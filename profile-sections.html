@@ -1,0 +1,2542 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Configure Profile - Build The Show</title>
+  <link rel="stylesheet" href="styles.css" />
+
+  <!--
+    Required migrations:
+    ALTER TABLE profiles ADD COLUMN IF NOT EXISTS sections jsonb DEFAULT '{}'::jsonb;
+    ALTER TABLE profiles ADD COLUMN IF NOT EXISTS headshot_urls jsonb DEFAULT '[]'::jsonb;
+    -- legal_first_name, legal_last_name, date_of_birth, headshot_url already exist from profile-create.
+  -->
+
+  <style>
+    /* ── Light page theme ──────────────────────────────── */
+    body { background: #f6f4fb; }
+    .grid-bg {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background-image: url('Grid-Glow-Purple.png');
+      background-size: 800px;
+      background-repeat: repeat;
+      opacity: 0.03;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* ── Sidebar grid bg ─────────────────────────────────── */
+    .sidebar::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background-image: url('Grid-Glow-Purple.png');
+      background-size: cover;
+      background-position: center;
+      background-repeat: no-repeat;
+      opacity: 0.03;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .sidebar > * { position: relative; z-index: 1; }
+
+    /* ── Layout ─────────────────────────────────────────────── */
+    .dashboard-layout {
+      display: flex;
+      min-height: 100vh;
+    }
+
+    /* ── Sidebar ─────────────────────────────────────────────── */
+    .sidebar {
+      width: 210px;
+      min-height: 100vh;
+      background: #572e88;
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+      position: fixed;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      z-index: 100;
+    }
+
+    .sidebar-logo {
+      padding: 1.5rem 1.25rem 1.1rem;
+    }
+
+    .sidebar-logo img {
+      height: 22px;
+      width: auto;
+    }
+
+    .sidebar-account {
+      margin: 0 0.75rem 1rem;
+      background: rgba(255, 255, 255, 0.12);
+      border-radius: 8px;
+      padding: 0.7rem 1rem;
+    }
+
+    .sidebar-account-label {
+      font-size: 0.65rem;
+      font-weight: 600;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: rgba(255, 255, 255, 0.5);
+      margin-bottom: 0.2rem;
+    }
+
+    .sidebar-account-id {
+      font-size: 0.9375rem;
+      font-weight: 700;
+      color: #ffffff;
+      letter-spacing: 0.03em;
+    }
+
+    /* ── Sidebar nav ─────────────────────────────────────────── */
+    .sidebar-nav {
+      flex: 1;
+      padding: 0.25rem 0.75rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.1rem;
+    }
+
+    .sidebar-nav-item {
+      display: flex;
+      align-items: center;
+      gap: 0.65rem;
+      padding: 0.55rem 0.75rem;
+      border-radius: 7px;
+      color: rgba(255, 255, 255, 0.65);
+      font-size: 0.875rem;
+      font-weight: 500;
+      text-decoration: none;
+      cursor: pointer;
+      border: none;
+      background: none;
+      font-family: inherit;
+      width: 100%;
+      text-align: left;
+      transition: background 0.15s, color 0.15s;
+    }
+
+    .sidebar-nav-item:hover {
+      background: rgba(255, 255, 255, 0.1);
+      color: #ffffff;
+    }
+
+    .sidebar-nav-item.active {
+      background: rgba(255, 255, 255, 0.16);
+      color: #ffffff;
+      font-weight: 600;
+    }
+
+    .sidebar-nav-icon {
+      width: 18px;
+      height: 18px;
+      flex-shrink: 0;
+      object-fit: contain;
+      filter: brightness(0) invert(1);
+      opacity: 0.8;
+    }
+
+    .sidebar-nav-item.active .sidebar-nav-icon,
+    .sidebar-nav-item:hover .sidebar-nav-icon {
+      opacity: 1;
+    }
+
+    /* ── Sidebar profile sub-list ────────────────────────────── */
+    .sidebar-profiles-list {
+      margin: 0.1rem 0 0.1rem 2rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.05rem;
+    }
+
+    .sidebar-profile-item {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.3rem 0.65rem;
+      border-radius: 6px;
+      color: rgba(255, 255, 255, 0.6);
+      font-size: 0.8rem;
+      font-weight: 500;
+      text-decoration: none;
+      transition: background 0.15s, color 0.15s;
+    }
+
+    .sidebar-profile-item:hover {
+      background: rgba(255, 255, 255, 0.08);
+      color: #ffffff;
+    }
+
+    .sidebar-profile-thumb {
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      object-fit: cover;
+      background: rgba(255, 255, 255, 0.2);
+      flex-shrink: 0;
+    }
+
+    .sidebar-profile-thumb-placeholder {
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.18);
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.65rem;
+      color: rgba(255,255,255,0.5);
+    }
+
+    .sidebar-profile-name {
+      flex: 1;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    /* ── Sidebar bottom ──────────────────────────────────────── */
+    .sidebar-bottom {
+      padding: 1rem 1.25rem;
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .sidebar-email {
+      font-size: 0.72rem;
+      color: rgba(255, 255, 255, 0.4);
+      margin-bottom: 0.65rem;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .sidebar-logout {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.8125rem;
+      font-weight: 500;
+      color: rgba(255, 255, 255, 0.5);
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-family: inherit;
+      padding: 0;
+      transition: color 0.2s;
+    }
+
+    .sidebar-logout:hover { color: #ffffff; }
+
+    /* ── Page layout ────────────────────────────────────────── */
+    .sections-main {
+      position: relative;
+      z-index: 10;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      margin-left: 210px;
+      padding: 3rem 2.5rem 5rem;
+    }
+
+    .sections-inner {
+      width: 100%;
+      max-width: 1100px;
+    }
+
+    /* ── Back link ─────────────────────────────────────── */
+    .back-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: #9b8db8;
+      text-decoration: none;
+      margin-bottom: 0.85rem;
+      transition: color 0.15s;
+    }
+    .back-link:hover { color: #572e88; }
+
+    /* ── Intro ─────────────────────────────────────────── */
+    .sections-heading {
+      font-size: clamp(1.6rem, 4vw, 2.2rem);
+      font-weight: 800;
+      letter-spacing: -0.025em;
+      color: #1a1530;
+      margin-bottom: 0.75rem;
+    }
+
+    .sections-intro {
+      font-size: 0.9375rem;
+      color: #5a5070;
+      line-height: 1.7;
+      margin-bottom: 0.6rem;
+    }
+
+    .profile-name-display {
+      font-size: 0.875rem;
+      font-weight: 700;
+      color: #572e88;
+      margin-bottom: 2rem;
+      letter-spacing: 0.01em;
+    }
+
+    /* ── Section Cards ─────────────────────────────────── */
+    .section-cards {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
+
+    .section-card {
+      background: #ffffff;
+      border: 1.5px solid rgba(87, 46, 136, 0.15);
+      border-radius: 14px;
+      overflow: hidden;
+      box-shadow: 0 2px 16px rgba(87, 46, 136, 0.06);
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+
+    .section-card.is-on {
+      border-color: rgba(87, 46, 136, 0.35);
+      box-shadow: 0 4px 24px rgba(87, 46, 136, 0.1);
+    }
+
+    /* ── Card header row ───────────────────────────────── */
+    .section-header {
+      display: flex;
+      align-items: center;
+      gap: 0.875rem;
+      padding: 1.1rem 1.25rem;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .section-icon {
+      font-size: 1.3rem;
+      flex-shrink: 0;
+      width: 2rem;
+      text-align: center;
+    }
+
+    .section-meta {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .section-name {
+      font-size: 0.9375rem;
+      font-weight: 700;
+      color: #1a1530;
+      margin-bottom: 0.2rem;
+    }
+
+    .section-desc {
+      font-size: 0.8125rem;
+      color: #7a6e90;
+      line-height: 1.5;
+    }
+
+    /* ── Toggle switch ─────────────────────────────────── */
+    .toggle-wrap {
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .toggle-label {
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: #b0a8c8;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      min-width: 1.8rem;
+      text-align: right;
+      transition: color 0.2s;
+    }
+
+    .section-card.is-on .toggle-label { color: #572e88; }
+
+    .toggle-input {
+      position: absolute;
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+
+    .toggle-track {
+      display: inline-block;
+      position: relative;
+      width: 42px;
+      height: 24px;
+      background: #d8d0e8;
+      border-radius: 12px;
+      cursor: pointer;
+      transition: background 0.25s;
+      flex-shrink: 0;
+    }
+
+    .toggle-track::after {
+      content: '';
+      position: absolute;
+      top: 3px;
+      left: 3px;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: #ffffff;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.18);
+      transition: transform 0.25s;
+    }
+
+    .toggle-input:checked + .toggle-track {
+      background: #572e88;
+    }
+
+    .toggle-input:checked + .toggle-track::after {
+      transform: translateX(18px);
+    }
+
+    .toggle-input:focus-visible + .toggle-track {
+      outline: 2px solid #572e88;
+      outline-offset: 2px;
+    }
+
+    /* ── Expandable body ───────────────────────────────── */
+    .section-body {
+      max-height: 0;
+      overflow: hidden;
+      transition: max-height 0.35s ease;
+    }
+
+    .section-body.is-open {
+      max-height: 1200px;
+    }
+
+    .section-body-inner {
+      padding: 0 1.25rem 1.25rem;
+      border-top: 1px solid rgba(87, 46, 136, 0.08);
+    }
+
+    /* ── Visibility selector ───────────────────────────── */
+    .visibility-row {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+      margin-bottom: 1.1rem;
+      padding-top: 0.9rem;
+    }
+
+    .visibility-label-text {
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      color: #9a8ab0;
+      margin-right: 0.25rem;
+      white-space: nowrap;
+    }
+
+    .visibility-opts {
+      display: flex;
+      gap: 0.4rem;
+      flex-wrap: wrap;
+    }
+
+    .vis-radio {
+      position: absolute;
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+
+    .vis-pill {
+      display: inline-block;
+      padding: 0.3rem 0.75rem;
+      border-radius: 20px;
+      border: 1.5px solid rgba(87, 46, 136, 0.22);
+      font-size: 0.775rem;
+      font-weight: 600;
+      color: #7a6e90;
+      cursor: pointer;
+      background: #f9f7fd;
+      transition: border-color 0.18s, background 0.18s, color 0.18s;
+      white-space: nowrap;
+    }
+
+    .vis-radio:checked + .vis-pill {
+      background: rgba(87, 46, 136, 0.1);
+      border-color: #572e88;
+      color: #572e88;
+    }
+
+    .vis-pill:hover {
+      border-color: rgba(87, 46, 136, 0.4);
+      color: #572e88;
+    }
+
+    /* ── Section fields ────────────────────────────────── */
+    .section-fields {
+      display: flex;
+      flex-direction: column;
+      gap: 0.85rem;
+    }
+
+    .field-group {
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+    }
+
+    .field-label {
+      display: flex;
+      align-items: center;
+      gap: 0.3rem;
+      flex-wrap: wrap;
+      font-size: 0.775rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: #5a4a70;
+    }
+
+    .field-label .opt {
+      font-weight: 400;
+      text-transform: none;
+      letter-spacing: 0;
+      color: #9a8ab0;
+      font-size: 0.75rem;
+    }
+
+    .field-input {
+      background: #f5f3fc;
+      border: 1px solid rgba(87, 46, 136, 0.2);
+      color: #1a1530;
+      border-radius: 8px;
+      padding: 0.65rem 0.875rem;
+      width: 100%;
+      font-size: 0.9rem;
+      font-family: inherit;
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+
+    .field-input::placeholder { color: #b0a8c8; }
+
+    .field-input:focus {
+      border-color: #572e88;
+      box-shadow: 0 0 0 3px rgba(87, 46, 136, 0.1);
+    }
+
+    textarea.field-input {
+      resize: vertical;
+      min-height: 70px;
+    }
+
+    .field-note {
+      font-size: 0.78rem;
+      color: #7a6e90;
+      line-height: 1.5;
+      background: rgba(87, 46, 136, 0.04);
+      border: 1px solid rgba(87, 46, 136, 0.1);
+      border-radius: 6px;
+      padding: 0.6rem 0.75rem;
+    }
+
+    /* ── Checkboxes (preferences) ──────────────────────── */
+    .checkbox-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.45rem 1rem;
+    }
+
+    .checkbox-item {
+      display: flex;
+      align-items: center;
+      gap: 0.45rem;
+      cursor: pointer;
+    }
+
+    .checkbox-item input[type="checkbox"] {
+      width: 15px;
+      height: 15px;
+      flex-shrink: 0;
+      accent-color: #572e88;
+      cursor: pointer;
+    }
+
+    .checkbox-item span {
+      font-size: 0.85rem;
+      color: #3a3050;
+      line-height: 1.4;
+    }
+
+    /* ── Divider in body ───────────────────────────────── */
+    .section-divider {
+      height: 1px;
+      background: rgba(87, 46, 136, 0.07);
+      margin: 0.9rem 0;
+    }
+
+    /* ── Save bar ──────────────────────────────────────── */
+    .save-bar {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.9rem;
+      margin-top: 2rem;
+    }
+
+    .autosave-status {
+      font-size: 0.78rem;
+      font-weight: 500;
+      color: rgba(87,46,136,0.45);
+      text-align: right;
+      margin-bottom: 1.25rem;
+      min-height: 1.2em;
+      transition: color 0.2s;
+    }
+    .autosave-status.saving { color: rgba(87,46,136,0.6); }
+    .autosave-status.saved  { color: #16a34a; }
+    .autosave-status.error  { color: #dc2626; }
+
+    .btn--save {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      padding: 0.85rem 2.25rem;
+      background: #572e88;
+      color: #ffffff;
+      font-size: 1rem;
+      font-weight: 700;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      letter-spacing: 0.01em;
+      transition: background 0.2s, transform 0.15s, box-shadow 0.2s;
+      box-shadow: 0 4px 18px rgba(87, 46, 136, 0.28);
+      width: 100%;
+      justify-content: center;
+      max-width: 340px;
+    }
+
+    .btn--save:hover {
+      background: #6b3ca8;
+      transform: translateY(-1px);
+      box-shadow: 0 6px 24px rgba(87, 46, 136, 0.36);
+    }
+
+    .btn--save:active { transform: translateY(0); }
+
+    .btn--save:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .skip-link {
+      font-size: 0.875rem;
+      color: #9a8ab0;
+      text-decoration: none;
+      transition: color 0.2s;
+    }
+
+    .skip-link:hover { color: #572e88; }
+
+    /* ── Toast ─────────────────────────────────────────── */
+    .toast {
+      position: fixed;
+      bottom: 2rem;
+      left: 50%;
+      transform: translateX(-50%) translateY(20px);
+      background: #1a1530;
+      color: #f0ecf8;
+      font-size: 0.875rem;
+      font-weight: 600;
+      padding: 0.75rem 1.5rem;
+      border-radius: 8px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.25);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.25s, transform 0.25s;
+      z-index: 1000;
+      white-space: nowrap;
+    }
+
+    .toast.visible {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+
+    .toast.is-error {
+      background: #5a1a1a;
+    }
+
+    /* ── Profile Tabs ─────────────────────────────────── */
+    .ptab-nav {
+      display: flex;
+      gap: 0;
+      border-bottom: 2px solid rgba(87,46,136,0.1);
+      margin-bottom: 2rem;
+    }
+
+    .ptab-btn {
+      padding: 0.65rem 1.2rem;
+      font-size: 0.875rem;
+      font-weight: 600;
+      color: #b0a8c8;
+      background: none;
+      border: none;
+      border-bottom: 2px solid transparent;
+      margin-bottom: -2px;
+      cursor: pointer;
+      font-family: inherit;
+      transition: color 0.2s, border-color 0.2s;
+      letter-spacing: 0.01em;
+      white-space: nowrap;
+    }
+
+    .ptab-btn:hover { color: #7a5ab0; }
+
+    .ptab-btn.active {
+      color: #572e88;
+      border-bottom-color: #572e88;
+    }
+
+    .ptab-btn.tab-on { color: #572e88; }
+
+    .ptab-btn.tab-on.active { border-bottom-color: #572e88; }
+
+    .ptab-btn.tab-off.active {
+      color: #9a8ab0;
+      border-bottom-color: #9a8ab0;
+    }
+
+    /* Basics is always enabled - keep it purple even when inactive */
+    .ptab-btn.tab-always-on { color: #7a50aa; }
+    .ptab-btn.tab-always-on.active { color: #572e88; border-bottom-color: #572e88; }
+
+    .ptab-panel { display: none; }
+    .ptab-panel.active { display: block; }
+
+    /* ── Toggle bar inside tab ────────────────────────── */
+    .tab-toggle-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      padding: 1rem 1.25rem;
+      background: #f9f7fd;
+      border: 1.5px solid rgba(87,46,136,0.15);
+      border-radius: 12px;
+      margin-bottom: 1.5rem;
+      transition: background 0.2s, border-color 0.2s;
+    }
+
+    .tab-toggle-bar.is-on {
+      background: rgba(87,46,136,0.06);
+      border-color: rgba(87,46,136,0.3);
+    }
+
+    .tab-toggle-title {
+      font-size: 0.9375rem;
+      font-weight: 700;
+      color: #1a1530;
+      margin-bottom: 0.2rem;
+    }
+
+    .tab-toggle-sub {
+      font-size: 0.8125rem;
+      color: #7a6e90;
+    }
+
+    /* ── Section body greyed out when disabled ────────── */
+    .tab-section-body { transition: opacity 0.25s; }
+
+    .tab-section-body.is-disabled {
+      opacity: 0.35;
+      pointer-events: none;
+      user-select: none;
+    }
+
+    /* ── Field hint ────────────────────────────────────── */
+    .field-hint {
+      font-size: 0.775rem;
+      color: #9a8ab0;
+      line-height: 1.5;
+      margin-top: 0.25rem;
+    }
+
+    /* ── Minor notice ───────────────────────────────────── */
+    .minor-notice {
+      background: rgba(160, 80, 0, 0.06);
+      border-color: rgba(160, 80, 0, 0.22);
+      color: #7a4000;
+    }
+
+    /* ── Age badge ──────────────────────────────────────── */
+    .age-badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 0.22rem 0.65rem;
+      background: rgba(87,46,136,0.09);
+      border-radius: 20px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: #572e88;
+      white-space: nowrap;
+    }
+    .age-badge.is-minor {
+      background: rgba(160, 80, 0, 0.1);
+      color: #7a4000;
+    }
+
+    /* ── Headshot grid (up to 5) ──────────────────────── */
+    .headshot-grid {
+      display: flex;
+      gap: 0.65rem;
+      flex-wrap: wrap;
+      align-items: flex-start;
+    }
+    .headshot-slot {
+      position: relative;
+      width: 80px;
+      aspect-ratio: 4 / 5;
+      border-radius: 8px;
+      border: 2px dashed rgba(87,46,136,0.25);
+      background: rgba(87,46,136,0.04);
+      overflow: hidden;
+      flex-shrink: 0;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    .headshot-slot--filled {
+      border-style: solid;
+      border-color: rgba(87,46,136,0.45);
+      box-shadow: 0 2px 12px rgba(87,46,136,0.12);
+    }
+    .headshot-slot img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+    .headshot-slot-label {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: rgba(87,46,136,0.82);
+      color: #fff;
+      font-size: 0.6rem;
+      font-weight: 700;
+      text-align: center;
+      padding: 0.2rem 0;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+    }
+    .headshot-slot-remove {
+      position: absolute;
+      top: 3px;
+      right: 3px;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: rgba(0,0,0,0.5);
+      color: #fff;
+      border: none;
+      cursor: pointer;
+      font-size: 13px;
+      line-height: 1;
+      padding: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+      transition: opacity 0.15s;
+      font-family: inherit;
+    }
+    .headshot-slot--filled:hover .headshot-slot-remove { opacity: 1; }
+    .headshot-slot[draggable="true"] { cursor: grab; }
+    .headshot-slot[draggable="true"]:active { cursor: grabbing; }
+    .headshot-slot--drag-over {
+      border-color: #572e88 !important;
+      box-shadow: 0 0 0 2px rgba(87,46,136,0.4) !important;
+      opacity: 0.7;
+    }
+    .headshot-slot--dragging { opacity: 0.35; }
+    .headshot-slot-set-primary {
+      position: absolute;
+      bottom: 22px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0,0,0,0.55);
+      color: #fff;
+      border: none;
+      border-radius: 4px;
+      font-size: 0.55rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      padding: 0.18rem 0.4rem;
+      cursor: pointer;
+      white-space: nowrap;
+      opacity: 0;
+      transition: opacity 0.15s;
+      font-family: inherit;
+    }
+    .headshot-slot--filled:hover .headshot-slot-set-primary { opacity: 1; }
+    .headshot-add-btn {
+      width: 80px;
+      aspect-ratio: 4 / 5;
+      border-radius: 8px;
+      border: 2px dashed rgba(87,46,136,0.25);
+      background: rgba(87,46,136,0.03);
+      color: #b0a0cc;
+      font-size: 1.5rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: border-color 0.2s, background 0.2s, color 0.2s;
+      flex-shrink: 0;
+    }
+    .headshot-add-btn:hover {
+      border-color: rgba(87,46,136,0.5);
+      background: rgba(87,46,136,0.07);
+      color: #572e88;
+    }
+
+    /* ── Privacy banner ─────────────────────────────────── */
+    .privacy-banner {
+      background: rgba(87,46,136,0.05);
+      border: 1.5px solid rgba(87,46,136,0.15);
+      border-radius: 12px;
+      padding: 1rem 1.25rem;
+      display: flex;
+      gap: 0.75rem;
+      align-items: flex-start;
+      margin-bottom: 1.5rem;
+    }
+    .privacy-banner-icon {
+      font-size: 1rem;
+      flex-shrink: 0;
+      margin-top: 0.1rem;
+    }
+    .privacy-banner-text {
+      font-size: 0.825rem;
+      color: #5a4a70;
+      line-height: 1.65;
+    }
+    .privacy-banner-text strong { color: #1a1530; }
+
+    /* ── Performer section blocks ─────────────────────── */
+    .perf-block {
+      background: #fff;
+      border: 1.5px solid rgba(87,46,136,0.1);
+      border-radius: 14px;
+      padding: 1.4rem 1.5rem;
+      margin-bottom: 1.25rem;
+      box-shadow: 0 2px 12px rgba(87,46,136,0.05);
+    }
+    .perf-block-header {
+      display: flex;
+      align-items: center;
+      gap: 0.65rem;
+      margin-bottom: 1.25rem;
+      padding-bottom: 0.75rem;
+      border-bottom: 1.5px solid rgba(87,46,136,0.08);
+    }
+    .perf-block-icon {
+      width: 30px;
+      height: 30px;
+      background: rgba(87,46,136,0.1);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      color: #572e88;
+    }
+    .perf-block-title {
+      font-size: 0.72rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: #572e88;
+    }
+
+    /* ── Skills 2-col grid ────────────────────────────── */
+    .skills-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.85rem;
+    }
+
+    /* ── Level pills ──────────────────────────────────── */
+    .level-opts {
+      display: flex;
+      gap: 0.4rem;
+      flex-wrap: wrap;
+      margin-top: 0.3rem;
+    }
+    .level-radio { position: absolute; opacity: 0; width: 0; height: 0; }
+    .level-pill {
+      display: inline-block;
+      padding: 0.3rem 0.85rem;
+      border-radius: 20px;
+      border: 1.5px solid rgba(87,46,136,0.2);
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: #7a6e90;
+      cursor: pointer;
+      background: #f9f7fd;
+      transition: all 0.15s;
+    }
+    .level-radio:checked + .level-pill {
+      background: #572e88;
+      border-color: #572e88;
+      color: #fff;
+    }
+    .level-pill:hover { border-color: rgba(87,46,136,0.45); color: #572e88; }
+    .level-radio:checked + .level-pill:hover { color: #fff; }
+
+    /* ── File upload area ─────────────────────────────── */
+    .file-upload-area {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.85rem 1.1rem;
+      border: 2px dashed rgba(87,46,136,0.25);
+      border-radius: 10px;
+      background: rgba(87,46,136,0.03);
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+      margin-top: 0.4rem;
+      user-select: none;
+    }
+    .file-upload-area:hover { border-color: rgba(87,46,136,0.45); background: rgba(87,46,136,0.06); }
+    .file-upload-area.has-file { border-style: solid; border-color: rgba(87,46,136,0.35); }
+    .file-upload-icon { color: #9a8ab0; flex-shrink: 0; }
+    .file-upload-area.has-file .file-upload-icon { color: #572e88; }
+    .file-upload-text { font-size: 0.85rem; color: #7a6e90; flex: 1; }
+    .file-upload-area.has-file .file-upload-text { color: #1a1530; font-weight: 600; }
+    .file-upload-clear {
+      font-size: 0.75rem; color: #9a8ab0; background: none; border: none;
+      cursor: pointer; padding: 0; font-family: inherit; display: none;
+    }
+    .file-upload-area.has-file .file-upload-clear { display: block; }
+
+    /* ── Label info tooltip ─────────────────────────────── */
+    .label-info {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 15px;
+      height: 15px;
+      border-radius: 50%;
+      background: rgba(87,46,136,0.12);
+      color: #572e88;
+      font-size: 0.6rem;
+      font-weight: 800;
+      cursor: default;
+      position: relative;
+      flex-shrink: 0;
+      vertical-align: middle;
+      transition: background 0.15s;
+    }
+    .label-info:hover,
+    .label-info:focus { background: rgba(87,46,136,0.22); outline: none; }
+    .label-info .tip {
+      position: absolute;
+      bottom: calc(100% + 8px);
+      left: 50%;
+      transform: translateX(-50%) translateY(4px);
+      background: #1a1530;
+      color: #f0ecf8;
+      font-size: 0.775rem;
+      font-weight: 400;
+      text-transform: none;
+      letter-spacing: 0;
+      line-height: 1.55;
+      padding: 0.6rem 0.85rem;
+      border-radius: 8px;
+      width: 250px;
+      white-space: normal;
+      opacity: 0;
+      pointer-events: none;
+      z-index: 200;
+      transition: opacity 0.15s, transform 0.15s;
+      box-shadow: 0 4px 18px rgba(0,0,0,0.22);
+    }
+    .label-info .tip::after {
+      content: '';
+      position: absolute;
+      top: 100%;
+      left: 50%;
+      transform: translateX(-50%);
+      border: 5px solid transparent;
+      border-top-color: #1a1530;
+    }
+    .label-info:hover .tip,
+    .label-info:focus .tip {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+
+    /* ── Volunteer skill cards ──────────────────────────── */
+    .vol-skills-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.75rem;
+    }
+    .vol-skill-card, .vol-comfort-card {
+      background: #f9f7fd;
+      border: 1.5px solid rgba(87,46,136,0.12);
+      border-radius: 10px;
+      padding: 0.8rem 0.95rem;
+      transition: border-color 0.2s, background 0.2s;
+    }
+    .vol-skill-card:has(.level-radio:checked),
+    .vol-comfort-card:has(.level-radio:checked) {
+      border-color: rgba(87,46,136,0.3);
+      background: rgba(87,46,136,0.04);
+    }
+    .vol-skill-name, .vol-comfort-name {
+      font-size: 0.82rem;
+      font-weight: 700;
+      color: #1a1530;
+      margin-bottom: 0.35rem;
+    }
+    .vol-skill-hint {
+      font-size: 0.73rem;
+      color: #9a8ab0;
+      margin-bottom: 0.45rem;
+      line-height: 1.4;
+    }
+    .vol-comfort-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.75rem;
+    }
+
+    /* ── Best Fit banner ─────────────────────────────────── */
+    .bestfit-banner {
+      background: linear-gradient(135deg, rgba(87,46,136,0.07), rgba(194,72,122,0.05));
+      border: 1.5px solid rgba(87,46,136,0.18);
+      border-radius: 12px;
+      padding: 1rem 1.25rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+      flex-wrap: wrap;
+    }
+    .bestfit-banner-text {
+      font-size: 0.875rem;
+      color: #3a2860;
+      line-height: 1.55;
+    }
+    .bestfit-banner-text strong { color: #1a1530; }
+    .btn--bestfit {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      padding: 0.55rem 1.1rem;
+      background: #572e88;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 0.82rem;
+      font-weight: 700;
+      font-family: inherit;
+      cursor: pointer;
+      text-decoration: none;
+      white-space: nowrap;
+      transition: opacity 0.2s, transform 0.15s;
+      flex-shrink: 0;
+    }
+    .btn--bestfit:hover { opacity: 0.88; transform: translateY(-1px); }
+
+    /* ── Responsive ────────────────────────────────────── */
+    @media (max-width: 700px) {
+      .sidebar {
+        width: 100%;
+        min-height: auto;
+        position: static;
+        flex-direction: column;
+      }
+      .sections-main {
+        margin-left: 0;
+        padding: 2rem 1rem 4rem;
+      }
+      .ptab-nav { overflow-x: auto; }
+      .skills-grid { grid-template-columns: 1fr; }
+      .perf-block { padding: 1rem; }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="grid-bg"></div>
+
+  <div class="dashboard-layout">
+
+    <!-- ── Sidebar ── -->
+    <aside class="sidebar" aria-label="Account navigation">
+
+      <div class="sidebar-logo">
+        <a href="index.html">
+          <img src="logo-long-white.png" alt="Build The Show" />
+        </a>
+      </div>
+
+      <div class="sidebar-account" aria-label="Account ID">
+        <div class="sidebar-account-label">Account</div>
+        <div class="sidebar-account-id" id="sidebar-account-id">-</div>
+      </div>
+
+      <nav class="sidebar-nav" aria-label="Main">
+
+        <a href="profile-select.html" class="sidebar-nav-item">
+          <img src="Performer.svg" class="sidebar-nav-icon" aria-hidden="true" alt="" />
+          Dashboard
+        </a>
+
+        <div>
+          <a href="profile-select.html#profiles" class="sidebar-nav-item active" aria-current="page">
+            <img src="Profiles.svg" class="sidebar-nav-icon" aria-hidden="true" alt="" />
+            Profiles
+          </a>
+          <div class="sidebar-profiles-list" id="sidebar-profiles-list" aria-label="Your profiles"></div>
+        </div>
+
+        <a href="applications.html" class="sidebar-nav-item">
+          <img src="Applications.svg" class="sidebar-nav-icon" aria-hidden="true" alt="" />
+          Applications
+        </a>
+
+        <a href="volunteer-best-fit.html" class="sidebar-nav-item">
+          <img src="Volunteers.svg" class="sidebar-nav-icon" aria-hidden="true" alt="" />
+          Volunteer Match
+        </a>
+
+        <a href="performer-settings.html" class="sidebar-nav-item">
+          <img src="Settings.svg" class="sidebar-nav-icon" aria-hidden="true" alt="" />
+          Settings
+        </a>
+
+      </nav>
+
+      <div class="sidebar-bottom">
+        <div class="sidebar-email" id="sidebar-email"></div>
+        <button class="sidebar-logout" id="logout-btn">
+          <svg width="14" height="14" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M6 2H3a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3M10 11l4-4-4-4M14 8H6"/>
+          </svg>
+          Log Out
+        </button>
+      </div>
+
+    </aside>
+
+  <main class="sections-main">
+    <div class="sections-inner">
+
+      <a href="#" id="back-to-profile" class="back-link">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 3L5 8l5 5"/></svg>
+        Back to profile
+      </a>
+      <h1 class="sections-heading">Edit Profile</h1>
+      <p class="profile-name-display" id="profileNameDisplay">Loading profile…</p>
+
+      <!-- ── Tab navigation ──────────────────────────────── -->
+      <div class="ptab-nav" role="tablist" aria-label="Profile sections">
+        <button class="ptab-btn active tab-always-on" data-ptab="basics" role="tab" aria-selected="true">Basics</button>
+        <button class="ptab-btn tab-off" data-ptab="performer" id="ptab-btn-performer" role="tab" aria-selected="false">Performer</button>
+        <button class="ptab-btn tab-off" data-ptab="volunteer" id="ptab-btn-volunteer" role="tab" aria-selected="false">Volunteer</button>
+        <button class="ptab-btn tab-off" data-ptab="creative" id="ptab-btn-creative" role="tab" aria-selected="false">Creative Team</button>
+      </div>
+
+      <!-- ── Autosave status ──────────────────────────────── -->
+      <div id="autosave-status" class="autosave-status" aria-live="polite"></div>
+
+      <form id="sectionsForm" novalidate>
+
+        <!-- ── Basics Tab ───────────────────────────────── -->
+        <div class="ptab-panel active" id="ptab-basics" role="tabpanel">
+
+          <!-- Privacy banner -->
+          <div class="privacy-banner">
+            <span class="privacy-banner-icon">🔒</span>
+            <p class="privacy-banner-text"><strong>Your profile is never public.</strong> Everything here stays private. Your information is only shared with an organisation when you apply to a production, or when you give explicit permission.</p>
+          </div>
+
+          <div class="section-fields">
+
+            <!-- Legal Name -->
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.85rem;">
+              <div class="field-group">
+                <label class="field-label" for="basics-legal-first">
+                  Legal First Name
+                  <span class="label-info" tabindex="0">i<span class="tip">Your legal name is private and only ever seen by you and the organisation admin. It is used for contracts, ID verification, emergency and medical forms, and to flag if this profile belongs to a minor. It never appears on cast lists or programmes.</span></span>
+                </label>
+                <input type="text" id="basics-legal-first" class="field-input" placeholder="As on government ID" autocomplete="given-name" />
+              </div>
+              <div class="field-group">
+                <label class="field-label" for="basics-legal-last">
+                  Legal Last Name
+                  <span class="label-info" tabindex="0">i<span class="tip">Your legal name is private and only ever seen by you and the organisation admin. It is used for contracts, ID verification, emergency and medical forms, and to flag if this profile belongs to a minor. It never appears on cast lists or programmes.</span></span>
+                </label>
+                <input type="text" id="basics-legal-last" class="field-input" placeholder="As on government ID" autocomplete="family-name" />
+              </div>
+            </div>
+
+            <!-- Credit Name -->
+            <div class="field-group">
+              <label class="field-label" for="basics-credit-name">
+                Programme / Credit Name
+                <span class="label-info" tabindex="0">i<span class="tip">This is the name printed on programmes and cast lists. It can match your legal name, a stage name, or any variation you prefer.</span></span>
+              </label>
+              <input type="text" id="basics-credit-name" class="field-input" placeholder="The name shown on cast lists and programmes" />
+            </div>
+
+            <!-- Nickname + Pronouns -->
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.85rem;">
+              <div class="field-group">
+                <label class="field-label" for="basics-nickname">
+                  Nickname <span class="opt">optional</span>
+                  <span class="label-info" tabindex="0">i<span class="tip">What the team calls you day to day. Internal only, never shown publicly.</span></span>
+                </label>
+                <input type="text" id="basics-nickname" class="field-input" placeholder="e.g. Katie, Jamie" />
+              </div>
+              <div class="field-group">
+                <label class="field-label" for="basics-pronouns">Pronouns</label>
+                <input type="text" id="basics-pronouns" class="field-input" placeholder="e.g. She/Her" list="pronouns-list" />
+                <datalist id="pronouns-list">
+                  <option value="She/Her">
+                  <option value="He/Him">
+                  <option value="They/Them">
+                  <option value="She/They">
+                  <option value="He/They">
+                  <option value="Any pronouns">
+                  <option value="Ze/Zir">
+                </datalist>
+              </div>
+            </div>
+
+            <!-- Date of Birth -->
+            <div class="field-group">
+              <label class="field-label" for="basics-dob">
+                Date of Birth
+                <span class="label-info" tabindex="0">i<span class="tip">Private, visible only to you and the organisation admin. Used to confirm age eligibility and flag if guardian policies apply. Never shared publicly.</span></span>
+              </label>
+              <div style="display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap;">
+                <input type="date" id="basics-dob" class="field-input" style="max-width:200px;" />
+                <span id="basics-age-badge"></span>
+              </div>
+              <div id="basics-minor-notice" class="field-note minor-notice" style="display:none;margin-top:0.5rem;">
+                This profile belongs to someone under 18. A parent or guardian must be notified for any booking, rehearsal, or event.
+              </div>
+            </div>
+
+            <!-- Headshots -->
+            <div class="field-group">
+              <label class="field-label" for="headshot-input">
+                Headshots
+                <span class="label-info" tabindex="0">i<span class="tip">Up to 5 photos. The first one is your primary headshot. Drag to reorder, or click "Set primary" to move one to the front. Standard theatre headshots are portrait format (8x10 ratio).</span></span>
+              </label>
+              <p class="field-hint" style="margin-bottom:0.65rem;">JPG, PNG or WebP, max 5 MB each.</p>
+              <div class="headshot-grid" id="headshot-grid"></div>
+              <input type="file" id="headshot-input" accept="image/*" style="display:none;" />
+            </div>
+
+          </div>
+        </div>
+
+        <!-- ── Performer Tab ─────────────────────────────── -->
+        <div class="ptab-panel" id="ptab-performer" role="tabpanel">
+          <div class="tab-toggle-bar" id="togglebar-performer">
+            <div>
+              <div class="tab-toggle-title">Performer</div>
+              <div class="tab-toggle-sub">Turn this on to access auditions, casting, and all performer features</div>
+            </div>
+            <div class="toggle-wrap" onclick="event.stopPropagation()">
+              <span class="toggle-label" id="toggle-lbl-performer">OFF</span>
+              <label>
+                <span class="sr-only">Enable Performer section</span>
+                <input type="checkbox" class="toggle-input section-toggle" data-section="performer" id="toggle-performer" />
+                <span class="toggle-track"></span>
+              </label>
+            </div>
+          </div>
+
+          <div class="tab-section-body is-disabled" id="tsbody-performer">
+
+            <!-- Block 2: Performance Skills -->
+            <div class="perf-block">
+              <div class="perf-block-header">
+                <div class="perf-block-icon">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+                </div>
+                <span class="perf-block-title">Performance Skills</span>
+              </div>
+              <div class="section-fields">
+                <div class="field-group">
+                  <label class="field-label" for="perf-voice-type">Vocal Range <span class="opt">optional</span></label>
+                  <select id="perf-voice-type" class="field-input">
+                    <option value="">Select vocal range...</option>
+                    <option value="Soprano">Soprano</option>
+                    <option value="Mezzo-Soprano">Mezzo-Soprano</option>
+                    <option value="Alto">Alto</option>
+                    <option value="Tenor">Tenor</option>
+                    <option value="Baritone">Baritone</option>
+                    <option value="Bass">Bass</option>
+                    <option value="Non-singing">Non-singing</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </div>
+                <div class="field-group">
+                  <span class="field-label">Singing Comfort <span class="opt">optional</span></span>
+                  <p class="field-hint" style="margin-bottom:0.4rem;">How comfortable are you singing in front of others?</p>
+                  <div class="level-opts">
+                    <label><input type="radio" name="perf-vocal-comfort" class="level-radio" value="prefer-not" /><span class="level-pill">Prefer not to sing</span></label>
+                    <label><input type="radio" name="perf-vocal-comfort" class="level-radio" value="chorus" /><span class="level-pill">Comfortable in chorus</span></label>
+                    <label><input type="radio" name="perf-vocal-comfort" class="level-radio" value="harmonies" /><span class="level-pill">Comfortable with harmonies</span></label>
+                    <label><input type="radio" name="perf-vocal-comfort" class="level-radio" value="solos" /><span class="level-pill">Comfortable singing solos</span></label>
+                  </div>
+                </div>
+                <div class="field-group">
+                  <span class="field-label">Dance Experience Level <span class="opt">optional</span></span>
+                  <div class="level-opts">
+                    <label><input type="radio" name="perf-dance-level" class="level-radio" value="none" /><span class="level-pill">No experience</span></label>
+                    <label><input type="radio" name="perf-dance-level" class="level-radio" value="beginner" /><span class="level-pill">Beginner</span></label>
+                    <label><input type="radio" name="perf-dance-level" class="level-radio" value="intermediate" /><span class="level-pill">Intermediate</span></label>
+                    <label><input type="radio" name="perf-dance-level" class="level-radio" value="advanced" /><span class="level-pill">Advanced</span></label>
+                  </div>
+                </div>
+                <div class="field-group">
+                  <span class="field-label">Acting Experience Level <span class="opt">optional</span></span>
+                  <div class="level-opts">
+                    <label><input type="radio" name="perf-acting-level" class="level-radio" value="first-show" /><span class="level-pill">First show</span></label>
+                    <label><input type="radio" name="perf-acting-level" class="level-radio" value="some" /><span class="level-pill">Some experience</span></label>
+                    <label><input type="radio" name="perf-acting-level" class="level-radio" value="experienced" /><span class="level-pill">Experienced</span></label>
+                    <label><input type="radio" name="perf-acting-level" class="level-radio" value="professional" /><span class="level-pill">Professional</span></label>
+                  </div>
+                </div>
+              </div>
+
+            <!-- Block 1: Experience & Background -->
+            <div class="perf-block">
+              <div class="perf-block-header">
+                <div class="perf-block-icon">
+                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M8 1l1.5 4.5H14l-3.5 2.5 1.5 4.5L8 10l-4 2.5 1.5-4.5L2 5.5h4.5z"/></svg>
+                </div>
+                <span class="perf-block-title">Experience &amp; Background</span>
+              </div>
+              <div class="section-fields">
+                <div class="field-group">
+                  <label class="field-label" for="perf-experience">Acting Experience <span class="opt">optional</span></label>
+                  <textarea id="perf-experience" class="field-input" rows="3" placeholder="Previous shows, roles, companies you have worked with..."></textarea>
+                  <p class="field-hint">Include show names, roles, and years where you remember them.</p>
+                </div>
+                <div class="field-group">
+                  <label class="field-label" for="perf-training">Training <span class="opt">optional</span></label>
+                  <textarea id="perf-training" class="field-input" rows="2" placeholder="Classes, coaches, schools, workshops..."></textarea>
+                </div>
+                <div class="skills-grid">
+                  <div class="field-group">
+                    <label class="field-label" for="perf-dance-styles">Dance Styles <span class="opt">optional</span></label>
+                    <input type="text" id="perf-dance-styles" class="field-input" placeholder="e.g. Ballet, Jazz, Hip-hop" />
+                    <p class="field-hint">Separate styles with commas.</p>
+                  </div>
+                  <div class="field-group">
+                    <label class="field-label" for="perf-instruments">Instruments <span class="opt">optional</span></label>
+                    <input type="text" id="perf-instruments" class="field-input" placeholder="e.g. Piano, Guitar, Drums" />
+                  </div>
+                  <div class="field-group">
+                    <label class="field-label" for="perf-accents">Accents <span class="opt">optional</span></label>
+                    <input type="text" id="perf-accents" class="field-input" placeholder="e.g. British RP, Southern US, Australian" />
+                  </div>
+                  <div class="field-group">
+                    <label class="field-label" for="perf-combat">Stage Combat <span class="opt">optional</span></label>
+                    <input type="text" id="perf-combat" class="field-input" placeholder="e.g. Unarmed, Rapier, Broadsword" />
+                  </div>
+                  <div class="field-group" style="grid-column:1/-1;">
+                    <label class="field-label" for="perf-other-skills">Other Special Skills <span class="opt">optional</span></label>
+                    <input type="text" id="perf-other-skills" class="field-input" placeholder="e.g. Gymnastics, aerial, juggling, magic, mime, stilts..." />
+                    <p class="field-hint">This can be the deciding factor in casting. Include anything unusual or unexpected.</p>
+                  </div>
+                </div>
+                <div class="field-group">
+                  <span class="field-label">Resume / CV <span class="opt">optional</span></span>
+                  <div class="file-upload-area" id="perf-resume-area" onclick="document.getElementById('perf-resume-input').click()">
+                    <span class="file-upload-icon">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14,2 14,8 20,8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
+                    </span>
+                    <span class="file-upload-text" id="perf-resume-text">Click to upload PDF (max 5 MB)</span>
+                    <button type="button" class="file-upload-clear" id="perf-resume-clear" onclick="event.stopPropagation();clearResume()">Remove</button>
+                  </div>
+                  <input type="file" id="perf-resume-input" accept=".pdf,application/pdf" style="display:none;" />
+                </div>
+              </div>
+            </div>
+
+            <!-- Block 1b: Appearance -->
+            <div class="section-block">
+              <div class="field-label" style="font-size:1rem;margin-bottom:0.25rem;">Appearance</div>
+              <p class="field-hint" style="margin-bottom:1rem;color:#5a4a70;font-size:0.85rem;">Used for casting purposes only. Shared with a production when you apply.</p>
+              <div class="section-fields" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0.85rem;">
+                <div class="field-group">
+                  <label class="field-label" for="perf-height">Height <span class="opt">optional</span></label>
+                  <input type="text" id="perf-height" class="field-input" placeholder='e.g. 5&apos;6" or 168 cm' />
+                </div>
+                <div class="field-group">
+                  <label class="field-label" for="perf-eye-colour">Eye Colour <span class="opt">optional</span></label>
+                  <select id="perf-eye-colour" class="field-input">
+                    <option value="">Select…</option>
+                    <option value="brown">Brown</option>
+                    <option value="blue">Blue</option>
+                    <option value="green">Green</option>
+                    <option value="hazel">Hazel</option>
+                    <option value="grey">Grey</option>
+                    <option value="amber">Amber</option>
+                    <option value="other">Other</option>
+                  </select>
+                </div>
+                <div class="field-group">
+                  <label class="field-label" for="perf-hair-colour">Hair Colour <span class="opt">optional</span></label>
+                  <select id="perf-hair-colour" class="field-input">
+                    <option value="">Select…</option>
+                    <option value="black">Black</option>
+                    <option value="dark-brown">Dark Brown</option>
+                    <option value="brown">Brown</option>
+                    <option value="light-brown">Light Brown</option>
+                    <option value="blonde">Blonde</option>
+                    <option value="red">Red</option>
+                    <option value="auburn">Auburn</option>
+                    <option value="grey">Grey</option>
+                    <option value="white">White</option>
+                    <option value="other">Other / Dyed</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- ── Volunteer Tab ─────────────────────────────── -->
+        <div class="ptab-panel" id="ptab-volunteer" role="tabpanel">
+          <div class="tab-toggle-bar" id="togglebar-volunteer">
+            <div>
+              <div class="tab-toggle-title">Volunteer</div>
+              <div class="tab-toggle-sub">Your experience, interests, and comfort level for volunteer roles</div>
+            </div>
+            <div class="toggle-wrap" onclick="event.stopPropagation()">
+              <span class="toggle-label" id="toggle-lbl-volunteer">OFF</span>
+              <label>
+                <span class="sr-only">Enable Volunteer section</span>
+                <input type="checkbox" class="toggle-input section-toggle" data-section="volunteer" id="toggle-volunteer" />
+                <span class="toggle-track"></span>
+              </label>
+            </div>
+          </div>
+          <div class="tab-section-body is-disabled" id="tsbody-volunteer">
+
+            <!-- Best Fit banner -->
+            <div class="bestfit-banner">
+              <div class="bestfit-banner-text">
+                <strong>Not sure where you fit in?</strong> Answer a few quick questions and we will show you the volunteer roles that suit you best.
+              </div>
+              <a href="volunteer-best-fit.html" class="btn--bestfit">Find My Best Fit</a>
+            </div>
+
+            <!-- Block 1: Experience -->
+            <div class="perf-block">
+              <div class="perf-block-header">
+                <div class="perf-block-icon">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                </div>
+                <div class="perf-block-title">Experience</div>
+              </div>
+              <p class="field-hint" style="margin-bottom:1rem;">Pick the level that best describes you for each area. Leave blank if you have no experience there.</p>
+              <div class="vol-skills-grid">
+
+                <div class="vol-skill-card">
+                  <div class="vol-skill-name">Front of House</div>
+                  <div class="vol-skill-hint">Welcoming audiences, seating, programme distribution</div>
+                  <div class="level-opts">
+                    <label><input type="radio" name="vol-skill-foh" class="level-radio" value="some"><span class="level-pill">Some</span></label>
+                    <label><input type="radio" name="vol-skill-foh" class="level-radio" value="comfortable"><span class="level-pill">Comfortable</span></label>
+                    <label><input type="radio" name="vol-skill-foh" class="level-radio" value="lots"><span class="level-pill">Lots</span></label>
+                  </div>
+                </div>
+
+                <div class="vol-skill-card">
+                  <div class="vol-skill-name">Box Office &amp; Ticketing</div>
+                  <div class="vol-skill-hint">Selling tickets, cash handling, payment processing</div>
+                  <div class="level-opts">
+                    <label><input type="radio" name="vol-skill-box-office" class="level-radio" value="some"><span class="level-pill">Some</span></label>
+                    <label><input type="radio" name="vol-skill-box-office" class="level-radio" value="comfortable"><span class="level-pill">Comfortable</span></label>
+                    <label><input type="radio" name="vol-skill-box-office" class="level-radio" value="lots"><span class="level-pill">Lots</span></label>
+                  </div>
+                </div>
+
+                <div class="vol-skill-card">
+                  <div class="vol-skill-name">Stage Crew</div>
+                  <div class="vol-skill-hint">Scenery, props, and equipment during shows</div>
+                  <div class="level-opts">
+                    <label><input type="radio" name="vol-skill-stage-crew" class="level-radio" value="some"><span class="level-pill">Some</span></label>
+                    <label><input type="radio" name="vol-skill-stage-crew" class="level-radio" value="comfortable"><span class="level-pill">Comfortable</span></label>
+                    <label><input type="radio" name="vol-skill-stage-crew" class="level-radio" value="lots"><span class="level-pill">Lots</span></label>
+                  </div>
+                </div>
+
+                <div class="vol-skill-card">
+                  <div class="vol-skill-name">Props</div>
+                  <div class="vol-skill-hint">Tracking and handling props before and during the show</div>
+                  <div class="level-opts">
+                    <label><input type="radio" name="vol-skill-props" class="level-radio" value="some"><span class="level-pill">Some</span></label>
+                    <label><input type="radio" name="vol-skill-props" class="level-radio" value="comfortable"><span class="level-pill">Comfortable</span></label>
+                    <label><input type="radio" name="vol-skill-props" class="level-radio" value="lots"><span class="level-pill">Lots</span></label>
+                  </div>
+                </div>
+
+                <div class="vol-skill-card">
+                  <div class="vol-skill-name">Costumes and Wardrobe</div>
+                  <div class="vol-skill-hint">Fittings, repairs, quick changes, laundry</div>
+                  <div class="level-opts">
+                    <label><input type="radio" name="vol-skill-costumes" class="level-radio" value="some"><span class="level-pill">Some</span></label>
+                    <label><input type="radio" name="vol-skill-costumes" class="level-radio" value="comfortable"><span class="level-pill">Comfortable</span></label>
+                    <label><input type="radio" name="vol-skill-costumes" class="level-radio" value="lots"><span class="level-pill">Lots</span></label>
+                  </div>
+                </div>
+
+                <div class="vol-skill-card">
+                  <div class="vol-skill-name">Set Build</div>
+                  <div class="vol-skill-hint">Building and painting sets, basic construction</div>
+                  <div class="level-opts">
+                    <label><input type="radio" name="vol-skill-set-build" class="level-radio" value="some"><span class="level-pill">Some</span></label>
+                    <label><input type="radio" name="vol-skill-set-build" class="level-radio" value="comfortable"><span class="level-pill">Comfortable</span></label>
+                    <label><input type="radio" name="vol-skill-set-build" class="level-radio" value="lots"><span class="level-pill">Lots</span></label>
+                  </div>
+                </div>
+
+                <div class="vol-skill-card">
+                  <div class="vol-skill-name">Lighting</div>
+                  <div class="vol-skill-hint">Lighting board operation or setting lights</div>
+                  <div class="level-opts">
+                    <label><input type="radio" name="vol-skill-lighting" class="level-radio" value="some"><span class="level-pill">Some</span></label>
+                    <label><input type="radio" name="vol-skill-lighting" class="level-radio" value="comfortable"><span class="level-pill">Comfortable</span></label>
+                    <label><input type="radio" name="vol-skill-lighting" class="level-radio" value="lots"><span class="level-pill">Lots</span></label>
+                  </div>
+                </div>
+
+                <div class="vol-skill-card">
+                  <div class="vol-skill-name">Sound</div>
+                  <div class="vol-skill-hint">Sound board, microphones, or PA systems</div>
+                  <div class="level-opts">
+                    <label><input type="radio" name="vol-skill-sound" class="level-radio" value="some"><span class="level-pill">Some</span></label>
+                    <label><input type="radio" name="vol-skill-sound" class="level-radio" value="comfortable"><span class="level-pill">Comfortable</span></label>
+                    <label><input type="radio" name="vol-skill-sound" class="level-radio" value="lots"><span class="level-pill">Lots</span></label>
+                  </div>
+                </div>
+
+                <div class="vol-skill-card">
+                  <div class="vol-skill-name">Photography or Video</div>
+                  <div class="vol-skill-hint">Documenting rehearsals, performances, and events</div>
+                  <div class="level-opts">
+                    <label><input type="radio" name="vol-skill-photo" class="level-radio" value="some"><span class="level-pill">Some</span></label>
+                    <label><input type="radio" name="vol-skill-photo" class="level-radio" value="comfortable"><span class="level-pill">Comfortable</span></label>
+                    <label><input type="radio" name="vol-skill-photo" class="level-radio" value="lots"><span class="level-pill">Lots</span></label>
+                  </div>
+                </div>
+
+                <div class="vol-skill-card">
+                  <div class="vol-skill-name">Working with Children</div>
+                  <div class="vol-skill-hint">Supervising, supporting, or wrangling youth cast</div>
+                  <div class="level-opts">
+                    <label><input type="radio" name="vol-skill-youth" class="level-radio" value="some"><span class="level-pill">Some</span></label>
+                    <label><input type="radio" name="vol-skill-youth" class="level-radio" value="comfortable"><span class="level-pill">Comfortable</span></label>
+                    <label><input type="radio" name="vol-skill-youth" class="level-radio" value="lots"><span class="level-pill">Lots</span></label>
+                  </div>
+                </div>
+
+                <div class="vol-skill-card">
+                  <div class="vol-skill-name">Customer Service</div>
+                  <div class="vol-skill-hint">Sales, information, general public support</div>
+                  <div class="level-opts">
+                    <label><input type="radio" name="vol-skill-customer-service" class="level-radio" value="some"><span class="level-pill">Some</span></label>
+                    <label><input type="radio" name="vol-skill-customer-service" class="level-radio" value="comfortable"><span class="level-pill">Comfortable</span></label>
+                    <label><input type="radio" name="vol-skill-customer-service" class="level-radio" value="lots"><span class="level-pill">Lots</span></label>
+                  </div>
+                </div>
+
+                <div class="vol-skill-card">
+                  <div class="vol-skill-name">Administration</div>
+                  <div class="vol-skill-hint">Organisation, data entry, scheduling, coordination</div>
+                  <div class="level-opts">
+                    <label><input type="radio" name="vol-skill-admin" class="level-radio" value="some"><span class="level-pill">Some</span></label>
+                    <label><input type="radio" name="vol-skill-admin" class="level-radio" value="comfortable"><span class="level-pill">Comfortable</span></label>
+                    <label><input type="radio" name="vol-skill-admin" class="level-radio" value="lots"><span class="level-pill">Lots</span></label>
+                  </div>
+                </div>
+
+              </div>
+            </div>
+
+            <!-- Block 2: What I enjoy -->
+            <div class="perf-block">
+              <div class="perf-block-header">
+                <div class="perf-block-icon">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+                </div>
+                <div class="perf-block-title">What I enjoy <span style="font-weight:400;opacity:0.65;font-size:0.7rem;margin-left:0.3rem;">pick any that apply</span></div>
+              </div>
+              <div class="level-opts" style="gap:0.5rem;">
+                <label><input type="checkbox" name="vol-interest" class="level-radio" value="people"><span class="level-pill">Working with people</span></label>
+                <label><input type="checkbox" name="vol-interest" class="level-radio" value="physical"><span class="level-pill">Physical, hands-on tasks</span></label>
+                <label><input type="checkbox" name="vol-interest" class="level-radio" value="behind-scenes"><span class="level-pill">Behind the scenes</span></label>
+                <label><input type="checkbox" name="vol-interest" class="level-radio" value="detail-work"><span class="level-pill">Detail-focused work</span></label>
+                <label><input type="checkbox" name="vol-interest" class="level-radio" value="creative"><span class="level-pill">Creative or design work</span></label>
+                <label><input type="checkbox" name="vol-interest" class="level-radio" value="organizing"><span class="level-pill">Organizing and coordinating</span></label>
+                <label><input type="checkbox" name="vol-interest" class="level-radio" value="leading"><span class="level-pill">Taking the lead</span></label>
+                <label><input type="checkbox" name="vol-interest" class="level-radio" value="supporting"><span class="level-pill">Supporting and helping others</span></label>
+              </div>
+            </div>
+
+            <!-- Block 3: Comfort and Boundaries -->
+            <div class="perf-block">
+              <div class="perf-block-header">
+                <div class="perf-block-icon">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                </div>
+                <div class="perf-block-title">Comfort and Boundaries <span style="font-weight:400;opacity:0.65;font-size:0.7rem;margin-left:0.3rem;">optional</span></div>
+              </div>
+              <div class="vol-comfort-grid">
+
+                <div class="vol-comfort-card">
+                  <div class="vol-comfort-name">Working with the public</div>
+                  <div class="level-opts">
+                    <label><input type="radio" name="vol-comfort-public" class="level-radio" value="love-it"><span class="level-pill">Love it</span></label>
+                    <label><input type="radio" name="vol-comfort-public" class="level-radio" value="fine"><span class="level-pill">Fine with it</span></label>
+                    <label><input type="radio" name="vol-comfort-public" class="level-radio" value="prefer-not"><span class="level-pill">Prefer not to</span></label>
+                  </div>
+                </div>
+
+                <div class="vol-comfort-card">
+                  <div class="vol-comfort-name">Working with children</div>
+                  <div class="level-opts">
+                    <label><input type="radio" name="vol-comfort-children" class="level-radio" value="love-it"><span class="level-pill">Love it</span></label>
+                    <label><input type="radio" name="vol-comfort-children" class="level-radio" value="fine"><span class="level-pill">Fine with it</span></label>
+                    <label><input type="radio" name="vol-comfort-children" class="level-radio" value="prefer-not"><span class="level-pill">Prefer not to</span></label>
+                  </div>
+                </div>
+
+                <div class="vol-comfort-card">
+                  <div class="vol-comfort-name">Physical tasks (lifting, moving)</div>
+                  <div class="level-opts">
+                    <label><input type="radio" name="vol-comfort-physical" class="level-radio" value="fine"><span class="level-pill">Totally fine</span></label>
+                    <label><input type="radio" name="vol-comfort-physical" class="level-radio" value="somewhat"><span class="level-pill">Somewhat</span></label>
+                    <label><input type="radio" name="vol-comfort-physical" class="level-radio" value="prefer-not"><span class="level-pill">Prefer lighter work</span></label>
+                  </div>
+                </div>
+
+                <div class="vol-comfort-card">
+                  <div class="vol-comfort-name">Fast-paced environments</div>
+                  <div class="level-opts">
+                    <label><input type="radio" name="vol-comfort-pace" class="level-radio" value="love-it"><span class="level-pill">Totally fine</span></label>
+                    <label><input type="radio" name="vol-comfort-pace" class="level-radio" value="usually-ok"><span class="level-pill">Usually ok</span></label>
+                    <label><input type="radio" name="vol-comfort-pace" class="level-radio" value="prefer-calm"><span class="level-pill">Prefer calm</span></label>
+                  </div>
+                </div>
+
+                <div class="vol-comfort-card">
+                  <div class="vol-comfort-name">Noisy or busy backstage areas</div>
+                  <div class="level-opts">
+                    <label><input type="radio" name="vol-comfort-noise" class="level-radio" value="fine"><span class="level-pill">Totally fine</span></label>
+                    <label><input type="radio" name="vol-comfort-noise" class="level-radio" value="usually-ok"><span class="level-pill">Usually ok</span></label>
+                    <label><input type="radio" name="vol-comfort-noise" class="level-radio" value="prefer-not"><span class="level-pill">Not ideal for me</span></label>
+                  </div>
+                </div>
+
+                <div class="vol-comfort-card">
+                  <div class="vol-comfort-name">Cash or payment handling</div>
+                  <div class="level-opts">
+                    <label><input type="radio" name="vol-comfort-cash" class="level-radio" value="fine"><span class="level-pill">Comfortable</span></label>
+                    <label><input type="radio" name="vol-comfort-cash" class="level-radio" value="with-training"><span class="level-pill">With training</span></label>
+                    <label><input type="radio" name="vol-comfort-cash" class="level-radio" value="prefer-not"><span class="level-pill">Prefer not to</span></label>
+                  </div>
+                </div>
+
+              </div>
+            </div>
+
+            <!-- Block 4: Working Style -->
+            <div class="perf-block">
+              <div class="perf-block-header">
+                <div class="perf-block-icon">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                </div>
+                <div class="perf-block-title">Working Style <span style="font-weight:400;opacity:0.65;font-size:0.7rem;margin-left:0.3rem;">optional</span></div>
+              </div>
+
+              <div class="field-group" style="margin-bottom:1rem;">
+                <span class="field-label">Leadership preference <span class="opt">optional</span></span>
+                <div class="level-opts">
+                  <label><input type="radio" name="vol-leadership" class="level-radio" value="support"><span class="level-pill">I prefer support roles</span></label>
+                  <label><input type="radio" name="vol-leadership" class="level-radio" value="co-lead"><span class="level-pill">I am comfortable co-leading</span></label>
+                  <label><input type="radio" name="vol-leadership" class="level-radio" value="lead"><span class="level-pill">I am happy to take charge</span></label>
+                </div>
+              </div>
+
+              <div class="field-group" style="margin-bottom:0.85rem;">
+                <label class="field-label" for="vol-availability">General Availability <span class="opt">optional</span></label>
+                <textarea id="vol-availability" class="field-input" rows="2" placeholder="e.g. Weekends, weekday evenings, school holidays"></textarea>
+              </div>
+
+              <div class="field-group">
+                <label class="field-label" for="vol-support-needs">Support Needs <span class="opt">optional</span></label>
+                <p class="field-hint" style="margin-bottom:0.4rem;">Anything that would help you volunteer comfortably. Accessibility needs, scheduling requirements, or anything else worth knowing.</p>
+                <textarea id="vol-support-needs" class="field-input" rows="2" placeholder="e.g. Wheelchair accessible spaces only, cannot do stairs"></textarea>
+              </div>
+
+            </div>
+
+          </div><!-- /tsbody-volunteer -->
+        </div>
+
+        <!-- ── Creative Team Tab ─────────────────────────── -->
+        <div class="ptab-panel" id="ptab-creative" role="tabpanel">
+          <div class="tab-toggle-bar" id="togglebar-creative">
+            <div>
+              <div class="tab-toggle-title">Creative Team</div>
+              <div class="tab-toggle-sub">Directors, stage managers, designers, and other creative roles</div>
+            </div>
+            <div class="toggle-wrap" onclick="event.stopPropagation()">
+              <span class="toggle-label" id="toggle-lbl-creative">OFF</span>
+              <label>
+                <span class="sr-only">Enable Creative Team section</span>
+                <input type="checkbox" class="toggle-input section-toggle" data-section="creative" id="toggle-creative" />
+                <span class="toggle-track"></span>
+              </label>
+            </div>
+          </div>
+          <div class="tab-section-body is-disabled" id="tsbody-creative">
+
+            <p style="font-size:0.82rem;color:#7a6e90;margin:0 0 1.25rem;line-height:1.6;">Turn on the roles you are available for. Each one you enable will make you visible to production teams looking for that role.</p>
+
+            <!-- Director -->
+            <div class="vol-skill-card" style="margin-bottom:1rem;">
+              <div class="vol-skill-header">
+                <div style="display:flex;align-items:center;gap:0.65rem;">
+                  <img src="CreativeTeam-Director.svg" alt="" style="width:28px;height:28px;object-fit:contain;flex-shrink:0;opacity:0.5;" />
+                  <div>
+                  <div class="vol-skill-name">Director</div>
+                  <div class="vol-skill-hint">Overall artistic vision, blocking, working with cast and creative team</div>
+                  </div>
+                </div>
+                <div class="toggle-wrap" onclick="event.stopPropagation()">
+                  <span class="toggle-label" id="toggle-lbl-cre-director">OFF</span>
+                  <label>
+                    <input type="checkbox" class="toggle-input cre-role-toggle" id="cre-director-toggle" data-role="director"
+                      onchange="this.closest('.vol-skill-card').querySelector('.cre-role-body').style.display=this.checked?'block':'none';document.getElementById('toggle-lbl-cre-director').textContent=this.checked?'ON':'OFF'" />
+                    <span class="toggle-track"></span>
+                  </label>
+                </div>
+              </div>
+              <div class="cre-role-body" style="display:none;margin-top:1rem;">
+                <div class="field-group">
+                  <label class="field-label" for="cre-director-exp">Experience</label>
+                  <textarea id="cre-director-exp" class="field-input" rows="2" placeholder="What shows have you directed? What style or scale do you work best in?"></textarea>
+                </div>
+              </div>
+            </div>
+
+            <!-- Choreographer -->
+            <div class="vol-skill-card" style="margin-bottom:1rem;">
+              <div class="vol-skill-header">
+                <div style="display:flex;align-items:center;gap:0.65rem;">
+                  <img src="CreativeTeam-Choreographer.svg" alt="" style="width:28px;height:28px;object-fit:contain;flex-shrink:0;opacity:0.5;" />
+                  <div>
+                  <div class="vol-skill-name">Choreographer</div>
+                  <div class="vol-skill-hint">Creating and teaching movement, dance numbers, and physical staging</div>
+                  </div>
+                </div>
+                <div class="toggle-wrap" onclick="event.stopPropagation()">
+                  <span class="toggle-label" id="toggle-lbl-cre-choreo">OFF</span>
+                  <label>
+                    <input type="checkbox" class="toggle-input cre-role-toggle" id="cre-choreo-toggle" data-role="choreographer"
+                      onchange="this.closest('.vol-skill-card').querySelector('.cre-role-body').style.display=this.checked?'block':'none';document.getElementById('toggle-lbl-cre-choreo').textContent=this.checked?'ON':'OFF'" />
+                    <span class="toggle-track"></span>
+                  </label>
+                </div>
+              </div>
+              <div class="cre-role-body" style="display:none;margin-top:1rem;">
+                <div class="field-group">
+                  <label class="field-label" for="cre-choreo-exp">Experience</label>
+                  <textarea id="cre-choreo-exp" class="field-input" rows="2" placeholder="What styles do you choreograph? Any notable shows or companies?"></textarea>
+                </div>
+              </div>
+            </div>
+
+            <!-- Vocal Director -->
+            <div class="vol-skill-card" style="margin-bottom:1rem;">
+              <div class="vol-skill-header">
+                <div style="display:flex;align-items:center;gap:0.65rem;">
+                  <img src="CreativeTeam-MusicalDirector.svg" alt="" style="width:28px;height:28px;object-fit:contain;flex-shrink:0;opacity:0.5;" />
+                  <div>
+                  <div class="vol-skill-name">Vocal Director</div>
+                  <div class="vol-skill-hint">Music direction, vocal coaching, conducting, and musical rehearsals</div>
+                  </div>
+                </div>
+                <div class="toggle-wrap" onclick="event.stopPropagation()">
+                  <span class="toggle-label" id="toggle-lbl-cre-vocal">OFF</span>
+                  <label>
+                    <input type="checkbox" class="toggle-input cre-role-toggle" id="cre-vocal-toggle" data-role="vocal_director"
+                      onchange="this.closest('.vol-skill-card').querySelector('.cre-role-body').style.display=this.checked?'block':'none';document.getElementById('toggle-lbl-cre-vocal').textContent=this.checked?'ON':'OFF'" />
+                    <span class="toggle-track"></span>
+                  </label>
+                </div>
+              </div>
+              <div class="cre-role-body" style="display:none;margin-top:1rem;">
+                <div class="field-group">
+                  <label class="field-label" for="cre-vocal-exp">Experience</label>
+                  <textarea id="cre-vocal-exp" class="field-input" rows="2" placeholder="Instruments, conducting experience, styles you work in?"></textarea>
+                </div>
+              </div>
+            </div>
+
+            <!-- Producer -->
+            <div class="vol-skill-card" style="margin-bottom:1rem;">
+              <div class="vol-skill-header">
+                <div style="display:flex;align-items:center;gap:0.65rem;">
+                  <img src="Creative Team-producer.svg" alt="" style="width:28px;height:28px;object-fit:contain;flex-shrink:0;opacity:0.5;" />
+                  <div>
+                  <div class="vol-skill-name">Producer</div>
+                  <div class="vol-skill-hint">Budgeting, logistics, contracts, and overall production management</div>
+                  </div>
+                </div>
+                <div class="toggle-wrap" onclick="event.stopPropagation()">
+                  <span class="toggle-label" id="toggle-lbl-cre-producer">OFF</span>
+                  <label>
+                    <input type="checkbox" class="toggle-input cre-role-toggle" id="cre-producer-toggle" data-role="producer"
+                      onchange="this.closest('.vol-skill-card').querySelector('.cre-role-body').style.display=this.checked?'block':'none';document.getElementById('toggle-lbl-cre-producer').textContent=this.checked?'ON':'OFF'" />
+                    <span class="toggle-track"></span>
+                  </label>
+                </div>
+              </div>
+              <div class="cre-role-body" style="display:none;margin-top:1rem;">
+                <div class="field-group">
+                  <label class="field-label" for="cre-producer-exp">Experience</label>
+                  <textarea id="cre-producer-exp" class="field-input" rows="2" placeholder="Productions you've produced, budget ranges, what you bring to a production?"></textarea>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+
+      </form>
+
+    </div><!-- /sections-inner -->
+  </main>
+
+  </div><!-- /.dashboard-layout -->
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script>
+    /* ── Supabase client ──────────────────────────────────── */
+    const { createClient } = supabase;
+    const sb = createClient(
+      'https://tkmaiktxpwqfbgeojbnf.supabase.co',
+      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRrbWFpa3R4cHdxZmJnZW9qYm5mIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM3MzE4MTcsImV4cCI6MjA4OTMwNzgxN30.TkTZBNWUatk3Y6Vmfv1hIRR3DfVjgwauwa76Pf00J_8'
+    );
+
+    /* ── Escape HTML ──────────────────────────────────────── */
+    function esc(str) {
+      const d = document.createElement('div');
+      d.textContent = str ?? '';
+      return d.innerHTML;
+    }
+
+    /* ── Sidebar profile thumbnails ───────────────────────── */
+    function renderSidebarProfiles(profiles) {
+      const container = document.getElementById('sidebar-profiles-list');
+      if (!profiles || !profiles.length) { container.innerHTML = ''; return; }
+      container.innerHTML = profiles.map(function(p) {
+        const firstName = (p.credit_name || '').split(' ')[0] || 'Unnamed';
+        const thumb = p.headshot_url
+          ? `<img src="${esc(p.headshot_url)}" alt="" class="sidebar-profile-thumb" aria-hidden="true" />`
+          : `<div class="sidebar-profile-thumb-placeholder" aria-hidden="true">👤</div>`;
+        return `<a href="profile-view.html?id=${esc(p.id)}" class="sidebar-profile-item">${thumb}<span class="sidebar-profile-name">${esc(firstName)}</span></a>`;
+      }).join('');
+    }
+
+    /* ── Toast ────────────────────────────────────────────── */
+    let toastTimer = null;
+    function showToast(msg, isError = false) {
+      const el = document.getElementById('toast');
+      el.textContent = msg;
+      el.classList.toggle('is-error', isError);
+      el.classList.add('visible');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(function() { el.classList.remove('visible'); }, 3500);
+    }
+
+    /* ── Tab switching ────────────────────────────────────── */
+    function switchPTab(tab) {
+      document.querySelectorAll('.ptab-btn').forEach(function(btn) {
+        const isActive = btn.dataset.ptab === tab;
+        btn.classList.toggle('active', isActive);
+        btn.setAttribute('aria-selected', isActive ? 'true' : 'false');
+      });
+      document.querySelectorAll('.ptab-panel').forEach(function(panel) {
+        panel.classList.toggle('active', panel.id === 'ptab-' + tab);
+      });
+    }
+
+    /* ── Toggle section on/off ────────────────────────────── */
+    function setTabSectionState(section, isOn) {
+      const body   = document.getElementById('tsbody-' + section);
+      const bar    = document.getElementById('togglebar-' + section);
+      const lbl    = document.getElementById('toggle-lbl-' + section);
+      const tabBtn = document.getElementById('ptab-btn-' + section);
+      if (body)   body.classList.toggle('is-disabled', !isOn);
+      if (bar)    bar.classList.toggle('is-on', isOn);
+      if (lbl)    lbl.textContent = isOn ? 'ON' : 'OFF';
+      if (tabBtn) {
+        tabBtn.classList.toggle('tab-on', isOn);
+        tabBtn.classList.toggle('tab-off', !isOn);
+      }
+    }
+
+    /* ── Wire up tab buttons ──────────────────────────────── */
+    document.querySelectorAll('.ptab-btn').forEach(function(btn) {
+      btn.addEventListener('click', function() { switchPTab(this.dataset.ptab); });
+    });
+
+    /* ── Wire up section toggles ──────────────────────────── */
+    document.querySelectorAll('.section-toggle').forEach(function(toggle) {
+      toggle.addEventListener('change', function() {
+        setTabSectionState(this.dataset.section, this.checked);
+      });
+    });
+
+    /* ── Headshot slots (up to 5) ─────────────────────────── */
+    const MAX_SHOTS = 5;
+    let headshotSlots = [];
+
+    let dragSrcIndex = null;
+
+    function renderHeadshotGrid() {
+      const grid = document.getElementById('headshot-grid');
+      grid.innerHTML = '';
+
+      headshotSlots.forEach(function(slot, i) {
+        const el = document.createElement('div');
+        el.className = 'headshot-slot headshot-slot--filled';
+        el.setAttribute('draggable', 'true');
+        el.dataset.index = i;
+        el.innerHTML =
+          '<img src="' + slot.previewUrl + '" alt="Headshot ' + (i + 1) + '" />' +
+          (i === 0 ? '<div class="headshot-slot-label">Primary</div>' : '<button type="button" class="headshot-slot-set-primary" data-index="' + i + '">Set primary</button>') +
+          '<button type="button" class="headshot-slot-remove" data-index="' + i + '" aria-label="Remove photo ' + (i + 1) + '">×</button>';
+
+        /* Drag events */
+        el.addEventListener('dragstart', function(e) {
+          dragSrcIndex = i;
+          e.dataTransfer.effectAllowed = 'move';
+          setTimeout(function() { el.classList.add('headshot-slot--dragging'); }, 0);
+        });
+        el.addEventListener('dragend', function() {
+          el.classList.remove('headshot-slot--dragging');
+          grid.querySelectorAll('.headshot-slot').forEach(function(s) { s.classList.remove('headshot-slot--drag-over'); });
+        });
+        el.addEventListener('dragover', function(e) {
+          e.preventDefault();
+          e.dataTransfer.dropEffect = 'move';
+          grid.querySelectorAll('.headshot-slot').forEach(function(s) { s.classList.remove('headshot-slot--drag-over'); });
+          if (dragSrcIndex !== i) el.classList.add('headshot-slot--drag-over');
+        });
+        el.addEventListener('dragleave', function() {
+          el.classList.remove('headshot-slot--drag-over');
+        });
+        el.addEventListener('drop', function(e) {
+          e.preventDefault();
+          el.classList.remove('headshot-slot--drag-over');
+          if (dragSrcIndex === null || dragSrcIndex === i) return;
+          const moved = headshotSlots.splice(dragSrcIndex, 1)[0];
+          headshotSlots.splice(i, 0, moved);
+          dragSrcIndex = null;
+          renderHeadshotGrid();
+          scheduleSave(true);
+        });
+
+        grid.appendChild(el);
+      });
+
+      if (headshotSlots.length < MAX_SHOTS) {
+        const addBtn = document.createElement('button');
+        addBtn.type = 'button';
+        addBtn.className = 'headshot-add-btn';
+        addBtn.setAttribute('aria-label', 'Add headshot');
+        addBtn.textContent = '+';
+        addBtn.addEventListener('click', function() {
+          document.getElementById('headshot-input').click();
+        });
+        grid.appendChild(addBtn);
+      }
+
+      grid.querySelectorAll('.headshot-slot-remove').forEach(function(btn) {
+        btn.addEventListener('click', function(e) {
+          e.stopPropagation();
+          headshotSlots.splice(parseInt(btn.dataset.index), 1);
+          renderHeadshotGrid();
+          scheduleSave(true);
+        });
+      });
+
+      grid.querySelectorAll('.headshot-slot-set-primary').forEach(function(btn) {
+        btn.addEventListener('click', function(e) {
+          e.stopPropagation();
+          const idx = parseInt(btn.dataset.index);
+          const moved = headshotSlots.splice(idx, 1)[0];
+          headshotSlots.unshift(moved);
+          renderHeadshotGrid();
+          scheduleSave(true);
+        });
+      });
+    }
+
+    document.getElementById('headshot-input').addEventListener('change', function(e) {
+      const file = e.target.files[0];
+      e.target.value = '';
+      if (!file) return;
+      if (file.size > 5 * 1024 * 1024) { showToast('Photo must be under 5 MB.', true); return; }
+      if (headshotSlots.length >= MAX_SHOTS) return;
+      const reader = new FileReader();
+      reader.onload = function(ev) {
+        headshotSlots.push({ file: file, previewUrl: ev.target.result, savedUrl: null });
+        renderHeadshotGrid();
+        scheduleSave(true);
+      };
+      reader.readAsDataURL(file);
+    });
+
+    renderHeadshotGrid();
+
+    /* ── DOB age display ──────────────────────────────────── */
+    function updateAgeDisplay(dobValue) {
+      const badge  = document.getElementById('basics-age-badge');
+      const notice = document.getElementById('basics-minor-notice');
+      if (!dobValue) { badge.innerHTML = ''; notice.style.display = 'none'; return; }
+      const birth = new Date(dobValue);
+      const today = new Date();
+      let age = today.getFullYear() - birth.getFullYear();
+      const m = today.getMonth() - birth.getMonth();
+      if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) age--;
+      if (age < 0 || age > 120) { badge.innerHTML = ''; notice.style.display = 'none'; return; }
+      const isMinor = age < 18;
+      badge.innerHTML = '<span class="age-badge' + (isMinor ? ' is-minor' : '') + '">' + age + ' years old' + (isMinor ? ' · Minor' : '') + '</span>';
+      notice.style.display = isMinor ? '' : 'none';
+    }
+
+    document.getElementById('basics-dob').addEventListener('change', function() {
+      updateAgeDisplay(this.value);
+    });
+
+    /* ── Resume file handling ─────────────────────────────── */
+    let pendingResumeFile = null;
+    document.getElementById('perf-resume-input').addEventListener('change', function() {
+      const file = this.files[0];
+      this.value = '';
+      if (!file) return;
+      if (file.size > 5 * 1024 * 1024) { showToast('Resume must be under 5 MB.', true); return; }
+      pendingResumeFile = file;
+      document.getElementById('perf-resume-text').textContent = file.name;
+      document.getElementById('perf-resume-area').classList.add('has-file');
+      scheduleSave(true);
+    });
+
+    function clearResume() {
+      pendingResumeFile = null;
+      document.getElementById('perf-resume-text').textContent = 'Click to upload PDF (max 5 MB)';
+      document.getElementById('perf-resume-area').classList.remove('has-file');
+      document.getElementById('perf-resume-input').value = '';
+    }
+
+    /* ── Collect sections JSONB ───────────────────────────── */
+    function collectSections() {
+      const sections = {};
+      ['performer', 'volunteer', 'creative'].forEach(function(key) {
+        const toggle  = document.querySelector('.section-toggle[data-section="' + key + '"]');
+        const enabled = toggle ? toggle.checked : false;
+        const entry   = { enabled: enabled };
+        if (key === 'performer') {
+          entry.voice_type    = document.getElementById('perf-voice-type').value;
+          entry.experience    = document.getElementById('perf-experience').value;
+          entry.training      = document.getElementById('perf-training').value;
+          entry.dance_styles  = document.getElementById('perf-dance-styles').value;
+          entry.instruments   = document.getElementById('perf-instruments').value;
+          entry.accents       = document.getElementById('perf-accents').value;
+          entry.combat        = document.getElementById('perf-combat').value;
+          entry.other_skills  = document.getElementById('perf-other-skills').value;
+          entry.height        = document.getElementById('perf-height').value;
+          entry.eye_colour    = document.getElementById('perf-eye-colour').value;
+          entry.hair_colour   = document.getElementById('perf-hair-colour').value;
+          const danceLevel    = document.querySelector('input[name="perf-dance-level"]:checked');
+          const actingLevel   = document.querySelector('input[name="perf-acting-level"]:checked');
+          const vocalComfort  = document.querySelector('input[name="perf-vocal-comfort"]:checked');
+          entry.dance_level   = danceLevel   ? danceLevel.value   : '';
+          entry.acting_level  = actingLevel  ? actingLevel.value  : '';
+          entry.vocal_comfort = vocalComfort ? vocalComfort.value : '';
+        } else if (key === 'volunteer') {
+          const skillKeys = ['foh','box-office','stage-crew','props','costumes','set-build','lighting','sound','photo','youth','customer-service','admin'];
+          const skills = {};
+          skillKeys.forEach(function(s) {
+            const checked = document.querySelector('input[name="vol-skill-' + s + '"]:checked');
+            if (checked) skills[s] = checked.value;
+          });
+          entry.skills = skills;
+          const interests = [];
+          document.querySelectorAll('input[name="vol-interest"]:checked').forEach(function(el) { interests.push(el.value); });
+          entry.interests = interests;
+          const comfort = {};
+          ['public','children','physical','pace','noise','cash'].forEach(function(c) {
+            const checked = document.querySelector('input[name="vol-comfort-' + c + '"]:checked');
+            if (checked) comfort[c] = checked.value;
+          });
+          entry.comfort = comfort;
+          const leadershipEl = document.querySelector('input[name="vol-leadership"]:checked');
+          entry.leadership    = leadershipEl ? leadershipEl.value : '';
+          entry.availability  = document.getElementById('vol-availability').value;
+          entry.support_needs = document.getElementById('vol-support-needs').value;
+        } else if (key === 'creative') {
+          const creRoles = {};
+          [{id:'director',key:'director'},{id:'choreo',key:'choreographer'},{id:'vocal',key:'vocal_director'},{id:'producer',key:'producer'}].forEach(function(r) {
+            const toggle = document.getElementById('cre-' + r.id + '-toggle');
+            const exp    = document.getElementById('cre-' + r.id + '-exp');
+            if (toggle) creRoles[r.key] = { enabled: toggle.checked, experience: exp ? exp.value : '' };
+          });
+          entry.roles = creRoles;
+        }
+        sections[key] = entry;
+      });
+      return sections;
+    }
+
+    /* ── Compute roles array ──────────────────────────────── */
+    function computeRoles(sections) {
+      const roles = [];
+      if (sections.performer && sections.performer.enabled) roles.push('Performer');
+      if (sections.volunteer && sections.volunteer.enabled) roles.push('Volunteer');
+      if (sections.creative  && sections.creative.enabled)  roles.push('Creative Team');
+      return roles;
+    }
+
+    /* ── Prefill from saved data ──────────────────────────── */
+    function prefillSections(saved) {
+      if (!saved || typeof saved !== 'object') return;
+      ['performer', 'volunteer', 'creative'].forEach(function(key) {
+        const data = saved[key];
+        if (!data) return;
+        const toggle = document.querySelector('.section-toggle[data-section="' + key + '"]');
+        if (toggle && data.enabled) {
+          toggle.checked = true;
+          setTabSectionState(key, true);
+        }
+        if (key === 'performer') {
+          if (data.voice_type)   document.getElementById('perf-voice-type').value    = data.voice_type;
+          if (data.experience)   document.getElementById('perf-experience').value    = data.experience;
+          if (data.training)     document.getElementById('perf-training').value      = data.training;
+          if (data.dance_styles) document.getElementById('perf-dance-styles').value  = data.dance_styles;
+          if (data.instruments)  document.getElementById('perf-instruments').value   = data.instruments;
+          if (data.accents)      document.getElementById('perf-accents').value       = data.accents;
+          if (data.combat)       document.getElementById('perf-combat').value        = data.combat;
+          if (data.other_skills) document.getElementById('perf-other-skills').value  = data.other_skills;
+          if (data.height)       document.getElementById('perf-height').value       = data.height;
+          if (data.eye_colour)   document.getElementById('perf-eye-colour').value   = data.eye_colour;
+          if (data.hair_colour)  document.getElementById('perf-hair-colour').value  = data.hair_colour;
+          if (data.dance_level) {
+            const r = document.querySelector('input[name="perf-dance-level"][value="' + data.dance_level + '"]');
+            if (r) r.checked = true;
+          }
+          if (data.acting_level) {
+            const r = document.querySelector('input[name="perf-acting-level"][value="' + data.acting_level + '"]');
+            if (r) r.checked = true;
+          }
+          if (data.vocal_comfort) {
+            const r = document.querySelector('input[name="perf-vocal-comfort"][value="' + data.vocal_comfort + '"]');
+            if (r) r.checked = true;
+          }
+          if (data.resume_url) {
+            document.getElementById('perf-resume-text').textContent = 'Resume on file (click to replace)';
+            document.getElementById('perf-resume-area').classList.add('has-file');
+          }
+        } else if (key === 'volunteer') {
+          if (data.skills && typeof data.skills === 'object') {
+            Object.entries(data.skills).forEach(function([skill, level]) {
+              const r = document.querySelector('input[name="vol-skill-' + skill + '"][value="' + level + '"]');
+              if (r) r.checked = true;
+            });
+          }
+          if (data.interests && Array.isArray(data.interests)) {
+            data.interests.forEach(function(val) {
+              const r = document.querySelector('input[name="vol-interest"][value="' + val + '"]');
+              if (r) r.checked = true;
+            });
+          }
+          if (data.comfort && typeof data.comfort === 'object') {
+            Object.entries(data.comfort).forEach(function([name, val]) {
+              const r = document.querySelector('input[name="vol-comfort-' + name + '"][value="' + val + '"]');
+              if (r) r.checked = true;
+            });
+          }
+          if (data.leadership) {
+            const r = document.querySelector('input[name="vol-leadership"][value="' + data.leadership + '"]');
+            if (r) r.checked = true;
+          }
+          if (data.availability)  document.getElementById('vol-availability').value   = data.availability;
+          if (data.support_needs) document.getElementById('vol-support-needs').value  = data.support_needs;
+        } else if (key === 'creative') {
+          if (data.roles) {
+            [{id:'director',key:'director'},{id:'choreo',key:'choreographer'},{id:'vocal',key:'vocal_director'},{id:'producer',key:'producer'}].forEach(function(r) {
+              const roleData = data.roles[r.key];
+              if (!roleData) return;
+              const toggle = document.getElementById('cre-' + r.id + '-toggle');
+              const exp    = document.getElementById('cre-' + r.id + '-exp');
+              const body   = toggle ? toggle.closest('.vol-skill-card').querySelector('.cre-role-body') : null;
+              const lbl    = document.getElementById('toggle-lbl-cre-' + r.id);
+              if (toggle && roleData.enabled) {
+                toggle.checked = true;
+                if (body) body.style.display = 'block';
+                if (lbl)  lbl.textContent = 'ON';
+              }
+              if (exp && roleData.experience) exp.value = roleData.experience;
+            });
+          }
+        }
+      });
+    }
+
+    /* ── Auth guard + init ────────────────────────────────── */
+    let currentProfileId = null;
+    let savedResumeUrl   = null; // preserved across saves
+
+    async function init() {
+      const { data: { session } } = await sb.auth.getSession();
+      if (!session) { window.location.href = 'login.html'; return; }
+
+      const profileId = new URLSearchParams(window.location.search).get('id');
+      if (!profileId) { window.location.href = 'profile-select.html'; return; }
+
+      currentProfileId = profileId;
+      document.getElementById('back-to-profile').href = 'profile-view.html?id=' + encodeURIComponent(profileId);
+
+      /* Sidebar */
+      document.getElementById('sidebar-email').textContent = session.user.email || '';
+      const metaId = session.user.user_metadata?.account_id;
+      if (metaId) document.getElementById('sidebar-account-id').textContent = metaId;
+
+      const { data: allProfiles } = await sb
+        .from('profiles')
+        .select('id, credit_name, headshot_url')
+        .eq('user_id', session.user.id);
+      if (allProfiles) renderSidebarProfiles(allProfiles);
+
+      /* Logout */
+      document.getElementById('logout-btn').addEventListener('click', async function() {
+        await sb.auth.signOut();
+        window.location.href = 'login.html';
+      });
+
+      /* Load profile */
+      const { data: profile, error } = await sb
+        .from('profiles')
+        .select('legal_first_name, legal_last_name, date_of_birth, credit_name, nickname, pronouns, headshot_url, headshot_urls, sections')
+        .eq('id', profileId)
+        .eq('user_id', session.user.id)
+        .single();
+
+      if (error || !profile) {
+        showToast('Could not load profile.', true);
+        setTimeout(function() { window.location.href = 'profile-select.html'; }, 2000);
+        return;
+      }
+
+      document.getElementById('profileNameDisplay').textContent = profile.credit_name || 'Unnamed Profile';
+      document.title = 'Edit ' + (profile.credit_name || 'Profile') + ' - Build The Show';
+
+      /* Prefill basics */
+      if (profile.legal_first_name) document.getElementById('basics-legal-first').value = profile.legal_first_name;
+      if (profile.legal_last_name)  document.getElementById('basics-legal-last').value  = profile.legal_last_name;
+      if (profile.date_of_birth)  {
+        document.getElementById('basics-dob').value = profile.date_of_birth;
+        updateAgeDisplay(profile.date_of_birth);
+      }
+      if (profile.credit_name) document.getElementById('basics-credit-name').value = profile.credit_name;
+      if (profile.nickname)    document.getElementById('basics-nickname').value    = profile.nickname;
+      if (profile.pronouns)    document.getElementById('basics-pronouns').value    = profile.pronouns;
+
+      /* Prefill headshots */
+      const savedUrls = (profile.headshot_urls && profile.headshot_urls.length)
+        ? profile.headshot_urls
+        : (profile.headshot_url ? [profile.headshot_url] : []);
+      headshotSlots = savedUrls.slice(0, MAX_SHOTS).map(function(url) {
+        return { file: null, previewUrl: url, savedUrl: url };
+      });
+      renderHeadshotGrid();
+
+      /* Prefill sections */
+      if (profile.sections) {
+        savedResumeUrl = profile.sections?.performer?.resume_url || null;
+        prefillSections(profile.sections);
+      }
+    }
+
+    /* ── Autosave ─────────────────────────────────────────── */
+    let saveTimer   = null;
+    let isSaving    = false;
+    let savedFadeTimer = null;
+
+    function setStatus(state, msg) {
+      const el = document.getElementById('autosave-status');
+      if (!el) return;
+      el.className = 'autosave-status ' + (state || '');
+      el.textContent = msg || '';
+      if (state === 'saved') {
+        clearTimeout(savedFadeTimer);
+        savedFadeTimer = setTimeout(function() {
+          el.textContent = '';
+          el.className = 'autosave-status';
+        }, 3000);
+      }
+    }
+
+    async function saveProfile() {
+      if (isSaving) { scheduleAfterCurrent(); return; }
+      isSaving = true;
+      setStatus('saving', 'Saving...');
+
+      try {
+        if (!currentProfileId) throw new Error('Profile not ready - try again in a moment');
+        const { data: { session } } = await sb.auth.getSession();
+        if (!session) throw new Error('Not logged in');
+        const currentUser = session.user;
+
+        /* Upload any new headshot files */
+        for (let i = 0; i < headshotSlots.length; i++) {
+          const slot = headshotSlots[i];
+          if (slot.file) {
+            const ext  = slot.file.name.split('.').pop();
+            const path = (currentUser ? currentUser.id : currentProfileId) + '/' + Date.now() + '_' + i + '.' + ext;
+            const { error: upErr } = await sb.storage
+              .from('profile-headshots')
+              .upload(path, slot.file, { upsert: true });
+            if (upErr) {
+              console.error('Photo upload error:', upErr.message);
+            } else {
+              const { data: urlData } = sb.storage.from('profile-headshots').getPublicUrl(path);
+              headshotSlots[i].savedUrl = urlData.publicUrl;
+              headshotSlots[i].file = null;
+            }
+          }
+        }
+
+        const finalUrls = headshotSlots.filter(function(s) { return s.savedUrl; }).map(function(s) { return s.savedUrl; });
+
+        /* Upload resume if changed */
+        const sections = collectSections();
+        // Preserve existing resume URL if no new file is being uploaded
+        if (savedResumeUrl && sections.performer && !sections.performer.resume_url) {
+          sections.performer.resume_url = savedResumeUrl;
+        }
+        if (pendingResumeFile && currentUser) {
+          const rPath = currentUser.id + '/resumes/' + currentProfileId + '.pdf';
+          const { error: rErr } = await sb.storage
+            .from('profile-headshots')
+            .upload(rPath, pendingResumeFile, { upsert: true, contentType: 'application/pdf' });
+          if (!rErr) {
+            const { data: rUrl } = sb.storage.from('profile-headshots').getPublicUrl(rPath);
+            sections.performer = sections.performer || {};
+            sections.performer.resume_url = rUrl.publicUrl;
+            savedResumeUrl = rUrl.publicUrl;
+            pendingResumeFile = null;
+          }
+        }
+
+        /* Build update payload */
+        const updateData = {
+          legal_first_name: document.getElementById('basics-legal-first').value.trim(),
+          legal_last_name:  document.getElementById('basics-legal-last').value.trim(),
+          date_of_birth:    document.getElementById('basics-dob').value || null,
+          credit_name:      document.getElementById('basics-credit-name').value.trim(),
+          nickname:         document.getElementById('basics-nickname').value.trim(),
+          pronouns:         document.getElementById('basics-pronouns').value.trim(),
+          headshot_url:     finalUrls[0] || null,
+          headshot_urls:    finalUrls,
+          sections:         sections,
+        };
+
+        const { error } = await sb
+          .from('profiles')
+          .update(updateData)
+          .eq('id', currentProfileId);
+
+        if (error) throw error;
+
+        setStatus('saved', 'Saved');
+
+      } catch (err) {
+        console.error('Save error:', err);
+        setStatus('error', 'Could not save: ' + (err.message || 'unknown error'));
+      } finally {
+        isSaving = false;
+      }
+    }
+
+    function scheduleAfterCurrent() {
+      clearTimeout(saveTimer);
+      saveTimer = setTimeout(saveProfile, 300);
+    }
+
+    function scheduleSave(immediate) {
+      clearTimeout(saveTimer);
+      saveTimer = setTimeout(saveProfile, immediate ? 0 : 1500);
+    }
+
+    /* Attach auto-save listeners once the form exists */
+    document.getElementById('sectionsForm').addEventListener('input', function(e) {
+      if (e.target.type === 'file') return; // files handled separately
+      scheduleSave(false);
+    });
+    document.getElementById('sectionsForm').addEventListener('change', function(e) {
+      if (e.target.type === 'file') return;
+      scheduleSave(e.target.type === 'checkbox' || e.target.tagName === 'SELECT');
+    });
+
+    /* ── Boot ─────────────────────────────────────────────── */
+    init();
+  </script>
+
+</body>
+</html>
