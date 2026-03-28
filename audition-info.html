@@ -226,8 +226,9 @@
     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
     .ai-tab-bar-wrap { margin-bottom: 2rem; }
     .ai-tab-bar {
-      display: flex; flex-wrap: nowrap; gap: 0;
+      display: flex; flex-wrap: wrap; gap: 0;
       border-bottom: 2px solid rgba(87,46,136,0.12);
+      align-items: flex-end;
     }
     .ai-tab {
       flex: 1; min-width: 0;
@@ -242,8 +243,28 @@
     }
     .ai-tab:hover { color: #572e88; }
     .ai-tab.active { color: #572e88; border-bottom-color: #572e88; }
+    .ai-tab.book-tab {
+      flex: none;
+      background: #572e88; color: #fff;
+      border-radius: 8px 8px 0 0;
+      padding: 0.6rem 1.1rem;
+      margin-bottom: -2px;
+      font-size: clamp(0.64rem, 1.2vw, 0.82rem);
+      border: none;
+      transition: background 0.15s, color 0.15s;
+    }
+    .ai-tab.book-tab:hover { background: #3d1f63; color: #fff; }
+    .ai-tab.book-tab.active { background: #3d1f63; color: #fff; border-bottom-color: transparent; }
     .ai-tab-panel { display: none; }
     .ai-tab-panel.active { display: block; }
+
+    /* Slot hour group */
+    .ai-hour-group { margin-bottom: 1.1rem; }
+    .ai-hour-label {
+      font-size: 0.72rem; font-weight: 800; text-transform: uppercase;
+      letter-spacing: 0.08em; color: #572e88;
+      margin-bottom: 0.45rem;
+    }
 
     .ai-faq-item.open .ai-faq-answer { display: block !important; }
     .ai-faq-item.open .ai-faq-chevron { transform: rotate(180deg); }
@@ -383,8 +404,9 @@
     .ai-slot-avail.available { color: #16a34a; }
     .ai-slot-avail.limited   { color: #d97706; }
     .ai-slot-avail.full      { color: #dc2626; }
+    .ai-slot-avail.held      { color: #9a90b0; }
     .ai-slot-empty { font-size: 0.85rem; color: #9a90b0; padding: 0.5rem 0; }
-    .ai-book-row { margin-top: 1.25rem; display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
+    .ai-book-row { margin-top: 1.25rem; display: flex; justify-content: center; align-items: center; gap: 1rem; flex-wrap: wrap; }
     .ai-confirm-check {
       display: flex; align-items: flex-start; gap: 0.5rem;
       font-size: 0.82rem; color: #4a3d6b; line-height: 1.4; cursor: pointer;
@@ -509,9 +531,12 @@
     .bk-modal {
       background: #fff; border-radius: 20px;
       width: 100%; max-width: 500px;
+      max-height: 92vh;
+      display: flex; flex-direction: column;
       box-shadow: 0 24px 72px rgba(87,46,136,0.25);
       overflow: hidden;
     }
+    .bk-body { overflow-y: auto; flex: 1; }
     .bk-modal-header {
       background: linear-gradient(135deg, #572e88, #3d1f6a);
       padding: 1.4rem 1.75rem 1.2rem; position: relative;
@@ -542,7 +567,7 @@
     }
     .bk-step-dot.active { background: #572e88; color: #fff; box-shadow: 0 0 0 4px rgba(87,46,136,0.13); }
     .bk-step-dot.done { background: #ecfdf5; color: #16a34a; }
-    .bk-step-lbl { font-size: 0.6rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: #c0b8d4; white-space: nowrap; }
+    .bk-step-lbl { font-size: 0.72rem; font-weight: 700; color: #c0b8d4; white-space: nowrap; }
     .bk-step-lbl.active { color: #572e88; }
     .bk-step-lbl.done { color: #16a34a; }
 
@@ -610,7 +635,7 @@
     /* Success */
     .bk-success { display: none; padding: 2.25rem 1.75rem 2rem; text-align: center; }
     .bk-success.active { display: block; }
-    .bk-success-icon { font-size: 2.75rem; margin-bottom: 0.6rem; }
+    .bk-success-icon { margin-bottom: 0.75rem; }
     .bk-success-title { font-size: 1.15rem; font-weight: 800; color: #1a1530; margin-bottom: 0.4rem; }
     .bk-success-sub { font-size: 0.875rem; color: #6a5a80; line-height: 1.5; margin-bottom: 1.5rem; }
 
@@ -654,10 +679,7 @@
       <a href="index.html"><img src="logo-long-white.png" alt="Build The Show" class="nav-logo-img" /></a>
     </div>
     <nav class="nav-links"></nav>
-    <div class="nav-actions">
-      <a href="login.html" class="nav-login">Log In</a>
-      <a href="signup.html" class="btn--signup">Sign Up</a>
-    </div>
+    <div class="nav-actions"></div>
   </header>
 
   <main id="page-main">
@@ -847,6 +869,7 @@
     let _allSessions = [], _allSlots = {}, _bkProd = null, _allCharacters = [];
     let _bkSession = null, _bkSlotId = null, _bkStep = 1;
     let _bkIsMinor = false;
+    let _bkAudConfig = null;
     let _bkSelectedChars = []; // array of character names
 
     /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -959,6 +982,7 @@
       _allSessions = sessions || [];
       _allSlots    = slotsBySession || {};
       _bkProd      = prod;
+      _bkAudConfig = audConfig || null;
       _allCharacters = characters || [];
       const html = buildPage(prod, org, audConfig, events || [], characters || [], sessions || [], slotsBySession, userBooking, venueCity, venueMap, venueLabel);
       const content = document.getElementById('page-content');
@@ -1072,7 +1096,7 @@
             <button class="ai-tab" onclick="switchTab('tab-fees', this)">Fees &amp; Costs</button>
             <button class="ai-tab" onclick="switchTab('tab-calendar', this)">Schedule</button>
             <button class="ai-tab" onclick="switchTab('tab-characters', this)">Character List</button>
-            <button class="ai-tab" onclick="switchTab('tab-sessions', this)">Book Audition</button>
+            <button class="ai-tab book-tab" onclick="switchTab('tab-sessions', this)">Book Audition</button>
           </div>
         </div>
 
@@ -1332,24 +1356,10 @@
           if (bookingMode === 'open') {
             schedulerHTML = `<div class="bk-avail-line">Open call — just show up during the session window</div>`;
           } else if (slots.length) {
-            const slotButtons = slots.map(slot => {
-              const cap    = slot.capacity || session.capacity_per_slot || 1;
-              const booked = slot.booked_count || 0;
-              const avail  = cap - booked;
-              const isFull = !slot.is_available || avail <= 0;
-              const isLim  = !isFull && cap > 1 && avail <= Math.max(1, Math.floor(cap * 0.3));
-              const availClass = isFull ? 'full' : (isLim ? 'limited' : 'available');
-              const availLabel = isFull ? 'Full' : (isLim ? `${avail} left` : 'Available');
-              return `<button class="ai-slot-btn" ${isFull ? 'disabled' : ''}
-                              onclick="selectSlot('${session.id}','${slot.id}',this)">
-                <span class="ai-slot-time">${fmtTimeStr(slot.slot_time)}</span>
-                <span class="ai-slot-avail ${availClass}">${availLabel}</span>
-              </button>`;
-            }).join('');
             schedulerHTML = `
-              <div style="margin-top:0.85rem;">
+              <div style="margin-top:0.85rem;" id="slot-grid-${session.id}">
                 <div class="ai-slot-picker-label">Pick a time slot</div>
-                <div class="ai-slot-grid" id="slot-grid-${session.id}">${slotButtons}</div>
+                ${_buildSlotGroups(slots, session)}
               </div>`;
           }
         }
@@ -1389,21 +1399,188 @@
     }
 
     /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+       SLOT RENDERING + REFRESH
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+    function _buildSlotGroups(slots, session) {
+      const now = new Date();
+      const byHour = {};
+      slots.forEach(slot => {
+        const h = parseInt(String(slot.slot_time).split(':')[0], 10);
+        if (!byHour[h]) byHour[h] = [];
+        byHour[h].push(slot);
+      });
+      return Object.keys(byHour).sort((a,b) => a-b).map(h => {
+        const h12  = h % 12 || 12;
+        const ampm = h >= 12 ? 'pm' : 'am';
+        const btns = byHour[h].map(slot => {
+          const cap    = slot.capacity || session?.capacity_per_slot || 1;
+          const booked = slot.booked_count || 0;
+          const avail  = cap - booked;
+          const isFull = !slot.is_available || avail <= 0;
+          // Reserved by someone else and hold hasn't expired
+          const isHeld = !isFull && slot.reserved_until
+            && new Date(slot.reserved_until) > now
+            && slot.reserved_token !== _bkResvToken;
+          const isLim  = !isFull && !isHeld && cap > 1 && avail <= Math.max(1, Math.floor(cap * 0.3));
+          const disabled = isFull || isHeld;
+          const availClass = isFull ? 'full' : isHeld ? 'held' : isLim ? 'limited' : 'available';
+          const availLabel = isFull ? 'Full' : isHeld ? 'Unavailable' : isLim ? `${avail} left` : 'Available';
+          return `<button class="ai-slot-btn" ${disabled ? 'disabled' : ''}
+                          ${!disabled ? `onclick="selectSlot('${session.id}','${slot.id}',this)"` : ''}>
+            <span class="ai-slot-time">${fmtTimeStr(slot.slot_time)}</span>
+            <span class="ai-slot-avail ${availClass}">${availLabel}</span>
+          </button>`;
+        }).join('');
+        return `<div class="ai-hour-group">
+          <div class="ai-hour-label">${h12}${ampm}</div>
+          <div class="ai-slot-grid">${btns}</div>
+        </div>`;
+      }).join('');
+    }
+
+    async function refreshSlots() {
+      if (!_allSessions.length) return;
+      const ids = _allSessions.map(s => s.id);
+      const { data: slots } = await sb
+        .from('audition_time_slots')
+        .select('*')
+        .in('session_id', ids)
+        .order('slot_time');
+      if (!slots) return;
+      // Rebuild _allSlots
+      const fresh = {};
+      slots.forEach(slot => {
+        if (!fresh[slot.session_id]) fresh[slot.session_id] = [];
+        fresh[slot.session_id].push(slot);
+      });
+      _allSlots = fresh;
+      // Re-render each visible slot grid
+      _allSessions.forEach(session => {
+        const grid = document.getElementById('slot-grid-' + session.id);
+        if (!grid) return;
+        const sessionSlots = fresh[session.id] || [];
+        const label = grid.querySelector('.ai-slot-picker-label');
+        grid.innerHTML = (label ? label.outerHTML : '<div class="ai-slot-picker-label">Pick a time slot</div>')
+          + _buildSlotGroups(sessionSlots, session);
+      });
+    }
+
+    // Refresh every 20 seconds so held slots update promptly
+    setInterval(refreshSlots, 20000);
+
+    /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
        BOOKING MODAL
     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+    let _bkContactMode = 'performer';
+    let _bkRoleMode    = '';
+    let _bkGenderPref  = '';
+    let _bkResvToken   = '';
+    let _bkResvTimer   = null;
+    let _bkExpiresAt   = 0; // absolute timestamp (ms) for the 10-min session
+
+    /* ── Session state persistence ── */
+    function _bkSaveState() {
+      if (!_bkSession) return;
+      sessionStorage.setItem('bts_bk', JSON.stringify({
+        sessionId:    _bkSession.id,
+        slotId:       _bkSlotId,
+        step:         _bkStep,
+        expiresAt:    _bkExpiresAt,
+        isMinor:      _bkIsMinor,
+        roleMode:     _bkRoleMode,
+        genderPref:   _bkGenderPref,
+        contactMode:  _bkContactMode,
+        selectedRoles:[..._bkSelectedRoles],
+        fields: {
+          fullname:   document.getElementById('bk-fullname')?.value   || '',
+          birthday:   document.getElementById('bk-birthday')?.value   || '',
+          pronouns:   document.getElementById('bk-pronouns')?.value   || '',
+          gdname:     document.getElementById('bk-gdname')?.value     || '',
+          gdemail:    document.getElementById('bk-gdemail')?.value    || '',
+          gdphone:    document.getElementById('bk-gdphone')?.value    || '',
+          ctname:     document.getElementById('bk-ct-name')?.value    || '',
+          ctpronouns: document.getElementById('bk-ct-pronouns')?.value|| '',
+          ctemail:    document.getElementById('bk-ct-email')?.value   || '',
+          ctphone:    document.getElementById('bk-ct-phone')?.value   || '',
+        }
+      }));
+    }
+
+    function _bkClearState() {
+      sessionStorage.removeItem('bts_bk');
+    }
+
+    function _bkRestoreState() {
+      const raw = sessionStorage.getItem('bts_bk');
+      if (!raw) return;
+      let state;
+      try { state = JSON.parse(raw); } catch { _bkClearState(); return; }
+      if (!state.expiresAt || Date.now() > state.expiresAt) { _bkClearState(); return; }
+      const session = _allSessions.find(s => s.id === state.sessionId);
+      if (!session) { _bkClearState(); return; }
+
+      // Restore variables
+      _bkSession     = session;
+      _bkSlotId      = state.slotId   || null;
+      _bkIsMinor     = state.isMinor  || false;
+      _bkRoleMode    = state.roleMode || '';
+      _bkGenderPref  = state.genderPref || '';
+      _bkContactMode = state.contactMode || 'performer';
+      _bkExpiresAt   = state.expiresAt;
+      _bkSelectedRoles.clear();
+      (state.selectedRoles || []).forEach(r => _bkSelectedRoles.add(r));
+
+      // Populate header
+      const showLine  = document.getElementById('bk-show-line');
+      const sessTitle = document.getElementById('bk-session-title');
+      if (showLine)  showLine.textContent  = _bkProd?.title || '';
+      if (sessTitle) sessTitle.textContent = _bkSession.name || 'Audition';
+
+      // Re-render dynamic steps
+      _bkRenderRoles();
+      _bkRenderQuestions();
+
+      // Show modal
+      document.getElementById('bk-success').classList.remove('active');
+      const _so1 = document.getElementById('bk-session-overlay'); if (_so1) _so1.classList.remove('active');
+      document.getElementById('bk-steps-wrap').style.display = '';
+      document.getElementById('bk-body').style.display = '';
+      document.getElementById('bk-footer').style.display = '';
+      _bkBuildStepDots();
+      _bkGoTo(state.step || 1);
+      document.getElementById('bk-overlay').classList.add('open');
+
+      // Restore field values
+      const f = state.fields || {};
+      const set = (id, val) => { const el = document.getElementById(id); if (el && val) el.value = val; };
+      set('bk-fullname', f.fullname); set('bk-birthday', f.birthday); set('bk-pronouns', f.pronouns);
+      set('bk-gdname', f.gdname); set('bk-gdemail', f.gdemail); set('bk-gdphone', f.gdphone);
+      set('bk-ct-name', f.ctname); set('bk-ct-pronouns', f.ctpronouns);
+      set('bk-ct-email', f.ctemail); set('bk-ct-phone', f.ctphone);
+      if (f.birthday) bkCalcAge();
+      if (state.isMinor) { const sec = document.getElementById('bk-guardian-section'); if (sec) sec.style.display = 'block'; }
+      if (_bkRoleMode) _bkPickRoleMode(_bkRoleMode);
+      if (_bkGenderPref) _bkPickGender(_bkGenderPref);
+
+      // Resume countdown
+      _bkRunCountdown();
+    }
+
     function selectSlot(sessionId, slotId, btn) {
       const grid = document.getElementById('slot-grid-' + sessionId);
       if (grid) grid.querySelectorAll('.ai-slot-btn').forEach(b => b.classList.remove('selected'));
       btn.classList.add('selected');
       selectedSlots[sessionId] = slotId;
+      openBookModal(sessionId);
     }
 
-    function _bkBuildStepDots(isMinor) {
+    function _bkBuildStepDots() {
       const wrap = document.getElementById('bk-steps-inner');
       if (!wrap) return;
-      const stepDefs = isMinor
-        ? [{ lbl: 'Performer' }, { lbl: 'Guardian' }, { lbl: 'Roles' }, { lbl: 'Time Slot' }, { lbl: 'Review' }]
-        : [{ lbl: 'Performer' }, { lbl: 'Roles' }, { lbl: 'Time Slot' }, { lbl: 'Review' }];
+      const stepDefs = [
+        { lbl: 'Performer' }, { lbl: 'Contact' },
+        { lbl: 'Roles' }, { lbl: 'Questions' }, { lbl: 'Review' }
+      ];
       wrap.innerHTML = stepDefs.map((s, i) => `
         <div class="bk-step-item">
           <div class="bk-step-dot${i === 0 ? ' active' : ''}">${i + 1}</div>
@@ -1416,41 +1593,75 @@
     function openBookModal(sessionId) {
       _bkSession = _allSessions.find(s => s.id === sessionId) || null;
       if (!_bkSession) return;
-      _bkSlotId = selectedSlots[sessionId] || null;
-      _bkIsMinor = false;
+      _bkSlotId      = selectedSlots[sessionId] || null;
+      _bkIsMinor     = false;
       _bkSelectedChars = [];
+      _bkContactMode = 'performer';
+      _bkRoleMode    = '';
+      _bkGenderPref  = '';
+      _bkSelectedRoles.clear();
+      _bkCharFilterType = _bkCharFilterVocal = _bkCharFilterDance = _bkCharFilterUsage = '';
+      _bkCharSort = 'default';
 
-      // Reset all form fields
-      ['bk-fname','bk-lname','bk-age','bk-pronouns',
-       'bk-gfname','bk-glname','bk-gemail','bk-gphone'].forEach(id => {
+      // Reset form fields
+      ['bk-fullname','bk-birthday','bk-age','bk-pronouns',
+       'bk-gdname','bk-gdemail','bk-gdphone',
+       'bk-ct-name','bk-ct-pronouns','bk-ct-email','bk-ct-phone'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.value = '';
       });
+      const gdCheck = document.getElementById('bk-gd-agree');
+      if (gdCheck) gdCheck.checked = false;
+      const ageDisplay = document.getElementById('bk-age-display');
+      if (ageDisplay) ageDisplay.textContent = '';
+      const today = new Date().toISOString().split('T')[0];
+      const bdayInput = document.getElementById('bk-birthday');
+      if (bdayInput) bdayInput.max = today;
+      const ageWarnReset = document.getElementById('bk-age-warning');
+      if (ageWarnReset) ageWarnReset.style.display = 'none';
+      const gdSection = document.getElementById('bk-guardian-section');
+      if (gdSection) gdSection.style.display = 'none';
 
-      // Populate header
+      // Reset contact radio
+      const r = document.getElementById('bk-ct-radio-performer');
+      if (r) r.checked = true;
+
+      // Header
       const showLine  = document.getElementById('bk-show-line');
       const sessTitle = document.getElementById('bk-session-title');
       if (showLine)  showLine.textContent  = _bkProd?.title || '';
       if (sessTitle) sessTitle.textContent = _bkSession.name || 'Audition';
 
-      // Render character checkboxes
-      _bkRenderChars();
-
-      // Render slot picker
-      _bkRenderSlots();
+      // Render dynamic steps
+      _bkRenderRoles();
+      _bkRenderQuestions();
 
       // Show modal
       document.getElementById('bk-success').classList.remove('active');
+      const _so2 = document.getElementById('bk-session-overlay'); if (_so2) _so2.classList.remove('active');
       document.getElementById('bk-steps-wrap').style.display = '';
       document.getElementById('bk-body').style.display = '';
       document.getElementById('bk-footer').style.display = '';
-      _bkBuildStepDots(false); // start with adult flow (4 steps)
+      _bkBuildStepDots();
       _bkGoTo(1);
+
+      // Reset more-time button for fresh session
+      const _mtb = document.getElementById('bk-more-time-btn');
+      if (_mtb) { _mtb.disabled = false; _mtb.style.display = 'none'; }
+
+      // Start 10-minute session countdown
+      _bkStartCountdown(10 * 60);
+
+      // Reserve slot if pre-selected
+      if (_bkSlotId) _bkReserveSlot(_bkSlotId);
+
       document.getElementById('bk-overlay').classList.add('open');
     }
 
     function closeBookModal() {
       document.getElementById('bk-overlay').classList.remove('open');
+      clearInterval(_bkResvTimer);
+      _bkClearState();
     }
 
     function bkOverlayClick(e) {
@@ -1459,12 +1670,9 @@
 
     function _bkGoTo(step) {
       _bkStep = step;
-      // Steps depend on whether minor (5 steps) or adult (4 steps, no guardian)
-      const steps = _bkIsMinor ? [1,2,3,4,5] : [1,3,4,5];
-      const visibleIdx = steps.indexOf(step); // 0-based position in visible steps
-      const totalVisible = steps.length;
+      const steps = [1,2,3,4,5];
+      const visibleIdx = steps.indexOf(step);
 
-      // Update dots
       document.querySelectorAll('#bk-modal .bk-step-dot').forEach((dot, i) => {
         dot.classList.remove('active','done');
         if (i === visibleIdx) dot.classList.add('active');
@@ -1480,70 +1688,80 @@
         conn.classList.toggle('done', i < visibleIdx);
       });
 
-      // Show correct panel
-      [1,2,3,4,5].forEach(n => {
+      steps.forEach(n => {
         const p = document.getElementById('bk-panel-' + n);
         if (p) p.classList.toggle('active', n === step);
       });
 
-      // Back button
       const back = document.getElementById('bk-back');
       if (back) back.style.display = visibleIdx > 0 ? '' : 'none';
 
-      // Next button text
       const next = document.getElementById('bk-next');
       if (next) {
         next.disabled = false;
-        next.textContent = step === steps[steps.length - 1] ? 'Confirm Booking' : 'Next →';
+        next.textContent = step === 5 ? 'Confirm Booking' : 'Next →';
       }
 
-      // Clear errors
       ['bk-error','bk-error-2','bk-error-3','bk-error-4','bk-error-5'].forEach(id => {
         const e = document.getElementById(id); if (e) e.textContent = '';
       });
+
+      // Scroll body to top when changing steps
+      const body = document.getElementById('bk-body');
+      if (body) body.scrollTop = 0;
+
+      // Persist state across tab switches
+      _bkSaveState();
     }
 
     function _bkNext() {
-      const steps = _bkIsMinor ? [1,2,3,4,5] : [1,3,4,5];
-      const curIdx = steps.indexOf(_bkStep);
-      const nextStep = steps[curIdx + 1];
-
       if (_bkStep === 1) {
-        const fname = document.getElementById('bk-fname').value.trim();
-        const lname = document.getElementById('bk-lname').value.trim();
-        const age   = parseInt(document.getElementById('bk-age').value.trim(), 10);
-        if (!fname || !lname) { _bkErr('Please enter the performer\'s first and last name.'); return; }
-        if (!age || age < 1 || age > 120) { _bkErr('Please enter a valid age.'); return; }
+        const fullname  = document.getElementById('bk-fullname').value.trim();
+        const birthday  = document.getElementById('bk-birthday').value;
+        const age       = parseInt(document.getElementById('bk-age').value, 10);
+        const pronouns  = document.getElementById('bk-pronouns').value.trim();
+        if (!fullname)  { _bkErr('Please enter the performer\'s full name.'); return; }
+        if (!birthday)  { _bkErr('Please enter the performer\'s birthday.'); return; }
+        if (!age || age < 1 || age > 120) { _bkErr('Please enter a valid birthday.'); return; }
+        if (!pronouns)  { _bkErr('Pronouns are required — e.g. she/her or they/them.'); return; }
+        if (!pronouns.includes('/')) { _bkErr('Please use the format word/word — e.g. she/her or they/them.'); return; }
 
-        const wasMinor = _bkIsMinor;
         _bkIsMinor = age < 18;
-        if (_bkIsMinor !== wasMinor) _bkBuildStepDots(_bkIsMinor);
+        if (_bkIsMinor) {
+          const gdname  = document.getElementById('bk-gdname').value.trim();
+          const gdemail = document.getElementById('bk-gdemail').value.trim();
+          const gdcheck = document.getElementById('bk-gd-agree').checked;
+          if (!gdname)  { _bkErr('Please enter the guardian\'s full name.'); return; }
+          if (!gdemail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(gdemail)) { _bkErr('Please enter a valid guardian email.'); return; }
+          if (!gdcheck) { _bkErr('A parent or guardian must agree to the terms before continuing.'); return; }
+        }
 
-        _bkGoTo(nextStep);
+        // Age range check
+        const ageWarn = document.getElementById('bk-age-warning');
+        if (ageWarn && ageWarn.style.display !== 'none') {
+          const override = document.getElementById('bk-age-override');
+          if (!override?.checked) { _bkErr('Please check the box to confirm you have permission from the production team to audition outside the listed age range.'); return; }
+        }
+        // Default contact to guardian if minor, otherwise performer
+        _bkFillContact(_bkIsMinor ? 'guardian' : 'performer');
+        _bkGoTo(2);
 
       } else if (_bkStep === 2) {
-        // Guardian step
-        const gfname = document.getElementById('bk-gfname').value.trim();
-        const glname = document.getElementById('bk-glname').value.trim();
-        const gemail = document.getElementById('bk-gemail').value.trim();
-        if (!gfname || !glname) { _bkErr('Please enter the guardian\'s first and last name.'); return; }
-        if (!gemail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(gemail)) { _bkErr('Please enter a valid guardian email address.'); return; }
-        _bkGoTo(nextStep);
+        const ctname     = document.getElementById('bk-ct-name').value.trim();
+        const ctpronouns = document.getElementById('bk-ct-pronouns').value.trim();
+        const ctemail    = document.getElementById('bk-ct-email').value.trim();
+        if (!ctname)  { _bkErr('Please enter a contact name.'); return; }
+        if (!ctpronouns) { _bkErr('Pronouns are required.'); return; }
+        if (!ctpronouns.includes('/')) { _bkErr('Please use the format word/word for pronouns — e.g. she/her or they/them.'); return; }
+        if (!ctemail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(ctemail)) { _bkErr('Please enter a valid contact email.'); return; }
+        _bkGoTo(3);
 
       } else if (_bkStep === 3) {
-        // Characters — always optional (can skip)
-        _bkSelectedChars = [];
-        document.querySelectorAll('#bk-char-list input[type="checkbox"]:checked').forEach(cb => {
-          _bkSelectedChars.push(cb.value);
-        });
-        _bkGoTo(nextStep);
+        if (!_bkRoleMode) { _bkErr('Please choose one of the options above.'); return; }
+        _bkGoTo(4);
 
       } else if (_bkStep === 4) {
-        // Slot step
-        const isOpenCall = _bkSession?.booking_mode === 'open';
-        const slots = _allSlots[_bkSession?.id] || [];
-        if (!isOpenCall && slots.length && !_bkSlotId) { _bkErr('Please pick a time slot.'); return; }
-        _bkGoTo(nextStep);
+        _bkGoTo(5);
         _bkPopulateReview();
 
       } else if (_bkStep === 5) {
@@ -1552,9 +1770,7 @@
     }
 
     function _bkBack() {
-      const steps = _bkIsMinor ? [1,2,3,4,5] : [1,3,4,5];
-      const curIdx = steps.indexOf(_bkStep);
-      if (curIdx > 0) _bkGoTo(steps[curIdx - 1]);
+      if (_bkStep > 1) _bkGoTo(_bkStep - 1);
     }
 
     function _bkErr(msg) {
@@ -1563,95 +1779,391 @@
       if (el) el.textContent = msg;
     }
 
-    function _bkRenderChars() {
-      const container = document.getElementById('bk-char-list');
-      if (!container) return;
-      const chars = _allCharacters || [];
-      if (!chars.length) {
-        container.innerHTML = `<div style="font-size:0.85rem;color:#9a90b0;">No specific roles listed — your audition will be considered for all available parts.</div>`;
-        return;
-      }
-      container.innerHTML = chars.map(c => `
-        <label class="bk-char-row">
-          <input type="checkbox" value="${esc(c.name)}" />
-          <span class="bk-char-name">${esc(c.name)}</span>
-          ${c.role_type ? `<span class="bk-char-type">${esc(c.role_type)}</span>` : ''}
-        </label>`).join('') +
-        `<label class="bk-char-row bk-char-any">
-          <input type="checkbox" value="__any__" onchange="_bkAnyRole(this)" />
-          <span class="bk-char-name" style="font-style:italic;color:#6a5a80;">Any role — I'm open to whatever fits</span>
-        </label>`;
+    function bkCalcAge() {
+      const bday = document.getElementById('bk-birthday').value;
+      const display = document.getElementById('bk-age-display');
+      const hidden  = document.getElementById('bk-age');
+      if (!bday) { if (display) display.textContent = ''; if (hidden) hidden.value = ''; bkToggleGuardian(); bkCheckAgeRange(); return; }
+      const today = new Date();
+      const born  = new Date(bday + 'T00:00:00');
+      let age = today.getFullYear() - born.getFullYear();
+      const m = today.getMonth() - born.getMonth();
+      if (m < 0 || (m === 0 && today.getDate() < born.getDate())) age--;
+      if (age < 0 || age > 120) { if (display) display.textContent = ''; if (hidden) hidden.value = ''; return; }
+      if (hidden)  hidden.value    = String(age);
+      if (display) display.textContent = `Age: ${age}`;
+      bkToggleGuardian();
+      bkCheckAgeRange();
     }
 
-    function _bkAnyRole(cb) {
-      if (cb.checked) {
-        document.querySelectorAll('#bk-char-list input[type="checkbox"]').forEach(c => {
-          if (c !== cb) c.checked = false;
-        });
+    function bkToggleGuardian() {
+      const age   = parseInt(document.getElementById('bk-age').value, 10);
+      const isMin = age > 0 && age < 18;
+      const sec   = document.getElementById('bk-guardian-section');
+      const gdOpt = document.getElementById('bk-ct-guardian-opt');
+      if (sec)   sec.style.display   = isMin ? 'block' : 'none';
+      if (gdOpt) gdOpt.style.display = isMin ? '' : 'none';
+    }
+
+    function bkCheckAgeRange() {
+      const age    = parseInt(document.getElementById('bk-age').value, 10);
+      const ageMin = _bkProd?.age_min;
+      const ageMax = _bkProd?.age_max;
+      const warn   = document.getElementById('bk-age-warning');
+      const msg    = document.getElementById('bk-age-warning-msg');
+      const range  = document.getElementById('bk-age-range-label');
+      const box    = document.getElementById('bk-age-override');
+      if (!warn) return;
+
+      // No range set — nothing to check
+      if (!ageMin && !ageMax) { warn.style.display = 'none'; return; }
+      if (!age || age < 1)    { warn.style.display = 'none'; return; }
+
+      const tooYoung = ageMin && age < ageMin;
+      const tooOld   = ageMax && age > ageMax;
+
+      if (!tooYoung && !tooOld) { warn.style.display = 'none'; if (box) box.checked = false; return; }
+
+      // Build range label
+      if (ageMin && ageMax) range.textContent = `${ageMin}–${ageMax}`;
+      else if (ageMin)      range.textContent = `${ageMin} and up`;
+      else                  range.textContent = `up to ${ageMax}`;
+
+      if (tooYoung) msg.textContent = 'This performer may be too young for this production.';
+      else          msg.textContent = 'This performer may be too old for this production.';
+
+      warn.style.display = 'block';
+    }
+
+    function _bkFillContact(mode) {
+      _bkContactMode = mode;
+      // Uncheck all radios, check the right one
+      ['performer','guardian','new'].forEach(m => {
+        const r = document.getElementById('bk-ct-radio-' + m);
+        if (r) r.checked = (m === mode);
+      });
+      const nameEl     = document.getElementById('bk-ct-name');
+      const pronounsEl = document.getElementById('bk-ct-pronouns');
+      const emailEl    = document.getElementById('bk-ct-email');
+      const phoneEl    = document.getElementById('bk-ct-phone');
+      if (mode === 'performer') {
+        if (nameEl)     nameEl.value     = document.getElementById('bk-fullname')?.value.trim() || '';
+        if (pronounsEl) pronounsEl.value = document.getElementById('bk-pronouns')?.value.trim() || '';
+        if (emailEl)    emailEl.value    = '';
+        if (phoneEl)    phoneEl.value    = '';
+      } else if (mode === 'guardian') {
+        if (nameEl)     nameEl.value     = document.getElementById('bk-gdname')?.value.trim() || '';
+        if (pronounsEl) pronounsEl.value = '';
+        if (emailEl)    emailEl.value    = document.getElementById('bk-gdemail')?.value.trim() || '';
+        if (phoneEl)    phoneEl.value    = document.getElementById('bk-gdphone')?.value.trim() || '';
+      } else {
+        if (nameEl)     nameEl.value     = '';
+        if (pronounsEl) pronounsEl.value = '';
+        if (emailEl)    emailEl.value    = '';
+        if (phoneEl)    phoneEl.value    = '';
       }
     }
 
-    function _bkRenderSlots() {
-      const container = document.getElementById('bk-slot-body');
-      if (!container || !_bkSession) return;
-      const isOpenCall = _bkSession.booking_mode === 'open';
-      const slots = _allSlots[_bkSession.id] || [];
-
-      if (isOpenCall || !slots.length) {
-        const sub = document.getElementById('bk-slot-sub');
-        if (sub) sub.textContent = '';
-        container.innerHTML = `<div class="bk-open-note">
-          This is an open call — no specific time slot required.<br>Just show up during the session window.
-        </div>`;
-        return;
-      }
-
-      container.innerHTML = `
-        <div class="ai-slot-grid" id="bk-slot-grid">
-          ${slots.map(slot => {
-            const cap    = slot.capacity || _bkSession.capacity_per_slot || 1;
-            const booked = slot.booked_count || 0;
-            const avail  = cap - booked;
-            const isFull = !slot.is_available || avail <= 0;
-            const isLim  = !isFull && cap > 1 && avail <= Math.max(1, Math.floor(cap * 0.3));
-            const availClass = isFull ? 'full' : (isLim ? 'limited' : 'available');
-            const availLabel = isFull ? 'Full' : (isLim ? `${avail} left` : 'Available');
-            return `<button class="ai-slot-btn${_bkSlotId === slot.id ? ' selected' : ''}"
-                            ${isFull ? 'disabled' : ''}
-                            onclick="_bkPickSlot('${slot.id}',this)">
-              <span class="ai-slot-time">${fmtTimeStr(slot.slot_time)}</span>
-              <span class="ai-slot-avail ${availClass}">${availLabel}</span>
-            </button>`;
-          }).join('')}
-        </div>`;
-    }
-
-    function _bkPickSlot(slotId, btn) {
-      _bkSlotId = slotId;
-      document.querySelectorAll('#bk-slot-grid .ai-slot-btn').forEach(b => b.classList.remove('selected'));
-      btn.classList.add('selected');
+    function _bkPickRoleMode(mode) {
+      _bkRoleMode = mode;
+      ['specific','ensemble','any'].forEach(m => {
+        const btn = document.getElementById('bk-role-choice-' + m);
+        if (btn) btn.classList.toggle('selected', m === mode);
+      });
+      const charSection   = document.getElementById('bk-role-char-section');
+      const genderSection = document.getElementById('bk-gender-section');
+      if (charSection)   charSection.style.display   = mode === 'specific' ? 'block' : 'none';
+      if (genderSection) genderSection.style.display = mode === 'any' ? 'block' : 'none';
       _bkErr('');
     }
 
+    function _bkPickGender(pref) {
+      _bkGenderPref = pref;
+      ['match','open'].forEach(m => {
+        const btn = document.getElementById('bk-gender-' + m);
+        if (btn) btn.classList.toggle('selected', m === pref);
+      });
+    }
+
+    // Booking wizard role tile state
+    let _bkCharFilterType = '', _bkCharFilterVocal = '', _bkCharFilterDance = '', _bkCharFilterUsage = '';
+    let _bkCharSort = 'default';
+    const _bkSelectedRoles = new Set();
+
+    function _bkRenderRoles() {
+      const container = document.getElementById('bk-role-char-list');
+      if (!container) return;
+      const chars = _allCharacters || [];
+      if (!chars.length) {
+        container.innerHTML = `<p style="font-size:0.85rem;color:#9a90b0;margin:0.5rem 0 0;">No specific roles listed — we'll consider you for everything.</p>`;
+        return;
+      }
+
+      const ROLE_ORDER  = ['Principal','Supporting','Featured','Cameo','Group'];
+      const VOCAL_ORDER = ['Baritone','Alto','Mezzo Soprano','Soprano','Non-Singing'];
+      const USAGE_ORDER = ['Solos','Featured Solos','Light Singing','Group Singing','Non-Singing'];
+      const DANCE_ORDER = ['No Dance','Beginner Friendly','Performer Level','Dance-Focused'];
+      const customSort = (arr, order) => {
+        const known = order.filter(v => arr.includes(v));
+        const rest  = arr.filter(v => !order.includes(v)).sort();
+        return [...known, ...rest];
+      };
+      const types  = customSort([...new Set([...ROLE_ORDER, ...chars.map(c => c.role_type).filter(Boolean)])], ROLE_ORDER);
+      const vocals = customSort([...new Set(chars.map(c => c.vocal_type).filter(Boolean))], VOCAL_ORDER);
+      const dances = customSort([...new Set(chars.map(c => c.dancing_strength).filter(s => s && s !== 'None' && s !== 'Non-Dancing'))], DANCE_ORDER);
+      const usages = customSort([...new Set(chars.map(c => c.vocal_usage).filter(Boolean))], USAGE_ORDER);
+
+      const ddStyle     = 'font-size:0.75rem;font-weight:600;padding:0.35rem 0.6rem;border:1.5px solid rgba(87,46,136,0.2);border-radius:8px;background:#fff;color:#4a3d6b;font-family:inherit;cursor:pointer;';
+      const sortDdStyle = 'font-size:0.75rem;font-weight:700;padding:0.35rem 0.6rem;border:1.5px solid #572e88;border-radius:8px;background:rgba(87,46,136,0.08);color:#572e88;font-family:inherit;cursor:pointer;';
+      const typeDD  = types.length  ? `<select onchange="bkSetCharFilter('type',this.value)"  style="${ddStyle}"><option value="">All Types</option>${types.map(t=>`<option value="${esc(t)}">${esc(t)}</option>`).join('')}</select>`  : '';
+      const vocalDD = vocals.length ? `<select onchange="bkSetCharFilter('vocal',this.value)" style="${ddStyle}"><option value="">All Vocals</option>${vocals.map(v=>`<option value="${esc(v)}">${esc(v)}</option>`).join('')}</select>` : '';
+      const danceDD = dances.length ? `<select onchange="bkSetCharFilter('dance',this.value)" style="${ddStyle}"><option value="">Any Movement</option>${dances.map(d=>`<option value="${esc(d)}">${esc(d)}</option>`).join('')}</select>` : '';
+      const usageDD = usages.length ? `<select onchange="bkSetCharFilter('usage',this.value)" style="${ddStyle}"><option value="">All Usage</option>${usages.map(u=>`<option value="${esc(u)}">${esc(u)}</option>`).join('')}</select>` : '';
+      const sortDD  = `<select onchange="bkSetCharSort(this.value)" style="${sortDdStyle}">
+        <option value="default">Sort: Default</option>
+        <option value="name">A – Z</option>
+        <option value="type">Role Type</option>
+        <option value="vocal">Vocal Type</option>
+      </select>`;
+
+      const charPageUrl = `audition-info.html?prod=${encodeURIComponent(_bkProd?.id || '')}&tab=characters`;
+      container.innerHTML = `
+        <div style="font-size:0.78rem;color:#6a5a80;margin-bottom:0.7rem;line-height:1.5;">
+          Want the full character breakdown?
+          <a href="${charPageUrl}" target="_blank" rel="noopener"
+             style="color:#572e88;font-weight:700;text-decoration:underline;">View it on the audition page</a>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:0.4rem;margin-bottom:0.75rem;">
+          ${typeDD}${vocalDD}${usageDD}${danceDD}${sortDD}
+        </div>
+        <div id="bk-roles-grid" class="bk-roles-grid"></div>`;
+
+      _bkApplyCharView();
+    }
+
+    function bkSetCharFilter(dim, val) {
+      if (dim === 'type')  _bkCharFilterType  = val;
+      if (dim === 'vocal') _bkCharFilterVocal = val;
+      if (dim === 'dance') _bkCharFilterDance = val;
+      if (dim === 'usage') _bkCharFilterUsage = val;
+      _bkApplyCharView();
+    }
+
+    function bkSetCharSort(by) {
+      _bkCharSort = by;
+      _bkApplyCharView();
+    }
+
+    function _bkApplyCharView() {
+      let list = [...(_allCharacters || [])];
+      if (_bkCharFilterType)  list = list.filter(c => c.role_type        === _bkCharFilterType);
+      if (_bkCharFilterVocal) list = list.filter(c => c.vocal_type       === _bkCharFilterVocal);
+      if (_bkCharFilterDance) list = list.filter(c => c.dancing_strength === _bkCharFilterDance);
+      if (_bkCharFilterUsage) list = list.filter(c => c.vocal_usage      === _bkCharFilterUsage);
+      if (_bkCharSort === 'name')  list.sort((a,b) => (a.name||'').localeCompare(b.name||''));
+      if (_bkCharSort === 'type')  list.sort((a,b) => (a.role_type||'').localeCompare(b.role_type||''));
+      if (_bkCharSort === 'vocal') list.sort((a,b) => (a.vocal_type||'').localeCompare(b.vocal_type||''));
+      const grid = document.getElementById('bk-roles-grid');
+      if (!grid) return;
+      if (!list.length) { grid.innerHTML = '<p style="font-size:0.85rem;color:#9a90b0;">No roles match this filter.</p>'; return; }
+      grid.innerHTML = list.map(c => _bkRoleCardHTML(c)).join('');
+    }
+
+    function _bkRoleCardHTML(c) {
+      const descHTML   = c.description ? `<div class="bk-role-tile-desc">${esc(c.description)}</div>` : '';
+      const isSelected = _bkSelectedRoles.has(c.name);
+      return `<div class="bk-role-tile${isSelected ? ' selected' : ''}" onclick="bkToggleRoleTile('${esc(c.name)}',this)">
+        <div class="bk-role-tile-check">${isSelected ? '✓' : ''}</div>
+        <div class="bk-role-tile-name">${esc(c.name)}</div>
+        ${descHTML}
+      </div>`;
+    }
+
+    function bkToggleRoleTile(name, el) {
+      if (_bkSelectedRoles.has(name)) {
+        _bkSelectedRoles.delete(name);
+        el.classList.remove('selected');
+        el.querySelector('.bk-role-tile-check').textContent = '';
+      } else {
+        _bkSelectedRoles.add(name);
+        el.classList.add('selected');
+        el.querySelector('.bk-role-tile-check').textContent = '✓';
+      }
+    }
+
+    function bkAvailToggle(type) {
+      const cb     = document.getElementById('bk-avail-' + type);
+      const detail = document.getElementById('bk-conflict-' + type);
+      if (!cb || !detail) return;
+      detail.style.display = cb.checked ? 'none' : 'block';
+    }
+
+    function bkSkillToggle(slug) {
+      const cb     = document.getElementById('bk-skill-' + slug);
+      const detail = document.getElementById('bk-skill-detail-' + slug);
+      if (!cb || !detail) return;
+      // cb.checked is already updated by the browser at this point (called via onchange)
+      detail.style.display = cb.checked ? 'block' : 'none';
+      if (cb.checked) {
+        const input = detail.querySelector('input');
+        if (input) setTimeout(() => input.focus(), 50);
+      }
+    }
+
+    function _bkRenderQuestions() {
+      const container = document.getElementById('bk-questions-body');
+      if (!container) return;
+      const cfg = _bkAudConfig || {};
+      let html = '';
+
+      // Experience
+      if (cfg.section_experience !== false) {
+        const skills = ['Acting','Singing','Dancing','Musical Instruments','Stage Combat','Improvisation','Accents / Dialects'];
+        const skillDetails = {
+          'Acting':              'e.g. 5 years community theatre, trained at...',
+          'Singing':             'e.g. Soprano, trained with..., 3 years...',
+          'Dancing':             'e.g. Ballet, Jazz, Hip-Hop, 4 years...',
+          'Musical Instruments': 'e.g. Piano (Grade 8), Guitar (3 years)...',
+          'Stage Combat':        'e.g. Certified, styles trained in...',
+          'Improvisation':       'e.g. 2 years improv, performed with...',
+          'Accents / Dialects':  'e.g. British RP, Southern American...',
+        };
+        html += `<div class="bk-q-section">
+          <div class="bk-q-section-title">Experience</div>
+          <div class="bk-q-sub">Check everything that applies, then add a bit of detail.</div>
+          <div class="bk-skill-list">
+            ${skills.map(s => {
+              const slug = s.toLowerCase().replace(/[^a-z]/g, '-');
+              const detailId = 'bk-skill-detail-' + slug;
+              const cbId = 'bk-skill-' + slug;
+              return `<div class="bk-skill-item">
+                <label class="bk-skill-check" for="${cbId}">
+                  <input type="checkbox" id="${cbId}" onchange="bkSkillToggle('${slug}')" />
+                  <span>${s}</span>
+                </label>
+                <div class="bk-skill-detail" id="${detailId}" style="display:none;">
+                  <input class="bk-input" type="text" id="bk-skill-detail-val-${slug}" placeholder="${skillDetails[s] || 'Tell us more...'}" style="font-size:0.8rem;padding:0.45rem 0.75rem;" />
+                </div>
+              </div>`;
+            }).join('')}
+          </div>
+          <div class="bk-form-group" style="margin-top:0.65rem;">
+            <label class="bk-skill-check" for="bk-skill-other">
+              <input type="checkbox" id="bk-skill-other" onchange="bkSkillToggle('other')" />
+              <span>Other</span>
+            </label>
+            <div class="bk-skill-detail" id="bk-skill-detail-other" style="display:none;margin-top:0.35rem;">
+              <input class="bk-input" id="bk-exp-other" type="text" placeholder="e.g. Aerial, Mime, Sign Language — add detail..." style="font-size:0.8rem;padding:0.45rem 0.75rem;" />
+            </div>
+          </div>
+        </div>`;
+      }
+
+      // Conflicts & Availability
+      if (cfg.section_conflicts !== false) {
+        html += `<div class="bk-q-section">
+          <div class="bk-q-section-title">Conflicts &amp; Availability</div>
+          <div class="bk-q-sub">Check a box if you're fully available. If not, let the team know which dates you can't make.</div>
+          <div class="bk-skill-list">
+            <div class="bk-skill-item">
+              <label class="bk-skill-check" for="bk-avail-rehearsals">
+                <input type="checkbox" id="bk-avail-rehearsals" onchange="bkAvailToggle('rehearsals')" />
+                <span>Available for all rehearsals</span>
+              </label>
+              <div id="bk-conflict-rehearsals" class="bk-skill-detail" style="display:block;">
+                <textarea class="bk-input" id="bk-conflict-rehearsals-text" rows="2" placeholder="Which dates can't you make for rehearsals?" style="font-size:0.8rem;padding:0.45rem 0.75rem;resize:vertical;min-height:58px;"></textarea>
+              </div>
+            </div>
+            <div class="bk-skill-item">
+              <label class="bk-skill-check" for="bk-avail-performances">
+                <input type="checkbox" id="bk-avail-performances" onchange="bkAvailToggle('performances')" />
+                <span>Available for all performances</span>
+              </label>
+              <div id="bk-conflict-performances" class="bk-skill-detail" style="display:block;">
+                <textarea class="bk-input" id="bk-conflict-performances-text" rows="2" placeholder="Which dates can't you make for performances?" style="font-size:0.8rem;padding:0.45rem 0.75rem;resize:vertical;min-height:58px;"></textarea>
+              </div>
+            </div>
+          </div>
+        </div>`;
+      }
+
+      // Headshot Upload
+      if (cfg.section_headshot !== false) {
+        html += `<div class="bk-q-section">
+          <div class="bk-q-section-title">Headshot / Recent Photo</div>
+          <div class="bk-q-sub">Please upload a clear, recent photo.</div>
+          <div class="bk-form-group">
+            <label class="bk-label">Photo upload</label>
+            <input class="bk-input" type="file" id="bk-headshot" accept="image/*" style="padding:0.45rem 0.85rem;" />
+          </div>
+        </div>`;
+      }
+
+      // Physical Details
+      if (cfg.section_physical) {
+        html += `<div class="bk-q-section">
+          <div class="bk-q-section-title">Physical Details</div>
+          <div class="bk-q-sub">Used for costume planning only.</div>
+          <div class="bk-form-row">
+            <div class="bk-form-group"><label class="bk-label">Height</label><input class="bk-input" id="bk-phys-height" type="text" placeholder='e.g. 5&apos;6"' /></div>
+            <div class="bk-form-group"><label class="bk-label">Eye Colour</label><input class="bk-input" id="bk-phys-eyes" type="text" placeholder="e.g. Blue" /></div>
+          </div>
+          <div class="bk-form-row">
+            <div class="bk-form-group"><label class="bk-label">Hair Colour</label><input class="bk-input" id="bk-phys-hair-colour" type="text" placeholder="e.g. Brown" /></div>
+            <div class="bk-form-group"><label class="bk-label">Hair Length</label><input class="bk-input" id="bk-phys-hair-length" type="text" placeholder="e.g. Short, Medium, Long" /></div>
+          </div>
+        </div>`;
+      }
+
+      // Costume Details
+      if (cfg.section_costume) {
+        html += `<div class="bk-q-section">
+          <div class="bk-q-section-title">Costume Details</div>
+          <div class="bk-q-sub">Used for costume fitting.</div>
+          <div class="bk-form-row">
+            <div class="bk-form-group"><label class="bk-label">Shirt Size</label><input class="bk-input" id="bk-cost-shirt" type="text" placeholder="e.g. M, L, XL" /></div>
+            <div class="bk-form-group"><label class="bk-label">Pant Size</label><input class="bk-input" id="bk-cost-pant" type="text" placeholder="e.g. 32x30" /></div>
+          </div>
+          <div class="bk-form-row">
+            <div class="bk-form-group"><label class="bk-label">Dress Size</label><input class="bk-input" id="bk-cost-dress" type="text" placeholder="e.g. 8, 10, 12" /></div>
+            <div class="bk-form-group"><label class="bk-label">Shoe Size</label><input class="bk-input" id="bk-cost-shoe" type="text" placeholder="e.g. 9 (US)" /></div>
+          </div>
+        </div>`;
+      }
+
+      if (!html) {
+        html = `<p style="font-size:0.875rem;color:#9a90b0;text-align:center;padding:1rem 0;">No additional questions for this audition.</p>`;
+      }
+      container.innerHTML = html;
+    }
+
     function _bkPopulateReview() {
-      const fname    = document.getElementById('bk-fname').value.trim();
-      const lname    = document.getElementById('bk-lname').value.trim();
-      const age      = document.getElementById('bk-age').value.trim();
-      const pronouns = document.getElementById('bk-pronouns').value.trim();
-      const slots    = _allSlots[_bkSession?.id] || [];
-      const slot     = slots.find(s => s.id === _bkSlotId);
+      const fullname  = document.getElementById('bk-fullname').value.trim();
+      const age       = document.getElementById('bk-age').value.trim();
+      const pronouns  = document.getElementById('bk-pronouns').value.trim();
+      const ctname    = document.getElementById('bk-ct-name').value.trim();
+      const ctemail   = document.getElementById('bk-ct-email').value.trim();
+      const ctphone   = document.getElementById('bk-ct-phone').value.trim();
+      const slots     = _allSlots[_bkSession?.id] || [];
+      const slot      = slots.find(s => s.id === _bkSlotId);
       const slotLabel = slot ? fmtTimeStr(slot.slot_time) : (_bkSession?.booking_mode === 'open' ? 'Open call' : '—');
-      const charLabel = _bkSelectedChars.filter(c => c !== '__any__').join(', ') || 'Open to any role';
+
+      const roleModeLabels = { specific: 'Specific roles', ensemble: 'Ensemble', any: 'Any role' };
+      const selectedChars = [..._bkSelectedRoles];
+      const roleLabel = _bkRoleMode === 'specific' && selectedChars.length
+        ? selectedChars.join(', ')
+        : (roleModeLabels[_bkRoleMode] || '—');
+      const genderLabel = _bkGenderPref === 'match' ? 'Prefers roles matching their gender' : _bkGenderPref === 'open' ? 'Open to any gender of role' : '';
 
       const guardianRows = _bkIsMinor ? `
         <div class="bk-review-row">
           <span class="bk-review-key">Guardian</span>
-          <span class="bk-review-val">${esc((document.getElementById('bk-gfname').value.trim() + ' ' + document.getElementById('bk-glname').value.trim()).trim())}</span>
-          <span class="bk-edit-link" onclick="_bkGoTo(2)">Edit</span>
+          <span class="bk-review-val">${esc(document.getElementById('bk-gdname')?.value.trim() || '')}</span>
+          <span class="bk-edit-link" onclick="_bkGoTo(1)">Edit</span>
         </div>
         <div class="bk-review-row">
           <span class="bk-review-key">G. Email</span>
-          <span class="bk-review-val">${esc(document.getElementById('bk-gemail').value.trim())}</span>
+          <span class="bk-review-val">${esc(document.getElementById('bk-gdemail')?.value.trim() || '')}</span>
         </div>` : '';
 
       const el = document.getElementById('bk-review-content');
@@ -1659,20 +2171,34 @@
       el.innerHTML = `
         <div class="bk-review-row">
           <span class="bk-review-key">Performer</span>
-          <span class="bk-review-val">${esc(fname + ' ' + lname)}</span>
+          <span class="bk-review-val">${esc(fullname)}</span>
           <span class="bk-edit-link" onclick="_bkGoTo(1)">Edit</span>
         </div>
         <div class="bk-review-row">
           <span class="bk-review-key">Age</span>
           <span class="bk-review-val">${esc(age)}</span>
         </div>
-        ${pronouns ? `<div class="bk-review-row"><span class="bk-review-key">Pronouns</span><span class="bk-review-val">${esc(pronouns)}</span></div>` : ''}
+        <div class="bk-review-row">
+          <span class="bk-review-key">Pronouns</span>
+          <span class="bk-review-val">${esc(pronouns)}</span>
+        </div>
         ${guardianRows}
         <div class="bk-review-row">
+          <span class="bk-review-key">Contact</span>
+          <span class="bk-review-val">${esc(ctname)}</span>
+          <span class="bk-edit-link" onclick="_bkGoTo(2)">Edit</span>
+        </div>
+        <div class="bk-review-row">
+          <span class="bk-review-key">C. Email</span>
+          <span class="bk-review-val">${esc(ctemail)}</span>
+        </div>
+        ${ctphone ? `<div class="bk-review-row"><span class="bk-review-key">C. Phone</span><span class="bk-review-val">${esc(ctphone)}</span></div>` : ''}
+        <div class="bk-review-row">
           <span class="bk-review-key">Roles</span>
-          <span class="bk-review-val">${esc(charLabel)}</span>
+          <span class="bk-review-val">${esc(roleLabel)}</span>
           <span class="bk-edit-link" onclick="_bkGoTo(3)">Edit</span>
         </div>
+        ${genderLabel ? `<div class="bk-review-row"><span class="bk-review-key">Gender pref.</span><span class="bk-review-val">${esc(genderLabel)}</span></div>` : ''}
         <div class="bk-review-row">
           <span class="bk-review-key">Session</span>
           <span class="bk-review-val">${esc(_bkSession?.name || 'Audition')}</span>
@@ -1680,8 +2206,168 @@
         <div class="bk-review-row">
           <span class="bk-review-key">Time</span>
           <span class="bk-review-val">${esc(slotLabel)}</span>
-          ${slot ? `<span class="bk-edit-link" onclick="_bkGoTo(4)">Change</span>` : ''}
-        </div>`;
+          <span class="bk-edit-link" onclick="_bkGoTo(4)">Edit</span>
+        </div>
+        ${(() => {
+          const cfg = _bkAudConfig || {};
+          let rows = '';
+          if (cfg.section_experience !== false) {
+            const skillDefs = [
+              ['acting','Acting'],['singing','Singing'],['dancing','Dancing'],
+              ['musical-instruments','Musical Instruments'],['stage-combat','Stage Combat'],
+              ['improvisation','Improvisation'],['accents---dialects','Accents / Dialects'],
+            ];
+            skillDefs.forEach(([slug, name]) => {
+              const cb = document.getElementById('bk-skill-' + slug);
+              if (cb?.checked) {
+                const detail = document.getElementById('bk-skill-detail-val-' + slug)?.value.trim();
+                rows += `<div class="bk-review-row"><span class="bk-review-key">${esc(name)}</span><span class="bk-review-val">${detail ? esc(detail) : '✓'}</span></div>`;
+              }
+            });
+            const otherCb = document.getElementById('bk-skill-other');
+            if (otherCb?.checked) {
+              const otherVal = document.getElementById('bk-exp-other')?.value.trim();
+              if (otherVal) rows += `<div class="bk-review-row"><span class="bk-review-key">Other</span><span class="bk-review-val">${esc(otherVal)}</span></div>`;
+            }
+          }
+          if (cfg.section_conflicts !== false) {
+            const rAvail = document.getElementById('bk-avail-rehearsals')?.checked;
+            const pAvail = document.getElementById('bk-avail-performances')?.checked;
+            const rNote  = document.getElementById('bk-conflict-rehearsals-text')?.value.trim();
+            const pNote  = document.getElementById('bk-conflict-performances-text')?.value.trim();
+            if (rAvail) {
+              rows += `<div class="bk-review-row"><span class="bk-review-key">Rehearsals</span><span class="bk-review-val">Fully available</span></div>`;
+            } else if (rNote) {
+              rows += `<div class="bk-review-row"><span class="bk-review-key">Rehearsal conflicts</span><span class="bk-review-val">${esc(rNote)}</span></div>`;
+            }
+            if (pAvail) {
+              rows += `<div class="bk-review-row"><span class="bk-review-key">Performances</span><span class="bk-review-val">Fully available</span></div>`;
+            } else if (pNote) {
+              rows += `<div class="bk-review-row"><span class="bk-review-key">Performance conflicts</span><span class="bk-review-val">${esc(pNote)}</span></div>`;
+            }
+          }
+          if (cfg.section_physical) {
+            const h = document.getElementById('bk-phys-height')?.value.trim();
+            const e = document.getElementById('bk-phys-eyes')?.value.trim();
+            const hc = document.getElementById('bk-phys-hair-colour')?.value.trim();
+            const hl = document.getElementById('bk-phys-hair-length')?.value.trim();
+            const parts = [h && `Height: ${h}`, hc && `Hair: ${hc}`, hl && `(${hl})`, e && `Eyes: ${e}`].filter(Boolean);
+            if (parts.length) rows += `<div class="bk-review-row"><span class="bk-review-key">Physical</span><span class="bk-review-val">${esc(parts.join(' · '))}</span></div>`;
+          }
+          if (cfg.section_costume) {
+            const shirt = document.getElementById('bk-cost-shirt')?.value.trim();
+            const pant = document.getElementById('bk-cost-pant')?.value.trim();
+            const dress = document.getElementById('bk-cost-dress')?.value.trim();
+            const shoe = document.getElementById('bk-cost-shoe')?.value.trim();
+            const parts = [shirt && `Shirt: ${shirt}`, pant && `Pant: ${pant}`, dress && `Dress: ${dress}`, shoe && `Shoe: ${shoe}`].filter(Boolean);
+            if (parts.length) rows += `<div class="bk-review-row"><span class="bk-review-key">Costume</span><span class="bk-review-val">${esc(parts.join(' · '))}</span></div>`;
+          }
+          return rows;
+        })()}`;
+    }
+
+    async function _bkReserveSlot(slotId) {
+      if (!slotId) return;
+      _bkResvToken = crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2);
+      try {
+        await sb.from('audition_time_slots').update({
+          reserved_until: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
+          reserved_token: _bkResvToken,
+        }).eq('id', slotId);
+      } catch (_) {}
+      _bkStartCountdown(10 * 60);
+    }
+
+    function _bkStartCountdown(seconds) {
+      _bkExpiresAt = Date.now() + seconds * 1000;
+      _bkRunCountdown();
+    }
+
+    let _bkWarnShown = false;
+
+    function _bkRunCountdown() {
+      clearInterval(_bkResvTimer);
+      _bkWarnShown = false;
+      const moreBtn = document.getElementById('bk-more-time-btn');
+      const textEl  = document.getElementById('bk-countdown-text');
+      const tick = () => {
+        const remaining = Math.floor((_bkExpiresAt - Date.now()) / 1000);
+
+        // Expired
+        if (remaining <= 0) {
+          clearInterval(_bkResvTimer);
+          if (textEl) { textEl.textContent = ''; }
+          if (moreBtn) moreBtn.style.display = 'none';
+          _bkShowOverlay('expired');
+          _bkClearState();
+          return;
+        }
+
+        // 1-minute warning
+        if (remaining <= 60 && !_bkWarnShown) {
+          _bkWarnShown = true;
+          _bkShowOverlay('warning');
+        }
+
+        const m = Math.floor(remaining / 60);
+        const s = String(remaining % 60).padStart(2, '0');
+        if (textEl) {
+          textEl.textContent = `${m}:${s} remaining`;
+          textEl.style.color = remaining <= 60 ? '#ffaaaa' : 'rgba(255,255,255,0.75)';
+        }
+        if (moreBtn) moreBtn.style.display = '';
+      };
+      tick();
+      _bkResvTimer = setInterval(tick, 1000);
+    }
+
+    function _bkShowOverlay(type) {
+      const overlay = document.getElementById('bk-session-overlay');
+      const icon    = document.getElementById('bk-overlay-icon');
+      const title   = document.getElementById('bk-overlay-title');
+      const sub     = document.getElementById('bk-overlay-sub');
+      const btn     = document.getElementById('bk-overlay-btn');
+      if (!overlay) return;
+
+      if (type === 'warning') {
+        if (icon)  icon.textContent  = '⏰';
+        if (title) title.textContent = 'Running low on time';
+        if (sub)   sub.textContent   = 'You have less than a minute left. Need a bit longer?';
+        if (btn) {
+          btn.textContent = 'I need more time (+5 min)';
+          btn.onclick = () => { bkAddTime(); overlay.classList.remove('active'); };
+        }
+        // Also show a "dismiss" link
+        let dismiss = overlay.querySelector('.bk-overlay-dismiss');
+        if (!dismiss) {
+          dismiss = document.createElement('button');
+          dismiss.className = 'bk-session-overlay-btn outline bk-overlay-dismiss';
+          dismiss.textContent = 'Keep going';
+          dismiss.onclick = () => overlay.classList.remove('active');
+          overlay.appendChild(dismiss);
+        }
+      } else {
+        // expired
+        if (icon)  icon.textContent  = '⏱️';
+        if (title) title.textContent = 'Your session expired';
+        if (sub)   sub.textContent   = 'Your held time slot has been released. Please start over to book a new spot.';
+        if (btn) {
+          btn.textContent = 'Start over';
+          btn.onclick = () => closeBookModal();
+        }
+        const dismiss = overlay.querySelector('.bk-overlay-dismiss');
+        if (dismiss) dismiss.remove();
+      }
+      overlay.classList.add('active');
+    }
+
+    function bkAddTime() {
+      const remaining = Math.floor((_bkExpiresAt - Date.now()) / 1000);
+      if (remaining <= 0) return; // already expired
+      _bkExpiresAt += 5 * 60 * 1000;
+      _bkWarnShown = false; // reset so warning can fire again if they cut it close again
+      const btn = document.getElementById('bk-more-time-btn');
+      if (btn) btn.disabled = true; // one use only
     }
 
     async function _bkSubmit() {
@@ -1689,25 +2375,61 @@
       if (next) { next.disabled = true; next.textContent = 'Booking...'; }
       _bkErr('');
 
-      const fname = document.getElementById('bk-fname').value.trim();
-      const lname = document.getElementById('bk-lname').value.trim();
-      const email = document.getElementById('bk-email').value.trim();
-      const phone = document.getElementById('bk-phone').value.trim();
+      const fullname = document.getElementById('bk-fullname').value.trim();
+      const age      = document.getElementById('bk-age').value.trim();
+      const pronouns = document.getElementById('bk-pronouns').value.trim();
+      const ctemail  = document.getElementById('bk-ct-email').value.trim();
+      const ctphone  = document.getElementById('bk-ct-phone').value.trim();
+      const ctname   = document.getElementById('bk-ct-name').value.trim();
+
+      const selectedChars = [..._bkSelectedRoles];
+
+      // Upload headshot if provided
+      let headshotUrl = null;
+      const headshotInput = document.getElementById('bk-headshot');
+      const headshotFile  = headshotInput?.files?.[0];
+      if (headshotFile) {
+        if (next) next.textContent = 'Uploading photo...';
+        const ext  = headshotFile.name.split('.').pop().toLowerCase() || 'jpg';
+        const path = `${_bkProd?.id || 'unknown'}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+        const { error: upErr } = await sb.storage.from('audition-headshots').upload(path, headshotFile, { upsert: false });
+        if (!upErr) {
+          const { data: urlData } = sb.storage.from('audition-headshots').getPublicUrl(path);
+          headshotUrl = urlData?.publicUrl || null;
+        }
+        if (next) next.textContent = 'Booking...';
+      }
 
       try {
         const { error } = await sb.from('audition_bookings').insert({
           session_id:    _bkSession.id,
           production_id: _bkProd?.id || null,
           slot_id:       _bkSlotId || null,
-          name:          fname + ' ' + lname,
-          email,
-          phone:         phone || null,
+          name:          fullname,
+          email:         ctemail,
+          phone:         ctphone || null,
+          age:           age ? parseInt(age, 10) : null,
+          pronouns:      pronouns || null,
+          contact_name:  ctname || null,
+          role_preference: _bkRoleMode || null,
+          gender_preference: _bkGenderPref || null,
+          roles_requested: selectedChars.length ? selectedChars : null,
+          is_minor:      _bkIsMinor,
+          guardian_name: _bkIsMinor ? (document.getElementById('bk-gdname')?.value.trim() || null) : null,
+          guardian_email: _bkIsMinor ? (document.getElementById('bk-gdemail')?.value.trim() || null) : null,
+          headshot_url:  headshotUrl,
         });
         if (error) throw error;
 
         if (_bkSlotId) {
-          await sb.from('audition_time_slots').update({ is_available: false }).eq('id', _bkSlotId);
+          await sb.from('audition_time_slots').update({
+            is_available:  false,
+            reserved_until: null,
+            reserved_token: null,
+          }).eq('id', _bkSlotId);
         }
+
+        clearInterval(_bkResvTimer);
 
         // Show success
         document.getElementById('bk-steps-wrap').style.display = 'none';
@@ -1716,14 +2438,15 @@
         const successSub = document.getElementById('bk-success-sub');
         if (successSub) {
           const slot = (_allSlots[_bkSession?.id] || []).find(s => s.id === _bkSlotId);
-          successSub.textContent = slot
-            ? `You're booked for ${fmtTimeStr(slot.slot_time)}. Can't wait to see you!`
-            : `Your spot is confirmed. Can't wait to see you!`;
+          const dateStr = _bkSession?.date ? ` on ${fmtDate(_bkSession.date)}` : '';
+          successSub.innerHTML = slot
+            ? `You're booked for <strong>${fmtTimeStr(slot.slot_time)}${dateStr}</strong>. A confirmation email is on its way. See you there!`
+            : `Your spot is confirmed${dateStr}. See you there!`;
         }
         document.getElementById('bk-success').classList.add('active');
 
       } catch (err) {
-        _bkErr('Something went wrong. Please try again.');
+        _bkErr('Something went wrong — please try again.');
         if (next) { next.disabled = false; next.textContent = 'Confirm Booking'; }
       }
     }
@@ -1928,30 +2651,16 @@
        5b. EXPECTATIONS
     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
     function buildExpectations(prod, audConfig) {
-      const prepareText = (audConfig?.prepare_text || '').trim();
-      const expectText  = (audConfig?.expect_text  || '').trim();
+      const expectText = (audConfig?.expect_text || '').trim();
 
-      if (!prepareText && !expectText) return `
+      if (!expectText) return `
         <section class="ai-section">
           <p style="color:#9a90b0;font-size:0.9rem;">Expectations information hasn't been added yet — check back soon, or reach out to the organisation directly.</p>
         </section>`;
 
-      const prepareHTML = prepareText ? `
-        <div class="ai-expect-section">
-          <div class="ai-expect-heading">What to Prepare</div>
-          <div class="ai-expect-text">${escParagraphs(prepareText)}</div>
-        </div>` : '';
-
-      const expectHTML = expectText ? `
-        <div class="ai-expect-section">
-          <div class="ai-expect-heading">What to Expect</div>
-          <div class="ai-expect-text">${escParagraphs(expectText)}</div>
-        </div>` : '';
-
       return `
         <section class="ai-section">
-          ${prepareHTML}
-          ${expectHTML}
+          <div style="font-size:0.9rem;color:#4a3d6b;line-height:1.7;">${escParagraphs(expectText)}</div>
         </section>`;
     }
 
@@ -1959,14 +2668,28 @@
        6. ABOUT
     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
     function buildAbout(prod, audConfig) {
-      const aboutText = audConfig?.about_text || '';
-      if (!aboutText.trim()) return `
+      const aboutText   = (audConfig?.about_text   || '').trim();
+      const prepareText = (audConfig?.prepare_text || '').trim();
+
+      if (!aboutText && !prepareText) return `
         <section class="ai-section">
           <p style="color:#9a90b0;font-size:0.9rem;">No program information has been added yet.</p>
         </section>`;
+
+      const aboutHTML = aboutText
+        ? `<div style="font-size:0.9rem;color:#4a3d6b;line-height:1.7;margin-bottom:${prepareText ? '2rem' : '0'};">${escParagraphs(aboutText)}</div>`
+        : '';
+
+      const prepareHTML = prepareText ? `
+        <div style="background:rgba(87,46,136,0.04);border:1px solid rgba(87,46,136,0.12);border-radius:12px;padding:1.25rem 1.5rem;">
+          <div style="font-size:0.72rem;font-weight:800;text-transform:uppercase;letter-spacing:0.08em;color:#572e88;margin-bottom:0.6rem;">Audition Prep</div>
+          <div style="font-size:0.875rem;color:#4a3d6b;line-height:1.7;">${escParagraphs(prepareText)}</div>
+        </div>` : '';
+
       return `
         <section class="ai-section">
-          <div style="font-size:0.9rem;color:#4a3d6b;line-height:1.7;">${escParagraphs(aboutText)}</div>
+          ${aboutHTML}
+          ${prepareHTML}
         </section>`;
     }
 
@@ -2023,7 +2746,8 @@
     let _charFilterUsage  = '';
     let _charSort         = 'default';
 
-    const _ddStyle = 'font-size:0.8rem;font-weight:600;padding:0.4rem 0.75rem;border:1.5px solid rgba(87,46,136,0.2);border-radius:8px;background:#fff;color:#4a3d6b;font-family:inherit;cursor:pointer;';
+    const _ddStyle     = 'font-size:0.8rem;font-weight:600;padding:0.4rem 0.75rem;border:1.5px solid rgba(87,46,136,0.2);border-radius:8px;background:#fff;color:#4a3d6b;font-family:inherit;cursor:pointer;';
+    const _sortDdStyle = 'font-size:0.8rem;font-weight:700;padding:0.4rem 0.75rem;border:1.5px solid #572e88;border-radius:8px;background:rgba(87,46,136,0.08);color:#572e88;font-family:inherit;cursor:pointer;';
 
     function buildRolePreview(characters, audConfig) {
       if (!characters || !characters.length) return '';
@@ -2064,7 +2788,7 @@
       const vocalDD = vocals.length ? `<select onchange="setCharFilter('vocal',this.value)" style="${_ddStyle}">${vocalOpts}</select>` : '';
       const danceDD = dances.length ? `<select onchange="setCharFilter('dance',this.value)" style="${_ddStyle}">${danceOpts}</select>` : '';
       const usageDD = usages.length ? `<select onchange="setCharFilter('usage',this.value)" style="${_ddStyle}">${usageOpts}</select>` : '';
-      const sortDD  = `<select onchange="setCharSort(this.value)" style="${_ddStyle}">
+      const sortDD  = `<select onchange="setCharSort(this.value)" style="${_sortDdStyle}">
         <option value="default">Sort: Default</option>
         <option value="name">Sort: A – Z</option>
         <option value="type">Sort: Role Type</option>
@@ -2208,85 +2932,218 @@
         </div>`;
     }
 
-    loadPage();
+    loadPage().then(() => {
+      // Restore booking wizard if user switched tabs mid-flow
+      _bkRestoreState();
+
+      // Auto-switch to tab specified in URL: ?tab=characters etc.
+      const tabParam = new URLSearchParams(window.location.search).get('tab');
+      if (tabParam) {
+        const panelId = 'tab-' + tabParam;
+        const panel = document.getElementById(panelId);
+        if (panel) {
+          document.querySelectorAll('.ai-tab-panel').forEach(p => p.classList.remove('active'));
+          document.querySelectorAll('.ai-tab').forEach(t => t.classList.remove('active'));
+          panel.classList.add('active');
+          const btn = document.querySelector(`.ai-tab[onclick*="${panelId}"]`);
+          if (btn) btn.classList.add('active');
+        }
+      }
+    });
   </script>
 
   <!-- ── Booking Modal ── -->
   <div class="bk-overlay" id="bk-overlay" onclick="bkOverlayClick(event)">
-    <div class="bk-modal">
+    <div class="bk-modal" id="bk-modal" style="position:relative;">
+
+      <!-- Session expired / 1-min warning overlay -->
+      <div class="bk-session-overlay" id="bk-session-overlay">
+        <div class="bk-session-overlay-icon" id="bk-overlay-icon">⏰</div>
+        <div class="bk-session-overlay-title" id="bk-overlay-title">Your session expired</div>
+        <div class="bk-session-overlay-sub" id="bk-overlay-sub">Your held time slot has been released. Please start over to book a new spot.</div>
+        <button class="bk-session-overlay-btn" id="bk-overlay-btn" onclick="closeBookModal()">Start over</button>
+      </div>
 
       <div class="bk-modal-header">
         <button class="bk-modal-close" onclick="closeBookModal()">✕</button>
         <div class="bk-show-line" id="bk-show-line"></div>
         <div class="bk-session-title" id="bk-session-title">Audition</div>
+        <div class="bk-countdown" id="bk-countdown">
+          <span id="bk-countdown-text"></span>
+          <button class="bk-more-time-btn" id="bk-more-time-btn" onclick="bkAddTime()" style="display:none;">+ 5 min</button>
+        </div>
       </div>
 
       <div class="bk-steps-wrap" id="bk-steps-wrap">
-        <div class="bk-steps">
-          <div class="bk-step-item">
-            <div class="bk-step-dot active" id="bkd1">1</div>
-            <div class="bk-step-lbl active" id="bkl1">Your Info</div>
-          </div>
-          <div class="bk-step-conn" id="bkc1"></div>
-          <div class="bk-step-item">
-            <div class="bk-step-dot" id="bkd2">2</div>
-            <div class="bk-step-lbl" id="bkl2">Time Slot</div>
-          </div>
-          <div class="bk-step-conn" id="bkc2"></div>
-          <div class="bk-step-item">
-            <div class="bk-step-dot" id="bkd3">3</div>
-            <div class="bk-step-lbl" id="bkl3">Review</div>
-          </div>
-        </div>
+        <div class="bk-steps" id="bk-steps-inner"></div>
       </div>
 
       <div class="bk-body" id="bk-body">
 
+        <!-- Step 1: Performer -->
         <div class="bk-step-panel active" id="bk-panel-1">
-          <div class="bk-step-title">Tell us about yourself</div>
-          <div class="bk-step-sub">Just a few details to hold your spot.</div>
+          <div class="bk-step-title">Tell us about the performer</div>
+          <div class="bk-step-sub">Fill in their details below.</div>
+          <div class="bk-form-group">
+            <label class="bk-label">Performer's Full Name</label>
+            <input class="bk-input" id="bk-fullname" type="text" placeholder="First and Last Name" autocomplete="name" />
+          </div>
           <div class="bk-form-row">
             <div class="bk-form-group">
-              <label class="bk-label">First Name</label>
-              <input class="bk-input" id="bk-fname" type="text" placeholder="First" autocomplete="given-name" />
+              <label class="bk-label">Birthday</label>
+              <input class="bk-input" id="bk-birthday" type="date" min="1920-01-01" oninput="bkCalcAge()" />
+              <div id="bk-age-display" style="font-size:0.78rem;color:#572e88;font-weight:700;margin-top:0.3rem;min-height:1rem;"></div>
+              <input type="hidden" id="bk-age" />
             </div>
             <div class="bk-form-group">
-              <label class="bk-label">Last Name</label>
-              <input class="bk-input" id="bk-lname" type="text" placeholder="Last" autocomplete="family-name" />
+              <label class="bk-label">Pronouns</label>
+              <input class="bk-input" id="bk-pronouns" type="text" placeholder="e.g. she/her" />
             </div>
           </div>
-          <div class="bk-form-group">
-            <label class="bk-label">Email Address</label>
-            <input class="bk-input" id="bk-email" type="email" placeholder="you@example.com" autocomplete="email" />
+
+          <!-- Age out-of-range warning -->
+          <div id="bk-age-warning" style="display:none;">
+            <div class="bk-underage-notice" style="background:rgba(234,179,8,0.08);border-color:rgba(234,179,8,0.4);">
+              <span style="font-size:1.1rem;">⚠️</span>
+              <div>
+                <div style="font-weight:800;font-size:0.9rem;color:#1a1530;margin-bottom:0.15rem;" id="bk-age-warning-msg"></div>
+                <div style="font-size:0.82rem;color:#6a5a80;">This production is looking for performers aged <span id="bk-age-range-label"></span>.</div>
+              </div>
+            </div>
+            <label class="bk-agree-row" style="background:rgba(234,179,8,0.06);margin-top:0.35rem;">
+              <input type="checkbox" id="bk-age-override" />
+              <span>I understand this performer is outside the listed age range. I have received permission from the production team to audition.</span>
+            </label>
           </div>
-          <div class="bk-form-group">
-            <label class="bk-label">Phone <span class="bk-opt">(optional)</span></label>
-            <input class="bk-input" id="bk-phone" type="tel" placeholder="(123) 456-7890" autocomplete="tel" />
+
+          <!-- Guardian section — shown when age < 18 -->
+          <div id="bk-guardian-section" style="display:none;">
+            <div class="bk-underage-notice">
+              <img src="Notifications.svg" style="width:22px;height:22px;flex-shrink:0;" alt="" />
+              <div>
+                <div style="font-weight:800;font-size:0.9rem;color:#1a1530;margin-bottom:0.15rem;">This performer seems to be under 18</div>
+                <div style="font-size:0.82rem;color:#6a5a80;">We need a parent or guardian's details too.</div>
+              </div>
+            </div>
+            <div class="bk-form-group">
+              <label class="bk-label">Guardian's Full Name</label>
+              <input class="bk-input" id="bk-gdname" type="text" placeholder="Parent or Guardian name" />
+            </div>
+            <div class="bk-form-group">
+              <label class="bk-label">Guardian's Phone</label>
+              <input class="bk-input" id="bk-gdphone" type="tel" placeholder="(123) 456-7890" />
+            </div>
+            <div class="bk-form-group">
+              <label class="bk-label">Guardian's Email</label>
+              <input class="bk-input" id="bk-gdemail" type="email" placeholder="guardian@example.com" />
+            </div>
+            <label class="bk-agree-row">
+              <input type="checkbox" id="bk-gd-agree" />
+              <span>I am the parent or legal guardian of this performer and I give permission for them to audition for this production.</span>
+            </label>
           </div>
+
           <div class="bk-error" id="bk-error"></div>
         </div>
 
+        <!-- Step 2: Contact Info -->
         <div class="bk-step-panel" id="bk-panel-2">
-          <div class="bk-step-title">Pick your time</div>
-          <div class="bk-step-sub" id="bk-slot-sub">Choose the slot that works best for you.</div>
-          <div id="bk-slot-body"></div>
+          <div class="bk-step-title">Contact information</div>
+          <div class="bk-step-sub">Who should we contact with updates about this audition?</div>
+          <div class="bk-ct-radio-group">
+            <label class="bk-ct-radio-opt">
+              <input type="radio" name="bk-ct-radio" id="bk-ct-radio-performer" value="performer" checked onchange="_bkFillContact('performer')" />
+              <span class="bk-ct-radio-label">Same as performer</span>
+            </label>
+            <label class="bk-ct-radio-opt" id="bk-ct-guardian-opt" style="display:none;">
+              <input type="radio" name="bk-ct-radio" id="bk-ct-radio-guardian" value="guardian" onchange="_bkFillContact('guardian')" />
+              <span class="bk-ct-radio-label">Same as guardian</span>
+            </label>
+            <label class="bk-ct-radio-opt">
+              <input type="radio" name="bk-ct-radio" id="bk-ct-radio-new" value="new" onchange="_bkFillContact('new')" />
+              <span class="bk-ct-radio-label">Someone else</span>
+            </label>
+          </div>
+          <div class="bk-form-group">
+            <label class="bk-label">Contact Name</label>
+            <input class="bk-input" id="bk-ct-name" type="text" placeholder="Full Name" />
+          </div>
+          <div class="bk-form-group">
+            <label class="bk-label">Contact Pronouns</label>
+            <input class="bk-input" id="bk-ct-pronouns" type="text" placeholder="e.g. she/her" />
+          </div>
+          <div class="bk-form-group">
+            <label class="bk-label">Contact Email</label>
+            <input class="bk-input" id="bk-ct-email" type="email" placeholder="email@example.com" />
+          </div>
+          <div class="bk-form-group">
+            <label class="bk-label">Contact Phone <span class="bk-opt">(optional)</span></label>
+            <input class="bk-input" id="bk-ct-phone" type="tel" placeholder="(123) 456-7890" />
+          </div>
           <div class="bk-error" id="bk-error-2"></div>
         </div>
 
+        <!-- Step 3: Roles -->
         <div class="bk-step-panel" id="bk-panel-3">
-          <div class="bk-step-title">All set?</div>
+          <div class="bk-step-title">Roles</div>
+          <div class="bk-step-sub">What are you hoping to audition for?</div>
+          <div class="bk-role-choices">
+            <button class="bk-role-choice" id="bk-role-choice-specific" onclick="_bkPickRoleMode('specific')">
+              <img src="specific-role-in-mind.svg" class="bk-role-choice-icon" alt="" />
+              <span class="bk-role-choice-label">I have a specific role in mind</span>
+            </button>
+            <button class="bk-role-choice" id="bk-role-choice-ensemble" onclick="_bkPickRoleMode('ensemble')">
+              <img src="ensemble.svg" class="bk-role-choice-icon" alt="" />
+              <span class="bk-role-choice-label">I'd love to be in the ensemble</span>
+            </button>
+            <button class="bk-role-choice" id="bk-role-choice-any" onclick="_bkPickRoleMode('any')">
+              <img src="Any-Role.svg" class="bk-role-choice-icon" alt="" />
+              <span class="bk-role-choice-label">Consider me for any role</span>
+            </button>
+          </div>
+          <div id="bk-role-char-section" style="display:none;margin-top:0.85rem;">
+            <div class="bk-label" style="margin-bottom:0.5rem;">Which roles?</div>
+            <div id="bk-role-char-list"></div>
+          </div>
+
+          <!-- Gender preference — shown only when "any" is selected -->
+          <div id="bk-gender-section" style="display:none;margin-top:0.75rem;padding:0.85rem 1rem;background:rgba(87,46,136,0.04);border:1.5px solid rgba(87,46,136,0.12);border-radius:12px;">
+            <div class="bk-label" style="margin-bottom:0.5rem;">Gender preference for roles</div>
+            <div style="display:flex;flex-direction:column;gap:0.4rem;">
+              <button class="bk-role-choice" id="bk-gender-match" onclick="_bkPickGender('match')">
+                <span class="bk-role-choice-label">I prefer roles that match my gender</span>
+              </button>
+              <button class="bk-role-choice" id="bk-gender-open" onclick="_bkPickGender('open')">
+                <span class="bk-role-choice-label">I'm happy with roles of any gender</span>
+              </button>
+            </div>
+          </div>
+          <div class="bk-error" id="bk-error-3"></div>
+        </div>
+
+        <!-- Step 4: Additional Questions -->
+        <div class="bk-step-panel" id="bk-panel-4">
+          <div class="bk-step-title">A few more questions</div>
+          <div class="bk-step-sub">The production team wants to know a bit more.</div>
+          <div id="bk-questions-body"></div>
+          <div class="bk-error" id="bk-error-4"></div>
+        </div>
+
+        <!-- Step 5: Review -->
+        <div class="bk-step-panel" id="bk-panel-5">
+          <div class="bk-step-title">Does everything look right?</div>
           <div class="bk-step-sub">Give this a quick look, then confirm below.</div>
           <div class="bk-review-card" id="bk-review-content"></div>
-          <div class="bk-error" id="bk-error-3"></div>
+          <div class="bk-error" id="bk-error-5"></div>
         </div>
 
       </div>
 
       <div class="bk-success" id="bk-success">
-        <div class="bk-success-icon">🎭</div>
+        <div class="bk-success-icon"><img src="Yay.svg" alt="" style="width:72px;height:72px;" /></div>
         <div class="bk-success-title">You're booked!</div>
         <div class="bk-success-sub" id="bk-success-sub">Your spot is confirmed. Can't wait to see you!</div>
-        <button class="bk-btn-next" onclick="closeBookModal()">Done</button>
+        <button class="bk-btn-next" style="width:100%;" onclick="closeBookModal()">Done</button>
       </div>
 
       <div class="bk-footer" id="bk-footer">
