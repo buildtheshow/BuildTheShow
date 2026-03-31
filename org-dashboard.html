@@ -1,0 +1,2833 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dashboard - Build The Show</title>
+  <link rel="stylesheet" href="styles.css" />
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #ffffff; font-family: inherit; color: #1a1530; }
+    .shell { display: flex; min-height: 100vh; }
+
+    /* ── Sidebar ── */
+    .sidebar {
+      width: 220px;
+      min-height: 100vh;
+      background: #572e88;
+      position: fixed;
+      top: 0; left: 0; bottom: 0;
+      display: flex;
+      flex-direction: column;
+      z-index: 100;
+      overflow: hidden;
+    }
+    .sidebar::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background-image: url('Grid-Glow-Purple.png');
+      background-size: cover;
+      background-position: center;
+      background-repeat: no-repeat;
+      opacity: 0.03;
+      pointer-events: none;
+      z-index: 0;
+    }
+    .sidebar > * { position: relative; z-index: 1; }
+
+    .sidebar-logo {
+      padding: 1.4rem 1.25rem 1rem;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+    }
+    .sidebar-logo img { height: 26px; }
+
+    .sidebar-org {
+      padding: 0.9rem 1.25rem;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+    }
+    .sidebar-org-name {
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: #fff;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      margin-bottom: 0.15rem;
+    }
+    .sidebar-org-id {
+      font-size: 0.68rem;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      color: rgba(255,255,255,0.4);
+    }
+
+    .sidebar-nav { flex: 1; padding: 0.6rem 0; }
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 0.7rem;
+      padding: 0.6rem 1.25rem;
+      color: rgba(255,255,255,0.65);
+      cursor: pointer;
+      font-size: 0.85rem;
+      font-weight: 500;
+      transition: background 0.15s, color 0.15s;
+      user-select: none;
+    }
+    .nav-item:hover { background: rgba(255,255,255,0.08); color: #fff; }
+    .nav-item.active { background: rgba(255,255,255,0.14); color: #fff; }
+    .nav-icon {
+      width: 17px;
+      height: 17px;
+      object-fit: contain;
+      flex-shrink: 0;
+      filter: brightness(0) invert(1);
+      opacity: 0.75;
+    }
+    .nav-item.active .nav-icon,
+    .nav-item:hover .nav-icon { opacity: 1; }
+
+    .nav-prod-list {
+      padding: 0 0.5rem 0.25rem;
+      max-height: 220px;
+      overflow-y: auto;
+    }
+    .nav-prod-tile {
+      display: block;
+      padding: 0.45rem 0.75rem;
+      margin: 0.1rem 0;
+      border-radius: 6px;
+      font-size: 0.78rem;
+      font-weight: 500;
+      color: rgba(255,255,255,0.7);
+      text-decoration: none;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      transition: background 0.15s, color 0.15s;
+      border-left: 2px solid rgba(255,255,255,0.15);
+    }
+    .nav-prod-tile:hover { background: rgba(255,255,255,0.1); color: #fff; border-left-color: #efab45; }
+
+    .sidebar-footer {
+      padding: 0.9rem 1.25rem;
+      border-top: 1px solid rgba(255,255,255,0.08);
+    }
+    .sidebar-email {
+      font-size: 0.72rem;
+      color: rgba(255,255,255,0.45);
+      margin-bottom: 0.4rem;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .sidebar-logout {
+      font-size: 0.72rem;
+      color: rgba(255,255,255,0.5);
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 0;
+      font-family: inherit;
+      transition: color 0.15s;
+    }
+    .sidebar-logout:hover { color: #fff; }
+
+    /* ── Main ── */
+    .main-content { margin-left: 220px; flex: 1; min-height: 100vh; position: relative; }
+    .main-content::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      left: 220px;
+      background-image: url('Grid-Glow-Purple.png');
+      background-size: cover;
+      background-position: center;
+      background-repeat: no-repeat;
+      opacity: 0.03;
+      pointer-events: none;
+      z-index: 0;
+    }
+    .content-section { display: none; padding: 2.25rem; position: relative; z-index: 1; }
+    .content-section.active { display: block; }
+
+    .page-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      margin-bottom: 1.75rem;
+      gap: 1rem;
+    }
+    .page-title { font-size: 1.45rem; font-weight: 800; color: #1a1530; letter-spacing: -0.02em; margin: 0; }
+    .page-subtitle { font-size: 0.85rem; color: #6a5a80; margin-top: 0.2rem; }
+    .page-actions { display: flex; gap: 0.6rem; align-items: center; flex-shrink: 0; }
+
+    /* ── Buttons ── */
+    .btn-primary {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      padding: 0.6rem 1.2rem;
+      background: #efab45;
+      color: #1a1008;
+      border: none;
+      border-radius: 8px;
+      font-size: 0.85rem;
+      font-weight: 700;
+      font-family: inherit;
+      cursor: pointer;
+      transition: opacity 0.2s, transform 0.15s;
+    }
+    .btn-primary:hover { opacity: 0.9; transform: translateY(-1px); }
+    .btn-primary:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
+
+    .btn-secondary {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      padding: 0.55rem 1.1rem;
+      background: #fff;
+      color: #572e88;
+      border: 1.5px solid rgba(87,46,136,0.28);
+      border-radius: 8px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      font-family: inherit;
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s;
+    }
+    .btn-secondary:hover { background: rgba(87,46,136,0.06); border-color: rgba(87,46,136,0.5); }
+
+    .btn-danger {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      padding: 0.6rem 1.2rem;
+      background: rgba(200,40,40,0.07);
+      color: #b91c1c;
+      border: 1.5px solid rgba(200,40,40,0.28);
+      border-radius: 8px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      font-family: inherit;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .btn-danger:hover { background: rgba(200,40,40,0.13); }
+
+    /* ── Org banner ── */
+
+    /* ── Stats ── */
+    .stats-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-bottom: 1.75rem; }
+    .stat-card {
+      background: #fff;
+      border: 1px solid rgba(87,46,136,0.1);
+      border-radius: 12px;
+      padding: 1.25rem 1.4rem;
+      box-shadow: 0 2px 10px rgba(87,46,136,0.05);
+    }
+    .stat-label { font-size: 0.7rem; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; color: #6a5a80; margin-bottom: 0.5rem; }
+    .stat-value { font-size: 1.9rem; font-weight: 800; color: #1a1530; line-height: 1; }
+    .stat-sub { font-size: 0.72rem; color: #9a90b0; margin-top: 0.3rem; }
+
+    /* ── Section card ── */
+    .section-card {
+      background: #fff;
+      border: 1px solid rgba(87,46,136,0.1);
+      border-radius: 12px;
+      padding: 1.4rem;
+      box-shadow: 0 2px 10px rgba(87,46,136,0.05);
+      margin-bottom: 1.4rem;
+    }
+    .section-card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; }
+    .section-card-title { font-size: 0.88rem; font-weight: 700; color: #1a1530; }
+
+    /* ── Production cards ── */
+    /* ── Collapsible production sections ── */
+    .prod-section { margin-bottom: 0.75rem; border: 1px solid rgba(87,46,136,0.12); border-radius: 12px; overflow: hidden; }
+    .prod-section-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.85rem 1.25rem;
+      cursor: pointer;
+      background: #faf9fc;
+      transition: background 0.15s;
+      user-select: none;
+    }
+    .prod-section-header:hover { background: rgba(87,46,136,0.05); }
+    .prod-section-title { display: flex; align-items: center; gap: 0.6rem; font-size: 0.75rem; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; color: #4a3f62; }
+    .prod-section-count { padding: 0.1rem 0.55rem; border-radius: 20px; font-size: 0.68rem; font-weight: 700; letter-spacing: 0.03em; }
+    .prod-section-count.cnt-live { background: rgba(239,171,69,0.18); color: #9c6b00; }
+    .prod-section-count.cnt-draft { background: rgba(87,46,136,0.12); color: #572e88; }
+    .prod-section-count.cnt-past { background: rgba(26,21,48,0.08); color: #6a5a80; }
+    .prod-section-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+    .prod-section-dot.dot-live { background: #efab45; }
+    .prod-section-dot.dot-draft { background: #572e88; }
+    .prod-section-dot.dot-past { background: #a99cc0; }
+    .prod-section-chevron { color: #a99cc0; font-size: 0.7rem; transition: transform 0.2s; display: inline-block; }
+    .prod-section-chevron.open { transform: rotate(180deg); }
+    .prod-section-body { padding: 1rem 1rem 1rem; border-top: 1px solid rgba(87,46,136,0.08); }
+    .prod-section-body.collapsed { display: none; }
+    .prod-section-empty { font-size: 0.8rem; color: #a99cc0; font-style: italic; margin: 0; }
+
+    /* ── Delete button on production cards ── */
+    .btn-delete-prod {
+      background: none;
+      border: 1px solid rgba(239,68,68,0.18);
+      border-radius: 8px;
+      color: #dc2626;
+      padding: 0.4rem 0.55rem;
+      font-size: 0.82rem;
+      line-height: 1;
+      cursor: pointer;
+      margin-left: auto;
+      transition: background 0.15s, border-color 0.15s;
+    }
+    .btn-delete-prod:hover { background: rgba(239,68,68,0.07); border-color: rgba(239,68,68,0.4); }
+
+    /* ── Delete confirm modal ── */
+    .delete-modal-icon { font-size: 2.5rem; text-align: center; margin-bottom: 0.75rem; }
+    .delete-modal-heading { font-size: 1.2rem; font-weight: 800; color: #1a1530; text-align: center; margin-bottom: 0.5rem; letter-spacing: -0.01em; }
+    .delete-modal-body { font-size: 0.875rem; color: #4a3f62; line-height: 1.6; text-align: center; margin-bottom: 1.5rem; }
+    .delete-modal-body strong { color: #1a1530; }
+    .delete-modal-actions { display: flex; gap: 0.75rem; }
+    .btn-nevermind { flex: 1; padding: 0.7rem 1rem; border: 1px solid rgba(87,46,136,0.2); border-radius: 10px; background: none; color: #572e88; font-weight: 600; font-size: 0.875rem; cursor: pointer; transition: background 0.15s; }
+    .btn-nevermind:hover { background: rgba(87,46,136,0.06); }
+    .btn-delete-confirm { flex: 1; padding: 0.7rem 1rem; border: none; border-radius: 10px; background: #dc2626; color: #fff; font-weight: 700; font-size: 0.875rem; cursor: pointer; transition: background 0.15s; }
+    .btn-delete-confirm:hover { background: #b91c1c; }
+
+    .productions-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(270px, 1fr)); gap: 1rem; }
+    .production-card {
+      background: #fff;
+      border: 1px solid rgba(87,46,136,0.1);
+      border-radius: 12px;
+      padding: 0;
+      box-shadow: 0 2px 8px rgba(87,46,136,0.05);
+      transition: box-shadow 0.2s, transform 0.15s;
+      overflow: hidden;
+    }
+    .production-card-body { padding: 1.2rem; }
+    .production-card:hover { box-shadow: 0 4px 20px rgba(87,46,136,0.12); transform: translateY(-1px); }
+    .production-card-top { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 0.6rem; }
+    .production-card-title { font-size: 0.975rem; font-weight: 700; color: #1a1530; }
+    .production-card-sub { font-size: 0.78rem; color: #6a5a80; margin-top: 0.1rem; }
+    .production-card-id { font-size: 0.63rem; font-weight: 600; letter-spacing: 0.09em; color: #9a90b0; margin-bottom: 0.5rem; }
+    .production-card-meta { font-size: 0.78rem; color: #6a5a80; margin-bottom: 0.85rem; display: flex; flex-direction: column; gap: 0.18rem; }
+    .production-card-footer { display: flex; gap: 0.5rem; }
+
+    .status-badge {
+      font-size: 0.62rem;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      padding: 0.22rem 0.6rem;
+      border-radius: 20px;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .s-setup        { background: rgba(87,46,136,0.1);  color: #572e88; }
+    .s-auditions    { background: rgba(239,171,69,0.15); color: #b87218; }
+    .s-rehearsals   { background: rgba(59,130,246,0.12); color: #1d4ed8; }
+    .s-performances { background: rgba(34,197,94,0.12);  color: #15803d; }
+    .s-wrapped      { background: rgba(107,114,128,0.12);color: #4b5563; }
+
+    /* ── Empty / loading ── */
+    .empty-state { text-align: center; padding: 3rem 2rem; color: #6a5a80; }
+    .empty-state-emoji { font-size: 2.25rem; margin-bottom: 0.6rem; }
+    .empty-state h3 { font-size: 0.975rem; font-weight: 700; color: #1a1530; margin: 0 0 0.35rem; }
+    .empty-state p { font-size: 0.85rem; margin: 0 0 1.2rem; }
+    .loading { text-align: center; padding: 2.5rem; color: #6a5a80; font-size: 0.875rem; }
+
+    /* ── Members ── */
+    .members-table { width: 100%; border-collapse: collapse; }
+    .members-table th {
+      text-align: left;
+      font-size: 0.68rem;
+      font-weight: 700;
+      letter-spacing: 0.07em;
+      text-transform: uppercase;
+      color: #6a5a80;
+      padding: 0.55rem 1rem;
+      border-bottom: 1px solid rgba(87,46,136,0.1);
+    }
+    .members-table td {
+      padding: 0.8rem 1rem;
+      font-size: 0.85rem;
+      color: #1a1530;
+      border-bottom: 1px solid rgba(87,46,136,0.06);
+    }
+    .member-cell { display: flex; align-items: center; gap: 0.6rem; }
+    .member-avatar {
+      width: 30px; height: 30px;
+      border-radius: 50%;
+      background: rgba(87,46,136,0.12);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.72rem; font-weight: 700; color: #572e88;
+      flex-shrink: 0;
+    }
+
+    /* ── Settings ── */
+    .settings-tabs { display: flex; border-bottom: 1px solid rgba(87,46,136,0.12); margin-bottom: 1.75rem; }
+    .settings-tab {
+      padding: 0.6rem 1.15rem;
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: #6a5a80;
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      margin-bottom: -1px;
+      transition: color 0.15s, border-color 0.15s;
+    }
+    .settings-tab:hover { color: #1a1530; }
+    .settings-tab.active { color: #572e88; border-bottom-color: #572e88; }
+    .settings-panel { display: none; }
+    .settings-panel.active { display: block; }
+    /* Venue cards */
+    .venue-card { display: flex; align-items: flex-start; justify-content: space-between; gap: 0.75rem; padding: 0.75rem 1rem; border: 1px solid rgba(87,46,136,0.12); border-radius: 10px; margin-bottom: 0.5rem; background: #fff; }
+    .venue-card-info { flex: 1; min-width: 0; }
+    .venue-card-name { font-weight: 600; font-size: 0.875rem; color: #1a1530; margin-bottom: 0.15rem; }
+    .venue-card-address { font-size: 0.78rem; color: #8a7aa0; line-height: 1.45; }
+    .venue-card-actions { display: flex; align-items: center; gap: 0.6rem; flex-shrink: 0; padding-top: 0.1rem; }
+    .venue-map-link { font-size: 0.75rem; font-weight: 600; color: #572e88; text-decoration: none; white-space: nowrap; }
+    .venue-map-link:hover { text-decoration: underline; }
+    .venue-delete-btn { background: none; border: none; cursor: pointer; color: #c0b8d0; font-size: 0.95rem; padding: 0.1rem 0.3rem; line-height: 1; transition: color 0.15s; }
+    .venue-delete-btn:hover { color: #b91c1c; }
+    .venues-empty-state { text-align: center; padding: 1.5rem; color: #9a90b0; font-size: 0.85rem; }
+    /* Venue cards grid */
+    .venues-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+    }
+    .venue-vcard {
+      border-radius: 12px;
+      overflow: hidden;
+      border: 1.5px solid rgba(87,46,136,0.12);
+      background: #fff;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+      transition: box-shadow 0.18s, border-color 0.18s;
+    }
+    .venue-vcard:hover { border-color: rgba(87,46,136,0.28); box-shadow: 0 4px 18px rgba(87,46,136,0.1); }
+    .venue-vcard-header {
+      padding: 1rem 1rem 0.75rem;
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      position: relative;
+    }
+    .venue-vcard-icon {
+      width: 56px; height: 56px; border-radius: 14px;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+    .venue-vcard-icon img { width: 36px; height: 36px; object-fit: contain; }
+    .venue-vcard-name {
+      font-size: 0.875rem; font-weight: 800; color: #1a1530;
+      line-height: 1.25; word-break: break-word;
+    }
+    .venue-vcard-body { padding: 0 1rem 0.75rem; flex: 1; }
+    .venue-vcard-address {
+      font-size: 0.72rem; color: #9a90b0; line-height: 1.5;
+      margin-bottom: 0.75rem;
+    }
+    .venue-vcard-nickname-label {
+      font-size: 0.62rem; font-weight: 700; color: #b8a8d4;
+      text-transform: uppercase; letter-spacing: 0.06em;
+      margin-bottom: 0.25rem;
+    }
+    .venue-nickname-input {
+      width: 100%; font-size: 0.78rem; padding: 0.3rem 0.5rem;
+      border: 1.5px solid rgba(87,46,136,0.15); border-radius: 7px;
+      background: #faf9fd; color: #1a1530; font-family: inherit;
+      transition: border-color 0.15s;
+    }
+    .venue-nickname-input:focus { outline: none; border-color: #572e88; }
+    .venue-nickname-input::placeholder { color: #c4b8d8; font-style: italic; }
+    .venue-vcard-footer {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0.5rem 1rem 0.75rem; border-top: 1px solid rgba(87,46,136,0.07);
+      gap: 0.5rem;
+    }
+    .venue-vcard-saved { font-size: 0.67rem; color: #52b788; font-weight: 700; opacity: 0; transition: opacity 0.4s; }
+    .venue-vcard-saved.show { opacity: 1; }
+    .venue-map-link { font-size: 0.72rem; font-weight: 600; color: #572e88; text-decoration: none; }
+    .venue-map-link:hover { text-decoration: underline; }
+    .venue-delete-btn { background: none; border: none; cursor: pointer; color: #c0b8d0; font-size: 0.9rem; padding: 0.1rem 0.3rem; line-height: 1; transition: color 0.15s; margin-left: auto; }
+    .venue-delete-btn:hover { color: #b91c1c; }
+    .venues-empty-state { text-align: center; padding: 1.5rem; color: #9a90b0; font-size: 0.85rem; }
+    /* Venue search + preview */
+    .venue-search-label { font-size: 0.72rem; font-weight: 700; color: #9a90b0; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.4rem; }
+    .venue-preview-card { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; padding: 0.85rem 1rem; background: rgba(87,46,136,0.04); border: 1.5px solid rgba(87,46,136,0.18); border-radius: 10px; margin-top: 0.6rem; }
+    .venue-preview-info { flex: 1; min-width: 0; }
+    .venue-preview-name { font-size: 0.875rem; font-weight: 700; color: #1a1530; margin-bottom: 0.2rem; }
+    .venue-preview-address { font-size: 0.78rem; color: #6a5a80; line-height: 1.4; }
+    .venue-preview-btns { display: flex; gap: 0.4rem; align-items: center; flex-shrink: 0; }
+    /* Google autocomplete dropdown z-index fix */
+    .pac-container { z-index: 9999 !important; }
+
+    .danger-zone { border: 1.5px solid rgba(200,40,40,0.22); border-radius: 12px; padding: 1.4rem; }
+    .danger-zone h3 { font-size: 0.78rem; font-weight: 700; color: #b91c1c; text-transform: uppercase; letter-spacing: 0.07em; margin: 0 0 0.35rem; }
+    .danger-zone p { font-size: 0.84rem; color: #6a5a80; margin: 0 0 1rem; }
+
+    /* ── Form ── */
+    .form-group { margin-bottom: 1rem; }
+    .form-label { display: block; font-size: 0.75rem; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #4a3f62; margin-bottom: 0.3rem; }
+    .form-label .opt { text-transform: none; font-weight: 400; letter-spacing: 0; font-size: 0.72rem; color: #6a5a80; margin-left: 0.3rem; }
+    .form-input, .form-select, .form-textarea {
+      width: 100%;
+      background: #f5f3fc;
+      border: 1px solid rgba(87,46,136,0.2);
+      color: #1a1530;
+      border-radius: 8px;
+      padding: 0.68rem 1rem;
+      font-size: 0.9375rem;
+      font-family: inherit;
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+      box-sizing: border-box;
+    }
+    .form-input:focus, .form-select:focus, .form-textarea:focus {
+      border-color: rgba(87,46,136,0.5);
+      box-shadow: 0 0 0 3px rgba(87,46,136,0.1);
+    }
+    .form-input::placeholder, .form-textarea::placeholder { color: #9a90b0; }
+    .form-textarea { resize: vertical; min-height: 90px; }
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+    .form-error-msg {
+      display: none;
+      background: rgba(200,40,40,0.07);
+      border: 1px solid rgba(200,40,40,0.22);
+      border-radius: 8px;
+      padding: 0.6rem 0.9rem;
+      font-size: 0.84rem;
+      color: #b91c1c;
+      margin-bottom: 1rem;
+    }
+    .form-error-msg.visible { display: block; }
+
+    /* ── Modal ── */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(26,21,48,0.5);
+      z-index: 200;
+      align-items: center;
+      justify-content: center;
+      padding: 1rem;
+    }
+    .modal-overlay.open { display: flex; }
+    .modal {
+      background: #fff;
+      border-radius: 14px;
+      padding: 2rem;
+      width: 100%;
+      max-width: 510px;
+      max-height: 92vh;
+      overflow-y: auto;
+      box-shadow: 0 20px 60px rgba(26,21,48,0.22);
+    }
+    .modal-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.4rem; }
+    .modal-title { font-size: 1.15rem; font-weight: 800; color: #1a1530; }
+    .modal-close { background: none; border: none; cursor: pointer; color: #6a5a80; font-size: 1.15rem; padding: 0.2rem; line-height: 1; transition: color 0.15s; }
+    .modal-close:hover { color: #1a1530; }
+
+    /* ── Start Production chooser tiles ── */
+    .start-prod-tiles { display: flex; flex-direction: column; gap: 0.75rem; }
+    .start-prod-tile {
+      display: flex;
+      align-items: flex-start;
+      gap: 1rem;
+      padding: 1.1rem 1.25rem;
+      border: 2px solid rgba(87, 46, 136, 0.15);
+      border-radius: 12px;
+      background: #fff;
+      cursor: pointer;
+      text-align: left;
+      width: 100%;
+      transition: border-color 0.15s, background 0.15s;
+    }
+    .start-prod-tile:hover { border-color: #572e88; background: rgba(87, 46, 136, 0.04); }
+    .start-prod-tile-icon { font-size: 1.5rem; line-height: 1; flex-shrink: 0; margin-top: 0.1rem; }
+    .start-prod-tile-title { font-size: 0.95rem; font-weight: 700; color: #1a1530; margin-bottom: 0.25rem; }
+    .start-prod-tile-desc { font-size: 0.82rem; color: #6a5a80; line-height: 1.45; }
+
+    /* ── Coming soon ── */
+    .coming-soon { text-align: center; padding: 3.5rem 2rem; color: #9a90b0; }
+    .coming-soon h3 { font-size: 0.975rem; font-weight: 700; color: #1a1530; margin: 0 0 0.35rem; }
+    .coming-soon p { margin: 0; font-size: 0.85rem; }
+
+    /* ── Past Shows ── */
+    .past-shows-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 1rem; }
+    .show-card {
+      background: #fff;
+      border: 1px solid rgba(87,46,136,0.1);
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 2px 8px rgba(87,46,136,0.05);
+      transition: box-shadow 0.2s, transform 0.15s;
+    }
+    .show-card:hover { box-shadow: 0 4px 20px rgba(87,46,136,0.12); transform: translateY(-1px); }
+    .show-card-poster {
+      width: 100%;
+      aspect-ratio: 2/3;
+      object-fit: cover;
+      background: linear-gradient(135deg, #572e88 0%, #3d1f6a 100%);
+      display: block;
+    }
+    .show-card-poster-placeholder {
+      width: 100%;
+      aspect-ratio: 2/3;
+      background: linear-gradient(135deg, #572e88 0%, #3d1f6a 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 2.5rem;
+      color: rgba(255,255,255,0.3);
+    }
+    .show-card-body { padding: 0.9rem 1rem; }
+    .show-card-title { font-size: 0.9rem; font-weight: 700; color: #1a1530; margin-bottom: 0.15rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .show-card-year { font-size: 0.75rem; color: #9a90b0; font-weight: 600; margin-bottom: 0.35rem; }
+    .show-card-meta { font-size: 0.78rem; color: #6a5a80; line-height: 1.5; }
+    .show-card-actions { display: flex; gap: 0.4rem; margin-top: 0.6rem; }
+    .show-card-btn { font-size: 0.72rem; padding: 0.3rem 0.7rem; border-radius: 6px; border: 1.5px solid rgba(87,46,136,0.2); background: transparent; color: #572e88; cursor: pointer; font-family: inherit; font-weight: 600; transition: background 0.15s; }
+    .show-card-btn:hover { background: rgba(87,46,136,0.07); }
+    .show-card-btn.danger { color: #b91c1c; border-color: rgba(200,40,40,0.2); }
+    .show-card-btn.danger:hover { background: rgba(200,40,40,0.07); }
+
+    /* ── This Week strip ── */
+    .this-week-card { margin-top: 1.5rem; }
+    .this-week-list { display: flex; flex-direction: column; gap: 0; }
+    .this-week-day { padding: 0.6rem 0; border-top: 1px solid rgba(87,46,136,0.08); }
+    .this-week-day:first-child { border-top: none; }
+    .this-week-day-label { font-size: 0.72rem; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; color: #9a90b0; margin-bottom: 0.4rem; }
+    .this-week-event { display: flex; align-items: center; gap: 0.6rem; padding: 0.3rem 0; }
+    .this-week-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+    .this-week-event-title { font-size: 0.84rem; font-weight: 600; color: #1a1530; flex: 1; }
+    .this-week-event-prod { font-size: 0.75rem; color: #9a90b0; white-space: nowrap; }
+    .this-week-event-time { font-size: 0.75rem; color: #6a5a80; white-space: nowrap; }
+    .this-week-empty { font-size: 0.875rem; color: #9a90b0; padding: 1rem 0; text-align: center; }
+
+    /* ── Cronus Calendar ── */
+    .cronus-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; margin-bottom: 1.25rem; }
+    .cronus-legend { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+    .cronus-legend-item { display: flex; align-items: center; gap: 0.4rem; font-size: 0.78rem; font-weight: 600; color: #4b4466; cursor: pointer; padding: 0.25rem 0.6rem; border-radius: 20px; border: 1.5px solid transparent; transition: all 0.15s; user-select: none; }
+    .cronus-legend-item:hover { border-color: currentColor; }
+    .cronus-legend-item.dimmed { opacity: 0.35; }
+    .cronus-legend-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+    #cronus-cal { min-height: 600px; }
+    /* Cronus event tile formatting */
+    #tab-cronus .fc-daygrid-event { margin-bottom: 2px !important; min-height: 34px !important; }
+    #tab-cronus .fc-event-main { padding: 3px 5px !important; width: 100%; display: flex; align-items: center; justify-content: center; }
+    .cronus-event-time  { font-size: 0.67rem; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: clip; }
+    .cronus-event-label { font-size: 0.7rem;  font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: clip; }
+    .cronus-event-prod  { font-size: 0.6rem;  font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: clip; opacity: 0.75; font-style: italic; margin-top: 1px; }
+    /* FullCalendar resets for Cronus */
+    #tab-cronus .fc { font-family: inherit; }
+    #tab-cronus .fc-toolbar-title { font-size: 1.1rem; font-weight: 700; color: #1a1530; }
+    #tab-cronus .fc-button { background: #572e88 !important; border-color: #572e88 !important; font-family: inherit; font-size: 0.8rem; }
+    #tab-cronus .fc-button:hover { background: #3d1f6a !important; border-color: #3d1f6a !important; }
+    #tab-cronus .fc-button-active { background: #3d1f6a !important; border-color: #3d1f6a !important; }
+    #tab-cronus .fc-daygrid-day-number, #tab-cronus .fc-col-header-cell-cushion { color: #1a1530; text-decoration: none; }
+    #tab-cronus .fc-day-today { background: rgba(87,46,136,0.06) !important; }
+    #tab-cronus .fc-view-harness,
+    #tab-cronus .fc-daygrid-body,
+    #tab-cronus .fc-scrollgrid,
+    #tab-cronus .fc-daygrid-day,
+    #tab-cronus .fc-col-header-cell,
+    #tab-cronus td, #tab-cronus th { background: #fff !important; }
+    #tab-cronus .fc-day-today { background: rgba(87,46,136,0.06) !important; }
+    #tab-cronus .fc-scrollgrid { border-color: rgba(87,46,136,0.15) !important; }
+    #tab-cronus td, #tab-cronus th { border-color: rgba(87,46,136,0.1) !important; }
+
+    /* ── Files tab ── */
+    .folder-tab {
+      background: none; border: none; padding: 0.6rem 1rem;
+      font-size: 0.84rem; font-weight: 600; color: #9a90b0;
+      cursor: pointer; font-family: inherit;
+      border-bottom: 2px solid transparent;
+      transition: color 0.15s, border-color 0.15s;
+      display: flex; align-items: center; gap: 0.4rem; white-space: nowrap;
+    }
+    .folder-tab:hover { color: #572e88; }
+    .folder-tab.active { color: #572e88; border-bottom-color: #572e88; }
+    .folder-tab-count {
+      font-size: 0.68rem; font-weight: 700;
+      background: rgba(87,46,136,0.1); color: #572e88;
+      border-radius: 20px; padding: 0.05rem 0.4rem;
+    }
+    .file-row {
+      display: flex; align-items: center; gap: 0.75rem;
+      padding: 0.75rem 1rem;
+      border-bottom: 1px solid rgba(87,46,136,0.07);
+      transition: background 0.12s;
+    }
+    .file-row:last-child { border-bottom: none; }
+    .file-row:hover { background: rgba(87,46,136,0.03); }
+    .file-icon { font-size: 1.25rem; flex-shrink: 0; width: 28px; text-align: center; }
+    .file-name { flex: 1; font-size: 0.875rem; font-weight: 600; color: #1a1530; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .file-meta { font-size: 0.75rem; color: #9a90b0; white-space: nowrap; }
+    .file-tags { display: flex; gap: 0.3rem; flex-wrap: wrap; }
+    .file-tag { font-size: 0.68rem; font-weight: 600; padding: 0.1rem 0.45rem; background: rgba(87,46,136,0.08); color: #572e88; border-radius: 20px; }
+    .file-actions { display: flex; gap: 0.3rem; flex-shrink: 0; }
+    .file-btn { background: none; border: 1.5px solid rgba(87,46,136,0.15); border-radius: 6px; padding: 0.25rem 0.6rem; font-size: 0.72rem; font-weight: 600; color: #572e88; cursor: pointer; font-family: inherit; transition: background 0.12s; }
+    .file-btn:hover { background: rgba(87,46,136,0.07); }
+    .file-btn.danger { color: #b91c1c; border-color: rgba(200,40,40,0.2); }
+    .file-btn.danger:hover { background: rgba(200,40,40,0.06); }
+  </style>
+</head>
+<body>
+
+<div class="shell">
+
+  <!-- ── Sidebar ── -->
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <a href="index.html">
+        <img src="logo-long-white.png" alt="Build The Show" />
+      </a>
+    </div>
+    <div class="sidebar-org">
+      <div class="sidebar-org-name" id="sb-org-name">Loading...</div>
+      <div class="sidebar-org-id" id="sb-org-id">-</div>
+    </div>
+    <nav class="sidebar-nav">
+      <div class="nav-item active" data-tab="home">
+        <img src="Home.svg" class="nav-icon" alt="" /> Home
+      </div>
+      <div class="nav-item" data-tab="productions">
+        <img src="Production.svg" class="nav-icon" alt="" /> Productions
+      </div>
+      <div class="nav-prod-list" id="nav-active-prods"></div>
+      <div class="nav-item" data-tab="cronus">
+        <img src="Calendar.svg" class="nav-icon" alt="" /> Calendar
+      </div>
+      <div class="nav-item" data-tab="members">
+        <img src="Creative Team.svg" class="nav-icon" alt="" /> Organisation Team
+      </div>
+      <div class="nav-item" data-tab="past-shows">
+        <img src="Past shows.svg" class="nav-icon" alt="" />
+        Past Productions
+      </div>
+      <div class="nav-item" data-tab="messages">
+        <img src="Messages.svg" class="nav-icon" alt="" /> Messages
+      </div>
+      <div class="nav-item" data-tab="files">
+        <img src="Files.svg" class="nav-icon" alt="" /> Files
+      </div>
+      <div class="nav-item" data-tab="settings">
+        <img src="Settings.svg" class="nav-icon" alt="" />
+        Settings
+      </div>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="sidebar-email" id="sb-email"></div>
+      <button class="sidebar-logout" id="logout-btn">Sign out</button>
+    </div>
+  </aside>
+
+  <!-- ── Main Content ── -->
+  <main class="main-content">
+
+    <!-- Home -->
+    <section class="content-section active" id="tab-home">
+      <div class="page-header">
+        <div>
+          <div class="page-title" id="home-title">Dashboard</div>
+          <div class="page-subtitle" id="home-subtitle">Your organisation overview</div>
+        </div>
+        <div class="page-actions">
+          <a id="view-profile-btn" href="#" target="_blank" class="btn-secondary" style="text-decoration:none;">View Public Profile ↗</a>
+          <button class="btn-primary" onclick="openStartProductionModal()">+ New Production</button>
+        </div>
+      </div>
+
+
+      <div class="stats-row">
+        <div class="stat-card">
+          <div class="stat-label">Productions</div>
+          <div class="stat-value" id="stat-prods">-</div>
+          <div class="stat-sub">Total created</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Organisation Team</div>
+          <div class="stat-value">1</div>
+          <div class="stat-sub">In your organisation</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Open Auditions</div>
+          <div class="stat-value">-</div>
+          <div class="stat-sub">Accepting applications</div>
+        </div>
+      </div>
+
+      <div class="section-card">
+        <div class="section-card-header">
+          <div class="section-card-title">Recent Productions</div>
+          <button class="btn-secondary" onclick="switchTab('productions')" style="font-size:0.78rem;padding:0.38rem 0.85rem;">View all</button>
+        </div>
+        <div id="home-recent-prods"><div class="loading">Loading...</div></div>
+      </div>
+
+      <div class="section-card this-week-card">
+        <div class="section-card-header">
+          <div class="section-card-title">This Week</div>
+          <button class="btn-secondary" onclick="switchTab('cronus')" style="font-size:0.78rem;padding:0.38rem 0.85rem;">View Calendar</button>
+        </div>
+        <div id="this-week-list"><div class="loading">Loading...</div></div>
+      </div>
+    </section>
+
+    <!-- Organisation Calendar -->
+    <section class="content-section" id="tab-cronus">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Calendar</div>
+          <div class="page-subtitle">Every event, across every production, all at once</div>
+        </div>
+      </div>
+      <div class="cronus-toolbar">
+        <div class="cronus-legend" id="cronus-legend"></div>
+      </div>
+      <div id="cronus-cal"></div>
+    </section>
+
+    <!-- Productions -->
+    <section class="content-section" id="tab-productions">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Productions</div>
+          <div class="page-subtitle">Create and manage your shows</div>
+        </div>
+        <div class="page-actions">
+          <button class="btn-primary" onclick="openStartProductionModal()">+ New Production</button>
+        </div>
+      </div>
+      <div id="productions-list"><div class="loading">Loading...</div></div>
+    </section>
+
+    <!-- Organisation Team -->
+    <section class="content-section" id="tab-members">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Organisation Team</div>
+          <div class="page-subtitle">The people who run your organisation: presidents, treasurers, directors, and more.</div>
+        </div>
+        <div class="page-actions">
+          <button class="btn-primary" onclick="openInviteModal()">+ Invite Member</button>
+        </div>
+      </div>
+      <div class="section-card" style="padding:0;overflow:hidden;">
+        <table class="members-table">
+          <thead>
+            <tr>
+              <th style="padding-left:1.4rem;">Member</th>
+              <th>Organisation Role</th>
+              <th>Access</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="members-tbody">
+            <tr><td colspan="4" class="loading">Loading...</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div id="pending-invites-card" style="display:none;">
+        <div class="page-title" style="font-size:0.8rem;color:#6a5a80;margin:1.25rem 0 0.5rem;text-transform:uppercase;letter-spacing:0.05em;">Pending Invitations</div>
+        <div class="section-card" style="padding:0;overflow:hidden;">
+          <table class="members-table">
+            <thead>
+              <tr>
+                <th style="padding-left:1.4rem;">Email</th>
+                <th>Organisation Role</th>
+                <th>Access</th>
+                <th>Expires</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="invites-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- Messages -->
+    <section class="content-section" id="tab-messages">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Messages</div>
+          <div class="page-subtitle">Organisation-wide communication</div>
+        </div>
+      </div>
+      <div class="section-card">
+        <div class="coming-soon">
+          <div style="font-size:2rem;margin-bottom:0.6rem;">💬</div>
+          <h3>Messages coming soon</h3>
+          <p>Production-specific messaging is available inside each production workspace.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Files -->
+    <section class="content-section" id="tab-files">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Files</div>
+          <div class="page-subtitle">Contracts, policies, marketing materials, and org-wide docs</div>
+        </div>
+        <div class="page-actions">
+          <button class="btn-secondary" onclick="openOrgNewFolderModal()">+ New Folder</button>
+          <button class="btn-primary" id="org-files-upload-btn" onclick="document.getElementById('org-files-upload-input').click()">+ Upload</button>
+          <input type="file" id="org-files-upload-input" multiple style="display:none" onchange="handleOrgFileUpload(this)" />
+        </div>
+      </div>
+
+      <!-- Folder tabs -->
+      <div id="org-files-folder-nav" style="display:flex;gap:0.35rem;flex-wrap:wrap;margin-bottom:1.25rem;border-bottom:1px solid rgba(87,46,136,0.1);padding-bottom:0;">
+        <!-- rendered by renderOrgFolderNav() -->
+      </div>
+
+      <!-- Upload progress -->
+      <div id="org-files-upload-progress" style="display:none;background:rgba(87,46,136,0.07);border:1px solid rgba(87,46,136,0.18);border-radius:8px;padding:0.75rem 1rem;font-size:0.84rem;color:#572e88;font-weight:600;margin-bottom:1rem;"></div>
+
+      <!-- Drop zone -->
+      <div id="org-files-drop-zone" style="border:2px dashed rgba(87,46,136,0.2);border-radius:12px;padding:1.75rem;text-align:center;margin-bottom:1.25rem;transition:border-color 0.2s,background 0.2s;cursor:pointer;"
+        onclick="document.getElementById('org-files-upload-input').click()"
+        ondragover="event.preventDefault();this.style.borderColor='#572e88';this.style.background='rgba(87,46,136,0.04)'"
+        ondragleave="this.style.borderColor='rgba(87,46,136,0.2)';this.style.background=''"
+        ondrop="event.preventDefault();this.style.borderColor='rgba(87,46,136,0.2)';this.style.background='';handleOrgFileDrop(event)">
+        <div style="font-size:1.5rem;margin-bottom:0.4rem;">📁</div>
+        <div style="font-size:0.875rem;font-weight:600;color:#572e88;">Drop files here or click to upload</div>
+        <div style="font-size:0.78rem;color:#9a90b0;margin-top:0.2rem;">Uploading to: <span id="org-files-active-folder-name">-</span></div>
+      </div>
+
+      <!-- File list -->
+      <div id="org-files-list">
+        <div style="text-align:center;padding:2rem;color:#9a90b0;font-size:0.875rem;">Select a folder above to see its files.</div>
+      </div>
+    </section>
+
+    <!-- Past Productions -->
+    <section class="content-section" id="tab-past-shows">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Past Productions</div>
+          <div class="page-subtitle">Your organisation's show history</div>
+        </div>
+        <div class="page-actions" style="gap:0.5rem;flex-wrap:wrap;">
+          <div style="display:flex;align-items:center;gap:0.5rem;">
+            <label style="font-size:0.78rem;font-weight:600;color:#6a5a80;">Sort</label>
+            <select id="ps-sort" onchange="renderPastShows()" style="font-size:0.78rem;font-family:inherit;color:#1a1530;background:#fff;border:1.5px solid rgba(87,46,136,0.2);border-radius:7px;padding:0.35rem 0.6rem;cursor:pointer;">
+              <option value="year-desc">Year: Newest</option>
+              <option value="year-asc">Year: Oldest</option>
+              <option value="name-asc">Name: A–Z</option>
+              <option value="name-desc">Name: Z–A</option>
+            </select>
+          </div>
+          <button class="btn-secondary" onclick="document.getElementById('ps-ai-file').click()" title="Import multiple shows from a PDF or image using AI">Import with AI</button>
+          <input type="file" id="ps-ai-file" accept=".pdf,.png,.jpg,.jpeg,.webp" style="display:none" onchange="importPastShowsWithAI(this)" />
+          <button class="btn-primary" onclick="openPastShowModal()">+ Add Production</button>
+        </div>
+      </div>
+      <div id="ps-ai-status" style="display:none;background:rgba(87,46,136,0.07);border:1px solid rgba(87,46,136,0.18);border-radius:8px;padding:0.75rem 1rem;font-size:0.84rem;color:#572e88;font-weight:600;margin-bottom:1rem;">Scanning document with AI…</div>
+      <div id="past-shows-list"><div class="loading">Loading...</div></div>
+    </section>
+
+    <!-- Settings -->
+    <section class="content-section" id="tab-settings">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Settings</div>
+          <div class="page-subtitle">Manage your organisation</div>
+        </div>
+      </div>
+
+      <div class="settings-tabs">
+        <div class="settings-tab active" data-panel="profile">Organisation Profile</div>
+        <div class="settings-tab" data-panel="branding">Branding</div>
+        <div class="settings-tab" data-panel="venues">Venues</div>
+        <div class="settings-tab" data-panel="permissions">Permissions</div>
+        <div class="settings-tab" data-panel="danger">Danger Zone</div>
+      </div>
+
+      <div class="settings-panel active" id="panel-profile">
+        <div class="section-card">
+          <div class="form-error-msg" id="settings-error"></div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Organisation Name</label>
+              <input class="form-input" id="s-name" type="text" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Abbreviation <span class="opt">(optional)</span></label>
+              <input class="form-input" id="s-abbr" type="text" maxlength="6" style="text-transform:uppercase;" />
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Location</label>
+            <input class="form-input" id="s-location" type="text" />
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Contact Email</label>
+              <input class="form-input" id="s-email" type="email" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Website <span class="opt">(optional)</span></label>
+              <input class="form-input" id="s-website" type="url" />
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Description</label>
+            <textarea class="form-textarea" id="s-description" rows="4"></textarea>
+          </div>
+          <div class="form-divider"></div>
+          <p style="font-size:0.7rem;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#efab45;margin-bottom:1rem;">About Your Organisation</p>
+          <div class="form-group">
+            <label class="form-label">Bio <span class="opt">(optional)</span></label>
+            <textarea class="form-textarea" id="s-bio" rows="3" placeholder="A brief description of who you are..."></textarea>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Our Mission <span class="opt">(optional)</span></label>
+            <textarea class="form-textarea" id="s-mission" rows="3" placeholder="What drives your organisation..."></textarea>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Our Story <span class="opt">(optional)</span></label>
+            <textarea class="form-textarea" id="s-story" rows="4" placeholder="How you got started, your history..."></textarea>
+          </div>
+          <div class="form-divider"></div>
+          <p style="font-size:0.7rem;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#efab45;margin-bottom:1rem;">Organisation Stats</p>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Established Year <span class="opt">(optional)</span></label>
+              <input class="form-input" id="s-established-year" type="number" placeholder="e.g. 2005" min="1800" max="2099" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Total Productions <span class="opt">(optional - overrides auto-count)</span></label>
+              <input class="form-input" id="s-total-productions" type="number" placeholder="Auto-calculated from history" min="0" />
+              <p style="font-size:0.72rem;color:#9a90b0;margin-top:0.3rem;">Leave blank to show the count from your Past Productions list.</p>
+            </div>
+          </div>
+          <div class="form-divider"></div>
+          <p style="font-size:0.7rem;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#efab45;margin-bottom:1rem;">Visibility</p>
+          <div style="display:flex;flex-direction:column;gap:0.75rem;margin-bottom:1.25rem;">
+            <label style="display:flex;align-items:center;gap:0.75rem;cursor:pointer;">
+              <input type="checkbox" id="s-profile-public" style="width:16px;height:16px;accent-color:#572e88;cursor:pointer;" />
+              <span style="font-size:0.875rem;color:#1a1530;font-weight:500;">Public profile, visible to anyone browsing Build The Show</span>
+            </label>
+            <label style="display:flex;align-items:center;gap:0.75rem;cursor:pointer;">
+              <input type="checkbox" id="s-show-contact" style="width:16px;height:16px;accent-color:#572e88;cursor:pointer;" />
+              <span style="font-size:0.875rem;color:#1a1530;font-weight:500;">Show contact info on public profile</span>
+            </label>
+          </div>
+          <button class="btn-primary" id="save-settings-btn" onclick="saveOrgSettings()">Save Changes</button>
+        </div>
+      </div>
+
+      <div class="settings-panel" id="panel-branding">
+        <div class="section-card">
+          <h3 style="margin-top:0;margin-bottom:1.25rem;font-size:1rem;font-weight:700;color:#1a1530;">Branding</h3>
+          <div class="form-group">
+            <label class="form-label">Organisation Logo</label>
+            <div id="logo-upload-area" onclick="document.getElementById('logo-file-input').click()" style="border:2px dashed rgba(87,46,136,0.25);border-radius:10px;padding:1.5rem;text-align:center;cursor:pointer;transition:border-color 0.2s;background:rgba(87,46,136,0.03);" onmouseover="this.style.borderColor='rgba(87,46,136,0.5)'" onmouseout="this.style.borderColor='rgba(87,46,136,0.25)'">
+              <img id="logo-preview" style="width:80px;height:80px;object-fit:cover;border-radius:8px;margin:0 auto 0.75rem;display:none;border:1px solid rgba(87,46,136,0.2);" alt="Logo preview" />
+              <div id="logo-upload-label" style="font-size:0.875rem;color:#7a7490;">Click to upload logo<br><span style="font-size:0.75rem;opacity:0.7;">PNG, JPG, SVG, max 5MB</span></div>
+            </div>
+            <input type="file" id="logo-file-input" accept="image/*" style="display:none" onchange="handleLogoFile(this)" />
+          </div>
+          <button class="btn-primary" id="save-branding-btn" onclick="saveBranding()">Save Branding</button>
+        </div>
+      </div>
+
+      <div class="settings-panel" id="panel-venues">
+        <div class="section-card">
+          <p style="font-size:0.8rem;color:#6a5a80;margin-bottom:1.25rem;">Save your rehearsal spaces, theatres, and other locations. These become quick-picks across all your productions.</p>
+
+          <div id="venues-list" style="margin-bottom:1.5rem;">
+            <div class="venues-empty-state">No venues saved yet.</div>
+          </div>
+
+          <div class="venue-search-label">Add a venue</div>
+          <div style="position:relative;">
+            <input class="form-input" id="venue-search-input" type="text"
+                   placeholder="Search for a theatre, studio, address..."
+                   autocomplete="off" style="width:100%;" />
+            <div id="venue-suggestions-dropdown" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:9999;background:#fff;border:1.5px solid rgba(87,46,136,0.2);border-top:none;border-radius:0 0 8px 8px;box-shadow:0 6px 18px rgba(0,0,0,0.1);max-height:220px;overflow-y:auto;"></div>
+          </div>
+
+          <div id="venue-preview-card" style="display:none;">
+            <div class="venue-preview-card">
+              <div class="venue-preview-info" style="flex:1;">
+                <div style="font-size:0.67rem;font-weight:700;color:#9a90b0;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:0.25rem;">Custom name <span style="font-weight:400;text-transform:none;letter-spacing:0;">(edit if needed)</span></div>
+                <input class="form-input" id="vp-name" type="text" style="font-weight:700;font-size:0.875rem;margin-bottom:0.35rem;" placeholder="Venue name" />
+                <div class="venue-preview-address" id="vp-address"></div>
+              </div>
+              <div class="venue-preview-btns">
+                <button class="btn-primary" onclick="saveVenueFromPreview()" style="padding:0.4rem 0.9rem;font-size:0.8rem;">Save</button>
+                <button class="btn--secondary" onclick="clearVenuePreview()" style="padding:0.4rem 0.9rem;font-size:0.8rem;">Clear</button>
+              </div>
+            </div>
+          </div>
+          <div class="form-error-msg" id="venue-error" style="margin-top:0.75rem;"></div>
+        </div>
+      </div>
+
+      <div class="settings-panel" id="panel-permissions">
+        <div class="section-card">
+          <div class="coming-soon"><h3>Permissions</h3><p>Role-based access controls coming soon.</p></div>
+        </div>
+      </div>
+
+      <div class="settings-panel" id="panel-danger">
+        <div class="danger-zone">
+          <h3 style="display:flex;align-items:center;gap:0.5rem;"><img src="Danger Zone.svg" alt="" style="width:16px;height:16px;object-fit:contain;filter:invert(20%) sepia(80%) saturate(600%) hue-rotate(330deg);opacity:0.85;" />Danger Zone</h3>
+          <p>Permanently delete your organisation. This removes all productions, members, and data. This cannot be undone.</p>
+          <button class="btn-danger" onclick="confirmDeleteOrg()">Delete Organisation</button>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<footer style="margin-left:210px;border-top:1px solid rgba(87,46,136,0.08);padding:1rem 2.5rem;display:flex;flex-wrap:wrap;gap:0.5rem 1.5rem;align-items:center;">
+  <a href="privacy-policy.html" target="_blank" style="font-size:0.78rem;color:#a098b8;text-decoration:none;font-weight:500;">Privacy Policy</a>
+  <a href="terms-of-service.html" target="_blank" style="font-size:0.78rem;color:#a098b8;text-decoration:none;font-weight:500;">Terms of Service</a>
+  <a href="copyright-policy.html" target="_blank" style="font-size:0.78rem;color:#a098b8;text-decoration:none;font-weight:500;">Copyright Policy</a>
+  <a href="accessibility-statement.html" target="_blank" style="font-size:0.78rem;color:#a098b8;text-decoration:none;font-weight:500;">Accessibility</a>
+  <a href="mailto:privacy@buildtheshow.com" style="font-size:0.78rem;color:#a098b8;text-decoration:none;font-weight:500;">Contact</a>
+  <span style="font-size:0.78rem;color:#c8c0d8;">© 2026 Build The Show</span>
+</footer>
+
+<!-- ── Start a New Production Modal ── -->
+<div class="modal-overlay" id="start-prod-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Start a New Production</div>
+      <button class="modal-close" onclick="closeStartProductionModal()">✕</button>
+    </div>
+    <div class="start-prod-tiles">
+      <button class="start-prod-tile" onclick="window.location.href='production-wizard.html?mode=full'">
+        <div class="start-prod-tile-icon">+</div>
+        <div>
+          <div class="start-prod-tile-title">I'll build the production page</div>
+          <div class="start-prod-tile-desc">Create the full production now. Details, dates, casting, and more.</div>
+        </div>
+      </button>
+      <button class="start-prod-tile" onclick="window.location.href='production-wizard.html?mode=handoff'">
+        <div class="start-prod-tile-icon" style="font-size:1.3rem;">&#128101;</div>
+        <div>
+          <div class="start-prod-tile-title">Invite a producer to start it</div>
+          <div class="start-prod-tile-desc">Send a producer their invitation. They'll fill in the production details using their account.</div>
+        </div>
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Org title suggestions -->
+<datalist id="org-title-suggestions">
+  <option value="President">
+  <option value="Vice President">
+  <option value="Treasurer">
+  <option value="Secretary">
+  <option value="Artistic Director">
+  <option value="Executive Director">
+  <option value="Board Chair">
+  <option value="Board Member">
+  <option value="Production Manager">
+  <option value="Founder">
+  <option value="Owner">
+  <option value="Administrator">
+</datalist>
+
+<!-- Delete Production Confirm Modal -->
+<div class="modal-overlay" id="delete-prod-modal">
+  <div class="modal" style="max-width:420px;">
+    <div class="delete-modal-icon">🛑</div>
+    <div class="delete-modal-heading">Wait. Stop. Think.</div>
+    <div class="delete-modal-body">
+      You're about to permanently delete<br>
+      <strong id="delete-modal-prod-name"></strong>.<br><br>
+      Every audition application, every team member, every setting. Gone. Forever. There is no undo, no recovery, no "oops" button.
+    </div>
+    <div class="delete-modal-actions">
+      <button class="btn-nevermind" onclick="closeDeleteModal()">Never mind</button>
+      <button class="btn-delete-confirm" id="btn-delete-confirm" onclick="confirmDeleteProduction()">Delete it forever</button>
+    </div>
+  </div>
+</div>
+
+<!-- Invite Member Modal -->
+<div class="modal-overlay" id="invite-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Invite to Organisation Team</div>
+      <button class="modal-close" onclick="closeInviteModal()">✕</button>
+    </div>
+    <div id="invite-error" class="form-error"></div>
+    <div id="invite-success" style="display:none;background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.3);border-radius:8px;padding:0.75rem 1rem;font-size:0.875rem;color:#166534;margin-bottom:1rem;"></div>
+    <div class="form-group">
+      <label class="form-label">Organisation Role</label>
+      <input class="form-input" id="invite-title" type="text" list="org-title-suggestions" placeholder="e.g. President, Treasurer, Artistic Director" autocomplete="off" />
+      <p style="font-size:0.75rem;color:#9a90b0;margin-top:0.3rem;">This is how they'll appear on your team. Start typing to see suggestions, or enter any title.</p>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Email or Profile ID</label>
+      <input class="form-input" id="invite-email" type="text" placeholder="member@example.com or BTS-223SK-01" autocomplete="off" />
+      <p style="font-size:0.75rem;color:#9a90b0;margin-top:0.3rem;">Enter their email address, or their Build The Show profile ID (e.g. BTS-223SK-01).</p>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Workspace Access</label>
+      <select class="form-input" id="invite-access">
+        <option value="editor">Editor (can edit productions and settings)</option>
+        <option value="viewer">Viewer (read-only access)</option>
+        <option value="admin">Admin (full access including team management)</option>
+      </select>
+    </div>
+    <button class="btn-primary" id="send-invite-btn" onclick="sendInvite()" style="width:100%;justify-content:center;">Send Invitation</button>
+  </div>
+</div>
+
+<!-- Past Production - Add Choice Modal -->
+<div class="modal-overlay" id="past-show-choice-modal">
+  <div class="modal" style="max-width:520px;">
+    <div class="modal-header">
+      <div class="modal-title">Add Past Production</div>
+      <button class="modal-close" onclick="closePastShowChoiceModal()">✕</button>
+    </div>
+    <p style="font-size:0.9rem;color:#4b4466;margin:0 0 1.5rem;">How do you want to add your past productions?</p>
+    <div style="display:flex;flex-direction:column;gap:1rem;">
+      <div class="cl-setup-card" onclick="closePastShowChoiceModal();openPastShowModal();" style="cursor:pointer;text-align:left;padding:1.1rem 1.25rem;">
+        <div style="display:flex;align-items:flex-start;gap:1rem;">
+          <div style="width:40px;height:40px;border-radius:8px;background:rgba(87,46,136,0.08);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#572e88" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          </div>
+          <div>
+            <div style="font-size:0.95rem;font-weight:700;color:#1a1530;margin-bottom:0.25rem;">Add Manually</div>
+            <div style="font-size:0.84rem;color:#6a5a80;line-height:1.5;">Fill in the details for one production at a time - title, year, director, and more. Good for adding a few shows quickly.</div>
+          </div>
+        </div>
+      </div>
+      <div class="cl-setup-card" onclick="closePastShowChoiceModal();document.getElementById('ps-ai-file').click();" style="cursor:pointer;text-align:left;padding:1.1rem 1.25rem;">
+        <div style="display:flex;align-items:flex-start;gap:1rem;">
+          <div style="width:40px;height:40px;border-radius:8px;background:rgba(87,46,136,0.08);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#572e88" stroke-width="2"><path d="M12 2a10 10 0 100 20 10 10 0 000-20z"/><path d="M12 8v4l2 2"/></svg>
+          </div>
+          <div>
+            <div style="font-size:0.95rem;font-weight:700;color:#1a1530;margin-bottom:0.25rem;">Import with AI <span style="font-size:0.72rem;font-weight:700;color:#efab45;background:rgba(239,171,69,0.15);border-radius:4px;padding:0.1rem 0.45rem;margin-left:0.35rem;">Fastest</span></div>
+            <div style="font-size:0.84rem;color:#6a5a80;line-height:1.5;">Upload a PDF, photo, or image - a programme booklet, season brochure, or anything that lists your shows. AI reads it and imports all productions at once. Works best with 5+ shows.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Past Production Modal -->
+<div class="modal-overlay" id="past-show-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="ps-modal-title">Add Past Production</div>
+      <button class="modal-close" onclick="closePastShowModal()">✕</button>
+    </div>
+    <div class="form-error-msg" id="ps-error"></div>
+    <div class="form-group">
+      <label class="form-label">Show Title <span class="opt">(required)</span></label>
+      <input class="form-input" id="ps-title" type="text" placeholder="e.g. Les Misérables" />
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Year <span class="opt">(required)</span></label>
+        <input class="form-input" id="ps-year" type="number" placeholder="e.g. 2024" min="1900" max="2099" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">Director <span class="opt">(optional)</span></label>
+        <input class="form-input" id="ps-director" type="text" placeholder="Director's name" />
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Musical Director <span class="opt">(optional)</span></label>
+        <input class="form-input" id="ps-musical-director" type="text" placeholder="MD's name" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">Choreographer <span class="opt">(optional)</span></label>
+        <input class="form-input" id="ps-choreographer" type="text" placeholder="Choreographer's name" />
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Poster Image URL <span class="opt">(optional)</span></label>
+      <input class="form-input" id="ps-poster-url" type="url" placeholder="https://..." />
+    </div>
+    <div style="display:flex;gap:0.6rem;margin-top:0.25rem;">
+      <button class="btn-secondary" onclick="closePastShowModal()" style="flex:1;justify-content:center;">Cancel</button>
+      <button class="btn-primary" id="ps-save-btn" onclick="submitPastShow()" style="flex:2;justify-content:center;">Save Production</button>
+    </div>
+  </div>
+</div>
+
+<!-- AI Import Review Modal -->
+<div class="modal-overlay" id="ai-import-modal" style="align-items:flex-start;padding-top:3rem;">
+  <div class="modal" style="max-width:750px;width:95%;">
+    <div class="modal-header">
+      <div class="modal-title">Review AI Import</div>
+      <button class="modal-close" onclick="closeAIImportModal()">✕</button>
+    </div>
+    <p style="font-size:0.84rem;color:#6a5a80;margin:0 0 0.75rem;" id="ai-import-count"></p>
+    <p style="font-size:0.78rem;color:#9a90b0;margin:0 0 1rem;">Check the ones you want to add. You can edit details after importing.</p>
+    <div style="overflow-x:auto;border:1px solid rgba(87,46,136,0.1);border-radius:10px;margin-bottom:1.25rem;">
+      <table style="width:100%;border-collapse:collapse;font-family:inherit;">
+        <thead>
+          <tr style="background:rgba(87,46,136,0.05);">
+            <th style="padding:0.5rem 0.6rem;text-align:left;font-size:0.72rem;font-weight:700;letter-spacing:0.07em;text-transform:uppercase;color:#7a6a96;white-space:nowrap;"></th>
+            <th style="padding:0.5rem 0.6rem;text-align:left;font-size:0.72rem;font-weight:700;letter-spacing:0.07em;text-transform:uppercase;color:#7a6a96;white-space:nowrap;">Title</th>
+            <th style="padding:0.5rem 0.6rem;text-align:left;font-size:0.72rem;font-weight:700;letter-spacing:0.07em;text-transform:uppercase;color:#7a6a96;white-space:nowrap;">Year</th>
+            <th style="padding:0.5rem 0.6rem;text-align:left;font-size:0.72rem;font-weight:700;letter-spacing:0.07em;text-transform:uppercase;color:#7a6a96;white-space:nowrap;">Director</th>
+            <th style="padding:0.5rem 0.6rem;text-align:left;font-size:0.72rem;font-weight:700;letter-spacing:0.07em;text-transform:uppercase;color:#7a6a96;white-space:nowrap;">MD</th>
+            <th style="padding:0.5rem 0.6rem;text-align:left;font-size:0.72rem;font-weight:700;letter-spacing:0.07em;text-transform:uppercase;color:#7a6a96;white-space:nowrap;">Choreo</th>
+          </tr>
+        </thead>
+        <tbody id="ai-import-body"></tbody>
+      </table>
+    </div>
+    <div style="display:flex;gap:0.6rem;">
+      <button class="btn-secondary" onclick="closeAIImportModal()" style="flex:1;justify-content:center;">Cancel</button>
+      <button class="btn-primary" id="ai-import-save-btn" onclick="confirmAIImport()" style="flex:2;justify-content:center;">Add Selected</button>
+    </div>
+  </div>
+</div>
+
+<!-- New Org Folder Modal -->
+<div class="modal-overlay" id="org-new-folder-modal">
+  <div class="modal" style="max-width:400px;">
+    <div class="modal-header">
+      <div class="modal-title">New Folder</div>
+      <button class="modal-close" onclick="closeOrgNewFolderModal()">✕</button>
+    </div>
+    <div class="form-error-msg" id="org-folder-error" style="margin-bottom:0.5rem;"></div>
+    <div class="form-group">
+      <label class="form-label">Folder Name <span style="color:#b91c1c;">*</span></label>
+      <input class="form-input" id="org-new-folder-name" type="text" placeholder="e.g. Board Minutes, Sponsorship" />
+    </div>
+    <div style="display:flex;gap:0.6rem;margin-top:0.25rem;">
+      <button class="btn-secondary" onclick="closeOrgNewFolderModal()" style="flex:1;justify-content:center;">Cancel</button>
+      <button class="btn-primary" id="org-folder-save-btn" onclick="submitOrgNewFolder()" style="flex:2;justify-content:center;">Create Folder</button>
+    </div>
+  </div>
+</div>
+
+<!-- Org File Tag Modal -->
+<div class="modal-overlay" id="org-file-tag-modal">
+  <div class="modal" style="max-width:380px;">
+    <div class="modal-header">
+      <div class="modal-title">Edit Tags</div>
+      <button class="modal-close" onclick="closeOrgFileTagModal()">✕</button>
+    </div>
+    <input type="hidden" id="org-file-tag-file-id" />
+    <div class="form-group">
+      <label class="form-label">Tags <span class="opt">(comma-separated)</span></label>
+      <input class="form-input" id="org-file-tag-input" type="text" placeholder="e.g. contract, 2026, signed" />
+    </div>
+    <div style="display:flex;gap:0.6rem;margin-top:0.25rem;">
+      <button class="btn-secondary" onclick="closeOrgFileTagModal()" style="flex:1;justify-content:center;">Cancel</button>
+      <button class="btn-primary" onclick="saveOrgFileTags()" style="flex:2;justify-content:center;">Save Tags</button>
+    </div>
+  </div>
+</div>
+
+<!-- Required SQL for Past Productions:
+CREATE TABLE IF NOT EXISTS past_shows (
+  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  organization_id uuid REFERENCES organizations(id) ON DELETE CASCADE,
+  title text NOT NULL,
+  year integer NOT NULL,
+  director text,
+  musical_director text,
+  choreographer text,
+  poster_url text,
+  created_at timestamptz DEFAULT now()
+);
+ALTER TABLE past_shows ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
+  organization_id IN (SELECT id FROM organizations WHERE admin_id = auth.uid())
+);
+-- Migration for existing tables:
+-- ALTER TABLE past_shows ADD COLUMN IF NOT EXISTS choreographer text;
+-- ALTER TABLE organizations ADD COLUMN IF NOT EXISTS established_year integer;
+-- ALTER TABLE organizations ADD COLUMN IF NOT EXISTS total_productions_override integer;
+-->
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<!--
+  Required SQL migrations for org profile & branding:
+  ALTER TABLE organizations ADD COLUMN IF NOT EXISTS bio text;
+  ALTER TABLE organizations ADD COLUMN IF NOT EXISTS mission text;
+  ALTER TABLE organizations ADD COLUMN IF NOT EXISTS story text;
+  ALTER TABLE organizations ADD COLUMN IF NOT EXISTS logo_url text;
+  ALTER TABLE organizations ADD COLUMN IF NOT EXISTS profile_public boolean DEFAULT true;
+  ALTER TABLE organizations ADD COLUMN IF NOT EXISTS show_contact boolean DEFAULT true;
+-->
+<!--
+  Required SQL for Org Files tab:
+  CREATE TABLE IF NOT EXISTS org_folders (
+    id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+    organization_id uuid REFERENCES organizations(id) ON DELETE CASCADE,
+    name text NOT NULL,
+    color text DEFAULT '#572e88',
+    is_default boolean DEFAULT false,
+    sort_order integer DEFAULT 0,
+    created_at timestamptz DEFAULT now()
+  );
+  ALTER TABLE org_folders ENABLE ROW LEVEL SECURITY;
+  CREATE POLICY "Org admin can manage org folders" ON org_folders USING (
+    organization_id IN (SELECT id FROM organizations WHERE admin_id = auth.uid())
+  );
+
+  CREATE TABLE IF NOT EXISTS org_files (
+    id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+    organization_id uuid REFERENCES organizations(id) ON DELETE CASCADE,
+    folder_id uuid REFERENCES org_folders(id) ON DELETE SET NULL,
+    name text NOT NULL,
+    file_url text NOT NULL,
+    file_path text,
+    file_type text,
+    file_size bigint,
+    tags text[] DEFAULT '{}',
+    created_at timestamptz DEFAULT now()
+  );
+  ALTER TABLE org_files ENABLE ROW LEVEL SECURITY;
+  CREATE POLICY "Org admin can manage org files" ON org_files USING (
+    organization_id IN (SELECT id FROM organizations WHERE admin_id = auth.uid())
+  );
+
+  -- Storage bucket: create bucket named "org-files" in Supabase Storage with public access
+-->
+<script>
+  const { createClient } = supabase;
+  const sb = createClient(
+    'https://tkmaiktxpwqfbgeojbnf.supabase.co',
+    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRrbWFpa3R4cHdxZmJnZW9qYm5mIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM3MzE4MTcsImV4cCI6MjA4OTMwNzgxN30.TkTZBNWUatk3Y6Vmfv1hIRR3DfVjgwauwa76Pf00J_8'
+  );
+
+  let currentOrg  = null;
+  let currentUser = null;
+  let allProds    = [];
+  let pendingLogoFile = null;
+
+  async function init() {
+    const { data: { session } } = await sb.auth.getSession();
+    if (!session) { window.location.href = 'login.html'; return; }
+    currentUser = session.user;
+    document.getElementById('sb-email').textContent = currentUser.email;
+
+    const { data: org, error } = await sb.from('organizations')
+      .select('*').eq('admin_id', currentUser.id).limit(1).single();
+    if (error || !org) { window.location.href = 'org-setup.html'; return; }
+
+    currentOrg = org;
+    renderOrgInfo();
+    loadProductions();
+    loadMembers();
+    loadPastShows();
+  }
+
+  function renderOrgInfo() {
+    const o = currentOrg;
+    document.getElementById('sb-org-name').textContent     = o.name;
+    document.getElementById('sb-org-id').textContent       = o.custom_id || '-';
+    document.getElementById('home-title').textContent      = o.name;
+    document.getElementById('home-subtitle').textContent   = o.location ? '📍 ' + o.location : 'Your organisation dashboard';
+    document.getElementById('s-name').value        = o.name         || '';
+    document.getElementById('s-abbr').value        = o.abbreviation || '';
+    document.getElementById('s-location').value    = o.location     || '';
+    document.getElementById('s-email').value       = o.email        || '';
+    document.getElementById('s-website').value     = o.website      || '';
+    document.getElementById('s-description').value = o.description  || '';
+    const profileBtn = document.getElementById('view-profile-btn');
+    if (profileBtn) profileBtn.href = `org-profile.html?id=${o.id}`;
+    if (document.getElementById('s-bio'))           document.getElementById('s-bio').value           = o.bio           || '';
+    if (document.getElementById('s-mission'))       document.getElementById('s-mission').value       = o.mission       || '';
+    if (document.getElementById('s-story'))         document.getElementById('s-story').value         = o.story         || '';
+    if (document.getElementById('s-established-year'))   document.getElementById('s-established-year').value   = o.established_year || '';
+    if (document.getElementById('s-total-productions'))  document.getElementById('s-total-productions').value  = o.total_productions_override != null ? o.total_productions_override : '';
+    if (document.getElementById('s-profile-public')) document.getElementById('s-profile-public').checked = o.profile_public !== false;
+    if (document.getElementById('s-show-contact'))  document.getElementById('s-show-contact').checked = o.show_contact !== false;
+    // Branding panel preview
+    const preview = document.getElementById('logo-preview');
+    const label   = document.getElementById('logo-upload-label');
+    if (preview && o.logo_url) { preview.src = o.logo_url; preview.style.display = 'block'; }
+    if (label && o.logo_url)   { label.innerHTML = '<span style="font-size:0.75rem;color:#572e88;font-weight:600;">Change logo</span>'; }
+  }
+
+  async function loadProductions() {
+    try {
+      const { data, error } = await sb.from('productions')
+        .select('*').eq('organization_id', currentOrg.id).order('created_at', { ascending: false });
+      if (error) throw error;
+      allProds = data || [];
+    } catch { allProds = []; }
+    document.getElementById('stat-prods').textContent = allProds.length;
+    renderProductionsList();
+    renderRecentProductions();
+    renderNavProductions();
+    if (typeof loadCronusData === 'function') loadCronusData();
+  }
+
+  function renderNavProductions() {
+    const el = document.getElementById('nav-active-prods');
+    if (!el) return;
+    const active = allProds.filter(p => p.status !== 'wrapped');
+    if (!active.length) { el.innerHTML = ''; return; }
+    el.innerHTML = active.map(p =>
+      `<a class="nav-prod-tile" href="production-workspace.html?id=${encodeURIComponent(p.id)}">${p.title || 'Untitled Production'}</a>`
+    ).join('');
+  }
+
+  function renderProductionsList() {
+    const el = document.getElementById('productions-list');
+    if (!allProds.length) { el.innerHTML = emptyProdsHTML(); return; }
+
+    const draft = allProds.filter(p => p.status === 'setup');
+    const live  = allProds.filter(p => ['auditions','rehearsals','performances'].includes(p.status));
+    const past  = allProds.filter(p => p.status === 'wrapped');
+
+    el.innerHTML =
+      prodSectionHTML('live',  'Live',       'live',  live,  true)  +
+      prodSectionHTML('draft', 'In Planning','draft', draft, true)  +
+      prodSectionHTML('past',  'Past',       'past',  past,  false);
+  }
+
+  function prodSectionHTML(key, label, type, prods, defaultOpen) {
+    const chevronCls = defaultOpen ? 'open' : '';
+    const bodyCls    = defaultOpen ? '' : 'collapsed';
+    const body = prods.length
+      ? `<div class="productions-grid">${prods.map(prodCardHTML).join('')}</div>`
+      : `<p class="prod-section-empty">None yet.</p>`;
+    return `
+      <div class="prod-section">
+        <div class="prod-section-header" onclick="toggleProdSection('${key}')">
+          <div class="prod-section-title">
+            <span class="prod-section-dot dot-${type}"></span>
+            ${label}
+            <span class="prod-section-count cnt-${type}">${prods.length}</span>
+          </div>
+          <span class="prod-section-chevron ${chevronCls}" id="chevron-${key}">&#9660;</span>
+        </div>
+        <div class="prod-section-body ${bodyCls}" id="prod-section-${key}">${body}</div>
+      </div>`;
+  }
+
+  function toggleProdSection(key) {
+    document.getElementById('prod-section-' + key).classList.toggle('collapsed');
+    document.getElementById('chevron-' + key).classList.toggle('open');
+  }
+
+  function openDeleteModal(id) {
+    const prod = allProds.find(p => p.id === id);
+    if (!prod) return;
+    const modal = document.getElementById('delete-prod-modal');
+    modal.dataset.prodId = id;
+    document.getElementById('delete-modal-prod-name').textContent = prod.title;
+    modal.classList.add('open');
+  }
+
+  function closeDeleteModal() {
+    document.getElementById('delete-prod-modal').classList.remove('open');
+    const btn = document.getElementById('btn-delete-confirm');
+    btn.disabled = false;
+    btn.textContent = 'Delete it forever';
+  }
+
+  async function confirmDeleteProduction() {
+    const modal = document.getElementById('delete-prod-modal');
+    const id = modal.dataset.prodId;
+    const btn = document.getElementById('btn-delete-confirm');
+    btn.disabled = true;
+    btn.textContent = 'Deleting...';
+    try {
+      const { error } = await sb.from('productions').delete().eq('id', id);
+      if (error) throw error;
+      allProds = allProds.filter(p => p.id !== id);
+      document.getElementById('stat-prods').textContent = allProds.length;
+      closeDeleteModal();
+      renderProductionsList();
+      renderRecentProductions();
+      renderNavProductions();
+    } catch(err) {
+      btn.disabled = false;
+      btn.textContent = 'Delete it forever';
+      alert('Could not delete: ' + (err.message || 'Unknown error'));
+    }
+  }
+
+  document.getElementById('delete-prod-modal').addEventListener('click', e => {
+    if (e.target === e.currentTarget) closeDeleteModal();
+  });
+
+  function renderRecentProductions() {
+    const el = document.getElementById('home-recent-prods');
+    const recent = allProds.slice(0, 3);
+    if (!recent.length) { el.innerHTML = emptyProdsHTML(); return; }
+    el.innerHTML = `<div class="productions-grid">${recent.map(prodCardHTML).join('')}</div>`;
+  }
+
+  function prodCardHTML(p) {
+    const labels = { setup: 'In Planning', auditions: 'Auditions', rehearsals: 'Rehearsals', performances: 'Performances', wrapped: 'Wrapped' };
+    const status = p.status || 'setup';
+    const dateStr = p.start_date && p.end_date
+      ? fmtDate(p.start_date) + ' – ' + fmtDate(p.end_date)
+      : p.start_date ? 'From ' + fmtDate(p.start_date) : 'Dates TBD';
+    const posterHTML = p.poster_url
+      ? `<div style="height:130px;overflow:hidden;background:#f4f2f8;"><img src="${esc(p.poster_url)}" style="width:100%;height:100%;object-fit:cover;" onerror="this.parentElement.style.display='none'" /></div>`
+      : `<div style="height:6px;background:linear-gradient(90deg,#572e88,#efab45);"></div>`;
+    return `
+      <div class="production-card">
+        ${posterHTML}
+        <div class="production-card-body">
+          <div class="production-card-top">
+            <div>
+              <div class="production-card-title">${esc(p.title)}</div>
+              ${p.subtitle ? `<div class="production-card-sub">${esc(p.subtitle)}</div>` : ''}
+            </div>
+            <span class="status-badge s-${status}">${labels[status] || 'Setup'}</span>
+          </div>
+          <div class="production-card-id">${p.custom_id || '-'}</div>
+          <div class="production-card-meta">
+            ${p.venue ? `<span>📍 ${esc(p.venue)}</span>` : ''}
+            <span>📅 ${dateStr}</span>
+          </div>
+          <div class="production-card-footer">
+            <button class="btn-primary" onclick="openProduction('${p.id}')" style="font-size:0.78rem;padding:0.42rem 1rem;">Open</button>
+            <button class="btn-delete-prod" onclick="openDeleteModal('${p.id}')" title="Delete production">🗑</button>
+          </div>
+        </div>
+      </div>`;
+  }
+
+  function emptyProdsHTML() {
+    return `<div class="empty-state">
+      <div class="empty-state-emoji"><img src="Production.svg" alt="" style="width:2.25rem;height:2.25rem;opacity:0.35;filter:brightness(0) saturate(100%) invert(28%) sepia(20%) saturate(800%) hue-rotate(230deg) brightness(80%);" /></div>
+      <h3>No productions yet</h3>
+      <p>Create your first production to get started.</p>
+      <button class="btn-primary" onclick="openStartProductionModal()">+ New Production</button>
+    </div>`;
+  }
+
+  async function loadMembers() {
+    const tbody = document.getElementById('members-tbody');
+    const init  = (currentUser.email || 'A')[0].toUpperCase();
+
+    // Always show admin first
+    let rows = `
+      <tr>
+        <td style="padding-left:1.4rem;">
+          <div class="member-cell">
+            <div class="member-avatar">${init}</div>
+            ${esc(currentUser.email)}
+          </div>
+        </td>
+        <td style="color:#6a5a80;font-size:0.8rem;">-</td>
+        <td><span style="font-size:0.7rem;font-weight:700;background:rgba(87,46,136,0.12);color:#572e88;padding:0.18rem 0.55rem;border-radius:20px;letter-spacing:0.04em;">Admin</span></td>
+        <td></td>
+      </tr>`;
+
+    // Load accepted members
+    try {
+      const { data: members } = await sb.from('org_members')
+        .select('*, profiles:user_id(display_name, custom_id, email)')
+        .eq('org_id', currentOrg.id);
+      if (members && members.length) {
+        members.forEach(m => {
+          const profile = m.profiles || {};
+          const name = profile.display_name || profile.email || m.user_id;
+          const avatarLetter = name[0].toUpperCase();
+          const titleText = m.title || '<span style="color:#9a90b0;">-</span>';
+          const accessText = m.access_level === 'viewer' ? 'Viewer' : 'Editor';
+          rows += `
+            <tr>
+              <td style="padding-left:1.4rem;">
+                <div class="member-cell">
+                  <div class="member-avatar">${esc(avatarLetter)}</div>
+                  ${esc(name)}
+                </div>
+              </td>
+              <td style="font-size:0.84rem;">${m.title ? esc(m.title) : '<span style="color:#9a90b0;">-</span>'}</td>
+              <td><span style="font-size:0.7rem;font-weight:600;background:rgba(87,46,136,0.08);color:#572e88;padding:0.18rem 0.55rem;border-radius:20px;">${esc(accessText)}</span></td>
+              <td><button onclick="removeMember('${m.id}')" style="background:none;border:none;color:#9a90b0;cursor:pointer;font-size:0.75rem;">Remove</button></td>
+            </tr>`;
+        });
+      }
+    } catch(e) {}
+
+    tbody.innerHTML = rows;
+
+    // Load pending invites
+    try {
+      const { data: invites } = await sb.from('org_invitations')
+        .select('*').eq('org_id', currentOrg.id).is('used_at', null)
+        .gt('expires_at', new Date().toISOString());
+      const invCard = document.getElementById('pending-invites-card');
+      if (invites && invites.length) {
+        invCard.style.display = 'block';
+        document.getElementById('invites-tbody').innerHTML = invites.map(inv => `
+          <tr>
+            <td style="padding-left:1.4rem;">${esc(inv.email)}</td>
+            <td style="font-size:0.84rem;">${inv.title ? esc(inv.title) : '<span style="color:#9a90b0;">-</span>'}</td>
+            <td><span style="font-size:0.7rem;font-weight:600;background:rgba(87,46,136,0.08);color:#572e88;padding:0.18rem 0.55rem;border-radius:20px;">${inv.access_level === 'viewer' ? 'Viewer' : 'Editor'}</span></td>
+            <td style="font-size:0.75rem;color:#6a5a80;">${new Date(inv.expires_at).toLocaleDateString('en-CA',{month:'short',day:'numeric'})}</td>
+            <td><button onclick="revokeInvite('${inv.id}')" style="background:none;border:none;color:#9a90b0;cursor:pointer;font-size:0.75rem;">Revoke</button></td>
+          </tr>`).join('');
+      } else {
+        invCard.style.display = 'none';
+      }
+    } catch(e) {}
+  }
+
+  // ── Invite modal ───────────────────────────────────────
+  function openInviteModal() {
+    document.getElementById('invite-modal').classList.add('open');
+    document.getElementById('invite-title').value = '';
+    document.getElementById('invite-email').value = '';
+    document.getElementById('invite-access').value = 'editor';
+    document.getElementById('invite-error').classList.remove('visible');
+    document.getElementById('invite-success').style.display = 'none';
+    document.getElementById('invite-title').focus();
+  }
+  function closeInviteModal() {
+    document.getElementById('invite-modal').classList.remove('open');
+  }
+  document.getElementById('invite-modal').addEventListener('click', e => {
+    if (e.target === e.currentTarget) closeInviteModal();
+  });
+
+  async function sendInvite() {
+    const input       = document.getElementById('invite-email').value.trim();
+    const title       = document.getElementById('invite-title').value.trim();
+    const access_level = document.getElementById('invite-access').value;
+    const errEl       = document.getElementById('invite-error');
+    const succEl      = document.getElementById('invite-success');
+    const btn         = document.getElementById('send-invite-btn');
+
+    errEl.classList.remove('visible');
+    succEl.style.display = 'none';
+    if (!input) { errEl.textContent = 'Please enter an email address or member number.'; errEl.classList.add('visible'); return; }
+
+    btn.disabled = true; btn.textContent = 'Looking up...';
+
+    // Resolve BTS member ID → email if input doesn't look like an email
+    let email = input;
+    if (!input.includes('@')) {
+      const { data: foundEmail, error: rpcErr } = await sb.rpc('lookup_email_by_bts_id', { bts_id: input });
+      if (rpcErr || !foundEmail) {
+        errEl.textContent = `No member found with ID "${input}". Double-check it and try again.`;
+        errEl.classList.add('visible');
+        btn.disabled = false; btn.textContent = 'Send Invitation';
+        return;
+      }
+      email = foundEmail;
+    }
+
+    btn.textContent = 'Sending...';
+
+    // Create invitation record
+    const { data: inv, error: invErr } = await sb.from('org_invitations').insert({
+      org_id: currentOrg.id,
+      email,
+      title: title || null,
+      access_level,
+      invited_by: currentUser.id,
+    }).select().single();
+
+    if (invErr) {
+      errEl.textContent = invErr.message; errEl.classList.add('visible');
+      btn.disabled = false; btn.textContent = 'Send Invitation'; return;
+    }
+
+    const inviteUrl = `${window.location.origin}/${window.location.pathname.split('/').slice(0,-1).join('/')}/accept-invite.html?token=${inv.token}`;
+
+    // Call Edge Function to send email
+    try {
+      await fetch('https://tkmaiktxpwqfbgeojbnf.supabase.co/functions/v1/send-invite', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRrbWFpa3R4cHdxZmJnZW9qYm5mIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM3MzE4MTcsImV4cCI6MjA4OTMwNzgxN30.TkTZBNWUatk3Y6Vmfv1hIRR3DfVjgwauwa76Pf00J_8` },
+        body: JSON.stringify({ to: email, orgName: currentOrg.name, title: title || null, access_level, inviteUrl }),
+      });
+    } catch(e) { /* email failed but invite record created */ }
+
+    succEl.textContent = `Invitation sent to ${email}. They'll receive a link to join.`;
+    succEl.style.display = 'block';
+    btn.disabled = false; btn.textContent = 'Send Invitation';
+    loadMembers();
+  }
+
+  async function revokeInvite(id) {
+    if (!confirm('Revoke this invitation?')) return;
+    await sb.from('org_invitations').delete().eq('id', id);
+    loadMembers();
+  }
+
+  async function removeMember(id) {
+    if (!confirm('Remove this member from the organisation?')) return;
+    await sb.from('org_members').delete().eq('id', id);
+    loadMembers();
+  }
+
+  // ── Tab switching ─────────────────────────────────────
+  function switchTab(id) {
+    document.querySelectorAll('.nav-item[data-tab]').forEach(el => el.classList.toggle('active', el.dataset.tab === id));
+    document.querySelectorAll('.content-section').forEach(el => el.classList.toggle('active', el.id === 'tab-' + id));
+    if (id === 'cronus' && typeof FullCalendar !== 'undefined') {
+      initCronusCalendar();
+    }
+    if (id === 'files') loadOrgFilesTab();
+  }
+  document.querySelectorAll('.nav-item[data-tab]').forEach(el => el.addEventListener('click', () => switchTab(el.dataset.tab)));
+
+  // ── Settings sub-tabs ─────────────────────────────────
+  document.querySelectorAll('.settings-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.settings-tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.settings-panel').forEach(p => p.classList.remove('active'));
+      tab.classList.add('active');
+      document.getElementById('panel-' + tab.dataset.panel).classList.add('active');
+      if (tab.dataset.panel === 'venues') loadVenues();
+    });
+  });
+
+  // ── Start production modal ────────────────────────────
+  function openStartProductionModal() {
+    document.getElementById('start-prod-modal').classList.add('open');
+  }
+  function closeStartProductionModal() {
+    document.getElementById('start-prod-modal').classList.remove('open');
+  }
+  document.getElementById('start-prod-modal').addEventListener('click', e => {
+    if (e.target === e.currentTarget) closeStartProductionModal();
+  });
+
+
+  function openProduction(id) {
+    window.location.href = `production-workspace.html?id=${id}`;
+  }
+
+  // ── Venues ────────────────────────────────────────────
+  let orgVenues = [];
+  let venuePreviewData  = null;
+  let _venueSugDebounce = null;
+
+  // Nominatim-based venue search (free, no API key)
+  function initVenuePlaces() {
+    const input    = document.getElementById('venue-search-input');
+    const dropdown = document.getElementById('venue-suggestions-dropdown');
+    if (!input) return;
+    input.addEventListener('input', () => {
+      clearTimeout(_venueSugDebounce);
+      const q = input.value.trim();
+      if (q.length < 2) { if (dropdown) dropdown.style.display = 'none'; return; }
+      _venueSugDebounce = setTimeout(() => _fetchVenueSuggestions(q), 350);
+    });
+    document.addEventListener('click', e => {
+      if (dropdown && !input.contains(e.target) && !dropdown.contains(e.target)) {
+        dropdown.style.display = 'none';
+      }
+    });
+  }
+
+  async function _fetchVenueSuggestions(query) {
+    const dropdown = document.getElementById('venue-suggestions-dropdown');
+    if (!dropdown) return;
+    dropdown.innerHTML = '<div style="padding:0.5rem 0.75rem;font-size:0.8rem;color:#9a90b0;">Searching...</div>';
+    dropdown.style.display = 'block';
+    try {
+      const url  = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&addressdetails=1&limit=6`;
+      const data = await fetch(url, { headers: { 'Accept-Language': 'en', 'User-Agent': 'BuildTheShow/1.0' } }).then(r => r.json());
+      if (!data || !data.length) {
+        dropdown.innerHTML = '<div style="padding:0.5rem 0.75rem;font-size:0.8rem;color:#9a90b0;">No results found.</div>';
+        return;
+      }
+      dropdown.innerHTML = data.map(r => {
+        const name    = r.name || r.display_name.split(',')[0];
+        const address = r.display_name;
+        const payload = JSON.stringify({ name, address, lat: r.lat, lng: r.lon, place_id: String(r.place_id) });
+        return `<div style="padding:0.55rem 0.85rem;cursor:pointer;border-bottom:1px solid rgba(87,46,136,0.06);font-size:0.84rem;"
+                     onmouseover="this.style.background='rgba(87,46,136,0.05)'" onmouseout="this.style.background=''"
+                     onclick='selectVenueSuggestion(${payload.replace(/'/g,"\\'")})'>
+                  <div style="font-weight:600;color:#1a1530;">${esc(name)}</div>
+                  <div style="font-size:0.72rem;color:#9a90b0;margin-top:0.1rem;">${esc(address)}</div>
+                </div>`;
+      }).join('');
+    } catch {
+      dropdown.innerHTML = '<div style="padding:0.5rem 0.75rem;font-size:0.8rem;color:#dc2626;">Search failed.</div>';
+    }
+  }
+
+  function selectVenueSuggestion(d) {
+    venuePreviewData = d;
+    const input    = document.getElementById('venue-search-input');
+    const dropdown = document.getElementById('venue-suggestions-dropdown');
+    if (input)    input.value         = d.name;
+    if (dropdown) dropdown.style.display = 'none';
+    document.getElementById('vp-name').value           = d.name;
+    document.getElementById('vp-address').textContent = d.address;
+    document.getElementById('venue-preview-card').style.display = 'block';
+  }
+
+  function clearVenuePreview() {
+    venuePreviewData = null;
+    const inp = document.getElementById('venue-search-input');
+    if (inp) inp.value = '';
+    const nameInp = document.getElementById('vp-name');
+    if (nameInp) nameInp.value = '';
+    document.getElementById('venue-preview-card').style.display = 'none';
+    const errEl = document.getElementById('venue-error');
+    if (errEl) errEl.classList.remove('visible');
+  }
+
+  async function saveVenueFromPreview() {
+    const errEl = document.getElementById('venue-error');
+    errEl.classList.remove('visible');
+    if (!venuePreviewData || !currentOrg) return;
+    const customName = (document.getElementById('vp-name')?.value || '').trim() || venuePreviewData.name;
+    const { error } = await sb.from('venues').insert({
+      org_id:   currentOrg.id,
+      name:     customName,
+      address:  venuePreviewData.address  || null,
+      place_id: venuePreviewData.place_id || null,
+      lat:      venuePreviewData.lat      || null,
+      lng:      venuePreviewData.lng      || null,
+    });
+    if (error) { errEl.textContent = error.message; errEl.classList.add('visible'); return; }
+    clearVenuePreview();
+    await loadVenues();
+  }
+
+  async function loadVenues() {
+    if (!currentOrg) return;
+    const { data } = await sb.from('venues')
+      .select('id, name, nickname, address, lat, lng')
+      .eq('org_id', currentOrg.id)
+      .order('name', { ascending: true });
+    orgVenues = data || [];
+    renderVenuesList();
+  }
+
+  const VENUE_BG = ['#f3eeff','#e8f8f0','#fff3e0','#fce4ec','#e3f2fd','#f9fbe7'];
+
+  function _venueIcon(idx) {
+    const bg = VENUE_BG[idx % VENUE_BG.length];
+    return `<div class="venue-vcard-icon" style="background:${bg};"><img src="Location1.svg" alt=""></div>`;
+  }
+
+  function renderVenuesList() {
+    const list = document.getElementById('venues-list');
+    if (!list) return;
+    if (!orgVenues.length) {
+      list.innerHTML = '<div class="venues-empty-state">No venues saved yet. Search above to add one.</div>';
+      return;
+    }
+    list.innerHTML = `<div class="venues-grid">${orgVenues.map((v, i) => {
+      const displayName = v.nickname || v.name;
+      const mapLink = (v.lat && v.lng)
+        ? `<a href="https://www.google.com/maps/search/?api=1&query=${v.lat},${v.lng}" target="_blank" rel="noopener" class="venue-map-link">View on map ↗</a>`
+        : '';
+      return `
+        <div class="venue-vcard" id="venue-row-${v.id}">
+          <div class="venue-vcard-header">
+            ${_venueIcon(i)}
+            <div class="venue-vcard-name" id="vn-name-${v.id}">${esc(displayName)}</div>
+          </div>
+          <div class="venue-vcard-body">
+            ${v.address ? `<div class="venue-vcard-address">${esc(v.address)}</div>` : ''}
+            <div class="venue-vcard-nickname-label">Public name</div>
+            <input class="venue-nickname-input" id="vn-${v.id}" type="text"
+              value="${esc(v.nickname || '')}"
+              placeholder="e.g. The Rec Centre, Main Stage..."
+              onblur="saveVenueNickname('${v.id}')"
+              onkeydown="if(event.key==='Enter'){this.blur();}" />
+            <span class="venue-vcard-saved" id="vn-saved-${v.id}">✓ Saved</span>
+          </div>
+          <div class="venue-vcard-footer">
+            ${mapLink}
+            <button class="venue-delete-btn" onclick="deleteVenue('${v.id}')" title="Remove venue">&#x2715;</button>
+          </div>
+        </div>`;
+    }).join('')}</div>`;
+  }
+
+  async function deleteVenue(id) {
+    if (!confirm('Remove this venue?')) return;
+    await sb.from('venues').delete().eq('id', id);
+    orgVenues = orgVenues.filter(v => v.id !== id);
+    renderVenuesList();
+  }
+
+  async function saveVenueNickname(id) {
+    const input = document.getElementById(`vn-${id}`);
+    if (!input) return;
+    const nickname = input.value.trim() || null;
+    const v = orgVenues.find(x => x.id === id);
+    // Skip if unchanged
+    if ((v?.nickname || null) === nickname) return;
+    const { error } = await sb.from('venues').update({ nickname }).eq('id', id);
+    if (error) { console.error('Venue rename error', error); return; }
+    if (v) v.nickname = nickname;
+    const savedEl = document.getElementById(`vn-saved-${id}`);
+    if (savedEl) {
+      savedEl.classList.add('show');
+      setTimeout(() => savedEl.classList.remove('show'), 2000);
+    }
+    const nameEl = document.getElementById(`vn-name-${id}`);
+    if (nameEl) nameEl.textContent = nickname || (v?.name || '');
+  }
+
+  // ── Save org settings ─────────────────────────────────
+  async function saveOrgSettings() {
+    const btn   = document.getElementById('save-settings-btn');
+    const errEl = document.getElementById('settings-error');
+    errEl.classList.remove('visible');
+
+    const name        = document.getElementById('s-name').value.trim();
+    const abbr        = document.getElementById('s-abbr').value.trim().toUpperCase();
+    const location    = document.getElementById('s-location').value.trim();
+    const email       = document.getElementById('s-email').value.trim();
+    const website     = document.getElementById('s-website').value.trim();
+    const description = document.getElementById('s-description').value.trim();
+    const bio          = document.getElementById('s-bio').value.trim();
+    const mission      = document.getElementById('s-mission').value.trim();
+    const story        = document.getElementById('s-story').value.trim();
+    const establishedYearRaw = document.getElementById('s-established-year').value.trim();
+    const totalProdRaw       = document.getElementById('s-total-productions').value.trim();
+    const established_year            = establishedYearRaw ? parseInt(establishedYearRaw, 10) : null;
+    const total_productions_override  = totalProdRaw !== '' ? parseInt(totalProdRaw, 10) : null;
+    const profilePublic = document.getElementById('s-profile-public').checked;
+    const showContact  = document.getElementById('s-show-contact').checked;
+
+    if (!name) { errEl.textContent = 'Organisation name is required.'; errEl.classList.add('visible'); return; }
+
+    btn.disabled = true;
+    btn.textContent = 'Saving...';
+
+    const { error } = await sb.from('organizations').update({
+      name, abbreviation: abbr || null, location, email,
+      website: website || null, description,
+      bio, mission, story, established_year, total_productions_override,
+      profile_public: profilePublic, show_contact: showContact,
+    }).eq('id', currentOrg.id);
+
+    if (error) {
+      errEl.textContent = error.message;
+      errEl.classList.add('visible');
+    } else {
+      currentOrg = { ...currentOrg, name, abbreviation: abbr || null, location, email, website: website || null, description, bio, mission, story, established_year, total_productions_override, profile_public: profilePublic, show_contact: showContact };
+      renderOrgInfo();
+    }
+    btn.disabled = false;
+    btn.textContent = 'Save Changes';
+  }
+
+  function handleLogoFile(input) {
+    const file = input.files[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) { alert('Logo must be under 5MB'); return; }
+    const preview = document.getElementById('logo-preview');
+    const label   = document.getElementById('logo-upload-label');
+    preview.src = URL.createObjectURL(file);
+    preview.style.display = 'block';
+    if (label) label.innerHTML = `<span style="font-size:0.75rem;color:#572e88;font-weight:600;">${esc(file.name)}</span>`;
+    pendingLogoFile = file;
+  }
+
+  async function saveBranding() {
+    const btn = document.getElementById('save-branding-btn');
+    btn.disabled = true; btn.textContent = 'Saving...';
+    let logoUrl = currentOrg.logo_url || null;
+    if (pendingLogoFile) {
+      const file = pendingLogoFile;
+      const ext  = file.name.split('.').pop();
+      const path = `${currentOrg.id}/logo.${ext}`;
+      const { error: upErr } = await sb.storage.from('org-logos').upload(path, file, { upsert: true, contentType: file.type });
+      if (upErr) { btn.disabled = false; btn.textContent = 'Save Branding'; alert('Upload failed: ' + upErr.message); return; }
+      const { data: urlData } = sb.storage.from('org-logos').getPublicUrl(path);
+      logoUrl = urlData.publicUrl;
+      pendingLogoFile = null;
+    }
+    const { error } = await sb.from('organizations').update({ logo_url: logoUrl || null }).eq('id', currentOrg.id);
+    if (!error) { currentOrg.logo_url = logoUrl || null; renderOrgInfo(); }
+    btn.disabled = false; btn.textContent = 'Save Branding';
+  }
+
+  function confirmDeleteOrg() {
+    if (!confirm(`Are you sure you want to delete "${currentOrg.name}"? This cannot be undone.`)) return;
+    const typed = prompt('Type DELETE to confirm:');
+    if (typed !== 'DELETE') { alert('Deletion cancelled.'); return; }
+    alert('To fully delete your organisation, please use your Supabase dashboard or contact support.');
+  }
+
+  document.getElementById('logout-btn').addEventListener('click', async () => {
+    await sb.auth.signOut();
+    window.location.href = 'login.html';
+  });
+
+  function fmtDate(d) {
+    if (!d) return '';
+    return new Date(d + 'T00:00:00').toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' });
+  }
+  function esc(s) {
+    if (!s) return '';
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  // ── Past Shows ────────────────────────────────────────
+  let pastShows = [];
+  let editingShowId = null;
+
+  async function loadPastShows() {
+    try {
+      const { data, error } = await sb.from('past_shows')
+        .select('*')
+        .eq('organization_id', currentOrg.id)
+        .order('year', { ascending: false });
+      if (error) throw error;
+      pastShows = data || [];
+    } catch { pastShows = []; }
+    renderPastShows();
+  }
+
+  function renderPastShows() {
+    const el = document.getElementById('past-shows-list');
+    if (!pastShows.length) {
+      el.innerHTML = `<div class="empty-state">
+        <div class="empty-state-emoji">🎭</div>
+        <h3>No past productions yet</h3>
+        <p>Add your organisation's show history to build your legacy.</p>
+        <button class="btn-primary" onclick="openPastShowChoiceModal()">+ Add Production</button>
+      </div>`;
+      return;
+    }
+    const sort = (document.getElementById('ps-sort') || {}).value || 'year-desc';
+    const sorted = [...pastShows].sort((a, b) => {
+      if (sort === 'year-desc') return (b.year || 0) - (a.year || 0);
+      if (sort === 'year-asc')  return (a.year || 0) - (b.year || 0);
+      if (sort === 'name-asc')  return (a.title || '').localeCompare(b.title || '');
+      if (sort === 'name-desc') return (b.title || '').localeCompare(a.title || '');
+      return 0;
+    });
+    el.innerHTML = `<div class="past-shows-grid">${sorted.map(showCardHTML).join('')}</div>`;
+  }
+
+  function showCardHTML(s) {
+    const poster = s.poster_url
+      ? `<img src="${esc(s.poster_url)}" alt="${esc(s.title)} poster" class="show-card-poster" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'" /><div class="show-card-poster-placeholder" style="display:none;">🎭</div>`
+      : `<div class="show-card-poster-placeholder">🎭</div>`;
+    const metaParts = [];
+    if (s.director)         metaParts.push('Dir. ' + esc(s.director));
+    if (s.musical_director) metaParts.push('MD: ' + esc(s.musical_director));
+    if (s.choreographer)    metaParts.push('Choreo: ' + esc(s.choreographer));
+    const meta = metaParts.join('<br>');
+    return `<div class="show-card">
+      ${poster}
+      <div class="show-card-body">
+        <div class="show-card-title">${esc(s.title)}</div>
+        <div class="show-card-year">${s.year}</div>
+        ${meta ? `<div class="show-card-meta">${meta}</div>` : ''}
+        <div class="show-card-actions">
+          <button class="show-card-btn" onclick="openPastShowModal('${s.id}')">Edit</button>
+          <button class="show-card-btn danger" onclick="deletePastShow('${s.id}')">Delete</button>
+        </div>
+      </div>
+    </div>`;
+  }
+
+  function openPastShowChoiceModal() {
+    document.getElementById('past-show-choice-modal').classList.add('open');
+  }
+  function closePastShowChoiceModal() {
+    document.getElementById('past-show-choice-modal').classList.remove('open');
+  }
+
+  function openPastShowModal(id = null) {
+    editingShowId = id;
+    const isEdit = !!id;
+    document.getElementById('ps-modal-title').textContent = isEdit ? 'Edit Production' : 'Add Past Production';
+    document.getElementById('ps-error').classList.remove('visible');
+    document.getElementById('ps-save-btn').textContent = isEdit ? 'Save Changes' : 'Save Production';
+
+    if (isEdit) {
+      const s = pastShows.find(x => x.id === id);
+      document.getElementById('ps-title').value = s.title || '';
+      document.getElementById('ps-year').value = s.year || '';
+      document.getElementById('ps-director').value = s.director || '';
+      document.getElementById('ps-musical-director').value = s.musical_director || '';
+      document.getElementById('ps-choreographer').value = s.choreographer || '';
+      document.getElementById('ps-poster-url').value = s.poster_url || '';
+    } else {
+      document.getElementById('ps-title').value = '';
+      document.getElementById('ps-year').value = '';
+      document.getElementById('ps-director').value = '';
+      document.getElementById('ps-musical-director').value = '';
+      document.getElementById('ps-choreographer').value = '';
+      document.getElementById('ps-poster-url').value = '';
+    }
+
+    document.getElementById('past-show-modal').classList.add('open');
+    document.getElementById('ps-title').focus();
+  }
+
+  function closePastShowModal() {
+    document.getElementById('past-show-modal').classList.remove('open');
+    editingShowId = null;
+  }
+
+  async function submitPastShow() {
+    const title = document.getElementById('ps-title').value.trim();
+    const year = parseInt(document.getElementById('ps-year').value, 10);
+    const director = document.getElementById('ps-director').value.trim();
+    const musical_director = document.getElementById('ps-musical-director').value.trim();
+    const choreographer = document.getElementById('ps-choreographer').value.trim();
+    const poster_url = document.getElementById('ps-poster-url').value.trim();
+    const errEl = document.getElementById('ps-error');
+    const btn = document.getElementById('ps-save-btn');
+
+    errEl.classList.remove('visible');
+    if (!title) { errEl.textContent = 'Show title is required.'; errEl.classList.add('visible'); return; }
+    if (!year || year < 1900 || year > 2099) { errEl.textContent = 'Please enter a valid year.'; errEl.classList.add('visible'); return; }
+
+    btn.disabled = true;
+    btn.textContent = 'Saving...';
+
+    const payload = {
+      organization_id: currentOrg.id,
+      title,
+      year,
+      director: director || null,
+      musical_director: musical_director || null,
+      choreographer: choreographer || null,
+      poster_url: poster_url || null,
+    };
+
+    let error;
+    if (editingShowId) {
+      ({ error } = await sb.from('past_shows').update(payload).eq('id', editingShowId));
+    } else {
+      ({ error } = await sb.from('past_shows').insert(payload));
+    }
+
+    if (error) {
+      errEl.textContent = error.message;
+      errEl.classList.add('visible');
+      btn.disabled = false;
+      btn.textContent = editingShowId ? 'Save Changes' : 'Save Production';
+      return;
+    }
+
+    btn.disabled = false;
+    btn.textContent = editingShowId ? 'Save Changes' : 'Save Production';
+    closePastShowModal();
+    await loadPastShows();
+  }
+
+  async function deletePastShow(id) {
+    if (!confirm('Delete this production? This cannot be undone.')) return;
+    const { error } = await sb.from('past_shows').delete().eq('id', id);
+    if (!error) await loadPastShows();
+  }
+
+  async function importPastShowsWithAI(input) {
+    const file = input.files[0];
+    if (!file) return;
+    input.value = '';
+
+    const statusEl = document.getElementById('ps-ai-status');
+    statusEl.style.display = 'block';
+    statusEl.textContent = 'Scanning document with AI…';
+
+    try {
+      const toBase64 = f => new Promise((res, rej) => {
+        const r = new FileReader();
+        r.onload = () => res(r.result.split(',')[1]);
+        r.onerror = rej;
+        r.readAsDataURL(f);
+      });
+
+      const isPdf = file.type === 'application/pdf';
+      const b64 = await toBase64(file);
+      const mediaType = isPdf ? 'application/pdf' : file.type;
+
+      const prompt = `You are reading a document about a theatre or performing arts organisation. Extract a list of past productions/shows from this document.
+
+For each production, extract:
+- title (string, required)
+- year (integer - use the performance year, not rehearsal year; if a range like 2023/2024 use the later year)
+- director (string or null)
+- musical_director (string or null - only if they are specifically the Musical Director or Vocal Director)
+- choreographer (string or null - only if they are specifically the Choreographer or Dance Director)
+
+Return ONLY a JSON array. No markdown, no explanation. Example:
+[{"title":"Les Misérables","year":2019,"director":"Jane Smith","musical_director":"Bob Jones","choreographer":null},{"title":"Grease","year":2021,"director":"Alex Brown","musical_director":null,"choreographer":"Sam Lee"}]
+
+If you cannot find any productions, return an empty array: []`;
+
+      const body = {
+        model: 'claude-sonnet-4-6',
+        max_tokens: 2048,
+        messages: [{
+          role: 'user',
+          content: [{
+            type: isPdf ? 'document' : 'image',
+            source: { type: 'base64', media_type: mediaType, data: b64 },
+          }, {
+            type: 'text',
+            text: prompt,
+          }]
+        }]
+      };
+
+      const res = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'x-api-key': 'YOUR_API_KEY_HERE',
+          'anthropic-version': '2023-06-01',
+          'anthropic-dangerous-direct-browser-access': 'true',
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify(body),
+      });
+
+      if (!res.ok) throw new Error('AI request failed: ' + res.status);
+      const data = await res.json();
+      const raw = (data.content || []).find(c => c.type === 'text')?.text?.trim() || '[]';
+
+      let shows;
+      try {
+        const match = raw.match(/\[[\s\S]*\]/);
+        shows = JSON.parse(match ? match[0] : raw);
+      } catch {
+        throw new Error('Could not read AI response. Try again or add shows manually.');
+      }
+
+      if (!Array.isArray(shows) || shows.length === 0) {
+        statusEl.textContent = 'No productions found in that document. Try a different file, or add shows manually.';
+        setTimeout(() => { statusEl.style.display = 'none'; }, 4000);
+        return;
+      }
+
+      // Show confirmation modal
+      statusEl.style.display = 'none';
+      showAIImportReview(shows);
+
+    } catch (err) {
+      statusEl.textContent = 'Import failed: ' + err.message;
+      setTimeout(() => { statusEl.style.display = 'none'; }, 5000);
+    }
+  }
+
+  let aiImportShows = [];
+
+  function showAIImportReview(shows) {
+    aiImportShows = shows;
+    const rows = shows.map((s, i) => `
+      <tr style="border-top:1px solid rgba(87,46,136,0.08);">
+        <td style="padding:0.5rem 0.6rem;"><input type="checkbox" checked id="ai-check-${i}" style="accent-color:#572e88;width:15px;height:15px;" /></td>
+        <td style="padding:0.5rem 0.6rem;font-weight:600;font-size:0.875rem;color:#1a1530;">${esc(s.title)}</td>
+        <td style="padding:0.5rem 0.6rem;font-size:0.84rem;color:#6a5a80;">${s.year || '-'}</td>
+        <td style="padding:0.5rem 0.6rem;font-size:0.84rem;color:#6a5a80;">${esc(s.director || '-')}</td>
+        <td style="padding:0.5rem 0.6rem;font-size:0.84rem;color:#6a5a80;">${esc(s.musical_director || '-')}</td>
+        <td style="padding:0.5rem 0.6rem;font-size:0.84rem;color:#6a5a80;">${esc(s.choreographer || '-')}</td>
+      </tr>`).join('');
+
+    document.getElementById('ai-import-body').innerHTML = rows;
+    document.getElementById('ai-import-count').textContent = shows.length + ' production' + (shows.length !== 1 ? 's' : '') + ' found';
+    document.getElementById('ai-import-modal').classList.add('open');
+  }
+
+  async function confirmAIImport() {
+    const btn = document.getElementById('ai-import-save-btn');
+    btn.disabled = true;
+    btn.textContent = 'Saving…';
+
+    const toSave = aiImportShows.filter((_, i) => {
+      const cb = document.getElementById('ai-check-' + i);
+      return cb && cb.checked;
+    });
+
+    if (toSave.length === 0) {
+      closeAIImportModal();
+      return;
+    }
+
+    const payload = toSave.map(s => ({
+      organization_id: currentOrg.id,
+      title: s.title,
+      year: s.year || null,
+      director: s.director || null,
+      musical_director: s.musical_director || null,
+      choreographer: s.choreographer || null,
+      poster_url: null,
+    }));
+
+    const { error } = await sb.from('past_shows').insert(payload);
+    if (error) {
+      alert('Save failed: ' + error.message);
+      btn.disabled = false;
+      btn.textContent = 'Add Selected';
+      return;
+    }
+
+    closeAIImportModal();
+    await loadPastShows();
+  }
+
+  function closeAIImportModal() {
+    document.getElementById('ai-import-modal').classList.remove('open');
+    aiImportShows = [];
+  }
+
+  document.getElementById('past-show-choice-modal').addEventListener('click', e => {
+    if (e.target === e.currentTarget) closePastShowChoiceModal();
+  });
+  document.getElementById('past-show-modal').addEventListener('click', e => {
+    if (e.target === e.currentTarget) closePastShowModal();
+  });
+  document.getElementById('ai-import-modal').addEventListener('click', e => {
+    if (e.target === e.currentTarget) closeAIImportModal();
+  });
+
+  init();
+
+  // ── Org Files tab ─────────────────────────────────────
+
+  const ORG_DEFAULT_FOLDERS = [
+    { name: 'Contracts',  color: '#572e88' },
+    { name: 'Policies',   color: '#c2487a' },
+    { name: 'Marketing',  color: '#0891b2' },
+    { name: 'General',    color: '#059669' },
+  ];
+
+  let orgFolders       = [];
+  let orgFiles         = [];
+  let orgActiveFolderId = null;
+
+  function orgFileIcon(type) {
+    if (!type) return '📄';
+    if (type.startsWith('image/')) return '🖼️';
+    if (type === 'application/pdf') return '📋';
+    if (type.includes('word') || type.includes('document')) return '📝';
+    if (type.includes('sheet') || type.includes('excel') || type.includes('csv')) return '📊';
+    if (type.startsWith('audio/')) return '🎵';
+    if (type.startsWith('video/')) return '🎬';
+    if (type.includes('zip') || type.includes('archive')) return '📦';
+    return '📄';
+  }
+
+  function orgFmtFileSize(bytes) {
+    if (!bytes) return '';
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+  }
+
+  async function loadOrgFilesTab() {
+    if (!currentOrg) return;
+    const orgId = currentOrg.id;
+
+    // Load folders
+    try {
+      const { data } = await sb.from('org_folders')
+        .select('*').eq('organization_id', orgId).order('sort_order').order('created_at');
+      orgFolders = data || [];
+    } catch { orgFolders = []; }
+
+    // Seed default folders if none exist
+    if (orgFolders.length === 0) {
+      const seeds = ORG_DEFAULT_FOLDERS.map((f, i) => ({ organization_id: orgId, name: f.name, color: f.color, is_default: true, sort_order: i }));
+      const { data } = await sb.from('org_folders').insert(seeds).select();
+      orgFolders = data || [];
+    }
+
+    // Load files
+    try {
+      const { data } = await sb.from('org_files')
+        .select('*').eq('organization_id', orgId).order('created_at', { ascending: false });
+      orgFiles = data || [];
+    } catch { orgFiles = []; }
+
+    // Default to first folder
+    if (!orgActiveFolderId && orgFolders.length > 0) orgActiveFolderId = orgFolders[0].id;
+
+    renderOrgFolderNav();
+    renderOrgFileList();
+  }
+
+  function renderOrgFolderNav() {
+    const nav = document.getElementById('org-files-folder-nav');
+    if (!nav) return;
+    nav.innerHTML = orgFolders.map(f => {
+      const count = orgFiles.filter(file => file.folder_id === f.id).length;
+      const countBadge = count > 0 ? `<span class="folder-tab-count">${count}</span>` : '';
+      return `<button class="folder-tab${f.id === orgActiveFolderId ? ' active' : ''}" onclick="switchOrgFolder('${f.id}')">
+        <span style="width:8px;height:8px;border-radius:50%;background:${esc(f.color || '#572e88')};display:inline-block;flex-shrink:0;"></span>
+        ${esc(f.name)}${countBadge}
+      </button>`;
+    }).join('');
+
+    const folder = orgFolders.find(f => f.id === orgActiveFolderId);
+    const nameEl = document.getElementById('org-files-active-folder-name');
+    if (nameEl && folder) nameEl.textContent = folder.name;
+  }
+
+  function switchOrgFolder(folderId) {
+    orgActiveFolderId = folderId;
+    renderOrgFolderNav();
+    renderOrgFileList();
+  }
+
+  function renderOrgFileList() {
+    const el = document.getElementById('org-files-list');
+    if (!el) return;
+    const folderFiles = orgFiles.filter(f => f.folder_id === orgActiveFolderId);
+    const folder = orgFolders.find(f => f.id === orgActiveFolderId);
+
+    if (!folderFiles.length) {
+      el.innerHTML = `<div style="text-align:center;padding:3rem;color:#9a90b0;font-size:0.875rem;">
+        No files in ${folder ? esc(folder.name) : 'this folder'} yet.<br>
+        <span style="font-size:0.8rem;">Upload files using the button above or drag and drop.</span>
+      </div>`;
+      return;
+    }
+
+    el.innerHTML = `<div style="background:#fff;border:1px solid rgba(87,46,136,0.1);border-radius:12px;overflow:hidden;">` +
+      folderFiles.map(f => {
+        const tagsHTML = (f.tags || []).length
+          ? `<div class="file-tags">${f.tags.map(t => `<span class="file-tag">${esc(t)}</span>`).join('')}</div>`
+          : '';
+        const sizeStr = orgFmtFileSize(f.file_size);
+        const dateStr = f.created_at ? new Date(f.created_at).toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
+        return `<div class="file-row">
+          <div class="file-icon">${orgFileIcon(f.file_type)}</div>
+          <div style="flex:1;min-width:0;">
+            <div class="file-name">${esc(f.name)}</div>
+            <div style="display:flex;align-items:center;gap:0.5rem;margin-top:0.2rem;flex-wrap:wrap;">
+              ${sizeStr ? `<span class="file-meta">${sizeStr}</span>` : ''}
+              ${dateStr ? `<span class="file-meta">${dateStr}</span>` : ''}
+              ${tagsHTML}
+            </div>
+          </div>
+          <div class="file-actions">
+            <button class="file-btn" onclick="editOrgFileTags('${f.id}')">Tag</button>
+            <a href="${esc(f.file_url)}" target="_blank" download="${esc(f.name)}" class="file-btn" style="text-decoration:none;">↓</a>
+            <button class="file-btn danger" onclick="deleteOrgFile('${f.id}')">✕</button>
+          </div>
+        </div>`;
+      }).join('') + `</div>`;
+  }
+
+  async function handleOrgFileUpload(input) {
+    const files = Array.from(input.files);
+    input.value = '';
+    if (!files.length) return;
+    if (!orgActiveFolderId) { alert('Select a folder first.'); return; }
+    await uploadOrgFiles(files);
+  }
+
+  async function handleOrgFileDrop(event) {
+    const files = Array.from(event.dataTransfer.files);
+    if (!files.length) return;
+    if (!orgActiveFolderId) { alert('Select a folder first.'); return; }
+    await uploadOrgFiles(files);
+  }
+
+  async function uploadOrgFiles(files) {
+    if (!currentOrg) return;
+    const orgId = currentOrg.id;
+    const progressEl = document.getElementById('org-files-upload-progress');
+    const btn = document.getElementById('org-files-upload-btn');
+    btn.disabled = true;
+    progressEl.style.display = 'block';
+
+    let done = 0;
+    for (const file of files) {
+      progressEl.textContent = `Uploading ${done + 1} of ${files.length}: ${file.name}…`;
+      try {
+        const path = `${orgId}/${orgActiveFolderId}/${Date.now()}_${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+        const { error: upErr } = await sb.storage.from('org-files').upload(path, file, { upsert: false, contentType: file.type });
+        if (upErr) throw upErr;
+        const { data: urlData } = sb.storage.from('org-files').getPublicUrl(path);
+        const payload = {
+          organization_id: orgId,
+          folder_id: orgActiveFolderId,
+          name: file.name,
+          file_url: urlData.publicUrl,
+          file_path: path,
+          file_type: file.type || null,
+          file_size: file.size || null,
+          tags: [],
+        };
+        const { data: row } = await sb.from('org_files').insert(payload).select().single();
+        if (row) orgFiles.unshift(row);
+        done++;
+      } catch (err) {
+        progressEl.textContent = `Failed to upload ${file.name}: ${err.message}`;
+        await new Promise(r => setTimeout(r, 2000));
+      }
+    }
+
+    progressEl.textContent = done === files.length
+      ? `${done} file${done !== 1 ? 's' : ''} uploaded.`
+      : `${done} of ${files.length} files uploaded.`;
+    setTimeout(() => { progressEl.style.display = 'none'; }, 3000);
+    btn.disabled = false;
+    renderOrgFolderNav();
+    renderOrgFileList();
+  }
+
+  async function deleteOrgFile(fileId) {
+    if (!confirm('Remove this file? This cannot be undone.')) return;
+    const f = orgFiles.find(x => x.id === fileId);
+    if (f?.file_path) {
+      await sb.storage.from('org-files').remove([f.file_path]);
+    }
+    await sb.from('org_files').delete().eq('id', fileId);
+    orgFiles = orgFiles.filter(x => x.id !== fileId);
+    renderOrgFolderNav();
+    renderOrgFileList();
+  }
+
+  function openOrgNewFolderModal() {
+    document.getElementById('org-new-folder-name').value = '';
+    document.getElementById('org-folder-error').textContent = '';
+    document.getElementById('org-new-folder-modal').classList.add('open');
+    document.getElementById('org-new-folder-name').focus();
+  }
+  function closeOrgNewFolderModal() { document.getElementById('org-new-folder-modal').classList.remove('open'); }
+
+  async function submitOrgNewFolder() {
+    if (!currentOrg) return;
+    const name  = document.getElementById('org-new-folder-name').value.trim();
+    const errEl = document.getElementById('org-folder-error');
+    const btn   = document.getElementById('org-folder-save-btn');
+    errEl.textContent = '';
+    if (!name) { errEl.textContent = 'Folder name is required.'; return; }
+    btn.disabled = true; btn.textContent = 'Creating…';
+    const payload = { organization_id: currentOrg.id, name, color: '#572e88', is_default: false, sort_order: orgFolders.length };
+    const { data, error } = await sb.from('org_folders').insert(payload).select().single();
+    btn.disabled = false; btn.textContent = 'Create Folder';
+    if (error) { errEl.textContent = error.message; return; }
+    if (data) { orgFolders.push(data); orgActiveFolderId = data.id; }
+    closeOrgNewFolderModal();
+    renderOrgFolderNav();
+    renderOrgFileList();
+  }
+
+  function editOrgFileTags(fileId) {
+    const f = orgFiles.find(x => x.id === fileId);
+    if (!f) return;
+    document.getElementById('org-file-tag-file-id').value = fileId;
+    document.getElementById('org-file-tag-input').value = (f.tags || []).join(', ');
+    document.getElementById('org-file-tag-modal').classList.add('open');
+    document.getElementById('org-file-tag-input').focus();
+  }
+  function closeOrgFileTagModal() { document.getElementById('org-file-tag-modal').classList.remove('open'); }
+
+  async function saveOrgFileTags() {
+    const fileId = document.getElementById('org-file-tag-file-id').value;
+    const raw    = document.getElementById('org-file-tag-input').value;
+    const tags   = raw.split(',').map(t => t.trim()).filter(Boolean);
+    await sb.from('org_files').update({ tags }).eq('id', fileId);
+    const f = orgFiles.find(x => x.id === fileId);
+    if (f) f.tags = tags;
+    closeOrgFileTagModal();
+    renderOrgFileList();
+  }
+
+  document.getElementById('org-new-folder-modal').addEventListener('click', e => { if (e.target === e.currentTarget) closeOrgNewFolderModal(); });
+  document.getElementById('org-file-tag-modal').addEventListener('click', e => { if (e.target === e.currentTarget) closeOrgFileTagModal(); });
+
+  // ── Cronus Calendar ───────────────────────────────────
+  const CRONUS_PROD_COLORS = [
+    '#572e88','#c2487a','#0891b2','#059669','#d97706',
+    '#dc2626','#7c3aed','#0284c7','#be185d','#15803d',
+  ];
+  let cronusCalendar  = null;
+  let cronusEvents    = [];
+  let cronusProdsMap  = {}; // prodId → { title, color }
+  let cronusHidden    = new Set();
+
+  async function loadCronusData() {
+    if (!currentOrg || !allProds.length) return;
+
+    // Build prod → color map
+    cronusProdsMap = {};
+    allProds.forEach((p, i) => {
+      cronusProdsMap[p.id] = { title: p.title || p.name || 'Untitled', color: CRONUS_PROD_COLORS[i % CRONUS_PROD_COLORS.length] };
+    });
+
+    const prodIds = allProds.map(p => p.id);
+    const { data, error } = await sb.from('production_events').select('*').in('production_id', prodIds);
+    if (error) { console.error('Cronus load error:', error); return; }
+    const stripTz = t => t ? t.slice(0, 19) : null;
+    cronusEvents = (data || []).map(e => {
+      const prod = cronusProdsMap[e.production_id] || { title: 'Unknown', color: '#9ca3af' };
+      return {
+        id: e.id,
+        title: e.title,
+        start: stripTz(e.start_time),
+        end: stripTz(e.end_time) || null,
+        allDay: e.all_day || false,
+        backgroundColor: prod.color,
+        borderColor: prod.color,
+        textColor: '#fff',
+        extendedProps: { production_id: e.production_id, prodTitle: prod.title, event_type: e.event_type },
+      };
+    });
+
+    renderThisWeekStrip();
+  }
+
+  function renderThisWeekStrip() {
+    const el = document.getElementById('this-week-list');
+    if (!el) return;
+
+    const now     = new Date();
+    const weekEnd = new Date(now); weekEnd.setDate(now.getDate() + 7);
+    const inWeek  = cronusEvents.filter(e => {
+      const s = new Date(e.start);
+      return s >= now && s <= weekEnd;
+    }).sort((a, b) => new Date(a.start) - new Date(b.start));
+
+    if (!inWeek.length) {
+      el.innerHTML = '<div class="this-week-empty">Nothing scheduled in the next 7 days.</div>';
+      return;
+    }
+
+    // Group by date
+    const byDay = {};
+    inWeek.forEach(e => {
+      const day = new Date(e.start).toDateString();
+      if (!byDay[day]) byDay[day] = [];
+      byDay[day].push(e);
+    });
+
+    const fmt = new Intl.DateTimeFormat('en-CA', { weekday: 'long', month: 'short', day: 'numeric' });
+    const timeFmt = new Intl.DateTimeFormat('en-CA', { hour: 'numeric', minute: '2-digit', hour12: true });
+
+    el.innerHTML = '<div class="this-week-list">' + Object.entries(byDay).map(([day, events]) => `
+      <div class="this-week-day">
+        <div class="this-week-day-label">${fmt.format(new Date(day))}</div>
+        ${events.map(e => `
+          <div class="this-week-event">
+            <span class="this-week-dot" style="background:${e.backgroundColor};"></span>
+            <span class="this-week-event-title">${e.title}</span>
+            <span class="this-week-event-prod">${e.extendedProps.prodTitle}</span>
+            ${!e.allDay ? `<span class="this-week-event-time">${timeFmt.format(new Date(e.start))}</span>` : ''}
+          </div>`).join('')}
+      </div>`).join('') + '</div>';
+  }
+
+  function initCronusCalendar() {
+    if (cronusCalendar) {
+      cronusCalendar.refetchEvents();
+      return;
+    }
+    const el = document.getElementById('cronus-cal');
+    if (!el) return;
+
+    cronusCalendar = new FullCalendar.Calendar(el, {
+      initialView: 'dayGridMonth',
+      headerToolbar: { left: 'prev,next today', center: 'title', right: 'dayGridMonth,timeGridWeek,listWeek' },
+      height: 'auto',
+      dayMaxEvents: true,
+      nowIndicator: true,
+      locale: 'en-CA',
+      eventContent(arg) {
+        const ev = arg.event;
+        const fmtT = t => {
+          if (!t) return '';
+          const h = t.getHours(), m = t.getMinutes(), ap = h >= 12 ? 'pm' : 'am';
+          return `${h % 12 || 12}:${String(m).padStart(2,'0')}${ap}`;
+        };
+        let timeStr = '';
+        if (!ev.allDay && ev.start) {
+          timeStr = fmtT(ev.start);
+          if (ev.end) timeStr += ' - ' + fmtT(ev.end);
+        }
+        const wrap = document.createElement('div');
+        wrap.style.cssText = 'width:100%;overflow:hidden;text-align:center;line-height:1.25;';
+        const te = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+        const prodTitle = ev.extendedProps.prodTitle || '';
+        wrap.innerHTML = (timeStr ? `<div class="cronus-event-time">${te(timeStr)}</div>` : '')
+          + `<div class="cronus-event-label">${te(ev.title)}</div>`
+          + (prodTitle ? `<div class="cronus-event-prod">${te(prodTitle)}</div>` : '');
+        return { domNodes: [wrap] };
+      },
+      eventDidMount(info) {
+        if (cronusHidden.has(info.event.extendedProps.production_id)) {
+          info.el.style.display = 'none';
+        }
+        ['.cronus-event-time', '.cronus-event-label', '.cronus-event-prod'].forEach(sel => {
+          const node = info.el.querySelector(sel);
+          if (!node) return;
+          let size = 11;
+          node.style.fontSize = size + 'px';
+          while (node.scrollWidth > node.clientWidth + 1 && size > 7) {
+            size -= 0.5;
+            node.style.fontSize = size + 'px';
+          }
+        });
+      },
+      events(fetchInfo, successCb) {
+        successCb(cronusEvents);
+      },
+    });
+    cronusCalendar.render();
+    renderCronusLegend();
+  }
+
+  function renderCronusLegend() {
+    const el = document.getElementById('cronus-legend');
+    if (!el) return;
+    el.innerHTML = Object.entries(cronusProdsMap).map(([id, p]) => `
+      <div class="cronus-legend-item${cronusHidden.has(id) ? ' dimmed' : ''}" onclick="toggleCronusProd('${id}')" style="color:${p.color};">
+        <span class="cronus-legend-dot" style="background:${p.color};"></span>
+        ${p.title}
+      </div>`).join('');
+  }
+
+  function toggleCronusProd(prodId) {
+    if (cronusHidden.has(prodId)) cronusHidden.delete(prodId);
+    else cronusHidden.add(prodId);
+    if (cronusCalendar) {
+      cronusCalendar.getEvents().forEach(e => {
+        e.setProp('display', cronusHidden.has(e.extendedProps.production_id) ? 'none' : 'auto');
+      });
+    }
+    renderCronusLegend();
+  }
+
+  // Auto-open a tab if requested via sessionStorage
+  const _pendingTab = sessionStorage.getItem('openTab');
+  if (_pendingTab) {
+    sessionStorage.removeItem('openTab');
+    switchTab(_pendingTab);
+  }
+</script>
+
+<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js"></script>
+<script>
+  // Load Cronus data after FullCalendar is ready
+  window.addEventListener('load', () => {
+    if (currentOrg) loadCronusData();
+  });
+</script>
+<script>
+  // Init venue search (Nominatim/OpenStreetMap - no API key needed)
+  document.addEventListener('DOMContentLoaded', () => initVenuePlaces());
+</script>
+
+</body>
+</html>
