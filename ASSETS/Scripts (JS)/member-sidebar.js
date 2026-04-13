@@ -12,48 +12,46 @@
     const s = document.createElement('link');
     s.id   = 'member-sidebar-css';
     s.rel  = 'stylesheet';
-    s.href = 'member-sidebar.css';
+    s.href = '../../../ASSETS/Styles (CSS)/member-sidebar.css';
     document.head.appendChild(s);
   }
 
   // ── Position sub-navigation definitions ─────────────────────────
   //    Matches the spec: Dashboard, then tools for that position.
   const PERFORMER_SUBNAV = [
-    { label: 'Dashboard',    href: 'performer-hub.html',   key: 'performer-hub' },
-    { label: 'Auditions',    href: 'find.html',            key: 'find-auditions' },
-    { label: 'Applications', href: 'applications.html',    key: 'applications' },
-    { label: 'Schedule',     href: 'member-calendar.html', key: 'calendar' },
-    { label: 'Media',        href: 'performer-media.html', key: 'performer-media' },
+    { label: 'Dashboard',    href: '../Performer/performer-hub.html',   key: 'performer-hub' },
+    { label: 'Auditions',    href: '../../../PUBLIC/find.html',         key: 'find-auditions' },
+    { label: 'Applications', href: '../Auditions/applications.html',    key: 'applications' },
+    { label: 'Schedule',     href: '../Dashboard/member-calendar.html', key: 'calendar' },
+    { label: 'Media',        href: '../Performer/performer-media.html', key: 'performer-media' },
   ];
 
   const CREATIVE_SUBNAV = [
-    { label: 'Dashboard',   href: 'creative-hub.html',          key: 'creative-hub' },
-    { label: 'Productions', href: 'creative-productions.html',  key: 'creative-productions' },
-    { label: 'Tasks',       href: 'creative-tasks.html',        key: 'creative-tasks' },
-    { label: 'Files',       href: 'creative-files.html',        key: 'creative-files' },
+    { label: 'Dashboard', href: '../../Organisations/Productions/Creative/creative-hub.html',   key: 'creative-hub' },
+    { label: 'Tasks',     href: '../../Organisations/Productions/Creative/creative-tasks.html', key: 'creative-tasks' },
+    { label: 'Files',     href: '../../Organisations/Productions/Creative/creative-files.html', key: 'creative-files' },
   ];
 
   const VOLUNTEER_SUBNAV = [
-    { label: 'Dashboard',       href: 'volunteer-hub.html',       key: 'volunteer-hub' },
-    { label: 'Opportunities',   href: 'find.html?type=volunteer', key: 'find-volunteer' },
-    { label: 'Assigned Shifts', href: 'volunteer-shifts.html',    key: 'volunteer-shifts' },
-    { label: 'Availability',    href: 'volunteer-best-fit.html',  key: 'volunteer-best-fit' },
-    { label: 'Hours',           href: 'volunteer-hours.html',     key: 'volunteer-hours' },
+    { label: 'Dashboard',       href: '../Volunteer/volunteer-hub.html',              key: 'volunteer-hub' },
+    { label: 'Opportunities',   href: '../../../PUBLIC/find.html?type=volunteer',    key: 'find-volunteer' },
+    { label: 'Assigned Shifts', href: '../Volunteer/volunteer-shifts.html',          key: 'volunteer-shifts' },
+    { label: 'Availability',    href: '../Volunteer/volunteer-best-fit.html',        key: 'volunteer-best-fit' },
+    { label: 'Hours',           href: '../Volunteer/volunteer-hours.html',           key: 'volunteer-hours' },
   ];
 
   // Which position a given page belongs to (controls which group auto-expands)
   const PAGE_POSITION = {
-    'performer-hub':        'performer',
-    'applications':         'performer',
-    'performer-media':      'performer',
-    'creative-hub':         'creative',
-    'creative-productions': 'creative',
-    'creative-tasks':       'creative',
-    'creative-files':       'creative',
-    'volunteer-hub':        'volunteer',
-    'volunteer-best-fit':   'volunteer',
-    'volunteer-shifts':     'volunteer',
-    'volunteer-hours':      'volunteer',
+    'performer-hub':    'performer',
+    'applications':     'performer',
+    'performer-media':  'performer',
+    'creative-hub':     'creative',
+    'creative-tasks':   'creative',
+    'creative-files':   'creative',
+    'volunteer-hub':    'volunteer',
+    'volunteer-best-fit': 'volunteer',
+    'volunteer-shifts': 'volunteer',
+    'volunteer-hours':  'volunteer',
     // 'calendar' is top-level — not scoped to a position
   };
 
@@ -115,24 +113,24 @@
     let nav = '';
 
     // Dashboard — always visible
-    nav += navLink('profile-select.html', 'Dashboard.svg', 'Dashboard', activePage === 'profile-select');
+    nav += navLink('../Profiles/profile-select.html', '../../../ASSETS/Images/Dashboard.svg', 'Dashboard', activePage === 'profile-select');
 
     // Position groups — only if enabled on selected profile
     if (isPerformer) {
-      nav += positionGroup('Performer.svg', 'Performer', PERFORMER_SUBNAV, activePosition === 'performer', activePage);
+      nav += positionGroup('../../../ASSETS/Images/Performer.svg', 'Performer', PERFORMER_SUBNAV, activePosition === 'performer', activePage);
     }
     if (isCreative) {
-      nav += positionGroup('CreativeTeam-Director.svg', 'Creative Team', CREATIVE_SUBNAV, activePosition === 'creative', activePage);
+      nav += positionGroup('../../../ASSETS/Images/CreativeTeam-Director.svg', 'Creative Team', CREATIVE_SUBNAV, activePosition === 'creative', activePage);
     }
     if (isVolunteer) {
-      nav += positionGroup('Volunteers.svg', 'Volunteer', VOLUNTEER_SUBNAV, activePosition === 'volunteer', activePage);
+      nav += positionGroup('../../../ASSETS/Images/Volunteers.svg', 'Volunteer', VOLUNTEER_SUBNAV, activePosition === 'volunteer', activePage);
     }
 
     // Calendar — always visible, top-level (not scoped to a position)
-    nav += navLink('member-calendar.html', 'Calendar.svg', 'Calendar', activePage === 'calendar');
+    nav += navLink('../Dashboard/member-calendar.html', '../../../ASSETS/Images/Calendar.svg', 'Calendar', activePage === 'calendar');
 
     // Settings — always visible
-    nav += navLink('performer-settings.html', 'Settings.svg', 'Settings', activePage === 'settings');
+    nav += navLink('../Performer/performer-settings.html', '../../../ASSETS/Images/Settings.svg', 'Settings', activePage === 'settings');
 
     // ── Inject nav ──
     const navEl = document.querySelector('.sidebar-nav');

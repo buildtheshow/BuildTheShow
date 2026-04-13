@@ -1,2 +1,2 @@
 window.SUPABASE_URL = "https://tkmaiktxpwqfbgeojbnf.supabase.co";
-window.SUPABASE_ANON_KEY = "sb_publishable_6gm-mXQIpEYhbyjWOdTTRA_O52F8MWu";
+window.SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRrbWFpa3R4cHdxZmJnZW9qYm5mIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM3MzE4MTcsImV4cCI6MjA4OTMwNzgxN30.TkTZBNWUatk3Y6Vmfv1hIRR3DfVjgwauwa76Pf00J_8";

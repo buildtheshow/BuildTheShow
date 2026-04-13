@@ -400,9 +400,14 @@
       .headshot-strip { flex-direction: row; align-items: flex-start; }
       .headshot-thumbs { max-width: none; }
     }
+    /* ── Toast ── */
+    .toast { position:fixed; bottom:1.5rem; right:1.5rem; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.14); color:#e8e0ff; padding:0.7rem 1.2rem; border-radius:0.5rem; font-size:0.87rem; opacity:0; transform:translateY(6px); transition:opacity 0.2s,transform 0.2s; pointer-events:none; z-index:9999; }
+    .toast.visible { opacity:1; transform:translateY(0); }
+    .toast.toast--error { background:rgba(220,60,60,0.12); border-color:rgba(220,60,60,0.35); color:#f08080; }
   </style>
 </head>
 <body>
+  <div class="toast" id="toast"></div>
 
   <div class="grid-bg"></div>
 
@@ -416,7 +421,7 @@
       <a href="profile-select.html" class="sidebar-profile-switcher" id="sidebar-profile-switcher" aria-label="Switch profile">
         <div class="sidebar-profile-avatar-placeholder" id="sidebar-avatar-placeholder">👤</div>
         <div class="sidebar-profile-switcher-info">
-          <div class="sidebar-profile-switcher-name" id="sidebar-profile-name">Loading...</div>
+          <div class="sidebar-profile-switcher-name" id="sidebar-profile-name">One moment...</div>
           <div class="sidebar-profile-switcher-hint">Switch profile</div>
         </div>
         <span class="sidebar-profile-switcher-chevron">▾</span>
@@ -438,7 +443,7 @@
     <main class="view-main">
       <div class="view-inner">
 
-        <a href="../Dashboard/performer-dashboard.html" class="back-link">
+        <a href="../Performer/performer-dashboard.html" class="back-link">
           <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M10 3L5 8l5 5"/></svg>
           Back to Dashboard
         </a>
@@ -455,6 +460,16 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="../../../ASSETS/Scripts (JS)/member-sidebar.js"></script>
   <script>
+    let toastTimer;
+    function showToast(msg, isError = false) {
+      const t = document.getElementById('toast');
+      clearTimeout(toastTimer);
+      t.textContent = msg;
+      t.classList.toggle('toast--error', isError);
+      t.classList.add('visible');
+      toastTimer = setTimeout(() => t.classList.remove('visible'), 3000);
+    }
+
     const { createClient } = supabase;
     const sb = createClient(
       'https://tkmaiktxpwqfbgeojbnf.supabase.co',
@@ -709,11 +724,11 @@
     async function confirmDeleteProfile(profileId, profileName) {
       if (!confirm('Delete the profile "' + profileName + '"? This cannot be undone.')) return;
       const typed = prompt('Type DELETE to confirm permanently removing this profile:');
-      if (typed !== 'DELETE') { alert('Deletion cancelled.'); return; }
+      if (typed !== 'DELETE') { showToast('Deletion cancelled.'); return; }
       const btn = document.getElementById('delete-profile-btn');
       if (btn) { btn.disabled = true; btn.textContent = 'Deleting…'; }
       const { error } = await sb.from('profiles').delete().eq('id', profileId);
-      if (error) { alert('Could not delete: ' + error.message); if (btn) { btn.disabled = false; btn.textContent = 'Delete This Profile'; } return; }
+      if (error) { showToast('Could not delete: ' + error.message, true); if (btn) { btn.disabled = false; btn.textContent = 'Delete This Profile'; } return; }
       sessionStorage.removeItem('bts_active_profile_id');
       sessionStorage.removeItem('bts_active_profile_name');
       sessionStorage.removeItem('bts_active_profile_sections');
@@ -739,12 +754,12 @@
     document.getElementById('logout-btn').addEventListener('click', async function() {
       await sb.auth.signOut();
       sessionStorage.clear();
-      window.location.href = 'index.html';
+      window.location.href = '../../../HOME/index.html';
     });
 
     async function init() {
       const { data: { session } } = await sb.auth.getSession();
-      if (!session) { window.location.href = 'login.html'; return; }
+      if (!session) { window.location.href = '../Account/login.html'; return; }
 
       // URL param takes priority; fall back to active session profile
       const profileId = new URLSearchParams(window.location.search).get('id')
