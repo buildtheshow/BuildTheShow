@@ -18,13 +18,13 @@
 
   const EXTRACT_PROMPT = (title) =>
     `List every character and role in this theatre production document for "${title}". ` +
-    `For each, note: name, role type (Principal/Supporting/Featured/Cameo/Group), gender, ` +
+    `For each, note: name, role type (Principal/Supporting/Featured/Cameo/Group), how the role is written (woman/girl, man/boy, non-binary/gender-neutral, or any/open), ` +
     `age range, vocal range, singing strength, dancing requirement, and performer count. Be thorough.`;
 
   const CONVERT_PROMPT = (extracted) =>
     `Convert this character list to a JSON array. Each object must have these exact keys: ` +
     `name, role_type (one of: Principal, Supporting, Featured, Cameo, Group), ` +
-    `gender (Female/Male/Non-binary/Any or null), age_range (text or null), ` +
+    `gender (use exactly: "Woman / Girl", "Man / Boy", "Non-binary / Gender-neutral", "Any", or null — these describe how the role is written, not a person's sex), age_range (text or null), ` +
     `description (1–2 sentences or null), ` +
     `vocal_type (Soprano/Mezzo-Soprano/Alto/Tenor/Baritone/Bass/Non-Singing or null), ` +
     `vocal_range (text like "A3–E5" or null), ` +
@@ -223,7 +223,7 @@
           <div id="aci-picker-file-list"></div>
           <div id="aci-picker-or">— or —</div>
           <label id="aci-picker-text-label" for="aci-picker-textarea">Paste character list or script text</label>
-          <textarea id="aci-picker-textarea" placeholder="JESS: Principal | 16–18 | Female | Alto | Strong singer | some movement | 1 performer&#10;MR. THOMAS: Supporting | 40–60 | Male | Baritone | No dance required | 1 performer"></textarea>
+          <textarea id="aci-picker-textarea" placeholder="JESS: Principal | 16–18 | Woman / Girl | Alto | Strong singer | some movement | 1 performer&#10;MR. THOMAS: Supporting | 40–60 | Man / Boy | Baritone | No dance required | 1 performer"></textarea>
           <button id="aci-picker-submit" type="button">Work the Magic ✨</button>
         </div>
       </div>

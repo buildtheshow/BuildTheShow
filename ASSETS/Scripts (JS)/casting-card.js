@@ -116,7 +116,8 @@ function renderCastingCard(data, options = {}) {
     pronouns = '',
     headshot_url = '',
     casting_categories = [],
-    role_openness = 'open'
+    role_openness = 'open',
+    attendance_mode = null,
   } = data;
   
   // Build classes
@@ -191,12 +192,18 @@ function renderCastingCard(data, options = {}) {
   const lastNameSize = getCastingCardTextSize(secondLine, 5.8, 3.1, 14);
   const metaLineSize = getCastingCardTextSize(thirdLine, 4.2, 2.3, 18);
   
+  // ── Video call badge ──────────────────────────────────────────
+  const videoCallBadge = attendance_mode === 'video_call'
+    ? `<img src="../../../../ASSETS/Images/VideoCall.svg" class="casting-card-videocall-badge" alt="Video Call" />`
+    : '';
+
   // ── Build the card HTML ───────────────────────────────────────
   return `
     <div class="${cardClasses}" ${attrs.join(' ')}>
       <div class="casting-card-image-area">
         ${imageHTML}
         ${indicatorsHTML}
+        ${videoCallBadge}
       </div>
       <div class="casting-card-lower">
         <div class="casting-card-lower-icons">

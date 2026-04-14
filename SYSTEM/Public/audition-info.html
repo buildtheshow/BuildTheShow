@@ -930,6 +930,22 @@
     .bk-body { padding: 1.25rem 1.75rem 0.5rem; flex: 1; overflow-y: auto; overflow-x: hidden; }
     .bk-step-panel { display: none; }
     .bk-step-panel.active { display: block; }
+    .bk-attend-options { display: flex; gap: 0.85rem; margin-top: 0.5rem; }
+    .bk-attend-card {
+      flex: 1; display: flex; flex-direction: column; align-items: center; gap: 0.4rem;
+      padding: 1.4rem 1rem; border-radius: 14px; cursor: pointer; font-family: inherit;
+      border: 2px solid rgba(87,46,136,0.15); background: rgba(87,46,136,0.03);
+      transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
+      text-align: center;
+    }
+    .bk-attend-card:hover { border-color: #572e88; background: rgba(87,46,136,0.07); }
+    .bk-attend-card.selected {
+      border-color: #572e88; background: rgba(87,46,136,0.1);
+      box-shadow: 0 0 0 3px rgba(87,46,136,0.18);
+    }
+    .bk-attend-icon { font-size: 2rem; line-height: 1; }
+    .bk-attend-label { font-size: 0.95rem; font-weight: 800; color: #1a1530; }
+    .bk-attend-desc { font-size: 0.75rem; color: #6a5a80; }
     .bk-step-title { font-size: 0.95rem; font-weight: 800; color: #1a1530; margin-bottom: 0.15rem; }
     .bk-step-sub { font-size: 0.8rem; color: #6a5a80; margin-bottom: 1rem; line-height: 1.4; }
 
@@ -2637,6 +2653,8 @@
     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
 
     let _spSessions = [], _spSlotsBySession = {}, _spSessionIdx = 0, _spSelectedSlots = {};
+    let _spHolds = {};       // { sessionId: { slotId, holdSessionId } } — in-flight pre-booking holds
+    let _spRealtimeSub = null; // Supabase realtime subscription for live slot updates
 
     async function openFatesSlotPicker() {
       const overlay = document.getElementById('sp-overlay');
@@ -2699,11 +2717,50 @@
           });
         });
 
+        // Sync into _allSlots so the wizard review step can read slot times
+        Object.entries(_spSlotsBySession).forEach(([sessId, slots]) => {
+          _allSlots[sessId] = slots;
+        });
+
         _spSessionIdx = 0;
         _spRender();
+        _spSubscribeRealtime();
       } catch {
         body.innerHTML = '<div class="sp-empty">Could not load times. Please try again.</div>';
       }
+    }
+
+    function _spSubscribeRealtime() {
+      // Unsubscribe any previous channel
+      if (_spRealtimeSub) { try { _spRealtimeSub.unsubscribe(); } catch {} _spRealtimeSub = null; }
+      const sessionIds = _spSessions.map(s => s.id).filter(Boolean);
+      if (!sessionIds.length) return;
+
+      _spRealtimeSub = sb.channel('sp-slots-live')
+        .on('postgres_changes', {
+          event: '*',
+          schema: 'public',
+          table: 'audition_time_slots',
+          filter: `session_id=in.(${sessionIds.join(',')})`,
+        }, payload => {
+          const updated = payload.new || payload.old;
+          if (!updated?.id) return;
+          const sessId = updated.session_id;
+          if (!_spSlotsBySession[sessId]) return;
+          // Update the slot in-place, preserving _liveCount
+          _spSlotsBySession[sessId] = _spSlotsBySession[sessId].map(s => {
+            if (s.id !== updated.id) return s;
+            return { ...s, ...updated, _liveCount: s._liveCount };
+          });
+          // Sync back to _allSlots
+          _allSlots[sessId] = _spSlotsBySession[sessId];
+          // Re-render picker if it's open and showing this session
+          const overlay = document.getElementById('sp-overlay');
+          if (overlay?.classList.contains('open') && _spSessions[_spSessionIdx]?.id === sessId) {
+            _spRender();
+          }
+        })
+        .subscribe();
     }
 
     function _spSlotUnavailable(slot) {
@@ -2759,6 +2816,27 @@
       const grid = btn.closest('.sp-slot-grid');
       if (grid) grid.querySelectorAll('.sp-slot-btn').forEach(b => b.classList.remove('selected'));
       btn.classList.add('selected');
+
+      // Release previous hold for this session if switching slots
+      const prev = _spHolds[sessionId];
+      if (prev && prev.slotId !== slotId && prev.holdSessionId) {
+        sb.from('audition_time_slots')
+          .update({ hold_expires_at: null, hold_session_id: null })
+          .eq('id', prev.slotId)
+          .eq('hold_session_id', prev.holdSessionId)
+          .then(() => {}).catch(() => {});
+      }
+
+      // Place a 15-minute hold immediately
+      const holdId = (typeof crypto !== 'undefined' && crypto.randomUUID)
+        ? crypto.randomUUID() : String(Date.now()) + Math.random();
+      const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
+      _spHolds[sessionId] = { slotId, holdSessionId: holdId };
+      sb.from('audition_time_slots')
+        .update({ hold_expires_at: expiresAt.toISOString(), hold_session_id: holdId })
+        .eq('id', slotId)
+        .then(() => {}).catch(() => {});
+
       _spSelectedSlots[sessionId] = slotId;
       document.getElementById('sp-continue-btn').disabled = false;
     }
@@ -2779,9 +2857,24 @@
 
     function spClose() {
       document.getElementById('sp-overlay').classList.remove('open');
+      // Release all pre-booking holds placed in the picker
+      Object.values(_spHolds).forEach(({ slotId, holdSessionId }) => {
+        sb.from('audition_time_slots')
+          .update({ hold_expires_at: null, hold_session_id: null })
+          .eq('id', slotId)
+          .eq('hold_session_id', holdSessionId)
+          .then(() => {}).catch(() => {});
+      });
+      _spHolds = {};
+      if (_spRealtimeSub) { try { _spRealtimeSub.unsubscribe(); } catch {} _spRealtimeSub = null; }
     }
 
     // ── Booking Wizard v2 ──────────────────────────────────────────
+
+    function _bkSessionHasHybridFormat() {
+      const fmt = (_bkSession?.format || '').toLowerCase();
+      return fmt === 'hybrid';
+    }
 
     function _bkStep4Needed() {
       if (!_bkAudConfig) return true;
@@ -2802,7 +2895,9 @@
       return true;
     }
     function _bkGetSteps() {
-      const steps = [1, 2, 3];
+      const steps = [];
+      if (_bkSessionHasHybridFormat()) steps.push(0);
+      steps.push(1, 2, 3);
       if (_bkStep4Needed()) steps.push(4);
       if (_bkStep5Needed()) steps.push(5);
       steps.push(6);
@@ -2833,6 +2928,7 @@
         custom_answers:{},
         headshot_file:null, headshot_url:null, headshot_preview:null,
         extra_sessions:[],
+        attendance_mode: null,
       };
       _bkSaveState();
     }
@@ -2865,9 +2961,9 @@
       document.getElementById('bk-body').style.display = '';
       document.getElementById('bk-footer').style.display = '';
       document.getElementById('bk-timer-wrap').style.display = _bkState.slot_id ? '' : 'none';
-      _bkMaxStep = 1;
+      _bkMaxStep = _bkGetSteps()[0];
       _bkBuildStepDots();
-      _bkGoTo(1);
+      _bkGoTo(_bkGetSteps()[0]);
       document.getElementById('bk-overlay').classList.add('open');
       if (_bkState.slot_id) _bkStartHold(_bkState.slot_id);
     }
@@ -2884,7 +2980,7 @@
       const wrap = document.getElementById('bk-steps-inner');
       if (!wrap) return;
       const steps = _bkGetSteps();
-      const labels = {1:'Performer',2:'Contact',3:'Roles',4:'Info',5:'Availability',6:'Review'};
+      const labels = {0:'How',1:'Performer',2:'Contact',3:'Roles',4:'Info',5:'Availability',6:'Review'};
       wrap.innerHTML = steps.map((n, i) => `
         <div class="bk-step-item">
           <div class="bk-step-dot${i===0?' active':''}" id="bkdot-${n}" onclick="_bkStepClick(${n})">${i+1}</div>
@@ -2928,7 +3024,7 @@
     function _bkGoTo(step) {
       if (step > _bkMaxStep) _bkMaxStep = step;
       _bkStep = step;
-      [1,2,3,4,5,6].forEach(n => {
+      [0,1,2,3,4,5,6].forEach(n => {
         const p = document.getElementById('bk-panel-'+n);
         if (p) p.classList.toggle('active', n === step);
       });
@@ -2941,8 +3037,8 @@
       const isLastStep = step === steps[steps.length-1];
       const finalLabel = isLastStep ? (_bkState?.slot_id ? 'Confirm Booking' : 'Submit Registration') : 'Next →';
       if (next) { next.disabled = false; next.textContent = finalLabel; }
-      ['bk-error','bk-error-2','bk-error-3','bk-error-4','bk-error-5','bk-error-6'].forEach(id => { const e = document.getElementById(id); if (e) e.textContent = ''; });
-      const renders = {1:_bkRenderStep1, 2:_bkRenderStep2, 3:_bkRenderStep3, 4:_bkRenderStep4, 5:_bkRenderStep5, 6:_bkRenderStep6};
+      ['bk-error-0','bk-error','bk-error-2','bk-error-3','bk-error-4','bk-error-5','bk-error-6'].forEach(id => { const e = document.getElementById(id); if (e) e.textContent = ''; });
+      const renders = {0:_bkRenderStep0, 1:_bkRenderStep1, 2:_bkRenderStep2, 3:_bkRenderStep3, 4:_bkRenderStep4, 5:_bkRenderStep5, 6:_bkRenderStep6};
       try {
         if (renders[step]) renders[step]();
       } catch (err) {
@@ -2955,6 +3051,7 @@
       try {
         const steps = _bkGetSteps();
         const curIdx = steps.indexOf(_bkStep);
+        if (_bkStep === 0 && !_bkValidateStep0()) return;
         if (_bkStep === 1 && !_bkValidateStep1()) return;
         if (_bkStep === 2 && !_bkValidateStep2()) return;
         if (_bkStep === 3 && !_bkValidateStep3()) return;
@@ -2977,7 +3074,7 @@
     }
 
     function _bkErr(msg) {
-      const map = {1:'bk-error',2:'bk-error-2',3:'bk-error-3',4:'bk-error-4',5:'bk-error-5',6:'bk-error-6'};
+      const map = {0:'bk-error-0',1:'bk-error',2:'bk-error-2',3:'bk-error-3',4:'bk-error-4',5:'bk-error-5',6:'bk-error-6'};
       const el = document.getElementById(map[_bkStep]||'bk-error');
       if (el) el.textContent = msg;
     }
@@ -3065,6 +3162,41 @@
 
     // ── Step Renders ──────────────────────────────────────────────
     function _bkSetVal(id, val) { const el = document.getElementById(id); if (el && val !== undefined && val !== null) el.value = val; }
+
+    function _bkRenderStep0() {
+      const panel = document.getElementById('bk-panel-0');
+      if (!panel) return;
+      const cur = _bkState.attendance_mode;
+      panel.innerHTML = `
+        <div class="bk-step-title">How are you joining?</div>
+        <div class="bk-step-sub">This session is available in person or over video call. Choose one.</div>
+        <div class="bk-attend-options">
+          <button type="button" class="bk-attend-card${cur === 'in_person' ? ' selected' : ''}"
+                  onclick="_bkSetAttendance('in_person')">
+            <div class="bk-attend-icon">🏛️</div>
+            <div class="bk-attend-label">In Person</div>
+            <div class="bk-attend-desc">I'll be there in the room.</div>
+          </button>
+          <button type="button" class="bk-attend-card${cur === 'video_call' ? ' selected' : ''}"
+                  onclick="_bkSetAttendance('video_call')">
+            <div class="bk-attend-icon">💻</div>
+            <div class="bk-attend-label">Video Call</div>
+            <div class="bk-attend-desc">I'll be joining online.</div>
+          </button>
+        </div>
+        <div class="bk-error" id="bk-error-0" style="color:#b91c1c;font-size:0.8rem;margin-top:0.5rem;"></div>`;
+    }
+
+    function _bkSetAttendance(mode) {
+      _bkState.attendance_mode = mode;
+      _bkSaveState();
+      _bkRenderStep0();
+    }
+
+    function _bkValidateStep0() {
+      if (!_bkState.attendance_mode) { _bkErr('Please choose how you are joining.'); return false; }
+      return true;
+    }
 
     function _bkRenderStep1() {
       _bkSetVal('bk-perf-fname', _bkState.perf_fname);
@@ -3245,14 +3377,14 @@
         let skillsBody = '';
         if (cfg.section_special_skills ?? true) {
           skillsBody += `<div class="bk-form-group">
-            <label class="bk-label">Special Skills${opt()}</label>
-            <textarea class="bk-input" id="bk-s4-special-skills" rows="3" style="resize:vertical;" placeholder="Accents, instruments, stage combat, gymnastics, anything you'd like us to know." oninput="_bkState.special_skills=this.value;_bkSaveState();">${esc(_bkState.special_skills)}</textarea>
+            <label class="bk-label">Special Skills${req()}</label>
+            <textarea class="bk-input" id="bk-s4-special-skills" rows="3" style="resize:vertical;" placeholder="Accents, instruments, stage combat, gymnastics, anything you'd like us to know. Write "None" if not applicable." oninput="_bkState.special_skills=this.value;_bkSaveState();">${esc(_bkState.special_skills)}</textarea>
           </div>`;
         }
         if (cfg.section_previous_experience ?? true) {
           skillsBody += `<div class="bk-form-group">
-            <label class="bk-label">Previous Experience${opt()}</label>
-            <textarea class="bk-input" id="bk-s4-previous-experience" rows="3" style="resize:vertical;" placeholder="Productions, training, or anything you'd like to share." oninput="_bkState.previous_experience=this.value;_bkSaveState();">${esc(_bkState.previous_experience)}</textarea>
+            <label class="bk-label">Previous Experience${req()}</label>
+            <textarea class="bk-input" id="bk-s4-previous-experience" rows="3" style="resize:vertical;" placeholder="Productions, training, or anything you'd like to share. Write "None" if not applicable." oninput="_bkState.previous_experience=this.value;_bkSaveState();">${esc(_bkState.previous_experience)}</textarea>
           </div>`;
         }
         if (cfg.collect_song) {
@@ -3433,9 +3565,14 @@
       try {
         const slots = _allSlots?.[_bkSession?.id] || [];
         const slot  = slots.find(s => s.id === _bkState.slot_id);
-        const sessionSlotList = _allSlots?.[_bkSession?.id] || [];
-        const slotLabel = slot
-          ? fmtTimeStr(slot.slot_time)
+        // Also check _spSlotsBySession in case _allSlots hasn't been synced yet
+        const spSlot = !slot && _bkState.slot_id
+          ? (_spSlotsBySession?.[_bkSession?.id] || []).find(s => s.id === _bkState.slot_id)
+          : null;
+        const resolvedSlot = slot || spSlot || null;
+        const sessionSlotList = _allSlots?.[_bkSession?.id] || _spSlotsBySession?.[_bkSession?.id] || [];
+        const slotLabel = resolvedSlot
+          ? fmtTimeStr(resolvedSlot.slot_time)
           : (_bkSession?.booking_mode === 'open'
               ? 'Open call — drop in any time'
               : sessionSlotList.length
@@ -3583,18 +3720,21 @@
         }
 
         const allSlotChips = [
-          _slotChip(_bkSession, sessionDate, slotLabel !== 'Open call — drop in any time' && slotLabel !== '— No slot selected' && slotLabel !== 'Slots not yet published' ? slotLabel : (slotLabel || '')),
+          _slotChip(_bkSession, sessionDate, resolvedSlot ? slotLabel : ''),
           ...((_bkState.extra_sessions || []).map(extra => {
             const extraSession = _allSessions.find(s => s.id === extra.session_id);
-            const extraSlot = (_allSlots[extra.session_id] || []).find(s => s.id === extra.slot_id);
+            const extraSlot = (_allSlots[extra.session_id] || _spSlotsBySession[extra.session_id] || []).find(s => s.id === extra.slot_id);
             const extraDate = extraSession?.date ? fmtDate(extraSession.date) : '';
             const extraTime = extraSlot?.slot_time ? fmtTimeStr(extraSlot.slot_time) : '';
             return _slotChip(extraSession, extraDate, extraTime);
           }))
         ].join('');
 
+        const attendanceLabel = _bkState.attendance_mode === 'in_person' ? 'In Person'
+          : _bkState.attendance_mode === 'video_call' ? 'Video Call' : '';
         const slotRows = `<div class="bk-slot-chips">${allSlotChips}</div>
-          ${slot ? `<div style="margin-top:0.5rem;"><span class="bk-edit-link" onclick="_bkGoTo(1)">Change time slot →</span></div>` : ''}`;
+          ${attendanceLabel ? `<div style="margin-top:0.5rem;font-size:0.78rem;color:#6a5a80;"><span style="font-weight:700;color:#1a1530;">Joining:</span> ${esc(attendanceLabel)} <span class="bk-edit-link" onclick="_bkGoTo(0)" style="margin-left:0.4rem;">Change</span></div>` : ''}
+          ${resolvedSlot ? `<div style="margin-top:0.3rem;"><span class="bk-edit-link" onclick="closeBookModal().then(()=>openFatesSlotPicker())">Change time slot →</span></div>` : ''}`;
 
         el.innerHTML = `
           <div class="bk-review-top">
@@ -3665,6 +3805,8 @@
       if ((cfg.section_acting ?? true) && !_bkState.acting_level) { _bkErr('Please select the performer\'s acting experience level.'); return false; }
       if ((cfg.section_vocal ?? true) && !_bkState.vocal_level) { _bkErr('Please select the performer\'s vocal experience level.'); return false; }
       if ((cfg.section_dance ?? true) && !_bkState.dance_level) { _bkErr('Please select the performer\'s dance / movement experience level.'); return false; }
+      if ((cfg.section_special_skills ?? true) && !_bkState.special_skills?.trim()) { _bkErr('Please fill in Special Skills (write "None" if not applicable).'); return false; }
+      if ((cfg.section_previous_experience ?? true) && !_bkState.previous_experience?.trim()) { _bkErr('Please fill in Previous Experience (write "None" if not applicable).'); return false; }
       if (cfg.collect_song     && !_bkState.song)      { _bkErr('Please enter the performer\'s song / piece.'); return false; }
       if (cfg.collect_monologue && !_bkState.monologue) { _bkErr('Please enter the performer\'s monologue.'); return false; }
       if (cfg.collect_skills   && !_bkState.skills)    { _bkErr('Please enter the performer\'s skills.'); return false; }
@@ -3851,7 +3993,7 @@
       if (!slotId) return;
       _bkHoldSessionId = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : String(Date.now())+Math.random();
       _bkExtended = false;
-      const expiresAt = new Date(Date.now() + 10*60*1000);
+      const expiresAt = new Date(Date.now() + 15*60*1000);
       try {
         await sb.from('audition_time_slots')
           .update({hold_expires_at: expiresAt.toISOString(), hold_session_id: _bkHoldSessionId})
@@ -4158,6 +4300,7 @@
           custom_answers: finalCustomAnswersPayload,
           headshot_url:   headshotUrl,
           performer_number: performerNumber,
+          attendance_mode: _bkState.attendance_mode || null,
         };
         async function _bkInsertBookingWithFallbacks(payload) {
           const attempts = [];
@@ -5043,6 +5186,9 @@
 
       <!-- Body -->
       <div class="bk-body" id="bk-body">
+
+        <!-- Panel 0: How are you joining? (hybrid sessions only) -->
+        <div class="bk-step-panel" id="bk-panel-0"></div>
 
         <!-- Panel 1: Performer Info -->
         <div class="bk-step-panel active" id="bk-panel-1">

@@ -114,8 +114,12 @@ function buildCastingCardBack(app, opts = {}) {
 
   // ── Casting ───────────────────────────────────────────────────
   const castingPref = (typeof applicantRolePrefLabel === 'function') ? applicantRolePrefLabel(app) : '';
+  const attendanceModeLabel = app?.attendance_mode === 'in_person' ? 'In Person'
+    : app?.attendance_mode === 'video_call' ? 'Video Call'
+    : null;
   const castingSection = section('Casting', [
     ['Role Openness', castingPref],
+    ['Joining', attendanceModeLabel],
   ], C.casting);
 
   // ── Acting ────────────────────────────────────────────────────

@@ -6,13 +6,19 @@
  *   VenuePicker.init(sb, orgId);
  *   VenuePicker.render('container-id', currentText, onChange);
  *   // onChange(venueText, venueId|null) called when a venue is chosen
+ *
+ * TBD behaviour:
+ *   - Small checkbox + label sits below the dropdown.
+ *   - Auto-checked when currentText is blank or "TBD".
+ *   - When checked: dropdown is disabled and greyed out, value is "TBD".
+ *   - Picking a real venue unchecks TBD automatically.
+ *   - Checking TBD while a venue is set clears the selection.
  */
 (function () {
 
   let _sb     = null;
   let _orgId  = null;
   let _venues = [];
-  let _loaded = false;
   let _debounceTimers = {};
 
   async function init(sb, orgId) {
@@ -28,10 +34,9 @@
       .eq('org_id', _orgId)
       .order('name', { ascending: true });
     _venues = data || [];
-    _loaded = true;
     document.querySelectorAll('[data-venue-picker]').forEach(el => {
-      const id       = el.dataset.venuePicker;
-      const current  = el.dataset.venueCurrentText || '';
+      const id      = el.dataset.venuePicker;
+      const current = el.dataset.venueCurrentText || '';
       _rebuildSelect(id, current);
     });
   }
@@ -40,42 +45,81 @@
     const container = document.getElementById(containerId);
     if (!container) return;
 
+    const isTbd = !currentText || currentText.trim().toLowerCase() === 'tbd';
+
+    // Inject styles once
+    if (!document.getElementById('vp-tbd-style')) {
+      const style = document.createElement('style');
+      style.id = 'vp-tbd-style';
+      style.textContent = `
+        .vp-tbd-row {
+          display: flex; align-items: center; gap: 0.4rem;
+          margin-top: 0.45rem;
+        }
+        .vp-tbd-row input[type="checkbox"] {
+          width: 14px; height: 14px; accent-color: #572e88; cursor: pointer; flex-shrink: 0;
+        }
+        .vp-tbd-row label {
+          font-size: 0.75rem; font-weight: 700; color: #9a90b0;
+          text-transform: uppercase; letter-spacing: 0.06em; cursor: pointer;
+          user-select: none;
+        }
+        .vp-tbd-row input[type="checkbox"]:checked + label { color: #572e88; }
+        .vp-picker-disabled { opacity: 0.45; pointer-events: none; }
+      `;
+      document.head.appendChild(style);
+    }
+
     container.innerHTML = `
       <div data-venue-picker="${containerId}"
            data-venue-current-text="${(currentText || '').replace(/"/g, '&quot;')}"
            data-venue-onchange="__vp_cb_${containerId}">
-        <div class="venue-picker-row">
-          <select class="form-select venue-picker-select" id="vp-select-${containerId}">
-            <option value="">Select a venue...</option>
-            ${_venues.map(v => { const lbl = v.nickname || v.name; return `<option value="${v.id}" data-name="${lbl.replace(/"/g, '&quot;')}" ${currentText === lbl || currentText === v.name ? 'selected' : ''}>${lbl}${v.address ? ' — ' + v.address : ''}</option>`; }).join('')}
-            <option value="__new__">+ Add new venue...</option>
-          </select>
-        </div>
-        <div class="venue-picker-new-wrap" id="vp-new-${containerId}" style="display:none;">
-          <div style="font-size:0.72rem;font-weight:700;color:#9a90b0;text-transform:uppercase;letter-spacing:0.05em;margin:0.6rem 0 0.3rem;">Search for venue or address</div>
-          <div style="position:relative;">
-            <input class="form-input" id="vp-search-${containerId}" type="text"
-                   placeholder="Start typing a name or address..." autocomplete="off" />
-            <div id="vp-dropdown-${containerId}" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:9999;background:#fff;border:1.5px solid rgba(87,46,136,0.2);border-top:none;border-radius:0 0 8px 8px;box-shadow:0 6px 18px rgba(0,0,0,0.1);max-height:220px;overflow-y:auto;"></div>
+
+        <div id="vp-picker-${containerId}"${isTbd ? ' class="vp-picker-disabled"' : ''}>
+          <div class="venue-picker-row">
+            <select class="form-select venue-picker-select" id="vp-select-${containerId}">
+              <option value="">Select a venue...</option>
+              ${_venues.map(v => { const lbl = v.nickname || v.name; return `<option value="${v.id}" data-name="${lbl.replace(/"/g, '&quot;')}" ${!isTbd && (currentText === lbl || currentText === v.name) ? 'selected' : ''}>${lbl}${v.address ? ' — ' + v.address : ''}</option>`; }).join('')}
+              <option value="__new__">+ Add new venue...</option>
+            </select>
           </div>
-          <div id="vp-preview-${containerId}" style="display:none;margin-top:0.5rem;">
-            <div class="venue-picker-preview">
-              <div>
-                <div class="venue-picker-preview-name" id="vp-pname-${containerId}"></div>
-                <div class="venue-picker-preview-addr" id="vp-paddress-${containerId}"></div>
-              </div>
-              <div style="display:flex;gap:0.4rem;flex-shrink:0;">
-                <button class="btn-primary" style="font-size:0.78rem;padding:0.35rem 0.75rem;"
-                        onclick="VenuePicker._saveNew('${containerId}')">Save &amp; Select</button>
-                <button class="btn--secondary" style="font-size:0.78rem;padding:0.35rem 0.75rem;"
-                        onclick="VenuePicker._cancelNew('${containerId}')">Cancel</button>
+          <div class="venue-picker-new-wrap" id="vp-new-${containerId}" style="display:none;">
+            <div style="font-size:0.72rem;font-weight:700;color:#9a90b0;text-transform:uppercase;letter-spacing:0.05em;margin:0.6rem 0 0.3rem;">Search for venue or address</div>
+            <div style="position:relative;">
+              <input class="form-input" id="vp-search-${containerId}" type="text"
+                     placeholder="Start typing a name or address..." autocomplete="off" />
+              <div id="vp-dropdown-${containerId}" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:9999;background:#fff;border:1.5px solid rgba(87,46,136,0.2);border-top:none;border-radius:0 0 8px 8px;box-shadow:0 6px 18px rgba(0,0,0,0.1);max-height:220px;overflow-y:auto;"></div>
+            </div>
+            <div id="vp-preview-${containerId}" style="display:none;margin-top:0.5rem;">
+              <div class="venue-picker-preview">
+                <div>
+                  <div class="venue-picker-preview-name" id="vp-pname-${containerId}"></div>
+                  <div class="venue-picker-preview-addr" id="vp-paddress-${containerId}"></div>
+                </div>
+                <div style="display:flex;gap:0.4rem;flex-shrink:0;">
+                  <button class="btn-primary" style="font-size:0.78rem;padding:0.35rem 0.75rem;"
+                          onclick="VenuePicker._saveNew('${containerId}')">Save &amp; Select</button>
+                  <button class="btn--secondary" style="font-size:0.78rem;padding:0.35rem 0.75rem;"
+                          onclick="VenuePicker._cancelNew('${containerId}')">Cancel</button>
+                </div>
               </div>
             </div>
           </div>
         </div>
+
+        <div class="vp-tbd-row">
+          <input type="checkbox" id="vp-tbd-${containerId}" ${isTbd ? 'checked' : ''}
+                 onchange="VenuePicker._toggleTbd('${containerId}')" />
+          <label for="vp-tbd-${containerId}">TBD</label>
+        </div>
+
       </div>`;
 
     window[`__vp_cb_${containerId}`] = onChange;
+
+    if (isTbd && typeof onChange === 'function') {
+      onChange('TBD', null);
+    }
 
     const select = document.getElementById(`vp-select-${containerId}`);
     select.addEventListener('change', () => {
@@ -88,11 +132,36 @@
         const opt  = select.options[select.selectedIndex];
         const name = opt.dataset.name || opt.textContent.split(' — ')[0];
         document.getElementById(`vp-new-${containerId}`).style.display = 'none';
+        _setTbd(containerId, false);
         if (typeof onChange === 'function') onChange(name, val);
       } else {
         if (typeof onChange === 'function') onChange('', null);
       }
     });
+  }
+
+  function _toggleTbd(containerId) {
+    const cb = document.getElementById(`vp-tbd-${containerId}`);
+    if (!cb) return;
+    if (cb.checked) {
+      _setTbd(containerId, true);
+      const select = document.getElementById(`vp-select-${containerId}`);
+      if (select) select.value = '';
+      _cancelNew(containerId);
+      const onChange = window[`__vp_cb_${containerId}`];
+      if (typeof onChange === 'function') onChange('TBD', null);
+    } else {
+      _setTbd(containerId, false);
+      const onChange = window[`__vp_cb_${containerId}`];
+      if (typeof onChange === 'function') onChange('', null);
+    }
+  }
+
+  function _setTbd(containerId, active) {
+    const cb     = document.getElementById(`vp-tbd-${containerId}`);
+    const picker = document.getElementById(`vp-picker-${containerId}`);
+    if (cb) cb.checked = active;
+    if (picker) picker.classList.toggle('vp-picker-disabled', active);
   }
 
   function _rebuildSelect(id, currentText) {
@@ -122,7 +191,6 @@
       _debounceTimers[pickerId] = setTimeout(() => _fetchSuggestions(pickerId, q), 350);
     });
 
-    // Hide dropdown when clicking outside
     document.addEventListener('click', e => {
       if (!input.contains(e.target) && !dropdown.contains(e.target)) {
         dropdown.style.display = 'none';
@@ -147,7 +215,6 @@
       }
 
       dropdown.innerHTML = data.map((r, i) => {
-        // Use the most specific name available
         const name    = r.name || r.address?.amenity || r.address?.building || r.display_name.split(',')[0];
         const address = r.display_name;
         return `<div class="vp-suggestion" data-idx="${i}"
@@ -159,7 +226,7 @@
                   <div style="font-size:0.72rem;color:#9a90b0;margin-top:0.1rem;">${_esc(address)}</div>
                 </div>`;
       }).join('');
-    } catch (err) {
+    } catch {
       dropdown.innerHTML = '<div style="padding:0.5rem 0.75rem;font-size:0.8rem;color:#dc2626;">Search failed. Check your connection.</div>';
     }
   }
@@ -196,14 +263,15 @@
     const select = document.getElementById(`vp-select-${pickerId}`);
     if (select) select.value = data.id;
     _cancelNew(pickerId);
+    _setTbd(pickerId, false);
     const cb = window[`__vp_cb_${pickerId}`];
     if (typeof cb === 'function') cb(d.name, data.id);
   }
 
   function _cancelNew(pickerId) {
-    const wrap = document.getElementById(`vp-new-${pickerId}`);
-    const prev = document.getElementById(`vp-preview-${pickerId}`);
-    const drop = document.getElementById(`vp-dropdown-${pickerId}`);
+    const wrap  = document.getElementById(`vp-new-${pickerId}`);
+    const prev  = document.getElementById(`vp-preview-${pickerId}`);
+    const drop  = document.getElementById(`vp-dropdown-${pickerId}`);
     const input = document.getElementById(`vp-search-${pickerId}`);
     if (wrap)  wrap.style.display  = 'none';
     if (prev)  prev.style.display  = 'none';
@@ -215,6 +283,6 @@
     return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
 
-  window.VenuePicker = { init, reload, render, _saveNew, _cancelNew, _selectSuggestion };
+  window.VenuePicker = { init, reload, render, _toggleTbd, _setTbd, _saveNew, _cancelNew, _selectSuggestion };
 
 })();
