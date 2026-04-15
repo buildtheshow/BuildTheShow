@@ -19039,15 +19039,17 @@ If you have any questions, don't hesitate to reach out.
     app.slot_assignments = updated;
     app.slot_id = newSlotId;
 
-    // Release any holds on the old and new slots, then recalculate availability
+    // Release holds and refresh availability fire-and-forget — the DB write already succeeded
+    // and these are housekeeping updates. Never await them; a slow/stalled slot update must not
+    // block the reschedule completing from the user's perspective.
     const touchSlots = [oldSlotId, newSlotId].filter(Boolean);
-    await Promise.all(touchSlots.map(sid =>
+    Promise.all(touchSlots.map(sid =>
       sb.from('audition_time_slots')
         .update({ hold_expires_at: null, hold_session_id: null })
         .eq('id', sid)
         .then(() => {}).catch(() => {})
-    ));
-    await refreshAuditionSlotAvailability(touchSlots);
+    )).catch(() => {});
+    refreshAuditionSlotAvailability(touchSlots).catch(() => {});
 
     const slotsEl = document.getElementById('reschedule-slots');
     if (slotsEl) slotsEl.style.display = 'none';
