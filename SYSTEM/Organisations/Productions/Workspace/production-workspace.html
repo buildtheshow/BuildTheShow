@@ -15383,11 +15383,13 @@ If you have any questions, don't hesitate to reach out.
 
   // ── Applicants ────────────────────────────────────────
   function applicantBookingMatchScore(app, booking) {
+    // Email and phone are contact/guardian details and are NOT unique per performer —
+    // a parent can book multiple children using the same email and phone.
+    // Only applicant_id and performer_number are safe unique identifiers.
+    // Name + slot or name + session are kept as weak corroborating signals only.
     let score = 0;
     if (app?.id && booking?.applicant_id && String(app.id) === String(booking.applicant_id)) score += 100;
     if (app?.performer_number && booking?.performer_number && String(app.performer_number).trim().toUpperCase() === String(booking.performer_number).trim().toUpperCase()) score += 80;
-    if (app.email && booking.email && String(app.email).trim().toLowerCase() === String(booking.email).trim().toLowerCase()) score += 6;
-    if (app.phone && booking.phone && String(app.phone).replace(/\D+/g, '') === String(booking.phone).replace(/\D+/g, '')) score += 5;
     if (app.name && booking.name && String(app.name).trim().toLowerCase() === String(booking.name).trim().toLowerCase()) score += 4;
     if (app.slot_id && booking.slot_id && app.slot_id === booking.slot_id) score += 2;
     if (app.session_id && booking.session_id && app.session_id === booking.session_id) score += 1;
@@ -15454,7 +15456,7 @@ If you have any questions, don't hesitate to reach out.
       const candidateBookings = bookings.filter(booking => {
         const status = String(booking?.status || '').trim().toLowerCase();
         if (status === 'canceled' || status === 'cancelled') return false;
-        return applicantBookingMatchScore(app, booking) >= 4;
+        return applicantBookingMatchScore(app, booking) >= 5;
       });
       if (!candidateBookings.length && !needsAgeBackfill && !needsAnswersBackfill && !needsCastingBackfill) return app;
 
@@ -15511,7 +15513,7 @@ If you have any questions, don't hesitate to reach out.
       const bookingEmail = String(booking?.email || '').trim().toLowerCase();
       if (bookingEmail && mergedEmailSet.has(bookingEmail)) return;
       // Slow path: scoring (catches name/phone-only matches and applicant_id links)
-      const exists = merged.some(app => applicantBookingMatchScore(app, booking) >= 4);
+      const exists = merged.some(app => applicantBookingMatchScore(app, booking) >= 5);
       if (exists) return;
       // Build slot_assignments from this booking's slot so Schedule/Check-In see the performer
       const _bfSlotAssignments = booking.slot_id && booking.session_id
@@ -15594,7 +15596,7 @@ If you have any questions, don't hesitate to reach out.
       // Fast path: email already in applications — skip
       const bookingEmail = String(booking?.email || '').trim().toLowerCase();
       if (bookingEmail && existingEmails.has(bookingEmail)) continue;
-      const alreadyMatched = existing.some(app => applicantBookingMatchScore(app, booking) >= 4);
+      const alreadyMatched = existing.some(app => applicantBookingMatchScore(app, booking) >= 5);
       if (alreadyMatched) continue;
 
       const payload = {
@@ -18080,7 +18082,7 @@ If you have any questions, don't hesitate to reach out.
       if (status === 'canceled' || status === 'cancelled') return false;
       // Never steal a booking that is already claimed by a different applicant
       if (booking?.applicant_id && app?.id && String(booking.applicant_id) !== String(app.id)) return false;
-      return applicantBookingMatchScore(app, booking) >= 4;
+      return applicantBookingMatchScore(app, booking) >= 5;
     })));
     const latestBySession = new Map();
     matched.forEach(booking => {
@@ -18119,7 +18121,7 @@ If you have any questions, don't hesitate to reach out.
       const status = String(booking?.status || '').trim().toLowerCase();
       if (status === 'canceled' || status === 'cancelled') return false;
       if (String(booking?.session_id || '') !== String(sessionId)) return false;
-      return applicantBookingMatchScore(app, booking) >= 4;
+      return applicantBookingMatchScore(app, booking) >= 5;
     });
     return rows.sort((a, b) => String(b.updated_at || b.created_at || '').localeCompare(String(a.updated_at || a.created_at || '')));
   }
@@ -18130,7 +18132,7 @@ If you have any questions, don't hesitate to reach out.
       const status = String(booking?.status || '').trim().toLowerCase();
       if (status === 'canceled' || status === 'cancelled') return false;
       if (String(booking?.session_id || '') !== String(sessionId)) return false;
-      return applicantBookingMatchScore(app, booking) >= 4;
+      return applicantBookingMatchScore(app, booking) >= 5;
     });
     if (!candidates.length) return null;
     candidates.sort((a, b) => String(b.updated_at || b.created_at || '').localeCompare(String(a.updated_at || a.created_at || '')));

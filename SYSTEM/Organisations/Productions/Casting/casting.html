@@ -360,6 +360,39 @@
     }
     .empty-state strong { display: block; font-size: 1rem; color: #a89ec0; margin-bottom: 0.4rem; }
 
+    /* ── Clio card grid ──────────────────────────────────── */
+    .clio-cards-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      gap: 1rem;
+    }
+    .clio-card-wrap {
+      cursor: pointer;
+      border-radius: 14px;
+      transition: transform 0.15s, box-shadow 0.15s;
+      outline: none;
+    }
+    .clio-card-wrap:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(87,46,136,0.25); }
+    .clio-card-wrap:focus-visible { box-shadow: 0 0 0 2px #8b5cf6; }
+    .clio-card-wrap.clio-card-called .casting-card { box-shadow: 0 0 0 2px #efab45; }
+    .clio-card-meta {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.4rem;
+      padding: 0.45rem 0.25rem 0;
+      flex-wrap: wrap;
+    }
+    .clio-card-role {
+      font-size: 0.7rem;
+      color: #7a7490;
+      font-style: italic;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 80px;
+    }
+
     /* ── Toast notification ───────────────────────────────── */
     .toast {
       position: fixed; bottom: 2rem; right: 2rem;
@@ -771,72 +804,48 @@
       const activeCount    = (statusCounts['submitted']||0)+(statusCounts['confirmed']||0)+(statusCounts['auditioned']||0)+callbackCount;
       const charsCastCount = allCharacters.filter(c => allApplications.some(a => a.status==='cast' && a.character_id===c.id)).length;
 
-      const tableHTML = allApplications.length === 0
+      const gridHTML = allApplications.length === 0
         ? `<div class="empty-state"><strong>No performers here.</strong>When performers apply, they'll show up here.</div>`
-        : `<div class="applications-table-wrap">
-            <table class="applications-table">
-              <thead>
-                <tr>
-                  <th>Performer</th>
-                  <th>Role Applied For</th>
-                  <th>Character</th>
-                  <th>Notes</th>
-                  <th>Status</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                ${allApplications.map(a => {
-                  const isCalled = a.callback_status && a.callback_status !== 'none';
-                  const notesCell = a.notes
-                    ? `<div style="display:flex;align-items:center;gap:0.3rem;">
-                        <span class="notes-text" title="${esc(a.notes)}">${esc(a.notes)}</span>
-                        <button class="notes-edit-btn" data-notes-app="${esc(a.id)}" title="Edit notes">✎</button>
-                       </div>`
-                    : `<button class="notes-edit-btn" data-notes-app="${esc(a.id)}" title="Add notes"><span class="notes-empty">+ Note</span></button>`;
-                  const canNotify = a.applicant_email && ['callback','cast','not_cast'].includes(a.status);
-                  const notifyBtn = canNotify
-                    ? `<button class="notify-btn" onclick="openNotifyModal('${esc(a.id)}')" title="Send notification email">
-                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
-                        Notify
-                      </button>` : '';
-                  const appBookings = getBookingsForApplicant(a);
-                  const slotLines = appBookings.map(b => {
-                    const dt = fmtSlotDateTime(b);
-                    const label = b._session?.name || 'Audition';
-                    return dt ? `<div style="font-size:0.7rem;color:#7a7490;margin-top:0.15rem;">📅 ${esc(label)}: ${esc(dt)}</div>` : '';
-                  }).filter(Boolean).join('');
-                  return `<tr>
-                    <td>
-                      <button class="applicant-name-btn" data-profile-app="${esc(a.id)}">${esc(a.applicant_name || a.applicant_email || 'Performer')}</button>
-                      <div class="applicant-email">${esc(a.applicant_email || '')}</div>
-                      ${slotLines}
-                    </td>
-                    <td>${esc(a.role_name || '-')}</td>
-                    <td>${charSelectHTML(a.id, a.character_id)}</td>
-                    <td class="notes-cell">${notesCell}</td>
-                    <td>
-                      <div style="display:flex;align-items:center;gap:0.4rem;flex-wrap:wrap;">
-                        ${statusSelectHTML(a.id, a.status)}
-                        ${notifyBtn}
-                      </div>
-                    </td>
-                    <td>
-                      <button class="cb-btn${isCalled ? ' is-called' : ''}" data-cb-toggle="${esc(a.id)}" title="${isCalled ? 'Remove from callbacks' : 'Mark for callback'}">
-                        ${isCalled ? '★ Called Back' : '☆ Call Back'}
-                      </button>
-                    </td>
-                  </tr>`;
-                }).join('')}
-              </tbody>
-            </table>
+        : `<div class="clio-cards-grid">
+            ${allApplications.map(a => {
+              const profile = a.profile_id ? allProfiles.find(p => p.id === a.profile_id) : null;
+              const nameParts = (a.applicant_name || '').trim().split(/\s+/);
+              const firstName = profile?.legal_first_name || nameParts[0] || '';
+              const lastName  = profile?.legal_last_name  || nameParts.slice(1).join(' ') || '';
+              const age       = calculateAgeFromDob(profile?.date_of_birth);
+              const pronouns  = profile?.sections?.performer?.pronouns || '';
+              const photo     = profile?.headshot_url || a.headshot_url || '';
+              const isCalled  = a.callback_status && a.callback_status !== 'none';
+              const cardHTML  = renderCastingCard({
+                first_name: firstName,
+                last_name: lastName,
+                age,
+                pronouns,
+                headshot_url: photo,
+                casting_categories: pronouns ? [pronouns] : [],
+                role_openness: a.role_name ? 'specific' : 'open',
+              }, {
+                size: 'default',
+                hasPadding: true,
+                hasIcons: true,
+                state: a.status === 'cast' ? 'chosen' : null,
+              });
+              // Wrap the card so clicking anywhere opens the profile panel
+              return `<div class="clio-card-wrap${isCalled ? ' clio-card-called' : ''}" data-profile-app="${esc(a.id)}" role="button" tabindex="0" title="View ${esc(a.applicant_name || 'performer')}">
+                ${cardHTML}
+                <div class="clio-card-meta">
+                  ${badgeHTML(a.status)}
+                  ${a.role_name ? `<span class="clio-card-role">${esc(a.role_name)}</span>` : ''}
+                </div>
+              </div>`;
+            }).join('')}
           </div>`;
 
       main.innerHTML = `
         ${headerHTML()}
         ${summaryHTML(allApplications.length, activeCount, castCount, charsCastCount)}
         ${viewTabsHTML()}
-        ${tableHTML}
+        ${gridHTML}
       `;
     }
 
@@ -1682,7 +1691,7 @@
           cbGroupFilter = filterBtn.dataset.cbGroupFilter || null;
           renderCallbackMode(); return;
         }
-        // Open profile panel
+        // Open profile panel (click or keyboard on clio card wrappers)
         const profileBtn = e.target.closest('[data-profile-app]');
         if (profileBtn) {
           openProfilePanel(profileBtn.dataset.profileApp); return;
@@ -1738,6 +1747,14 @@
         // Callback group modal close on backdrop
         const cbModal = e.target.closest('.cb-modal-overlay');
         if (cbModal && e.target === cbModal) { closeCbGroupModal(); return; }
+      });
+
+      // Enter/Space on focusable clio card wrappers
+      document.addEventListener('keydown', e => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          const card = e.target.closest('[data-profile-app]');
+          if (card) { e.preventDefault(); openProfilePanel(card.dataset.profileApp); }
+        }
       });
 
       // Enter key in group modal

@@ -4098,41 +4098,40 @@
         const perfName = [_bkState.perf_fname, _bkState.perf_lname].filter(Boolean).join(' ').trim()
           || _bkState.perf_preferred_name || _bkState.contact_name || 'Unknown';
         async function _bkFindExistingApplicationIdentity() {
-          const email = String(_bkState.ct_email || '').trim().toLowerCase();
-          const phone = String(_bkState.ct_phone || '').replace(/\D+/g, '');
-          const name = String(perfName || '').trim().toLowerCase();
+          // Email and phone are contact/guardian details — shared across multiple performers
+          // (e.g. a parent booking two children with one email). Not reliable unique identifiers.
+          // Match on performer name + date of birth instead. Two different performers with the
+          // exact same full name AND the same birthday at the same production is not a realistic
+          // scenario, so this combination is a safe identity signal.
+          const name = perfName.trim().toLowerCase();
+          const dob  = String(_bkState.perf_birthday || '').trim();
+          if (!name || !dob) return null;
           const { data } = await sb.from('audition_applications')
             .select('*')
             .eq('production_id', _bkProd?.id)
             .order('created_at', { ascending: false });
           const rows = data || [];
           return rows.find(row => {
-            const rowEmail = String(row?.email || '').trim().toLowerCase();
-            const rowPhone = String(row?.phone || '').replace(/\D+/g, '');
             const rowName = String(row?.name || '').trim().toLowerCase();
-            if (email && rowEmail && email === rowEmail) return true;
-            if (phone && rowPhone && phone === rowPhone) return true;
-            if (name && rowName && name === rowName) return true;
-            return false;
+            const rowDob  = String(row?.custom_answers?.['Date of Birth'] || '').trim();
+            return rowName === name && rowDob === dob;
           }) || null;
         }
         async function _bkFindExistingBookingIdentity() {
-          const email = String(_bkState.ct_email || '').trim().toLowerCase();
-          const phone = String(_bkState.ct_phone || '').replace(/\D+/g, '');
-          const name = String(perfName || '').trim().toLowerCase();
+          // Bookings use the same name+DOB logic to stay consistent.
+          const name = perfName.trim().toLowerCase();
+          const dob  = String(_bkState.perf_birthday || '').trim();
+          if (!name || !dob) return null;
           const { data } = await sb.from('audition_bookings')
             .select('*')
             .eq('production_id', _bkProd?.id)
             .order('created_at', { ascending: false });
           const rows = data || [];
           return rows.find(row => {
-            const rowEmail = String(row?.email || '').trim().toLowerCase();
-            const rowPhone = String(row?.phone || '').replace(/\D+/g, '');
             const rowName = String(row?.name || '').trim().toLowerCase();
-            if (email && rowEmail && email === rowEmail) return true;
-            if (phone && rowPhone && phone === rowPhone) return true;
-            if (name && rowName && name === rowName) return true;
-            return false;
+            // audition_bookings stores custom_answers differently — fall back gracefully
+            const rowDob  = String(row?.custom_answers?.['Date of Birth'] || row?.date_of_birth || '').trim();
+            return rowName === name && rowDob === dob;
           }) || null;
         }
         function _bkPerformerNumberHasBannedWord(value) {
