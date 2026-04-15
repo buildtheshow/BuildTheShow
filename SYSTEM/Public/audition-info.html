@@ -2089,7 +2089,7 @@
       const daysLeft = daysBetween(closeDate);
       let statusTag = '';
       if (isOpen && closeDate && daysLeft !== null && daysLeft <= 7 && daysLeft >= 0) {
-        statusTag = `<div class="ai-status-tag soon"><span class="ai-status-dot"></span>Closing Soon${daysLeft <= 1 ? ' — Today!' : ' — ' + daysLeft + ' days left'}</div>`;
+        statusTag = `<div class="ai-status-tag soon"><span class="ai-status-dot"></span>${daysLeft <= 1 ? 'Closing Today!' : 'Closing in ' + daysLeft + ' days'}</div>`;
       } else if (isOpen) {
         statusTag = `<div class="ai-status-tag open"><span class="ai-status-dot"></span>Auditions Open</div>`;
       } else {
@@ -3497,7 +3497,7 @@
       }
 
       let html = `<div class="bk-step-title">Conflicts &amp; Availability</div>
-                  <div class="bk-step-sub">Tap any date the performer can't make — it'll turn red.</div>`;
+                  <div class="bk-step-sub">Tap any date the performer can't make. It'll turn red.</div>`;
 
       const eventsList = Array.isArray(_bkProdEvents) ? _bkProdEvents.filter(Boolean) : [];
       let groupCount = 0;
@@ -3694,7 +3694,7 @@
             const label = !Number.isNaN(dt.getTime())
               ? dt.toLocaleDateString('en-CA', { weekday:'short', month:'short', day:'numeric' })
               : (c.date || '');
-            const display = c.title ? `${label} — ${c.title}` : label;
+            const display = c.title ? `${label}: ${c.title}` : label;
             availRows += row('Conflict', esc(display));
           });
         } else if (hasStep5) {
@@ -3908,7 +3908,6 @@
     }
 
     // ── Character tiles ───────────────────────────────────────────
-    function _bkToggleCharArea() { /* tiles are always visible — no-op */ }
     function _bkRenderCharTiles() {
       const container = document.getElementById('bk-char-tiles');
       if (!container) return;
@@ -3931,10 +3930,6 @@
       if (idx === -1) _bkState.selected_chars.push(name); else _bkState.selected_chars.splice(idx,1);
       _bkSaveState(); _bkRenderCharTiles();
     }
-    function _bkCastAnyChange(cb) {
-      ['girls','boys','nonbinary'].forEach(v => { const el = document.getElementById('bk-cast-'+v); if (el) { el.disabled = cb.checked; if (cb.checked) el.checked = false; } });
-    }
-
     // ── Headshot upload ───────────────────────────────────────────
     function _bkHeadshotFile(file) {
       const errEl = document.getElementById('bk-headshot-error');
@@ -4061,17 +4056,31 @@
       const next = document.getElementById('bk-next');
       if (next) { next.disabled = true; next.textContent = 'Booking...'; }
       try {
-        // Re-validate slot still held by us
+        // Re-validate slot: check hold still ours AND live booking count hasn't hit capacity
         if (_bkState.slot_id) {
-          const { data: slotCheck } = await sb.from('audition_time_slots')
-            .select('hold_session_id,hold_expires_at,is_available,label').eq('id',_bkState.slot_id).single();
-          const stillValid = slotCheck && (
-            isBookablePublicSlot(slotCheck) && (
-              slotCheck.hold_session_id === _bkHoldSessionId ||
-              (slotCheck.is_available && (!slotCheck.hold_expires_at || new Date(slotCheck.hold_expires_at) < new Date()))
-            )
-          );
-          if (!stillValid) { _bkErr('Your hold has expired. Please close and select a new time slot.'); if (next) { next.disabled=false; next.textContent='Confirm Booking'; } return; }
+          const [{ data: slotCheck }, { count: liveCount }] = await Promise.all([
+            sb.from('audition_time_slots')
+              .select('hold_session_id,hold_expires_at,is_available,label,capacity')
+              .eq('id', _bkState.slot_id).single(),
+            sb.from('audition_applications')
+              .select('*', { count: 'exact', head: true })
+              .eq('production_id', _bkProd?.id)
+              .eq('slot_id', _bkState.slot_id),
+          ]);
+          const capacity = slotCheck?.capacity || _bkSession?.capacity_per_slot || 1;
+          const weHoldIt = slotCheck?.hold_session_id === _bkHoldSessionId;
+          const holdExpired = !slotCheck?.hold_expires_at || new Date(slotCheck.hold_expires_at) < new Date();
+          const slotFull = (liveCount ?? 0) >= capacity;
+          const labelOk = isBookablePublicSlot(slotCheck);
+          const stillValid = slotCheck && labelOk && (weHoldIt || holdExpired) && !slotFull;
+          if (!stillValid) {
+            const msg = slotFull
+              ? 'This slot just filled up. Please close and select a different time.'
+              : 'Your hold has expired. Please close and select a new time slot.';
+            _bkErr(msg);
+            if (next) { next.disabled=false; next.textContent='Confirm Booking'; }
+            return;
+          }
         }
         // Upload headshot if present
         let headshotUrl = null;
@@ -4086,7 +4095,8 @@
             }
           } catch {}
         }
-        const perfName = (_bkState.perf_fname+' '+_bkState.perf_lname).trim();
+        const perfName = [_bkState.perf_fname, _bkState.perf_lname].filter(Boolean).join(' ').trim()
+          || _bkState.perf_preferred_name || _bkState.contact_name || 'Unknown';
         async function _bkFindExistingApplicationIdentity() {
           const email = String(_bkState.ct_email || '').trim().toLowerCase();
           const phone = String(_bkState.ct_phone || '').replace(/\D+/g, '');
@@ -4155,6 +4165,19 @@
         }
         const existingIdentityApplication = await _bkFindExistingApplicationIdentity();
         const existingIdentityBooking = existingIdentityApplication ? null : await _bkFindExistingBookingIdentity();
+
+        // Build slot_assignments for this application — merges into any existing entries so
+        // a returning performer who books a second session keeps their first-session assignment.
+        // slot_assignments is what Schedule, Check-In, and In The Room all read from.
+        const _existingAssignments = Array.isArray(existingIdentityApplication?.slot_assignments)
+          ? existingIdentityApplication.slot_assignments
+          : [];
+        const _primarySlotAssignment = _bkState.slot_id && _bkState.session_id
+          ? { session_id: _bkState.session_id, slot_id: _bkState.slot_id }
+          : null;
+        const _mergedSlotAssignments = _primarySlotAssignment
+          ? [..._existingAssignments.filter(x => x.session_id !== _bkState.session_id), _primarySlotAssignment]
+          : _existingAssignments;
         const existingIdentityAnswers =
           (existingIdentityApplication?.custom_answers && (typeof existingIdentityApplication.custom_answers === 'string'
             ? (() => { try { return JSON.parse(existingIdentityApplication.custom_answers || '{}') || {}; } catch { return {}; } })()
@@ -4267,7 +4290,7 @@
               const label = !Number.isNaN(dt.getTime())
                 ? dt.toLocaleDateString('en-CA', { weekday:'short', month:'short', day:'numeric' })
                 : (c.date || '');
-              return c.title ? `${label} — ${c.title}` : label;
+              return c.title ? `${label}: ${c.title}` : label;
             }).join(', ');
             return { 'Conflict Dates': dateList };
           })(),
@@ -4344,6 +4367,10 @@
           production_id:    _bkProd?.id,
           session_id:       _bkState.session_id,
           slot_id:          _bkState.slot_id||null,
+          // slot_assignments is the canonical field read by Schedule, Check-In, and In The Room.
+          // We carry forward any existing assignments for other sessions (returning performer)
+          // and upsert the current session's entry.
+          slot_assignments: _mergedSlotAssignments,
           name:             perfName,
           email:            _bkState.ct_email,
           phone:            _bkState.ct_phone||null,
@@ -4380,6 +4407,7 @@
             production_id:   payload.production_id,
             session_id:      payload.session_id,
             slot_id:         payload.slot_id,
+            slot_assignments: payload.slot_assignments,
             name:            payload.name,
             email:           payload.email,
             phone:           payload.phone,
@@ -4438,6 +4466,7 @@
             production_id: payload.production_id,
             session_id: payload.session_id,
             slot_id: payload.slot_id,
+            slot_assignments: payload.slot_assignments,
             name: payload.name,
             email: payload.email,
             phone: payload.phone,
@@ -4513,38 +4542,78 @@
         const slotList = _allSlots[_bkState.session_id] || [];
         const localSlot = slotList.find(s => s.id === _bkState.slot_id);
         if (_bkState.slot_id) {
-          await sb.from('audition_time_slots').update({is_available:false,hold_expires_at:null,hold_session_id:null}).eq('id',_bkState.slot_id);
+          const cap = localSlot?.capacity || _bkSession?.capacity_per_slot || 1;
+          const nextBooked = Number(localSlot?.booked_count || 0) + 1;
+          const nowFull = nextBooked >= cap;
+          await sb.from('audition_time_slots')
+            .update({ is_available: !nowFull, hold_expires_at: null, hold_session_id: null })
+            .eq('id', _bkState.slot_id);
           if (localSlot) {
-            const cap = localSlot.capacity || _bkSession?.capacity_per_slot || 1;
-            const nextBooked = Number(localSlot.booked_count || 0) + 1;
             localSlot.booked_count = nextBooked;
-            localSlot.is_available = nextBooked < cap;
+            localSlot.is_available = !nowFull;
             localSlot.hold_expires_at = null;
             localSlot.hold_session_id = null;
           }
         }
 
         // ── Extra sessions (multi-session mode) ───────────────────
+        // Each extra session gets its own booking row in Apollo.
+        // We also need to add the extra session's slot to the application's slot_assignments
+        // so that Check-In, Schedule, and In The Room show the performer for that session too.
         const extraSessions = _bkState.extra_sessions || [];
         for (const extra of extraSessions) {
           if (!extra.session_id) continue;
           const extraBookingPayload = { ...bookingPayload, session_id: extra.session_id, slot_id: extra.slot_id || null };
           const extraBookingErr = await _bkInsertBookingWithFallbacks(extraBookingPayload);
           if (extraBookingErr) console.error('[BTS] Extra booking insert failed:', extraBookingErr.message);
-          // Mark extra slot as booked
+          // Mark extra slot as booked (capacity-aware)
           if (extra.slot_id) {
-            await sb.from('audition_time_slots').update({is_available:false,hold_expires_at:null,hold_session_id:null}).eq('id',extra.slot_id);
             const extraLocalSlot = (_allSlots[extra.session_id]||[]).find(s => s.id === extra.slot_id);
+            const extraSession = _allSessions.find(s => s.id === extra.session_id);
+            const extraCap = extraLocalSlot?.capacity || extraSession?.capacity_per_slot || 1;
+            const extraNextBooked = Number(extraLocalSlot?.booked_count || 0) + 1;
+            const extraNowFull = extraNextBooked >= extraCap;
+            await sb.from('audition_time_slots')
+              .update({ is_available: !extraNowFull, hold_expires_at: null, hold_session_id: null })
+              .eq('id', extra.slot_id);
             if (extraLocalSlot) {
-              const extraSession = _allSessions.find(s => s.id === extra.session_id);
-              const cap = extraLocalSlot.capacity || extraSession?.capacity_per_slot || 1;
-              const nextBooked = Number(extraLocalSlot.booked_count || 0) + 1;
-              extraLocalSlot.booked_count = nextBooked;
-              extraLocalSlot.is_available = nextBooked < cap;
+              extraLocalSlot.booked_count = extraNextBooked;
+              extraLocalSlot.is_available = !extraNowFull;
               extraLocalSlot.hold_expires_at = null;
               extraLocalSlot.hold_session_id = null;
             }
           }
+        }
+
+        // ── Sync extra sessions into slot_assignments on the application ──
+        // Do this as a single read-merge-write after all extra bookings are written.
+        // Ensures the performer appears in Check-In and Schedule for every session they booked.
+        if (extraSessions.length > 0 && _bkProd?.id && _bkState.ct_email) {
+          try {
+            const { data: linkedApp } = await sb.from('audition_applications')
+              .select('id, slot_assignments')
+              .eq('production_id', _bkProd.id)
+              .eq('email', _bkState.ct_email)
+              .order('created_at', { ascending: false })
+              .limit(1)
+              .single();
+            if (linkedApp?.id) {
+              const currentAssignments = Array.isArray(linkedApp.slot_assignments) ? linkedApp.slot_assignments : [];
+              const extraEntries = extraSessions
+                .filter(e => e.session_id && e.slot_id)
+                .map(e => ({ session_id: e.session_id, slot_id: e.slot_id }));
+              // Upsert each extra session entry — replace if session already present, otherwise append
+              const finalAssignments = [...currentAssignments];
+              extraEntries.forEach(entry => {
+                const idx = finalAssignments.findIndex(x => x.session_id === entry.session_id);
+                if (idx >= 0) finalAssignments[idx] = entry;
+                else finalAssignments.push(entry);
+              });
+              await sb.from('audition_applications')
+                .update({ slot_assignments: finalAssignments })
+                .eq('id', linkedApp.id);
+            }
+          } catch { /* non-critical — slot_assignments will be back-filled by workspace on load */ }
         }
 
         // Send booking confirmation email using the org's template (fire-and-forget)
@@ -4802,7 +4871,7 @@
 
       if (!prepareText && !expectText) return `
         <section class="ai-section">
-          <p style="color:#9a90b0;font-size:0.9rem;">Expectations information hasn't been added yet — check back soon, or reach out to the organisation directly.</p>
+          <p style="color:#9a90b0;font-size:0.9rem;">Expectations information hasn't been added yet. Check back soon, or reach out to the organisation directly.</p>
         </section>`;
 
       const prepareHTML = prepareText ? `
@@ -4987,7 +5056,7 @@
       const usageDD = usages.length ? `<select onchange="setCharFilter('usage',this.value)" style="${_ddStyle}">${usageOpts}</select>` : '';
       const sortDD  = `<select onchange="setCharSort(this.value)" style="${_ddStyle}">
         <option value="default">Sort: Default</option>
-        <option value="name">Sort: A – Z</option>
+        <option value="name">Sort: A to Z</option>
         <option value="type">Sort: Role Type</option>
         <option value="vocal">Sort: Vocal Type</option>
       </select>`;
@@ -5363,7 +5432,7 @@
             <div style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap;margin:0.5rem 0;">
               <select class="bk-char-sort-sel" id="bk-char-sort" onchange="_bkRenderCharTiles()">
                 <option value="manual">Sort: Default</option>
-                <option value="alpha">Sort: A – Z</option>
+                <option value="alpha">Sort: A to Z</option>
                 <option value="role_type">Sort: Role Type</option>
               </select>
               <select class="bk-char-sort-sel" id="bk-char-filter-type" onchange="_bkRenderCharTiles()">
