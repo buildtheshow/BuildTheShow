@@ -1783,7 +1783,7 @@
           if (userId) {
             const { data: bookingRows } = await sb
               .from('audition_bookings')
-              .select('*')
+              .select('id,production_id,user_id,session_id,slot_id,slot_time,status,created_at,name,email,date_of_birth,custom_answers')
               .eq('production_id', resolvedId)
               .eq('user_id', userId)
               .order('created_at', { ascending: true });
@@ -2736,6 +2736,35 @@
       const sessionIds = _spSessions.map(s => s.id).filter(Boolean);
       if (!sessionIds.length) return;
 
+      // Re-fetch occupancy from audition_applications and re-render
+      async function _spRefreshOccupancy() {
+        try {
+          const prodId = _bkProd?.id;
+          if (!prodId) return;
+          const { data: applicants } = await sb
+            .from('audition_applications')
+            .select('status,slot_assignments,slot_id')
+            .eq('production_id', prodId);
+          const occupancy = {};
+          (applicants || []).forEach(app => {
+            if (String(app.status || '').toLowerCase().includes('cancel')) return;
+            const assignments = Array.isArray(app.slot_assignments) ? app.slot_assignments : [];
+            if (assignments.length) {
+              assignments.forEach(({ slot_id }) => { if (slot_id) occupancy[slot_id] = (occupancy[slot_id] || 0) + 1; });
+            } else if (app.slot_id) {
+              occupancy[app.slot_id] = (occupancy[app.slot_id] || 0) + 1;
+            }
+          });
+          // Patch _liveCount on all slots
+          Object.entries(_spSlotsBySession).forEach(([sessId, slots]) => {
+            _spSlotsBySession[sessId] = slots.map(s => ({ ...s, _liveCount: occupancy[s.id] || 0 }));
+            _allSlots[sessId] = _spSlotsBySession[sessId];
+          });
+          const overlay = document.getElementById('sp-overlay');
+          if (overlay?.classList.contains('open')) _spRender();
+        } catch {}
+      }
+
       _spRealtimeSub = sb.channel('sp-slots-live')
         .on('postgres_changes', {
           event: '*',
@@ -2752,13 +2781,20 @@
             if (s.id !== updated.id) return s;
             return { ...s, ...updated, _liveCount: s._liveCount };
           });
-          // Sync back to _allSlots
           _allSlots[sessId] = _spSlotsBySession[sessId];
-          // Re-render picker if it's open and showing this session
           const overlay = document.getElementById('sp-overlay');
           if (overlay?.classList.contains('open') && _spSessions[_spSessionIdx]?.id === sessId) {
             _spRender();
           }
+        })
+        .on('postgres_changes', {
+          event: '*',
+          schema: 'public',
+          table: 'audition_applications',
+          filter: `production_id=eq.${_bkProd?.id}`,
+        }, () => {
+          // A reschedule or new booking changed slot occupancy — re-count
+          _spRefreshOccupancy();
         })
         .subscribe();
     }
@@ -2945,7 +2981,14 @@
       if (!_bkSession) return;
       const preSlotId = selectedSlots[sessionId] || null;
       const saved = _bkLoadSavedState(sessionId);
-      if (saved && saved.slot_id === preSlotId) { _bkState = saved; } else { _bkResetState(sessionId, preSlotId); }
+      if (saved) {
+        // Always restore saved state — if the slot changed (user went back to pick a new time),
+        // just swap in the new slot_id so all their form data is preserved.
+        _bkState = { ...saved, slot_id: preSlotId, session_id: sessionId };
+        _bkSaveState();
+      } else {
+        _bkResetState(sessionId, preSlotId);
+      }
       // Populate extra_sessions from the Fates slot picker selections (all sessions except the primary)
       _bkState.extra_sessions = Object.entries(selectedSlots)
         .filter(([sid]) => sid !== sessionId)
@@ -2961,9 +3004,12 @@
       document.getElementById('bk-body').style.display = '';
       document.getElementById('bk-footer').style.display = '';
       document.getElementById('bk-timer-wrap').style.display = _bkState.slot_id ? '' : 'none';
-      _bkMaxStep = _bkGetSteps()[0];
+      const steps = _bkGetSteps();
+      const jumpToReview = _bkReturnToReview;
+      _bkReturnToReview = false;
+      _bkMaxStep = jumpToReview ? steps[steps.length - 1] : steps[0];
       _bkBuildStepDots();
-      _bkGoTo(_bkGetSteps()[0]);
+      _bkGoTo(jumpToReview ? steps[steps.length - 1] : steps[0]);
       document.getElementById('bk-overlay').classList.add('open');
       if (_bkState.slot_id) _bkStartHold(_bkState.slot_id);
     }
@@ -2971,6 +3017,19 @@
     async function closeBookModal() {
       await _bkClearHold();
       document.getElementById('bk-overlay').classList.remove('open');
+    }
+
+    let _bkReturnToReview = false;
+
+    async function _bkChangeSlot() {
+      // Save current form state before closing, then reopen the slot picker.
+      // openBookModal will restore all form data and just swap in the new slot_id.
+      _bkAutoSave(_bkStep);
+      _bkSaveState();
+      _bkReturnToReview = true;
+      await _bkClearHold();
+      document.getElementById('bk-overlay').classList.remove('open');
+      await openFatesSlotPicker();
     }
 
     function bkOverlayClick(e) { /* disabled — accidental close during booking */ }
@@ -3734,7 +3793,7 @@
           : _bkState.attendance_mode === 'video_call' ? 'Video Call' : '';
         const slotRows = `<div class="bk-slot-chips">${allSlotChips}</div>
           ${attendanceLabel ? `<div style="margin-top:0.5rem;font-size:0.78rem;color:#6a5a80;"><span style="font-weight:700;color:#1a1530;">Joining:</span> ${esc(attendanceLabel)} <span class="bk-edit-link" onclick="_bkGoTo(0)" style="margin-left:0.4rem;">Change</span></div>` : ''}
-          ${resolvedSlot ? `<div style="margin-top:0.3rem;"><span class="bk-edit-link" onclick="closeBookModal().then(()=>openFatesSlotPicker())">Change time slot →</span></div>` : ''}`;
+          ${resolvedSlot ? `<div style="margin-top:0.3rem;"><span class="bk-edit-link" onclick="_bkChangeSlot()">Change time →</span></div>` : ''}`;
 
         el.innerHTML = `
           <div class="bk-review-top">
@@ -4134,6 +4193,24 @@
             return rowName === name && rowDob === dob;
           }) || null;
         }
+        async function _bkFindUnlinkedBookingIdsForIdentity() {
+          const name = perfName.trim().toLowerCase();
+          const dob = String(_bkState.perf_birthday || '').trim();
+          if (!name || !dob || !_bkProd?.id) return [];
+          const { data } = await sb.from('audition_bookings')
+            .select('id, name, date_of_birth, custom_answers, applicant_id')
+            .eq('production_id', _bkProd.id)
+            .is('applicant_id', null)
+            .order('created_at', { ascending: false });
+          return (data || [])
+            .filter(row => {
+              const rowName = String(row?.name || '').trim().toLowerCase();
+              const rowDob = String(row?.custom_answers?.['Date of Birth'] || row?.date_of_birth || '').trim();
+              return rowName === name && rowDob === dob;
+            })
+            .map(row => row.id)
+            .filter(Boolean);
+        }
         function _bkPerformerNumberHasBannedWord(value) {
           const banned = [
             'ASS','ASSH','BITCH','COCK','CUNT','DICK','FUCK','FUK','FUC','PISS',
@@ -4514,29 +4591,20 @@
           ? await _bkUpdateApplicationWithFallbacks(existingApplication.id, applicationPayload)
           : await _bkInsertApplicationWithFallbacks(applicationPayload);
         if (appErr) console.error('[BTS] audition_applications insert failed:', appErr.message);
+        const persistedApplication = existingApplication?.id
+          ? existingApplication
+          : await _bkFindExistingApplicationIdentity();
 
         // Link the booking back to the application so Clio can match by applicant_id.
-        // Guard: only run if we have a concrete production_id — an undefined filter
-        // would be silently dropped by PostgREST and update rows across ALL productions.
-        const _linkProdId = _bkProd?.id;
-        if (_linkProdId && typeof _linkProdId === 'string' && _linkProdId.trim()) {
+        if (persistedApplication?.id) {
           try {
-            const { data: linkedApp } = await sb
-              .from('audition_applications')
-              .select('id')
-              .eq('production_id', _linkProdId)
-              .eq('email', _bkState.ct_email)
-              .order('created_at', { ascending: false })
-              .limit(1)
-              .single();
-            if (linkedApp?.id) {
+            const unlinkedBookingIds = await _bkFindUnlinkedBookingIdsForIdentity();
+            if (unlinkedBookingIds.length) {
               await sb.from('audition_bookings')
-                .update({ applicant_id: linkedApp.id })
-                .eq('production_id', _linkProdId)
-                .eq('email', _bkState.ct_email)
-                .is('applicant_id', null);
+                .update({ applicant_id: persistedApplication.id })
+                .in('id', unlinkedBookingIds);
             }
-          } catch { /* non-critical — email matching still works as fallback */ }
+          } catch { /* non-critical — the workspace can still match by identity */ }
         }
         const slotList = _allSlots[_bkState.session_id] || [];
         const localSlot = slotList.find(s => s.id === _bkState.slot_id);
@@ -4587,14 +4655,11 @@
         // ── Sync extra sessions into slot_assignments on the application ──
         // Do this as a single read-merge-write after all extra bookings are written.
         // Ensures the performer appears in Check-In and Schedule for every session they booked.
-        if (extraSessions.length > 0 && _bkProd?.id && _bkState.ct_email) {
+        if (extraSessions.length > 0 && persistedApplication?.id) {
           try {
             const { data: linkedApp } = await sb.from('audition_applications')
               .select('id, slot_assignments')
-              .eq('production_id', _bkProd.id)
-              .eq('email', _bkState.ct_email)
-              .order('created_at', { ascending: false })
-              .limit(1)
+              .eq('id', persistedApplication.id)
               .single();
             if (linkedApp?.id) {
               const currentAssignments = Array.isArray(linkedApp.slot_assignments) ? linkedApp.slot_assignments : [];
@@ -4617,16 +4682,10 @@
 
         // Send booking confirmation email using the org's template (fire-and-forget)
         try {
-          const { data: confirmedBooking } = await sb.from('audition_bookings')
-            .select('id')
-            .eq('production_id', _bkProd.id)
-            .eq('email', _bkState.ct_email)
-            .order('created_at', { ascending: false })
-            .limit(1)
-            .single();
+          const confirmedBooking = await _bkFindExistingBookingIdentity();
           if (confirmedBooking?.id) {
-            sb.functions.invoke('send-audition-email', {
-              body: { booking_id: confirmedBooking.id, production_id: _bkProd.id }
+            sb.functions.invoke('send-email', {
+              body: { booking_id: confirmedBooking.id, production_id: _bkProd.id, category: 'booking_confirmation' }
             }).catch(() => {});
           }
         } catch {}

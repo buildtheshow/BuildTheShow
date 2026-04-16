@@ -684,6 +684,8 @@
     let allProfiles        = [];
     let allCallbackGroups  = [];
     let allBookings        = [];
+    let allSessionsById    = {};
+    let allSlotsById       = {};
     let activeView         = 'applicants'; // 'applicants' | 'castlist'
     let boardMode          = 'audition';   // 'audition' | 'callback'
     let cbStatusFilter     = 'all';        // 'all' | 'attended' | 'complete'
@@ -691,9 +693,11 @@
     let selectedGroupColour = '#efab45';
     let openPanelAppId          = null;
     let _prod                   = null;
+    let _org                    = null;
     let _reschedulingBookingId  = null;
     let _reschedulingSessionId  = null;
     let _reschedulingAppId      = null;
+    let castingRealtimeChannel  = null;
 
     const CB_GROUP_COLOURS = [
       '#efab45','#f03592','#55acda','#4ab847','#a87af8','#22cdd4','#ff7db4','#ef7d05',
@@ -714,14 +718,117 @@
     }
 
     // ── Fates (schedule) helpers ──────────────────────────────
-    function getBookingsForApplicant(app) {
-      const email = (app.applicant_email || '').toLowerCase();
-      return allBookings.filter(b => {
-        if (b.status === 'canceled' || b.status === 'cancelled') return false;
-        if (b.applicant_id && b.applicant_id === app.id) return true;
-        if (email && b.email && b.email.toLowerCase() === email) return true;
-        return false;
+    function normalizeApplicationAssignments(app) {
+      const fromJson = Array.isArray(app?.slot_assignments)
+        ? app.slot_assignments
+        : [];
+      const normalized = fromJson
+        .filter(entry => entry && entry.session_id)
+        .map(entry => ({
+          session_id: entry.session_id,
+          slot_id: entry.slot_id || null,
+        }));
+
+      const legacySessionId = app?.session_id || null;
+      const legacySlotId = app?.time_slot_id || app?.slot_id || null;
+      if (legacySessionId && !normalized.some(entry => entry.session_id === legacySessionId)) {
+        normalized.push({ session_id: legacySessionId, slot_id: legacySlotId });
+      }
+
+      return normalized;
+    }
+
+    function buildApplicationSlotUpdate(app, sessionId, slotId) {
+      const nextAssignments = normalizeApplicationAssignments(app)
+        .filter(entry => entry.session_id !== sessionId);
+      nextAssignments.push({ session_id: sessionId, slot_id: slotId || null });
+
+      const currentPrimarySessionId = app?.session_id || null;
+      const shouldMirrorLegacy = currentPrimarySessionId && currentPrimarySessionId === sessionId;
+      return {
+        slot_assignments: nextAssignments,
+        ...(shouldMirrorLegacy ? { time_slot_id: slotId || null, slot_id: slotId || null } : {}),
+      };
+    }
+
+    function buildApplicationScheduleEntries(app) {
+      return normalizeApplicationAssignments(app).map((entry, index) => ({
+        id: `application-${app.id}-${entry.session_id || index}`,
+        applicant_id: app.id,
+        email: app.applicant_email || null,
+        session_id: entry.session_id || null,
+        slot_id: entry.slot_id || null,
+        status: app.status || 'pending',
+        _source: 'application',
+        _session: allSessionsById[entry.session_id] || null,
+        _slot: allSlotsById[entry.slot_id] || null,
+      }));
+    }
+
+    function mergeCastingScheduleEntries(bookingRows) {
+      const merged = [];
+      const seenApplicationSessions = new Set();
+
+      (bookingRows || []).forEach(row => {
+        const key = row.applicant_id && row.session_id ? `${row.applicant_id}:${row.session_id}` : '';
+        if (key) seenApplicationSessions.add(key);
+        merged.push({
+          ...row,
+          _source: 'booking',
+          _session: allSessionsById[row.session_id] || null,
+          _slot: allSlotsById[row.slot_id] || null,
+        });
       });
+
+      allApplications.forEach(app => {
+        buildApplicationScheduleEntries(app).forEach(entry => {
+          const key = entry.applicant_id && entry.session_id ? `${entry.applicant_id}:${entry.session_id}` : '';
+          if (key && seenApplicationSessions.has(key)) return;
+          merged.push(entry);
+        });
+      });
+
+      allBookings = merged;
+    }
+
+    async function reloadCastingScheduleState() {
+      const { data: bookingRows } = await sb
+        .from('audition_bookings')
+        .select('id, applicant_id, email, slot_id, session_id, status, created_at')
+        .eq('production_id', productionId)
+        .not('status', 'in', '("canceled","cancelled")');
+
+      const applicationAssignments = allApplications.flatMap(app => normalizeApplicationAssignments(app));
+      const sessionIds = [...new Set([
+        ...(bookingRows || []).map(row => row.session_id).filter(Boolean),
+        ...applicationAssignments.map(entry => entry.session_id).filter(Boolean),
+      ])];
+      const slotIds = [...new Set([
+        ...(bookingRows || []).map(row => row.slot_id).filter(Boolean),
+        ...applicationAssignments.map(entry => entry.slot_id).filter(Boolean),
+      ])];
+
+      const [sessionResult, slotResult] = await Promise.all([
+        sessionIds.length ? sb.from('audition_sessions').select('id, name').in('id', sessionIds) : Promise.resolve({ data: [] }),
+        slotIds.length ? sb.from('audition_time_slots').select('id, slot_time, slot_date').in('id', slotIds) : Promise.resolve({ data: [] }),
+      ]);
+
+      allSessionsById = Object.fromEntries((sessionResult.data || []).map(session => [session.id, session]));
+      allSlotsById = Object.fromEntries((slotResult.data || []).map(slot => [slot.id, slot]));
+      mergeCastingScheduleEntries(bookingRows || []);
+    }
+
+    function getBookingsForApplicant(app) {
+      return allBookings
+        .filter(b => {
+          if (b.status === 'canceled' || b.status === 'cancelled') return false;
+          return b.applicant_id === app.id;
+        })
+        .sort((a, b) => {
+          const aDate = `${a._slot?.slot_date || ''} ${a._slot?.slot_time || ''}`.trim();
+          const bDate = `${b._slot?.slot_date || ''} ${b._slot?.slot_time || ''}`.trim();
+          return aDate.localeCompare(bDate) || String(a.created_at || '').localeCompare(String(b.created_at || ''));
+        });
     }
 
     function fmtSlotDateTime(booking) {
@@ -752,6 +859,27 @@
       t.classList.toggle('toast--error', isError);
       t.classList.add('visible');
       toastTimer = setTimeout(() => t.classList.remove('visible'), 3000);
+    }
+
+    async function updateCastingApplication(appId, patch, options = {}) {
+      const errorMessage = options.errorMessage || 'Could not update performer.';
+      const successMessage = options.successMessage || '';
+      const rerenderPanel = options.rerenderPanel !== false;
+      const rerenderBoard = options.rerenderBoard !== false;
+
+      const { error } = await sb.from('audition_applications').update(patch).eq('id', appId);
+      if (error) {
+        showToast(errorMessage, true);
+        return error;
+      }
+
+      const app = allApplications.find(item => item.id === appId);
+      if (app) Object.assign(app, patch);
+
+      if (successMessage) showToast(successMessage);
+      if (rerenderBoard) render();
+      if (rerenderPanel && openPanelAppId === appId) openProfilePanel(appId);
+      return null;
     }
 
     // ── Status helpers ─────────────────────────────────────────
@@ -1026,42 +1154,38 @@
       const app = allApplications.find(a => a.id === appId);
       if (!app) return;
       const newStatus = (app.callback_status && app.callback_status !== 'none') ? 'none' : 'selected';
-      const { error } = await sb.from('audition_applications')
-        .update({ callback_status: newStatus }).eq('id', appId);
-      if (error) { showToast('Could not update callback status.', true); return; }
-      app.callback_status = newStatus;
-      showToast(newStatus === 'selected' ? 'Added to callbacks.' : 'Removed from callbacks.');
-      render();
-      if (openPanelAppId === appId) openProfilePanel(appId);
+      await updateCastingApplication(appId, { callback_status: newStatus }, {
+        errorMessage: 'Could not update callback status.',
+        successMessage: newStatus === 'selected' ? 'Added to callbacks.' : 'Removed from callbacks.',
+      });
     }
 
     // ── Callback: update callback sub-status ───────────────────
     async function updateCallbackStatus(appId, status) {
-      const { error } = await sb.from('audition_applications')
-        .update({ callback_status: status }).eq('id', appId);
-      if (error) { showToast('Could not update.', true); return; }
-      const app = allApplications.find(a => a.id === appId);
-      if (app) app.callback_status = status;
+      await updateCastingApplication(appId, { callback_status: status }, {
+        errorMessage: 'Could not update.',
+        successMessage: '',
+        rerenderBoard: false,
+      });
     }
 
     // ── Callback: assign group ─────────────────────────────────
     async function assignCallbackGroup(appId, groupId) {
       const val = groupId || null;
-      const { error } = await sb.from('audition_applications')
-        .update({ callback_group_id: val }).eq('id', appId);
-      if (error) { showToast('Could not assign group.', true); return; }
-      const app = allApplications.find(a => a.id === appId);
-      if (app) app.callback_group_id = val;
+      await updateCastingApplication(appId, { callback_group_id: val }, {
+        errorMessage: 'Could not assign group.',
+        successMessage: '',
+        rerenderBoard: false,
+      });
     }
 
     // ── Callback: save callback notes ──────────────────────────
     async function saveCallbackNotes(appId, notes) {
-      const { error } = await sb.from('audition_applications')
-        .update({ callback_notes: notes }).eq('id', appId);
-      if (error) { showToast('Could not save callback notes.', true); return; }
-      const app = allApplications.find(a => a.id === appId);
-      if (app) app.callback_notes = notes;
-      showToast('Callback notes saved.');
+      await updateCastingApplication(appId, { callback_notes: notes }, {
+        errorMessage: 'Could not save callback notes.',
+        successMessage: 'Callback notes saved.',
+        rerenderBoard: false,
+      });
     }
 
     // ── Callback: save callback rating ─────────────────────────
@@ -1070,10 +1194,11 @@
       if (!app) return;
       const current = app.callback_rating || {};
       current[category] = value;
-      const { error } = await sb.from('audition_applications')
-        .update({ callback_rating: current }).eq('id', appId);
-      if (error) { showToast('Could not save rating.', true); return; }
-      app.callback_rating = current;
+      await updateCastingApplication(appId, { callback_rating: current }, {
+        errorMessage: 'Could not save rating.',
+        successMessage: '',
+        rerenderBoard: false,
+      });
     }
 
     // ── Callback group modal ───────────────────────────────────
@@ -1419,9 +1544,9 @@
       const bookingId   = _reschedulingBookingId;
       const appId       = _reschedulingAppId;
       const panelAppId  = openPanelAppId;
+      const app = allApplications.find(item => item.id === appId);
 
-      // Hard guard — both IDs must be concrete strings or we refuse to touch the DB.
-      if (!bookingId || !productionId) {
+      if (!appId || !productionId || !app) {
         showToast('Could not reschedule: missing ID.', true);
         closePanelReschedule();
         return;
@@ -1430,63 +1555,39 @@
       const slotSection = document.getElementById('panel-reschedule-slots');
       if (slotSection) slotSection.innerHTML = '<div style="font-size:0.78rem;color:#7a7490;padding:0.35rem 0;">Saving…</div>';
 
-      // 1 — Update audition_bookings.
-      //     Only set slot_id (guaranteed to exist in schema).
-      //     Double-filter: id (PK) + production_id (safety net).
-      //     .select() returns the rows actually changed so we can log them.
-      const { data: updatedRows, error: bkErr } = await sb
-        .from('audition_bookings')
-        .update({ slot_id: newSlotId })
-        .eq('id', bookingId)
-        .eq('production_id', productionId)
-        .select('id, slot_id');
+      const applicationUpdate = buildApplicationSlotUpdate(app, _reschedulingSessionId, newSlotId);
+      const { error: appErr } = await sb
+        .from('audition_applications')
+        .update(applicationUpdate)
+        .eq('id', appId)
+        .eq('production_id', productionId);
 
-      console.log('[Clio reschedule] booking update →', { bookingId, productionId, newSlotId, updatedRows, bkErr });
-
-      if (bkErr) {
-        showToast('Could not reschedule: ' + bkErr.message, true);
-        closePanelReschedule();
-        return;
-      }
-      if (!updatedRows || updatedRows.length === 0) {
-        showToast('Could not reschedule: booking not found.', true);
+      if (appErr) {
+        showToast('Could not reschedule: ' + appErr.message, true);
         closePanelReschedule();
         return;
       }
 
-      // 2 — Mirror slot_id to audition_applications (safe to fail — display reads bookings).
-      if (appId) {
-        await sb.from('audition_applications')
-          .update({ slot_id: newSlotId })
-          .eq('id', appId)
-          .eq('production_id', productionId);
-      }
+      app.slot_assignments = applicationUpdate.slot_assignments || [];
+      if ('time_slot_id' in applicationUpdate) app.time_slot_id = applicationUpdate.time_slot_id;
+      if ('slot_id' in applicationUpdate) app.slot_id = applicationUpdate.slot_id;
 
-      // 3 — Reload bookings fresh from Supabase so local state is always accurate.
-      try {
-        const { data: bookingRows } = await sb
+      if (!String(bookingId || '').startsWith('application-') && bookingId) {
+        const { error: bkErr } = await sb
           .from('audition_bookings')
-          .select('id, applicant_id, email, slot_id, session_id, status')
-          .eq('production_id', productionId)
-          .not('status', 'in', '("canceled","cancelled")');
+          .update({ slot_id: newSlotId })
+          .eq('id', bookingId)
+          .eq('production_id', productionId);
 
-        if (bookingRows?.length) {
-          const sessIds = [...new Set(bookingRows.map(b => b.session_id).filter(Boolean))];
-          const slotIds = [...new Set(bookingRows.map(b => b.slot_id).filter(Boolean))];
-          const [sessRes, slotRes] = await Promise.all([
-            sessIds.length ? sb.from('audition_sessions').select('id, name').in('id', sessIds) : Promise.resolve({ data: [] }),
-            slotIds.length ? sb.from('audition_time_slots').select('id, slot_time, slot_date').in('id', slotIds) : Promise.resolve({ data: [] }),
-          ]);
-          const sessMap = Object.fromEntries((sessRes.data || []).map(s => [s.id, s]));
-          const slotMap = Object.fromEntries((slotRes.data || []).map(s => [s.id, s]));
-          allBookings = bookingRows.map(b => ({
-            ...b,
-            _session: sessMap[b.session_id] || null,
-            _slot:    slotMap[b.slot_id]    || null,
-          }));
-        } else {
-          allBookings = [];
+        if (bkErr) {
+          showToast('Could not reschedule: ' + bkErr.message, true);
+          closePanelReschedule();
+          return;
         }
+      }
+
+      try {
+        await reloadCastingScheduleState();
       } catch (e) {
         console.warn('[Clio reschedule] Could not reload bookings', e);
       }
@@ -1535,11 +1636,10 @@
     }
 
     async function persistNotes(appId, notes) {
-      const { error } = await sb.from('audition_applications').update({ org_notes: notes }).eq('id', appId);
-      if (error) { showToast('Could not save notes.', true); return; }
-      const app = allApplications.find(a => a.id === appId);
-      if (app) app.notes = notes;
-      showToast('Notes saved.');
+      await updateCastingApplication(appId, { org_notes: notes }, {
+        errorMessage: 'Could not save notes.',
+        successMessage: 'Notes saved.',
+      });
     }
 
     // ── Notify modal ───────────────────────────────────────────
@@ -1558,21 +1658,137 @@
       not_cast: 'Not Cast',
     };
 
+    function notifyFmtDate(dateStr) {
+      if (!dateStr) return '';
+      try {
+        return new Date(`${dateStr}T00:00:00`).toLocaleDateString('en-CA', {
+          weekday: 'long',
+          month: 'long',
+          day: 'numeric',
+          year: 'numeric'
+        });
+      } catch {
+        return String(dateStr);
+      }
+    }
+
+    function notifyFmtTime(timeStr) {
+      if (!timeStr) return '';
+      try {
+        const parts = String(timeStr).includes('T')
+          ? String(timeStr).split('T')[1].split(':')
+          : String(timeStr).split(':');
+        const h = Number(parts[0]);
+        const m = Number(parts[1] || 0);
+        const ampm = h >= 12 ? 'pm' : 'am';
+        const h12 = h % 12 || 12;
+        return m === 0 ? `${h12}${ampm}` : `${h12}:${String(m).padStart(2, '0')}${ampm}`;
+      } catch {
+        return String(timeStr);
+      }
+    }
+
+    function notifyFirstDefined(...values) {
+      for (const value of values) {
+        if (value === null || value === undefined) continue;
+        const str = String(value).trim();
+        if (str) return str;
+      }
+      return '';
+    }
+
+    function notifyNormalizeLookupKey(value) {
+      return String(value || '')
+        .trim()
+        .toLowerCase()
+        .replace(/[_-]+/g, ' ')
+        .replace(/\s+/g, ' ');
+    }
+
+    function notifyLookupFlexibleValue(source, rawKey) {
+      const target = notifyNormalizeLookupKey(rawKey);
+      for (const [key, value] of Object.entries(source || {})) {
+        if (notifyNormalizeLookupKey(key) === target) return notifyFirstDefined(value);
+      }
+      return '';
+    }
+
     // Replace {{tokens}} in a template string with real performer and production values
     function substituteTemplateTokens(text, app) {
       if (!text) return '';
       const firstName = (app.applicant_name || '').split(' ')[0] || 'Performer';
       const prod = _prod || {};
-      return text
-        .replace(/\{\{performer_name\}\}/g,       app.applicant_name || 'Performer')
-        .replace(/\{\{performer_first_name\}\}/g, firstName)
-        .replace(/\{\{performer_pronouns\}\}/g,   app.pronouns || '')
-        .replace(/\{\{performer_email\}\}/g,      app.applicant_email || '')
-        .replace(/\{\{show_name\}\}/g,            prod.title || '')
-        .replace(/\{\{show_subtitle\}\}/g,        prod.subtitle || '')
-        .replace(/\{\{show_venue\}\}/g,           prod.venue || '')
-        .replace(/\{\{org_name\}\}/g,             prod.org_name || '')
-        .replace(/\{\{director_name\}\}/g,        prod.director || '');
+      const bookings = getBookingsForApplicant(app);
+      const firstBooking = bookings[0] || null;
+      const slotDate = firstBooking?._slot?.slot_date || firstBooking?.slot_date || '';
+      const slotTime = firstBooking?._slot?.slot_time || firstBooking?.slot_time || '';
+      const callbackBooking = bookings.find(booking => {
+        const sessionName = String(booking?._session?.name || '').toLowerCase();
+        return sessionName.includes('callback');
+      }) || null;
+      const callbackDate = callbackBooking?._slot?.slot_date || callbackBooking?.slot_date || '';
+      const callbackTime = callbackBooking?._slot?.slot_time || callbackBooking?.slot_time || '';
+      const roleName = notifyFirstDefined(app.role_name, app.character_name);
+      const showDates = prod?.start_date && prod?.end_date
+        ? `${notifyFmtDate(prod.start_date)} – ${notifyFmtDate(prod.end_date)}`
+        : notifyFmtDate(prod?.start_date || '');
+      const tokenValues = {
+        '{{performer_name}}': app.applicant_name || 'Performer',
+        '{{performer_first_name}}': firstName,
+        '{{performer_pronouns}}': app.pronouns || '',
+        '{{performer_email}}': app.applicant_email || '',
+        '{{show_name}}': prod.title || '',
+        '{{show_subtitle}}': prod.subtitle || '',
+        '{{show_venue}}': prod.venue || '',
+        '{{show_dates}}': showDates,
+        '{{audition_session}}': firstBooking?._session?.name || '',
+        '{{audition_date}}': notifyFmtDate(slotDate),
+        '{{audition_time}}': notifyFmtTime(slotTime),
+        '{{audition_venue}}': prod.venue || '',
+        '{{audition_notes}}': '',
+        '{{booking_link}}': productionId ? `https://buildtheshow.com/audition-info?prod=${productionId}` : '',
+        '{{org_name}}': (_org && _org.name) || prod.org_name || '',
+        '{{director_name}}': prod.director || '',
+        '{{role_name}}': roleName,
+        '{{role_type}}': '',
+        '{{callback_date}}': notifyFmtDate(callbackDate),
+        '{{callback_time}}': notifyFmtTime(callbackTime),
+        '{{callback_venue}}': prod.venue || '',
+        '{{rehearsal_start_date}}': notifyFmtDate(prod.start_date || ''),
+        '{{rehearsal_schedule}}': '',
+        '{{opening_night}}': notifyFmtDate(prod.end_date || ''),
+      };
+      const productionFieldValues = {
+        ...(prod || {}),
+        org_name: (_org && _org.name) || prod.org_name || '',
+        director_name: prod.director || '',
+        show_dates: showDates,
+      };
+      const performerFieldValues = {
+        ...(app || {}),
+        performer_name: app.applicant_name || 'Performer',
+        performer_first_name: firstName,
+        performer_email: app.applicant_email || '',
+        role_name: roleName,
+      };
+      const customFieldValues = (app && typeof app.custom_answers === 'object' && !Array.isArray(app.custom_answers))
+        ? app.custom_answers
+        : {};
+      let result = String(text || '');
+      Object.entries(tokenValues).forEach(([token, value]) => {
+        result = result.replaceAll(token, value);
+      });
+      result = result.replace(/\{\{\s*(custom|production|performer|booking|app|organization|org)\s*:\s*([^}]+)\}\}/gi, (_match, scope, rawKey) => {
+        const scopeName = String(scope || '').toLowerCase();
+        const key = String(rawKey || '').trim();
+        let value = '';
+        if (scopeName === 'custom') value = notifyLookupFlexibleValue(customFieldValues, key);
+        if (scopeName === 'production') value = notifyLookupFlexibleValue(productionFieldValues, key);
+        if (scopeName === 'performer' || scopeName === 'booking' || scopeName === 'app') value = notifyLookupFlexibleValue(performerFieldValues, key);
+        if (scopeName === 'organization' || scopeName === 'org') value = notifyLookupFlexibleValue({ name: (_org && _org.name) || prod.org_name || '', email: (_org && _org.email) || '' }, key);
+        return value;
+      });
+      return result;
     }
 
     async function openNotifyModal(appId) {
@@ -1637,30 +1853,16 @@
       sendingEl.style.display = 'block';
 
       try {
-        const { data: { session } } = await sb.auth.getSession();
-        const res = await fetch(
-          'https://tkmaiktxpwqfbgeojbnf.supabase.co/functions/v1/send-cast-notification',
-          {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${session?.access_token || ''}`,
-            },
-            body: JSON.stringify({
-              to:               app.applicant_email,
-              name:             app.applicant_name || 'Performer',
-              status:           app.status,
-              subject:          subject || undefined,
-              message:          message,
-              production_title: _prod?.title || '',
-            }),
-          }
-        );
-
-        if (!res.ok) {
-          const err = await res.json().catch(() => ({}));
-          throw new Error(err.error || `Server error ${res.status}`);
-        }
+        const { error } = await sb.functions.invoke('send-email', {
+          body: {
+            applicant_id: app.id,
+            production_id: productionId,
+            status: app.status,
+            subject: subject || undefined,
+            message,
+          },
+        });
+        if (error) throw error;
 
         closeNotifyModal();
         showToast('Email sent.');
@@ -1770,13 +1972,11 @@
           const appId     = statusSel.dataset.id;
           const newStatus = statusSel.value;
           const prev      = allApplications.find(a => a.id === appId)?.status;
-          const { error } = await sb.from('audition_applications').update({ status: newStatus }).eq('id', appId);
-          if (error) { statusSel.value = prev; showToast('Could not update status.', true); return; }
-          const app = allApplications.find(a => a.id === appId);
-          if (app) app.status = newStatus;
-          showToast('Status updated.');
-          render();
-          if (openPanelAppId === appId) openProfilePanel(appId);
+          const error = await updateCastingApplication(appId, { status: newStatus }, {
+            errorMessage: 'Could not update status.',
+            successMessage: 'Status updated.',
+          });
+          if (error) statusSel.value = prev;
           return;
         }
 
@@ -1785,13 +1985,10 @@
         if (charSel) {
           const appId  = charSel.dataset.appId;
           const charId = charSel.value || null;
-          const { error } = await sb.from('audition_applications').update({ character_id: charId }).eq('id', appId);
-          if (error) { showToast('Could not assign character.', true); return; }
-          const app = allApplications.find(a => a.id === appId);
-          if (app) app.character_id = charId;
-          showToast('Character assigned.');
-          render();
-          if (openPanelAppId === appId) openProfilePanel(appId);
+          await updateCastingApplication(appId, { character_id: charId }, {
+            errorMessage: 'Could not assign character.',
+            successMessage: 'Character assigned.',
+          });
           return;
         }
 
@@ -1822,14 +2019,7 @@
       });
     }
 
-    // ── Init ───────────────────────────────────────────────────
-    async function init() {
-      if (!productionId) { window.location.href = '../../org-dashboard.html'; return; }
-
-      const { data: { session } } = await sb.auth.getSession();
-      if (!session) { window.location.href = '../../../Members/Account/login.html'; return; }
-
-      // Load production + characters + callback groups in parallel
+    async function loadCastingData() {
       const [prodResult, charsResult, groupsResult] = await Promise.all([
         sb.from('productions').select('*').eq('id', productionId).single(),
         sb.from('production_characters').select('*').eq('production_id', productionId).order('sort_order').order('created_at'),
@@ -1838,32 +2028,46 @@
 
       if (prodResult.error || !prodResult.data) {
         main.innerHTML = `<div class="loading-state" style="color:#f08080;">Production not found.</div>`;
-        return;
+        return false;
       }
 
-      _prod              = prodResult.data;
-      allCharacters      = charsResult.data || [];
-      allCallbackGroups  = groupsResult.data || [];
+      _prod             = prodResult.data;
+      _org              = null;
+      allCharacters     = charsResult.data || [];
+      allCallbackGroups = groupsResult.data || [];
 
-      // Load applications directly by production_id
+      if (_prod.organization_id) {
+        try {
+          const { data: org } = await sb
+            .from('organizations')
+            .select('id, name, email')
+            .eq('id', _prod.organization_id)
+            .maybeSingle();
+          _org = org || null;
+        } catch {
+          _org = null;
+        }
+      }
+
       try {
         const { data: apps } = await sb
           .from('audition_applications')
-          .select('id, status, name, email, role_interest, notes, org_notes, character_id, profile_id, headshot_url, callback_status, callback_notes, callback_rating, callback_group_id')
+          .select('id, status, name, email, role_interest, notes, org_notes, character_id, profile_id, headshot_url, callback_status, callback_notes, callback_rating, callback_group_id, session_id, slot_id, time_slot_id, slot_assignments, custom_answers')
           .eq('production_id', productionId)
           .order('created_at', { ascending: false });
-        // Normalise field names so the rest of the code works uniformly
         allApplications = (apps || []).map(a => ({
           ...a,
           applicant_name:  a.name,
           applicant_email: a.email,
           role_name:       a.role_interest,
-          notes:           a.org_notes,   // org_notes is the internal org field
-          performer_notes: a.notes,       // original submission notes
+          custom_answers:  a.custom_answers || {},
+          notes:           a.org_notes,
+          performer_notes: a.notes,
         }));
-      } catch { allApplications = []; }
+      } catch {
+        allApplications = [];
+      }
 
-      // Load profiles for applications that have profile_id
       const profileIds = [...new Set(allApplications.filter(a => a.profile_id).map(a => a.profile_id))];
       if (profileIds.length > 0) {
         try {
@@ -1872,38 +2076,67 @@
             .select('id, credit_name, legal_first_name, legal_last_name, date_of_birth, headshot_url, sections')
             .in('id', profileIds);
           allProfiles = profs || [];
-        } catch { allProfiles = []; }
+        } catch {
+          allProfiles = [];
+        }
+      } else {
+        allProfiles = [];
       }
 
-      // Load Fates schedule — separate queries so missing FK relationships don't break anything
       try {
-        const { data: bookingRows } = await sb
-          .from('audition_bookings')
-          .select('id, applicant_id, email, slot_id, session_id, slot_time, slot_date, status')
-          .eq('production_id', productionId)
-          .not('status', 'in', '("canceled","cancelled")');
+        await reloadCastingScheduleState();
+      } catch {
+        allBookings = [];
+        allSessionsById = {};
+        allSlotsById = {};
+      }
 
-        if (bookingRows?.length) {
-          const sessIds = [...new Set(bookingRows.map(b => b.session_id).filter(Boolean))];
-          const slotIds = [...new Set(bookingRows.map(b => b.slot_id).filter(Boolean))];
-          const [sessRes, slotRes] = await Promise.all([
-            sessIds.length ? sb.from('audition_sessions').select('id, name').in('id', sessIds) : Promise.resolve({ data: [] }),
-            slotIds.length ? sb.from('audition_time_slots').select('id, slot_time, slot_date').in('id', slotIds) : Promise.resolve({ data: [] }),
-          ]);
-          const sessMap = Object.fromEntries((sessRes.data || []).map(s => [s.id, s]));
-          const slotMap = Object.fromEntries((slotRes.data || []).map(s => [s.id, s]));
-          allBookings = bookingRows.map(b => ({
-            ...b,
-            _session: sessMap[b.session_id] || null,
-            _slot:    slotMap[b.slot_id]    || null,
-          }));
-        } else {
-          allBookings = [];
-        }
-      } catch { allBookings = []; }
+      return true;
+    }
 
+    function subscribeCastingRealtime() {
+      if (castingRealtimeChannel) {
+        try { sb.removeChannel(castingRealtimeChannel); } catch {}
+        castingRealtimeChannel = null;
+      }
+
+      castingRealtimeChannel = sb
+        .channel(`casting-live-${productionId}`)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'audition_applications', filter: `production_id=eq.${productionId}` }, async () => {
+          if (await loadCastingData()) render();
+        })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'audition_bookings', filter: `production_id=eq.${productionId}` }, async () => {
+          if (await loadCastingData()) render();
+        })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'production_characters', filter: `production_id=eq.${productionId}` }, async () => {
+          if (await loadCastingData()) render();
+        })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'callback_groups', filter: `production_id=eq.${productionId}` }, async () => {
+          if (await loadCastingData()) render();
+        })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'audition_sessions', filter: `production_id=eq.${productionId}` }, async () => {
+          if (await loadCastingData()) render();
+        })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'audition_time_slots' }, async () => {
+          if (await loadCastingData()) render();
+        })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, async () => {
+          if (await loadCastingData()) render();
+        })
+        .subscribe();
+    }
+
+    // ── Init ───────────────────────────────────────────────────
+    async function init() {
+      if (!productionId) { window.location.href = '../../org-dashboard.html'; return; }
+
+      const { data: { session } } = await sb.auth.getSession();
+      if (!session) { window.location.href = '../../../Members/Account/login.html'; return; }
+
+      if (!await loadCastingData()) return;
       bindEvents();
       render();
+      subscribeCastingRealtime();
     }
 
     init();
