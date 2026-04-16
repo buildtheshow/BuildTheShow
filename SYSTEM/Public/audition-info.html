@@ -4401,6 +4401,7 @@
           performer_number: performerNumber,
           attendance_mode: _bkState.attendance_mode || null,
         };
+        // Returns { id } on success, or { error } on failure
         async function _bkInsertBookingWithFallbacks(payload) {
           const attempts = [];
           attempts.push({ ...payload });
@@ -4414,8 +4415,9 @@
             let attempt = { ...seedAttempt };
             while (attempt && Object.keys(attempt).length) {
               try {
-                const { error } = await sb.from('audition_bookings').insert(attempt);
-                if (!error) return null;
+                const { data, error } = await sb.from('audition_bookings').insert(attempt).select('id').single();
+                if (!error && data?.id) return { id: data.id };
+                if (!error) return { id: null };
                 lastError = error;
                 const missingColumn = String(error?.message || '').match(/Could not find the '([^']+)' column/i)?.[1];
                 if (!missingColumn || !(missingColumn in attempt)) break;
@@ -4428,11 +4430,12 @@
               }
             }
           }
-          return lastError;
+          return { error: lastError };
         }
 
-        const bookingErr = await _bkInsertBookingWithFallbacks(bookingPayload);
-        if (bookingErr) throw bookingErr;
+        const bookingResult = await _bkInsertBookingWithFallbacks(bookingPayload);
+        if (bookingResult.error) throw bookingResult.error;
+        const insertedBookingId = bookingResult.id || null;
 
         // Also write to audition_applications so the casting board picks this up
         const appNotes = [
@@ -4631,8 +4634,8 @@
         for (const extra of extraSessions) {
           if (!extra.session_id) continue;
           const extraBookingPayload = { ...bookingPayload, session_id: extra.session_id, slot_id: extra.slot_id || null };
-          const extraBookingErr = await _bkInsertBookingWithFallbacks(extraBookingPayload);
-          if (extraBookingErr) console.error('[BTS] Extra booking insert failed:', extraBookingErr.message);
+          const extraBookingResult = await _bkInsertBookingWithFallbacks(extraBookingPayload);
+          if (extraBookingResult.error) console.error('[BTS] Extra booking insert failed:', extraBookingResult.error?.message);
           // Mark extra slot as booked (capacity-aware)
           if (extra.slot_id) {
             const extraLocalSlot = (_allSlots[extra.session_id]||[]).find(s => s.id === extra.slot_id);
@@ -4681,14 +4684,11 @@
         }
 
         // Send booking confirmation email using the org's template (fire-and-forget)
-        try {
-          const confirmedBooking = await _bkFindExistingBookingIdentity();
-          if (confirmedBooking?.id) {
-            sb.functions.invoke('send-email', {
-              body: { booking_id: confirmedBooking.id, production_id: _bkProd.id, category: 'booking_confirmation' }
-            }).catch(() => {});
-          }
-        } catch {}
+        if (insertedBookingId) {
+          sb.functions.invoke('send-email', {
+            body: { booking_id: insertedBookingId, production_id: _bkProd.id, category: 'booking_confirmation' }
+          }).catch(() => {});
+        }
 
         _userBooking = {
           ...(applicationPayload || {}),
