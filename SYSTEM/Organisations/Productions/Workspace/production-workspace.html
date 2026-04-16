@@ -19289,9 +19289,21 @@ If you have any questions, don't hesitate to reach out.
 
         <!-- Hero -->
         <div style="display:flex;gap:1rem;align-items:flex-start;flex-wrap:wrap;">
-          ${a.headshot_url
-            ? `<img src="${esc(a.headshot_url)}" style="width:80px;height:100px;border-radius:8px;object-fit:cover;object-position:top;flex-shrink:0;" />`
-            : `<div style="width:80px;height:100px;border-radius:8px;background:linear-gradient(135deg,#ece7df,#ddd5ca);display:flex;align-items:center;justify-content:center;color:rgba(26,21,48,0.24);font-size:1.75rem;flex-shrink:0;">👤</div>`}
+          <div style="display:flex;flex-direction:column;align-items:center;gap:0.35rem;flex-shrink:0;">
+            <div id="ws-headshot-wrap" style="width:80px;height:100px;border-radius:8px;overflow:hidden;background:linear-gradient(135deg,#ece7df,#ddd5ca);display:flex;align-items:center;justify-content:center;color:rgba(26,21,48,0.24);font-size:1.75rem;">
+              ${a.headshot_url
+                ? `<img src="${esc(a.headshot_url)}" style="width:100%;height:100%;object-fit:cover;object-position:top;" />`
+                : `👤`}
+            </div>
+            <button id="ws-headshot-btn"
+              data-app-id="${esc(a.id)}"
+              data-old-url="${esc(a.headshot_url||'')}"
+              onclick="wsTriggerHeadshotUpload(this)"
+              style="font-size:0.62rem;color:#9a90b0;background:none;border:none;cursor:pointer;font-family:inherit;text-decoration:underline;text-underline-offset:2px;padding:0;white-space:nowrap;">
+              ${a.headshot_url ? 'Change photo' : 'Upload photo'}
+            </button>
+            <input type="file" id="ws-headshot-input" accept="image/*" style="display:none;" />
+          </div>
           <div style="flex:1;min-width:200px;display:flex;flex-direction:column;gap:0.55rem;padding-top:0.1rem;">
             <div>
               <div style="font-size:1.05rem;font-weight:800;color:#1a1530;line-height:1.2;">${esc(a.name || '—')}</div>
@@ -19974,6 +19986,56 @@ If you have any questions, don't hesitate to reach out.
     showSaveStatus('saved');
     showToast('Audition time updated.');
     return { bookingId: promptBookingId || null };
+  }
+
+  function wsTriggerHeadshotUpload(btn) {
+    const input = document.getElementById('ws-headshot-input');
+    if (!input) return;
+    input.onchange = () => wsUploadHeadshot(btn.dataset.appId, btn.dataset.oldUrl || null, input.files[0]);
+    input.value = '';
+    input.click();
+  }
+
+  async function wsUploadHeadshot(appId, oldUrl, file) {
+    if (!file) return;
+    const btn  = document.getElementById('ws-headshot-btn');
+    const wrap = document.getElementById('ws-headshot-wrap');
+    if (btn) { btn.disabled = true; btn.textContent = 'Uploading…'; }
+    try {
+      const ext  = (file.name.split('.').pop() || 'jpg').toLowerCase();
+      const path = `${prodId}/${appId}.${ext}`;
+
+      // Delete old file if it was in our bucket
+      if (oldUrl && oldUrl.includes('audition-headshots')) {
+        const oldPath = oldUrl.split('/audition-headshots/')[1]?.split('?')[0];
+        if (oldPath) await sb.storage.from('audition-headshots').remove([oldPath]).catch(() => {});
+      }
+
+      const { data: upData, error: upErr } = await sb.storage
+        .from('audition-headshots').upload(path, file, { upsert: true, contentType: file.type });
+      if (upErr) throw upErr;
+
+      const { data: urlData } = sb.storage.from('audition-headshots').getPublicUrl(upData.path);
+      const newUrl = urlData?.publicUrl;
+      if (!newUrl) throw new Error('Could not get public URL');
+
+      await sb.from('audition_applications').update({ headshot_url: newUrl }).eq('id', appId);
+
+      // Update in-memory
+      const app = allApplicants.find(x => x.id === appId);
+      if (app) app.headshot_url = newUrl;
+
+      // Update the modal photo immediately
+      if (wrap) wrap.innerHTML = `<img src="${esc(newUrl)}" style="width:100%;height:100%;object-fit:cover;object-position:top;" />`;
+      if (btn) { btn.disabled = false; btn.textContent = 'Change photo'; btn.dataset.oldUrl = newUrl; }
+
+      // Re-render grid cards
+      try { renderApplicants(); } catch {}
+      try { renderApplicantsMirror(); } catch {}
+    } catch (err) {
+      console.error('[WS] Headshot upload failed:', err);
+      if (btn) { btn.disabled = false; btn.textContent = 'Upload failed — try again'; }
+    }
   }
 
   async function resendConfirmationEmail(bookingId) {
