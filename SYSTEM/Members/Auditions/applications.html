@@ -191,6 +191,7 @@
     };
 
     const profileId = sessionStorage.getItem('bts_active_profile_id');
+    let applicationsRealtimeChannel = null;
     if (!profileId) window.location.href = '../Profiles/profile-select.html';
 
     document.getElementById('logout-btn').addEventListener('click', async () => {
@@ -207,6 +208,7 @@
       renderMemberSidebar('applications');
 
       await loadApplications();
+      subscribeApplicationsRealtime();
     }
 
     async function loadApplications() {
@@ -252,6 +254,25 @@
             </div>
           </div>`;
       }).join('');
+    }
+
+    function subscribeApplicationsRealtime() {
+      if (applicationsRealtimeChannel) {
+        try { sb.removeChannel(applicationsRealtimeChannel); } catch {}
+        applicationsRealtimeChannel = null;
+      }
+
+      applicationsRealtimeChannel = sb
+        .channel(`member-applications-${profileId}`)
+        .on('postgres_changes', {
+          event: '*',
+          schema: 'public',
+          table: 'audition_applications',
+          filter: `profile_id=eq.${profileId}`,
+        }, async () => {
+          await loadApplications();
+        })
+        .subscribe();
     }
 
     async function withdrawApplication(appId) {

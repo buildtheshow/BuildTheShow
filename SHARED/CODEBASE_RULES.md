@@ -146,6 +146,19 @@ These are non-negotiable platform rules for how the system should be shaped and 
 8. Do not rely on manual syncing.
 9. Do not allow stale views.
 
+### Live Updates
+
+1. Build The Show should feel live across the whole website.
+2. Users should not need to refresh to see something they just changed.
+3. If a user changes data, the UI should reflect that change immediately in the current view.
+4. If that same data appears elsewhere on the current page or in related production views, those views should update too.
+5. Supabase is the source of truth, but the interface must keep a live local mirror so changes appear instantly.
+6. After every successful write, update local state immediately and then reconcile with Supabase in the background.
+7. Do not make users wait for a full reload, tab switch, modal close, or page revisit to see updated data.
+8. Scheduling, performer records, casting changes, check-in state, and production workflow changes should all follow this live-update rule.
+9. Real-time behaviour must never overwrite unrelated data. If one audition type changes, only that audition type should change.
+10. Prefer explicit live update flows over hidden refresh logic, delayed page-wide reloads, or “save and refresh” behaviour.
+
 ### Features
 
 1. Do not build orphaned features.

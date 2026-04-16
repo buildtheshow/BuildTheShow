@@ -218,6 +218,8 @@
     let fcCalendar = null;
     let currentTab = 'mine';  // 'mine' | 'all'
     let allProfilesData = null; // cached for the All Profiles tab
+    let currentUserId = null;
+    let calendarRealtimeChannel = null;
 
     // Colours matching Zeus / Apollo
     const CAL_COLOURS = {
@@ -281,64 +283,141 @@
         });
     }
 
+    async function loadAllProfilesCalendarData() {
+      document.getElementById('upcoming-list-content').innerHTML = '<div class="loading-state">Loading all profiles...</div>';
+      const { data: allProfiles } = await sb.from('profiles').select('id, credit_name').eq('user_id', currentUserId);
+      const profileIds = (allProfiles || []).map(p => p.id);
+      const nameMap = {};
+      (allProfiles || []).forEach(p => { nameMap[p.id] = (p.credit_name || 'Unnamed').split(' ')[0]; });
+
+      let apps = [];
+      if (profileIds.length) {
+        const { data: appRows } = await sb.from('audition_applications')
+          .select('id, profile_id, status, productions(id, title)')
+          .in('profile_id', profileIds)
+          .not('status', 'eq', 'withdrawn');
+        apps = appRows || [];
+      }
+
+      const prodTitleMap = {};
+      apps.forEach(a => { if (a.productions?.id) prodTitleMap[a.productions.id] = a.productions.title; });
+      const prodIds = Object.keys(prodTitleMap);
+
+      let prodEvents = [];
+      if (prodIds.length) {
+        const { data: pe } = await sb.from('production_events')
+          .select('id, production_id, event_type, title, start_time, end_time, all_day, venue')
+          .in('production_id', prodIds).order('start_time');
+        prodEvents = pe || [];
+      }
+
+      allProfilesData = { apps, nameMap, prodEvents, prodTitleMap };
+      return allProfilesData;
+    }
+
+    async function loadMineCalendarData() {
+      const [profileRes, appsRes] = await Promise.all([
+        sb.from('profiles').select('id, credit_name, headshot_url, sections').eq('id', profileId).single(),
+        sb.from('audition_applications')
+          .select('id, status, productions(id, title)')
+          .eq('profile_id', profileId)
+          .not('status', 'eq', 'withdrawn'),
+      ]);
+
+      const profile = profileRes.data;
+      if (!profile) { window.location.href = '../Profiles/profile-select.html'; return null; }
+
+      sessionStorage.setItem('bts_active_profile_sections', JSON.stringify(profile.sections || {}));
+      sessionStorage.setItem('bts_active_profile_name', profile.credit_name || 'Unnamed');
+
+      const apps = appsRes.data || [];
+      const prodTitleMap = {};
+      apps.forEach(a => { if (a.productions?.id) prodTitleMap[a.productions.id] = a.productions.title; });
+      const prodIds = Object.keys(prodTitleMap);
+
+      let prodEvents = [];
+      if (prodIds.length) {
+        const { data: pe } = await sb.from('production_events')
+          .select('id, production_id, event_type, title, start_time, end_time, all_day, venue')
+          .in('production_id', prodIds)
+          .order('start_time');
+        prodEvents = pe || [];
+      }
+
+      window._calMineData = { apps, prodEvents, prodTitleMap };
+      return profile;
+    }
+
+    async function refreshCurrentCalendarView() {
+      if (currentTab === 'mine') {
+        const profile = await loadMineCalendarData();
+        if (!profile) return;
+        updateSidebarAvatar(profile);
+        const { apps, prodEvents, prodTitleMap } = window._calMineData || {};
+        const appliedProdIds = new Set((apps || []).map(a => a.productions?.id).filter(Boolean));
+        updateCalendar(buildCalendarEvents(prodEvents || [], prodTitleMap || {}, appliedProdIds), prodEvents || [], prodTitleMap || {}, appliedProdIds);
+        document.getElementById('upcoming-title').textContent = 'Upcoming';
+        return;
+      }
+
+      const { apps, nameMap, prodEvents, prodTitleMap } = await loadAllProfilesCalendarData();
+      const allEvents = [];
+      const byProfile = {};
+      (apps || []).forEach(a => {
+        if (!byProfile[a.profile_id]) byProfile[a.profile_id] = [];
+        byProfile[a.profile_id].push(a);
+      });
+      Object.entries(byProfile).forEach(([pid, profileApps]) => {
+        const appliedProdIds = new Set(profileApps.map(a => a.productions?.id).filter(Boolean));
+        allEvents.push(...buildCalendarEvents(prodEvents, prodTitleMap, appliedProdIds, nameMap[pid]));
+      });
+
+      const allAppliedProdIds = new Set((apps || []).map(a => a.productions?.id).filter(Boolean));
+      updateCalendar(allEvents, prodEvents, prodTitleMap, allAppliedProdIds);
+      document.getElementById('upcoming-title').textContent = 'Upcoming (All Profiles)';
+    }
+
+    function subscribeCalendarRealtime() {
+      if (calendarRealtimeChannel) {
+        try { sb.removeChannel(calendarRealtimeChannel); } catch {}
+        calendarRealtimeChannel = null;
+      }
+
+      calendarRealtimeChannel = sb
+        .channel(`member-calendar-${profileId}`)
+        .on('postgres_changes', {
+          event: '*',
+          schema: 'public',
+          table: 'audition_applications',
+        }, async () => {
+          allProfilesData = null;
+          await refreshCurrentCalendarView();
+        })
+        .on('postgres_changes', {
+          event: '*',
+          schema: 'public',
+          table: 'profiles',
+        }, async () => {
+          allProfilesData = null;
+          await refreshCurrentCalendarView();
+        })
+        .on('postgres_changes', {
+          event: '*',
+          schema: 'public',
+          table: 'production_events',
+        }, async () => {
+          allProfilesData = null;
+          await refreshCurrentCalendarView();
+        })
+        .subscribe();
+    }
+
     // Switch between My Calendar and All Profiles
     async function switchCalTab(tab) {
       currentTab = tab;
       document.getElementById('tab-mine').classList.toggle('active', tab === 'mine');
       document.getElementById('tab-all').classList.toggle('active', tab === 'all');
-
-      if (tab === 'mine') {
-        const { apps, prodEvents, prodTitleMap } = window._calMineData || {};
-        const appliedProdIds = new Set((apps || []).map(a => a.productions?.id).filter(Boolean));
-        updateCalendar(buildCalendarEvents(prodEvents || [], prodTitleMap || {}, appliedProdIds), prodEvents || [], prodTitleMap || {}, appliedProdIds);
-        document.getElementById('upcoming-title').textContent = 'Upcoming';
-      } else {
-        if (!allProfilesData) {
-          document.getElementById('upcoming-list-content').innerHTML = '<div class="loading-state">Loading all profiles...</div>';
-          const { data: { session } } = await sb.auth.getSession();
-          if (!session) return;
-
-          const { data: allProfiles } = await sb.from('profiles').select('id, credit_name').eq('user_id', session.user.id);
-          const profileIds = (allProfiles || []).map(p => p.id);
-          const nameMap = {};
-          (allProfiles || []).forEach(p => { nameMap[p.id] = (p.credit_name || 'Unnamed').split(' ')[0]; });
-
-          const { data: apps } = await sb.from('audition_applications')
-            .select('id, profile_id, status, productions(id, title)')
-            .in('profile_id', profileIds)
-            .not('status', 'eq', 'withdrawn');
-
-          const prodTitleMap = {};
-          (apps || []).forEach(a => { if (a.productions?.id) prodTitleMap[a.productions.id] = a.productions.title; });
-          const prodIds = Object.keys(prodTitleMap);
-
-          let prodEvents = [];
-          if (prodIds.length) {
-            const { data: pe } = await sb.from('production_events')
-              .select('id, production_id, event_type, title, start_time, end_time, all_day, venue')
-              .in('production_id', prodIds).order('start_time');
-            prodEvents = pe || [];
-          }
-          allProfilesData = { apps: apps || [], nameMap, prodEvents, prodTitleMap };
-        }
-
-        const { apps, nameMap, prodEvents, prodTitleMap } = allProfilesData;
-        // Build one event per production event, per profile that applied to that production
-        const allEvents = [];
-        const byProfile = {};
-        (apps || []).forEach(a => {
-          if (!byProfile[a.profile_id]) byProfile[a.profile_id] = [];
-          byProfile[a.profile_id].push(a);
-        });
-        Object.entries(byProfile).forEach(([pid, profileApps]) => {
-          const appliedProdIds = new Set(profileApps.map(a => a.productions?.id).filter(Boolean));
-          allEvents.push(...buildCalendarEvents(prodEvents, prodTitleMap, appliedProdIds, nameMap[pid]));
-        });
-
-        const allAppliedProdIds = new Set((apps || []).map(a => a.productions?.id).filter(Boolean));
-        updateCalendar(allEvents, prodEvents, prodTitleMap, allAppliedProdIds);
-        document.getElementById('upcoming-title').textContent = 'Upcoming (All Profiles)';
-      }
+      await refreshCurrentCalendarView();
     }
 
     function updateCalendar(calEvents, prodEvents, prodTitleMap, appliedProdIds) {
@@ -414,49 +493,19 @@
     async function init() {
       const { data: { session } } = await sb.auth.getSession();
       if (!session) { window.location.href = '../Account/login.html'; return; }
+      currentUserId = session.user.id;
       document.getElementById('sidebar-email').textContent = session.user.email;
 
-      const [profileRes, appsRes] = await Promise.all([
-        sb.from('profiles').select('id, credit_name, headshot_url, sections').eq('id', profileId).single(),
-        sb.from('audition_applications')
-          .select('id, status, productions(id, title)')
-          .eq('profile_id', profileId)
-          .not('status', 'eq', 'withdrawn'),
-      ]);
-
-      const profile = profileRes.data;
-      if (!profile) { window.location.href = '../Profiles/profile-select.html'; return; }
-
-      sessionStorage.setItem('bts_active_profile_sections', JSON.stringify(profile.sections || {}));
-      sessionStorage.setItem('bts_active_profile_name', profile.credit_name || 'Unnamed');
-
       renderMemberSidebar('calendar');
+      const profile = await loadMineCalendarData();
+      if (!profile) return;
       updateSidebarAvatar(profile);
 
-      const apps = appsRes.data || [];
-
-      // Build production title map and get IDs
-      const prodTitleMap = {};
-      (apps || []).forEach(a => { if (a.productions?.id) prodTitleMap[a.productions.id] = a.productions.title; });
-      const prodIds = Object.keys(prodTitleMap);
-
-      // Load all events from Zeus (production_events) for these productions
-      let prodEvents = [];
-      if (prodIds.length) {
-        const { data: pe } = await sb.from('production_events')
-          .select('id, production_id, event_type, title, start_time, end_time, all_day, venue')
-          .in('production_id', prodIds)
-          .order('start_time');
-        prodEvents = pe || [];
-      }
-
-      // Cache for tab switching
-      window._calMineData = { apps, prodEvents, prodTitleMap };
-
-      const appliedProdIds = new Set(prodIds);
-      const calEvents = buildCalendarEvents(prodEvents, prodTitleMap, appliedProdIds);
-      initCalendar(calEvents);
-      renderUpcomingList(prodEvents, prodTitleMap, appliedProdIds);
+      const { apps, prodEvents, prodTitleMap } = window._calMineData || {};
+      const appliedProdIds = new Set(Object.keys(prodTitleMap || {}));
+      initCalendar(buildCalendarEvents(prodEvents || [], prodTitleMap || {}, appliedProdIds));
+      renderUpcomingList(prodEvents || [], prodTitleMap || {}, appliedProdIds);
+      subscribeCalendarRealtime();
     }
 
     init();

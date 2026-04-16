@@ -156,6 +156,7 @@
   // ── Profile ID check ─────────────────────────────
   const profileId = sessionStorage.getItem('bts_active_profile_id');
   if (!profileId) window.location.href = '../Profiles/profile-select.html';
+  let hubRealtimeChannel = null;
 
   // ── Avatar update safely ────────────────────────
   function updateSidebarAvatar(profile) {
@@ -241,6 +242,56 @@
     window.location.href = '../../../HOME/index.html';
   });
 
+  async function loadHubData() {
+    const [profileRes, appsRes] = await Promise.all([
+      sb.from('profiles').select('id, credit_name, headshot_url, profile_display_id, sections').eq('id', profileId).single(),
+      sb.from('audition_applications')
+        .select('id, status, character_name, role_interest, created_at, productions(title)')
+        .eq('profile_id', profileId)
+        .order('created_at', { ascending: false })
+        .limit(10),
+    ]);
+
+    if (profileRes.error) throw profileRes.error;
+    if (appsRes.error) throw appsRes.error;
+
+    const profile = profileRes.data;
+    if (!profile) { window.location.href = '../Profiles/profile-select.html'; return; }
+
+    sessionStorage.setItem('bts_active_profile_sections', JSON.stringify(profile.sections || {}));
+    sessionStorage.setItem('bts_active_profile_name', profile.credit_name || 'Unnamed');
+
+    updateSidebarAvatar(profile);
+    renderHub(profile, appsRes.data || []);
+  }
+
+  function subscribeHubRealtime() {
+    if (hubRealtimeChannel) {
+      try { sb.removeChannel(hubRealtimeChannel); } catch {}
+      hubRealtimeChannel = null;
+    }
+
+    hubRealtimeChannel = sb
+      .channel(`performer-hub-${profileId}`)
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'audition_applications',
+        filter: `profile_id=eq.${profileId}`,
+      }, async () => {
+        await loadHubData();
+      })
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'profiles',
+        filter: `id=eq.${profileId}`,
+      }, async () => {
+        await loadHubData();
+      })
+      .subscribe();
+  }
+
   // ── Init page ────────────────────────────────────
   async function init() {
     try {
@@ -249,28 +300,9 @@
 
       document.getElementById('sidebar-email').textContent = session.user.email;
 
-      const [profileRes, appsRes] = await Promise.all([
-        sb.from('profiles').select('id, credit_name, headshot_url, profile_display_id, sections').eq('id', profileId).single(),
-        sb.from('audition_applications')
-          .select('id, status, character_name, role_interest, created_at, productions(title)')
-          .eq('profile_id', profileId)
-          .order('created_at', { ascending: false })
-          .limit(10),
-      ]);
-
-      if (profileRes.error) throw profileRes.error;
-      if (appsRes.error) throw appsRes.error;
-
-      const profile = profileRes.data;
-      if (!profile) { window.location.href = '../Profiles/profile-select.html'; return; }
-
-      // Save active sections
-      sessionStorage.setItem('bts_active_profile_sections', JSON.stringify(profile.sections || {}));
-      sessionStorage.setItem('bts_active_profile_name', profile.credit_name || 'Unnamed');
-
       renderMemberSidebar('performer-hub');
-      updateSidebarAvatar(profile);
-      renderHub(profile, appsRes.data || []);
+      await loadHubData();
+      subscribeHubRealtime();
     } catch (err) {
       showToast('Error loading hub: ' + (err.message || err), true);
       console.error(err);

@@ -633,6 +633,23 @@
     let currentUser = null;
     const esc = s => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 
+    async function scrubAuditionContactDataForUser(userId) {
+      const scrubPatch = {
+        name: '[Account Deleted]',
+        email: null,
+        phone: null,
+        headshot_url: null,
+      };
+
+      const [appRes, bookingRes] = await Promise.all([
+        sb.from('audition_applications').update(scrubPatch).eq('user_id', userId),
+        sb.from('audition_bookings').update(scrubPatch).eq('user_id', userId),
+      ]);
+
+      if (appRes.error) throw appRes.error;
+      if (bookingRes.error) throw bookingRes.error;
+    }
+
     // ── Sub-tabs ──────────────────────────────────────────────
     document.querySelectorAll('.settings-tab').forEach(tab => {
       tab.addEventListener('click', () => {
@@ -733,14 +750,7 @@
         }).eq('user_id', currentUser.id);
 
         // Scrub audition applications unless consent given
-        if (!keepContact) {
-          await sb.from('audition_applications').update({
-            name:         '[Account Deleted]',
-            email:        null,
-            phone:        null,
-            headshot_url: null,
-          }).eq('user_id', currentUser.id);
-        }
+        if (!keepContact) await scrubAuditionContactDataForUser(currentUser.id);
 
         // Sign out
         await sb.auth.signOut();
@@ -809,7 +819,7 @@
     async function loadCurrentProfile() {
       const profileId = sessionStorage.getItem('bts_active_profile_id');
       if (!profileId) return;
-      const { data } = await sb.from('profiles').select('id, sections').eq('id', profileId).single();
+      const { data } = await sb.from('profiles').select('id, credit_name, custom_id, sections').eq('id', profileId).single();
       if (!data) return;
       currentProfile = data;
 

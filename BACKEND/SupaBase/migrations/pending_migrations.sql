@@ -17,6 +17,27 @@ ALTER TABLE profiles ADD COLUMN IF NOT EXISTS email text;
 -- audition.html now passes session_id and time_slot_id on submit.
 ALTER TABLE audition_applications ADD COLUMN IF NOT EXISTS session_id   uuid REFERENCES audition_sessions(id)    ON DELETE SET NULL;
 ALTER TABLE audition_applications ADD COLUMN IF NOT EXISTS time_slot_id uuid REFERENCES audition_time_slots(id)  ON DELETE SET NULL;
+ALTER TABLE audition_applications ADD COLUMN IF NOT EXISTS slot_assignments jsonb DEFAULT '[]'::jsonb;
+ALTER TABLE audition_applications ADD COLUMN IF NOT EXISTS audition_type_1 uuid REFERENCES audition_sessions(id) ON DELETE SET NULL;
+ALTER TABLE audition_applications ADD COLUMN IF NOT EXISTS audition_slot_1 uuid REFERENCES audition_time_slots(id) ON DELETE SET NULL;
+ALTER TABLE audition_applications ADD COLUMN IF NOT EXISTS audition_type_2 uuid REFERENCES audition_sessions(id) ON DELETE SET NULL;
+ALTER TABLE audition_applications ADD COLUMN IF NOT EXISTS audition_slot_2 uuid REFERENCES audition_time_slots(id) ON DELETE SET NULL;
+ALTER TABLE audition_applications ADD COLUMN IF NOT EXISTS audition_type_3 uuid REFERENCES audition_sessions(id) ON DELETE SET NULL;
+ALTER TABLE audition_applications ADD COLUMN IF NOT EXISTS audition_slot_3 uuid REFERENCES audition_time_slots(id) ON DELETE SET NULL;
+ALTER TABLE audition_applications ADD COLUMN IF NOT EXISTS audition_type_4 uuid REFERENCES audition_sessions(id) ON DELETE SET NULL;
+ALTER TABLE audition_applications ADD COLUMN IF NOT EXISTS audition_slot_4 uuid REFERENCES audition_time_slots(id) ON DELETE SET NULL;
+ALTER TABLE audition_applications ADD COLUMN IF NOT EXISTS audition_type_5 uuid REFERENCES audition_sessions(id) ON DELETE SET NULL;
+ALTER TABLE audition_applications ADD COLUMN IF NOT EXISTS audition_slot_5 uuid REFERENCES audition_time_slots(id) ON DELETE SET NULL;
+ALTER TABLE audition_applications ADD COLUMN IF NOT EXISTS audition_type_6 uuid REFERENCES audition_sessions(id) ON DELETE SET NULL;
+ALTER TABLE audition_applications ADD COLUMN IF NOT EXISTS audition_slot_6 uuid REFERENCES audition_time_slots(id) ON DELETE SET NULL;
+ALTER TABLE audition_applications ADD COLUMN IF NOT EXISTS audition_type_7 uuid REFERENCES audition_sessions(id) ON DELETE SET NULL;
+ALTER TABLE audition_applications ADD COLUMN IF NOT EXISTS audition_slot_7 uuid REFERENCES audition_time_slots(id) ON DELETE SET NULL;
+ALTER TABLE audition_applications ADD COLUMN IF NOT EXISTS audition_type_8 uuid REFERENCES audition_sessions(id) ON DELETE SET NULL;
+ALTER TABLE audition_applications ADD COLUMN IF NOT EXISTS audition_slot_8 uuid REFERENCES audition_time_slots(id) ON DELETE SET NULL;
+ALTER TABLE audition_applications ADD COLUMN IF NOT EXISTS audition_type_9 uuid REFERENCES audition_sessions(id) ON DELETE SET NULL;
+ALTER TABLE audition_applications ADD COLUMN IF NOT EXISTS audition_slot_9 uuid REFERENCES audition_time_slots(id) ON DELETE SET NULL;
+ALTER TABLE audition_applications ADD COLUMN IF NOT EXISTS audition_type_10 uuid REFERENCES audition_sessions(id) ON DELETE SET NULL;
+ALTER TABLE audition_applications ADD COLUMN IF NOT EXISTS audition_slot_10 uuid REFERENCES audition_time_slots(id) ON DELETE SET NULL;
 
 -- ── 4. Audition time slots: is_available default ─────────────
 -- Ensure column exists (may already be present)

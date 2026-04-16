@@ -330,6 +330,7 @@
     }
 
     const profileId = sessionStorage.getItem('bts_active_profile_id');
+    let dashboardRealtimeChannel = null;
 
     function renderSidebarAvatar(profile) {
       const switcher = document.getElementById('sidebar-profile-switcher');
@@ -482,14 +483,7 @@
       window.location.href = '../../../HOME/index.html';
     });
 
-    async function init() {
-      const { data: { session } } = await sb.auth.getSession();
-      if (!session) { window.location.href = '../Account/login.html'; return; }
-      document.getElementById('sidebar-email').textContent = session.user.email;
-
-      // If no profile selected, send to profile selector
-      if (!profileId) { window.location.href = '../Profiles/profile-select.html'; return; }
-
+    async function loadDashboardData() {
       const [profileRes, appsRes] = await Promise.all([
         sb.from('profiles').select('id, credit_name, headshot_url, profile_display_id, sections').eq('id', profileId).single(),
         sb.from('audition_applications')
@@ -527,8 +521,54 @@
       }
 
       renderSidebarAvatar(profile);
-      renderMemberSidebar('member-dashboard');
       renderDashboard(profile, calEvents);
+    }
+
+    function subscribeDashboardRealtime() {
+      if (dashboardRealtimeChannel) {
+        try { sb.removeChannel(dashboardRealtimeChannel); } catch {}
+        dashboardRealtimeChannel = null;
+      }
+
+      dashboardRealtimeChannel = sb
+        .channel(`member-dashboard-${profileId}`)
+        .on('postgres_changes', {
+          event: '*',
+          schema: 'public',
+          table: 'audition_applications',
+          filter: `profile_id=eq.${profileId}`,
+        }, async () => {
+          await loadDashboardData();
+        })
+        .on('postgres_changes', {
+          event: '*',
+          schema: 'public',
+          table: 'profiles',
+          filter: `id=eq.${profileId}`,
+        }, async () => {
+          await loadDashboardData();
+        })
+        .on('postgres_changes', {
+          event: '*',
+          schema: 'public',
+          table: 'production_events',
+        }, async () => {
+          await loadDashboardData();
+        })
+        .subscribe();
+    }
+
+    async function init() {
+      const { data: { session } } = await sb.auth.getSession();
+      if (!session) { window.location.href = '../Account/login.html'; return; }
+      document.getElementById('sidebar-email').textContent = session.user.email;
+
+      // If no profile selected, send to profile selector
+      if (!profileId) { window.location.href = '../Profiles/profile-select.html'; return; }
+
+      renderMemberSidebar('member-dashboard');
+      await loadDashboardData();
+      subscribeDashboardRealtime();
     }
 
     init();

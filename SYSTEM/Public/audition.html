@@ -381,6 +381,9 @@
     let config = null;
     let availableSlots = [];
     let selectedSlotId = null;
+    let publicAuditionRealtimeChannel = null;
+    let characters    = [];
+    let customQuestions = [];
 
     // Age helpers
     function getAge(dobString) {
@@ -419,17 +422,47 @@
       } catch { return t; }
     }
 
-    let characters    = [];
-    let customQuestions = [];
+    function canonicalApplicationAssignments(app) {
+      const assignments = Array.isArray(app?.slot_assignments)
+        ? app.slot_assignments.filter(entry => entry && entry.slot_id)
+        : [];
+      const legacySlotId = app?.time_slot_id || app?.slot_id || null;
+      if (legacySlotId) assignments.push({ session_id: app?.session_id || null, slot_id: legacySlotId });
+      return assignments;
+    }
 
-    async function init() {
-      if (!prodId) { show('screen-closed'); return; }
+    async function refreshPublicSlotAvailability() {
+      const [{ data: slots }, { data: bookings }] = await Promise.all([
+        sb.from('audition_slots').select('*').eq('production_id', prodId).order('date').order('start_time'),
+        sb.from('audition_applications').select('status,session_id,slot_id,time_slot_id,slot_assignments').eq('production_id', prodId),
+      ]);
 
+      if (!slots || !slots.length) {
+        availableSlots = [];
+        document.getElementById('slot-picker-section').style.display = 'none';
+        return;
+      }
+
+      const bookedCounts = {};
+      (bookings || []).forEach(app => {
+        if (String(app.status || '').toLowerCase().includes('cancel')) return;
+        canonicalApplicationAssignments(app).forEach(({ slot_id }) => {
+          if (slot_id) bookedCounts[slot_id] = (bookedCounts[slot_id] || 0) + 1;
+        });
+      });
+
+      availableSlots = slots.map(s => ({ ...s, booked: bookedCounts[s.id] || 0, full: (bookedCounts[s.id] || 0) >= s.capacity }));
+      if (selectedSlotId && availableSlots.find(slot => slot.id === selectedSlotId)?.full) selectedSlotId = null;
+      renderSlotPicker();
+      document.getElementById('slot-picker-section').style.display = 'block';
+    }
+
+    async function loadAuditionPageData() {
       const [{ data: prod }, { data: cfg }, { data: slots }, { data: bookings }, { data: chars }, { data: cqs }, { data: zeusAudEvents }] = await Promise.all([
         sb.from('productions').select('title, subtitle, venue, start_date, custom_id').eq('id', prodId).single(),
         sb.from('audition_configs').select('*').eq('production_id', prodId).single(),
         sb.from('audition_slots').select('*').eq('production_id', prodId).order('date').order('start_time'),
-        sb.from('audition_applications').select('slot_id').eq('production_id', prodId).not('slot_id', 'is', null),
+        sb.from('audition_applications').select('status,session_id,slot_id,time_slot_id,slot_assignments').eq('production_id', prodId),
         sb.from('production_characters').select('*').eq('production_id', prodId).eq('show_on_form', true).order('sort_order'),
         sb.from('audition_custom_questions').select('*').eq('production_id', prodId).order('sort_order'),
         // Zeus is source of truth for audition dates
@@ -438,7 +471,7 @@
           .order('start_time').limit(1),
       ]);
 
-      if (!cfg || !cfg.is_open) { show('screen-closed'); return; }
+      if (!cfg || !cfg.is_open) { show('screen-closed'); return false; }
       config = cfg;
       characters = chars || [];
       customQuestions = cqs || [];
@@ -446,10 +479,18 @@
       // Build available slots (not full)
       if (slots && slots.length) {
         const bookedCounts = {};
-        (bookings || []).forEach(b => { bookedCounts[b.slot_id] = (bookedCounts[b.slot_id] || 0) + 1; });
+        (bookings || []).forEach(app => {
+          if (String(app.status || '').toLowerCase().includes('cancel')) return;
+          canonicalApplicationAssignments(app).forEach(({ slot_id }) => {
+            if (slot_id) bookedCounts[slot_id] = (bookedCounts[slot_id] || 0) + 1;
+          });
+        });
         availableSlots = slots.map(s => ({ ...s, booked: bookedCounts[s.id] || 0, full: (bookedCounts[s.id] || 0) >= s.capacity }));
         renderSlotPicker();
         document.getElementById('slot-picker-section').style.display = 'block';
+      } else {
+        availableSlots = [];
+        document.getElementById('slot-picker-section').style.display = 'none';
       }
 
       // If this form was opened from a session card, show which session it's for
@@ -462,21 +503,29 @@
             if (sess.date)       chips.push(fmtDate(sess.date));
             if (sess.start_time) chips.push(fmtTime(sess.start_time) + (sess.end_time ? ' – ' + fmtTime(sess.end_time) : ''));
             if (sess.location)   chips.push('📍 ' + sess.location);
-            const bar = document.createElement('div');
+            let bar = document.getElementById('session-summary-bar');
+            if (!bar) {
+              bar = document.createElement('div');
+              bar.id = 'session-summary-bar';
+              const formSection = document.getElementById('screen-form');
+              formSection.insertBefore(bar, formSection.firstChild);
+            }
             bar.style.cssText = 'background:rgba(87,46,136,0.08);border:1px solid rgba(87,46,136,0.2);border-radius:8px;padding:0.55rem 0.85rem;font-size:0.84rem;color:#4a3d6b;margin-bottom:1rem;';
             bar.innerHTML = chips.join(' &nbsp;·&nbsp; ');
-            const formSection = document.getElementById('screen-form');
-            formSection.insertBefore(bar, formSection.firstChild);
 
             // Show the pre-selected slot
             if (preselectedTimeSlotId) {
               const { data: slot } = await sb.from('audition_time_slots').select('slot_time').eq('id', preselectedTimeSlotId).single();
               if (slot) {
-                const slotBar = document.createElement('div');
-                slotBar.id = 'preselected-slot-bar';
+                let slotBar = document.getElementById('preselected-slot-bar');
+                if (!slotBar) {
+                  slotBar = document.createElement('div');
+                  slotBar.id = 'preselected-slot-bar';
+                  const formSection = document.getElementById('screen-form');
+                  formSection.insertBefore(slotBar, formSection.firstChild);
+                }
                 slotBar.style.cssText = 'background:rgba(87,46,136,0.12);border:1px solid rgba(87,46,136,0.3);border-radius:8px;padding:0.55rem 0.85rem;font-size:0.84rem;color:#572e88;font-weight:600;margin-bottom:1rem;';
                 slotBar.innerHTML = '🕐 Your selected time: ' + fmtTime(slot.slot_time);
-                formSection.insertBefore(slotBar, formSection.firstChild);
               }
             }
           }
@@ -547,6 +596,42 @@
       }
 
       show('screen-form');
+      return true;
+    }
+
+    function subscribePublicAuditionRealtime() {
+      if (publicAuditionRealtimeChannel) {
+        try { sb.removeChannel(publicAuditionRealtimeChannel); } catch {}
+        publicAuditionRealtimeChannel = null;
+      }
+
+      publicAuditionRealtimeChannel = sb
+        .channel(`public-audition-form-${prodId}`)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'audition_applications', filter: `production_id=eq.${prodId}` }, async () => {
+          await refreshPublicSlotAvailability();
+        })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'audition_configs', filter: `production_id=eq.${prodId}` }, async () => {
+          await loadAuditionPageData();
+        })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'audition_slots', filter: `production_id=eq.${prodId}` }, async () => {
+          await refreshPublicSlotAvailability();
+        })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'production_characters', filter: `production_id=eq.${prodId}` }, async () => {
+          await loadAuditionPageData();
+        })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'audition_custom_questions', filter: `production_id=eq.${prodId}` }, async () => {
+          await loadAuditionPageData();
+        })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'production_events', filter: `production_id=eq.${prodId}` }, async () => {
+          await loadAuditionPageData();
+        })
+        .subscribe();
+    }
+
+    async function init() {
+      if (!prodId) { show('screen-closed'); return; }
+      const didLoad = await loadAuditionPageData();
+      if (didLoad) subscribePublicAuditionRealtime();
     }
 
     // File input label
@@ -589,6 +674,37 @@
       selectedSlotId = id;
       document.getElementById('slot-required-msg').style.display = 'none';
       renderSlotPicker();
+    }
+
+    async function insertApplicationWithFallbacks(payload) {
+      let attempt = { ...payload };
+      let lastError = null;
+      while (attempt && Object.keys(attempt).length) {
+        try {
+          const { error } = await sb.from('audition_applications').insert(attempt);
+          if (!error) return null;
+          lastError = error;
+          const slotFkError = /audition_applications_(time_slot_id|slot_id)_fkey|time_slot_id_fkey|slot_id_fkey|foreign key constraint/i.test(String(error?.message || ''));
+          if (slotFkError && 'time_slot_id' in attempt) {
+            delete attempt.time_slot_id;
+            continue;
+          }
+          const missingColumn = String(error?.message || '').match(/Could not find the '([^']+)' column/i)?.[1];
+          if (!missingColumn || !(missingColumn in attempt)) break;
+          delete attempt[missingColumn];
+        } catch (err) {
+          lastError = err || null;
+          const slotFkError = /audition_applications_(time_slot_id|slot_id)_fkey|time_slot_id_fkey|slot_id_fkey|foreign key constraint/i.test(String(err?.message || ''));
+          if (slotFkError && 'time_slot_id' in attempt) {
+            delete attempt.time_slot_id;
+            continue;
+          }
+          const missingColumn = String(err?.message || '').match(/Could not find the '([^']+)' column/i)?.[1];
+          if (!missingColumn || !(missingColumn in attempt)) break;
+          delete attempt[missingColumn];
+        }
+      }
+      return lastError;
     }
 
     async function submitApplication() {
@@ -723,6 +839,9 @@
         }
       }
 
+      const primaryAssignment = sessionId && timeSlotId
+        ? [{ session_id: sessionId, slot_id: timeSlotId }]
+        : null;
       const payload = {
         production_id: prodId,
         name, email,
@@ -734,6 +853,7 @@
         slot_id:       selectedSlotId || null,
         session_id:    sessionId  || null,
         time_slot_id:  timeSlotId || null,
+        slot_assignments: primaryAssignment,
         notes: [
           song    ? 'Song: ' + song       : '',
           monol   ? 'Monologue: ' + monol : '',
@@ -755,7 +875,7 @@
         } catch {}
       }
 
-      const { error } = await sb.from('audition_applications').insert(payload);
+      const error = await insertApplicationWithFallbacks(payload);
       if (error) {
         errEl.textContent = error.message; errEl.classList.add('visible');
         btn.disabled = false; btn.textContent = 'Submit Audition Form'; return;
