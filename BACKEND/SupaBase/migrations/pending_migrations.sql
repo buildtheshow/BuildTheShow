@@ -8,6 +8,18 @@
 ALTER TABLE productions ADD COLUMN IF NOT EXISTS slug text;
 CREATE UNIQUE INDEX IF NOT EXISTS productions_slug_idx ON productions (slug);
 
+-- ── 1b. Organisation URL slugs ───────────────────────────────
+-- Used for clean audition URLs: buildtheshow.com/RYT/Audition/Annie2026
+ALTER TABLE organizations ADD COLUMN IF NOT EXISTS slug text;
+CREATE UNIQUE INDEX IF NOT EXISTS organizations_slug_idx ON organizations (slug);
+-- Backfill existing orgs from abbreviation (e.g. RYT) or name
+UPDATE organizations
+SET slug = regexp_replace(abbreviation, '[^a-zA-Z0-9]', '', 'g')
+WHERE abbreviation IS NOT NULL AND (slug IS NULL OR slug = '');
+UPDATE organizations
+SET slug = regexp_replace(name, '[^a-zA-Z0-9]', '', 'g')
+WHERE (slug IS NULL OR slug = '');
+
 -- ── 2. Profiles: add email column (for BTS ID invite lookup) ─
 -- profile-create.html already saves email on new profiles.
 -- This column doesn't exist yet on the table.
