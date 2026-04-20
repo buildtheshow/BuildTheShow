@@ -12340,6 +12340,10 @@
     setupAuditionsRealtime();
     setupEmailTemplatesRealtime();
     handleMobileSidebarViewport();
+    setTimeout(() => {
+      replaceWorkspaceHistoryState();
+      workspaceHistoryReady = true;
+    }, 250);
   }
 
   async function refreshAuditionsLiveUi(options = {}) {
@@ -12411,9 +12415,87 @@
   function saveWorkspaceNavState(next) {
     try {
       const current = loadWorkspaceNavState();
-      localStorage.setItem(getWorkspaceNavStorageKey(), JSON.stringify({ ...current, ...next }));
+      const merged = { ...current, ...next };
+      localStorage.setItem(getWorkspaceNavStorageKey(), JSON.stringify(merged));
+      queueWorkspaceHistoryState(merged);
     } catch {}
   }
+
+  let workspaceHistoryReady = false;
+  let workspaceApplyingHistory = false;
+  let workspaceHistoryTimer = null;
+  let workspaceLastHistoryKey = '';
+
+  function workspaceHistoryPayload(state = loadWorkspaceNavState()) {
+    return {
+      btsWorkspaceNav: true,
+      prodId,
+      nav: { ...(state || {}) },
+    };
+  }
+
+  function workspaceHistoryKey(state = loadWorkspaceNavState()) {
+    try {
+      return JSON.stringify({
+        prodTab: state?.prodTab || '',
+        castingSubTab: state?.castingSubTab || '',
+        auditionsSubTab: state?.auditionsSubTab || '',
+        auditionsDayTab: state?.auditionsDayTab || '',
+        auditionsSessionId: state?.auditionsSessionId || '',
+        auditionsSessionTool: state?.auditionsSessionTool || '',
+      });
+    } catch {
+      return '';
+    }
+  }
+
+  function replaceWorkspaceHistoryState() {
+    if (!window.history?.replaceState) return;
+    const state = loadWorkspaceNavState();
+    workspaceLastHistoryKey = workspaceHistoryKey(state);
+    history.replaceState(workspaceHistoryPayload(state), '', window.location.href);
+  }
+
+  function queueWorkspaceHistoryState(state) {
+    if (!workspaceHistoryReady || workspaceApplyingHistory || !window.history?.pushState) return;
+    clearTimeout(workspaceHistoryTimer);
+    workspaceHistoryTimer = setTimeout(() => {
+      const latest = loadWorkspaceNavState();
+      const nextKey = workspaceHistoryKey(latest);
+      if (!nextKey || nextKey === workspaceLastHistoryKey) return;
+      workspaceLastHistoryKey = nextKey;
+      history.pushState(workspaceHistoryPayload(latest), '', window.location.href);
+    }, 0);
+  }
+
+  function applyWorkspaceHistoryNav(state) {
+    if (!state || state.prodId !== prodId || !state.nav) return;
+    workspaceApplyingHistory = true;
+    try {
+      const nav = state.nav;
+      localStorage.setItem(getWorkspaceNavStorageKey(), JSON.stringify(nav));
+      if (nav.auditionsSessionId) activeAuditionNavSessionId = nav.auditionsSessionId;
+      if (nav.auditionsSessionTool) activeAuditionNavTool = nav.auditionsSessionTool;
+
+      if (nav.prodTab === 'casting') {
+        openCastingSubTab(nav.castingSubTab || 'castboard');
+      } else if (nav.prodTab === 'auditions') {
+        if (nav.auditionsSubTab) openAuditionsSubTab(nav.auditionsSubTab);
+        else switchAudTab('overview');
+      } else if (nav.prodTab) {
+        switchProdTab(nav.prodTab);
+      }
+      workspaceLastHistoryKey = workspaceHistoryKey(nav);
+    } finally {
+      workspaceApplyingHistory = false;
+    }
+  }
+
+  window.addEventListener('popstate', event => {
+    if (event.state?.btsWorkspaceNav) {
+      applyWorkspaceHistoryNav(event.state);
+    }
+  });
 
   const mobileSidebarMq = window.matchMedia('(max-width: 900px)');
 
