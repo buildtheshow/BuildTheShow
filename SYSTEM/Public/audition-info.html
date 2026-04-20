@@ -1,6 +1,9 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" />
+  <link rel="preconnect" href="https://xfxaigabrkwkzdkbsthf.supabase.co" />
+  <link rel="dns-prefetch" href="https://cdn.jsdelivr.net" />
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Audition Info - Build The Show</title>
@@ -1986,7 +1989,7 @@
       ] = await Promise.all([
         sb.from('organizations').select('id,name,logo_url,email,website,location').eq('id', prod.organization_id).maybeSingle(),
         sb.from('audition_configs').select('*').eq('production_id', resolvedId).maybeSingle(),
-        sb.from('production_events').select('id,event_type,title,start_time,end_time,all_day,venue,notes').eq('production_id', resolvedId).eq('is_public', true).order('start_time'),
+        sb.from('production_events').select('id,event_type,title,start_time,end_time,all_day,venue,notes,is_public').eq('production_id', resolvedId).order('start_time'),
         sb.from('production_characters').select('*').eq('production_id', resolvedId).eq('show_on_public_page', true).order('created_at'),
         sb.auth.getSession(),
       ]);
@@ -2097,11 +2100,17 @@
       _bkProd        = prod;
       _bkAudConfig   = audConfig;
       _bkPhoneNANP   = /canada|united states|usa/i.test(org?.location || '');
-      _bkProdEvents  = getPublicCalendarEvents(events || []).filter(e => BK_CONFLICT_TYPES.includes(e.event_type));
+      // Filter to public-only events for Apollo. If is_public column doesn't exist yet,
+      // fall back to showing all events so the page never breaks.
+      const allEvents = events || [];
+      const hasPublicFlag = allEvents.some(e => e.is_public !== undefined && e.is_public !== null);
+      const publicEvents = hasPublicFlag ? allEvents.filter(e => e.is_public) : allEvents;
+
+      _bkProdEvents  = getPublicCalendarEvents(publicEvents).filter(e => BK_CONFLICT_TYPES.includes(e.event_type));
       _allCharacters = characters || [];
       window._venueMap = venueMap || {};
       window._venueLabel = venueLabel || {};
-      const html = buildPage(prod, org, audConfig, events || [], characters || [], sessions || [], slotsBySession, userBooking, venueCity, venueMap, venueLabel);
+      const html = buildPage(prod, org, audConfig, publicEvents, characters || [], sessions || [], slotsBySession, userBooking, venueCity, venueMap, venueLabel);
       const content = document.getElementById('page-content');
       content.innerHTML = html;
       content.style.display = 'block';
@@ -5884,6 +5893,6 @@
     </div>
   </div>
 
-  <script src="/SHARED/Components/text-fit.js"></script>
+  <script defer src="/SHARED/Components/text-fit.js"></script>
 </body>
 </html>

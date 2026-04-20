@@ -8,6 +8,15 @@
 ALTER TABLE productions ADD COLUMN IF NOT EXISTS slug text;
 CREATE UNIQUE INDEX IF NOT EXISTS productions_slug_idx ON productions (slug);
 
+-- ── 1c. Production events: public Apollo visibility flag ─────
+-- Controls whether an event shows on the public audition page (Apollo).
+-- Audition/performance types default true; meetings/rehearsals default false.
+ALTER TABLE production_events ADD COLUMN IF NOT EXISTS is_public boolean DEFAULT false;
+UPDATE production_events
+SET is_public = true
+WHERE event_type IN ('audition','dance_call','callback','other_audition','performance','dress','tech')
+  AND is_public IS DISTINCT FROM true;
+
 -- ── 1b. Organisation URL slugs ───────────────────────────────
 -- Used for clean audition URLs: buildtheshow.com/RYT/Audition/Annie2026
 ALTER TABLE organizations ADD COLUMN IF NOT EXISTS slug text;
