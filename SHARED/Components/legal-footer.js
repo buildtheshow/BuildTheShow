@@ -58,7 +58,7 @@
       position:       'static',
       width:          '100%',
       marginLeft:     '0',
-      marginTop:      '2rem',
+      marginTop:      'auto',
       alignSelf:      'stretch',
       clear:          'both',
       flexShrink:     '0',
@@ -66,7 +66,7 @@
       flexWrap:       'wrap',
       alignItems:     'center',
       gap:            '0.35rem 1.25rem',
-      padding:        '0.6rem 2rem',
+      padding:        '1.35rem 2rem 0.6rem',
       background:     '#ffffff',
       borderTop:      '1px solid rgba(87,46,136,0.1)',
     });
