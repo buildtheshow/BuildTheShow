@@ -55,12 +55,11 @@
     footer.setAttribute('aria-label', 'Legal');
 
     Object.assign(footer.style, {
-      position:       'relative',
+      position:       'static',
       width:          '100%',
       marginLeft:     '0',
-      marginTop:      'auto',
+      marginTop:      '2rem',
       flexShrink:     '0',
-      zIndex:         '9000',
       display:        'flex',
       flexWrap:       'wrap',
       alignItems:     'center',
