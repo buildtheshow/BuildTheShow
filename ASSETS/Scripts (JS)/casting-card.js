@@ -238,9 +238,9 @@ function renderCastingCard(data, options = {}) {
   if (age !== null && age !== undefined && age !== '') thirdParts.push(String(age));
   if (pronouns) thirdParts.push(String(pronouns));
   const thirdLine = thirdParts.join(' | ');
-  const firstNameSize = firstNameFontSize || getCastingCardTextSize(firstLine, 10.6, 5.2, 8);
-  const lastNameSize = getCastingCardTextSize(secondLine, 5.8, 3.1, 14);
-  const metaLineSize = getCastingCardTextSize(thirdLine, 4.2, 2.3, 18);
+  const firstNameSize = firstNameFontSize || getCastingCardTextSize(firstLine, 10.6, 8.5, 8);
+  const lastNameSize = getCastingCardTextSize(secondLine, 5.8, 5.0, 14);
+  const metaLineSize = getCastingCardTextSize(thirdLine, 4.2, 3.8, 18);
   
   // ── Video call badge ──────────────────────────────────────────
   const videoCallBadge = isVideoCallAttendanceMode(attendance_mode)
