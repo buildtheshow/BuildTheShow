@@ -36,7 +36,9 @@ function buildCastingCardBack(app, opts = {}) {
     includeRoomNotes    = true,
     accentColor         = null,  // if set, all sections use this color instead of per-category rainbow
     sessionNotes        = null,  // array of { label, note } — one per audition session
-    bucketPlacements    = null,  // array of { sessionLabel, bucketName, bucketColour } — dance call container placements
+    bucketPlacements      = null,  // array of { sessionLabel, bucketName, bucketColour } — dance call container placements
+    roleNotes             = null,  // array of { charName, roleType, note } — per-character in-room notes
+    characterAssignments  = null,  // array of { charName, roleType, state, decision } — casting board placements
   } = opts;
 
   const ca = (typeof applicantCustomAnswers === 'function')
@@ -109,8 +111,12 @@ function buildCastingCardBack(app, opts = {}) {
     'In The Room - Vocals', 'In The Room - Movement', 'In The Room - Acting',
     'In The Room - Direction', 'In The Room - Presence', 'In The Room - Energy', 'In The Room - Notes',
   ]);
-  // Also exclude per-session note keys (e.g. "In The Room - Notes - <uuid>")
-  const isHandledKey = key => handledKeys.has(key) || key.startsWith('In The Room - Notes - ');
+  // Also exclude per-session note keys and per-role note keys
+  const isHandledKey = key =>
+    handledKeys.has(key) ||
+    key.startsWith('In The Room - Notes - ') ||
+    key.startsWith('In The Room - Role Notes - ') ||
+    key.startsWith('In The Room - Considered - ');
 
   // ── Casting ───────────────────────────────────────────────────
   const castingPref = (typeof applicantRolePrefLabel === 'function') ? applicantRolePrefLabel(app) : '';
@@ -238,12 +244,44 @@ function buildCastingCardBack(app, opts = {}) {
       }
     }
 
+    // Casting board character assignments (liked / chosen)
+    if (characterAssignments && characterAssignments.length) {
+      const stateLabel = { liked: 'Considered', chosen: 'Cast', applied: 'Applied' };
+      const stateColour = { liked: '#572e88', chosen: '#b07a00', applied: '#7a7490' };
+      const decisionLabel = { yes: 'Yes', maybe: 'Maybe', no: 'No' };
+      const decisionColour = { yes: '#2f7a4a', maybe: '#c89118', no: '#9a4a4a' };
+      inRoomContent += `<div class="irb-inroom-chars-block">
+        <div class="irb-inroom-note-label" style="color:#572e88;">Casting Board</div>
+        ${characterAssignments.map(({ sessionLabel, charName, roleType, state, decision }) => {
+          const col = decisionColour[decision] || stateColour[state] || '#572e88';
+          const lbl = decisionLabel[decision] || stateLabel[state] || state;
+          return `<div class="irb-inroom-chars-row">
+            <span class="irb-inroom-chars-name">${sessionLabel ? `<span style="display:block;font-size:0.75em;font-weight:700;opacity:0.7;">${escStr(sessionLabel)}</span>` : ''}${escStr(charName)}${roleType === 'Group' ? ' <span style="opacity:0.65;font-size:0.85em;">(group)</span>' : ''}</span>
+            <span class="irb-inroom-chars-state" style="color:${col};">${escStr(lbl)}</span>
+          </div>`;
+        }).join('')}
+      </div>`;
+    }
+
     // Dance call bucket placements (one chip per session they were sorted into a container)
     if (bucketPlacements && bucketPlacements.length) {
       inRoomContent += bucketPlacements.map(({ sessionLabel, bucketName, bucketColour }) =>
         `<div class="irb-inroom-bucket-block" style="border-left-color:${escStr(bucketColour)};background:${escStr(bucketColour)}12;">
           <div class="irb-inroom-note-label" style="color:${escStr(bucketColour)};">${escStr(sessionLabel)}</div>
           <div class="irb-inroom-bucket-name" style="color:${escStr(bucketColour)};">${escStr(bucketName)}</div>
+        </div>`
+      ).join('');
+    }
+
+    // Per-character role notes (one block per character with notes)
+    if (roleNotes && roleNotes.length) {
+      inRoomContent += roleNotes.map(({ sessionLabel, charName, roleType, note }) =>
+        `<div class="irb-inroom-role-note-block">
+          <div class="irb-inroom-role-note-header">
+            <span class="irb-inroom-role-note-name">${sessionLabel ? `<span style="display:block;font-size:0.75em;font-weight:700;opacity:0.7;">${escStr(sessionLabel)}</span>` : ''}${escStr(charName)}${roleType === 'Group' ? ' <span style="font-size:0.85em;font-weight:600;opacity:0.65;">(group)</span>' : ''}</span>
+            ${roleType && roleType !== 'Group' ? `<span class="irb-inroom-role-note-type">${escStr(roleType)}</span>` : ''}
+          </div>
+          <div class="irb-notes">${escStr(note)}</div>
         </div>`
       ).join('');
     }
@@ -268,7 +306,7 @@ function buildCastingCardBack(app, opts = {}) {
     }
 
     inRoomZone = `<div class="irb-inroom-zone">
-      <div class="irb-inroom-zone-header">In The Room</div>
+      <div class="irb-inroom-zone-header">⬥ In The Room</div>
       ${inRoomContent || '<div class="irb-inroom-empty">Nothing recorded yet.</div>'}
     </div>`;
   }

@@ -627,6 +627,35 @@
       border-radius: 10px;
       padding: 0.75rem 0.85rem;
     }
+    .ai-si-slot-pills {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.35rem;
+      margin-top: 0.35rem;
+    }
+    .ai-si-slot-pill {
+      display: inline-flex;
+      align-items: center;
+      background: rgba(87,46,136,0.07);
+      border: 1.5px solid rgba(87,46,136,0.18);
+      border-radius: 20px;
+      padding: 0.22rem 0.65rem;
+      font-size: 0.78rem;
+      font-weight: 600;
+      color: #572e88;
+    }
+    .ai-si-slot-pill.ai-si-slot-pill-full {
+      background: rgba(0,0,0,0.04);
+      border-color: rgba(0,0,0,0.1);
+      color: #aaa;
+      text-decoration: line-through;
+    }
+    .ai-si-slot-empty {
+      font-size: 0.78rem;
+      color: #9a90b0;
+      font-style: italic;
+      margin-top: 0.25rem;
+    }
     .ai-si-slot-grid {
       display: grid;
       grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -1102,6 +1131,28 @@
     .bk-success-icon { font-size: 2.75rem; margin-bottom: 0.6rem; }
     .bk-success-title { font-size: 1.15rem; font-weight: 800; color: #1a1530; margin-bottom: 0.4rem; }
     .bk-success-sub { font-size: 0.875rem; color: #6a5a80; line-height: 1.5; margin-bottom: 1.5rem; }
+    .bk-success-email-status {
+      display: none;
+      margin: -0.35rem auto 1.25rem;
+      max-width: 560px;
+      padding: 0.8rem 0.95rem;
+      border-radius: 12px;
+      font-size: 0.82rem;
+      line-height: 1.5;
+      text-align: left;
+      border: 1px solid transparent;
+    }
+    .bk-success-email-status.active { display: block; }
+    .bk-success-email-status.success {
+      background: rgba(22,163,74,0.08);
+      border-color: rgba(22,163,74,0.18);
+      color: #166534;
+    }
+    .bk-success-email-status.error {
+      background: rgba(185,28,28,0.07);
+      border-color: rgba(185,28,28,0.16);
+      color: #b91c1c;
+    }
 
     .bk-char-row {
       display: flex; align-items: center; gap: 0.65rem;
@@ -1775,6 +1826,20 @@
 
       const slotsBySession = {};
 
+      // Fetch time slots for all sessions (for flip card display)
+      if (sessions && sessions.length) {
+        try {
+          const { data: allSlots } = await sb.from('audition_time_slots')
+            .select('id,session_id,slot_time,slot_date,label,capacity,is_available')
+            .in('session_id', sessions.map(s => s.id))
+            .order('slot_time');
+          (allSlots || []).forEach(slot => {
+            if (!slotsBySession[slot.session_id]) slotsBySession[slot.session_id] = [];
+            slotsBySession[slot.session_id].push(slot);
+          });
+        } catch (_) {}
+      }
+
       // User booking check
       let userBooking = null;
       try {
@@ -2037,7 +2102,10 @@
         : '';
       const orgInner = `<span style="display:flex;align-items:center;gap:0.4rem;">${orgLogoHTML}${esc(org?.name || '')}</span>`;
       const orgLine = org
-        ? `<div class="ai-org-line"><a href="../Organisations/org-profile.html?id=${encodeURIComponent(org.id)}" style="display:inline-flex;align-items:center;gap:0.4rem;color:inherit;text-decoration:none;" onmouseover="this.style.color='#572e88'" onmouseout="this.style.color=''">${orgInner}</a></div>`
+        ? `<div class="ai-org-line">${org.website
+            ? `<a href="${esc(org.website)}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:0.4rem;color:inherit;text-decoration:none;" onmouseover="this.style.color='#572e88'" onmouseout="this.style.color=''">${orgInner}</a>`
+            : `<span style="display:inline-flex;align-items:center;gap:0.4rem;">${orgInner}</span>`
+          }</div>`
         : '';
 
       const cityLine = venueCity
@@ -2518,7 +2586,15 @@
           const sessionTime = inferSessionTimeRanges(session, slots).join(' or ');
           const meta = [sessionDate, sessionTime].filter(Boolean).join(' · ');
           const showName = group.length > 1 && (session.name || '').trim() && (session.name || '').trim() !== typeLabel;
-          const scheduleContent = '';
+          const scheduleContent = slots.length
+            ? `<div class="ai-si-slot-pills">
+                ${slots.map(s => {
+                  const t = fmtTimeStr(s.slot_time);
+                  const full = s.is_available === false;
+                  return `<div class="ai-si-slot-pill${full ? ' ai-si-slot-pill-full' : ''}">${esc(t)}</div>`;
+                }).join('')}
+              </div>`
+            : `<div class="ai-si-slot-empty">Slots not yet published</div>`;
 
           return `
             <div class="ai-si-schedule-session">
@@ -2686,7 +2762,7 @@
             .eq('production_id', _bkProd.id),
         ]);
 
-        _spSessions = sessions || [];
+        _spSessions = (sessions || []).filter(s => s.allow_self_booking !== false);
         if (!_spSessions.length) {
           body.innerHTML = '<div class="sp-empty">No audition sessions are open for booking right now.</div>';
           return;
@@ -4145,14 +4221,21 @@
         let headshotUrl = null;
         if (_bkState.headshot_file) {
           try {
-            const ext = (_bkState.headshot_file.name || 'jpg').split('.').pop() || 'jpg';
+            const file = _bkState.headshot_file;
+            const ext = (file.name || 'jpg').split('.').pop() || 'jpg';
             const path = `${_bkProd?.id || 'prod'}-${Date.now()}.${ext}`;
-            const { data: upData } = await sb.storage.from('audition-headshots').upload(path, _bkState.headshot_file, { upsert: true });
-            if (upData?.path) {
+            const { data: upData, error: upErr } = await sb.storage
+              .from('audition-headshots')
+              .upload(path, file, { upsert: true, contentType: file.type });
+            if (upErr) {
+              console.error('[BTS] Headshot upload error:', upErr.message);
+            } else if (upData?.path) {
               const { data: urlData } = sb.storage.from('audition-headshots').getPublicUrl(upData.path);
               headshotUrl = urlData?.publicUrl || null;
             }
-          } catch {}
+          } catch (e) {
+            console.error('[BTS] Headshot upload exception:', e);
+          }
         }
         const perfName = [_bkState.perf_fname, _bkState.perf_lname].filter(Boolean).join(' ').trim()
           || _bkState.perf_preferred_name || _bkState.contact_name || 'Unknown';
@@ -4372,6 +4455,9 @@
           })(),
           ...(_bkState.notes ? { 'Additional Notes': _bkState.notes } : {})
         };
+        if (_bkState.attendance_mode === 'in_person') customAnswersPayload['Attendance Type'] = 'In Person';
+        else if (_bkState.attendance_mode === 'video_call') customAnswersPayload['Attendance Type'] = 'On a Video Call';
+
         const finalCustomAnswersPayload = Object.keys(customAnswersPayload).length ? customAnswersPayload : null;
 
         const bookingPayload = {
@@ -4473,6 +4559,7 @@
           date_conflicts:   Object.keys(_bkState.date_conflicts).length ? _bkState.date_conflicts : null,
           headshot_url:     headshotUrl,
           performer_number: performerNumber,
+          attendance_mode:  _bkState.attendance_mode || null,
           status:           'pending',
         };
         async function _bkInsertApplicationWithFallbacks(payload) {
@@ -4685,9 +4772,70 @@
 
         // Send booking confirmation email using the org's template (fire-and-forget)
         if (insertedBookingId) {
+          const resolvedWhatToPrepare = (() => {
+            const questionValue = finalCustomAnswersPayload && typeof finalCustomAnswersPayload === 'object'
+              ? (finalCustomAnswersPayload['What to Prepare'] || finalCustomAnswersPayload['what_to_prepare'])
+              : '';
+            return questionValue || _bkSession?.prepare_text || '';
+          })();
           sb.functions.invoke('send-email', {
-            body: { booking_id: insertedBookingId, production_id: _bkProd.id, category: 'booking_confirmation' }
-          }).catch(() => {});
+            body: {
+              booking_id: insertedBookingId,
+              production_id: _bkProd.id,
+              category: 'booking_confirmation',
+              email: bookingPayload.email,
+              name: bookingPayload.name,
+              session_id: bookingPayload.session_id,
+              slot_id: bookingPayload.slot_id || null,
+              role_interest: bookingPayload.role_interest || '',
+              context: {
+                performer_name: bookingPayload.name,
+                performer_email: bookingPayload.email,
+                show_name: _bkProd?.title || '',
+                show_subtitle: _bkProd?.subtitle || '',
+                audition_session: _bkSession?.name || 'Audition',
+                audition_date: _bkSession?.date ? fmtDate(_bkSession.date) : '',
+                audition_time: localSlot?.slot_time ? fmtTimeStr(localSlot.slot_time) : '',
+                audition_venue: _bkSession?.location || _bkProd?.venue || '',
+                what_to_prepare: resolvedWhatToPrepare,
+                org_name: _bkProd?.org_name || '',
+                director_name: _bkProd?.director || '',
+                role_name: bookingPayload.role_interest || '',
+                custom_answers: finalCustomAnswersPayload || null,
+                session_id: bookingPayload.session_id,
+                slot_id: bookingPayload.slot_id || null,
+                production: {
+                  title: _bkProd?.title || '',
+                  subtitle: _bkProd?.subtitle || '',
+                  venue: _bkProd?.venue || '',
+                  director: _bkProd?.director || '',
+                  organization_id: _bkProd?.organization_id || '',
+                  start_date: _bkProd?.start_date || '',
+                  end_date: _bkProd?.end_date || '',
+                  org_name: _bkProd?.org_name || '',
+                }
+              }
+            }
+          }).then(({ data, error }) => {
+            if (error) {
+              console.error('[BTS] booking confirmation email failed:', error);
+              setBookingEmailStatus(`Email update: booking saved, but the confirmation email failed. ${error.message || 'Unknown error'}`, true);
+              try { showToast(`Booking saved, but email failed: ${error.message || 'Unknown error'}`, true); } catch {}
+              return;
+            }
+            if (!data?.sent) {
+              console.error('[BTS] booking confirmation email not sent:', data?.error || data);
+              setBookingEmailStatus(`Email update: booking saved, but the confirmation email was not sent. ${data?.error || 'Unknown reason'}`, true);
+              try { showToast(`Booking saved, but email was not sent: ${data?.error || 'Unknown reason'}`, true); } catch {}
+              return;
+            }
+            setBookingEmailStatus('Email update: your confirmation email was sent successfully.');
+            try { showToast('Booking confirmation email sent.'); } catch {}
+          }).catch((err) => {
+            console.error('[BTS] booking confirmation email crashed:', err);
+            setBookingEmailStatus(`Email update: booking saved, but the confirmation email crashed. ${err?.message || 'Unknown error'}`, true);
+            try { showToast(`Booking saved, but email crashed: ${err?.message || 'Unknown error'}`, true); } catch {}
+          });
         }
 
         _userBooking = {
@@ -4723,6 +4871,7 @@
         } else {
           if (successSub) successSub.textContent = slot ? `You're booked for ${fmtTimeStr(slot.slot_time)}. Can't wait to see you!` : `Your spot is confirmed. Can't wait to see you!`;
         }
+        setBookingEmailStatus('Email update: sending your confirmation email…');
         document.getElementById('bk-success').classList.add('active');
       } catch (err) {
         console.error('[BTS] Booking submit error:', err);
@@ -4760,6 +4909,18 @@
         window._venueMap || {},
         window._venueLabel || {}
       );
+    }
+
+    function setBookingEmailStatus(message, isError = false) {
+      const el = document.getElementById('bk-success-email-status');
+      if (!el) return;
+      if (!message) {
+        el.className = 'bk-success-email-status';
+        el.textContent = '';
+        return;
+      }
+      el.className = `bk-success-email-status active ${isError ? 'error' : 'success'}`;
+      el.textContent = message;
     }
 
     /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -5527,6 +5688,7 @@
         <div class="bk-success-icon">🎭</div>
         <div class="bk-success-title">You're booked!</div>
         <div class="bk-success-sub" id="bk-success-sub">Your spot is confirmed. Can't wait to see you!</div>
+        <div class="bk-success-email-status" id="bk-success-email-status"></div>
         <button class="bk-btn-next" onclick="closeBookModal()">Done</button>
       </div>
 

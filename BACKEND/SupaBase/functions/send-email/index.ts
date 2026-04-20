@@ -30,6 +30,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 const SUPABASE_URL     = Deno.env.get('SUPABASE_URL')             ?? '';
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
 const RESEND_API_KEY   = Deno.env.get('RESEND_API_KEY')            ?? '';
+const FROM_EMAIL       = Deno.env.get('FROM_EMAIL')                ?? '';
 
 // Map legacy status field → template category
 const STATUS_TO_CATEGORY: Record<string, string> = {
@@ -48,6 +49,7 @@ const CATEGORY_SUBJECTS: Record<string, string> = {
 };
 
 serve(async (req) => {
+  try {
   if (req.method === 'OPTIONS') return corsResponse(null, 204);
   if (req.method !== 'POST')   return json({ error: 'Method not allowed' }, 405);
 
@@ -65,45 +67,93 @@ serve(async (req) => {
   const bookingIdRaw   = String(body.booking_id   || '').trim();
   const applicantIdRaw = String(body.applicant_id || '').trim();
   const productionIdRaw = String(body.production_id || '').trim();
+  const directContext = isRecord(body.context) ? body.context as Record<string, unknown> : {};
+  const hasDirectBookingContext = Boolean(
+    firstDefinedString(
+      directContext.performer_email,
+      body.email,
+    ) &&
+    firstDefinedString(
+      directContext.audition_session,
+      directContext.audition_date,
+      directContext.audition_time,
+      directContext.audition_venue,
+      body.session_id,
+    )
+  );
 
   // ── Resolve performer data ────────────────────────────────────
   // Prefer audition_applications (has email + all custom answers).
   // Fall back to audition_bookings for booking confirmation flow.
 
-  let performerEmail  = '';
-  let performerName   = '';
-  let customAnswers: Record<string, unknown> = {};
-  let roleInterest    = '';
-  let appSessionId    = '';
-  let appSlotId       = '';
+  let performerEmail  = firstDefinedString(body.email, directContext.performer_email);
+  let performerName   = firstDefinedString(body.name, directContext.performer_name);
+  let customAnswers: Record<string, unknown> = isRecord(directContext.custom_answers) ? directContext.custom_answers as Record<string, unknown> : {};
+  let roleInterest    = firstDefinedString(body.role_interest, directContext.role_name);
+  let appSessionId    = firstDefinedString(body.session_id, directContext.session_id);
+  let appSlotId       = firstDefinedString(body.slot_id, directContext.slot_id);
   let productionId    = productionIdRaw;
 
-  // Path A: we have an applicant_id
+  // Path A: we have an applicant_id — non-fatal if DB lookup fails, top-level email/name are the fallback
   if (applicantIdRaw) {
-    const { data: app } = await sb
-      .from('audition_applications')
-      .select('id,name,email,role_interest,custom_answers,session_id,slot_id,time_slot_id,production_id')
-      .eq('id', applicantIdRaw)
-      .single();
-    if (!app) return json({ error: 'Applicant not found' }, 404);
-    performerEmail  = String(app.email || '');
-    performerName   = String(app.name  || '');
-    customAnswers   = isRecord(app.custom_answers) ? app.custom_answers as Record<string, unknown> : {};
-    roleInterest    = String(app.role_interest || '');
-    appSessionId    = String(app.session_id || '');
-    appSlotId       = String(app.time_slot_id || app.slot_id || '');
-    if (!productionId) productionId = String(app.production_id || '');
+    try {
+      const { data: app } = await sb
+        .from('audition_applications')
+        .select('id,name,email,role_interest,custom_answers,session_id,slot_id,time_slot_id,production_id')
+        .eq('id', applicantIdRaw)
+        .maybeSingle();
+      if (app) {
+        if (app.email) performerEmail = String(app.email);
+        if (app.name)  performerName  = String(app.name);
+        customAnswers  = isRecord(app.custom_answers) ? app.custom_answers as Record<string, unknown> : {};
+        roleInterest   = firstDefinedString(directContext.role_name, String(app.role_interest || ''));
+        appSessionId   = String(app.session_id || '');
+        appSlotId      = String(app.time_slot_id || app.slot_id || '');
+        if (!productionId) productionId = String(app.production_id || '');
+      }
+    } catch { /* fall through — use top-level email/name */ }
   }
 
   // Path B: booking_id (booking confirmation / resend)
   let bookingSessionId = '';
   let bookingSlotId    = '';
-  if (bookingIdRaw) {
-    const { data: booking } = await sb
-      .from('audition_bookings')
-      .select('id,email,name,first_name,last_name,session_id,slot_id,production_id,custom_answers,applicant_id')
-      .eq('id', bookingIdRaw)
-      .single();
+  if (bookingIdRaw && !(category === 'booking_confirmation' && hasDirectBookingContext)) {
+    const bookingSelect = 'id,email,name,first_name,last_name,session_id,slot_id,production_id,custom_answers,applicant_id';
+    let booking: Record<string, unknown> | null = null;
+
+    for (let attempt = 0; attempt < 3 && !booking; attempt += 1) {
+      const { data } = await sb
+        .from('audition_bookings')
+        .select(bookingSelect)
+        .eq('id', bookingIdRaw)
+        .maybeSingle();
+      if (data) {
+        booking = data as Record<string, unknown>;
+        break;
+      }
+      if (attempt < 2) await wait(180 * (attempt + 1));
+    }
+
+    if (!booking) {
+      const fallbackEmail = String(body.email || '').trim();
+      const fallbackProductionId = String(productionIdRaw || '').trim();
+      const fallbackSessionId = String(body.session_id || '').trim();
+      const fallbackSlotId = String(body.slot_id || '').trim();
+      if (fallbackEmail && fallbackProductionId) {
+        let query = sb
+          .from('audition_bookings')
+          .select(bookingSelect)
+          .eq('production_id', fallbackProductionId)
+          .eq('email', fallbackEmail)
+          .order('created_at', { ascending: false })
+          .limit(1);
+        if (fallbackSessionId) query = query.eq('session_id', fallbackSessionId);
+        if (fallbackSlotId) query = query.eq('slot_id', fallbackSlotId);
+        const { data: fallbackBooking } = await query.maybeSingle();
+        if (fallbackBooking) booking = fallbackBooking as Record<string, unknown>;
+      }
+    }
+
     if (!booking) return json({ error: 'Booking not found' }, 404);
     // Only overwrite email/name if we don't already have them from the application
     if (!performerEmail) performerEmail = String(booking.email || '');
@@ -133,15 +183,15 @@ serve(async (req) => {
     }
   }
 
-  if (!productionId)   return json({ error: 'Missing production_id' }, 400);
-  if (!performerEmail) return json({ error: 'No email address found for this performer' }, 422);
+  if (!productionId)   return json({ ok: false, error: 'Missing production_id' });
+  if (!performerEmail) return json({ ok: false, error: 'No email address found for this performer' });
 
   // ── Fetch production + template + org ────────────────────────
   const [{ data: prod }, { data: template }] = await Promise.all([
     sb.from('productions')
       .select('id,title,subtitle,venue,director,organization_id,start_date,end_date')
       .eq('id', productionId)
-      .single(),
+      .maybeSingle(),
     sb.from('email_templates')
       .select('subject,body')
       .eq('production_id', productionId)
@@ -151,14 +201,40 @@ serve(async (req) => {
       .maybeSingle(),
   ]);
 
-  if (!prod) {
-    console.error('[send-email] Production not found:', productionId);
-    return json({ error: 'Production not found' }, 404);
+  if (!template && !body.subject && !body.message) {
+    console.error('[send-email] Template not found for category:', category, 'production:', productionId);
+    return json({ ok: false, error: `No email template found for "${category}". Create one in the Emails tab first.` });
   }
 
-  const { data: org } = prod.organization_id
-    ? await sb.from('organizations').select('name,email').eq('id', String(prod.organization_id)).maybeSingle()
-    : { data: null };
+  const directProduction = isRecord(directContext.production) ? directContext.production as Record<string, unknown> : {};
+  const productionRecord = {
+    id: productionId,
+    title: firstDefinedString(directContext.show_name, directProduction.title, prod?.title),
+    subtitle: firstDefinedString(directContext.show_subtitle, directProduction.subtitle, prod?.subtitle),
+    venue: firstDefinedString(directContext.show_venue, directContext.audition_venue, directProduction.venue, prod?.venue),
+    director: firstDefinedString(directContext.director_name, directProduction.director, prod?.director),
+    organization_id: firstDefinedString(directProduction.organization_id, prod?.organization_id),
+    start_date: firstDefinedString(directContext.rehearsal_start_date, directProduction.start_date, prod?.start_date),
+    end_date: firstDefinedString(directContext.opening_night, directProduction.end_date, prod?.end_date),
+  };
+
+  let org: Record<string, unknown> | null = null;
+  if (productionRecord.organization_id) {
+    try {
+      const { data } = await sb
+        .from('organizations')
+        .select('name,email')
+        .eq('id', String(productionRecord.organization_id))
+        .maybeSingle();
+      org = data as Record<string, unknown> | null;
+    } catch { org = null; }
+  }
+  if (!org) {
+    org = {
+      name: firstDefinedString(directContext.org_name, directContext.organization_name, directProduction.org_name),
+      email: firstDefinedString(directContext.org_email, directContext.organization_email, directProduction.org_email),
+    };
+  }
 
   // ── Resolve session + slot ────────────────────────────────────
   const sessionId = appSessionId || bookingSessionId;
@@ -216,25 +292,40 @@ serve(async (req) => {
   const firstName    = (performerName.split(' ')[0] || 'Performer');
   const orgName      = String(org?.name  || '');
   const orgEmail     = String(org?.email || '');
-  const showName     = String(prod.title    || '');
-  const director     = String(prod.director || '');
-  const audVenue     = String((primarySession as Record<string,unknown>)?.location ?? prod.venue ?? '');
-  const sessionDate  = fmtDate(String((primarySession as Record<string,unknown>)?.date || (primarySession as Record<string,unknown>)?.session_date || ''));
-  const sessionName  = String((primarySession as Record<string,unknown>)?.name || '');
-  const slotTime     = primarySlot
-    ? fmtTime(String((primarySlot as Record<string,unknown>).slot_time || ''))
-    : (primarySession ? fmtTime(String((primarySession as Record<string,unknown>).start_time || '')) : '');
-  const prepareText  = (primarySession as Record<string,unknown>)?.prepare_text
-    ? htmlToPlainText(String((primarySession as Record<string,unknown>).prepare_text))
-    : '';
+  const showName     = String(productionRecord.title || '');
+  const director     = String(productionRecord.director || '');
+  const audVenue     = firstDefinedString(
+    directContext.audition_venue,
+    (primarySession as Record<string,unknown>)?.location,
+    productionRecord.venue,
+  );
+  const sessionDate  = firstDefinedString(
+    directContext.audition_date,
+    fmtDate(String((primarySession as Record<string,unknown>)?.date || (primarySession as Record<string,unknown>)?.session_date || '')),
+  );
+  const sessionName  = firstDefinedString(
+    directContext.audition_session,
+    (primarySession as Record<string,unknown>)?.name,
+  );
+  const slotTime     = firstDefinedString(
+    directContext.audition_time,
+    primarySlot ? fmtTime(String((primarySlot as Record<string,unknown>).slot_time || '')) : '',
+    primarySession ? fmtTime(String((primarySession as Record<string,unknown>).start_time || '')) : '',
+  );
+  const prepareText  = firstDefinedString(
+    directContext.what_to_prepare,
+    (primarySession as Record<string,unknown>)?.prepare_text
+      ? htmlToPlainText(String((primarySession as Record<string,unknown>).prepare_text))
+      : '',
+  );
   const whatToPrepare = firstDefinedString(
     prepareText,
     customAnswers['What to Prepare'],
     customAnswers['what_to_prepare'],
   );
-  const showDates = prod.start_date && prod.end_date
-    ? `${fmtDate(String(prod.start_date))} – ${fmtDate(String(prod.end_date))}`
-    : (prod.start_date ? fmtDate(String(prod.start_date)) : '');
+  const showDates = productionRecord.start_date && productionRecord.end_date
+    ? `${fmtDate(String(productionRecord.start_date))} – ${fmtDate(String(productionRecord.end_date))}`
+    : (productionRecord.start_date ? fmtDate(String(productionRecord.start_date)) : '');
   const bookingLink = `https://buildtheshow.com/audition-info?prod=${productionId}`;
   const pronouns    = firstDefinedString(
     customAnswers['Pronouns'], customAnswers['pronouns'],
@@ -246,8 +337,8 @@ serve(async (req) => {
     '{{performer_pronouns}}':    pronouns,
     '{{performer_email}}':       performerEmail,
     '{{show_name}}':             showName,
-    '{{show_subtitle}}':         String(prod.subtitle || ''),
-    '{{show_venue}}':            String(prod.venue    || ''),
+    '{{show_subtitle}}':         String(productionRecord.subtitle || ''),
+    '{{show_venue}}':            String(productionRecord.venue    || ''),
     '{{show_dates}}':            showDates,
     '{{audition_session}}':      sessionName,
     '{{audition_date}}':         sessionDate,
@@ -260,16 +351,25 @@ serve(async (req) => {
     '{{director_name}}':         director,
     '{{role_name}}':             roleInterest,
     '{{role_type}}':             '',
-    '{{callback_date}}':         fmtDate(String((callbackSlot as Record<string,unknown>)?.slot_date || (callbackSession as Record<string,unknown>)?.session_date || '')),
-    '{{callback_time}}':         fmtTime(String((callbackSlot as Record<string,unknown>)?.slot_time || (callbackSession as Record<string,unknown>)?.start_time  || '')),
-    '{{callback_venue}}':        audVenue,
-    '{{rehearsal_start_date}}':  prod.start_date ? fmtDate(String(prod.start_date)) : '',
+    '{{callback_date}}':         firstDefinedString(
+      directContext.callback_date,
+      fmtDate(String((callbackSlot as Record<string,unknown>)?.slot_date || (callbackSession as Record<string,unknown>)?.session_date || '')),
+    ),
+    '{{callback_time}}':         firstDefinedString(
+      directContext.callback_time,
+      fmtTime(String((callbackSlot as Record<string,unknown>)?.slot_time || (callbackSession as Record<string,unknown>)?.start_time  || '')),
+    ),
+    '{{callback_venue}}':        firstDefinedString(
+      directContext.callback_venue,
+      audVenue,
+    ),
+    '{{rehearsal_start_date}}':  productionRecord.start_date ? fmtDate(String(productionRecord.start_date)) : '',
     '{{rehearsal_schedule}}':    '',
-    '{{opening_night}}':         prod.end_date   ? fmtDate(String(prod.end_date))   : '',
+    '{{opening_night}}':         productionRecord.end_date   ? fmtDate(String(productionRecord.end_date))   : '',
   };
 
   const productionFieldValues: Record<string, unknown> = {
-    ...(prod as object),
+    ...(productionRecord as object),
     org_name:     orgName,
     director_name: director,
     show_dates:    showDates,
@@ -309,10 +409,11 @@ serve(async (req) => {
   const overrideMessage = typeof body.message === 'string' ? body.message : '';
   const sourceSubject = overrideSubject || template?.subject || CATEGORY_SUBJECTS[category] || `Update from ${showName || 'Build The Show'}`;
   const sourceBody    = overrideMessage || template?.body    || '';
+  const sourceBodyText = htmlToPlainText(String(sourceBody || ''));
 
-  if (!sourceBody.trim()) {
-    console.log('[send-email] No body for category:', category, 'production:', productionId, '— skipping.');
-    return json({ ok: true, skipped: true, reason: 'no_template' });
+  if (!sourceBodyText.trim()) {
+    console.error('[send-email] No usable body for category:', category, 'production:', productionId);
+    return json({ ok: false, error: `The "${category}" email template has no body. Open it in the Emails tab and add content.` });
   }
 
   const subject       = substituteTemplate(sourceSubject);
@@ -321,29 +422,26 @@ serve(async (req) => {
   const htmlBody      = bodyLooksHtml ? substituteTemplate(sourceBody, true) : plainTextToHtml(templatedBody);
   const bodyText      = bodyLooksHtml ? htmlToPlainText(templatedBody) : templatedBody;
 
-  const fromName  = orgName || showName || 'Build The Show';
-  const fromEmail = `${fromName} <noreply@buildtheshow.com>`;
+  const fromName  = orgName || 'Build The Show';
+  const fromEmail = FROM_EMAIL || `noreply@buildtheshow.com`;
+  const fromField = `${fromName} <${fromEmail}>`;
+  const replyTo   = orgEmail || undefined;
 
   const html = `<!DOCTYPE html>
 <html>
 <head><meta charset="UTF-8" /></head>
 <body style="font-family:sans-serif;color:#1a1530;max-width:600px;margin:0 auto;padding:2rem 1rem;">
-  <div style="margin-bottom:1.5rem;">
-    <img src="https://buildtheshow.com/logo-long-colour.png" alt="Build The Show" height="32" style="display:block;" />
-  </div>
-  <h2 style="font-size:1.3rem;font-weight:800;color:#1a1530;margin:0 0 1.25rem;">${escHtml(subject)}</h2>
   ${htmlBody}
   <hr style="margin:2rem 0;border:none;border-top:1px solid #e5e0f0;" />
   <p style="font-size:0.75rem;color:#9a90b0;margin:0;">
-    This message was sent via <a href="https://buildtheshow.com" style="color:#572e88;">Build The Show</a>
-    on behalf of ${escHtml(orgName || showName || 'a production team')}.
+    Sent by ${escHtml(fromName)} via <a href="https://buildtheshow.com" style="color:#572e88;">Build The Show</a>.
   </p>
 </body>
 </html>`;
 
   if (!RESEND_API_KEY) {
-    console.log('[send-email] No RESEND_API_KEY. Would send to:', performerEmail, '| Subject:', subject);
-    return json({ ok: true, dev: true });
+    console.error('[send-email] Missing RESEND_API_KEY. Cannot send to:', performerEmail, '| Subject:', subject);
+    return json({ ok: false, error: 'Email sending is not configured (missing API key). Contact your admin.' });
   }
 
   const res = await fetch('https://api.resend.com/emails', {
@@ -353,8 +451,9 @@ serve(async (req) => {
       'Content-Type':  'application/json',
     },
     body: JSON.stringify({
-      from:    fromEmail,
+      from:    fromField,
       to:      [performerEmail],
+      reply_to: replyTo,
       subject,
       html,
       text:    bodyText,
@@ -363,11 +462,17 @@ serve(async (req) => {
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
+    const resendMsg = (err as Record<string, string>).message || (err as Record<string, string>).name || JSON.stringify(err);
     console.error('[send-email] Resend error:', err);
-    return json({ error: (err as Record<string, string>).message || 'Email send failed' }, 502);
+    return json({ ok: false, error: `Resend API error: ${resendMsg}` });
   }
 
-  return json({ ok: true });
+  return json({ ok: true, sent: true, category, performer_email: performerEmail });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error('[send-email] Unhandled error:', msg);
+    return json({ ok: false, error: `Unexpected error: ${msg}` });
+  }
 });
 
 // ── Helpers ───────────────────────────────────────────────────
@@ -451,10 +556,19 @@ function lookupFlexibleValue(source: Record<string, unknown>, rawKey: string): s
   return '';
 }
 
+function wait(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
 function json(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), {
     status,
-    headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+    headers: {
+      'Content-Type': 'application/json',
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+    },
   });
 }
 
@@ -464,7 +578,7 @@ function corsResponse(body: null, status: number): Response {
     headers: {
       'Access-Control-Allow-Origin':  '*',
       'Access-Control-Allow-Methods': 'POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Authorization, Content-Type',
+      'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
     },
   });
 }

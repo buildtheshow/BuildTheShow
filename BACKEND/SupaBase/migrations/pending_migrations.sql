@@ -17,6 +17,7 @@ ALTER TABLE profiles ADD COLUMN IF NOT EXISTS email text;
 -- audition.html now passes session_id and time_slot_id on submit.
 ALTER TABLE audition_applications ADD COLUMN IF NOT EXISTS session_id   uuid REFERENCES audition_sessions(id)    ON DELETE SET NULL;
 ALTER TABLE audition_applications ADD COLUMN IF NOT EXISTS time_slot_id uuid REFERENCES audition_time_slots(id)  ON DELETE SET NULL;
+ALTER TABLE audition_applications ADD COLUMN IF NOT EXISTS attendance_mode text;
 ALTER TABLE audition_applications ADD COLUMN IF NOT EXISTS slot_assignments jsonb DEFAULT '[]'::jsonb;
 ALTER TABLE audition_applications ADD COLUMN IF NOT EXISTS audition_type_1 uuid REFERENCES audition_sessions(id) ON DELETE SET NULL;
 ALTER TABLE audition_applications ADD COLUMN IF NOT EXISTS audition_slot_1 uuid REFERENCES audition_time_slots(id) ON DELETE SET NULL;
@@ -38,6 +39,34 @@ ALTER TABLE audition_applications ADD COLUMN IF NOT EXISTS audition_type_9 uuid 
 ALTER TABLE audition_applications ADD COLUMN IF NOT EXISTS audition_slot_9 uuid REFERENCES audition_time_slots(id) ON DELETE SET NULL;
 ALTER TABLE audition_applications ADD COLUMN IF NOT EXISTS audition_type_10 uuid REFERENCES audition_sessions(id) ON DELETE SET NULL;
 ALTER TABLE audition_applications ADD COLUMN IF NOT EXISTS audition_slot_10 uuid REFERENCES audition_time_slots(id) ON DELETE SET NULL;
+
+ALTER TABLE audition_bookings ADD COLUMN IF NOT EXISTS attendance_mode text;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'audition_applications_attendance_mode_check'
+  ) THEN
+    ALTER TABLE audition_applications
+      ADD CONSTRAINT audition_applications_attendance_mode_check
+      CHECK (attendance_mode IS NULL OR attendance_mode IN ('in_person', 'video_call'));
+  END IF;
+END $$;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'audition_bookings_attendance_mode_check'
+  ) THEN
+    ALTER TABLE audition_bookings
+      ADD CONSTRAINT audition_bookings_attendance_mode_check
+      CHECK (attendance_mode IS NULL OR attendance_mode IN ('in_person', 'video_call'));
+  END IF;
+END $$;
 
 -- ── 4. Audition time slots: is_available default ─────────────
 -- Ensure column exists (may already be present)

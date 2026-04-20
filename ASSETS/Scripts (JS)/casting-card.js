@@ -55,6 +55,32 @@ function getCastingCardTextSize(text, baseSize, minSize, maxChars) {
   return `${fitted}cqw`;
 }
 
+function isVideoCallAttendanceMode(attendanceMode) {
+  const normalized = String(attendanceMode || '').trim().toLowerCase();
+  return normalized === 'video_call'
+    || normalized === 'video'
+    || normalized === 'virtual'
+    || normalized === 'video call'
+    || normalized === 'on a video call';
+}
+
+function getCastingCardVideoCallIconUrl() {
+  const version = '20260415-2039';
+  try {
+    const scriptTag = Array.from(document.scripts || []).find(script =>
+      String(script?.src || '').includes('/ASSETS/Scripts%20(JS)/casting-card.js') ||
+      String(script?.src || '').includes('/ASSETS/Scripts (JS)/casting-card.js') ||
+      String(script?.src || '').endsWith('casting-card.js')
+    );
+    if (scriptTag?.src) {
+      const url = new URL('../Images/VideoCall.svg', scriptTag.src);
+      url.searchParams.set('v', version);
+      return url.href;
+    }
+  } catch {}
+  return `ASSETS/Images/VideoCall.svg?v=${version}`;
+}
+
 // ── Determine Category Badge (gender) ────────────────────────
 function getCategorySymbol(castingCategories) {
   // Legacy alias — delegates to getCategoryBadge
@@ -106,7 +132,8 @@ function renderCastingCard(data, options = {}) {
     onDragStart = null,
     onDragEnd = null,
     id = null,
-    title = null
+    title = null,
+    firstNameFontSize = null,  // override computed size, e.g. '22cqw'
   } = options;
   
   const {
@@ -188,13 +215,13 @@ function renderCastingCard(data, options = {}) {
   if (age !== null && age !== undefined && age !== '') thirdParts.push(String(age));
   if (pronouns) thirdParts.push(String(pronouns));
   const thirdLine = thirdParts.join(' | ');
-  const firstNameSize = getCastingCardTextSize(firstLine, 10.6, 5.2, 8);
+  const firstNameSize = firstNameFontSize || getCastingCardTextSize(firstLine, 10.6, 5.2, 8);
   const lastNameSize = getCastingCardTextSize(secondLine, 5.8, 3.1, 14);
   const metaLineSize = getCastingCardTextSize(thirdLine, 4.2, 2.3, 18);
   
   // ── Video call badge ──────────────────────────────────────────
-  const videoCallBadge = attendance_mode === 'video_call'
-    ? `<img src="../../../../ASSETS/Images/VideoCall.svg" class="casting-card-videocall-badge" alt="Video Call" />`
+  const videoCallBadge = isVideoCallAttendanceMode(attendance_mode)
+    ? `<img src="${esc(getCastingCardVideoCallIconUrl())}" class="casting-card-videocall-badge" alt="Video Call" />`
     : '';
 
   // ── Build the card HTML ───────────────────────────────────────

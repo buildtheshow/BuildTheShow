@@ -934,6 +934,21 @@
 
     // ── Applicants view ────────────────────────────────────────
     function renderApplicants() {
+      function castingAttendanceModeLabel(record) {
+        const customAnswers = (typeof record?.custom_answers === 'string')
+          ? JSON.parse(record.custom_answers || '{}')
+          : (record?.custom_answers || {});
+        const raw = String(
+          record?.attendance_mode ||
+          customAnswers['Attendance Type'] ||
+          customAnswers['attendance_mode'] ||
+          ''
+        ).trim().toLowerCase();
+        if (['in_person', 'in person', 'in-person', 'onsite', 'on site'].includes(raw)) return 'In Person';
+        if (['video_call', 'video call', 'video', 'virtual', 'online', 'zoom', 'google meet', 'meet', 'on a video call'].includes(raw)) return 'On a Video Call';
+        return '';
+      }
+
       const statusCounts = {};
       allApplications.forEach(a => { statusCounts[a.status] = (statusCounts[a.status] || 0) + 1; });
 
@@ -962,6 +977,7 @@
                 headshot_url: photo,
                 casting_categories: pronouns ? [pronouns] : [],
                 role_openness: a.role_name ? 'specific' : 'open',
+                attendance_mode: castingAttendanceModeLabel(a) || null,
               }, {
                 size: 'default',
                 hasPadding: true,
@@ -1019,6 +1035,7 @@
             headshot_url: castApp ? (profile?.headshot_url || castApp.headshot_url || '') : '',
             casting_categories: pronouns,
             role_openness: roleOpenness,
+            attendance_mode: castingAttendanceModeLabel(castApp) || null,
             char_name: char.name,
             char_type: char.character_type,
             vocal_type: char.vocal_type,
@@ -1355,18 +1372,18 @@
         if (upErr) throw upErr;
 
         const { data: urlData } = sb.storage.from('audition-headshots').getPublicUrl(upData.path);
-        const newUrl = urlData?.publicUrl;
+        const newUrl = urlData?.publicUrl ? urlData.publicUrl + '?t=' + Date.now() : null;
         if (!newUrl) throw new Error('Could not get public URL');
 
         // Update audition_applications
-        await sb.from('audition_applications').update({ headshot_url: newUrl }).eq('id', appId);
+        await sb.from('audition_applications').update({ headshot_url: newUrl }).eq('id', appId).catch(() => {});
 
         // Also update profiles table if linked
         if (profileId) {
           await sb.from('profiles').update({ headshot_url: newUrl }).eq('id', profileId).catch(() => {});
         }
 
-        // Update in-memory record
+        // Update in-memory records
         const app = allApplications.find(a => a.id === appId);
         if (app) app.headshot_url = newUrl;
         const profile = allProfiles.find(p => p.id === profileId);
@@ -1375,10 +1392,11 @@
         // Update the headshot in the panel immediately
         const wrap = document.getElementById('clio-headshot-wrap');
         if (wrap) wrap.innerHTML = `<img src="${esc(newUrl)}" alt="Headshot" style="width:100%;height:100%;object-fit:cover;object-position:center top;" />`;
-        if (btn) { btn.disabled = false; btn.textContent = 'Change headshot'; }
+        if (btn) { btn.disabled = false; btn.textContent = 'Change headshot'; btn.dataset.oldUrl = newUrl; }
 
-        // Re-render the grid card too
-        renderApplicants();
+        // Re-render all views
+        try { renderApplicants(); } catch {}
+        try { renderCastList(); } catch {}
       } catch (err) {
         console.error('[Clio] Headshot upload failed:', err);
         if (btn) { btn.disabled = false; btn.textContent = 'Upload failed — try again'; }
@@ -1875,12 +1893,12 @@
       return result;
     }
 
-    async function openNotifyModal(appId) {
+    async function openNotifyModal(appId, forceCategory) {
       const app = allApplications.find(a => a.id === appId);
       if (!app) return;
 
-      const status   = app.status;
-      const category = NOTIFY_TEMPLATE_CATEGORY[status];
+      const status   = forceCategory ? Object.keys(NOTIFY_TEMPLATE_CATEGORY).find(k => NOTIFY_TEMPLATE_CATEGORY[k] === forceCategory) || app.status : app.status;
+      const category = forceCategory || NOTIFY_TEMPLATE_CATEGORY[status];
 
       // Reset modal state
       document.getElementById('notify-modal-app-id').value        = appId;
@@ -1937,16 +1955,34 @@
       sendingEl.style.display = 'block';
 
       try {
-        const { error } = await sb.functions.invoke('send-email', {
+        const { data, error } = await sb.functions.invoke('send-email', {
           body: {
             applicant_id: app.id,
             production_id: productionId,
             status: app.status,
             subject: subject || undefined,
             message,
+            context: {
+              show_name:     _prod?.title || '',
+              show_subtitle: _prod?.subtitle || '',
+              org_name:      (_org && _org.name) || _prod?.org_name || '',
+              org_email:     (_org && _org.email) || '',
+              director_name: _prod?.director || '',
+              production: {
+                title:           _prod?.title || '',
+                subtitle:        _prod?.subtitle || '',
+                venue:           _prod?.venue || '',
+                director:        _prod?.director || '',
+                organization_id: _prod?.organization_id || '',
+                start_date:      _prod?.start_date || '',
+                end_date:        _prod?.end_date || '',
+                org_name:        (_org && _org.name) || _prod?.org_name || '',
+              },
+            },
           },
         });
         if (error) throw error;
+        if (!data?.sent) throw new Error(data?.error || 'Email was not sent.');
 
         closeNotifyModal();
         showToast('Email sent.');
@@ -2136,7 +2172,7 @@
       try {
         const { data: apps } = await sb
           .from('audition_applications')
-          .select('id, status, name, email, role_interest, notes, org_notes, character_id, profile_id, headshot_url, callback_status, callback_notes, callback_rating, callback_group_id, session_id, slot_id, time_slot_id, slot_assignments, custom_answers')
+          .select('id, status, name, email, role_interest, notes, org_notes, character_id, profile_id, headshot_url, callback_status, callback_notes, callback_rating, callback_group_id, session_id, slot_id, time_slot_id, slot_assignments, custom_answers, attendance_mode')
           .eq('production_id', productionId)
           .order('created_at', { ascending: false });
         allApplications = (apps || []).map(a => ({
@@ -2226,6 +2262,7 @@
     init();
   </script>
 
+  <script src="../../../../SHARED/Components/legal-footer.js"></script>
 </body>
 </html>
 
