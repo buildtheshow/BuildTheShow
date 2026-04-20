@@ -59,6 +59,8 @@
       width:          '100%',
       marginLeft:     '0',
       marginTop:      '2rem',
+      alignSelf:      'stretch',
+      clear:          'both',
       flexShrink:     '0',
       display:        'flex',
       flexWrap:       'wrap',
