@@ -11028,6 +11028,13 @@
         <label class="form-label">Notes <span class="opt">(optional)</span></label>
         <textarea class="form-textarea" id="ev-notes" rows="2" style="min-height:60px;"></textarea>
       </div>
+      <div class="form-group" style="display:flex;align-items:center;gap:0.75rem;padding:0.65rem 0.85rem;background:rgba(87,46,136,0.04);border-radius:10px;border:1.5px solid rgba(87,46,136,0.1);">
+        <input type="checkbox" id="ev-is-public" style="accent-color:#572e88;width:16px;height:16px;flex-shrink:0;cursor:pointer;" />
+        <div>
+          <label for="ev-is-public" style="font-size:0.84rem;font-weight:700;color:#1a1530;cursor:pointer;display:block;">Show on Public Apollo Calendar</label>
+          <div style="font-size:0.72rem;color:#9a90b0;margin-top:0.1rem;">Performers will see this event on the audition page.</div>
+        </div>
+      </div>
       <div style="display:flex;gap:0.75rem;">
         <button class="btn-primary" id="save-event-btn" onclick="submitEventModal()" style="flex:1;justify-content:center;">
           Add to Calendar
@@ -13063,7 +13070,7 @@ If you have any questions, don't hesitate to reach out.
       allDay: e.all_day || false,
       backgroundColor: colour,
       borderColor: colour,
-      extendedProps: { event_type: e.event_type, venue: e.venue, notes: e.notes },
+      extendedProps: { event_type: e.event_type, venue: e.venue, notes: e.notes, is_public: e.is_public ?? false },
     };
   }
 
@@ -13107,6 +13114,10 @@ If you have any questions, don't hesitate to reach out.
 
     // Pre-fill from selection or existing event
     document.getElementById('ev-start').readOnly = false;
+    // Public by default for performer-facing types
+    const PUBLIC_TYPES = ['audition','dance_call','callback','other_audition','performance','dress','tech'];
+    const _defaultPublic = type => PUBLIC_TYPES.includes(type);
+
     if (opts.fcEvent) {
       // Editing existing
       const ev = opts.fcEvent;
@@ -13120,6 +13131,7 @@ If you have any questions, don't hesitate to reach out.
       document.getElementById('ev-end').value   = toDateTimeLocal(ev.end);
       document.getElementById('ev-venue').value = ev.extendedProps.venue || '';
       document.getElementById('ev-notes').value = ev.extendedProps.notes || '';
+      document.getElementById('ev-is-public').checked = ev.extendedProps.is_public ?? _defaultPublic(ev.extendedProps.event_type);
       VenuePicker.render('ev-venue-picker', ev.extendedProps.venue || '', (name) => {
         document.getElementById('ev-venue').value = name;
       });
@@ -13133,6 +13145,7 @@ If you have any questions, don't hesitate to reach out.
       document.getElementById('ev-end').value   = toDateTimeLocal(opts.endStr);
       document.getElementById('ev-venue').value = defaultVenue;
       document.getElementById('ev-notes').value = '';
+      document.getElementById('ev-is-public').checked = _defaultPublic(evType);
       VenuePicker.render('ev-venue-picker', defaultVenue, (name) => {
         document.getElementById('ev-venue').value = name;
       });
@@ -13193,6 +13206,7 @@ If you have any questions, don't hesitate to reach out.
     // Store times as-is (no UTC conversion) so stripTz on read shows the correct local time
     const fmtLocal = s => s ? (s.length === 16 ? s + ':00' : s.slice(0, 19)) : null;
     const defaultEnd = start.slice(0, 11) + '18:00:00';
+    const isPublic = document.getElementById('ev-is-public').checked;
     const payload = {
       title,
       event_type: type,
@@ -13200,6 +13214,7 @@ If you have any questions, don't hesitate to reach out.
       end_time:   fmtLocal(end) || defaultEnd,
       venue:      venue || null,
       notes:      notes || null,
+      is_public:  isPublic,
     };
 
     let error, savedEventId = editingEventId;
