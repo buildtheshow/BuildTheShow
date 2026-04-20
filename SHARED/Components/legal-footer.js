@@ -1,15 +1,15 @@
 /**
  * ═══════════════════════════════════════════════════════════════
  * LEGAL FOOTER — Shared component
- * Injects a fixed-position legal footer at the bottom of the page.
- * Handles sidebar offset automatically.
+ * Injects a page-flow legal footer at the bottom of the page.
+ * Handles sidebar offset automatically on desktop.
  *
  * Usage: include this script anywhere on the page.
  * <script src="path/to/SHARED/Components/legal-footer.js"></script>
  *
- * The footer sticks to the bottom of the viewport (position: fixed)
- * and auto-detects whether a sidebar is present to set the left offset.
- * It also adds padding-bottom to the body so content is never hidden behind it.
+ * The footer stays in normal document flow so it never overlaps page content.
+ * Pages using body { min-height: 100vh; display:flex; flex-direction:column; }
+ * will keep it at the bottom when content is short.
  * ═══════════════════════════════════════════════════════════════
  */
 
@@ -55,10 +55,11 @@
     footer.setAttribute('aria-label', 'Legal');
 
     Object.assign(footer.style, {
-      position:       'fixed',
-      bottom:         '0',
-      left:           sidebarW ? sidebarW + 'px' : '0',
-      right:          '0',
+      position:       'relative',
+      width:          '100%',
+      marginLeft:     '0',
+      marginTop:      'auto',
+      flexShrink:     '0',
       zIndex:         '9000',
       display:        'flex',
       flexWrap:       'wrap',
@@ -79,10 +80,7 @@
     `;
 
     document.body.appendChild(footer);
-
-    // Add padding-bottom to body so content is never hidden behind the footer
-    const footerH = footer.offsetHeight || 42;
-    document.body.style.paddingBottom = (footerH + 4) + 'px';
+    document.body.style.paddingBottom = '0';
 
     // Recalculate left offset if the sidebar loads asynchronously
     let attempts = 0;
@@ -90,7 +88,8 @@
       attempts++;
       const w = getSidebarWidth();
       if (w !== sidebarW) {
-        footer.style.left = w + 'px';
+        footer.style.marginLeft = '0';
+        footer.style.width = '100%';
       }
       if (attempts >= 10) clearInterval(poll);
     }, 300);
