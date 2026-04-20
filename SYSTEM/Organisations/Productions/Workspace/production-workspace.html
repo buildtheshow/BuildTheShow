@@ -11725,6 +11725,19 @@
           <textarea class="form-textarea" id="ps-description" rows="6" oninput="scheduleSettingsSave()"></textarea>
         </div>
 
+        <!-- Public URL slug -->
+        <div class="form-group">
+          <label class="form-label">Public Audition URL</label>
+          <div style="font-size:0.78rem;color:#9a90b0;margin-bottom:0.5rem;">The short link performers use to find your audition page. Letters, numbers, and hyphens only.</div>
+          <div style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap;">
+            <span id="ps-slug-base" style="font-size:0.78rem;color:#9a90b0;white-space:nowrap;background:rgba(87,46,136,0.05);border:1px solid rgba(87,46,136,0.12);border-radius:6px 0 0 6px;padding:0.45rem 0.6rem;line-height:1.4;"></span>
+            <input id="ps-slug-input" class="form-input" type="text" placeholder="my-show-2026" style="flex:1;min-width:140px;font-size:0.84rem;border-radius:0 6px 6px 0;margin-left:-1px;" oninput="this.dataset.dirty='1'" />
+            <button type="button" class="btn-secondary" onclick="psAutoSlug()" style="white-space:nowrap;flex-shrink:0;font-size:0.78rem;">Auto-fill</button>
+            <button type="button" class="btn-secondary" onclick="psSaveSlug()" style="white-space:nowrap;flex-shrink:0;">Save URL</button>
+          </div>
+          <div id="ps-slug-msg" style="display:none;font-size:0.78rem;border-radius:6px;padding:0.4rem 0.7rem;margin-top:0.5rem;"></div>
+        </div>
+
         <div class="locs-section">
           <div class="locs-section-header">
             <img src="/ASSETS/Images/Location2.svg" alt="" style="width:13px;height:13px;object-fit:contain;filter:brightness(0) saturate(100%) invert(22%) sepia(60%) saturate(600%) hue-rotate(250deg) brightness(80%);" />
@@ -13943,6 +13956,18 @@ If you have any questions, don't hesitate to reach out.
     _renderLocChips('reh');
     _renderLocChips('perf');
     updatePosterThumb(prod.poster_url || null);
+    // Populate slug field
+    const psSlugBase = document.getElementById('ps-slug-base');
+    const psSlugInput = document.getElementById('ps-slug-input');
+    if (psSlugBase) psSlugBase.textContent = slugBase();
+    if (psSlugInput && !psSlugInput.dataset.dirty) {
+      psSlugInput.value = prod.slug || '';
+      // Auto-generate if no slug exists yet
+      if (!prod.slug) {
+        const year = prod.start_date ? new Date(prod.start_date + 'T00:00:00').getFullYear() : new Date().getFullYear();
+        psSlugInput.value = generateSlug((prod.title || '') + ' ' + year);
+      }
+    }
   }
 
   function updatePosterThumb(url) {
@@ -17100,14 +17125,17 @@ If you have any questions, don't hesitate to reach out.
   }
 
   function autoSlug() {
-    const year    = prod.start_date ? new Date(prod.start_date + 'T00:00:00').getFullYear() : new Date().getFullYear();
-    const slugEl  = document.getElementById('pub-slug-input');
-    if (slugEl) slugEl.value = generateSlug((prod.title || '') + ' ' + year);
+    const year = prod.start_date ? new Date(prod.start_date + 'T00:00:00').getFullYear() : new Date().getFullYear();
+    const val  = generateSlug((prod.title || '') + ' ' + year);
+    ['pub-slug-input', 'ps-slug-input'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) { el.value = val; el.dataset.dirty = '1'; }
+    });
   }
 
-  async function saveSlug() {
-    const slugEl = document.getElementById('pub-slug-input');
-    const msg    = document.getElementById('pub-slug-msg');
+  async function doSaveSlug(inputId, msgId) {
+    const slugEl = document.getElementById(inputId);
+    const msg    = document.getElementById(msgId);
     if (!slugEl || !msg) return;
     let slug = slugEl.value.trim().toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
     if (!slug) {
@@ -17126,10 +17154,24 @@ If you have any questions, don't hesitate to reach out.
       return;
     }
     prod.slug = slug;
+    // Keep both slug inputs in sync
+    ['pub-slug-input', 'ps-slug-input'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) { el.value = slug; delete el.dataset.dirty; }
+    });
     msg.textContent = 'Saved. Page URL updated.';
     msg.style.cssText = 'display:block;font-size:0.78rem;border-radius:6px;padding:0.4rem 0.7rem;margin-top:0.5rem;background:rgba(34,197,94,0.1);color:#166534;';
     setTimeout(() => { msg.style.display = 'none'; }, 2500);
     renderPublicPageTab();
+  }
+
+  async function saveSlug()   { await doSaveSlug('pub-slug-input', 'pub-slug-msg'); }
+  async function psSaveSlug() { await doSaveSlug('ps-slug-input', 'ps-slug-msg'); }
+
+  function psAutoSlug() {
+    const year   = prod.start_date ? new Date(prod.start_date + 'T00:00:00').getFullYear() : new Date().getFullYear();
+    const slugEl = document.getElementById('ps-slug-input');
+    if (slugEl) { slugEl.value = generateSlug((prod.title || '') + ' ' + year); slugEl.dataset.dirty = '1'; }
   }
 
   function renderPublicPageTab() {
@@ -17138,11 +17180,16 @@ If you have any questions, don't hesitate to reach out.
     radios.forEach(r => r.checked = (r.value === status));
     updatePubStatusHighlight(status);
 
-    // Populate slug field
-    const slugBaseEl = document.getElementById('pub-slug-base');
-    if (slugBaseEl) slugBaseEl.textContent = slugBase();
-    const slugEl = document.getElementById('pub-slug-input');
-    if (slugEl && !slugEl.dataset.dirty) slugEl.value = prod.slug || '';
+    // Populate slug fields (both Public Page tab and Settings tab)
+    const base = slugBase();
+    ['pub-slug-base', 'ps-slug-base'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.textContent = base;
+    });
+    ['pub-slug-input', 'ps-slug-input'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el && !el.dataset.dirty) el.value = prod.slug || '';
+    });
 
     const link = getPageLink();
     const previewBtn = document.getElementById('pub-preview-btn');
