@@ -134,6 +134,7 @@ function renderCastingCard(data, options = {}) {
     id = null,
     title = null,
     firstNameFontSize = null,  // override computed size, e.g. '22cqw'
+    variant = null,
   } = options;
   
   const {
@@ -145,6 +146,7 @@ function renderCastingCard(data, options = {}) {
     casting_categories = [],
     role_openness = 'open',
     attendance_mode = null,
+    skill_dots = null,
   } = data;
   
   // Build classes
@@ -152,6 +154,7 @@ function renderCastingCard(data, options = {}) {
     'casting-card',
     size === 'sm' ? 'casting-card--sm' : '',
     size === 'compact' ? 'casting-card--compact' : '',
+    variant === 'callbackSimple' ? 'casting-card--callback-simple' : '',
     grid === 'sticky' ? 'casting-card-grid-sticky-item' : '',
     hasPadding ? 'has-padding' : '',
     state ? `state-${state}` : ''
@@ -189,6 +192,24 @@ function renderCastingCard(data, options = {}) {
       <div class="casting-card-icon-stack">
         <div class="casting-icon-category ${categoryBadge.class}" title="Gender preference">${esc(categoryBadge.text)}</div>
         <div class="casting-icon-openness ${opennessIcon.class}" title="Role openness">${opennessIcon.letter}</div>
+      </div>
+    `;
+  }
+
+  let skillDotsHTML = '';
+  if (Array.isArray(skill_dots) && skill_dots.length) {
+    const normalizeStatus = (value) => {
+      const normalized = String(value || '').trim().toLowerCase();
+      return ['yes', 'maybe', 'no'].includes(normalized) ? normalized : 'none';
+    };
+    skillDotsHTML = `
+      <div class="casting-card-skill-dots" aria-label="Callback decision markers">
+        ${skill_dots.slice(0, 3).map(dot => {
+          const label = String(dot?.label || dot?.key || '').slice(0, 1).toUpperCase();
+          const status = normalizeStatus(dot?.status || dot?.value);
+          const title = dot?.title || `${label || 'Marker'}: ${status === 'none' ? 'Not selected' : status}`;
+          return `<div class="casting-card-skill-dot is-${status}" title="${esc(title)}">${esc(label)}</div>`;
+        }).join('')}
       </div>
     `;
   }
@@ -241,6 +262,7 @@ function renderCastingCard(data, options = {}) {
           <div class="casting-card-last-name" style="font-size:${lastNameSize};">${esc(last_name)}</div>
           <div class="casting-card-meta-line" style="font-size:${metaLineSize};">${esc(thirdLine)}</div>
         </div>
+        ${skillDotsHTML}
       </div>
     </div>
   `;
