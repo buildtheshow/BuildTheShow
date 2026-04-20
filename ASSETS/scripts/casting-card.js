@@ -131,6 +131,7 @@ function renderCastingCard(data, options = {}) {
     onClick = null,
     onDragStart = null,
     onDragEnd = null,
+    onPointerDown = null,
     id = null,
     title = null,
     firstNameFontSize = null,  // override computed size, e.g. '22cqw'
@@ -170,6 +171,7 @@ function renderCastingCard(data, options = {}) {
     if (onDragEnd) attrs.push(`ondragend="${onDragEnd}"`);
   }
   if (onClick) attrs.push(`onclick="${onClick}"`);
+  if (onPointerDown) attrs.push(`onpointerdown="${onPointerDown}"`);
   
   // ── SECTION 1: IMAGE ─────────────────────────────────────────
   let imageHTML;
