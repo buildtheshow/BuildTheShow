@@ -11327,11 +11327,11 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script defer src="/ASSETS/scripts/venue-picker.js"></script>
-<script defer src="/ASSETS/scripts/casting-card.js"></script>
-<script defer src="../../../../SHARED/Components/casting-card-back.js"></script>
-<script defer src="../../../../SHARED/Components/audition-status-strip.js"></script>
-<script defer src="../../../../SHARED/Components/ai-character-importer.js"></script>
+<script src="/ASSETS/scripts/venue-picker.js"></script>
+<script src="/ASSETS/scripts/casting-card.js"></script>
+<script src="../../../../SHARED/Components/casting-card-back.js"></script>
+<script src="../../../../SHARED/Components/audition-status-strip.js"></script>
+<script src="../../../../SHARED/Components/ai-character-importer.js"></script>
 <!-- VenuePicker uses OpenStreetMap/Nominatim - no API key needed -->
 <script>
   /* SQL needed:
@@ -11514,6 +11514,7 @@
   let applicantSortDir = 'asc';
   let allApplicants = [];
   let allAuditionBookings = [];
+  let _hasIsPublicColumn = false; // set true once we confirm the column exists
   let allSlots      = [];
   let auditionsRealtimeChannel = null;
   let auditionsRefreshTimer    = null;
@@ -11540,6 +11541,9 @@
     if (error || !data) { window.location.href = '../../org-dashboard.html'; return; }
 
     prod = data;
+    // Check if is_public column exists — non-blocking, safe to run in background
+    sb.from('production_events').select('is_public').eq('production_id', prodId).limit(1)
+      .then(({ error }) => { if (!error) _hasIsPublicColumn = true; });
     renderProdHeader();
     prefillSettings();
     applyModuleVisibility();
@@ -13217,8 +13221,9 @@ If you have any questions, don't hesitate to reach out.
       end_time:   fmtLocal(end) || defaultEnd,
       venue:      venue || null,
       notes:      notes || null,
-      is_public:  isPublic,
     };
+    // Only add is_public if the column exists — prevents errors before SQL migration is run
+    if (_hasIsPublicColumn) payload.is_public = isPublic;
 
     let error, savedEventId = editingEventId;
     if (editingEventId) {
