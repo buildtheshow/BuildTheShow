@@ -12,7 +12,7 @@
     const s = document.createElement('link');
     s.id   = 'member-sidebar-css';
     s.rel  = 'stylesheet';
-    s.href = '../../../ASSETS/Styles (CSS)/member-sidebar.css';
+    s.href = '/ASSETS/Styles (CSS)/member-sidebar.css';
     document.head.appendChild(s);
   }
 
@@ -113,24 +113,24 @@
     let nav = '';
 
     // Dashboard — always visible
-    nav += navLink('../Profiles/profile-select.html', '../../../ASSETS/Images/Dashboard.svg', 'Dashboard', activePage === 'profile-select');
+    nav += navLink('../Profiles/profile-select.html', '/ASSETS/Images/Dashboard.svg', 'Dashboard', activePage === 'profile-select');
 
     // Position groups — only if enabled on selected profile
     if (isPerformer) {
-      nav += positionGroup('../../../ASSETS/Images/Performer.svg', 'Performer', PERFORMER_SUBNAV, activePosition === 'performer', activePage);
+      nav += positionGroup('/ASSETS/Images/Performer.svg', 'Performer', PERFORMER_SUBNAV, activePosition === 'performer', activePage);
     }
     if (isCreative) {
-      nav += positionGroup('../../../ASSETS/Images/CreativeTeam-Director.svg', 'Creative Team', CREATIVE_SUBNAV, activePosition === 'creative', activePage);
+      nav += positionGroup('/ASSETS/Images/CreativeTeam-Director.svg', 'Creative Team', CREATIVE_SUBNAV, activePosition === 'creative', activePage);
     }
     if (isVolunteer) {
-      nav += positionGroup('../../../ASSETS/Images/Volunteers.svg', 'Volunteer', VOLUNTEER_SUBNAV, activePosition === 'volunteer', activePage);
+      nav += positionGroup('/ASSETS/Images/Volunteers.svg', 'Volunteer', VOLUNTEER_SUBNAV, activePosition === 'volunteer', activePage);
     }
 
     // Calendar — always visible, top-level (not scoped to a position)
-    nav += navLink('../Dashboard/member-calendar.html', '../../../ASSETS/Images/Calendar.svg', 'Calendar', activePage === 'calendar');
+    nav += navLink('../Dashboard/member-calendar.html', '/ASSETS/Images/Calendar.svg', 'Calendar', activePage === 'calendar');
 
     // Settings — always visible
-    nav += navLink('../Performer/performer-settings.html', '../../../ASSETS/Images/Settings.svg', 'Settings', activePage === 'settings');
+    nav += navLink('../Performer/performer-settings.html', '/ASSETS/Images/Settings.svg', 'Settings', activePage === 'settings');
 
     // ── Inject nav ──
     const navEl = document.querySelector('.sidebar-nav');

@@ -68,8 +68,8 @@ function getCastingCardVideoCallIconUrl() {
   const version = '20260415-2039';
   try {
     const scriptTag = Array.from(document.scripts || []).find(script =>
-      String(script?.src || '').includes('/ASSETS/Scripts%20(JS)/casting-card.js') ||
-      String(script?.src || '').includes('/ASSETS/Scripts (JS)/casting-card.js') ||
+      String(script?.src || '').includes('//ASSETS/Scripts%20(JS)/casting-card.js') ||
+      String(script?.src || '').includes('//ASSETS/Scripts (JS)/casting-card.js') ||
       String(script?.src || '').endsWith('casting-card.js')
     );
     if (scriptTag?.src) {
@@ -78,7 +78,7 @@ function getCastingCardVideoCallIconUrl() {
       return url.href;
     }
   } catch {}
-  return `ASSETS/Images/VideoCall.svg?v=${version}`;
+  return `/ASSETS/Images/VideoCall.svg?v=${version}`;
 }
 
 // ── Determine Category Badge (gender) ────────────────────────
