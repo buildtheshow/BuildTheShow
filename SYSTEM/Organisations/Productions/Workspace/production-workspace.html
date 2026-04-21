@@ -2973,6 +2973,15 @@
     .url-input-wrap .form-input:focus {
       box-shadow: none;
     }
+    .url-builder-link {
+      cursor: pointer;
+      width: fit-content;
+      max-width: 100%;
+    }
+    .url-builder-link:hover .url-segment,
+    .url-builder-link:hover .url-slash {
+      color: #572e88;
+    }
     .url-actions {
       display: flex;
       gap: 0.5rem;
@@ -12026,13 +12035,13 @@
       <div class="card" style="margin-bottom:1.5rem;">
         <div class="url-card-kicker">Page URL</div>
         <div class="url-card-copy">The link performers use to find your audition page. Only the last part is editable.</div>
-        <div id="pub-slug-builder" class="url-builder">
+        <div id="pub-slug-builder" class="url-builder url-builder-link" onclick="openCurrentPublicUrl(event)" title="Open URL">
           <span class="url-segment url-segment-muted">BuildTheShow.com/</span>
           <span id="pub-slug-org" class="url-segment">—</span>
           <span class="url-slash">/</span>
           <span id="pub-url-section" class="url-segment url-segment-muted">Audition/</span>
           <div class="url-input-wrap">
-            <input id="pub-slug-input" class="form-input" type="text" placeholder="my-show-2026" oninput="handleSlugInput(this)" />
+            <input id="pub-slug-input" class="form-input" type="text" placeholder="my-show-2026" oninput="handleSlugInput(this)" onclick="event.stopPropagation()" />
           </div>
         </div>
         <!-- hidden element kept for slugBase() compat -->
@@ -12147,13 +12156,13 @@
               </div>
               <div class="settings-section-tag">Public</div>
             </div>
-            <div class="url-builder" style="margin-bottom:0.65rem;">
+            <div class="url-builder url-builder-link" style="margin-bottom:0.65rem;" onclick="openCurrentPublicUrl(event)" title="Open URL">
               <span class="url-segment url-segment-muted">BuildTheShow.com/</span>
               <span id="ps-slug-org" class="url-segment">loading…</span>
               <span class="url-slash">/</span>
               <span id="ps-url-section" class="url-segment url-segment-muted">Audition/</span>
               <div class="url-input-wrap">
-                <input id="ps-slug-input" class="form-input" type="text" placeholder="my-show-2026" oninput="handleSlugInput(this)" />
+                <input id="ps-slug-input" class="form-input" type="text" placeholder="my-show-2026" oninput="handleSlugInput(this)" onclick="event.stopPropagation()" />
               </div>
             </div>
             <span id="ps-slug-base" style="display:none;"></span>
@@ -17670,6 +17679,16 @@ If you have any questions, don't hesitate to reach out.
     return `${url}${sep}${encodeURIComponent(key)}=${encodeURIComponent(value)}`;
   }
 
+  function currentPublicOpenLink() {
+    const link = getPageLink();
+    return currentPublicPageStatus() === 'draft' ? withQueryParam(link, 'preview', '1') : link;
+  }
+
+  function openCurrentPublicUrl(event) {
+    if (event?.target?.closest?.('input,button,a,textarea,select')) return;
+    window.open(currentPublicOpenLink(), '_blank');
+  }
+
   function renderPublicUrlSectionLabels() {
     const label = publicUrlSection() + '/';
     ['pub-url-section', 'ps-url-section'].forEach(id => {
@@ -17839,6 +17858,17 @@ If you have any questions, don't hesitate to reach out.
 
   function copyPageLink() {
     const link = getPageLink();
+    if (currentPublicPageStatus() === 'draft') {
+      const msg = document.getElementById('pub-status-msg') || document.getElementById('ps-slug-msg');
+      if (msg) {
+        msg.textContent = 'Publish or hide the page before copying the public URL.';
+        msg.style.display = 'block';
+        msg.style.background = 'rgba(220,60,60,0.1)';
+        msg.style.color = '#b91c1c';
+        setTimeout(() => { msg.style.display = 'none'; }, 3500);
+      }
+      return;
+    }
     navigator.clipboard.writeText(link).then(() => {
       const msg = document.getElementById('pub-status-msg');
       msg.textContent = 'Link copied to clipboard.';
@@ -19363,10 +19393,7 @@ If you have any questions, don't hesitate to reach out.
   }
 
   function viewAudPage() {
-    const link = currentPublicPageStatus() === 'draft'
-      ? `${getPageLink()}${getPageLink().includes('?') ? '&' : '?'}preview=1`
-      : auditionPublicLink();
-    window.open(link, '_blank');
+    window.open(currentPublicOpenLink(), '_blank');
   }
 
   async function saveAuditionConfig() {
