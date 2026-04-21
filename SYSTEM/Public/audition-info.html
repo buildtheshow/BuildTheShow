@@ -514,27 +514,39 @@
       letter-spacing: 0;
       text-transform: none;
     }
-    .ai-role-type-pill {
-      flex: 0 0 auto;
-      font-size: 0.62rem;
-      font-weight: 900;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      border-radius: 999px;
-      padding: 0.18rem 0.48rem;
-      background: var(--role-accent-soft, rgba(87,46,136,0.08));
-      color: var(--role-accent, #572e88);
+    .ai-role-facts {
+      display: grid;
+      gap: 0.28rem;
+      margin: 0.48rem 0 0.45rem;
     }
-    .ai-role-tags  { display: flex; flex-wrap: wrap; gap: 0.32rem; margin-bottom: 0.5rem; }
-    .ai-role-tag   {
-      font-size: 0.66rem;
-      font-weight: 800;
-      letter-spacing: 0.02em;
+    .ai-role-fact {
+      --dot-color: var(--role-accent, #572e88);
+      display: grid;
+      grid-template-columns: 10px 1fr;
+      align-items: start;
+      gap: 0.48rem;
+      font-size: 0.75rem;
+      color: #5d526f;
+      line-height: 1.35;
+    }
+    .ai-role-fact-dot {
+      width: 7px;
+      height: 7px;
+      margin-top: 0.22rem;
       border-radius: 999px;
-      padding: 0.18rem 0.5rem;
-      white-space: nowrap;
-      background: rgba(87,46,136,0.055);
-      color: #6a5a80;
+      background: var(--dot-color);
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--dot-color) 15%, transparent), 0 0 12px color-mix(in srgb, var(--dot-color) 38%, transparent);
+    }
+    .ai-role-fact-label {
+      font-weight: 850;
+      color: #2c2443;
+    }
+    .ai-role-fact-note {
+      display: block;
+      margin-top: 0.1rem;
+      color: #8f85a3;
+      font-size: 0.69rem;
+      line-height: 1.35;
     }
     .ai-role-count { font-size: 0.75rem; color: #9a90b0; }
     .ai-role-desc  {
@@ -543,19 +555,9 @@
       line-height: 1.62;
       margin-top: 0.35rem;
     }
-    .ai-role-reqs  { display: flex; flex-wrap: wrap; gap: 0.3rem; margin-top: 0.5rem; }
-    .ai-role-req-chip {
-      font-size: 0.65rem; font-weight: 700; padding: 0.18rem 0.5rem;
-      border-radius: 20px; border: 1px solid rgba(87,46,136,0.2);
-      color: #572e88; background: rgba(87,46,136,0.05);
-    }
     .ai-role-materials {
-      margin-top: 0.7rem; padding-top: 0.65rem; border-top: 1px solid rgba(87,46,136,0.1);
-      display: flex; flex-direction: column; gap: 0.35rem;
-    }
-    .ai-role-material-label {
-      font-size: 0.64rem; font-weight: 800; letter-spacing: 0.07em; text-transform: uppercase;
-      color: #9a90b0;
+      display: grid;
+      gap: 0.22rem;
     }
     .ai-role-material-note { font-size: 0.76rem; color: #4a3d6b; line-height: 1.45; }
     .ai-role-material-link {
@@ -5628,8 +5630,13 @@
     let _charFilterVocal  = '';
     let _charFilterDance  = '';
     let _charFilterUsage  = '';
-    let _charSort         = 'default';
+    let _charSort         = 'type';
     let _publicMaterialsSettings = {};
+
+    const ROLE_ORDER  = ['Principal','Supporting','Featured','Cameo','Group'];
+    const VOCAL_ORDER = ['Baritone','Alto','Mezzo Soprano','Soprano','Non-Singing'];
+    const USAGE_ORDER = ['Primary Vocals','Featured Vocals','Vocal Group','Supporting Vocals','Ensemble Vocals','Minimal','Non-Singing'];
+    const DANCE_ORDER = ['No Dance','Beginner Friendly','Performer Level','Dance-Focused'];
 
     const _ddStyle = '';
 
@@ -5639,12 +5646,8 @@
       _charDisplayFields = audConfig?.char_display_fields || {};
       _publicMaterialsSettings = prod?.wizard_data?.materials_enabled || {};
       _charFilterType = _charFilterVocal = _charFilterDance = _charFilterUsage = '';
-      _charSort       = 'default';
+      _charSort       = 'type';
 
-      const ROLE_ORDER  = ['Principal','Supporting','Featured','Cameo','Group'];
-      const VOCAL_ORDER = ['Baritone','Alto','Mezzo Soprano','Soprano','Non-Singing'];
-      const USAGE_ORDER = ['Primary Vocals','Featured Vocals','Vocal Group','Supporting Vocals','Ensemble Vocals','Minimal','Non-Singing'];
-      const DANCE_ORDER = ['No Dance','Beginner Friendly','Performer Level','Dance-Focused'];
       const customSort = (arr, order) => {
         const known = order.filter(v => arr.includes(v));
         const rest  = arr.filter(v => !order.includes(v)).sort();
@@ -5676,9 +5679,9 @@
       const danceDD = (fieldOn('dancing_strength') && dances.length) ? `<select onchange="setCharFilter('dance',this.value)">${danceOpts}</select>` : '';
       const usageDD = (fieldOn('vocal_usage')      && usages.length) ? `<select onchange="setCharFilter('usage',this.value)">${usageOpts}</select>` : '';
       const sortDD  = `<select onchange="setCharSort(this.value)">
-        <option value="default">Sort: Default</option>
+        <option value="type" selected>Sort: Role Type</option>
         <option value="name">Sort: A to Z</option>
-        ${fieldOn('role_type')  ? `<option value="type">Sort: Role Type</option>`  : ''}
+        <option value="default">Sort: Custom Order</option>
         ${fieldOn('vocal_type') ? `<option value="vocal">Sort: Vocal Type</option>` : ''}
         ${fieldOn('vocal_usage') ? `<option value="usage">Sort: Vocal Usage</option>` : ''}
       </select>`;
@@ -5688,7 +5691,7 @@
           <div class="ai-role-controls">
             ${typeDD}${vocalDD}${usageDD}${danceDD}${sortDD}
           </div>
-          <div class="ai-roles-grid" id="roles-grid">${renderRoleCards(_allCharacters)}</div>
+          <div class="ai-roles-grid" id="roles-grid">${renderRoleCards(sortCharacterList(_allCharacters))}</div>
         </section>`;
     }
 
@@ -5711,12 +5714,29 @@
       if (_charFilterVocal) list = list.filter(c => c.vocal_type       === _charFilterVocal);
       if (_charFilterDance) list = list.filter(c => c.dancing_strength === _charFilterDance);
       if (_charFilterUsage) list = list.filter(c => displayVocalUsage(c.vocal_usage) === _charFilterUsage);
-      if (_charSort === 'name')  list.sort((a,b) => (a.name||'').localeCompare(b.name||''));
-      if (_charSort === 'type')  list.sort((a,b) => (a.role_type||'').localeCompare(b.role_type||''));
-      if (_charSort === 'vocal') list.sort((a,b) => (a.vocal_type||'').localeCompare(b.vocal_type||''));
-      if (_charSort === 'usage') list.sort((a,b) => displayVocalUsage(a.vocal_usage).localeCompare(displayVocalUsage(b.vocal_usage)));
+      list = sortCharacterList(list);
       const grid = document.getElementById('roles-grid');
       if (grid) grid.innerHTML = list.length ? renderRoleCards(list) : '<p style="color:#9a90b0;font-size:0.9rem;">No roles match this filter.</p>';
+    }
+
+    function sortCharacterList(list) {
+      const sorted = [...list];
+      const manualRank = c => Number.isFinite(c?.sort_order) ? c.sort_order : 9999;
+      if (_charSort === 'name') {
+        sorted.sort((a,b) => (a.name||'').localeCompare(b.name||''));
+      } else if (_charSort === 'type') {
+        sorted.sort((a,b) => {
+          const aRank = ROLE_ORDER.indexOf(a.role_type);
+          const bRank = ROLE_ORDER.indexOf(b.role_type);
+          const byType = (aRank === -1 ? 99 : aRank) - (bRank === -1 ? 99 : bRank);
+          return byType || manualRank(a) - manualRank(b) || (a.name||'').localeCompare(b.name||'');
+        });
+      } else if (_charSort === 'vocal') {
+        sorted.sort((a,b) => (a.vocal_type||'').localeCompare(b.vocal_type||''));
+      } else if (_charSort === 'usage') {
+        sorted.sort((a,b) => displayVocalUsage(a.vocal_usage).localeCompare(displayVocalUsage(b.vocal_usage)));
+      }
+      return sorted;
     }
 
     function renderRoleCards(characters) {
@@ -5738,21 +5758,6 @@
 
       return characters.map(c => {
 
-        const typeBadge = (show('role_type') && c.role_type && c.role_type !== 'Ensemble')
-          ? `<span class="ai-role-type-pill">${esc(c.role_type)}</span>`
-          : '';
-        const vocalBadge = (show('vocal_type') && c.vocal_type)
-          ? `<span class="ai-role-tag">${esc(c.vocal_type)}</span>`
-          : '';
-        const ageBadge = (show('age_range') && c.age_range)
-          ? `<span class="ai-role-tag">Age: ${esc(c.age_range)}</span>`
-          : '';
-        const vocalRangeBadge = (show('vocal_range') && c.vocal_range)
-          ? `<span class="ai-role-tag">${esc(c.vocal_range)}</span>`
-          : '';
-        const vocalUsageBadge = (show('vocal_usage') && c.vocal_usage)
-          ? `<span class="ai-role-tag">${esc(displayVocalUsage(c.vocal_usage))}</span>`
-          : '';
         const genderBadge = (show('gender') && c.gender)
           ? `<span class="ai-role-gender">${esc(displayGender(c.gender))}</span>`
           : '';
@@ -5768,33 +5773,46 @@
           'Performer Level':   'Regular choreography throughout the show. Requires coordination, memory, and comfort moving on stage.',
           'Dance-Focused':     'Heavy choreography. Fast-paced, precise, and requires strong dance ability and stamina.',
         };
-        const reqs = [];
+        const facts = [];
+        const fact = (label, value, color = 'var(--role-accent, #572e88)', note = '') => {
+          if (!value) return;
+          facts.push(`<div class="ai-role-fact" style="--dot-color:${esc(color)};">
+            <span class="ai-role-fact-dot"></span>
+            <span><span class="ai-role-fact-label">${esc(label)}:</span> ${esc(value)}${note ? `<span class="ai-role-fact-note">${esc(note)}</span>` : ''}</span>
+          </div>`);
+        };
+        if (show('role_type') && c.role_type && c.role_type !== 'Ensemble') fact('Role Type', c.role_type, 'var(--role-accent, #572e88)');
+        if (show('age_range') && c.age_range) fact('Age Range', c.age_range, '#d97706');
+        if (show('vocal_type') && c.vocal_type) fact('Vocal Type', c.vocal_type, '#2563eb');
+        if (show('vocal_range') && c.vocal_range) fact('Vocal Range', c.vocal_range, '#0891b2');
+        if (show('vocal_usage') && c.vocal_usage) fact('Vocal Usage', displayVocalUsage(c.vocal_usage), '#16a34a');
         if (show('dancing_strength') && c.dancing_strength && c.dancing_strength !== 'None' && c.dancing_strength !== 'Non-Dancing') {
-          reqs.push({ label: 'Movement', value: c.dancing_strength, desc: DANCE_DESCS[c.dancing_strength] || null });
+          fact('Movement', c.dancing_strength, '#db2777', DANCE_DESCS[c.dancing_strength] || '');
         }
-        const reqsHTML = reqs.length
-          ? `<div class="ai-role-reqs">${reqs.map(r => `<span class="ai-role-req-chip">
-              <span style="font-weight:700;">${esc(r.label)}: ${esc(r.value)}</span>
-              ${r.desc ? `<span style="display:block;font-weight:400;font-size:0.68rem;margin-top:2px;opacity:0.8;line-height:1.35;">${esc(r.desc)}</span>` : ''}
-            </span>`).join('')}</div>` : '';
         const materialItems = [];
         if (materialSetOn('audition') && (c.audition_material || c.audition_file_url)) {
           const fileName = c.audition_file_name || fileNameFromUrl(c.audition_file_url) || 'Audition material';
-          materialItems.push(`<div class="ai-role-materials">
-            <div class="ai-role-material-label">General Audition Material</div>
+          materialItems.push(`<div class="ai-role-materials ai-role-fact" style="--dot-color:#7c3aed;">
+            <span class="ai-role-fact-dot"></span>
+            <span><span class="ai-role-fact-label">General Audition Material:</span>
             ${c.audition_material ? `<div class="ai-role-material-note">${esc(c.audition_material)}</div>` : ''}
             ${c.audition_file_url ? `<a class="ai-role-material-link" href="${esc(c.audition_file_url)}" target="_blank" rel="noopener" download="${esc(fileName)}">Download Material</a>` : ''}
+            </span>
           </div>`);
         }
         if (materialSetOn('callback') && (c.callback_material || c.callback_file_url)) {
           const fileName = c.callback_file_name || fileNameFromUrl(c.callback_file_url) || 'Callback material';
-          materialItems.push(`<div class="ai-role-materials">
-            <div class="ai-role-material-label">Callback Material</div>
+          materialItems.push(`<div class="ai-role-materials ai-role-fact" style="--dot-color:#9333ea;">
+            <span class="ai-role-fact-dot"></span>
+            <span><span class="ai-role-fact-label">Callback Material:</span>
             ${c.callback_material ? `<div class="ai-role-material-note">${esc(c.callback_material)}</div>` : ''}
             ${c.callback_file_url ? `<a class="ai-role-material-link" href="${esc(c.callback_file_url)}" target="_blank" rel="noopener" download="${esc(fileName)}">Download Material</a>` : ''}
+            </span>
           </div>`);
         }
-        const materialsHTML = materialItems.join('');
+        const factsHTML = [...facts, ...materialItems].length
+          ? `<div class="ai-role-facts">${[...facts, ...materialItems].join('')}</div>`
+          : '';
 
         return `
           <div class="ai-role-card">
@@ -5803,13 +5821,10 @@
                 <div class="ai-role-name">${esc(c.name)}</div>
                 ${genderBadge}
               </div>
-              ${typeBadge}
             </div>
-            <div class="ai-role-tags">${vocalBadge}${vocalRangeBadge}${vocalUsageBadge}${ageBadge}</div>
+            ${factsHTML}
             ${countNote}
             ${descHTML}
-            ${reqsHTML}
-            ${materialsHTML}
           </div>`;
       }).join('');
     }
