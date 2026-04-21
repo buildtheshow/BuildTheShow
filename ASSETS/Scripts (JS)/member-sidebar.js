@@ -63,15 +63,14 @@
   }
 
   // ── Build a plain nav link ───────────────────────────────────────
-  function navLink(href, icon, label, isActive) {
+  function navLink(href, label, isActive) {
     return `<a href="${href}" class="sidebar-nav-item${isActive ? ' active' : ''}"${isActive ? ' aria-current="page"' : ''}>
-      <img src="${icon}" class="sidebar-nav-icon" aria-hidden="true" alt="" />
       ${label}
     </a>`;
   }
 
   // ── Build a position group with expandable subnav ────────────────
-  function positionGroup(icon, label, subnav, isOpen, activePage) {
+  function positionGroup(label, subnav, isOpen, activePage) {
     const hub = subnav[0].href;
     const subLinksHTML = subnav.map(s => {
       const isSubActive = s.key === activePage;
@@ -80,11 +79,7 @@
 
     return `<div class="sidebar-position-group${isOpen ? ' open' : ''}">
       <a href="${hub}" class="sidebar-nav-item sidebar-position-trigger${isOpen ? ' active' : ''}">
-        <img src="${icon}" class="sidebar-nav-icon" aria-hidden="true" alt="" />
         ${label}
-        <svg class="sidebar-chevron" width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-          <polyline points="2,3 5,7 8,3"/>
-        </svg>
       </a>
       <div class="sidebar-subnav${isOpen ? ' open' : ''}">
         ${subLinksHTML}
@@ -113,24 +108,24 @@
     let nav = '';
 
     // Dashboard — always visible
-    nav += navLink('../Profiles/profile-select.html', '../../../ASSETS/Images/Dashboard.svg', 'Dashboard', activePage === 'profile-select');
+    nav += navLink('../Profiles/profile-select.html', 'Dashboard', activePage === 'profile-select');
 
     // Position groups — only if enabled on selected profile
     if (isPerformer) {
-      nav += positionGroup('../../../ASSETS/Images/Performer.svg', 'Performer', PERFORMER_SUBNAV, activePosition === 'performer', activePage);
+      nav += positionGroup('Performer', PERFORMER_SUBNAV, activePosition === 'performer', activePage);
     }
     if (isCreative) {
-      nav += positionGroup('../../../ASSETS/Images/CreativeTeam-Director.svg', 'Creative Team', CREATIVE_SUBNAV, activePosition === 'creative', activePage);
+      nav += positionGroup('Creative Team', CREATIVE_SUBNAV, activePosition === 'creative', activePage);
     }
     if (isVolunteer) {
-      nav += positionGroup('../../../ASSETS/Images/Volunteers.svg', 'Volunteer', VOLUNTEER_SUBNAV, activePosition === 'volunteer', activePage);
+      nav += positionGroup('Volunteer', VOLUNTEER_SUBNAV, activePosition === 'volunteer', activePage);
     }
 
     // Calendar — always visible, top-level (not scoped to a position)
-    nav += navLink('../Dashboard/member-calendar.html', '../../../ASSETS/Images/Calendar.svg', 'Calendar', activePage === 'calendar');
+    nav += navLink('../Dashboard/member-calendar.html', 'Calendar', activePage === 'calendar');
 
     // Settings — always visible
-    nav += navLink('../Performer/performer-settings.html', '../../../ASSETS/Images/Settings.svg', 'Settings', activePage === 'settings');
+    nav += navLink('../Performer/performer-settings.html', 'Settings', activePage === 'settings');
 
     // ── Inject nav ──
     const navEl = document.querySelector('.sidebar-nav');
