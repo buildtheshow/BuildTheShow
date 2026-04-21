@@ -1887,6 +1887,12 @@
       return map[raw] ?? raw;
     }
 
+    function effectiveVocalUsage(char) {
+      const usage = displayVocalUsage(char?.vocal_usage);
+      if (_ensembleOverride && (!usage || usage === 'Non-Singing')) return 'Ensemble Vocals';
+      return usage;
+    }
+
     const _MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
     function fmtDate(str) {
@@ -2056,6 +2062,7 @@
     let _allSessions = [], _allSlots = {}, _bkProd = null, _allCharacters = [], _allCQ = [], _userBooking = null;
     let _bkAudConfig = null, _bkProdEvents = [];
     let _bkPhoneNANP = false;
+    let _ensembleOverride = false;
 
     const BK_CONFLICT_TYPES = [
       'rehearsal','music_rehearsal','choreography','tech','dress',
@@ -2349,6 +2356,7 @@
 
       _bkProdEvents  = getPublicCalendarEvents(publicEvents).filter(e => BK_CONFLICT_TYPES.includes(e.event_type));
       _allCharacters = characters || [];
+      _ensembleOverride = prod?.wizard_data?.ensemble_override === true;
       window._venueMap = venueMap || {};
       window._venueLabel = venueLabel || {};
       window._venueNameMap = venueNameMap || {};
@@ -4511,7 +4519,7 @@
       container.innerHTML = chars.length
         ? chars.map(c => `<button type="button" class="bk-char-tile${_bkState.selected_chars.includes(c.name)?' selected':''}" aria-pressed="${_bkState.selected_chars.includes(c.name) ? 'true' : 'false'}" data-char-name="${esc(c.name)}">
             <span class="bk-char-tile-main">${esc(c.name)}</span>
-            ${c.vocal_usage ? `<span class="bk-char-tile-meta">${esc(displayVocalUsage(c.vocal_usage))}</span>` : ''}
+            ${effectiveVocalUsage(c) ? `<span class="bk-char-tile-meta">${esc(effectiveVocalUsage(c))}</span>` : ''}
           </button>`).join('')
         : '<div style="font-size:0.82rem;color:#9a90b0;">No roles available.</div>';
       container.querySelectorAll('.bk-char-tile').forEach(btn => {
@@ -5687,6 +5695,7 @@
     let _charFilterVocal  = '';
     let _charFilterDance  = '';
     let _charFilterUsage  = '';
+    let _charFilterGender = '';
     let _charSort         = 'type';
     let _publicMaterialsSettings = {};
 
@@ -5702,7 +5711,8 @@
       _allCharacters     = characters;
       _charDisplayFields = audConfig?.char_display_fields || {};
       _publicMaterialsSettings = prod?.wizard_data?.materials_enabled || {};
-      _charFilterType = _charFilterVocal = _charFilterDance = _charFilterUsage = '';
+      _ensembleOverride = prod?.wizard_data?.ensemble_override === true;
+      _charFilterType = _charFilterVocal = _charFilterDance = _charFilterUsage = _charFilterGender = '';
       _charSort       = 'type';
 
       const customSort = (arr, order) => {
@@ -5715,7 +5725,8 @@
       const types    = customSort(typeSet, ROLE_ORDER);
       const vocals   = customSort([...new Set(characters.map(c => c.vocal_type).filter(Boolean))], VOCAL_ORDER);
       const dances   = customSort([...new Set(characters.map(c => c.dancing_strength).filter(s => s && s !== 'None' && s !== 'Non-Dancing'))], DANCE_ORDER);
-      const usages   = customSort([...new Set(characters.map(c => displayVocalUsage(c.vocal_usage)).filter(Boolean))], USAGE_ORDER);
+      const usages   = customSort([...new Set(characters.map(c => effectiveVocalUsage(c)).filter(Boolean))], USAGE_ORDER);
+      const genders  = customSort([...new Set(characters.map(c => displayGender(c.gender)).filter(Boolean))], ['She/Her','He/Him','They/Them','Any']);
 
       const DANCE_DESCS = {
         'No Dance':          'No choreography — staging only',
@@ -5730,15 +5741,16 @@
       const vocalOpts = `<option value="">All Vocal Types</option>` + vocals.map(v => `<option value="${esc(v)}">${esc(v)}</option>`).join('');
       const danceOpts = `<option value="">Any Movement Level</option>` + dances.map(d => `<option value="${esc(d)}">${esc(d)}</option>`).join('');
       const usageOpts = `<option value="">All Vocal Usage</option>` + usages.map(u => `<option value="${esc(u)}">${esc(u)}</option>`).join('');
+      const genderOpts = `<option value="">All Pronouns</option>` + genders.map(g => `<option value="${esc(g)}">${esc(g)}</option>`).join('');
 
       const typeDD  = (fieldOn('role_type')       && types.length)  ? `<select onchange="setCharFilter('type',this.value)">${typeOpts}</select>`  : '';
+      const genderDD = (fieldOn('gender')         && genders.length) ? `<select onchange="setCharFilter('gender',this.value)">${genderOpts}</select>` : '';
       const vocalDD = (fieldOn('vocal_type')       && vocals.length) ? `<select onchange="setCharFilter('vocal',this.value)">${vocalOpts}</select>` : '';
       const danceDD = (fieldOn('dancing_strength') && dances.length) ? `<select onchange="setCharFilter('dance',this.value)">${danceOpts}</select>` : '';
       const usageDD = (fieldOn('vocal_usage')      && usages.length) ? `<select onchange="setCharFilter('usage',this.value)">${usageOpts}</select>` : '';
       const sortDD  = `<select onchange="setCharSort(this.value)">
         <option value="type" selected>Sort: Role Type</option>
         <option value="name">Sort: A to Z</option>
-        <option value="default">Sort: Custom Order</option>
         ${fieldOn('vocal_type') ? `<option value="vocal">Sort: Vocal Type</option>` : ''}
         ${fieldOn('vocal_usage') ? `<option value="usage">Sort: Vocal Usage</option>` : ''}
       </select>`;
@@ -5746,7 +5758,7 @@
       return `
         <section class="ai-section" id="roles">
           <div class="ai-role-controls">
-            <div class="ai-role-filter-group">${typeDD}${vocalDD}${usageDD}${danceDD}</div>
+            <div class="ai-role-filter-group">${typeDD}${genderDD}${vocalDD}${usageDD}${danceDD}</div>
             <div class="ai-role-sort-group">${sortDD}</div>
           </div>
           <div class="ai-roles-grid" id="roles-grid">${renderRoleCards(sortCharacterList(_allCharacters))}</div>
@@ -5758,6 +5770,7 @@
       if (dimension === 'vocal') _charFilterVocal = value;
       if (dimension === 'dance') _charFilterDance = value;
       if (dimension === 'usage') _charFilterUsage = value;
+      if (dimension === 'gender') _charFilterGender = value;
       _applyCharView();
     }
 
@@ -5771,7 +5784,8 @@
       if (_charFilterType)  list = list.filter(c => c.role_type        === _charFilterType);
       if (_charFilterVocal) list = list.filter(c => c.vocal_type       === _charFilterVocal);
       if (_charFilterDance) list = list.filter(c => c.dancing_strength === _charFilterDance);
-      if (_charFilterUsage) list = list.filter(c => displayVocalUsage(c.vocal_usage) === _charFilterUsage);
+      if (_charFilterUsage) list = list.filter(c => effectiveVocalUsage(c) === _charFilterUsage);
+      if (_charFilterGender) list = list.filter(c => displayGender(c.gender) === _charFilterGender);
       list = sortCharacterList(list);
       const grid = document.getElementById('roles-grid');
       if (grid) grid.innerHTML = list.length ? renderRoleCards(list) : '<p style="color:#9a90b0;font-size:0.9rem;">No roles match this filter.</p>';
@@ -5792,7 +5806,7 @@
       } else if (_charSort === 'vocal') {
         sorted.sort((a,b) => (a.vocal_type||'').localeCompare(b.vocal_type||''));
       } else if (_charSort === 'usage') {
-        sorted.sort((a,b) => displayVocalUsage(a.vocal_usage).localeCompare(displayVocalUsage(b.vocal_usage)));
+        sorted.sort((a,b) => effectiveVocalUsage(a).localeCompare(effectiveVocalUsage(b)));
       }
       return sorted;
     }
@@ -5843,7 +5857,7 @@
         if (show('age_range') && c.age_range) fact('Age Range', c.age_range, '#d97706');
         if (show('vocal_type') && c.vocal_type) fact('Vocal Type', c.vocal_type, '#2563eb');
         if (show('vocal_range') && c.vocal_range) fact('Vocal Range', c.vocal_range, '#0891b2');
-        if (show('vocal_usage') && c.vocal_usage) fact('Vocal Usage', displayVocalUsage(c.vocal_usage), '#16a34a');
+        if (show('vocal_usage') && effectiveVocalUsage(c)) fact('Vocal Usage', effectiveVocalUsage(c), '#16a34a');
         if (show('dancing_strength') && c.dancing_strength && c.dancing_strength !== 'None' && c.dancing_strength !== 'Non-Dancing') {
           fact('Movement', c.dancing_strength, '#db2777', DANCE_DESCS[c.dancing_strength] || '');
         }
