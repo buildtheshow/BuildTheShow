@@ -30,6 +30,14 @@
     .team-card { background:#fff; border:1px solid rgba(87,46,136,0.12); border-radius:14px; padding:0.9rem; }
     .team-card-title { font-weight:950; margin-bottom:0.35rem; }
     .team-card-sub { color:#86799f; font-size:0.8rem; font-weight:700; line-height:1.45; }
+    .profile-layout { display:grid; grid-template-columns:260px minmax(0,1fr); gap:1rem; align-items:start; }
+    .profile-photo { width:100%; aspect-ratio:1; border-radius:18px; background:rgba(87,46,136,0.08); overflow:hidden; display:grid; place-items:center; color:#572e88; font-size:3rem; font-weight:950; }
+    .profile-photo img { width:100%; height:100%; object-fit:cover; object-position:top; }
+    .profile-actions { display:flex; gap:0.5rem; flex-wrap:wrap; margin-top:0.75rem; }
+    .color-grid { display:flex; gap:0.5rem; flex-wrap:wrap; margin:0.55rem 0 0.25rem; }
+    .color-dot { width:2rem; height:2rem; border-radius:999px; border:2px solid transparent; background:var(--team-note-color); box-shadow:0 0 0.55rem color-mix(in srgb, var(--team-note-color) 45%, transparent); cursor:pointer; }
+    .color-dot.active { border-color:#1a1530; }
+    .color-dot:disabled { opacity:0.22; cursor:not-allowed; box-shadow:none; }
     .type-row { display:flex; align-items:center; gap:0.55rem; padding:0.5rem 0; border-bottom:1px solid rgba(87,46,136,0.08); }
     .type-dot { width:0.62rem; height:0.62rem; border-radius:50%; background:var(--c,#572e88); box-shadow:0 0 0.55rem color-mix(in srgb,var(--c,#572e88) 50%,transparent); }
     .type-name { font-weight:900; }
@@ -59,7 +67,7 @@
     .empty { text-align:center; color:#9a90b0; padding:2rem 1rem; }
     .error { color:#b91c1c; font-size:0.82rem; font-weight:800; margin-top:0.55rem; }
     @media (max-width: 860px) {
-      .team-top, .room-layout, .room-main { grid-template-columns:1fr; display:grid; }
+      .team-top, .room-layout, .room-main, .profile-layout { grid-template-columns:1fr; display:grid; }
       .team-grid { grid-template-columns:1fr; }
       .team-badge { width:100%; }
     }
@@ -69,8 +77,9 @@
   <div id="app" class="team-login">
     <div class="team-login-card">
       <h1>Audition Team</h1>
-      <p>Enter your production team passcode to open the audition workspace.</p>
-      <input class="form-input" id="team-passcode" placeholder="Passcode" autocomplete="one-time-code" />
+      <p>Enter the email address and access code from your invite.</p>
+      <input class="form-input" id="team-email" placeholder="Email address" type="email" autocomplete="email" />
+      <input class="form-input" id="team-passcode" placeholder="Access code" autocomplete="one-time-code" style="margin-top:0.55rem;" />
       <button class="btn-primary" onclick="loginTeam()" style="width:100%;justify-content:center;margin-top:0.75rem;">Open Auditions</button>
       <div class="error" id="login-error"></div>
     </div>
@@ -87,11 +96,13 @@
     const params = new URLSearchParams(location.search);
     const prodId = params.get('id') || params.get('prod');
     let passcode = params.get('code') || '';
+    let teamEmail = params.get('email') || '';
     let member = null;
     let prod = null;
     let sessions = [];
     let applicants = [];
     let notes = [];
+    let takenColors = [];
     let activeTab = 'dashboard';
     let activeSessionId = '';
     let activeApplicantId = '';
@@ -107,6 +118,7 @@
     function labelForType(type) {
       return ({ audition:'General Auditions', dance_call:'Dance Call', callback:'Callbacks', other:'Other Audition', other_audition:'Other Audition' })[type] || 'Audition';
     }
+    const TEAM_NOTE_COLORS = ['#572e88', '#7FAF8B', '#D68CB2', '#E3A46F', '#55acda', '#22cdd4', '#c2487a', '#8a7aac'];
     function customAnswers(app) {
       if (!app?.custom_answers) return {};
       if (typeof app.custom_answers === 'string') { try { return JSON.parse(app.custom_answers || '{}') || {}; } catch { return {}; } }
@@ -139,26 +151,29 @@
     }
     async function loginTeam() {
       passcode = document.getElementById('team-passcode')?.value?.trim() || passcode;
+      teamEmail = document.getElementById('team-email')?.value?.trim() || teamEmail;
       const err = document.getElementById('login-error');
       if (err) err.textContent = '';
-      if (!prodId || !passcode) { if (err) err.textContent = 'Missing production or passcode.'; return; }
-      const { data, error } = await sb.rpc('team_member_login', { p_production_id: prodId, p_passcode: passcode });
-      if (error || !data?.length) { if (err) err.textContent = 'That passcode did not work.'; return; }
+      if (!prodId || !teamEmail || !passcode) { if (err) err.textContent = 'Enter your email and access code.'; return; }
+      const { data, error } = await sb.rpc('team_member_login', { p_production_id: prodId, p_email: teamEmail, p_passcode: passcode });
+      if (error || !data?.length) { if (err) err.textContent = 'That email and access code did not match.'; return; }
       member = data[0];
       await loadData();
       renderShell();
     }
     async function loadData() {
-      const [prodRes, sessionRes, appRes, notesRes] = await Promise.all([
+      const [prodRes, sessionRes, appRes, notesRes, colorRes] = await Promise.all([
         sb.from('productions').select('*').eq('id', prodId).single(),
         sb.from('audition_sessions').select('*').eq('production_id', prodId).order('sort_order', { ascending: true }),
         sb.from('audition_applications').select('*').eq('production_id', prodId).order('created_at', { ascending: false }),
-        sb.rpc('team_note_list', { p_production_id: prodId, p_passcode: passcode })
+        sb.rpc('team_note_list', { p_production_id: prodId, p_email: teamEmail, p_passcode: passcode }),
+        sb.rpc('team_member_colour_list', { p_production_id: prodId, p_email: teamEmail, p_passcode: passcode })
       ]);
       prod = prodRes.data || {};
       sessions = sessionRes.data || [];
       applicants = appRes.data || [];
       notes = notesRes.data || [];
+      takenColors = colorRes.data || [];
       activeSessionId = activeSessionId || sessions[0]?.id || '';
       activeApplicantId = activeApplicantId || applicants[0]?.id || '';
     }
@@ -177,7 +192,7 @@
           </div>
         </div>
         <div class="team-tabs">
-          ${['dashboard','schedule','types','inroom','callbacks'].map(t => `<button class="team-tab${activeTab === t ? ' active' : ''}" onclick="setTab('${t}')">${({dashboard:'Dashboard',schedule:'Schedule',types:'All Audition Types',inroom:'In The Room',callbacks:'Callback List'})[t]}</button>`).join('')}
+          ${['dashboard','schedule','types','inroom','callbacks','profile'].map(t => `<button class="team-tab${activeTab === t ? ' active' : ''}" onclick="setTab('${t}')">${({dashboard:'Dashboard',schedule:'Schedule',types:'All Audition Types',inroom:'In The Room',callbacks:'Callback List',profile:'Profile'})[t]}</button>`).join('')}
         </div>
         <div id="team-content"></div>`;
       renderTab();
@@ -195,9 +210,96 @@
         el.innerHTML = `<div class="team-card">${sessions.map(s => `<div class="type-row" style="--c:${colorForType(s.type)};"><span class="type-dot"></span><span class="type-name">${esc(s.name || labelForType(s.type))}</span><span class="type-meta">${esc(labelForType(s.type))}</span></div>`).join('') || '<div class="empty">No audition types yet.</div>'}</div>`;
       } else if (activeTab === 'callbacks') {
         renderCallbacks();
+      } else if (activeTab === 'profile') {
+        renderProfile();
       } else {
         renderInRoom();
       }
+    }
+    function colorOptionsHtml() {
+      const current = String(member?.note_color || '#572e88').toLowerCase();
+      const usedByOthers = new Set((takenColors || [])
+        .filter(row => row.team_member_id !== member.id)
+        .map(row => String(row.note_color || '').toLowerCase())
+        .filter(Boolean));
+      return TEAM_NOTE_COLORS.map(color => {
+        const taken = usedByOthers.has(color.toLowerCase());
+        const active = current === color.toLowerCase();
+        return `<button type="button" class="color-dot${active ? ' active' : ''}" style="--team-note-color:${esc(color)};" ${taken ? 'disabled title="Already chosen by another team member"' : ''} onclick="selectProfileColor('${esc(color)}')"></button>`;
+      }).join('');
+    }
+    function selectProfileColor(color) {
+      member.note_color = color;
+      renderProfile();
+      renderShell();
+      activeTab = 'profile';
+      renderTab();
+    }
+    function renderProfile() {
+      document.getElementById('team-content').innerHTML = `
+        <div class="profile-layout">
+          <div class="team-card">
+            <div class="profile-photo" id="profile-photo-preview">
+              ${member.headshot_url ? `<img src="${esc(member.headshot_url)}" alt="" />` : esc((member.name || '?').trim().charAt(0).toUpperCase())}
+            </div>
+            <div class="profile-actions">
+              <input type="file" id="profile-headshot-input" accept="image/*" style="display:none;" onchange="uploadProfileHeadshot(this.files?.[0])" />
+              <button class="btn-secondary" onclick="document.getElementById('profile-headshot-input').click()">Upload Headshot</button>
+              ${member.headshot_url ? `<a class="btn-secondary" href="${esc(member.headshot_url)}" target="_blank" download style="text-decoration:none;">Download</a>` : ''}
+            </div>
+          </div>
+          <div class="team-card">
+            <div class="team-card-title">Your Profile</div>
+            <div class="team-card-sub">Choose the colour your notes use, then add a headshot and bio the producer can download.</div>
+            <label style="display:block;font-weight:900;margin-top:1rem;">Note colour</label>
+            <div class="color-grid">${colorOptionsHtml()}</div>
+            <label style="display:block;font-weight:900;margin-top:1rem;">Bio</label>
+            <textarea class="form-textarea" id="profile-bio" placeholder="Short bio for programs, websites, or marketing..." style="min-height:160px;">${esc(member.bio || '')}</textarea>
+            <button class="btn-primary" onclick="saveProfile()" style="margin-top:0.75rem;">Save Profile</button>
+            <div class="error" id="profile-error"></div>
+          </div>
+        </div>`;
+    }
+    async function uploadProfileHeadshot(file) {
+      if (!file) return;
+      const err = document.getElementById('profile-error');
+      if (err) err.textContent = '';
+      const safeName = file.name.replace(/[^a-zA-Z0-9._-]+/g, '-');
+      const path = `${prodId}/team/${member.id}-${Date.now()}-${safeName}`;
+      const { data, error } = await sb.storage.from('audition-headshots').upload(path, file, { upsert: true, contentType: file.type });
+      if (error) { if (err) err.textContent = 'Upload failed: ' + error.message; return; }
+      const { data: urlData } = sb.storage.from('audition-headshots').getPublicUrl(data.path);
+      member.headshot_url = urlData?.publicUrl || '';
+      member.headshot_path = data.path;
+      await saveProfile(false);
+      renderProfile();
+    }
+    async function saveProfile(showSaved = true) {
+      const err = document.getElementById('profile-error');
+      if (err) err.textContent = '';
+      const bio = document.getElementById('profile-bio')?.value || member.bio || '';
+      const { data, error } = await sb.rpc('team_member_update_profile', {
+        p_production_id: prodId,
+        p_email: teamEmail,
+        p_passcode: passcode,
+        p_note_color: member.note_color || '#572e88',
+        p_bio: bio,
+        p_headshot_url: member.headshot_url || null,
+        p_headshot_path: member.headshot_path || null
+      });
+      if (error || !data?.length) {
+        if (err) err.textContent = error?.message || 'Could not save profile.';
+        return;
+      }
+      member = data[0];
+      const colorRes = await sb.rpc('team_member_colour_list', { p_production_id: prodId, p_email: teamEmail, p_passcode: passcode });
+      takenColors = colorRes.data || [];
+      if (showSaved) {
+        if (err) { err.style.color = '#2f7d43'; err.textContent = 'Profile saved.'; }
+      }
+      renderShell();
+      activeTab = 'profile';
+      renderTab();
     }
     function sessionStrip() {
       return `<div class="session-strip">${sessions.map(s => `<button class="session-btn${s.id === activeSessionId ? ' active' : ''}" style="--c:${colorForType(s.type)};" onclick="activeSessionId='${esc(s.id)}';renderTab();">${esc(s.name || labelForType(s.type))}</button>`).join('')}</div>`;
@@ -254,6 +356,7 @@
       if (!body) return;
       const { data, error } = await sb.rpc('team_note_add', {
         p_production_id: prodId,
+        p_email: teamEmail,
         p_passcode: passcode,
         p_applicant_id: appId,
         p_session_id: activeSessionId || null,
@@ -267,8 +370,8 @@
       else renderInRoom();
     }
     if (passcode) {
+      document.getElementById('team-email').value = teamEmail;
       document.getElementById('team-passcode').value = passcode;
-      loginTeam();
     }
   </script>
 </body>

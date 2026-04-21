@@ -10910,7 +10910,7 @@
       </div>
 
       <div class="prod-tab" data-tab="team">
-        <span class="tab-icon-slot"><img src="/ASSETS/Images/Production Team.svg" class="tab-icon" alt="" aria-hidden="true" /></span>
+        <span class="tab-icon-slot"><img src="/ASSETS/Images/navproductionteam.svg" class="tab-icon" alt="" aria-hidden="true" /></span>
         Production Team
       </div>
       <div class="prod-tab" onclick="openCastingSubTab('castlist')">
@@ -17492,6 +17492,7 @@ If you have any questions, don't hesitate to reach out.
     const url = new URL('audition-team.html', window.location.href);
     url.searchParams.set('id', prodId);
     if (member?.passcode) url.searchParams.set('code', member.passcode);
+    if (member?.email) url.searchParams.set('email', member.email);
     return url.toString();
   }
 
@@ -17508,16 +17509,9 @@ If you have any questions, don't hesitate to reach out.
     return TEAM_NOTE_COLORS.find(color => !used.has(color.toLowerCase())) || TEAM_NOTE_COLORS[0];
   }
 
-  function teamColorOptions(currentColor, memberId) {
-    const current = currentColor || nextAvailableTeamColor(memberId);
-    const usedByOthers = new Set((auditionTeamMembers || [])
-      .filter(m => m.id !== memberId && m.is_active !== false)
-      .map(m => String(m.note_color || '').toLowerCase())
-      .filter(Boolean));
-    return TEAM_NOTE_COLORS.map(color => {
-      const taken = usedByOthers.has(color.toLowerCase());
-      return `<button type="button" class="team-color-dot${current.toLowerCase() === color.toLowerCase() ? ' active' : ''}" ${taken ? 'disabled title="Already used by another team member"' : ''} style="--team-note-color:${esc(color)};" onclick="saveTeamMemberColor('${esc(memberId)}','${esc(color)}')"></button>`;
-    }).join('');
+  function teamColorPreview(color) {
+    const c = color || '#572e88';
+    return `<span class="team-color-picker" title="Chosen by this team member"><span class="team-color-dot active" style="--team-note-color:${esc(c)};"></span><span style="font-size:0.72rem;font-weight:800;color:#86799f;">Chosen in profile</span></span>`;
   }
 
   async function upsertTeamAccessForCreativeRole(role) {
@@ -17571,20 +17565,6 @@ If you have any questions, don't hesitate to reach out.
     renderTeamView(document.getElementById('tm-container'));
   }
 
-  async function saveTeamMemberColor(memberId, color) {
-    const chosen = String(color || '').trim();
-    if (!TEAM_NOTE_COLORS.includes(chosen)) return;
-    const duplicate = auditionTeamMembers.find(m => m.id !== memberId && m.is_active !== false && String(m.note_color || '').toLowerCase() === chosen.toLowerCase());
-    if (duplicate) {
-      showToast(`${duplicate.name || 'Another team member'} already has that colour.`, true);
-      return;
-    }
-    const { error } = await sb.from('production_team_members').update({ note_color: chosen }).eq('id', memberId);
-    if (error) { showToast('Could not save note colour: ' + error.message, true); return; }
-    await loadAuditionTeamMembers();
-    renderTeamView(document.getElementById('tm-container'));
-  }
-
   async function toggleTeamMemberAccess(memberId, isActive) {
     const { error } = await sb.from('production_team_members').update({ is_active: isActive === true }).eq('id', memberId);
     if (error) { showToast('Could not update team access: ' + error.message, true); return; }
@@ -17601,6 +17581,87 @@ If you have any questions, don't hesitate to reach out.
     } catch {
       prompt('Copy this audition team link:', link);
     }
+  }
+
+  function teamInviteMessage(member) {
+    const link = teamPortalUrl(member);
+    const lines = [
+      `Hi ${member.name || 'there'},`,
+      '',
+      `You've been added to the audition team for ${prod?.title || 'this production'} as ${member.role || 'a production team member'}.`,
+      '',
+      'Here is your audition team access:',
+      `Link: ${link}`,
+      `Email: ${member.email || ''}`,
+      `Passcode: ${member.passcode || ''}`,
+      '',
+      'Inside, you can view the audition dashboard, schedule, audition types, in-the-room cards, callback list, and shared team notes.',
+      'Please open your Profile tab first so you can choose your note colour, upload a headshot, and add your bio.',
+      '',
+      `Thank you,`,
+      orgName || 'The production team'
+    ];
+    return lines.join('\n');
+  }
+
+  async function emailTeamInvite(memberId) {
+    const member = auditionTeamMembers.find(m => m.id === memberId);
+    if (!member) return;
+    if (!member.email) {
+      showToast('Add an email address before sending the invite.', true);
+      return;
+    }
+    const subject = `${prod?.title || 'Production'} audition team access`;
+    const message = teamInviteMessage(member);
+    try {
+      const { data, error } = await sb.functions.invoke('send-email', {
+        body: {
+          production_id: prodId,
+          category: 'general',
+          email: member.email,
+          name: member.name || member.email,
+          subject,
+          message,
+          context: {
+            performer_email: member.email,
+            performer_name: member.name || member.email,
+            show_name: prod?.title || '',
+            show_subtitle: prod?.subtitle || '',
+            org_name: orgName || '',
+            org_email: orgEmail || '',
+            production: {
+              title: prod?.title || '',
+              subtitle: prod?.subtitle || '',
+              venue: prod?.venue || '',
+              director: prod?.director || '',
+              organization_id: prod?.organization_id || '',
+              org_name: orgName || '',
+            },
+          },
+        },
+      });
+      if (error || !data?.sent) throw new Error(error?.message || data?.error || 'Email was not sent.');
+      showToast(`Invite emailed to ${member.name || member.email}.`);
+    } catch (err) {
+      const mailto = `mailto:${encodeURIComponent(member.email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(message)}`;
+      window.location.href = mailto;
+      showToast('Could not send automatically, so I opened your email app with the invite ready.', true);
+    }
+  }
+
+  function downloadTeamBio(memberId) {
+    const member = auditionTeamMembers.find(m => m.id === memberId);
+    if (!member?.bio) { showToast('No bio has been added yet.', true); return; }
+    const text = `${member.name || 'Team Member'}\n${member.role || ''}\n\n${member.bio || ''}`;
+    const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${(member.name || 'team-member').toLowerCase().replace(/[^a-z0-9]+/g, '-')}-bio.txt`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
   }
 
   function showTeamSubnav() {
@@ -17771,18 +17832,25 @@ If you have any questions, don't hesitate to reach out.
       </div>`;
 
     const accessRows = (auditionTeamMembers || []).map(m => `
-      <div style="display:grid;grid-template-columns:1.1fr 1.3fr 0.9fr 0.75fr 1.05fr auto;gap:0.55rem;align-items:center;padding:0.55rem 0;border-top:1px solid rgba(87,46,136,0.1);">
+      <div style="display:grid;grid-template-columns:64px minmax(0,1.05fr) minmax(0,1.2fr) 0.85fr 0.65fr auto;gap:0.65rem;align-items:center;padding:0.7rem 0;border-top:1px solid rgba(87,46,136,0.1);">
+        <div style="width:48px;height:48px;border-radius:14px;background:rgba(87,46,136,0.08);overflow:hidden;display:grid;place-items:center;color:#572e88;font-weight:950;">
+          ${m.headshot_url ? `<img src="${esc(m.headshot_url)}" alt="" style="width:100%;height:100%;object-fit:cover;object-position:top;" />` : esc((m.name || '?').trim().charAt(0).toUpperCase())}
+        </div>
         <input class="form-input" value="${esc(m.name || '')}" placeholder="Name" onblur="saveTeamMemberField('${esc(m.id)}','name',this.value)" style="min-height:34px;font-size:0.78rem;" />
         <input class="form-input" value="${esc(m.email || '')}" placeholder="Email" onblur="saveTeamMemberField('${esc(m.id)}','email',this.value)" style="min-height:34px;font-size:0.78rem;" />
         <input class="form-input" value="${esc(m.role || '')}" placeholder="Role" onblur="saveTeamMemberField('${esc(m.id)}','role',this.value)" style="min-height:34px;font-size:0.78rem;" />
         <input class="form-input" value="${esc(m.passcode || '')}" placeholder="Code" onblur="saveTeamMemberField('${esc(m.id)}','passcode',this.value)" style="min-height:34px;font-size:0.78rem;font-weight:900;text-transform:uppercase;" />
-        <div class="team-color-picker">${teamColorOptions(m.note_color || '#572e88', m.id)}</div>
-        <div style="display:flex;gap:0.4rem;justify-content:flex-end;align-items:center;">
+        <div style="display:flex;gap:0.4rem;justify-content:flex-end;align-items:center;flex-wrap:wrap;">
+          ${teamColorPreview(m.note_color || '#572e88')}
+          <button class="btn-secondary" onclick="emailTeamInvite('${esc(m.id)}')" style="font-size:0.72rem;padding:0.3rem 0.55rem;">Email Invite</button>
           <button class="btn-secondary" onclick="copyTeamPortalLink('${esc(m.id)}')" style="font-size:0.72rem;padding:0.3rem 0.55rem;">Copy Link</button>
+          ${m.headshot_url ? `<a class="btn-secondary" href="${esc(m.headshot_url)}" target="_blank" download style="font-size:0.72rem;padding:0.3rem 0.55rem;text-decoration:none;">Headshot</a>` : ''}
+          <button class="btn-secondary" onclick="downloadTeamBio('${esc(m.id)}')" style="font-size:0.72rem;padding:0.3rem 0.55rem;" ${m.bio ? '' : 'disabled'}>Bio</button>
           <label style="display:inline-flex;align-items:center;gap:0.28rem;font-size:0.72rem;font-weight:800;color:#6a5a80;white-space:nowrap;">
             <input type="checkbox" ${m.is_active !== false ? 'checked' : ''} onchange="toggleTeamMemberAccess('${esc(m.id)}',this.checked)" /> Active
           </label>
         </div>
+        ${m.bio ? `<div style="grid-column:2 / -1;font-size:0.75rem;color:#86799f;line-height:1.45;margin-top:-0.35rem;">${esc(m.bio).slice(0, 220)}${String(m.bio).length > 220 ? '...' : ''}</div>` : ''}
       </div>`).join('');
 
     const accessSection = `
