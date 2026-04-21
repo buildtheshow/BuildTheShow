@@ -1789,6 +1789,7 @@
 
     const params   = new URLSearchParams(window.location.search);
     const prodId   = params.get('prod') || params.get('id');
+    const orgPathKey = params.get('org') || window.location.pathname.match(/^\/([^/]+)\/Audition\/[^/]+/)?.[1] || null;
     // Support clean URLs: /ORG/Audition/PROD or /audition/PROD
     const cleanPath = window.location.pathname.match(/^\/[^/]+\/Audition\/([^/]+)/)?.[1]
                    || window.location.pathname.match(/^\/audition\/([^/]+)/)?.[1];
@@ -1986,9 +1987,26 @@
       if (!prodId && !prodSlug) { showNotFound(); return; }
 
       // Production
-      let q = sb.from('productions').select('*');
-      if (prodSlug) q = q.eq('slug', prodSlug); else q = q.eq('id', prodId);
-      const { data: prod } = await q.maybeSingle();
+      let prod = null;
+      if (prodSlug) {
+        let scopedOrgId = null;
+        if (orgPathKey) {
+          const { data: orgMatch } = await sb
+            .from('organizations')
+            .select('id')
+            .or(`slug.eq.${orgPathKey},abbreviation.eq.${orgPathKey},abbreviation.eq.${String(orgPathKey).toUpperCase()},abbreviation.eq.${String(orgPathKey).toLowerCase()}`)
+            .maybeSingle();
+          scopedOrgId = orgMatch?.id || null;
+        }
+
+        let q = sb.from('productions').select('*').eq('slug', prodSlug);
+        if (scopedOrgId) q = q.eq('organization_id', scopedOrgId);
+        const { data } = await q.maybeSingle();
+        prod = data || null;
+      } else if (prodId) {
+        const { data } = await sb.from('productions').select('*').eq('id', prodId).maybeSingle();
+        prod = data || null;
+      }
       if (!prod) { showNotFound(); return; }
 
       if (!canAccessPublicPage(prod)) { showNotFound(); return; }

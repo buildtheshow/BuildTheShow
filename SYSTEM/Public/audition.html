@@ -380,6 +380,7 @@
     const _params    = new URLSearchParams(window.location.search);
     const preview    = _params.get('preview') === '1';
     const prodId     = _params.get('prod') || _params.get('id');
+    const orgPathKey = _params.get('org') || window.location.pathname.match(/^\/([^/]+)\/Audition\/[^/]+/)?.[1] || null;
     const cleanPath  = window.location.pathname.match(/^\/[^/]+\/Audition\/([^/]+)/)?.[1]
                     || window.location.pathname.match(/^\/audition\/([^/]+)/)?.[1];
     const prodSlug   = _params.get('slug') || (cleanPath ? decodeURIComponent(cleanPath) : null);
@@ -483,11 +484,26 @@
     }
 
     async function loadAuditionPageData() {
-      let prodQuery = sb.from('productions').select('id, title, subtitle, description, venue, venue_id, audition_location, audition_locations, rehearsal_locations, performance_locations, age_min, age_max, start_date, custom_id, organization_id, slug, poster_url, page_status');
-      if (prodSlug) prodQuery = prodQuery.eq('slug', prodSlug);
-      else prodQuery = prodQuery.eq('id', prodId);
+      let prod = null;
+      if (prodSlug) {
+        let scopedOrgId = null;
+        if (orgPathKey) {
+          const { data: orgMatch } = await sb
+            .from('organizations')
+            .select('id')
+            .or(`slug.eq.${orgPathKey},abbreviation.eq.${orgPathKey},abbreviation.eq.${String(orgPathKey).toUpperCase()},abbreviation.eq.${String(orgPathKey).toLowerCase()}`)
+            .maybeSingle();
+          scopedOrgId = orgMatch?.id || null;
+        }
 
-      const { data: prod } = await prodQuery.single();
+        let prodQuery = sb.from('productions').select('id, title, subtitle, description, venue, venue_id, audition_location, audition_locations, rehearsal_locations, performance_locations, age_min, age_max, start_date, custom_id, organization_id, slug, poster_url, page_status').eq('slug', prodSlug);
+        if (scopedOrgId) prodQuery = prodQuery.eq('organization_id', scopedOrgId);
+        const { data } = await prodQuery.maybeSingle();
+        prod = data || null;
+      } else if (prodId) {
+        const { data } = await sb.from('productions').select('id, title, subtitle, description, venue, venue_id, audition_location, audition_locations, rehearsal_locations, performance_locations, age_min, age_max, start_date, custom_id, organization_id, slug, poster_url, page_status').eq('id', prodId).maybeSingle();
+        prod = data || null;
+      }
       if (!prod) { show('screen-closed'); return false; }
       const resolvedProdId = prod.id;
       currentProdId = resolvedProdId;
