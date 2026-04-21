@@ -378,15 +378,37 @@
     );
 
     const _params    = new URLSearchParams(window.location.search);
-    const prodId     = _params.get('prod');
+    const preview    = _params.get('preview') === '1';
+    const prodId     = _params.get('prod') || _params.get('id');
+    const cleanPath  = window.location.pathname.match(/^\/[^/]+\/Audition\/([^/]+)/)?.[1]
+                    || window.location.pathname.match(/^\/audition\/([^/]+)/)?.[1];
+    const prodSlug   = _params.get('slug') || (cleanPath ? decodeURIComponent(cleanPath) : null);
     const sessionId  = _params.get('session') || null;  // from audition-info.html session card
     const preselectedTimeSlotId = _params.get('slot') || null; // from slot picker on audition-info
+    let currentProdId = prodId || null;
     let config = null;
     let availableSlots = [];
     let selectedSlotId = null;
     let publicAuditionRealtimeChannel = null;
     let characters    = [];
     let customQuestions = [];
+
+    function normalizePageStatus(status) {
+      const val = String(status || '').toLowerCase();
+      return ['draft', 'hidden', 'live'].includes(val) ? val : 'draft';
+    }
+
+    function canAccessPublicPage(prod) {
+      const status = normalizePageStatus(prod?.page_status);
+      return status !== 'draft' || preview;
+    }
+
+    function canAcceptPublicBookings(prod, cfg) {
+      const status = normalizePageStatus(prod?.page_status);
+      if (status === 'draft') return false;
+      if (!canAccessPublicPage(prod)) return false;
+      return cfg ? !!cfg.is_open : true;
+    }
 
     // Age helpers
     function getAge(dobString) {
@@ -436,8 +458,8 @@
 
     async function refreshPublicSlotAvailability() {
       const [{ data: slots }, { data: bookings }] = await Promise.all([
-        sb.from('audition_slots').select('*').eq('production_id', prodId).order('date').order('start_time'),
-        sb.from('audition_applications').select('status,session_id,slot_id,time_slot_id,slot_assignments').eq('production_id', prodId),
+        sb.from('audition_slots').select('*').eq('production_id', currentProdId).order('date').order('start_time'),
+        sb.from('audition_applications').select('status,session_id,slot_id,time_slot_id,slot_assignments').eq('production_id', currentProdId),
       ]);
 
       if (!slots || !slots.length) {
@@ -461,20 +483,28 @@
     }
 
     async function loadAuditionPageData() {
-      const [{ data: prod }, { data: cfg }, { data: slots }, { data: bookings }, { data: chars }, { data: cqs }, { data: zeusAudEvents }] = await Promise.all([
-        sb.from('productions').select('title, subtitle, venue, start_date, custom_id').eq('id', prodId).single(),
-        sb.from('audition_configs').select('*').eq('production_id', prodId).single(),
-        sb.from('audition_slots').select('*').eq('production_id', prodId).order('date').order('start_time'),
-        sb.from('audition_applications').select('status,session_id,slot_id,time_slot_id,slot_assignments').eq('production_id', prodId),
-        sb.from('production_characters').select('*').eq('production_id', prodId).eq('show_on_form', true).order('sort_order'),
-        sb.from('audition_custom_questions').select('*').eq('production_id', prodId).order('sort_order'),
+      let prodQuery = sb.from('productions').select('id, title, subtitle, description, venue, venue_id, audition_location, audition_locations, rehearsal_locations, performance_locations, age_min, age_max, start_date, custom_id, organization_id, slug, poster_url, page_status');
+      if (prodSlug) prodQuery = prodQuery.eq('slug', prodSlug);
+      else prodQuery = prodQuery.eq('id', prodId);
+
+      const { data: prod } = await prodQuery.single();
+      if (!prod) { show('screen-closed'); return false; }
+      const resolvedProdId = prod.id;
+      currentProdId = resolvedProdId;
+
+      const [{ data: cfg }, { data: slots }, { data: bookings }, { data: chars }, { data: cqs }, { data: zeusAudEvents }] = await Promise.all([
+        sb.from('audition_configs').select('*').eq('production_id', resolvedProdId).single(),
+        sb.from('audition_slots').select('*').eq('production_id', resolvedProdId).order('date').order('start_time'),
+        sb.from('audition_applications').select('status,session_id,slot_id,time_slot_id,slot_assignments').eq('production_id', resolvedProdId),
+        sb.from('production_characters').select('*').eq('production_id', resolvedProdId).eq('show_on_form', true).order('sort_order'),
+        sb.from('audition_custom_questions').select('*').eq('production_id', resolvedProdId).order('sort_order'),
         // Zeus is source of truth for audition dates
-        sb.from('production_events').select('start_time').eq('production_id', prodId)
+        sb.from('production_events').select('start_time').eq('production_id', resolvedProdId)
           .in('event_type', ['audition', 'dance_call', 'callback', 'other_audition'])
           .order('start_time').limit(1),
       ]);
 
-      if (!cfg || !cfg.is_open) { show('screen-closed'); return false; }
+      if (!prod || !canAccessPublicPage(prod) || !canAcceptPublicBookings(prod, cfg)) { show('screen-closed'); return false; }
       config = cfg;
       characters = chars || [];
       customQuestions = cqs || [];
@@ -536,13 +566,24 @@
       }
 
       if (prod) {
+        const { data: org } = prod.organization_id
+          ? await sb.from('organizations').select('name').eq('id', prod.organization_id).maybeSingle()
+          : { data: null };
+        if (org?.name) document.getElementById('aud-org-badge').textContent = org.name;
         document.getElementById('aud-prod-title').textContent = prod.title + ' - Auditions';
         document.title = prod.title + ' Auditions - Build The Show';
         const meta = [];
+        const auditionLocation = (prod.audition_locations || [])[0] || cfg.audition_location || prod.audition_location || prod.venue;
         if (prod.venue) meta.push('📍 ' + prod.venue);
         const firstAudDate = zeusAudEvents?.[0]?.start_time;
         if (firstAudDate) meta.push('📅 Auditions: ' + fmtDate(firstAudDate.slice(0, 10)));
-        if (cfg.audition_location) meta.push('📍 Audition venue: ' + cfg.audition_location);
+        if (auditionLocation) meta.push('📍 Audition venue: ' + auditionLocation);
+        if (prod.age_min || prod.age_max) {
+          const ageText = prod.age_min && prod.age_max ? `${prod.age_min}-${prod.age_max}`
+            : prod.age_min ? `${prod.age_min}+`
+            : `Up to ${prod.age_max}`;
+          meta.push('👥 Ages: ' + ageText);
+        }
         document.getElementById('aud-meta').innerHTML = meta.map(m => `<div>${m}</div>`).join('');
       }
 
@@ -609,30 +650,30 @@
       }
 
       publicAuditionRealtimeChannel = sb
-        .channel(`public-audition-form-${prodId}`)
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'audition_applications', filter: `production_id=eq.${prodId}` }, async () => {
+        .channel(`public-audition-form-${currentProdId}`)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'audition_applications', filter: `production_id=eq.${currentProdId}` }, async () => {
           await refreshPublicSlotAvailability();
         })
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'audition_configs', filter: `production_id=eq.${prodId}` }, async () => {
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'audition_configs', filter: `production_id=eq.${currentProdId}` }, async () => {
           await loadAuditionPageData();
         })
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'audition_slots', filter: `production_id=eq.${prodId}` }, async () => {
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'audition_slots', filter: `production_id=eq.${currentProdId}` }, async () => {
           await refreshPublicSlotAvailability();
         })
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'production_characters', filter: `production_id=eq.${prodId}` }, async () => {
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'production_characters', filter: `production_id=eq.${currentProdId}` }, async () => {
           await loadAuditionPageData();
         })
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'audition_custom_questions', filter: `production_id=eq.${prodId}` }, async () => {
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'audition_custom_questions', filter: `production_id=eq.${currentProdId}` }, async () => {
           await loadAuditionPageData();
         })
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'production_events', filter: `production_id=eq.${prodId}` }, async () => {
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'production_events', filter: `production_id=eq.${currentProdId}` }, async () => {
           await loadAuditionPageData();
         })
         .subscribe();
     }
 
     async function init() {
-      if (!prodId) { show('screen-closed'); return; }
+      if (!prodId && !prodSlug) { show('screen-closed'); return; }
       const didLoad = await loadAuditionPageData();
       if (didLoad) subscribePublicAuditionRealtime();
     }
@@ -803,7 +844,7 @@
       if (photo) {
         try {
           const ext  = photo.name.split('.').pop();
-          const path = `auditions/${prodId}/${Date.now()}.${ext}`;
+          const path = `auditions/${currentProdId}/${Date.now()}.${ext}`;
           const { error: upErr } = await sb.storage.from('profile-headshots').upload(path, photo, { upsert: true });
           if (!upErr) {
             const { data: urlData } = sb.storage.from('profile-headshots').getPublicUrl(path);
@@ -816,7 +857,7 @@
       if (file) {
         try {
           const ext  = file.name.split('.').pop();
-          const path = `audition-files/${prodId}/${Date.now()}.${ext}`;
+          const path = `audition-files/${currentProdId}/${Date.now()}.${ext}`;
           const { error: upErr } = await sb.storage.from('profile-headshots').upload(path, file, { upsert: true });
           if (!upErr) {
             const { data: urlData } = sb.storage.from('profile-headshots').getPublicUrl(path);
@@ -846,7 +887,7 @@
         ? [{ session_id: sessionId, slot_id: timeSlotId }]
         : null;
       const payload = {
-        production_id: prodId,
+        production_id: currentProdId,
         name, email,
         phone:         phone      || null,
         role_interest: role       || null,

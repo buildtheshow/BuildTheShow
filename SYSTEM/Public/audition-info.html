@@ -1795,6 +1795,23 @@
     const prodSlug = params.get('slug') || (cleanPath ? decodeURIComponent(cleanPath) : null);
     const preview  = params.get('preview') === '1';
 
+    function normalizePageStatus(status) {
+      const val = String(status || '').toLowerCase();
+      return ['draft', 'hidden', 'live'].includes(val) ? val : 'draft';
+    }
+
+    function canAccessPublicPage(prod) {
+      const status = normalizePageStatus(prod?.page_status);
+      return status !== 'draft' || preview;
+    }
+
+    function canAcceptPublicBookings(prod, audConfig) {
+      const status = normalizePageStatus(prod?.page_status);
+      if (status === 'draft') return false;
+      if (!canAccessPublicPage(prod)) return false;
+      return audConfig ? !!audConfig.is_open : true;
+    }
+
     if (preview) {
       document.getElementById('preview-banner').style.display = 'block';
       const el = document.getElementById('preview-edit-link');
@@ -1974,7 +1991,7 @@
       const { data: prod } = await q.maybeSingle();
       if (!prod) { showNotFound(); return; }
 
-      // Page is accessible whenever it exists; is_open state is shown on-page
+      if (!canAccessPublicPage(prod)) { showNotFound(); return; }
 
       const resolvedId = prod.id;
       setupPublicAuditionsRealtime(resolvedId);
@@ -2337,11 +2354,16 @@
         </div>`;
 
       // Status tag — default open if no audition config record yet
-      const isOpen = audConfig ? !!audConfig.is_open : true;
+      const pageStatus = normalizePageStatus(prod?.page_status);
+      const isOpen = canAcceptPublicBookings(prod, audConfig);
       const closeDate = audConfig?.close_date;
       const daysLeft = daysBetween(closeDate);
       let statusTag = '';
-      if (isOpen && closeDate && daysLeft !== null && daysLeft <= 7 && daysLeft >= 0) {
+      if (preview && pageStatus === 'draft') {
+        statusTag = `<div class="ai-status-tag"><span class="ai-status-dot"></span>Preview Mode</div>`;
+      } else if (pageStatus === 'hidden') {
+        statusTag = `<div class="ai-status-tag"><span class="ai-status-dot"></span>Link Only</div>`;
+      } else if (isOpen && closeDate && daysLeft !== null && daysLeft <= 7 && daysLeft >= 0) {
         statusTag = `<div class="ai-status-tag soon"><span class="ai-status-dot"></span>${daysLeft <= 1 ? 'Closing Today!' : 'Closing in ' + daysLeft + ' days'}</div>`;
       } else if (isOpen) {
         statusTag = `<div class="ai-status-tag open"><span class="ai-status-dot"></span>Auditions Open</div>`;
@@ -2461,7 +2483,7 @@
     function buildAuditionCards(sessions, slotsBySession, prod, audConfig, userBooking, venueMap, venueLabel) {
       if (!sessions || !sessions.length) return '';
 
-      const isOpen = audConfig ? !!audConfig.is_open : true;
+      const isOpen = canAcceptPublicBookings(prod, audConfig);
       const sessionAccessMap = prod?.wizard_data?.audition_session_access || {};
       const sessionPrepareMap = prod?.wizard_data?.audition_session_prepare || {};
 
