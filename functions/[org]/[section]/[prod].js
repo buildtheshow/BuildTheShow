@@ -3,7 +3,13 @@
 // The page JS resolves the org + production slug from window.location.pathname.
 
 export async function onRequest(context) {
+  const org = String(context.params.org || '');
   const section = String(context.params.section || '');
+
+  if (['ASSETS', 'HOME', 'PUBLIC', 'SHARED', 'SYSTEM'].includes(org)) {
+    return context.env.ASSETS.fetch(context.request);
+  }
+
   if (section !== 'Audition' && !/^Archive\d{4}$/.test(section)) {
     return new Response('Not found', { status: 404 });
   }
