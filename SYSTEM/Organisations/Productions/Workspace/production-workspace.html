@@ -21486,6 +21486,7 @@ If you have any questions, don't hesitate to reach out.
     const btn = inputEl.previousElementSibling;
     const originalBtnText = btn?.textContent || 'Upload';
     if (btn) { btn.disabled = true; btn.textContent = 'Uploading...'; }
+    let uploadPhase = 'upload';
     try {
       const materialsFolder = await ensureProductionFolder('Materials', '#7FAF8B');
       if (!materialsFolder?.id) throw new Error('Could not find or create the Materials folder.');
@@ -21505,6 +21506,7 @@ If you have any questions, don't hesitate to reach out.
         [meta.filePathField]: path,
         [meta.fileNameField]: file.name
       };
+      uploadPhase = 'character';
       let { error: updateErr } = await sb.from('production_characters').update(updates).eq('id', charId);
       if (updateErr && /file_(path|name)|column/i.test(updateErr.message || '')) {
         updateErr = (await sb.from('production_characters').update({ [meta.fileField]: url }).eq('id', charId)).error;
@@ -21520,6 +21522,7 @@ If you have any questions, don't hesitate to reach out.
         file_size: file.size || null,
         tags: [type === 'callback' ? 'callback material' : 'audition material'],
       };
+      uploadPhase = 'file record';
       const { data: savedFile } = await sb.from('production_files').insert(fileRow).select().single();
       if (savedFile && !prodFiles.some(f => f.id === savedFile.id)) prodFiles.unshift(savedFile);
       const c = characters.find(x => x.id === charId);
@@ -21527,7 +21530,12 @@ If you have any questions, don't hesitate to reach out.
       showToast('Material uploaded.');
       renderMaterialsList();
     } catch(err) {
-      showToast('Upload failed: ' + (err.message || 'Unknown error'), true);
+      const prefix = uploadPhase === 'upload'
+        ? 'Upload failed'
+        : uploadPhase === 'character'
+          ? 'File uploaded, but character material save failed'
+          : 'File uploaded, but file record save failed';
+      showToast(prefix + ': ' + (err.message || 'Unknown error'), true);
     } finally {
       if (btn) { btn.disabled = false; btn.textContent = originalBtnText; }
       inputEl.value = '';
