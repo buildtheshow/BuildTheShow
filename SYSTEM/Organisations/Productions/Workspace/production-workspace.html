@@ -9602,51 +9602,51 @@
       color: #86799f;
       line-height: 1.2;
     }
-    .materials-active-card {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 0.8rem;
-      min-width: 0;
-      padding: 0.25rem 0.05rem;
-      border-top: 1px solid rgba(87,46,136,0.08);
-    }
-    .materials-active-title {
-      display: flex;
+    .materials-type-toggle {
+      display: none;
       align-items: center;
       gap: 0.42rem;
-      font-size: 0.78rem;
-      font-weight: 850;
-      color: #572e88;
-      line-height: 1.2;
-    }
-    .materials-active-dot {
-      width: 0.46rem;
-      height: 0.46rem;
-      border-radius: 999px;
-      background: var(--mat-accent);
-      box-shadow: 0 0 0.42rem var(--mat-accent-soft);
-      flex: 0 0 auto;
-    }
-    .materials-active-copy {
-      margin-top: 0.08rem;
+      margin-left: auto;
+      color: #fff;
       font-size: 0.72rem;
-      font-weight: 650;
-      color: #86799f;
-      line-height: 1.25;
+      font-weight: 900;
+      flex: 0 0 auto;
+      cursor: pointer;
     }
-    .materials-active-toggle { display: inline-flex; align-items: center; gap: 0.45rem; color: #7a6b91; font-size: 0.74rem; font-weight: 850; flex: 0 0 auto; }
-    .materials-active-toggle .aud-toggle-track {
+    .materials-type-item.active .materials-type-toggle {
+      display: inline-flex;
+    }
+    .materials-type-toggle-track {
       width: 34px;
       height: 18px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.35);
+      border: 1px solid rgba(255,255,255,0.44);
+      position: relative;
+      display: inline-block;
+      transition: background 0.15s ease;
     }
-    .materials-active-toggle .aud-toggle-track:before {
+    .materials-type-toggle-track::before {
+      content: '';
+      position: absolute;
       width: 14px;
       height: 14px;
       left: 2px;
       top: 2px;
+      border-radius: 999px;
+      background: #fff;
+      transition: transform 0.15s ease;
+      box-shadow: 0 1px 3px rgba(53,39,86,0.22);
     }
-    .materials-active-toggle .aud-toggle input:checked + .aud-toggle-track:before {
+    .materials-type-toggle input {
+      position: absolute;
+      opacity: 0;
+      pointer-events: none;
+    }
+    .materials-type-toggle input:checked + .materials-type-toggle-track {
+      background: rgba(255,255,255,0.58);
+    }
+    .materials-type-toggle input:checked + .materials-type-toggle-track::before {
       transform: translateX(16px);
     }
     @media (max-width: 820px) {
@@ -9656,14 +9656,16 @@
       .materials-type-item {
         flex: 0 0 170px;
       }
-      .materials-active-card {
-        align-items: center;
-        flex-direction: row;
-      }
     }
     .materials-empty {
       text-align: center; padding: 2.5rem 1rem; color: #9a90b0; font-size: 0.875rem;
       border: 1.5px dashed var(--mat-accent-border); border-radius: 12px; background: #fff;
+    }
+    .materials-loading {
+      padding: 1rem;
+      color: #86799f;
+      font-size: 0.8rem;
+      font-weight: 750;
     }
     .mat-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 1rem; }
     .mat-row {
@@ -22266,9 +22268,12 @@ If you have any questions, don't hesitate to reach out.
     };
   }
 
+  let materialsRenderFrame = null;
   function switchMaterialsType(type) {
-    activeMaterialsType = materialPrefixForType(type);
-    renderMaterialsList();
+    const nextType = materialPrefixForType(type);
+    if (activeMaterialsType === nextType) return;
+    activeMaterialsType = nextType;
+    renderMaterialsList({ deferRows: true });
   }
 
   function materialDisabledMessage(type) {
@@ -22404,14 +22409,7 @@ If you have any questions, don't hesitate to reach out.
     document.body.appendChild(frame);
   }
 
-  function renderMaterialsList() {
-    const el = document.getElementById('materials-character-list');
-    if (!el) return;
-
-    const materialTypes = materialTypesForProduction();
-    if (!materialTypes.includes(activeMaterialsType)) activeMaterialsType = materialTypes[0] || 'audition';
-    const settings = getMaterialsSettings();
-    const activeMeta = materialTypeMeta(activeMaterialsType);
+  function renderMaterialsToolbar(materialTypes, settings) {
     const typeNav = materialTypes.map(type => {
       const color = getAuditionScheduleSidebarMarkerColor(type);
       const isActive = activeMaterialsType === type;
@@ -22422,37 +22420,47 @@ If you have any questions, don't hesitate to reach out.
           <span class="materials-type-title">${esc(materialLabelForType(type))}</span>
           <span class="materials-type-status">${isOn ? 'Materials on' : 'Materials off'}</span>
         </span>
+        ${isActive ? `<label class="materials-type-toggle" for="materials-toggle-${esc(type)}" onclick="event.stopPropagation()">
+          <span>${isOn ? 'On' : 'Off'}</span>
+          <input id="materials-toggle-${esc(type)}" type="checkbox" ${isOn ? 'checked' : ''} onchange="toggleMaterialsSection('${esc(type)}', this.checked)" />
+          <span class="materials-type-toggle-track"></span>
+        </label>` : ''}
       </button>`;
     }).join('');
-    const toolbar = `<div class="materials-theme materials-theme--${activeMaterialsType}">
-    <div class="materials-toolbar">
+    return `<div class="materials-toolbar">
       <div class="materials-type-panel">
         <div class="materials-type-head">Audition Types</div>
         <div class="materials-type-list" role="tablist" aria-label="Material type">${typeNav}</div>
       </div>
-      <div class="materials-active-card">
-        <div>
-          <div class="materials-active-title"><span class="materials-active-dot"></span>${esc(activeMeta.title)} materials</div>
-          <div class="materials-active-copy">${settings[activeMaterialsType] ? 'Performers receive these when their slot is confirmed.' : 'Hidden from performers until turned on.'}</div>
-        </div>
-        <label class="materials-active-toggle" for="materials-toggle-${activeMaterialsType}">
-          <span>${settings[activeMaterialsType] ? 'On' : 'Off'}</span>
-          <span class="aud-toggle">
-            <input id="materials-toggle-${activeMaterialsType}" type="checkbox" ${settings[activeMaterialsType] ? 'checked' : ''} onchange="toggleMaterialsSection('${activeMaterialsType}', this.checked)" />
-            <span class="aud-toggle-track"></span>
-          </span>
-        </label>
-      </div>
     </div>`;
+  }
 
-    if (!characters.length) {
-      el.innerHTML = toolbar + '<div class="materials-empty">Add characters in Audition Settings first.</div></div>';
-      return;
-    }
+  function renderMaterialsContent(type, settings) {
+    if (!characters.length) return '<div class="materials-empty">Add characters in Audition Settings first.</div>';
+    return settings[type]
+      ? materialRows(type)
+      : `<div class="materials-empty">${esc(materialDisabledMessage(type))}</div>`;
+  }
 
-    el.innerHTML = toolbar + (settings[activeMaterialsType]
-      ? materialRows(activeMaterialsType)
-      : `<div class="materials-empty">${esc(materialDisabledMessage(activeMaterialsType))}</div>`) + '</div>';
+  function renderMaterialsList(options = {}) {
+    const el = document.getElementById('materials-character-list');
+    if (!el) return;
+
+    const materialTypes = materialTypesForProduction();
+    if (!materialTypes.includes(activeMaterialsType)) activeMaterialsType = materialTypes[0] || 'audition';
+    const settings = getMaterialsSettings();
+    const renderType = activeMaterialsType;
+    const toolbar = renderMaterialsToolbar(materialTypes, settings);
+    el.innerHTML = `<div class="materials-theme materials-theme--${renderType}">${toolbar}<div id="materials-content">${options.deferRows ? '<div class="materials-loading">Loading materials...</div>' : renderMaterialsContent(renderType, settings)}</div></div>`;
+    if (!options.deferRows) return;
+
+    if (materialsRenderFrame) cancelAnimationFrame(materialsRenderFrame);
+    materialsRenderFrame = requestAnimationFrame(() => {
+      const content = document.getElementById('materials-content');
+      if (!content || activeMaterialsType !== renderType) return;
+      content.innerHTML = renderMaterialsContent(renderType, settings);
+      materialsRenderFrame = null;
+    });
   }
 
   async function toggleMaterialsSection(type, checked) {
