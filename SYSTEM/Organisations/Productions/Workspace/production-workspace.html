@@ -8600,6 +8600,43 @@
       color: #7f748f;
       margin-bottom: 0.75rem;
     }
+    .aud-dashboard-cards {
+      background: rgba(255,255,255,0.9);
+      border: 1px solid rgba(53,39,86,0.1);
+      border-radius: 20px;
+      padding: 1rem;
+      box-shadow: 0 8px 28px rgba(53,39,86,0.07);
+    }
+    .aud-dashboard-cards-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      margin-bottom: 0.85rem;
+    }
+    .aud-dashboard-cards-title {
+      font-size: 0.75rem;
+      font-weight: 900;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: #7f748f;
+    }
+    .aud-dashboard-cards-link {
+      border: none;
+      background: transparent;
+      color: #572e88;
+      font-family: inherit;
+      font-size: 0.75rem;
+      font-weight: 850;
+      cursor: pointer;
+      padding: 0;
+      white-space: nowrap;
+    }
+    .aud-dashboard-card-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
+      gap: 0.55rem;
+    }
     .aud-update-row {
       display: flex;
       align-items: center;
@@ -21259,6 +21296,12 @@ If you have any questions, don't hesitate to reach out.
     renderMaterialsList();
   }
 
+  function materialDisabledMessage(type) {
+    return type === 'callback'
+      ? 'Turn on callback materials when performers need callback sides, song cuts, or prep notes.'
+      : 'Turn on general audition materials when performers need sides, song cuts, or prep notes for their audition.';
+  }
+
   function materialRows(type) {
     const meta = materialTypeMeta(type);
     return `<div class="mat-list">${characters.map(c => {
@@ -21319,7 +21362,7 @@ If you have any questions, don't hesitate to reach out.
 
     el.innerHTML = toolbar + (settings[activeMaterialsType]
       ? materialRows(activeMaterialsType)
-      : `<div class="materials-empty">Turn on ${esc(activeMeta.title)} to add uploads.</div>`);
+      : `<div class="materials-empty">${esc(materialDisabledMessage(activeMaterialsType))}</div>`);
   }
 
   async function toggleMaterialsSection(type, checked) {
@@ -26959,6 +27002,35 @@ If you have any questions, don't hesitate to reach out.
     }).join('');
   }
 
+  function buildAuditionDashboardCards() {
+    const recent = [...(allApplicants || [])]
+      .sort((a, b) => String(b.created_at || b.updated_at || '').localeCompare(String(a.created_at || a.updated_at || '')))
+      .slice(0, 8);
+    if (!recent.length) {
+      return '<div class="ov-checklist-empty">No performers yet.</div>';
+    }
+    return `<div class="aud-dashboard-card-grid">${recent.map(app => {
+      const nameParts = String(app.name || 'Unknown').split(' ');
+      const firstName = nameParts[0] || '';
+      const lastName = nameParts.slice(1).join(' ') || '';
+      return renderCastingCard({
+        first_name: firstName,
+        last_name: lastName,
+        age: cbv2ApplicantAge(app),
+        pronouns: applicantPronouns(app),
+        headshot_url: app.headshot_url || '',
+        casting_categories: cbv2CastingCategories(app),
+        role_openness: cbv2RoleBadge(app),
+        attendance_mode: applicantAttendanceModeLabel(app) || null,
+      }, {
+        size: 'compact',
+        hasPadding: true,
+        hasIcons: true,
+        onClick: `openApplicantModal('${app.id}')`,
+      });
+    }).join('')}</div>`;
+  }
+
   function loadAudDashboard() {
     const host = document.getElementById('aud-visual-dashboard');
     if (!host) return;
@@ -27008,6 +27080,13 @@ If you have any questions, don't hesitate to reach out.
       <div class="aud-updates-card">
         <div class="aud-updates-title">Latest Updates</div>
         ${buildAuditionUpdateRows()}
+      </div>
+      <div class="aud-dashboard-cards">
+        <div class="aud-dashboard-cards-head">
+          <div class="aud-dashboard-cards-title">Recent Performer Cards</div>
+          <button type="button" class="aud-dashboard-cards-link" onclick="openAuditionsSubTab('auditions')">See all -></button>
+        </div>
+        ${buildAuditionDashboardCards()}
       </div>`;
   }
 
