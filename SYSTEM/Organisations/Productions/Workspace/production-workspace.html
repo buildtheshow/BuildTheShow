@@ -14476,7 +14476,7 @@
         { token: '{{team_member_name}}',  label: 'Team Member Name',  sample: 'Alex Rivera' },
         { token: '{{team_member_role}}',  label: 'Team Member Role',  sample: 'Vocal Director' },
         { token: '{{team_member_email}}', label: 'Team Member Email', sample: 'alex@example.com' },
-        { token: '{{team_access_code}}',  label: 'Access Code',       sample: 'XK9-247' },
+        { token: '{{team_access_code}}',  label: 'Access Code',       sample: '294761' },
         { token: '{{portal_link}}',       label: 'Portal Link',       sample: 'https://buildtheshow.com/audition-team' },
       ],
     },
@@ -17597,8 +17597,7 @@ If you have any questions, don't hesitate to reach out.
   }
 
   function randomTeamPasscode() {
-    const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-    return Array.from({ length: 6 }, () => alphabet[Math.floor(Math.random() * alphabet.length)]).join('');
+    return Array.from({ length: 6 }, () => Math.floor(Math.random() * 10)).join('');
   }
 
   function nextAvailableTeamColor(memberId = null) {
@@ -17778,6 +17777,10 @@ If you have any questions, don't hesitate to reach out.
       return;
     }
 
+    const btn = document.getElementById(`invite-btn-${memberId}`);
+    const originalText = btn ? btn.textContent.trim() : '';
+    if (btn) { btn.disabled = true; btn.textContent = 'Sending…'; }
+
     // Use the live team_invite template if one exists, else fall back to default message
     const liveTemplate = etLatestTemplateForCategory('team_invite');
     let subject, message;
@@ -17821,6 +17824,7 @@ If you have any questions, don't hesitate to reach out.
       renderTeamView(document.getElementById('tm-container'));
       showToast(`Invite emailed to ${member.name || member.email}.`);
     } catch (err) {
+      if (btn) { btn.disabled = false; btn.textContent = originalText; }
       const mailto = `mailto:${encodeURIComponent(member.email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(message)}`;
       window.location.href = mailto;
       showToast('Could not send automatically — your email app is opening with the invite ready.', true);
@@ -18009,30 +18013,50 @@ If you have any questions, don't hesitate to reach out.
         </div>
       </div>`;
 
-    const accessRows = (auditionTeamMembers || []).map(m => `
-      <div style="display:grid;grid-template-columns:64px minmax(0,1.05fr) minmax(0,1.2fr) 0.85fr 0.65fr auto;gap:0.65rem;align-items:center;padding:0.7rem 0;border-top:1px solid rgba(87,46,136,0.1);">
-        <div style="width:48px;height:48px;border-radius:14px;background:rgba(87,46,136,0.08);overflow:hidden;display:grid;place-items:center;color:#572e88;font-weight:950;">
-          ${m.headshot_url ? `<img src="${esc(m.headshot_url)}" alt="" style="width:100%;height:100%;object-fit:cover;object-position:top;" />` : esc((m.name || '?').trim().charAt(0).toUpperCase())}
-        </div>
-        <input class="form-input" value="${esc(m.name || '')}" placeholder="Name" onblur="saveTeamMemberField('${esc(m.id)}','name',this.value)" style="min-height:34px;font-size:0.78rem;" />
-        <input class="form-input" value="${esc(m.email || '')}" placeholder="Email" onblur="saveTeamMemberField('${esc(m.id)}','email',this.value)" style="min-height:34px;font-size:0.78rem;" />
-        <input class="form-input" value="${esc(m.role || '')}" placeholder="Role" onblur="saveTeamMemberField('${esc(m.id)}','role',this.value)" style="min-height:34px;font-size:0.78rem;" />
-        <input class="form-input" value="${esc(m.passcode || '')}" placeholder="Code" onblur="saveTeamMemberField('${esc(m.id)}','passcode',this.value)" style="min-height:34px;font-size:0.78rem;font-weight:900;text-transform:uppercase;" />
-        <div style="display:flex;gap:0.4rem;justify-content:flex-end;align-items:center;flex-wrap:wrap;">
-          ${teamColorPreview(m.note_color || '#572e88')}
-          ${m.invite_sent_at
-            ? `<span style="display:inline-flex;align-items:center;gap:0.25rem;font-size:0.72rem;font-weight:800;color:#166534;background:rgba(22,101,52,0.08);border:1px solid rgba(22,101,52,0.18);border-radius:6px;padding:0.3rem 0.55rem;" title="Invite sent ${new Date(m.invite_sent_at).toLocaleDateString('en-CA', {month:'short',day:'numeric'})}">Sent ✓</span><button class="btn-secondary" onclick="emailTeamInvite('${esc(m.id)}')" style="font-size:0.72rem;padding:0.3rem 0.55rem;">Resend</button>`
-            : `<button class="btn-secondary" onclick="emailTeamInvite('${esc(m.id)}')" style="font-size:0.72rem;padding:0.3rem 0.55rem;">Email Invite</button>`
-          }
-          <button class="btn-secondary" onclick="copyTeamPortalLink('${esc(m.id)}')" style="font-size:0.72rem;padding:0.3rem 0.55rem;">Copy Link</button>
-          ${m.headshot_url ? `<a class="btn-secondary" href="${esc(m.headshot_url)}" target="_blank" download style="font-size:0.72rem;padding:0.3rem 0.55rem;text-decoration:none;">Headshot</a>` : ''}
-          <button class="btn-secondary" onclick="downloadTeamBio('${esc(m.id)}')" style="font-size:0.72rem;padding:0.3rem 0.55rem;" ${m.bio ? '' : 'disabled'}>Bio</button>
-          <label style="display:inline-flex;align-items:center;gap:0.28rem;font-size:0.72rem;font-weight:800;color:#6a5a80;white-space:nowrap;">
-            <input type="checkbox" ${m.is_active !== false ? 'checked' : ''} onchange="toggleTeamMemberAccess('${esc(m.id)}',this.checked)" /> Active
+    const accessRows = (auditionTeamMembers || []).map(m => {
+      const initial = esc((m.name || '?').trim().charAt(0).toUpperCase());
+      const avatarBg = m.is_active === false ? 'rgba(87,46,136,0.05)' : 'rgba(87,46,136,0.1)';
+      const cardOpacity = m.is_active === false ? 'opacity:0.55;' : '';
+      const sentDate = m.invite_sent_at ? new Date(m.invite_sent_at).toLocaleDateString('en-CA', { month: 'short', day: 'numeric' }) : '';
+      return `
+      <div style="border-radius:16px;border:1px solid rgba(87,46,136,0.14);background:#fff;overflow:hidden;box-shadow:0 2px 10px rgba(87,46,136,0.07);${cardOpacity}">
+        <!-- Identity row -->
+        <div style="padding:1rem 1rem 0.85rem;display:flex;align-items:flex-start;gap:0.85rem;border-bottom:1px solid rgba(87,46,136,0.08);">
+          <div style="width:52px;height:52px;border-radius:14px;background:${avatarBg};overflow:hidden;display:grid;place-items:center;flex-shrink:0;color:#572e88;font-weight:900;font-size:1.1rem;">
+            ${m.headshot_url ? `<img src="${esc(m.headshot_url)}" alt="" style="width:100%;height:100%;object-fit:cover;object-position:top;" />` : initial}
+          </div>
+          <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:0.2rem;">
+            <input class="form-input" value="${esc(m.name || '')}" placeholder="Full name" onblur="saveTeamMemberField('${esc(m.id)}','name',this.value)" style="font-weight:700;font-size:0.9rem;padding:0.25rem 0.4rem;min-height:0;border-color:rgba(87,46,136,0.15);" />
+            <input class="form-input" value="${esc(m.role || '')}" placeholder="Role" onblur="saveTeamMemberField('${esc(m.id)}','role',this.value)" style="font-size:0.76rem;color:#6a5a80;padding:0.2rem 0.4rem;min-height:0;border-color:rgba(87,46,136,0.12);" />
+          </div>
+          <label style="display:inline-flex;align-items:center;gap:0.3rem;font-size:0.7rem;font-weight:700;color:${m.is_active !== false ? '#166634' : '#86799f'};cursor:pointer;flex-shrink:0;padding-top:0.15rem;">
+            <input type="checkbox" ${m.is_active !== false ? 'checked' : ''} onchange="toggleTeamMemberAccess('${esc(m.id)}',this.checked)" style="accent-color:#572e88;" />
+            ${m.is_active !== false ? 'Active' : 'Inactive'}
           </label>
         </div>
-        ${m.bio ? `<div style="grid-column:2 / -1;font-size:0.75rem;color:#86799f;line-height:1.45;margin-top:-0.35rem;">${esc(m.bio).slice(0, 220)}${String(m.bio).length > 220 ? '...' : ''}</div>` : ''}
-      </div>`).join('');
+        <!-- Email row -->
+        <div style="padding:0.6rem 1rem;border-bottom:1px solid rgba(87,46,136,0.08);">
+          <input class="form-input" type="email" value="${esc(m.email || '')}" placeholder="Email address" onblur="saveTeamMemberField('${esc(m.id)}','email',this.value)" style="font-size:0.8rem;padding:0.3rem 0.4rem;min-height:0;width:100%;box-sizing:border-box;border-color:rgba(87,46,136,0.12);" />
+        </div>
+        <!-- Passcode + note colour -->
+        <div style="padding:0.65rem 1rem;border-bottom:1px solid rgba(87,46,136,0.08);display:flex;align-items:center;gap:0.65rem;background:rgba(87,46,136,0.02);">
+          <span style="font-size:0.65rem;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;color:#86799f;white-space:nowrap;">Passcode</span>
+          <input class="form-input" value="${esc(m.passcode || '')}" placeholder="6-digit code" onblur="saveTeamMemberField('${esc(m.id)}','passcode',this.value)" style="font-size:0.85rem;font-weight:900;letter-spacing:0.12em;padding:0.25rem 0.5rem;min-height:0;width:7.5rem;border-color:rgba(87,46,136,0.15);" />
+          <div style="margin-left:auto;">${teamColorPreview(m.note_color || '#572e88')}</div>
+        </div>
+        <!-- Actions row -->
+        <div style="padding:0.65rem 1rem;display:flex;gap:0.4rem;align-items:center;flex-wrap:wrap;">
+          ${m.invite_sent_at
+            ? `<span style="display:inline-flex;align-items:center;gap:0.2rem;font-size:0.7rem;font-weight:800;color:#166634;background:rgba(22,101,52,0.08);border:1px solid rgba(22,101,52,0.2);border-radius:6px;padding:0.28rem 0.5rem;" title="Sent ${sentDate}">Sent ✓</span><button id="invite-btn-${esc(m.id)}" class="btn-secondary" onclick="emailTeamInvite('${esc(m.id)}')" style="font-size:0.72rem;padding:0.28rem 0.55rem;">Resend</button>`
+            : `<button id="invite-btn-${esc(m.id)}" class="btn-primary" onclick="emailTeamInvite('${esc(m.id)}')" style="font-size:0.72rem;padding:0.28rem 0.65rem;">Email Invite</button>`
+          }
+          <button class="btn-secondary" onclick="copyTeamPortalLink('${esc(m.id)}')" style="font-size:0.72rem;padding:0.28rem 0.55rem;">Copy Link</button>
+          ${m.bio ? `<button class="btn-secondary" onclick="downloadTeamBio('${esc(m.id)}')" style="font-size:0.72rem;padding:0.28rem 0.55rem;">Bio ↓</button>` : ''}
+          ${m.headshot_url ? `<a class="btn-secondary" href="${esc(m.headshot_url)}" target="_blank" download style="font-size:0.72rem;padding:0.28rem 0.55rem;text-decoration:none;">Headshot ↓</a>` : ''}
+        </div>
+        ${m.bio ? `<div style="padding:0 1rem 0.75rem;font-size:0.74rem;color:#86799f;line-height:1.5;">${esc(m.bio).slice(0, 180)}${String(m.bio).length > 180 ? '…' : ''}</div>` : ''}
+      </div>`;
+    }).join('');
 
     const accessSection = `
       <div style="margin-top:1.75rem;border-top:1px solid rgba(87,46,136,0.12);padding-top:1rem;">
@@ -18060,7 +18084,9 @@ If you have any questions, don't hesitate to reach out.
             <span id="add-tm-error" style="font-size:0.78rem;color:#b91c1c;font-weight:700;"></span>
           </div>
         </div>
-        ${accessRows || '<div style="font-size:0.82rem;color:#9a90b0;padding:0.75rem 0;">No team members yet. Click + Add Team Member to get started.</div>'}
+        ${accessRows
+          ? `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:1rem;">${accessRows}</div>`
+          : '<div style="font-size:0.82rem;color:#9a90b0;padding:0.75rem 0;">No team members yet. Click + Add Team Member to get started.</div>'}
       </div>`;
 
     container.innerHTML = producerSection + creativeSection + accessSection;
