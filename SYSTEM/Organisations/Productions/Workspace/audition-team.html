@@ -88,6 +88,8 @@
     .prod-tab-label { display: inline-flex; align-items: center; gap: 0.6rem; min-width: 0; }
     .prod-tab-submenu-wrap { display: flex; flex-direction: column; }
     .prod-tab-submenu-wrap .prod-tab { justify-content: space-between; }
+    .tab-chevron { font-size: 0.6rem; opacity: 0.5; transition: transform 0.2s; margin-left: auto; padding: 0.35rem; cursor: pointer; }
+    .prod-tab-submenu-wrap.open .tab-chevron { transform: rotate(180deg); opacity: 0.8; }
     .prod-submenu { display: none; flex-direction: column; background: rgba(0,0,0,0.12); }
     .prod-tab-submenu-wrap.open .prod-submenu { display: flex; }
     .prod-sub-item {
@@ -279,24 +281,27 @@
     <nav class="prod-tabs">
       <div class="prod-tab active" data-tab="dashboard" onclick="setTab('dashboard')">
         <span class="tab-icon-slot"><img src="/ASSETS/Images/navoverview.svg" class="tab-icon" alt="" /></span>
-        Dashboard
+        Overview
       </div>
+
+      <!-- Auditions — expandable submenu, matches workspace exactly -->
       <div class="prod-tab-submenu-wrap open" id="aud-submenu-wrap">
-        <div class="prod-tab" data-tab="auditions">
+        <div class="prod-tab" data-tab="auditions" onclick="setTab('dashboard')">
           <span class="prod-tab-label">
             <span class="tab-icon-slot"><img src="/ASSETS/Images/navauditions.svg" class="tab-icon" alt="" /></span>
             Auditions
           </span>
+          <span class="tab-chevron" onclick="toggleAudMenu(event)">▼</span>
         </div>
-        <div class="prod-submenu" style="display:flex;">
+        <div class="prod-submenu">
           <div class="prod-sub-item" id="asub-schedule" onclick="setTab('schedule')">Schedule</div>
-          <div class="prod-sub-item" id="asub-types" onclick="setTab('types')">All Audition Types</div>
-          <div class="prod-sub-item" id="asub-inroom" onclick="setTab('inroom')">In The Room</div>
-          <div class="prod-sub-item" id="asub-callbacks" onclick="setTab('callbacks')">Callbacks</div>
+          <div class="prod-sub-item" id="asub-performers" onclick="activeSessionId='';setTab('inroom')">Performers</div>
+          <div id="asub-session-items"></div>
         </div>
       </div>
+
       <div class="prod-tab" data-tab="profile" onclick="setTab('profile')">
-        <span class="tab-icon-slot"><img src="/ASSETS/Images/navproductionteam.svg" class="tab-icon" alt="" /></span>
+        <span class="tab-icon-slot"><img src="/ASSETS/Images/navprofile.svg" class="tab-icon" alt="" /></span>
         My Profile
       </div>
     </nav>
@@ -338,23 +343,9 @@
         <div id="schedule-content"></div>
       </div>
 
-      <!-- All Types -->
-      <div class="tab-panel" id="panel-types">
-        <div class="section-kicker">View Only</div>
-        <div class="section-title">All Audition Types</div>
-        <div id="types-content"></div>
-      </div>
-
-      <!-- In The Room -->
+      <!-- Performers / In The Room -->
       <div class="tab-panel" id="panel-inroom">
-        <div class="section-title" style="margin-bottom:0.75rem;">In The Room</div>
         <div id="inroom-content"></div>
-      </div>
-
-      <!-- Callbacks -->
-      <div class="tab-panel" id="panel-callbacks">
-        <div class="section-title" style="margin-bottom:0.75rem;">Callback List</div>
-        <div id="callbacks-content"></div>
       </div>
 
       <!-- Profile -->
@@ -377,8 +368,8 @@
 
     const params      = new URLSearchParams(location.search);
     const prodId      = params.get('id') || params.get('prod');
-    let passcode      = params.get('code')  || '';
-    let teamEmail     = params.get('email') || '';
+    let passcode      = '';
+    let teamEmail     = '';
     let member        = null;
     let prod          = null;
     let sessions      = [];
@@ -471,6 +462,7 @@
       takenColors= colorRes.data || [];
       activeSessionId   = activeSessionId   || sessions[0]?.id   || '';
       activeApplicantId = activeApplicantId || applicants[0]?.id || '';
+      renderSidebarSessions();
     }
 
     // ── Sidebar population ────────────────────────────────────────────────
@@ -494,11 +486,30 @@
       activeTab = tab;
       document.querySelectorAll('.prod-tab[data-tab]').forEach(el => el.classList.toggle('active', el.dataset.tab === tab));
       document.querySelectorAll('.prod-sub-item').forEach(el => el.classList.remove('active'));
-      const subMap = { schedule:'asub-schedule', types:'asub-types', inroom:'asub-inroom', callbacks:'asub-callbacks' };
-      if (subMap[tab]) { const el = document.getElementById(subMap[tab]); if (el) el.classList.add('active'); }
+      if (tab === 'schedule') {
+        document.getElementById('asub-schedule')?.classList.add('active');
+      } else if (tab === 'inroom') {
+        if (activeSessionId) document.getElementById(`asub-session-${activeSessionId}`)?.classList.add('active');
+        else document.getElementById('asub-performers')?.classList.add('active');
+      }
       document.querySelectorAll('.tab-panel').forEach(el => el.classList.toggle('active', el.id === 'panel-' + tab));
-      const renderers = { dashboard: renderDashboard, schedule: renderSchedule, types: renderTypes, inroom: renderInRoom, callbacks: renderCallbacks, profile: renderProfile };
+      const renderers = { dashboard: renderDashboard, schedule: renderSchedule, inroom: renderInRoom, profile: renderProfile };
       renderers[tab]?.();
+    }
+
+    function toggleAudMenu(e) {
+      e?.stopPropagation();
+      document.getElementById('aud-submenu-wrap')?.classList.toggle('open');
+    }
+
+    function renderSidebarSessions() {
+      const host = document.getElementById('asub-session-items');
+      if (!host) return;
+      host.innerHTML = sessions.map(s => {
+        const color = colorForType(s.type);
+        const dot = `<span style="flex:0 0 auto;width:0.42rem;height:0.42rem;border-radius:999px;background:${esc(color)};box-shadow:0 0 0.4rem ${esc(color)};margin-right:0.45rem;display:inline-block;vertical-align:middle;"></span>`;
+        return `<div class="prod-sub-item" id="asub-session-${esc(s.id)}" onclick="activeSessionId='${esc(s.id)}';setTab('inroom');" style="display:flex;align-items:center;">${dot}${esc(s.name || labelForType(s.type))}</div>`;
+      }).join('');
     }
 
     // ── Dashboard ─────────────────────────────────────────────────────────
@@ -566,6 +577,8 @@
       ).join('')}</div>`;
     }
     function renderInRoom() {
+      const activeSession = sessions.find(s => s.id === activeSessionId) || null;
+      const title = activeSession ? esc(activeSession.name || labelForType(activeSession.type)) : 'Performers';
       const app = applicants.find(a => a.id === activeApplicantId) || applicants[0];
       if (app) activeApplicantId = app.id;
       const el = document.getElementById('inroom-content');
@@ -573,7 +586,7 @@
         `<button class="performer-btn${a.id === activeApplicantId ? ' active' : ''}" onclick="activeApplicantId='${esc(a.id)}';renderInRoom();">${esc(a.name || 'Performer')}</button>`
       ).join('');
       el.innerHTML = `
-        ${sessionStrip()}
+        <div class="section-title" style="margin-bottom:0.75rem;">${title}</div>
         <div class="room-layout">
           <div class="performer-list-panel">${list || '<div class="empty-state">No performers yet.</div>'}</div>
           ${app ? renderRoomMain(app) : '<div class="empty-state">No performer selected.</div>'}
@@ -767,16 +780,7 @@
         if (err) err.textContent = 'Production not found. Check your link.';
         return;
       }
-      const emailInput    = document.getElementById('team-email');
-      const passcodeInput = document.getElementById('team-passcode');
-      if (teamEmail && emailInput) {
-        document.getElementById('login-email-wrap').style.display = 'none';
-        document.getElementById('login-heading').textContent = 'Enter your access code';
-        document.getElementById('login-subtext').textContent = "Enter the 6-character code from your invite email.";
-      }
-      if (emailInput)    emailInput.value    = teamEmail;
-      if (passcodeInput) passcodeInput.value = passcode;
-      if (passcode && teamEmail) loginTeam();
+      // Portal is always shown as a login form — credentials entered manually
     })();
   </script>
 </body>
