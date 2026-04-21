@@ -493,6 +493,21 @@
       border-radius: 20px; border: 1px solid rgba(87,46,136,0.2);
       color: #572e88; background: rgba(87,46,136,0.05);
     }
+    .ai-role-materials {
+      margin-top: 0.7rem; padding-top: 0.65rem; border-top: 1px solid rgba(87,46,136,0.1);
+      display: flex; flex-direction: column; gap: 0.35rem;
+    }
+    .ai-role-material-label {
+      font-size: 0.64rem; font-weight: 800; letter-spacing: 0.07em; text-transform: uppercase;
+      color: #9a90b0;
+    }
+    .ai-role-material-note { font-size: 0.76rem; color: #4a3d6b; line-height: 1.45; }
+    .ai-role-material-link {
+      align-self: flex-start; font-size: 0.74rem; font-weight: 800; color: #572e88;
+      text-decoration: none; border: 1px solid rgba(87,46,136,0.18); border-radius: 999px;
+      padding: 0.22rem 0.58rem; background: rgba(87,46,136,0.04);
+    }
+    .ai-role-material-link:hover { background: rgba(87,46,136,0.09); }
 
     /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
        8. REQUIREMENTS
@@ -2289,7 +2304,7 @@
         </div>
 
         <div id="tab-characters" class="ai-tab-panel">
-          ${buildRolePreview(characters, audConfig)}
+          ${buildRolePreview(characters, audConfig, prod)}
         </div>
 
         ${sessions && sessions.length ? `<div id="tab-sessions" class="ai-tab-panel">
@@ -5488,13 +5503,15 @@
     let _charFilterDance  = '';
     let _charFilterUsage  = '';
     let _charSort         = 'default';
+    let _publicMaterialsSettings = {};
 
     const _ddStyle = 'font-size:0.8rem;font-weight:600;padding:0.4rem 0.75rem;border:1.5px solid rgba(87,46,136,0.2);border-radius:8px;background:#fff;color:#4a3d6b;font-family:inherit;cursor:pointer;';
 
-    function buildRolePreview(characters, audConfig) {
+    function buildRolePreview(characters, audConfig, prod = null) {
       if (!characters || !characters.length) return '';
       _allCharacters     = characters;
       _charDisplayFields = audConfig?.char_display_fields || {};
+      _publicMaterialsSettings = prod?.wizard_data?.materials_enabled || {};
       _charFilterType = _charFilterVocal = _charFilterDance = _charFilterUsage = '';
       _charSort       = 'default';
 
@@ -5576,6 +5593,18 @@
       const df = _charDisplayFields;
       // If a field isn't in the settings object at all, default to showing it
       const show = f => !(f in df) || df[f] === true;
+      const materialSetOn = type => {
+        if (type === 'callback') return _publicMaterialsSettings.callback === true;
+        return _publicMaterialsSettings.audition !== false;
+      };
+      const fileNameFromUrl = url => {
+        if (!url) return '';
+        try {
+          return decodeURIComponent(new URL(url).pathname.split('/').pop() || '');
+        } catch {
+          return String(url).split('/').pop() || '';
+        }
+      };
 
       const typeColors = {
         'Principal':  { bg: 'rgba(87,46,136,0.1)',   color: '#572e88' },
@@ -5628,6 +5657,24 @@
               <span style="font-weight:700;">${esc(r.label)}: ${esc(r.value)}</span>
               ${r.desc ? `<span style="display:block;font-weight:400;font-size:0.68rem;margin-top:2px;opacity:0.8;line-height:1.35;">${esc(r.desc)}</span>` : ''}
             </span>`).join('')}</div>` : '';
+        const materialItems = [];
+        if (materialSetOn('audition') && (c.audition_material || c.audition_file_url)) {
+          const fileName = c.audition_file_name || fileNameFromUrl(c.audition_file_url) || 'Audition material';
+          materialItems.push(`<div class="ai-role-materials">
+            <div class="ai-role-material-label">General Audition Material</div>
+            ${c.audition_material ? `<div class="ai-role-material-note">${esc(c.audition_material)}</div>` : ''}
+            ${c.audition_file_url ? `<a class="ai-role-material-link" href="${esc(c.audition_file_url)}" target="_blank" rel="noopener" download="${esc(fileName)}">Download Material</a>` : ''}
+          </div>`);
+        }
+        if (materialSetOn('callback') && (c.callback_material || c.callback_file_url)) {
+          const fileName = c.callback_file_name || fileNameFromUrl(c.callback_file_url) || 'Callback material';
+          materialItems.push(`<div class="ai-role-materials">
+            <div class="ai-role-material-label">Callback Material</div>
+            ${c.callback_material ? `<div class="ai-role-material-note">${esc(c.callback_material)}</div>` : ''}
+            ${c.callback_file_url ? `<a class="ai-role-material-link" href="${esc(c.callback_file_url)}" target="_blank" rel="noopener" download="${esc(fileName)}">Download Material</a>` : ''}
+          </div>`);
+        }
+        const materialsHTML = materialItems.join('');
 
         return `
           <div class="ai-role-card">
@@ -5636,6 +5683,7 @@
             ${countNote}
             ${descHTML}
             ${reqsHTML}
+            ${materialsHTML}
           </div>`;
       }).join('');
     }
