@@ -14857,6 +14857,32 @@ If you have any questions, don't hesitate to reach out.
     return '';
   }
 
+  async function _seedDefaultLocationFromEvent(type, venue) {
+    const nextVenue = String(venue || '').trim();
+    if (!nextVenue || !prod) return;
+
+    const AUD  = ['audition','dance_call','callback','other_audition'];
+    const REH  = ['rehearsal','tech','dress'];
+    const PERF = ['performance'];
+
+    let field = null;
+    let chipType = null;
+    if (AUD.includes(type)) { field = 'audition_locations'; chipType = 'aud'; }
+    else if (REH.includes(type)) { field = 'rehearsal_locations'; chipType = 'reh'; }
+    else if (PERF.includes(type)) { field = 'performance_locations'; chipType = 'perf'; }
+    if (!field) return;
+
+    const existing = Array.isArray(prod[field]) ? [...prod[field]] : [];
+    if (existing.length || (prod[field.replace('_locations', '_location')] || '').trim()) return;
+
+    const next = [nextVenue];
+    const { error } = await sb.from('productions').update({ [field]: next }).eq('id', prodId);
+    if (error) return;
+
+    prod[field] = next;
+    _renderLocChips(chipType);
+  }
+
   function closeEventModal() {
     document.getElementById('event-modal').classList.remove('open');
     if (fcCalendar) fcCalendar.unselect();
@@ -14924,6 +14950,8 @@ If you have any questions, don't hesitate to reach out.
     btn.textContent = editingEventId ? 'Save Changes' : 'Add to Calendar';
 
     if (error) { errEl.textContent = error.message; errEl.classList.add('visible'); return; }
+
+    await _seedDefaultLocationFromEvent(type, payload.venue);
 
     // Keep matching audition_session in sync with Zeus (Zeus is source of truth for timing)
     await _reverseSync(type, title, payload.start_time, payload.end_time, savedEventId, payload.venue);

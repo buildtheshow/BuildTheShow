@@ -2090,16 +2090,25 @@
         venueCity = extractCity(org.location) || org.location.split(',')[0].trim();
       }
 
-      // Build venue name → address map and venue name → preferred display label map
-      let venueMap = {}, venueLabel = {};
+      // Build venue maps for address lookups plus human-facing labels.
+      let venueMap = {}, venueLabel = {}, venueNameMap = {};
       try {
         if (org?.id) {
           const { data: venueRows } = await sb.from('venues').select('name,nickname,address').eq('org_id', org.id);
           (venueRows || []).forEach(v => {
             const addr  = v.address || '';
-            const label = v.nickname || v.name;
-            if (v.name)     { venueMap[v.name]     = addr; venueLabel[v.name]     = label; }
-            if (v.nickname) { venueMap[v.nickname] = addr; venueLabel[v.nickname] = label; }
+            const shortLabel = v.nickname || v.name;
+            const fullLabel  = v.name || v.nickname || '';
+            if (v.name) {
+              venueMap[v.name] = addr;
+              venueLabel[v.name] = shortLabel;
+              venueNameMap[v.name] = fullLabel;
+            }
+            if (v.nickname) {
+              venueMap[v.nickname] = addr;
+              venueLabel[v.nickname] = shortLabel;
+              venueNameMap[v.nickname] = fullLabel;
+            }
           });
         }
       } catch (_) {}
@@ -2127,7 +2136,8 @@
       _allCharacters = characters || [];
       window._venueMap = venueMap || {};
       window._venueLabel = venueLabel || {};
-      const html = buildPage(prod, org, audConfig, publicEvents, characters || [], sessions || [], slotsBySession, userBooking, venueCity, venueMap, venueLabel);
+      window._venueNameMap = venueNameMap || {};
+      const html = buildPage(prod, org, audConfig, publicEvents, characters || [], sessions || [], slotsBySession, userBooking, venueCity, venueMap, venueLabel, venueNameMap);
       const content = document.getElementById('page-content');
       content.innerHTML = html;
       content.style.display = 'block';
@@ -2233,9 +2243,9 @@
     /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
        BUILD PAGE
     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
-    function buildPage(prod, org, audConfig, events, characters, sessions, slotsBySession, userBooking, venueCity, venueMap, venueLabel) {
+    function buildPage(prod, org, audConfig, events, characters, sessions, slotsBySession, userBooking, venueCity, venueMap, venueLabel, venueNameMap) {
       return `<div class="ai-page">
-        ${buildHero(prod, org, audConfig, sessions, venueCity, venueMap, venueLabel)}
+        ${buildHero(prod, org, audConfig, events, sessions, venueCity, venueMap, venueLabel, venueNameMap)}
         ${buildQuickBar(prod, events, sessions, slotsBySession)}
 
         <div class="ai-tab-bar-wrap">
@@ -2294,7 +2304,7 @@
     /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
        1. HERO
     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
-    function buildHero(prod, org, audConfig, sessions, venueCity, venueMap, venueLabel) {
+    function buildHero(prod, org, audConfig, events, sessions, venueCity, venueMap, venueLabel, venueNameMap) {
       const posterHTML = prod.poster_url
         ? `<img src="${esc(prod.poster_url)}" alt="${esc(prod.title)} poster" />`
         : `<div class="ai-poster-placeholder">🎭</div>`;
@@ -2322,14 +2332,28 @@
 
       const _fmtAddr = _fmtAddress;
 
-      const locVal = (name) => {
+      const locVal = (name, preferFullName = false) => {
         if (!name) return `<span style="display:inline-flex;align-items:center;gap:0.3rem;font-style:italic;color:#c0b8d4;"><img src="/ASSETS/Images/Location2.svg" style="width:11px;height:11px;opacity:0.35;flex-shrink:0;" />Location TBD</span>`;
-        const label = (venueLabel && venueLabel[name]) || name;
+        const label = preferFullName
+          ? ((venueNameMap && venueNameMap[name]) || name)
+          : ((venueLabel && venueLabel[name]) || name);
         return `<span style="display:inline-flex;align-items:center;gap:0.3rem;"><img src="/ASSETS/Images/Location2.svg" style="width:11px;height:11px;opacity:0.55;flex-shrink:0;" />${esc(label)}</span>`;
       };
 
+      const derivePrimaryAuditionLocation = () => {
+        const sessionLoc = (sessions || [])
+          .find(s => s && s.location && s.is_visible !== false && s.show_to_applicants !== false && s.type !== 'callback')
+          ?.location;
+        if (sessionLoc) return sessionLoc;
+        const eventLoc = (events || [])
+          .find(e => e && e.venue && ['audition', 'dance_call', 'callback', 'other_audition'].includes(e.event_type))
+          ?.venue;
+        if (eventLoc) return eventLoc;
+        return (prod.audition_locations || [])[0] || prod.audition_location || '';
+      };
+
       // Use new location arrays (fallback to old single fields for backwards compat)
-      const audLoc  = (prod.audition_locations    || [])[0] || prod.audition_location    || '';
+      const audLoc  = derivePrimaryAuditionLocation();
       const rehLoc  = (prod.rehearsal_locations   || [])[0] || prod.rehearsal_location   || '';
       const perfLoc = (prod.performance_locations || [])[0] || prod.performance_location || '';
 
@@ -2341,7 +2365,7 @@
           </div>
           <div class="ai-hero-info-row">
             <span class="ai-hero-info-label">Auditions</span>
-            <span class="ai-hero-info-value">${locVal(audLoc)}</span>
+            <span class="ai-hero-info-value">${locVal(audLoc, true)}</span>
           </div>
           <div class="ai-hero-info-row">
             <span class="ai-hero-info-label">Rehearsals</span>
