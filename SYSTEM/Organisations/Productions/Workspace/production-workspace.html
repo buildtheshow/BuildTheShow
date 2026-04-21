@@ -13148,7 +13148,9 @@
     // Handle deep-link params — e.g. ?tab=casting&sub=castboard from production.html
    const tabParam = params.get('tab');
    const subParam = params.get('sub');
-    const savedNav = loadWorkspaceNavState();
+    const hasExplicitNav = !!(tabParam || subParam);
+    if (!hasExplicitNav) resetWorkspaceNavForFreshOpen();
+    const savedNav = hasExplicitNav ? loadWorkspaceNavState() : getDefaultWorkspaceNavState();
     if (savedNav?.auditionsSessionId) activeAuditionNavSessionId = savedNav.auditionsSessionId;
     if (savedNav?.auditionsSessionTool) activeAuditionNavTool = savedNav.auditionsSessionTool;
     if (savedNav?.inRoomApplicantId) inRoomApplicantId = savedNav.inRoomApplicantId;
@@ -13165,7 +13167,7 @@
     } else if (savedNav?.prodTab) {
       setTimeout(() => switchProdTab(savedNav.prodTab), 100);
     }
-    scheduleWorkspaceScrollRestore();
+    if (hasExplicitNav) scheduleWorkspaceScrollRestore();
 
     setupAuditionsRealtime();
     setupEmailTemplatesRealtime();
@@ -13249,6 +13251,26 @@
       localStorage.setItem(getWorkspaceNavStorageKey(), JSON.stringify(merged));
       queueWorkspaceHistoryState(merged);
     } catch {}
+  }
+
+  function resetWorkspaceNavForFreshOpen() {
+    try {
+      localStorage.setItem(getWorkspaceNavStorageKey(), JSON.stringify(getDefaultWorkspaceNavState()));
+    } catch {}
+  }
+
+  function getDefaultWorkspaceNavState() {
+    return {
+      prodTab: 'overview',
+      castingSubTab: 'castboard',
+      auditionsSubTab: 'overview',
+      auditionsDayTab: 'overview',
+      auditionsSessionId: '',
+      auditionsSessionTool: '',
+      inRoomApplicantId: '',
+      scrollX: 0,
+      scrollY: 0,
+    };
   }
 
   let workspaceHistoryReady = false;
