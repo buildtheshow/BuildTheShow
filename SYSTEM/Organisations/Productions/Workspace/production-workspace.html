@@ -17555,6 +17555,44 @@ If you have any questions, don't hesitate to reach out.
     showToast('Production team audition access is ready.');
   }
 
+  function showAddTeamMemberForm() {
+    const form = document.getElementById('add-team-member-form');
+    if (!form) return;
+    form.style.display = 'block';
+    document.getElementById('new-tm-name')?.focus();
+  }
+
+  async function addTeamMemberDirect() {
+    const name  = document.getElementById('new-tm-name')?.value?.trim();
+    const email = document.getElementById('new-tm-email')?.value?.trim();
+    const role  = document.getElementById('new-tm-role')?.value?.trim();
+    const err   = document.getElementById('add-tm-error');
+    if (err) err.textContent = '';
+    if (!name)  { if (err) err.textContent = 'Enter a name.'; return; }
+    if (!email) { if (err) err.textContent = 'Enter an email address.'; return; }
+    if (!role)  { if (err) err.textContent = 'Enter a role.'; return; }
+    await loadAuditionTeamMembers();
+    const duplicate = auditionTeamMembers.find(m => m.email?.toLowerCase() === email.toLowerCase());
+    if (duplicate) { if (err) err.textContent = 'That email already has access.'; return; }
+    const { error } = await sb.from('production_team_members').insert({
+      production_id: prodId,
+      name,
+      email,
+      role,
+      passcode: randomTeamPasscode(),
+      note_color: nextAvailableTeamColor(),
+      is_active: true,
+    });
+    if (error) { if (err) err.textContent = 'Could not add: ' + error.message; return; }
+    document.getElementById('new-tm-name').value  = '';
+    document.getElementById('new-tm-email').value = '';
+    document.getElementById('new-tm-role').value  = '';
+    document.getElementById('add-team-member-form').style.display = 'none';
+    await loadAuditionTeamMembers();
+    renderTeamView(document.getElementById('tm-container'));
+    showToast(`${name} added. Send them the invite from the access row below.`);
+  }
+
   async function saveTeamMemberField(memberId, field, value) {
     if (!['name', 'email', 'role', 'passcode'].includes(field)) return;
     const patch = { [field]: String(value || '').trim() || null };
@@ -17585,21 +17623,35 @@ If you have any questions, don't hesitate to reach out.
 
   function teamInviteMessage(member) {
     const link = teamPortalUrl(member);
+    const prodTitle = prod?.title || 'this production';
+    const role = member.role || 'a team member';
     const lines = [
       `Hi ${member.name || 'there'},`,
       '',
-      `You've been added to the audition team for ${prod?.title || 'this production'} as ${member.role || 'a production team member'}.`,
+      `You've been added to the audition team for ${prodTitle} as ${role}.`,
       '',
-      'Here is your audition team access:',
-      `Link: ${link}`,
-      `Email: ${member.email || ''}`,
-      `Passcode: ${member.passcode || ''}`,
+      '─────────────────────────────',
+      'YOUR LOGIN DETAILS',
+      '─────────────────────────────',
+      `Portal link:  ${link}`,
+      `Email:        ${member.email || ''}`,
+      `Access code:  ${member.passcode || ''}`,
+      '─────────────────────────────',
       '',
-      'Inside, you can view the audition dashboard, schedule, audition types, in-the-room cards, callback list, and shared team notes.',
-      'Please open your Profile tab first so you can choose your note colour, upload a headshot, and add your bio.',
+      'HOW TO GET IN:',
+      `1. Click the portal link above (or copy and paste it into your browser).`,
+      `2. Enter your email address: ${member.email || ''}`,
+      `3. Enter your access code: ${member.passcode || ''}`,
+      `4. Click "Open Auditions."`,
       '',
-      `Thank you,`,
-      orgName || 'The production team'
+      'ONCE YOU\'RE IN:',
+      '- Go to the Profile tab first. Choose your note colour and add a headshot and bio.',
+      '- Use "In The Room" during auditions to pull up performer cards and write notes.',
+      '- Your notes are saved to your name and visible to the full team in real time.',
+      '',
+      `If you have any trouble logging in, reply to this email and we'll sort it out.`,
+      '',
+      `${orgName || 'The production team'}`
     ];
     return lines.join('\n');
   }
@@ -17641,11 +17693,14 @@ If you have any questions, don't hesitate to reach out.
         },
       });
       if (error || !data?.sent) throw new Error(error?.message || data?.error || 'Email was not sent.');
+      await sb.from('production_team_members').update({ invite_sent_at: new Date().toISOString() }).eq('id', memberId);
+      await loadAuditionTeamMembers();
+      renderTeamView(document.getElementById('tm-container'));
       showToast(`Invite emailed to ${member.name || member.email}.`);
     } catch (err) {
       const mailto = `mailto:${encodeURIComponent(member.email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(message)}`;
       window.location.href = mailto;
-      showToast('Could not send automatically, so I opened your email app with the invite ready.', true);
+      showToast('Could not send automatically — your email app is opening with the invite ready.', true);
     }
   }
 
@@ -17842,7 +17897,10 @@ If you have any questions, don't hesitate to reach out.
         <input class="form-input" value="${esc(m.passcode || '')}" placeholder="Code" onblur="saveTeamMemberField('${esc(m.id)}','passcode',this.value)" style="min-height:34px;font-size:0.78rem;font-weight:900;text-transform:uppercase;" />
         <div style="display:flex;gap:0.4rem;justify-content:flex-end;align-items:center;flex-wrap:wrap;">
           ${teamColorPreview(m.note_color || '#572e88')}
-          <button class="btn-secondary" onclick="emailTeamInvite('${esc(m.id)}')" style="font-size:0.72rem;padding:0.3rem 0.55rem;">Email Invite</button>
+          ${m.invite_sent_at
+            ? `<span style="display:inline-flex;align-items:center;gap:0.25rem;font-size:0.72rem;font-weight:800;color:#166534;background:rgba(22,101,52,0.08);border:1px solid rgba(22,101,52,0.18);border-radius:6px;padding:0.3rem 0.55rem;" title="Invite sent ${new Date(m.invite_sent_at).toLocaleDateString('en-CA', {month:'short',day:'numeric'})}">Sent ✓</span><button class="btn-secondary" onclick="emailTeamInvite('${esc(m.id)}')" style="font-size:0.72rem;padding:0.3rem 0.55rem;">Resend</button>`
+            : `<button class="btn-secondary" onclick="emailTeamInvite('${esc(m.id)}')" style="font-size:0.72rem;padding:0.3rem 0.55rem;">Email Invite</button>`
+          }
           <button class="btn-secondary" onclick="copyTeamPortalLink('${esc(m.id)}')" style="font-size:0.72rem;padding:0.3rem 0.55rem;">Copy Link</button>
           ${m.headshot_url ? `<a class="btn-secondary" href="${esc(m.headshot_url)}" target="_blank" download style="font-size:0.72rem;padding:0.3rem 0.55rem;text-decoration:none;">Headshot</a>` : ''}
           <button class="btn-secondary" onclick="downloadTeamBio('${esc(m.id)}')" style="font-size:0.72rem;padding:0.3rem 0.55rem;" ${m.bio ? '' : 'disabled'}>Bio</button>
@@ -17861,11 +17919,25 @@ If you have any questions, don't hesitate to reach out.
             <div style="font-size:0.78rem;color:#86799f;margin-top:0.18rem;">Directors can use a passcode link to view auditions and write authored notes. No sign-in needed.</div>
           </div>
           <div style="display:flex;gap:0.45rem;flex-wrap:wrap;">
-            <button class="btn-secondary" onclick="syncCreativeRolesToTeamAccess()" style="font-size:0.78rem;">Create/Sync Access</button>
-            <button class="btn-secondary" onclick="copyTeamPortalLink()" style="font-size:0.78rem;">Copy Blank Portal Link</button>
+            <button class="btn-primary" onclick="showAddTeamMemberForm()" style="font-size:0.78rem;">+ Add Team Member</button>
+            <button class="btn-secondary" onclick="syncCreativeRolesToTeamAccess()" style="font-size:0.78rem;">Sync from Creative Team</button>
+            <button class="btn-secondary" onclick="copyTeamPortalLink()" style="font-size:0.78rem;">Copy Portal Link</button>
           </div>
         </div>
-        ${accessRows || '<div style="font-size:0.82rem;color:#9a90b0;padding:0.75rem 0;">No team access yet. Assign Creative Team names, then click Create/Sync Access.</div>'}
+        <div id="add-team-member-form" style="display:none;background:rgba(87,46,136,0.04);border:1px solid rgba(87,46,136,0.14);border-radius:12px;padding:1rem;margin-bottom:0.85rem;">
+          <div style="font-size:0.78rem;font-weight:900;color:#572e88;margin-bottom:0.65rem;">New Team Member</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0.55rem;margin-bottom:0.55rem;">
+            <input class="form-input" id="new-tm-name" placeholder="Full name" style="font-size:0.82rem;" />
+            <input class="form-input" id="new-tm-email" placeholder="Email address" type="email" style="font-size:0.82rem;" />
+            <input class="form-input" id="new-tm-role" placeholder="Role (e.g. Director)" style="font-size:0.82rem;" />
+          </div>
+          <div style="display:flex;gap:0.45rem;align-items:center;">
+            <button class="btn-primary" onclick="addTeamMemberDirect()" style="font-size:0.78rem;">Add Member</button>
+            <button class="btn-secondary" onclick="document.getElementById('add-team-member-form').style.display='none'" style="font-size:0.78rem;">Cancel</button>
+            <span id="add-tm-error" style="font-size:0.78rem;color:#b91c1c;font-weight:700;"></span>
+          </div>
+        </div>
+        ${accessRows || '<div style="font-size:0.82rem;color:#9a90b0;padding:0.75rem 0;">No team members yet. Click + Add Team Member to get started.</div>'}
       </div>`;
 
     container.innerHTML = producerSection + creativeSection + accessSection;
