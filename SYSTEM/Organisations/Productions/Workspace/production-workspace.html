@@ -9308,13 +9308,61 @@
     .mat-row:first-child { border-top: 0; }
     @media (max-width: 860px) { .mat-row { grid-template-columns: 1fr; align-items: stretch; } }
     .mat-card-name { font-size: 0.9rem; font-weight: 800; color: #1a1530; }
-    .mat-file-row { display: flex; align-items: center; justify-content: flex-end; gap: 0.4rem; min-width: 0; }
-    @media (max-width: 860px) { .mat-file-row { justify-content: flex-start; } }
-    .mat-file-link {
-      font-size: 0.75rem; color: #572e88; font-weight: 700; text-decoration: none; white-space: nowrap;
-      overflow: hidden; text-overflow: ellipsis; max-width: 110px;
+    .mat-type-options {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.35rem;
     }
-    .mat-file-link:hover { text-decoration: underline; }
+    .mat-type-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.25rem;
+      border: 1px solid rgba(87,46,136,0.16);
+      border-radius: 999px;
+      background: rgba(87,46,136,0.045);
+      color: #5c4b78;
+      font-size: 0.7rem;
+      font-weight: 850;
+      padding: 0.22rem 0.5rem;
+      cursor: pointer;
+      user-select: none;
+    }
+    .mat-type-chip input {
+      accent-color: #572e88;
+      margin: 0;
+    }
+    .mat-type-hint {
+      flex: 1 1 100%;
+      color: #8f84a2;
+      font-size: 0.68rem;
+      font-weight: 700;
+      line-height: 1.3;
+    }
+    .mat-file-row { display: flex; align-items: center; justify-content: flex-end; gap: 0.4rem; min-width: 0; flex-wrap: wrap; }
+    @media (max-width: 860px) { .mat-file-row { justify-content: flex-start; } }
+    .mat-file-link,
+    .mat-file-action {
+      font-size: 0.75rem; color: #572e88; font-weight: 700; text-decoration: none; white-space: nowrap;
+      background: transparent; border: 0; font-family: inherit; padding: 0; cursor: pointer;
+    }
+    .mat-file-link:hover,
+    .mat-file-action:hover { text-decoration: underline; }
+    .mat-file-name {
+      flex: 1 1 140px;
+      min-width: 90px;
+      max-width: 220px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-size: 0.74rem;
+      font-weight: 800;
+      color: #4a3d6b;
+      background: rgba(87,46,136,0.06);
+      border: 1px solid rgba(87,46,136,0.12);
+      border-radius: 999px;
+      padding: 0.22rem 0.55rem;
+    }
     .mat-file-missing { font-size: 0.74rem; color: #aaa0ba; font-weight: 700; }
     .mat-upload-btn {
       font-size: 0.72rem; font-weight: 600; color: #572e88;
@@ -9323,6 +9371,53 @@
       white-space: nowrap;
     }
     .mat-upload-btn:hover { background: rgba(87,46,136,0.12); }
+    .material-preview-modal {
+      max-width: min(980px, 96vw);
+      height: min(820px, 92vh);
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .material-preview-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      padding: 1rem 1.2rem;
+      border-bottom: 1px solid rgba(87,46,136,0.1);
+    }
+    .material-preview-title {
+      min-width: 0;
+      font-size: 0.95rem;
+      font-weight: 900;
+      color: #1a1530;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .material-preview-actions {
+      display: flex;
+      align-items: center;
+      gap: 0.55rem;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+    .material-preview-frame {
+      flex: 1;
+      width: 100%;
+      border: 0;
+      background: #f8f6fb;
+    }
+    .material-preview-fallback {
+      flex: 1;
+      display: grid;
+      place-items: center;
+      padding: 2rem;
+      color: #7a6b91;
+      text-align: center;
+      background: #f8f6fb;
+    }
     .mat-save-btn { padding: 0.36rem 0.75rem; font-size: 0.76rem; font-weight: 800; white-space: nowrap; }
 
     /* ── Character tiles ── */
@@ -21389,7 +21484,8 @@ If you have any questions, don't hesitate to reach out.
       fileField: isCallback ? 'callback_file_url' : 'audition_file_url',
       filePathField: isCallback ? 'callback_file_path' : 'audition_file_path',
       fileNameField: isCallback ? 'callback_file_name' : 'audition_file_name',
-      placeholder: isCallback ? 'Callback sides, song cut, or prep note' : 'Song cut, monologue, or prep note'
+      typesField: isCallback ? 'callback_material_types' : 'audition_material_types',
+      placeholder: isCallback ? 'Notes, song cut instructions, sheet music details, or prep note' : 'Song cut instructions, sheet music details, monologue, or prep note'
     };
   }
 
@@ -21406,16 +21502,31 @@ If you have any questions, don't hesitate to reach out.
 
   function materialRows(type) {
     const meta = materialTypeMeta(type);
+    const options = ['Sides', 'Song Cut', 'Other'];
     return `<div class="mat-list">${characters.map(c => {
       const fileName = c[meta.fileNameField] || materialFileNameFromUrl(c[meta.fileField]) || 'Material file';
+      const selectedTypes = Array.isArray(c[meta.typesField]) ? c[meta.typesField] : [];
+      const hasSongCut = selectedTypes.includes('Song Cut');
+      const typeHTML = `<div class="mat-type-options">${options.map(option => {
+        const id = `${meta.inputIdPrefix}-type-${option.toLowerCase().replace(/\s+/g, '-')}-${c.id}`;
+        const checked = selectedTypes.includes(option) ? ' checked' : '';
+        return `<label class="mat-type-chip" for="${esc(id)}">
+          <input id="${esc(id)}" type="checkbox" data-material-type="${esc(type)}" data-character-id="${esc(c.id)}" value="${esc(option)}"${checked} />
+          ${esc(option)}
+        </label>`;
+      }).join('')}${hasSongCut ? '<span class="mat-type-hint">Song Cut can be typed here or uploaded as sheet music/audio.</span>' : ''}</div>`;
       const fileHTML = c[meta.fileField]
-        ? `<a class="mat-file-link" href="${esc(c[meta.fileField])}" target="_blank" download="${esc(fileName)}" title="${esc(fileName)}">Download</a>`
+        ? `<span class="mat-file-name" title="${esc(fileName)}">${esc(fileName)}</span>
+           <button type="button" class="mat-file-action" onclick="previewMaterialFile('${esc(c[meta.fileField])}','${esc(fileName)}')">Preview</button>
+           <button type="button" class="mat-file-action" onclick="printMaterialFile('${esc(c[meta.fileField])}')">Print</button>
+           <a class="mat-file-link" href="${esc(c[meta.fileField])}" target="_blank" download="${esc(fileName)}" title="${esc(fileName)}">Download</a>`
         : '<span class="mat-file-missing">No file</span>';
       return `<div class="mat-row">
         <div class="mat-card-name">${esc(c.name)}</div>
         <input class="form-input" id="${meta.inputIdPrefix}-${c.id}" type="text"
                placeholder="${esc(meta.placeholder)}"
                value="${esc(c[meta.materialField]||'')}" />
+        ${typeHTML}
         <div class="mat-file-row">
           <button class="mat-upload-btn" onclick="document.getElementById('${meta.fileIdPrefix}-${c.id}').click()">${c[meta.fileField] ? 'Replace' : 'Upload'}</button>
           <input type="file" id="${meta.fileIdPrefix}-${c.id}" style="display:none;"
@@ -21435,6 +21546,57 @@ If you have any questions, don't hesitate to reach out.
     } catch {
       return String(url).split('/').pop() || '';
     }
+  }
+
+  function previewMaterialFile(url, fileName = 'Material file') {
+    if (!url) return;
+    document.getElementById('material-preview-modal')?.remove();
+    const safeUrl = esc(url);
+    const safeName = esc(fileName || materialFileNameFromUrl(url) || 'Material file');
+    document.body.insertAdjacentHTML('beforeend', `
+      <div class="modal-overlay open" id="material-preview-modal" onclick="if(event.target===this) closeMaterialPreview()">
+        <div class="modal material-preview-modal">
+          <div class="material-preview-header">
+            <div class="material-preview-title" title="${safeName}">${safeName}</div>
+            <div class="material-preview-actions">
+              <button type="button" class="btn-secondary" onclick="printMaterialFile('${safeUrl}')">Print</button>
+              <a class="btn-secondary" href="${safeUrl}" target="_blank" rel="noopener" style="text-decoration:none;">Open</a>
+              <a class="btn-secondary" href="${safeUrl}" target="_blank" download="${safeName}" style="text-decoration:none;">Download</a>
+              <button type="button" class="modal-close" onclick="closeMaterialPreview()">×</button>
+            </div>
+          </div>
+          <iframe class="material-preview-frame" src="${safeUrl}" title="${safeName}" onerror="this.replaceWith(document.getElementById('material-preview-fallback-template').content.cloneNode(true))"></iframe>
+          <template id="material-preview-fallback-template">
+            <div class="material-preview-fallback">This file type may not preview in the browser. Use Open or Download instead.</div>
+          </template>
+        </div>
+      </div>`);
+  }
+
+  function closeMaterialPreview() {
+    document.getElementById('material-preview-modal')?.remove();
+  }
+
+  function printMaterialFile(url) {
+    if (!url) return;
+    const frame = document.createElement('iframe');
+    frame.style.position = 'fixed';
+    frame.style.right = '0';
+    frame.style.bottom = '0';
+    frame.style.width = '0';
+    frame.style.height = '0';
+    frame.style.border = '0';
+    frame.onload = () => {
+      try {
+        frame.contentWindow?.focus();
+        frame.contentWindow?.print();
+      } catch {
+        window.open(url, '_blank', 'noopener');
+      }
+      setTimeout(() => frame.remove(), 3000);
+    };
+    frame.src = url;
+    document.body.appendChild(frame);
   }
 
   function renderMaterialsList() {
@@ -21545,17 +21707,37 @@ If you have any questions, don't hesitate to reach out.
   async function saveMaterial(charId, type) {
     const updates = {};
     if (!type || type === 'audition') {
+      const audMeta = materialTypeMeta('audition');
       const audEl = document.getElementById('mat-aud-'+charId);
       if (audEl) updates.audition_material = audEl.value.trim() || null;
+      updates[audMeta.typesField] = selectedMaterialTypes(charId, 'audition');
     }
     if (!type || type === 'callback') {
+      const cbMeta = materialTypeMeta('callback');
       const cbEl = document.getElementById('mat-cb-'+charId);
       if (cbEl) updates.callback_material = cbEl.value.trim() || null;
+      updates[cbMeta.typesField] = selectedMaterialTypes(charId, 'callback');
     }
     if (!Object.keys(updates).length) return;
-    await sb.from('production_characters').update(updates).eq('id', charId);
+    let { error } = await sb.from('production_characters').update(updates).eq('id', charId);
+    if (error && /material_types|column/i.test(error.message || '')) {
+      delete updates.audition_material_types;
+      delete updates.callback_material_types;
+      error = (await sb.from('production_characters').update(updates).eq('id', charId)).error;
+    }
+    if (error) {
+      showToast('Could not save material: ' + error.message, true);
+      return;
+    }
     const c = characters.find(x => x.id === charId);
     if (c) Object.assign(c, updates);
+    showToast('Material saved.');
+  }
+
+  function selectedMaterialTypes(charId, type) {
+    return Array.from(document.querySelectorAll(`input[data-material-type="${type}"][data-character-id="${charId}"]:checked`))
+      .map(input => input.value)
+      .filter(Boolean);
   }
 
   async function toggleCharOnForm(id, checked) {
