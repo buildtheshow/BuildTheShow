@@ -745,7 +745,28 @@
     }
 
     // ── Init ──────────────────────────────────────────────────────────────
-    (function init() {
+    (async function init() {
+      // If no ?id= param, resolve production ID from path: /OrgAbbrev/ShowSlug/Team
+      if (!prodId) {
+        const parts = location.pathname.replace(/\/+$/, '').split('/').filter(Boolean);
+        // parts[0] = OrgAbbrev, parts[1] = ShowSlug, parts[2] = 'Team'
+        if (parts.length >= 2) {
+          try {
+            const resolved = await sb.rpc('resolve_team_portal', {
+              p_org_abbrev: parts[0],
+              p_show_slug:  parts[1]
+            });
+            if (resolved.data) prodId = resolved.data;
+          } catch(e) {
+            console.error('[BTS] team portal slug lookup failed:', e);
+          }
+        }
+      }
+      if (!prodId) {
+        const err = document.getElementById('login-error');
+        if (err) err.textContent = 'Production not found. Check your link.';
+        return;
+      }
       const emailInput    = document.getElementById('team-email');
       const passcodeInput = document.getElementById('team-passcode');
       if (teamEmail && emailInput) {
