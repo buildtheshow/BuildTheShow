@@ -19,7 +19,7 @@
   const EXTRACT_PROMPT = (title) =>
     `List every character and role in this theatre production document for "${title}". ` +
     `For each, note: name, role type (Principal/Supporting/Featured/Cameo/Group), how the role is written (woman/girl, man/boy, non-binary/gender-neutral, or any/open), ` +
-    `age range, vocal range, singing strength, dancing requirement, and performer count. Be thorough.`;
+    `age range, vocal range, vocal usage, dancing requirement, and performer count. Be thorough.`;
 
   const CONVERT_PROMPT = (extracted) =>
     `Convert this character list to a JSON array. Each object must have these exact keys: ` +
@@ -29,7 +29,6 @@
     `vocal_type (Soprano/Mezzo-Soprano/Alto/Tenor/Baritone/Bass/Non-Singing or null), ` +
     `vocal_range (text like "A3–E5" or null), ` +
     `vocal_usage (one of: Primary Vocals/Featured Vocals/Vocal Group/Supporting Vocals/Ensemble Vocals/Minimal/Non-Singing or null — Primary Vocals: leads full songs; Featured Vocals: one clear standout solo moment; Vocal Group: recurring small group unit; Supporting Vocals: regular but never focal; Ensemble Vocals: full group numbers only; Minimal: sings once or barely; Non-Singing: no singing at all), ` +
-    `singing_strength (Strong/Moderate/Light/Non-Singing or null), ` +
     `dancing_strength (No Dance/Beginner Friendly/Performer Level/Dance-Focused or null), ` +
     `performer_count (integer, default 1). ` +
     `Return ONLY the JSON array, nothing else.\n\n${extracted}`;
@@ -462,7 +461,6 @@
       vocal_type: c.vocal_type || null,
       vocal_range: c.vocal_range || null,
       vocal_usage: c.vocal_usage || null,
-      singing_strength: c.singing_strength || null,
       dancing_strength: c.dancing_strength || null,
       performer_count: c.performer_count || 1,
       show_on_form: true,

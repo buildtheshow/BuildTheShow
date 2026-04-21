@@ -830,9 +830,9 @@
     if (state.characterSetup === 'manual_now' && state.characterWhen === 'later') return [];
     // manual_now + now: give a simple starter structure they can build on
     return [
-      { name: 'Lead Roles', role_type: 'Principal', performer_count: 1, description: 'A starter place for your named lead roles.', audition_material: prepText, callback_material: callbackText },
-      { name: 'Supporting Roles', role_type: 'Supporting', performer_count: 1, description: 'A starter place for supporting characters.', audition_material: prepText, callback_material: callbackText },
-      { name: 'Ensemble', role_type: 'Group', performer_count: 10, description: 'A flexible group card for chorus, featured ensemble, or swing space.', audition_material: prepText, callback_material: callbackText },
+      { name: 'Lead Roles', role_type: 'Principal', performer_count: 1, description: 'A starter place for your named lead roles.', vocal_usage: 'Primary Vocals', audition_material: prepText, callback_material: callbackText },
+      { name: 'Supporting Roles', role_type: 'Supporting', performer_count: 1, description: 'A starter place for supporting characters.', vocal_usage: 'Supporting Vocals', audition_material: prepText, callback_material: callbackText },
+      { name: 'Ensemble', role_type: 'Group', performer_count: 10, description: 'A flexible group card for chorus, featured ensemble, or swing space.', vocal_usage: 'Ensemble Vocals', audition_material: prepText, callback_material: callbackText },
     ];
   }
 
@@ -960,6 +960,7 @@
           role_type: character.role_type,
           performer_count: character.performer_count,
           description: character.description,
+          vocal_usage: character.vocal_usage || null,
           audition_material: character.audition_material,
           callback_material: character.callback_material,
           show_on_form: true,

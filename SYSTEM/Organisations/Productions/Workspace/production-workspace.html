@@ -11191,6 +11191,7 @@
                 <option value="name">Name</option>
                 <option value="role_type">Role Type</option>
                 <option value="vocal_type">Vocal Type</option>
+                <option value="vocal_usage">Vocal Usage</option>
               </select>
             </div>
           </div>
@@ -11211,7 +11212,6 @@
                 <label class="char-disp-check"><input type="checkbox" id="cd-vocal_range" /><span>Vocal Range</span></label>
                 <label class="char-disp-check"><input type="checkbox" id="cd-vocal_type" checked /><span>Vocal Type</span></label>
                 <label class="char-disp-check"><input type="checkbox" id="cd-vocal_usage" checked /><span>Vocal Usage</span></label>
-                <label class="char-disp-check"><input type="checkbox" id="cd-singing_strength" /><span>Singing Strength</span></label>
                 <label class="char-disp-check"><input type="checkbox" id="cd-dancing_strength" /><span>Movement Requirement</span></label>
               </div>
               <button class="btn-secondary" onclick="saveCharDisplaySettings()" style="margin-top:0.85rem;font-size:0.78rem;padding:0.35rem 0.85rem;">Save Display Settings</button>
@@ -12901,16 +12901,6 @@
         </select>
       </div>
       <div class="form-group">
-        <label class="form-label">Singing Strength <span class="opt">(optional)</span></label>
-        <select class="form-select" id="char-singing-strength">
-          <option value="">- select -</option>
-          <option value="Strong">Strong</option>
-          <option value="Moderate">Moderate</option>
-          <option value="Light">Light</option>
-          <option value="Non-Singing">Non-Singing</option>
-        </select>
-      </div>
-      <div class="form-group">
         <label class="form-label">Movement Requirement <span class="opt">(optional)</span></label>
         <select class="form-select" id="char-dancing-strength">
           <option value="">- select -</option>
@@ -13150,7 +13140,6 @@
    * UPDATE production_characters SET vocal_usage = 'Vocal Group'     WHERE vocal_usage = 'Harmony / Group';
    * UPDATE production_characters SET vocal_usage = 'Ensemble Vocals' WHERE vocal_usage = 'Group Singing';
    * UPDATE production_characters SET vocal_usage = 'Minimal'         WHERE vocal_usage = 'Light Singing';
-   * ALTER TABLE production_characters ADD COLUMN IF NOT EXISTS singing_strength text;
    * ALTER TABLE production_characters ADD COLUMN IF NOT EXISTS dancing_strength text;
    * ALTER TABLE production_characters ADD COLUMN IF NOT EXISTS beginner_friendly boolean DEFAULT false;
    * ALTER TABLE production_characters ADD COLUMN IF NOT EXISTS cast_later boolean DEFAULT false;
@@ -21489,6 +21478,7 @@ If you have any questions, don't hesitate to reach out.
       if (sort === 'name')      return (a.name || '').localeCompare(b.name || '');
       if (sort === 'role_type') return (a.role_type || 'zzz').localeCompare(b.role_type || 'zzz');
       if (sort === 'vocal_type')return (a.vocal_type || 'zzz').localeCompare(b.vocal_type || 'zzz');
+      if (sort === 'vocal_usage')return (displayVocalUsage(a.vocal_usage) || 'zzz').localeCompare(displayVocalUsage(b.vocal_usage) || 'zzz');
       return (a.sort_order ?? 999) - (b.sort_order ?? 999);
     });
 
@@ -21503,7 +21493,7 @@ If you have any questions, don't hesitate to reach out.
       const roleClass  = ROLE_TYPE_CLASSES[c.role_type] || 'char-tag-role-ensemble';
       const roleTag    = (c.role_type && !isEnsemble) ? `<span class="char-tag ${roleClass}">${esc(c.role_type)}</span>` : '';
       const vocalTag   = c.vocal_type ? `<span class="char-tag char-tag-vocal">${esc(c.vocal_type)}</span>` : '';
-      const effectiveUsage = ensOverride ? 'Ensemble Vocals' : c.vocal_usage;
+      const effectiveUsage = ensOverride ? 'Ensemble Vocals' : displayVocalUsage(c.vocal_usage);
       const usageTag   = effectiveUsage ? `<span class="char-tag char-tag-usage${ensOverride ? ' char-tag-usage--override' : ''}">${esc(effectiveUsage)}</span>` : '';
       const genderTag  = c.gender ? `<span class="char-tag char-tag-gender">${esc(displayGender(c.gender))}</span>` : '';
       const ageTag     = c.age_range ? `<span class="char-tag char-tag-gender">${esc(c.age_range)}</span>` : '';
@@ -21634,7 +21624,6 @@ If you have any questions, don't hesitate to reach out.
       vocal_type:        src.vocal_type,
       vocal_range:       src.vocal_range,
       vocal_usage:       src.vocal_usage,
-      singing_strength:  src.singing_strength,
       dancing_strength:  src.dancing_strength,
       cast_later:        src.cast_later === true,
       show_on_public_page: src.show_on_public_page,
@@ -22000,7 +21989,6 @@ If you have any questions, don't hesitate to reach out.
     document.getElementById('char-vocal').value            = c?.vocal_type || '';
     document.getElementById('char-vocal-range').value      = c?.vocal_range || '';
     document.getElementById('char-vocal-usage').value      = c?.vocal_usage || '';
-    document.getElementById('char-singing-strength').value = c?.singing_strength || '';
     document.getElementById('char-dancing-strength').value = c?.dancing_strength || '';
     document.getElementById('char-cast-later').checked     = c?.cast_later === true;
     document.getElementById('char-show-public').checked    = c?.show_on_public_page !== false;
@@ -22050,7 +22038,6 @@ If you have any questions, don't hesitate to reach out.
       vocal_type:       document.getElementById('char-vocal').value || null,
       vocal_range:      document.getElementById('char-vocal-range').value.trim() || null,
       vocal_usage:      document.getElementById('char-vocal-usage').value || null,
-      singing_strength: document.getElementById('char-singing-strength').value || null,
       dancing_strength: document.getElementById('char-dancing-strength').value || null,
       cast_later:       document.getElementById('char-cast-later').checked,
       show_on_public_page: document.getElementById('char-show-public').checked,
@@ -22166,7 +22153,7 @@ If you have any questions, don't hesitate to reach out.
   }
 
   function saveCharDisplaySettings() {
-    const fields = ['role_type','gender','age_range','description','vocal_range','vocal_type','vocal_usage','singing_strength','dancing_strength'];
+    const fields = ['role_type','gender','age_range','description','vocal_range','vocal_type','vocal_usage','dancing_strength'];
     const vals = {};
     fields.forEach(f => { const el = document.getElementById('cd-' + f); if(el) vals[f] = el.checked; });
     if (auditionConfig) {
@@ -26821,6 +26808,7 @@ If you have any questions, don't hesitate to reach out.
     if (char.role_type) rows.push(['Role Type', char.role_type]);
     if (char.age_range) rows.push(['Age Range', char.age_range]);
     if (char.vocal_range) rows.push(['Voice', char.vocal_range]);
+    if (char.vocal_usage) rows.push(['Vocal Usage', displayVocalUsage(char.vocal_usage)]);
     if (char.dancing_strength) rows.push(['Movement', char.dancing_strength]);
     const rowsEl = document.getElementById('cbv2-popup-rows');
     rowsEl.innerHTML = rows.map(([l, v]) =>
@@ -29651,6 +29639,19 @@ If you have any questions, don't hesitate to reach out.
       'any':                       'Any',
       'Any':                       'Any',
       'ANY':                       'Any',
+    };
+    return map[raw] ?? raw;
+  }
+
+  function displayVocalUsage(raw) {
+    if (!raw) return '';
+    const map = {
+      'Solos': 'Primary Vocals',
+      'Featured Solo': 'Featured Vocals',
+      'Featured Solos': 'Featured Vocals',
+      'Harmony / Group': 'Vocal Group',
+      'Group Singing': 'Ensemble Vocals',
+      'Light Singing': 'Minimal'
     };
     return map[raw] ?? raw;
   }

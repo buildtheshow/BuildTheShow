@@ -1373,6 +1373,17 @@
       -webkit-appearance: none;
       outline: none;
     }
+    .bk-char-tile-main { display: block; }
+    .bk-char-tile-meta {
+      display: block;
+      margin-top: 0.12rem;
+      font-size: 0.66rem;
+      font-weight: 750;
+      color: #9a90b0;
+      line-height: 1.2;
+    }
+    .bk-char-tile.selected .bk-char-tile-meta,
+    .bk-char-tile[aria-pressed="true"] .bk-char-tile-meta { color: rgba(255,255,255,0.75); }
     .bk-char-tile:hover { border-color: #572e88; background: rgba(87,46,136,0.06); }
     .bk-char-tile.selected,
     .bk-char-tile[aria-pressed="true"] {
@@ -1800,6 +1811,19 @@
         'any':                         'Any',
         'Any':                         'Any',
         'ANY':                         'Any',
+      };
+      return map[raw] ?? raw;
+    }
+
+    function displayVocalUsage(raw) {
+      if (!raw) return '';
+      const map = {
+        'Solos': 'Primary Vocals',
+        'Featured Solo': 'Featured Vocals',
+        'Featured Solos': 'Featured Vocals',
+        'Harmony / Group': 'Vocal Group',
+        'Group Singing': 'Ensemble Vocals',
+        'Light Singing': 'Minimal'
       };
       return map[raw] ?? raw;
     }
@@ -4426,7 +4450,10 @@
       if (sort==='alpha') chars = [...chars].sort((a,b) => (a.name||'').localeCompare(b.name||''));
       else if (sort==='role_type') chars = [...chars].sort((a,b) => (ORDER[a.role_type]??99)-(ORDER[b.role_type]??99));
       container.innerHTML = chars.length
-        ? chars.map(c => `<button type="button" class="bk-char-tile${_bkState.selected_chars.includes(c.name)?' selected':''}" aria-pressed="${_bkState.selected_chars.includes(c.name) ? 'true' : 'false'}" data-char-name="${esc(c.name)}">${esc(c.name)}</button>`).join('')
+        ? chars.map(c => `<button type="button" class="bk-char-tile${_bkState.selected_chars.includes(c.name)?' selected':''}" aria-pressed="${_bkState.selected_chars.includes(c.name) ? 'true' : 'false'}" data-char-name="${esc(c.name)}">
+            <span class="bk-char-tile-main">${esc(c.name)}</span>
+            ${c.vocal_usage ? `<span class="bk-char-tile-meta">${esc(displayVocalUsage(c.vocal_usage))}</span>` : ''}
+          </button>`).join('')
         : '<div style="font-size:0.82rem;color:#9a90b0;">No roles available.</div>';
       container.querySelectorAll('.bk-char-tile').forEach(btn => {
         btn.addEventListener('click', () => _bkToggleChar(btn.dataset.charName || ''));
@@ -5628,7 +5655,7 @@
       const types    = customSort(typeSet, ROLE_ORDER);
       const vocals   = customSort([...new Set(characters.map(c => c.vocal_type).filter(Boolean))], VOCAL_ORDER);
       const dances   = customSort([...new Set(characters.map(c => c.dancing_strength).filter(s => s && s !== 'None' && s !== 'Non-Dancing'))], DANCE_ORDER);
-      const usages   = customSort([...new Set(characters.map(c => c.vocal_usage).filter(Boolean))], USAGE_ORDER);
+      const usages   = customSort([...new Set(characters.map(c => displayVocalUsage(c.vocal_usage)).filter(Boolean))], USAGE_ORDER);
 
       const DANCE_DESCS = {
         'No Dance':          'No choreography — staging only',
@@ -5653,6 +5680,7 @@
         <option value="name">Sort: A to Z</option>
         ${fieldOn('role_type')  ? `<option value="type">Sort: Role Type</option>`  : ''}
         ${fieldOn('vocal_type') ? `<option value="vocal">Sort: Vocal Type</option>` : ''}
+        ${fieldOn('vocal_usage') ? `<option value="usage">Sort: Vocal Usage</option>` : ''}
       </select>`;
 
       return `
@@ -5682,10 +5710,11 @@
       if (_charFilterType)  list = list.filter(c => c.role_type        === _charFilterType);
       if (_charFilterVocal) list = list.filter(c => c.vocal_type       === _charFilterVocal);
       if (_charFilterDance) list = list.filter(c => c.dancing_strength === _charFilterDance);
-      if (_charFilterUsage) list = list.filter(c => c.vocal_usage      === _charFilterUsage);
+      if (_charFilterUsage) list = list.filter(c => displayVocalUsage(c.vocal_usage) === _charFilterUsage);
       if (_charSort === 'name')  list.sort((a,b) => (a.name||'').localeCompare(b.name||''));
       if (_charSort === 'type')  list.sort((a,b) => (a.role_type||'').localeCompare(b.role_type||''));
       if (_charSort === 'vocal') list.sort((a,b) => (a.vocal_type||'').localeCompare(b.vocal_type||''));
+      if (_charSort === 'usage') list.sort((a,b) => displayVocalUsage(a.vocal_usage).localeCompare(displayVocalUsage(b.vocal_usage)));
       const grid = document.getElementById('roles-grid');
       if (grid) grid.innerHTML = list.length ? renderRoleCards(list) : '<p style="color:#9a90b0;font-size:0.9rem;">No roles match this filter.</p>';
     }
@@ -5722,7 +5751,7 @@
           ? `<span class="ai-role-tag">${esc(c.vocal_range)}</span>`
           : '';
         const vocalUsageBadge = (show('vocal_usage') && c.vocal_usage)
-          ? `<span class="ai-role-tag">${esc(c.vocal_usage)}</span>`
+          ? `<span class="ai-role-tag">${esc(displayVocalUsage(c.vocal_usage))}</span>`
           : '';
         const genderBadge = (show('gender') && c.gender)
           ? `<span class="ai-role-gender">${esc(displayGender(c.gender))}</span>`
@@ -5740,7 +5769,6 @@
           'Dance-Focused':     'Heavy choreography. Fast-paced, precise, and requires strong dance ability and stamina.',
         };
         const reqs = [];
-        if (show('singing_strength') && c.singing_strength && c.singing_strength !== 'None') reqs.push({ label: 'Singing', value: c.singing_strength, desc: null });
         if (show('dancing_strength') && c.dancing_strength && c.dancing_strength !== 'None' && c.dancing_strength !== 'Non-Dancing') {
           reqs.push({ label: 'Movement', value: c.dancing_strength, desc: DANCE_DESCS[c.dancing_strength] || null });
         }
