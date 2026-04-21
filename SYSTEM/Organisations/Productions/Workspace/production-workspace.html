@@ -8799,6 +8799,7 @@
     .char-tag-role-cameo { background: rgba(236,72,153,0.1); color: #be185d; }
     .char-tag-vocal  { background: rgba(239,171,69,0.12); color: #7a4e0a; }
     .char-tag-usage  { background: rgba(5,150,105,0.12);  color: #059669; }
+    .char-tag-usage--override { background: rgba(87,46,136,0.1); color: #572e88; font-style: italic; }
     .char-tag-gender { background: rgba(87,46,136,0.07);  color: #4a3d6b; }
     .char-card-desc  { font-size: 0.78rem; color: #6a5a80; line-height: 1.5; word-break: break-word; }
     .char-card-footer { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; flex-wrap: wrap; row-gap: 0.5rem; margin-top: 0.25rem; padding-top: 0.6rem; border-top: 1px solid rgba(87,46,136,0.08); }
@@ -11154,6 +11155,14 @@
             <button class="btn-primary" onclick="openAddCharacterModal()" style="font-size:0.8rem;padding:0.4rem 0.85rem;">+ Add Character</button>
             <button class="btn-secondary" onclick="openImportWithAIModal()" style="font-size:0.78rem;padding:0.38rem 0.75rem;">Import with AI</button>
             <button id="char-bulk-toggle-btn" class="btn-secondary" onclick="toggleBulkMode()" style="font-size:0.78rem;padding:0.38rem 0.75rem;">Select</button>
+
+            <div style="width:1px;height:20px;background:rgba(87,46,136,0.15);margin:0 0.1rem;flex-shrink:0;"></div>
+
+            <label id="ensemble-override-toggle" style="display:inline-flex;align-items:center;gap:0.5rem;cursor:pointer;font-size:0.78rem;font-weight:700;color:#572e88;background:rgba(87,46,136,0.07);border:1.5px solid rgba(87,46,136,0.18);border-radius:20px;padding:0.3rem 0.75rem;user-select:none;" title="Everyone joins the ensemble — overrides individual vocal usage">
+              <input type="checkbox" id="ensemble-override-cb" style="display:none;" onchange="toggleEnsembleOverride(this.checked)" />
+              <span id="ensemble-override-dot" style="width:10px;height:10px;border-radius:50%;background:rgba(87,46,136,0.25);flex-shrink:0;transition:background 0.15s;"></span>
+              Everyone in Ensemble
+            </label>
 
             <div style="width:1px;height:20px;background:rgba(87,46,136,0.15);margin:0 0.1rem;flex-shrink:0;"></div>
 
@@ -17260,7 +17269,7 @@ If you have any questions, don't hesitate to reach out.
       if (el) el.style.display = (i === inner) ? '' : 'none';
     });
     if (inner === 'materials') renderMaterialsList();
-    if (inner === 'characters') { renderCharacters(); loadCharDisplaySettings(); }
+    if (inner === 'characters') { renderCharacters(); loadCharDisplaySettings(); syncEnsembleOverrideUI(); }
     if (inner === 'prodinfo') loadProdInfo();
   }
 
@@ -21442,6 +21451,31 @@ If you have any questions, don't hesitate to reach out.
     }
   }
 
+  function isEnsembleOverrideOn() {
+    return prod?.wizard_data?.ensemble_override === true;
+  }
+
+  function syncEnsembleOverrideUI() {
+    const on = isEnsembleOverrideOn();
+    const cb  = document.getElementById('ensemble-override-cb');
+    const dot = document.getElementById('ensemble-override-dot');
+    const lbl = document.getElementById('ensemble-override-toggle');
+    if (cb)  cb.checked = on;
+    if (dot) dot.style.background = on ? '#572e88' : 'rgba(87,46,136,0.25)';
+    if (lbl) lbl.style.background = on ? 'rgba(87,46,136,0.14)' : 'rgba(87,46,136,0.07)';
+  }
+
+  async function toggleEnsembleOverride(checked) {
+    if (!prod.wizard_data) prod.wizard_data = {};
+    prod.wizard_data.ensemble_override = checked === true;
+    const { error } = await sb.from('productions').update({ wizard_data: prod.wizard_data }).eq('id', prodId);
+    if (error) { showToast('Could not save: ' + error.message, true); return; }
+    syncEnsembleOverrideUI();
+    renderCharacters();
+    renderMaterialsList();
+    showToast(checked ? 'Everyone set to Ensemble Vocals.' : 'Ensemble override removed.');
+  }
+
   function renderCharacters() {
     const el = document.getElementById('characters-list');
     if (!el) return;
@@ -21467,10 +21501,12 @@ If you have any questions, don't hesitate to reach out.
 
     el.innerHTML = '<div class="char-grid">' + filtered.map(c => {
       const isEnsemble = c.role_type === 'Ensemble';
+      const ensOverride = isEnsembleOverrideOn();
       const roleClass  = ROLE_TYPE_CLASSES[c.role_type] || 'char-tag-role-ensemble';
       const roleTag    = (c.role_type && !isEnsemble) ? `<span class="char-tag ${roleClass}">${esc(c.role_type)}</span>` : '';
       const vocalTag   = c.vocal_type ? `<span class="char-tag char-tag-vocal">${esc(c.vocal_type)}</span>` : '';
-      const usageTag   = (c.vocal_usage && !isEnsemble) ? `<span class="char-tag char-tag-usage">${esc(c.vocal_usage)}</span>` : '';
+      const effectiveUsage = ensOverride ? 'Ensemble Vocals' : c.vocal_usage;
+      const usageTag   = effectiveUsage ? `<span class="char-tag char-tag-usage${ensOverride ? ' char-tag-usage--override' : ''}">${esc(effectiveUsage)}</span>` : '';
       const genderTag  = c.gender ? `<span class="char-tag char-tag-gender">${esc(displayGender(c.gender))}</span>` : '';
       const ageTag     = c.age_range ? `<span class="char-tag char-tag-gender">${esc(c.age_range)}</span>` : '';
       const countBadge = c.performer_count > 1 ? `<span style="font-size:0.72rem;color:#9a90b0;">×${c.performer_count}</span>` : '';
