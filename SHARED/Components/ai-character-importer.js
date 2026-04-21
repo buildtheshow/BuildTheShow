@@ -28,7 +28,7 @@
     `description (1–2 sentences or null), ` +
     `vocal_type (Soprano/Mezzo-Soprano/Alto/Tenor/Baritone/Bass/Non-Singing or null), ` +
     `vocal_range (text like "A3–E5" or null), ` +
-    `vocal_usage (Solos/Featured Solo/Group Singing/Light Singing/Harmony / Group/Non-Singing or null), ` +
+    `vocal_usage (one of: Primary Vocals/Featured Vocals/Vocal Group/Supporting Vocals/Ensemble Vocals/Minimal/Non-Singing or null — Primary Vocals: leads full songs; Featured Vocals: one clear standout solo moment; Vocal Group: recurring small group unit; Supporting Vocals: regular but never focal; Ensemble Vocals: full group numbers only; Minimal: sings once or barely; Non-Singing: no singing at all), ` +
     `singing_strength (Strong/Moderate/Light/Non-Singing or null), ` +
     `dancing_strength (No Dance/Beginner Friendly/Performer Level/Dance-Focused or null), ` +
     `performer_count (integer, default 1). ` +
