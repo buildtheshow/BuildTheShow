@@ -7764,6 +7764,29 @@
       font-size: 0.74rem;
       padding: 0.32rem 0.7rem;
     }
+    .team-color-picker {
+      display: flex;
+      gap: 0.28rem;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .team-color-dot {
+      width: 1.25rem;
+      height: 1.25rem;
+      border-radius: 999px;
+      border: 2px solid transparent;
+      background: var(--team-note-color);
+      box-shadow: 0 0 0.45rem color-mix(in srgb, var(--team-note-color) 45%, transparent);
+      cursor: pointer;
+    }
+    .team-color-dot.active {
+      border-color: #1a1530;
+    }
+    .team-color-dot:disabled {
+      opacity: 0.2;
+      cursor: not-allowed;
+      box-shadow: none;
+    }
     .inroom-bottom-roles {
       grid-area: roles;
     }
@@ -13122,6 +13145,34 @@
   </div>
 
   <!-- ── Opportunity Modal ── -->
+  <div class="modal-overlay" id="creative-assign-modal" onclick="if(event.target===this)closeCreativeAssignModal()">
+    <div class="modal" style="max-width:440px;">
+      <div class="modal-header">
+        <div>
+          <div class="modal-title">Assign Creative Team</div>
+          <div id="creative-assign-role-label" style="font-size:0.78rem;color:#86799f;font-weight:800;margin-top:0.12rem;"></div>
+        </div>
+        <button class="modal-close" type="button" aria-label="Close" onclick="closeCreativeAssignModal()">✕</button>
+      </div>
+      <div class="form-error-msg" id="creative-assign-error"></div>
+      <div class="form-group">
+        <label class="form-label">Name</label>
+        <input class="form-input" id="creative-assign-name" type="text" placeholder="e.g. Jamie Lee" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">Email <span class="opt">(optional, but useful)</span></label>
+        <input class="form-input" id="creative-assign-email" type="email" placeholder="name@example.com" />
+      </div>
+      <div style="font-size:0.78rem;color:#86799f;line-height:1.45;margin-bottom:0.9rem;">
+        This creates their audition team passcode access, so their notes are attached to their name and role.
+      </div>
+      <div style="display:flex;gap:0.65rem;align-items:center;">
+        <button class="btn-secondary" onclick="clearCreativeAssignment()" style="flex:0 0 auto;">Clear</button>
+        <button class="btn-primary" onclick="saveCreativeAssignment()" style="flex:1;justify-content:center;">Save & Create Access</button>
+      </div>
+    </div>
+  </div>
+
   <div class="modal-overlay" id="opp-modal">
     <div class="modal modal-wide">
       <div class="modal-header">
@@ -17359,6 +17410,8 @@ If you have any questions, don't hesitate to reach out.
   let teamConfig = null; // null = not loaded yet
   let auditionTeamMembers = [];
   let auditionAuthoredNotes = [];
+  let editingCreativeRoleIndex = null;
+  const TEAM_NOTE_COLORS = ['#572e88', '#7FAF8B', '#D68CB2', '#E3A46F', '#55acda', '#22cdd4', '#c2487a', '#8a7aac'];
 
   function templateToConfig(template) {
     return template.departments.map(dept => ({
@@ -17447,6 +17500,51 @@ If you have any questions, don't hesitate to reach out.
     return Array.from({ length: 6 }, () => alphabet[Math.floor(Math.random() * alphabet.length)]).join('');
   }
 
+  function nextAvailableTeamColor(memberId = null) {
+    const used = new Set((auditionTeamMembers || [])
+      .filter(m => m.id !== memberId && m.is_active !== false)
+      .map(m => String(m.note_color || '').toLowerCase())
+      .filter(Boolean));
+    return TEAM_NOTE_COLORS.find(color => !used.has(color.toLowerCase())) || TEAM_NOTE_COLORS[0];
+  }
+
+  function teamColorOptions(currentColor, memberId) {
+    const current = currentColor || nextAvailableTeamColor(memberId);
+    const usedByOthers = new Set((auditionTeamMembers || [])
+      .filter(m => m.id !== memberId && m.is_active !== false)
+      .map(m => String(m.note_color || '').toLowerCase())
+      .filter(Boolean));
+    return TEAM_NOTE_COLORS.map(color => {
+      const taken = usedByOthers.has(color.toLowerCase());
+      return `<button type="button" class="team-color-dot${current.toLowerCase() === color.toLowerCase() ? ' active' : ''}" ${taken ? 'disabled title="Already used by another team member"' : ''} style="--team-note-color:${esc(color)};" onclick="saveTeamMemberColor('${esc(memberId)}','${esc(color)}')"></button>`;
+    }).join('');
+  }
+
+  async function upsertTeamAccessForCreativeRole(role) {
+    if (!role?.person?.trim()) return;
+    await loadAuditionTeamMembers();
+    const existing = auditionTeamMembers.find(m =>
+      String(m.role || '').toLowerCase() === String(role.name || '').toLowerCase() &&
+      String(m.name || '').toLowerCase() === String(role.person || '').toLowerCase()
+    );
+    const payload = {
+      name: role.person.trim(),
+      email: role.email || null,
+      role: role.name,
+      note_color: existing?.note_color || nextAvailableTeamColor(existing?.id),
+      is_active: true,
+    };
+    if (existing) {
+      await sb.from('production_team_members').update(payload).eq('id', existing.id);
+      return;
+    }
+    await sb.from('production_team_members').insert({
+      production_id: prodId,
+      ...payload,
+      passcode: randomTeamPasscode(),
+    });
+  }
+
   async function syncCreativeRolesToTeamAccess() {
     const creative = teamConfig?.find(d => d.name === 'Creative Team');
     const roles = (creative?.roles || []).filter(r => r.person && r.person.trim());
@@ -17456,19 +17554,7 @@ If you have any questions, don't hesitate to reach out.
     }
     await loadAuditionTeamMembers();
     for (const role of roles) {
-      const existing = auditionTeamMembers.find(m =>
-        String(m.role || '').toLowerCase() === String(role.name || '').toLowerCase() &&
-        String(m.name || '').toLowerCase() === String(role.person || '').toLowerCase()
-      );
-      if (existing) continue;
-      await sb.from('production_team_members').insert({
-        production_id: prodId,
-        name: role.person.trim(),
-        email: role.email || null,
-        role: role.name,
-        passcode: randomTeamPasscode(),
-        is_active: true,
-      });
+      await upsertTeamAccessForCreativeRole(role);
     }
     await loadAuditionTeamMembers();
     renderTeamView(document.getElementById('tm-container'));
@@ -17481,6 +17567,20 @@ If you have any questions, don't hesitate to reach out.
     if (field === 'passcode' && !patch[field]) patch[field] = randomTeamPasscode();
     const { error } = await sb.from('production_team_members').update(patch).eq('id', memberId);
     if (error) { showToast('Could not save team access: ' + error.message, true); return; }
+    await loadAuditionTeamMembers();
+    renderTeamView(document.getElementById('tm-container'));
+  }
+
+  async function saveTeamMemberColor(memberId, color) {
+    const chosen = String(color || '').trim();
+    if (!TEAM_NOTE_COLORS.includes(chosen)) return;
+    const duplicate = auditionTeamMembers.find(m => m.id !== memberId && m.is_active !== false && String(m.note_color || '').toLowerCase() === chosen.toLowerCase());
+    if (duplicate) {
+      showToast(`${duplicate.name || 'Another team member'} already has that colour.`, true);
+      return;
+    }
+    const { error } = await sb.from('production_team_members').update({ note_color: chosen }).eq('id', memberId);
+    if (error) { showToast('Could not save note colour: ' + error.message, true); return; }
     await loadAuditionTeamMembers();
     renderTeamView(document.getElementById('tm-container'));
   }
@@ -17646,13 +17746,15 @@ If you have any questions, don't hesitate to reach out.
       const hasPerson = r.person && r.person.trim();
       return `
         <div style="border-radius:10px;overflow:hidden;border:1px solid rgba(87,46,136,0.2);box-shadow:0 1px 4px rgba(0,0,0,0.06);">
-          <div style="background:#572e88;padding:0.75rem 1rem;">
-            <span style="color:#fff;font-weight:700;font-size:0.875rem;">${r.name}</span>
+          <div style="background:#572e88;padding:0.75rem 1rem;display:flex;justify-content:space-between;align-items:center;gap:0.5rem;">
+            <span style="color:#fff;font-weight:700;font-size:0.875rem;">${esc(r.name)}</span>
+            ${hasPerson ? '<span style="width:0.5rem;height:0.5rem;border-radius:999px;background:#7FAF8B;box-shadow:0 0 0.45rem rgba(127,175,139,0.8);"></span>' : ''}
           </div>
           <div style="background:rgba(87,46,136,0.04);padding:1rem;min-height:5rem;display:flex;flex-direction:column;gap:0.5rem;">
             <div style="font-size:0.875rem;font-weight:${hasPerson ? '600' : '400'};color:${hasPerson ? '#1a1530' : '#b91c1c'};">
-              ${hasPerson ? r.person : 'Unfilled'}
+              ${hasPerson ? esc(r.person) : 'Unfilled'}
             </div>
+            ${r.email ? `<div style="font-size:0.76rem;color:#86799f;font-weight:700;word-break:break-word;">${esc(r.email)}</div>` : ''}
             <button onclick="editCreativeRole(${ri})" style="margin-top:auto;background:none;border:none;font-size:0.75rem;color:#572e88;cursor:pointer;font-family:inherit;padding:0;text-align:left;font-weight:600;">
               ${hasPerson ? 'Edit' : 'Assign someone'}
             </button>
@@ -17669,11 +17771,12 @@ If you have any questions, don't hesitate to reach out.
       </div>`;
 
     const accessRows = (auditionTeamMembers || []).map(m => `
-      <div style="display:grid;grid-template-columns:1.1fr 1.3fr 0.9fr 0.75fr auto;gap:0.55rem;align-items:center;padding:0.55rem 0;border-top:1px solid rgba(87,46,136,0.1);">
+      <div style="display:grid;grid-template-columns:1.1fr 1.3fr 0.9fr 0.75fr 1.05fr auto;gap:0.55rem;align-items:center;padding:0.55rem 0;border-top:1px solid rgba(87,46,136,0.1);">
         <input class="form-input" value="${esc(m.name || '')}" placeholder="Name" onblur="saveTeamMemberField('${esc(m.id)}','name',this.value)" style="min-height:34px;font-size:0.78rem;" />
         <input class="form-input" value="${esc(m.email || '')}" placeholder="Email" onblur="saveTeamMemberField('${esc(m.id)}','email',this.value)" style="min-height:34px;font-size:0.78rem;" />
         <input class="form-input" value="${esc(m.role || '')}" placeholder="Role" onblur="saveTeamMemberField('${esc(m.id)}','role',this.value)" style="min-height:34px;font-size:0.78rem;" />
         <input class="form-input" value="${esc(m.passcode || '')}" placeholder="Code" onblur="saveTeamMemberField('${esc(m.id)}','passcode',this.value)" style="min-height:34px;font-size:0.78rem;font-weight:900;text-transform:uppercase;" />
+        <div class="team-color-picker">${teamColorOptions(m.note_color || '#572e88', m.id)}</div>
         <div style="display:flex;gap:0.4rem;justify-content:flex-end;align-items:center;">
           <button class="btn-secondary" onclick="copyTeamPortalLink('${esc(m.id)}')" style="font-size:0.72rem;padding:0.3rem 0.55rem;">Copy Link</button>
           <label style="display:inline-flex;align-items:center;gap:0.28rem;font-size:0.72rem;font-weight:800;color:#6a5a80;white-space:nowrap;">
@@ -17723,11 +17826,61 @@ If you have any questions, don't hesitate to reach out.
     const creative = teamConfig.find(d => d.name === 'Creative Team');
     if (!creative) return;
     const role = creative.roles[ri];
-    const name = prompt(`Who is the ${role.name}?`, role.person || '');
-    if (name === null) return;
-    role.person = name.trim();
-    role.filled = !!role.person;
-    saveTeamConfig();
+    editingCreativeRoleIndex = ri;
+    document.getElementById('creative-assign-role-label').textContent = role.name || 'Creative Team';
+    document.getElementById('creative-assign-name').value = role.person || '';
+    document.getElementById('creative-assign-email').value = role.email || '';
+    document.getElementById('creative-assign-error').classList.remove('visible');
+    document.getElementById('creative-assign-modal').classList.add('open');
+    setTimeout(() => document.getElementById('creative-assign-name')?.focus(), 50);
+  }
+
+  function closeCreativeAssignModal() {
+    document.getElementById('creative-assign-modal').classList.remove('open');
+    editingCreativeRoleIndex = null;
+  }
+
+  async function saveCreativeAssignment() {
+    const creative = teamConfig?.find(d => d.name === 'Creative Team');
+    const role = creative?.roles?.[editingCreativeRoleIndex];
+    if (!role) return;
+    const name = document.getElementById('creative-assign-name')?.value.trim() || '';
+    const email = document.getElementById('creative-assign-email')?.value.trim() || '';
+    const err = document.getElementById('creative-assign-error');
+    if (!name) {
+      err.textContent = 'Please enter their name.';
+      err.classList.add('visible');
+      return;
+    }
+    role.person = name;
+    role.email = email;
+    role.filled = true;
+    await saveTeamConfig();
+    await upsertTeamAccessForCreativeRole(role);
+    await loadAuditionTeamMembers();
+    closeCreativeAssignModal();
+    renderTeamView(document.getElementById('tm-container'));
+    showToast(`${role.name} assigned.`);
+  }
+
+  async function clearCreativeAssignment() {
+    const creative = teamConfig?.find(d => d.name === 'Creative Team');
+    const role = creative?.roles?.[editingCreativeRoleIndex];
+    if (!role) return;
+    const oldPerson = role.person || '';
+    role.person = '';
+    role.email = '';
+    role.filled = false;
+    await saveTeamConfig();
+    if (oldPerson) {
+      const existing = auditionTeamMembers.find(m =>
+        String(m.role || '').toLowerCase() === String(role.name || '').toLowerCase() &&
+        String(m.name || '').toLowerCase() === String(oldPerson || '').toLowerCase()
+      );
+      if (existing) await sb.from('production_team_members').update({ is_active: false }).eq('id', existing.id);
+    }
+    await loadAuditionTeamMembers();
+    closeCreativeAssignModal();
     renderTeamView(document.getElementById('tm-container'));
   }
 
@@ -28680,8 +28833,8 @@ If you have any questions, don't hesitate to reach out.
     const notes = authoredNotesFor(appId, options);
     if (!notes.length) return '<div class="inroom-save-hint">No team notes yet.</div>';
     return `<div class="team-note-thread">${notes.map(note => `
-      <div class="team-note-item">
-        <div class="team-note-meta">${esc(authoredNoteLabel(note))}</div>
+      <div class="team-note-item" style="border-left-color:${esc(note.author_color || '#572e88')};background:${esc(note.author_color || '#572e88')}12;">
+        <div class="team-note-meta" style="color:${esc(note.author_color || '#572e88')};">${esc(authoredNoteLabel(note))}</div>
         <div class="team-note-body">${esc(note.body || '')}</div>
       </div>`).join('')}</div>`;
   }
@@ -28705,6 +28858,7 @@ If you have any questions, don't hesitate to reach out.
       author_name: 'Producer',
       author_email: orgEmail || null,
       author_role: 'Producer',
+      author_color: '#1c1917',
       team_member_id: null,
     };
     showSaveStatus('saving');
@@ -28751,6 +28905,7 @@ If you have any questions, don't hesitate to reach out.
         note: note.body,
         authorName: note.author_name,
         authorRole: note.author_role,
+        authorColor: note.author_color,
       });
     });
     if (!notes.length) {
@@ -28841,6 +28996,7 @@ If you have any questions, don't hesitate to reach out.
         note: note.body,
         authorName: note.author_name,
         authorRole: note.author_role,
+        authorColor: note.author_color,
       });
     });
     return results.length ? results : null;

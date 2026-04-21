@@ -34,6 +34,9 @@
     .type-dot { width:0.62rem; height:0.62rem; border-radius:50%; background:var(--c,#572e88); box-shadow:0 0 0.55rem color-mix(in srgb,var(--c,#572e88) 50%,transparent); }
     .type-name { font-weight:900; }
     .type-meta { color:#86799f; font-size:0.78rem; margin-left:auto; }
+    .session-strip { display:flex; gap:0.5rem; overflow-x:auto; padding-bottom:0.35rem; margin-bottom:0.8rem; }
+    .session-btn { border:1px solid rgba(87,46,136,0.12); background:#fff; color:#4a3d6b; font:inherit; font-size:0.8rem; font-weight:900; border-radius:12px; padding:0.55rem 0.7rem; white-space:nowrap; cursor:pointer; }
+    .session-btn.active { background:var(--c,#572e88); border-color:var(--c,#572e88); color:#fff; }
     .room-layout { display:grid; grid-template-columns:260px minmax(0,1fr); gap:1rem; align-items:start; }
     .performer-list { background:#fff; border:1px solid rgba(87,46,136,0.12); border-radius:14px; padding:0.6rem; display:grid; gap:0.35rem; max-height:72vh; overflow:auto; }
     .performer-btn { border:0; background:transparent; text-align:left; font:inherit; padding:0.45rem; border-radius:10px; cursor:pointer; color:#2c2443; font-weight:850; }
@@ -44,11 +47,15 @@
     .notes-panel { background:#fff; border:1px solid rgba(87,46,136,0.12); border-radius:14px; padding:0.9rem; }
     .notes-title { font-weight:950; margin-bottom:0.55rem; }
     .note-thread { display:grid; gap:0.5rem; margin:0.65rem 0; }
-    .note-item { border-left:3px solid #572e88; padding:0.4rem 0.55rem; background:rgba(87,46,136,0.04); border-radius:0 7px 7px 0; }
-    .note-meta { font-size:0.64rem; font-weight:950; letter-spacing:0.06em; text-transform:uppercase; color:#572e88; margin-bottom:0.18rem; }
+    .note-item { border-left:3px solid var(--note-color,#572e88); padding:0.4rem 0.55rem; background:color-mix(in srgb, var(--note-color,#572e88) 8%, transparent); border-radius:0 7px 7px 0; }
+    .note-meta { font-size:0.64rem; font-weight:950; letter-spacing:0.06em; text-transform:uppercase; color:var(--note-color,#572e88); margin-bottom:0.18rem; }
     .note-body { font-size:0.82rem; line-height:1.45; white-space:pre-wrap; color:#2c2443; }
     .compose { display:grid; gap:0.45rem; margin-top:0.7rem; }
     .compose textarea { min-height:92px; resize:vertical; }
+    .callback-list { display:grid; gap:0.7rem; }
+    .callback-row { display:grid; grid-template-columns:210px minmax(0,1fr); gap:0.75rem; background:#fff; border:1px solid rgba(87,46,136,0.12); border-left:4px solid #E3A46F; border-radius:12px; padding:0.75rem; }
+    .callback-name { font-weight:950; }
+    .callback-meta { color:#86799f; font-size:0.78rem; font-weight:750; margin-top:0.2rem; }
     .empty { text-align:center; color:#9a90b0; padding:2rem 1rem; }
     .error { color:#b91c1c; font-size:0.82rem; font-weight:800; margin-top:0.55rem; }
     @media (max-width: 860px) {
@@ -166,11 +173,11 @@
           </div>
           <div class="team-badge">
             <div class="team-badge-name">${esc(member.name)}</div>
-            <div class="team-badge-role">${esc(member.role)}</div>
+            <div class="team-badge-role"><span style="display:inline-block;width:0.55rem;height:0.55rem;border-radius:999px;background:${esc(member.note_color || '#572e88')};box-shadow:0 0 0.5rem ${esc(member.note_color || '#572e88')};margin-right:0.35rem;"></span>${esc(member.role)}</div>
           </div>
         </div>
         <div class="team-tabs">
-          ${['dashboard','schedule','types','inroom'].map(t => `<button class="team-tab${activeTab === t ? ' active' : ''}" onclick="setTab('${t}')">${({dashboard:'Dashboard',schedule:'Schedule',types:'All Audition Types',inroom:'In The Room'})[t]}</button>`).join('')}
+          ${['dashboard','schedule','types','inroom','callbacks'].map(t => `<button class="team-tab${activeTab === t ? ' active' : ''}" onclick="setTab('${t}')">${({dashboard:'Dashboard',schedule:'Schedule',types:'All Audition Types',inroom:'In The Room',callbacks:'Callback List'})[t]}</button>`).join('')}
         </div>
         <div id="team-content"></div>`;
       renderTab();
@@ -186,25 +193,48 @@
         </div>`;
       } else if (activeTab === 'schedule' || activeTab === 'types') {
         el.innerHTML = `<div class="team-card">${sessions.map(s => `<div class="type-row" style="--c:${colorForType(s.type)};"><span class="type-dot"></span><span class="type-name">${esc(s.name || labelForType(s.type))}</span><span class="type-meta">${esc(labelForType(s.type))}</span></div>`).join('') || '<div class="empty">No audition types yet.</div>'}</div>`;
+      } else if (activeTab === 'callbacks') {
+        renderCallbacks();
       } else {
         renderInRoom();
       }
     }
+    function sessionStrip() {
+      return `<div class="session-strip">${sessions.map(s => `<button class="session-btn${s.id === activeSessionId ? ' active' : ''}" style="--c:${colorForType(s.type)};" onclick="activeSessionId='${esc(s.id)}';renderTab();">${esc(s.name || labelForType(s.type))}</button>`).join('')}</div>`;
+    }
     function renderInRoom() {
-      const sessionOptions = sessions.map(s => `<option value="${esc(s.id)}" ${s.id === activeSessionId ? 'selected' : ''}>${esc(s.name || labelForType(s.type))}</option>`).join('');
       const app = applicants.find(a => a.id === activeApplicantId) || applicants[0];
       if (app) activeApplicantId = app.id;
       const list = applicants.map(a => `<button class="performer-btn${a.id === activeApplicantId ? ' active' : ''}" onclick="activeApplicantId='${esc(a.id)}';renderInRoom();">${esc(a.name || a.email || 'Performer')}</button>`).join('');
       document.getElementById('team-content').innerHTML = `
-        <div style="margin-bottom:0.75rem;"><select class="form-select" onchange="activeSessionId=this.value;renderInRoom();" style="max-width:320px;">${sessionOptions}</select></div>
+        ${sessionStrip()}
         <div class="room-layout">
           <div class="performer-list">${list || '<div class="empty">No performers yet.</div>'}</div>
           ${app ? renderRoomMain(app) : '<div class="empty">No performer selected.</div>'}
         </div>`;
     }
+    function renderCallbacks() {
+      const callbackSessions = sessions.filter(s => s.type === 'callback');
+      if (callbackSessions.length && !callbackSessions.some(s => s.id === activeSessionId)) activeSessionId = callbackSessions[0].id;
+      const rows = applicants.map(app => `
+        <div class="callback-row">
+          <div>
+            <div class="callback-name">${esc(app.name || app.email || 'Performer')}</div>
+            <div class="callback-meta">${esc(app.email || '')}</div>
+          </div>
+          <div>
+            ${noteThread(app.id, 'callback_list')}
+            <div class="compose">
+              <textarea class="form-textarea" id="callback-note-${esc(app.id)}" placeholder="Add callback list note..."></textarea>
+              <button class="btn-primary" onclick="addTeamNote('${esc(app.id)}','callback_list','callback-note-${esc(app.id)}')">Add Note</button>
+            </div>
+          </div>
+        </div>`).join('');
+      document.getElementById('team-content').innerHTML = `${sessionStrip()}<div class="callback-list">${rows || '<div class="empty">No performers yet.</div>'}</div>`;
+    }
     function noteThread(appId, area, characterId = null) {
       const rows = notes.filter(n => n.applicant_id === appId && n.note_area === area && (!activeSessionId || n.session_id === activeSessionId) && (!characterId || n.character_id === characterId));
-      return rows.length ? `<div class="note-thread">${rows.map(n => `<div class="note-item"><div class="note-meta">${esc([n.author_name,n.author_role].filter(Boolean).join(' · '))}</div><div class="note-body">${esc(n.body)}</div></div>`).join('')}</div>` : '<div class="team-card-sub">No team notes yet.</div>';
+      return rows.length ? `<div class="note-thread">${rows.map(n => `<div class="note-item" style="--note-color:${esc(n.author_color || '#572e88')};"><div class="note-meta">${esc([n.author_name,n.author_role].filter(Boolean).join(' · '))}</div><div class="note-body">${esc(n.body)}</div></div>`).join('')}</div>` : '<div class="team-card-sub">No team notes yet.</div>';
     }
     function renderRoomMain(app) {
       return `<div class="room-main">
@@ -214,13 +244,13 @@
           ${noteThread(app.id, 'in_room')}
           <div class="compose">
             <textarea class="form-textarea" id="team-note-body" placeholder="Write what you noticed. Everyone on the team will see this."></textarea>
-            <button class="btn-primary" onclick="addTeamNote('${esc(app.id)}')">Add Note</button>
+            <button class="btn-primary" onclick="addTeamNote('${esc(app.id)}','in_room','team-note-body')">Add Note</button>
           </div>
         </div>
       </div>`;
     }
-    async function addTeamNote(appId) {
-      const body = document.getElementById('team-note-body')?.value?.trim();
+    async function addTeamNote(appId, area = 'in_room', textareaId = 'team-note-body') {
+      const body = document.getElementById(textareaId)?.value?.trim();
       if (!body) return;
       const { data, error } = await sb.rpc('team_note_add', {
         p_production_id: prodId,
@@ -228,12 +258,13 @@
         p_applicant_id: appId,
         p_session_id: activeSessionId || null,
         p_character_id: null,
-        p_note_area: 'in_room',
+        p_note_area: area,
         p_body: body
       });
       if (error) { alert('Could not save note: ' + error.message); return; }
       if (data) notes.push(data);
-      renderInRoom();
+      if (activeTab === 'callbacks') renderCallbacks();
+      else renderInRoom();
     }
     if (passcode) {
       document.getElementById('team-passcode').value = passcode;
