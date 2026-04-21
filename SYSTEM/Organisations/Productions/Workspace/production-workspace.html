@@ -8637,6 +8637,94 @@
       grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
       gap: 0.55rem;
     }
+    .aud-type-flow {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+      gap: 0.85rem;
+    }
+    .aud-type-card {
+      --aud-type-color: #7FAF8B;
+      position: relative;
+      overflow: hidden;
+      border-radius: 18px;
+      padding: 1rem;
+      min-height: 150px;
+      background:
+        radial-gradient(circle at 88% 10%, color-mix(in srgb, var(--aud-type-color) 32%, transparent), transparent 34%),
+        linear-gradient(145deg, #ffffff 0%, color-mix(in srgb, var(--aud-type-color) 12%, #ffffff) 100%);
+      border: 1px solid color-mix(in srgb, var(--aud-type-color) 24%, rgba(53,39,86,0.1));
+      box-shadow: 0 10px 28px rgba(53,39,86,0.08);
+      cursor: pointer;
+      transition: transform 0.16s ease, box-shadow 0.16s ease;
+    }
+    .aud-type-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 14px 34px rgba(53,39,86,0.12);
+    }
+    .aud-type-card::before {
+      content: '';
+      position: absolute;
+      inset: auto -18px -26px auto;
+      width: 96px;
+      height: 96px;
+      border-radius: 999px;
+      background: color-mix(in srgb, var(--aud-type-color) 18%, transparent);
+    }
+    .aud-type-card-kicker {
+      position: relative;
+      z-index: 1;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      font-size: 0.66rem;
+      font-weight: 900;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: color-mix(in srgb, var(--aud-type-color) 58%, #1a1530);
+    }
+    .aud-type-card-dot {
+      width: 0.5rem;
+      height: 0.5rem;
+      border-radius: 999px;
+      background: var(--aud-type-color);
+      box-shadow: 0 0 0.75rem color-mix(in srgb, var(--aud-type-color) 55%, transparent);
+    }
+    .aud-type-card-title {
+      position: relative;
+      z-index: 1;
+      margin-top: 0.55rem;
+      font-size: 1.15rem;
+      font-weight: 950;
+      letter-spacing: -0.03em;
+      color: #1a1530;
+    }
+    .aud-type-card-meta {
+      position: relative;
+      z-index: 1;
+      margin-top: 0.35rem;
+      font-size: 0.78rem;
+      color: #6a5a80;
+      line-height: 1.4;
+    }
+    .aud-type-card-stats {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      gap: 0.45rem;
+      flex-wrap: wrap;
+      margin-top: 0.9rem;
+    }
+    .aud-type-pill {
+      display: inline-flex;
+      align-items: center;
+      border-radius: 999px;
+      padding: 0.28rem 0.55rem;
+      background: rgba(255,255,255,0.72);
+      border: 1px solid color-mix(in srgb, var(--aud-type-color) 20%, rgba(53,39,86,0.08));
+      color: #352756;
+      font-size: 0.72rem;
+      font-weight: 850;
+    }
     .aud-update-row {
       display: flex;
       align-items: center;
@@ -27002,6 +27090,48 @@ If you have any questions, don't hesitate to reach out.
     }).join('');
   }
 
+  function buildAuditionTypeFlow() {
+    const typeOrder = ['audition', 'dance_call', 'callback', 'other_audition'];
+    const fallbackLabels = {
+      audition: 'General Auditions',
+      dance_call: 'Dance Call',
+      callback: 'Callbacks',
+      other_audition: 'Other Auditions',
+    };
+    const grouped = new Map(typeOrder.map(type => [type, []]));
+    (audSessions || []).forEach(session => {
+      const type = typeOrder.includes(session.type) ? session.type : 'other_audition';
+      grouped.get(type).push(session);
+    });
+
+    return `<div class="aud-type-flow">${typeOrder.map(type => {
+      const sessions = grouped.get(type) || [];
+      const colour = auditionTypeColour(type);
+      const sessionIds = new Set(sessions.map(s => s.id));
+      const performerCount = (allApplicants || []).filter(app => {
+        const assignments = Array.isArray(app.slot_assignments) ? app.slot_assignments : [];
+        return assignments.some(a => sessionIds.has(a.session_id)) || sessionIds.has(app.session_id);
+      }).length;
+      const next = [...sessions]
+        .filter(session => session.date)
+        .sort((a, b) => `${a.date || '9999'} ${a.start_time || ''}`.localeCompare(`${b.date || '9999'} ${b.start_time || ''}`))[0];
+      const enabled = sessions.filter(s => s.enabled !== false).length;
+      const meta = next
+        ? `Next: ${formatAuditionVisualSessionDate(next)}`
+        : (sessions.length ? 'No date scheduled yet' : 'Not added yet');
+      return `<button type="button" class="aud-type-card" style="--aud-type-color:${esc(colour)};" onclick="openAuditionsSubTab('schedule')">
+        <div class="aud-type-card-kicker"><span class="aud-type-card-dot"></span>${esc(sessionTypeLabel(type))}</div>
+        <div class="aud-type-card-title">${esc(fallbackLabels[type])}</div>
+        <div class="aud-type-card-meta">${esc(meta)}</div>
+        <div class="aud-type-card-stats">
+          <span class="aud-type-pill">${sessions.length} session${sessions.length === 1 ? '' : 's'}</span>
+          <span class="aud-type-pill">${performerCount} performer${performerCount === 1 ? '' : 's'}</span>
+          ${sessions.length ? `<span class="aud-type-pill">${enabled} active</span>` : ''}
+        </div>
+      </button>`;
+    }).join('')}</div>`;
+  }
+
   function buildAuditionDashboardCards() {
     const recent = [...(allApplicants || [])]
       .sort((a, b) => String(b.created_at || b.updated_at || '').localeCompare(String(a.created_at || a.updated_at || '')))
@@ -27078,8 +27208,8 @@ If you have any questions, don't hesitate to reach out.
         </div>
       </div>
       <div class="aud-updates-card">
-        <div class="aud-updates-title">Latest Updates</div>
-        ${buildAuditionUpdateRows()}
+        <div class="aud-updates-title">Casting Flow</div>
+        ${buildAuditionTypeFlow()}
       </div>
       <div class="aud-dashboard-cards">
         <div class="aud-dashboard-cards-head">
