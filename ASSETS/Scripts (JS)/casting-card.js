@@ -22,8 +22,9 @@
  * - "specific" → white "S" in black dot (specific roles requested)
  * 
  * casting_categories options (mapped to symbols):
- * - ["She/Her", etc.] → Triangle (girl/woman roles)
- * - ["He/Him", etc.] → Square (boy/man roles)
+ * - ["She/Her"] → Triangle (She/Her roles)
+ * - ["He/Him"] → Square (He/Him roles)
+ * - ["They/Them"] → Hexagon (They/Them roles)
  * - ["They/Them", etc.] → Hexagon (neutral/non-binary)
  * - Multiple → Circle (multiple categories)
  * 

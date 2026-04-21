@@ -11158,9 +11158,8 @@
 
             <div style="width:1px;height:20px;background:rgba(87,46,136,0.15);margin:0 0.1rem;flex-shrink:0;"></div>
 
-            <label id="ensemble-override-toggle" style="display:inline-flex;align-items:center;gap:0.5rem;cursor:pointer;font-size:0.78rem;font-weight:700;color:#572e88;background:rgba(87,46,136,0.07);border:1.5px solid rgba(87,46,136,0.18);border-radius:20px;padding:0.3rem 0.75rem;user-select:none;" title="Everyone joins the ensemble — overrides individual vocal usage">
-              <input type="checkbox" id="ensemble-override-cb" style="display:none;" onchange="toggleEnsembleOverride(this.checked)" />
-              <span id="ensemble-override-dot" style="width:10px;height:10px;border-radius:50%;background:rgba(87,46,136,0.25);flex-shrink:0;transition:background 0.15s;"></span>
+            <label style="display:inline-flex;align-items:center;gap:0.4rem;cursor:pointer;font-size:0.78rem;font-weight:600;color:#4a3d6b;user-select:none;" title="Non-Singing roles will show as Ensemble Vocals">
+              <input type="checkbox" id="ensemble-override-cb" style="accent-color:#572e88;width:14px;height:14px;margin:0;cursor:pointer;" onchange="toggleEnsembleOverride(this.checked)" />
               Everyone in Ensemble
             </label>
 
@@ -12853,9 +12852,9 @@
         <select class="form-select" id="char-gender">
           <option value="">- select -</option>
           <option value="Any">Any / Open</option>
-          <option value="Woman / Girl">Woman / Girl</option>
-          <option value="Man / Boy">Man / Boy</option>
-          <option value="Non-binary / Gender-neutral">Non-binary / Gender-neutral</option>
+          <option value="She/Her">She/Her</option>
+          <option value="He/Him">He/Him</option>
+          <option value="They/Them">They/Them</option>
         </select>
       </div>
       <div class="form-group">
@@ -12985,7 +12984,7 @@
       <div style="text-align:center;font-size:0.75rem;color:#9a8aa0;margin:0.5rem 0;">or</div>
       <div class="form-group" style="margin-bottom:0.5rem;">
         <label class="form-label" style="font-size:0.8rem;">Paste character list / script text</label>
-        <textarea class="form-textarea" id="import-ai-text" rows="6" placeholder="JESS: Principal | 16-18 | Woman / Girl | Alto | Strong singer | some movement | 1 performer | Confident, quick-witted, and a natural leader. Pushes forward even when unsure.&#10;MR. THOMAS: Supporting | 40-60 | Man / Boy | Baritone | No dance required | 1 performer | Firm but fair. A steady presence who cares more than he lets on."></textarea>
+        <textarea class="form-textarea" id="import-ai-text" rows="6" placeholder="JESS: Principal | 16-18 | She/Her | Alto | Strong singer | some movement | 1 performer | Confident, quick-witted, and a natural leader. Pushes forward even when unsure.&#10;MR. THOMAS: Supporting | 40-60 | He/Him | Baritone | No dance required | 1 performer | Firm but fair. A steady presence who cares more than he lets on."></textarea>
       </div>
       <div id="import-ai-status" class="import-ai-loading-overlay" style="position:fixed;top:0;left:0;right:0;bottom:0;z-index:1000;background:rgba(200,190,210,0.92);backdrop-filter:grayscale(80%) blur(2px);flex-direction:column;align-items:center;justify-content:center;">
         <div style="font-size:1.1rem;color:#572e88;font-weight:700;text-align:center;margin-bottom:1rem;">Hey, this might take some time…</div>
@@ -13136,6 +13135,10 @@
    * ALTER TABLE productions ADD COLUMN IF NOT EXISTS rehearsal_location text;
    * ALTER TABLE productions ADD COLUMN IF NOT EXISTS performance_location text;
    * ALTER TABLE production_characters ADD COLUMN IF NOT EXISTS gender text;
+   * -- Migrate old gender values to pronoun-based system:
+   * UPDATE production_characters SET gender = 'She/Her'    WHERE gender IN ('Female','FEMALE','female','Woman / Girl');
+   * UPDATE production_characters SET gender = 'He/Him'     WHERE gender IN ('Male','MALE','male','Man / Boy');
+   * UPDATE production_characters SET gender = 'They/Them'  WHERE gender = 'Non-binary / Gender-neutral';
    * ALTER TABLE production_characters ADD COLUMN IF NOT EXISTS age_range text;
    * ALTER TABLE production_characters ADD COLUMN IF NOT EXISTS description text;
    * ALTER TABLE production_characters ADD COLUMN IF NOT EXISTS vocal_range text;
@@ -21456,13 +21459,8 @@ If you have any questions, don't hesitate to reach out.
   }
 
   function syncEnsembleOverrideUI() {
-    const on = isEnsembleOverrideOn();
-    const cb  = document.getElementById('ensemble-override-cb');
-    const dot = document.getElementById('ensemble-override-dot');
-    const lbl = document.getElementById('ensemble-override-toggle');
-    if (cb)  cb.checked = on;
-    if (dot) dot.style.background = on ? '#572e88' : 'rgba(87,46,136,0.25)';
-    if (lbl) lbl.style.background = on ? 'rgba(87,46,136,0.14)' : 'rgba(87,46,136,0.07)';
+    const cb = document.getElementById('ensemble-override-cb');
+    if (cb) cb.checked = isEnsembleOverrideOn();
   }
 
   async function toggleEnsembleOverride(checked) {
@@ -21501,7 +21499,7 @@ If you have any questions, don't hesitate to reach out.
 
     el.innerHTML = '<div class="char-grid">' + filtered.map(c => {
       const isEnsemble = c.role_type === 'Ensemble';
-      const ensOverride = isEnsembleOverrideOn();
+      const ensOverride = isEnsembleOverrideOn() && (!c.vocal_usage || c.vocal_usage === 'Non-Singing');
       const roleClass  = ROLE_TYPE_CLASSES[c.role_type] || 'char-tag-role-ensemble';
       const roleTag    = (c.role_type && !isEnsemble) ? `<span class="char-tag ${roleClass}">${esc(c.role_type)}</span>` : '';
       const vocalTag   = c.vocal_type ? `<span class="char-tag char-tag-vocal">${esc(c.vocal_type)}</span>` : '';
@@ -29641,9 +29639,18 @@ If you have any questions, don't hesitate to reach out.
   function displayGender(raw) {
     if (!raw) return '';
     const map = {
-      'male':   'Man / Boy',  'Male':   'Man / Boy',  'MALE':   'Man / Boy',
-      'female': 'Woman / Girl','Female': 'Woman / Girl','FEMALE': 'Woman / Girl',
-      'any':    'Any',         'Any':    'Any',         'ANY':    'Any',
+      'male':                      'He/Him',
+      'Male':                      'He/Him',
+      'MALE':                      'He/Him',
+      'Man / Boy':                 'He/Him',
+      'female':                    'She/Her',
+      'Female':                    'She/Her',
+      'FEMALE':                    'She/Her',
+      'Woman / Girl':              'She/Her',
+      'Non-binary / Gender-neutral': 'They/Them',
+      'any':                       'Any',
+      'Any':                       'Any',
+      'ANY':                       'Any',
     };
     return map[raw] ?? raw;
   }
