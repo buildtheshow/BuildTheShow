@@ -2910,6 +2910,8 @@
       flex-wrap: wrap;
       padding: 0;
       margin-bottom: 0.75rem;
+      font-family: inherit;
+      color: #4a3d6b;
     }
     .url-segment {
       display: inline;
@@ -2919,15 +2921,15 @@
       background: transparent;
       color: #4a3d6b;
       font-size: 0.92rem;
-      font-weight: 600;
+      font-weight: 700;
       line-height: 1.5;
       white-space: normal;
       max-width: none;
     }
     .url-segment-muted {
       background: transparent;
-      color: #7e7198;
-      font-weight: 500;
+      color: #4a3d6b;
+      font-weight: 700;
     }
     .url-segment-strong {
       background: transparent;
@@ -2948,7 +2950,7 @@
       max-width: 100%;
       min-height: 40px;
       padding: 0 0.85rem;
-      border-radius: 10px;
+      border-radius: 8px;
       background: #fff;
       border: 1px solid rgba(87,46,136,0.14);
       box-shadow: 0 1px 2px rgba(26,21,48,0.04);
@@ -2965,7 +2967,7 @@
       height: auto;
       font-size: 0.92rem;
       font-weight: 700;
-      color: #1a1530;
+      color: #4a3d6b;
     }
     .url-input-wrap .form-input:focus {
       box-shadow: none;
@@ -12027,9 +12029,9 @@
           <span class="url-segment url-segment-muted">https://buildtheshow.com/</span>
           <span id="pub-slug-org" class="url-segment">—</span>
           <span class="url-slash">/</span>
-          <span class="url-segment url-segment-muted">Audition/</span>
+          <span id="pub-url-section" class="url-segment url-segment-muted">Audition/</span>
           <div class="url-input-wrap">
-            <input id="pub-slug-input" class="form-input" type="text" placeholder="my-show-2026" oninput="this.dataset.dirty='1'" />
+            <input id="pub-slug-input" class="form-input" type="text" placeholder="my-show-2026" oninput="handleSlugInput(this)" />
           </div>
         </div>
         <!-- hidden element kept for slugBase() compat -->
@@ -12148,9 +12150,9 @@
               <span class="url-segment url-segment-muted">https://buildtheshow.com/</span>
               <span id="ps-slug-org" class="url-segment">loading…</span>
               <span class="url-slash">/</span>
-              <span class="url-segment url-segment-muted">Audition/</span>
+              <span id="ps-url-section" class="url-segment url-segment-muted">Audition/</span>
               <div class="url-input-wrap">
-                <input id="ps-slug-input" class="form-input" type="text" placeholder="my-show-2026" oninput="this.dataset.dirty='1'" />
+                <input id="ps-slug-input" class="form-input" type="text" placeholder="my-show-2026" oninput="handleSlugInput(this)" />
               </div>
             </div>
             <span id="ps-slug-base" style="display:none;"></span>
@@ -13048,6 +13050,7 @@
   let editingOppId   = null;
   let orgName        = '';
   let orgEmail       = '';
+  let orgAbbreviation = '';
   let orgSlug        = '';
 
   // ── Init ─────────────────────────────────────────────
@@ -13091,7 +13094,8 @@
           if (data) {
             orgName  = data.name  || '';
             orgEmail = data.email || '';
-            orgSlug  = data.slug  || (data.abbreviation || '').replace(/[^a-zA-Z0-9]/g, '') || '';
+            orgAbbreviation = data.abbreviation || '';
+            orgSlug  = data.slug  || (orgAbbreviation || '').replace(/[^a-zA-Z0-9]/g, '') || generateSlug(data.name || '') || '';
             etTogglePreview();
             // Update all slug org labels now that orgSlug is loaded
             ['pub-slug-org', 'ps-slug-org'].forEach(id => {
@@ -17630,7 +17634,7 @@ If you have any questions, don't hesitate to reach out.
 
   function getPageLink() {
     if (orgSlug && prod && prod.slug) {
-      return `${window.location.origin}/${orgSlug}/Audition/${prod.slug}`;
+      return `${window.location.origin}/${orgSlug}/${publicUrlSection()}/${prod.slug}`;
     }
     if (prod && prod.slug) {
       return `${window.location.origin}/audition/${encodeURIComponent(prod.slug)}`;
@@ -17639,11 +17643,38 @@ If you have any questions, don't hesitate to reach out.
   }
 
   function slugBase() {
-    return orgSlug ? `${window.location.origin}/${orgSlug}/Audition/` : `${window.location.origin}/audition/`;
+    return orgSlug ? `${window.location.origin}/${orgSlug}/${publicUrlSection()}/` : `${window.location.origin}/audition/`;
   }
 
   function orgPathDisplayLabel() {
-    return orgName || prod?.org_name || orgSlug || '—';
+    return orgSlug || generateSlug(orgName || prod?.org_name || orgAbbreviation || 'organisation');
+  }
+
+  function productionArchiveYear() {
+    const raw = prod?.end_date || prod?.start_date || prod?.season_year || '';
+    const match = String(raw).match(/\b(20\d{2}|19\d{2})\b/);
+    return match ? match[1] : String(new Date().getFullYear());
+  }
+
+  function isArchivedPublicPath() {
+    return ['wrapped', 'closed', 'archived'].includes(String(prod?.status || '').toLowerCase());
+  }
+
+  function publicUrlSection() {
+    return isArchivedPublicPath() ? `Archive${productionArchiveYear()}` : 'Audition';
+  }
+
+  function withQueryParam(url, key, value) {
+    const sep = String(url || '').includes('?') ? '&' : '?';
+    return `${url}${sep}${encodeURIComponent(key)}=${encodeURIComponent(value)}`;
+  }
+
+  function renderPublicUrlSectionLabels() {
+    const label = publicUrlSection() + '/';
+    ['pub-url-section', 'ps-url-section'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.textContent = label;
+    });
   }
 
   function generateSlug(str) {
@@ -17659,6 +17690,45 @@ If you have any questions, don't hesitate to reach out.
     });
   }
 
+  let _slugCheckTimer = null;
+  function handleSlugInput(input) {
+    if (!input) return;
+    input.dataset.dirty = '1';
+    const targetMsg = input.id === 'ps-slug-input' ? 'ps-slug-msg' : 'pub-slug-msg';
+    clearTimeout(_slugCheckTimer);
+    _slugCheckTimer = setTimeout(() => checkSlugAvailability(input.id, targetMsg), 350);
+  }
+
+  async function checkSlugAvailability(inputId, msgId) {
+    const input = document.getElementById(inputId);
+    const msg = document.getElementById(msgId);
+    if (!input || !msg) return true;
+
+    const slug = input.value.trim().toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
+    if (!slug) {
+      msg.style.display = 'none';
+      return false;
+    }
+
+    const { data, error } = await sb.from('productions').select('id,title').eq('slug', slug).neq('id', prodId).limit(1);
+    if (error) {
+      msg.textContent = 'Could not check URL availability.';
+      msg.style.cssText = 'display:block;font-size:0.78rem;border-radius:6px;padding:0.4rem 0.7rem;margin-top:0.5rem;background:rgba(220,60,60,0.08);color:#b91c1c;';
+      return false;
+    }
+
+    const taken = !!(data && data.length);
+    if (taken) {
+      msg.textContent = 'That URL is already taken.';
+      msg.style.cssText = 'display:block;font-size:0.78rem;border-radius:6px;padding:0.4rem 0.7rem;margin-top:0.5rem;background:rgba(220,60,60,0.08);color:#b91c1c;';
+      return false;
+    }
+
+    msg.textContent = 'URL is available.';
+    msg.style.cssText = 'display:block;font-size:0.78rem;border-radius:6px;padding:0.4rem 0.7rem;margin-top:0.5rem;background:rgba(34,197,94,0.1);color:#166534;';
+    return true;
+  }
+
   async function doSaveSlug(inputId, msgId) {
     const slugEl = document.getElementById(inputId);
     const msg    = document.getElementById(msgId);
@@ -17670,6 +17740,8 @@ If you have any questions, don't hesitate to reach out.
       return;
     }
     slugEl.value = slug;
+    const available = await checkSlugAvailability(inputId, msgId);
+    if (!available) return;
     const { error } = await sb.from('productions').update({ slug }).eq('id', prodId);
     if (error) {
       const txt = (error.message || '').includes('unique') || (error.message || '').includes('duplicate')
@@ -17707,6 +17779,7 @@ If you have any questions, don't hesitate to reach out.
     updatePubStatusHighlight(status);
 
     // Populate slug fields (both Public Page tab and Settings tab)
+    renderPublicUrlSectionLabels();
     ['pub-slug-org', 'ps-slug-org'].forEach(id => {
       const el = document.getElementById(id);
       if (el) el.textContent = orgPathDisplayLabel();
@@ -17722,11 +17795,11 @@ If you have any questions, don't hesitate to reach out.
     const linkText   = document.getElementById('pub-link-text');
 
     if (status !== 'draft') {
-      if (previewBtn) { previewBtn.href = link + '&preview=1'; previewBtn.style.display = 'inline-flex'; }
+      if (previewBtn) { previewBtn.href = withQueryParam(link, 'preview', '1'); previewBtn.style.display = 'inline-flex'; }
       if (linkCard)   linkCard.style.display = 'block';
       if (linkText)   linkText.textContent = link;
     } else {
-      if (previewBtn) { previewBtn.href = link + '&preview=1'; previewBtn.style.display = 'inline-flex'; }
+      if (previewBtn) { previewBtn.href = withQueryParam(link, 'preview', '1'); previewBtn.style.display = 'inline-flex'; }
       if (linkCard)   linkCard.style.display = 'none';
     }
 
