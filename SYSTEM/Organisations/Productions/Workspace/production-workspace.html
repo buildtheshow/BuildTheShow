@@ -9291,7 +9291,27 @@
     .aud-card-footer-row.vis-off .aud-vis-toggle .vis-slider { background-color: #d1c8e0; }
     .aud-card-footer-row.vis-off .aud-vis-toggle .vis-slider:before { background-color: #fff; }
 
-    /* Materials: 3-col grid with upload */
+    /* Materials: grouped upload sections */
+    .materials-toggle-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.8rem; margin-bottom: 1.15rem; }
+    @media (max-width: 680px) { .materials-toggle-row { grid-template-columns: 1fr; } }
+    .materials-toggle-card {
+      display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+      background: rgba(87,46,136,0.035); border: 1.5px solid rgba(87,46,136,0.12);
+      border-radius: 12px; padding: 0.9rem 1rem;
+    }
+    .materials-toggle-title { font-size: 0.92rem; font-weight: 800; color: #1a1530; }
+    .materials-toggle-hint { font-size: 0.76rem; color: #8a7ca0; margin-top: 0.16rem; }
+    .materials-section { margin-top: 1.1rem; }
+    .materials-section + .materials-section { margin-top: 1.5rem; }
+    .materials-section-head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: 0.65rem; }
+    .materials-section-title {
+      font-size: 0.72rem; font-weight: 900; letter-spacing: 0.09em; text-transform: uppercase;
+      color: #8a7ca0;
+    }
+    .materials-empty {
+      text-align: center; padding: 2.5rem 1rem; color: #9a90b0; font-size: 0.875rem;
+      border: 1.5px dashed rgba(87,46,136,0.16); border-radius: 12px; background: rgba(87,46,136,0.025);
+    }
     .mat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; }
     @media (max-width: 900px) { .mat-grid { grid-template-columns: repeat(2, 1fr); } }
     @media (max-width: 560px) { .mat-grid { grid-template-columns: 1fr; } }
@@ -10891,7 +10911,7 @@
         <div class="aud-inner-nav">
           <button class="aud-inner-btn active" data-inner="settings" onclick="switchAudInner('settings')">Audition Settings</button>
           <button class="aud-inner-btn" data-inner="characters" onclick="switchAudInner('characters')">Characters <span id="char-inner-count" style="display:none;background:rgba(87,46,136,0.12);color:#572e88;border-radius:20px;padding:0.05rem 0.45rem;font-size:0.72rem;font-weight:700;margin-left:0.2rem;"></span></button>
-          <button class="aud-inner-btn" data-inner="materials" onclick="switchAudInner('materials')">Audition Materials</button>
+          <button class="aud-inner-btn" data-inner="materials" onclick="switchAudInner('materials')">Materials</button>
           <button class="aud-inner-btn" data-inner="questions" onclick="switchAudInner('questions')">Audition Questions</button>
           <button class="aud-inner-btn" data-inner="prodinfo" onclick="switchAudInner('prodinfo')">Production Info</button>
         </div>
@@ -11004,8 +11024,8 @@
         <div id="aud-inner-materials" class="aud-inner" style="display:none;">
           <div class="page-header" style="margin-bottom:1.25rem;">
             <div>
-              <div class="page-title">Audition Materials</div>
-              <div class="page-subtitle">Add preparation materials per character for auditionees.</div>
+              <div class="page-title">Materials</div>
+              <div class="page-subtitle">Choose which audition material sets are active, then upload the files performers need.</div>
             </div>
           </div>
           <div id="materials-character-list">
@@ -21292,49 +21312,105 @@ If you have any questions, don't hesitate to reach out.
     renderCharacters(); renderMaterialsList(); updateCharInnerCount();
   }
 
+  function hasMaterialForType(type) {
+    return characters.some(c => type === 'callback'
+      ? (c.callback_material || c.callback_file_url)
+      : (c.audition_material || c.audition_file_url));
+  }
+
+  function getMaterialsSettings() {
+    const saved = prod?.wizard_data?.materials_enabled || {};
+    return {
+      audition: saved.audition !== undefined ? saved.audition !== false : true,
+      callback: saved.callback !== undefined ? saved.callback !== false : hasMaterialForType('callback')
+    };
+  }
+
+  function materialToggleCard(type, title, hint, checked) {
+    const inputId = `materials-toggle-${type}`;
+    return `<div class="materials-toggle-card">
+      <div>
+        <div class="materials-toggle-title">${esc(title)}</div>
+        <div class="materials-toggle-hint">${esc(hint)}</div>
+      </div>
+      <label class="aud-toggle" for="${inputId}">
+        <input id="${inputId}" type="checkbox" ${checked ? 'checked' : ''} onchange="toggleMaterialsSection('${type}', this.checked)" />
+        <span class="aud-toggle-track"></span>
+      </label>
+    </div>`;
+  }
+
+  function materialTypeSection(type) {
+    const isCallback = type === 'callback';
+    const sectionTitle = isCallback ? 'Callbacks' : 'General Auditions';
+    const inputIdPrefix = isCallback ? 'mat-cb' : 'mat-aud';
+    const fileIdPrefix = isCallback ? 'mat-cb-file' : 'mat-aud-file';
+    const materialField = isCallback ? 'callback_material' : 'audition_material';
+    const fileField = isCallback ? 'callback_file_url' : 'audition_file_url';
+    const placeholder = isCallback ? 'e.g. Sides from Act 1, Scene 2' : 'e.g. 16 bars of an upbeat MT song';
+
+    return `<div class="materials-section">
+      <div class="materials-section-head">
+        <div class="materials-section-title">${sectionTitle}</div>
+      </div>
+      <div class="mat-grid">${characters.map(c => {
+        const fileHTML = c[fileField]
+          ? `<a class="mat-file-link" href="${esc(c[fileField])}" target="_blank" title="${esc(c[fileField])}">View file</a>`
+          : '';
+        return `<div class="mat-card">
+          <div class="mat-card-name">${esc(c.name)}</div>
+          <div class="mat-section">
+            <div class="mat-section-label">${isCallback ? 'Callback Material' : 'Audition Material'}</div>
+            <input class="form-input" id="${inputIdPrefix}-${c.id}" type="text"
+                   placeholder="${esc(placeholder)}"
+                   value="${esc(c[materialField]||'')}" />
+            <div class="mat-file-row">
+              <button class="mat-upload-btn" onclick="document.getElementById('${fileIdPrefix}-${c.id}').click()">Upload File</button>
+              <input type="file" id="${fileIdPrefix}-${c.id}" style="display:none;"
+                     onchange="uploadMatFile('${c.id}','${type}',this)" />
+              ${fileHTML}
+            </div>
+          </div>
+          <button class="btn-secondary mat-save-btn" onclick="saveMaterial('${c.id}','${type}')">Save</button>
+        </div>`;
+      }).join('')}</div>
+    </div>`;
+  }
+
   function renderMaterialsList() {
     const el = document.getElementById('materials-character-list');
     if (!el) return;
+
+    const settings = getMaterialsSettings();
+    const toggles = `<div class="materials-toggle-row">
+      ${materialToggleCard('audition', 'General Auditions', 'Material for the first audition round.', settings.audition)}
+      ${materialToggleCard('callback', 'Callbacks', 'Separate material for callback invitations.', settings.callback)}
+    </div>`;
+
     if (!characters.length) {
-      el.innerHTML = '<div style="text-align:center;padding:3rem;color:#9a90b0;font-size:0.875rem;">Add characters in Audition Settings first.</div>';
+      el.innerHTML = toggles + '<div class="materials-empty">Add characters in Audition Settings first.</div>';
       return;
     }
-    el.innerHTML = '<div class="mat-grid">' + characters.map(c => {
-      const audFileHTML = c.audition_file_url
-        ? `<a class="mat-file-link" href="${esc(c.audition_file_url)}" target="_blank" title="${esc(c.audition_file_url)}">View file</a>`
-        : '';
-      const cbFileHTML = c.callback_file_url
-        ? `<a class="mat-file-link" href="${esc(c.callback_file_url)}" target="_blank" title="${esc(c.callback_file_url)}">View file</a>`
-        : '';
-      return `<div class="mat-card">
-        <div class="mat-card-name">${esc(c.name)}</div>
-        <div class="mat-section">
-          <div class="mat-section-label">Audition Material</div>
-          <input class="form-input" id="mat-aud-${c.id}" type="text"
-                 placeholder="e.g. 16 bars of an upbeat MT song"
-                 value="${esc(c.audition_material||'')}" />
-          <div class="mat-file-row">
-            <button class="mat-upload-btn" onclick="document.getElementById('mat-aud-file-${c.id}').click()">Upload File</button>
-            <input type="file" id="mat-aud-file-${c.id}" style="display:none;"
-                   onchange="uploadMatFile('${c.id}','audition',this)" />
-            ${audFileHTML}
-          </div>
-        </div>
-        <div class="mat-section">
-          <div class="mat-section-label">Callback Material</div>
-          <input class="form-input" id="mat-cb-${c.id}" type="text"
-                 placeholder="e.g. Sides from Act 1, Scene 2"
-                 value="${esc(c.callback_material||'')}" />
-          <div class="mat-file-row">
-            <button class="mat-upload-btn" onclick="document.getElementById('mat-cb-file-${c.id}').click()">Upload File</button>
-            <input type="file" id="mat-cb-file-${c.id}" style="display:none;"
-                   onchange="uploadMatFile('${c.id}','callback',this)" />
-            ${cbFileHTML}
-          </div>
-        </div>
-        <button class="btn-secondary mat-save-btn" onclick="saveMaterial('${c.id}')">Save</button>
-      </div>`;
-    }).join('') + '</div>';
+
+    const sections = [
+      settings.audition ? materialTypeSection('audition') : '',
+      settings.callback ? materialTypeSection('callback') : ''
+    ].join('');
+
+    el.innerHTML = toggles + (sections || '<div class="materials-empty">Turn on a material set to add uploads.</div>');
+  }
+
+  async function toggleMaterialsSection(type, checked) {
+    const wizardData = { ...(prod?.wizard_data || {}) };
+    wizardData.materials_enabled = { ...getMaterialsSettings(), [type]: checked === true };
+    const { error } = await sb.from('productions').update({ wizard_data: wizardData }).eq('id', prodId);
+    if (error) {
+      showToast('Could not save material settings: ' + error.message, true);
+      renderMaterialsList();
+      return;
+    }
+    prod.wizard_data = wizardData;
+    renderMaterialsList();
   }
 
   async function uploadMatFile(charId, type, inputEl) {
@@ -21361,12 +21437,20 @@ If you have any questions, don't hesitate to reach out.
     }
   }
 
-  async function saveMaterial(charId) {
-    const audMat = document.getElementById('mat-aud-'+charId)?.value.trim() || null;
-    const cbMat  = document.getElementById('mat-cb-'+charId)?.value.trim() || null;
-    await sb.from('production_characters').update({ audition_material: audMat, callback_material: cbMat }).eq('id', charId);
+  async function saveMaterial(charId, type) {
+    const updates = {};
+    if (!type || type === 'audition') {
+      const audEl = document.getElementById('mat-aud-'+charId);
+      if (audEl) updates.audition_material = audEl.value.trim() || null;
+    }
+    if (!type || type === 'callback') {
+      const cbEl = document.getElementById('mat-cb-'+charId);
+      if (cbEl) updates.callback_material = cbEl.value.trim() || null;
+    }
+    if (!Object.keys(updates).length) return;
+    await sb.from('production_characters').update(updates).eq('id', charId);
     const c = characters.find(x => x.id === charId);
-    if (c) { c.audition_material = audMat; c.callback_material = cbMat; }
+    if (c) Object.assign(c, updates);
   }
 
   async function toggleCharOnForm(id, checked) {
