@@ -1893,6 +1893,24 @@
       return usage;
     }
 
+    function materialPrefixForType(type) {
+      return ['audition', 'dance_call', 'callback', 'other'].includes(type) ? type : 'audition';
+    }
+
+    function materialLabelForType(type) {
+      if (type === 'audition') return 'General Audition Material';
+      if (type === 'dance_call') return 'Dance Call Material';
+      if (type === 'callback') return 'Callback Material';
+      if (type === 'other') return 'Other Audition Material';
+      return 'Audition Material';
+    }
+
+    function publicMaterialTypesForProduction() {
+      const present = new Set((_allSessions || []).map(s => materialPrefixForType(s.type || 'audition')));
+      if (!present.size) present.add('audition');
+      return ['audition', 'dance_call', 'callback', 'other'].filter(type => present.has(type));
+    }
+
     const _MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
     function fmtDate(str) {
@@ -2131,6 +2149,8 @@
     let publicAuditionsRealtimeChannel = null;
     let publicAuditionsRefreshTimer = null;
     let publicAuditionsResolvedProdId = '';
+    let activePublicAuditionTab = 'tab-fees';
+    let hasAppliedInitialPublicTab = false;
 
     function queuePublicAuditionsRefresh() {
       clearTimeout(publicAuditionsRefreshTimer);
@@ -2368,9 +2388,13 @@
 
       // Auto-switch to booking tab if ?book=1 or ?tab=sessions in URL
       const autoTab = params.get('tab') || (params.get('book') === '1' ? 'sessions' : null);
-      if (autoTab === 'sessions' || autoTab === 'book') {
+      if (!hasAppliedInitialPublicTab && (autoTab === 'sessions' || autoTab === 'book')) {
+        hasAppliedInitialPublicTab = true;
         const bookBtn = document.querySelector('.ai-tab[onclick*="tab-sessions"]');
         if (bookBtn) switchTab('tab-sessions', bookBtn);
+      } else {
+        hasAppliedInitialPublicTab = true;
+        applyPublicAuditionTab(activePublicAuditionTab);
       }
     }
 
@@ -2467,37 +2491,39 @@
        BUILD PAGE
     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
     function buildPage(prod, org, audConfig, events, characters, sessions, slotsBySession, userBooking, venueCity, venueMap, venueLabel, venueNameMap) {
+      const hasSessions = !!(sessions && sessions.length);
+      const activeTab = (!hasSessions && activePublicAuditionTab === 'tab-sessions') ? 'tab-fees' : activePublicAuditionTab;
       return `<div class="ai-page">
         ${buildHero(prod, org, audConfig, events, sessions, venueCity, venueMap, venueLabel, venueNameMap)}
         ${buildQuickBar(prod, events, sessions, slotsBySession)}
 
         <div class="ai-tab-bar-wrap">
           <div class="ai-tab-bar">
-            <button class="ai-tab active" onclick="switchTab('tab-fees', this)">Fees &amp; Costs</button>
-            <button class="ai-tab" onclick="switchTab('tab-guide', this)">FAQ</button>
-            <button class="ai-tab" onclick="switchTab('tab-calendar', this)">Schedule</button>
-            <button class="ai-tab" onclick="switchTab('tab-characters', this)">Character List</button>
-            ${sessions && sessions.length ? `<button class="ai-tab" onclick="switchTab('tab-sessions', this)">Audition</button>` : ''}
+            <button class="ai-tab ${activeTab === 'tab-fees' ? 'active' : ''}" onclick="switchTab('tab-fees', this)">Fees &amp; Costs</button>
+            <button class="ai-tab ${activeTab === 'tab-guide' ? 'active' : ''}" onclick="switchTab('tab-guide', this)">FAQ</button>
+            <button class="ai-tab ${activeTab === 'tab-calendar' ? 'active' : ''}" onclick="switchTab('tab-calendar', this)">Schedule</button>
+            <button class="ai-tab ${activeTab === 'tab-characters' ? 'active' : ''}" onclick="switchTab('tab-characters', this)">Character List</button>
+            ${hasSessions ? `<button class="ai-tab ${activeTab === 'tab-sessions' ? 'active' : ''}" onclick="switchTab('tab-sessions', this)">Audition</button>` : ''}
           </div>
         </div>
 
-        <div id="tab-fees" class="ai-tab-panel active">
+        <div id="tab-fees" class="ai-tab-panel ${activeTab === 'tab-fees' ? 'active' : ''}">
           ${buildFees(audConfig)}
         </div>
 
-        <div id="tab-guide" class="ai-tab-panel">
+        <div id="tab-guide" class="ai-tab-panel ${activeTab === 'tab-guide' ? 'active' : ''}">
           ${buildPrepareAndFaq(prod, audConfig)}
         </div>
 
-        <div id="tab-calendar" class="ai-tab-panel">
+        <div id="tab-calendar" class="ai-tab-panel ${activeTab === 'tab-calendar' ? 'active' : ''}">
           ${buildCalendar(events)}
         </div>
 
-        <div id="tab-characters" class="ai-tab-panel">
+        <div id="tab-characters" class="ai-tab-panel ${activeTab === 'tab-characters' ? 'active' : ''}">
           ${buildRolePreview(characters, audConfig, prod)}
         </div>
 
-        ${sessions && sessions.length ? `<div id="tab-sessions" class="ai-tab-panel">
+        ${hasSessions ? `<div id="tab-sessions" class="ai-tab-panel ${activeTab === 'tab-sessions' ? 'active' : ''}">
           ${buildAuditionCards(sessions, slotsBySession, prod, audConfig, userBooking, venueMap, venueLabel)}
         </div>` : ''}
 
@@ -5348,13 +5374,22 @@
     /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
        TAB SWITCHER
     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+    function applyPublicAuditionTab(panelId) {
+      const fallback = 'tab-fees';
+      const panel = document.getElementById(panelId) || document.getElementById(fallback);
+      const nextPanelId = panel?.id || fallback;
+      activePublicAuditionTab = nextPanelId;
+      document.querySelectorAll('.ai-tab-panel').forEach(p => p.classList.toggle('active', p.id === nextPanelId));
+      document.querySelectorAll('.ai-tab').forEach(t => {
+        const handler = t.getAttribute('onclick') || '';
+        t.classList.toggle('active', handler.includes(`'${nextPanelId}'`) || handler.includes(`"${nextPanelId}"`));
+      });
+      if (nextPanelId === 'tab-calendar') setTimeout(initApollo, 50);
+    }
+
     function switchTab(panelId, btn) {
-      document.querySelectorAll('.ai-tab-panel').forEach(p => p.classList.remove('active'));
-      document.querySelectorAll('.ai-tab').forEach(t => t.classList.remove('active'));
-      const panel = document.getElementById(panelId);
-      if (panel) panel.classList.add('active');
-      if (btn) btn.classList.add('active');
-      if (panelId === 'tab-calendar') setTimeout(initApollo, 50);
+      activePublicAuditionTab = panelId;
+      applyPublicAuditionTab(panelId);
     }
 
     function toggleAuditionInfoCard(cardEl) {
@@ -5815,10 +5850,7 @@
       const df = _charDisplayFields;
       // If a field isn't in the settings object at all, default to showing it
       const show = f => !(f in df) || df[f] === true;
-      const materialSetOn = type => {
-        if (type === 'callback') return _publicMaterialsSettings.callback === true;
-        return _publicMaterialsSettings.audition !== false;
-      };
+      const materialSetOn = type => _publicMaterialsSettings[type] !== false;
       const fileNameFromUrl = url => {
         if (!url) return '';
         try {
@@ -5862,26 +5894,20 @@
           fact('Movement', c.dancing_strength, '#db2777', DANCE_DESCS[c.dancing_strength] || '');
         }
         const materialItems = [];
-        if (materialSetOn('audition') && (c.audition_material || c.audition_file_url)) {
-          const fileName = c.audition_file_name || fileNameFromUrl(c.audition_file_url) || 'Audition material';
+        publicMaterialTypesForProduction().forEach(type => {
+          const p = materialPrefixForType(type);
+          const materialText = c[`${p}_material`];
+          const fileUrl = c[`${p}_file_url`];
+          const fileName = c[`${p}_file_name`] || fileNameFromUrl(fileUrl) || materialLabelForType(p);
+          if (!materialSetOn(p) || (!materialText && !fileUrl)) return;
           materialItems.push(`<div class="ai-role-materials ai-role-fact" style="--dot-color:#7c3aed;">
             <span class="ai-role-fact-dot"></span>
-            <span><span class="ai-role-fact-label">General Audition Material:</span>
-            ${c.audition_material ? `<div class="ai-role-material-note">${esc(c.audition_material)}</div>` : ''}
-            ${c.audition_file_url ? `<a class="ai-role-material-link" href="${esc(c.audition_file_url)}" target="_blank" rel="noopener" download="${esc(fileName)}">Download Material</a>` : ''}
+            <span><span class="ai-role-fact-label">${esc(materialLabelForType(p))}:</span>
+            ${materialText ? `<div class="ai-role-material-note">${esc(materialText)}</div>` : ''}
+            ${fileUrl ? `<a class="ai-role-material-link" href="${esc(fileUrl)}" target="_blank" rel="noopener" download="${esc(fileName)}">Download Material</a>` : ''}
             </span>
           </div>`);
-        }
-        if (materialSetOn('callback') && (c.callback_material || c.callback_file_url)) {
-          const fileName = c.callback_file_name || fileNameFromUrl(c.callback_file_url) || 'Callback material';
-          materialItems.push(`<div class="ai-role-materials ai-role-fact" style="--dot-color:#9333ea;">
-            <span class="ai-role-fact-dot"></span>
-            <span><span class="ai-role-fact-label">Callback Material:</span>
-            ${c.callback_material ? `<div class="ai-role-material-note">${esc(c.callback_material)}</div>` : ''}
-            ${c.callback_file_url ? `<a class="ai-role-material-link" href="${esc(c.callback_file_url)}" target="_blank" rel="noopener" download="${esc(fileName)}">Download Material</a>` : ''}
-            </span>
-          </div>`);
-        }
+        });
         const factsHTML = [...facts, ...materialItems].length
           ? `<div class="ai-role-facts">${[...facts, ...materialItems].join('')}</div>`
           : '';
