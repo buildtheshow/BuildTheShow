@@ -14363,6 +14363,7 @@
     { value: 'cast_announcement',    label: 'Cast Announcement',    color: '#166534' },
     { value: 'not_cast',             label: 'Not Cast',             color: '#475569' },
     { value: 'rehearsal',            label: 'Rehearsal Info',       color: '#0e7490' },
+    { value: 'team_invite',          label: 'Team Access Invite',   color: '#7e3af2' },
     { value: 'general',              label: 'General',              color: '#7c3aed' },
   ];
 
@@ -14426,6 +14427,18 @@
         { token: '{{opening_night}}',        label: 'Opening Night',      sample: () => prod?.end_date ? fmtDate(prod.end_date) : 'Friday, July 18' },
       ],
     },
+    {
+      group: 'Team Access',
+      color: '#7e3af2',
+      bg:    'rgba(126,58,242,0.12)',
+      vars: [
+        { token: '{{team_member_name}}',  label: 'Team Member Name',  sample: 'Alex Rivera' },
+        { token: '{{team_member_role}}',  label: 'Team Member Role',  sample: 'Vocal Director' },
+        { token: '{{team_member_email}}', label: 'Team Member Email', sample: 'alex@example.com' },
+        { token: '{{team_access_code}}',  label: 'Access Code',       sample: 'XK9-247' },
+        { token: '{{portal_link}}',       label: 'Portal Link',       sample: 'https://buildtheshow.com/audition-team' },
+      ],
+    },
   ];
 
   const ET_SMART_RULES = {
@@ -14458,6 +14471,11 @@
       required: ['{{performer_first_name}}', '{{rehearsal_start_date}}'],
       recommended: ['{{rehearsal_schedule}}', '{{show_venue}}', '{{opening_night}}'],
       note: 'Rehearsal emails should make next steps and scheduling details easy to skim.'
+    },
+    team_invite: {
+      required: ['{{team_member_name}}', '{{portal_link}}', '{{team_access_code}}'],
+      recommended: ['{{team_member_role}}', '{{team_member_email}}', '{{show_name}}'],
+      note: 'Team invite emails must include the portal link and access code — without these, your team member cannot log in.'
     },
     general: {
       required: ['{{performer_first_name}}'],
@@ -14876,6 +14894,38 @@ We're so excited to get started. See you in the room!
 {{org_name}}`,
     },
     {
+      name: 'Team Access Invite',
+      category: 'team_invite',
+      trigger: 'team_invite',
+      subject: '{{show_name}} — your audition team access',
+      body: `Hi {{team_member_name}},
+
+You've been added to the audition team for {{show_name}} as {{team_member_role}}.
+
+─────────────────────────────
+YOUR LOGIN DETAILS
+─────────────────────────────
+Portal link:  {{portal_link}}
+Email:        {{team_member_email}}
+Access code:  {{team_access_code}}
+─────────────────────────────
+
+HOW TO GET IN:
+1. Click the portal link above (or copy and paste it into your browser).
+2. Enter your email address: {{team_member_email}}
+3. Enter your access code: {{team_access_code}}
+4. Click "Open Auditions."
+
+ONCE YOU'RE IN:
+- Go to the Profile tab first. Choose your note colour and add a headshot and bio.
+- Use "In The Room" during auditions to pull up performer cards and write notes.
+- Your notes are saved to your name and visible to the full team in real time.
+
+If you have any trouble logging in, reply to this email and we'll sort it out.
+
+{{org_name}}`,
+    },
+    {
       name: 'General Announcement',
       category: 'general',
       trigger: 'manual',
@@ -14931,6 +14981,16 @@ If you have any questions, don't hesitate to reach out.
       await etSeedStarterTemplates();
       return;
     }
+    // Backfill team_invite for productions that existed before this template was added
+    if (!_etTemplates.some(t => t.category === 'team_invite')) {
+      const starter = ET_STARTER_TEMPLATES.find(t => t.category === 'team_invite');
+      if (starter) {
+        await sb.from('email_templates').insert({ ...starter, production_id: prodId });
+        const { data: refreshed } = await sb.from('email_templates')
+          .select('*').eq('production_id', prodId).order('created_at', { ascending: false });
+        _etTemplates = refreshed || _etTemplates;
+      }
+    }
     renderEmailTemplates();
   }
 
@@ -14958,6 +15018,7 @@ If you have any questions, don't hesitate to reach out.
       cast_announcement:    '#22c55e',
       not_cast:             '#94a3b8',
       rehearsal:            '#22cdd4',
+      team_invite:          '#7e3af2',
       general:              '#a87af8',
     };
     list.innerHTML = `<div class="et-inbox">
@@ -17656,6 +17717,20 @@ If you have any questions, don't hesitate to reach out.
     return lines.join('\n');
   }
 
+  function teamInviteSubstituteTokens(text, member) {
+    if (!text) return '';
+    const link = teamPortalUrl(member);
+    return text
+      .split('{{team_member_name}}').join(member.name || 'there')
+      .split('{{team_member_role}}').join(member.role || 'a team member')
+      .split('{{team_member_email}}').join(member.email || '')
+      .split('{{team_access_code}}').join(member.passcode || '')
+      .split('{{portal_link}}').join(link)
+      .split('{{show_name}}').join(prod?.title || 'this production')
+      .split('{{org_name}}').join(orgName || 'The production team')
+      .split('{{director_name}}').join(prod?.director || '');
+  }
+
   async function emailTeamInvite(memberId) {
     const member = auditionTeamMembers.find(m => m.id === memberId);
     if (!member) return;
@@ -17663,8 +17738,17 @@ If you have any questions, don't hesitate to reach out.
       showToast('Add an email address before sending the invite.', true);
       return;
     }
-    const subject = `${prod?.title || 'Production'} audition team access`;
-    const message = teamInviteMessage(member);
+
+    // Use the live team_invite template if one exists, else fall back to default message
+    const liveTemplate = etLatestTemplateForCategory('team_invite');
+    let subject, message;
+    if (liveTemplate) {
+      subject = teamInviteSubstituteTokens(liveTemplate.subject, member);
+      message = teamInviteSubstituteTokens(liveTemplate.body, member);
+    } else {
+      subject = `${prod?.title || 'Production'} audition team access`;
+      message = teamInviteMessage(member);
+    }
     try {
       const { data, error } = await sb.functions.invoke('send-email', {
         body: {
