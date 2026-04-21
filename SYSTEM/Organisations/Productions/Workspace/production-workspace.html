@@ -9378,16 +9378,36 @@
       border-bottom: 1px solid rgba(87,46,136,0.08);
     }
     .mat-slot:last-child { border-bottom: 0; }
+    .mat-slot-header {
+      display: flex;
+      align-items: center;
+    }
+    .mat-slot-toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.45rem;
+      cursor: pointer;
+      user-select: none;
+    }
+    .mat-slot-toggle input[type="checkbox"] {
+      accent-color: #572e88;
+      width: 14px;
+      height: 14px;
+      margin: 0;
+      cursor: pointer;
+    }
     .mat-slot-label {
-      font-size: 0.64rem;
+      font-size: 0.72rem;
       font-weight: 900;
-      letter-spacing: 0.07em;
+      letter-spacing: 0.06em;
       text-transform: uppercase;
       color: #9a8db5;
     }
+    .mat-slot--on .mat-slot-label { color: #1a1530; }
     .mat-slot-body {
       display: grid;
       gap: 0.45rem;
+      padding-top: 0.35rem;
     }
     .mat-detail-panel {
       display: grid;
@@ -21626,12 +21646,15 @@ If you have any questions, don't hesitate to reach out.
   function materialRows(type) {
     const meta = materialTypeMeta(type);
     return `<div class="mat-list">${characters.map(c => {
+      const activeTypes = Array.isArray(c[meta.typesField]) ? c[meta.typesField] : [];
       const slotsHTML = meta.slots.map(slot => {
+        const on    = activeTypes.includes(slot.label);
         const url   = c[slot.urlField]  || '';
         const name  = c[slot.nameField] || materialFileNameFromUrl(url) || `${slot.label} file`;
         const notes = c[slot.notesField] || '';
         const fileId  = `${meta.fileIdPrefix}-${slot.key}-${c.id}`;
         const notesId = `${meta.inputIdPrefix}-${slot.key}-${c.id}`;
+        const cbId    = `${meta.inputIdPrefix}-tog-${slot.key}-${c.id}`;
         const fileHTML = url
           ? `<span class="mat-file-name" title="${esc(name)}">${esc(name)}</span>
              <div class="mat-file-actions">
@@ -21640,9 +21663,15 @@ If you have any questions, don't hesitate to reach out.
                <button type="button" class="mat-file-action" onclick="deleteMaterialFile('${esc(c.id)}','${esc(type)}','${esc(slot.key)}')">Remove</button>
              </div>`
           : '<span class="mat-file-missing">No file</span>';
-        return `<div class="mat-slot">
-          <div class="mat-slot-label">${esc(slot.label)}</div>
-          <div class="mat-slot-body">
+        return `<div class="mat-slot${on ? ' mat-slot--on' : ''}">
+          <div class="mat-slot-header">
+            <label class="mat-slot-toggle" for="${esc(cbId)}">
+              <input type="checkbox" id="${esc(cbId)}"${on ? ' checked' : ''}
+                     onchange="toggleMaterialSlot('${esc(c.id)}','${esc(type)}','${esc(slot.label)}',this.checked)" />
+              <span class="mat-slot-label">${esc(slot.label)}</span>
+            </label>
+          </div>
+          ${on ? `<div class="mat-slot-body">
             <div class="mat-note-row">
               <input class="form-input" id="${esc(notesId)}" type="text"
                      placeholder="${esc(slot.placeholder)}"
@@ -21655,7 +21684,7 @@ If you have any questions, don't hesitate to reach out.
                      onchange="uploadMatFile('${esc(c.id)}','${esc(type)}','${esc(slot.key)}',this)" />
               ${fileHTML}
             </div>
-          </div>
+          </div>` : ''}
         </div>`;
       }).join('');
       return `<div class="mat-row">
@@ -21826,6 +21855,19 @@ If you have any questions, don't hesitate to reach out.
       if (btn) { btn.disabled = false; btn.textContent = originalBtnText; }
       inputEl.value = '';
     }
+  }
+
+  async function toggleMaterialSlot(charId, type, label, checked) {
+    const meta = materialTypeMeta(type);
+    const c = characters.find(x => x.id === charId);
+    if (!c) return;
+    const current = new Set(Array.isArray(c[meta.typesField]) ? c[meta.typesField] : []);
+    checked ? current.add(label) : current.delete(label);
+    const updates = { [meta.typesField]: [...current] };
+    const { error } = await sb.from('production_characters').update(updates).eq('id', charId);
+    if (error) { showToast('Could not save: ' + error.message, true); renderMaterialsList(); return; }
+    Object.assign(c, updates);
+    renderMaterialsList();
   }
 
   async function deleteMaterialFile(charId, type, slot) {
