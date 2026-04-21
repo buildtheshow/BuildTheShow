@@ -9427,10 +9427,21 @@
     }
     .mat-note-row {
       display: grid;
-      grid-template-columns: minmax(180px, 1fr) auto;
-      gap: 0.55rem;
+      grid-template-columns: 1fr auto;
+      gap: 0.45rem;
       align-items: center;
     }
+    .mat-notes-status {
+      font-size: 0.68rem;
+      font-weight: 700;
+      white-space: nowrap;
+      color: #9a8db5;
+      min-width: 48px;
+      text-align: right;
+    }
+    .mat-notes-status.is-saved  { color: #3a9e5f; }
+    .mat-notes-status.is-error  { color: #c0392b; }
+    .mat-notes-status.is-saving { color: #9a8db5; }
     @media (max-width: 860px) { .mat-note-row { grid-template-columns: 1fr; } }
     .mat-file-row {
       display: flex;
@@ -9530,7 +9541,6 @@
       text-align: center;
       background: #f8f6fb;
     }
-    .mat-save-btn { padding: 0.36rem 0.75rem; font-size: 0.76rem; font-weight: 800; white-space: nowrap; }
 
     /* ── Character tiles ── */
     .char-tile { background:#fff; border:1px solid rgba(87,46,136,0.12); border-radius:12px; padding:0.85rem 1rem; margin-bottom:0.5rem; display:flex; align-items:center; gap:0.75rem; }
@@ -21675,8 +21685,9 @@ If you have any questions, don't hesitate to reach out.
             <div class="mat-note-row">
               <input class="form-input" id="${esc(notesId)}" type="text"
                      placeholder="${esc(slot.placeholder)}"
-                     value="${esc(notes)}" />
-              <button class="btn-secondary mat-save-btn" onclick="saveMaterial('${esc(c.id)}','${esc(type)}','${esc(slot.key)}')">Save</button>
+                     value="${esc(notes)}"
+                     oninput="debounceSaveMaterial('${esc(c.id)}','${esc(type)}','${esc(slot.key)}')" />
+              <span class="mat-notes-status" id="${esc(notesId)}-status"></span>
             </div>
             <div class="mat-file-row">
               <button class="mat-upload-btn" onclick="document.getElementById('${esc(fileId)}').click()">${url ? 'Replace file' : 'Upload file'}</button>
@@ -21884,18 +21895,39 @@ If you have any questions, don't hesitate to reach out.
     renderMaterialsList();
   }
 
+  const _matSaveTimers = {};
+
+  function debounceSaveMaterial(charId, type, slotKey) {
+    const key = `${charId}-${type}-${slotKey}`;
+    clearTimeout(_matSaveTimers[key]);
+    const meta = materialTypeMeta(type);
+    const statusEl = document.getElementById(`${meta.inputIdPrefix}-${slotKey}-${charId}-status`);
+    if (statusEl) { statusEl.textContent = ''; statusEl.className = 'mat-notes-status'; }
+    _matSaveTimers[key] = setTimeout(() => saveMaterial(charId, type, slotKey), 900);
+  }
+
   async function saveMaterial(charId, type, slotKey) {
     const meta = materialTypeMeta(type);
     const slotMeta = meta.slots.find(s => s.key === slotKey);
     if (!slotMeta) return;
-    const el = document.getElementById(`${meta.inputIdPrefix}-${slotKey}-${charId}`);
+    const inputId = `${meta.inputIdPrefix}-${slotKey}-${charId}`;
+    const el = document.getElementById(inputId);
     if (!el) return;
+    const statusEl = document.getElementById(`${inputId}-status`);
+    if (statusEl) { statusEl.textContent = 'Saving…'; statusEl.className = 'mat-notes-status is-saving'; }
     const updates = { [slotMeta.notesField]: el.value.trim() || null };
     const { error } = await sb.from('production_characters').update(updates).eq('id', charId);
-    if (error) { showToast('Could not save notes: ' + error.message, true); return; }
+    if (error) {
+      if (statusEl) { statusEl.textContent = 'Not saved'; statusEl.className = 'mat-notes-status is-error'; }
+      return;
+    }
     const c = characters.find(x => x.id === charId);
     if (c) Object.assign(c, updates);
-    showToast('Notes saved.');
+    if (statusEl) {
+      statusEl.textContent = 'Saved';
+      statusEl.className = 'mat-notes-status is-saved';
+      setTimeout(() => { if (statusEl) { statusEl.textContent = ''; statusEl.className = 'mat-notes-status'; } }, 2500);
+    }
   }
 
   async function toggleCharOnForm(id, checked) {
