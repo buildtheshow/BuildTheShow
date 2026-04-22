@@ -132,7 +132,7 @@
         width: 100%; box-sizing: border-box; padding: 0.55rem 0.75rem;
         border: 1px solid rgba(87,46,136,0.2); border-radius: 8px;
         font-size: 0.8rem; color: #1a1530; resize: vertical; min-height: 110px;
-        font-family: inherit; margin-bottom: 0.75rem;
+        font-family: var(--bts-font); margin-bottom: 0.75rem;
       }
       #aci-picker-textarea:focus { outline: none; border-color: #572e88; }
       #aci-picker-submit {

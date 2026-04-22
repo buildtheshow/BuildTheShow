@@ -196,7 +196,7 @@
         }
         .status-action {
           font-size: 0.64rem;
-          letter-spacing: -0.01em;
+          letter-spacing: 0;
           flex: 0 0 auto;
         }
         .status-action + .status-action::before {
