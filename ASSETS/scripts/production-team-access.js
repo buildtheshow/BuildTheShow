@@ -204,6 +204,33 @@ async function copyTeamPortalLink(memberId = null, btn = null) {
   }
 }
 
+async function removeProductionTeamMember(memberId, btn = null) {
+  const member = auditionTeamMembers.find(m => String(m.id) === String(memberId));
+  if (!member) return;
+  const label = member.name || member.email || 'this team member';
+  const ok = window.confirm(`Remove ${label} from production team access?`);
+  if (!ok) return;
+
+  const markDone = ptcBtnFeedback?.(btn, { working: 'Removing...', done: 'Removed', restore: false });
+  const { error } = await sb.from('production_team_members').delete().eq('id', memberId);
+  if (error) {
+    markDone?.(false);
+    showToast('Could not remove team member: ' + error.message, true);
+    return;
+  }
+
+  const role = findCreativeRoleForTeamMember(member);
+  if (role) {
+    role.team_member_id = null;
+    role.email = role.email || member.email || '';
+    await saveTeamConfig();
+  }
+  auditionTeamMembers = auditionTeamMembers.filter(m => String(m.id) !== String(memberId));
+  markDone?.(true);
+  setTimeout(() => renderTeamView(document.getElementById('tm-container')), 500);
+  showToast(`${label} removed from team access.`);
+}
+
 function teamInviteMessage(member) {
   const link = teamPortalUrl();
   const prodTitle = prod?.title || 'this production';

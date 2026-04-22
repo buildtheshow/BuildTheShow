@@ -17,6 +17,7 @@ function renderProductionTeamCard(member, options = {}) {
   const m = member || {};
   const id = escapeHtml(m.id || '');
   const name = escapeHtml(m.name || '');
+  const firstName = escapeHtml((m.name || '').trim().split(/\s+/)[0] || 'Firstname');
   const role = escapeHtml(m.role || '');
   const email = escapeHtml(m.email || '');
   const phone = escapeHtml(m.phone || m.phone_number || '');
@@ -67,31 +68,32 @@ function renderProductionTeamCard(member, options = {}) {
           <div class="production-team-card-face production-team-card-back">
             <div class="production-team-card-back-head">
               <div class="production-team-card-back-topline">
-                <div class="production-team-card-back-role">${role || 'Production Team'}</div>
                 <label class="production-team-card-back-status ${statusClass}" onclick="event.stopPropagation();">
                   <input type="checkbox" ${isActive ? 'checked' : ''} onchange="toggleTeamMemberAccess('${id}',this.checked)" />
                   ${isActive ? 'Active' : 'Inactive'}
                 </label>
               </div>
-              <div class="production-team-card-back-name">${name || 'Firstname Lastname'}</div>
+              <div class="production-team-card-back-identity" title="${name || 'Firstname Lastname'}">
+                <span class="production-team-card-back-dot" aria-hidden="true"></span>
+                <span class="production-team-card-back-first-name">${firstName}</span>
+                <span class="production-team-card-back-role-inline">(${role || 'Production Team'})</span>
+              </div>
               <div class="production-team-card-back-contact">
+                <div class="production-team-card-back-contact-item">
+                  <span>Phone Number:</span>
+                  <strong>${phone || 'No phone saved'}</strong>
+                </div>
                 <div class="production-team-card-back-contact-item production-team-card-back-contact-email">
-                  <span>Email</span>
+                  <span>Email:</span>
                   <input class="production-team-card-back-input" type="email" value="${email}" placeholder="No email saved" onclick="event.stopPropagation();" onblur="saveTeamMemberField('${id}','email',this.value)" />
                 </div>
-                ${phone ? `
-                  <div class="production-team-card-back-contact-item">
-                    <span>Phone</span>
-                    <strong>${phone}</strong>
-                  </div>
-                ` : ''}
                 <div class="production-team-card-back-contact-item production-team-card-back-contact-passcode">
-                  <span>Passcode</span>
-                <div class="production-team-card-back-passcode-row" onclick="event.stopPropagation();">
-                  <input id="passcode-input-${id}" class="production-team-card-back-input production-team-card-back-passcode" value="${passcode}" placeholder="6 digits" inputmode="numeric" maxlength="6" pattern="[0-9]{6}" oninput="this.value=this.value.replace(/\\D+/g,'').slice(0,6)" />
-                  <button class="production-team-card-back-icon" type="button" onclick="saveTeamMemberPasscode('${id}',this)" title="Save access code">Save</button>
-                  <button class="production-team-card-back-icon" type="button" onclick="regenPasscode('${id}',this)" title="Generate new 6-digit passcode">↻</button>
-                </div>
+                  <span>Passcode:</span>
+                  <div class="production-team-card-back-passcode-row" onclick="event.stopPropagation();">
+                    <input id="passcode-input-${id}" class="production-team-card-back-input production-team-card-back-passcode" value="${passcode}" placeholder="6 digits" inputmode="numeric" maxlength="6" pattern="[0-9]{6}" oninput="this.value=this.value.replace(/\\D+/g,'').slice(0,6)" />
+                    <button class="production-team-card-back-icon" type="button" onclick="saveTeamMemberPasscode('${id}',this)" title="Save access code">Save</button>
+                    <button class="production-team-card-back-icon" type="button" onclick="regenPasscode('${id}',this)" title="Generate new 6-digit passcode">↻</button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -108,6 +110,7 @@ function renderProductionTeamCard(member, options = {}) {
                 <button class="production-team-card-back-action" type="button" onclick="copyProductionTeamCardPasscode('${id}',this)">Copy Code</button>
                 ${bio ? `<button class="production-team-card-back-action" type="button" onclick="downloadTeamBio('${id}')">Bio ↓</button>` : ''}
                 ${m.headshot_url ? `<a class="production-team-card-back-action" href="${escapeHtml(m.headshot_url)}" target="_blank" download>Headshot ↓</a>` : ''}
+                <button class="production-team-card-back-action is-danger" type="button" onclick="removeProductionTeamMember('${id}',this)">Remove</button>
                 <div class="production-team-card-back-hint">Click to flip back</div>
               </div>
             ` : ''}
