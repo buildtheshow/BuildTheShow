@@ -14093,28 +14093,36 @@
     const portalParts = teamPortalPathParts();
     const usePortalLogin = teamAccessMode && portalParts.org && portalParts.show;
     if (!prodId && !usePortalLogin) { if (err) err.textContent = 'Production not found. Check your link.'; return; }
-    const { data, error } = usePortalLogin
-      ? await sb.rpc('team_member_start_session_for_portal', {
+    let data, error;
+    if (usePortalLogin) {
+      ({ data, error } = await sb.rpc('team_member_start_session_for_portal', {
           p_org_abbrev: portalParts.org,
           p_show_slug: portalParts.show,
           p_email: teamAccessEmail,
           p_passcode: teamAccessPasscode,
           p_user_agent: navigator.userAgent || null,
-        })
-      : await sb.rpc('team_member_start_session', {
+        }));
+      if (error && prodId) {
+        console.warn('[BTS] portal team login failed, retrying with resolved production id', error);
+      }
+    }
+    if (!usePortalLogin || (error && prodId)) {
+      ({ data, error } = await sb.rpc('team_member_start_session', {
           p_production_id: prodId,
           p_email: teamAccessEmail,
           p_passcode: teamAccessPasscode,
           p_user_agent: navigator.userAgent || null,
-        });
+        }));
+    }
     const result = Array.isArray(data) ? data[0] : data;
     if (error || !result) {
+      console.warn('[BTS] team login failed', error || { message: 'No team member returned' });
       if (options.silent) {
         forgetTeamAccess();
         showTeamAccessLogin();
         return;
       }
-      if (err) err.textContent = 'That email and access code did not match.';
+      if (err) err.textContent = error?.message || 'That email and access code did not match.';
       return;
     }
     if (result.production_id) prodId = result.production_id;
