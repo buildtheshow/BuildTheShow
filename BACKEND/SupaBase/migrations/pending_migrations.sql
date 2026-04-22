@@ -423,7 +423,7 @@ AS $$
   WHERE lower(regexp_replace(COALESCE(o.slug, o.abbreviation, o.name), '[^a-zA-Z0-9]', '', 'g')) = lower(regexp_replace(p_org_abbrev, '[^a-zA-Z0-9]', '', 'g'))
     AND (
       lower(COALESCE(p.slug, '')) = lower(p_show_slug)
-      OR lower(regexp_replace(COALESCE(p.title, p.name, ''), '[^a-zA-Z0-9]+', '-', 'g')) = lower(regexp_replace(p_show_slug, '[^a-zA-Z0-9]+', '-', 'g'))
+      OR lower(regexp_replace(COALESCE(p.title, ''), '[^a-zA-Z0-9]+', '-', 'g')) = lower(regexp_replace(p_show_slug, '[^a-zA-Z0-9]+', '-', 'g'))
     )
   LIMIT 1;
 $$;

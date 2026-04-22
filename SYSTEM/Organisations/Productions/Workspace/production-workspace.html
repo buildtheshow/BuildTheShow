@@ -13901,6 +13901,132 @@
   let prod     = null;
   let prodId   = null;
   let calDate  = new Date();
+  let teamAccessMode = false;
+  let teamAccessMember = null;
+  let teamAccessEmail = '';
+  let teamAccessPasscode = '';
+
+  const TEAM_ACCESS_PERMISSIONS = {
+    producer: { label: 'Producer', canViewContact: true, canEditSchedule: true, canCheckIn: true, canViewSettings: true, canCreateNotes: true, canEditOwnNotes: true, canDeleteOwnNotes: true, canEditAllNotes: true, canDeleteAllNotes: true },
+    director: { label: 'Director', canViewContact: false, canEditSchedule: false, canCheckIn: false, canViewSettings: false, canCreateNotes: true, canEditOwnNotes: true, canDeleteOwnNotes: true, canEditAllNotes: false, canDeleteAllNotes: false },
+    vocal_director: { label: 'Vocal Director', canViewContact: false, canEditSchedule: false, canCheckIn: false, canViewSettings: false, canCreateNotes: true, canEditOwnNotes: true, canDeleteOwnNotes: true, canEditAllNotes: false, canDeleteAllNotes: false },
+    choreographer: { label: 'Choreographer', canViewContact: false, canEditSchedule: false, canCheckIn: false, canViewSettings: false, canCreateNotes: true, canEditOwnNotes: true, canDeleteOwnNotes: true, canEditAllNotes: false, canDeleteAllNotes: false },
+  };
+
+  function isTeamAccessRequest() {
+    return /\/Team\/?$/i.test(window.location.pathname) || new URLSearchParams(window.location.search).get('team') === '1';
+  }
+
+  function normalizeTeamRole(role) {
+    const raw = String(role || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+    if (raw === 'musical_director' || raw === 'music_director') return 'vocal_director';
+    return TEAM_ACCESS_PERMISSIONS[raw] ? raw : 'director';
+  }
+
+  function teamAccessPermissions() {
+    return TEAM_ACCESS_PERMISSIONS[normalizeTeamRole(teamAccessMember?.role)] || TEAM_ACCESS_PERMISSIONS.director;
+  }
+
+  async function resolveTeamProductionIdFromPath() {
+    const parts = window.location.pathname.replace(/\/+$/, '').split('/').filter(Boolean);
+    if (parts.length < 2) return '';
+    try {
+      const { data, error } = await sb.rpc('resolve_team_portal', {
+        p_org_abbrev: parts[0],
+        p_show_slug: parts[1],
+      });
+      if (error) throw error;
+      return data || '';
+    } catch (error) {
+      console.error('[BTS] team production lookup failed', error);
+      return '';
+    }
+  }
+
+  function showTeamAccessLogin(message = '') {
+    document.body.classList.add('team-access-login-visible');
+    document.getElementById('team-access-login-overlay')?.remove();
+    const overlay = document.createElement('div');
+    overlay.id = 'team-access-login-overlay';
+    overlay.innerHTML = `
+      <style>
+        #team-access-login-overlay { position:fixed; inset:0; z-index:9999; background:linear-gradient(160deg,#1f1138 0%,#3d1d6e 50%,#572e88 100%); display:flex; align-items:center; justify-content:center; padding:1.5rem; }
+        .team-access-login-card { width:min(420px,100%); background:#fff; border-radius:20px; overflow:hidden; box-shadow:0 28px 70px rgba(15,6,35,0.45); }
+        .team-access-login-head { background:#572e88; padding:1.25rem 1.5rem; position:relative; overflow:hidden; }
+        .team-access-login-head::before { content:''; position:absolute; inset:0; background-image:url('/ASSETS/Images/Grid-Glow-Purple.png'); background-size:cover; opacity:0.07; pointer-events:none; }
+        .team-access-login-logo { height:22px; display:block; position:relative; z-index:1; margin-bottom:0.7rem; }
+        .team-access-login-label { font-size:0.68rem; font-weight:900; letter-spacing:0.13em; text-transform:uppercase; color:rgba(255,255,255,0.55); position:relative; z-index:1; }
+        .team-access-login-body { padding:1.5rem; }
+        .team-access-login-body h1 { margin:0 0 0.3rem; font-size:1.45rem; font-weight:950; letter-spacing:-0.03em; color:#1a1530; }
+        .team-access-login-body p { color:#6a5a80; margin:0 0 1.1rem; line-height:1.5; font-size:0.88rem; }
+        .team-access-login-error { color:#b91c1c; font-size:0.82rem; font-weight:800; margin-top:0.55rem; min-height:1.2em; }
+      </style>
+      <div class="team-access-login-card">
+        <div class="team-access-login-head">
+          <img src="/ASSETS/Images/logo-long-white.png" alt="Build The Show" class="team-access-login-logo" />
+          <div class="team-access-login-label">Audition Team Access</div>
+        </div>
+        <div class="team-access-login-body">
+          <h1>Welcome</h1>
+          <p>Enter the email address and access code from your invite.</p>
+          <input class="form-input" id="team-access-email" placeholder="Your email address" type="email" autocomplete="email" />
+          <input class="form-input" id="team-access-passcode" placeholder="6-digit access code" autocomplete="one-time-code" inputmode="numeric" style="margin-top:0.55rem;" />
+          <button class="btn-primary" onclick="loginTeamAccess()" style="width:100%;justify-content:center;margin-top:0.85rem;">Open Auditions</button>
+          <div class="team-access-login-error" id="team-access-login-error">${esc(message)}</div>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+  }
+
+  async function loginTeamAccess() {
+    const err = document.getElementById('team-access-login-error');
+    teamAccessEmail = document.getElementById('team-access-email')?.value?.trim() || '';
+    teamAccessPasscode = document.getElementById('team-access-passcode')?.value?.trim() || '';
+    if (err) err.textContent = '';
+    if (!prodId) { if (err) err.textContent = 'Production not found. Check your link.'; return; }
+    if (!teamAccessEmail || !teamAccessPasscode) { if (err) err.textContent = 'Enter your email and access code.'; return; }
+    const { data, error } = await sb.rpc('team_member_login', { p_production_id: prodId, p_email: teamAccessEmail, p_passcode: teamAccessPasscode });
+    if (error || !data?.length) { if (err) err.textContent = 'That email and access code did not match.'; return; }
+    teamAccessMember = data[0];
+    document.getElementById('team-access-login-overlay')?.remove();
+    document.body.classList.remove('team-access-login-visible');
+    await bootProductionWorkspace(new URLSearchParams(window.location.search));
+    applyTeamAccessMode();
+    switchProdTab('auditions');
+    openAuditionsSubTab('dashboard');
+  }
+
+  function applyTeamAccessMode() {
+    if (!teamAccessMode) return;
+    document.body.classList.add('team-access-mode');
+    const perms = teamAccessPermissions();
+    const nameEl = document.getElementById('hdr-title');
+    const subEl = document.getElementById('hdr-sub');
+    if (nameEl && prod) nameEl.textContent = prod.title || 'Production';
+    if (subEl) subEl.textContent = [teamAccessMember?.name, perms.label].filter(Boolean).join(' · ');
+    document.querySelectorAll('.prod-tabs > .prod-tab').forEach(tab => {
+      const isAllowed = tab.id === 'auditions-parent-tab' || tab.dataset.tab === 'auditions';
+      tab.style.display = isAllowed ? '' : 'none';
+    });
+    document.getElementById('casting-wrap')?.style.setProperty('display', 'none');
+    document.getElementById('asub-setup')?.style.setProperty('display', 'none');
+    document.getElementById('asub-checkin')?.style.setProperty('display', 'none');
+    document.getElementById('view-contact-info-btn')?.style.setProperty('display', 'none');
+    document.getElementById('view-contact-info-btn2')?.style.setProperty('display', 'none');
+    document.querySelectorAll('[data-producer-only], .producer-only').forEach(el => { el.style.display = 'none'; });
+    renderAuditionsSidebarSubmenu();
+  }
+
+  function teamCan(action) {
+    if (!teamAccessMode) return true;
+    const perms = teamAccessPermissions();
+    if (action === 'viewContact') return !!perms.canViewContact;
+    if (action === 'editSchedule') return !!perms.canEditSchedule;
+    if (action === 'checkIn') return !!perms.canCheckIn;
+    if (action === 'settings') return !!perms.canViewSettings;
+    if (action === 'createNotes') return !!perms.canCreateNotes;
+    return true;
+  }
 
   // ── Global autosave indicator ──────────────────────────
   let _saveFadeTimer = null;
@@ -13975,14 +14101,32 @@
   // ── Init ─────────────────────────────────────────────
   async function init() {
     const params = new URLSearchParams(window.location.search);
+    teamAccessMode = isTeamAccessRequest();
     prodId = params.get('id');
-    if (!prodId) { window.location.href = '../../org-dashboard.html'; return; }
+    if (!prodId && teamAccessMode) prodId = await resolveTeamProductionIdFromPath();
+    if (!prodId) {
+      if (teamAccessMode) showTeamAccessLogin('Production not found. Check your link.');
+      else window.location.href = '../../org-dashboard.html';
+      return;
+    }
+
+    if (teamAccessMode) {
+      showTeamAccessLogin();
+      return;
+    }
 
     const { data: { session } } = await sb.auth.getSession();
     if (!session) { window.location.href = '../../../Members/Account/login.html'; return; }
+    await bootProductionWorkspace(params);
+  }
 
+  async function bootProductionWorkspace(params) {
     const { data, error } = await sb.from('productions').select('*').eq('id', prodId).single();
-    if (error || !data) { window.location.href = '../../org-dashboard.html'; return; }
+    if (error || !data) {
+      if (teamAccessMode) showTeamAccessLogin('Production not found. Check your link.');
+      else window.location.href = '../../org-dashboard.html';
+      return;
+    }
 
     prod = data;
     updateTeamUrlDisplays();
@@ -18453,9 +18597,9 @@ If you have any questions, don't hesitate to reach out.
     headerLeft.innerHTML = `
       <div class="aud-session-topnav" style="--session-accent:${esc(headerAccent)};">
         <div class="aud-day-topnav">
-          <button type="button" class="aud-day-topnav-btn${_audHeaderActiveTool === 'checkin'     ? ' active' : ''}" onclick="${ciClick}">Check In</button>
+          ${teamAccessMode ? '' : `<button type="button" class="aud-day-topnav-btn${_audHeaderActiveTool === 'checkin'     ? ' active' : ''}" onclick="${ciClick}">Check In</button>`}
           <button type="button" class="aud-day-topnav-btn${_audHeaderActiveTool === 'inroom'      ? ' active' : ''}" onclick="${irClick}">In the Room</button>
-          ${isDanceCall ? '' : `
+          ${teamAccessMode || isDanceCall ? '' : `
           <button type="button" class="aud-day-topnav-btn${_audHeaderActiveTool === 'castingboard'? ' active' : ''}" onclick="${cbCastClick}">Casting Board</button>
           <button type="button" class="aud-day-topnav-btn${_audHeaderActiveTool === 'callbacks' ? ' active' : ''}" onclick="openAuditionsSubTab('callbacks')">${listLabel}</button>
           `}
@@ -18586,6 +18730,7 @@ If you have any questions, don't hesitate to reach out.
   function getAuditionNavSessions() {
     return [...(audSessions || [])]
       .filter(session => !!session)
+      .filter(session => !teamAccessMode || (session.enabled !== false && session.is_visible !== false && session.show_to_applicants !== false))
       .sort((a, b) => {
         const aHasDate = !!a.date;
         const bHasDate = !!b.date;
@@ -18628,6 +18773,9 @@ If you have any questions, don't hesitate to reach out.
       const dot = `<span style="flex:0 0 auto;width:0.42rem;height:0.42rem;border-radius:999px;background:${esc(dotColor)};box-shadow:0 0 0.4rem ${esc(dotColor)};margin-right:0.45rem;display:inline-block;vertical-align:middle;"></span>`;
       return `<div class="prod-sub-item" id="asub-session-${esc(session.id)}" onclick="openAuditionSessionWorkspace('${esc(session.id)}')" style="display:flex;align-items:center;">${dot}${esc(label)}</div>`;
     }).join('');
+    if (teamAccessMode) {
+      document.getElementById('asub-setup')?.style.setProperty('display', 'none');
+    }
     // Re-apply whichever sidebar item was active before the re-render
     if (_sidebarSubId) document.getElementById(_sidebarSubId)?.classList.add('active');
   }
@@ -18646,6 +18794,10 @@ If you have any questions, don't hesitate to reach out.
 
   function openAuditionsSubTab(subTab) {
     closeMobileSidebar();
+    if (teamAccessMode) {
+      const blocked = new Set(['overview','setup','checkin','run','castingboard','callbacks']);
+      if (blocked.has(subTab)) subTab = 'dashboard';
+    }
     switchProdTab('auditions');
     const isSessionSubTab = String(subTab).startsWith('session:');
     saveWorkspaceNavState({ auditionsSubTab: subTab });
@@ -18711,6 +18863,8 @@ If you have any questions, don't hesitate to reach out.
   }
 
   function openAuditionSessionWorkspace(sessionId, tool = 'checkin') {
+    if (teamAccessMode && tool === 'checkin') tool = 'inroom';
+    if (teamAccessMode && tool === 'castingboard') tool = 'inroom';
     activeAuditionNavSessionId = sessionId;
     activeAuditionNavTool = tool;
     _audHeaderActiveTool = tool; // keep header showing, update active tab
@@ -22041,8 +22195,8 @@ If you have any questions, don't hesitate to reach out.
             <div class="aud-ov-today-meta">${timeLabel}${countLabel}</div>
           </div>
           <div class="aud-ov-today-btns">
-            <button class="aud-ov-today-btn" onclick="openAuditionsSubTab('checkin')">Check-In</button>
-            <button class="aud-ov-today-btn" onclick="openAuditionsSubTab('inroom')">In The Room</button>
+            ${teamAccessMode ? '' : `<button class="aud-ov-today-btn" onclick="openAuditionsSubTab('checkin')">Check-In</button>`}
+            <button class="aud-ov-today-btn" onclick="${teamAccessMode ? `openAuditionSessionWorkspace('${esc(s.id)}','inroom')` : `openAuditionsSubTab('inroom')`}">In The Room</button>
           </div>
         </div>`;
     }).join('');
@@ -24154,6 +24308,14 @@ If you have any questions, don't hesitate to reach out.
     }));
 
     if (applicantSheetSection === 'contact_info') {
+      if (teamAccessMode && !teamCan('viewContact')) {
+        return [
+          { key: 'headshot', label: 'Headshot', minWidth: '88px' },
+          { key: 'name', label: 'Performer', minWidth: '190px' },
+          { key: 'dob_age', label: 'DOB / Age', minWidth: '155px' },
+          { key: 'pronouns', label: 'Pronouns', minWidth: '110px' },
+        ];
+      }
       return [
         { key: 'headshot', label: 'Headshot', minWidth: '88px' },
         { key: 'name', label: 'Performer', minWidth: '190px' },
@@ -28933,7 +29095,7 @@ If you have any questions, don't hesitate to reach out.
             </div>
           </div>
         </div>
-        <button class="aud-intro-btn-primary" type="button" onclick="openAuditionsSubTab('setup')" style="justify-self:start;">Set Up Auditions</button>`;
+        ${teamAccessMode ? '' : `<button class="aud-intro-btn-primary" type="button" onclick="openAuditionsSubTab('setup')" style="justify-self:start;">Set Up Auditions</button>`}`;
       return;
     }
 
@@ -29139,14 +29301,50 @@ If you have any questions, don't hesitate to reach out.
     return [note.author_name, note.author_role].filter(Boolean).join(' · ') || 'Production Team';
   }
 
+  function authoredNoteTypeLabel(type) {
+    return ({
+      acting: 'Acting',
+      vocals: 'Vocals',
+      dance: 'Dance',
+      general: 'General',
+      callback_interest: 'Callback Interest',
+      role_suggestion: 'Role Suggestions'
+    })[type] || 'General';
+  }
+
+  function canManageAuthoredNote(note, action) {
+    if (!teamAccessMode) return true;
+    const perms = teamAccessPermissions();
+    if (action === 'edit' && perms.canEditAllNotes) return true;
+    if (action === 'delete' && perms.canDeleteAllNotes) return true;
+    return note.team_member_id && teamAccessMember?.id && String(note.team_member_id) === String(teamAccessMember.id);
+  }
+
   function authoredNotesThreadHtml(appId, options = {}) {
     const notes = authoredNotesFor(appId, options);
     if (!notes.length) return '<div class="inroom-save-hint">No team notes yet.</div>';
     return `<div class="team-note-thread">${notes.map(note => `
       <div class="team-note-item" style="border-left-color:${esc(note.author_color || '#572e88')};background:${esc(note.author_color || '#572e88')}12;">
-        <div class="team-note-meta" style="color:${esc(note.author_color || '#572e88')};">${esc(authoredNoteLabel(note))}</div>
+        <div class="team-note-meta" style="color:${esc(note.author_color || '#572e88')};display:flex;align-items:center;justify-content:space-between;gap:0.5rem;">
+          <span>${esc(authoredNoteTypeLabel(note.note_type))} · ${esc(authoredNoteLabel(note))}</span>
+          <span style="display:inline-flex;gap:0.25rem;">
+            ${canManageAuthoredNote(note, 'edit') ? `<button type="button" class="btn-secondary" style="font-size:0.68rem;padding:0.16rem 0.42rem;" onclick="editAuthoredTeamNote('${esc(note.id)}')">Edit</button>` : ''}
+            ${canManageAuthoredNote(note, 'delete') ? `<button type="button" class="btn-secondary" style="font-size:0.68rem;padding:0.16rem 0.42rem;" onclick="deleteAuthoredTeamNote('${esc(note.id)}')">Delete</button>` : ''}
+          </span>
+        </div>
         <div class="team-note-body">${esc(note.body || '')}</div>
       </div>`).join('')}</div>`;
+  }
+
+  function authoredNoteTypeSelectHtml(id) {
+    return `<select id="${esc(id)}" class="form-input" style="font-size:0.78rem;padding:0.35rem 0.55rem;min-height:0;">
+      <option value="general">General</option>
+      <option value="acting">Acting</option>
+      <option value="vocals">Vocals</option>
+      <option value="dance">Dance</option>
+      <option value="callback_interest">Callback Interest</option>
+      <option value="role_suggestion">Role Suggestions</option>
+    </select>`;
   }
 
   function scheduleProducerAuthoredNote(appId, textareaId, options = {}) {
@@ -29158,6 +29356,34 @@ If you have any questions, don't hesitate to reach out.
 
   async function saveProducerAuthoredNote(appId, body, options = {}, textarea = null) {
     const sessionId = options.sessionId || getCurrentInRoomSession()?.id || null;
+    if (teamAccessMode) {
+      const typeId = options.typeInputId || `${textarea?.id || ''}-type`;
+      const noteType = document.getElementById(typeId)?.value || 'general';
+      showSaveStatus('saving');
+      try {
+        const { data, error } = await sb.rpc('team_note_add', {
+          p_production_id: prodId,
+          p_email: teamAccessEmail,
+          p_passcode: teamAccessPasscode,
+          p_applicant_id: appId,
+          p_session_id: sessionId,
+          p_character_id: options.characterId || null,
+          p_note_area: options.area || 'in_room',
+          p_body: body,
+          p_note_type: noteType,
+          p_note_rating: null
+        });
+        if (error) throw error;
+        auditionAuthoredNotes.push(...(Array.isArray(data) ? data : [data]));
+        if (textarea) textarea.value = '';
+        showSaveStatus('saved');
+        renderInRoomPage(appId, inRoomContainerId, inRoomOpenFn);
+      } catch (error) {
+        console.error('[BTS] team authored note save failed', error);
+        showToast('Could not save team note.', true);
+      }
+      return;
+    }
     const payload = {
       production_id: prodId,
       applicant_id: appId,
@@ -29183,6 +29409,52 @@ If you have any questions, don't hesitate to reach out.
       console.error('[BTS] authored note save failed', error);
       showToast('Could not save team note. Run the team portal Supabase SQL if you have not yet.', true);
     }
+  }
+
+  async function editAuthoredTeamNote(noteId) {
+    const note = auditionAuthoredNotes.find(n => String(n.id) === String(noteId));
+    if (!note || !canManageAuthoredNote(note, 'edit')) return;
+    const body = prompt('Edit note', note.body || '');
+    if (body == null) return;
+    const nextBody = body.trim();
+    if (!nextBody) return;
+    if (teamAccessMode) {
+      const { data, error } = await sb.rpc('team_note_update', {
+        p_production_id: prodId,
+        p_email: teamAccessEmail,
+        p_passcode: teamAccessPasscode,
+        p_note_id: noteId,
+        p_body: nextBody
+      });
+      if (error) { showToast('Could not update note: ' + error.message, true); return; }
+      const updated = Array.isArray(data) ? data[0] : data;
+      Object.assign(note, updated || { body: nextBody });
+    } else {
+      const { data, error } = await sb.from('production_audition_notes').update({ body: nextBody, updated_at: new Date().toISOString() }).eq('id', noteId).select('*').single();
+      if (error) { showToast('Could not update note: ' + error.message, true); return; }
+      Object.assign(note, data || { body: nextBody });
+    }
+    renderInRoomPage(inRoomApplicantId, inRoomContainerId, inRoomOpenFn);
+  }
+
+  async function deleteAuthoredTeamNote(noteId) {
+    const note = auditionAuthoredNotes.find(n => String(n.id) === String(noteId));
+    if (!note || !canManageAuthoredNote(note, 'delete')) return;
+    if (!confirm('Delete this note?')) return;
+    if (teamAccessMode) {
+      const { error } = await sb.rpc('team_note_delete', {
+        p_production_id: prodId,
+        p_email: teamAccessEmail,
+        p_passcode: teamAccessPasscode,
+        p_note_id: noteId
+      });
+      if (error) { showToast('Could not delete note: ' + error.message, true); return; }
+    } else {
+      const { error } = await sb.from('production_audition_notes').delete().eq('id', noteId);
+      if (error) { showToast('Could not delete note: ' + error.message, true); return; }
+    }
+    auditionAuthoredNotes = auditionAuthoredNotes.filter(n => String(n.id) !== String(noteId));
+    renderInRoomPage(inRoomApplicantId, inRoomContainerId, inRoomOpenFn);
   }
 
   // Collect dance call bucket placements for a performer across all dance call sessions.
@@ -29483,6 +29755,7 @@ If you have any questions, don't hesitate to reach out.
         </div>
         <textarea class="inroom-considered-notes" id="inroom-role-notes-${safeCharId}" placeholder="Notes for this role…" oninput="scheduleInRoomRoleNotesSave('${safeAppId}','${esc(sessionId || '')}','${safeCharId}')">${esc(notes)}</textarea>
         <div class="team-note-compose">
+          ${authoredNoteTypeSelectHtml(`producer-role-team-note-${safeCharId}-type`)}
           <textarea id="producer-role-team-note-${safeCharId}" class="inroom-considered-notes" placeholder="Add an authored role note..."></textarea>
           <button type="button" class="btn-secondary" onclick="scheduleProducerAuthoredNote('${safeAppId}','producer-role-team-note-${safeCharId}',{ area:'role_note', sessionId:'${esc(sessionId || '')}', characterId:'${safeCharId}' })">Add Team Note</button>
         </div>
@@ -29542,6 +29815,7 @@ If you have any questions, don't hesitate to reach out.
           <div class="inroom-callback-card-notes-label">Notes</div>
           <textarea class="inroom-callback-card-notes" id="inroom-role-notes-${safeCharId}" placeholder="Notes for this callback role…" oninput="scheduleInRoomRoleNotesSave('${safeAppId}','${esc(sessionId || '')}','${safeCharId}')">${esc(notes)}</textarea>
           <div class="team-note-compose">
+            ${authoredNoteTypeSelectHtml(`producer-role-team-note-${safeCharId}-type`)}
             <textarea id="producer-role-team-note-${safeCharId}" class="inroom-callback-card-notes" placeholder="Add an authored callback note..."></textarea>
             <button type="button" class="btn-secondary" onclick="scheduleProducerAuthoredNote('${safeAppId}','producer-role-team-note-${safeCharId}',{ area:'role_note', sessionId:'${esc(sessionId || '')}', characterId:'${safeCharId}' })">Add Team Note</button>
           </div>
@@ -29644,9 +29918,10 @@ If you have any questions, don't hesitate to reach out.
         </div>
         <div class="inroom-notes-card">
           <div class="inroom-notes-title">Quick Notes</div>
-          <textarea id="inroom-notes" class="inroom-notes-text" placeholder="Write down what you noticed in the room..." oninput="scheduleInRoomNotesSave('${app.id}')">${esc(applicantInRoomNotes(app, currentSession?.id))}</textarea>
-          <div class="inroom-save-hint">Notes save automatically.</div>
+          ${teamAccessMode ? '' : `<textarea id="inroom-notes" class="inroom-notes-text" placeholder="Write down what you noticed in the room..." oninput="scheduleInRoomNotesSave('${app.id}')">${esc(applicantInRoomNotes(app, currentSession?.id))}</textarea>
+          <div class="inroom-save-hint">Notes save automatically.</div>`}
           <div class="team-note-compose">
+            ${authoredNoteTypeSelectHtml(`producer-team-note-${esc(app.id)}-type`)}
             <textarea id="producer-team-note-${esc(app.id)}" class="inroom-notes-text" placeholder="Add an authored team note..."></textarea>
             <button type="button" class="btn-secondary" onclick="scheduleProducerAuthoredNote('${esc(app.id)}','producer-team-note-${esc(app.id)}',{ area:'in_room', sessionId:'${esc(currentSession?.id || '')}' })">Add Team Note</button>
           </div>
@@ -29883,6 +30158,7 @@ If you have any questions, don't hesitate to reach out.
 
   // ── Auditions day sub-tab switching ──
   function switchAudDayTab(tab) {
+    if (teamAccessMode && (tab === 'run' || tab === 'checkin' || tab === 'callbacklist')) tab = 'dashboard';
     saveWorkspaceNavState({ auditionsDayTab: tab });
     document.querySelectorAll('.aud-day-tab[data-adtab]').forEach(el => {
       el.classList.toggle('active', el.dataset.adtab === tab);
@@ -30078,7 +30354,12 @@ If you have any questions, don't hesitate to reach out.
       return;
     }
     activeCheckInSessionId = session.id;
-    const tool = activeAuditionNavTool || 'checkin';
+    let tool = activeAuditionNavTool || 'checkin';
+    if (teamAccessMode && (tool === 'checkin' || tool === 'castingboard')) {
+      tool = 'inroom';
+      activeAuditionNavTool = 'inroom';
+      _audHeaderActiveTool = 'inroom';
+    }
     const metaParts = [];
     if (session.date) metaParts.push({ label: 'Date', value: formatAuditionScheduleSessionDate(session.date) });
     if (session.start_time || session.end_time) {
@@ -30463,7 +30744,8 @@ If you have any questions, don't hesitate to reach out.
   }
 
   function buildAuditionScheduleBookedCardHtml(app) {
-    return `<div class="audition-schedule-booked-card" draggable="true" ondragstart="fatesDragStart(event,'${esc(app.id)}')" ondragend="fatesDragEnd(event)">
+    const dragAttrs = teamCan('editSchedule') ? `draggable="true" ondragstart="fatesDragStart(event,'${esc(app.id)}')" ondragend="fatesDragEnd(event)"` : '';
+    return `<div class="audition-schedule-booked-card" ${dragAttrs}>
       ${renderCastingCard({
         first_name: String(app.name || '').split(' ')[0] || '',
         last_name: String(app.name || '').split(' ').slice(1).join(' ') || '',
@@ -30506,8 +30788,8 @@ If you have any questions, don't hesitate to reach out.
       const isBlocked = slotState === 'block';
       const bookedPerformers = isBlocked ? [] : getAuditionScheduleBookedPerformers(slot, session);
       const cardsHtml = bookedPerformers.map(buildAuditionScheduleBookedCardHtml).join('');
-      const dropAttrs = isBlocked ? '' : `ondragover="fatesDragOver(event,'${esc(slot.id)}')" ondragleave="fatesDragLeave(event)" ondrop="fatesDrop(event,'${esc(slot.id)}')"`;
-      const confirmHtml = isBlocked ? '' : buildFatesDropConfirmHtml(slot);
+      const dropAttrs = isBlocked || !teamCan('editSchedule') ? '' : `ondragover="fatesDragOver(event,'${esc(slot.id)}')" ondragleave="fatesDragLeave(event)" ondrop="fatesDrop(event,'${esc(slot.id)}')"`;
+      const confirmHtml = isBlocked || !teamCan('editSchedule') ? '' : buildFatesDropConfirmHtml(slot);
       return `
         <div class="audition-schedule-h-slot state-${esc(slotState)}" ${dropAttrs}>
           <div class="audition-schedule-h-slot-header">${esc(timeLabel)}${isBlocked ? ' · Blocked' : ''}</div>
@@ -30528,8 +30810,8 @@ If you have any questions, don't hesitate to reach out.
         const timeLabel = formatSlotTime(slot.slot_time || slot.start_time || '');
         const slotState = getAudSlotState(slot);
         const isBlocked = slotState === 'block';
-        const dropAttrs = isBlocked ? '' : `ondragover="fatesDragOver(event,'${esc(slot.id)}')" ondragleave="fatesDragLeave(event)" ondrop="fatesDrop(event,'${esc(slot.id)}')"`;
-        const confirmHtml = isBlocked ? '' : buildFatesDropConfirmHtml(slot);
+        const dropAttrs = isBlocked || !teamCan('editSchedule') ? '' : `ondragover="fatesDragOver(event,'${esc(slot.id)}')" ondragleave="fatesDragLeave(event)" ondrop="fatesDrop(event,'${esc(slot.id)}')"`;
+        const confirmHtml = isBlocked || !teamCan('editSchedule') ? '' : buildFatesDropConfirmHtml(slot);
         return `
           <div class="audition-schedule-time-cell ${index >= lastRowStartIndex ? 'is-last-row' : ''} state-${slotState}" ${dropAttrs}>
             <div class="audition-schedule-time-label">${buildAuditionSchedulePlaceholderTimeLabelHtml(timeLabel)}</div>
