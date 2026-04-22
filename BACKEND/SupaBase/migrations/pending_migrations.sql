@@ -180,6 +180,7 @@ ALTER TABLE production_audition_notes ENABLE ROW LEVEL SECURITY;
 
 DROP FUNCTION IF EXISTS team_member_login(uuid,text,text);
 DROP FUNCTION IF EXISTS team_member_start_session(uuid,text,text,text);
+DROP FUNCTION IF EXISTS team_member_start_session_for_portal(text,text,text,text,text);
 DROP FUNCTION IF EXISTS team_member_resume_session(uuid,text);
 DROP FUNCTION IF EXISTS team_member_revoke_session(uuid,text);
 DROP FUNCTION IF EXISTS team_member_colour_list(uuid,text,text);
@@ -256,6 +257,81 @@ BEGIN
   );
 
   RETURN QUERY SELECT v_token, v_expires_at, v_member;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION team_member_start_session_for_portal(
+  p_org_abbrev text,
+  p_show_slug text,
+  p_email text,
+  p_passcode text,
+  p_user_agent text DEFAULT NULL
+)
+RETURNS TABLE(
+  production_id uuid,
+  session_token text,
+  expires_at timestamptz,
+  team_member production_team_members
+)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_member production_team_members%ROWTYPE;
+  v_token text;
+  v_expires_at timestamptz;
+BEGIN
+  SELECT m.*
+  INTO v_member
+  FROM production_team_members m
+  JOIN productions p ON p.id = m.production_id
+  JOIN organizations o ON o.id = p.organization_id
+  CROSS JOIN LATERAL (
+    SELECT
+      lower(regexp_replace(COALESCE(p.slug, ''), '[^a-zA-Z0-9]', '', 'g')) AS production_slug_key,
+      lower(regexp_replace(COALESCE(p.title, ''), '[^a-zA-Z0-9]', '', 'g')) AS title_key,
+      lower(regexp_replace(regexp_replace(COALESCE(p.title, ''), '^(test|demo)[^a-zA-Z0-9]+', '', 'i'), '[^a-zA-Z0-9]', '', 'g')) AS clean_title_key,
+      lower(regexp_replace(COALESCE(p_show_slug, ''), '[^a-zA-Z0-9]', '', 'g')) AS requested_key,
+      regexp_replace(COALESCE(p.season, ''), '[^0-9]', '', 'g') AS season_digits
+  ) keys
+  WHERE lower(regexp_replace(COALESCE(o.slug, o.abbreviation, o.name), '[^a-zA-Z0-9]', '', 'g')) = lower(regexp_replace(p_org_abbrev, '[^a-zA-Z0-9]', '', 'g'))
+    AND lower(trim(m.email)) = lower(trim(p_email))
+    AND m.passcode = regexp_replace(trim(p_passcode), '\D+', '', 'g')
+    AND m.is_active = true
+    AND (
+      keys.production_slug_key = keys.requested_key
+      OR keys.title_key = keys.requested_key
+      OR keys.clean_title_key = keys.requested_key
+      OR keys.requested_key LIKE keys.production_slug_key || '%'
+      OR keys.requested_key LIKE keys.clean_title_key || '%'
+      OR keys.requested_key = keys.clean_title_key || keys.season_digits
+    )
+  ORDER BY
+    CASE
+      WHEN keys.production_slug_key = keys.requested_key THEN 0
+      WHEN keys.clean_title_key = keys.requested_key THEN 1
+      WHEN keys.requested_key = keys.clean_title_key || keys.season_digits THEN 2
+      ELSE 3
+    END,
+    p.id
+  LIMIT 1;
+
+  IF v_member.id IS NULL THEN
+    RAISE EXCEPTION 'Team access not found';
+  END IF;
+
+  v_token := encode(gen_random_bytes(32), 'hex');
+  v_expires_at := now() + interval '30 days';
+
+  INSERT INTO production_team_member_sessions (
+    production_id, team_member_id, session_token, user_agent, expires_at
+  )
+  VALUES (
+    v_member.production_id, v_member.id, v_token, p_user_agent, v_expires_at
+  );
+
+  RETURN QUERY SELECT v_member.production_id, v_token, v_expires_at, v_member;
 END;
 $$;
 

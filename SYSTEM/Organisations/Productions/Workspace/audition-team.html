@@ -13963,6 +13963,14 @@
     return /\/Team\/?$/i.test(window.location.pathname) || new URLSearchParams(window.location.search).get('team') === '1';
   }
 
+  function teamPortalPathParts() {
+    const parts = window.location.pathname.replace(/\/+$/, '').split('/').filter(Boolean);
+    return {
+      org: parts[0] || '',
+      show: parts[1] || '',
+    };
+  }
+
   function normalizeTeamRole(role) {
     const raw = String(role || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
     if (raw === 'musical_director' || raw === 'music_director') return 'vocal_director';
@@ -13974,12 +13982,12 @@
   }
 
   async function resolveTeamProductionIdFromPath() {
-    const parts = window.location.pathname.replace(/\/+$/, '').split('/').filter(Boolean);
-    if (parts.length < 2) return '';
+    const parts = teamPortalPathParts();
+    if (!parts.org || !parts.show) return '';
     try {
       const { data, error } = await sb.rpc('resolve_team_portal', {
-        p_org_abbrev: parts[0],
-        p_show_slug: parts[1],
+        p_org_abbrev: parts.org,
+        p_show_slug: parts.show,
       });
       if (error) throw error;
       return data || '';
@@ -14029,11 +14037,11 @@
     teamAccessEmail = options.email || document.getElementById('team-access-email')?.value?.trim() || '';
     teamAccessPasscode = (options.passcode || document.getElementById('team-access-passcode')?.value || '').replace(/\D+/g, '').slice(0, 6);
     if (err) err.textContent = options.silent ? 'Opening your saved team access...' : '';
-    if (!prodId) { if (err) err.textContent = 'Production not found. Check your link.'; return; }
     if (!options.sessionToken && teamAccessPasscode.length !== 6) {
       if (err) err.textContent = 'Enter the 6-digit access code from your invite.';
       return;
     }
+    if (!prodId && options.sessionToken) { if (err) err.textContent = 'Production not found. Check your link.'; return; }
     if (options.sessionToken) {
       const { data, error } = await sb.rpc('team_member_resume_session', { p_production_id: prodId, p_session_token: options.sessionToken });
       if (error || !data?.length) {
@@ -14054,12 +14062,22 @@
       return;
     }
     if (!teamAccessEmail || !teamAccessPasscode) { if (err) err.textContent = 'Enter your email and access code.'; return; }
-    const { data, error } = await sb.rpc('team_member_start_session', {
-      p_production_id: prodId,
-      p_email: teamAccessEmail,
-      p_passcode: teamAccessPasscode,
-      p_user_agent: navigator.userAgent || null,
-    });
+    const portalParts = teamPortalPathParts();
+    const canResolveByPortal = teamAccessMode && portalParts.org && portalParts.show;
+    const { data, error } = canResolveByPortal
+      ? await sb.rpc('team_member_start_session_for_portal', {
+          p_org_abbrev: portalParts.org,
+          p_show_slug: portalParts.show,
+          p_email: teamAccessEmail,
+          p_passcode: teamAccessPasscode,
+          p_user_agent: navigator.userAgent || null,
+        })
+      : await sb.rpc('team_member_start_session', {
+          p_production_id: prodId,
+          p_email: teamAccessEmail,
+          p_passcode: teamAccessPasscode,
+          p_user_agent: navigator.userAgent || null,
+        });
     if (error || !data?.length) {
       if (options.silent) {
         forgetTeamAccess();
@@ -14069,6 +14087,8 @@
       if (err) err.textContent = 'That email and access code did not match.';
       return;
     }
+    if (data[0].production_id) prodId = data[0].production_id;
+    if (!prodId) { if (err) err.textContent = 'Production not found. Check your link.'; return; }
     teamAccessSessionToken = data[0].session_token || '';
     teamAccessMember = data[0].team_member || null;
     rememberTeamAccess();
@@ -14305,7 +14325,7 @@
     prodId = params.get('id');
     if (!prodId && teamAccessMode) prodId = await resolveTeamProductionIdFromPath();
     if (!prodId) {
-      if (teamAccessMode) showTeamAccessLogin('Production not found. Check your link.');
+      if (teamAccessMode) showTeamAccessLogin();
       else window.location.href = '../../org-dashboard.html';
       return;
     }
