@@ -35,7 +35,7 @@ function renderProductionTeamCard(member, options = {}) {
     : `<div class="production-team-card-placeholder">${initial}</div>`;
 
   const inviteHtml = m.invite_sent_at
-    ? `<span class="production-team-card-sent" title="Sent ${escapeHtml(sentDate)}">Sent ✓</span><button id="invite-btn-${id}" class="btn-secondary" onclick="emailTeamInvite('${id}')">Resend</button>`
+    ? `<button id="invite-btn-${id}" class="production-team-card-back-action" type="button" onclick="event.stopPropagation();emailTeamInvite('${id}')">Resend Invite</button>`
     : `<button id="invite-btn-${id}" class="btn-primary" onclick="emailTeamInvite('${id}')">Email Invite</button>`;
 
   const bio = String(m.bio || '');
@@ -70,9 +70,13 @@ function renderProductionTeamCard(member, options = {}) {
               <div class="production-team-card-back-name">${name || 'Firstname Lastname'}</div>
             </div>
             <div class="production-team-card-back-fields">
+              <label class="production-team-card-back-status ${statusClass}" onclick="event.stopPropagation();">
+                <input type="checkbox" ${isActive ? 'checked' : ''} onchange="toggleTeamMemberAccess('${id}',this.checked)" />
+                ${isActive ? 'Active' : 'Inactive'}
+              </label>
               <div class="production-team-card-back-field">
                 <span>Email</span>
-                <strong>${email || 'No email saved'}</strong>
+                <input class="production-team-card-back-input" type="email" value="${email}" placeholder="No email saved" onclick="event.stopPropagation();" onblur="saveTeamMemberField('${id}','email',this.value)" />
               </div>
               ${phone ? `
                 <div class="production-team-card-back-field">
@@ -82,42 +86,30 @@ function renderProductionTeamCard(member, options = {}) {
               ` : ''}
               <div class="production-team-card-back-field">
                 <span>Passcode</span>
-                <strong class="production-team-card-back-passcode">${passcode || 'Not set'}</strong>
+                <div class="production-team-card-back-passcode-row" onclick="event.stopPropagation();">
+                  <input id="passcode-input-${id}" class="production-team-card-back-input production-team-card-back-passcode" value="${passcode}" placeholder="6 digits" inputmode="numeric" maxlength="6" pattern="[0-9]{6}" oninput="this.value=this.value.replace(/\\D+/g,'').slice(0,6)" />
+                  <button class="production-team-card-back-icon" type="button" onclick="saveTeamMemberPasscode('${id}')" title="Save access code">Save</button>
+                  <button class="production-team-card-back-icon" type="button" onclick="regenPasscode('${id}')" title="Generate new 6-digit passcode">↻</button>
+                </div>
               </div>
               <div class="production-team-card-back-field production-team-card-back-bio">
                 <span>Bio</span>
                 <p>${bioText}</p>
               </div>
             </div>
+            ${showManagement ? `
+              <div class="production-team-card-back-actions" onclick="event.stopPropagation();">
+                ${inviteHtml}
+                <button class="production-team-card-back-action" type="button" onclick="copyTeamPortalLink('${id}')">Copy Link</button>
+                <button class="production-team-card-back-action" type="button" onclick="copyProductionTeamCardPasscode('${id}')">Copy Code</button>
+                ${bio ? `<button class="production-team-card-back-action" type="button" onclick="downloadTeamBio('${id}')">Bio ↓</button>` : ''}
+                ${m.headshot_url ? `<a class="production-team-card-back-action" href="${escapeHtml(m.headshot_url)}" target="_blank" download>Headshot ↓</a>` : ''}
+              </div>
+            ` : ''}
             <div class="production-team-card-back-hint">Click to flip back</div>
           </div>
         </div>
       </div>
-      ${showManagement ? `
-        <div class="production-team-card-controls">
-          <div class="production-team-card-fields">
-            <input class="form-input production-team-card-name-input" value="${name}" placeholder="Full name" onblur="saveTeamMemberField('${id}','name',this.value)" />
-            <input class="form-input production-team-card-role-input" value="${role}" placeholder="Role" onblur="saveTeamMemberField('${id}','role',this.value)" />
-            <input class="form-input production-team-card-email-input" type="email" value="${email}" placeholder="Email address" onblur="saveTeamMemberField('${id}','email',this.value)" />
-          </div>
-          <div class="production-team-card-access">
-            <input id="passcode-input-${id}" class="form-input production-team-card-code-input" value="${passcode}" placeholder="6-digit code" inputmode="numeric" maxlength="6" pattern="[0-9]{6}" oninput="this.value=this.value.replace(/\\D+/g,'').slice(0,6)" />
-            <button class="production-team-card-save" onclick="saveTeamMemberPasscode('${id}')" title="Save access code">Save</button>
-            <button class="production-team-card-regen" onclick="regenPasscode('${id}')" title="Generate new 6-digit passcode">↻</button>
-            <label class="production-team-card-status ${statusClass}">
-              <input type="checkbox" ${isActive ? 'checked' : ''} onchange="toggleTeamMemberAccess('${id}',this.checked)" />
-              ${isActive ? 'Active' : 'Inactive'}
-            </label>
-          </div>
-          <div class="production-team-card-actions">
-            ${inviteHtml}
-            <button class="btn-secondary" onclick="copyTeamPortalLink('${id}')">Copy Link</button>
-            <button class="btn-secondary" onclick="copyProductionTeamCardPasscode('${id}')">Copy Code</button>
-            ${bio ? `<button class="btn-secondary" onclick="downloadTeamBio('${id}')">Bio ↓</button>` : ''}
-            ${m.headshot_url ? `<a class="btn-secondary" href="${escapeHtml(m.headshot_url)}" target="_blank" download style="text-decoration:none;">Headshot ↓</a>` : ''}
-          </div>
-        </div>
-      ` : ''}
     </div>
   `;
 }
