@@ -17959,17 +17959,17 @@ If you have any questions, don't hesitate to reach out.
     await saveTeamMemberField(memberId, 'passcode', code);
   }
 
+  async function saveTeamMemberPasscode(memberId) {
+    const input = document.getElementById(`passcode-input-${memberId}`);
+    await saveTeamMemberField(memberId, 'passcode', input?.value || '');
+  }
+
   function nextAvailableTeamColor(memberId = null) {
     const used = new Set((auditionTeamMembers || [])
       .filter(m => m.id !== memberId && m.is_active !== false)
       .map(m => String(m.note_color || '').toLowerCase())
       .filter(Boolean));
     return TEAM_NOTE_COLORS.find(color => !used.has(color.toLowerCase())) || TEAM_NOTE_COLORS[0];
-  }
-
-  function teamColorPreview(color) {
-    const c = color || '#572e88';
-    return `<span class="team-color-picker" title="Chosen by this team member"><span class="team-color-dot active" style="--team-note-color:${esc(c)};"></span><span style="font-size:0.72rem;font-weight:800;color:#86799f;">Chosen in profile</span></span>`;
   }
 
   async function upsertTeamAccessForCreativeRole(role) {
@@ -18331,107 +18331,54 @@ If you have any questions, don't hesitate to reach out.
     }
   }
 
-  // ── Team tab - Producer(s) + Creative Team ──
+  // ── Team tab - Audition team access ──
   function renderTeamView(container) {
-    const producers = teamConfig?.find(d => d.name === 'Producer(s)');
-    const creative  = teamConfig?.find(d => d.name === 'Creative Team');
-
-    // Producer pills
-    const producerPills = (producers?.roles || []).map((r, ri) =>
-      `<span style="background:rgba(255,255,255,0.14);color:#fff;border-radius:20px;padding:0.35rem 0.85rem;font-size:0.82rem;font-weight:500;display:inline-flex;align-items:center;gap:0.4rem;">
-        ${r.person || r.name}
-        <button onclick="removeProducer(${ri})" style="background:none;border:none;color:rgba(255,255,255,0.5);cursor:pointer;font-size:0.72rem;padding:0;line-height:1;" title="Remove">✕</button>
-      </span>`
-    ).join('');
-
-    const producerSection = `
-      <div style="border-radius:10px;overflow:hidden;margin-bottom:1.75rem;box-shadow:0 1px 4px rgba(0,0,0,0.08);">
-        <div style="background:#1c1917;padding:0.875rem 1.25rem;">
-          <span style="color:#fff;font-weight:700;font-size:0.9rem;letter-spacing:0.01em;">Producer(s)</span>
-        </div>
-        <div style="background:rgba(28,25,23,0.05);border:1px solid rgba(28,25,23,0.1);border-top:none;padding:1rem 1.25rem;display:flex;flex-wrap:wrap;align-items:center;gap:0.5rem;min-height:3.25rem;">
-          ${producerPills || '<span style="font-size:0.82rem;color:#9a90b0;">No producers added yet.</span>'}
-          <button onclick="addProducer()" style="background:none;border:1px dashed rgba(28,25,23,0.25);border-radius:20px;padding:0.3rem 0.8rem;font-size:0.78rem;color:#6a5a80;cursor:pointer;font-family:inherit;transition:border-color 0.15s;">+ Add producer</button>
-        </div>
-      </div>`;
-
-    // Creative Team tiles
-    const creativeTiles = (creative?.roles || []).map((r, ri) => {
-      const hasPerson = r.person && r.person.trim();
-      return `
-        <div style="border-radius:10px;overflow:hidden;border:1px solid rgba(87,46,136,0.2);box-shadow:0 1px 4px rgba(0,0,0,0.06);">
-          <div style="background:#572e88;padding:0.75rem 1rem;display:flex;justify-content:space-between;align-items:center;gap:0.5rem;">
-            <span style="color:#fff;font-weight:700;font-size:0.875rem;">${esc(r.name)}</span>
-            ${hasPerson ? '<span style="width:0.5rem;height:0.5rem;border-radius:999px;background:#7FAF8B;box-shadow:0 0 0.45rem rgba(127,175,139,0.8);"></span>' : ''}
-          </div>
-          <div style="background:rgba(87,46,136,0.04);padding:1rem;min-height:5rem;display:flex;flex-direction:column;gap:0.5rem;">
-            <div style="font-size:0.875rem;font-weight:${hasPerson ? '600' : '400'};color:${hasPerson ? '#1a1530' : '#b91c1c'};">
-              ${hasPerson ? esc(r.person) : 'Unfilled'}
-            </div>
-            ${r.email ? `<div style="font-size:0.76rem;color:#86799f;font-weight:700;word-break:break-word;">${esc(r.email)}</div>` : ''}
-            <button onclick="editCreativeRole(${ri})" style="margin-top:auto;background:none;border:none;font-size:0.75rem;color:#572e88;cursor:pointer;font-family:inherit;padding:0;text-align:left;font-weight:600;">
-              ${hasPerson ? 'Edit' : 'Assign someone'}
-            </button>
-          </div>
-        </div>`;
-    }).join('');
-
-    const creativeSection = `
-      <div>
-        <div style="font-size:0.72rem;font-weight:700;letter-spacing:0.07em;text-transform:uppercase;color:#6a5a80;margin-bottom:0.75rem;">Creative Team</div>
-        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;">
-          ${creativeTiles}
-        </div>
-      </div>`;
-
     const accessRows = (auditionTeamMembers || []).map(m => {
       const initial = esc((m.name || '?').trim().charAt(0).toUpperCase());
-      const avatarBg = m.is_active === false ? 'rgba(87,46,136,0.05)' : 'rgba(87,46,136,0.1)';
+      const teamColor = esc(m.note_color || '#572e88');
       const cardOpacity = m.is_active === false ? 'opacity:0.55;' : '';
       const sentDate = m.invite_sent_at ? new Date(m.invite_sent_at).toLocaleDateString('en-CA', { month: 'short', day: 'numeric' }) : '';
       return `
-      <div style="border-radius:16px;border:1px solid rgba(87,46,136,0.14);background:#fff;overflow:hidden;box-shadow:0 2px 10px rgba(87,46,136,0.07);${cardOpacity}">
-        <!-- Identity row -->
-        <div style="padding:1rem 1rem 0.85rem;display:flex;align-items:flex-start;gap:0.85rem;border-bottom:1px solid rgba(87,46,136,0.08);">
-          <div style="width:52px;height:52px;border-radius:14px;background:${avatarBg};overflow:hidden;display:grid;place-items:center;flex-shrink:0;color:#572e88;font-weight:900;font-size:1.1rem;">
+      <div style="--team-card-color:${teamColor};border-radius:10px;border:1px solid color-mix(in srgb, var(--team-card-color) 32%, rgba(87,46,136,0.12));background:#fff;overflow:hidden;box-shadow:0 2px 10px rgba(87,46,136,0.07);border-top:6px solid var(--team-card-color);${cardOpacity}">
+        <div style="padding:0.95rem;display:grid;grid-template-columns:76px minmax(0,1fr);gap:0.85rem;border-bottom:1px solid rgba(87,46,136,0.08);background:linear-gradient(135deg,color-mix(in srgb,var(--team-card-color) 10%,#fff) 0%,#fff 66%);">
+          <div style="width:76px;aspect-ratio:4 / 5;border-radius:8px;background:color-mix(in srgb,var(--team-card-color) 14%,#f8f5fb);overflow:hidden;display:grid;place-items:center;color:var(--team-card-color);font-weight:950;font-size:1.4rem;border:1px solid color-mix(in srgb,var(--team-card-color) 25%,rgba(87,46,136,0.12));box-shadow:0 6px 16px rgba(26,21,48,0.08);">
             ${m.headshot_url ? `<img src="${esc(m.headshot_url)}" alt="" style="width:100%;height:100%;object-fit:cover;object-position:top;" />` : initial}
           </div>
-          <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:0.2rem;">
-            <input class="form-input" value="${esc(m.name || '')}" placeholder="Full name" onblur="saveTeamMemberField('${esc(m.id)}','name',this.value)" style="font-weight:700;font-size:0.9rem;padding:0.25rem 0.4rem;min-height:0;border-color:rgba(87,46,136,0.15);" />
-            <input class="form-input" value="${esc(m.role || '')}" placeholder="Role" onblur="saveTeamMemberField('${esc(m.id)}','role',this.value)" style="font-size:0.76rem;color:#6a5a80;padding:0.2rem 0.4rem;min-height:0;border-color:rgba(87,46,136,0.12);" />
+          <div style="min-width:0;display:flex;flex-direction:column;gap:0.42rem;">
+            <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:0.65rem;">
+              <div style="min-width:0;flex:1;display:flex;flex-direction:column;gap:0.34rem;">
+                <input class="form-input" value="${esc(m.name || '')}" placeholder="Full name" onblur="saveTeamMemberField('${esc(m.id)}','name',this.value)" style="font-weight:950;font-size:1rem;padding:0.35rem 0.5rem;min-height:0;border-color:color-mix(in srgb,var(--team-card-color) 26%,rgba(87,46,136,0.14));background:rgba(255,255,255,0.82);color:#1a1530;" />
+                <input class="form-input" value="${esc(m.role || '')}" placeholder="Role" onblur="saveTeamMemberField('${esc(m.id)}','role',this.value)" style="font-size:0.82rem;font-weight:800;color:#6a5a80;padding:0.3rem 0.5rem;min-height:0;border-color:rgba(87,46,136,0.12);background:rgba(255,255,255,0.78);" />
+              </div>
+              <label style="display:inline-flex;align-items:center;gap:0.34rem;font-size:0.72rem;font-weight:900;color:${m.is_active !== false ? '#166634' : '#86799f'};cursor:pointer;flex-shrink:0;background:${m.is_active !== false ? 'rgba(22,101,52,0.08)' : 'rgba(134,121,159,0.1)'};border:1px solid ${m.is_active !== false ? 'rgba(22,101,52,0.18)' : 'rgba(134,121,159,0.16)'};border-radius:999px;padding:0.34rem 0.55rem;">
+                <input type="checkbox" ${m.is_active !== false ? 'checked' : ''} onchange="toggleTeamMemberAccess('${esc(m.id)}',this.checked)" style="accent-color:var(--team-card-color);" />
+                ${m.is_active !== false ? 'Active' : 'Inactive'}
+              </label>
+            </div>
+            <input class="form-input" type="email" value="${esc(m.email || '')}" placeholder="Email address" onblur="saveTeamMemberField('${esc(m.id)}','email',this.value)" style="font-size:0.82rem;padding:0.38rem 0.5rem;min-height:0;width:100%;box-sizing:border-box;border-color:rgba(87,46,136,0.12);background:#fff;" />
           </div>
-          <label style="display:inline-flex;align-items:center;gap:0.3rem;font-size:0.7rem;font-weight:700;color:${m.is_active !== false ? '#166634' : '#86799f'};cursor:pointer;flex-shrink:0;padding-top:0.15rem;">
-            <input type="checkbox" ${m.is_active !== false ? 'checked' : ''} onchange="toggleTeamMemberAccess('${esc(m.id)}',this.checked)" style="accent-color:#572e88;" />
-            ${m.is_active !== false ? 'Active' : 'Inactive'}
-          </label>
         </div>
-        <!-- Email row -->
-        <div style="padding:0.6rem 1rem;border-bottom:1px solid rgba(87,46,136,0.08);">
-          <input class="form-input" type="email" value="${esc(m.email || '')}" placeholder="Email address" onblur="saveTeamMemberField('${esc(m.id)}','email',this.value)" style="font-size:0.8rem;padding:0.3rem 0.4rem;min-height:0;width:100%;box-sizing:border-box;border-color:rgba(87,46,136,0.12);" />
+        <div style="padding:0.75rem 0.95rem;border-bottom:1px solid rgba(87,46,136,0.08);display:grid;grid-template-columns:auto minmax(7.5rem,1fr) auto auto;align-items:center;gap:0.6rem;background:color-mix(in srgb,var(--team-card-color) 6%,#fff);">
+          <span style="font-size:0.66rem;font-weight:900;text-transform:uppercase;letter-spacing:0.08em;color:#86799f;white-space:nowrap;">Passcode</span>
+          <input id="passcode-input-${esc(m.id)}" class="form-input" value="${esc(m.passcode || '')}" placeholder="6-digit code" inputmode="numeric" maxlength="6" pattern="[0-9]{6}" oninput="this.value=this.value.replace(/\\D+/g,'').slice(0,6)" style="font-size:1rem;font-weight:950;letter-spacing:0.18em;padding:0.34rem 0.55rem;min-height:0;width:100%;border-color:color-mix(in srgb,var(--team-card-color) 30%,rgba(87,46,136,0.14));color:#1a1530;background:#fff;" />
+          <button onclick="saveTeamMemberPasscode('${esc(m.id)}')" title="Save access code" style="background:var(--team-card-color);border:1px solid var(--team-card-color);border-radius:8px;cursor:pointer;font-size:0.78rem;color:#fff;padding:0.34rem 0.62rem;line-height:1;font-weight:900;">Save</button>
+          <button onclick="regenPasscode('${esc(m.id)}')" title="Generate new 6-digit passcode" style="background:color-mix(in srgb,var(--team-card-color) 12%,#fff);border:1px solid color-mix(in srgb,var(--team-card-color) 26%,rgba(87,46,136,0.15));border-radius:8px;cursor:pointer;font-size:0.82rem;color:var(--team-card-color);padding:0.34rem 0.48rem;line-height:1;font-weight:900;" onmouseover="this.style.background='color-mix(in srgb,var(--team-card-color) 18%,#fff)'" onmouseout="this.style.background='color-mix(in srgb,var(--team-card-color) 12%,#fff)'">↻</button>
         </div>
-        <!-- Passcode + note colour -->
-        <div style="padding:0.65rem 1rem;border-bottom:1px solid rgba(87,46,136,0.08);display:flex;align-items:center;gap:0.65rem;background:rgba(87,46,136,0.02);">
-          <span style="font-size:0.65rem;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;color:#86799f;white-space:nowrap;">Passcode</span>
-          <input id="passcode-input-${esc(m.id)}" class="form-input" value="${esc(m.passcode || '')}" placeholder="6-digit code" inputmode="numeric" maxlength="6" pattern="[0-9]{6}" onblur="saveTeamMemberField('${esc(m.id)}','passcode',this.value)" style="font-size:0.85rem;font-weight:900;letter-spacing:0.12em;padding:0.25rem 0.5rem;min-height:0;width:7.5rem;border-color:rgba(87,46,136,0.15);" />
-          <button onclick="regenPasscode('${esc(m.id)}')" title="Generate new 6-digit passcode" style="background:none;border:none;cursor:pointer;font-size:0.8rem;color:#86799f;padding:0.15rem 0.25rem;line-height:1;" onmouseover="this.style.color='#572e88'" onmouseout="this.style.color='#86799f'">↻</button>
-          <div style="margin-left:auto;">${teamColorPreview(m.note_color || '#572e88')}</div>
-        </div>
-        <!-- Actions row -->
-        <div style="padding:0.65rem 1rem;display:flex;gap:0.4rem;align-items:center;flex-wrap:wrap;">
+        <div style="padding:0.75rem 0.95rem;display:flex;gap:0.45rem;align-items:center;flex-wrap:wrap;">
           ${m.invite_sent_at
-            ? `<span style="display:inline-flex;align-items:center;gap:0.2rem;font-size:0.7rem;font-weight:800;color:#166634;background:rgba(22,101,52,0.08);border:1px solid rgba(22,101,52,0.2);border-radius:6px;padding:0.28rem 0.5rem;" title="Sent ${sentDate}">Sent ✓</span><button id="invite-btn-${esc(m.id)}" class="btn-secondary" onclick="emailTeamInvite('${esc(m.id)}')" style="font-size:0.72rem;padding:0.28rem 0.55rem;">Resend</button>`
-            : `<button id="invite-btn-${esc(m.id)}" class="btn-primary" onclick="emailTeamInvite('${esc(m.id)}')" style="font-size:0.72rem;padding:0.28rem 0.65rem;">Email Invite</button>`
+            ? `<span style="display:inline-flex;align-items:center;gap:0.2rem;font-size:0.72rem;font-weight:900;color:#166634;background:rgba(22,101,52,0.08);border:1px solid rgba(22,101,52,0.2);border-radius:8px;padding:0.32rem 0.55rem;" title="Sent ${sentDate}">Sent ✓</span><button id="invite-btn-${esc(m.id)}" class="btn-secondary" onclick="emailTeamInvite('${esc(m.id)}')" style="font-size:0.74rem;padding:0.32rem 0.58rem;border-color:color-mix(in srgb,var(--team-card-color) 26%,rgba(87,46,136,0.18));color:var(--team-card-color);">Resend</button>`
+            : `<button id="invite-btn-${esc(m.id)}" class="btn-primary" onclick="emailTeamInvite('${esc(m.id)}')" style="font-size:0.74rem;padding:0.34rem 0.7rem;background:var(--team-card-color);border-color:var(--team-card-color);">Email Invite</button>`
           }
-          <button class="btn-secondary" onclick="copyTeamPortalLink('${esc(m.id)}')" style="font-size:0.72rem;padding:0.28rem 0.55rem;">Copy Link</button>
-          ${m.bio ? `<button class="btn-secondary" onclick="downloadTeamBio('${esc(m.id)}')" style="font-size:0.72rem;padding:0.28rem 0.55rem;">Bio ↓</button>` : ''}
-          ${m.headshot_url ? `<a class="btn-secondary" href="${esc(m.headshot_url)}" target="_blank" download style="font-size:0.72rem;padding:0.28rem 0.55rem;text-decoration:none;">Headshot ↓</a>` : ''}
+          <button class="btn-secondary" onclick="copyTeamPortalLink('${esc(m.id)}')" style="font-size:0.74rem;padding:0.32rem 0.58rem;border-color:color-mix(in srgb,var(--team-card-color) 26%,rgba(87,46,136,0.18));color:var(--team-card-color);">Copy Link</button>
+          ${m.bio ? `<button class="btn-secondary" onclick="downloadTeamBio('${esc(m.id)}')" style="font-size:0.74rem;padding:0.32rem 0.58rem;border-color:color-mix(in srgb,var(--team-card-color) 26%,rgba(87,46,136,0.18));color:var(--team-card-color);">Bio ↓</button>` : ''}
+          ${m.headshot_url ? `<a class="btn-secondary" href="${esc(m.headshot_url)}" target="_blank" download style="font-size:0.74rem;padding:0.32rem 0.58rem;text-decoration:none;border-color:color-mix(in srgb,var(--team-card-color) 26%,rgba(87,46,136,0.18));color:var(--team-card-color);">Headshot ↓</a>` : ''}
         </div>
-        ${m.bio ? `<div style="padding:0 1rem 0.75rem;font-size:0.74rem;color:#86799f;line-height:1.5;">${esc(m.bio).slice(0, 180)}${String(m.bio).length > 180 ? '…' : ''}</div>` : ''}
+        ${m.bio ? `<div style="padding:0 0.95rem 0.85rem;font-size:0.76rem;color:#6a5a80;line-height:1.5;">${esc(m.bio).slice(0, 180)}${String(m.bio).length > 180 ? '…' : ''}</div>` : ''}
       </div>`;
     }).join('');
 
     const accessSection = `
-      <div style="margin-top:1.75rem;border-top:1px solid rgba(87,46,136,0.12);padding-top:1rem;">
+      <div>
         <div style="display:flex;justify-content:space-between;align-items:center;gap:0.75rem;flex-wrap:wrap;margin-bottom:0.65rem;">
           <div>
             <div style="font-size:0.72rem;font-weight:700;letter-spacing:0.07em;text-transform:uppercase;color:#6a5a80;">Audition Team Access</div>
@@ -18461,7 +18408,7 @@ If you have any questions, don't hesitate to reach out.
           : '<div style="font-size:0.82rem;color:#9a90b0;padding:0.75rem 0;">No team members yet. Click + Add Team Member to get started.</div>'}
       </div>`;
 
-    container.innerHTML = producerSection + creativeSection + accessSection;
+    container.innerHTML = accessSection;
   }
 
   function addProducer() {
