@@ -13970,7 +13970,7 @@
           <h1>Welcome</h1>
           <p>Enter the email address and access code from your invite.</p>
           <input class="form-input" id="team-access-email" placeholder="Your email address" type="email" autocomplete="email" />
-          <input class="form-input" id="team-access-passcode" placeholder="6-digit access code" autocomplete="one-time-code" inputmode="numeric" style="margin-top:0.55rem;" />
+          <input class="form-input" id="team-access-passcode" placeholder="6-digit access code" autocomplete="one-time-code" inputmode="numeric" maxlength="6" pattern="[0-9]{6}" style="margin-top:0.55rem;" />
           <button class="btn-primary" onclick="loginTeamAccess()" style="width:100%;justify-content:center;margin-top:0.85rem;">Open Auditions</button>
           <div class="team-access-login-error" id="team-access-login-error">${esc(message)}</div>
         </div>
@@ -13981,9 +13981,10 @@
   async function loginTeamAccess() {
     const err = document.getElementById('team-access-login-error');
     teamAccessEmail = document.getElementById('team-access-email')?.value?.trim() || '';
-    teamAccessPasscode = document.getElementById('team-access-passcode')?.value?.trim() || '';
+    teamAccessPasscode = (document.getElementById('team-access-passcode')?.value || '').replace(/\D+/g, '').slice(0, 6);
     if (err) err.textContent = '';
     if (!prodId) { if (err) err.textContent = 'Production not found. Check your link.'; return; }
+    if (teamAccessPasscode.length !== 6) { if (err) err.textContent = 'Enter the 6-digit access code from your invite.'; return; }
     if (!teamAccessEmail || !teamAccessPasscode) { if (err) err.textContent = 'Enter your email and access code.'; return; }
     const { data, error } = await sb.rpc('team_member_login', { p_production_id: prodId, p_email: teamAccessEmail, p_passcode: teamAccessPasscode });
     if (error || !data?.length) { if (err) err.textContent = 'That email and access code did not match.'; return; }
@@ -17846,7 +17847,19 @@ If you have any questions, don't hesitate to reach out.
   async function saveTeamMemberField(memberId, field, value) {
     if (!['name', 'email', 'role', 'passcode'].includes(field)) return;
     const patch = { [field]: String(value || '').trim() || null };
-    if (field === 'passcode' && !patch[field]) patch[field] = randomTeamPasscode();
+    if (field === 'passcode') {
+      const digits = String(value || '').replace(/\D+/g, '').slice(0, 6);
+      if (digits.length !== 6) {
+        const existing = auditionTeamMembers.find(m => String(m.id) === String(memberId));
+        const input = document.getElementById(`passcode-input-${memberId}`);
+        if (input) input.value = existing?.passcode || '';
+        showToast('Access code must be exactly 6 numbers.', true);
+        return;
+      }
+      patch.passcode = digits;
+      const input = document.getElementById(`passcode-input-${memberId}`);
+      if (input) input.value = patch.passcode;
+    }
     const { error } = await sb.from('production_team_members').update(patch).eq('id', memberId);
     if (error) { showToast('Could not save team access: ' + error.message, true); return; }
     await loadAuditionTeamMembers();
@@ -18192,7 +18205,7 @@ If you have any questions, don't hesitate to reach out.
         <!-- Passcode + note colour -->
         <div style="padding:0.65rem 1rem;border-bottom:1px solid rgba(87,46,136,0.08);display:flex;align-items:center;gap:0.65rem;background:rgba(87,46,136,0.02);">
           <span style="font-size:0.65rem;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;color:#86799f;white-space:nowrap;">Passcode</span>
-          <input id="passcode-input-${esc(m.id)}" class="form-input" value="${esc(m.passcode || '')}" placeholder="6-digit code" inputmode="numeric" onblur="saveTeamMemberField('${esc(m.id)}','passcode',this.value)" style="font-size:0.85rem;font-weight:900;letter-spacing:0.12em;padding:0.25rem 0.5rem;min-height:0;width:7.5rem;border-color:rgba(87,46,136,0.15);" />
+          <input id="passcode-input-${esc(m.id)}" class="form-input" value="${esc(m.passcode || '')}" placeholder="6-digit code" inputmode="numeric" maxlength="6" pattern="[0-9]{6}" onblur="saveTeamMemberField('${esc(m.id)}','passcode',this.value)" style="font-size:0.85rem;font-weight:900;letter-spacing:0.12em;padding:0.25rem 0.5rem;min-height:0;width:7.5rem;border-color:rgba(87,46,136,0.15);" />
           <button onclick="regenPasscode('${esc(m.id)}')" title="Generate new 6-digit passcode" style="background:none;border:none;cursor:pointer;font-size:0.8rem;color:#86799f;padding:0.15rem 0.25rem;line-height:1;" onmouseover="this.style.color='#572e88'" onmouseout="this.style.color='#86799f'">↻</button>
           <div style="margin-left:auto;">${teamColorPreview(m.note_color || '#572e88')}</div>
         </div>

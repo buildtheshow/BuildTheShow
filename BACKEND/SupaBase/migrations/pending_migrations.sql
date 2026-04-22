@@ -98,6 +98,23 @@ CREATE TABLE IF NOT EXISTS production_team_members (
   UNIQUE (production_id, email)
 );
 
+UPDATE production_team_members
+SET passcode = lpad(floor(random() * 1000000)::int::text, 6, '0')
+WHERE passcode IS NULL OR passcode !~ '^[0-9]{6}$';
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'production_team_members_passcode_six_digits_check'
+  ) THEN
+    ALTER TABLE production_team_members
+      ADD CONSTRAINT production_team_members_passcode_six_digits_check
+      CHECK (passcode ~ '^[0-9]{6}$');
+  END IF;
+END $$;
+
 CREATE UNIQUE INDEX IF NOT EXISTS production_team_members_colour_unique
   ON production_team_members (production_id, lower(note_color))
   WHERE is_active = true AND note_color IS NOT NULL;
@@ -161,6 +178,21 @@ ALTER TABLE production_team_members ENABLE ROW LEVEL SECURITY;
 ALTER TABLE production_team_member_sessions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE production_audition_notes ENABLE ROW LEVEL SECURITY;
 
+DROP FUNCTION IF EXISTS team_member_login(uuid,text,text);
+DROP FUNCTION IF EXISTS team_member_start_session(uuid,text,text,text);
+DROP FUNCTION IF EXISTS team_member_resume_session(uuid,text);
+DROP FUNCTION IF EXISTS team_member_revoke_session(uuid,text);
+DROP FUNCTION IF EXISTS team_member_colour_list(uuid,text,text);
+DROP FUNCTION IF EXISTS team_member_colour_list_for_session(uuid,text);
+DROP FUNCTION IF EXISTS team_member_update_profile(uuid,text,text,text,text,text,text);
+DROP FUNCTION IF EXISTS team_member_update_profile_for_session(uuid,text,text,text,text,text);
+DROP FUNCTION IF EXISTS team_note_add(uuid,text,text,uuid,uuid,uuid,text,text,text,integer);
+DROP FUNCTION IF EXISTS team_note_update(uuid,text,text,uuid,text);
+DROP FUNCTION IF EXISTS team_note_delete(uuid,text,text,uuid);
+DROP FUNCTION IF EXISTS team_note_add_for_session(uuid,text,uuid,uuid,uuid,text,text,text,integer);
+DROP FUNCTION IF EXISTS team_note_update_for_session(uuid,text,uuid,text);
+DROP FUNCTION IF EXISTS team_note_delete_for_session(uuid,text,uuid);
+
 CREATE OR REPLACE FUNCTION team_member_login(
   p_production_id uuid,
   p_email text,
@@ -175,7 +207,7 @@ AS $$
   FROM production_team_members
   WHERE production_id = p_production_id
     AND lower(email) = lower(trim(p_email))
-    AND passcode = trim(p_passcode)
+    AND passcode = regexp_replace(trim(p_passcode), '\D+', '', 'g')
     AND is_active = true
   LIMIT 1;
 $$;
@@ -205,7 +237,7 @@ BEGIN
   FROM production_team_members
   WHERE production_id = p_production_id
     AND lower(email) = lower(trim(p_email))
-    AND passcode = trim(p_passcode)
+    AND passcode = regexp_replace(trim(p_passcode), '\D+', '', 'g')
     AND is_active = true
   LIMIT 1;
 
@@ -284,6 +316,94 @@ AS $$
   SELECT true;
 $$;
 
+CREATE OR REPLACE FUNCTION team_member_colour_list_for_session(
+  p_production_id uuid,
+  p_session_token text
+)
+RETURNS TABLE(team_member_id uuid, note_color text, name text)
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  WITH authed AS (
+    SELECT s.team_member_id
+    FROM production_team_member_sessions s
+    JOIN production_team_members m ON m.id = s.team_member_id
+    WHERE s.production_id = p_production_id
+      AND s.session_token = trim(p_session_token)
+      AND s.revoked_at IS NULL
+      AND s.expires_at > now()
+      AND m.is_active = true
+    LIMIT 1
+  )
+  SELECT m.id, m.note_color, m.name
+  FROM production_team_members m
+  WHERE EXISTS (SELECT 1 FROM authed)
+    AND m.production_id = p_production_id
+    AND m.is_active = true
+  ORDER BY m.name;
+$$;
+
+CREATE OR REPLACE FUNCTION team_member_update_profile_for_session(
+  p_production_id uuid,
+  p_session_token text,
+  p_note_color text,
+  p_bio text DEFAULT NULL,
+  p_headshot_url text DEFAULT NULL,
+  p_headshot_path text DEFAULT NULL
+)
+RETURNS SETOF production_team_members
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_member production_team_members%ROWTYPE;
+BEGIN
+  SELECT m.*
+  INTO v_member
+  FROM production_team_member_sessions s
+  JOIN production_team_members m ON m.id = s.team_member_id
+  WHERE s.production_id = p_production_id
+    AND s.session_token = trim(p_session_token)
+    AND s.revoked_at IS NULL
+    AND s.expires_at > now()
+    AND m.is_active = true
+  LIMIT 1;
+
+  IF v_member.id IS NULL THEN
+    RAISE EXCEPTION 'Team access not found';
+  END IF;
+
+  IF EXISTS (
+    SELECT 1
+    FROM production_team_members
+    WHERE production_id = p_production_id
+      AND id <> v_member.id
+      AND is_active = true
+      AND lower(note_color) = lower(p_note_color)
+  ) THEN
+    RAISE EXCEPTION 'That note colour is already taken';
+  END IF;
+
+  UPDATE production_team_members
+  SET note_color = COALESCE(NULLIF(p_note_color, ''), note_color),
+      bio = p_bio,
+      headshot_url = p_headshot_url,
+      headshot_path = p_headshot_path,
+      updated_at = now()
+  WHERE id = v_member.id;
+
+  UPDATE production_team_member_sessions
+  SET last_used_at = now()
+  WHERE production_id = p_production_id
+    AND session_token = trim(p_session_token)
+    AND revoked_at IS NULL;
+
+  RETURN QUERY SELECT * FROM production_team_members WHERE id = v_member.id;
+END;
+$$;
+
 CREATE OR REPLACE FUNCTION team_member_colour_list(
   p_production_id uuid,
   p_email text,
@@ -299,7 +419,7 @@ AS $$
     FROM production_team_members
     WHERE production_id = p_production_id
       AND lower(email) = lower(trim(p_email))
-      AND passcode = trim(p_passcode)
+      AND passcode = regexp_replace(trim(p_passcode), '\D+', '', 'g')
       AND is_active = true
     LIMIT 1
   )
@@ -333,7 +453,7 @@ BEGIN
   FROM production_team_members
   WHERE production_id = p_production_id
     AND lower(email) = lower(trim(p_email))
-    AND passcode = trim(p_passcode)
+    AND passcode = regexp_replace(trim(p_passcode), '\D+', '', 'g')
     AND is_active = true
   LIMIT 1;
 
@@ -379,7 +499,7 @@ AS $$
     FROM production_team_members
     WHERE production_id = p_production_id
       AND lower(email) = lower(trim(p_email))
-      AND passcode = trim(p_passcode)
+      AND passcode = regexp_replace(trim(p_passcode), '\D+', '', 'g')
       AND is_active = true
     LIMIT 1
   )
@@ -416,7 +536,7 @@ BEGIN
   FROM production_team_members
   WHERE production_id = p_production_id
     AND lower(email) = lower(trim(p_email))
-    AND passcode = trim(p_passcode)
+    AND passcode = regexp_replace(trim(p_passcode), '\D+', '', 'g')
     AND is_active = true
   LIMIT 1;
 
@@ -466,7 +586,7 @@ BEGIN
   FROM production_team_members
   WHERE production_id = p_production_id
     AND lower(email) = lower(trim(p_email))
-    AND passcode = trim(p_passcode)
+    AND passcode = regexp_replace(trim(p_passcode), '\D+', '', 'g')
     AND is_active = true
   LIMIT 1;
 
@@ -508,7 +628,7 @@ BEGIN
   FROM production_team_members
   WHERE production_id = p_production_id
     AND lower(email) = lower(trim(p_email))
-    AND passcode = trim(p_passcode)
+    AND passcode = regexp_replace(trim(p_passcode), '\D+', '', 'g')
     AND is_active = true
   LIMIT 1;
 
@@ -524,6 +644,166 @@ BEGIN
   IF NOT FOUND THEN
     RAISE EXCEPTION 'You can only delete your own notes';
   END IF;
+
+  RETURN true;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION team_note_add_for_session(
+  p_production_id uuid,
+  p_session_token text,
+  p_applicant_id uuid,
+  p_session_id uuid DEFAULT NULL,
+  p_character_id uuid DEFAULT NULL,
+  p_note_area text DEFAULT 'in_room',
+  p_body text DEFAULT '',
+  p_note_type text DEFAULT 'general',
+  p_note_rating integer DEFAULT NULL
+)
+RETURNS SETOF production_audition_notes
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_member production_team_members%ROWTYPE;
+  v_note_id uuid;
+BEGIN
+  SELECT m.*
+  INTO v_member
+  FROM production_team_member_sessions s
+  JOIN production_team_members m ON m.id = s.team_member_id
+  WHERE s.production_id = p_production_id
+    AND s.session_token = trim(p_session_token)
+    AND s.revoked_at IS NULL
+    AND s.expires_at > now()
+    AND m.is_active = true
+  LIMIT 1;
+
+  IF v_member.id IS NULL THEN
+    RAISE EXCEPTION 'Team access not found';
+  END IF;
+  IF NULLIF(trim(p_body), '') IS NULL THEN
+    RAISE EXCEPTION 'Note body is required';
+  END IF;
+
+  UPDATE production_team_member_sessions
+  SET last_used_at = now()
+  WHERE production_id = p_production_id
+    AND session_token = trim(p_session_token)
+    AND revoked_at IS NULL;
+
+  INSERT INTO production_audition_notes (
+    production_id, applicant_id, session_id, character_id,
+    team_member_id, author_name, author_email, author_role, author_color,
+    note_area, note_type, note_rating, body
+  )
+  VALUES (
+    p_production_id, p_applicant_id, p_session_id, p_character_id,
+    v_member.id, v_member.name, v_member.email, v_member.role, v_member.note_color,
+    COALESCE(NULLIF(p_note_area, ''), 'in_room'),
+    COALESCE(NULLIF(p_note_type, ''), 'general'),
+    p_note_rating,
+    trim(p_body)
+  )
+  RETURNING id INTO v_note_id;
+
+  RETURN QUERY SELECT * FROM production_audition_notes WHERE id = v_note_id;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION team_note_update_for_session(
+  p_production_id uuid,
+  p_session_token text,
+  p_note_id uuid,
+  p_body text
+)
+RETURNS SETOF production_audition_notes
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_member production_team_members%ROWTYPE;
+BEGIN
+  SELECT m.*
+  INTO v_member
+  FROM production_team_member_sessions s
+  JOIN production_team_members m ON m.id = s.team_member_id
+  WHERE s.production_id = p_production_id
+    AND s.session_token = trim(p_session_token)
+    AND s.revoked_at IS NULL
+    AND s.expires_at > now()
+    AND m.is_active = true
+  LIMIT 1;
+
+  IF v_member.id IS NULL THEN
+    RAISE EXCEPTION 'Team access not found';
+  END IF;
+
+  UPDATE production_audition_notes
+  SET body = trim(p_body),
+      updated_at = now()
+  WHERE id = p_note_id
+    AND production_id = p_production_id
+    AND team_member_id = v_member.id;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'You can only edit your own notes';
+  END IF;
+
+  UPDATE production_team_member_sessions
+  SET last_used_at = now()
+  WHERE production_id = p_production_id
+    AND session_token = trim(p_session_token)
+    AND revoked_at IS NULL;
+
+  RETURN QUERY SELECT * FROM production_audition_notes WHERE id = p_note_id;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION team_note_delete_for_session(
+  p_production_id uuid,
+  p_session_token text,
+  p_note_id uuid
+)
+RETURNS boolean
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_member production_team_members%ROWTYPE;
+BEGIN
+  SELECT m.*
+  INTO v_member
+  FROM production_team_member_sessions s
+  JOIN production_team_members m ON m.id = s.team_member_id
+  WHERE s.production_id = p_production_id
+    AND s.session_token = trim(p_session_token)
+    AND s.revoked_at IS NULL
+    AND s.expires_at > now()
+    AND m.is_active = true
+  LIMIT 1;
+
+  IF v_member.id IS NULL THEN
+    RAISE EXCEPTION 'Team access not found';
+  END IF;
+
+  DELETE FROM production_audition_notes
+  WHERE id = p_note_id
+    AND production_id = p_production_id
+    AND team_member_id = v_member.id;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'You can only delete your own notes';
+  END IF;
+
+  UPDATE production_team_member_sessions
+  SET last_used_at = now()
+  WHERE production_id = p_production_id
+    AND session_token = trim(p_session_token)
+    AND revoked_at IS NULL;
 
   RETURN true;
 END;
