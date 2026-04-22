@@ -102,7 +102,7 @@ function renderProductionTeamCard(member, options = {}) {
                 ${inviteHtml}
                 <button class="production-team-card-back-action" type="button" onclick="copyTeamPortalLink('${id}',this)"><span class="production-team-card-action-label">Copy Link</span><span class="production-team-card-action-status"></span></button>
                 <button class="production-team-card-back-action" type="button" onclick="copyProductionTeamCardPasscode('${id}',this)"><span class="production-team-card-action-label">Copy Passcode</span><span class="production-team-card-action-status"></span></button>
-                ${m.headshot_url ? `<a class="production-team-card-back-action" href="${escapeHtml(m.headshot_url)}" target="_blank" download><span class="production-team-card-action-label">Download Headshot</span><span class="production-team-card-action-status"></span></a>` : ''}
+                ${m.headshot_url ? `<a class="production-team-card-back-action" href="${escapeHtml(m.headshot_url)}" target="_blank" download onclick="ptcBtnFeedback(this,{working:'Downloading',done:'Downloaded'})?.(true)"><span class="production-team-card-action-label">Download Headshot</span><span class="production-team-card-action-status"></span></a>` : ''}
               </div>
             ` : ''}
           </div>
@@ -139,28 +139,36 @@ function flipProductionTeamCard(card) {
 
 function ptcBtnFeedback(btn, { working = null, done = 'Saved', timeout = 1800, restore = true } = {}) {
   if (!btn) return () => {};
-  const orig = btn.textContent.trim();
+  const label = btn.querySelector?.('.production-team-card-action-label');
+  const status = btn.querySelector?.('.production-team-card-action-status');
+  const orig = label ? label.textContent.trim() : btn.textContent.trim();
   btn.classList.remove('did-work', 'is-clicked');
   void btn.offsetWidth;
   btn.classList.add('is-clicked');
   setTimeout(() => btn.classList.remove('is-clicked'), 420);
   btn.classList.add('is-working');
   btn.disabled = true;
-  if (working) btn.textContent = working;
+  if (working) {
+    if (status) status.textContent = working;
+    else btn.textContent = working;
+  }
   return function ptcMarkDone(success = true) {
     btn.classList.remove('is-working');
     btn.disabled = false;
     if (success) {
-      btn.textContent = done;
+      if (status) status.textContent = done;
+      else btn.textContent = done;
       btn.classList.add('did-work');
       if (restore) {
         setTimeout(() => {
-          btn.textContent = orig;
+          if (status) status.textContent = '';
+          else btn.textContent = orig;
           btn.classList.remove('did-work');
         }, timeout);
       }
     } else {
-      btn.textContent = orig;
+      if (status) status.textContent = '';
+      else btn.textContent = orig;
     }
   };
 }

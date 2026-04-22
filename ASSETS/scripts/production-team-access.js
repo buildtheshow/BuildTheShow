@@ -211,7 +211,7 @@ async function removeProductionTeamMember(memberId, btn = null) {
   const ok = window.confirm(`Remove ${label} from production team access?`);
   if (!ok) return;
 
-  const markDone = ptcBtnFeedback?.(btn, { working: 'Removing...', done: 'Removed', restore: false });
+  const markDone = ptcBtnFeedback?.(btn, { working: 'Removing', done: 'Removed', restore: false });
   const { error } = await sb.from('production_team_members').delete().eq('id', memberId);
   if (error) {
     markDone?.(false);
