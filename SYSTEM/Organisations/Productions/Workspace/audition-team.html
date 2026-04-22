@@ -14093,13 +14093,23 @@
       return;
     }
     if (!teamAccessEmail || !teamAccessPasscode) { if (err) err.textContent = 'Enter your email and access code.'; return; }
-    if (!prodId) { if (err) err.textContent = 'Production not found. Check your link.'; return; }
-    const { data, error } = await sb.rpc('team_member_start_session', {
-      p_production_id: prodId,
-      p_email: teamAccessEmail,
-      p_passcode: teamAccessPasscode,
-      p_user_agent: navigator.userAgent || null,
-    });
+    const portalParts = teamPortalPathParts();
+    const usePortalLogin = teamAccessMode && portalParts.org && portalParts.show;
+    if (!prodId && !usePortalLogin) { if (err) err.textContent = 'Production not found. Check your link.'; return; }
+    const { data, error } = usePortalLogin
+      ? await sb.rpc('team_member_start_session_for_portal', {
+          p_org_abbrev: portalParts.org,
+          p_show_slug: portalParts.show,
+          p_email: teamAccessEmail,
+          p_passcode: teamAccessPasscode,
+          p_user_agent: navigator.userAgent || null,
+        })
+      : await sb.rpc('team_member_start_session', {
+          p_production_id: prodId,
+          p_email: teamAccessEmail,
+          p_passcode: teamAccessPasscode,
+          p_user_agent: navigator.userAgent || null,
+        });
     const result = Array.isArray(data) ? data[0] : data;
     if (error || !result) {
       if (options.silent) {
