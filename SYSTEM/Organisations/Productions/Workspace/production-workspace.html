@@ -18679,16 +18679,23 @@ If you have any questions, don't hesitate to reach out.
   }
 
   function renderAuditionsPanel() {
-    // Populate day selectors and load dashboard by default
     populateAudDaySelects();
     renderAuditionsSidebarSubmenu();
-    if (!allApplicants.length) {
-      loadApplicants().then(() => {
-        if (loadWorkspaceNavState().auditionsDayTab === 'dashboard') loadAudDashboard();
-      }).catch(() => {});
-    }
     const savedNav = loadWorkspaceNavState();
-    switchAudDayTab(savedNav.auditionsDayTab || 'dashboard');
+    const targetTab = savedNav.auditionsDayTab || 'dashboard';
+    // Make sure sessions + applicants are loaded before rendering the dashboard
+    const needsSessions    = !audSessions.length;
+    const needsApplicants  = !allApplicants.length;
+    if (needsSessions || needsApplicants) {
+      Promise.all([
+        needsSessions   ? loadAudSessions()   : Promise.resolve(),
+        needsApplicants ? loadApplicants()    : Promise.resolve(),
+      ]).then(() => {
+        switchAudDayTab(targetTab);
+      }).catch(() => switchAudDayTab(targetTab));
+    } else {
+      switchAudDayTab(targetTab);
+    }
   }
 
   let _sidebarSection = null;
