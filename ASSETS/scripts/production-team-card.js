@@ -36,8 +36,8 @@ function renderProductionTeamCard(member, options = {}) {
     : `<div class="production-team-card-placeholder">${initial}</div>`;
 
   const inviteHtml = m.invite_sent_at
-    ? `<button id="invite-btn-${id}" class="production-team-card-back-action" type="button" onclick="event.stopPropagation();emailTeamInvite('${id}', this)">Resend Invite</button>`
-    : `<button id="invite-btn-${id}" class="btn-primary" type="button" onclick="event.stopPropagation();emailTeamInvite('${id}', this)">Email Invite</button>`;
+    ? `<button id="invite-btn-${id}" class="production-team-card-back-action" type="button" onclick="event.stopPropagation();emailTeamInvite('${id}', this)"><span class="production-team-card-action-label">Resend Invite</span><span class="production-team-card-action-status"></span></button>`
+    : `<button id="invite-btn-${id}" class="production-team-card-back-action" type="button" onclick="event.stopPropagation();emailTeamInvite('${id}', this)"><span class="production-team-card-action-label">Email Invite</span><span class="production-team-card-action-status"></span></button>`;
 
   const bio = String(m.bio || '');
   const bioText = escapeHtml(bio || 'No bio added yet.');
@@ -67,16 +67,10 @@ function renderProductionTeamCard(member, options = {}) {
           </div>
           <div class="production-team-card-face production-team-card-back">
             <div class="production-team-card-back-head">
-              <div class="production-team-card-back-topline">
-                <label class="production-team-card-back-status ${statusClass}" onclick="event.stopPropagation();">
-                  <input type="checkbox" ${isActive ? 'checked' : ''} onchange="toggleTeamMemberAccess('${id}',this.checked)" />
-                  ${isActive ? 'Active' : 'Inactive'}
-                </label>
-              </div>
               <div class="production-team-card-back-identity" title="${name || 'Firstname Lastname'}">
                 <span class="production-team-card-back-dot" aria-hidden="true"></span>
-                <span class="production-team-card-back-first-name">${firstName}</span>
-                <span class="production-team-card-back-role-inline">(${role || 'Production Team'})</span>
+                <span class="production-team-card-back-full-name">${name || 'Firstname Lastname'}</span>
+                <span class="production-team-card-back-role-inline">${role || 'Production Team'}</span>
               </div>
               <div class="production-team-card-back-contact">
                 <div class="production-team-card-back-contact-item">
@@ -91,7 +85,7 @@ function renderProductionTeamCard(member, options = {}) {
                   <span>Passcode:</span>
                   <div class="production-team-card-back-passcode-row" onclick="event.stopPropagation();">
                     <input id="passcode-input-${id}" class="production-team-card-back-input production-team-card-back-passcode" value="${passcode}" placeholder="6 digits" inputmode="numeric" maxlength="6" pattern="[0-9]{6}" oninput="this.value=this.value.replace(/\\D+/g,'').slice(0,6)" />
-                    <button class="production-team-card-back-icon" type="button" onclick="saveTeamMemberPasscode('${id}',this)" title="Save access code">Save</button>
+                    <button class="production-team-card-back-icon" type="button" onclick="saveTeamMemberPasscode('${id}',this)" title="Save access code"><span class="production-team-card-action-label">Save</span><span class="production-team-card-action-status"></span></button>
                     <button class="production-team-card-back-icon" type="button" onclick="regenPasscode('${id}',this)" title="Generate new 6-digit passcode">↻</button>
                   </div>
                 </div>
@@ -106,12 +100,9 @@ function renderProductionTeamCard(member, options = {}) {
             ${showManagement ? `
               <div class="production-team-card-back-actions" onclick="event.stopPropagation();">
                 ${inviteHtml}
-                <button class="production-team-card-back-action" type="button" onclick="copyTeamPortalLink('${id}',this)">Copy Link</button>
-                <button class="production-team-card-back-action" type="button" onclick="copyProductionTeamCardPasscode('${id}',this)">Copy Code</button>
-                ${bio ? `<button class="production-team-card-back-action" type="button" onclick="downloadTeamBio('${id}')">Bio ↓</button>` : ''}
-                ${m.headshot_url ? `<a class="production-team-card-back-action" href="${escapeHtml(m.headshot_url)}" target="_blank" download>Headshot ↓</a>` : ''}
-                <button class="production-team-card-back-action is-danger" type="button" onclick="removeProductionTeamMember('${id}',this)">Remove</button>
-                <div class="production-team-card-back-hint">Click to flip back</div>
+                <button class="production-team-card-back-action" type="button" onclick="copyTeamPortalLink('${id}',this)"><span class="production-team-card-action-label">Copy Link</span><span class="production-team-card-action-status"></span></button>
+                <button class="production-team-card-back-action" type="button" onclick="copyProductionTeamCardPasscode('${id}',this)"><span class="production-team-card-action-label">Copy Passcode</span><span class="production-team-card-action-status"></span></button>
+                ${m.headshot_url ? `<a class="production-team-card-back-action" href="${escapeHtml(m.headshot_url)}" target="_blank" download><span class="production-team-card-action-label">Download Headshot</span><span class="production-team-card-action-status"></span></a>` : ''}
               </div>
             ` : ''}
           </div>
