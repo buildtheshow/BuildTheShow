@@ -102,6 +102,22 @@ CREATE UNIQUE INDEX IF NOT EXISTS production_team_members_colour_unique
   ON production_team_members (production_id, lower(note_color))
   WHERE is_active = true AND note_color IS NOT NULL;
 
+CREATE TABLE IF NOT EXISTS production_team_member_sessions (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  production_id uuid NOT NULL REFERENCES productions(id) ON DELETE CASCADE,
+  team_member_id uuid NOT NULL REFERENCES production_team_members(id) ON DELETE CASCADE,
+  session_token text NOT NULL UNIQUE,
+  user_agent text,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  last_used_at timestamptz NOT NULL DEFAULT now(),
+  expires_at timestamptz NOT NULL DEFAULT (now() + interval '30 days'),
+  revoked_at timestamptz
+);
+
+CREATE INDEX IF NOT EXISTS production_team_member_sessions_lookup_idx
+  ON production_team_member_sessions (production_id, session_token)
+  WHERE revoked_at IS NULL;
+
 CREATE TABLE IF NOT EXISTS production_audition_notes (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   production_id uuid NOT NULL REFERENCES productions(id) ON DELETE CASCADE,
@@ -142,6 +158,7 @@ BEGIN
 END $$;
 
 ALTER TABLE production_team_members ENABLE ROW LEVEL SECURITY;
+ALTER TABLE production_team_member_sessions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE production_audition_notes ENABLE ROW LEVEL SECURITY;
 
 CREATE OR REPLACE FUNCTION team_member_login(
@@ -161,6 +178,110 @@ AS $$
     AND passcode = trim(p_passcode)
     AND is_active = true
   LIMIT 1;
+$$;
+
+CREATE OR REPLACE FUNCTION team_member_start_session(
+  p_production_id uuid,
+  p_email text,
+  p_passcode text,
+  p_user_agent text DEFAULT NULL
+)
+RETURNS TABLE(
+  session_token text,
+  expires_at timestamptz,
+  team_member production_team_members
+)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_member production_team_members%ROWTYPE;
+  v_token text;
+  v_expires_at timestamptz;
+BEGIN
+  SELECT *
+  INTO v_member
+  FROM production_team_members
+  WHERE production_id = p_production_id
+    AND lower(email) = lower(trim(p_email))
+    AND passcode = trim(p_passcode)
+    AND is_active = true
+  LIMIT 1;
+
+  IF v_member.id IS NULL THEN
+    RAISE EXCEPTION 'Team access not found';
+  END IF;
+
+  v_token := encode(gen_random_bytes(32), 'hex');
+  v_expires_at := now() + interval '30 days';
+
+  INSERT INTO production_team_member_sessions (
+    production_id, team_member_id, session_token, user_agent, expires_at
+  )
+  VALUES (
+    p_production_id, v_member.id, v_token, p_user_agent, v_expires_at
+  );
+
+  RETURN QUERY SELECT v_token, v_expires_at, v_member;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION team_member_resume_session(
+  p_production_id uuid,
+  p_session_token text
+)
+RETURNS SETOF production_team_members
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_session production_team_member_sessions%ROWTYPE;
+BEGIN
+  SELECT *
+  INTO v_session
+  FROM production_team_member_sessions
+  WHERE production_id = p_production_id
+    AND session_token = trim(p_session_token)
+    AND revoked_at IS NULL
+    AND expires_at > now()
+  LIMIT 1;
+
+  IF v_session.id IS NULL THEN
+    RETURN;
+  END IF;
+
+  UPDATE production_team_member_sessions
+  SET last_used_at = now()
+  WHERE id = v_session.id;
+
+  RETURN QUERY
+  SELECT m.*
+  FROM production_team_members m
+  WHERE m.id = v_session.team_member_id
+    AND m.production_id = p_production_id
+    AND m.is_active = true
+  LIMIT 1;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION team_member_revoke_session(
+  p_production_id uuid,
+  p_session_token text
+)
+RETURNS boolean
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  UPDATE production_team_member_sessions
+  SET revoked_at = now()
+  WHERE production_id = p_production_id
+    AND session_token = trim(p_session_token)
+    AND revoked_at IS NULL;
+
+  SELECT true;
 $$;
 
 CREATE OR REPLACE FUNCTION team_member_colour_list(

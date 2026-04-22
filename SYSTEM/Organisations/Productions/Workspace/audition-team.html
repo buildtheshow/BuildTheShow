@@ -13915,6 +13915,35 @@
   let teamAccessMember = null;
   let teamAccessEmail = '';
   let teamAccessPasscode = '';
+  let teamAccessSessionToken = '';
+
+  function teamAccessStorageKey() {
+    return `bts-team-access:${prodId || 'unknown'}`;
+  }
+
+  function loadRememberedTeamAccess() {
+    try {
+      const raw = localStorage.getItem(teamAccessStorageKey());
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  }
+
+  function rememberTeamAccess() {
+    try {
+      if (!prodId || !teamAccessSessionToken) return;
+      localStorage.setItem(teamAccessStorageKey(), JSON.stringify({
+        email: teamAccessEmail,
+        sessionToken: teamAccessSessionToken,
+        savedAt: new Date().toISOString(),
+      }));
+    } catch {}
+  }
+
+  function forgetTeamAccess() {
+    try { localStorage.removeItem(teamAccessStorageKey()); } catch {}
+  }
 
   const TEAM_ACCESS_PERMISSIONS = {
     producer: { label: 'Producer', canViewContact: true, canEditSchedule: true, canCheckIn: true, canViewSettings: true, canCreateNotes: true, canEditOwnNotes: true, canDeleteOwnNotes: true, canEditAllNotes: true, canDeleteAllNotes: true, canEditPerformerFiles: true },
@@ -13988,22 +14017,73 @@
     document.body.appendChild(overlay);
   }
 
-  async function loginTeamAccess() {
+  async function loginTeamAccess(options = {}) {
     const err = document.getElementById('team-access-login-error');
-    teamAccessEmail = document.getElementById('team-access-email')?.value?.trim() || '';
-    teamAccessPasscode = document.getElementById('team-access-passcode')?.value?.trim() || '';
-    if (err) err.textContent = '';
+    teamAccessEmail = options.email || document.getElementById('team-access-email')?.value?.trim() || '';
+    teamAccessPasscode = options.passcode || document.getElementById('team-access-passcode')?.value?.trim() || '';
+    if (err) err.textContent = options.silent ? 'Opening your saved team access...' : '';
     if (!prodId) { if (err) err.textContent = 'Production not found. Check your link.'; return; }
+    if (options.sessionToken) {
+      const { data, error } = await sb.rpc('team_member_resume_session', { p_production_id: prodId, p_session_token: options.sessionToken });
+      if (error || !data?.length) {
+        forgetTeamAccess();
+        showTeamAccessLogin();
+        return;
+      }
+      teamAccessSessionToken = options.sessionToken;
+      teamAccessMember = data[0];
+      teamAccessEmail = teamAccessMember.email || options.email || '';
+      rememberTeamAccess();
+      document.getElementById('team-access-login-overlay')?.remove();
+      document.body.classList.remove('team-access-login-visible');
+      await bootProductionWorkspace(new URLSearchParams(window.location.search));
+      applyTeamAccessMode();
+      switchProdTab('auditions');
+      openAuditionsSubTab('dashboard');
+      return;
+    }
     if (!teamAccessEmail || !teamAccessPasscode) { if (err) err.textContent = 'Enter your email and access code.'; return; }
-    const { data, error } = await sb.rpc('team_member_login', { p_production_id: prodId, p_email: teamAccessEmail, p_passcode: teamAccessPasscode });
-    if (error || !data?.length) { if (err) err.textContent = 'That email and access code did not match.'; return; }
-    teamAccessMember = data[0];
+    const { data, error } = await sb.rpc('team_member_start_session', {
+      p_production_id: prodId,
+      p_email: teamAccessEmail,
+      p_passcode: teamAccessPasscode,
+      p_user_agent: navigator.userAgent || null,
+    });
+    if (error || !data?.length) {
+      if (options.silent) {
+        forgetTeamAccess();
+        showTeamAccessLogin();
+        return;
+      }
+      if (err) err.textContent = 'That email and access code did not match.';
+      return;
+    }
+    teamAccessSessionToken = data[0].session_token || '';
+    teamAccessMember = data[0].team_member || null;
+    rememberTeamAccess();
     document.getElementById('team-access-login-overlay')?.remove();
     document.body.classList.remove('team-access-login-visible');
     await bootProductionWorkspace(new URLSearchParams(window.location.search));
     applyTeamAccessMode();
     switchProdTab('auditions');
     openAuditionsSubTab('dashboard');
+  }
+
+  async function logoutTeamAccess() {
+    const tokenToRevoke = teamAccessSessionToken || loadRememberedTeamAccess()?.sessionToken || '';
+    if (tokenToRevoke) {
+      try { await sb.rpc('team_member_revoke_session', { p_production_id: prodId, p_session_token: tokenToRevoke }); } catch {}
+    }
+    forgetTeamAccess();
+    teamAccessMember = null;
+    teamAccessEmail = '';
+    teamAccessPasscode = '';
+    teamAccessSessionToken = '';
+    if (auditionsRealtimeChannel) {
+      try { await sb.removeChannel(auditionsRealtimeChannel); } catch {}
+      auditionsRealtimeChannel = null;
+    }
+    showTeamAccessLogin('You have been logged out.');
   }
 
   function applyTeamAccessMode() {
@@ -14014,6 +14094,12 @@
     const subEl = document.getElementById('hdr-sub');
     if (nameEl && prod) nameEl.textContent = prod.title || 'Production';
     if (subEl) subEl.textContent = [teamAccessMember?.name, perms.label].filter(Boolean).join(' · ');
+    const sidebarProd = document.querySelector('.sidebar-prod');
+    if (sidebarProd && !document.getElementById('team-access-logout-btn')) {
+      sidebarProd.insertAdjacentHTML('beforeend', `
+        <button type="button" id="team-access-logout-btn" onclick="logoutTeamAccess()" style="display:flex;align-items:center;justify-content:center;width:100%;margin-top:0.75rem;font-size:0.76rem;font-weight:800;color:#fff;background:rgba(255,255,255,0.12);border:1.5px solid rgba(255,255,255,0.22);border-radius:8px;padding:0.42rem 0.85rem;cursor:pointer;font-family:inherit;">Log Out</button>
+      `);
+    }
     document.querySelectorAll('.prod-tabs > .prod-tab').forEach(tab => {
       const isAllowed = tab.id === 'auditions-parent-tab' || tab.dataset.tab === 'auditions' || tab.dataset.tab === 'profile' || tab.dataset.tab === 'castlist';
       tab.style.display = isAllowed ? '' : 'none';
@@ -14216,6 +14302,10 @@
 
     if (teamAccessMode) {
       showTeamAccessLogin();
+      const remembered = loadRememberedTeamAccess();
+      if (remembered?.sessionToken) {
+        loginTeamAccess({ email: remembered.email || '', sessionToken: remembered.sessionToken, silent: true });
+      }
       return;
     }
 
