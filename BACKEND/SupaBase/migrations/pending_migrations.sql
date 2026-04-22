@@ -206,7 +206,7 @@ AS $$
   SELECT *
   FROM production_team_members
   WHERE production_id = p_production_id
-    AND lower(email) = lower(trim(p_email))
+    AND lower(trim(email)) = lower(trim(p_email))
     AND passcode = regexp_replace(trim(p_passcode), '\D+', '', 'g')
     AND is_active = true
   LIMIT 1;
@@ -236,7 +236,7 @@ BEGIN
   INTO v_member
   FROM production_team_members
   WHERE production_id = p_production_id
-    AND lower(email) = lower(trim(p_email))
+    AND lower(trim(email)) = lower(trim(p_email))
     AND passcode = regexp_replace(trim(p_passcode), '\D+', '', 'g')
     AND is_active = true
   LIMIT 1;
@@ -418,7 +418,7 @@ AS $$
     SELECT id
     FROM production_team_members
     WHERE production_id = p_production_id
-      AND lower(email) = lower(trim(p_email))
+      AND lower(trim(email)) = lower(trim(p_email))
       AND passcode = regexp_replace(trim(p_passcode), '\D+', '', 'g')
       AND is_active = true
     LIMIT 1
@@ -452,7 +452,7 @@ BEGIN
   INTO v_member
   FROM production_team_members
   WHERE production_id = p_production_id
-    AND lower(email) = lower(trim(p_email))
+    AND lower(trim(email)) = lower(trim(p_email))
     AND passcode = regexp_replace(trim(p_passcode), '\D+', '', 'g')
     AND is_active = true
   LIMIT 1;
@@ -498,7 +498,7 @@ AS $$
     SELECT id
     FROM production_team_members
     WHERE production_id = p_production_id
-      AND lower(email) = lower(trim(p_email))
+      AND lower(trim(email)) = lower(trim(p_email))
       AND passcode = regexp_replace(trim(p_passcode), '\D+', '', 'g')
       AND is_active = true
     LIMIT 1
@@ -535,7 +535,7 @@ BEGIN
   INTO v_member
   FROM production_team_members
   WHERE production_id = p_production_id
-    AND lower(email) = lower(trim(p_email))
+    AND lower(trim(email)) = lower(trim(p_email))
     AND passcode = regexp_replace(trim(p_passcode), '\D+', '', 'g')
     AND is_active = true
   LIMIT 1;
@@ -585,7 +585,7 @@ BEGIN
   INTO v_member
   FROM production_team_members
   WHERE production_id = p_production_id
-    AND lower(email) = lower(trim(p_email))
+    AND lower(trim(email)) = lower(trim(p_email))
     AND passcode = regexp_replace(trim(p_passcode), '\D+', '', 'g')
     AND is_active = true
   LIMIT 1;
@@ -627,7 +627,7 @@ BEGIN
   INTO v_member
   FROM production_team_members
   WHERE production_id = p_production_id
-    AND lower(email) = lower(trim(p_email))
+    AND lower(trim(email)) = lower(trim(p_email))
     AND passcode = regexp_replace(trim(p_passcode), '\D+', '', 'g')
     AND is_active = true
   LIMIT 1;

@@ -104,9 +104,9 @@ function renderProductionTeamCard(member, options = {}) {
                 <button class="production-team-card-back-action" type="button" onclick="copyProductionTeamCardPasscode('${id}')">Copy Code</button>
                 ${bio ? `<button class="production-team-card-back-action" type="button" onclick="downloadTeamBio('${id}')">Bio ↓</button>` : ''}
                 ${m.headshot_url ? `<a class="production-team-card-back-action" href="${escapeHtml(m.headshot_url)}" target="_blank" download>Headshot ↓</a>` : ''}
+                <div class="production-team-card-back-hint">Click to flip back</div>
               </div>
             ` : ''}
-            <div class="production-team-card-back-hint">Click to flip back</div>
           </div>
         </div>
       </div>
