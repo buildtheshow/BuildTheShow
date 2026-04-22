@@ -85,7 +85,7 @@ function renderProductionTeamCard(member, options = {}) {
                   <span>Passcode:</span>
                   <div class="production-team-card-back-passcode-row" onclick="event.stopPropagation();">
                     <input id="passcode-input-${id}" class="production-team-card-back-input production-team-card-back-passcode" value="${passcode}" placeholder="6 digits" inputmode="numeric" maxlength="6" pattern="[0-9]{6}" oninput="this.value=this.value.replace(/\\D+/g,'').slice(0,6)" />
-                    <button class="production-team-card-back-icon" type="button" onclick="saveTeamMemberPasscode('${id}',this)" title="Save access code"><span class="production-team-card-action-label">Save</span><span class="production-team-card-action-status"></span></button>
+                    <button class="production-team-card-back-icon" type="button" onclick="saveTeamMemberPasscode('${id}',this)" title="Save access code">Save</button>
                     <button class="production-team-card-back-icon" type="button" onclick="regenPasscode('${id}',this)" title="Generate new 6-digit passcode">↻</button>
                   </div>
                 </div>
@@ -103,6 +103,7 @@ function renderProductionTeamCard(member, options = {}) {
                 <button class="production-team-card-back-action" type="button" onclick="copyTeamPortalLink('${id}',this)"><span class="production-team-card-action-label">Copy Link</span><span class="production-team-card-action-status"></span></button>
                 <button class="production-team-card-back-action" type="button" onclick="copyProductionTeamCardPasscode('${id}',this)"><span class="production-team-card-action-label">Copy Passcode</span><span class="production-team-card-action-status"></span></button>
                 ${m.headshot_url ? `<a class="production-team-card-back-action" href="${escapeHtml(m.headshot_url)}" target="_blank" download onclick="ptcBtnFeedback(this,{working:'Downloading',done:'Downloaded'})?.(true)"><span class="production-team-card-action-label">Download Headshot</span><span class="production-team-card-action-status"></span></a>` : ''}
+                <button class="production-team-card-back-action is-danger" type="button" onclick="removeProductionTeamMember('${id}',this)"><span class="production-team-card-action-label">Remove</span><span class="production-team-card-action-status"></span></button>
               </div>
             ` : ''}
           </div>
