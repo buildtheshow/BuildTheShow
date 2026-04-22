@@ -13949,6 +13949,35 @@
   let teamAccessMember = null;
   let teamAccessEmail = '';
   let teamAccessPasscode = '';
+  let teamAccessSessionToken = '';
+
+  function teamAccessStorageKey() {
+    return `bts-team-access:${prodId || 'unknown'}`;
+  }
+
+  function loadRememberedTeamAccess() {
+    try {
+      const raw = localStorage.getItem(teamAccessStorageKey());
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  }
+
+  function rememberTeamAccess() {
+    try {
+      if (!prodId || !teamAccessSessionToken) return;
+      localStorage.setItem(teamAccessStorageKey(), JSON.stringify({
+        email: teamAccessEmail,
+        sessionToken: teamAccessSessionToken,
+        savedAt: new Date().toISOString(),
+      }));
+    } catch {}
+  }
+
+  function forgetTeamAccess() {
+    try { localStorage.removeItem(teamAccessStorageKey()); } catch {}
+  }
 
   const TEAM_ACCESS_PERMISSIONS = {
     producer: { label: 'Producer', canViewContact: true, canEditSchedule: true, canCheckIn: true, canViewSettings: true, canCreateNotes: true, canEditOwnNotes: true, canDeleteOwnNotes: true, canEditAllNotes: true, canDeleteAllNotes: true },
@@ -13959,6 +13988,14 @@
 
   function isTeamAccessRequest() {
     return /\/Team\/?$/i.test(window.location.pathname) || new URLSearchParams(window.location.search).get('team') === '1';
+  }
+
+  function teamPortalPathParts() {
+    const parts = window.location.pathname.replace(/\/+$/, '').split('/').filter(Boolean);
+    return {
+      org: parts[0] || '',
+      show: parts[1] || '',
+    };
   }
 
   function normalizeTeamRole(role) {
@@ -13972,12 +14009,12 @@
   }
 
   async function resolveTeamProductionIdFromPath() {
-    const parts = window.location.pathname.replace(/\/+$/, '').split('/').filter(Boolean);
-    if (parts.length < 2) return '';
+    const parts = teamPortalPathParts();
+    if (!parts.org || !parts.show) return '';
     try {
       const { data, error } = await sb.rpc('resolve_team_portal', {
-        p_org_abbrev: parts[0],
-        p_show_slug: parts[1],
+        p_org_abbrev: parts.org,
+        p_show_slug: parts.show,
       });
       if (error) throw error;
       return data || '';
@@ -14022,23 +14059,88 @@
     document.body.appendChild(overlay);
   }
 
-  async function loginTeamAccess() {
+  async function loginTeamAccess(options = {}) {
     const err = document.getElementById('team-access-login-error');
-    teamAccessEmail = document.getElementById('team-access-email')?.value?.trim() || '';
-    teamAccessPasscode = (document.getElementById('team-access-passcode')?.value || '').replace(/\D+/g, '').slice(0, 6);
-    if (err) err.textContent = '';
-    if (!prodId) { if (err) err.textContent = 'Production not found. Check your link.'; return; }
-    if (teamAccessPasscode.length !== 6) { if (err) err.textContent = 'Enter the 6-digit access code from your invite.'; return; }
+    teamAccessEmail = (options.email || document.getElementById('team-access-email')?.value?.trim() || '').toLowerCase();
+    teamAccessPasscode = (options.passcode || document.getElementById('team-access-passcode')?.value || '').trim().replace(/\D+/g, '').slice(0, 6);
+    if (err) err.textContent = options.silent ? 'Opening your saved team access...' : '';
+    if (!options.sessionToken && teamAccessPasscode.length !== 6) {
+      if (err) err.textContent = 'Enter the 6-digit access code from your invite.';
+      return;
+    }
+    if (!prodId && options.sessionToken) { if (err) err.textContent = 'Production not found. Check your link.'; return; }
+    if (options.sessionToken) {
+      const { data, error } = await sb.rpc('team_member_resume_session', { p_production_id: prodId, p_session_token: options.sessionToken });
+      if (error || !data?.length) {
+        forgetTeamAccess();
+        showTeamAccessLogin();
+        return;
+      }
+      teamAccessSessionToken = options.sessionToken;
+      teamAccessMember = data[0];
+      teamAccessEmail = teamAccessMember.email || options.email || '';
+      rememberTeamAccess();
+      document.getElementById('team-access-login-overlay')?.remove();
+      document.body.classList.remove('team-access-login-visible');
+      await bootProductionWorkspace(new URLSearchParams(window.location.search));
+      applyTeamAccessMode();
+      switchProdTab('auditions');
+      openAuditionsSubTab('dashboard');
+      startAuditionsPoll();
+      return;
+    }
     if (!teamAccessEmail || !teamAccessPasscode) { if (err) err.textContent = 'Enter your email and access code.'; return; }
-    const { data, error } = await sb.rpc('team_member_login', { p_production_id: prodId, p_email: teamAccessEmail, p_passcode: teamAccessPasscode });
-    if (error || !data?.length) { if (err) err.textContent = 'That email and access code did not match.'; return; }
-    teamAccessMember = data[0];
+    if (!prodId) { if (err) err.textContent = 'Production not found. Check your link.'; return; }
+    const { data, error } = await sb.rpc('team_member_start_session', {
+      p_production_id: prodId,
+      p_email: teamAccessEmail,
+      p_passcode: teamAccessPasscode,
+      p_user_agent: navigator.userAgent || null,
+    });
+    const result = Array.isArray(data) ? data[0] : data;
+    if (error || !result) {
+      if (options.silent) {
+        forgetTeamAccess();
+        showTeamAccessLogin();
+        return;
+      }
+      if (err) err.textContent = 'That email and access code did not match.';
+      return;
+    }
+    if (result.production_id) prodId = result.production_id;
+    if (!prodId) { if (err) err.textContent = 'Production not found. Check your link.'; return; }
+    teamAccessSessionToken = result.session_token || '';
+    teamAccessMember = result.team_member || null;
+    rememberTeamAccess();
     document.getElementById('team-access-login-overlay')?.remove();
     document.body.classList.remove('team-access-login-visible');
     await bootProductionWorkspace(new URLSearchParams(window.location.search));
     applyTeamAccessMode();
+    await Promise.all([
+      audSessions.length   ? Promise.resolve() : loadAudSessions(),
+      allApplicants.length ? Promise.resolve() : loadApplicants(),
+    ]).catch(() => {});
     switchProdTab('auditions');
     openAuditionsSubTab('dashboard');
+    startAuditionsPoll();
+  }
+
+  async function logoutTeamAccess() {
+    const tokenToRevoke = teamAccessSessionToken || loadRememberedTeamAccess()?.sessionToken || '';
+    if (tokenToRevoke) {
+      try { await sb.rpc('team_member_revoke_session', { p_production_id: prodId, p_session_token: tokenToRevoke }); } catch {}
+    }
+    forgetTeamAccess();
+    teamAccessMember = null;
+    teamAccessEmail = '';
+    teamAccessPasscode = '';
+    teamAccessSessionToken = '';
+    stopAuditionsPoll();
+    if (auditionsRealtimeChannel) {
+      try { await sb.removeChannel(auditionsRealtimeChannel); } catch {}
+      auditionsRealtimeChannel = null;
+    }
+    showTeamAccessLogin('You have been logged out.');
   }
 
   function applyTeamAccessMode() {
@@ -14049,6 +14151,12 @@
     const subEl = document.getElementById('hdr-sub');
     if (nameEl && prod) nameEl.textContent = prod.title || 'Production';
     if (subEl) subEl.textContent = [teamAccessMember?.name, perms.label].filter(Boolean).join(' · ');
+    const sidebarProd = document.querySelector('.sidebar-prod');
+    if (sidebarProd && !document.getElementById('team-access-logout-btn')) {
+      sidebarProd.insertAdjacentHTML('beforeend', `
+        <button type="button" id="team-access-logout-btn" onclick="logoutTeamAccess()" style="display:flex;align-items:center;justify-content:center;width:100%;margin-top:0.75rem;font-size:0.76rem;font-weight:800;color:#fff;background:rgba(255,255,255,0.12);border:1.5px solid rgba(255,255,255,0.22);border-radius:8px;padding:0.42rem 0.85rem;cursor:pointer;font-family: var(--bts-font);">Log Out</button>
+      `);
+    }
     document.querySelectorAll('.prod-tabs > .prod-tab').forEach(tab => {
       const isAllowed = tab.id === 'auditions-parent-tab' || tab.dataset.tab === 'auditions';
       tab.style.display = isAllowed ? '' : 'none';
@@ -14132,6 +14240,7 @@
   let allSlots      = [];
   let auditionsRealtimeChannel = null;
   let auditionsRefreshTimer    = null;
+  let _auditionsPollTimer      = null;
   let emailTemplatesRealtimeChannel = null;
   let emailTemplatesRefreshTimer    = null;
   let roles         = [];
@@ -14157,6 +14266,10 @@
 
     if (teamAccessMode) {
       showTeamAccessLogin();
+      const remembered = loadRememberedTeamAccess();
+      if (remembered?.sessionToken) {
+        loginTeamAccess({ email: remembered.email || '', sessionToken: remembered.sessionToken, silent: true });
+      }
       return;
     }
 
@@ -14567,6 +14680,21 @@
         console.error('[BTS] email templates realtime refresh failed:', err);
       }
     }, 200);
+  }
+
+  function startAuditionsPoll() {
+    clearInterval(_auditionsPollTimer);
+    _auditionsPollTimer = setInterval(async () => {
+      if (!prodId) return;
+      try {
+        await refreshAuditionsLiveUi({ preserveModal: true });
+      } catch {}
+    }, 10000);
+  }
+
+  function stopAuditionsPoll() {
+    clearInterval(_auditionsPollTimer);
+    _auditionsPollTimer = null;
   }
 
   function setupEmailTemplatesRealtime() {
@@ -29068,10 +29196,9 @@ If you have any questions, don't hesitate to reach out.
       const noteType = document.getElementById(typeId)?.value || 'general';
       showSaveStatus('saving');
       try {
-        const { data, error } = await sb.rpc('team_note_add', {
+        const { data, error } = await sb.rpc('team_note_add_for_session', {
           p_production_id: prodId,
-          p_email: teamAccessEmail,
-          p_passcode: teamAccessPasscode,
+          p_session_token: teamAccessSessionToken,
           p_applicant_id: appId,
           p_session_id: sessionId,
           p_character_id: options.characterId || null,
@@ -29126,10 +29253,9 @@ If you have any questions, don't hesitate to reach out.
     const nextBody = body.trim();
     if (!nextBody) return;
     if (teamAccessMode) {
-      const { data, error } = await sb.rpc('team_note_update', {
+      const { data, error } = await sb.rpc('team_note_update_for_session', {
         p_production_id: prodId,
-        p_email: teamAccessEmail,
-        p_passcode: teamAccessPasscode,
+        p_session_token: teamAccessSessionToken,
         p_note_id: noteId,
         p_body: nextBody
       });
@@ -29149,10 +29275,9 @@ If you have any questions, don't hesitate to reach out.
     if (!note || !canManageAuthoredNote(note, 'delete')) return;
     if (!confirm('Delete this note?')) return;
     if (teamAccessMode) {
-      const { error } = await sb.rpc('team_note_delete', {
+      const { error } = await sb.rpc('team_note_delete_for_session', {
         p_production_id: prodId,
-        p_email: teamAccessEmail,
-        p_passcode: teamAccessPasscode,
+        p_session_token: teamAccessSessionToken,
         p_note_id: noteId
       });
       if (error) { showToast('Could not delete note: ' + error.message, true); return; }

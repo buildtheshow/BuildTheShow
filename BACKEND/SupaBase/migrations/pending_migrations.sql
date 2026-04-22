@@ -194,25 +194,6 @@ DROP FUNCTION IF EXISTS team_note_add_for_session(uuid,text,uuid,uuid,uuid,text,
 DROP FUNCTION IF EXISTS team_note_update_for_session(uuid,text,uuid,text);
 DROP FUNCTION IF EXISTS team_note_delete_for_session(uuid,text,uuid);
 
-CREATE OR REPLACE FUNCTION team_member_login(
-  p_production_id uuid,
-  p_email text,
-  p_passcode text
-)
-RETURNS SETOF production_team_members
-LANGUAGE sql
-SECURITY DEFINER
-SET search_path = public
-AS $$
-  SELECT *
-  FROM production_team_members
-  WHERE production_id = p_production_id
-    AND lower(trim(email)) = lower(trim(p_email))
-    AND passcode = regexp_replace(trim(p_passcode), '\D+', '', 'g')
-    AND is_active = true
-  LIMIT 1;
-$$;
-
 CREATE OR REPLACE FUNCTION team_member_start_session(
   p_production_id uuid,
   p_email text,
