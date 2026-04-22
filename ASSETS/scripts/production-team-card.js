@@ -29,8 +29,6 @@ function renderProductionTeamCard(member, options = {}) {
     ? new Date(m.invite_sent_at).toLocaleDateString('en-CA', { month: 'short', day: 'numeric' })
     : '';
   const showManagement = options.showManagement !== false;
-  const roleInitial = escapeHtml((m.role || '?').trim().charAt(0).toUpperCase() || '?');
-
   const photoHtml = m.headshot_url
     ? `<img src="${escapeHtml(m.headshot_url)}" alt="" class="production-team-card-image" />`
     : `<div class="production-team-card-placeholder">${initial}</div>`;
@@ -46,26 +44,23 @@ function renderProductionTeamCard(member, options = {}) {
 
   return `
     <div class="production-team-card-wrap" style="--pt-card-color:${color};">
-      <div class="production-team-card${inactiveClass}">
+      <div
+        class="production-team-card${inactiveClass}"
+        role="button"
+        tabindex="0"
+        aria-label="Open ${name || 'production team member'} details"
+        onclick="openProductionTeamCardDetails('${id}')"
+        onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openProductionTeamCardDetails('${id}');}"
+      >
         <div class="production-team-card-image-area">
           ${photoHtml}
-          <div class="production-team-card-status-badge">${isActive ? 'ACTIVE' : 'OFF'}</div>
         </div>
         <div class="production-team-card-lower">
-          <div class="production-team-card-accent">
-            <div class="production-team-card-colour-chip" title="Team colour"></div>
-            <div class="production-team-card-role-chip" title="${role || 'Role'}">${roleInitial}</div>
-          </div>
-          <div class="production-team-card-caption">
-            <div class="production-team-card-name" title="${name}">${name || 'Unassigned'}</div>
+          <div class="production-team-card-role-line">
+            <span class="production-team-card-colour-chip" title="Team colour"></span>
             <div class="production-team-card-role" title="${role}">${role || 'Production Team'}</div>
-            <div class="production-team-card-email" title="${email}">${email || 'No email'}</div>
           </div>
-          <div class="production-team-card-mini-actions">
-            <div class="production-team-card-mini-dot" title="Access code">#</div>
-            <div class="production-team-card-mini-dot" title="Invite">${m.invite_sent_at ? '✓' : '@'}</div>
-            <div class="production-team-card-mini-dot" title="Profile">${m.headshot_url ? 'H' : 'P'}</div>
-          </div>
+          <div class="production-team-card-name" title="${name}">${name || 'Firstname Lastname'}</div>
         </div>
       </div>
       ${showManagement ? `
@@ -97,3 +92,115 @@ function renderProductionTeamCard(member, options = {}) {
   `;
 }
 
+function productionTeamCardEscape(value) {
+  if (typeof esc === 'function') return esc(value);
+  return String(value ?? '').replace(/[&<>"']/g, char => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;'
+  }[char]));
+}
+
+function getProductionTeamCardMember(memberId) {
+  let members = [];
+  try {
+    members = Array.isArray(auditionTeamMembers) ? auditionTeamMembers : [];
+  } catch (error) {
+    members = Array.isArray(window.auditionTeamMembers) ? window.auditionTeamMembers : [];
+  }
+  return members.find(member => String(member.id) === String(memberId)) || null;
+}
+
+function closeProductionTeamCardDetails() {
+  document.getElementById('production-team-card-detail-overlay')?.remove();
+}
+
+function openProductionTeamCardDetails(memberId) {
+  const member = getProductionTeamCardMember(memberId);
+  if (!member) return;
+
+  const escapeHtml = productionTeamCardEscape;
+  const color = escapeHtml(member.note_color || '#572e88');
+  const name = escapeHtml(member.name || 'Firstname Lastname');
+  const role = escapeHtml(member.role || 'Production Team');
+  const email = escapeHtml(member.email || 'No email saved');
+  const phone = escapeHtml(member.phone || member.phone_number || '');
+  const passcode = escapeHtml(member.passcode || 'Not set');
+  const bio = escapeHtml(member.bio || 'No bio added yet.');
+  const initial = escapeHtml((member.name || '?').trim().charAt(0).toUpperCase() || '?');
+  const photoHtml = member.headshot_url
+    ? `<img src="${escapeHtml(member.headshot_url)}" alt="" class="production-team-card-detail-photo-img" />`
+    : `<div class="production-team-card-detail-photo-placeholder">${initial}</div>`;
+  const statusText = member.is_active === false ? 'Inactive' : 'Active';
+
+  closeProductionTeamCardDetails();
+
+  const overlay = document.createElement('div');
+  overlay.id = 'production-team-card-detail-overlay';
+  overlay.className = 'production-team-card-detail-overlay';
+  overlay.style.setProperty('--pt-card-color', color);
+  overlay.addEventListener('click', event => {
+    if (event.target === overlay) closeProductionTeamCardDetails();
+  });
+  overlay.innerHTML = `
+    <section class="production-team-card-detail" role="dialog" aria-modal="true" aria-label="${name} team details">
+      <button class="production-team-card-detail-close" type="button" onclick="closeProductionTeamCardDetails()" aria-label="Close details">×</button>
+      <div class="production-team-card-detail-head">
+        <div class="production-team-card-detail-photo">
+          ${photoHtml}
+        </div>
+        <div class="production-team-card-detail-title-block">
+          <div class="production-team-card-detail-role">
+            <span class="production-team-card-detail-colour"></span>
+            <span>${role}</span>
+          </div>
+          <h3>${name}</h3>
+          <p>${statusText}</p>
+        </div>
+      </div>
+
+      <div class="production-team-card-detail-grid">
+        <div class="production-team-card-detail-field">
+          <span>Email</span>
+          <strong>${email}</strong>
+        </div>
+        ${phone ? `
+          <div class="production-team-card-detail-field">
+            <span>Phone</span>
+            <strong>${phone}</strong>
+          </div>
+        ` : ''}
+        <div class="production-team-card-detail-field">
+          <span>Passcode</span>
+          <strong class="production-team-card-detail-passcode">${passcode}</strong>
+        </div>
+        <div class="production-team-card-detail-field production-team-card-detail-bio">
+          <span>Bio</span>
+          <p>${bio}</p>
+        </div>
+      </div>
+
+      <div class="production-team-card-detail-actions">
+        <button class="btn-secondary" type="button" onclick="copyProductionTeamCardPasscode('${escapeHtml(member.id || '')}')">Copy Code</button>
+        <button class="btn-secondary" type="button" onclick="copyTeamPortalLink('${escapeHtml(member.id || '')}')">Copy Link</button>
+        <button class="btn-primary" type="button" onclick="emailTeamInvite('${escapeHtml(member.id || '')}')">${member.invite_sent_at ? 'Resend Invite' : 'Email Invite'}</button>
+      </div>
+    </section>
+  `;
+
+  document.body.appendChild(overlay);
+}
+
+async function copyProductionTeamCardPasscode(memberId) {
+  const member = getProductionTeamCardMember(memberId);
+  if (!member?.passcode) return;
+  try {
+    await navigator.clipboard.writeText(member.passcode);
+    showToast?.('Passcode copied.');
+  } catch (error) {
+    console.error('Copy passcode failed', error);
+    showToast?.('Could not copy passcode.', 'error');
+  }
+}
