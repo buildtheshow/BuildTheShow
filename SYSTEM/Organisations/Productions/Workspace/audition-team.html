@@ -14336,6 +14336,7 @@
   let auditionsRealtimeChannel = null;
   let auditionsRefreshTimer    = null;
   let _auditionsPollTimer      = null;
+  let _inRoomSaveInProgress    = 0;
   let emailTemplatesRealtimeChannel = null;
   let emailTemplatesRefreshTimer    = null;
   let roles         = [];
@@ -14770,7 +14771,7 @@
   function startAuditionsPoll() {
     clearInterval(_auditionsPollTimer);
     _auditionsPollTimer = setInterval(async () => {
-      if (!prodId) return;
+      if (!prodId || _inRoomSaveInProgress > 0) return;
       try {
         await refreshAuditionsLiveUi({ preserveModal: true });
       } catch {}
@@ -30254,6 +30255,23 @@ If you have any questions, don't hesitate to reach out.
     renderAuditionSessionWorkspace();
   }
 
+  async function saveInRoomCustomAnswers(app, nextAnswers) {
+    _inRoomSaveInProgress++;
+    try {
+      const targetId = String(app._sourceApplicationIds?.[0] || app.id || '');
+      if (!targetId || targetId.startsWith('booking-')) {
+        const error = await persistApplicantPatch(app, { custom_answers: nextAnswers });
+        return error;
+      }
+      const { error } = await sb.from('audition_applications')
+        .update({ custom_answers: nextAnswers })
+        .eq('id', targetId);
+      return error || null;
+    } finally {
+      _inRoomSaveInProgress--;
+    }
+  }
+
   async function setInRoomScore(appId, key, value) {
     const app = allApplicants.find(a => a.id === appId);
     if (!app) return;
@@ -30272,7 +30290,7 @@ If you have any questions, don't hesitate to reach out.
     renderInRoomPage(appId, inRoomContainerId, inRoomOpenFn);
     showSaveStatus('saving');
     try {
-      const error = await persistApplicantPatch(app, { custom_answers: nextAnswers });
+      const error = await saveInRoomCustomAnswers(app, nextAnswers);
       if (error) throw error;
       if (token === inRoomScoreSaveToken) {
         showSaveStatus('saved');
@@ -30299,7 +30317,7 @@ If you have any questions, don't hesitate to reach out.
       if (value.trim()) nextAnswers[noteKey] = value.trim();
       else delete nextAnswers[noteKey];
       try {
-        const error = await persistApplicantPatch(app, { custom_answers: nextAnswers });
+        const error = await saveInRoomCustomAnswers(app, nextAnswers);
         if (error) throw error;
         app.custom_answers = nextAnswers;
         showSaveStatus('saved');
@@ -30380,7 +30398,7 @@ If you have any questions, don't hesitate to reach out.
     app.custom_answers = nextAnswers;
     showSaveStatus('saving');
     try {
-      const error = await persistApplicantPatch(app, { custom_answers: nextAnswers });
+      const error = await saveInRoomCustomAnswers(app, nextAnswers);
       if (error) throw error;
       showSaveStatus('saved');
     } catch (error) {
@@ -30407,7 +30425,7 @@ If you have any questions, don't hesitate to reach out.
     renderInRoomPage(appId, inRoomContainerId, inRoomOpenFn);
     showSaveStatus('saving');
     try {
-      const error = await persistApplicantPatch(app, { custom_answers: nextAnswers });
+      const error = await saveInRoomCustomAnswers(app, nextAnswers);
       if (error) throw error;
       showSaveStatus('saved');
     } catch (error) {
