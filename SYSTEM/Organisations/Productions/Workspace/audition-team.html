@@ -14088,6 +14088,10 @@
     document.body.classList.remove('team-access-login-visible');
     await bootProductionWorkspace(new URLSearchParams(window.location.search));
     applyTeamAccessMode();
+    await Promise.all([
+      audSessions.length   ? Promise.resolve() : loadAudSessions(),
+      allApplicants.length ? Promise.resolve() : loadApplicants(),
+    ]).catch(() => {});
     switchProdTab('auditions');
     openAuditionsSubTab('dashboard');
   }
@@ -18885,16 +18889,20 @@ If you have any questions, don't hesitate to reach out.
   }
 
   function renderAuditionsPanel() {
-    // Populate day selectors and load dashboard by default
     populateAudDaySelects();
     renderAuditionsSidebarSubmenu();
-    if (!allApplicants.length) {
-      loadApplicants().then(() => {
-        if (loadWorkspaceNavState().auditionsDayTab === 'dashboard') loadAudDashboard();
-      }).catch(() => {});
+    const needsSessions   = !audSessions.length;
+    const needsApplicants = !allApplicants.length;
+    if (needsSessions || needsApplicants) {
+      Promise.all([
+        needsSessions   ? loadAudSessions()  : Promise.resolve(),
+        needsApplicants ? loadApplicants()   : Promise.resolve(),
+      ]).then(() => {
+        switchAudDayTab('dashboard');
+      }).catch(() => switchAudDayTab('dashboard'));
+    } else {
+      switchAudDayTab('dashboard');
     }
-    const savedNav = loadWorkspaceNavState();
-    switchAudDayTab(savedNav.auditionsDayTab || 'dashboard');
   }
 
   let _sidebarSection = null;
