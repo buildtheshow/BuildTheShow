@@ -88,8 +88,8 @@ function renderProductionTeamCard(member, options = {}) {
                 <span>Passcode</span>
                 <div class="production-team-card-back-passcode-row" onclick="event.stopPropagation();">
                   <input id="passcode-input-${id}" class="production-team-card-back-input production-team-card-back-passcode" value="${passcode}" placeholder="6 digits" inputmode="numeric" maxlength="6" pattern="[0-9]{6}" oninput="this.value=this.value.replace(/\\D+/g,'').slice(0,6)" />
-                  <button class="production-team-card-back-icon" type="button" onclick="saveTeamMemberPasscode('${id}')" title="Save access code">Save</button>
-                  <button class="production-team-card-back-icon" type="button" onclick="regenPasscode('${id}')" title="Generate new 6-digit passcode">↻</button>
+                  <button class="production-team-card-back-icon" type="button" onclick="saveTeamMemberPasscode('${id}',this)" title="Save access code">Save</button>
+                  <button class="production-team-card-back-icon" type="button" onclick="regenPasscode('${id}',this)" title="Generate new 6-digit passcode">↻</button>
                 </div>
               </div>
               <div class="production-team-card-back-field production-team-card-back-bio">
@@ -100,8 +100,8 @@ function renderProductionTeamCard(member, options = {}) {
             ${showManagement ? `
               <div class="production-team-card-back-actions" onclick="event.stopPropagation();">
                 ${inviteHtml}
-                <button class="production-team-card-back-action" type="button" onclick="copyTeamPortalLink('${id}')">Copy Link</button>
-                <button class="production-team-card-back-action" type="button" onclick="copyProductionTeamCardPasscode('${id}')">Copy Code</button>
+                <button class="production-team-card-back-action" type="button" onclick="copyTeamPortalLink('${id}',this)">Copy Link</button>
+                <button class="production-team-card-back-action" type="button" onclick="copyProductionTeamCardPasscode('${id}',this)">Copy Code</button>
                 ${bio ? `<button class="production-team-card-back-action" type="button" onclick="downloadTeamBio('${id}')">Bio ↓</button>` : ''}
                 ${m.headshot_url ? `<a class="production-team-card-back-action" href="${escapeHtml(m.headshot_url)}" target="_blank" download>Headshot ↓</a>` : ''}
                 <div class="production-team-card-back-hint">Click to flip back</div>
@@ -139,14 +139,39 @@ function flipProductionTeamCard(card) {
   card?.classList.toggle('is-flipped');
 }
 
-async function copyProductionTeamCardPasscode(memberId) {
+function ptcBtnFeedback(btn, { working = null, done = '✓', timeout = 1800 } = {}) {
+  if (!btn) return () => {};
+  const orig = btn.textContent.trim();
+  btn.classList.add('is-working');
+  btn.disabled = true;
+  if (working) btn.textContent = working;
+  return function ptcMarkDone(success = true) {
+    btn.classList.remove('is-working');
+    btn.disabled = false;
+    if (success) {
+      btn.textContent = done;
+      btn.classList.add('did-work');
+      setTimeout(() => {
+        btn.textContent = orig;
+        btn.classList.remove('did-work');
+      }, timeout);
+    } else {
+      btn.textContent = orig;
+    }
+  };
+}
+
+async function copyProductionTeamCardPasscode(memberId, btn) {
   const member = getProductionTeamCardMember(memberId);
   if (!member?.passcode) return;
+  const markDone = ptcBtnFeedback(btn, { done: 'Copied!' });
   try {
     await navigator.clipboard.writeText(member.passcode);
+    markDone(true);
     showToast?.('Passcode copied.');
   } catch (error) {
     console.error('Copy passcode failed', error);
+    markDone(false);
     showToast?.('Could not copy passcode.', 'error');
   }
 }

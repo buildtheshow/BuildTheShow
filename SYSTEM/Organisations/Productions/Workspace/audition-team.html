@@ -9,7 +9,7 @@
   <title>Production Workspace - Build The Show</title>
   <link rel="stylesheet" href="/ASSETS/styles/styles.css?v=typography-safe-20260421-2025" />
   <link rel="stylesheet" href="/ASSETS/styles/casting-card.css" />
-  <link rel="stylesheet" href="/ASSETS/styles/production-team-card.css?v=team-card-safe-20260421-2025" />
+  <link rel="stylesheet" href="/ASSETS/styles/production-team-card.css?v=team-card-btn-feedback-20260422" />
   <style>
     * { box-sizing: border-box; }
     body { margin: 0; background: #ffffff; font-family: var(--bts-font); color: #1a1530; display: flex; flex-direction: column; min-height: 100vh; min-height: 100dvh; }
@@ -13745,7 +13745,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="/ASSETS/scripts/venue-picker.js"></script>
 <script src="/ASSETS/scripts/casting-card.js"></script>
-<script src="/ASSETS/scripts/production-team-card.js?v=team-card-safe-20260421-2025"></script>
+<script src="/ASSETS/scripts/production-team-card.js?v=team-card-btn-feedback-20260422"></script>
 <script src="../../../../SHARED/Components/casting-card-back.js"></script>
 <script src="../../../../SHARED/Components/audition-status-strip.js"></script>
 <script src="../../../../SHARED/Components/ai-character-importer.js"></script>
@@ -18024,16 +18024,20 @@ If you have any questions, don't hesitate to reach out.
     return Array.from({ length: 6 }, () => Math.floor(Math.random() * 10)).join('');
   }
 
-  async function regenPasscode(memberId) {
+  async function regenPasscode(memberId, btn) {
     const code = randomTeamPasscode();
     const input = document.getElementById(`passcode-input-${memberId}`);
     if (input) input.value = code;
-    await saveTeamMemberField(memberId, 'passcode', code);
+    const markDone = ptcBtnFeedback?.(btn, { working: '…', done: '✓' });
+    const ok = await saveTeamMemberField(memberId, 'passcode', code);
+    markDone?.(ok !== false);
   }
 
-  async function saveTeamMemberPasscode(memberId) {
+  async function saveTeamMemberPasscode(memberId, btn) {
     const input = document.getElementById(`passcode-input-${memberId}`);
-    await saveTeamMemberField(memberId, 'passcode', input?.value || '');
+    const markDone = ptcBtnFeedback?.(btn, { working: '…', done: 'Saved ✓' });
+    const ok = await saveTeamMemberField(memberId, 'passcode', input?.value || '');
+    markDone?.(ok !== false);
   }
 
   function nextAvailableTeamColor(memberId = null) {
@@ -18164,7 +18168,7 @@ If you have any questions, don't hesitate to reach out.
   }
 
   async function saveTeamMemberField(memberId, field, value) {
-    if (!['name', 'email', 'role', 'passcode'].includes(field)) return;
+    if (!['name', 'email', 'role', 'passcode'].includes(field)) return false;
     const patch = { [field]: String(value || '').trim() || null };
     if (field === 'passcode') {
       const digits = String(value || '').replace(/\D+/g, '').slice(0, 6);
@@ -18173,7 +18177,7 @@ If you have any questions, don't hesitate to reach out.
         const input = document.getElementById(`passcode-input-${memberId}`);
         if (input) input.value = existing?.passcode || '';
         showToast('Access code must be exactly 6 numbers.', true);
-        return;
+        return false;
       }
       patch.passcode = digits;
       const input = document.getElementById(`passcode-input-${memberId}`);
@@ -18181,10 +18185,11 @@ If you have any questions, don't hesitate to reach out.
     }
     const existing = auditionTeamMembers.find(m => String(m.id) === String(memberId));
     const { error } = await sb.from('production_team_members').update(patch).eq('id', memberId);
-    if (error) { showToast('Could not save team access: ' + error.message, true); return; }
+    if (error) { showToast('Could not save team access: ' + error.message, true); return false; }
     await syncTeamMemberToProductionTeam({ ...(existing || {}), id: memberId }, patch);
     await loadAuditionTeamMembers();
     renderTeamView(document.getElementById('tm-container'));
+    return true;
   }
 
   async function toggleTeamMemberAccess(memberId, isActive) {
@@ -18194,13 +18199,16 @@ If you have any questions, don't hesitate to reach out.
     renderTeamView(document.getElementById('tm-container'));
   }
 
-  async function copyTeamPortalLink(memberId = null) {
+  async function copyTeamPortalLink(memberId = null, btn = null) {
     const member = auditionTeamMembers.find(m => m.id === memberId) || null;
     const link = teamPortalUrl();
+    const markDone = ptcBtnFeedback?.(btn, { done: 'Copied!' });
     try {
       await navigator.clipboard.writeText(link);
+      markDone?.(true);
       showToast(member ? `Copied ${member.name}'s audition link.` : 'Copied team audition portal link.');
     } catch {
+      markDone?.(false);
       prompt('Copy this audition team link:', link);
     }
   }
