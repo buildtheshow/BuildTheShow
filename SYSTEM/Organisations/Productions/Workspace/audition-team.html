@@ -253,7 +253,7 @@
     <div class="login-card">
       <div class="login-card-header">
         <img src="/ASSETS/Images/logo-long-white.png" alt="Build The Show" class="login-card-logo" />
-        <div class="login-card-label">Audition &amp; Creative Team Portal</div>
+        <div class="login-card-label">Audition Team Access</div>
       </div>
       <div class="login-card-body">
         <h1 id="login-heading">Welcome</h1>
@@ -279,14 +279,9 @@
       <span class="status-badge s-auditions" id="hdr-status" style="display:none;">Auditions</span>
     </div>
     <nav class="prod-tabs">
-      <div class="prod-tab active" data-tab="dashboard" onclick="setTab('dashboard')">
-        <span class="tab-icon-slot"><img src="/ASSETS/Images/navoverview.svg" class="tab-icon" alt="" /></span>
-        Overview
-      </div>
-
-      <!-- Auditions — expandable submenu, matches workspace exactly -->
+      <!-- Auditions — expandable submenu, matches production workspace structure -->
       <div class="prod-tab-submenu-wrap open" id="aud-submenu-wrap">
-        <div class="prod-tab" data-tab="auditions" onclick="setTab('dashboard')">
+        <div class="prod-tab active" data-tab="auditions" onclick="setTab('dashboard')">
           <span class="prod-tab-label">
             <span class="tab-icon-slot"><img src="/ASSETS/Images/navauditions.svg" class="tab-icon" alt="" /></span>
             Auditions
@@ -294,8 +289,9 @@
           <span class="tab-chevron" onclick="toggleAudMenu(event)">▼</span>
         </div>
         <div class="prod-submenu">
+          <div class="prod-sub-item active" id="asub-dashboard" onclick="setTab('dashboard')">Dashboard</div>
           <div class="prod-sub-item" id="asub-schedule" onclick="setTab('schedule')">Schedule</div>
-          <div class="prod-sub-item" id="asub-performers" onclick="activeSessionId='';setTab('inroom')">Performers</div>
+          <div class="prod-sub-item" id="asub-performers" onclick="activeSessionId='';setTab('performers')">Performers</div>
           <div id="asub-session-items"></div>
         </div>
       </div>
@@ -343,9 +339,14 @@
         <div id="schedule-content"></div>
       </div>
 
-      <!-- Performers / In The Room -->
-      <div class="tab-panel" id="panel-inroom">
-        <div id="inroom-content"></div>
+      <!-- Performers -->
+      <div class="tab-panel" id="panel-performers">
+        <div id="performers-content"></div>
+      </div>
+
+      <!-- Audition Type -->
+      <div class="tab-panel" id="panel-audition-type">
+        <div id="audition-type-content"></div>
       </div>
 
       <!-- Profile -->
@@ -382,20 +383,85 @@
     let activeNoteType    = 'general';
     let activeNoteRating  = null;
 
+    const ROLES = {
+      producer: {
+        label: 'Producer',
+        canViewContact: true,
+        canEditSchedule: true,
+        canCheckIn: true,
+        canViewSettings: true,
+        canCreateNotes: true,
+        canEditAllNotes: true,
+        canDeleteAllNotes: true
+      },
+      director: {
+        label: 'Director',
+        canViewContact: false,
+        canEditSchedule: false,
+        canCheckIn: false,
+        canViewSettings: false,
+        canCreateNotes: true,
+        canEditAllNotes: false,
+        canDeleteAllNotes: false
+      },
+      vocal_director: {
+        label: 'Vocal Director',
+        canViewContact: false,
+        canEditSchedule: false,
+        canCheckIn: false,
+        canViewSettings: false,
+        canCreateNotes: true,
+        canEditAllNotes: false,
+        canDeleteAllNotes: false
+      },
+      choreographer: {
+        label: 'Choreographer',
+        canViewContact: false,
+        canEditSchedule: false,
+        canCheckIn: false,
+        canViewSettings: false,
+        canCreateNotes: true,
+        canEditAllNotes: false,
+        canDeleteAllNotes: false
+      }
+    };
+
+    const AUDITION_PAGE_TEMPLATES = {
+      dashboard: renderAuditionsDashboardTemplate,
+      schedule: renderAuditionsScheduleTemplate,
+      performers: renderPerformersTemplate,
+      auditionType: renderAuditionTypeTemplate
+    };
+
     const NOTE_TYPES = [
       { value:'acting',            label:'Acting' },
       { value:'vocals',            label:'Vocals' },
       { value:'dance',             label:'Dance' },
       { value:'general',           label:'General' },
-      { value:'callback_interest', label:'Callback' },
-      { value:'role_suggestion',   label:'Role' },
+      { value:'callback_interest', label:'Callback Interest' },
+      { value:'role_suggestion',   label:'Role Suggestions' },
     ];
     const TEAM_NOTE_COLORS = ['#572e88','#7FAF8B','#D68CB2','#E3A46F','#55acda','#22cdd4','#c2487a','#8a7aac'];
 
     function esc(v) { const d = document.createElement('div'); d.textContent = v ?? ''; return d.innerHTML; }
+    function normalizeRole(role) {
+      const raw = String(role || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+      if (raw === 'musical_director' || raw === 'music_director') return 'vocal_director';
+      return ROLES[raw] ? raw : 'director';
+    }
+    function currentPermissions() { return ROLES[normalizeRole(member?.role)] || ROLES.director; }
+    function activeSessions() { return sessions.filter(s => s && s.is_active !== false && s.enabled !== false); }
     function colorForType(t) { return ({audition:'#7FAF8B',dance_call:'#D68CB2',callback:'#E3A46F',other:'#B8AECF',other_audition:'#B8AECF'})[t] || '#7FAF8B'; }
-    function labelForType(t) { return ({audition:'General Auditions',dance_call:'Dance Call',callback:'Callbacks',other:'Other Audition',other_audition:'Other Audition'})[t] || 'Audition'; }
+    function labelForType(t) { return ({audition:'General Auditions',dance_call:'Dance Call',callback:'Callback',other:'Other Audition',other_audition:'Other Audition'})[t] || 'Audition'; }
     function noteTypeLabelFor(t) { return NOTE_TYPES.find(n => n.value === t)?.label || ''; }
+    function noteAuthorKey(note) { return String(note.team_member_id || note.author_id || note.author_email || note.author_name || '').toLowerCase(); }
+    function currentAuthorKey() { return String(member?.id || member?.email || member?.name || '').toLowerCase(); }
+    function canManageNote(note, action) {
+      const perms = currentPermissions();
+      if (action === 'edit' && perms.canEditAllNotes) return true;
+      if (action === 'delete' && perms.canDeleteAllNotes) return true;
+      return noteAuthorKey(note) && noteAuthorKey(note) === currentAuthorKey();
+    }
 
     function customAnswers(app) {
       if (!app?.custom_answers) return {};
@@ -460,7 +526,7 @@
       applicants = appRes.data   || [];
       notes      = notesRes.data || [];
       takenColors= colorRes.data || [];
-      activeSessionId   = activeSessionId   || sessions[0]?.id   || '';
+      activeSessionId   = activeSessionId   || activeSessions()[0]?.id   || '';
       activeApplicantId = activeApplicantId || applicants[0]?.id || '';
       renderSidebarSessions();
     }
@@ -477,23 +543,26 @@
       const wrap  = document.getElementById('sidebar-member');
       if (dot)   { dot.style.background = member.note_color || '#572e88'; dot.style.boxShadow = `0 0 0.4rem ${member.note_color || '#572e88'}`; }
       if (nameL) nameL.textContent = member.name || '';
-      if (roleL) roleL.textContent = member.role || '';
+      if (roleL) roleL.textContent = currentPermissions().label || member.role || '';
       if (wrap)  wrap.style.display = 'block';
     }
 
     // ── Tab switching ─────────────────────────────────────────────────────
     function setTab(tab) {
       activeTab = tab;
-      document.querySelectorAll('.prod-tab[data-tab]').forEach(el => el.classList.toggle('active', el.dataset.tab === tab));
+      document.querySelectorAll('.prod-tab[data-tab]').forEach(el => el.classList.toggle('active', el.dataset.tab === tab || (el.dataset.tab === 'auditions' && ['dashboard','schedule','performers','audition-type'].includes(tab))));
       document.querySelectorAll('.prod-sub-item').forEach(el => el.classList.remove('active'));
-      if (tab === 'schedule') {
+      if (tab === 'dashboard') {
+        document.getElementById('asub-dashboard')?.classList.add('active');
+      } else if (tab === 'schedule') {
         document.getElementById('asub-schedule')?.classList.add('active');
-      } else if (tab === 'inroom') {
+      } else if (tab === 'performers') {
+        document.getElementById('asub-performers')?.classList.add('active');
+      } else if (tab === 'audition-type') {
         if (activeSessionId) document.getElementById(`asub-session-${activeSessionId}`)?.classList.add('active');
-        else document.getElementById('asub-performers')?.classList.add('active');
       }
       document.querySelectorAll('.tab-panel').forEach(el => el.classList.toggle('active', el.id === 'panel-' + tab));
-      const renderers = { dashboard: renderDashboard, schedule: renderSchedule, inroom: renderInRoom, profile: renderProfile };
+      const renderers = { dashboard: renderDashboard, schedule: renderSchedule, performers: renderPerformers, 'audition-type': renderAuditionType, profile: renderProfile };
       renderers[tab]?.();
     }
 
@@ -505,87 +574,109 @@
     function renderSidebarSessions() {
       const host = document.getElementById('asub-session-items');
       if (!host) return;
-      host.innerHTML = sessions.map(s => {
+      host.innerHTML = activeSessions().map(s => {
         const color = colorForType(s.type);
         const dot = `<span style="flex:0 0 auto;width:0.42rem;height:0.42rem;border-radius:999px;background:${esc(color)};box-shadow:0 0 0.4rem ${esc(color)};margin-right:0.45rem;display:inline-block;vertical-align:middle;"></span>`;
-        return `<div class="prod-sub-item" id="asub-session-${esc(s.id)}" onclick="activeSessionId='${esc(s.id)}';setTab('inroom');" style="display:flex;align-items:center;">${dot}${esc(s.name || labelForType(s.type))}</div>`;
+        return `<div class="prod-sub-item" id="asub-session-${esc(s.id)}" onclick="activeSessionId='${esc(s.id)}';setTab('audition-type');" style="display:flex;align-items:center;">${dot}${esc(s.name || labelForType(s.type))}</div>`;
       }).join('');
     }
 
     // ── Dashboard ─────────────────────────────────────────────────────────
     function renderDashboard() {
-      document.getElementById('dash-title').textContent = prod.title || prod.name || '—';
-      document.getElementById('dash-sub').textContent   = prod.subtitle || '';
-      document.getElementById('dash-performers').textContent = applicants.length;
-      document.getElementById('dash-sessions').textContent   = sessions.length;
-      document.getElementById('dash-notes').textContent      = notes.length;
-      document.getElementById('dash-my-notes').textContent   = notes.filter(n => n.author_name === member.name).length;
+      document.getElementById('panel-dashboard').innerHTML = AUDITION_PAGE_TEMPLATES.dashboard();
+    }
+    function renderAuditionsDashboardTemplate() {
+      const enabledSessions = activeSessions();
+      const noteKey = currentAuthorKey();
+      const myNotes = notes.filter(n => noteAuthorKey(n) === noteKey).length;
       const today = new Date().toISOString().slice(0,10);
-      const todaySessions = sessions.filter(s => s.date === today);
-      const band = document.getElementById('dash-today-band');
-      if (!band) return;
-      if (todaySessions.length) {
-        band.innerHTML = `<div style="background:linear-gradient(135deg,#3d1d6b 0%,#572e88 60%,#7c3aed 100%);border-radius:12px;padding:1rem 1.25rem;color:#fff;margin-bottom:1.25rem;">
+      const todaySessions = enabledSessions.filter(s => s.date === today);
+      return `
+        <div class="prod-hero">
+          <div class="prod-hero-text">
+            <div class="prod-hero-id">Auditions</div>
+            <div class="prod-hero-title" id="dash-title">${esc(prod.title || prod.name || '—')}</div>
+            <div class="prod-hero-sub" id="dash-sub">${esc(prod.subtitle || '')}</div>
+          </div>
+        </div>
+        <div class="stats-row">
+          <div class="stat-card"><div class="stat-label">Performers</div><div class="stat-value">${applicants.length}</div><div class="stat-sub">Submitted</div></div>
+          <div class="stat-card"><div class="stat-label">Audition Types</div><div class="stat-value">${enabledSessions.length}</div><div class="stat-sub">Active</div></div>
+          <div class="stat-card"><div class="stat-label">Team Notes</div><div class="stat-value">${notes.length}</div><div class="stat-sub">Shared notes</div></div>
+          <div class="stat-card"><div class="stat-label">Your Notes</div><div class="stat-value">${myNotes}</div><div class="stat-sub">Editable by you</div></div>
+        </div>
+        ${todaySessions.length ? `<div style="background:linear-gradient(135deg,#3d1d6b 0%,#572e88 60%,#7c3aed 100%);border-radius:12px;padding:1rem 1.25rem;color:#fff;margin-bottom:1.25rem;">
           <div style="font-size:0.65rem;font-weight:800;letter-spacing:0.1em;text-transform:uppercase;opacity:0.65;margin-bottom:0.6rem;">Today</div>
           ${todaySessions.map(s => `<div style="display:flex;align-items:center;justify-content:space-between;gap:1rem;padding:0.5rem 0;border-top:1px solid rgba(255,255,255,0.1);">
-            <div><div style="font-size:0.9rem;font-weight:700;">${esc(s.name || labelForType(s.type))}</div><div style="font-size:0.72rem;opacity:0.75;margin-top:0.1rem;">${esc(labelForType(s.type))}${s.location ? ' · ' + s.location : ''}</div></div>
-            <button onclick="setTab('inroom')" style="background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.3);color:#fff;border-radius:7px;padding:0.38rem 0.75rem;font-size:0.75rem;font-weight:700;cursor:pointer;font-family:inherit;">In The Room</button>
+            <div><div style="font-size:0.9rem;font-weight:700;">${esc(s.name || labelForType(s.type))}</div><div style="font-size:0.72rem;opacity:0.75;margin-top:0.1rem;">${esc(labelForType(s.type))}${s.location ? ' · ' + esc(s.location) : ''}</div></div>
+            <button onclick="activeSessionId='${esc(s.id)}';setTab('audition-type')" style="background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.3);color:#fff;border-radius:7px;padding:0.38rem 0.75rem;font-size:0.75rem;font-weight:700;cursor:pointer;font-family:inherit;">Open</button>
           </div>`).join('')}
-        </div>`;
-      } else {
-        band.innerHTML = '';
-      }
+        </div>` : ''}
+        ${renderTeamColourKey()}`;
     }
 
     // ── Schedule ──────────────────────────────────────────────────────────
     function renderSchedule() {
-      const el = document.getElementById('schedule-content');
-      if (!sessions.length) { el.innerHTML = '<div class="empty-state">No sessions set up yet.</div>'; return; }
-      el.innerHTML = `<div class="type-list">${sessions.map(s => `
+      document.getElementById('panel-schedule').innerHTML = AUDITION_PAGE_TEMPLATES.schedule();
+    }
+    function renderAuditionsScheduleTemplate() {
+      const enabledSessions = activeSessions();
+      if (!enabledSessions.length) return '<div class="empty-state">No sessions set up yet.</div>';
+      return `
+        <div class="section-kicker">View Only</div>
+        <div class="section-title">Schedule</div>
+        <div class="type-list">${enabledSessions.map(s => `
         <div class="type-row" style="--c:${colorForType(s.type)};">
           <span class="type-dot"></span>
-          <span class="type-name">${esc(s.name || labelForType(s.type))}</span>
+          <button type="button" class="type-name" style="border:0;background:none;padding:0;text-align:left;font:inherit;font-weight:800;color:#1a1530;cursor:pointer;" onclick="activeSessionId='${esc(s.id)}';setTab('audition-type')">${esc(s.name || labelForType(s.type))}</button>
           ${s.date ? `<span style="font-size:0.78rem;color:#6a5a80;font-weight:700;">${new Date(s.date + 'T00:00:00').toLocaleDateString('en-CA',{weekday:'short',month:'short',day:'numeric'})}</span>` : ''}
           ${s.location ? `<span style="font-size:0.75rem;color:#9a90b0;margin-left:0.25rem;">${esc(s.location)}</span>` : ''}
           <span class="type-meta">${esc(labelForType(s.type))}</span>
         </div>`).join('')}
-      </div>`;
-    }
-
-    // ── All Types ─────────────────────────────────────────────────────────
-    function renderTypes() {
-      const el = document.getElementById('types-content');
-      if (!sessions.length) { el.innerHTML = '<div class="empty-state">No audition types yet.</div>'; return; }
-      el.innerHTML = `<div class="type-list">${sessions.map(s => `
-        <div class="type-row" style="--c:${colorForType(s.type)};">
-          <span class="type-dot"></span>
-          <span class="type-name">${esc(s.name || labelForType(s.type))}</span>
-          <span class="type-meta">${esc(labelForType(s.type))}</span>
-        </div>`).join('')}
-      </div>`;
+        </div>`;
     }
 
     // ── In The Room ───────────────────────────────────────────────────────
     function renderCurrent() {
-      const renderers = { inroom: renderInRoom, callbacks: renderCallbacks };
-      (renderers[activeTab] || renderInRoom)();
+      const renderers = { performers: renderPerformers, 'audition-type': renderAuditionType, callbacks: renderCallbacks };
+      (renderers[activeTab] || renderAuditionType)();
     }
     function sessionStrip() {
-      if (!sessions.length) return '';
-      return `<div class="session-strip">${sessions.map(s =>
+      const enabledSessions = activeSessions();
+      if (!enabledSessions.length) return '';
+      return `<div class="session-strip">${enabledSessions.map(s =>
         `<button class="session-btn${s.id === activeSessionId ? ' active' : ''}" style="--c:${colorForType(s.type)};" onclick="activeSessionId='${esc(s.id)}';renderCurrent();">${esc(s.name || labelForType(s.type))}</button>`
       ).join('')}</div>`;
     }
-    function renderInRoom() {
+    function renderPerformers() {
+      document.getElementById('performers-content').innerHTML = AUDITION_PAGE_TEMPLATES.performers();
+    }
+    function renderPerformersTemplate() {
+      const list = applicants.map(a =>
+        `<button class="performer-btn${a.id === activeApplicantId ? ' active' : ''}" onclick="activeApplicantId='${esc(a.id)}';renderPerformers();">${esc(a.name || 'Performer')}</button>`
+      ).join('');
+      const app = applicants.find(a => a.id === activeApplicantId) || applicants[0];
+      if (app) activeApplicantId = app.id;
+      return `
+        <div class="section-title" style="margin-bottom:0.75rem;">Performers</div>
+        <div class="room-layout">
+          <div class="performer-list-panel">${list || '<div class="empty-state">No performers yet.</div>'}</div>
+          ${app ? renderPerformerRecord(app, 'performers') : '<div class="empty-state">No performer selected.</div>'}
+        </div>`;
+    }
+    function renderAuditionType() {
+      document.getElementById('audition-type-content').innerHTML = AUDITION_PAGE_TEMPLATES.auditionType();
+    }
+    function renderAuditionTypeTemplate() {
       const activeSession = sessions.find(s => s.id === activeSessionId) || null;
       const title = activeSession ? esc(activeSession.name || labelForType(activeSession.type)) : 'Performers';
       const app = applicants.find(a => a.id === activeApplicantId) || applicants[0];
       if (app) activeApplicantId = app.id;
-      const el = document.getElementById('inroom-content');
       const list = applicants.map(a =>
-        `<button class="performer-btn${a.id === activeApplicantId ? ' active' : ''}" onclick="activeApplicantId='${esc(a.id)}';renderInRoom();">${esc(a.name || 'Performer')}</button>`
+        `<button class="performer-btn${a.id === activeApplicantId ? ' active' : ''}" onclick="activeApplicantId='${esc(a.id)}';renderAuditionType();">${esc(a.name || 'Performer')}</button>`
       ).join('');
-      el.innerHTML = `
+      return `
+        ${sessionStrip()}
         <div class="section-title" style="margin-bottom:0.75rem;">${title}</div>
         <div class="room-layout">
           <div class="performer-list-panel">${list || '<div class="empty-state">No performers yet.</div>'}</div>
@@ -598,16 +689,45 @@
       const next = applicants[idx + 1] || null;
       return `<div>
         <div class="performer-nav">
-          <button class="performer-nav-btn" ${!prev ? 'disabled' : ''} onclick="activeApplicantId='${prev ? esc(prev.id) : ''}';renderInRoom();">← Prev</button>
+          <button class="performer-nav-btn" ${!prev ? 'disabled' : ''} onclick="activeApplicantId='${prev ? esc(prev.id) : ''}';renderAuditionType();">← Prev</button>
           <span class="performer-nav-counter">${esc(app.name || 'Performer')} <span style="font-weight:600;color:#86799f;font-size:0.75rem;">${idx+1} / ${applicants.length}</span></span>
-          <button class="performer-nav-btn" ${!next ? 'disabled' : ''} onclick="activeApplicantId='${next ? esc(next.id) : ''}';renderInRoom();">Next →</button>
+          <button class="performer-nav-btn" ${!next ? 'disabled' : ''} onclick="activeApplicantId='${next ? esc(next.id) : ''}';renderAuditionType();">Next →</button>
         </div>
         <div class="room-main">
           <div class="card-face">${cardHtml(app)}</div>
           <div class="notes-panel">
             <div class="notes-panel-title">Team Notes</div>
+            ${renderTeamColourKey()}
             ${noteThread(app.id, 'in_room')}
-            ${noteComposer(app.id, 'in_room', 'team-note-body')}
+            ${currentPermissions().canCreateNotes ? noteComposer(app.id, 'in_room', 'team-note-body') : ''}
+          </div>
+        </div>
+      </div>`;
+    }
+    function renderPerformerRecord(app, sourceTab) {
+      const ca = customAnswers(app);
+      const fact = (label, value) => value ? `<div class="type-row"><span class="type-name">${esc(label)}</span><span class="type-meta" style="text-align:right;white-space:normal;">${esc(value)}</span></div>` : '';
+      const age = applicantAge(app);
+      const roles = Array.isArray(app.roles_requested) ? app.roles_requested.join(', ') : (app.roles_requested || app.role_interest || '');
+      const answers = Object.entries(ca || {}).filter(([key]) => !/email|phone|guardian|contact/i.test(key)).map(([key, value]) => fact(key, Array.isArray(value) ? value.join(', ') : value)).join('');
+      return `<div>
+        <div class="performer-nav">
+          <span class="performer-nav-counter">${esc(app.name || 'Performer')}</span>
+          <button class="performer-nav-btn" onclick="setTab('audition-type')">Open Audition Record</button>
+        </div>
+        <div class="room-main">
+          <div class="card-face">${cardHtml(app)}</div>
+          <div class="notes-panel">
+            <div class="notes-panel-title">Performer Details</div>
+            <div class="type-list">
+              ${fact('Age', age)}
+              ${fact('Pronouns', app.pronouns || ca.Pronouns)}
+              ${fact('Selected Roles', roles)}
+              ${fact('Materials', app.skills)}
+              ${fact('Resume / Experience', app.experience || app.experience_level)}
+              ${fact('Conflicts', Array.isArray(app.date_conflicts) ? app.date_conflicts.join(', ') : app.date_conflicts)}
+              ${answers}
+            </div>
           </div>
         </div>
       </div>`;
@@ -624,7 +744,7 @@
           </div>
           <div>
             ${noteThread(app.id, 'callback_list')}
-            ${noteComposer(app.id, 'callback_list', `cb-note-${esc(app.id)}`)}
+            ${currentPermissions().canCreateNotes ? noteComposer(app.id, 'callback_list', `cb-note-${esc(app.id)}`) : ''}
           </div>
         </div>`).join('');
       el.innerHTML = `${sessionStrip()}<div class="callback-list">${rows || '<div class="empty-state">No performers yet.</div>'}</div>`;
@@ -637,8 +757,27 @@
       return `<div class="note-thread">${rows.map(n => {
         const typeLabel  = noteTypeLabelFor(n.note_type);
         const ratingStars = n.note_rating ? '★'.repeat(n.note_rating) + '☆'.repeat(5 - n.note_rating) : '';
-        return `<div class="note-item" style="--note-color:${esc(n.author_color || '#572e88')};"><div class="note-meta">${typeLabel ? `<span class="note-type-badge">${esc(typeLabel)}</span>` : ''}${ratingStars ? `<span class="note-rating-badge">${ratingStars}</span>` : ''}${esc([n.author_name,n.author_role].filter(Boolean).join(' · '))}</div><div class="note-body">${esc(n.body)}</div></div>`;
+        const actions = `${canManageNote(n, 'edit') ? `<button class="btn-secondary" style="font-size:0.68rem;padding:0.18rem 0.45rem;" onclick="editTeamNote('${esc(n.id)}')">Edit</button>` : ''}${canManageNote(n, 'delete') ? `<button class="btn-secondary" style="font-size:0.68rem;padding:0.18rem 0.45rem;" onclick="deleteTeamNote('${esc(n.id)}')">Delete</button>` : ''}`;
+        return `<div class="note-item" style="--note-color:${esc(n.author_color || '#572e88')};"><div style="display:flex;align-items:flex-start;justify-content:space-between;gap:0.5rem;"><div class="note-meta">${typeLabel ? `<span class="note-type-badge">${esc(typeLabel)}</span>` : ''}${ratingStars ? `<span class="note-rating-badge">${ratingStars}</span>` : ''}${esc([n.author_name,n.author_role,formatNoteTime(n.created_at || n.inserted_at)].filter(Boolean).join(' · '))}</div>${actions ? `<div style="display:flex;gap:0.25rem;">${actions}</div>` : ''}</div><div class="note-body">${esc(n.body || n.content || '')}</div></div>`;
       }).join('')}</div>`;
+    }
+    function formatNoteTime(value) {
+      if (!value) return '';
+      try { return new Date(value).toLocaleString('en-CA', { month:'short', day:'numeric', hour:'numeric', minute:'2-digit' }); }
+      catch { return ''; }
+    }
+    function renderTeamColourKey() {
+      const people = new Map();
+      notes.forEach(n => {
+        const key = noteAuthorKey(n);
+        if (!key || people.has(key)) return;
+        people.set(key, { name: n.author_name || 'Team member', role: n.author_role || '', color: n.author_color || '#572e88' });
+      });
+      if (member && !people.has(currentAuthorKey())) people.set(currentAuthorKey(), { name: member.name || 'You', role: member.role || '', color: member.note_color || '#572e88' });
+      if (!people.size) return '';
+      return `<div style="display:flex;align-items:center;gap:0.45rem;flex-wrap:wrap;margin:0 0 0.65rem;">
+        ${Array.from(people.values()).map(p => `<span style="display:inline-flex;align-items:center;gap:0.25rem;font-size:0.68rem;font-weight:800;color:#6a5a80;"><span style="width:0.5rem;height:0.5rem;border-radius:999px;background:${esc(p.color)};box-shadow:0 0 0.35rem ${esc(p.color)};"></span>${esc(p.name)}</span>`).join('')}
+      </div>`;
     }
     function setNoteType(type) {
       activeNoteType = type;
@@ -682,7 +821,41 @@
       if (data) notes.push(...(Array.isArray(data) ? data : [data]));
       if (ta) ta.value = '';
       if (area === 'callback_list') renderCallbacks();
-      else renderInRoom();
+      else if (activeTab === 'performers') renderPerformers();
+      else renderAuditionType();
+    }
+    async function editTeamNote(noteId) {
+      const note = notes.find(n => String(n.id) === String(noteId));
+      if (!note || !canManageNote(note, 'edit')) return;
+      const body = prompt('Edit note', note.body || note.content || '');
+      if (body == null) return;
+      const nextBody = body.trim();
+      if (!nextBody) return;
+      const { error } = await sb.rpc('team_note_update', {
+        p_production_id: prodId,
+        p_email: teamEmail,
+        p_passcode: passcode,
+        p_note_id: noteId,
+        p_body: nextBody
+      });
+      if (error) { alert('Could not update note: ' + error.message); return; }
+      note.body = nextBody;
+      note.content = nextBody;
+      renderCurrent();
+    }
+    async function deleteTeamNote(noteId) {
+      const note = notes.find(n => String(n.id) === String(noteId));
+      if (!note || !canManageNote(note, 'delete')) return;
+      if (!confirm('Delete your note?')) return;
+      const { error } = await sb.rpc('team_note_delete', {
+        p_production_id: prodId,
+        p_email: teamEmail,
+        p_passcode: passcode,
+        p_note_id: noteId
+      });
+      if (error) { alert('Could not delete note: ' + error.message); return; }
+      notes = notes.filter(n => String(n.id) !== String(noteId));
+      renderCurrent();
     }
 
     // ── Profile ───────────────────────────────────────────────────────────
