@@ -35,8 +35,8 @@ function renderProductionTeamCard(member, options = {}) {
     : `<div class="production-team-card-placeholder">${initial}</div>`;
 
   const inviteHtml = m.invite_sent_at
-    ? `<button id="invite-btn-${id}" class="production-team-card-back-action" type="button" onclick="event.stopPropagation();emailTeamInvite('${id}')">Resend Invite</button>`
-    : `<button id="invite-btn-${id}" class="btn-primary" onclick="emailTeamInvite('${id}')">Email Invite</button>`;
+    ? `<button id="invite-btn-${id}" class="production-team-card-back-action" type="button" onclick="event.stopPropagation();emailTeamInvite('${id}', this)">Resend Invite</button>`
+    : `<button id="invite-btn-${id}" class="btn-primary" type="button" onclick="event.stopPropagation();emailTeamInvite('${id}', this)">Email Invite</button>`;
 
   const bio = String(m.bio || '');
   const bioText = escapeHtml(bio || 'No bio added yet.');
@@ -139,9 +139,13 @@ function flipProductionTeamCard(card) {
   card?.classList.toggle('is-flipped');
 }
 
-function ptcBtnFeedback(btn, { working = null, done = '✓', timeout = 1800 } = {}) {
+function ptcBtnFeedback(btn, { working = null, done = 'Saved', timeout = 1800, restore = true } = {}) {
   if (!btn) return () => {};
   const orig = btn.textContent.trim();
+  btn.classList.remove('did-work', 'is-clicked');
+  void btn.offsetWidth;
+  btn.classList.add('is-clicked');
+  setTimeout(() => btn.classList.remove('is-clicked'), 420);
   btn.classList.add('is-working');
   btn.disabled = true;
   if (working) btn.textContent = working;
@@ -151,10 +155,12 @@ function ptcBtnFeedback(btn, { working = null, done = '✓', timeout = 1800 } = 
     if (success) {
       btn.textContent = done;
       btn.classList.add('did-work');
-      setTimeout(() => {
-        btn.textContent = orig;
-        btn.classList.remove('did-work');
-      }, timeout);
+      if (restore) {
+        setTimeout(() => {
+          btn.textContent = orig;
+          btn.classList.remove('did-work');
+        }, timeout);
+      }
     } else {
       btn.textContent = orig;
     }
@@ -164,7 +170,7 @@ function ptcBtnFeedback(btn, { working = null, done = '✓', timeout = 1800 } = 
 async function copyProductionTeamCardPasscode(memberId, btn) {
   const member = getProductionTeamCardMember(memberId);
   if (!member?.passcode) return;
-  const markDone = ptcBtnFeedback(btn, { done: 'Copied!' });
+  const markDone = ptcBtnFeedback(btn, { done: 'Copied' });
   try {
     await navigator.clipboard.writeText(member.passcode);
     markDone(true);

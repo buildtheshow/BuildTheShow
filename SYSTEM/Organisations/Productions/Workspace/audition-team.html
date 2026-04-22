@@ -9,7 +9,7 @@
   <title>Production Workspace - Build The Show</title>
   <link rel="stylesheet" href="/ASSETS/styles/styles.css?v=typography-safe-20260421-2025" />
   <link rel="stylesheet" href="/ASSETS/styles/casting-card.css" />
-  <link rel="stylesheet" href="/ASSETS/styles/production-team-card.css?v=team-card-btn-feedback-20260422" />
+  <link rel="stylesheet" href="/ASSETS/styles/production-team-card.css?v=team-card-btn-feedback-20260422b" />
   <style>
     * { box-sizing: border-box; }
     body { margin: 0; background: #ffffff; font-family: var(--bts-font); color: #1a1530; display: flex; flex-direction: column; min-height: 100vh; min-height: 100dvh; }
@@ -13745,7 +13745,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="/ASSETS/scripts/venue-picker.js"></script>
 <script src="/ASSETS/scripts/casting-card.js"></script>
-<script src="/ASSETS/scripts/production-team-card.js?v=team-card-btn-feedback-20260422"></script>
+<script src="/ASSETS/scripts/production-team-card.js?v=team-card-btn-feedback-20260422b"></script>
 <script src="../../../../SHARED/Components/casting-card-back.js"></script>
 <script src="../../../../SHARED/Components/audition-status-strip.js"></script>
 <script src="../../../../SHARED/Components/ai-character-importer.js"></script>
@@ -18028,15 +18028,15 @@ If you have any questions, don't hesitate to reach out.
     const code = randomTeamPasscode();
     const input = document.getElementById(`passcode-input-${memberId}`);
     if (input) input.value = code;
-    const markDone = ptcBtnFeedback?.(btn, { working: '…', done: '✓' });
-    const ok = await saveTeamMemberField(memberId, 'passcode', code);
+    const markDone = ptcBtnFeedback?.(btn, { working: 'Saving...', done: 'Saved' });
+    const ok = await saveTeamMemberField(memberId, 'passcode', code, { render: false });
     markDone?.(ok !== false);
   }
 
   async function saveTeamMemberPasscode(memberId, btn) {
     const input = document.getElementById(`passcode-input-${memberId}`);
-    const markDone = ptcBtnFeedback?.(btn, { working: '…', done: 'Saved ✓' });
-    const ok = await saveTeamMemberField(memberId, 'passcode', input?.value || '');
+    const markDone = ptcBtnFeedback?.(btn, { working: 'Saving...', done: 'Saved' });
+    const ok = await saveTeamMemberField(memberId, 'passcode', input?.value || '', { render: false });
     markDone?.(ok !== false);
   }
 
@@ -18167,8 +18167,9 @@ If you have any questions, don't hesitate to reach out.
     showToast(`${name} added. Send them the invite from the access row below.`);
   }
 
-  async function saveTeamMemberField(memberId, field, value) {
+  async function saveTeamMemberField(memberId, field, value, options = {}) {
     if (!['name', 'email', 'role', 'passcode'].includes(field)) return false;
+    const shouldRender = options.render !== false;
     const patch = { [field]: String(value || '').trim() || null };
     if (field === 'passcode') {
       const digits = String(value || '').replace(/\D+/g, '').slice(0, 6);
@@ -18187,8 +18188,9 @@ If you have any questions, don't hesitate to reach out.
     const { error } = await sb.from('production_team_members').update(patch).eq('id', memberId);
     if (error) { showToast('Could not save team access: ' + error.message, true); return false; }
     await syncTeamMemberToProductionTeam({ ...(existing || {}), id: memberId }, patch);
+    if (existing) Object.assign(existing, patch);
     await loadAuditionTeamMembers();
-    renderTeamView(document.getElementById('tm-container'));
+    if (shouldRender) renderTeamView(document.getElementById('tm-container'));
     return true;
   }
 
@@ -18202,7 +18204,7 @@ If you have any questions, don't hesitate to reach out.
   async function copyTeamPortalLink(memberId = null, btn = null) {
     const member = auditionTeamMembers.find(m => m.id === memberId) || null;
     const link = teamPortalUrl();
-    const markDone = ptcBtnFeedback?.(btn, { done: 'Copied!' });
+    const markDone = ptcBtnFeedback?.(btn, { done: 'Copied' });
     try {
       await navigator.clipboard.writeText(link);
       markDone?.(true);
@@ -18262,7 +18264,7 @@ If you have any questions, don't hesitate to reach out.
       .split('{{director_name}}').join(prod?.director || '');
   }
 
-  async function emailTeamInvite(memberId) {
+  async function emailTeamInvite(memberId, clickedBtn = null) {
     const member = auditionTeamMembers.find(m => m.id === memberId);
     if (!member) return;
     if (!member.email) {
@@ -18270,9 +18272,8 @@ If you have any questions, don't hesitate to reach out.
       return;
     }
 
-    const btn = document.getElementById(`invite-btn-${memberId}`);
-    const originalText = btn ? btn.textContent.trim() : '';
-    if (btn) { btn.disabled = true; btn.textContent = 'Sending…'; }
+    const btn = clickedBtn || document.getElementById(`invite-btn-${memberId}`);
+    const markDone = ptcBtnFeedback?.(btn, { working: 'Sending...', done: 'Sent', restore: false });
 
     // Use the live team_invite template if one exists, else fall back to default message
     const liveTemplate = etLatestTemplateForCategory('team_invite');
@@ -18313,11 +18314,12 @@ If you have any questions, don't hesitate to reach out.
       });
       if (error || !data?.sent) throw new Error(error?.message || data?.error || 'Email was not sent.');
       await sb.from('production_team_members').update({ invite_sent_at: new Date().toISOString() }).eq('id', memberId);
+      markDone?.(true);
       await loadAuditionTeamMembers();
-      renderTeamView(document.getElementById('tm-container'));
+      setTimeout(() => renderTeamView(document.getElementById('tm-container')), 900);
       showToast(`Invite emailed to ${member.name || member.email}.`);
     } catch (err) {
-      if (btn) { btn.disabled = false; btn.textContent = originalText; }
+      markDone?.(false);
       const mailto = `mailto:${encodeURIComponent(member.email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(message)}`;
       window.location.href = mailto;
       showToast('Could not send automatically — your email app is opening with the invite ready.', true);
