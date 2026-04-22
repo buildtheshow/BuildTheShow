@@ -8608,12 +8608,41 @@
       align-items: end;
     }
     .aud-visual-kicker {
+      display: flex;
+      align-items: center;
+      gap: 0.42rem;
       font-size: 0.72rem;
       font-weight: 900;
       letter-spacing: var(--bts-tracking-label);
       text-transform: uppercase;
       color: #7a4e0a;
       margin-bottom: 0.45rem;
+    }
+    .bts-live-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      flex: 0 0 auto;
+      background: #aaa;
+      transition: background 0.3s;
+    }
+    .bts-live-dot[data-live="live"] {
+      background: #22c55e;
+      box-shadow: 0 0 0 3px rgba(34,197,94,0.22);
+      animation: bts-live-pulse 2s ease-in-out infinite;
+    }
+    .bts-live-dot[data-live="connecting"] {
+      background: #f59e0b;
+      animation: bts-live-pulse 1s ease-in-out infinite;
+    }
+    .bts-live-dot[data-live="offline"] {
+      background: #ef4444;
+      box-shadow: none;
+      animation: none;
+    }
+    @keyframes bts-live-pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.45; }
     }
     .aud-visual-title {
       margin: 0;
@@ -14684,55 +14713,54 @@
     syncMobileSidebarButton();
   }
 
+  let _realtimeReconnectTimer = null;
+
+  function setLiveIndicator(state) {
+    document.querySelectorAll('.bts-live-dot').forEach(el => {
+      el.dataset.live = state;
+      el.title = state === 'live' ? 'Live — syncing in real time' : state === 'connecting' ? 'Connecting…' : 'Offline — changes may not sync';
+    });
+  }
+
   function setupAuditionsRealtime() {
-    if (!prodId || auditionsRealtimeChannel) return;
-    auditionsRealtimeChannel = sb
-      .channel(`production-auditions-${prodId}`)
-      .on('postgres_changes', {
-        event: '*',
-        schema: 'public',
-        table: 'audition_applications',
+    if (!prodId) return;
+    if (auditionsRealtimeChannel) {
+      try { sb.removeChannel(auditionsRealtimeChannel); } catch {}
+      auditionsRealtimeChannel = null;
+    }
+    clearTimeout(_realtimeReconnectTimer);
+    setLiveIndicator('connecting');
+
+    const TABLES = [
+      'audition_applications',
+      'audition_bookings',
+      'audition_time_slots',
+      'audition_sessions',
+      'audition_configs',
+      'production_events',
+      'production_audition_notes',
+    ];
+
+    let ch = sb.channel(`production-auditions-${prodId}`);
+    TABLES.forEach(table => {
+      ch = ch.on('postgres_changes', {
+        event: '*', schema: 'public', table,
         filter: `production_id=eq.${prodId}`
-      }, queueAuditionsRefresh)
-      .on('postgres_changes', {
-        event: '*',
-        schema: 'public',
-        table: 'audition_bookings',
-        filter: `production_id=eq.${prodId}`
-      }, queueAuditionsRefresh)
-      .on('postgres_changes', {
-        event: '*',
-        schema: 'public',
-        table: 'audition_time_slots',
-        filter: `production_id=eq.${prodId}`
-      }, queueAuditionsRefresh)
-      .on('postgres_changes', {
-        event: '*',
-        schema: 'public',
-        table: 'audition_sessions',
-        filter: `production_id=eq.${prodId}`
-      }, queueAuditionsRefresh)
-      .on('postgres_changes', {
-        event: '*',
-        schema: 'public',
-        table: 'audition_configs',
-        filter: `production_id=eq.${prodId}`
-      }, queueAuditionsRefresh)
-      .on('postgres_changes', {
-        event: '*',
-        schema: 'public',
-        table: 'production_events',
-        filter: `production_id=eq.${prodId}`
-      }, queueAuditionsRefresh)
-      .on('postgres_changes', {
-        event: '*',
-        schema: 'public',
-        table: 'production_audition_notes',
-        filter: `production_id=eq.${prodId}`
-      }, queueAuditionsRefresh)
-      .subscribe((status) => {
-        if (status === 'SUBSCRIBED') console.log('[BTS] auditions realtime subscribed');
-      });
+      }, queueAuditionsRefresh);
+    });
+
+    auditionsRealtimeChannel = ch.subscribe((status, err) => {
+      if (status === 'SUBSCRIBED') {
+        setLiveIndicator('live');
+        console.log('[BTS] realtime live');
+      } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+        setLiveIndicator('offline');
+        console.warn('[BTS] realtime dropped, reconnecting in 4s…', status, err);
+        try { sb.removeChannel(auditionsRealtimeChannel); } catch {}
+        auditionsRealtimeChannel = null;
+        _realtimeReconnectTimer = setTimeout(setupAuditionsRealtime, 4000);
+      }
+    });
   }
 
   function queueEmailTemplatesRefresh() {
@@ -29301,7 +29329,7 @@ If you have any questions, don't hesitate to reach out.
         <div class="aud-visual-hero">
           <div class="aud-visual-hero-content">
             <div>
-              <div class="aud-visual-kicker">Auditions</div>
+              <div class="aud-visual-kicker"><span class="bts-live-dot" data-live="connecting"></span>Auditions</div>
               <h2 class="aud-visual-title">Map the audition journey first.</h2>
               <p class="aud-visual-copy">Set up auditions first. Once performers start signing up, this page becomes your live overview.</p>
             </div>
@@ -29319,7 +29347,7 @@ If you have any questions, don't hesitate to reach out.
       <div class="aud-visual-hero">
         <div class="aud-visual-hero-content">
           <div>
-            <div class="aud-visual-kicker">Auditions</div>
+            <div class="aud-visual-kicker"><span class="bts-live-dot" data-live="connecting"></span>Auditions</div>
             <h2 class="aud-visual-title">Auditions at a glance.</h2>
             <p class="aud-visual-copy">${nextSession ? `Next audition: ${esc(nextSession.name || sessionTypeLabel(nextSession.type))}, ${esc(formatAuditionVisualSessionDate(nextSession))}.` : 'Your audition overview is ready. Add dates or open a room to keep the flow moving.'}</p>
           </div>
