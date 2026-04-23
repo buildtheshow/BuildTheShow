@@ -184,12 +184,12 @@
       roleTypeOptions,
       openFn,
       inRoomFlipOpen,
-      cardFrontHtml,
-      cardBackHtml,
-      scorePanelHtml,
-      notesTextHtml,
-      teamNoteHtml,
-      roleChipsHtml
+      cardFrontHtml = '',
+      cardBackHtml = '',
+      scorePanelHtml = '',
+      notesTextHtml = '',
+      teamNoteHtml = '',
+      roleChipsHtml = ''
     } = config;
     const characterListHtml = renderTemplate({ area: 'auditions', component: 'character-list' }, {
       esc,
@@ -285,7 +285,7 @@
   api.registerTemplate({
     id: 'auditions.in-room.checked-in-strip',
     name: 'In The Room Checked-In Strip - Locked Workspace/Portal Template',
-    tags: { area: 'auditions', page: 'in-room', component: 'checked-in-strip' },
+    tags: { area: 'auditions', page: 'in-room', templatePart: 'checked-in-strip' },
     priority: 90,
     render: renderCheckedInStripTemplate
   });
