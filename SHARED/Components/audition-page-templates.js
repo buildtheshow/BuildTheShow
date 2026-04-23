@@ -80,6 +80,30 @@
       </button>`;
   }
 
+  function renderCastingBoardStickyNoteTemplate(config) {
+    const {
+      esc,
+      charId = '',
+      name = 'Unnamed',
+      tiltDeg = 0,
+      cardsHtml = '',
+      footerHtml = '',
+      interactive = true,
+    } = config;
+
+    const dndAttrs = interactive ? `
+      ondragover="cbv2NoteDragOver(event,'${esc(charId)}')"
+      ondragleave="cbv2NoteDragLeave(event,'${esc(charId)}')"
+      ondrop="cbv2DropOnNote(event,'${esc(charId)}')"` : '';
+    const headerClick = interactive ? `onclick="openCbNotePopup('${esc(charId)}')"` : '';
+
+    return `<div class="cbv2-role-note" data-cbv2-char-id="${esc(charId)}" style="--cbv2-note-tilt:${esc(String(tiltDeg))}deg;"${dndAttrs}>
+      <div class="cbv2-note-header" ${headerClick}><span class="cbv2-note-header-label">${esc(name)}</span></div>
+      <div class="cbv2-note-cards">${cardsHtml}</div>
+      <div class="cbv2-note-footer">${footerHtml}</div>
+    </div>`;
+  }
+
   function renderCharacterListHintTemplate() {
     return `<div class="inroom-save-hint">Gold means they asked for it. Purple means we like them for it.</div>`;
   }
@@ -310,6 +334,14 @@
     tags: { area: 'auditions', component: 'sticky-note' },
     priority: 85,
     render: renderStickyNoteTemplate
+  });
+
+  api.registerTemplate({
+    id: 'auditions.casting-board.sticky-note',
+    name: 'Casting Board Sticky Note',
+    tags: { area: 'auditions', page: 'casting-board', component: 'sticky-note' },
+    priority: 90,
+    render: renderCastingBoardStickyNoteTemplate
   });
 
   api.registerTemplate({
