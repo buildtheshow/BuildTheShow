@@ -193,6 +193,44 @@ DROP FUNCTION IF EXISTS team_note_delete(uuid,text,text,uuid);
 DROP FUNCTION IF EXISTS team_note_add_for_session(uuid,text,uuid,uuid,uuid,text,text,text,integer);
 DROP FUNCTION IF EXISTS team_note_update_for_session(uuid,text,uuid,text);
 DROP FUNCTION IF EXISTS team_note_delete_for_session(uuid,text,uuid);
+DROP FUNCTION IF EXISTS remove_production_team_member(uuid,uuid);
+
+CREATE OR REPLACE FUNCTION remove_production_team_member(
+  p_production_id uuid,
+  p_team_member_id uuid
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_notes_deleted integer := 0;
+  v_sessions_deleted integer := 0;
+  v_members_deleted integer := 0;
+BEGIN
+  DELETE FROM production_audition_notes
+  WHERE production_id = p_production_id
+    AND team_member_id = p_team_member_id;
+  GET DIAGNOSTICS v_notes_deleted = ROW_COUNT;
+
+  DELETE FROM production_team_member_sessions
+  WHERE production_id = p_production_id
+    AND team_member_id = p_team_member_id;
+  GET DIAGNOSTICS v_sessions_deleted = ROW_COUNT;
+
+  DELETE FROM production_team_members
+  WHERE production_id = p_production_id
+    AND id = p_team_member_id;
+  GET DIAGNOSTICS v_members_deleted = ROW_COUNT;
+
+  RETURN jsonb_build_object(
+    'team_members_deleted', v_members_deleted,
+    'sessions_deleted', v_sessions_deleted,
+    'notes_deleted', v_notes_deleted
+  );
+END;
+$$;
 
 CREATE OR REPLACE FUNCTION team_member_start_session(
   p_production_id uuid,
@@ -227,7 +265,8 @@ BEGIN
     RAISE EXCEPTION 'Team access not found';
   END IF;
 
-  v_token := encode(gen_random_bytes(32), 'hex');
+  v_token := md5(random()::text || clock_timestamp()::text || v_member.id::text)
+          || md5(random()::text || clock_timestamp()::text || p_production_id::text);
   v_expires_at := now() + interval '30 days';
 
   INSERT INTO production_team_member_sessions (
@@ -273,8 +312,7 @@ BEGIN
       lower(regexp_replace(COALESCE(p.slug, ''), '[^a-zA-Z0-9]', '', 'g')) AS production_slug_key,
       lower(regexp_replace(COALESCE(p.title, ''), '[^a-zA-Z0-9]', '', 'g')) AS title_key,
       lower(regexp_replace(regexp_replace(COALESCE(p.title, ''), '^(test|demo)[^a-zA-Z0-9]+', '', 'i'), '[^a-zA-Z0-9]', '', 'g')) AS clean_title_key,
-      lower(regexp_replace(COALESCE(p_show_slug, ''), '[^a-zA-Z0-9]', '', 'g')) AS requested_key,
-      regexp_replace(COALESCE(p.season, ''), '[^0-9]', '', 'g') AS season_digits
+      lower(regexp_replace(COALESCE(p_show_slug, ''), '[^a-zA-Z0-9]', '', 'g')) AS requested_key
   ) keys
   WHERE lower(regexp_replace(COALESCE(o.slug, o.abbreviation, o.name), '[^a-zA-Z0-9]', '', 'g')) = lower(regexp_replace(p_org_abbrev, '[^a-zA-Z0-9]', '', 'g'))
     AND lower(trim(m.email)) = lower(trim(p_email))
@@ -286,13 +324,11 @@ BEGIN
       OR keys.clean_title_key = keys.requested_key
       OR keys.requested_key LIKE keys.production_slug_key || '%'
       OR keys.requested_key LIKE keys.clean_title_key || '%'
-      OR keys.requested_key = keys.clean_title_key || keys.season_digits
     )
   ORDER BY
     CASE
       WHEN keys.production_slug_key = keys.requested_key THEN 0
       WHEN keys.clean_title_key = keys.requested_key THEN 1
-      WHEN keys.requested_key = keys.clean_title_key || keys.season_digits THEN 2
       ELSE 3
     END,
     p.id
@@ -302,7 +338,8 @@ BEGIN
     RAISE EXCEPTION 'Team access not found';
   END IF;
 
-  v_token := encode(gen_random_bytes(32), 'hex');
+  v_token := md5(random()::text || clock_timestamp()::text || v_member.id::text)
+          || md5(random()::text || clock_timestamp()::text || v_member.production_id::text);
   v_expires_at := now() + interval '30 days';
 
   INSERT INTO production_team_member_sessions (

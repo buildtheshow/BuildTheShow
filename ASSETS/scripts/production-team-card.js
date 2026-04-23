@@ -74,7 +74,7 @@ function renderProductionTeamCard(member, options = {}) {
               </div>
               <div class="production-team-card-back-contact">
                 <div class="production-team-card-back-contact-item">
-                  <span>Phone Number:</span>
+                  <span>Phone:</span>
                   <strong>${phone || 'No phone saved'}</strong>
                 </div>
                 <div class="production-team-card-back-contact-item production-team-card-back-contact-email">
@@ -103,8 +103,16 @@ function renderProductionTeamCard(member, options = {}) {
                 <button class="production-team-card-back-action" type="button" onclick="copyTeamPortalLink('${id}',this)"><span class="production-team-card-action-label">Copy Link</span><span class="production-team-card-action-status"></span></button>
                 <button class="production-team-card-back-action" type="button" onclick="copyProductionTeamCardPasscode('${id}',this)"><span class="production-team-card-action-label">Copy Passcode</span><span class="production-team-card-action-status"></span></button>
                 ${m.headshot_url ? `<a class="production-team-card-back-action" href="${escapeHtml(m.headshot_url)}" target="_blank" download onclick="ptcBtnFeedback(this,{working:'Downloading',done:'Downloaded'})?.(true)"><span class="production-team-card-action-label">Download Headshot</span><span class="production-team-card-action-status"></span></a>` : ''}
-                <button class="production-team-card-back-action is-danger" type="button" onclick="removeProductionTeamMember('${id}',this)"><span class="production-team-card-action-label">Remove</span><span class="production-team-card-action-status"></span></button>
               </div>
+              <button class="production-team-card-trash" type="button" onclick="event.stopPropagation();removeProductionTeamMember('${id}',this)" title="Remove team member" aria-label="Remove ${name || 'production team member'}">
+                <span class="production-team-card-trash-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" focusable="false">
+                    <path d="M9 4h6l1 2h4v2H4V6h4l1-2Zm-1 6h2v8H8v-8Zm6 0h2v8h-2v-8Zm-3 0h2v8h-2v-8ZM6 9h12l-1 12H7L6 9Z"></path>
+                  </svg>
+                </span>
+                <span class="production-team-card-action-label">Remove</span>
+                <span class="production-team-card-action-status"></span>
+              </button>
             ` : ''}
           </div>
         </div>

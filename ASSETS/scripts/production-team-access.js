@@ -208,27 +208,81 @@ async function removeProductionTeamMember(memberId, btn = null) {
   const member = auditionTeamMembers.find(m => String(m.id) === String(memberId));
   if (!member) return;
   const label = member.name || member.email || 'this team member';
-  const ok = window.confirm(`Remove ${label} from production team access?`);
+  const ok = window.confirm([
+    `Remove ${label}?`,
+    '',
+    'This will permanently delete:',
+    '- their team access email and passcode',
+    '- saved team login sessions',
+    '- all audition notes they wrote',
+    '- their team profile details',
+    '',
+    'This cannot be undone.'
+  ].join('\n'));
   if (!ok) return;
 
   const markDone = ptcBtnFeedback?.(btn, { working: 'Removing', done: 'Removed', restore: false });
-  const { error } = await sb.from('production_team_members').delete().eq('id', memberId);
-  if (error) {
-    markDone?.(false);
-    showToast('Could not remove team member: ' + error.message, true);
-    return;
-  }
+  try {
+    if (member.headshot_path) {
+      const { error: fileError } = await sb.storage.from('audition-headshots').remove([member.headshot_path]);
+      if (fileError) console.warn('[BTS] Could not remove team headshot file.', fileError);
+    }
 
-  const role = findCreativeRoleForTeamMember(member);
-  if (role) {
-    role.team_member_id = null;
-    role.email = role.email || member.email || '';
-    await saveTeamConfig();
+    let removedWithRpc = false;
+    const { error: rpcError } = await sb.rpc('remove_production_team_member', {
+      p_production_id: prodId,
+      p_team_member_id: memberId
+    });
+
+    if (!rpcError) {
+      removedWithRpc = true;
+    } else {
+      console.warn('[BTS] remove_production_team_member RPC unavailable; using direct cleanup.', rpcError);
+    }
+
+    if (!removedWithRpc) {
+      const { error: notesError } = await sb
+        .from('production_audition_notes')
+        .delete()
+        .eq('production_id', prodId)
+        .eq('team_member_id', memberId);
+      if (notesError) throw notesError;
+
+      const { error: sessionsError } = await sb
+        .from('production_team_member_sessions')
+        .delete()
+        .eq('production_id', prodId)
+        .eq('team_member_id', memberId);
+      if (sessionsError) throw sessionsError;
+
+      const { error: memberError } = await sb
+        .from('production_team_members')
+        .delete()
+        .eq('production_id', prodId)
+        .eq('id', memberId);
+      if (memberError) throw memberError;
+    }
+
+    const role = findCreativeRoleForTeamMember(member);
+    if (role) {
+      role.team_member_id = null;
+      role.email = '';
+      await saveTeamConfig();
+    }
+
+    if (Array.isArray(auditionAuthoredNotes)) {
+      auditionAuthoredNotes = auditionAuthoredNotes.filter(note => String(note.team_member_id || '') !== String(memberId));
+    }
+
+    auditionTeamMembers = auditionTeamMembers.filter(m => String(m.id) !== String(memberId));
+    markDone?.(true);
+    setTimeout(() => renderTeamView(document.getElementById('tm-container')), 500);
+    showToast(`${label} and their team notes were removed.`);
+  } catch (error) {
+    console.error('[BTS] Remove team member failed.', error);
+    markDone?.(false);
+    showToast('Could not remove team member: ' + (error.message || 'Please try again.'), true);
   }
-  auditionTeamMembers = auditionTeamMembers.filter(m => String(m.id) !== String(memberId));
-  markDone?.(true);
-  setTimeout(() => renderTeamView(document.getElementById('tm-container')), 500);
-  showToast(`${label} removed from team access.`);
 }
 
 function teamInviteMessage(member) {
