@@ -467,8 +467,9 @@ These rules cover hierarchy, spacing, labels, and how interface elements should 
 2. Give container headers a small, consistent padding buffer from the container edges.
 3. Keep container headers visually clean, clear, and easy to scan.
 4. Give container headers modest separation from the body content so the structure reads immediately.
-5. Do not invent one-off header alignment rules unless there is a documented reason to break the default.
-6. This rule applies only when a container actually has a header.
+5. Left-align container headers when the container is functional, list-driven, or operationally scanned and left alignment improves readability or works better with adjacent controls.
+6. Do not invent one-off header alignment rules unless there is a documented reason to break the default.
+7. This rule applies only when a container actually has a header.
 
 ### Labels and Values
 
