@@ -66,6 +66,24 @@
     return roleTypeOptions.map(rt => `<option value="${esc(rt)}">${esc(rt)}</option>`).join('');
   }
 
+  function renderStickyNoteTemplate(config) {
+    const {
+      esc,
+      appId = '',
+      charId = '',
+      name = 'Unnamed',
+      stateClass = ''
+    } = config;
+
+    return `<button type="button" class="inroom-role-chip ${stateClass}" onclick="toggleInRoomRole('${esc(appId)}','${esc(charId)}')">
+        <div class="inroom-role-chip-title">${esc(name)}</div>
+      </button>`;
+  }
+
+  function renderCharacterListHintTemplate() {
+    return `<div class="inroom-save-hint">Gold means they asked for it. Purple means we like them for it.</div>`;
+  }
+
   function renderCharacterListTemplate(config) {
     const {
       esc,
@@ -74,14 +92,14 @@
     } = config;
 
     return `<div class="inroom-roles-card inroom-bottom-roles">
-          <div class="inroom-roles-header" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:0.5rem;margin-bottom:0.6rem;">
-            <div class="inroom-roles-title" style="margin:0;">Character List</div>
-            <div class="inroom-roles-controls" style="display:flex;gap:0.4rem;flex-wrap:wrap;align-items:center;">
-              <select id="inroom-role-filter" onchange="filterInRoomRoleChips()" style="font-size:0.78rem;font-family: var(--bts-font);border:1.5px solid rgba(87,46,136,0.2);border-radius:8px;padding:0.25rem 0.5rem;color:#4a3d6b;background:#fff;cursor:pointer;">
+          <div class="inroom-roles-header">
+            <div class="inroom-roles-title">Character List</div>
+            <div class="inroom-roles-controls">
+              <select id="inroom-role-filter" class="inroom-roles-select" onchange="filterInRoomRoleChips()">
                 <option value="">All roles</option>
                 ${renderRoleTypeOptions(roleTypeOptions, esc)}
               </select>
-              <select id="inroom-role-sort" onchange="filterInRoomRoleChips()" style="font-size:0.78rem;font-family: var(--bts-font);border:1.5px solid rgba(87,46,136,0.2);border-radius:8px;padding:0.25rem 0.5rem;color:#4a3d6b;background:#fff;cursor:pointer;">
+              <select id="inroom-role-sort" class="inroom-roles-select" onchange="filterInRoomRoleChips()">
                 <option value="type">By role type</option>
                 <option value="az">A - Z</option>
                 <option value="za">Z - A</option>
@@ -89,7 +107,7 @@
             </div>
           </div>
           <div class="inroom-roles-grid" id="inroom-roles-grid">${roleChipsHtml}</div>
-          <div class="inroom-save-hint">Gold means they asked for it. Purple means we like them for it.</div>
+          ${renderTemplateById('auditions.character-list.hint', {})}
         </div>`;
   }
 
@@ -283,6 +301,22 @@
     tags: { area: 'auditions', component: 'empty-state' },
     priority: 85,
     render: renderEmptyStateTemplate
+  });
+
+  api.registerTemplate({
+    id: 'auditions.sticky-note',
+    name: 'Audition Sticky Note',
+    tags: { area: 'auditions', component: 'sticky-note' },
+    priority: 85,
+    render: renderStickyNoteTemplate
+  });
+
+  api.registerTemplate({
+    id: 'auditions.character-list.hint',
+    name: 'Character List Hint',
+    tags: { area: 'auditions', component: 'character-list-hint' },
+    priority: 81,
+    render: renderCharacterListHintTemplate
   });
 
   api.registerTemplate({
