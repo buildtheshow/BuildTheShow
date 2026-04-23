@@ -1,5 +1,8 @@
 (function () {
   const templateRegistry = [];
+  // Source-of-truth page shell for General Auditions in both workspace and team portal views.
+  // Locks the card, impressions, quick notes, and character list structure.
+  const LOCKED_GENERAL_IN_ROOM_TEMPLATE_ID = 'auditions.in-room.general';
 
   function normalizeTags(tags = {}) {
     return Object.entries(tags).reduce((acc, [key, value]) => {
@@ -264,8 +267,8 @@
   });
 
   api.registerTemplate({
-    id: 'auditions.in-room.general',
-    name: 'General Auditions In The Room',
+    id: LOCKED_GENERAL_IN_ROOM_TEMPLATE_ID,
+    name: 'General Auditions In The Room - Locked Workspace/Portal Source Template',
     tags: { area: 'auditions', page: 'in-room', sessionType: 'general' },
     priority: 100,
     render: renderInRoomPageTemplate
