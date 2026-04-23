@@ -6897,11 +6897,11 @@
       align-items: start;
       width: 100%;
       min-width: 0;
-      background: rgba(255,255,255,0.96);
-      border: 1.5px solid rgba(87,46,136,0.12);
-      border-radius: 16px;
-      box-shadow: 0 8px 22px rgba(21,16,43,0.045);
-      padding: 1rem;
+      background: transparent;
+      border: 0;
+      border-radius: 0;
+      box-shadow: none;
+      padding: 0;
       box-sizing: border-box;
     }
     .inroom-primary-title {
@@ -7525,12 +7525,12 @@
     .inroom-main.inroom-main-flat .inroom-right {
       gap: 0.75rem;
       align-self: start;
-      height: auto;
+      height: var(--inroom-panel-height, auto);
     }
     .inroom-main.inroom-main-flat .inroom-score-card {
       min-height: 0;
-      height: auto;
-      max-height: none;
+      height: var(--inroom-panel-height, auto);
+      max-height: var(--inroom-panel-height, none);
       justify-content: stretch;
     }
     .inroom-main.inroom-main-flat .inroom-considered-card {
@@ -7571,11 +7571,11 @@
     }
     .inroom-main.inroom-main-flat .inroom-notes-card,
     .inroom-main.inroom-main-flat .inroom-roles-card {
-      background: rgba(255,255,255,0.96);
-      border: 1.5px solid rgba(87,46,136,0.12);
-      box-shadow: 0 8px 22px rgba(21,16,43,0.045);
-      padding: 0.95rem;
-      border-radius: 16px;
+      background: transparent;
+      border: 0;
+      box-shadow: none;
+      padding: 0;
+      border-radius: 0;
       min-width: 0;
     }
     .inroom-main.inroom-main-flat .inroom-primary-container .inroom-notes-card {
@@ -10574,7 +10574,7 @@
           "right"
           "notes";
         gap: 0.85rem;
-        padding: 0.85rem !important;
+        padding: 0 !important;
       }
 
       .inroom-main.inroom-main-flat .inroom-score-card,
@@ -10640,11 +10640,11 @@
       }
 
       .inroom-main.inroom-main-flat .inroom-bottom-roles {
-        background: rgba(255,255,255,0.96) !important;
-        border: 1.5px solid rgba(87,46,136,0.12) !important;
-        border-radius: 16px !important;
-        box-shadow: 0 8px 22px rgba(21,16,43,0.045) !important;
-        padding: 0.85rem !important;
+        background: transparent !important;
+        border: 0 !important;
+        border-radius: 0 !important;
+        box-shadow: none !important;
+        padding: 0 !important;
       }
 
       .inroom-score-options {
@@ -10867,7 +10867,7 @@
           "title title"
           "card right"
           "notes notes";
-        padding: 0.85rem !important;
+        padding: 0 !important;
       }
 
       .inroom-flip,
@@ -14371,7 +14371,6 @@
     renderProdHeader();
     prefillSettings();
     applyModuleVisibility();
-    loadEvents();
     if (params.get('openAiImport') === 'true') {
       setTimeout(() => openImportWithAIModal(), 800);
     }
@@ -14382,11 +14381,14 @@
     loadApplicants();
     loadAuditionAuthoredNotes();
     loadCharacters();
-    loadCustomQuestions();
-    loadOverviewCards();
-    checkAutoStageTransition();
-    loadRoles();
-    loadOpportunities();
+    queueWorkspaceWarmup([
+      loadEvents,
+      loadCustomQuestions,
+      loadOverviewCards,
+      checkAutoStageTransition,
+      loadRoles,
+      loadOpportunities,
+    ]);
     // Load org name for auto-fill + init venue picker
     if (prod.organization_id) {
       sb.from('organizations').select('name,email,slug,abbreviation').eq('id', prod.organization_id).single()
@@ -29742,13 +29744,13 @@ If you have any questions, don't hesitate to reach out.
   function syncInRoomRightPanelHeight(container) {
     if (!container) return;
     const main = container.querySelector('.inroom-main.inroom-main-flat');
-    if (main) {
-      main.style.removeProperty('--inroom-panel-height');
-      return;
-    }
     const card = container.querySelector('.inroom-front-card-wrap .casting-card');
     const panel = container.querySelector('.inroom-score-card, .inroom-considered-card');
     if (!main || !card || !panel) return;
+    if (window.matchMedia('(max-width: 760px)').matches) {
+      main.style.removeProperty('--inroom-panel-height');
+      return;
+    }
     const cardHeight = Math.round(card.getBoundingClientRect().height);
     if (!cardHeight) return;
     main.style.setProperty('--inroom-panel-height', `${cardHeight}px`);
@@ -31516,6 +31518,42 @@ If you have any questions, don't hesitate to reach out.
   document.addEventListener('keydown', (event) => {
     if (event.key === 'Escape') closeMobileSidebar();
   });
+
+  function dedupeWorkspaceLoad(fn) {
+    let pending = null;
+    return function dedupedWorkspaceLoad(...args) {
+      if (pending) return pending;
+      pending = Promise.resolve(fn.apply(this, args)).finally(() => {
+        pending = null;
+      });
+      return pending;
+    };
+  }
+
+  function queueWorkspaceWarmup(tasks = []) {
+    tasks.forEach((task, index) => {
+      const run = () => {
+        try { task(); } catch (error) { console.warn('[BTS] warmup task failed', error); }
+      };
+      const schedule = () => {
+        if ('requestIdleCallback' in window) window.requestIdleCallback(run, { timeout: 2200 + index * 250 });
+        else setTimeout(run, 0);
+      };
+      setTimeout(schedule, 350 + index * 180);
+    });
+  }
+
+  loadAuditionConfig = dedupeWorkspaceLoad(loadAuditionConfig);
+  loadAudSessions = dedupeWorkspaceLoad(loadAudSessions);
+  loadSlots = dedupeWorkspaceLoad(loadSlots);
+  loadApplicants = dedupeWorkspaceLoad(loadApplicants);
+  loadAuditionAuthoredNotes = dedupeWorkspaceLoad(loadAuditionAuthoredNotes);
+  loadCharacters = dedupeWorkspaceLoad(loadCharacters);
+  loadCustomQuestions = dedupeWorkspaceLoad(loadCustomQuestions);
+  loadEvents = dedupeWorkspaceLoad(loadEvents);
+  loadOverviewCards = dedupeWorkspaceLoad(loadOverviewCards);
+  loadRoles = dedupeWorkspaceLoad(loadRoles);
+  loadOpportunities = dedupeWorkspaceLoad(loadOpportunities);
 
   init();
 </script>
