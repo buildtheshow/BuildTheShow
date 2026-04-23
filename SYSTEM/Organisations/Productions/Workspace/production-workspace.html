@@ -6096,16 +6096,6 @@
         0 1px 2px rgba(15,23,42,0.08),
         2px 3px 5px rgba(15,23,42,0.12);
     }
-    .cbv2-template-note-area {
-      margin: 1.5rem -2.25rem 0;
-      padding: 1.5rem 1.75rem 2rem;
-      background: rgba(237,232,247,0.72);
-      border-top: 1px solid rgba(87,46,136,0.08);
-    }
-    .cbv2-template-note {
-      width: min(320px, 100%);
-    }
-
     /* ── Dance Call In The Room ── */
     #aud-session-inroom-content {
       width: 100%;
@@ -27239,16 +27229,24 @@ If you have any questions, don't hesitate to reach out.
 
   function cbv2BuildNoteHtml(char, tiltDeg, options = {}) {
     const { idPrefix = 'cbnote', interactive = true } = options;
-    return window.BTSAuditionTemplates?.renderTemplateById?.('auditions.casting-board.sticky-note', {
-      esc,
-      charId: char.id,
-      name: char.name || 'Unnamed',
-      tiltDeg,
-      interactive,
-      cardsHtml: cbv2BuildNoteCards(char.id),
-      footerHtml: cbv2BuildNoteFooter(char.id),
-      idPrefix,
-    }) || '';
+    const noteId = `${idPrefix}-${char.id}`;
+    const cardsId = `${idPrefix}-cards-${char.id}`;
+    const footerId = `${idPrefix}-footer-${char.id}`;
+    const dndAttrs = interactive ? `
+      ondragover="cbv2NoteDragOver(event,'${char.id}')"
+      ondragleave="cbv2NoteDragLeave(event,'${char.id}')"
+      ondrop="cbv2DropOnNote(event,'${char.id}')"` : '';
+    const headerClick = interactive ? `onclick="openCbNotePopup('${char.id}')"` : '';
+    return `<div class="cbv2-role-note" id="${noteId}" data-cbv2-char-id="${esc(char.id)}"
+      style="--cbv2-note-tilt:${tiltDeg}deg;"${dndAttrs}>
+      <div class="cbv2-note-header" ${headerClick}><span class="cbv2-note-header-label">${esc(char.name || 'Unnamed')}</span></div>
+      <div class="cbv2-note-cards" id="${cardsId}">
+        ${cbv2BuildNoteCards(char.id)}
+      </div>
+      <div class="cbv2-note-footer" id="${footerId}">
+        ${cbv2BuildNoteFooter(char.id)}
+      </div>
+    </div>`;
   }
 
   function cbv2CallbacksChars() {
@@ -27519,31 +27517,6 @@ If you have any questions, don't hesitate to reach out.
     }).join('');
   }
 
-  function renderCbBaseStickyNoteArea() {
-    const existing = document.getElementById('cbv2-template-note-area');
-    if (existing) existing.remove();
-    if (getActiveCastingBoardMode() === 'callbacks') return;
-
-    const outer = document.getElementById('cbv2-outer');
-    if (!outer) return;
-
-    const templateHtml = window.BTSAuditionTemplates?.renderTemplateById?.('auditions.sticky-note', {
-      esc,
-      appId: 'template',
-      charId: 'template',
-      name: 'Mrs. Corry',
-      stateClass: '',
-    }) || '';
-
-    if (!templateHtml) return;
-
-    const area = document.createElement('div');
-    area.className = 'cbv2-template-note-area';
-    area.id = 'cbv2-template-note-area';
-    area.innerHTML = `<div class="cbv2-template-note">${templateHtml}</div>`;
-    outer.appendChild(area);
-  }
-
   function renderCbEnsemble() {
     renderCbEnsembleInto({
       floorId: 'cbv2-ensemble-floor',
@@ -27566,7 +27539,6 @@ If you have any questions, don't hesitate to reach out.
     if (getActiveCastingBoardMode() !== 'callbacks') renderCbPerformers();
     renderCbv2Roles();
     renderCbEnsemble();
-    renderCbBaseStickyNoteArea();
     // Keep the Callbacks panel in sync if it's currently visible
     const cbPanel = document.getElementById('aud-panel-callbacks');
     if (cbPanel && cbPanel.style.display !== 'none') renderCallbacksFresh();
