@@ -58,10 +58,32 @@
   }
 
   function applyFooterOffset(footer) {
+    if (footer.dataset.footerInsideMain === 'true') {
+      footer.style.marginLeft = '0';
+      footer.style.width = '100%';
+      footer.style.maxWidth = '100%';
+      return;
+    }
     const sidebarW = getSidebarWidth();
     footer.style.marginLeft = sidebarW ? `${sidebarW}px` : '0';
     footer.style.width = sidebarW ? `calc(100% - ${sidebarW}px)` : '100%';
     footer.style.maxWidth = sidebarW ? `calc(100% - ${sidebarW}px)` : '100%';
+  }
+
+  function getMainFooterHost() {
+    const candidates = [
+      '.prod-main',
+      '.main-content',
+      '.dashboard-main',
+      '.member-main'
+    ];
+    return candidates
+      .map(selector => document.querySelector(selector))
+      .find(el => {
+        if (!el || el.closest('.modal, [role="dialog"]')) return false;
+        const style = window.getComputedStyle(el);
+        return style.display !== 'none' && style.visibility !== 'hidden';
+      }) || null;
   }
 
   function injectFooter() {
@@ -103,7 +125,9 @@
       <span style="font-size:0.78rem;color:#c8c0d8;">© ${year} Build The Show</span>
     `;
 
-    document.body.appendChild(footer);
+    const host = getMainFooterHost();
+    footer.dataset.footerInsideMain = host ? 'true' : 'false';
+    (host || document.body).appendChild(footer);
     document.body.style.paddingBottom = '0';
     applyFooterOffset(footer);
 
