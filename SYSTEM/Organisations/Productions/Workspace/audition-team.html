@@ -14197,9 +14197,12 @@
     const host = document.getElementById('team-access-profile-content');
     if (!host || !teamAccessMode || !teamAccessMember) return;
     const used = new Set(teamAccessUsedColours());
+    const perms = teamAccessPermissions();
     const currentColor = teamAccessMember.note_color || '#572e88';
     const currentEmail = teamAccessMember.email || teamAccessEmail || '';
     const currentPhone = teamAccessMember.phone || '';
+    const memberName = teamAccessMember.name || 'Team Member';
+    const memberRole = teamAccessMember.role || perms.label || 'Production Team';
     const colourButtons = TEAM_NOTE_COLOR_GROUPS.map(group => {
       const variants = group.variants.map(({ tone, value }) => {
         const taken = used.has(value.toLowerCase());
@@ -14213,43 +14216,97 @@
         </div>`;
     }).join('');
     const initial = esc((teamAccessMember.name || '?').trim().charAt(0).toUpperCase() || '?');
+    const permissionsHtml = [
+      { label: 'View contact info', enabled: !!perms.canViewContact },
+      { label: 'Edit audition schedule', enabled: !!perms.canEditSchedule },
+      { label: 'Check performers in', enabled: !!perms.canCheckIn },
+      { label: 'View settings', enabled: !!perms.canViewSettings },
+      { label: 'Write team notes', enabled: !!perms.canCreateNotes },
+      { label: 'Edit performer files', enabled: !!perms.canEditPerformerFiles },
+    ].map(item => `
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:0.75rem;padding:0.55rem 0;border-bottom:1px solid rgba(87,46,136,0.08);">
+        <span style="font-size:0.82rem;color:#1a1530;font-weight:700;">${esc(item.label)}</span>
+        <span style="font-size:0.72rem;font-weight:800;text-transform:uppercase;letter-spacing:0.04em;color:${item.enabled ? '#166534' : '#8a7aa4'};background:${item.enabled ? 'rgba(34,197,94,0.12)' : 'rgba(138,122,164,0.12)'};border-radius:999px;padding:0.18rem 0.5rem;">${item.enabled ? 'Yes' : 'No'}</span>
+      </div>
+    `).join('');
     host.innerHTML = `
       <div class="page-header">
         <div>
-          <div class="page-title">Profile</div>
-          <div class="page-subtitle">Your headshot, bio, and contact info for this production.</div>
+          <div class="page-title">Team Profile</div>
+          <div class="page-subtitle">Your production identity, note colour, and contact details for this show.</div>
         </div>
       </div>
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:1.25rem;align-items:start;">
-        <div class="ov-card">
-          <div id="team-access-headshot-preview" style="width:100%;aspect-ratio:1;border-radius:14px;background:rgba(87,46,136,0.08);overflow:hidden;display:grid;place-items:center;color:#572e88;font-size:3rem;font-weight:950;">
+
+      <div class="ov-card" style="margin-bottom:1.25rem;padding:1.1rem 1.2rem;">
+        <div style="display:grid;grid-template-columns:auto minmax(0,1fr);gap:1rem;align-items:center;">
+          <div id="team-access-headshot-preview" style="width:110px;aspect-ratio:1;border-radius:18px;background:rgba(87,46,136,0.08);overflow:hidden;display:grid;place-items:center;color:#572e88;font-size:3rem;font-weight:950;box-shadow:inset 0 0 0 1px rgba(87,46,136,0.1);">
             ${teamAccessMember.headshot_url ? `<img src="${esc(teamAccessMember.headshot_url)}" alt="" style="width:100%;height:100%;object-fit:cover;object-position:top;" />` : initial}
           </div>
-          <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-top:0.75rem;">
-            <input type="file" id="team-access-headshot-input" accept="image/*" style="display:none;" onchange="uploadTeamAccessHeadshot(this.files?.[0])" />
-            <button type="button" class="btn-secondary" onclick="document.getElementById('team-access-headshot-input').click()">Upload Headshot</button>
-            ${teamAccessMember.headshot_url ? `<a class="btn-secondary" href="${esc(teamAccessMember.headshot_url)}" target="_blank" download style="text-decoration:none;">Download</a>` : ''}
+          <div style="min-width:0;">
+            <div style="display:flex;flex-wrap:wrap;gap:0.55rem;align-items:center;margin-bottom:0.5rem;">
+              <div style="font-size:1.35rem;font-weight:900;color:#1a1530;line-height:1;">${esc(memberName)}</div>
+              <span style="display:inline-flex;align-items:center;gap:0.35rem;padding:0.28rem 0.65rem;border-radius:999px;background:rgba(87,46,136,0.1);color:#572e88;font-size:0.76rem;font-weight:800;letter-spacing:0.04em;text-transform:uppercase;">${esc(memberRole)}</span>
+            </div>
+            <div style="font-size:0.86rem;color:#6a5a80;line-height:1.5;">${esc(prod?.title || 'Production')} · ${esc(perms.label || 'Team Access')}</div>
+            <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-top:0.85rem;">
+              <input type="file" id="team-access-headshot-input" accept="image/*" style="display:none;" onchange="uploadTeamAccessHeadshot(this.files?.[0])" />
+              <button type="button" class="btn-secondary" onclick="document.getElementById('team-access-headshot-input').click()">Upload Headshot</button>
+              ${teamAccessMember.headshot_url ? `<a class="btn-secondary" href="${esc(teamAccessMember.headshot_url)}" target="_blank" download style="text-decoration:none;">Download</a>` : ''}
+            </div>
           </div>
         </div>
-        <div class="ov-card">
-          <div class="ov-card-label">Your Profile</div>
-          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:0.85rem 1rem;margin-bottom:1rem;">
-            <label style="display:block;">
-              <span style="display:block;font-weight:800;font-size:0.82rem;margin-bottom:0.35rem;">Email</span>
-              <input id="team-access-email-field" class="form-input" type="email" value="${esc(currentEmail)}" placeholder="you@example.com" />
-            </label>
-            <label style="display:block;">
-              <span style="display:block;font-weight:800;font-size:0.82rem;margin-bottom:0.35rem;">Phone</span>
-              <input id="team-access-phone-field" class="form-input" type="tel" value="${esc(currentPhone)}" placeholder="Phone number" />
-            </label>
+      </div>
+
+      <div style="display:grid;grid-template-columns:minmax(0,1.15fr) minmax(280px,0.85fr);gap:1.25rem;align-items:start;">
+        <div style="display:grid;gap:1.25rem;">
+          <div class="ov-card">
+            <div class="ov-card-label">Profile Details</div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:0.85rem 1rem;margin-bottom:1rem;">
+              <label style="display:block;">
+                <span style="display:block;font-weight:800;font-size:0.82rem;margin-bottom:0.35rem;">Name</span>
+                <input class="form-input" type="text" value="${esc(memberName)}" disabled />
+              </label>
+              <label style="display:block;">
+                <span style="display:block;font-weight:800;font-size:0.82rem;margin-bottom:0.35rem;">Role</span>
+                <input class="form-input" type="text" value="${esc(memberRole)}" disabled />
+              </label>
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:0.85rem 1rem;">
+              <label style="display:block;">
+                <span style="display:block;font-weight:800;font-size:0.82rem;margin-bottom:0.35rem;">Email</span>
+                <input id="team-access-email-field" class="form-input" type="email" value="${esc(currentEmail)}" placeholder="you@example.com" />
+              </label>
+              <label style="display:block;">
+                <span style="display:block;font-weight:800;font-size:0.82rem;margin-bottom:0.35rem;">Phone</span>
+                <input id="team-access-phone-field" class="form-input" type="tel" value="${esc(currentPhone)}" placeholder="Phone number" />
+              </label>
+            </div>
           </div>
-          <label style="display:block;font-weight:800;font-size:0.82rem;margin-bottom:0.35rem;">Note colour</label>
-          <div style="display:grid;gap:0.65rem;margin:0.55rem 0 0.25rem;">${colourButtons}</div>
-          <div style="font-size:0.76rem;color:#8a7aa4;margin-top:0.45rem;">Taken colours stay locked so everyone keeps their own.</div>
-          <label style="display:block;font-weight:800;font-size:0.82rem;margin-top:1rem;margin-bottom:0.35rem;">Bio</label>
-          <textarea class="form-textarea" id="team-access-bio" placeholder="Short bio for programs, websites, or marketing..." style="min-height:140px;">${esc(teamAccessMember.bio || '')}</textarea>
-          <button type="button" class="btn-primary" onclick="saveTeamAccessProfile()" style="margin-top:0.75rem;">Save Profile</button>
-          <div id="team-access-profile-msg" style="font-size:0.8rem;margin-top:0.5rem;min-height:1.2em;"></div>
+
+          <div class="ov-card">
+            <div class="ov-card-label">Bio</div>
+            <label style="display:block;font-weight:800;font-size:0.82rem;margin-bottom:0.35rem;">About You</label>
+            <textarea class="form-textarea" id="team-access-bio" placeholder="Short bio for programs, websites, or marketing..." style="min-height:180px;">${esc(teamAccessMember.bio || '')}</textarea>
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:0.75rem;flex-wrap:wrap;margin-top:0.75rem;">
+              <div id="team-access-profile-msg" style="font-size:0.8rem;min-height:1.2em;color:#8a7aa4;"></div>
+              <button type="button" class="btn-primary" onclick="saveTeamAccessProfile()">Save Profile</button>
+            </div>
+          </div>
+        </div>
+
+        <div style="display:grid;gap:1.25rem;">
+          <div class="ov-card">
+            <div class="ov-card-label">Note Colour</div>
+            <label style="display:block;font-weight:800;font-size:0.82rem;margin-bottom:0.35rem;">Your Themis colour</label>
+            <div style="display:grid;gap:0.65rem;margin:0.55rem 0 0.25rem;">${colourButtons}</div>
+            <div style="font-size:0.76rem;color:#8a7aa4;margin-top:0.45rem;">Taken colours stay locked so everyone keeps their own note colour.</div>
+          </div>
+
+          <div class="ov-card">
+            <div class="ov-card-label">Access</div>
+            <div style="font-size:0.82rem;color:#6a5a80;margin-bottom:0.2rem;">What this production role can do in the team portal.</div>
+            <div style="margin-top:0.55rem;">${permissionsHtml}</div>
+          </div>
         </div>
       </div>`;
   }
