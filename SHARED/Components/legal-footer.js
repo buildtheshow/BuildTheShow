@@ -32,14 +32,36 @@
   const termsUrl   = resolveUrl('../Legal/terms-of-service.html');
 
   function getSidebarWidth() {
-    // Check for known sidebar selectors used across the app
-    const sidebar =
-      document.querySelector('.prod-sidebar') ||
-      document.querySelector('aside.sidebar') ||
-      document.querySelector('.member-sidebar') ||
-      document.querySelector('.dashboard-sidebar');
+    // Only reserve space for sidebars that actually occupy the left edge.
+    // Mobile/off-canvas sidebars should not offset the footer.
+    const selectors = [
+      '.prod-sidebar',
+      'aside.sidebar',
+      '.sidebar',
+      '.member-sidebar',
+      '.dashboard-sidebar'
+    ];
+    const sidebar = selectors
+      .map(selector => document.querySelector(selector))
+      .find(el => {
+        if (!el) return false;
+        const style = window.getComputedStyle(el);
+        const rect = el.getBoundingClientRect();
+        const occupiesLeftEdge = rect.width > 0 && rect.left <= 1;
+        const isFixedColumn = style.position === 'fixed' || style.position === 'sticky';
+        const isVisible = style.display !== 'none' && style.visibility !== 'hidden' && rect.height > 0;
+        const isDesktop = window.matchMedia('(min-width: 761px)').matches;
+        return isDesktop && isVisible && isFixedColumn && occupiesLeftEdge;
+      });
     if (!sidebar) return 0;
-    return sidebar.offsetWidth || 220;
+    return Math.round(sidebar.getBoundingClientRect().width || sidebar.offsetWidth || 0);
+  }
+
+  function applyFooterOffset(footer) {
+    const sidebarW = getSidebarWidth();
+    footer.style.marginLeft = sidebarW ? `${sidebarW}px` : '0';
+    footer.style.width = sidebarW ? `calc(100% - ${sidebarW}px)` : '100%';
+    footer.style.maxWidth = sidebarW ? `calc(100% - ${sidebarW}px)` : '100%';
   }
 
   function injectFooter() {
@@ -48,8 +70,6 @@
     // (leaves modal footers, card footers etc. untouched).
     document.querySelectorAll('body > footer').forEach(el => el.remove());
 
-    const sidebarW = getSidebarWidth();
-
     const footer = document.createElement('footer');
     footer.id = 'legal-footer';
     footer.setAttribute('aria-label', 'Legal');
@@ -57,6 +77,7 @@
     Object.assign(footer.style, {
       position:       'static',
       width:          '100%',
+      maxWidth:       '100%',
       marginLeft:     '0',
       marginTop:      'auto',
       alignSelf:      'stretch',
@@ -69,6 +90,8 @@
       padding:        '1.35rem 2rem 0.6rem',
       background:     '#ffffff',
       borderTop:      '1px solid rgba(87,46,136,0.1)',
+      zIndex:         'auto',
+      boxSizing:      'border-box',
     });
 
     const year = new Date().getFullYear();
@@ -82,18 +105,16 @@
 
     document.body.appendChild(footer);
     document.body.style.paddingBottom = '0';
+    applyFooterOffset(footer);
 
-    // Recalculate left offset if the sidebar loads asynchronously
+    // Recalculate if the sidebar loads asynchronously or the viewport changes.
     let attempts = 0;
     const poll = setInterval(() => {
       attempts++;
-      const w = getSidebarWidth();
-      if (w !== sidebarW) {
-        footer.style.marginLeft = '0';
-        footer.style.width = '100%';
-      }
+      applyFooterOffset(footer);
       if (attempts >= 10) clearInterval(poll);
     }, 300);
+    window.addEventListener('resize', () => applyFooterOffset(footer));
   }
 
   if (document.readyState === 'loading') {
