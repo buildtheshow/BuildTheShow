@@ -14267,7 +14267,11 @@
     if (!host || !teamAccessMode || !teamAccessMember) return;
     const used = new Set(teamAccessUsedColours());
     const perms = teamAccessPermissions();
-    const currentColor = teamAccessMember.note_color || '#572e88';
+    const selectedColor = String(teamAccessMember.note_color || '#572e88').toLowerCase();
+    const colorSet = TEAM_NOTE_COLOR_GROUPS.find(group => group.base.toLowerCase() === selectedColor)
+      || TEAM_NOTE_COLOR_GROUPS.find(group => group.family === 'Purple')
+      || { base: '#572e88', dark: '#2f184e', light: '#e0d4f0' };
+    const currentColor = colorSet.base;
     const currentEmail = teamAccessMember.email || teamAccessEmail || '';
     const currentPhone = teamAccessMember.phone || '';
     const memberName = teamAccessMember.name || 'Team Member';
@@ -14277,10 +14281,10 @@
     const memberRole = memberRoles.join(', ') || teamAccessMember.role || perms.label || 'Production Team';
     const memberBio = teamAccessMember.bio || '';
     const hasHeadshot = !!teamAccessMember.headshot_url;
-    const heroTint = `${currentColor}14`;
-    const heroStrongTint = `${currentColor}24`;
-    const heroLine = `${currentColor}33`;
-    const teamSoft = `${currentColor}b8`;
+    const heroTint = colorSet.light;
+    const heroStrongTint = colorSet.base;
+    const heroLine = colorSet.base;
+    const teamSoft = colorSet.dark;
     const colorIsLight = (() => {
       const hex = String(currentColor || '').replace('#', '').trim();
       if (!/^[0-9a-fA-F]{6}$/.test(hex)) return false;
@@ -14289,13 +14293,12 @@
       const b = parseInt(hex.slice(4, 6), 16);
       return ((r * 299) + (g * 587) + (b * 114)) / 1000 > 165;
     })();
-    const currentColorText = colorIsLight ? '#1a1530' : currentColor;
+    const currentColorText = colorIsLight ? '#1a1530' : colorSet.dark;
     const colourButtons = TEAM_NOTE_COLOR_GROUPS
-      .flatMap(group => group.variants.map(({ value }) => ({ value })))
-      .map(({ value }) => {
-        const taken = used.has(value.toLowerCase());
-        const active = currentColor.toLowerCase() === value.toLowerCase();
-        return `<button type="button" class="team-color-dot${active ? ' active' : ''}" aria-label="Choose colour" title="${taken ? 'This colour is already taken' : 'Choose colour'}" ${taken ? 'disabled' : ''} onclick="selectTeamAccessColour('${esc(value)}')" style="--team-note-color:${esc(value)};"></button>`;
+      .map(({ base }) => {
+        const taken = used.has(base.toLowerCase());
+        const active = currentColor.toLowerCase() === base.toLowerCase();
+        return `<button type="button" class="team-color-dot${active ? ' active' : ''}" aria-label="Choose colour" title="${taken ? 'This colour is already taken' : 'Choose colour'}" ${taken ? 'disabled' : ''} onclick="selectTeamAccessColour('${esc(base)}')" style="--team-note-color:${esc(base)};"></button>`;
       }).join('');
     const initial = esc((teamAccessMember.name || '?').trim().charAt(0).toUpperCase() || '?');
     const profileCardHtml = typeof renderProductionTeamCard === 'function'
@@ -14311,7 +14314,7 @@
         }, { showManagement: false })
       : '';
     host.innerHTML = `
-      <div class="team-profile-theme" style="--team-accent:${esc(currentColor)};--team-accent-line:${esc(heroLine)};--team-accent-soft:${esc(teamSoft)};--team-accent-ink:${esc(currentColorText)};">
+      <div class="team-profile-theme" style="--team-accent:${esc(colorSet.base)};--team-accent-dark:${esc(colorSet.dark)};--team-accent-light:${esc(colorSet.light)};--team-accent-line:${esc(colorSet.base)};--team-accent-soft:${esc(colorSet.dark)};--team-accent-ink:${esc(colorSet.dark)};">
       <div class="page-header">
         <div>
           <div class="page-title">Team Profile</div>
@@ -14323,7 +14326,7 @@
         <div style="display:grid;grid-template-columns:minmax(220px,280px) minmax(0,1fr);gap:1.5rem;align-items:start;">
           <div style="display:grid;gap:0.85rem;">
             ${profileCardHtml ? `<div style="width:100%;max-width:280px;">${profileCardHtml}</div>` : `
-            <div id="team-access-headshot-preview" style="width:100%;aspect-ratio:4 / 5;border-radius:24px;background:${hasHeadshot ? '#ece7f5' : `linear-gradient(180deg, ${heroStrongTint} 0%, ${heroTint} 100%)`};overflow:hidden;display:grid;place-items:center;color:${currentColorText};font-size:4.2rem;font-weight:950;box-shadow:inset 0 0 0 1px ${heroLine};">
+            <div id="team-access-headshot-preview" style="width:100%;aspect-ratio:4 / 5;border-radius:24px;background:${hasHeadshot ? colorSet.light : `linear-gradient(180deg, ${heroStrongTint} 0%, ${heroTint} 100%)`};overflow:hidden;display:grid;place-items:center;color:${currentColorText};font-size:4.2rem;font-weight:950;box-shadow:inset 0 0 0 1px ${heroLine};">
               ${hasHeadshot ? `<img src="${esc(teamAccessMember.headshot_url)}" alt="" style="width:100%;height:100%;object-fit:cover;object-position:center top;" />` : initial}
             </div>`}
             <div style="display:flex;gap:0.55rem;flex-wrap:wrap;">
@@ -18238,16 +18241,16 @@ If you have any questions, don't hesitate to reach out.
   let auditionObservations = [];
   let editingCreativeRoleIndex = null;
   const TEAM_NOTE_COLOR_GROUPS = [
-    { family: 'Red', variants: [{ tone: 'Standard', value: '#df3b2f' }] },
-    { family: 'Orange', variants: [{ tone: 'Standard', value: '#f39a4a' }] },
-    { family: 'Gold', variants: [{ tone: 'Standard', value: '#f0c419' }] },
-    { family: 'Green', variants: [{ tone: 'Standard', value: '#7dbb45' }] },
-    { family: 'Teal', variants: [{ tone: 'Standard', value: '#43b8b0' }] },
-    { family: 'Blue', variants: [{ tone: 'Standard', value: '#5d8fff' }] },
-    { family: 'Purple', variants: [{ tone: 'Standard', value: '#7a4ff6' }] },
-    { family: 'Pink', variants: [{ tone: 'Standard', value: '#e66bb8' }] },
+    { family: 'Red', base: '#df3b2f', dark: '#8d221b', light: '#f9d8d3' },
+    { family: 'Orange', base: '#f39a4a', dark: '#9a5517', light: '#fde4cf' },
+    { family: 'Gold', base: '#f0c419', dark: '#8d6a00', light: '#fdf0b8' },
+    { family: 'Green', base: '#7dbb45', dark: '#4a7322', light: '#e3f1d2' },
+    { family: 'Teal', base: '#43b8b0', dark: '#1d706b', light: '#d3f2ef' },
+    { family: 'Blue', base: '#5d8fff', dark: '#284d9f', light: '#dbe6ff' },
+    { family: 'Purple', base: '#572e88', dark: '#2f184e', light: '#e0d4f0' },
+    { family: 'Pink', base: '#e66bb8', dark: '#922d6d', light: '#f9d5e9' },
   ];
-  const TEAM_NOTE_COLORS = TEAM_NOTE_COLOR_GROUPS.flatMap(group => group.variants.map(variant => variant.value));
+  const TEAM_NOTE_COLORS = TEAM_NOTE_COLOR_GROUPS.map(group => group.base);
 
   function templateToConfig(template) {
     return template.departments.map(dept => ({
