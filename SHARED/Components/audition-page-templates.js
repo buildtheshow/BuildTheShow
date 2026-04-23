@@ -166,6 +166,7 @@
       ciClick,
       irClick,
       cbCastClick,
+      cbListClick,
       isDanceCall,
       listLabel
     } = config;
@@ -177,7 +178,7 @@
           <button type="button" class="aud-day-topnav-btn${activeTool === 'inroom' ? ' active' : ''}" onclick="${irClick}">In the Room</button>
           ${isDanceCall ? '' : `
           <button type="button" class="aud-day-topnav-btn${activeTool === 'castingboard' ? ' active' : ''}" onclick="${cbCastClick}">Casting Board</button>
-          <button type="button" class="aud-day-topnav-btn${activeTool === 'callbacks' ? ' active' : ''}" onclick="openAuditionsSubTab('callbacks')">${esc(listLabel)}</button>
+          <button type="button" class="aud-day-topnav-btn${activeTool === 'callbacks' ? ' active' : ''}" onclick="${cbListClick}">${esc(listLabel)}</button>
           `}
         </div>
       </div>`;
@@ -256,7 +257,7 @@
         <div class="inroom-right">${scorePanelHtml}</div>
         <div class="inroom-notes-card">
           <div class="inroom-notes-title">Quick Notes</div>
-          ${teamAccessMode ? '' : notesTextHtml}
+          ${notesTextHtml}
           ${isGeneralAuditionInRoom ? '' : teamNoteHtml}
         </div>
         ${generalClose}
