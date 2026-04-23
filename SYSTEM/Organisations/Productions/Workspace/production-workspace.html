@@ -18711,6 +18711,9 @@ If you have any questions, don't hesitate to reach out.
     _audHeaderActiveTool = tool; // keep header showing, update active tab
     saveWorkspaceNavState({ auditionsSessionId: sessionId, auditionsSessionTool: tool });
     openAuditionsSubTab(`session:${sessionId}`);
+    activeAuditionNavTool = tool;
+    _audHeaderActiveTool = tool;
+    renderAuditionSessionWorkspace();
   }
 
   function getActiveAuditionNavSession() {
@@ -29667,16 +29670,21 @@ If you have any questions, don't hesitate to reach out.
   }
 
   function renderGeneralInRoomCheckedStrip(openFn = 'openAuditionSessionInRoom', label = 'Checked In') {
-    const session = getCurrentInRoomSession() || getActiveAuditionNavSession() || getSelectedAuditionSession();
-    const checkedInApps = getInRoomCheckedInApps();
-    const trayCards = checkedInApps.map(app => inRoomThumbHtml(app, openFn, session)).join('');
-    const config = { esc, label, trayCards };
-    return (window.BTSAuditionTemplates?.renderTemplateById?.('auditions.in-room.checked-in-strip', config)
-      || window.BTSAuditionTemplates?.renderCheckedInStripTemplate?.(config)
-      || `<div class="inroom-checked-strip">
-        <div class="inroom-checked-strip-label">${esc(label)}</div>
-        <div class="inroom-checked-strip-track"><div class="inroom-thumbs">${trayCards}</div></div>
-      </div>`);
+    try {
+      const session = getCurrentInRoomSession() || getActiveAuditionNavSession() || getSelectedAuditionSession();
+      const checkedInApps = getInRoomCheckedInApps();
+      const trayCards = checkedInApps.map(app => inRoomThumbHtml(app, openFn, session)).join('');
+      const config = { esc, label, trayCards };
+      return (window.BTSAuditionTemplates?.renderTemplateById?.('auditions.in-room.checked-in-strip', config)
+        || window.BTSAuditionTemplates?.renderCheckedInStripTemplate?.(config)
+        || `<div class="inroom-checked-strip">
+          <div class="inroom-checked-strip-label">${esc(label)}</div>
+          <div class="inroom-checked-strip-track"><div class="inroom-thumbs">${trayCards}</div></div>
+        </div>`);
+    } catch (error) {
+      console.error('[BTS] checked-in strip render failed', error);
+      return '';
+    }
   }
 
   function syncInRoomRightPanelHeight(container) {
@@ -30209,11 +30217,12 @@ If you have any questions, don't hesitate to reach out.
     const sessionAccentVars = `border-top:3px solid ${sessionAccent};--session-accent:${sessionAccent};--session-accent-07:${hexToRgba(sessionAccent,0.07)};--session-accent-08:${hexToRgba(sessionAccent,0.08)};--session-accent-12:${hexToRgba(sessionAccent,0.12)};--session-accent-20:${hexToRgba(sessionAccent,0.2)};--session-accent-25:${hexToRgba(sessionAccent,0.25)}`;
     const isGeneralAuditionInRoomWorkspace = tool === 'inroom' && session.type === 'audition';
     const isClassicInRoomWorkspace = tool === 'inroom' && (session.type === 'audition' || session.type === 'callback');
+    const checkedInStripHtml = isGeneralAuditionInRoomWorkspace
+      ? renderGeneralInRoomCheckedStrip('openAuditionSessionInRoom', 'Checked In')
+      : '';
     renderAuditionHeaderFrame();
     host.innerHTML = `
-      ${isGeneralAuditionInRoomWorkspace
-        ? renderGeneralInRoomCheckedStrip('openAuditionSessionInRoom', 'Checked In')
-        : ''}
+      ${checkedInStripHtml}
       <div class="aud-session-shell${isClassicInRoomWorkspace ? ' aud-session-shell-general-inroom' : ''}" style="${sessionAccentVars};">
         <div class="aud-session-hero">
           <div class="aud-session-hero-copy">
