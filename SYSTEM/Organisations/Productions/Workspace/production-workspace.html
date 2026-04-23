@@ -13762,7 +13762,7 @@
 <script src="../../../../SHARED/Components/casting-card-back.js"></script>
 <script src="../../../../SHARED/Components/audition-status-strip.js"></script>
 <script src="../../../../SHARED/Components/ai-character-importer.js"></script>
-<script src="../../../../SHARED/Components/audition-page-templates.js"></script>
+<script src="../../../../SHARED/Components/audition-page-templates.js?v=checked-strip-visual-20260422"></script>
 <!-- VenuePicker uses OpenStreetMap/Nominatim - no API key needed -->
 <script>
   /* SQL needed:
@@ -29670,10 +29670,13 @@ If you have any questions, don't hesitate to reach out.
     const session = getCurrentInRoomSession() || getActiveAuditionNavSession() || getSelectedAuditionSession();
     const checkedInApps = getInRoomCheckedInApps();
     const trayCards = checkedInApps.map(app => inRoomThumbHtml(app, openFn, session)).join('');
-    return window.BTSAuditionTemplates.renderTemplateById(
-      'auditions.in-room.checked-in-strip',
-      { esc, label, trayCards }
-    );
+    const config = { esc, label, trayCards };
+    return (window.BTSAuditionTemplates?.renderTemplateById?.('auditions.in-room.checked-in-strip', config)
+      || window.BTSAuditionTemplates?.renderCheckedInStripTemplate?.(config)
+      || `<div class="inroom-checked-strip">
+        <div class="inroom-checked-strip-label">${esc(label)}</div>
+        <div class="inroom-checked-strip-track"><div class="inroom-thumbs">${trayCards}</div></div>
+      </div>`);
   }
 
   function syncInRoomRightPanelHeight(container) {
@@ -30204,20 +30207,22 @@ If you have any questions, don't hesitate to reach out.
       : '<strong>Date:</strong> Not set yet';
     const sessionAccent = getAuditionScheduleSidebarMarkerColor(session.type || 'audition');
     const sessionAccentVars = `border-top:3px solid ${sessionAccent};--session-accent:${sessionAccent};--session-accent-07:${hexToRgba(sessionAccent,0.07)};--session-accent-08:${hexToRgba(sessionAccent,0.08)};--session-accent-12:${hexToRgba(sessionAccent,0.12)};--session-accent-20:${hexToRgba(sessionAccent,0.2)};--session-accent-25:${hexToRgba(sessionAccent,0.25)}`;
+    const isGeneralAuditionInRoomWorkspace = tool === 'inroom' && session.type === 'audition';
+    const isClassicInRoomWorkspace = tool === 'inroom' && (session.type === 'audition' || session.type === 'callback');
     renderAuditionHeaderFrame();
     host.innerHTML = `
-      ${tool === 'inroom' && (session.type === 'audition' || session.type === 'callback')
-        ? renderGeneralInRoomCheckedStrip('openAuditionSessionInRoom', session.type === 'callback' ? 'Check In' : 'Checked In')
+      ${isGeneralAuditionInRoomWorkspace
+        ? renderGeneralInRoomCheckedStrip('openAuditionSessionInRoom', 'Checked In')
         : ''}
-      <div class="aud-session-shell${tool === 'inroom' && (session.type === 'audition' || session.type === 'callback') ? ' aud-session-shell-general-inroom' : ''}" style="${sessionAccentVars};">
+      <div class="aud-session-shell${isClassicInRoomWorkspace ? ' aud-session-shell-general-inroom' : ''}" style="${sessionAccentVars};">
         <div class="aud-session-hero">
           <div class="aud-session-hero-copy">
-            ${tool === 'inroom' && (session.type === 'audition' || session.type === 'callback') ? '' : `<div class="aud-session-hero-kicker" style="color:${esc(sessionAccent)};">${esc(sessionTypeLabel(session.type || 'audition'))}</div>`}
+            ${isClassicInRoomWorkspace ? '' : `<div class="aud-session-hero-kicker" style="color:${esc(sessionAccent)};">${esc(sessionTypeLabel(session.type || 'audition'))}</div>`}
             <div class="aud-session-hero-title">${esc(session.name || sessionTypeLabel(session.type || 'audition'))}</div>
             <div class="aud-session-hero-meta">${tool === 'inroom' ? metaMarkup : metaPlain}</div>
           </div>
         </div>
-        <div class="${tool === 'inroom' && (session.type === 'audition' || session.type === 'callback') ? 'aud-session-body-shell aud-session-body-shell-flat aud-session-body-shell-general-inroom' : 'aud-session-body-shell'}">
+        <div class="${isClassicInRoomWorkspace ? 'aud-session-body-shell aud-session-body-shell-flat aud-session-body-shell-general-inroom' : 'aud-session-body-shell'}">
           ${tool === 'checkin' ? `
             <div class="aud-session-checkin-tools">
               <input id="session-ci-search" type="search" placeholder="Search performers…" value="${esc(sessionCiSearchQuery)}" oninput="updateSessionCiSearch(this.value)" style="flex:1;min-width:180px;max-width:320px;padding:0.45rem 0.85rem;border:1.5px solid ${esc(hexToRgba(sessionAccent,0.25))};border-radius:8px;font-size:0.875rem;font-family: var(--bts-font);color:#1a1530;outline:none;background:#fff;" />
