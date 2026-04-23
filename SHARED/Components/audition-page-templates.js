@@ -258,7 +258,7 @@
         <div class="inroom-notes-card">
           <div class="inroom-notes-title">Quick Notes</div>
           ${notesTextHtml}
-          ${isGeneralAuditionInRoom ? '' : teamNoteHtml}
+          ${teamNoteHtml}
         </div>
         ${generalClose}
         ${characterListHtml}
