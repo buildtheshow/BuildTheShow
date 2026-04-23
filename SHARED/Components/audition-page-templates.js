@@ -81,7 +81,7 @@
   }
 
   function renderCharacterListHintTemplate() {
-    return `<div class="inroom-save-hint">Gold means they asked for it. Purple means we like them for it.</div>`;
+    return `<div class="inroom-save-hint">Gold: their choice<br>Your colour: your choice</div>`;
   }
 
   function renderCharacterListTemplate(config) {

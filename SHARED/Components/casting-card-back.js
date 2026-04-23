@@ -275,13 +275,12 @@ function buildCastingCardBack(app, opts = {}) {
 
     // Per-character role notes (one block per character with notes)
     if (roleNotes && roleNotes.length) {
-      inRoomContent += roleNotes.map(({ sessionLabel, charName, roleType, note, authorName, authorRole, authorColor }) =>
+      inRoomContent += roleNotes.map(({ sessionLabel, charName, roleType, note, authorColor }) =>
         `<div class="irb-inroom-role-note-block" style="${authorColor ? `border-left-color:${escStr(authorColor)};background:${escStr(authorColor)}12;` : ''}">
           <div class="irb-inroom-role-note-header">
             <span class="irb-inroom-role-note-name">${sessionLabel ? `<span style="display:block;font-size:0.75em;font-weight:700;opacity:0.7;">${escStr(sessionLabel)}</span>` : ''}${escStr(charName)}${roleType === 'Group' ? ' <span style="font-size:0.85em;font-weight:600;opacity:0.65;">(group)</span>' : ''}</span>
             ${roleType && roleType !== 'Group' ? `<span class="irb-inroom-role-note-type">${escStr(roleType)}</span>` : ''}
           </div>
-          ${authorName || authorRole ? `<div class="irb-inroom-note-label" style="${authorColor ? `color:${escStr(authorColor)};` : ''}">${escStr([authorName, authorRole].filter(Boolean).join(' · '))}</div>` : ''}
           <div class="irb-notes">${escStr(note)}</div>
         </div>`
       ).join('');
@@ -290,10 +289,9 @@ function buildCastingCardBack(app, opts = {}) {
     // Per-session notes (one block per session that has notes)
     if (includeRoomNotes) {
       if (sessionNotes && sessionNotes.length) {
-        inRoomContent += sessionNotes.map(({ label, note, authorName, authorRole, authorColor }) =>
+        inRoomContent += sessionNotes.map(({ label, note, authorColor }) =>
           `<div class="irb-inroom-note-block" style="${authorColor ? `border-left-color:${escStr(authorColor)};background:${escStr(authorColor)}12;` : ''}">
             <div class="irb-inroom-note-label" style="${authorColor ? `color:${escStr(authorColor)};` : ''}">${escStr(label)}</div>
-            ${authorName || authorRole ? `<div class="irb-inroom-note-label" style="opacity:0.72;${authorColor ? `color:${escStr(authorColor)};` : ''}">${escStr([authorName, authorRole].filter(Boolean).join(' · '))}</div>` : ''}
             <div class="irb-notes">${escStr(note)}</div>
           </div>`
         ).join('');
