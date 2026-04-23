@@ -4819,18 +4819,12 @@
       flex: 1;
       min-height: 0;
       padding: 0.75rem 1rem 1rem;
-      display: flex;
-      flex-direction: column;
-      gap: 1rem;
-    }
-    /* Each row holds exactly 2 cards side by side */
-    .cbv2-perf-row {
-      display: flex;
-      gap: 1rem;
-      flex-shrink: 0;
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 0.75rem;
     }
     .cbv2-perf-card-wrap {
-      flex: 0 0 calc(50% - 0.5rem);
+      width: 100%;
       aspect-ratio: 4 / 5;
       position: relative;
       overflow: visible;
@@ -4861,6 +4855,14 @@
     .cbv2-perf-card-wrap.is-muted .casting-card:hover {
       box-shadow: none !important;
       transform: none !important;
+    }
+    #cb-perf-filter {
+      width: min(150px, 100%);
+      min-height: 28px;
+      padding: 0.22rem 0.6rem;
+      font-size: 0.72rem;
+      border-radius: 9px;
+      align-self: center;
     }
 
     /* ── Callbacks card grid ── */
@@ -5945,12 +5947,6 @@
         gap: 0.75rem;
         padding: 0.65rem 0.75rem 0.9rem;
       }
-      .cbv2-perf-row {
-        gap: 0.75rem;
-      }
-      .cbv2-perf-card-wrap {
-        flex-basis: calc(50% - 0.375rem);
-      }
       .cbv2-roles-area {
         grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
         gap: 1.15rem 1rem;
@@ -5986,6 +5982,7 @@
       .cbv2-perf-head { display: none; }
       /* Grid becomes horizontal scroll row */
       .cbv2-perf-grid {
+        display: flex;
         flex-direction: row;
         flex-wrap: nowrap;
         overflow-x: auto;
@@ -7985,10 +7982,10 @@
       align-items: center;
       gap: 0.35rem;
       padding: 0.24rem 0.54rem;
-      border: 1px solid rgba(109,75,0,0.14);
+      border: 1px solid rgba(45,36,55,0.18);
       border-radius: 999px;
-      background: rgba(239,171,69,0.3);
-      color: rgba(109,75,0,0.9);
+      background: rgba(45,36,55,0.72);
+      color: rgba(255,255,255,0.88);
       font-size: clamp(0.54rem, 2.6cqw, 0.74rem);
       font-weight: 800;
       letter-spacing: 0.04em;
@@ -7998,14 +7995,14 @@
       transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
     }
     .cbv2-note-later:hover {
-      background: rgba(239,171,69,0.42);
-      color: #6d4b00;
-      border-color: rgba(109,75,0,0.2);
+      background: rgba(45,36,55,0.84);
+      color: #ffffff;
+      border-color: rgba(45,36,55,0.24);
     }
     .cbv2-note-later.active {
-      background: rgba(239,171,69,0.5);
-      color: #5a3800;
-      border-color: rgba(109,75,0,0.24);
+      background: rgba(45,36,55,0.92);
+      color: #ffffff;
+      border-color: rgba(45,36,55,0.3);
     }
     .cbv2-note-empty {
       position: absolute;
@@ -27045,20 +27042,14 @@ If you have any questions, don't hesitate to reach out.
       return;
     }
 
-    const rows = [];
-    for (let i = 0; i < perfEntries.length; i += 2) {
-      const pair = perfEntries.slice(i, i + 2);
-      const ensembleIds = new Set(getCbEnsemblePerformers().map(p => p.id));
-      const cards = pair.map(({ app, muted }) => {
-        // In colour if: locked into a role (chosen) OR in the ensemble
-        const isLocked = cbv2Assignments.some(a => a.applicant_id === app.id && a.state === 'chosen');
-        const isInEnsemble = ensembleIds.has(app.id);
-        const poolState = (isLocked || isInEnsemble) ? null : 'applied';
-        return `<div class="cbv2-perf-card-wrap${muted ? ' is-muted' : ''}" onclick="openPerfLightbox('${app.id}')" style="cursor:pointer;">${cbv2MakeCCard(app, null, poolState)}</div>`;
-      }).join('');
-      rows.push(`<div class="cbv2-perf-row">${cards}</div>`);
-    }
-    grid.innerHTML = rows.join('');
+    const ensembleIds = new Set(getCbEnsemblePerformers().map(p => p.id));
+    grid.innerHTML = perfEntries.map(({ app, muted }) => {
+      // In colour if: locked into a role (chosen) OR in the ensemble
+      const isLocked = cbv2Assignments.some(a => a.applicant_id === app.id && a.state === 'chosen');
+      const isInEnsemble = ensembleIds.has(app.id);
+      const poolState = (isLocked || isInEnsemble) ? null : 'applied';
+      return `<div class="cbv2-perf-card-wrap${muted ? ' is-muted' : ''}" onclick="openPerfLightbox('${app.id}')" style="cursor:pointer;">${cbv2MakeCCard(app, null, poolState)}</div>`;
+    }).join('');
   }
 
   function fitCbv2NoteHeaders() {
@@ -27143,6 +27134,21 @@ If you have any questions, don't hesitate to reach out.
   const CB_STATE_ORDER = { chosen: 0, liked: 1, applied: 2 };
   let cbv2CallbacksFocusId = null;
   const CBV2_CALLBACKS_FOOTER_HEIGHT = 124;
+  const CBV2_ORG_NOTE_COLOR = '#8a838a';
+
+  function cbv2CurrentNoteColors() {
+    const rawColor = teamAccessMode
+      ? (teamAccessMember?.author_color || teamAccessMember?.note_color || teamAccessMember?.color || teamAccessMember?.colour || '')
+      : '';
+    const body = rawColor || CBV2_ORG_NOTE_COLOR;
+    const header = body === CBV2_ORG_NOTE_COLOR
+      ? '#777179'
+      : '#5f4d7c';
+    const edge = body === CBV2_ORG_NOTE_COLOR
+      ? 'rgba(45, 36, 55, 0.24)'
+      : 'color-mix(in srgb, #2d2437 28%, transparent)';
+    return { header, body, edge };
+  }
 
   // Shared state computation for a note — called by both cards and footer builders.
   function cbv2NoteState(charId) {
@@ -27216,13 +27222,14 @@ If you have any questions, don't hesitate to reach out.
     const noteId = `${idPrefix}-${char.id}`;
     const cardsId = `${idPrefix}-cards-${char.id}`;
     const footerId = `${idPrefix}-footer-${char.id}`;
+    const noteColors = cbv2CurrentNoteColors();
     const dndAttrs = interactive ? `
       ondragover="cbv2NoteDragOver(event,'${char.id}')"
       ondragleave="cbv2NoteDragLeave(event,'${char.id}')"
       ondrop="cbv2DropOnNote(event,'${char.id}')"` : '';
     const headerClick = interactive ? `onclick="openCbNotePopup('${char.id}')"` : '';
     return `<div class="cbv2-role-note" id="${noteId}" data-cbv2-char-id="${esc(char.id)}"
-      style="--cbv2-note-tilt:${tiltDeg}deg;"${dndAttrs}>
+      style="--cbv2-note-tilt:${tiltDeg}deg;--cbv2-note-header:${esc(noteColors.header)};--cbv2-note-body:${esc(noteColors.body)};--cbv2-note-edge:${esc(noteColors.edge)};"${dndAttrs}>
       <div class="cbv2-note-header" ${headerClick}><span class="cbv2-note-header-label">${esc(char.name || 'Unnamed')}</span></div>
       <div class="cbv2-note-cards" id="${cardsId}">
         ${cbv2BuildNoteCards(char.id)}
