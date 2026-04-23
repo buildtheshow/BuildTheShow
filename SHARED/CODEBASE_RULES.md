@@ -461,6 +461,15 @@ These rules cover hierarchy, spacing, labels, and how interface elements should 
 4. Do not fill the whole screen just because you can.
 5. Use dense layouts only when density helps the task.
 
+### Container Headers
+
+1. If a container has a header, center the header within that container by default.
+2. Give container headers a small, consistent padding buffer from the container edges.
+3. Keep container headers visually clean, clear, and easy to scan.
+4. Give container headers modest separation from the body content so the structure reads immediately.
+5. Do not invent one-off header alignment rules unless there is a documented reason to break the default.
+6. This rule applies only when a container actually has a header.
+
 ### Labels and Values
 
 1. Labels are a last resort when the value can already stand on its own.
