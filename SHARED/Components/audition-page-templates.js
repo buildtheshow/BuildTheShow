@@ -24,6 +24,10 @@
   }
 
   function templateScore(template, queryTags) {
+    const exactKeys = ['component', 'portal'];
+    for (const key of exactKeys) {
+      if (queryTags[key] && template.tags?.[key] !== queryTags[key]) return -1;
+    }
     let score = template.priority || 0;
     for (const [key, value] of Object.entries(template.tags || {})) {
       if (queryTags[key] !== value) return -1;
@@ -285,7 +289,7 @@
   api.registerTemplate({
     id: 'auditions.in-room.checked-in-strip',
     name: 'In The Room Checked-In Strip - Locked Workspace/Portal Template',
-    tags: { area: 'auditions', page: 'in-room', templatePart: 'checked-in-strip' },
+    tags: { area: 'auditions', page: 'in-room', component: 'checked-in-strip' },
     priority: 90,
     render: renderCheckedInStripTemplate
   });
