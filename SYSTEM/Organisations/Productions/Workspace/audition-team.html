@@ -14536,11 +14536,132 @@
     } catch {}
   }
 
-  function queueAuditionsRefresh() {
+  const auditionCheckInStore = new Map();
+
+  function applicantCheckInSnapshot(row = {}) {
+    return JSON.stringify({
+      status: row.status ?? null,
+      checked_in: row.checked_in ?? null,
+      checked_in_at: row.checked_in_at ?? null,
+      session_checkins: row.session_checkins ?? null,
+    });
+  }
+
+  function mergeApplicantCheckInRow(row = {}) {
+    const id = String(row.id || '');
+    if (!id) return false;
+    const nextSnapshot = applicantCheckInSnapshot(row);
+    if (auditionCheckInStore.get(id) === nextSnapshot) return false;
+    auditionCheckInStore.set(id, nextSnapshot);
+    const app = allApplicants.find(candidate => String(candidate.id) === id);
+    if (!app) return true;
+    app.status = row.status;
+    app.checked_in = row.checked_in;
+    app.checked_in_at = row.checked_in_at;
+    app.session_checkins = row.session_checkins;
+    return true;
+  }
+
+  function hydrateApplicantCheckInStore() {
+    allApplicants.forEach(app => {
+      if (app?.id) auditionCheckInStore.set(String(app.id), applicantCheckInSnapshot(app));
+    });
+  }
+
+  async function loadApplicantCheckInState() {
+    try {
+      const { data, error } = await sb.from('audition_applications')
+        .select('id,status,checked_in,checked_in_at,session_checkins')
+        .eq('production_id', prodId);
+      if (error) throw error;
+      const existingById = new Map(allApplicants.map(app => [String(app.id), app]));
+      let sawUnknownApplicant = false;
+      let changed = false;
+      (data || []).forEach(row => {
+        if (!existingById.has(String(row.id))) {
+          sawUnknownApplicant = true;
+          return;
+        }
+        changed = mergeApplicantCheckInRow(row) || changed;
+      });
+      if (sawUnknownApplicant) {
+        await loadApplicants();
+        hydrateApplicantCheckInStore();
+        return true;
+      }
+      return changed;
+    } catch (error) {
+      console.error('[BTS] check-in state refresh failed:', error);
+      return false;
+    }
+  }
+
+  function refreshCheckedInStripOnly() {
+    const strip = document.querySelector('.inroom-checked-strip');
+    if (!strip) return;
+    const label = strip.querySelector('.inroom-checked-strip-label')?.textContent || 'Checked In';
+    try {
+      strip.outerHTML = renderGeneralInRoomCheckedStrip(inRoomOpenFn || 'openAuditionSessionInRoom', label);
+    } catch (error) {
+      console.error('[BTS] checked-in strip refresh failed:', error);
+    }
+  }
+
+  async function refreshAuditionsCheckInUi() {
+    const changed = await loadApplicantCheckInState();
+    if (!changed) return;
+    try { renderCheckInList(); } catch {}
+    try { refreshCheckedInStripOnly(); } catch {}
+    try {
+      const standaloneInRoomPanel = document.getElementById('adtab-inroom');
+      const standaloneInRoomVisible = !!standaloneInRoomPanel && standaloneInRoomPanel.style.display !== 'none';
+      const sessionInRoomVisible = document.getElementById('aud-session-inroom-content');
+      if (standaloneInRoomVisible) renderInRoomPage(inRoomApplicantId);
+      if (teamAccessMode && activeAuditionNavTool === 'inroom' && sessionInRoomVisible) {
+        refreshCheckedInStripOnly();
+      }
+    } catch {}
+  }
+
+  async function refreshPortalAuditionsByEvent(payload = null) {
+    const table = payload?.table || '';
+    if (table === 'audition_applications') {
+      if (payload?.new?.id) {
+        const changed = mergeApplicantCheckInRow(payload.new);
+        if (changed) {
+          try { renderCheckInList(); } catch {}
+          try { refreshCheckedInStripOnly(); } catch {}
+        }
+        return;
+      }
+      await refreshAuditionsCheckInUi();
+      return;
+    }
+    if (table === 'production_audition_notes') {
+      await loadAuditionAuthoredNotes();
+      try {
+        if (activeAuditionNavTool === 'inroom' && document.getElementById('aud-session-inroom-content')) {
+          renderInRoomPage(inRoomApplicantId, 'aud-session-inroom-content', 'openAuditionSessionInRoom');
+        }
+      } catch {}
+      return;
+    }
+    if (table === 'audition_sessions' || table === 'audition_time_slots' || table === 'audition_bookings') {
+      await Promise.all([loadAudSessions(), loadSlots(), loadApplicants()]);
+      hydrateApplicantCheckInStore();
+      try { renderCheckInList(); } catch {}
+      try { refreshCheckedInStripOnly(); } catch {}
+      return;
+    }
+    await refreshAuditionsCheckInUi();
+  }
+
+  function queueAuditionsRefresh(payload = null) {
     clearTimeout(auditionsRefreshTimer);
     auditionsRefreshTimer = setTimeout(async () => {
       try {
-        await refreshAuditionsLiveUi({ preserveModal: true });
+        if (teamAccessMode) await refreshPortalAuditionsByEvent(payload);
+        else await refreshAuditionsLiveUi({ preserveModal: true });
       } catch (err) {
         console.error('[BTS] auditions realtime refresh failed:', err);
       }
@@ -14770,7 +14891,7 @@
       ch = ch.on('postgres_changes', {
         event: '*', schema: 'public', table,
         filter: `production_id=eq.${prodId}`
-      }, queueAuditionsRefresh);
+      }, payload => queueAuditionsRefresh(payload));
     });
 
     auditionsRealtimeChannel = ch.subscribe((status, err) => {
@@ -14792,7 +14913,8 @@
     _auditionsPollTimer = setInterval(async () => {
       if (!prodId) return;
       try {
-        await refreshAuditionsLiveUi({ preserveModal: true });
+        if (teamAccessMode) await refreshAuditionsCheckInUi();
+        else await refreshAuditionsLiveUi({ preserveModal: true });
       } catch {}
     }, 10000);
   }
@@ -21848,6 +21970,7 @@ If you have any questions, don't hesitate to reach out.
     if (cbv2Loaded) {
       try { await cbv2SyncApplied(); } catch {}
     }
+    hydrateApplicantCheckInStore();
     renderAudOverviewStats();
     renderApplicants();
     renderApplicantsMirror();
