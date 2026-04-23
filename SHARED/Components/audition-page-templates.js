@@ -56,6 +56,12 @@
     return template.render(config);
   }
 
+  function renderTemplateById(id, config) {
+    const template = templateRegistry.find(item => item.id === id);
+    if (!template) return '';
+    return template.render(config);
+  }
+
   function renderRoleTypeOptions(roleTypeOptions, esc) {
     return roleTypeOptions.map(rt => `<option value="${esc(rt)}">${esc(rt)}</option>`).join('');
   }
@@ -244,6 +250,7 @@
     registerTemplate,
     findTemplate,
     renderTemplate,
+    renderTemplateById,
     renderCharacterListTemplate,
     renderCheckedInStripTemplate,
     renderPortalLoginTemplate,
