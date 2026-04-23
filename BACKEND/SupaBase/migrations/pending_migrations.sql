@@ -85,6 +85,7 @@ CREATE TABLE IF NOT EXISTS production_team_members (
   production_id uuid NOT NULL REFERENCES productions(id) ON DELETE CASCADE,
   name text NOT NULL,
   email text NOT NULL,
+  phone text,
   role text NOT NULL DEFAULT 'director',
   passcode text NOT NULL,
   note_color text DEFAULT '#572e88',
@@ -186,7 +187,11 @@ DROP FUNCTION IF EXISTS team_member_revoke_session(uuid,text);
 DROP FUNCTION IF EXISTS team_member_colour_list(uuid,text,text);
 DROP FUNCTION IF EXISTS team_member_colour_list_for_session(uuid,text);
 DROP FUNCTION IF EXISTS team_member_update_profile(uuid,text,text,text,text,text,text);
+ALTER TABLE production_team_members
+  ADD COLUMN IF NOT EXISTS phone text;
+
 DROP FUNCTION IF EXISTS team_member_update_profile_for_session(uuid,text,text,text,text,text);
+DROP FUNCTION IF EXISTS team_member_update_profile_for_session(uuid,text,text,text,text,text,text,text);
 DROP FUNCTION IF EXISTS team_note_add(uuid,text,text,uuid,uuid,uuid,text,text,text,integer);
 DROP FUNCTION IF EXISTS team_note_update(uuid,text,text,uuid,text);
 DROP FUNCTION IF EXISTS team_note_delete(uuid,text,text,uuid);
@@ -442,6 +447,8 @@ CREATE OR REPLACE FUNCTION team_member_update_profile_for_session(
   p_production_id uuid,
   p_session_token text,
   p_note_color text,
+  p_email text DEFAULT NULL,
+  p_phone text DEFAULT NULL,
   p_bio text DEFAULT NULL,
   p_headshot_url text DEFAULT NULL,
   p_headshot_path text DEFAULT NULL
@@ -480,8 +487,25 @@ BEGIN
     RAISE EXCEPTION 'That note colour is already taken';
   END IF;
 
+  IF COALESCE(NULLIF(trim(p_email), ''), '') = '' THEN
+    RAISE EXCEPTION 'Email is required';
+  END IF;
+
+  IF EXISTS (
+    SELECT 1
+    FROM production_team_members
+    WHERE production_id = p_production_id
+      AND id <> v_member.id
+      AND is_active = true
+      AND lower(trim(email)) = lower(trim(p_email))
+  ) THEN
+    RAISE EXCEPTION 'That email is already used by another team member';
+  END IF;
+
   UPDATE production_team_members
   SET note_color = COALESCE(NULLIF(p_note_color, ''), note_color),
+      email = lower(trim(p_email)),
+      phone = NULLIF(trim(COALESCE(p_phone, '')), ''),
       bio = p_bio,
       headshot_url = p_headshot_url,
       headshot_path = p_headshot_path,
@@ -530,6 +554,8 @@ CREATE OR REPLACE FUNCTION team_member_update_profile(
   p_email text,
   p_passcode text,
   p_note_color text,
+  p_new_email text DEFAULT NULL,
+  p_phone text DEFAULT NULL,
   p_bio text DEFAULT NULL,
   p_headshot_url text DEFAULT NULL,
   p_headshot_path text DEFAULT NULL
@@ -566,8 +592,25 @@ BEGIN
     RAISE EXCEPTION 'That note colour is already taken';
   END IF;
 
+  IF COALESCE(NULLIF(trim(p_new_email), ''), '') = '' THEN
+    RAISE EXCEPTION 'Email is required';
+  END IF;
+
+  IF EXISTS (
+    SELECT 1
+    FROM production_team_members
+    WHERE production_id = p_production_id
+      AND id <> v_member.id
+      AND is_active = true
+      AND lower(trim(email)) = lower(trim(p_new_email))
+  ) THEN
+    RAISE EXCEPTION 'That email is already used by another team member';
+  END IF;
+
   UPDATE production_team_members
   SET note_color = COALESCE(NULLIF(p_note_color, ''), note_color),
+      email = lower(trim(p_new_email)),
+      phone = NULLIF(trim(COALESCE(p_phone, '')), ''),
       bio = p_bio,
       headshot_url = p_headshot_url,
       headshot_path = p_headshot_path,

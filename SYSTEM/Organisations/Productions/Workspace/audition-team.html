@@ -9,7 +9,7 @@
   <title>Production Workspace - Build The Show</title>
   <link rel="stylesheet" href="/ASSETS/styles/styles.css?v=typography-safe-20260421-2025" />
   <link rel="stylesheet" href="/ASSETS/styles/casting-card.css" />
-  <link rel="stylesheet" href="/ASSETS/styles/production-team-card.css?v=team-card-polished-back-20260422" />
+  <link rel="stylesheet" href="/ASSETS/styles/production-team-card.css?v=team-card-polished-back-20260423a" />
   <style>
     * { box-sizing: border-box; }
     body { margin: 0; background: #ffffff; font-family: var(--bts-font); color: #1a1530; display: flex; flex-direction: column; min-height: 100vh; min-height: 100dvh; }
@@ -13746,7 +13746,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="/ASSETS/scripts/venue-picker.js"></script>
 <script src="/ASSETS/scripts/casting-card.js"></script>
-<script src="/ASSETS/scripts/production-team-card.js?v=team-card-polished-back-20260422"></script>
+<script src="/ASSETS/scripts/production-team-card.js?v=team-card-polished-back-20260423a"></script>
 <script src="/ASSETS/scripts/production-team-access.js?v=team-card-polished-back-20260422"></script>
 <script src="../../../../SHARED/Components/casting-card-back.js"></script>
 <script src="../../../../SHARED/Components/audition-status-strip.js"></script>
@@ -14196,20 +14196,29 @@
     if (!host || !teamAccessMode || !teamAccessMember) return;
     const used = new Set(teamAccessUsedColours());
     const currentColor = teamAccessMember.note_color || '#572e88';
-    const colourButtons = TEAM_NOTE_COLORS.map(color => {
-      const taken = used.has(color.toLowerCase());
-      const active = currentColor.toLowerCase() === color.toLowerCase();
-      return `<button type="button" aria-label="Choose ${esc(color)}" title="${taken ? 'Chosen by another team member' : 'Choose colour'}" ${taken ? 'disabled' : ''} onclick="selectTeamAccessColour('${esc(color)}')" style="width:2rem;height:2rem;border-radius:999px;border:2px solid ${active ? '#1a1530' : 'transparent'};background:${esc(color)};box-shadow:${taken ? 'none' : `0 0 0.55rem ${esc(color)}66`};opacity:${taken ? '0.25' : '1'};cursor:${taken ? 'not-allowed' : 'pointer'};"></button>`;
+    const currentEmail = teamAccessMember.email || teamAccessEmail || '';
+    const currentPhone = teamAccessMember.phone || '';
+    const colourButtons = TEAM_NOTE_COLOR_GROUPS.map(group => {
+      const variants = group.variants.map(({ tone, value }) => {
+        const taken = used.has(value.toLowerCase());
+        const active = currentColor.toLowerCase() === value.toLowerCase();
+        return `<button type="button" aria-label="Choose ${esc(group.family)} ${esc(tone)}" title="${taken ? `${group.family} ${tone} is already taken` : `${group.family} ${tone}`}" ${taken ? 'disabled' : ''} onclick="selectTeamAccessColour('${esc(value)}')" style="width:2.35rem;height:2.35rem;border-radius:999px;border:2px solid ${active ? '#1a1530' : 'rgba(87,46,136,0.16)'};background:${esc(value)};box-shadow:${taken ? 'none' : `0 0 0.45rem ${esc(value)}55`};opacity:${taken ? '0.22' : '1'};cursor:${taken ? 'not-allowed' : 'pointer'};"></button>`;
+      }).join('');
+      return `
+        <div style="display:grid;grid-template-columns:88px minmax(0,1fr);gap:0.7rem;align-items:center;">
+          <div style="font-size:0.78rem;font-weight:800;color:#6a5a80;">${esc(group.family)}</div>
+          <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">${variants}</div>
+        </div>`;
     }).join('');
     const initial = esc((teamAccessMember.name || '?').trim().charAt(0).toUpperCase() || '?');
     host.innerHTML = `
       <div class="page-header">
         <div>
           <div class="page-title">Profile</div>
-          <div class="page-subtitle">Your headshot, bio, and note colour for this production.</div>
+          <div class="page-subtitle">Your headshot, bio, and contact info for this production.</div>
         </div>
       </div>
-      <div style="display:grid;grid-template-columns:260px minmax(0,1fr);gap:1.25rem;align-items:start;">
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:1.25rem;align-items:start;">
         <div class="ov-card">
           <div id="team-access-headshot-preview" style="width:100%;aspect-ratio:1;border-radius:14px;background:rgba(87,46,136,0.08);overflow:hidden;display:grid;place-items:center;color:#572e88;font-size:3rem;font-weight:950;">
             ${teamAccessMember.headshot_url ? `<img src="${esc(teamAccessMember.headshot_url)}" alt="" style="width:100%;height:100%;object-fit:cover;object-position:top;" />` : initial}
@@ -14222,8 +14231,19 @@
         </div>
         <div class="ov-card">
           <div class="ov-card-label">Your Profile</div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:0.85rem 1rem;margin-bottom:1rem;">
+            <label style="display:block;">
+              <span style="display:block;font-weight:800;font-size:0.82rem;margin-bottom:0.35rem;">Email</span>
+              <input id="team-access-email-field" class="form-input" type="email" value="${esc(currentEmail)}" placeholder="you@example.com" />
+            </label>
+            <label style="display:block;">
+              <span style="display:block;font-weight:800;font-size:0.82rem;margin-bottom:0.35rem;">Phone</span>
+              <input id="team-access-phone-field" class="form-input" type="tel" value="${esc(currentPhone)}" placeholder="Phone number" />
+            </label>
+          </div>
           <label style="display:block;font-weight:800;font-size:0.82rem;margin-bottom:0.35rem;">Note colour</label>
-          <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin:0.55rem 0 0.25rem;">${colourButtons}</div>
+          <div style="display:grid;gap:0.65rem;margin:0.55rem 0 0.25rem;">${colourButtons}</div>
+          <div style="font-size:0.76rem;color:#8a7aa4;margin-top:0.45rem;">Taken colours stay locked so everyone keeps their own.</div>
           <label style="display:block;font-weight:800;font-size:0.82rem;margin-top:1rem;margin-bottom:0.35rem;">Bio</label>
           <textarea class="form-textarea" id="team-access-bio" placeholder="Short bio for programs, websites, or marketing..." style="min-height:140px;">${esc(teamAccessMember.bio || '')}</textarea>
           <button type="button" class="btn-primary" onclick="saveTeamAccessProfile()" style="margin-top:0.75rem;">Save Profile</button>
@@ -14254,11 +14274,19 @@
   async function saveTeamAccessProfile(showMessage = true) {
     if (!teamAccessMember) return;
     const msg = document.getElementById('team-access-profile-msg');
+    const email = (document.getElementById('team-access-email-field')?.value || teamAccessMember.email || teamAccessEmail || '').trim().toLowerCase();
+    const phone = (document.getElementById('team-access-phone-field')?.value || teamAccessMember.phone || '').trim();
     const bio = document.getElementById('team-access-bio')?.value || teamAccessMember.bio || '';
+    if (!email) {
+      if (msg) { msg.style.color = '#b91c1c'; msg.textContent = 'Email is required.'; }
+      return;
+    }
     const { data, error } = await sb.rpc('team_member_update_profile_for_session', {
       p_production_id: prodId,
       p_session_token: teamAccessSessionToken,
       p_note_color: teamAccessMember.note_color || '#572e88',
+      p_email: email,
+      p_phone: phone || null,
       p_bio: bio,
       p_headshot_url: teamAccessMember.headshot_url || null,
       p_headshot_path: teamAccessMember.headshot_path || null,
@@ -14268,6 +14296,8 @@
       return;
     }
     teamAccessMember = data[0];
+    teamAccessEmail = teamAccessMember.email || email;
+    rememberTeamAccess();
     await loadAuditionTeamMembers();
     applyTeamAccessMode();
     if (showMessage && msg) { msg.style.color = '#166534'; msg.textContent = 'Profile saved.'; }
@@ -18060,7 +18090,17 @@ If you have any questions, don't hesitate to reach out.
   let auditionAuthoredNotes = [];
   let auditionObservations = [];
   let editingCreativeRoleIndex = null;
-  const TEAM_NOTE_COLORS = ['#572e88', '#7FAF8B', '#D68CB2', '#E3A46F', '#55acda', '#22cdd4', '#c2487a', '#8a7aac'];
+  const TEAM_NOTE_COLOR_GROUPS = [
+    { family: 'Red', variants: [{ tone: 'Muted', value: '#a84d5f' }, { tone: 'Pastel', value: '#f6b8c4' }, { tone: 'Neon', value: '#ff4f87' }] },
+    { family: 'Orange', variants: [{ tone: 'Muted', value: '#b76a3b' }, { tone: 'Pastel', value: '#ffd1a8' }, { tone: 'Neon', value: '#ff7a1a' }] },
+    { family: 'Gold', variants: [{ tone: 'Muted', value: '#af8a2c' }, { tone: 'Pastel', value: '#f7e4a3' }, { tone: 'Neon', value: '#ffd400' }] },
+    { family: 'Green', variants: [{ tone: 'Muted', value: '#5f8f5d' }, { tone: 'Pastel', value: '#cdeecb' }, { tone: 'Neon', value: '#39ff6a' }] },
+    { family: 'Teal', variants: [{ tone: 'Muted', value: '#4d8f88' }, { tone: 'Pastel', value: '#b9f2eb' }, { tone: 'Neon', value: '#1fffe0' }] },
+    { family: 'Blue', variants: [{ tone: 'Muted', value: '#4f6fa8' }, { tone: 'Pastel', value: '#bfd8ff' }, { tone: 'Neon', value: '#2f7dff' }] },
+    { family: 'Purple', variants: [{ tone: 'Muted', value: '#6f5a99' }, { tone: 'Pastel', value: '#dccbff' }, { tone: 'Neon', value: '#a13dff' }] },
+    { family: 'Pink', variants: [{ tone: 'Muted', value: '#a35f8d' }, { tone: 'Pastel', value: '#ffc8e8' }, { tone: 'Neon', value: '#ff4fd8' }] },
+  ];
+  const TEAM_NOTE_COLORS = TEAM_NOTE_COLOR_GROUPS.flatMap(group => group.variants.map(variant => variant.value));
 
   function templateToConfig(template) {
     return template.departments.map(dept => ({
