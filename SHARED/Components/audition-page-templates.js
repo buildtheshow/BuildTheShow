@@ -83,6 +83,21 @@
         </div>`;
   }
 
+  function renderCheckedInStripTemplate(config) {
+    const {
+      esc,
+      label = 'Checked In',
+      trayCards = ''
+    } = config;
+
+    return `<div class="inroom-checked-strip">
+      <div class="inroom-checked-strip-label">${esc(label)}</div>
+      <div class="inroom-checked-strip-track">
+        <div class="inroom-thumbs">${trayCards}</div>
+      </div>
+    </div>`;
+  }
+
   function renderPortalLoginTemplate(config) {
     const { esc, message = '' } = config;
     return `
@@ -226,6 +241,7 @@
     findTemplate,
     renderTemplate,
     renderCharacterListTemplate,
+    renderCheckedInStripTemplate,
     renderPortalLoginTemplate,
     renderPortalSessionFrameTemplate,
     renderEmptyStateTemplate,
@@ -264,6 +280,14 @@
     tags: { area: 'auditions', component: 'character-list' },
     priority: 80,
     render: renderCharacterListTemplate
+  });
+
+  api.registerTemplate({
+    id: 'auditions.in-room.checked-in-strip',
+    name: 'In The Room Checked-In Strip - Locked Workspace/Portal Template',
+    tags: { area: 'auditions', page: 'in-room', component: 'checked-in-strip' },
+    priority: 90,
+    render: renderCheckedInStripTemplate
   });
 
   api.registerTemplate({
