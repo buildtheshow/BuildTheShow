@@ -6125,6 +6125,12 @@
       font-weight: 800;
       letter-spacing: 0;
       color: #4a3d6b;
+      margin-bottom: 0.18rem;
+    }
+    .dc-pool-count {
+      font-size: 0.76rem;
+      font-weight: 700;
+      color: #8a80a3;
       margin-bottom: 0.55rem;
     }
     .dc-pool-grid {
@@ -14381,7 +14387,7 @@
     loadAuditionConfig();
     loadSlots();
     loadApplicants();
-    loadAuditionAuthoredNotes();
+    Promise.all([loadAuditionAuthoredNotes(), loadAuditionObservations()]);
     loadCharacters();
     queueWorkspaceWarmup([
       loadEvents,
@@ -14467,7 +14473,7 @@
       ? document.getElementById('reschedule-slots')?.style.display !== 'none'
       : false;
 
-    await Promise.all([loadAudSessions(), loadApplicants(), loadSlots(), loadAuditionAuthoredNotes()]);
+    await Promise.all([loadAudSessions(), loadApplicants(), loadSlots(), loadAuditionAuthoredNotes(), loadAuditionObservations()]);
     try { renderApplicants(); } catch {}
     try { renderApplicantsMirror(); } catch {}
     try { renderSlots(); } catch {}
@@ -14603,8 +14609,8 @@
       await refreshAuditionsCheckInUi();
       return;
     }
-    if (table === 'production_audition_notes') {
-      await loadAuditionAuthoredNotes();
+    if (table === 'production_audition_notes' || table === 'production_audition_observations') {
+      await Promise.all([loadAuditionAuthoredNotes(), loadAuditionObservations()]);
       try {
         if (activeAuditionNavTool === 'inroom' && document.getElementById('aud-session-inroom-content')) {
           renderInRoomPage(inRoomApplicantId, 'aud-session-inroom-content', 'openAuditionSessionInRoom');
@@ -14850,6 +14856,7 @@
       'audition_configs',
       'production_events',
       'production_audition_notes',
+      'production_audition_observations',
     ];
 
     let ch = sb.channel(`production-auditions-${prodId}`);
@@ -18042,6 +18049,7 @@ If you have any questions, don't hesitate to reach out.
   let teamConfig = null; // null = not loaded yet
   let auditionTeamMembers = [];
   let auditionAuthoredNotes = [];
+  let auditionObservations = [];
   let editingCreativeRoleIndex = null;
   const TEAM_NOTE_COLORS = ['#572e88', '#7FAF8B', '#D68CB2', '#E3A46F', '#55acda', '#22cdd4', '#c2487a', '#8a7aac'];
 
@@ -28795,7 +28803,7 @@ If you have any questions, don't hesitate to reach out.
           ondragover="event.preventDefault()"
           ondrop="dcDropOnPool(event,'${sessionId}')">
           <div class="dc-section-label">Performers</div>
-          <div class="dc-board-section-sub">${sectionLabel}</div>
+          <div class="dc-pool-count">${sectionLabel}</div>
           <div class="dc-pool-grid" id="dc-pool-grid">${poolCards}</div>
         </div>
         <div class="dc-board">
@@ -29297,7 +29305,14 @@ If you have any questions, don't hesitate to reach out.
   function applicantInRoomScore(app, key) {
     const ca = applicantCustomAnswers(app);
     const sessionId = getCurrentInRoomSession()?.id || null;
-    return ca[inRoomScoreKey(sessionId, key)] || ca[INROOM_SCORE_CA_KEYS[key]] || '';
+    const observation = findAuditionObservation(app?.id, {
+      sessionId,
+      area: 'in_room',
+      type: 'score',
+      key,
+      currentAuthorOnly: true,
+    });
+    return observation?.value || ca[inRoomScoreKey(sessionId, key)] || ca[INROOM_SCORE_CA_KEYS[key]] || '';
   }
 
   function inRoomNotesKey(sessionId) {
@@ -29306,6 +29321,14 @@ If you have any questions, don't hesitate to reach out.
 
   function applicantInRoomNotes(app, sessionId) {
     const ca = applicantCustomAnswers(app);
+    const observation = findAuditionObservation(app?.id, {
+      sessionId: sessionId || null,
+      area: 'in_room',
+      type: 'quick_note',
+      key: 'notes',
+      currentAuthorOnly: true,
+    });
+    if (observation?.body) return observation.body;
     if (sessionId) return ca[inRoomNotesKey(sessionId)] || '';
     return ca[INROOM_SCORE_CA_KEYS.notes] || '';
   }
@@ -29324,6 +29347,114 @@ If you have any questions, don't hesitate to reach out.
       console.warn('[BTS] production_audition_notes unavailable. Run the team portal Supabase SQL.', error);
     }
     return auditionAuthoredNotes;
+  }
+
+  async function loadAuditionObservations() {
+    if (!prodId) return [];
+    try {
+      const { data, error } = await sb.from('production_audition_observations')
+        .select('*')
+        .eq('production_id', prodId)
+        .order('created_at', { ascending: true });
+      if (error) throw error;
+      auditionObservations = data || [];
+    } catch (error) {
+      auditionObservations = [];
+      console.warn('[BTS] production_audition_observations unavailable.', error);
+    }
+    return auditionObservations;
+  }
+
+  function isCurrentObservationAuthor(observation) {
+    if (!observation) return false;
+    if (teamAccessMode) {
+      return observation.source_type === 'team_member'
+        && observation.team_member_id
+        && teamAccessMember?.id
+        && String(observation.team_member_id) === String(teamAccessMember.id);
+    }
+    return observation.source_type === 'organisation' && !observation.team_member_id;
+  }
+
+  function findAuditionObservation(appId, options = {}) {
+    const matches = (auditionObservations || []).filter(observation => {
+      if (appId && String(observation.applicant_id) !== String(appId)) return false;
+      if (options.sessionId !== undefined && String(observation.session_id || '') !== String(options.sessionId || '')) return false;
+      if (options.characterId !== undefined && String(observation.character_id || '') !== String(options.characterId || '')) return false;
+      if (options.area && observation.observation_area !== options.area) return false;
+      if (options.type && observation.observation_type !== options.type) return false;
+      if (options.key && observation.observation_key !== options.key) return false;
+      if (options.currentAuthorOnly && !isCurrentObservationAuthor(observation)) return false;
+      return true;
+    });
+    return matches.sort((a, b) => new Date(b.updated_at || b.created_at || 0) - new Date(a.updated_at || a.created_at || 0))[0] || null;
+  }
+
+  function listAuditionObservations(appId, options = {}) {
+    return (auditionObservations || []).filter(observation => {
+      if (appId && String(observation.applicant_id) !== String(appId)) return false;
+      if (options.sessionId !== undefined && String(observation.session_id || '') !== String(options.sessionId || '')) return false;
+      if (options.characterId !== undefined && String(observation.character_id || '') !== String(options.characterId || '')) return false;
+      if (options.area && observation.observation_area !== options.area) return false;
+      if (options.type && observation.observation_type !== options.type) return false;
+      if (options.currentAuthorOnly && !isCurrentObservationAuthor(observation)) return false;
+      return true;
+    });
+  }
+
+  async function saveAuditionObservation(appId, options = {}) {
+    const payload = {
+      p_production_id: prodId,
+      p_applicant_id: appId,
+      p_session_id: options.sessionId || null,
+      p_character_id: options.characterId || null,
+      p_observation_area: options.area || 'in_room',
+      p_observation_type: options.type || 'general',
+      p_observation_key: options.key || 'general',
+      p_value: options.value ?? null,
+      p_body: options.body ?? null,
+      p_metadata: options.metadata || {},
+    };
+    let data, error;
+    if (teamAccessMode) {
+      ({ data, error } = await sb.rpc('team_observation_upsert_for_session', {
+        ...payload,
+        p_session_token: teamAccessSessionToken,
+      }));
+    } else {
+      ({ data, error } = await sb.rpc('organisation_observation_upsert', {
+        ...payload,
+        p_author_name: orgName || 'Organisation',
+        p_author_role: 'Organisation',
+        p_author_color: ORG_AUTHORED_NOTE_COLOR,
+      }));
+    }
+    if (error) throw error;
+    const saved = Array.isArray(data) ? data[0] : data;
+    if (!saved?.id) return null;
+    auditionObservations = (auditionObservations || []).filter(observation => String(observation.id) !== String(saved.id));
+    auditionObservations.push(saved);
+    return saved;
+  }
+
+  async function deleteAuditionObservation(observationId) {
+    if (!observationId) return true;
+    let error = null;
+    if (teamAccessMode) {
+      ({ error } = await sb.rpc('team_observation_delete_for_session', {
+        p_production_id: prodId,
+        p_session_token: teamAccessSessionToken,
+        p_observation_id: observationId,
+      }));
+    } else {
+      ({ error } = await sb.rpc('organisation_observation_delete', {
+        p_production_id: prodId,
+        p_observation_id: observationId,
+      }));
+    }
+    if (error) throw error;
+    auditionObservations = (auditionObservations || []).filter(observation => String(observation.id) !== String(observationId));
+    return true;
   }
 
   function authoredNotesFor(appId, options = {}) {
@@ -29554,6 +29685,23 @@ If you have any questions, don't hesitate to reach out.
       const legacy = (ca[INROOM_SCORE_CA_KEYS.notes] || '').trim();
       if (legacy) notes.push({ label: 'Room Notes', note: legacy });
     }
+    listAuditionObservations(app.id, { area: 'in_room', type: 'quick_note' }).forEach(observation => {
+      if (!observation?.body) return;
+      const legacyBody = String(
+        observation.session_id
+          ? (ca[inRoomNotesKey(observation.session_id)] || '')
+          : (ca[INROOM_SCORE_CA_KEYS.notes] || '')
+      ).trim();
+      if (isCurrentObservationAuthor(observation) && legacyBody && legacyBody === String(observation.body || '').trim()) return;
+      const session = (audSessions || []).find(s => s.id === observation.session_id);
+      notes.push({
+        label: session?.name || 'Room Notes',
+        note: observation.body,
+        authorName: observation.author_name,
+        authorRole: observation.author_role,
+        authorColor: observation.author_color,
+      });
+    });
     return notes.length ? notes : null;
   }
 
@@ -29563,6 +29711,16 @@ If you have any questions, don't hesitate to reach out.
 
   function applicantInRoomRoleChoice(app, sessionId, charId) {
     if (!sessionId || !charId) return '';
+    const observation = findAuditionObservation(app?.id, {
+      sessionId,
+      characterId: charId,
+      area: 'role',
+      type: 'choice',
+      key: charId,
+      currentAuthorOnly: true,
+    });
+    const observedValue = observation?.value;
+    if (observedValue === 'liked' || observedValue === 'chosen' || observedValue === 'applied') return observedValue;
     const ca = applicantCustomAnswers(app);
     const value = ca[inRoomRoleChoiceKey(sessionId, charId)];
     return value === 'liked' || value === 'chosen' || value === 'applied' ? value : '';
@@ -29639,6 +29797,24 @@ If you have any questions, don't hesitate to reach out.
         authorName: note.author_name,
         authorRole: authoredNoteRole(note),
         authorColor: authoredNoteColor(note),
+      });
+    });
+    listAuditionObservations(app.id, { area: 'role_note', type: 'body' }).forEach(observation => {
+      if (!String(observation.body || '').trim()) return;
+      const legacyBody = String(
+        ca[inRoomRoleNotesKey(observation.session_id, observation.character_id)] || ''
+      ).trim();
+      if (isCurrentObservationAuthor(observation) && legacyBody && legacyBody === String(observation.body || '').trim()) return;
+      const session = (audSessions || []).find(s => s.id === observation.session_id);
+      const char = (characters || []).find(c => c.id === observation.character_id);
+      results.push({
+        sessionLabel: session?.name || sessionTypeLabel(session?.type || 'audition'),
+        charName: char?.name || 'Unknown Role',
+        roleType: char?.role_type || '',
+        note: observation.body,
+        authorName: observation.author_name,
+        authorRole: observation.author_role,
+        authorColor: observation.author_color,
       });
     });
     return results.length ? results : null;
@@ -30054,6 +30230,7 @@ If you have any questions, don't hesitate to reach out.
   }
 
   async function saveInRoomCustomAnswers(app, nextAnswers) {
+    if (teamAccessMode) return null;
     _inRoomSaveInProgress++;
     try {
       const targetId = String(app._sourceApplicationIds?.[0] || app.id || '');
@@ -30090,6 +30267,16 @@ If you have any questions, don't hesitate to reach out.
     try {
       const error = await saveInRoomCustomAnswers(app, nextAnswers);
       if (error) throw error;
+      const nextValue = currentAnswers[answerKey] === value ? null : value;
+      const existingObservation = findAuditionObservation(appId, {
+        sessionId,
+        area: 'in_room',
+        type: 'score',
+        key,
+        currentAuthorOnly: true,
+      });
+      if (nextValue) await saveAuditionObservation(appId, { sessionId, area: 'in_room', type: 'score', key, value: nextValue });
+      else if (existingObservation?.id) await deleteAuditionObservation(existingObservation.id);
       if (token === inRoomScoreSaveToken) {
         showSaveStatus('saved');
       }
@@ -30118,6 +30305,15 @@ If you have any questions, don't hesitate to reach out.
         const error = await saveInRoomCustomAnswers(app, nextAnswers);
         if (error) throw error;
         app.custom_answers = nextAnswers;
+        const existingObservation = findAuditionObservation(appId, {
+          sessionId: session?.id || null,
+          area: 'in_room',
+          type: 'quick_note',
+          key: 'notes',
+          currentAuthorOnly: true,
+        });
+        if (value.trim()) await saveAuditionObservation(appId, { sessionId: session?.id || null, area: 'in_room', type: 'quick_note', key: 'notes', body: value.trim() });
+        else if (existingObservation?.id) await deleteAuditionObservation(existingObservation.id);
         showSaveStatus('saved');
       } catch (error) {
         console.error('[BTS] in-room notes save failed', error);
@@ -30138,12 +30334,31 @@ If you have any questions, don't hesitate to reach out.
 
   function applicantInRoomRoleNotes(app, sessionId, charId) {
     if (!sessionId || !charId) return '';
+    const observation = findAuditionObservation(app?.id, {
+      sessionId,
+      characterId: charId,
+      area: 'role_note',
+      type: 'body',
+      key: charId,
+      currentAuthorOnly: true,
+    });
+    if (observation?.body) return observation.body;
     const ca = applicantCustomAnswers(app);
     return ca[inRoomRoleNotesKey(sessionId, charId)] || '';
   }
 
   function applicantInRoomRoleDecision(app, sessionId, charId) {
     if (!sessionId || !charId) return '';
+    const observation = findAuditionObservation(app?.id, {
+      sessionId,
+      characterId: charId,
+      area: 'role',
+      type: 'decision',
+      key: charId,
+      currentAuthorOnly: true,
+    });
+    const observedValue = observation?.value;
+    if (observedValue === 'yes' || observedValue === 'maybe' || observedValue === 'no') return observedValue;
     const ca = applicantCustomAnswers(app);
     const value = ca[inRoomRoleDecisionKey(sessionId, charId)];
     return value === 'yes' || value === 'maybe' || value === 'no' ? value : '';
@@ -30166,6 +30381,16 @@ If you have any questions, don't hesitate to reach out.
         const error = await saveInRoomCustomAnswers(app, nextAnswers);
         if (error) throw error;
         app.custom_answers = nextAnswers;
+        const existingObservation = findAuditionObservation(appId, {
+          sessionId,
+          characterId: charId,
+          area: 'role_note',
+          type: 'body',
+          key: charId,
+          currentAuthorOnly: true,
+        });
+        if (value.trim()) await saveAuditionObservation(appId, { sessionId, characterId: charId, area: 'role_note', type: 'body', key: charId, body: value.trim() });
+        else if (existingObservation?.id) await deleteAuditionObservation(existingObservation.id);
         showSaveStatus('saved');
       } catch (error) {
         console.error('[BTS] in-room role notes save failed', error);
@@ -30198,6 +30423,17 @@ If you have any questions, don't hesitate to reach out.
     try {
       const error = await saveInRoomCustomAnswers(app, nextAnswers);
       if (error) throw error;
+      const nextValue = isClearing ? null : value;
+      const existingObservation = findAuditionObservation(appId, {
+        sessionId,
+        characterId: charId,
+        area: 'role',
+        type: 'decision',
+        key: charId,
+        currentAuthorOnly: true,
+      });
+      if (nextValue) await saveAuditionObservation(appId, { sessionId, characterId: charId, area: 'role', type: 'decision', key: charId, value: nextValue });
+      else if (existingObservation?.id) await deleteAuditionObservation(existingObservation.id);
       showSaveStatus('saved');
     } catch (error) {
       app.custom_answers = currentAnswers;
@@ -30225,6 +30461,17 @@ If you have any questions, don't hesitate to reach out.
     try {
       const error = await saveInRoomCustomAnswers(app, nextAnswers);
       if (error) throw error;
+      const nextValue = nextAnswers[key] === 'liked' ? 'liked' : null;
+      const existingObservation = findAuditionObservation(appId, {
+        sessionId,
+        characterId: charId,
+        area: 'role',
+        type: 'choice',
+        key: charId,
+        currentAuthorOnly: true,
+      });
+      if (nextValue) await saveAuditionObservation(appId, { sessionId, characterId: charId, area: 'role', type: 'choice', key: charId, value: nextValue });
+      else if (existingObservation?.id) await deleteAuditionObservation(existingObservation.id);
       showSaveStatus('saved');
     } catch (error) {
       console.error('[BTS] in-room role toggle failed', error);
@@ -31742,6 +31989,7 @@ If you have any questions, don't hesitate to reach out.
   loadSlots = dedupeWorkspaceLoad(loadSlots);
   loadApplicants = dedupeWorkspaceLoad(loadApplicants);
   loadAuditionAuthoredNotes = dedupeWorkspaceLoad(loadAuditionAuthoredNotes);
+  loadAuditionObservations = dedupeWorkspaceLoad(loadAuditionObservations);
   loadCharacters = dedupeWorkspaceLoad(loadCharacters);
   loadCustomQuestions = dedupeWorkspaceLoad(loadCustomQuestions);
   loadEvents = dedupeWorkspaceLoad(loadEvents);
