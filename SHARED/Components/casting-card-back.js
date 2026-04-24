@@ -41,14 +41,13 @@ function buildCastingCardBack(app, opts = {}) {
     'padding:0',
     'box-sizing:border-box',
     'overflow-y:auto',
-    'background:#ffffff',
+    'background:#fdfdfd',
     'border-radius:4px',
     'box-shadow:-3px -3px 0 rgba(255,255,255,0.78), 0 14px 30px rgba(15,23,42,0.34), 18px 26px 42px rgba(15,23,42,0.28), 0 3px 10px rgba(15,23,42,0.18)'
   ].join(';');
   const {
     includeInRoomScores = true,
     includeRoomNotes    = true,
-    accentColor         = null,  // if set, all sections use this color instead of per-category rainbow
     scoreColorSet       = null,
     sessionNotes        = null,  // array of { label, note } — one per audition session
     bucketPlacements      = null,  // array of { sessionLabel, bucketName, bucketColour } — dance call container placements
@@ -70,10 +69,12 @@ function buildCastingCardBack(app, opts = {}) {
     return d.innerHTML;
   }
 
-  function section(label, rows, color) {
+  let sectionIndex = 0;
+  function section(label, rows) {
     const filtered = rows.filter(([, v]) => v && String(v).trim() && v !== '—');
     if (!filtered.length) return '';
-    return `<div class="irb-section" style="border-left-color:${color};background:${color}66;">
+    const sectionBg = sectionIndex++ % 2 === 0 ? '#fdfdfd' : '#e0e0e0';
+    return `<div class="irb-section" style="border-left-color:${sectionBg};background:${sectionBg};">
       <div class="irb-section-label">${escStr(label)}</div>
       <div class="irb-section-rows">
         ${filtered.map(([k, v]) =>
@@ -166,33 +167,6 @@ function buildCastingCardBack(app, opts = {}) {
     return content || '<div class="irb-tab-empty">Nothing here yet.</div>';
   }
 
-  // ── Section colours ───────────────────────────────────────────
-  // If accentColor is provided (e.g. session type colour), all sections use it.
-  // Otherwise each section gets its own colour for visual distinction.
-  const C = accentColor ? {
-    casting:      accentColor,
-    acting:       accentColor,
-    vocals:       accentColor,
-    dance:        accentColor,
-    skills:       accentColor,
-    availability: accentColor,
-    other:        accentColor,
-    notes:        accentColor,
-    inroom:       accentColor,
-    roomnotes:    accentColor,
-  } : {
-    casting:      '#a87af8',
-    acting:       '#55acda',
-    vocals:       '#4ab847',
-    dance:        '#ef7d05',
-    skills:       '#ffdd68',
-    availability: '#f03592',
-    other:        '#ff7db4',
-    notes:        '#22cdd4',
-    inroom:       '#7b7b7b',
-    roomnotes:    '#22cdd4',
-  };
-
   // Keys already surfaced explicitly — don't repeat in "Other Answers"
   const handledKeys = new Set([
     'Preferred Name', 'Pronouns', 'Date of Birth', 'DOB', 'Birth Date',
@@ -224,33 +198,33 @@ function buildCastingCardBack(app, opts = {}) {
   const castingSection = section('Casting', [
     ['Role Openness', castingPref],
     ['Joining', attendanceModeLabel],
-  ], C.casting);
+  ]);
 
   // ── Acting ────────────────────────────────────────────────────
   const actingSection = section('Acting', [
     ['Level',   ca['Acting Experience Level']],
     ['Details', ca['Acting Experience Details']],
-  ].filter(([, v]) => v), C.acting);
+  ].filter(([, v]) => v));
 
   // ── Vocals ────────────────────────────────────────────────────
   const vocalSection = section('Vocals', [
     ['Level',      ca['Vocal Experience Level']],
     ['Voice Type', ca['Vocal Type']],
     ['Details',    ca['Vocal Experience Details']],
-  ].filter(([, v]) => v), C.vocals);
+  ].filter(([, v]) => v));
 
   // ── Dance ─────────────────────────────────────────────────────
   const danceSection = section('Dance', [
     ['Level',   ca['Dance / Movement Experience Level']],
     ['Styles',  ca['Dance Styles']],
     ['Details', ca['Dance / Movement Details']],
-  ].filter(([, v]) => v), C.dance);
+  ].filter(([, v]) => v));
 
   // ── Skills & Experience ───────────────────────────────────────
   const skillsSection = section('Skills & Experience', [
     ['Special Skills',       ca['Special Skills'] || app.skills],
     ['Previous Experience',  ca['Previous Experience'] || app.experience],
-  ].filter(([, v]) => v), C.skills);
+  ].filter(([, v]) => v));
 
   // ── Availability (schedule + conflicts together) ─────────────
   const availabilityRows = [
@@ -294,7 +268,7 @@ function buildCastingCardBack(app, opts = {}) {
   const availabilitySection = availabilityRows
     .filter(([, v]) => v)
     .length
-    ? section('Availability', availabilityRows.filter(([, v]) => v), C.availability)
+    ? section('Availability', availabilityRows.filter(([, v]) => v))
     : '';
 
   // ── Other custom answers ──────────────────────────────────────
@@ -310,15 +284,18 @@ function buildCastingCardBack(app, opts = {}) {
       return [key, display];
     })
     .filter(([, display]) => display && display.trim() && display !== '—');
-  const customSection = customRows.length ? section('Other Answers', customRows, C.other) : '';
+  const customSection = customRows.length ? section('Other Answers', customRows) : '';
 
   // ── Notes ─────────────────────────────────────────────────────
   const notesValue = ca['Additional Notes'] || app.notes;
   const notesSection = notesValue
-    ? `<div class="irb-section" style="border-left-color:${C.notes};background:${C.notes}26;">
+    ? (() => {
+        const notesBg = sectionIndex++ % 2 === 0 ? '#fdfdfd' : '#e0e0e0';
+        return `<div class="irb-section" style="border-left-color:${notesBg};background:${notesBg};">
          <div class="irb-section-label">Notes</div>
          <div class="irb-section-rows"><div class="irb-notes">${escStr(notesValue)}</div></div>
-       </div>`
+       </div>`;
+      })()
     : '';
 
   const theirAnswersContent = [
