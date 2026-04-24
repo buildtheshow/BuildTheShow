@@ -217,7 +217,6 @@
       cardBackHtml = '',
       scorePanelHtml = '',
       notesTextHtml = '',
-      teamNoteHtml = '',
       roleChipsHtml = ''
     } = config;
     const resolvedNotesTextHtml = notesTextHtml || (() => {
@@ -256,7 +255,7 @@
               <div class="inroom-face front">
                 <div class="inroom-front-card-wrap">${cardFrontHtml}</div>
               </div>
-              <div class="inroom-face back">
+              <div class="inroom-face back" onclick="event.stopPropagation()">
                 ${cardBackHtml}
               </div>
             </div>
@@ -266,7 +265,6 @@
         <div class="inroom-notes-card">
           <div class="inroom-notes-title">Quick Notes</div>
           ${resolvedNotesTextHtml}
-          ${teamNoteHtml}
         </div>
         ${generalClose}
         ${characterListHtml}

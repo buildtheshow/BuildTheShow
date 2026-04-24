@@ -35,6 +35,7 @@ function buildCastingCardBack(app, opts = {}) {
     includeInRoomScores = true,
     includeRoomNotes    = true,
     accentColor         = null,  // if set, all sections use this color instead of per-category rainbow
+    scoreColorSet       = null,
     sessionNotes        = null,  // array of { label, note } — one per audition session
     bucketPlacements      = null,  // array of { sessionLabel, bucketName, bucketColour } — dance call container placements
     roleNotes             = null,  // array of { charName, roleType, note } — per-character in-room notes
@@ -122,14 +123,19 @@ function buildCastingCardBack(app, opts = {}) {
     ).join('');
   }
 
-  function renderSessionNotes(entries) {
+  function renderSessionNotes(entries, heading = '') {
     if (!entries?.length) return '';
-    return entries.map(({ label, note, authorColor }) =>
+    const content = entries.map(({ label, note, authorColor }) =>
       `<div class="irb-inroom-note-block" style="${authorColor ? `border-left-color:${escStr(authorColor)};background:${escStr(authorColor)}12;` : ''}">
         <div class="irb-inroom-note-label" style="${authorColor ? `color:${escStr(authorColor)};` : ''}">${escStr(label)}</div>
         <div class="irb-notes">${escStr(note)}</div>
       </div>`
     ).join('');
+    if (!heading) return content;
+    return `<div class="irb-session-block">
+      <div class="irb-session-label">${escStr(heading)}</div>
+      ${content}
+    </div>`;
   }
 
   function renderSessionTabContent(type) {
@@ -141,7 +147,7 @@ function buildCastingCardBack(app, opts = {}) {
       renderSessionAssignments(assignmentEntries),
       renderSessionBuckets(bucketEntries),
       renderSessionRoleNotes(roleNoteEntries),
-      renderSessionNotes(noteEntries),
+      renderSessionNotes(noteEntries, type === 'audition' ? 'Quick Notes' : ''),
     ].filter(Boolean).join('');
     return content || '<div class="irb-tab-empty">Nothing here yet.</div>';
   }
@@ -323,10 +329,22 @@ function buildCastingCardBack(app, opts = {}) {
         .map(key => [INROOM_SCORE_LABELS[key], applicantInRoomScore(app, key)])
         .filter(([, value]) => value);
       if (scoreRows.length) {
-        generalAuditionsContent += `<div class="irb-session-block irb-inroom-scores">
-          <div class="irb-session-label">Impressions</div>
+        const scoreBlockStyle = scoreColorSet
+          ? `style="background:${escStr(scoreColorSet.light)};border-left:3px solid ${escStr(scoreColorSet.base)};padding:0.45rem 0.5rem;border-radius:0 6px 6px 0;"`
+          : '';
+        const scoreLabelStyle = scoreColorSet
+          ? `style="color:${escStr(scoreColorSet.dark)};"`
+          : '';
+        const scoreKeyStyle = scoreColorSet
+          ? `style="color:${escStr(scoreColorSet.dark)};opacity:0.72;"`
+          : '';
+        const scoreValStyle = scoreColorSet
+          ? `style="color:${escStr(scoreColorSet.dark)};"`
+          : '';
+        generalAuditionsContent += `<div class="irb-session-block irb-inroom-scores" ${scoreBlockStyle}>
+          <div class="irb-session-label" ${scoreLabelStyle}>Impressions</div>
           <div class="irb-score-grid">${scoreRows.map(([label, value]) =>
-            `<div class="irb-score-pair"><span class="irb-score-key">${escStr(label)}</span><span class="irb-score-val">${escStr(value)}</span></div>`
+            `<div class="irb-score-pair"><span class="irb-score-key" ${scoreKeyStyle}>${escStr(label)}</span><span class="irb-score-val" ${scoreValStyle}>${escStr(value)}</span></div>`
           ).join('')}</div>
         </div>`;
       }
