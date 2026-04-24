@@ -220,6 +220,14 @@
       teamNoteHtml = '',
       roleChipsHtml = ''
     } = config;
+    const resolvedNotesTextHtml = notesTextHtml || (() => {
+      const safeAppId = esc(app?.id || '');
+      const noteValue = typeof applicantInRoomNotes === 'function'
+        ? applicantInRoomNotes(app, currentSession?.id)
+        : '';
+      return `<textarea id="inroom-notes" class="inroom-notes-text" placeholder="Write down what you noticed in the room..." oninput="scheduleInRoomNotesSave('${safeAppId}')">${esc(noteValue || '')}</textarea>
+          <div class="inroom-save-hint">Notes save automatically.</div>`;
+    })();
     const characterListHtml = renderTemplate({ area: 'auditions', component: 'character-list' }, {
       esc,
       roleTypeOptions,
@@ -257,7 +265,7 @@
         <div class="inroom-right">${scorePanelHtml}</div>
         <div class="inroom-notes-card">
           <div class="inroom-notes-title">Quick Notes</div>
-          ${notesTextHtml}
+          ${resolvedNotesTextHtml}
           ${teamNoteHtml}
         </div>
         ${generalClose}
