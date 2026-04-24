@@ -225,7 +225,7 @@ function openProductionTeamMemberEdit(memberId) {
         </label>
         <label>
           <span style="display:block;font-size:0.78rem;font-weight:800;margin-bottom:0.3rem;">Phone</span>
-          <input id="ptm-edit-phone" class="form-input" type="tel" value="${safe(member.phone || member.phone_number || '')}" />
+          <input id="ptm-edit-phone" class="form-input" type="tel" value="${safe(window.BTSPhone?.format(member.phone || member.phone_number || '') || (member.phone || member.phone_number || ''))}" />
         </label>
         <label>
           <span style="display:block;font-size:0.78rem;font-weight:800;margin-bottom:0.3rem;">Card Colour</span>
@@ -259,7 +259,7 @@ async function saveProductionTeamMemberEdit(memberId, btn = null) {
     name: (document.getElementById('ptm-edit-name')?.value || '').trim(),
     role: (document.getElementById('ptm-edit-role')?.value || '').trim(),
     email: (document.getElementById('ptm-edit-email')?.value || '').trim().toLowerCase(),
-    phone: (document.getElementById('ptm-edit-phone')?.value || '').trim() || null,
+    phone: (window.BTSPhone?.format(document.getElementById('ptm-edit-phone')?.value || '') || document.getElementById('ptm-edit-phone')?.value || '').trim() || null,
     bio: document.getElementById('ptm-edit-bio')?.value || '',
     note_color: document.getElementById('ptm-edit-color')?.value || nextAvailableTeamColor(memberId),
   };
