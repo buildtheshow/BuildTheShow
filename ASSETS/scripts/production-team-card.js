@@ -39,9 +39,10 @@ function renderProductionTeamCard(member, options = {}) {
     ? `<img src="${escapeHtml(m.headshot_url)}" alt="" class="production-team-card-image" />`
     : `<div class="production-team-card-placeholder">${initial}</div>`;
 
-  const inviteHtml = m.invite_sent_at
-    ? `<button id="invite-btn-${id}" class="production-team-card-back-action" type="button" onclick="event.stopPropagation();emailTeamInvite('${id}', this)"><span class="production-team-card-action-label">Resend Invite</span><span class="production-team-card-action-status"></span></button>`
-    : `<button id="invite-btn-${id}" class="production-team-card-back-action" type="button" onclick="event.stopPropagation();emailTeamInvite('${id}', this)"><span class="production-team-card-action-label">Email Invite</span><span class="production-team-card-action-status"></span></button>`;
+  const inviteLabel = m.invite_sent_at
+    ? '<span>Resend</span><span>Invite</span>'
+    : '<span>Email</span><span>Invite</span>';
+  const inviteHtml = `<button id="invite-btn-${id}" class="production-team-card-back-action" type="button" onclick="event.stopPropagation();emailTeamInvite('${id}', this)"><span class="production-team-card-action-label">${inviteLabel}</span><span class="production-team-card-action-status"></span></button>`;
 
   const bio = String(m.bio || '');
   const bioText = escapeHtml(bio || 'No bio added yet.');
@@ -105,9 +106,9 @@ function renderProductionTeamCard(member, options = {}) {
               <div class="production-team-card-back-actions" onclick="event.stopPropagation();">
                 <button class="production-team-card-back-action" type="button" onclick="openProductionTeamMemberEdit('${id}')"><span class="production-team-card-action-label">Edit</span><span class="production-team-card-action-status"></span></button>
                 ${inviteHtml}
-                <button class="production-team-card-back-action" type="button" onclick="copyTeamPortalLink('${id}',this)"><span class="production-team-card-action-label">Copy Link</span><span class="production-team-card-action-status"></span></button>
-                <button class="production-team-card-back-action" type="button" onclick="copyProductionTeamCardPasscode('${id}',this)"><span class="production-team-card-action-label">Copy Passcode</span><span class="production-team-card-action-status"></span></button>
-                ${m.headshot_url ? `<a class="production-team-card-back-action" href="${escapeHtml(m.headshot_url)}" target="_blank" download onclick="ptcBtnFeedback(this,{working:'Downloading',done:'Downloaded'})?.(true)"><span class="production-team-card-action-label">Download Headshot</span><span class="production-team-card-action-status"></span></a>` : ''}
+                <button class="production-team-card-back-action" type="button" onclick="copyTeamPortalLink('${id}',this)"><span class="production-team-card-action-label"><span>Copy</span><span>Link</span></span><span class="production-team-card-action-status"></span></button>
+                <button class="production-team-card-back-action" type="button" onclick="copyProductionTeamCardPasscode('${id}',this)"><span class="production-team-card-action-label"><span>Copy</span><span>Passcode</span></span><span class="production-team-card-action-status"></span></button>
+                ${m.headshot_url ? `<a class="production-team-card-back-action" href="${escapeHtml(m.headshot_url)}" target="_blank" download onclick="ptcBtnFeedback(this,{working:'Downloading',done:'Downloaded'})?.(true)"><span class="production-team-card-action-label"><span>Download</span><span>Headshot</span></span><span class="production-team-card-action-status"></span></a>` : ''}
               </div>
               <button class="production-team-card-trash" type="button" onclick="event.stopPropagation();removeProductionTeamMember('${id}',this)" title="Remove team member" aria-label="Remove ${name || 'production team member'}">
                 <span class="production-team-card-trash-icon" aria-hidden="true">
