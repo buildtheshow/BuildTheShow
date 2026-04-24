@@ -1,8 +1,6 @@
 (function () {
   const templateRegistry = [];
-  const STANDARD_CARD_SHELL_WIDTH = '304px';
-  const STANDARD_CARD_MIN_HEIGHT = '380px';
-  const STANDARD_CARD_WRAP_PADDING = '0 1.1rem 1.5rem 1.1rem';
+  const STANDARD_CARD_WRAP_PADDING = '0';
   // Source-of-truth page shell for General Auditions in both workspace and team portal views.
   // Locks the card, impressions, quick notes, and character list structure.
   const LOCKED_GENERAL_IN_ROOM_TEMPLATE_ID = 'auditions.in-room.general';
@@ -214,8 +212,8 @@
       backClick = ''
     } = config;
 
-    return `<div class="${shellClass}${flipped ? ' flipped' : ''}"${id ? ` id="${esc(id)}"` : ''} style="width:min(100%, ${STANDARD_CARD_SHELL_WIDTH});margin:0 auto;perspective:1400px;overflow:visible;">
-      <div class="inroom-flip-inner" style="width:100%;max-width:${STANDARD_CARD_SHELL_WIDTH};aspect-ratio:4 / 5;min-height:${STANDARD_CARD_MIN_HEIGHT};">
+    return `<div class="${shellClass}${flipped ? ' flipped' : ''}"${id ? ` id="${esc(id)}"` : ''} style="width:100%;margin:0 auto;perspective:1400px;overflow:visible;">
+      <div class="inroom-flip-inner" style="width:100%;max-width:100%;height:100%;aspect-ratio:4 / 5;min-height:0;">
         <div class="inroom-face front"${frontClick ? ` onclick="${frontClick}"` : ''}>
           <div class="inroom-front-card-wrap" style="display:flex;align-items:flex-start;justify-content:center;padding:${STANDARD_CARD_WRAP_PADDING};width:100%;height:100%;overflow:visible;box-sizing:border-box;">${frontHtml}</div>
         </div>
