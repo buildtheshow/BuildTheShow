@@ -225,6 +225,11 @@
     </div>`;
   }
 
+  function buildCastingCardBackClickHandler(toggleFnName) {
+    const safeToggle = String(toggleFnName || '').replace(/"/g, '&quot;');
+    return `(function(event,back){const tabBar=back.querySelector('.irb-tab-bar');const tabRect=tabBar&&tabBar.getBoundingClientRect?tabBar.getBoundingClientRect():null;const clickY=event.clientY;const interactive=event.target&&event.target.closest('button, a, input, select, textarea, label, [role=&quot;button&quot;], .irb-tab-bar, .irb-tab');if((tabRect&&clickY<=tabRect.bottom)||interactive){event.stopPropagation();return;}event.stopPropagation();const toggleName="${safeToggle}";if(toggleName&&typeof window[toggleName]==='function')window[toggleName]();})(event,this)`;
+  }
+
   function renderInRoomPageTemplate(config) {
     const {
       app,
@@ -282,7 +287,7 @@
             frontHtml: cardFrontHtml,
             backHtml: cardBackHtml,
             frontClick: 'toggleInRoomFlip()',
-            backClick: `(function(event,back){const tabBar=back.querySelector('.irb-tab-bar');const tabRect=tabBar&&tabBar.getBoundingClientRect?tabBar.getBoundingClientRect():null;const clickY=event.clientY;const interactive=event.target&&event.target.closest('button, a, input, select, textarea, label, [role=&quot;button&quot;], .irb-tab-bar, .irb-tab');if ((tabRect && clickY <= tabRect.bottom) || interactive){event.stopPropagation();return;}event.stopPropagation();if(typeof toggleInRoomFlip==='function')toggleInRoomFlip();})(event,this)`
+            backClick: buildCastingCardBackClickHandler('toggleInRoomFlip')
           })}
         </div>
         <div class="inroom-right">${scorePanelHtml}</div>
@@ -300,6 +305,7 @@
     findTemplate,
     renderTemplate,
     renderTemplateById,
+    buildCastingCardBackClickHandler,
     renderCastingCardFlipShellTemplate,
     renderCharacterListTemplate,
     renderCheckedInStripTemplate,

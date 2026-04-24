@@ -238,14 +238,13 @@ function buildCastingCardBack(app, opts = {}) {
     ['Previous Experience',  ca['Previous Experience'] || app.experience],
   ].filter(([, v]) => v), C.skills);
 
-  // ── Availability (yes/no scheduling questions) ───────────────
+  // ── Availability (schedule + conflicts together) ─────────────
   const availabilityRows = [
     ['All Rehearsals',   (() => { const v = ca['Available for all rehearsals?'];   if (v === true  || v === 'true')  return 'Yes'; if (v === false || v === 'false') return 'No'; return null; })()],
     ['All Performances', (() => { const v = ca['Available for all performances?']; if (v === true  || v === 'true')  return 'Yes'; if (v === false || v === 'false') return 'No'; return null; })()],
-  ].filter(([, v]) => v);
-  const availabilitySection = availabilityRows.length ? section('Availability', availabilityRows, C.availability) : '';
+  ];
 
-  // ── Conflicts (individual dates, own section) ─────────────────
+  // Add conflict dates into Availability instead of their own section
   const rawConflicts = app?.date_conflicts;
   const conflictsObj = typeof rawConflicts === 'string'
     ? (() => { try { return JSON.parse(rawConflicts || '{}') || {}; } catch { return {}; } })()
@@ -262,23 +261,27 @@ function buildCastingCardBack(app, opts = {}) {
     } catch { return String(dateStr); }
   }
 
-  const conflictRows = conflictEntries.map(([, v]) => {
+  const conflictRows = conflictEntries.map(([, v], index) => {
     if (typeof v === 'object' && v !== null) {
       const dateStr = v.date ? fmtConflictDate(v.date) : null;
       const title   = v.title || null;
-      // Left column = date (what day), right column = event name (what it is)
-      if (dateStr && title)  return [dateStr, title];
-      if (dateStr)           return [dateStr, 'Unavailable'];
-      if (title)             return [title,   'Date not recorded'];
+      if (dateStr && title)  return [`Conflict ${index + 1}`, `${dateStr} — ${title}`];
+      if (dateStr)           return [`Conflict ${index + 1}`, dateStr];
+      if (title)             return [`Conflict ${index + 1}`, title];
     }
-    return ['Conflict', 'Date not recorded'];
+    return [`Conflict ${index + 1}`, 'Date not recorded'];
   }).filter(([k]) => k);
 
-  // Also include any free-text conflict note
+  // Also include any free-text conflict note in Availability
   const conflictNote = ca['List any conflicts'];
-  if (conflictNote) conflictRows.push(['Notes', conflictNote]);
+  if (conflictNote) conflictRows.push(['Conflict Notes', conflictNote]);
 
-  const conflictsSection = conflictRows.length ? section('Conflicts', conflictRows, C.availability) : '';
+  availabilityRows.push(...conflictRows);
+  const availabilitySection = availabilityRows
+    .filter(([, v]) => v)
+    .length
+    ? section('Availability', availabilityRows.filter(([, v]) => v), C.availability)
+    : '';
 
   // ── Other custom answers ──────────────────────────────────────
   const customRows = Object.entries(ca || {})
@@ -311,7 +314,6 @@ function buildCastingCardBack(app, opts = {}) {
     danceSection,
     skillsSection,
     availabilitySection,
-    conflictsSection,
     customSection,
     notesSection,
   ].filter(Boolean).join('') || '<div class="irb-tab-empty">Nothing here yet.</div>';
