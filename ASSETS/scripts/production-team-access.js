@@ -183,6 +183,119 @@ async function saveTeamMemberField(memberId, field, value, options = {}) {
   return true;
 }
 
+function openProductionTeamMemberEdit(memberId) {
+  const member = auditionTeamMembers.find(m => String(m.id) === String(memberId));
+  if (!member) return;
+  const safe = typeof esc === 'function'
+    ? esc
+    : (value) => String(value ?? '').replace(/[&<>"']/g, char => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;'
+      }[char]));
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay open';
+  overlay.id = 'production-team-member-edit-modal';
+  overlay.onclick = event => {
+    if (event.target === overlay) closeProductionTeamMemberEdit();
+  };
+  overlay.innerHTML = `
+    <div class="modal-card" style="max-width:620px;width:min(94vw,620px);" onclick="event.stopPropagation()">
+      <div class="modal-header">
+        <div>
+          <div class="modal-title">Edit Team Member</div>
+          <div class="modal-subtitle">Update the details shown on their production team card.</div>
+        </div>
+        <button class="modal-close" type="button" aria-label="Close" onclick="closeProductionTeamMemberEdit()">×</button>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:0.75rem;">
+        <label>
+          <span style="display:block;font-size:0.78rem;font-weight:800;margin-bottom:0.3rem;">Name</span>
+          <input id="ptm-edit-name" class="form-input" value="${safe(member.name || '')}" />
+        </label>
+        <label>
+          <span style="display:block;font-size:0.78rem;font-weight:800;margin-bottom:0.3rem;">Role</span>
+          <input id="ptm-edit-role" class="form-input" value="${safe(member.role || '')}" />
+        </label>
+        <label>
+          <span style="display:block;font-size:0.78rem;font-weight:800;margin-bottom:0.3rem;">Email</span>
+          <input id="ptm-edit-email" class="form-input" type="email" value="${safe(member.email || '')}" />
+        </label>
+        <label>
+          <span style="display:block;font-size:0.78rem;font-weight:800;margin-bottom:0.3rem;">Phone</span>
+          <input id="ptm-edit-phone" class="form-input" type="tel" value="${safe(member.phone || member.phone_number || '')}" />
+        </label>
+        <label>
+          <span style="display:block;font-size:0.78rem;font-weight:800;margin-bottom:0.3rem;">Card Colour</span>
+          <input id="ptm-edit-color" class="form-input" type="color" value="${safe(member.note_color || nextAvailableTeamColor(member.id))}" style="height:42px;padding:0.2rem;" />
+        </label>
+      </div>
+      <label style="display:block;margin-top:0.8rem;">
+        <span style="display:block;font-size:0.78rem;font-weight:800;margin-bottom:0.3rem;">Bio</span>
+        <textarea id="ptm-edit-bio" class="form-textarea" style="min-height:130px;">${safe(member.bio || '')}</textarea>
+      </label>
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:0.75rem;margin-top:0.95rem;">
+        <div id="ptm-edit-msg" style="font-size:0.8rem;color:#8a7aa4;"></div>
+        <div style="display:flex;gap:0.5rem;">
+          <button class="btn-secondary" type="button" onclick="closeProductionTeamMemberEdit()">Cancel</button>
+          <button class="btn-primary" type="button" onclick="saveProductionTeamMemberEdit('${safe(member.id)}', this)">Save</button>
+        </div>
+      </div>
+    </div>`;
+  document.getElementById('production-team-member-edit-modal')?.remove();
+  document.body.appendChild(overlay);
+  setTimeout(() => document.getElementById('ptm-edit-name')?.focus(), 50);
+}
+
+function closeProductionTeamMemberEdit() {
+  document.getElementById('production-team-member-edit-modal')?.remove();
+}
+
+async function saveProductionTeamMemberEdit(memberId, btn = null) {
+  const msg = document.getElementById('ptm-edit-msg');
+  const payload = {
+    name: (document.getElementById('ptm-edit-name')?.value || '').trim(),
+    role: (document.getElementById('ptm-edit-role')?.value || '').trim(),
+    email: (document.getElementById('ptm-edit-email')?.value || '').trim().toLowerCase(),
+    phone: (document.getElementById('ptm-edit-phone')?.value || '').trim() || null,
+    bio: document.getElementById('ptm-edit-bio')?.value || '',
+    note_color: document.getElementById('ptm-edit-color')?.value || nextAvailableTeamColor(memberId),
+  };
+  if (!payload.name) {
+    if (msg) { msg.style.color = '#b91c1c'; msg.textContent = 'Name is required.'; }
+    return;
+  }
+  if (!payload.role) {
+    if (msg) { msg.style.color = '#b91c1c'; msg.textContent = 'Role is required.'; }
+    return;
+  }
+  if (!payload.email) {
+    if (msg) { msg.style.color = '#b91c1c'; msg.textContent = 'Email is required.'; }
+    return;
+  }
+  const markDone = ptcBtnFeedback?.(btn, { working: 'Saving...', done: 'Saved' });
+  const { data, error } = await sb
+    .from('production_team_members')
+    .update(payload)
+    .eq('production_id', prodId)
+    .eq('id', memberId)
+    .select('*')
+    .single();
+  if (error) {
+    markDone?.(false);
+    if (msg) { msg.style.color = '#b91c1c'; msg.textContent = 'Could not save: ' + error.message; }
+    return;
+  }
+  await syncTeamMemberToProductionTeam(data || { id: memberId }, payload);
+  await loadAuditionTeamMembers();
+  markDone?.(true);
+  closeProductionTeamMemberEdit();
+  renderTeamView(document.getElementById('tm-container'));
+  showToast('Team member updated.');
+}
+
 async function toggleTeamMemberAccess(memberId, isActive) {
   const { error } = await sb.from('production_team_members').update({ is_active: isActive === true }).eq('id', memberId);
   if (error) { showToast('Could not update team access: ' + error.message, true); return; }

@@ -27,6 +27,8 @@ function renderProductionTeamCard(member, options = {}) {
   const isActive = m.is_active !== false;
   const inactiveClass = isActive ? '' : ' is-inactive';
   const statusClass = isActive ? 'is-active' : 'is-inactive';
+  const roleSize = getProductionTeamCardTextSize(m.role || 'Production Team', 10.6, 5.2, 8);
+  const nameSize = getProductionTeamCardTextSize(m.name || 'Firstname Lastname', 5.8, 3.1, 14);
   const sentDate = m.invite_sent_at
     ? new Date(m.invite_sent_at).toLocaleDateString('en-CA', { month: 'short', day: 'numeric' })
     : '';
@@ -60,9 +62,9 @@ function renderProductionTeamCard(member, options = {}) {
             <div class="production-team-card-lower">
               <div class="production-team-card-role-line">
                 <span class="production-team-card-colour-chip" title="Team colour"></span>
-                <div class="production-team-card-role" title="${role}">${role || 'Production Team'}</div>
+                <div class="production-team-card-role" title="${role}" style="font-size:${roleSize};">${role || 'Production Team'}</div>
               </div>
-              <div class="production-team-card-name" title="${name}">${name || 'Firstname Lastname'}</div>
+              <div class="production-team-card-name" title="${name}" style="font-size:${nameSize};">${name || 'Firstname Lastname'}</div>
             </div>
           </div>
           <div class="production-team-card-face production-team-card-back">
@@ -99,6 +101,7 @@ function renderProductionTeamCard(member, options = {}) {
             </div>
             ${showManagement ? `
               <div class="production-team-card-back-actions" onclick="event.stopPropagation();">
+                <button class="production-team-card-back-action" type="button" onclick="openProductionTeamMemberEdit('${id}')"><span class="production-team-card-action-label">Edit</span><span class="production-team-card-action-status"></span></button>
                 ${inviteHtml}
                 <button class="production-team-card-back-action" type="button" onclick="copyTeamPortalLink('${id}',this)"><span class="production-team-card-action-label">Copy Link</span><span class="production-team-card-action-status"></span></button>
                 <button class="production-team-card-back-action" type="button" onclick="copyProductionTeamCardPasscode('${id}',this)"><span class="production-team-card-action-label">Copy Passcode</span><span class="production-team-card-action-status"></span></button>
@@ -119,6 +122,14 @@ function renderProductionTeamCard(member, options = {}) {
       </div>
     </div>
   `;
+}
+
+function getProductionTeamCardTextSize(text, baseSize, minSize, maxChars) {
+  const value = String(text || '').trim();
+  if (!value) return `${baseSize}cqw`;
+  const ratio = value.length > maxChars ? (maxChars / value.length) : 1;
+  const fitted = Math.max(minSize, Number((baseSize * ratio).toFixed(3)));
+  return `${fitted}cqw`;
 }
 
 function productionTeamCardEscape(value) {
