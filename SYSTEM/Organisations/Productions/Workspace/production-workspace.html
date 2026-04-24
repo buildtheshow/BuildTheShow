@@ -7130,6 +7130,43 @@
       color: #9a90b0;
       padding: 0.5rem 0.1rem 0.2rem;
     }
+    .template-clean-flip {
+      width: min(100%, 304px);
+      margin: 0 auto;
+    }
+    .template-clean-flip-card {
+      position: relative;
+      cursor: pointer;
+      transform-origin: center center;
+      transition: transform 0.34s cubic-bezier(0.2, 0.75, 0.25, 1), opacity 0.18s ease;
+      will-change: transform, opacity;
+    }
+    .template-clean-flip-card.is-swapping {
+      opacity: 0.78;
+      transform: rotateY(88deg) scale(0.985);
+    }
+    .template-clean-flip-card:focus-visible {
+      border-radius: 8px;
+      box-shadow: 0 0 0 3px rgba(239,171,69,0.34);
+      outline: none;
+    }
+    .template-clean-flip-hint {
+      display: flex;
+      justify-content: center;
+      margin-top: 0.72rem;
+      color: #6a5a80;
+      font-size: 0.76rem;
+      font-weight: 500;
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .template-clean-flip-card {
+        transition: none;
+      }
+      .template-clean-flip-card.is-swapping {
+        opacity: 1;
+        transform: none;
+      }
+    }
     .irb-session-block {
       margin-bottom: 0.45rem;
     }
@@ -14523,20 +14560,30 @@
       .replace(/id="(irb-tab-[^"]+)"/g, `id="$1-${suffix}"`)
       .replace(/data-panel="(irb-tab-[^"]+)"/g, `data-panel="$1-${suffix}"`);
     const backPreviewHtml = namespaceBackTemplate(backHtml, 'template-test-back');
-    const flipBackHtml = namespaceBackTemplate(backHtml, 'template-test-flip');
-    const flipBackClick = window.BTSAuditionTemplates.buildCastingCardBackClickHandler('toggleTemplateTestFlip');
-    const flipHtml = window.BTSAuditionTemplates.renderCastingCardFlipShellTemplate({
-      shellClass: 'inroom-flip template-test-flip',
-      id: 'template-test-flip',
-      flipped: false,
-      frontHtml,
-      backHtml: flipBackHtml,
-      frontClick: 'toggleTemplateTestFlip()',
-      backClick: flipBackClick
-    });
-
-    window.toggleTemplateTestFlip = function toggleTemplateTestFlip() {
-      document.getElementById('template-test-flip')?.classList.toggle('flipped');
+    const cleanFlipBackHtml = namespaceBackTemplate(backHtml, 'template-test-clean-flip');
+    window.templateTestCleanFlipSide = 'front';
+    window.toggleTemplateTestCleanFlip = function toggleTemplateTestCleanFlip(event) {
+      const target = event?.target;
+      if (target?.closest?.('button, a, input, select, textarea, label, .irb-tab-bar, .irb-tab')) return;
+      const card = document.getElementById('template-clean-flip-card');
+      const content = document.getElementById('template-clean-flip-content');
+      const hint = document.getElementById('template-clean-flip-hint');
+      if (!card || !content || card.classList.contains('is-swapping')) return;
+      const nextSide = window.templateTestCleanFlipSide === 'back' ? 'front' : 'back';
+      card.classList.add('is-swapping');
+      window.setTimeout(() => {
+        window.templateTestCleanFlipSide = nextSide;
+        content.innerHTML = nextSide === 'back' ? cleanFlipBackHtml : frontHtml;
+        card.setAttribute('aria-label', `Showing casting card ${nextSide}. Click to show ${nextSide === 'back' ? 'front' : 'back'}.`);
+        if (hint) hint.textContent = nextSide === 'back' ? 'Showing Casting Card Back' : 'Showing Casting Card Front';
+        requestAnimationFrame(() => requestAnimationFrame(fitInRoomRoleChipTitles));
+      }, 170);
+      window.setTimeout(() => card.classList.remove('is-swapping'), 350);
+    };
+    window.handleTemplateTestCleanFlipKey = function handleTemplateTestCleanFlipKey(event) {
+      if (event.key !== 'Enter' && event.key !== ' ') return;
+      event.preventDefault();
+      window.toggleTemplateTestCleanFlip(event);
     };
 
     host.innerHTML = `
@@ -14557,8 +14604,13 @@
             <div style="width:min(100%,304px);margin:0 auto;">${backPreviewHtml}</div>
           </div>
           <div>
-            <div class="container-header" style="padding:0 0 0.75rem;">Stored Flip Animation</div>
-            <div style="width:min(100%,304px);margin:0 auto;">${flipHtml}</div>
+            <div class="container-header" style="padding:0 0 0.75rem;">Simplified Flip</div>
+            <div class="template-clean-flip">
+              <div class="template-clean-flip-card" id="template-clean-flip-card" role="button" tabindex="0" aria-label="Showing casting card front. Click to show back." onclick="toggleTemplateTestCleanFlip(event)" onkeydown="handleTemplateTestCleanFlipKey(event)">
+                <div id="template-clean-flip-content">${frontHtml}</div>
+              </div>
+              <div class="template-clean-flip-hint" id="template-clean-flip-hint">Showing Casting Card Front</div>
+            </div>
           </div>
         </div>
       </div>`;
