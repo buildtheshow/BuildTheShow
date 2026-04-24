@@ -29,6 +29,8 @@ function renderProductionTeamCard(member, options = {}) {
   const statusClass = isActive ? 'is-active' : 'is-inactive';
   const roleSize = getProductionTeamCardTextSize(m.role || 'Production Team', 10.6, 5.2, 8);
   const nameSize = getProductionTeamCardTextSize(m.name || 'Firstname Lastname', 5.8, 3.1, 14);
+  const backRoleSize = getProductionTeamCardTextSize(m.role || 'Production Team', 5.3, 2.6, 8);
+  const backNameSize = getProductionTeamCardTextSize(m.name || 'Firstname Lastname', 2.9, 1.55, 14);
   const sentDate = m.invite_sent_at
     ? new Date(m.invite_sent_at).toLocaleDateString('en-CA', { month: 'short', day: 'numeric' })
     : '';
@@ -71,8 +73,8 @@ function renderProductionTeamCard(member, options = {}) {
             <div class="production-team-card-back-head">
               <div class="production-team-card-back-identity" title="${name || 'Firstname Lastname'}">
                 <span class="production-team-card-back-dot" aria-hidden="true"></span>
-                <span class="production-team-card-back-role-inline" style="font-size:${roleSize};">${role || 'Production Team'}</span>
-                <span class="production-team-card-back-full-name" style="font-size:${nameSize};">${name || 'Firstname Lastname'}</span>
+                <span class="production-team-card-back-role-inline" style="font-size:${backRoleSize};">${role || 'Production Team'}</span>
+                <span class="production-team-card-back-full-name" style="font-size:${backNameSize};">${name || 'Firstname Lastname'}</span>
               </div>
               <div class="production-team-card-back-contact">
                 <div class="production-team-card-back-contact-item">
