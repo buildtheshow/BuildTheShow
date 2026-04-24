@@ -53,6 +53,7 @@ function buildCastingCardBack(app, opts = {}) {
     bucketPlacements      = null,  // array of { sessionLabel, bucketName, bucketColour } — dance call container placements
     roleNotes             = null,  // array of { charName, roleType, note } — per-character in-room notes
     characterAssignments  = null,  // array of { charName, roleType, state, decision } — casting board placements
+    auditionTimeRows      = null,  // array of [audition type label, booked time or "-"]
   } = opts;
 
   const ca = (typeof applicantCustomAnswers === 'function')
@@ -330,7 +331,12 @@ function buildCastingCardBack(app, opts = {}) {
     : '';
 
   // ── Other custom answers ──────────────────────────────────────
-  const customRows = Object.entries(ca || {})
+  const providedAuditionTimeRows = Array.isArray(auditionTimeRows)
+    ? auditionTimeRows
+      .filter(row => Array.isArray(row) && row.length >= 2)
+      .map(([key, value]) => [key, value || '-'])
+    : [];
+  const customAuditionTimeRows = Object.entries(ca || {})
     .filter(([key, value]) =>
       !isHandledKey(key) &&
       !isConflictDateKey(key) &&
@@ -344,7 +350,8 @@ function buildCastingCardBack(app, opts = {}) {
       return [key, display];
     })
     .filter(([, display]) => display && display.trim() && display !== '—');
-  const customSection = customRows.length ? section('Other Answers', customRows) : '';
+  const customRows = providedAuditionTimeRows.length ? providedAuditionTimeRows : customAuditionTimeRows;
+  const customSection = customRows.length ? section('Audition Times', customRows) : '';
 
   // ── Notes ─────────────────────────────────────────────────────
   const notesValue = ca['Additional Notes'] || app.notes;
