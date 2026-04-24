@@ -200,6 +200,30 @@ function buildCastingCardBack(app, opts = {}) {
     key.startsWith('In The Room - Role Notes - ') ||
     key.startsWith('In The Room - Considered - ');
 
+  function formatAnswerValue(value) {
+    if (value === true) return 'Yes';
+    if (value === false) return 'No';
+    if (Array.isArray(value)) return value.join(', ');
+    if (typeof value === 'object') return JSON.stringify(value);
+    return String(value);
+  }
+
+  function isConflictDateKey(key) {
+    return /^(conflict dates?|date conflicts?)$/i.test(String(key || '').trim());
+  }
+
+  function isAuditionTimeKey(key) {
+    const normalized = String(key || '').trim().toLowerCase();
+    return (
+      normalized.includes('audition time') ||
+      normalized.includes('audition slot') ||
+      normalized.includes('arrival time') ||
+      normalized.includes('time preference') ||
+      normalized.includes('preferred time') ||
+      normalized.includes('preferred slot')
+    );
+  }
+
   // ── Casting ───────────────────────────────────────────────────
   const castingPref = (typeof applicantRolePrefLabel === 'function') ? applicantRolePrefLabel(app) : '';
   const attendanceModeLabel = app?.attendance_mode === 'in_person' ? 'In Person'
@@ -273,6 +297,12 @@ function buildCastingCardBack(app, opts = {}) {
   // Also include any free-text conflict note.
   const conflictNote = ca['List any conflicts'];
   if (conflictNote) conflictRows.push(['Conflict Notes', conflictNote]);
+  Object.entries(ca || {})
+    .filter(([key, value]) => isConflictDateKey(key) && value !== null && value !== undefined && value !== '')
+    .forEach(([, value]) => {
+      const display = formatAnswerValue(value);
+      if (display && display.trim() && display !== '—') conflictRows.push(['Conflict Dates', display]);
+    });
 
   availabilityRows.push(...conflictRows);
   const availabilitySection = availabilityRows
@@ -283,14 +313,16 @@ function buildCastingCardBack(app, opts = {}) {
 
   // ── Other custom answers ──────────────────────────────────────
   const customRows = Object.entries(ca || {})
-    .filter(([key, value]) => !isHandledKey(key) && value !== null && value !== undefined && value !== '')
+    .filter(([key, value]) =>
+      !isHandledKey(key) &&
+      !isConflictDateKey(key) &&
+      isAuditionTimeKey(key) &&
+      value !== null &&
+      value !== undefined &&
+      value !== ''
+    )
     .map(([key, value]) => {
-      let display;
-      if (value === true)             display = 'Yes';
-      else if (value === false)       display = 'No';
-      else if (Array.isArray(value))  display = value.join(', ');
-      else if (typeof value === 'object') display = JSON.stringify(value);
-      else display = String(value);
+      const display = formatAnswerValue(value);
       return [key, display];
     })
     .filter(([, display]) => display && display.trim() && display !== '—');
@@ -315,8 +347,8 @@ function buildCastingCardBack(app, opts = {}) {
     danceSection,
     skillsSection,
     availabilitySection,
-    customSection,
     notesSection,
+    customSection,
   ].filter(Boolean).join('') || '<div class="irb-tab-empty">Nothing here yet.</div>';
 
   let generalAuditionsContent = '';
