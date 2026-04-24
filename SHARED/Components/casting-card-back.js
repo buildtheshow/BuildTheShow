@@ -31,6 +31,20 @@
  * @returns {string} HTML string — wrap in .inroom-back-scroll or equivalent
  */
 function buildCastingCardBack(app, opts = {}) {
+  const BACK_CARD_SURFACE_STYLE = [
+    'display:flex',
+    'flex-direction:column',
+    'gap:0',
+    'width:100%',
+    'height:auto',
+    'aspect-ratio:4 / 5',
+    'padding:0',
+    'box-sizing:border-box',
+    'overflow-y:auto',
+    'background:#ffffff',
+    'border-radius:4px',
+    'box-shadow:-3px -3px 0 rgba(255,255,255,0.78), 0 14px 30px rgba(15,23,42,0.34), 18px 26px 42px rgba(15,23,42,0.28), 0 3px 10px rgba(15,23,42,0.18)'
+  ].join(';');
   const {
     includeInRoomScores = true,
     includeRoomNotes    = true,
@@ -366,7 +380,7 @@ function buildCastingCardBack(app, opts = {}) {
     }
   }
 
-  return `<div class="inroom-back-scroll irb-tabs">
+  return `<div class="inroom-back-scroll irb-tabs" style="${BACK_CARD_SURFACE_STYLE}">
     <div class="irb-tab-bar" role="tablist" aria-label="Casting card details">
       ${tabButton('Their Answers', true, 'irb-tab-answers')}
       ${tabButton('General Auditions', false, 'irb-tab-general')}
