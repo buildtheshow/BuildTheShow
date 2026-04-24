@@ -14012,10 +14012,10 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="/ASSETS/scripts/venue-picker.js"></script>
-<script src="/ASSETS/scripts/phone-format.js?v=nanp-20260424"></script>
+<script src="/ASSETS/scripts/phone-format.js?v=nanp-smart-20260424"></script>
 <script src="/ASSETS/scripts/casting-card.js"></script>
 <script src="/ASSETS/scripts/production-team-card.js?v=team-card-phone-format-20260424"></script>
-<script src="/ASSETS/scripts/production-team-access.js?v=team-card-phone-format-20260424"></script>
+<script src="/ASSETS/scripts/production-team-access.js?v=team-card-colour-smart-20260424"></script>
 <script src="../../../../SHARED/Components/casting-card-back.js?v=20260424-audition-time-rows"></script>
 <script src="../../../../SHARED/Components/audition-status-strip.js"></script>
 <script src="../../../../SHARED/Components/ai-character-importer.js"></script>
@@ -14453,7 +14453,7 @@
   function teamAccessUsedColours() {
     return (auditionTeamMembers || [])
       .filter(member => String(member.id || '') !== String(teamAccessMember?.id || ''))
-      .map(member => String(member.note_color || '').toLowerCase())
+      .map(member => typeof normalizeTeamColor === 'function' ? normalizeTeamColor(member.note_color) : String(member.note_color || '').toLowerCase())
       .filter(Boolean);
   }
 
@@ -14481,10 +14481,13 @@
     const memberName = teamAccessMember.name || 'Team Member';
     const memberRole = teamAccessMember.role || perms.label || 'Production Team';
     const colourButtons = TEAM_NOTE_COLOR_GROUPS.map(group => {
-      const variants = group.variants.map(({ tone, value }) => {
-        const taken = used.has(value.toLowerCase());
+      const variants = (group.variants || [{ tone: '', value: group.base }]).map(({ tone, value }) => {
+        const takenBy = typeof teamColorOwnerFromList === 'function'
+          ? teamColorOwnerFromList(value, teamAccessMember.id)
+          : null;
+        const taken = !!takenBy || used.has(value.toLowerCase());
         const active = currentColor.toLowerCase() === value.toLowerCase();
-        return `<button type="button" aria-label="Choose ${esc(group.family)} ${esc(tone)}" title="${taken ? `${group.family} ${tone} is already taken` : `${group.family} ${tone}`}" ${taken ? 'disabled' : ''} onclick="selectTeamAccessColour('${esc(value)}')" style="width:2.35rem;height:2.35rem;border-radius:999px;border:2px solid ${active ? '#1a1530' : 'rgba(87,46,136,0.16)'};background:${esc(value)};box-shadow:${taken ? 'none' : `0 0 0.45rem ${esc(value)}55`};opacity:${taken ? '0.22' : '1'};cursor:${taken ? 'not-allowed' : 'pointer'};"></button>`;
+        return `<button type="button" aria-label="Choose ${esc(group.family)} ${esc(tone)}" title="${taken ? `${group.family} ${tone} is already taken${takenBy?.name ? ` by ${takenBy.name}` : ''}` : `${group.family} ${tone}`}" ${taken ? 'disabled' : ''} onclick="selectTeamAccessColour('${esc(value)}')" style="width:2.35rem;height:2.35rem;border-radius:999px;border:2px solid ${active ? '#1a1530' : 'rgba(87,46,136,0.16)'};background:${esc(value)};box-shadow:${taken ? 'none' : `0 0 0.45rem ${esc(value)}55`};opacity:${taken ? '0.22' : '1'};filter:${taken ? 'grayscale(1)' : 'none'};cursor:${taken ? 'not-allowed' : 'pointer'};"></button>`;
       }).join('');
       return `
         <div style="display:grid;grid-template-columns:88px minmax(0,1fr);gap:0.7rem;align-items:center;">
@@ -14717,6 +14720,14 @@
 
   function selectTeamAccessColour(color) {
     if (!teamAccessMember) return;
+    const takenBy = typeof teamColorOwnerFromList === 'function'
+      ? teamColorOwnerFromList(color, teamAccessMember.id)
+      : null;
+    if (takenBy) {
+      const msg = document.getElementById('team-access-profile-msg');
+      if (msg) { msg.style.color = '#b91c1c'; msg.textContent = `${takenBy.name || 'Another team member'} is already using that colour.`; }
+      return;
+    }
     teamAccessMember.note_color = color;
     renderTeamAccessProfile();
   }
@@ -14738,11 +14749,21 @@
     if (!teamAccessMember) return;
     const msg = document.getElementById('team-access-profile-msg');
     const email = (document.getElementById('team-access-email-field')?.value || teamAccessMember.email || teamAccessEmail || '').trim().toLowerCase();
-    const phone = (window.BTSPhone?.format(document.getElementById('team-access-phone-field')?.value || teamAccessMember.phone || '') || document.getElementById('team-access-phone-field')?.value || teamAccessMember.phone || '').trim();
+    const rawPhone = document.getElementById('team-access-phone-field')?.value || teamAccessMember.phone || '';
+    const phone = (window.BTSPhone?.format(rawPhone) || rawPhone).trim();
     const bio = document.getElementById('team-access-bio')?.value || teamAccessMember.bio || '';
     if (!email) {
       if (msg) { msg.style.color = '#b91c1c'; msg.textContent = 'Email is required.'; }
       return;
+    }
+    if (typeof checkTeamColorAvailability === 'function') {
+      const colorCheck = await checkTeamColorAvailability(teamAccessMember.note_color || '#572e88', teamAccessMember.id);
+      if (!colorCheck.ok) {
+        if (msg) { msg.style.color = '#b91c1c'; msg.textContent = colorCheck.message || 'That colour is already taken.'; }
+        renderTeamAccessProfile();
+        return;
+      }
+      teamAccessMember.note_color = colorCheck.color;
     }
     const { data, error } = await sb.rpc('team_member_update_profile_for_session', {
       p_production_id: prodId,

@@ -14103,10 +14103,10 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="/ASSETS/scripts/venue-picker.js"></script>
-<script src="/ASSETS/scripts/phone-format.js?v=nanp-20260424"></script>
+<script src="/ASSETS/scripts/phone-format.js?v=nanp-smart-20260424"></script>
 <script src="/ASSETS/scripts/casting-card.js"></script>
 <script src="/ASSETS/scripts/production-team-card.js?v=team-card-phone-format-20260424"></script>
-<script src="/ASSETS/scripts/production-team-access.js?v=team-card-phone-format-20260424"></script>
+<script src="/ASSETS/scripts/production-team-access.js?v=team-card-colour-smart-20260424"></script>
 <script src="../../../../SHARED/Components/casting-card-back.js?v=20260424-audition-time-rows"></script>
 <script src="../../../../SHARED/Components/audition-status-strip.js"></script>
 <script src="../../../../SHARED/Components/ai-character-importer.js"></script>
@@ -14546,7 +14546,7 @@
   function teamAccessUsedColours() {
     return (auditionTeamMembers || [])
       .filter(member => String(member.id || '') !== String(teamAccessMember?.id || ''))
-      .map(member => String(member.note_color || '').toLowerCase())
+      .map(member => typeof normalizeTeamColor === 'function' ? normalizeTeamColor(member.note_color) : String(member.note_color || '').toLowerCase())
       .filter(Boolean);
   }
 
@@ -14581,9 +14581,12 @@
     const currentColorText = colorIsLight ? '#1a1530' : colorSet.dark;
     const colourButtons = TEAM_NOTE_COLOR_GROUPS
       .map(({ base }) => {
-        const taken = used.has(base.toLowerCase());
+        const takenBy = typeof teamColorOwnerFromList === 'function'
+          ? teamColorOwnerFromList(base, teamAccessMember.id)
+          : null;
+        const taken = !!takenBy || used.has(base.toLowerCase());
         const active = currentColor.toLowerCase() === base.toLowerCase();
-        return `<button type="button" class="team-color-dot${active ? ' active' : ''}" aria-label="Choose colour" title="${taken ? 'This colour is already taken' : 'Choose colour'}" ${taken ? 'disabled' : ''} onclick="selectTeamAccessColour('${esc(base)}')" style="--team-note-color:${esc(base)};"></button>`;
+        return `<button type="button" class="team-color-dot${active ? ' active' : ''}" aria-label="Choose colour" title="${taken ? `This colour is already used${takenBy?.name ? ` by ${takenBy.name}` : ''}` : 'Choose colour'}" ${taken ? 'disabled' : ''} onclick="selectTeamAccessColour('${esc(base)}')" style="--team-note-color:${esc(base)};${taken ? 'filter:grayscale(1);opacity:0.22;cursor:not-allowed;' : ''}"></button>`;
       }).join('');
     const initial = esc((teamAccessMember.name || '?').trim().charAt(0).toUpperCase() || '?');
     const profileCardHtml = typeof renderProductionTeamCard === 'function'
@@ -14667,6 +14670,13 @@
 
   function selectTeamAccessColour(color) {
     if (!teamAccessMember) return;
+    const takenBy = typeof teamColorOwnerFromList === 'function'
+      ? teamColorOwnerFromList(color, teamAccessMember.id)
+      : null;
+    if (takenBy) {
+      setTeamAccessProfileMessage(`${takenBy.name || 'Another team member'} is already using that colour.`, 'error');
+      return;
+    }
     teamAccessMember.note_color = color;
     applyTeamAccessProfileColor(color);
     scheduleTeamAccessProfileAutosave(120);
@@ -14706,6 +14716,15 @@
     if (!email) {
       setTeamAccessProfileMessage('Email is required.', 'error');
       return;
+    }
+    if (typeof checkTeamColorAvailability === 'function') {
+      const colorCheck = await checkTeamColorAvailability(draft.note_color, teamAccessMember.id);
+      if (!colorCheck.ok) {
+        setTeamAccessProfileMessage(colorCheck.message || 'That colour is already taken.', 'error');
+        renderTeamAccessProfile();
+        return;
+      }
+      draft.note_color = colorCheck.color;
     }
     const token = ++teamAccessProfileSaveToken;
     const { data, error } = await sb.rpc('team_member_update_profile_for_session', {
@@ -18587,10 +18606,11 @@ If you have any questions, don't hesitate to reach out.
   }
 
   function getTeamAccessProfileDraft() {
+    const rawPhone = document.getElementById('team-access-phone-field')?.value || teamAccessMember?.phone || '';
     return {
       name: (document.getElementById('team-access-name-field')?.value || teamAccessMember?.name || '').trim(),
       email: (document.getElementById('team-access-email-field')?.value || teamAccessMember?.email || teamAccessEmail || '').trim().toLowerCase(),
-      phone: (window.BTSPhone?.format(document.getElementById('team-access-phone-field')?.value || teamAccessMember?.phone || '') || document.getElementById('team-access-phone-field')?.value || teamAccessMember?.phone || '').trim(),
+      phone: (window.BTSPhone?.format(rawPhone) || rawPhone).trim(),
       bio: document.getElementById('team-access-bio')?.value || teamAccessMember?.bio || '',
       note_color: teamAccessMember?.note_color || '#572e88',
       headshot_url: teamAccessMember?.headshot_url || '',

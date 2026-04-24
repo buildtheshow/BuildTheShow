@@ -31,10 +31,132 @@ async function saveTeamMemberPasscode(memberId, btn) {
 
 function nextAvailableTeamColor(memberId = null) {
   const used = new Set((auditionTeamMembers || [])
-    .filter(m => m.id !== memberId && m.is_active !== false)
-    .map(m => String(m.note_color || '').toLowerCase())
+    .filter(m => String(m.id || '') !== String(memberId || '') && m.is_active !== false)
+    .map(m => normalizeTeamColor(m.note_color))
     .filter(Boolean));
-  return TEAM_NOTE_COLORS.find(color => !used.has(color.toLowerCase())) || TEAM_NOTE_COLORS[0];
+  return TEAM_NOTE_COLORS.find(color => !used.has(normalizeTeamColor(color))) || '';
+}
+
+function normalizeTeamColor(color) {
+  const value = String(color || '').trim().toLowerCase();
+  return /^#[0-9a-f]{6}$/.test(value) ? value : '';
+}
+
+function teamColorOwnerFromList(color, memberId = null, members = auditionTeamMembers || []) {
+  const normalized = normalizeTeamColor(color);
+  if (!normalized) return null;
+  return (members || []).find(member =>
+    member?.is_active !== false
+    && String(member.id || '') !== String(memberId || '')
+    && normalizeTeamColor(member.note_color) === normalized
+  ) || null;
+}
+
+async function refreshTeamColorRoster() {
+  const { data, error } = await sb
+    .from('production_team_members')
+    .select('id,name,role,note_color,is_active')
+    .eq('production_id', prodId);
+  if (error) return { ok: false, message: 'Could not refresh team colours: ' + error.message };
+
+  auditionTeamMembers = (data || []).map(member => {
+    const existing = (auditionTeamMembers || []).find(item => String(item.id) === String(member.id));
+    return existing ? { ...existing, ...member } : member;
+  });
+  return { ok: true, members: data || [] };
+}
+
+async function checkTeamColorAvailability(color, memberId = null) {
+  const normalized = normalizeTeamColor(color);
+  if (!normalized) return { ok: false, message: 'Choose a team colour.' };
+
+  const roster = await refreshTeamColorRoster();
+  if (!roster.ok) return roster;
+
+  const freshOwner = teamColorOwnerFromList(normalized, memberId, roster.members || []);
+  if (freshOwner) {
+    return { ok: false, owner: freshOwner, message: `${freshOwner.name || 'Another team member'} just took that colour. Choose another.` };
+  }
+  return { ok: true, color: normalized };
+}
+
+function isTeamColorConstraintError(error) {
+  const text = String(error?.message || error?.details || error?.hint || '').toLowerCase();
+  return text.includes('production_team_members_note_color_key')
+    || (text.includes('duplicate') && text.includes('note_color'))
+    || (text.includes('unique') && text.includes('note_color'))
+    || text.includes('colour is already')
+    || text.includes('color is already');
+}
+
+async function nextFreshTeamColor(memberId = null) {
+  await refreshTeamColorRoster();
+  return nextAvailableTeamColor(memberId);
+}
+
+async function insertTeamMemberWithAvailableColor(payload, options = {}) {
+  const firstColor = normalizeTeamColor(payload.note_color) || await nextFreshTeamColor();
+  if (!firstColor) return { data: null, error: { message: options.fullMessage || 'All team colours are already taken.' } };
+
+  let attempt = { ...payload, note_color: firstColor };
+  let result = await sb.from('production_team_members').insert(attempt).select('*').single();
+  if (!isTeamColorConstraintError(result.error)) return result;
+
+  const retryColor = await nextFreshTeamColor();
+  if (!retryColor || retryColor === firstColor) return result;
+  attempt = { ...attempt, note_color: retryColor };
+  return sb.from('production_team_members').insert(attempt).select('*').single();
+}
+
+async function updateTeamMemberWithColorGuard(memberId, payload) {
+  const result = await sb
+    .from('production_team_members')
+    .update(payload)
+    .eq('production_id', prodId)
+    .eq('id', memberId)
+    .select('*')
+    .single();
+  if (!isTeamColorConstraintError(result.error)) return result;
+
+  await refreshTeamColorRoster();
+  return {
+    data: null,
+    error: {
+      message: 'That colour was just taken by another team member. Choose another.',
+      original: result.error,
+    },
+  };
+}
+
+function teamColorPickerHtml(selectedColor, memberId = null, inputId = 'ptm-edit-color') {
+  const selected = normalizeTeamColor(selectedColor) || normalizeTeamColor(nextAvailableTeamColor(memberId));
+  const buttons = TEAM_NOTE_COLOR_GROUPS.map(group => {
+    const color = normalizeTeamColor(group.base);
+    const takenBy = teamColorOwnerFromList(color, memberId);
+    const active = color === selected;
+    return `<button
+      type="button"
+      class="team-color-dot${active ? ' active' : ''}"
+      aria-label="${takenBy ? `${group.family} is already used by ${takenBy.name || 'another team member'}` : `Choose ${group.family}`}"
+      title="${takenBy ? `${group.family} is already used by ${takenBy.name || 'another team member'}` : `Choose ${group.family}`}"
+      ${takenBy ? 'disabled' : ''}
+      onclick="selectProductionTeamEditColor('${color}')"
+      style="--team-note-color:${color};width:2.35rem;height:2.35rem;border-radius:999px;border:2px solid ${active ? '#1a1530' : 'rgba(87,46,136,0.16)'};background:${color};box-shadow:${takenBy ? 'none' : `0 0 0.45rem ${color}55`};opacity:${takenBy ? '0.22' : '1'};filter:${takenBy ? 'grayscale(1)' : 'none'};cursor:${takenBy ? 'not-allowed' : 'pointer'};"
+    ></button>`;
+  }).join('');
+  return `<input id="${inputId}" type="hidden" value="${selected}" />
+    <div id="${inputId}-picker" style="display:flex;gap:0.48rem;align-items:center;flex-wrap:wrap;">${buttons}</div>`;
+}
+
+function selectProductionTeamEditColor(color) {
+  const normalized = normalizeTeamColor(color);
+  const input = document.getElementById('ptm-edit-color');
+  if (!input || !normalized) return;
+  input.value = normalized;
+  document.querySelectorAll('#ptm-edit-color-picker .team-color-dot').forEach(button => {
+    button.classList.toggle('active', normalizeTeamColor(button.style.getPropertyValue('--team-note-color')) === normalized);
+    button.style.borderColor = button.classList.contains('active') ? '#1a1530' : 'rgba(87,46,136,0.16)';
+  });
 }
 
 function findCreativeRoleForTeamMember(member) {
@@ -77,24 +199,37 @@ async function upsertTeamAccessForCreativeRole(role) {
     String(m.role || '').toLowerCase() === String(role.name || '').toLowerCase() &&
     String(m.name || '').toLowerCase() === String(role.person || '').toLowerCase()
   );
+  const noteColor = existing?.note_color || nextAvailableTeamColor(existing?.id);
+  if (!noteColor) {
+    showToast?.('All team colours are already taken. Free one up before adding another team member.', true);
+    return;
+  }
   const payload = {
     name: role.person.trim(),
     email: role.email || null,
     role: role.name,
-    note_color: existing?.note_color || nextAvailableTeamColor(existing?.id),
+    note_color: noteColor,
     is_active: true,
   };
   if (existing) {
-    await sb.from('production_team_members').update(payload).eq('id', existing.id);
+    const { error } = await updateTeamMemberWithColorGuard(existing.id, payload);
+    if (error) {
+      showToast?.('Could not update team access: ' + error.message, true);
+      return;
+    }
     role.team_member_id = existing.id;
     await saveTeamConfig();
     return;
   }
-  const { data } = await sb.from('production_team_members').insert({
+  const { data, error } = await insertTeamMemberWithAvailableColor({
     production_id: prodId,
     ...payload,
     passcode: randomTeamPasscode(),
-  }).select('id').single();
+  });
+  if (error) {
+    showToast?.('Could not create team access: ' + error.message, true);
+    return;
+  }
   if (data?.id) {
     role.team_member_id = data.id;
     await saveTeamConfig();
@@ -136,15 +271,20 @@ async function addTeamMemberDirect() {
   await loadAuditionTeamMembers();
   const duplicate = auditionTeamMembers.find(m => m.email?.toLowerCase() === email.toLowerCase());
   if (duplicate) { if (err) err.textContent = 'That email already has access.'; return; }
-  const { data, error } = await sb.from('production_team_members').insert({
+  const noteColor = nextAvailableTeamColor();
+  if (!noteColor) {
+    if (err) err.textContent = 'All team colours are already taken. Remove or reassign a colour before adding another team member.';
+    return;
+  }
+  const { data, error } = await insertTeamMemberWithAvailableColor({
     production_id: prodId,
     name,
     email,
     role,
     passcode: randomTeamPasscode(),
-    note_color: nextAvailableTeamColor(),
+    note_color: noteColor,
     is_active: true,
-  }).select('*').single();
+  }, { fullMessage: 'All team colours are already taken. Remove or reassign a colour before adding another team member.' });
   if (error) { if (err) err.textContent = 'Could not add: ' + error.message; return; }
   await syncTeamMemberToProductionTeam(data, { name, email, role });
   document.getElementById('new-tm-name').value = '';
@@ -229,7 +369,7 @@ function openProductionTeamMemberEdit(memberId) {
         </label>
         <label>
           <span style="display:block;font-size:0.78rem;font-weight:800;margin-bottom:0.3rem;">Card Colour</span>
-          <input id="ptm-edit-color" class="form-input" type="color" value="${safe(member.note_color || nextAvailableTeamColor(member.id))}" style="height:42px;padding:0.2rem;" />
+          ${teamColorPickerHtml(member.note_color || nextAvailableTeamColor(member.id), member.id)}
         </label>
       </div>
       <label style="display:block;margin-top:0.8rem;">
@@ -255,11 +395,13 @@ function closeProductionTeamMemberEdit() {
 
 async function saveProductionTeamMemberEdit(memberId, btn = null) {
   const msg = document.getElementById('ptm-edit-msg');
+  const phoneInput = document.getElementById('ptm-edit-phone');
+  const rawPhone = phoneInput?.value || '';
   const payload = {
     name: (document.getElementById('ptm-edit-name')?.value || '').trim(),
     role: (document.getElementById('ptm-edit-role')?.value || '').trim(),
     email: (document.getElementById('ptm-edit-email')?.value || '').trim().toLowerCase(),
-    phone: (window.BTSPhone?.format(document.getElementById('ptm-edit-phone')?.value || '') || document.getElementById('ptm-edit-phone')?.value || '').trim() || null,
+    phone: (window.BTSPhone?.format(rawPhone) || rawPhone).trim() || null,
     bio: document.getElementById('ptm-edit-bio')?.value || '',
     note_color: document.getElementById('ptm-edit-color')?.value || nextAvailableTeamColor(memberId),
   };
@@ -276,13 +418,15 @@ async function saveProductionTeamMemberEdit(memberId, btn = null) {
     return;
   }
   const markDone = ptcBtnFeedback?.(btn, { working: 'Saving...', done: 'Saved' });
-  const { data, error } = await sb
-    .from('production_team_members')
-    .update(payload)
-    .eq('production_id', prodId)
-    .eq('id', memberId)
-    .select('*')
-    .single();
+  const colorCheck = await checkTeamColorAvailability(payload.note_color, memberId);
+  if (!colorCheck.ok) {
+    markDone?.(false);
+    await loadAuditionTeamMembers();
+    if (msg) { msg.style.color = '#b91c1c'; msg.textContent = colorCheck.message || 'That colour is already taken.'; }
+    return;
+  }
+  payload.note_color = colorCheck.color;
+  const { data, error } = await updateTeamMemberWithColorGuard(memberId, payload);
   if (error) {
     markDone?.(false);
     if (msg) { msg.style.color = '#b91c1c'; msg.textContent = 'Could not save: ' + error.message; }
