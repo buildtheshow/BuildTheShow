@@ -226,13 +226,13 @@ function buildCastingCardBack(app, opts = {}) {
     ['Previous Experience',  ca['Previous Experience'] || app.experience],
   ].filter(([, v]) => v));
 
-  // ── Availability (schedule + conflicts together) ─────────────
+  // ── Conflicts (schedule + conflicts together) ────────────────
   const availabilityRows = [
     ['All Rehearsals',   (() => { const v = ca['Available for all rehearsals?'];   if (v === true  || v === 'true')  return 'Yes'; if (v === false || v === 'false') return 'No'; return null; })()],
     ['All Performances', (() => { const v = ca['Available for all performances?']; if (v === true  || v === 'true')  return 'Yes'; if (v === false || v === 'false') return 'No'; return null; })()],
   ];
 
-  // Add conflict dates into Availability instead of their own section
+  // Add conflict dates into the compact conflicts section.
   const rawConflicts = app?.date_conflicts;
   const conflictsObj = typeof rawConflicts === 'string'
     ? (() => { try { return JSON.parse(rawConflicts || '{}') || {}; } catch { return {}; } })()
@@ -260,7 +260,7 @@ function buildCastingCardBack(app, opts = {}) {
     return [`Conflict ${index + 1}`, 'Date not recorded'];
   }).filter(([k]) => k);
 
-  // Also include any free-text conflict note in Availability
+  // Also include any free-text conflict note.
   const conflictNote = ca['List any conflicts'];
   if (conflictNote) conflictRows.push(['Conflict Notes', conflictNote]);
 
@@ -268,7 +268,7 @@ function buildCastingCardBack(app, opts = {}) {
   const availabilitySection = availabilityRows
     .filter(([, v]) => v)
     .length
-    ? section('Availability', availabilityRows.filter(([, v]) => v))
+    ? section('Conflicts', availabilityRows.filter(([, v]) => v))
     : '';
 
   // ── Other custom answers ──────────────────────────────────────
