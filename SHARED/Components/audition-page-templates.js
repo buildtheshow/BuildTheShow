@@ -255,8 +255,10 @@
               <div class="inroom-face front" onclick="toggleInRoomFlip()">
                 <div class="inroom-front-card-wrap">${cardFrontHtml}</div>
               </div>
-              <div class="inroom-face back" onclick="handleInRoomBackClick(event)">
-                ${cardBackHtml}
+              <div class="inroom-face back" onclick="(function(event,back){const tabBar=back.querySelector('.irb-tab-bar');const tabRect=tabBar&&tabBar.getBoundingClientRect?tabBar.getBoundingClientRect():null;const clickY=event.clientY;const interactive=event.target&&event.target.closest('button, a, input, select, textarea, label, [role=&quot;button&quot;], .irb-tab-bar, .irb-tab');if ((tabRect && clickY <= tabRect.bottom) || interactive){event.stopPropagation();return;}event.stopPropagation();if(typeof toggleInRoomFlip==='function')toggleInRoomFlip();})(event,this)">
+                <div class="inroom-back-card-surface">
+                  ${cardBackHtml}
+                </div>
               </div>
             </div>
           </div>
