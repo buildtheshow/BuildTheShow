@@ -96,7 +96,7 @@ function buildCastingCardBack(app, opts = {}) {
   }
 
   function tabButton(label, isActive, panelId) {
-    return `<button type="button" class="irb-tab${isActive ? ' is-active' : ''}" aria-selected="${isActive ? 'true' : 'false'}" onclick="(function(btn){const wrap=btn.closest('.irb-tabs'); if(!wrap) return; wrap.querySelectorAll('.irb-tab').forEach(tab=>{tab.classList.remove('is-active');tab.setAttribute('aria-selected','false');}); wrap.querySelectorAll('.irb-tab-panel').forEach(panel=>panel.hidden=true); btn.classList.add('is-active'); btn.setAttribute('aria-selected','true'); const panel=wrap.querySelector('#'+btn.getAttribute('data-panel')); if(panel) panel.hidden=false;})(this)" data-panel="${escStr(panelId)}">${escStr(label)}</button>`;
+    return `<button type="button" class="irb-tab${isActive ? ' is-active' : ''}" aria-selected="${isActive ? 'true' : 'false'}" onclick="(function(event,btn){if(event) event.stopPropagation(); const wrap=btn.closest('.irb-tabs'); if(!wrap) return; wrap.querySelectorAll('.irb-tab').forEach(tab=>{tab.classList.remove('is-active');tab.setAttribute('aria-selected','false');}); wrap.querySelectorAll('.irb-tab-panel').forEach(panel=>panel.hidden=true); btn.classList.add('is-active'); btn.setAttribute('aria-selected','true'); const panel=wrap.querySelector('#'+btn.getAttribute('data-panel')); if(panel) panel.hidden=false;})(event,this)" data-panel="${escStr(panelId)}">${escStr(label)}</button>`;
   }
 
   function tabPanel(id, content, isActive) {
