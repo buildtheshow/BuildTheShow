@@ -214,13 +214,31 @@ function buildCastingCardBack(app, opts = {}) {
 
   function isAuditionTimeKey(key) {
     const normalized = String(key || '').trim().toLowerCase();
+    const hasTimingLanguage = (
+      normalized.includes('time') ||
+      normalized.includes('slot') ||
+      normalized.includes('arrival') ||
+      normalized.includes('booking')
+    );
+    const hasAuditionRound = (
+      normalized.includes('audition') ||
+      normalized.includes('general') ||
+      normalized.includes('dance') ||
+      normalized.includes('callback') ||
+      normalized.includes('call back') ||
+      normalized.includes('call-back')
+    );
     return (
       normalized.includes('audition time') ||
       normalized.includes('audition slot') ||
+      normalized.includes('general audition') ||
+      normalized.includes('dance call') ||
+      normalized.includes('callback') ||
       normalized.includes('arrival time') ||
       normalized.includes('time preference') ||
       normalized.includes('preferred time') ||
-      normalized.includes('preferred slot')
+      normalized.includes('preferred slot') ||
+      (hasTimingLanguage && hasAuditionRound)
     );
   }
 
