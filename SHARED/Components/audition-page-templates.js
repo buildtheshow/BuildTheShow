@@ -200,6 +200,31 @@
           </div>`;
   }
 
+  function renderCastingCardFlipShellTemplate(config) {
+    const {
+      shellClass = '',
+      id = '',
+      flipped = false,
+      frontHtml = '',
+      backHtml = '',
+      frontClick = '',
+      backClick = ''
+    } = config;
+
+    return `<div class="${shellClass}${flipped ? ' flipped' : ''}"${id ? ` id="${esc(id)}"` : ''}>
+      <div class="inroom-flip-inner">
+        <div class="inroom-face front"${frontClick ? ` onclick="${frontClick}"` : ''}>
+          <div class="inroom-front-card-wrap">${frontHtml}</div>
+        </div>
+        <div class="inroom-face back"${backClick ? ` onclick="${backClick}"` : ''}>
+          <div class="inroom-back-card-surface">
+            ${backHtml}
+          </div>
+        </div>
+      </div>
+    </div>`;
+  }
+
   function renderInRoomPageTemplate(config) {
     const {
       app,
@@ -250,18 +275,15 @@
         <div class="inroom-main${usesGeneralInRoomLayout ? ' inroom-main-flat' : ''}">
         ${generalOpen}
         <div class="inroom-card-stage">
-          <div class="inroom-flip${inRoomFlipOpen ? ' flipped' : ''}" id="inroom-flip-card">
-            <div class="inroom-flip-inner">
-              <div class="inroom-face front" onclick="toggleInRoomFlip()">
-                <div class="inroom-front-card-wrap">${cardFrontHtml}</div>
-              </div>
-              <div class="inroom-face back" onclick="(function(event,back){const tabBar=back.querySelector('.irb-tab-bar');const tabRect=tabBar&&tabBar.getBoundingClientRect?tabBar.getBoundingClientRect():null;const clickY=event.clientY;const interactive=event.target&&event.target.closest('button, a, input, select, textarea, label, [role=&quot;button&quot;], .irb-tab-bar, .irb-tab');if ((tabRect && clickY <= tabRect.bottom) || interactive){event.stopPropagation();return;}event.stopPropagation();if(typeof toggleInRoomFlip==='function')toggleInRoomFlip();})(event,this)">
-                <div class="inroom-back-card-surface">
-                  ${cardBackHtml}
-                </div>
-              </div>
-            </div>
-          </div>
+          ${renderCastingCardFlipShellTemplate({
+            shellClass: 'inroom-flip',
+            id: 'inroom-flip-card',
+            flipped: inRoomFlipOpen,
+            frontHtml: cardFrontHtml,
+            backHtml: cardBackHtml,
+            frontClick: 'toggleInRoomFlip()',
+            backClick: `(function(event,back){const tabBar=back.querySelector('.irb-tab-bar');const tabRect=tabBar&&tabBar.getBoundingClientRect?tabBar.getBoundingClientRect():null;const clickY=event.clientY;const interactive=event.target&&event.target.closest('button, a, input, select, textarea, label, [role=&quot;button&quot;], .irb-tab-bar, .irb-tab');if ((tabRect && clickY <= tabRect.bottom) || interactive){event.stopPropagation();return;}event.stopPropagation();if(typeof toggleInRoomFlip==='function')toggleInRoomFlip();})(event,this)`
+          })}
         </div>
         <div class="inroom-right">${scorePanelHtml}</div>
         <div class="inroom-notes-card">
@@ -278,11 +300,13 @@
     findTemplate,
     renderTemplate,
     renderTemplateById,
+    renderCastingCardFlipShellTemplate,
     renderCharacterListTemplate,
     renderCheckedInStripTemplate,
     renderPortalLoginTemplate,
     renderPortalSessionFrameTemplate,
     renderEmptyStateTemplate,
+    renderCastingCardFlipShellTemplate,
     renderInRoomPageTemplate
   });
 

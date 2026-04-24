@@ -5350,13 +5350,16 @@
       position: relative;
       width: 100%;
       height: 100%;
-      transform-style: preserve-3d;
-      transition: transform 0.65s cubic-bezier(0.2, 0.75, 0.25, 1);
     }
-    .perf-lightbox-inner.flipped {
+    .perf-lightbox-inner .inroom-flip-inner {
+      width: 100%;
+      height: 100%;
+      min-height: 0;
+    }
+    .perf-lightbox-inner.flipped .inroom-flip-inner {
       transform: rotateY(180deg);
     }
-    .perf-lightbox-face {
+    .perf-lightbox-inner .inroom-face {
       position: absolute;
       inset: 0;
       backface-visibility: hidden;
@@ -5364,7 +5367,17 @@
       border-radius: 10px;
       overflow: hidden;
     }
-    .perf-lightbox-face.front .casting-card {
+    .perf-lightbox-inner .inroom-face.front {
+      background: transparent;
+      border: none;
+      box-shadow: none;
+      padding: 0;
+    }
+    .perf-lightbox-inner .inroom-face.front .inroom-front-card-wrap {
+      padding: 0;
+      height: 100%;
+    }
+    .perf-lightbox-inner .inroom-face.front .casting-card {
       width: 100%;
       height: 100%;
       box-shadow: 0 4px 8px rgba(15,23,42,0.35), 0 9px 12px rgba(15,23,42,0.25);
@@ -5372,13 +5385,24 @@
       transform: none !important;
       border-radius: 10px;
     }
-    .perf-lightbox-face.back {
+    .perf-lightbox-inner .inroom-face.back {
       transform: rotateY(180deg);
-      background: #fff;
-      border: 1.5px solid rgba(87,46,136,0.12);
-      box-shadow: 0 4px 8px rgba(15,23,42,0.35), 0 9px 12px rgba(15,23,42,0.25);
-      overflow-y: auto;
+      background: transparent;
+      border: none;
+      box-shadow: none;
+      padding: 0;
+    }
+    .perf-lightbox-inner .inroom-back-card-surface {
+      width: 100%;
+      height: 100%;
+      min-height: 0;
+    }
+    .perf-lightbox-inner .inroom-back-scroll {
+      min-height: 100%;
       padding: 1rem 0.85rem 1.25rem;
+      border-radius: 10px;
+      background: #fff;
+      box-shadow: 0 4px 8px rgba(15,23,42,0.35), 0 9px 12px rgba(15,23,42,0.25);
     }
     /* Flip — small ghost label, top-left, floating above card */
     .perf-flip-btn {
@@ -12567,10 +12591,7 @@
         <!-- Performer card lightbox -->
         <div class="perf-lightbox-overlay" id="perf-lightbox" onclick="closePerfLightbox(event)">
           <div class="perf-lightbox-scene">
-            <div class="perf-lightbox-inner" id="perf-lightbox-inner">
-              <div class="perf-lightbox-face front" id="perf-lightbox-front"></div>
-              <div class="perf-lightbox-face back" id="perf-lightbox-back"></div>
-            </div>
+            <div class="perf-lightbox-inner" id="perf-lightbox-inner"></div>
             <button class="perf-flip-btn" onclick="togglePerfFlip()">
               <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M1 4h10M11 4l-3-3M11 4l-3 3"/>
@@ -27276,6 +27297,18 @@ If you have any questions, don't hesitate to reach out.
     });
   }
 
+  function buildStandardCastingCardBackHtml(app, options = {}) {
+    return buildCastingCardBack(app, {
+      includeInRoomScores: true,
+      includeRoomNotes: true,
+      sessionNotes: collectAllSessionNotes(app),
+      bucketPlacements: collectDanceBucketPlacements(app),
+      roleNotes: collectRoleNotes(app),
+      characterAssignments: collectCharacterAssignments(app),
+      ...options,
+    });
+  }
+
   // ── Performer card lightbox ──────────────────────────────────
   let perfLightboxFlipped = false;
 
@@ -27284,21 +27317,23 @@ If you have any questions, don't hesitate to reach out.
     if (!app) return;
 
     perfLightboxFlipped = false;
-    document.getElementById('perf-lightbox-inner').classList.remove('flipped');
-
-    // Front — full casting card
-    document.getElementById('perf-lightbox-front').innerHTML = cbv2MakeCCard(app, null, null);
-
-    // Back — application data + In The Room zone (scores + per-session notes + dance call bucket)
-    document.getElementById('perf-lightbox-back').innerHTML =
-      buildCastingCardBack(app, { includeInRoomScores: true, includeRoomNotes: true, sessionNotes: collectAllSessionNotes(app), bucketPlacements: collectDanceBucketPlacements(app), roleNotes: collectRoleNotes(app), characterAssignments: collectCharacterAssignments(app) });
+    document.getElementById('perf-lightbox-inner').innerHTML =
+      window.BTSAuditionTemplates.renderCastingCardFlipShellTemplate({
+        shellClass: 'perf-lightbox-shell',
+        id: 'perf-lightbox-shell',
+        flipped: false,
+        frontHtml: buildStandardCastingCardHtml(app),
+        backHtml: buildStandardCastingCardBackHtml(app),
+        frontClick: 'togglePerfFlip()',
+        backClick: `(function(event,back){const tabBar=back.querySelector('.irb-tab-bar');const tabRect=tabBar&&tabBar.getBoundingClientRect?tabBar.getBoundingClientRect():null;const clickY=event.clientY;const interactive=event.target&&event.target.closest('button, a, input, select, textarea, label, [role=&quot;button&quot;], .irb-tab-bar, .irb-tab');if ((tabRect && clickY <= tabRect.bottom) || interactive){event.stopPropagation();return;}event.stopPropagation();if(typeof togglePerfFlip==='function')togglePerfFlip();})(event,this)`
+      });
 
     document.getElementById('perf-lightbox').classList.add('open');
   }
 
   function togglePerfFlip() {
     perfLightboxFlipped = !perfLightboxFlipped;
-    document.getElementById('perf-lightbox-inner').classList.toggle('flipped', perfLightboxFlipped);
+    document.getElementById('perf-lightbox-shell')?.classList.toggle('flipped', perfLightboxFlipped);
   }
 
   function closePerfLightbox(e) {
