@@ -255,7 +255,7 @@
               <div class="inroom-face front">
                 <div class="inroom-front-card-wrap">${cardFrontHtml}</div>
               </div>
-              <div class="inroom-face back" onclick="event.stopPropagation()">
+              <div class="inroom-face back" onclick="handleInRoomBackClick(event)">
                 ${cardBackHtml}
               </div>
             </div>
