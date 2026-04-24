@@ -71,8 +71,8 @@ function renderProductionTeamCard(member, options = {}) {
             <div class="production-team-card-back-head">
               <div class="production-team-card-back-identity" title="${name || 'Firstname Lastname'}">
                 <span class="production-team-card-back-dot" aria-hidden="true"></span>
-                <span class="production-team-card-back-full-name">${name || 'Firstname Lastname'}</span>
-                <span class="production-team-card-back-role-inline">${role || 'Production Team'}</span>
+                <span class="production-team-card-back-role-inline" style="font-size:${roleSize};">${role || 'Production Team'}</span>
+                <span class="production-team-card-back-full-name" style="font-size:${nameSize};">${name || 'Firstname Lastname'}</span>
               </div>
               <div class="production-team-card-back-contact">
                 <div class="production-team-card-back-contact-item">
