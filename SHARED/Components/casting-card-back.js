@@ -74,8 +74,9 @@ function buildCastingCardBack(app, opts = {}) {
     const filtered = rows.filter(([, v]) => v && String(v).trim() && v !== '—');
     if (!filtered.length) return '';
     const sectionBg = sectionIndex++ % 2 === 0 ? '#fdfdfd' : '#e0e0e0';
+    const labelHtml = label === 'Skills & Experience' ? 'Skills &<br>Experience' : escStr(label);
     return `<div class="irb-section" style="border-left-color:${sectionBg};background:${sectionBg};">
-      <div class="irb-section-label">${escStr(label)}</div>
+      <div class="irb-section-label">${labelHtml}</div>
       <div class="irb-section-rows">
         ${filtered.map(([k, v]) =>
           `<div class="irb-row"><span class="irb-row-key">${escStr(k)}</span><span class="irb-row-val">${escStr(String(v))}</span></div>`
