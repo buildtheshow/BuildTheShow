@@ -70,13 +70,20 @@ function buildCastingCardBack(app, opts = {}) {
   }
 
   let sectionIndex = 0;
+  function sectionLabelHtml(label) {
+    const chunks = String(label || '').trim().split(/\s+/).filter(Boolean);
+    if (chunks.length < 2) return escStr(label);
+    const splitAt = Math.max(1, chunks.length - 1);
+    const firstLine = chunks.slice(0, splitAt).join(' ');
+    const secondLine = chunks.slice(splitAt).join(' ');
+    return `<span class="irb-section-label-stack"><span>${escStr(firstLine)}</span><span>${escStr(secondLine)}</span></span>`;
+  }
+
   function section(label, rows) {
     const filtered = rows.filter(([, v]) => v && String(v).trim() && v !== '—');
     if (!filtered.length) return '';
     const sectionBg = sectionIndex++ % 2 === 0 ? '#fdfdfd' : '#e0e0e0';
-    const labelHtml = label === 'Skills & Experience'
-      ? '<span class="irb-section-label-stack"><span>Skills &amp;</span><span>Experience</span></span>'
-      : escStr(label);
+    const labelHtml = sectionLabelHtml(label);
     return `<div class="irb-section" style="border-left-color:${sectionBg};background:${sectionBg};">
       <div class="irb-section-label">${labelHtml}</div>
       <div class="irb-section-rows">
