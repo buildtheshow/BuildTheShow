@@ -250,9 +250,9 @@
         <div class="inroom-main${usesGeneralInRoomLayout ? ' inroom-main-flat' : ''}">
         ${generalOpen}
         <div class="inroom-card-stage">
-          <div class="inroom-flip${inRoomFlipOpen ? ' flipped' : ''}" id="inroom-flip-card" onclick="toggleInRoomFlip()">
+          <div class="inroom-flip${inRoomFlipOpen ? ' flipped' : ''}" id="inroom-flip-card">
             <div class="inroom-flip-inner">
-              <div class="inroom-face front">
+              <div class="inroom-face front" onclick="toggleInRoomFlip()">
                 <div class="inroom-front-card-wrap">${cardFrontHtml}</div>
               </div>
               <div class="inroom-face back" onclick="handleInRoomBackClick(event)">
