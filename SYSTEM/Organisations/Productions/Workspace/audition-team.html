@@ -14631,6 +14631,7 @@
           <div class="page-subtitle">Your identity for this production, with the things people actually need to find fast.</div>
         </div>
       </div>
+      <div id="team-access-profile-msg" class="team-profile-help" style="font-size:0.8rem;min-height:1.2em;margin-bottom:0.5rem;"></div>
 
       <div class="ov-card" style="margin-bottom:1.35rem;padding:1.4rem;background:linear-gradient(180deg, var(--team-accent-light) 0%, rgba(255,255,255,0.98) 100%);border-color:var(--team-accent-base);">
         <div style="display:grid;grid-template-columns:minmax(220px,280px) minmax(0,1fr);gap:1.5rem;align-items:start;">
@@ -14682,9 +14683,7 @@
         <div class="ov-card team-profile-bio-card">
           <label class="team-profile-bio-label" style="display:block;font-weight:800;font-size:0.82rem;margin-bottom:0.35rem;">About You</label>
           <textarea class="form-textarea team-profile-bio-textarea" id="team-access-bio" placeholder="Short bio for programs, websites, or marketing..." oninput="scheduleTeamAccessProfileAutosave()">${esc(memberBio)}</textarea>
-          <div class="team-profile-bio-actions">
-            <div id="team-access-profile-msg" class="team-profile-help" style="font-size:0.8rem;min-height:1.2em;"></div>
-          </div>
+          <div class="team-profile-bio-actions"></div>
         </div>
       </div>
       </div>`;
@@ -14722,10 +14721,12 @@
   async function saveTeamAccessProfile(showMessage = true, options = {}) {
     if (!teamAccessMember) return;
     const draft = getTeamAccessProfileDraft();
+    const name = draft.name;
     const email = draft.email;
     const phone = draft.phone;
     const bio = draft.bio;
     const payloadKey = JSON.stringify({
+      name,
       email,
       phone,
       bio,
@@ -14734,7 +14735,7 @@
       headshot_path: draft.headshot_path,
     });
     if (options.quiet && payloadKey === teamAccessProfileLastSavedPayload) {
-      if (showMessage) setTeamAccessProfileMessage('Saved', 'success');
+      if (showMessage) showSaveStatus('saved');
       return;
     }
     if (!email) {
@@ -14754,6 +14755,7 @@
     const { data, error } = await sb.rpc('team_member_update_profile_for_session', {
       p_production_id: prodId,
       p_session_token: teamAccessSessionToken,
+      p_name: name || null,
       p_note_color: draft.note_color || '#572e88',
       p_email: email,
       p_phone: phone || null,
@@ -14762,14 +14764,15 @@
       p_headshot_path: draft.headshot_path || null,
     });
     if (error || !data?.length) {
-      if (token === teamAccessProfileSaveToken) setTeamAccessProfileMessage(error?.message || 'Could not save profile.', 'error');
+      console.error('[BTS] team profile save failed', error);
+      if (token === teamAccessProfileSaveToken) setTeamAccessProfileMessage(error?.message || 'Could not save profile. Check browser console.', 'error');
       return;
     }
     teamAccessMember = {
       ...teamAccessMember,
       ...data[0],
       note_color: draft.note_color || data[0].note_color || teamAccessMember.note_color,
-      name: draft.name || data[0].name || teamAccessMember.name,
+      name: name || data[0].name || teamAccessMember.name,
     };
     teamAccessEmail = teamAccessMember.email || email;
     teamAccessProfileLastSavedPayload = payloadKey;
@@ -14780,7 +14783,7 @@
       syncTeamAccessProfilePreview();
     }
     if (token === teamAccessProfileSaveToken && showMessage) {
-      setTeamAccessProfileMessage('Saved', 'success');
+      showSaveStatus('saved');
     }
   }
 
@@ -18685,7 +18688,7 @@ If you have any questions, don't hesitate to reach out.
   function scheduleTeamAccessProfileAutosave(delay = 320) {
     if (!teamAccessMember) return;
     clearTimeout(teamAccessProfileSaveTimer);
-    setTeamAccessProfileMessage('Saving...', 'muted');
+    showSaveStatus('saving');
     syncTeamAccessProfilePreview();
     teamAccessProfileSaveTimer = setTimeout(() => saveTeamAccessProfile(false, { quiet: true, rerender: false }), delay);
   }

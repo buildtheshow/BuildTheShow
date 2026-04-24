@@ -192,6 +192,7 @@ ALTER TABLE production_team_members
 
 DROP FUNCTION IF EXISTS team_member_update_profile_for_session(uuid,text,text,text,text,text);
 DROP FUNCTION IF EXISTS team_member_update_profile_for_session(uuid,text,text,text,text,text,text,text);
+DROP FUNCTION IF EXISTS team_member_update_profile_for_session(uuid,text,text,text,text,text,text,text,text);
 DROP FUNCTION IF EXISTS team_note_add(uuid,text,text,uuid,uuid,uuid,text,text,text,integer);
 DROP FUNCTION IF EXISTS team_note_update(uuid,text,text,uuid,text);
 DROP FUNCTION IF EXISTS team_note_delete(uuid,text,text,uuid);
@@ -447,6 +448,7 @@ CREATE OR REPLACE FUNCTION team_member_update_profile_for_session(
   p_production_id uuid,
   p_session_token text,
   p_note_color text,
+  p_name text DEFAULT NULL,
   p_email text DEFAULT NULL,
   p_phone text DEFAULT NULL,
   p_bio text DEFAULT NULL,
@@ -503,7 +505,8 @@ BEGIN
   END IF;
 
   UPDATE production_team_members
-  SET note_color = COALESCE(NULLIF(p_note_color, ''), note_color),
+  SET name = COALESCE(NULLIF(trim(p_name), ''), name),
+      note_color = COALESCE(NULLIF(p_note_color, ''), note_color),
       email = lower(trim(p_email)),
       phone = NULLIF(trim(COALESCE(p_phone, '')), ''),
       bio = p_bio,
