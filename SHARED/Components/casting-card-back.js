@@ -227,19 +227,9 @@ function buildCastingCardBack(app, opts = {}) {
   }
 
   function renderCharacterList(entries) {
-    const decisionLabel = { yes: 'Yes', maybe: 'Maybe', no: 'No' };
-    const stateLabel    = { liked: 'Considered', chosen: 'Cast', applied: 'Applied' };
-    const decisionColour = { yes: '#2f7a4a', maybe: '#c89118', no: '#9a4a4a' };
-    const stateColour    = { liked: '#572e88', chosen: '#b07a00', applied: '#7a7490' };
-    const rows = (entries || []).map(({ charName, roleType, state, decision, authorName, authorRole, authorColor }) => {
-      const lbl = decisionLabel[decision] || stateLabel[state] || state;
-      const col = decisionColour[decision] || stateColour[state] || '#572e88';
-      const author = [authorName, authorRole].filter(Boolean).join(' · ');
-      return `<div class="irb-inroom-chars-row">
-        <span class="irb-inroom-chars-name">${escStr(charName)}${roleType === 'Group' ? ' <span style="opacity:0.65;font-size:0.85em;">(group)</span>' : ''}${author ? `<span style="display:block;font-size:0.75em;font-weight:700;color:${escStr(authorColor || '#7a7490')};">${escStr(author)}</span>` : ''}</span>
-        <span class="irb-inroom-chars-state" style="color:${escStr(authorColor || col)};">${escStr(lbl)}</span>
-      </div>`;
-    });
+    const rows = (entries || []).map(({ charName, authorColor }) =>
+      `<div class="irb-notes" style="${authorColor ? `color:${escStr(authorColor)};` : ''}">${escStr(charName)}</div>`
+    );
     return `<div class="irb-session-block">
       <div class="irb-session-label">Characters</div>
       ${rows.length ? rows.join('') : '<div class="irb-notes irb-score-empty">—</div>'}
