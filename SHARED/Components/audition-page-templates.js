@@ -209,12 +209,8 @@
       frontHtml = '',
       backHtml = '',
       frontClick = '',
-      backClick = '',
-      backHotspotClick = ''
+      backClick = ''
     } = config;
-    const backHotspot = backHotspotClick
-      ? `<button type="button" class="inroom-back-flip-hotspot" tabindex="-1" aria-hidden="true" onclick="event.stopPropagation();${backHotspotClick}" style="position:absolute;left:0;right:0;bottom:0;height:80%;z-index:5;border:0;background:transparent;padding:0;margin:0;opacity:0;cursor:pointer;"></button>`
-      : '';
 
     return `<div class="${shellClass}${flipped ? ' flipped' : ''}"${id ? ` id="${esc(id)}"` : ''} style="width:100%;margin:0 auto;perspective:1400px;overflow:visible;">
       <div class="inroom-flip-inner" style="width:100%;max-width:100%;height:100%;aspect-ratio:4 / 5;min-height:0;">
@@ -225,7 +221,6 @@
           <div class="inroom-back-card-surface" style="width:100%;height:100%;display:flex;align-items:flex-start;justify-content:center;padding:${STANDARD_CARD_WRAP_PADDING};box-sizing:border-box;overflow:visible;">
             ${backHtml}
           </div>
-          ${backHotspot}
         </div>
       </div>
     </div>`;
@@ -293,8 +288,7 @@
             frontHtml: cardFrontHtml,
             backHtml: cardBackHtml,
             frontClick: 'toggleInRoomFlip()',
-            backClick: buildCastingCardBackClickHandler('toggleInRoomFlip'),
-            backHotspotClick: 'toggleInRoomFlip()'
+            backClick: buildCastingCardBackClickHandler('toggleInRoomFlip')
           })}
         </div>
         <div class="inroom-right">${scorePanelHtml}</div>
