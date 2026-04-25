@@ -30107,7 +30107,16 @@ If you have any questions, don't hesitate to reach out.
       key,
       currentAuthorOnly: true,
     });
-    return observation?.value || ca[inRoomScoreKey(sessionId, key)] || ca[INROOM_SCORE_CA_KEYS[key]] || '';
+    const direct = observation?.value || ca[inRoomScoreKey(sessionId, key)] || ca[INROOM_SCORE_CA_KEYS[key]] || '';
+    if (direct) return direct;
+    // Prefix-scan: find session-keyed value even if current session context isn't set yet
+    const baseKey = INROOM_SCORE_CA_KEYS[key] || '';
+    if (baseKey) {
+      const prefix = baseKey + ' - ';
+      const match = Object.entries(ca).find(([k, v]) => v && k.startsWith(prefix));
+      if (match) return match[1];
+    }
+    return '';
   }
 
   function inRoomNotesKey(sessionId) {
@@ -30125,7 +30134,12 @@ If you have any questions, don't hesitate to reach out.
     });
     if (observation?.body) return observation.body;
     if (sessionId) return ca[inRoomNotesKey(sessionId)] || '';
-    return ca[INROOM_SCORE_CA_KEYS.notes] || '';
+    const base = ca[INROOM_SCORE_CA_KEYS.notes];
+    if (base) return base;
+    // Prefix-scan: find session-keyed notes even if sessionId isn't available yet
+    const prefix = 'In The Room - Notes - ';
+    const match = Object.entries(ca).find(([k, v]) => v && k.startsWith(prefix));
+    return match ? match[1] : '';
   }
 
   async function loadAuditionAuthoredNotes() {
@@ -31205,6 +31219,14 @@ If you have any questions, don't hesitate to reach out.
     if (app && surface) surface.innerHTML = buildInRoomBackHtml(app);
   }
 
+  function syncInRoomCardBack() {
+    if (!inRoomFlipOpen) return;
+    const app = allApplicants.find(a => a.id === inRoomApplicantId);
+    if (!app) return;
+    const surface = document.querySelector(`#${inRoomContainerId} .inroom-back-card-surface`);
+    if (surface) surface.innerHTML = buildInRoomBackHtml(app);
+  }
+
   function toggleInRoomFlip() {
     inRoomFlipOpen = !inRoomFlipOpen;
     const el = document.getElementById('inroom-flip-card');
@@ -31309,7 +31331,11 @@ If you have any questions, don't hesitate to reach out.
     } catch (obsError) {
       console.warn('[BTS] observation save failed; score is still saved in custom_answers', obsError);
     }
-    if (token === inRoomScoreSaveToken) showSaveStatus('saved');
+    if (token === inRoomScoreSaveToken) {
+      showSaveStatus('saved');
+      syncInRoomCardBack();
+      refreshPerfLightboxContents();
+    }
   }
 
   function scheduleInRoomNotesSave(appId) {
@@ -31339,6 +31365,8 @@ If you have any questions, don't hesitate to reach out.
         if (value.trim()) await saveAuditionObservation(appId, { sessionId: session?.id || null, area: 'in_room', type: 'quick_note', key: 'notes', body: value.trim() });
         else if (existingObservation?.id) await deleteAuditionObservation(existingObservation.id);
         showSaveStatus('saved');
+        syncInRoomCardBack();
+        refreshPerfLightboxContents();
       } catch (error) {
         console.error('[BTS] in-room notes save failed', error);
         showToast('Could not save in the room notes.', true);
