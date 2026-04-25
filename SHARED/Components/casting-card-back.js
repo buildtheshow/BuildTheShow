@@ -37,7 +37,6 @@ function buildCastingCardBack(app, opts = {}) {
     'gap:0',
     'width:100%',
     'height:100%',
-    'min-height:375px',
     'padding:0',
     'box-sizing:border-box',
     'overflow:hidden',
