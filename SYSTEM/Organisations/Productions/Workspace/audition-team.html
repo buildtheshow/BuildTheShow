@@ -14966,8 +14966,9 @@
     loadAuditionConfig();
     loadSlots();
     loadApplicants();
-    Promise.all([loadAuditionAuthoredNotes(), loadAuditionObservations()]).then(() => {
-      // Re-render the in-room card once observations have arrived — prevents dashes on refresh
+    // Load sessions early so collectScoreObservations can build session-keyed lookups on first render
+    Promise.all([loadAudSessions(), loadAuditionAuthoredNotes(), loadAuditionObservations()]).then(() => {
+      // Re-render the in-room card once all session + observation data has arrived
       if (!inRoomApplicantId) return;
       try {
         if (document.getElementById('adtab-inroom')?.style.display !== 'none') renderInRoomPage(inRoomApplicantId);
@@ -30497,6 +30498,16 @@ If you have any questions, don't hesitate to reach out.
         return note ? { label: s.name || sessionTypeLabel(s.type || 'audition'), sessionType: s.type || 'audition', note } : null;
       })
       .filter(Boolean);
+    // Prefix-scan: if sessions haven't loaded yet, find any session-keyed notes in custom_answers
+    if (!(audSessions || []).length) {
+      const prefix = 'In The Room - Notes - ';
+      Object.entries(ca)
+        .filter(([k, v]) => v && k.startsWith(prefix))
+        .forEach(([, v]) => {
+          const trimmed = String(v || '').trim();
+          if (trimmed) notes.push({ label: 'Room Notes', sessionType: 'audition', note: trimmed });
+        });
+    }
     authoredNotesFor(app.id, { area: 'in_room' }).forEach(note => {
       const session = (audSessions || []).find(s => s.id === note.session_id);
       notes.push({
@@ -30597,6 +30608,12 @@ If you have any questions, don't hesitate to reach out.
           const sessionKey = session?.id ? inRoomScoreKey(session.id, key) : null;
           value = (sessionKey && ca[sessionKey]) || ca[baseKey];
           if (value) { sessionType = session?.type || 'audition'; break; }
+        }
+        // Prefix-scan: find any session-keyed entry even if audSessions hasn't loaded yet
+        if (!value) {
+          const prefix = baseKey + ' - ';
+          const match = Object.entries(ca).find(([k, v]) => v && k.startsWith(prefix));
+          if (match) { value = match[1]; }
         }
         if (!value) return;
         results.push({ sessionType, sessionLabel: '', label: INROOM_SCORE_LABELS[key] || key, value, authorName: '', authorRole: '', authorColor: '' });

@@ -15005,7 +15005,7 @@
     loadAuditionConfig();
     loadSlots();
     loadApplicants();
-    Promise.all([loadAuditionAuthoredNotes(), loadAuditionObservations()]).then(() => {
+    Promise.all([loadAudSessions(), loadAuditionAuthoredNotes(), loadAuditionObservations()]).then(() => {
       if (!inRoomApplicantId) return;
       try {
         if (document.getElementById('adtab-inroom')?.style.display !== 'none') renderInRoomPage(inRoomApplicantId);
@@ -30251,6 +30251,16 @@ If you have any questions, don't hesitate to reach out.
         return note ? { label: s.name || sessionTypeLabel(s.type || 'audition'), sessionType: s.type || 'audition', note } : null;
       })
       .filter(Boolean);
+    // Prefix-scan: if sessions haven't loaded yet, find any session-keyed notes in custom_answers
+    if (!(audSessions || []).length) {
+      const prefix = 'In The Room - Notes - ';
+      Object.entries(ca)
+        .filter(([k, v]) => v && k.startsWith(prefix))
+        .forEach(([, v]) => {
+          const trimmed = String(v || '').trim();
+          if (trimmed) notes.push({ label: 'Room Notes', sessionType: 'audition', note: trimmed });
+        });
+    }
     authoredNotesFor(app.id, { area: 'in_room' }).forEach(note => {
       const session = (audSessions || []).find(s => s.id === note.session_id);
       notes.push({
@@ -30335,17 +30345,24 @@ If you have any questions, don't hesitate to reach out.
       })
       .filter(Boolean);
     if (fromObs.length) return fromObs;
-    // Fallback: scores may be stored in custom_answers (legacy path)
+    // Fallback: scores may be stored in custom_answers (session-keyed or legacy base key)
     if (typeof INROOM_SCORE_CA_KEYS === 'undefined' || typeof INROOM_SCORE_LABELS === 'undefined') return [];
     const ca = applicantCustomAnswers(app);
-    return Object.entries(INROOM_SCORE_CA_KEYS)
+    const results = [];
+    Object.entries(INROOM_SCORE_CA_KEYS)
       .filter(([key]) => key !== 'notes')
-      .map(([key, caKey]) => {
-        const value = ca[caKey];
-        if (!value) return null;
-        return { sessionType: 'audition', sessionLabel: '', label: INROOM_SCORE_LABELS[key] || key, value, authorName: '', authorRole: '', authorColor: '' };
-      })
-      .filter(Boolean);
+      .forEach(([key, baseKey]) => {
+        let value = ca[baseKey] || null;
+        // Prefix-scan: find any session-keyed entry even if audSessions hasn't loaded yet
+        if (!value) {
+          const prefix = baseKey + ' - ';
+          const match = Object.entries(ca).find(([k, v]) => v && k.startsWith(prefix));
+          if (match) { value = match[1]; }
+        }
+        if (!value) return;
+        results.push({ sessionType: 'audition', sessionLabel: '', label: INROOM_SCORE_LABELS[key] || key, value, authorName: '', authorRole: '', authorColor: '' });
+      });
+    return results;
   }
 
   function inRoomRoleChoiceKey(sessionId, charId) {
