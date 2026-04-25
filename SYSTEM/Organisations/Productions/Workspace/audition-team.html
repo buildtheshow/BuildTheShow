@@ -30533,17 +30533,27 @@ If you have any questions, don't hesitate to reach out.
       })
       .filter(Boolean);
     if (fromObs.length) return fromObs;
-    // Fallback: scores may be stored in custom_answers (legacy path)
+    // Fallback: scores stored in custom_answers — check session-keyed AND legacy base keys
     if (typeof INROOM_SCORE_CA_KEYS === 'undefined' || typeof INROOM_SCORE_LABELS === 'undefined') return [];
     const ca = applicantCustomAnswers(app);
-    return Object.entries(INROOM_SCORE_CA_KEYS)
+    const lookupSessions = (audSessions?.length)
+      ? audSessions.filter(s => ['audition', 'dance_call', 'callback'].includes(s.type))
+      : [null];
+    const results = [];
+    Object.entries(INROOM_SCORE_CA_KEYS)
       .filter(([key]) => key !== 'notes')
-      .map(([key, caKey]) => {
-        const value = ca[caKey];
-        if (!value) return null;
-        return { sessionType: 'audition', sessionLabel: '', label: INROOM_SCORE_LABELS[key] || key, value, authorName: '', authorRole: '', authorColor: '' };
-      })
-      .filter(Boolean);
+      .forEach(([key, baseKey]) => {
+        let value = null;
+        let sessionType = 'audition';
+        for (const session of lookupSessions) {
+          const sessionKey = session?.id ? inRoomScoreKey(session.id, key) : null;
+          value = (sessionKey && ca[sessionKey]) || ca[baseKey];
+          if (value) { sessionType = session?.type || 'audition'; break; }
+        }
+        if (!value) return;
+        results.push({ sessionType, sessionLabel: '', label: INROOM_SCORE_LABELS[key] || key, value, authorName: '', authorRole: '', authorColor: '' });
+      });
+    return results;
   }
 
   function inRoomRoleChoiceKey(sessionId, charId) {
@@ -31216,25 +31226,25 @@ If you have any questions, don't hesitate to reach out.
     try {
       const error = await saveInRoomCustomAnswers(app, nextAnswers);
       if (error) throw error;
-      const nextValue = currentAnswers[answerKey] === value ? null : value;
-      const existingObservation = findAuditionObservation(appId, {
-        sessionId,
-        area: 'in_room',
-        type: 'score',
-        key,
-        currentAuthorOnly: true,
-      });
-      if (nextValue) await saveAuditionObservation(appId, { sessionId, area: 'in_room', type: 'score', key, value: nextValue });
-      else if (existingObservation?.id) await deleteAuditionObservation(existingObservation.id);
-      if (token === inRoomScoreSaveToken) {
-        showSaveStatus('saved');
-      }
-    } catch (error) {
+    } catch (caError) {
       app.custom_answers = currentAnswers;
       applyInRoomScoreUI(buttonEl, currentAnswers[answerKey], !currentAnswers[answerKey]);
-      console.error('[BTS] in-room score save failed', error);
+      console.error('[BTS] in-room score save failed', caError);
       showToast('Could not save in the room score.', true);
+      return;
     }
+    // Observation save is best-effort — custom_answers already persisted above
+    const nextValue = currentAnswers[answerKey] === value ? null : value;
+    const existingObservation = findAuditionObservation(appId, {
+      sessionId, area: 'in_room', type: 'score', key, currentAuthorOnly: true,
+    });
+    try {
+      if (nextValue) await saveAuditionObservation(appId, { sessionId, area: 'in_room', type: 'score', key, value: nextValue });
+      else if (existingObservation?.id) await deleteAuditionObservation(existingObservation.id);
+    } catch (obsError) {
+      console.warn('[BTS] observation save failed; score is still saved in custom_answers', obsError);
+    }
+    if (token === inRoomScoreSaveToken) showSaveStatus('saved');
   }
 
   function scheduleInRoomNotesSave(appId) {
