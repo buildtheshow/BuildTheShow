@@ -848,7 +848,9 @@
       <div class="notes-modal-title">Internal Notes</div>
       <div class="notes-modal-sub" id="notes-modal-sub">Notes are only visible to your organisation.</div>
       <input type="hidden" id="notes-modal-app-id" />
-      <textarea class="notes-modal-textarea" id="notes-modal-textarea" placeholder="e.g. Great callback, strong belt. Consider for lead…"></textarea>
+      <textarea class="notes-modal-textarea" id="notes-modal-textarea"
+        data-autosave-table="audition_applications" data-autosave-field="org_notes"
+        placeholder="e.g. Great callback, strong belt. Consider for lead…"></textarea>
       <div class="notes-modal-actions">
         <button class="btn--ghost-sm" onclick="closeNotesModal()" style="flex:1;justify-content:center;">Cancel</button>
         <button class="btn--primary-sm" onclick="saveNotesFromModal()" style="flex:2;justify-content:center;">Save Notes</button>
@@ -1107,15 +1109,18 @@
       const rerenderPanel = options.rerenderPanel !== false;
       const rerenderBoard = options.rerenderBoard !== false;
 
+      if (window.AutoSave) window.AutoSave.showSaving();
       const { error } = await sb.from('audition_applications').update(patch).eq('id', appId);
       if (error) {
         showToast(errorMessage, true);
+        if (window.AutoSave) window.AutoSave.showError();
         return error;
       }
 
       const app = allApplications.find(item => item.id === appId);
       if (app) Object.assign(app, patch);
 
+      if (window.AutoSave) window.AutoSave.showSaved();
       if (successMessage) showToast(successMessage);
       if (rerenderBoard) render();
       if (rerenderPanel && openPanelAppId === appId) openProfilePanel(appId);
@@ -1810,6 +1815,7 @@
           <div style="margin-top:1rem;">
             <div class="profile-section-title" style="color:#efab45;border-bottom-color:rgba(239,171,69,0.2);">Callback Notes</div>
             <textarea class="profile-notes-area" id="panel-cb-notes-area"
+              data-autosave-table="audition_applications" data-autosave-id="${esc(app.id)}" data-autosave-field="callback_notes"
               placeholder="Chemistry, direction notes, pairings…"
               style="border-color:rgba(239,171,69,0.2);">${esc(app.callback_notes || '')}</textarea>
             <button class="profile-notes-save" onclick="saveCbNotesFromPanel()" style="background:#c08a1c;">Save Callback Notes</button>
@@ -1836,7 +1842,9 @@
 
         <div style="margin-top:1.25rem;">
           <div class="profile-section-title">Internal Notes</div>
-          <textarea class="profile-notes-area" id="panel-notes-area" placeholder="Only visible to your team…">${esc(app.notes || '')}</textarea>
+          <textarea class="profile-notes-area" id="panel-notes-area"
+            data-autosave-table="audition_applications" data-autosave-id="${esc(app.id)}" data-autosave-field="org_notes"
+            placeholder="Only visible to your team…">${esc(app.notes || '')}</textarea>
           <button class="profile-notes-save" onclick="saveNotesFromPanel()">Save Notes</button>
         </div>
 
@@ -2021,6 +2029,7 @@
       const app = allApplications.find(a => a.id === appId);
       if (!app) return;
       document.getElementById('notes-modal-app-id').value = appId;
+      document.getElementById('notes-modal-textarea').dataset.autosaveId = appId;
       document.getElementById('notes-modal-textarea').value = app.notes || '';
       document.getElementById('notes-modal-sub').textContent = `Notes for ${app.applicant_name || 'Performer'} - only visible to your team.`;
       document.getElementById('notes-modal').classList.add('open');
@@ -2563,6 +2572,7 @@
 
   <script defer src="../../../../SHARED/Components/legal-footer.js"></script>
   <script defer src="/SHARED/Components/text-fit.js"></script>
+  <script src="/SHARED/Components/auto-save.js?v=1"></script>
 </body>
 </html>
 
