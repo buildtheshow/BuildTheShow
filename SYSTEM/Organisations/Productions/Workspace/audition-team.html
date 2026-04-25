@@ -14966,7 +14966,16 @@
     loadAuditionConfig();
     loadSlots();
     loadApplicants();
-    Promise.all([loadAuditionAuthoredNotes(), loadAuditionObservations()]);
+    Promise.all([loadAuditionAuthoredNotes(), loadAuditionObservations()]).then(() => {
+      // Re-render the in-room card once observations have arrived — prevents dashes on refresh
+      if (!inRoomApplicantId) return;
+      try {
+        if (document.getElementById('adtab-inroom')?.style.display !== 'none') renderInRoomPage(inRoomApplicantId);
+      } catch {}
+      try {
+        if (teamAccessMode && activeAuditionNavTool === 'inroom') renderInRoomPage(inRoomApplicantId, 'aud-session-inroom-content', 'openAuditionSessionInRoom');
+      } catch {}
+    });
     loadCharacters();
     queueWorkspaceWarmup([
       loadEvents,
@@ -30127,6 +30136,14 @@ If you have any questions, don't hesitate to reach out.
           p_production_id: prodId,
           p_session_token: teamAccessSessionToken,
         }));
+        // If RPC doesn't exist yet, fall back to direct query (RLS-limited but better than nothing)
+        if (error) {
+          console.warn('[BTS] team_authored_notes_for_production RPC unavailable, falling back.', error);
+          ({ data, error } = await sb.from('production_audition_notes')
+            .select('*')
+            .eq('production_id', prodId)
+            .order('created_at', { ascending: true }));
+        }
       } else {
         ({ data, error } = await sb.from('production_audition_notes')
           .select('*')
@@ -30151,6 +30168,14 @@ If you have any questions, don't hesitate to reach out.
           p_production_id: prodId,
           p_session_token: teamAccessSessionToken,
         }));
+        // If RPC doesn't exist yet, fall back to direct query (RLS-limited but better than nothing)
+        if (error) {
+          console.warn('[BTS] team_observations_for_production RPC unavailable, falling back.', error);
+          ({ data, error } = await sb.from('production_audition_observations')
+            .select('*')
+            .eq('production_id', prodId)
+            .order('created_at', { ascending: true }));
+        }
       } else {
         ({ data, error } = await sb.from('production_audition_observations')
           .select('*')
