@@ -14133,7 +14133,7 @@
 <script src="../../../../SHARED/Components/casting-card-back.js?v=20260424-audition-time-rows"></script>
 <script src="../../../../SHARED/Components/audition-status-strip.js"></script>
 <script src="../../../../SHARED/Components/ai-character-importer.js"></script>
-<script src="../../../../SHARED/Components/audition-page-templates.js?v=flip-scroll-fix-20260424"></script>
+<script src="../../../../SHARED/Components/audition-page-templates.js?v=inroom-fast-interactions-20260424"></script>
 <!-- VenuePicker uses OpenStreetMap/Nominatim - no API key needed -->
 <script>
   /* SQL needed:
@@ -30604,21 +30604,46 @@ If you have any questions, don't hesitate to reach out.
     }).filter(Boolean));
     const list = getInRoomRoleList(app, session, filterType, sortMode);
     return list.map(char => {
-      const requested = requestedSet.has(char.id);
-      const choice = applicantInRoomRoleChoice(app, sessionId, char.id);
-      const callbackAssigned = session?.type === 'callback' && isCallbackRoleForApplicant(app.id, char.id);
-      const liked = choice === 'liked' || choice === 'chosen' || callbackAssigned;
-      const stateClass = requested && liked ? 'both' : (liked ? 'liked' : (requested ? 'requested' : ''));
+      const stateClass = getInRoomRoleChipStateClass(app, session, sessionId, char.id, requestedSet);
       return window.BTSAuditionTemplates?.renderTemplateById?.('auditions.sticky-note', {
         esc,
         appId: app.id,
         charId: char.id,
         name: char.name || 'Unnamed',
         stateClass,
-      }) || `<button type="button" class="inroom-role-chip ${stateClass}" onclick="toggleInRoomRole('${app.id}','${char.id}')">
+      }) || `<button type="button" class="inroom-role-chip ${stateClass}" data-app-id="${esc(app.id)}" data-char-id="${esc(char.id)}" onclick="toggleInRoomRole(this,'${app.id}','${char.id}')">
         <div class="inroom-role-chip-title">${esc(char.name || 'Unnamed')}</div>
       </button>`;
     }).join('');
+  }
+
+  function getInRoomRoleChipStateClass(app, session, sessionId, charId, requestedSet = null) {
+    const requestedRoles = requestedSet || new Set(applicantRequestedRoleList(app).map(role => {
+      const char = findCharacterForRequestedRole(role);
+      return char?.id || '';
+    }).filter(Boolean));
+    const requested = requestedRoles.has(charId);
+    const choice = applicantInRoomRoleChoice(app, sessionId, charId);
+    const callbackAssigned = session?.type === 'callback' && isCallbackRoleForApplicant(app.id, charId);
+    const liked = choice === 'liked' || choice === 'chosen' || callbackAssigned;
+    return requested && liked ? 'both' : (liked ? 'liked' : (requested ? 'requested' : ''));
+  }
+
+  function updateInRoomRoleChipUI(chipEl, app, sessionId, charId) {
+    const chip = chipEl || Array.from(document.querySelectorAll('.inroom-role-chip'))
+      .find(el => el.dataset.charId === String(charId));
+    if (!chip) return;
+    const session = getCurrentInRoomSession();
+    const stateClass = getInRoomRoleChipStateClass(app, session, sessionId, charId);
+    chip.classList.remove('requested', 'liked', 'chosen', 'both');
+    if (stateClass) chip.classList.add(stateClass);
+  }
+
+  function updateInRoomConsideredPanel(app) {
+    const currentSession = getCurrentInRoomSession();
+    if (!currentSession || currentSession.type === 'audition' || currentSession.type === 'callback') return;
+    const list = document.querySelector(`#${inRoomContainerId} .inroom-considered-list`);
+    if (list) list.innerHTML = renderInRoomConsideredFor(app);
   }
 
   function filterInRoomRoleChips() {
@@ -30628,16 +30653,15 @@ If you have any questions, don't hesitate to reach out.
     const sortMode   = document.getElementById('inroom-role-sort')?.value  || 'type';
     const grid = document.getElementById('inroom-roles-grid');
     if (!grid) return;
-    grid.querySelectorAll('.inroom-role-chip-title').forEach(l => { l.style.opacity = '0'; l.style.fontSize = '0'; });
     grid.innerHTML = renderInRoomRoleChips(app, filterType, sortMode);
-    requestAnimationFrame(() => requestAnimationFrame(fitInRoomRoleChipTitles));
+    requestAnimationFrame(() => requestAnimationFrame(() => fitInRoomRoleChipTitles(grid)));
   }
 
 
   const _chipSizeCache = new Map();
 
-  function fitInRoomRoleChipTitles() {
-    const labels = Array.from(document.querySelectorAll('.inroom-role-chip-title'));
+  function fitInRoomRoleChipTitles(scope = document) {
+    const labels = Array.from((scope || document).querySelectorAll('.inroom-role-chip-title'));
     labels.forEach(label => {
       const parent = label.closest('.inroom-role-chip');
       if (!parent || !parent.clientHeight) return;
@@ -30684,7 +30708,7 @@ If you have any questions, don't hesitate to reach out.
         _chipSizeCache.set(cacheKey, size);
       }
     });
-    requestAnimationFrame(() => labels.forEach(l => { l.style.opacity = '1'; }));
+    labels.forEach(l => { l.style.opacity = '1'; });
   }
 
   function renderInRoomConsideredFor(app) {
@@ -30723,7 +30747,7 @@ If you have any questions, don't hesitate to reach out.
         <div class="inroom-score-options">
           ${options.map(option => {
             const safeOption = String(option).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-            return `<button type="button" class="inroom-score-btn${current === option ? ' active' : ''}" onclick="setInRoomScore('${app.id}','${key}','${safeOption}')">${esc(option)}</button>`;
+            return `<button type="button" class="inroom-score-btn${current === option ? ' active' : ''}" data-score-value="${esc(option)}" onclick="setInRoomScore(this,'${app.id}','${key}','${safeOption}')">${esc(option)}</button>`;
           }).join('')}
         </div>
       </div>`;
@@ -30892,15 +30916,15 @@ If you have any questions, don't hesitate to reach out.
       roleChipsHtml: renderInRoomRoleChips(app)
     }) + inRoomThemeClose;
     requestAnimationFrame(() => requestAnimationFrame(() => syncInRoomRightPanelHeight(el)));
-    requestAnimationFrame(() => requestAnimationFrame(fitInRoomRoleChipTitles));
+    requestAnimationFrame(() => requestAnimationFrame(() => fitInRoomRoleChipTitles(el)));
     // Re-fit on grid resize (window resize, panel expand/collapse, etc.)
     const rolesGrid = el.querySelector('.inroom-roles-grid');
     if (rolesGrid && !rolesGrid._chipResizeObserver) {
       rolesGrid._chipResizeObserver = new ResizeObserver(() => {
         // Clear size cache and reset labels so sizes are fully recalculated at the new chip width
         _chipSizeCache.clear();
-        el.querySelectorAll('.inroom-role-chip-title').forEach(l => { l.style.opacity = '0'; l.style.fontSize = '0'; });
-        requestAnimationFrame(() => requestAnimationFrame(fitInRoomRoleChipTitles));
+        el.querySelectorAll('.inroom-role-chip-title').forEach(l => { l.style.fontSize = '0'; });
+        requestAnimationFrame(() => requestAnimationFrame(() => fitInRoomRoleChipTitles(rolesGrid)));
       });
       rolesGrid._chipResizeObserver.observe(rolesGrid);
     }
@@ -30954,7 +30978,21 @@ If you have any questions, don't hesitate to reach out.
     }
   }
 
-  async function setInRoomScore(appId, key, value) {
+  function applyInRoomScoreUI(buttonEl, value, isClearing = false) {
+    const wrap = buttonEl?.closest('.inroom-score-options');
+    if (!wrap) return;
+    wrap.querySelectorAll('.inroom-score-btn').forEach(btn => {
+      btn.classList.toggle('active', !isClearing && btn.dataset.scoreValue === value);
+    });
+  }
+
+  async function setInRoomScore(buttonEl, appId, key, value) {
+    if (typeof buttonEl === 'string') {
+      value = key;
+      key = appId;
+      appId = buttonEl;
+      buttonEl = null;
+    }
     const app = allApplicants.find(a => a.id === appId);
     if (!app) return;
     const currentAnswers = applicantCustomAnswers(app);
@@ -30962,14 +31000,15 @@ If you have any questions, don't hesitate to reach out.
     const answerKey = inRoomScoreKey(sessionId, key);
     if (!answerKey) return;
     const nextAnswers = { ...currentAnswers };
-    if (currentAnswers[answerKey] === value) {
+    const isClearing = currentAnswers[answerKey] === value;
+    if (isClearing) {
       delete nextAnswers[answerKey];
     } else {
       nextAnswers[answerKey] = value;
     }
     const token = ++inRoomScoreSaveToken;
     app.custom_answers = nextAnswers;
-    renderInRoomPage(appId, inRoomContainerId, inRoomOpenFn);
+    applyInRoomScoreUI(buttonEl, value, isClearing);
     showSaveStatus('saving');
     try {
       const error = await saveInRoomCustomAnswers(app, nextAnswers);
@@ -30989,7 +31028,7 @@ If you have any questions, don't hesitate to reach out.
       }
     } catch (error) {
       app.custom_answers = currentAnswers;
-      renderInRoomPage(appId);
+      applyInRoomScoreUI(buttonEl, currentAnswers[answerKey], !currentAnswers[answerKey]);
       console.error('[BTS] in-room score save failed', error);
       showToast('Could not save in the room score.', true);
     }
@@ -31151,7 +31190,12 @@ If you have any questions, don't hesitate to reach out.
     }
   }
 
-  async function toggleInRoomRole(appId, charId) {
+  async function toggleInRoomRole(chipEl, appId, charId) {
+    if (typeof chipEl === 'string') {
+      charId = appId;
+      appId = chipEl;
+      chipEl = null;
+    }
     const app = allApplicants.find(a => a.id === appId);
     if (!app) return;
     const sessionId = getCurrentInRoomSession()?.id || null;
@@ -31163,7 +31207,8 @@ If you have any questions, don't hesitate to reach out.
     else nextAnswers[key] = 'liked';
 
     app.custom_answers = nextAnswers;
-    renderInRoomPage(appId, inRoomContainerId, inRoomOpenFn);
+    updateInRoomRoleChipUI(chipEl, app, sessionId, charId);
+    updateInRoomConsideredPanel(app);
     showSaveStatus('saving');
     try {
       const error = await saveInRoomCustomAnswers(app, nextAnswers);
@@ -31183,7 +31228,8 @@ If you have any questions, don't hesitate to reach out.
     } catch (error) {
       console.error('[BTS] in-room role toggle failed', error);
       app.custom_answers = currentAnswers;
-      renderInRoomPage(appId, inRoomContainerId, inRoomOpenFn);
+      updateInRoomRoleChipUI(chipEl, app, sessionId, charId);
+      updateInRoomConsideredPanel(app);
       showToast('Could not update that role.', true);
     }
   }

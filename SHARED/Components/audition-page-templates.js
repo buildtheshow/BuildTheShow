@@ -76,7 +76,7 @@
       stateClass = ''
     } = config;
 
-    return `<button type="button" class="inroom-role-chip ${stateClass}" onclick="toggleInRoomRole('${esc(appId)}','${esc(charId)}')">
+    return `<button type="button" class="inroom-role-chip ${stateClass}" data-app-id="${esc(appId)}" data-char-id="${esc(charId)}" onclick="toggleInRoomRole(this,'${esc(appId)}','${esc(charId)}')">
         <div class="inroom-role-chip-title">${esc(name)}</div>
       </button>`;
   }
