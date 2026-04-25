@@ -30233,7 +30233,7 @@ If you have any questions, don't hesitate to reach out.
   }
 
   function collectScoreObservations(app) {
-    return listAuditionObservations(app.id, { area: 'in_room', type: 'score' })
+    const fromObs = listAuditionObservations(app.id, { area: 'in_room', type: 'score' })
       .map(observation => {
         if (!observation?.value) return null;
         const session = (audSessions || []).find(s => s.id === observation.session_id);
@@ -30244,6 +30244,18 @@ If you have any questions, don't hesitate to reach out.
           value: observation.value,
           ...observationAuthorFields(observation),
         };
+      })
+      .filter(Boolean);
+    if (fromObs.length) return fromObs;
+    // Fallback: scores may be stored in custom_answers (legacy path)
+    if (typeof INROOM_SCORE_CA_KEYS === 'undefined' || typeof INROOM_SCORE_LABELS === 'undefined') return [];
+    const ca = applicantCustomAnswers(app);
+    return Object.entries(INROOM_SCORE_CA_KEYS)
+      .filter(([key]) => key !== 'notes')
+      .map(([key, caKey]) => {
+        const value = ca[caKey];
+        if (!value) return null;
+        return { sessionType: 'audition', sessionLabel: '', label: INROOM_SCORE_LABELS[key] || key, value, authorName: '', authorRole: '', authorColor: '' };
       })
       .filter(Boolean);
   }

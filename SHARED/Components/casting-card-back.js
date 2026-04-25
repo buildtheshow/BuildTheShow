@@ -479,6 +479,7 @@ function buildCastingCardBack(app, opts = {}) {
 
   if (includeInRoomScores || includeRoomNotes) {
     if ((!scoreObservations || !scoreObservations.length) && includeInRoomScores
+      && !impressionCategories
       && typeof applicantInRoomScore === 'function'
       && typeof INROOM_SCORE_OPTIONS !== 'undefined'
       && typeof INROOM_SCORE_LABELS !== 'undefined') {
