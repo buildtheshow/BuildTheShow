@@ -30592,29 +30592,31 @@ If you have any questions, don't hesitate to reach out.
   }
 
   function collectScoreObservations(app) {
-    const fromObs = listAuditionObservations(app.id, { area: 'in_room', type: 'score' })
-      .map(observation => {
-        if (!observation?.value) return null;
-        const session = (audSessions || []).find(s => s.id === observation.session_id);
-        return {
-          sessionLabel: session?.name || sessionTypeLabel(session?.type || 'audition'),
-          sessionType: session?.type || 'audition',
-          label: (typeof INROOM_SCORE_LABELS !== 'undefined' && INROOM_SCORE_LABELS[observation.observation_key]) || observation.observation_key || 'Score',
-          value: observation.value,
-          ...observationAuthorFields(observation),
-        };
-      })
-      .filter(Boolean);
-    if (fromObs.length) return fromObs;
-    // Fallback: scores stored in custom_answers — check session-keyed AND legacy base keys
     if (typeof INROOM_SCORE_CA_KEYS === 'undefined' || typeof INROOM_SCORE_LABELS === 'undefined') return [];
+    const allScoreObs = listAuditionObservations(app.id, { area: 'in_room', type: 'score' });
+    // Build entries from all DB observations (supports multiple authors)
+    const results = allScoreObs.map(observation => {
+      if (!observation?.value) return null;
+      const session = (audSessions || []).find(s => s.id === observation.session_id);
+      return {
+        sessionLabel: session?.name || sessionTypeLabel(session?.type || 'audition'),
+        sessionType: session?.type || 'audition',
+        label: INROOM_SCORE_LABELS[observation.observation_key] || observation.observation_key || 'Score',
+        value: observation.value,
+        ...observationAuthorFields(observation),
+      };
+    }).filter(Boolean);
+    // Which keys does the current author already have covered in the DB?
+    const coveredKeys = new Set(
+      allScoreObs.filter(o => isCurrentObservationAuthor(o)).map(o => o.observation_key)
+    );
+    // For any key the current author has NOT saved as an observation, check custom_answers
     const ca = applicantCustomAnswers(app);
     const lookupSessions = (audSessions?.length)
       ? audSessions.filter(s => ['audition', 'dance_call', 'callback'].includes(s.type))
       : [null];
-    const results = [];
     Object.entries(INROOM_SCORE_CA_KEYS)
-      .filter(([key]) => key !== 'notes')
+      .filter(([key]) => key !== 'notes' && !coveredKeys.has(key))
       .forEach(([key, baseKey]) => {
         let value = null;
         let sessionType = 'audition';
@@ -30623,7 +30625,6 @@ If you have any questions, don't hesitate to reach out.
           value = (sessionKey && ca[sessionKey]) || ca[baseKey];
           if (value) { sessionType = session?.type || 'audition'; break; }
         }
-        // Prefix-scan: find any session-keyed entry even if audSessions hasn't loaded yet
         if (!value) {
           const prefix = baseKey + ' - ';
           const match = Object.entries(ca).find(([k, v]) => v && k.startsWith(prefix));
@@ -30812,7 +30813,13 @@ If you have any questions, don't hesitate to reach out.
     const scoreColorSet = teamAccessMode
       ? getTeamNoteColorSet(teamAccessMember?.note_color)
       : { base: ORG_AUTHORED_NOTE_COLOR, dark: '#5f5a69', light: '#efedf2' };
-    return buildCastingCardBack(app, { includeInRoomScores: true, includeRoomNotes: true, impressionCategories: Object.values(INROOM_SCORE_LABELS), accentColor: backAccent, scoreColorSet, sessionNotes: collectAllSessionNotes(app), scoreObservations: collectScoreObservations(app), bucketPlacements: collectDanceBucketPlacements(app), roleNotes: collectRoleNotes(app), characterAssignments: collectCharacterAssignments(app), auditionTimeRows: buildAuditionTimeRowsForCard(app) });
+    const currentAuthorColor = scoreColorSet?.base || '';
+    // Apply current viewer's colour to any entries that have no authorColor (custom_answers fallback entries)
+    const rawScoreObs = collectScoreObservations(app);
+    const scoreObservations = currentAuthorColor
+      ? rawScoreObs.map(e => e.authorColor ? e : { ...e, authorColor: currentAuthorColor })
+      : rawScoreObs;
+    return buildCastingCardBack(app, { includeInRoomScores: true, includeRoomNotes: true, impressionCategories: Object.values(INROOM_SCORE_LABELS), accentColor: backAccent, scoreColorSet, sessionNotes: collectAllSessionNotes(app), scoreObservations, bucketPlacements: collectDanceBucketPlacements(app), roleNotes: collectRoleNotes(app), characterAssignments: collectCharacterAssignments(app), auditionTimeRows: buildAuditionTimeRowsForCard(app) });
   }
 
   function inRoomThumbHtml(app, openFn = 'openInRoom', session = null) {

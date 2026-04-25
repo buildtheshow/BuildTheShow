@@ -30331,36 +30331,43 @@ If you have any questions, don't hesitate to reach out.
   }
 
   function collectScoreObservations(app) {
-    const fromObs = listAuditionObservations(app.id, { area: 'in_room', type: 'score' })
-      .map(observation => {
-        if (!observation?.value) return null;
-        const session = (audSessions || []).find(s => s.id === observation.session_id);
-        return {
-          sessionLabel: session?.name || sessionTypeLabel(session?.type || 'audition'),
-          sessionType: session?.type || 'audition',
-          label: (typeof INROOM_SCORE_LABELS !== 'undefined' && INROOM_SCORE_LABELS[observation.observation_key]) || observation.observation_key || 'Score',
-          value: observation.value,
-          ...observationAuthorFields(observation),
-        };
-      })
-      .filter(Boolean);
-    if (fromObs.length) return fromObs;
-    // Fallback: scores may be stored in custom_answers (session-keyed or legacy base key)
     if (typeof INROOM_SCORE_CA_KEYS === 'undefined' || typeof INROOM_SCORE_LABELS === 'undefined') return [];
+    const allScoreObs = listAuditionObservations(app.id, { area: 'in_room', type: 'score' });
+    const results = allScoreObs.map(observation => {
+      if (!observation?.value) return null;
+      const session = (audSessions || []).find(s => s.id === observation.session_id);
+      return {
+        sessionLabel: session?.name || sessionTypeLabel(session?.type || 'audition'),
+        sessionType: session?.type || 'audition',
+        label: INROOM_SCORE_LABELS[observation.observation_key] || observation.observation_key || 'Score',
+        value: observation.value,
+        ...observationAuthorFields(observation),
+      };
+    }).filter(Boolean);
+    const coveredKeys = new Set(
+      allScoreObs.filter(o => isCurrentObservationAuthor(o)).map(o => o.observation_key)
+    );
     const ca = applicantCustomAnswers(app);
-    const results = [];
+    const lookupSessions = (audSessions?.length)
+      ? audSessions.filter(s => ['audition', 'dance_call', 'callback'].includes(s.type))
+      : [null];
     Object.entries(INROOM_SCORE_CA_KEYS)
-      .filter(([key]) => key !== 'notes')
+      .filter(([key]) => key !== 'notes' && !coveredKeys.has(key))
       .forEach(([key, baseKey]) => {
-        let value = ca[baseKey] || null;
-        // Prefix-scan: find any session-keyed entry even if audSessions hasn't loaded yet
+        let value = null;
+        let sessionType = 'audition';
+        for (const session of lookupSessions) {
+          const sessionKey = session?.id ? inRoomScoreKey(session.id, key) : null;
+          value = (sessionKey && ca[sessionKey]) || ca[baseKey];
+          if (value) { sessionType = session?.type || 'audition'; break; }
+        }
         if (!value) {
           const prefix = baseKey + ' - ';
           const match = Object.entries(ca).find(([k, v]) => v && k.startsWith(prefix));
           if (match) { value = match[1]; }
         }
         if (!value) return;
-        results.push({ sessionType: 'audition', sessionLabel: '', label: INROOM_SCORE_LABELS[key] || key, value, authorName: '', authorRole: '', authorColor: '' });
+        results.push({ sessionType, sessionLabel: '', label: INROOM_SCORE_LABELS[key] || key, value, authorName: '', authorRole: '', authorColor: '' });
       });
     return results;
   }
