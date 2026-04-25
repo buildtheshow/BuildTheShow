@@ -15124,6 +15124,10 @@
     } catch {}
   }
 
+  async function refreshAuditionTeamData() {
+    await Promise.all([loadAuditionAuthoredNotes(), loadAuditionObservations()]);
+  }
+
   async function refreshPortalAuditionsByEvent(payload = null) {
     const table = payload?.table || '';
     if (table === 'audition_applications') {
@@ -15139,12 +15143,13 @@
       return;
     }
     if (table === 'production_audition_notes' || table === 'production_audition_observations') {
-      await Promise.all([loadAuditionAuthoredNotes(), loadAuditionObservations()]);
+      await refreshAuditionTeamData();
       try {
         if (activeAuditionNavTool === 'inroom' && document.getElementById('aud-session-inroom-content')) {
           renderInRoomPage(inRoomApplicantId, 'aud-session-inroom-content', 'openAuditionSessionInRoom');
         }
       } catch {}
+      try { refreshPerfLightboxContents(); } catch {}
       return;
     }
     if (table === 'audition_sessions' || table === 'audition_time_slots' || table === 'audition_bookings') {
@@ -15415,7 +15420,10 @@
     _auditionsPollTimer = setInterval(async () => {
       if (!prodId) return;
       try {
-        if (teamAccessMode) await refreshAuditionsCheckInUi();
+        if (teamAccessMode) {
+          await Promise.all([refreshAuditionsCheckInUi(), refreshAuditionTeamData()]);
+          refreshPerfLightboxContents();
+        }
         else await refreshAuditionsLiveUi({ preserveModal: true });
       } catch {}
     }, 10000);
@@ -27869,22 +27877,54 @@ If you have any questions, don't hesitate to reach out.
 
   // ── Performer card lightbox ──────────────────────────────────
   let perfLightboxFlipped = false;
+  let perfLightboxAppId = null;
 
-  function openPerfLightbox(appId) {
-    const app = allApplicants.find(x => x.id === appId);
+  function renderPerfLightboxCard(app) {
     if (!app) return;
-
-    perfLightboxFlipped = false;
-    document.getElementById('perf-lightbox-inner').innerHTML =
+    const inner = document.getElementById('perf-lightbox-inner');
+    if (!inner) return;
+    const activePanelId = inner.querySelector('.irb-tab.is-active')?.getAttribute('data-panel') || '';
+    const activeScrollTop = activePanelId ? (inner.querySelector(`#${activePanelId}`)?.scrollTop || 0) : 0;
+    inner.innerHTML =
       window.BTSAuditionTemplates.renderCastingCardFlipShellTemplate({
         shellClass: 'perf-lightbox-shell',
         id: 'perf-lightbox-shell',
-        flipped: false,
+        flipped: perfLightboxFlipped,
         frontHtml: buildStandardCastingCardHtml(app),
         backHtml: buildStandardCastingCardBackHtml(app),
         frontClick: 'togglePerfFlip()',
         backClick: window.BTSAuditionTemplates.buildCastingCardBackClickHandler('togglePerfFlip')
       });
+    document.getElementById('perf-lightbox-shell')?.classList.toggle('flipped', perfLightboxFlipped);
+    if (activePanelId) {
+      const tab = inner.querySelector(`.irb-tab[data-panel="${activePanelId}"]`);
+      const panel = inner.querySelector(`#${activePanelId}`);
+      if (tab && panel) {
+        inner.querySelectorAll('.irb-tab').forEach(item => {
+          item.classList.toggle('is-active', item === tab);
+          item.setAttribute('aria-selected', item === tab ? 'true' : 'false');
+        });
+        inner.querySelectorAll('.irb-tab-panel').forEach(item => { item.hidden = item !== panel; });
+        panel.scrollTop = activeScrollTop;
+      }
+    }
+  }
+
+  async function refreshPerfLightboxContents() {
+    if (!perfLightboxAppId || !document.getElementById('perf-lightbox')?.classList.contains('open')) return;
+    const app = allApplicants.find(x => x.id === perfLightboxAppId);
+    if (!app) return;
+    renderPerfLightboxCard(app);
+  }
+
+  async function openPerfLightbox(appId) {
+    await refreshAuditionTeamData();
+    const app = allApplicants.find(x => x.id === appId);
+    if (!app) return;
+
+    perfLightboxFlipped = false;
+    perfLightboxAppId = appId;
+    renderPerfLightboxCard(app);
 
     document.getElementById('perf-lightbox').classList.add('open');
   }
@@ -27899,6 +27939,7 @@ If you have any questions, don't hesitate to reach out.
     if (e && e.target !== document.getElementById('perf-lightbox')) return;
     document.getElementById('perf-lightbox').classList.remove('open');
     perfLightboxFlipped = false;
+    perfLightboxAppId = null;
   }
 
   function renderCbPerformers() {
@@ -31031,10 +31072,20 @@ If you have any questions, don't hesitate to reach out.
     }
   }
 
+  async function refreshInRoomBackCardContents() {
+    await refreshAuditionTeamData();
+    const app = allApplicants.find(a => a.id === inRoomApplicantId);
+    const surface = document.querySelector(`#${inRoomContainerId} .inroom-back-card-surface`);
+    if (app && surface) surface.innerHTML = buildInRoomBackHtml(app);
+  }
+
   function toggleInRoomFlip() {
     inRoomFlipOpen = !inRoomFlipOpen;
     const el = document.getElementById('inroom-flip-card');
     if (el) el.classList.toggle('flipped', inRoomFlipOpen);
+    if (inRoomFlipOpen) refreshInRoomBackCardContents().catch(error => {
+      console.error('[BTS] in-room card back refresh failed', error);
+    });
   }
 
   function toggleInRoomCallbackCard(headEl) {
