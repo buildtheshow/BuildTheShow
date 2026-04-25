@@ -253,9 +253,7 @@ function buildCastingCardBack(app, opts = {}) {
     }
 
     if (type === 'dance_call') {
-      const danceCategories = scoreEntries.length ? impressionCategories : null;
       return [
-        renderSessionScores(scoreEntries, danceCategories),
         renderSessionBuckets(bucketEntries),
         renderSessionNotesAlways(noteEntries, 'Quick Notes'),
         renderCharacterList(assignmentEntries),
