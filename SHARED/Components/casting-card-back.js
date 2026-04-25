@@ -50,6 +50,7 @@ function buildCastingCardBack(app, opts = {}) {
     includeRoomNotes    = true,
     scoreColorSet       = null,
     sessionNotes        = null,  // array of { label, note } — one per audition session
+    scoreObservations   = null,  // array of { sessionLabel, sessionType, label, value, authorName, authorRole, authorColor }
     bucketPlacements      = null,  // array of { sessionLabel, bucketName, bucketColour } — dance call container placements
     roleNotes             = null,  // array of { charName, roleType, note } — per-character in-room notes
     characterAssignments  = null,  // array of { charName, roleType, state, decision } — casting board placements
@@ -114,15 +115,31 @@ function buildCastingCardBack(app, opts = {}) {
     const decisionLabel = { yes: 'Yes', maybe: 'Maybe', no: 'No' };
     const decisionColour = { yes: '#2f7a4a', maybe: '#c89118', no: '#9a4a4a' };
     return `<div class="irb-session-block">
-      <div class="irb-session-label">Casting Board</div>
-      ${entries.map(({ sessionLabel, charName, roleType, state, decision }) => {
+      <div class="irb-session-label">Role Clicks</div>
+      ${entries.map(({ sessionLabel, charName, roleType, state, decision, authorName, authorRole, authorColor }) => {
         const col = decisionColour[decision] || stateColour[state] || '#572e88';
         const lbl = decisionLabel[decision] || stateLabel[state] || state;
+        const author = [authorName, authorRole].filter(Boolean).join(' · ');
         return `<div class="irb-inroom-chars-row">
-          <span class="irb-inroom-chars-name">${sessionLabel ? `<span style="display:block;font-size:0.75em;font-weight:700;opacity:0.7;">${escStr(sessionLabel)}</span>` : ''}${escStr(charName)}${roleType === 'Group' ? ' <span style="opacity:0.65;font-size:0.85em;">(group)</span>' : ''}</span>
-          <span class="irb-inroom-chars-state" style="color:${col};">${escStr(lbl)}</span>
+          <span class="irb-inroom-chars-name">${sessionLabel ? `<span style="display:block;font-size:0.75em;font-weight:700;opacity:0.7;">${escStr(sessionLabel)}</span>` : ''}${escStr(charName)}${roleType === 'Group' ? ' <span style="opacity:0.65;font-size:0.85em;">(group)</span>' : ''}${author ? `<span style="display:block;font-size:0.75em;font-weight:700;color:${escStr(authorColor || '#7a7490')};">${escStr(author)}</span>` : ''}</span>
+          <span class="irb-inroom-chars-state" style="color:${escStr(authorColor || col)};">${escStr(lbl)}</span>
         </div>`;
       }).join('')}
+    </div>`;
+  }
+
+  function renderSessionScores(entries) {
+    if (!entries?.length) return '';
+    return `<div class="irb-session-block irb-inroom-scores">
+      <div class="irb-session-label">Impressions</div>
+      <div class="irb-score-grid">${entries.map(({ label, value, authorName, authorRole, authorColor }) => {
+        const author = [authorName, authorRole].filter(Boolean).join(' · ');
+        return `<div class="irb-score-pair" style="${authorColor ? `border-left:3px solid ${escStr(authorColor)};padding-left:0.35rem;` : ''}">
+          <span class="irb-score-key" style="${authorColor ? `color:${escStr(authorColor)};` : ''}">${escStr(label)}</span>
+          <span class="irb-score-val">${escStr(value)}</span>
+          ${author ? `<span class="irb-inroom-note-label" style="${authorColor ? `color:${escStr(authorColor)};` : ''}">${escStr(author)}</span>` : ''}
+        </div>`;
+      }).join('')}</div>
     </div>`;
   }
 
@@ -138,12 +155,13 @@ function buildCastingCardBack(app, opts = {}) {
 
   function renderSessionRoleNotes(entries) {
     if (!entries?.length) return '';
-    return entries.map(({ sessionLabel, charName, roleType, note, authorColor }) =>
+    return entries.map(({ sessionLabel, charName, roleType, note, authorName, authorRole, authorColor }) =>
       `<div class="irb-inroom-role-note-block" style="${authorColor ? `border-left-color:${escStr(authorColor)};background:${escStr(authorColor)}12;` : ''}">
         <div class="irb-inroom-role-note-header">
           <span class="irb-inroom-role-note-name">${sessionLabel ? `<span style="display:block;font-size:0.75em;font-weight:700;opacity:0.7;">${escStr(sessionLabel)}</span>` : ''}${escStr(charName)}${roleType === 'Group' ? ' <span style="font-size:0.85em;font-weight:600;opacity:0.65;">(group)</span>' : ''}</span>
           ${roleType && roleType !== 'Group' ? `<span class="irb-inroom-role-note-type">${escStr(roleType)}</span>` : ''}
         </div>
+        ${authorName || authorRole ? `<div class="irb-inroom-note-label" style="${authorColor ? `color:${escStr(authorColor)};` : ''}">${escStr([authorName, authorRole].filter(Boolean).join(' · '))}</div>` : ''}
         <div class="irb-notes">${escStr(note)}</div>
       </div>`
     ).join('');
@@ -165,11 +183,13 @@ function buildCastingCardBack(app, opts = {}) {
   }
 
   function renderSessionTabContent(type) {
+    const scoreEntries = (scoreObservations || []).filter(entry => entryMatchesSessionType(entry, type));
     const assignmentEntries = (characterAssignments || []).filter(entry => entryMatchesSessionType(entry, type));
     const bucketEntries = (bucketPlacements || []).filter(entry => entryMatchesSessionType(entry, type));
     const roleNoteEntries = (roleNotes || []).filter(entry => entryMatchesSessionType(entry, type));
     const noteEntries = (sessionNotes || []).filter(entry => entryMatchesSessionType(entry, type));
     const content = [
+      renderSessionScores(scoreEntries),
       renderSessionAssignments(assignmentEntries),
       renderSessionBuckets(bucketEntries),
       renderSessionRoleNotes(roleNoteEntries),
@@ -381,7 +401,7 @@ function buildCastingCardBack(app, opts = {}) {
   let callbackContent = '';
 
   if (includeInRoomScores || includeRoomNotes) {
-    if (includeInRoomScores
+    if ((!scoreObservations || !scoreObservations.length) && includeInRoomScores
       && typeof applicantInRoomScore === 'function'
       && typeof INROOM_SCORE_OPTIONS !== 'undefined'
       && typeof INROOM_SCORE_LABELS !== 'undefined') {

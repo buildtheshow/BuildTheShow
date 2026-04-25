@@ -14022,7 +14022,7 @@
 <script src="/ASSETS/scripts/casting-card.js"></script>
 <script src="/ASSETS/scripts/production-team-card.js?v=team-card-phone-format-20260424"></script>
 <script src="/ASSETS/scripts/production-team-access.js?v=team-card-colour-smart-20260424"></script>
-<script src="../../../../SHARED/Components/casting-card-back.js?v=20260424-audition-time-rows"></script>
+<script src="../../../../SHARED/Components/casting-card-back.js?v=team-card-back-observations-20260424"></script>
 <script src="../../../../SHARED/Components/audition-status-strip.js"></script>
 <script src="../../../../SHARED/Components/ai-character-importer.js"></script>
 <script src="../../../../SHARED/Components/audition-page-templates.js?v=inroom-fast-interactions-20260424"></script>
@@ -27604,6 +27604,7 @@ If you have any questions, don't hesitate to reach out.
       includeRoomNotes: true,
       auditionTimeRows: buildAuditionTimeRowsForCard(app),
       sessionNotes: collectAllSessionNotes(app),
+      scoreObservations: collectScoreObservations(app),
       bucketPlacements: collectDanceBucketPlacements(app),
       roleNotes: collectRoleNotes(app),
       characterAssignments: collectCharacterAssignments(app),
@@ -30123,7 +30124,7 @@ If you have any questions, don't hesitate to reach out.
     authoredNotesFor(app.id, { area: 'in_room' }).forEach(note => {
       const session = (audSessions || []).find(s => s.id === note.session_id);
       notes.push({
-        label: session?.name || 'Team Note',
+        label: [session?.name || 'Team Note', authoredNoteLabel(note)].filter(Boolean).join(' · '),
         sessionType: session?.type || 'audition',
         note: note.body,
         authorName: note.author_name,
@@ -30144,16 +30145,65 @@ If you have any questions, don't hesitate to reach out.
       ).trim();
       if (isCurrentObservationAuthor(observation) && legacyBody && legacyBody === String(observation.body || '').trim()) return;
       const session = (audSessions || []).find(s => s.id === observation.session_id);
+      const author = observationAuthorLabel(observation);
       notes.push({
-        label: session?.name || 'Room Notes',
+        label: [session?.name || 'Room Notes', author].filter(Boolean).join(' · '),
         sessionType: session?.type || 'audition',
         note: observation.body,
         authorName: observation.author_name,
-        authorRole: observation.author_role,
-        authorColor: observation.author_color,
+        authorRole: observationAuthorRole(observation),
+        authorColor: observationAuthorColor(observation),
       });
     });
     return notes.length ? notes : null;
+  }
+
+  function observationAuthorRole(observation) {
+    return observation?.source_type === 'organisation' && !observation?.team_member_id
+      ? 'Organisation'
+      : observation?.author_role;
+  }
+
+  function observationAuthorColor(observation) {
+    return observation?.source_type === 'organisation' && !observation?.team_member_id
+      ? ORG_AUTHORED_NOTE_COLOR
+      : (observation?.author_color || '#572e88');
+  }
+
+  function observationAuthorLabel(observation) {
+    const name = observation?.author_name || (observation?.source_type === 'organisation' ? (orgName || 'Organisation') : '');
+    return [name, observationAuthorRole(observation)].filter(Boolean).join(' · ');
+  }
+
+  function observationAuthorFields(observation) {
+    return {
+      authorName: observation?.author_name || (observation?.source_type === 'organisation' ? (orgName || 'Organisation') : ''),
+      authorRole: observationAuthorRole(observation),
+      authorColor: observationAuthorColor(observation),
+    };
+  }
+
+  function sameObservationAuthor(a, b) {
+    if (!a || !b) return false;
+    if (a.source_type !== b.source_type) return false;
+    if (a.team_member_id || b.team_member_id) return String(a.team_member_id || '') === String(b.team_member_id || '');
+    return String(a.author_email || a.author_name || '') === String(b.author_email || b.author_name || '');
+  }
+
+  function collectScoreObservations(app) {
+    return listAuditionObservations(app.id, { area: 'in_room', type: 'score' })
+      .map(observation => {
+        if (!observation?.value) return null;
+        const session = (audSessions || []).find(s => s.id === observation.session_id);
+        return {
+          sessionLabel: session?.name || sessionTypeLabel(session?.type || 'audition'),
+          sessionType: session?.type || 'audition',
+          label: (typeof INROOM_SCORE_LABELS !== 'undefined' && INROOM_SCORE_LABELS[observation.observation_key]) || observation.observation_key || 'Score',
+          value: observation.value,
+          ...observationAuthorFields(observation),
+        };
+      })
+      .filter(Boolean);
   }
 
   function inRoomRoleChoiceKey(sessionId, charId) {
@@ -30184,12 +30234,63 @@ If you have any questions, don't hesitate to reach out.
   }
 
   function collectCharacterAssignments(app) {
+    const observedChoices = listAuditionObservations(app.id, { area: 'role', type: 'choice' })
+      .filter(observation => observation.value === 'liked' || observation.value === 'chosen' || observation.value === 'applied');
+    const observedKeys = new Set(observedChoices.map(observation =>
+      [observation.session_id || '', observation.character_id || ''].join('::')
+    ));
+    const observedAuthorKeys = new Set(observedChoices.map(observation =>
+      [observation.session_id || '', observation.character_id || '', observation.source_type || '', observation.team_member_id || observation.author_email || observation.author_name || ''].join('::')
+    ));
+    const observedResults = observedChoices.map(observation => {
+      const session = (audSessions || []).find(s => s.id === observation.session_id);
+      const char = (characters || []).find(c => c.id === observation.character_id);
+      if (!char) return null;
+      const decision = listAuditionObservations(app.id, {
+        sessionId: observation.session_id || null,
+        characterId: observation.character_id || null,
+        area: 'role',
+        type: 'decision',
+      }).find(decisionObservation => sameObservationAuthor(observation, decisionObservation));
+      return {
+        sessionLabel: session?.name || sessionTypeLabel(session?.type || 'audition'),
+        sessionType: session?.type || 'audition',
+        charName: char.name || 'Unknown',
+        roleType: char.role_type || '',
+        state: observation.value,
+        decision: decision?.value || '',
+        ...observationAuthorFields(observation),
+      };
+    }).filter(Boolean);
+    const observedDecisionResults = listAuditionObservations(app.id, { area: 'role', type: 'decision' })
+      .filter(observation => observation.value === 'yes' || observation.value === 'maybe' || observation.value === 'no')
+      .filter(observation => !observedAuthorKeys.has([
+        observation.session_id || '',
+        observation.character_id || '',
+        observation.source_type || '',
+        observation.team_member_id || observation.author_email || observation.author_name || ''
+      ].join('::')))
+      .map(observation => {
+        const session = (audSessions || []).find(s => s.id === observation.session_id);
+        const char = (characters || []).find(c => c.id === observation.character_id);
+        if (!char) return null;
+        return {
+          sessionLabel: session?.name || sessionTypeLabel(session?.type || 'audition'),
+          sessionType: session?.type || 'audition',
+          charName: char.name || 'Unknown',
+          roleType: char.role_type || '',
+          state: 'decision',
+          decision: observation.value,
+          ...observationAuthorFields(observation),
+        };
+      }).filter(Boolean);
     const sessionResults = (audSessions || []).flatMap(session => {
       const ca = applicantCustomAnswers(app);
       return Object.entries(ca || {})
         .filter(([key, value]) => key.startsWith(`In The Room - Considered - ${session.id} - `) && (value === 'liked' || value === 'chosen' || value === 'applied'))
         .map(([key, value]) => {
           const charId = key.replace(`In The Room - Considered - ${session.id} - `, '');
+          if (observedKeys.has([session.id, charId].join('::'))) return null;
           const char = (characters || []).find(c => c.id === charId);
           if (!char) return null;
           return {
@@ -30211,7 +30312,7 @@ If you have any questions, don't hesitate to reach out.
         return { sessionLabel: 'Callback', sessionType: 'callback', charName: char.name || 'Unknown', roleType: char.role_type || '', state: a.state };
       })
       .filter(Boolean);
-    const results = [...sessionResults, ...boardResults].sort((a, b) => {
+    const results = [...observedResults, ...observedDecisionResults, ...sessionResults, ...boardResults].sort((a, b) => {
         const order = { chosen: 0, liked: 1, applied: 2 };
         const stateDiff = (order[a.state] ?? 9) - (order[b.state] ?? 9);
         if (stateDiff !== 0) return stateDiff;
@@ -30268,8 +30369,8 @@ If you have any questions, don't hesitate to reach out.
         roleType: char?.role_type || '',
         note: observation.body,
         authorName: observation.author_name,
-        authorRole: observation.author_role,
-        authorColor: observation.author_color,
+        authorRole: observationAuthorRole(observation),
+        authorColor: observationAuthorColor(observation),
       });
     });
     return results.length ? results : null;
@@ -30280,7 +30381,7 @@ If you have any questions, don't hesitate to reach out.
     const sessionAccent = session ? getAuditionScheduleSidebarMarkerColor(session.type || 'audition') : null;
     const backAccent = session?.type === 'audition' ? null : sessionAccent;
     const scoreColorSet = { base: ORG_AUTHORED_NOTE_COLOR, dark: '#5f5a69', light: '#efedf2' };
-    return buildCastingCardBack(app, { includeInRoomScores: true, includeRoomNotes: true, accentColor: backAccent, scoreColorSet, sessionNotes: collectAllSessionNotes(app), bucketPlacements: collectDanceBucketPlacements(app), roleNotes: collectRoleNotes(app), characterAssignments: collectCharacterAssignments(app), auditionTimeRows: buildAuditionTimeRowsForCard(app) });
+    return buildCastingCardBack(app, { includeInRoomScores: true, includeRoomNotes: true, accentColor: backAccent, scoreColorSet, sessionNotes: collectAllSessionNotes(app), scoreObservations: collectScoreObservations(app), bucketPlacements: collectDanceBucketPlacements(app), roleNotes: collectRoleNotes(app), characterAssignments: collectCharacterAssignments(app), auditionTimeRows: buildAuditionTimeRowsForCard(app) });
   }
 
   function inRoomThumbHtml(app, openFn = 'openInRoom', session = null) {
