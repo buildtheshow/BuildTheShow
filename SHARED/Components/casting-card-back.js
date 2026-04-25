@@ -202,12 +202,12 @@ function buildCastingCardBack(app, opts = {}) {
 
   function renderSessionNotes(entries, heading = '') {
     if (!entries?.length) return '';
-    const content = entries.map(({ label, note, authorColor }) =>
-      `<div class="irb-inroom-note-block" style="${authorColor ? `border-left-color:${escStr(authorColor)};background:${escStr(authorColor)}12;` : ''}">
-        <div class="irb-inroom-note-label" style="${authorColor ? `color:${escStr(authorColor)};` : ''}">${escStr(label)}</div>
-        <div class="irb-notes">${escStr(note)}</div>
-      </div>`
-    ).join('');
+    const content = entries
+      .filter(e => String(e.note || '').trim())
+      .map(({ note, authorColor }) =>
+        `<div class="irb-notes" style="${authorColor ? `color:${escStr(authorColor)};` : ''}">${escStr(note)}</div>`
+      ).join('');
+    if (!content) return '';
     if (!heading) return content;
     return `<div class="irb-session-block">
       <div class="irb-session-label">${escStr(heading)}</div>
@@ -220,7 +220,7 @@ function buildCastingCardBack(app, opts = {}) {
     if (!hasContent) {
       return `<div class="irb-session-block">
         <div class="irb-session-label">${escStr(heading)}</div>
-        <div class="irb-inroom-note-block"><div class="irb-notes irb-score-empty">—</div></div>
+        <div class="irb-notes irb-score-empty">—</div>
       </div>`;
     }
     return renderSessionNotes(entries, heading);
