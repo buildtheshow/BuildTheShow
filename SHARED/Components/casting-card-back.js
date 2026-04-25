@@ -49,12 +49,13 @@ function buildCastingCardBack(app, opts = {}) {
     includeInRoomScores = true,
     includeRoomNotes    = true,
     scoreColorSet       = null,
-    sessionNotes        = null,  // array of { label, note } — one per audition session
-    scoreObservations   = null,  // array of { sessionLabel, sessionType, label, value, authorName, authorRole, authorColor }
-    bucketPlacements      = null,  // array of { sessionLabel, bucketName, bucketColour } — dance call container placements
-    roleNotes             = null,  // array of { charName, roleType, note } — per-character in-room notes
-    characterAssignments  = null,  // array of { charName, roleType, state, decision } — casting board placements
-    auditionTimeRows      = null,  // array of [audition type label, booked time or "-"]
+    sessionNotes        = null,        // array of { label, note } — one per audition session
+    scoreObservations   = null,        // array of { sessionLabel, sessionType, label, value, authorName, authorRole, authorColor }
+    impressionCategories = null,       // string[] — all expected score category labels; shows all with — for missing
+    bucketPlacements      = null,      // array of { sessionLabel, bucketName, bucketColour } — dance call container placements
+    roleNotes             = null,      // array of { charName, roleType, note } — per-character in-room notes
+    characterAssignments  = null,      // array of { charName, roleType, state, decision } — casting board placements
+    auditionTimeRows      = null,      // array of [audition type label, booked time or "-"]
   } = opts;
 
   const ca = (typeof applicantCustomAnswers === 'function')
@@ -128,7 +129,43 @@ function buildCastingCardBack(app, opts = {}) {
     </div>`;
   }
 
-  function renderSessionScores(entries) {
+  function renderSessionScores(entries, allCategories) {
+    if (allCategories?.length) {
+      // Group entries by author so we can show all expected categories per author.
+      const authorMap = new Map();
+      (entries || []).forEach(entry => {
+        const key = [entry.authorName, entry.authorRole, entry.authorColor].join('||');
+        if (!authorMap.has(key)) authorMap.set(key, { authorName: entry.authorName, authorRole: entry.authorRole, authorColor: entry.authorColor, values: new Map() });
+        authorMap.get(key).values.set(entry.label, entry.value);
+      });
+
+      const scoreRows = authorMap.size
+        ? [...authorMap.values()].map(({ authorName, authorRole, authorColor, values }) => {
+            const author = [authorName, authorRole].filter(Boolean).join(' · ');
+            return `<div style="margin-bottom:0.45rem;${authorColor ? `border-left:3px solid ${escStr(authorColor)};padding-left:0.5rem;` : ''}">
+              ${author ? `<div class="irb-inroom-note-label" style="${authorColor ? `color:${escStr(authorColor)};` : ''}">${escStr(author)}</div>` : ''}
+              <div class="irb-score-grid">${allCategories.map(cat => {
+                const val = values.get(cat);
+                return `<div class="irb-score-pair">
+                  <span class="irb-score-key" style="${authorColor ? `color:${escStr(authorColor)};opacity:0.72;` : ''}">${escStr(cat)}</span>
+                  <span class="irb-score-val${!val ? ' irb-score-empty' : ''}">${val ? escStr(val) : '—'}</span>
+                </div>`;
+              }).join('')}</div>
+            </div>`;
+          }).join('')
+        : `<div class="irb-score-grid">${allCategories.map(cat =>
+            `<div class="irb-score-pair">
+              <span class="irb-score-key">${escStr(cat)}</span>
+              <span class="irb-score-val irb-score-empty">—</span>
+            </div>`
+          ).join('')}</div>`;
+
+      return `<div class="irb-session-block irb-inroom-scores">
+        <div class="irb-session-label">Impressions</div>
+        ${scoreRows}
+      </div>`;
+    }
+
     if (!entries?.length) return '';
     return `<div class="irb-session-block irb-inroom-scores">
       <div class="irb-session-label">Impressions</div>
@@ -182,18 +219,58 @@ function buildCastingCardBack(app, opts = {}) {
     </div>`;
   }
 
+  function renderSessionNotesAlways(entries, heading) {
+    const hasContent = entries?.some(e => String(e.note || '').trim());
+    if (!hasContent) {
+      return `<div class="irb-session-block">
+        <div class="irb-session-label">${escStr(heading)}</div>
+        <div class="irb-inroom-note-block"><div class="irb-notes irb-score-empty">—</div></div>
+      </div>`;
+    }
+    return renderSessionNotes(entries, heading);
+  }
+
+  function renderCharacterList(entries) {
+    const decisionLabel = { yes: 'Yes', maybe: 'Maybe', no: 'No' };
+    const stateLabel    = { liked: 'Considered', chosen: 'Cast', applied: 'Applied' };
+    const decisionColour = { yes: '#2f7a4a', maybe: '#c89118', no: '#9a4a4a' };
+    const stateColour    = { liked: '#572e88', chosen: '#b07a00', applied: '#7a7490' };
+    const rows = (entries || []).map(({ charName, roleType, state, decision, authorName, authorRole, authorColor }) => {
+      const lbl = decisionLabel[decision] || stateLabel[state] || state;
+      const col = decisionColour[decision] || stateColour[state] || '#572e88';
+      const author = [authorName, authorRole].filter(Boolean).join(' · ');
+      return `<div class="irb-inroom-chars-row">
+        <span class="irb-inroom-chars-name">${escStr(charName)}${roleType === 'Group' ? ' <span style="opacity:0.65;font-size:0.85em;">(group)</span>' : ''}${author ? `<span style="display:block;font-size:0.75em;font-weight:700;color:${escStr(authorColor || '#7a7490')};">${escStr(author)}</span>` : ''}</span>
+        <span class="irb-inroom-chars-state" style="color:${escStr(authorColor || col)};">${escStr(lbl)}</span>
+      </div>`;
+    });
+    return `<div class="irb-session-block">
+      <div class="irb-session-label">Characters</div>
+      ${rows.length ? rows.join('') : '<div class="irb-notes irb-score-empty">—</div>'}
+    </div>`;
+  }
+
   function renderSessionTabContent(type) {
-    const scoreEntries = (scoreObservations || []).filter(entry => entryMatchesSessionType(entry, type));
+    const scoreEntries      = (scoreObservations   || []).filter(entry => entryMatchesSessionType(entry, type));
     const assignmentEntries = (characterAssignments || []).filter(entry => entryMatchesSessionType(entry, type));
-    const bucketEntries = (bucketPlacements || []).filter(entry => entryMatchesSessionType(entry, type));
-    const roleNoteEntries = (roleNotes || []).filter(entry => entryMatchesSessionType(entry, type));
-    const noteEntries = (sessionNotes || []).filter(entry => entryMatchesSessionType(entry, type));
+    const bucketEntries     = (bucketPlacements     || []).filter(entry => entryMatchesSessionType(entry, type));
+    const roleNoteEntries   = (roleNotes            || []).filter(entry => entryMatchesSessionType(entry, type));
+    const noteEntries       = (sessionNotes         || []).filter(entry => entryMatchesSessionType(entry, type));
+
+    if (type === 'audition') {
+      return [
+        renderSessionScores(scoreEntries, impressionCategories),
+        renderSessionNotesAlways(noteEntries, 'Quick Notes'),
+        renderCharacterList(assignmentEntries),
+      ].filter(Boolean).join('');
+    }
+
     const content = [
       renderSessionScores(scoreEntries),
       renderSessionAssignments(assignmentEntries),
       renderSessionBuckets(bucketEntries),
       renderSessionRoleNotes(roleNoteEntries),
-      renderSessionNotes(noteEntries, type === 'audition' ? 'Quick Notes' : ''),
+      renderSessionNotes(noteEntries, ''),
     ].filter(Boolean).join('');
     return content || '<div class="irb-tab-empty">Nothing here yet.</div>';
   }
@@ -406,8 +483,7 @@ function buildCastingCardBack(app, opts = {}) {
       && typeof INROOM_SCORE_OPTIONS !== 'undefined'
       && typeof INROOM_SCORE_LABELS !== 'undefined') {
       const scoreRows = Object.keys(INROOM_SCORE_OPTIONS)
-        .map(key => [INROOM_SCORE_LABELS[key], applicantInRoomScore(app, key)])
-        .filter(([, value]) => value);
+        .map(key => [INROOM_SCORE_LABELS[key], applicantInRoomScore(app, key) || null]);
       if (scoreRows.length) {
         const scoreBlockStyle = scoreColorSet
           ? `style="background:${escStr(scoreColorSet.light)};border-left:3px solid ${escStr(scoreColorSet.base)};padding:0.45rem 0.5rem;border-radius:0 6px 6px 0;"`
@@ -424,7 +500,7 @@ function buildCastingCardBack(app, opts = {}) {
         generalAuditionsContent += `<div class="irb-session-block irb-inroom-scores" ${scoreBlockStyle}>
           <div class="irb-session-label" ${scoreLabelStyle}>Impressions</div>
           <div class="irb-score-grid">${scoreRows.map(([label, value]) =>
-            `<div class="irb-score-pair"><span class="irb-score-key" ${scoreKeyStyle}>${escStr(label)}</span><span class="irb-score-val" ${scoreValStyle}>${escStr(value)}</span></div>`
+            `<div class="irb-score-pair"><span class="irb-score-key" ${scoreKeyStyle}>${escStr(label)}</span><span class="irb-score-val${!value ? ' irb-score-empty' : ''}" ${scoreValStyle}>${value ? escStr(value) : '—'}</span></div>`
           ).join('')}</div>
         </div>`;
       }
