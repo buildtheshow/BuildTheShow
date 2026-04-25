@@ -178,12 +178,13 @@ function buildCastingCardBack(app, opts = {}) {
 
   function renderSessionBuckets(entries) {
     if (!entries?.length) return '';
-    return entries.map(({ sessionLabel, bucketName, bucketColour }) =>
-      `<div class="irb-inroom-bucket-block" style="border-left-color:${escStr(bucketColour)};background:${escStr(bucketColour)}12;">
-        <div class="irb-inroom-note-label" style="color:${escStr(bucketColour)};">${escStr(sessionLabel)}</div>
-        <div class="irb-inroom-bucket-name" style="color:${escStr(bucketColour)};">${escStr(bucketName)}</div>
-      </div>`
+    const rows = entries.map(({ bucketName, bucketColour }) =>
+      `<div class="irb-char-name" style="${bucketColour ? `color:${escStr(bucketColour)};` : ''}">${escStr(bucketName)}</div>`
     ).join('');
+    return `<div class="irb-session-block">
+      <div class="irb-session-label">Groups</div>
+      ${rows}
+    </div>`;
   }
 
   function renderSessionRoleNotes(entries) {
@@ -246,6 +247,16 @@ function buildCastingCardBack(app, opts = {}) {
     if (type === 'audition') {
       return [
         renderSessionScores(scoreEntries, impressionCategories),
+        renderSessionNotesAlways(noteEntries, 'Quick Notes'),
+        renderCharacterList(assignmentEntries),
+      ].filter(Boolean).join('');
+    }
+
+    if (type === 'dance_call') {
+      const danceCategories = scoreEntries.length ? impressionCategories : null;
+      return [
+        renderSessionScores(scoreEntries, danceCategories),
+        renderSessionBuckets(bucketEntries),
         renderSessionNotesAlways(noteEntries, 'Quick Notes'),
         renderCharacterList(assignmentEntries),
       ].filter(Boolean).join('');
