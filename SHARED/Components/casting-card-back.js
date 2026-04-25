@@ -228,7 +228,7 @@ function buildCastingCardBack(app, opts = {}) {
 
   function renderCharacterList(entries) {
     const rows = (entries || []).map(({ charName, authorColor }) =>
-      `<div class="irb-notes" style="${authorColor ? `color:${escStr(authorColor)};` : ''}">${escStr(charName)}</div>`
+      `<div class="irb-char-name" style="${authorColor ? `color:${escStr(authorColor)};` : ''}">${escStr(charName)}</div>`
     );
     return `<div class="irb-session-block">
       <div class="irb-session-label">Characters</div>
