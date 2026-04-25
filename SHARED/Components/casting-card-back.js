@@ -130,36 +130,35 @@ function buildCastingCardBack(app, opts = {}) {
 
   function renderSessionScores(entries, allCategories) {
     if (allCategories?.length) {
-      // Group entries by author so we can show all expected categories per author.
-      const authorMap = new Map();
+      // Build ordered author list (first-seen order = consistent column order)
+      const authorOrder = [];
+      const authorSet = new Set();
       (entries || []).forEach(entry => {
         const key = [entry.authorName, entry.authorRole, entry.authorColor].join('||');
-        if (!authorMap.has(key)) authorMap.set(key, { authorName: entry.authorName, authorRole: entry.authorRole, authorColor: entry.authorColor, values: new Map() });
-        authorMap.get(key).values.set(entry.label, entry.value);
+        if (!authorSet.has(key)) { authorSet.add(key); authorOrder.push({ key, authorColor: entry.authorColor }); }
       });
 
-      const scoreRows = authorMap.size
-        ? [...authorMap.values()].map(({ authorColor, values }) =>
-            `<div style="margin-bottom:0.4rem;${authorColor ? `border-left:3px solid ${escStr(authorColor)};padding-left:0.5rem;` : ''}">
-              <div class="irb-score-grid">${allCategories.map(cat => {
-                const val = values.get(cat);
-                return `<div class="irb-score-pair">
-                  <span class="irb-score-key" style="${authorColor ? `color:${escStr(authorColor)};opacity:0.72;` : ''}">${escStr(cat)}</span>
-                  <span class="irb-score-val${!val ? ' irb-score-empty' : ''}">${val ? escStr(val) : '—'}</span>
-                </div>`;
-              }).join('')}</div>
-            </div>`
-          ).join('')
-        : `<div class="irb-score-grid">${allCategories.map(cat =>
-            `<div class="irb-score-pair">
-              <span class="irb-score-key">${escStr(cat)}</span>
-              <span class="irb-score-val irb-score-empty">—</span>
-            </div>`
-          ).join('')}</div>`;
+      // Build category → author-key → value map
+      const catMap = new Map(allCategories.map(cat => [cat, new Map()]));
+      (entries || []).forEach(entry => {
+        const key = [entry.authorName, entry.authorRole, entry.authorColor].join('||');
+        catMap.get(entry.label)?.set(key, entry.value);
+      });
+
+      const categoriesHtml = allCategories.map(cat => {
+        const byAuthor = catMap.get(cat);
+        const answers = authorOrder.length
+          ? authorOrder.map(({ key, authorColor }) => {
+              const val = byAuthor.get(key);
+              return `<span class="irb-impression-answer${!val ? ' irb-score-empty' : ''}" style="${authorColor ? `color:${escStr(authorColor)};` : ''}">${val ? escStr(val) : '—'}</span>`;
+            }).join('')
+          : `<span class="irb-impression-answer irb-score-empty">—</span>`;
+        return `<div class="irb-impression-row"><span class="irb-impression-cat">${escStr(cat)}</span>${answers}</div>`;
+      }).join('');
 
       return `<div class="irb-session-block irb-inroom-scores">
         <div class="irb-session-label">Impressions</div>
-        ${scoreRows}
+        <div class="irb-impression-grid">${categoriesHtml}</div>
       </div>`;
     }
 
