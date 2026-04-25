@@ -139,10 +139,8 @@ function buildCastingCardBack(app, opts = {}) {
       });
 
       const scoreRows = authorMap.size
-        ? [...authorMap.values()].map(({ authorName, authorRole, authorColor, values }) => {
-            const author = [authorName, authorRole].filter(Boolean).join(' · ');
-            return `<div style="margin-bottom:0.45rem;${authorColor ? `border-left:3px solid ${escStr(authorColor)};padding-left:0.5rem;` : ''}">
-              ${author ? `<div class="irb-inroom-note-label" style="${authorColor ? `color:${escStr(authorColor)};` : ''}">${escStr(author)}</div>` : ''}
+        ? [...authorMap.values()].map(({ authorColor, values }) =>
+            `<div style="margin-bottom:0.4rem;${authorColor ? `border-left:3px solid ${escStr(authorColor)};padding-left:0.5rem;` : ''}">
               <div class="irb-score-grid">${allCategories.map(cat => {
                 const val = values.get(cat);
                 return `<div class="irb-score-pair">
@@ -150,8 +148,8 @@ function buildCastingCardBack(app, opts = {}) {
                   <span class="irb-score-val${!val ? ' irb-score-empty' : ''}">${val ? escStr(val) : '—'}</span>
                 </div>`;
               }).join('')}</div>
-            </div>`;
-          }).join('')
+            </div>`
+          ).join('')
         : `<div class="irb-score-grid">${allCategories.map(cat =>
             `<div class="irb-score-pair">
               <span class="irb-score-key">${escStr(cat)}</span>
