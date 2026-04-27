@@ -1029,3 +1029,334 @@ BEGIN
     $p$;
   END IF;
 END $$;
+
+-- ── 9. production_audition_observations + RPCs ───────────────────────────────
+-- Stores structured per-applicant scores, role decisions, and quick notes
+-- keyed by area/type/key and author (team member OR organisation).
+-- Team portal writes here via session-token RPCs (SECURITY DEFINER).
+-- Org admin reads directly via RLS. Team members read via team_observations_for_production.
+
+CREATE TABLE IF NOT EXISTS production_audition_observations (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  production_id uuid NOT NULL REFERENCES productions(id) ON DELETE CASCADE,
+  applicant_id uuid NOT NULL REFERENCES audition_applications(id) ON DELETE CASCADE,
+  session_id uuid REFERENCES audition_sessions(id) ON DELETE SET NULL,
+  character_id uuid,
+  source_type text NOT NULL DEFAULT 'team_member',
+  team_member_id uuid REFERENCES production_team_members(id) ON DELETE SET NULL,
+  author_name text,
+  author_role text,
+  author_color text DEFAULT '#572e88',
+  observation_area text NOT NULL DEFAULT 'in_room',
+  observation_type text NOT NULL DEFAULT 'general',
+  observation_key text NOT NULL DEFAULT 'general',
+  value text,
+  body text,
+  metadata jsonb DEFAULT '{}',
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+ALTER TABLE production_audition_observations ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Org admin can manage production audition observations" ON production_audition_observations;
+CREATE POLICY "Org admin can manage production audition observations" ON production_audition_observations
+  USING (production_id IN (
+    SELECT p.id FROM productions p
+    JOIN organizations o ON o.id = p.organization_id
+    WHERE o.admin_id = auth.uid()
+  ))
+  WITH CHECK (production_id IN (
+    SELECT p.id FROM productions p
+    JOIN organizations o ON o.id = p.organization_id
+    WHERE o.admin_id = auth.uid()
+  ));
+
+CREATE INDEX IF NOT EXISTS production_audition_observations_prod_idx
+  ON production_audition_observations (production_id, applicant_id, session_id, created_at);
+
+-- READ: team member reads all observations for a production
+DROP FUNCTION IF EXISTS team_observations_for_production(uuid,text);
+CREATE OR REPLACE FUNCTION team_observations_for_production(
+  p_production_id uuid,
+  p_session_token text
+)
+RETURNS SETOF production_audition_observations
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  WITH authed AS (
+    SELECT s.team_member_id
+    FROM production_team_member_sessions s
+    JOIN production_team_members m ON m.id = s.team_member_id
+    WHERE s.production_id = p_production_id
+      AND s.session_token = trim(p_session_token)
+      AND s.revoked_at IS NULL
+      AND s.expires_at > now()
+      AND m.is_active = true
+    LIMIT 1
+  )
+  SELECT o.*
+  FROM production_audition_observations o
+  WHERE EXISTS (SELECT 1 FROM authed)
+    AND o.production_id = p_production_id
+  ORDER BY o.created_at ASC;
+$$;
+
+-- WRITE: team member upserts an observation
+DROP FUNCTION IF EXISTS team_observation_upsert_for_session(uuid,text,uuid,uuid,uuid,text,text,text,text,text,jsonb);
+CREATE OR REPLACE FUNCTION team_observation_upsert_for_session(
+  p_production_id uuid,
+  p_session_token text,
+  p_applicant_id uuid,
+  p_session_id uuid DEFAULT NULL,
+  p_character_id uuid DEFAULT NULL,
+  p_observation_area text DEFAULT 'in_room',
+  p_observation_type text DEFAULT 'general',
+  p_observation_key text DEFAULT 'general',
+  p_value text DEFAULT NULL,
+  p_body text DEFAULT NULL,
+  p_metadata jsonb DEFAULT '{}'
+)
+RETURNS SETOF production_audition_observations
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_member production_team_members%ROWTYPE;
+  v_obs_id uuid;
+BEGIN
+  SELECT m.*
+  INTO v_member
+  FROM production_team_member_sessions s
+  JOIN production_team_members m ON m.id = s.team_member_id
+  WHERE s.production_id = p_production_id
+    AND s.session_token = trim(p_session_token)
+    AND s.revoked_at IS NULL
+    AND s.expires_at > now()
+    AND m.is_active = true
+  LIMIT 1;
+
+  IF v_member.id IS NULL THEN
+    RAISE EXCEPTION 'Team access not found';
+  END IF;
+
+  UPDATE production_team_member_sessions
+  SET last_used_at = now()
+  WHERE production_id = p_production_id
+    AND session_token = trim(p_session_token)
+    AND revoked_at IS NULL;
+
+  SELECT id INTO v_obs_id
+  FROM production_audition_observations
+  WHERE production_id = p_production_id
+    AND applicant_id = p_applicant_id
+    AND source_type = 'team_member'
+    AND team_member_id = v_member.id
+    AND observation_area = p_observation_area
+    AND observation_type = p_observation_type
+    AND observation_key = p_observation_key
+    AND (p_session_id IS NULL AND session_id IS NULL OR session_id = p_session_id)
+    AND (p_character_id IS NULL AND character_id IS NULL OR character_id = p_character_id)
+  LIMIT 1;
+
+  IF v_obs_id IS NOT NULL THEN
+    UPDATE production_audition_observations
+    SET value = p_value,
+        body = p_body,
+        metadata = COALESCE(p_metadata, '{}'),
+        updated_at = now()
+    WHERE id = v_obs_id;
+  ELSE
+    INSERT INTO production_audition_observations (
+      production_id, applicant_id, session_id, character_id,
+      source_type, team_member_id,
+      author_name, author_role, author_color,
+      observation_area, observation_type, observation_key,
+      value, body, metadata
+    )
+    VALUES (
+      p_production_id, p_applicant_id, p_session_id, p_character_id,
+      'team_member', v_member.id,
+      v_member.name, v_member.role, v_member.note_color,
+      p_observation_area, p_observation_type, p_observation_key,
+      p_value, p_body, COALESCE(p_metadata, '{}')
+    )
+    RETURNING id INTO v_obs_id;
+  END IF;
+
+  RETURN QUERY SELECT * FROM production_audition_observations WHERE id = v_obs_id;
+END;
+$$;
+
+-- DELETE: team member removes their own observation
+DROP FUNCTION IF EXISTS team_observation_delete_for_session(uuid,text,uuid);
+CREATE OR REPLACE FUNCTION team_observation_delete_for_session(
+  p_production_id uuid,
+  p_session_token text,
+  p_observation_id uuid
+)
+RETURNS boolean
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_member production_team_members%ROWTYPE;
+BEGIN
+  SELECT m.*
+  INTO v_member
+  FROM production_team_member_sessions s
+  JOIN production_team_members m ON m.id = s.team_member_id
+  WHERE s.production_id = p_production_id
+    AND s.session_token = trim(p_session_token)
+    AND s.revoked_at IS NULL
+    AND s.expires_at > now()
+    AND m.is_active = true
+  LIMIT 1;
+
+  IF v_member.id IS NULL THEN
+    RAISE EXCEPTION 'Team access not found';
+  END IF;
+
+  DELETE FROM production_audition_observations
+  WHERE id = p_observation_id
+    AND production_id = p_production_id
+    AND team_member_id = v_member.id;
+
+  UPDATE production_team_member_sessions
+  SET last_used_at = now()
+  WHERE production_id = p_production_id
+    AND session_token = trim(p_session_token)
+    AND revoked_at IS NULL;
+
+  RETURN FOUND;
+END;
+$$;
+
+-- WRITE: org admin upserts an observation
+DROP FUNCTION IF EXISTS organisation_observation_upsert(uuid,uuid,uuid,uuid,text,text,text,text,text,jsonb,text,text,text);
+CREATE OR REPLACE FUNCTION organisation_observation_upsert(
+  p_production_id uuid,
+  p_applicant_id uuid,
+  p_session_id uuid DEFAULT NULL,
+  p_character_id uuid DEFAULT NULL,
+  p_observation_area text DEFAULT 'in_room',
+  p_observation_type text DEFAULT 'general',
+  p_observation_key text DEFAULT 'general',
+  p_value text DEFAULT NULL,
+  p_body text DEFAULT NULL,
+  p_metadata jsonb DEFAULT '{}',
+  p_author_name text DEFAULT NULL,
+  p_author_role text DEFAULT NULL,
+  p_author_color text DEFAULT '#b8b4c0'
+)
+RETURNS SETOF production_audition_observations
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_obs_id uuid;
+BEGIN
+  SELECT id INTO v_obs_id
+  FROM production_audition_observations
+  WHERE production_id = p_production_id
+    AND applicant_id = p_applicant_id
+    AND source_type = 'organisation'
+    AND team_member_id IS NULL
+    AND observation_area = p_observation_area
+    AND observation_type = p_observation_type
+    AND observation_key = p_observation_key
+    AND (p_session_id IS NULL AND session_id IS NULL OR session_id = p_session_id)
+    AND (p_character_id IS NULL AND character_id IS NULL OR character_id = p_character_id)
+  LIMIT 1;
+
+  IF v_obs_id IS NOT NULL THEN
+    UPDATE production_audition_observations
+    SET value = p_value,
+        body = p_body,
+        metadata = COALESCE(p_metadata, '{}'),
+        updated_at = now()
+    WHERE id = v_obs_id;
+  ELSE
+    INSERT INTO production_audition_observations (
+      production_id, applicant_id, session_id, character_id,
+      source_type, team_member_id,
+      author_name, author_role, author_color,
+      observation_area, observation_type, observation_key,
+      value, body, metadata
+    )
+    VALUES (
+      p_production_id, p_applicant_id, p_session_id, p_character_id,
+      'organisation', NULL,
+      p_author_name, p_author_role, p_author_color,
+      p_observation_area, p_observation_type, p_observation_key,
+      p_value, p_body, COALESCE(p_metadata, '{}')
+    )
+    RETURNING id INTO v_obs_id;
+  END IF;
+
+  RETURN QUERY SELECT * FROM production_audition_observations WHERE id = v_obs_id;
+END;
+$$;
+
+-- DELETE: org admin removes an observation
+DROP FUNCTION IF EXISTS organisation_observation_delete(uuid,uuid);
+CREATE OR REPLACE FUNCTION organisation_observation_delete(
+  p_production_id uuid,
+  p_observation_id uuid
+)
+RETURNS boolean
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  DELETE FROM production_audition_observations
+  WHERE id = p_observation_id
+    AND production_id = p_production_id
+    AND source_type = 'organisation';
+
+  RETURN FOUND;
+END;
+$$;
+
+-- READ: team member reads all authored notes for a production (session-token version)
+DROP FUNCTION IF EXISTS team_authored_notes_for_production(uuid,text);
+CREATE OR REPLACE FUNCTION team_authored_notes_for_production(
+  p_production_id uuid,
+  p_session_token text
+)
+RETURNS SETOF production_audition_notes
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  WITH authed AS (
+    SELECT s.team_member_id
+    FROM production_team_member_sessions s
+    JOIN production_team_members m ON m.id = s.team_member_id
+    WHERE s.production_id = p_production_id
+      AND s.session_token = trim(p_session_token)
+      AND s.revoked_at IS NULL
+      AND s.expires_at > now()
+      AND m.is_active = true
+    LIMIT 1
+  )
+  SELECT n.*
+  FROM production_audition_notes n
+  WHERE EXISTS (SELECT 1 FROM authed)
+    AND n.production_id = p_production_id
+  ORDER BY n.created_at ASC;
+$$;
+
+-- GRANTS
+GRANT EXECUTE ON FUNCTION team_observations_for_production(uuid,text) TO anon;
+GRANT EXECUTE ON FUNCTION team_observation_upsert_for_session(uuid,text,uuid,uuid,uuid,text,text,text,text,text,jsonb) TO anon;
+GRANT EXECUTE ON FUNCTION team_observation_delete_for_session(uuid,text,uuid) TO anon;
+GRANT EXECUTE ON FUNCTION team_authored_notes_for_production(uuid,text) TO anon;
+GRANT EXECUTE ON FUNCTION organisation_observation_upsert(uuid,uuid,uuid,uuid,text,text,text,text,text,jsonb,text,text,text) TO authenticated;
+GRANT EXECUTE ON FUNCTION organisation_observation_delete(uuid,uuid) TO authenticated;
