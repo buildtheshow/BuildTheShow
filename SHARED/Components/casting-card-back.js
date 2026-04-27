@@ -269,8 +269,8 @@ function buildCastingCardBack(app, opts = {}) {
           `<span class="irb-char-dot" title="${escStr(badge)}" style="background:${escStr(color)};"></span>`
         ).join('');
         return `<div class="irb-char-row">
-          <span class="irb-char-name">${escStr(charName)}</span>
           <span class="irb-char-dots">${dots}</span>
+          <span class="irb-char-name">${escStr(charName)}</span>
         </div>`;
       }).join('');
       return `<div class="irb-char-group">
@@ -564,7 +564,8 @@ function buildCastingCardBack(app, opts = {}) {
     }
   }
 
-  return `<div class="inroom-back-scroll irb-tabs" style="${BACK_CARD_SURFACE_STYLE}">
+  const accentColor = scoreColorSet?.base || '#572e88';
+  return `<div class="inroom-back-scroll irb-tabs" style="${BACK_CARD_SURFACE_STYLE};--irb-accent:${escStr(accentColor)}">
     <div class="irb-tab-bar" role="tablist" aria-label="Casting card details">
       ${tabButton('Their Answers', true, 'irb-tab-answers')}
       ${tabButton('General Auditions', false, 'irb-tab-general')}
