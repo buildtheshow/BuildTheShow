@@ -235,26 +235,42 @@ function buildCastingCardBack(app, opts = {}) {
       </div>`;
     }
     const ROLE_ORDER = { Principal: 0, Featured: 1, Supporting: 2, Ensemble: 3, Chorus: 3, Group: 3 };
-    const STATE_LABEL = { liked: 'Liked', chosen: 'Cast', applied: 'Applied', decision: '' };
     const DECISION_LABEL = { yes: 'Yes', maybe: 'Maybe', no: 'No' };
-    const sorted = [...entries].sort((a, b) => {
+    const STATE_LABEL = { liked: 'Liked', chosen: 'Cast', applied: 'Applied' };
+
+    // Deduplicate: one entry per character, collecting all authors
+    const charMap = new Map();
+    entries.forEach(entry => {
+      const key = entry.charName || '';
+      if (!charMap.has(key)) charMap.set(key, { ...entry, authors: [] });
+      const badge = DECISION_LABEL[entry.decision] || STATE_LABEL[entry.state] || '';
+      charMap.get(key).authors.push({ color: entry.authorColor || '#572e88', badge });
+    });
+
+    // Sort deduped characters by role type then name
+    const deduped = [...charMap.values()].sort((a, b) => {
       const ra = ROLE_ORDER[a.roleType] ?? 99, rb = ROLE_ORDER[b.roleType] ?? 99;
       if (ra !== rb) return ra - rb;
       return (a.charName || '').localeCompare(b.charName || '');
     });
+
+    // Group by role type
     const groups = [];
     let current = null;
-    sorted.forEach(entry => {
+    deduped.forEach(entry => {
       const type = entry.roleType || 'Other';
       if (!current || current.type !== type) { current = { type, entries: [] }; groups.push(current); }
       current.entries.push(entry);
     });
+
     const inner = groups.map(({ type, entries: grpEntries }) => {
-      const rows = grpEntries.map(({ charName, state, decision, authorColor }) => {
-        const badge = DECISION_LABEL[decision] || STATE_LABEL[state] || '';
+      const rows = grpEntries.map(({ charName, authors }) => {
+        const dots = authors.map(({ color, badge }) =>
+          `<span class="irb-char-dot" title="${escStr(badge)}" style="background:${escStr(color)};"></span>`
+        ).join('');
         return `<div class="irb-char-row">
-          <span class="irb-char-name" style="${authorColor ? `color:${escStr(authorColor)};` : ''}">${escStr(charName)}</span>
-          ${badge ? `<span class="irb-char-badge" style="${authorColor ? `color:${escStr(authorColor)};border-color:${escStr(authorColor)};` : ''}">${escStr(badge)}</span>` : ''}
+          <span class="irb-char-name">${escStr(charName)}</span>
+          <span class="irb-char-dots">${dots}</span>
         </div>`;
       }).join('');
       return `<div class="irb-char-group">
@@ -262,6 +278,7 @@ function buildCastingCardBack(app, opts = {}) {
         ${rows}
       </div>`;
     }).join('');
+
     return `<div class="irb-session-block">
       <div class="irb-session-label">Characters</div>
       ${inner}
