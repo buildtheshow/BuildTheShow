@@ -71,7 +71,6 @@ function buildCastingCardBack(app, opts = {}) {
     return d.innerHTML;
   }
 
-  let sectionIndex = 0;
   function sectionLabelHtml(label) {
     const chunks = String(label || '').trim().split(/\s+/).filter(Boolean);
     if (chunks.length < 2) return escStr(label);
@@ -84,9 +83,8 @@ function buildCastingCardBack(app, opts = {}) {
   function section(label, rows) {
     const filtered = rows.filter(([, v]) => v && String(v).trim() && v !== '—');
     if (!filtered.length) return '';
-    const sectionBg = sectionIndex++ % 2 === 0 ? '#fdfdfd' : '#e0e0e0';
     const labelHtml = sectionLabelHtml(label);
-    return `<div class="irb-section" style="border-left-color:${sectionBg};background:${sectionBg};">
+    return `<div class="irb-section">
       <div class="irb-section-label">${labelHtml}</div>
       <div class="irb-section-rows">
         ${filtered.map(([k, v]) =>
@@ -179,7 +177,10 @@ function buildCastingCardBack(app, opts = {}) {
   function renderSessionBuckets(entries) {
     if (!entries?.length) return '';
     const rows = entries.map(({ bucketName, bucketColour }) =>
-      `<div class="irb-char-name" style="${bucketColour ? `color:${escStr(bucketColour)};` : ''}">${escStr(bucketName)}</div>`
+      `<div class="irb-char-row">
+        <span class="irb-char-dots"><span class="irb-char-dot" style="background:${escStr(bucketColour || 'var(--irb-accent)')};"></span></span>
+        <span class="irb-char-name" style="${bucketColour ? `color:${escStr(bucketColour)};` : ''}">${escStr(bucketName)}</span>
+      </div>`
     ).join('');
     return `<div class="irb-session-block">
       <div class="irb-session-label">Groups</div>
@@ -189,7 +190,7 @@ function buildCastingCardBack(app, opts = {}) {
 
   function renderSessionRoleNotes(entries) {
     if (!entries?.length) return '';
-    return entries.map(({ sessionLabel, charName, roleType, note, authorName, authorRole, authorColor }) =>
+    const rowsHtml = entries.map(({ sessionLabel, charName, roleType, note, authorName, authorRole, authorColor }) =>
       `<div class="irb-inroom-role-note-block" style="${authorColor ? `border-left-color:${escStr(authorColor)};background:${escStr(authorColor)}12;` : ''}">
         <div class="irb-inroom-role-note-header">
           <span class="irb-inroom-role-note-name">${sessionLabel ? `<span style="display:block;font-size:0.75em;font-weight:700;opacity:0.7;">${escStr(sessionLabel)}</span>` : ''}${escStr(charName)}${roleType === 'Group' ? ' <span style="font-size:0.85em;font-weight:600;opacity:0.65;">(group)</span>' : ''}</span>
@@ -199,6 +200,10 @@ function buildCastingCardBack(app, opts = {}) {
         <div class="irb-notes">${escStr(note)}</div>
       </div>`
     ).join('');
+    return `<div class="irb-session-block">
+      <div class="irb-session-label">Role Notes</div>
+      ${rowsHtml}
+    </div>`;
   }
 
   function renderSessionNotes(entries, heading = '') {
@@ -309,11 +314,11 @@ function buildCastingCardBack(app, opts = {}) {
     }
 
     const content = [
-      renderSessionScores(scoreEntries),
-      renderSessionAssignments(assignmentEntries),
-      renderSessionBuckets(bucketEntries),
+      renderSessionScores(scoreEntries, impressionCategories),
+      renderCharacterList(assignmentEntries),
       renderSessionRoleNotes(roleNoteEntries),
-      renderSessionNotes(noteEntries, ''),
+      renderSessionBuckets(bucketEntries),
+      renderSessionNotesAlways(noteEntries, 'Quick Notes'),
     ].filter(Boolean).join('');
     return content || '<div class="irb-tab-empty">Nothing here yet.</div>';
   }
@@ -496,13 +501,10 @@ function buildCastingCardBack(app, opts = {}) {
   // ── Notes ─────────────────────────────────────────────────────
   const notesValue = ca['Additional Notes'] || app.notes;
   const notesSection = notesValue
-    ? (() => {
-        const notesBg = sectionIndex++ % 2 === 0 ? '#fdfdfd' : '#e0e0e0';
-        return `<div class="irb-section" style="border-left-color:${notesBg};background:${notesBg};">
+    ? `<div class="irb-section">
          <div class="irb-section-label">Notes</div>
          <div class="irb-section-rows"><div class="irb-notes">${escStr(notesValue)}</div></div>
-       </div>`;
-      })()
+       </div>`
     : '';
 
   const theirAnswersContent = [
