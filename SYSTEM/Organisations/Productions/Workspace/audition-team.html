@@ -14839,11 +14839,6 @@
   let _saveFadeTimer = null;
   let _modalSaveFadeTimer = null;
   function showSaveStatus(state) {
-    if (window.AutoSave) {
-      if (state === 'saving') window.AutoSave.showSaving();
-      else if (state === 'saved') window.AutoSave.showSaved();
-      else if (state === 'error') window.AutoSave.showError();
-    }
     const el = document.getElementById('global-save-indicator');
     if (!el) return;
     clearTimeout(_saveFadeTimer);
@@ -31317,17 +31312,19 @@ If you have any questions, don't hesitate to reach out.
     app.custom_answers = nextAnswers;
     applyInRoomScoreUI(buttonEl, value, isClearing);
     showSaveStatus('saving');
-    try {
-      const error = await saveInRoomCustomAnswers(app, nextAnswers);
-      if (error) throw error;
-    } catch (caError) {
-      app.custom_answers = currentAnswers;
-      applyInRoomScoreUI(buttonEl, currentAnswers[answerKey], !currentAnswers[answerKey]);
-      console.error('[BTS] in-room score save failed', caError);
-      showToast('Could not save in the room score.', true);
-      return;
+    if (!teamAccessMode) {
+      try {
+        const error = await saveInRoomCustomAnswers(app, nextAnswers);
+        if (error) throw error;
+      } catch (caError) {
+        app.custom_answers = currentAnswers;
+        applyInRoomScoreUI(buttonEl, currentAnswers[answerKey], !currentAnswers[answerKey]);
+        console.error('[BTS] in-room score save failed', caError);
+        showToast('Could not save in the room score.', true);
+        return;
+      }
     }
-    // Observation save is best-effort — custom_answers already persisted above
+    // Observation save is the source of truth for team members
     const nextValue = currentAnswers[answerKey] === value ? null : value;
     const existingObservation = findAuditionObservation(appId, {
       sessionId, area: 'in_room', type: 'score', key, currentAuthorOnly: true,
