@@ -29325,7 +29325,6 @@ If you have any questions, don't hesitate to reach out.
     if (!el) return;
     dcCurrentSessionId = sessionId;
     const prevBoardScroll = el.querySelector('.dc-board-scroll')?.scrollTop || 0;
-    const prevPoolScroll = el.querySelector('#dc-pool-grid')?.scrollTop || 0;
 
     // Per-session check-in (same pattern as check-in list)
     const allCheckedIn = allApplicants.filter(a => {
@@ -29358,10 +29357,6 @@ If you have any questions, don't hesitate to reach out.
     const buckets = dcGetBuckets(sessionId);
     const collapsedState = dcGetCollapsedState(sessionId);
     const collapsedBuckets = new Set(collapsedState.buckets || []);
-    const inBucket = new Set(buckets.flatMap(b => b.appIds));
-    const pool = checkedIn
-      .filter(a => !inBucket.has(a.id))
-      .sort(compareApplicantsAlphabetically);
 
     // Session accent color
     const sessionObj = audSessions.find(s => s.id === sessionId);
@@ -29383,15 +29378,10 @@ If you have any questions, don't hesitate to reach out.
         </div>`;
     }
 
-    const poolCards = pool.length
-      ? pool.map(a => `
-          <div class="dc-pool-card" id="dc-pool-${a.id}"
-            draggable="true"
-            ondragstart="dcDragStart(event,'${a.id}',null)"
-            ondragend="dcDragEnd(event)">
-            ${cbv2MakeCCard(a, null, null)}
-          </div>`).join('')
-      : `<div style="color:#c4bdd4;font-size:0.8rem;padding:0.5rem;">Everyone's been placed in a bucket.</div>`;
+    // Checked-in thumbnail tray (same as General Auditions In The Room)
+    const trayThumbs = checkedIn.length
+      ? checkedIn.map(a => inRoomThumbHtml(a, 'openAuditionSessionInRoom', sessionObj)).join('')
+      : `<div class="inroom-empty-note">No performers checked in yet.</div>`;
 
     const bucketsHtml = buckets.map(b => {
       const isCollapsed = collapsedBuckets.has(b.id);
@@ -29433,39 +29423,29 @@ If you have any questions, don't hesitate to reach out.
       </div>`;
     }).join('');
 
-    const sectionLabel = activeSlotTime !== null
-      ? `${esc(formatSlotTime(activeSlotTime))} · ${checkedIn.length} performer${checkedIn.length !== 1 ? 's' : ''}`
-      : `Checked In · ${allCheckedIn.length} performer${allCheckedIn.length !== 1 ? 's' : ''}`;
-
     el.innerHTML = `<div class="dc-shell">
       ${slotFilterHtml}
-      <div class="dc-main">
-        <div class="dc-pool-section"
-          ondragover="event.preventDefault()"
-          ondrop="dcDropOnPool(event,'${sessionId}')">
-          <div class="dc-section-label">Performers</div>
-          <div class="dc-pool-count">${sectionLabel}</div>
-          <div class="dc-pool-grid" id="dc-pool-grid">${poolCards}</div>
-        </div>
-        <div class="dc-board">
-          <div class="dc-board-scroll">
-            <div class="dc-board-section">
-              <div class="dc-board-section-head">
-                <div class="dc-board-section-title">Quick Notes</div>
-              </div>
-              <div class="dc-buckets-area" id="dc-buckets-area">
-                ${bucketsHtml}
-                <button class="dc-add-bucket-btn" onclick="dcAddBucket('${sessionId}')">+ Add Container</button>
-              </div>
+      <div class="inroom-tray">
+        <div class="inroom-thumbs">${trayThumbs}</div>
+      </div>
+      <div class="dc-board">
+        <div class="dc-board-scroll">
+          <div class="dc-board-section">
+            <div class="dc-board-section-head">
+              <div class="dc-board-section-title">Quick Notes</div>
             </div>
-            <div class="dc-board-section">
-              <div class="dc-board-section-head">
-                <div class="dc-board-section-title">Characters</div>
-              </div>
-              ${characters.length
-                ? `<div class="dc-chars-section">${dcRenderCharSections(sessionId)}</div>`
-                : `<div class="dc-bucket-empty">Add characters in Audition Setup to start sorting by role.</div>`}
+            <div class="dc-buckets-area" id="dc-buckets-area">
+              ${bucketsHtml}
+              <button class="dc-add-bucket-btn" onclick="dcAddBucket('${sessionId}')">+ Add Container</button>
             </div>
+          </div>
+          <div class="dc-board-section">
+            <div class="dc-board-section-head">
+              <div class="dc-board-section-title">Characters</div>
+            </div>
+            ${characters.length
+              ? `<div class="dc-chars-section">${dcRenderCharSections(sessionId)}</div>`
+              : `<div class="dc-bucket-empty">Add characters in Audition Setup to start sorting by role.</div>`}
           </div>
         </div>
       </div>
@@ -29473,9 +29453,7 @@ If you have any questions, don't hesitate to reach out.
 
     requestAnimationFrame(() => {
       const boardScroll = el.querySelector('.dc-board-scroll');
-      const poolGrid = el.querySelector('#dc-pool-grid');
       if (boardScroll) boardScroll.scrollTop = prevBoardScroll;
-      if (poolGrid) poolGrid.scrollTop = prevPoolScroll;
     });
   }
 
