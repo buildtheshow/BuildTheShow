@@ -217,9 +217,10 @@
         <div class="inroom-face front"${frontClick ? ` onclick="${frontClick}"` : ''}>
           <div class="inroom-front-card-wrap" style="display:flex;align-items:flex-start;justify-content:center;padding:${STANDARD_CARD_WRAP_PADDING};width:100%;height:100%;overflow:visible;box-sizing:border-box;">${frontHtml}</div>
         </div>
-        <div class="inroom-face back"${backClick ? ` onclick="${backClick}"` : ''}>
-          <div class="inroom-back-card-surface" style="width:100%;height:100%;display:flex;align-items:flex-start;justify-content:center;padding:${STANDARD_CARD_WRAP_PADDING};box-sizing:border-box;overflow:visible;">
+        <div class="inroom-face back">
+          <div class="inroom-back-card-surface" style="width:100%;height:100%;display:flex;align-items:flex-start;justify-content:center;padding:${STANDARD_CARD_WRAP_PADDING};box-sizing:border-box;overflow:visible;position:relative;">
             ${backHtml}
+            ${backClick ? `<div class="irb-flip-overlay" onclick="${backClick}" style="position:absolute;bottom:0;left:0;right:0;height:80%;z-index:1;cursor:pointer;background:transparent;" aria-hidden="true"></div>` : ''}
           </div>
         </div>
       </div>
