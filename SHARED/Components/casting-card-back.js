@@ -228,12 +228,43 @@ function buildCastingCardBack(app, opts = {}) {
   }
 
   function renderCharacterList(entries) {
-    const rows = (entries || []).map(({ charName, authorColor }) =>
-      `<div class="irb-char-name" style="${authorColor ? `color:${escStr(authorColor)};` : ''}">${escStr(charName)}</div>`
-    );
+    if (!entries?.length) {
+      return `<div class="irb-session-block">
+        <div class="irb-session-label">Characters</div>
+        <div class="irb-notes irb-score-empty">—</div>
+      </div>`;
+    }
+    const ROLE_ORDER = { Principal: 0, Featured: 1, Supporting: 2, Ensemble: 3, Chorus: 3, Group: 3 };
+    const STATE_LABEL = { liked: 'Liked', chosen: 'Cast', applied: 'Applied', decision: '' };
+    const DECISION_LABEL = { yes: 'Yes', maybe: 'Maybe', no: 'No' };
+    const sorted = [...entries].sort((a, b) => {
+      const ra = ROLE_ORDER[a.roleType] ?? 99, rb = ROLE_ORDER[b.roleType] ?? 99;
+      if (ra !== rb) return ra - rb;
+      return (a.charName || '').localeCompare(b.charName || '');
+    });
+    const groups = [];
+    let current = null;
+    sorted.forEach(entry => {
+      const type = entry.roleType || 'Other';
+      if (!current || current.type !== type) { current = { type, entries: [] }; groups.push(current); }
+      current.entries.push(entry);
+    });
+    const inner = groups.map(({ type, entries: grpEntries }) => {
+      const rows = grpEntries.map(({ charName, state, decision, authorColor }) => {
+        const badge = DECISION_LABEL[decision] || STATE_LABEL[state] || '';
+        return `<div class="irb-char-row">
+          <span class="irb-char-name" style="${authorColor ? `color:${escStr(authorColor)};` : ''}">${escStr(charName)}</span>
+          ${badge ? `<span class="irb-char-badge" style="${authorColor ? `color:${escStr(authorColor)};border-color:${escStr(authorColor)};` : ''}">${escStr(badge)}</span>` : ''}
+        </div>`;
+      }).join('');
+      return `<div class="irb-char-group">
+        <div class="irb-char-group-label">${escStr(type)}</div>
+        ${rows}
+      </div>`;
+    }).join('');
     return `<div class="irb-session-block">
       <div class="irb-session-label">Characters</div>
-      ${rows.length ? rows.join('') : '<div class="irb-notes irb-score-empty">—</div>'}
+      ${inner}
     </div>`;
   }
 
