@@ -78,7 +78,7 @@
     }).join('');
 
     return `<div class="sidebar-position-group${isOpen ? ' open' : ''}">
-      <a href="${hub}" class="sidebar-nav-item sidebar-position-trigger${isOpen ? ' active' : ''}">
+      <a href="${hub}" class="sidebar-nav-item sidebar-position-trigger${isOpen ? ' open-parent' : ''}">
         ${label}
       </a>
       <div class="sidebar-subnav${isOpen ? ' open' : ''}">
@@ -157,6 +157,7 @@
       trigger.addEventListener('click', function (e) {
         const group = trigger.closest('.sidebar-position-group');
         if (!group) return;
+        if (group.classList.contains('open')) return;
         group.classList.toggle('open');
         const subnav = group.querySelector('.sidebar-subnav');
         if (subnav) subnav.classList.toggle('open');

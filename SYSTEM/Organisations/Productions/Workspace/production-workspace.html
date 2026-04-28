@@ -296,7 +296,8 @@
       white-space: nowrap;
     }
     .prod-tab:hover { color: rgba(255,255,255,0.9); background: rgba(255,255,255,0.06); }
-    .prod-tab.active { color: #fff; border-left-color: #efab45; background: rgba(255,255,255,0.08); }
+    .prod-tab.active { color: #fff; border-left-color: #efab45; background: rgba(255,255,255,0.12); }
+    .prod-tab.is-open-parent { color: rgba(255,255,255,0.88); border-left-color: rgba(239,171,69,0.45); background: rgba(255,255,255,0.06); }
     .tab-icon-slot {
       width: 24px;
       height: 24px;
@@ -314,7 +315,8 @@
       opacity: 0.68;
     }
     .prod-tab:hover .tab-icon,
-    .prod-tab.active .tab-icon { opacity: 1; }
+    .prod-tab.active .tab-icon,
+    .prod-tab.is-open-parent .tab-icon { opacity: 1; }
     .prod-tab-label {
       display: inline-flex;
       align-items: center;
@@ -11493,7 +11495,7 @@
         </div>
       </div>
 
-      <div class="prod-tab" onclick="openCastingSubTab('castlist')">
+      <div class="prod-tab" data-tab="castlist" onclick="openCastingSubTab('castlist')">
         <span class="tab-icon-slot"><img src="/ASSETS/Images/navcastlist.svg" class="tab-icon" alt="" aria-hidden="true" /></span>
         Cast List
       </div>
@@ -19558,7 +19560,15 @@ If you have any questions, don't hesitate to reach out.
       if (wrap) wrap.classList.toggle('open', !!section && id === `${section}-wrap`);
     });
     document.querySelectorAll('.prod-sub-item, .prod-sub-group-link').forEach(el => el.classList.remove('active'));
-    if (activeSubId) document.getElementById(activeSubId)?.classList.add('active');
+    document.querySelectorAll('#auditions-parent-tab, #casting-parent-tab').forEach(el => {
+      el.classList.remove('active', 'is-open-parent');
+    });
+    const activeSubEl = activeSubId ? document.getElementById(activeSubId) : null;
+    if (activeSubEl) activeSubEl.classList.add('active');
+    if (section) {
+      const parent = document.getElementById(`${section}-parent-tab`);
+      parent?.classList.add(activeSubEl ? 'is-open-parent' : 'active');
+    }
   }
 
   let activeAuditionNavSessionId = '';
@@ -19627,6 +19637,7 @@ If you have any questions, don't hesitate to reach out.
     const wrap = document.getElementById('auditions-wrap');
     const isOpen = !!wrap?.classList.contains('open');
     if (isOpen) {
+      if (_sidebarSection === 'auditions') return;
       wrap.classList.remove('open');
       return;
     }
@@ -19744,6 +19755,7 @@ If you have any questions, don't hesitate to reach out.
     const wrap = document.getElementById('casting-wrap');
     const isOpen = !!wrap?.classList.contains('open');
     if (isOpen) {
+      if (_sidebarSection === 'casting') return;
       wrap.classList.remove('open');
       return;
     }
@@ -19777,7 +19789,14 @@ If you have any questions, don't hesitate to reach out.
   function openCastingSubTab(subTab) {
     closeMobileSidebar();
     switchProdTab('casting');
-    setSidebarSubmenuState('casting', 'csub-' + subTab);
+    if (subTab === 'castlist') {
+      setSidebarSubmenuState(null, null);
+      document.querySelectorAll('.prod-tab[data-tab]').forEach(el => {
+        el.classList.toggle('active', el.dataset.tab === 'castlist');
+      });
+    } else {
+      setSidebarSubmenuState('casting', 'csub-' + subTab);
+    }
     if (subTab === 'castboard') {
       setCastboardMode('general');
     }
@@ -19805,8 +19824,7 @@ If you have any questions, don't hesitate to reach out.
     document.querySelectorAll('.prod-tab[data-tab]').forEach(el => {
       el.classList.toggle('active', el.dataset.tab === id);
     });
-    if (id === 'auditions') document.getElementById('auditions-parent-tab')?.classList.add('active');
-    if (id === 'casting') document.getElementById('casting-parent-tab')?.classList.add('active');
+    if (id !== 'auditions' && id !== 'casting') setSidebarSubmenuState(null, null);
     const panelId = (id === 'auditions' || id === 'casting') ? 'casting' : id;
     document.querySelectorAll('.tab-panel').forEach(el => el.classList.toggle('active', el.id === 'panel-' + panelId));
     document.querySelector('.prod-main').classList.toggle('checklist-active', id === 'checklist');
@@ -19854,6 +19872,7 @@ If you have any questions, don't hesitate to reach out.
   document.querySelectorAll('.prod-tab[data-tab]').forEach(el => {
     // submenu parents are handled by their own onclick handlers
     if (el.id === 'casting-parent-tab' || el.id === 'auditions-parent-tab') return;
+    if (el.dataset.tab === 'castlist') return;
     el.addEventListener('click', () => switchProdTab(el.dataset.tab));
   });
 
