@@ -165,11 +165,7 @@
       teamAccessMode,
       activeTool,
       ciClick,
-      irClick,
-      cbCastClick,
-      cbListClick,
-      isDanceCall,
-      listLabel
+      irClick
     } = config;
 
     return `
