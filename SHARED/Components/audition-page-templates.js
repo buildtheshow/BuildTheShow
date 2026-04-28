@@ -280,7 +280,7 @@
             ${tagBtn('picks_up', 'Picks Up Quickly')}${tagBtn('clean', 'Clean')}${tagBtn('strong_presence', 'Strong Presence')}${tagBtn('takes_direction', 'Takes Direction')}
           </div>
           <div class="dc-tag-grid dc-tag-grid-neg">
-            ${tagBtn('missed_timing', 'Missed Timing')}${tagBtn('needs_control', 'Needs Control')}${tagBtn('low_presence', 'Low Presence')}${tagBtn('unsure', 'Unsure')}
+            ${tagBtn('missed_timing', 'Missed Timing')}${tagBtn('needs_support', 'Needs Support')}${tagBtn('low_presence', 'Low Presence')}${tagBtn('unsure', 'Unsure')}
           </div>
         </div>
       </div>
