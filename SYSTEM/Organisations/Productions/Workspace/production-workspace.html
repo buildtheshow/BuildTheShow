@@ -29674,7 +29674,7 @@ If you have any questions, don't hesitate to reach out.
           app: a,
           sessionId,
           cardFrontHtml: buildStandardCastingCardHtml(a),
-          cardBackHtml: buildInRoomBackHtml(a),
+          cardBackHtml: buildDanceCallBackHtml(a, sessionId),
           inRoomFlipOpen: false,
           activeTags: dcGetActiveTags(a.id, sessionId),
           activeResponse: dcGetSnap(a.id, sessionId, 'response'),
@@ -30812,6 +30812,76 @@ If you have any questions, don't hesitate to reach out.
       });
     });
     return results.length ? results : null;
+  }
+
+  function buildDanceCallBackHtml(app, sessionId) {
+    const session = (audSessions || []).find(s => s.id === sessionId) || null;
+    const sessionAccent = getAuditionScheduleSidebarMarkerColor('dance_call');
+    const scoreColorSet = teamAccessMode && teamAccessMember?.note_color
+      ? { base: teamAccessMember.note_color, dark: teamAccessMember.note_color, light: teamAccessMember.note_color }
+      : { base: ORG_AUTHORED_NOTE_COLOR, dark: '#5f5a69', light: '#efedf2' };
+    const accentColor = (teamAccessMode && teamAccessMember?.note_color) ? teamAccessMember.note_color : sessionAccent;
+
+    const sessionNotes = [];
+    listAuditionObservations(app.id, { area: 'dance_call', type: 'quick_note' }).forEach(obs => {
+      if (!obs?.body) return;
+      const author = observationAuthorLabel(obs);
+      sessionNotes.push({
+        label: [session?.name || 'Dance Call', author].filter(Boolean).join(' · '),
+        sessionType: 'dance_call',
+        note: obs.body,
+        ...observationAuthorFields(obs),
+      });
+    });
+
+    const TAG_LABELS = {
+      picks_up: 'Picks Up Quickly', clean: 'Clean', strong_presence: 'Strong Presence',
+      takes_direction: 'Takes Direction', missed_timing: 'Missed Timing',
+      needs_support: 'Needs Support', low_presence: 'Low Presence', unsure: 'Unsure',
+    };
+    const SNAP_LABELS = {
+      no_change: 'No Change', tried: 'Tried', adjusted: 'Adjusted', got_it: 'Got It',
+      ensemble: 'Ensemble', featured: 'Featured', watch: 'Watch', support: 'Support',
+    };
+    const scoreObservations = [];
+    listAuditionObservations(app.id, { area: 'dance_call', type: 'tag' }).forEach(obs => {
+      if (obs.value !== '1') return;
+      scoreObservations.push({
+        sessionLabel: session?.name || 'Dance Call',
+        sessionType: 'dance_call',
+        label: TAG_LABELS[obs.observation_key] || obs.observation_key,
+        value: '✓',
+        ...observationAuthorFields(obs),
+      });
+    });
+    listAuditionObservations(app.id, { area: 'dance_call', type: 'snap' }).forEach(obs => {
+      if (!obs.value) return;
+      const sectionLabel = obs.observation_key === 'response' ? 'Progression' : 'Casting';
+      scoreObservations.push({
+        sessionLabel: session?.name || 'Dance Call',
+        sessionType: 'dance_call',
+        label: `${sectionLabel}: ${SNAP_LABELS[obs.value] || obs.value}`,
+        value: obs.value,
+        ...observationAuthorFields(obs),
+      });
+    });
+
+    const coloredScoreObs = scoreColorSet?.base
+      ? scoreObservations.map(e => e.authorColor ? e : { ...e, authorColor: scoreColorSet.base })
+      : scoreObservations;
+
+    return buildCastingCardBack(app, {
+      includeInRoomScores: false,
+      includeRoomNotes: true,
+      accentColor,
+      scoreColorSet,
+      sessionNotes: sessionNotes.length ? sessionNotes : null,
+      scoreObservations: coloredScoreObs,
+      bucketPlacements: collectDanceBucketPlacements(app),
+      roleNotes: collectRoleNotes(app),
+      characterAssignments: collectCharacterAssignments(app),
+      auditionTimeRows: buildAuditionTimeRowsForCard(app),
+    });
   }
 
   function buildInRoomBackHtml(app) {
