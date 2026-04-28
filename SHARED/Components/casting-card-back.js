@@ -307,8 +307,9 @@ function buildCastingCardBack(app, opts = {}) {
 
     if (type === 'dance_call') {
       return [
-        renderSessionBuckets(bucketEntries),
+        renderSessionScores(scoreEntries, impressionCategories),
         renderSessionNotesAlways(noteEntries, 'Quick Notes'),
+        renderSessionBuckets(bucketEntries),
         renderCharacterList(assignmentEntries),
       ].filter(Boolean).join('');
     }
