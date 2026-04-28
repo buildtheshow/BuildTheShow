@@ -29565,14 +29565,18 @@ If you have any questions, don't hesitate to reach out.
   function dcToggleTag(appId, sessionId, key, btn) {
     const isNowOn = !btn.classList.contains('is-on');
     btn.classList.toggle('is-on', isNowOn);
-    saveAuditionObservation(appId, { sessionId, area: 'dance_call', type: 'tag', key, value: isNowOn ? '1' : '' }).catch(console.error);
+    saveAuditionObservation(appId, { sessionId, area: 'dance_call', type: 'tag', key, value: isNowOn ? '1' : '' })
+      .then(() => syncDanceCallCardBack(appId, sessionId))
+      .catch(console.error);
   }
 
   function dcToggleSnap(appId, sessionId, snapKey, snapValue, btn) {
     const isNowOn = !btn.classList.contains('is-on');
     btn.closest('.dc-inroom-snap-col')?.querySelectorAll('.dc-snap-btn').forEach(b => b.classList.remove('is-on'));
     if (isNowOn) btn.classList.add('is-on');
-    saveAuditionObservation(appId, { sessionId, area: 'dance_call', type: 'snap', key: snapKey, value: isNowOn ? snapValue : '' }).catch(console.error);
+    saveAuditionObservation(appId, { sessionId, area: 'dance_call', type: 'snap', key: snapKey, value: isNowOn ? snapValue : '' })
+      .then(() => syncDanceCallCardBack(appId, sessionId))
+      .catch(console.error);
   }
 
   function dcApplicantNotes(app, sessionId) {
@@ -29597,6 +29601,7 @@ If you have any questions, don't hesitate to reach out.
           await deleteAuditionObservation(existing.id);
         }
         showSaveStatus('saved');
+        syncDanceCallCardBack(appId, dcCurrentSessionId);
       } catch (error) {
         console.error('[BTS] dance call notes save failed', error);
         showToast('Could not save dance call notes.', true);
@@ -31330,6 +31335,18 @@ If you have any questions, don't hesitate to reach out.
     const app = allApplicants.find(a => a.id === inRoomApplicantId);
     const surface = document.querySelector(`#${inRoomContainerId} .inroom-back-card-surface`);
     if (app && surface) surface.innerHTML = buildInRoomBackHtml(app);
+  }
+
+  function syncDanceCallCardBack(appId, sessionId) {
+    const app = allApplicants.find(a => a.id === appId);
+    if (!app) return;
+    const card = document.getElementById(`dc-sheet-${appId}`);
+    if (!card) return;
+    const surface = card.querySelector('.inroom-back-card-surface');
+    if (!surface) return;
+    const activeIdx = [...surface.querySelectorAll('.irb-tab')].findIndex(t => t.classList.contains('is-active'));
+    surface.innerHTML = buildDanceCallBackHtml(app, sessionId);
+    if (activeIdx > 0) surface.querySelectorAll('.irb-tab')[activeIdx]?.click();
   }
 
   function toggleInRoomFlip() {
