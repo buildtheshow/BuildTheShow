@@ -6748,6 +6748,131 @@
       color: #fff;
     }
 
+    /* ── Dance Call In-Room Sheet ── */
+    .dc-inroom-sheet {
+      --dc-sheet-accent: #572e88;
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+      padding: 0.25rem 0 1rem;
+    }
+    .dc-inroom-top {
+      display: flex;
+      gap: 1rem;
+      align-items: flex-start;
+    }
+    .dc-inroom-card-col {
+      flex: 0 0 165px;
+      width: 165px;
+      min-width: 0;
+    }
+    .dc-inroom-impressions-col {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 0.55rem;
+    }
+    .dc-inroom-section-label {
+      font-size: 0.68rem;
+      font-weight: 900;
+      letter-spacing: 0.07em;
+      text-transform: uppercase;
+      color: #8a80a3;
+      margin-bottom: 0.1rem;
+    }
+    .dc-tag-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.4rem;
+    }
+    .dc-tag-grid + .dc-tag-grid {
+      margin-top: 0.2rem;
+    }
+    .dc-tag-btn {
+      padding: 0.55rem 0.4rem;
+      border: 1.5px solid rgba(87,46,136,0.14);
+      background: rgba(87,46,136,0.04);
+      border-radius: 10px;
+      font-family: var(--bts-font);
+      font-size: 0.78rem;
+      font-weight: 800;
+      color: #6a5a80;
+      cursor: pointer;
+      transition: background 0.13s, border-color 0.13s, color 0.13s;
+      text-align: center;
+      line-height: 1.2;
+    }
+    .dc-tag-btn:hover { background: rgba(87,46,136,0.09); }
+    .dc-tag-btn.is-on {
+      background: rgba(34,197,94,0.12);
+      border-color: rgba(34,197,94,0.38);
+      color: #15803d;
+    }
+    .dc-tag-grid-neg .dc-tag-btn.is-on {
+      background: rgba(251,146,60,0.12);
+      border-color: rgba(251,146,60,0.38);
+      color: #c2410c;
+    }
+    .dc-inroom-mid {
+      display: flex;
+      gap: 1rem;
+      align-items: flex-start;
+    }
+    .dc-inroom-snap-col {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 0.38rem;
+    }
+    .dc-snap-btn {
+      width: 100%;
+      padding: 0.62rem 0.75rem;
+      text-align: left;
+      border: 1.5px solid rgba(87,46,136,0.12);
+      background: rgba(87,46,136,0.04);
+      border-radius: 10px;
+      font-family: var(--bts-font);
+      font-size: 0.82rem;
+      font-weight: 700;
+      color: #6a5a80;
+      cursor: pointer;
+      transition: background 0.13s, border-color 0.13s, color 0.13s;
+    }
+    .dc-snap-btn:hover { background: rgba(87,46,136,0.09); }
+    .dc-snap-btn.is-on {
+      background: color-mix(in srgb, var(--dc-sheet-accent) 13%, transparent);
+      border-color: color-mix(in srgb, var(--dc-sheet-accent) 40%, transparent);
+      color: var(--dc-sheet-accent);
+      font-weight: 900;
+    }
+    .dc-inroom-divider {
+      border: none;
+      border-top: 1px solid rgba(87,46,136,0.1);
+      margin: 0;
+    }
+    .dc-inroom-notes-col {
+      display: flex;
+      flex-direction: column;
+      gap: 0.45rem;
+    }
+    .dc-inroom-empty-prompt {
+      color: #9a90b0;
+      font-size: 0.82rem;
+      text-align: center;
+      padding: 3rem 1rem;
+      line-height: 1.5;
+    }
+    @media (max-width: 640px) {
+      .dc-inroom-top { flex-direction: column; }
+      .dc-inroom-card-col { width: 100%; flex: none; max-width: 180px; }
+      .dc-inroom-mid { flex-direction: column; }
+    }
+
     /* ── Sticky note (character role) ── */
   .cbv2-role-note {
     position: relative;
@@ -14127,7 +14252,7 @@
 <script src="../../../../SHARED/Components/casting-card-back.js?v=card-back-all-tabs-20260427"></script>
 <script src="../../../../SHARED/Components/audition-status-strip.js"></script>
 <script src="../../../../SHARED/Components/ai-character-importer.js"></script>
-<script src="../../../../SHARED/Components/audition-page-templates.js?v=flip-fix-noselect-20260427"></script>
+<script src="../../../../SHARED/Components/audition-page-templates.js?v=dc-sheet-20260427"></script>
 <!-- VenuePicker uses OpenStreetMap/Nominatim - no API key needed -->
 <script>
   /* SQL needed:
@@ -29065,6 +29190,7 @@ If you have any questions, don't hesitate to reach out.
   let dcDragFromBucket = null; // null = pool
   let dcActiveSlotFilter = {}; // { [sessionId]: slotTimeStr | null }
   let dcCurrentSessionId = null;
+  let dcCurrentPerformerId = null;
   let dcDragCharId        = null; // charId being dragged between sections
   let dcDragCharFromSec   = null;
 
@@ -29320,11 +29446,40 @@ If you have any questions, don't hesitate to reach out.
     renderDanceCallInRoom(sessionId);
   }
 
+  function dcGetActiveTags(appId, sessionId) {
+    const tagObs = listAuditionObservations(appId, { sessionId, area: 'dance_call', type: 'tag', currentAuthorOnly: true });
+    return new Set(tagObs.filter(o => o.value === '1').map(o => o.observation_key));
+  }
+
+  function dcGetSnap(appId, sessionId, key) {
+    const obs = findAuditionObservation(appId, { sessionId, area: 'dance_call', type: 'snap', key, currentAuthorOnly: true });
+    return obs?.value || null;
+  }
+
+  function dcOpenPerformer(appId) {
+    dcCurrentPerformerId = appId;
+    inRoomApplicantId = appId;
+    inRoomFlipOpen = false;
+    renderDanceCallInRoom(dcCurrentSessionId);
+  }
+
+  function dcToggleTag(appId, sessionId, key, btn) {
+    const isNowOn = !btn.classList.contains('is-on');
+    btn.classList.toggle('is-on', isNowOn);
+    saveAuditionObservation(appId, { sessionId, area: 'dance_call', type: 'tag', key, value: isNowOn ? '1' : '' }).catch(console.error);
+  }
+
+  function dcToggleSnap(appId, sessionId, snapKey, snapValue, btn) {
+    const isNowOn = !btn.classList.contains('is-on');
+    btn.closest('.dc-inroom-snap-col')?.querySelectorAll('.dc-snap-btn').forEach(b => b.classList.remove('is-on'));
+    if (isNowOn) btn.classList.add('is-on');
+    saveAuditionObservation(appId, { sessionId, area: 'dance_call', type: 'snap', key: snapKey, value: isNowOn ? snapValue : '' }).catch(console.error);
+  }
+
   function renderDanceCallInRoom(sessionId) {
     const el = document.getElementById('aud-session-inroom-content');
     if (!el) return;
     dcCurrentSessionId = sessionId;
-    const prevBoardScroll = el.querySelector('.dc-board-scroll')?.scrollTop || 0;
 
     // Per-session check-in (same pattern as check-in list)
     const allCheckedIn = allApplicants.filter(a => {
@@ -29354,10 +29509,6 @@ If you have any questions, don't hesitate to reach out.
           return (slot?.slot_time || slot?.start_time || null) === activeSlotTime;
         });
 
-    const buckets = dcGetBuckets(sessionId);
-    const collapsedState = dcGetCollapsedState(sessionId);
-    const collapsedBuckets = new Set(collapsedState.buckets || []);
-
     // Session accent color
     const sessionObj = audSessions.find(s => s.id === sessionId);
     const sessionAccent = getAuditionScheduleSidebarMarkerColor(sessionObj?.type || 'dance_call');
@@ -29378,83 +29529,39 @@ If you have any questions, don't hesitate to reach out.
         </div>`;
     }
 
-    // Checked-in thumbnail tray (same as General Auditions In The Room)
+    // Checked-in thumbnail tray — uses dcOpenPerformer so the sheet renders below
     const trayThumbs = checkedIn.length
-      ? checkedIn.map(a => inRoomThumbHtml(a, 'openAuditionSessionInRoom', sessionObj)).join('')
+      ? checkedIn.map(a => inRoomThumbHtml(a, 'dcOpenPerformer', sessionObj)).join('')
       : `<div class="inroom-empty-note">No performers checked in yet.</div>`;
 
-    const bucketsHtml = buckets.map(b => {
-      const isCollapsed = collapsedBuckets.has(b.id);
-      // Filter bucket cards to active slot (buckets are shared across all slots)
-      const visibleIds = activeSlotTime === null
-        ? b.appIds
-        : b.appIds.filter(id => {
-            const a = allApplicants.find(x => x.id === id);
-            if (!a) return false;
-            const slot = getApplicantSlotForSession(a, sessionId);
-            return (slot?.slot_time || slot?.start_time || null) === activeSlotTime;
-          });
-      const cards = visibleIds.map(id => {
-        const a = allApplicants.find(x => x.id === id);
-        if (!a) return '';
-        return `<div class="dc-bucket-card" id="dc-bcard-${b.id}-${a.id}"
-          draggable="true"
-          ondragstart="dcDragStart(event,'${a.id}','${b.id}')"
-          ondragend="dcDragEnd(event)">
-          ${cbv2MakeCCard(a, null, null)}
-        </div>`;
-      }).join('');
-      return `<div class="dc-bucket${isCollapsed ? ' is-collapsed' : ''}" id="dc-bucket-${b.id}"
-        style="--dc-bucket-col:${b.colour};"
-        ondragover="event.preventDefault();this.classList.add('dc-dragover')"
-        ondragleave="dcContainerDragLeave(event,'dc-dragover')"
-        ondrop="dcDropOnBucket(event,'${b.id}','${sessionId}')">
-        <div class="dc-bucket-header">
-          <button class="dc-collapse-btn${isCollapsed ? ' is-collapsed' : ''}" onclick="event.stopPropagation();dcToggleBucketCollapse('${sessionId}','${b.id}')" title="${isCollapsed ? 'Expand container' : 'Collapse container'}">▾</button>
-          <input type="color" class="dc-bucket-colour-picker" value="${esc(b.colour)}" title="Change colour" onclick="event.stopPropagation()" onchange="dcRecolourBucket('${b.id}','${sessionId}',this.value)" />
-          <input class="dc-bucket-name" value="${esc(b.name)}"
-            onchange="dcRenameBucket('${b.id}','${sessionId}',this.value)"
-            onclick="event.stopPropagation()" />
-          <button class="dc-bucket-delete" onclick="dcDeleteBucket('${b.id}','${sessionId}')" title="Remove bucket">×</button>
-        </div>
-        <div class="dc-bucket-cards" id="dc-bucket-cards-${b.id}">
-          ${cards || `<div class="dc-bucket-empty">Drop performers here</div>`}
-        </div>
-      </div>`;
-    }).join('');
+    // Performer sheet
+    let performerSheetHtml = `<div class="dc-inroom-empty-prompt">Select a performer above to start taking notes.</div>`;
+    if (dcCurrentPerformerId) {
+      const perfApp = allApplicants.find(a => a.id === dcCurrentPerformerId);
+      if (perfApp) {
+        performerSheetHtml = window.BTSAuditionTemplates.renderTemplateById('auditions.in-room.dance-call', {
+          esc,
+          app: perfApp,
+          sessionId,
+          cardFrontHtml: buildStandardCastingCardHtml(perfApp),
+          cardBackHtml: buildInRoomBackHtml(perfApp),
+          inRoomFlipOpen,
+          activeTags: dcGetActiveTags(perfApp.id, sessionId),
+          activeResponse: dcGetSnap(perfApp.id, sessionId, 'response'),
+          activeCasting: dcGetSnap(perfApp.id, sessionId, 'casting'),
+          notesValue: applicantInRoomNotes(perfApp, sessionId),
+          accentColor: sessionAccent
+        });
+      }
+    }
 
     el.innerHTML = `<div class="dc-shell">
       ${slotFilterHtml}
       <div class="inroom-tray">
         <div class="inroom-thumbs">${trayThumbs}</div>
       </div>
-      <div class="dc-board">
-        <div class="dc-board-scroll">
-          <div class="dc-board-section">
-            <div class="dc-board-section-head">
-              <div class="dc-board-section-title">Quick Notes</div>
-            </div>
-            <div class="dc-buckets-area" id="dc-buckets-area">
-              ${bucketsHtml}
-              <button class="dc-add-bucket-btn" onclick="dcAddBucket('${sessionId}')">+ Add Container</button>
-            </div>
-          </div>
-          <div class="dc-board-section">
-            <div class="dc-board-section-head">
-              <div class="dc-board-section-title">Characters</div>
-            </div>
-            ${characters.length
-              ? `<div class="dc-chars-section">${dcRenderCharSections(sessionId)}</div>`
-              : `<div class="dc-bucket-empty">Add characters in Audition Setup to start sorting by role.</div>`}
-          </div>
-        </div>
-      </div>
+      ${performerSheetHtml}
     </div>`;
-
-    requestAnimationFrame(() => {
-      const boardScroll = el.querySelector('.dc-board-scroll');
-      if (boardScroll) boardScroll.scrollTop = prevBoardScroll;
-    });
   }
 
   function dcDragStart(e, appId, fromBucket) {

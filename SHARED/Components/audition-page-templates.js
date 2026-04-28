@@ -231,6 +231,83 @@
     return `(function(event){if(event.target&&event.target.closest('button,a,input,select,textarea,label,[role=&quot;button&quot;],.irb-tab-bar,.irb-tab')){event.stopPropagation();return;}event.stopPropagation();if(typeof window['${safeToggle}']==='function')window['${safeToggle}']();})(event)`;
   }
 
+  function renderDanceCallInRoomTemplate(config) {
+    const {
+      esc = (s) => String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'),
+      app,
+      sessionId = '',
+      cardFrontHtml = '',
+      cardBackHtml = '',
+      inRoomFlipOpen = false,
+      activeTags,
+      activeResponse = null,
+      activeCasting = null,
+      notesValue = '',
+      accentColor = '#572e88'
+    } = config;
+
+    const appId = app?.id || '';
+    const safeAppId = esc(appId);
+    const safeSessionId = esc(sessionId);
+
+    const tagBtn = (key, label) => {
+      const isOn = activeTags instanceof Set ? activeTags.has(key) : false;
+      return `<button type="button" class="dc-tag-btn${isOn ? ' is-on' : ''}" onclick="dcToggleTag('${safeAppId}','${safeSessionId}','${key}',this)">${esc(label)}</button>`;
+    };
+
+    const snapBtn = (snapKey, value, label) => {
+      const current = snapKey === 'response' ? activeResponse : activeCasting;
+      const isOn = current === value;
+      return `<button type="button" class="dc-snap-btn${isOn ? ' is-on' : ''}" onclick="dcToggleSnap('${safeAppId}','${safeSessionId}','${snapKey}','${value}',this)">${esc(label)}</button>`;
+    };
+
+    return `<div class="dc-inroom-sheet" style="--dc-sheet-accent:${esc(accentColor)};">
+      <div class="dc-inroom-top">
+        <div class="dc-inroom-card-col">
+          ${renderCastingCardFlipShellTemplate({
+            shellClass: 'inroom-flip',
+            id: 'inroom-flip-card',
+            flipped: inRoomFlipOpen,
+            frontHtml: cardFrontHtml,
+            backHtml: cardBackHtml,
+            frontClick: 'toggleInRoomFlip()',
+            backClick: buildCastingCardBackClickHandler('toggleInRoomFlip')
+          })}
+        </div>
+        <div class="dc-inroom-impressions-col">
+          <div class="dc-inroom-section-label">Quick Impressions</div>
+          <div class="dc-tag-grid">
+            ${tagBtn('fast', 'Fast')}${tagBtn('clean', 'Clean')}${tagBtn('strong', 'Strong')}${tagBtn('energy', 'Energy')}
+          </div>
+          <div class="dc-tag-grid dc-tag-grid-neg">
+            ${tagBtn('missed', 'Missed')}${tagBtn('messy', 'Messy')}${tagBtn('slow', 'Slow')}${tagBtn('flat', 'Flat')}
+          </div>
+        </div>
+      </div>
+      <div class="dc-inroom-mid">
+        <div class="dc-inroom-snap-col">
+          <div class="dc-inroom-section-label">Response</div>
+          ${snapBtn('response', 'adjusted', 'Adjusted')}
+          ${snapBtn('response', 'tried', 'Tried')}
+          ${snapBtn('response', 'no_change', 'No Change')}
+        </div>
+        <div class="dc-inroom-snap-col">
+          <div class="dc-inroom-section-label">Casting</div>
+          ${snapBtn('casting', 'ensemble', 'Ensemble')}
+          ${snapBtn('casting', 'featured', 'Featured')}
+          ${snapBtn('casting', 'watch', 'Watch')}
+          ${snapBtn('casting', 'support', 'Support')}
+        </div>
+      </div>
+      <hr class="dc-inroom-divider" />
+      <div class="dc-inroom-notes-col">
+        <div class="dc-inroom-section-label">Notes</div>
+        <textarea class="inroom-notes-text" id="inroom-notes" placeholder="note…" oninput="scheduleInRoomNotesSave('${safeAppId}')">${esc(notesValue || '')}</textarea>
+        <div class="inroom-save-hint">Notes save automatically.</div>
+      </div>
+    </div>`;
+  }
+
   function renderInRoomPageTemplate(config) {
     const {
       app,
@@ -314,7 +391,8 @@
     renderPortalSessionFrameTemplate,
     renderEmptyStateTemplate,
     renderCastingCardFlipShellTemplate,
-    renderInRoomPageTemplate
+    renderInRoomPageTemplate,
+    renderDanceCallInRoomTemplate
   });
 
   window.BTSAuditionTemplates = api;
@@ -397,5 +475,13 @@
     tags: { area: 'auditions', page: 'in-room' },
     priority: 10,
     render: renderInRoomPageTemplate
+  });
+
+  api.registerTemplate({
+    id: 'auditions.in-room.dance-call',
+    name: 'Dance Call In The Room',
+    tags: { area: 'auditions', page: 'in-room', sessionType: 'dance_call' },
+    priority: 95,
+    render: renderDanceCallInRoomTemplate
   });
 })();
