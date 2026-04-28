@@ -277,10 +277,10 @@
         <div class="dc-inroom-impressions-col">
           <div class="dc-inroom-section-label">Quick Impressions</div>
           <div class="dc-tag-grid">
-            ${tagBtn('fast', 'Fast')}${tagBtn('clean', 'Clean')}${tagBtn('strong', 'Strong')}${tagBtn('energy', 'Energy')}
+            ${tagBtn('picks_up', 'Picks Up Quickly')}${tagBtn('clean', 'Clean')}${tagBtn('strong_presence', 'Strong Presence')}${tagBtn('takes_direction', 'Takes Direction')}
           </div>
           <div class="dc-tag-grid dc-tag-grid-neg">
-            ${tagBtn('missed', 'Missed')}${tagBtn('messy', 'Messy')}${tagBtn('slow', 'Slow')}${tagBtn('flat', 'Flat')}
+            ${tagBtn('missed_timing', 'Missed Timing')}${tagBtn('needs_control', 'Needs Control')}${tagBtn('low_presence', 'Low Presence')}${tagBtn('unsure', 'Unsure')}
           </div>
         </div>
       </div>
