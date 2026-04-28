@@ -302,7 +302,7 @@
       <hr class="dc-inroom-divider" />
       <div class="dc-inroom-notes-col">
         <div class="dc-inroom-section-label">Notes</div>
-        <textarea class="inroom-notes-text" id="inroom-notes" placeholder="note…" oninput="scheduleInRoomNotesSave('${safeAppId}')">${esc(notesValue || '')}</textarea>
+        <textarea class="inroom-notes-text" id="inroom-notes" placeholder="note…" oninput="scheduleDcNotesSave('${safeAppId}')">${esc(notesValue || '')}</textarea>
         <div class="inroom-save-hint">Notes save automatically.</div>
       </div>
     </div>`;
