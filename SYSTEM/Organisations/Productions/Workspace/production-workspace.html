@@ -30567,6 +30567,17 @@ If you have any questions, don't hesitate to reach out.
         authorColor: observationAuthorColor(observation),
       });
     });
+    listAuditionObservations(app.id, { area: 'dance_call', type: 'quick_note' }).forEach(observation => {
+      if (!observation?.body) return;
+      const session = (audSessions || []).find(s => s.id === observation.session_id);
+      const author = observationAuthorLabel(observation);
+      notes.push({
+        label: [session?.name || 'Dance Call', author].filter(Boolean).join(' · '),
+        sessionType: 'dance_call',
+        note: observation.body,
+        ...observationAuthorFields(observation),
+      });
+    });
     return notes.length ? notes : null;
   }
 
@@ -30641,6 +30652,38 @@ If you have any questions, don't hesitate to reach out.
         if (!value) return;
         results.push({ sessionType, sessionLabel: '', label: INROOM_SCORE_LABELS[key] || key, value, authorName: '', authorRole: '', authorColor: '' });
       });
+    const DC_TAG_LABELS = {
+      picks_up: 'Picks Up Quickly', clean: 'Clean', strong_presence: 'Strong Presence',
+      takes_direction: 'Takes Direction', missed_timing: 'Missed Timing',
+      needs_support: 'Needs Support', low_presence: 'Low Presence', unsure: 'Unsure',
+    };
+    const DC_SNAP_LABELS = {
+      no_change: 'No Change', tried: 'Tried', adjusted: 'Adjusted', got_it: 'Got It',
+      ensemble: 'Ensemble', featured: 'Featured', watch: 'Watch', support: 'Support',
+    };
+    listAuditionObservations(app.id, { area: 'dance_call', type: 'tag' }).forEach(obs => {
+      if (obs.value !== '1') return;
+      const session = (audSessions || []).find(s => s.id === obs.session_id);
+      results.push({
+        sessionLabel: session?.name || 'Dance Call',
+        sessionType: 'dance_call',
+        label: DC_TAG_LABELS[obs.observation_key] || obs.observation_key,
+        value: '✓',
+        ...observationAuthorFields(obs),
+      });
+    });
+    listAuditionObservations(app.id, { area: 'dance_call', type: 'snap' }).forEach(obs => {
+      if (!obs.value) return;
+      const session = (audSessions || []).find(s => s.id === obs.session_id);
+      const sectionLabel = obs.observation_key === 'response' ? 'Progression' : 'Casting';
+      results.push({
+        sessionLabel: session?.name || 'Dance Call',
+        sessionType: 'dance_call',
+        label: `${sectionLabel}: ${DC_SNAP_LABELS[obs.value] || obs.value}`,
+        value: obs.value,
+        ...observationAuthorFields(obs),
+      });
+    });
     return results;
   }
 
