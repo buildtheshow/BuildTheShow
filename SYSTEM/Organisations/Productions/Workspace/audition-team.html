@@ -4761,6 +4761,38 @@
       border-color: rgba(220, 38, 38, 0.2);
       transform: translateY(-1px);
     }
+    .cbv2-final-summary {
+      display: none;
+      align-items: center;
+      gap: 0.75rem;
+      margin: -0.2rem 0 0.85rem;
+      color: #5f536f;
+      font-size: 0.78rem;
+      font-weight: 750;
+      line-height: 1.35;
+      flex-shrink: 0;
+    }
+    .cbv2-final-summary.is-active {
+      display: flex;
+    }
+    .cbv2-final-metrics {
+      display: flex;
+      align-items: center;
+      gap: 0.55rem;
+      flex-wrap: wrap;
+    }
+    .cbv2-final-metric strong {
+      color: #1a1530;
+      font-weight: 900;
+    }
+    .cbv2-final-alerts {
+      color: #8a3b5c;
+      white-space: nowrap;
+    }
+    .cbv2-final-alerts strong {
+      color: #6d2443;
+      font-weight: 900;
+    }
 
     /* Two-panel layout — fills remaining space, each panel scrolls independently */
     .cbv2-body {
@@ -11600,6 +11632,11 @@
         </div>
       </div>
 
+      <div class="prod-tab" data-tab="castlist">
+        <span class="tab-icon-slot"><img src="/ASSETS/Images/navcastlist.svg" class="tab-icon" alt="" aria-hidden="true" /></span>
+        Cast List
+      </div>
+
       <div class="prod-tab" data-tab="profile" id="team-profile-tab" style="display:none;">
         <span class="tab-icon-slot"><img src="/ASSETS/Images/navprofile.svg" class="tab-icon" alt="" aria-hidden="true" /></span>
         Profile
@@ -12978,6 +13015,8 @@
             <button class="cbv2-reset-btn" onclick="resetCastingBoard()">Reset Casting Board</button>
             <button class="cbv2-help-btn" onclick="openCbHelp()">? What is this?</button>
           </div>
+
+          <div class="cbv2-final-summary" id="cbv2-final-summary"></div>
 
           <div class="cbv2-body">
             <!-- Performers panel -->
@@ -19761,7 +19800,7 @@ If you have any questions, don't hesitate to reach out.
       return `<div class="prod-sub-item" id="asub-session-${esc(session.id)}" onclick="openAuditionSessionWorkspace('${esc(session.id)}')" style="display:flex;align-items:center;">${dot}${esc(label)}</div>`;
     };
     const castingItem = `<div class="prod-sub-item" id="asub-casting" onclick="openCastingSubTab('castboard')" style="display:flex;align-items:center;"><span style="flex:0 0 auto;width:0.42rem;height:0.42rem;border-radius:999px;background:#3b82f6;box-shadow:0 0 0.4rem #3b82f6;margin-right:0.45rem;display:inline-block;vertical-align:middle;"></span>Casting Board</div>`;
-    const finalCastingItem = `<div class="prod-sub-item" id="asub-finalcasting" onclick="openAuditionsSubTab('finalcasting')" style="display:flex;align-items:center;"><span style="flex:0 0 auto;width:0.42rem;height:0.42rem;border-radius:999px;background:#111827;box-shadow:0 0 0.4rem rgba(17,24,39,0.55);margin-right:0.45rem;display:inline-block;vertical-align:middle;"></span>Final Casting</div>`;
+    const finalCastingItem = `<div class="prod-sub-item" id="asub-finalcasting" onclick="openFinalCastingSubTab()" style="display:flex;align-items:center;"><span style="flex:0 0 auto;width:0.42rem;height:0.42rem;border-radius:999px;background:#111827;box-shadow:0 0 0.4rem rgba(17,24,39,0.55);margin-right:0.45rem;display:inline-block;vertical-align:middle;"></span>Final Casting</div>`;
     host.innerHTML = beforeCallback.map(sessionItem).join('') + castingItem + callbackSessions.map(sessionItem).join('') + finalCastingItem;
     if (teamAccessMode) {
       document.getElementById('asub-setup')?.style.setProperty('display', 'none');
@@ -19833,7 +19872,9 @@ If you have any questions, don't hesitate to reach out.
       switchAudTab('auditions');
       switchAudDayTab('callbacklist');
     } else if (subTab === 'finalcasting') {
-      switchAudTab('castlist');
+      setCastboardMode('final');
+      switchAudTab('castboard');
+      saveWorkspaceNavState({ auditionsSubTab: 'finalcasting' });
     }
 
     // Set sidebar highlight AFTER tab switching (so it runs after any renderAuditionsSidebarSubmenu calls)
@@ -19899,6 +19940,15 @@ If you have any questions, don't hesitate to reach out.
     switchAudTab('castboard');
   }
 
+  function openFinalCastingSubTab() {
+    closeMobileSidebar();
+    switchProdTab('auditions');
+    setSidebarSubmenuState('auditions', 'asub-finalcasting');
+    setCastboardMode('final');
+    switchAudTab('castboard');
+    saveWorkspaceNavState({ prodTab: 'auditions', auditionsSubTab: 'finalcasting' });
+  }
+
   function switchProdTab(id) {
     if (id === 'test') id = 'overview';
     // If the wizard iframe is open, close it before navigating away
@@ -19912,7 +19962,7 @@ If you have any questions, don't hesitate to reach out.
       el.classList.toggle('active', el.dataset.tab === id);
     });
     if (id !== 'auditions') setSidebarSubmenuState(null, null);
-    const panelId = (id === 'auditions' || id === 'casting') ? 'casting' : id;
+    const panelId = (id === 'auditions' || id === 'casting' || id === 'castlist') ? 'casting' : id;
     document.querySelectorAll('.tab-panel').forEach(el => el.classList.toggle('active', el.id === 'panel-' + panelId));
     document.querySelector('.prod-main').classList.toggle('checklist-active', id === 'checklist');
     if (id === 'overview') {
@@ -19951,6 +20001,11 @@ If you have any questions, don't hesitate to reach out.
     }
     if (id === 'emails') {
       loadEmailTemplates();
+    }
+    if (id === 'castlist') {
+      _audHeaderActiveTool = null;
+      switchAudTab('castlist');
+      saveWorkspaceNavState({ prodTab: 'castlist' });
     }
   }
   document.querySelectorAll('.prod-tab[data-tab]').forEach(el => {
@@ -27586,16 +27641,26 @@ If you have any questions, don't hesitate to reach out.
     const activeMode   = getActiveCastingBoardMode();
     if (generalBtn)   generalBtn.classList.toggle('active', cbv2Tab === 'general');
     if (callbacksBtn) callbacksBtn.classList.toggle('active', cbv2Tab === 'callbacks');
-    if (boardTitle)   boardTitle.textContent = activeMode === 'callbacks' ? 'Callback Casting Board' : 'General Casting Board';
+    if (boardTitle) {
+      boardTitle.textContent = activeMode === 'callbacks'
+        ? 'Callback Casting Board'
+        : activeMode === 'final'
+          ? 'Final Casting Board'
+          : 'General Casting Board';
+    }
     if (backBar)      backBar.style.display = 'flex';
     if (activeMode === 'callbacks') {
       if (backBtn)    backBtn.onclick = () => openAuditionsSubTab('callbacks');
       if (backLabel)  backLabel.textContent = 'Back to List';
       if (backContext) backContext.textContent = 'Callbacks Casting Board';
+    } else if (activeMode === 'final') {
+      if (backBtn)    backBtn.onclick = () => openAuditionsSubTab('callbacks');
+      if (backLabel)  backLabel.textContent = 'Back to Callbacks';
+      if (backContext) backContext.textContent = 'Final Casting Board';
     } else {
       if (backBtn)    backBtn.onclick = () => openAuditionsSubTab('checkin');
       if (backLabel)  backLabel.textContent = 'Back to Auditions';
-      if (backContext) backContext.textContent = 'General Casting Board';
+      if (backContext) backContext.textContent = activeMode === 'final' ? 'Final Casting Board' : 'General Casting Board';
     }
   }
 
@@ -27720,7 +27785,7 @@ If you have any questions, don't hesitate to reach out.
   }
 
   function setCastboardMode(mode) {
-    const nextMode = mode === 'callbacks' ? 'callbacks' : 'general';
+    const nextMode = mode === 'callbacks' ? 'callbacks' : mode === 'final' ? 'final' : 'general';
     if (cbv2Tab === nextMode) return;
     cbv2Tab = nextMode;
     syncCbv2TabUi();
@@ -28043,7 +28108,9 @@ If you have any questions, don't hesitate to reach out.
     const age       = cbv2ApplicantAge(app);
     const ca        = (typeof app.custom_answers === 'string') ? JSON.parse(app.custom_answers || '{}') : (app.custom_answers || {});
     const pref      = (ca['Preferred Name'] || '').trim();
-    const isCallbackPlacedCard = !!charId && getActiveCastingBoardMode() === 'callbacks';
+    const activeBoardMode = getActiveCastingBoardMode();
+    const isCallbackPlacedCard = !!charId && activeBoardMode === 'callbacks';
+    const isSelectablePlacedCard = !!charId && (activeBoardMode === 'callbacks' || activeBoardMode === 'final');
     // If preferred name differs from first name, show "Pref (First)"
     const first     = (pref && pref.toLowerCase() !== firstName.toLowerCase())
                         ? `${pref} (${firstName})`
@@ -28079,7 +28146,7 @@ If you have any questions, don't hesitate to reach out.
       onPointerDown: charId
         ? `cbv2PointerDragStart(event,'${app.id}','${charId}','${state || 'liked'}')`
         : `cbv2PointerDragStart(event,'${app.id}',null,null)`,
-      onClick: isCallbackPlacedCard
+      onClick: isSelectablePlacedCard
         ? `cbv2ToggleChosen(event,'${app.id}','${charId}')`
         : `openPerfLightbox('${app.id}')`
     });
@@ -28430,12 +28497,14 @@ If you have any questions, don't hesitate to reach out.
   function cbv2BuildNoteCards(charId) {
     const state = cbv2NoteState(charId);
     if (!state) return '';
-    const isCallbacks = getActiveCastingBoardMode() === 'callbacks';
+    const activeBoardMode = getActiveCastingBoardMode();
+    const isCallbacks = activeBoardMode === 'callbacks';
+    const isDecisionBoard = isCallbacks || activeBoardMode === 'final';
     const char = characters.find(c => c.id === charId);
     const cards = state.pageItems
       .filter(a => {
         // In callbacks mode, never show grey auto-applied ghost cards
-        if (isCallbacks && a.state === 'applied') return false;
+        if (isDecisionBoard && a.state === 'applied') return false;
         return true;
       })
       .map(a => {
@@ -28470,7 +28539,7 @@ If you have any questions, don't hesitate to reach out.
           ? `<button type="button" class="cbv2-note-pg-btn" onclick="event.stopPropagation(); cbv2NoteSetPage('${charId}', ${currentPage + 1})">›</button>`
           : `<span class="cbv2-note-pg-btn" style="opacity:0;pointer-events:none;">›</span>`}
       </div>` : '<div></div>';
-    const castLaterBtn = getActiveCastingBoardMode() === 'callbacks'
+    const castLaterBtn = getActiveCastingBoardMode() !== 'general'
       ? ''
       : `<button type="button" class="cbv2-note-later${char.cast_later ? ' active' : ''}" onclick="event.stopPropagation(); toggleCharacterCastLater('${charId}', ${char.cast_later ? 'false' : 'true'})">${char.cast_later ? 'Cast later' : 'Cast later?'}</button>`;
     return `${paginationHtml}${castLaterBtn}`;
@@ -28727,6 +28796,77 @@ If you have any questions, don't hesitate to reach out.
     });
   }
 
+  function finalCastingPool() {
+    const callbackSessionIds = new Set((audSessions || []).filter(s => s.type === 'callback').map(s => s.id));
+    const hasCallbackSlot = (app) => {
+      const assignments = Array.isArray(app?.slot_assignments) ? app.slot_assignments : [];
+      return assignments.some(x => callbackSessionIds.has(x.session_id));
+    };
+    const assignedIds = new Set(cbv2Assignments
+      .filter(a => a.state === 'liked' || a.state === 'chosen')
+      .map(a => a.applicant_id));
+    const pool = allApplicants.filter(app =>
+      app.status === 'callback' ||
+      hasCallbackSlot(app) ||
+      assignedIds.has(app.id) ||
+      cbv2EnsembleManual.has(app.id)
+    );
+    return (pool.length ? pool : allApplicants.filter(app => app.checked_in)).sort(compareApplicantsAlphabetically);
+  }
+
+  function finalCastingStatus() {
+    const appById = new Map(allApplicants.map(app => [app.id, app]));
+    const charById = new Map(characters.map(char => [char.id, char]));
+    const chosen = cbv2Assignments
+      .filter(a => a.state === 'chosen')
+      .map(a => {
+        const app = appById.get(a.applicant_id);
+        const char = charById.get(a.character_id);
+        if (!app || !char) return null;
+        return { app, char };
+      })
+      .filter(Boolean)
+      .sort((a, b) => (a.char.name || '').localeCompare(b.char.name || ''));
+    const chosenIds = new Set(chosen.map(item => item.app.id));
+    const ensemble = getCbEnsemblePerformers()
+      .filter(app => !chosenIds.has(app.id))
+      .sort(compareApplicantsAlphabetically);
+    const ensembleIds = new Set(ensemble.map(app => app.id));
+    const chosenCharIds = new Set(chosen.map(item => item.char.id));
+    const openRoles = characters
+      .filter(char => !chosenCharIds.has(char.id))
+      .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+    const unplaced = finalCastingPool()
+      .filter(app => !chosenIds.has(app.id) && !ensembleIds.has(app.id));
+    return { chosen, ensemble, unplaced, openRoles };
+  }
+
+  function renderFinalCastingSummary() {
+    const host = document.getElementById('cbv2-final-summary');
+    if (!host) return;
+    const isFinal = getActiveCastingBoardMode() === 'final';
+    host.classList.toggle('is-active', isFinal);
+    if (!isFinal) {
+      host.innerHTML = '';
+      return;
+    }
+    const { chosen, ensemble, unplaced, openRoles } = finalCastingStatus();
+    const alertBits = [];
+    if (unplaced.length) alertBits.push(`<strong>${unplaced.length}</strong> unplaced`);
+    if (openRoles.length) alertBits.push(`<strong>${openRoles.length}</strong> open role${openRoles.length === 1 ? '' : 's'}`);
+    host.innerHTML = `
+      <div class="cbv2-final-metrics">
+        <span class="cbv2-final-metric"><strong>${chosen.length}</strong> cast</span>
+        <span>·</span>
+        <span class="cbv2-final-metric"><strong>${ensemble.length}</strong> ensemble</span>
+        <span>·</span>
+        <span class="cbv2-final-metric"><strong>${unplaced.length}</strong> unplaced</span>
+        <span>·</span>
+        <span class="cbv2-final-metric"><strong>${openRoles.length}</strong> open roles</span>
+      </div>
+      <div class="cbv2-final-alerts">${alertBits.length ? alertBits.join(' · ') : 'Ready'}</div>`;
+  }
+
   function renderCbEnsembleInto({ floorId, gridId, countId, keepVisible = false }) {
     const floor   = document.getElementById(floorId);
     const grid    = document.getElementById(gridId);
@@ -28791,6 +28931,7 @@ If you have any questions, don't hesitate to reach out.
 
   function renderCbv2() {
     syncCbv2TabUi();
+    renderFinalCastingSummary();
     const outer = document.getElementById('cbv2-outer');
     if (outer) outer.classList.toggle('callbacks-empty', getActiveCastingBoardMode() === 'callbacks');
     if (getActiveCastingBoardMode() !== 'callbacks') renderCbPerformers();
