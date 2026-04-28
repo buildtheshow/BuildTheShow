@@ -15391,8 +15391,13 @@
     } catch {}
   }
 
-  async function refreshAuditionTeamData() {
+  let auditionTeamDataLoadedAt = 0;
+
+  async function refreshAuditionTeamData(options = {}) {
+    const { force = false, maxAge = 10000 } = options;
+    if (!force && auditionTeamDataLoadedAt && Date.now() - auditionTeamDataLoadedAt < maxAge) return;
     await Promise.all([loadAuditionAuthoredNotes(), loadAuditionObservations()]);
+    auditionTeamDataLoadedAt = Date.now();
   }
 
   function queueAuditionsRefresh() {
@@ -27572,9 +27577,16 @@ If you have any questions, don't hesitate to reach out.
       } catch { cbv2Assignments = []; }
       cbv2ManualOrder = characters.map(c => c.id);
       cbv2Loaded = true;
-      try { await cbv2SyncApplied(); } catch {}
       applyBoardTheme();
       if (!skipRender) renderActiveCastingBoard();
+      const syncApplied = async () => {
+        try {
+          const changed = await cbv2SyncApplied();
+          if (changed && !skipRender) renderActiveCastingBoard();
+        } catch {}
+      };
+      if ('requestIdleCallback' in window) window.requestIdleCallback(syncApplied, { timeout: 1200 });
+      else setTimeout(syncApplied, 0);
     })().finally(() => {
       cbv2LoadPromise = null;
     });
@@ -27593,11 +27605,13 @@ If you have any questions, don't hesitate to reach out.
       });
     });
 
+    let changed = false;
     const staleApplied = cbv2Assignments.filter(a =>
       a.state === 'applied' && !desiredAppliedPairs.has(`${a.applicant_id}::${a.character_id}`)
     );
     if (staleApplied.length) {
       cbv2Assignments = cbv2Assignments.filter(a => !staleApplied.includes(a));
+      changed = true;
       await Promise.all(staleApplied.map(async a => {
         try {
           await sb.from('casting_assignments').delete().eq('id', a.id);
@@ -27606,14 +27620,12 @@ If you have any questions, don't hesitate to reach out.
     }
 
     const toInsert = [];
+    const existingAssignmentKeys = new Set(cbv2Assignments
+      .filter(a => a.state === 'applied' || a.state === 'liked' || a.state === 'chosen')
+      .map(a => `${a.applicant_id}::${a.character_id}`));
     desiredAppliedPairs.forEach(pair => {
       const [appId, charId] = pair.split('::');
-      const existing = cbv2Assignments.find(a =>
-        a.character_id === charId &&
-        a.applicant_id === appId &&
-        (a.state === 'applied' || a.state === 'liked' || a.state === 'chosen')
-      );
-      if (!existing) {
+      if (!existingAssignmentKeys.has(`${appId}::${charId}`)) {
         toInsert.push({ production_id: prodId, character_id: charId, applicant_id: appId, state: 'applied' });
       }
     });
@@ -27621,9 +27633,13 @@ If you have any questions, don't hesitate to reach out.
     if (toInsert.length) {
       try {
         const { data } = await sb.from('casting_assignments').insert(toInsert).select();
-        if (data) cbv2Assignments.push(...data);
+        if (data) {
+          cbv2Assignments.push(...data);
+          changed = true;
+        }
       } catch {}
     }
+    return changed;
   }
 
   function cbv2SortedChars() {
@@ -27960,23 +27976,38 @@ If you have any questions, don't hesitate to reach out.
   let perfLightboxFlipped = false;
   let perfLightboxAppId = null;
 
-  function renderPerfLightboxCard(app) {
+  function schedulePerfLightboxBackRender(appId) {
+    const renderBack = () => {
+      if (perfLightboxAppId !== appId || !document.getElementById('perf-lightbox')?.classList.contains('open')) return;
+      const app = allApplicants.find(x => x.id === appId);
+      if (app) renderPerfLightboxCard(app);
+    };
+    if ('requestIdleCallback' in window) window.requestIdleCallback(renderBack, { timeout: 350 });
+    else setTimeout(renderBack, 0);
+  }
+
+  function renderPerfLightboxCard(app, options = {}) {
     if (!app) return;
+    const { deferBack = false } = options;
     const inner = document.getElementById('perf-lightbox-inner');
     if (!inner) return;
     const activePanelId = inner.querySelector('.irb-tab.is-active')?.getAttribute('data-panel') || '';
     const activeScrollTop = activePanelId ? (inner.querySelector(`#${activePanelId}`)?.scrollTop || 0) : 0;
+    const backHtml = deferBack
+      ? '<div class="inroom-back-scroll" style="display:flex;align-items:center;justify-content:center;color:#8f82a8;font-size:0.82rem;font-weight:700;">Loading details...</div>'
+      : buildStandardCastingCardBackHtml(app);
     inner.innerHTML =
       window.BTSAuditionTemplates.renderCastingCardFlipShellTemplate({
-        shellClass: 'perf-lightbox-shell',
+        shellClass: 'inroom-flip perf-lightbox-shell',
         id: 'perf-lightbox-shell',
         flipped: perfLightboxFlipped,
         frontHtml: buildStandardCastingCardHtml(app),
-        backHtml: buildStandardCastingCardBackHtml(app),
+        backHtml,
         frontClick: 'togglePerfFlip()',
         backClick: window.BTSAuditionTemplates.buildCastingCardBackClickHandler('togglePerfFlip')
       });
     document.getElementById('perf-lightbox-shell')?.classList.toggle('flipped', perfLightboxFlipped);
+    inner.classList.toggle('flipped', perfLightboxFlipped);
     if (activePanelId) {
       const tab = inner.querySelector(`.irb-tab[data-panel="${activePanelId}"]`);
       const panel = inner.querySelector(`#${activePanelId}`);
@@ -27999,20 +28030,22 @@ If you have any questions, don't hesitate to reach out.
   }
 
   async function openPerfLightbox(appId) {
-    await refreshAuditionTeamData();
     const app = allApplicants.find(x => x.id === appId);
     if (!app) return;
 
     perfLightboxFlipped = false;
     perfLightboxAppId = appId;
-    renderPerfLightboxCard(app);
+    renderPerfLightboxCard(app, { deferBack: true });
 
     document.getElementById('perf-lightbox').classList.add('open');
+    schedulePerfLightboxBackRender(appId);
+    refreshAuditionTeamData().then(refreshPerfLightboxContents).catch(() => {});
   }
 
   function togglePerfFlip() {
     perfLightboxFlipped = !perfLightboxFlipped;
     document.getElementById('perf-lightbox-shell')?.classList.toggle('flipped', perfLightboxFlipped);
+    document.getElementById('perf-lightbox-inner')?.classList.toggle('flipped', perfLightboxFlipped);
   }
 
   function closePerfLightbox(e) {
