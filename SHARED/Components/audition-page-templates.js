@@ -168,7 +168,8 @@
       irClick,
       cbCastClick,
       cbListClick,
-      isDanceCall,
+      dcCastClick,
+      sessionType,
       listLabel
     } = config;
 
@@ -177,10 +178,12 @@
         <div class="aud-day-topnav">
           ${teamAccessMode ? '' : `<button type="button" class="aud-day-topnav-btn${activeTool === 'checkin' ? ' active' : ''}" onclick="${ciClick}">Check In</button>`}
           <button type="button" class="aud-day-topnav-btn${activeTool === 'inroom' ? ' active' : ''}" onclick="${irClick}">In the Room</button>
-          ${isDanceCall ? '' : `
+          ${sessionType === 'dance_call' ? `
+          <button type="button" class="aud-day-topnav-btn${activeTool === 'castingboard' ? ' active' : ''}" onclick="${dcCastClick}">Casting</button>
+          ` : sessionType === 'callback' ? `
           <button type="button" class="aud-day-topnav-btn${activeTool === 'castingboard' ? ' active' : ''}" onclick="${cbCastClick}">Casting Board</button>
           <button type="button" class="aud-day-topnav-btn${activeTool === 'callbacks' ? ' active' : ''}" onclick="${cbListClick}">${esc(listLabel)}</button>
-          `}
+          ` : ''}
         </div>
       </div>`;
   }
