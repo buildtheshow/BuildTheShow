@@ -6839,6 +6839,12 @@
       .dc-inroom-mid { flex-direction: column; }
     }
     /* ── Dance Call Card (8.5:11, scales via container queries) ── */
+    .dc-cards-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 1.25rem;
+      align-items: start;
+    }
     .dc-inroom-card {
       aspect-ratio: 8 / 9.5;
       background: #fff;
@@ -29700,8 +29706,8 @@ If you have any questions, don't hesitate to reach out.
   function dcOpenPerformer(appId) {
     dcCurrentPerformerId = appId;
     inRoomApplicantId = appId;
-    inRoomFlipOpen = false;
-    renderDanceCallInRoom(dcCurrentSessionId);
+    const card = document.getElementById(`dc-sheet-${appId}`);
+    if (card) card.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
   function dcToggleTag(appId, sessionId, key, btn) {
@@ -29802,38 +29808,37 @@ If you have any questions, don't hesitate to reach out.
         </div>`;
     }
 
-    // Checked-in thumbnail tray — uses dcOpenPerformer so the sheet renders below
+    const accentColor = (teamAccessMode && teamAccessMember?.note_color) ? getTeamNoteColorSet(teamAccessMember.note_color).base : sessionAccent;
+
+    // Thumbnail tray — clicking scrolls to that performer's card
     const trayThumbs = checkedIn.length
       ? checkedIn.map(a => inRoomThumbHtml(a, 'dcOpenPerformer', sessionObj)).join('')
       : `<div class="inroom-empty-note">No performers checked in yet.</div>`;
 
-    // Performer sheet
-    let performerSheetHtml = '';
-    if (dcCurrentPerformerId) {
-      const perfApp = allApplicants.find(a => a.id === dcCurrentPerformerId);
-      if (perfApp) {
-        performerSheetHtml = window.BTSAuditionTemplates.renderTemplateById('auditions.in-room.dance-call', {
+    // One card per checked-in performer
+    const allCardsHtml = checkedIn.map(a => `
+      <div class="dc-inroom-card" id="dc-sheet-${esc(a.id)}">
+        ${window.BTSAuditionTemplates.renderTemplateById('auditions.in-room.dance-call', {
           esc,
-          app: perfApp,
+          app: a,
           sessionId,
-          cardFrontHtml: buildStandardCastingCardHtml(perfApp),
-          cardBackHtml: buildInRoomBackHtml(perfApp),
-          inRoomFlipOpen,
-          activeTags: dcGetActiveTags(perfApp.id, sessionId),
-          activeResponse: dcGetSnap(perfApp.id, sessionId, 'response'),
-          activeCasting: dcGetSnap(perfApp.id, sessionId, 'casting'),
-          notesValue: dcApplicantNotes(perfApp, sessionId),
-          accentColor: (teamAccessMode && teamAccessMember?.note_color) ? getTeamNoteColorSet(teamAccessMember.note_color).base : sessionAccent
-        });
-      }
-    }
+          cardFrontHtml: buildStandardCastingCardHtml(a),
+          cardBackHtml: buildInRoomBackHtml(a),
+          inRoomFlipOpen: false,
+          activeTags: dcGetActiveTags(a.id, sessionId),
+          activeResponse: dcGetSnap(a.id, sessionId, 'response'),
+          activeCasting: dcGetSnap(a.id, sessionId, 'casting'),
+          notesValue: dcApplicantNotes(a, sessionId),
+          accentColor
+        })}
+      </div>`).join('');
 
     const stripOuter = document.getElementById('dc-checkin-strip-outer');
     if (stripOuter) {
       stripOuter.innerHTML = window.BTSAuditionTemplates.renderTemplateById('auditions.in-room.checked-in-strip', { esc, label: 'Checked In', trayCards: trayThumbs });
     }
-    el.innerHTML = (slotFilterHtml || performerSheetHtml)
-      ? `<div class="dc-shell">${slotFilterHtml}${performerSheetHtml}</div>`
+    el.innerHTML = (slotFilterHtml || allCardsHtml)
+      ? `<div class="dc-shell">${slotFilterHtml}<div class="dc-cards-grid">${allCardsHtml}</div></div>`
       : '';
   }
 
