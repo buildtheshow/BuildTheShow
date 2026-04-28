@@ -11590,25 +11590,6 @@
         Profile
       </div>
 
-      <!-- Casting — expandable submenu -->
-      <div class="prod-tab-submenu-wrap" id="casting-wrap">
-        <div class="prod-tab" data-tab="casting" id="casting-parent-tab" onclick="openCastingSubTab('castboard')">
-          <span class="prod-tab-label">
-            <span class="tab-icon-slot"><img src="/ASSETS/Images/navcastlist.svg" class="tab-icon" alt="" aria-hidden="true" /></span>
-            Casting
-          </span>
-          <span class="tab-chevron" role="button" tabindex="0" aria-label="Toggle Casting menu" onclick="toggleCastingMenu(event)" onkeydown="handleSidebarChevronKey(event, 'casting')">▼</span>
-        </div>
-        <div class="prod-submenu">
-          <div class="prod-sub-item" id="csub-castboard" onclick="openCastingSubTab('castboard')">Casting Board</div>
-          <div class="prod-sub-item" id="csub-callbacks" onclick="openCastingSubTab('callbacks')">Callback List</div>
-        </div>
-      </div>
-
-      <div class="prod-tab" data-tab="castlist" onclick="openCastingSubTab('castlist')">
-        <span class="tab-icon-slot"><img src="/ASSETS/Images/navcastlist.svg" class="tab-icon" alt="" aria-hidden="true" /></span>
-        Cast List
-      </div>
       <div class="prod-tab" data-tab="emails" onclick="switchProdTab('emails')">
         <span class="tab-icon-slot"><img src="/ASSETS/Images/navemailtemplate.svg" class="tab-icon" alt="" aria-hidden="true" /></span>
         Email Templates
@@ -14818,7 +14799,6 @@
       tab.style.display = isAllowed ? '' : 'none';
     });
     document.getElementById('team-profile-tab')?.style.setProperty('display', '');
-    document.getElementById('casting-wrap')?.style.setProperty('display', '');
     document.getElementById('asub-setup')?.style.setProperty('display', 'none');
     document.getElementById('asub-checkin')?.style.setProperty('display', 'none');
     document.getElementById('asub-auditions')?.style.setProperty('display', 'none');
@@ -19494,7 +19474,7 @@ If you have any questions, don't hesitate to reach out.
 
   // ── Audition sub-tab switching ────────────────────────
   function switchAudTab(tab) {
-      const auditionsTabs = new Set(['overview', 'setup', 'auditions', 'checkin', 'inroom']);
+      const auditionsTabs = new Set(['overview', 'setup', 'auditions', 'checkin', 'inroom', 'callbacks', 'castboard', 'castlist']);
       if (auditionsTabs.has(tab)) {
         const navPatch = tab === 'auditions'
           ? { prodTab: 'auditions' }
@@ -19527,7 +19507,7 @@ If you have any questions, don't hesitate to reach out.
       switchAudInner(savedNav.auditionSetupInnerTab || 'settings');
     }
   }
-  renderAuditionHeaderFrame();
+  renderAuditionHeaderFrame(tab);
 }
 
   function switchAudInner(inner) {
@@ -19558,9 +19538,20 @@ If you have any questions, don't hesitate to reach out.
   // Tracks which of the 4 operational tabs is currently active for the persistent header
   let _audHeaderActiveTool = null; // 'checkin' | 'inroom' | 'castingboard' | 'callbacks' | null
 
-  function renderAuditionHeaderFrame() {
+  function renderAuditionHeaderFrame(activeAudTab) {
     const headerLeft = document.getElementById('aud-page-header-left');
     if (!headerLeft) return;
+
+    if (activeAudTab === 'castboard' || activeAudTab === 'castlist') {
+      headerLeft.innerHTML = `
+        <div class="aud-session-topnav" style="--session-accent:#3b82f6;">
+          <div class="aud-day-topnav">
+            <button type="button" class="aud-day-topnav-btn${activeAudTab === 'castboard' ? ' active' : ''}" onclick="openCastingSubTab('castboard')">Casting Board</button>
+            <button type="button" class="aud-day-topnav-btn${activeAudTab === 'castlist' ? ' active' : ''}" onclick="openCastingSubTab('castlist')">Cast List</button>
+          </div>
+        </div>`;
+      return;
+    }
 
     if (!_audHeaderActiveTool) {
       headerLeft.innerHTML = '';
@@ -19703,12 +19694,12 @@ If you have any questions, don't hesitate to reach out.
   function setSidebarSubmenuState(section, activeSubId) {
     _sidebarSection = section;
     _sidebarSubId   = activeSubId || null;
-    ['auditions-wrap', 'casting-wrap'].forEach(id => {
+    ['auditions-wrap'].forEach(id => {
       const wrap = document.getElementById(id);
       if (wrap) wrap.classList.toggle('open', !!section && id === `${section}-wrap`);
     });
     document.querySelectorAll('.prod-sub-item, .prod-sub-group-link').forEach(el => el.classList.remove('active'));
-    document.querySelectorAll('#auditions-parent-tab, #casting-parent-tab').forEach(el => {
+    document.querySelectorAll('#auditions-parent-tab').forEach(el => {
       el.classList.remove('active', 'is-open-parent');
     });
     const activeSubEl = activeSubId ? document.getElementById(activeSubId) : null;
@@ -19770,7 +19761,8 @@ If you have any questions, don't hesitate to reach out.
       const dot = `<span style="flex:0 0 auto;width:0.42rem;height:0.42rem;border-radius:999px;background:${esc(dotColor)};box-shadow:0 0 0.4rem ${esc(dotColor)};margin-right:0.45rem;display:inline-block;vertical-align:middle;"></span>`;
       return `<div class="prod-sub-item" id="asub-session-${esc(session.id)}" onclick="openAuditionSessionWorkspace('${esc(session.id)}')" style="display:flex;align-items:center;">${dot}${esc(label)}</div>`;
     };
-    host.innerHTML = beforeCallback.map(sessionItem).join('') + callbackSessions.map(sessionItem).join('');
+    const castingItem = `<div class="prod-sub-item" id="asub-casting" onclick="openCastingSubTab('castboard')" style="display:flex;align-items:center;"><span style="flex:0 0 auto;width:0.42rem;height:0.42rem;border-radius:999px;background:#3b82f6;box-shadow:0 0 0.4rem #3b82f6;margin-right:0.45rem;display:inline-block;vertical-align:middle;"></span>Casting</div>`;
+    host.innerHTML = beforeCallback.map(sessionItem).join('') + castingItem + callbackSessions.map(sessionItem).join('');
     if (teamAccessMode) {
       document.getElementById('asub-setup')?.style.setProperty('display', 'none');
     }
@@ -19799,10 +19791,6 @@ If you have any questions, don't hesitate to reach out.
     }
     if (subTab === 'castingboard') {
       openCastingSubTab('castboard');
-      return;
-    }
-    if (subTab === 'callbacks') {
-      openCastingSubTab('callbacks');
       return;
     }
     switchProdTab('auditions');
@@ -19901,25 +19889,10 @@ If you have any questions, don't hesitate to reach out.
     setTimeout(() => attempt(20), 50);
   }
 
-  function toggleCastingMenu(e) {
-    e?.preventDefault?.();
-    e?.stopPropagation?.();
-    const wrap = document.getElementById('casting-wrap');
-    const isOpen = !!wrap?.classList.contains('open');
-    if (isOpen) {
-      if (_sidebarSection === 'casting') return;
-      wrap.classList.remove('open');
-      return;
-    }
-    setSidebarSubmenuState('casting');
-  }
-
   function handleSidebarChevronKey(e, section) {
     if (e.key !== 'Enter' && e.key !== ' ') return;
     if (section === 'auditions') {
       toggleAuditionsMenu(e);
-    } else if (section === 'casting') {
-      toggleCastingMenu(e);
     }
   }
 
@@ -19935,27 +19908,13 @@ If you have any questions, don't hesitate to reach out.
 
   function openCastingSubTab(subTab) {
     closeMobileSidebar();
-    switchProdTab('casting');
-    if (subTab === 'castlist') {
-      setSidebarSubmenuState(null, null);
-      document.querySelectorAll('.prod-tab[data-tab]').forEach(el => {
-        el.classList.toggle('active', el.dataset.tab === 'castlist');
-      });
-    } else {
-      setSidebarSubmenuState('casting', 'csub-' + subTab);
-    }
+    switchProdTab('auditions');
+    setSidebarSubmenuState('auditions', 'asub-casting');
     if (subTab === 'castboard') {
       setCastboardMode('general');
     }
-    if (subTab === 'callbacks') {
-      // Reset to performers view when navigating to callbacks from sidebar
-      const perfBtn  = document.getElementById('cbpanel-tab-performers');
-      const boardBtn = document.getElementById('cbpanel-tab-board');
-      if (perfBtn)  perfBtn.classList.add('active');
-      if (boardBtn) boardBtn.classList.remove('active');
-    }
     switchAudTab(subTab);
-    if (subTab === 'castboard' || subTab === 'auditions') {
+    if (subTab === 'castboard') {
       if (!allApplicants.length) loadApplicants();
     }
   }
@@ -19972,7 +19931,7 @@ If you have any questions, don't hesitate to reach out.
     document.querySelectorAll('.prod-tab[data-tab]').forEach(el => {
       el.classList.toggle('active', el.dataset.tab === id);
     });
-    if (id !== 'auditions' && id !== 'casting') setSidebarSubmenuState(null, null);
+    if (id !== 'auditions') setSidebarSubmenuState(null, null);
     const panelId = (id === 'auditions' || id === 'casting') ? 'casting' : id;
     document.querySelectorAll('.tab-panel').forEach(el => el.classList.toggle('active', el.id === 'panel-' + panelId));
     document.querySelector('.prod-main').classList.toggle('checklist-active', id === 'checklist');
@@ -20016,8 +19975,7 @@ If you have any questions, don't hesitate to reach out.
   }
   document.querySelectorAll('.prod-tab[data-tab]').forEach(el => {
     // submenu parents are handled by their own onclick handlers
-    if (el.id === 'casting-parent-tab' || el.id === 'auditions-parent-tab') return;
-    if (el.dataset.tab === 'castlist') return;
+    if (el.id === 'auditions-parent-tab') return;
     el.addEventListener('click', () => switchProdTab(el.dataset.tab));
   });
 
