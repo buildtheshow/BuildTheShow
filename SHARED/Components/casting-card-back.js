@@ -306,12 +306,41 @@ function buildCastingCardBack(app, opts = {}) {
     }
 
     if (type === 'dance_call') {
+      const dcImpressionEntries = scoreEntries.filter(e =>
+        !String(e.label || '').startsWith('Progression:') &&
+        !String(e.label || '').startsWith('Casting:')
+      );
+      const dcProgressionEntries = scoreEntries
+        .filter(e => String(e.label || '').startsWith('Progression:'))
+        .map(e => ({ ...e, label: String(e.label).replace(/^Progression:\s*/, '') }));
+      const dcCastingEntries = scoreEntries
+        .filter(e => String(e.label || '').startsWith('Casting:'))
+        .map(e => ({ ...e, label: String(e.label).replace(/^Casting:\s*/, '') }));
+
+      const renderDcBlock = (heading, entries, showVal) => {
+        if (!entries.length) return '';
+        const rows = entries.map(({ label, value, authorName, authorRole, authorColor }) => {
+          const author = [authorName, authorRole].filter(Boolean).join(' · ');
+          return `<div class="irb-score-pair" style="${authorColor ? `border-left:3px solid ${escStr(authorColor)};padding-left:0.35rem;` : ''}">
+            <span class="irb-score-key" style="${authorColor ? `color:${escStr(authorColor)};` : ''}">${escStr(label)}</span>
+            ${showVal ? `<span class="irb-score-val">${escStr(value)}</span>` : ''}
+            ${author ? `<span class="irb-inroom-note-label" style="${authorColor ? `color:${escStr(authorColor)};` : ''}">${escStr(author)}</span>` : ''}
+          </div>`;
+        }).join('');
+        return `<div class="irb-session-block irb-inroom-scores">
+          <div class="irb-session-label">${escStr(heading)}</div>
+          <div class="irb-score-grid">${rows}</div>
+        </div>`;
+      };
+
       return [
-        renderSessionScores(scoreEntries, impressionCategories),
-        renderSessionNotesAlways(noteEntries, 'Quick Notes'),
+        renderDcBlock('Quick Impressions', dcImpressionEntries, true),
+        renderDcBlock('Progression', dcProgressionEntries, false),
+        renderDcBlock('Casting', dcCastingEntries, false),
+        renderSessionNotesAlways(noteEntries, 'Notes'),
         renderSessionBuckets(bucketEntries),
         renderCharacterList(assignmentEntries),
-      ].filter(Boolean).join('');
+      ].filter(Boolean).join('') || '<div class="irb-tab-empty">Nothing here yet.</div>';
     }
 
     const content = [
