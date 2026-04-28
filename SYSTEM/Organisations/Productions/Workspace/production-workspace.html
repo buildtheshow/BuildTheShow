@@ -15270,7 +15270,7 @@
     // Checklists load on tab open
     loadAuditionConfig();
     loadSlots();
-    loadApplicants();
+    loadApplicants({ skipRender: true, skipCastingSync: true });
     Promise.all([loadAudSessions(), loadAuditionAuthoredNotes(), loadAuditionObservations()]).then(() => {
       if (!inRoomApplicantId) return;
       try {
@@ -19738,7 +19738,6 @@ If you have any questions, don't hesitate to reach out.
     setSidebarSubmenuState('auditions', 'asub-casting');
     setCastboardMode('general');
     switchAudTab('castboard');
-    if (!allApplicants.length) loadApplicants();
   }
 
   function switchProdTab(id) {
@@ -22683,16 +22682,20 @@ If you have any questions, don't hesitate to reach out.
     return insertedAny;
   }
 
-  async function loadApplicants() {
+  async function loadApplicants(options = {}) {
+    const { skipRender = false, skipCastingSync = false } = options;
     try {
-      let { data } = await sb.from('audition_applications')
-        .select('*').eq('production_id', prodId).order('created_at', { ascending: false });
-      let mergedApplicants = data || [];
-      try {
-        const { data: bookingData } = await sb.from('audition_bookings')
+      const [applicationsRes, bookingsRes] = await Promise.all([
+        sb.from('audition_applications')
+          .select('*').eq('production_id', prodId).order('created_at', { ascending: false }),
+        sb.from('audition_bookings')
           .select('*')
           .eq('production_id', prodId)
-          .order('created_at', { ascending: false });
+          .order('created_at', { ascending: false }),
+      ]);
+      let mergedApplicants = applicationsRes.data || [];
+      try {
+        const bookingData = bookingsRes.data || [];
         allAuditionBookings = bookingData || [];
         const promoted = await promoteUnmatchedBookingsToApplications(mergedApplicants, bookingData || []);
         if (promoted) {
@@ -22706,16 +22709,25 @@ If you have any questions, don't hesitate to reach out.
     } catch (e) { console.error('loadApplicants error:', e); allApplicants = []; allAuditionBookings = []; }
     const ovCount = document.getElementById('ov-applicant-count');
     if (ovCount) ovCount.textContent = allApplicants.length;
-    if (cbv2Loaded) {
-      try { await cbv2SyncApplied(); } catch {}
+    if (cbv2Loaded && !skipCastingSync) {
+      const syncApplied = async () => {
+        try {
+          const changed = await cbv2SyncApplied();
+          if (changed && document.getElementById('aud-panel-castboard')?.style.display !== 'none') renderActiveCastingBoard();
+        } catch {}
+      };
+      if ('requestIdleCallback' in window) window.requestIdleCallback(syncApplied, { timeout: 1200 });
+      else setTimeout(syncApplied, 0);
     }
     renderAudOverviewStats();
+    if (skipRender) return allApplicants;
     renderApplicants();
     renderApplicantsMirror();
     renderSlots();
     if (document.getElementById('adtab-inroom')?.style.display !== 'none') {
       renderInRoomPage(inRoomApplicantId);
     }
+    return allApplicants;
   }
 
   async function findMatchingBookingRecord(app) {
@@ -27564,17 +27576,20 @@ If you have any questions, don't hesitate to reach out.
     if (!silent) setCbv2Loading();
 
     cbv2LoadPromise = (async () => {
-      // Each await is guarded so a failure in one layer never prevents renderCbv2 from running.
-      try { if (!characters.length || force) await loadCharacters(); } catch {}
-      try { if (!allApplicants.length || force) await loadApplicants(); } catch {}
-      try {
-        const { data, error } = await sb.from('casting_assignments')
-          .select('*').eq('production_id', prodId);
-        const allRows = error ? [] : (data || []);
-        const ensembleRows = allRows.filter(a => a.state === 'ensemble_manual');
-        cbv2EnsembleManual = new Set(ensembleRows.map(a => a.applicant_id));
-        cbv2Assignments = allRows.filter(a => a.state !== 'ensemble_manual');
-      } catch { cbv2Assignments = []; }
+      await Promise.all([
+        (!characters.length || force) ? loadCharacters().catch(() => {}) : Promise.resolve(),
+        (!allApplicants.length || force) ? loadApplicants({ skipRender: true, skipCastingSync: true }).catch(() => {}) : Promise.resolve(),
+        sb.from('casting_assignments')
+          .select('*')
+          .eq('production_id', prodId)
+          .then(({ data, error }) => {
+            const allRows = error ? [] : (data || []);
+            const ensembleRows = allRows.filter(a => a.state === 'ensemble_manual');
+            cbv2EnsembleManual = new Set(ensembleRows.map(a => a.applicant_id));
+            cbv2Assignments = allRows.filter(a => a.state !== 'ensemble_manual');
+          })
+          .catch(() => { cbv2Assignments = []; }),
+      ]);
       cbv2ManualOrder = characters.map(c => c.id);
       cbv2Loaded = true;
       applyBoardTheme();
@@ -28202,6 +28217,16 @@ If you have any questions, don't hesitate to reach out.
     const rawColor = teamAccessMode
       ? (teamAccessMember?.author_color || teamAccessMember?.note_color || teamAccessMember?.color || teamAccessMember?.colour || '')
       : '';
+    if (rawColor) {
+      const colorSet = typeof getTeamNoteColorSet === 'function'
+        ? getTeamNoteColorSet(rawColor)
+        : TEAM_NOTE_COLOR_GROUPS.find(group => group.base.toLowerCase() === String(rawColor).toLowerCase());
+      return {
+        header: colorSet?.dark || rawColor,
+        body: colorSet?.base || rawColor,
+        edge: 'color-mix(in srgb, #2d2437 28%, transparent)',
+      };
+    }
     const body = rawColor || CBV2_ORG_NOTE_COLOR;
     const header = body === CBV2_ORG_NOTE_COLOR
       ? '#777179'
