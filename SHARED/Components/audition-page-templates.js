@@ -286,10 +286,11 @@
       </div>
       <div class="dc-inroom-mid">
         <div class="dc-inroom-snap-col">
-          <div class="dc-inroom-section-label">Response</div>
-          ${snapBtn('response', 'adjusted', 'Adjusted')}
-          ${snapBtn('response', 'tried', 'Tried')}
+          <div class="dc-inroom-section-label">Progression</div>
           ${snapBtn('response', 'no_change', 'No Change')}
+          ${snapBtn('response', 'tried', 'Tried')}
+          ${snapBtn('response', 'adjusted', 'Adjusted')}
+          ${snapBtn('response', 'got_it', 'Got It')}
         </div>
         <div class="dc-inroom-snap-col">
           <div class="dc-inroom-section-label">Casting</div>
