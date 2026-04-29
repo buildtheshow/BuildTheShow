@@ -16379,14 +16379,28 @@
   async function markNextPerformerSentIn(roomKey) {
     const state = getRoomState(roomKey);
     if (!state) return;
+    const card = document.getElementById(`inroom-next-request-${roomKey}`);
+    const action = card?.querySelector('.inroom-next-request-actions .primary');
+    if (action) {
+      action.disabled = true;
+      action.textContent = 'Sending...';
+    }
     const session = audSessions.find(candidate => candidate.id === state.session_id) || getActiveAuditionNavSession() || getSelectedAuditionSession();
     const nextApp = allApplicants.find(app => app.id === state.next_applicant_id) || null;
+    if (!nextApp && !state.next_group_key && !state.next_group_label) {
+      showToast('No next performer is queued for this room.', true);
+      if (action) {
+        action.disabled = false;
+        action.textContent = 'Sent In';
+      }
+      return;
+    }
     const payload = buildRoomStatePayload({ session, app: nextApp, status: 'in_progress', roomId: state.room_id });
     payload.current_group_key = state.next_group_key || null;
     payload.current_group_label = state.next_group_label || null;
     payload.current_group_member_ids = state.next_group_member_ids || [];
+    card?.remove();
     await persistAuditionRoomState(payload);
-    if (state.session_id) openAuditionSessionWorkspace(state.session_id, 'checkin');
     renderInRoomReadySignals();
   }
 
