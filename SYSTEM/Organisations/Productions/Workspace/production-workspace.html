@@ -14244,25 +14244,6 @@
           <section class="settings-section">
             <div class="settings-section-header">
               <div>
-                <h3 class="settings-section-title">Public Link</h3>
-                <div class="settings-section-subtitle">Generated automatically from this organisation and production.</div>
-              </div>
-              <div class="settings-section-tag">Public</div>
-            </div>
-            <div class="url-link-card url-builder-link" style="margin-bottom:0.65rem;" onclick="openCurrentPublicUrl(event)" title="Open URL">
-              <div class="url-link-label">Page</div>
-              <div id="ps-generated-link-text" class="url-link-value"></div>
-              <button type="button" class="btn-secondary" onclick="event.stopPropagation();copyPageLink()">Copy Link</button>
-            </div>
-            <span id="ps-slug-org" style="display:none;"></span>
-            <span id="ps-url-section" style="display:none;"></span>
-            <span id="ps-slug-base" style="display:none;"></span>
-            <div id="ps-slug-msg" style="display:none;font-size:0.78rem;border-radius:6px;padding:0.4rem 0.7rem;margin-top:0.5rem;"></div>
-          </section>
-
-          <section class="settings-section">
-            <div class="settings-section-header">
-              <div>
                 <h3 class="settings-section-title">Team Portal URL</h3>
                 <div class="settings-section-subtitle">The link your creative team uses to log in to the audition portal. Read-only — derived from your organisation shortcode and show title.</div>
               </div>
@@ -15261,6 +15242,19 @@
     };
   }
 
+  function adminProductionPathParts() {
+    const parts = window.location.pathname.replace(/\/+$/, '').split('/').filter(Boolean);
+    const orgIndex = parts.findIndex(part => part.toLowerCase() === 'org');
+    const productionsIndex = parts.findIndex(part => part.toLowerCase() === 'productions');
+    if (orgIndex < 1 || productionsIndex < 0 || productionsIndex + 1 >= parts.length) {
+      return { org: '', show: '' };
+    }
+    return {
+      org: parts[orgIndex - 1] || '',
+      show: parts[productionsIndex + 1] || '',
+    };
+  }
+
   function normalizeTeamRole(role) {
     const raw = String(role || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
     if (raw === 'musical_director' || raw === 'music_director') return 'vocal_director';
@@ -15283,6 +15277,22 @@
       return data || '';
     } catch (error) {
       console.error('[BTS] team production lookup failed', error);
+      return '';
+    }
+  }
+
+  async function resolveAdminProductionIdFromPath() {
+    const parts = adminProductionPathParts();
+    if (!parts.org || !parts.show) return '';
+    try {
+      const { data, error } = await sb.rpc('resolve_team_portal', {
+        p_org_abbrev: parts.org,
+        p_show_slug: parts.show,
+      });
+      if (error) throw error;
+      return data || '';
+    } catch (error) {
+      console.error('[BTS] production lookup failed', error);
       return '';
     }
   }
@@ -15387,6 +15397,17 @@
     switchProdTab('auditions');
     openAuditionsSubTab('dashboard');
     startAuditionsPoll();
+  }
+
+  function cleanAdminWorkspaceUrl() {
+    if (!orgSlug || !prod?.slug || teamAccessMode) return;
+    const url = new URL(window.location.href);
+    url.pathname = `/${encodeURIComponent(orgSlug)}/ORG/Productions/${encodeURIComponent(prod.slug)}`;
+    url.searchParams.delete('id');
+    const next = url.pathname + url.search + url.hash;
+    if (next !== window.location.pathname + window.location.search + window.location.hash) {
+      history.replaceState(workspaceHistoryPayload(loadWorkspaceNavState()), '', next);
+    }
   }
 
   async function logoutTeamAccess() {
@@ -16068,7 +16089,10 @@
     teamAccessMode = isTeamAccessRequest();
     prodId = params.get('id');
     if (!prodId) {
-      if (teamAccessMode) showTeamAccessLogin('Use the team link from this production. Team links must include the production ID.');
+      prodId = teamAccessMode ? await resolveTeamProductionIdFromPath() : await resolveAdminProductionIdFromPath();
+    }
+    if (!prodId) {
+      if (teamAccessMode) showTeamAccessLogin('Use the team link from this production.');
       else window.location.href = '/org/dashboard';
       return;
     }
@@ -16139,12 +16163,13 @@
             orgSlug  = data.slug  || (orgAbbreviation || '').replace(/[^a-zA-Z0-9]/g, '') || generateSlug(data.name || '') || '';
             etTogglePreview();
             // Update all slug org labels now that orgSlug is loaded
-            ['pub-slug-org', 'ps-slug-org'].forEach(id => {
+            ['pub-slug-org'].forEach(id => {
               const el = document.getElementById(id);
               if (el) el.textContent = orgPathDisplayLabel();
             });
             // Update team portal URL displays
             updateTeamUrlDisplays();
+            cleanAdminWorkspaceUrl();
           }
         });
       // Init shared venue picker with this org
@@ -21300,7 +21325,7 @@ If you have any questions, don't hesitate to reach out.
 
   function renderPublicUrlSectionLabels() {
     const label = publicUrlSection();
-    ['pub-url-section', 'ps-url-section'].forEach(id => {
+    ['pub-url-section'].forEach(id => {
       const el = document.getElementById(id);
       if (el) el.textContent = label;
     });
@@ -21349,7 +21374,7 @@ If you have any questions, don't hesitate to reach out.
 
   function renderGeneratedPublicUrlDisplays() {
     const link = getPageLink();
-    ['pub-generated-link-text', 'ps-generated-link-text'].forEach(id => {
+    ['pub-generated-link-text'].forEach(id => {
       const el = document.getElementById(id);
       if (el) el.textContent = link;
     });
@@ -21362,7 +21387,7 @@ If you have any questions, don't hesitate to reach out.
     updatePubStatusHighlight(status);
 
     renderPublicUrlSectionLabels();
-    ['pub-slug-org', 'ps-slug-org'].forEach(id => {
+    ['pub-slug-org'].forEach(id => {
       const el = document.getElementById(id);
       if (el) el.textContent = orgPathDisplayLabel();
     });
@@ -21418,7 +21443,7 @@ If you have any questions, don't hesitate to reach out.
   function copyPageLink() {
     const link = getPageLink();
     if (currentPublicPageStatus() === 'draft') {
-      const msg = document.getElementById('pub-status-msg') || document.getElementById('ps-slug-msg');
+      const msg = document.getElementById('pub-status-msg');
       if (msg) {
         msg.textContent = 'Publish or hide the page before copying the public link.';
         msg.style.display = 'block';
