@@ -169,11 +169,12 @@ These are non-negotiable platform rules for how the system should be shaped and 
 6. Organisation URLs are mandatory during organisation setup.
 7. Organisation URLs auto-start from the abbreviation, but the user must choose an available value before creation.
 8. Organisation URLs can use only letters, numbers, and hyphens.
-9. Reserved words such as `ORG`, `Team`, `Audition`, `System`, `Public`, and `Admin` cannot be organisation URLs.
-10. Offensive, abusive, adult, or hateful words cannot be organisation URLs.
-11. Organisation URLs are locked after creation and must not be editable in normal settings.
-12. Show URLs only need to be unique inside their organisation.
-13. Pretty URLs are for humans; IDs remain the source of truth for private/team access.
+9. Reserved routes such as `admin`, `api`, `auth`, `dashboard`, `login`, `settings`, `support`, `profile`, `organizations`, `productions`, `public`, `system`, `assets`, `backend`, `shared`, `home`, `www`, `mail`, and `app` cannot be organisation URLs.
+10. Explicit sexual terms, hate speech, slurs, and extreme profanity cannot be organisation URLs.
+11. Theatre-relevant dark-theme words such as `death`, `murder`, `blood`, `drug`, `weed`, `crime`, `hell`, `suicide`, `gun`, and `war` are not blocked by themselves.
+12. Organisation URLs are locked after creation and must not be editable in normal settings.
+13. Show URLs only need to be unique inside their organisation.
+14. Pretty URLs are for humans; IDs remain the source of truth for private/team access.
 
 ### Features
 

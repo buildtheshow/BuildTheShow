@@ -470,6 +470,7 @@
   </main>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="/SHARED/Components/custom-url-validation.js?v=20260429"></script>
   <script>
     const { createClient } = supabase;
     const sb = createClient(
@@ -483,35 +484,6 @@
     const orgAbbrInput = document.getElementById('org-abbr');
     const orgSlugInput = document.getElementById('org-slug');
     const orgSlugStatus = document.getElementById('org-slug-status');
-    const RESERVED_ORG_SLUGS = new Set([
-      'admin', 'api', 'app', 'assets', 'audition', 'auditions', 'callback', 'callbacks',
-      'cast', 'cast-list', 'castlist', 'dashboard', 'find', 'home', 'login', 'logout',
-      'members', 'org', 'organisation', 'organization', 'public', 'setup', 'system',
-      'team', 'teams', 'tickets', 'volunteer', 'volunteers', 'www'
-    ]);
-    const BLOCKED_ORG_SLUG_PATTERNS = [
-      /(^|-)ass(hole)?($|-)/i,
-      /bastard/i,
-      /bitch/i,
-      /bullshit/i,
-      /cunt/i,
-      /damn/i,
-      /dick/i,
-      /fag/i,
-      /fuck/i,
-      /hell/i,
-      /nazi/i,
-      /nigg/i,
-      /piss/i,
-      /porn/i,
-      /prick/i,
-      /pussy/i,
-      /rape/i,
-      /shit/i,
-      /slut/i,
-      /twat/i,
-      /whore/i
-    ];
     let orgSlugEdited = false;
     let orgSlugCheckTimer = null;
     let orgSlugAvailable = false;
@@ -528,23 +500,12 @@
 
     // ── Organisation URL ────────────────────────────────
     function normalizeOrgSlug(value) {
-      return String(value || '')
-        .trim()
-        .replace(/['’]/g, '')
-        .replace(/&/g, ' and ')
-        .replace(/[^a-zA-Z0-9]+/g, '-')
-        .replace(/-+/g, '-')
-        .replace(/^-|-$/g, '')
-        .substring(0, 60);
+      return window.BTSCustomUrl.normalizeSubmittedSlug(value);
     }
 
     function orgSlugError(slug) {
-      if (!slug) return 'Organisation URL is required.';
-      if (!/^[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*$/.test(slug)) return 'Use letters, numbers, and hyphens only.';
-      if (slug.length < 2) return 'Use at least 2 characters.';
-      if (RESERVED_ORG_SLUGS.has(slug.toLowerCase())) return 'That URL is reserved. Try another one.';
-      if (BLOCKED_ORG_SLUG_PATTERNS.some(pattern => pattern.test(slug))) return 'That URL is not allowed. Try another one.';
-      return '';
+      const result = window.BTSCustomUrl.validate(slug);
+      return result.ok ? '' : result.message;
     }
 
     function setOrgSlugStatus(message, state = '') {
@@ -554,7 +515,7 @@
 
     function suggestOrgSlug() {
       if (orgSlugEdited) return;
-      const suggestion = normalizeOrgSlug(orgAbbrInput.value || orgNameInput.value);
+      const suggestion = window.BTSCustomUrl.slugify(orgAbbrInput.value || orgNameInput.value);
       orgSlugInput.value = suggestion;
       scheduleOrgSlugCheck();
     }

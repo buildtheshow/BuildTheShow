@@ -2,13 +2,14 @@
 -- URLs are chosen during org setup, checked live, and locked after creation.
 
 ALTER TABLE organizations ADD COLUMN IF NOT EXISTS slug text;
+CREATE EXTENSION IF NOT EXISTS unaccent WITH SCHEMA extensions;
 
 UPDATE organizations
-SET slug = regexp_replace(COALESCE(NULLIF(abbreviation, ''), name, custom_id, id::text), '[^a-zA-Z0-9]+', '-', 'g')
+SET slug = substring(lower(extensions.unaccent(regexp_replace(COALESCE(NULLIF(abbreviation, ''), name, custom_id, id::text), '[^a-zA-Z0-9]+', '-', 'g'))) from 1 for 50)
 WHERE slug IS NULL OR slug = '';
 
 UPDATE organizations
-SET slug = regexp_replace(regexp_replace(slug, '[^a-zA-Z0-9]+', '-', 'g'), '(^-+|-+$)', '', 'g')
+SET slug = substring(lower(extensions.unaccent(regexp_replace(regexp_replace(slug, '[^a-zA-Z0-9]+', '-', 'g'), '(^-+|-+$)', '', 'g'))) from 1 for 50)
 WHERE slug IS NOT NULL;
 
 CREATE UNIQUE INDEX IF NOT EXISTS organizations_slug_lower_idx
@@ -28,34 +29,48 @@ AS $$
   SELECT lower(COALESCE(p_slug, '')) = ANY (ARRAY[
     'admin',
     'api',
-    'app',
-    'assets',
-    'audition',
-    'auditions',
-    'callback',
-    'callbacks',
-    'cast',
-    'cast-list',
-    'castlist',
+    'auth',
+    'billing',
     'dashboard',
-    'find',
-    'home',
     'login',
     'logout',
-    'members',
-    'org',
-    'organisation',
-    'organization',
+    'signup',
+    'settings',
+    'support',
+    'help',
+    'account',
+    'profile',
+    'users',
+    'organisations',
+    'organizations',
+    'productions',
     'public',
-    'setup',
     'system',
-    'team',
-    'teams',
-    'tickets',
-    'volunteer',
-    'volunteers',
-    'www'
+    'app',
+    'assets',
+    'backend',
+    'shared',
+    'home',
+    'www',
+    'mail'
   ]);
+$$;
+
+CREATE OR REPLACE FUNCTION normalize_slug_for_blocklist(p_slug text)
+RETURNS text
+LANGUAGE sql
+IMMUTABLE
+AS $$
+  SELECT regexp_replace(
+    translate(
+      lower(extensions.unaccent(COALESCE(p_slug, ''))),
+      '013457',
+      'oieast'
+    ),
+    '[^a-z]',
+    '',
+    'g'
+  );
 $$;
 
 CREATE OR REPLACE FUNCTION is_blocked_organization_slug(p_slug text)
@@ -63,7 +78,7 @@ RETURNS boolean
 LANGUAGE sql
 IMMUTABLE
 AS $$
-  SELECT lower(COALESCE(p_slug, '')) ~ '(ass(hole)?|bastard|bitch|bullshit|cunt|damn|dick|fag|fuck|hell|nazi|nigg|piss|porn|prick|pussy|rape|shit|slut|twat|whore)';
+  SELECT normalize_slug_for_blocklist(p_slug) ~ '(arsehole|asshole|bitch|blowjob|bullshit|chink|cock|cocksucker|cunt|faggot|^fag$|fuck|kike|motherfucker|nazi|nigg|paki|porn|pussy|rape|shit|slut|spic|twat|whore|wop)';
 $$;
 
 ALTER TABLE organizations
@@ -73,10 +88,26 @@ ALTER TABLE organizations
   ADD CONSTRAINT organizations_slug_format_chk
   CHECK (
     slug IS NOT NULL
-    AND slug ~ '^[A-Za-z0-9]+(-[A-Za-z0-9]+)*$'
-    AND char_length(slug) BETWEEN 2 AND 60
+    AND slug ~ '^[a-z0-9]+(-[a-z0-9]+)*$'
+    AND char_length(slug) BETWEEN 3 AND 50
     AND NOT is_reserved_organization_slug(slug)
     AND NOT is_blocked_organization_slug(slug)
+  )
+  NOT VALID;
+
+ALTER TABLE productions
+  DROP CONSTRAINT IF EXISTS productions_slug_format_chk;
+
+ALTER TABLE productions
+  ADD CONSTRAINT productions_slug_format_chk
+  CHECK (
+    slug IS NULL
+    OR (
+      slug ~ '^[a-z0-9]+(-[a-z0-9]+)*$'
+      AND char_length(slug) BETWEEN 3 AND 50
+      AND NOT is_reserved_organization_slug(slug)
+      AND NOT is_blocked_organization_slug(slug)
+    )
   )
   NOT VALID;
 
@@ -90,12 +121,12 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
 DECLARE
-  v_slug text := regexp_replace(regexp_replace(COALESCE(p_slug, ''), '[^a-zA-Z0-9]+', '-', 'g'), '(^-+|-+$)', '', 'g');
+  v_slug text := lower(extensions.unaccent(trim(COALESCE(p_slug, ''))));
 BEGIN
   IF v_slug = ''
-    OR v_slug !~ '^[A-Za-z0-9]+(-[A-Za-z0-9]+)*$'
-    OR char_length(v_slug) < 2
-    OR char_length(v_slug) > 60
+    OR v_slug !~ '^[a-z0-9]+(-[a-z0-9]+)*$'
+    OR char_length(v_slug) < 3
+    OR char_length(v_slug) > 50
     OR is_reserved_organization_slug(v_slug)
     OR is_blocked_organization_slug(v_slug)
   THEN
