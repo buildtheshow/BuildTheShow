@@ -14806,7 +14806,7 @@
 <script src="/ASSETS/scripts/phone-format.js?v=nanp-smart-20260424"></script>
 <script src="/ASSETS/scripts/casting-card.js"></script>
 <script src="/ASSETS/scripts/production-team-card.js?v=team-card-phone-format-20260424"></script>
-<script src="/ASSETS/scripts/production-team-access.js?v=team-card-colour-smart-20260424"></script>
+<script src="/ASSETS/scripts/production-team-access.js?v=team-portal-prod-id-20260429"></script>
 <script src="../../../../SHARED/Components/casting-card-back.js?v=dc-colour-only-20260428"></script>
 <script src="../../../../SHARED/Components/audition-status-strip.js"></script>
 <script src="../../../../SHARED/Components/ai-character-importer.js"></script>
@@ -15100,6 +15100,18 @@
     document.body.appendChild(overlay);
   }
 
+  function teamAccessMemberMatchesProduction(member = teamAccessMember) {
+    return !!prodId && !!member?.production_id && String(member.production_id) === String(prodId);
+  }
+
+  function rejectMismatchedTeamAccess() {
+    forgetTeamAccess();
+    teamAccessSessionToken = '';
+    teamAccessMember = null;
+    teamAccessEmail = '';
+    showTeamAccessLogin('This team access belongs to a different production. Use the team link from this show.');
+  }
+
   async function loginTeamAccess(options = {}) {
     const err = document.getElementById('team-access-login-error');
     teamAccessEmail = (options.email || document.getElementById('team-access-email')?.value?.trim() || '').toLowerCase();
@@ -15119,6 +15131,10 @@
       }
       teamAccessSessionToken = options.sessionToken;
       teamAccessMember = data[0];
+      if (!teamAccessMemberMatchesProduction()) {
+        rejectMismatchedTeamAccess();
+        return;
+      }
       teamAccessEmail = teamAccessMember.email || options.email || '';
       rememberTeamAccess();
       document.getElementById('team-access-login-overlay')?.remove();
@@ -15137,30 +15153,14 @@
       return;
     }
     if (!teamAccessEmail || !teamAccessPasscode) { if (err) err.textContent = 'Enter your email and access code.'; return; }
-    const portalParts = teamPortalPathParts();
-    const usePortalLogin = teamAccessMode && portalParts.org && portalParts.show;
-    if (!prodId && !usePortalLogin) { if (err) err.textContent = 'Production not found. Check your link.'; return; }
+    if (!prodId) { if (err) err.textContent = 'Production not found. Copy the team link again from this production.'; return; }
     let data, error;
-    if (usePortalLogin) {
-      ({ data, error } = await sb.rpc('team_member_start_session_for_portal', {
-          p_org_abbrev: portalParts.org,
-          p_show_slug: portalParts.show,
-          p_email: teamAccessEmail,
-          p_passcode: teamAccessPasscode,
-          p_user_agent: navigator.userAgent || null,
-        }));
-      if (error && prodId) {
-        console.warn('[BTS] portal team login failed, retrying with resolved production id', error);
-      }
-    }
-    if (!usePortalLogin || (error && prodId)) {
-      ({ data, error } = await sb.rpc('team_member_start_session', {
-          p_production_id: prodId,
-          p_email: teamAccessEmail,
-          p_passcode: teamAccessPasscode,
-          p_user_agent: navigator.userAgent || null,
-        }));
-    }
+    ({ data, error } = await sb.rpc('team_member_start_session', {
+        p_production_id: prodId,
+        p_email: teamAccessEmail,
+        p_passcode: teamAccessPasscode,
+        p_user_agent: navigator.userAgent || null,
+      }));
     const result = Array.isArray(data) ? data[0] : data;
     if (error || !result) {
       console.warn('[BTS] team login failed', error || { message: 'No team member returned' });
@@ -15176,6 +15176,10 @@
     if (!prodId) { if (err) err.textContent = 'Production not found. Check your link.'; return; }
     teamAccessSessionToken = result.session_token || '';
     teamAccessMember = result.team_member || null;
+    if (!teamAccessMemberMatchesProduction()) {
+      rejectMismatchedTeamAccess();
+      return;
+    }
     rememberTeamAccess();
     document.getElementById('team-access-login-overlay')?.remove();
     document.body.classList.remove('team-access-login-visible');
@@ -15565,9 +15569,8 @@
     const params = new URLSearchParams(window.location.search);
     teamAccessMode = isTeamAccessRequest();
     prodId = params.get('id');
-    if (!prodId && teamAccessMode) prodId = await resolveTeamProductionIdFromPath();
     if (!prodId) {
-      if (teamAccessMode) showTeamAccessLogin();
+      if (teamAccessMode) showTeamAccessLogin('Use the team link from this production. Team links must include the production ID.');
       else window.location.href = '../../org-dashboard.html';
       return;
     }
@@ -21011,7 +21014,7 @@ If you have any questions, don't hesitate to reach out.
 
   function updateTeamUrlDisplays() {
     const abbrev   = orgAbbreviation || orgSlug || '—';
-    const showSlug = generateSlug(prod?.title || '') || '—';
+    const showSlug = prod?.slug || generateSlug(prod?.title || '') || '—';
     ['pub-team-url-org', 'ps-team-url-org'].forEach(id => {
       const el = document.getElementById(id);
       if (el) el.textContent = abbrev;

@@ -328,8 +328,6 @@ BEGIN
       keys.production_slug_key = keys.requested_key
       OR keys.title_key = keys.requested_key
       OR keys.clean_title_key = keys.requested_key
-      OR keys.requested_key LIKE keys.production_slug_key || '%'
-      OR keys.requested_key LIKE keys.clean_title_key || '%'
     )
   ORDER BY
     CASE
@@ -963,9 +961,16 @@ AS $$
   JOIN organizations o ON o.id = p.organization_id
   WHERE lower(regexp_replace(COALESCE(o.slug, o.abbreviation, o.name), '[^a-zA-Z0-9]', '', 'g')) = lower(regexp_replace(p_org_abbrev, '[^a-zA-Z0-9]', '', 'g'))
     AND (
-      lower(COALESCE(p.slug, '')) = lower(p_show_slug)
-      OR lower(regexp_replace(COALESCE(p.title, ''), '[^a-zA-Z0-9]+', '-', 'g')) = lower(regexp_replace(p_show_slug, '[^a-zA-Z0-9]+', '-', 'g'))
+      lower(regexp_replace(COALESCE(p.slug, ''), '[^a-zA-Z0-9]', '', 'g')) = lower(regexp_replace(p_show_slug, '[^a-zA-Z0-9]', '', 'g'))
+      OR lower(regexp_replace(COALESCE(p.title, ''), '[^a-zA-Z0-9]', '', 'g')) = lower(regexp_replace(p_show_slug, '[^a-zA-Z0-9]', '', 'g'))
+      OR lower(regexp_replace(regexp_replace(COALESCE(p.title, ''), '^(test|demo)[^a-zA-Z0-9]+', '', 'i'), '[^a-zA-Z0-9]', '', 'g')) = lower(regexp_replace(p_show_slug, '[^a-zA-Z0-9]', '', 'g'))
     )
+  ORDER BY
+    CASE
+      WHEN lower(regexp_replace(COALESCE(p.slug, ''), '[^a-zA-Z0-9]', '', 'g')) = lower(regexp_replace(p_show_slug, '[^a-zA-Z0-9]', '', 'g')) THEN 0
+      ELSE 1
+    END,
+    p.created_at DESC
   LIMIT 1;
 $$;
 

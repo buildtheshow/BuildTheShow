@@ -6,7 +6,9 @@
 function teamPortalUrl() {
   const abbrev = orgAbbreviation || orgSlug || 'team';
   const showSlug = prod?.slug || generateSlug(prod?.title || 'show');
-  return new URL(`/${abbrev}/${showSlug}/Team`, window.location.origin).toString();
+  const url = new URL(`/${abbrev}/${showSlug}/Team`, window.location.origin);
+  if (prodId) url.searchParams.set('id', prodId);
+  return url.toString();
 }
 
 function randomTeamPasscode() {
