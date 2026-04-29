@@ -15585,6 +15585,53 @@
     }
   }
 
+  async function findOrganizationForPath(slug) {
+    const value = String(slug || '').trim();
+    if (!value) return null;
+    try {
+      let result = await sb.from('organizations').select('id,name,slug,abbreviation').ilike('slug', value).maybeSingle();
+      if (result.error) throw result.error;
+      if (result.data) return result.data;
+      result = await sb.from('organizations').select('id,name,slug,abbreviation').ilike('abbreviation', value).maybeSingle();
+      if (result.error) throw result.error;
+      return result.data || null;
+    } catch (error) {
+      console.warn('[BTS] organization lookup failed', error);
+      return null;
+    }
+  }
+
+  function showWorkspaceNotFound(title, message, actionHref = '/', actionLabel = 'Back to Build The Show') {
+    if (window.PageLoader) window.PageLoader.hide();
+    document.body.classList.remove('team-access-login-visible');
+    document.getElementById('team-access-login-overlay')?.remove();
+    document.querySelector('.prod-sidebar')?.remove();
+    const main = document.querySelector('.prod-main');
+    if (!main) return;
+    main.style.marginLeft = '0';
+    main.style.width = '100%';
+    main.innerHTML = `
+      <main style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:2rem;background:#faf8ff;">
+        <section style="width:min(520px,100%);background:#fff;border:1px solid rgba(87,46,136,0.16);border-radius:18px;padding:2rem;text-align:center;box-shadow:0 18px 60px rgba(45,27,78,0.10);">
+          <img src="/ASSETS/Images/logo-long-white.png" alt="Build The Show" style="height:24px;background:#572e88;border-radius:8px;padding:0.45rem 0.65rem;margin-bottom:1.2rem;" />
+          <h1 style="margin:0 0 0.55rem;color:#2d1b4e;font-size:1.7rem;letter-spacing:0;">${esc(title)}</h1>
+          <p style="margin:0 auto 1.25rem;color:#6a5a80;line-height:1.55;max-width:34rem;">${esc(message)}</p>
+          <a href="${esc(actionHref)}" style="display:inline-flex;align-items:center;justify-content:center;border-radius:999px;background:#572e88;color:#fff;text-decoration:none;font-weight:900;padding:0.72rem 1.15rem;">${esc(actionLabel)}</a>
+        </section>
+      </main>`;
+  }
+
+  async function showProductionPathNotFound() {
+    const parts = adminProductionPathParts();
+    const org = await findOrganizationForPath(parts.org);
+    if (!org) {
+      showWorkspaceNotFound('Organisation not found', 'That organisation URL does not match a Build The Show organisation.', '/', 'Back to Build The Show');
+      return;
+    }
+    const orgPath = org.slug || org.abbreviation || parts.org;
+    showWorkspaceNotFound('Production not found', 'That production URL does not exist for this organisation.', `/${encodeURIComponent(orgPath)}`, 'View organisation profile');
+  }
+
   function showTeamAccessLogin(message = '') {
     document.body.classList.add('team-access-login-visible');
     document.getElementById('team-access-login-overlay')?.remove();
@@ -16544,8 +16591,11 @@
       prodId = teamAccessMode ? await resolveTeamProductionIdFromPath() : await resolveAdminProductionIdFromPath();
     }
     if (!prodId) {
-      if (teamAccessMode) showTeamAccessLogin('Use the team link from this production.');
-      else window.location.href = '/org/dashboard';
+      await showProductionPathNotFound();
+      return;
+    }
+    if (isWorkspaceRouteInvalid()) {
+      showWorkspaceNotFound('Page not found', 'That page does not exist in this production workspace.', workspaceRouteBasePath(), 'Back to production');
       return;
     }
 
@@ -16592,6 +16642,10 @@
     // Calendar initialises lazily when the Calendar tab is opened (see switchProdTab)
     // Checklists load on tab open
     const bootRouteNav = getWorkspaceNavStateFromRoute();
+    if (isWorkspaceRouteInvalid()) {
+      showWorkspaceNotFound('Page not found', 'That page does not exist in this production workspace.', workspaceCanonicalBasePath(), 'Back to production');
+      return;
+    }
     const bootNav = bootRouteNav || loadWorkspaceNavState() || getDefaultWorkspaceNavState();
     const shouldHydrateAuditions = bootNav.prodTab === 'auditions' || bootNav.prodTab === 'castlist';
     syncAuditionsLiveLoop(bootNav);
@@ -16858,6 +16912,49 @@
     const productionsIndex = parts.findIndex(part => part.toLowerCase() === 'productions');
     if (productionsIndex < 0) return [];
     return parts.slice(productionsIndex + 2).map(cleanWorkspaceRoutePart).filter(Boolean);
+  }
+
+  function isWorkspaceRouteInvalid() {
+    const segments = workspaceRouteSegments();
+    if (!segments.length) return false;
+    const [section, child, detail, extra] = segments;
+    const topLevel = new Set([
+      'overview',
+      'team',
+      'calendar',
+      'settings',
+      'emails',
+      'email-templates',
+      'test',
+      'templates',
+      'checklist',
+      'files',
+      'profile',
+      'cast-list',
+      'castlist',
+    ]);
+    if (topLevel.has(section)) return segments.length > 1;
+    if (section !== 'auditions') return true;
+    if (child === 'session') return !detail || !!extra;
+    if (detail) return true;
+    const audRoutes = new Set([
+      '',
+      'dashboard',
+      'settings',
+      'setup',
+      'schedule',
+      'performers',
+      'checkin',
+      'check-in',
+      'in-the-room',
+      'inroom',
+      'callback',
+      'callbacks',
+      'casting-board',
+      'casting',
+      'final-casting',
+    ]);
+    return !audRoutes.has(child || '');
   }
 
   function getWorkspaceNavStateFromRoute() {
