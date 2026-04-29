@@ -159,6 +159,22 @@ These are non-negotiable platform rules for how the system should be shaped and 
 9. Real-time behaviour must never overwrite unrelated data. If one audition type changes, only that audition type should change.
 10. Prefer explicit live update flows over hidden refresh logic, delayed page-wide reloads, or “save and refresh” behaviour.
 
+### URL Identity
+
+1. Public organisation profiles live at `/{ORG}`.
+2. Organisation admin lives at `/{ORG}/ORG`.
+3. Production-specific public pages use `/{ORG}/{SHOW}/{PURPOSE}`.
+4. Public audition pages use `/{ORG}/{SHOW}/Audition`.
+5. Team portals use `/{ORG}/{SHOW}/Team`, with the production ID still passed as the source-of-truth lock.
+6. Organisation URLs are mandatory during organisation setup.
+7. Organisation URLs auto-start from the abbreviation, but the user must choose an available value before creation.
+8. Organisation URLs can use only letters, numbers, and hyphens.
+9. Reserved words such as `ORG`, `Team`, `Audition`, `System`, `Public`, and `Admin` cannot be organisation URLs.
+10. Offensive, abusive, adult, or hateful words cannot be organisation URLs.
+11. Organisation URLs are locked after creation and must not be editable in normal settings.
+12. Show URLs only need to be unique inside their organisation.
+13. Pretty URLs are for humans; IDs remain the source of truth for private/team access.
+
 ### Features
 
 1. Do not build orphaned features.

@@ -2198,10 +2198,19 @@
     const prodId   = params.get('prod') || params.get('id');
     const pathParts = window.location.pathname.split('/').filter(Boolean).map(decodeURIComponent);
     const auditionPathIndex = pathParts.findIndex(part => /^audition$/i.test(part) || /^archive\d{4}$/i.test(part));
-    const orgPathKey = params.get('org') || (auditionPathIndex > 0 ? pathParts[auditionPathIndex - 1] : null);
-    // Support clean URLs: /ORG/Audition/PROD, /ORG/ArchiveYEAR/PROD, or /audition/PROD.
+    let cleanPath = null;
+    let orgPathKey = params.get('org') || null;
+    if (auditionPathIndex === 0) {
+      cleanPath = pathParts[1] || null;
+    } else if (auditionPathIndex === 1) {
+      orgPathKey = orgPathKey || pathParts[0] || null;
+      cleanPath = pathParts[2] || null;
+    } else if (auditionPathIndex > 1) {
+      orgPathKey = orgPathKey || pathParts[0] || null;
+      cleanPath = pathParts[auditionPathIndex - 1] || null;
+    }
+    // Support clean URLs: /ORG/PROD/Audition, /ORG/Audition/PROD, /ORG/PROD/ArchiveYEAR, or /audition/PROD.
     // Match case-insensitively because phones/browsers often autocorrect or lowercase typed URLs.
-    const cleanPath = auditionPathIndex > -1 ? pathParts[auditionPathIndex + 1] : null;
     const prodSlug = params.get('slug') || (cleanPath ? decodeURIComponent(cleanPath) : null);
     const preview  = params.get('preview') === '1';
 
@@ -2411,7 +2420,7 @@
           scopedOrgId = orgMatch?.id || null;
         }
 
-        let q = sb.from('productions').select('*').eq('slug', prodSlug);
+        let q = sb.from('productions').select('*').ilike('slug', prodSlug);
         if (scopedOrgId) q = q.eq('organization_id', scopedOrgId);
         const { data } = await q.maybeSingle();
         prod = data || null;

@@ -560,7 +560,7 @@
     }
 
     // ── Build open opportunities section ─────────────────────────
-    function buildOpportunitiesSection(opportunities) {
+    function buildOpportunitiesSection(opportunities, org) {
       if (!opportunities || opportunities.length === 0) return '';
 
       function fmtDate(d) {
@@ -568,18 +568,21 @@
         return new Date(d).toLocaleDateString('en-CA', { month: 'short', day: 'numeric' });
       }
 
-      const badgeClass = 'opp-type-badge--audition';
-      const badgeLabel = 'Auditions Open';
+      const cards = opportunities.map(opp => {
+        const badgeClass = 'opp-type-badge--audition';
+        const badgeLabel = 'Auditions Open';
 
-      const start = fmtDate(opp.start_date);
-      const end = fmtDate(opp.end_date);
+        const start = fmtDate(opp.start_date);
+        const end = fmtDate(opp.end_date);
 
-      const datesLine = start
-        ? `<div class="opp-card-dates">Performances: ${start}${end && end !== start ? ' to ' + end : ''}</div>`
-        : '';
+        const datesLine = start
+          ? `<div class="opp-card-dates">Performances: ${start}${end && end !== start ? ' to ' + end : ''}</div>`
+          : '';
 
-      const ctaHref = `../Public/audition.html?id=${esc(opp.production_id)}`;
-      const ctaLabel = 'Sign Up for Auditions';
+        const ctaHref = org?.slug && opp.slug
+          ? `/${encodeURIComponent(org.slug)}/${encodeURIComponent(opp.slug)}/Audition`
+          : `../Public/audition.html?id=${esc(opp.id)}`;
+        const ctaLabel = 'Sign Up for Auditions';
 
         return `
           <div class="opp-card">
@@ -712,19 +715,20 @@
     async function loadProfile() {
       const params = new URLSearchParams(window.location.search);
       const orgId  = params.get('id');
+      const pathOrg = decodeURIComponent((window.location.pathname.split('/').filter(Boolean)[0] || '').trim());
 
-      if (!orgId) {
+      if (!orgId && !pathOrg) {
         showNotFound();
         return;
       }
 
       // Load org (must be public)
-      const { data: orgData, error: orgError } = await sb
+      let orgQuery = sb
         .from('organizations')
         .select('*')
-        .eq('id', orgId)
-        .eq('profile_public', true)
-        .maybeSingle();
+        .eq('profile_public', true);
+      orgQuery = orgId ? orgQuery.eq('id', orgId) : orgQuery.ilike('slug', pathOrg);
+      const { data: orgData, error: orgError } = await orgQuery.maybeSingle();
 
       if (orgError || !orgData) {
         showNotFound();
@@ -738,9 +742,9 @@
 
       // Load past shows + open opportunities in parallel
       const [showsResult, prodResult] = await Promise.all([
-        sb.from('past_shows').select('*').eq('organization_id', orgId).order('year', { ascending: false }),
-        sb.from('productions').select('id, title, poster_url, start_date, end_date')
-          .eq('organization_id', orgId).eq('is_public', true),
+        sb.from('past_shows').select('*').eq('organization_id', org.id).order('year', { ascending: false }),
+        sb.from('productions').select('id, title, slug, poster_url, start_date, end_date')
+          .eq('organization_id', org.id).eq('is_public', true),
       ]);
       const showsData = showsResult.data || [];
       const publicProds = prodResult.data || [];
@@ -763,7 +767,7 @@
       // Assemble page HTML
       const html =
         buildHero(org, showsData.length) +
-        buildOpportunitiesSection(opportunities) +
+        buildOpportunitiesSection(opportunities, org) +
         buildAboutSection(org) +
         buildShowsSection(showsData) +
         buildContactSection(org);

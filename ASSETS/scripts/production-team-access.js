@@ -4,7 +4,7 @@
  */
 
 function teamPortalUrl() {
-  const abbrev = orgAbbreviation || orgSlug || 'team';
+  const abbrev = orgSlug || orgAbbreviation || 'team';
   const showSlug = prod?.slug || generateSlug(prod?.title || 'show');
   const url = new URL(`/${abbrev}/${showSlug}/Team`, window.location.origin);
   if (prodId) url.searchParams.set('id', prodId);

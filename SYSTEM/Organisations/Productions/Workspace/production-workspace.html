@@ -14117,15 +14117,16 @@
       <!-- Page URL / Slug card -->
       <div class="card" style="margin-bottom:1.5rem;">
         <div class="url-card-kicker">Page URL</div>
-        <div class="url-card-copy">The link performers use to find your audition page. Only the last part is editable.</div>
+        <div class="url-card-copy">The link performers use to find your audition page. Only the show part is editable.</div>
         <div id="pub-slug-builder" class="url-builder url-builder-link" onclick="openCurrentPublicUrl(event)" title="Open URL">
           <span class="url-segment url-segment-muted">BuildTheShow.com/</span>
           <span id="pub-slug-org" class="url-segment">—</span>
           <span class="url-slash">/</span>
-          <span id="pub-url-section" class="url-segment url-segment-muted">Audition/</span>
           <div class="url-input-wrap">
             <input id="pub-slug-input" class="form-input" type="text" placeholder="my-show-2026" oninput="handleSlugInput(this)" onclick="event.stopPropagation()" />
           </div>
+          <span class="url-slash">/</span>
+          <span id="pub-url-section" class="url-segment url-segment-muted">Audition</span>
         </div>
         <!-- hidden element kept for slugBase() compat -->
         <span id="pub-slug-base" style="display:none;"></span>
@@ -14252,7 +14253,7 @@
             <div class="settings-section-header">
               <div>
                 <h3 class="settings-section-title">Public URL</h3>
-                <div class="settings-section-subtitle">Only the last part is editable.</div>
+                <div class="settings-section-subtitle">Only the show part is editable.</div>
               </div>
               <div class="settings-section-tag">Public</div>
             </div>
@@ -14260,10 +14261,11 @@
               <span class="url-segment url-segment-muted">BuildTheShow.com/</span>
               <span id="ps-slug-org" class="url-segment">loading…</span>
               <span class="url-slash">/</span>
-              <span id="ps-url-section" class="url-segment url-segment-muted">Audition/</span>
               <div class="url-input-wrap">
                 <input id="ps-slug-input" class="form-input" type="text" placeholder="my-show-2026" oninput="handleSlugInput(this)" onclick="event.stopPropagation()" />
               </div>
+              <span class="url-slash">/</span>
+              <span id="ps-url-section" class="url-segment url-segment-muted">Audition</span>
             </div>
             <span id="ps-slug-base" style="display:none;"></span>
             <div class="url-actions">
@@ -21263,7 +21265,7 @@ If you have any questions, don't hesitate to reach out.
 
   function getPageLink() {
     if (orgSlug && prod && prod.slug) {
-      return `${window.location.origin}/${orgSlug}/${publicUrlSection()}/${prod.slug}`;
+      return `${window.location.origin}/${orgSlug}/${prod.slug}/${publicUrlSection()}`;
     }
     if (prod && prod.slug) {
       return `${window.location.origin}/audition/${encodeURIComponent(prod.slug)}`;
@@ -21272,7 +21274,7 @@ If you have any questions, don't hesitate to reach out.
   }
 
   function slugBase() {
-    return orgSlug ? `${window.location.origin}/${orgSlug}/${publicUrlSection()}/` : `${window.location.origin}/audition/`;
+    return orgSlug ? `${window.location.origin}/${orgSlug}/` : `${window.location.origin}/audition/`;
   }
 
   function orgPathDisplayLabel() {
@@ -21280,7 +21282,7 @@ If you have any questions, don't hesitate to reach out.
   }
 
   function updateTeamUrlDisplays() {
-    const abbrev   = orgAbbreviation || orgSlug || '—';
+    const abbrev   = orgSlug || orgAbbreviation || '—';
     const showSlug = prod?.slug || generateSlug(prod?.title || '') || '—';
     ['pub-team-url-org', 'ps-team-url-org'].forEach(id => {
       const el = document.getElementById(id);
@@ -21322,7 +21324,7 @@ If you have any questions, don't hesitate to reach out.
   }
 
   function renderPublicUrlSectionLabels() {
-    const label = publicUrlSection() + '/';
+    const label = publicUrlSection();
     ['pub-url-section', 'ps-url-section'].forEach(id => {
       const el = document.getElementById(id);
       if (el) el.textContent = label;
@@ -21362,7 +21364,9 @@ If you have any questions, don't hesitate to reach out.
       return false;
     }
 
-    const { data, error } = await sb.from('productions').select('id,title').eq('slug', slug).neq('id', prodId).limit(1);
+    let query = sb.from('productions').select('id,title').ilike('slug', slug).neq('id', prodId).limit(1);
+    if (prod?.organization_id) query = query.eq('organization_id', prod.organization_id);
+    const { data, error } = await query;
     if (error) {
       msg.textContent = 'Could not check URL availability.';
       msg.style.cssText = 'display:block;font-size:0.78rem;border-radius:6px;padding:0.4rem 0.7rem;margin-top:0.5rem;background:rgba(220,60,60,0.08);color:#b91c1c;';
