@@ -9157,9 +9157,29 @@
     .castlist-performer-list { display: flex; flex-direction: column; gap: 0.38rem; font-weight: 650; color: #352756; }
     .castlist-performer-list > div { white-space: nowrap; }
     .castlist-open { color: #9a90b0; font-weight: 650; }
+    #aud-panel-castlist {
+      min-height: calc(100dvh - 118px);
+      flex-direction: column;
+    }
+    .castlist-page-card {
+      flex: 1 1 auto;
+      width: 100%;
+      min-height: calc(100dvh - 245px);
+      display: flex;
+      padding: 0 !important;
+      overflow: auto !important;
+    }
+    #cast-list-programme-host {
+      flex: 1 1 auto;
+      min-width: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: clamp(1.25rem, 4vw, 3rem);
+    }
     .castlist-programme-card {
       width: min(100%, 760px);
-      margin: 0 auto;
+      margin: auto;
       padding: 2rem 1.5rem;
       background: #fff;
       font-family: var(--bts-font);
@@ -13388,7 +13408,7 @@
           </div>
           <button class="btn-secondary" onclick="exportCastList()" style="font-size:0.8rem;">Export</button>
         </div>
-        <div class="card" style="padding:0;overflow:hidden;">
+        <div class="card castlist-page-card">
           <div id="cast-list-programme-host">
             <div style="text-align:center;padding:2.5rem;color:#9a90b0;">Add characters or groupings to build the cast list.</div>
           </div>
@@ -28194,6 +28214,13 @@ If you have any questions, don't hesitate to reach out.
           <div class="cbv2-ensemble-note-header">
             <span class="cbv2-ensemble-note-label">Ensemble</span>
             <span class="cbv2-ensemble-count" id="cbv2-callbacks-ensemble-count"></span>
+            <div class="cbv2-board-trash"
+              ondragover="cbv2BoardBinDragOver(event)"
+              ondragleave="cbv2BoardBinDragLeave(event)"
+              ondrop="cbv2DropOnBoardBin(event)">
+              <span>Garbage Bin</span>
+              <img src="/ASSETS/Images/Bin.svg" alt="Remove" draggable="false" />
+            </div>
           </div>
           <div class="cbv2-ensemble-note-cards" id="cbv2-callbacks-ensemble-grid"></div>
         </div>`;
@@ -28245,6 +28272,13 @@ If you have any questions, don't hesitate to reach out.
         <div class="cbv2-ensemble-note-header">
           <span class="cbv2-ensemble-note-label">Ensemble</span>
           <span class="cbv2-ensemble-count" id="cbv2-callbacks-ensemble-count"></span>
+          <div class="cbv2-board-trash"
+            ondragover="cbv2BoardBinDragOver(event)"
+            ondragleave="cbv2BoardBinDragLeave(event)"
+            ondrop="cbv2DropOnBoardBin(event)">
+            <span>Garbage Bin</span>
+            <img src="/ASSETS/Images/Bin.svg" alt="Remove" draggable="false" />
+          </div>
         </div>
         <div class="cbv2-ensemble-note-cards" id="cbv2-callbacks-ensemble-grid"></div>
       </div>`;
@@ -29241,6 +29275,10 @@ If you have any questions, don't hesitate to reach out.
     e.preventDefault();
     e.currentTarget?.classList.remove('ensemble-dragover');
     if (!cbv2DragId) return;
+    if (cbv2DragFromChar === '__ensemble__' || cbv2DragState === 'ensemble_manual' || cbv2DragState === 'ensemble_auto') {
+      cbv2DragId = cbv2DragFromChar = cbv2DragState = null;
+      return;
+    }
     if (cbv2DragFromChar && cbv2DragState !== 'applied') {
       // Dragged from a role note — remove from that role (returns to pool)
       const appId  = cbv2DragId;
@@ -29414,10 +29452,13 @@ If you have any questions, don't hesitate to reach out.
         size: 'compact',
         hasPadding: true,
         hasIcons: true,
-        draggable: false,
+        draggable: true,
         state: isManual ? null : 'ensemble',
         id: `cbv2-ensemble-card-${app.id}`,
         title: app.name || '',
+        onDragStart: `cbv2DragStart(event,'${app.id}','__ensemble__','${isManual ? 'ensemble_manual' : 'ensemble_auto'}')`,
+        onDragEnd: 'cbv2DragEnd(event)',
+        onPointerDown: `cbv2PointerDragStart(event,'${app.id}','__ensemble__','${isManual ? 'ensemble_manual' : 'ensemble_auto'}')`,
         onClick: `openPerfLightbox('${app.id}')`,
       });
     }).join('');
@@ -29522,8 +29563,8 @@ If you have any questions, don't hesitate to reach out.
   }
   function cbv2DragEnd(e) {
     e.currentTarget.classList.remove('dragging');
-    document.querySelectorAll('.cbv2-drag-active,.note-dragover,.desk-dragover').forEach(el => {
-      el.classList.remove('cbv2-drag-active', 'note-dragover', 'desk-dragover');
+    document.querySelectorAll('.cbv2-drag-active,.note-dragover,.desk-dragover,.ensemble-dragover,.bin-dragover').forEach(el => {
+      el.classList.remove('cbv2-drag-active', 'note-dragover', 'desk-dragover', 'ensemble-dragover', 'bin-dragover');
     });
     cbv2SetBoardBinDragState(false);
     setTimeout(cbv2ClearDragPreview, 0);
@@ -29785,6 +29826,7 @@ If you have any questions, don't hesitate to reach out.
     const appId    = cbv2DragId;
     const fromChar = cbv2DragFromChar;
     const prevState = cbv2DragState;
+    const fromEnsemble = fromChar === '__ensemble__' || prevState === 'ensemble_manual' || prevState === 'ensemble_auto';
     cbv2DragId = cbv2DragFromChar = cbv2DragState = null;
     showSaveStatus('saving');
 
@@ -29796,7 +29838,7 @@ If you have any questions, don't hesitate to reach out.
     };
 
     // Remove from previous role if moving
-    if (fromChar && fromChar !== targetCharId) {
+    if (fromChar && !fromEnsemble && fromChar !== targetCharId) {
       cbv2Assignments = cbv2Assignments.filter(a => !(a.character_id === fromChar && a.applicant_id === appId));
       try {
         const { error } = await sb.from('casting_assignments')
@@ -29808,7 +29850,7 @@ If you have any questions, don't hesitate to reach out.
       } catch (error) {
         console.error('[BTS] casting assignment move cleanup failed', error);
       }
-    } else if (fromChar === targetCharId) {
+    } else if (!fromEnsemble && fromChar === targetCharId) {
       renderActiveCastingBoard(); return; // dropped back on same note
     }
 
@@ -29849,7 +29891,12 @@ If you have any questions, don't hesitate to reach out.
     const appId    = cbv2DragId;
     const fromChar = cbv2DragFromChar;
     const prevState = cbv2DragState;
+    const fromEnsemble = fromChar === '__ensemble__' || prevState === 'ensemble_manual' || prevState === 'ensemble_auto';
     cbv2DragId = cbv2DragFromChar = cbv2DragState = null;
+    if (fromEnsemble) {
+      await cbv2RemoveFromEnsemble(appId, prevState);
+      return;
+    }
 
     const charName = characters.find(c => c.id === fromChar)?.name || 'role';
     cbv2UndoStack = { action: 'remove', appId, fromChar, prevState,
@@ -29871,6 +29918,26 @@ If you have any questions, don't hesitate to reach out.
     showSaveStatus('saved');
   }
 
+  async function cbv2RemoveFromEnsemble(appId, state = 'ensemble_manual') {
+    const appName = allApplicants.find(a => a.id === appId)?.name || 'Performer';
+    if (!cbv2EnsembleManual.has(appId) && state !== 'ensemble_manual') {
+      cbv2ShowToast(`${appName} is appearing in Ensemble automatically.`, true);
+      cbv2DragId = cbv2DragFromChar = cbv2DragState = null;
+      return;
+    }
+    cbv2EnsembleManual.delete(appId);
+    try {
+      await sb.from('casting_assignments')
+        .delete()
+        .eq('production_id', prodId)
+        .eq('applicant_id', appId)
+        .eq('state', 'ensemble_manual');
+    } catch {}
+    cbv2ShowToast(`Removed ${appName} from Ensemble`);
+    renderActiveCastingBoard();
+    showSaveStatus('saved');
+  }
+
   function cbv2SetBoardBinDragState(isActive) {
     document.querySelectorAll('.cbv2-board-trash').forEach(bin => {
       bin.classList.toggle('bin-dragover', !!isActive);
@@ -29879,7 +29946,7 @@ If you have any questions, don't hesitate to reach out.
 
   function cbv2BoardBinDragOver(e) {
     e.preventDefault(); e.stopPropagation();
-    if (cbv2DragFromChar) {
+    if (cbv2DragFromChar || cbv2DragState === 'ensemble_manual' || cbv2DragState === 'ensemble_auto') {
       cbv2SetBoardBinDragState(true);
     }
   }
@@ -29890,6 +29957,13 @@ If you have any questions, don't hesitate to reach out.
     e.preventDefault(); e.stopPropagation();
     cbv2SetBoardBinDragState(false);
     if (!cbv2DragId || !cbv2DragFromChar) { cbv2DragId = cbv2DragFromChar = cbv2DragState = null; return; }
+    if (cbv2DragFromChar === '__ensemble__' || cbv2DragState === 'ensemble_manual' || cbv2DragState === 'ensemble_auto') {
+      const appId = cbv2DragId;
+      const state = cbv2DragState;
+      cbv2DragId = cbv2DragFromChar = cbv2DragState = null;
+      await cbv2RemoveFromEnsemble(appId, state);
+      return;
+    }
     // Greyed-out cards (state-applied) were auto-placed from the performer panel — they
     // can't be removed here because they represent an actual submitted application.
     // Removing them would need to go through the applicant record itself.
