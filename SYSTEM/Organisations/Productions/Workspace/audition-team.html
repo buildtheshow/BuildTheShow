@@ -15636,18 +15636,24 @@
     // Calendar initialises lazily when the Calendar tab is opened (see switchProdTab)
     // Checklists load on tab open
     // Load sessions early so collectScoreObservations can build session-keyed lookups on first render
-    const initialWorkspaceData = Promise.allSettled([
+    const criticalWorkspaceData = Promise.allSettled([
       loadAuditionConfig(),
-      loadSlots(),
+    ]);
+    const backgroundWorkspaceData = criticalWorkspaceData.then(() => Promise.allSettled([
       loadApplicants({ skipRender: true, skipCastingSync: true }),
+      loadSlots(),
       loadAudSessions(),
       loadAuditionAuthoredNotes(),
       loadAuditionObservations(),
       loadAuditionRoomStates({ force: true }),
       loadRoomNextSignals({ force: true }),
-    ]);
-    initialWorkspaceData.then(() => {
+    ]));
+    backgroundWorkspaceData.then(() => {
       // Re-render the in-room card once all session + observation data has arrived
+      try {
+        if (teamAccessMode) refreshAuditionsCheckInUi();
+        else refreshAuditionsLiveUi({ preserveModal: true });
+      } catch {}
       if (!inRoomApplicantId) return;
       try {
         if (document.getElementById('adtab-inroom')?.style.display !== 'none') renderInRoomPage(inRoomApplicantId);
@@ -15722,7 +15728,7 @@
     setupAuditionsRealtime();
     setupEmailTemplatesRealtime();
     handleMobileSidebarViewport();
-    initialWorkspaceData.finally(() => {
+    criticalWorkspaceData.finally(() => {
       setTimeout(() => {
         if (window.PageLoader) window.PageLoader.hide();
       }, 180);
@@ -34871,6 +34877,7 @@ If you have any questions, don't hesitate to reach out.
   loadAuditionAuthoredNotes = dedupeWorkspaceLoad(loadAuditionAuthoredNotes);
   loadAuditionObservations = dedupeWorkspaceLoad(loadAuditionObservations);
   loadAuditionRoomStates = dedupeWorkspaceLoad(loadAuditionRoomStates);
+  loadRoomNextSignals = dedupeWorkspaceLoad(loadRoomNextSignals);
   loadCharacters = dedupeWorkspaceLoad(loadCharacters);
   loadCustomQuestions = dedupeWorkspaceLoad(loadCustomQuestions);
   loadEvents = dedupeWorkspaceLoad(loadEvents);
