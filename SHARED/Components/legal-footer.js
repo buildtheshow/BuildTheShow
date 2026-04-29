@@ -28,8 +28,8 @@
     return relativePath;
   }
 
-  const privacyUrl = resolveUrl('../Legal/privacy-policy.html');
-  const termsUrl   = resolveUrl('../Legal/terms-of-service.html');
+  const privacyUrl = '/privacy';
+  const termsUrl   = '/terms';
 
   function getSidebarWidth() {
     // Only reserve space for sidebars that actually occupy the left edge.

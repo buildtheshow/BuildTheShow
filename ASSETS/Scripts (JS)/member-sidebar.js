@@ -19,25 +19,25 @@
   // ── Position sub-navigation definitions ─────────────────────────
   //    Matches the spec: Dashboard, then tools for that position.
   const PERFORMER_SUBNAV = [
-    { label: 'Dashboard',    href: '../Performer/performer-hub.html',   key: 'performer-hub' },
-    { label: 'Auditions',    href: '../../../PUBLIC/find.html',         key: 'find-auditions' },
-    { label: 'Applications', href: '../Auditions/applications.html',    key: 'applications' },
-    { label: 'Schedule',     href: '../Dashboard/member-calendar.html', key: 'calendar' },
-    { label: 'Media',        href: '../Performer/performer-media.html', key: 'performer-media' },
+    { label: 'Dashboard',    href: '/member/performer',   key: 'performer-hub' },
+    { label: 'Auditions',    href: '/find',         key: 'find-auditions' },
+    { label: 'Applications', href: '/member/applications',    key: 'applications' },
+    { label: 'Schedule',     href: '/member/calendar', key: 'calendar' },
+    { label: 'Media',        href: '/member/media', key: 'performer-media' },
   ];
 
   const CREATIVE_SUBNAV = [
-    { label: 'Dashboard', href: '../../Organisations/Productions/Creative/creative-hub.html',   key: 'creative-hub' },
-    { label: 'Tasks',     href: '../../Organisations/Productions/Creative/creative-tasks.html', key: 'creative-tasks' },
-    { label: 'Files',     href: '../../Organisations/Productions/Creative/creative-files.html', key: 'creative-files' },
+    { label: 'Dashboard', href: '/member/creative',   key: 'creative-hub' },
+    { label: 'Tasks',     href: '/member/creative/tasks', key: 'creative-tasks' },
+    { label: 'Files',     href: '/member/creative/files', key: 'creative-files' },
   ];
 
   const VOLUNTEER_SUBNAV = [
-    { label: 'Dashboard',       href: '../Volunteer/volunteer-hub.html',              key: 'volunteer-hub' },
-    { label: 'Opportunities',   href: '../../../PUBLIC/find.html?type=volunteer',    key: 'find-volunteer' },
-    { label: 'Assigned Shifts', href: '../Volunteer/volunteer-shifts.html',          key: 'volunteer-shifts' },
-    { label: 'Availability',    href: '../Volunteer/volunteer-best-fit.html',        key: 'volunteer-best-fit' },
-    { label: 'Hours',           href: '../Volunteer/volunteer-hours.html',           key: 'volunteer-hours' },
+    { label: 'Dashboard',       href: '/member/volunteer',              key: 'volunteer-hub' },
+    { label: 'Opportunities',   href: '/find?type=volunteer',    key: 'find-volunteer' },
+    { label: 'Assigned Shifts', href: '/member/volunteer/shifts',          key: 'volunteer-shifts' },
+    { label: 'Availability',    href: '/member/volunteer/best-fit',        key: 'volunteer-best-fit' },
+    { label: 'Hours',           href: '/member/volunteer/hours',           key: 'volunteer-hours' },
   ];
 
   // Which position a given page belongs to (controls which group auto-expands)
@@ -108,7 +108,7 @@
     let nav = '';
 
     // Dashboard — always visible
-    nav += navLink('../Profiles/profile-select.html', 'Dashboard', activePage === 'profile-select');
+    nav += navLink('/member', 'Dashboard', activePage === 'profile-select');
 
     // Position groups — only if enabled on selected profile
     if (isPerformer) {
@@ -122,10 +122,10 @@
     }
 
     // Calendar — always visible, top-level (not scoped to a position)
-    nav += navLink('../Dashboard/member-calendar.html', 'Calendar', activePage === 'calendar');
+    nav += navLink('/member/calendar', 'Calendar', activePage === 'calendar');
 
     // Settings — always visible
-    nav += navLink('../Performer/performer-settings.html', 'Settings', activePage === 'settings');
+    nav += navLink('/member/settings', 'Settings', activePage === 'settings');
 
     // ── Inject nav ──
     const navEl = document.querySelector('.sidebar-nav');
