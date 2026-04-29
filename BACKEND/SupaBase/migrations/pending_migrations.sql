@@ -17,7 +17,7 @@ SET is_public = true
 WHERE event_type IN ('audition','dance_call','callback','other_audition','performance','dress','tech')
   AND is_public IS DISTINCT FROM true;
 
--- ── 1b. Organisation URL slugs ───────────────────────────────
+-- ── 1b. Organisation link slugs ───────────────────────────────
 -- Used for clean audition URLs: buildtheshow.com/RYT/Audition/Annie2026
 ALTER TABLE organizations ADD COLUMN IF NOT EXISTS slug text;
 CREATE UNIQUE INDEX IF NOT EXISTS organizations_slug_idx ON organizations (slug);

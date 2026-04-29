@@ -112,59 +112,6 @@
       line-height: 1.5;
     }
 
-    .url-preview {
-      display: flex;
-      align-items: stretch;
-      width: 100%;
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      border-radius: 8px;
-      background: rgba(255, 255, 255, 0.05);
-      overflow: hidden;
-      transition: border-color 0.2s, box-shadow 0.2s;
-    }
-
-    .url-preview:focus-within {
-      border-color: #572e88;
-      box-shadow: 0 0 0 3px rgba(87, 46, 136, 0.15);
-    }
-
-    .url-prefix {
-      display: flex;
-      align-items: center;
-      padding: 0 0.9rem;
-      background: rgba(87, 46, 136, 0.08);
-      color: #6a5a80;
-      font-size: 0.9rem;
-      font-weight: 700;
-      white-space: nowrap;
-      border-right: 1px solid rgba(87, 46, 136, 0.12);
-    }
-
-    .url-preview .form-input {
-      border: 0;
-      border-radius: 0;
-      background: transparent;
-      box-shadow: none;
-      padding-left: 0.8rem;
-    }
-
-    .url-preview .form-input:focus {
-      border-color: transparent;
-      box-shadow: none;
-    }
-
-    .url-status {
-      min-height: 1.2rem;
-      font-size: 0.8rem;
-      font-weight: 700;
-      margin-top: 0.35rem;
-    }
-
-    .url-status.available { color: #2f8f55; }
-    .url-status.taken,
-    .url-status.invalid { color: #c54545; }
-    .url-status.checking { color: #7a7490; }
-
     .form-input[type="file"] {
       padding: 0.6rem 1rem;
       cursor: pointer;
@@ -318,11 +265,6 @@
       color: #1a1530;
     }
 
-    .url-preview {
-      background: #f5f3fc;
-      border-color: rgba(87, 46, 136, 0.2);
-    }
-
     .form-input::placeholder,
     .form-textarea::placeholder { color: #9a90b0; }
 
@@ -389,18 +331,7 @@
           </label>
           <input class="form-input" type="text" id="org-abbr" name="org-abbr"
             placeholder="e.g. RYT" maxlength="12" style="text-transform:uppercase" required />
-          <p class="form-hint">A short name for your organisation. We use this to suggest your public URL.</p>
-        </div>
-
-        <div class="form-group">
-          <label class="form-label" for="org-slug">Organisation URL</label>
-          <div class="url-preview">
-            <span class="url-prefix">buildtheshow.com/</span>
-            <input class="form-input" type="text" id="org-slug" name="org-slug"
-              placeholder="RYT" autocomplete="off" spellcheck="false" required />
-          </div>
-          <div class="url-status" id="org-slug-status" aria-live="polite"></div>
-          <p class="form-hint">Choose this once. It can use letters, numbers, and hyphens, and it cannot be changed after setup.</p>
+          <p class="form-hint">A short name for your organisation. We use this to suggest your public link.</p>
         </div>
 
         <div class="form-group">
@@ -470,7 +401,6 @@
   </main>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="/SHARED/Components/custom-url-validation.js?v=20260429"></script>
   <script>
     const { createClient } = supabase;
     const sb = createClient(
@@ -482,12 +412,6 @@
     const submitBtn = document.getElementById('submit-btn');
     const orgNameInput = document.getElementById('org-name');
     const orgAbbrInput = document.getElementById('org-abbr');
-    const orgSlugInput = document.getElementById('org-slug');
-    const orgSlugStatus = document.getElementById('org-slug-status');
-    let orgSlugEdited = false;
-    let orgSlugCheckTimer = null;
-    let orgSlugAvailable = false;
-    let orgSlugLastChecked = '';
 
     // ── ID generation ───────────────────────────────────
     const ID_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -498,26 +422,48 @@
       return `ORG-${code}`;
     }
 
-    // ── Organisation URL ────────────────────────────────
-    function normalizeOrgSlug(value) {
-      return window.BTSCustomUrl.normalizeSubmittedSlug(value);
+    // ── System URL slug ─────────────────────────────────
+    const RESERVED_GENERATED_SLUGS = new Set([
+      'admin', 'api', 'auth', 'billing', 'dashboard', 'login', 'logout',
+      'signup', 'settings', 'support', 'help', 'account', 'profile',
+      'users', 'organisations', 'organizations', 'productions', 'public',
+      'system', 'assets', 'backend', 'shared', 'home', 'www', 'mail', 'app',
+      'member', 'members', 'org', 'find', 'opportunity', 'invite',
+      'audition', 'audition-info', 'privacy', 'terms', 'copyright',
+      'accessibility',
+    ]);
+    const STRICT_BLOCKED_SLUG_RE = /(arsehole|asshole|bitch|blowjob|bullshit|chink|cock|cocksucker|cunt|faggot|^fag$|fuck|kike|motherfucker|nazi|nigg|paki|porn|pussy|rape|shit|slut|spic|twat|whore|wop)/;
+
+    function slugifyInternal(value, maxLength = 50) {
+      let slug = String(value || '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .replace(/['’]/g, '')
+        .replace(/&/g, ' and ')
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/-+/g, '-')
+        .replace(/^-|-$/g, '');
+      if (slug.length > maxLength) slug = slug.slice(0, maxLength).replace(/-+$/g, '');
+      if (slug.length > 0 && slug.length < 3) slug = `${slug}-org`;
+      return slug || 'organisation';
     }
 
-    function orgSlugError(slug) {
-      const result = window.BTSCustomUrl.validate(slug);
-      return result.ok ? '' : result.message;
+    function normalizeSlugForBlocklist(slug) {
+      return String(slug || '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .replace(/[013457]/g, ch => ({ '0': 'o', '1': 'i', '3': 'e', '4': 'a', '5': 's', '7': 't' }[ch]))
+        .replace(/[^a-z]/g, '');
     }
 
-    function setOrgSlugStatus(message, state = '') {
-      orgSlugStatus.textContent = message || '';
-      orgSlugStatus.className = `url-status ${state}`.trim();
-    }
-
-    function suggestOrgSlug() {
-      if (orgSlugEdited) return;
-      const suggestion = window.BTSCustomUrl.slugify(orgAbbrInput.value || orgNameInput.value);
-      orgSlugInput.value = suggestion;
-      scheduleOrgSlugCheck();
+    function generatedSlugAllowed(slug) {
+      return /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)
+        && slug.length >= 3
+        && slug.length <= 50
+        && !RESERVED_GENERATED_SLUGS.has(slug)
+        && !STRICT_BLOCKED_SLUG_RE.test(normalizeSlugForBlocklist(slug));
     }
 
     async function isOrgSlugAvailable(slug) {
@@ -535,53 +481,36 @@
       return !(data && data.length);
     }
 
-    async function checkOrgSlugNow() {
-      const cleaned = normalizeOrgSlug(orgSlugInput.value);
-      orgSlugInput.value = cleaned;
-      orgSlugAvailable = false;
-      orgSlugLastChecked = '';
-
-      const validationError = orgSlugError(cleaned);
-      if (validationError) {
-        setOrgSlugStatus(validationError, 'invalid');
-        return false;
-      }
-
-      setOrgSlugStatus('Checking availability...', 'checking');
-      try {
-        const available = await isOrgSlugAvailable(cleaned);
-        orgSlugAvailable = available;
-        orgSlugLastChecked = cleaned;
-        setOrgSlugStatus(
-          available ? `${cleaned} is available.` : `${cleaned} is already taken.`,
-          available ? 'available' : 'taken'
-        );
-        return available;
-      } catch {
-        setOrgSlugStatus('Could not check this URL. Try again in a moment.', 'invalid');
-        return false;
-      }
+    function orgSlugCandidates(name, abbr, location, customId) {
+      const locationPart = String(location || '').split(',')[0] || '';
+      const firstWord = String(name || '').trim().split(/\s+/)[0] || '';
+      return [
+        abbr,
+        name,
+        `${abbr} ${locationPart}`,
+        `${name} ${locationPart}`,
+        `${firstWord} ${locationPart}`,
+        `${abbr} theatre`,
+        `${name} theatre`,
+        `${abbr} ${customId}`,
+        `${name} ${customId}`,
+      ].map(value => slugifyInternal(value)).filter(Boolean);
     }
 
-    function scheduleOrgSlugCheck() {
-      clearTimeout(orgSlugCheckTimer);
-      orgSlugAvailable = false;
-      orgSlugCheckTimer = setTimeout(checkOrgSlugNow, 350);
+    async function generateOrgSlug(name, abbr, location, customId) {
+      const tried = new Set();
+      for (const candidate of orgSlugCandidates(name, abbr, location, customId)) {
+        if (tried.has(candidate)) continue;
+        tried.add(candidate);
+        if (!generatedSlugAllowed(candidate)) continue;
+        if (await isOrgSlugAvailable(candidate)) return candidate;
+      }
+      throw new Error('Could not generate an available organisation link. Please try a more specific organisation name or abbreviation.');
     }
 
-    orgNameInput.addEventListener('input', suggestOrgSlug);
     orgAbbrInput.addEventListener('input', () => {
       orgAbbrInput.value = orgAbbrInput.value.toUpperCase().replace(/[^A-Z0-9]/g, '').substring(0, 12);
-      suggestOrgSlug();
     });
-    orgSlugInput.addEventListener('input', () => {
-      orgSlugEdited = true;
-      const cursor = orgSlugInput.selectionStart;
-      orgSlugInput.value = normalizeOrgSlug(orgSlugInput.value);
-      try { orgSlugInput.setSelectionRange(cursor, cursor); } catch {}
-      scheduleOrgSlugCheck();
-    });
-    orgSlugInput.addEventListener('blur', checkOrgSlugNow);
 
     // ── Location autocomplete (OpenStreetMap Nominatim) ─
     const locationInput   = document.getElementById('org-location');
@@ -724,7 +653,6 @@
 
       const name        = document.getElementById('org-name').value.trim();
       const abbr        = document.getElementById('org-abbr').value.trim().toUpperCase();
-      const orgSlug     = normalizeOrgSlug(document.getElementById('org-slug').value);
       const location    = locationInput.value.trim();
       const email       = document.getElementById('org-email').value.trim();
       const website     = document.getElementById('org-website').value.trim();
@@ -736,12 +664,6 @@
 
       if (!name)     { showError('Organisation name is required.'); return; }
       if (!abbr)     { showError('Abbreviation is required.'); return; }
-      const slugValidation = orgSlugError(orgSlug);
-      if (slugValidation) { showError(slugValidation); return; }
-      if (!orgSlugAvailable || orgSlugLastChecked !== orgSlug) {
-        const available = await checkOrgSlugNow();
-        if (!available) { showError('Choose an available organisation URL before continuing.'); return; }
-      }
       if (!location) { showError('Location is required.'); return; }
       if (!email)    { showError('Contact email is required.'); return; }
 
@@ -757,6 +679,15 @@
       }
 
       const custom_id = generateOrgId();
+      let orgSlug = '';
+      try {
+        orgSlug = await generateOrgSlug(name, abbr, location, custom_id);
+      } catch (err) {
+        showError(err.message || 'Could not generate an organisation link. Please try again.');
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Create Organisation';
+        return;
+      }
 
       const [logo_url, banner_url] = await Promise.all([
         logoFile   ? uploadFile(logoFile,   user.id, 'org-logos')   : Promise.resolve(null),
@@ -794,9 +725,7 @@
           }
         } else {
           if (error.code === '23505' && error.message.includes('slug')) {
-            orgSlugAvailable = false;
-            setOrgSlugStatus(`${orgSlug} is already taken.`, 'taken');
-            showError('That organisation URL was just taken. Choose another one.');
+            showError('Could not generate an available organisation link. Please try a more specific organisation name or abbreviation.');
           } else {
             showError(error.message);
           }

@@ -1,4 +1,4 @@
--- Organisation URL rules
+-- Organisation link rules
 -- URLs are chosen during org setup, checked live, and locked after creation.
 
 ALTER TABLE organizations ADD COLUMN IF NOT EXISTS slug text;
@@ -150,7 +150,7 @@ LANGUAGE plpgsql
 AS $$
 BEGIN
   IF TG_OP = 'UPDATE' AND OLD.slug IS DISTINCT FROM NEW.slug THEN
-    RAISE EXCEPTION 'Organisation URL cannot be changed after creation';
+    RAISE EXCEPTION 'Organisation link cannot be changed after creation';
   END IF;
 
   RETURN NEW;
