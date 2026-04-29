@@ -161,14 +161,14 @@ function selectProductionTeamEditColor(color) {
   });
 }
 
-function findCreativeRoleForTeamMember(member) {
+function creativeRolesForTeamMember(member) {
   const creative = teamConfig?.find(d => d.name === 'Creative Team');
-  if (!creative) return null;
+  if (!creative) return [];
   const memberId = String(member?.id || '');
   const memberName = String(member?.name || '').trim().toLowerCase();
   const memberRole = String(member?.role || '').trim().toLowerCase();
   const memberEmail = String(member?.email || '').trim().toLowerCase();
-  return (creative.roles || []).find(role =>
+  return (creative.roles || []).filter(role =>
     String(role.team_member_id || '') === memberId
     || (
       String(role.name || '').trim().toLowerCase() === memberRole
@@ -178,7 +178,11 @@ function findCreativeRoleForTeamMember(member) {
       memberEmail
       && String(role.email || '').trim().toLowerCase() === memberEmail
     )
-  ) || null;
+  );
+}
+
+function findCreativeRoleForTeamMember(member) {
+  return creativeRolesForTeamMember(member)[0] || null;
 }
 
 async function syncTeamMemberToProductionTeam(member, patch = {}) {
@@ -487,6 +491,17 @@ async function removeProductionTeamMember(memberId, btn = null) {
       if (fileError) console.warn('[BTS] Could not remove team headshot file.', fileError);
     }
 
+    try {
+      const { error: observationsError } = await sb
+        .from('production_audition_observations')
+        .delete()
+        .eq('production_id', prodId)
+        .eq('team_member_id', memberId);
+      if (observationsError) throw observationsError;
+    } catch (observationsError) {
+      console.warn('[BTS] Could not remove team audition observations directly; continuing with member cleanup.', observationsError);
+    }
+
     let removedWithRpc = false;
     const { error: rpcError } = await sb.rpc('remove_production_team_member', {
       p_production_id: prodId,
@@ -507,6 +522,17 @@ async function removeProductionTeamMember(memberId, btn = null) {
         .eq('team_member_id', memberId);
       if (notesError) throw notesError;
 
+      try {
+        const { error: observationsError } = await sb
+          .from('production_audition_observations')
+          .delete()
+          .eq('production_id', prodId)
+          .eq('team_member_id', memberId);
+        if (observationsError) throw observationsError;
+      } catch (observationsError) {
+        console.warn('[BTS] Could not remove team audition observations during fallback cleanup.', observationsError);
+      }
+
       const { error: sessionsError } = await sb
         .from('production_team_member_sessions')
         .delete()
@@ -522,15 +548,22 @@ async function removeProductionTeamMember(memberId, btn = null) {
       if (memberError) throw memberError;
     }
 
-    const role = findCreativeRoleForTeamMember(member);
-    if (role) {
-      role.team_member_id = null;
-      role.email = '';
+    const linkedRoles = creativeRolesForTeamMember(member);
+    if (linkedRoles.length) {
+      linkedRoles.forEach(role => {
+        role.person = '';
+        role.team_member_id = null;
+        role.email = '';
+        role.filled = false;
+      });
       await saveTeamConfig();
     }
 
     if (Array.isArray(auditionAuthoredNotes)) {
       auditionAuthoredNotes = auditionAuthoredNotes.filter(note => String(note.team_member_id || '') !== String(memberId));
+    }
+    if (typeof auditionObservations !== 'undefined' && Array.isArray(auditionObservations)) {
+      auditionObservations = auditionObservations.filter(observation => String(observation.team_member_id || '') !== String(memberId));
     }
 
     auditionTeamMembers = auditionTeamMembers.filter(m => String(m.id) !== String(memberId));

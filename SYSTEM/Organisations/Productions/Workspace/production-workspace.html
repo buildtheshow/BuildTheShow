@@ -16058,6 +16058,7 @@
   let _auditionsPollTimer      = null;
   let auditionRoomStateTableAvailable = null;
   let auditionRoomStatesLoadedAt = 0;
+  const INROOM_NEXT_WAITING_LABEL_MS = 10000;
   const auditionRoomStates = new Map();
   const inRoomNextClientId = (() => {
     try {
@@ -16512,6 +16513,29 @@
     return state?.status === 'ready_for_next' || state?.status === 'waiting_for_arrival';
   }
 
+  function roomStateWaitingStartedAt(state) {
+    return Date.parse(state?.requested_at || state?.updated_at || state?.sent_at || '') || 0;
+  }
+
+  function roomStateShowsWaitingLabel(state) {
+    if (!roomStateIsWaiting(state)) return false;
+    const startedAt = roomStateWaitingStartedAt(state);
+    return !startedAt || Date.now() - startedAt < INROOM_NEXT_WAITING_LABEL_MS;
+  }
+
+  function setInRoomNextButtonWaiting(buttonEl, waitingLabel = 'Waiting for next performer...') {
+    if (!buttonEl) return;
+    clearTimeout(buttonEl._btsNextWaitingTimer);
+    buttonEl.disabled = true;
+    buttonEl.classList.add('is-waiting');
+    buttonEl.textContent = waitingLabel;
+    buttonEl._btsNextWaitingTimer = setTimeout(() => {
+      buttonEl.disabled = false;
+      buttonEl.classList.remove('is-waiting');
+      buttonEl.textContent = 'NEXT!';
+    }, INROOM_NEXT_WAITING_LABEL_MS);
+  }
+
   function getSessionQueue(session) {
     if (!session?.id) return getInRoomCheckedInApps();
     return getCheckInSessionApps(session, '', 'in');
@@ -16630,7 +16654,7 @@
     if (!app && !group) return '';
     const meta = getAuditionRoomMeta(session);
     const state = getRoomState(meta.roomKey);
-    const waiting = roomStateIsWaiting(state);
+    const waiting = roomStateShowsWaitingLabel(state);
     const label = waiting ? 'Waiting for next performer...' : 'NEXT!';
     const disabled = waiting ? ' disabled aria-disabled="true"' : '';
     const appId = app?.id || '';
@@ -16643,17 +16667,13 @@
     const app = allApplicants.find(candidate => String(candidate.id) === String(appId)) || null;
     const meta = getAuditionRoomMeta(session);
     const existing = getRoomState(meta.roomKey);
-    if (roomStateIsWaiting(existing)) return;
+    if (roomStateShowsWaitingLabel(existing)) return;
     if (!app) {
       showToast('Choose a performer before asking for the next one.', true);
       return;
     }
     const payload = buildRoomStatePayload({ session, app, status: 'ready_for_next' });
-    if (buttonEl) {
-      buttonEl.disabled = true;
-      buttonEl.classList.add('is-waiting');
-      buttonEl.textContent = 'Waiting for next performer...';
-    }
+    setInRoomNextButtonWaiting(buttonEl, 'Waiting for next performer...');
     await persistAuditionRoomState(payload);
   }
 
@@ -16661,7 +16681,7 @@
     const session = audSessions.find(candidate => String(candidate.id) === String(sessionId)) || getActiveAuditionNavSession();
     const meta = getAuditionRoomMeta(session);
     const existing = getRoomState(meta.roomKey);
-    if (roomStateIsWaiting(existing)) return;
+    if (roomStateShowsWaitingLabel(existing)) return;
     const checkedIn = allApplicants.filter(app => {
       if (!isCheckedInForSession(app, sessionId)) return false;
       const slot = getApplicantSlotForSession(app, sessionId);
@@ -16697,11 +16717,7 @@
         nextMemberIds: nextMembers.map(app => app.id),
       },
     });
-    if (buttonEl) {
-      buttonEl.disabled = true;
-      buttonEl.classList.add('is-waiting');
-      buttonEl.textContent = 'Waiting for next group...';
-    }
+    setInRoomNextButtonWaiting(buttonEl, 'Waiting for next group...');
     await persistAuditionRoomState(payload);
   }
 
@@ -16779,8 +16795,8 @@
       'production_events',
       'production_audition_notes',
       'production_audition_observations',
+      'production_audition_room_states',
     ];
-    if (auditionRoomStateTableAvailable === true) TABLES.push('production_audition_room_states');
 
     let ch = sb.channel(`production-auditions-${prodId}`);
     TABLES.forEach(table => {
@@ -16793,6 +16809,7 @@
     auditionsRealtimeChannel = ch.subscribe((status, err) => {
       if (status === 'SUBSCRIBED') {
         setLiveIndicator('live');
+        loadAuditionRoomStates({ force: true }).catch(() => {});
         console.log('[BTS] realtime live');
       } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
         setLiveIndicator('offline');
@@ -31157,7 +31174,7 @@ If you have any questions, don't hesitate to reach out.
     const sessionObj = audSessions.find(s => s.id === sessionId);
     const sessionAccent = getAuditionScheduleSidebarMarkerColor(sessionObj?.type || 'dance_call');
     const dcRoomState = getRoomState(getAuditionRoomMeta(sessionObj).roomKey);
-    const dcWaiting = roomStateIsWaiting(dcRoomState);
+    const dcWaiting = roomStateShowsWaitingLabel(dcRoomState);
     const dcNextLabel = dcWaiting ? 'Waiting for next group...' : 'NEXT!';
     const dcNextButtonHtml = checkedIn.length
       ? `<button type="button" class="inroom-next-btn${dcWaiting ? ' is-waiting' : ''}" onclick="sendDanceCallNextRequest('${esc(sessionId)}','${esc(activeSlotTime || '')}', this)"${dcWaiting ? ' disabled aria-disabled="true"' : ''}>${dcNextLabel}</button>`

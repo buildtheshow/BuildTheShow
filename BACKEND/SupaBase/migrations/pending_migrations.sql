@@ -211,10 +211,20 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
 DECLARE
+  v_observations_deleted integer := 0;
   v_notes_deleted integer := 0;
   v_sessions_deleted integer := 0;
   v_members_deleted integer := 0;
 BEGIN
+  IF to_regclass('public.production_audition_observations') IS NOT NULL THEN
+    EXECUTE
+      'DELETE FROM production_audition_observations
+       WHERE production_id = $1
+         AND team_member_id = $2'
+    USING p_production_id, p_team_member_id;
+    GET DIAGNOSTICS v_observations_deleted = ROW_COUNT;
+  END IF;
+
   DELETE FROM production_audition_notes
   WHERE production_id = p_production_id
     AND team_member_id = p_team_member_id;
@@ -233,7 +243,8 @@ BEGIN
   RETURN jsonb_build_object(
     'team_members_deleted', v_members_deleted,
     'sessions_deleted', v_sessions_deleted,
-    'notes_deleted', v_notes_deleted
+    'notes_deleted', v_notes_deleted,
+    'observations_deleted', v_observations_deleted
   );
 END;
 $$;
