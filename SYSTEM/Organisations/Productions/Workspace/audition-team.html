@@ -14741,7 +14741,7 @@
 <script src="../../../../SHARED/Components/casting-card-back.js?v=dc-colour-only-20260428"></script>
 <script src="../../../../SHARED/Components/audition-status-strip.js"></script>
 <script src="../../../../SHARED/Components/ai-character-importer.js"></script>
-<script src="../../../../SHARED/Components/audition-page-templates.js?v=casting-menu-20260428"></script>
+<script src="../../../../SHARED/Components/audition-page-templates.js?v=callback-layout-20260429"></script>
 <!-- VenuePicker uses OpenStreetMap/Nominatim - no API key needed -->
 <script>
   /* SQL needed:
@@ -15464,7 +15464,7 @@
   let auditionsRefreshTimer    = null;
   let _auditionsPollTimer      = null;
   let _inRoomSaveInProgress    = 0;
-  let auditionRoomStateTableAvailable = true;
+  let auditionRoomStateTableAvailable = null;
   let auditionRoomStatesLoadedAt = 0;
   const auditionRoomStates = new Map();
   const inRoomNextClientId = (() => {
@@ -16091,7 +16091,7 @@
   }
 
   async function loadAuditionRoomStates(options = {}) {
-    if (!prodId || !auditionRoomStateTableAvailable) return [];
+    if (!prodId || auditionRoomStateTableAvailable === false) return [];
     const { force = false, maxAge = 4000 } = options;
     if (!force && auditionRoomStatesLoadedAt && Date.now() - auditionRoomStatesLoadedAt < maxAge) return [...auditionRoomStates.values()];
     try {
@@ -16105,6 +16105,7 @@
         ({ data, error } = await sb.from('production_audition_room_states').select('*').eq('production_id', prodId));
       }
       if (error) throw error;
+      auditionRoomStateTableAvailable = true;
       auditionRoomStates.clear();
       (data || []).forEach(mergeAuditionRoomState);
       auditionRoomStatesLoadedAt = Date.now();
@@ -16120,6 +16121,10 @@
   async function persistAuditionRoomState(payload) {
     mergeAuditionRoomState(payload);
     renderInRoomReadySignals();
+    if (auditionRoomStateTableAvailable === false) {
+      console.warn('[BTS] room state save skipped because the room states migration is not available yet.');
+      return payload;
+    }
     try {
       let data, error;
       if (teamAccessMode && teamAccessSessionToken) {
@@ -16314,8 +16319,8 @@
       'production_events',
       'production_audition_notes',
       'production_audition_observations',
-      'production_audition_room_states',
     ];
+    if (auditionRoomStateTableAvailable === true) TABLES.push('production_audition_room_states');
 
     let ch = sb.channel(`production-auditions-${prodId}`);
     TABLES.forEach(table => {
