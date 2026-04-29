@@ -9156,6 +9156,44 @@
     .castlist-role-name { font-weight: 800; color: #261843; }
     .castlist-performer-list { display: flex; flex-direction: column; gap: 0.22rem; font-weight: 650; color: #352756; }
     .castlist-open { color: #9a90b0; font-weight: 650; }
+    .castlist-programme-card {
+      max-width: 520px;
+      margin: 0 auto;
+      padding: 2rem 1.5rem;
+      background: #fff;
+    }
+    .castlist-programme-title {
+      text-align: center;
+      font-family: Georgia, 'Times New Roman', serif;
+      font-size: 1.35rem;
+      font-weight: 700;
+      letter-spacing: 0;
+      color: #111827;
+      margin: 0 0 0.9rem;
+      text-transform: uppercase;
+    }
+    .castlist-programme {
+      display: grid;
+      grid-template-columns: minmax(8rem, max-content) minmax(10rem, max-content);
+      justify-content: center;
+      column-gap: 1.45rem;
+      row-gap: 0.16rem;
+      font-size: clamp(0.9rem, 1.8vw, 1.05rem);
+      line-height: 1.12;
+      color: #111827;
+    }
+    .castlist-programme-role {
+      text-align: right;
+      font-weight: 800;
+    }
+    .castlist-programme-name {
+      text-align: left;
+      font-weight: 450;
+    }
+    .castlist-programme-open {
+      color: #9a90b0;
+      font-style: italic;
+    }
 
     /* Auditions sub-nav */
     .aud-day-tabs {
@@ -30136,21 +30174,36 @@ If you have any questions, don't hesitate to reach out.
     }).join('');
   }
 
+  function buildCastListProgrammeHtml() {
+    const sortedChars = (characters || [])
+      .filter(char => char && char.id)
+      .slice()
+      .sort(compareCastListCharacters);
+    if (!sortedChars.length) {
+      return '<div style="text-align:center;padding:2.5rem;color:#9a90b0;">Add characters or groupings to build the cast list.</div>';
+    }
+    const rows = [];
+    sortedChars.forEach(char => {
+      const cast = cbv2Assignments
+        .filter(a => a.character_id === char.id && a.state === 'chosen')
+        .map(a => allApplicants.find(x => x.id === a.applicant_id))
+        .filter(Boolean)
+        .sort(compareApplicantsAlphabetically);
+      const names = cast.length ? cast.map(app => app.name || '—') : ['Open'];
+      names.forEach(name => {
+        rows.push(`<div class="castlist-programme-role">${esc(char.name || 'Unnamed')}</div><div class="castlist-programme-name${name === 'Open' ? ' castlist-programme-open' : ''}">${esc(name)}</div>`);
+      });
+    });
+    return `<div class="castlist-programme-card">
+      <div class="castlist-programme-title">Cast List</div>
+      <div class="castlist-programme">${rows.join('')}</div>
+    </div>`;
+  }
+
   function renderCastListViewInto(viewId) {
     const view = document.getElementById(viewId);
     if (!view) return;
-    view.innerHTML = `<div class="card" style="padding:0;overflow:hidden;">
-      <table class="castlist-table">
-        <thead>
-          <tr>
-            <th style="padding-left:1.4rem;">Character / Grouping</th>
-            <th>Performer(s)</th>
-            <th>Role Type</th>
-          </tr>
-        </thead>
-        <tbody>${buildCastListRowsHtml()}</tbody>
-      </table>
-    </div>`;
+    view.innerHTML = buildCastListProgrammeHtml();
   }
 
   function renderCastList() {
