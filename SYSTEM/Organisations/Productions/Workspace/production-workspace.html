@@ -9153,6 +9153,9 @@
       border-bottom: 1px solid rgba(87,46,136,0.06);
     }
     .castlist-table tr:last-child td { border-bottom: none; }
+    .castlist-role-name { font-weight: 800; color: #261843; }
+    .castlist-performer-list { display: flex; flex-direction: column; gap: 0.22rem; font-weight: 650; color: #352756; }
+    .castlist-open { color: #9a90b0; font-weight: 650; }
 
     /* Auditions sub-nav */
     .aud-day-tabs {
@@ -13155,7 +13158,7 @@
 
           <div class="cbv2-final-summary" id="cbv2-final-summary"></div>
           <div class="cbv2-callback-list-view" id="cbv2-callback-list-view" style="display:none;">
-            <div style="text-align:center;padding:3rem 2rem;color:#9a90b0;font-size:0.875rem;">Refreshing callback list…</div>
+            <div style="text-align:center;padding:3rem 2rem;color:#9a90b0;font-size:0.875rem;">Refreshing list…</div>
           </div>
 
           <div class="cbv2-body">
@@ -13335,7 +13338,7 @@
         <div class="page-header">
           <div>
             <div class="page-title">Cast List</div>
-            <div class="page-subtitle">Everyone who has been selected for a character.</div>
+            <div class="page-subtitle">Every character and grouping with current casting decisions.</div>
           </div>
           <button class="btn-secondary" onclick="exportCastList()" style="font-size:0.8rem;">Export</button>
         </div>
@@ -13343,13 +13346,13 @@
           <table class="castlist-table" id="cast-list-table">
             <thead>
               <tr>
-                <th style="padding-left:1.4rem;">Performer</th>
-                <th>Character</th>
+                <th style="padding-left:1.4rem;">Character / Grouping</th>
+                <th>Performer(s)</th>
                 <th>Role Type</th>
               </tr>
             </thead>
             <tbody id="cast-list-tbody">
-              <tr><td colspan="3" style="text-align:center;padding:2.5rem;color:#9a90b0;">No performers have been selected yet. Use the Casting Board to choose your cast.</td></tr>
+              <tr><td colspan="3" style="text-align:center;padding:2.5rem;color:#9a90b0;">Add characters or groupings to build the cast list.</td></tr>
             </tbody>
           </table>
         </div>
@@ -19996,7 +19999,7 @@ If you have any questions, don't hesitate to reach out.
         <div class="aud-session-topnav" style="--session-accent:#3b82f6;">
           <div class="aud-day-topnav">
             <button type="button" class="aud-day-topnav-btn cbv2-mode-btn${cbv2SubView === 'board' ? ' active' : ''}" id="cbv2-mode-btn-general" onclick="setCastboardSubView('board')">Casting Board</button>
-            <button type="button" class="aud-day-topnav-btn cbv2-mode-btn${cbv2SubView === 'callbacklist' ? ' active' : ''}" id="cbv2-mode-btn-callback-list" onclick="setCastboardSubView('callbacklist')">Callback List</button>
+            <button type="button" class="aud-day-topnav-btn cbv2-mode-btn${cbv2SubView === 'callbacklist' ? ' active' : ''}" id="cbv2-mode-btn-callback-list" onclick="setCastboardSubView('callbacklist')">List</button>
           </div>
         </div>`;
       return;
@@ -23827,7 +23830,7 @@ If you have any questions, don't hesitate to reach out.
 
   // Callback session: casting outcomes after callbacks have happened.
   function renderCallbacks() {
-    const targets = ['callbacks-list', 'cbpanel-performers-view', 'cbv2-callback-list-view']
+    const targets = ['callbacks-list', 'cbpanel-performers-view']
       .map(id => document.getElementById(id))
       .filter(Boolean);
     if (!targets.length) return;
@@ -24006,7 +24009,7 @@ If you have any questions, don't hesitate to reach out.
   function renderCallbacksFresh() {
     if (_renderCallbacksAfterRefresh) return;
     _renderCallbacksAfterRefresh = true;
-    const targets = ['callbacks-list', 'cbpanel-performers-view', 'cbv2-callback-list-view']
+    const targets = ['callbacks-list', 'cbpanel-performers-view']
       .map(id => document.getElementById(id))
       .filter(Boolean);
     targets.forEach(target => {
@@ -28084,7 +28087,7 @@ If you have any questions, don't hesitate to reach out.
     if (body) body.style.display = showList ? 'none' : '';
     if (floor) floor.style.display = showList ? 'none' : '';
     syncCbv2TabUi();
-    if (showList) renderCallbacksFresh();
+    if (showList) renderCastListViewInto('cbv2-callback-list-view');
   }
 
   function setCastboardSubView(view) {
@@ -30094,34 +30097,82 @@ If you have any questions, don't hesitate to reach out.
   }
 
   // ── Cast List ──
-  function renderCastList() {
-    const tbody = document.getElementById('cast-list-tbody');
-    if (!tbody) return;
-    const chosen = cbv2Assignments.filter(a => a.state === 'chosen');
-    if (!chosen.length) {
-      tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;padding:2.5rem;color:#9a90b0;">No performers have been selected yet.</td></tr>';
-      return;
+  function castListCharacterSortRank(char) {
+    const name = String(char?.name || '').trim().toLowerCase();
+    const type = String(char?.role_type || '').trim().toLowerCase();
+    if (name === 'ensemble' || type === 'ensemble') return 2;
+    if (type === 'group' || type === 'chorus') return 1;
+    return 0;
+  }
+
+  function compareCastListCharacters(a, b) {
+    const rankDiff = castListCharacterSortRank(a) - castListCharacterSortRank(b);
+    if (rankDiff) return rankDiff;
+    return String(a?.name || '').localeCompare(String(b?.name || ''), undefined, { sensitivity: 'base' });
+  }
+
+  function buildCastListRowsHtml() {
+    const sortedChars = (characters || [])
+      .filter(char => char && char.id)
+      .slice()
+      .sort(compareCastListCharacters);
+    if (!sortedChars.length) {
+      return '<tr><td colspan="3" style="text-align:center;padding:2.5rem;color:#9a90b0;">Add characters or groupings to build the cast list.</td></tr>';
     }
-    tbody.innerHTML = chosen.map(a => {
-      const app  = allApplicants.find(x => x.id === a.applicant_id);
-      const char = characters.find(x => x.id === a.character_id);
-      if (!app || !char) return '';
+    return sortedChars.map(char => {
+      const cast = cbv2Assignments
+        .filter(a => a.character_id === char.id && a.state === 'chosen')
+        .map(a => allApplicants.find(x => x.id === a.applicant_id))
+        .filter(Boolean)
+        .sort(compareApplicantsAlphabetically);
+      const performerHtml = cast.length
+        ? `<div class="castlist-performer-list">${cast.map(app => `<div>${esc(app.name || '—')}</div>`).join('')}</div>`
+        : '<span class="castlist-open">Open</span>';
       return `<tr>
-        <td style="padding-left:1.4rem;font-weight:600;">${esc(app.name || '—')}</td>
-        <td>${esc(char.name || '—')}</td>
-        <td><span class="char-tag char-tag-role-${(char.role_type||'').toLowerCase()}">${esc(char.role_type || '—')}</span></td>
+        <td style="padding-left:1.4rem;"><div class="castlist-role-name">${esc(char.name || 'Unnamed')}</div></td>
+        <td>${performerHtml}</td>
+        <td><span class="char-tag char-tag-role-${esc((char.role_type || '').toLowerCase())}">${esc(char.role_type || '—')}</span></td>
       </tr>`;
     }).join('');
   }
 
+  function renderCastListViewInto(viewId) {
+    const view = document.getElementById(viewId);
+    if (!view) return;
+    view.innerHTML = `<div class="card" style="padding:0;overflow:hidden;">
+      <table class="castlist-table">
+        <thead>
+          <tr>
+            <th style="padding-left:1.4rem;">Character / Grouping</th>
+            <th>Performer(s)</th>
+            <th>Role Type</th>
+          </tr>
+        </thead>
+        <tbody>${buildCastListRowsHtml()}</tbody>
+      </table>
+    </div>`;
+  }
+
+  function renderCastList() {
+    const tbody = document.getElementById('cast-list-tbody');
+    if (!tbody) return;
+    tbody.innerHTML = buildCastListRowsHtml();
+  }
+
   function exportCastList() {
-    const chosen = cbv2Assignments.filter(a => a.state === 'chosen');
-    if (!chosen.length) { showToast('No cast selected yet.', true); return; }
-    const rows = [['Performer', 'Character', 'Role Type']];
-    chosen.forEach(a => {
-      const app  = allApplicants.find(x => x.id === a.applicant_id);
-      const char = characters.find(x => x.id === a.character_id);
-      if (app && char) rows.push([app.name || '', char.name || '', char.role_type || '']);
+    const sortedChars = (characters || [])
+      .filter(char => char && char.id)
+      .slice()
+      .sort(compareCastListCharacters);
+    if (!sortedChars.length) { showToast('No characters added yet.', true); return; }
+    const rows = [['Character / Grouping', 'Performer(s)', 'Role Type']];
+    sortedChars.forEach(char => {
+      const names = cbv2Assignments
+        .filter(a => a.character_id === char.id && a.state === 'chosen')
+        .map(a => allApplicants.find(x => x.id === a.applicant_id)?.name || '')
+        .filter(Boolean)
+        .join('; ');
+      rows.push([char.name || '', names || 'Open', char.role_type || '']);
     });
     const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
