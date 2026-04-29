@@ -15598,9 +15598,11 @@
       document.body.classList.remove('team-access-login-visible');
       await bootProductionWorkspace(new URLSearchParams(window.location.search));
       applyTeamAccessMode();
-      await loadAuditionRoomStates({ force: true }).catch(() => {});
       switchProdTab('auditions');
       openAuditionsSubTab('dashboard');
+      loadAuditionRoomStates({ force: true })
+        .then(() => refreshAuditionsCheckInUi())
+        .catch(() => {});
       startAuditionsPoll();
       return;
     }
@@ -15637,20 +15639,22 @@
     document.body.classList.remove('team-access-login-visible');
     await bootProductionWorkspace(new URLSearchParams(window.location.search));
     applyTeamAccessMode();
-    await Promise.all([
+    switchProdTab('auditions');
+    openAuditionsSubTab('dashboard');
+    Promise.all([
       audSessions.length   ? Promise.resolve() : loadAudSessions(),
       allApplicants.length ? Promise.resolve() : loadApplicants(),
       loadAuditionRoomStates({ force: true }),
-    ]).catch(() => {});
-    switchProdTab('auditions');
-    openAuditionsSubTab('dashboard');
+    ])
+      .then(() => refreshAuditionsCheckInUi())
+      .catch(() => {});
     startAuditionsPoll();
   }
 
   function cleanAdminWorkspaceUrl() {
     if (!orgSlug || !prod?.slug || teamAccessMode) return;
     const url = new URL(window.location.href);
-    url.pathname = `/${encodeURIComponent(orgSlug)}/ORG/Productions/${encodeURIComponent(prod.slug)}`;
+    url.pathname = workspacePathForNavState(loadWorkspaceNavState());
     url.searchParams.delete('id');
     const next = url.pathname + url.search + url.hash;
     if (next !== window.location.pathname + window.location.search + window.location.hash) {
@@ -16486,8 +16490,13 @@
     }
 
     prod = data;
-    await ensureProductionSlug();
     updateTeamUrlDisplays();
+    ensureProductionSlug()
+      .then(() => {
+        updateTeamUrlDisplays();
+        cleanAdminWorkspaceUrl();
+      })
+      .catch(error => console.warn('[BTS] production slug check failed', error));
     setupRoomReadyBroadcast();
     if (!teamAccessMode) startAuditionsPoll();
     // Check if is_public column exists — non-blocking, safe to run in background
@@ -16501,20 +16510,26 @@
     }
     // Calendar initialises lazily when the Calendar tab is opened (see switchProdTab)
     // Checklists load on tab open
-    const criticalWorkspaceData = Promise.allSettled([
-      loadAuditionConfig(),
-    ]);
+    const bootRouteNav = getWorkspaceNavStateFromRoute();
+    const bootNav = bootRouteNav || loadWorkspaceNavState() || getDefaultWorkspaceNavState();
+    const shouldHydrateAuditions = bootNav.prodTab === 'auditions' || bootNav.prodTab === 'castlist';
+    const criticalWorkspaceData = Promise.resolve();
     const backgroundWorkspaceData = criticalWorkspaceData.then(() => Promise.allSettled([
-      loadApplicants({ skipRender: true, skipCastingSync: true }),
-      loadSlots(),
+      loadAuditionConfig(),
       loadAudSessions(),
-      loadAuditionAuthoredNotes(),
-      loadAuditionObservations(),
-      loadAuditionRoomStates({ force: true }),
       loadRoomNextSignals({ force: true }),
+      ...(shouldHydrateAuditions ? [
+        loadApplicants({ skipRender: true, skipCastingSync: true }),
+        loadSlots(),
+        loadAuditionAuthoredNotes(),
+        loadAuditionObservations(),
+        loadAuditionRoomStates({ force: true }),
+      ] : []),
     ]));
     backgroundWorkspaceData.then(() => {
-      try { refreshAuditionsLiveUi({ preserveModal: true }); } catch {}
+      if (shouldHydrateAuditions) {
+        try { refreshAuditionsLiveUi({ preserveModal: true }); } catch {}
+      }
       if (!inRoomApplicantId) return;
       try {
         if (document.getElementById('adtab-inroom')?.style.display !== 'none') renderInRoomPage(inRoomApplicantId);
@@ -16564,13 +16579,21 @@
     // Handle deep-link params
    const tabParam = params.get('tab');
    const subParam = params.get('sub');
-    const hasExplicitNav = !!(tabParam || subParam);
+    const routeNav = bootRouteNav;
+    const hasExplicitNav = !!(tabParam || subParam || routeNav);
     if (!hasExplicitNav) resetWorkspaceNavForFreshOpen();
-    const savedNav = hasExplicitNav ? loadWorkspaceNavState() : getDefaultWorkspaceNavState();
+    if (routeNav) {
+      try { localStorage.setItem(getWorkspaceNavStorageKey(), JSON.stringify(routeNav)); } catch {}
+    }
+    const savedNav = routeNav || (hasExplicitNav ? loadWorkspaceNavState() : getDefaultWorkspaceNavState());
     if (savedNav?.auditionsSessionId) activeAuditionNavSessionId = savedNav.auditionsSessionId;
     if (savedNav?.auditionsSessionTool) activeAuditionNavTool = savedNav.auditionsSessionTool;
     if (savedNav?.inRoomApplicantId) inRoomApplicantId = savedNav.inRoomApplicantId;
-    if (tabParam === 'casting') {
+    if (routeNav?.prodTab === 'auditions') {
+      setTimeout(() => routeNav.auditionsSubTab ? openAuditionsSubTab(routeNav.auditionsSubTab) : switchAudTab('overview'), 100);
+    } else if (routeNav?.prodTab) {
+      setTimeout(() => switchProdTab(routeNav.prodTab), 100);
+    } else if (tabParam === 'casting') {
       setTimeout(() => openCastingSubTab(subParam || 'castboard'), 100);
     } else if (tabParam === 'auditions') {
       setTimeout(() => subParam ? openAuditionsSubTab(subParam) : switchAudTab('overview'), 100);
@@ -16717,6 +16740,116 @@
     };
   }
 
+  function cleanWorkspaceRoutePart(value) {
+    return String(value || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  }
+
+  function workspaceRouteBasePath() {
+    const parts = window.location.pathname.replace(/\/+$/, '').split('/').filter(Boolean);
+    const productionsIndex = parts.findIndex(part => part.toLowerCase() === 'productions');
+    if (productionsIndex >= 0 && productionsIndex + 1 < parts.length) {
+      return '/' + parts.slice(0, productionsIndex + 2).map(encodeURIComponent).join('/');
+    }
+    return window.location.pathname.replace(/\/+$/, '') || '/';
+  }
+
+  function workspaceCanonicalBasePath() {
+    if (!teamAccessMode && orgSlug && prod?.slug) {
+      return `/${encodeURIComponent(orgSlug)}/ORG/Productions/${encodeURIComponent(prod.slug)}`;
+    }
+    return workspaceRouteBasePath();
+  }
+
+  function workspaceRouteSegments() {
+    const parts = window.location.pathname.replace(/\/+$/, '').split('/').filter(Boolean);
+    const productionsIndex = parts.findIndex(part => part.toLowerCase() === 'productions');
+    if (productionsIndex < 0) return [];
+    return parts.slice(productionsIndex + 2).map(cleanWorkspaceRoutePart).filter(Boolean);
+  }
+
+  function getWorkspaceNavStateFromRoute() {
+    const segments = workspaceRouteSegments();
+    if (!segments.length) return null;
+    const [section, child, detail] = segments;
+    const nav = getDefaultWorkspaceNavState();
+    const topLevel = {
+      overview: 'overview',
+      team: 'team',
+      calendar: 'calendar',
+      settings: 'settings',
+      emails: 'emails',
+      'email-templates': 'emails',
+      test: 'test',
+      templates: 'test',
+      checklist: 'checklist',
+      files: 'files',
+      profile: 'profile',
+      'cast-list': 'castlist',
+      castlist: 'castlist',
+    };
+    if (topLevel[section]) return { ...nav, prodTab: topLevel[section] };
+    if (section !== 'auditions') return null;
+    nav.prodTab = 'auditions';
+    const audMap = {
+      '': 'dashboard',
+      dashboard: 'dashboard',
+      settings: 'setup',
+      setup: 'setup',
+      schedule: 'schedule',
+      performers: 'auditions',
+      checkin: 'checkin',
+      'check-in': 'checkin',
+      'in-the-room': 'inroom',
+      inroom: 'inroom',
+      callback: 'callbacks',
+      callbacks: 'callbacks',
+      'casting-board': 'castboard',
+      casting: 'castboard',
+      'final-casting': 'finalcasting',
+    };
+    nav.auditionsSubTab = audMap[child || ''] || 'dashboard';
+    if (child === 'session' && detail) nav.auditionsSubTab = `session:${detail}`;
+    return nav;
+  }
+
+  function workspacePathForNavState(state = loadWorkspaceNavState()) {
+    const base = workspaceCanonicalBasePath();
+    const prodTab = state?.prodTab || 'overview';
+    const auditionsSubTab = state?.auditionsSubTab || state?.auditionsDayTab || '';
+    let route = '';
+    if (prodTab === 'auditions') {
+      const audRoutes = {
+        overview: 'auditions',
+        dashboard: 'auditions',
+        setup: 'auditions/settings',
+        schedule: 'auditions/schedule',
+        auditions: 'auditions/performers',
+        checkin: 'auditions/check-in',
+        inroom: 'auditions/in-the-room',
+        callbacks: 'auditions/callback',
+        casting: 'auditions/casting-board',
+        castboard: 'auditions/casting-board',
+        finalcasting: 'auditions/final-casting',
+      };
+      route = audRoutes[auditionsSubTab] || (String(auditionsSubTab).startsWith('session:') ? `auditions/session/${encodeURIComponent(String(auditionsSubTab).replace(/^session:/, ''))}` : 'auditions');
+    } else {
+      const tabRoutes = {
+        overview: 'overview',
+        team: 'team',
+        calendar: 'calendar',
+        settings: 'settings',
+        emails: 'email-templates',
+        test: 'templates',
+        checklist: 'checklist',
+        files: 'files',
+        profile: 'profile',
+        castlist: 'cast-list',
+      };
+      route = tabRoutes[prodTab] || 'overview';
+    }
+    return `${base}/${route}`.replace(/\/{2,}/g, '/');
+  }
+
   let workspaceHistoryReady = false;
   let workspaceApplyingHistory = false;
   let workspaceHistoryTimer = null;
@@ -16784,7 +16917,7 @@
     if (!window.history?.replaceState) return;
     const state = loadWorkspaceNavState();
     workspaceLastHistoryKey = workspaceHistoryKey(state);
-    history.replaceState(workspaceHistoryPayload(state), '', window.location.href);
+    history.replaceState(workspaceHistoryPayload(state), '', workspacePathForNavState(state) + window.location.hash);
   }
 
   function queueWorkspaceHistoryState(state) {
@@ -16795,7 +16928,7 @@
       const nextKey = workspaceHistoryKey(latest);
       if (!nextKey || nextKey === workspaceLastHistoryKey) return;
       workspaceLastHistoryKey = nextKey;
-      history.pushState(workspaceHistoryPayload(latest), '', window.location.href);
+      history.pushState(workspaceHistoryPayload(latest), '', workspacePathForNavState(latest));
     }, 0);
   }
 
@@ -16824,6 +16957,9 @@
   window.addEventListener('popstate', event => {
     if (event.state?.btsWorkspaceNav) {
       applyWorkspaceHistoryNav(event.state);
+    } else {
+      const nav = getWorkspaceNavStateFromRoute();
+      if (nav) applyWorkspaceHistoryNav(workspaceHistoryPayload(nav));
     }
   });
   window.addEventListener('scroll', queueWorkspaceScrollPositionSave, { passive: true });
@@ -21464,6 +21600,10 @@ If you have any questions, don't hesitate to reach out.
     } else if (subTab === 'callbacks') {
       switchAudTab('auditions');
       switchAudDayTab('callbacklist');
+    } else if (subTab === 'castboard') {
+      cbv2SubView = 'board';
+      setCastboardMode('general');
+      switchAudTab('castboard');
     } else if (subTab === 'finalcasting') {
       cbv2SubView = 'board';
       setCastboardMode('final');

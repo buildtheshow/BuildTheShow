@@ -1,6 +1,6 @@
 // Cloudflare Pages Function
-// Routes /:org/ORG/Productions/:show -> protected production workspace.
-// The workspace resolves org/show slugs and then manages nested section URLs client-side.
+// Routes nested production workspace pages like
+// /:org/ORG/Productions/:show/auditions/casting-board back to the shared shell.
 
 export async function onRequest(context) {
   const url = new URL(context.request.url);
