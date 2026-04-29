@@ -9154,10 +9154,11 @@
     }
     .castlist-table tr:last-child td { border-bottom: none; }
     .castlist-role-name { font-weight: 800; color: #261843; }
-    .castlist-performer-list { display: flex; flex-direction: column; gap: 0.22rem; font-weight: 650; color: #352756; }
+    .castlist-performer-list { display: flex; flex-direction: column; gap: 0.38rem; font-weight: 650; color: #352756; }
+    .castlist-performer-list > div { white-space: nowrap; }
     .castlist-open { color: #9a90b0; font-weight: 650; }
     .castlist-programme-card {
-      max-width: 520px;
+      width: min(100%, 760px);
       margin: 0 auto;
       padding: 2rem 1.5rem;
       background: #fff;
@@ -9175,10 +9176,10 @@
     }
     .castlist-programme {
       display: grid;
-      grid-template-columns: minmax(8rem, max-content) minmax(10rem, max-content);
+      grid-template-columns: minmax(9rem, max-content) minmax(14rem, max-content);
       justify-content: center;
       column-gap: 1.45rem;
-      row-gap: 0.16rem;
+      row-gap: 0.58rem;
       font-size: clamp(0.9rem, 1.8vw, 1.05rem);
       line-height: 1.12;
       color: #111827;
@@ -9190,6 +9191,12 @@
     .castlist-programme-name {
       text-align: left;
       font-weight: 450;
+      white-space: nowrap;
+    }
+    .castlist-programme-name-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.34rem;
     }
     .castlist-programme-open {
       color: #9a90b0;
@@ -19976,7 +19983,7 @@ If you have any questions, don't hesitate to reach out.
 
   if (tab === 'auditions') { if (!allApplicants.length) loadApplicants(); renderAuditionsPanel(); }
   if (tab === 'castboard') { loadCbv2(); }
-  if (tab === 'castlist') { loadCbv2({ skipRender: true }).then(renderCastList).catch(renderCastList); }
+  if (tab === 'castlist') { loadCbv2({ force: true, skipRender: true }).then(renderCastList).catch(renderCastList); }
   if (tab === 'callbacks') renderCallbacksFresh();
   if (tab === 'setup') {
     const inner = document.querySelector('.aud-inner-btn.active');
@@ -30154,12 +30161,13 @@ If you have any questions, don't hesitate to reach out.
 
   function getCastListPerformers(char) {
     const assigned = cbv2Assignments
-      .filter(a => a.character_id === char.id && a.state === 'chosen')
+      .filter(a => a.character_id === char.id && (a.state === 'chosen' || a.state === 'liked'))
+      .sort((a, b) => (a.state === 'chosen' ? 0 : 1) - (b.state === 'chosen' ? 0 : 1))
       .map(a => allApplicants.find(x => x.id === a.applicant_id))
       .filter(Boolean);
     const isEnsemble = castListCharacterSortRank(char) === 2;
-    const ensemble = isEnsemble && typeof getCbEnsemblePerformers === 'function'
-      ? getCbEnsemblePerformers()
+    const ensemble = isEnsemble
+      ? allApplicants.filter(app => cbv2EnsembleManual.has(app.id))
       : [];
     const seen = new Set();
     return [...assigned, ...ensemble]
@@ -30198,9 +30206,10 @@ If you have any questions, don't hesitate to reach out.
     sortedChars.forEach(char => {
       const cast = getCastListPerformers(char);
       const names = cast.length ? cast.map(app => app.name || '—') : ['Open'];
-      names.forEach(name => {
-        rows.push(`<div class="castlist-programme-role">${esc(char.name || 'Unnamed')}</div><div class="castlist-programme-name${name === 'Open' ? ' castlist-programme-open' : ''}">${esc(name)}</div>`);
-      });
+      rows.push(`<div class="castlist-programme-role">${esc(char.name || 'Unnamed')}</div>
+        <div class="castlist-programme-name-list">
+          ${names.map(name => `<div class="castlist-programme-name${name === 'Open' ? ' castlist-programme-open' : ''}">${esc(name)}</div>`).join('')}
+        </div>`);
     });
     return `<div class="castlist-programme-card">
       <div class="castlist-programme-title">Cast List</div>
