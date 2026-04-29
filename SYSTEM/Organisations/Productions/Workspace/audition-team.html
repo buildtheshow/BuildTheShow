@@ -15548,8 +15548,11 @@
   let _inRoomSaveInProgress    = 0;
   let auditionRoomStateTableAvailable = null;
   let auditionRoomStatesLoadedAt = 0;
+  let roomNextSignalsTableAvailable = null;
+  let roomNextSignalsLoadedAt = 0;
   const INROOM_NEXT_WAITING_LABEL_MS = 10000;
   const auditionRoomStates = new Map();
+  const roomNextSignals = new Map();
   let inRoomNextBroadcastChannel = null;
   const inRoomNextClientId = (() => {
     try {
@@ -15632,7 +15635,7 @@
     loadSlots();
     loadApplicants({ skipRender: true, skipCastingSync: true });
     // Load sessions early so collectScoreObservations can build session-keyed lookups on first render
-    Promise.all([loadAudSessions(), loadAuditionAuthoredNotes(), loadAuditionObservations(), loadAuditionRoomStates({ force: true })]).then(() => {
+    Promise.all([loadAudSessions(), loadAuditionAuthoredNotes(), loadAuditionObservations(), loadAuditionRoomStates({ force: true }), loadRoomNextSignals({ force: true })]).then(() => {
       // Re-render the in-room card once all session + observation data has arrived
       if (!inRoomApplicantId) return;
       try {
@@ -15726,7 +15729,7 @@
       ? document.getElementById('reschedule-slots')?.style.display !== 'none'
       : false;
 
-    await Promise.all([loadAudSessions(), loadApplicants(), loadSlots(), loadAuditionAuthoredNotes(), loadAuditionObservations(), loadAuditionRoomStates({ force: true })]);
+    await Promise.all([loadAudSessions(), loadApplicants(), loadSlots(), loadAuditionAuthoredNotes(), loadAuditionObservations(), loadAuditionRoomStates({ force: true }), loadRoomNextSignals({ force: true })]);
     try { renderApplicants(); } catch {}
     try { renderApplicantsMirror(); } catch {}
     try { renderSlots(); } catch {}
@@ -15871,6 +15874,12 @@
         const session = getCurrentInRoomSession?.() || getActiveAuditionNavSession?.();
         if (session && activeAuditionNavTool === 'inroom') syncCurrentRoomFromState(session, 'aud-session-inroom-content', 'openAuditionSessionInRoom');
       } catch {}
+      return;
+    }
+    if (table === 'production_room_next_signals') {
+      if (payload?.new?.room_key) mergeRoomNextSignal(payload.new);
+      else await loadRoomNextSignals({ force: true });
+      renderInRoomReadySignals();
       return;
     }
     if (table === 'audition_applications') {
@@ -16132,8 +16141,17 @@
     auditionRoomStates.set(row.room_key, row);
   }
 
+  function mergeRoomNextSignal(row) {
+    if (!row?.room_key) return;
+    roomNextSignals.set(row.room_key, row);
+  }
+
   function getRoomState(roomKey) {
     return auditionRoomStates.get(roomKey) || null;
+  }
+
+  function getRoomNextSignal(roomKey) {
+    return roomNextSignals.get(roomKey) || null;
   }
 
   function roomStateIsWaiting(state) {
@@ -16168,9 +16186,9 @@
   }
 
   function handleRoomReadyBroadcast(message) {
-    const state = message?.state || message;
-    if (!state || String(state.production_id || '') !== String(prodId || '') || !state.room_key) return;
-    mergeAuditionRoomState(state);
+    const signal = message?.signal || message?.state || message;
+    if (!signal || String(signal.production_id || '') !== String(prodId || '') || !signal.room_key) return;
+    mergeRoomNextSignal(signal);
     renderInRoomReadySignals();
   }
 
@@ -16188,13 +16206,13 @@
     });
   }
 
-  function broadcastRoomReadySignal(state) {
-    if (!state || state.status !== 'ready_for_next') return;
+  function broadcastRoomReadySignal(signal) {
+    if (!signal || signal.status !== 'ready') return;
     const message = {
       type: 'room_ready',
       production_id: prodId,
       sent_at: new Date().toISOString(),
-      state,
+      signal,
     };
     setupRoomReadyBroadcast();
     try { inRoomNextBroadcastChannel?.postMessage(message); } catch {}
@@ -16269,7 +16287,105 @@
     }
   }
 
-  async function persistAuditionRoomState(payload) {
+  function buildRoomNextSignalPayload(roomPayload) {
+    const nextApp = allApplicants.find(app => app.id === roomPayload.next_applicant_id);
+    return {
+      organization_id: roomPayload.organization_id || prod?.organization_id || null,
+      production_id: prodId,
+      session_id: roomPayload.session_id || null,
+      audition_type: roomPayload.audition_type || null,
+      room_id: roomPayload.room_id || 'main',
+      room_key: roomPayload.room_key,
+      room_name: roomPayload.room_name || 'Audition Room',
+      status: 'ready',
+      current_applicant_id: roomPayload.current_applicant_id || null,
+      current_group_key: roomPayload.current_group_key || null,
+      current_group_label: roomPayload.current_group_label || null,
+      current_group_member_ids: roomPayload.current_group_member_ids || [],
+      next_applicant_id: roomPayload.next_applicant_id || null,
+      next_group_key: roomPayload.next_group_key || null,
+      next_group_label: roomPayload.next_group_label || null,
+      next_group_member_ids: roomPayload.next_group_member_ids || [],
+      next_label: roomPayload.next_group_label || (nextApp ? appDisplayName(nextApp) : 'the next performer'),
+      requested_by: roomPayload.requested_by || teamAccessMember?.name || 'In The Room',
+      requested_by_team_member_id: roomPayload.requested_by_team_member_id || teamAccessMember?.id || null,
+      requested_at: new Date().toISOString(),
+    };
+  }
+
+  async function loadRoomNextSignals(options = {}) {
+    if (!prodId || (roomNextSignalsTableAvailable === false && !options.force)) return [];
+    const { force = false, maxAge = 2000 } = options;
+    if (!force && roomNextSignalsLoadedAt && Date.now() - roomNextSignalsLoadedAt < maxAge) return [...roomNextSignals.values()];
+    try {
+      let data, error;
+      if (teamAccessMode && teamAccessSessionToken) {
+        ({ data, error } = await sb.rpc('team_next_signal_list_for_session', {
+          p_production_id: prodId,
+          p_session_token: teamAccessSessionToken,
+        }));
+      } else {
+        ({ data, error } = await sb.from('production_room_next_signals').select('*').eq('production_id', prodId));
+      }
+      if (error) throw error;
+      roomNextSignalsTableAvailable = true;
+      roomNextSignals.clear();
+      (data || []).forEach(mergeRoomNextSignal);
+      roomNextSignalsLoadedAt = Date.now();
+      renderInRoomReadySignals();
+      return data || [];
+    } catch (error) {
+      roomNextSignalsTableAvailable = false;
+      console.warn('[BTS] room next signals unavailable. Run the next signals Supabase migration.', error);
+      return [];
+    }
+  }
+
+  async function persistRoomNextSignal(signal) {
+    mergeRoomNextSignal(signal);
+    renderInRoomReadySignals();
+    try {
+      let data, error;
+      if (teamAccessMode && teamAccessSessionToken) {
+        ({ data, error } = await sb.rpc('team_next_signal_upsert_for_session', {
+          p_production_id: prodId,
+          p_session_token: teamAccessSessionToken,
+          p_session_id: signal.session_id || null,
+          p_audition_type: signal.audition_type || null,
+          p_room_id: signal.room_id || 'main',
+          p_room_key: signal.room_key,
+          p_room_name: signal.room_name || null,
+          p_current_applicant_id: signal.current_applicant_id || null,
+          p_current_group_key: signal.current_group_key || null,
+          p_current_group_label: signal.current_group_label || null,
+          p_current_group_member_ids: signal.current_group_member_ids || [],
+          p_next_applicant_id: signal.next_applicant_id || null,
+          p_next_group_key: signal.next_group_key || null,
+          p_next_group_label: signal.next_group_label || null,
+          p_next_group_member_ids: signal.next_group_member_ids || [],
+          p_next_label: signal.next_label || null,
+        }));
+      } else {
+        ({ data, error } = await sb.from('production_room_next_signals')
+          .upsert(signal, { onConflict: 'production_id,room_key' })
+          .select('*')
+          .single());
+      }
+      if (error) throw error;
+      roomNextSignalsTableAvailable = true;
+      const saved = Array.isArray(data) ? data[0] : data;
+      if (saved) mergeRoomNextSignal(saved);
+      renderInRoomReadySignals();
+      return saved || signal;
+    } catch (error) {
+      roomNextSignalsTableAvailable = false;
+      console.error('[BTS] room next signal save failed:', error);
+      return signal;
+    }
+  }
+
+  async function persistAuditionRoomState(payload, options = {}) {
+    const { localFallback = false } = options;
     mergeAuditionRoomState(payload);
     renderInRoomReadySignals();
     try {
@@ -16308,6 +16424,7 @@
     } catch (error) {
       auditionRoomStateTableAvailable = false;
       console.error('[BTS] room state save failed:', error);
+      if (localFallback) return payload;
       showToast('Could not update room status.', true);
       throw error;
     }
@@ -16336,9 +16453,10 @@
       return;
     }
     const payload = buildRoomStatePayload({ session, app, status: 'ready_for_next' });
+    const nextSignal = buildRoomNextSignalPayload(payload);
     setInRoomNextButtonWaiting(buttonEl, 'Waiting for next performer...');
-    broadcastRoomReadySignal(payload);
-    await persistAuditionRoomState(payload);
+    broadcastRoomReadySignal(nextSignal);
+    await persistRoomNextSignal(nextSignal);
   }
 
   async function sendDanceCallNextRequest(sessionId, slotTime = '', buttonEl = null) {
@@ -16381,15 +16499,16 @@
         nextMemberIds: nextMembers.map(app => app.id),
       },
     });
+    const nextSignal = buildRoomNextSignalPayload(payload);
     setInRoomNextButtonWaiting(buttonEl, 'Waiting for next group...');
-    broadcastRoomReadySignal(payload);
-    await persistAuditionRoomState(payload);
+    broadcastRoomReadySignal(nextSignal);
+    await persistRoomNextSignal(nextSignal);
   }
 
   function renderInRoomReadySignals() {
     if (teamAccessMode) return;
-    const readyStates = [...auditionRoomStates.values()]
-      .filter(state => state.status === 'ready_for_next' || state.status === 'waiting_for_arrival')
+    const readyStates = [...roomNextSignals.values()]
+      .filter(state => state.status === 'ready')
       .sort((a, b) => String(b.requested_at || b.updated_at || '').localeCompare(String(a.requested_at || a.updated_at || '')));
     document.getElementById('inroom-next-request-stack')?.remove();
     if (!readyStates.length) return;
@@ -16398,8 +16517,7 @@
     stack.className = 'inroom-next-request-stack';
     stack.innerHTML = readyStates.map(state => {
       const nextApp = allApplicants.find(app => app.id === state.next_applicant_id);
-      const nextName = state.next_group_label || (nextApp ? appDisplayName(nextApp) : 'the next performer');
-      const isWaiting = state.status === 'waiting_for_arrival';
+      const nextName = state.next_label || state.next_group_label || (nextApp ? appDisplayName(nextApp) : 'the next performer');
       return `<div class="inroom-next-request" id="inroom-next-request-${esc(state.room_key)}">
         <div class="inroom-next-request-title">${esc(state.room_name || 'Audition Room')} is ready.</div>
         <div class="inroom-next-request-body">
@@ -16407,7 +16525,7 @@
         </div>
         <div class="inroom-next-request-actions">
           <button type="button" onclick="dismissInRoomReadySignal('${esc(state.room_key)}')">Dismiss</button>
-          <button type="button" class="primary" onclick="markNextPerformerSentIn('${esc(state.room_key)}')"${isWaiting ? ' disabled' : ''}>${isWaiting ? 'Waiting...' : 'Sent In'}</button>
+          <button type="button" class="primary" onclick="markNextPerformerSentIn('${esc(state.room_key)}')">Sent In</button>
         </div>
       </div>`;
     }).join('');
@@ -16416,10 +16534,22 @@
 
   function dismissInRoomReadySignal(roomKey) {
     document.getElementById(`inroom-next-request-${roomKey}`)?.remove();
+    const signal = getRoomNextSignal(roomKey);
+    if (signal) {
+      const updated = { ...signal, status: 'dismissed', dismissed_at: new Date().toISOString(), updated_at: new Date().toISOString() };
+      mergeRoomNextSignal(updated);
+      if (roomNextSignalsTableAvailable !== false) {
+        sb.from('production_room_next_signals').update({
+          status: 'dismissed',
+          dismissed_at: updated.dismissed_at,
+          updated_at: updated.updated_at,
+        }).eq('production_id', prodId).eq('room_key', roomKey).then(() => {});
+      }
+    }
   }
 
   async function markNextPerformerSentIn(roomKey) {
-    const state = getRoomState(roomKey);
+    const state = getRoomNextSignal(roomKey);
     if (!state) return;
     const card = document.getElementById(`inroom-next-request-${roomKey}`);
     const action = card?.querySelector('.inroom-next-request-actions .primary');
@@ -16442,7 +16572,16 @@
     payload.current_group_label = state.next_group_label || null;
     payload.current_group_member_ids = state.next_group_member_ids || [];
     card?.remove();
-    await persistAuditionRoomState(payload);
+    const sentAt = new Date().toISOString();
+    mergeRoomNextSignal({ ...state, status: 'sent', sent_at: sentAt, updated_at: sentAt });
+    if (roomNextSignalsTableAvailable !== false) {
+      sb.from('production_room_next_signals').update({
+        status: 'sent',
+        sent_at: sentAt,
+        updated_at: sentAt,
+      }).eq('production_id', prodId).eq('room_key', roomKey).then(() => {});
+    }
+    await persistAuditionRoomState(payload, { localFallback: true });
     renderInRoomReadySignals();
   }
 
@@ -16475,6 +16614,7 @@
       'production_audition_notes',
       'production_audition_observations',
       'production_audition_room_states',
+      'production_room_next_signals',
     ];
 
     let ch = sb.channel(`production-auditions-${prodId}`);
@@ -16489,6 +16629,7 @@
       if (status === 'SUBSCRIBED') {
         setLiveIndicator('live');
         loadAuditionRoomStates({ force: true }).catch(() => {});
+        loadRoomNextSignals({ force: true }).catch(() => {});
         console.log('[BTS] realtime live');
       } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
         setLiveIndicator('offline');
@@ -16506,11 +16647,11 @@
       if (!prodId) return;
       try {
         if (teamAccessMode) {
-          await Promise.all([refreshAuditionsCheckInUi(), refreshAuditionTeamData(), loadAuditionRoomStates({ force: true })]);
+          await Promise.all([refreshAuditionsCheckInUi(), refreshAuditionTeamData(), loadAuditionRoomStates({ force: true }), loadRoomNextSignals({ force: true })]);
           refreshPerfLightboxContents();
         }
         else {
-          await loadAuditionRoomStates({ force: true });
+          await Promise.all([loadAuditionRoomStates({ force: true }), loadRoomNextSignals({ force: true })]);
           if (Date.now() - _auditionsFullPollAt > 10000) {
             _auditionsFullPollAt = Date.now();
             await refreshAuditionsLiveUi({ preserveModal: true });
