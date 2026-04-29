@@ -15557,6 +15557,7 @@
   const INROOM_NEXT_WAITING_LABEL_MS = 10000;
   const auditionRoomStates = new Map();
   const roomNextSignals = new Map();
+  const teamSentInNotificationKeys = new Set();
   let inRoomNextBroadcastChannel = null;
   const inRoomNextClientId = (() => {
     try {
@@ -16141,8 +16142,8 @@
   }
 
   function getAuditionRoomMeta(session = null, roomId = '') {
-    const safeRoomId = String(roomId || session?.room_id || session?.room || session?.location || 'main').trim() || 'main';
-    const roomName = session?.room_name || session?.room || session?.location || session?.name || sessionTypeLabel(session?.type || 'audition') || 'Audition Room';
+    const safeRoomId = String(roomId || session?.room_id || session?.room || 'main').trim() || 'main';
+    const roomName = session?.room_name || session?.room || session?.name || sessionTypeLabel(session?.type || 'audition') || 'Audition Room';
     return {
       roomId: safeRoomId,
       roomKey: `session:${session?.id || 'general'}:room:${safeRoomId}`,
@@ -16151,9 +16152,24 @@
     };
   }
 
+  function notifyTeamPerformerSentIn(row) {
+    if (!teamAccessMode || !row || row.status !== 'in_progress') return;
+    if (!row.current_applicant_id && !row.current_group_label) return;
+    const timestamp = row.sent_at || row.entered_at || row.updated_at || '';
+    const sentAt = Date.parse(timestamp);
+    if (!sentAt || Date.now() - sentAt > 30000) return;
+    const key = `${row.room_key || 'room'}:${row.current_applicant_id || row.current_group_key || row.current_group_label || 'next'}:${timestamp}`;
+    if (teamSentInNotificationKeys.has(key)) return;
+    teamSentInNotificationKeys.add(key);
+    const app = allApplicants.find(candidate => String(candidate.id) === String(row.current_applicant_id || ''));
+    const label = row.current_group_label || (app ? appDisplayName(app) : 'The next performer');
+    showToast(`${label} has been sent in.`);
+  }
+
   function mergeAuditionRoomState(row) {
     if (!row?.room_key) return;
     auditionRoomStates.set(row.room_key, row);
+    notifyTeamPerformerSentIn(row);
   }
 
   function mergeRoomNextSignal(row) {
@@ -16167,6 +16183,25 @@
 
   function getRoomNextSignal(roomKey) {
     return roomNextSignals.get(roomKey) || null;
+  }
+
+  function hasMultipleAuditionRooms() {
+    const roomKeys = new Set();
+    auditionRoomStates.forEach(state => {
+      const key = state?.room_id || state?.room_key || state?.room_name;
+      if (key) roomKeys.add(String(key));
+    });
+    roomNextSignals.forEach(state => {
+      if (state?.status !== 'ready') return;
+      const key = state?.room_id || state?.room_key || state?.room_name;
+      if (key) roomKeys.add(String(key));
+    });
+    return roomKeys.size > 1;
+  }
+
+  function roomReadyRequestTitle(state) {
+    if (!hasMultipleAuditionRooms()) return 'Please send in the next performer.';
+    return `${state?.room_name || 'Audition Room'} is ready.`;
   }
 
   function roomStateIsWaiting(state) {
@@ -16549,7 +16584,7 @@
       const nextApp = allApplicants.find(app => app.id === state.next_applicant_id);
       const nextName = state.next_label || state.next_group_label || (nextApp ? appDisplayName(nextApp) : 'the next performer');
       return `<div class="inroom-next-request" id="inroom-next-request-${esc(state.room_key)}">
-        <div class="inroom-next-request-title">${esc(state.room_name || 'Audition Room')} is ready.</div>
+        <div class="inroom-next-request-title">${esc(roomReadyRequestTitle(state))}</div>
         <div class="inroom-next-request-body">
           Send in <strong>${esc(nextName)}</strong>.
         </div>
