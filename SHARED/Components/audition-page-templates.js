@@ -318,6 +318,7 @@
       cardBackHtml = '',
       scorePanelHtml = '',
       notesTextHtml = '',
+      nextButtonHtml = '',
       roleChipsHtml = ''
     } = config;
     const resolvedNotesTextHtml = notesTextHtml || (() => {
@@ -364,6 +365,7 @@
         <div class="inroom-right">${scorePanelHtml}</div>
         <div class="inroom-notes-card">
           <div class="inroom-notes-title">Quick Notes</div>
+          ${nextButtonHtml}
           ${resolvedNotesTextHtml}
         </div>
         ${generalClose}
