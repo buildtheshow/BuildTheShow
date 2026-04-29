@@ -5711,9 +5711,14 @@
     }
     .cbv2-mode-btn:hover { color: #5b3a86; }
     #cbv2-mode-btn-general { order: 1; }
-    #cbv2-mode-btn-callbacks { order: 3; }
+    #cbv2-mode-btn-callback-list { order: 3; }
     .cbv2-mode-btn.active {
       color: #2f214f;
+    }
+    .cbv2-callback-list-view {
+      padding: 1.25rem;
+      min-height: 620px;
+      background: #fff;
     }
 
     .cbv2-outer.callbacks-empty .cbv2-controls,
@@ -13234,10 +13239,10 @@
         <div id="cbv2-back-bar" style="display:none;"></div>
         <div id="cbv2-callbacks-back-bar" style="display:none;"></div>
         <div class="cbv2-outer" id="cbv2-outer">
-          <div class="cbv2-mode-bar" style="display:none;">
+          <div class="cbv2-mode-bar">
             <div class="cbv2-mode-toggle">
-              <button class="cbv2-mode-btn active" id="cbv2-mode-btn-general" onclick="setCastboardMode('general')">General Casting</button>
-              <button class="cbv2-mode-btn" id="cbv2-mode-btn-callbacks" onclick="setCastboardMode('callbacks')">Callbacks</button>
+              <button class="cbv2-mode-btn active" id="cbv2-mode-btn-general" onclick="setCastboardSubView('board')">Casting Board</button>
+              <button class="cbv2-mode-btn" id="cbv2-mode-btn-callback-list" onclick="setCastboardSubView('callbacklist')">Callback List</button>
             </div>
           </div>
           <div class="cbv2-controls">
@@ -13270,6 +13275,9 @@
           </div>
 
           <div class="cbv2-final-summary" id="cbv2-final-summary"></div>
+          <div class="cbv2-callback-list-view" id="cbv2-callback-list-view" style="display:none;">
+            <div style="text-align:center;padding:3rem 2rem;color:#9a90b0;font-size:0.875rem;">Refreshing callback list…</div>
+          </div>
 
           <div class="cbv2-body">
             <!-- Performers panel -->
@@ -20492,6 +20500,7 @@ If you have any questions, don't hesitate to reach out.
     closeMobileSidebar();
     switchProdTab('auditions');
     setSidebarSubmenuState('auditions', 'asub-casting');
+    cbv2SubView = 'board';
     setCastboardMode('general');
     switchAudTab('castboard');
   }
@@ -23967,7 +23976,7 @@ If you have any questions, don't hesitate to reach out.
 
   // Callback session: casting outcomes after callbacks have happened.
   function renderCallbacks() {
-    const targets = ['callbacks-list', 'cbpanel-performers-view', 'aud-session-callbacks-content']
+    const targets = ['callbacks-list', 'cbpanel-performers-view', 'aud-session-callbacks-content', 'cbv2-callback-list-view']
       .map(id => document.getElementById(id))
       .filter(Boolean);
     if (!targets.length) return;
@@ -24146,7 +24155,7 @@ If you have any questions, don't hesitate to reach out.
   function renderCallbacksFresh() {
     if (_renderCallbacksAfterRefresh) return;
     _renderCallbacksAfterRefresh = true;
-    const targets = ['callbacks-list', 'cbpanel-performers-view']
+    const targets = ['callbacks-list', 'cbpanel-performers-view', 'cbv2-callback-list-view']
       .map(id => document.getElementById(id))
       .filter(Boolean);
     targets.forEach(target => {
@@ -28151,6 +28160,7 @@ If you have any questions, don't hesitate to reach out.
   let cbv2CastLaterPersistenceDisabled = false;
   let cbv2LoadPromise = null;
   let cbv2Tab = 'general';
+  let cbv2SubView = 'board';
   let cbv2TouchSelectedAppId = null;
 
   function setCbv2Loading(message = 'Loading casting board...') {
@@ -28189,15 +28199,15 @@ If you have any questions, don't hesitate to reach out.
 
   function syncCbv2TabUi() {
     const generalBtn   = document.getElementById('cbv2-mode-btn-general');
-    const callbacksBtn = document.getElementById('cbv2-mode-btn-callbacks');
+    const callbackListBtn = document.getElementById('cbv2-mode-btn-callback-list');
     const boardTitle   = document.getElementById('cbv2-board-title');
     const backBar      = document.getElementById('cbv2-back-bar');
     const backBtn      = document.getElementById('cbv2-back-btn');
     const backLabel    = document.getElementById('cbv2-back-label');
     const backContext  = document.getElementById('cbv2-back-context');
     const activeMode   = getActiveCastingBoardMode();
-    if (generalBtn)   generalBtn.classList.toggle('active', cbv2Tab === 'general');
-    if (callbacksBtn) callbacksBtn.classList.toggle('active', cbv2Tab === 'callbacks');
+    if (generalBtn)      generalBtn.classList.toggle('active', cbv2SubView === 'board');
+    if (callbackListBtn) callbackListBtn.classList.toggle('active', cbv2SubView === 'callbacklist');
     if (boardTitle) {
       boardTitle.textContent = activeMode === 'callbacks'
         ? 'Callback Casting Board'
@@ -28219,6 +28229,31 @@ If you have any questions, don't hesitate to reach out.
       if (backLabel)  backLabel.textContent = 'Back to Auditions';
       if (backContext) backContext.textContent = activeMode === 'final' ? 'Final Casting Board' : 'General Casting Board';
     }
+  }
+
+  function syncCastboardSubView() {
+    const showList = cbv2SubView === 'callbacklist';
+    const listView = document.getElementById('cbv2-callback-list-view');
+    const controls = document.querySelector('#cbv2-outer > .cbv2-controls');
+    const summary = document.getElementById('cbv2-final-summary');
+    const body = document.querySelector('#cbv2-outer > .cbv2-body');
+    const floor = document.getElementById('cbv2-ensemble-floor');
+    if (listView) listView.style.display = showList ? '' : 'none';
+    if (controls) controls.style.display = showList ? 'none' : '';
+    if (summary) summary.style.display = showList ? 'none' : '';
+    if (body) body.style.display = showList ? 'none' : '';
+    if (floor) floor.style.display = showList ? 'none' : '';
+    syncCbv2TabUi();
+    if (showList) renderCallbacksFresh();
+  }
+
+  function setCastboardSubView(view) {
+    cbv2SubView = view === 'callbacklist' ? 'callbacklist' : 'board';
+    if (cbv2SubView === 'board') {
+      cbv2Tab = 'general';
+      renderActiveCastingBoard();
+    }
+    syncCastboardSubView();
   }
 
   function switchCallbacksPanel(view) {
@@ -29539,6 +29574,7 @@ If you have any questions, don't hesitate to reach out.
     // Keep the Callbacks panel in sync if it's currently visible
     const cbPanel = document.getElementById('aud-panel-callbacks');
     if (cbPanel && cbPanel.style.display !== 'none') renderCallbacksFresh();
+    syncCastboardSubView();
   }
 
   function renderActiveCastingBoard() {
