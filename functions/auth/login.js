@@ -15,14 +15,24 @@ export async function onRequestPost(context) {
     return Response.json({ message: 'Email and password are required.' }, { status: 400 });
   }
 
-  const response = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
-    method: 'POST',
-    headers: {
-      apikey: SUPABASE_ANON_KEY,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ email, password }),
-  });
+  let response;
+  try {
+    response = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
+      method: 'POST',
+      headers: {
+        apikey: SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ email, password }),
+      signal: AbortSignal.timeout(10000),
+    });
+  } catch (error) {
+    return Response.json(
+      { message: 'Login service is taking too long. Please try again.' },
+      { status: 504 }
+    );
+  }
   const payload = await response.json().catch(() => ({}));
   return Response.json(payload, { status: response.status });
 }
