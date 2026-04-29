@@ -246,10 +246,10 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script>
     const { createClient } = supabase;
-    const sb = createClient(
-      'https://tkmaiktxpwqfbgeojbnf.supabase.co',
-      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRrbWFpa3R4cHdxZmJnZW9qYm5mIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM3MzE4MTcsImV4cCI6MjA4OTMwNzgxN30.TkTZBNWUatk3Y6Vmfv1hIRR3DfVjgwauwa76Pf00J_8'
-    );
+    const SUPABASE_URL = 'https://tkmaiktxpwqfbgeojbnf.supabase.co';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRrbWFpa3R4cHdxZmJnZW9qYm5mIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM3MzE4MTcsImV4cCI6MjA4OTMwNzgxN30.TkTZBNWUatk3Y6Vmfv1hIRR3DfVjgwauwa76Pf00J_8';
+    const SUPABASE_AUTH_TIMEOUT = '__bts_supabase_auth_timeout__';
+    const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
     const errorMsg = document.getElementById('error-msg');
     const submitBtn = document.getElementById('submit-btn');
@@ -274,6 +274,59 @@
         timeoutId = setTimeout(() => reject(new Error(message)), ms);
       });
       return Promise.race([promise, timeout]).finally(() => clearTimeout(timeoutId));
+    }
+
+    async function directPasswordLogin(email, password) {
+      const response = await withTimeout(
+        fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
+          method: 'POST',
+          headers: {
+            apikey: SUPABASE_ANON_KEY,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ email, password }),
+        }),
+        12000,
+        'Login is taking too long. Please check your connection and try again.'
+      );
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        return {
+          data: null,
+          error: {
+            message: payload.error_description || payload.msg || payload.message || 'Invalid login credentials',
+          },
+        };
+      }
+      const { data, error } = await withTimeout(
+        sb.auth.setSession({
+          access_token: payload.access_token,
+          refresh_token: payload.refresh_token,
+        }),
+        8000,
+        'Login succeeded, but the session took too long to save.'
+      );
+      return {
+        data: {
+          user: data?.user || payload.user,
+          session: data?.session || payload,
+        },
+        error,
+      };
+    }
+
+    async function signIn(email, password) {
+      try {
+        return await withTimeout(
+          sb.auth.signInWithPassword({ email, password }),
+          6000,
+          SUPABASE_AUTH_TIMEOUT
+        );
+      } catch (err) {
+        if (err?.message !== SUPABASE_AUTH_TIMEOUT) throw err;
+        console.warn('[BTS] Supabase auth helper timed out; using direct auth fallback.');
+        return directPasswordLogin(email, password);
+      }
     }
 
     async function getOrganisationLanding(userId) {
@@ -319,11 +372,7 @@
       submitBtn.textContent = 'Logging in...';
 
       try {
-        const { data, error } = await withTimeout(
-          sb.auth.signInWithPassword({ email, password }),
-          12000,
-          'Login is taking too long. Please check your connection and try again.'
-        );
+        const { data, error } = await signIn(email, password);
 
         if (error) {
           showError(error.message);
