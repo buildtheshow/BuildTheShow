@@ -15666,7 +15666,6 @@
       })
       .catch(error => console.warn('[BTS] production slug check failed', error));
     setupRoomReadyBroadcast();
-    if (!teamAccessMode) startAuditionsPoll();
     // Check if is_public column exists — non-blocking, safe to run in background
     sb.from('production_events').select('is_public').eq('production_id', prodId).limit(1)
       .then(({ error }) => { if (!error) _hasIsPublicColumn = true; });
@@ -15681,6 +15680,7 @@
     const bootRouteNav = getWorkspaceNavStateFromRoute();
     const bootNav = bootRouteNav || loadWorkspaceNavState() || getDefaultWorkspaceNavState();
     const shouldHydrateAuditions = bootNav.prodTab === 'auditions' || bootNav.prodTab === 'castlist' || teamAccessMode;
+    syncAuditionsLiveLoop(bootNav);
     const criticalWorkspaceData = Promise.resolve();
     const backgroundWorkspaceData = criticalWorkspaceData.then(() => Promise.allSettled([
       loadAuditionConfig(),
@@ -15992,7 +15992,20 @@
     await refreshAuditionsCheckInUi();
   }
 
+  function shouldRunAuditionsLiveLoop(state = null) {
+    const nav = state || loadWorkspaceNavState() || {};
+    return !!teamAccessMode || nav.prodTab === 'auditions' || nav.prodTab === 'castlist';
+  }
+
+  function syncAuditionsLiveLoop(state = null) {
+    if (shouldRunAuditionsLiveLoop(state)) startAuditionsPoll();
+    else stopAuditionsPoll();
+  }
+
   function queueAuditionsRefresh(payload = null) {
+    const table = payload?.table || '';
+    const roomSignalTable = table === 'production_audition_room_states' || table === 'production_room_next_signals';
+    if (!teamAccessMode && !roomSignalTable && !shouldRunAuditionsLiveLoop()) return;
     clearTimeout(auditionsRefreshTimer);
     auditionsRefreshTimer = setTimeout(async () => {
       try {
@@ -16886,6 +16899,10 @@
     clearInterval(_auditionsPollTimer);
     _auditionsPollTimer = setInterval(async () => {
       if (!prodId) return;
+      if (!shouldRunAuditionsLiveLoop()) {
+        stopAuditionsPoll();
+        return;
+      }
       try {
         if (teamAccessMode) {
           await Promise.all([refreshAuditionsCheckInUi(), refreshAuditionTeamData(), loadAuditionRoomStates({ force: true }), loadRoomNextSignals({ force: true })]);
@@ -21118,6 +21135,7 @@ If you have any questions, don't hesitate to reach out.
     }
     closeMobileSidebar();
     saveWorkspaceNavState({ prodTab: id });
+    syncAuditionsLiveLoop({ prodTab: id });
     document.querySelectorAll('.prod-tab[data-tab]').forEach(el => {
       el.classList.toggle('active', el.dataset.tab === id);
     });
@@ -35037,10 +35055,10 @@ If you have any questions, don't hesitate to reach out.
         try { task(); } catch (error) { console.warn('[BTS] warmup task failed', error); }
       };
       const schedule = () => {
-        if ('requestIdleCallback' in window) window.requestIdleCallback(run, { timeout: 2200 + index * 250 });
+        if ('requestIdleCallback' in window) window.requestIdleCallback(run, { timeout: 4200 + index * 350 });
         else setTimeout(run, 0);
       };
-      setTimeout(schedule, 350 + index * 180);
+      setTimeout(schedule, 1600 + index * 250);
     });
   }
 
