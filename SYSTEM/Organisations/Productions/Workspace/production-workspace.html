@@ -9161,10 +9161,11 @@
       margin: 0 auto;
       padding: 2rem 1.5rem;
       background: #fff;
+      font-family: var(--bts-font);
     }
     .castlist-programme-title {
       text-align: center;
-      font-family: Georgia, 'Times New Roman', serif;
+      font-family: var(--bts-font);
       font-size: 1.35rem;
       font-weight: 700;
       letter-spacing: 0;
@@ -13381,18 +13382,9 @@
           <button class="btn-secondary" onclick="exportCastList()" style="font-size:0.8rem;">Export</button>
         </div>
         <div class="card" style="padding:0;overflow:hidden;">
-          <table class="castlist-table" id="cast-list-table">
-            <thead>
-              <tr>
-                <th style="padding-left:1.4rem;">Character / Grouping</th>
-                <th>Performer(s)</th>
-                <th>Role Type</th>
-              </tr>
-            </thead>
-            <tbody id="cast-list-tbody">
-              <tr><td colspan="3" style="text-align:center;padding:2.5rem;color:#9a90b0;">Add characters or groupings to build the cast list.</td></tr>
-            </tbody>
-          </table>
+          <div id="cast-list-programme-host">
+            <div style="text-align:center;padding:2.5rem;color:#9a90b0;">Add characters or groupings to build the cast list.</div>
+          </div>
         </div>
       </div>
 
@@ -30149,20 +30141,43 @@ If you have any questions, don't hesitate to reach out.
     return String(a?.name || '').localeCompare(String(b?.name || ''), undefined, { sensitivity: 'base' });
   }
 
-  function buildCastListRowsHtml() {
+  function getCastListCharacters() {
     const sortedChars = (characters || [])
       .filter(char => char && char.id)
-      .slice()
-      .sort(compareCastListCharacters);
+      .slice();
+    const hasEnsemble = sortedChars.some(char => castListCharacterSortRank(char) === 2);
+    if (!hasEnsemble) {
+      sortedChars.push({ id: '__ensemble__', name: 'Ensemble', role_type: 'Ensemble' });
+    }
+    return sortedChars.sort(compareCastListCharacters);
+  }
+
+  function getCastListPerformers(char) {
+    const assigned = cbv2Assignments
+      .filter(a => a.character_id === char.id && a.state === 'chosen')
+      .map(a => allApplicants.find(x => x.id === a.applicant_id))
+      .filter(Boolean);
+    const isEnsemble = castListCharacterSortRank(char) === 2;
+    const ensemble = isEnsemble && typeof getCbEnsemblePerformers === 'function'
+      ? getCbEnsemblePerformers()
+      : [];
+    const seen = new Set();
+    return [...assigned, ...ensemble]
+      .filter(app => {
+        if (!app || seen.has(app.id)) return false;
+        seen.add(app.id);
+        return true;
+      })
+      .sort(compareApplicantsAlphabetically);
+  }
+
+  function buildCastListRowsHtml() {
+    const sortedChars = getCastListCharacters();
     if (!sortedChars.length) {
       return '<tr><td colspan="3" style="text-align:center;padding:2.5rem;color:#9a90b0;">Add characters or groupings to build the cast list.</td></tr>';
     }
     return sortedChars.map(char => {
-      const cast = cbv2Assignments
-        .filter(a => a.character_id === char.id && a.state === 'chosen')
-        .map(a => allApplicants.find(x => x.id === a.applicant_id))
-        .filter(Boolean)
-        .sort(compareApplicantsAlphabetically);
+      const cast = getCastListPerformers(char);
       const performerHtml = cast.length
         ? `<div class="castlist-performer-list">${cast.map(app => `<div>${esc(app.name || '—')}</div>`).join('')}</div>`
         : '<span class="castlist-open">Open</span>';
@@ -30175,20 +30190,13 @@ If you have any questions, don't hesitate to reach out.
   }
 
   function buildCastListProgrammeHtml() {
-    const sortedChars = (characters || [])
-      .filter(char => char && char.id)
-      .slice()
-      .sort(compareCastListCharacters);
+    const sortedChars = getCastListCharacters();
     if (!sortedChars.length) {
       return '<div style="text-align:center;padding:2.5rem;color:#9a90b0;">Add characters or groupings to build the cast list.</div>';
     }
     const rows = [];
     sortedChars.forEach(char => {
-      const cast = cbv2Assignments
-        .filter(a => a.character_id === char.id && a.state === 'chosen')
-        .map(a => allApplicants.find(x => x.id === a.applicant_id))
-        .filter(Boolean)
-        .sort(compareApplicantsAlphabetically);
+      const cast = getCastListPerformers(char);
       const names = cast.length ? cast.map(app => app.name || '—') : ['Open'];
       names.forEach(name => {
         rows.push(`<div class="castlist-programme-role">${esc(char.name || 'Unnamed')}</div><div class="castlist-programme-name${name === 'Open' ? ' castlist-programme-open' : ''}">${esc(name)}</div>`);
@@ -30203,28 +30211,37 @@ If you have any questions, don't hesitate to reach out.
   function renderCastListViewInto(viewId) {
     const view = document.getElementById(viewId);
     if (!view) return;
-    view.innerHTML = buildCastListProgrammeHtml();
+    view.innerHTML = `<div class="card" style="padding:0;overflow:hidden;">
+      <table class="castlist-table">
+        <thead>
+          <tr>
+            <th style="padding-left:1.4rem;">Character / Grouping</th>
+            <th>Performer(s)</th>
+            <th>Role Type</th>
+          </tr>
+        </thead>
+        <tbody>${buildCastListRowsHtml()}</tbody>
+      </table>
+    </div>`;
   }
 
   function renderCastList() {
+    const programmeHost = document.getElementById('cast-list-programme-host');
+    if (programmeHost) {
+      programmeHost.innerHTML = buildCastListProgrammeHtml();
+      return;
+    }
     const tbody = document.getElementById('cast-list-tbody');
     if (!tbody) return;
     tbody.innerHTML = buildCastListRowsHtml();
   }
 
   function exportCastList() {
-    const sortedChars = (characters || [])
-      .filter(char => char && char.id)
-      .slice()
-      .sort(compareCastListCharacters);
+    const sortedChars = getCastListCharacters();
     if (!sortedChars.length) { showToast('No characters added yet.', true); return; }
     const rows = [['Character / Grouping', 'Performer(s)', 'Role Type']];
     sortedChars.forEach(char => {
-      const names = cbv2Assignments
-        .filter(a => a.character_id === char.id && a.state === 'chosen')
-        .map(a => allApplicants.find(x => x.id === a.applicant_id)?.name || '')
-        .filter(Boolean)
-        .join('; ');
+      const names = getCastListPerformers(char).map(app => app.name || '').filter(Boolean).join('; ');
       rows.push([char.name || '', names || 'Open', char.role_type || '']);
     });
     const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
