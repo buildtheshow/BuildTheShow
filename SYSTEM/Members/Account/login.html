@@ -268,21 +268,37 @@
       submitBtn.textContent = 'Log In';
     }
 
+    function withTimeout(promise, ms, message) {
+      let timeoutId;
+      const timeout = new Promise((_, reject) => {
+        timeoutId = setTimeout(() => reject(new Error(message)), ms);
+      });
+      return Promise.race([promise, timeout]).finally(() => clearTimeout(timeoutId));
+    }
+
     async function getOrganisationLanding(userId) {
-      const { data: orgs, error } = await sb.from('organizations')
-        .select('slug')
-        .eq('admin_id', userId)
-        .limit(1);
+      const { data: orgs, error } = await withTimeout(
+        sb.from('organizations')
+          .select('slug')
+          .eq('admin_id', userId)
+          .limit(1),
+        8000,
+        'The organisation lookup is taking too long.'
+      );
       if (error) throw error;
       if (!orgs || orgs.length === 0) return '/org/setup';
       return orgs[0]?.slug ? `/${encodeURIComponent(orgs[0].slug)}/ORG` : '/org/dashboard';
     }
 
     async function getMemberLanding(userId) {
-      const { data: profiles, error } = await sb.from('profiles')
-        .select('id')
-        .eq('user_id', userId)
-        .limit(1);
+      const { data: profiles, error } = await withTimeout(
+        sb.from('profiles')
+          .select('id')
+          .eq('user_id', userId)
+          .limit(1),
+        8000,
+        'The profile lookup is taking too long.'
+      );
       if (error) throw error;
       return (profiles && profiles.length > 0) ? '/member' : '/member/profile/create';
     }
@@ -303,7 +319,11 @@
       submitBtn.textContent = 'Logging in...';
 
       try {
-        const { data, error } = await sb.auth.signInWithPassword({ email, password });
+        const { data, error } = await withTimeout(
+          sb.auth.signInWithPassword({ email, password }),
+          12000,
+          'Login is taking too long. Please check your connection and try again.'
+        );
 
         if (error) {
           showError(error.message);
@@ -350,7 +370,7 @@
         }
       } catch (err) {
         console.error('[BTS] login redirect failed', err);
-        showError('You are logged in, but we could not open your dashboard. Please try again.');
+        showError(err?.message || 'We could not finish logging you in. Please try again.');
         resetSubmitButton();
       }
     });
