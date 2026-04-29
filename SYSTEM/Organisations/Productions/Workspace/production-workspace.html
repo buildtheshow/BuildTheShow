@@ -16059,8 +16059,12 @@
   let _auditionsFullPollAt     = 0;
   let auditionRoomStateTableAvailable = null;
   let auditionRoomStatesLoadedAt = 0;
+  let auditionRoomStatesRetryAfter = 0;
+  let auditionRoomStatesWarningShown = false;
   let roomNextSignalsTableAvailable = null;
   let roomNextSignalsLoadedAt = 0;
+  let roomNextSignalsRetryAfter = 0;
+  let roomNextSignalsWarningShown = false;
   const INROOM_NEXT_WAITING_LABEL_MS = 10000;
   const auditionRoomStates = new Map();
   const roomNextSignals = new Map();
@@ -16134,7 +16138,6 @@
     sb.from('production_events').select('is_public').eq('production_id', prodId).limit(1)
       .then(({ error }) => { if (!error) _hasIsPublicColumn = true; });
     renderProdHeader();
-    if (window.PageLoader) window.PageLoader.hide();
     prefillSettings();
     applyModuleVisibility();
     if (params.get('openAiImport') === 'true') {
@@ -16142,10 +16145,17 @@
     }
     // Calendar initialises lazily when the Calendar tab is opened (see switchProdTab)
     // Checklists load on tab open
-    loadAuditionConfig();
-    loadSlots();
-    loadApplicants({ skipRender: true, skipCastingSync: true });
-    Promise.all([loadAudSessions(), loadAuditionAuthoredNotes(), loadAuditionObservations(), loadAuditionRoomStates({ force: true }), loadRoomNextSignals({ force: true })]).then(() => {
+    const initialWorkspaceData = Promise.allSettled([
+      loadAuditionConfig(),
+      loadSlots(),
+      loadApplicants({ skipRender: true, skipCastingSync: true }),
+      loadAudSessions(),
+      loadAuditionAuthoredNotes(),
+      loadAuditionObservations(),
+      loadAuditionRoomStates({ force: true }),
+      loadRoomNextSignals({ force: true }),
+    ]);
+    initialWorkspaceData.then(() => {
       if (!inRoomApplicantId) return;
       try {
         if (document.getElementById('adtab-inroom')?.style.display !== 'none') renderInRoomPage(inRoomApplicantId);
@@ -16217,6 +16227,11 @@
     setupAuditionsRealtime();
     setupEmailTemplatesRealtime();
     handleMobileSidebarViewport();
+    initialWorkspaceData.finally(() => {
+      setTimeout(() => {
+        if (window.PageLoader) window.PageLoader.hide();
+      }, 180);
+    });
     setTimeout(() => {
       replaceWorkspaceHistoryState();
       workspaceHistoryReady = true;
@@ -16637,7 +16652,8 @@
   }
 
   async function loadAuditionRoomStates(options = {}) {
-    if (!prodId || (auditionRoomStateTableAvailable === false && !options.force)) return [];
+    if (!prodId) return [];
+    if (auditionRoomStateTableAvailable === false && Date.now() < auditionRoomStatesRetryAfter) return [];
     const { force = false, maxAge = 4000 } = options;
     if (!force && auditionRoomStatesLoadedAt && Date.now() - auditionRoomStatesLoadedAt < maxAge) return [...auditionRoomStates.values()];
     try {
@@ -16659,7 +16675,11 @@
       return data || [];
     } catch (error) {
       auditionRoomStateTableAvailable = false;
-      console.warn('[BTS] audition room states unavailable. Run the room states Supabase migration.', error);
+      auditionRoomStatesRetryAfter = Date.now() + 60000;
+      if (!auditionRoomStatesWarningShown) {
+        auditionRoomStatesWarningShown = true;
+        console.warn('[BTS] audition room states unavailable. Run the room states Supabase migration.', error);
+      }
       return [];
     }
   }
@@ -16691,7 +16711,8 @@
   }
 
   async function loadRoomNextSignals(options = {}) {
-    if (!prodId || (roomNextSignalsTableAvailable === false && !options.force)) return [];
+    if (!prodId) return [];
+    if (roomNextSignalsTableAvailable === false && Date.now() < roomNextSignalsRetryAfter) return [];
     const { force = false, maxAge = 2000 } = options;
     if (!force && roomNextSignalsLoadedAt && Date.now() - roomNextSignalsLoadedAt < maxAge) return [...roomNextSignals.values()];
     try {
@@ -16713,7 +16734,11 @@
       return data || [];
     } catch (error) {
       roomNextSignalsTableAvailable = false;
-      console.warn('[BTS] room next signals unavailable. Run the next signals Supabase migration.', error);
+      roomNextSignalsRetryAfter = Date.now() + 60000;
+      if (!roomNextSignalsWarningShown) {
+        roomNextSignalsWarningShown = true;
+        console.warn('[BTS] room next signals unavailable. Run the next signals Supabase migration.', error);
+      }
       return [];
     }
   }
@@ -16721,6 +16746,7 @@
   async function persistRoomNextSignal(signal) {
     mergeRoomNextSignal(signal);
     renderInRoomReadySignals();
+    if (roomNextSignalsTableAvailable === false && Date.now() < roomNextSignalsRetryAfter) return signal;
     try {
       let data, error;
       if (teamAccessMode && teamAccessSessionToken) {
@@ -16756,7 +16782,11 @@
       return saved || signal;
     } catch (error) {
       roomNextSignalsTableAvailable = false;
-      console.error('[BTS] room next signal save failed:', error);
+      roomNextSignalsRetryAfter = Date.now() + 60000;
+      if (!roomNextSignalsWarningShown) {
+        roomNextSignalsWarningShown = true;
+        console.warn('[BTS] room next signal save unavailable. Run the next signals Supabase migration.', error);
+      }
       return signal;
     }
   }
