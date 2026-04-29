@@ -321,6 +321,7 @@
       scorePanelHtml = '',
       notesTextHtml = '',
       nextButtonHtml = '',
+      callbackCharactersHtml = '',
       roleChipsHtml = ''
     } = config;
     const resolvedNotesTextHtml = notesTextHtml || (() => {
@@ -348,6 +349,35 @@
           <h2 class="inroom-primary-title">${esc(currentSession?.name || 'General Auditions')}</h2>`
       : '';
     const generalClose = isGeneralAuditionInRoom ? '</div>' : '';
+
+    if (currentSession?.type === 'callback') {
+      return `
+        ${trayHtml}
+        <div class="inroom-main inroom-main-callback">
+          <div class="inroom-callback-top">
+            <div class="inroom-card-stage inroom-callback-card-stage">
+              ${renderCastingCardFlipShellTemplate({
+                shellClass: 'inroom-flip',
+                id: 'inroom-flip-card',
+                flipped: inRoomFlipOpen,
+                frontHtml: cardFrontHtml,
+                backHtml: cardBackHtml,
+                frontClick: 'toggleInRoomFlip()',
+                backClick: buildCastingCardBackClickHandler('toggleInRoomFlip')
+              })}
+            </div>
+            <div class="inroom-callback-characters">
+              <div class="inroom-roles-title">Characters</div>
+              <div class="inroom-callback-character-grid">${callbackCharactersHtml || scorePanelHtml}</div>
+            </div>
+          </div>
+          <div class="inroom-notes-card inroom-callback-notes-card">
+            <div class="inroom-notes-title">Notes</div>
+            ${nextButtonHtml}
+            ${resolvedNotesTextHtml}
+          </div>
+        </div>`;
+    }
 
     return `
         ${trayHtml}

@@ -8331,6 +8331,66 @@
       align-items: center;
       min-width: 0;
     }
+    .inroom-main-callback {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 1.25rem;
+      align-items: stretch;
+      max-width: 1120px;
+      margin: 0 auto;
+    }
+    .inroom-callback-top {
+      display: grid;
+      grid-template-columns: minmax(260px, 360px) minmax(280px, 1fr);
+      gap: 2rem;
+      align-items: start;
+      min-height: 520px;
+      padding: 1.4rem;
+      border: 1.5px solid rgba(87,46,136,0.1);
+      border-radius: 14px;
+      background: #fff;
+    }
+    .inroom-callback-card-stage {
+      width: min(100%, 330px);
+      justify-self: center;
+    }
+    .inroom-callback-characters {
+      min-width: 0;
+      padding-top: 0.3rem;
+    }
+    .inroom-callback-character-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.65rem;
+      align-content: flex-start;
+      margin-top: 1rem;
+    }
+    .inroom-callback-role-chip {
+      border: 1.5px solid rgba(87,46,136,0.16);
+      border-radius: 8px;
+      background: #fff;
+      color: #352756;
+      font-family: var(--bts-font);
+      font-size: 0.92rem;
+      font-weight: 850;
+      padding: 0.55rem 0.78rem;
+      cursor: pointer;
+      line-height: 1.15;
+      min-height: 40px;
+      max-width: 100%;
+    }
+    .inroom-callback-role-chip:hover,
+    .inroom-callback-role-chip.active {
+      background: var(--session-accent-08, rgba(87,46,136,0.08));
+      border-color: var(--session-accent, #572e88);
+      color: var(--session-accent, #572e88);
+    }
+    .inroom-callback-notes-card {
+      min-height: 240px;
+    }
+    .inroom-callback-notes-card .inroom-notes-text {
+      min-height: 170px;
+    }
     .inroom-roles-select {
       font-size: 0.78rem;
       font-family: var(--bts-font);
@@ -11298,6 +11358,33 @@
           "roles";
         gap: 1rem;
         align-items: stretch;
+      }
+
+      .inroom-main-callback {
+        gap: 0.85rem;
+      }
+
+      .inroom-callback-top {
+        grid-template-columns: 1fr;
+        min-height: 0;
+        gap: 1rem;
+        padding: 0 !important;
+        border: 0;
+        background: transparent;
+      }
+
+      .inroom-callback-card-stage {
+        width: min(100%, 280px);
+      }
+
+      .inroom-callback-character-grid {
+        gap: 0.45rem;
+      }
+
+      .inroom-callback-role-chip {
+        font-size: 0.82rem;
+        min-height: 36px;
+        padding: 0.45rem 0.58rem;
       }
 
       .inroom-primary-container {
@@ -31915,6 +32002,34 @@ If you have any questions, don't hesitate to reach out.
     }).join('');
   }
 
+  function renderCallbackCharacterChips(app) {
+    const sessionId = getCurrentInRoomSession()?.id || null;
+    const callbackRoles = getGeneralCallbackInviteRolesForApp(app.id)
+      .map(char => ({ char, decision: applicantInRoomRoleDecision(app, sessionId, char.id) }))
+      .sort((a, b) => (a.char.name || '').localeCompare(b.char.name || ''));
+    if (!callbackRoles.length) {
+      return `<div class="inroom-considered-empty">No callback characters are attached to this performer yet.</div>`;
+    }
+    return callbackRoles.map(({ char, decision }) => {
+      const safeCharId = esc(char.id);
+      const safeAppId = esc(app.id);
+      const active = decision ? ' active' : '';
+      const label = char.role_type ? `${char.name || 'Unnamed'} · ${char.role_type}` : (char.name || 'Unnamed');
+      return `<button type="button" class="inroom-callback-role-chip${active}" onclick="openCallbackCharacterNotes(event,'${safeAppId}','${esc(sessionId || '')}','${safeCharId}')">${esc(label)}</button>`;
+    }).join('');
+  }
+
+  function openCallbackCharacterNotes(event, appId, sessionId, charId) {
+    const textarea = document.getElementById('inroom-notes');
+    const char = characters.find(c => String(c.id) === String(charId));
+    if (textarea) {
+      textarea.focus();
+      textarea.placeholder = char?.name ? `Notes for ${char.name}...` : 'Notes...';
+    }
+    document.querySelectorAll('.inroom-callback-role-chip').forEach(btn => btn.classList.remove('active'));
+    event?.currentTarget?.classList?.add('active');
+  }
+
   function renderGeneralInRoomCheckedStrip(openFn = 'openAuditionSessionInRoom', label = 'Checked In') {
     try {
       const session = getCurrentInRoomSession() || getActiveAuditionNavSession() || getSelectedAuditionSession();
@@ -32027,6 +32142,7 @@ If you have any questions, don't hesitate to reach out.
       scorePanelHtml,
       notesTextHtml,
       nextButtonHtml: buildInRoomNextButtonHtml(app, currentSession),
+      callbackCharactersHtml: renderCallbackCharacterChips(app),
       roleChipsHtml: renderInRoomRoleChips(app)
     });
     requestAnimationFrame(() => requestAnimationFrame(() => syncInRoomRightPanelHeight(el)));
@@ -32575,7 +32691,7 @@ If you have any questions, don't hesitate to reach out.
     const isDanceCallInRoom = tool === 'inroom' && session.type === 'dance_call';
     const isGeneralAuditionInRoomWorkspace = tool === 'inroom' && session.type === 'audition';
     const isClassicInRoomWorkspace = tool === 'inroom' && (session.type === 'audition' || session.type === 'callback');
-    const checkedInStripHtml = isGeneralAuditionInRoomWorkspace
+    const checkedInStripHtml = isClassicInRoomWorkspace
       ? renderGeneralInRoomCheckedStrip('openAuditionSessionInRoom', 'Checked In')
       : '';
     renderAuditionHeaderFrame();
