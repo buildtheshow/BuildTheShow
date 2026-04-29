@@ -354,25 +354,27 @@
       return `
         ${trayHtml}
         <div class="inroom-main inroom-main-callback">
-          <div class="inroom-callback-top">
-            <div class="inroom-card-stage inroom-callback-card-stage">
-              ${renderCastingCardFlipShellTemplate({
-                shellClass: 'inroom-flip',
-                id: 'inroom-flip-card',
-                flipped: inRoomFlipOpen,
-                frontHtml: cardFrontHtml,
-                backHtml: cardBackHtml,
-                frontClick: 'toggleInRoomFlip()',
-                backClick: buildCastingCardBackClickHandler('toggleInRoomFlip')
-              })}
+          <div class="inroom-callback-top-section">
+            <div class="inroom-callback-left">
+              <div class="inroom-card-stage inroom-callback-card-stage">
+                ${renderCastingCardFlipShellTemplate({
+                  shellClass: 'inroom-flip',
+                  id: 'inroom-flip-card',
+                  flipped: inRoomFlipOpen,
+                  frontHtml: cardFrontHtml,
+                  backHtml: cardBackHtml,
+                  frontClick: 'toggleInRoomFlip()',
+                  backClick: buildCastingCardBackClickHandler('toggleInRoomFlip')
+                })}
+              </div>
             </div>
-            <div class="inroom-callback-characters">
-              <div class="inroom-roles-title">Characters</div>
+            <div class="inroom-callback-right">
+              <div class="inroom-callback-heading">CHARACTERS</div>
               <div class="inroom-callback-character-grid">${callbackCharactersHtml || scorePanelHtml}</div>
             </div>
           </div>
-          <div class="inroom-notes-card inroom-callback-notes-card">
-            <div class="inroom-notes-title">Notes</div>
+          <div class="inroom-callback-notes-section">
+            <div class="inroom-notes-title">NOTES</div>
             ${nextButtonHtml}
             ${resolvedNotesTextHtml}
           </div>
