@@ -16056,10 +16056,12 @@
   let auditionsRealtimeChannel = null;
   let auditionsRefreshTimer    = null;
   let _auditionsPollTimer      = null;
+  let _auditionsFullPollAt     = 0;
   let auditionRoomStateTableAvailable = null;
   let auditionRoomStatesLoadedAt = 0;
   const INROOM_NEXT_WAITING_LABEL_MS = 10000;
   const auditionRoomStates = new Map();
+  let inRoomNextBroadcastChannel = null;
   const inRoomNextClientId = (() => {
     try {
       const key = 'bts-inroom-next-client';
@@ -16123,6 +16125,8 @@
     prod = data;
     await ensureProductionSlug();
     updateTeamUrlDisplays();
+    setupRoomReadyBroadcast();
+    if (!teamAccessMode) startAuditionsPoll();
     // Check if is_public column exists — non-blocking, safe to run in background
     sb.from('production_events').select('is_public').eq('production_id', prodId).limit(1)
       .then(({ error }) => { if (!error) _hasIsPublicColumn = true; });
@@ -16536,6 +16540,44 @@
     }, INROOM_NEXT_WAITING_LABEL_MS);
   }
 
+  function roomReadyBroadcastStorageKey() {
+    return `bts-room-ready-signal:${prodId || 'unknown'}`;
+  }
+
+  function handleRoomReadyBroadcast(message) {
+    const state = message?.state || message;
+    if (!state || String(state.production_id || '') !== String(prodId || '') || !state.room_key) return;
+    mergeAuditionRoomState(state);
+    renderInRoomReadySignals();
+  }
+
+  function setupRoomReadyBroadcast() {
+    if (inRoomNextBroadcastChannel || !prodId) return;
+    try {
+      inRoomNextBroadcastChannel = new BroadcastChannel(`bts-room-ready:${prodId}`);
+      inRoomNextBroadcastChannel.onmessage = event => handleRoomReadyBroadcast(event.data);
+    } catch {
+      inRoomNextBroadcastChannel = { postMessage() {} };
+    }
+    window.addEventListener('storage', event => {
+      if (event.key !== roomReadyBroadcastStorageKey() || !event.newValue) return;
+      try { handleRoomReadyBroadcast(JSON.parse(event.newValue)); } catch {}
+    });
+  }
+
+  function broadcastRoomReadySignal(state) {
+    if (!state || state.status !== 'ready_for_next') return;
+    const message = {
+      type: 'room_ready',
+      production_id: prodId,
+      sent_at: new Date().toISOString(),
+      state,
+    };
+    setupRoomReadyBroadcast();
+    try { inRoomNextBroadcastChannel?.postMessage(message); } catch {}
+    try { localStorage.setItem(roomReadyBroadcastStorageKey(), JSON.stringify(message)); } catch {}
+  }
+
   function getSessionQueue(session) {
     if (!session?.id) return getInRoomCheckedInApps();
     return getCheckInSessionApps(session, '', 'in');
@@ -16577,7 +16619,7 @@
   }
 
   async function loadAuditionRoomStates(options = {}) {
-    if (!prodId || auditionRoomStateTableAvailable === false) return [];
+    if (!prodId || (auditionRoomStateTableAvailable === false && !options.force)) return [];
     const { force = false, maxAge = 4000 } = options;
     if (!force && auditionRoomStatesLoadedAt && Date.now() - auditionRoomStatesLoadedAt < maxAge) return [...auditionRoomStates.values()];
     try {
@@ -16607,10 +16649,6 @@
   async function persistAuditionRoomState(payload) {
     mergeAuditionRoomState(payload);
     renderInRoomReadySignals();
-    if (auditionRoomStateTableAvailable === false) {
-      console.warn('[BTS] room state save skipped because the room states migration is not available yet.');
-      return payload;
-    }
     try {
       let data, error;
       if (teamAccessMode && teamAccessSessionToken) {
@@ -16639,11 +16677,13 @@
           .single());
       }
       if (error) throw error;
+      auditionRoomStateTableAvailable = true;
       const saved = Array.isArray(data) ? data[0] : data;
       if (saved) mergeAuditionRoomState(saved);
       renderInRoomReadySignals();
       return saved || payload;
     } catch (error) {
+      auditionRoomStateTableAvailable = false;
       console.error('[BTS] room state save failed:', error);
       showToast('Could not update room status.', true);
       throw error;
@@ -16674,6 +16714,7 @@
     }
     const payload = buildRoomStatePayload({ session, app, status: 'ready_for_next' });
     setInRoomNextButtonWaiting(buttonEl, 'Waiting for next performer...');
+    broadcastRoomReadySignal(payload);
     await persistAuditionRoomState(payload);
   }
 
@@ -16718,6 +16759,7 @@
       },
     });
     setInRoomNextButtonWaiting(buttonEl, 'Waiting for next group...');
+    broadcastRoomReadySignal(payload);
     await persistAuditionRoomState(payload);
   }
 
@@ -16854,9 +16896,13 @@
     _auditionsPollTimer = setInterval(async () => {
       if (!prodId) return;
       try {
-        await refreshAuditionsLiveUi({ preserveModal: true });
+        await loadAuditionRoomStates({ force: true });
+        if (Date.now() - _auditionsFullPollAt > 10000) {
+          _auditionsFullPollAt = Date.now();
+          await refreshAuditionsLiveUi({ preserveModal: true });
+        }
       } catch {}
-    }, 10000);
+    }, 2000);
   }
 
   function stopAuditionsPoll() {
