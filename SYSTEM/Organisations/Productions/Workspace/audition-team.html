@@ -17015,9 +17015,11 @@
       'production_events',
       'production_audition_notes',
       'production_audition_observations',
-      'production_audition_room_states',
-      'production_room_next_signals',
     ];
+    const includeRoomStatesRealtime = auditionRoomStateTableAvailable === true;
+    const includeNextSignalsRealtime = roomNextSignalsTableAvailable === true;
+    if (includeRoomStatesRealtime) TABLES.push('production_audition_room_states');
+    if (includeNextSignalsRealtime) TABLES.push('production_room_next_signals');
 
     let ch = sb.channel(`production-auditions-${prodId}`);
     TABLES.forEach(table => {
@@ -17031,8 +17033,15 @@
       if (status === 'SUBSCRIBED') {
         _realtimeReconnectAttempt = 0;
         setLiveIndicator('live');
-        loadAuditionRoomStates({ force: true }).catch(() => {});
-        loadRoomNextSignals({ force: true }).catch(() => {});
+        Promise.allSettled([
+          loadAuditionRoomStates({ force: true }),
+          loadRoomNextSignals({ force: true }),
+        ]).then(() => {
+          const shouldReconnectForRoomRealtime =
+            (!includeRoomStatesRealtime && auditionRoomStateTableAvailable === true) ||
+            (!includeNextSignalsRealtime && roomNextSignalsTableAvailable === true);
+          if (shouldReconnectForRoomRealtime) setupAuditionsRealtime();
+        });
         console.log('[BTS] realtime live');
       } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
         setLiveIndicator('offline');
