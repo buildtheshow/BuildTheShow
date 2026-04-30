@@ -127,6 +127,31 @@
     </div>`;
   }
 
+  function renderRoomReadyRequestTemplate(config) {
+    const {
+      esc,
+      roomKey = '',
+      title = '',
+      nextName = 'the next performer',
+      dismissOnclick = '',
+      sentOnclick = ''
+    } = config;
+    const safeRoomKey = esc(roomKey);
+    const safeDismissOnclick = String(dismissOnclick || `dismissInRoomReadySignal('${safeRoomKey}')`).replace(/"/g, '&quot;');
+    const safeSentOnclick = String(sentOnclick || `markNextPerformerSentIn('${safeRoomKey}')`).replace(/"/g, '&quot;');
+
+    return `<div class="inroom-next-request" id="inroom-next-request-${safeRoomKey}">
+      <div class="inroom-next-request-title">${esc(title)}</div>
+      <div class="inroom-next-request-body">
+        Send in <strong>${esc(nextName)}</strong>.
+      </div>
+      <div class="inroom-next-request-actions">
+        <button type="button" onclick="${safeDismissOnclick}">Dismiss</button>
+        <button type="button" class="primary" onclick="${safeSentOnclick}">Sent In</button>
+      </div>
+    </div>`;
+  }
+
   function renderPortalLoginTemplate(config) {
     const { esc, message = '' } = config;
     return `
@@ -416,6 +441,7 @@
     renderCastingCardFlipShellTemplate,
     renderCharacterListTemplate,
     renderCheckedInStripTemplate,
+    renderRoomReadyRequestTemplate,
     renderPortalLoginTemplate,
     renderPortalSessionFrameTemplate,
     renderEmptyStateTemplate,
@@ -480,6 +506,14 @@
     tags: { area: 'auditions', page: 'in-room', component: 'checked-in-strip' },
     priority: 90,
     render: renderCheckedInStripTemplate
+  });
+
+  api.registerTemplate({
+    id: 'auditions.in-room.room-ready-request',
+    name: 'In The Room Room-Ready Request',
+    tags: { area: 'auditions', page: 'in-room', component: 'room-ready-request' },
+    priority: 88,
+    render: renderRoomReadyRequestTemplate
   });
 
   api.registerTemplate({

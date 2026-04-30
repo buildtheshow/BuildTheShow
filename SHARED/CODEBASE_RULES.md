@@ -134,6 +134,21 @@ These are non-negotiable platform rules for how the system should be shaped and 
 5. If something behaves like a section, it should be a real page.
 6. Every page must answer who it is for, what the user does there, and what happens next.
 
+### Component Architecture
+
+1. Build reusable components, not page-local lookalikes.
+2. Before creating any UI, search for an existing shared component, template, helper, or class that already owns that pattern.
+3. If the component exists, reuse it or update it at the source.
+4. If the component does not exist, create it once in a shared location and call it from every page that needs it.
+5. Pages are assemblers: they choose components, position them, and pass data.
+6. Pages must not redefine component HTML, duplicate component CSS, hardcode fake variants, or create inline copies of shared UI.
+7. Components must accept data as input and render from that data.
+8. Components must not hardcode production names, performer names, roles, states, or page-specific content.
+9. Use controlled variants inside the existing component when one pattern needs multiple supported looks.
+10. Do not create duplicate names such as `-v2`, `-new`, `-final`, or page-specific versions for the same real component.
+11. Template Test must preview the real shared components, not rebuilt examples that only look similar.
+12. A design change should update the shared component so every page using it changes together.
+
 ### Data
 
 1. Keep one source of truth.
