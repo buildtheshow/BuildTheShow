@@ -12,7 +12,7 @@
     const s = document.createElement('link');
     s.id   = 'member-sidebar-css';
     s.rel  = 'stylesheet';
-    s.href = '/ASSETS/Styles (CSS)/member-sidebar.css';
+    s.href = '/ASSETS/styles/member-sidebar.css';
     document.head.appendChild(s);
   }
 
