@@ -73,11 +73,27 @@
       appId = '',
       charId = '',
       name = 'Unnamed',
-      stateClass = ''
+      stateClass = '',
+      variant = 'body',
+      namePlacement = variant,
+      bodyHtml = ''
     } = config;
+    const placement = namePlacement === 'header' ? 'header' : 'body';
+    const safeAppId = esc(appId);
+    const safeCharId = esc(charId);
+    const safeName = esc(name);
+    const safeStateClass = esc(stateClass).trim();
+    const className = ['inroom-role-chip', `inroom-role-chip--${placement}`, safeStateClass]
+      .filter(Boolean)
+      .join(' ');
 
-    return `<button type="button" class="inroom-role-chip ${stateClass}" data-app-id="${esc(appId)}" data-char-id="${esc(charId)}" onclick="toggleInRoomRole(this,'${esc(appId)}','${esc(charId)}')">
-        <div class="inroom-role-chip-title">${esc(name)}</div>
+    const contentHtml = placement === 'header'
+      ? `<div class="inroom-role-chip-header"><div class="inroom-role-chip-header-title">${safeName}</div></div>
+        <div class="inroom-role-chip-body">${bodyHtml || ''}</div>`
+      : `<div class="inroom-role-chip-title">${safeName}</div>${bodyHtml || ''}`;
+
+    return `<button type="button" class="${className}" data-app-id="${safeAppId}" data-char-id="${safeCharId}" onclick="toggleInRoomRole(this,'${safeAppId}','${safeCharId}')">
+        ${contentHtml}
       </button>`;
   }
 
