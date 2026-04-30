@@ -15623,6 +15623,7 @@
   let applicantSortKey = null;
   let applicantSortDir = 'asc';
   let allApplicants = [];
+  let applicantsLoadedAt = 0;
   let allAuditionBookings = [];
   let _hasIsPublicColumn = false; // set true once we confirm the column exists
   let allSlots      = [];
@@ -15631,6 +15632,7 @@
   let _auditionsPollTimer      = null;
   let _auditionsFullPollAt     = 0;
   let _auditionsLiveRefreshRunning = false;
+  let _auditionsVisibilityBound = false;
   let _realtimeReconnectAttempt = 0;
   let _inRoomSaveInProgress    = 0;
   let auditionRoomStateTableAvailable = null;
@@ -15644,6 +15646,7 @@
   const INROOM_NEXT_WAITING_LABEL_MS = 10000;
   const AUDITIONS_SIGNAL_POLL_MS = 10000;
   const AUDITIONS_FULL_POLL_MS = 30000;
+  const AUDITIONS_DATA_CACHE_MS = 15000;
   const AUDITIONS_REALTIME_RECONNECT_BASE_MS = 5000;
   const AUDITIONS_REALTIME_RECONNECT_MAX_MS = 60000;
   const ROOM_SIGNAL_RETRY_MS = 60000;
@@ -15836,6 +15839,7 @@
     if (hasExplicitNav) scheduleWorkspaceScrollRestore();
 
     setupAuditionsRealtime();
+    setupAuditionsVisibilityHandler();
     setupEmailTemplatesRealtime();
     handleMobileSidebarViewport();
     criticalWorkspaceData.finally(() => {
@@ -15864,7 +15868,15 @@
         ? document.getElementById('reschedule-slots')?.style.display !== 'none'
         : false;
 
-      await Promise.all([loadAudSessions(), loadApplicants(), loadSlots(), loadAuditionAuthoredNotes(), loadAuditionObservations(), loadAuditionRoomStates({ force: true }), loadRoomNextSignals({ force: true })]);
+      await Promise.all([
+        loadAudSessions({ maxAge: AUDITIONS_DATA_CACHE_MS }),
+        loadApplicants({ maxAge: AUDITIONS_DATA_CACHE_MS }),
+        loadSlots({ maxAge: AUDITIONS_DATA_CACHE_MS }),
+        loadAuditionAuthoredNotes({ maxAge: AUDITIONS_DATA_CACHE_MS }),
+        loadAuditionObservations({ maxAge: AUDITIONS_DATA_CACHE_MS }),
+        loadAuditionRoomStates({ maxAge: AUDITIONS_DATA_CACHE_MS }),
+        loadRoomNextSignals({ maxAge: AUDITIONS_DATA_CACHE_MS }),
+      ]);
       try { renderApplicants(); } catch {}
       try { renderApplicantsMirror(); } catch {}
       try { renderSlots(); } catch {}
@@ -16057,12 +16069,30 @@
     return !!teamAccessMode || nav.prodTab === 'auditions' || nav.prodTab === 'castlist';
   }
 
+  function shouldRunVisibleAuditionsLiveLoop(state = null) {
+    return document.visibilityState !== 'hidden' && shouldRunAuditionsLiveLoop(state);
+  }
+
   function syncAuditionsLiveLoop(state = null) {
-    if (shouldRunAuditionsLiveLoop(state)) startAuditionsPoll();
+    if (shouldRunVisibleAuditionsLiveLoop(state)) startAuditionsPoll();
     else stopAuditionsPoll();
   }
 
+  function setupAuditionsVisibilityHandler() {
+    if (_auditionsVisibilityBound) return;
+    _auditionsVisibilityBound = true;
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden') {
+        stopAuditionsPoll();
+        return;
+      }
+      syncAuditionsLiveLoop();
+      if (shouldRunAuditionsLiveLoop()) queueAuditionsRefresh();
+    });
+  }
+
   function queueAuditionsRefresh(payload = null) {
+    if (document.visibilityState === 'hidden') return;
     const table = payload?.table || '';
     const roomSignalTable = table === 'production_audition_room_states' || table === 'production_room_next_signals';
     if (!teamAccessMode && !roomSignalTable && !shouldRunAuditionsLiveLoop()) return;
@@ -17023,6 +17053,7 @@
     clearInterval(_auditionsPollTimer);
     _auditionsPollTimer = setInterval(async () => {
       if (!prodId) return;
+      if (document.visibilityState === 'hidden') return;
       if (!shouldRunAuditionsLiveLoop()) {
         stopAuditionsPoll();
         return;
@@ -20219,6 +20250,8 @@ If you have any questions, don't hesitate to reach out.
   let auditionTeamMembers = [];
   let auditionAuthoredNotes = [];
   let auditionObservations = [];
+  let auditionAuthoredNotesLoadedAt = 0;
+  let auditionObservationsLoadedAt = 0;
   let editingCreativeRoleIndex = null;
   const TEAM_NOTE_COLOR_GROUPS = [
     { family: 'Red',     base: '#df3b2f', dark: '#8d221b', light: '#f9d8d3' },
@@ -22127,6 +22160,7 @@ If you have any questions, don't hesitate to reach out.
 
   // ── Audition Session Card System ─────────────────────────────
   let audSessions = [];
+  let audSessionsLoadedAt = 0;
   let audSlots = {};        // { [sessionId]: slot[] }
   const audCollapsed = new Set(); // session IDs that are collapsed
   const audCollapseInitialized = new Set(); // session IDs that have received their default collapse state
@@ -23029,7 +23063,9 @@ If you have any questions, don't hesitate to reach out.
     syncAuditionEvents();
   }
 
-  async function loadAudSessions() {
+  async function loadAudSessions(options = {}) {
+    const { maxAge = 0 } = options;
+    if (maxAge && audSessionsLoadedAt && Date.now() - audSessionsLoadedAt < maxAge) return audSessions;
     if (!auditionConfig) { renderAudSessions(); return; }
     const { data: sessions } = await sb.from('audition_sessions')
       .select('*').eq('production_id', prodId).order('sort_order', { ascending: true });
@@ -23068,6 +23104,7 @@ If you have any questions, don't hesitate to reach out.
       audSlots = {};
     }
     // Initialize block state from session data
+    audSessionsLoadedAt = Date.now();
     audSessions.forEach(s => _initBlocks(s));
     primeAudCollapsedState(audSessions);
     renderAudSessions();
@@ -23494,13 +23531,19 @@ If you have any questions, don't hesitate to reach out.
   }
 
   // ── Slots ─────────────────────────────────────────────
-  async function loadSlots() {
+  let allSlotsLoadedAt = 0;
+
+  async function loadSlots(options = {}) {
+    const { maxAge = 0 } = options;
+    if (maxAge && allSlotsLoadedAt && Date.now() - allSlotsLoadedAt < maxAge) return allSlots;
     try {
       const { data } = await sb.from('audition_slots')
         .select('*').eq('production_id', prodId).order('date').order('start_time');
       allSlots = data || [];
+      allSlotsLoadedAt = Date.now();
     } catch { allSlots = []; }
     renderSlots();
+    return allSlots;
   }
 
   function renderSlots() {
@@ -24140,7 +24183,8 @@ If you have any questions, don't hesitate to reach out.
   }
 
   async function loadApplicants(options = {}) {
-    const { skipRender = false, skipCastingSync = false } = options;
+    const { skipRender = false, skipCastingSync = false, maxAge = 0 } = options;
+    if (maxAge && applicantsLoadedAt && Date.now() - applicantsLoadedAt < maxAge) return allApplicants;
     try {
       const [applicationsRes, bookingsRes] = await Promise.all([
         sb.from('audition_applications')
@@ -24163,6 +24207,7 @@ If you have any questions, don't hesitate to reach out.
         mergedApplicants = mergeApplicantBookingData(mergedApplicants, bookingData || []);
       } catch { allAuditionBookings = []; }
       allApplicants = collapsePerformerProfiles(mergedApplicants);
+      applicantsLoadedAt = Date.now();
     } catch (e) { console.error('loadApplicants error:', e); allApplicants = []; allAuditionBookings = []; }
     const ovCount = document.getElementById('ov-applicant-count');
     if (ovCount) ovCount.textContent = allApplicants.length;
@@ -32089,8 +32134,10 @@ If you have any questions, don't hesitate to reach out.
     return match ? match[1] : '';
   }
 
-  async function loadAuditionAuthoredNotes() {
+  async function loadAuditionAuthoredNotes(options = {}) {
     if (!prodId) return [];
+    const { maxAge = 0 } = options;
+    if (maxAge && auditionAuthoredNotesLoadedAt && Date.now() - auditionAuthoredNotesLoadedAt < maxAge) return auditionAuthoredNotes;
     try {
       let data, error;
       if (teamAccessMode && teamAccessSessionToken) {
@@ -32114,6 +32161,7 @@ If you have any questions, don't hesitate to reach out.
       }
       if (error) throw error;
       auditionAuthoredNotes = data || [];
+      auditionAuthoredNotesLoadedAt = Date.now();
     } catch (error) {
       auditionAuthoredNotes = [];
       console.warn('[BTS] production_audition_notes unavailable. Run the team portal Supabase SQL.', error);
@@ -32121,8 +32169,10 @@ If you have any questions, don't hesitate to reach out.
     return auditionAuthoredNotes;
   }
 
-  async function loadAuditionObservations() {
+  async function loadAuditionObservations(options = {}) {
     if (!prodId) return [];
+    const { maxAge = 0 } = options;
+    if (maxAge && auditionObservationsLoadedAt && Date.now() - auditionObservationsLoadedAt < maxAge) return auditionObservations;
     try {
       let data, error;
       if (teamAccessMode && teamAccessSessionToken) {
@@ -32146,6 +32196,7 @@ If you have any questions, don't hesitate to reach out.
       }
       if (error) throw error;
       auditionObservations = data || [];
+      auditionObservationsLoadedAt = Date.now();
     } catch (error) {
       auditionObservations = [];
       console.warn('[BTS] production_audition_observations unavailable.', error);
