@@ -7027,6 +7027,7 @@
     }
     .inroom-checked-strip-list {
       display: flex;
+      flex-flow: row nowrap;
       align-items: flex-start;
       gap: 0.72rem;
       overflow-x: auto;
@@ -7036,10 +7037,20 @@
       scrollbar-width: thin;
       perspective: 900px;
       transform-style: preserve-3d;
+      white-space: nowrap;
+      max-width: 100%;
+      min-width: 0;
+      -webkit-overflow-scrolling: touch;
+    }
+    .inroom-checked-strip-list > * {
+      flex: 0 0 auto;
     }
     .inroom-thumb {
       width: 128px;
-      flex-shrink: 0;
+      flex: 0 0 128px;
+      display: grid;
+      grid-template-rows: 1rem auto 1rem;
+      align-items: start;
       border: none;
       background: none;
       padding: 0;
@@ -7063,6 +7074,7 @@
     .inroom-thumb.tray-current,
     .inroom-thumb.tray-selected {
       width: 136px;
+      flex-basis: 136px;
       z-index: 6;
       transform: translateZ(24px) scale(1.035);
       filter: drop-shadow(0 14px 28px rgba(26,21,48,0.18));
@@ -11793,8 +11805,17 @@
       }
 
       .inroom-checked-strip {
+        grid-template-columns: auto minmax(0, 1fr) !important;
         padding: 0.8rem !important;
         margin-bottom: 0.85rem;
+      }
+
+      .inroom-checked-strip-list {
+        display: flex !important;
+        flex-flow: row nowrap !important;
+        overflow-x: auto !important;
+        overflow-y: visible !important;
+        max-width: 100% !important;
       }
 
       .inroom-right,
@@ -16030,6 +16051,7 @@
     const label = strip.querySelector('.inroom-checked-strip-label')?.textContent || 'Checked In';
     try {
       strip.outerHTML = renderGeneralInRoomCheckedStrip(inRoomOpenFn || 'openAuditionSessionInRoom', label);
+      requestAnimationFrame(() => scrollCheckedInRailToActive(document));
     } catch (error) {
       console.error('[BTS] checked-in strip refresh failed:', error);
     }
@@ -33420,6 +33442,17 @@ If you have any questions, don't hesitate to reach out.
     }
   }
 
+  function scrollCheckedInRailToActive(scope = document) {
+    const root = scope || document;
+    const list = root.querySelector?.('.inroom-checked-strip-list') || document.querySelector('.inroom-checked-strip-list');
+    if (!list) return;
+    const target = list.querySelector('.inroom-thumb.tray-selected, .inroom-thumb.tray-current')
+      || list.querySelector('.inroom-thumb:not(.tray-late)')
+      || list.querySelector('.inroom-thumb');
+    if (!target) return;
+    target.scrollIntoView({ block: 'nearest', inline: 'center', behavior: 'smooth' });
+  }
+
   function syncInRoomRightPanelHeight(container) {
     if (!container) return;
     const main = container.querySelector('.inroom-main.inroom-main-flat');
@@ -33531,6 +33564,7 @@ If you have any questions, don't hesitate to reach out.
       callbackCharactersHtml: renderCallbackCharacterChips(app),
       roleChipsHtml: renderInRoomRoleChips(app)
     }) + inRoomThemeClose;
+    requestAnimationFrame(() => scrollCheckedInRailToActive(el));
     requestAnimationFrame(() => requestAnimationFrame(() => syncInRoomRightPanelHeight(el)));
     requestAnimationFrame(() => requestAnimationFrame(() => fitInRoomRoleChipTitles(el)));
     // Re-fit on grid resize (window resize, panel expand/collapse, etc.)
