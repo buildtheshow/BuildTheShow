@@ -289,7 +289,7 @@
           },
           body: JSON.stringify({ email, password }),
         }),
-        35000,
+        60000,
         'Login is taking too long. Please check your connection and try again.'
       );
       const payload = await response.json().catch(() => ({}));
@@ -319,17 +319,14 @@
     }
 
     async function signIn(email, password) {
-      try {
-        return await withTimeout(
-          sb.auth.signInWithPassword({ email, password }),
-          15000,
-          SUPABASE_AUTH_TIMEOUT
-        );
-      } catch (err) {
-        if (err?.message !== SUPABASE_AUTH_TIMEOUT) throw err;
-        updateLoginProgress('Still logging in...');
-        return directPasswordLogin(email, password);
-      }
+      setTimeout(() => updateLoginProgress('Still logging in...'), 12000);
+      const helperAttempt = sb.auth.signInWithPassword({ email, password });
+      const fallbackAttempt = directPasswordLogin(email, password);
+      return withTimeout(
+        Promise.any([helperAttempt, fallbackAttempt]),
+        65000,
+        'Login is taking too long. Please check your connection and try again.'
+      );
     }
 
     async function getOrganisationLanding(userId) {
