@@ -16962,6 +16962,22 @@
     await persistRoomNextSignal(nextSignal);
   }
 
+  function normalizeRoomReadyName(value) {
+    return String(value || '').trim().toLowerCase().replace(/\s+/g, ' ');
+  }
+
+  function resolveRoomReadyNextApp(state, session = null) {
+    if (!state) return null;
+    const byId = allApplicants.find(app => String(app.id) === String(state.next_applicant_id || ''));
+    if (byId) return byId;
+    const label = normalizeRoomReadyName(state.next_label);
+    if (!label || label === 'the next performer') return null;
+    const queue = session ? getSessionQueue(session) : allApplicants;
+    return queue.find(app => normalizeRoomReadyName(appDisplayName(app)) === label)
+      || allApplicants.find(app => normalizeRoomReadyName(appDisplayName(app)) === label)
+      || null;
+  }
+
   function renderInRoomReadySignals() {
     if (teamAccessMode) return;
     const readyStates = [...roomNextSignals.values()]
@@ -16973,8 +16989,9 @@
     stack.id = 'inroom-next-request-stack';
     stack.className = 'inroom-next-request-stack';
     stack.innerHTML = readyStates.map(state => {
-      const nextApp = allApplicants.find(app => app.id === state.next_applicant_id);
-      const nextName = state.next_label || state.next_group_label || (nextApp ? appDisplayName(nextApp) : 'the next performer');
+      const session = audSessions.find(candidate => String(candidate.id) === String(state.session_id || '')) || getActiveAuditionNavSession() || getSelectedAuditionSession();
+      const nextApp = resolveRoomReadyNextApp(state, session);
+      const nextName = state.next_group_label || (nextApp ? appDisplayName(nextApp) : state.next_label || 'the next performer');
       return `<div class="inroom-next-request" id="inroom-next-request-${esc(state.room_key)}">
         <div class="inroom-next-request-title">${esc(roomReadyRequestTitle(state))}</div>
         <div class="inroom-next-request-body">
@@ -17013,8 +17030,8 @@
       action.disabled = true;
       action.textContent = 'Sending...';
     }
-    const session = audSessions.find(candidate => candidate.id === state.session_id) || getActiveAuditionNavSession() || getSelectedAuditionSession();
-    const nextApp = allApplicants.find(app => app.id === state.next_applicant_id) || null;
+    const session = audSessions.find(candidate => String(candidate.id) === String(state.session_id || '')) || getActiveAuditionNavSession() || getSelectedAuditionSession();
+    const nextApp = resolveRoomReadyNextApp(state, session);
     if (!nextApp && !state.next_group_key && !state.next_group_label) {
       showToast('No next performer is queued for this room.', true);
       if (action) {

@@ -8510,7 +8510,7 @@
       align-items: center;
       justify-content: center;
       min-width: 2rem;
-      border-right: 2px solid rgba(87,46,136,0.12);
+      border-left: 2px solid rgba(87,46,136,0.12);
       color: #1a1530;
       font-size: 0.72rem;
       font-weight: 950;
@@ -8524,6 +8524,8 @@
       padding: 0.9rem 0.65rem 0.65rem;
       margin: -0.65rem -0.65rem -0.45rem;
       scrollbar-width: thin;
+      perspective: 900px;
+      transform-style: preserve-3d;
     }
     .template-checkedin-card {
       position: relative;
@@ -8533,6 +8535,8 @@
       background: #fff;
       padding: 0.45rem;
       box-shadow: 0 8px 20px rgba(26,21,48,0.07);
+      transform-origin: center center;
+      transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
     }
     .template-checkedin-card.is-done {
       opacity: 0.48;
@@ -8556,10 +8560,10 @@
       border-color: rgba(239,171,69,0.62);
       z-index: 5;
       flex-basis: 128px;
-      transform: translateY(-10px) scale(1.07);
+      transform: translateZ(54px) scale(1.08);
       box-shadow:
         0 0 0 4px rgba(239,171,69,0.12),
-        0 16px 30px rgba(26,21,48,0.18);
+        0 22px 44px rgba(26,21,48,0.22);
     }
     .template-checkedin-img {
       aspect-ratio: 1 / 1;
@@ -8892,7 +8896,7 @@
         transform: none;
         justify-content: flex-start;
         min-width: 0;
-        border-right: 0;
+        border-left: 0;
         border-bottom: 2px solid rgba(87,46,136,0.12);
         padding-bottom: 0.5rem;
       }
@@ -16132,14 +16136,25 @@
         headshot: sample.headshot,
       };
     });
-    const checkedInPreviewHtml = checkedInPreviewPeople.map(person => `
-      <div class="template-checkedin-card ${person.className}">
-        <div class="template-checkedin-img"><img src="${esc(person.headshot)}" alt="${esc(person.name)}" loading="lazy" /></div>
+    const checkedInPreviewHtml = checkedInPreviewPeople.map((person, index) => {
+      const nameParts = String(person.name || '').trim().split(/\s+/);
+      const cardHtml = renderCastingCard({
+        first_name: nameParts[0] || '',
+        last_name: nameParts.slice(1).join(' '),
+        headshot_url: person.headshot,
+        attendance_mode: 'in_person',
+      }, {
+        size: 'compact',
+        hasPadding: true,
+        hasIcons: true,
+        state: null,
+      });
+      return `<div class="template-checkedin-card ${person.className}">
+        ${cardHtml}
         <div class="template-checkedin-time">${esc(person.time)}</div>
-        <div class="template-checkedin-name">${esc(person.name)}</div>
         <div class="template-checkedin-state"><span>${esc(person.state)}</span></div>
-      </div>
-    `).join('');
+      </div>`;
+    }).join('');
 
     host.innerHTML = `
       <div class="page-header">
@@ -17739,6 +17754,22 @@
     await persistRoomNextSignal(nextSignal);
   }
 
+  function normalizeRoomReadyName(value) {
+    return String(value || '').trim().toLowerCase().replace(/\s+/g, ' ');
+  }
+
+  function resolveRoomReadyNextApp(state, session = null) {
+    if (!state) return null;
+    const byId = allApplicants.find(app => String(app.id) === String(state.next_applicant_id || ''));
+    if (byId) return byId;
+    const label = normalizeRoomReadyName(state.next_label);
+    if (!label || label === 'the next performer') return null;
+    const queue = session ? getSessionQueue(session) : allApplicants;
+    return queue.find(app => normalizeRoomReadyName(appDisplayName(app)) === label)
+      || allApplicants.find(app => normalizeRoomReadyName(appDisplayName(app)) === label)
+      || null;
+  }
+
   function renderInRoomReadySignals() {
     if (teamAccessMode) return;
     const readyStates = [...roomNextSignals.values()]
@@ -17750,8 +17781,9 @@
     stack.id = 'inroom-next-request-stack';
     stack.className = 'inroom-next-request-stack';
     stack.innerHTML = readyStates.map(state => {
-      const nextApp = allApplicants.find(app => app.id === state.next_applicant_id);
-      const nextName = state.next_label || state.next_group_label || (nextApp ? appDisplayName(nextApp) : 'the next performer');
+      const session = audSessions.find(candidate => String(candidate.id) === String(state.session_id || '')) || getActiveAuditionNavSession() || getSelectedAuditionSession();
+      const nextApp = resolveRoomReadyNextApp(state, session);
+      const nextName = state.next_group_label || (nextApp ? appDisplayName(nextApp) : state.next_label || 'the next performer');
       return `<div class="inroom-next-request" id="inroom-next-request-${esc(state.room_key)}">
         <div class="inroom-next-request-title">${esc(roomReadyRequestTitle(state))}</div>
         <div class="inroom-next-request-body">
@@ -17790,8 +17822,8 @@
       action.disabled = true;
       action.textContent = 'Sending...';
     }
-    const session = audSessions.find(candidate => candidate.id === state.session_id) || getActiveAuditionNavSession() || getSelectedAuditionSession();
-    const nextApp = allApplicants.find(app => app.id === state.next_applicant_id) || null;
+    const session = audSessions.find(candidate => String(candidate.id) === String(state.session_id || '')) || getActiveAuditionNavSession() || getSelectedAuditionSession();
+    const nextApp = resolveRoomReadyNextApp(state, session);
     if (!nextApp && !state.next_group_key && !state.next_group_label) {
       showToast('No next performer is queued for this room.', true);
       if (action) {
