@@ -15869,7 +15869,7 @@
         : false;
 
       await Promise.all([
-        loadAudSessions({ maxAge: AUDITIONS_DATA_CACHE_MS }),
+        loadAudSessions({ maxAge: AUDITIONS_DATA_CACHE_MS, skipMaintenance: true }),
         loadApplicants({ maxAge: AUDITIONS_DATA_CACHE_MS }),
         loadSlots({ maxAge: AUDITIONS_DATA_CACHE_MS }),
         loadAuditionAuthoredNotes({ maxAge: AUDITIONS_DATA_CACHE_MS }),
@@ -23073,7 +23073,7 @@ If you have any questions, don't hesitate to reach out.
   }
 
   async function loadAudSessions(options = {}) {
-    const { maxAge = 0 } = options;
+    const { maxAge = 0, skipMaintenance = false } = options;
     if (maxAge && audSessionsLoadedAt && Date.now() - audSessionsLoadedAt < maxAge) return audSessions;
     if (!auditionConfig) { renderAudSessions(); return; }
     const { data: sessions } = await sb.from('audition_sessions')
@@ -23118,10 +23118,13 @@ If you have any questions, don't hesitate to reach out.
     primeAudCollapsedState(audSessions);
     renderAudSessions();
     renderAuditionsSidebarSubmenu();
-    // Sync all sessions with dates into production_events so Zeus/Cronus/Apollo all see them
-    syncAuditionEvents();
-    // Silently sync block capacity to slot rows in case settings were changed without a re-generate
-    _syncBlockCapacitiesToSlots();
+    if (!skipMaintenance) {
+      // Sync all sessions with dates into production_events so Zeus/Cronus/Apollo all see them
+      syncAuditionEvents();
+      // Silently sync block capacity to slot rows in case settings were changed without a re-generate
+      _syncBlockCapacitiesToSlots();
+    }
+    return audSessions;
   }
 
   async function _syncBlockCapacitiesToSlots() {
