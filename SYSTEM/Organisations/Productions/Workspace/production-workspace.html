@@ -16545,6 +16545,7 @@
   let auditionsRefreshTimer    = null;
   let _auditionsPollTimer      = null;
   let _auditionsFullPollAt     = 0;
+  let _auditionsLiveRefreshRunning = false;
   let _realtimeReconnectAttempt = 0;
   let auditionRoomStateTableAvailable = null;
   let auditionRoomStatesLoadedAt = 0;
@@ -16756,46 +16757,52 @@
   }
 
   async function refreshAuditionsLiveUi(options = {}) {
-    const preserveModal = options.preserveModal !== false;
-    const preserveReschedule = options.preserveReschedule !== false;
-    const preserveRescheduleEmailPrompt = options.preserveRescheduleEmailPrompt !== false;
-    const activeModalApplicantId = preserveModal ? activeApplicantId : null;
-    const activeModalRescheduleSessionId = preserveModal && preserveReschedule ? activeRescheduleSessionId : '';
-    const activeModalRescheduleDate = preserveModal && preserveReschedule ? activeRescheduleDate : '';
-    const activeModalRescheduleEmailBookingId = preserveModal && preserveRescheduleEmailPrompt ? activeRescheduleEmailPromptBookingId : null;
-    const wasRescheduleOpen = preserveModal && preserveReschedule
-      ? document.getElementById('reschedule-slots')?.style.display !== 'none'
-      : false;
+    if (_auditionsLiveRefreshRunning) return;
+    _auditionsLiveRefreshRunning = true;
+    try {
+      const preserveModal = options.preserveModal !== false;
+      const preserveReschedule = options.preserveReschedule !== false;
+      const preserveRescheduleEmailPrompt = options.preserveRescheduleEmailPrompt !== false;
+      const activeModalApplicantId = preserveModal ? activeApplicantId : null;
+      const activeModalRescheduleSessionId = preserveModal && preserveReschedule ? activeRescheduleSessionId : '';
+      const activeModalRescheduleDate = preserveModal && preserveReschedule ? activeRescheduleDate : '';
+      const activeModalRescheduleEmailBookingId = preserveModal && preserveRescheduleEmailPrompt ? activeRescheduleEmailPromptBookingId : null;
+      const wasRescheduleOpen = preserveModal && preserveReschedule
+        ? document.getElementById('reschedule-slots')?.style.display !== 'none'
+        : false;
 
-    await Promise.all([loadAudSessions(), loadApplicants(), loadSlots(), loadAuditionAuthoredNotes(), loadAuditionObservations(), loadAuditionRoomStates({ force: true }), loadRoomNextSignals({ force: true })]);
-    try { renderApplicants(); } catch {}
-    try { renderApplicantsMirror(); } catch {}
-    try { renderSlots(); } catch {}
-    try { renderAuditionConfig(); } catch {}
-    try { renderAudSchedule(); } catch {}
-    try { renderAuditionSessionWorkspace(); } catch {}
-    try { loadAudDashboard(); } catch {}
-    try {
-      if (cbv2Loaded) await loadCbv2();
-    } catch {}
-    try {
-      if (document.getElementById('adtab-inroom')?.style.display !== 'none') renderInRoomPage(inRoomApplicantId);
-    } catch {}
-    try { refreshPerfLightboxContents(); } catch {}
-    if (!activeModalApplicantId) return;
-    try {
-      openApplicantModal(activeModalApplicantId);
-      if (activeModalRescheduleEmailBookingId) {
-        activeRescheduleEmailPromptBookingId = activeModalRescheduleEmailBookingId;
-        showRescheduleEmailPrompt(activeModalRescheduleEmailBookingId);
-        return;
-      }
-      if (wasRescheduleOpen && activeModalRescheduleSessionId) {
-        activeRescheduleSessionId = activeModalRescheduleSessionId;
-        activeRescheduleDate = activeModalRescheduleDate;
-        await showRescheduleOptions(activeModalRescheduleSessionId);
-      }
-    } catch {}
+      await Promise.all([loadAudSessions(), loadApplicants(), loadSlots(), loadAuditionAuthoredNotes(), loadAuditionObservations(), loadAuditionRoomStates({ force: true }), loadRoomNextSignals({ force: true })]);
+      try { renderApplicants(); } catch {}
+      try { renderApplicantsMirror(); } catch {}
+      try { renderSlots(); } catch {}
+      try { renderAuditionConfig(); } catch {}
+      try { renderAudSchedule(); } catch {}
+      try { renderAuditionSessionWorkspace(); } catch {}
+      try { loadAudDashboard(); } catch {}
+      try {
+        if (cbv2Loaded) await loadCbv2();
+      } catch {}
+      try {
+        if (document.getElementById('adtab-inroom')?.style.display !== 'none') renderInRoomPage(inRoomApplicantId);
+      } catch {}
+      try { refreshPerfLightboxContents(); } catch {}
+      if (!activeModalApplicantId) return;
+      try {
+        openApplicantModal(activeModalApplicantId);
+        if (activeModalRescheduleEmailBookingId) {
+          activeRescheduleEmailPromptBookingId = activeModalRescheduleEmailBookingId;
+          showRescheduleEmailPrompt(activeModalRescheduleEmailBookingId);
+          return;
+        }
+        if (wasRescheduleOpen && activeModalRescheduleSessionId) {
+          activeRescheduleSessionId = activeModalRescheduleSessionId;
+          activeRescheduleDate = activeModalRescheduleDate;
+          await showRescheduleOptions(activeModalRescheduleSessionId);
+        }
+      } catch {}
+    } finally {
+      _auditionsLiveRefreshRunning = false;
+    }
   }
 
   let auditionTeamDataLoadedAt = 0;
