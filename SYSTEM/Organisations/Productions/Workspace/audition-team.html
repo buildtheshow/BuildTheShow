@@ -15744,10 +15744,10 @@
     syncAuditionsLiveLoop(bootNav);
     const criticalWorkspaceData = Promise.resolve();
     const backgroundWorkspaceData = criticalWorkspaceData.then(() => Promise.allSettled([
-      loadAuditionConfig(),
-      loadAudSessions(),
-      loadRoomNextSignals({ force: true }),
       ...(shouldHydrateAuditions ? [
+        loadAuditionConfig(),
+        loadAudSessions(),
+        loadRoomNextSignals({ force: true }),
         loadApplicants({ skipRender: true, skipCastingSync: true }),
         loadSlots(),
         loadAuditionAuthoredNotes(),
@@ -15771,15 +15771,7 @@
         if (teamAccessMode && activeAuditionNavTool === 'inroom') renderInRoomPage(inRoomApplicantId, 'aud-session-inroom-content', 'openAuditionSessionInRoom');
       } catch {}
     });
-    loadCharacters();
-    queueWorkspaceWarmup([
-      loadEvents,
-      loadCustomQuestions,
-      loadOverviewCards,
-      checkAutoStageTransition,
-      loadRoles,
-      loadOpportunities,
-    ]);
+    queueWorkspaceWarmupForNav(bootNav);
     // Load org name for auto-fill + init venue picker
     if (prod.organization_id) {
       sb.from('organizations').select('name,email,slug,abbreviation').eq('id', prod.organization_id).single()
@@ -35193,6 +35185,22 @@ If you have any questions, don't hesitate to reach out.
       };
       setTimeout(schedule, 1600 + index * 250);
     });
+  }
+
+  function queueWorkspaceWarmupForNav(nav = {}) {
+    const tasks = [];
+    if ((nav.prodTab || 'overview') === 'overview') {
+      tasks.push(loadEvents, loadOverviewCards, checkAutoStageTransition);
+    }
+    if (nav.prodTab === 'auditions') {
+      const subTab = nav.auditionsSubTab || nav.auditionsDayTab || '';
+      if (['setup', 'callbacks', 'castboard', 'castlist', 'finalcasting'].includes(subTab)) {
+        tasks.push(loadCharacters);
+      }
+      if (subTab === 'setup') tasks.push(loadCustomQuestions);
+    }
+    if (nav.prodTab === 'castlist') tasks.push(loadCharacters);
+    queueWorkspaceWarmup(tasks);
   }
 
   loadAuditionConfig = dedupeWorkspaceLoad(loadAuditionConfig);
