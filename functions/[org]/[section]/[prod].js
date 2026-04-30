@@ -37,9 +37,9 @@ export async function onRequest(context) {
     return context.env.ASSETS.fetch(new URL(cleanRouteAsset, url));
   }
 
-  const isLegacyPurpose = section === 'Audition' || /^Archive\d{4}$/.test(section);
+  const isLegacyPurpose = /^audition$/i.test(section) || /^Archive\d{4}$/i.test(section);
   const isTeamPurpose = /^team$/i.test(prod);
-  const isPurposeLast = prod === 'Audition' || /^Archive\d{4}$/.test(prod) || isTeamPurpose;
+  const isPurposeLast = /^audition$/i.test(prod) || /^Archive\d{4}$/i.test(prod) || isTeamPurpose;
   if (!isLegacyPurpose && !isPurposeLast) {
     return new Response('Not found', { status: 404 });
   }
