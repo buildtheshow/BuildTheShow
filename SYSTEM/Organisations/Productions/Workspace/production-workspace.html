@@ -17282,6 +17282,41 @@
     return roomNextSignals.get(roomKey) || null;
   }
 
+  function roomNextSignalConsumedStorageKey() {
+    return `bts-room-next-consumed:${prodId || 'unknown'}`;
+  }
+
+  function roomNextSignalStamp(state) {
+    return Date.parse(state?.requested_at || state?.created_at || state?.updated_at || '') || 0;
+  }
+
+  function getConsumedRoomNextSignals() {
+    try {
+      return JSON.parse(localStorage.getItem(roomNextSignalConsumedStorageKey()) || '{}') || {};
+    } catch {
+      return {};
+    }
+  }
+
+  function markRoomNextSignalConsumed(roomKey, state, status) {
+    if (!roomKey) return;
+    const consumed = getConsumedRoomNextSignals();
+    consumed[roomKey] = {
+      status,
+      stamp: roomNextSignalStamp(state),
+      at: new Date().toISOString(),
+    };
+    try { localStorage.setItem(roomNextSignalConsumedStorageKey(), JSON.stringify(consumed)); } catch {}
+  }
+
+  function roomNextSignalWasConsumed(state) {
+    if (!state?.room_key || state.status !== 'ready') return false;
+    const consumed = getConsumedRoomNextSignals()[state.room_key];
+    if (!consumed) return false;
+    const signalStamp = roomNextSignalStamp(state);
+    return !signalStamp || Number(consumed.stamp || 0) >= signalStamp;
+  }
+
   function hasMultipleAuditionRooms() {
     const roomKeys = new Set();
     auditionRoomStates.forEach(state => {
@@ -17297,6 +17332,8 @@
   }
 
   function roomReadyRequestTitle(state) {
+    const requester = String(state?.requested_by || '').trim();
+    if (requester && !/^in the room$/i.test(requester)) return `${requester} is ready.`;
     if (!hasMultipleAuditionRooms()) return 'Please send in the next performer.';
     return `${state?.room_name || 'Audition Room'} is ready.`;
   }
@@ -17561,6 +17598,24 @@
     }
   }
 
+  async function persistRoomNextSignalStatus(roomKey, status, fields = {}) {
+    if (!roomKey || roomNextSignalsTableAvailable === false) return null;
+    const updatedAt = fields.updated_at || new Date().toISOString();
+    const patch = { ...fields, status, updated_at: updatedAt };
+    try {
+      const { data, error } = await sb.from('production_room_next_signals')
+        .update(patch)
+        .eq('production_id', prodId)
+        .eq('room_key', roomKey);
+      if (error) throw error;
+      if (data) mergeRoomNextSignal(data);
+      return data || patch;
+    } catch (error) {
+      console.warn('[BTS] room next signal status save failed:', error);
+      return null;
+    }
+  }
+
   async function persistAuditionRoomState(payload, options = {}) {
     const { localFallback = false } = options;
     mergeAuditionRoomState(payload);
@@ -17687,7 +17742,7 @@
   function renderInRoomReadySignals() {
     if (teamAccessMode) return;
     const readyStates = [...roomNextSignals.values()]
-      .filter(state => state.status === 'ready')
+      .filter(state => state.status === 'ready' && !roomNextSignalWasConsumed(state))
       .sort((a, b) => String(b.requested_at || b.updated_at || '').localeCompare(String(a.requested_at || a.updated_at || '')));
     document.getElementById('inroom-next-request-stack')?.remove();
     if (!readyStates.length) return;
@@ -17711,20 +17766,19 @@
     document.body.appendChild(stack);
   }
 
-  function dismissInRoomReadySignal(roomKey) {
+  async function dismissInRoomReadySignal(roomKey) {
     document.getElementById(`inroom-next-request-${roomKey}`)?.remove();
     const signal = getRoomNextSignal(roomKey);
     if (signal) {
       const updated = { ...signal, status: 'dismissed', dismissed_at: new Date().toISOString(), updated_at: new Date().toISOString() };
+      markRoomNextSignalConsumed(roomKey, signal, 'dismissed');
       mergeRoomNextSignal(updated);
-      if (roomNextSignalsTableAvailable !== false) {
-        sb.from('production_room_next_signals').update({
-          status: 'dismissed',
-          dismissed_at: updated.dismissed_at,
-          updated_at: updated.updated_at,
-        }).eq('production_id', prodId).eq('room_key', roomKey).then(() => {});
-      }
+      await persistRoomNextSignalStatus(roomKey, 'dismissed', {
+        dismissed_at: updated.dismissed_at,
+        updated_at: updated.updated_at,
+      });
     }
+    renderInRoomReadySignals();
   }
 
   async function markNextPerformerSentIn(roomKey) {
@@ -17752,14 +17806,12 @@
     payload.current_group_member_ids = state.next_group_member_ids || [];
     card?.remove();
     const sentAt = new Date().toISOString();
+    markRoomNextSignalConsumed(roomKey, state, 'sent');
     mergeRoomNextSignal({ ...state, status: 'sent', sent_at: sentAt, updated_at: sentAt });
-    if (roomNextSignalsTableAvailable !== false) {
-      sb.from('production_room_next_signals').update({
-        status: 'sent',
-        sent_at: sentAt,
-        updated_at: sentAt,
-      }).eq('production_id', prodId).eq('room_key', roomKey).then(() => {});
-    }
+    await persistRoomNextSignalStatus(roomKey, 'sent', {
+      sent_at: sentAt,
+      updated_at: sentAt,
+    });
     await persistAuditionRoomState(payload, { localFallback: true });
     renderInRoomReadySignals();
   }
@@ -21535,8 +21587,8 @@ If you have any questions, don't hesitate to reach out.
   }
 
   if (tab === 'auditions') { if (!allApplicants.length) loadApplicants(); renderAuditionsPanel(); }
-  if (tab === 'castboard') { loadCbv2(); }
-  if (tab === 'castlist') { loadCbv2({ force: true, skipRender: true }).then(renderCastList).catch(renderCastList); }
+  if (tab === 'castboard') { ensureWorkspaceData(['castingBoard']).then(renderActiveCastingBoard).catch(renderActiveCastingBoard); }
+  if (tab === 'castlist') { ensureWorkspaceData(['castList']).then(renderCastList).catch(renderCastList); }
   if (tab === 'callbacks') renderCallbacksFresh();
   if (tab === 'setup') {
     const inner = document.querySelector('.aud-inner-btn.active');
@@ -21558,7 +21610,21 @@ If you have any questions, don't hesitate to reach out.
       if (el) el.style.display = (i === inner) ? '' : 'none';
     });
     if (inner === 'materials') renderMaterialsList();
-    if (inner === 'characters') { renderCharacters(); loadCharDisplaySettings(); syncEnsembleOverrideUI(); }
+    if (inner === 'characters') {
+      const list = document.getElementById('characters-list');
+      if (list && !isWorkspaceDataReady('characters')) {
+        list.innerHTML = '<div style="text-align:center;padding:3rem;color:#9a90b0;font-size:0.875rem;">Loading characters…</div>';
+      }
+      ensureWorkspaceData(['characters']).then(() => {
+        renderCharacters();
+        loadCharDisplaySettings();
+        syncEnsembleOverrideUI();
+      }).catch(() => {
+        renderCharacters();
+        loadCharDisplaySettings();
+        syncEnsembleOverrideUI();
+      });
+    }
     if (inner === 'prodinfo') loadProdInfo();
   }
 
@@ -25563,7 +25629,7 @@ If you have any questions, don't hesitate to reach out.
     targets.forEach(target => {
       target.innerHTML = '<div style="text-align:center;padding:3rem 2rem;color:#9a90b0;font-size:0.875rem;">Refreshing callback source from Supabase…</div>';
     });
-    refreshCallbackSourceFromSupabase()
+    ensureWorkspaceData(['callbacks'])
       .then(() => renderCallbacks())
       .catch(error => {
         console.error('[BTS] callback source refresh failed', error);
@@ -31005,6 +31071,11 @@ If you have any questions, don't hesitate to reach out.
   }
 
   function renderActiveCastingBoard() {
+    if (!isWorkspaceDataReady('castingBoard')) {
+      setCbv2Loading();
+      ensureWorkspaceData(['castingBoard']).then(renderActiveCastingBoard).catch(renderCbv2);
+      return;
+    }
     if (isCallbackSessionCastingBoardActive()) {
       renderCallbacksBoardInPanel('aud-session-castboard-content');
       return;
@@ -31820,6 +31891,17 @@ If you have any questions, don't hesitate to reach out.
   }
 
   function renderCastList() {
+    if (!isWorkspaceDataReady('castList')) {
+      const programmeHost = document.getElementById('cast-list-programme-host');
+      const tbody = document.getElementById('cast-list-tbody');
+      if (programmeHost) {
+        programmeHost.innerHTML = '<div style="text-align:center;padding:2.5rem;color:#9a90b0;">Loading cast list…</div>';
+      } else if (tbody) {
+        tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;padding:2.5rem;color:#9a90b0;">Loading cast list…</td></tr>';
+      }
+      ensureWorkspaceData(['castList']).then(renderCastList).catch(renderCastList);
+      return;
+    }
     const programmeHost = document.getElementById('cast-list-programme-host');
     if (programmeHost) {
       programmeHost.innerHTML = buildCastListProgrammeHtml();
@@ -33871,6 +33953,11 @@ If you have any questions, don't hesitate to reach out.
     inRoomOpenFn = openFn;
     const el = document.getElementById(containerId);
     if (!el) return;
+    if (!isWorkspaceDataReady('inRoom')) {
+      el.innerHTML = '<div class="inroom-shell"><div style="text-align:center;padding:3rem;color:#9a90b0;font-size:0.875rem;">Loading in-the-room data…</div></div>';
+      ensureWorkspaceData(['inRoom']).then(() => renderInRoomPage(targetId || inRoomApplicantId, containerId, openFn)).catch(() => renderInRoomPage(targetId || inRoomApplicantId, containerId, openFn));
+      return;
+    }
     const groups = getInRoomGroups();
     const requestedId = targetId || inRoomApplicantId || null;
     const requestedIsValid = requestedId ? getInRoomCheckedInApps().some(app => app.id === requestedId) : false;
@@ -34533,7 +34620,7 @@ If you have any questions, don't hesitate to reach out.
       if (session.type === 'dance_call') {
         renderDanceCallInRoom(session.id);
       } else if (session.type === 'callback' && !cbv2Loaded) {
-        refreshCallbackSourceFromSupabase().then(() => renderInRoomPage(inRoomApplicantId, 'aud-session-inroom-content', 'openAuditionSessionInRoom'));
+        ensureWorkspaceData(['callbacks']).then(() => renderInRoomPage(inRoomApplicantId, 'aud-session-inroom-content', 'openAuditionSessionInRoom'));
       } else {
         renderInRoomPage(inRoomApplicantId, 'aud-session-inroom-content', 'openAuditionSessionInRoom');
       }
@@ -34541,7 +34628,7 @@ If you have any questions, don't hesitate to reach out.
     if (tool === 'castingboard' && session.type === 'callback') {
       const target = document.getElementById('aud-session-castboard-content');
       if (target) target.innerHTML = '<div style="text-align:center;padding:3rem 2rem;color:#9a90b0;font-size:0.875rem;">Refreshing callback source from Supabase…</div>';
-      refreshCallbackSourceFromSupabase().then(() => renderCallbacksBoardInPanel('aud-session-castboard-content'));
+      ensureWorkspaceData(['callbacks']).then(() => renderCallbacksBoardInPanel('aud-session-castboard-content'));
     }
   }
 
@@ -35787,20 +35874,85 @@ If you have any questions, don't hesitate to reach out.
     queueWorkspaceWarmup(tasks);
   }
 
-  loadAuditionConfig = dedupeWorkspaceLoad(loadAuditionConfig);
-  loadAudSessions = dedupeWorkspaceLoad(loadAudSessions);
-  loadSlots = dedupeWorkspaceLoad(loadSlots);
-  loadApplicants = dedupeWorkspaceLoad(loadApplicants);
-  loadAuditionAuthoredNotes = dedupeWorkspaceLoad(loadAuditionAuthoredNotes);
-  loadAuditionObservations = dedupeWorkspaceLoad(loadAuditionObservations);
+  const workspaceDataLoaded = Object.create(null);
+  const workspaceDataEnsurePromises = Object.create(null);
+
+  function trackWorkspaceDataLoad(key, fn) {
+    return async function trackedWorkspaceDataLoad(...args) {
+      const result = await fn.apply(this, args);
+      workspaceDataLoaded[key] = true;
+      return result;
+    };
+  }
+
+  function isWorkspaceDataReady(key) {
+    if (key === 'castingBoard' || key === 'castList') return cbv2Loaded === true;
+    if (key === 'callbacks') return cbv2Loaded === true && workspaceDataLoaded.applicants === true;
+    if (key === 'inRoom') {
+      return workspaceDataLoaded.applicants === true
+        && workspaceDataLoaded.auditionSessions === true
+        && workspaceDataLoaded.auditionSlots === true
+        && workspaceDataLoaded.characters === true
+        && workspaceDataLoaded.auditionAuthoredNotes === true
+        && workspaceDataLoaded.auditionObservations === true;
+    }
+    return workspaceDataLoaded[key] === true;
+  }
+
+  function workspaceDataLoaderFor(key, options = {}) {
+    if (key === 'characters') return () => loadCharacters();
+    if (key === 'applicants') return () => loadApplicants({ skipRender: true, skipCastingSync: true });
+    if (key === 'auditionSessions') return () => loadAudSessions();
+    if (key === 'auditionSlots') return () => loadSlots();
+    if (key === 'auditionAuthoredNotes') return () => loadAuditionAuthoredNotes();
+    if (key === 'auditionObservations') return () => loadAuditionObservations();
+    if (key === 'castingBoard' || key === 'castList') return () => loadCbv2({ silent: true, skipRender: true, force: options.force === true });
+    if (key === 'callbacks') return () => refreshCallbackSourceFromSupabase();
+    if (key === 'inRoom') {
+      return () => Promise.allSettled([
+        ensureWorkspaceData(['applicants', 'auditionSessions', 'auditionSlots', 'characters', 'auditionAuthoredNotes', 'auditionObservations']),
+      ]);
+    }
+    return null;
+  }
+
+  function ensureWorkspaceData(keys = [], options = {}) {
+    const list = Array.isArray(keys) ? keys : [keys];
+    return Promise.all(list.map(key => {
+      if (!key) return Promise.resolve();
+      if (!options.force && isWorkspaceDataReady(key)) return Promise.resolve();
+      const promiseKey = options.force ? `${key}:force` : key;
+      if (workspaceDataEnsurePromises[promiseKey]) return workspaceDataEnsurePromises[promiseKey];
+      const loader = workspaceDataLoaderFor(key, options);
+      if (!loader) return Promise.resolve();
+      workspaceDataEnsurePromises[promiseKey] = Promise.resolve()
+        .then(loader)
+        .then(result => {
+          workspaceDataLoaded[key] = true;
+          return result;
+        })
+        .finally(() => {
+          delete workspaceDataEnsurePromises[promiseKey];
+        });
+      return workspaceDataEnsurePromises[promiseKey];
+    }));
+  }
+
+  loadAuditionConfig = trackWorkspaceDataLoad('auditionConfig', dedupeWorkspaceLoad(loadAuditionConfig));
+  loadAudSessions = trackWorkspaceDataLoad('auditionSessions', dedupeWorkspaceLoad(loadAudSessions));
+  loadSlots = trackWorkspaceDataLoad('auditionSlots', dedupeWorkspaceLoad(loadSlots));
+  loadApplicants = trackWorkspaceDataLoad('applicants', dedupeWorkspaceLoad(loadApplicants));
+  loadAuditionAuthoredNotes = trackWorkspaceDataLoad('auditionAuthoredNotes', dedupeWorkspaceLoad(loadAuditionAuthoredNotes));
+  loadAuditionObservations = trackWorkspaceDataLoad('auditionObservations', dedupeWorkspaceLoad(loadAuditionObservations));
   loadAuditionRoomStates = dedupeWorkspaceLoad(loadAuditionRoomStates);
   loadRoomNextSignals = dedupeWorkspaceLoad(loadRoomNextSignals);
-  loadCharacters = dedupeWorkspaceLoad(loadCharacters);
+  loadCharacters = trackWorkspaceDataLoad('characters', dedupeWorkspaceLoad(loadCharacters));
   loadCustomQuestions = dedupeWorkspaceLoad(loadCustomQuestions);
   loadEvents = dedupeWorkspaceLoad(loadEvents);
   loadOverviewCards = dedupeWorkspaceLoad(loadOverviewCards);
-  loadRoles = dedupeWorkspaceLoad(loadRoles);
+  loadRoles = trackWorkspaceDataLoad('roles', dedupeWorkspaceLoad(loadRoles));
   loadOpportunities = dedupeWorkspaceLoad(loadOpportunities);
+  loadCbv2 = trackWorkspaceDataLoad('castingBoard', loadCbv2);
 
   init();
 </script>

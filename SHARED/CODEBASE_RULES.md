@@ -146,6 +146,25 @@ These are non-negotiable platform rules for how the system should be shaped and 
 8. Do not rely on manual syncing.
 9. Do not allow stale views.
 
+### Supabase And Speed
+
+1. Build The Show must store data in Supabase as small, connected records, not repeated page content.
+2. Every real thing must have one shared source of truth: `Organisation`, `Production`, `Performer`, `Character`, `Audition`, `Time Slot`, `Team Member`, `Volunteer Role`, `Shift`, `Ticket`, `Payment`, and `Report`.
+3. Pages must read from the shared source of truth instead of saving duplicate copies of the same information.
+4. Interfaces, backend storage, dashboards, tools, audition systems, and public pages must stay connected to the same production data model.
+5. Data must be split into clean relational tables, with IDs linking records together.
+6. Do not store the same name, date, role, status, or setting in multiple places unless there is a clear technical reason.
+7. Use joins, views, lightweight RPC functions, and indexed columns so pages load only the exact fields they need.
+8. Large files must not live inside table rows.
+9. Images, resumes, audition files, receipts, programmes, and attachments must be stored in Supabase Storage.
+10. Database rows for files should store only the file path, metadata, owner ID, and permission rules.
+11. Public and dashboard pages must request small, purpose-built datasets.
+12. No page should download an entire production when it only needs a roster, a card, a schedule, or a count.
+13. Use pagination, filters, limits, safe caching, and server-side queries for heavy data.
+14. Let Supabase handle sorting, filtering, security, relationships, and record linking whenever possible.
+15. Do not create duplicate data, bloated rows, orphaned records, or page-specific data copies.
+16. The operating rule is: store once, link everything, fetch only what the page needs, keep files in storage, and make the system fast by design.
+
 ### Live Updates
 
 1. Build The Show should feel live across the whole website.
