@@ -121,9 +121,7 @@
 
     return `<div class="inroom-checked-strip">
       <div class="inroom-checked-strip-label">${esc(label)}</div>
-      <div class="inroom-checked-strip-track">
-        <div class="inroom-thumbs">${trayCards}</div>
-      </div>
+      <div class="inroom-checked-strip-list">${trayCards}</div>
     </div>`;
   }
 
@@ -365,9 +363,7 @@
 
     const trayHtml = usesGeneralInRoomLayout && containerId === 'aud-session-inroom-content'
       ? ''
-      : `<div class="inroom-tray${usesGeneralInRoomLayout ? ' inroom-tray-flat' : ''}">
-          <div class="inroom-thumbs">${trayCards}</div>
-        </div>`;
+      : renderCheckedInStripTemplate({ esc, label: 'Checked In', trayCards });
 
     const generalOpen = isGeneralAuditionInRoom
       ? `<div class="inroom-primary-container">
