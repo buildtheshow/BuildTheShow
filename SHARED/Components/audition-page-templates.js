@@ -76,21 +76,30 @@
       stateClass = '',
       variant = 'body',
       namePlacement = variant,
+      roleType = '',
+      subtitle = roleType,
+      bodyText = '',
       bodyHtml = ''
     } = config;
     const placement = namePlacement === 'header' ? 'header' : 'body';
     const safeAppId = esc(appId);
     const safeCharId = esc(charId);
     const safeName = esc(name);
+    const safeSubtitle = esc(subtitle);
+    const safeBodyText = esc(bodyText);
     const safeStateClass = esc(stateClass).trim();
     const className = ['inroom-role-chip', `inroom-role-chip--${placement}`, safeStateClass]
       .filter(Boolean)
       .join(' ');
+    const resolvedBodyHtml = bodyHtml || [
+      safeSubtitle ? `<div class="inroom-role-chip-body-kicker">${safeSubtitle}</div>` : '',
+      safeBodyText ? `<div class="inroom-role-chip-body-copy">${safeBodyText}</div>` : ''
+    ].filter(Boolean).join('');
 
     const contentHtml = placement === 'header'
       ? `<div class="inroom-role-chip-header"><div class="inroom-role-chip-header-title">${safeName}</div></div>
-        <div class="inroom-role-chip-body">${bodyHtml || ''}</div>`
-      : `<div class="inroom-role-chip-title">${safeName}</div>${bodyHtml || ''}`;
+        <div class="inroom-role-chip-body">${resolvedBodyHtml}</div>`
+      : `<div class="inroom-role-chip-title">${safeName}</div>`;
 
     return `<button type="button" class="${className}" data-app-id="${safeAppId}" data-char-id="${safeCharId}" onclick="toggleInRoomRole(this,'${safeAppId}','${safeCharId}')">
         ${contentHtml}
