@@ -15645,6 +15645,8 @@
   const AUDITIONS_FULL_POLL_MS = 30000;
   const AUDITIONS_REALTIME_RECONNECT_BASE_MS = 5000;
   const AUDITIONS_REALTIME_RECONNECT_MAX_MS = 60000;
+  const ROOM_SIGNAL_RETRY_MS = 60000;
+  const ROOM_SIGNAL_SCHEMA_RETRY_MS = 300000;
   const auditionRoomStates = new Map();
   const roomNextSignals = new Map();
   const teamSentInNotificationKeys = new Set();
@@ -16598,6 +16600,21 @@
     };
   }
 
+  function roomSignalErrorText(error) {
+    return [
+      error?.code,
+      error?.message,
+      error?.details,
+      error?.hint,
+    ].filter(Boolean).join(' ').toLowerCase();
+  }
+
+  function roomSignalRetryDelay(error) {
+    const text = roomSignalErrorText(error);
+    const missingResource = /pgrst202|pgrst205|42p01|42883|schema cache|could not find (the )?(table|function)|no matches were found/.test(text);
+    return missingResource ? ROOM_SIGNAL_SCHEMA_RETRY_MS : ROOM_SIGNAL_RETRY_MS;
+  }
+
   async function loadAuditionRoomStates(options = {}) {
     if (!prodId) return [];
     if (auditionRoomStateTableAvailable === false && Date.now() < auditionRoomStatesRetryAfter) return [];
@@ -16622,7 +16639,7 @@
       return data || [];
     } catch (error) {
       auditionRoomStateTableAvailable = false;
-      auditionRoomStatesRetryAfter = Date.now() + 60000;
+      auditionRoomStatesRetryAfter = Date.now() + roomSignalRetryDelay(error);
       if (!auditionRoomStatesWarningShown) {
         auditionRoomStatesWarningShown = true;
         console.warn('[BTS] audition room states unavailable. Run the room states Supabase migration.', error);
@@ -16681,7 +16698,7 @@
       return data || [];
     } catch (error) {
       roomNextSignalsTableAvailable = false;
-      roomNextSignalsRetryAfter = Date.now() + 60000;
+      roomNextSignalsRetryAfter = Date.now() + roomSignalRetryDelay(error);
       if (!roomNextSignalsWarningShown) {
         roomNextSignalsWarningShown = true;
         console.warn('[BTS] room next signals unavailable. Run the next signals Supabase migration.', error);
@@ -16729,7 +16746,7 @@
       return saved || signal;
     } catch (error) {
       roomNextSignalsTableAvailable = false;
-      roomNextSignalsRetryAfter = Date.now() + 60000;
+      roomNextSignalsRetryAfter = Date.now() + roomSignalRetryDelay(error);
       if (!roomNextSignalsWarningShown) {
         roomNextSignalsWarningShown = true;
         console.warn('[BTS] room next signal save unavailable. Run the next signals Supabase migration.', error);
@@ -16742,6 +16759,7 @@
     const { localFallback = false } = options;
     mergeAuditionRoomState(payload);
     renderInRoomReadySignals();
+    if (auditionRoomStateTableAvailable === false && Date.now() < auditionRoomStatesRetryAfter) return payload;
     try {
       let data, error;
       if (teamAccessMode && teamAccessSessionToken) {
@@ -16777,6 +16795,7 @@
       return saved || payload;
     } catch (error) {
       auditionRoomStateTableAvailable = false;
+      auditionRoomStatesRetryAfter = Date.now() + roomSignalRetryDelay(error);
       console.error('[BTS] room state save failed:', error);
       if (localFallback) return payload;
       showToast('Could not update room status.', true);
