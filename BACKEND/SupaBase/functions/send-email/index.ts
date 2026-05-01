@@ -445,6 +445,10 @@ serve(async (req) => {
     return json({ ok: false, error: 'Email sending is not configured (missing API key). Contact your admin.' });
   }
 
+  const bccAddresses = (category === 'booking_confirmation' && orgEmail && orgEmail !== performerEmail)
+    ? [orgEmail]
+    : undefined;
+
   const res = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: {
@@ -452,12 +456,13 @@ serve(async (req) => {
       'Content-Type':  'application/json',
     },
     body: JSON.stringify({
-      from:    fromField,
-      to:      [performerEmail],
+      from:     fromField,
+      to:       [performerEmail],
       reply_to: replyTo,
+      ...(bccAddresses ? { bcc: bccAddresses } : {}),
       subject,
       html,
-      text:    bodyText,
+      text:     bodyText,
     }),
   });
 
