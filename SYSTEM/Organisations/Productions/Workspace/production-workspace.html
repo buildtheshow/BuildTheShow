@@ -15360,6 +15360,7 @@
   }
 
   function showTeamAccessLogin(message = '') {
+    if (window.PageLoader) window.PageLoader.hide();
     document.body.classList.add('team-access-login-visible');
     document.getElementById('team-access-login-overlay')?.remove();
     const overlay = document.createElement('div');
@@ -15381,6 +15382,18 @@
     teamAccessMember = null;
     teamAccessEmail = '';
     showTeamAccessLogin('This team access belongs to a different production. Use the team link from this show.');
+  }
+
+  function openTeamAccessStartTab() {
+    const nav = getWorkspaceNavStateFromRoute() || loadWorkspaceNavState() || {};
+    const allowedTopTabs = new Set(['auditions', 'castlist', 'profile']);
+    const prodTab = allowedTopTabs.has(nav.prodTab) ? nav.prodTab : 'auditions';
+    if (prodTab === 'auditions') {
+      const subTab = nav.auditionsSubTab && nav.auditionsSubTab !== 'overview' ? nav.auditionsSubTab : 'dashboard';
+      openAuditionsSubTab(subTab);
+      return;
+    }
+    switchProdTab(prodTab);
   }
 
   async function loginTeamAccess(options = {}) {
@@ -15412,8 +15425,7 @@
       document.body.classList.remove('team-access-login-visible');
       await bootProductionWorkspace(new URLSearchParams(window.location.search));
       applyTeamAccessMode();
-      switchProdTab('auditions');
-      openAuditionsSubTab('dashboard');
+      openTeamAccessStartTab();
       loadAuditionRoomStates({ force: true })
         .then(() => refreshAuditionsCheckInUi())
         .catch(() => {});
@@ -15453,8 +15465,7 @@
     document.body.classList.remove('team-access-login-visible');
     await bootProductionWorkspace(new URLSearchParams(window.location.search));
     applyTeamAccessMode();
-    switchProdTab('auditions');
-    openAuditionsSubTab('dashboard');
+    openTeamAccessStartTab();
     Promise.all([
       audSessions.length   ? Promise.resolve() : loadAudSessions(),
       allApplicants.length ? Promise.resolve() : loadApplicants(),
@@ -16551,11 +16562,11 @@
    const subParam = params.get('sub');
     const routeNav = bootRouteNav;
     const hasExplicitNav = !!(tabParam || subParam || routeNav);
-    if (!hasExplicitNav) resetWorkspaceNavForFreshOpen();
+    if (!hasExplicitNav && !teamAccessMode) resetWorkspaceNavForFreshOpen();
     if (routeNav) {
       try { localStorage.setItem(getWorkspaceNavStorageKey(), JSON.stringify(routeNav)); } catch {}
     }
-    const savedNav = routeNav || (hasExplicitNav ? loadWorkspaceNavState() : getDefaultWorkspaceNavState());
+    const savedNav = routeNav || ((hasExplicitNav || teamAccessMode) ? loadWorkspaceNavState() : getDefaultWorkspaceNavState());
     if (savedNav?.auditionsSessionId) activeAuditionNavSessionId = savedNav.auditionsSessionId;
     if (savedNav?.auditionsSessionTool) activeAuditionNavTool = savedNav.auditionsSessionTool;
     if (savedNav?.inRoomApplicantId) inRoomApplicantId = savedNav.inRoomApplicantId;
@@ -21623,16 +21634,30 @@ If you have any questions, don't hesitate to reach out.
     switchAudTab(tab === 'castboard' ? 'castboard' : 'castboard');
   }
 
+  function resolveAuditionsDayTabFromNav(nav = {}) {
+    const subTab = String(nav.auditionsSubTab || '');
+    if (subTab === 'dashboard') return 'dashboard';
+    if (subTab === 'schedule') return 'schedule';
+    if (subTab === 'auditions') return 'performers';
+    if (subTab === 'checkin') return 'checkin';
+    if (subTab === 'inroom') return 'inroom';
+    if (subTab === 'callbacks') return 'callbacklist';
+    if (subTab.startsWith('session:')) return 'session';
+    const dayTab = String(nav.auditionsDayTab || '');
+    const validDayTabs = new Set(['dashboard', 'run', 'checkin', 'inroom', 'performers', 'schedule', 'session', 'callbacklist']);
+    return validDayTabs.has(dayTab) ? dayTab : 'dashboard';
+  }
+
   function renderAuditionsPanel() {
     populateAudDaySelects();
     renderAuditionsSidebarSubmenu();
     const savedNav = loadWorkspaceNavState();
-    const targetTab = savedNav.auditionsDayTab || 'dashboard';
+    const targetTab = resolveAuditionsDayTabFromNav(savedNav);
     // Make sure sessions + applicants are loaded before rendering the dashboard
     const needsSessions    = !audSessions.length;
     const needsApplicants  = !allApplicants.length;
     if (needsSessions || needsApplicants) {
-      Promise.all([
+      Promise.allSettled([
         needsSessions   ? loadAudSessions()   : Promise.resolve(),
         needsApplicants ? loadApplicants()    : Promise.resolve(),
       ]).then(() => {
@@ -23655,11 +23680,11 @@ If you have any questions, don't hesitate to reach out.
   async function loadAudSessions(options = {}) {
     const { maxAge = 0, skipMaintenance = false } = options;
     if (maxAge && audSessionsLoadedAt && Date.now() - audSessionsLoadedAt < maxAge) return audSessions;
-    if (!auditionConfig) { renderAudSessions(); return; }
-    const { data: sessions } = await sb.from('audition_sessions')
+    const { data: sessions, error: sessionsError } = await sb.from('audition_sessions')
       .select('*').eq('production_id', prodId).order('sort_order', { ascending: true });
+    if (sessionsError) throw sessionsError;
 
-    if (!sessions || sessions.length === 0) {
+    if ((!sessions || sessions.length === 0) && auditionConfig) {
       // Auto-create the 3 default cards (all disabled by default)
       const defaults = [
         { production_id: prodId, name: 'General Auditions', type: 'audition',   format: 'in_person', is_visible: false, enabled: false, show_to_applicants: false, sort_order: 0 },
@@ -23673,7 +23698,7 @@ If you have any questions, don't hesitate to reach out.
         prepare_text: getSessionPrepareText(session)
       }));
     } else {
-      audSessions = sessions.map(session => ({
+      audSessions = (sessions || []).map(session => ({
         ...session,
         access_options: getSessionAccessOptions(session),
         prepare_text: getSessionPrepareText(session)
@@ -24781,7 +24806,7 @@ If you have any questions, don't hesitate to reach out.
     const { skipRender = false, skipCastingSync = false, maxAge = 0 } = options;
     if (maxAge && applicantsLoadedAt && Date.now() - applicantsLoadedAt < maxAge) return allApplicants;
     try {
-      const [applicationsRes, bookingsRes] = await Promise.all([
+      const [applicationsResult, bookingsResult] = await Promise.allSettled([
         sb.from('audition_applications')
           .select('*').eq('production_id', prodId).order('created_at', { ascending: false }),
         sb.from('audition_bookings')
@@ -24789,6 +24814,12 @@ If you have any questions, don't hesitate to reach out.
           .eq('production_id', prodId)
           .order('created_at', { ascending: false }),
       ]);
+      const applicationsRes = applicationsResult.status === 'fulfilled' ? applicationsResult.value : {};
+      const bookingsRes = bookingsResult.status === 'fulfilled' ? bookingsResult.value : {};
+      if (applicationsResult.status === 'rejected') throw applicationsResult.reason;
+      if (applicationsRes.error) throw applicationsRes.error;
+      if (bookingsResult.status === 'rejected') console.warn('[BTS] audition bookings load failed:', bookingsResult.reason);
+      if (bookingsRes.error) console.warn('[BTS] audition bookings load failed:', bookingsRes.error);
       let mergedApplicants = applicationsRes.data || [];
       try {
         const bookingData = bookingsRes.data || [];

@@ -9,6 +9,7 @@
 
   const CYCLE_MS   = 1900;
   const FADE_MS    = 420;
+  const FAIL_OPEN_MS = 9000;
 
   const DEFAULT_MSGS = [
     'Setting the stage...',
@@ -22,6 +23,7 @@
   const msgs   = (window.BTS_LOAD_MSGS && window.BTS_LOAD_MSGS.length) ? window.BTS_LOAD_MSGS : DEFAULT_MSGS;
   let msgIndex = Math.floor(Math.random() * msgs.length);
   let cycleTimer  = null;
+  let failOpenTimer = null;
   let hidden      = false;
 
   // ── Build overlay ────────────────────────────────────────────────────────
@@ -102,6 +104,10 @@
 
   // ── Message cycling ───────────────────────────────────────────────────────
   function startCycle() {
+    clearTimeout(failOpenTimer);
+    failOpenTimer = setTimeout(function () {
+      window.PageLoader?.hide?.();
+    }, FAIL_OPEN_MS);
     cycleTimer = setInterval(function () {
       if (hidden) return;
       const msgEl = document.getElementById('bts-pl-msg');
@@ -122,6 +128,7 @@
       if (hidden) return;
       hidden = true;
       clearInterval(cycleTimer);
+      clearTimeout(failOpenTimer);
       el.classList.add('bts-pl-hiding');
       setTimeout(function () {
         if (el.parentNode) el.parentNode.removeChild(el);
