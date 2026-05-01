@@ -16606,7 +16606,7 @@
         ? document.getElementById('reschedule-slots')?.style.display !== 'none'
         : false;
 
-      await Promise.all([
+      await Promise.allSettled([
         loadAudSessions({ maxAge: AUDITIONS_DATA_CACHE_MS, skipMaintenance: true }),
         loadApplicants({ maxAge: AUDITIONS_DATA_CACHE_MS }),
         loadSlots({ maxAge: AUDITIONS_DATA_CACHE_MS }),
@@ -16764,6 +16764,10 @@
     if (productionsIndex >= 0 && productionsIndex + 1 < parts.length) {
       return '/' + parts.slice(0, productionsIndex + 2).map(encodeURIComponent).join('/');
     }
+    const teamIndex = parts.findIndex(part => part.toLowerCase() === 'team');
+    if (teamIndex >= 0) {
+      return '/' + parts.slice(0, teamIndex + 1).map(encodeURIComponent).join('/');
+    }
     return window.location.pathname.replace(/\/+$/, '') || '/';
   }
 
@@ -16777,8 +16781,14 @@
   function workspaceRouteSegments() {
     const parts = window.location.pathname.replace(/\/+$/, '').split('/').filter(Boolean);
     const productionsIndex = parts.findIndex(part => part.toLowerCase() === 'productions');
-    if (productionsIndex < 0) return [];
-    return parts.slice(productionsIndex + 2).map(cleanWorkspaceRoutePart).filter(Boolean);
+    if (productionsIndex >= 0 && productionsIndex + 1 < parts.length) {
+      return parts.slice(productionsIndex + 2).map(cleanWorkspaceRoutePart).filter(Boolean);
+    }
+    const teamIndex = parts.findIndex(part => part.toLowerCase() === 'team');
+    if (teamIndex >= 0) {
+      return parts.slice(teamIndex + 1).map(cleanWorkspaceRoutePart).filter(Boolean);
+    }
+    return [];
   }
 
   function isWorkspaceRouteInvalid() {
@@ -35787,6 +35797,10 @@ If you have any questions, don't hesitate to reach out.
       if (!loader) return Promise.resolve();
       workspaceDataEnsurePromises[promiseKey] = Promise.resolve()
         .then(loader)
+        .catch(error => {
+          console.warn(`[BTS] workspace data load failed for ${key}`, error);
+          return null;
+        })
         .then(result => {
           workspaceDataLoaded[key] = true;
           return result;
