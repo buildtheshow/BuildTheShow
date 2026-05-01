@@ -6205,26 +6205,40 @@
     }
 
     async function loadCharList() {
-      document.body.style.overflow = 'hidden';
-      const overlay = document.getElementById('char-list-overlay');
-      if (overlay) overlay.style.display = 'flex';
       try {
-        let resolvedId = prodId;
-        if (!resolvedId && prodSlug) {
-          const { data: p } = await sb.from('productions').select('id,title,wizard_data').ilike('slug', prodSlug).maybeSingle();
-          if (p) { resolvedId = p.id; }
+        let prod = null;
+        if (prodSlug) {
+          let scopedOrgId = null;
+          if (orgPathKey) {
+            const { data: orgMatch } = await sb.from('organizations').select('id')
+              .or(`slug.eq.${orgPathKey},abbreviation.eq.${orgPathKey},abbreviation.eq.${String(orgPathKey).toUpperCase()},abbreviation.eq.${String(orgPathKey).toLowerCase()}`)
+              .maybeSingle();
+            scopedOrgId = orgMatch?.id || null;
+          }
+          let q = sb.from('productions').select('id,title,wizard_data').ilike('slug', prodSlug);
+          if (scopedOrgId) q = q.eq('organization_id', scopedOrgId);
+          const { data } = await q.maybeSingle();
+          prod = data || null;
+        } else if (prodId) {
+          const { data } = await sb.from('productions').select('id,title,wizard_data').eq('id', prodId).maybeSingle();
+          prod = data || null;
         }
-        if (!resolvedId) { document.getElementById('char-list-body').textContent = 'Could not load character list.'; return; }
-        const [{ data: prod }, { data: audConfig }, { data: chars }] = await Promise.all([
-          sb.from('productions').select('id,title,wizard_data').eq('id', resolvedId).maybeSingle(),
-          sb.from('audition_configs').select('*').eq('production_id', resolvedId).maybeSingle(),
-          sb.from('production_characters').select('*').eq('production_id', resolvedId).eq('show_on_public_page', true).order('sort_order'),
+        // DOM is fully parsed by the time the first await resolves — safe to access overlay now
+        const overlay = document.getElementById('char-list-overlay');
+        if (overlay) overlay.style.display = 'flex';
+        document.body.style.overflow = 'hidden';
+        if (!prod) { document.getElementById('char-list-body').textContent = 'Could not load character list.'; return; }
+        const [{ data: audConfig }, { data: chars }] = await Promise.all([
+          sb.from('audition_configs').select('*').eq('production_id', prod.id).maybeSingle(),
+          sb.from('production_characters').select('*').eq('production_id', prod.id).eq('show_on_public_page', true).order('sort_order'),
         ]);
         const titleEl = document.getElementById('char-list-title');
-        if (titleEl && prod?.title) titleEl.textContent = prod.title;
+        if (titleEl && prod.title) titleEl.textContent = prod.title;
         const body = document.getElementById('char-list-body');
         if (body) body.innerHTML = buildRolePreview(chars || [], audConfig || {}, prod) || '<p style="color:#9a90b0;">No characters have been added yet.</p>';
       } catch (e) {
+        const overlay = document.getElementById('char-list-overlay');
+        if (overlay) overlay.style.display = 'flex';
         const body = document.getElementById('char-list-body');
         if (body) body.textContent = 'Could not load character list.';
       }
