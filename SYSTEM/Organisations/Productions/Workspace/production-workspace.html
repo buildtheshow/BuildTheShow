@@ -8386,7 +8386,7 @@
       background: transparent;
       padding: 0;
       font-family: var(--bts-font);
-      cursor: default;
+      cursor: pointer;
     }
     .template-checkin-time {
       color: #6f9a78;
@@ -8401,7 +8401,7 @@
     }
     .template-checkin-card .casting-card {
       width: 100%;
-      cursor: default;
+      cursor: inherit;
       pointer-events: none;
       box-shadow: 2px 2px 4px rgba(15,23,42,0.16) !important;
     }
@@ -17648,9 +17648,10 @@
     renderInRoomReadySignals();
   }
 
-  function syncCurrentRoomFromState(session, containerId = inRoomContainerId, openFn = inRoomOpenFn) {
+  function syncCurrentRoomFromState(session, containerId = inRoomContainerId, openFn = inRoomOpenFn, requestedId = null) {
     const state = getRoomState(getAuditionRoomMeta(session).roomKey);
     if (!state || state.status !== 'in_progress' || !state.current_applicant_id) return false;
+    if (requestedId && String(requestedId) !== String(state.current_applicant_id)) return false;
     if (String(state.current_applicant_id) === String(inRoomApplicantId || '')) return false;
     inRoomApplicantId = state.current_applicant_id;
     saveWorkspaceNavState({ inRoomApplicantId });
@@ -33521,12 +33522,22 @@ If you have any questions, don't hesitate to reach out.
       }
       return null;
     })();
-    const isSelected = app?.id === inRoomApplicantId;
-    const isCurrent  = slotStart && now >= slotStart && now < slotStart + (10 * 60 * 1000);
-    const isLate     = slotStart && now >= slotStart + (10 * 60 * 1000);
+    const currentRoomState = getRoomState(getAuditionRoomMeta(session || getCurrentInRoomSession()).roomKey);
+    const currentId = String(inRoomApplicantId || currentRoomState?.current_applicant_id || '');
+    const checkedInQueue = getInRoomCheckedInApps();
+    const appIndex = checkedInQueue.findIndex(candidate => String(candidate.id) === String(app?.id || ''));
+    const currentIndex = currentId
+      ? checkedInQueue.findIndex(candidate => String(candidate.id) === currentId)
+      : -1;
+    const isCurrent  = currentId
+      ? String(app?.id || '') === currentId
+      : !!(slotStart && now >= slotStart && now < slotStart + (10 * 60 * 1000));
+    const isThrough = currentIndex >= 0 && appIndex >= 0
+      ? appIndex < currentIndex
+      : !!(slotStart && now >= slotStart + (10 * 60 * 1000) && !isCurrent);
     const classes = ['template-checkin-tile'];
-    if (isSelected || isCurrent) classes.push('is-next');
-    else if (isLate) classes.push('is-done');
+    if (isCurrent) classes.push('is-next');
+    else if (isThrough) classes.push('is-done');
     const nameParts = String(app?.name || '').trim().split(' ');
     const cardHtml = renderCastingCard({
       first_name: nameParts[0] || '',
@@ -33539,8 +33550,8 @@ If you have any questions, don't hesitate to reach out.
       attendance_mode:    applicantAttendanceModeLabel(app) || null,
     }, { size: 'compact', hasPadding: true, hasIcons: true });
     const timeLabel = slotTimeStr ? `<div class="template-checkin-time">${esc(formatSlotTime(slotTimeStr))}</div>` : '';
-    const statusLabel = isSelected ? 'Next' : (isLate ? 'Through' : 'Ready');
-    return `<button type="button" class="${classes.join(' ')}" onclick="${openFn}('${app.id}')" title="${esc(app.name || '')}" style="flex:0 0 88px;width:88px;display:grid;grid-template-rows:0.78rem auto 0.86rem;justify-items:center;gap:0.22rem;">
+    const statusLabel = isCurrent ? 'Next' : (isThrough ? 'Through' : 'Ready');
+    return `<button type="button" class="${classes.join(' ')}" onclick="${openFn}('${app.id}')" title="${esc(app.name || '')}" aria-current="${isCurrent ? 'true' : 'false'}" style="flex:0 0 88px;width:88px;display:grid;grid-template-rows:0.78rem auto 0.86rem;justify-items:center;gap:0.22rem;">
       ${timeLabel}
       <div class="template-checkin-card">${cardHtml}</div>
       <div class="template-checkin-status">${esc(statusLabel)}</div>
@@ -33889,7 +33900,7 @@ If you have any questions, don't hesitate to reach out.
     const checkedInApps = getInRoomCheckedInApps();
     const inRoomSession = getSelectedAuditionSession();
     const currentSession = getCurrentInRoomSession();
-    if (syncCurrentRoomFromState(currentSession, containerId, openFn)) return;
+    if (syncCurrentRoomFromState(currentSession, containerId, openFn, requestedId)) return;
     const currentRoomState = getRoomState(getAuditionRoomMeta(currentSession).roomKey);
     if (!roomStateIsWaiting(currentRoomState) && app?.id && String(currentRoomState?.current_applicant_id || '') !== String(app.id)) {
       persistAuditionRoomState(buildRoomStatePayload({ session: currentSession, app, status: 'in_progress' })).catch(() => {});
