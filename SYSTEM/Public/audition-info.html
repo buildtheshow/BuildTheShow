@@ -1465,11 +1465,12 @@
     .bk-btn-next:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
 
     /* Success */
-    .bk-success { display: none; padding: 2.25rem 1.75rem 2rem; text-align: center; }
+    .bk-success { display: none; padding: 2.5rem 2rem 2.25rem; text-align: center; }
     .bk-success.active { display: block; }
-    .bk-success-icon { font-size: 2.75rem; margin-bottom: 0.6rem; }
-    .bk-success-title { font-size: 1.15rem; font-weight: 800; color: #1a1530; margin-bottom: 0.4rem; }
-    .bk-success-sub { font-size: 0.875rem; color: #6a5a80; line-height: 1.5; margin-bottom: 1.5rem; }
+    .bk-success-icon { font-size: 4rem; margin-bottom: 0.75rem; }
+    .bk-success-title { font-size: 1.55rem; font-weight: 900; color: #1a1530; margin-bottom: 0.5rem; letter-spacing: -0.01em; }
+    .bk-success-sub { font-size: 0.95rem; color: #6a5a80; line-height: 1.55; margin-bottom: 1rem; }
+    .bk-success-email-note { font-size: 0.82rem; color: #8a7ca5; background: rgba(87,46,136,0.07); border-radius: 10px; padding: 0.65rem 0.9rem; margin: 0 auto 1.5rem; max-width: 320px; line-height: 1.5; }
     .bk-success-email-status {
       display: none;
       margin: -0.35rem auto 1.25rem;
@@ -1583,6 +1584,8 @@
     /* Expired overlay */
     .bk-expired-overlay { display: none; position: absolute; inset: 0; z-index: 30; background: rgba(26,21,48,0.92); backdrop-filter: blur(4px); border-radius: inherit; align-items: center; justify-content: center; flex-direction: column; text-align: center; padding: 2rem; }
     .bk-expired-overlay.active { display: flex; }
+    .bk-slot-filled-overlay { display: none; position: absolute; inset: 0; z-index: 30; background: rgba(26,21,48,0.92); backdrop-filter: blur(4px); border-radius: inherit; align-items: center; justify-content: center; flex-direction: column; text-align: center; padding: 2rem; }
+    .bk-slot-filled-overlay.active { display: flex; }
 
     /* Review slot change link */
     .bk-review-slot-change { font-size: 0.72rem; color: #572e88; cursor: pointer; text-decoration: underline; display: inline-block; margin-top: 0.3rem; }
@@ -2346,7 +2349,7 @@
     let publicAuditionsRealtimeChannel = null;
     let publicAuditionsRefreshTimer = null;
     let publicAuditionsResolvedProdId = '';
-    let activePublicAuditionTab = 'tab-fees';
+    let activePublicAuditionTab = window.location.hash ? window.location.hash.slice(1) : 'tab-fees';
     let hasAppliedInitialPublicTab = false;
 
     function queuePublicAuditionsRefresh() {
@@ -3761,6 +3764,7 @@
       if (sessTitle) sessTitle.textContent = _bkSession.name || 'Audition';
       document.getElementById('bk-success').classList.remove('active');
       document.getElementById('bk-expired-overlay').classList.remove('active');
+      document.getElementById('bk-slot-filled-overlay').classList.remove('active');
       document.getElementById('bk-steps-wrap').style.display = '';
       document.getElementById('bk-body').style.display = '';
       document.getElementById('bk-footer').style.display = '';
@@ -3781,6 +3785,14 @@
     }
 
     let _bkReturnToReview = false;
+
+    function _bkShowSlotFilled() {
+      document.getElementById('bk-slot-filled-overlay').classList.add('active');
+    }
+    async function _bkDismissSlotFilled() {
+      document.getElementById('bk-slot-filled-overlay').classList.remove('active');
+      await _bkChangeSlot();
+    }
 
     async function _bkChangeSlot() {
       // Save current form state before closing, then reopen the slot picker.
@@ -4897,9 +4909,12 @@
           const labelOk = isBookablePublicSlot(slotCheck);
           const stillValid = slotCheck && labelOk && (weHoldIt || holdExpired) && !slotFull;
           if (!stillValid) {
-            const reason = slotFull ? 'This slot just filled up.' : 'Your hold has expired.';
-            _bkErr(`${reason} <a href="#" onclick="event.preventDefault();_bkChangeSlot()" style="color:#572e88;font-weight:700;text-decoration:underline;">Pick a different time →</a>`);
             if (next) { next.disabled=false; next.textContent='Confirm Booking'; }
+            if (slotFull) {
+              _bkShowSlotFilled();
+            } else {
+              document.getElementById('bk-expired-overlay').classList.add('active');
+            }
             return;
           }
         }
@@ -6440,8 +6455,17 @@
         <div class="bk-success-icon">🎭</div>
         <div class="bk-success-title">You're booked!</div>
         <div class="bk-success-sub" id="bk-success-sub">Your spot is confirmed. Can't wait to see you!</div>
+        <div class="bk-success-email-note">📬 A confirmation email is on its way. If you don't see it in a few minutes, check your junk or spam folder.</div>
         <div class="bk-success-email-status" id="bk-success-email-status"></div>
         <button class="bk-btn-next" onclick="closeBookModal()">Done</button>
+      </div>
+
+      <!-- Slot filled overlay -->
+      <div class="bk-slot-filled-overlay" id="bk-slot-filled-overlay">
+        <div style="font-size:2.5rem;margin-bottom:0.75rem;">😬</div>
+        <div style="font-size:1.15rem;font-weight:900;color:#fff;margin-bottom:0.5rem;">That slot just filled up</div>
+        <div style="font-size:0.9rem;color:rgba(255,255,255,0.75);margin-bottom:1.75rem;line-height:1.55;max-width:280px;">Someone else grabbed it right before you. Pick a different time to keep going.</div>
+        <button class="bk-btn-next" onclick="_bkDismissSlotFilled()">Pick a Different Time →</button>
       </div>
 
       <div class="bk-footer" id="bk-footer">

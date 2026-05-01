@@ -313,15 +313,21 @@ serve(async (req) => {
     primarySession ? fmtTime(String((primarySession as Record<string,unknown>).start_time || '')) : '',
   );
   const prepareText  = firstDefinedString(
-    directContext.what_to_prepare,
+    directContext.what_to_prepare
+      ? htmlToPlainText(String(directContext.what_to_prepare))
+      : '',
     (primarySession as Record<string,unknown>)?.prepare_text
       ? htmlToPlainText(String((primarySession as Record<string,unknown>).prepare_text))
       : '',
   );
   const whatToPrepare = firstDefinedString(
     prepareText,
-    customAnswers['What to Prepare'],
-    customAnswers['what_to_prepare'],
+    customAnswers['What to Prepare']
+      ? htmlToPlainText(String(customAnswers['What to Prepare']))
+      : '',
+    customAnswers['what_to_prepare']
+      ? htmlToPlainText(String(customAnswers['what_to_prepare']))
+      : '',
   );
   const showDates = productionRecord.start_date && productionRecord.end_date
     ? `${fmtDate(String(productionRecord.start_date))} – ${fmtDate(String(productionRecord.end_date))}`
