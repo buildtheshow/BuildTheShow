@@ -312,22 +312,13 @@ serve(async (req) => {
     primarySlot ? fmtTime(String((primarySlot as Record<string,unknown>).slot_time || '')) : '',
     primarySession ? fmtTime(String((primarySession as Record<string,unknown>).start_time || '')) : '',
   );
-  const prepareText  = firstDefinedString(
-    directContext.what_to_prepare
-      ? htmlToPlainText(String(directContext.what_to_prepare))
-      : '',
-    (primarySession as Record<string,unknown>)?.prepare_text
-      ? htmlToPlainText(String((primarySession as Record<string,unknown>).prepare_text))
-      : '',
-  );
+  // Keep as original HTML so it renders properly in HTML emails.
+  // htmlToPlainText is applied to the whole body later for the plain-text version.
   const whatToPrepare = firstDefinedString(
-    prepareText,
-    customAnswers['What to Prepare']
-      ? htmlToPlainText(String(customAnswers['What to Prepare']))
-      : '',
-    customAnswers['what_to_prepare']
-      ? htmlToPlainText(String(customAnswers['what_to_prepare']))
-      : '',
+    String(directContext.what_to_prepare || ''),
+    String((primarySession as Record<string,unknown>)?.prepare_text || ''),
+    String(customAnswers['What to Prepare'] || ''),
+    String(customAnswers['what_to_prepare'] || ''),
   );
   const showDates = productionRecord.start_date && productionRecord.end_date
     ? `${fmtDate(String(productionRecord.start_date))} – ${fmtDate(String(productionRecord.end_date))}`
@@ -389,10 +380,14 @@ serve(async (req) => {
     ...customAnswers,
   };
 
+  // These tokens contain rich HTML from the org's editor — insert as-is in HTML emails.
+  const rawHtmlTokens = new Set(['{{what_to_prepare}}', '{{audition_notes}}']);
+
   function substituteTemplate(text: string, escapeForHtml = false): string {
     let result = String(text || '');
     Object.entries(tokenValues).forEach(([token, value]) => {
-      result = result.split(token).join(escapeForHtml ? escHtml(value) : value);
+      const isRaw = escapeForHtml && rawHtmlTokens.has(token);
+      result = result.split(token).join((escapeForHtml && !isRaw) ? escHtml(value) : value);
     });
     result = result.replace(
       /\{\{\s*(custom|production|performer|booking|app|organization|org)\s*:\s*([^}]+)\}\}/gi,
