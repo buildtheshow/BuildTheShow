@@ -181,9 +181,9 @@
       trayCards = ''
     } = config;
 
-    return `<div class="inroom-checked-strip" data-bts-template="checked-in-rail">
-      <div class="inroom-checked-strip-label">${esc(label)}</div>
-      <div class="inroom-checked-strip-list">${trayCards}</div>
+    return `<div class="template-checkin-rail" data-bts-template="checked-in-rail">
+      <div class="template-checkin-label">${esc(label)}</div>
+      <div class="template-checkin-row">${trayCards}</div>
     </div>`;
   }
 

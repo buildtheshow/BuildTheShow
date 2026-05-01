@@ -7163,6 +7163,121 @@
       font-size: 0.82rem;
       line-height: 1.45;
     }
+    .template-checkin-rail {
+      display: grid;
+      grid-template-columns: 74px minmax(0, 1fr);
+      gap: 0.75rem;
+      align-items: stretch;
+      min-width: 0;
+      border-radius: 0 0 16px 16px;
+      background: #fff;
+      padding: 1rem 1.05rem 1.35rem;
+      overflow: hidden;
+    }
+    .template-checkin-label {
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      align-self: stretch;
+      min-height: 100%;
+      margin: -1rem 0 -1.35rem;
+      padding: 1rem 0 1.35rem;
+      color: #1a1530;
+      font-size: 0.82rem;
+      font-weight: 950;
+      letter-spacing: 0.08em;
+      line-height: 1.1;
+      text-align: center;
+      text-transform: uppercase;
+      writing-mode: vertical-rl;
+      transform: rotate(180deg);
+      user-select: none;
+    }
+    .template-checkin-label::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 2px;
+      background: rgba(87,46,136,0.12);
+    }
+    .template-checkin-row {
+      display: flex;
+      flex-direction: row;
+      flex-wrap: nowrap;
+      align-items: flex-start;
+      gap: 0.9rem;
+      min-width: 0;
+      max-width: 100%;
+      overflow-x: auto;
+      overflow-y: hidden;
+      padding: 0.1rem 0.15rem 0.85rem;
+      scrollbar-width: thin;
+      -webkit-overflow-scrolling: touch;
+      perspective: 900px;
+    }
+    .template-checkin-tile {
+      flex: 0 0 124px;
+      width: 124px;
+      display: grid;
+      grid-template-rows: 1rem auto 1.05rem;
+      justify-items: center;
+      gap: 0.36rem;
+      border: 0;
+      background: transparent;
+      padding: 0;
+      font-family: var(--bts-font);
+      cursor: default;
+    }
+    .template-checkin-time {
+      color: #6f9a78;
+      font-size: 0.86rem;
+      font-weight: 950;
+      line-height: 1rem;
+      white-space: nowrap;
+    }
+    .template-checkin-card {
+      width: 100%;
+      aspect-ratio: 4 / 5;
+    }
+    .template-checkin-card .casting-card {
+      width: 100%;
+      cursor: default;
+      pointer-events: none;
+      box-shadow: 2px 2px 4px rgba(15,23,42,0.16) !important;
+    }
+    .template-checkin-status {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 1.32rem;
+      max-width: 100%;
+      border-radius: 999px;
+      padding: 0.08rem 0.58rem;
+      background: rgba(129,171,139,0.14);
+      color: #4f8a5c;
+      font-size: 0.82rem;
+      font-weight: 950;
+      line-height: 1.15rem;
+      white-space: nowrap;
+    }
+    .template-checkin-tile.is-done {
+      opacity: 0.5;
+      filter: grayscale(0.72);
+    }
+    .template-checkin-tile.is-next .template-checkin-card .casting-card {
+      box-shadow:
+        0 21px 38px rgba(26,21,48,0.27),
+        0 12px 25px rgba(239,171,69,0.27),
+        0 0 0 2px rgba(239,171,69,0.38);
+      transform: translateY(-2px) translateZ(48px) scale(1.095);
+    }
+    .template-checkin-tile.is-next .template-checkin-status {
+      background: rgba(239,171,69,0.18);
+      color: #a56716;
+    }
     .inroom-main {
       display: grid;
       grid-template-columns: minmax(280px, 0.9fr) minmax(420px, 1.7fr);
@@ -16099,9 +16214,9 @@
       if (dcCurrentSessionId) renderDanceCallInRoom(dcCurrentSessionId);
       return;
     }
-    const strip = document.querySelector('.inroom-checked-strip');
+    const strip = document.querySelector('.template-checkin-rail[data-bts-template="checked-in-rail"]');
     if (!strip) return;
-    const label = strip.querySelector('.inroom-checked-strip-label')?.textContent || 'Checked In';
+    const label = strip.querySelector('.template-checkin-label')?.textContent || 'Checked In';
     try {
       strip.outerHTML = renderGeneralInRoomCheckedStrip(inRoomOpenFn || 'openAuditionSessionInRoom', label);
       requestAnimationFrame(() => scrollCheckedInRailToActive(document));
@@ -33221,12 +33336,10 @@ If you have any questions, don't hesitate to reach out.
     const isSelected = app?.id === inRoomApplicantId;
     const isCurrent  = slotStart && now >= slotStart && now < slotStart + (10 * 60 * 1000);
     const isLate     = slotStart && now >= slotStart + (10 * 60 * 1000);
-    const classes = ['inroom-thumb'];
-    if (isSelected) classes.push('tray-selected');
-    else if (isCurrent) classes.push('tray-current');
-    else if (isLate)    classes.push('tray-late');
+    const classes = ['template-checkin-tile'];
+    if (isSelected || isCurrent) classes.push('is-next');
+    else if (isLate) classes.push('is-done');
     const nameParts = String(app?.name || '').trim().split(' ');
-    const isGeneralAuditionThumb = session?.type === 'audition';
     const cardHtml = renderCastingCard({
       first_name: nameParts[0] || '',
       last_name:  nameParts.slice(1).join(' ') || '',
@@ -33236,13 +33349,13 @@ If you have any questions, don't hesitate to reach out.
       casting_categories: cbv2CastingCategories(app),
       role_openness:      cbv2RoleBadge(app),
       attendance_mode:    applicantAttendanceModeLabel(app) || null,
-    }, { size: isGeneralAuditionThumb ? 'compact' : 'default', hasPadding: true, hasIcons: true });
-    const timeLabel = slotTimeStr ? `<div class="inroom-thumb-time">${esc(formatSlotTime(slotTimeStr))}</div>` : '';
+    }, { size: 'compact', hasPadding: true, hasIcons: true });
+    const timeLabel = slotTimeStr ? `<div class="template-checkin-time">${esc(formatSlotTime(slotTimeStr))}</div>` : '';
     const statusLabel = isSelected ? 'Next' : (isLate ? 'Through' : 'Ready');
     return `<button type="button" class="${classes.join(' ')}" onclick="${openFn}('${app.id}')" title="${esc(app.name || '')}">
       ${timeLabel}
-      ${cardHtml}
-      <div class="inroom-thumb-state"><span>${esc(statusLabel)}</span></div>
+      <div class="template-checkin-card">${cardHtml}</div>
+      <div class="template-checkin-status">${esc(statusLabel)}</div>
     </button>`;
   }
 
@@ -33527,11 +33640,11 @@ If you have any questions, don't hesitate to reach out.
 
   function scrollCheckedInRailToActive(scope = document) {
     const root = scope || document;
-    const list = root.querySelector?.('.inroom-checked-strip-list') || document.querySelector('.inroom-checked-strip-list');
+    const list = root.querySelector?.('.template-checkin-row') || document.querySelector('.template-checkin-row');
     if (!list) return;
-    const target = list.querySelector('.inroom-thumb.tray-selected, .inroom-thumb.tray-current')
-      || list.querySelector('.inroom-thumb:not(.tray-late)')
-      || list.querySelector('.inroom-thumb');
+    const target = list.querySelector('.template-checkin-tile.is-next')
+      || list.querySelector('.template-checkin-tile:not(.is-done)')
+      || list.querySelector('.template-checkin-tile');
     if (!target) return;
     target.scrollIntoView({ block: 'nearest', inline: 'center', behavior: 'smooth' });
   }
