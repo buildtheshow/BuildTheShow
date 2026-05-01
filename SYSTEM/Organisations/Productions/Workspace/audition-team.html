@@ -9424,6 +9424,7 @@
     #aud-panel-castlist {
       min-height: calc(100dvh - 118px);
       flex-direction: column;
+      padding: 0 !important;
     }
     .castlist-page-card {
       flex: 1 1 auto;
@@ -9437,14 +9438,13 @@
       flex: 1 1 auto;
       min-width: 0;
       display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: clamp(1.25rem, 4vw, 3rem);
+      align-items: stretch;
+      justify-content: stretch;
     }
     .castlist-programme-card {
-      width: min(100%, 760px);
-      margin: auto;
-      padding: 2rem 1.5rem;
+      flex: 1 1 auto;
+      width: 100%;
+      padding: 2.5rem clamp(1.5rem, 5vw, 4rem);
       background: #fff;
       font-family: var(--bts-font);
     }
@@ -9455,7 +9455,7 @@
       font-weight: 700;
       letter-spacing: 0;
       color: #111827;
-      margin: 0 0 0.9rem;
+      margin: 0 0 1.5rem;
       text-transform: uppercase;
     }
     .castlist-programme {
@@ -9485,6 +9485,27 @@
     .castlist-programme-open {
       color: #9a90b0;
       font-style: italic;
+    }
+    .castlist-programme-section-head {
+      grid-column: 1 / -1;
+      text-align: center;
+      font-size: 0.7rem;
+      font-weight: 800;
+      letter-spacing: 0.13em;
+      text-transform: uppercase;
+      color: #9a90b0;
+      padding-top: 1.1rem;
+      margin-top: 0.35rem;
+      border-top: 1px solid rgba(87,46,136,0.12);
+    }
+    .castlist-table-section-head td {
+      padding: 0.9rem 1.4rem 0.3rem;
+      font-size: 0.68rem;
+      font-weight: 800;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: #9a90b0;
+      border-top: 1px solid rgba(87,46,136,0.1);
     }
 
     /* Auditions sub-nav */
@@ -13659,14 +13680,14 @@
 
       <!-- ── CAST LIST ── -->
       <div id="aud-panel-castlist" class="aud-panel" style="display:none;">
-        <div class="page-header">
+        <div class="page-header" style="padding:1.75rem 2rem 0;">
           <div>
             <div class="page-title">Cast List</div>
             <div class="page-subtitle">Every character and grouping with current casting decisions.</div>
           </div>
           <button class="btn-secondary" onclick="exportCastList()" style="font-size:0.8rem;">Export</button>
         </div>
-        <div class="card castlist-page-card">
+        <div class="card castlist-page-card" style="margin:1.25rem 2rem 2.5rem;">
           <div id="cast-list-programme-host">
             <div style="text-align:center;padding:2.5rem;color:#9a90b0;">Add characters or groupings to build the cast list.</div>
           </div>
@@ -31323,17 +31344,31 @@ If you have any questions, don't hesitate to reach out.
     if (!sortedChars.length) {
       return '<tr><td colspan="3" style="text-align:center;padding:2.5rem;color:#9a90b0;">Add characters or groupings to build the cast list.</td></tr>';
     }
-    return sortedChars.map(char => {
-      const cast = getCastListPerformers(char);
-      const performerHtml = cast.length
-        ? `<div class="castlist-performer-list">${cast.map(app => `<div>${esc(app.name || '—')}</div>`).join('')}</div>`
-        : '<span class="castlist-open">Open</span>';
-      return `<tr>
-        <td style="padding-left:1.4rem;"><div class="castlist-role-name">${esc(char.name || 'Unnamed')}</div></td>
-        <td>${performerHtml}</td>
-        <td><span class="char-tag char-tag-role-${esc((char.role_type || '').toLowerCase())}">${esc(char.role_type || '—')}</span></td>
-      </tr>`;
-    }).join('');
+    const sectionLabels = { 0: null, 1: 'Groups', 2: 'Ensemble' };
+    const rankGroups = [0, 1, 2].map(rank => ({
+      rank,
+      label: sectionLabels[rank],
+      chars: sortedChars.filter(c => castListCharacterSortRank(c) === rank),
+    })).filter(g => g.chars.length);
+
+    const rows = [];
+    rankGroups.forEach((group, i) => {
+      if (i > 0 && group.label) {
+        rows.push(`<tr class="castlist-table-section-head"><td colspan="3">${esc(group.label)}</td></tr>`);
+      }
+      group.chars.forEach(char => {
+        const cast = getCastListPerformers(char);
+        const performerHtml = cast.length
+          ? `<div class="castlist-performer-list">${cast.map(app => `<div>${esc(app.name || '—')}</div>`).join('')}</div>`
+          : '<span class="castlist-open">Open</span>';
+        rows.push(`<tr>
+          <td style="padding-left:1.4rem;"><div class="castlist-role-name">${esc(char.name || 'Unnamed')}</div></td>
+          <td>${performerHtml}</td>
+          <td><span class="char-tag char-tag-role-${esc((char.role_type || '').toLowerCase())}">${esc(char.role_type || '—')}</span></td>
+        </tr>`);
+      });
+    });
+    return rows.join('');
   }
 
   function buildCastListProgrammeHtml() {
@@ -31341,14 +31376,26 @@ If you have any questions, don't hesitate to reach out.
     if (!sortedChars.length) {
       return '<div style="text-align:center;padding:2.5rem;color:#9a90b0;">Add characters or groupings to build the cast list.</div>';
     }
+    const sectionLabels = { 0: null, 1: 'Groups', 2: 'Ensemble' };
+    const rankGroups = [0, 1, 2].map(rank => ({
+      rank,
+      label: sectionLabels[rank],
+      chars: sortedChars.filter(c => castListCharacterSortRank(c) === rank),
+    })).filter(g => g.chars.length);
+
     const rows = [];
-    sortedChars.forEach(char => {
-      const cast = getCastListPerformers(char);
-      const names = cast.length ? cast.map(app => app.name || '—') : ['Open'];
-      rows.push(`<div class="castlist-programme-role">${esc(char.name || 'Unnamed')}</div>
-        <div class="castlist-programme-name-list">
-          ${names.map(name => `<div class="castlist-programme-name${name === 'Open' ? ' castlist-programme-open' : ''}">${esc(name)}</div>`).join('')}
-        </div>`);
+    rankGroups.forEach((group, i) => {
+      if (i > 0 && group.label) {
+        rows.push(`<div class="castlist-programme-section-head">${esc(group.label)}</div>`);
+      }
+      group.chars.forEach(char => {
+        const cast = getCastListPerformers(char);
+        const names = cast.length ? cast.map(app => app.name || '—') : ['Open'];
+        rows.push(`<div class="castlist-programme-role">${esc(char.name || 'Unnamed')}</div>
+          <div class="castlist-programme-name-list">
+            ${names.map(name => `<div class="castlist-programme-name${name === 'Open' ? ' castlist-programme-open' : ''}">${esc(name)}</div>`).join('')}
+          </div>`);
+      });
     });
     return `<div class="castlist-programme-card">
       <div class="castlist-programme-title">Cast List</div>
