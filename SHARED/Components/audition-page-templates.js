@@ -106,6 +106,43 @@
       </button>`;
   }
 
+  function renderCastingBoardStickyNoteTemplate(config) {
+    const {
+      esc,
+      noteId = '',
+      charId = '',
+      name = 'Unnamed',
+      style = '',
+      cardsId = '',
+      cardsHtml = '',
+      footerId = '',
+      footerHtml = '',
+      interactive = true,
+      headerOnclick = '',
+      noteOnclick = '',
+      dragAttrs = ''
+    } = config;
+    const safeCharId = esc(charId);
+    const safeNoteId = esc(noteId || `cbnote-${charId}`);
+    const safeCardsId = esc(cardsId || `cbnote-cards-${charId}`);
+    const safeFooterId = esc(footerId || `cbnote-footer-${charId}`);
+    const safeName = esc(name);
+    const safeStyle = String(style || '').replace(/"/g, '&quot;');
+    const resolvedNoteOnclick = noteOnclick || (interactive ? `cbv2TouchPlaceOnNote(event,'${safeCharId}')` : '');
+
+    return `<div class="cbv2-role-note" id="${safeNoteId}" data-cbv2-char-id="${safeCharId}"
+      ${resolvedNoteOnclick ? `onclick="${resolvedNoteOnclick}"` : ''}
+      style="${safeStyle}"${dragAttrs || ''}>
+      <div class="cbv2-note-header" ${headerOnclick ? `onclick="${headerOnclick}"` : ''}><span class="cbv2-note-header-label">${safeName}</span></div>
+      <div class="cbv2-note-cards" id="${safeCardsId}">
+        ${cardsHtml || '<div class="cbv2-note-empty">Drop here</div>'}
+      </div>
+      <div class="cbv2-note-footer" id="${safeFooterId}">
+        ${footerHtml || ''}
+      </div>
+    </div>`;
+  }
+
   function renderCharacterListHintTemplate() {
     return `<div class="inroom-save-hint">Gold: their choice<br>Your colour: your choice</div>`;
   }
@@ -466,6 +503,7 @@
     renderPortalLoginTemplate,
     renderPortalSessionFrameTemplate,
     renderEmptyStateTemplate,
+    renderCastingBoardStickyNoteTemplate,
     renderCastingCardFlipShellTemplate,
     renderInRoomPageTemplate,
     renderDanceCallInRoomTemplate
@@ -503,6 +541,14 @@
     tags: { area: 'auditions', component: 'sticky-note' },
     priority: 85,
     render: renderStickyNoteTemplate
+  });
+
+  api.registerTemplate({
+    id: 'auditions.casting-board.sticky-note',
+    name: 'Casting Board Sticky Note',
+    tags: { area: 'auditions', page: 'casting-board', component: 'sticky-note' },
+    priority: 85,
+    render: renderCastingBoardStickyNoteTemplate
   });
 
   api.registerTemplate({
