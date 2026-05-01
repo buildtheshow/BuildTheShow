@@ -6198,7 +6198,37 @@
       if (!document.hidden) queuePublicAuditionsRefresh();
     });
 
-    loadPage();
+    if (params.get('view') === 'characters') {
+      loadCharList();
+    } else {
+      loadPage();
+    }
+
+    async function loadCharList() {
+      document.body.style.overflow = 'hidden';
+      const overlay = document.getElementById('char-list-overlay');
+      if (overlay) overlay.style.display = 'flex';
+      try {
+        let resolvedId = prodId;
+        if (!resolvedId && prodSlug) {
+          const { data: p } = await sb.from('productions').select('id,title,wizard_data').ilike('slug', prodSlug).maybeSingle();
+          if (p) { resolvedId = p.id; }
+        }
+        if (!resolvedId) { document.getElementById('char-list-body').textContent = 'Could not load character list.'; return; }
+        const [{ data: prod }, { data: audConfig }, { data: chars }] = await Promise.all([
+          sb.from('productions').select('id,title,wizard_data').eq('id', resolvedId).maybeSingle(),
+          sb.from('audition_configs').select('*').eq('production_id', resolvedId).maybeSingle(),
+          sb.from('production_characters').select('*').eq('production_id', resolvedId).eq('show_on_public_page', true).order('sort_order'),
+        ]);
+        const titleEl = document.getElementById('char-list-title');
+        if (titleEl && prod?.title) titleEl.textContent = prod.title;
+        const body = document.getElementById('char-list-body');
+        if (body) body.innerHTML = buildRolePreview(chars || [], audConfig || {}, prod) || '<p style="color:#9a90b0;">No characters have been added yet.</p>';
+      } catch (e) {
+        const body = document.getElementById('char-list-body');
+        if (body) body.textContent = 'Could not load character list.';
+      }
+    }
   </script>
 
 
@@ -6419,7 +6449,7 @@
 
           <div id="bk-char-area" style="display:none;">
             <div class="bk-pref-section-title" style="margin-top:1rem;">Characters</div>
-            <div class="bk-pref-section-sub">Tap the character(s) the performer would like to be considered for. Unsure? <a href="#" onclick="event.preventDefault();window.open(window.location.href.split('#')[0]+'#tab-characters','_blank')" style="color:#572e88;font-weight:600;text-decoration:underline;">View the full character list</a></div>
+            <div class="bk-pref-section-sub">Tap the character(s) the performer would like to be considered for. Unsure? <a href="#" onclick="event.preventDefault();(function(){var s=window.location.search;window.open(window.location.origin+window.location.pathname+s+(s?'&':'?')+'view=characters','_blank');})()" style="color:#572e88;font-weight:600;text-decoration:underline;">View the full character list</a></div>
             <div style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap;margin:0.5rem 0;">
               <select class="bk-char-sort-sel" id="bk-char-sort" onchange="_bkRenderCharTiles()">
                 <option value="manual">Sort: Default</option>
@@ -6478,6 +6508,20 @@
         <button class="bk-btn-next" id="bk-next" onclick="_bkNext()">Next →</button>
       </div>
 
+    </div>
+  </div>
+
+  <!-- ── Character List Overlay (opened via ?view=characters) ── -->
+  <div id="char-list-overlay" style="display:none;position:fixed;inset:0;z-index:99999;background:#f7f5fb;overflow-y:auto;flex-direction:column;">
+    <div style="max-width:860px;width:100%;margin:0 auto;padding:2rem 1.5rem 4rem;">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:2rem;gap:1rem;">
+        <div>
+          <div style="font-size:0.72rem;font-weight:800;text-transform:uppercase;letter-spacing:0.1em;color:#8a7ca5;margin-bottom:0.3rem;">Character List</div>
+          <h1 id="char-list-title" style="font-size:1.5rem;font-weight:900;color:#1a1530;margin:0;line-height:1.2;">Loading...</h1>
+        </div>
+        <button onclick="window.close()" style="flex-shrink:0;background:#572e88;color:#fff;border:none;border-radius:10px;padding:0.6rem 1.2rem;font-size:0.85rem;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;">Close Tab ✕</button>
+      </div>
+      <div id="char-list-body" style="color:#6a5a80;font-size:0.9rem;">Loading character list…</div>
     </div>
   </div>
 
