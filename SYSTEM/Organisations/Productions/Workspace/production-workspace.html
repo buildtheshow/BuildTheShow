@@ -14975,7 +14975,7 @@
 <script src="/SHARED/Components/casting-card-back.js?v=dc-colour-only-20260428"></script>
 <script src="/SHARED/Components/audition-status-strip.js"></script>
 <script src="/SHARED/Components/ai-character-importer.js"></script>
-<script src="/SHARED/Components/audition-page-templates.js?v=callback-layout-20260429"></script>
+<script src="/SHARED/Components/audition-page-templates.js?v=locked-checkin-bar-20260430"></script>
 <!-- VenuePicker uses OpenStreetMap/Nominatim - no API key needed -->
 <script>
   /* SQL needed:
@@ -17654,11 +17654,14 @@
 
   function setupAuditionsRealtime() {
     if (!prodId) return;
+    if (_realtimeReconnectTimer) {
+      clearTimeout(_realtimeReconnectTimer);
+      _realtimeReconnectTimer = null;
+    }
     if (auditionsRealtimeChannel) {
       try { sb.removeChannel(auditionsRealtimeChannel); } catch {}
       auditionsRealtimeChannel = null;
     }
-    clearTimeout(_realtimeReconnectTimer);
     setLiveIndicator('connecting');
 
     const TABLES = [
@@ -17685,7 +17688,12 @@
     });
 
     auditionsRealtimeChannel = ch.subscribe((status, err) => {
+      if (auditionsRealtimeChannel !== ch) return;
       if (status === 'SUBSCRIBED') {
+        if (_realtimeReconnectTimer) {
+          clearTimeout(_realtimeReconnectTimer);
+          _realtimeReconnectTimer = null;
+        }
         _realtimeReconnectAttempt = 0;
         setLiveIndicator('live');
         Promise.allSettled([
@@ -17699,15 +17707,19 @@
         });
         console.log('[BTS] realtime live');
       } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+        if (_realtimeReconnectTimer) return;
         setLiveIndicator('offline');
         const delay = Math.min(
           AUDITIONS_REALTIME_RECONNECT_MAX_MS,
           AUDITIONS_REALTIME_RECONNECT_BASE_MS * Math.pow(2, _realtimeReconnectAttempt++)
         );
         console.warn(`[BTS] realtime dropped, reconnecting in ${Math.round(delay / 1000)}s...`, status, err);
-        try { sb.removeChannel(auditionsRealtimeChannel); } catch {}
         auditionsRealtimeChannel = null;
-        _realtimeReconnectTimer = setTimeout(setupAuditionsRealtime, delay);
+        _realtimeReconnectTimer = setTimeout(() => {
+          _realtimeReconnectTimer = null;
+          try { sb.removeChannel(ch); } catch {}
+          setupAuditionsRealtime();
+        }, delay);
       }
     });
   }
