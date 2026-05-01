@@ -1468,8 +1468,12 @@
     .bk-success { display: none; padding: 2.5rem 2rem 2.25rem; text-align: center; }
     .bk-success.active { display: block; }
     .bk-success-icon { font-size: 4rem; margin-bottom: 0.75rem; }
-    .bk-success-title { font-size: 1.55rem; font-weight: 900; color: #1a1530; margin-bottom: 0.5rem; letter-spacing: -0.01em; }
-    .bk-success-sub { font-size: 0.95rem; color: #6a5a80; line-height: 1.55; margin-bottom: 1rem; }
+    .bk-success-title { font-size: 1.55rem; font-weight: 900; color: #1a1530; margin-bottom: 1rem; letter-spacing: -0.01em; }
+    .bk-success-bookings { display: flex; flex-direction: column; gap: 0.6rem; margin: 0 auto 1rem; max-width: 340px; width: 100%; text-align: left; }
+    .bk-success-booking-row { background: rgba(87,46,136,0.07); border-radius: 10px; padding: 0.75rem 1rem; }
+    .bk-success-booking-name { font-size: 0.9rem; font-weight: 800; color: #1a1530; margin-bottom: 0.2rem; }
+    .bk-success-booking-meta { font-size: 0.78rem; color: #6a5a80; line-height: 1.5; }
+    .bk-success-sub { font-size: 0.875rem; color: #8a7ca5; line-height: 1.55; margin-bottom: 1rem; }
     .bk-success-email-note { font-size: 0.82rem; color: #8a7ca5; background: rgba(87,46,136,0.07); border-radius: 10px; padding: 0.65rem 0.9rem; margin: 0 auto 1.5rem; max-width: 320px; line-height: 1.5; }
     .bk-success-email-status {
       display: none;
@@ -3767,6 +3771,7 @@
       if (showLine)  showLine.textContent  = _bkProd?.title || '';
       if (sessTitle) sessTitle.textContent = _bkSession.name || 'Audition';
       document.getElementById('bk-success').classList.remove('active');
+      document.getElementById('bk-success-bookings').innerHTML = '';
       document.getElementById('bk-expired-overlay').classList.remove('active');
       document.getElementById('bk-slot-filled-overlay').classList.remove('active');
       document.getElementById('bk-steps-wrap').style.display = '';
@@ -5560,22 +5565,26 @@
         document.getElementById('bk-timer-wrap').style.display = 'none';
         const slots = _allSlots[_bkSession?.id]||[];
         const slot  = slots.find(s => s.id === _bkState.slot_id);
-        const successSub = document.getElementById('bk-success-sub');
-        if (extraSessions.length > 0) {
-          // Multi-session success message
-          const slotSummaries = [
-            slot ? `${_bkSession?.name || 'Audition'} at ${fmtTimeStr(slot.slot_time)}` : null,
-            ...extraSessions.map(extra => {
-              const extraSession = _allSessions.find(s => s.id === extra.session_id);
-              const extraSlot = (_allSlots[extra.session_id]||[]).find(s => s.id === extra.slot_id);
-              return extraSlot ? `${extraSession?.name || 'Session'} at ${fmtTimeStr(extraSlot.slot_time)}` : null;
-            })
-          ].filter(Boolean);
-          if (successSub) successSub.textContent = slotSummaries.length
-            ? `You're booked for: ${slotSummaries.join(' and ')}. Can't wait to see you!`
-            : `You're registered for both sessions. Can't wait to see you!`;
-        } else {
-          if (successSub) successSub.textContent = slot ? `You're booked for ${fmtTimeStr(slot.slot_time)}. Can't wait to see you!` : `Your spot is confirmed. Can't wait to see you!`;
+        const successBookings = document.getElementById('bk-success-bookings');
+        if (successBookings) {
+          const allBookings = [
+            { session: _bkSession, slot },
+            ...extraSessions.map(extra => ({
+              session: _allSessions.find(s => s.id === extra.session_id),
+              slot: (_allSlots[extra.session_id]||[]).find(s => s.id === extra.slot_id)
+            }))
+          ].filter(b => b.session);
+          successBookings.innerHTML = allBookings.map(b => {
+            const name = b.session?.name || 'Audition';
+            const dateStr = b.session?.date ? fmtDate(b.session.date) : '';
+            const timeStr = b.slot?.slot_time ? fmtTimeStr(b.slot.slot_time) : '';
+            const loc = b.session?.location || ((_bkProd?.audition_locations||[])[0]) || _bkProd?.audition_location || '';
+            const meta = [dateStr, timeStr, loc].filter(Boolean).join(' · ');
+            return `<div class="bk-success-booking-row">
+              <div class="bk-success-booking-name">${esc(name)}</div>
+              ${meta ? `<div class="bk-success-booking-meta">${esc(meta)}</div>` : ''}
+            </div>`;
+          }).join('');
         }
         setBookingEmailStatus('Email update: sending your confirmation email…');
         const emailNote = document.getElementById('bk-success-email-note');
@@ -6505,7 +6514,8 @@
       <div class="bk-success" id="bk-success">
         <div class="bk-success-icon">🎭</div>
         <div class="bk-success-title">You're booked!</div>
-        <div class="bk-success-sub" id="bk-success-sub">Your spot is confirmed. Can't wait to see you!</div>
+        <div class="bk-success-bookings" id="bk-success-bookings"></div>
+        <div class="bk-success-sub" id="bk-success-sub">Can't wait to see you!</div>
         <div class="bk-success-email-note" id="bk-success-email-note">📬 A confirmation email is on its way. If you don't see it in a few minutes, check your junk or spam folder.</div>
         <div class="bk-success-email-status" id="bk-success-email-status"></div>
         <button class="bk-btn-next" onclick="closeBookModal()">Done</button>
