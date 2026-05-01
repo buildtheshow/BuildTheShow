@@ -181,9 +181,9 @@
       trayCards = ''
     } = config;
 
-    return `<div class="template-checkin-rail" data-bts-template="checked-in-rail">
+    return `<div class="template-checkin-rail" data-bts-template="checked-in-rail" style="display:grid;grid-template-columns:74px minmax(0,1fr);gap:0.75rem;align-items:stretch;min-width:0;border-radius:0 0 16px 16px;background:#fff;padding:1rem 1.05rem 1.35rem;overflow:hidden;">
       <div class="template-checkin-label">${esc(label)}</div>
-      <div class="template-checkin-row">${trayCards}</div>
+      <div class="template-checkin-row" style="display:flex;flex-direction:row;flex-wrap:nowrap;align-items:flex-start;gap:0.9rem;min-width:0;max-width:100%;overflow-x:auto;overflow-y:hidden;padding:0.1rem 0.15rem 0.85rem;scrollbar-width:thin;-webkit-overflow-scrolling:touch;perspective:900px;">${trayCards}</div>
     </div>`;
   }
 
