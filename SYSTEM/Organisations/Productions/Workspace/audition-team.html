@@ -17947,11 +17947,16 @@ If you have any questions, don't hesitate to reach out.
       await etSeedStarterTemplates();
       return;
     }
-    // Backfill team_invite for productions that existed before this template was added
-    if (!_etTemplates.some(t => t.category === 'team_invite')) {
-      const starter = ET_STARTER_TEMPLATES.find(t => t.category === 'team_invite');
-      if (starter) {
-        await sb.from('email_templates').insert({ ...starter, production_id: prodId });
+    // Backfill any missing critical templates for productions that predate them
+    const criticalCategories = ['booking_confirmation', 'team_invite'];
+    const missingCategories = criticalCategories.filter(cat => !_etTemplates.some(t => t.category === cat));
+    if (missingCategories.length) {
+      const toInsert = missingCategories
+        .map(cat => ET_STARTER_TEMPLATES.find(t => t.category === cat))
+        .filter(Boolean)
+        .map(starter => ({ ...starter, production_id: prodId }));
+      if (toInsert.length) {
+        await sb.from('email_templates').insert(toInsert);
         const { data: refreshed } = await sb.from('email_templates')
           .select('*').eq('production_id', prodId).order('created_at', { ascending: false });
         _etTemplates = refreshed || _etTemplates;

@@ -201,7 +201,33 @@ serve(async (req) => {
       .maybeSingle(),
   ]);
 
-  if (!template && !body.subject && !body.message) {
+  // Fallback template for booking_confirmation so the email always goes out
+  const FALLBACK_TEMPLATES: Record<string, { subject: string; body: string }> = {
+    booking_confirmation: {
+      subject: 'Your audition is confirmed: {{show_name}}',
+      body: `Hi {{performer_first_name}},
+
+Your audition for {{show_name}} is confirmed. We can't wait to see you!
+
+Here are your details:
+
+Session: {{audition_session}}
+Date: {{audition_date}}
+Time: {{audition_time}}
+Location: {{audition_venue}}
+
+{{what_to_prepare}}
+
+If you need to reschedule or have any questions, please get in touch as soon as possible.
+
+See you soon,
+{{director_name}}
+{{org_name}}`,
+    },
+  };
+
+  const fallback = !template && !body.subject && !body.message ? FALLBACK_TEMPLATES[category] : null;
+  if (!template && !body.subject && !body.message && !fallback) {
     console.error('[send-email] Template not found for category:', category, 'production:', productionId);
     return json({ ok: false, error: `No email template found for "${category}". Create one in the Emails tab first.` });
   }
@@ -408,8 +434,8 @@ serve(async (req) => {
   // ── Resolve subject + body ────────────────────────────────────
   const overrideSubject = typeof body.subject === 'string' ? body.subject : '';
   const overrideMessage = typeof body.message === 'string' ? body.message : '';
-  const sourceSubject = overrideSubject || template?.subject || CATEGORY_SUBJECTS[category] || `Update from ${showName || 'Build The Show'}`;
-  const sourceBody    = overrideMessage || template?.body    || '';
+  const sourceSubject = overrideSubject || template?.subject || fallback?.subject || CATEGORY_SUBJECTS[category] || `Update from ${showName || 'Build The Show'}`;
+  const sourceBody    = overrideMessage || template?.body    || fallback?.body    || '';
   const sourceBodyText = htmlToPlainText(String(sourceBody || ''));
 
   if (!sourceBodyText.trim()) {
