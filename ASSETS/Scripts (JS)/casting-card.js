@@ -177,7 +177,7 @@ function renderCastingCard(data, options = {}) {
   // ── SECTION 1: IMAGE ─────────────────────────────────────────
   let imageHTML;
   if (headshot_url) {
-    imageHTML = `<img src="${esc(headshot_url)}" alt="${esc(first_name)} ${esc(last_name)}" class="casting-card-image" loading="lazy" />`;
+    imageHTML = `<img src="${esc(headshot_url)}" alt="${esc(first_name)} ${esc(last_name)}" class="casting-card-image" loading="lazy" onerror="this.outerHTML='<div class=\\'casting-card-image-placeholder\\'>👤</div>'" />`;
   } else {
     imageHTML = `
       <div class="casting-card-image-placeholder">
