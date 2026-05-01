@@ -519,14 +519,27 @@ function plainTextToHtml(text: string): string {
 }
 
 function htmlToPlainText(html: string): string {
-  return String(html || '')
+  let result = String(html || '');
+  // Convert ordered lists to numbered items before stripping tags
+  result = result.replace(/<ol[^>]*>([\s\S]*?)<\/ol>/gi, (_: string, content: string) => {
+    let i = 0;
+    return '\n' + content.replace(/<li[^>]*>([\s\S]*?)<\/li>/gi, (_2: string, item: string) => {
+      i++;
+      return `${i}. ${item.replace(/<[^>]+>/g, '').trim()}\n`;
+    });
+  });
+  // Convert unordered lists to bullet items
+  result = result.replace(/<ul[^>]*>([\s\S]*?)<\/ul>/gi, (_: string, content: string) => {
+    return '\n' + content.replace(/<li[^>]*>([\s\S]*?)<\/li>/gi, (_2: string, item: string) => {
+      return `• ${item.replace(/<[^>]+>/g, '').trim()}\n`;
+    });
+  });
+  return result
     .replace(/<style[\s\S]*?<\/style>/gi, '')
     .replace(/<script[\s\S]*?<\/script>/gi, '')
     .replace(/<br\s*\/?>/gi, '\n')
     .replace(/<\/p>/gi, '\n\n')
     .replace(/<\/div>/gi, '\n')
-    .replace(/<li>/gi, '- ')
-    .replace(/<\/li>/gi, '\n')
     .replace(/<[^>]+>/g, '')
     .replace(/&nbsp;/g, ' ')
     .replace(/&amp;/g, '&')
