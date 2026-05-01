@@ -15802,8 +15802,7 @@
     const criticalWorkspaceData = Promise.resolve();
     const backgroundWorkspaceData = criticalWorkspaceData.then(() => Promise.allSettled([
       ...(shouldHydrateAuditions ? [
-        loadAuditionConfig(),
-        loadAudSessions(),
+        loadAuditionConfig().then(() => loadAudSessions()),
         loadRoomNextSignals({ force: true }),
         loadApplicants({ skipRender: true, skipCastingSync: true }),
         loadSlots(),
@@ -23232,6 +23231,10 @@ If you have any questions, don't hesitate to reach out.
     const { data: sessions, error: sessionsError } = await sb.from('audition_sessions')
       .select('*').eq('production_id', prodId).order('sort_order', { ascending: true });
     if (sessionsError) throw sessionsError;
+
+    if ((!sessions || sessions.length === 0) && !auditionConfig && !workspaceDataLoaded.auditionConfig) {
+      try { await loadAuditionConfig(); } catch {}
+    }
 
     if ((!sessions || sessions.length === 0) && auditionConfig) {
       // Auto-create the 3 default cards (all disabled by default)
@@ -34138,6 +34141,14 @@ If you have any questions, don't hesitate to reach out.
   function renderAuditionSessionWorkspace() {
     const host = document.getElementById('aud-session-workspace');
     if (!host) return;
+    if (!isWorkspaceDataReady('auditionSessions')) {
+      renderAuditionHeaderFrame();
+      host.innerHTML = '<div class="card" style="text-align:center;padding:3.5rem 2rem;color:#9a90b0;">Loading audition sessions...</div>';
+      ensureWorkspaceData(['auditionConfig', 'auditionSessions'])
+        .then(() => renderAuditionSessionWorkspace())
+        .catch(() => renderAuditionSessionWorkspace());
+      return;
+    }
     const session = getActiveAuditionNavSession();
     if (!session) {
       renderAuditionHeaderFrame();
@@ -35498,6 +35509,7 @@ If you have any questions, don't hesitate to reach out.
   }
 
   function workspaceDataLoaderFor(key, options = {}) {
+    if (key === 'auditionConfig') return () => loadAuditionConfig();
     if (key === 'characters') return () => loadCharacters();
     if (key === 'applicants') return () => loadApplicants({ skipRender: true, skipCastingSync: true });
     if (key === 'auditionSessions') return () => loadAudSessions();
