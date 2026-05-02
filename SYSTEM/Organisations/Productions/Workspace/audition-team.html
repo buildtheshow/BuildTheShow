@@ -1126,6 +1126,9 @@
     .audition-schedule-booked-card[draggable="true"] { cursor: grab; }
     .audition-schedule-booked-card[draggable="true"]:active { cursor: grabbing; }
     .audition-schedule-booked-card.fates-dragging { opacity: 0.35; }
+
+    /* V2 schedule cards — clickable, opens flip lightbox */
+    .aud-v2-card { cursor: pointer; }
     .audition-schedule-h-slot.fates-drag-over .audition-schedule-h-slot-cards,
     .audition-schedule-time-cell.fates-drag-over {
       outline: 2px dashed #572e88;
@@ -12113,7 +12116,6 @@
         </div>
         <div class="prod-submenu">
           <div class="prod-sub-item" id="asub-setup" onclick="openAuditionsSubTab('setup')">Settings</div>
-          <div class="prod-sub-item" id="asub-schedule" onclick="openAuditionsSubTab('schedule')">Schedule</div>
           <div class="prod-sub-item" id="asub-audschedule" onclick="openAuditionsSubTab('audschedule')">Audition Schedule</div>
           <div class="prod-sub-item" id="asub-auditions" onclick="openAuditionsSubTab('auditions')">Performers</div>
           <div id="asub-session-items"></div>
@@ -13618,20 +13620,6 @@
           <button class="cbv2-toast-undo" id="cbv2-toast-undo-btn" onclick="cbv2Undo()">Undo</button>
         </div>
 
-        <!-- Performer card lightbox -->
-        <div class="perf-lightbox-overlay" id="perf-lightbox" onclick="closePerfLightbox(event)">
-          <div class="perf-lightbox-scene">
-            <div class="perf-lightbox-inner" id="perf-lightbox-inner"></div>
-            <button class="perf-flip-btn" onclick="togglePerfFlip()">
-              <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M1 4h10M11 4l-3-3M11 4l-3 3"/>
-                <path d="M15 12H5M5 12l3-3M5 12l3 3"/>
-              </svg>
-              Flip
-            </button>
-            <button class="perf-close-btn" onclick="closePerfLightbox()">✕</button>
-          </div>
-        </div>
 
         <!-- Duplicate selection warning -->
         <div class="cbv2-warn-overlay" id="cbv2-warn-overlay">
@@ -34070,6 +34058,7 @@ If you have any questions, don't hesitate to reach out.
       loadApplicants({ maxAge: 8000 }).catch(() => {});
     }
     if (tab === 'schedule') { activeApplicantId = null; renderAudSchedule(); }
+    if (tab === 'audschedule') renderAudScheduleV2();
     if (tab === 'callbacklist') renderCallbacksFresh();
     if (tab === 'session') renderAuditionSessionWorkspace();
     renderAuditionHeaderFrame();
@@ -34759,6 +34748,139 @@ If you have any questions, don't hesitate to reach out.
           <section class="audition-schedule-stage">
             <div class="audition-schedule-calendar" style="${calendarThemeStyle}">
               ${buildAuditionScheduleTimeGridHtml(selectedSession)}
+            </div>
+          </section>
+        </div>
+      </div>`;
+  }
+
+  // ── Audition Schedule V2 (read-only) ─────────────────────
+  let _audScheduleV2SessionId = null;
+
+  function setAudScheduleV2Session(sessionId) {
+    _audScheduleV2SessionId = sessionId;
+    renderAudScheduleV2();
+  }
+
+  function buildAudScheduleV2CardHtml(app) {
+    return `<div class="audition-schedule-booked-card aud-v2-card" onclick="openPerfLightbox('${esc(app.id)}')">
+      ${renderCastingCard({
+        first_name: String(app.name || '').split(' ')[0] || '',
+        last_name: String(app.name || '').split(' ').slice(1).join(' ') || '',
+        age: cbv2ApplicantAge(app),
+        pronouns: applicantPronouns(app),
+        headshot_url: app.headshot_url || '',
+        casting_categories: cbv2CastingCategories(app),
+        role_openness: cbv2RoleBadge(app),
+        attendance_mode: applicantAttendanceModeLabel(app) || null,
+      }, {
+        size: 'sm',
+        hasPadding: true,
+        hasIcons: true,
+      })}
+    </div>`;
+  }
+
+  function buildAudScheduleV2GridHtml(session) {
+    const isDance = String(session?.type || '').toLowerCase().includes('dance');
+    const sessionSlots = getAuditionScheduleSessionSlots(session);
+
+    if (isDance) {
+      if (!sessionSlots.length) {
+        return `<div class="audition-schedule-horizontal">${Array.from({ length: 8 }, () =>
+          `<div class="audition-schedule-h-slot state-open">
+            <div class="audition-schedule-h-slot-header">—</div>
+            <div class="audition-schedule-h-slot-divider"></div>
+            <div class="audition-schedule-h-slot-cards"></div>
+          </div>`).join('')}</div>`;
+      }
+      return `<div class="audition-schedule-horizontal">${sessionSlots.map(slot => {
+        const timeLabel = formatSlotTime(slot.slot_time || slot.start_time || '');
+        const slotState = getAudSlotState(slot);
+        const isBlocked = slotState === 'block';
+        const performers = isBlocked ? [] : getAuditionScheduleBookedPerformers(slot, session);
+        return `
+          <div class="audition-schedule-h-slot state-${esc(slotState)}">
+            <div class="audition-schedule-h-slot-header">${esc(timeLabel)}${isBlocked ? ' · Blocked' : ''}</div>
+            <div class="audition-schedule-h-slot-divider"></div>
+            <div class="audition-schedule-h-slot-cards">${performers.map(buildAudScheduleV2CardHtml).join('')}</div>
+          </div>`;
+      }).join('')}</div>`;
+    }
+
+    if (sessionSlots.length) {
+      const lastRowStartIndex = Math.max(0, sessionSlots.length - 7);
+      return `<div class="audition-schedule-calendar-grid">${sessionSlots.map((slot, index) => {
+        const timeLabel = formatSlotTime(slot.slot_time || slot.start_time || '');
+        const slotState = getAudSlotState(slot);
+        const isBlocked = slotState === 'block';
+        const performers = isBlocked ? [] : getAuditionScheduleBookedPerformers(slot, session);
+        const cardsHtml = performers.map(buildAudScheduleV2CardHtml).join('');
+        return `
+          <div class="audition-schedule-time-cell ${index >= lastRowStartIndex ? 'is-last-row' : ''} state-${esc(slotState)}">
+            <div class="audition-schedule-time-label">${buildAuditionSchedulePlaceholderTimeLabelHtml(timeLabel)}</div>
+            ${isBlocked ? `<div class="audition-schedule-slot-label">Blocked</div>` : ''}
+            ${cardsHtml ? `<div class="audition-schedule-booked-stack">${cardsHtml}</div>` : ''}
+          </div>`;
+      }).join('')}</div>`;
+    }
+
+    const emptyCellCount = 35;
+    const lastRowStartIndex = Math.max(0, emptyCellCount - 7);
+    return `<div class="audition-schedule-calendar-grid">${Array.from({ length: emptyCellCount }, (_, i) => `
+      <div class="audition-schedule-time-cell is-empty-grid${i >= lastRowStartIndex ? ' is-last-row' : ''}">
+        <div class="audition-schedule-time-placeholder is-empty-grid"></div>
+      </div>`).join('')}</div>`;
+  }
+
+  async function renderAudScheduleV2() {
+    const el = document.getElementById('aud-schedule-v2-content');
+    if (!el) return;
+
+    if (!audSessions.length) {
+      try { await loadAudSessions(); } catch {}
+    }
+    if (!allApplicants.length) {
+      try { await loadApplicants(); } catch {}
+    }
+
+    const scheduleSessions = getAuditionScheduleViewSessions();
+    if (!_audScheduleV2SessionId || !scheduleSessions.find(s => s.id === _audScheduleV2SessionId)) {
+      _audScheduleV2SessionId = (scheduleSessions.find(s => !!s.date) || scheduleSessions[0])?.id || null;
+    }
+    const selectedSession = scheduleSessions.find(s => s.id === _audScheduleV2SessionId) || scheduleSessions[0] || null;
+
+    const accentColor = getAuditionScheduleSidebarMarkerColor(selectedSession?.type);
+    const calendarThemeStyle = buildAuditionScheduleCalendarThemeStyle(accentColor);
+
+    const sidebarHtml = scheduleSessions.map(session => {
+      const isActive = selectedSession && session.id === selectedSession.id;
+      const markerColor = getAuditionScheduleSidebarMarkerColor(session.type);
+      return `
+        <button type="button" class="audition-schedule-sidebar-item${isActive ? ' active' : ''}" onclick="setAudScheduleV2Session('${esc(session.id)}')">
+          <div class="audition-schedule-sidebar-marker" style="background:${esc(markerColor)};"></div>
+          <div class="audition-schedule-sidebar-copy">
+            <div class="audition-schedule-sidebar-title">${esc(session.name || 'Untitled Audition')}</div>
+            <div class="audition-schedule-sidebar-date">${esc(formatAuditionScheduleSessionDate(session.date))}</div>
+          </div>
+        </button>`;
+    }).join('');
+
+    el.innerHTML = `
+      <div class="audition-schedule-shell">
+        <section class="audition-schedule-stage-head">
+          <div class="audition-schedule-stage-eyebrow">Audition Schedule</div>
+          <h2 class="audition-schedule-stage-title">${esc(selectedSession?.name || 'Time Slot Calendar')}</h2>
+          <p class="audition-schedule-stage-copy">Select an audition type on the left to view its time slots.</p>
+        </section>
+        <div class="audition-schedule-body">
+          <aside class="audition-schedule-sidebar">
+            <div class="audition-schedule-sidebar-head">Audition Types &amp; Dates</div>
+            <div class="audition-schedule-sidebar-list">${sidebarHtml}</div>
+          </aside>
+          <section class="audition-schedule-stage">
+            <div class="audition-schedule-calendar" style="${calendarThemeStyle}">
+              ${buildAudScheduleV2GridHtml(selectedSession)}
             </div>
           </section>
         </div>
@@ -35677,5 +35799,20 @@ If you have any questions, don't hesitate to reach out.
 </div>
 
   <script src="/SHARED/Components/auto-save.js?v=1"></script>
+
+  <!-- Performer card lightbox — lives at top level so it works from any tab -->
+  <div class="perf-lightbox-overlay" id="perf-lightbox" onclick="closePerfLightbox(event)">
+    <div class="perf-lightbox-scene">
+      <div class="perf-lightbox-inner" id="perf-lightbox-inner"></div>
+      <button class="perf-flip-btn" onclick="togglePerfFlip()">
+        <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M1 4h10M11 4l-3-3M11 4l-3 3"/>
+          <path d="M15 12H5M5 12l3-3M5 12l3 3"/>
+        </svg>
+        Flip
+      </button>
+      <button class="perf-close-btn" onclick="closePerfLightbox()">✕</button>
+    </div>
+  </div>
 </body>
 </html>
