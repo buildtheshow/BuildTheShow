@@ -25153,7 +25153,11 @@ If you have any questions, don't hesitate to reach out.
 
   async function syncApplicantEditsToSource(app, update) {
     const skipBookingMirror = !!update?._skipBookingMirror;
-    const slotAssignmentFields = buildSlotAssignmentStorageFields(update.slot_assignments);
+    // Only include slot assignment fields when slot_assignments is explicitly being updated.
+    // buildSlotAssignmentStorageFields(undefined) returns slot_assignments:[] which would wipe existing data.
+    const slotAssignmentFields = update.slot_assignments !== undefined
+      ? buildSlotAssignmentStorageFields(update.slot_assignments)
+      : {};
     const applicationUpdate = {
       production_id: prodId,
       session_id: update.session_id ?? app.session_id ?? null,
@@ -35160,8 +35164,8 @@ If you have any questions, don't hesitate to reach out.
     }
 
     if (!bookingId) {
-      if (row) row.innerHTML = `<span style="font-size:0.72rem;color:#c0392b;">No booking record found — this performer was added manually and can't receive templated emails.</span>`;
-      setTimeout(() => _apmResetEmailRow(), 5000);
+      showToast('No booking record found — email cannot be sent for manually-added performers.', true);
+      _apmResetEmailRow();
       return;
     }
 
