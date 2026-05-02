@@ -60,41 +60,116 @@ serve(async (req) => {
   const sb = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
   // ── Test email mode ───────────────────────────────────────────
+  // Substitutes all tokens with real production/session data + sample
+  // performer info so the preview looks like an actual booking email.
   const testEmail = String(body.test_email || '').trim();
   if (testEmail) {
-    const testSubject = String(body.subject || 'Test Email').trim();
-    const testBody    = String(body.body    || '').trim();
-    const prodIdTest  = String(body.production_id || '').trim();
-    // Fetch minimal production data for token substitution
-    let testFromName  = 'Build The Show';
-    let testFromEmail = FROM_EMAIL || 'noreply@buildtheshow.com';
-    if (prodIdTest) {
-      const { data: p } = await sb.from('productions').select('title,org_name,org_email').eq('id', prodIdTest).maybeSingle();
-      if (p) {
-        testFromName  = String(p.org_name  || p.title  || testFromName);
-        testFromEmail = String(p.org_email || testFromEmail);
-      }
-    }
-    const testHtml = `<!DOCTYPE html><html><head><meta charset="UTF-8"></head>
-<body style="font-family:sans-serif;color:#1a1530;max-width:600px;margin:0 auto;padding:2rem 1rem;">
-${testBody || '<p>(no body)</p>'}
-<hr style="margin:2rem 0;border:none;border-top:1px solid #e5e0f0;">
-<p style="font-size:0.75rem;color:#9a90b0;margin:0;">Test email sent via <strong>Build The Show</strong>. Variables shown as-is.</p>
-</body></html>`;
+    const testSubject  = String(body.subject || 'Test Email').trim();
+    const testBody     = String(body.body    || '').trim();
+    const prodIdTest   = String(body.production_id || '').trim();
+
     if (!RESEND_API_KEY) return json({ ok: false, error: 'Email sending not configured.' });
+
+    // Fetch production + all sessions in parallel
+    const [{ data: prodRec }, { data: testSessions }] = await Promise.all([
+      prodIdTest
+        ? sb.from('productions').select('title,subtitle,venue,org_name,org_email,director,start_date,end_date').eq('id', prodIdTest).maybeSingle()
+        : Promise.resolve({ data: null }),
+      prodIdTest
+        ? sb.from('audition_sessions').select('id,name,type,date,start_time,location').eq('production_id', prodIdTest).order('sort_order', { ascending: true })
+        : Promise.resolve({ data: [] }),
+    ]);
+
+    const p = (prodRec || {}) as Record<string, unknown>;
+    const sessions = (testSessions || []) as Record<string, unknown>[];
+
+    const fromName  = String(p.org_name  || p.title  || 'Build The Show');
+    const fromEmail = FROM_EMAIL || 'noreply@buildtheshow.com';
+
+    // Build a full token map using real data + sample performer values
+    const generalSess  = sessions.find(s => String(s.type||'').toLowerCase().includes('general')  || String(s.name||'').toLowerCase().includes('general'));
+    const danceSess    = sessions.find(s => String(s.type||'').toLowerCase().includes('dance')     || String(s.name||'').toLowerCase().includes('dance'));
+    const callbackSess = sessions.find(s => String(s.type||'').toLowerCase().includes('callback')  || String(s.name||'').toLowerCase().includes('callback'));
+    const primarySess  = generalSess || sessions[0];
+
+    const showDates = p.start_date && p.end_date
+      ? `${fmtDate(String(p.start_date))} – ${fmtDate(String(p.end_date))}`
+      : (p.start_date ? fmtDate(String(p.start_date)) : '');
+
+    const testTokens: Record<string, string> = {
+      // Performer (sample)
+      '{{performer_name}}':       'Jamie Lee',
+      '{{performer_first_name}}': 'Jamie',
+      '{{performer_pronouns}}':   'she/her',
+      '{{performer_email}}':      testEmail,
+      // Show (real)
+      '{{show_name}}':     String(p.title    || 'Our Show'),
+      '{{show_subtitle}}': String(p.subtitle || ''),
+      '{{show_venue}}':    String(p.venue    || ''),
+      '{{show_dates}}':    showDates,
+      '{{org_name}}':      String(p.org_name  || p.title || 'Your Theatre Company'),
+      '{{director_name}}': String(p.director  || ''),
+      // Your Booking (uses general session as stand-in)
+      '{{audition_session}}':      primarySess ? String(primarySess.name || '') : '',
+      '{{audition_date}}':         primarySess?.date        ? fmtDate(String(primarySess.date))        : '',
+      '{{audition_time}}':         primarySess?.start_time  ? fmtTime(String(primarySess.start_time))  : '10:00 AM',
+      '{{audition_venue}}':        String(primarySess?.location || p.venue || ''),
+      '{{what_to_prepare}}':       'Please prepare 16 bars of a song in the style of the show.',
+      '{{booking_link}}':          `https://buildtheshow.com/audition-info?prod=${prodIdTest}`,
+      '{{all_audition_sessions}}': sessions.map(s => `${s.name || 'Session'}: ${s.date ? fmtDate(String(s.date)) : 'TBC'}${s.start_time ? ' at ' + fmtTime(String(s.start_time)) : ''}`).join('\n'),
+      // General Auditions (real)
+      '{{general_audition_date}}':  generalSess?.date        ? fmtDate(String(generalSess.date))        : '',
+      '{{general_audition_time}}':  generalSess?.start_time  ? fmtTime(String(generalSess.start_time))  : '',
+      '{{general_audition_venue}}': String(generalSess?.location || p.venue || ''),
+      '{{general_audition_name}}':  String(generalSess?.name || ''),
+      // Dance Call (real)
+      '{{dance_call_date}}':  danceSess?.date        ? fmtDate(String(danceSess.date))        : '',
+      '{{dance_call_time}}':  danceSess?.start_time  ? fmtTime(String(danceSess.start_time))  : '',
+      '{{dance_call_venue}}': String(danceSess?.location || p.venue || ''),
+      '{{dance_call_name}}':  String(danceSess?.name || ''),
+      // Callbacks (real)
+      '{{callback_date}}':  callbackSess?.date        ? fmtDate(String(callbackSess.date))        : '',
+      '{{callback_time}}':  callbackSess?.start_time  ? fmtTime(String(callbackSess.start_time))  : '',
+      '{{callback_venue}}': String(callbackSess?.location || p.venue || ''),
+      '{{callback_name}}':  String(callbackSess?.name || ''),
+      // Casting (sample)
+      '{{role_name}}': 'The Lead',
+      '{{role_type}}': 'Principal',
+      // Rehearsals (real)
+      '{{rehearsal_start_date}}': p.start_date ? fmtDate(String(p.start_date)) : '',
+      '{{rehearsal_schedule}}':   '',
+      '{{opening_night}}':        p.end_date   ? fmtDate(String(p.end_date))   : '',
+    };
+
+    function substituteTest(text: string): string {
+      let r = String(text || '');
+      Object.entries(testTokens).forEach(([k, v]) => { r = r.split(k).join(v); });
+      return r;
+    }
+
+    const subj    = substituteTest(testSubject);
+    const subBody = substituteTest(testBody);
+    const bodyLooksHtml = /<[a-z][\s\S]*>/i.test(subBody);
+    const htmlBody = bodyLooksHtml ? subBody : plainTextToHtml(subBody);
+    const textBody = bodyLooksHtml ? htmlToPlainText(subBody) : subBody;
+
+    const html = `<!DOCTYPE html>
+<html><head><meta charset="UTF-8"></head>
+<body style="font-family:sans-serif;color:#1a1530;max-width:600px;margin:0 auto;padding:2rem 1rem;">
+  ${htmlBody}
+  <hr style="margin:2rem 0;border:none;border-top:1px solid #e5e0f0;">
+  <p style="font-size:0.75rem;color:#9a90b0;margin:0;">
+    Test email — sent by <strong>${escHtml(fromName)}</strong> via Build The Show.
+  </p>
+</body></html>`;
+
     const r = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        from:    `${testFromName} <${testFromEmail}>`,
-        to:      [testEmail],
-        subject: testSubject,
-        html:    testHtml,
-        text:    testBody.replace(/<[^>]+>/g, ''),
-      }),
+      body: JSON.stringify({ from: `${fromName} <${fromEmail}>`, to: [testEmail], subject: subj, html, text: textBody }),
     });
     const rd = await r.json().catch(() => ({}));
-    if (!r.ok) return json({ ok: false, error: rd.message || 'Resend error.' });
+    if (!r.ok) return json({ ok: false, error: (rd as Record<string,unknown>).message as string || 'Resend error.' });
     return json({ ok: true });
   }
 
