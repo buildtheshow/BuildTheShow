@@ -35016,7 +35016,7 @@ If you have any questions, don't hesitate to reach out.
 
   // ── All Performers Performer Modal (APM) ─────────────────────
   let _apmAppId = null, _apmApp = null, _apmTab = 'scheduling';
-  let _apmPendingSlots = {}, _apmPickingSessions = new Set(), _apmEdits = {}, _apmPendingAttendance = {};
+  let _apmPendingSlots = {}, _apmPickingSessions = new Set(), _apmEdits = {}, _apmPendingAttendance = {}, _apmAttendanceConfirming = {};
   let _apmHeadshotFile = null, _apmHeadshotObjectUrl = null;
 
   function openApPerformerModal(appId) {
@@ -35050,7 +35050,8 @@ If you have any questions, don't hesitate to reach out.
     const modal = document.getElementById('ap-performer-modal');
     if (modal) modal.style.display = 'none';
     _apmAppId = null; _apmApp = null;
-    _apmPendingSlots = {}; _apmPickingSessions = new Set(); _apmEdits = {}; _apmPendingAttendance = {};
+    _apmPendingSlots = {}; _apmPickingSessions = new Set(); _apmEdits = {}; _apmPendingAttendance = {}; _apmAttendanceConfirming = {};
+
     if (_apmHeadshotObjectUrl) { URL.revokeObjectURL(_apmHeadshotObjectUrl); _apmHeadshotObjectUrl = null; }
     _apmHeadshotFile = null;
   }
@@ -35095,7 +35096,22 @@ If you have any questions, don't hesitate to reach out.
       const currentAttendance = pendingAttendance !== null ? pendingAttendance : (existingAttendance.value || '');
       const isInPerson = currentAttendance === 'in_person' || currentAttendance === 'in person';
       const isVideo = currentAttendance === 'video_call' || currentAttendance === 'video' || currentAttendance === 'virtual';
+      const confirmingMode = _apmAttendanceConfirming[session.id] || null;
       const attendanceChanged = pendingAttendance !== null;
+      const sid = esc(session.id);
+      const btnStyle = (active) => `background:${active?'#572e88':'#fff'};color:${active?'#fff':'#572e88'};border:1.5px solid ${active?'#572e88':'rgba(87,46,136,0.25)'};border-radius:20px;padding:0.18rem 0.65rem;font-size:0.75rem;font-weight:600;cursor:${active?'default':'pointer'};`;
+      const attendanceRow = confirmingMode
+        ? `<div style="display:flex;gap:0.5rem;padding:0 1rem 0.75rem;align-items:center;flex-wrap:wrap;">
+             <span style="font-size:0.8rem;color:#1a1530;font-weight:600;">Switch to <strong>${confirmingMode === 'in_person' ? 'In Person' : 'Video Call'}</strong>?</span>
+             <button onclick="apmConfirmAttendance('${sid}','${confirmingMode}')" style="background:#572e88;color:#fff;border:none;border-radius:6px;padding:0.22rem 0.7rem;font-size:0.75rem;font-weight:600;cursor:pointer;">Yes, change it</button>
+             <button onclick="apmCancelAttendanceConfirm('${sid}')" style="background:none;border:1px solid rgba(87,46,136,0.25);border-radius:6px;padding:0.22rem 0.7rem;font-size:0.75rem;font-weight:600;color:#6a5a80;cursor:pointer;">Cancel</button>
+           </div>`
+        : `<div style="display:flex;gap:0.4rem;padding:0 1rem 0.75rem;align-items:center;">
+             <span style="font-size:0.72rem;font-weight:700;color:#9a90b0;text-transform:uppercase;letter-spacing:0.05em;margin-right:0.25rem;">Attendance:</span>
+             <button onclick="${isInPerson ? '' : `apmRequestAttendance('${sid}','in_person')`}" style="${btnStyle(isInPerson)}${isInPerson?'pointer-events:none;':''}">In Person</button>
+             <button onclick="${isVideo ? '' : `apmRequestAttendance('${sid}','video_call')`}" style="${btnStyle(isVideo)}${isVideo?'pointer-events:none;':''}">Video Call</button>
+             ${attendanceChanged ? `<span style="font-size:0.72rem;color:#572e88;font-weight:600;">· changed</span>` : ''}
+           </div>`;
       const isOpen = _apmPickingSessions.has(session.id);
       return `
         <div class="apm-session-card">
@@ -35107,12 +35123,7 @@ If you have any questions, don't hesitate to reach out.
             </div>
             <button class="apm-change-btn ${isOpen ? 'open' : ''}" onclick="apmTogglePicker('${esc(session.id)}')">${isOpen ? 'Done' : 'Change'}</button>
           </div>
-          <div style="display:flex;gap:0.4rem;padding:0 1rem 0.75rem;align-items:center;">
-            <span style="font-size:0.72rem;font-weight:700;color:#9a90b0;text-transform:uppercase;letter-spacing:0.05em;margin-right:0.25rem;">Attendance:</span>
-            <button onclick="apmSetAttendance('${esc(session.id)}','in_person')" style="background:${isInPerson ? '#572e88' : '#fff'};color:${isInPerson ? '#fff' : '#572e88'};border:1.5px solid ${isInPerson ? '#572e88' : 'rgba(87,46,136,0.25)'};border-radius:20px;padding:0.18rem 0.65rem;font-size:0.75rem;font-weight:600;cursor:pointer;">In Person</button>
-            <button onclick="apmSetAttendance('${esc(session.id)}','video_call')" style="background:${isVideo ? '#572e88' : '#fff'};color:${isVideo ? '#fff' : '#572e88'};border:1.5px solid ${isVideo ? '#572e88' : 'rgba(87,46,136,0.25)'};border-radius:20px;padding:0.18rem 0.65rem;font-size:0.75rem;font-weight:600;cursor:pointer;">Video Call</button>
-            ${attendanceChanged ? `<span style="font-size:0.72rem;color:#572e88;font-weight:600;">· changed</span>` : ''}
-          </div>
+          ${attendanceRow}
           ${isOpen ? _apmSlotPickerHTML(session, effectiveSlotId) : ''}
         </div>`;
     }).join('');
@@ -35155,8 +35166,19 @@ If you have any questions, don't hesitate to reach out.
     if (_apmTab === 'scheduling') _apmRenderBody();
   }
 
-  function apmSetAttendance(sessionId, mode) {
+  function apmRequestAttendance(sessionId, mode) {
+    _apmAttendanceConfirming[sessionId] = mode;
+    if (_apmTab === 'scheduling') _apmRenderBody();
+  }
+
+  function apmConfirmAttendance(sessionId, mode) {
     _apmPendingAttendance[sessionId] = mode;
+    delete _apmAttendanceConfirming[sessionId];
+    if (_apmTab === 'scheduling') _apmRenderBody();
+  }
+
+  function apmCancelAttendanceConfirm(sessionId) {
+    delete _apmAttendanceConfirming[sessionId];
     if (_apmTab === 'scheduling') _apmRenderBody();
   }
 
@@ -36735,6 +36757,7 @@ If you have any questions, don't hesitate to reach out.
       <div class="apm-header-info">
         <div class="apm-header-name" id="apm-header-name">—</div>
         <div class="apm-header-meta" id="apm-header-meta"></div>
+        <div id="apm-resend-row" style="margin-top:0.5rem;"></div>
       </div>
       <button class="apm-close" onclick="closeApPerformerModal()" title="Close">✕</button>
     </div>
