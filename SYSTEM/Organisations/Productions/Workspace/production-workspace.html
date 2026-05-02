@@ -1410,19 +1410,35 @@
       position: relative;
     }
     .et-modal-split {
-      display: grid; grid-template-columns: minmax(0, 1.06fr) minmax(340px, 0.94fr);
+      display: flex; flex-direction: column;
       flex: 1; min-height: 0; overflow: hidden;
-      background: linear-gradient(90deg, #fff 0%, #fff 61%, #f6f3fb 61%, #f6f3fb 100%);
+      background: #fff;
     }
     .et-modal-left {
       min-width: 0; min-height: 0; overflow-y: auto;
-      border-right: 1px solid rgba(87,46,136,0.08);
-      background: #fff;
+      background: #fff; flex: 1;
     }
-    .et-modal-right {
-      min-width: 0; min-height: 0; overflow-y: auto;
-      background: linear-gradient(180deg, #f8f5fc, #f2eef8);
-      padding: 1.15rem;
+    .et-test-email-row {
+      display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;
+      padding: 0.6rem 1.5rem 0.75rem;
+      background: rgba(87,46,136,0.04);
+      border-top: 1px solid rgba(87,46,136,0.08);
+      flex-shrink: 0;
+    }
+    .et-test-email-row .et-test-label {
+      font-size: 0.75rem; font-weight: 700; color: #7d7192; white-space: nowrap;
+    }
+    .et-test-email-input {
+      flex: 1; min-width: 180px;
+      border: 1.5px solid rgba(87,46,136,0.18);
+      background: #fff; color: #1a1530;
+      border-radius: 8px; padding: 0.46rem 0.75rem;
+      font-size: 0.82rem; font-family: var(--bts-font);
+      outline: none;
+    }
+    .et-test-email-input:focus {
+      border-color: rgba(87,46,136,0.42);
+      box-shadow: 0 0 0 3px rgba(87,46,136,0.08);
     }
     .et-modal-header {
       display: flex; align-items: flex-start; justify-content: space-between;
@@ -13864,7 +13880,7 @@
 
           <div class="et-modal-split">
             <div class="et-modal-left">
-              <div class="et-left-sections">
+              <div class="et-left-sections" style="max-width:700px;margin:0 auto;">
                 <details class="et-section">
                   <summary class="et-section-summary">
                     <div class="et-section-title-wrap">
@@ -13969,44 +13985,20 @@
                 </div>
                 <div style="display:flex;gap:0.4rem;">
                   <button class="btn-secondary" style="font-size:0.82rem;padding:0.5rem 1rem;display:none;" id="et-copy-btn" onclick="copyEmailTemplate()">Copy text</button>
+                  <button class="btn-secondary" style="font-size:0.82rem;padding:0.5rem 1rem;" onclick="etToggleTestRow()">Send Test</button>
                   <button class="btn-primary" style="font-size:0.82rem;padding:0.5rem 1.1rem;" id="et-save-btn" onclick="saveEmailTemplate()">Save</button>
                 </div>
               </div>
             </div>
 
-            <div class="et-modal-right">
-              <div id="et-preview-panel" class="et-preview-panel">
-                <div class="et-preview-shell">
-                  <div class="et-preview-label">Email Layout</div>
-                  <div class="et-preview-message">
-                    <div class="et-preview-subject-line" id="et-preview-subject"></div>
-                    <div class="et-preview-email-card">
-                      <div class="et-preview-email-header">
-                        <div class="et-preview-avatar">BTS</div>
-                        <div class="et-preview-from-block">
-                          <div class="et-preview-from-name" id="et-preview-from-name">Build The Show</div>
-                          <div class="et-preview-from-addr" id="et-preview-from">noreply@buildtheshow.com</div>
-                          <div class="et-preview-meta">
-                            <div class="et-preview-meta-row">
-                              <span class="et-preview-meta-label">To</span>
-                              <span id="et-preview-recipient">Performer</span>
-                            </div>
-                            <div class="et-preview-meta-row">
-                              <span class="et-preview-meta-label">From</span>
-                              <span><span id="et-preview-from-name-inline">Build The Show</span> &lt;<span id="et-preview-from-inline">noreply@buildtheshow.com</span>&gt;</span>
-                            </div>
-                          </div>
-                        </div>
-                        <div class="et-preview-date" id="et-preview-date"></div>
-                      </div>
-                      <iframe id="et-preview-iframe" class="et-preview-iframe" frameborder="0" title="Email preview"></iframe>
-                      <div class="et-preview-footer">
-                        <div class="et-preview-footer-copy">This is the live email preview, using the current template content and sample Supabase data.</div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
+            <!-- Test email row (shown when Send Test is clicked) -->
+            <div id="et-test-email-row" class="et-test-email-row" style="display:none;">
+              <span class="et-test-label">Send test to:</span>
+              <input id="et-test-email-input" class="et-test-email-input" type="email"
+                placeholder="you@example.com"
+                onkeydown="if(event.key==='Enter')etSendTestEmail()" />
+              <button class="btn-primary" style="font-size:0.82rem;padding:0.46rem 1rem;" id="et-test-send-btn" onclick="etSendTestEmail()">Send</button>
+              <button class="btn-secondary" style="font-size:0.82rem;padding:0.46rem 0.8rem;" onclick="etToggleTestRow()">Cancel</button>
             </div>
           </div>
 
@@ -18292,88 +18284,59 @@
     return div.innerHTML.replace(/\n/g, '<br>');
   }
 
-  function etPreviewEscText(str) {
-    return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  function etTogglePreview() {} // no-op — preview replaced by Send Test
+
+  function etToggleTestRow() {
+    const row = document.getElementById('et-test-email-row');
+    if (!row) return;
+    const visible = row.style.display !== 'none';
+    row.style.display = visible ? 'none' : 'flex';
+    if (!visible) document.getElementById('et-test-email-input')?.focus();
   }
 
-  function etTogglePreview() {
-    const subject  = document.getElementById('et-subject')?.value || '';
-    const bodyHtml = document.getElementById('et-body')?.innerHTML || '';
-
-    let subWithVars = '(no subject)';
-    let renderedBody = '';
-    try { subWithVars = etSubstituteVars(subject) || '(no subject)'; } catch {}
-    try { renderedBody = etSubstituteVars(bodyHtml); } catch {}
-
-    const subEl = document.getElementById('et-preview-subject');
-    if (subEl) subEl.textContent = subWithVars;
-
-    const fromName  = (typeof orgName  !== 'undefined' && orgName)  ? orgName  : (prod?.org_name  || 'Build The Show');
-    const fromEmail = (typeof orgEmail !== 'undefined' && orgEmail) ? orgEmail : (prod?.org_email || 'noreply@buildtheshow.com');
-
-    // Build the real email HTML — matches exactly what the edge function sends
-    const emailDoc = `<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1.0">
-  <style>
-    * { box-sizing: border-box; }
-    html, body { margin: 0; padding: 0; }
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
-      color: #1a1530; font-size: 15px; line-height: 1.75;
-      padding: 2rem 1.5rem; max-width: 600px;
+  async function etSendTestEmail() {
+    const emailInput = document.getElementById('et-test-email-input');
+    const email = (emailInput?.value || '').trim();
+    if (!email || !email.includes('@')) {
+      showToast('Enter a valid email address first.', true);
+      emailInput?.focus();
+      return;
     }
-    p { margin: 0 0 1em; }
-    div { margin-bottom: 0; }
-    ul, ol { margin: 0.4em 0 1em; padding-left: 1.6em; }
-    li { margin-bottom: 0.2em; }
-    a { color: #572e88; }
-    b, strong { font-weight: 700; }
-    hr { border: none; border-top: 1px solid #e5e0f0; margin: 2rem 0; }
-    .bts-footer { font-size: 0.75rem; color: #9a90b0; margin: 0; }
-  </style>
-</head>
-<body>
-${renderedBody || '<p style="color:#c4bbd4;font-style:italic;">(no body yet)</p>'}
-<hr>
-<p class="bts-footer">Sent by <strong>${etPreviewEscText(fromName)}</strong> via Build The Show.</p>
-</body>
-</html>`;
-
-    const iframeEl = document.getElementById('et-preview-iframe');
-    if (iframeEl) {
-      iframeEl.srcdoc = emailDoc;
-      iframeEl.onload = () => {
-        try {
-          const h = iframeEl.contentDocument?.documentElement?.scrollHeight
-                 || iframeEl.contentDocument?.body?.scrollHeight;
-          if (h > 60) iframeEl.style.height = (h + 4) + 'px';
-        } catch {}
-      };
+    const subject = document.getElementById('et-subject')?.value?.trim() || '';
+    const bodyEl  = document.getElementById('et-body');
+    const body    = bodyEl?.innerHTML?.trim() || '';
+    if (!subject && !body) {
+      showToast('Add a subject or body before sending.', true);
+      return;
     }
-
-    // Update email-client chrome (from / to / date)
-    const fromNameEl = document.getElementById('et-preview-from-name');
-    if (fromNameEl) fromNameEl.textContent = fromName;
-    const fromNameInlineEl = document.getElementById('et-preview-from-name-inline');
-    if (fromNameInlineEl) fromNameInlineEl.textContent = fromName;
-    const fromEl = document.getElementById('et-preview-from');
-    if (fromEl) fromEl.textContent = fromEmail;
-    const fromInlineEl = document.getElementById('et-preview-from-inline');
-    if (fromInlineEl) fromInlineEl.textContent = fromEmail;
-    const dateEl = document.getElementById('et-preview-date');
-    if (dateEl) {
-      const now = new Date();
-      dateEl.textContent = now.toLocaleString('en-CA', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
-    }
-    const recipientEl = document.getElementById('et-preview-recipient');
-    if (recipientEl) {
-      let rName = '', rEmail = 'performer@email.com';
-      try { rName  = etSubstituteVars('{{performer_name}}')  || etSubstituteVars('{{performer_first_name}}') || 'Performer'; } catch {}
-      try { rEmail = etSubstituteVars('{{performer_email}}') || rEmail; } catch {}
-      recipientEl.textContent = `${rName} <${rEmail}>`;
+    const btn = document.getElementById('et-test-send-btn');
+    if (btn) { btn.textContent = 'Sending…'; btn.disabled = true; }
+    try {
+      const res = await fetch('https://tkmaiktxpwqfbgeojbnf.supabase.co/functions/v1/send-email', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRrbWFpa3R4cHdxZmJnZW9qYm5mIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM3MzE4MTcsImV4cCI6MjA4OTMwNzgxN30.TkTZBNWUatk3Y6Vmfv1hIRR3DfVjgwauwa76Pf00J_8',
+        },
+        body: JSON.stringify({
+          production_id: prodId,
+          test_email:    email,
+          subject,
+          body,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (data.ok) {
+        showToast(`Test sent to ${email}`);
+        etToggleTestRow();
+        if (emailInput) emailInput.value = '';
+      } else {
+        showToast(data.error || 'Could not send test email.', true);
+      }
+    } catch {
+      showToast('Could not reach the email service.', true);
+    } finally {
+      if (btn) { btn.textContent = 'Send'; btn.disabled = false; }
     }
   }
 

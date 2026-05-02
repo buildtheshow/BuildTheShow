@@ -59,6 +59,45 @@ serve(async (req) => {
 
   const sb = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
+  // ── Test email mode ───────────────────────────────────────────
+  const testEmail = String(body.test_email || '').trim();
+  if (testEmail) {
+    const testSubject = String(body.subject || 'Test Email').trim();
+    const testBody    = String(body.body    || '').trim();
+    const prodIdTest  = String(body.production_id || '').trim();
+    // Fetch minimal production data for token substitution
+    let testFromName  = 'Build The Show';
+    let testFromEmail = FROM_EMAIL || 'noreply@buildtheshow.com';
+    if (prodIdTest) {
+      const { data: p } = await sb.from('productions').select('title,org_name,org_email').eq('id', prodIdTest).maybeSingle();
+      if (p) {
+        testFromName  = String(p.org_name  || p.title  || testFromName);
+        testFromEmail = String(p.org_email || testFromEmail);
+      }
+    }
+    const testHtml = `<!DOCTYPE html><html><head><meta charset="UTF-8"></head>
+<body style="font-family:sans-serif;color:#1a1530;max-width:600px;margin:0 auto;padding:2rem 1rem;">
+${testBody || '<p>(no body)</p>'}
+<hr style="margin:2rem 0;border:none;border-top:1px solid #e5e0f0;">
+<p style="font-size:0.75rem;color:#9a90b0;margin:0;">Test email sent via <strong>Build The Show</strong>. Variables shown as-is.</p>
+</body></html>`;
+    if (!RESEND_API_KEY) return json({ ok: false, error: 'Email sending not configured.' });
+    const r = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        from:    `${testFromName} <${testFromEmail}>`,
+        to:      [testEmail],
+        subject: testSubject,
+        html:    testHtml,
+        text:    testBody.replace(/<[^>]+>/g, ''),
+      }),
+    });
+    const rd = await r.json().catch(() => ({}));
+    if (!r.ok) return json({ ok: false, error: rd.message || 'Resend error.' });
+    return json({ ok: true });
+  }
+
   // ── Resolve category ──────────────────────────────────────────
   const statusRaw  = String(body.status  || '').trim().toLowerCase();
   const categoryRaw = String(body.category || '').trim();
