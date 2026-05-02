@@ -29582,19 +29582,18 @@ If you have any questions, don't hesitate to reach out.
     }
   }
 
-  async function resendConfirmationEmail(bookingId) {
-    // No email goes out without a template — ensures every send matches what the org has approved
+  async function resendConfirmationEmail(bookingId, category = 'booking_confirmation') {
     const { data: templates } = await sb.from('email_templates')
-      .select('id').eq('production_id', prodId).eq('category', 'booking_confirmation').limit(1);
+      .select('id').eq('production_id', prodId).eq('category', category).limit(1);
     if (!templates?.length) {
-      showToast('No Booking Confirmation template found. Create one in the Emails tab first.', true);
-      return;
+      showToast(`No ${category.replace(/_/g,' ')} template found. Create one in the Emails tab first.`, true);
+      return false;
     }
     const { data, error } = await sb.functions.invoke('send-email', {
       body: {
         booking_id:    bookingId,
         production_id: prodId,
-        category:      'booking_confirmation',
+        category,
         context: {
           show_name:     prod?.title    || '',
           show_subtitle: prod?.subtitle || '',
@@ -29614,12 +29613,10 @@ If you have any questions, don't hesitate to reach out.
         },
       }
     });
-    if (error) { showToast('Could not resend: ' + error.message, true); return; }
-    if (!data?.sent) {
-      showToast(`Could not resend: ${data?.error || 'Email was not sent.'}`, true);
-      return;
-    }
-    showToast('Confirmation email resent.');
+    if (error) { showToast('Could not send: ' + error.message, true); return false; }
+    if (!data?.sent) { showToast(`Could not send: ${data?.error || 'Email was not sent.'}`, true); return false; }
+    showToast('Email sent.');
+    return true;
   }
 
   async function sendUpdatedRescheduleEmail(bookingId) {
@@ -35034,8 +35031,7 @@ If you have any questions, don't hesitate to reach out.
     document.querySelectorAll('.apm-tab').forEach(t => t.classList.toggle('active', t.dataset.apmtab === 'scheduling'));
     const statusEl = document.getElementById('apm-save-status');
     if (statusEl) { statusEl.className = 'apm-save-status'; statusEl.textContent = ''; }
-    const resendRow = document.getElementById('apm-resend-row');
-    if (resendRow) resendRow.innerHTML = `<button onclick="apmSendUpdatedConfirmation()" style="background:none;border:1px solid rgba(87,46,136,0.3);border-radius:6px;padding:0.2rem 0.65rem;font-size:0.72rem;font-weight:600;color:#572e88;cursor:pointer;letter-spacing:0.02em;">Resend Confirmation Email</button>`;
+    _apmResetEmailRow();
     const modal = document.getElementById('ap-performer-modal');
     if (modal) modal.style.display = 'flex';
     _apmRenderBody();
@@ -35053,30 +35049,79 @@ If you have any questions, don't hesitate to reach out.
 
   function apmOverlayClick(e) { if (e.target === e.currentTarget) closeApPerformerModal(); }
 
-  function apmSendUpdatedConfirmation() {
-    const resendRow = document.getElementById('apm-resend-row');
-    if (!resendRow) return;
-    resendRow.innerHTML = `
-      <span style="font-size:0.78rem;color:#1a1530;font-weight:600;">Resend confirmation email?</span>
-      <button onclick="apmConfirmResend()" style="background:#572e88;color:#fff;border:none;border-radius:6px;padding:0.2rem 0.6rem;font-size:0.72rem;font-weight:600;cursor:pointer;margin-left:0.4rem;">Yes, send it</button>
-      <button onclick="apmCancelResend()" style="background:none;border:1px solid rgba(87,46,136,0.25);border-radius:6px;padding:0.2rem 0.6rem;font-size:0.72rem;font-weight:600;color:#6a5a80;cursor:pointer;margin-left:0.25rem;">Cancel</button>
+  const _apmEmailCategories = [
+    { value: 'booking_confirmation', label: 'Booking Confirmation' },
+    { value: 'audition_reminder',    label: 'Audition Reminder'    },
+    { value: 'callback',             label: 'Callback Invite'      },
+    { value: 'cast_announcement',    label: 'Cast Announcement'    },
+    { value: 'not_cast',             label: 'Not Cast'             },
+    { value: 'rehearsal',            label: 'Rehearsal Info'       },
+    { value: 'general',              label: 'General'              },
+  ];
+
+  function _apmResetEmailRow() {
+    const row = document.getElementById('apm-resend-row');
+    if (!row) return;
+    row.innerHTML = `<button onclick="apmShowEmailPicker()" style="background:none;border:1px solid rgba(87,46,136,0.3);border-radius:6px;padding:0.2rem 0.65rem;font-size:0.72rem;font-weight:600;color:#572e88;cursor:pointer;letter-spacing:0.02em;">Send Email</button>`;
+  }
+
+  async function apmShowEmailPicker() {
+    const row = document.getElementById('apm-resend-row');
+    if (!row) return;
+    row.innerHTML = `<span style="font-size:0.72rem;color:#9a90b0;font-style:italic;">Loading templates…</span>`;
+    const { data: existing } = await sb.from('email_templates')
+      .select('category').eq('production_id', prodId);
+    const availableValues = new Set((existing || []).map(t => t.category));
+    const available = _apmEmailCategories.filter(c => availableValues.has(c.value));
+    if (!available.length) {
+      row.innerHTML = `<span style="font-size:0.72rem;color:#c0392b;">No email templates set up yet.</span> <button onclick="_apmResetEmailRow()" style="background:none;border:none;font-size:0.72rem;color:#572e88;cursor:pointer;font-weight:600;">Dismiss</button>`;
+      return;
+    }
+    const options = available.map(c => `<option value="${esc(c.value)}">${esc(c.label)}</option>`).join('');
+    row.innerHTML = `
+      <select id="apm-email-select" style="border:1.5px solid rgba(87,46,136,0.25);border-radius:6px;padding:0.18rem 0.4rem;font-size:0.72rem;color:#1a1530;font-family:inherit;background:#fff;" onchange="apmEmailPickerChange()">
+        <option value="">Choose template…</option>
+        ${options}
+      </select>
+      <button id="apm-email-send-btn" onclick="apmEmailPickerSend()" disabled style="background:rgba(87,46,136,0.12);color:#9a90b0;border:none;border-radius:6px;padding:0.2rem 0.6rem;font-size:0.72rem;font-weight:600;cursor:default;margin-left:0.3rem;">Send</button>
+      <button onclick="_apmResetEmailRow()" style="background:none;border:none;font-size:0.72rem;color:#9a90b0;cursor:pointer;margin-left:0.15rem;">✕</button>
     `;
   }
 
-  async function apmConfirmResend() {
-    const resendRow = document.getElementById('apm-resend-row');
-    if (resendRow) resendRow.innerHTML = `<span style="font-size:0.72rem;color:#9a90b0;font-style:italic;">Sending…</span>`;
-    const bookingId = _apmApp?.booking_id || _apmApp?.id;
-    await resendConfirmationEmail(bookingId);
-    if (resendRow) resendRow.innerHTML = `<span style="font-size:0.72rem;color:#3d8a4e;font-weight:600;">✓ Email sent</span>`;
-    setTimeout(() => {
-      if (resendRow) resendRow.innerHTML = `<button onclick="apmSendUpdatedConfirmation()" style="background:none;border:1px solid rgba(87,46,136,0.3);border-radius:6px;padding:0.2rem 0.65rem;font-size:0.72rem;font-weight:600;color:#572e88;cursor:pointer;letter-spacing:0.02em;">Resend Confirmation Email</button>`;
-    }, 3000);
+  function apmEmailPickerChange() {
+    const sel = document.getElementById('apm-email-select');
+    const btn = document.getElementById('apm-email-send-btn');
+    if (!sel || !btn) return;
+    const hasVal = !!sel.value;
+    btn.disabled = !hasVal;
+    btn.style.background = hasVal ? '#572e88' : 'rgba(87,46,136,0.12)';
+    btn.style.color = hasVal ? '#fff' : '#9a90b0';
+    btn.style.cursor = hasVal ? 'pointer' : 'default';
   }
 
-  function apmCancelResend() {
-    const resendRow = document.getElementById('apm-resend-row');
-    if (resendRow) resendRow.innerHTML = `<button onclick="apmSendUpdatedConfirmation()" style="background:none;border:1px solid rgba(87,46,136,0.3);border-radius:6px;padding:0.2rem 0.65rem;font-size:0.72rem;font-weight:600;color:#572e88;cursor:pointer;letter-spacing:0.02em;">Resend Confirmation Email</button>`;
+  function apmEmailPickerSend() {
+    const sel = document.getElementById('apm-email-select');
+    if (!sel?.value) return;
+    const category = sel.value;
+    const label = _apmEmailCategories.find(c => c.value === category)?.label || category;
+    const row = document.getElementById('apm-resend-row');
+    if (!row) return;
+    row.innerHTML = `
+      <span style="font-size:0.78rem;color:#1a1530;font-weight:600;">Send "${esc(label)}"?</span>
+      <button onclick="apmEmailConfirmSend('${esc(category)}')" style="background:#572e88;color:#fff;border:none;border-radius:6px;padding:0.2rem 0.6rem;font-size:0.72rem;font-weight:600;cursor:pointer;margin-left:0.4rem;">Yes, send</button>
+      <button onclick="apmShowEmailPicker()" style="background:none;border:1px solid rgba(87,46,136,0.25);border-radius:6px;padding:0.2rem 0.6rem;font-size:0.72rem;font-weight:600;color:#6a5a80;cursor:pointer;margin-left:0.25rem;">Back</button>
+    `;
+  }
+
+  async function apmEmailConfirmSend(category) {
+    const row = document.getElementById('apm-resend-row');
+    if (row) row.innerHTML = `<span style="font-size:0.72rem;color:#9a90b0;font-style:italic;">Sending…</span>`;
+    const bookingId = _apmApp?.booking_id || _apmApp?.id;
+    const ok = await resendConfirmationEmail(bookingId, category);
+    if (row) row.innerHTML = ok
+      ? `<span style="font-size:0.72rem;color:#3d8a4e;font-weight:600;">✓ Email sent</span>`
+      : `<span style="font-size:0.72rem;color:#c0392b;font-weight:600;">Failed to send.</span>`;
+    setTimeout(() => _apmResetEmailRow(), 3000);
   }
 
   function switchApmTab(tab) {
