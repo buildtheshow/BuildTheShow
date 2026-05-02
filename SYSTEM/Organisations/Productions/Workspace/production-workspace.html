@@ -1102,6 +1102,11 @@
     .audition-schedule-booked-card[draggable="true"] { cursor: grab; }
     .audition-schedule-booked-card[draggable="true"]:active { cursor: grabbing; }
     .audition-schedule-booked-card.fates-dragging { opacity: 0.35; }
+
+    /* V2 read-only cards — no hover, no cursor, no click */
+    .aud-v2-card { pointer-events: none; }
+    .aud-v2-card .casting-card { cursor: default !important; }
+    .aud-v2-card .casting-card:hover { transform: none !important; box-shadow: 0 6px 16px rgba(15,23,42,0.12) !important; }
     .audition-schedule-h-slot.fates-drag-over .audition-schedule-h-slot-cards,
     .audition-schedule-time-cell.fates-drag-over {
       outline: 2px dashed #572e88;
@@ -35020,6 +35025,25 @@ If you have any questions, don't hesitate to reach out.
     renderAudScheduleV2();
   }
 
+  function buildAudScheduleV2CardHtml(app) {
+    return `<div class="audition-schedule-booked-card aud-v2-card">
+      ${renderCastingCard({
+        first_name: String(app.name || '').split(' ')[0] || '',
+        last_name: String(app.name || '').split(' ').slice(1).join(' ') || '',
+        age: cbv2ApplicantAge(app),
+        pronouns: applicantPronouns(app),
+        headshot_url: app.headshot_url || '',
+        casting_categories: cbv2CastingCategories(app),
+        role_openness: cbv2RoleBadge(app),
+        attendance_mode: applicantAttendanceModeLabel(app) || null,
+      }, {
+        size: 'sm',
+        hasPadding: true,
+        hasIcons: true,
+      })}
+    </div>`;
+  }
+
   function buildAudScheduleV2GridHtml(session) {
     const isDance = String(session?.type || '').toLowerCase().includes('dance');
     const sessionSlots = getAuditionScheduleSessionSlots(session);
@@ -35037,11 +35061,12 @@ If you have any questions, don't hesitate to reach out.
         const timeLabel = formatSlotTime(slot.slot_time || slot.start_time || '');
         const slotState = getAudSlotState(slot);
         const isBlocked = slotState === 'block';
+        const performers = isBlocked ? [] : getAuditionScheduleBookedPerformers(slot, session);
         return `
           <div class="audition-schedule-h-slot state-${esc(slotState)}">
             <div class="audition-schedule-h-slot-header">${esc(timeLabel)}${isBlocked ? ' · Blocked' : ''}</div>
             <div class="audition-schedule-h-slot-divider"></div>
-            <div class="audition-schedule-h-slot-cards"></div>
+            <div class="audition-schedule-h-slot-cards">${performers.map(buildAudScheduleV2CardHtml).join('')}</div>
           </div>`;
       }).join('')}</div>`;
     }
@@ -35052,10 +35077,13 @@ If you have any questions, don't hesitate to reach out.
         const timeLabel = formatSlotTime(slot.slot_time || slot.start_time || '');
         const slotState = getAudSlotState(slot);
         const isBlocked = slotState === 'block';
+        const performers = isBlocked ? [] : getAuditionScheduleBookedPerformers(slot, session);
+        const cardsHtml = performers.map(buildAudScheduleV2CardHtml).join('');
         return `
           <div class="audition-schedule-time-cell ${index >= lastRowStartIndex ? 'is-last-row' : ''} state-${esc(slotState)}">
             <div class="audition-schedule-time-label">${buildAuditionSchedulePlaceholderTimeLabelHtml(timeLabel)}</div>
             ${isBlocked ? `<div class="audition-schedule-slot-label">Blocked</div>` : ''}
+            ${cardsHtml ? `<div class="audition-schedule-booked-stack">${cardsHtml}</div>` : ''}
           </div>`;
       }).join('')}</div>`;
     }
@@ -35074,6 +35102,9 @@ If you have any questions, don't hesitate to reach out.
 
     if (!audSessions.length) {
       try { await loadAudSessions(); } catch {}
+    }
+    if (!allApplicants.length) {
+      try { await loadApplicants(); } catch {}
     }
 
     const scheduleSessions = getAuditionScheduleViewSessions();
