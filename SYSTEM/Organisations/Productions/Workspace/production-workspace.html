@@ -29642,8 +29642,8 @@ If you have any questions, don't hesitate to reach out.
         booking_id:    bookingId,
         production_id: prodId,
         category,
-        subject:    template.subject || '',
-        message:    template.body    || '',
+        subject:    overrides.subject !== undefined ? overrides.subject : (template.subject || ''),
+        message:    overrides.body    !== undefined ? overrides.body    : (template.body    || ''),
         email:      performerEmail,
         name:       performerName,
         session_id: emailContext?.session_id || '',
@@ -35116,7 +35116,6 @@ If you have any questions, don't hesitate to reach out.
         <option value="">Choose template…</option>
         ${options}
       </select>
-      <button id="apm-email-send-btn" onclick="apmEmailPickerSend()" disabled style="background:rgba(87,46,136,0.12);color:#9a90b0;border:none;border-radius:6px;padding:0.2rem 0.6rem;font-size:0.72rem;font-weight:600;cursor:default;margin-left:0.3rem;">Send</button>
     `;
   }
 
@@ -35124,104 +35123,110 @@ If you have any questions, don't hesitate to reach out.
 
   function apmEmailPickerChange() {
     const sel = document.getElementById('apm-email-select');
-    const btn = document.getElementById('apm-email-send-btn');
-    if (!sel || !btn) return;
-    const hasVal = !!sel.value;
-    btn.disabled = !hasVal;
-    btn.style.background = hasVal ? '#572e88' : 'rgba(87,46,136,0.12)';
-    btn.style.color = hasVal ? '#fff' : '#9a90b0';
-    btn.style.cursor = hasVal ? 'pointer' : 'default';
-  }
-
-  function apmEmailPickerSend() {
-    const sel = document.getElementById('apm-email-select');
     if (!sel?.value) return;
-    const category = sel.value;
-    const label = _apmEmailCategories.find(c => c.value === category)?.label || category;
-    const row = document.getElementById('apm-resend-row');
-    if (!row) return;
-    row.innerHTML = `
-      <span style="font-size:0.78rem;color:#1a1530;font-weight:600;">Send "${esc(label)}"?</span>
-      <button onclick="apmEmailConfirmSend('${esc(category)}')" style="background:#572e88;color:#fff;border:none;border-radius:6px;padding:0.2rem 0.6rem;font-size:0.72rem;font-weight:600;cursor:pointer;margin-left:0.4rem;">Yes, send</button>
-      <button onclick="_apmResetEmailRow()" style="background:none;border:1px solid rgba(87,46,136,0.25);border-radius:6px;padding:0.2rem 0.6rem;font-size:0.72rem;font-weight:600;color:#6a5a80;cursor:pointer;margin-left:0.25rem;">Back</button>
-    `;
+    apmLoadEmailComposer(sel.value);
   }
 
-  async function apmEmailConfirmSend(category) {
-    const row = document.getElementById('apm-resend-row');
-    if (row) row.innerHTML = `<span style="font-size:0.72rem;color:#9a90b0;font-style:italic;">Sending…</span>`;
-
-    // Resolve booking_id — prefer stored value, fall back to querying audition_bookings by email
-    let bookingId = _apmApp?.booking_id || null;
-    if (!bookingId && _apmApp?.email) {
-      const { data: bookingRows } = await sb.from('audition_bookings')
-        .select('id')
-        .eq('production_id', prodId)
-        .eq('email', _apmApp.email)
-        .order('created_at', { ascending: false })
-        .limit(1);
-      bookingId = bookingRows?.[0]?.id || null;
-    }
-
-    if (!bookingId) {
-      showToast('No booking record found — email cannot be sent for manually-added performers.', true);
-      _apmResetEmailRow();
-      return;
-    }
-
-    // Build context from workspace data — same pattern as the public booking form
+  function _apmBuildEmailContext() {
     const slotAssignments  = Array.isArray(_apmApp?.slot_assignments) ? _apmApp.slot_assignments : [];
     const primarySessionId = _apmApp?.session_id || slotAssignments[0]?.session_id || null;
     const primarySession   = (audSessions || []).find(s => s.id === primarySessionId) || null;
     const primaryAssign    = slotAssignments.find(a => a.session_id === primarySessionId) || slotAssignments[0] || null;
     const primarySlotId    = primaryAssign?.slot_id || _apmApp?.slot_id || null;
     const primarySlot      = (primarySlotId && primarySessionId)
-      ? (audSlots[primarySessionId] || []).find(s => s.id === primarySlotId) || null
-      : null;
+      ? (audSlots[primarySessionId] || []).find(s => s.id === primarySlotId) || null : null;
     const customAnswers    = (typeof _apmApp?.custom_answers === 'object' && _apmApp.custom_answers) ? _apmApp.custom_answers : {};
-    const whatToPrepare    = primarySession?.prepare_text
-      || customAnswers['What to Prepare']
-      || customAnswers['what_to_prepare']
-      || '';
-
-    const emailContext = {
-      performer_name:   _apmApp?.name             || '',
-      performer_email:  _apmApp?.email            || '',
-      show_name:        prod?.title               || '',
-      show_subtitle:    prod?.subtitle            || '',
-      org_name:         orgName                   || '',
-      org_email:        orgEmail                  || '',
-      director_name:    prod?.director            || '',
-      audition_session: primarySession?.name      || '',
-      audition_date:    primarySession?.date      ? fmtDate(primarySession.date) : '',
-      audition_time:    primarySlot?.slot_time    ? formatSlotTime(primarySlot.slot_time)
+    const whatToPrepare    = primarySession?.prepare_text || customAnswers['What to Prepare'] || customAnswers['what_to_prepare'] || '';
+    return {
+      performer_name:   _apmApp?.name          || '',
+      performer_email:  _apmApp?.email         || '',
+      show_name:        prod?.title            || '',
+      show_subtitle:    prod?.subtitle         || '',
+      org_name:         orgName                || '',
+      org_email:        orgEmail               || '',
+      director_name:    prod?.director         || '',
+      audition_session: primarySession?.name   || '',
+      audition_date:    primarySession?.date   ? fmtDate(primarySession.date) : '',
+      audition_time:    primarySlot?.slot_time ? formatSlotTime(primarySlot.slot_time)
                         : primarySession?.start_time ? formatSlotTime(primarySession.start_time) : '',
-      audition_venue:   primarySession?.location  || prod?.venue || '',
+      audition_venue:   primarySession?.location || prod?.venue || '',
       what_to_prepare:  whatToPrepare,
-      role_name:        _apmApp?.role_interest    || '',
+      role_name:        _apmApp?.role_interest || '',
       custom_answers:   customAnswers,
-      session_id:       primarySessionId          || '',
-      slot_id:          primarySlotId             || '',
+      session_id:       primarySessionId       || '',
+      slot_id:          primarySlotId          || '',
       production: {
-        title:           prod?.title           || '',
-        subtitle:        prod?.subtitle        || '',
-        venue:           prod?.venue           || '',
-        director:        prod?.director        || '',
-        organization_id: prod?.organization_id || '',
-        start_date:      prod?.start_date      || '',
-        end_date:        prod?.end_date        || '',
-        org_name:        orgName               || '',
+        title: prod?.title || '', subtitle: prod?.subtitle || '', venue: prod?.venue || '',
+        director: prod?.director || '', organization_id: prod?.organization_id || '',
+        start_date: prod?.start_date || '', end_date: prod?.end_date || '', org_name: orgName || '',
       },
     };
+  }
 
+  function _applyEmailContext(text, context) {
+    if (!text) return '';
+    const firstName = (context.performer_name || '').split(/\s+/)[0] || '';
+    const flat = { ...context, performer_first_name: firstName };
+    return text.replace(/\{\{(\w+)\}\}/g, (_, key) => {
+      const val = flat[key];
+      return (val !== undefined && val !== null) ? String(val) : `{{${key}}}`;
+    });
+  }
+
+  async function apmLoadEmailComposer(category) {
+    const row = document.getElementById('apm-resend-row');
+    if (!row) return;
+    row.innerHTML = `<span style="font-size:0.72rem;color:#9a90b0;font-style:italic;">Loading…</span>`;
+    const { data: templates } = await sb.from('email_templates')
+      .select('subject, body').eq('production_id', prodId).eq('category', category)
+      .order('created_at', { ascending: false }).limit(1);
+    if (!templates?.length) {
+      row.innerHTML = `<span style="font-size:0.72rem;color:#c0392b;">No template found. Add one in the Emails tab.</span>`;
+      setTimeout(() => _apmResetEmailRow(), 2500);
+      return;
+    }
+    const template = templates[0];
+    const context  = _apmBuildEmailContext();
+    const subject  = _applyEmailContext(template.subject || '', context);
+    const body     = _applyEmailContext(template.body    || '', context);
+    row.innerHTML = `
+      <div style="width:100%;display:flex;flex-direction:column;gap:0.35rem;padding:0.4rem 0 0.2rem;">
+        <input id="apm-composer-subject" type="text" value="${esc(subject)}"
+          style="width:100%;box-sizing:border-box;border:1.5px solid rgba(87,46,136,0.3);border-radius:6px;padding:0.28rem 0.5rem;font-size:0.78rem;font-family:inherit;" placeholder="Subject" />
+        <textarea id="apm-composer-body" rows="6"
+          style="width:100%;box-sizing:border-box;border:1.5px solid rgba(87,46,136,0.3);border-radius:6px;padding:0.28rem 0.5rem;font-size:0.78rem;font-family:inherit;resize:vertical;">${esc(body)}</textarea>
+        <div style="display:flex;gap:0.4rem;justify-content:flex-end;">
+          <button onclick="_apmResetEmailRow()" style="border:1px solid rgba(87,46,136,0.3);background:none;border-radius:6px;padding:0.25rem 0.8rem;font-size:0.75rem;font-weight:600;cursor:pointer;color:#6a5a80;font-family:inherit;">Cancel</button>
+          <button onclick="apmSendComposedEmail('${esc(category)}')" style="background:#572e88;color:#fff;border:none;border-radius:6px;padding:0.25rem 0.8rem;font-size:0.75rem;font-weight:600;cursor:pointer;font-family:inherit;">Send</button>
+        </div>
+      </div>
+    `;
+  }
+
+  async function apmSendComposedEmail(category) {
+    const subject = document.getElementById('apm-composer-subject')?.value?.trim() || '';
+    const body    = document.getElementById('apm-composer-body')?.value?.trim()    || '';
+    const row     = document.getElementById('apm-resend-row');
+    if (row) row.innerHTML = `<span style="font-size:0.72rem;color:#9a90b0;font-style:italic;">Sending…</span>`;
+    let bookingId = _apmApp?.booking_id || null;
+    if (!bookingId && _apmApp?.email) {
+      const { data: bookingRows } = await sb.from('audition_bookings')
+        .select('id').eq('production_id', prodId).eq('email', _apmApp.email)
+        .order('created_at', { ascending: false }).limit(1);
+      bookingId = bookingRows?.[0]?.id || null;
+    }
+    if (!bookingId) {
+      showToast('No booking record — email cannot be sent for manually-added performers.', true);
+      _apmResetEmailRow();
+      return;
+    }
     const ok = await resendConfirmationEmail(bookingId, category, {
-      email:   _apmApp?.email || '',
-      name:    _apmApp?.name  || '',
-      context: emailContext,
+      email: _apmApp?.email || '', name: _apmApp?.name || '',
+      context: _apmBuildEmailContext(), subject, body,
     });
     if (row) row.innerHTML = ok
-      ? `<span style="font-size:0.72rem;color:#3d8a4e;font-weight:600;">✓ Email sent</span>`
-      : `<span style="font-size:0.72rem;color:#c0392b;font-weight:600;">Failed to send. Check the Emails tab for template errors.</span>`;
+      ? `<span style="font-size:0.72rem;color:#3d8a4e;font-weight:600;">✓ Sent</span>`
+      : `<span style="font-size:0.72rem;color:#c0392b;font-weight:600;">Failed. Check the Emails tab.</span>`;
     setTimeout(() => _apmResetEmailRow(), 3000);
   }
 
