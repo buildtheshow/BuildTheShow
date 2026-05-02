@@ -29589,11 +29589,27 @@ If you have any questions, don't hesitate to reach out.
       showToast(`No ${category.replace(/_/g,' ')} template found. Create one in the Emails tab first.`, true);
       return false;
     }
+
+    // Fetch full booking record so we can pass email/name/session_id/slot_id explicitly
+    const { data: bookingRecord, error: bookingErr } = await sb
+      .from('audition_bookings')
+      .select('email, name, session_id, slot_id')
+      .eq('id', bookingId)
+      .single();
+    if (bookingErr || !bookingRecord) {
+      showToast('Could not load booking details. Please try again.', true);
+      return false;
+    }
+
     const { data, error } = await sb.functions.invoke('send-email', {
       body: {
         booking_id:    bookingId,
         production_id: prodId,
         category,
+        email:      bookingRecord.email      || '',
+        name:       bookingRecord.name       || '',
+        session_id: bookingRecord.session_id || '',
+        slot_id:    bookingRecord.slot_id    || '',
         context: {
           show_name:     prod?.title    || '',
           show_subtitle: prod?.subtitle || '',
