@@ -35016,7 +35016,8 @@ If you have any questions, don't hesitate to reach out.
 
   // ── All Performers Performer Modal (APM) ─────────────────────
   let _apmAppId = null, _apmApp = null, _apmTab = 'scheduling';
-  let _apmPendingSlots = {}, _apmPickingSessions = new Set(), _apmEdits = {};
+  let _apmPendingSlots = {}, _apmPickingSessions = new Set(), _apmEdits = {}, _apmPendingAttendance = {};
+  let _apmHeadshotFile = null, _apmHeadshotObjectUrl = null;
 
   function openApPerformerModal(appId) {
     const app = (allApplicants || []).find(a => String(a.id) === String(appId));
@@ -35049,7 +35050,9 @@ If you have any questions, don't hesitate to reach out.
     const modal = document.getElementById('ap-performer-modal');
     if (modal) modal.style.display = 'none';
     _apmAppId = null; _apmApp = null;
-    _apmPendingSlots = {}; _apmPickingSessions = new Set(); _apmEdits = {};
+    _apmPendingSlots = {}; _apmPickingSessions = new Set(); _apmEdits = {}; _apmPendingAttendance = {};
+    if (_apmHeadshotObjectUrl) { URL.revokeObjectURL(_apmHeadshotObjectUrl); _apmHeadshotObjectUrl = null; }
+    _apmHeadshotFile = null;
   }
 
   function apmOverlayClick(e) { if (e.target === e.currentTarget) closeApPerformerModal(); }
@@ -35086,6 +35089,13 @@ If you have any questions, don't hesitate to reach out.
         slotLabel = [dateStr, timeStr].filter(Boolean).join(' · ');
         slotClass = pendingSlotId !== undefined ? 'changed' : '';
       }
+      // Attendance mode
+      const existingAttendance = getApplicantAttendanceForSession(_apmApp, session.id);
+      const pendingAttendance = _apmPendingAttendance.hasOwnProperty(session.id) ? _apmPendingAttendance[session.id] : null;
+      const currentAttendance = pendingAttendance !== null ? pendingAttendance : (existingAttendance.value || '');
+      const isInPerson = currentAttendance === 'in_person' || currentAttendance === 'in person';
+      const isVideo = currentAttendance === 'video_call' || currentAttendance === 'video' || currentAttendance === 'virtual';
+      const attendanceChanged = pendingAttendance !== null;
       const isOpen = _apmPickingSessions.has(session.id);
       return `
         <div class="apm-session-card">
@@ -35096,6 +35106,12 @@ If you have any questions, don't hesitate to reach out.
               <div class="apm-session-slot ${slotClass}">${esc(slotLabel)}</div>
             </div>
             <button class="apm-change-btn ${isOpen ? 'open' : ''}" onclick="apmTogglePicker('${esc(session.id)}')">${isOpen ? 'Done' : 'Change'}</button>
+          </div>
+          <div style="display:flex;gap:0.4rem;padding:0 1rem 0.75rem;align-items:center;">
+            <span style="font-size:0.72rem;font-weight:700;color:#9a90b0;text-transform:uppercase;letter-spacing:0.05em;margin-right:0.25rem;">Attendance:</span>
+            <button onclick="apmSetAttendance('${esc(session.id)}','in_person')" style="background:${isInPerson ? '#572e88' : '#fff'};color:${isInPerson ? '#fff' : '#572e88'};border:1.5px solid ${isInPerson ? '#572e88' : 'rgba(87,46,136,0.25)'};border-radius:20px;padding:0.18rem 0.65rem;font-size:0.75rem;font-weight:600;cursor:pointer;">In Person</button>
+            <button onclick="apmSetAttendance('${esc(session.id)}','video_call')" style="background:${isVideo ? '#572e88' : '#fff'};color:${isVideo ? '#fff' : '#572e88'};border:1.5px solid ${isVideo ? '#572e88' : 'rgba(87,46,136,0.25)'};border-radius:20px;padding:0.18rem 0.65rem;font-size:0.75rem;font-weight:600;cursor:pointer;">Video Call</button>
+            ${attendanceChanged ? `<span style="font-size:0.72rem;color:#572e88;font-weight:600;">· changed</span>` : ''}
           </div>
           ${isOpen ? _apmSlotPickerHTML(session, effectiveSlotId) : ''}
         </div>`;
@@ -35136,6 +35152,11 @@ If you have any questions, don't hesitate to reach out.
   function apmSelectSlot(sessionId, slotId) {
     _apmPendingSlots[sessionId] = slotId;
     _apmPickingSessions.delete(sessionId);
+    if (_apmTab === 'scheduling') _apmRenderBody();
+  }
+
+  function apmSetAttendance(sessionId, mode) {
+    _apmPendingAttendance[sessionId] = mode;
     if (_apmTab === 'scheduling') _apmRenderBody();
   }
 
@@ -35205,19 +35226,91 @@ If you have any questions, don't hesitate to reach out.
   }
 
   function _apmHeadshotHTML() {
-    const url = _apmEdits.headshot_url !== undefined ? _apmEdits.headshot_url : (_apmApp.headshot_url || '');
-    const photoEl = url
-      ? `<img src="${esc(url)}" class="apm-headshot-preview" alt="Headshot" onerror="this.style.display='none'" />`
+    const currentUrl = _apmApp.headshot_url || '';
+    if (_apmHeadshotFile && _apmHeadshotObjectUrl) {
+      // Confirmation state — show old vs new
+      const oldEl = currentUrl
+        ? `<img src="${esc(currentUrl)}" class="apm-headshot-preview" alt="Current" />`
+        : `<div class="apm-headshot-placeholder-lg" style="width:100px;height:125px;font-size:2rem;">👤</div>`;
+      return `
+        <p style="font-size:0.82rem;color:#1a1530;font-weight:600;margin-bottom:1rem;">Replace this headshot?</p>
+        <div style="display:flex;gap:1.5rem;align-items:flex-start;margin-bottom:1.25rem;">
+          <div style="text-align:center;">
+            <div style="font-size:0.68rem;font-weight:700;color:#9a90b0;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:0.4rem;">Current</div>
+            ${oldEl}
+          </div>
+          <div style="display:flex;align-items:center;font-size:1.2rem;color:#9a90b0;padding-top:50px;">→</div>
+          <div style="text-align:center;">
+            <div style="font-size:0.68rem;font-weight:700;color:#572e88;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:0.4rem;">New</div>
+            <img src="${esc(_apmHeadshotObjectUrl)}" class="apm-headshot-preview" alt="New headshot" />
+          </div>
+        </div>
+        <div style="display:flex;gap:0.5rem;">
+          <button class="btn-primary" onclick="apmConfirmHeadshotUpload()">Yes, replace headshot</button>
+          <button class="btn-secondary" onclick="apmCancelHeadshotChange()">Cancel</button>
+        </div>`;
+    }
+    // Default state
+    const photoEl = currentUrl
+      ? `<img src="${esc(currentUrl)}" class="apm-headshot-preview" alt="Headshot" />`
       : `<div class="apm-headshot-placeholder-lg">👤</div>`;
     return `
       ${photoEl}
-      <div class="apm-form-group"><div class="apm-form-label">Headshot URL</div><input class="apm-form-input" id="apm-headshot-url" type="url" value="${esc(url)}" placeholder="https://…" oninput="apmPreviewHeadshot(this.value)" /></div>
-      <p style="font-size:0.78rem;color:#9a90b0;margin-top:0.25rem;line-height:1.5;">Paste a direct image URL and click Save Changes.</p>`;
+      <input type="file" id="apm-headshot-file-input" accept="image/*" style="display:none;" onchange="apmHeadshotFilePicked(this)" />
+      <button class="btn-secondary" onclick="document.getElementById('apm-headshot-file-input').click()">Change Headshot</button>
+      <p style="font-size:0.78rem;color:#9a90b0;margin-top:0.75rem;line-height:1.5;">Upload a new photo. You'll confirm before the old one is removed.</p>`;
   }
 
-  function apmPreviewHeadshot(url) {
-    _apmEdits.headshot_url = url;
+  function apmHeadshotFilePicked(input) {
+    const file = input?.files?.[0];
+    if (!file) return;
+    if (_apmHeadshotObjectUrl) URL.revokeObjectURL(_apmHeadshotObjectUrl);
+    _apmHeadshotFile = file;
+    _apmHeadshotObjectUrl = URL.createObjectURL(file);
     if (_apmTab === 'headshot') _apmRenderBody();
+  }
+
+  function apmCancelHeadshotChange() {
+    if (_apmHeadshotObjectUrl) { URL.revokeObjectURL(_apmHeadshotObjectUrl); _apmHeadshotObjectUrl = null; }
+    _apmHeadshotFile = null;
+    if (_apmTab === 'headshot') _apmRenderBody();
+  }
+
+  async function apmConfirmHeadshotUpload() {
+    if (!_apmHeadshotFile || !_apmApp) return;
+    const statusEl = document.getElementById('apm-save-status');
+    if (statusEl) { statusEl.className = 'apm-save-status saving'; statusEl.textContent = 'Uploading…'; }
+    try {
+      const file = _apmHeadshotFile;
+      const safeName = file.name.replace(/[^a-zA-Z0-9._-]+/g, '-');
+      const path = `${prodId}/applicants/${_apmApp.id}-${Date.now()}-${safeName}`;
+      const { data, error } = await sb.storage.from('audition-headshots').upload(path, file, { upsert: true, contentType: file.type });
+      if (error) throw error;
+      const { data: urlData } = sb.storage.from('audition-headshots').getPublicUrl(data.path);
+      const newUrl = (urlData?.publicUrl || '') + '?t=' + Date.now();
+      // Delete old headshot from storage
+      const oldUrl = _apmApp.headshot_url || '';
+      if (oldUrl && oldUrl.includes('audition-headshots')) {
+        const oldPath = oldUrl.split('/audition-headshots/')[1]?.split('?')[0];
+        if (oldPath) await sb.storage.from('audition-headshots').remove([oldPath]).catch(() => {});
+      }
+      // Save new URL
+      await syncApplicantEditsToSource(_apmApp, { headshot_url: newUrl });
+      const idx = (allApplicants || []).findIndex(a => String(a.id) === String(_apmAppId));
+      if (idx >= 0) { allApplicants[idx] = { ...allApplicants[idx], headshot_url: newUrl }; _apmApp = allApplicants[idx]; }
+      // Clean up preview
+      URL.revokeObjectURL(_apmHeadshotObjectUrl);
+      _apmHeadshotFile = null; _apmHeadshotObjectUrl = null;
+      // Update header photo
+      const pw = document.getElementById('apm-header-photo');
+      if (pw) pw.innerHTML = `<img src="${esc(newUrl)}" class="apm-header-photo" alt="" />`;
+      renderAllPerformers();
+      if (statusEl) { statusEl.className = 'apm-save-status saved'; statusEl.textContent = 'Headshot updated!'; setTimeout(() => { if (statusEl) statusEl.textContent = ''; }, 2500); }
+      if (_apmTab === 'headshot') _apmRenderBody();
+    } catch (err) {
+      console.error('[APM] headshot upload error', err);
+      if (statusEl) { statusEl.className = 'apm-save-status error'; statusEl.textContent = 'Upload failed. Try again.'; }
+    }
   }
 
   async function saveApmChanges() {
@@ -35226,6 +35319,15 @@ If you have any questions, don't hesitate to reach out.
     if (statusEl) { statusEl.className = 'apm-save-status saving'; statusEl.textContent = 'Saving…'; }
     try {
       const update = {};
+      // Attendance mode — stored on the application record
+      if (Object.keys(_apmPendingAttendance).length) {
+        // Use the first changed session's attendance as the primary value (most productions have one session)
+        const firstMode = Object.values(_apmPendingAttendance)[0];
+        if (firstMode) update.attendance_mode = firstMode;
+        const ca2 = update.custom_answers || { ...applicantCustomAnswers(_apmApp) };
+        Object.values(_apmPendingAttendance).forEach(mode => { if (mode) ca2['Attendance Type'] = attendanceModeLabelForValue(mode); });
+        update.custom_answers = ca2;
+      }
       // Slot assignments
       if (Object.keys(_apmPendingSlots).length) {
         const existing = Array.isArray(_apmApp?.slot_assignments) ? [..._apmApp.slot_assignments] : [];
@@ -35281,10 +35383,7 @@ If you have any questions, don't hesitate to reach out.
         if (contactEmail) ca2['Contact Email'] = contactEmail; else delete ca2['Contact Email'];
         update.custom_answers = ca2;
       }
-      // Headshot
-      const headshotUrl = document.getElementById('apm-headshot-url')?.value.trim();
-      if (headshotUrl !== undefined && headshotUrl !== (_apmApp.headshot_url || '')) update.headshot_url = headshotUrl || null;
-      if (_apmEdits.headshot_url !== undefined) update.headshot_url = _apmEdits.headshot_url || null;
+      // Headshot is handled separately via apmConfirmHeadshotUpload — not included here
 
       if (!Object.keys(update).length) {
         if (statusEl) { statusEl.className = 'apm-save-status'; statusEl.textContent = 'No changes to save.'; }
@@ -35293,7 +35392,7 @@ If you have any questions, don't hesitate to reach out.
       await syncApplicantEditsToSource(_apmApp, update);
       const idx = (allApplicants || []).findIndex(a => String(a.id) === String(_apmAppId));
       if (idx >= 0) { allApplicants[idx] = { ...allApplicants[idx], ...update }; _apmApp = allApplicants[idx]; }
-      _apmPendingSlots = {}; _apmPickingSessions = new Set(); _apmEdits = {};
+      _apmPendingSlots = {}; _apmPickingSessions = new Set(); _apmEdits = {}; _apmPendingAttendance = {};
       if (update.headshot_url !== undefined) {
         const pw = document.getElementById('apm-header-photo');
         if (pw) pw.innerHTML = update.headshot_url
