@@ -35042,6 +35042,7 @@ If you have any questions, don't hesitate to reach out.
   let _apmAppId = null, _apmApp = null, _apmTab = 'scheduling';
   let _apmPendingSlots = {}, _apmPickingSessions = new Set(), _apmEdits = {}, _apmPendingAttendance = {}, _apmAttendanceConfirming = {};
   let _apmHeadshotFile = null, _apmHeadshotObjectUrl = null;
+  let _apmDangerConfirming = false;
 
   function openApPerformerModal(appId) {
     const app = (allApplicants || []).find(a => String(a.id) === String(appId));
@@ -35222,14 +35223,79 @@ If you have any questions, don't hesitate to reach out.
 
   function switchApmTab(tab) {
     _apmTab = tab;
+    _apmDangerConfirming = false;
     document.querySelectorAll('.apm-tab').forEach(t => t.classList.toggle('active', t.dataset.apmtab === tab));
     _apmRenderBody();
+  }
+
+  function _apmDangerHTML() {
+    const name = esc(_apmApp?.name || 'this performer');
+    if (_apmDangerConfirming) {
+      return `
+        <div style="padding:1.5rem;">
+          <div style="border:2px solid #e74c3c;border-radius:12px;padding:1.25rem 1.5rem;background:#fff8f8;">
+            <div style="font-size:0.72rem;font-weight:800;text-transform:uppercase;letter-spacing:0.08em;color:#e74c3c;margin-bottom:0.75rem;">Confirm Removal</div>
+            <p style="font-size:0.88rem;color:#1a1530;margin:0 0 1rem;">Are you sure you want to remove <strong>${name}</strong> from this production? This will delete their application and booking record and cannot be undone.</p>
+            <div style="display:flex;gap:0.6rem;flex-wrap:wrap;">
+              <button onclick="apmConfirmDelete()" style="background:#e74c3c;color:#fff;border:none;border-radius:8px;padding:0.45rem 1.1rem;font-size:0.82rem;font-weight:700;cursor:pointer;font-family:inherit;">Yes, remove them</button>
+              <button onclick="_apmDangerConfirming=false;_apmRenderBody();" style="background:#fff;color:#6a5a80;border:1.5px solid rgba(87,46,136,0.2);border-radius:8px;padding:0.45rem 1rem;font-size:0.82rem;font-weight:600;cursor:pointer;font-family:inherit;">Cancel</button>
+            </div>
+          </div>
+        </div>`;
+    }
+    return `
+      <div style="padding:1.5rem;">
+        <div style="border:2px solid rgba(231,76,60,0.3);border-radius:12px;padding:1.25rem 1.5rem;background:#fff8f8;">
+          <div style="font-size:0.72rem;font-weight:800;text-transform:uppercase;letter-spacing:0.08em;color:#e74c3c;margin-bottom:0.5rem;">Danger Zone</div>
+          <p style="font-size:0.85rem;color:#6a5a80;margin:0 0 1rem;">Removing a performer will permanently delete their application and booking record from this production.</p>
+          <button onclick="_apmDangerConfirming=true;_apmRenderBody();" style="background:#fff;color:#e74c3c;border:2px solid #e74c3c;border-radius:8px;padding:0.45rem 1.1rem;font-size:0.82rem;font-weight:700;cursor:pointer;font-family:inherit;">Remove ${name}</button>
+        </div>
+      </div>`;
+  }
+
+  async function apmConfirmDelete() {
+    if (!_apmApp) return;
+    const app = _apmApp;
+    const slotId = app.slot_id || null;
+    const isBookingFallback = String(app.id).startsWith('booking-');
+
+    try {
+      const booking = isBookingFallback
+        ? { id: String(app.id).replace(/^booking-/, '') }
+        : await findMatchingBookingRecord(app);
+
+      if (!isBookingFallback) {
+        const { error: appDeleteError } = await sb.from('audition_applications').delete().eq('id', app.id);
+        if (appDeleteError) throw appDeleteError;
+      }
+      if (booking?.id) {
+        await sb.from('audition_bookings').delete().eq('id', booking.id);
+      }
+
+      const allSlotIdsToRelease = new Set();
+      if (slotId) allSlotIdsToRelease.add(slotId);
+      (Array.isArray(app.slot_assignments) ? app.slot_assignments : []).forEach(x => { if (x.slot_id) allSlotIdsToRelease.add(x.slot_id); });
+      if (allSlotIdsToRelease.size) {
+        try { await refreshAuditionSlotAvailability([...allSlotIdsToRelease]); } catch {}
+      }
+
+      closeApplicantModal();
+      await loadApplicants();
+      await loadSlots();
+      try { renderApplicantsMirror(); } catch {}
+      try { renderActiveCastingBoard(); } catch {}
+      showToast(`${app.name || 'Performer'} removed.`);
+    } catch (err) {
+      showToast('Could not remove performer: ' + (err?.message || 'Unknown error'), true);
+      _apmDangerConfirming = false;
+      _apmRenderBody();
+    }
   }
 
   function _apmRenderBody() {
     const body = document.getElementById('apm-body');
     if (!body || !_apmApp) return;
-    const map = { scheduling: _apmSchedulingHTML, performer: _apmPerformerHTML, audition: _apmAuditionHTML, contact: _apmContactHTML, headshot: _apmHeadshotHTML };
+    const map = { scheduling: _apmSchedulingHTML, performer: _apmPerformerHTML, audition: _apmAuditionHTML, contact: _apmContactHTML, headshot: _apmHeadshotHTML, danger: _apmDangerHTML };
     body.innerHTML = (map[_apmTab] || (() => ''))();
   }
 
@@ -36929,6 +36995,7 @@ If you have any questions, don't hesitate to reach out.
       <button class="apm-tab" data-apmtab="audition" onclick="switchApmTab('audition')">Audition</button>
       <button class="apm-tab" data-apmtab="contact" onclick="switchApmTab('contact')">Contact</button>
       <button class="apm-tab" data-apmtab="headshot" onclick="switchApmTab('headshot')">Headshot</button>
+      <button class="apm-tab" data-apmtab="danger" onclick="switchApmTab('danger')" style="color:#c0392b;">Danger Zone</button>
     </div>
     <div class="apm-body" id="apm-body"></div>
     <div class="apm-footer">

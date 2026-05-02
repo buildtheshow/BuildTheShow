@@ -613,7 +613,7 @@ See you soon,
     return json({ ok: false, error: 'Email sending is not configured (missing API key). Contact your admin.' });
   }
 
-  const bccAddresses = (category === 'booking_confirmation' && orgEmail && orgEmail !== performerEmail)
+  const bccAddresses = (orgEmail && orgEmail !== performerEmail)
     ? [orgEmail]
     : undefined;
 
