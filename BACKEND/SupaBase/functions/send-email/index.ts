@@ -266,10 +266,6 @@ See you soon,
   const sessionId = appSessionId || bookingSessionId;
   const slotId    = appSlotId    || bookingSlotId;
 
-  // For cast notifications, also look up all bookings to find callback session
-  let callbackSession: Record<string, unknown> | null = null;
-  let callbackSlot:    Record<string, unknown> | null = null;
-
   const sessionIds = [...new Set([sessionId].filter(Boolean))];
   const slotIds    = [...new Set([slotId].filter(Boolean))];
 
@@ -299,7 +295,18 @@ See you soon,
   ]);
 
   const danceCallSession = (allProductionSessions || []).find((s: Record<string,unknown>) =>
-    String(s.type || '').toLowerCase().includes('dance')
+    String(s.type || '').toLowerCase().includes('dance') ||
+    String(s.name || '').toLowerCase().includes('dance')
+  ) as Record<string,unknown> | undefined;
+
+  const generalAuditionSession = (allProductionSessions || []).find((s: Record<string,unknown>) =>
+    String(s.type || '').toLowerCase().includes('general') ||
+    String(s.name || '').toLowerCase().includes('general')
+  ) as Record<string,unknown> | undefined;
+
+  const callbackSessionProd = (allProductionSessions || []).find((s: Record<string,unknown>) =>
+    String(s.type || '').toLowerCase().includes('callback') ||
+    String(s.name || '').toLowerCase().includes('callback')
   ) as Record<string,unknown> | undefined;
 
   const sessionsById = Object.fromEntries((sessions || []).map(r => [r.id, r]));
@@ -307,19 +314,6 @@ See you soon,
 
   const primarySession = sessionsById[sessionId] || null;
   const primarySlot    = slotsById[slotId]       || null;
-
-  // Find callback session (for callback/cast emails)
-  for (const s of Object.values(sessionsById)) {
-    if (String((s as Record<string,unknown>).name || '').toLowerCase().includes('callback')) {
-      callbackSession = s as Record<string, unknown>;
-      // Find its slot
-      for (const slot of Object.values(slotsById)) {
-        callbackSlot = slot as Record<string, unknown>;
-        break;
-      }
-      break;
-    }
-  }
 
   // ── Build tokens ──────────────────────────────────────────────
   const firstName    = (performerName.split(' ')[0] || 'Performer');
@@ -381,24 +375,30 @@ See you soon,
     '{{director_name}}':         director,
     '{{role_name}}':             roleInterest,
     '{{role_type}}':             '',
-    '{{callback_date}}':         firstDefinedString(
-      directContext.callback_date,
-      fmtDate(String((callbackSlot as Record<string,unknown>)?.slot_date || (callbackSession as Record<string,unknown>)?.session_date || '')),
-    ),
-    '{{callback_time}}':         firstDefinedString(
-      directContext.callback_time,
-      fmtTime(String((callbackSlot as Record<string,unknown>)?.slot_time || (callbackSession as Record<string,unknown>)?.start_time  || '')),
-    ),
-    '{{callback_venue}}':        firstDefinedString(
-      directContext.callback_venue,
-      audVenue,
-    ),
     '{{rehearsal_start_date}}':  productionRecord.start_date ? fmtDate(String(productionRecord.start_date)) : '',
     '{{rehearsal_schedule}}':    '',
     '{{opening_night}}':         productionRecord.end_date   ? fmtDate(String(productionRecord.end_date))   : '',
-    '{{dance_call_date}}':       danceCallSession ? fmtDate(String(danceCallSession.date || '')) : '',
-    '{{dance_call_time}}':       danceCallSession ? fmtTime(String(danceCallSession.start_time || '')) : '',
-    '{{dance_call_venue}}':      danceCallSession ? String(danceCallSession.location || audVenue) : audVenue,
+    '{{general_audition_date}}':  generalAuditionSession ? fmtDate(String(generalAuditionSession.date        || '')) : '',
+    '{{general_audition_time}}':  generalAuditionSession ? fmtTime(String(generalAuditionSession.start_time  || '')) : '',
+    '{{general_audition_venue}}': generalAuditionSession ? String(generalAuditionSession.location || audVenue) : audVenue,
+    '{{general_audition_name}}':  generalAuditionSession ? String(generalAuditionSession.name     || '') : '',
+    '{{dance_call_date}}':        danceCallSession ? fmtDate(String(danceCallSession.date        || '')) : '',
+    '{{dance_call_time}}':        danceCallSession ? fmtTime(String(danceCallSession.start_time  || '')) : '',
+    '{{dance_call_venue}}':       danceCallSession ? String(danceCallSession.location || audVenue) : audVenue,
+    '{{dance_call_name}}':        danceCallSession ? String(danceCallSession.name     || '') : '',
+    '{{callback_date}}':          firstDefinedString(
+      directContext.callback_date,
+      callbackSessionProd ? fmtDate(String(callbackSessionProd.date        || '')) : '',
+    ),
+    '{{callback_time}}':          firstDefinedString(
+      directContext.callback_time,
+      callbackSessionProd ? fmtTime(String(callbackSessionProd.start_time  || '')) : '',
+    ),
+    '{{callback_venue}}':         firstDefinedString(
+      directContext.callback_venue,
+      callbackSessionProd ? String(callbackSessionProd.location || audVenue) : audVenue,
+    ),
+    '{{callback_name}}':          callbackSessionProd ? String(callbackSessionProd.name || '') : '',
     '{{all_audition_sessions}}': (allProductionSessions || [])
       .map((s: Record<string,unknown>) => `${s.name || 'Session'}: ${s.date ? fmtDate(String(s.date)) : 'TBC'}${s.start_time ? ' at ' + fmtTime(String(s.start_time)) : ''}`)
       .join('\n'),
