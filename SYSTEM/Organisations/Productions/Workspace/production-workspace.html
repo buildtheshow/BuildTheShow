@@ -35111,11 +35111,29 @@ If you have any questions, don't hesitate to reach out.
   async function apmEmailConfirmSend(category) {
     const row = document.getElementById('apm-resend-row');
     if (row) row.innerHTML = `<span style="font-size:0.72rem;color:#9a90b0;font-style:italic;">Sending…</span>`;
-    const bookingId = _apmApp?.booking_id || _apmApp?.id;
+
+    // Resolve booking_id — prefer stored value, fall back to querying audition_bookings by email
+    let bookingId = _apmApp?.booking_id || null;
+    if (!bookingId && _apmApp?.email) {
+      const { data: bookingRows } = await sb.from('audition_bookings')
+        .select('id')
+        .eq('production_id', prodId)
+        .eq('email', _apmApp.email)
+        .order('created_at', { ascending: false })
+        .limit(1);
+      bookingId = bookingRows?.[0]?.id || null;
+    }
+
+    if (!bookingId) {
+      if (row) row.innerHTML = `<span style="font-size:0.72rem;color:#c0392b;">No booking record found — this performer was added manually and can't receive templated emails.</span>`;
+      setTimeout(() => _apmResetEmailRow(), 5000);
+      return;
+    }
+
     const ok = await resendConfirmationEmail(bookingId, category);
     if (row) row.innerHTML = ok
       ? `<span style="font-size:0.72rem;color:#3d8a4e;font-weight:600;">✓ Email sent</span>`
-      : `<span style="font-size:0.72rem;color:#c0392b;font-weight:600;">Failed to send.</span>`;
+      : `<span style="font-size:0.72rem;color:#c0392b;font-weight:600;">Failed to send. Check the Emails tab for template errors.</span>`;
     setTimeout(() => _apmResetEmailRow(), 3000);
   }
 
