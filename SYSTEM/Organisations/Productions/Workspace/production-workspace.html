@@ -29378,12 +29378,18 @@ If you have any questions, don't hesitate to reach out.
 
   function recalcLocalSlotAvailability(slot) {
     if (!slot) return;
-    // Slot-level capacity is the source of truth
     const sessionCapacity = audSessions.find(s => s.id === slot.session_id)?.capacity_per_slot || 1;
     const capacity = Number(slot.capacity) > 0 ? Number(slot.capacity) : Number(sessionCapacity) || 1;
-    const bookedCount = Number(slot.booked_count || 0);
+    // Count from allApplicants directly — never trust booked_count which can drift
+    const liveCount = (allApplicants || []).filter(app => {
+      const assignments = Array.isArray(app.slot_assignments) && app.slot_assignments.length
+        ? app.slot_assignments
+        : (app.slot_id ? [{ slot_id: app.slot_id }] : []);
+      return assignments.some(x => x.slot_id === slot.id);
+    }).length;
+    slot.booked_count = liveCount;
     const isOpenLabel = getAudSlotState(slot) === 'open';
-    slot.is_available = isOpenLabel && bookedCount < capacity;
+    slot.is_available = isOpenLabel && liveCount < capacity;
   }
 
   function applyLocalRescheduleState(app, oldSlotId, newSlot) {
