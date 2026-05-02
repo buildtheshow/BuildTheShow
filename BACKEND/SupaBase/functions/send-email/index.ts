@@ -404,6 +404,21 @@ See you soon,
       .join('\n'),
   };
 
+  // Dynamic per-session tokens — one group per session, keyed by name slug.
+  // Uses "if not already set" so the explicit type-based tokens above take priority.
+  for (const session of ((allProductionSessions ?? []) as Record<string,unknown>[])) {
+    const slug = sessionSlug(String(session.name || ''));
+    if (!slug) continue;
+    const dk = `{{${slug}_date}}`;
+    const tk = `{{${slug}_time}}`;
+    const vk = `{{${slug}_venue}}`;
+    const nk = `{{${slug}_name}}`;
+    if (!(dk in tokenValues)) tokenValues[dk] = session.date        ? fmtDate(String(session.date))        : '';
+    if (!(tk in tokenValues)) tokenValues[tk] = session.start_time  ? fmtTime(String(session.start_time))  : '';
+    if (!(vk in tokenValues)) tokenValues[vk] = String(session.location || audVenue);
+    if (!(nk in tokenValues)) tokenValues[nk] = String(session.name || '');
+  }
+
   const productionFieldValues: Record<string, unknown> = {
     ...(productionRecord as object),
     org_name:     orgName,
@@ -521,6 +536,12 @@ See you soon,
 });
 
 // ── Helpers ───────────────────────────────────────────────────
+
+function sessionSlug(name: string): string {
+  return String(name || '').trim().toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '');
+}
 
 function fmtDate(dateStr: string): string {
   if (!dateStr) return '';
