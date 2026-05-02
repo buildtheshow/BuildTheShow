@@ -35257,73 +35257,54 @@ If you have any questions, don't hesitate to reach out.
     if (!_apmApp) return;
     const app = _apmApp;
     const isBookingFallback = String(app.id).startsWith('booking-');
-    const realAppId       = isBookingFallback ? null : app.id;
-    const bookingOnlyId   = isBookingFallback ? String(app.id).replace(/^booking-/, '') : null;
-    const email           = app.email || null;
+    const realAppId     = isBookingFallback ? null : app.id;
+    const bookingOnlyId = isBookingFallback ? String(app.id).replace(/^booking-/, '') : null;
+    const email         = app.email || null;
 
+    // Non-essential cleanups — each isolated so they can't block the core delete
+    if (realAppId) {
+      try { await sb.from('casting_assignments').delete().eq('production_id', prodId).eq('applicant_id', realAppId); } catch {}
+      try { await sb.from('production_audition_notes').delete().eq('production_id', prodId).eq('applicant_id', realAppId); } catch {}
+      try { await sb.from('production_audition_observations').delete().eq('production_id', prodId).eq('applicant_id', realAppId); } catch {}
+      try { await sb.from('production_roles').update({ cast_member_id: null }).eq('production_id', prodId).eq('cast_member_id', realAppId); } catch {}
+    }
+
+    // Core delete — this must succeed
     try {
-      // 1. Casting assignments
-      if (realAppId) {
-        await sb.from('casting_assignments').delete()
-          .eq('production_id', prodId).eq('applicant_id', realAppId);
+      // Bookings: by direct ID, by applicant link, and by email
+      if (app.booking_id) {
+        await sb.from('audition_bookings').delete().eq('id', app.booking_id);
       }
-
-      // 2. Audition notes
       if (realAppId) {
-        await sb.from('production_audition_notes').delete()
-          .eq('production_id', prodId).eq('applicant_id', realAppId);
-      }
-
-      // 3. Audition observations
-      if (realAppId) {
-        await sb.from('production_audition_observations').delete()
-          .eq('production_id', prodId).eq('applicant_id', realAppId);
-      }
-
-      // 4. Unassign from any cast role (preserve the role itself, just clear the person)
-      if (realAppId) {
-        await sb.from('production_roles')
-          .update({ cast_member_id: null })
-          .eq('production_id', prodId).eq('cast_member_id', realAppId);
-      }
-
-      // 5. All booking records — by applicant_id link AND by email (catches public-form bookings)
-      if (realAppId) {
-        await sb.from('audition_bookings').delete()
-          .eq('production_id', prodId).eq('applicant_id', realAppId);
+        await sb.from('audition_bookings').delete().eq('production_id', prodId).eq('applicant_id', realAppId);
       }
       if (email) {
-        await sb.from('audition_bookings').delete()
-          .eq('production_id', prodId).eq('email', email);
+        await sb.from('audition_bookings').delete().eq('production_id', prodId).eq('email', email);
       }
       if (bookingOnlyId) {
         await sb.from('audition_bookings').delete().eq('id', bookingOnlyId);
       }
 
-      // 6. Headshot from storage
+      // Headshot from storage
       if (app.headshot_url) {
         try {
           const urlObj = new URL(app.headshot_url);
           const match  = urlObj.pathname.match(/audition-headshots\/(.+)$/);
           if (match) await sb.storage.from('audition-headshots').remove([match[1]]);
-        } catch { /* non-fatal */ }
+        } catch {}
       }
 
-      // 7. Application record (session_checkins JSONB lives here — gone with the row)
+      // Application record (takes session_checkins JSONB with it)
       if (realAppId) {
         const { error: appErr } = await sb.from('audition_applications').delete().eq('id', realAppId);
         if (appErr) throw appErr;
       }
 
-      // 8. Release all slots this person held
+      // Release all slots
       const allSlotIdsToRelease = new Set();
       if (app.slot_id) allSlotIdsToRelease.add(app.slot_id);
-      (Array.isArray(app.slot_assignments) ? app.slot_assignments : []).forEach(x => {
-        if (x.slot_id) allSlotIdsToRelease.add(x.slot_id);
-      });
-      if (allSlotIdsToRelease.size) {
-        try { await refreshAuditionSlotAvailability([...allSlotIdsToRelease]); } catch {}
-      }
+      (Array.isArray(app.slot_assignments) ? app.slot_assignments : []).forEach(x => { if (x.slot_id) allSlotIdsToRelease.add(x.slot_id); });
+      if (allSlotIdsToRelease.size) try { await refreshAuditionSlotAvailability([...allSlotIdsToRelease]); } catch {}
 
       closeApPerformerModal();
       await loadApplicants();
