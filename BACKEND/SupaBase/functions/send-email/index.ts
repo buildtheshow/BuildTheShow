@@ -87,9 +87,9 @@ serve(async (req) => {
     const fromEmail = FROM_EMAIL || 'noreply@buildtheshow.com';
 
     // Build a full token map using real data + sample performer values
-    const generalSess  = sessions.find(s => String(s.type||'').toLowerCase().includes('general')  || String(s.name||'').toLowerCase().includes('general'));
-    const danceSess    = sessions.find(s => String(s.type||'').toLowerCase().includes('dance')     || String(s.name||'').toLowerCase().includes('dance'));
-    const callbackSess = sessions.find(s => String(s.type||'').toLowerCase().includes('callback')  || String(s.name||'').toLowerCase().includes('callback'));
+    const generalSess  = sessions.find(s => String(s.type||'').toLowerCase() === 'audition' || String(s.type||'').toLowerCase().includes('general') || String(s.name||'').toLowerCase().includes('general'));
+    const danceSess    = sessions.find(s => String(s.type||'').toLowerCase().includes('dance')    || String(s.name||'').toLowerCase().includes('dance'));
+    const callbackSess = sessions.find(s => String(s.type||'').toLowerCase().includes('callback') || String(s.name||'').toLowerCase().includes('callback'));
     const primarySess  = generalSess || sessions[0];
 
     const showDates = p.start_date && p.end_date
