@@ -29582,24 +29582,55 @@ If you have any questions, don't hesitate to reach out.
     }
   }
 
-  async function resendConfirmationEmail(bookingId, category = 'booking_confirmation') {
+  async function resendConfirmationEmail(bookingId, category = 'booking_confirmation', overrides = {}) {
     const { data: templates } = await sb.from('email_templates')
-      .select('id, subject, body').eq('production_id', prodId).eq('category', category).limit(1);
+      .select('id, subject, body')
+      .eq('production_id', prodId)
+      .eq('category', category)
+      .order('created_at', { ascending: false })
+      .limit(1);
     if (!templates?.length) {
       showToast(`No ${category.replace(/_/g,' ')} template found. Create one in the Emails tab first.`, true);
       return false;
     }
     const template = templates[0];
 
-    // Fetch full booking record so we can pass email/name/session_id/slot_id explicitly
-    const { data: bookingRecord, error: bookingErr } = await sb
-      .from('audition_bookings')
-      .select('email, name, session_id, slot_id')
-      .eq('id', bookingId)
-      .single();
-    if (bookingErr || !bookingRecord) {
-      showToast('Could not load booking details. Please try again.', true);
-      return false;
+    // Use pre-built overrides if provided (from APM modal); otherwise fetch from booking record
+    let performerEmail = overrides.email || '';
+    let performerName  = overrides.name  || '';
+    let emailContext   = overrides.context || null;
+
+    if (!performerEmail || !emailContext) {
+      const { data: bookingRecord, error: bookingErr } = await sb
+        .from('audition_bookings')
+        .select('email, name, session_id, slot_id')
+        .eq('id', bookingId)
+        .single();
+      if (bookingErr || !bookingRecord) {
+        showToast('Could not load booking details. Please try again.', true);
+        return false;
+      }
+      if (!performerEmail) performerEmail = bookingRecord.email || '';
+      if (!performerName)  performerName  = bookingRecord.name  || '';
+      if (!emailContext) emailContext = {
+        show_name:     prod?.title    || '',
+        show_subtitle: prod?.subtitle || '',
+        org_name:      orgName        || '',
+        org_email:     orgEmail       || '',
+        director_name: prod?.director || '',
+        session_id:    bookingRecord.session_id || '',
+        slot_id:       bookingRecord.slot_id    || '',
+        production: {
+          title:           prod?.title           || '',
+          subtitle:        prod?.subtitle        || '',
+          venue:           prod?.venue           || '',
+          director:        prod?.director        || '',
+          organization_id: prod?.organization_id || '',
+          start_date:      prod?.start_date      || '',
+          end_date:        prod?.end_date        || '',
+          org_name:        orgName               || '',
+        },
+      };
     }
 
     const { data, error } = await sb.functions.invoke('send-email', {
@@ -29607,29 +29638,13 @@ If you have any questions, don't hesitate to reach out.
         booking_id:    bookingId,
         production_id: prodId,
         category,
-        subject:    template.subject    || '',
-        message:    template.body       || '',
-        email:      bookingRecord.email      || '',
-        name:       bookingRecord.name       || '',
-        session_id: bookingRecord.session_id || '',
-        slot_id:    bookingRecord.slot_id    || '',
-        context: {
-          show_name:     prod?.title    || '',
-          show_subtitle: prod?.subtitle || '',
-          org_name:      orgName        || '',
-          org_email:     orgEmail       || '',
-          director_name: prod?.director || '',
-          production: {
-            title:           prod?.title           || '',
-            subtitle:        prod?.subtitle        || '',
-            venue:           prod?.venue           || '',
-            director:        prod?.director        || '',
-            organization_id: prod?.organization_id || '',
-            start_date:      prod?.start_date      || '',
-            end_date:        prod?.end_date        || '',
-            org_name:        orgName               || '',
-          },
-        },
+        subject:    template.subject || '',
+        message:    template.body    || '',
+        email:      performerEmail,
+        name:       performerName,
+        session_id: emailContext?.session_id || '',
+        slot_id:    emailContext?.slot_id    || '',
+        context:    emailContext,
       }
     });
     if (error) { showToast('Could not send: ' + error.message, true); return false; }
@@ -35149,7 +35164,56 @@ If you have any questions, don't hesitate to reach out.
       return;
     }
 
-    const ok = await resendConfirmationEmail(bookingId, category);
+    // Build context from workspace data — same pattern as the public booking form
+    const slotAssignments  = Array.isArray(_apmApp?.slot_assignments) ? _apmApp.slot_assignments : [];
+    const primarySessionId = _apmApp?.session_id || slotAssignments[0]?.session_id || null;
+    const primarySession   = (audSessions || []).find(s => s.id === primarySessionId) || null;
+    const primaryAssign    = slotAssignments.find(a => a.session_id === primarySessionId) || slotAssignments[0] || null;
+    const primarySlotId    = primaryAssign?.slot_id || _apmApp?.slot_id || null;
+    const primarySlot      = (primarySlotId && primarySessionId)
+      ? (audSlots[primarySessionId] || []).find(s => s.id === primarySlotId) || null
+      : null;
+    const customAnswers    = (typeof _apmApp?.custom_answers === 'object' && _apmApp.custom_answers) ? _apmApp.custom_answers : {};
+    const whatToPrepare    = primarySession?.prepare_text
+      || customAnswers['What to Prepare']
+      || customAnswers['what_to_prepare']
+      || '';
+
+    const emailContext = {
+      performer_name:   _apmApp?.name             || '',
+      performer_email:  _apmApp?.email            || '',
+      show_name:        prod?.title               || '',
+      show_subtitle:    prod?.subtitle            || '',
+      org_name:         orgName                   || '',
+      org_email:        orgEmail                  || '',
+      director_name:    prod?.director            || '',
+      audition_session: primarySession?.name      || '',
+      audition_date:    primarySession?.date      ? fmtDate(primarySession.date) : '',
+      audition_time:    primarySlot?.slot_time    ? formatSlotTime(primarySlot.slot_time)
+                        : primarySession?.start_time ? formatSlotTime(primarySession.start_time) : '',
+      audition_venue:   primarySession?.location  || prod?.venue || '',
+      what_to_prepare:  whatToPrepare,
+      role_name:        _apmApp?.role_interest    || '',
+      custom_answers:   customAnswers,
+      session_id:       primarySessionId          || '',
+      slot_id:          primarySlotId             || '',
+      production: {
+        title:           prod?.title           || '',
+        subtitle:        prod?.subtitle        || '',
+        venue:           prod?.venue           || '',
+        director:        prod?.director        || '',
+        organization_id: prod?.organization_id || '',
+        start_date:      prod?.start_date      || '',
+        end_date:        prod?.end_date        || '',
+        org_name:        orgName               || '',
+      },
+    };
+
+    const ok = await resendConfirmationEmail(bookingId, category, {
+      email:   _apmApp?.email || '',
+      name:    _apmApp?.name  || '',
+      context: emailContext,
+    });
     if (row) row.innerHTML = ok
       ? `<span style="font-size:0.72rem;color:#3d8a4e;font-weight:600;">✓ Email sent</span>`
       : `<span style="font-size:0.72rem;color:#c0392b;font-weight:600;">Failed to send. Check the Emails tab for template errors.</span>`;
