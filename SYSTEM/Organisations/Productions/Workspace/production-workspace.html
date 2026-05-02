@@ -27233,7 +27233,7 @@ If you have any questions, don't hesitate to reach out.
     const count = Object.keys(conflicts || {}).length;
     if (count) return `${count} conflict${count === 1 ? '' : 's'}`;
     if (app?.conflicts) return String(app.conflicts);
-    return 'All good';
+    return 'No Conflicts';
   }
 
   function applicantConflictDetails(app) {
@@ -27244,14 +27244,18 @@ If you have any questions, don't hesitate to reach out.
     const entries = Object.entries(conflicts || {})
       .filter(([, v]) => v && (v === true || v.conflict === true || v === 'true'));
     if (!entries.length) return '—';
-    // Build readable labels: prefer stored title+date, fall back to count
+    // Build readable labels: DD/MM/YYYY (Title) format
+    const fmtDate = (d) => {
+      const p = String(d || '').split('-');
+      return p.length === 3 ? `${p[2]}/${p[1]}/${p[0]}` : String(d || '');
+    };
     const labels = entries.map(([, v]) => {
       if (typeof v === 'object' && v.title) {
-        return v.date ? `${v.title} (${v.date})` : v.title;
+        return v.date ? `${fmtDate(v.date)} (${v.title})` : v.title;
       }
       return null;
     }).filter(Boolean);
-    if (labels.length) return labels.join(', ');
+    if (labels.length) return labels.join('\n');
     return `${entries.length} date conflict${entries.length === 1 ? '' : 's'}`;
   }
 
@@ -27287,7 +27291,7 @@ If you have any questions, don't hesitate to reach out.
 
   function applicantAvailabilityDetails(app) {
     const details = applicantConflictDetails(app);
-    return details === '—' ? 'All good' : details;
+    return details === '—' ? 'No Conflicts' : details;
   }
 
   // Returns the plain-English conflict text for display in card back and modal.
@@ -27467,17 +27471,24 @@ If you have any questions, don't hesitate to reach out.
         { key: 'requested_roles', label: 'Requested Roles', minWidth: '180px' },
         { key: 'gender_roles', label: 'Role Gender Preferences', minWidth: '190px' },
         { key: 'casting_preference', label: 'Casting Preference', minWidth: '160px' },
-        { key: 'other_roles', label: 'Other Roles', minWidth: '150px' },
-        { key: 'availability', label: 'Availability', minWidth: '220px' },
+        { key: 'other_roles', label: 'Open to Other Roles', minWidth: '150px' },
+        { key: 'availability', label: 'Conflicts', minWidth: '220px' },
       ];
     }
 
     if (applicantSheetSection === 'booking_details') {
-      const bookingColumns = getAuditionScheduleViewSessions().map(session => ({
-        key: `booking_session:${session.id}`,
-        label: session.name || sessionTypeLabel(session.type || 'audition'),
-        minWidth: '180px',
-      }));
+      const bookingColumns = getAuditionScheduleViewSessions().flatMap(session => [
+        {
+          key: `booking_session:${session.id}`,
+          label: session.name || sessionTypeLabel(session.type || 'audition'),
+          minWidth: '180px',
+        },
+        {
+          key: `booking_attendance:${session.id}`,
+          label: 'Type',
+          minWidth: '62px',
+        },
+      ]);
       return [
         { key: 'headshot', label: 'Headshot', minWidth: '80px' },
         { key: 'name', label: 'Performer', minWidth: '190px' },
@@ -27534,7 +27545,6 @@ If you have any questions, don't hesitate to reach out.
         { key: 'special_skills', label: 'Special Skills', minWidth: '150px' },
         { key: 'previous_experience', label: 'Previous Experience', minWidth: '150px' },
         { key: 'additional_notes', label: 'Additional Notes', minWidth: '150px' },
-        { key: 'availability', label: 'Conflicts / Availability', minWidth: '150px' },
         ...questionCols,
       ];
     }
@@ -27624,6 +27634,16 @@ If you have any questions, don't hesitate to reach out.
   function applicantColumnValue(app, key) {
     const ca = applicantCustomAnswers(app);
     const hasAuditionSetup = !!(audSessions || []).length;
+    if (key.startsWith('booking_attendance:')) {
+      const sessionId = key.split(':')[1] || '';
+      if (!hasAuditionSetup) return '—';
+      const assignments = Array.isArray(app?.slot_assignments) ? app.slot_assignments : [];
+      const assignment = assignments.find(x => x.session_id === sessionId);
+      if (!assignment?.slot_id) return '—';
+      const attendance = getApplicantAttendanceForSession(app, sessionId);
+      if (!attendance.label) return '—';
+      return attendance.isVideoCall ? 'Video' : 'In Person';
+    }
     if (key.startsWith('booking_session:')) {
       const sessionId = key.split(':')[1] || '';
       if (!hasAuditionSetup) return '';
