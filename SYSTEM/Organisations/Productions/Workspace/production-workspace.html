@@ -35256,25 +35256,71 @@ If you have any questions, don't hesitate to reach out.
   async function apmConfirmDelete() {
     if (!_apmApp) return;
     const app = _apmApp;
-    const slotId = app.slot_id || null;
     const isBookingFallback = String(app.id).startsWith('booking-');
+    const realAppId       = isBookingFallback ? null : app.id;
+    const bookingOnlyId   = isBookingFallback ? String(app.id).replace(/^booking-/, '') : null;
+    const email           = app.email || null;
 
     try {
-      const booking = isBookingFallback
-        ? { id: String(app.id).replace(/^booking-/, '') }
-        : await findMatchingBookingRecord(app);
-
-      if (!isBookingFallback) {
-        const { error: appDeleteError } = await sb.from('audition_applications').delete().eq('id', app.id);
-        if (appDeleteError) throw appDeleteError;
-      }
-      if (booking?.id) {
-        await sb.from('audition_bookings').delete().eq('id', booking.id);
+      // 1. Casting assignments
+      if (realAppId) {
+        await sb.from('casting_assignments').delete()
+          .eq('production_id', prodId).eq('applicant_id', realAppId);
       }
 
+      // 2. Audition notes
+      if (realAppId) {
+        await sb.from('production_audition_notes').delete()
+          .eq('production_id', prodId).eq('applicant_id', realAppId);
+      }
+
+      // 3. Audition observations
+      if (realAppId) {
+        await sb.from('production_audition_observations').delete()
+          .eq('production_id', prodId).eq('applicant_id', realAppId);
+      }
+
+      // 4. Unassign from any cast role (preserve the role itself, just clear the person)
+      if (realAppId) {
+        await sb.from('production_roles')
+          .update({ cast_member_id: null })
+          .eq('production_id', prodId).eq('cast_member_id', realAppId);
+      }
+
+      // 5. All booking records — by applicant_id link AND by email (catches public-form bookings)
+      if (realAppId) {
+        await sb.from('audition_bookings').delete()
+          .eq('production_id', prodId).eq('applicant_id', realAppId);
+      }
+      if (email) {
+        await sb.from('audition_bookings').delete()
+          .eq('production_id', prodId).eq('email', email);
+      }
+      if (bookingOnlyId) {
+        await sb.from('audition_bookings').delete().eq('id', bookingOnlyId);
+      }
+
+      // 6. Headshot from storage
+      if (app.headshot_url) {
+        try {
+          const urlObj = new URL(app.headshot_url);
+          const match  = urlObj.pathname.match(/audition-headshots\/(.+)$/);
+          if (match) await sb.storage.from('audition-headshots').remove([match[1]]);
+        } catch { /* non-fatal */ }
+      }
+
+      // 7. Application record (session_checkins JSONB lives here — gone with the row)
+      if (realAppId) {
+        const { error: appErr } = await sb.from('audition_applications').delete().eq('id', realAppId);
+        if (appErr) throw appErr;
+      }
+
+      // 8. Release all slots this person held
       const allSlotIdsToRelease = new Set();
-      if (slotId) allSlotIdsToRelease.add(slotId);
-      (Array.isArray(app.slot_assignments) ? app.slot_assignments : []).forEach(x => { if (x.slot_id) allSlotIdsToRelease.add(x.slot_id); });
+      if (app.slot_id) allSlotIdsToRelease.add(app.slot_id);
+      (Array.isArray(app.slot_assignments) ? app.slot_assignments : []).forEach(x => {
+        if (x.slot_id) allSlotIdsToRelease.add(x.slot_id);
+      });
       if (allSlotIdsToRelease.size) {
         try { await refreshAuditionSlotAvailability([...allSlotIdsToRelease]); } catch {}
       }
