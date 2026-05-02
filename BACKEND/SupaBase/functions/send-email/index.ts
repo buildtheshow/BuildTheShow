@@ -286,14 +286,21 @@ See you soon,
     });
   }
 
-  const [{ data: sessions }, { data: slots }] = await Promise.all([
+  const [{ data: sessions }, { data: slots }, { data: allProductionSessions }] = await Promise.all([
     sessionIds.length
       ? sb.from('audition_sessions').select('id,name,session_date,date,start_time,location,prepare_text').in('id', [...new Set(sessionIds)])
       : Promise.resolve({ data: [] }),
     slotIds.length
       ? sb.from('audition_time_slots').select('id,slot_time,slot_date,label').in('id', [...new Set(slotIds)])
       : Promise.resolve({ data: [] }),
+    productionId
+      ? sb.from('audition_sessions').select('id,name,type,date,start_time,location').eq('production_id', productionId).order('sort_order', { ascending: true })
+      : Promise.resolve({ data: [] }),
   ]);
+
+  const danceCallSession = (allProductionSessions || []).find((s: Record<string,unknown>) =>
+    String(s.type || '').toLowerCase().includes('dance')
+  ) as Record<string,unknown> | undefined;
 
   const sessionsById = Object.fromEntries((sessions || []).map(r => [r.id, r]));
   const slotsById    = Object.fromEntries((slots    || []).map(r => [r.id, r]));
@@ -389,6 +396,12 @@ See you soon,
     '{{rehearsal_start_date}}':  productionRecord.start_date ? fmtDate(String(productionRecord.start_date)) : '',
     '{{rehearsal_schedule}}':    '',
     '{{opening_night}}':         productionRecord.end_date   ? fmtDate(String(productionRecord.end_date))   : '',
+    '{{dance_call_date}}':       danceCallSession ? fmtDate(String(danceCallSession.date || '')) : '',
+    '{{dance_call_time}}':       danceCallSession ? fmtTime(String(danceCallSession.start_time || '')) : '',
+    '{{dance_call_venue}}':      danceCallSession ? String(danceCallSession.location || audVenue) : audVenue,
+    '{{all_audition_sessions}}': (allProductionSessions || [])
+      .map((s: Record<string,unknown>) => `${s.name || 'Session'}: ${s.date ? fmtDate(String(s.date)) : 'TBC'}${s.start_time ? ' at ' + fmtTime(String(s.start_time)) : ''}`)
+      .join('\n'),
   };
 
   const productionFieldValues: Record<string, unknown> = {
