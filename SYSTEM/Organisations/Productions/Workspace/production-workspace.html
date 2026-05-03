@@ -35136,12 +35136,33 @@ If you have any questions, don't hesitate to reach out.
     const knownSlots     = applicantAllKnownSlots();
     const customAnswers  = (typeof _apmApp?.custom_answers === 'object' && _apmApp.custom_answers) ? _apmApp.custom_answers : {};
 
+    const appEmail = String(_apmApp?.email || '').trim().toLowerCase();
     function effectiveSlotForSession(sess) {
-      const savedAsgn = savedAssignments.find(x => x.session_id === sess.id);
+      // 1. Pending slot change (same as scheduling tab)
       const pendingSlotId = _apmPendingSlots.hasOwnProperty(sess.id) ? _apmPendingSlots[sess.id] : undefined;
-      const slotId = pendingSlotId !== undefined ? pendingSlotId : (savedAsgn?.slot_id || null);
-      if (!slotId) return null;
-      return knownSlots.find(s => s.id === slotId) || null;
+      if (pendingSlotId !== undefined) {
+        if (!pendingSlotId) return null;
+        return knownSlots.find(s => s.id === pendingSlotId) || null;
+      }
+      // 2. Saved slot_assignments
+      const savedAsgn = savedAssignments.find(x => x.session_id === sess.id);
+      if (savedAsgn?.slot_id) {
+        const slot = knownSlots.find(s => s.id === savedAsgn.slot_id);
+        if (slot) return slot;
+      }
+      // 3. Fallback: audition_bookings (most recent active booking for this performer + session)
+      if (appEmail) {
+        const booking = (allAuditionBookings || []).find(b => {
+          const status = String(b.status || '').toLowerCase();
+          if (status === 'cancelled' || status === 'canceled') return false;
+          return b.session_id === sess.id &&
+            String(b.email || '').trim().toLowerCase() === appEmail;
+        });
+        if (booking?.slot_id) {
+          return knownSlots.find(s => s.id === booking.slot_id) || null;
+        }
+      }
+      return null;
     }
     function slotTimeStr(slot) {
       const t = slot?.slot_time || slot?.start_time || '';
@@ -35212,7 +35233,6 @@ If you have any questions, don't hesitate to reach out.
     // Walk every session in schedule order and populate named + slug tokens
     for (const sess of sessions) {
       const slot  = effectiveSlotForSession(sess);
-      const time  = slotTimeStr(slot);
       const date  = sess.date  ? fmtDate(sess.date) : '';
       const venue = sess.location || prod?.venue || '';
       const name  = sess.name || '';
