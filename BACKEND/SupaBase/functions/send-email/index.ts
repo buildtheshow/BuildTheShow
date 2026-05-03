@@ -570,6 +570,7 @@ See you soon,
     directContext.performer_pronouns, customAnswers['Pronouns'], customAnswers['pronouns'],
   );
   contactName = firstDefinedString(contactName, customAnswers['Contact Name']);
+  const contactFirstName = firstNameOnly(contactName);
   const performanceSchedule = firstDefinedString(
     directContext.performance_schedule,
     ((performanceEvents || []) as Record<string, unknown>[]).map(formatScheduleEvent).filter(Boolean).join('\n'),
@@ -580,7 +581,7 @@ See you soon,
   );
 
   const tokenValues: Record<string, string> = {
-    '{{contact_name}}':          contactName,
+    '{{contact_name}}':          contactFirstName,
     '{{performer_name}}':        performerName,
     '{{performer_first_name}}':  firstName,
     '{{performer_pronouns}}':    pronouns,
@@ -671,7 +672,7 @@ See you soon,
     performer_first_name: firstName,
     performer_email:      performerEmail,
     performer_pronouns:   pronouns,
-    contact_name:          contactName,
+    contact_name:          contactFirstName,
     role_name:            roleInterest,
     role_type:             roleType,
     ...customAnswers,
@@ -880,6 +881,10 @@ function firstDefinedString(...values: unknown[]): string {
     if (s) return s;
   }
   return '';
+}
+
+function firstNameOnly(value: unknown): string {
+  return String(value || '').trim().split(/\s+/)[0] || '';
 }
 
 function normalizeLookupKey(value: string): string {
