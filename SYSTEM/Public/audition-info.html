@@ -5482,6 +5482,14 @@
 
         // Send booking confirmation email using the org's template (fire-and-forget)
         if (insertedBookingId) {
+          const emailSlotAssignments = [..._mergedSlotAssignments];
+          (extraSessions || []).forEach(extra => {
+            if (!extra.session_id || !extra.slot_id) return;
+            const idx = emailSlotAssignments.findIndex(x => x.session_id === extra.session_id);
+            const entry = { session_id: extra.session_id, slot_id: extra.slot_id };
+            if (idx >= 0) emailSlotAssignments[idx] = entry;
+            else emailSlotAssignments.push(entry);
+          });
           const resolvedWhatToPrepare = (() => {
             const questionValue = finalCustomAnswersPayload && typeof finalCustomAnswersPayload === 'object'
               ? (finalCustomAnswersPayload['What to Prepare'] || finalCustomAnswersPayload['what_to_prepare'])
@@ -5491,6 +5499,7 @@
           sb.functions.invoke('send-email', {
             body: {
               booking_id: insertedBookingId,
+              applicant_id: persistedApplication?.id || null,
               production_id: _bkProd.id,
               category: 'booking_confirmation',
               email: bookingPayload.email,
@@ -5512,6 +5521,7 @@
                 director_name: _bkProd?.director || '',
                 role_name: bookingPayload.role_interest || '',
                 custom_answers: finalCustomAnswersPayload || null,
+                slot_assignments: emailSlotAssignments,
                 session_id: bookingPayload.session_id,
                 slot_id: bookingPayload.slot_id || null,
                 production: {

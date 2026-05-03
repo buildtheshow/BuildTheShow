@@ -234,13 +234,16 @@ serve(async (req) => {
   let appSessionId    = firstDefinedString(body.session_id, directContext.session_id);
   let appSlotId       = firstDefinedString(body.slot_id, directContext.slot_id);
   let productionId    = productionIdRaw;
+  let slotAssignments: Record<string, unknown>[] = Array.isArray(directContext.slot_assignments)
+    ? directContext.slot_assignments.filter(isRecord) as Record<string, unknown>[]
+    : [];
 
   // Path A: we have an applicant_id — non-fatal if DB lookup fails, top-level email/name are the fallback
   if (applicantIdRaw) {
     try {
       const { data: app } = await sb
         .from('audition_applications')
-        .select('id,name,email,contact_name,role_interest,custom_answers,session_id,slot_id,time_slot_id,production_id')
+        .select('id,name,email,contact_name,role_interest,custom_answers,session_id,slot_id,time_slot_id,slot_assignments,production_id')
         .eq('id', applicantIdRaw)
         .maybeSingle();
       if (app) {
@@ -251,6 +254,9 @@ serve(async (req) => {
         roleInterest   = firstDefinedString(directContext.role_name, String(app.role_interest || ''));
         appSessionId   = String(app.session_id || '');
         appSlotId      = String(app.time_slot_id || app.slot_id || '');
+        slotAssignments = Array.isArray((app as Record<string, unknown>).slot_assignments)
+          ? ((app as Record<string, unknown>).slot_assignments as unknown[]).filter(isRecord) as Record<string, unknown>[]
+          : slotAssignments;
         if (!productionId) productionId = String(app.production_id || '');
       }
     } catch { /* fall through — use top-level email/name */ }
@@ -314,7 +320,7 @@ serve(async (req) => {
     if (!applicantIdRaw && booking.applicant_id) {
       const { data: linkedApp } = await sb
         .from('audition_applications')
-        .select('id,role_interest,custom_answers')
+        .select('id,role_interest,custom_answers,session_id,slot_id,time_slot_id,slot_assignments')
         .eq('id', String(booking.applicant_id))
         .single();
       if (linkedApp) {
@@ -322,6 +328,11 @@ serve(async (req) => {
         const appAnswers = isRecord(linkedApp.custom_answers) ? linkedApp.custom_answers as Record<string, unknown> : {};
         customAnswers = { ...appAnswers, ...customAnswers }; // booking answers win on conflicts
         contactName = firstDefinedString(contactName, appAnswers['Contact Name'], customAnswers['Contact Name']);
+        slotAssignments = Array.isArray((linkedApp as Record<string, unknown>).slot_assignments)
+          ? ((linkedApp as Record<string, unknown>).slot_assignments as unknown[]).filter(isRecord) as Record<string, unknown>[]
+          : slotAssignments;
+        appSessionId = firstDefinedString(appSessionId, linkedApp.session_id);
+        appSlotId = firstDefinedString(appSlotId, linkedApp.time_slot_id, linkedApp.slot_id);
       }
     }
   }
@@ -432,6 +443,12 @@ See you soon,
 
   const sessionIds = [...new Set([sessionId].filter(Boolean))];
   const slotIds    = [...new Set([slotId].filter(Boolean))];
+  slotAssignments.forEach(assignment => {
+    const assignmentSessionId = String(assignment.session_id || '').trim();
+    const assignmentSlotId = String(assignment.slot_id || '').trim();
+    if (assignmentSessionId) sessionIds.push(assignmentSessionId);
+    if (assignmentSlotId) slotIds.push(assignmentSlotId);
+  });
 
   if (applicantIdRaw && ['callback', 'cast_announcement', 'not_cast'].includes(category)) {
     const { data: bookingRows } = await sb
@@ -507,6 +524,11 @@ See you soon,
 
   const primarySession = sessionsById[sessionId] || null;
   const primarySlot    = slotsById[slotId]       || null;
+  function slotForSession(session: Record<string, unknown> | undefined): Record<string, unknown> | null {
+    if (!session?.id) return null;
+    const assignment = slotAssignments.find(item => String(item.session_id || '') === String(session.id));
+    return assignment?.slot_id ? (slotsById[String(assignment.slot_id)] || null) : null;
+  }
 
   // ── Build tokens ──────────────────────────────────────────────
   const firstName    = (performerName.split(' ')[0] || 'Performer');
@@ -588,15 +610,15 @@ See you soon,
     '{{team_member_email}}':     firstDefinedString(directContext.team_member_email, teamMember?.email, performerEmail),
     '{{team_access_code}}':      firstDefinedString(directContext.team_access_code, teamMember?.passcode),
     '{{portal_link}}':           teamPortalLink,
-    '{{general_audition_date}}':  generalAuditionSession ? fmtDate(String(generalAuditionSession.date        || '')) : '',
-    '{{general_audition_time}}':  generalAuditionSession ? fmtTime(String(generalAuditionSession.start_time  || '')) : '',
-    '{{general_audition_venue}}': generalAuditionSession ? String(generalAuditionSession.location || audVenue) : audVenue,
-    '{{general_audition_name}}':  generalAuditionSession ? String(generalAuditionSession.name     || '') : '',
+    '{{general_audition_date}}':  firstDefinedString(directContext.general_audition_date, generalAuditionSession ? fmtDate(String(generalAuditionSession.date || '')) : ''),
+    '{{general_audition_time}}':  firstDefinedString(directContext.general_audition_time, slotForSession(generalAuditionSession)?.slot_time ? fmtTime(String(slotForSession(generalAuditionSession)?.slot_time || '')) : '', generalAuditionSession ? fmtTime(String(generalAuditionSession.start_time || '')) : ''),
+    '{{general_audition_venue}}': firstDefinedString(directContext.general_audition_venue, generalAuditionSession ? String(generalAuditionSession.location || audVenue) : audVenue),
+    '{{general_audition_name}}':  firstDefinedString(directContext.general_audition_name, generalAuditionSession ? String(generalAuditionSession.name || '') : ''),
     '{{general_audition_prepare}}': generalAuditionSession ? String(generalAuditionSession.prepare_text || '') : '',
-    '{{dance_call_date}}':        danceCallSession ? fmtDate(String(danceCallSession.date        || '')) : '',
-    '{{dance_call_time}}':        danceCallSession ? fmtTime(String(danceCallSession.start_time  || '')) : '',
-    '{{dance_call_venue}}':       danceCallSession ? String(danceCallSession.location || audVenue) : audVenue,
-    '{{dance_call_name}}':        danceCallSession ? String(danceCallSession.name     || '') : '',
+    '{{dance_call_date}}':        firstDefinedString(directContext.dance_call_date, danceCallSession ? fmtDate(String(danceCallSession.date || '')) : ''),
+    '{{dance_call_time}}':        firstDefinedString(directContext.dance_call_time, slotForSession(danceCallSession)?.slot_time ? fmtTime(String(slotForSession(danceCallSession)?.slot_time || '')) : '', danceCallSession ? fmtTime(String(danceCallSession.start_time || '')) : ''),
+    '{{dance_call_venue}}':       firstDefinedString(directContext.dance_call_venue, danceCallSession ? String(danceCallSession.location || audVenue) : audVenue),
+    '{{dance_call_name}}':        firstDefinedString(directContext.dance_call_name, danceCallSession ? String(danceCallSession.name || '') : ''),
     '{{dance_call_prepare}}':     danceCallSession ? String(danceCallSession.prepare_text || '') : '',
     '{{callback_date}}':          firstDefinedString(
       directContext.callback_date,
@@ -604,6 +626,7 @@ See you soon,
     ),
     '{{callback_time}}':          firstDefinedString(
       directContext.callback_time,
+      slotForSession(callbackSessionProd)?.slot_time ? fmtTime(String(slotForSession(callbackSessionProd)?.slot_time || '')) : '',
       callbackSessionProd ? fmtTime(String(callbackSessionProd.start_time  || '')) : '',
     ),
     '{{callback_venue}}':         firstDefinedString(
@@ -631,7 +654,7 @@ See you soon,
     const nk = `{{${slug}_name}}`;
     const pk = `{{${slug}_prepare}}`;
     if (!(dk in tokenValues)) tokenValues[dk] = session.date        ? fmtDate(String(session.date))        : '';
-    if (!(tk in tokenValues)) tokenValues[tk] = session.start_time  ? fmtTime(String(session.start_time))  : '';
+    if (!(tk in tokenValues)) tokenValues[tk] = slotForSession(session)?.slot_time ? fmtTime(String(slotForSession(session)?.slot_time || '')) : (session.start_time ? fmtTime(String(session.start_time)) : '');
     if (!(vk in tokenValues)) tokenValues[vk] = String(session.location || audVenue);
     if (!(nk in tokenValues)) tokenValues[nk] = String(session.name || '');
     if (!(pk in tokenValues)) tokenValues[pk] = String(session.prepare_text || '');
