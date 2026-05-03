@@ -35130,38 +35130,110 @@ If you have any questions, don't hesitate to reach out.
 
   function _apmBuildEmailContext() {
     const slotAssignments  = Array.isArray(_apmApp?.slot_assignments) ? _apmApp.slot_assignments : [];
+    const allSess          = audSessions || [];
+    const customAnswers    = (typeof _apmApp?.custom_answers === 'object' && _apmApp.custom_answers) ? _apmApp.custom_answers : {};
+
+    // Primary session (performer's own booking)
     const primarySessionId = _apmApp?.session_id || slotAssignments[0]?.session_id || null;
-    const primarySession   = (audSessions || []).find(s => s.id === primarySessionId) || null;
+    const primarySession   = allSess.find(s => s.id === primarySessionId) || null;
     const primaryAssign    = slotAssignments.find(a => a.session_id === primarySessionId) || slotAssignments[0] || null;
     const primarySlotId    = primaryAssign?.slot_id || _apmApp?.slot_id || null;
     const primarySlot      = (primarySlotId && primarySessionId)
       ? (audSlots[primarySessionId] || []).find(s => s.id === primarySlotId) || null : null;
-    const customAnswers    = (typeof _apmApp?.custom_answers === 'object' && _apmApp.custom_answers) ? _apmApp.custom_answers : {};
     const whatToPrepare    = primarySession?.prepare_text || customAnswers['What to Prepare'] || customAnswers['what_to_prepare'] || '';
-    return {
-      performer_name:   _apmApp?.name          || '',
-      performer_email:  _apmApp?.email         || '',
-      show_name:        prod?.title            || '',
-      show_subtitle:    prod?.subtitle         || '',
-      org_name:         orgName                || '',
-      org_email:        orgEmail               || '',
-      director_name:    prod?.director         || '',
-      audition_session: primarySession?.name   || '',
-      audition_date:    primarySession?.date   ? fmtDate(primarySession.date) : '',
-      audition_time:    primarySlot?.slot_time ? formatSlotTime(primarySlot.slot_time)
-                        : primarySession?.start_time ? formatSlotTime(primarySession.start_time) : '',
-      audition_venue:   primarySession?.location || prod?.venue || '',
-      what_to_prepare:  whatToPrepare,
-      role_name:        _apmApp?.role_interest || '',
-      custom_answers:   customAnswers,
-      session_id:       primarySessionId       || '',
-      slot_id:          primarySlotId          || '',
+
+    // Named session type lookups (mirrors edge function logic)
+    const generalSess  = allSess.find(s => (s.type||'').toLowerCase().includes('general')  || (s.name||'').toLowerCase().includes('general'));
+    const danceSess    = allSess.find(s => (s.type||'').toLowerCase().includes('dance')     || (s.name||'').toLowerCase().includes('dance'));
+    const callbackSess = allSess.find(s => (s.type||'').toLowerCase().includes('callback')  || (s.name||'').toLowerCase().includes('callback'));
+
+    // Performer's own slot for each named session
+    function slotFor(sess) {
+      if (!sess) return null;
+      const assign = slotAssignments.find(a => a.session_id === sess.id);
+      return assign?.slot_id ? (audSlots[sess.id] || []).find(s => s.id === assign.slot_id) || null : null;
+    }
+    function sessTime(sess, slot) {
+      if (slot?.slot_time) return formatSlotTime(slot.slot_time);
+      if (sess?.start_time) return formatSlotTime(sess.start_time);
+      return '';
+    }
+
+    const generalSlot  = slotFor(generalSess);
+    const danceSlot    = slotFor(danceSess);
+    const callbackSlot = slotFor(callbackSess);
+
+    const showDates = (prod?.start_date && prod?.end_date)
+      ? `${fmtDate(prod.start_date)} – ${fmtDate(prod.end_date)}`
+      : (prod?.start_date ? fmtDate(prod.start_date) : '');
+
+    const allSessionsSummary = allSess
+      .map(s => `${s.name||'Session'}: ${s.date ? fmtDate(s.date) : 'TBC'}${s.start_time ? ' at ' + formatSlotTime(s.start_time) : ''}`)
+      .join('\n');
+
+    const pronouns = customAnswers['Pronouns'] || customAnswers['pronouns'] || _apmApp?.pronouns || '';
+
+    const ctx = {
+      // Performer
+      performer_name:        _apmApp?.name    || '',
+      performer_first_name:  (_apmApp?.name   || '').split(/\s+/)[0] || '',
+      performer_email:       _apmApp?.email   || '',
+      performer_pronouns:    pronouns,
+      // Show
+      show_name:             prod?.title      || '',
+      show_subtitle:         prod?.subtitle   || '',
+      show_venue:            prod?.venue      || '',
+      show_dates:            showDates,
+      org_name:              orgName          || '',
+      org_email:             orgEmail         || '',
+      director_name:         prod?.director   || '',
+      // Primary (performer's booked session)
+      audition_session:      primarySession?.name     || '',
+      audition_date:         primarySession?.date     ? fmtDate(primarySession.date) : '',
+      audition_time:         sessTime(primarySession, primarySlot),
+      audition_venue:        primarySession?.location || prod?.venue || '',
+      what_to_prepare:       whatToPrepare,
+      role_name:             _apmApp?.role_interest   || '',
+      booking_link:          `https://buildtheshow.com/audition-info?prod=${prodId}`,
+      all_audition_sessions: allSessionsSummary,
+      // General Auditions
+      general_audition_name:  generalSess?.name     || '',
+      general_audition_date:  generalSess?.date     ? fmtDate(generalSess.date) : '',
+      general_audition_time:  sessTime(generalSess, generalSlot),
+      general_audition_venue: generalSess?.location || prod?.venue || '',
+      // Dance Call
+      dance_call_name:  danceSess?.name     || '',
+      dance_call_date:  danceSess?.date     ? fmtDate(danceSess.date) : '',
+      dance_call_time:  sessTime(danceSess, danceSlot),
+      dance_call_venue: danceSess?.location || prod?.venue || '',
+      // Callback
+      callback_name:  callbackSess?.name     || '',
+      callback_date:  callbackSess?.date     ? fmtDate(callbackSess.date) : '',
+      callback_time:  sessTime(callbackSess, callbackSlot),
+      callback_venue: callbackSess?.location || prod?.venue || '',
+      // Internals
+      custom_answers: customAnswers,
+      session_id:     primarySessionId || '',
+      slot_id:        primarySlotId    || '',
       production: {
         title: prod?.title || '', subtitle: prod?.subtitle || '', venue: prod?.venue || '',
         director: prod?.director || '', organization_id: prod?.organization_id || '',
         start_date: prod?.start_date || '', end_date: prod?.end_date || '', org_name: orgName || '',
       },
     };
+
+    // Dynamic slug-based tokens for every session (e.g. {{general_auditions_name}})
+    for (const sess of allSess) {
+      const slug = sessionSlug(sess.name || '');
+      if (!slug) continue;
+      const slot = slotFor(sess);
+      ctx[`${slug}_name`]  = sess.name     || '';
+      ctx[`${slug}_date`]  = sess.date     ? fmtDate(sess.date) : '';
+      ctx[`${slug}_time`]  = sessTime(sess, slot);
+      ctx[`${slug}_venue`] = sess.location || prod?.venue || '';
+    }
+
+    return ctx;
   }
 
   function _applyEmailContext(text, context) {
