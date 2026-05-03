@@ -35131,37 +35131,34 @@ If you have any questions, don't hesitate to reach out.
   function _apmBuildEmailContext() {
     const slotAssignments  = Array.isArray(_apmApp?.slot_assignments) ? _apmApp.slot_assignments : [];
     const allSess          = audSessions || [];
+    const knownSlots       = applicantAllKnownSlots();
     const customAnswers    = (typeof _apmApp?.custom_answers === 'object' && _apmApp.custom_answers) ? _apmApp.custom_answers : {};
 
-    // Primary session (performer's own booking)
-    const primarySessionId = _apmApp?.session_id || slotAssignments[0]?.session_id || null;
-    const primarySession   = allSess.find(s => s.id === primarySessionId) || null;
-    const primaryAssign    = slotAssignments.find(a => a.session_id === primarySessionId) || slotAssignments[0] || null;
-    const primarySlotId    = primaryAssign?.slot_id || _apmApp?.slot_id || null;
-    const primarySlot      = (primarySlotId && primarySessionId)
-      ? (audSlots[primarySessionId] || []).find(s => s.id === primarySlotId) || null : null;
-    const whatToPrepare    = primarySession?.prepare_text || customAnswers['What to Prepare'] || customAnswers['what_to_prepare'] || '';
-
-    // Named session type lookups (mirrors edge function logic)
-    const generalSess  = allSess.find(s => (s.type||'').toLowerCase().includes('general')  || (s.name||'').toLowerCase().includes('general'));
-    const danceSess    = allSess.find(s => (s.type||'').toLowerCase().includes('dance')     || (s.name||'').toLowerCase().includes('dance'));
-    const callbackSess = allSess.find(s => (s.type||'').toLowerCase().includes('callback')  || (s.name||'').toLowerCase().includes('callback'));
-
-    // Performer's own slot for each named session — uses same lookup as the scheduling tab
-    function slotFor(sess) {
-      if (!sess) return null;
-      return getApplicantSlotForSession(_apmApp, sess.id);
+    // Resolve a slot object from an assignment, using string coercion so number/string IDs both match
+    function resolveSlot(asgn) {
+      if (!asgn?.slot_id) return null;
+      const sid = String(asgn.slot_id);
+      return knownSlots.find(s => String(s.id) === sid) || null;
     }
-    function sessTime(sess, slot) {
-      const slotT = slot?.slot_time || slot?.start_time || '';
-      if (slotT) return formatSlotTime(slotT);
+    function resolveSession(asgn) {
+      if (!asgn?.session_id) return null;
+      const sid = String(asgn.session_id);
+      return allSess.find(s => String(s.id) === sid) || null;
+    }
+    function slotTimeStr(slot, sess) {
+      const t = slot?.slot_time || slot?.start_time || '';
+      if (t) return formatSlotTime(t);
       if (sess?.start_time) return formatSlotTime(sess.start_time);
       return '';
     }
 
-    const generalSlot  = slotFor(generalSess);
-    const danceSlot    = slotFor(danceSess);
-    const callbackSlot = slotFor(callbackSess);
+    // Primary session — first assignment, or legacy session_id
+    const primaryAsgn    = slotAssignments[0] || null;
+    const primarySession = resolveSession(primaryAsgn) ||
+      allSess.find(s => String(s.id) === String(_apmApp?.session_id || '')) || null;
+    const primarySlot    = resolveSlot(primaryAsgn) ||
+      (_apmApp?.slot_id ? knownSlots.find(s => String(s.id) === String(_apmApp.slot_id)) : null) || null;
+    const whatToPrepare  = primarySession?.prepare_text || customAnswers['What to Prepare'] || customAnswers['what_to_prepare'] || '';
 
     const showDates = (prod?.start_date && prod?.end_date)
       ? `${fmtDate(prod.start_date)} – ${fmtDate(prod.end_date)}`
@@ -35187,34 +35184,23 @@ If you have any questions, don't hesitate to reach out.
       org_name:              orgName          || '',
       org_email:             orgEmail         || '',
       director_name:         prod?.director   || '',
-      // Primary (performer's booked session)
+      // Primary (performer's first booked session)
       audition_session:      primarySession?.name     || '',
       audition_date:         primarySession?.date     ? fmtDate(primarySession.date) : '',
-      audition_time:         sessTime(primarySession, primarySlot || getApplicantSlotForSession(_apmApp, primarySessionId)),
+      audition_time:         slotTimeStr(primarySlot, primarySession),
       audition_venue:        primarySession?.location || prod?.venue || '',
       what_to_prepare:       whatToPrepare,
       role_name:             _apmApp?.role_interest   || '',
       booking_link:          `https://buildtheshow.com/audition-info?prod=${prodId}`,
       all_audition_sessions: allSessionsSummary,
-      // General Auditions
-      general_audition_name:  generalSess?.name     || '',
-      general_audition_date:  generalSess?.date     ? fmtDate(generalSess.date) : '',
-      general_audition_time:  sessTime(generalSess, generalSlot),
-      general_audition_venue: generalSess?.location || prod?.venue || '',
-      // Dance Call
-      dance_call_name:  danceSess?.name     || '',
-      dance_call_date:  danceSess?.date     ? fmtDate(danceSess.date) : '',
-      dance_call_time:  sessTime(danceSess, danceSlot),
-      dance_call_venue: danceSess?.location || prod?.venue || '',
-      // Callback
-      callback_name:  callbackSess?.name     || '',
-      callback_date:  callbackSess?.date     ? fmtDate(callbackSess.date) : '',
-      callback_time:  sessTime(callbackSess, callbackSlot),
-      callback_venue: callbackSess?.location || prod?.venue || '',
+      // Named session tokens — filled below from performer's actual assignments
+      general_audition_name: '', general_audition_date: '', general_audition_time: '', general_audition_venue: '',
+      dance_call_name: '',       dance_call_date: '',       dance_call_time: '',       dance_call_venue: '',
+      callback_name: '',         callback_date: '',         callback_time: '',         callback_venue: '',
       // Internals
       custom_answers: customAnswers,
-      session_id:     primarySessionId || '',
-      slot_id:        primarySlotId    || '',
+      session_id:     primaryAsgn?.session_id || _apmApp?.session_id || '',
+      slot_id:        primaryAsgn?.slot_id    || _apmApp?.slot_id    || '',
       production: {
         title: prod?.title || '', subtitle: prod?.subtitle || '', venue: prod?.venue || '',
         director: prod?.director || '', organization_id: prod?.organization_id || '',
@@ -35222,14 +35208,55 @@ If you have any questions, don't hesitate to reach out.
       },
     };
 
-    // Dynamic slug-based tokens for every session (e.g. {{general_auditions_name}})
+    // Walk each of the performer's actual slot_assignments and populate named + slug tokens.
+    // Using String() coercion on IDs to guard against number/string mismatches.
+    for (const asgn of slotAssignments) {
+      const sess = resolveSession(asgn);
+      if (!sess) continue;
+      const slot  = resolveSlot(asgn);
+      const time  = slotTimeStr(slot, sess);
+      const date  = sess.date  ? fmtDate(sess.date) : '';
+      const venue = sess.location || prod?.venue || '';
+      const name  = sess.name || '';
+      const type  = (sess.type || '').toLowerCase();
+      const nl    = name.toLowerCase();
+
+      if (type.includes('general') || nl.includes('general')) {
+        ctx.general_audition_name  = name;
+        ctx.general_audition_date  = date;
+        ctx.general_audition_time  = time;
+        ctx.general_audition_venue = venue;
+      }
+      if (type.includes('dance') || nl.includes('dance')) {
+        ctx.dance_call_name  = name;
+        ctx.dance_call_date  = date;
+        ctx.dance_call_time  = time;
+        ctx.dance_call_venue = venue;
+      }
+      if (type.includes('callback') || nl.includes('callback')) {
+        ctx.callback_name  = name;
+        ctx.callback_date  = date;
+        ctx.callback_time  = time;
+        ctx.callback_venue = venue;
+      }
+
+      // Slug-based tokens (e.g. {{general_auditions_time}})
+      const slug = sessionSlug(name);
+      if (slug) {
+        ctx[`${slug}_name`]  = name;
+        ctx[`${slug}_date`]  = date;
+        ctx[`${slug}_time`]  = time;
+        ctx[`${slug}_venue`] = venue;
+      }
+    }
+
+    // Fill slug tokens for sessions the performer is NOT booked into (name/date only, no time)
     for (const sess of allSess) {
       const slug = sessionSlug(sess.name || '');
-      if (!slug) continue;
-      const slot = slotFor(sess);
-      ctx[`${slug}_name`]  = sess.name     || '';
-      ctx[`${slug}_date`]  = sess.date     ? fmtDate(sess.date) : '';
-      ctx[`${slug}_time`]  = sessTime(sess, slot);
+      if (!slug || ctx[`${slug}_name`] !== undefined) continue;
+      ctx[`${slug}_name`]  = sess.name || '';
+      ctx[`${slug}_date`]  = sess.date ? fmtDate(sess.date) : '';
+      ctx[`${slug}_time`]  = '';
       ctx[`${slug}_venue`] = sess.location || prod?.venue || '';
     }
 
