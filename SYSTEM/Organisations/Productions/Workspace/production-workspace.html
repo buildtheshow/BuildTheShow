@@ -1953,8 +1953,9 @@
     }
     .et-template-cards {
       display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
+      grid-template-columns: repeat(3, minmax(0, 290px));
       gap: 1rem;
+      justify-content: start;
     }
     .et-row {
       position: relative;
@@ -13004,6 +13005,11 @@
         Cast List
       </div>
 
+      <div class="prod-tab" data-tab="registration">
+        <span class="tab-icon-slot"><img src="/ASSETS/Images/navprofile.svg" class="tab-icon" alt="" aria-hidden="true" /></span>
+        Registration
+      </div>
+
       <div class="prod-tab" data-tab="profile" id="team-profile-tab" style="display:none;" onclick="switchProdTab('profile')">
         <span class="tab-icon-slot"><img src="/ASSETS/Images/navemailtemplate.svg" class="tab-icon" alt="" aria-hidden="true" /></span>
         Profile
@@ -14567,6 +14573,9 @@
 
     <!-- Opportunities (content moved into Production Team > Open Roles sub-panel) -->
     <div class="tab-panel" id="panel-opportunities"></div>
+
+    <!-- Registration -->
+    <div class="tab-panel" id="panel-registration"></div>
 
     <div class="tab-panel" id="panel-profile">
       <div id="team-access-profile-content"></div>
@@ -18899,11 +18908,12 @@
   function renderEmailTemplateSummary() {
     const wrap = document.getElementById('email-template-summary');
     if (!wrap) return;
+    const visibleTemplates = etVisibleEmailTemplates(_etTemplates || []);
     const liveCount = ET_PURPOSES.filter(p => p.value !== 'all')
-      .reduce((count, purpose) => count + (etLatestTemplateForCategory(purpose.value) ? 1 : 0), 0);
-    const latestTemplate = [...(_etTemplates || [])]
+      .reduce((count, purpose) => count + (visibleTemplates.some(t => t.category === purpose.value) ? 1 : 0), 0);
+    const latestTemplate = [...visibleTemplates]
       .sort((a, b) => String(b.updated_at || b.created_at || '').localeCompare(String(a.updated_at || a.created_at || '')))[0] || null;
-    const visibleCount = _etCatFilter === 'all' ? _etTemplates.length : _etTemplates.filter(t => t.category === _etCatFilter).length;
+    const visibleCount = _etCatFilter === 'all' ? visibleTemplates.length : visibleTemplates.filter(t => t.category === _etCatFilter).length;
     const latestLabel = latestTemplate ? formatShortDateTime(latestTemplate.updated_at || latestTemplate.created_at) : 'No updates yet';
     wrap.innerHTML = `
       <div class="et-summary-card">
@@ -19000,6 +19010,18 @@
     return (_etTemplates || [])
       .filter(t => t.category === category)
       .sort((a, b) => String(b.updated_at || b.created_at || '').localeCompare(String(a.updated_at || a.created_at || '')))[0] || null;
+  }
+
+  function etVisibleEmailTemplates(templates = []) {
+    let keptTeamInvite = false;
+    return [...(templates || [])]
+      .sort((a, b) => String(b.updated_at || b.created_at || '').localeCompare(String(a.updated_at || a.created_at || '')))
+      .filter(template => {
+        if (template.category !== 'team_invite') return true;
+        if (keptTeamInvite) return false;
+        keptTeamInvite = true;
+        return true;
+      });
   }
 
   function etSessionPrepareSample(session, fallback = 'Please review the audition page for preparation details.') {
@@ -19472,7 +19494,8 @@ If you have any questions, don't hesitate to reach out.
     if (!list) return;
     etBuildFilterChips();
     renderEmailTemplateSummary();
-    const sorted = [..._etTemplates].sort((a, b) => {
+    const visibleTemplates = etVisibleEmailTemplates(_etTemplates || []);
+    const sorted = [...visibleTemplates].sort((a, b) => {
       const aIdx = ET_PURPOSES.findIndex(p => p.value === a.category);
       const bIdx = ET_PURPOSES.findIndex(p => p.value === b.category);
       if (aIdx !== bIdx) return (aIdx < 0 ? 999 : aIdx) - (bIdx < 0 ? 999 : bIdx);
