@@ -35129,42 +35129,43 @@ If you have any questions, don't hesitate to reach out.
   }
 
   function _apmBuildEmailContext() {
-    const slotAssignments  = Array.isArray(_apmApp?.slot_assignments) ? _apmApp.slot_assignments : [];
-    const allSess          = audSessions || [];
-    const knownSlots       = applicantAllKnownSlots();
-    const customAnswers    = (typeof _apmApp?.custom_answers === 'object' && _apmApp.custom_answers) ? _apmApp.custom_answers : {};
+    // Mirror the scheduling tab exactly: iterate sessions, check _apmPendingSlots first,
+    // then saved slot_assignments. This guarantees the same slot IDs the tab is showing.
+    const sessions       = getAuditionScheduleViewSessions();
+    const savedAssignments = Array.isArray(_apmApp?.slot_assignments) ? _apmApp.slot_assignments : [];
+    const knownSlots     = applicantAllKnownSlots();
+    const customAnswers  = (typeof _apmApp?.custom_answers === 'object' && _apmApp.custom_answers) ? _apmApp.custom_answers : {};
 
-    // Resolve a slot object from an assignment, using string coercion so number/string IDs both match
-    function resolveSlot(asgn) {
-      if (!asgn?.slot_id) return null;
-      const sid = String(asgn.slot_id);
-      return knownSlots.find(s => String(s.id) === sid) || null;
+    function effectiveSlotForSession(sess) {
+      const savedAsgn = savedAssignments.find(x => x.session_id === sess.id);
+      const pendingSlotId = _apmPendingSlots.hasOwnProperty(sess.id) ? _apmPendingSlots[sess.id] : undefined;
+      const slotId = pendingSlotId !== undefined ? pendingSlotId : (savedAsgn?.slot_id || null);
+      if (!slotId) return null;
+      return knownSlots.find(s => s.id === slotId) || null;
     }
-    function resolveSession(asgn) {
-      if (!asgn?.session_id) return null;
-      const sid = String(asgn.session_id);
-      return allSess.find(s => String(s.id) === sid) || null;
-    }
-    function slotTimeStr(slot, sess) {
+    function slotTimeStr(slot) {
       const t = slot?.slot_time || slot?.start_time || '';
-      if (t) return formatSlotTime(t);
-      if (sess?.start_time) return formatSlotTime(sess.start_time);
-      return '';
+      return t ? formatSlotTime(t) : '';
     }
 
-    // Primary session — first assignment, or legacy session_id
-    const primaryAsgn    = slotAssignments[0] || null;
-    const primarySession = resolveSession(primaryAsgn) ||
-      allSess.find(s => String(s.id) === String(_apmApp?.session_id || '')) || null;
-    const primarySlot    = resolveSlot(primaryAsgn) ||
-      (_apmApp?.slot_id ? knownSlots.find(s => String(s.id) === String(_apmApp.slot_id)) : null) || null;
-    const whatToPrepare  = primarySession?.prepare_text || customAnswers['What to Prepare'] || customAnswers['what_to_prepare'] || '';
+    // Primary session: first session that the performer has a slot for
+    let primarySession = null, primarySlot = null;
+    for (const sess of sessions) {
+      const slot = effectiveSlotForSession(sess);
+      if (slot) { primarySession = sess; primarySlot = slot; break; }
+    }
+    // Fallback: use legacy session_id even if no slot
+    if (!primarySession) {
+      const legacySid = _apmApp?.session_id || savedAssignments[0]?.session_id || null;
+      primarySession = legacySid ? (sessions.find(s => s.id === legacySid) || null) : null;
+    }
+    const whatToPrepare = primarySession?.prepare_text || customAnswers['What to Prepare'] || customAnswers['what_to_prepare'] || '';
 
     const showDates = (prod?.start_date && prod?.end_date)
       ? `${fmtDate(prod.start_date)} – ${fmtDate(prod.end_date)}`
       : (prod?.start_date ? fmtDate(prod.start_date) : '');
 
-    const allSessionsSummary = allSess
+    const allSessionsSummary = sessions
       .map(s => `${s.name||'Session'}: ${s.date ? fmtDate(s.date) : 'TBC'}${s.start_time ? ' at ' + formatSlotTime(s.start_time) : ''}`)
       .join('\n');
 
@@ -35184,23 +35185,23 @@ If you have any questions, don't hesitate to reach out.
       org_name:              orgName          || '',
       org_email:             orgEmail         || '',
       director_name:         prod?.director   || '',
-      // Primary (performer's first booked session)
+      // Primary (first session with a booked slot)
       audition_session:      primarySession?.name     || '',
       audition_date:         primarySession?.date     ? fmtDate(primarySession.date) : '',
-      audition_time:         slotTimeStr(primarySlot, primarySession),
+      audition_time:         slotTimeStr(primarySlot),
       audition_venue:        primarySession?.location || prod?.venue || '',
       what_to_prepare:       whatToPrepare,
       role_name:             _apmApp?.role_interest   || '',
       booking_link:          `https://buildtheshow.com/audition-info?prod=${prodId}`,
       all_audition_sessions: allSessionsSummary,
-      // Named session tokens — filled below from performer's actual assignments
+      // Named session tokens — filled below
       general_audition_name: '', general_audition_date: '', general_audition_time: '', general_audition_venue: '',
       dance_call_name: '',       dance_call_date: '',       dance_call_time: '',       dance_call_venue: '',
       callback_name: '',         callback_date: '',         callback_time: '',         callback_venue: '',
       // Internals
       custom_answers: customAnswers,
-      session_id:     primaryAsgn?.session_id || _apmApp?.session_id || '',
-      slot_id:        primaryAsgn?.slot_id    || _apmApp?.slot_id    || '',
+      session_id: primarySession?.id || _apmApp?.session_id || '',
+      slot_id:    primarySlot?.id    || _apmApp?.slot_id    || '',
       production: {
         title: prod?.title || '', subtitle: prod?.subtitle || '', venue: prod?.venue || '',
         director: prod?.director || '', organization_id: prod?.organization_id || '',
@@ -35208,13 +35209,10 @@ If you have any questions, don't hesitate to reach out.
       },
     };
 
-    // Walk each of the performer's actual slot_assignments and populate named + slug tokens.
-    // Using String() coercion on IDs to guard against number/string mismatches.
-    for (const asgn of slotAssignments) {
-      const sess = resolveSession(asgn);
-      if (!sess) continue;
-      const slot  = resolveSlot(asgn);
-      const time  = slotTimeStr(slot, sess);
+    // Walk every session in schedule order and populate named + slug tokens
+    for (const sess of sessions) {
+      const slot  = effectiveSlotForSession(sess);
+      const time  = slotTimeStr(slot);
       const date  = sess.date  ? fmtDate(sess.date) : '';
       const venue = sess.location || prod?.venue || '';
       const name  = sess.name || '';
@@ -35240,7 +35238,6 @@ If you have any questions, don't hesitate to reach out.
         ctx.callback_venue = venue;
       }
 
-      // Slug-based tokens (e.g. {{general_auditions_time}})
       const slug = sessionSlug(name);
       if (slug) {
         ctx[`${slug}_name`]  = name;
@@ -35248,16 +35245,6 @@ If you have any questions, don't hesitate to reach out.
         ctx[`${slug}_time`]  = time;
         ctx[`${slug}_venue`] = venue;
       }
-    }
-
-    // Fill slug tokens for sessions the performer is NOT booked into (name/date only, no time)
-    for (const sess of allSess) {
-      const slug = sessionSlug(sess.name || '');
-      if (!slug || ctx[`${slug}_name`] !== undefined) continue;
-      ctx[`${slug}_name`]  = sess.name || '';
-      ctx[`${slug}_date`]  = sess.date ? fmtDate(sess.date) : '';
-      ctx[`${slug}_time`]  = '';
-      ctx[`${slug}_venue`] = sess.location || prod?.venue || '';
     }
 
     return ctx;
@@ -35314,19 +35301,13 @@ If you have any questions, don't hesitate to reach out.
       _apmResetEmailRow();
       return;
     }
-    const ok = await resendConfirmationEmail(bookingId, category, {
+    await resendConfirmationEmail(bookingId, category, {
       email: _apmApp?.email || '', name: _apmApp?.name || '',
       context: _apmBuildEmailContext(), subject, body,
     });
     _apmEmailCompose = null;
-    if (ok) {
-      showToast('Email sent.');
-      _apmRenderBody();
-      _apmResetEmailRow();
-    } else {
-      _apmRenderBody();
-      _apmResetEmailRow();
-    }
+    _apmRenderBody();
+    _apmResetEmailRow();
   }
 
   function switchApmTab(tab) {
