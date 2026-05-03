@@ -71,12 +71,15 @@ serve(async (req) => {
     if (!RESEND_API_KEY) return json({ ok: false, error: 'Email sending not configured.' });
 
     // Fetch production + all sessions in parallel
-    const [{ data: prodRec }, { data: testSessions }] = await Promise.all([
+    const [{ data: prodRec }, { data: testSessions }, { data: testPerformanceEvents }] = await Promise.all([
       prodIdTest
         ? sb.from('productions').select('title,subtitle,venue,org_name,org_email,director,start_date,end_date').eq('id', prodIdTest).maybeSingle()
         : Promise.resolve({ data: null }),
       prodIdTest
-        ? sb.from('audition_sessions').select('id,name,type,date,start_time,location').eq('production_id', prodIdTest).order('sort_order', { ascending: true })
+        ? sb.from('audition_sessions').select('id,name,type,date,start_time,location,prepare_text').eq('production_id', prodIdTest).order('sort_order', { ascending: true })
+        : Promise.resolve({ data: [] }),
+      prodIdTest
+        ? sb.from('production_events').select('title,start_time,end_time,venue,event_type').eq('production_id', prodIdTest).eq('event_type', 'performance').order('start_time', { ascending: true })
         : Promise.resolve({ data: [] }),
     ]);
 
@@ -98,6 +101,7 @@ serve(async (req) => {
 
     const testTokens: Record<string, string> = {
       // Performer (sample)
+      '{{contact_name}}':         'Morgan Lee',
       '{{performer_name}}':       'Jamie Lee',
       '{{performer_first_name}}': 'Jamie',
       '{{performer_pronouns}}':   'she/her',
@@ -122,24 +126,45 @@ serve(async (req) => {
       '{{general_audition_time}}':  generalSess?.start_time  ? fmtTime(String(generalSess.start_time))  : '',
       '{{general_audition_venue}}': String(generalSess?.location || p.venue || ''),
       '{{general_audition_name}}':  String(generalSess?.name || ''),
+      '{{general_audition_prepare}}': String(generalSess?.prepare_text || ''),
       // Dance Call (real)
       '{{dance_call_date}}':  danceSess?.date        ? fmtDate(String(danceSess.date))        : '',
       '{{dance_call_time}}':  danceSess?.start_time  ? fmtTime(String(danceSess.start_time))  : '',
       '{{dance_call_venue}}': String(danceSess?.location || p.venue || ''),
       '{{dance_call_name}}':  String(danceSess?.name || ''),
+      '{{dance_call_prepare}}': String(danceSess?.prepare_text || ''),
       // Callbacks (real)
       '{{callback_date}}':  callbackSess?.date        ? fmtDate(String(callbackSess.date))        : '',
       '{{callback_time}}':  callbackSess?.start_time  ? fmtTime(String(callbackSess.start_time))  : '',
       '{{callback_venue}}': String(callbackSess?.location || p.venue || ''),
       '{{callback_name}}':  String(callbackSess?.name || ''),
+      '{{callback_prepare}}': String(callbackSess?.prepare_text || ''),
       // Casting (sample)
       '{{role_name}}': 'The Lead',
       '{{role_type}}': 'Principal',
       // Rehearsals (real)
       '{{rehearsal_start_date}}': p.start_date ? fmtDate(String(p.start_date)) : '',
       '{{rehearsal_schedule}}':   '',
+      '{{rehearsal_end_date}}':   p.end_date   ? fmtDate(String(p.end_date))   : '',
       '{{opening_night}}':        p.end_date   ? fmtDate(String(p.end_date))   : '',
+      '{{performance_schedule}}': ((testPerformanceEvents || []) as Record<string, unknown>[]).map(formatScheduleEvent).filter(Boolean).join('\n'),
+      // Team Access (sample)
+      '{{team_member_name}}':  'Alex Rivera',
+      '{{team_member_role}}':  'Vocal Director',
+      '{{team_member_email}}': testEmail,
+      '{{team_access_code}}':  '294761',
+      '{{portal_link}}':       `https://buildtheshow.com/audition-team?prod=${prodIdTest}`,
     };
+
+    for (const session of sessions) {
+      const slug = sessionSlug(String(session.name || ''));
+      if (!slug) continue;
+      testTokens[`{{${slug}_date}}`] = session.date ? fmtDate(String(session.date)) : '';
+      testTokens[`{{${slug}_time}}`] = session.start_time ? fmtTime(String(session.start_time)) : '';
+      testTokens[`{{${slug}_venue}}`] = String(session.location || p.venue || '');
+      testTokens[`{{${slug}_name}}`] = String(session.name || '');
+      testTokens[`{{${slug}_prepare}}`] = String(session.prepare_text || '');
+    }
 
     function substituteTest(text: string): string {
       let r = String(text || '');
@@ -204,6 +229,8 @@ serve(async (req) => {
   let performerName   = firstDefinedString(body.name, directContext.performer_name);
   let customAnswers: Record<string, unknown> = isRecord(directContext.custom_answers) ? directContext.custom_answers as Record<string, unknown> : {};
   let roleInterest    = firstDefinedString(body.role_interest, directContext.role_name);
+  let contactName     = firstDefinedString(directContext.contact_name, body.contact_name);
+  let roleType        = firstDefinedString(directContext.role_type, body.role_type);
   let appSessionId    = firstDefinedString(body.session_id, directContext.session_id);
   let appSlotId       = firstDefinedString(body.slot_id, directContext.slot_id);
   let productionId    = productionIdRaw;
@@ -213,13 +240,14 @@ serve(async (req) => {
     try {
       const { data: app } = await sb
         .from('audition_applications')
-        .select('id,name,email,role_interest,custom_answers,session_id,slot_id,time_slot_id,production_id')
+        .select('id,name,email,contact_name,role_interest,custom_answers,session_id,slot_id,time_slot_id,production_id')
         .eq('id', applicantIdRaw)
         .maybeSingle();
       if (app) {
         if (app.email) performerEmail = String(app.email);
         if (app.name)  performerName  = String(app.name);
         customAnswers  = isRecord(app.custom_answers) ? app.custom_answers as Record<string, unknown> : {};
+        contactName    = firstDefinedString(contactName, (app as Record<string, unknown>).contact_name, customAnswers['Contact Name']);
         roleInterest   = firstDefinedString(directContext.role_name, String(app.role_interest || ''));
         appSessionId   = String(app.session_id || '');
         appSlotId      = String(app.time_slot_id || app.slot_id || '');
@@ -293,12 +321,13 @@ serve(async (req) => {
         roleInterest  = roleInterest  || String(linkedApp.role_interest || '');
         const appAnswers = isRecord(linkedApp.custom_answers) ? linkedApp.custom_answers as Record<string, unknown> : {};
         customAnswers = { ...appAnswers, ...customAnswers }; // booking answers win on conflicts
+        contactName = firstDefinedString(contactName, appAnswers['Contact Name'], customAnswers['Contact Name']);
       }
     }
   }
 
   if (!productionId)   return json({ ok: false, error: 'Missing production_id' });
-  if (!performerEmail) return json({ ok: false, error: 'No email address found for this performer' });
+  if (!performerEmail && category !== 'team_invite') return json({ ok: false, error: 'No email address found for this performer' });
 
   // ── Fetch production + template + org ────────────────────────
   const [{ data: prod }, { data: template }] = await Promise.all([
@@ -314,6 +343,27 @@ serve(async (req) => {
       .limit(1)
       .maybeSingle(),
   ]);
+
+  let teamMember: Record<string, unknown> | null = null;
+  if (category === 'team_invite') {
+    const teamMemberId = firstDefinedString(body.team_member_id, directContext.team_member_id);
+    try {
+      let teamQuery = sb
+        .from('production_team_members')
+        .select('id,name,email,role,passcode')
+        .eq('production_id', productionId);
+      if (teamMemberId) {
+        teamQuery = teamQuery.eq('id', teamMemberId);
+      } else if (performerEmail) {
+        teamQuery = teamQuery.eq('email', performerEmail);
+      }
+      const { data } = await teamQuery.limit(1).maybeSingle();
+      teamMember = data as Record<string, unknown> | null;
+    } catch { teamMember = null; }
+    performerEmail = firstDefinedString(performerEmail, teamMember?.email, directContext.team_member_email);
+    performerName = firstDefinedString(performerName, teamMember?.name, directContext.team_member_name);
+    if (!performerEmail) return json({ ok: false, error: 'No email address found for this team member' });
+  }
 
   // Fallback template for booking_confirmation so the email always goes out
   const FALLBACK_TEMPLATES: Record<string, { subject: string; body: string }> = {
@@ -355,7 +405,7 @@ See you soon,
     director: firstDefinedString(directContext.director_name, directProduction.director, prod?.director),
     organization_id: firstDefinedString(directProduction.organization_id, prod?.organization_id),
     start_date: firstDefinedString(directContext.rehearsal_start_date, directProduction.start_date, prod?.start_date),
-    end_date: firstDefinedString(directContext.opening_night, directProduction.end_date, prod?.end_date),
+    end_date: firstDefinedString(directContext.rehearsal_end_date, directContext.opening_night, directProduction.end_date, prod?.end_date),
   };
 
   let org: Record<string, unknown> | null = null;
@@ -396,7 +446,7 @@ See you soon,
     });
   }
 
-  const [{ data: sessions }, { data: slots }, { data: allProductionSessions }] = await Promise.all([
+  const [{ data: sessions }, { data: slots }, { data: allProductionSessions }, { data: performanceEvents }] = await Promise.all([
     sessionIds.length
       ? sb.from('audition_sessions').select('id,name,session_date,date,start_time,location,prepare_text').in('id', [...new Set(sessionIds)])
       : Promise.resolve({ data: [] }),
@@ -404,9 +454,38 @@ See you soon,
       ? sb.from('audition_time_slots').select('id,slot_time,slot_date,label').in('id', [...new Set(slotIds)])
       : Promise.resolve({ data: [] }),
     productionId
-      ? sb.from('audition_sessions').select('id,name,type,date,start_time,location').eq('production_id', productionId).order('sort_order', { ascending: true })
+      ? sb.from('audition_sessions').select('id,name,type,date,start_time,location,prepare_text').eq('production_id', productionId).order('sort_order', { ascending: true })
+      : Promise.resolve({ data: [] }),
+    productionId
+      ? sb.from('production_events').select('title,start_time,end_time,venue,event_type').eq('production_id', productionId).eq('event_type', 'performance').order('start_time', { ascending: true })
       : Promise.resolve({ data: [] }),
   ]);
+
+  if (applicantIdRaw && !roleType) {
+    try {
+      const { data: assignmentRows } = await sb
+        .from('casting_assignments')
+        .select('character_id,state')
+        .eq('production_id', productionId)
+        .eq('applicant_id', applicantIdRaw)
+        .limit(5);
+      const characterIds = (assignmentRows || [])
+        .map((row: Record<string, unknown>) => String(row.character_id || ''))
+        .filter(Boolean);
+      if (characterIds.length) {
+        const { data: characters } = await sb
+          .from('production_characters')
+          .select('id,name,role_type')
+          .in('id', characterIds);
+        const byId = new Map((characters || []).map((c: Record<string, unknown>) => [String(c.id), c]));
+        const selected = (assignmentRows || [])
+          .map((row: Record<string, unknown>) => byId.get(String(row.character_id || '')))
+          .find(Boolean) as Record<string, unknown> | undefined;
+        roleType = firstDefinedString(selected?.role_type, roleType);
+        roleInterest = firstDefinedString(roleInterest, selected?.name);
+      }
+    } catch { /* role type remains optional */ }
+  }
 
   const danceCallSession = (allProductionSessions || []).find((s: Record<string,unknown>) =>
     String(s.type || '').toLowerCase().includes('dance') ||
@@ -466,10 +545,20 @@ See you soon,
     : (productionRecord.start_date ? fmtDate(String(productionRecord.start_date)) : '');
   const bookingLink = `https://buildtheshow.com/audition-info?prod=${productionId}`;
   const pronouns    = firstDefinedString(
-    customAnswers['Pronouns'], customAnswers['pronouns'],
+    directContext.performer_pronouns, customAnswers['Pronouns'], customAnswers['pronouns'],
+  );
+  contactName = firstDefinedString(contactName, customAnswers['Contact Name']);
+  const performanceSchedule = firstDefinedString(
+    directContext.performance_schedule,
+    ((performanceEvents || []) as Record<string, unknown>[]).map(formatScheduleEvent).filter(Boolean).join('\n'),
+  );
+  const teamPortalLink = firstDefinedString(
+    directContext.portal_link,
+    `https://buildtheshow.com/audition-team?prod=${productionId}`,
   );
 
   const tokenValues: Record<string, string> = {
+    '{{contact_name}}':          contactName,
     '{{performer_name}}':        performerName,
     '{{performer_first_name}}':  firstName,
     '{{performer_pronouns}}':    pronouns,
@@ -488,18 +577,27 @@ See you soon,
     '{{org_name}}':              orgName,
     '{{director_name}}':         director,
     '{{role_name}}':             roleInterest,
-    '{{role_type}}':             '',
+    '{{role_type}}':             roleType,
     '{{rehearsal_start_date}}':  productionRecord.start_date ? fmtDate(String(productionRecord.start_date)) : '',
-    '{{rehearsal_schedule}}':    '',
+    '{{rehearsal_schedule}}':    firstDefinedString(directContext.rehearsal_schedule, directProduction.rehearsal_schedule),
+    '{{rehearsal_end_date}}':    productionRecord.end_date   ? fmtDate(String(productionRecord.end_date))   : '',
     '{{opening_night}}':         productionRecord.end_date   ? fmtDate(String(productionRecord.end_date))   : '',
+    '{{performance_schedule}}':  performanceSchedule,
+    '{{team_member_name}}':      firstDefinedString(directContext.team_member_name, teamMember?.name, performerName),
+    '{{team_member_role}}':      firstDefinedString(directContext.team_member_role, teamMember?.role),
+    '{{team_member_email}}':     firstDefinedString(directContext.team_member_email, teamMember?.email, performerEmail),
+    '{{team_access_code}}':      firstDefinedString(directContext.team_access_code, teamMember?.passcode),
+    '{{portal_link}}':           teamPortalLink,
     '{{general_audition_date}}':  generalAuditionSession ? fmtDate(String(generalAuditionSession.date        || '')) : '',
     '{{general_audition_time}}':  generalAuditionSession ? fmtTime(String(generalAuditionSession.start_time  || '')) : '',
     '{{general_audition_venue}}': generalAuditionSession ? String(generalAuditionSession.location || audVenue) : audVenue,
     '{{general_audition_name}}':  generalAuditionSession ? String(generalAuditionSession.name     || '') : '',
+    '{{general_audition_prepare}}': generalAuditionSession ? String(generalAuditionSession.prepare_text || '') : '',
     '{{dance_call_date}}':        danceCallSession ? fmtDate(String(danceCallSession.date        || '')) : '',
     '{{dance_call_time}}':        danceCallSession ? fmtTime(String(danceCallSession.start_time  || '')) : '',
     '{{dance_call_venue}}':       danceCallSession ? String(danceCallSession.location || audVenue) : audVenue,
     '{{dance_call_name}}':        danceCallSession ? String(danceCallSession.name     || '') : '',
+    '{{dance_call_prepare}}':     danceCallSession ? String(danceCallSession.prepare_text || '') : '',
     '{{callback_date}}':          firstDefinedString(
       directContext.callback_date,
       callbackSessionProd ? fmtDate(String(callbackSessionProd.date        || '')) : '',
@@ -513,6 +611,10 @@ See you soon,
       callbackSessionProd ? String(callbackSessionProd.location || audVenue) : audVenue,
     ),
     '{{callback_name}}':          callbackSessionProd ? String(callbackSessionProd.name || '') : '',
+    '{{callback_prepare}}':       firstDefinedString(
+      directContext.callback_prepare,
+      callbackSessionProd ? String(callbackSessionProd.prepare_text || '') : '',
+    ),
     '{{all_audition_sessions}}': (allProductionSessions || [])
       .map((s: Record<string,unknown>) => `${s.name || 'Session'}: ${s.date ? fmtDate(String(s.date)) : 'TBC'}${s.start_time ? ' at ' + fmtTime(String(s.start_time)) : ''}`)
       .join('\n'),
@@ -527,10 +629,12 @@ See you soon,
     const tk = `{{${slug}_time}}`;
     const vk = `{{${slug}_venue}}`;
     const nk = `{{${slug}_name}}`;
+    const pk = `{{${slug}_prepare}}`;
     if (!(dk in tokenValues)) tokenValues[dk] = session.date        ? fmtDate(String(session.date))        : '';
     if (!(tk in tokenValues)) tokenValues[tk] = session.start_time  ? fmtTime(String(session.start_time))  : '';
     if (!(vk in tokenValues)) tokenValues[vk] = String(session.location || audVenue);
     if (!(nk in tokenValues)) tokenValues[nk] = String(session.name || '');
+    if (!(pk in tokenValues)) tokenValues[pk] = String(session.prepare_text || '');
   }
 
   const productionFieldValues: Record<string, unknown> = {
@@ -544,17 +648,25 @@ See you soon,
     performer_first_name: firstName,
     performer_email:      performerEmail,
     performer_pronouns:   pronouns,
+    contact_name:          contactName,
     role_name:            roleInterest,
+    role_type:             roleType,
     ...customAnswers,
   };
 
   // These tokens contain rich HTML from the org's editor — insert as-is in HTML emails.
-  const rawHtmlTokens = new Set(['{{what_to_prepare}}', '{{audition_notes}}']);
+  const rawHtmlTokens = new Set([
+    '{{what_to_prepare}}',
+    '{{audition_notes}}',
+    '{{general_audition_prepare}}',
+    '{{dance_call_prepare}}',
+    '{{callback_prepare}}',
+  ]);
 
   function substituteTemplate(text: string, escapeForHtml = false): string {
     let result = String(text || '');
     Object.entries(tokenValues).forEach(([token, value]) => {
-      const isRaw = escapeForHtml && rawHtmlTokens.has(token);
+      const isRaw = escapeForHtml && (rawHtmlTokens.has(token) || /^\{\{[a-z0-9_]+_prepare\}\}$/.test(token));
       result = result.split(token).join((escapeForHtml && !isRaw) ? escHtml(value) : value);
     });
     result = result.replace(
@@ -675,6 +787,16 @@ function fmtTime(timeStr: string): string {
     const h12  = h % 12 || 12;
     return m === 0 ? `${h12}${ampm}` : `${h12}:${String(m).padStart(2, '0')}${ampm}`;
   } catch { return timeStr; }
+}
+
+function formatScheduleEvent(row: Record<string, unknown>): string {
+  if (!row?.start_time) return String(row?.title || 'Performance');
+  const start = String(row.start_time).slice(0, 16);
+  const [datePart, timePart = ''] = start.split('T');
+  const date = datePart ? fmtDate(datePart) : '';
+  const time = timePart ? fmtTime(timePart) : '';
+  const venue = row.venue ? ` - ${row.venue}` : '';
+  return `${row.title || 'Performance'}: ${[date, time].filter(Boolean).join(' at ')}${venue}`;
 }
 
 function escHtml(s: string): string {
