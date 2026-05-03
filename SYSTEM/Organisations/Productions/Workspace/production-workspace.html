@@ -23886,11 +23886,12 @@ If you have any questions, don't hesitate to reach out.
       const sessionIds = audSessions.map(s => s.id);
       const { data: slots } = await sb.from('audition_time_slots')
         .select('*').in('session_id', sessionIds).order('slot_time', { ascending: true });
-      audSlots = {};
+      const newAudSlots = {};
       (slots || []).forEach(slot => {
-        if (!audSlots[slot.session_id]) audSlots[slot.session_id] = [];
-        audSlots[slot.session_id].push(slot);
+        if (!newAudSlots[slot.session_id]) newAudSlots[slot.session_id] = [];
+        newAudSlots[slot.session_id].push(slot);
       });
+      audSlots = newAudSlots;
     } else {
       audSlots = {};
     }
@@ -35131,26 +35132,27 @@ If you have any questions, don't hesitate to reach out.
   function _apmBuildEmailContext() {
     // Mirror the scheduling tab exactly: iterate sessions, check _apmPendingSlots first,
     // then saved slot_assignments. This guarantees the same slot IDs the tab is showing.
-    const sessions       = getAuditionScheduleViewSessions();
+    const sessions         = getAuditionScheduleViewSessions();
     const savedAssignments = Array.isArray(_apmApp?.slot_assignments) ? _apmApp.slot_assignments : [];
-    const knownSlots     = applicantAllKnownSlots();
-    const customAnswers  = (typeof _apmApp?.custom_answers === 'object' && _apmApp.custom_answers) ? _apmApp.custom_answers : {};
+    const customAnswers    = (typeof _apmApp?.custom_answers === 'object' && _apmApp.custom_answers) ? _apmApp.custom_answers : {};
+    const appEmail         = String(_apmApp?.email || '').trim().toLowerCase();
 
-    const appEmail = String(_apmApp?.email || '').trim().toLowerCase();
     function effectiveSlotForSession(sess) {
+      // Call applicantAllKnownSlots() fresh each time — never use a stale snapshot
+      const allSlotsCurrent = applicantAllKnownSlots();
       // 1. Pending slot change (same as scheduling tab)
       const pendingSlotId = _apmPendingSlots.hasOwnProperty(sess.id) ? _apmPendingSlots[sess.id] : undefined;
       if (pendingSlotId !== undefined) {
         if (!pendingSlotId) return null;
-        return knownSlots.find(s => s.id === pendingSlotId) || null;
+        return allSlotsCurrent.find(s => s.id === pendingSlotId) || null;
       }
-      // 2. Saved slot_assignments
+      // 2. Saved slot_assignments on applicant record
       const savedAsgn = savedAssignments.find(x => x.session_id === sess.id);
       if (savedAsgn?.slot_id) {
-        const slot = knownSlots.find(s => s.id === savedAsgn.slot_id);
+        const slot = allSlotsCurrent.find(s => s.id === savedAsgn.slot_id);
         if (slot) return slot;
       }
-      // 3. Fallback: audition_bookings (most recent active booking for this performer + session)
+      // 3. Audition bookings — fallback when slot_assignments is incomplete
       if (appEmail) {
         const booking = (allAuditionBookings || []).find(b => {
           const status = String(b.status || '').toLowerCase();
@@ -35159,7 +35161,7 @@ If you have any questions, don't hesitate to reach out.
             String(b.email || '').trim().toLowerCase() === appEmail;
         });
         if (booking?.slot_id) {
-          return knownSlots.find(s => s.id === booking.slot_id) || null;
+          return allSlotsCurrent.find(s => s.id === booking.slot_id) || null;
         }
       }
       return null;
