@@ -2251,21 +2251,43 @@
     }
     .et-basics-grid {
       display: grid;
-      grid-template-columns: minmax(0, 1fr) minmax(200px, 0.52fr);
+      grid-template-columns: minmax(240px, 1.15fr) minmax(170px, 0.72fr) minmax(170px, 0.72fr);
       gap: 0;
       border-bottom: 1px solid rgba(26,21,48,0.08);
     }
     .et-cue-row {
-      grid-column: 1 / -1;
       background: #fbfafc;
-      border-left: 0 !important;
-      border-top: 1px solid rgba(26,21,48,0.08);
     }
     .et-basics-grid .et-compose-field {
+      align-items: flex-start;
+      flex-direction: column;
+      gap: 0.16rem;
       border-bottom: 0;
+      min-height: 66px;
+      padding: 0.68rem 1.15rem 0.58rem;
     }
     .et-basics-grid .et-compose-field + .et-compose-field {
       border-left: 1px solid rgba(26,21,48,0.08);
+    }
+    .et-basics-grid .et-compose-label {
+      width: auto;
+      color: #9a90b0;
+      font-size: 0.62rem;
+      font-weight: 900;
+      letter-spacing: 0.07em;
+      line-height: 1.1;
+      text-transform: uppercase;
+    }
+    .et-basics-grid .et-compose-input {
+      width: 100%;
+      padding: 0.15rem 0 0;
+      font-size: 0.92rem;
+      font-weight: 760;
+      line-height: 1.25;
+    }
+    .et-basics-grid #et-name {
+      font-size: 1.02rem;
+      font-weight: 850;
     }
     .et-compose-field {
       min-height: 42px;
@@ -16314,7 +16336,7 @@
             </div>
             <div style="font-size:0.86rem;color:#6a5a80;line-height:1.5;">${esc(prod?.title || 'Production')} · ${esc(perms.label || 'Team Access')}</div>
             <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-top:0.85rem;">
-              <input type="file" id="team-access-headshot-input" accept="image/*" style="display:none;" onchange="uploadTeamAccessHeadshot(this.files?.[0])" />
+              <input type="file" id="team-access-headshot-input" accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.heic,.heif" style="display:none;" onchange="uploadTeamAccessHeadshot(this.files?.[0])" />
               <button type="button" class="btn-secondary" onclick="document.getElementById('team-access-headshot-input').click()">Upload Headshot</button>
               ${teamAccessMember.headshot_url ? `<a class="btn-secondary" href="${esc(teamAccessMember.headshot_url)}" target="_blank" download style="text-decoration:none;">Download</a>` : ''}
             </div>
@@ -16949,6 +16971,14 @@
 
   async function uploadTeamAccessHeadshot(file) {
     if (!file || !teamAccessMember) return;
+    if (!btsSupportedHeadshotType(file)) { alert('Please upload a JPG, PNG, WEBP, or iPhone HEIC image.'); return; }
+    try {
+      file = await btsNormalizeHeadshotFile(file);
+    } catch (err) {
+      console.error('[Team Access] HEIC conversion failed', err);
+      alert('Could not convert that iPhone photo. Try a JPG, PNG, or WEBP image.');
+      return;
+    }
     const safeName = file.name.replace(/[^a-zA-Z0-9._-]+/g, '-');
     const path = `${prodId}/team/${teamAccessMember.id}-${Date.now()}-${safeName}`;
     const { data, error } = await sb.storage.from('audition-headshots').upload(path, file, { upsert: true, contentType: file.type });
@@ -26305,7 +26335,7 @@ If you have any questions, don't hesitate to reach out.
       const metaLine   = [age ? String(age) : null, pronouns || null].filter(Boolean).join(' | ');
 
       const imageHtml = a.headshot_url
-        ? `<img src="${esc(a.headshot_url)}" alt="${esc(a.name || '')}" loading="lazy" />`
+        ? `<img src="${esc(a.headshot_url)}" alt="${esc(a.name || '')}" loading="lazy" onerror="this.outerHTML='<div class=\\'cb-ccard-img-placeholder\\'>👤</div>'" />`
         : `<div class="cb-ccard-img-placeholder">👤</div>`;
 
       const chipsHtml = placements.map(p =>
@@ -26420,7 +26450,7 @@ If you have any questions, don't hesitate to reach out.
     };
 
     const renderAvatar = (app) => app.headshot_url
-      ? `<img class="cb-outcome-avatar" src="${esc(app.headshot_url)}" alt="${esc(app.name || '')}" loading="lazy" />`
+      ? `<img class="cb-outcome-avatar" src="${esc(app.headshot_url)}" alt="${esc(app.name || '')}" loading="lazy" onerror="this.outerHTML='<span class=\\'cb-outcome-avatar cb-outcome-avatar-placeholder\\'>👤</span>'" />`
       : `<span class="cb-outcome-avatar cb-outcome-avatar-placeholder">👤</span>`;
 
     const renderOutcomeRow = (app, badges = [], emailRoleNames = '') => {
@@ -29695,7 +29725,7 @@ If you have any questions, don't hesitate to reach out.
           <div class="app-modal-headshot-stack">
             <div id="ws-headshot-wrap" style="width:100%;aspect-ratio:4 / 5;min-height:220px;border-radius:16px;overflow:hidden;background:linear-gradient(135deg,#ece7df,#ddd5ca);display:flex;align-items:center;justify-content:center;color:rgba(26,21,48,0.24);font-size:2.4rem;box-shadow:0 12px 26px rgba(26,21,48,0.08);">
               ${a.headshot_url
-                ? `<img src="${esc(a.headshot_url)}" style="width:100%;height:100%;object-fit:cover;object-position:top;" />`
+                ? `<img src="${esc(a.headshot_url)}" style="width:100%;height:100%;object-fit:cover;object-position:top;" onerror="this.outerHTML='👤'" />`
                 : `👤`}
             </div>
             <button id="ws-headshot-btn"
@@ -29705,7 +29735,7 @@ If you have any questions, don't hesitate to reach out.
               style="font-size:0.68rem;color:#7a6a90;background:rgba(255,255,255,0.92);border:1px solid rgba(87,46,136,0.12);border-radius:999px;cursor:pointer;font-family: var(--bts-font);padding:0.42rem 0.8rem;white-space:nowrap;width:100%;">
               ${a.headshot_url ? 'Change photo' : 'Upload photo'}
             </button>
-            <input type="file" id="ws-headshot-input" accept="image/*" style="display:none;" />
+            <input type="file" id="ws-headshot-input" accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.heic,.heif" style="display:none;" />
           </div>
           <div class="app-modal-main">
             <div class="app-modal-topbar">
@@ -30388,20 +30418,63 @@ If you have any questions, don't hesitate to reach out.
     input.click();
   }
 
+  let _btsHeicLoaderPromise = null;
+  function btsIsHeicHeadshotFile(file) {
+    const type = (file?.type || '').toLowerCase();
+    const name = (file?.name || '').toLowerCase();
+    return type === 'image/heic' || type === 'image/heif' || name.endsWith('.heic') || name.endsWith('.heif');
+  }
+  function btsKnownHeadshotMime(file) {
+    const type = (file?.type || '').toLowerCase();
+    const name = (file?.name || '').toLowerCase();
+    if (['image/jpeg', 'image/png', 'image/webp'].includes(type)) return type;
+    if (name.endsWith('.jpg') || name.endsWith('.jpeg')) return 'image/jpeg';
+    if (name.endsWith('.png')) return 'image/png';
+    if (name.endsWith('.webp')) return 'image/webp';
+    return '';
+  }
+  function btsSupportedHeadshotType(file) {
+    return !!file && (!!btsKnownHeadshotMime(file) || btsIsHeicHeadshotFile(file));
+  }
+  function btsLoadHeicConverter() {
+    if (window.heic2any) return Promise.resolve(window.heic2any);
+    if (_btsHeicLoaderPromise) return _btsHeicLoaderPromise;
+    _btsHeicLoaderPromise = new Promise((resolve, reject) => {
+      const script = document.createElement('script');
+      script.src = 'https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js';
+      script.async = true;
+      script.onload = () => window.heic2any ? resolve(window.heic2any) : reject(new Error('HEIC converter did not load.'));
+      script.onerror = () => reject(new Error('HEIC converter could not be loaded.'));
+      document.head.appendChild(script);
+    });
+    return _btsHeicLoaderPromise;
+  }
+  async function btsNormalizeHeadshotFile(file) {
+    const knownMime = btsKnownHeadshotMime(file);
+    if (knownMime && file.type !== knownMime) return new File([file], file.name || 'headshot', { type: knownMime, lastModified: file.lastModified || Date.now() });
+    if (!btsIsHeicHeadshotFile(file)) return file;
+    const heic2any = await btsLoadHeicConverter();
+    const converted = await heic2any({ blob: file, toType: 'image/jpeg', quality: 0.9 });
+    const jpgBlob = Array.isArray(converted) ? converted[0] : converted;
+    if (!jpgBlob) throw new Error('HEIC conversion failed.');
+    const baseName = (file.name || 'headshot').replace(/\.(heic|heif)$/i, '') || 'headshot';
+    return new File([jpgBlob], `${baseName}.jpg`, { type: 'image/jpeg', lastModified: Date.now() });
+  }
+
   async function wsUploadHeadshot(appId, oldUrl, file) {
     if (!file) return;
     const btn  = document.getElementById('ws-headshot-btn');
     const wrap = document.getElementById('ws-headshot-wrap');
-    if (btn) { btn.disabled = true; btn.textContent = 'Uploading…'; }
+    if (!btsSupportedHeadshotType(file)) {
+      showToast('Please upload a JPG, PNG, WEBP, or iPhone HEIC image.', true);
+      return;
+    }
+    if (btn) { btn.disabled = true; btn.textContent = btsIsHeicHeadshotFile(file) ? 'Converting…' : 'Uploading…'; }
     try {
-      const ext  = (file.name.split('.').pop() || 'jpg').toLowerCase();
+      file = await btsNormalizeHeadshotFile(file);
+      if (btn) btn.textContent = 'Uploading…';
+      const ext  = file.type === 'image/png' ? 'png' : file.type === 'image/webp' ? 'webp' : 'jpg';
       const path = `${prodId}/${appId}.${ext}`;
-
-      // Delete old file if it was in our bucket
-      if (oldUrl && oldUrl.includes('audition-headshots')) {
-        const oldPath = oldUrl.split('/audition-headshots/')[1]?.split('?')[0];
-        if (oldPath) await sb.storage.from('audition-headshots').remove([oldPath]).catch(() => {});
-      }
 
       const { data: upData, error: upErr } = await sb.storage
         .from('audition-headshots').upload(path, file, { upsert: true, contentType: file.type });
@@ -30433,11 +30506,17 @@ If you have any questions, don't hesitate to reach out.
         await sb.from('profiles').update({ headshot_url: newUrl }).eq('id', app.profile_id).catch(() => {});
       }
 
+      // Delete old file only after the new public URL has been saved everywhere.
+      if (oldUrl && oldUrl.includes('audition-headshots')) {
+        const oldPath = oldUrl.split('/audition-headshots/')[1]?.split('?')[0];
+        if (oldPath) await sb.storage.from('audition-headshots').remove([oldPath]).catch(() => {});
+      }
+
       // Update in-memory
       if (app) app.headshot_url = newUrl;
 
       // Update the modal photo immediately
-      if (wrap) wrap.innerHTML = `<img src="${esc(newUrl)}" style="width:100%;height:100%;object-fit:cover;object-position:top;" />`;
+      if (wrap) wrap.innerHTML = `<img src="${esc(newUrl)}" style="width:100%;height:100%;object-fit:cover;object-position:top;" onerror="this.outerHTML='👤'" />`;
       if (btn) { btn.disabled = false; btn.textContent = 'Change photo'; btn.dataset.oldUrl = newUrl; }
 
       // Re-render all views that show headshots
@@ -35922,7 +36001,7 @@ If you have any questions, don't hesitate to reach out.
     _apmPendingSlots = {}; _apmPickingSessions = new Set(); _apmEdits = {};
     const photoWrap = document.getElementById('apm-header-photo');
     if (photoWrap) photoWrap.innerHTML = app.headshot_url
-      ? `<img src="${esc(app.headshot_url)}" class="apm-header-photo" alt="${esc(app.name||'')}" />`
+      ? `<img src="${esc(app.headshot_url)}" class="apm-header-photo" alt="${esc(app.name||'')}" onerror="this.outerHTML='<div class=\\'apm-header-photo-placeholder\\'>👤</div>'" />`
       : `<div class="apm-header-photo-placeholder">👤</div>`;
     const nameEl = document.getElementById('apm-header-name');
     if (nameEl) nameEl.textContent = app.name || '—';
@@ -36536,7 +36615,7 @@ If you have any questions, don't hesitate to reach out.
     if (_apmHeadshotFile && _apmHeadshotObjectUrl) {
       // Confirmation state — show old vs new
       const oldEl = currentUrl
-        ? `<img src="${esc(currentUrl)}" class="apm-headshot-preview" alt="Current" />`
+        ? `<img src="${esc(currentUrl)}" class="apm-headshot-preview" alt="Current" onerror="this.outerHTML='<div class=\\'apm-headshot-placeholder-lg\\' style=\\'width:100px;height:125px;font-size:2rem;\\'>👤</div>'" />`
         : `<div class="apm-headshot-placeholder-lg" style="width:100px;height:125px;font-size:2rem;">👤</div>`;
       return `
         <p style="font-size:0.82rem;color:#1a1530;font-weight:600;margin-bottom:1rem;">Replace this headshot?</p>
@@ -36558,21 +36637,37 @@ If you have any questions, don't hesitate to reach out.
     }
     // Default state
     const photoEl = currentUrl
-      ? `<img src="${esc(currentUrl)}" class="apm-headshot-preview" alt="Headshot" />`
+      ? `<img src="${esc(currentUrl)}" class="apm-headshot-preview" alt="Headshot" onerror="this.outerHTML='<div class=\\'apm-headshot-placeholder-lg\\'>👤</div>'" />`
       : `<div class="apm-headshot-placeholder-lg">👤</div>`;
     return `
       ${photoEl}
-      <input type="file" id="apm-headshot-file-input" accept="image/*" style="display:none;" onchange="apmHeadshotFilePicked(this)" />
+      <input type="file" id="apm-headshot-file-input" accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.heic,.heif" style="display:none;" onchange="apmHeadshotFilePicked(this)" />
       <button class="btn-secondary" onclick="document.getElementById('apm-headshot-file-input').click()">Change Headshot</button>
       <p style="font-size:0.78rem;color:#9a90b0;margin-top:0.75rem;line-height:1.5;">Upload a new photo. You'll confirm before the old one is removed.</p>`;
   }
 
-  function apmHeadshotFilePicked(input) {
+  async function apmHeadshotFilePicked(input) {
     const file = input?.files?.[0];
     if (!file) return;
+    if (!btsSupportedHeadshotType(file)) {
+      const statusEl = document.getElementById('apm-save-status');
+      if (statusEl) { statusEl.className = 'apm-save-status error'; statusEl.textContent = 'Use a JPG, PNG, WEBP, or iPhone HEIC image.'; }
+      return;
+    }
+    const statusEl = document.getElementById('apm-save-status');
+    if (statusEl && btsIsHeicHeadshotFile(file)) { statusEl.className = 'apm-save-status saving'; statusEl.textContent = 'Converting iPhone photo…'; }
+    let normalizedFile = file;
+    try {
+      normalizedFile = await btsNormalizeHeadshotFile(file);
+    } catch (err) {
+      console.error('[APM] HEIC conversion failed', err);
+      if (statusEl) { statusEl.className = 'apm-save-status error'; statusEl.textContent = 'Could not convert that iPhone photo. Try a JPG, PNG, or WEBP image.'; }
+      return;
+    }
+    if (statusEl) statusEl.textContent = '';
     if (_apmHeadshotObjectUrl) URL.revokeObjectURL(_apmHeadshotObjectUrl);
-    _apmHeadshotFile = file;
-    _apmHeadshotObjectUrl = URL.createObjectURL(file);
+    _apmHeadshotFile = normalizedFile;
+    _apmHeadshotObjectUrl = URL.createObjectURL(normalizedFile);
     if (_apmTab === 'headshot') _apmRenderBody();
   }
 
@@ -36588,20 +36683,22 @@ If you have any questions, don't hesitate to reach out.
     if (statusEl) { statusEl.className = 'apm-save-status saving'; statusEl.textContent = 'Uploading…'; }
     try {
       const file = _apmHeadshotFile;
-      const safeName = file.name.replace(/[^a-zA-Z0-9._-]+/g, '-');
+      const ext = file.type === 'image/png' ? 'png' : file.type === 'image/webp' ? 'webp' : 'jpg';
+      const safeName = file.name.replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/\.[^.]+$/, `.${ext}`);
       const path = `${prodId}/applicants/${_apmApp.id}-${Date.now()}-${safeName}`;
       const { data, error } = await sb.storage.from('audition-headshots').upload(path, file, { upsert: true, contentType: file.type });
       if (error) throw error;
       const { data: urlData } = sb.storage.from('audition-headshots').getPublicUrl(data.path);
       const newUrl = (urlData?.publicUrl || '') + '?t=' + Date.now();
-      // Delete old headshot from storage
+      if (!urlData?.publicUrl) throw new Error('Could not get public headshot link.');
       const oldUrl = _apmApp.headshot_url || '';
+      // Save new URL
+      await syncApplicantEditsToSource(_apmApp, { headshot_url: newUrl });
+      // Delete old headshot only after the new URL has been saved.
       if (oldUrl && oldUrl.includes('audition-headshots')) {
         const oldPath = oldUrl.split('/audition-headshots/')[1]?.split('?')[0];
         if (oldPath) await sb.storage.from('audition-headshots').remove([oldPath]).catch(() => {});
       }
-      // Save new URL
-      await syncApplicantEditsToSource(_apmApp, { headshot_url: newUrl });
       const idx = (allApplicants || []).findIndex(a => String(a.id) === String(_apmAppId));
       if (idx >= 0) { allApplicants[idx] = { ...allApplicants[idx], headshot_url: newUrl }; _apmApp = allApplicants[idx]; }
       // Clean up preview
@@ -36609,7 +36706,7 @@ If you have any questions, don't hesitate to reach out.
       _apmHeadshotFile = null; _apmHeadshotObjectUrl = null;
       // Update header photo
       const pw = document.getElementById('apm-header-photo');
-      if (pw) pw.innerHTML = `<img src="${esc(newUrl)}" class="apm-header-photo" alt="" />`;
+      if (pw) pw.innerHTML = `<img src="${esc(newUrl)}" class="apm-header-photo" alt="" onerror="this.outerHTML='<div class=\\'apm-header-photo-placeholder\\'>👤</div>'" />`;
       renderAllPerformers();
       if (statusEl) { statusEl.className = 'apm-save-status saved'; statusEl.textContent = 'Headshot updated!'; setTimeout(() => { if (statusEl) statusEl.textContent = ''; }, 2500); }
       if (_apmTab === 'headshot') _apmRenderBody();
@@ -36702,7 +36799,7 @@ If you have any questions, don't hesitate to reach out.
       if (update.headshot_url !== undefined) {
         const pw = document.getElementById('apm-header-photo');
         if (pw) pw.innerHTML = update.headshot_url
-          ? `<img src="${esc(update.headshot_url)}" class="apm-header-photo" alt="" />`
+          ? `<img src="${esc(update.headshot_url)}" class="apm-header-photo" alt="" onerror="this.outerHTML='<div class=\\'apm-header-photo-placeholder\\'>👤</div>'" />`
           : `<div class="apm-header-photo-placeholder">👤</div>`;
       }
       renderAllPerformers();

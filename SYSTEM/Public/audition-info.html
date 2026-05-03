@@ -3740,10 +3740,23 @@
       _bkSaveState();
     }
     function _bkSaveState() {
-      try { localStorage.setItem('bts_bk_'+(_bkState.session_id||'x'), JSON.stringify(_bkState)); } catch {}
+      try {
+        const { headshot_file, headshot_preview, headshot_url, ...persistableState } = _bkState || {};
+        localStorage.setItem('bts_bk_'+(_bkState.session_id||'x'), JSON.stringify({
+          ...persistableState,
+          headshot_file: null,
+          headshot_preview: null,
+          headshot_url: null,
+        }));
+      } catch {}
     }
     function _bkLoadSavedState(sessionId) {
-      try { const r = localStorage.getItem('bts_bk_'+sessionId); return r ? JSON.parse(r) : null; } catch { return null; }
+      try {
+        const r = localStorage.getItem('bts_bk_'+sessionId);
+        if (!r) return null;
+        const saved = JSON.parse(r);
+        return { ...saved, headshot_file: null, headshot_preview: null, headshot_url: null };
+      } catch { return null; }
     }
 
     // ── Open / Close ─────────────────────────────────────────────
@@ -4135,16 +4148,16 @@
             ondragleave="_bkHeadshotDragLeave(event)"
             ondrop="_bkHeadshotDrop(event)">
             <div class="bk-headshot-preview-wrap" id="bk-headshot-preview-wrap" style="display:none;">
-              <img class="bk-headshot-preview" id="bk-headshot-preview" src="" alt="Headshot preview" />
+              <img class="bk-headshot-preview" id="bk-headshot-preview" src="" alt="Headshot preview" onerror="this.closest('.bk-headshot-preview-wrap').style.display='none';document.getElementById('bk-headshot-placeholder').style.display='';" />
               <div class="bk-headshot-change-hint">Tap or drop to change</div>
             </div>
             <div class="bk-headshot-placeholder" id="bk-headshot-placeholder">
               <div class="bk-headshot-icon">📷</div>
               <div class="bk-headshot-hint">Tap or drag &amp; drop a headshot</div>
-              <div class="bk-headshot-hint-sub">JPG, PNG or WEBP · Max 5MB</div>
+              <div class="bk-headshot-hint-sub">JPG, PNG, WEBP or iPhone HEIC · Max 5MB</div>
             </div>
           </div>
-          <input type="file" id="bk-headshot-input" accept="image/jpeg,image/png,image/webp" style="display:none;" onchange="_bkHeadshotSelected(this)" />
+          <input type="file" id="bk-headshot-input" accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.heic,.heif" style="display:none;" onchange="_bkHeadshotSelected(this)" />
           <div id="bk-headshot-error" style="font-size:0.75rem;color:#b91c1c;margin-top:0.3rem;min-height:1rem;"></div>`);
       }
 
@@ -4449,7 +4462,7 @@
         if (_bkState.perf_p1) metaParts.push(`${_bkState.perf_p1}/${_bkState.perf_p2 || ''}`);
         const metaLine = metaParts.join(' · ');
         const photoHtml = _bkState.headshot_preview
-          ? `<img src="${_bkState.headshot_preview}" alt="Headshot" />`
+          ? `<img src="${esc(_bkState.headshot_preview)}" alt="Headshot" onerror="this.outerHTML='<div class=\\'bk-review-polaroid-placeholder\\'>👤</div>'" />`
           : `<div class="bk-review-polaroid-placeholder">👤</div>`;
 
         const polaroid = `
@@ -4641,7 +4654,7 @@
     function _bkValidateStep4() {
       _bkAutoSave(4);
       const cfg = _bkAudConfig || {};
-      if (!_bkState.headshot_file && !_bkState.headshot_url) { _bkErr('A headshot is required. Please upload a photo before continuing.'); return false; }
+      if (!_bkHasValidHeadshotFile() && !_bkState.headshot_url) { _bkErr('A headshot is required. Please upload a JPG, PNG, or WEBP photo before continuing.'); return false; }
       if ((cfg.section_acting ?? true) && !_bkState.acting_level) { _bkErr('Please select the performer\'s acting experience level.'); return false; }
       if ((cfg.section_vocal ?? true) && !_bkState.vocal_level) { _bkErr('Please select the performer\'s vocal experience level.'); return false; }
       if ((cfg.section_dance ?? true) && !_bkState.dance_level) { _bkErr('Please select the performer\'s dance / movement experience level.'); return false; }
@@ -4774,19 +4787,84 @@
       _bkSaveState(); _bkRenderCharTiles();
     }
     // ── Headshot upload ───────────────────────────────────────────
-    function _bkHeadshotFile(file) {
+    let _bkHeicLoaderPromise = null;
+    function _bkIsHeicFile(file) {
+      const type = (file?.type || '').toLowerCase();
+      const name = (file?.name || '').toLowerCase();
+      return type === 'image/heic' || type === 'image/heif' || name.endsWith('.heic') || name.endsWith('.heif');
+    }
+    function _bkKnownHeadshotMime(file) {
+      const type = (file?.type || '').toLowerCase();
+      const name = (file?.name || '').toLowerCase();
+      if (['image/jpeg', 'image/png', 'image/webp'].includes(type)) return type;
+      if (name.endsWith('.jpg') || name.endsWith('.jpeg')) return 'image/jpeg';
+      if (name.endsWith('.png')) return 'image/png';
+      if (name.endsWith('.webp')) return 'image/webp';
+      return '';
+    }
+    function _bkIsSupportedHeadshotFile(file) {
+      return !!file && (!!_bkKnownHeadshotMime(file) || _bkIsHeicFile(file));
+    }
+    function _bkLoadHeicConverter() {
+      if (window.heic2any) return Promise.resolve(window.heic2any);
+      if (_bkHeicLoaderPromise) return _bkHeicLoaderPromise;
+      _bkHeicLoaderPromise = new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = 'https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js';
+        script.async = true;
+        script.onload = () => window.heic2any ? resolve(window.heic2any) : reject(new Error('HEIC converter did not load.'));
+        script.onerror = () => reject(new Error('HEIC converter could not be loaded.'));
+        document.head.appendChild(script);
+      });
+      return _bkHeicLoaderPromise;
+    }
+    async function _bkNormalizeHeadshotFile(file) {
+      const knownMime = _bkKnownHeadshotMime(file);
+      if (knownMime && file.type !== knownMime) return new File([file], file.name || 'headshot', { type: knownMime, lastModified: file.lastModified || Date.now() });
+      if (!_bkIsHeicFile(file)) return file;
+      const heic2any = await _bkLoadHeicConverter();
+      const converted = await heic2any({ blob: file, toType: 'image/jpeg', quality: 0.9 });
+      const jpgBlob = Array.isArray(converted) ? converted[0] : converted;
+      if (!jpgBlob) throw new Error('HEIC conversion failed.');
+      const baseName = (file.name || 'headshot').replace(/\.(heic|heif)$/i, '') || 'headshot';
+      return new File([jpgBlob], `${baseName}.jpg`, { type: 'image/jpeg', lastModified: Date.now() });
+    }
+
+    function _bkHasValidHeadshotFile() {
+      const file = _bkState?.headshot_file;
+      return !!file
+        && typeof file.arrayBuffer === 'function'
+        && ['image/jpeg', 'image/png', 'image/webp'].includes(file.type)
+        && file.size > 0
+        && file.size <= 5 * 1024 * 1024;
+    }
+
+    async function _bkHeadshotFile(file) {
       const errEl = document.getElementById('bk-headshot-error');
       if (!file) return;
-      if (!file.type.startsWith('image/')) {
-        if (errEl) errEl.textContent = 'Please upload an image file (JPG, PNG or WEBP).';
+      if (!_bkIsSupportedHeadshotFile(file)) {
+        if (errEl) errEl.textContent = 'Please upload a JPG, PNG, WEBP, or iPhone HEIC image.';
         return;
       }
       if (file.size > 5 * 1024 * 1024) {
         if (errEl) errEl.textContent = 'File is too large. Max 5MB.';
         return;
       }
+      if (errEl) errEl.textContent = _bkIsHeicFile(file) ? 'Converting iPhone photo…' : '';
+      let normalizedFile = file;
+      try {
+        normalizedFile = await _bkNormalizeHeadshotFile(file);
+      } catch (e) {
+        console.error('[BTS] HEIC conversion failed:', e);
+        if (errEl) errEl.textContent = 'We could not convert that iPhone photo. Please try a JPG, PNG, or WEBP image.';
+        return;
+      }
+      if (normalizedFile.size > 5 * 1024 * 1024) {
+        if (errEl) errEl.textContent = 'Converted image is too large. Please choose a smaller photo.';
+        return;
+      }
       if (errEl) errEl.textContent = '';
-      _bkState.headshot_file = file;
+      _bkState.headshot_file = normalizedFile;
       const reader = new FileReader();
       reader.onload = e => {
         _bkState.headshot_preview = e.target.result;
@@ -4800,7 +4878,12 @@
         if (zone) zone.classList.remove('drag-over');
         _bkSaveState();
       };
-      reader.readAsDataURL(file);
+      reader.onerror = () => {
+        _bkState.headshot_file = null;
+        _bkState.headshot_preview = null;
+        if (errEl) errEl.textContent = 'We could not read that image. Please try another JPG, PNG, or WEBP.';
+      };
+      reader.readAsDataURL(normalizedFile);
     }
 
     function _bkHeadshotSelected(input) {
@@ -4931,20 +5014,26 @@
         let headshotUrl = null;
         if (_bkState.headshot_file) {
           try {
+            if (!_bkHasValidHeadshotFile()) throw new Error('Selected headshot is not a valid JPG, PNG, or WEBP file.');
             const file = _bkState.headshot_file;
-            const ext = (file.name || 'jpg').split('.').pop() || 'jpg';
+            const ext = file.type === 'image/png' ? 'png' : file.type === 'image/webp' ? 'webp' : 'jpg';
             const path = `${_bkProd?.id || 'prod'}-${Date.now()}.${ext}`;
             const { data: upData, error: upErr } = await sb.storage
               .from('audition-headshots')
               .upload(path, file, { upsert: true, contentType: file.type });
             if (upErr) {
               console.error('[BTS] Headshot upload error:', upErr.message);
+              throw upErr;
             } else if (upData?.path) {
               const { data: urlData } = sb.storage.from('audition-headshots').getPublicUrl(upData.path);
               headshotUrl = urlData?.publicUrl || null;
             }
+            if (!headshotUrl) throw new Error('Could not get a public headshot link.');
           } catch (e) {
             console.error('[BTS] Headshot upload exception:', e);
+            if (next) { next.disabled = false; next.textContent = 'Confirm Booking'; }
+            _bkErr('Your headshot could not be uploaded. Please try a JPG, PNG, or WEBP image and submit again.');
+            return;
           }
         }
         const perfName = [_bkState.perf_fname, _bkState.perf_lname].filter(Boolean).join(' ').trim()
