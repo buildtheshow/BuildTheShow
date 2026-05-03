@@ -380,7 +380,7 @@ serve(async (req) => {
   const FALLBACK_TEMPLATES: Record<string, { subject: string; body: string }> = {
     booking_confirmation: {
       subject: 'Your audition is confirmed: {{show_name}}',
-      body: `Hi {{performer_first_name}},
+      body: `Hi {{contact_name}},
 
 Your audition for {{show_name}} is confirmed. We can't wait to see you!
 
