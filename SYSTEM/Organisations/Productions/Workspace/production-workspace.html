@@ -35129,37 +35129,30 @@ If you have any questions, don't hesitate to reach out.
     apmLoadEmailComposer(sel.value);
   }
 
-  function _apmBuildEmailContext(freshBookings, freshSlots) {
-    // freshBookings: rows from audition_bookings for this performer (direct DB query)
-    // freshSlots:    rows from audition_time_slots for those slot IDs (direct DB query)
+  function _apmBuildEmailContext() {
     const sessions      = getAuditionScheduleViewSessions();
     const customAnswers = (typeof _apmApp?.custom_answers === 'object' && _apmApp.custom_answers) ? _apmApp.custom_answers : {};
-    const dbBookings    = Array.isArray(freshBookings) ? freshBookings : [];
-    const dbSlots       = Array.isArray(freshSlots)    ? freshSlots    : [];
+    const assignments   = Array.isArray(_apmApp?.slot_assignments) ? _apmApp.slot_assignments : [];
 
     function slotTimeForSession(sess) {
-      // Fresh DB data: find this performer's booking for this session
-      const booking = dbBookings.find(b => b.session_id === sess.id && b.slot_id);
-      if (booking) {
-        const slot = dbSlots.find(s => s.id === booking.slot_id);
-        if (slot?.slot_time) return formatSlotTime(slot.slot_time);
-      }
-      // Fallback: pending slot change in APM (unsaved)
-      const pendingSlotId = _apmPendingSlots.hasOwnProperty(sess.id) ? _apmPendingSlots[sess.id] : null;
-      if (pendingSlotId) {
-        const slot = applicantAllKnownSlots().find(s => s.id === pendingSlotId);
+      const pendingSlotId   = _apmPendingSlots.hasOwnProperty(sess.id) ? _apmPendingSlots[sess.id] : undefined;
+      const effectiveSlotId = pendingSlotId !== undefined
+        ? pendingSlotId
+        : (assignments.find(x => x.session_id === sess.id)?.slot_id || null);
+      if (effectiveSlotId) {
+        const slot = applicantAllKnownSlots().find(s => s.id === effectiveSlotId);
         if (slot) return formatSlotTime(slot.slot_time || slot.start_time || '');
       }
       return '';
     }
-    // Primary session: first session that has a booking with a slot
+
     let primarySession = null, primaryTime = '';
     for (const sess of sessions) {
       const t = slotTimeForSession(sess);
       if (t) { primarySession = sess; primaryTime = t; break; }
     }
     if (!primarySession) {
-      const legacySid = _apmApp?.session_id || (dbBookings[0]?.session_id) || null;
+      const legacySid = _apmApp?.session_id || null;
       primarySession = legacySid ? (sessions.find(s => s.id === legacySid) || null) : null;
     }
     const whatToPrepare = primarySession?.prepare_text || customAnswers['What to Prepare'] || customAnswers['what_to_prepare'] || '';
@@ -35199,7 +35192,7 @@ If you have any questions, don't hesitate to reach out.
       callback_name: '',         callback_date: '',         callback_time: '',         callback_venue: '',
       custom_answers: customAnswers,
       session_id: primarySession?.id || _apmApp?.session_id || '',
-      slot_id:    (dbBookings.find(b => b.session_id === primarySession?.id))?.slot_id || _apmApp?.slot_id || '',
+      slot_id:    assignments.find(x => x.session_id === primarySession?.id)?.slot_id || _apmApp?.slot_id || '',
       production: {
         title: prod?.title || '', subtitle: prod?.subtitle || '', venue: prod?.venue || '',
         director: prod?.director || '', organization_id: prod?.organization_id || '',
@@ -35260,20 +35253,9 @@ If you have any questions, don't hesitate to reach out.
     const row = document.getElementById('apm-resend-row');
     if (row) row.innerHTML = `<span style="font-size:0.72rem;color:#9a90b0;font-style:italic;">Loading…</span>`;
 
-    // Fetch template + this performer's bookings directly from DB in parallel
-    const appEmail = _apmApp?.email || '';
-    const [{ data: templates }, { data: rawBookings }] = await Promise.all([
-      sb.from('email_templates')
-        .select('subject, body').eq('production_id', prodId).eq('category', category)
-        .order('created_at', { ascending: false }).limit(1),
-      appEmail
-        ? sb.from('audition_bookings')
-            .select('session_id, slot_id, status')
-            .eq('production_id', prodId)
-            .eq('email', appEmail)
-            .order('created_at', { ascending: false })
-        : Promise.resolve({ data: [] }),
-    ]);
+    const { data: templates } = await sb.from('email_templates')
+      .select('subject, body').eq('production_id', prodId).eq('category', category)
+      .order('created_at', { ascending: false }).limit(1);
 
     if (!templates?.length) {
       if (row) row.innerHTML = `<span style="font-size:0.72rem;color:#c0392b;">No template found. Add one in the Emails tab.</span>`;
@@ -35281,23 +35263,8 @@ If you have any questions, don't hesitate to reach out.
       return;
     }
 
-    // Filter cancelled bookings, collect slot IDs
-    const bookings = (rawBookings || []).filter(b => {
-      const s = String(b.status || '').toLowerCase();
-      return s !== 'cancelled' && s !== 'canceled';
-    });
-    const slotIds = [...new Set(bookings.map(b => b.slot_id).filter(Boolean))];
-
-    // Fetch the actual slot times directly from audition_time_slots
-    let freshSlots = [];
-    if (slotIds.length) {
-      const { data: sd } = await sb.from('audition_time_slots')
-        .select('id, slot_time, session_id').in('id', slotIds);
-      freshSlots = sd || [];
-    }
-
     const template = templates[0];
-    const context  = _apmBuildEmailContext(bookings, freshSlots);
+    const context  = _apmBuildEmailContext();
     _apmEmailCompose = {
       category,
       subject: _applyEmailContext(template.subject || '', context),
