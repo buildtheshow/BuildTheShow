@@ -1953,7 +1953,7 @@
     }
     .et-template-cards {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+      grid-template-columns: repeat(3, minmax(0, 1fr));
       gap: 1rem;
     }
     .et-row {
@@ -2443,7 +2443,12 @@
       border-color: rgba(26,21,48,0.1);
       color: #1a1530;
     }
-    @media (max-width: 900px) {
+    @media (max-width: 1100px) {
+      .et-template-cards {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+    @media (max-width: 720px) {
       .et-summary-bar {
         align-items: flex-start;
         flex-direction: column;
@@ -18717,8 +18722,20 @@
     { color: '#55acda', bg: '#dff3ff' },
   ];
 
-  function buildSessionVarGroups() {
-    const sessions = Array.isArray(audSessions) ? audSessions : [];
+  function etIsCanonicalSessionGroup(session) {
+    const type = String(session?.type || '').toLowerCase();
+    const name = String(session?.name || '').toLowerCase();
+    return (type === 'audition' && (name.includes('general') || name.includes('audition')))
+      || type === 'dance_call'
+      || name.includes('dance call')
+      || type === 'callback'
+      || name.includes('callback');
+  }
+
+  function buildSessionVarGroups(options = {}) {
+    const includeCanonical = options.includeCanonical !== false;
+    const sessions = (Array.isArray(audSessions) ? audSessions : [])
+      .filter(session => includeCanonical || !etIsCanonicalSessionGroup(session));
     return sessions.map((session, i) => {
       const slug = sessionSlug(session.name || `session_${i + 1}`);
       const col  = SESSION_GROUP_COLORS[i % SESSION_GROUP_COLORS.length];
@@ -19033,7 +19050,7 @@
     const wrap = document.getElementById('et-var-groups');
     if (!wrap) return;
     const query = (document.getElementById('et-custom-token-input')?.value || '').trim().toLowerCase();
-    const allGroups = [...ET_VARIABLES, ...buildSessionVarGroups()];
+    const allGroups = [...ET_VARIABLES, ...buildSessionVarGroups({ includeCanonical: false })];
     if (!performanceScheduleSummaryLoaded) loadPerformanceScheduleSummary().then(() => {
       if (document.getElementById('et-var-groups') === wrap) etBuildVarGroups();
     });
