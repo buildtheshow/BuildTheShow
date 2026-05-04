@@ -650,7 +650,8 @@ async function emailTeamInvite(memberId, clickedBtn = null) {
     const { data, error } = await sb.functions.invoke('send-email', {
       body: {
         production_id: prodId,
-        category: 'general',
+        category: 'team_invite',
+        trigger: 'team_invite',
         email: member.email,
         name: member.name || member.email,
         subject,

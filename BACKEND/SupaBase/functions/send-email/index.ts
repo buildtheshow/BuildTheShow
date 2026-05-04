@@ -48,6 +48,18 @@ const CATEGORY_SUBJECTS: Record<string, string> = {
   general:             'A message from the production team',
 };
 
+const CATEGORY_TO_TRIGGER: Record<string, string> = {
+  booking_confirmation: 'booking_confirmed',
+  self_tape_booked:     'self_tape_registered',
+  audition_reminder:    'manual',
+  callback:             'callback_set',
+  cast_announcement:    'cast_set',
+  not_cast:             'not_cast_set',
+  rehearsal:            'manual',
+  team_invite:          'team_invite',
+  general:              'manual',
+};
+
 serve(async (req) => {
   try {
   if (req.method === 'OPTIONS') return corsResponse(null, 204);
@@ -202,6 +214,7 @@ serve(async (req) => {
   const statusRaw  = String(body.status  || '').trim().toLowerCase();
   const categoryRaw = String(body.category || '').trim();
   const category   = categoryRaw || STATUS_TO_CATEGORY[statusRaw] || 'booking_confirmation';
+  const requestedTrigger = firstDefinedString(body.trigger, CATEGORY_TO_TRIGGER[category]);
 
   const bookingIdRaw   = String(body.booking_id   || '').trim();
   const applicantIdRaw = String(body.applicant_id || '').trim();
@@ -341,19 +354,24 @@ serve(async (req) => {
   if (!performerEmail && category !== 'team_invite') return json({ ok: false, error: 'No email address found for this performer' });
 
   // ── Fetch production + template + org ────────────────────────
-  const [{ data: prod }, { data: template }] = await Promise.all([
+  const [{ data: prod }, { data: templates }] = await Promise.all([
     sb.from('productions')
       .select('id,title,subtitle,venue,director,organization_id,start_date,end_date')
       .eq('id', productionId)
       .maybeSingle(),
     sb.from('email_templates')
-      .select('subject,body')
+      .select('subject,body,trigger')
       .eq('production_id', productionId)
       .eq('category', category)
       .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle(),
+      .limit(20),
   ]);
+  const templateList = Array.isArray(templates) ? templates as { subject?: string; body?: string; trigger?: string }[] : [];
+  const template =
+    templateList.find(t => String(t.trigger || '').trim() === requestedTrigger) ||
+    templateList.find(t => !t.trigger && requestedTrigger === CATEGORY_TO_TRIGGER[category]) ||
+    templateList[0] ||
+    null;
 
   let teamMember: Record<string, unknown> | null = null;
   if (category === 'team_invite') {
@@ -777,7 +795,7 @@ See you soon,
     return json({ ok: false, error: `Resend API error: ${resendMsg}` });
   }
 
-  return json({ ok: true, sent: true, category, performer_email: performerEmail });
+  return json({ ok: true, sent: true, category, trigger: requestedTrigger, performer_email: performerEmail });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error('[send-email] Unhandled error:', msg);

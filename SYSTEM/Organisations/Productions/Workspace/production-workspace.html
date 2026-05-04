@@ -15862,8 +15862,9 @@
                         <select id="et-category" class="et-compose-input et-compose-select" onchange="etSetPurpose(this.value)"></select>
                       </div>
                       <div class="et-compose-field et-cue-row">
-                        <span class="et-compose-label">Cue</span>
+                        <span class="et-compose-label">Cue (how / when it sends)</span>
                         <select id="et-trigger" class="et-compose-input et-compose-select"></select>
+                        <div id="et-cue-help" style="font-size:0.72rem;color:#7d7192;line-height:1.45;margin-top:0.35rem;"></div>
                       </div>
                     </div>
                   </details>
@@ -20195,6 +20196,7 @@
     if (triggerSelect && !triggerSelect.dataset.touched) {
       triggerSelect.value = etDefaultCueForCategory(value || 'general');
     }
+    etUpdateCueHelp();
     etRefreshSaveButton();
     etTogglePreview();
   }
@@ -20205,28 +20207,49 @@
 
   function etCueLabel(trigger) {
     const labels = {
-      booking_confirmed: 'Booking confirmed',
-      callback_set: 'Callback set',
-      cast_set: 'Cast list set',
-      not_cast_set: 'Not cast set',
-      team_invite: 'Team invited',
-      manual: 'Manual send',
+      booking_confirmed: 'Automatic: when a performer finishes booking an audition time',
+      self_tape_registered: 'Automatic: when a performer registers for self tape',
+      callback_set: 'Manual action: when you send a callback invite from casting',
+      cast_set: 'Manual action: when you send a cast announcement from casting',
+      not_cast_set: 'Manual action: when you send a not-cast email from casting',
+      team_invite: 'Manual action: when you send a production team portal invite',
+      manual: 'Manual only: never sends until you choose to send it',
     };
-    return labels[trigger] || 'Manual send';
+    return labels[trigger] || 'Manual only: never sends until you choose to send it';
+  }
+
+  function etCueHelpText(trigger) {
+    const help = {
+      booking_confirmed: 'How it sends: automatic. When it sends: immediately after a performer completes the public audition booking form and their audition slot/registration is saved.',
+      self_tape_registered: 'How it sends: automatic. When it sends: immediately after a performer completes the public self tape registration form. This email must include {{submission_link}} so they can submit their tape later.',
+      callback_set: 'How it sends: team-triggered. When it sends: only when you select a performer and use the callback invite/send action in casting. Setting a callback status alone is not the email body; this template is used for the actual invite send.',
+      cast_set: 'How it sends: team-triggered. When it sends: only when you choose to send the cast announcement/role offer email to a performer from casting.',
+      not_cast_set: 'How it sends: team-triggered. When it sends: only when you choose to send the not-cast email to a performer from casting.',
+      team_invite: 'How it sends: team-triggered. When it sends: when you invite a production team member and send their portal link/access code.',
+      manual: 'How it sends: manual only. When it sends: never automatically. Use this for reminders, rehearsal info, and general updates that you decide to send yourself.',
+    };
+    return help[trigger] || help.manual;
+  }
+
+  function etUpdateCueHelp() {
+    const select = document.getElementById('et-trigger');
+    const help = document.getElementById('et-cue-help');
+    if (help) help.textContent = etCueHelpText(select?.value || 'manual');
   }
 
   const ET_CUE_OPTIONS = [
-    { value: 'manual',            label: 'Manual send' },
-    { value: 'booking_confirmed', label: 'Booking confirmed' },
-    { value: 'callback_set',      label: 'Callback set' },
-    { value: 'cast_set',          label: 'Cast list set' },
-    { value: 'not_cast_set',      label: 'Not cast set' },
-    { value: 'team_invite',       label: 'Team invited' },
+    { value: 'manual',               label: 'Manual only: never sends until you choose to send it' },
+    { value: 'booking_confirmed',    label: 'Automatic: when a performer finishes booking an audition time' },
+    { value: 'self_tape_registered', label: 'Automatic: when a performer registers for self tape' },
+    { value: 'callback_set',         label: 'Manual action: when you send a callback invite from casting' },
+    { value: 'cast_set',             label: 'Manual action: when you send a cast announcement from casting' },
+    { value: 'not_cast_set',         label: 'Manual action: when you send a not-cast email from casting' },
+    { value: 'team_invite',          label: 'Manual action: when you send a production team portal invite' },
   ];
 
   const ET_DEFAULT_CUES = {
     booking_confirmation: 'booking_confirmed',
-    self_tape_booked:     'manual',
+    self_tape_booked:     'self_tape_registered',
     audition_reminder:    'manual',
     callback:             'callback_set',
     cast_announcement:    'cast_set',
@@ -20244,6 +20267,7 @@
       `<option value="${esc(option.value)}">${esc(option.label)}</option>`
     ).join('');
     select.value = ET_CUE_OPTIONS.some(option => option.value === selected) ? selected : 'manual';
+    etUpdateCueHelp();
   }
 
   function etDefaultCueForCategory(category) {
@@ -20667,7 +20691,7 @@ If you have any questions, don't hesitate to reach out.
     {
       name: 'Self Tape — Registration Confirmed',
       category: 'self_tape_booked',
-      trigger: 'manual',
+      trigger: 'self_tape_registered',
       subject: 'Your self tape registration for {{show_name}}',
       body: `Hi {{performer_name}},
 
@@ -20860,8 +20884,9 @@ We look forward to seeing your work!
     if (triggerSelect) {
       delete triggerSelect.dataset.pendingValue;
       triggerSelect.dataset.touched = '';
-      triggerSelect.onchange = () => { triggerSelect.dataset.touched = '1'; };
+      triggerSelect.onchange = () => { triggerSelect.dataset.touched = '1'; etUpdateCueHelp(); };
     }
+    etUpdateCueHelp();
     etBuildVarGroups();
     etRefreshSaveButton();
     etTogglePreview();
@@ -28528,6 +28553,7 @@ We look forward to seeing your work!
         applicant_id: app.id,
         production_id: prodId,
         category: 'callback',
+        trigger: 'callback_set',
         email: app.email || '',
         name:  app.name  || '',
         session_id: session?.id || '',
