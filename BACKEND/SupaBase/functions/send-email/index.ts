@@ -167,6 +167,7 @@ serve(async (req) => {
       '{{team_access_code}}':  '294761',
       '{{portal_link}}':       `https://buildtheshow.com/audition-team?prod=${prodIdTest}`,
       '{{submission_link}}':    `https://buildtheshow.com/ryt/mary-poppins-jr-2026/SelfTape/JAMIE4827`,
+      '{{self_tape_instructions}}': 'Please film 16-32 bars of a song in the style of the show and one short scene or monologue. Start by saying your name, and make sure your link is viewable.',
     };
 
     for (const session of sessions) {
@@ -357,7 +358,7 @@ serve(async (req) => {
   // ── Fetch production + template + org ────────────────────────
   const [{ data: prod }, { data: templates }] = await Promise.all([
     sb.from('productions')
-      .select('id,title,subtitle,venue,director,organization_id,start_date,end_date')
+      .select('id,title,subtitle,venue,director,organization_id,start_date,end_date,wizard_data')
       .eq('id', productionId)
       .maybeSingle(),
     sb.from('email_templates')
@@ -427,6 +428,10 @@ See you soon,
   }
 
   const directProduction = isRecord(directContext.production) ? directContext.production as Record<string, unknown> : {};
+  const prodWizardData = isRecord((prod as Record<string, unknown> | null)?.wizard_data)
+    ? (prod as Record<string, unknown>).wizard_data as Record<string, unknown>
+    : {};
+  const directWizardData = isRecord(directProduction.wizard_data) ? directProduction.wizard_data as Record<string, unknown> : {};
   const productionRecord = {
     id: productionId,
     title: firstDefinedString(directContext.show_name, directProduction.title, prod?.title),
@@ -631,6 +636,7 @@ See you soon,
     '{{team_access_code}}':      firstDefinedString(directContext.team_access_code, teamMember?.passcode),
     '{{portal_link}}':           teamPortalLink,
     '{{submission_link}}':       firstDefinedString(directContext.submission_link, directContext.self_tape_submission_link),
+    '{{self_tape_instructions}}': firstDefinedString(directContext.self_tape_instructions, directWizardData.self_tape_instructions, prodWizardData.self_tape_instructions),
     '{{general_audition_date}}':  firstDefinedString(directContext.general_audition_date, generalAuditionSession ? fmtDate(String(generalAuditionSession.date || '')) : ''),
     '{{general_audition_time}}':  firstDefinedString(directContext.general_audition_time, slotForSession(generalAuditionSession)?.slot_time ? fmtTime(String(slotForSession(generalAuditionSession)?.slot_time || '')) : '', generalAuditionSession ? fmtTime(String(generalAuditionSession.start_time || '')) : ''),
     '{{general_audition_venue}}': firstDefinedString(directContext.general_audition_venue, generalAuditionSession ? String(generalAuditionSession.location || audVenue) : audVenue),

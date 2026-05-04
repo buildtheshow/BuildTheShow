@@ -14797,6 +14797,21 @@
               </div>
             </div>
 
+            <!-- Self Tape Brief -->
+            <div class="aud-section-card" style="align-items:flex-start;">
+              <div class="aud-section-body" style="width:100%;">
+                <div class="aud-section-name">Self Tape Brief</div>
+                <div style="font-size:0.78rem;color:#8a7ca5;line-height:1.5;margin:0.25rem 0 0.65rem;">
+                  Shown on Step 1 of the self tape wizard and available in emails as <code style="font-size:0.72rem;background:rgba(87,46,136,0.08);padding:0.1rem 0.3rem;border-radius:4px;">{{self_tape_instructions}}</code>.
+                </div>
+                <textarea class="form-textarea" id="aud-self-tape-instructions" rows="5"
+                  placeholder="Example: Please film 16-32 bars of a song in the style of the show, one short scene or monologue, and a short movement clip if you would like to be considered for dance-heavy roles. Start by saying your name. Make sure your link is viewable."
+                  oninput="autoSaveSelfTapeInstructions()"
+                  style="width:100%;resize:vertical;"></textarea>
+                <div id="aud-self-tape-status" style="font-size:0.74rem;color:#9a90b0;margin-top:0.35rem;min-height:1rem;"></div>
+              </div>
+            </div>
+
             <!-- Actor Details -->
             <div class="aud-section-card">
               <div class="aud-section-body">
@@ -20140,7 +20155,8 @@
       color: '#2563eb',
       bg:    '#dbeafe',
       vars: [
-        { token: '{{submission_link}}', label: 'Submission Link', sample: () => (orgSlug && prod?.slug) ? `https://buildtheshow.com/${orgSlug}/${prod.slug}/self-tape/submit?app=…` : 'https://buildtheshow.com/self-tape/submit?app=…' },
+        { token: '{{submission_link}}', label: 'Submission Link', sample: () => (orgSlug && prod?.slug) ? `https://buildtheshow.com/${orgSlug}/${prod.slug}/SelfTape/JAMIE4827` : 'https://buildtheshow.com/self-tape/submit?app=…' },
+        { token: '{{self_tape_instructions}}', label: 'What to Film', sample: () => prod?.wizard_data?.self_tape_instructions || 'Please film 16-32 bars of a song and one short scene or monologue.' },
         { token: '{{show_name}}',       label: 'Show Name',       sample: () => prod?.title || 'Our Show' },
         { token: '{{performer_name}}',  label: 'Performer Name',  sample: 'Jamie Lee' },
       ],
@@ -20913,6 +20929,9 @@ If you have any questions, don't hesitate to reach out.
 Thank you for registering to submit a self tape for {{show_name}}!
 
 Use the link below to upload your video. You can submit any time before the deadline.
+
+What to film:
+{{self_tape_instructions}}
 
 ─────────────────────────────
 YOUR SUBMISSION LINK
@@ -27095,6 +27114,8 @@ We look forward to seeing your work!
         const el = document.getElementById('aud-sec-' + key);
         if (el) el.checked = true;
       });
+      const selfTapeEl = document.getElementById('aud-self-tape-instructions');
+      if (selfTapeEl) selfTapeEl.value = prod?.wizard_data?.self_tape_instructions || '';
     } else {
       if (linkCard)   linkCard.style.display   = 'none';
       if (linkEmpty)  linkEmpty.style.display  = 'block';
@@ -27218,6 +27239,7 @@ We look forward to seeing your work!
   }
 
   let _audSecSaveTimer = null;
+  let _audSelfTapeInstructionsTimer = null;
 
   function autoSaveAudSections() {
     showSaveStatus('saving');
@@ -27246,6 +27268,35 @@ We look forward to seeing your work!
       const statusEl = document.getElementById('aud-q-status');
       if (statusEl) { statusEl.textContent = 'Save failed. Check the browser console for details.'; statusEl.style.color = '#b91c1c'; }
     }
+  }
+
+  function autoSaveSelfTapeInstructions() {
+    const statusEl = document.getElementById('aud-self-tape-status');
+    if (statusEl) { statusEl.textContent = 'Saving...'; statusEl.style.color = '#9a90b0'; }
+    showSaveStatus('saving');
+    clearTimeout(_audSelfTapeInstructionsTimer);
+    _audSelfTapeInstructionsTimer = setTimeout(saveSelfTapeInstructions, 700);
+  }
+
+  async function saveSelfTapeInstructions() {
+    const el = document.getElementById('aud-self-tape-instructions');
+    const statusEl = document.getElementById('aud-self-tape-status');
+    const value = el ? String(el.value || '').trim() : '';
+    if (!prod) prod = {};
+    const wizardData = { ...(prod.wizard_data || {}), self_tape_instructions: value };
+    const { error } = await sb.from('productions').update({ wizard_data: wizardData }).eq('id', prodId);
+    if (error) {
+      if (statusEl) { statusEl.textContent = 'Save failed.'; statusEl.style.color = '#b91c1c'; }
+      showSaveStatus('error');
+      console.error('[BTS] saveSelfTapeInstructions failed:', error.message);
+      return;
+    }
+    prod.wizard_data = wizardData;
+    if (statusEl) { statusEl.textContent = 'Saved'; statusEl.style.color = '#16a34a'; }
+    showSaveStatus('saved');
+    setTimeout(() => {
+      if (statusEl && statusEl.textContent === 'Saved') statusEl.textContent = '';
+    }, 1600);
   }
 
   async function toggleAuditions() {

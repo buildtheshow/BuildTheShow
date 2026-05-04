@@ -69,6 +69,16 @@
     .st-attend-icon { width: 42px; height: 42px; border-radius: 12px; display: flex; align-items: center; justify-content: center; background: rgba(87,46,136,0.1); font-size: 1.25rem; }
     .st-attend-label { font-size: 0.95rem; font-weight: 800; color: #1a1530; }
     .st-attend-desc { font-size: 0.8rem; color: #6a5a80; margin-top: 0.15rem; line-height: 1.4; }
+    .st-brief-grid { display: grid; grid-template-columns: 1fr; gap: 0.75rem; margin-top: 0.9rem; }
+    .st-brief-card { background: #faf9fd; border: 1.5px solid rgba(87,46,136,0.12); border-radius: 12px; padding: 0.9rem 1rem; }
+    .st-brief-card.accent { background: #eef6ff; border-color: rgba(37,99,235,0.18); }
+    .st-brief-title { font-size: 0.76rem; font-weight: 900; text-transform: uppercase; letter-spacing: 0.08em; color: #572e88; margin-bottom: 0.35rem; }
+    .st-brief-card.accent .st-brief-title { color: #2563eb; }
+    .st-brief-copy { font-size: 0.82rem; color: #4a3d6b; line-height: 1.55; }
+    .st-brief-copy ul { margin: 0.35rem 0 0; padding-left: 1.1rem; }
+    .st-brief-copy li { margin: 0.18rem 0; }
+    .st-brief-copy p { margin: 0 0 0.55rem; }
+    .st-brief-copy p:last-child { margin-bottom: 0; }
     .st-copy-checks { display: flex; flex-wrap: wrap; gap: 0.55rem; margin-bottom: 0.9rem; }
     .st-copy-check, .st-pref-check { display: flex; align-items: flex-start; gap: 0.55rem; font-size: 0.84rem; color: #4a3d6b; line-height: 1.4; cursor: pointer; }
     .st-copy-check input, .st-pref-check input { accent-color: #572e88; margin-top: 0.15rem; }
@@ -174,7 +184,7 @@
         <div class="st-body">
           <div class="st-panel active" id="st-panel-0">
             <div class="st-step-title">How are you joining?</div>
-            <div class="st-step-sub">This audition is set up for self tape submission.</div>
+            <div class="st-step-sub">Register now, then send your video later from the link in your confirmation email.</div>
             <div class="st-attend-options">
               <button type="button" class="st-attend-card" aria-pressed="true">
                 <div class="st-attend-icon">🎬</div>
@@ -183,6 +193,28 @@
                   <div class="st-attend-desc">Send in your tape later using the link in your confirmation email.</div>
                 </div>
               </button>
+            </div>
+            <div class="st-brief-grid">
+              <div class="st-brief-card">
+                <div class="st-brief-title">What is a self tape?</div>
+                <div class="st-brief-copy">A self tape is a video audition you record on your own and submit online. You will complete this registration first, then use your personal email link to upload the video when it is ready.</div>
+              </div>
+              <div class="st-brief-card accent">
+                <div class="st-brief-title">What to film</div>
+                <div class="st-brief-copy" id="st-self-tape-instructions">Loading instructions...</div>
+              </div>
+              <div class="st-brief-card">
+                <div class="st-brief-title">Recording tips</div>
+                <div class="st-brief-copy">
+                  <ul>
+                    <li>Film somewhere quiet and well lit.</li>
+                    <li>Make sure we can see and hear you clearly.</li>
+                    <li>Start by saying your name.</li>
+                    <li>Use landscape video if possible.</li>
+                    <li>Upload to YouTube, Vimeo, or Google Drive and make sure the link is viewable.</li>
+                  </ul>
+                </div>
+              </div>
             </div>
             <div class="st-error" id="st-error-0"></div>
           </div>
@@ -425,6 +457,12 @@
     return `${cleanName}${String(hash).padStart(5, '0')}`;
   }
 
+  function stSelfTapeInstructionsHtml() {
+    const custom = String(_prod?.wizard_data?.self_tape_instructions || '').trim();
+    if (custom) return esc(custom).replace(/\n/g, '<br>');
+    return 'Record the material requested by the production. If no specific material was listed, choose something that clearly shows your voice, acting, movement, or personality.';
+  }
+
   function stSetVal(id, value) {
     const el = document.getElementById(id);
     if (el && value !== undefined && value !== null) el.value = value;
@@ -661,6 +699,10 @@
     if (back) back.style.visibility = curIdx > 0 ? 'visible' : 'hidden';
     if (next) { next.disabled = false; next.textContent = step === steps[steps.length - 1] ? 'Confirm' : 'Next →'; }
     stClearError(step);
+    if (step === 0) {
+      const instructionsEl = document.getElementById('st-self-tape-instructions');
+      if (instructionsEl) instructionsEl.innerHTML = stSelfTapeInstructionsHtml();
+    }
     if (step === 1) stRenderStep1();
     if (step === 2) stRenderStep2();
     if (step === 3) stRenderStep3();
@@ -1123,6 +1165,8 @@
         ...(conflicts.length ? { 'Conflict Dates': conflicts.map(c => c.title ? `${stDateLabel(c.date)}: ${c.title}` : stDateLabel(c.date)).join(', ') } : {}),
         ...(_stState.notes ? { 'Additional Notes': _stState.notes } : {})
       };
+      const selfTapeInstructions = String(_prod?.wizard_data?.self_tape_instructions || '').trim();
+      if (selfTapeInstructions) customAnswersPayload['Self Tape Instructions'] = selfTapeInstructions;
       const payload = {
         production_id: prodId,
         name: performerName,
@@ -1223,6 +1267,7 @@
           performer_email: email,
           show_name: _prod?.title || '',
           submission_link: submissionLink,
+          self_tape_instructions: _prod?.wizard_data?.self_tape_instructions || '',
         }
       };
       await sb.functions.invoke('send-email', { body: payload });
