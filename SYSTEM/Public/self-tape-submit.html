@@ -281,9 +281,14 @@
     'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRrbWFpa3R4cHdxZmJnZW9qYm5mIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM3MzE4MTcsImV4cCI6MjA4OTMwNzgxN30.TkTZBNWUatk3Y6Vmfv1hIRR3DfVjgwauwa76Pf00J_8'
   );
 
-  const params = new URLSearchParams(window.location.search);
-  const prodId = params.get('prod');
-  const appId  = params.get('app');
+  const params     = new URLSearchParams(window.location.search);
+  const _pathParts  = window.location.pathname.split('/').filter(Boolean).map(decodeURIComponent);
+  // Pretty URL: /{org}/{show}/self-tape/submit  → pathParts[0]=org, pathParts[1]=show
+  // Legacy URL: /self-tape/submit?prod=UUID&app=UUID
+  const _orgKey    = _pathParts.length >= 4 ? _pathParts[0] : null;
+  const _showSlug  = _pathParts.length >= 4 ? _pathParts[1] : null;
+  let   prodId     = params.get('prod') || null;
+  const appId      = params.get('app');
 
   let _prod = null;
   let _app  = null;
@@ -449,6 +454,20 @@
   // ── Init ─────────────────────────────────────────────────────
 
   async function ssInit() {
+    // Resolve production ID from path slug if not in query string
+    if (!prodId && _orgKey && _showSlug) {
+      try {
+        const { data: orgMatch } = await sb.from('organisations').select('id')
+          .or(`slug.eq.${_orgKey},abbreviation.eq.${_orgKey},abbreviation.eq.${_orgKey.toUpperCase()},abbreviation.eq.${_orgKey.toLowerCase()}`)
+          .maybeSingle();
+        const orgId = orgMatch?.id || null;
+        let q = sb.from('productions').select('id').ilike('slug', _showSlug);
+        if (orgId) q = q.eq('organization_id', orgId);
+        const { data: prodMatch } = await q.maybeSingle();
+        prodId = prodMatch?.id || null;
+      } catch (_) {}
+    }
+
     if (!prodId || !appId) {
       document.getElementById('page-content').innerHTML = `
         <div class="state-error">
