@@ -10465,6 +10465,7 @@
       display: grid;
       grid-template-columns: repeat(4, 1fr);
       grid-template-rows: repeat(2, auto);
+      grid-auto-flow: row;
       grid-auto-rows: 0;
       overflow: hidden;
       gap: 4% 1.5%;
@@ -33067,7 +33068,9 @@ If you have any questions, don't hesitate to reach out.
     });
   }
 
-  const CB_NOTE_PAGE_SIZE = 8; // 4 columns × 2 rows
+  const CB_NOTE_COLUMNS = 4;
+  const CB_NOTE_ROWS = 2;
+  const CB_NOTE_PAGE_SIZE = CB_NOTE_COLUMNS * CB_NOTE_ROWS;
   const CB_STATE_ORDER = { chosen: 0, liked: 1, applied: 2 };
   let cbv2CallbacksFocusId = null;
   const CBV2_CALLBACKS_FOOTER_HEIGHT = 124;
@@ -33106,7 +33109,14 @@ If you have any questions, don't hesitate to reach out.
   function cbv2NoteState(charId) {
     const char = characters.find(c => c.id === charId);
     if (!char) return null;
-    let assigned = cbv2Assignments.filter(a => a.character_id === charId);
+    const activeBoardMode = getActiveCastingBoardMode();
+    const isDecisionBoard = activeBoardMode === 'callbacks' || activeBoardMode === 'final';
+    let assigned = cbv2Assignments.filter(a => {
+      if (a.character_id !== charId) return false;
+      if (!allApplicants.some(app => app.id === a.applicant_id)) return false;
+      if (isDecisionBoard && a.state === 'applied') return false;
+      return a.state === 'chosen' || a.state === 'liked' || a.state === 'applied';
+    });
     assigned.sort((a, b) => {
       const stateDiff = (CB_STATE_ORDER[a.state] ?? 1) - (CB_STATE_ORDER[b.state] ?? 1);
       if (stateDiff) return stateDiff;
@@ -33126,14 +33136,8 @@ If you have any questions, don't hesitate to reach out.
     if (!state) return '';
     const activeBoardMode = getActiveCastingBoardMode();
     const isCallbacks = activeBoardMode === 'callbacks';
-    const isDecisionBoard = isCallbacks || activeBoardMode === 'final';
     const char = characters.find(c => c.id === charId);
     const cards = state.pageItems
-      .filter(a => {
-        // In callbacks mode, never show grey auto-applied ghost cards
-        if (isDecisionBoard && a.state === 'applied') return false;
-        return true;
-      })
       .map(a => {
         const app = allApplicants.find(x => x.id === a.applicant_id);
         if (!app) return '';
