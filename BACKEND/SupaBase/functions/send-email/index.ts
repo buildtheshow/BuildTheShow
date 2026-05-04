@@ -166,6 +166,7 @@ serve(async (req) => {
       '{{team_member_email}}': testEmail,
       '{{team_access_code}}':  '294761',
       '{{portal_link}}':       `https://buildtheshow.com/audition-team?prod=${prodIdTest}`,
+      '{{submission_link}}':    `https://buildtheshow.com/ryt/mary-poppins-jr-2026/SelfTape/JAMIE4827`,
     };
 
     for (const session of sessions) {
@@ -629,6 +630,7 @@ See you soon,
     '{{team_member_email}}':     firstDefinedString(directContext.team_member_email, teamMember?.email, performerEmail),
     '{{team_access_code}}':      firstDefinedString(directContext.team_access_code, teamMember?.passcode),
     '{{portal_link}}':           teamPortalLink,
+    '{{submission_link}}':       firstDefinedString(directContext.submission_link, directContext.self_tape_submission_link),
     '{{general_audition_date}}':  firstDefinedString(directContext.general_audition_date, generalAuditionSession ? fmtDate(String(generalAuditionSession.date || '')) : ''),
     '{{general_audition_time}}':  firstDefinedString(directContext.general_audition_time, slotForSession(generalAuditionSession)?.slot_time ? fmtTime(String(slotForSession(generalAuditionSession)?.slot_time || '')) : '', generalAuditionSession ? fmtTime(String(generalAuditionSession.start_time || '')) : ''),
     '{{general_audition_venue}}': firstDefinedString(directContext.general_audition_venue, generalAuditionSession ? String(generalAuditionSession.location || audVenue) : audVenue),
@@ -677,6 +679,15 @@ See you soon,
     if (!(vk in tokenValues)) tokenValues[vk] = String(session.location || audVenue);
     if (!(nk in tokenValues)) tokenValues[nk] = String(session.name || '');
     if (!(pk in tokenValues)) tokenValues[pk] = String(session.prepare_text || '');
+  }
+
+  for (const [key, rawValue] of Object.entries(directContext)) {
+    const token = `{{${key}}}`;
+    if (token in tokenValues) continue;
+    if (rawValue === null || rawValue === undefined) continue;
+    if (['string', 'number', 'boolean'].includes(typeof rawValue)) {
+      tokenValues[token] = String(rawValue);
+    }
   }
 
   const productionFieldValues: Record<string, unknown> = {

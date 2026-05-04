@@ -283,12 +283,15 @@
 
   const params     = new URLSearchParams(window.location.search);
   const _pathParts  = window.location.pathname.split('/').filter(Boolean).map(decodeURIComponent);
-  // Pretty URL: /{org}/{show}/self-tape/submit  → pathParts[0]=org, pathParts[1]=show
+  // Pretty URL: /{org}/{show}/SelfTape/{code} → pathParts[0]=org, pathParts[1]=show
+  // Older pretty URL: /{org}/{show}/self-tape/submit?app=UUID
   // Legacy URL: /self-tape/submit?prod=UUID&app=UUID
-  const _orgKey    = _pathParts.length >= 4 ? _pathParts[0] : null;
-  const _showSlug  = _pathParts.length >= 4 ? _pathParts[1] : null;
+  const _prettyMarker = String(_pathParts[2] || '').toLowerCase();
+  const _orgKey    = _pathParts.length >= 4 && (_prettyMarker === 'selftape' || _prettyMarker === 'self-tape') ? _pathParts[0] : null;
+  const _showSlug  = _pathParts.length >= 4 && (_prettyMarker === 'selftape' || _prettyMarker === 'self-tape') ? _pathParts[1] : null;
+  const _submissionCode = _prettyMarker === 'selftape' ? String(_pathParts[3] || '').toUpperCase() : '';
   let   prodId     = params.get('prod') || null;
-  const appId      = params.get('app');
+  let   appId      = params.get('app');
 
   let _prod = null;
   let _app  = null;
@@ -298,6 +301,19 @@
     const d = document.createElement('div');
     d.textContent = str ?? '';
     return d.innerHTML;
+  }
+
+  function ssSubmissionCode(name, id) {
+    const cleanName = String(name || 'Performer')
+      .trim()
+      .split(/\s+/)[0]
+      .replace(/[^a-z0-9]/gi, '')
+      .toUpperCase()
+      .slice(0, 12) || 'PERFORMER';
+    const raw = String(id || '');
+    let hash = 0;
+    for (let i = 0; i < raw.length; i += 1) hash = ((hash * 31) + raw.charCodeAt(i)) % 100000;
+    return `${cleanName}${String(hash).padStart(5, '0')}`;
   }
 
   // ── Platform detection ───────────────────────────────────────
@@ -465,6 +481,18 @@
         if (orgId) q = q.eq('organization_id', orgId);
         const { data: prodMatch } = await q.maybeSingle();
         prodId = prodMatch?.id || null;
+      } catch (_) {}
+    }
+
+    if (prodId && !appId && _submissionCode) {
+      try {
+        const { data: applicants } = await sb.from('audition_applications')
+          .select('id,name,email')
+          .eq('production_id', prodId)
+          .eq('audition_method', 'self_tape')
+          .order('created_at', { ascending: false });
+        const match = (applicants || []).find(app => ssSubmissionCode(app.name, app.id) === _submissionCode);
+        appId = match?.id || null;
       } catch (_) {}
     }
 
