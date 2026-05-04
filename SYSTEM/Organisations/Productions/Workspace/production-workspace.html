@@ -17160,10 +17160,10 @@
 <script src="/ASSETS/scripts/casting-card.js"></script>
 <script src="/ASSETS/scripts/production-team-card.js?v=team-card-phone-format-20260424"></script>
 <script src="/ASSETS/scripts/production-team-access.js?v=team-portal-prod-id-20260429"></script>
-<script src="/SHARED/Components/casting-card-back.js?v=selftapes-tab-20260504"></script>
+<script src="/SHARED/Components/casting-card-back.js?v=selftapes-tab-20260504b"></script>
 <script src="/SHARED/Components/audition-status-strip.js"></script>
 <script src="/SHARED/Components/ai-character-importer.js"></script>
-<script src="/SHARED/Components/audition-page-templates.js?v=selftapes-tab-20260504"></script>
+<script src="/SHARED/Components/audition-page-templates.js?v=selftapes-tab-20260504b"></script>
 <!-- VenuePicker uses OpenStreetMap/Nominatim - no API key needed -->
 <script>
   /* SQL needed:
@@ -18541,6 +18541,7 @@
   let applicantsLoadedAt = 0;
   let allAuditionBookings = [];
   let _selfTapeSubmissionsMap = null; // Map<appId, submission[]> — populated by renderSelfTapeTab()
+  let stSelectedAppId = null;
   let _hasIsPublicColumn = false; // set true once we confirm the column exists
   let allSlots      = [];
   let auditionsRealtimeChannel = null;
@@ -37920,7 +37921,7 @@ We look forward to seeing your work!
           attendance_mode:    null,
         }, { size: 'compact', hasPadding: true, hasIcons: true });
         const label = appSubs.length === 1 ? '1 tape' : `${appSubs.length} tapes`;
-        return `<button type="button" class="template-checkin-tile" title="${esc(app.name || '')}" aria-current="false" style="flex:0 0 88px;width:88px;display:grid;grid-template-rows:0.78rem auto 0.86rem;justify-items:center;gap:0.22rem;">
+        return `<button type="button" class="template-checkin-tile" data-app-id="${esc(String(app.id))}" onclick="openSelfTapePerformer('${esc(String(app.id))}')" title="${esc(app.name || '')}" aria-current="false" style="flex:0 0 88px;width:88px;display:grid;grid-template-rows:0.78rem auto 0.86rem;justify-items:center;gap:0.22rem;">
           <div></div>
           <div class="template-checkin-card">${cardHtml}</div>
           <div class="template-checkin-status">${esc(label)}</div>
@@ -37964,70 +37965,77 @@ We look forward to seeing your work!
           </div>
         </div>`;
     } else {
-      html += `<div class="st-workspace-list">`;
-      selfTapeApplicants.sort(compareApplicantsAlphabetically).forEach(app => {
-        const appSubs = submissionsByApp[app.id] || [];
-        const received = appSubs.length > 0;
-        const flipId = `st-flip-${String(app.id || '').replace(/[^a-zA-Z0-9_-]/g, '')}`;
-
-        const cardHtml = window.BTSAuditionTemplates.renderCastingCardFlipShellTemplate({
-          shellClass: 'inroom-flip st-selftape-flip',
-          id: flipId,
-          flipped: false,
-          frontHtml: buildStandardCastingCardHtml(app, { draggable: false, state: null }),
-          backHtml: buildStandardCastingCardBackHtml(app),
-          frontClick: `stToggleSelfTapeFlip('${flipId}')`,
-          backClick: `(function(event){if(event.target&&event.target.closest('button,a,input,select,textarea,label,[role=&quot;button&quot;],.irb-tab-bar,.irb-tab')){event.stopPropagation();return;}event.stopPropagation();stToggleSelfTapeFlip('${flipId}');})(event)`
-        });
-        const statusClass = received ? 'st-status-received' : 'st-status-pending';
-        const statusLabel = received ? `Received (${appSubs.length})` : 'Not submitted';
-        const statusIcon  = received ? '✅' : '⏳';
-
-        const subsHtml = received ? appSubs.map(s => {
-          const date = s.submitted_at
-            ? new Date(s.submitted_at).toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' })
-            : '';
-          const platform = s.platform ? String(s.platform).replace(/_/g, ' ') : '';
-          const embed = stBuildSubmissionEmbed(s.video_url);
-          const linkHtml = `<a href="${esc(s.video_url)}" target="_blank" rel="noopener" class="st-sub-link">
-            <span>${esc(s.label || 'Self Tape')}${platform ? ` · ${esc(platform)}` : ''}</span>
-            ${date ? `<small>${esc(date)} ↗</small>` : '<small>Open ↗</small>'}
-          </a>`;
-          return embed
-            ? `<div class="st-sub-card">
-                <div class="st-sub-embed">
-                  <iframe src="${esc(embed)}" title="${esc(s.label || 'Self Tape submission')}" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen" allowfullscreen loading="lazy" referrerpolicy="strict-origin-when-cross-origin"></iframe>
-                </div>
-                <div class="st-sub-card-body">${linkHtml}</div>
-              </div>`
-            : linkHtml;
-        }).join('') : '';
-
-        html += `
-          <div class="st-performer-row">
-            <div class="st-performer-card-wrap" title="Click card to flip">
-              ${cardHtml}
-            </div>
-            <div class="st-submission-panel">
-              <div class="st-submission-head">
-                <div>
-                  <div class="st-performer-name">${esc(app.name || '')}</div>
-                  <div class="st-submission-meta">${esc(app.email || '')}</div>
-                </div>
-                <div class="st-status-badge ${statusClass}">${statusIcon} ${statusLabel}</div>
-              </div>
-              ${subsHtml ? `<div class="st-subs-list">${subsHtml}</div>` : `
-                <div class="st-sub-empty">
-                  No tape has been submitted yet. Their confirmation email includes their personal submission link.
-                </div>`}
-            </div>
-          </div>`;
-      });
-      html += `</div>`;
+      html += `<div class="inroom-shell" id="st-performer-panel"></div>`;
     }
 
     container.innerHTML = html;
     window._stSelfTapeLink = selfTapeLink;
+    stSelectedAppId = null;
+    openSelfTapePerformer(submittedForRail[0]?.id || null);
+  }
+
+  function openSelfTapePerformer(appId) {
+    stSelectedAppId = appId ? String(appId) : null;
+    const panel = document.getElementById('st-performer-panel');
+    if (!panel) return;
+
+    document.querySelectorAll('#selftape-content .template-checkin-tile').forEach(btn => {
+      btn.classList.toggle('is-next', btn.dataset.appId === stSelectedAppId);
+    });
+
+    if (!appId) {
+      panel.innerHTML = window.BTSAuditionTemplates.renderTemplate(
+        { area: 'auditions', component: 'empty-state' },
+        { icon: '🎬', title: 'No performer selected', message: 'Click a thumbnail above to open a performer.' }
+      );
+      return;
+    }
+
+    const app = allApplicants.find(a => String(a.id) === stSelectedAppId);
+    if (!app) return;
+
+    const roleTypeOptions = [...new Set(characters.map(c => c.role_type).filter(Boolean))].sort();
+    const scorePanelHtml = `<div class="inroom-score-card"><div class="inroom-roles-title" style="text-align:center;">Impressions</div>${renderInRoomScoreRows(app)}</div>`;
+    const safeId = esc(String(app.id));
+    const notesTextHtml = `<textarea id="inroom-notes" class="inroom-notes-text" placeholder="Write down what you noticed..." oninput="scheduleInRoomNotesSave('${safeId}')">${esc(applicantInRoomNotes(app, null))}</textarea>
+      <div class="inroom-save-hint">Notes save automatically.</div>`;
+
+    panel.innerHTML = window.BTSAuditionTemplates.renderTemplate(
+      { area: 'auditions', page: 'in-room', sessionType: 'general' },
+      {
+        app,
+        esc,
+        usesGeneralInRoomLayout: true,
+        isGeneralAuditionInRoom: true,
+        containerId: 'aud-session-inroom-content',
+        trayCards: '',
+        currentSession: null,
+        teamAccessMode,
+        roleTypeOptions,
+        openFn: 'openSelfTapePerformer',
+        inRoomFlipOpen: false,
+        cardFrontHtml: buildStandardCastingCardHtml(app),
+        cardBackHtml: buildInRoomBackHtml(app),
+        scorePanelHtml,
+        notesTextHtml,
+        nextButtonHtml: '',
+        callbackCharactersHtml: '',
+        roleChipsHtml: renderInRoomRoleChips(app)
+      }
+    );
+
+    requestAnimationFrame(() => requestAnimationFrame(() => syncInRoomRightPanelHeight(panel)));
+    requestAnimationFrame(() => requestAnimationFrame(() => fitInRoomRoleChipTitles(panel)));
+
+    const rolesGrid = panel.querySelector('.inroom-roles-grid');
+    if (rolesGrid && !rolesGrid._chipResizeObserver) {
+      rolesGrid._chipResizeObserver = new ResizeObserver(() => {
+        _chipSizeCache.clear();
+        panel.querySelectorAll('.inroom-role-chip-title').forEach(l => { l.style.fontSize = '0'; });
+        requestAnimationFrame(() => requestAnimationFrame(() => fitInRoomRoleChipTitles(rolesGrid)));
+      });
+      rolesGrid._chipResizeObserver.observe(rolesGrid);
+    }
   }
 
   function stCopyRegistrationLink() {
