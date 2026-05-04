@@ -6163,7 +6163,7 @@
       transform: none !important;
       cursor: grab;
       touch-action: none;
-      -webkit-user-drag: none;
+      -webkit-user-drag: element;
       -webkit-tap-highlight-color: transparent;
       box-shadow:
         0 3px 5px rgba(15, 23, 42, 0.35),
@@ -10566,7 +10566,7 @@
       align-self: start;
       transform: none !important;
       touch-action: none;
-      -webkit-user-drag: none;
+      -webkit-user-drag: element;
       -webkit-tap-highlight-color: transparent;
       box-shadow:
         0 1px 2px rgba(15, 23, 42, 0.08),
@@ -32712,7 +32712,7 @@ If you have any questions, don't hesitate to reach out.
       hasPadding: true,
       hasIcons: !isCallbackPlacedCard,
       variant: isCallbackPlacedCard ? 'callbackSimple' : null,
-      draggable: false,
+      draggable: true,
       state: charId ? (state || 'liked') : null,
       id: `cbv2-card-${app.id}-${charId || 'pool'}`,
       title: `${app.name || ''}${age ? ` (${age})` : ''}`,
@@ -33676,6 +33676,7 @@ If you have any questions, don't hesitate to reach out.
 
   function cbv2PointerDragStart(event, appId, charId, state) {
     if (event.button !== undefined && event.button !== 0) return;
+    if (event.pointerType === 'mouse') return;
     const target = event.currentTarget;
     if (!target || event.target?.closest?.('button,a,input,textarea,select')) return;
     cbv2PointerDrag = {
@@ -33927,21 +33928,24 @@ If you have any questions, don't hesitate to reach out.
       removedAssignment: fromChar ? cbv2Assignments.find(a => a.character_id === fromChar && a.applicant_id === appId) : null,
     };
 
-    // Remove from previous role if moving
+    // Remove from previous role if moving. If they originally wanted the old role,
+    // it reverts to black-and-white instead of disappearing.
     if (fromChar && !fromEnsemble && fromChar !== targetCharId) {
-      cbv2Assignments = cbv2Assignments.filter(a => !(a.character_id === fromChar && a.applicant_id === appId));
-      try {
-        const { error } = await sb.from('casting_assignments')
-          .delete()
-          .eq('production_id', prodId)
-          .eq('character_id', fromChar)
-          .eq('applicant_id', appId);
-        if (error) throw error;
-      } catch (error) {
-        console.error('[BTS] casting assignment move cleanup failed', error);
-      }
+      await cbv2RevertAssignmentToRequestedOrRemove(appId, fromChar);
     } else if (!fromEnsemble && fromChar === targetCharId) {
-      renderActiveCastingBoard(); return; // dropped back on same note
+      if (prevState === 'applied') {
+        try {
+          await cbv2PersistAssignment(appId, targetCharId, 'liked');
+          const charName = characters.find(c => c.id === targetCharId)?.name || 'role';
+          cbv2ShowToast(`Added to ${charName}`);
+        } catch (error) {
+          console.error('[BTS] casting assignment promote failed', error);
+          cbv2ShowToast('Could not save this card to the sticky note.', true);
+        }
+      }
+      renderActiveCastingBoard();
+      showSaveStatus('saved');
+      return;
     }
 
     try {
