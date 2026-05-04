@@ -7643,6 +7643,10 @@
       width: 100%;
       height: 100%;
     }
+    .final-casting-drop-ready {
+      outline: 3px solid rgba(17, 24, 39, 0.28) !important;
+      outline-offset: 0.22rem !important;
+    }
     /* ── Dance Call In The Room ── */
     #aud-session-inroom-content {
       width: 100%;
@@ -15222,7 +15226,10 @@
                   <input class="cbv2-filter-input" id="final-casting-pool-search" type="text" placeholder="Search performers…" oninput="renderFinalCastingPool()" />
                   <div class="cbv2-panel-rule"></div>
                 </div>
-                <div class="cbv2-perf-grid" id="final-casting-pool-grid">
+                <div class="cbv2-perf-grid" id="final-casting-pool-grid"
+                  ondragover="finalCastingDragOver(event)"
+                  ondragleave="finalCastingDragLeave(event)"
+                  ondrop="finalCastingDropOnPool(event)">
                   <div style="padding:1.5rem 0.5rem;text-align:center;color:#9a90b0;font-size:0.78rem;line-height:1.4;">Final Casting will be built here.</div>
                 </div>
               </div>
@@ -15252,7 +15259,10 @@
               </div>
             </div>
 
-            <div class="cbv2-floor">
+            <div class="cbv2-floor"
+              ondragover="finalCastingDragOver(event)"
+              ondragleave="finalCastingDragLeave(event)"
+              ondrop="finalCastingDropOnEnsemble(event)">
               <div class="cbv2-ensemble-note-header">
                 <span class="cbv2-ensemble-note-label">Final Ensemble</span>
               </div>
@@ -19775,6 +19785,7 @@
   const ET_PURPOSES = [
     { value: 'all',                  label: 'All',                  color: '#7FAF8B' },
     { value: 'booking_confirmation', label: 'Booking Confirmation', color: '#7FAF8B' },
+    { value: 'self_tape_booked',     label: 'Self Tape Registered', color: '#2563eb' },
     { value: 'audition_reminder',    label: 'Audition Reminder',    color: '#D68CB2' },
     { value: 'callback',             label: 'Callback Invite',      color: '#E3A46F' },
     { value: 'cast_announcement',    label: 'Cast Announcement',    color: '#659671' },
@@ -20192,13 +20203,14 @@
 
   const ET_DEFAULT_CUES = {
     booking_confirmation: 'booking_confirmed',
-    audition_reminder: 'manual',
-    callback: 'callback_set',
-    cast_announcement: 'cast_set',
-    not_cast: 'not_cast_set',
-    rehearsal: 'manual',
-    team_invite: 'team_invite',
-    general: 'manual',
+    self_tape_booked:     'manual',
+    audition_reminder:    'manual',
+    callback:             'callback_set',
+    cast_announcement:    'cast_set',
+    not_cast:             'not_cast_set',
+    rehearsal:            'manual',
+    team_invite:          'team_invite',
+    general:              'manual',
   };
 
   function etBuildCueOptions(currentValue = 'manual') {
@@ -20716,6 +20728,7 @@ If you have any questions, don't hesitate to reach out.
     const ET_DOT_COLORS = Object.fromEntries(ET_PURPOSES.filter(p => p.value !== 'all').map(p => [p.value, p.color]));
     const ET_PURPOSE_SUMMARIES = {
       booking_confirmation: 'Sent right after someone books. Confirms their audition time(s) and gives them everything they need to show up.',
+      self_tape_booked:     'Sent automatically when a performer registers via the self tape link. Includes their personal submission link.',
       audition_reminder:    'A reminder before audition day. Repeats their audition time(s) and key details so nothing gets missed.',
       callback:             'Sent to performers you want to see again. Invites them to a callback with next steps.',
       cast_announcement:    'Sent to performers who are cast. Shares their role and what happens next.',
@@ -24437,6 +24450,9 @@ If you have any questions, don't hesitate to reach out.
   let finalCastingPoolSelectedIds = new Set();
   let finalCastingPoolApplicants = [];
   let finalCastingSelectedAssignments = [];
+  let finalCastingEnsembleIds = new Set();
+  let finalCastingDrag = null;
+  let finalCastingEnsembleLoaded = false;
   const finalCastingPickedKeys = new Set();
 
   async function loadFinalCastingPool() {
@@ -24465,6 +24481,7 @@ If you have any questions, don't hesitate to reach out.
 
   async function loadFinalCastingBoardVisuals() {
     await loadFinalCastingPool();
+    finalCastingEnsembleLoaded = false;
     await Promise.all([
       renderFinalCastingCharacterNotes(),
       renderFinalCastingEnsemble(),
@@ -24487,6 +24504,10 @@ If you have any questions, don't hesitate to reach out.
       const cardsId = `fc-note-cards-${char.id}`;
       const footerId = `fc-note-footer-${char.id}`;
       const cardsHtml = finalCastingCardsForCharacter(char);
+      const dragAttrs = `
+        ondragover="finalCastingDragOver(event)"
+        ondragleave="finalCastingDragLeave(event)"
+        ondrop="finalCastingDropOnNote(event,'${esc(char.id)}')"`;
       return window.BTSAuditionTemplates.renderTemplateById('auditions.casting-board.sticky-note', {
         esc,
         noteId,
@@ -24500,7 +24521,7 @@ If you have any questions, don't hesitate to reach out.
         interactive: false,
         headerOnclick: '',
         noteOnclick: '',
-        dragAttrs: '',
+        dragAttrs,
       });
     }).join('');
     requestAnimationFrame(fitCbv2NoteHeaders);
@@ -24521,8 +24542,10 @@ If you have any questions, don't hesitate to reach out.
       if (!app) return '';
       const wantsRole = cbv2AppWantsRole(app, char);
       const cardHtml = buildStandardCastingCardHtml(app, {
-        draggable: false,
+        draggable: true,
         state: wantsRole ? 'chosen' : 'liked',
+        onDragStart: `finalCastingDragStart(event,'${esc(app.id)}','${esc(char.id)}','role')`,
+        onDragEnd: 'finalCastingDragEnd(event)',
       });
       const pickKey = `${char.id}::${app.id}`;
       const selectedClass = finalCastingPickedKeys.has(pickKey) ? ' is-selected' : '';
@@ -24530,6 +24553,88 @@ If you have any questions, don't hesitate to reach out.
       return `<div class="final-casting-pick${selectedClass}" onclick="toggleFinalCastingPick(event,'${esc(char.id)}','${esc(app.id)}')">${visualCard}</div>`;
     }).filter(Boolean).join('');
     return html || '<div class="cbv2-note-empty">Final picks here</div>';
+  }
+
+  function finalCastingDragStart(event, appId, fromCharId = '', source = 'pool') {
+    finalCastingDrag = {
+      appId,
+      fromCharId: fromCharId || '',
+      source,
+    };
+    event?.currentTarget?.classList.add('dragging');
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('text/plain', appId);
+  }
+
+  function finalCastingDragEnd(event) {
+    event?.currentTarget?.classList.remove('dragging');
+    document.querySelectorAll('.final-casting-drop-ready').forEach(el => el.classList.remove('final-casting-drop-ready'));
+  }
+
+  function finalCastingDragOver(event) {
+    if (!finalCastingDrag) return;
+    event.preventDefault();
+    event.currentTarget?.classList.add('final-casting-drop-ready');
+  }
+
+  function finalCastingDragLeave(event) {
+    if (!event.currentTarget?.contains?.(event.relatedTarget)) {
+      event.currentTarget?.classList.remove('final-casting-drop-ready');
+    }
+  }
+
+  function removeFinalCastingPlacement(appId, charId) {
+    finalCastingSelectedAssignments = finalCastingSelectedAssignments.filter(a => !(a.applicant_id === appId && a.character_id === charId));
+    finalCastingPickedKeys.delete(`${charId}::${appId}`);
+  }
+
+  function addFinalCastingPlacement(appId, charId) {
+    finalCastingEnsembleIds.delete(appId);
+    const exists = finalCastingSelectedAssignments.some(a => a.applicant_id === appId && a.character_id === charId);
+    if (!exists) finalCastingSelectedAssignments.push({ applicant_id: appId, character_id: charId, state: 'liked' });
+    finalCastingPoolSelectedIds.add(appId);
+  }
+
+  function finalCastingRerenderBoard() {
+    renderFinalCastingPool();
+    renderFinalCastingCharacterNotes();
+    renderFinalCastingEnsemble();
+  }
+
+  function finalCastingDropOnNote(event, charId) {
+    event.preventDefault();
+    event.currentTarget?.classList.remove('final-casting-drop-ready');
+    if (!finalCastingDrag?.appId) return;
+    const { appId, fromCharId, source } = finalCastingDrag;
+    finalCastingDrag = null;
+    if (source === 'role' && fromCharId && fromCharId !== charId) removeFinalCastingPlacement(appId, fromCharId);
+    if (source === 'ensemble') finalCastingEnsembleIds.delete(appId);
+    addFinalCastingPlacement(appId, charId);
+    finalCastingRerenderBoard();
+  }
+
+  function finalCastingDropOnEnsemble(event) {
+    event.preventDefault();
+    event.currentTarget?.classList.remove('final-casting-drop-ready');
+    if (!finalCastingDrag?.appId) return;
+    const { appId, fromCharId, source } = finalCastingDrag;
+    finalCastingDrag = null;
+    if (source === 'role' && fromCharId) removeFinalCastingPlacement(appId, fromCharId);
+    finalCastingEnsembleIds.add(appId);
+    finalCastingPoolSelectedIds.add(appId);
+    finalCastingRerenderBoard();
+  }
+
+  function finalCastingDropOnPool(event) {
+    event.preventDefault();
+    event.currentTarget?.classList.remove('final-casting-drop-ready');
+    if (!finalCastingDrag?.appId) return;
+    const { appId, fromCharId, source } = finalCastingDrag;
+    finalCastingDrag = null;
+    if (source === 'role' && fromCharId) removeFinalCastingPlacement(appId, fromCharId);
+    if (source === 'ensemble') finalCastingEnsembleIds.delete(appId);
+    finalCastingPoolSelectedIds = new Set(finalCastingSelectedAssignments.map(a => a.applicant_id));
+    finalCastingRerenderBoard();
   }
 
   function toggleFinalCastingPick(event, charId, appId) {
@@ -24544,22 +24649,25 @@ If you have any questions, don't hesitate to reach out.
   async function renderFinalCastingEnsemble() {
     const grid = document.getElementById('final-casting-ensemble-grid');
     if (!grid) return;
-    grid.innerHTML = '<div style="padding:1rem 1.25rem;color:#9a90b0;font-size:0.82rem;">Loading ensemble…</div>';
-    if (!allApplicants.length) await loadApplicants({ skipRender: true, skipCastingSync: true }).catch(() => {});
+    if (!finalCastingEnsembleLoaded) {
+      grid.innerHTML = '<div style="padding:1rem 1.25rem;color:#9a90b0;font-size:0.82rem;">Loading ensemble…</div>';
+      if (!allApplicants.length) await loadApplicants({ skipRender: true, skipCastingSync: true }).catch(() => {});
 
-    const { data, error } = await sb.from('casting_assignments')
-      .select('applicant_id')
-      .eq('production_id', prodId)
-      .eq('state', 'ensemble_manual');
+      const { data, error } = await sb.from('casting_assignments')
+        .select('applicant_id')
+        .eq('production_id', prodId)
+        .eq('state', 'ensemble_manual');
 
-    if (error) {
-      grid.innerHTML = '<div style="padding:1rem 1.25rem;color:#c0392b;font-size:0.82rem;">Could not load Final Ensemble.</div>';
-      return;
+      if (error) {
+        grid.innerHTML = '<div style="padding:1rem 1.25rem;color:#c0392b;font-size:0.82rem;">Could not load Final Ensemble.</div>';
+        return;
+      }
+
+      finalCastingEnsembleIds = new Set((data || []).map(row => row.applicant_id).filter(Boolean));
+      finalCastingEnsembleLoaded = true;
     }
-
-    const ensembleIds = new Set((data || []).map(row => row.applicant_id).filter(Boolean));
     const apps = (allApplicants || [])
-      .filter(app => ensembleIds.has(app.id))
+      .filter(app => finalCastingEnsembleIds.has(app.id))
       .sort(compareApplicantsAlphabetically);
 
     if (!apps.length) {
@@ -24568,7 +24676,12 @@ If you have any questions, don't hesitate to reach out.
     }
 
     grid.innerHTML = apps.map(app => {
-      const cardHtml = buildStandardCastingCardHtml(app, { draggable: false, state: 'liked' });
+      const cardHtml = buildStandardCastingCardHtml(app, {
+        draggable: true,
+        state: 'liked',
+        onDragStart: `finalCastingDragStart(event,'${esc(app.id)}','','ensemble')`,
+        onDragEnd: 'finalCastingDragEnd(event)',
+      });
       return `<div class="final-casting-ensemble-card">${cardHtml}</div>`;
     }).join('');
   }
@@ -24585,11 +24698,21 @@ If you have any questions, don't hesitate to reach out.
       return;
     }
     const selectedHtml = selected.map(app => {
-      const cardHtml = buildStandardCastingCardHtml(app, { draggable: false, state: 'liked' });
+      const cardHtml = buildStandardCastingCardHtml(app, {
+        draggable: true,
+        state: 'liked',
+        onDragStart: `finalCastingDragStart(event,'${esc(app.id)}','','pool')`,
+        onDragEnd: 'finalCastingDragEnd(event)',
+      });
       return `<div class="cbv2-perf-card-wrap">${cardHtml}</div>`;
     }).join('');
     const unplacedHtml = unplaced.map(app => {
-      const cardHtml = buildStandardCastingCardHtml(app, { draggable: false, state: 'applied' });
+      const cardHtml = buildStandardCastingCardHtml(app, {
+        draggable: true,
+        state: 'applied',
+        onDragStart: `finalCastingDragStart(event,'${esc(app.id)}','','pool')`,
+        onDragEnd: 'finalCastingDragEnd(event)',
+      });
       return `<div class="cbv2-perf-card-wrap">${cardHtml}</div>`;
     }).join('');
     const unplacedHeader = unplaced.length
