@@ -80,10 +80,18 @@
     .st-char-tile.selected { border-color: #572e88; background: rgba(87,46,136,0.07); box-shadow: 0 0 0 3px rgba(87,46,136,0.08); }
     .st-char-tile-main { display: block; font-size: 0.82rem; font-weight: 800; }
     .st-char-tile-meta { display: block; font-size: 0.68rem; color: #8a7ca5; margin-top: 0.15rem; }
-    .st-headshot-upload { border: 1.5px dashed rgba(87,46,136,0.25); border-radius: 12px; padding: 1rem; display: flex; align-items: center; gap: 1rem; cursor: pointer; background: #faf9fd; }
-    .st-headshot-preview-wrap { width: 74px; height: 94px; border-radius: 8px; overflow: hidden; background: #e4dff0; flex-shrink: 0; }
+    .st-headshot-upload { border: 2px dashed rgba(87,46,136,0.28); border-radius: 12px; padding: 1.4rem; min-height: 132px; display: flex; align-items: center; justify-content: center; gap: 1rem; cursor: pointer; background: rgba(255,255,255,0.42); text-align: center; transition: border-color 0.15s, background 0.15s, transform 0.15s; }
+    .st-headshot-upload:hover, .st-headshot-upload.drag-over { border-color: #572e88; background: rgba(255,255,255,0.68); transform: translateY(-1px); }
+    .st-headshot-preview-wrap { width: 92px; height: 118px; border-radius: 8px; overflow: hidden; background: #e4dff0; flex-shrink: 0; position: relative; }
     .st-headshot-preview-wrap img { width: 100%; height: 100%; object-fit: cover; display: block; }
-    .st-headshot-placeholder { width: 74px; height: 94px; border-radius: 8px; display: flex; align-items: center; justify-content: center; background: #f0edf8; color: #8a7ca5; font-size: 1.6rem; flex-shrink: 0; }
+    .st-headshot-change-hint { position: absolute; inset-inline: 0; bottom: 0; padding: 0.28rem; background: rgba(26,21,48,0.72); color: #fff; font-size: 0.62rem; font-weight: 800; }
+    .st-headshot-placeholder { color: #572e88; }
+    .st-headshot-icon { font-size: 1.7rem; margin-bottom: 0.35rem; }
+    .st-headshot-hint { font-size: 0.9rem; font-weight: 900; color: #572e88; }
+    .st-headshot-hint-sub { font-size: 0.76rem; color: #8a7ca5; margin-top: 0.25rem; }
+    .st-s4-section { margin: 1rem 0 1.35rem; border-radius: 14px; overflow: hidden; background: color-mix(in srgb, var(--s4-color) 18%, #fff); box-shadow: 0 10px 26px rgba(15,23,42,0.08); }
+    .st-s4-section-head { background: var(--s4-color); color: #4a3d6b; padding: 0.55rem 1rem; font-size: 0.78rem; font-weight: 900; text-transform: uppercase; letter-spacing: 0.08em; }
+    .st-s4-section-body { padding: 1rem; }
     .st-section-block { padding: 0.85rem 0; border-top: 1px solid rgba(87,46,136,0.08); }
     .st-section-block:first-child { padding-top: 0; border-top: 0; }
     .st-avail-group { margin-bottom: 1rem; }
@@ -710,41 +718,53 @@
     const confidenceOptions = ["I have no experience", "I'm starting out", "I feel comfortable", "I'm confident", "I've had professional experience"];
     const opt = () => ' <span style="font-size:0.65rem;color:#b0a8c4;">(optional)</span>';
     const req = () => '<span style="color:#b91c1c;margin-left:0.2rem;">*</span>';
+    const s4Section = (color, title, content) => `
+      <div class="st-s4-section" style="--s4-color:${color};">
+        <div class="st-s4-section-head">${title}</div>
+        <div class="st-s4-section-body">${content}</div>
+      </div>`;
     let html = '<div class="st-step-title">A bit more about the performer</div><div class="st-step-sub">Fill in what the production has asked for. Required fields are marked with *.</div>';
     if (cfg.section_headshot ?? true) {
-      html += `<div class="st-section-block">
-        <label class="st-label">Headshot${req()}</label>
-        <label class="st-headshot-upload" for="st-headshot-file">
-          ${_headshotPreview ? `<div class="st-headshot-preview-wrap"><img src="${esc(_headshotPreview)}" alt="Headshot preview" /></div>` : '<div class="st-headshot-placeholder">👤</div>'}
-          <div>
-            <div style="font-size:0.86rem;font-weight:800;color:#1a1530;">Upload a JPG, PNG, or WEBP photo</div>
-            <div style="font-size:0.76rem;color:#8a7ca5;margin-top:0.2rem;">Maximum 5MB.</div>
-            <div id="st-headshot-error" style="font-size:0.76rem;color:#b91c1c;margin-top:0.35rem;"></div>
-          </div>
-        </label>
+      html += s4Section('#c8b8f0', `Headshot${req()}`, `
+        <div class="st-headshot-upload" id="st-headshot-upload"
+          onclick="document.getElementById('st-headshot-file').click()"
+          ondragover="stHeadshotDragOver(event)"
+          ondragleave="stHeadshotDragLeave(event)"
+          ondrop="stHeadshotDrop(event)">
+          ${_headshotPreview ? `
+            <div class="st-headshot-preview-wrap">
+              <img src="${esc(_headshotPreview)}" alt="Headshot preview" />
+              <div class="st-headshot-change-hint">Tap or drop to change</div>
+            </div>` : `
+            <div class="st-headshot-placeholder">
+              <div class="st-headshot-icon">📷</div>
+              <div class="st-headshot-hint">Tap or drag &amp; drop a headshot</div>
+              <div class="st-headshot-hint-sub">JPG, PNG or WEBP · Max 5MB</div>
+            </div>`}
+        </div>
         <input id="st-headshot-file" type="file" accept="image/jpeg,image/png,image/webp" style="display:none;" onchange="stHeadshotSelected(this)" />
-      </div>`;
+        <div id="st-headshot-error" style="font-size:0.75rem;color:#b91c1c;margin-top:0.35rem;min-height:1rem;"></div>`);
     }
     if (cfg.section_acting ?? true) {
-      html += `<div class="st-section-block">
+      html += s4Section('#9fc8e2', `Acting${req()}`, `
         <label class="st-label">How would you describe your acting experience?${req()}</label>
         <select class="st-input" id="st-s4-acting-level" onchange="stAutoSave(4)"><option value="">Select...</option>${confidenceOptions.map(s => `<option value="${esc(s)}"${_stState.acting_level === s ? ' selected' : ''}>${esc(s)}</option>`).join('')}</select>
         <label class="st-label" style="margin-top:0.75rem;">Tell us about your acting background${opt()}</label>
         <textarea class="st-input" id="st-s4-acting-details" rows="3" placeholder="School shows, theatre productions, classes, film, improv, anything you'd like us to know." oninput="stAutoSave(4)">${esc(_stState.acting_details)}</textarea>
-      </div>`;
+      `);
     }
     if (cfg.section_vocal ?? true) {
-      html += `<div class="st-section-block">
+      html += s4Section('#7ac177', `Vocals${req()}`, `
         <label class="st-label">How would you describe your vocal experience?${req()}</label>
         <select class="st-input" id="st-s4-vocal-level" onchange="stAutoSave(4)"><option value="">Select...</option>${confidenceOptions.map(s => `<option value="${esc(s)}"${_stState.vocal_level === s ? ' selected' : ''}>${esc(s)}</option>`).join('')}</select>
         <label class="st-label" style="margin-top:0.75rem;">Voice Type${opt()}</label>
         <select class="st-input" id="st-s4-vocal-type" onchange="stAutoSave(4)"><option value="">Select...</option>${['Not sure','Soprano','Mezzo-Soprano','Alto','Tenor','Baritone','Bass'].map(s => `<option value="${esc(s)}"${_stState.vocal_type === s ? ' selected' : ''}>${esc(s)}</option>`).join('')}</select>
         <label class="st-label" style="margin-top:0.75rem;">Tell us about your vocal background${opt()}</label>
         <textarea class="st-input" id="st-s4-vocal-details" rows="3" placeholder="Choirs, lessons, solo experience, or any training you've had." oninput="stAutoSave(4)">${esc(_stState.vocal_details)}</textarea>
-      </div>`;
+      `);
     }
     if (cfg.section_dance ?? true) {
-      html += `<div class="st-section-block">
+      html += s4Section('#f1912c', `Dance${req()}`, `
         <label class="st-label">How would you describe your dance and movement experience?${req()}</label>
         <select class="st-input" id="st-s4-dance-level" onchange="stAutoSave(4)"><option value="">Select...</option>${confidenceOptions.map(s => `<option value="${esc(s)}"${_stState.dance_level === s ? ' selected' : ''}>${esc(s)}</option>`).join('')}</select>
         <label class="st-label" style="margin-top:0.75rem;">Dance Styles${opt()}</label>
@@ -757,17 +777,17 @@
         </div>
         <label class="st-label" style="margin-top:0.75rem;">Tell us about your dance and movement background${opt()}</label>
         <textarea class="st-input" id="st-s4-dance-details" rows="3" placeholder="Styles you've trained in, classes, or anything you enjoy doing." oninput="stAutoSave(4)">${esc(_stState.dance_details)}</textarea>
-      </div>`;
+      `);
     }
     if ((cfg.section_special_skills ?? true) || (cfg.section_previous_experience ?? true) || cfg.collect_song || cfg.collect_monologue || cfg.collect_skills || cfg.collect_notes) {
-      html += '<div class="st-section-block">';
-      if (cfg.section_special_skills ?? true) html += `<label class="st-label">Special Skills${req()}</label><textarea class="st-input" id="st-s4-special-skills" rows="3" placeholder="Accents, instruments, stage combat, gymnastics, anything you'd like us to know. Write &quot;None&quot; if not applicable." oninput="stAutoSave(4)">${esc(_stState.special_skills)}</textarea>`;
-      if (cfg.section_previous_experience ?? true) html += `<label class="st-label" style="margin-top:0.75rem;">Previous Experience${req()}</label><textarea class="st-input" id="st-s4-previous-experience" rows="3" placeholder="Productions, training, or anything you'd like to share. Write &quot;None&quot; if not applicable." oninput="stAutoSave(4)">${esc(_stState.previous_experience)}</textarea>`;
-      if (cfg.collect_song) html += `<label class="st-label" style="margin-top:0.75rem;">Song / Piece${req()}</label><input class="st-input" id="st-s4-song" type="text" placeholder="Title and composer" value="${esc(_stState.song)}" oninput="stAutoSave(4)" />`;
-      if (cfg.collect_monologue) html += `<label class="st-label" style="margin-top:0.75rem;">Monologue${req()}</label><input class="st-input" id="st-s4-monologue" type="text" placeholder="Title, playwright, character" value="${esc(_stState.monologue)}" oninput="stAutoSave(4)" />`;
-      if (cfg.collect_skills) html += `<label class="st-label" style="margin-top:0.75rem;">Skills${req()}</label><input class="st-input" id="st-s4-skills" type="text" placeholder="e.g. singing, dancing, piano, stage combat, dialects" value="${esc(_stState.skills)}" oninput="stAutoSave(4)" />`;
-      if (cfg.collect_notes) html += `<label class="st-label" style="margin-top:0.75rem;">Additional Notes${opt()}</label><textarea class="st-input" id="st-s4-notes" rows="3" placeholder="Anything else the production team should know about the performer" oninput="stAutoSave(4)">${esc(_stState.notes)}</textarea>`;
-      html += '</div>';
+      let skillsBody = '';
+      if (cfg.section_special_skills ?? true) skillsBody += `<label class="st-label">Special Skills${req()}</label><textarea class="st-input" id="st-s4-special-skills" rows="3" placeholder="Accents, instruments, stage combat, gymnastics, anything you'd like us to know. Write &quot;None&quot; if not applicable." oninput="stAutoSave(4)">${esc(_stState.special_skills)}</textarea>`;
+      if (cfg.section_previous_experience ?? true) skillsBody += `<label class="st-label" style="margin-top:0.75rem;">Previous Experience${req()}</label><textarea class="st-input" id="st-s4-previous-experience" rows="3" placeholder="Productions, training, or anything you'd like to share. Write &quot;None&quot; if not applicable." oninput="stAutoSave(4)">${esc(_stState.previous_experience)}</textarea>`;
+      if (cfg.collect_song) skillsBody += `<label class="st-label" style="margin-top:0.75rem;">Song / Piece${req()}</label><input class="st-input" id="st-s4-song" type="text" placeholder="Title and composer" value="${esc(_stState.song)}" oninput="stAutoSave(4)" />`;
+      if (cfg.collect_monologue) skillsBody += `<label class="st-label" style="margin-top:0.75rem;">Monologue${req()}</label><input class="st-input" id="st-s4-monologue" type="text" placeholder="Title, playwright, character" value="${esc(_stState.monologue)}" oninput="stAutoSave(4)" />`;
+      if (cfg.collect_skills) skillsBody += `<label class="st-label" style="margin-top:0.75rem;">Skills${req()}</label><input class="st-input" id="st-s4-skills" type="text" placeholder="e.g. singing, dancing, piano, stage combat, dialects" value="${esc(_stState.skills)}" oninput="stAutoSave(4)" />`;
+      if (cfg.collect_notes) skillsBody += `<label class="st-label" style="margin-top:0.75rem;">Additional Notes${opt()}</label><textarea class="st-input" id="st-s4-notes" rows="3" placeholder="Anything else the production team should know about the performer" oninput="stAutoSave(4)">${esc(_stState.notes)}</textarea>`;
+      html += s4Section('#ffdd68', 'Skills &amp; Experience', skillsBody);
     }
     html += stRenderCustomQuestionFields();
     html += '<div class="st-error" id="st-error-4"></div>';
@@ -776,7 +796,9 @@
 
   function stRenderCustomQuestionFields() {
     if (!_customQs.length) return '';
-    return `<div class="st-section-block">
+    return `<div class="st-s4-section" style="--s4-color:#9be0e3;">
+      <div class="st-s4-section-head">Additional Questions</div>
+      <div class="st-s4-section-body">
       ${_customQs.map(q => {
         const fid = 'st-cq-' + q.id;
         const qType = q.question_type || q.type || 'text';
@@ -788,6 +810,7 @@
         if (qType === 'radio' && Array.isArray(q.options)) return `<div class="st-form-group"><label class="st-label">${esc(q.question_text || q.question || '')}${qreq}</label><div class="st-pref-group">${q.options.map(o => `<label class="st-pref-check"><input type="radio" name="${fid}" value="${esc(o)}"${saved === o ? ' checked' : ''} onchange="stAutoSave(4)" /> ${esc(o)}</label>`).join('')}</div></div>`;
         return `<div class="st-form-group"><label class="st-label">${esc(q.question_text || q.question || '')}${qreq}</label><input class="st-input" id="${fid}" type="text" value="${esc(saved)}" oninput="stAutoSave(4)" /></div>`;
       }).join('')}
+      </div>
     </div>`;
   }
 
@@ -917,7 +940,26 @@
   }
 
   function stHeadshotSelected(input) {
-    const file = input.files?.[0];
+    stHeadshotFile(input.files?.[0]);
+  }
+
+  function stHeadshotDragOver(e) {
+    e.preventDefault();
+    document.getElementById('st-headshot-upload')?.classList.add('drag-over');
+  }
+
+  function stHeadshotDragLeave(e) {
+    e.preventDefault();
+    document.getElementById('st-headshot-upload')?.classList.remove('drag-over');
+  }
+
+  function stHeadshotDrop(e) {
+    e.preventDefault();
+    document.getElementById('st-headshot-upload')?.classList.remove('drag-over');
+    stHeadshotFile(e.dataTransfer?.files?.[0]);
+  }
+
+  function stHeadshotFile(file) {
     const err = document.getElementById('st-headshot-error');
     if (!file) return;
     if (!['image/jpeg','image/png','image/webp'].includes(file.type)) {
