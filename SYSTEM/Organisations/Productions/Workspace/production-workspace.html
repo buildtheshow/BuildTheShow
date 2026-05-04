@@ -17160,10 +17160,10 @@
 <script src="/ASSETS/scripts/casting-card.js"></script>
 <script src="/ASSETS/scripts/production-team-card.js?v=team-card-phone-format-20260424"></script>
 <script src="/ASSETS/scripts/production-team-access.js?v=team-portal-prod-id-20260429"></script>
-<script src="/SHARED/Components/casting-card-back.js?v=selftapes-tab-20260504b"></script>
+<script src="/SHARED/Components/casting-card-back.js?v=selftapes-tab-20260504c"></script>
 <script src="/SHARED/Components/audition-status-strip.js"></script>
 <script src="/SHARED/Components/ai-character-importer.js"></script>
-<script src="/SHARED/Components/audition-page-templates.js?v=selftapes-tab-20260504b"></script>
+<script src="/SHARED/Components/audition-page-templates.js?v=selftapes-tab-20260504c"></script>
 <!-- VenuePicker uses OpenStreetMap/Nominatim - no API key needed -->
 <script>
   /* SQL needed:
@@ -37154,9 +37154,9 @@ We look forward to seeing your work!
     return list;
   }
 
-  function renderInRoomRoleChips(app, filterType = '', sortMode = 'type') {
+  function renderInRoomRoleChips(app, filterType = '', sortMode = 'type', sessionIdOverride = null) {
     const session = getCurrentInRoomSession();
-    const sessionId = session?.id || null;
+    const sessionId = sessionIdOverride || session?.id || null;
     const requestedSet = new Set(applicantRequestedRoleList(app).map(role => {
       const char = findCharacterForRequestedRole(role);
       return char?.id || '';
@@ -37204,13 +37204,15 @@ We look forward to seeing your work!
   }
 
   function filterInRoomRoleChips() {
-    const app = allApplicants.find(a => a.id === inRoomApplicantId);
+    const isSelftapeActive = document.getElementById('adtab-selftape')?.style.display !== 'none';
+    const appId = isSelftapeActive ? stSelectedAppId : inRoomApplicantId;
+    const app = allApplicants.find(a => String(a.id) === String(appId));
     if (!app) return;
     const filterType = document.getElementById('inroom-role-filter')?.value || '';
     const sortMode   = document.getElementById('inroom-role-sort')?.value  || 'type';
     const grid = document.getElementById('inroom-roles-grid');
     if (!grid) return;
-    grid.innerHTML = renderInRoomRoleChips(app, filterType, sortMode);
+    grid.innerHTML = renderInRoomRoleChips(app, filterType, sortMode, isSelftapeActive ? 'self_tape' : null);
     requestAnimationFrame(() => requestAnimationFrame(() => fitInRoomRoleChipTitles(grid)));
   }
 
@@ -37814,7 +37816,9 @@ We look forward to seeing your work!
     }
     const app = allApplicants.find(a => a.id === appId);
     if (!app) return;
-    const sessionId = getCurrentInRoomSession()?.id || null;
+    const isSelftape = document.getElementById('adtab-selftape')?.style.display !== 'none';
+    let sessionId = getCurrentInRoomSession()?.id || null;
+    if (!sessionId && isSelftape) sessionId = 'self_tape';
     if (!sessionId) return;
     const currentAnswers = applicantCustomAnswers(app);
     const key = inRoomRoleChoiceKey(sessionId, charId);
@@ -37829,17 +37833,19 @@ We look forward to seeing your work!
     try {
       const error = await persistApplicantPatch(app, { custom_answers: nextAnswers });
       if (error) throw error;
-      const nextValue = nextAnswers[key] === 'liked' ? 'liked' : null;
-      const existingObservation = findAuditionObservation(appId, {
-        sessionId,
-        characterId: charId,
-        area: 'role',
-        type: 'choice',
-        key: charId,
-        currentAuthorOnly: true,
-      });
-      if (nextValue) await saveAuditionObservation(appId, { sessionId, characterId: charId, area: 'role', type: 'choice', key: charId, value: nextValue });
-      else if (existingObservation?.id) await deleteAuditionObservation(existingObservation.id);
+      if (!isSelftape) {
+        const nextValue = nextAnswers[key] === 'liked' ? 'liked' : null;
+        const existingObservation = findAuditionObservation(appId, {
+          sessionId,
+          characterId: charId,
+          area: 'role',
+          type: 'choice',
+          key: charId,
+          currentAuthorOnly: true,
+        });
+        if (nextValue) await saveAuditionObservation(appId, { sessionId, characterId: charId, area: 'role', type: 'choice', key: charId, value: nextValue });
+        else if (existingObservation?.id) await deleteAuditionObservation(existingObservation.id);
+      }
       showSaveStatus('saved');
     } catch (error) {
       console.error('[BTS] in-room role toggle failed', error);
@@ -38020,7 +38026,7 @@ We look forward to seeing your work!
         notesTextHtml,
         nextButtonHtml: '',
         callbackCharactersHtml: '',
-        roleChipsHtml: renderInRoomRoleChips(app)
+        roleChipsHtml: renderInRoomRoleChips(app, '', 'type', 'self_tape')
       }
     );
 
