@@ -10585,6 +10585,20 @@
         0 1px 2px rgba(15, 23, 42, 0.08),
         2px 3px 5px rgba(15, 23, 42, 0.12);
     }
+    .final-casting-pick {
+      cursor: pointer;
+    }
+    .final-casting-pick .casting-card {
+      transition: transform 0.16s ease, box-shadow 0.16s ease, filter 0.16s ease;
+    }
+    .final-casting-pick.is-selected .casting-card {
+      transform: scale(1.08) !important;
+      z-index: 4;
+      box-shadow:
+        0 18px 30px rgba(15, 23, 42, 0.24),
+        0 8px 16px rgba(15, 23, 42, 0.18),
+        0 0 0 2.5px rgba(17, 24, 39, 0.8) !important;
+    }
     .cbv2-perf-card-wrap.cbv2-touch-selected .casting-card {
       transform: translateY(-3px) !important;
       box-shadow:
@@ -15229,7 +15243,7 @@
               <div class="cbv2-ensemble-note-header">
                 <span class="cbv2-ensemble-note-label">Final Ensemble</span>
               </div>
-              <div class="cbv2-ensemble-note-cards"></div>
+              <div class="cbv2-ensemble-note-cards" id="final-casting-ensemble-grid"></div>
             </div>
           </div>
         </section>
@@ -24407,6 +24421,8 @@ If you have any questions, don't hesitate to reach out.
 
   let finalCastingPoolSelectedIds = new Set();
   let finalCastingPoolApplicants = [];
+  let finalCastingSelectedAssignments = [];
+  const finalCastingPickedKeys = new Set();
 
   async function loadFinalCastingPool() {
     const grid = document.getElementById('final-casting-pool-grid');
@@ -24416,7 +24432,7 @@ If you have any questions, don't hesitate to reach out.
     if (!allApplicants.length) await loadApplicants({ skipRender: true, skipCastingSync: true }).catch(() => {});
 
     const { data, error } = await sb.from('casting_assignments')
-      .select('applicant_id')
+      .select('applicant_id, character_id, state')
       .eq('production_id', prodId)
       .in('state', ['liked', 'chosen']);
 
@@ -24425,6 +24441,7 @@ If you have any questions, don't hesitate to reach out.
       return;
     }
 
+    finalCastingSelectedAssignments = data || [];
     finalCastingPoolSelectedIds = new Set((data || []).map(row => row.applicant_id).filter(Boolean));
     finalCastingPoolApplicants = (allApplicants || [])
       .sort(compareApplicantsAlphabetically);
@@ -24432,9 +24449,10 @@ If you have any questions, don't hesitate to reach out.
   }
 
   async function loadFinalCastingBoardVisuals() {
+    await loadFinalCastingPool();
     await Promise.all([
-      loadFinalCastingPool(),
       renderFinalCastingCharacterNotes(),
+      renderFinalCastingEnsemble(),
     ]);
   }
 
@@ -24453,6 +24471,7 @@ If you have any questions, don't hesitate to reach out.
       const noteId = `fc-note-${char.id}`;
       const cardsId = `fc-note-cards-${char.id}`;
       const footerId = `fc-note-footer-${char.id}`;
+      const cardsHtml = finalCastingCardsForCharacter(char);
       return window.BTSAuditionTemplates.renderTemplateById('auditions.casting-board.sticky-note', {
         esc,
         noteId,
@@ -24460,7 +24479,7 @@ If you have any questions, don't hesitate to reach out.
         name: char.name || 'Unnamed',
         style: cbv2NoteStyle(rotations[index] || 0),
         cardsId,
-        cardsHtml: '<div class="cbv2-note-empty">Final picks here</div>',
+        cardsHtml,
         footerId,
         footerHtml: '<div></div>',
         interactive: false,
@@ -24470,6 +24489,73 @@ If you have any questions, don't hesitate to reach out.
       });
     }).join('');
     requestAnimationFrame(fitCbv2NoteHeaders);
+  }
+
+  function finalCastingCardsForCharacter(char) {
+    const assignments = finalCastingSelectedAssignments
+      .filter(a => a.character_id === char.id && (a.state === 'liked' || a.state === 'chosen'))
+      .sort((a, b) => {
+        const stateDiff = (CB_STATE_ORDER[a.state] ?? 1) - (CB_STATE_ORDER[b.state] ?? 1);
+        if (stateDiff) return stateDiff;
+        const appA = allApplicants.find(app => app.id === a.applicant_id);
+        const appB = allApplicants.find(app => app.id === b.applicant_id);
+        return compareApplicantsAlphabetically(appA || {}, appB || {});
+      });
+    const html = assignments.map(a => {
+      const app = allApplicants.find(candidate => candidate.id === a.applicant_id);
+      if (!app) return '';
+      const wantsRole = cbv2AppWantsRole(app, char);
+      const cardHtml = buildStandardCastingCardHtml(app, {
+        draggable: false,
+        state: wantsRole ? 'chosen' : 'liked',
+      });
+      const pickKey = `${char.id}::${app.id}`;
+      const selectedClass = finalCastingPickedKeys.has(pickKey) ? ' is-selected' : '';
+      const visualCard = wantsRole ? `<div class="cbv2-wants-role-wrap">${cardHtml}</div>` : cardHtml;
+      return `<div class="final-casting-pick${selectedClass}" onclick="toggleFinalCastingPick(event,'${esc(char.id)}','${esc(app.id)}')">${visualCard}</div>`;
+    }).filter(Boolean).join('');
+    return html || '<div class="cbv2-note-empty">Final picks here</div>';
+  }
+
+  function toggleFinalCastingPick(event, charId, appId) {
+    event?.preventDefault?.();
+    event?.stopPropagation?.();
+    const key = `${charId}::${appId}`;
+    if (finalCastingPickedKeys.has(key)) finalCastingPickedKeys.delete(key);
+    else finalCastingPickedKeys.add(key);
+    event?.currentTarget?.classList.toggle('is-selected', finalCastingPickedKeys.has(key));
+  }
+
+  async function renderFinalCastingEnsemble() {
+    const grid = document.getElementById('final-casting-ensemble-grid');
+    if (!grid) return;
+    grid.innerHTML = '<div style="padding:1rem 1.25rem;color:#9a90b0;font-size:0.82rem;">Loading ensemble…</div>';
+    if (!allApplicants.length) await loadApplicants({ skipRender: true, skipCastingSync: true }).catch(() => {});
+
+    const { data, error } = await sb.from('casting_assignments')
+      .select('applicant_id')
+      .eq('production_id', prodId)
+      .eq('state', 'ensemble_manual');
+
+    if (error) {
+      grid.innerHTML = '<div style="padding:1rem 1.25rem;color:#c0392b;font-size:0.82rem;">Could not load Final Ensemble.</div>';
+      return;
+    }
+
+    const ensembleIds = new Set((data || []).map(row => row.applicant_id).filter(Boolean));
+    const apps = (allApplicants || [])
+      .filter(app => ensembleIds.has(app.id))
+      .sort(compareApplicantsAlphabetically);
+
+    if (!apps.length) {
+      grid.innerHTML = '<div style="padding:1rem 1.25rem;color:#9a90b0;font-size:0.82rem;">Final Ensemble picks will appear here.</div>';
+      return;
+    }
+
+    grid.innerHTML = apps.map(app => {
+      const cardHtml = buildStandardCastingCardHtml(app, { draggable: false, state: 'liked' });
+      return `<div class="cbv2-perf-card-wrap">${cardHtml}</div>`;
+    }).join('');
   }
 
   function renderFinalCastingPool() {
