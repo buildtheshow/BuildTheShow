@@ -7100,6 +7100,55 @@
       .cb-list-actions { grid-column: 1 / -1; padding-left: 0.25rem; }
     }
 
+    /* ── Self Tape workspace tab ── */
+    .st-workspace-header {
+      display: flex; align-items: flex-start; justify-content: space-between;
+      gap: 1rem; flex-wrap: wrap;
+      padding: 1.25rem 0 1rem; margin-bottom: 1rem;
+      border-bottom: 1px solid rgba(87,46,136,0.1);
+    }
+    .st-workspace-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+      gap: 1.25rem;
+      padding-bottom: 2rem;
+    }
+    .st-performer-tile {
+      display: flex; flex-direction: column; gap: 0.4rem;
+      align-items: center;
+    }
+    .st-performer-card-wrap {
+      width: 100%; cursor: pointer;
+      transition: transform 0.15s;
+    }
+    .st-performer-card-wrap:hover { transform: translateY(-2px); }
+    .st-performer-name {
+      font-size: 0.78rem; font-weight: 700; color: #1a1530;
+      text-align: center; white-space: nowrap; overflow: hidden;
+      text-overflow: ellipsis; max-width: 100%;
+    }
+    .st-status-badge {
+      font-size: 0.68rem; font-weight: 700; border-radius: 999px;
+      padding: 0.18em 0.65em; white-space: nowrap;
+    }
+    .st-status-received { background: #eafaf1; color: #1a7540; }
+    .st-status-pending  { background: #fef9e7; color: #92680a; }
+    .st-subs-list {
+      display: flex; flex-direction: column; gap: 0.25rem;
+      width: 100%; align-items: center;
+    }
+    .st-sub-link {
+      font-size: 0.68rem; font-weight: 600; color: #572e88;
+      background: rgba(87,46,136,0.08); border-radius: 6px;
+      padding: 0.18em 0.55em; text-decoration: none;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      max-width: 100%; display: block; text-align: center;
+    }
+    .st-sub-link:hover { background: rgba(87,46,136,0.14); }
+    @media (max-width: 600px) {
+      .st-workspace-grid { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); }
+    }
+
     .cbv2-outer.callbacks-empty .cbv2-controls,
     .cbv2-outer.callbacks-empty .cbv2-performers,
     .cbv2-outer.callbacks-empty .cbv2-board-head,
@@ -14873,6 +14922,11 @@
         <!-- In the Room sub-tab -->
         <div id="adtab-inroom" class="adtab-panel" style="display:none;">
           <div id="inroom-content" class="inroom-shell"></div>
+        </div>
+
+        <!-- Self Tape sub-tab -->
+        <div id="adtab-selftape" class="adtab-panel" style="display:none;">
+          <div id="selftape-content"></div>
         </div>
 
         <div id="adtab-session" class="adtab-panel" style="display:none;">
@@ -24088,7 +24142,7 @@ If you have any questions, don't hesitate to reach out.
     saveWorkspaceNavState({ auditionsSubTab: subTab });
 
     // Determine whether this navigation should keep or clear the persistent header
-    const operationalTabs = new Set(['checkin','inroom','callbacks']);
+    const operationalTabs = new Set(['checkin','inroom','callbacks','selftape']);
     if (operationalTabs.has(subTab)) {
       _audHeaderActiveTool = subTab;
     } else if (isSessionSubTab) {
@@ -24129,6 +24183,9 @@ If you have any questions, don't hesitate to reach out.
     } else if (subTab === 'inroom') {
       switchAudTab('auditions');
       switchAudDayTab('inroom');
+    } else if (subTab === 'selftape') {
+      switchAudTab('auditions');
+      switchAudDayTab('selftape');
     } else if (subTab === 'callbacks') {
       switchAudTab('auditions');
       switchAudDayTab('callbacklist');
@@ -36962,8 +37019,8 @@ If you have any questions, don't hesitate to reach out.
       el.classList.toggle('active', el.dataset.adtab === tab);
     });
     const statusBar = ensureAudStatusBar();
-    if (statusBar) statusBar.setVisible(tab !== 'inroom' && !(tab === 'session' && activeAuditionNavTool === 'inroom'));
-    ['dashboard','run','checkin','inroom','allperformers','schedule','audschedule','session','callbacklist'].forEach(t => {
+    if (statusBar) statusBar.setVisible(tab !== 'inroom' && tab !== 'selftape' && !(tab === 'session' && activeAuditionNavTool === 'inroom'));
+    ['dashboard','run','checkin','inroom','selftape','allperformers','schedule','audschedule','session','callbacklist'].forEach(t => {
       const el = document.getElementById('adtab-' + t);
       if (el) el.style.display = (t === tab) ? '' : 'none';
     });
@@ -36971,12 +37028,111 @@ If you have any questions, don't hesitate to reach out.
     if (tab === 'run') {}
     if (tab === 'checkin') loadCheckIn();
     if (tab === 'inroom') renderInRoomPage(inRoomApplicantId);
+    if (tab === 'selftape') renderSelfTapeTab();
     if (tab === 'allperformers') renderAllPerformers();
     if (tab === 'schedule') renderAudSchedule();
     if (tab === 'audschedule') renderAudScheduleV2();
     if (tab === 'callbacklist') renderCallbacksFresh();
     if (tab === 'session') renderAuditionSessionWorkspace();
     renderAuditionHeaderFrame();
+  }
+
+  // ── Self Tape ──
+
+  async function renderSelfTapeTab() {
+    const container = document.getElementById('selftape-content');
+    if (!container) return;
+    container.innerHTML = '<div style="text-align:center;padding:2.5rem;color:#9a90b0;font-size:0.875rem;">Loading self tape submissions…</div>';
+
+    if (!allApplicants.length) await loadApplicants();
+
+    const selfTapeApplicants = allApplicants.filter(a => a.audition_method === 'self_tape');
+
+    let submissions = [];
+    try {
+      const { data } = await sb.from('self_tape_submissions')
+        .select('*').eq('production_id', prodId)
+        .order('submitted_at', { ascending: false });
+      submissions = data || [];
+    } catch (e) { console.warn('[Self Tape] could not load submissions:', e); }
+
+    const submissionsByApp = {};
+    submissions.forEach(s => {
+      if (!submissionsByApp[s.applicant_id]) submissionsByApp[s.applicant_id] = [];
+      submissionsByApp[s.applicant_id].push(s);
+    });
+
+    const selfTapeLink = prodId ? `${window.location.origin}/self-tape?prod=${encodeURIComponent(prodId)}` : '';
+
+    let html = `
+      <div class="st-workspace-header">
+        <div>
+          <div class="page-title" style="font-size:1.15rem;">Self Tape Auditions</div>
+          <div style="font-size:0.82rem;color:#6a5a80;margin-top:0.2rem;">Performers who registered for self tape. Submissions appear automatically when received.</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:0.75rem;flex-shrink:0;">
+          <div style="font-size:0.78rem;color:#8a7ca5;font-weight:600;background:rgba(87,46,136,0.08);border-radius:8px;padding:0.35rem 0.75rem;">
+            ${selfTapeApplicants.length} registered · ${submissions.length} tape${submissions.length !== 1 ? 's' : ''} received
+          </div>
+          ${selfTapeLink ? `
+            <button class="btn-secondary" style="font-size:0.78rem;" onclick="stCopyRegistrationLink()">Copy Registration Link</button>
+          ` : ''}
+        </div>
+      </div>`;
+
+    if (!selfTapeApplicants.length) {
+      html += `
+        <div style="text-align:center;padding:4rem 2rem;color:#9a90b0;">
+          <div style="font-size:2rem;margin-bottom:0.75rem;">🎬</div>
+          <div style="font-size:0.9rem;font-weight:600;color:#6a5a80;margin-bottom:0.3rem;">No self tape registrations yet</div>
+          <div style="font-size:0.8rem;max-width:320px;margin:0 auto;line-height:1.5;">
+            Share your registration link with performers to get them signed up.
+            ${selfTapeLink ? `<div style="margin-top:0.75rem;"><code style="font-size:0.72rem;background:rgba(87,46,136,0.08);padding:0.25rem 0.5rem;border-radius:6px;word-break:break-all;">${esc(selfTapeLink)}</code></div>` : ''}
+          </div>
+        </div>`;
+    } else {
+      html += `<div class="st-workspace-grid">`;
+      selfTapeApplicants.sort(compareApplicantsAlphabetically).forEach(app => {
+        const appSubs = submissionsByApp[app.id] || [];
+        const received = appSubs.length > 0;
+
+        const cardHtml = buildStandardCastingCardHtml(app, { size: 'sm' });
+        const statusClass = received ? 'st-status-received' : 'st-status-pending';
+        const statusLabel = received ? `Received (${appSubs.length})` : 'Not submitted';
+        const statusIcon  = received ? '✅' : '⏳';
+
+        const subsHtml = received ? appSubs.map(s => {
+          const date = s.submitted_at
+            ? new Date(s.submitted_at).toLocaleDateString('en-CA', { month: 'short', day: 'numeric' })
+            : '';
+          return `<a href="${esc(s.video_url)}" target="_blank" rel="noopener" class="st-sub-link">
+            ${esc(s.label || 'Self Tape')}${date ? ` · ${date}` : ''}
+          </a>`;
+        }).join('') : '';
+
+        html += `
+          <div class="st-performer-tile">
+            <div class="st-performer-card-wrap" onclick="openPerfLightbox('${esc(app.id)}')">
+              ${cardHtml}
+            </div>
+            <div class="st-performer-name">${esc(app.name || '')}</div>
+            <div class="st-status-badge ${statusClass}">${statusIcon} ${statusLabel}</div>
+            ${subsHtml ? `<div class="st-subs-list">${subsHtml}</div>` : ''}
+          </div>`;
+      });
+      html += `</div>`;
+    }
+
+    container.innerHTML = html;
+    window._stSelfTapeLink = selfTapeLink;
+  }
+
+  function stCopyRegistrationLink() {
+    const link = window._stSelfTapeLink;
+    if (!link) return;
+    navigator.clipboard.writeText(link).then(() => {
+      showToast('Registration link copied!');
+    }).catch(() => { prompt('Copy this link:', link); });
   }
 
   // ── Check-In ──

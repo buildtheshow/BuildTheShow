@@ -1,0 +1,1028 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" />
+  <link rel="preconnect" href="https://tkmaiktxpwqfbgeojbnf.supabase.co" />
+  <link rel="dns-prefetch" href="https://cdn.jsdelivr.net" />
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Self Tape Audition</title>
+  <link rel="stylesheet" href="/ASSETS/styles/styles.css?v=typography-safe-20260421-2025" />
+  <style>
+    body { background: #f7f5fb; }
+
+    .nav {
+      background: #572e88;
+      border-bottom-color: rgba(87,46,136,0.2);
+      overflow: hidden;
+    }
+    .nav::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(255,255,255,0.07) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.07) 1px, transparent 1px);
+      background-size: 32px 32px;
+      pointer-events: none;
+      z-index: 0;
+    }
+    .nav > * { position: relative; z-index: 1; }
+    .nav-actions { display: none; }
+
+    .state-loading, .state-error {
+      text-align: center; padding: 5rem 1.5rem;
+      color: #6a5a80; font-size: 1rem;
+    }
+    .state-error h2 { font-size: 1.5rem; font-weight: 800; color: #1a1530; margin-bottom: 0.5rem; }
+
+    .st-page { max-width: 680px; margin: 0 auto; padding: 2rem 1.5rem 5rem; }
+
+    /* ── Show header ── */
+    .st-show-head {
+      display: flex; align-items: center; gap: 1.1rem;
+      margin-bottom: 1.75rem;
+    }
+    .st-show-poster {
+      width: 52px; height: 52px; border-radius: 8px;
+      object-fit: cover; background: #e4dff0; flex-shrink: 0;
+    }
+    .st-show-poster-placeholder {
+      width: 52px; height: 52px; border-radius: 8px;
+      background: linear-gradient(135deg, #ece7df 0%, #ddd5ca 100%);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.4rem; flex-shrink: 0;
+    }
+    .st-show-title { font-size: 1.2rem; font-weight: 800; color: #1a1530; line-height: 1.15; }
+    .st-show-subtitle { font-size: 0.8rem; color: #6a5a80; margin-top: 0.2rem; }
+    .st-show-badge {
+      display: inline-flex; align-items: center; gap: 0.3rem;
+      background: rgba(87,46,136,0.1); color: #572e88;
+      border-radius: 999px; padding: 0.18em 0.65em;
+      font-size: 0.72rem; font-weight: 700;
+      margin-top: 0.3rem;
+    }
+
+    /* ── Wizard card ── */
+    .st-card {
+      background: #fff;
+      border-radius: 18px;
+      box-shadow: 0 4px 24px rgba(15,23,42,0.10), 0 1px 4px rgba(15,23,42,0.06);
+      overflow: hidden;
+    }
+
+    /* ── Step indicators ── */
+    .st-steps-wrap {
+      padding: 1.1rem 1.75rem 0;
+      border-bottom: 1px solid rgba(87,46,136,0.08);
+      background: #faf9fd;
+    }
+    .st-steps {
+      display: flex; align-items: flex-start; justify-content: space-between;
+      gap: 0.5rem; padding-bottom: 1rem;
+    }
+    .st-step-item {
+      flex: 1 1 0; display: flex; flex-direction: column;
+      align-items: center; gap: 0.25rem; min-width: 0; position: relative;
+    }
+    .st-step-item:not(:last-child)::after {
+      content: '';
+      position: absolute;
+      top: 14px; left: calc(50% + 14px);
+      right: calc(-50% + 14px);
+      height: 2px;
+      background: #e4dff0;
+    }
+    .st-step-item.done:not(:last-child)::after { background: #572e88; }
+    .st-step-dot {
+      width: 28px; height: 28px; border-radius: 50%;
+      background: #f0edf8; color: #8a7ca5;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.72rem; font-weight: 800;
+      transition: all 0.2s; position: relative; z-index: 1;
+    }
+    .st-step-dot.active {
+      background: #572e88; color: #fff;
+      box-shadow: 0 0 0 4px rgba(87,46,136,0.13);
+    }
+    .st-step-dot.done { background: #ecfdf5; color: #16a34a; cursor: pointer; }
+    .st-step-dot.done:hover { background: #dcfce7; }
+    .st-step-lbl {
+      font-size: 0.58rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.04em; color: #c0b8d4; white-space: nowrap; text-align: center;
+    }
+    .st-step-lbl.active { color: #572e88; }
+    .st-step-lbl.done { color: #16a34a; }
+
+    /* ── Body ── */
+    .st-body { padding: 1.5rem 1.75rem 0; }
+    .st-panel { display: none; }
+    .st-panel.active { display: block; }
+
+    .st-step-title { font-size: 1rem; font-weight: 800; color: #1a1530; margin-bottom: 0.2rem; }
+    .st-step-sub { font-size: 0.82rem; color: #6a5a80; margin-bottom: 1.1rem; line-height: 1.4; }
+
+    /* ── Form elements ── */
+    .st-form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0.65rem; margin-bottom: 0.65rem; }
+    .st-form-group { margin-bottom: 0.65rem; }
+    .st-label {
+      display: block; font-size: 0.78rem; font-weight: 700;
+      color: #4a3d6b; margin-bottom: 0.35rem; letter-spacing: 0.01em;
+    }
+    .st-input {
+      width: 100%; padding: 0.52rem 0.75rem;
+      border: 1.5px solid rgba(87,46,136,0.2);
+      border-radius: 8px; font-size: 0.875rem;
+      font-family: var(--bts-font); color: #1a1530;
+      background: #fff; outline: none;
+      box-sizing: border-box;
+      transition: border-color 0.15s, box-shadow 0.15s;
+    }
+    .st-input:focus {
+      border-color: #572e88;
+      box-shadow: 0 0 0 3px rgba(87,46,136,0.1);
+    }
+    select.st-input { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%238a7ca5' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 10px center; background-size: 10px; padding-right: 2rem; }
+    .st-pronoun-pair { display: flex; align-items: center; gap: 0.5rem; }
+    .st-pronoun-pair select { flex: 1; }
+    .st-pronoun-slash { color: #8a7ca5; font-weight: 700; flex-shrink: 0; }
+    .st-age-display { font-size: 0.78rem; color: #572e88; font-weight: 600; margin-top: 0.3rem; min-height: 1.2em; }
+
+    /* ── Guardian section ── */
+    .st-guardian-section {
+      display: none;
+      background: #fdf5e7;
+      border: 1.5px solid #f5c842;
+      border-radius: 12px;
+      padding: 1rem 1.1rem;
+      margin: 0.75rem 0 0.65rem;
+    }
+    .st-guardian-section.visible { display: block; }
+    .st-guardian-title { font-size: 0.875rem; font-weight: 800; color: #92680a; margin-bottom: 0.2rem; }
+    .st-guardian-sub { font-size: 0.78rem; color: #a07820; margin-bottom: 0.85rem; line-height: 1.4; }
+
+    /* ── Agree row ── */
+    .st-agree-row {
+      display: flex; align-items: flex-start; gap: 0.55rem;
+      font-size: 0.8rem; color: #4a3d6b; line-height: 1.45;
+      cursor: pointer; margin-top: 0.4rem;
+    }
+    .st-agree-row input { flex-shrink: 0; margin-top: 0.15rem; accent-color: #572e88; cursor: pointer; }
+
+    /* ── Error ── */
+    .st-error {
+      display: none; background: #fef2f2; border: 1.5px solid #fca5a5;
+      border-radius: 8px; padding: 0.6rem 0.85rem;
+      font-size: 0.8rem; color: #991b1b; margin-top: 0.75rem;
+    }
+    .st-error.visible { display: block; }
+
+    /* ── Role checkboxes ── */
+    .st-role-list { display: flex; flex-direction: column; gap: 0.5rem; }
+    .st-role-item {
+      display: flex; align-items: center; gap: 0.75rem;
+      padding: 0.7rem 0.9rem; border: 1.5px solid rgba(87,46,136,0.15);
+      border-radius: 10px; cursor: pointer;
+      transition: border-color 0.15s, background 0.15s;
+    }
+    .st-role-item:hover { border-color: rgba(87,46,136,0.3); background: rgba(87,46,136,0.03); }
+    .st-role-item.checked { border-color: #572e88; background: rgba(87,46,136,0.06); }
+    .st-role-item input { accent-color: #572e88; flex-shrink: 0; width: 16px; height: 16px; cursor: pointer; }
+    .st-role-name { font-size: 0.875rem; font-weight: 700; color: #1a1530; }
+    .st-role-meta { font-size: 0.75rem; color: #6a5a80; margin-top: 0.1rem; }
+    .st-role-badge {
+      margin-left: auto; flex-shrink: 0;
+      font-size: 0.65rem; font-weight: 800; text-transform: uppercase;
+      letter-spacing: 0.04em; padding: 0.15em 0.55em;
+      border-radius: 999px; border: 1.5px solid;
+    }
+    .st-role-badge.gw  { background: #fbd5e6; color: #8b3a6b; border-color: #f4a7c7; }
+    .st-role-badge.bm  { background: #cce3fd; color: #1a4f8a; border-color: #93c5fd; }
+    .st-role-badge.nb  { background: #c9f5da; color: #1a5c38; border-color: #86efac; }
+    .st-role-badge.all { background: #fdf5c2; color: #6b5202; border-color: #fde047; }
+    .st-ensemble-section { margin-top: 0.85rem; padding-top: 0.85rem; border-top: 1px solid rgba(87,46,136,0.1); }
+    .st-empty-note { text-align: center; padding: 2rem; color: #9a90b0; font-size: 0.85rem; }
+
+    /* ── Questions ── */
+    .st-question-group { margin-bottom: 1.1rem; }
+    .st-question-label { font-size: 0.82rem; font-weight: 700; color: #4a3d6b; margin-bottom: 0.35rem; }
+    .st-question-sub { font-size: 0.75rem; color: #8a7ca5; margin-bottom: 0.4rem; line-height: 1.4; }
+    textarea.st-input { resize: vertical; min-height: 80px; }
+
+    /* ── Review ── */
+    .st-review-section {
+      margin-bottom: 1rem; padding: 0.85rem 1rem;
+      background: #faf9fd; border-radius: 10px;
+      border: 1px solid rgba(87,46,136,0.1);
+    }
+    .st-review-section-title {
+      font-size: 0.72rem; font-weight: 800; text-transform: uppercase;
+      letter-spacing: 0.05em; color: #8a7ca5; margin-bottom: 0.5rem;
+    }
+    .st-review-row { display: flex; gap: 0.75rem; margin-bottom: 0.3rem; font-size: 0.82rem; }
+    .st-review-key { color: #8a7ca5; min-width: 90px; flex-shrink: 0; }
+    .st-review-val { color: #1a1530; font-weight: 600; }
+    .st-review-tags { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+    .st-review-tag {
+      background: rgba(87,46,136,0.1); color: #572e88;
+      border-radius: 999px; padding: 0.2em 0.7em;
+      font-size: 0.75rem; font-weight: 700;
+    }
+    .st-submit-agree {
+      background: rgba(87,46,136,0.05); border: 1.5px solid rgba(87,46,136,0.15);
+      border-radius: 10px; padding: 0.85rem 1rem; margin-top: 0.75rem;
+    }
+
+    /* ── Navigation ── */
+    .st-nav {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 1.1rem 1.75rem 1.5rem; gap: 0.75rem;
+    }
+    .st-btn-back {
+      background: none; border: 1.5px solid rgba(87,46,136,0.22);
+      border-radius: 10px; padding: 0.55rem 1.1rem;
+      font-size: 0.875rem; font-weight: 700; color: #572e88;
+      cursor: pointer; font-family: var(--bts-font);
+      transition: border-color 0.15s, background 0.15s;
+    }
+    .st-btn-back:hover { background: rgba(87,46,136,0.06); }
+    .st-btn-back[style*="visibility:hidden"] { pointer-events: none; }
+    .st-btn-next {
+      background: #572e88; color: #fff;
+      border: none; border-radius: 10px;
+      padding: 0.6rem 1.4rem;
+      font-size: 0.875rem; font-weight: 800;
+      cursor: pointer; font-family: var(--bts-font);
+      transition: background 0.15s, transform 0.15s;
+      margin-left: auto;
+    }
+    .st-btn-next:hover { background: #4a2576; transform: translateY(-1px); }
+    .st-btn-next:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+    /* ── Success ── */
+    .st-success {
+      display: none; padding: 2.5rem 2rem 2.25rem; text-align: center;
+    }
+    .st-success.active { display: block; }
+    .st-success-icon { font-size: 3.5rem; margin-bottom: 0.75rem; }
+    .st-success-title {
+      font-size: 1.5rem; font-weight: 900; color: #1a1530;
+      margin-bottom: 0.75rem; letter-spacing: -0.01em;
+    }
+    .st-success-sub {
+      font-size: 0.875rem; color: #6a5a80; line-height: 1.55; margin-bottom: 1.5rem;
+    }
+    .st-link-box {
+      background: #faf9fd; border: 1.5px solid rgba(87,46,136,0.2);
+      border-radius: 12px; padding: 1rem 1.1rem; margin: 0 auto 1.25rem;
+      max-width: 400px; text-align: left;
+    }
+    .st-link-box-label {
+      font-size: 0.72rem; font-weight: 800; text-transform: uppercase;
+      letter-spacing: 0.05em; color: #8a7ca5; margin-bottom: 0.4rem;
+    }
+    .st-link-url {
+      font-size: 0.8rem; color: #572e88; font-weight: 600;
+      word-break: break-all; line-height: 1.4;
+    }
+    .st-copy-btn {
+      margin-top: 0.6rem; background: #572e88; color: #fff;
+      border: none; border-radius: 8px; padding: 0.42rem 1rem;
+      font-size: 0.78rem; font-weight: 700;
+      cursor: pointer; font-family: var(--bts-font);
+      transition: background 0.15s;
+    }
+    .st-copy-btn:hover { background: #4a2576; }
+    .st-email-note {
+      font-size: 0.8rem; color: #8a7ca5;
+      background: rgba(87,46,136,0.07); border-radius: 10px;
+      padding: 0.65rem 0.9rem; margin: 0 auto;
+      max-width: 360px; line-height: 1.5;
+    }
+
+    @media (max-width: 520px) {
+      .st-page { padding: 1.25rem 1rem 4rem; }
+      .st-body { padding: 1.1rem 1.1rem 0; }
+      .st-nav { padding: 1rem 1.1rem 1.25rem; }
+      .st-steps-wrap { padding: 0.9rem 1.1rem 0; }
+      .st-form-row { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<nav class="nav">
+  <a href="/" class="nav-logo">
+    <img src="/ASSETS/Images/btslogowhite.svg" alt="Build The Show" class="nav-logo-img" />
+  </a>
+</nav>
+
+<div id="page-content">
+  <div class="state-loading">Loading audition info…</div>
+</div>
+
+<div id="st-app" style="display:none;">
+  <div class="st-page">
+
+    <div class="st-show-head" id="st-show-head"></div>
+
+    <div class="st-card">
+      <div class="st-steps-wrap">
+        <div class="st-steps" id="st-steps-inner"></div>
+      </div>
+
+      <div id="st-wizard-body">
+        <div class="st-body">
+
+          <!-- Panel 1: Your Info -->
+          <div class="st-panel active" id="st-panel-1">
+            <div class="st-step-title">Tell us about the performer</div>
+            <div class="st-step-sub">This info stays with the production team only.</div>
+
+            <div class="st-form-row">
+              <div class="st-form-group">
+                <label class="st-label">First Name <span style="color:#b91c1c;">*</span></label>
+                <input class="st-input" id="st-fname" type="text" placeholder="First" autocomplete="given-name" />
+              </div>
+              <div class="st-form-group">
+                <label class="st-label">Last Name <span style="color:#b91c1c;">*</span></label>
+                <input class="st-input" id="st-lname" type="text" placeholder="Last" autocomplete="family-name" />
+              </div>
+            </div>
+
+            <div class="st-form-group">
+              <label class="st-label">Preferred Name</label>
+              <input class="st-input" id="st-preferred-name" type="text" placeholder="What they like to be called (optional)" />
+            </div>
+
+            <div class="st-form-group">
+              <label class="st-label">Pronouns</label>
+              <div class="st-pronoun-pair">
+                <select class="st-input" id="st-p1" onchange="stSyncPronouns()">
+                  <option value="He">He</option>
+                  <option value="She">She</option>
+                  <option value="They" selected>They</option>
+                </select>
+                <span class="st-pronoun-slash">/</span>
+                <select class="st-input" id="st-p2">
+                  <option value="Him">Him</option>
+                  <option value="Her">Her</option>
+                  <option value="Them" selected>Them</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="st-form-group">
+              <label class="st-label">Email Address <span style="color:#b91c1c;">*</span></label>
+              <input class="st-input" id="st-email" type="email" placeholder="email@example.com" autocomplete="email" />
+            </div>
+
+            <div class="st-form-group">
+              <label class="st-label">Phone Number</label>
+              <input class="st-input" id="st-phone" type="tel" placeholder="(123) 456-7890" autocomplete="tel" oninput="stFormatPhone(this)" />
+            </div>
+
+            <div class="st-form-group">
+              <label class="st-label">Date of Birth <span style="color:#b91c1c;">*</span></label>
+              <input class="st-input" id="st-dob" type="date" autocomplete="bday"
+                min="1900-01-01" oninput="stHandleDob(this)" onchange="stHandleDob(this)" />
+              <div class="st-age-display" id="st-age-display"></div>
+            </div>
+
+            <div class="st-guardian-section" id="st-guardian-section">
+              <div class="st-guardian-title">Guardian information required</div>
+              <div class="st-guardian-sub">This performer is under 18. A parent or guardian's details are required.</div>
+              <div class="st-form-group">
+                <label class="st-label">Guardian Name <span style="color:#b91c1c;">*</span></label>
+                <input class="st-input" id="st-g-name" type="text" placeholder="Full name" />
+              </div>
+              <div class="st-form-group">
+                <label class="st-label">Guardian Email <span style="color:#b91c1c;">*</span></label>
+                <input class="st-input" id="st-g-email" type="email" placeholder="guardian@example.com" />
+              </div>
+              <div class="st-form-group">
+                <label class="st-label">Guardian Phone <span style="color:#b91c1c;">*</span></label>
+                <input class="st-input" id="st-g-phone" type="tel" placeholder="(123) 456-7890" oninput="stFormatPhone(this)" />
+              </div>
+              <label class="st-agree-row">
+                <input type="checkbox" id="st-g-ack" />
+                I confirm the guardian listed has given permission for this performer to audition.
+              </label>
+            </div>
+
+            <div class="st-error" id="st-error-1"></div>
+          </div>
+
+          <!-- Panel 2: Role Interests -->
+          <div class="st-panel" id="st-panel-2">
+            <div class="st-step-title">Role interests</div>
+            <div class="st-step-sub">Select the roles this performer is interested in. Pick all that apply.</div>
+            <div id="st-roles-list" class="st-role-list"></div>
+            <div class="st-ensemble-section">
+              <label class="st-role-item" id="st-ensemble-item">
+                <input type="checkbox" id="st-ensemble-check" onchange="stToggleRoleItem(this)" />
+                <div>
+                  <div class="st-role-name">Open to ensemble / chorus</div>
+                  <div class="st-role-meta">Happy to be considered for ensemble or chorus roles</div>
+                </div>
+              </label>
+            </div>
+            <div class="st-error" id="st-error-2"></div>
+          </div>
+
+          <!-- Panel 3: Questions -->
+          <div class="st-panel" id="st-panel-3">
+            <div class="st-step-title">A few more questions</div>
+            <div class="st-step-sub">Answer whatever you can — these help the casting team get to know you.</div>
+            <div id="st-questions-list"></div>
+            <div class="st-error" id="st-error-3"></div>
+          </div>
+
+          <!-- Panel 4: Review & Submit -->
+          <div class="st-panel" id="st-panel-4">
+            <div class="st-step-title">Review your information</div>
+            <div class="st-step-sub">Make sure everything looks right before submitting.</div>
+            <div id="st-review-content"></div>
+            <div class="st-submit-agree">
+              <label class="st-agree-row">
+                <input type="checkbox" id="st-final-ack" />
+                I confirm the information above is accurate and I'm ready to submit.
+              </label>
+            </div>
+            <div class="st-error" id="st-error-4"></div>
+          </div>
+        </div>
+
+        <div class="st-nav" id="st-nav">
+          <button class="st-btn-back" id="st-btn-back" onclick="stBack()" style="visibility:hidden;">← Back</button>
+          <button class="st-btn-next" id="st-btn-next" onclick="stNext()">Continue →</button>
+        </div>
+      </div>
+
+      <div class="st-success" id="st-success">
+        <div class="st-success-icon">🎬</div>
+        <div class="st-success-title">You're registered!</div>
+        <div class="st-success-sub" id="st-success-sub">
+          Your self tape registration has been received. Use the link below to upload your tape.
+        </div>
+        <div class="st-link-box">
+          <div class="st-link-box-label">Your submission link</div>
+          <div class="st-link-url" id="st-submission-link-text"></div>
+          <button class="st-copy-btn" onclick="stCopyLink()">Copy Link</button>
+        </div>
+        <div class="st-email-note" id="st-email-note">
+          We've also sent this link to your email address. Keep it safe — you'll need it to upload your tape.
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script>
+  'use strict';
+
+  const { createClient } = supabase;
+  const sb = createClient(
+    'https://tkmaiktxpwqfbgeojbnf.supabase.co',
+    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRrbWFpa3R4cHdxZmJnZW9qYm5mIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM3MzE4MTcsImV4cCI6MjA4OTMwNzgxN30.TkTZBNWUatk3Y6Vmfv1hIRR3DfVjgwauwa76Pf00J_8'
+  );
+
+  const params  = new URLSearchParams(window.location.search);
+  const prodId  = params.get('prod') || params.get('id');
+
+  let _prod = null;
+  let _characters = [];
+  let _customQs = [];
+  let _stCurrentStep = 1;
+  let _stTotalSteps = 4;
+  let _stSubmissionLink = '';
+
+  // ── Utilities ─────────────────────────────────────────────────
+
+  function esc(str) {
+    const d = document.createElement('div');
+    d.textContent = str ?? '';
+    return d.innerHTML;
+  }
+
+  function stFormatPhone(input) {
+    let v = input.value.replace(/\D/g, '');
+    if (v.length > 10) v = v.slice(0, 10);
+    if (v.length >= 7) v = `(${v.slice(0,3)}) ${v.slice(3,6)}-${v.slice(6)}`;
+    else if (v.length >= 4) v = `(${v.slice(0,3)}) ${v.slice(3)}`;
+    else if (v.length > 0) v = `(${v}`;
+    input.value = v;
+  }
+
+  function stCalcAge(dob) {
+    if (!dob) return null;
+    const birth = new Date(dob + 'T00:00:00');
+    const now = new Date();
+    let age = now.getFullYear() - birth.getFullYear();
+    const m = now.getMonth() - birth.getMonth();
+    if (m < 0 || (m === 0 && now.getDate() < birth.getDate())) age--;
+    return age;
+  }
+
+  function stHandleDob(input) {
+    const age = stCalcAge(input.value);
+    const disp = document.getElementById('st-age-display');
+    const guardianSection = document.getElementById('st-guardian-section');
+    if (age !== null && age >= 0 && age < 120) {
+      disp.textContent = `Age: ${age}`;
+      if (age < 18) {
+        guardianSection.classList.add('visible');
+      } else {
+        guardianSection.classList.remove('visible');
+      }
+    } else {
+      disp.textContent = '';
+      guardianSection.classList.remove('visible');
+    }
+  }
+
+  function stSyncPronouns() {
+    const p1 = document.getElementById('st-p1').value;
+    const p2 = document.getElementById('st-p2');
+    const map = { He: 'Him', She: 'Her', They: 'Them' };
+    if (map[p1]) {
+      for (let i = 0; i < p2.options.length; i++) {
+        if (p2.options[i].value === map[p1]) { p2.selectedIndex = i; break; }
+      }
+    }
+  }
+
+  function stToggleRoleItem(checkbox) {
+    const item = checkbox.closest('.st-role-item');
+    if (item) item.classList.toggle('checked', checkbox.checked);
+  }
+
+  function stShowError(panelId, msg) {
+    const el = document.getElementById('st-error-' + panelId);
+    if (!el) return;
+    el.textContent = msg;
+    el.classList.add('visible');
+  }
+
+  function stClearError(panelId) {
+    const el = document.getElementById('st-error-' + panelId);
+    if (el) { el.textContent = ''; el.classList.remove('visible'); }
+  }
+
+  // ── Step navigation ──────────────────────────────────────────
+
+  function stUpdateStepUI() {
+    const steps = document.getElementById('st-steps-inner');
+    if (steps) {
+      steps.querySelectorAll('.st-step-item').forEach((item, i) => {
+        const n = i + 1;
+        const dot = item.querySelector('.st-step-dot');
+        const lbl = item.querySelector('.st-step-lbl');
+        if (n < _stCurrentStep) {
+          dot.className = 'st-step-dot done'; dot.textContent = '✓';
+          lbl.className = 'st-step-lbl done';
+          dot.onclick = () => stGoToStep(n);
+        } else if (n === _stCurrentStep) {
+          dot.className = 'st-step-dot active'; dot.textContent = n;
+          lbl.className = 'st-step-lbl active';
+          dot.onclick = null;
+        } else {
+          dot.className = 'st-step-dot'; dot.textContent = n;
+          lbl.className = 'st-step-lbl';
+          dot.onclick = null;
+        }
+      });
+    }
+    document.querySelectorAll('.st-panel').forEach((p, i) => {
+      p.classList.toggle('active', i + 1 === _stCurrentStep);
+    });
+    const back = document.getElementById('st-btn-back');
+    const next = document.getElementById('st-btn-next');
+    if (back) back.style.visibility = _stCurrentStep > 1 ? 'visible' : 'hidden';
+    if (next) next.textContent = _stCurrentStep === _stTotalSteps ? 'Submit' : 'Continue →';
+    if (_stCurrentStep === _stTotalSteps) stBuildReview();
+  }
+
+  function stGoToStep(n) {
+    if (n < _stCurrentStep) {
+      _stCurrentStep = n;
+      stUpdateStepUI();
+    }
+  }
+
+  function stBack() {
+    if (_stCurrentStep > 1) {
+      _stCurrentStep--;
+      stUpdateStepUI();
+    }
+  }
+
+  function stNext() {
+    stClearError(_stCurrentStep);
+    if (!stValidateStep(_stCurrentStep)) return;
+    if (_stCurrentStep < _stTotalSteps) {
+      _stCurrentStep++;
+      stUpdateStepUI();
+    } else {
+      stSubmit();
+    }
+  }
+
+  // ── Validation ──────────────────────────────────────────────
+
+  function stValidateStep(step) {
+    if (step === 1) {
+      const fname = document.getElementById('st-fname').value.trim();
+      const lname = document.getElementById('st-lname').value.trim();
+      const email = document.getElementById('st-email').value.trim();
+      const dob   = document.getElementById('st-dob').value;
+      if (!fname || !lname) { stShowError(1, 'Please enter the performer\'s first and last name.'); return false; }
+      if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { stShowError(1, 'Please enter a valid email address.'); return false; }
+      if (!dob) { stShowError(1, 'Please enter the performer\'s date of birth.'); return false; }
+      const age = stCalcAge(dob);
+      if (age < 18) {
+        const gName  = document.getElementById('st-g-name').value.trim();
+        const gEmail = document.getElementById('st-g-email').value.trim();
+        const gAck   = document.getElementById('st-g-ack').checked;
+        if (!gName)  { stShowError(1, 'Please enter the guardian\'s name.'); return false; }
+        if (!gEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(gEmail)) { stShowError(1, 'Please enter a valid guardian email.'); return false; }
+        if (!gAck)   { stShowError(1, 'Please confirm the guardian has given permission.'); return false; }
+      }
+      return true;
+    }
+    if (step === 2) {
+      const anyChecked = [...document.querySelectorAll('#st-roles-list input[type="checkbox"], #st-ensemble-check')]
+        .some(cb => cb.checked);
+      if (!anyChecked) { stShowError(2, 'Please select at least one role or tick "Open to ensemble".'); return false; }
+      return true;
+    }
+    if (step === 3) {
+      // Required questions
+      let ok = true;
+      _customQs.forEach(q => {
+        if (!q.required) return;
+        const el = document.getElementById('st-q-' + q.id);
+        if (!el || !el.value.trim()) { stShowError(3, `Please answer: "${q.question}"`); ok = false; }
+      });
+      return ok;
+    }
+    if (step === 4) {
+      const ack = document.getElementById('st-final-ack').checked;
+      if (!ack) { stShowError(4, 'Please tick the confirmation box before submitting.'); return false; }
+      return true;
+    }
+    return true;
+  }
+
+  // ── Review panel ────────────────────────────────────────────
+
+  function stBuildReview() {
+    const container = document.getElementById('st-review-content');
+    if (!container) return;
+
+    const fname = document.getElementById('st-fname').value.trim();
+    const lname = document.getElementById('st-lname').value.trim();
+    const preferred = document.getElementById('st-preferred-name').value.trim();
+    const p1 = document.getElementById('st-p1').value;
+    const p2 = document.getElementById('st-p2').value;
+    const email = document.getElementById('st-email').value.trim();
+    const phone = document.getElementById('st-phone').value.trim();
+    const dob = document.getElementById('st-dob').value;
+    const age = stCalcAge(dob);
+    const isMinor = age !== null && age < 18;
+
+    const selectedRoles = [];
+    document.querySelectorAll('#st-roles-list input[type="checkbox"]:checked').forEach(cb => {
+      const item = cb.closest('.st-role-item');
+      const namEl = item?.querySelector('.st-role-name');
+      if (namEl) selectedRoles.push(namEl.textContent.trim());
+    });
+    if (document.getElementById('st-ensemble-check').checked) selectedRoles.push('Ensemble / Chorus');
+
+    let html = `
+      <div class="st-review-section">
+        <div class="st-review-section-title">Performer</div>
+        <div class="st-review-row"><span class="st-review-key">Name</span><span class="st-review-val">${esc(fname + ' ' + lname)}${preferred ? ` (${esc(preferred)})` : ''}</span></div>
+        <div class="st-review-row"><span class="st-review-key">Pronouns</span><span class="st-review-val">${esc(p1)}/${esc(p2)}</span></div>
+        <div class="st-review-row"><span class="st-review-key">Email</span><span class="st-review-val">${esc(email)}</span></div>
+        ${phone ? `<div class="st-review-row"><span class="st-review-key">Phone</span><span class="st-review-val">${esc(phone)}</span></div>` : ''}
+        ${dob ? `<div class="st-review-row"><span class="st-review-key">Age</span><span class="st-review-val">${age} years old</span></div>` : ''}
+      </div>`;
+
+    if (isMinor) {
+      const gName  = document.getElementById('st-g-name').value.trim();
+      const gEmail = document.getElementById('st-g-email').value.trim();
+      html += `
+        <div class="st-review-section">
+          <div class="st-review-section-title">Guardian</div>
+          <div class="st-review-row"><span class="st-review-key">Name</span><span class="st-review-val">${esc(gName)}</span></div>
+          <div class="st-review-row"><span class="st-review-key">Email</span><span class="st-review-val">${esc(gEmail)}</span></div>
+        </div>`;
+    }
+
+    if (selectedRoles.length) {
+      html += `
+        <div class="st-review-section">
+          <div class="st-review-section-title">Role Interests</div>
+          <div class="st-review-tags">${selectedRoles.map(r => `<span class="st-review-tag">${esc(r)}</span>`).join('')}</div>
+        </div>`;
+    }
+
+    const qAnswers = [];
+    _customQs.forEach(q => {
+      const el = document.getElementById('st-q-' + q.id);
+      const val = el?.value?.trim();
+      if (val) qAnswers.push({ label: q.question, val });
+    });
+    if (qAnswers.length) {
+      html += `<div class="st-review-section"><div class="st-review-section-title">Questions</div>`;
+      qAnswers.forEach(({ label, val }) => {
+        html += `<div class="st-review-row" style="flex-direction:column;gap:0.15rem;"><span class="st-review-key" style="min-width:auto;">${esc(label)}</span><span class="st-review-val">${esc(val)}</span></div>`;
+      });
+      html += `</div>`;
+    }
+
+    container.innerHTML = html;
+  }
+
+  // ── Submit ───────────────────────────────────────────────────
+
+  async function stSubmit() {
+    const btn = document.getElementById('st-btn-next');
+    btn.disabled = true;
+    btn.textContent = 'Submitting…';
+
+    try {
+      const fname    = document.getElementById('st-fname').value.trim();
+      const lname    = document.getElementById('st-lname').value.trim();
+      const preferred = document.getElementById('st-preferred-name').value.trim();
+      const p1       = document.getElementById('st-p1').value;
+      const p2       = document.getElementById('st-p2').value;
+      const email    = document.getElementById('st-email').value.trim();
+      const phone    = document.getElementById('st-phone').value.trim();
+      const dob      = document.getElementById('st-dob').value;
+      const age      = stCalcAge(dob);
+      const isMinor  = age !== null && age < 18;
+
+      const gName  = isMinor ? document.getElementById('st-g-name').value.trim() : '';
+      const gEmail = isMinor ? document.getElementById('st-g-email').value.trim() : '';
+      const gPhone = isMinor ? document.getElementById('st-g-phone').value.trim() : '';
+
+      const selectedRoleIds = [];
+      const selectedRoleNames = [];
+      document.querySelectorAll('#st-roles-list input[type="checkbox"]:checked').forEach(cb => {
+        selectedRoleIds.push(cb.dataset.charId);
+        const item = cb.closest('.st-role-item');
+        const namEl = item?.querySelector('.st-role-name');
+        if (namEl) selectedRoleNames.push(namEl.textContent.trim());
+      });
+      const ensembleChecked = document.getElementById('st-ensemble-check').checked;
+      if (ensembleChecked) selectedRoleNames.push('Ensemble');
+
+      const customAnswers = {};
+      _customQs.forEach(q => {
+        const el = document.getElementById('st-q-' + q.id);
+        if (el?.value?.trim()) customAnswers[q.id] = el.value.trim();
+      });
+
+      const payload = {
+        production_id:   prodId,
+        name:            `${fname} ${lname}`.trim(),
+        preferred_name:  preferred || null,
+        pronouns:        `${p1}/${p2}`,
+        email:           email,
+        phone:           phone || null,
+        dob:             dob || null,
+        guardian_name:   gName || null,
+        guardian_email:  gEmail || null,
+        guardian_phone:  gPhone || null,
+        role_interest:   selectedRoleNames.join(', '),
+        custom_answers:  customAnswers,
+        audition_method: 'self_tape',
+        status:          'applied',
+      };
+
+      const { data: inserted, error: insertErr } = await sb
+        .from('audition_applications')
+        .insert(payload)
+        .select('id')
+        .single();
+
+      if (insertErr) throw insertErr;
+
+      const appId = inserted.id;
+      const submissionLink = `${window.location.origin}/self-tape/submit?prod=${encodeURIComponent(prodId)}&app=${encodeURIComponent(appId)}`;
+      _stSubmissionLink = submissionLink;
+
+      // Send confirmation email
+      await stSendEmail(fname, lname, email, submissionLink);
+
+      // Show success
+      document.getElementById('st-wizard-body').style.display = 'none';
+      document.getElementById('st-steps-wrap').style.display = 'none';
+      const success = document.getElementById('st-success');
+      success.classList.add('active');
+      document.getElementById('st-submission-link-text').textContent = submissionLink;
+
+    } catch (err) {
+      console.error('[Self Tape] submit error:', err);
+      stShowError(4, 'Something went wrong. Please try again or contact the production.');
+      btn.disabled = false;
+      btn.textContent = 'Submit';
+    }
+  }
+
+  async function stSendEmail(fname, lname, email, submissionLink) {
+    try {
+      const { data: templates } = await sb.from('email_templates')
+        .select('subject, body')
+        .eq('production_id', prodId)
+        .eq('category', 'self_tape_booked')
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      const template = templates?.[0];
+      const showName = esc(_prod?.title || '');
+
+      const context = {
+        performer_name:  `${fname} ${lname}`.trim(),
+        performer_email: email,
+        show_name:       _prod?.title || '',
+        submission_link: submissionLink,
+      };
+
+      const payload = {
+        to:       email,
+        category: 'self_tape_booked',
+        context,
+        production_id: prodId,
+      };
+
+      if (template) {
+        payload.subject = template.subject;
+        payload.message = template.body;
+      }
+
+      await sb.functions.invoke('send-email', { body: payload });
+    } catch (e) {
+      console.warn('[Self Tape] email send failed (non-fatal):', e);
+    }
+  }
+
+  function stCopyLink() {
+    if (!_stSubmissionLink) return;
+    navigator.clipboard.writeText(_stSubmissionLink).then(() => {
+      const btn = document.querySelector('.st-copy-btn');
+      if (btn) { btn.textContent = 'Copied!'; setTimeout(() => { btn.textContent = 'Copy Link'; }, 2000); }
+    }).catch(() => {
+      prompt('Copy this link:', _stSubmissionLink);
+    });
+  }
+
+  // ── Rendering helpers ────────────────────────────────────────
+
+  function stRenderSteps() {
+    const labels = ['Your Info', 'Role Interests', 'Questions', 'Review'];
+    const container = document.getElementById('st-steps-inner');
+    if (!container) return;
+    _stTotalSteps = labels.length;
+    container.innerHTML = labels.map((label, i) => `
+      <div class="st-step-item">
+        <div class="st-step-dot${i === 0 ? ' active' : ''}">${i + 1}</div>
+        <div class="st-step-lbl${i === 0 ? ' active' : ''}">${label}</div>
+      </div>
+    `).join('');
+  }
+
+  function stRenderShowHead() {
+    const prod = _prod;
+    const container = document.getElementById('st-show-head');
+    if (!container || !prod) return;
+    const poster = prod.poster_url
+      ? `<img src="${esc(prod.poster_url)}" class="st-show-poster" alt="" />`
+      : `<div class="st-show-poster-placeholder">🎭</div>`;
+    container.innerHTML = `
+      ${poster}
+      <div>
+        <div class="st-show-title">${esc(prod.title || 'Auditions')}</div>
+        <div class="st-show-subtitle">${esc(prod.org_name || '')}</div>
+        <div class="st-show-badge">🎬 Self Tape Audition</div>
+      </div>`;
+  }
+
+  function stRenderRoles() {
+    const container = document.getElementById('st-roles-list');
+    if (!container) return;
+
+    const genderBadge = {
+      female: { cls: 'gw', label: 'F' },
+      male:   { cls: 'bm', label: 'M' },
+      nonbinary: { cls: 'nb', label: 'NB' },
+    };
+
+    if (!_characters.length) {
+      container.innerHTML = '<div class="st-empty-note">No specific roles listed — please indicate ensemble interest below.</div>';
+      return;
+    }
+
+    container.innerHTML = _characters.map(char => {
+      const badge = genderBadge[char.gender_category?.toLowerCase()] || { cls: 'all', label: '' };
+      return `
+        <label class="st-role-item" onclick="">
+          <input type="checkbox" data-char-id="${esc(char.id)}" onchange="stToggleRoleItem(this)" />
+          <div>
+            <div class="st-role-name">${esc(char.name)}</div>
+            ${char.age_range ? `<div class="st-role-meta">Age range: ${esc(char.age_range)}</div>` : ''}
+          </div>
+          ${badge.label ? `<span class="st-role-badge ${badge.cls}">${badge.label}</span>` : ''}
+        </label>`;
+    }).join('');
+  }
+
+  function stRenderQuestions() {
+    const container = document.getElementById('st-questions-list');
+    if (!container) return;
+
+    if (!_customQs.length) {
+      container.innerHTML = '<div class="st-empty-note">No additional questions for this production.</div>';
+      return;
+    }
+
+    container.innerHTML = _customQs.map(q => {
+      const isTextarea = (q.type === 'textarea' || !q.type || q.type === 'text');
+      const input = isTextarea
+        ? `<textarea class="st-input" id="st-q-${esc(q.id)}" rows="3" placeholder="${esc(q.placeholder || '')}">${esc(q.default_value || '')}</textarea>`
+        : `<input class="st-input" id="st-q-${esc(q.id)}" type="text" placeholder="${esc(q.placeholder || '')}" value="${esc(q.default_value || '')}" />`;
+      return `
+        <div class="st-question-group">
+          <div class="st-question-label">${esc(q.question)}${q.required ? ' <span style="color:#b91c1c;">*</span>' : ''}</div>
+          ${q.description ? `<div class="st-question-sub">${esc(q.description)}</div>` : ''}
+          ${input}
+        </div>`;
+    }).join('');
+  }
+
+  // ── Init ─────────────────────────────────────────────────────
+
+  async function stInit() {
+    if (!prodId) {
+      document.getElementById('page-content').innerHTML = `
+        <div class="state-error">
+          <h2>Link not found</h2>
+          <p>This self tape link doesn't look right. Check with the production for the correct URL.</p>
+        </div>`;
+      return;
+    }
+
+    try {
+      const [prodRes, charRes, qRes] = await Promise.all([
+        sb.from('productions').select('id, title, poster_url, org_id').eq('id', prodId).maybeSingle(),
+        sb.from('production_characters').select('*').eq('production_id', prodId).eq('show_on_public_page', true).order('sort_order'),
+        sb.from('audition_custom_questions').select('*').eq('production_id', prodId).eq('enabled', true).order('sort_order'),
+      ]);
+
+      if (!prodRes.data) {
+        document.getElementById('page-content').innerHTML = `
+          <div class="state-error">
+            <h2>Production not found</h2>
+            <p>This self tape link doesn't match a production. Check with the team for the correct URL.</p>
+          </div>`;
+        return;
+      }
+
+      // Fetch org name
+      let orgName = '';
+      if (prodRes.data.org_id) {
+        const { data: org } = await sb.from('organisations').select('name').eq('id', prodRes.data.org_id).maybeSingle();
+        orgName = org?.name || '';
+      }
+
+      _prod = { ...prodRes.data, org_name: orgName };
+      _characters = charRes.data || [];
+      _customQs   = qRes.data || [];
+
+      document.title = `Self Tape — ${_prod.title || 'Audition'}`;
+      document.getElementById('page-content').style.display = 'none';
+      document.getElementById('st-app').style.display = 'block';
+
+      stRenderSteps();
+      stRenderShowHead();
+      stRenderRoles();
+      stRenderQuestions();
+
+    } catch (err) {
+      console.error('[Self Tape] init error:', err);
+      document.getElementById('page-content').innerHTML = `
+        <div class="state-error">
+          <h2>Something went wrong</h2>
+          <p>Could not load the audition info. Please try again or contact the production.</p>
+        </div>`;
+    }
+  }
+
+  document.addEventListener('DOMContentLoaded', stInit);
+</script>
+</body>
+</html>
