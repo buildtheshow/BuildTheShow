@@ -6148,7 +6148,7 @@
       position: relative;
       overflow: visible;
       border-radius: 4px;
-      touch-action: manipulation;
+      touch-action: none;
     }
     .cbv2-perf-card-wrap.is-muted .casting-card {
       filter: grayscale(1) saturate(0.22) brightness(0.84);
@@ -6162,8 +6162,8 @@
       height: 100%;
       transform: none !important;
       cursor: grab;
-      touch-action: manipulation;
-      -webkit-user-drag: none;
+      touch-action: none;
+      -webkit-user-drag: element;
       -webkit-tap-highlight-color: transparent;
       box-shadow:
         0 3px 5px rgba(15, 23, 42, 0.35),
@@ -10561,12 +10561,12 @@
     .cbv2-note-cards .casting-card {
       width: 100%;
       max-width: 100%;
-      cursor: pointer;
+      cursor: grab;
       justify-self: stretch;
       align-self: start;
       transform: none !important;
-      touch-action: manipulation;
-      -webkit-user-drag: none;
+      touch-action: none;
+      -webkit-user-drag: element;
       -webkit-tap-highlight-color: transparent;
       box-shadow:
         0 1px 2px rgba(15, 23, 42, 0.08),
@@ -10574,7 +10574,7 @@
     }
 
     .cbv2-note-cards .casting-card.state-applied {
-      filter: brightness(0.78) saturate(0.72);
+      filter: grayscale(1) contrast(1.04) brightness(0.98);
       box-shadow: none;
     }
 
@@ -20551,9 +20551,10 @@ If you have any questions, don't hesitate to reach out.
       await etSeedStarterTemplates();
       return;
     }
-    // Backfill team_invite for productions that existed before this template was added
-    if (!_etTemplates.some(t => t.category === 'team_invite')) {
-      const starter = ET_STARTER_TEMPLATES.find(t => t.category === 'team_invite');
+    // Backfill required starter templates for productions that existed before they were added.
+    for (const requiredCategory of ['team_invite', 'callback']) {
+      if (_etTemplates.some(t => t.category === requiredCategory)) continue;
+      const starter = ET_STARTER_TEMPLATES.find(t => t.category === requiredCategory);
       if (starter) {
         await sb.from('email_templates').insert({ ...starter, production_id: prodId });
         const { data: refreshed } = await sb.from('email_templates')
@@ -27859,6 +27860,21 @@ If you have any questions, don't hesitate to reach out.
   let _callbackSourceRefreshPromise = null;
   let _renderCallbacksAfterRefresh = false;
 
+  async function ensureCallbackEmailTemplate() {
+    const { data: templates, error } = await sb.from('email_templates')
+      .select('id')
+      .eq('production_id', prodId)
+      .eq('category', 'callback')
+      .limit(1);
+    if (error) throw error;
+    if (templates?.length) return true;
+    const starter = ET_STARTER_TEMPLATES.find(t => t.category === 'callback');
+    if (!starter) return false;
+    const { error: insertError } = await sb.from('email_templates').insert({ ...starter, production_id: prodId });
+    if (insertError) throw insertError;
+    return true;
+  }
+
   async function refreshCallbackSourceFromSupabase() {
     if (_callbackSourceRefreshPromise) return _callbackSourceRefreshPromise;
     _callbackSourceRefreshPromise = (async () => {
@@ -27895,11 +27911,14 @@ If you have any questions, don't hesitate to reach out.
     const app = allApplicants.find(a => a.id === appId);
     if (!app || !app.email) { showToast('No email address for this performer.', true); return; }
 
-    // Check template exists first
-    const { data: templates } = await sb.from('email_templates')
-      .select('id').eq('production_id', prodId).eq('category', 'callback').limit(1);
-    if (!templates?.length) {
-      showToast('No Callback Invite template found. Create one in the Emails tab first.', true);
+    try {
+      const hasTemplate = await ensureCallbackEmailTemplate();
+      if (!hasTemplate) {
+        showToast('No Callback Invite template found. Create one in the Emails tab first.', true);
+        return;
+      }
+    } catch (error) {
+      showToast('Could not prepare the Callback Invite template.', true);
       return;
     }
 
@@ -32706,7 +32725,7 @@ If you have any questions, don't hesitate to reach out.
         : `cbv2PointerDragStart(event,'${app.id}',null,null)`,
       onClick: isSelectablePlacedCard
         ? `cbv2ToggleChosen(event,'${app.id}','${charId}')`
-        : `cbv2TouchSelectCard(event,'${app.id}')`
+        : (!charId ? `cbv2TouchSelectCard(event,'${app.id}')` : '')
     });
     if (wantsRole) {
       return `<div class="cbv2-wants-role-wrap">${cardHtml}</div>`;
@@ -33112,8 +33131,9 @@ If you have any questions, don't hesitate to reach out.
       .map(a => {
         const app = allApplicants.find(x => x.id === a.applicant_id);
         if (!app) return '';
-        // Glow only when the performer specifically requested this role in their audition.
-        const wantsRole = (isCallbacks || activeBoardMode === 'general') && char && cbv2AppWantsRole(app, char);
+        const teamSelected = a.state === 'liked' || a.state === 'chosen';
+        // Glow only when the team selected them AND they specifically requested this role.
+        const wantsRole = teamSelected && (isCallbacks || activeBoardMode === 'general') && char && cbv2AppWantsRole(app, char);
         return cbv2MakeCCard(app, charId, a.state, wantsRole);
       }).join('');
     return cards || '<div class="cbv2-note-empty">Drop here</div>';
