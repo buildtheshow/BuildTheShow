@@ -55,6 +55,7 @@ function buildCastingCardBack(app, opts = {}) {
     roleNotes             = null,      // array of { charName, roleType, note } — per-character in-room notes
     characterAssignments  = null,      // array of { charName, roleType, state, decision } — casting board placements
     auditionTimeRows      = null,      // array of [audition type label, booked time or "-"]
+    selfTapeSubmissions   = null,      // array of self_tape_submissions rows; null = not loaded; [] = loaded, none found
   } = opts;
 
   const ca = (typeof applicantCustomAnswers === 'function')
@@ -591,6 +592,37 @@ function buildCastingCardBack(app, opts = {}) {
     }
   }
 
+  // ── Self Tape tab ─────────────────────────────────────────────
+  let selfTapeContent = '';
+  if (selfTapeSubmissions === null) {
+    // Not loaded — self tape tab was never visited this session
+    selfTapeContent = `<div class="irb-tab-empty" style="font-size:0.75rem;color:#9a90b0;line-height:1.5;">
+      Self tape data not loaded.<br>Visit the Self Tape tab to load submissions.
+    </div>`;
+  } else if (selfTapeSubmissions.length === 0) {
+    selfTapeContent = `<div class="irb-tab-empty">
+      <div style="font-size:1.1rem;margin-bottom:0.3rem;">⏳</div>
+      Not Submitted<br>
+      <span style="font-size:0.72rem;color:#9a90b0;font-weight:400;">No self tape received yet.</span>
+    </div>`;
+  } else {
+    selfTapeContent = selfTapeSubmissions.map(s => {
+      const date = s.submitted_at
+        ? new Date(s.submitted_at).toLocaleDateString('en-CA', { year: 'numeric', month: 'short', day: 'numeric' })
+        : '';
+      const label = escStr(s.label || 'Self Tape');
+      const url   = escStr(s.video_url || '');
+      return `<div class="irb-session-block" style="background:#eafaf1;border-left:3px solid #34d371;padding:0.45rem 0.5rem;border-radius:0 6px 6px 0;margin-bottom:0.4rem;">
+        <div style="font-size:0.72rem;font-weight:800;color:#1a7540;margin-bottom:0.2rem;">${label}</div>
+        <a href="${url}" target="_blank" rel="noopener"
+           style="font-size:0.7rem;color:#15803d;font-weight:600;word-break:break-all;text-decoration:underline;line-height:1.35;display:block;">
+          ${url}
+        </a>
+        ${date ? `<div style="font-size:0.65rem;color:#2d8a56;margin-top:0.2rem;">${date}</div>` : ''}
+      </div>`;
+    }).join('');
+  }
+
   const accentColor = scoreColorSet?.base || '#572e88';
   return `<div class="inroom-back-scroll irb-tabs" style="${BACK_CARD_SURFACE_STYLE};--irb-accent:${escStr(accentColor)}">
     <div class="irb-tab-bar" role="tablist" aria-label="Casting card details">
@@ -598,10 +630,12 @@ function buildCastingCardBack(app, opts = {}) {
       ${tabButton('General Auditions', false, 'irb-tab-general')}
       ${tabButton('Dance Call', false, 'irb-tab-dance')}
       ${tabButton('Callback', false, 'irb-tab-callback')}
+      ${tabButton('Self Tape', false, 'irb-tab-selftape')}
     </div>
     ${tabPanel('irb-tab-answers', theirAnswersContent, true)}
     ${tabPanel('irb-tab-general', generalAuditionsContent, false)}
     ${tabPanel('irb-tab-dance', danceCallContent, false)}
     ${tabPanel('irb-tab-callback', callbackContent, false)}
+    ${tabPanel('irb-tab-selftape', selfTapeContent, false)}
   </div>`;
 }

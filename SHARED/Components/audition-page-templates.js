@@ -250,7 +250,8 @@
       teamAccessMode,
       activeTool,
       ciClick,
-      irClick
+      irClick,
+      stClick
     } = config;
 
     return `
@@ -258,6 +259,7 @@
         <div class="aud-day-topnav">
           ${teamAccessMode ? '' : `<button type="button" class="aud-day-topnav-btn${activeTool === 'checkin' ? ' active' : ''}" onclick="${ciClick}">Check In</button>`}
           <button type="button" class="aud-day-topnav-btn${activeTool === 'inroom' ? ' active' : ''}" onclick="${irClick}">In the Room</button>
+          ${stClick ? `<button type="button" class="aud-day-topnav-btn${activeTool === 'selftape' ? ' active' : ''}" onclick="${stClick}">Self Tape</button>` : ''}
         </div>
       </div>`;
   }
