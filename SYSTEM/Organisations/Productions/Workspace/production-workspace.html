@@ -1847,6 +1847,7 @@
       padding: 0.14rem 0.48rem; border-radius: 999px; white-space: nowrap; flex-shrink: 0;
     }
     .et-cat-booking_confirmation { background: rgba(127,175,139,0.18); color: #3f7a51; }
+    .et-cat-self_tape_booked     { background: rgba(37,99,235,0.12);   color: #1d4ed8; }
     .et-cat-audition_reminder    { background: rgba(214,140,178,0.18); color: #9f537a; }
     .et-cat-callback             { background: rgba(227,164,111,0.2);  color: #a4612b; }
     .et-cat-cast_announcement    { background: rgba(101,150,113,0.2); color: #3b744c; }
@@ -14925,11 +14926,17 @@
                 <div class="aud-run-card-copy">Mark performers as arrived, pull up contact information, and quickly handle no-shows at the front of house.</div>
                 <div class="aud-run-card-note">Best when people are walking in the door.</div>
               </button>
-              <button type="button" class="aud-run-card" onclick="openAuditionsSubTab('inroom')">
+              <button type="button" class="aud-run-card" onclick="openAuditionsSubTab(‘inroom’)">
                 <span class="aud-run-card-badge">2</span>
                 <div class="aud-run-card-title">In the Room</div>
                 <div class="aud-run-card-copy">Open the active performer card, score what you’re seeing, and track notes while auditions are happening.</div>
                 <div class="aud-run-card-note">Best when the panel is actively seeing performers.</div>
+              </button>
+              <button type="button" class="aud-run-card" onclick="openAuditionsSubTab(‘selftape’)">
+                <span class="aud-run-card-badge">🎬</span>
+                <div class="aud-run-card-title">Self Tape</div>
+                <div class="aud-run-card-copy">View performers who registered for self tape and see which submissions have been received.</div>
+                <div class="aud-run-card-note">Submissions appear automatically — nothing to mark manually.</div>
               </button>
             </div>
           </div>
@@ -19911,6 +19918,17 @@
         { token: '{{portal_link}}',       label: 'Portal Link',       sample: 'https://buildtheshow.com/audition-team' },
       ],
     },
+    // ── Self Tape ────────────────────────────────────────────────
+    {
+      group: 'Self Tape',
+      color: '#2563eb',
+      bg:    '#dbeafe',
+      vars: [
+        { token: '{{submission_link}}', label: 'Submission Link', sample: 'https://buildtheshow.com/self-tape/submit?prod=…&app=…' },
+        { token: '{{show_name}}',       label: 'Show Name',       sample: () => prod?.title || 'Our Show' },
+        { token: '{{performer_name}}',  label: 'Performer Name',  sample: 'Jamie Lee' },
+      ],
+    },
   ];
 
   const ET_LEGACY_VARIABLES = [
@@ -20003,6 +20021,11 @@
       required: ['{{contact_name}}', '{{role_name}}'],
       recommended: ['{{show_name}}', '{{rehearsal_start_date}}', '{{opening_night}}'],
       note: 'Cast announcements should celebrate the offer, then move quickly into next steps.'
+    },
+    self_tape_booked: {
+      required: ['{{performer_name}}', '{{submission_link}}'],
+      recommended: ['{{show_name}}'],
+      note: 'This email is sent automatically when a performer registers. It must include {{submission_link}} — without it, they cannot submit their tape.'
     },
     not_cast: {
       required: ['{{contact_name}}'],
@@ -20641,6 +20664,33 @@ If you have any questions, don't hesitate to reach out.
 {{director_name}}
 {{org_name}}`,
     },
+    {
+      name: 'Self Tape — Registration Confirmed',
+      category: 'self_tape_booked',
+      trigger: 'manual',
+      subject: 'Your self tape registration for {{show_name}}',
+      body: `Hi {{performer_name}},
+
+Thank you for registering to submit a self tape for {{show_name}}!
+
+Use the link below to upload your video. You can submit any time before the deadline.
+
+─────────────────────────────
+YOUR SUBMISSION LINK
+─────────────────────────────
+{{submission_link}}
+─────────────────────────────
+
+Keep this email — you'll need this link to submit your tape. The link is unique to you.
+
+Accepted platforms: YouTube (unlisted), Vimeo, Google Drive
+
+If you have any questions, just reply to this email.
+
+We look forward to seeing your work!
+
+{{org_name}}`,
+    },
   ];
 
   async function etSeedStarterTemplates() {
@@ -20697,7 +20747,7 @@ If you have any questions, don't hesitate to reach out.
       return;
     }
     // Backfill required starter templates for productions that existed before they were added.
-    for (const requiredCategory of ['team_invite', 'callback']) {
+    for (const requiredCategory of ['team_invite', 'callback', 'self_tape_booked']) {
       if (_etTemplates.some(t => t.category === requiredCategory)) continue;
       const starter = ET_STARTER_TEMPLATES.find(t => t.category === requiredCategory);
       if (starter) {
@@ -24644,6 +24694,7 @@ If you have any questions, don't hesitate to reach out.
     if (finalCastingPickedKeys.has(key)) finalCastingPickedKeys.delete(key);
     else finalCastingPickedKeys.add(key);
     event?.currentTarget?.classList.toggle('is-selected', finalCastingPickedKeys.has(key));
+    renderFinalCastingPool();
   }
 
   async function renderFinalCastingEnsemble() {
@@ -24691,34 +24742,37 @@ If you have any questions, don't hesitate to reach out.
     if (!grid) return;
     const query = String(document.getElementById('final-casting-pool-search')?.value || '').trim().toLowerCase();
     const apps = finalCastingPoolApplicants.filter(app => !query || String(app.name || '').toLowerCase().includes(query));
-    const selected = apps.filter(app => finalCastingPoolSelectedIds.has(app.id));
-    const unplaced = apps.filter(app => !finalCastingPoolSelectedIds.has(app.id));
+    const confirmedIds = new Set([...finalCastingEnsembleIds]);
+    finalCastingPickedKeys.forEach(key => {
+      const [, appId] = String(key).split('::');
+      if (appId) confirmedIds.add(appId);
+    });
+    const confirmed = apps.filter(app => confirmedIds.has(app.id));
+    const notConfirmed = apps.filter(app => finalCastingPoolSelectedIds.has(app.id) && !confirmedIds.has(app.id));
+    const unplaced = apps.filter(app => !finalCastingPoolSelectedIds.has(app.id) && !confirmedIds.has(app.id));
     if (!apps.length) {
       grid.innerHTML = `<div style="padding:1.5rem 0.5rem;text-align:center;color:#9a90b0;font-size:0.78rem;line-height:1.4;">${query ? 'No selected performers match that search.' : 'No selected performers yet. Add colour cards on the Casting Board to build this pool.'}</div>`;
       return;
     }
-    const selectedHtml = selected.map(app => {
+    const makeCard = (app, state) => {
       const cardHtml = buildStandardCastingCardHtml(app, {
         draggable: true,
-        state: 'liked',
+        state,
         onDragStart: `finalCastingDragStart(event,'${esc(app.id)}','','pool')`,
         onDragEnd: 'finalCastingDragEnd(event)',
       });
       return `<div class="cbv2-perf-card-wrap">${cardHtml}</div>`;
-    }).join('');
-    const unplacedHtml = unplaced.map(app => {
-      const cardHtml = buildStandardCastingCardHtml(app, {
-        draggable: true,
-        state: 'applied',
-        onDragStart: `finalCastingDragStart(event,'${esc(app.id)}','','pool')`,
-        onDragEnd: 'finalCastingDragEnd(event)',
-      });
-      return `<div class="cbv2-perf-card-wrap">${cardHtml}</div>`;
-    }).join('');
-    const unplacedHeader = unplaced.length
-      ? `<div style="grid-column:1/-1;margin:0.35rem 0 0.1rem;padding-top:0.65rem;border-top:1px solid rgba(87,46,136,0.12);font-size:0.68rem;font-weight:800;text-transform:uppercase;letter-spacing:0.08em;color:#9a90b0;">Not placed yet</div>`
-      : '';
-    grid.innerHTML = `${selectedHtml}${unplacedHeader}${unplacedHtml}`;
+    };
+    const groupHtml = (label, items, state, withRule = true) => {
+      if (!items.length) return '';
+      const rule = withRule ? 'border-top:1px solid rgba(87,46,136,0.12);padding-top:0.65rem;' : '';
+      return `<div style="grid-column:1/-1;margin:0.35rem 0 0.1rem;${rule}font-size:0.68rem;font-weight:800;text-transform:uppercase;letter-spacing:0.08em;color:#9a90b0;">${label}</div>${items.map(app => makeCard(app, state)).join('')}`;
+    };
+    grid.innerHTML = [
+      groupHtml('Confirmed', confirmed, 'chosen', false),
+      groupHtml('Not confirmed', notConfirmed, 'liked'),
+      groupHtml('Not yet placed', unplaced, 'applied'),
+    ].join('');
   }
 
   function switchProdTab(id) {
