@@ -15192,10 +15192,10 @@
               <div class="cbv2-performers">
                 <div class="cbv2-perf-head">
                   <div class="cbv2-panel-heading" style="margin:0;">Final Pool</div>
-                  <input class="cbv2-filter-input" type="text" placeholder="Search performers…" disabled />
+                  <input class="cbv2-filter-input" id="final-casting-pool-search" type="text" placeholder="Search performers…" oninput="renderFinalCastingPool()" />
                   <div class="cbv2-panel-rule"></div>
                 </div>
-                <div class="cbv2-perf-grid">
+                <div class="cbv2-perf-grid" id="final-casting-pool-grid">
                   <div style="padding:1.5rem 0.5rem;text-align:center;color:#9a90b0;font-size:0.78rem;line-height:1.4;">Final Casting will be built here.</div>
                 </div>
               </div>
@@ -15216,7 +15216,7 @@
                   <div class="cbv2-board-rule"></div>
                 </div>
                 <div class="cbv2-board-scroll">
-                  <div class="cbv2-roles-area">
+                  <div class="cbv2-roles-area" id="final-casting-roles-area">
                     <div style="grid-column:1/-1;text-align:center;padding:3rem;color:#9a90b0;font-size:0.875rem;">
                       A separate Final Casting board will live here.
                     </div>
@@ -24402,6 +24402,99 @@ If you have any questions, don't hesitate to reach out.
     document.querySelectorAll('.final-casting-tab-panel').forEach(panel => {
       panel.style.display = panel.id === `final-casting-tab-${key}` ? '' : 'none';
     });
+    if (key === 'board') loadFinalCastingBoardVisuals();
+  }
+
+  let finalCastingPoolSelectedIds = new Set();
+  let finalCastingPoolApplicants = [];
+
+  async function loadFinalCastingPool() {
+    const grid = document.getElementById('final-casting-pool-grid');
+    if (!grid) return;
+    grid.innerHTML = '<div style="padding:1.5rem 0.5rem;text-align:center;color:#9a90b0;font-size:0.78rem;line-height:1.4;">Loading selected performers…</div>';
+
+    if (!allApplicants.length) await loadApplicants({ skipRender: true, skipCastingSync: true }).catch(() => {});
+
+    const { data, error } = await sb.from('casting_assignments')
+      .select('applicant_id')
+      .eq('production_id', prodId)
+      .in('state', ['liked', 'chosen']);
+
+    if (error) {
+      grid.innerHTML = '<div style="padding:1.5rem 0.5rem;text-align:center;color:#c0392b;font-size:0.78rem;line-height:1.4;">Could not load the final pool.</div>';
+      return;
+    }
+
+    finalCastingPoolSelectedIds = new Set((data || []).map(row => row.applicant_id).filter(Boolean));
+    finalCastingPoolApplicants = (allApplicants || [])
+      .sort(compareApplicantsAlphabetically);
+    renderFinalCastingPool();
+  }
+
+  async function loadFinalCastingBoardVisuals() {
+    await Promise.all([
+      loadFinalCastingPool(),
+      renderFinalCastingCharacterNotes(),
+    ]);
+  }
+
+  async function renderFinalCastingCharacterNotes() {
+    const area = document.getElementById('final-casting-roles-area');
+    if (!area) return;
+    area.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:3rem;color:#9a90b0;font-size:0.875rem;">Loading roles…</div>';
+    if (!characters.length) await loadCharacters().catch(() => {});
+    const chars = [...(characters || [])].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0) || String(a.name || '').localeCompare(String(b.name || '')));
+    if (!chars.length) {
+      area.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:3rem;color:#9a90b0;font-size:0.875rem;">Add characters in Audition Setup to build the Final Casting board.</div>';
+      return;
+    }
+    const rotations = cbv2NoteRotations(chars);
+    area.innerHTML = chars.map((char, index) => {
+      const noteId = `fc-note-${char.id}`;
+      const cardsId = `fc-note-cards-${char.id}`;
+      const footerId = `fc-note-footer-${char.id}`;
+      return window.BTSAuditionTemplates.renderTemplateById('auditions.casting-board.sticky-note', {
+        esc,
+        noteId,
+        charId: char.id,
+        name: char.name || 'Unnamed',
+        style: cbv2NoteStyle(rotations[index] || 0),
+        cardsId,
+        cardsHtml: '<div class="cbv2-note-empty">Final picks here</div>',
+        footerId,
+        footerHtml: '<div></div>',
+        interactive: false,
+        headerOnclick: '',
+        noteOnclick: '',
+        dragAttrs: '',
+      });
+    }).join('');
+    requestAnimationFrame(fitCbv2NoteHeaders);
+  }
+
+  function renderFinalCastingPool() {
+    const grid = document.getElementById('final-casting-pool-grid');
+    if (!grid) return;
+    const query = String(document.getElementById('final-casting-pool-search')?.value || '').trim().toLowerCase();
+    const apps = finalCastingPoolApplicants.filter(app => !query || String(app.name || '').toLowerCase().includes(query));
+    const selected = apps.filter(app => finalCastingPoolSelectedIds.has(app.id));
+    const unplaced = apps.filter(app => !finalCastingPoolSelectedIds.has(app.id));
+    if (!apps.length) {
+      grid.innerHTML = `<div style="padding:1.5rem 0.5rem;text-align:center;color:#9a90b0;font-size:0.78rem;line-height:1.4;">${query ? 'No selected performers match that search.' : 'No selected performers yet. Add colour cards on the Casting Board to build this pool.'}</div>`;
+      return;
+    }
+    const selectedHtml = selected.map(app => {
+      const cardHtml = buildStandardCastingCardHtml(app, { draggable: false, state: 'liked' });
+      return `<div class="cbv2-perf-card-wrap">${cardHtml}</div>`;
+    }).join('');
+    const unplacedHtml = unplaced.map(app => {
+      const cardHtml = buildStandardCastingCardHtml(app, { draggable: false, state: 'applied' });
+      return `<div class="cbv2-perf-card-wrap">${cardHtml}</div>`;
+    }).join('');
+    const unplacedHeader = unplaced.length
+      ? `<div style="grid-column:1/-1;margin:0.35rem 0 0.1rem;padding-top:0.65rem;border-top:1px solid rgba(87,46,136,0.12);font-size:0.68rem;font-weight:800;text-transform:uppercase;letter-spacing:0.08em;color:#9a90b0;">Not placed yet</div>`
+      : '';
+    grid.innerHTML = `${selectedHtml}${unplacedHeader}${unplacedHtml}`;
   }
 
   function switchProdTab(id) {
