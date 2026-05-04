@@ -15159,6 +15159,11 @@
         </div>
       </div><!-- end aud-panel-castboard -->
 
+      <!-- ── FINAL CASTING ── -->
+      <div id="aud-panel-finalcasting" class="aud-panel" style="display:none;">
+        <div id="cbv2-finalcasting-mount"></div>
+      </div>
+
       <!-- ── CAST LIST ── -->
       <div id="aud-panel-castlist" class="aud-panel" style="display:none;">
         <div class="page-header">
@@ -23607,7 +23612,7 @@ If you have any questions, don't hesitate to reach out.
 
   // ── Audition sub-tab switching ────────────────────────
   function switchAudTab(tab) {
-      const auditionsTabs = new Set(['overview', 'setup', 'auditions', 'checkin', 'inroom', 'callbacks', 'castboard', 'castlist']);
+      const auditionsTabs = new Set(['overview', 'setup', 'auditions', 'checkin', 'inroom', 'callbacks', 'castboard', 'finalcasting', 'castlist']);
       if (auditionsTabs.has(tab)) {
         const navPatch = tab === 'auditions'
           ? { prodTab: 'auditions' }
@@ -23617,7 +23622,7 @@ If you have any questions, don't hesitate to reach out.
       document.querySelectorAll('.aud-snav-btn[data-aud-tab]').forEach(el => {
     el.classList.toggle('active', el.dataset.audTab === tab);
   });
-     ['overview','setup','auditions','castboard','castlist','callbacks'].forEach(t => {
+     ['overview','setup','auditions','castboard','finalcasting','castlist','callbacks'].forEach(t => {
       const el = document.getElementById('aud-panel-' + t);
       if (el) el.style.display = (t === tab) ? '' : 'none';
   });
@@ -23629,6 +23634,7 @@ If you have any questions, don't hesitate to reach out.
 
   if (tab === 'auditions') { if (!allApplicants.length) loadApplicants(); renderAuditionsPanel(); }
   if (tab === 'castboard') { ensureWorkspaceData(['castingBoard']).then(renderActiveCastingBoard).catch(renderActiveCastingBoard); }
+  if (tab === 'finalcasting') { ensureWorkspaceData(['castingBoard']).then(renderActiveCastingBoard).catch(renderActiveCastingBoard); }
   if (tab === 'castlist') { ensureWorkspaceData(['castList']).then(renderCastList).catch(renderCastList); }
   if (tab === 'callbacks') renderCallbacksFresh();
   if (tab === 'setup') {
@@ -24195,10 +24201,10 @@ If you have any questions, don't hesitate to reach out.
       cbv2SubView = 'board';
       setCastboardMode('general');
       switchAudTab('castboard');
-    } else if (subTab === 'finalcasting') {
+  } else if (subTab === 'finalcasting') {
       cbv2SubView = 'board';
       setCastboardMode('final');
-      switchAudTab('castboard');
+      switchAudTab('finalcasting');
       saveWorkspaceNavState({ auditionsSubTab: 'finalcasting' });
     }
 
@@ -24279,7 +24285,7 @@ If you have any questions, don't hesitate to reach out.
     setSidebarSubmenuState('auditions', 'asub-finalcasting');
     cbv2SubView = 'board';
     setCastboardMode('final');
-    switchAudTab('castboard');
+    switchAudTab('finalcasting');
     saveWorkspaceNavState({ prodTab: 'auditions', auditionsSubTab: 'finalcasting' });
   }
 
@@ -27230,7 +27236,9 @@ If you have any questions, don't hesitate to reach out.
       const syncApplied = async () => {
         try {
           const changed = await cbv2SyncApplied();
-          if (changed && document.getElementById('aud-panel-castboard')?.style.display !== 'none') renderActiveCastingBoard();
+          const boardVisible = document.getElementById('aud-panel-castboard')?.style.display !== 'none' ||
+            document.getElementById('aud-panel-finalcasting')?.style.display !== 'none';
+          if (changed && boardVisible) renderActiveCastingBoard();
         } catch {}
       };
       if ('requestIdleCallback' in window) window.requestIdleCallback(syncApplied, { timeout: 1200 });
@@ -32142,6 +32150,16 @@ If you have any questions, don't hesitate to reach out.
     return isCallbackSessionCastingBoardActive() ? 'callbacks' : cbv2Tab;
   }
 
+  function mountActiveCastingBoardSurface() {
+    const outer = document.getElementById('cbv2-outer');
+    const activeMode = getActiveCastingBoardMode();
+    const target = activeMode === 'final'
+      ? document.getElementById('cbv2-finalcasting-mount')
+      : document.getElementById('aud-panel-castboard');
+    if (!outer || !target || outer.parentElement === target) return;
+    target.appendChild(outer);
+  }
+
   function applyBoardTheme() {
     const outer = document.getElementById('cbv2-outer');
     if (!outer) return;
@@ -33589,6 +33607,7 @@ If you have any questions, don't hesitate to reach out.
   }
 
   function renderActiveCastingBoard() {
+    mountActiveCastingBoardSurface();
     if (!isWorkspaceDataReady('castingBoard')) {
       setCbv2Loading();
       ensureWorkspaceData(['castingBoard']).then(renderActiveCastingBoard).catch(renderCbv2);
