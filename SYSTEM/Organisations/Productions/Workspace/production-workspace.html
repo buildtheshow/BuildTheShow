@@ -24973,7 +24973,7 @@ We look forward to seeing your work!
       const pickKey = `${char.id}::${app.id}`;
       const selectedClass = finalCastingPickedKeys.has(pickKey) ? ' is-selected' : '';
       const visualCard = wantsRole ? `<div class="cbv2-wants-role-wrap">${cardHtml}</div>` : cardHtml;
-      return `<div class="final-casting-pick${selectedClass}" onclick="toggleFinalCastingPick(event,'${esc(char.id)}','${esc(app.id)}')">${visualCard}</div>`;
+      return `<div class="final-casting-pick${selectedClass}" data-final-casting-pick-key="${esc(pickKey)}" onclick="toggleFinalCastingPick(event,'${esc(char.id)}','${esc(app.id)}')">${visualCard}</div>`;
     }).filter(Boolean).join('');
     return html || '<div class="cbv2-note-empty">Final picks here</div>';
   }
@@ -25082,12 +25082,14 @@ We look forward to seeing your work!
       if (existingRoleNames.length) {
         const appName = allApplicants.find(app => String(app.id) === String(appId))?.name || 'This performer';
         const roleName = characters.find(char => String(char.id) === String(charId))?.name || 'this role';
-        const confirmed = await btsWarningConfirm({
-          title: 'Confirm multiple roles?',
-          body: `${appName} is already confirmed for ${existingRoleNames.join(', ')}. Do you want to lock them into ${roleName} as well?`,
-          confirmLabel: 'Confirm Both Roles',
-        });
-        if (!confirmed) return;
+        cbv2OpenWarn(
+          `${appName} is already confirmed for ${existingRoleNames.join(', ')}. Are you sure you want to lock them into ${roleName} too?`,
+          { type: 'final-casting-double-confirm', key },
+          true,
+          'Confirm multiple roles?',
+          'Yes, Confirm Both'
+        );
+        return;
       }
       finalCastingPickedKeys.add(key);
     }
@@ -35072,11 +35074,16 @@ We look forward to seeing your work!
   }
 
   // ── Click to toggle chosen ──
-  function cbv2OpenWarn(message, pending = null, allowContinue = true) {
+  function cbv2OpenWarn(message, pending = null, allowContinue = true, title = 'Performer already selected', continueLabel = 'Continue') {
+    const titleEl = document.querySelector('#cbv2-warn-overlay .cbv2-warn-title');
     const body = document.getElementById('cbv2-warn-body');
     const continueBtn = document.getElementById('cbv2-warn-continue-btn');
+    if (titleEl) titleEl.textContent = title;
     if (body) body.textContent = message;
-    if (continueBtn) continueBtn.style.display = allowContinue ? '' : 'none';
+    if (continueBtn) {
+      continueBtn.textContent = continueLabel;
+      continueBtn.style.display = allowContinue ? '' : 'none';
+    }
     cbv2WarnPending = pending;
     document.getElementById('cbv2-warn-overlay')?.classList.add('open');
   }
@@ -35173,14 +35180,27 @@ We look forward to seeing your work!
   function cbv2WarnStop() {
     cbv2WarnPending = null;
     const continueBtn = document.getElementById('cbv2-warn-continue-btn');
-    if (continueBtn) continueBtn.style.display = '';
+    const titleEl = document.querySelector('#cbv2-warn-overlay .cbv2-warn-title');
+    if (titleEl) titleEl.textContent = 'Performer already selected';
+    if (continueBtn) { continueBtn.textContent = 'Continue'; continueBtn.style.display = ''; }
     document.getElementById('cbv2-warn-overlay').classList.remove('open');
   }
   async function cbv2WarnContinue() {
     document.getElementById('cbv2-warn-overlay').classList.remove('open');
     const continueBtn = document.getElementById('cbv2-warn-continue-btn');
-    if (continueBtn) continueBtn.style.display = '';
+    const titleEl = document.querySelector('#cbv2-warn-overlay .cbv2-warn-title');
+    if (titleEl) titleEl.textContent = 'Performer already selected';
+    if (continueBtn) { continueBtn.textContent = 'Continue'; continueBtn.style.display = ''; }
     if (!cbv2WarnPending) return;
+    if (cbv2WarnPending.type === 'final-casting-double-confirm') {
+      const { key } = cbv2WarnPending;
+      cbv2WarnPending = null;
+      finalCastingPickedKeys.add(key);
+      await renderFinalCastingCharacterNotes();
+      renderFinalCastingPool();
+      renderFinalCastingList();
+      return;
+    }
     const { assignment } = cbv2WarnPending;
     cbv2WarnPending = null;
     assignment.state = 'chosen';
