@@ -24977,16 +24977,18 @@ We look forward to seeing your work!
       const app = allApplicants.find(candidate => candidate.id === a.applicant_id);
       if (!app) return '';
       const wantsRole = cbv2AppWantsRole(app, char);
+      const pickKey = `${char.id}::${app.id}`;
+      const isLocked = finalCastingPickedKeys.has(pickKey);
       const cardHtml = buildStandardCastingCardHtml(app, {
         draggable: true,
-        state: wantsRole ? 'chosen' : 'liked',
+        state: isLocked ? 'chosen' : 'liked',
         onDragStart: `finalCastingDragStart(event,'${esc(app.id)}','${esc(char.id)}','role')`,
         onDragEnd: 'finalCastingDragEnd(event)',
+        onClick: `toggleFinalCastingPick(event,'${esc(char.id)}','${esc(app.id)}')`,
       });
-      const pickKey = `${char.id}::${app.id}`;
-      const selectedClass = finalCastingPickedKeys.has(pickKey) ? ' is-selected' : '';
+      const selectedClass = isLocked ? ' is-selected' : '';
       const visualCard = wantsRole ? `<div class="cbv2-wants-role-wrap">${cardHtml}</div>` : cardHtml;
-      return `<div class="final-casting-pick${selectedClass}" data-final-casting-pick-key="${esc(pickKey)}" onclick="toggleFinalCastingPick(event,'${esc(char.id)}','${esc(app.id)}')">${visualCard}</div>`;
+      return `<div class="final-casting-pick${selectedClass}" data-final-casting-pick-key="${esc(pickKey)}">${visualCard}</div>`;
     }).filter(Boolean).join('');
     return html || '<div class="cbv2-note-empty">Final picks here</div>';
   }
@@ -25113,8 +25115,12 @@ We look forward to seeing your work!
           .select()
           .single();
         if (error) throw error;
-        assignment = data || { production_id: prodId, character_id: charId, applicant_id: appId, state: nextState };
-        finalCastingSelectedAssignments.push(assignment);
+        const savedAssignment = data || { production_id: prodId, character_id: charId, applicant_id: appId, state: nextState };
+        if (assignment) Object.assign(assignment, savedAssignment);
+        else {
+          assignment = savedAssignment;
+          finalCastingSelectedAssignments.push(assignment);
+        }
       }
 
       const sharedAssignment = cbv2Assignments.find(row =>
@@ -25181,7 +25187,7 @@ We look forward to seeing your work!
       const saved = await finalCastingPersistPickKey(key, true);
       if (!saved) return;
     }
-    event?.currentTarget?.classList.toggle('is-selected', finalCastingPickedKeys.has(key));
+    await renderFinalCastingCharacterNotes();
     renderFinalCastingPool();
     renderFinalCastingList();
   }
