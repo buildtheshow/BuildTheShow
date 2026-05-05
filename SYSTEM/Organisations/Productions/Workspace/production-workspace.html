@@ -15620,23 +15620,12 @@
               <div class="settings-section-header">
                 <div>
                   <div class="settings-section-title">Casting List</div>
-                  <div class="settings-section-subtitle">Role offers will be prepared here in casting order, starting with principal roles and moving down through the company.</div>
+                  <div class="settings-section-subtitle">Confirmed roles and ensemble pulled from the Final Casting Board.</div>
                 </div>
-                <span class="settings-section-tag">Offer Workflow</span>
+                <span class="settings-section-tag">Board Snapshot</span>
               </div>
-              <div class="settings-grid-3">
-                <div class="settings-subcard">
-                  <div class="settings-subcard-title">1. Principal Roles</div>
-                  <div class="settings-section-subtitle">Send first offers for leads and principal roles.</div>
-                </div>
-                <div class="settings-subcard">
-                  <div class="settings-subcard-title">2. Supporting / Featured</div>
-                  <div class="settings-section-subtitle">Prepare the next wave once principal offers are settled.</div>
-                </div>
-                <div class="settings-subcard">
-                  <div class="settings-subcard-title">3. Ensemble</div>
-                  <div class="settings-section-subtitle">Finalize ensemble and company offers after role placements are clear.</div>
-                </div>
+              <div id="final-casting-list-host">
+                <div style="text-align:center;padding:2.5rem;color:#9a90b0;">Open the Casting Board to build the casting list.</div>
               </div>
             </section>
           </div>
@@ -24861,6 +24850,7 @@ We look forward to seeing your work!
       panel.style.display = panel.id === `final-casting-tab-${key}` ? '' : 'none';
     });
     if (key === 'board') loadFinalCastingBoardVisuals();
+    if (key === 'list') loadFinalCastingList();
   }
 
   let finalCastingPoolSelectedIds = new Set();
@@ -24889,6 +24879,11 @@ We look forward to seeing your work!
     }
 
     finalCastingSelectedAssignments = data || [];
+    (data || []).forEach(row => {
+      if (row.state === 'chosen' && row.character_id && row.applicant_id) {
+        finalCastingPickedKeys.add(`${row.character_id}::${row.applicant_id}`);
+      }
+    });
     finalCastingPoolSelectedIds = new Set((data || []).map(row => row.applicant_id).filter(Boolean));
     finalCastingPoolApplicants = (allApplicants || [])
       .sort(compareApplicantsAlphabetically);
@@ -24902,6 +24897,18 @@ We look forward to seeing your work!
       renderFinalCastingCharacterNotes(),
       renderFinalCastingEnsemble(),
     ]);
+    renderFinalCastingList();
+  }
+
+  async function loadFinalCastingList() {
+    const host = document.getElementById('final-casting-list-host');
+    if (!host) return;
+    host.innerHTML = '<div style="text-align:center;padding:2.5rem;color:#9a90b0;">Loading casting list…</div>';
+    if (!finalCastingPoolApplicants.length || !finalCastingSelectedAssignments.length) {
+      await loadFinalCastingPool();
+    }
+    if (!finalCastingEnsembleLoaded) await renderFinalCastingEnsemble();
+    renderFinalCastingList();
   }
 
   async function renderFinalCastingCharacterNotes() {
@@ -25015,6 +25022,7 @@ We look forward to seeing your work!
     renderFinalCastingPool();
     renderFinalCastingCharacterNotes();
     renderFinalCastingEnsemble();
+    renderFinalCastingList();
   }
 
   function finalCastingDropOnNote(event, charId) {
@@ -25085,6 +25093,61 @@ We look forward to seeing your work!
     }
     event?.currentTarget?.classList.toggle('is-selected', finalCastingPickedKeys.has(key));
     renderFinalCastingPool();
+    renderFinalCastingList();
+  }
+
+  function getFinalCastingListCharacters() {
+    const sortedChars = (characters || [])
+      .filter(char => char && char.id)
+      .slice();
+    const hasEnsemble = sortedChars.some(char => castListCharacterSortRank(char) === 2);
+    if (!hasEnsemble) sortedChars.push({ id: '__final_ensemble__', name: 'Ensemble', role_type: 'Ensemble' });
+    return sortedChars.sort(compareCastListCharacters);
+  }
+
+  function getFinalCastingConfirmedPerformersForCharacter(char) {
+    if (char.id === '__final_ensemble__' || castListCharacterSortRank(char) === 2) {
+      return (allApplicants || [])
+        .filter(app => finalCastingEnsembleIds.has(app.id))
+        .sort(compareApplicantsAlphabetically);
+    }
+    const appIds = [...finalCastingPickedKeys]
+      .map(key => {
+        const [charId, appId] = String(key).split('::');
+        return charId === char.id ? appId : null;
+      })
+      .filter(Boolean);
+    const seen = new Set();
+    return appIds
+      .map(appId => (allApplicants || []).find(app => app.id === appId))
+      .filter(app => {
+        if (!app || seen.has(app.id)) return false;
+        seen.add(app.id);
+        return true;
+      })
+      .sort(compareApplicantsAlphabetically);
+  }
+
+  function renderFinalCastingList() {
+    const host = document.getElementById('final-casting-list-host');
+    if (!host) return;
+    const sortedChars = getFinalCastingListCharacters();
+    if (!sortedChars.length) {
+      host.innerHTML = '<div style="text-align:center;padding:2.5rem;color:#9a90b0;">Add characters on the Casting Board to build the casting list.</div>';
+      return;
+    }
+    const rows = sortedChars.map(char => {
+      const cast = getFinalCastingConfirmedPerformersForCharacter(char);
+      const names = cast.length ? cast.map(app => app.name || '-') : ['Open'];
+      return `<div class="castlist-programme-role">${esc(char.name || 'Unnamed')}</div>
+        <div class="castlist-programme-name-list">
+          ${names.map(name => `<div class="castlist-programme-name${name === 'Open' ? ' castlist-programme-open' : ''}">${esc(name)}</div>`).join('')}
+        </div>`;
+    });
+    host.innerHTML = `<div class="castlist-programme-card">
+      <div class="castlist-programme-title">Casting List</div>
+      <div class="castlist-programme">${rows.join('')}</div>
+    </div>`;
   }
 
   async function renderFinalCastingEnsemble() {
