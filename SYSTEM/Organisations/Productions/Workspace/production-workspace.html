@@ -10956,6 +10956,25 @@
       opacity: 0.86;
       box-shadow: none !important;
     }
+    .final-casting-role-section-divider {
+      grid-column: 1 / -1;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      margin: 0.45rem 0 0.1rem;
+      color: #6a5a80;
+      font-size: 0.72rem;
+      font-weight: 900;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+    .final-casting-role-section-divider::before,
+    .final-casting-role-section-divider::after {
+      content: '';
+      height: 1px;
+      flex: 1 1 auto;
+      background: rgba(87,46,136,0.16);
+    }
     .cbv2-perf-card-wrap.cbv2-touch-selected .casting-card {
       transform: translateY(-3px) !important;
       box-shadow:
@@ -24964,22 +24983,35 @@ We look forward to seeing your work!
     if (!area) return;
     area.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:3rem;color:#9a90b0;font-size:0.875rem;">Loading roles…</div>';
     if (!characters.length) await loadCharacters().catch(() => {});
-    const chars = [...(characters || [])].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0) || String(a.name || '').localeCompare(String(b.name || '')));
+    const chars = [...(characters || [])]
+      .filter(char => char && char.id)
+      .sort((a, b) => {
+        const rankDiff = castListCharacterSortRank(a) - castListCharacterSortRank(b);
+        if (rankDiff) return rankDiff;
+        return (a.sort_order ?? 0) - (b.sort_order ?? 0) || String(a.name || '').localeCompare(String(b.name || ''));
+      });
     if (!chars.length) {
       area.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:3rem;color:#9a90b0;font-size:0.875rem;">Add characters in Audition Setup to build the Final Casting board.</div>';
       return;
     }
     const rotations = cbv2NoteRotations(chars);
+    let previousRank = null;
     area.innerHTML = chars.map((char, index) => {
+      const rank = castListCharacterSortRank(char);
+      const dividerHtml = previousRank === 0 && rank > 0
+        ? '<div class="final-casting-role-section-divider">Groups &amp; Ensemble</div>'
+        : '';
+      previousRank = rank;
       const noteId = `fc-note-${char.id}`;
       const cardsId = `fc-note-cards-${char.id}`;
       const footerId = `fc-note-footer-${char.id}`;
       const cardsHtml = finalCastingCardsForCharacter(char);
+      const castLaterHtml = finalCastingCastLaterButtonHtml(char);
       const dragAttrs = `
         ondragover="finalCastingDragOver(event)"
         ondragleave="finalCastingDragLeave(event)"
         ondrop="finalCastingDropOnNote(event,'${esc(char.id)}')"`;
-      return window.BTSAuditionTemplates.renderTemplateById('auditions.casting-board.sticky-note', {
+      const noteHtml = window.BTSAuditionTemplates.renderTemplateById('auditions.casting-board.sticky-note', {
         esc,
         noteId,
         charId: char.id,
@@ -24988,14 +25020,20 @@ We look forward to seeing your work!
         cardsId,
         cardsHtml,
         footerId,
-        footerHtml: '<div></div>',
+        footerHtml: `<div></div>${castLaterHtml}`,
         interactive: false,
         headerOnclick: '',
         noteOnclick: '',
         dragAttrs,
       });
+      return `${dividerHtml}${noteHtml}`;
     }).join('');
     requestAnimationFrame(fitCbv2NoteHeaders);
+  }
+
+  function finalCastingCastLaterButtonHtml(char) {
+    if (!char?.id) return '';
+    return `<button type="button" class="cbv2-note-later${char.cast_later ? ' active' : ''}" onclick="event.stopPropagation(); toggleCharacterCastLater('${esc(char.id)}', ${char.cast_later ? 'false' : 'true'})">${char.cast_later ? 'Cast later' : 'Cast later?'}</button>`;
   }
 
   function finalCastingCardsForCharacter(char) {
@@ -34809,6 +34847,8 @@ We look forward to seeing your work!
     const prevValue = !!char.cast_later;
     char.cast_later = nextValue;
     renderCbv2Roles();
+    renderFinalCastingCharacterNotes();
+    renderFinalCastingList();
     renderCharacters();
     showSaveStatus('saved');
     if (cbv2CastLaterPersistenceDisabled) return;
@@ -34824,6 +34864,8 @@ We look forward to seeing your work!
       }
       char.cast_later = prevValue;
       renderCbv2Roles();
+      renderFinalCastingCharacterNotes();
+      renderFinalCastingList();
       renderCharacters();
       showToast('Could not update cast later.', true);
     }
