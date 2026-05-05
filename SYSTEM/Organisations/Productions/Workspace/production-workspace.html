@@ -10946,9 +10946,9 @@
         0 0 0 5px rgba(239, 171, 69, 0.42),
         0 0 24px rgba(239, 171, 69, 0.48) !important;
     }
-    .final-casting-pool-not-confirmed .casting-card {
-      filter: grayscale(0.88) saturate(0.35) contrast(0.92) brightness(1.04);
-      opacity: 0.62;
+    .final-casting-pool-not-yet-placed .casting-card {
+      filter: grayscale(1) saturate(0) contrast(1.12) brightness(0.72);
+      opacity: 0.86;
       box-shadow: none !important;
     }
     .cbv2-perf-card-wrap.cbv2-touch-selected .casting-card {
@@ -25034,16 +25034,77 @@ We look forward to seeing your work!
     }
   }
 
-  function removeFinalCastingPlacement(appId, charId) {
-    finalCastingSelectedAssignments = finalCastingSelectedAssignments.filter(a => !(a.applicant_id === appId && a.character_id === charId));
+  async function removeFinalCastingPlacement(appId, charId) {
+    const assignment = finalCastingSelectedAssignments.find(a =>
+      String(a.applicant_id) === String(appId) &&
+      String(a.character_id) === String(charId)
+    );
+    finalCastingSelectedAssignments = finalCastingSelectedAssignments.filter(a =>
+      !(String(a.applicant_id) === String(appId) && String(a.character_id) === String(charId))
+    );
+    cbv2Assignments = cbv2Assignments.filter(a =>
+      !(String(a.applicant_id) === String(appId) && String(a.character_id) === String(charId))
+    );
     finalCastingPickedKeys.delete(`${charId}::${appId}`);
+    if (assignment?.id && !String(assignment.id).startsWith('local-')) {
+      try {
+        await sb.from('casting_assignments').delete().eq('id', assignment.id);
+      } catch (error) {
+        console.error('[BTS] final casting placement remove failed', error);
+        showToast('Could not remove that casting placement.', true);
+      }
+    }
   }
 
-  function addFinalCastingPlacement(appId, charId) {
+  async function addFinalCastingPlacement(appId, charId) {
     finalCastingEnsembleIds.delete(appId);
-    const exists = finalCastingSelectedAssignments.some(a => a.applicant_id === appId && a.character_id === charId);
-    if (!exists) finalCastingSelectedAssignments.push({ applicant_id: appId, character_id: charId, state: 'liked' });
+    let assignment = finalCastingSelectedAssignments.find(a =>
+      String(a.applicant_id) === String(appId) &&
+      String(a.character_id) === String(charId)
+    );
+    if (!assignment) {
+      try {
+        const { data, error } = await sb.from('casting_assignments')
+          .insert({
+            production_id: prodId,
+            character_id: charId,
+            applicant_id: appId,
+            state: 'liked',
+          })
+          .select()
+          .single();
+        if (error) throw error;
+        assignment = data || { production_id: prodId, character_id: charId, applicant_id: appId, state: 'liked' };
+      } catch (error) {
+        const duplicate = String(error?.code || '') === '23505' || String(error?.message || '').toLowerCase().includes('duplicate');
+        if (!duplicate) {
+          console.error('[BTS] final casting placement save failed', error);
+          showToast('Could not save that casting placement.', true);
+          return false;
+        }
+        const { data: existing, error: findError } = await sb.from('casting_assignments')
+          .select('*')
+          .eq('production_id', prodId)
+          .eq('character_id', charId)
+          .eq('applicant_id', appId)
+          .maybeSingle();
+        if (findError || !existing) {
+          console.error('[BTS] final casting duplicate lookup failed', findError || error);
+          showToast('Could not save that casting placement.', true);
+          return false;
+        }
+        assignment = existing;
+      }
+      finalCastingSelectedAssignments.push(assignment);
+    }
+    const sharedAssignment = cbv2Assignments.find(row =>
+      String(row.character_id) === String(charId) &&
+      String(row.applicant_id) === String(appId)
+    );
+    if (sharedAssignment) Object.assign(sharedAssignment, assignment);
+    else cbv2Assignments.push({ ...assignment });
     finalCastingPoolSelectedIds.add(appId);
+    return true;
   }
 
   function finalCastingRerenderBoard() {
@@ -25053,37 +25114,38 @@ We look forward to seeing your work!
     renderFinalCastingList();
   }
 
-  function finalCastingDropOnNote(event, charId) {
+  async function finalCastingDropOnNote(event, charId) {
     event.preventDefault();
     event.currentTarget?.classList.remove('final-casting-drop-ready');
     if (!finalCastingDrag?.appId) return;
     const { appId, fromCharId, source } = finalCastingDrag;
     finalCastingDrag = null;
-    if (source === 'role' && fromCharId && fromCharId !== charId) removeFinalCastingPlacement(appId, fromCharId);
+    if (source === 'role' && fromCharId && fromCharId !== charId) await removeFinalCastingPlacement(appId, fromCharId);
     if (source === 'ensemble') finalCastingEnsembleIds.delete(appId);
-    addFinalCastingPlacement(appId, charId);
+    const saved = await addFinalCastingPlacement(appId, charId);
+    if (!saved) return;
     finalCastingRerenderBoard();
   }
 
-  function finalCastingDropOnEnsemble(event) {
+  async function finalCastingDropOnEnsemble(event) {
     event.preventDefault();
     event.currentTarget?.classList.remove('final-casting-drop-ready');
     if (!finalCastingDrag?.appId) return;
     const { appId, fromCharId, source } = finalCastingDrag;
     finalCastingDrag = null;
-    if (source === 'role' && fromCharId) removeFinalCastingPlacement(appId, fromCharId);
+    if (source === 'role' && fromCharId) await removeFinalCastingPlacement(appId, fromCharId);
     finalCastingEnsembleIds.add(appId);
     finalCastingPoolSelectedIds.add(appId);
     finalCastingRerenderBoard();
   }
 
-  function finalCastingDropOnPool(event) {
+  async function finalCastingDropOnPool(event) {
     event.preventDefault();
     event.currentTarget?.classList.remove('final-casting-drop-ready');
     if (!finalCastingDrag?.appId) return;
     const { appId, fromCharId, source } = finalCastingDrag;
     finalCastingDrag = null;
-    if (source === 'role' && fromCharId) removeFinalCastingPlacement(appId, fromCharId);
+    if (source === 'role' && fromCharId) await removeFinalCastingPlacement(appId, fromCharId);
     if (source === 'ensemble') finalCastingEnsembleIds.delete(appId);
     finalCastingPoolSelectedIds = new Set(finalCastingSelectedAssignments.map(a => a.applicant_id));
     finalCastingRerenderBoard();
@@ -25332,8 +25394,8 @@ We look forward to seeing your work!
     };
     grid.innerHTML = [
       groupHtml('Confirmed', confirmed, null, '', false),
-      groupHtml('Not confirmed', notConfirmed, null, 'final-casting-pool-not-confirmed'),
-      groupHtml('Not yet placed', unplaced, 'applied'),
+      groupHtml('Not confirmed', notConfirmed, 'applied'),
+      groupHtml('Not yet placed', unplaced, null, 'final-casting-pool-not-yet-placed'),
     ].join('');
   }
 
