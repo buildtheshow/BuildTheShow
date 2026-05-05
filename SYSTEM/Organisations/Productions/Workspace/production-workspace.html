@@ -25053,12 +25053,36 @@ We look forward to seeing your work!
     finalCastingRerenderBoard();
   }
 
-  function toggleFinalCastingPick(event, charId, appId) {
+  function finalCastingConfirmedRoleNamesForApplicant(appId, exceptCharId = '') {
+    return [...finalCastingPickedKeys]
+      .map(key => {
+        const [pickedCharId, pickedAppId] = String(key).split('::');
+        if (pickedAppId !== appId || pickedCharId === exceptCharId) return null;
+        return characters.find(char => String(char.id) === String(pickedCharId))?.name || 'another role';
+      })
+      .filter(Boolean);
+  }
+
+  async function toggleFinalCastingPick(event, charId, appId) {
     event?.preventDefault?.();
     event?.stopPropagation?.();
     const key = `${charId}::${appId}`;
-    if (finalCastingPickedKeys.has(key)) finalCastingPickedKeys.delete(key);
-    else finalCastingPickedKeys.add(key);
+    if (finalCastingPickedKeys.has(key)) {
+      finalCastingPickedKeys.delete(key);
+    } else {
+      const existingRoleNames = finalCastingConfirmedRoleNamesForApplicant(appId, charId);
+      if (existingRoleNames.length) {
+        const appName = allApplicants.find(app => String(app.id) === String(appId))?.name || 'This performer';
+        const roleName = characters.find(char => String(char.id) === String(charId))?.name || 'this role';
+        const confirmed = await btsWarningConfirm({
+          title: 'Confirm multiple roles?',
+          body: `${appName} is already confirmed for ${existingRoleNames.join(', ')}. Do you want to lock them into ${roleName} as well?`,
+          confirmLabel: 'Confirm Both Roles',
+        });
+        if (!confirmed) return;
+      }
+      finalCastingPickedKeys.add(key);
+    }
     event?.currentTarget?.classList.toggle('is-selected', finalCastingPickedKeys.has(key));
     renderFinalCastingPool();
   }
@@ -35060,7 +35084,7 @@ We look forward to seeing your work!
         const otherChar = characters.find(c => c.id === chosenElsewhere.character_id)?.name || 'another character';
         const appName = allApplicants.find(x => x.id === appId)?.name || 'This performer';
         cbv2OpenWarn(
-          `${appName} is already selected for ${otherChar}. Do you want to keep both selections?`,
+          `${appName} is already confirmed for ${otherChar}. Do you want to lock them into more than one role?`,
           { appId, charId, assignment: a },
           true
         );
@@ -40417,6 +40441,23 @@ We look forward to seeing your work!
     if (!r) return;
     const cycle = { 'open': 'tentative', 'tentative': 'confirmed', 'confirmed': 'open', 'needs-replacement': 'open' };
     const next = cycle[r.status] || 'tentative';
+    if (next === 'confirmed' && r.cast_member_id) {
+      const confirmedElsewhere = roles.filter(x =>
+        x.id !== roleId &&
+        x.cast_member_id === r.cast_member_id &&
+        x.status === 'confirmed'
+      );
+      if (confirmedElsewhere.length) {
+        const performerName = allApplicants.find(app => app.id === r.cast_member_id)?.name || 'This performer';
+        const otherRoleNames = confirmedElsewhere.map(role => role.name || 'another role').join(', ');
+        const ok = await btsWarningConfirm({
+          title: 'Confirm multiple roles?',
+          body: `${performerName} is already confirmed for ${otherRoleNames}. Do you want to lock them into ${r.name || 'this role'} as well?`,
+          confirmLabel: 'Confirm Both Roles',
+        });
+        if (!ok) return;
+      }
+    }
     const { error } = await sb.from('production_roles').update({ status: next }).eq('id', roleId);
     if (!error) { r.status = next; renderCastingBoard(); }
   }
