@@ -1217,6 +1217,11 @@
         const { data: urlData } = sb.storage.from('audition-headshots').getPublicUrl(upData.path);
         headshotUrl = urlData?.publicUrl || null;
       }
+      if (!headshotUrl) {
+        stShowError(6, 'A headshot is required. Please upload it again before confirming.');
+        if (btn) { btn.disabled = false; btn.textContent = 'Confirm'; }
+        return;
+      }
       const performerName = [_stState.perf_fname, _stState.perf_lname].filter(Boolean).join(' ').trim();
       const rolePreferenceValue = _stState.cast_pref === 'specific' && _stState.decline_other_roles ? 'specific_only' : (_stState.cast_pref || null);
       const genderPreference = [_stState.gender_girls ? 'Roles written as girls / women' : '', _stState.gender_boys ? 'Roles written as boys / men' : '', _stState.gender_nonbinary ? 'Roles written as non-binary / gender-neutral' : ''].filter(Boolean).join(', ') || null;
@@ -1317,6 +1322,9 @@
       while (Object.keys(attempt).length) {
         try {
           const { data, error } = await sb.from('audition_applications').insert(attempt).select('id').single();
+          if (!error && payload.headshot_url && attempt.headshot_url !== payload.headshot_url) {
+            return { error: new Error('Headshot URL was not included in the saved application.') };
+          }
           if (!error && data?.id) return { id: data.id };
           if (!error) return { id: null };
           lastError = error;
@@ -1326,6 +1334,7 @@
             continue;
           }
           const missing = String(error?.message || '').match(/Could not find the '([^']+)' column/i)?.[1];
+          if (missing === 'headshot_url') break;
           if (!missing || !(missing in attempt)) break;
           delete attempt[missing];
         } catch (err) {
@@ -1336,6 +1345,7 @@
             continue;
           }
           const missing = String(err?.message || '').match(/Could not find the '([^']+)' column/i)?.[1];
+          if (missing === 'headshot_url') break;
           if (!missing || !(missing in attempt)) break;
           delete attempt[missing];
         }

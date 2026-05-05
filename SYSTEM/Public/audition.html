@@ -777,6 +777,9 @@
       while (attempt && Object.keys(attempt).length) {
         try {
           const { error } = await sb.from('audition_applications').insert(attempt);
+          if (!error && payload.headshot_url && attempt.headshot_url !== payload.headshot_url) {
+            return new Error('Headshot URL was not included in the saved application.');
+          }
           if (!error) return null;
           lastError = error;
           const slotFkError = /audition_applications_(time_slot_id|slot_id)_fkey|time_slot_id_fkey|slot_id_fkey|foreign key constraint/i.test(String(error?.message || ''));
@@ -785,6 +788,7 @@
             continue;
           }
           const missingColumn = String(error?.message || '').match(/Could not find the '([^']+)' column/i)?.[1];
+          if (missingColumn === 'headshot_url') break;
           if (!missingColumn || !(missingColumn in attempt)) break;
           delete attempt[missingColumn];
         } catch (err) {
@@ -795,6 +799,7 @@
             continue;
           }
           const missingColumn = String(err?.message || '').match(/Could not find the '([^']+)' column/i)?.[1];
+          if (missingColumn === 'headshot_url') break;
           if (!missingColumn || !(missingColumn in attempt)) break;
           delete attempt[missingColumn];
         }
@@ -868,6 +873,11 @@
         customAnswers['Guardian Contact'] = guardianContact;
       }
 
+      if (config && config.collect_headshot && !photo) {
+        errEl.textContent = 'A headshot is required. Please upload a JPG, PNG, or WEBP photo before submitting.';
+        errEl.classList.add('visible'); return;
+      }
+
       if (config && config.collect_headshot && photo) {
         if (!document.getElementById('consent-photo').checked) {
           errEl.textContent = 'Please consent to your headshot being stored and used for casting purposes.';
@@ -896,12 +906,17 @@
         try {
           const ext  = photo.name.split('.').pop();
           const path = `auditions/${currentProdId}/${Date.now()}.${ext}`;
-          const { error: upErr } = await sb.storage.from('profile-headshots').upload(path, photo, { upsert: true });
+          const { error: upErr } = await sb.storage.from('profile-headshots').upload(path, photo, { upsert: true, contentType: photo.type });
           if (!upErr) {
             const { data: urlData } = sb.storage.from('profile-headshots').getPublicUrl(path);
-            headshot_url = urlData.publicUrl;
+            headshot_url = urlData?.publicUrl || null;
           }
         } catch {}
+        if (!headshot_url) {
+          errEl.textContent = 'Your headshot could not be uploaded. Please try again before submitting.';
+          errEl.classList.add('visible');
+          btn.disabled = false; btn.textContent = 'Submit Audition Form'; return;
+        }
       }
 
       let file_url = null;
