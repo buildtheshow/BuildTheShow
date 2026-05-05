@@ -15611,6 +15611,17 @@
               </div>
               <div class="cbv2-ensemble-note-cards" id="final-casting-ensemble-grid"></div>
             </div>
+
+            <div class="cbv2-warn-overlay" id="final-casting-warn-overlay">
+              <div class="cbv2-warn-inner">
+                <div class="cbv2-warn-title" id="final-casting-warn-title">Confirm multiple roles?</div>
+                <div class="cbv2-warn-body" id="final-casting-warn-body">This performer is already confirmed for another role.</div>
+                <div class="cbv2-warn-btns">
+                  <button class="btn-secondary" onclick="finalCastingWarnStop()">Stop</button>
+                  <button class="btn-primary" id="final-casting-warn-continue-btn" onclick="finalCastingWarnContinue()">Yes, Confirm Both</button>
+                </div>
+              </div>
+            </div>
           </div>
         </section>
 
@@ -24859,6 +24870,7 @@ We look forward to seeing your work!
   let finalCastingEnsembleIds = new Set();
   let finalCastingDrag = null;
   let finalCastingEnsembleLoaded = false;
+  let finalCastingWarnPending = null;
   const finalCastingPickedKeys = new Set();
 
   async function loadFinalCastingPool() {
@@ -24869,7 +24881,7 @@ We look forward to seeing your work!
     if (!allApplicants.length) await loadApplicants({ skipRender: true, skipCastingSync: true }).catch(() => {});
 
     const { data, error } = await sb.from('casting_assignments')
-      .select('applicant_id, character_id, state')
+      .select('*')
       .eq('production_id', prodId)
       .in('state', ['liked', 'chosen']);
 
@@ -24879,6 +24891,7 @@ We look forward to seeing your work!
     }
 
     finalCastingSelectedAssignments = data || [];
+    finalCastingPickedKeys.clear();
     (data || []).forEach(row => {
       if (row.state === 'chosen' && row.character_id && row.applicant_id) {
         finalCastingPickedKeys.add(`${row.character_id}::${row.applicant_id}`);
@@ -25071,27 +25084,102 @@ We look forward to seeing your work!
       .filter(Boolean);
   }
 
+  async function finalCastingPersistPickKey(key, isPicked) {
+    const [charId, appId] = String(key || '').split('::');
+    if (!charId || !appId) return false;
+    const nextState = isPicked ? 'chosen' : 'liked';
+    let assignment = finalCastingSelectedAssignments.find(row =>
+      String(row.character_id) === String(charId) &&
+      String(row.applicant_id) === String(appId)
+    );
+
+    try {
+      if (assignment?.id && !String(assignment.id).startsWith('local-')) {
+        const { data, error } = await sb.from('casting_assignments')
+          .update({ state: nextState })
+          .eq('id', assignment.id)
+          .select()
+          .single();
+        if (error) throw error;
+        Object.assign(assignment, data || { state: nextState });
+      } else {
+        const { data, error } = await sb.from('casting_assignments')
+          .insert({
+            production_id: prodId,
+            character_id: charId,
+            applicant_id: appId,
+            state: nextState,
+          })
+          .select()
+          .single();
+        if (error) throw error;
+        assignment = data || { production_id: prodId, character_id: charId, applicant_id: appId, state: nextState };
+        finalCastingSelectedAssignments.push(assignment);
+      }
+
+      const sharedAssignment = cbv2Assignments.find(row =>
+        String(row.character_id) === String(charId) &&
+        String(row.applicant_id) === String(appId)
+      );
+      if (sharedAssignment) Object.assign(sharedAssignment, assignment, { state: nextState });
+      else cbv2Assignments.push({ ...assignment, state: nextState });
+
+      finalCastingPoolSelectedIds.add(appId);
+      if (isPicked) finalCastingPickedKeys.add(key);
+      else finalCastingPickedKeys.delete(key);
+      return true;
+    } catch (error) {
+      console.error('[BTS] final casting lock save failed', error);
+      showToast('Could not save locked casting choice.', true);
+      return false;
+    }
+  }
+
+  function finalCastingOpenWarn(message, pending = null) {
+    const overlay = document.getElementById('final-casting-warn-overlay');
+    const body = document.getElementById('final-casting-warn-body');
+    if (body) body.textContent = message;
+    finalCastingWarnPending = pending;
+    overlay?.classList.add('open');
+  }
+
+  function finalCastingWarnStop() {
+    finalCastingWarnPending = null;
+    document.getElementById('final-casting-warn-overlay')?.classList.remove('open');
+  }
+
+  async function finalCastingWarnContinue() {
+    document.getElementById('final-casting-warn-overlay')?.classList.remove('open');
+    if (!finalCastingWarnPending?.key) return;
+    const { key } = finalCastingWarnPending;
+    finalCastingWarnPending = null;
+    const saved = await finalCastingPersistPickKey(key, true);
+    if (!saved) return;
+    await renderFinalCastingCharacterNotes();
+    renderFinalCastingPool();
+    renderFinalCastingList();
+  }
+
   async function toggleFinalCastingPick(event, charId, appId) {
     event?.preventDefault?.();
     event?.stopPropagation?.();
     const key = `${charId}::${appId}`;
     if (finalCastingPickedKeys.has(key)) {
-      finalCastingPickedKeys.delete(key);
+      const saved = await finalCastingPersistPickKey(key, false);
+      if (!saved) return;
     } else {
       const existingRoleNames = finalCastingConfirmedRoleNamesForApplicant(appId, charId);
       if (existingRoleNames.length) {
         const appName = allApplicants.find(app => String(app.id) === String(appId))?.name || 'This performer';
         const roleName = characters.find(char => String(char.id) === String(charId))?.name || 'this role';
-        cbv2OpenWarn(
+        finalCastingOpenWarn(
           `${appName} is already confirmed for ${existingRoleNames.join(', ')}. Are you sure you want to lock them into ${roleName} too?`,
-          { type: 'final-casting-double-confirm', key },
-          true,
-          'Confirm multiple roles?',
-          'Yes, Confirm Both'
+          { key }
         );
         return;
       }
-      finalCastingPickedKeys.add(key);
+      const saved = await finalCastingPersistPickKey(key, true);
+      if (!saved) return;
     }
     event?.currentTarget?.classList.toggle('is-selected', finalCastingPickedKeys.has(key));
     renderFinalCastingPool();
