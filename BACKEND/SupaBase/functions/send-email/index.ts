@@ -43,6 +43,8 @@ const STATUS_TO_CATEGORY: Record<string, string> = {
 const CATEGORY_SUBJECTS: Record<string, string> = {
   booking_confirmation: 'Your audition is confirmed!',
   callback:            'You have a callback!',
+  callback_confirmed:  'Your callback is confirmed!',
+  callback_declined:   'Callback response received',
   cast_announcement:   'Congratulations — you have been cast!',
   not_cast:            'Regarding your audition',
   general:             'A message from the production team',
@@ -53,6 +55,8 @@ const CATEGORY_TO_TRIGGER: Record<string, string> = {
   self_tape_booked:     'self_tape_registered',
   audition_reminder:    'manual',
   callback:             'callback_set',
+  callback_confirmed:   'callback_confirmed',
+  callback_declined:    'callback_declined',
   cast_announcement:    'cast_set',
   not_cast:             'not_cast_set',
   rehearsal:            'manual',
