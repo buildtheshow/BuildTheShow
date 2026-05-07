@@ -2789,6 +2789,53 @@
       gap: 1rem;
       justify-content: start;
     }
+    .et-section-home-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 290px));
+      gap: 1rem;
+      justify-content: start;
+    }
+    .et-section-card {
+      appearance: none;
+      position: relative;
+      min-height: 190px;
+      border: 1px solid var(--et-card-border, rgba(53,39,86,0.12));
+      border-radius: 18px;
+      background: var(--et-card-bg, #fff);
+      box-shadow: 0 10px 28px rgba(53,39,86,0.08);
+      cursor: pointer;
+      color: var(--et-card-ink, #fff);
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      gap: 1rem;
+      padding: 1rem;
+      text-align: left;
+      transition: transform 0.16s ease, box-shadow 0.16s ease;
+      overflow: hidden;
+    }
+    .et-section-card:hover {
+      box-shadow: 0 14px 34px rgba(53,39,86,0.12);
+      transform: translateY(-2px);
+    }
+    .et-section-card-title {
+      color: var(--et-card-ink, #fff);
+      font-size: 1rem;
+      font-weight: 900;
+      line-height: 1.2;
+    }
+    .et-section-card-sub {
+      color: var(--et-card-muted, rgba(255,255,255,0.78));
+      font-size: 0.78rem;
+      line-height: 1.45;
+      margin-top: 0.45rem;
+    }
+    .et-section-card-count {
+      color: var(--et-card-muted, rgba(255,255,255,0.82));
+      font-size: 0.7rem;
+      font-weight: 900;
+      text-transform: uppercase;
+    }
     .et-row-used-by {
       display: none;
     }
@@ -2823,7 +2870,8 @@
       max-width: 290px;
     }
     @media (max-width: 900px) {
-      .et-section-rows {
+      .et-section-rows,
+      .et-section-home-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr));
       }
     }
@@ -20481,7 +20529,7 @@
   const ET_SECTION_META = {
     auditions:   { label: 'Auditions', color: '#7FAF8B', summary: 'Booking, reminders, and performer audition logistics.' },
     callbacks:   { label: 'Callbacks', color: '#E3A46F', summary: 'Callback requests, responses, and materials.' },
-    casting:     { label: 'Casting', color: '#572E88', summary: 'Casting decisions and performer outcome emails.' },
+    casting:     { label: 'Casting', color: '#572E88', summary: 'Callbacks, casting decisions, and performer outcome emails.' },
     rehearsals:  { label: 'Rehearsals', color: '#3B82F6', summary: 'Schedules and rehearsal updates.' },
     team_portal: { label: 'Team Portal', color: '#7C3AED', summary: 'Team access and internal portal onboarding.' },
     general:     { label: 'General', color: '#64748B', summary: 'Flexible production communications.' },
@@ -20566,6 +20614,14 @@
       usedBy: 'Manual production communications',
     },
   };
+
+  const ET_HOME_SECTIONS = [
+    { key: 'auditions', sections: ['auditions'] },
+    { key: 'casting', sections: ['callbacks', 'casting'] },
+    { key: 'rehearsals', sections: ['rehearsals'] },
+    { key: 'team_portal', sections: ['team_portal'] },
+    { key: 'general', sections: ['general'] },
+  ];
 
   // Find the first session matching a type keyword (checks type field then name)
   function etFindSession(typeHint) {
@@ -20832,7 +20888,6 @@
   const ET_FILTERS = [
     { value: 'all', label: 'All' },
     { value: 'auditions', label: 'Auditions' },
-    { value: 'callbacks', label: 'Callbacks' },
     { value: 'casting', label: 'Casting' },
     { value: 'rehearsals', label: 'Rehearsals' },
     { value: 'team_portal', label: 'Team Portal' },
@@ -20852,6 +20907,22 @@
 
   function etSectionMeta(sectionKey) {
     return ET_SECTION_META[sectionKey] || ET_SECTION_META.general;
+  }
+
+  function etHomeSection(sectionKey) {
+    return ET_HOME_SECTIONS.find(section => section.key === sectionKey)
+      || { key: sectionKey, sections: [sectionKey] };
+  }
+
+  function etSectionMatchesFilter(template, filter) {
+    if (filter === 'all') return true;
+    return etHomeSection(filter).sections.includes(etTemplateMeta(template.category).section);
+  }
+
+  function etDefaultCategoryForFilter(filter) {
+    const category = Object.entries(EMAIL_TEMPLATE_META)
+      .find(([, meta]) => etHomeSection(filter).sections.includes(meta.section))?.[0];
+    return category || 'general';
   }
 
   function etSendTypeLabel(sendType) {
@@ -21656,9 +21727,27 @@ We look forward to seeing your work!
       if (aIdx !== bIdx) return (aIdx < 0 ? 999 : aIdx) - (bIdx < 0 ? 999 : bIdx);
       return String(b.updated_at || b.created_at || '').localeCompare(String(a.updated_at || a.created_at || ''));
     });
-    const filtered = _etCatFilter === 'all'
-      ? sorted
-      : sorted.filter(t => etTemplateMeta(t.category).section === _etCatFilter);
+    if (_etCatFilter === 'all') {
+      const homeCards = ET_HOME_SECTIONS.map(home => {
+        const section = etSectionMeta(home.key);
+        const count = sorted.filter(t => etSectionMatchesFilter(t, home.key)).length;
+        const cardStyle = `--et-card-bg:${esc(section.color)};--et-card-border:color-mix(in srgb, ${esc(section.color)} 82%, #000);--et-card-ink:#fff;--et-card-muted:rgba(255,255,255,0.78);`;
+        return `<button type="button" class="et-section-card" style="${cardStyle}" onclick="filterEmailTemplates('${home.key}')">
+          <div>
+            <div class="et-section-card-title">${esc(section.label)}</div>
+            <div class="et-section-card-sub">${esc(section.summary)}</div>
+          </div>
+          <div class="et-section-card-count">${count} ${count === 1 ? 'template' : 'templates'}</div>
+        </button>`;
+      }).join('');
+      list.innerHTML = `<div class="et-inbox">
+        <div class="et-template-cards et-template-library">
+          <div class="et-section-home-grid">${homeCards}</div>
+        </div>
+      </div>`;
+      return;
+    }
+    const filtered = sorted.filter(t => etSectionMatchesFilter(t, _etCatFilter));
     const groups = new Map();
     filtered.forEach(template => {
       const meta = etTemplateMeta(template.category);
@@ -21759,7 +21848,7 @@ We look forward to seeing your work!
     _etEditing = null;
     document.getElementById('et-modal-title').textContent = 'New Template';
     document.getElementById('et-name').value = '';
-    const category = ET_PURPOSES.some(p => p.value === _etCatFilter && p.value !== 'all') ? _etCatFilter : 'general';
+    const category = _etCatFilter === 'all' ? 'general' : etDefaultCategoryForFilter(_etCatFilter);
     document.getElementById('et-category').value = category;
     document.getElementById('et-trigger').dataset.pendingValue = etDefaultCueForCategory(category);
     document.getElementById('et-subject').value = '';
