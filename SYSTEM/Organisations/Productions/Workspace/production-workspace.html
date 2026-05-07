@@ -29322,6 +29322,12 @@ We look forward to seeing your work!
   }
 
   // ── Callbacks ─────────────────────────────────────────
+  function isCallbackEligibleCharacter(char) {
+    const roleType = String(char?.role_type || '').trim().toLowerCase();
+    const name = String(char?.name || '').trim().toLowerCase();
+    return roleType !== 'ensemble' && roleType !== 'group' && name !== 'ensemble';
+  }
+
   function getGeneralCallbackInviteAssignments() {
     return (cbv2Assignments || [])
       // Callback invites are production intent: colour (liked) and colour/glow (chosen/both).
@@ -29332,6 +29338,7 @@ We look forward to seeing your work!
         const char = characters.find(c => c.id === a.character_id);
         return app && char ? { app, char, assignment: a } : null;
       })
+      .filter(item => isCallbackEligibleCharacter(item?.char))
       .filter(Boolean);
   }
 
@@ -29831,16 +29838,14 @@ We look forward to seeing your work!
   async function bulkSendCallbackEmails() {
     const btn = document.getElementById('cb-list-bulk-btn');
 
-    // Build the same role map as the list view
+    // Build the same callback-eligible role map as the list view.
     const roleMap = new Map();
     (cbv2Assignments || []).forEach(a => {
       if (a.state !== 'liked' && a.state !== 'chosen') return;
+      const char = (characters || []).find(c => c.id === a.character_id);
+      if (!isCallbackEligibleCharacter(char)) return;
       if (!roleMap.has(a.applicant_id)) roleMap.set(a.applicant_id, new Set());
       roleMap.get(a.applicant_id).add(a.character_id);
-    });
-    getCbEnsemblePerformers().forEach(app => {
-      if (!roleMap.has(app.id)) roleMap.set(app.id, new Set());
-      roleMap.get(app.id).add('__ensemble__');
     });
 
     const charMap = new Map((characters || []).map(c => [c.id, c]));
@@ -29886,9 +29891,7 @@ We look forward to seeing your work!
     let sent = 0, failed = 0;
     for (const { app, session, slot, charIds } of readyToSend) {
       const roleNames = [
-        ...[...charIds].filter(id => id !== '__ensemble__')
-          .map(id => charMap.get(id)?.name).filter(Boolean).sort(),
-        ...(charIds.has('__ensemble__') ? ['Ensemble'] : []),
+        ...[...charIds].map(id => charMap.get(id)?.name).filter(Boolean).sort(),
       ].join(', ');
       try {
         await _sendCallbackEmailDirect(app, roleNames, session, slot);
@@ -36331,17 +36334,14 @@ We look forward to seeing your work!
     const view = document.getElementById(viewId);
     if (!view) return;
 
-    // Build performer → charIds map from liked/chosen assignments
+    // Build performer → charIds map from liked/chosen callback-eligible role assignments.
     const roleMap = new Map();
     (cbv2Assignments || []).forEach(a => {
       if (a.state !== 'liked' && a.state !== 'chosen') return;
+      const char = (characters || []).find(c => c.id === a.character_id);
+      if (!isCallbackEligibleCharacter(char)) return;
       if (!roleMap.has(a.applicant_id)) roleMap.set(a.applicant_id, new Set());
       roleMap.get(a.applicant_id).add(a.character_id);
-    });
-    // Include ensemble (manual + auto)
-    getCbEnsemblePerformers().forEach(app => {
-      if (!roleMap.has(app.id)) roleMap.set(app.id, new Set());
-      roleMap.get(app.id).add('__ensemble__');
     });
 
     const charMap = new Map((characters || []).map(c => [c.id, c]));
@@ -36359,8 +36359,7 @@ We look forward to seeing your work!
     const rows = performers.map(app => {
       const charIds = roleMap.get(app.id) || new Set();
       const tags = [];
-      // Named roles first (sorted), then ensemble
-      const namedCharIds = [...charIds].filter(id => id !== '__ensemble__');
+      const namedCharIds = [...charIds];
       namedCharIds
         .map(id => charMap.get(id))
         .filter(Boolean)
@@ -36368,13 +36367,9 @@ We look forward to seeing your work!
         .forEach(char => {
           tags.push(`<span class="cb-list-role-tag">${esc(char.name || 'Unknown')}</span>`);
         });
-      if (charIds.has('__ensemble__')) {
-        tags.push(`<span class="cb-list-role-tag is-ensemble">Ensemble</span>`);
-      }
 
       const roleNamesStr = [
         ...namedCharIds.map(id => charMap.get(id)?.name).filter(Boolean).sort(),
-        ...(charIds.has('__ensemble__') ? ['Ensemble'] : []),
       ].join(', ');
 
       const cardHtml = buildStandardCastingCardHtml(app, { draggable: false, state: null });
