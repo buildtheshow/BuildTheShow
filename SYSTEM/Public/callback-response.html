@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Callback Response | Build The Show</title>
+  <style>
+    :root {
+      --bts-purple: #572e88;
+      --bts-amber: #e3a46f;
+      --bts-ink: #1a1530;
+      --bts-muted: #6a5a80;
+      --bts-line: rgba(87,46,136,0.14);
+      --bts-bg: #f7f4fc;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: var(--bts-ink);
+      background: var(--bts-bg);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: clamp(1rem, 4vw, 3rem);
+    }
+    .shell {
+      width: min(760px, 100%);
+      background: #fff;
+      border: 1px solid var(--bts-line);
+      border-radius: 8px;
+      box-shadow: 0 18px 48px rgba(87,46,136,0.14);
+      overflow: hidden;
+    }
+    .bar { height: 0.45rem; background: var(--bts-amber); }
+    .content { padding: clamp(1.25rem, 4vw, 2.25rem); }
+    .eyebrow {
+      color: var(--bts-purple);
+      font-size: 0.72rem;
+      font-weight: 900;
+      text-transform: uppercase;
+      letter-spacing: 0;
+      margin-bottom: 0.55rem;
+    }
+    h1 {
+      margin: 0;
+      font-size: clamp(1.55rem, 5vw, 2.4rem);
+      line-height: 1.05;
+      letter-spacing: 0;
+    }
+    p {
+      color: var(--bts-muted);
+      line-height: 1.55;
+      margin: 0.75rem 0 0;
+    }
+    .details {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 0.75rem;
+      margin: 1.35rem 0;
+    }
+    .detail {
+      background: rgba(87,46,136,0.05);
+      border: 1px solid var(--bts-line);
+      border-radius: 8px;
+      padding: 0.75rem;
+      min-width: 0;
+    }
+    .detail-label {
+      color: #9a90b0;
+      font-size: 0.68rem;
+      font-weight: 900;
+      text-transform: uppercase;
+      letter-spacing: 0;
+      margin-bottom: 0.25rem;
+    }
+    .detail-value {
+      font-weight: 850;
+      overflow-wrap: anywhere;
+    }
+    .actions {
+      display: flex;
+      gap: 0.7rem;
+      flex-wrap: wrap;
+      margin-top: 1.25rem;
+    }
+    button {
+      border: 1.5px solid var(--bts-purple);
+      border-radius: 8px;
+      padding: 0.72rem 1rem;
+      font: inherit;
+      font-size: 0.86rem;
+      font-weight: 900;
+      cursor: pointer;
+      transition: transform 0.15s, background 0.15s, border-color 0.15s;
+    }
+    button:hover { transform: translateY(-1px); }
+    button:disabled { cursor: default; opacity: 0.65; transform: none; }
+    .primary { background: var(--bts-purple); color: #fff; }
+    .secondary { background: #fff; color: var(--bts-purple); }
+    .danger { border-color: #fecdd3; background: #fff1f2; color: #be123c; }
+    .slots {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(175px, 1fr));
+      gap: 0.75rem;
+      margin-top: 1rem;
+    }
+    .slot {
+      width: 100%;
+      text-align: left;
+      background: #fff;
+      color: var(--bts-ink);
+      border-color: var(--bts-line);
+    }
+    .slot strong { display: block; font-size: 0.95rem; }
+    .slot span { display: block; color: var(--bts-muted); font-size: 0.78rem; margin-top: 0.25rem; }
+    .slot.selected {
+      border-color: var(--bts-purple);
+      background: #f1ecff;
+    }
+    .status {
+      margin-top: 1rem;
+      padding: 0.85rem 1rem;
+      border-radius: 8px;
+      background: #f1ecff;
+      color: #4a2a75;
+      font-weight: 800;
+      line-height: 1.45;
+    }
+    .status.error { background: #fff1f2; color: #be123c; }
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <div class="bar"></div>
+    <section class="content">
+      <div class="eyebrow">Callback Response</div>
+      <h1 id="title">Loading your callback...</h1>
+      <p id="intro">One moment while we find your invitation.</p>
+      <div class="details hidden" id="details"></div>
+      <div class="actions hidden" id="actions">
+        <button class="primary" id="accept-btn" type="button">Accept</button>
+        <button class="secondary" id="reschedule-btn" type="button">Reschedule</button>
+        <button class="danger" id="decline-btn" type="button">Decline</button>
+      </div>
+      <section class="hidden" id="reschedule-panel">
+        <p>Choose a new callback time from the available slots.</p>
+        <div class="slots" id="slots"></div>
+        <div class="actions">
+          <button class="primary" id="confirm-reschedule-btn" type="button" disabled>Confirm New Time</button>
+          <button class="secondary" id="cancel-reschedule-btn" type="button">Back</button>
+        </div>
+      </section>
+      <div class="status hidden" id="status"></div>
+    </section>
+  </main>
+
+  <script type="module">
+    import { supabase as sb } from '/ASSETS/scripts/supabase.js';
+
+    const KEYS = {
+      token: '__bts_callback_response_token',
+      status: '__bts_callback_invite_status',
+      sentAt: '__bts_callback_email_sent_at',
+      respondedAt: '__bts_callback_responded_at',
+      sessionId: '__bts_callback_session_id',
+      slotId: '__bts_callback_slot_id',
+      roleNames: '__bts_callback_role_names',
+      previousSlotId: '__bts_callback_previous_slot_id',
+    };
+
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get('token') || '';
+    const prodId = params.get('prod') || '';
+    const initialAction = (params.get('action') || '').toLowerCase();
+
+    let app = null;
+    let prod = null;
+    let invite = null;
+    let session = null;
+    let slot = null;
+    let slots = [];
+    let selectedSlotId = '';
+
+    const $ = id => document.getElementById(id);
+    const esc = value => String(value ?? '').replace(/[&<>"']/g, ch => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[ch]));
+    const fmtDate = value => {
+      if (!value) return '';
+      const d = new Date(`${String(value).slice(0, 10)}T00:00:00`);
+      return Number.isNaN(d.getTime()) ? String(value) : d.toLocaleDateString('en-CA', { weekday:'long', month:'long', day:'numeric', year:'numeric' });
+    };
+    const fmtTime = value => {
+      if (!value) return '';
+      const [h, m] = String(value).slice(0, 5).split(':').map(Number);
+      if (!Number.isFinite(h) || !Number.isFinite(m)) return String(value);
+      const d = new Date(); d.setHours(h, m, 0, 0);
+      return d.toLocaleTimeString('en-CA', { hour:'numeric', minute:'2-digit' });
+    };
+    const answers = record => {
+      const raw = record?.custom_answers;
+      if (!raw) return {};
+      if (typeof raw === 'string') {
+        try { return JSON.parse(raw) || {}; } catch { return {}; }
+      }
+      return raw || {};
+    };
+    const setStatus = (message, isError = false) => {
+      $('status').textContent = message;
+      $('status').classList.toggle('error', !!isError);
+      $('status').classList.remove('hidden');
+    };
+    const setBusy = busy => {
+      ['accept-btn', 'decline-btn', 'reschedule-btn', 'confirm-reschedule-btn'].forEach(id => {
+        const btn = $(id);
+        if (btn) btn.disabled = busy || (id === 'confirm-reschedule-btn' && !selectedSlotId);
+      });
+    };
+
+    function currentState() {
+      const ca = answers(app);
+      return {
+        status: ca[KEYS.status] || '',
+        sessionId: ca[KEYS.sessionId] || '',
+        slotId: ca[KEYS.slotId] || '',
+        roleNames: ca[KEYS.roleNames] || '',
+      };
+    }
+
+    function renderDetails() {
+      const roleNames = invite.roleNames || 'Callback';
+      $('title').textContent = `${prod?.title || 'Your callback'} callback`;
+      $('intro').textContent = `Hi ${app?.name || 'there'}, please respond to your callback invitation.`;
+      $('details').innerHTML = `
+        <div class="detail"><div class="detail-label">Role</div><div class="detail-value">${esc(roleNames)}</div></div>
+        <div class="detail"><div class="detail-label">Date</div><div class="detail-value">${esc(fmtDate(session?.date || slot?.slot_date)) || 'TBC'}</div></div>
+        <div class="detail"><div class="detail-label">Time</div><div class="detail-value">${esc(fmtTime(slot?.slot_time || session?.start_time)) || 'TBC'}</div></div>
+        <div class="detail"><div class="detail-label">Location</div><div class="detail-value">${esc(session?.location || prod?.venue || 'TBC')}</div></div>
+      `;
+      $('details').classList.remove('hidden');
+      $('actions').classList.remove('hidden');
+    }
+
+    async function loadInvite() {
+      if (!token || !prodId) throw new Error('This callback link is missing information.');
+      const { data: apps, error } = await sb.from('audition_applications')
+        .select('id,production_id,name,email,custom_answers,slot_assignments')
+        .eq('production_id', prodId)
+        .contains('custom_answers', { [KEYS.token]: token })
+        .limit(1);
+      if (error) throw error;
+      app = apps?.[0] || null;
+      if (!app) throw new Error('We could not find this callback invitation.');
+      const ca = answers(app);
+      invite = currentState();
+      const [{ data: prodData }, { data: sessionData }, { data: slotData }] = await Promise.all([
+        sb.from('productions').select('id,title,subtitle,venue,director,organization_id,start_date,end_date').eq('id', prodId).maybeSingle(),
+        ca[KEYS.sessionId] ? sb.from('audition_sessions').select('*').eq('id', ca[KEYS.sessionId]).maybeSingle() : Promise.resolve({ data: null }),
+        ca[KEYS.slotId] ? sb.from('audition_time_slots').select('*').eq('id', ca[KEYS.slotId]).maybeSingle() : Promise.resolve({ data: null }),
+      ]);
+      prod = prodData || {};
+      session = sessionData || null;
+      slot = slotData || null;
+      renderDetails();
+      if (['accepted', 'declined', 'rescheduled'].includes(invite.status)) {
+        const label = invite.status === 'accepted' ? 'accepted' : invite.status === 'declined' ? 'declined' : 'rescheduled';
+        $('actions').classList.add('hidden');
+        setStatus(`This callback has already been ${label}.`);
+      } else if (initialAction === 'accept') {
+        acceptInvite();
+      } else if (initialAction === 'decline') {
+        declineInvite();
+      } else if (initialAction === 'reschedule') {
+        showReschedule();
+      }
+    }
+
+    async function updateSlotAvailability(slotId) {
+      if (!slotId) return;
+      const { data: slotRow } = await sb.from('audition_time_slots').select('id,capacity').eq('id', slotId).maybeSingle();
+      const { data: apps } = await sb.from('audition_applications')
+        .select('slot_assignments,status')
+        .eq('production_id', prodId);
+      const count = (apps || []).filter(row => !String(row.status || '').toLowerCase().includes('cancel'))
+        .reduce((total, row) => total + ((Array.isArray(row.slot_assignments) ? row.slot_assignments : []).some(x => x.slot_id === slotId) ? 1 : 0), 0);
+      const available = count < (Number(slotRow?.capacity) || 1);
+      await sb.from('audition_time_slots').update({ is_available: available }).eq('id', slotId);
+    }
+
+    async function saveResponse(status, nextSessionId, nextSlotId, previousSlotId = '') {
+      const ca = {
+        ...answers(app),
+        [KEYS.status]: status,
+        [KEYS.respondedAt]: new Date().toISOString(),
+        [KEYS.sessionId]: nextSessionId || '',
+        [KEYS.slotId]: nextSlotId || '',
+        ...(previousSlotId ? { [KEYS.previousSlotId]: previousSlotId } : {}),
+      };
+      const currentAssignments = Array.isArray(app.slot_assignments) ? app.slot_assignments : [];
+      const withoutCallback = currentAssignments.filter(x => x.session_id !== invite.sessionId);
+      const slotAssignments = status === 'declined'
+        ? withoutCallback
+        : [...withoutCallback, { session_id: nextSessionId, slot_id: nextSlotId }];
+      const { error } = await sb.from('audition_applications')
+        .update({ custom_answers: ca, slot_assignments: slotAssignments })
+        .eq('id', app.id);
+      if (error) throw error;
+      app.custom_answers = ca;
+      app.slot_assignments = slotAssignments;
+      invite = currentState();
+      if (previousSlotId) await updateSlotAvailability(previousSlotId);
+      if (nextSlotId) await updateSlotAvailability(nextSlotId);
+    }
+
+    async function loadOpenSlots() {
+      const { data: sessions } = await sb.from('audition_sessions')
+        .select('*')
+        .eq('production_id', prodId)
+        .eq('type', 'callback')
+        .eq('enabled', true)
+        .order('date');
+      const sessionIds = (sessions || []).map(s => s.id).filter(Boolean);
+      const [{ data: slotRows }, { data: apps }] = await Promise.all([
+        sessionIds.length
+          ? sb.from('audition_time_slots').select('*').in('session_id', sessionIds).order('slot_time')
+          : Promise.resolve({ data: [] }),
+        sb.from('audition_applications').select('id,status,slot_assignments').eq('production_id', prodId),
+      ]);
+      const occupancy = {};
+      (apps || []).forEach(row => {
+        if (row.id === app.id || String(row.status || '').toLowerCase().includes('cancel')) return;
+        (Array.isArray(row.slot_assignments) ? row.slot_assignments : []).forEach(x => {
+          if (x.slot_id) occupancy[x.slot_id] = (occupancy[x.slot_id] || 0) + 1;
+        });
+      });
+      const bySession = new Map((sessions || []).map(s => [s.id, s]));
+      slots = (slotRows || [])
+        .map(s => ({ ...s, session: bySession.get(s.session_id), liveCount: occupancy[s.id] || 0 }))
+        .filter(s => s.session && s.id !== invite.slotId && (s.liveCount < (Number(s.capacity) || 1)));
+    }
+
+    async function showReschedule() {
+      $('actions').classList.add('hidden');
+      $('reschedule-panel').classList.remove('hidden');
+      $('slots').innerHTML = '<p>Loading available callback times...</p>';
+      await loadOpenSlots();
+      if (!slots.length) {
+        $('slots').innerHTML = '<p>No alternate callback slots are currently available. Please reply to your callback email and the team will help.</p>';
+        return;
+      }
+      $('slots').innerHTML = slots.map(s => `
+        <button class="slot" type="button" data-slot-id="${esc(s.id)}">
+          <strong>${esc(fmtTime(s.slot_time))}</strong>
+          <span>${esc(fmtDate(s.session?.date || s.slot_date))}${s.session?.location ? ` · ${esc(s.session.location)}` : ''}</span>
+        </button>
+      `).join('');
+      document.querySelectorAll('.slot').forEach(btn => {
+        btn.addEventListener('click', () => {
+          selectedSlotId = btn.dataset.slotId || '';
+          document.querySelectorAll('.slot').forEach(el => el.classList.remove('selected'));
+          btn.classList.add('selected');
+          $('confirm-reschedule-btn').disabled = !selectedSlotId;
+        });
+      });
+    }
+
+    async function callbackMaterialsHtml() {
+      try {
+        const roleNames = String(invite.roleNames || '').split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+        const { data: chars } = await sb.from('production_characters')
+          .select('name,callback_material,callback_file_url,callback_file_name,callback_side_url,callback_side_name,callback_side_notes,callback_songcut_url,callback_songcut_name,callback_songcut_notes,callback_other_url,callback_other_name,callback_other_notes')
+          .eq('production_id', prodId);
+        const matched = (chars || []).filter(char => !roleNames.length || roleNames.some(role => String(char.name || '').toLowerCase() === role));
+        const lines = [];
+        if (session?.prepare_text) lines.push(String(session.prepare_text));
+        matched.forEach(char => {
+          const bits = [];
+          if (char.callback_material) bits.push(String(char.callback_material));
+          [
+            ['Sides', char.callback_side_url, char.callback_side_name, char.callback_side_notes],
+            ['Song Cut', char.callback_songcut_url, char.callback_songcut_name, char.callback_songcut_notes],
+            ['Other', char.callback_other_url, char.callback_other_name, char.callback_other_notes],
+            ['File', char.callback_file_url, char.callback_file_name, ''],
+          ].forEach(([label, url, name, notes]) => {
+            if (notes) bits.push(`${label}: ${notes}`);
+            if (url) bits.push(`${label}: <a href="${esc(url)}">${esc(name || url)}</a>`);
+          });
+          if (bits.length) lines.push(`<strong>${esc(char.name || 'Callback Materials')}</strong><br>${bits.join('<br>')}`);
+        });
+        return lines.join('<br><br>') || 'The production team will share any additional preparation notes separately.';
+      } catch {
+        return session?.prepare_text || 'The production team will share any additional preparation notes separately.';
+      }
+    }
+
+    async function sendConfirmation(kind) {
+      const isDecline = kind === 'declined';
+      const materials = isDecline ? '' : await callbackMaterialsHtml();
+      const subject = isDecline
+        ? `Callback declined — ${prod?.title || 'Build The Show'}`
+        : `Your callback is confirmed — ${prod?.title || 'Build The Show'}`;
+      const message = isDecline
+        ? `Hi {{contact_name}},
+
+Thanks for letting us know that you can't attend this callback for {{show_name}}.
+
+Warmly,
+{{director_name}}
+{{org_name}}`
+        : `Hi {{contact_name}},
+
+Your callback for {{show_name}} is confirmed.
+
+Role: {{role_name}}
+Date: {{callback_date}}
+Time: {{callback_time}}
+Location: {{callback_venue}}
+
+Callback materials:
+{{callback_materials}}
+
+Warmly,
+{{director_name}}
+{{org_name}}`;
+      const activeSlot = slots.find(s => s.id === invite.slotId) || slot;
+      const activeSession = activeSlot?.session || session;
+      const { data } = await sb.functions.invoke('send-email', {
+        body: {
+          applicant_id: app.id,
+          production_id: prodId,
+          category: 'callback',
+          trigger: 'callback_set',
+          subject,
+          message,
+          email: app.email || '',
+          name: app.name || '',
+          session_id: activeSession?.id || '',
+          slot_id: activeSlot?.id || '',
+          context: {
+            role_name: invite.roleNames || '',
+            callback_date: fmtDate(activeSession?.date || activeSlot?.slot_date),
+            callback_time: fmtTime(activeSlot?.slot_time || activeSession?.start_time),
+            callback_venue: activeSession?.location || prod?.venue || '',
+            callback_materials: materials,
+            show_name: prod?.title || '',
+            director_name: prod?.director || '',
+            org_name: '',
+          },
+        },
+      });
+      if (!data?.sent) throw new Error(data?.error || 'Confirmation email was not sent.');
+    }
+
+    async function acceptInvite() {
+      try {
+        setBusy(true);
+        await saveResponse('accepted', invite.sessionId, invite.slotId);
+        await sendConfirmation('accepted');
+        $('actions').classList.add('hidden');
+        setStatus('Accepted. Your confirmed callback details and materials have been emailed to you.');
+      } catch (err) {
+        setStatus(err.message || 'Could not accept this callback.', true);
+      } finally {
+        setBusy(false);
+      }
+    }
+
+    async function declineInvite() {
+      try {
+        setBusy(true);
+        const oldSlot = invite.slotId;
+        await saveResponse('declined', '', '', oldSlot);
+        await sendConfirmation('declined');
+        $('actions').classList.add('hidden');
+        setStatus('Declined. A confirmation email has been sent.');
+      } catch (err) {
+        setStatus(err.message || 'Could not decline this callback.', true);
+      } finally {
+        setBusy(false);
+      }
+    }
+
+    async function confirmReschedule() {
+      await loadOpenSlots();
+      const next = slots.find(s => s.id === selectedSlotId);
+      if (!next) {
+        setStatus('That slot is no longer available. Please choose another time.', true);
+        showReschedule();
+        return;
+      }
+      try {
+        setBusy(true);
+        const oldSlot = invite.slotId;
+        slot = next;
+        session = next.session;
+        await saveResponse('rescheduled', next.session_id, next.id, oldSlot);
+        await sendConfirmation('rescheduled');
+        $('reschedule-panel').classList.add('hidden');
+        setStatus('Rescheduled. Your confirmed callback details and materials have been emailed to you.');
+        renderDetails();
+        $('actions').classList.add('hidden');
+      } catch (err) {
+        setStatus(err.message || 'Could not reschedule this callback.', true);
+      } finally {
+        setBusy(false);
+      }
+    }
+
+    $('accept-btn').addEventListener('click', acceptInvite);
+    $('decline-btn').addEventListener('click', declineInvite);
+    $('reschedule-btn').addEventListener('click', showReschedule);
+    $('confirm-reschedule-btn').addEventListener('click', confirmReschedule);
+    $('cancel-reschedule-btn').addEventListener('click', () => {
+      $('reschedule-panel').classList.add('hidden');
+      $('actions').classList.remove('hidden');
+    });
+
+    loadInvite().catch(err => {
+      $('title').textContent = 'Callback link unavailable';
+      $('intro').textContent = 'We could not open this callback response link.';
+      setStatus(err.message || 'Please contact the production team.', true);
+    });
+  </script>
+</body>
+</html>

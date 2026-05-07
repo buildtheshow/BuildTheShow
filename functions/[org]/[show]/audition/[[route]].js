@@ -4,6 +4,7 @@
 
 export async function onRequest(context) {
   const url = new URL(context.request.url);
-  const assetUrl = new URL('/SYSTEM/Public/audition-info.html', url);
+  const isCallbackResponse = url.pathname.toLowerCase().includes('/callback-response');
+  const assetUrl = new URL(isCallbackResponse ? '/SYSTEM/Public/callback-response.html' : '/SYSTEM/Public/audition-info.html', url);
   return context.env.ASSETS.fetch(assetUrl);
 }

@@ -720,6 +720,7 @@ See you soon,
     '{{general_audition_prepare}}',
     '{{dance_call_prepare}}',
     '{{callback_prepare}}',
+    '{{callback_materials}}',
   ]);
 
   function substituteTemplate(text: string, escapeForHtml = false): string {
