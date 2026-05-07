@@ -7261,6 +7261,9 @@
       border-color: #6b3aaa;
       transform: translateY(-1px);
     }
+    .cb-list-email-btn.is-accepted,
+    .cb-list-email-btn.is-declined,
+    .cb-list-email-btn.is-rescheduled,
     .cb-list-email-btn.is-sent,
     .cb-list-email-btn:disabled {
       background: #eafaf1;
@@ -7269,10 +7272,21 @@
       cursor: default;
       transform: none;
     }
+    .cb-list-email-btn.is-declined {
+      background: #fff1f2;
+      color: #be123c;
+      border-color: #fecdd3;
+    }
+    .cb-list-email-btn.is-rescheduled {
+      background: #eef2ff;
+      color: #4338ca;
+      border-color: #c7d2fe;
+    }
+    .cb-list-email-btn.is-accepted:hover,
+    .cb-list-email-btn.is-declined:hover,
+    .cb-list-email-btn.is-rescheduled:hover,
     .cb-list-email-btn.is-sent:hover,
     .cb-list-email-btn:disabled:hover {
-      background: #eafaf1;
-      border-color: #bfe7cf;
       transform: none;
     }
     .cb-list-no-email {
@@ -29678,15 +29692,40 @@ We look forward to seeing your work!
 
   // Core send — shared by modal confirm + bulk send
   async function _sendCallbackEmailDirect(app, roleNames, session, slot) {
+    const token = await ensureCallbackResponseToken(app);
+    const responseLinks = callbackResponseLinks(token);
     const sessionDate = session?.date
       ? new Date(`${session.date}T00:00:00`).toLocaleDateString('en-CA', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
       : '';
+    const callbackTime = slot?.slot_time ? formatSlotTime(slot.slot_time) : '';
+    const callbackVenue = session?.location || prod?.venue || '';
     const { data, error } = await sb.functions.invoke('send-email', {
       body: {
         applicant_id: app.id,
         production_id: prodId,
         category: 'callback',
         trigger: 'callback_set',
+        subject: `Callback response requested — ${prod?.title || 'Build The Show'}`,
+        message: `Hi {{contact_name}},
+
+We'd love to see you for callbacks for {{show_name}}.
+
+Role: {{role_name}}
+Date: {{callback_date}}
+Time: {{callback_time}}
+Location: {{callback_venue}}
+
+Please choose one of the options below:
+
+Accept: {{callback_accept_link}}
+Decline: {{callback_decline_link}}
+Reschedule: {{callback_reschedule_link}}
+
+Once you accept or choose a new time, we'll send your confirmed callback details and materials.
+
+Warmly,
+{{director_name}}
+{{org_name}}`,
         email: app.email || '',
         name:  app.name  || '',
         session_id: session?.id || '',
@@ -29696,8 +29735,11 @@ We look forward to seeing your work!
           performer_email:  app.email || '',
           role_name:        roleNames || '',
           callback_date:    sessionDate,
-          callback_time:    slot?.slot_time ? formatSlotTime(slot.slot_time) : '',
-          callback_venue:   session?.location || prod?.venue || '',
+          callback_time:    callbackTime,
+          callback_venue:   callbackVenue,
+          callback_accept_link: responseLinks.accept,
+          callback_decline_link: responseLinks.decline,
+          callback_reschedule_link: responseLinks.reschedule,
           audition_session: session?.name || '',
           show_name:        prod?.title || '',
           show_subtitle:    prod?.subtitle || '',
@@ -29717,7 +29759,7 @@ We look forward to seeing your work!
     const fnError = data?.error || (error?.message || '');
     if (!data?.sent) throw new Error(fnError || 'Email was not sent.');
     try {
-      await markCallbackEmailSent(app);
+      await markCallbackRequestSent(app, roleNames, session, slot);
     } catch (markError) {
       console.warn('[BTS] callback email sent, but sent marker failed', markError);
     }
@@ -29762,7 +29804,7 @@ We look forward to seeing your work!
     Array.from(roleMap.keys()).forEach(appId => {
       const app = allApplicants.find(a => a.id === appId);
       if (!app?.email) return;
-      if (hasCallbackEmailSent(app)) return;
+      if (hasCallbackRequestSent(app)) return;
       const existingSlotEntry = (Array.isArray(app.slot_assignments) ? app.slot_assignments : [])
         .find(x => cbSessionIds.has(x.session_id));
       if (existingSlotEntry) {
@@ -29809,7 +29851,7 @@ We look forward to seeing your work!
       if (btn) btn.textContent = `Sending ${sent + failed} / ${readyToSend.length}…`;
     }
 
-    if (btn) { btn.disabled = false; btn.textContent = 'Send All Callback Emails'; }
+    if (btn) { btn.disabled = false; btn.textContent = 'Send All Callback Requests'; }
     const msg = needsSlot.length
       ? `${sent} sent${failed ? `, ${failed} failed` : ''}. ${needsSlot.length} performer${needsSlot.length === 1 ? '' : 's'} still need a slot — use individual email buttons.`
       : `${sent} callback email${sent === 1 ? '' : 's'} sent${failed ? ` (${failed} failed)` : ''}.`;
@@ -36142,24 +36184,99 @@ We look forward to seeing your work!
     </div>`;
   }
 
-  const CALLBACK_EMAIL_SENT_KEY = '__bts_callback_email_sent_at';
+  const CALLBACK_INVITE_KEYS = {
+    token: '__bts_callback_response_token',
+    status: '__bts_callback_invite_status',
+    sentAt: '__bts_callback_email_sent_at',
+    respondedAt: '__bts_callback_responded_at',
+    sessionId: '__bts_callback_session_id',
+    slotId: '__bts_callback_slot_id',
+    roleNames: '__bts_callback_role_names',
+  };
 
-  function callbackEmailSentAt(app) {
-    return applicantCustomAnswers(app)[CALLBACK_EMAIL_SENT_KEY] || app?.callback_email_sent_at || '';
+  function callbackInviteState(app) {
+    const ca = applicantCustomAnswers(app);
+    const sentAt = ca[CALLBACK_INVITE_KEYS.sentAt] || app?.callback_email_sent_at || '';
+    const status = ca[CALLBACK_INVITE_KEYS.status] || (sentAt ? 'sent' : '');
+    return {
+      status,
+      token: ca[CALLBACK_INVITE_KEYS.token] || '',
+      sentAt,
+      respondedAt: ca[CALLBACK_INVITE_KEYS.respondedAt] || '',
+      sessionId: ca[CALLBACK_INVITE_KEYS.sessionId] || '',
+      slotId: ca[CALLBACK_INVITE_KEYS.slotId] || '',
+      roleNames: ca[CALLBACK_INVITE_KEYS.roleNames] || '',
+    };
   }
 
-  function hasCallbackEmailSent(app) {
-    return !!callbackEmailSentAt(app);
+  function hasCallbackRequestSent(app) {
+    return !!callbackInviteState(app).status;
   }
 
-  async function markCallbackEmailSent(app) {
+  function callbackStatusLabel(app) {
+    const status = callbackInviteState(app).status;
+    if (status === 'accepted') return 'Accepted';
+    if (status === 'declined') return 'Declined';
+    if (status === 'rescheduled') return 'Rescheduled';
+    if (status === 'sent') return 'Callback Sent';
+    return '';
+  }
+
+  function callbackStatusClass(app) {
+    const status = callbackInviteState(app).status;
+    return ['accepted', 'declined', 'rescheduled'].includes(status) ? `is-${status}` : 'is-sent';
+  }
+
+  function createCallbackResponseToken() {
+    const bytes = new Uint8Array(18);
+    crypto.getRandomValues(bytes);
+    return Array.from(bytes, b => b.toString(36).padStart(2, '0')).join('').slice(0, 32);
+  }
+
+  function callbackResponseBaseUrl() {
+    const base = (orgSlug && prod?.slug)
+      ? `${window.location.origin}/${encodeURIComponent(orgSlug)}/${encodeURIComponent(prod.slug)}/Auditions/callback-response`
+      : `${window.location.origin}/SYSTEM/Public/callback-response.html`;
+    return `${base}?prod=${encodeURIComponent(prodId)}`;
+  }
+
+  function callbackResponseLinks(token) {
+    const base = `${callbackResponseBaseUrl()}&token=${encodeURIComponent(token)}`;
+    return {
+      accept: `${base}&action=accept`,
+      decline: `${base}&action=decline`,
+      reschedule: `${base}&action=reschedule`,
+    };
+  }
+
+  async function saveCallbackInviteState(app, patch) {
     if (!app?.id) return;
-    const customAnswers = { ...applicantCustomAnswers(app), [CALLBACK_EMAIL_SENT_KEY]: new Date().toISOString() };
+    const customAnswers = { ...applicantCustomAnswers(app), ...patch };
     app.custom_answers = customAnswers;
     const { error } = await sb.from('audition_applications')
       .update({ custom_answers: customAnswers })
       .eq('id', app.id);
     if (error) throw error;
+  }
+
+  async function ensureCallbackResponseToken(app) {
+    const existing = callbackInviteState(app).token;
+    if (existing) return existing;
+    const token = createCallbackResponseToken();
+    await saveCallbackInviteState(app, { [CALLBACK_INVITE_KEYS.token]: token });
+    return token;
+  }
+
+  async function markCallbackRequestSent(app, roleNames, session, slot) {
+    const now = new Date().toISOString();
+    await saveCallbackInviteState(app, {
+      [CALLBACK_INVITE_KEYS.status]: 'sent',
+      [CALLBACK_INVITE_KEYS.sentAt]: now,
+      [CALLBACK_INVITE_KEYS.respondedAt]: '',
+      [CALLBACK_INVITE_KEYS.sessionId]: session?.id || '',
+      [CALLBACK_INVITE_KEYS.slotId]: slot?.id || '',
+      [CALLBACK_INVITE_KEYS.roleNames]: roleNames || '',
+    });
   }
 
   function renderCastListViewInto(viewId) {
@@ -36190,7 +36307,7 @@ We look forward to seeing your work!
       return;
     }
 
-    const withEmail = performers.filter(p => p.email && !hasCallbackEmailSent(p));
+    const withEmail = performers.filter(p => p.email && !hasCallbackRequestSent(p));
     const rows = performers.map(app => {
       const charIds = roleMap.get(app.id) || new Set();
       const tags = [];
@@ -36213,7 +36330,8 @@ We look forward to seeing your work!
       ].join(', ');
 
       const cardHtml = buildStandardCastingCardHtml(app, { draggable: false, state: null });
-      const isSent = hasCallbackEmailSent(app);
+      const statusLabel = callbackStatusLabel(app);
+      const statusClass = callbackStatusClass(app);
 
       return `<div class="cb-list-row">
         <div class="cb-list-card">${cardHtml}</div>
@@ -36223,8 +36341,8 @@ We look forward to seeing your work!
           <div class="cb-list-roles">${tags.join('')}</div>
         </div>
         <div class="cb-list-actions">
-          ${isSent
-            ? `<button class="cb-list-email-btn is-sent" type="button" disabled>Callback Sent</button>`
+          ${statusLabel
+            ? `<button class="cb-list-email-btn ${statusClass}" type="button" disabled>${esc(statusLabel)}</button>`
             : app.email
               ? `<button class="cb-list-email-btn" onclick="sendCallbackEmail('${esc(app.id)}','${esc(roleNamesStr)}')" title="Send callback email to ${esc(app.name || '')}">Send Email</button>`
             : `<span class="cb-list-no-email">No email</span>`}
@@ -36236,7 +36354,7 @@ We look forward to seeing your work!
       <div class="cb-list-header">
         <div class="cb-list-count"><strong>${performers.length}</strong> performer${performers.length === 1 ? '' : 's'} called back</div>
         ${withEmail.length
-          ? `<button class="cb-list-bulk-btn" id="cb-list-bulk-btn" onclick="bulkSendCallbackEmails()">Send All Callback Emails</button>`
+          ? `<button class="cb-list-bulk-btn" id="cb-list-bulk-btn" onclick="bulkSendCallbackEmails()">Send All Callback Requests</button>`
           : ''}
       </div>
       <div class="cb-list-rows">${rows}</div>
