@@ -269,8 +269,8 @@
 
     <div class="ss-card">
       <div id="ss-main">
-        <div class="ss-card-title">Submit your self tape</div>
-        <div class="ss-card-sub">Paste the link to your video — YouTube, Vimeo, and Google Drive are all accepted.</div>
+        <div class="ss-card-title" id="ss-card-title">Submit your self tape</div>
+        <div class="ss-card-sub" id="ss-card-sub">Paste the link to your video. YouTube, Vimeo, and Google Drive are all accepted.</div>
 
         <div class="ss-performer-banner" id="ss-performer-banner"></div>
 
@@ -367,10 +367,15 @@
   const _submissionCode = _prettyMarker === 'selftape' ? String(_pathParts[3] || '').toUpperCase() : '';
   let   prodId     = params.get('prod') || null;
   let   appId      = params.get('app');
+  const submissionScope = String(params.get('scope') || '').toLowerCase() === 'callback' ? 'callback' : 'general_audition';
 
   let _prod = null;
   let _app  = null;
   let _prevSubmissions = [];
+
+  function ssScopeLabel() {
+    return submissionScope === 'callback' ? 'callback self tape' : 'self tape';
+  }
 
   function esc(str) {
     const d = document.createElement('div');
@@ -524,6 +529,7 @@
         video_url:     row.querySelector('.ss-url-input').value.trim(),
         platform:      ssDetectPlatform(row.querySelector('.ss-url-input').value.trim())?.id || null,
         label:         row.querySelector('.ss-label-input').value.trim() || null,
+        scope:         submissionScope,
       }));
 
       const { error: insertErr } = await sb.from('self_tape_submissions').insert(inserts);
@@ -533,8 +539,9 @@
       document.getElementById('ss-main').style.display = 'none';
       success.classList.add('active');
       const count = inserts.length;
+      const label = ssScopeLabel();
       document.getElementById('ss-success-sub').textContent =
-        `${count === 1 ? 'Your self tape has' : `${count} self tapes have`} been submitted to ${_prod?.title || 'the production'}. The team will be in touch.`;
+        `${count === 1 ? `Your ${label} has` : `${count} ${label}s have`} been submitted to ${_prod?.title || 'the production'}. The team will be in touch.`;
 
     } catch (err) {
       console.error('[Self Tape Submit] error:', err);
@@ -569,7 +576,7 @@
       <div>
         <div class="ss-show-title">${esc(_prod.title || 'Auditions')}</div>
         ${_prod.org_name ? `<div class="ss-show-subtitle">${esc(_prod.org_name)}</div>` : ''}
-        <div class="ss-badge">🎬 Self Tape Submission</div>
+        <div class="ss-badge">🎬 ${submissionScope === 'callback' ? 'Callback Self Tape Submission' : 'Self Tape Submission'}</div>
       </div>`;
   }
 
@@ -596,7 +603,7 @@
       : '';
     wrap.innerHTML = `
       <div class="ss-prev-submission">
-        <div class="ss-prev-title">Previous submission received</div>
+        <div class="ss-prev-title">Previous ${esc(ssScopeLabel())} submission received</div>
         <div class="ss-prev-link">${esc(latest.video_url)}</div>
         ${date ? `<div class="ss-prev-meta">Submitted ${date}${latest.label ? ` · ${esc(latest.label)}` : ''}</div>` : ''}
         <div class="ss-update-note">You can submit a new tape below to add another or update the previous one.</div>
@@ -646,7 +653,7 @@
         sb.from('productions').select('id, title, poster_url, organization_id').eq('id', prodId).maybeSingle(),
         sb.from('audition_applications').select('id, name, email').eq('id', appId).eq('production_id', prodId).maybeSingle(),
         sb.from('self_tape_submissions')
-          .select('*').eq('applicant_id', appId).eq('production_id', prodId)
+          .select('*').eq('applicant_id', appId).eq('production_id', prodId).eq('scope', submissionScope)
           .order('submitted_at', { ascending: false }),
       ]);
 
@@ -671,9 +678,15 @@
       _app  = appRes.data;
       _prevSubmissions = prevRes.data || [];
 
-      document.title = `Submit Self Tape — ${_prod.title || 'Audition'}`;
+      document.title = `${submissionScope === 'callback' ? 'Submit Callback Self Tape' : 'Submit Self Tape'}: ${_prod.title || 'Audition'}`;
       document.getElementById('page-content').style.display = 'none';
       document.getElementById('ss-app').style.display = 'block';
+      const titleEl = document.getElementById('ss-card-title');
+      const subEl = document.getElementById('ss-card-sub');
+      if (titleEl) titleEl.textContent = submissionScope === 'callback' ? 'Submit your callback self tape' : 'Submit your self tape';
+      if (subEl) subEl.textContent = submissionScope === 'callback'
+        ? 'Paste the link to your callback video. YouTube, Vimeo, and Google Drive are all accepted.'
+        : 'Paste the link to your video. YouTube, Vimeo, and Google Drive are all accepted.';
 
       ssRenderShowHead();
       ssRenderPerformerBanner();

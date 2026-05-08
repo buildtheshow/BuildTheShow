@@ -1985,6 +1985,9 @@
     .et-cat-self_tape_booked     { background: rgba(37,99,235,0.12);   color: #1d4ed8; }
     .et-cat-audition_reminder    { background: rgba(214,140,178,0.18); color: #9f537a; }
     .et-cat-callback             { background: rgba(227,164,111,0.2);  color: #a4612b; }
+    .et-cat-callback_confirmed   { background: rgba(101,150,113,0.16); color: #3f7a50; }
+    .et-cat-callback_declined    { background: rgba(75,85,99,0.12);    color: #4b5563; }
+    .et-cat-callback_self_tape   { background: rgba(37,99,235,0.12);   color: #1d4ed8; }
     .et-cat-cast_announcement    { background: rgba(101,150,113,0.2); color: #3b744c; }
     .et-cat-not_cast             { background: rgba(75,85,99,0.16);   color: #4b5563; }
     .et-cat-rehearsal            { background: rgba(14,116,144,0.14);  color: #0e7490; }
@@ -17562,17 +17565,17 @@
                 <div class="aud-run-card-copy">Mark performers as arrived, pull up contact information, and quickly handle no-shows at the front of house.</div>
                 <div class="aud-run-card-note">Best when people are walking in the door.</div>
               </button>
-              <button type="button" class="aud-run-card" onclick="openAuditionsSubTab(‘inroom’)">
+              <button type="button" class="aud-run-card" onclick="openAuditionsSubTab('inroom')">
                 <span class="aud-run-card-badge">2</span>
                 <div class="aud-run-card-title">In the Room</div>
                 <div class="aud-run-card-copy">Open the active performer card, score what you’re seeing, and track notes while auditions are happening.</div>
                 <div class="aud-run-card-note">Best when the panel is actively seeing performers.</div>
               </button>
-              <button type="button" class="aud-run-card" onclick="openAuditionsSubTab(‘selftape’)">
+              <button type="button" class="aud-run-card" onclick="openAuditionsSubTab('selftape')">
                 <span class="aud-run-card-badge">🎬</span>
-                <div class="aud-run-card-title">Self Tape</div>
-                <div class="aud-run-card-copy">View performers who registered for self tape and see which submissions have been received.</div>
-                <div class="aud-run-card-note">Submissions appear automatically — nothing to mark manually.</div>
+                <div class="aud-run-card-title">General Self Tape</div>
+                <div class="aud-run-card-copy">View performers who registered for the general audition self tape and see which submissions have been received.</div>
+                <div class="aud-run-card-note">Callback self tapes are handled separately.</div>
               </button>
             </div>
           </div>
@@ -22458,6 +22461,7 @@
     { value: 'callback',             label: 'Callback Request',     color: '#E3A46F' },
     { value: 'callback_confirmed',   label: 'Callback Confirmed',   color: '#659671' },
     { value: 'callback_declined',    label: 'Callback Declined',    color: '#4B5563' },
+    { value: 'callback_self_tape',   label: 'Callback Self Tape',   color: '#2563eb' },
     { value: 'cast_announcement',    label: 'Cast Announcement',    color: '#659671' },
     { value: 'not_cast',             label: 'Not Cast',             color: '#4B5563' },
     { value: 'rehearsal',            label: 'Rehearsal Info',       color: '#0e7490' },
@@ -22528,6 +22532,15 @@
       usedBy: 'Callback response page > Decline',
       summary: 'Acknowledges that the performer has declined their callback.',
       sendSummary: 'Sends after they decline.',
+    },
+    callback_self_tape: {
+      section: 'callbacks',
+      label: 'Callback Self Tape',
+      sendType: 'team_action',
+      required: true,
+      usedBy: 'Callback workflow > Self tape request',
+      summary: 'Sends a callback only upload link for performers asked to submit a callback tape.',
+      sendSummary: 'Sent when a callback self tape is requested.',
     },
     cast_announcement: {
       section: 'casting',
@@ -22750,6 +22763,7 @@
         { token: '{{callback_name}}',  label: 'Session Name', sample: () => etSessionValue(etFindSession('callback'), 'name', 'callback name', 'callback') },
         { token: '{{callback_prepare}}', label: 'What to Prepare', sample: () => etSessionValue(etFindSession('callback'), 'prepare', 'what to prepare for callbacks', 'callback') },
         { token: '{{callback_materials}}', label: 'Callback Materials', sample: () => etPlaceholder('callback materials') },
+        { token: '{{callback_self_tape_link}}', label: 'Callback Self Tape Link', sample: 'https://buildtheshow.com/.../self-tape/submit?scope=callback' },
         { token: '{{callback_accept_link}}', label: 'Accept Link', sample: 'https://buildtheshow.com/.../callback-response?action=accept' },
         { token: '{{callback_decline_link}}', label: 'Decline Link', sample: 'https://buildtheshow.com/.../callback-response?action=decline' },
         { token: '{{callback_reschedule_link}}', label: 'Reschedule Link', sample: 'https://buildtheshow.com/.../callback-response?action=reschedule' },
@@ -22907,6 +22921,11 @@
       required: ['{{contact_name}}'],
       recommended: ['{{show_name}}', '{{director_name}}'],
       note: 'This automatic email acknowledges that the performer declined their callback.'
+    },
+    callback_self_tape: {
+      required: ['{{contact_name}}', '{{callback_self_tape_link}}'],
+      recommended: ['{{show_name}}', '{{role_name}}', '{{callback_materials}}'],
+      note: 'This request is only for callback tapes. It uses a callback scoped upload link, separate from the general audition self tape link.'
     },
     cast_announcement: {
       required: ['{{contact_name}}', '{{role_name}}'],
@@ -23194,6 +23213,7 @@
       booking_confirmed: 'Automatic: when a performer finishes booking an audition time',
       self_tape_registered: 'Automatic: when a performer registers for self tape',
       callback_set: 'Manual action: when you send a callback response request from casting',
+      callback_self_tape_requested: 'Manual action: when you request a callback self tape',
       cast_set: 'Manual action: when you send a cast announcement from casting',
       not_cast_set: 'Manual action: when you send a not cast email from casting',
       team_invite: 'Manual action: when you send a production team portal invite',
@@ -23207,6 +23227,7 @@
       booking_confirmed: 'Auto booking',
       self_tape_registered: 'Auto self tape',
       callback_set: 'Send from callbacks',
+      callback_self_tape_requested: 'Send callback tape',
       callback_confirmed: 'Auto confirmation',
       callback_declined: 'Auto decline',
       cast_set: 'Send role offer',
@@ -23222,6 +23243,7 @@
       booking_confirmed: 'How it sends: automatic. When it sends: immediately after a performer completes the public audition booking form and their audition slot/registration is saved.',
       self_tape_registered: 'How it sends: automatic. When it sends: immediately after a performer completes the public self tape registration form. This email must include {{submission_link}} so they can submit their tape later.',
       callback_set: 'How it sends: team triggered. When it sends: when you send the callback response request from casting. This email should include accept, decline, and reschedule links.',
+      callback_self_tape_requested: 'How it sends: team triggered. When it sends: when you ask a callback performer to submit a callback self tape. This email must include {{callback_self_tape_link}}.',
       callback_confirmed: 'How it sends: automatic. When it sends: immediately after a performer accepts their callback or successfully reschedules themself. This is where callback materials belong.',
       callback_declined: 'How it sends: automatic. When it sends: immediately after a performer declines their callback.',
       cast_set: 'How it sends: team triggered. When it sends: only when you choose to send the cast announcement or role offer email to a performer from casting.',
@@ -23258,6 +23280,7 @@
     { value: 'booking_confirmed',    label: 'Auto: audition booked' },
     { value: 'self_tape_registered', label: 'Auto: self tape registered' },
     { value: 'callback_set',         label: 'Team sends: callback request' },
+    { value: 'callback_self_tape_requested', label: 'Team sends: callback self tape' },
     { value: 'callback_confirmed',   label: 'Auto: callback confirmed' },
     { value: 'callback_declined',    label: 'Auto: callback declined' },
     { value: 'cast_set',             label: 'Team sends: role offer' },
@@ -23272,6 +23295,7 @@
     callback:             'callback_set',
     callback_confirmed:   'callback_confirmed',
     callback_declined:    'callback_declined',
+    callback_self_tape:   'callback_self_tape_requested',
     cast_announcement:    'cast_set',
     not_cast:             'not_cast_set',
     rehearsal:            'manual',
@@ -23656,6 +23680,44 @@ Warmly,
 {{org_name}}`,
     },
     {
+      name: 'Callback Self Tape Request',
+      category: 'callback_self_tape',
+      trigger: 'callback_self_tape_requested',
+      subject: 'Callback self tape request: {{show_name}}',
+      body: `Hi {{contact_name}},
+
+We would love to see a callback self tape from you for {{show_name}}.
+
+Role: {{role_name}}
+
+This is different from a general audition self tape. Please use the callback link below so your tape is connected to your callback request.
+
+Callback materials:
+{{callback_materials}}
+
+How to submit your callback tape:
+1. Record the requested callback material.
+2. Upload the video to YouTube as unlisted, Vimeo, or Google Drive.
+3. Make sure the link is viewable by anyone with the link.
+4. Open your callback self tape link below.
+5. Paste your video link into the submission form and press submit.
+
+Accepted platforms:
+YouTube unlisted, Vimeo, or Google Drive
+
+─────────────────────────────
+YOUR CALLBACK SELF TAPE LINK
+─────────────────────────────
+{{callback_self_tape_link}}
+─────────────────────────────
+
+Please keep this email until your callback tape has been submitted.
+
+Warmly,
+{{director_name}}
+{{org_name}}`,
+    },
+    {
       name: 'Cast Announcement You Got the Role',
       category: 'cast_announcement',
       trigger: 'cast_set',
@@ -23867,7 +23929,7 @@ We look forward to seeing your work!
       return;
     }
     // Backfill required starter templates for productions that existed before they were added.
-    for (const requiredCategory of ['team_invite', 'callback', 'callback_confirmed', 'callback_declined', 'self_tape_booked']) {
+    for (const requiredCategory of ['team_invite', 'callback', 'callback_confirmed', 'callback_declined', 'callback_self_tape', 'self_tape_booked']) {
       if (_etTemplates.some(t => t.category === requiredCategory)) continue;
       const starter = ET_STARTER_TEMPLATES.find(t => t.category === requiredCategory);
       if (starter) {
@@ -32197,7 +32259,7 @@ We look forward to seeing your work!
   }
 
   async function ensureCallbackEmailTemplate() {
-    return ensureEmailTemplatesForCategories(['callback', 'callback_confirmed', 'callback_declined']);
+    return ensureEmailTemplatesForCategories(['callback', 'callback_confirmed', 'callback_declined', 'callback_self_tape']);
   }
 
   async function refreshCallbackSourceFromSupabase() {
@@ -32353,6 +32415,7 @@ We look forward to seeing your work!
   async function _sendCallbackEmailDirect(app, roleNames, session, slot) {
     const token = await ensureCallbackResponseToken(app);
     const responseLinks = callbackResponseLinks(token);
+    const callbackSelfTapeLink = callbackSelfTapeSubmissionLink(app, token);
     const sessionDate = session?.date
       ? new Date(`${session.date}T00:00:00`).toLocaleDateString('en-CA', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
       : '';
@@ -32378,6 +32441,7 @@ We look forward to seeing your work!
           callback_accept_link: responseLinks.accept,
           callback_decline_link: responseLinks.decline,
           callback_reschedule_link: responseLinks.reschedule,
+          callback_self_tape_link: callbackSelfTapeLink,
           audition_session: session?.name || '',
           show_name:        prod?.title || '',
           show_subtitle:    prod?.subtitle || '',
@@ -38908,6 +38972,19 @@ We look forward to seeing your work!
     };
   }
 
+  function callbackSelfTapeSubmissionLink(app, token = '') {
+    const query = new URLSearchParams({
+      prod: String(prodId || ''),
+      app: String(app?.id || ''),
+      scope: 'callback',
+    });
+    if (token) query.set('token', token);
+    if (orgSlug && prod?.slug) {
+      return `${window.location.origin}/${encodeURIComponent(orgSlug)}/${encodeURIComponent(prod.slug)}/self-tape/submit?${query.toString()}`;
+    }
+    return `${window.location.origin}/self-tape/submit?${query.toString()}`;
+  }
+
   async function saveCallbackInviteState(app, patch) {
     if (!app?.id) return;
     const customAnswers = { ...applicantCustomAnswers(app), ...patch };
@@ -41560,22 +41637,48 @@ We look forward to seeing your work!
 
   // ── Self Tape ──
 
+  function selfTapeSubmissionScope(record) {
+    const context = record?.context && typeof record.context === 'object' ? record.context : null;
+    return String(
+      record?.scope ||
+      record?.submission_scope ||
+      record?.submission_type ||
+      record?.tape_type ||
+      record?.audition_type ||
+      context?.scope ||
+      context?.submission_scope ||
+      context?.submission_type ||
+      ''
+    ).trim().toLowerCase();
+  }
+
+  function isGeneralAuditionSelfTapeSubmission(record) {
+    const scope = selfTapeSubmissionScope(record);
+    if (!scope) return true;
+    if (scope.includes('callback')) return false;
+    return ['general', 'audition', 'general_audition', 'self_tape', 'self tape'].includes(scope);
+  }
+
+  function isGeneralAuditionSelfTapeApplicant(app) {
+    return String(app?.audition_method || '').toLowerCase() === 'self_tape';
+  }
+
   async function renderSelfTapeTab() {
     const container = document.getElementById('selftape-content');
     if (!container) return;
-    container.innerHTML = '<div style="text-align:center;padding:2.5rem;color:#9a90b0;font-size:0.875rem;">Loading self tape submissions…</div>';
+    container.innerHTML = '<div style="text-align:center;padding:2.5rem;color:#9a90b0;font-size:0.875rem;">Loading general audition self tapes…</div>';
 
     if (!allApplicants.length) await loadApplicants();
     if (!isWorkspaceDataReady('inRoom')) await ensureWorkspaceData(['inRoom']).catch(() => {});
 
-    const selfTapeApplicants = allApplicants.filter(a => a.audition_method === 'self_tape');
+    const selfTapeApplicants = allApplicants.filter(isGeneralAuditionSelfTapeApplicant);
 
     let submissions = [];
     try {
       const { data } = await sb.from('self_tape_submissions')
         .select('*').eq('production_id', prodId)
         .order('submitted_at', { ascending: false });
-      submissions = data || [];
+      submissions = (data || []).filter(isGeneralAuditionSelfTapeSubmission);
     } catch (e) { console.warn('[Self Tape] could not load submissions:', e); }
 
     const submissionsByApp = {};
@@ -41612,7 +41715,7 @@ We look forward to seeing your work!
       }).join('');
       railHtml = window.BTSAuditionTemplates.renderTemplateById(
         'auditions.in-room.checked-in-strip',
-        { esc, label: 'Self Tapes', trayCards }
+        { esc, label: 'General Self Tapes', trayCards }
       );
     }
 
@@ -41623,8 +41726,8 @@ We look forward to seeing your work!
     let html = `
       <div class="st-workspace-header">
         <div>
-          <div class="page-title" style="font-size:1.15rem;">Self Tape Auditions</div>
-          <div style="font-size:0.82rem;color:#6a5a80;margin-top:0.2rem;">Performers who registered for self tape. Submissions appear automatically when received.</div>
+          <div class="page-title" style="font-size:1.15rem;">General Audition Self Tapes</div>
+          <div style="font-size:0.82rem;color:#6a5a80;margin-top:0.2rem;">Performers who registered for the general audition self tape. Callback self tapes are separate and only appear through the callback workflow.</div>
         </div>
         <div style="display:flex;align-items:center;gap:0.75rem;flex-shrink:0;">
           <div style="font-size:0.78rem;color:#8a7ca5;font-weight:600;background:rgba(87,46,136,0.08);border-radius:8px;padding:0.35rem 0.75rem;">
@@ -41641,7 +41744,7 @@ We look forward to seeing your work!
       html += `
         <div style="text-align:center;padding:4rem 2rem;color:#9a90b0;">
           <div style="font-size:2rem;margin-bottom:0.75rem;">🎬</div>
-          <div style="font-size:0.9rem;font-weight:600;color:#6a5a80;margin-bottom:0.3rem;">No self tape registrations yet</div>
+          <div style="font-size:0.9rem;font-weight:600;color:#6a5a80;margin-bottom:0.3rem;">No general self tape registrations yet</div>
           <div style="font-size:0.8rem;max-width:320px;margin:0 auto;line-height:1.5;">
             Share your registration link with performers to get them signed up.
             ${selfTapeLink ? `<div style="margin-top:0.75rem;"><code style="font-size:0.72rem;background:rgba(87,46,136,0.08);padding:0.25rem 0.5rem;border-radius:6px;word-break:break-all;">${esc(selfTapeLink)}</code></div>` : ''}
@@ -42308,6 +42411,7 @@ We look forward to seeing your work!
     { value: 'callback',             label: 'Callback Request'     },
     { value: 'callback_confirmed',   label: 'Callback Confirmed'   },
     { value: 'callback_declined',    label: 'Callback Declined'    },
+    { value: 'callback_self_tape',   label: 'Callback Self Tape'   },
     { value: 'cast_announcement',    label: 'Cast Announcement'    },
     { value: 'not_cast',             label: 'Not Cast'             },
     { value: 'rehearsal',            label: 'Rehearsal Info'       },
@@ -43366,7 +43470,7 @@ We look forward to seeing your work!
   }
 
   function buildAudScheduleSelfTapeSession() {
-    return { id: 'schedule-self-tapes', name: 'Self Tapes', type: 'self_tape', date: '', _isSelfTape: true };
+    return { id: 'schedule-self-tapes', name: 'General Self Tapes', type: 'self_tape', date: '', _isSelfTape: true };
   }
 
   function getAudScheduleV2Sessions() {
@@ -43452,10 +43556,10 @@ We look forward to seeing your work!
 
   function buildAudScheduleV2SelfTapeHtml() {
     const selfTapeApplicants = (allApplicants || [])
-      .filter(app => String(app?.audition_method || '').toLowerCase() === 'self_tape')
+      .filter(isGeneralAuditionSelfTapeApplicant)
       .sort(compareApplicantsAlphabetically);
     const submissionsByApp = {};
-    (_audScheduleSelfTapeSubmissions || []).forEach(sub => {
+    (_audScheduleSelfTapeSubmissions || []).filter(isGeneralAuditionSelfTapeSubmission).forEach(sub => {
       if (!sub?.applicant_id) return;
       if (!submissionsByApp[sub.applicant_id]) submissionsByApp[sub.applicant_id] = [];
       submissionsByApp[sub.applicant_id].push(sub);
@@ -43485,15 +43589,15 @@ We look forward to seeing your work!
         </div>`;
     }).join('') : `
       <div class="audition-schedule-selftape-empty">
-        No self tape registrations yet. When performers register through the self tape link, they will appear here.
+        No general self tape registrations yet. When performers register through the general self tape link, they will appear here.
       </div>`;
 
     return `
       <div class="audition-schedule-selftape">
         <div class="audition-schedule-selftape-head">
           <div>
-            <div class="audition-schedule-selftape-title">Self Tape Submissions</div>
-            <div class="audition-schedule-selftape-copy">A rolling view of performers registered for self tape, with their submission status and links beside their casting cards.</div>
+            <div class="audition-schedule-selftape-title">General Self Tape Submissions</div>
+            <div class="audition-schedule-selftape-copy">A rolling view of performers registered for the general audition self tape. Callback self tapes stay in the callback workflow.</div>
           </div>
           <div class="audition-schedule-selftape-stats">
             <div class="audition-schedule-selftape-stat"><strong>${selfTapeApplicants.length}</strong><span>Registered</span></div>
@@ -43520,7 +43624,7 @@ We look forward to seeing your work!
       const { data } = await sb.from('self_tape_submissions')
         .select('*').eq('production_id', prodId)
         .order('submitted_at', { ascending: false });
-      _audScheduleSelfTapeSubmissions = data || [];
+      _audScheduleSelfTapeSubmissions = (data || []).filter(isGeneralAuditionSelfTapeSubmission);
     } catch (e) {
       console.warn('[BTS] audition schedule self tape submission load failed', e);
       _audScheduleSelfTapeSubmissions = [];
@@ -43553,7 +43657,7 @@ We look forward to seeing your work!
         <section class="audition-schedule-stage-head">
           <div class="audition-schedule-stage-eyebrow">Audition Schedule</div>
           <h2 class="audition-schedule-stage-title">${esc(selectedSession?.name || 'Time Slot Calendar')}</h2>
-          <p class="audition-schedule-stage-copy">${String(selectedSession?.type || '') === 'self_tape' ? 'Review self tape registrations and received submissions.' : 'Select an audition type on the left to view its time slots.'}</p>
+          <p class="audition-schedule-stage-copy">${String(selectedSession?.type || '') === 'self_tape' ? 'Review general audition self tape registrations and received submissions.' : 'Select an audition type on the left to view its time slots.'}</p>
         </section>
         <div class="audition-schedule-body">
           <aside class="audition-schedule-sidebar">
