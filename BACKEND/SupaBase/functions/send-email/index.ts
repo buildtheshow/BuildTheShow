@@ -257,7 +257,10 @@ serve(async (req) => {
   const bookingIdRaw   = String(body.booking_id   || '').trim();
   const applicantIdRaw = String(body.applicant_id || '').trim();
   const productionIdRaw = String(body.production_id || '').trim();
-  const directContext = isRecord(body.context) ? body.context as Record<string, unknown> : {};
+  const directContext = {
+    ...(isRecord(body) ? body as Record<string, unknown> : {}),
+    ...(isRecord(body.context) ? body.context as Record<string, unknown> : {}),
+  };
   const hasDirectBookingContext = Boolean(
     firstDefinedString(
       directContext.performer_email,
@@ -449,8 +452,8 @@ serve(async (req) => {
     venue: firstDefinedString(directContext.show_venue, directContext.audition_venue, directProduction.venue, prod?.venue),
     director: firstDefinedString(directContext.director_name, directProduction.director, prod?.director),
     organization_id: firstDefinedString(directProduction.organization_id, prod?.organization_id),
-    start_date: firstDefinedString(directContext.rehearsal_start_date, directProduction.start_date, prod?.start_date),
-    end_date: firstDefinedString(directContext.rehearsal_end_date, directContext.opening_night, directProduction.end_date, prod?.end_date),
+    start_date: firstDefinedString(directProduction.start_date, prod?.start_date, directContext.rehearsal_start_date),
+    end_date: firstDefinedString(directProduction.end_date, prod?.end_date, directContext.rehearsal_end_date, directContext.opening_night),
   };
 
   let org: Record<string, unknown> | null = null;
@@ -660,10 +663,10 @@ serve(async (req) => {
     '{{cast_offer_deadline}}':   firstDefinedString(directContext.cast_offer_deadline),
     '{{cast_offer_deadline_note}}': firstDefinedString(directContext.cast_offer_deadline_note),
     '{{registration_link}}':     firstDefinedString(directContext.registration_link, directContext.cast_accept_link, directContext.cast_response_link),
-    '{{rehearsal_start_date}}':  productionRecord.start_date ? fmtDate(String(productionRecord.start_date)) : '',
+    '{{rehearsal_start_date}}':  firstDefinedString(directContext.rehearsal_start_date, productionRecord.start_date ? fmtDate(String(productionRecord.start_date)) : ''),
     '{{rehearsal_schedule}}':    firstDefinedString(directContext.rehearsal_schedule, directProduction.rehearsal_schedule),
-    '{{rehearsal_end_date}}':    productionRecord.end_date   ? fmtDate(String(productionRecord.end_date))   : '',
-    '{{opening_night}}':         productionRecord.end_date   ? fmtDate(String(productionRecord.end_date))   : '',
+    '{{rehearsal_end_date}}':    firstDefinedString(directContext.rehearsal_end_date, productionRecord.end_date ? fmtDate(String(productionRecord.end_date)) : ''),
+    '{{opening_night}}':         firstDefinedString(directContext.opening_night, productionRecord.end_date ? fmtDate(String(productionRecord.end_date)) : ''),
     '{{performance_schedule}}':  performanceSchedule,
     '{{team_member_name}}':      firstDefinedString(directContext.team_member_name, teamMember?.name, performerName),
     '{{team_member_role}}':      firstDefinedString(directContext.team_member_role, teamMember?.role),
