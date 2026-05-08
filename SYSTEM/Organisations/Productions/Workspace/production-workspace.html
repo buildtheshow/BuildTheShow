@@ -13435,6 +13435,44 @@
       display: flex;
       flex-direction: column;
     }
+    .final-casting-offer-role-section {
+      border-top: 1px solid rgba(26,21,48,0.07);
+    }
+    .final-casting-offer-role-section:first-child {
+      border-top: 0;
+    }
+    .final-casting-offer-role-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+      padding: 0.75rem 1rem 0.55rem;
+      background: linear-gradient(90deg, var(--final-offer-section-bg, rgba(87,46,136,0.05)), rgba(255,255,255,0));
+      color: #352756;
+      font-size: 0.82rem;
+      font-weight: 600;
+      line-height: 1.2;
+    }
+    .final-casting-offer-role-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.42rem;
+      min-width: 0;
+    }
+    .final-casting-offer-role-dot {
+      width: 0.55rem;
+      height: 0.55rem;
+      border-radius: 999px;
+      background: var(--final-offer-section-color, #8a838a);
+      box-shadow: 0 0 0 3px var(--final-offer-section-bg, rgba(87,46,136,0.08));
+      flex: 0 0 auto;
+    }
+    .final-casting-offer-role-count {
+      color: #8a7ca5;
+      font-size: 0.72rem;
+      font-weight: 400;
+      white-space: nowrap;
+    }
     .final-casting-offer-row {
       display: grid;
       grid-template-columns: minmax(0, 1fr) auto;
@@ -13442,6 +13480,9 @@
       align-items: center;
       padding: 0.85rem 1rem;
       border-bottom: 1px solid rgba(26,21,48,0.07);
+    }
+    .final-casting-offer-role-section .final-casting-offer-row {
+      border-bottom-color: rgba(26,21,48,0.055);
     }
     .final-casting-offer-row:last-child {
       border-bottom: 0;
@@ -13457,6 +13498,24 @@
       font-size: 0.76rem;
       color: #6f6681;
       line-height: 1.35;
+    }
+    .final-casting-offer-role-chipline {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.3rem;
+      margin-top: 0.35rem;
+    }
+    .final-casting-offer-role-chip {
+      display: inline-flex;
+      align-items: center;
+      min-height: 1.35rem;
+      padding: 0.22rem 0.48rem;
+      border-radius: 999px;
+      background: rgba(87,46,136,0.08);
+      color: #4a3d6b;
+      font-size: 0.68rem;
+      font-weight: 500;
+      line-height: 1.1;
     }
     .final-casting-offer-actions {
       display: flex;
@@ -23039,7 +23098,7 @@
         { token: '{{callback_name}}',  label: 'Session Name', sample: () => etSessionValue(etFindSession('callback'), 'name', 'callback name', 'callback') },
         { token: '{{callback_prepare}}', label: 'What to Prepare', sample: () => etSessionValue(etFindSession('callback'), 'prepare', 'what to prepare for callbacks', 'callback') },
         { token: '{{callback_materials}}', label: 'Callback Materials', sample: () => etPlaceholder('callback materials') },
-        { token: '{{callback_self_tape_link}}', label: 'Callback Self Tape Link', sample: 'https://buildtheshow.com/.../self-tape/submit?scope=callback' },
+        { token: '{{callback_self_tape_link}}', label: 'Callback Self Tape Link', sample: 'https://buildtheshow.com/.../callback-self-tape/submit?app=…' },
         { token: '{{callback_accept_link}}', label: 'Accept Link', sample: 'https://buildtheshow.com/.../callback-response?action=accept' },
         { token: '{{callback_decline_link}}', label: 'Decline Link', sample: 'https://buildtheshow.com/.../callback-response?action=decline' },
         { token: '{{callback_reschedule_link}}', label: 'Reschedule Link', sample: 'https://buildtheshow.com/.../callback-response?action=reschedule' },
@@ -28635,14 +28694,35 @@ We look forward to seeing your work!
       if (!charId || !appId) return;
       const char = (characters || []).find(c => String(c.id) === String(charId));
       const roleName = char?.name || 'Role';
-      if (!roleMap.has(appId)) roleMap.set(appId, new Set());
-      roleMap.get(appId).add(roleName);
+      if (!roleMap.has(appId)) roleMap.set(appId, new Map());
+      roleMap.get(appId).set(roleName, {
+        name: roleName,
+        roleType: char?.role_type || 'Other',
+      });
     });
     finalCastingEnsembleIds.forEach(appId => {
-      if (!roleMap.has(appId)) roleMap.set(appId, new Set());
-      roleMap.get(appId).add('Ensemble');
+      if (!roleMap.has(appId)) roleMap.set(appId, new Map());
+      roleMap.get(appId).set('Ensemble', {
+        name: 'Ensemble',
+        roleType: 'Ensemble',
+      });
     });
     return roleMap;
+  }
+
+  const FINAL_CASTING_OFFER_ROLE_TYPES = [
+    { key: 'principal', labels: ['principal', 'lead'], label: 'Principal', color: '#572e88', bg: 'rgba(87,46,136,0.07)', order: 0 },
+    { key: 'featured', labels: ['featured'], label: 'Featured', color: '#1f7a8c', bg: 'rgba(67,184,176,0.11)', order: 1 },
+    { key: 'supporting', labels: ['supporting'], label: 'Supporting', color: '#8b5a2b', bg: 'rgba(239,171,69,0.13)', order: 2 },
+    { key: 'group', labels: ['group', 'groups'], label: 'Groups', color: '#5b6f95', bg: 'rgba(100,139,228,0.12)', order: 3 },
+    { key: 'ensemble', labels: ['ensemble', 'chorus'], label: 'Ensemble', color: '#7f5b7a', bg: 'rgba(214,140,178,0.12)', order: 4 },
+    { key: 'other', labels: [], label: 'Other', color: '#8a838a', bg: 'rgba(138,131,138,0.11)', order: 9 },
+  ];
+
+  function finalCastingOfferRoleTypeConfig(roleType = '') {
+    const normalized = String(roleType || '').trim().toLowerCase();
+    return FINAL_CASTING_OFFER_ROLE_TYPES.find(config => config.labels.includes(normalized))
+      || FINAL_CASTING_OFFER_ROLE_TYPES.find(config => config.key === 'other');
   }
 
   function getFinalCastingOfferQueues() {
@@ -28652,7 +28732,18 @@ We look forward to seeing your work!
       .map(([appId, roles]) => {
         const app = (allApplicants || []).find(candidate => String(candidate.id) === String(appId));
         if (!app) return null;
-        return { app, roles: [...roles].sort((a, b) => String(a).localeCompare(String(b), undefined, { sensitivity: 'base' })) };
+        const roleEntries = [...roles.values()].sort((a, b) => {
+          const typeA = finalCastingOfferRoleTypeConfig(a.roleType);
+          const typeB = finalCastingOfferRoleTypeConfig(b.roleType);
+          if (typeA.order !== typeB.order) return typeA.order - typeB.order;
+          return String(a.name).localeCompare(String(b.name), undefined, { sensitivity: 'base' });
+        });
+        return {
+          app,
+          roleEntries,
+          roles: roleEntries.map(role => role.name),
+          primaryRoleType: roleEntries[0]?.roleType || 'Other',
+        };
       })
       .filter(Boolean)
       .sort((a, b) => compareApplicantsAlphabetically(a.app, b.app));
@@ -28674,18 +28765,41 @@ We look forward to seeing your work!
     const makeRow = (item, kind) => {
       const app = item.app;
       const rolesText = item.roles?.length ? item.roles.join(', ') : 'Not cast';
-      const buttonLabel = kind === 'offer' ? 'Send Offer' : 'Send Not-Cast';
+      const buttonLabel = kind === 'offer' ? 'Send Offer' : 'Send Not Cast';
       const buttonClass = kind === 'offer' ? 'btn-primary' : 'btn-secondary';
       const clickFn = kind === 'offer' ? 'sendFinalCastingOfferEmail' : 'sendFinalCastingRejectionEmail';
+      const roleChips = kind === 'offer' && item.roleEntries?.length
+        ? `<div class="final-casting-offer-role-chipline">${item.roleEntries.map(role => `<span class="final-casting-offer-role-chip">${esc(role.name)}</span>`).join('')}</div>`
+        : '';
       return `<div class="final-casting-offer-row">
         <div>
           <div class="final-casting-offer-name">${esc(app.name || 'Unnamed performer')}</div>
           <div class="final-casting-offer-meta">${esc(rolesText)}${app.email ? ` · ${esc(app.email)}` : ' · Missing email'}</div>
+          ${roleChips}
         </div>
         <div class="final-casting-offer-actions">
           ${app.email ? `<button type="button" class="${buttonClass}" style="font-size:0.76rem;padding:0.38rem 0.75rem;" onclick="${clickFn}('${esc(app.id)}')">${buttonLabel}</button>` : '<span class="final-casting-offers-count">No email</span>'}
         </div>
       </div>`;
+    };
+    const groupedOfferRows = rows => {
+      const groups = new Map();
+      rows.forEach(item => {
+        const config = finalCastingOfferRoleTypeConfig(item.primaryRoleType);
+        if (!groups.has(config.key)) groups.set(config.key, { config, items: [] });
+        groups.get(config.key).items.push(item);
+      });
+      return [...groups.values()]
+        .sort((a, b) => a.config.order - b.config.order)
+        .map(({ config, items }) => `
+          <section class="final-casting-offer-role-section" style="--final-offer-section-color:${esc(config.color)};--final-offer-section-bg:${esc(config.bg)};">
+            <div class="final-casting-offer-role-head">
+              <div class="final-casting-offer-role-label"><span class="final-casting-offer-role-dot"></span>${esc(config.label)}</div>
+              <div class="final-casting-offer-role-count">${items.length} ${items.length === 1 ? 'offer' : 'offers'}</div>
+            </div>
+            ${items.map(item => makeRow(item, 'offer')).join('')}
+          </section>
+        `).join('');
     };
     const panelHtml = (title, count, bulkId, bulkLabel, bulkFn, rows, emptyText, kind) => `
       <div class="final-casting-offers-panel">
@@ -28697,13 +28811,15 @@ We look forward to seeing your work!
           <button type="button" class="btn-primary" id="${esc(bulkId)}" style="font-size:0.76rem;padding:0.42rem 0.8rem;" onclick="${bulkFn}()" ${rows.some(item => item.app?.email) ? '' : 'disabled'}>${esc(bulkLabel)}</button>
         </div>
         <div class="final-casting-offers-list">
-          ${rows.length ? rows.map(item => makeRow(item, kind)).join('') : `<div class="final-casting-offer-empty">${esc(emptyText)}</div>`}
+          ${rows.length
+            ? (kind === 'offer' ? groupedOfferRows(rows) : rows.map(item => makeRow(item, kind)).join(''))
+            : `<div class="final-casting-offer-empty">${esc(emptyText)}</div>`}
         </div>
       </div>`;
     host.innerHTML = `
       <div class="final-casting-offers-grid">
         ${panelHtml('Role Offers', offers.length, 'final-casting-bulk-offers-btn', 'Send All Offers', 'bulkSendFinalCastingOfferEmails', offers, 'No locked role offers yet. Click cards on the Casting Board to lock performers into roles.', 'offer')}
-        ${panelHtml('Not-Cast Emails', rejections.length, 'final-casting-bulk-rejections-btn', 'Send All Not-Cast', 'bulkSendFinalCastingRejectionEmails', rejections, 'Everyone in the final pool is currently confirmed.', 'rejection')}
+        ${panelHtml('Not Cast Emails', rejections.length, 'final-casting-bulk-rejections-btn', 'Send All Not Cast', 'bulkSendFinalCastingRejectionEmails', rejections, 'Everyone in the final pool is currently confirmed.', 'rejection')}
       </div>
       ${missingEmail.length ? `<div class="final-casting-offers-missing"><strong>Missing email:</strong> ${esc(missingEmail.join(', '))}</div>` : ''}
     `;
@@ -28793,10 +28909,10 @@ We look forward to seeing your work!
   async function bulkSendFinalCastingRejectionEmails() {
     const { rejections } = getFinalCastingOfferQueues();
     const ready = rejections.filter(item => item.app?.email);
-    if (!ready.length) { showToast('No not-cast recipients with email addresses.', true); return; }
-    if (!confirm(`Send not-cast emails to ${ready.length} performer${ready.length === 1 ? '' : 's'}?`)) return;
+    if (!ready.length) { showToast('No not cast recipients with email addresses.', true); return; }
+    if (!confirm(`Send not cast emails to ${ready.length} performer${ready.length === 1 ? '' : 's'}?`)) return;
     const btn = document.getElementById('final-casting-bulk-rejections-btn');
-    await bulkSendFinalCastingEmails(ready, 'not_cast', btn, 'Send All Not-Cast');
+    await bulkSendFinalCastingEmails(ready, 'not_cast', btn, 'Send All Not Cast');
   }
 
   async function bulkSendFinalCastingEmails(items, category, btn, resetLabel) {
@@ -28814,7 +28930,7 @@ We look forward to seeing your work!
       if (btn) btn.textContent = `Sending ${sent + failed} / ${items.length}...`;
     }
     if (btn) { btn.disabled = false; btn.textContent = resetLabel; }
-    const label = category === 'cast_announcement' ? 'offer' : 'not-cast email';
+    const label = category === 'cast_announcement' ? 'offer' : 'not cast email';
     showToast(`${sent} ${label}${sent === 1 ? '' : 's'} sent${failed ? `, ${failed} failed` : ''}.`, failed > 0);
   }
 
@@ -39252,13 +39368,12 @@ We look forward to seeing your work!
     const query = new URLSearchParams({
       prod: String(prodId || ''),
       app: String(app?.id || ''),
-      scope: 'callback',
     });
     if (token) query.set('token', token);
     if (orgSlug && prod?.slug) {
-      return `${window.location.origin}/${encodeURIComponent(orgSlug)}/${encodeURIComponent(prod.slug)}/self-tape/submit?${query.toString()}`;
+      return `${window.location.origin}/${encodeURIComponent(orgSlug)}/${encodeURIComponent(prod.slug)}/callback-self-tape/submit?${query.toString()}`;
     }
-    return `${window.location.origin}/self-tape/submit?${query.toString()}`;
+    return `${window.location.origin}/callback-self-tape/submit?${query.toString()}`;
   }
 
   async function saveCallbackInviteState(app, patch) {
