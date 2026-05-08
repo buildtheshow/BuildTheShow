@@ -29883,19 +29883,20 @@ We look forward to seeing your work!
     document.getElementById('final-casting-email-preview-overlay')?.remove();
   }
 
-  async function openFinalCastingEmailPreview(item, category) {
+  async function openFinalCastingEmailPreview(item, category, options = {}) {
     if (!item?.app) return;
     try {
       const template = await loadFinalCastingEmailTemplate(category);
-      const ca = applicantCustomAnswers(item.app);
-      const previewLinks = category === 'cast_announcement'
-        ? castOfferLinks(ca[CAST_OFFER_KEYS.token] || 'preview-token', ca[CAST_OFFER_KEYS.code] || castOfferCode(item.app))
-        : {};
+      const identity = category === 'cast_announcement' ? await ensureCastOfferIdentity(item.app) : null;
+      const previewLinks = identity ? castOfferLinks(identity.token, identity.code) : {};
       const { context } = await buildFinalCastingEmailContext(item.app, category, item.roles || [], previewLinks, item.roleEntries || []);
       const subject = applyFinalCastingEmailContext(template.subject || '', context) || 'Email preview';
       const body = applyFinalCastingEmailContext(template.body || '', context) || '<p>Email body preview.</p>';
       const from = orgName || prod?.org_name || 'Build The Show';
       const toName = item.app.name || 'performer';
+      const sendMode = Boolean(options.sendMode);
+      const sendLabel = category === 'cast_announcement' ? 'Send Offer' : 'Send Email';
+      const sendFn = category === 'cast_announcement' ? 'confirmFinalCastingOfferEmailSend' : 'confirmFinalCastingRejectionEmailSend';
       const overlay = document.createElement('div');
       overlay.id = 'final-casting-email-preview-overlay';
       overlay.className = 'et-preview-overlay';
@@ -29941,6 +29942,12 @@ We look forward to seeing your work!
                 </div>
                 <div class="et-preview-body-content">${body}</div>
               </div>
+              ${sendMode ? `
+                <div class="et-preview-footer">
+                  <button type="button" class="btn-secondary" onclick="closeFinalCastingEmailPreview()">Cancel</button>
+                  <button type="button" class="btn-primary" onclick="${sendFn}('${esc(item.app.id)}', this)">${esc(sendLabel)}</button>
+                </div>
+              ` : ''}
             </div>
           </div>
         </div>`;
@@ -29968,12 +29975,18 @@ We look forward to seeing your work!
     const { offers } = getFinalCastingOfferQueues();
     const item = offers.find(row => String(row.app.id) === String(appId));
     if (!item?.app?.email) { showToast('No email address for this performer.', true); return; }
-    const ok = confirm(`Send role offer email to ${item.app.name || item.app.email}?`);
-    if (!ok) return;
+    openFinalCastingEmailPreview(item, 'cast_announcement', { sendMode: true });
+  }
+
+  async function confirmFinalCastingOfferEmailSend(appId, buttonEl = null) {
+    const { offers } = getFinalCastingOfferQueues();
+    const item = offers.find(row => String(row.app.id) === String(appId));
+    if (!item?.app?.email) { showToast('No email address for this performer.', true); return; }
     if (buttonEl) { buttonEl.disabled = true; buttonEl.textContent = 'Sending...'; }
     try {
       await _sendFinalCastingEmailDirect(item.app, 'cast_announcement', item.roles, item.roleEntries || []);
       finalCastingEmailSendState.set(`offer:${item.app.id}`, { sentAt: new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) });
+      closeFinalCastingEmailPreview();
       showToast(`Offer email sent to ${item.app.name || item.app.email}.`);
       renderFinalCastingOffers();
     } catch (error) {
@@ -29998,6 +30011,10 @@ We look forward to seeing your work!
       if (buttonEl) { buttonEl.disabled = false; buttonEl.textContent = 'Send Not Cast'; }
       showToast('Could not send not cast email: ' + (error.message || 'Unknown error'), true);
     }
+  }
+
+  async function confirmFinalCastingRejectionEmailSend(appId, buttonEl = null) {
+    return sendFinalCastingRejectionEmail(appId, buttonEl);
   }
 
   async function bulkSendFinalCastingOfferEmails() {
