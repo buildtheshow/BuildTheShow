@@ -13598,6 +13598,24 @@
     .final-casting-offer-casting-card .casting-card:hover {
       transform: none;
     }
+    .final-casting-offer-unfilled {
+      width: min(7.25rem, 100%);
+      aspect-ratio: 4 / 5;
+      display: grid;
+      place-items: center;
+      padding: 0.85rem;
+      border-radius: 7px;
+      background: rgba(255,255,255,0.38);
+      color: rgba(26,21,48,0.62);
+      box-shadow:
+        inset 0 0 0 1px rgba(255,255,255,0.32),
+        0 8px 14px rgba(26,21,48,0.07);
+      font-size: 0.92rem;
+      font-weight: 850;
+      line-height: 1.1;
+      text-align: center;
+      overflow-wrap: anywhere;
+    }
     .final-casting-offer-contact {
       display: grid;
       gap: 0.26rem;
@@ -28953,6 +28971,11 @@ We look forward to seeing your work!
   function getFinalCastingOfferQueues() {
     const roleMap = getFinalCastingOfferRoleMap();
     const confirmedIds = new Set(roleMap.keys());
+    const filledCharacterIds = new Set();
+    finalCastingPickedKeys.forEach(key => {
+      const [charId] = String(key).split('::');
+      if (charId) filledCharacterIds.add(String(charId));
+    });
     const offers = [...roleMap.entries()]
       .map(([appId, roles]) => {
         const app = (allApplicants || []).find(candidate => String(candidate.id) === String(appId));
@@ -28972,22 +28995,51 @@ We look forward to seeing your work!
       })
       .filter(Boolean)
       .sort((a, b) => compareApplicantsAlphabetically(a.app, b.app));
+    const unfilledRoles = (characters || [])
+      .filter(char => char?.id && !filledCharacterIds.has(String(char.id)))
+      .map(char => ({
+        app: null,
+        roles: [char.name || 'Unnamed role'],
+        roleEntries: [{
+          name: char.name || 'Unnamed role',
+          roleType: char.role_type || 'Other',
+        }],
+        primaryRoleType: char.role_type || 'Other',
+        unfilled: true,
+      }))
+      .sort((a, b) => {
+        const typeA = finalCastingOfferRoleTypeConfig(a.primaryRoleType);
+        const typeB = finalCastingOfferRoleTypeConfig(b.primaryRoleType);
+        if (typeA.order !== typeB.order) return typeA.order - typeB.order;
+        return String(a.roles?.[0] || '').localeCompare(String(b.roles?.[0] || ''), undefined, { sensitivity: 'base' });
+      });
     const rejections = (finalCastingPoolApplicants.length ? finalCastingPoolApplicants : allApplicants || [])
       .filter(app => app?.id && !confirmedIds.has(app.id))
       .sort(compareApplicantsAlphabetically)
       .map(app => ({ app, roles: [] }));
-    return { offers, rejections };
+    return { offers, rejections, unfilledRoles };
   }
 
   function renderFinalCastingOffers() {
     const host = document.getElementById('final-casting-offers-host');
     if (!host) return;
-    const { offers, rejections } = getFinalCastingOfferQueues();
+    const { offers, rejections, unfilledRoles } = getFinalCastingOfferQueues();
     const missingEmail = [...offers, ...rejections]
       .filter(item => !item.app?.email)
       .map(item => item.app?.name || 'Unnamed performer')
       .sort((a, b) => String(a).localeCompare(String(b), undefined, { sensitivity: 'base' }));
     const makeRow = (item, kind) => {
+      if (item.unfilled) {
+        const roleTitle = item.roles?.[0] || 'Unnamed role';
+        return `<div class="final-casting-offer-row final-casting-offer-row-unfilled">
+          <div>
+            <div class="final-casting-offer-name">${esc(roleTitle)}</div>
+            <div class="final-casting-offer-performer">
+              <div class="final-casting-offer-unfilled">Not Cast</div>
+            </div>
+          </div>
+        </div>`;
+      }
       const app = item.app;
       const ca = applicantCustomAnswers(app);
       const roleTitle = item.roles?.length ? item.roles.join(', ') : 'Not Cast';
@@ -29093,7 +29145,7 @@ We look forward to seeing your work!
       </div>`;
     host.innerHTML = `
       <div class="final-casting-offers-grid">
-        ${panelHtml('Offers', offers.length, 'final-casting-bulk-offers-btn', 'Send All Offers', 'bulkSendFinalCastingOfferEmails', offers, 'No locked offers yet. Click cards on the Casting Board to lock performers into roles.', 'offer')}
+        ${panelHtml('Offers', offers.length, 'final-casting-bulk-offers-btn', 'Send All Offers', 'bulkSendFinalCastingOfferEmails', [...offers, ...unfilledRoles], 'No locked offers yet. Click cards on the Casting Board to lock performers into roles.', 'offer')}
         ${panelHtml('Not Cast', rejections.length, 'final-casting-bulk-rejections-btn', 'Send All Not Cast', 'bulkSendFinalCastingRejectionEmails', rejections, 'Everyone in the final pool is currently confirmed.', 'rejection')}
       </div>
       ${missingEmail.length ? `<div class="final-casting-offers-missing"><strong>Missing email:</strong> ${esc(missingEmail.join(', '))}</div>` : ''}
