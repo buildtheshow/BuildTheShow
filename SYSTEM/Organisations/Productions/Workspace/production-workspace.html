@@ -21319,6 +21319,57 @@
     };
   }
 
+  function etPlaceholder(label = '') {
+    const cleanLabel = String(label || '').trim();
+    return cleanLabel ? `(this is a placeholder: ${cleanLabel})` : '(this is a placeholder)';
+  }
+
+  function etFirstRealValue(...values) {
+    for (const value of values) {
+      if (value === null || value === undefined) continue;
+      const text = String(value).trim();
+      if (text) return text;
+    }
+    return '';
+  }
+
+  function etProductionLocationFor(typeHint) {
+    const type = String(typeHint || '').toLowerCase();
+    if (type.includes('audition') || type.includes('dance') || type.includes('callback')) {
+      return etFirstRealValue(
+        ...(Array.isArray(prod?.audition_locations) ? prod.audition_locations : []),
+        prod?.audition_location,
+        prod?.venue
+      );
+    }
+    if (type.includes('rehearsal')) {
+      return etFirstRealValue(
+        ...(Array.isArray(prod?.rehearsal_locations) ? prod.rehearsal_locations : []),
+        prod?.rehearsal_location,
+        prod?.venue
+      );
+    }
+    if (type.includes('performance')) {
+      return etFirstRealValue(
+        ...(Array.isArray(prod?.performance_locations) ? prod.performance_locations : []),
+        prod?.performance_location,
+        prod?.venue
+      );
+    }
+    return etFirstRealValue(prod?.venue);
+  }
+
+  function etSessionValue(session, field, label, fallbackType = '') {
+    if (!session && field === 'location') return etProductionLocationFor(fallbackType) || etPlaceholder(label);
+    if (!session) return etPlaceholder(label);
+    if (field === 'date') return session.date ? fmtDate(session.date) : etPlaceholder(label);
+    if (field === 'time') return session.start_time ? formatTime12h(session.start_time) : etPlaceholder(label);
+    if (field === 'location') return etFirstRealValue(session.location, etProductionLocationFor(fallbackType)) || etPlaceholder(label);
+    if (field === 'name') return etFirstRealValue(session.name) || etPlaceholder(label);
+    if (field === 'prepare') return etSessionPrepareSample(session, etPlaceholder(label));
+    return etFirstRealValue(session[field]) || etPlaceholder(label);
+  }
+
   const ET_VARIABLES = [
     // ── Contact ─────────────────────────────────────────────────
     {
@@ -21337,9 +21388,9 @@
       color: '#55acda',
       bg:    '#dff3ff',
       vars: [
-        { token: '{{show_name}}',  label: 'Show Title',        sample: () => prod?.title || 'Our Show' },
-        { token: '{{show_venue}}', label: 'Performance Venue', sample: () => prod?.venue || 'The Main Stage' },
-        { token: '{{org_name}}',   label: 'Company Name',      sample: () => prod?.org_name || 'Your Theatre Company' },
+        { token: '{{show_name}}',  label: 'Show Title',        sample: () => prod?.title || etPlaceholder('show title') },
+        { token: '{{show_venue}}', label: 'Performance Venue', sample: () => etProductionLocationFor('performance') || etPlaceholder('performance venue') },
+        { token: '{{org_name}}',   label: 'Company Name',      sample: () => orgName || prod?.org_name || etPlaceholder('company name') },
       ],
     },
     // ── General Auditions ────────────────────────────────────────
@@ -21348,11 +21399,11 @@
       color: '#4ab847',
       bg:    '#e0f7df',
       vars: [
-        { token: '{{general_audition_date}}',  label: 'Date',         sample: () => { const s = etFindSession('general'); return s?.date ? fmtDate(s.date) : 'Saturday, April 19'; } },
-        { token: '{{general_audition_time}}',  label: 'Start Time',   sample: () => { const s = etFindSession('general'); return s?.start_time ? formatTime12h(s.start_time) : '10:00 AM'; } },
-        { token: '{{general_audition_venue}}', label: 'Location',     sample: () => etFindSession('general')?.location || 'Studio A' },
-        { token: '{{general_audition_name}}',  label: 'Session Name', sample: () => etFindSession('general')?.name || 'General Auditions' },
-        { token: '{{general_audition_prepare}}', label: 'What to Prepare', sample: () => etSessionPrepareSample(etFindSession('general'), 'Please prepare 16 bars of a song of your choice.') },
+        { token: '{{general_audition_date}}',  label: 'Date',         sample: () => etSessionValue(etFindSession('general'), 'date', 'general audition date', 'audition') },
+        { token: '{{general_audition_time}}',  label: 'Start Time',   sample: () => etSessionValue(etFindSession('general'), 'time', 'general audition time', 'audition') },
+        { token: '{{general_audition_venue}}', label: 'Location',     sample: () => etSessionValue(etFindSession('general'), 'location', 'general audition location', 'audition') },
+        { token: '{{general_audition_name}}',  label: 'Session Name', sample: () => etSessionValue(etFindSession('general'), 'name', 'general audition name', 'audition') },
+        { token: '{{general_audition_prepare}}', label: 'What to Prepare', sample: () => etSessionValue(etFindSession('general'), 'prepare', 'what to prepare for general auditions', 'audition') },
       ],
     },
     // ── Dance Call ───────────────────────────────────────────────
@@ -21361,11 +21412,11 @@
       color: '#ef7d05',
       bg:    '#ffe6c7',
       vars: [
-        { token: '{{dance_call_date}}',  label: 'Date',         sample: () => { const s = etFindSession('dance'); return s?.date ? fmtDate(s.date) : 'Sunday, April 20'; } },
-        { token: '{{dance_call_time}}',  label: 'Start Time',   sample: () => { const s = etFindSession('dance'); return s?.start_time ? formatTime12h(s.start_time) : '2:00 PM'; } },
-        { token: '{{dance_call_venue}}', label: 'Location',     sample: () => etFindSession('dance')?.location || 'Studio B' },
-        { token: '{{dance_call_name}}',  label: 'Session Name', sample: () => etFindSession('dance')?.name || 'Dance Call' },
-        { token: '{{dance_call_prepare}}', label: 'What to Prepare', sample: () => etSessionPrepareSample(etFindSession('dance'), 'Wear clothes and shoes you can move in.') },
+        { token: '{{dance_call_date}}',  label: 'Date',         sample: () => etSessionValue(etFindSession('dance'), 'date', 'dance call date', 'dance_call') },
+        { token: '{{dance_call_time}}',  label: 'Start Time',   sample: () => etSessionValue(etFindSession('dance'), 'time', 'dance call time', 'dance_call') },
+        { token: '{{dance_call_venue}}', label: 'Location',     sample: () => etSessionValue(etFindSession('dance'), 'location', 'dance call location', 'dance_call') },
+        { token: '{{dance_call_name}}',  label: 'Session Name', sample: () => etSessionValue(etFindSession('dance'), 'name', 'dance call name', 'dance_call') },
+        { token: '{{dance_call_prepare}}', label: 'What to Prepare', sample: () => etSessionValue(etFindSession('dance'), 'prepare', 'what to prepare for dance call', 'dance_call') },
       ],
     },
     // ── Callbacks ────────────────────────────────────────────────
@@ -21374,12 +21425,12 @@
       color: '#fc5c65',
       bg:    '#ffe0e3',
       vars: [
-        { token: '{{callback_date}}',  label: 'Date',         sample: () => { const s = etFindSession('callback'); return s?.date ? fmtDate(s.date) : 'Saturday, May 3'; } },
-        { token: '{{callback_time}}',  label: 'Start Time',   sample: () => { const s = etFindSession('callback'); return s?.start_time ? formatTime12h(s.start_time) : '2:00 PM'; } },
-        { token: '{{callback_venue}}', label: 'Location',     sample: () => etFindSession('callback')?.location || 'Studio B' },
-        { token: '{{callback_name}}',  label: 'Session Name', sample: () => etFindSession('callback')?.name || 'Callbacks' },
-        { token: '{{callback_prepare}}', label: 'What to Prepare', sample: () => etSessionPrepareSample(etFindSession('callback'), 'Please review the callback materials before you arrive.') },
-        { token: '{{callback_materials}}', label: 'Callback Materials', sample: 'Callback materials will appear here once the performer confirms.' },
+        { token: '{{callback_date}}',  label: 'Date',         sample: () => etSessionValue(etFindSession('callback'), 'date', 'callback date', 'callback') },
+        { token: '{{callback_time}}',  label: 'Start Time',   sample: () => etSessionValue(etFindSession('callback'), 'time', 'callback time', 'callback') },
+        { token: '{{callback_venue}}', label: 'Location',     sample: () => etSessionValue(etFindSession('callback'), 'location', 'callback location', 'callback') },
+        { token: '{{callback_name}}',  label: 'Session Name', sample: () => etSessionValue(etFindSession('callback'), 'name', 'callback name', 'callback') },
+        { token: '{{callback_prepare}}', label: 'What to Prepare', sample: () => etSessionValue(etFindSession('callback'), 'prepare', 'what to prepare for callbacks', 'callback') },
+        { token: '{{callback_materials}}', label: 'Callback Materials', sample: () => etPlaceholder('callback materials') },
         { token: '{{callback_accept_link}}', label: 'Accept Link', sample: 'https://buildtheshow.com/.../callback-response?action=accept' },
         { token: '{{callback_decline_link}}', label: 'Decline Link', sample: 'https://buildtheshow.com/.../callback-response?action=decline' },
         { token: '{{callback_reschedule_link}}', label: 'Reschedule Link', sample: 'https://buildtheshow.com/.../callback-response?action=reschedule' },
@@ -21401,9 +21452,9 @@
       color: '#22cdd4',
       bg:    '#d9f8f9',
       vars: [
-        { token: '{{rehearsal_schedule}}',   label: 'Full Rehearsal Schedule', sample: 'Mondays & Wednesdays, 7-10 PM' },
-        { token: '{{rehearsal_start_date}}', label: 'Rehearsal Start',         sample: () => prod?.start_date ? fmtDate(prod.start_date) : 'Monday, May 12' },
-        { token: '{{rehearsal_end_date}}',   label: 'Rehearsal End',           sample: () => prod?.end_date ? fmtDate(prod.end_date) : 'Friday, July 18' },
+        { token: '{{rehearsal_schedule}}',   label: 'Full Rehearsal Schedule', sample: () => prod?.rehearsal_schedule || etPlaceholder('rehearsal schedule') },
+        { token: '{{rehearsal_start_date}}', label: 'Rehearsal Start',         sample: () => prod?.start_date ? fmtDate(prod.start_date) : etPlaceholder('rehearsal start date') },
+        { token: '{{rehearsal_end_date}}',   label: 'Rehearsal End',           sample: () => prod?.end_date ? fmtDate(prod.end_date) : etPlaceholder('rehearsal end date') },
       ],
     },
     // ── Performances ────────────────────────────────────────────
@@ -21412,7 +21463,7 @@
       color: '#2b6529',
       bg:    '#dff2dc',
       vars: [
-        { token: '{{performance_schedule}}', label: 'Performance Schedule', sample: () => performanceScheduleSummaryCache || 'Friday, July 18 at 7:30 PM\nSaturday, July 19 at 2:00 PM' },
+        { token: '{{performance_schedule}}', label: 'Performance Schedule', sample: () => performanceScheduleSummaryCache || etPlaceholder('performance schedule') },
       ],
     },
     // ── Team Access ──────────────────────────────────────────────
@@ -21435,8 +21486,8 @@
       bg:    '#dbeafe',
       vars: [
         { token: '{{submission_link}}', label: 'Submission Link', sample: () => (orgSlug && prod?.slug) ? `https://buildtheshow.com/${orgSlug}/${prod.slug}/SelfTape/JAMIE4827` : 'https://buildtheshow.com/self-tape/submit?app=…' },
-        { token: '{{self_tape_instructions}}', label: 'What to Film', sample: () => prod?.wizard_data?.self_tape_instructions || 'Please film 16 to 32 bars of a song and one short scene or monologue.' },
-        { token: '{{show_name}}',       label: 'Show Name',       sample: () => prod?.title || 'Our Show' },
+        { token: '{{self_tape_instructions}}', label: 'What to Film', sample: () => prod?.wizard_data?.self_tape_instructions || etPlaceholder('self tape instructions') },
+        { token: '{{show_name}}',       label: 'Show Name',       sample: () => prod?.title || etPlaceholder('show name') },
         { token: '{{performer_name}}',  label: 'Performer Name',  sample: () => etSamplePerson(1).name },
       ],
     },
@@ -21448,19 +21499,19 @@
       color: '#4ab847',
       bg:    '#e0f7df',
       vars: [
-        { token: '{{audition_session}}',      label: 'Session Name',    sample: () => etFindSession('general')?.name || 'General Auditions' },
-        { token: '{{audition_date}}',         label: 'Your Date',       sample: () => { const s = etFindSession('general'); return s?.date ? fmtDate(s.date) : 'Saturday, April 19'; } },
-        { token: '{{audition_time}}',         label: 'Your Time',       sample: '10:00 AM' },
-        { token: '{{audition_venue}}',        label: 'Your Location',   sample: () => etFindSession('general')?.location || 'Studio A' },
-        { token: '{{what_to_prepare}}',       label: 'What to Prepare', sample: 'Please prepare 16 bars of a song of your choice.' },
+        { token: '{{audition_session}}',      label: 'Session Name',    sample: () => etSessionValue(etFindSession('general'), 'name', 'audition session name', 'audition') },
+        { token: '{{audition_date}}',         label: 'Your Date',       sample: () => etSessionValue(etFindSession('general'), 'date', 'audition date', 'audition') },
+        { token: '{{audition_time}}',         label: 'Your Time',       sample: () => etSessionValue(etFindSession('general'), 'time', 'audition time', 'audition') },
+        { token: '{{audition_venue}}',        label: 'Your Location',   sample: () => etSessionValue(etFindSession('general'), 'location', 'audition location', 'audition') },
+        { token: '{{what_to_prepare}}',       label: 'What to Prepare', sample: () => etSessionValue(etFindSession('general'), 'prepare', 'what to prepare', 'audition') },
         { token: '{{performer_first_name}}',  label: 'First Name',      sample: () => etSamplePerson(1).firstName },
         { token: '{{performer_email}}',       label: 'Email Address',   sample: () => `${etSamplePerson(1).firstName.toLowerCase()}@example.com` },
-        { token: '{{show_subtitle}}',         label: 'Subtitle',        sample: () => prod?.subtitle || 'Spring 2026' },
-        { token: '{{show_dates}}',            label: 'Run Dates',       sample: () => (prod?.start_date && prod?.end_date) ? `${fmtDate(prod.start_date)} to ${fmtDate(prod.end_date)}` : 'TBC' },
-        { token: '{{director_name}}',         label: 'Director',        sample: () => etSamplePerson(12).name },
-        { token: '{{opening_night}}',         label: 'Opening Night',   sample: () => prod?.end_date ? fmtDate(prod.end_date) : 'Friday, July 18' },
+        { token: '{{show_subtitle}}',         label: 'Subtitle',        sample: () => prod?.subtitle || etPlaceholder('show subtitle') },
+        { token: '{{show_dates}}',            label: 'Run Dates',       sample: () => (prod?.start_date && prod?.end_date) ? `${fmtDate(prod.start_date)} to ${fmtDate(prod.end_date)}` : etPlaceholder('show dates') },
+        { token: '{{director_name}}',         label: 'Director',        sample: () => prod?.director || etPlaceholder('director name') },
+        { token: '{{opening_night}}',         label: 'Opening Night',   sample: () => prod?.end_date ? fmtDate(prod.end_date) : etPlaceholder('opening night') },
         { token: '{{booking_link}}',          label: 'Booking Link',    sample: 'https://buildtheshow.com/audition/…' },
-        { token: '{{all_audition_sessions}}', label: 'All Sessions',    sample: () => (audSessions||[]).map(s => `${s.name||'Session'}: ${s.date ? fmtDate(s.date) : 'TBC'}${s.start_time ? ' at ' + formatTime12h(s.start_time) : ''}`).join('\n') || 'General Auditions: Saturday, April 19\nDance Call: Sunday, April 20 at 2:00 PM' },
+        { token: '{{all_audition_sessions}}', label: 'All Sessions',    sample: () => (audSessions||[]).map(s => `${s.name || etPlaceholder('session name')}: ${s.date ? fmtDate(s.date) : etPlaceholder('date')}${s.start_time ? ' at ' + formatTime12h(s.start_time) : ''}`).join('\n') || etPlaceholder('audition sessions') },
       ],
     },
   ];
@@ -21502,11 +21553,11 @@
         color: col.color,
         bg:    col.bg,
         vars: [
-          { token: `{{${slug}_date}}`,  label: 'Date',         sample: () => session.date        ? fmtDate(session.date)             : 'TBC' },
-          { token: `{{${slug}_time}}`,  label: 'Start Time',   sample: () => session.start_time  ? formatTime12h(session.start_time) : 'TBC' },
-          { token: `{{${slug}_venue}}`, label: 'Location',     sample: () => session.location    || 'TBC' },
-          { token: `{{${slug}_name}}`,  label: 'Session Name', sample: () => session.name        || 'TBC' },
-          { token: `{{${slug}_prepare}}`, label: 'What to Prepare', sample: () => etSessionPrepareSample(session) },
+          { token: `{{${slug}_date}}`,  label: 'Date',         sample: () => session.date        ? fmtDate(session.date)             : etPlaceholder('session date') },
+          { token: `{{${slug}_time}}`,  label: 'Start Time',   sample: () => session.start_time  ? formatTime12h(session.start_time) : etPlaceholder('session time') },
+          { token: `{{${slug}_venue}}`, label: 'Location',     sample: () => etFirstRealValue(session.location, etProductionLocationFor(session.type)) || etPlaceholder('session location') },
+          { token: `{{${slug}_name}}`,  label: 'Session Name', sample: () => session.name        || etPlaceholder('session name') },
+          { token: `{{${slug}_prepare}}`, label: 'What to Prepare', sample: () => etSessionPrepareSample(session, etPlaceholder('what to prepare')) },
         ],
       };
     });
@@ -21711,18 +21762,18 @@
   function etSampleProductionField(rawKey) {
     const key = String(rawKey || '').trim();
     const lookup = {
-      title: prod?.title || 'Our Show',
-      show_name: prod?.title || 'Our Show',
-      subtitle: prod?.subtitle || 'Spring 2026',
-      show_subtitle: prod?.subtitle || 'Spring 2026',
-      venue: prod?.venue || 'The Main Stage',
-      show_venue: prod?.venue || 'The Main Stage',
-      season_year: prod?.season_year || '2026',
-      director: prod?.director || etSamplePerson(12).name,
-      director_name: prod?.director || etSamplePerson(12).name,
-      org_name: prod?.org_name || 'Your Theatre Company',
+      title: prod?.title || etPlaceholder('show title'),
+      show_name: prod?.title || etPlaceholder('show title'),
+      subtitle: prod?.subtitle || etPlaceholder('show subtitle'),
+      show_subtitle: prod?.subtitle || etPlaceholder('show subtitle'),
+      venue: prod?.venue || etPlaceholder('venue'),
+      show_venue: etProductionLocationFor('performance') || etPlaceholder('performance venue'),
+      season_year: prod?.season_year || etPlaceholder('season year'),
+      director: prod?.director || etPlaceholder('director name'),
+      director_name: prod?.director || etPlaceholder('director name'),
+      org_name: orgName || prod?.org_name || etPlaceholder('company name'),
     };
-    return lookup[key] || lookup[key.toLowerCase()] || `Sample ${key}`;
+    return lookup[key] || lookup[key.toLowerCase()] || etPlaceholder(key);
   }
 
   function etSampleDynamicToken(scope, rawKey) {
@@ -21733,9 +21784,9 @@
     if (scopeName === 'performer' || scopeName === 'booking' || scopeName === 'app') return `Sample ${key}`;
     if (scopeName === 'organization' || scopeName === 'org') {
       return lookupFlexibleValue({
-        name: orgName || prod?.org_name || 'Your Theatre Company',
-        email: orgEmail || prod?.org_email || 'noreply@buildtheshow.com',
-      }, key);
+        name: orgName || prod?.org_name || etPlaceholder('company name'),
+        email: orgEmail || prod?.org_email || etPlaceholder('company email'),
+      }, key) || etPlaceholder(key);
     }
     return '';
   }
