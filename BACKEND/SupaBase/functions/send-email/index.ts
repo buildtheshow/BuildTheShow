@@ -12,7 +12,7 @@
  *   Cast/callback/not-cast notification:
  *   { applicant_id, production_id, status: 'cast'|'callback'|'not_cast' }
  *   or
- *   { applicant_id, production_id, category: 'cast_announcement'|'callback'|'not_cast' }
+ *   { applicant_id, production_id, category: 'cast_announcement'|'cast_accepted'|'callback'|'not_cast' }
  *
  *   Any template by category:
  *   { applicant_id?, booking_id?, production_id, category }
@@ -47,6 +47,7 @@ const CATEGORY_SUBJECTS: Record<string, string> = {
   callback_declined:   'Callback response received',
   callback_self_tape:  'Callback self tape request',
   cast_announcement:   'Congratulations — you have been cast!',
+  cast_accepted:       'Yay! You accepted your role',
   not_cast:            'Regarding your audition',
   general:             'A message from the production team',
 };
@@ -60,6 +61,7 @@ const CATEGORY_TO_TRIGGER: Record<string, string> = {
   callback_declined:    'callback_declined',
   callback_self_tape:   'callback_self_tape_requested',
   cast_announcement:    'cast_set',
+  cast_accepted:        'cast_accepted',
   not_cast:             'not_cast_set',
   rehearsal:            'manual',
   team_invite:          'team_invite',
@@ -437,7 +439,20 @@ Please choose one of the options below so we can keep everything moving:
 Accept your role: {{cast_accept_link}}
 Decline this offer: {{cast_decline_link}}
 
-Once you accept, your registration will unlock here:
+With excitement,
+{{director_name}}
+{{org_name}}`,
+    },
+    cast_accepted: {
+      subject: 'Yay! You accepted your role in {{show_name}}',
+      body: `Hi {{contact_name}},
+
+Yay! You have accepted the role of {{role_name}} in {{show_name}}.
+
+We are so excited to have you in the cast.
+
+Your registration is now unlocked. Please use the link below to complete your cast registration:
+
 {{registration_link}}
 
 With excitement,
@@ -499,7 +514,7 @@ With excitement,
     if (assignmentSlotId) slotIds.push(assignmentSlotId);
   });
 
-  if (applicantIdRaw && ['callback', 'cast_announcement', 'not_cast'].includes(category)) {
+  if (applicantIdRaw && ['callback', 'cast_announcement', 'cast_accepted', 'not_cast'].includes(category)) {
     const { data: bookingRows } = await sb
       .from('audition_bookings')
       .select('id,session_id,slot_id,status')

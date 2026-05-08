@@ -2008,6 +2008,7 @@
     .et-cat-callback_declined    { background: rgba(75,85,99,0.12);    color: #4b5563; }
     .et-cat-callback_self_tape   { background: rgba(37,99,235,0.12);   color: #1d4ed8; }
     .et-cat-cast_announcement    { background: rgba(101,150,113,0.2); color: #3b744c; }
+    .et-cat-cast_accepted        { background: rgba(101,150,113,0.16); color: #2f6b43; }
     .et-cat-not_cast             { background: rgba(75,85,99,0.16);   color: #4b5563; }
     .et-cat-rehearsal            { background: rgba(14,116,144,0.14);  color: #0e7490; }
     .et-cat-general              { background: rgba(157,139,196,0.2); color: #6b5a92; }
@@ -18763,8 +18764,8 @@
                   </div>
                   <div class="settings-grid-3">
                     <div class="form-group" style="margin-bottom:0;"><label class="form-label">Offer Expiry</label><select id="reg-offer-expiry" class="form-select"><option>24 hours</option><option>48 hours</option><option>72 hours</option><option>No expiry</option></select></div>
+                    <div class="form-group" style="margin-bottom:0;"><label class="form-label">Reply By</label><input id="reg-offer-deadline" class="form-input" type="datetime-local" /></div>
                     <div class="form-group" style="margin-bottom:0;"><label class="form-label">Allow Re-offers</label><select id="reg-allow-reoffers" class="form-select"><option>Yes</option><option>No</option><option>Staff approval</option></select></div>
-                    <div class="form-group" style="margin-bottom:0;"><label class="form-label">Sequential Casting</label><select id="reg-sequential-casting" class="form-select"><option>On</option><option>Off</option></select></div>
                   </div>
                 </section>
                 <section class="settings-section">
@@ -22984,6 +22985,7 @@
     { value: 'callback_declined',    label: 'Callback Declined',    color: '#4B5563' },
     { value: 'callback_self_tape',   label: 'Callback Self Tape',   color: '#2563eb' },
     { value: 'cast_announcement',    label: 'Cast Offer',           color: '#659671' },
+    { value: 'cast_accepted',        label: 'Role Accepted',        color: '#659671' },
     { value: 'not_cast',             label: 'Not Cast',             color: '#4B5563' },
     { value: 'rehearsal',            label: 'Rehearsal Info',       color: '#0e7490' },
     { value: 'team_invite',          label: 'Team Access Invite',   color: '#B8AECF' },
@@ -23069,8 +23071,17 @@
       sendType: 'team_action',
       required: true,
       usedBy: 'Final Casting > Role offers',
-      summary: 'Offers a role with accept, decline, and registration links.',
+      summary: 'Offers a role and asks the performer to accept or decline.',
       sendSummary: 'Sent from Final Casting.',
+    },
+    cast_accepted: {
+      section: 'casting',
+      label: 'Role Accepted',
+      sendType: 'automatic',
+      required: true,
+      usedBy: 'Cast offer response page > Accept Role',
+      summary: 'Celebrates the acceptance and sends the registration link.',
+      sendSummary: 'Sends after a performer accepts their role.',
     },
     not_cast: {
       section: 'casting',
@@ -23302,7 +23313,7 @@
         { token: '{{cast_accept_link}}', label: 'Accept Offer Link', sample: 'https://buildtheshow.com/.../cast-offer?action=accept' },
         { token: '{{cast_decline_link}}', label: 'Decline Offer Link', sample: 'https://buildtheshow.com/.../cast-offer?action=decline' },
         { token: '{{cast_response_link}}', label: 'Review Offer Link', sample: 'https://buildtheshow.com/.../cast-offer' },
-        { token: '{{registration_link}}', label: 'Registration Link', sample: 'https://buildtheshow.com/.../cast-offer?action=accept' },
+        { token: '{{registration_link}}', label: 'Registration Link', sample: 'https://buildtheshow.com/.../cast-offer?view=registration' },
       ],
     },
     // ── Rehearsals ───────────────────────────────────────────────
@@ -23455,8 +23466,13 @@
     },
     cast_announcement: {
       required: ['{{contact_name}}', '{{role_name}}', '{{cast_accept_link}}', '{{cast_decline_link}}'],
-      recommended: ['{{show_name}}', '{{rehearsal_start_date}}', '{{opening_night}}', '{{registration_link}}'],
-      note: 'Cast announcements should celebrate the offer, then give clear accept and decline links so Registration can unlock automatically.'
+      recommended: ['{{show_name}}', '{{rehearsal_start_date}}', '{{opening_night}}'],
+      note: 'Cast offers should celebrate the offer, then give clear accept and decline links. Registration is sent after acceptance.'
+    },
+    cast_accepted: {
+      required: ['{{contact_name}}', '{{role_name}}', '{{registration_link}}'],
+      recommended: ['{{show_name}}', '{{rehearsal_start_date}}', '{{opening_night}}'],
+      note: 'This automatic email sends after a performer accepts. It should feel celebratory and include the registration link.'
     },
       self_tape_booked: {
         required: ['{{performer_name}}', '{{submission_link}}'],
@@ -23741,6 +23757,7 @@
       callback_set: 'Manual action: when you send a callback response request from casting',
       callback_self_tape_requested: 'Manual action: when you request a callback self tape',
       cast_set: 'Manual action: when you send a role offer from Final Casting',
+      cast_accepted: 'Automatic: when a performer accepts their role offer',
       not_cast_set: 'Manual action: when you send a not cast email from casting',
       team_invite: 'Manual action: when you send a production team portal invite',
       manual: 'Manual only: never sends until you choose to send it',
@@ -23757,6 +23774,7 @@
       callback_confirmed: 'Auto confirmation',
       callback_declined: 'Auto decline',
       cast_set: 'Send role offer',
+      cast_accepted: 'Auto accepted',
       not_cast_set: 'Send not cast',
       team_invite: 'Send team invite',
       manual: 'Manual',
@@ -23772,7 +23790,8 @@
       callback_self_tape_requested: 'How it sends: team triggered. When it sends: when you ask a callback performer to submit a callback self tape. This email must include {{callback_self_tape_link}}.',
       callback_confirmed: 'How it sends: automatic. When it sends: immediately after a performer accepts their callback or successfully reschedules themself. This is where callback materials belong.',
       callback_declined: 'How it sends: automatic. When it sends: immediately after a performer declines their callback.',
-      cast_set: 'How it sends: team triggered. When it sends: when you choose to send the role offer email from Final Casting. This email must include accept and decline links so the Registration flow can unlock automatically.',
+      cast_set: 'How it sends: team triggered. When it sends: when you choose to send the role offer email from Final Casting. This email should include accept and decline links only.',
+      cast_accepted: 'How it sends: automatic. When it sends: immediately after a performer accepts their role offer. This is where the registration link belongs.',
       not_cast_set: 'How it sends: team triggered. When it sends: only when you choose to send the not cast email to a performer from casting.',
       team_invite: 'How it sends: team triggered. When it sends: when you invite a production team member and send their portal link and access code.',
       manual: 'How it sends: manual only. When it sends: never automatically. Use this for reminders, rehearsal info, and general updates that you decide to send yourself.',
@@ -23810,6 +23829,7 @@
     { value: 'callback_confirmed',   label: 'Auto: callback confirmed' },
     { value: 'callback_declined',    label: 'Auto: callback declined' },
     { value: 'cast_set',             label: 'Team sends: role offer' },
+    { value: 'cast_accepted',        label: 'Auto: role accepted' },
     { value: 'not_cast_set',         label: 'Team sends: not cast email' },
     { value: 'team_invite',          label: 'Team sends: portal invite' },
   ];
@@ -23823,6 +23843,7 @@
     callback_declined:    'callback_declined',
     callback_self_tape:   'callback_self_tape_requested',
     cast_announcement:    'cast_set',
+    cast_accepted:        'cast_accepted',
     not_cast:             'not_cast_set',
     rehearsal:            'manual',
     team_invite:          'team_invite',
@@ -24264,8 +24285,29 @@ Please choose one of the options below so we can keep everything moving:
 Accept your role: {{cast_accept_link}}
 Decline this offer: {{cast_decline_link}}
 
-Once you accept, your registration will unlock here:
+With excitement,
+{{director_name}}
+{{org_name}}`,
+    },
+    {
+      name: 'Role Accepted Registration',
+      category: 'cast_accepted',
+      trigger: 'cast_accepted',
+      subject: 'Yay! You accepted your role in {{show_name}}',
+      body: `Hi {{contact_name}},
+
+Yay! You have accepted the role of {{role_name}} in {{show_name}}.
+
+We are so excited to have you in the cast.
+
+Your registration is now unlocked. Please use the link below to complete your cast registration:
+
 {{registration_link}}
+
+Rehearsals begin {{rehearsal_start_date}}.
+{{rehearsal_schedule}}
+
+Opening night is {{opening_night}} at {{show_venue}}.
 
 With excitement,
 {{director_name}}
@@ -24443,7 +24485,7 @@ We look forward to seeing your work!
   }
 
   function etCastOfferResponseBlock() {
-    return `\n\nPlease choose one of the options below so we can keep everything moving:\n\nAccept your role: {{cast_accept_link}}\nDecline this offer: {{cast_decline_link}}\n\nOnce you accept, your registration will unlock here:\n{{registration_link}}`;
+    return `\n\nPlease choose one of the options below so we can keep everything moving:\n\nAccept your role: {{cast_accept_link}}\nDecline this offer: {{cast_decline_link}}`;
   }
 
   function etTemplateHasCastOfferLinks(template) {
@@ -24451,12 +24493,25 @@ We look forward to seeing your work!
     return body.includes('{{cast_accept_link}}') && body.includes('{{cast_decline_link}}');
   }
 
+  function etCleanCastOfferTemplateBody(body) {
+    return String(body || '')
+      .replace(/\n{2,}Once you accept,\s*your registration will unlock here:\s*\n\{\{registration_link\}\}/gi, '')
+      .replace(/\n{2,}Your registration is now unlocked\.[\s\S]*?\{\{registration_link\}\}/gi, '')
+      .trim();
+  }
+
   async function etEnsureCastOfferTemplateLinks(templates = _etTemplates) {
-    const castTemplates = (templates || []).filter(t => t?.category === 'cast_announcement' && !etTemplateHasCastOfferLinks(t));
+    const castTemplates = (templates || []).filter(t => {
+      if (t?.category !== 'cast_announcement') return false;
+      const cleaned = etCleanCastOfferTemplateBody(t.body || '');
+      return cleaned !== String(t.body || '').trim() || !etTemplateHasCastOfferLinks({ ...t, body: cleaned });
+    });
     if (!castTemplates.length) return;
     const updates = castTemplates.map(t => ({
       ...t,
-      body: `${String(t.body || '').trim()}${etCastOfferResponseBlock()}`,
+      body: etTemplateHasCastOfferLinks({ ...t, body: etCleanCastOfferTemplateBody(t.body || '') })
+        ? etCleanCastOfferTemplateBody(t.body || '')
+        : `${etCleanCastOfferTemplateBody(t.body || '')}${etCastOfferResponseBlock()}`,
     }));
     _etTemplates = (_etTemplates || []).map(t => updates.find(u => u.id === t.id) || t);
     await Promise.all(updates.map(t =>
@@ -24483,7 +24538,7 @@ We look forward to seeing your work!
       return;
     }
     // Backfill required starter templates for productions that existed before they were added.
-    for (const requiredCategory of ['team_invite', 'callback', 'callback_confirmed', 'callback_declined', 'callback_self_tape', 'self_tape_booked', 'cast_announcement', 'not_cast']) {
+    for (const requiredCategory of ['team_invite', 'callback', 'callback_confirmed', 'callback_declined', 'callback_self_tape', 'self_tape_booked', 'cast_announcement', 'cast_accepted', 'not_cast']) {
       if (_etTemplates.some(t => t.category === requiredCategory)) continue;
       const starter = ET_STARTER_TEMPLATES.find(t => t.category === requiredCategory);
       if (starter) {
@@ -28086,6 +28141,7 @@ We look forward to seeing your work!
     const sv = (id, val) => { const el = document.getElementById(id); if (el) el.value = val; };
     const sc = (id, v)   => { const el = document.getElementById(id); if (el) el.checked = v; };
     sv('reg-offer-expiry',         s.offer_expiry         || '48 hours');
+    sv('reg-offer-deadline',       s.offer_deadline       || '');
     sv('reg-allow-reoffers',       s.allow_reoffers       || 'Yes');
     sv('reg-sequential-casting',   s.sequential_casting   === false ? 'Off' : 'On');
     sc('reg-return-declined',      s.return_declined      !== false);
@@ -28122,6 +28178,7 @@ We look forward to seeing your work!
     const gc = id => document.getElementById(id)?.checked || false;
     const s = {
       offer_expiry:          gv('reg-offer-expiry'),
+      offer_deadline:        gv('reg-offer-deadline'),
       allow_reoffers:        gv('reg-allow-reoffers'),
       sequential_casting:    gv('reg-sequential-casting') === 'On',
       return_declined:       gc('reg-return-declined'),
@@ -28918,11 +28975,11 @@ We look forward to seeing your work!
     if (error) throw error;
     if (templates?.length) {
       if (category === 'cast_announcement') {
-        const currentBody = String(templates[0].body || '');
-        if (!etTemplateHasCastOfferLinks(templates[0])) {
+        const currentBody = etCleanCastOfferTemplateBody(templates[0].body || '');
+        if (currentBody !== String(templates[0].body || '').trim() || !etTemplateHasCastOfferLinks({ ...templates[0], body: currentBody })) {
           const responseBlock = etCastOfferResponseBlock();
           const { error: updateError } = await sb.from('email_templates')
-            .update({ body: `${currentBody.trim()}${responseBlock}` })
+            .update({ body: etTemplateHasCastOfferLinks({ ...templates[0], body: currentBody }) ? currentBody : `${currentBody}${responseBlock}` })
             .eq('id', templates[0].id);
           if (updateError) throw updateError;
         }
@@ -29304,6 +29361,7 @@ We look forward to seeing your work!
       review: base,
       accept: `${base}&action=accept`,
       decline: `${base}&action=decline`,
+      registration: `${base}&view=registration`,
     };
   }
 
@@ -29395,7 +29453,7 @@ We look forward to seeing your work!
       cast_response_link: links.review || '',
       cast_accept_link: links.accept || '',
       cast_decline_link: links.decline || '',
-      registration_link: links.accept || links.review || '',
+      registration_link: links.registration || links.review || '',
       show_name: prod?.title || '',
       show_subtitle: prod?.subtitle || '',
       show_venue: prod?.venue || '',
@@ -33306,7 +33364,7 @@ We look forward to seeing your work!
   }
 
   async function ensureFinalCastingEmailTemplates() {
-    return ensureEmailTemplatesForCategories(['cast_announcement', 'not_cast']);
+    return ensureEmailTemplatesForCategories(['cast_announcement', 'cast_accepted', 'not_cast']);
   }
 
   async function ensureCallbackEmailTemplate() {
@@ -43680,6 +43738,7 @@ We look forward to seeing your work!
     { value: 'callback_declined',    label: 'Callback Declined'    },
     { value: 'callback_self_tape',   label: 'Callback Self Tape'   },
     { value: 'cast_announcement',    label: 'Cast Offer'           },
+    { value: 'cast_accepted',        label: 'Role Accepted'        },
     { value: 'not_cast',             label: 'Not Cast'             },
     { value: 'rehearsal',            label: 'Rehearsal Info'       },
     { value: 'general',              label: 'General'              },
@@ -43878,7 +43937,7 @@ We look forward to seeing your work!
 
   async function _apmBuildEmailContextForCategory(category) {
     const context = _apmBuildEmailContext();
-    if (category !== 'cast_announcement' || !_apmApp?.id) return context;
+    if (!['cast_announcement', 'cast_accepted'].includes(category) || !_apmApp?.id) return context;
     const token = await ensureCastOfferToken(_apmApp);
     const links = castOfferLinks(token);
     const roleEntries = _apmCastOfferRoleEntries(_apmApp);
@@ -43893,7 +43952,7 @@ We look forward to seeing your work!
       cast_response_link: links.review,
       cast_accept_link: links.accept,
       cast_decline_link: links.decline,
-      registration_link: links.accept || links.review,
+      registration_link: links.registration || links.review,
       __cast_offer_role_entries: roleEntries,
     };
   }

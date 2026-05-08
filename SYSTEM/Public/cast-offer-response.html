@@ -97,10 +97,24 @@
       font-weight: 850;
     }
     .actions {
-      display: flex;
-      gap: 0.7rem;
-      flex-wrap: wrap;
-      margin-top: 1.25rem;
+      display: grid;
+      gap: 1.45rem;
+      margin-top: 1.45rem;
+    }
+    .accept-zone,
+    .decline-zone {
+      min-width: 0;
+    }
+    .decline-zone {
+      border-top: 1px solid rgba(185,75,106,0.18);
+      padding-top: 1.05rem;
+    }
+    .decline-note {
+      margin: 0 0 0.62rem;
+      color: #8f3f55;
+      font-size: 0.84rem;
+      line-height: 1.45;
+      font-weight: 750;
     }
     button {
       border: 1.5px solid var(--bts-purple);
@@ -111,6 +125,15 @@
       font-weight: 900;
       cursor: pointer;
       transition: transform 0.15s, background 0.15s, border-color 0.15s;
+    }
+    .accept-zone button {
+      width: min(100%, 340px);
+      min-height: 3.2rem;
+      font-size: 0.95rem;
+    }
+    .decline-zone button {
+      min-height: 2.55rem;
+      font-size: 0.8rem;
     }
     button:hover { transform: translateY(-1px); }
     button:disabled { cursor: default; opacity: 0.65; transform: none; }
@@ -141,8 +164,13 @@
       <div class="details hidden" id="details"></div>
       <div class="role-list hidden" id="roles"></div>
       <div class="actions hidden" id="actions">
-        <button class="primary" id="accept-btn" type="button">Accept Role</button>
-        <button class="danger" id="decline-btn" type="button">Decline Offer</button>
+        <div class="accept-zone">
+          <button class="primary" id="accept-btn" type="button">Accept Role</button>
+        </div>
+        <div class="decline-zone">
+          <p class="decline-note">Only decline if you are sure you cannot accept this role.</p>
+          <button class="danger" id="decline-btn" type="button">Decline Offer</button>
+        </div>
       </div>
       <div class="status hidden" id="status"></div>
     </section>
@@ -238,6 +266,14 @@
         .filter(Boolean);
     }
 
+    function responseBaseUrl() {
+      return `${window.location.origin}${window.location.pathname}?prod=${encodeURIComponent(prodId)}&token=${encodeURIComponent(token)}`;
+    }
+
+    function registrationLink() {
+      return `${responseBaseUrl()}&view=registration`;
+    }
+
     async function loadOffer() {
       if (!token || !prodId) throw new Error('This cast offer link is missing information.');
       const { data: apps, error } = await sb.from('audition_applications')
@@ -282,6 +318,46 @@
       renderDetails();
     }
 
+    async function sendAcceptedEmail() {
+      const { data } = await sb.functions.invoke('send-email', {
+        body: {
+          applicant_id: app.id,
+          production_id: prodId,
+          category: 'cast_accepted',
+          trigger: 'cast_accepted',
+          email: app.email || '',
+          name: app.name || '',
+          context: {
+            contact_name: app.name || '',
+            performer_name: app.name || '',
+            performer_email: app.email || '',
+            role_name: roleNames.join(', '),
+            role_names: roleNames.join(', '),
+            roles: roleNames.join(', '),
+            registration_link: registrationLink(),
+            cast_response_link: responseBaseUrl(),
+            show_name: prod?.title || '',
+            show_subtitle: prod?.subtitle || '',
+            show_venue: prod?.venue || '',
+            director_name: prod?.director || '',
+            rehearsal_start_date: prod?.start_date || '',
+            rehearsal_end_date: prod?.end_date || '',
+            opening_night: prod?.end_date || prod?.start_date || '',
+            production: {
+              title: prod?.title || '',
+              subtitle: prod?.subtitle || '',
+              venue: prod?.venue || '',
+              director: prod?.director || '',
+              organization_id: prod?.organization_id || '',
+              start_date: prod?.start_date || '',
+              end_date: prod?.end_date || '',
+            },
+          },
+        },
+      });
+      if (!data?.sent) throw new Error(data?.error || 'Accepted-role email was not sent.');
+    }
+
     async function saveResponse(status) {
       const nextState = status === 'accepted' ? 'offer_accepted' : 'offer_declined';
       const ids = offeredAssignments.map(row => row.id).filter(Boolean);
@@ -305,8 +381,19 @@
       try {
         setBusy(true);
         await saveResponse('accepted');
+        let emailSent = true;
+        try {
+          await sendAcceptedEmail();
+        } catch (emailError) {
+          emailSent = false;
+          console.warn('[BTS] role accepted email failed', emailError);
+        }
         $('actions').classList.add('hidden');
-        setStatus('Accepted. Your registration is now unlocked with the production team.');
+        setStatus(emailSent
+          ? 'Accepted. We just emailed your registration link and next steps.'
+          : 'Accepted. Your role is confirmed, but we could not send the registration email. Please contact the production team for your registration link.',
+          emailSent ? '' : 'neutral'
+        );
       } catch (err) {
         setStatus(err.message || 'Could not accept this offer.', 'error');
       } finally {
@@ -315,6 +402,8 @@
     }
 
     async function declineOffer() {
+      const confirmed = window.confirm('Are you sure you want to decline this role offer? This tells the production team you are not accepting the role.');
+      if (!confirmed) return;
       try {
         setBusy(true);
         await saveResponse('declined');
