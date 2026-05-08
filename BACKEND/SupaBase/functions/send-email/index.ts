@@ -426,6 +426,24 @@ See you soon,
 {{director_name}}
 {{org_name}}`,
     },
+    cast_announcement: {
+      subject: 'Congratulations: you have been cast in {{show_name}}!',
+      body: `Hi {{contact_name}},
+
+We are absolutely thrilled to offer you the role of {{role_name}} in {{show_name}}!
+
+Please choose one of the options below so we can keep everything moving:
+
+Accept your role: {{cast_accept_link}}
+Decline this offer: {{cast_decline_link}}
+
+Once you accept, your registration will unlock here:
+{{registration_link}}
+
+With excitement,
+{{director_name}}
+{{org_name}}`,
+    },
   };
 
   const fallback = !template && !body.subject && !body.message ? FALLBACK_TEMPLATES[category] : null;
@@ -632,6 +650,11 @@ See you soon,
     '{{director_name}}':         director,
     '{{role_name}}':             roleInterest,
     '{{role_type}}':             roleType,
+    '{{role_names}}':            firstDefinedString(directContext.role_names, directContext.roles, roleInterest),
+    '{{cast_response_link}}':    firstDefinedString(directContext.cast_response_link),
+    '{{cast_accept_link}}':      firstDefinedString(directContext.cast_accept_link),
+    '{{cast_decline_link}}':     firstDefinedString(directContext.cast_decline_link),
+    '{{registration_link}}':     firstDefinedString(directContext.registration_link, directContext.cast_accept_link, directContext.cast_response_link),
     '{{rehearsal_start_date}}':  productionRecord.start_date ? fmtDate(String(productionRecord.start_date)) : '',
     '{{rehearsal_schedule}}':    firstDefinedString(directContext.rehearsal_schedule, directProduction.rehearsal_schedule),
     '{{rehearsal_end_date}}':    productionRecord.end_date   ? fmtDate(String(productionRecord.end_date))   : '',

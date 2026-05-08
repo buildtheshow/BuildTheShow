@@ -14164,6 +14164,24 @@
       font-weight: 450;
       white-space: nowrap;
     }
+    .castlist-programme-name.is-unconfirmed {
+      color: #6a5a80;
+    }
+    .castlist-programme-status {
+      display: inline-block;
+      margin-left: 0.48rem;
+      padding: 0.08rem 0.38rem;
+      border-radius: 999px;
+      background: rgba(227,164,111,0.16);
+      color: #9a5f24;
+      border: 1px solid rgba(227,164,111,0.28);
+      font-size: 0.56rem;
+      font-weight: 900;
+      line-height: 1.2;
+      vertical-align: middle;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
     .castlist-programme-name-list {
       display: flex;
       flex-direction: column;
@@ -22965,7 +22983,7 @@
     { value: 'callback_confirmed',   label: 'Callback Confirmed',   color: '#659671' },
     { value: 'callback_declined',    label: 'Callback Declined',    color: '#4B5563' },
     { value: 'callback_self_tape',   label: 'Callback Self Tape',   color: '#2563eb' },
-    { value: 'cast_announcement',    label: 'Cast Announcement',    color: '#659671' },
+    { value: 'cast_announcement',    label: 'Cast Offer',           color: '#659671' },
     { value: 'not_cast',             label: 'Not Cast',             color: '#4B5563' },
     { value: 'rehearsal',            label: 'Rehearsal Info',       color: '#0e7490' },
     { value: 'team_invite',          label: 'Team Access Invite',   color: '#B8AECF' },
@@ -23047,11 +23065,11 @@
     },
     cast_announcement: {
       section: 'casting',
-      label: 'Cast Announcement',
+      label: 'Cast Offer',
       sendType: 'team_action',
       required: true,
       usedBy: 'Final Casting > Role offers',
-      summary: 'Offers a role and gives the performer the next step.',
+      summary: 'Offers a role with accept, decline, and registration links.',
       sendSummary: 'Sent from Final Casting.',
     },
     not_cast: {
@@ -23722,7 +23740,7 @@
       self_tape_registered: 'Automatic: when a performer registers for self tape',
       callback_set: 'Manual action: when you send a callback response request from casting',
       callback_self_tape_requested: 'Manual action: when you request a callback self tape',
-      cast_set: 'Manual action: when you send a cast announcement from casting',
+      cast_set: 'Manual action: when you send a role offer from Final Casting',
       not_cast_set: 'Manual action: when you send a not cast email from casting',
       team_invite: 'Manual action: when you send a production team portal invite',
       manual: 'Manual only: never sends until you choose to send it',
@@ -23754,7 +23772,7 @@
       callback_self_tape_requested: 'How it sends: team triggered. When it sends: when you ask a callback performer to submit a callback self tape. This email must include {{callback_self_tape_link}}.',
       callback_confirmed: 'How it sends: automatic. When it sends: immediately after a performer accepts their callback or successfully reschedules themself. This is where callback materials belong.',
       callback_declined: 'How it sends: automatic. When it sends: immediately after a performer declines their callback.',
-      cast_set: 'How it sends: team triggered. When it sends: when you choose to send the cast announcement or role offer email from Final Casting. This email should include accept and decline links.',
+      cast_set: 'How it sends: team triggered. When it sends: when you choose to send the role offer email from Final Casting. This email must include accept and decline links so the Registration flow can unlock automatically.',
       not_cast_set: 'How it sends: team triggered. When it sends: only when you choose to send the not cast email to a performer from casting.',
       team_invite: 'How it sends: team triggered. When it sends: when you invite a production team member and send their portal link and access code.',
       manual: 'How it sends: manual only. When it sends: never automatically. Use this for reminders, rehearsal info, and general updates that you decide to send yourself.',
@@ -24226,7 +24244,7 @@ Warmly,
 {{org_name}}`,
     },
     {
-      name: 'Cast Announcement You Got the Role',
+      name: 'Cast Offer You Got the Role',
       category: 'cast_announcement',
       trigger: 'cast_set',
       subject: 'Congratulations: you have been cast in {{show_name}}!',
@@ -24424,6 +24442,28 @@ We look forward to seeing your work!
     ));
   }
 
+  function etCastOfferResponseBlock() {
+    return `\n\nPlease choose one of the options below so we can keep everything moving:\n\nAccept your role: {{cast_accept_link}}\nDecline this offer: {{cast_decline_link}}\n\nOnce you accept, your registration will unlock here:\n{{registration_link}}`;
+  }
+
+  function etTemplateHasCastOfferLinks(template) {
+    const body = String(template?.body || '');
+    return body.includes('{{cast_accept_link}}') && body.includes('{{cast_decline_link}}');
+  }
+
+  async function etEnsureCastOfferTemplateLinks(templates = _etTemplates) {
+    const castTemplates = (templates || []).filter(t => t?.category === 'cast_announcement' && !etTemplateHasCastOfferLinks(t));
+    if (!castTemplates.length) return;
+    const updates = castTemplates.map(t => ({
+      ...t,
+      body: `${String(t.body || '').trim()}${etCastOfferResponseBlock()}`,
+    }));
+    _etTemplates = (_etTemplates || []).map(t => updates.find(u => u.id === t.id) || t);
+    await Promise.all(updates.map(t =>
+      sb.from('email_templates').update({ body: t.body }).eq('id', t.id)
+    ));
+  }
+
   async function loadEmailTemplates() {
     const list = document.getElementById('email-template-list');
     if (!list) return;
@@ -24443,7 +24483,7 @@ We look forward to seeing your work!
       return;
     }
     // Backfill required starter templates for productions that existed before they were added.
-    for (const requiredCategory of ['team_invite', 'callback', 'callback_confirmed', 'callback_declined', 'callback_self_tape', 'self_tape_booked']) {
+    for (const requiredCategory of ['team_invite', 'callback', 'callback_confirmed', 'callback_declined', 'callback_self_tape', 'self_tape_booked', 'cast_announcement', 'not_cast']) {
       if (_etTemplates.some(t => t.category === requiredCategory)) continue;
       const starter = ET_STARTER_TEMPLATES.find(t => t.category === requiredCategory);
       if (starter) {
@@ -24454,6 +24494,7 @@ We look forward to seeing your work!
       }
     }
     await etNormalizeContactGreetings();
+    await etEnsureCastOfferTemplateLinks();
     renderEmailTemplates();
   }
 
@@ -28860,6 +28901,7 @@ We look forward to seeing your work!
     const host = document.getElementById('final-casting-offers-host');
     if (!host) return;
     host.innerHTML = '<div style="text-align:center;padding:2.5rem;color:#9a90b0;">Loading offer queues…</div>';
+    await ensureFinalCastingEmailTemplates().catch(error => console.warn('[BTS] final casting email template setup failed', error));
     await loadFinalCastingPool();
     if (!finalCastingEnsembleLoaded) await renderFinalCastingEnsemble();
     await loadFinalCastingOfferAcceptanceState();
@@ -28877,10 +28919,8 @@ We look forward to seeing your work!
     if (templates?.length) {
       if (category === 'cast_announcement') {
         const currentBody = String(templates[0].body || '');
-        const hasAccept = currentBody.includes('{{cast_accept_link}}');
-        const hasDecline = currentBody.includes('{{cast_decline_link}}');
-        if (!hasAccept || !hasDecline) {
-          const responseBlock = `\n\nPlease choose one of the options below so we can keep everything moving:\n\nAccept your role: {{cast_accept_link}}\nDecline this offer: {{cast_decline_link}}\n\nOnce you accept, your registration will unlock here:\n{{registration_link}}`;
+        if (!etTemplateHasCastOfferLinks(templates[0])) {
+          const responseBlock = etCastOfferResponseBlock();
           const { error: updateError } = await sb.from('email_templates')
             .update({ body: `${currentBody.trim()}${responseBlock}` })
             .eq('id', templates[0].id);
@@ -33254,7 +33294,19 @@ We look forward to seeing your work!
         .insert(missing.map(starter => ({ ...starter, production_id: prodId })));
       if (insertError) throw insertError;
     }
+    if (categories.includes('cast_announcement')) {
+      const { data: castTemplates, error: castError } = await sb.from('email_templates')
+        .select('id,category,body')
+        .eq('production_id', prodId)
+        .eq('category', 'cast_announcement');
+      if (castError) throw castError;
+      await etEnsureCastOfferTemplateLinks(castTemplates || []);
+    }
     return true;
+  }
+
+  async function ensureFinalCastingEmailTemplates() {
+    return ensureEmailTemplatesForCategories(['cast_announcement', 'not_cast']);
   }
 
   async function ensureCallbackEmailTemplate() {
@@ -37821,7 +37873,10 @@ We look forward to seeing your work!
           .eq('production_id', prodId)
           .then(({ data, error }) => {
             const allRows = error ? [] : (data || []);
-            const ensembleRows = allRows.filter(a => a.state === 'ensemble_manual');
+            const ensembleRows = allRows.filter(a =>
+              a.state === 'ensemble_manual' ||
+              (a.state === 'offer_accepted' && !a.character_id)
+            );
             cbv2EnsembleManual = new Set(ensembleRows.map(a => a.applicant_id));
             cbv2Assignments = allRows.filter(a => a.state !== 'ensemble_manual');
           })
@@ -39848,24 +39903,60 @@ We look forward to seeing your work!
     return sortedChars.sort(compareCastListCharacters);
   }
 
-  function getCastListPerformers(char) {
+  function getCastListPerformerEntries(char) {
     const assigned = cbv2Assignments
-      .filter(a => a.character_id === char.id && (a.state === 'chosen' || a.state === 'liked'))
-      .sort((a, b) => (a.state === 'chosen' ? 0 : 1) - (b.state === 'chosen' ? 0 : 1))
-      .map(a => allApplicants.find(x => x.id === a.applicant_id))
-      .filter(Boolean);
+      .filter(a => a.character_id === char.id && (a.state === 'chosen' || a.state === 'offer_accepted'))
+      .sort((a, b) => {
+        const stateDiff = (a.state === 'offer_accepted' ? 0 : 1) - (b.state === 'offer_accepted' ? 0 : 1);
+        if (stateDiff) return stateDiff;
+        const appA = allApplicants.find(app => app.id === a.applicant_id);
+        const appB = allApplicants.find(app => app.id === b.applicant_id);
+        return compareApplicantsAlphabetically(appA || {}, appB || {});
+      })
+      .map(a => ({
+        app: allApplicants.find(x => x.id === a.applicant_id),
+        state: a.state,
+      }))
+      .filter(entry => entry.app);
     const isEnsemble = castListCharacterSortRank(char) === 2;
     const ensemble = isEnsemble
-      ? allApplicants.filter(app => cbv2EnsembleManual.has(app.id))
+      ? allApplicants
+          .filter(app => cbv2EnsembleManual.has(app.id))
+          .map(app => {
+            const accepted = cbv2Assignments.some(a =>
+              !a.character_id &&
+              a.applicant_id === app.id &&
+              a.state === 'offer_accepted'
+            );
+            return { app, state: accepted ? 'offer_accepted' : 'ensemble_manual' };
+          })
       : [];
     const seen = new Set();
     return [...assigned, ...ensemble]
-      .filter(app => {
-        if (!app || seen.has(app.id)) return false;
-        seen.add(app.id);
+      .filter(entry => {
+        if (!entry?.app || seen.has(entry.app.id)) return false;
+        seen.add(entry.app.id);
         return true;
       })
-      .sort(compareApplicantsAlphabetically);
+      .sort((a, b) => {
+        const stateDiff = (a.state === 'offer_accepted' ? 0 : 1) - (b.state === 'offer_accepted' ? 0 : 1);
+        if (stateDiff) return stateDiff;
+        return compareApplicantsAlphabetically(a.app, b.app);
+      });
+  }
+
+  function getCastListPerformers(char) {
+    return getCastListPerformerEntries(char).map(entry => entry.app);
+  }
+
+  function castListProgrammeNameHtml(entryOrName) {
+    if (typeof entryOrName === 'string') {
+      return `<div class="castlist-programme-name${entryOrName === 'Open' ? ' castlist-programme-open' : ''}">${esc(entryOrName)}</div>`;
+    }
+    const app = entryOrName?.app;
+    if (!app) return '<div class="castlist-programme-name castlist-programme-open">Open</div>';
+    const confirmed = entryOrName.state === 'offer_accepted';
+    return `<div class="castlist-programme-name${confirmed ? '' : ' is-unconfirmed'}">${esc(app.name || '-')} ${confirmed ? '' : '<span class="castlist-programme-status">NOT YET CONFIRMED</span>'}</div>`;
   }
 
   function buildCastListRowsHtml() {
@@ -39874,9 +39965,9 @@ We look forward to seeing your work!
       return '<tr><td colspan="3" style="text-align:center;padding:2.5rem;color:#9a90b0;">Add characters or groupings to build the cast list.</td></tr>';
     }
     return sortedChars.map(char => {
-      const cast = getCastListPerformers(char);
+      const cast = getCastListPerformerEntries(char);
       const performerHtml = cast.length
-        ? `<div class="castlist-performer-list">${cast.map(app => `<div>${esc(app.name || '—')}</div>`).join('')}</div>`
+        ? `<div class="castlist-performer-list">${cast.map(entry => `<div>${esc(entry.app.name || '—')}${entry.state === 'offer_accepted' ? '' : ' — NOT YET CONFIRMED'}</div>`).join('')}</div>`
         : '<span class="castlist-open">Open</span>';
       return `<tr>
         <td style="padding-left:1.4rem;"><div class="castlist-role-name">${esc(char.name || 'Unnamed')}</div></td>
@@ -39891,18 +39982,33 @@ We look forward to seeing your work!
     if (!sortedChars.length) {
       return '<div style="text-align:center;padding:2.5rem;color:#9a90b0;">Add characters or groupings to build the cast list.</div>';
     }
-    const rows = [];
-    sortedChars.forEach(char => {
-      const cast = getCastListPerformers(char);
-      const names = cast.length ? cast.map(app => app.name || '—') : ['Open'];
-      rows.push(`<div class="castlist-programme-role">${esc(char.name || 'Unnamed')}</div>
+    const rowHtml = (char) => {
+      const cast = getCastListPerformerEntries(char);
+      const names = cast.length ? cast : ['Open'];
+      return `<div class="castlist-programme-role">${esc(char.name || 'Unnamed')}</div>
         <div class="castlist-programme-name-list">
-          ${names.map(name => `<div class="castlist-programme-name${name === 'Open' ? ' castlist-programme-open' : ''}">${esc(name)}</div>`).join('')}
-        </div>`);
-    });
+          ${names.map(castListProgrammeNameHtml).join('')}
+        </div>`;
+    };
+    const sectionHtml = (label, chars) => {
+      if (!chars.length) return '';
+      const rows = chars
+        .slice()
+        .sort((a, b) => String(a?.name || '').localeCompare(String(b?.name || ''), undefined, { sensitivity: 'base' }))
+        .map(rowHtml)
+        .join('');
+      return `<div class="castlist-programme-section-title">${esc(label)}</div>${rows}`;
+    };
+    const namedRoles = sortedChars.filter(char => castListCharacterSortRank(char) === 0);
+    const groups = sortedChars.filter(char => castListCharacterSortRank(char) === 1);
+    const ensemble = sortedChars.filter(char => castListCharacterSortRank(char) === 2);
     return `<div class="castlist-programme-card">
-      <div class="castlist-programme-title">Cast List</div>
-      <div class="castlist-programme">${rows.join('')}</div>
+      <div class="castlist-programme-title">Casting List</div>
+      <div class="castlist-programme">
+        ${sectionHtml('Named Roles', namedRoles)}
+        ${sectionHtml('Groups', groups)}
+        ${sectionHtml('Ensemble', ensemble)}
+      </div>
     </div>`;
   }
 
@@ -40114,13 +40220,16 @@ We look forward to seeing your work!
     if (!sortedChars.length) { showToast('No characters added yet.', true); return; }
     const rows = [['Character / Grouping', 'Performer(s)', 'Role Type']];
     sortedChars.forEach(char => {
-      const names = getCastListPerformers(char).map(app => app.name || '').filter(Boolean).join('; ');
+      const names = getCastListPerformerEntries(char)
+        .map(entry => `${entry.app.name || ''}${entry.state === 'offer_accepted' ? '' : ' (NOT YET CONFIRMED)'}`)
+        .filter(Boolean)
+        .join('; ');
       rows.push([char.name || '', names || 'Open', char.role_type || '']);
     });
     const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
-    a.download = 'cast-list.csv'; a.click();
+    a.download = 'casting-list.csv'; a.click();
   }
 
   // ── Auditions Day helpers ──
@@ -43570,7 +43679,7 @@ We look forward to seeing your work!
     { value: 'callback_confirmed',   label: 'Callback Confirmed'   },
     { value: 'callback_declined',    label: 'Callback Declined'    },
     { value: 'callback_self_tape',   label: 'Callback Self Tape'   },
-    { value: 'cast_announcement',    label: 'Cast Announcement'    },
+    { value: 'cast_announcement',    label: 'Cast Offer'           },
     { value: 'not_cast',             label: 'Not Cast'             },
     { value: 'rehearsal',            label: 'Rehearsal Info'       },
     { value: 'general',              label: 'General'              },
@@ -43739,6 +43848,56 @@ We look forward to seeing your work!
     return ctx;
   }
 
+  function _apmCastOfferRoleEntries(app) {
+    if (!app?.id) return [];
+    try {
+      const roleMap = typeof getFinalCastingOfferRoleMap === 'function' ? getFinalCastingOfferRoleMap() : null;
+      const mapped = roleMap?.get?.(app.id);
+      if (mapped?.size) return [...mapped.values()];
+    } catch {}
+    const entries = (cbv2Assignments || [])
+      .filter(a =>
+        String(a.applicant_id || '') === String(app.id || '') &&
+        (a.state === 'chosen' || a.state === 'offer_accepted')
+      )
+      .map(a => {
+        const char = (characters || []).find(c => String(c.id || '') === String(a.character_id || ''));
+        if (!char) return null;
+        return {
+          id: char.id,
+          name: char.name || 'Role',
+          roleType: char.role_type || 'Other',
+        };
+      })
+      .filter(Boolean);
+    const hasEnsemble = (cbv2EnsembleManual || new Set()).has(app.id) ||
+      (cbv2Assignments || []).some(a => String(a.applicant_id || '') === String(app.id || '') && !a.character_id && a.state === 'offer_accepted');
+    if (hasEnsemble) entries.push({ id: '__ensemble__', name: 'Ensemble', roleType: 'Ensemble' });
+    return entries;
+  }
+
+  async function _apmBuildEmailContextForCategory(category) {
+    const context = _apmBuildEmailContext();
+    if (category !== 'cast_announcement' || !_apmApp?.id) return context;
+    const token = await ensureCastOfferToken(_apmApp);
+    const links = castOfferLinks(token);
+    const roleEntries = _apmCastOfferRoleEntries(_apmApp);
+    const roleNames = roleEntries.map(role => role.name).filter(Boolean).join(', ');
+    const roleTypes = [...new Set(roleEntries.map(role => role.roleType).filter(Boolean))].join(', ');
+    return {
+      ...context,
+      role_name: roleNames || context.role_name || '',
+      role_names: roleNames || context.role_name || '',
+      roles: roleNames || context.role_name || '',
+      role_type: roleTypes || context.role_type || '',
+      cast_response_link: links.review,
+      cast_accept_link: links.accept,
+      cast_decline_link: links.decline,
+      registration_link: links.accept || links.review,
+      __cast_offer_role_entries: roleEntries,
+    };
+  }
+
   function _applyEmailContext(text, context) {
     if (!text) return '';
     const firstName = (context.performer_name || '').split(/\s+/)[0] || '';
@@ -43765,7 +43924,7 @@ We look forward to seeing your work!
 
     const template = templates[0];
     await loadPerformanceScheduleSummary();
-    const context  = _apmBuildEmailContext();
+    const context  = await _apmBuildEmailContextForCategory(category);
     _apmEmailCompose = {
       category,
       subject: _applyEmailContext(template.subject || '', context),
@@ -43794,10 +43953,14 @@ We look forward to seeing your work!
       _apmResetEmailRow();
       return;
     }
-    await resendConfirmationEmail(bookingId, category, {
+    const context = await _apmBuildEmailContextForCategory(category);
+    const sent = await resendConfirmationEmail(bookingId, category, {
       email: _apmApp?.email || '', name: _apmApp?.name || '',
-      context: _apmBuildEmailContext(), subject, body,
+      context, subject, body,
     });
+    if (sent && category === 'cast_announcement') {
+      await markCastOfferSent(_apmApp, context.__cast_offer_role_entries || []);
+    }
     _apmEmailCompose = null;
     _apmRenderBody();
     _apmResetEmailRow();
