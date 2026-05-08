@@ -454,7 +454,10 @@
               </div>
             </div>
             <div class="inroom-callback-right">
-              <div class="inroom-callback-heading">CHARACTERS</div>
+              <div class="inroom-callback-heading">
+                <span>Characters</span>
+                <small>Callback choices</small>
+              </div>
               <div class="inroom-callback-character-grid">${callbackCharactersHtml || scorePanelHtml}</div>
             </div>
           </div>
