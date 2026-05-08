@@ -166,14 +166,16 @@ serve(async (req) => {
       '{{callback_venue}}': String(callbackSess?.location || p.venue || ''),
       '{{callback_name}}':  String(callbackSess?.name || ''),
       '{{callback_prepare}}': String(callbackSess?.prepare_text || ''),
+      '{{callback_accept_link}}': `https://buildtheshow.com/ryt/mary-poppins-jr-2026/callback-response?prod=${prodIdTest}&token=sample&action=accept`,
+      '{{callback_decline_link}}': `https://buildtheshow.com/ryt/mary-poppins-jr-2026/callback-response?prod=${prodIdTest}&token=sample&action=decline`,
+      '{{callback_reschedule_link}}': `https://buildtheshow.com/ryt/mary-poppins-jr-2026/callback-response?prod=${prodIdTest}&token=sample&action=reschedule`,
       // Casting (sample)
       '{{role_name}}': 'The Lead',
       '{{role_type}}': 'Principal',
       '{{cast_response_link}}': 'https://buildtheshow.com/ryt/mary-poppins-jr-2026/CastOffer/JAMIE04827',
       '{{cast_accept_link}}': 'https://buildtheshow.com/ryt/mary-poppins-jr-2026/CastOffer/JAMIE04827/YES',
       '{{cast_decline_link}}': 'https://buildtheshow.com/ryt/mary-poppins-jr-2026/CastOffer/JAMIE04827/NO',
-      '{{cast_accept_button}}': '<a href="https://buildtheshow.com/ryt/mary-poppins-jr-2026/CastOffer/JAMIE04827/YES" style="display:inline-block;background:#659671;color:#ffffff;text-decoration:none;font-weight:800;padding:14px 22px;border-radius:8px;">YES, I accept this role</a>',
-      '{{cast_decline_button}}': '<a href="https://buildtheshow.com/ryt/mary-poppins-jr-2026/CastOffer/JAMIE04827/NO" style="display:inline-block;background:#fff1f2;color:#be123c;text-decoration:none;font-weight:800;padding:12px 18px;border:1px solid #fecdd3;border-radius:8px;">NO, I decline this offer</a>',
+      '{{registration_link}}': 'https://buildtheshow.com/ryt/mary-poppins-jr-2026/CastOffer/JAMIE04827/Registration',
       // Rehearsals (real)
       '{{rehearsal_start_date}}': p.start_date ? fmtDate(String(p.start_date)) : '',
       '{{rehearsal_schedule}}':   '',
@@ -190,6 +192,8 @@ serve(async (req) => {
       '{{callback_self_tape_link}}': `https://buildtheshow.com/self-tape/submit?prod=${prodIdTest}&app=sample&scope=callback`,
       '{{self_tape_instructions}}': 'Please film 16-32 bars of a song in the style of the show and one short scene or monologue. Start by saying your name, and make sure your link is viewable.',
     };
+
+    addEmailButtonTokens(testTokens);
 
     for (const session of sessions) {
       const slug = sessionSlug(String(session.name || ''));
@@ -210,10 +214,9 @@ serve(async (req) => {
     const subj    = substituteTest(testSubject);
     const subBody = substituteTest(testBody);
     const bodyLooksHtml = /<[a-z][\s\S]*>/i.test(testBody);
-    const testRawHtmlSnippets = [
-      testTokens['{{cast_accept_button}}'],
-      testTokens['{{cast_decline_button}}'],
-    ].filter(Boolean);
+    const testRawHtmlSnippets = Object.entries(testTokens)
+      .filter(([token, value]) => token.endsWith('_button}}') && value)
+      .map(([, value]) => value);
     const htmlBody = bodyLooksHtml ? subBody : plainTextToHtml(subBody, testRawHtmlSnippets);
     const textBody = (bodyLooksHtml || testRawHtmlSnippets.length) ? htmlToPlainText(subBody) : subBody;
 
@@ -729,16 +732,7 @@ serve(async (req) => {
     }
   }
 
-  const castAcceptLink = String(tokenValues['{{cast_accept_link}}'] || '');
-  const castDeclineLink = String(tokenValues['{{cast_decline_link}}'] || '');
-  if (castAcceptLink) {
-    tokenValues['{{cast_accept_button}}'] =
-      `<a href="${escAttr(castAcceptLink)}" style="display:inline-block;background:#659671;color:#ffffff;text-decoration:none;font-weight:800;padding:14px 22px;border-radius:8px;">YES, I accept this role</a>`;
-  }
-  if (castDeclineLink) {
-    tokenValues['{{cast_decline_button}}'] =
-      `<a href="${escAttr(castDeclineLink)}" style="display:inline-block;background:#fff1f2;color:#be123c;text-decoration:none;font-weight:800;padding:12px 18px;border:1px solid #fecdd3;border-radius:8px;">NO, I decline this offer</a>`;
-  }
+  addEmailButtonTokens(tokenValues);
 
   const productionFieldValues: Record<string, unknown> = {
     ...(productionRecord as object),
@@ -770,14 +764,12 @@ serve(async (req) => {
     '{{callback_prepare}}',
     '{{callback_materials}}',
     '{{producer_signoff}}',
-    '{{cast_accept_button}}',
-    '{{cast_decline_button}}',
   ]);
 
   function substituteTemplate(text: string, escapeForHtml = false): string {
     let result = String(text || '');
     Object.entries(tokenValues).forEach(([token, value]) => {
-      const isRaw = escapeForHtml && (rawHtmlTokens.has(token) || /^\{\{[a-z0-9_]+_prepare\}\}$/.test(token));
+      const isRaw = escapeForHtml && (rawHtmlTokens.has(token) || /^\{\{[a-z0-9_]+_prepare\}\}$/.test(token) || /^\{\{[a-z0-9_]+_button\}\}$/.test(token));
       const renderedValue = token === '{{producer_signoff}}' && escapeForHtml
         ? escHtml(value).replace(/\n/g, '<br>')
         : ((escapeForHtml && !isRaw) ? escHtml(value) : value);
@@ -820,10 +812,9 @@ serve(async (req) => {
   const subject       = substituteTemplate(sourceSubject);
   const templatedBody = substituteTemplate(sourceBody);
   const bodyLooksHtml = /<[a-z][\s\S]*>/i.test(sourceBody);
-  const rawHtmlSnippets = [
-    tokenValues['{{cast_accept_button}}'],
-    tokenValues['{{cast_decline_button}}'],
-  ].filter(Boolean);
+  const rawHtmlSnippets = Object.entries(tokenValues)
+    .filter(([token, value]) => token.endsWith('_button}}') && value)
+    .map(([, value]) => value);
   const htmlBody      = bodyLooksHtml ? substituteTemplate(sourceBody, true) : plainTextToHtml(templatedBody, rawHtmlSnippets);
   const bodyText      = (bodyLooksHtml || rawHtmlSnippets.length) ? htmlToPlainText(templatedBody) : templatedBody;
 
@@ -933,6 +924,43 @@ function escHtml(s: string): string {
 
 function escAttr(s: string): string {
   return escHtml(s).replace(/'/g, '&#39;');
+}
+
+function emailButtonLabelForToken(tokenName: string): string {
+  const labels: Record<string, string> = {
+    booking_button: 'Open Audition Booking',
+    callback_accept_button: 'Accept Callback',
+    callback_decline_button: 'Decline Callback',
+    callback_reschedule_button: 'Request New Time',
+    callback_self_tape_button: 'Open Callback Self Tape',
+    cast_accept_button: 'YES, I accept this role',
+    cast_decline_button: 'NO, I decline this offer',
+    cast_response_button: 'Review Role Offer',
+    registration_button: 'Complete Registration',
+    portal_button: 'Open Audition Team Portal',
+    submission_button: 'Submit Self Tape',
+  };
+  return labels[tokenName] || 'Open Link';
+}
+
+function emailActionButtonHtml(href: string, label: string, tone = 'primary'): string {
+  if (!href) return '';
+  const styles = tone === 'secondary'
+    ? 'display:inline-block;background:#ffffff;color:#572e88;text-decoration:none;font-weight:800;padding:12px 18px;border:1.5px solid #572e88;border-radius:8px;'
+    : 'display:inline-block;background:#572e88;color:#ffffff;text-decoration:none;font-weight:800;padding:14px 22px;border-radius:8px;';
+  return `<a href="${escAttr(href)}" style="${styles}">${escHtml(label)}</a>`;
+}
+
+function addEmailButtonTokens(tokenValues: Record<string, string>): void {
+  Object.entries({ ...tokenValues }).forEach(([token, href]) => {
+    const match = token.match(/^\{\{([a-z0-9_]+)_link\}\}$/i);
+    if (!match || !href) return;
+    const buttonName = `${match[1]}_button`;
+    const buttonToken = `{{${buttonName}}}`;
+    if (tokenValues[buttonToken]) return;
+    const tone = buttonName.includes('decline') ? 'secondary' : 'primary';
+    tokenValues[buttonToken] = emailActionButtonHtml(String(href), emailButtonLabelForToken(buttonName), tone);
+  });
 }
 
 function plainTextToHtml(text: string, rawHtmlSnippets: string[] = []): string {
