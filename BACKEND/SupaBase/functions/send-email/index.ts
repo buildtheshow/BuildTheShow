@@ -17,8 +17,9 @@
  *   Any template by category:
  *   { applicant_id?, booking_id?, production_id, category }
  *
- *   Optional overrides (skip template lookup):
- *   { ..., subject: '...', message: '...' }
+ *   Product law: no rogue emails.
+ *   All performer-facing emails are sent from email_templates by category.
+ *   The service rejects subject/message/raw body copy outside test_email mode.
  *
  * Requires env: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, RESEND_API_KEY
  * ─────────────────────────────────────────────────────────────
@@ -31,6 +32,8 @@ const SUPABASE_URL     = Deno.env.get('SUPABASE_URL')             ?? '';
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
 const RESEND_API_KEY   = Deno.env.get('RESEND_API_KEY')            ?? '';
 const FROM_EMAIL       = Deno.env.get('FROM_EMAIL')                ?? '';
+const TEMPLATE_ONLY_RULE =
+  'No rogue emails: performer-facing sends must use email_templates by category. Do not pass subject, message, or raw body copy to send-email.';
 
 // Map legacy status field → template category
 const STATUS_TO_CATEGORY: Record<string, string> = {
@@ -46,7 +49,7 @@ const CATEGORY_SUBJECTS: Record<string, string> = {
   callback_confirmed:  'Your callback is confirmed!',
   callback_declined:   'Callback response received',
   callback_self_tape:  'Callback self tape request',
-  cast_announcement:   'Congratulations — you have been cast!',
+  cast_announcement:   'Role offer',
   cast_accepted:       'Yay! You accepted your role',
   not_cast:            'Regarding your audition',
   general:             'A message from the production team',
@@ -223,6 +226,14 @@ serve(async (req) => {
     const rd = await r.json().catch(() => ({}));
     if (!r.ok) return json({ ok: false, error: (rd as Record<string,unknown>).message as string || 'Resend error.' });
     return json({ ok: true });
+  }
+
+  const hasRawEmailCopy = ['subject', 'message', 'body_html', 'html', 'text'].some(key =>
+    typeof body[key] === 'string' && String(body[key] || '').trim()
+  );
+  if (hasRawEmailCopy) {
+    console.error('[send-email] Template-only rule blocked raw email copy.', { keys: Object.keys(body) });
+    return json({ ok: false, error: TEMPLATE_ONLY_RULE }, 400);
   }
 
   // ── Resolve category ──────────────────────────────────────────
@@ -409,63 +420,7 @@ serve(async (req) => {
     if (!performerEmail) return json({ ok: false, error: 'No email address found for this team member' });
   }
 
-  // Fallback template for booking_confirmation so the email always goes out
-  const FALLBACK_TEMPLATES: Record<string, { subject: string; body: string }> = {
-    booking_confirmation: {
-      subject: 'Your audition is confirmed: {{show_name}}',
-      body: `Hi {{contact_name}},
-
-Your audition for {{show_name}} is confirmed. We can't wait to see you!
-
-Here are your details:
-
-Session: {{audition_session}}
-Date: {{audition_date}}
-Time: {{audition_time}}
-Location: {{audition_venue}}
-
-{{what_to_prepare}}
-
-If you need to reschedule or have any questions, please get in touch as soon as possible.
-
-See you soon,
-{{producer_signoff}}`,
-    },
-    cast_announcement: {
-      subject: 'Congratulations: you have been cast in {{show_name}}!',
-      body: `Hi {{contact_name}},
-
-We are absolutely thrilled to offer you the role of {{role_name}} in {{show_name}}!
-
-Please choose one of the options below so we can keep everything moving:
-
-Accept your role: {{cast_accept_link}}
-Decline this offer: {{cast_decline_link}}
-
-{{cast_offer_deadline_note}}
-
-With excitement,
-{{producer_signoff}}`,
-    },
-    cast_accepted: {
-      subject: 'Yay! You accepted your role in {{show_name}}',
-      body: `Hi {{contact_name}},
-
-Yay! You have accepted the role of {{role_name}} in {{show_name}}.
-
-We are so excited to have you in the cast.
-
-Your registration is now unlocked. Please use the link below to complete your cast registration:
-
-{{registration_link}}
-
-With excitement,
-{{producer_signoff}}`,
-    },
-  };
-
-  const fallback = !template && !body.subject && !body.message ? FALLBACK_TEMPLATES[category] : null;
-  if (!template && !body.subject && !body.message && !fallback) {
+  if (!template) {
     console.error('[send-email] Template not found for category:', category, 'production:', productionId);
     return json({ ok: false, error: `No email template found for "${category}". Create one in the Emails tab first.` });
   }
@@ -823,8 +778,6 @@ With excitement,
   }
 
   // ── Resolve subject + body ────────────────────────────────────
-  const overrideSubject = typeof body.subject === 'string' ? body.subject : '';
-  const overrideMessage = typeof body.message === 'string' ? body.message : '';
   function ensureProducerSignoffBlock(value: string): string {
     const text = String(value || '').trim();
     if (!text || text.includes('{{producer_signoff}}')) return text;
@@ -833,8 +786,8 @@ With excitement,
       .replace(/\n+\{\{org_name\}\}\s*$/i, '\n{{producer_signoff}}');
     return replaced.includes('{{producer_signoff}}') ? replaced : `${text}\n\n{{producer_signoff}}`;
   }
-  const sourceSubject = overrideSubject || template?.subject || fallback?.subject || CATEGORY_SUBJECTS[category] || `Update from ${showName || 'Build The Show'}`;
-  const sourceBody    = ensureProducerSignoffBlock(overrideMessage || template?.body || fallback?.body || '');
+  const sourceSubject = template?.subject || CATEGORY_SUBJECTS[category] || `Update from ${showName || 'Build The Show'}`;
+  const sourceBody    = ensureProducerSignoffBlock(template?.body || '');
   const sourceBodyText = htmlToPlainText(String(sourceBody || ''));
 
   if (!sourceBodyText.trim()) {

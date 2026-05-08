@@ -22965,9 +22965,10 @@
   }
 
   // ── EMAIL TEMPLATES ───────────────────────────────────────────
-  // Product law: every automatic email must have a first-class email_templates category.
-  // Do not hardcode automatic email subject/body copy at the send site; create a starter
-  // template here, register its trigger, and send through the template category.
+  // Product law: no rogue emails.
+  // Every performer-facing email must have a first-class email_templates category.
+  // Do not hardcode subject/body copy at the send site. Create a starter template,
+  // register its trigger, and send through send-email with category + context only.
   let _etTemplates = [];
   let _etEditing   = null; // id of template being edited, null = new
   let _etCatFilter = 'all';
@@ -24303,15 +24304,15 @@ Warmly,
 {{producer_signoff}}`,
     },
     {
-      name: 'Cast Offer You Got the Role',
+      name: 'Role Offer',
       category: 'cast_announcement',
       trigger: 'cast_set',
-      subject: 'Congratulations: you have been cast in {{show_name}}!',
+      subject: 'Role offer: {{role_name}} in {{show_name}}',
       body: `Hi {{contact_name}},
 
-We are absolutely thrilled to offer you the role of {{role_name}} in {{show_name}}!
+We are absolutely thrilled to offer you the role of {{role_name}} in {{show_name}}.
 
-This is going to be a wonderful production and we can't wait to have you on board.
+This offer is not confirmed until you accept it using the link below.
 
 Rehearsals begin {{rehearsal_start_date}}.
 {{rehearsal_schedule}}
@@ -24541,6 +24542,35 @@ We look forward to seeing your work!
     ));
   }
 
+  function etNormalizeCastOfferLanguageTemplate(template) {
+    if (template?.category !== 'cast_announcement') return template;
+    const next = { ...template };
+    if (/you got the role/i.test(String(next.name || '')) || /^cast offer you got the role$/i.test(String(next.name || ''))) {
+      next.name = 'Role Offer';
+    }
+    if (/you have been cast/i.test(String(next.subject || '')) || /congratulations/i.test(String(next.subject || ''))) {
+      next.subject = 'Role offer: {{role_name}} in {{show_name}}';
+    }
+    next.body = String(next.body || '')
+      .replace(/We are absolutely thrilled to offer you the role of \{\{role_name\}\} in \{\{show_name\}\}!/g, 'We are absolutely thrilled to offer you the role of {{role_name}} in {{show_name}}.')
+      .replace(/This is going to be a wonderful production and we can't wait to have you on board\./g, 'This offer is not confirmed until you accept it using the link below.');
+    return next;
+  }
+
+  async function etEnsureCastOfferLanguage() {
+    const updates = (_etTemplates || [])
+      .map(etNormalizeCastOfferLanguageTemplate)
+      .filter(t => {
+        const original = (_etTemplates || []).find(item => item.id === t.id) || {};
+        return t.name !== original.name || t.subject !== original.subject || t.body !== original.body;
+      });
+    if (!updates.length) return;
+    _etTemplates = (_etTemplates || []).map(t => updates.find(u => u.id === t.id) || t);
+    await Promise.all(updates.map(t =>
+      sb.from('email_templates').update({ name: t.name, subject: t.subject, body: t.body }).eq('id', t.id)
+    ));
+  }
+
   function etCastOfferResponseBlock() {
     return `\n\nPlease choose one of the options below so we can keep everything moving:\n\nAccept your role: {{cast_accept_link}}\nDecline this offer: {{cast_decline_link}}\n\n{{cast_offer_deadline_note}}`;
   }
@@ -24622,6 +24652,7 @@ We look forward to seeing your work!
     }
     await etNormalizeContactGreetings();
     await etEnsureProducerSignoffs();
+    await etEnsureCastOfferLanguage();
     await etEnsureCastOfferTemplateLinks();
     renderEmailTemplates();
   }
@@ -29046,7 +29077,7 @@ We look forward to seeing your work!
 
   async function ensureFinalCastingEmailTemplate(category) {
     const { data: templates, error } = await sb.from('email_templates')
-      .select('id, body')
+      .select('id, name, subject, body, category')
       .eq('production_id', prodId)
       .eq('category', category)
       .order('created_at', { ascending: false })
@@ -29054,11 +29085,22 @@ We look forward to seeing your work!
     if (error) throw error;
     if (templates?.length) {
       if (category === 'cast_announcement') {
-        const currentBody = etCleanCastOfferTemplateBody(templates[0].body || '');
-        if (currentBody !== String(templates[0].body || '').trim() || !etTemplateHasCastOfferLinks({ ...templates[0], body: currentBody }) || !etTemplateHasCastOfferDeadline({ ...templates[0], body: currentBody })) {
+        const languageCleaned = etNormalizeCastOfferLanguageTemplate(templates[0]);
+        const currentBody = etCleanCastOfferTemplateBody(languageCleaned.body || '');
+        if (
+          languageCleaned.name !== templates[0].name ||
+          languageCleaned.subject !== templates[0].subject ||
+          currentBody !== String(templates[0].body || '').trim() ||
+          !etTemplateHasCastOfferLinks({ ...templates[0], body: currentBody }) ||
+          !etTemplateHasCastOfferDeadline({ ...templates[0], body: currentBody })
+        ) {
           const responseBlock = etCastOfferMissingBlock({ ...templates[0], body: currentBody });
           const { error: updateError } = await sb.from('email_templates')
-            .update({ body: etTemplateHasCastOfferLinks({ ...templates[0], body: currentBody }) && etTemplateHasCastOfferDeadline({ ...templates[0], body: currentBody }) ? currentBody : `${currentBody}${responseBlock}` })
+            .update({
+              name: languageCleaned.name,
+              subject: languageCleaned.subject,
+              body: etTemplateHasCastOfferLinks({ ...templates[0], body: currentBody }) && etTemplateHasCastOfferDeadline({ ...templates[0], body: currentBody }) ? currentBody : `${currentBody}${responseBlock}`,
+            })
             .eq('id', templates[0].id);
           if (updateError) throw updateError;
         }
@@ -33518,11 +33560,27 @@ We look forward to seeing your work!
     }
     if (categories.includes('cast_announcement')) {
       const { data: castTemplates, error: castError } = await sb.from('email_templates')
-        .select('id,category,body')
+        .select('id,category,name,subject,body')
         .eq('production_id', prodId)
         .eq('category', 'cast_announcement');
       if (castError) throw castError;
-      await etEnsureCastOfferTemplateLinks(castTemplates || []);
+      const languageUpdates = (castTemplates || [])
+        .map(etNormalizeCastOfferLanguageTemplate)
+        .filter(t => {
+          const original = (castTemplates || []).find(item => item.id === t.id) || {};
+          return t.name !== original.name || t.subject !== original.subject || t.body !== original.body;
+        });
+      if (languageUpdates.length) {
+        await Promise.all(languageUpdates.map(t =>
+          sb.from('email_templates').update({ name: t.name, subject: t.subject, body: t.body }).eq('id', t.id)
+        ));
+      }
+      const normalizedCastTemplates = (castTemplates || []).map(t => languageUpdates.find(u => u.id === t.id) || t);
+      _etTemplates = (_etTemplates || []).map(t => {
+        const fresh = normalizedCastTemplates.find(template => template.id === t.id);
+        return fresh ? { ...t, ...fresh } : t;
+      });
+      await etEnsureCastOfferTemplateLinks(normalizedCastTemplates);
     }
     return true;
   }
@@ -37685,8 +37743,6 @@ We look forward to seeing your work!
         booking_id:    bookingId,
         production_id: prodId,
         category,
-        subject:    overrides.subject !== undefined ? overrides.subject : (template.subject || ''),
-        message:    overrides.body    !== undefined ? overrides.body    : (template.body    || ''),
         email:      performerEmail,
         name:       performerName,
         session_id: emailContext?.session_id || '',
