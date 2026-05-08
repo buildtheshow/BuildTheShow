@@ -23350,6 +23350,8 @@
         { token: '{{role_type}}', label: 'Role Type', sample: 'Principal' },
         { token: '{{cast_accept_link}}', label: 'Accept Offer Link', sample: 'https://buildtheshow.com/ryt/show/CastOffer/JAMIE04827/YES' },
         { token: '{{cast_decline_link}}', label: 'Decline Offer Link', sample: 'https://buildtheshow.com/ryt/show/CastOffer/JAMIE04827/NO' },
+        { token: '{{cast_accept_button}}', label: 'Accept Offer Button', sample: 'YES, I accept this role' },
+        { token: '{{cast_decline_button}}', label: 'Decline Offer Button', sample: 'NO, I decline this offer' },
         { token: '{{cast_response_link}}', label: 'Review Offer Link', sample: 'https://buildtheshow.com/ryt/show/CastOffer/JAMIE04827' },
         { token: '{{cast_offer_deadline}}', label: 'Offer Reply Deadline', sample: 'Friday, May 15, 2026 at 5:00 PM' },
         { token: '{{cast_offer_deadline_note}}', label: 'Offer Deadline Sentence', sample: 'Please respond by Friday, May 15, 2026 at 5:00 PM. If we do not hear from you by then, we will mark this role offer as declined so the production team can keep casting moving.' },
@@ -24322,15 +24324,19 @@ Opening night is {{opening_night}} at {{show_venue}}.
 Please choose one of the options below so we can keep everything moving.
 
 ─────────────────────────────
-YES: I accept this role: {{cast_accept_link}}
+{{cast_accept_button}}
+
+Accept link: {{cast_accept_link}}
 ─────────────────────────────
 
 {{cast_offer_deadline_note}}
 
-If you cannot accept this role, use the decline link below. This releases the offer back to the production team.
+If you cannot accept this role, use the decline option below. This releases the offer back to the production team.
 
 ─────────────────────────────
-NO: I decline this offer: {{cast_decline_link}}
+{{cast_decline_button}}
+
+Decline link: {{cast_decline_link}}
 ─────────────────────────────
 
 With excitement,
@@ -24580,7 +24586,7 @@ We look forward to seeing your work!
   }
 
   function etCastOfferResponseBlock() {
-    return `\n\nPlease choose one of the options below so we can keep everything moving.\n\n─────────────────────────────\nYES: I accept this role: {{cast_accept_link}}\n─────────────────────────────\n\n{{cast_offer_deadline_note}}\n\nIf you cannot accept this role, use the decline link below. This releases the offer back to the production team.\n\n─────────────────────────────\nNO: I decline this offer: {{cast_decline_link}}\n─────────────────────────────\n\nWith excitement,\n{{producer_signoff}}`;
+    return `\n\nPlease choose one of the options below so we can keep everything moving.\n\n─────────────────────────────\n{{cast_accept_button}}\n\nAccept link: {{cast_accept_link}}\n─────────────────────────────\n\n{{cast_offer_deadline_note}}\n\nIf you cannot accept this role, use the decline option below. This releases the offer back to the production team.\n\n─────────────────────────────\n{{cast_decline_button}}\n\nDecline link: {{cast_decline_link}}\n─────────────────────────────\n\nWith excitement,\n{{producer_signoff}}`;
   }
 
   function etCastOfferMissingBlock(template) {
@@ -24594,6 +24600,11 @@ We look forward to seeing your work!
   function etTemplateHasCastOfferLinks(template) {
     const body = String(template?.body || '');
     return body.includes('{{cast_accept_link}}') && body.includes('{{cast_decline_link}}');
+  }
+
+  function etTemplateHasCastOfferButtons(template) {
+    const body = String(template?.body || '');
+    return body.includes('{{cast_accept_button}}') && body.includes('{{cast_decline_button}}');
   }
 
   function etTemplateHasCastOfferDeadline(template) {
@@ -24617,7 +24628,7 @@ We look forward to seeing your work!
       .replace(/\n{2,}\{\{producer_signoff\}\}/gi, '')
       .replace(/\n{2,}\{\{cast_offer_deadline_note\}\}/gi, '')
       .trim();
-    const actionMarker = text.search(/\n{2,}(Please choose one of the options below|Accept your role:\s*\{\{cast_accept_link\}\}|Decline this offer:\s*\{\{cast_decline_link\}\})/i);
+    const actionMarker = text.search(/\n{2,}(Please choose one of the options below|Accept your role:\s*\{\{cast_accept_link\}\}|Decline this offer:\s*\{\{cast_decline_link\}\}|\{\{cast_accept_button\}\})/i);
     if (actionMarker >= 0) text = text.slice(0, actionMarker).trim();
     return `${text}${etCastOfferResponseBlock()}`.trim();
   }
@@ -24626,15 +24637,16 @@ We look forward to seeing your work!
     const castTemplates = (templates || []).filter(t => {
       if (t?.category !== 'cast_announcement') return false;
       const cleaned = etCleanCastOfferTemplateBody(t.body || '');
-      return cleaned !== String(t.body || '').trim() || !etTemplateHasCastOfferLinks({ ...t, body: cleaned }) || !etTemplateHasCastOfferDeadline({ ...t, body: cleaned });
+      return cleaned !== String(t.body || '').trim() || !etTemplateHasCastOfferLinks({ ...t, body: cleaned }) || !etTemplateHasCastOfferButtons({ ...t, body: cleaned }) || !etTemplateHasCastOfferDeadline({ ...t, body: cleaned });
     });
     if (!castTemplates.length) return;
     const updates = castTemplates.map(t => ({
       ...t,
       body: etTemplateHasCastOfferLinks({ ...t, body: etCleanCastOfferTemplateBody(t.body || '') })
+        && etTemplateHasCastOfferButtons({ ...t, body: etCleanCastOfferTemplateBody(t.body || '') })
         && etTemplateHasCastOfferDeadline({ ...t, body: etCleanCastOfferTemplateBody(t.body || '') })
         ? etCleanCastOfferTemplateBody(t.body || '')
-        : `${etCleanCastOfferTemplateBody(t.body || '')}${etCastOfferMissingBlock({ ...t, body: etCleanCastOfferTemplateBody(t.body || '') })}`,
+        : etNormalizeCastOfferTemplateBody(etCleanCastOfferTemplateBody(t.body || '')),
     }));
     _etTemplates = (_etTemplates || []).map(t => updates.find(u => u.id === t.id) || t);
     await Promise.all(updates.map(t =>

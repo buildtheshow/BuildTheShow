@@ -169,6 +169,11 @@ serve(async (req) => {
       // Casting (sample)
       '{{role_name}}': 'The Lead',
       '{{role_type}}': 'Principal',
+      '{{cast_response_link}}': 'https://buildtheshow.com/ryt/mary-poppins-jr-2026/CastOffer/JAMIE04827',
+      '{{cast_accept_link}}': 'https://buildtheshow.com/ryt/mary-poppins-jr-2026/CastOffer/JAMIE04827/YES',
+      '{{cast_decline_link}}': 'https://buildtheshow.com/ryt/mary-poppins-jr-2026/CastOffer/JAMIE04827/NO',
+      '{{cast_accept_button}}': '<a href="https://buildtheshow.com/ryt/mary-poppins-jr-2026/CastOffer/JAMIE04827/YES" style="display:inline-block;background:#659671;color:#ffffff;text-decoration:none;font-weight:800;padding:14px 22px;border-radius:8px;">YES, I accept this role</a>',
+      '{{cast_decline_button}}': '<a href="https://buildtheshow.com/ryt/mary-poppins-jr-2026/CastOffer/JAMIE04827/NO" style="display:inline-block;background:#fff1f2;color:#be123c;text-decoration:none;font-weight:800;padding:12px 18px;border:1px solid #fecdd3;border-radius:8px;">NO, I decline this offer</a>',
       // Rehearsals (real)
       '{{rehearsal_start_date}}': p.start_date ? fmtDate(String(p.start_date)) : '',
       '{{rehearsal_schedule}}':   '',
@@ -204,9 +209,13 @@ serve(async (req) => {
 
     const subj    = substituteTest(testSubject);
     const subBody = substituteTest(testBody);
-    const bodyLooksHtml = /<[a-z][\s\S]*>/i.test(subBody);
-    const htmlBody = bodyLooksHtml ? subBody : plainTextToHtml(subBody);
-    const textBody = bodyLooksHtml ? htmlToPlainText(subBody) : subBody;
+    const bodyLooksHtml = /<[a-z][\s\S]*>/i.test(testBody);
+    const testRawHtmlSnippets = [
+      testTokens['{{cast_accept_button}}'],
+      testTokens['{{cast_decline_button}}'],
+    ].filter(Boolean);
+    const htmlBody = bodyLooksHtml ? subBody : plainTextToHtml(subBody, testRawHtmlSnippets);
+    const textBody = (bodyLooksHtml || testRawHtmlSnippets.length) ? htmlToPlainText(subBody) : subBody;
 
     const html = `<!DOCTYPE html>
 <html><head><meta charset="UTF-8"></head>
@@ -720,6 +729,17 @@ serve(async (req) => {
     }
   }
 
+  const castAcceptLink = String(tokenValues['{{cast_accept_link}}'] || '');
+  const castDeclineLink = String(tokenValues['{{cast_decline_link}}'] || '');
+  if (castAcceptLink) {
+    tokenValues['{{cast_accept_button}}'] =
+      `<a href="${escAttr(castAcceptLink)}" style="display:inline-block;background:#659671;color:#ffffff;text-decoration:none;font-weight:800;padding:14px 22px;border-radius:8px;">YES, I accept this role</a>`;
+  }
+  if (castDeclineLink) {
+    tokenValues['{{cast_decline_button}}'] =
+      `<a href="${escAttr(castDeclineLink)}" style="display:inline-block;background:#fff1f2;color:#be123c;text-decoration:none;font-weight:800;padding:12px 18px;border:1px solid #fecdd3;border-radius:8px;">NO, I decline this offer</a>`;
+  }
+
   const productionFieldValues: Record<string, unknown> = {
     ...(productionRecord as object),
     org_name:     orgName,
@@ -750,6 +770,8 @@ serve(async (req) => {
     '{{callback_prepare}}',
     '{{callback_materials}}',
     '{{producer_signoff}}',
+    '{{cast_accept_button}}',
+    '{{cast_decline_button}}',
   ]);
 
   function substituteTemplate(text: string, escapeForHtml = false): string {
@@ -797,9 +819,13 @@ serve(async (req) => {
 
   const subject       = substituteTemplate(sourceSubject);
   const templatedBody = substituteTemplate(sourceBody);
-  const bodyLooksHtml = /<[a-z][\s\S]*>/i.test(templatedBody);
-  const htmlBody      = bodyLooksHtml ? substituteTemplate(sourceBody, true) : plainTextToHtml(templatedBody);
-  const bodyText      = bodyLooksHtml ? htmlToPlainText(templatedBody) : templatedBody;
+  const bodyLooksHtml = /<[a-z][\s\S]*>/i.test(sourceBody);
+  const rawHtmlSnippets = [
+    tokenValues['{{cast_accept_button}}'],
+    tokenValues['{{cast_decline_button}}'],
+  ].filter(Boolean);
+  const htmlBody      = bodyLooksHtml ? substituteTemplate(sourceBody, true) : plainTextToHtml(templatedBody, rawHtmlSnippets);
+  const bodyText      = (bodyLooksHtml || rawHtmlSnippets.length) ? htmlToPlainText(templatedBody) : templatedBody;
 
   const fromName  = orgName || 'Build The Show';
   const fromEmail = FROM_EMAIL || `noreply@buildtheshow.com`;
@@ -905,10 +931,26 @@ function escHtml(s: string): string {
     .replace(/"/g, '&quot;');
 }
 
-function plainTextToHtml(text: string): string {
-  return String(text || '')
+function escAttr(s: string): string {
+  return escHtml(s).replace(/'/g, '&#39;');
+}
+
+function plainTextToHtml(text: string, rawHtmlSnippets: string[] = []): string {
+  let source = String(text || '');
+  const placeholders = new Map<string, string>();
+  rawHtmlSnippets.forEach((snippet, index) => {
+    if (!snippet) return;
+    const key = `__BTS_RAW_HTML_${index}__`;
+    placeholders.set(key, snippet);
+    source = source.split(snippet).join(key);
+  });
+  return source
     .split('\n\n')
-    .map(p => `<p style="margin:0 0 1em;">${escHtml(p).replace(/\n/g, '<br>')}</p>`)
+    .map(p => {
+      let html = escHtml(p).replace(/\n/g, '<br>');
+      placeholders.forEach((snippet, key) => { html = html.split(key).join(snippet); });
+      return `<p style="margin:0 0 1em;">${html}</p>`;
+    })
     .join('\n');
 }
 
