@@ -13457,11 +13457,13 @@
       padding: 1rem;
     }
     .final-casting-offer-role-section {
-      border: 1px solid var(--final-offer-section-border, rgba(26,21,48,0.07));
+      border: none;
       border-radius: 10px;
       background: var(--final-offer-section-bg-strong, #d7d0d7);
       overflow: hidden;
-      box-shadow: 0 8px 24px rgba(26,21,48,0.055);
+      box-shadow:
+        0 10px 22px rgba(26,21,48,0.08),
+        0 0 0 3px color-mix(in srgb, var(--final-offer-section-bg, #d7d0d7) 42%, transparent);
     }
     .final-casting-offer-role-head {
       display: flex;
@@ -13507,12 +13509,14 @@
       justify-content: space-between;
       gap: 0.8rem;
       aspect-ratio: 4 / 5;
-      min-height: 216px;
+      min-height: 340px;
       padding: 0.9rem;
-      border: 1px solid var(--final-offer-section-border, rgba(26,21,48,0.06));
+      border: none;
       border-radius: 8px;
       background: var(--final-offer-section-bg, rgba(87,46,136,0.06));
-      box-shadow: 0 6px 18px rgba(26,21,48,0.045);
+      box-shadow:
+        0 8px 16px rgba(26,21,48,0.075),
+        0 0 0 2px rgba(255,255,255,0.28);
       margin: 0;
       position: relative;
       overflow: hidden;
@@ -13539,56 +13543,23 @@
       text-align: center;
     }
     .final-casting-offer-performer {
-      display: grid;
-      grid-template-columns: 4rem minmax(0, 1fr);
-      gap: 0.7rem;
-      align-items: center;
+      display: flex;
+      justify-content: center;
       margin-top: 0.2rem;
-      text-align: left;
     }
-    .final-casting-offer-headshot {
-      width: 4rem;
-      aspect-ratio: 4 / 5;
-      border-radius: 7px;
-      overflow: hidden;
-      background: #f5f1e7;
-      border: 1px solid rgba(26,21,48,0.12);
-      display: grid;
-      place-items: center;
-      color: rgba(26,21,48,0.38);
-      font-size: 1.4rem;
-      font-weight: 850;
+    .final-casting-offer-casting-card {
+      width: min(7.25rem, 100%);
+      transform: rotate(-1deg);
+      filter: drop-shadow(0 4px 7px rgba(26,21,48,0.14));
     }
-    .final-casting-offer-headshot img {
+    .final-casting-offer-casting-card .casting-card {
       width: 100%;
-      height: 100%;
-      object-fit: cover;
-      object-position: top;
-      display: block;
+      max-width: none;
+      cursor: default;
+      box-shadow: 0 3px 8px rgba(15,23,42,0.12);
     }
-    .final-casting-offer-person {
-      min-width: 0;
-      display: grid;
-      gap: 0.12rem;
-    }
-    .final-casting-offer-first,
-    .final-casting-offer-last {
-      font-size: 0.86rem;
-      font-weight: 750;
-      color: #1a1530;
-      line-height: 1.25;
-      overflow-wrap: anywhere;
-      word-break: normal;
-    }
-    .final-casting-offer-last {
-      font-weight: 650;
-    }
-    .final-casting-offer-details {
-      font-size: 0.72rem;
-      color: #4c435d;
-      line-height: 1.25;
-      overflow-wrap: anywhere;
-      word-break: normal;
+    .final-casting-offer-casting-card .casting-card:hover {
+      transform: none;
     }
     .final-casting-offer-contact {
       display: grid;
@@ -13664,7 +13635,9 @@
     }
     .final-casting-offer-row.final-casting-offer-row-rejection {
       background: #f6c7c7;
-      border-color: #df8b8b;
+      box-shadow:
+        0 8px 16px rgba(127,29,29,0.1),
+        0 0 0 2px rgba(255,255,255,0.28);
     }
     .final-casting-offer-row.final-casting-offer-row-rejection .final-casting-offer-meta {
       color: #7f1d1d;
@@ -28881,7 +28854,8 @@ We look forward to seeing your work!
 
   function finalCastingOfferRoleTypeSortValue(roleType = '') {
     const normalized = finalCastingOfferRoleTypeKey(roleType).toLowerCase();
-    const knownOrder = ['principal', 'lead', 'featured', 'supporting', 'ensemble', 'chorus', 'group', 'groups', 'other'];
+    const knownOrder = ['principal', 'lead', 'featured', 'supporting', 'cameo'];
+    if (['ensemble', 'ensamble', 'chorus'].includes(normalized)) return 90;
     const index = knownOrder.indexOf(normalized);
     return index >= 0 ? index : 20;
   }
@@ -28895,7 +28869,9 @@ We look forward to seeing your work!
       lead: 0,
       featured: 1,
       supporting: 2,
+      cameo: 3,
       ensemble: 4,
+      ensamble: 4,
       chorus: 4,
       group: 3,
       groups: 3,
@@ -28952,19 +28928,23 @@ We look forward to seeing your work!
       const app = item.app;
       const ca = applicantCustomAnswers(app);
       const roleTitle = item.roles?.length ? item.roles.join(', ') : 'Not Cast';
-      const age = cbv2ApplicantAge(app);
-      const pronouns = applicantPronouns(app);
       const nameParts = String(app.name || 'Unnamed performer').trim().split(/\s+/).filter(Boolean);
       const firstName = nameParts[0] || 'Unnamed';
       const lastName = nameParts.slice(1).join(' ') || 'Performer';
-      const detailsLine = [
-        age != null ? `${age}` : '',
-        pronouns || '',
-      ].filter(Boolean).join(', ');
-      const initial = esc(firstName.charAt(0).toUpperCase() || 'P');
-      const headshotHtml = app.headshot_url
-        ? `<img src="${esc(app.headshot_url)}" alt="${esc(app.name || 'Performer')}" loading="lazy" onerror="this.outerHTML='<span>${initial}</span>'" />`
-        : `<span>${initial}</span>`;
+      const castingCardHtml = renderCastingCard({
+        first_name: firstName,
+        last_name: lastName,
+        age: cbv2ApplicantAge(app),
+        pronouns: applicantPronouns(app),
+        headshot_url: app.headshot_url || '',
+        casting_categories: cbv2CastingCategories(app),
+        role_openness: cbv2RoleBadge(app),
+        attendance_mode: applicantAttendanceModeLabel(app) || null,
+      }, {
+        size: 'sm',
+        hasPadding: true,
+        hasIcons: true,
+      });
       const contactName = applicantContactName(app) || app.name || 'No contact name';
       const contactEmail = app.email || ca['Contact Email'] || 'No email';
       const rawPhone = app.phone || ca['Contact Phone'] || ca['Phone'] || ca['phone'] || '';
@@ -28983,12 +28963,7 @@ We look forward to seeing your work!
         <div>
           <div class="final-casting-offer-name">${esc(roleTitle)}</div>
           <div class="final-casting-offer-performer">
-            <div class="final-casting-offer-headshot">${headshotHtml}</div>
-            <div class="final-casting-offer-person">
-              <div class="final-casting-offer-first">${esc(firstName)}</div>
-              <div class="final-casting-offer-last">${esc(lastName)}</div>
-              <div class="final-casting-offer-details">${detailsLine ? esc(detailsLine) : '&nbsp;'}</div>
-            </div>
+            <div class="final-casting-offer-casting-card">${castingCardHtml}</div>
           </div>
           <div class="final-casting-offer-contact">
             <div class="final-casting-offer-contact-row">
@@ -29022,7 +28997,10 @@ We look forward to seeing your work!
         groups.get(config.key).items.push(item);
       });
       return [...groups.values()]
-        .sort((a, b) => a.config.order - b.config.order)
+        .sort((a, b) => {
+          if (a.config.order !== b.config.order) return a.config.order - b.config.order;
+          return a.config.label.localeCompare(b.config.label, undefined, { sensitivity: 'base' });
+        })
         .map(({ config, items }) => `
           <section class="final-casting-offer-role-section" style="--final-offer-section-color:${esc(config.color)};--final-offer-section-ink:${esc(config.ink)};--final-offer-section-bg:${esc(config.bg)};--final-offer-section-bg-strong:${esc(config.strong)};--final-offer-section-border:${esc(config.border)};">
             <div class="final-casting-offer-role-head">
