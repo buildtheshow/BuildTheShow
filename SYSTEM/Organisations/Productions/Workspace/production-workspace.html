@@ -12664,6 +12664,54 @@
     .inroom-callback-secondary-section .inroom-callback-character-section-grid {
       grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
     }
+    .inroom-callback-character-grid .inroom-role-chip,
+    .inroom-callback-character-section-grid .inroom-role-chip {
+      width: 100%;
+      min-width: 0;
+    }
+    .inroom-role-chip.callback-character-note.requested {
+      --note-top: #e7a52e;
+      --note-body: #8a838a;
+      --note-edge: rgba(137, 89, 10, 0.22);
+    }
+    .inroom-role-chip.callback-character-note.called-back {
+      --note-top: #5b3a8f;
+      --note-body: #7047aa;
+      --note-edge: rgba(57, 32, 96, 0.3);
+    }
+    .inroom-role-chip.callback-character-note.selected {
+      --note-top: var(--callback-note-top, #5b3a8f);
+      --note-body: var(--callback-note-body, #7047aa);
+      --note-edge: var(--callback-note-edge, rgba(57, 32, 96, 0.3));
+    }
+    .inroom-role-chip.callback-character-note.dismissed {
+      --note-top: #777179;
+      --note-body: #8a838a;
+      --note-edge: rgba(45, 36, 55, 0.18);
+      opacity: 0.62;
+      filter: grayscale(0.15);
+    }
+    .callback-character-note .inroom-callback-role-chip-badges {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 0.26rem;
+      margin-top: 0.42rem;
+      max-width: 100%;
+    }
+    .callback-character-note .inroom-callback-role-chip-badge {
+      display: inline-flex;
+      align-items: center;
+      min-height: 1.15rem;
+      padding: 0.16rem 0.38rem;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.22);
+      color: rgba(255,255,255,0.9);
+      font-size: clamp(0.46rem, 4.6cqw, 0.62rem);
+      font-weight: 850;
+      line-height: 1;
+      white-space: nowrap;
+    }
     .inroom-callback-role-chip {
       position: relative;
       isolation: isolate;
@@ -41240,7 +41288,6 @@ We look forward to seeing your work!
       const decision = applicantInRoomRoleDecision(app, sessionId, char.id);
       const safeCharId = esc(char.id);
       const safeAppId = esc(app.id);
-      const isSynthetic = !!char._isCallbackEnsembleCard;
       return `<div class="inroom-callback-card is-collapsed">
         <div class="inroom-callback-card-head" onclick="toggleInRoomCallbackCard(this)" aria-expanded="false">
           <div class="inroom-callback-card-copy">
@@ -41278,7 +41325,6 @@ We look forward to seeing your work!
       ? teamAccessMember.note_color
       : ORG_AUTHORED_NOTE_COLOR;
     const selectedShadow = hexToRgba(selectedColor, 0.26);
-    const selectedSoft = hexToRgba(selectedColor, 0.12);
     const requestedRoles = applicantRequestedRoleList(app);
     const requestedSet = new Set(requestedRoles.map(role => {
       const char = findCharacterForRequestedRole(role);
@@ -41318,18 +41364,30 @@ We look forward to seeing your work!
         choice === 'liked' || choice === 'chosen' ? 'Selected' : '',
         dismissed ? 'Unchecked' : '',
       ].filter(Boolean);
+      const noteTop = selected ? selectedColor : '';
+      const noteBody = selected ? selectedColor : '';
+      const noteEdge = selected ? selectedShadow : '';
       const tileStyle = [
-        `--callback-tile-selected:${esc(selectedColor)}`,
-        `--callback-tile-selected-shadow:${esc(selectedShadow)}`,
-        selected ? `--callback-tile-border:${esc(selectedColor)}` : '',
-        selected ? `--callback-tile-border-hover:${esc(selectedColor)}` : '',
-        selected ? `--callback-tile-bg:${esc(selectedSoft)}` : '',
+        selected ? `--callback-note-top:${esc(noteTop)}` : '',
+        selected ? `--callback-note-body:${esc(noteBody)}` : '',
+        selected ? `--callback-note-edge:${esc(noteEdge)}` : '',
       ].filter(Boolean).join(';') + ';';
-      return `<div class="${classes.join(' ')}" style="${tileStyle}" role="button" tabindex="0" aria-pressed="${selected ? 'true' : 'false'}" data-app-id="${safeAppId}" data-char-id="${safeCharId}" data-synthetic="${isSynthetic ? 'true' : 'false'}" data-requested="${requested ? 'true' : 'false'}" data-called-back="${calledBack ? 'true' : 'false'}" onclick="toggleCallbackRoleTile(this,'${safeAppId}','${safeCharId}')" onkeydown="handleCallbackRoleTileKey(event,this,'${safeAppId}','${safeCharId}')">
-        <div class="inroom-callback-role-chip-title">${esc(char.name || 'Unnamed')}</div>
-        ${char.role_type ? `<div class="inroom-callback-role-chip-type">${esc(char.role_type)}</div>` : ''}
-        ${badges.length ? `<div class="inroom-callback-role-chip-badges">${badges.map(label => `<span class="inroom-callback-role-chip-badge">${esc(label)}</span>`).join('')}</div>` : ''}
-      </div>`;
+      const bodyHtml = [
+        char.role_type ? `<div class="inroom-role-chip-body-kicker">${esc(char.role_type)}</div>` : '',
+        badges.length ? `<div class="inroom-callback-role-chip-badges">${badges.map(label => `<span class="inroom-callback-role-chip-badge">${esc(label)}</span>`).join('')}</div>` : '',
+      ].filter(Boolean).join('');
+      const noteHtml = window.BTSAuditionTemplates.renderTemplateById('auditions.sticky-note', {
+        esc,
+        appId: app.id,
+        charId: char.id,
+        name: char.name || 'Unnamed',
+        stateClass: classes.filter(cls => cls !== 'inroom-callback-role-chip').join(' '),
+        namePlacement: 'header',
+        bodyHtml,
+      });
+      return noteHtml
+        .replace('class="inroom-role-chip ', `class="inroom-role-chip callback-character-note `)
+        .replace('onclick="toggleInRoomRole', `style="${tileStyle}" aria-pressed="${selected ? 'true' : 'false'}" data-synthetic="${isSynthetic ? 'true' : 'false'}" data-requested="${requested ? 'true' : 'false'}" data-called-back="${calledBack ? 'true' : 'false'}" onkeydown="handleCallbackRoleTileKey(event,this,'${safeAppId}','${safeCharId}')" onclick="toggleCallbackRoleTile`);
     };
     const primaryCharacters = productionCharacters.filter(char => !isSecondaryCallbackCharacter(char));
     const secondaryCharacters = productionCharacters.filter(isSecondaryCallbackCharacter);
@@ -41369,10 +41427,17 @@ We look forward to seeing your work!
     const choice = applicantInRoomRoleChoice(app, sessionId, charId);
     const dismissed = choice === 'dismissed';
     const selected = !dismissed && (choice === 'liked' || choice === 'chosen');
+    const selectedColor = (teamAccessMode && teamAccessMember?.note_color)
+      ? teamAccessMember.note_color
+      : ORG_AUTHORED_NOTE_COLOR;
+    const selectedShadow = hexToRgba(selectedColor, 0.26);
     tileEl.classList.toggle('requested', requested);
     tileEl.classList.toggle('called-back', calledBack);
     tileEl.classList.toggle('selected', selected);
     tileEl.classList.toggle('dismissed', dismissed);
+    tileEl.style.setProperty('--callback-note-top', selected ? selectedColor : '');
+    tileEl.style.setProperty('--callback-note-body', selected ? selectedColor : '');
+    tileEl.style.setProperty('--callback-note-edge', selected ? selectedShadow : '');
     tileEl.setAttribute('aria-pressed', selected ? 'true' : 'false');
     const badges = [
       requested ? 'Requested' : '',
@@ -41382,8 +41447,12 @@ We look forward to seeing your work!
     ].filter(Boolean);
     const existing = tileEl.querySelector('.inroom-callback-role-chip-badges');
     const html = badges.map(label => `<span class="inroom-callback-role-chip-badge">${esc(label)}</span>`).join('');
-    if (existing) existing.innerHTML = html;
-    else if (html) tileEl.insertAdjacentHTML('beforeend', `<div class="inroom-callback-role-chip-badges">${html}</div>`);
+    if (existing && html) existing.innerHTML = html;
+    else if (existing) existing.remove();
+    else if (html) {
+      const body = tileEl.querySelector('.inroom-role-chip-body') || tileEl;
+      body.insertAdjacentHTML('beforeend', `<div class="inroom-callback-role-chip-badges">${html}</div>`);
+    }
   }
 
   function handleCallbackRoleTileKey(event, tileEl, appId, charId) {
