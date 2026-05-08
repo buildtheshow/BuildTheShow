@@ -12752,9 +12752,12 @@
       display: inline-flex;
       align-items: center;
       justify-content: center;
+      border: 0;
+      padding: 0;
       border-radius: 50%;
       background: rgba(255,255,255,0.24);
       color: #fff;
+      font-family: var(--bts-font);
       font-size: 0.62rem;
       font-weight: 950;
       line-height: 1;
@@ -41435,7 +41438,7 @@ We look forward to seeing your work!
       const bodyHtml = [
         `<div class="callback-character-note-name">${esc(char.name || 'Unnamed')}</div>`,
       ].filter(Boolean).join('');
-      const infoHtml = `<span class="callback-character-note-info" role="button" tabindex="0" title="More info" aria-label="More info for ${esc(char.name || 'this character')}" onclick="openCallbackCharacterInfo(event,'${safeCharId}')" onkeydown="handleCallbackCharacterInfoKey(event,'${safeCharId}')">i</span>`;
+      const infoHtml = `<button type="button" class="callback-character-note-info" title="More info" aria-label="More info for ${esc(char.name || 'this character')}" onpointerdown="event.stopPropagation()" onmousedown="event.stopPropagation()" onclick="openCallbackCharacterInfo(event,'${safeCharId}')" onkeydown="handleCallbackCharacterInfoKey(event,'${safeCharId}')">i</button>`;
       const noteHtml = window.BTSAuditionTemplates.renderTemplateById('auditions.sticky-note', {
         esc,
         appId: app.id,
@@ -41445,7 +41448,10 @@ We look forward to seeing your work!
         namePlacement: 'header',
         bodyHtml,
       });
-      return noteHtml
+      const callbackNoteHtml = noteHtml
+        .replace('<button type="button"', '<div role="button" tabindex="0"')
+        .replace(/\s*<\/button>\s*$/, '\n      </div>');
+      return callbackNoteHtml
         .replace('class="inroom-role-chip ', `class="inroom-role-chip callback-character-note `)
         .replace('</div></div>\n        <div class="inroom-role-chip-body">', `</div>${infoHtml}</div>\n        <div class="inroom-role-chip-body">`)
         .replace('onclick="toggleInRoomRole', `style="${tileStyle}" aria-pressed="${selected ? 'true' : 'false'}" data-synthetic="${isSynthetic ? 'true' : 'false'}" data-requested="${requested ? 'true' : 'false'}" data-called-back="${calledBack ? 'true' : 'false'}" onkeydown="handleCallbackRoleTileKey(event,this,'${safeAppId}','${safeCharId}')" onclick="toggleCallbackRoleTile`);
@@ -41545,12 +41551,13 @@ We look forward to seeing your work!
     if (!app || !sessionId || !charId) return;
     const currentAnswers = applicantCustomAnswers(app);
     const key = inRoomRoleChoiceKey(sessionId, charId);
-    const calledBack = tileEl?.dataset?.calledBack === 'true';
     const isSynthetic = tileEl?.dataset?.synthetic === 'true';
     const currentChoice = applicantInRoomRoleChoice(app, sessionId, charId);
-    const isActive = currentChoice === 'liked' || currentChoice === 'chosen' || (!currentChoice && calledBack);
-    const nextValue = isActive ? 'dismissed' : 'liked';
-    const nextAnswers = { ...currentAnswers, [key]: nextValue };
+    const isActive = currentChoice === 'liked' || currentChoice === 'chosen';
+    const nextValue = isActive ? null : 'liked';
+    const nextAnswers = { ...currentAnswers };
+    if (nextValue) nextAnswers[key] = nextValue;
+    else delete nextAnswers[key];
     app.custom_answers = nextAnswers;
     applyCallbackRoleTileState(tileEl, app, sessionId, charId);
     showSaveStatus('saving');
@@ -41558,7 +41565,16 @@ We look forward to seeing your work!
       const error = await persistApplicantPatch(app, { custom_answers: nextAnswers });
       if (error) throw error;
       if (!isSynthetic) {
-        await saveAuditionObservation(appId, { sessionId, characterId: charId, area: 'role', type: 'choice', key: charId, value: nextValue });
+        const existingObservation = findAuditionObservation(appId, {
+          sessionId,
+          characterId: charId,
+          area: 'role',
+          type: 'choice',
+          key: charId,
+          currentAuthorOnly: true,
+        });
+        if (nextValue) await saveAuditionObservation(appId, { sessionId, characterId: charId, area: 'role', type: 'choice', key: charId, value: nextValue });
+        else if (existingObservation?.id) await deleteAuditionObservation(existingObservation.id);
       }
       showSaveStatus('saved');
     } catch (error) {
