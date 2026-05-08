@@ -12623,6 +12623,47 @@
       gap: 0.82rem;
       align-content: flex-start;
     }
+    .inroom-callback-character-stack,
+    .inroom-callback-character-section {
+      display: flex;
+      flex-direction: column;
+      gap: 0.78rem;
+      min-width: 0;
+    }
+    .inroom-callback-character-stack {
+      grid-column: 1 / -1;
+    }
+    .inroom-callback-character-section-title {
+      color: #352756;
+      font-family: var(--bts-font);
+      font-size: 0.78rem;
+      font-weight: 900;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+    .inroom-callback-character-section-title small {
+      display: block;
+      margin-top: 0.12rem;
+      color: #7e7198;
+      font-size: 0.72rem;
+      font-weight: 600;
+      font-style: italic;
+      letter-spacing: 0;
+      text-transform: none;
+    }
+    .inroom-callback-character-section-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(156px, 1fr));
+      gap: 0.82rem;
+      align-content: flex-start;
+    }
+    .inroom-callback-secondary-section {
+      width: 100%;
+      padding-top: 0.15rem;
+    }
+    .inroom-callback-secondary-section .inroom-callback-character-section-grid {
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    }
     .inroom-callback-role-chip {
       position: relative;
       isolation: isolate;
@@ -16037,6 +16078,12 @@
       }
 
       .inroom-callback-character-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 0.6rem;
+      }
+
+      .inroom-callback-character-section-grid,
+      .inroom-callback-secondary-section .inroom-callback-character-section-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr));
         gap: 0.6rem;
       }
@@ -41229,7 +41276,12 @@ We look forward to seeing your work!
     if (!productionCharacters.length) {
       return `<div class="inroom-considered-empty">No production characters have been added yet.</div>`;
     }
-    return productionCharacters.map(char => {
+    const isSecondaryCallbackCharacter = (char) => {
+      const roleType = String(char?.role_type || '').trim().toLowerCase();
+      const name = String(char?.name || '').trim().toLowerCase();
+      return roleType === 'group' || roleType === 'ensemble' || name === 'ensemble';
+    };
+    const renderTile = (char) => {
       const safeCharId = esc(char.id);
       const safeAppId = esc(app.id);
       const requested = requestedSet.has(char.id);
@@ -41253,7 +41305,33 @@ We look forward to seeing your work!
         ${char.role_type ? `<div class="inroom-callback-role-chip-type">${esc(char.role_type)}</div>` : ''}
         ${badges.length ? `<div class="inroom-callback-role-chip-badges">${badges.map(label => `<span class="inroom-callback-role-chip-badge">${esc(label)}</span>`).join('')}</div>` : ''}
       </div>`;
-    }).join('');
+    };
+    const primaryCharacters = productionCharacters.filter(char => !isSecondaryCallbackCharacter(char));
+    const secondaryCharacters = productionCharacters.filter(isSecondaryCallbackCharacter);
+    const primaryHtml = primaryCharacters.length
+      ? primaryCharacters.map(renderTile).join('')
+      : `<div class="inroom-considered-empty">No named callback characters have been added yet.</div>`;
+    const secondaryHtml = secondaryCharacters.length
+      ? `<section class="inroom-callback-character-section inroom-callback-secondary-section">
+          <div class="inroom-callback-character-section-title">Groups and Ensemble<small>Still selectable, kept separate from named character choices.</small></div>
+          <div class="inroom-callback-character-section-grid">${secondaryCharacters.map(renderTile).join('')}</div>
+        </section>`
+      : '';
+    return `<div class="inroom-callback-character-stack">
+      <section class="inroom-callback-character-section">
+        <div class="inroom-callback-character-section-grid">${primaryHtml}</div>
+      </section>
+      ${secondaryHtml}
+    </div>`;
+  }
+
+  function positionCallbackSecondaryCharacters(scope = document) {
+    const root = scope || document;
+    const secondary = root.querySelector('.inroom-callback-secondary-section');
+    const topSection = root.querySelector('.inroom-callback-top-section');
+    if (!secondary || !topSection) return;
+    if (secondary.parentElement === topSection.parentElement) return;
+    topSection.insertAdjacentElement('afterend', secondary);
   }
 
   function applyCallbackRoleTileState(tileEl, app, sessionId, charId) {
@@ -41441,6 +41519,9 @@ We look forward to seeing your work!
       callbackCharactersHtml: renderCallbackCharacterChips(app),
       roleChipsHtml: renderInRoomRoleChips(app)
     });
+    if (currentSession?.type === 'callback') {
+      positionCallbackSecondaryCharacters(el);
+    }
     requestAnimationFrame(() => scrollCheckedInRailToActive(el));
     requestAnimationFrame(() => requestAnimationFrame(() => syncInRoomRightPanelHeight(el)));
     requestAnimationFrame(() => requestAnimationFrame(() => fitInRoomRoleChipTitles(el)));
