@@ -12667,10 +12667,10 @@
     .inroom-callback-role-chip {
       position: relative;
       isolation: isolate;
-      border: 1.5px solid rgba(87,46,136,0.12);
+      border: 1.5px solid var(--callback-tile-border, rgba(87,46,136,0.12));
       border-radius: 8px;
-      background: #f4eef9;
-      color: #1f1833;
+      background: var(--callback-tile-bg, #f1eff4);
+      color: var(--callback-tile-text, #1f1833);
       font-family: var(--bts-font);
       padding: 0.9rem 0.85rem;
       cursor: pointer;
@@ -12691,7 +12691,7 @@
       content: '';
       position: absolute;
       inset: 0;
-      border-top: 7px solid var(--callback-tile-accent, var(--session-accent, #572e88));
+      border-top: 7px solid var(--callback-tile-bar, #b8b4c0);
       opacity: 0.78;
       z-index: -1;
     }
@@ -12714,38 +12714,43 @@
     .inroom-callback-role-chip:focus-visible {
       transform: translateY(-2px);
       background: #fff;
-      border-color: var(--callback-tile-accent, var(--session-accent, #572e88));
-      color: var(--callback-tile-accent, var(--session-accent, #572e88));
+      border-color: var(--callback-tile-border-hover, var(--callback-tile-bar, #572e88));
+      color: var(--callback-tile-hover-text, var(--callback-tile-bar, #572e88));
       box-shadow: 0 8px 16px rgba(47,35,74,0.08);
       outline: 0;
     }
     .inroom-callback-role-chip.selected {
-      background: linear-gradient(145deg, var(--callback-tile-selected, var(--session-accent, #572e88)), #1f1833);
+      background: linear-gradient(145deg, var(--callback-tile-selected, var(--session-accent, #572e88)), color-mix(in srgb, var(--callback-tile-selected, #572e88) 62%, #1f1833 38%));
       border-color: var(--callback-tile-selected, var(--session-accent, #572e88));
       color: #fff;
       box-shadow: 0 18px 34px var(--callback-tile-selected-shadow, rgba(47,35,74,0.18));
     }
     .inroom-callback-role-chip.requested {
-      background: #eef7ec;
-      border-color: rgba(108,149,95,0.28);
-      --callback-tile-accent: #7FAF8B;
+      --callback-tile-bar: #F7B731;
     }
     .inroom-callback-role-chip.called-back {
-      background: #fff1df;
-      border-color: rgba(227,164,111,0.36);
-      --callback-tile-accent: #E3A46F;
+      --callback-tile-bg: #efe7ff;
+      --callback-tile-border: rgba(126,58,242,0.28);
+      --callback-tile-bar: #7E3AF2;
+      --callback-tile-hover-text: #5c2db3;
     }
     .inroom-callback-role-chip.called-back::before {
-      border-top-color: #E3A46F;
+      border-top-color: var(--callback-tile-bar, #7E3AF2);
     }
     .inroom-callback-role-chip.requested::before {
-      border-top-color: #7FAF8B;
+      border-top-color: #F7B731;
     }
     .inroom-callback-role-chip.dismissed {
       opacity: 0.62;
       background: #f1eef5;
       border-style: dashed;
-      --callback-tile-accent: #8a7ca5;
+      --callback-tile-bar: #8a7ca5;
+    }
+    .inroom-callback-role-chip.selected {
+      background: linear-gradient(145deg, var(--callback-tile-selected, var(--session-accent, #572e88)), color-mix(in srgb, var(--callback-tile-selected, #572e88) 62%, #1f1833 38%));
+      border-color: var(--callback-tile-selected, var(--session-accent, #572e88));
+      color: #fff;
+      box-shadow: 0 18px 34px var(--callback-tile-selected-shadow, rgba(47,35,74,0.18));
     }
     .inroom-callback-role-chip.selected .inroom-callback-role-chip-type {
       color: rgba(255,255,255,0.78);
@@ -41063,10 +41068,14 @@ We look forward to seeing your work!
   function renderInRoomRoleChips(app, filterType = '', sortMode = 'type', sessionIdOverride = null) {
     const session = getCurrentInRoomSession();
     const sessionId = sessionIdOverride || session?.id || null;
-    const requestedSet = new Set(applicantRequestedRoleList(app).map(role => {
+    const requestedRoles = applicantRequestedRoleList(app);
+    const requestedSet = new Set(requestedRoles.map(role => {
       const char = findCharacterForRequestedRole(role);
       return char?.id || '';
     }).filter(Boolean));
+    if (requestedRoles.some(role => normalizeRoleMatchName(role).includes('ensemble'))) {
+      requestedSet.add('__callback_ensemble__');
+    }
     const list = getInRoomRoleList(app, session, filterType, sortMode);
     return list.map(char => {
       const stateClass = getInRoomRoleChipStateClass(app, session, sessionId, char.id, requestedSet);
@@ -41234,6 +41243,7 @@ We look forward to seeing your work!
       const decision = applicantInRoomRoleDecision(app, sessionId, char.id);
       const safeCharId = esc(char.id);
       const safeAppId = esc(app.id);
+      const isSynthetic = !!char._isCallbackEnsembleCard;
       return `<div class="inroom-callback-card is-collapsed">
         <div class="inroom-callback-card-head" onclick="toggleInRoomCallbackCard(this)" aria-expanded="false">
           <div class="inroom-callback-card-copy">
@@ -41271,6 +41281,7 @@ We look forward to seeing your work!
       ? teamAccessMember.note_color
       : ORG_AUTHORED_NOTE_COLOR;
     const selectedShadow = hexToRgba(selectedColor, 0.26);
+    const selectedSoft = hexToRgba(selectedColor, 0.12);
     const requestedSet = new Set(applicantRequestedRoleList(app).map(role => {
       const char = findCharacterForRequestedRole(role);
       return char?.id || '';
@@ -41280,9 +41291,7 @@ We look forward to seeing your work!
       .filter(char => char && char.id && (char.name || '').trim())
       .slice()
       .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
-    if (!productionCharacters.length) {
-      return `<div class="inroom-considered-empty">No production characters have been added yet.</div>`;
-    }
+    const ensembleCard = { id: '__callback_ensemble__', name: 'Ensemble', role_type: 'Ensemble', _isCallbackEnsembleCard: true };
     const isSecondaryCallbackCharacter = (char) => {
       const roleType = String(char?.role_type || '').trim().toLowerCase();
       const name = String(char?.name || '').trim().toLowerCase();
@@ -41295,7 +41304,7 @@ We look forward to seeing your work!
       const calledBack = calledBackSet.has(char.id);
       const choice = applicantInRoomRoleChoice(app, sessionId, char.id);
       const dismissed = choice === 'dismissed';
-      const selected = !dismissed && (choice === 'liked' || choice === 'chosen' || (!choice && calledBack));
+      const selected = !dismissed && (choice === 'liked' || choice === 'chosen');
       const classes = ['inroom-callback-role-chip'];
       if (requested) classes.push('requested');
       if (calledBack) classes.push('called-back');
@@ -41307,8 +41316,14 @@ We look forward to seeing your work!
         choice === 'liked' || choice === 'chosen' ? 'Selected' : '',
         dismissed ? 'Unchecked' : '',
       ].filter(Boolean);
-      const tileStyle = `--callback-tile-selected:${esc(selectedColor)};--callback-tile-selected-shadow:${esc(selectedShadow)};`;
-      return `<div class="${classes.join(' ')}" style="${tileStyle}" role="button" tabindex="0" aria-pressed="${selected ? 'true' : 'false'}" data-app-id="${safeAppId}" data-char-id="${safeCharId}" data-requested="${requested ? 'true' : 'false'}" data-called-back="${calledBack ? 'true' : 'false'}" onclick="toggleCallbackRoleTile(this,'${safeAppId}','${safeCharId}')" onkeydown="handleCallbackRoleTileKey(event,this,'${safeAppId}','${safeCharId}')">
+      const tileStyle = [
+        `--callback-tile-selected:${esc(selectedColor)}`,
+        `--callback-tile-selected-shadow:${esc(selectedShadow)}`,
+        selected ? `--callback-tile-border:${esc(selectedColor)}` : '',
+        selected ? `--callback-tile-border-hover:${esc(selectedColor)}` : '',
+        selected ? `--callback-tile-bg:${esc(selectedSoft)}` : '',
+      ].filter(Boolean).join(';') + ';';
+      return `<div class="${classes.join(' ')}" style="${tileStyle}" role="button" tabindex="0" aria-pressed="${selected ? 'true' : 'false'}" data-app-id="${safeAppId}" data-char-id="${safeCharId}" data-synthetic="${isSynthetic ? 'true' : 'false'}" data-requested="${requested ? 'true' : 'false'}" data-called-back="${calledBack ? 'true' : 'false'}" onclick="toggleCallbackRoleTile(this,'${safeAppId}','${safeCharId}')" onkeydown="handleCallbackRoleTileKey(event,this,'${safeAppId}','${safeCharId}')">
         <div class="inroom-callback-role-chip-title">${esc(char.name || 'Unnamed')}</div>
         ${char.role_type ? `<div class="inroom-callback-role-chip-type">${esc(char.role_type)}</div>` : ''}
         ${badges.length ? `<div class="inroom-callback-role-chip-badges">${badges.map(label => `<span class="inroom-callback-role-chip-badge">${esc(label)}</span>`).join('')}</div>` : ''}
@@ -41316,6 +41331,9 @@ We look forward to seeing your work!
     };
     const primaryCharacters = productionCharacters.filter(char => !isSecondaryCallbackCharacter(char));
     const secondaryCharacters = productionCharacters.filter(isSecondaryCallbackCharacter);
+    if (!secondaryCharacters.some(char => String(char?.role_type || '').trim().toLowerCase() === 'ensemble' || String(char?.name || '').trim().toLowerCase() === 'ensemble')) {
+      secondaryCharacters.push(ensembleCard);
+    }
     const primaryHtml = primaryCharacters.length
       ? primaryCharacters.map(renderTile).join('')
       : `<div class="inroom-considered-empty">No named callback characters have been added yet.</div>`;
@@ -41348,7 +41366,7 @@ We look forward to seeing your work!
     const calledBack = tileEl.dataset.calledBack === 'true';
     const choice = applicantInRoomRoleChoice(app, sessionId, charId);
     const dismissed = choice === 'dismissed';
-    const selected = !dismissed && (choice === 'liked' || choice === 'chosen' || (!choice && calledBack));
+    const selected = !dismissed && (choice === 'liked' || choice === 'chosen');
     tileEl.classList.toggle('requested', requested);
     tileEl.classList.toggle('called-back', calledBack);
     tileEl.classList.toggle('selected', selected);
@@ -41379,6 +41397,7 @@ We look forward to seeing your work!
     const currentAnswers = applicantCustomAnswers(app);
     const key = inRoomRoleChoiceKey(sessionId, charId);
     const calledBack = tileEl?.dataset?.calledBack === 'true';
+    const isSynthetic = tileEl?.dataset?.synthetic === 'true';
     const currentChoice = applicantInRoomRoleChoice(app, sessionId, charId);
     const isActive = currentChoice === 'liked' || currentChoice === 'chosen' || (!currentChoice && calledBack);
     const nextValue = isActive ? 'dismissed' : 'liked';
@@ -41389,7 +41408,9 @@ We look forward to seeing your work!
     try {
       const error = await persistApplicantPatch(app, { custom_answers: nextAnswers });
       if (error) throw error;
-      await saveAuditionObservation(appId, { sessionId, characterId: charId, area: 'role', type: 'choice', key: charId, value: nextValue });
+      if (!isSynthetic) {
+        await saveAuditionObservation(appId, { sessionId, characterId: charId, area: 'role', type: 'choice', key: charId, value: nextValue });
+      }
       showSaveStatus('saved');
     } catch (error) {
       app.custom_answers = currentAnswers;
