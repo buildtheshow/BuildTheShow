@@ -23348,12 +23348,12 @@
         { token: '{{role_name}}', label: 'Role Name', sample: 'The Lead' },
         { token: '{{role_names}}', label: 'All Offered Roles', sample: 'The Lead, Featured Ensemble' },
         { token: '{{role_type}}', label: 'Role Type', sample: 'Principal' },
-        { token: '{{cast_accept_link}}', label: 'Accept Offer Link', sample: 'https://buildtheshow.com/.../cast-offer?action=accept' },
-        { token: '{{cast_decline_link}}', label: 'Decline Offer Link', sample: 'https://buildtheshow.com/.../cast-offer?action=decline' },
-        { token: '{{cast_response_link}}', label: 'Review Offer Link', sample: 'https://buildtheshow.com/.../cast-offer' },
+        { token: '{{cast_accept_link}}', label: 'Accept Offer Link', sample: 'https://buildtheshow.com/ryt/show/CastOffer/JAMIE04827/YES' },
+        { token: '{{cast_decline_link}}', label: 'Decline Offer Link', sample: 'https://buildtheshow.com/ryt/show/CastOffer/JAMIE04827/NO' },
+        { token: '{{cast_response_link}}', label: 'Review Offer Link', sample: 'https://buildtheshow.com/ryt/show/CastOffer/JAMIE04827' },
         { token: '{{cast_offer_deadline}}', label: 'Offer Reply Deadline', sample: 'Friday, May 15, 2026 at 5:00 PM' },
         { token: '{{cast_offer_deadline_note}}', label: 'Offer Deadline Sentence', sample: 'Please respond by Friday, May 15, 2026 at 5:00 PM. If we do not hear from you by then, we will mark this role offer as declined so the production team can keep casting moving.' },
-        { token: '{{registration_link}}', label: 'Registration Link', sample: 'https://buildtheshow.com/.../cast-offer?view=registration' },
+        { token: '{{registration_link}}', label: 'Registration Link', sample: 'https://buildtheshow.com/ryt/show/CastOffer/JAMIE04827/Registration' },
       ],
     },
     // ── Rehearsals ───────────────────────────────────────────────
@@ -29486,6 +29486,7 @@ We look forward to seeing your work!
   }
 
   const CAST_OFFER_KEYS = {
+    code: '__bts_cast_offer_code',
     token: '__bts_cast_offer_token',
     status: '__bts_cast_offer_status',
     sentAt: '__bts_cast_offer_sent_at',
@@ -29539,15 +29540,35 @@ We look forward to seeing your work!
     };
   }
 
-  function castOfferBaseUrl() {
-    const base = (orgSlug && prod?.slug)
-      ? `${window.location.origin}/${encodeURIComponent(orgSlug)}/${encodeURIComponent(prod.slug)}/cast-offer`
-      : `${window.location.origin}/SYSTEM/Public/cast-offer-response.html`;
-    return `${base}?prod=${encodeURIComponent(prodId)}`;
+  function castOfferCode(app) {
+    const cleanName = String(app?.name || app?.first_name || 'Performer')
+      .trim()
+      .split(/\s+/)[0]
+      .replace(/[^a-z0-9]/gi, '')
+      .toUpperCase()
+      .slice(0, 12) || 'PERFORMER';
+    const raw = String(app?.id || app?.email || cleanName);
+    let hash = 0;
+    for (let i = 0; i < raw.length; i += 1) hash = ((hash * 31) + raw.charCodeAt(i)) % 100000;
+    return `${cleanName}${String(hash).padStart(5, '0')}`;
   }
 
-  function castOfferLinks(token) {
-    const base = `${castOfferBaseUrl()}&token=${encodeURIComponent(token)}`;
+  function castOfferFallbackBaseUrl(token) {
+    const base = `${window.location.origin}/SYSTEM/Public/cast-offer-response.html`;
+    return `${base}?prod=${encodeURIComponent(prodId)}&token=${encodeURIComponent(token)}`;
+  }
+
+  function castOfferLinks(token, code = token) {
+    if (orgSlug && prod?.slug && code) {
+      const base = `${window.location.origin}/${encodeURIComponent(orgSlug)}/${encodeURIComponent(prod.slug)}/CastOffer/${encodeURIComponent(code)}`;
+      return {
+        review: base,
+        accept: `${base}/YES`,
+        decline: `${base}/NO`,
+        registration: `${base}/Registration`,
+      };
+    }
+    const base = castOfferFallbackBaseUrl(token);
     return {
       review: base,
       accept: `${base}&action=accept`,
@@ -29602,6 +29623,19 @@ We look forward to seeing your work!
     return token;
   }
 
+  async function ensureCastOfferIdentity(app) {
+    const ca = applicantCustomAnswers(app);
+    const token = ca[CAST_OFFER_KEYS.token] || createCallbackResponseToken();
+    const code = ca[CAST_OFFER_KEYS.code] || castOfferCode(app);
+    if (token !== ca[CAST_OFFER_KEYS.token] || code !== ca[CAST_OFFER_KEYS.code]) {
+      await saveCastOfferState(app, {
+        [CAST_OFFER_KEYS.token]: token,
+        [CAST_OFFER_KEYS.code]: code,
+      });
+    }
+    return { token, code };
+  }
+
   async function markCastOfferSent(app, roles = [], deadline = castOfferDeadlineFromSettings()) {
     const roleNames = roles.map(role => role?.name || '').filter(Boolean).join(', ');
     const roleIds = roles.map(role => role?.id || '').filter(Boolean).join(',');
@@ -29620,8 +29654,8 @@ We look forward to seeing your work!
   async function _sendFinalCastingEmailDirect(app, category, roleNames = [], roleEntries = []) {
     const hasTemplate = await ensureFinalCastingEmailTemplate(category);
     if (!hasTemplate) throw new Error(category === 'cast_announcement' ? 'No cast announcement template found.' : 'No not cast template found.');
-    const token = category === 'cast_announcement' ? await ensureCastOfferToken(app) : '';
-    const links = token ? castOfferLinks(token) : {};
+    const identity = category === 'cast_announcement' ? await ensureCastOfferIdentity(app) : null;
+    const links = identity ? castOfferLinks(identity.token, identity.code) : {};
     const deadline = category === 'cast_announcement' ? castOfferDeadlineFromSettings() : { iso: '', text: '' };
     const { context } = await buildFinalCastingEmailContext(app, category, roleNames, links, roleEntries, deadline);
     const { data, error } = await sb.functions.invoke('send-email', {
@@ -29716,8 +29750,9 @@ We look forward to seeing your work!
     if (!item?.app) return;
     try {
       const template = await loadFinalCastingEmailTemplate(category);
+      const ca = applicantCustomAnswers(item.app);
       const previewLinks = category === 'cast_announcement'
-        ? castOfferLinks(applicantCustomAnswers(item.app)[CAST_OFFER_KEYS.token] || 'preview-token')
+        ? castOfferLinks(ca[CAST_OFFER_KEYS.token] || 'preview-token', ca[CAST_OFFER_KEYS.code] || castOfferCode(item.app))
         : {};
       const { context } = await buildFinalCastingEmailContext(item.app, category, item.roles || [], previewLinks, item.roleEntries || []);
       const subject = applyFinalCastingEmailContext(template.subject || '', context) || 'Email preview';
@@ -44182,8 +44217,8 @@ We look forward to seeing your work!
   async function _apmBuildEmailContextForCategory(category) {
     const context = _apmBuildEmailContext();
     if (!['cast_announcement', 'cast_accepted'].includes(category) || !_apmApp?.id) return context;
-    const token = await ensureCastOfferToken(_apmApp);
-    const links = castOfferLinks(token);
+    const identity = await ensureCastOfferIdentity(_apmApp);
+    const links = castOfferLinks(identity.token, identity.code);
     const roleEntries = _apmCastOfferRoleEntries(_apmApp);
     const roleNames = roleEntries.map(role => role.name).filter(Boolean).join(', ');
     const roleTypes = [...new Set(roleEntries.map(role => role.roleType).filter(Boolean))].join(', ');

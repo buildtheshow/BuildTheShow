@@ -182,6 +182,7 @@
     import { supabase as sb } from '/ASSETS/scripts/supabase.js';
 
     const KEYS = {
+      code: '__bts_cast_offer_code',
       token: '__bts_cast_offer_token',
       status: '__bts_cast_offer_status',
       sentAt: '__bts_cast_offer_sent_at',
@@ -194,9 +195,25 @@
     };
 
     const params = new URLSearchParams(window.location.search);
-    const token = params.get('token') || '';
-    const prodId = params.get('prod') || '';
-    const initialAction = (params.get('action') || '').toLowerCase();
+    const pathParts = window.location.pathname.split('/').filter(Boolean).map(decodeURIComponent);
+    const prettyIndex = pathParts.findIndex(part => String(part || '').toLowerCase() === 'castoffer' || String(part || '').toLowerCase() === 'cast-offer');
+    const pretty = prettyIndex >= 2 ? {
+      org: pathParts[prettyIndex - 2] || '',
+      show: pathParts[prettyIndex - 1] || '',
+      code: pathParts[prettyIndex + 1] || '',
+      action: pathParts[prettyIndex + 2] || '',
+    } : null;
+    const actionMap = {
+      yes: 'accept',
+      accept: 'accept',
+      no: 'decline',
+      decline: 'decline',
+      registration: 'registration',
+    };
+    const offerCode = params.get('code') || pretty?.code || '';
+    const token = params.get('token') || offerCode || '';
+    let prodId = params.get('prod') || '';
+    const initialAction = actionMap[String(params.get('action') || pretty?.action || params.get('view') || '').toLowerCase()] || '';
 
     let app = null;
     let prod = null;
@@ -308,22 +325,58 @@
     }
 
     function responseBaseUrl() {
+      if (pretty?.code) {
+        const baseParts = pathParts.slice(0, prettyIndex + 2);
+        return `${window.location.origin}/${baseParts.map(encodeURIComponent).join('/')}`;
+      }
       return `${window.location.origin}${window.location.pathname}?prod=${encodeURIComponent(prodId)}&token=${encodeURIComponent(token)}`;
     }
 
     function registrationLink() {
+      if (pretty?.code) return `${responseBaseUrl()}/Registration`;
       return `${responseBaseUrl()}&view=registration`;
     }
 
-    async function loadOffer() {
-      if (!token || !prodId) throw new Error('This cast offer link is missing information.');
-      const { data: apps, error } = await sb.from('audition_applications')
+    async function resolveProductionFromPrettyPath() {
+      if (prodId || !pretty?.org || !pretty?.show) return;
+      const orgKey = pretty.org;
+      const showSlug = pretty.show;
+      try {
+        const { data: orgMatch } = await sb.from('organizations').select('id')
+          .or(`slug.eq.${orgKey},abbreviation.eq.${orgKey},abbreviation.eq.${orgKey.toUpperCase()},abbreviation.eq.${orgKey.toLowerCase()}`)
+          .maybeSingle();
+        const orgId = orgMatch?.id || null;
+        let q = sb.from('productions').select('id').ilike('slug', showSlug);
+        if (orgId) q = q.eq('organization_id', orgId);
+        const { data: prodMatch } = await q.maybeSingle();
+        prodId = prodMatch?.id || '';
+      } catch (_) {}
+    }
+
+    async function findOfferApplication() {
+      if (!prodId || !token) return null;
+      if (offerCode) {
+        const { data: codeMatches, error: codeError } = await sb.from('audition_applications')
+          .select('id,production_id,name,email,custom_answers')
+          .eq('production_id', prodId)
+          .contains('custom_answers', { [KEYS.code]: offerCode })
+          .limit(1);
+        if (codeError) throw codeError;
+        if (codeMatches?.[0]) return codeMatches[0];
+      }
+      const { data: tokenMatches, error: tokenError } = await sb.from('audition_applications')
         .select('id,production_id,name,email,custom_answers')
         .eq('production_id', prodId)
         .contains('custom_answers', { [KEYS.token]: token })
         .limit(1);
-      if (error) throw error;
-      app = apps?.[0] || null;
+      if (tokenError) throw tokenError;
+      return tokenMatches?.[0] || null;
+    }
+
+    async function loadOffer() {
+      await resolveProductionFromPrettyPath();
+      if (!token || !prodId) throw new Error('This cast offer link is missing information.');
+      app = await findOfferApplication();
       if (!app) throw new Error('We could not find this cast offer.');
 
       const ca = answers(app);
