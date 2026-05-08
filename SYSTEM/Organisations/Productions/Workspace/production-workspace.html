@@ -13458,6 +13458,32 @@
       gap: 1rem;
       padding: 1rem;
     }
+    .final-casting-offers-progress {
+      display: flex;
+      align-items: baseline;
+      justify-content: center;
+      gap: 0.45rem;
+      width: fit-content;
+      max-width: 100%;
+      margin: 0 auto 1rem;
+      padding: 0.55rem 0.9rem;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.72);
+      box-shadow: 0 6px 16px rgba(26,21,48,0.055);
+      color: #1a1530;
+      line-height: 1.1;
+      text-align: center;
+    }
+    .final-casting-offers-progress strong {
+      font-size: 0.98rem;
+      font-weight: 850;
+      letter-spacing: 0;
+    }
+    .final-casting-offers-progress span {
+      font-size: 0.74rem;
+      font-weight: 500;
+      color: #6f6681;
+    }
     .final-casting-offer-role-section {
       border: none;
       border-radius: 10px;
@@ -28822,6 +28848,7 @@ We look forward to seeing your work!
     host.innerHTML = '<div style="text-align:center;padding:2.5rem;color:#9a90b0;">Loading offer queues…</div>';
     await loadFinalCastingPool();
     if (!finalCastingEnsembleLoaded) await renderFinalCastingEnsemble();
+    await loadFinalCastingOfferAcceptanceState();
     renderFinalCastingOffers();
   }
 
@@ -28864,6 +28891,7 @@ We look forward to seeing your work!
   }
 
   const finalCastingEmailSendState = new Map();
+  const finalCastingOfferAcceptanceState = new Map();
   const FINAL_CASTING_OFFER_TYPE_COLORS = [
     { color: '#572e88', ink: '#24163b', bg: '#d9c6f0', strong: '#b995dc', border: '#8d66bd' },
     { color: '#1f7a8c', ink: '#153e47', bg: '#b9e2df', strong: '#79c7c2', border: '#4fa4a2' },
@@ -28938,6 +28966,44 @@ We look forward to seeing your work!
     ].join(';');
   }
 
+  async function loadFinalCastingOfferAcceptanceState() {
+    finalCastingOfferAcceptanceState.clear();
+    if (!prodId || !sb) return;
+    try {
+      const { data, error } = await sb.from('casting_assignments')
+        .select('applicant_id, character_id, state')
+        .eq('production_id', prodId)
+        .in('state', ['offer_accepted', 'offer_declined']);
+      if (error) throw error;
+      (data || []).forEach(row => {
+        if (!row?.applicant_id) return;
+        const key = row.character_id
+          ? `${row.applicant_id}::${row.character_id}`
+          : `${row.applicant_id}::`;
+        finalCastingOfferAcceptanceState.set(key, row.state);
+      });
+    } catch (error) {
+      console.warn('[BTS] final casting acceptance state unavailable', error);
+    }
+  }
+
+  function finalCastingAcceptedRolesSummary() {
+    let total = 0;
+    let accepted = 0;
+    finalCastingPickedKeys.forEach(key => {
+      const [charId, appId] = String(key).split('::');
+      if (!charId || !appId) return;
+      total += 1;
+      if (finalCastingOfferAcceptanceState.get(`${appId}::${charId}`) === 'offer_accepted') accepted += 1;
+    });
+    finalCastingEnsembleIds.forEach(appId => {
+      if (!appId) return;
+      total += 1;
+      if (finalCastingOfferAcceptanceState.get(`${appId}::`) === 'offer_accepted') accepted += 1;
+    });
+    return { accepted, total };
+  }
+
   function getFinalCastingOfferQueues() {
     const roleMap = getFinalCastingOfferRoleMap();
     const confirmedIds = new Set(roleMap.keys());
@@ -28994,6 +29060,7 @@ We look forward to seeing your work!
     const host = document.getElementById('final-casting-offers-host');
     if (!host) return;
     const { offers, rejections, unfilledRoles } = getFinalCastingOfferQueues();
+    const acceptanceSummary = finalCastingAcceptedRolesSummary();
     const missingEmail = [...offers, ...rejections]
       .filter(item => !item.app?.email)
       .map(item => item.app?.name || 'Unnamed performer')
@@ -29132,6 +29199,10 @@ We look forward to seeing your work!
         </div>
       </div>`;
     host.innerHTML = `
+      <div class="final-casting-offers-progress">
+        <strong>${acceptanceSummary.accepted} / ${acceptanceSummary.total}</strong>
+        <span>roles accepted</span>
+      </div>
       <div class="final-casting-offers-grid">
         ${panelHtml('Offers', offers.length, 'final-casting-bulk-offers-btn', 'Send All Offers', 'bulkSendFinalCastingOfferEmails', [...offers, ...unfilledRoles], 'No locked offers yet. Click cards on the Casting Board to lock performers into roles.', 'offer')}
         ${panelHtml('Not Cast', rejections.length, 'final-casting-bulk-rejections-btn', 'Send All Not Cast', 'bulkSendFinalCastingRejectionEmails', rejections, 'Everyone in the final pool is currently confirmed.', 'rejection')}
