@@ -36368,20 +36368,22 @@ We look forward to seeing your work!
     }
   }
 
-  function getCbEnsemblePerformers() {
-    const checkedIn = allApplicants.filter(app => {
+  function cbv2ApplicantIsCheckedIn(app) {
       if (app.checked_in) return true;
       const checkins = Array.isArray(app.session_checkins) ? app.session_checkins : [];
       return checkins.some(x => x.checked_in);
-    });
+  }
 
-    return checkedIn.filter(app => {
+  function getCbEnsemblePerformers() {
+    return allApplicants.filter(app => {
       // Exclude anyone the CD has explicitly placed on a named role (liked or chosen).
       // 'applied' state is auto-placed from their application and doesn't count.
       const onARole = cbv2Assignments.some(a => a.applicant_id === app.id && a.state !== 'applied');
       if (onARole) return false;
       const badge = cbv2RoleBadge(app);
-      return badge === 'ensemble' || badge === 'open' || cbv2EnsembleManual.has(app.id);
+      if (badge === 'ensemble') return true;
+      if (cbv2EnsembleManual.has(app.id)) return true;
+      return badge === 'open' && cbv2ApplicantIsCheckedIn(app);
     }).sort((a, b) => {
       const la = (a.name || '').split(' ').slice(1).join(' ') || a.name || '';
       const lb = (b.name || '').split(' ').slice(1).join(' ') || b.name || '';
@@ -36472,8 +36474,7 @@ We look forward to seeing your work!
 
     const ensemblePerfs = getCbEnsemblePerformers();
 
-    const manualCount = ensemblePerfs.filter(app => cbv2EnsembleManual.has(app.id)).length;
-    if (countEl) countEl.textContent = manualCount || '';
+    if (countEl) countEl.textContent = ensemblePerfs.length || '';
     floor.style.display = (ensemblePerfs.length || keepVisible) ? '' : 'none';
     if (!ensemblePerfs.length) {
       grid.innerHTML = keepVisible ? '' : '';
