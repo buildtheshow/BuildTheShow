@@ -2810,9 +2810,10 @@
       display: flex;
       flex-direction: column;
       justify-content: space-between;
+      align-items: center;
       gap: 1rem;
       padding: 1.1rem;
-      text-align: left;
+      text-align: center;
       transition: transform 0.16s ease, box-shadow 0.16s ease;
       overflow: hidden;
     }
@@ -2843,9 +2844,10 @@
       line-height: 1.42;
       margin-top: 0.65rem;
       max-width: 14rem;
+      text-align: center;
     }
     .et-section-card-count {
-      align-self: flex-start;
+      align-self: center;
       border-radius: 999px;
       background: rgba(255,255,255,0.62);
       border: 1px solid rgba(53,39,86,0.08);
@@ -2876,6 +2878,26 @@
     .et-status-pill.manual { background: rgba(100,116,139,0.11); color: #475569; border-color: rgba(100,116,139,0.2); }
     .et-status-pill.live { background: rgba(34,197,94,0.1); color: #15803d; border-color: rgba(34,197,94,0.18); }
     .et-status-pill.attention { background: rgba(244,63,94,0.09); color: #be123c; border-color: rgba(244,63,94,0.18); }
+    .et-review-pill {
+      align-self: flex-start;
+      display: inline-flex;
+      align-items: center;
+      width: fit-content;
+      border-radius: 999px;
+      padding: 0.22rem 0.52rem;
+      background: rgba(255,255,255,0.2);
+      border: 1px solid rgba(255,255,255,0.42);
+      color: var(--et-card-ink, #fff);
+      font-size: 0.66rem;
+      font-weight: 900;
+      line-height: 1.15;
+    }
+    .et-review-pill.needs,
+    .et-review-pill.stale {
+      background: rgba(255,255,255,0.14);
+      border-color: rgba(255,255,255,0.3);
+      color: var(--et-card-muted, rgba(255,255,255,0.78));
+    }
     .et-library-empty {
       max-width: 780px;
       padding: 1.2rem;
@@ -20546,12 +20568,12 @@
   ];
 
   const ET_SECTION_META = {
-    auditions:   { label: 'Auditions', color: '#DDEFD9', summary: 'Bookings, self tapes, reminders, and audition-day performer emails.' },
-    callbacks:   { label: 'Callbacks', color: '#E3A46F', summary: 'Callback requests, responses, and materials.' },
-    casting:     { label: 'Casting', color: '#E9DDF7', summary: 'Callbacks, role offers, not-cast notes, and casting decisions.' },
-    rehearsals:  { label: 'Rehearsals', color: '#DDF1F4', summary: 'Schedules, first rehearsal details, and cast updates.' },
-    team_portal: { label: 'Team Portal', color: '#E8E1F4', summary: 'Team invites, access codes, and portal onboarding.' },
-    general:     { label: 'General', color: '#ECE7DE', summary: 'Flexible production messages that do not fit one workflow.' },
+    auditions:   { label: 'Auditions', color: '#DDEFD9', summary: 'Bookings • Self tapes • Reminders • Audition day' },
+    callbacks:   { label: 'Callbacks', color: '#E3A46F', summary: 'Requests • Responses • Materials' },
+    casting:     { label: 'Casting', color: '#E9DDF7', summary: 'Callbacks • Role offers • Not-cast notes • Decisions' },
+    rehearsals:  { label: 'Rehearsals', color: '#DDF1F4', summary: 'Schedules • First rehearsal • Cast updates' },
+    team_portal: { label: 'Team Portal', color: '#E8E1F4', summary: 'Invites • Access codes • Portal onboarding' },
+    general:     { label: 'General', color: '#ECE7DE', summary: 'Announcements • Updates • Flexible messages' },
   };
 
   const EMAIL_TEMPLATE_META = {
@@ -20942,6 +20964,53 @@
     const category = Object.entries(EMAIL_TEMPLATE_META)
       .find(([, meta]) => etHomeSection(filter).sections.includes(meta.section))?.[0];
     return category || 'general';
+  }
+
+  function etReviewStoreKey() {
+    return `bts_email_template_approvals_${prodId || 'production'}`;
+  }
+
+  function etLocalReviewMap() {
+    try {
+      return JSON.parse(localStorage.getItem(etReviewStoreKey()) || '{}') || {};
+    } catch {
+      return {};
+    }
+  }
+
+  function etSetLocalReviewedAt(id, reviewedAt) {
+    if (!id || !reviewedAt) return;
+    const map = etLocalReviewMap();
+    map[id] = reviewedAt;
+    try { localStorage.setItem(etReviewStoreKey(), JSON.stringify(map)); } catch {}
+  }
+
+  function etReviewedAt(template) {
+    return template?.reviewed_at || etLocalReviewMap()[template?.id] || '';
+  }
+
+  function etFormatReviewDate(value) {
+    if (!value) return '';
+    try {
+      return new Date(value).toLocaleDateString('en-CA', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+      });
+    } catch {
+      return String(value);
+    }
+  }
+
+  function etTemplateReviewState(template) {
+    const reviewedAt = etReviewedAt(template);
+    if (!reviewedAt) return { className: 'needs', label: 'Needs approval', button: 'Approve' };
+    const reviewedTime = new Date(reviewedAt).getTime();
+    const changedTime = new Date(template?.updated_at || template?.created_at || reviewedAt).getTime();
+    if (Number.isFinite(reviewedTime) && Number.isFinite(changedTime) && changedTime > reviewedTime + 1000) {
+      return { className: 'stale', label: 'Updated since approval', button: 'Approve Again' };
+    }
+    return { className: 'approved', label: `Approved on ${etFormatReviewDate(reviewedAt)}`, button: 'Approved' };
   }
 
   function etSendTypeLabel(sendType) {
@@ -21791,6 +21860,7 @@ We look forward to seeing your work!
             const meta = etTemplateMeta(t.category);
             const purpose = ET_PURPOSES.find(p => p.value === t.category);
             const issues = etTemplateIssues(t);
+            const review = etTemplateReviewState(t);
             const dotColor = purpose?.color || section.color || '#9D8BC4';
             const cardStyle = `--et-card-bg:${esc(dotColor)};--et-card-border:color-mix(in srgb, ${esc(dotColor)} 82%, #000);--et-card-ink:#fff;--et-card-muted:rgba(255,255,255,0.78);--et-button-bg:rgba(255,255,255,0.18);--et-button-hover:rgba(255,255,255,0.3);--et-button-border:rgba(255,255,255,0.56);`;
             return `<div class="et-row" style="${cardStyle}" onclick="openEditEmailTemplate('${t.id}')">
@@ -21798,10 +21868,12 @@ We look forward to seeing your work!
                 <span class="et-row-name">${esc(t.name || meta.label || 'Untitled')}</span>
                 <span class="et-row-purpose-summary">${esc(meta.usedBy || 'Reusable production email')}</span>
                 <span class="et-row-cue"><strong>Cue:</strong> ${esc(etCueLabel(t.trigger))}</span>
+                <span class="et-review-pill ${esc(review.className)}">${esc(review.label)}</span>
                 ${issues.length ? '<span class="et-row-cue"><strong>Needs:</strong> Setup check</span>' : ''}
               </div>
               <div class="et-row-right">
                 <div class="et-row-actions">
+                  <button class="et-row-action-btn" onclick="event.stopPropagation();markEmailTemplateApproved('${t.id}')">${esc(review.button)}</button>
                   <button class="et-row-action-btn" onclick="event.stopPropagation();openEditEmailTemplate('${t.id}')">Edit</button>
                   <button class="et-row-action-btn" onclick="event.stopPropagation();duplicateEmailTemplate('${t.id}')">Duplicate</button>
                   <button class="et-row-action-btn danger" onclick="event.stopPropagation();deleteEmailTemplate('${t.id}')">Delete</button>
@@ -21844,6 +21916,27 @@ We look forward to seeing your work!
   function filterEmailTemplates(cat) {
     _etCatFilter = cat;
     renderEmailTemplates();
+  }
+
+  async function markEmailTemplateApproved(id) {
+    const reviewedAt = new Date().toISOString();
+    const template = _etTemplates.find(t => String(t.id) === String(id));
+    if (!template) return;
+    try {
+      const { data, error } = await sb.from('email_templates')
+        .update({ reviewed_at: reviewedAt })
+        .eq('id', id)
+        .select('*')
+        .single();
+      if (error) throw error;
+      _etTemplates = (_etTemplates || []).map(t => String(t.id) === String(id) ? (data || { ...t, reviewed_at: reviewedAt }) : t);
+    } catch (err) {
+      console.warn('[BTS] email template reviewed_at unavailable; storing approval locally.', err);
+      etSetLocalReviewedAt(id, reviewedAt);
+      _etTemplates = (_etTemplates || []).map(t => String(t.id) === String(id) ? { ...t, reviewed_at: reviewedAt } : t);
+    }
+    renderEmailTemplates();
+    showToast(`${template.name || 'Template'} approved.`);
   }
 
   function etOpenModal() {

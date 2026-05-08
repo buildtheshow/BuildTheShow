@@ -1620,3 +1620,5 @@ $$;
 
 GRANT EXECUTE ON FUNCTION team_next_signal_list_for_session(uuid,text) TO anon, authenticated;
 GRANT EXECUTE ON FUNCTION team_next_signal_upsert_for_session(uuid,text,uuid,text,text,text,text,uuid,text,text,uuid[],uuid,text,text,uuid[],text) TO anon, authenticated;
+ALTER TABLE email_templates
+  ADD COLUMN IF NOT EXISTS reviewed_at timestamptz;
