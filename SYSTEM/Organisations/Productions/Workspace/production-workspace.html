@@ -13679,19 +13679,13 @@
       cursor: not-allowed;
       filter: grayscale(0.35);
     }
-    .final-casting-offer-status {
-      display: none;
-      margin-top: 0.1rem;
-      padding: 0.45rem 0.6rem;
-      border-radius: 8px;
-      background: rgba(52,211,113,0.1);
-      color: #1a7540;
-      font-size: 0.74rem;
-      font-weight: 600;
-      line-height: 1.3;
-    }
-    .final-casting-offer-status.visible {
-      display: block;
+    .final-casting-offer-actions button.final-casting-offer-send-state:disabled {
+      opacity: 1;
+      filter: none;
+      cursor: default;
+      background: rgba(255,255,255,0.72);
+      color: #572e88;
+      box-shadow: inset 0 0 0 1px rgba(87,46,136,0.2), 0 3px 8px rgba(26,21,48,0.06);
     }
     .final-casting-offer-row.final-casting-offer-row-rejection {
       background: #f6c7c7;
@@ -29350,6 +29344,24 @@ We look forward to seeing your work!
     return { accepted, total };
   }
 
+  function finalCastingOfferResponseState(item) {
+    if (!item?.app?.id) return '';
+    const roleEntries = item.roleEntries || [];
+    const states = roleEntries
+      .map(role => {
+        const roleKey = role?.id === '__ensemble__' ? '' : String(role?.id || '');
+        return finalCastingOfferAcceptanceState.get(`${item.app.id}::${roleKey}`) || '';
+      })
+      .filter(Boolean);
+    if (states.length && states.every(state => state === 'offer_accepted')) return 'accepted';
+    if (states.length && states.every(state => state === 'offer_declined')) return 'declined';
+    const offerStatus = applicantCustomAnswers(item.app)[CAST_OFFER_KEYS.status] || '';
+    if (offerStatus === 'accepted') return 'accepted';
+    if (offerStatus === 'declined') return 'declined';
+    if (offerStatus === 'sent') return 'sent';
+    return '';
+  }
+
   function getFinalCastingOfferQueues() {
     const roleMap = getFinalCastingOfferRoleMap();
     const confirmedIds = new Set(roleMap.keys());
@@ -29466,16 +29478,19 @@ We look forward to seeing your work!
       const contactEmail = app.email || ca['Contact Email'] || 'No email';
       const rawPhone = app.phone || ca['Contact Phone'] || ca['Phone'] || ca['phone'] || '';
       const contactPhone = rawPhone ? (window.BTSPhone?.format(rawPhone) || rawPhone) : 'No phone';
-      const buttonLabel = kind === 'offer' ? 'Send Offer' : 'Send Email';
-      const buttonClass = kind === 'offer' ? 'btn-primary' : 'btn-secondary';
       const clickFn = kind === 'offer' ? 'sendFinalCastingOfferEmail' : 'sendFinalCastingRejectionEmail';
       const previewFn = kind === 'offer' ? 'previewFinalCastingOfferEmail' : 'previewFinalCastingRejectionEmail';
       const sentKey = `${kind}:${app.id}`;
       const sendState = finalCastingEmailSendState.get(sentKey);
-      const sentVisible = sendState?.sentAt ? ' visible' : '';
-      const sentText = sendState?.sentAt
-        ? `${kind === 'offer' ? 'Offer' : 'Not cast'} email sent at ${sendState.sentAt}.`
-        : '';
+      const responseState = kind === 'offer' ? finalCastingOfferResponseState(item) : '';
+      let buttonLabel = kind === 'offer' ? 'Send Offer' : 'Send Email';
+      if (kind === 'offer' && responseState === 'accepted') buttonLabel = 'Offer Accepted';
+      else if (kind === 'offer' && responseState === 'declined') buttonLabel = 'Offer Denied';
+      else if (sendState?.sentAt || (kind === 'offer' && responseState === 'sent')) buttonLabel = kind === 'offer' ? 'Offer Sent' : 'Email Sent';
+      const buttonIsStatus = buttonLabel !== (kind === 'offer' ? 'Send Offer' : 'Send Email');
+      const buttonClass = buttonIsStatus ? 'btn-secondary final-casting-offer-send-state' : (kind === 'offer' ? 'btn-primary' : 'btn-secondary');
+      const buttonDisabled = buttonIsStatus ? ' disabled' : '';
+      const buttonClick = buttonIsStatus ? '' : ` onclick="${clickFn}('${esc(app.id)}', this)"`;
       return `<div class="final-casting-offer-row${kind === 'rejection' ? ' final-casting-offer-row-rejection' : ''}">
         <div>
           <div class="final-casting-offer-name">${esc(roleTitle)}</div>
@@ -29500,10 +29515,9 @@ We look forward to seeing your work!
         <div class="final-casting-offer-actions">
           ${app.email ? `
             <button type="button" class="btn-secondary" style="font-size:0.76rem;padding:0.38rem 0.75rem;justify-content:center;" onclick="${previewFn}('${esc(app.id)}')">Preview</button>
-            <button type="button" class="${buttonClass}" style="font-size:0.76rem;padding:0.38rem 0.75rem;justify-content:center;" onclick="${clickFn}('${esc(app.id)}', this)">${buttonLabel}</button>
+            <button type="button" class="${buttonClass}" style="font-size:0.76rem;padding:0.38rem 0.75rem;justify-content:center;"${buttonDisabled}${buttonClick}>${buttonLabel}</button>
           ` : '<span class="final-casting-offers-count">No email</span>'}
         </div>
-        <div class="final-casting-offer-status${sentVisible}">${esc(sentText)}</div>
       </div>`;
     };
     const groupedOfferRows = rows => {
