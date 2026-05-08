@@ -18766,6 +18766,7 @@
                     <div class="form-group" style="margin-bottom:0;"><label class="form-label">Offer Expiry</label><select id="reg-offer-expiry" class="form-select"><option>24 hours</option><option>48 hours</option><option>72 hours</option><option>No expiry</option></select></div>
                     <div class="form-group" style="margin-bottom:0;"><label class="form-label">Reply By</label><input id="reg-offer-deadline" class="form-input" type="datetime-local" /></div>
                     <div class="form-group" style="margin-bottom:0;"><label class="form-label">Allow Re-offers</label><select id="reg-allow-reoffers" class="form-select"><option>Yes</option><option>No</option><option>Staff approval</option></select></div>
+                    <div class="form-group" style="margin-bottom:0;"><label class="form-label">Sequential Casting</label><select id="reg-sequential-casting" class="form-select"><option>On</option><option>Off</option></select></div>
                   </div>
                 </section>
                 <section class="settings-section">
@@ -23197,6 +23198,30 @@
     return '';
   }
 
+  function producerSignoffContext() {
+    const producerDept = (teamConfig || []).find(dept => String(dept?.name || '').toLowerCase().includes('producer'));
+    const producerRole = (producerDept?.roles || []).find(role => role?.filled !== false && etFirstRealValue(role?.person, role?.name));
+    const producerMember = (auditionTeamMembers || []).find(member => String(member?.role || '').toLowerCase().includes('producer'));
+    const name = etFirstRealValue(
+      producerRole?.person,
+      producerMember?.name,
+      prod?.producer_name,
+      prod?.producer,
+      prod?.director,
+      orgName,
+      prod?.org_name,
+      'Producer'
+    );
+    const role = etFirstRealValue(producerRole?.name, producerMember?.role, prod?.producer_role, 'Producer');
+    const email = etFirstRealValue(producerRole?.email, producerMember?.email, prod?.producer_email, orgEmail, prod?.org_email);
+    return {
+      producer_name: name,
+      producer_role: role,
+      producer_email: email,
+      producer_signoff: [name, role, email].filter(Boolean).join('\n'),
+    };
+  }
+
   function etProductionLocationFor(typeHint) {
     const type = String(typeHint || '').toLowerCase();
     if (type.includes('audition') || type.includes('dance') || type.includes('callback')) {
@@ -23257,6 +23282,18 @@
         { token: '{{org_name}}',   label: 'Company Name',      sample: () => orgName || prod?.org_name || etPlaceholder('company name') },
       ],
     },
+    // ── Sign-Off ────────────────────────────────────────────────
+    {
+      group: 'Producer Sign-Off',
+      color: '#572e88',
+      bg:    '#eadcff',
+      vars: [
+        { token: '{{producer_name}}',    label: 'Producer Name', sample: () => producerSignoffContext().producer_name || etPlaceholder('producer name') },
+        { token: '{{producer_role}}',    label: 'Producer Role', sample: () => producerSignoffContext().producer_role || 'Producer' },
+        { token: '{{producer_email}}',   label: 'Producer Email', sample: () => producerSignoffContext().producer_email || etPlaceholder('producer email') },
+        { token: '{{producer_signoff}}', label: 'Producer Sign-Off', sample: () => producerSignoffContext().producer_signoff || 'Producer\nProducer\nproducer@example.com' },
+      ],
+    },
     // ── General Auditions ────────────────────────────────────────
     {
       group: 'General Auditions',
@@ -23313,6 +23350,8 @@
         { token: '{{cast_accept_link}}', label: 'Accept Offer Link', sample: 'https://buildtheshow.com/.../cast-offer?action=accept' },
         { token: '{{cast_decline_link}}', label: 'Decline Offer Link', sample: 'https://buildtheshow.com/.../cast-offer?action=decline' },
         { token: '{{cast_response_link}}', label: 'Review Offer Link', sample: 'https://buildtheshow.com/.../cast-offer' },
+        { token: '{{cast_offer_deadline}}', label: 'Offer Reply Deadline', sample: 'Friday, May 15, 2026 at 5:00 PM' },
+        { token: '{{cast_offer_deadline_note}}', label: 'Offer Deadline Sentence', sample: 'Please respond by Friday, May 15, 2026 at 5:00 PM. If we do not hear from you by then, we will mark this role offer as declined so the production team can keep casting moving.' },
         { token: '{{registration_link}}', label: 'Registration Link', sample: 'https://buildtheshow.com/.../cast-offer?view=registration' },
       ],
     },
@@ -23465,9 +23504,9 @@
       note: 'This request is only for callback tapes. It uses a callback scoped upload link, separate from the general audition self tape link.'
     },
     cast_announcement: {
-      required: ['{{contact_name}}', '{{role_name}}', '{{cast_accept_link}}', '{{cast_decline_link}}'],
+      required: ['{{contact_name}}', '{{role_name}}', '{{cast_accept_link}}', '{{cast_decline_link}}', '{{cast_offer_deadline_note}}'],
       recommended: ['{{show_name}}', '{{rehearsal_start_date}}', '{{opening_night}}'],
-      note: 'Cast offers should celebrate the offer, then give clear accept and decline links. Registration is sent after acceptance.'
+      note: 'Cast offers should celebrate the offer, give clear accept and decline links, and name the reply-by deadline before the offer is marked declined.'
     },
     cast_accepted: {
       required: ['{{contact_name}}', '{{role_name}}', '{{registration_link}}'],
@@ -23606,6 +23645,7 @@
     const issues = [];
     if (!String(template?.subject || '').trim()) issues.push('Missing subject');
     if (!etPlainSnippet(template?.body || '')) issues.push('Missing body');
+    if (!String(template?.body || '').includes('{{producer_signoff}}')) issues.push('Missing {{producer_signoff}}');
     const requiredTokens = ET_SMART_RULES[template?.category]?.required || [];
     const combined = `${template?.subject || ''}\n${template?.body || ''}`;
     requiredTokens.forEach(token => {
@@ -23652,6 +23692,10 @@
       director: prod?.director || etPlaceholder('director name'),
       director_name: prod?.director || etPlaceholder('director name'),
       org_name: orgName || prod?.org_name || etPlaceholder('company name'),
+      producer_name: producerSignoffContext().producer_name || etPlaceholder('producer name'),
+      producer_role: producerSignoffContext().producer_role || 'Producer',
+      producer_email: producerSignoffContext().producer_email || etPlaceholder('producer email'),
+      producer_signoff: producerSignoffContext().producer_signoff || etPlaceholder('producer sign-off'),
     };
     return lookup[key] || lookup[key.toLowerCase()] || etPlaceholder(key);
   }
@@ -24141,8 +24185,7 @@ Location: {{audition_venue}}
 If you need to reschedule or have any questions, please get in touch as soon as possible.
 
 See you soon,
-{{director_name}}
-{{org_name}}`,
+{{producer_signoff}}`,
     },
     {
       name: 'Audition Reminder',
@@ -24163,8 +24206,7 @@ Location: {{audition_venue}}
 We're looking forward to seeing you. If anything has changed and you can no longer make it, please let us know as soon as possible so we can offer your slot to someone else.
 
 See you there,
-{{director_name}}
-{{org_name}}`,
+{{producer_signoff}}`,
     },
     {
       name: 'Callback Response Request',
@@ -24189,8 +24231,7 @@ Reschedule: {{callback_reschedule_link}}
 Once you accept or choose a new time, we'll send your confirmed callback details and materials.
 
 Warmly,
-{{director_name}}
-{{org_name}}`,
+{{producer_signoff}}`,
     },
     {
       name: 'Callback Confirmed Materials',
@@ -24210,8 +24251,7 @@ Callback materials:
 {{callback_materials}}
 
 Warmly,
-{{director_name}}
-{{org_name}}`,
+{{producer_signoff}}`,
     },
     {
       name: 'Callback Declined Confirmation',
@@ -24223,8 +24263,7 @@ Warmly,
 Thanks for letting us know that you can't attend this callback for {{show_name}}.
 
 Warmly,
-{{director_name}}
-{{org_name}}`,
+{{producer_signoff}}`,
     },
     {
       name: 'Callback Self Tape Request',
@@ -24261,8 +24300,7 @@ YOUR CALLBACK SELF TAPE LINK
 Please keep this email until your callback tape has been submitted.
 
 Warmly,
-{{director_name}}
-{{org_name}}`,
+{{producer_signoff}}`,
     },
     {
       name: 'Cast Offer You Got the Role',
@@ -24285,9 +24323,10 @@ Please choose one of the options below so we can keep everything moving:
 Accept your role: {{cast_accept_link}}
 Decline this offer: {{cast_decline_link}}
 
+{{cast_offer_deadline_note}}
+
 With excitement,
-{{director_name}}
-{{org_name}}`,
+{{producer_signoff}}`,
     },
     {
       name: 'Role Accepted Registration',
@@ -24310,8 +24349,7 @@ Rehearsals begin {{rehearsal_start_date}}.
 Opening night is {{opening_night}} at {{show_venue}}.
 
 With excitement,
-{{director_name}}
-{{org_name}}`,
+{{producer_signoff}}`,
     },
     {
       name: 'Not Cast Kind Decline',
@@ -24329,8 +24367,7 @@ We truly hope to see you again at future auditions. Your talent absolutely did n
 Thank you again for your time and energy.
 
 With gratitude,
-{{director_name}}
-{{org_name}}`,
+{{producer_signoff}}`,
     },
     {
       name: 'Rehearsal Schedule Welcome to the Cast',
@@ -24350,8 +24387,7 @@ Please review the schedule carefully and flag any conflicts as soon as possible.
 
 We're so excited to get started. See you in the room!
 
-{{director_name}}
-{{org_name}}`,
+{{producer_signoff}}`,
     },
     {
       name: 'Team Access Invite',
@@ -24383,7 +24419,7 @@ ONCE YOU'RE IN:
 
 If you have any trouble logging in, reply to this email and we'll sort it out.
 
-{{org_name}}`,
+{{producer_signoff}}`,
     },
     {
       name: 'General Announcement',
@@ -24398,8 +24434,7 @@ Just a quick update from the team at {{show_name}}.
 
 If you have any questions, don't hesitate to reach out.
 
-{{director_name}}
-{{org_name}}`,
+{{producer_signoff}}`,
     },
     {
       name: 'Self Tape Registration Confirmed',
@@ -24445,7 +24480,7 @@ If you have any questions, just reply to this email.
 
 We look forward to seeing your work!
 
-{{org_name}}`,
+{{producer_signoff}}`,
     },
   ];
 
@@ -24484,8 +24519,38 @@ We look forward to seeing your work!
     ));
   }
 
+  function etNormalizeProducerSignoffBody(body) {
+    const text = String(body || '').trim();
+    if (!text) return text;
+    if (text.includes('{{producer_signoff}}')) return text;
+    const replaced = text
+      .replace(/\n+\{\{director_name\}\}\s*\n\{\{org_name\}\}\s*$/i, '\n{{producer_signoff}}')
+      .replace(/\n+\{\{org_name\}\}\s*$/i, '\n{{producer_signoff}}');
+    if (replaced.includes('{{producer_signoff}}')) return replaced;
+    return `${text}\n\n{{producer_signoff}}`;
+  }
+
+  async function etEnsureProducerSignoffs() {
+    const updates = (_etTemplates || [])
+      .map(t => ({ ...t, body: etNormalizeProducerSignoffBody(t.body || '') }))
+      .filter(t => t.body !== String((_etTemplates || []).find(original => original.id === t.id)?.body || '').trim());
+    if (!updates.length) return;
+    _etTemplates = (_etTemplates || []).map(t => updates.find(u => u.id === t.id) || t);
+    await Promise.all(updates.map(t =>
+      sb.from('email_templates').update({ body: t.body }).eq('id', t.id)
+    ));
+  }
+
   function etCastOfferResponseBlock() {
-    return `\n\nPlease choose one of the options below so we can keep everything moving:\n\nAccept your role: {{cast_accept_link}}\nDecline this offer: {{cast_decline_link}}`;
+    return `\n\nPlease choose one of the options below so we can keep everything moving:\n\nAccept your role: {{cast_accept_link}}\nDecline this offer: {{cast_decline_link}}\n\n{{cast_offer_deadline_note}}`;
+  }
+
+  function etCastOfferMissingBlock(template) {
+    const hasLinks = etTemplateHasCastOfferLinks(template);
+    const hasDeadline = etTemplateHasCastOfferDeadline(template);
+    if (!hasLinks) return etCastOfferResponseBlock();
+    if (!hasDeadline) return `\n\n{{cast_offer_deadline_note}}`;
+    return '';
   }
 
   function etTemplateHasCastOfferLinks(template) {
@@ -24493,10 +24558,16 @@ We look forward to seeing your work!
     return body.includes('{{cast_accept_link}}') && body.includes('{{cast_decline_link}}');
   }
 
+  function etTemplateHasCastOfferDeadline(template) {
+    const body = String(template?.body || '');
+    return body.includes('{{cast_offer_deadline_note}}') || body.includes('{{cast_offer_deadline}}');
+  }
+
   function etCleanCastOfferTemplateBody(body) {
     return String(body || '')
       .replace(/\n{2,}Once you accept,\s*your registration will unlock here:\s*\n\{\{registration_link\}\}/gi, '')
       .replace(/\n{2,}Your registration is now unlocked\.[\s\S]*?\{\{registration_link\}\}/gi, '')
+      .replace(/\n{2,}Please respond by\s+\{\{cast_offer_deadline\}\}\.[\s\S]*?keep casting moving\./gi, '')
       .trim();
   }
 
@@ -24504,14 +24575,15 @@ We look forward to seeing your work!
     const castTemplates = (templates || []).filter(t => {
       if (t?.category !== 'cast_announcement') return false;
       const cleaned = etCleanCastOfferTemplateBody(t.body || '');
-      return cleaned !== String(t.body || '').trim() || !etTemplateHasCastOfferLinks({ ...t, body: cleaned });
+      return cleaned !== String(t.body || '').trim() || !etTemplateHasCastOfferLinks({ ...t, body: cleaned }) || !etTemplateHasCastOfferDeadline({ ...t, body: cleaned });
     });
     if (!castTemplates.length) return;
     const updates = castTemplates.map(t => ({
       ...t,
       body: etTemplateHasCastOfferLinks({ ...t, body: etCleanCastOfferTemplateBody(t.body || '') })
+        && etTemplateHasCastOfferDeadline({ ...t, body: etCleanCastOfferTemplateBody(t.body || '') })
         ? etCleanCastOfferTemplateBody(t.body || '')
-        : `${etCleanCastOfferTemplateBody(t.body || '')}${etCastOfferResponseBlock()}`,
+        : `${etCleanCastOfferTemplateBody(t.body || '')}${etCastOfferMissingBlock({ ...t, body: etCleanCastOfferTemplateBody(t.body || '') })}`,
     }));
     _etTemplates = (_etTemplates || []).map(t => updates.find(u => u.id === t.id) || t);
     await Promise.all(updates.map(t =>
@@ -24549,6 +24621,7 @@ We look forward to seeing your work!
       }
     }
     await etNormalizeContactGreetings();
+    await etEnsureProducerSignoffs();
     await etEnsureCastOfferTemplateLinks();
     renderEmailTemplates();
   }
@@ -24838,7 +24911,7 @@ We look forward to seeing your work!
     const trigger  = document.getElementById('et-trigger').value || etDefaultCueForCategory(category);
     const subject  = document.getElementById('et-subject').value.trim();
     const bodyEl   = document.getElementById('et-body');
-    const body     = bodyEl.innerHTML.trim();
+    const body     = etNormalizeProducerSignoffBody(bodyEl.innerHTML.trim());
     const msg = document.getElementById('et-modal-msg');
 
     if (!name) { msg.textContent = 'Please enter a template name.'; msg.style.display = ''; msg.style.background = 'rgba(185,28,28,0.07)'; msg.style.color = '#b91c1c'; return; }
@@ -28222,6 +28295,7 @@ We look forward to seeing your work!
 
     if (!allApplicants.length) await loadApplicants({ skipRender: true, skipCastingSync: true }).catch(() => {});
     if (!characters.length) await loadCharacters().catch(() => {});
+    await expirePastDueCastOffers().catch(error => console.warn('[BTS] registration offer expiry check failed', error));
 
     const { data: assignments, error } = await sb.from('casting_assignments')
       .select('*')
@@ -28960,6 +29034,11 @@ We look forward to seeing your work!
     host.innerHTML = '<div style="text-align:center;padding:2.5rem;color:#9a90b0;">Loading offer queues…</div>';
     await ensureFinalCastingEmailTemplates().catch(error => console.warn('[BTS] final casting email template setup failed', error));
     await loadFinalCastingPool();
+    const expiredCount = await expirePastDueCastOffers().catch(error => {
+      console.warn('[BTS] cast offer expiry check failed', error);
+      return 0;
+    });
+    if (expiredCount) await loadFinalCastingPool();
     if (!finalCastingEnsembleLoaded) await renderFinalCastingEnsemble();
     await loadFinalCastingOfferAcceptanceState();
     renderFinalCastingOffers();
@@ -28976,10 +29055,10 @@ We look forward to seeing your work!
     if (templates?.length) {
       if (category === 'cast_announcement') {
         const currentBody = etCleanCastOfferTemplateBody(templates[0].body || '');
-        if (currentBody !== String(templates[0].body || '').trim() || !etTemplateHasCastOfferLinks({ ...templates[0], body: currentBody })) {
-          const responseBlock = etCastOfferResponseBlock();
+        if (currentBody !== String(templates[0].body || '').trim() || !etTemplateHasCastOfferLinks({ ...templates[0], body: currentBody }) || !etTemplateHasCastOfferDeadline({ ...templates[0], body: currentBody })) {
+          const responseBlock = etCastOfferMissingBlock({ ...templates[0], body: currentBody });
           const { error: updateError } = await sb.from('email_templates')
-            .update({ body: etTemplateHasCastOfferLinks({ ...templates[0], body: currentBody }) ? currentBody : `${currentBody}${responseBlock}` })
+            .update({ body: etTemplateHasCastOfferLinks({ ...templates[0], body: currentBody }) && etTemplateHasCastOfferDeadline({ ...templates[0], body: currentBody }) ? currentBody : `${currentBody}${responseBlock}` })
             .eq('id', templates[0].id);
           if (updateError) throw updateError;
         }
@@ -29331,6 +29410,10 @@ We look forward to seeing your work!
         <strong>${acceptanceSummary.accepted} / ${acceptanceSummary.total}</strong>
         <span>roles accepted</span>
       </div>
+      <div class="final-casting-offers-progress">
+        <strong>Reply by</strong>
+        <span>${esc(castOfferDeadlineFromSettings().text || 'as soon as possible')}</span>
+      </div>
       <div class="final-casting-offers-grid">
         ${panelHtml('Offers', offers.length, 'final-casting-bulk-offers-btn', 'Send All Offers', 'bulkSendFinalCastingOfferEmails', [...offers, ...unfilledRoles], 'No locked offers yet. Click cards on the Casting Board to lock performers into roles.', 'offer')}
         ${panelHtml('Not Cast', rejections.length, 'final-casting-bulk-rejections-btn', 'Send All Not Cast', 'bulkSendFinalCastingRejectionEmails', rejections, 'Everyone in the final pool is currently confirmed.', 'rejection')}
@@ -29344,9 +29427,54 @@ We look forward to seeing your work!
     status: '__bts_cast_offer_status',
     sentAt: '__bts_cast_offer_sent_at',
     respondedAt: '__bts_cast_offer_responded_at',
+    deadlineAt: '__bts_cast_offer_deadline_at',
+    deadlineText: '__bts_cast_offer_deadline_text',
+    expiredAt: '__bts_cast_offer_expired_at',
     roleNames: '__bts_cast_offer_role_names',
     roleIds: '__bts_cast_offer_role_ids',
   };
+
+  function castOfferDeadlineLabel(date) {
+    if (!date || Number.isNaN(date.getTime())) return '';
+    return date.toLocaleString('en-CA', {
+      weekday: 'long',
+      month: 'long',
+      day: 'numeric',
+      year: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+    });
+  }
+
+  function castOfferDeadlineFromSettings() {
+    const settings = (typeof prod?.registration_settings === 'object' && prod.registration_settings) ? prod.registration_settings : {};
+    const exact = String(settings.offer_deadline || '').trim();
+    if (exact) {
+      const exactDate = new Date(exact);
+      if (!Number.isNaN(exactDate.getTime())) {
+        const text = castOfferDeadlineLabel(exactDate);
+        return {
+          iso: exactDate.toISOString(),
+          text,
+          note: `Please respond by ${text}. If we do not hear from you by then, we will mark this role offer as declined so the production team can keep casting moving.`,
+        };
+      }
+    }
+    const expiry = String(settings.offer_expiry || '48 hours').toLowerCase();
+    if (expiry.includes('no expiry')) return {
+      iso: '',
+      text: 'No deadline set',
+      note: 'Please respond as soon as you can so the production team can keep casting moving.',
+    };
+    const hours = Number((expiry.match(/(\d+)/) || [])[1] || 48);
+    const date = new Date(Date.now() + hours * 60 * 60 * 1000);
+    const text = castOfferDeadlineLabel(date);
+    return {
+      iso: date.toISOString(),
+      text,
+      note: `Please respond by ${text}. If we do not hear from you by then, we will mark this role offer as declined so the production team can keep casting moving.`,
+    };
+  }
 
   function castOfferBaseUrl() {
     const base = (orgSlug && prod?.slug)
@@ -29375,6 +29503,34 @@ We look forward to seeing your work!
     if (error) throw error;
   }
 
+  async function expirePastDueCastOffers(apps = allApplicants) {
+    const settings = (typeof prod?.registration_settings === 'object' && prod.registration_settings) ? prod.registration_settings : {};
+    if (settings.mark_expired === false) return 0;
+    const now = Date.now();
+    const expired = (apps || []).filter(app => {
+      const ca = applicantCustomAnswers(app);
+      if (ca[CAST_OFFER_KEYS.status] !== 'sent' || ca[CAST_OFFER_KEYS.expiredAt]) return false;
+      const deadline = ca[CAST_OFFER_KEYS.deadlineAt] ? new Date(ca[CAST_OFFER_KEYS.deadlineAt]) : null;
+      return deadline && !Number.isNaN(deadline.getTime()) && deadline.getTime() < now;
+    });
+    if (!expired.length) return 0;
+    await Promise.all(expired.map(async app => {
+      const expiredAt = new Date().toISOString();
+      await saveCastOfferState(app, {
+        [CAST_OFFER_KEYS.status]: 'declined',
+        [CAST_OFFER_KEYS.respondedAt]: expiredAt,
+        [CAST_OFFER_KEYS.expiredAt]: expiredAt,
+      });
+      const { error } = await sb.from('casting_assignments')
+        .update({ state: 'offer_declined' })
+        .eq('production_id', prodId)
+        .eq('applicant_id', app.id)
+        .in('state', ['chosen', 'ensemble_manual']);
+      if (error) throw error;
+    }));
+    return expired.length;
+  }
+
   async function ensureCastOfferToken(app) {
     const existing = applicantCustomAnswers(app)[CAST_OFFER_KEYS.token] || '';
     if (existing) return existing;
@@ -29383,13 +29539,16 @@ We look forward to seeing your work!
     return token;
   }
 
-  async function markCastOfferSent(app, roles = []) {
+  async function markCastOfferSent(app, roles = [], deadline = castOfferDeadlineFromSettings()) {
     const roleNames = roles.map(role => role?.name || '').filter(Boolean).join(', ');
     const roleIds = roles.map(role => role?.id || '').filter(Boolean).join(',');
     await saveCastOfferState(app, {
       [CAST_OFFER_KEYS.status]: 'sent',
       [CAST_OFFER_KEYS.sentAt]: new Date().toISOString(),
       [CAST_OFFER_KEYS.respondedAt]: '',
+      [CAST_OFFER_KEYS.deadlineAt]: deadline.iso || '',
+      [CAST_OFFER_KEYS.deadlineText]: deadline.text || '',
+      [CAST_OFFER_KEYS.expiredAt]: '',
       [CAST_OFFER_KEYS.roleNames]: roleNames,
       [CAST_OFFER_KEYS.roleIds]: roleIds,
     });
@@ -29400,7 +29559,8 @@ We look forward to seeing your work!
     if (!hasTemplate) throw new Error(category === 'cast_announcement' ? 'No cast announcement template found.' : 'No not cast template found.');
     const token = category === 'cast_announcement' ? await ensureCastOfferToken(app) : '';
     const links = token ? castOfferLinks(token) : {};
-    const { context } = await buildFinalCastingEmailContext(app, category, roleNames, links, roleEntries);
+    const deadline = category === 'cast_announcement' ? castOfferDeadlineFromSettings() : { iso: '', text: '' };
+    const { context } = await buildFinalCastingEmailContext(app, category, roleNames, links, roleEntries, deadline);
     const { data, error } = await sb.functions.invoke('send-email', {
       body: {
         applicant_id: app.id,
@@ -29416,7 +29576,7 @@ We look forward to seeing your work!
     if (!data?.sent) throw new Error(fnError || 'Email was not sent.');
     if (category === 'cast_announcement') {
       try {
-        await markCastOfferSent(app, roleEntries);
+        await markCastOfferSent(app, roleEntries, deadline);
       } catch (markError) {
         console.warn('[BTS] cast offer email sent, but sent marker failed', markError);
       }
@@ -29436,7 +29596,7 @@ We look forward to seeing your work!
     return data[0];
   }
 
-  async function buildFinalCastingEmailContext(app, category, roleNames = [], links = {}, roleEntries = []) {
+  async function buildFinalCastingEmailContext(app, category, roleNames = [], links = {}, roleEntries = [], deadline = castOfferDeadlineFromSettings()) {
     const rolesText = roleNames.length ? roleNames.join(', ') : '';
     const roleTypesText = [...new Set((roleEntries || []).map(role => role?.roleType || '').filter(Boolean))].join(', ');
     const performanceSchedule = await loadPerformanceScheduleSummary().catch(() => '');
@@ -29453,6 +29613,9 @@ We look forward to seeing your work!
       cast_response_link: links.review || '',
       cast_accept_link: links.accept || '',
       cast_decline_link: links.decline || '',
+      cast_offer_deadline: deadline.text || 'as soon as possible',
+      cast_offer_deadline_at: deadline.iso || '',
+      cast_offer_deadline_note: deadline.note || '',
       registration_link: links.registration || links.review || '',
       show_name: prod?.title || '',
       show_subtitle: prod?.subtitle || '',
@@ -29460,6 +29623,7 @@ We look forward to seeing your work!
       org_name: orgName || '',
       org_email: orgEmail || '',
       director_name: prod?.director || '',
+      ...producerSignoffContext(),
       rehearsal_start_date: prod?.start_date ? fmtDate(prod.start_date) : '',
       opening_night: prod?.start_date ? fmtDate(prod.start_date) : '',
       rehearsal_schedule: performanceSchedule || '',
@@ -33557,6 +33721,7 @@ We look forward to seeing your work!
           org_name:         orgName || '',
           org_email:        orgEmail || '',
           director_name:    prod?.director || '',
+          ...producerSignoffContext(),
           production: {
             title: prod?.title || '', subtitle: prod?.subtitle || '',
             venue: prod?.venue || '', director: prod?.director || '',
@@ -37499,6 +37664,7 @@ We look forward to seeing your work!
         org_name:      orgName        || '',
         org_email:     orgEmail       || '',
         director_name: prod?.director || '',
+        ...producerSignoffContext(),
         session_id:    bookingRecord.session_id || '',
         slot_id:       bookingRecord.slot_id    || '',
         production: {
@@ -43841,6 +44007,7 @@ We look forward to seeing your work!
       org_name:              orgName          || '',
       org_email:             orgEmail         || '',
       director_name:         prod?.director   || '',
+      ...producerSignoffContext(),
       audition_session:      primarySession?.name     || '',
       audition_date:         primarySession?.date     ? fmtDate(primarySession.date) : '',
       audition_time:         primaryTime,
@@ -43943,6 +44110,7 @@ We look forward to seeing your work!
     const roleEntries = _apmCastOfferRoleEntries(_apmApp);
     const roleNames = roleEntries.map(role => role.name).filter(Boolean).join(', ');
     const roleTypes = [...new Set(roleEntries.map(role => role.roleType).filter(Boolean))].join(', ');
+    const deadline = category === 'cast_announcement' ? castOfferDeadlineFromSettings() : { iso: '', text: '' };
     return {
       ...context,
       role_name: roleNames || context.role_name || '',
@@ -43952,8 +44120,12 @@ We look forward to seeing your work!
       cast_response_link: links.review,
       cast_accept_link: links.accept,
       cast_decline_link: links.decline,
+      cast_offer_deadline: deadline.text || 'as soon as possible',
+      cast_offer_deadline_at: deadline.iso || '',
+      cast_offer_deadline_note: deadline.note || '',
       registration_link: links.registration || links.review,
       __cast_offer_role_entries: roleEntries,
+      __cast_offer_deadline: deadline,
     };
   }
 
@@ -44018,7 +44190,7 @@ We look forward to seeing your work!
       context, subject, body,
     });
     if (sent && category === 'cast_announcement') {
-      await markCastOfferSent(_apmApp, context.__cast_offer_role_entries || []);
+      await markCastOfferSent(_apmApp, context.__cast_offer_role_entries || [], context.__cast_offer_deadline || castOfferDeadlineFromSettings());
     }
     _apmEmailCompose = null;
     _apmRenderBody();

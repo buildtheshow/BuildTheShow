@@ -184,6 +184,9 @@
       status: '__bts_cast_offer_status',
       sentAt: '__bts_cast_offer_sent_at',
       respondedAt: '__bts_cast_offer_responded_at',
+      deadlineAt: '__bts_cast_offer_deadline_at',
+      deadlineText: '__bts_cast_offer_deadline_text',
+      expiredAt: '__bts_cast_offer_expired_at',
       roleNames: '__bts_cast_offer_role_names',
       roleIds: '__bts_cast_offer_role_ids',
     };
@@ -232,12 +235,17 @@
 
     function renderDetails() {
       const showName = prod?.title || 'this production';
+      const ca = answers(app);
+      const deadlineText = ca[KEYS.deadlineText] || formatDeadline(ca[KEYS.deadlineAt]);
       $('title').textContent = `Your offer for ${showName}`;
-      $('intro').textContent = `Hi ${app?.name || 'there'}, please respond to your cast offer.`;
+      $('intro').textContent = deadlineText && deadlineText !== 'No deadline set'
+        ? `Hi ${app?.name || 'there'}, please respond to your cast offer by ${deadlineText}.`
+        : `Hi ${app?.name || 'there'}, please respond to your cast offer.`;
       $('details').innerHTML = `
         <div class="detail"><div class="detail-label">Production</div><div class="detail-value">${esc(showName)}</div></div>
         <div class="detail"><div class="detail-label">Venue</div><div class="detail-value">${esc(prod?.venue || 'TBC')}</div></div>
         <div class="detail"><div class="detail-label">Director</div><div class="detail-value">${esc(prod?.director || 'TBC')}</div></div>
+        ${deadlineText ? `<div class="detail"><div class="detail-label">Reply By</div><div class="detail-value">${esc(deadlineText)}</div></div>` : ''}
       `;
       $('roles').innerHTML = roleNames.map(name => `<div class="role-pill">${esc(name)}</div>`).join('');
       $('details').classList.remove('hidden');
@@ -246,10 +254,13 @@
 
       const state = offerState();
       if (state === 'accepted' || state === 'declined') {
+        const expired = Boolean(answers(app)[KEYS.expiredAt]);
         $('actions').classList.add('hidden');
         setStatus(state === 'accepted'
           ? 'This role offer has already been accepted. Your registration is unlocked for the production team.'
-          : 'This role offer has already been declined. Thank you for letting the production team know.',
+          : (expired
+            ? 'This role offer deadline has passed, so the offer has been marked declined. Please contact the production team if you have questions.'
+            : 'This role offer has already been declined. Thank you for letting the production team know.'),
           'neutral'
         );
       } else if (initialAction === 'accept') {
@@ -264,6 +275,34 @@
         .split(',')
         .map(value => value.trim())
         .filter(Boolean);
+    }
+
+    function formatDeadline(value) {
+      if (!value) return '';
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) return '';
+      return date.toLocaleString('en-CA', {
+        weekday: 'long',
+        month: 'long',
+        day: 'numeric',
+        year: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+      });
+    }
+
+    function offerIsPastDeadline() {
+      const raw = answers(app)[KEYS.deadlineAt] || '';
+      if (!raw) return false;
+      const date = new Date(raw);
+      return !Number.isNaN(date.getTime()) && Date.now() > date.getTime();
+    }
+
+    async function expireOfferIfNeeded() {
+      if (offerState() !== 'sent' || !offerIsPastDeadline()) return;
+      const settings = (prod && typeof prod.registration_settings === 'object') ? prod.registration_settings : {};
+      if (settings.mark_expired === false) return;
+      await saveResponse('declined', { [KEYS.expiredAt]: new Date().toISOString() });
     }
 
     function responseBaseUrl() {
@@ -288,7 +327,7 @@
       const ca = answers(app);
       const roleIds = parseRoleIds(ca);
       const [{ data: prodData }, { data: assignmentRows }] = await Promise.all([
-        sb.from('productions').select('id,title,subtitle,venue,director,organization_id,start_date,end_date').eq('id', prodId).maybeSingle(),
+        sb.from('productions').select('id,title,subtitle,venue,director,organization_id,start_date,end_date,registration_settings').eq('id', prodId).maybeSingle(),
         sb.from('casting_assignments')
           .select('id,production_id,character_id,applicant_id,state')
           .eq('production_id', prodId)
@@ -315,6 +354,7 @@
       );
       const storedNames = String(ca[KEYS.roleNames] || '').split(',').map(name => name.trim()).filter(Boolean);
       if (!roleNames.length && storedNames.length) roleNames = storedNames;
+      await expireOfferIfNeeded();
       renderDetails();
     }
 
@@ -358,7 +398,7 @@
       if (!data?.sent) throw new Error(data?.error || 'Accepted-role email was not sent.');
     }
 
-    async function saveResponse(status) {
+    async function saveResponse(status, extraAnswers = {}) {
       const nextState = status === 'accepted' ? 'offer_accepted' : 'offer_declined';
       const ids = offeredAssignments.map(row => row.id).filter(Boolean);
       if (!ids.length) throw new Error('This offer cannot be updated.');
@@ -366,6 +406,7 @@
         ...answers(app),
         [KEYS.status]: status,
         [KEYS.respondedAt]: new Date().toISOString(),
+        ...extraAnswers,
       };
       const [{ error: appError }, { error: assignmentError }] = await Promise.all([
         sb.from('audition_applications').update({ custom_answers: ca }).eq('id', app.id),
@@ -380,6 +421,12 @@
     async function acceptOffer() {
       try {
         setBusy(true);
+        await expireOfferIfNeeded();
+        if (offerState() === 'declined') {
+          $('actions').classList.add('hidden');
+          setStatus('This role offer deadline has passed, so the offer has been marked declined. Please contact the production team if you have questions.', 'neutral');
+          return;
+        }
         await saveResponse('accepted');
         let emailSent = true;
         try {

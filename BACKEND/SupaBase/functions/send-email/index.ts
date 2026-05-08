@@ -133,6 +133,10 @@ serve(async (req) => {
       '{{show_dates}}':    showDates,
       '{{org_name}}':      String(p.org_name  || p.title || 'Your Theatre Company'),
       '{{director_name}}': String(p.director  || ''),
+      '{{producer_name}}': String(p.director || p.org_name || 'Producer'),
+      '{{producer_role}}': 'Producer',
+      '{{producer_email}}': String(p.org_email || 'producer@example.com'),
+      '{{producer_signoff}}': [String(p.director || p.org_name || 'Producer'), 'Producer', String(p.org_email || 'producer@example.com')].filter(Boolean).join('\n'),
       // Your Booking (uses general session as stand-in)
       '{{audition_session}}':      primarySess ? String(primarySess.name || '') : '',
       '{{audition_date}}':         primarySess?.date        ? fmtDate(String(primarySess.date))        : '',
@@ -425,8 +429,7 @@ Location: {{audition_venue}}
 If you need to reschedule or have any questions, please get in touch as soon as possible.
 
 See you soon,
-{{director_name}}
-{{org_name}}`,
+{{producer_signoff}}`,
     },
     cast_announcement: {
       subject: 'Congratulations: you have been cast in {{show_name}}!',
@@ -439,9 +442,10 @@ Please choose one of the options below so we can keep everything moving:
 Accept your role: {{cast_accept_link}}
 Decline this offer: {{cast_decline_link}}
 
+{{cast_offer_deadline_note}}
+
 With excitement,
-{{director_name}}
-{{org_name}}`,
+{{producer_signoff}}`,
     },
     cast_accepted: {
       subject: 'Yay! You accepted your role in {{show_name}}',
@@ -456,8 +460,7 @@ Your registration is now unlocked. Please use the link below to complete your ca
 {{registration_link}}
 
 With excitement,
-{{director_name}}
-{{org_name}}`,
+{{producer_signoff}}`,
     },
   };
 
@@ -500,6 +503,16 @@ With excitement,
       email: firstDefinedString(directContext.org_email, directContext.organization_email, directProduction.org_email),
     };
   }
+
+  let producerMember: Record<string, unknown> | null = null;
+  try {
+    const { data } = await sb
+      .from('production_team_members')
+      .select('name,email,role,is_active')
+      .eq('production_id', productionId);
+    producerMember = ((data || []) as Record<string, unknown>[])
+      .find(member => String(member.role || '').toLowerCase().includes('producer') && member.is_active !== false) || null;
+  } catch { producerMember = null; }
 
   // ── Resolve session + slot ────────────────────────────────────
   const sessionId = appSessionId || bookingSessionId;
@@ -600,6 +613,10 @@ With excitement,
   const orgEmail     = String(org?.email || '');
   const showName     = String(productionRecord.title || '');
   const director     = String(productionRecord.director || '');
+  const producerName  = firstDefinedString(directContext.producer_name, producerMember?.name, director, orgName, 'Producer');
+  const producerRole  = firstDefinedString(directContext.producer_role, producerMember?.role, 'Producer');
+  const producerEmail = firstDefinedString(directContext.producer_email, producerMember?.email, orgEmail);
+  const producerSignoff = firstDefinedString(directContext.producer_signoff, [producerName, producerRole, producerEmail].filter(Boolean).join('\n'));
   const audVenue     = firstDefinedString(
     directContext.audition_venue,
     (primarySession as Record<string,unknown>)?.location,
@@ -663,12 +680,18 @@ With excitement,
     '{{booking_link}}':          bookingLink,
     '{{org_name}}':              orgName,
     '{{director_name}}':         director,
+    '{{producer_name}}':         producerName,
+    '{{producer_role}}':         producerRole,
+    '{{producer_email}}':        producerEmail,
+    '{{producer_signoff}}':      producerSignoff,
     '{{role_name}}':             roleInterest,
     '{{role_type}}':             roleType,
     '{{role_names}}':            firstDefinedString(directContext.role_names, directContext.roles, roleInterest),
     '{{cast_response_link}}':    firstDefinedString(directContext.cast_response_link),
     '{{cast_accept_link}}':      firstDefinedString(directContext.cast_accept_link),
     '{{cast_decline_link}}':     firstDefinedString(directContext.cast_decline_link),
+    '{{cast_offer_deadline}}':   firstDefinedString(directContext.cast_offer_deadline),
+    '{{cast_offer_deadline_note}}': firstDefinedString(directContext.cast_offer_deadline_note),
     '{{registration_link}}':     firstDefinedString(directContext.registration_link, directContext.cast_accept_link, directContext.cast_response_link),
     '{{rehearsal_start_date}}':  productionRecord.start_date ? fmtDate(String(productionRecord.start_date)) : '',
     '{{rehearsal_schedule}}':    firstDefinedString(directContext.rehearsal_schedule, directProduction.rehearsal_schedule),
@@ -746,6 +769,10 @@ With excitement,
     ...(productionRecord as object),
     org_name:     orgName,
     director_name: director,
+    producer_name: producerName,
+    producer_role: producerRole,
+    producer_email: producerEmail,
+    producer_signoff: producerSignoff,
     show_dates:    showDates,
   };
   const performerFieldValues: Record<string, unknown> = {
@@ -767,13 +794,17 @@ With excitement,
     '{{dance_call_prepare}}',
     '{{callback_prepare}}',
     '{{callback_materials}}',
+    '{{producer_signoff}}',
   ]);
 
   function substituteTemplate(text: string, escapeForHtml = false): string {
     let result = String(text || '');
     Object.entries(tokenValues).forEach(([token, value]) => {
       const isRaw = escapeForHtml && (rawHtmlTokens.has(token) || /^\{\{[a-z0-9_]+_prepare\}\}$/.test(token));
-      result = result.split(token).join((escapeForHtml && !isRaw) ? escHtml(value) : value);
+      const renderedValue = token === '{{producer_signoff}}' && escapeForHtml
+        ? escHtml(value).replace(/\n/g, '<br>')
+        : ((escapeForHtml && !isRaw) ? escHtml(value) : value);
+      result = result.split(token).join(renderedValue);
     });
     result = result.replace(
       /\{\{\s*(custom|production|performer|booking|app|organization|org)\s*:\s*([^}]+)\}\}/gi,
@@ -794,8 +825,16 @@ With excitement,
   // ── Resolve subject + body ────────────────────────────────────
   const overrideSubject = typeof body.subject === 'string' ? body.subject : '';
   const overrideMessage = typeof body.message === 'string' ? body.message : '';
+  function ensureProducerSignoffBlock(value: string): string {
+    const text = String(value || '').trim();
+    if (!text || text.includes('{{producer_signoff}}')) return text;
+    const replaced = text
+      .replace(/\n+\{\{director_name\}\}\s*\n\{\{org_name\}\}\s*$/i, '\n{{producer_signoff}}')
+      .replace(/\n+\{\{org_name\}\}\s*$/i, '\n{{producer_signoff}}');
+    return replaced.includes('{{producer_signoff}}') ? replaced : `${text}\n\n{{producer_signoff}}`;
+  }
   const sourceSubject = overrideSubject || template?.subject || fallback?.subject || CATEGORY_SUBJECTS[category] || `Update from ${showName || 'Build The Show'}`;
-  const sourceBody    = overrideMessage || template?.body    || fallback?.body    || '';
+  const sourceBody    = ensureProducerSignoffBlock(overrideMessage || template?.body || fallback?.body || '');
   const sourceBodyText = htmlToPlainText(String(sourceBody || ''));
 
   if (!sourceBodyText.trim()) {
