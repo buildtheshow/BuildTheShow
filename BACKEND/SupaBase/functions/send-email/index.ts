@@ -217,7 +217,7 @@ serve(async (req) => {
     const testRawHtmlSnippets = Object.entries(testTokens)
       .filter(([token, value]) => token.endsWith('_button}}') && value)
       .map(([, value]) => value);
-    const htmlBody = bodyLooksHtml ? subBody : plainTextToHtml(subBody, testRawHtmlSnippets);
+    const htmlBody = styleFallbackLinksHtml(bodyLooksHtml ? subBody : plainTextToHtml(subBody, testRawHtmlSnippets));
     const textBody = (bodyLooksHtml || testRawHtmlSnippets.length) ? htmlToPlainText(subBody) : subBody;
 
     const html = `<!DOCTYPE html>
@@ -815,7 +815,7 @@ serve(async (req) => {
   const rawHtmlSnippets = Object.entries(tokenValues)
     .filter(([token, value]) => token.endsWith('_button}}') && value)
     .map(([, value]) => value);
-  const htmlBody      = bodyLooksHtml ? substituteTemplate(sourceBody, true) : plainTextToHtml(templatedBody, rawHtmlSnippets);
+  const htmlBody      = styleFallbackLinksHtml(bodyLooksHtml ? substituteTemplate(sourceBody, true) : plainTextToHtml(templatedBody, rawHtmlSnippets));
   const bodyText      = (bodyLooksHtml || rawHtmlSnippets.length) ? htmlToPlainText(templatedBody) : templatedBody;
 
   const fromName  = orgName || 'Build The Show';
@@ -951,6 +951,15 @@ function emailActionButtonHtml(href: string, label: string, tone = 'primary'): s
   return `<a href="${escAttr(href)}" style="${styles}">${escHtml(label)}</a>`;
 }
 
+function styleFallbackLinksHtml(html: string): string {
+  return String(html || '').replace(/\(or click this link:\s*([^)<]+)\)/gi, (_match: string, rawHref: string) => {
+    const href = String(rawHref || '').trim();
+    const safeHref = escHtml(href);
+    const attrHref = escAttr(href);
+    return `<span style="display:block;margin-top:0.35rem;color:#9a90b0;font-size:0.78rem;font-style:italic;line-height:1.35;">(or click this link: <a href="${attrHref}" style="color:#9a90b0;text-decoration:underline;">${safeHref}</a>)</span>`;
+  });
+}
+
 function addEmailButtonTokens(tokenValues: Record<string, string>): void {
   Object.entries({ ...tokenValues }).forEach(([token, href]) => {
     const match = token.match(/^\{\{([a-z0-9_]+)_link\}\}$/i);
@@ -977,6 +986,7 @@ function plainTextToHtml(text: string, rawHtmlSnippets: string[] = []): string {
     .map(p => {
       let html = escHtml(p).replace(/\n/g, '<br>');
       placeholders.forEach((snippet, key) => { html = html.split(key).join(snippet); });
+      html = styleFallbackLinksHtml(html);
       return `<p style="margin:0 0 1em;">${html}</p>`;
     })
     .join('\n');
