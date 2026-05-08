@@ -2395,6 +2395,62 @@
       font-size: 0.74rem; color: #8d82a3;
     }
     .et-preview-var { background: rgba(87,46,136,0.1); color: #572e88; border-radius: 4px; padding: 0 3px; font-weight: 600; font-size: 0.85em; }
+    .et-preview-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 9000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1rem;
+      background: rgba(26,21,48,0.52);
+    }
+    .et-preview-modal {
+      width: min(760px, 100%);
+      max-height: min(760px, calc(100vh - 2rem));
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      border-radius: 14px;
+      background: #fff;
+      box-shadow: 0 24px 70px rgba(26,21,48,0.26);
+    }
+    .et-preview-modal-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 1rem;
+      padding: 1rem 1.15rem;
+      border-bottom: 1px solid rgba(26,21,48,0.08);
+    }
+    .et-preview-modal-title {
+      color: #1a1530;
+      font-size: 1rem;
+      font-weight: 850;
+      line-height: 1.25;
+    }
+    .et-preview-modal-subtitle {
+      margin-top: 0.18rem;
+      color: #7d7192;
+      font-size: 0.76rem;
+      line-height: 1.35;
+    }
+    .et-preview-modal-close {
+      width: 1.9rem;
+      height: 1.9rem;
+      border: 0;
+      border-radius: 999px;
+      background: rgba(26,21,48,0.06);
+      color: #5f5672;
+      cursor: pointer;
+      font-size: 1.05rem;
+      line-height: 1;
+    }
+    .et-preview-modal-body {
+      overflow: auto;
+      padding: 1.05rem;
+      background: #f7f6f9;
+    }
 
     /* ── Email Templates — minimal workbench refresh ── */
     #panel-emails,
@@ -17103,7 +17159,7 @@
                   <div id="et-modal-msg" class="et-modal-msg"></div>
                 </div>
                 <div style="display:flex;gap:0.4rem;">
-                  <button class="btn-secondary" style="font-size:0.82rem;padding:0.5rem 1rem;display:none;" id="et-copy-btn" onclick="copyEmailTemplate()">Copy text</button>
+                  <button class="btn-secondary" style="font-size:0.82rem;padding:0.5rem 1rem;" id="et-preview-btn" onclick="openEmailTemplatePreview()">View Preview</button>
                   <button class="btn-secondary" style="font-size:0.82rem;padding:0.5rem 1rem;" onclick="etToggleTestRow()">Send Test</button>
                   <button class="btn-primary" style="font-size:0.82rem;padding:0.5rem 1.1rem;" id="et-save-btn" onclick="saveEmailTemplate()">Save</button>
                 </div>
@@ -22244,10 +22300,28 @@ If you have any questions, don't hesitate to reach out.
 
 Thank you for registering to submit a self tape for {{show_name}}!
 
-Use the link below to upload your video. You can submit any time before the deadline.
+A self tape is a recorded audition. Instead of coming into the room at a scheduled audition time, you record the requested material on video and send it to the audition team for review.
+
+Please have your tape completed and submitted before {{general_audition_date}}.
 
 What to film:
 {{self_tape_instructions}}
+
+How to submit your tape:
+1. Record your audition video.
+2. Upload the video to YouTube as unlisted, Vimeo, or Google Drive.
+3. Make sure the link is viewable by anyone with the link.
+4. Open your personal submission link below.
+5. Paste your video link into the submission form and press submit.
+
+Why this matters:
+Your self tape is how the audition team will review your work for {{show_name}}. Submitting through your personal link makes sure your tape is connected to your registration.
+
+Important:
+Please use only the link in this email. It is unique to you and should not be shared with another performer.
+
+Accepted platforms:
+YouTube unlisted, Vimeo, or Google Drive
 
 ─────────────────────────────
 YOUR SUBMISSION LINK
@@ -22255,9 +22329,7 @@ YOUR SUBMISSION LINK
 {{submission_link}}
 ─────────────────────────────
 
-Keep this email. You'll need this link to submit your tape. The link is unique to you.
-
-Accepted platforms: YouTube (unlisted), Vimeo, Google Drive
+Keep this email until your tape has been submitted.
 
 If you have any questions, just reply to this email.
 
@@ -22515,7 +22587,6 @@ We look forward to seeing your work!
     document.getElementById('et-subject').value = '';
     document.getElementById('et-body').innerHTML = '';
     document.getElementById('et-modal-msg').style.display = 'none';
-    document.getElementById('et-copy-btn').style.display = 'none';
     etOpenModal();
   }
 
@@ -22530,7 +22601,6 @@ We look forward to seeing your work!
     document.getElementById('et-subject').value = t.subject || '';
     document.getElementById('et-body').innerHTML = etToHtml(t.body || '');
     document.getElementById('et-modal-msg').style.display = 'none';
-    document.getElementById('et-copy-btn').style.display = '';
     etOpenModal();
   }
 
@@ -22538,19 +22608,52 @@ We look forward to seeing your work!
     document.getElementById('email-template-modal').style.display = 'none';
   }
 
-  function copyEmailTemplate() {
-    const subject  = document.getElementById('et-subject').value;
-    const bodyEl   = document.getElementById('et-body');
-    const bodyText = bodyEl.innerText || bodyEl.textContent || '';
-    const text = subject ? `Subject: ${subject}\n\n${bodyText}` : bodyText;
-    navigator.clipboard.writeText(text).then(() => {
-      const msg = document.getElementById('et-modal-msg');
-      msg.textContent = 'Copied to clipboard.';
-      msg.style.display = '';
-      msg.style.background = 'rgba(21,128,61,0.08)';
-      msg.style.color = '#15803d';
-      setTimeout(() => { msg.style.display = 'none'; }, 2000);
-    });
+  function closeEmailTemplatePreview() {
+    document.getElementById('et-preview-overlay')?.remove();
+  }
+
+  function openEmailTemplatePreview() {
+    const subjectRaw = document.getElementById('et-subject')?.value || '';
+    const bodyRaw = document.getElementById('et-body')?.innerHTML || '';
+    const subject = firstDefinedString(etSubstituteVars(subjectRaw), 'Email Preview');
+    const body = firstDefinedString(etSubstituteVars(bodyRaw), '<p>Your email body will appear here.</p>');
+    const from = firstDefinedString(prod?.org_name, orgName, 'Build The Show');
+    const overlay = document.createElement('div');
+    overlay.id = 'et-preview-overlay';
+    overlay.className = 'et-preview-overlay';
+    overlay.onclick = event => {
+      if (event.target === overlay) closeEmailTemplatePreview();
+    };
+    overlay.innerHTML = `
+      <div class="et-preview-modal" role="dialog" aria-modal="true" aria-label="Email preview">
+        <div class="et-preview-modal-head">
+          <div>
+            <div class="et-preview-modal-title">Email Preview</div>
+            <div class="et-preview-modal-subtitle">Sample variables are filled in for review.</div>
+          </div>
+          <button type="button" class="et-preview-modal-close" onclick="closeEmailTemplatePreview()" aria-label="Close preview">×</button>
+        </div>
+        <div class="et-preview-modal-body">
+          <div class="et-preview-message">
+            <div class="et-preview-subject-line">${esc(subject)}</div>
+            <div class="et-preview-email-card">
+              <div class="et-preview-email-header">
+                <div class="et-preview-avatar">${esc(String(from || 'B').slice(0, 1).toUpperCase())}</div>
+                <div class="et-preview-from-block">
+                  <div class="et-preview-from-name">${esc(from)}</div>
+                  <div class="et-preview-from-addr">noreply@buildtheshow.com</div>
+                  <div class="et-preview-meta">
+                    <div class="et-preview-meta-row"><span class="et-preview-meta-label">To</span><span>Sample recipient</span></div>
+                  </div>
+                </div>
+                <div class="et-preview-date">Now</div>
+              </div>
+              <div style="padding:1.1rem 1.25rem;color:#1a1530;font-size:0.9rem;line-height:1.65;">${body}</div>
+            </div>
+          </div>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
   }
 
   async function duplicateEmailTemplate(id) {
@@ -22564,7 +22667,6 @@ We look forward to seeing your work!
     document.getElementById('et-subject').value = t.subject || '';
     document.getElementById('et-body').innerHTML = etToHtml(t.body || '');
     document.getElementById('et-modal-msg').style.display = 'none';
-    document.getElementById('et-copy-btn').style.display = '';
     etOpenModal();
   }
 
