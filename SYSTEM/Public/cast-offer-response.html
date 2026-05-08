@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Cast Offer | Build The Show</title>
+  <style>
+    :root {
+      --bts-purple: #572e88;
+      --bts-green: #659671;
+      --bts-rose: #b94b6a;
+      --bts-gold: #e3a46f;
+      --bts-ink: #1a1530;
+      --bts-muted: #6a5a80;
+      --bts-line: rgba(87,46,136,0.14);
+      --bts-bg: #f7f4fc;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: var(--bts-ink);
+      background:
+        linear-gradient(135deg, rgba(227,164,111,0.16), transparent 34%),
+        linear-gradient(225deg, rgba(101,150,113,0.14), transparent 38%),
+        var(--bts-bg);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: clamp(1rem, 4vw, 3rem);
+    }
+    .shell {
+      width: min(780px, 100%);
+      background: #fff;
+      border: 1px solid var(--bts-line);
+      border-radius: 8px;
+      box-shadow: 0 20px 52px rgba(87,46,136,0.16);
+      overflow: hidden;
+    }
+    .bar { height: 0.45rem; background: linear-gradient(90deg, var(--bts-gold), var(--bts-green)); }
+    .content { padding: clamp(1.3rem, 4vw, 2.35rem); }
+    .eyebrow {
+      color: var(--bts-purple);
+      font-size: 0.72rem;
+      font-weight: 900;
+      text-transform: uppercase;
+      letter-spacing: 0;
+      margin-bottom: 0.55rem;
+    }
+    h1 {
+      margin: 0;
+      font-size: clamp(1.65rem, 5vw, 2.55rem);
+      line-height: 1.04;
+      letter-spacing: 0;
+    }
+    p {
+      color: var(--bts-muted);
+      line-height: 1.55;
+      margin: 0.75rem 0 0;
+    }
+    .details {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+      gap: 0.75rem;
+      margin: 1.35rem 0;
+    }
+    .detail {
+      background: rgba(87,46,136,0.05);
+      border: 1px solid var(--bts-line);
+      border-radius: 8px;
+      padding: 0.78rem;
+      min-width: 0;
+    }
+    .detail-label {
+      color: #9a90b0;
+      font-size: 0.68rem;
+      font-weight: 900;
+      text-transform: uppercase;
+      letter-spacing: 0;
+      margin-bottom: 0.25rem;
+    }
+    .detail-value {
+      font-weight: 850;
+      overflow-wrap: anywhere;
+    }
+    .role-list {
+      display: grid;
+      gap: 0.55rem;
+      margin: 1.25rem 0;
+    }
+    .role-pill {
+      border: 1px solid rgba(87,46,136,0.16);
+      background: #fbfafc;
+      border-radius: 8px;
+      padding: 0.72rem 0.82rem;
+      font-weight: 850;
+    }
+    .actions {
+      display: flex;
+      gap: 0.7rem;
+      flex-wrap: wrap;
+      margin-top: 1.25rem;
+    }
+    button {
+      border: 1.5px solid var(--bts-purple);
+      border-radius: 8px;
+      padding: 0.74rem 1.05rem;
+      font: inherit;
+      font-size: 0.86rem;
+      font-weight: 900;
+      cursor: pointer;
+      transition: transform 0.15s, background 0.15s, border-color 0.15s;
+    }
+    button:hover { transform: translateY(-1px); }
+    button:disabled { cursor: default; opacity: 0.65; transform: none; }
+    .primary { border-color: var(--bts-green); background: var(--bts-green); color: #fff; }
+    .secondary { background: #fff; color: var(--bts-purple); }
+    .danger { border-color: #fecdd3; background: #fff1f2; color: #be123c; }
+    .status {
+      margin-top: 1rem;
+      padding: 0.9rem 1rem;
+      border-radius: 8px;
+      background: #eef7ef;
+      color: #315f3a;
+      font-weight: 800;
+      line-height: 1.45;
+    }
+    .status.error { background: #fff1f2; color: #be123c; }
+    .status.neutral { background: #f1ecff; color: #4a2a75; }
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <div class="bar"></div>
+    <section class="content">
+      <div class="eyebrow">Cast Offer</div>
+      <h1 id="title">Loading your offer...</h1>
+      <p id="intro">One moment while we find your role offer.</p>
+      <div class="details hidden" id="details"></div>
+      <div class="role-list hidden" id="roles"></div>
+      <div class="actions hidden" id="actions">
+        <button class="primary" id="accept-btn" type="button">Accept Role</button>
+        <button class="danger" id="decline-btn" type="button">Decline Offer</button>
+      </div>
+      <div class="status hidden" id="status"></div>
+    </section>
+  </main>
+
+  <script type="module">
+    import { supabase as sb } from '/ASSETS/scripts/supabase.js';
+
+    const KEYS = {
+      token: '__bts_cast_offer_token',
+      status: '__bts_cast_offer_status',
+      sentAt: '__bts_cast_offer_sent_at',
+      respondedAt: '__bts_cast_offer_responded_at',
+      roleNames: '__bts_cast_offer_role_names',
+      roleIds: '__bts_cast_offer_role_ids',
+    };
+
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get('token') || '';
+    const prodId = params.get('prod') || '';
+    const initialAction = (params.get('action') || '').toLowerCase();
+
+    let app = null;
+    let prod = null;
+    let assignments = [];
+    let offeredAssignments = [];
+    let roleNames = [];
+
+    const $ = id => document.getElementById(id);
+    const esc = value => String(value ?? '').replace(/[&<>"']/g, ch => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[ch]));
+    const answers = record => {
+      const raw = record?.custom_answers;
+      if (!raw) return {};
+      if (typeof raw === 'string') {
+        try { return JSON.parse(raw) || {}; } catch { return {}; }
+      }
+      return raw || {};
+    };
+    const setStatus = (message, mode = '') => {
+      $('status').textContent = message;
+      $('status').classList.toggle('error', mode === 'error');
+      $('status').classList.toggle('neutral', mode === 'neutral');
+      $('status').classList.remove('hidden');
+    };
+    const setBusy = busy => {
+      ['accept-btn', 'decline-btn'].forEach(id => {
+        const btn = $(id);
+        if (btn) btn.disabled = busy;
+      });
+    };
+
+    function offerState() {
+      const ca = answers(app);
+      if (ca[KEYS.status]) return ca[KEYS.status];
+      if (offeredAssignments.length && offeredAssignments.every(row => row.state === 'offer_accepted')) return 'accepted';
+      if (offeredAssignments.length && offeredAssignments.every(row => row.state === 'offer_declined')) return 'declined';
+      return 'sent';
+    }
+
+    function renderDetails() {
+      const showName = prod?.title || 'this production';
+      $('title').textContent = `Your offer for ${showName}`;
+      $('intro').textContent = `Hi ${app?.name || 'there'}, please respond to your cast offer.`;
+      $('details').innerHTML = `
+        <div class="detail"><div class="detail-label">Production</div><div class="detail-value">${esc(showName)}</div></div>
+        <div class="detail"><div class="detail-label">Venue</div><div class="detail-value">${esc(prod?.venue || 'TBC')}</div></div>
+        <div class="detail"><div class="detail-label">Director</div><div class="detail-value">${esc(prod?.director || 'TBC')}</div></div>
+      `;
+      $('roles').innerHTML = roleNames.map(name => `<div class="role-pill">${esc(name)}</div>`).join('');
+      $('details').classList.remove('hidden');
+      $('roles').classList.remove('hidden');
+      $('actions').classList.remove('hidden');
+
+      const state = offerState();
+      if (state === 'accepted' || state === 'declined') {
+        $('actions').classList.add('hidden');
+        setStatus(state === 'accepted'
+          ? 'This role offer has already been accepted. Your registration is unlocked for the production team.'
+          : 'This role offer has already been declined. Thank you for letting the production team know.',
+          'neutral'
+        );
+      } else if (initialAction === 'accept') {
+        setStatus('Please click Accept Role to confirm and unlock registration.', 'neutral');
+      } else if (initialAction === 'decline') {
+        setStatus('Please click Decline Offer to release this role back to the production team.', 'neutral');
+      }
+    }
+
+    function parseRoleIds(ca) {
+      return String(ca[KEYS.roleIds] || '')
+        .split(',')
+        .map(value => value.trim())
+        .filter(Boolean);
+    }
+
+    async function loadOffer() {
+      if (!token || !prodId) throw new Error('This cast offer link is missing information.');
+      const { data: apps, error } = await sb.from('audition_applications')
+        .select('id,production_id,name,email,custom_answers')
+        .eq('production_id', prodId)
+        .contains('custom_answers', { [KEYS.token]: token })
+        .limit(1);
+      if (error) throw error;
+      app = apps?.[0] || null;
+      if (!app) throw new Error('We could not find this cast offer.');
+
+      const ca = answers(app);
+      const roleIds = parseRoleIds(ca);
+      const [{ data: prodData }, { data: assignmentRows }] = await Promise.all([
+        sb.from('productions').select('id,title,subtitle,venue,director,organization_id,start_date,end_date').eq('id', prodId).maybeSingle(),
+        sb.from('casting_assignments')
+          .select('id,production_id,character_id,applicant_id,state')
+          .eq('production_id', prodId)
+          .eq('applicant_id', app.id)
+          .in('state', ['chosen', 'ensemble_manual', 'offer_accepted', 'offer_declined']),
+      ]);
+      prod = prodData || {};
+      assignments = assignmentRows || [];
+      offeredAssignments = assignments.filter(row => {
+        if (!roleIds.length) return true;
+        if (!row.character_id) return roleIds.includes('__ensemble__');
+        return roleIds.includes(String(row.character_id));
+      });
+      if (!offeredAssignments.length) throw new Error('This offer no longer has any roles attached.');
+
+      const charIds = offeredAssignments.map(row => row.character_id).filter(Boolean);
+      const { data: chars } = charIds.length
+        ? await sb.from('production_characters').select('id,name,role_type').in('id', charIds)
+        : { data: [] };
+      const charMap = new Map((chars || []).map(char => [String(char.id), char]));
+      roleNames = offeredAssignments.map(row => row.character_id
+        ? (charMap.get(String(row.character_id))?.name || 'Role')
+        : 'Ensemble'
+      );
+      const storedNames = String(ca[KEYS.roleNames] || '').split(',').map(name => name.trim()).filter(Boolean);
+      if (!roleNames.length && storedNames.length) roleNames = storedNames;
+      renderDetails();
+    }
+
+    async function saveResponse(status) {
+      const nextState = status === 'accepted' ? 'offer_accepted' : 'offer_declined';
+      const ids = offeredAssignments.map(row => row.id).filter(Boolean);
+      if (!ids.length) throw new Error('This offer cannot be updated.');
+      const ca = {
+        ...answers(app),
+        [KEYS.status]: status,
+        [KEYS.respondedAt]: new Date().toISOString(),
+      };
+      const [{ error: appError }, { error: assignmentError }] = await Promise.all([
+        sb.from('audition_applications').update({ custom_answers: ca }).eq('id', app.id),
+        sb.from('casting_assignments').update({ state: nextState }).in('id', ids),
+      ]);
+      if (appError) throw appError;
+      if (assignmentError) throw assignmentError;
+      app.custom_answers = ca;
+      offeredAssignments = offeredAssignments.map(row => ({ ...row, state: nextState }));
+    }
+
+    async function acceptOffer() {
+      try {
+        setBusy(true);
+        await saveResponse('accepted');
+        $('actions').classList.add('hidden');
+        setStatus('Accepted. Your registration is now unlocked with the production team.');
+      } catch (err) {
+        setStatus(err.message || 'Could not accept this offer.', 'error');
+      } finally {
+        setBusy(false);
+      }
+    }
+
+    async function declineOffer() {
+      try {
+        setBusy(true);
+        await saveResponse('declined');
+        $('actions').classList.add('hidden');
+        setStatus('Declined. Thank you for letting the production team know.');
+      } catch (err) {
+        setStatus(err.message || 'Could not decline this offer.', 'error');
+      } finally {
+        setBusy(false);
+      }
+    }
+
+    $('accept-btn').addEventListener('click', acceptOffer);
+    $('decline-btn').addEventListener('click', declineOffer);
+
+    loadOffer().catch(err => {
+      $('title').textContent = 'Cast offer unavailable';
+      $('intro').textContent = 'We could not open this cast offer link.';
+      setStatus(err.message || 'Please contact the production team.', 'error');
+    });
+  </script>
+</body>
+</html>

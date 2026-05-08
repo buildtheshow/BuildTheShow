@@ -23279,7 +23279,12 @@
       bg:    '#fff0dc',
       vars: [
         { token: '{{role_name}}', label: 'Role Name', sample: 'The Lead' },
+        { token: '{{role_names}}', label: 'All Offered Roles', sample: 'The Lead, Featured Ensemble' },
         { token: '{{role_type}}', label: 'Role Type', sample: 'Principal' },
+        { token: '{{cast_accept_link}}', label: 'Accept Offer Link', sample: 'https://buildtheshow.com/.../cast-offer?action=accept' },
+        { token: '{{cast_decline_link}}', label: 'Decline Offer Link', sample: 'https://buildtheshow.com/.../cast-offer?action=decline' },
+        { token: '{{cast_response_link}}', label: 'Review Offer Link', sample: 'https://buildtheshow.com/.../cast-offer' },
+        { token: '{{registration_link}}', label: 'Registration Link', sample: 'https://buildtheshow.com/.../cast-offer?action=accept' },
       ],
     },
     // ── Rehearsals ───────────────────────────────────────────────
@@ -23431,9 +23436,9 @@
       note: 'This request is only for callback tapes. It uses a callback scoped upload link, separate from the general audition self tape link.'
     },
     cast_announcement: {
-      required: ['{{contact_name}}', '{{role_name}}'],
-      recommended: ['{{show_name}}', '{{rehearsal_start_date}}', '{{opening_night}}'],
-      note: 'Cast announcements should celebrate the offer, then move quickly into next steps.'
+      required: ['{{contact_name}}', '{{role_name}}', '{{cast_accept_link}}', '{{cast_decline_link}}'],
+      recommended: ['{{show_name}}', '{{rehearsal_start_date}}', '{{opening_night}}', '{{registration_link}}'],
+      note: 'Cast announcements should celebrate the offer, then give clear accept and decline links so Registration can unlock automatically.'
     },
       self_tape_booked: {
         required: ['{{performer_name}}', '{{submission_link}}'],
@@ -23749,7 +23754,7 @@
       callback_self_tape_requested: 'How it sends: team triggered. When it sends: when you ask a callback performer to submit a callback self tape. This email must include {{callback_self_tape_link}}.',
       callback_confirmed: 'How it sends: automatic. When it sends: immediately after a performer accepts their callback or successfully reschedules themself. This is where callback materials belong.',
       callback_declined: 'How it sends: automatic. When it sends: immediately after a performer declines their callback.',
-      cast_set: 'How it sends: team triggered. When it sends: only when you choose to send the cast announcement or role offer email to a performer from casting.',
+      cast_set: 'How it sends: team triggered. When it sends: when you choose to send the cast announcement or role offer email from Final Casting. This email should include accept and decline links.',
       not_cast_set: 'How it sends: team triggered. When it sends: only when you choose to send the not cast email to a performer from casting.',
       team_invite: 'How it sends: team triggered. When it sends: when you invite a production team member and send their portal link and access code.',
       manual: 'How it sends: manual only. When it sends: never automatically. Use this for reminders, rehearsal info, and general updates that you decide to send yourself.',
@@ -24236,7 +24241,13 @@ Rehearsals begin {{rehearsal_start_date}}.
 
 Opening night is {{opening_night}} at {{show_venue}}.
 
-Please reply to this email to confirm your acceptance of this role. We'll be in touch shortly with the full rehearsal schedule and everything you need to get started.
+Please choose one of the options below so we can keep everything moving:
+
+Accept your role: {{cast_accept_link}}
+Decline this offer: {{cast_decline_link}}
+
+Once you accept, your registration will unlock here:
+{{registration_link}}
 
 With excitement,
 {{director_name}}
@@ -28117,7 +28128,7 @@ We look forward to seeing your work!
     const { data: assignments, error } = await sb.from('casting_assignments')
       .select('*')
       .eq('production_id', prodId)
-      .in('state', ['chosen', 'offer_accepted', 'offer_declined']);
+      .in('state', ['chosen', 'ensemble_manual', 'offer_accepted', 'offer_declined']);
 
     if (error) {
       board.innerHTML = `<div style="padding:2.5rem;color:#c0392b;font-size:0.875rem;text-align:center;width:100%;">Could not load offers.</div>`;
@@ -28128,7 +28139,10 @@ We look forward to seeing your work!
     const charMap = new Map((characters    || []).map(c => [c.id, c]));
 
     const groups = { chosen: [], offer_accepted: [], offer_declined: [] };
-    (assignments || []).forEach(a => { if (groups[a.state]) groups[a.state].push(a); });
+    (assignments || []).forEach(a => {
+      const state = a.state === 'ensemble_manual' ? 'chosen' : a.state;
+      if (groups[state]) groups[state].push(a);
+    });
 
     const makeCol = (label, stateKey, colorClass) => {
       const items = groups[stateKey].map(a => {
@@ -28136,7 +28150,7 @@ We look forward to seeing your work!
         const char = charMap.get(a.character_id);
         if (!app) return '';
         const cardHtml = buildStandardCastingCardHtml(app, { draggable: false });
-        const roleName = char?.name || 'Unknown Role';
+        const roleName = char?.name || (!a.character_id ? 'Ensemble' : 'Unknown Role');
         return `<div class="reg-offer-item">${cardHtml}<div class="reg-offer-role-label">${roleName}</div></div>`;
       }).filter(Boolean);
 
@@ -28341,7 +28355,7 @@ We look forward to seeing your work!
     const { data, error } = await sb.from('casting_assignments')
       .select('*')
       .eq('production_id', prodId)
-      .in('state', ['liked', 'chosen']);
+      .in('state', ['liked', 'chosen', 'offer_accepted']);
 
     if (error) {
       grid.innerHTML = '<div style="padding:1.5rem 0.5rem;text-align:center;color:#c0392b;font-size:0.78rem;line-height:1.4;">Could not load the final pool.</div>';
@@ -28351,7 +28365,7 @@ We look forward to seeing your work!
     finalCastingSelectedAssignments = data || [];
     finalCastingPickedKeys.clear();
     (data || []).forEach(row => {
-      if (row.state === 'chosen' && row.character_id && row.applicant_id) {
+      if ((row.state === 'chosen' || row.state === 'offer_accepted') && row.character_id && row.applicant_id) {
         finalCastingPickedKeys.add(`${row.character_id}::${row.applicant_id}`);
       }
     });
@@ -28443,7 +28457,7 @@ We look forward to seeing your work!
 
   function finalCastingCardsForCharacter(char) {
     const assignments = finalCastingSelectedAssignments
-      .filter(a => a.character_id === char.id && (a.state === 'liked' || a.state === 'chosen'))
+      .filter(a => a.character_id === char.id && (a.state === 'liked' || a.state === 'chosen' || a.state === 'offer_accepted'))
       .sort((a, b) => {
         const stateDiff = (CB_STATE_ORDER[a.state] ?? 1) - (CB_STATE_ORDER[b.state] ?? 1);
         if (stateDiff) return stateDiff;
@@ -28854,12 +28868,27 @@ We look forward to seeing your work!
 
   async function ensureFinalCastingEmailTemplate(category) {
     const { data: templates, error } = await sb.from('email_templates')
-      .select('id')
+      .select('id, body')
       .eq('production_id', prodId)
       .eq('category', category)
+      .order('created_at', { ascending: false })
       .limit(1);
     if (error) throw error;
-    if (templates?.length) return true;
+    if (templates?.length) {
+      if (category === 'cast_announcement') {
+        const currentBody = String(templates[0].body || '');
+        const hasAccept = currentBody.includes('{{cast_accept_link}}');
+        const hasDecline = currentBody.includes('{{cast_decline_link}}');
+        if (!hasAccept || !hasDecline) {
+          const responseBlock = `\n\nPlease choose one of the options below so we can keep everything moving:\n\nAccept your role: {{cast_accept_link}}\nDecline this offer: {{cast_decline_link}}\n\nOnce you accept, your registration will unlock here:\n{{registration_link}}`;
+          const { error: updateError } = await sb.from('email_templates')
+            .update({ body: `${currentBody.trim()}${responseBlock}` })
+            .eq('id', templates[0].id);
+          if (updateError) throw updateError;
+        }
+      }
+      return true;
+    }
     const starter = ET_STARTER_TEMPLATES.find(t => t.category === category);
     if (!starter) return false;
     const { error: insertError } = await sb.from('email_templates').insert({ ...starter, production_id: prodId });
@@ -28876,15 +28905,17 @@ We look forward to seeing your work!
       const roleName = char?.name || 'Role';
       if (!roleMap.has(appId)) roleMap.set(appId, new Map());
       roleMap.get(appId).set(roleName, {
+        id: charId,
         name: roleName,
         roleType: char?.role_type || 'Other',
       });
     });
     finalCastingEnsembleIds.forEach(appId => {
       if (!roleMap.has(appId)) roleMap.set(appId, new Map());
-      roleMap.get(appId).set('Ensamble', {
-        name: 'Ensamble',
-        roleType: 'Ensamble',
+      roleMap.get(appId).set('Ensemble', {
+        id: '__ensemble__',
+        name: 'Ensemble',
+        roleType: 'Ensemble',
       });
     });
     return roleMap;
@@ -28909,7 +28940,7 @@ We look forward to seeing your work!
 
   function finalCastingOfferRoleTypeLabel(roleType = '') {
     const label = finalCastingOfferRoleTypeKey(roleType);
-    return ['ensemble', 'ensamble', 'chorus'].includes(label.toLowerCase()) ? 'Ensamble' : label;
+    return ['ensemble', 'ensamble', 'chorus'].includes(label.toLowerCase()) ? 'Ensemble' : label;
   }
 
   function finalCastingOfferRoleTypeSortValue(roleType = '') {
@@ -29211,10 +29242,67 @@ We look forward to seeing your work!
     `;
   }
 
-  async function _sendFinalCastingEmailDirect(app, category, roleNames = []) {
+  const CAST_OFFER_KEYS = {
+    token: '__bts_cast_offer_token',
+    status: '__bts_cast_offer_status',
+    sentAt: '__bts_cast_offer_sent_at',
+    respondedAt: '__bts_cast_offer_responded_at',
+    roleNames: '__bts_cast_offer_role_names',
+    roleIds: '__bts_cast_offer_role_ids',
+  };
+
+  function castOfferBaseUrl() {
+    const base = (orgSlug && prod?.slug)
+      ? `${window.location.origin}/${encodeURIComponent(orgSlug)}/${encodeURIComponent(prod.slug)}/cast-offer`
+      : `${window.location.origin}/SYSTEM/Public/cast-offer-response.html`;
+    return `${base}?prod=${encodeURIComponent(prodId)}`;
+  }
+
+  function castOfferLinks(token) {
+    const base = `${castOfferBaseUrl()}&token=${encodeURIComponent(token)}`;
+    return {
+      review: base,
+      accept: `${base}&action=accept`,
+      decline: `${base}&action=decline`,
+    };
+  }
+
+  async function saveCastOfferState(app, patch) {
+    if (!app?.id) return;
+    const customAnswers = { ...applicantCustomAnswers(app), ...patch };
+    app.custom_answers = customAnswers;
+    const { error } = await sb.from('audition_applications')
+      .update({ custom_answers: customAnswers })
+      .eq('id', app.id);
+    if (error) throw error;
+  }
+
+  async function ensureCastOfferToken(app) {
+    const existing = applicantCustomAnswers(app)[CAST_OFFER_KEYS.token] || '';
+    if (existing) return existing;
+    const token = createCallbackResponseToken();
+    await saveCastOfferState(app, { [CAST_OFFER_KEYS.token]: token });
+    return token;
+  }
+
+  async function markCastOfferSent(app, roles = []) {
+    const roleNames = roles.map(role => role?.name || '').filter(Boolean).join(', ');
+    const roleIds = roles.map(role => role?.id || '').filter(Boolean).join(',');
+    await saveCastOfferState(app, {
+      [CAST_OFFER_KEYS.status]: 'sent',
+      [CAST_OFFER_KEYS.sentAt]: new Date().toISOString(),
+      [CAST_OFFER_KEYS.respondedAt]: '',
+      [CAST_OFFER_KEYS.roleNames]: roleNames,
+      [CAST_OFFER_KEYS.roleIds]: roleIds,
+    });
+  }
+
+  async function _sendFinalCastingEmailDirect(app, category, roleNames = [], roleEntries = []) {
     const hasTemplate = await ensureFinalCastingEmailTemplate(category);
     if (!hasTemplate) throw new Error(category === 'cast_announcement' ? 'No cast announcement template found.' : 'No not cast template found.');
-    const { context } = await buildFinalCastingEmailContext(app, category, roleNames);
+    const token = category === 'cast_announcement' ? await ensureCastOfferToken(app) : '';
+    const links = token ? castOfferLinks(token) : {};
+    const { context } = await buildFinalCastingEmailContext(app, category, roleNames, links, roleEntries);
     const { data, error } = await sb.functions.invoke('send-email', {
       body: {
         applicant_id: app.id,
@@ -29228,6 +29316,13 @@ We look forward to seeing your work!
     });
     const fnError = data?.error || error?.message || '';
     if (!data?.sent) throw new Error(fnError || 'Email was not sent.');
+    if (category === 'cast_announcement') {
+      try {
+        await markCastOfferSent(app, roleEntries);
+      } catch (markError) {
+        console.warn('[BTS] cast offer email sent, but sent marker failed', markError);
+      }
+    }
   }
 
   async function loadFinalCastingEmailTemplate(category) {
@@ -29243,8 +29338,9 @@ We look forward to seeing your work!
     return data[0];
   }
 
-  async function buildFinalCastingEmailContext(app, category, roleNames = []) {
+  async function buildFinalCastingEmailContext(app, category, roleNames = [], links = {}, roleEntries = []) {
     const rolesText = roleNames.length ? roleNames.join(', ') : '';
+    const roleTypesText = [...new Set((roleEntries || []).map(role => role?.roleType || '').filter(Boolean))].join(', ');
     const performanceSchedule = await loadPerformanceScheduleSummary().catch(() => '');
     const context = {
       contact_name: app.name || '',
@@ -29255,6 +29351,11 @@ We look forward to seeing your work!
       role_name: rolesText,
       role_names: rolesText,
       roles: rolesText,
+      role_type: roleTypesText,
+      cast_response_link: links.review || '',
+      cast_accept_link: links.accept || '',
+      cast_decline_link: links.decline || '',
+      registration_link: links.accept || links.review || '',
       show_name: prod?.title || '',
       show_subtitle: prod?.subtitle || '',
       show_venue: prod?.venue || '',
@@ -29290,7 +29391,10 @@ We look forward to seeing your work!
     if (!item?.app) return;
     try {
       const template = await loadFinalCastingEmailTemplate(category);
-      const { context } = await buildFinalCastingEmailContext(item.app, category, item.roles || []);
+      const previewLinks = category === 'cast_announcement'
+        ? castOfferLinks(applicantCustomAnswers(item.app)[CAST_OFFER_KEYS.token] || 'preview-token')
+        : {};
+      const { context } = await buildFinalCastingEmailContext(item.app, category, item.roles || [], previewLinks, item.roleEntries || []);
       const subject = applyFinalCastingEmailContext(template.subject || '', context) || 'Email preview';
       const body = applyFinalCastingEmailContext(template.body || '', context) || '<p>Email body preview.</p>';
       const from = orgName || prod?.org_name || 'Build The Show';
@@ -29371,7 +29475,7 @@ We look forward to seeing your work!
     if (!ok) return;
     if (buttonEl) { buttonEl.disabled = true; buttonEl.textContent = 'Sending...'; }
     try {
-      await _sendFinalCastingEmailDirect(item.app, 'cast_announcement', item.roles);
+      await _sendFinalCastingEmailDirect(item.app, 'cast_announcement', item.roles, item.roleEntries || []);
       finalCastingEmailSendState.set(`offer:${item.app.id}`, { sentAt: new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) });
       showToast(`Offer email sent to ${item.app.name || item.app.email}.`);
       renderFinalCastingOffers();
@@ -29389,7 +29493,7 @@ We look forward to seeing your work!
     if (!ok) return;
     if (buttonEl) { buttonEl.disabled = true; buttonEl.textContent = 'Sending...'; }
     try {
-      await _sendFinalCastingEmailDirect(item.app, 'not_cast', []);
+      await _sendFinalCastingEmailDirect(item.app, 'not_cast', [], []);
       finalCastingEmailSendState.set(`rejection:${item.app.id}`, { sentAt: new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) });
       showToast(`Not cast email sent to ${item.app.name || item.app.email}.`);
       renderFinalCastingOffers();
@@ -29423,7 +29527,7 @@ We look forward to seeing your work!
     let failed = 0;
     for (const item of items) {
       try {
-        await _sendFinalCastingEmailDirect(item.app, category, item.roles || []);
+        await _sendFinalCastingEmailDirect(item.app, category, item.roles || [], item.roleEntries || []);
         sent++;
       } catch (error) {
         console.error('[BTS] final casting email failed', error);
@@ -29446,7 +29550,8 @@ We look forward to seeing your work!
       const { data, error } = await sb.from('casting_assignments')
         .select('applicant_id')
         .eq('production_id', prodId)
-        .eq('state', 'ensemble_manual');
+        .is('character_id', null)
+        .in('state', ['ensemble_manual', 'offer_accepted']);
 
       if (error) {
         grid.innerHTML = '<div style="padding:1rem 1.25rem;color:#c0392b;font-size:0.82rem;">Could not load Final Ensemble.</div>';
