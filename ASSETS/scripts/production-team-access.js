@@ -103,6 +103,10 @@ async function insertTeamMemberWithAvailableColor(payload, options = {}) {
 
   let attempt = { ...payload, note_color: firstColor };
   let result = await sb.from('production_team_members').insert(attempt).select('*').single();
+  if (isTeamMemberSchemaColumnError(result.error)) {
+    attempt = stripTeamMemberMetadataColumns(attempt);
+    result = await sb.from('production_team_members').insert(attempt).select('*').single();
+  }
   if (!isTeamColorConstraintError(result.error)) return result;
 
   const retryColor = await nextFreshTeamColor();
@@ -112,13 +116,22 @@ async function insertTeamMemberWithAvailableColor(payload, options = {}) {
 }
 
 async function updateTeamMemberWithColorGuard(memberId, payload) {
-  const result = await sb
+  let result = await sb
     .from('production_team_members')
     .update(payload)
     .eq('production_id', prodId)
     .eq('id', memberId)
     .select('*')
     .single();
+  if (isTeamMemberSchemaColumnError(result.error)) {
+    result = await sb
+      .from('production_team_members')
+      .update(stripTeamMemberMetadataColumns(payload))
+      .eq('production_id', prodId)
+      .eq('id', memberId)
+      .select('*')
+      .single();
+  }
   if (!isTeamColorConstraintError(result.error)) return result;
 
   await refreshTeamColorRoster();
@@ -129,6 +142,19 @@ async function updateTeamMemberWithColorGuard(memberId, payload) {
       original: result.error,
     },
   };
+}
+
+function isTeamMemberSchemaColumnError(error) {
+  const text = String(error?.message || error?.details || error?.hint || '').toLowerCase();
+  return text.includes('department') || text.includes('access_level') || text.includes('menu_access') || text.includes('schema cache');
+}
+
+function stripTeamMemberMetadataColumns(payload = {}) {
+  const next = { ...payload };
+  delete next.department;
+  delete next.access_level;
+  delete next.menu_access;
+  return next;
 }
 
 function teamColorPickerHtml(selectedColor, memberId = null, inputId = 'ptm-edit-color') {
@@ -163,7 +189,7 @@ function selectProductionTeamEditColor(color) {
 }
 
 function creativeRolesForTeamMember(member) {
-  const creative = teamConfig?.find(d => d.name === 'Creative Team');
+  const creative = teamConfig?.find(d => d.name === 'Artistic Team') || teamConfig?.find(d => d.name === 'Creative Team');
   if (!creative) return [];
   const memberId = String(member?.id || '');
   const memberName = String(member?.name || '').trim().toLowerCase();
@@ -283,6 +309,9 @@ async function addTeamMemberDirect() {
   const name = document.getElementById('new-tm-name')?.value?.trim();
   const email = document.getElementById('new-tm-email')?.value?.trim();
   const role = document.getElementById('new-tm-role')?.value?.trim();
+  const department = document.getElementById('new-tm-department')?.value?.trim() || 'Production & Rehearsal Support';
+  const accessLevel = document.getElementById('new-tm-access')?.value?.trim() || 'creative';
+  const menuAccess = Array.from(document.querySelectorAll('.new-tm-menu:checked')).map(input => input.value).filter(Boolean);
   const err = document.getElementById('add-tm-error');
   if (err) err.textContent = '';
   if (!name) { if (err) err.textContent = 'Enter a name.'; return; }
@@ -301,6 +330,9 @@ async function addTeamMemberDirect() {
     name,
     email,
     role,
+    department,
+    access_level: accessLevel,
+    menu_access: menuAccess,
     passcode: randomTeamPasscode(),
     note_color: noteColor,
     is_active: true,
@@ -310,6 +342,7 @@ async function addTeamMemberDirect() {
   document.getElementById('new-tm-name').value = '';
   document.getElementById('new-tm-email').value = '';
   document.getElementById('new-tm-role').value = '';
+  syncNewTeamMemberMenuDefaults?.();
   document.getElementById('add-team-member-form').style.display = 'none';
   await loadAuditionTeamMembers();
   renderTeamView(document.getElementById('tm-container'));
@@ -361,6 +394,19 @@ function openProductionTeamMemberEdit(memberId) {
   overlay.onclick = event => {
     if (event.target === overlay) closeProductionTeamMemberEdit();
   };
+  const departmentOptions = (window.PRODUCTION_TEAM_DEPARTMENTS || PRODUCTION_TEAM_DEPARTMENTS || [])
+    .map(name => `<option value="${safe(name)}"${String(member.department || '') === String(name) ? ' selected' : ''}>${safe(name)}</option>`)
+    .join('');
+  const accessOptions = (window.TEAM_ACCESS_LEVELS || TEAM_ACCESS_LEVELS || [])
+    .map(level => `<option value="${safe(level.key)}"${normalizeTeamRole(member.access_level || member.role) === level.key ? ' selected' : ''}>${safe(level.label)}</option>`)
+    .join('');
+  const selectedMenus = teamMemberMenuAccess?.(member) || new Set();
+  const menuChecks = (window.TEAM_PORTAL_MENU_ITEMS || TEAM_PORTAL_MENU_ITEMS || [])
+    .map(item => `<label class="team-menu-check">
+      <input type="checkbox" class="ptm-edit-menu" value="${safe(item.key)}" ${selectedMenus.has(item.key) ? 'checked' : ''} />
+      <span>${safe(item.label)}</span>
+    </label>`)
+    .join('');
   overlay.innerHTML = `
     <div class="modal-card" style="max-width:620px;width:min(94vw,620px);" onclick="event.stopPropagation()">
       <div class="modal-header">
@@ -380,6 +426,14 @@ function openProductionTeamMemberEdit(memberId) {
           <input id="ptm-edit-role" class="form-input" value="${safe(member.role || '')}" />
         </label>
         <label>
+          <span style="display:block;font-size:0.78rem;font-weight:800;margin-bottom:0.3rem;">Department</span>
+          <select id="ptm-edit-department" class="form-select">${departmentOptions}</select>
+        </label>
+        <label>
+          <span style="display:block;font-size:0.78rem;font-weight:800;margin-bottom:0.3rem;">Access</span>
+          <select id="ptm-edit-access" class="form-select">${accessOptions}</select>
+        </label>
+        <label>
           <span style="display:block;font-size:0.78rem;font-weight:800;margin-bottom:0.3rem;">Email</span>
           <input id="ptm-edit-email" class="form-input" type="email" value="${safe(member.email || '')}" />
         </label>
@@ -396,6 +450,10 @@ function openProductionTeamMemberEdit(memberId) {
         <span style="display:block;font-size:0.78rem;font-weight:800;margin-bottom:0.3rem;">Bio</span>
         <textarea id="ptm-edit-bio" class="form-textarea" style="min-height:130px;">${safe(member.bio || '')}</textarea>
       </label>
+      <div style="margin-top:0.8rem;">
+        <div style="display:block;font-size:0.78rem;font-weight:800;margin-bottom:0.45rem;">Menu items</div>
+        <div class="team-menu-checks">${menuChecks}</div>
+      </div>
       <div style="display:flex;align-items:center;justify-content:space-between;gap:0.75rem;margin-top:0.95rem;">
         <div id="ptm-edit-msg" style="font-size:0.8rem;color:#8a7aa4;"></div>
         <div style="display:flex;gap:0.5rem;">
