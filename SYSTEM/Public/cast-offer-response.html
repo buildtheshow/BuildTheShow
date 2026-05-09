@@ -108,6 +108,14 @@
       text-transform: uppercase;
       text-align: center;
     }
+    .hero-in-label {
+      font-size: 0.74rem;
+      font-weight: 800;
+      color: rgba(255,255,255,0.48);
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      margin: 0.35rem 0 0.45rem;
+    }
     .role-badges {
       display: flex;
       flex-wrap: wrap;
@@ -123,6 +131,14 @@
       line-height: 1.15;
       letter-spacing: 0;
       text-shadow: 0 8px 24px rgba(0,0,0,0.2);
+    }
+    .role-summary {
+      max-width: 520px;
+      margin: -0.35rem auto 0.75rem;
+      color: rgba(255,255,255,0.54);
+      font-size: 0.82rem;
+      line-height: 1.5;
+      text-align: center;
     }
     .hero-show-title {
       font-size: clamp(1.08rem, 2.8vw, 1.75rem);
@@ -237,7 +253,6 @@
 
     /* Poster box — always visible, placeholder when no poster */
     .poster-box {
-      aspect-ratio: 2/3;
       border-radius: 8px;
       overflow: visible;
       box-shadow: 0 12px 40px rgba(0,0,0,0.55);
@@ -254,14 +269,15 @@
       padding: 0;
     }
     .hero-poster {
-      position: absolute;
-      inset: 0;
       width: 100%;
-      height: 100%;
+      height: auto;
+      display: block;
       object-fit: contain;
       object-position: top right;
     }
     .poster-placeholder {
+      aspect-ratio: 2/3;
+      width: 100%;
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -301,11 +317,40 @@
       letter-spacing: 0.01em;
     }
     #hero-cta {
-      width: min(100%, 360px);
-      margin-top: 0.85rem;
+      width: min(100%, 440px);
+      margin-top: 0.95rem;
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+      gap: 0.65rem;
+    }
+    .hero-response-actions {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 0.65rem;
+      align-items: stretch;
     }
     .btn-accept-hero:hover { transform: translateY(-2px); box-shadow: 0 12px 28px rgba(239,171,69,0.48); }
     .btn-accept-hero:disabled { opacity: 0.6; transform: none; cursor: default; }
+    .btn-decline-hero {
+      background: rgba(255,255,255,0.08);
+      color: rgba(255,255,255,0.78);
+      border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 8px;
+      padding: 0.9rem 1rem;
+      font: inherit;
+      font-size: 0.82rem;
+      font-weight: 750;
+      cursor: pointer;
+      transition: transform 0.15s, background 0.15s, border-color 0.15s;
+      white-space: nowrap;
+    }
+    .btn-decline-hero:hover {
+      transform: translateY(-1px);
+      background: rgba(255,255,255,0.14);
+      border-color: rgba(255,255,255,0.32);
+    }
+    .btn-decline-hero:disabled { opacity: 0.55; transform: none; cursor: default; }
     .hero-cta-note {
       font-size: 0.68rem;
       color: rgba(255,255,255,0.35);
@@ -779,6 +824,7 @@
       .offer-hero { --hero-corner-size: clamp(58px, 18vw, 78px); }
       .hero-inner { padding-top: 1.25rem; }
       #hero-cta { width: min(100%, 360px); }
+      .hero-response-actions { grid-template-columns: 1fr; }
       .sched-conflicts-grid { grid-template-columns: 1fr; }
       .decision-body { grid-template-columns: 1fr; }
       .info-cards { grid-template-columns: 1fr 1fr; }
@@ -809,15 +855,20 @@
       <div class="hero-inner">
         <div class="hero-left">
           <span class="hero-eyebrow">Cast Offer</span>
-          <h1 class="hero-show-title" id="title">Loading your offer...</h1>
           <p class="hero-intro" id="intro">One moment while we find your role offer.</p>
-          <p class="hero-deadline hidden" id="hero-deadline"></p>
           <div class="hero-role-label hidden" id="role-heading">Character</div>
           <div class="role-badges hidden" id="roles"></div>
+          <div class="role-summary hidden" id="role-summary"></div>
+          <div class="hero-in-label hidden" id="production-connector">In</div>
+          <h1 class="hero-show-title" id="title">Loading your offer...</h1>
+          <p class="hero-deadline hidden" id="hero-deadline"></p>
 
           <!-- Accept CTA — hidden until offer loads -->
           <div class="hidden" id="hero-cta">
-            <button class="btn-accept-hero" id="accept-btn-top" type="button">I Accept This Role</button>
+            <div class="hero-response-actions">
+              <button class="btn-accept-hero" id="accept-btn-top" type="button">I Accept This Role</button>
+              <button class="btn-decline-hero" id="decline-btn-top" type="button">I Decline</button>
+            </div>
             <p class="hero-cta-note">Add any unavailability notes below before you accept. Your registration link will appear right on this page.</p>
           </div>
         </div>
@@ -965,6 +1016,7 @@
     let assignments = [];
     let offeredAssignments = [];
     let roleNames = [];
+    let roleSummaries = [];
     let prodEvents = [];
     let productionTeamMembers = [];
 
@@ -985,7 +1037,7 @@
       $('status').classList.remove('hidden');
     };
     const setBusy = busy => {
-      ['accept-btn-top', 'accept-btn', 'decline-btn'].forEach(id => {
+      ['accept-btn-top', 'accept-btn', 'decline-btn-top', 'decline-btn'].forEach(id => {
         const btn = $(id);
         if (btn) btn.disabled = busy;
       });
@@ -1360,9 +1412,9 @@
 
       // Hero text
       $('title').textContent = showName;
-      $('intro').textContent = `Hi ${app?.name || 'there'}, you have been offered a role in this production.`;
+      $('intro').textContent = `Hi ${app?.name || 'there'}, we would love to offer you the role of`;
       if (deadlineText) {
-        $('hero-deadline').textContent = `Please respond by ${deadlineText}.`;
+        $('hero-deadline').textContent = `Please accept this offer by ${deadlineText}. If we do not hear from you by then, we may offer the role to another performer.`;
         $('hero-deadline').classList.remove('hidden');
       } else {
         $('hero-deadline').classList.add('hidden');
@@ -1371,8 +1423,19 @@
       // Role display
       $('role-heading').textContent = roleNames.length > 1 ? 'Characters' : 'Character';
       $('roles').innerHTML = roleNames.map(name => `<div class="role-badge">${esc(name)}</div>`).join('');
+      const summaries = (roleSummaries || []).filter(item => item?.summary);
+      if (summaries.length) {
+        $('role-summary').innerHTML = summaries.map(item => {
+          const prefix = roleNames.length > 1 && item.name ? `<strong>${esc(item.name)}:</strong> ` : '';
+          return `<p>${prefix}${esc(item.summary)}</p>`;
+        }).join('');
+        $('role-summary').classList.remove('hidden');
+      } else {
+        $('role-summary').classList.add('hidden');
+      }
       $('role-heading').classList.remove('hidden');
       $('roles').classList.remove('hidden');
+      $('production-connector').classList.remove('hidden');
       $('hero-cta').classList.remove('hidden');
 
       // Org logo box — swap placeholder for real content when available
@@ -1457,6 +1520,7 @@
         $('decision-panel').classList.add('hidden');
         $('hero-cta').classList.add('hidden');
         $('hero-deadline').classList.add('hidden');
+        $('production-connector').classList.add('hidden');
         setStatus(state === 'accepted'
           ? 'This role offer has already been accepted. Your registration is unlocked for the production team.'
           : (expired
@@ -1595,13 +1659,20 @@
 
       const charIds = offeredAssignments.map(row => row.character_id).filter(Boolean);
       const { data: chars } = charIds.length
-        ? await sb.from('production_characters').select('id,name,role_type').in('id', charIds)
+        ? await sb.from('production_characters').select('id,name,role_type,description').in('id', charIds)
         : { data: [] };
       const charMap = new Map((chars || []).map(c => [String(c.id), c]));
       roleNames = offeredAssignments.map(row => row.character_id
         ? (charMap.get(String(row.character_id))?.name || 'Role')
         : 'Ensemble'
       );
+      roleSummaries = offeredAssignments.map(row => {
+        const character = row.character_id ? charMap.get(String(row.character_id)) : null;
+        return {
+          name: row.character_id ? (character?.name || 'Role') : 'Ensemble',
+          summary: String(character?.description || '').trim(),
+        };
+      }).filter(item => item.summary);
       const storedNames = String(ca[KEYS.roleNames] || '').split(',').map(n => n.trim()).filter(Boolean);
       if (!roleNames.length && storedNames.length) roleNames = storedNames;
       await expireOfferIfNeeded();
@@ -1672,6 +1743,7 @@
         if (offerState() === 'declined') {
           $('decision-panel').classList.add('hidden');
           $('hero-cta').classList.add('hidden');
+          $('hero-deadline').classList.add('hidden');
           setStatus('This role offer deadline has passed, so the offer has been marked declined. Please contact the production team if you have questions.', 'neutral');
           return;
         }
@@ -1682,6 +1754,7 @@
         $('decision-panel').classList.add('hidden');
         $('deadline-banner').classList.add('hidden');
         $('hero-cta').classList.add('hidden');
+        $('hero-deadline').classList.add('hidden');
         const regUrl = registrationLink();
         $('reg-url').href = regUrl;
         $('reg-card').classList.remove('hidden');
@@ -1707,6 +1780,7 @@
         $('decision-panel').classList.add('hidden');
         $('deadline-banner').classList.add('hidden');
         $('hero-cta').classList.add('hidden');
+        $('hero-deadline').classList.add('hidden');
         setStatus('Declined. Thank you for letting the production team know.');
       } catch (err) {
         setStatus(err.message || 'Could not decline this offer.', 'error');
@@ -1717,6 +1791,7 @@
 
     $('accept-btn-top').addEventListener('click', acceptOffer);
     $('accept-btn').addEventListener('click', acceptOffer);
+    $('decline-btn-top').addEventListener('click', declineOffer);
     $('decline-btn').addEventListener('click', declineOffer);
 
     loadOffer().catch(err => {
