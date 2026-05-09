@@ -315,6 +315,15 @@
       line-height: 1.45;
       text-align: center;
     }
+    .hero-submitted {
+      background: #f1ecff;
+      color: var(--purple);
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,0.25), 0 8px 22px rgba(26,21,48,0.18);
+    }
+    .hero-submitted.declined {
+      background: #fff1f4;
+      color: #9f1239;
+    }
 
     /* ═══════════════════════════════════════════
        INFO CARDS — below hero
@@ -1002,6 +1011,10 @@
               <button class="btn-decline-hero" id="decline-btn-top" type="button">I Decline</button>
             </div>
             <p class="hero-cta-note">Your registration link will appear right on this page after you accept.</p>
+            <div class="response-submitted hero-submitted hidden" id="hero-response-submitted">
+              <div class="response-submitted-title" id="hero-response-submitted-title"></div>
+              <div class="response-submitted-note" id="hero-response-submitted-note"></div>
+            </div>
           </div>
         </div>
       </div>
@@ -1360,12 +1373,21 @@
     function showSubmittedResponse(state, emailSent = true) {
       const isAccepted = state === 'accepted';
       $('response-actions')?.classList.add('hidden');
-      const box = $('response-submitted');
-      if (!box) return;
-      box.classList.toggle('declined', !isAccepted);
-      $('response-submitted-title').textContent = isAccepted ? 'Role accepted!' : 'Offer rejected';
-      $('response-submitted-note').textContent = submittedResponseNote(state, emailSent);
-      box.classList.remove('hidden');
+      document.querySelector('#hero-cta .hero-response-actions')?.classList.add('hidden');
+      document.querySelector('#hero-cta .hero-cta-note')?.classList.add('hidden');
+      const title = isAccepted ? 'Role accepted!' : 'Offer rejected';
+      const note = submittedResponseNote(state, emailSent);
+      [
+        ['response-submitted', 'response-submitted-title', 'response-submitted-note'],
+        ['hero-response-submitted', 'hero-response-submitted-title', 'hero-response-submitted-note'],
+      ].forEach(([boxId, titleId, noteId]) => {
+        const box = $(boxId);
+        if (!box) return;
+        box.classList.toggle('declined', !isAccepted);
+        $(titleId).textContent = title;
+        $(noteId).textContent = note;
+        box.classList.remove('hidden');
+      });
     }
 
     function parseRoleIds(ca) {
@@ -1756,14 +1778,10 @@
       const state = offerState();
       if (state === 'accepted' || state === 'declined') {
         $('decision-panel').classList.remove('hidden');
-        $('hero-cta').classList.add('hidden');
+        $('hero-cta').classList.remove('hidden');
         $('hero-deadline').classList.add('hidden');
         showSubmittedResponse(state);
-        if (state === 'accepted') {
-          const regUrl = registrationLink();
-          $('reg-url').href = regUrl;
-          $('reg-card').classList.remove('hidden');
-        }
+        $('reg-card').classList.add('hidden');
         clearStatus();
       } else if (initialAction === 'accept') {
         setStatus('Review the offer, then click accept to confirm your role.', 'neutral');
@@ -2023,9 +2041,10 @@
         await expireOfferIfNeeded();
         if (offerState() === 'declined') {
           $('decision-panel').classList.remove('hidden');
-          $('hero-cta').classList.add('hidden');
+          $('hero-cta').classList.remove('hidden');
           $('hero-deadline').classList.add('hidden');
           showSubmittedResponse('declined');
+          $('reg-card').classList.add('hidden');
           clearStatus();
           return;
         }
@@ -2035,14 +2054,9 @@
         catch (e) { emailSent = false; console.warn('[BTS] role accepted email failed', e); }
         $('decision-panel').classList.remove('hidden');
         $('deadline-banner').classList.add('hidden');
-        $('hero-cta').classList.add('hidden');
+        $('hero-cta').classList.remove('hidden');
         $('hero-deadline').classList.add('hidden');
-        const regUrl = registrationLink();
-        $('reg-url').href = regUrl;
-        $('reg-card-note').textContent = emailSent
-          ? 'Check your email for your registration link. You can also use the link below.'
-          : 'Your role is confirmed. Use the link below to get started with registration.';
-        $('reg-card').classList.remove('hidden');
+        $('reg-card').classList.add('hidden');
         showSubmittedResponse('accepted', emailSent);
         setOfferLocked(true);
         clearStatus();
@@ -2061,9 +2075,10 @@
         await saveResponse('declined');
         $('decision-panel').classList.remove('hidden');
         $('deadline-banner').classList.add('hidden');
-        $('hero-cta').classList.add('hidden');
+        $('hero-cta').classList.remove('hidden');
         $('hero-deadline').classList.add('hidden');
         setOfferLocked(true);
+        $('reg-card').classList.add('hidden');
         showSubmittedResponse('declined');
         clearStatus();
       } catch (err) {
