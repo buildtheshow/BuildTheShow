@@ -20721,9 +20721,39 @@
         p_show_slug: parts.show,
       });
       if (error) throw error;
-      return data || '';
+      if (data) return data;
+      return await resolveAdminProductionIdDirect(parts);
     } catch (error) {
       console.error('[BTS] production lookup failed', error);
+      return await resolveAdminProductionIdDirect(parts);
+    }
+  }
+
+  function normalizePathLookupValue(value) {
+    return String(value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  }
+
+  async function resolveAdminProductionIdDirect(parts = adminProductionPathParts()) {
+    if (!parts.org || !parts.show) return '';
+    try {
+      const org = await findOrganizationForPath(parts.org);
+      if (!org?.id) return '';
+      const { data, error } = await sb
+        .from('productions')
+        .select('id,slug,title')
+        .eq('organization_id', org.id)
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      const target = normalizePathLookupValue(parts.show);
+      const match = (data || []).find(row => {
+        const slug = normalizePathLookupValue(row.slug);
+        const title = normalizePathLookupValue(row.title);
+        const titleWithoutTest = normalizePathLookupValue(String(row.title || '').replace(/^(test|demo)[^a-zA-Z0-9]+/i, ''));
+        return slug === target || title === target || titleWithoutTest === target;
+      });
+      return match?.id || '';
+    } catch (error) {
+      console.error('[BTS] direct production lookup failed', error);
       return '';
     }
   }
@@ -20754,8 +20784,8 @@
     main.style.marginLeft = '0';
     main.style.width = '100%';
     main.innerHTML = `
-      <main style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:2rem;background:#faf8ff;">
-        <section style="width:min(520px,100%);background:#fff;border:1px solid rgba(87,46,136,0.16);border-radius:18px;padding:2rem;text-align:center;box-shadow:0 18px 60px rgba(45,27,78,0.10);">
+      <main style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:2rem;background:transparent;">
+        <section style="width:min(520px,100%);background:#fff;border:1px solid rgba(87,46,136,0.16);border-radius:8px;padding:2rem;text-align:center;box-shadow:none;">
           <img src="/ASSETS/Images/logo-long-white.png" alt="Build The Show" style="height:24px;background:#572e88;border-radius:8px;padding:0.45rem 0.65rem;margin-bottom:1.2rem;" />
           <h1 style="margin:0 0 0.55rem;color:#2d1b4e;font-size:1.7rem;letter-spacing:0;">${esc(title)}</h1>
           <p style="margin:0 auto 1.25rem;color:#6a5a80;line-height:1.55;max-width:34rem;">${esc(message)}</p>
