@@ -582,41 +582,6 @@ async function removeProductionTeamMember(memberId, btn = null) {
   }
 }
 
-function teamInviteMessage(member) {
-  const link = teamPortalUrl();
-  const prodTitle = prod?.title || 'this production';
-  const role = member.role || 'a team member';
-  const lines = [
-    `Hi ${member.name || 'there'},`,
-    '',
-    `You've been added to the audition team for ${prodTitle} as ${role}.`,
-    '',
-    '-----------------------------',
-    'YOUR LOGIN DETAILS',
-    '-----------------------------',
-    `Portal link:  ${link}`,
-    `Email:        ${member.email || ''}`,
-    `Access code:  ${member.passcode || ''}`,
-    '-----------------------------',
-    '',
-    'HOW TO GET IN:',
-    `1. Click the portal link above (or copy and paste it into your browser).`,
-    `2. Enter your email address: ${member.email || ''}`,
-    `3. Enter your access code: ${member.passcode || ''}`,
-    `4. Click "Open Auditions."`,
-    '',
-    'ONCE YOU\'RE IN:',
-    '- Go to the Profile tab first. Choose your note colour and add a headshot and bio.',
-    '- Use "In The Room" during auditions to pull up performer cards and write notes.',
-    '- Your notes are saved to your name and visible to the full team in real time.',
-    '',
-    `If you have any trouble logging in, reply to this email and we'll sort it out.`,
-    '',
-    `${orgName || 'The production team'}`
-  ];
-  return lines.join('\n');
-}
-
 function teamInviteSubstituteTokens(text, member) {
   if (!text) return '';
   const link = teamPortalUrl();
@@ -643,14 +608,14 @@ async function emailTeamInvite(memberId, clickedBtn = null) {
   const markDone = ptcBtnFeedback?.(btn, { working: 'Sending...', done: 'Sent', restore: false });
 
   const liveTemplate = etLatestTemplateForCategory('team_invite');
-  let subject, message;
-  if (liveTemplate) {
-    subject = teamInviteSubstituteTokens(liveTemplate.subject, member);
-    message = teamInviteSubstituteTokens(liveTemplate.body, member);
-  } else {
-    subject = `${prod?.title || 'Production'} audition team access`;
-    message = teamInviteMessage(member);
+  if (!liveTemplate) {
+    markDone?.(false);
+    showToast('Team invite template is missing. Open Email Templates and restore the Team Access Invite template.', true);
+    return;
   }
+
+  const subject = teamInviteSubstituteTokens(liveTemplate.subject, member);
+  const message = teamInviteSubstituteTokens(liveTemplate.body, member);
   try {
     const { data, error } = await sb.functions.invoke('send-email', {
       body: {
@@ -687,9 +652,8 @@ async function emailTeamInvite(memberId, clickedBtn = null) {
     showToast(`Invite emailed to ${member.name || member.email}.`);
   } catch (err) {
     markDone?.(false);
-    const mailto = `mailto:${encodeURIComponent(member.email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(message)}`;
-    window.location.href = mailto;
-    showToast('Could not send automatically - your email app is opening with the invite ready.', true);
+    console.error('[BTS] team invite email failed', err);
+    showToast('Could not send team invite through the email system: ' + (err.message || 'Please check the template and email settings.'), true);
   }
 }
 
