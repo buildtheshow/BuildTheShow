@@ -1227,18 +1227,27 @@
       return entries;
     }
 
-    function producerContactEmail() {
+    function producerContact() {
       const producer = (productionTeamMembers || []).find(member =>
         member?.email && /producer/i.test(String(member?.role || ''))
       );
-      return firstTruthy(
-        producer?.email,
+      if (producer?.email) {
+        return { type: 'producer', name: producer.name || 'Producer', email: producer.email };
+      }
+      const email = firstTruthy(
         prod?.producer_email,
         prod?.contact_email,
         org?.production_email,
         org?.contact_email,
         org?.email,
       );
+      const name = firstTruthy(
+        prod?.producer_name,
+        prod?.contact_name,
+        org?.contact_name,
+        org?.name,
+      );
+      return { type: 'organisation', name, email };
     }
 
     function creativeTeamHtml() {
@@ -1557,10 +1566,11 @@
 
       renderSchedule();
       renderConflicts();
-      const producerEmail = producerContactEmail();
-      $('producer-contact').innerHTML = producerEmail
-        ? `If you have questions, email the producer at <a href="mailto:${esc(producerEmail)}">${esc(producerEmail)}</a>.`
-        : 'If you have questions, email the producer.';
+      const producer = producerContact();
+      const producerLabel = [producer.name, producer.email].filter(Boolean).join(', ');
+      $('producer-contact').innerHTML = producer.email
+        ? `If you have questions, email the ${producer.type === 'producer' ? 'producer' : 'organisation'}: ${esc(producer.name || (producer.type === 'producer' ? 'Producer' : 'Organisation'))}, <a href="mailto:${esc(producer.email)}">${esc(producer.email)}</a>.`
+        : `If you have questions, email the ${producer.type === 'producer' ? 'producer' : 'organisation'}${producerLabel ? `: ${esc(producerLabel)}` : ''}.`;
 
       $('info-section').classList.remove('hidden');
       $('body-pad').classList.remove('hidden');
