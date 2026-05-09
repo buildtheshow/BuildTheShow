@@ -700,6 +700,10 @@
       padding: 0.6rem 0.8rem;
       margin-bottom: 0.45rem;
       cursor: pointer;
+      display: block;
+      width: 100%;
+      font: inherit;
+      text-align: left;
       transition: opacity 0.2s, background 0.2s;
       user-select: none;
       position: relative;
@@ -878,8 +882,20 @@
       padding: 1.3rem 1.4rem;
       box-shadow: 0 6px 20px rgba(101,150,113,0.1);
     }
-    .reg-card-title { font-size: 1rem; font-weight: 700; color: #2a5c35; margin-bottom: 0.3rem; }
     .reg-card-note { font-size: 0.85rem; color: #4a7c56; line-height: 1.5; margin-bottom: 0.9rem; max-width: 560px; }
+    .reg-card-accepted {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 3rem;
+      border-radius: 8px;
+      background: var(--green);
+      color: #fff;
+      padding: 0.78rem 1.4rem;
+      font-weight: 800;
+      font-size: 0.95rem;
+      box-shadow: 0 5px 16px rgba(101,150,113,0.28);
+    }
     .reg-link-btn {
       display: inline-block;
       background: var(--green);
@@ -1023,8 +1039,8 @@
 
       <!-- Reg card -->
       <div class="reg-card hidden" id="reg-card">
-        <div class="reg-card-title">Your role is confirmed.</div>
-        <p class="reg-card-note">Here is your registration link. You will also get a copy by email.</p>
+        <div class="reg-card-accepted">Role accepted!</div>
+        <p class="reg-card-note" id="reg-card-note">Check your email for your registration link. You can also use the link below.</p>
         <a href="#" id="reg-url" class="reg-link-btn">Go to Registration</a>
       </div>
 
@@ -1054,6 +1070,8 @@
       acceptNotes: '__bts_cast_offer_accept_notes',
       declineNotes: '__bts_cast_offer_decline_notes',
       additionalUnavailability: '__bts_cast_offer_additional_unavailability',
+      scheduleUnavailableEventIds: '__bts_cast_offer_schedule_unavailable_event_ids',
+      resolvedConflictIds: '__bts_cast_offer_resolved_conflict_ids',
       availabilityReviewedAt: '__bts_cast_offer_availability_reviewed_at',
     };
 
@@ -1348,8 +1366,9 @@
       const evType = String(ev.event_type || '').toLowerCase();
       const dateLabel = formatDate(ev.start_time, false) || 'Date TBC';
       const showType = evType && !['rehearsal', 'music_rehearsal', 'choreography', 'tech', 'dress', 'performance'].includes(evType);
+      const isUnavailable = selectedScheduleUnavailableIds().has(String(ev.id || ''));
       return `
-        <button class="event" type="button" data-type="${esc(evType)}" aria-pressed="false" onclick="toggleScheduleUnavailable(this)">
+        <button class="event${isUnavailable ? ' unavailable' : ''}" type="button" data-event-id="${esc(ev.id || '')}" data-type="${esc(evType)}" aria-pressed="${isUnavailable ? 'true' : 'false'}">
           <div class="event-info">
             <div class="event-name">${esc(dateLabel)}</div>
             ${showType ? `<div class="event-kind">${esc(eventTypeLabel(evType))}</div>` : ''}
@@ -1359,9 +1378,27 @@
       `;
     }
 
+    function selectedScheduleUnavailableIds() {
+      const raw = answers(app)[KEYS.scheduleUnavailableEventIds];
+      if (Array.isArray(raw)) return new Set(raw.map(String));
+      return new Set(String(raw || '').split(',').map(v => v.trim()).filter(Boolean));
+    }
+
+    function selectedResolvedConflictIds() {
+      const raw = answers(app)[KEYS.resolvedConflictIds];
+      if (Array.isArray(raw)) return new Set(raw.map(String));
+      return new Set(String(raw || '').split(',').map(v => v.trim()).filter(Boolean));
+    }
+
     function toggleScheduleUnavailable(el) {
       const next = !el.classList.contains('unavailable');
       el.classList.toggle('unavailable', next);
+      el.setAttribute('aria-pressed', next ? 'true' : 'false');
+    }
+
+    function toggleConflictResolved(el) {
+      const next = !el.classList.contains('resolved');
+      el.classList.toggle('resolved', next);
       el.setAttribute('aria-pressed', next ? 'true' : 'false');
     }
 
@@ -1399,13 +1436,14 @@
         `);
       }
       if (!sections.length && (prod?.start_date || prod?.end_date)) {
+        const windowUnavailable = selectedScheduleUnavailableIds().has('__production_window__');
         sections.push(`
           <div class="schedule-group">
             <div class="schedule-group-header">
               <span class="schedule-title">Production Window</span>
             </div>
             <div class="event-list">
-              <button class="event" type="button" data-type="production" aria-pressed="false" onclick="toggleScheduleUnavailable(this)">
+              <button class="event${windowUnavailable ? ' unavailable' : ''}" type="button" data-event-id="__production_window__" data-type="production" aria-pressed="${windowUnavailable ? 'true' : 'false'}">
                 <div class="event-info">
                   <div class="event-name">${esc(formatDate(prod.start_date, false) || 'Dates TBC')}</div>
                   <div class="event-meta">${esc([formatDateLong(prod.start_date), formatDateLong(prod.end_date)].filter(Boolean).join(' – ') || 'Dates TBC')}</div>
@@ -1434,7 +1472,7 @@
         const date = value?.date || (/^\d{4}-\d{2}-\d{2}/.test(key) ? key : '');
         const label = formatDate(date) || value?.title || key || 'Unavailable';
         const detail = [value?.title && value.title !== label ? value.title : '', value?.notes || value?.note || ''].filter(Boolean).join('\n');
-        entries.push({ title: label, detail });
+        entries.push({ id: `date:${key}`, title: label, detail });
       });
       const freeTextFields = [
         ['Audition conflict note', app?.conflicts],
@@ -1443,22 +1481,25 @@
         ['Unavailable dates', ca['Unavailable Dates']],
       ];
       freeTextFields.forEach(([title, value]) => {
-        if (value && String(value).trim()) entries.push({ title, detail: String(value).trim() });
+        if (value && String(value).trim()) entries.push({ id: `text:${title}`, title, detail: String(value).trim() });
       });
       if (ca['Available for all rehearsals?'] === false || ca['Available for all rehearsals?'] === 'No')
-        entries.push({ title: 'Rehearsal availability', detail: 'Marked as not available for every rehearsal.' });
+        entries.push({ id: 'availability:rehearsals', title: 'Rehearsal availability', detail: 'Marked as not available for every rehearsal.' });
       if (ca['Available for all performances?'] === false || ca['Available for all performances?'] === 'No')
-        entries.push({ title: 'Performance availability', detail: 'Marked as not available for every performance.' });
+        entries.push({ id: 'availability:performances', title: 'Performance availability', detail: 'Marked as not available for every performance.' });
       return entries;
     }
 
     function renderConflicts() {
       const entries = conflictEntries();
+      const resolvedIds = selectedResolvedConflictIds();
       if (entries.length) {
         $('conflict-list').innerHTML =
           '<p class="conflict-hint">Click any item to mark it as no longer a concern.</p>' +
-          entries.map(item => `
-            <div class="conflict" onclick="this.classList.toggle('resolved')">
+          entries.map(item => {
+            const isResolved = resolvedIds.has(String(item.id || ''));
+            return `
+            <button class="conflict${isResolved ? ' resolved' : ''}" type="button" data-conflict-id="${esc(item.id || '')}" aria-pressed="${isResolved ? 'true' : 'false'}">
               <div class="conflict-inner">
                 <div class="conflict-check"></div>
                 <div>
@@ -1467,8 +1508,9 @@
                 </div>
               </div>
               <span class="conflict-resolved-label">Resolved</span>
-            </div>
-          `).join('');
+            </button>
+          `;
+          }).join('');
       } else {
         $('conflict-list').innerHTML = '<div class="empty-state">No conflicts recorded from your audition form.</div>';
       }
@@ -1774,8 +1816,53 @@
       if (!data?.sent) throw new Error(data?.error || 'Accepted-role email was not sent.');
     }
 
+    function selectedScheduleUnavailableEventIds() {
+      return Array.from(document.querySelectorAll('#schedule-list .event.unavailable'))
+        .map(el => el.dataset.eventId || '')
+        .filter(Boolean);
+    }
+
+    function selectedResolvedConflictEventIds() {
+      return Array.from(document.querySelectorAll('#conflict-list .conflict.resolved'))
+        .map(el => el.dataset.conflictId || '')
+        .filter(Boolean);
+    }
+
+    function dateConflictsForFile() {
+      const next = { ...parseMaybeObject(app?.date_conflicts) };
+      const knownEventIds = new Set((prodEvents || []).map(ev => String(ev?.id || '')).filter(Boolean));
+      knownEventIds.forEach(id => {
+        if (next[id]?.__cast_offer_marked) delete next[id];
+      });
+      selectedResolvedConflictEventIds().forEach(id => {
+        if (id.startsWith('date:')) delete next[id.slice(5)];
+      });
+      selectedScheduleUnavailableEventIds().forEach(id => {
+        if (id === '__production_window__') {
+          next[id] = {
+            conflict: true,
+            title: showTitle(),
+            date: prod?.start_date ? String(prod.start_date).slice(0, 10) : '',
+            __cast_offer_marked: true,
+          };
+          return;
+        }
+        const ev = (prodEvents || []).find(row => String(row?.id || '') === id);
+        if (!ev) return;
+        next[id] = {
+          conflict: true,
+          title: ev.title || eventTypeLabel(ev.event_type),
+          date: ev.start_time ? String(ev.start_time).slice(0, 10) : '',
+          __cast_offer_marked: true,
+        };
+      });
+      return Object.keys(next).length ? next : null;
+    }
+
     function responseNotes(status) {
       return {
+        [KEYS.scheduleUnavailableEventIds]: selectedScheduleUnavailableEventIds(),
+        [KEYS.resolvedConflictIds]: selectedResolvedConflictEventIds(),
         [KEYS.availabilityReviewedAt]: new Date().toISOString(),
       };
     }
@@ -1791,13 +1878,15 @@
         ...responseNotes(status),
         ...extraAnswers,
       };
+      const fileDateConflicts = dateConflictsForFile();
       const [{ error: appError }, { error: assignmentError }] = await Promise.all([
-        sb.from('audition_applications').update({ custom_answers: ca }).eq('id', app.id),
+        sb.from('audition_applications').update({ custom_answers: ca, date_conflicts: fileDateConflicts }).eq('id', app.id),
         sb.from('casting_assignments').update({ state: nextState }).in('id', ids),
       ]);
       if (appError) throw appError;
       if (assignmentError) throw assignmentError;
       app.custom_answers = ca;
+      app.date_conflicts = fileDateConflicts;
       offeredAssignments = offeredAssignments.map(row => ({ ...row, state: nextState }));
     }
 
@@ -1822,10 +1911,13 @@
         $('hero-deadline').classList.add('hidden');
         const regUrl = registrationLink();
         $('reg-url').href = regUrl;
+        $('reg-card-note').textContent = emailSent
+          ? 'Check your email for your registration link. You can also use the link below.'
+          : 'Your role is confirmed. Use the link below to get started with registration.';
         $('reg-card').classList.remove('hidden');
         setStatus(
           emailSent
-            ? 'Accepted. We just sent your registration link by email as well.'
+            ? 'Role accepted! Check your email for your registration link.'
             : 'Accepted. Your role is confirmed. Use the link below to get started with registration.',
           emailSent ? '' : 'neutral'
         );
@@ -1846,7 +1938,13 @@
         $('deadline-banner').classList.add('hidden');
         $('hero-cta').classList.add('hidden');
         $('hero-deadline').classList.add('hidden');
-        setStatus('Declined. Thank you for letting the production team know.');
+        const contact = producerContact();
+        setStatus(
+          contact.email
+            ? `Declined. Please email the ${contact.type === 'producer' ? 'producer' : 'organisation'} to let them know why: ${contact.name || (contact.type === 'producer' ? 'Producer' : 'Organisation')}, ${contact.email}.`
+            : `Declined. Please email the ${contact.type === 'producer' ? 'producer' : 'organisation'} to let them know why.`,
+          'neutral'
+        );
       } catch (err) {
         setStatus(err.message || 'Could not decline this offer.', 'error');
       } finally {
@@ -1858,6 +1956,15 @@
     $('accept-btn').addEventListener('click', acceptOffer);
     $('decline-btn-top').addEventListener('click', declineOffer);
     $('decline-btn').addEventListener('click', declineOffer);
+    document.addEventListener('click', event => {
+      const scheduleChip = event.target.closest('#schedule-list .event');
+      if (scheduleChip) {
+        toggleScheduleUnavailable(scheduleChip);
+        return;
+      }
+      const conflictItem = event.target.closest('#conflict-list .conflict');
+      if (conflictItem) toggleConflictResolved(conflictItem);
+    });
 
     loadOffer().catch(err => {
       $('title').textContent = 'Cast offer unavailable';
