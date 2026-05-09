@@ -64,10 +64,8 @@ function renderProductionTeamCard(member, options = {}) {
               ${photoHtml}
             </div>
             <div class="production-team-card-lower">
-              <div class="production-team-card-role-line">
-                <span class="production-team-card-colour-chip" title="Team colour"></span>
-                <div class="production-team-card-role" title="${role}" style="font-size:${roleSize};">${role || 'Production Team'}</div>
-              </div>
+              <span class="production-team-card-colour-chip" title="Team colour" aria-hidden="true"></span>
+              <div class="production-team-card-role" title="${role}" style="font-size:${roleSize};">${role || 'Production Team'}</div>
               <div class="production-team-card-name" title="${name}" style="font-size:${nameSize};">${name || 'Firstname Lastname'}</div>
             </div>
           </div>
