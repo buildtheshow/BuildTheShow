@@ -187,6 +187,26 @@
     </div>`;
   }
 
+  function renderCheckedInTileTemplate(config) {
+    const {
+      esc,
+      time = '',
+      name = '',
+      state = '',
+      className = '',
+      cardHtml = '',
+      onclick = '',
+      tabindex = '-1'
+    } = config;
+    const safeClassName = esc(className).trim();
+    const safeOnclick = onclick ? ` onclick="${String(onclick).replace(/"/g, '&quot;')}"` : '';
+    return `<button type="button" class="template-checkin-tile${safeClassName ? ` ${safeClassName}` : ''}" title="${esc(name)}" tabindex="${esc(tabindex)}" aria-label="${esc(`${time} ${name} ${state}`)}"${safeOnclick} style="flex:0 0 88px;width:88px;display:grid;grid-template-rows:0.78rem auto 0.86rem;justify-items:center;gap:0.22rem;">
+      <div class="template-checkin-time">${esc(time)}</div>
+      <div class="template-checkin-card">${cardHtml}</div>
+      <div class="template-checkin-status">${esc(state)}</div>
+    </button>`;
+  }
+
   function renderRoomReadyRequestTemplate(config) {
     const {
       esc,
@@ -495,6 +515,65 @@
         </div>`;
   }
 
+  function renderTemplateTestSectionTemplate(config) {
+    const {
+      esc,
+      kicker = '',
+      heading = '',
+      description = '',
+      badge = '',
+      bodyHtml = ''
+    } = config;
+    return `<details class="template-test-section">
+      <summary class="template-test-section-head">
+        <div>
+          <div class="template-test-kicker">${esc(kicker)}</div>
+          <div class="template-test-heading">${esc(heading)}</div>
+          <div class="template-test-description">${esc(description)}</div>
+        </div>
+        ${badge ? `<div class="template-test-badge">${esc(badge)}</div>` : ''}
+        <span class="template-test-chevron" aria-hidden="true">›</span>
+      </summary>
+      <div class="template-test-section-body">${bodyHtml}</div>
+    </details>`;
+  }
+
+  function renderTemplateTestPreviewTemplate(config) {
+    const {
+      esc,
+      title = '',
+      note = '',
+      bodyHtml = '',
+      className = ''
+    } = config;
+    const safeClassName = esc(className).trim();
+    return `<div class="template-test-preview${safeClassName ? ` ${safeClassName}` : ''}">
+      <div class="template-test-preview-title">${esc(title)}</div>
+      ${note ? `<div class="template-test-preview-note">${esc(note)}</div>` : ''}
+      ${bodyHtml}
+    </div>`;
+  }
+
+  function renderTemplateTestCheckedInPreviewTemplate(config) {
+    const {
+      esc,
+      title = 'General Auditions',
+      meta = '',
+      pill = '',
+      railHtml = ''
+    } = config;
+    return `<div class="template-checkedin-preview">
+      <div class="template-checkedin-head">
+        <div>
+          <div class="template-checkedin-title">${esc(title)}</div>
+          ${meta ? `<div class="template-checkedin-meta">${esc(meta)}</div>` : ''}
+        </div>
+        ${pill ? `<div class="template-checkedin-pill">${esc(pill)}</div>` : ''}
+      </div>
+      ${railHtml}
+    </div>`;
+  }
+
   const api = Object.assign({}, window.BTSAuditionTemplates, {
     registerTemplate,
     findTemplate,
@@ -504,6 +583,7 @@
     renderCastingCardFlipShellTemplate,
     renderCharacterListTemplate,
     renderCheckedInStripTemplate,
+    renderCheckedInTileTemplate,
     renderRoomReadyRequestTemplate,
     renderPortalLoginTemplate,
     renderPortalSessionFrameTemplate,
@@ -511,7 +591,10 @@
     renderCastingBoardStickyNoteTemplate,
     renderCastingCardFlipShellTemplate,
     renderInRoomPageTemplate,
-    renderDanceCallInRoomTemplate
+    renderDanceCallInRoomTemplate,
+    renderTemplateTestSectionTemplate,
+    renderTemplateTestPreviewTemplate,
+    renderTemplateTestCheckedInPreviewTemplate
   });
 
   window.BTSAuditionTemplates = api;
@@ -581,6 +664,14 @@
   });
 
   api.registerTemplate({
+    id: 'auditions.in-room.checked-in-tile',
+    name: 'In The Room Checked-In Tile',
+    tags: { area: 'auditions', page: 'in-room', component: 'checked-in-tile' },
+    priority: 90,
+    render: renderCheckedInTileTemplate
+  });
+
+  api.registerTemplate({
     id: 'auditions.in-room.room-ready-request',
     name: 'In The Room Room-Ready Request',
     tags: { area: 'auditions', page: 'in-room', component: 'room-ready-request' },
@@ -618,5 +709,29 @@
     tags: { area: 'auditions', page: 'in-room', sessionType: 'dance_call' },
     priority: 95,
     render: renderDanceCallInRoomTemplate
+  });
+
+  api.registerTemplate({
+    id: 'template-test.section',
+    name: 'Template Test Section',
+    tags: { area: 'template-test', component: 'section' },
+    priority: 100,
+    render: renderTemplateTestSectionTemplate
+  });
+
+  api.registerTemplate({
+    id: 'template-test.preview',
+    name: 'Template Test Preview',
+    tags: { area: 'template-test', component: 'preview' },
+    priority: 100,
+    render: renderTemplateTestPreviewTemplate
+  });
+
+  api.registerTemplate({
+    id: 'template-test.checked-in-preview',
+    name: 'Template Test Checked-In Preview',
+    tags: { area: 'template-test', component: 'checked-in-preview' },
+    priority: 100,
+    render: renderTemplateTestCheckedInPreviewTemplate
   });
 })();
