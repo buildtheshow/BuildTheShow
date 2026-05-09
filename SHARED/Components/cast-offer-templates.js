@@ -100,13 +100,29 @@
     const esc = escFor(config);
     const { entries = [], emptyLabel = 'TBC' } = config;
     if (!entries.length) return `<div class="info-card-value">${esc(emptyLabel)}</div>`;
-    return `<div class="creative-team-list">${entries.map(item => renderCreativeTeamLockupTemplate({
-      esc,
-      role: item.role,
-      name: item.name,
-      dotColor: item.dotColor || '#572e88',
-      haloColor: item.haloColor || '#e7ddf3'
-    })).join('')}</div>`;
+    return `<div class="creative-team-list">${entries.map(item => {
+      if (window.BTSProductionTeamTemplates?.renderCreativeTeamLayoutTemplate) {
+        return window.BTSProductionTeamTemplates.renderCreativeTeamLayoutTemplate({
+          role: item.role,
+          name: item.name,
+          note_color: item.dotColor || '#572e88'
+        }, {
+          framed: false,
+          width: '100%',
+          minHeight: '0',
+          roleSize: '1.18rem',
+          nameSize: '0.98rem',
+          halo: item.haloColor || '#e7ddf3'
+        });
+      }
+      return renderCreativeTeamLockupTemplate({
+        esc,
+        role: item.role,
+        name: item.name,
+        dotColor: item.dotColor || '#572e88',
+        haloColor: item.haloColor || '#e7ddf3'
+      });
+    }).join('')}</div>`;
   }
 
   function renderInfoCardTemplate(config = {}) {

@@ -137,14 +137,21 @@ function renderCreativeTeamLayoutTemplate(member, options = {}) {
   const nameSize = escapeHtml(options.nameSize || 'clamp(1.15rem, 2vw, 1.85rem)');
   const width = escapeHtml(options.width || 'min(100%, 420px)');
   const minHeight = escapeHtml(options.minHeight || '150px');
+  const framed = options.framed !== false;
+  const innerHtml = `
+    <div style="display:grid;grid-template-columns:3.2rem minmax(0,1fr);align-items:center;column-gap:0.75rem;">
+      <span aria-hidden="true" style="width:1.55rem;height:1.55rem;border-radius:999px;background:${color};box-shadow:0 0 0 0.42rem ${halo};justify-self:center;align-self:center;grid-row:1 / span 2;"></span>
+      <div style="color:#111;font-size:${roleSize};font-weight:950;line-height:0.95;text-transform:uppercase;">${role}</div>
+      <div style="grid-column:2;color:#242124;font-size:${nameSize};font-weight:500;line-height:1.12;text-transform:uppercase;margin-top:0.5rem;">${name}</div>
+    </div>`;
+
+  if (!framed) {
+    return `<div data-bts-template="creative-team-layout" style="width:${width};min-height:${minHeight};display:grid;align-content:center;color:#111;">${innerHtml}</div>`;
+  }
 
   return `
     <div data-bts-template="creative-team-layout" style="width:${width};min-height:${minHeight};margin:0 auto;padding:1.2rem 1.35rem;border-radius:12px;border:1.5px solid #e4deed;background:#fff;color:#111;display:grid;align-content:center;">
-      <div style="display:grid;grid-template-columns:3.2rem minmax(0,1fr);align-items:center;column-gap:0.75rem;">
-        <span aria-hidden="true" style="width:1.55rem;height:1.55rem;border-radius:999px;background:${color};box-shadow:0 0 0 0.42rem ${halo};justify-self:center;align-self:center;grid-row:1 / span 2;"></span>
-        <div style="color:#111;font-size:${roleSize};font-weight:950;line-height:0.95;text-transform:uppercase;">${role}</div>
-        <div style="grid-column:2;color:#242124;font-size:${nameSize};font-weight:500;line-height:1.12;text-transform:uppercase;margin-top:0.5rem;">${name}</div>
-      </div>
+      ${innerHtml}
     </div>`;
 }
 
