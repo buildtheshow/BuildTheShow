@@ -227,10 +227,27 @@ async function unlinkProductionTeamMemberFromCreativeConfig(member) {
 
 async function syncTeamMemberToProductionTeam(member, patch = {}) {
   if (!member || !teamConfig) return;
-  const role = findCreativeRoleForTeamMember(member);
+  const departmentName = patch.department || member.department || '';
+  let department = departmentName ? teamConfig.find(dept => dept.name === departmentName) : null;
+  let role = findCreativeRoleForTeamMember(member);
+  if (!role && department) {
+    const roleName = patch.role || member.role || 'Team Member';
+    const memberId = String(member.id || '');
+    const memberEmail = String(patch.email || member.email || '').trim().toLowerCase();
+    role = (department.roles || []).find(item =>
+      String(item.team_member_id || '') === memberId ||
+      (memberEmail && String(item.email || '').trim().toLowerCase() === memberEmail)
+    );
+    if (!role) {
+      role = { id: crypto.randomUUID(), name: roleName, filled: false, person: '', email: '', notes: '' };
+      department.roles = [...(department.roles || []), role];
+    }
+  }
   if (!role) return;
   if (Object.prototype.hasOwnProperty.call(patch, 'name')) role.person = patch.name || '';
+  else role.person = role.person || member.name || '';
   if (Object.prototype.hasOwnProperty.call(patch, 'email')) role.email = patch.email || '';
+  else role.email = role.email || member.email || '';
   if (Object.prototype.hasOwnProperty.call(patch, 'role')) role.name = patch.role || role.name || '';
   role.team_member_id = member.id;
   role.filled = Boolean(role.person);
@@ -283,7 +300,7 @@ async function upsertTeamAccessForCreativeRole(role) {
 }
 
 async function syncCreativeRolesToTeamAccess(options = {}) {
-  const creative = teamConfig?.find(d => d.name === 'Creative Team');
+  const creative = teamConfig?.find(d => d.name === 'Artistic Team') || teamConfig?.find(d => d.name === 'Creative Team');
   const roles = (creative?.roles || []).filter(r => r.person && r.person.trim());
   if (!roles.length) {
     if (!options.silent) showToast('Add names to the Creative Team first.', true);
@@ -478,6 +495,9 @@ async function saveProductionTeamMemberEdit(memberId, btn = null) {
   const payload = {
     name: (document.getElementById('ptm-edit-name')?.value || '').trim(),
     role: (document.getElementById('ptm-edit-role')?.value || '').trim(),
+    department: (document.getElementById('ptm-edit-department')?.value || '').trim() || null,
+    access_level: (document.getElementById('ptm-edit-access')?.value || '').trim() || 'creative',
+    menu_access: Array.from(document.querySelectorAll('.ptm-edit-menu:checked')).map(input => input.value).filter(Boolean),
     email: (document.getElementById('ptm-edit-email')?.value || '').trim().toLowerCase(),
     phone: (window.BTSPhone?.format(rawPhone) || rawPhone).trim() || null,
     bio: document.getElementById('ptm-edit-bio')?.value || '',
