@@ -64,14 +64,16 @@ function renderProductionTeamCard(member, options = {}) {
               ${photoHtml}
             </div>
             <div class="production-team-card-lower">
-              <span class="production-team-card-colour-chip" title="Team colour" aria-hidden="true"></span>
-              <div class="production-team-card-role" title="${role}" style="font-size:${roleSize};">${role || 'Production Team'}</div>
-              <div class="production-team-card-name" title="${name}" style="font-size:${nameSize};">${name || 'Firstname Lastname'}</div>
+              <div class="production-team-role-lockup production-team-card-front-lockup" title="${name || 'Firstname Lastname'}">
+                <span class="production-team-card-colour-chip" title="Team colour" aria-hidden="true"></span>
+                <div class="production-team-card-role" title="${role}" style="font-size:${roleSize};">${role || 'Production Team'}</div>
+                <div class="production-team-card-name" title="${name}" style="font-size:${nameSize};">${name || 'Firstname Lastname'}</div>
+              </div>
             </div>
           </div>
           <div class="production-team-card-face production-team-card-back">
             <div class="production-team-card-back-head">
-              <div class="production-team-card-back-identity" title="${name || 'Firstname Lastname'}">
+              <div class="production-team-role-lockup production-team-card-back-identity" title="${name || 'Firstname Lastname'}">
                 <span class="production-team-card-back-dot" aria-hidden="true"></span>
                 <span class="production-team-card-back-role-inline" style="font-size:${backRoleSize};">${role || 'Production Team'}</span>
                 <span class="production-team-card-back-full-name" style="font-size:${backNameSize};">${name || 'Firstname Lastname'}</span>
