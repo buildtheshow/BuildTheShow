@@ -564,52 +564,77 @@
       overflow: hidden;
     }
     .event {
-      display: grid;
-      grid-template-columns: 7.5rem 1fr;
-      gap: 0.6rem;
-      padding: 0.52rem 0.75rem;
+      display: flex;
+      align-items: flex-start;
+      gap: 0.85rem;
+      padding: 0.65rem 0.75rem;
       border-bottom: 1px solid rgba(87,46,136,0.06);
       background: #fff;
-      position: relative;
     }
     .event:last-child { border-bottom: 0; }
-    .event:nth-child(even) { background: #faf8ff; }
-    .event[data-type="rehearsal"]  { border-left: 2.5px solid rgba(87,46,136,0.35); }
-    .event[data-type="performance"] { border-left: 2.5px solid rgba(101,150,113,0.5); }
-    .event[data-type="tech"]       { border-left: 2.5px solid rgba(60,122,168,0.45); }
-    .event[data-type="dress"]      { border-left: 2.5px solid rgba(60,122,168,0.45); }
-    .event[data-type="audition"]   { border-left: 2.5px solid rgba(239,171,69,0.5); }
-    .event[data-type="callback"]   { border-left: 2.5px solid rgba(239,171,69,0.5); }
-    .event[data-type="strike"]     { border-left: 2.5px solid rgba(185,75,106,0.4); }
-    .event-date-chip {
-      display: inline-block;
-      font-size: 0.72rem;
-      font-weight: 700;
-      color: var(--purple);
+    .event-date-block {
+      flex-shrink: 0;
+      min-width: 42px;
+      text-align: center;
       background: rgba(87,46,136,0.07);
-      border-radius: 4px;
-      padding: 0.12rem 0.42rem;
-      white-space: nowrap;
-      line-height: 1.5;
+      border-radius: 8px;
+      padding: 0.35rem 0.4rem;
     }
-    .event-time-text {
-      font-size: 0.68rem;
-      font-weight: 400;
-      color: var(--soft);
-      margin-top: 0.18rem;
-      line-height: 1.3;
+    .event-date-month {
+      font-size: 0.6rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      color: var(--purple);
+      letter-spacing: 0.05em;
+    }
+    .event-date-day {
+      font-size: 1.05rem;
+      font-weight: 800;
+      color: var(--ink);
+      line-height: 1;
+    }
+    .event-info {
+      flex: 1;
+      min-width: 0;
     }
     .event-name {
-      font-size: 0.83rem;
+      font-size: 0.875rem;
       font-weight: 600;
       color: var(--ink);
       line-height: 1.3;
     }
     .event-meta {
-      font-size: 0.72rem;
+      font-size: 0.75rem;
       color: var(--soft);
       line-height: 1.3;
       margin-top: 0.1rem;
+    }
+    .event-type-badge {
+      flex-shrink: 0;
+      margin-top: 0.15rem;
+      border-radius: 20px;
+      background: rgba(87,46,136,0.08);
+      color: var(--purple);
+      padding: 0.16rem 0.5rem;
+      font-size: 0.64rem;
+      font-weight: 750;
+      letter-spacing: 0.04em;
+      line-height: 1;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+    .event-type-badge[data-type="performance"] {
+      background: rgba(101,150,113,0.12);
+      color: #3f704a;
+    }
+    .event-type-badge[data-type="tech"],
+    .event-type-badge[data-type="dress"] {
+      background: rgba(60,122,168,0.1);
+      color: #315f83;
+    }
+    .event-type-badge[data-type="strike"] {
+      background: rgba(185,75,106,0.1);
+      color: #8f3f55;
     }
     .empty-state {
       border: 1px dashed rgba(87,46,136,0.16);
@@ -838,7 +863,8 @@
     @media (max-width: 480px) {
       body { padding: 0; background: #fff; }
       .shell { border-radius: 0; border-left: 0; border-right: 0; border-bottom: 0; min-height: 100vh; box-shadow: none; }
-      .event { grid-template-columns: 1fr; gap: 0.08rem; }
+      .event { gap: 0.65rem; }
+      .event-type-badge { display: none; }
       .info-cards { grid-template-columns: 1fr; }
     }
   </style>
@@ -1204,6 +1230,15 @@
       return d.toLocaleDateString('en-CA', { weekday: 'short', month: 'short', day: 'numeric', ...(withYear ? { year: 'numeric' } : {}) });
     }
 
+    function formatDateBlock(value) {
+      const d = dateObj(value);
+      if (!d) return { month: 'TBC', day: '' };
+      return {
+        month: d.toLocaleDateString('en-CA', { month: 'short' }).toUpperCase(),
+        day: String(d.getDate()),
+      };
+    }
+
     function formatDateLong(value) {
       const d = dateObj(value);
       if (!d) return '';
@@ -1259,25 +1294,26 @@
       const title = ev.title || eventTypeLabel(ev.event_type);
       const typeLabel = eventTypeLabel(ev.event_type);
       const metaParts = [];
-      if (title !== typeLabel) metaParts.push(typeLabel);
-      if (ev.venue) metaParts.push(ev.venue);
-      const meta = metaParts.join(' · ');
-      const day = formatDate(ev.start_time);
       const t0 = formatTime(ev.start_time);
       const t1 = formatTime(ev.end_time);
       const timeStr = ev.all_day ? 'All day' : (t0 && t1 ? `${t0} – ${t1}` : t0 || '');
+      if (timeStr) metaParts.push(timeStr);
+      if (ev.venue) metaParts.push(ev.venue);
+      const meta = metaParts.join(' · ');
       const evType = String(ev.event_type || '').toLowerCase();
+      const dateBlock = formatDateBlock(ev.start_time);
       return `
         <div class="event" data-type="${esc(evType)}">
-          <div class="event-date-col">
-            ${day ? `<div class="event-date-chip">${esc(day.replace(/,\s*\d{4}$/, ''))}</div>` : ''}
-            ${timeStr ? `<div class="event-time-text">${esc(timeStr)}</div>` : ''}
+          <div class="event-date-block">
+            <div class="event-date-month">${esc(dateBlock.month)}</div>
+            ${dateBlock.day ? `<div class="event-date-day">${esc(dateBlock.day)}</div>` : ''}
           </div>
-          <div>
+          <div class="event-info">
             <div class="event-name">${esc(title)}</div>
             ${meta ? `<div class="event-meta">${esc(meta)}</div>` : ''}
             ${ev.notes ? `<div class="event-meta">${esc(ev.notes)}</div>` : ''}
           </div>
+          <div class="event-type-badge" data-type="${esc(evType)}">${esc(typeLabel)}</div>
         </div>
       `;
     }
@@ -1327,13 +1363,15 @@
             </div>
             <div class="event-list">
               <div class="event">
-                <div class="event-date-col">
-                  <div class="event-date-chip">${esc(formatDate(prod.start_date, false) || 'TBC')}</div>
+                <div class="event-date-block">
+                  <div class="event-date-month">${esc(formatDateBlock(prod.start_date).month)}</div>
+                  ${formatDateBlock(prod.start_date).day ? `<div class="event-date-day">${esc(formatDateBlock(prod.start_date).day)}</div>` : ''}
                 </div>
-                <div>
+                <div class="event-info">
                   <div class="event-name">${esc(showTitle())}</div>
                   <div class="event-meta">${esc([formatDateLong(prod.start_date), formatDateLong(prod.end_date)].filter(Boolean).join(' – ') || 'Dates TBC')}</div>
                 </div>
+                <div class="event-type-badge" data-type="production">Production</div>
               </div>
             </div>
           </div>
