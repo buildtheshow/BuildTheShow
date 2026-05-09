@@ -571,6 +571,10 @@
       transition: background 0.12s, border-color 0.12s;
       width: 100%;
     }
+    .offer-locked .event {
+      cursor: default;
+      pointer-events: none;
+    }
     .event:hover {
       border-color: rgba(87,46,136,0.3);
     }
@@ -707,6 +711,10 @@
       transition: opacity 0.2s, background 0.2s;
       user-select: none;
       position: relative;
+    }
+    .offer-locked .conflict {
+      cursor: default;
+      pointer-events: none;
     }
     .conflict:last-of-type { margin-bottom: 0; }
     .conflict:hover { border-color: rgba(185,75,106,0.32); }
@@ -1290,6 +1298,18 @@
       return 'sent';
     }
 
+    function offerIsLocked() {
+      return ['accepted', 'declined'].includes(offerState());
+    }
+
+    function setOfferLocked(locked = offerIsLocked()) {
+      document.body.classList.toggle('offer-locked', locked);
+      document.querySelectorAll('#schedule-list .event, #conflict-list .conflict').forEach(el => {
+        el.disabled = locked;
+        el.setAttribute('aria-disabled', locked ? 'true' : 'false');
+      });
+    }
+
     function parseRoleIds(ca) {
       return String(ca[KEYS.roleIds] || '').split(',').map(v => v.trim()).filter(Boolean);
     }
@@ -1367,8 +1387,9 @@
       const dateLabel = formatDate(ev.start_time, false) || 'Date TBC';
       const showType = evType && !['rehearsal', 'music_rehearsal', 'choreography', 'tech', 'dress', 'performance'].includes(evType);
       const isUnavailable = selectedScheduleUnavailableIds().has(String(ev.id || ''));
+      const locked = offerIsLocked();
       return `
-        <button class="event${isUnavailable ? ' unavailable' : ''}" type="button" data-event-id="${esc(ev.id || '')}" data-type="${esc(evType)}" aria-pressed="${isUnavailable ? 'true' : 'false'}">
+        <button class="event${isUnavailable ? ' unavailable' : ''}" type="button" data-event-id="${esc(ev.id || '')}" data-type="${esc(evType)}" aria-pressed="${isUnavailable ? 'true' : 'false'}" aria-disabled="${locked ? 'true' : 'false'}"${locked ? ' disabled' : ''}>
           <div class="event-info">
             <div class="event-name">${esc(dateLabel)}</div>
             ${showType ? `<div class="event-kind">${esc(eventTypeLabel(evType))}</div>` : ''}
@@ -1390,13 +1411,56 @@
       return new Set(String(raw || '').split(',').map(v => v.trim()).filter(Boolean));
     }
 
+    function scheduleConflictEntry(id) {
+      if (id === '__production_window__') {
+        return {
+          id: `schedule:${id}`,
+          source: 'schedule',
+          eventId: id,
+          title: formatDate(prod?.start_date, false) || 'Dates TBC',
+          detail: 'Production Window',
+        };
+      }
+      const ev = (prodEvents || []).find(row => String(row?.id || '') === String(id));
+      if (!ev) return null;
+      const t0 = formatTime(ev.start_time);
+      const t1 = formatTime(ev.end_time);
+      const timeStr = ev.all_day ? 'All day' : (t0 && t1 ? `${t0} – ${t1}` : t0 || 'Time TBC');
+      return {
+        id: `schedule:${id}`,
+        source: 'schedule',
+        eventId: String(id),
+        title: formatDate(ev.start_time, false) || 'Date TBC',
+        detail: [eventTypeLabel(ev.event_type), timeStr].filter(Boolean).join(' · '),
+      };
+    }
+
+    function selectedScheduleConflictEntries() {
+      return selectedScheduleUnavailableEventIds()
+        .map(scheduleConflictEntry)
+        .filter(Boolean);
+    }
+
     function toggleScheduleUnavailable(el) {
+      if (offerIsLocked()) return;
       const next = !el.classList.contains('unavailable');
       el.classList.toggle('unavailable', next);
       el.setAttribute('aria-pressed', next ? 'true' : 'false');
+      renderConflicts();
     }
 
     function toggleConflictResolved(el) {
+      if (offerIsLocked()) return;
+      if (el.dataset.source === 'schedule' && el.dataset.eventId) {
+        const chip = Array.from(document.querySelectorAll('#schedule-list .event'))
+          .find(item => item.dataset.eventId === el.dataset.eventId);
+        if (chip) {
+          chip.classList.remove('unavailable');
+          chip.setAttribute('aria-pressed', 'false');
+        }
+        renderConflicts();
+        return;
+      }
       const next = !el.classList.contains('resolved');
       el.classList.toggle('resolved', next);
       el.setAttribute('aria-pressed', next ? 'true' : 'false');
@@ -1437,13 +1501,14 @@
       }
       if (!sections.length && (prod?.start_date || prod?.end_date)) {
         const windowUnavailable = selectedScheduleUnavailableIds().has('__production_window__');
+        const locked = offerIsLocked();
         sections.push(`
           <div class="schedule-group">
             <div class="schedule-group-header">
               <span class="schedule-title">Production Window</span>
             </div>
             <div class="event-list">
-              <button class="event${windowUnavailable ? ' unavailable' : ''}" type="button" data-event-id="__production_window__" data-type="production" aria-pressed="${windowUnavailable ? 'true' : 'false'}">
+              <button class="event${windowUnavailable ? ' unavailable' : ''}" type="button" data-event-id="__production_window__" data-type="production" aria-pressed="${windowUnavailable ? 'true' : 'false'}" aria-disabled="${locked ? 'true' : 'false'}"${locked ? ' disabled' : ''}>
                 <div class="event-info">
                   <div class="event-name">${esc(formatDate(prod.start_date, false) || 'Dates TBC')}</div>
                   <div class="event-meta">${esc([formatDateLong(prod.start_date), formatDateLong(prod.end_date)].filter(Boolean).join(' – ') || 'Dates TBC')}</div>
@@ -1464,11 +1529,12 @@
 
     function conflictEntries() {
       const ca = answers(app);
-      const entries = [];
+      const entries = selectedScheduleConflictEntries();
       const rawConflicts = parseMaybeObject(app?.date_conflicts || ca.date_conflicts || ca.DateConflicts);
       Object.entries(rawConflicts || {}).forEach(([key, value]) => {
         const isConflict = value === true || value === 'true' || value?.conflict === true || value?.unavailable === true;
         if (!isConflict) return;
+        if (value?.__cast_offer_marked) return;
         const date = value?.date || (/^\d{4}-\d{2}-\d{2}/.test(key) ? key : '');
         const label = formatDate(date) || value?.title || key || 'Unavailable';
         const detail = [value?.title && value.title !== label ? value.title : '', value?.notes || value?.note || ''].filter(Boolean).join('\n');
@@ -1493,13 +1559,14 @@
     function renderConflicts() {
       const entries = conflictEntries();
       const resolvedIds = selectedResolvedConflictIds();
+      const locked = offerIsLocked();
       if (entries.length) {
         $('conflict-list').innerHTML =
-          '<p class="conflict-hint">Click any item to mark it as no longer a concern.</p>' +
+          `<p class="conflict-hint">${locked ? 'This offer has been submitted, so these conflicts are locked.' : 'Click any item to mark it as no longer a concern.'}</p>` +
           entries.map(item => {
             const isResolved = resolvedIds.has(String(item.id || ''));
             return `
-            <button class="conflict${isResolved ? ' resolved' : ''}" type="button" data-conflict-id="${esc(item.id || '')}" aria-pressed="${isResolved ? 'true' : 'false'}">
+            <button class="conflict${isResolved ? ' resolved' : ''}" type="button" data-conflict-id="${esc(item.id || '')}" data-source="${esc(item.source || '')}" data-event-id="${esc(item.eventId || '')}" aria-pressed="${isResolved ? 'true' : 'false'}" aria-disabled="${locked ? 'true' : 'false'}"${locked ? ' disabled' : ''}>
               <div class="conflict-inner">
                 <div class="conflict-check"></div>
                 <div>
@@ -1514,6 +1581,7 @@
       } else {
         $('conflict-list').innerHTML = '<div class="empty-state">No conflicts recorded from your audition form.</div>';
       }
+      setOfferLocked(locked);
     }
 
     function renderDetails() {
@@ -1617,6 +1685,7 @@
 
       renderSchedule();
       renderConflicts();
+      setOfferLocked();
       const producer = producerContact();
       const producerLabel = [producer.name, producer.email].filter(Boolean).join(', ');
       $('producer-contact').innerHTML = producer.email
@@ -1834,6 +1903,7 @@
       knownEventIds.forEach(id => {
         if (next[id]?.__cast_offer_marked) delete next[id];
       });
+      if (next.__production_window__?.__cast_offer_marked) delete next.__production_window__;
       selectedResolvedConflictEventIds().forEach(id => {
         if (id.startsWith('date:')) delete next[id.slice(5)];
       });
@@ -1915,6 +1985,7 @@
           ? 'Check your email for your registration link. You can also use the link below.'
           : 'Your role is confirmed. Use the link below to get started with registration.';
         $('reg-card').classList.remove('hidden');
+        setOfferLocked(true);
         setStatus(
           emailSent
             ? 'Role accepted! Check your email for your registration link.'
@@ -1938,6 +2009,7 @@
         $('deadline-banner').classList.add('hidden');
         $('hero-cta').classList.add('hidden');
         $('hero-deadline').classList.add('hidden');
+        setOfferLocked(true);
         const contact = producerContact();
         setStatus(
           contact.email
@@ -1957,6 +2029,7 @@
     $('decline-btn-top').addEventListener('click', declineOffer);
     $('decline-btn').addEventListener('click', declineOffer);
     document.addEventListener('click', event => {
+      if (offerIsLocked() && event.target.closest('#schedule-list .event, #conflict-list .conflict')) return;
       const scheduleChip = event.target.closest('#schedule-list .event');
       if (scheduleChip) {
         toggleScheduleUnavailable(scheduleChip);
