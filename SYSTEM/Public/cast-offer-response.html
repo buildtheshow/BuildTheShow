@@ -911,6 +911,7 @@
       return raw || {};
     };
     const textValue = id => ($(id)?.value || '').trim();
+    const firstTruthy = (...values) => values.find(value => String(value || '').trim()) || '';
     const setStatus = (message, mode = '') => {
       $('status').textContent = message;
       $('status').classList.toggle('error', mode === 'error');
@@ -925,6 +926,43 @@
     };
 
     function showTitle() { return prod?.title || prod?.show_name || 'this production'; }
+
+    function normalizeAssetUrl(value, bucket = 'production-posters') {
+      const raw = String(value || '').trim();
+      if (!raw) return '';
+      if (/^https?:\/\//i.test(raw) || raw.startsWith('data:') || raw.startsWith('/')) return raw;
+      try {
+        const path = raw.replace(/^\/+/, '');
+        const { data } = sb.storage.from(bucket).getPublicUrl(path);
+        return data?.publicUrl || raw;
+      } catch (_) {
+        return raw;
+      }
+    }
+
+    function orgLogoUrl() {
+      return normalizeAssetUrl(firstTruthy(
+        org?.logo_url,
+        org?.logo,
+        org?.image_url,
+        org?.avatar_url,
+        org?.brand_logo_url,
+        org?.settings?.logo_url,
+        org?.branding?.logo_url,
+      ), 'org-logos');
+    }
+
+    function prodPosterUrl() {
+      return normalizeAssetUrl(firstTruthy(
+        prod?.poster_url,
+        prod?.poster,
+        prod?.image_url,
+        prod?.cover_url,
+        prod?.show_image_url,
+        prod?.wizard_data?.poster_url,
+        prod?.public_page?.poster_url,
+      ), 'production-posters');
+    }
 
     function offerState() {
       const ca = answers(app);
@@ -1173,8 +1211,9 @@
       $('hero-cta').classList.remove('hidden');
 
       // Org logo box — swap placeholder for real content when available
-      if (org.logo_url) {
-        $('org-logo').src = org.logo_url;
+      const logoUrl = orgLogoUrl();
+      if (logoUrl) {
+        $('org-logo').src = logoUrl;
         $('org-logo').alt = org.name || '';
         $('org-logo').classList.remove('hidden');
         $('org-placeholder').classList.add('hidden');
@@ -1182,12 +1221,13 @@
       if (org.name) {
         $('org-name').textContent = org.name;
         $('org-name').classList.remove('hidden');
-        if (!org.logo_url) $('org-placeholder').classList.add('hidden');
+        if (!logoUrl) $('org-placeholder').classList.add('hidden');
       }
 
       // Poster — swap placeholder for real poster when available
-      if (prod?.poster_url) {
-        $('hero-poster').src = prod.poster_url;
+      const posterUrl = prodPosterUrl();
+      if (posterUrl) {
+        $('hero-poster').src = posterUrl;
         $('hero-poster').alt = `${showName} poster`;
         $('hero-poster').classList.remove('hidden');
         $('poster-placeholder').classList.add('hidden');
@@ -1197,8 +1237,8 @@
       const orgCard = org.name ? `
         <div class="info-card">
           <div class="info-card-icon">
-            ${org.logo_url
-              ? `<img src="${esc(org.logo_url)}" alt="${esc(org.name)}" class="org-card-logo" />`
+            ${logoUrl
+              ? `<img src="${esc(logoUrl)}" alt="${esc(org.name)}" class="org-card-logo" />`
               : `<img src="/ASSETS/Images/Organisation.svg" alt="" />`}
           </div>
           <div class="info-card-body">
@@ -1298,10 +1338,11 @@
       const orgKey = pretty.org;
       const showSlug = pretty.show;
       try {
-        const { data: orgMatch } = await sb.from('organizations').select('id')
+        const { data: orgMatch } = await sb.from('organizations').select('*')
           .or(`slug.eq.${orgKey},abbreviation.eq.${orgKey},abbreviation.eq.${orgKey.toUpperCase()},abbreviation.eq.${orgKey.toLowerCase()}`)
           .maybeSingle();
         const orgId = orgMatch?.id || null;
+        if (orgMatch) org = { ...org, ...orgMatch };
         let q = sb.from('productions').select('id').ilike('slug', showSlug);
         if (orgId) q = q.eq('organization_id', orgId);
         const { data: prodMatch } = await q.maybeSingle();
@@ -1359,8 +1400,14 @@
       prod = prodData || {};
       prodEvents = eventRows || [];
       if (prod.organization_id) {
-        const { data: orgData } = await sb.from('organizations').select('id,name,logo_url,contact_email').eq('id', prod.organization_id).maybeSingle();
-        org = orgData || {};
+        const { data: orgData } = await sb.from('organizations').select('*').eq('id', prod.organization_id).maybeSingle();
+        org = orgData || org || {};
+      } else if (!org?.id && pretty?.org) {
+        const orgKey = pretty.org;
+        const { data: orgData } = await sb.from('organizations').select('*')
+          .or(`slug.eq.${orgKey},abbreviation.eq.${orgKey},abbreviation.eq.${orgKey.toUpperCase()},abbreviation.eq.${orgKey.toLowerCase()}`)
+          .maybeSingle();
+        org = orgData || org || {};
       }
       assignments = assignmentRows || [];
       offeredAssignments = assignments.filter(row => {
