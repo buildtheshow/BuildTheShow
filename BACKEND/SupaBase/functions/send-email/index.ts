@@ -52,6 +52,7 @@ const CATEGORY_SUBJECTS: Record<string, string> = {
   cast_announcement:   'Role offer',
   cast_accepted:       'Yay! You accepted your role',
   not_cast:            'Regarding your audition',
+  cast_response_notification: 'Role offer response received',
   general:             'A message from the production team',
 };
 
@@ -65,6 +66,7 @@ const CATEGORY_TO_TRIGGER: Record<string, string> = {
   callback_self_tape:   'callback_self_tape_requested',
   cast_announcement:    'cast_set',
   cast_accepted:        'cast_accepted',
+  cast_response_notification: 'cast_response_notification',
   not_cast:             'not_cast_set',
   rehearsal:            'manual',
   team_invite:          'team_invite',
@@ -392,7 +394,7 @@ serve(async (req) => {
   }
 
   if (!productionId)   return json({ ok: false, error: 'Missing production_id' });
-  if (!performerEmail && category !== 'team_invite') return json({ ok: false, error: 'No email address found for this performer' });
+  if (!performerEmail && !['team_invite', 'cast_response_notification'].includes(category)) return json({ ok: false, error: 'No email address found for this performer' });
 
   // ── Fetch production + template + org ────────────────────────
   const [{ data: prod }, { data: templates }] = await Promise.all([
@@ -408,6 +410,7 @@ serve(async (req) => {
       .limit(20),
   ]);
   const templateList = Array.isArray(templates) ? templates as { subject?: string; body?: string; trigger?: string }[] : [];
+  const isProducerNotification = category === 'cast_response_notification';
   const template =
     templateList.find(t => String(t.trigger || '').trim() === requestedTrigger) ||
     templateList.find(t => !t.trigger && requestedTrigger === CATEGORY_TO_TRIGGER[category]) ||
@@ -435,7 +438,7 @@ serve(async (req) => {
     if (!performerEmail) return json({ ok: false, error: 'No email address found for this team member' });
   }
 
-  if (!template) {
+  if (!template && !isProducerNotification) {
     console.error('[send-email] Template not found for category:', category, 'production:', productionId);
     return json({ ok: false, error: `No email template found for "${category}". Create one in the Emails tab first.` });
   }
@@ -587,6 +590,79 @@ serve(async (req) => {
   const producerRole  = firstDefinedString(directContext.producer_role, producerMember?.role, 'Producer');
   const producerEmail = firstDefinedString(directContext.producer_email, producerMember?.email, orgEmail);
   const producerSignoff = firstDefinedString(directContext.producer_signoff, [producerName, producerRole, producerEmail].filter(Boolean).join('\n'));
+  if (isProducerNotification) {
+    const notificationEmail = firstDefinedString(directContext.notification_email, producerEmail, orgEmail);
+    if (!notificationEmail) return json({ ok: false, error: 'No producer or organisation email found for notification.' });
+    if (!RESEND_API_KEY) return json({ ok: false, error: 'Email sending is not configured (missing API key).' });
+
+    const responseStatus = firstDefinedString(directContext.response_status, directContext.status, 'responded').toLowerCase();
+    const responseLabel = responseStatus === 'accepted'
+      ? 'accepted'
+      : responseStatus === 'declined' || responseStatus === 'rejected'
+        ? 'rejected'
+        : 'responded to';
+    const roleName = firstDefinedString(directContext.role_names, directContext.role_name, roleInterest, 'their role offer');
+    const responseLink = firstDefinedString(directContext.cast_response_link);
+    const subject = `${performerName || 'A performer'} ${responseLabel} ${showName ? `their ${showName} role offer` : 'a role offer'}`;
+    const details = [
+      ['Performer', performerName],
+      ['Email', performerEmail],
+      ['Production', showName],
+      ['Role', roleName],
+      ['Response', responseLabel.charAt(0).toUpperCase() + responseLabel.slice(1)],
+    ].filter(([, value]) => String(value || '').trim());
+    const htmlDetails = details.map(([label, value]) => `
+      <tr>
+        <td style="padding:6px 12px 6px 0;color:#6a5a80;font-weight:700;vertical-align:top;">${escHtml(String(label))}</td>
+        <td style="padding:6px 0;color:#1a1530;vertical-align:top;">${escHtml(String(value))}</td>
+      </tr>
+    `).join('');
+    const linkHtml = responseLink
+      ? `<p style="margin:18px 0 0;"><a href="${escHtml(responseLink)}" style="display:inline-block;background:#572e88;color:#ffffff;text-decoration:none;font-weight:800;padding:12px 16px;border-radius:8px;">Open offer response</a></p>`
+      : '';
+    const html = `<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8" /></head>
+<body style="font-family:sans-serif;color:#1a1530;max-width:600px;margin:0 auto;padding:2rem 1rem;">
+  <h1 style="font-size:24px;line-height:1.2;margin:0 0 14px;">Role offer ${escHtml(responseLabel)}</h1>
+  <p style="margin:0 0 16px;color:#4a3d6b;line-height:1.5;">${escHtml(performerName || 'A performer')} has ${escHtml(responseLabel)} a role offer.</p>
+  <table style="border-collapse:collapse;width:100%;margin:0 0 10px;">${htmlDetails}</table>
+  ${linkHtml}
+  <hr style="margin:2rem 0;border:none;border-top:1px solid #e5e0f0;" />
+  <p style="font-size:0.75rem;color:#9a90b0;margin:0;">Sent by Build The Show.</p>
+</body>
+</html>`;
+    const text = [
+      `Role offer ${responseLabel}`,
+      '',
+      ...details.map(([label, value]) => `${label}: ${value}`),
+      responseLink ? `Offer response: ${responseLink}` : '',
+    ].filter(Boolean).join('\n');
+    const fromName = orgName || 'Build The Show';
+    const fromEmail = FROM_EMAIL || 'noreply@buildtheshow.com';
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${RESEND_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from: `${fromName} <${fromEmail}>`,
+        to: [notificationEmail],
+        reply_to: performerEmail || orgEmail || undefined,
+        subject,
+        html,
+        text,
+      }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      const resendMsg = (err as Record<string, string>).message || (err as Record<string, string>).name || JSON.stringify(err);
+      console.error('[send-email] Producer notification Resend error:', err);
+      return json({ ok: false, error: `Resend API error: ${resendMsg}` });
+    }
+    return json({ ok: true, sent: true, category, trigger: requestedTrigger, notification_email: notificationEmail });
+  }
   const audVenue     = firstDefinedString(
     directContext.audition_venue,
     (primarySession as Record<string,unknown>)?.location,

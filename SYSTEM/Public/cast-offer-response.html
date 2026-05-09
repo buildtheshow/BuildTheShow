@@ -316,9 +316,9 @@
       text-align: center;
     }
     .hero-submitted {
-      background: #f1ecff;
-      color: var(--purple);
-      box-shadow: inset 0 0 0 1px rgba(255,255,255,0.25), 0 8px 22px rgba(26,21,48,0.18);
+      background: #ded1f4;
+      color: var(--ink);
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,0.32), 0 8px 22px rgba(26,21,48,0.18);
     }
     .hero-submitted.declined {
       background: #fff1f4;
@@ -1960,6 +1960,49 @@
       if (!data?.sent) throw new Error(data?.error || 'Accepted-role email was not sent.');
     }
 
+    async function sendOfferResponseNotification(status) {
+      const contact = producerContact();
+      const { data } = await sb.functions.invoke('send-email', {
+        body: {
+          applicant_id: app.id,
+          production_id: prodId,
+          category: 'cast_response_notification',
+          trigger: 'cast_response_notification',
+          email: app.email || '',
+          name: app.name || '',
+          context: {
+            response_status: status,
+            notification_email: contact.email || '',
+            producer_name: contact.name || '',
+            producer_email: contact.email || '',
+            contact_name: app.name || '',
+            performer_name: app.name || '',
+            performer_email: app.email || '',
+            role_name: roleNames.join(', '),
+            role_names: roleNames.join(', '),
+            roles: roleNames.join(', '),
+            cast_response_link: responseBaseUrl(),
+            show_name: showTitle(),
+            show_subtitle: prod?.subtitle || '',
+            show_venue: prod?.venue || '',
+            director_name: directorName(),
+            org_name: org?.name || '',
+            org_email: org?.email || '',
+            production: {
+              title: showTitle(),
+              subtitle: prod?.subtitle || '',
+              venue: prod?.venue || '',
+              director: directorName(),
+              organization_id: prod?.organization_id || '',
+              start_date: prod?.start_date || '',
+              end_date: prod?.end_date || '',
+            },
+          },
+        },
+      });
+      if (!data?.sent) throw new Error(data?.error || 'Producer notification was not sent.');
+    }
+
     function selectedScheduleUnavailableEventIds() {
       return Array.from(document.querySelectorAll('#schedule-list .event.unavailable'))
         .map(el => el.dataset.eventId || '')
@@ -2052,6 +2095,8 @@
         let emailSent = true;
         try { await sendAcceptedEmail(); }
         catch (e) { emailSent = false; console.warn('[BTS] role accepted email failed', e); }
+        try { await sendOfferResponseNotification('accepted'); }
+        catch (e) { console.warn('[BTS] producer accepted-role notification failed', e); }
         $('decision-panel').classList.remove('hidden');
         $('deadline-banner').classList.add('hidden');
         $('hero-cta').classList.remove('hidden');
@@ -2073,6 +2118,8 @@
       try {
         setBusy(true);
         await saveResponse('declined');
+        try { await sendOfferResponseNotification('declined'); }
+        catch (e) { console.warn('[BTS] producer declined-role notification failed', e); }
         $('decision-panel').classList.remove('hidden');
         $('deadline-banner').classList.add('hidden');
         $('hero-cta').classList.remove('hidden');
