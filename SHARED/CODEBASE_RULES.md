@@ -72,6 +72,16 @@ Do not casually reintroduce `Applicants` in user-facing audition flows when we m
 - Do not mix competing page-level wallpapers or glow effects when the shared production wallpaper is in use.
 - If a production page needs a different texture for a very specific reason, it should be an intentional exception, not the default.
 
+### Box And Container Fill Rule
+
+- Boxes that hold information must always be 100% filled with a real colour.
+- Information boxes must never be transparent, frosted, glassy, or see-through.
+- The page wallpaper or grid may show around information boxes, but must not show through them.
+- Containers and layout wrappers should be 0% filled by default unless a filled surface is specifically requested.
+- Containers may control spacing, borders, grouping, section collapse, and layout without becoming another filled card.
+- Do not create nested filled-card stacks unless each filled box is a real information surface.
+- When in doubt, ask: is this an information box or only a container? Fill information boxes; leave containers unfilled.
+
 ### Creative Team Pattern
 
 - Whenever the UI talks about or lists Creative Team members, use the locked Creative Team hierarchy.
