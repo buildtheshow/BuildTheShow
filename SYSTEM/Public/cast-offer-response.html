@@ -868,6 +868,31 @@
     }
     .btn-decline:hover { background: #fff1f2; border-color: #fda4af; }
     .btn-decline:disabled { opacity: 0.6; cursor: default; }
+    .response-submitted {
+      display: grid;
+      gap: 0.5rem;
+      border-radius: 8px;
+      padding: 0.95rem 1rem;
+      background: #eef7ef;
+      color: #2e5c37;
+      box-shadow: inset 0 0 0 1px rgba(101,150,113,0.22);
+      text-align: center;
+    }
+    .response-submitted.declined {
+      background: #fff1f2;
+      color: #9f1239;
+      box-shadow: inset 0 0 0 1px rgba(185,75,106,0.24);
+    }
+    .response-submitted-title {
+      font-size: 0.98rem;
+      font-weight: 850;
+      line-height: 1.2;
+    }
+    .response-submitted-note {
+      font-size: 0.84rem;
+      font-weight: 500;
+      line-height: 1.45;
+    }
 
     /* ═══════════════════════════════════════════
        STATUS + REG CARD
@@ -1036,10 +1061,16 @@
         </div>
         <div class="decision-body">
           <div class="accept-col">
-            <button class="btn-accept-main" id="accept-btn" type="button">Yes, I accept this role</button>
-            <div class="decline-area">
-              <p class="decline-note">Declining lets the team know you cannot take this role.</p>
-              <button class="btn-decline" id="decline-btn" type="button">No, I decline this offer</button>
+            <div id="response-actions">
+              <button class="btn-accept-main" id="accept-btn" type="button">Yes, I accept this role</button>
+              <div class="decline-area">
+                <p class="decline-note">Declining lets the team know you cannot take this role.</p>
+                <button class="btn-decline" id="decline-btn" type="button">No, I decline this offer</button>
+              </div>
+            </div>
+            <div class="response-submitted hidden" id="response-submitted">
+              <div class="response-submitted-title" id="response-submitted-title"></div>
+              <div class="response-submitted-note" id="response-submitted-note"></div>
             </div>
           </div>
         </div>
@@ -1123,6 +1154,10 @@
       $('status').classList.toggle('error', mode === 'error');
       $('status').classList.toggle('neutral', mode === 'neutral');
       $('status').classList.remove('hidden');
+    };
+    const clearStatus = () => {
+      $('status').textContent = '';
+      $('status').className = 'status hidden';
     };
     const setBusy = busy => {
       ['accept-btn-top', 'accept-btn', 'decline-btn-top', 'decline-btn'].forEach(id => {
@@ -1308,6 +1343,29 @@
         el.disabled = locked;
         el.setAttribute('aria-disabled', locked ? 'true' : 'false');
       });
+    }
+
+    function submittedResponseNote(state, emailSent = true) {
+      if (state === 'accepted') {
+        return emailSent
+          ? 'Check your email for your registration link.'
+          : 'Your role is confirmed. Use the registration link below to get started.';
+      }
+      const contact = producerContact();
+      return contact.email
+        ? `Please email the ${contact.type === 'producer' ? 'producer' : 'organisation'} to let them know why: ${contact.name || (contact.type === 'producer' ? 'Producer' : 'Organisation')}, ${contact.email}.`
+        : `Please email the ${contact.type === 'producer' ? 'producer' : 'organisation'} to let them know why.`;
+    }
+
+    function showSubmittedResponse(state, emailSent = true) {
+      const isAccepted = state === 'accepted';
+      $('response-actions')?.classList.add('hidden');
+      const box = $('response-submitted');
+      if (!box) return;
+      box.classList.toggle('declined', !isAccepted);
+      $('response-submitted-title').textContent = isAccepted ? 'Role accepted!' : 'Offer rejected';
+      $('response-submitted-note').textContent = submittedResponseNote(state, emailSent);
+      box.classList.remove('hidden');
     }
 
     function parseRoleIds(ca) {
@@ -1697,17 +1755,16 @@
 
       const state = offerState();
       if (state === 'accepted' || state === 'declined') {
-        const expired = Boolean(answers(app)[KEYS.expiredAt]);
-        $('decision-panel').classList.add('hidden');
+        $('decision-panel').classList.remove('hidden');
         $('hero-cta').classList.add('hidden');
         $('hero-deadline').classList.add('hidden');
-        setStatus(state === 'accepted'
-          ? 'This role offer has already been accepted. Your registration is unlocked for the production team.'
-          : (expired
-            ? 'This role offer deadline has passed, so the offer has been marked declined. Please contact the production team if you have questions.'
-            : 'This role offer has already been declined. Thank you for letting the production team know.'),
-          'neutral'
-        );
+        showSubmittedResponse(state);
+        if (state === 'accepted') {
+          const regUrl = registrationLink();
+          $('reg-url').href = regUrl;
+          $('reg-card').classList.remove('hidden');
+        }
+        clearStatus();
       } else if (initialAction === 'accept') {
         setStatus('Review the offer, then click accept to confirm your role.', 'neutral');
       } else if (initialAction === 'decline') {
@@ -1965,17 +2022,18 @@
         setBusy(true);
         await expireOfferIfNeeded();
         if (offerState() === 'declined') {
-          $('decision-panel').classList.add('hidden');
+          $('decision-panel').classList.remove('hidden');
           $('hero-cta').classList.add('hidden');
           $('hero-deadline').classList.add('hidden');
-          setStatus('This role offer deadline has passed, so the offer has been marked declined. Please contact the production team if you have questions.', 'neutral');
+          showSubmittedResponse('declined');
+          clearStatus();
           return;
         }
         await saveResponse('accepted');
         let emailSent = true;
         try { await sendAcceptedEmail(); }
         catch (e) { emailSent = false; console.warn('[BTS] role accepted email failed', e); }
-        $('decision-panel').classList.add('hidden');
+        $('decision-panel').classList.remove('hidden');
         $('deadline-banner').classList.add('hidden');
         $('hero-cta').classList.add('hidden');
         $('hero-deadline').classList.add('hidden');
@@ -1985,13 +2043,9 @@
           ? 'Check your email for your registration link. You can also use the link below.'
           : 'Your role is confirmed. Use the link below to get started with registration.';
         $('reg-card').classList.remove('hidden');
+        showSubmittedResponse('accepted', emailSent);
         setOfferLocked(true);
-        setStatus(
-          emailSent
-            ? 'Role accepted! Check your email for your registration link.'
-            : 'Accepted. Your role is confirmed. Use the link below to get started with registration.',
-          emailSent ? '' : 'neutral'
-        );
+        clearStatus();
       } catch (err) {
         setStatus(err.message || 'Could not accept this offer.', 'error');
       } finally {
@@ -2005,18 +2059,13 @@
       try {
         setBusy(true);
         await saveResponse('declined');
-        $('decision-panel').classList.add('hidden');
+        $('decision-panel').classList.remove('hidden');
         $('deadline-banner').classList.add('hidden');
         $('hero-cta').classList.add('hidden');
         $('hero-deadline').classList.add('hidden');
         setOfferLocked(true);
-        const contact = producerContact();
-        setStatus(
-          contact.email
-            ? `Declined. Please email the ${contact.type === 'producer' ? 'producer' : 'organisation'} to let them know why: ${contact.name || (contact.type === 'producer' ? 'Producer' : 'Organisation')}, ${contact.email}.`
-            : `Declined. Please email the ${contact.type === 'producer' ? 'producer' : 'organisation'} to let them know why.`,
-          'neutral'
-        );
+        showSubmittedResponse('declined');
+        clearStatus();
       } catch (err) {
         setStatus(err.message || 'Could not decline this offer.', 'error');
       } finally {
