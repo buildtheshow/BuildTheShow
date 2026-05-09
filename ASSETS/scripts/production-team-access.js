@@ -58,7 +58,8 @@ async function refreshTeamColorRoster() {
   const { data, error } = await sb
     .from('production_team_members')
     .select('id,name,role,note_color,is_active')
-    .eq('production_id', prodId);
+    .eq('production_id', prodId)
+    .eq('is_active', true);
   if (error) return { ok: false, message: 'Could not refresh team colours: ' + error.message };
 
   auditionTeamMembers = (data || []).map(member => {
@@ -183,6 +184,19 @@ function creativeRolesForTeamMember(member) {
 
 function findCreativeRoleForTeamMember(member) {
   return creativeRolesForTeamMember(member)[0] || null;
+}
+
+async function unlinkProductionTeamMemberFromCreativeConfig(member) {
+  const linkedRoles = creativeRolesForTeamMember(member);
+  if (!linkedRoles.length) return false;
+  linkedRoles.forEach(role => {
+    role.person = '';
+    role.team_member_id = null;
+    role.email = '';
+    role.filled = false;
+  });
+  await saveTeamConfig();
+  return true;
 }
 
 async function syncTeamMemberToProductionTeam(member, patch = {}) {
@@ -486,6 +500,8 @@ async function removeProductionTeamMember(memberId, btn = null) {
 
   const markDone = ptcBtnFeedback?.(btn, { working: 'Removing', done: 'Removed', restore: false });
   try {
+    await unlinkProductionTeamMemberFromCreativeConfig(member);
+
     if (member.headshot_path) {
       const { error: fileError } = await sb.storage.from('audition-headshots').remove([member.headshot_path]);
       if (fileError) console.warn('[BTS] Could not remove team headshot file.', fileError);
@@ -546,17 +562,6 @@ async function removeProductionTeamMember(memberId, btn = null) {
         .eq('production_id', prodId)
         .eq('id', memberId);
       if (memberError) throw memberError;
-    }
-
-    const linkedRoles = creativeRolesForTeamMember(member);
-    if (linkedRoles.length) {
-      linkedRoles.forEach(role => {
-        role.person = '';
-        role.team_member_id = null;
-        role.email = '';
-        role.filled = false;
-      });
-      await saveTeamConfig();
     }
 
     if (Array.isArray(auditionAuthoredNotes)) {

@@ -20095,7 +20095,7 @@
 <script src="/ASSETS/scripts/phone-format.js?v=nanp-smart-20260424"></script>
 <script src="/ASSETS/scripts/casting-card.js"></script>
 <script src="/ASSETS/scripts/production-team-card.js?v=team-card-phone-format-20260424"></script>
-<script src="/ASSETS/scripts/production-team-access.js?v=team-portal-prod-id-20260429"></script>
+<script src="/ASSETS/scripts/production-team-access.js?v=team-delete-permanent-20260508"></script>
 <script src="/SHARED/Components/casting-card-back.js?v=selftapes-tab-20260504k"></script>
 <script src="/SHARED/Components/audition-status-strip.js"></script>
 <script src="/SHARED/Components/ai-character-importer.js"></script>
@@ -27480,6 +27480,7 @@ We look forward to seeing your work!
       const { data, error } = await sb.from('production_team_members')
         .select('*')
         .eq('production_id', prodId)
+        .eq('is_active', true)
         .order('created_at', { ascending: true });
       if (error) throw error;
       auditionTeamMembers = data || [];
@@ -27713,16 +27714,32 @@ We look forward to seeing your work!
     const role = creative?.roles?.[editingCreativeRoleIndex];
     if (!role) return;
     const oldPerson = role.person || '';
+    const oldEmail = role.email || '';
+    const oldTeamMemberId = role.team_member_id || '';
     role.person = '';
     role.email = '';
+    role.team_member_id = null;
     role.filled = false;
     await saveTeamConfig();
-    if (oldPerson) {
+    if (oldPerson || oldEmail || oldTeamMemberId) {
       const existing = auditionTeamMembers.find(m =>
-        String(m.role || '').toLowerCase() === String(role.name || '').toLowerCase() &&
-        String(m.name || '').toLowerCase() === String(oldPerson || '').toLowerCase()
+        String(m.id || '') === String(oldTeamMemberId || '') ||
+        (
+          String(m.role || '').toLowerCase() === String(role.name || '').toLowerCase() &&
+          String(m.name || '').toLowerCase() === String(oldPerson || '').toLowerCase()
+        ) ||
+        (
+          String(oldEmail || '').trim() &&
+          String(m.email || '').toLowerCase() === String(oldEmail || '').toLowerCase()
+        )
       );
-      if (existing) await sb.from('production_team_members').update({ is_active: false }).eq('id', existing.id);
+      if (existing) {
+        const { error } = await sb.from('production_team_members').delete().eq('production_id', prodId).eq('id', existing.id);
+        if (error) {
+          showToast('Could not delete team access: ' + error.message, true);
+          return;
+        }
+      }
     }
     await loadAuditionTeamMembers();
     closeCreativeAssignModal();

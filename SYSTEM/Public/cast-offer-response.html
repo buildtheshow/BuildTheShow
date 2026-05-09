@@ -40,7 +40,7 @@
     ═══════════════════════════════════════════ */
     .offer-hero {
       --hero-edge: clamp(1.5rem, 4vw, 2.5rem);
-      --hero-top: clamp(1.3rem, 4vw, 2rem);
+      --hero-corner-inset: clamp(0.55rem, 1.6vw, 0.95rem);
       --hero-corner-size: clamp(72px, 9vw, 96px);
       background: radial-gradient(circle at 50% 35%, #7741ab 0%, #572e88 35%, #241140 72%, #241140 100%);
       position: relative;
@@ -140,8 +140,8 @@
     .org-logo-box {
       position: absolute;
       z-index: 2;
-      top: var(--hero-top);
-      left: var(--hero-edge);
+      top: var(--hero-corner-inset);
+      left: var(--hero-corner-inset);
       width: var(--hero-corner-size);
       height: var(--hero-corner-size);
       background: transparent;
@@ -213,8 +213,8 @@
       justify-content: center;
       position: absolute;
       z-index: 2;
-      top: var(--hero-top);
-      right: var(--hero-edge);
+      top: var(--hero-corner-inset);
+      right: var(--hero-corner-inset);
       width: var(--hero-corner-size);
     }
     .hero-poster {
@@ -928,6 +928,7 @@
     let offeredAssignments = [];
     let roleNames = [];
     let prodEvents = [];
+    let productionTeamMembers = [];
 
     const $ = id => document.getElementById(id);
     const esc = value => String(value ?? '').replace(/[&<>"']/g, ch => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[ch]));
@@ -1027,6 +1028,63 @@
         prod?.wizard_data?.poster_url,
         prod?.public_page?.poster_url,
       ), 'production-posters');
+    }
+
+    function roleLabel(value) {
+      const raw = String(value || '').trim();
+      if (!raw) return '';
+      return ({
+        director: 'Director',
+        vocal_director: 'Vocal Director',
+        music_director: 'Music Director',
+        musical_director: 'Music Director',
+        choreographer: 'Choreographer',
+        producer: 'Producer',
+      })[raw.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '')] || raw;
+    }
+
+    function creativeTeamEntries() {
+      const entries = [];
+      const seen = new Set();
+      const add = (role, name) => {
+        const cleanRole = roleLabel(role);
+        const cleanName = String(name || '').trim();
+        if (!cleanRole || !cleanName) return;
+        const key = `${cleanRole.toLowerCase()}::${cleanName.toLowerCase()}`;
+        if (seen.has(key)) return;
+        seen.add(key);
+        entries.push({ role: cleanRole, name: cleanName });
+      };
+
+      const teamConfig = prod?.wizard_data?.team_config || [];
+      const creativeDept = Array.isArray(teamConfig)
+        ? teamConfig.find(dept => String(dept?.name || '').toLowerCase() === 'creative team')
+        : null;
+      (creativeDept?.roles || []).forEach(role => {
+        if (role?.filled === false && !role?.person) return;
+        add(role?.name, role?.person);
+      });
+
+      (productionTeamMembers || [])
+        .filter(member => member?.is_active !== false)
+        .filter(member => !/producer/i.test(String(member?.role || '')))
+        .forEach(member => add(member.role, member.name));
+
+      if (!entries.length && prod?.director) add('Director', prod.director);
+      return entries;
+    }
+
+    function creativeTeamHtml() {
+      const entries = creativeTeamEntries();
+      if (!entries.length) return '<div class="info-card-value">TBC</div>';
+      return entries.map(item => `
+        <div class="info-card-value">${esc(item.name)}</div>
+        <div class="info-card-meta">${esc(item.role)}</div>
+      `).join('');
+    }
+
+    function directorName() {
+      return creativeTeamEntries().find(item => /director/i.test(item.role))?.name || prod?.director || '';
     }
 
     function offerState() {
@@ -1335,8 +1393,7 @@
           <div class="info-card-icon"><img src="/ASSETS/Images/Creative Team.svg" alt="" /></div>
           <div class="info-card-body">
             <div class="info-card-label">Creative Team</div>
-            <div class="info-card-value">${esc(prod?.director || 'TBC')}</div>
-            <div class="info-card-meta">Director</div>
+            ${creativeTeamHtml()}
           </div>
         </div>
         ${orgCard}
@@ -1476,6 +1533,18 @@
           .maybeSingle();
         org = orgData || org || {};
       }
+      try {
+        const { data: teamRows, error: teamError } = await sb.from('production_team_members')
+          .select('id,name,email,role,is_active')
+          .eq('production_id', prodId)
+          .eq('is_active', true)
+          .order('created_at', { ascending: true });
+        if (teamError) throw teamError;
+        productionTeamMembers = teamRows || [];
+      } catch (teamError) {
+        productionTeamMembers = [];
+        console.warn('[BTS] production team members unavailable for cast offer page', teamError);
+      }
       assignments = assignmentRows || [];
       offeredAssignments = assignments.filter(row => {
         if (!roleIds.length) return true;
@@ -1511,12 +1580,12 @@
             role_name: roleNames.join(', '), role_names: roleNames.join(', '), roles: roleNames.join(', '),
             registration_link: registrationLink(), cast_response_link: responseBaseUrl(),
             show_name: showTitle(), show_subtitle: prod?.subtitle || '',
-            show_venue: prod?.venue || '', director_name: prod?.director || '',
+            show_venue: prod?.venue || '', director_name: directorName(),
             rehearsal_start_date: prod?.start_date || '', rehearsal_end_date: prod?.end_date || '',
             opening_night: prod?.end_date || prod?.start_date || '',
             production: {
               title: showTitle(), subtitle: prod?.subtitle || '', venue: prod?.venue || '',
-              director: prod?.director || '', organization_id: prod?.organization_id || '',
+              director: directorName(), organization_id: prod?.organization_id || '',
               start_date: prod?.start_date || '', end_date: prod?.end_date || '',
             },
           },
