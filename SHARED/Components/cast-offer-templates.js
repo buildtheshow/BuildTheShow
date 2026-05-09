@@ -110,8 +110,11 @@
           framed: false,
           width: '100%',
           minHeight: '0',
-          roleSize: '1.18rem',
-          nameSize: '0.98rem',
+          dotColumn: '1.65rem',
+          dotSize: '0.84rem',
+          dotHalo: '0.18rem',
+          roleSize: 'clamp(0.78rem, 1.15vw, 0.95rem)',
+          nameSize: 'clamp(0.72rem, 1vw, 0.86rem)',
           halo: item.haloColor || '#e7ddf3'
         });
       }
