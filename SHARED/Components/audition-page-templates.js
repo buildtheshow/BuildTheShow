@@ -574,6 +574,31 @@
     </div>`;
   }
 
+  function renderAuditionPageHeaderTemplate(config) {
+    const {
+      esc,
+      kicker = 'Auditions',
+      title = 'Auditions at a glance.',
+      copy = '',
+      statValue = '',
+      statLabel = '',
+      liveState = 'connecting'
+    } = config;
+    return `<div class="aud-visual-hero">
+      <div class="aud-visual-hero-content">
+        <div>
+          <div class="aud-visual-kicker"><span class="bts-live-dot" data-live="${esc(liveState)}"></span>${esc(kicker)}</div>
+          <h2 class="aud-visual-title">${esc(title)}</h2>
+          ${copy ? `<p class="aud-visual-copy">${esc(copy)}</p>` : ''}
+        </div>
+        ${statValue !== '' || statLabel ? `<div class="aud-visual-total">
+          <div class="aud-visual-total-value">${esc(statValue)}</div>
+          <div class="aud-visual-total-label">${esc(statLabel)}</div>
+        </div>` : ''}
+      </div>
+    </div>`;
+  }
+
   const api = Object.assign({}, window.BTSAuditionTemplates, {
     registerTemplate,
     findTemplate,
@@ -594,7 +619,8 @@
     renderDanceCallInRoomTemplate,
     renderTemplateTestSectionTemplate,
     renderTemplateTestPreviewTemplate,
-    renderTemplateTestCheckedInPreviewTemplate
+    renderTemplateTestCheckedInPreviewTemplate,
+    renderAuditionPageHeaderTemplate
   });
 
   window.BTSAuditionTemplates = api;
@@ -733,5 +759,13 @@
     tags: { area: 'template-test', component: 'checked-in-preview' },
     priority: 100,
     render: renderTemplateTestCheckedInPreviewTemplate
+  });
+
+  api.registerTemplate({
+    id: 'auditions.page-header',
+    name: 'Auditions Page Header',
+    tags: { area: 'auditions', component: 'page-header' },
+    priority: 100,
+    render: renderAuditionPageHeaderTemplate
   });
 })();
