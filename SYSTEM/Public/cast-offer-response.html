@@ -769,10 +769,23 @@
     .decision-body {
       padding: 1.1rem 1.3rem;
       display: grid;
-      grid-template-columns: minmax(0, 1fr) 230px;
+      grid-template-columns: minmax(0, 1fr);
       gap: 1.4rem;
       align-items: start;
     }
+    .producer-contact {
+      margin-top: 0.55rem;
+      color: var(--muted);
+      font-size: 0.82rem;
+      font-weight: 400;
+      line-height: 1.45;
+    }
+    .producer-contact a {
+      color: var(--purple);
+      font-weight: 700;
+      text-decoration: none;
+    }
+    .producer-contact a:hover { text-decoration: underline; }
     label {
       display: block;
       font-size: 0.8rem;
@@ -939,7 +952,7 @@
               <button class="btn-accept-hero" id="accept-btn-top" type="button">I Accept This Role</button>
               <button class="btn-decline-hero" id="decline-btn-top" type="button">I Decline</button>
             </div>
-            <p class="hero-cta-note">Add any unavailability notes below before you accept. Your registration link will appear right on this page.</p>
+            <p class="hero-cta-note">Your registration link will appear right on this page after you accept.</p>
           </div>
         </div>
       </div>
@@ -996,25 +1009,13 @@
         <div class="decision-head">
           <div class="card-label">Your Response</div>
           <div class="card-title" style="font-size:1rem;font-weight:700;color:var(--ink);margin-top:0.1rem;">Before you answer</div>
-          <p style="font-size:0.82rem;color:var(--muted);margin-top:0.3rem;line-height:1.45;font-weight:400;">Any notes you add will be saved with your response for the production team.</p>
+          <p class="producer-contact" id="producer-contact">If you have questions, email the producer.</p>
         </div>
         <div class="decision-body">
-          <div>
-            <div class="field">
-              <label for="additional-unavailability">Any new dates or times you are unavailable?</label>
-              <textarea id="additional-unavailability" placeholder="Example: Sept 12 after 5 PM, Sept 18 arrival may be late."></textarea>
-            </div>
-            <div class="field">
-              <label for="accept-notes">Notes if you accept</label>
-              <textarea id="accept-notes" placeholder="Questions, access needs, schedule context, name pronunciation, or anything the team should know."></textarea>
-            </div>
-          </div>
           <div class="accept-col">
             <button class="btn-accept-main" id="accept-btn" type="button">Yes, I accept this role</button>
             <div class="decline-area">
               <p class="decline-note">Declining lets the team know you cannot take this role.</p>
-              <label for="decline-notes">Optional note if you decline</label>
-              <textarea id="decline-notes" placeholder="You can leave a short note for the production team." style="min-height:68px;"></textarea>
               <button class="btn-decline" id="decline-btn" type="button">No, I decline this offer</button>
             </div>
           </div>
@@ -1224,6 +1225,20 @@
 
       if (!entries.length && prod?.director) add('Director', prod.director);
       return entries;
+    }
+
+    function producerContactEmail() {
+      const producer = (productionTeamMembers || []).find(member =>
+        member?.email && /producer/i.test(String(member?.role || ''))
+      );
+      return firstTruthy(
+        producer?.email,
+        prod?.producer_email,
+        prod?.contact_email,
+        org?.production_email,
+        org?.contact_email,
+        org?.email,
+      );
     }
 
     function creativeTeamHtml() {
@@ -1437,15 +1452,8 @@
             </div>
           `).join('');
       } else {
-        $('conflict-list').innerHTML = '<div class="empty-state">No conflicts recorded from your audition form. If anything changed, add new dates in the notes section below before you accept.</div>';
+        $('conflict-list').innerHTML = '<div class="empty-state">No conflicts recorded from your audition form.</div>';
       }
-    }
-
-    function prefillNotes() {
-      const ca = answers(app);
-      $('additional-unavailability').value = ca[KEYS.additionalUnavailability] || '';
-      $('accept-notes').value = ca[KEYS.acceptNotes] || '';
-      $('decline-notes').value = ca[KEYS.declineNotes] || '';
     }
 
     function renderDetails() {
@@ -1549,7 +1557,10 @@
 
       renderSchedule();
       renderConflicts();
-      prefillNotes();
+      const producerEmail = producerContactEmail();
+      $('producer-contact').innerHTML = producerEmail
+        ? `If you have questions, email the producer at <a href="mailto:${esc(producerEmail)}">${esc(producerEmail)}</a>.`
+        : 'If you have questions, email the producer.';
 
       $('info-section').classList.remove('hidden');
       $('body-pad').classList.remove('hidden');
@@ -1568,9 +1579,9 @@
           'neutral'
         );
       } else if (initialAction === 'accept') {
-        setStatus('Review the offer, add any new unavailability, then click accept to confirm your role.', 'neutral');
+        setStatus('Review the offer, then click accept to confirm your role.', 'neutral');
       } else if (initialAction === 'decline') {
-        setStatus('Review the offer below. Add a note if it would be helpful, then click decline to let the team know.', 'neutral');
+        setStatus('Review the offer below, then click decline to let the team know.', 'neutral');
       }
     }
 
@@ -1745,13 +1756,9 @@
     }
 
     function responseNotes(status) {
-      const patch = {
-        [KEYS.additionalUnavailability]: textValue('additional-unavailability'),
+      return {
         [KEYS.availabilityReviewedAt]: new Date().toISOString(),
       };
-      if (status === 'accepted') patch[KEYS.acceptNotes] = textValue('accept-notes');
-      if (status === 'declined') patch[KEYS.declineNotes] = textValue('decline-notes');
-      return patch;
     }
 
     async function saveResponse(status, extraAnswers = {}) {
