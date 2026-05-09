@@ -6308,6 +6308,59 @@
       letter-spacing: 0.03em;
       text-transform: uppercase;
     }
+    .team-department-sections {
+      display: grid;
+      gap: 1.35rem;
+      margin-top: 1.1rem;
+    }
+    .team-department-section {
+      background: transparent;
+    }
+    .team-department-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.9rem;
+      margin-bottom: 0.7rem;
+      padding-bottom: 0.45rem;
+      border-bottom: 1.5px solid rgba(87,46,136,0.14);
+    }
+    .team-department-title {
+      color: #1a1530;
+      font-size: 0.94rem;
+      font-weight: 950;
+      letter-spacing: 0.04em;
+      line-height: 1.05;
+      text-transform: uppercase;
+    }
+    .team-department-count {
+      color: #8a7aa4;
+      font-size: 0.72rem;
+      font-weight: 850;
+      margin-top: 0.18rem;
+    }
+    .team-department-actions {
+      display: flex;
+      gap: 0.45rem;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+    .team-department-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+      gap: 1.05rem;
+      align-items: start;
+    }
+    .team-department-empty {
+      background: #fff;
+      border: 1px solid rgba(87,46,136,0.14);
+      border-radius: 8px;
+      padding: 0.9rem 1rem;
+      color: #6a5a80;
+      font-size: 0.82rem;
+      font-weight: 700;
+      line-height: 1.4;
+    }
     .tm-add-dept {
       display: flex; gap: 0.5rem; margin-top: 0.75rem; align-items: center;
     }
@@ -27979,8 +28032,19 @@ We look forward to seeing your work!
     });
   }
 
+  function teamMemberDepartment(member = {}) {
+    const value = String(member.department || '').trim();
+    return PRODUCTION_TEAM_DEPARTMENTS.includes(value) ? value : 'Production & Rehearsal Support';
+  }
+
+  function showAddTeamMemberForDepartment(department) {
+    showAddTeamMemberForm();
+    const select = document.getElementById('new-tm-department');
+    if (select && department) select.value = department;
+  }
+
   function renderTeamView(container) {
-    const accessRows = (auditionTeamMembers || []).map(m => {
+    const renderTeamMemberTile = (m) => {
       const department = m.department || 'Production Team';
       const accessLabel = teamAccessLevelConfig(normalizeTeamRole(m.access_level || m.role)).label;
       const menuLabel = [...teamMemberMenuAccess(m)]
@@ -27995,6 +28059,31 @@ We look forward to seeing your work!
           ${menuLabel ? `<span class="team-member-pill">${esc(menuLabel)}</span>` : ''}
         </div>
       </div>`;
+    };
+    const groupedMembers = new Map(PRODUCTION_TEAM_DEPARTMENTS.map(name => [name, []]));
+    (auditionTeamMembers || []).forEach(member => {
+      const dept = teamMemberDepartment(member);
+      if (!groupedMembers.has(dept)) groupedMembers.set(dept, []);
+      groupedMembers.get(dept).push(member);
+    });
+    const departmentSections = PRODUCTION_TEAM_DEPARTMENTS.map(department => {
+      const members = groupedMembers.get(department) || [];
+      const countLabel = `${members.length} ${members.length === 1 ? 'person' : 'people'}`;
+      return `<section class="team-department-section">
+        <div class="team-department-head">
+          <div>
+            <div class="team-department-title">${esc(department)}</div>
+            <div class="team-department-count">${esc(countLabel)}</div>
+          </div>
+          <div class="team-department-actions">
+            <button type="button" class="btn-secondary" onclick="showAddTeamMemberForDepartment(${JSON.stringify(department)})" style="font-size:0.76rem;">Add Here</button>
+            <button type="button" class="btn-secondary" onclick="showTeamEditor()" style="font-size:0.76rem;">Edit Roles</button>
+          </div>
+        </div>
+        ${members.length
+          ? `<div class="team-department-grid">${members.map(renderTeamMemberTile).join('')}</div>`
+          : `<div class="team-department-empty">No one added here yet. Use Add Here to invite this type of team member.</div>`}
+      </section>`;
     }).join('');
     const departmentOptions = PRODUCTION_TEAM_DEPARTMENTS
       .map(name => `<option value="${esc(name)}">${esc(name)}</option>`)
@@ -28053,9 +28142,7 @@ We look forward to seeing your work!
             <span id="add-tm-error" style="font-size:0.78rem;color:#b91c1c;font-weight:700;"></span>
           </div>
         </div>
-        ${accessRows
-          ? `<div class="team-access-grid">${accessRows}</div>`
-          : '<div style="font-size:0.82rem;color:#9a90b0;padding:0.75rem 0;">No team members yet. Click + Add Team Member to get started.</div>'}
+        <div class="team-department-sections">${departmentSections}</div>
       </div>`;
 
     container.innerHTML = accessSection;
