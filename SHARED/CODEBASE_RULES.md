@@ -72,6 +72,15 @@ Do not casually reintroduce `Applicants` in user-facing audition flows when we m
 - Do not mix competing page-level wallpapers or glow effects when the shared production wallpaper is in use.
 - If a production page needs a different texture for a very specific reason, it should be an intentional exception, not the default.
 
+### Creative Team Pattern
+
+- Whenever the UI talks about or lists Creative Team members, use the locked Creative Team hierarchy.
+- Show the role first in large, bold, uppercase type.
+- Show the person's name underneath in smaller, lighter uppercase type.
+- Use the coloured dot marker to the left of the role when the layout has room.
+- Do not flip this into name-first cards, comma lists, small chips, or paragraph text unless the context is too compact for the full pattern.
+- If the context is compact, preserve the same hierarchy: role first, name second.
+
 ### Audition Colour System
 
 - Audition UI should use one consistent colour system everywhere across production and public pages.
