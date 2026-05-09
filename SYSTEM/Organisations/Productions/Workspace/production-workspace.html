@@ -6454,7 +6454,7 @@
     }
     .team-department-sections {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
       align-items: start;
       gap: 1.55rem;
       margin-top: 0.2rem;
@@ -6523,13 +6523,52 @@
     }
     .team-role-people {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr));
-      gap: 0.62rem;
+      grid-template-columns: repeat(auto-fill, minmax(5.4rem, 1fr));
+      gap: 0.48rem;
       min-width: 0;
     }
     .team-role-card-shell {
       display: grid;
+      justify-items: center;
       min-width: 0;
+    }
+    .team-role-card-shell .production-team-card-wrap {
+      width: min(100%, 5.9rem);
+      gap: 0;
+    }
+    .team-role-card-shell .production-team-card {
+      width: 100%;
+      min-width: 0;
+    }
+    .team-role-card-shell .production-team-card-face {
+      box-shadow: 0 4px 10px rgba(15, 23, 42, 0.11);
+    }
+    .team-role-card-shell .production-team-card-back {
+      gap: 0.28rem;
+      padding: 0.5rem 0.5rem 0.42rem;
+      border-top-width: 0.34rem;
+    }
+    .team-role-card-shell .production-team-card-back-contact,
+    .team-role-card-shell .production-team-card-back-fields,
+    .team-role-card-shell .production-team-card-back-actions,
+    .team-role-card-shell .production-team-card-trash {
+      display: none;
+    }
+    .team-role-card-shell .production-team-card-back-head {
+      padding: 0;
+      border-bottom: 0;
+    }
+    .team-role-card-shell .production-team-card-back-identity {
+      grid-template-columns: 1.15rem minmax(0, 1fr);
+      column-gap: 0.3rem;
+      padding-left: 0;
+    }
+    .team-role-card-shell .production-team-card-back-dot {
+      width: 0.62rem;
+      height: 0.62rem;
+      min-width: 0.62rem;
+      min-height: 0.62rem;
+      box-shadow: 0 0 0 0.15rem color-mix(in srgb, var(--pt-card-color) 18%, transparent);
     }
     .team-role-card-shell.is-open .production-team-card {
       filter: grayscale(0.15);
@@ -28046,7 +28085,7 @@ We look forward to seeing your work!
       desc: 'The editable production-team map based on RYT departments, roles, and colour families.',
       departments: [
         { name: 'Board Members', roles: ['President', 'Vice President', 'Treasurer', 'Recording Secretary', 'Marketing & Communications Director', 'Fundraising Chair', 'Volunteer Coordinator', 'Youth Member(s)', 'Members at Large'], noLead: true },
-        { name: 'Artistic Team', roles: ['Producer', 'Director', 'Vocal Director', 'Choreographer'] },
+        { name: 'Artistic Team', roles: ['Director', 'Vocal Director', 'Choreographer', 'Producer'] },
         { name: 'Production & Rehearsal Support', roles: ['Stage Manager', 'Assistant Stage Manager', 'Rehearsal Assistant', 'Backstage Crew', 'Quick-Change Assistant', 'Backstage Child Wrangler', 'Rehearsal Child Wrangler'] },
         { name: 'Design & Construction Crew', roles: ['Set Designer', 'Lead Builder', 'Set Builders', 'Set Strike Crew', 'Lead Set Painter', 'Set Painters', 'Lead Prop Person', 'Props Helper'] },
         { name: 'Technical Crew', roles: ['Lighting Designer / Technician', 'Spotlight Operators', 'Sound Technician', 'Mic Wrangler'] },
@@ -28140,19 +28179,32 @@ We look forward to seeing your work!
         teamConfig = teamConfig.filter(dept => dept.name !== 'Creative Team');
         dirty = true;
       }
-      const artisticTeam = teamConfig.find(dept => dept.name === 'Artistic Team');
-      if (artisticTeam?.roles?.length) {
-        artisticTeam.roles.forEach(role => {
+      const defaultDepartments = BUILTIN_TEMPLATES[0].departments;
+      defaultDepartments.forEach(defaultDept => {
+        const dept = teamConfig.find(item => item.name === defaultDept.name);
+        if (!dept) return;
+        let roles = dept.roles || [];
+        roles.forEach(role => {
           if (role.name === 'Music Director') {
             role.name = 'Vocal Director';
             dirty = true;
           }
         });
-        if (!artisticTeam.roles.some(role => role.name === 'Producer')) {
-          artisticTeam.roles.unshift({ id: crypto.randomUUID(), name: 'Producer', filled: false, notes: '' });
+        defaultDept.roles.forEach(roleName => {
+          if (!roles.some(role => role.name === roleName)) {
+            roles.push({ id: crypto.randomUUID(), name: roleName, filled: false, notes: '' });
+            dirty = true;
+          }
+        });
+        const ordered = [
+          ...defaultDept.roles.map(roleName => roles.find(role => role.name === roleName)).filter(Boolean),
+          ...roles.filter(role => !defaultDept.roles.includes(role.name)),
+        ];
+        if (ordered.map(role => role.name).join('|') !== roles.map(role => role.name).join('|')) {
+          dept.roles = ordered;
           dirty = true;
         }
-      }
+      });
       if (dirty) await saveTeamConfig();
     }
 
@@ -28354,7 +28406,7 @@ We look forward to seeing your work!
         is_active: true,
       };
       return `<div class="team-role-card-shell${isOpen ? ' is-open' : ''}" style="${teamDepartmentStyle(department)}">
-        ${renderProductionTeamCard({ ...cardMember, role: role?.name || cardMember.role, note_color: cardMember.note_color || color.h }, { showManagement: !isOpen })}
+        ${renderProductionTeamCard({ ...cardMember, role: role?.name || cardMember.role, note_color: cardMember.note_color || color.h }, { showManagement: false })}
       </div>`;
     };
     const departmentNames = productionTeamDepartmentNames();
