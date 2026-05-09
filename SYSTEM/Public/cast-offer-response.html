@@ -427,8 +427,8 @@
       height: 0.82rem;
       margin-top: 0.05rem;
       border-radius: 999px;
-      background: #ef332b;
-      box-shadow: 0 0 0 0.18rem #ffd4d2;
+      background: var(--creative-dot, var(--purple));
+      box-shadow: 0 0 0 0.18rem var(--creative-dot-halo, #e7ddf3);
     }
     .creative-team-copy {
       min-width: 0;
@@ -1045,35 +1045,7 @@
     <div class="body-pad hidden" id="body-pad">
 
       <!-- Schedule + Conflicts -->
-      <div class="sched-conflicts-grid" id="breakdown">
-
-        <div class="bts-card">
-          <div class="card-head">
-            <div class="card-head-icon">
-              <img src="/ASSETS/Images/navproductioncalendar.svg" alt="" />
-            </div>
-            <div class="card-head-text">
-              <div class="card-label">Dates</div>
-              <div class="card-title">Production Schedule</div>
-            </div>
-          </div>
-          <div class="card-body" id="schedule-list"></div>
-        </div>
-
-        <div class="bts-card">
-          <div class="card-head">
-            <div class="card-head-icon">
-              <img src="/ASSETS/Images/Checklist.svg" alt="" />
-            </div>
-            <div class="card-head-text">
-              <div class="card-label">Availability</div>
-              <div class="card-title">Your Conflicts</div>
-            </div>
-          </div>
-          <div class="card-body" id="conflict-list"></div>
-        </div>
-
-      </div>
+      <div class="sched-conflicts-grid" id="breakdown"></div>
 
       <!-- Response -->
       <div class="decision" id="decision-panel">
@@ -1114,6 +1086,7 @@
 
   </main>
 
+  <script src="/SHARED/Components/cast-offer-templates.js?v=cast-offer-templates-20260509"></script>
   <script type="module">
     import { supabase as sb } from '/ASSETS/scripts/supabase.js';
 
@@ -1163,6 +1136,7 @@
 
     const $ = id => document.getElementById(id);
     const esc = value => String(value ?? '').replace(/[&<>"']/g, ch => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[ch]));
+    const renderCastOfferTemplate = (id, config = {}) => window.BTSCastOfferTemplates?.renderTemplateById?.(id, { esc, ...config }) || '';
     const answers = record => {
       const raw = record?.custom_answers;
       if (!raw) return {};
@@ -1187,6 +1161,23 @@
         if (btn) btn.disabled = busy;
       });
     };
+
+    function renderBreakdownShell() {
+      $('breakdown').innerHTML = [
+        renderCastOfferTemplate('cast-offer.card-shell', {
+          icon: '/ASSETS/Images/navproductioncalendar.svg',
+          label: 'Dates',
+          title: 'Production Schedule',
+          bodyId: 'schedule-list'
+        }),
+        renderCastOfferTemplate('cast-offer.card-shell', {
+          icon: '/ASSETS/Images/Rehearsals.svg',
+          label: 'Availability',
+          title: 'Your Conflicts',
+          bodyId: 'conflict-list'
+        })
+      ].join('');
+    }
 
     function showTitle() { return prod?.title || prod?.show_name || 'this production'; }
 
@@ -1334,16 +1325,7 @@
 
     function creativeTeamHtml() {
       const entries = creativeTeamEntries();
-      if (!entries.length) return '<div class="info-card-value">TBC</div>';
-      return `<div class="creative-team-list">${entries.map(item => `
-        <div class="creative-team-member">
-          <span class="creative-team-dot" aria-hidden="true"></span>
-          <div class="creative-team-copy">
-            <div class="creative-team-role">${esc(item.role)}</div>
-            <div class="creative-team-name">${esc(item.name)}</div>
-          </div>
-        </div>
-      `).join('')}</div>`;
+      return renderCastOfferTemplate('cast-offer.creative-team-list', { entries });
     }
 
     function directorName() {
@@ -1395,10 +1377,15 @@
       ].forEach(([boxId, titleId, noteId]) => {
         const box = $(boxId);
         if (!box) return;
-        box.classList.toggle('declined', !isAccepted);
-        $(titleId).textContent = title;
-        $(noteId).textContent = note;
-        box.classList.remove('hidden');
+        box.outerHTML = renderCastOfferTemplate('cast-offer.response-status', {
+          id: boxId,
+          titleId,
+          noteId,
+          title,
+          note,
+          state,
+          extraClass: boxId === 'hero-response-submitted' ? 'hero-submitted' : ''
+        });
       });
     }
 
@@ -1478,17 +1465,21 @@
       const evType = String(ev.event_type || '').toLowerCase();
       const dateLabel = formatDate(ev.start_time, false) || 'Date TBC';
       const showType = evType && !['rehearsal', 'music_rehearsal', 'choreography', 'tech', 'dress', 'performance'].includes(evType);
+      const typeLabel = evType === 'event' && ev.title
+        ? `Event - ${ev.title}`
+        : eventTypeLabel(evType);
       const isUnavailable = selectedScheduleUnavailableIds().has(String(ev.id || ''));
       const locked = offerIsLocked();
-      return `
-        <button class="event${isUnavailable ? ' unavailable' : ''}" type="button" data-event-id="${esc(ev.id || '')}" data-type="${esc(evType)}" aria-pressed="${isUnavailable ? 'true' : 'false'}" aria-disabled="${locked ? 'true' : 'false'}"${locked ? ' disabled' : ''}>
-          <div class="event-info">
-            <div class="event-name">${esc(dateLabel)}</div>
-            ${showType ? `<div class="event-kind">${esc(eventTypeLabel(evType))}</div>` : ''}
-            <div class="event-meta">${esc(timeStr || 'Time TBC')}</div>
-          </div>
-        </button>
-      `;
+      return renderCastOfferTemplate('cast-offer.schedule-event', {
+        id: ev.id || '',
+        type: evType,
+        dateLabel,
+        timeLabel: timeStr || 'Time TBC',
+        typeLabel,
+        showType,
+        unavailable: isUnavailable,
+        locked
+      });
     }
 
     function selectedScheduleUnavailableIds() {
@@ -1569,46 +1560,34 @@
         const events = prodEvents.filter(ev => group.types.includes(String(ev.event_type || '').toLowerCase()));
         events.forEach(ev => used.add(ev.id));
         if (!events.length) return '';
-        return `
-          <div class="schedule-group">
-            <div class="schedule-group-header">
-              <span class="schedule-title">${esc(group.title)}</span>
-              <span class="sched-count">${events.length} date${events.length !== 1 ? 's' : ''}</span>
-            </div>
-            <div class="event-list">${events.map(eventCard).join('')}</div>
-          </div>
-        `;
+        return renderCastOfferTemplate('cast-offer.schedule-group', {
+          title: group.title,
+          countLabel: `${events.length} date${events.length !== 1 ? 's' : ''}`,
+          eventsHtml: events.map(eventCard).join('')
+        });
       }).filter(Boolean);
       const otherEvents = prodEvents.filter(ev => !used.has(ev.id) && String(ev.event_type || '').toLowerCase() === 'event');
       if (otherEvents.length) {
-        sections.push(`
-          <div class="schedule-group">
-            <div class="schedule-group-header">
-              <span class="schedule-title">Other Dates</span>
-              <span class="sched-count">${otherEvents.length} date${otherEvents.length !== 1 ? 's' : ''}</span>
-            </div>
-            <div class="event-list">${otherEvents.map(eventCard).join('')}</div>
-          </div>
-        `);
+        sections.push(renderCastOfferTemplate('cast-offer.schedule-group', {
+          title: 'Other Dates',
+          countLabel: `${otherEvents.length} date${otherEvents.length !== 1 ? 's' : ''}`,
+          eventsHtml: otherEvents.map(eventCard).join('')
+        }));
       }
       if (!sections.length && (prod?.start_date || prod?.end_date)) {
         const windowUnavailable = selectedScheduleUnavailableIds().has('__production_window__');
         const locked = offerIsLocked();
-        sections.push(`
-          <div class="schedule-group">
-            <div class="schedule-group-header">
-              <span class="schedule-title">Production Window</span>
-            </div>
-            <div class="event-list">
-              <button class="event${windowUnavailable ? ' unavailable' : ''}" type="button" data-event-id="__production_window__" data-type="production" aria-pressed="${windowUnavailable ? 'true' : 'false'}" aria-disabled="${locked ? 'true' : 'false'}"${locked ? ' disabled' : ''}>
-                <div class="event-info">
-                  <div class="event-name">${esc(formatDate(prod.start_date, false) || 'Dates TBC')}</div>
-                  <div class="event-meta">${esc([formatDateLong(prod.start_date), formatDateLong(prod.end_date)].filter(Boolean).join(' – ') || 'Dates TBC')}</div>
-                </div>
-              </button>
-            </div>
-          </div>
-        `);
+        sections.push(renderCastOfferTemplate('cast-offer.schedule-group', {
+          title: 'Production Window',
+          eventsHtml: renderCastOfferTemplate('cast-offer.schedule-event', {
+            id: '__production_window__',
+            type: 'production',
+            dateLabel: formatDate(prod.start_date, false) || 'Dates TBC',
+            timeLabel: [formatDateLong(prod.start_date), formatDateLong(prod.end_date)].filter(Boolean).join(' – ') || 'Dates TBC',
+            unavailable: windowUnavailable,
+            locked
+          })
+        }));
       }
       $('schedule-list').innerHTML = sections.join('') || '<div class="empty-state">No production dates have been added yet. The team may still be building the calendar.</div>';
     }
@@ -1657,18 +1636,15 @@
           `<p class="conflict-hint">${locked ? 'This offer has been submitted, so these conflicts are locked.' : 'Click any item to mark it as no longer a concern.'}</p>` +
           entries.map(item => {
             const isResolved = resolvedIds.has(String(item.id || ''));
-            return `
-            <button class="conflict${isResolved ? ' resolved' : ''}" type="button" data-conflict-id="${esc(item.id || '')}" data-source="${esc(item.source || '')}" data-event-id="${esc(item.eventId || '')}" aria-pressed="${isResolved ? 'true' : 'false'}" aria-disabled="${locked ? 'true' : 'false'}"${locked ? ' disabled' : ''}>
-              <div class="conflict-inner">
-                <div class="conflict-check"></div>
-                <div>
-                  <div class="conflict-title">${esc(item.title)}</div>
-                  ${item.detail ? `<div class="conflict-detail">${esc(item.detail)}</div>` : ''}
-                </div>
-              </div>
-              <span class="conflict-resolved-label">Resolved</span>
-            </button>
-          `;
+            return renderCastOfferTemplate('cast-offer.conflict-item', {
+              id: item.id || '',
+              source: item.source || '',
+              eventId: item.eventId || '',
+              title: item.title,
+              detail: item.detail,
+              resolved: isResolved,
+              locked
+            });
           }).join('');
       } else {
         $('conflict-list').innerHTML = '<div class="empty-state">No conflicts recorded from your audition form.</div>';
@@ -1733,17 +1709,15 @@
 
       // Info cards (injected into #details)
       const orgCard = org.name ? `
-        <div class="info-card info-card--org">
-          <div class="info-card-icon ${primaryLogoUrl || logoUrl ? 'info-card-icon--logo' : ''}">
-            ${primaryLogoUrl || logoUrl
+        ${renderCastOfferTemplate('cast-offer.info-card', {
+          className: 'info-card--org',
+          iconClass: primaryLogoUrl || logoUrl ? 'info-card-icon--logo' : '',
+          iconHtml: primaryLogoUrl || logoUrl
               ? `<img src="${esc(primaryLogoUrl || logoUrl)}" alt="${esc(org.name)}" class="org-card-logo" />`
-              : `<img src="/ASSETS/Images/Organisation.svg" alt="" />`}
-          </div>
-          <div class="info-card-body">
-            <div class="info-card-label">Presented by</div>
-            <div class="info-card-value">${esc(org.name)}</div>
-          </div>
-        </div>
+              : `<img src="/ASSETS/Images/Organisation.svg" alt="" />`,
+          label: 'Presented by',
+          value: org.name
+        })}
       ` : '';
 
       const firstRehearsal = rehearsal
@@ -1752,23 +1726,21 @@
       const openingNight = opening ? formatDate(opening.start_time, false) : '';
 
       $('details').innerHTML = `
-        <div class="info-card">
-          <div class="info-card-icon"><img src="/ASSETS/Images/Production Team.svg" alt="" /></div>
-          <div class="info-card-body">
-            <div class="info-card-label">Production</div>
-            <div class="info-card-value">${esc(showName)}</div>
-            ${prod?.venue ? `<div class="info-card-meta">${esc(prod.venue)}</div>` : ''}
-            ${firstRehearsal ? `<div class="info-card-detail">First rehearsal: ${esc(firstRehearsal)}</div>` : ''}
-            ${openingNight ? `<div class="info-card-detail">Opening night: ${esc(openingNight)}</div>` : ''}
-          </div>
-        </div>
-        <div class="info-card">
-          <div class="info-card-icon"><img src="/ASSETS/Images/Creative Team.svg" alt="" /></div>
-          <div class="info-card-body">
-            <div class="info-card-label">Creative Team</div>
-            ${creativeTeamHtml()}
-          </div>
-        </div>
+        ${renderCastOfferTemplate('cast-offer.info-card', {
+          icon: '/ASSETS/Images/Performer.svg',
+          label: 'Production',
+          value: showName,
+          meta: prod?.venue || '',
+          details: [
+            firstRehearsal ? `First rehearsal: ${firstRehearsal}` : '',
+            openingNight ? `Opening night: ${openingNight}` : ''
+          ]
+        })}
+        ${renderCastOfferTemplate('cast-offer.info-card', {
+          icon: '/ASSETS/Images/Creative Team.svg',
+          label: 'Creative Team',
+          valueHtml: creativeTeamHtml()
+        })}
         ${orgCard}
       `;
 
@@ -2151,6 +2123,7 @@
     $('accept-btn').addEventListener('click', acceptOffer);
     $('decline-btn-top').addEventListener('click', declineOffer);
     $('decline-btn').addEventListener('click', declineOffer);
+    renderBreakdownShell();
     document.addEventListener('click', event => {
       if (offerIsLocked() && event.target.closest('#schedule-list .event, #conflict-list .conflict')) return;
       const scheduleChip = event.target.closest('#schedule-list .event');
