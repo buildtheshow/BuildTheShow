@@ -1066,13 +1066,32 @@
       <div class="settings-panel" id="panel-branding">
         <div class="section-card">
           <h3 style="margin-top:0;margin-bottom:1.25rem;font-size:1rem;font-weight:700;color:#1a1530;">Branding</h3>
-          <div class="form-group">
-            <label class="form-label">Organisation Logo</label>
-            <div id="logo-upload-area" onclick="document.getElementById('logo-file-input').click()" style="border:2px dashed rgba(87,46,136,0.25);border-radius:10px;padding:1.5rem;text-align:center;cursor:pointer;transition:border-color 0.2s;background:rgba(87,46,136,0.03);" onmouseover="this.style.borderColor='rgba(87,46,136,0.5)'" onmouseout="this.style.borderColor='rgba(87,46,136,0.25)'">
-              <img id="logo-preview" style="width:80px;height:80px;object-fit:cover;border-radius:8px;margin:0 auto 0.75rem;display:none;border:1px solid rgba(87,46,136,0.2);" alt="Logo preview" />
-              <div id="logo-upload-label" style="font-size:0.875rem;color:#7a7490;">Click to upload logo<br><span style="font-size:0.75rem;opacity:0.7;">PNG, JPG, SVG, max 5MB</span></div>
+          <p style="font-size:0.82rem;color:#6a5a80;line-height:1.5;margin-top:-0.5rem;margin-bottom:1.25rem;">Add a few logo versions so public pages, emails, and dark headers can choose the right mark automatically.</p>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:1rem;margin-bottom:1.25rem;">
+            <div class="form-group" style="margin:0;">
+              <label class="form-label">Primary Logo</label>
+              <div onclick="document.getElementById('logo-file-input').click()" style="height:100%;border:2px dashed rgba(87,46,136,0.25);border-radius:10px;padding:1.25rem;text-align:center;cursor:pointer;transition:border-color 0.2s;background:rgba(87,46,136,0.03);" onmouseover="this.style.borderColor='rgba(87,46,136,0.5)'" onmouseout="this.style.borderColor='rgba(87,46,136,0.25)'">
+                <img id="logo-preview" style="width:80px;height:80px;object-fit:contain;border-radius:8px;margin:0 auto 0.75rem;display:none;border:1px solid rgba(87,46,136,0.2);background:#fff;" alt="Logo preview" />
+                <div id="logo-upload-label" style="font-size:0.875rem;color:#7a7490;">Upload main logo<br><span style="font-size:0.75rem;opacity:0.7;">PNG, JPG, SVG, max 5MB</span></div>
+              </div>
+              <input type="file" id="logo-file-input" accept="image/*" style="display:none" onchange="handleBrandingFile(this, 'logo')" />
             </div>
-            <input type="file" id="logo-file-input" accept="image/*" style="display:none" onchange="handleLogoFile(this)" />
+            <div class="form-group" style="margin:0;">
+              <label class="form-label">Transparent PNG Logo</label>
+              <div onclick="document.getElementById('transparent-logo-file-input').click()" style="height:100%;border:2px dashed rgba(87,46,136,0.25);border-radius:10px;padding:1.25rem;text-align:center;cursor:pointer;transition:border-color 0.2s;background:#241140;" onmouseover="this.style.borderColor='rgba(239,171,69,0.7)'" onmouseout="this.style.borderColor='rgba(87,46,136,0.25)'">
+                <img id="transparent-logo-preview" style="width:120px;height:80px;object-fit:contain;border-radius:8px;margin:0 auto 0.75rem;display:none;" alt="Transparent logo preview" />
+                <div id="transparent-logo-upload-label" style="font-size:0.875rem;color:rgba(255,255,255,0.82);">Upload no-background logo<br><span style="font-size:0.75rem;opacity:0.65;">Best for purple headers</span></div>
+              </div>
+              <input type="file" id="transparent-logo-file-input" accept="image/png,image/svg+xml,image/webp,image/*" style="display:none" onchange="handleBrandingFile(this, 'transparentLogo')" />
+            </div>
+            <div class="form-group" style="margin:0;">
+              <label class="form-label">Brand Stamp</label>
+              <div onclick="document.getElementById('brand-stamp-file-input').click()" style="height:100%;border:2px dashed rgba(87,46,136,0.25);border-radius:10px;padding:1.25rem;text-align:center;cursor:pointer;transition:border-color 0.2s;background:rgba(239,171,69,0.08);" onmouseover="this.style.borderColor='rgba(87,46,136,0.5)'" onmouseout="this.style.borderColor='rgba(87,46,136,0.25)'">
+                <img id="brand-stamp-preview" style="width:80px;height:80px;object-fit:contain;border-radius:999px;margin:0 auto 0.75rem;display:none;border:1px solid rgba(87,46,136,0.16);background:#fff;" alt="Brand stamp preview" />
+                <div id="brand-stamp-upload-label" style="font-size:0.875rem;color:#7a7490;">Upload stamp or mark<br><span style="font-size:0.75rem;opacity:0.7;">Square/circle works best</span></div>
+              </div>
+              <input type="file" id="brand-stamp-file-input" accept="image/*" style="display:none" onchange="handleBrandingFile(this, 'brandStamp')" />
+            </div>
           </div>
           <button class="btn-primary" id="save-branding-btn" onclick="saveBranding()">Save Branding</button>
         </div>
@@ -1399,6 +1418,8 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
   ALTER TABLE organizations ADD COLUMN IF NOT EXISTS mission text;
   ALTER TABLE organizations ADD COLUMN IF NOT EXISTS story text;
   ALTER TABLE organizations ADD COLUMN IF NOT EXISTS logo_url text;
+  ALTER TABLE organizations ADD COLUMN IF NOT EXISTS logo_transparent_url text;
+  ALTER TABLE organizations ADD COLUMN IF NOT EXISTS brand_stamp_url text;
   ALTER TABLE organizations ADD COLUMN IF NOT EXISTS profile_public boolean DEFAULT true;
   ALTER TABLE organizations ADD COLUMN IF NOT EXISTS show_contact boolean DEFAULT true;
 -->
@@ -1457,7 +1478,11 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
   let currentOrg  = null;
   let currentUser = null;
   let allProds    = [];
-  let pendingLogoFile = null;
+  const pendingBrandingFiles = {
+    logo: null,
+    transparentLogo: null,
+    brandStamp: null,
+  };
 
   // ── Cycling loading messages ──────────────────────────
   function cycleMsg(el, msgs, ms) {
@@ -1520,10 +1545,9 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
     if (document.getElementById('s-profile-public')) document.getElementById('s-profile-public').checked = o.profile_public !== false;
     if (document.getElementById('s-show-contact'))  document.getElementById('s-show-contact').checked = o.show_contact !== false;
     // Branding panel preview
-    const preview = document.getElementById('logo-preview');
-    const label   = document.getElementById('logo-upload-label');
-    if (preview && o.logo_url) { preview.src = o.logo_url; preview.style.display = 'block'; }
-    if (label && o.logo_url)   { label.innerHTML = '<span style="font-size:0.75rem;color:#572e88;font-weight:600;">Change logo</span>'; }
+    setBrandingPreview('logo', o.logo_url, o.logo_url ? 'Change logo' : '');
+    setBrandingPreview('transparentLogo', o.logo_transparent_url, o.logo_transparent_url ? 'Change transparent logo' : '');
+    setBrandingPreview('brandStamp', o.brand_stamp_url, o.brand_stamp_url ? 'Change brand stamp' : '');
   }
 
   async function loadProductions() {
@@ -2129,34 +2153,101 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
     btn.textContent = 'Save Changes';
   }
 
-  function handleLogoFile(input) {
+  const BRANDING_FIELDS = {
+    logo: {
+      column: 'logo_url',
+      pathName: 'logo',
+      preview: 'logo-preview',
+      label: 'logo-upload-label',
+      savedLabel: 'Change logo',
+    },
+    transparentLogo: {
+      column: 'logo_transparent_url',
+      pathName: 'logo-transparent',
+      preview: 'transparent-logo-preview',
+      label: 'transparent-logo-upload-label',
+      savedLabel: 'Change transparent logo',
+    },
+    brandStamp: {
+      column: 'brand_stamp_url',
+      pathName: 'brand-stamp',
+      preview: 'brand-stamp-preview',
+      label: 'brand-stamp-upload-label',
+      savedLabel: 'Change brand stamp',
+    },
+  };
+
+  function setBrandingPreview(type, src, labelText) {
+    const cfg = BRANDING_FIELDS[type];
+    if (!cfg) return;
+    const preview = document.getElementById(cfg.preview);
+    const label = document.getElementById(cfg.label);
+    if (preview && src) {
+      preview.src = src;
+      preview.style.display = 'block';
+    }
+    if (label && labelText) {
+      const color = type === 'transparentLogo' ? '#fff' : '#572e88';
+      label.innerHTML = `<span style="font-size:0.75rem;color:${color};font-weight:600;">${esc(labelText)}</span>`;
+    }
+  }
+
+  function handleBrandingFile(input, type) {
     const file = input.files[0];
     if (!file) return;
     if (file.size > 5 * 1024 * 1024) { showToast('Logo must be under 5MB', true); return; }
-    const preview = document.getElementById('logo-preview');
-    const label   = document.getElementById('logo-upload-label');
-    preview.src = URL.createObjectURL(file);
-    preview.style.display = 'block';
-    if (label) label.innerHTML = `<span style="font-size:0.75rem;color:#572e88;font-weight:600;">${esc(file.name)}</span>`;
-    pendingLogoFile = file;
+    setBrandingPreview(type, URL.createObjectURL(file), file.name);
+    if (pendingBrandingFiles[type] !== undefined) pendingBrandingFiles[type] = file;
+  }
+
+  function handleLogoFile(input) {
+    handleBrandingFile(input, 'logo');
   }
 
   async function saveBranding() {
     const btn = document.getElementById('save-branding-btn');
     btn.disabled = true; btn.textContent = 'Saving...';
-    let logoUrl = currentOrg.logo_url || null;
-    if (pendingLogoFile) {
-      const file = pendingLogoFile;
-      const ext  = file.name.split('.').pop();
-      const path = `${currentOrg.id}/logo.${ext}`;
-      const { error: upErr } = await sb.storage.from('org-logos').upload(path, file, { upsert: true, contentType: file.type });
-      if (upErr) { btn.disabled = false; btn.textContent = 'Save Branding'; showToast('Upload failed: ' + upErr.message, true); return; }
-      const { data: urlData } = sb.storage.from('org-logos').getPublicUrl(path);
-      logoUrl = urlData.publicUrl;
-      pendingLogoFile = null;
+    const patch = {};
+    for (const [type, cfg] of Object.entries(BRANDING_FIELDS)) {
+      let url = currentOrg[cfg.column] || null;
+      const file = pendingBrandingFiles[type];
+      if (file) {
+        const ext = file.name.split('.').pop();
+        const path = `${currentOrg.id}/${cfg.pathName}.${ext}`;
+        const { error: upErr } = await sb.storage.from('org-logos').upload(path, file, { upsert: true, contentType: file.type });
+        if (upErr) {
+          btn.disabled = false;
+          btn.textContent = 'Save Branding';
+          showToast('Upload failed: ' + upErr.message, true);
+          return;
+        }
+        const { data: urlData } = sb.storage.from('org-logos').getPublicUrl(path);
+        url = urlData.publicUrl;
+      }
+      patch[cfg.column] = url || null;
     }
-    const { error } = await sb.from('organizations').update({ logo_url: logoUrl || null }).eq('id', currentOrg.id);
-    if (!error) { currentOrg.logo_url = logoUrl || null; renderOrgInfo(); }
+    let { error } = await sb.from('organizations').update(patch).eq('id', currentOrg.id);
+    if (error && /logo_transparent_url|brand_stamp_url|column/i.test(error.message || '')) {
+      const legacyPatch = { logo_url: patch.logo_url || null };
+      const retry = await sb.from('organizations').update(legacyPatch).eq('id', currentOrg.id);
+      if (!retry.error) {
+        currentOrg = { ...currentOrg, ...legacyPatch };
+        pendingBrandingFiles.logo = null;
+        renderOrgInfo();
+        showToast('Primary logo saved. Run the branding assets migration to save transparent logos and stamps.', true);
+        btn.disabled = false; btn.textContent = 'Save Branding';
+        return;
+      }
+      error = retry.error;
+    }
+    if (!error) {
+      currentOrg = { ...currentOrg, ...patch };
+      Object.keys(pendingBrandingFiles).forEach(key => { pendingBrandingFiles[key] = null; });
+      renderOrgInfo();
+      showToast('Branding saved.');
+    } else {
+      showToast(error.message, true);
+    }
     btn.disabled = false; btn.textContent = 'Save Branding';
   }
 
