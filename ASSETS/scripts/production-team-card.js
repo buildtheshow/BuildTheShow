@@ -128,6 +128,28 @@ function renderProductionTeamCard(member, options = {}) {
   `;
 }
 
+function renderCreativeTeamLayoutTemplate(member, options = {}) {
+  const escapeHtml = typeof esc === 'function' ? esc : productionTeamCardEscape;
+  const m = member || {};
+  const role = escapeHtml(m.role || options.role || 'Director');
+  const name = escapeHtml(m.name || options.name || 'Firstname Lastname');
+  const color = escapeHtml(m.note_color || m.noteColor || options.color || '#572e88');
+  const halo = escapeHtml(options.halo || '#e7ddf3');
+  const roleSize = escapeHtml(options.roleSize || 'clamp(1.75rem, 3.5vw, 2.8rem)');
+  const nameSize = escapeHtml(options.nameSize || 'clamp(1.15rem, 2vw, 1.85rem)');
+  const width = escapeHtml(options.width || 'min(100%, 420px)');
+  const minHeight = escapeHtml(options.minHeight || '150px');
+
+  return `
+    <div data-bts-template="creative-team-layout" style="width:${width};min-height:${minHeight};margin:0 auto;padding:1.2rem 1.35rem;border-radius:12px;border:1.5px solid #e4deed;background:#fff;color:#111;display:grid;align-content:center;">
+      <div style="display:grid;grid-template-columns:3.2rem minmax(0,1fr);align-items:center;column-gap:0.75rem;">
+        <span aria-hidden="true" style="width:1.55rem;height:1.55rem;border-radius:999px;background:${color};box-shadow:0 0 0 0.42rem ${halo};justify-self:center;align-self:center;grid-row:1 / span 2;"></span>
+        <div style="color:#111;font-size:${roleSize};font-weight:950;line-height:0.95;text-transform:uppercase;">${role}</div>
+        <div style="grid-column:2;color:#242124;font-size:${nameSize};font-weight:500;line-height:1.12;text-transform:uppercase;margin-top:0.5rem;">${name}</div>
+      </div>
+    </div>`;
+}
+
 function getProductionTeamCardTextSize(text, baseSize, minSize, maxChars) {
   const value = String(text || '').trim();
   if (!value) return `${baseSize}cqw`;
@@ -135,6 +157,11 @@ function getProductionTeamCardTextSize(text, baseSize, minSize, maxChars) {
   const fitted = Math.max(minSize, Number((baseSize * ratio).toFixed(3)));
   return `${fitted}cqw`;
 }
+
+window.BTSProductionTeamTemplates = Object.assign({}, window.BTSProductionTeamTemplates, {
+  renderProductionTeamCard,
+  renderCreativeTeamLayoutTemplate
+});
 
 function productionTeamCardEscape(value) {
   if (typeof esc === 'function') return esc(value);

@@ -91,6 +91,15 @@ Do not casually reintroduce `Applicants` in user-facing audition flows when we m
 - Do not flip this into name-first cards, comma lists, small chips, or paragraph text unless the context is too compact for the full pattern.
 - If the context is compact, preserve the same hierarchy: role first, name second.
 
+### Template Test Contract
+
+- Template Test is a template page, not a sketch page.
+- Everything shown in Template Test must be a real template, shared component, or shared renderer.
+- If a UI pattern is added to Template Test and is not already a template, make it one first.
+- Template Test must call the shared template/component instead of carrying page-local sample CSS or one-off HTML.
+- Local wrappers are allowed only for preview layout, spacing, and labels.
+- Do not let Template Test become the only place a reusable pattern exists.
+
 ### Audition Colour System
 
 - Audition UI should use one consistent colour system everywhere across production and public pages.
