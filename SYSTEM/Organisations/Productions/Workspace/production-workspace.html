@@ -13519,6 +13519,37 @@
         0 0 0 5px rgba(239, 171, 69, 0.42),
         0 0 24px rgba(239, 171, 69, 0.48) !important;
     }
+    .final-casting-pick.is-declined {
+      position: relative;
+      pointer-events: none;
+    }
+    .final-casting-pick.is-declined .casting-card {
+      filter: grayscale(0.72);
+      opacity: 0.58;
+      border-color: rgba(185,75,106,0.5);
+      box-shadow: 0 0 0 4px rgba(185,75,106,0.14), 0 10px 22px rgba(185,75,106,0.12);
+    }
+    .final-casting-pick.is-declined::after {
+      content: 'Offer Rejected';
+      position: absolute;
+      left: 50%;
+      bottom: 0.45rem;
+      transform: translateX(-50%);
+      z-index: 2;
+      width: max-content;
+      max-width: calc(100% - 0.8rem);
+      padding: 0.22rem 0.5rem;
+      border-radius: 999px;
+      background: #fff1f4;
+      color: #9f1239;
+      box-shadow: inset 0 0 0 1px rgba(185,75,106,0.28), 0 4px 12px rgba(26,21,48,0.12);
+      font-size: 0.58rem;
+      font-weight: 900;
+      line-height: 1;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      text-align: center;
+    }
     .final-casting-pool-not-confirmed .casting-card {
       filter: grayscale(0.38) saturate(0.78) contrast(1.02) brightness(0.8);
       opacity: 0.82;
@@ -14255,13 +14286,12 @@
       min-height: calc(100dvh - 118px);
       flex-direction: column;
     }
-    .castlist-page-card {
+    .castlist-page-surface {
       flex: 1 1 auto;
       width: 100%;
       min-height: calc(100dvh - 245px);
       display: flex;
-      padding: 0 !important;
-      overflow: auto !important;
+      overflow: auto;
     }
     #cast-list-programme-host {
       flex: 1 1 auto;
@@ -18653,7 +18683,7 @@
           </div>
           <button class="btn-secondary" onclick="exportCastList()" style="font-size:0.8rem;">Export</button>
         </div>
-        <div class="card castlist-page-card">
+        <div class="castlist-page-surface">
           <div id="cast-list-programme-host">
             <div style="text-align:center;padding:2.5rem;color:#9a90b0;">Add characters or groupings to build the cast list.</div>
           </div>
@@ -28889,7 +28919,7 @@ We look forward to seeing your work!
     const { data, error } = await sb.from('casting_assignments')
       .select('*')
       .eq('production_id', prodId)
-      .in('state', ['liked', 'chosen', 'offer_accepted']);
+      .in('state', ['liked', 'chosen', 'offer_accepted', 'offer_declined']);
 
     if (error) {
       grid.innerHTML = '<div style="padding:1.5rem 0.5rem;text-align:center;color:#c0392b;font-size:0.78rem;line-height:1.4;">Could not load the final pool.</div>';
@@ -28991,8 +29021,10 @@ We look forward to seeing your work!
 
   function finalCastingCardsForCharacter(char) {
     const assignments = finalCastingSelectedAssignments
-      .filter(a => a.character_id === char.id && (a.state === 'liked' || a.state === 'chosen' || a.state === 'offer_accepted'))
+      .filter(a => a.character_id === char.id && (a.state === 'liked' || a.state === 'chosen' || a.state === 'offer_accepted' || a.state === 'offer_declined'))
       .sort((a, b) => {
+        const declinedDiff = (a.state === 'offer_declined' ? 1 : 0) - (b.state === 'offer_declined' ? 1 : 0);
+        if (declinedDiff) return declinedDiff;
         const stateDiff = (CB_STATE_ORDER[a.state] ?? 1) - (CB_STATE_ORDER[b.state] ?? 1);
         if (stateDiff) return stateDiff;
         const appA = allApplicants.find(app => app.id === a.applicant_id);
@@ -29005,14 +29037,15 @@ We look forward to seeing your work!
       const wantsRole = cbv2AppWantsRole(app, char);
       const pickKey = `${char.id}::${app.id}`;
       const isLocked = finalCastingPickedKeys.has(pickKey);
+      const isDeclined = a.state === 'offer_declined';
       const cardHtml = buildStandardCastingCardHtml(app, {
-        draggable: true,
-        state: isLocked ? 'chosen' : 'liked',
-        onDragStart: `finalCastingDragStart(event,'${esc(app.id)}','${esc(char.id)}','role')`,
-        onDragEnd: 'finalCastingDragEnd(event)',
-        onClick: `toggleFinalCastingPick(event,'${esc(char.id)}','${esc(app.id)}')`,
+        draggable: !isDeclined,
+        state: isDeclined ? null : (isLocked ? 'chosen' : 'liked'),
+        onDragStart: isDeclined ? '' : `finalCastingDragStart(event,'${esc(app.id)}','${esc(char.id)}','role')`,
+        onDragEnd: isDeclined ? '' : 'finalCastingDragEnd(event)',
+        onClick: isDeclined ? '' : `toggleFinalCastingPick(event,'${esc(char.id)}','${esc(app.id)}')`,
       });
-      const selectedClass = isLocked ? ' is-selected' : '';
+      const selectedClass = isDeclined ? ' is-declined' : (isLocked ? ' is-selected' : '');
       const visualCard = wantsRole ? `<div class="cbv2-wants-role-wrap">${cardHtml}</div>` : cardHtml;
       return `<div class="final-casting-pick${selectedClass}" data-final-casting-pick-key="${esc(pickKey)}">${visualCard}</div>`;
     }).filter(Boolean).join('');
@@ -29380,14 +29413,12 @@ We look forward to seeing your work!
     const namedRoles = sortedChars.filter(char => castListCharacterSortRank(char) === 0);
     const groups = sortedChars.filter(char => castListCharacterSortRank(char) === 1);
     const ensemble = sortedChars.filter(char => castListCharacterSortRank(char) === 2);
-    host.innerHTML = `<div class="castlist-programme-card">
-      <div class="castlist-programme-title">Casting List</div>
-      <div class="castlist-programme">
-        ${sectionHtml('Named Roles', namedRoles)}
-        ${sectionHtml('Groups', groups)}
-        ${sectionHtml('Ensemble', ensemble)}
-      </div>
-    </div>`;
+    host.innerHTML = buildCastListProgrammeLayoutHtml({
+      title: 'Casting List',
+      namedRolesHtml: sectionHtml('Named Roles', namedRoles),
+      groupsHtml: sectionHtml('Groups', groups),
+      ensembleHtml: sectionHtml('Ensemble', ensemble),
+    });
   }
 
   async function loadFinalCastingOffers() {
@@ -29604,13 +29635,27 @@ We look forward to seeing your work!
 
   function getFinalCastingOfferQueues() {
     const roleMap = getFinalCastingOfferRoleMap();
-    const confirmedIds = new Set(roleMap.keys());
+    const declinedRoleMap = new Map();
+    finalCastingSelectedAssignments
+      .filter(row => row?.state === 'offer_declined' && row.applicant_id && row.character_id)
+      .forEach(row => {
+        const char = (characters || []).find(c => String(c.id) === String(row.character_id));
+        const roleName = char?.name || 'Role';
+        const appId = String(row.applicant_id);
+        if (!declinedRoleMap.has(appId)) declinedRoleMap.set(appId, new Map());
+        declinedRoleMap.get(appId).set(roleName, {
+          id: row.character_id,
+          name: roleName,
+          roleType: char?.role_type || 'Other',
+        });
+      });
+    const excludedFromRejectionsIds = new Set([...roleMap.keys(), ...declinedRoleMap.keys()]);
     const filledCharacterIds = new Set();
     finalCastingPickedKeys.forEach(key => {
       const [charId] = String(key).split('::');
       if (charId) filledCharacterIds.add(String(charId));
     });
-    const offers = [...roleMap.entries()]
+    const mapOfferRows = (sourceMap, extra = {}) => [...sourceMap.entries()]
       .map(([appId, roles]) => {
         const app = (allApplicants || []).find(candidate => String(candidate.id) === String(appId));
         if (!app) return null;
@@ -29625,9 +29670,14 @@ We look forward to seeing your work!
           roleEntries,
           roles: roleEntries.map(role => role.name),
           primaryRoleType: roleEntries[0]?.roleType || 'Other',
+          ...extra,
         };
       })
-      .filter(Boolean)
+      .filter(Boolean);
+    const offers = [
+      ...mapOfferRows(roleMap),
+      ...mapOfferRows(declinedRoleMap, { forcedResponseState: 'declined', inactiveOffer: true }),
+    ]
       .sort((a, b) => compareApplicantsAlphabetically(a.app, b.app));
     const unfilledRoles = (characters || [])
       .filter(char => char?.id && !filledCharacterIds.has(String(char.id)))
@@ -29648,7 +29698,7 @@ We look forward to seeing your work!
         return String(a.roles?.[0] || '').localeCompare(String(b.roles?.[0] || ''), undefined, { sensitivity: 'base' });
       });
     const rejections = (finalCastingPoolApplicants.length ? finalCastingPoolApplicants : allApplicants || [])
-      .filter(app => app?.id && !confirmedIds.has(app.id))
+      .filter(app => app?.id && !excludedFromRejectionsIds.has(String(app.id)))
       .sort(compareApplicantsAlphabetically)
       .map(app => ({ app, roles: [] }));
     return { offers, rejections, unfilledRoles };
@@ -29722,7 +29772,7 @@ We look forward to seeing your work!
       const previewFn = kind === 'offer' ? 'previewFinalCastingOfferEmail' : 'previewFinalCastingRejectionEmail';
       const sentKey = `${kind}:${app.id}`;
       const sendState = finalCastingEmailSendState.get(sentKey);
-      const responseState = kind === 'offer' ? finalCastingOfferResponseState(item) : '';
+      const responseState = kind === 'offer' ? (item.forcedResponseState || finalCastingOfferResponseState(item)) : '';
       const offerStateClass = kind === 'offer'
         ? ` final-casting-offer-row-${responseState === 'accepted' || responseState === 'declined' ? responseState : 'pending'}`
         : '';
@@ -29796,7 +29846,7 @@ We look forward to seeing your work!
             <div class="final-casting-offers-title">${esc(title)}</div>
             <div class="final-casting-offers-count">${count} ${count === 1 ? 'person' : 'people'}</div>
           </div>
-          <button type="button" class="btn-primary" id="${esc(bulkId)}" style="font-size:0.76rem;padding:0.42rem 0.8rem;" onclick="${bulkFn}()" ${rows.some(item => item.app?.email) ? '' : 'disabled'}>${esc(bulkLabel)}</button>
+          <button type="button" class="btn-primary" id="${esc(bulkId)}" style="font-size:0.76rem;padding:0.42rem 0.8rem;" onclick="${bulkFn}()" ${rows.some(item => item.app?.email && !item.inactiveOffer) ? '' : 'disabled'}>${esc(bulkLabel)}</button>
         </div>
         <div class="final-casting-offers-list">
           ${rows.length
@@ -30272,7 +30322,7 @@ We look forward to seeing your work!
 
   async function bulkSendFinalCastingOfferEmails() {
     const { offers } = getFinalCastingOfferQueues();
-    const ready = offers.filter(item => item.app?.email);
+    const ready = offers.filter(item => item.app?.email && !item.inactiveOffer);
     if (!ready.length) { showToast('No offer recipients with email addresses.', true); return; }
     if (!confirm(`Send role offers to ${ready.length} performer${ready.length === 1 ? '' : 's'}?`)) return;
     const btn = document.getElementById('final-casting-bulk-offers-btn');
@@ -40745,12 +40795,21 @@ We look forward to seeing your work!
     const namedRoles = sortedChars.filter(char => castListCharacterSortRank(char) === 0);
     const groups = sortedChars.filter(char => castListCharacterSortRank(char) === 1);
     const ensemble = sortedChars.filter(char => castListCharacterSortRank(char) === 2);
+    return buildCastListProgrammeLayoutHtml({
+      title: 'Cast List',
+      namedRolesHtml: sectionHtml('Named Roles', namedRoles),
+      groupsHtml: sectionHtml('Groups', groups),
+      ensembleHtml: sectionHtml('Ensemble', ensemble),
+    });
+  }
+
+  function buildCastListProgrammeLayoutHtml({ title = 'Cast List', namedRolesHtml = '', groupsHtml = '', ensembleHtml = '' } = {}) {
     return `<div class="castlist-programme-card">
-      <div class="castlist-programme-title">Casting List</div>
+      <div class="castlist-programme-title">${esc(title)}</div>
       <div class="castlist-programme">
-        ${sectionHtml('Named Roles', namedRoles)}
-        ${sectionHtml('Groups', groups)}
-        ${sectionHtml('Ensemble', ensemble)}
+        ${namedRolesHtml}
+        ${groupsHtml}
+        ${ensembleHtml}
       </div>
     </div>`;
   }
