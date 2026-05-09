@@ -40742,14 +40742,27 @@ We look forward to seeing your work!
     return getCastListPerformerEntries(char).map(entry => entry.app);
   }
 
+  function getCastListDisplayItems(char) {
+    const entries = getCastListPerformerEntries(char);
+    const accepted = entries.filter(entry => entry.state === 'offer_accepted');
+    const hasPending = entries.some(entry => entry.state !== 'offer_accepted');
+    if (accepted.length) {
+      return hasPending ? [...accepted, { status: 'NOT YET CONFIRMED' }] : accepted;
+    }
+    return [hasPending ? { status: 'NOT YET CONFIRMED' } : { status: 'OPEN' }];
+  }
+
   function castListProgrammeNameHtml(entryOrName) {
     if (typeof entryOrName === 'string') {
       return `<div class="castlist-programme-name${entryOrName === 'Open' ? ' castlist-programme-open' : ''}">${esc(entryOrName)}</div>`;
     }
+    if (entryOrName?.status) {
+      const isOpen = entryOrName.status === 'OPEN';
+      return `<div class="castlist-programme-name${isOpen ? ' castlist-programme-open' : ' is-unconfirmed'}">${esc(entryOrName.status)}</div>`;
+    }
     const app = entryOrName?.app;
     if (!app) return '<div class="castlist-programme-name castlist-programme-open">Open</div>';
-    const confirmed = entryOrName.state === 'offer_accepted';
-    return `<div class="castlist-programme-name${confirmed ? '' : ' is-unconfirmed'}">${esc(app.name || '-')} ${confirmed ? '' : '<span class="castlist-programme-status">NOT YET CONFIRMED</span>'}</div>`;
+    return `<div class="castlist-programme-name">${esc(app.name || '-')}</div>`;
   }
 
   function buildCastListRowsHtml() {
@@ -40758,10 +40771,11 @@ We look forward to seeing your work!
       return '<tr><td colspan="3" style="text-align:center;padding:2.5rem;color:#9a90b0;">Add characters or groupings to build the cast list.</td></tr>';
     }
     return sortedChars.map(char => {
-      const cast = getCastListPerformerEntries(char);
-      const performerHtml = cast.length
-        ? `<div class="castlist-performer-list">${cast.map(entry => `<div>${esc(entry.app.name || '—')}${entry.state === 'offer_accepted' ? '' : ' — NOT YET CONFIRMED'}</div>`).join('')}</div>`
-        : '<span class="castlist-open">Open</span>';
+      const displayItems = getCastListDisplayItems(char);
+      const performerHtml = `<div class="castlist-performer-list">${displayItems.map(item => {
+        if (item.status) return `<div class="${item.status === 'OPEN' ? 'castlist-open' : 'castlist-programme-name is-unconfirmed'}">${esc(item.status)}</div>`;
+        return `<div>${esc(item.app?.name || '—')}</div>`;
+      }).join('')}</div>`;
       return `<tr>
         <td style="padding-left:1.4rem;"><div class="castlist-role-name">${esc(char.name || 'Unnamed')}</div></td>
         <td>${performerHtml}</td>
@@ -40776,8 +40790,7 @@ We look forward to seeing your work!
       return '<div style="text-align:center;padding:2.5rem;color:#9a90b0;">Add characters or groupings to build the cast list.</div>';
     }
     const rowHtml = (char) => {
-      const cast = getCastListPerformerEntries(char);
-      const names = cast.length ? cast : ['Open'];
+      const names = getCastListDisplayItems(char);
       return `<div class="castlist-programme-role">${esc(char.name || 'Unnamed')}</div>
         <div class="castlist-programme-name-list">
           ${names.map(castListProgrammeNameHtml).join('')}
@@ -41022,8 +41035,8 @@ We look forward to seeing your work!
     if (!sortedChars.length) { showToast('No characters added yet.', true); return; }
     const rows = [['Character / Grouping', 'Performer(s)', 'Role Type']];
     sortedChars.forEach(char => {
-      const names = getCastListPerformerEntries(char)
-        .map(entry => `${entry.app.name || ''}${entry.state === 'offer_accepted' ? '' : ' (NOT YET CONFIRMED)'}`)
+      const names = getCastListDisplayItems(char)
+        .map(entry => entry.status || entry.app?.name || '')
         .filter(Boolean)
         .join('; ');
       rows.push([char.name || '', names || 'Open', char.role_type || '']);
