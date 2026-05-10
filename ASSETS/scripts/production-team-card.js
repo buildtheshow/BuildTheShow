@@ -161,9 +161,50 @@ function renderVolunteerCard(member, options = {}) {
 function renderVolunteerCardBack(member, options = {}) {
   const escapeHtml = typeof esc === 'function' ? esc : productionTeamCardEscape;
   const m = member || {};
+  const role = String(m.role || 'Volunteer').trim();
+  const name = String(m.name || 'OPEN').trim();
   const color = String(m.note_color || m.noteColor || options.color || '#572e88').trim();
+  const email = String(m.email || '').trim();
+  const phone = window.BTSPhone?.format(m.phone || m.phone_number || '') || (m.phone || m.phone_number || '');
+  const passcode = String(m.passcode || '').trim();
+  const bio = String(m.bio || '').trim();
+  const roleHtml = volunteerRoleIdentifierBreakRole(role, 16);
+  const roleLines = roleHtml.split('<br>');
+  const longestRoleLine = roleLines.reduce((longest, line) => line.length > longest.length ? line : longest, '');
+  const roleSize = volunteerRoleIdentifierTextSize(longestRoleLine, 1.58, 0.78, 13, 'rem');
+  const nameSize = volunteerRoleIdentifierTextSize(name, 0.92, 0.56, 14, 'rem');
+
   return `<div class="volunteer-card-wrap" style="--volunteer-card-color:${escapeHtml(color)};">
-    <div class="volunteer-card-back" aria-label="Blank volunteer card back"></div>
+    <div class="volunteer-card-back">
+      <div class="volunteer-card-back-head">
+        <div class="volunteer-card-back-identity" title="${escapeHtml(name)}">
+          <span class="volunteer-card-back-dot" aria-hidden="true"></span>
+          <span class="volunteer-card-back-role" style="font-size:${roleSize};">${roleHtml.split('<br>').map(escapeHtml).join('<br>')}</span>
+          <span class="volunteer-card-back-name" style="font-size:${nameSize};">${escapeHtml(name)}</span>
+        </div>
+        <button class="volunteer-card-back-trash" type="button" title="Remove volunteer" aria-label="Remove ${escapeHtml(name)}">
+          <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+            <path d="M9 4h6l1 2h4v2H4V6h4l1-2Zm-1 6h2v8H8v-8Zm6 0h2v8h-2v-8Zm-3 0h2v8h-2v-8ZM6 9h12l-1 12H7L6 9Z"></path>
+          </svg>
+        </button>
+        <div class="volunteer-card-back-contact">
+          <div><span>Phone:</span><strong>${escapeHtml(phone || 'No phone saved')}</strong></div>
+          <div><span>Email:</span><strong>${escapeHtml(email || 'No email saved')}</strong></div>
+          <div class="volunteer-card-back-passcode"><span>Passcode:</span><strong>${escapeHtml(passcode || 'Not set')}</strong><em>Save</em><em>↻</em></div>
+        </div>
+      </div>
+      <div class="volunteer-card-back-bio">
+        <span>Bio</span>
+        <p>${escapeHtml(bio || 'No bio added yet.')}</p>
+      </div>
+      <div class="volunteer-card-back-actions" aria-label="Volunteer card actions">
+        <span>Edit</span>
+        <span>Email<br>Invite</span>
+        <span>Copy<br>Link</span>
+        <span>Copy<br>Passcode</span>
+        <span>Download<br>Headshot</span>
+      </div>
+    </div>
   </div>`;
 }
 
