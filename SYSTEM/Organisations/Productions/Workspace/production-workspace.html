@@ -12671,12 +12671,6 @@
       column-gap: 0.34rem;
       margin: 0;
     }
-    .template-volunteer-card-preview .volunteer-role-identifier.is-card-front .volunteer-role-identifier-role {
-      display: -webkit-box;
-      -webkit-box-orient: vertical;
-      -webkit-line-clamp: 2;
-      overflow: hidden;
-    }
     .template-volunteer-card-preview .volunteer-role-identifier.is-card-front .volunteer-role-identifier-dot {
       width: 0.62rem;
       height: 0.62rem;
@@ -21615,15 +21609,26 @@
       const ratio = value.length > maxChars ? maxChars / value.length : 1;
       return `${Math.max(minSize, Number((baseSize * ratio).toFixed(3)))}rem`;
     };
-    const templateVolunteerBreakRole = (roleText, maxCharsPerLine = 16, maxLines = 3) => {
-      const words = String(roleText || '').trim().split(/\s+/).filter(Boolean);
-      if (!words.length) return 'Volunteer';
+    const templateVolunteerBreakRole = (roleText, maxCharsPerLine = 16) => {
+      const rawWords = String(roleText || '').trim().split(/\s+/).filter(Boolean);
+      if (!rawWords.length) return 'Volunteer';
+      const words = [];
+      for (let index = 0; index < rawWords.length; index += 1) {
+        const word = rawWords[index];
+        if ((word === '&' || word === '/') && rawWords[index + 1] && `${word} ${rawWords[index + 1]}`.length <= maxCharsPerLine) {
+          words.push(`${word} ${rawWords[index + 1]}`);
+          index += 1;
+        } else if ((words[words.length - 1] === '&' || words[words.length - 1] === '/') && word.length + 2 <= maxCharsPerLine) {
+          words[words.length - 1] = `${words[words.length - 1]} ${word}`;
+        } else {
+          words.push(word);
+        }
+      }
       const lines = [];
       let line = '';
       words.forEach(word => {
         const candidate = line ? `${line} ${word}` : word;
-        const shouldBreakAfterPrevious = /[&/]$/.test(line);
-        if (line && (candidate.length > maxCharsPerLine || shouldBreakAfterPrevious) && lines.length < maxLines - 1) {
+        if (line && candidate.length > maxCharsPerLine) {
           lines.push(line);
           line = word;
         } else {
@@ -21638,7 +21643,7 @@
       const nameText = String(name || 'OPEN').trim();
       const color = String(note_color || '#572e88').trim();
       const isCardFront = options.variant === 'card-front';
-      const roleHtml = templateVolunteerBreakRole(roleText, isCardFront ? 14 : 16, isCardFront ? 2 : 3);
+      const roleHtml = templateVolunteerBreakRole(roleText, 16);
       const roleLineCount = roleHtml.split('<br>').length;
       const roleSize = isCardFront
         ? templateVolunteerTextSize(roleText, 1.12, 0.48, roleLineCount > 1 ? 24 : 13)
