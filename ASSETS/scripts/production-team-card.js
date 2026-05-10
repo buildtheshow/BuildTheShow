@@ -36,6 +36,8 @@ function renderProductionTeamCard(member, options = {}) {
     ? new Date(m.invite_sent_at).toLocaleDateString('en-CA', { month: 'short', day: 'numeric' })
     : '';
   const showManagement = options.showManagement !== false;
+  const variantClass = options.variant === 'mini' ? ' production-team-card-wrap--mini' : '';
+  const cardClass = options.variant === 'mini' ? ' production-team-card--mini' : '';
   const photoHtml = m.headshot_url
     ? `<img src="${escapeHtml(m.headshot_url)}" alt="" class="production-team-card-image" />`
     : `<div class="production-team-card-placeholder">${initial}</div>`;
@@ -49,9 +51,9 @@ function renderProductionTeamCard(member, options = {}) {
   const bioText = escapeHtml(bio || 'No bio added yet.');
 
   return `
-    <div class="production-team-card-wrap" style="--pt-card-color:${color};">
+    <div class="production-team-card-wrap${variantClass}" style="--pt-card-color:${color};">
       <div
-        class="production-team-card${inactiveClass}"
+        class="production-team-card${cardClass}${inactiveClass}"
         role="button"
         tabindex="0"
         aria-label="Flip ${name || 'production team member'} card"
