@@ -179,8 +179,10 @@ function renderVolunteerRoleIdentifier(member, options = {}) {
   const m = member || {};
   const role = escapeHtml(m.role || options.role || 'Volunteer');
   const name = escapeHtml(m.name || options.name || 'OPEN');
+  const color = escapeHtml(m.note_color || m.noteColor || options.color || '#572e88');
   const framed = options.framed !== false;
-  return `<div class="volunteer-role-identifier${framed ? ' is-framed' : ''}">
+  return `<div class="volunteer-role-identifier${framed ? ' is-framed' : ''}" style="--volunteer-role-color:${color};">
+    <span class="volunteer-role-identifier-dot" aria-hidden="true"></span>
     <span class="volunteer-role-identifier-role">${role}</span>
     <span class="volunteer-role-identifier-name">${name}</span>
   </div>`;
