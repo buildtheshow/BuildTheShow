@@ -133,9 +133,7 @@ function renderProductionTeamCard(member, options = {}) {
 function renderVolunteerCard(member, options = {}) {
   const escapeHtml = typeof esc === 'function' ? esc : productionTeamCardEscape;
   const m = member || {};
-  const role = String(m.role || 'Volunteer').trim();
   const name = String(m.name || 'OPEN').trim();
-  const color = String(m.note_color || m.noteColor || options.color || '#572e88').trim();
   const headshot = String(m.headshot_url || m.headshot || '').trim();
   const isMini = options.variant === 'mini';
   const imageHtml = headshot
@@ -148,11 +146,7 @@ function renderVolunteerCard(member, options = {}) {
         <div class="volunteer-card-image-area">
           ${imageHtml}
         </div>
-        <div class="volunteer-card-blank-lower">
-          <div class="volunteer-card-identifier-frame">
-            ${renderVolunteerRoleIdentifier({ role, name, note_color: color }, { framed: false, variant: 'card-front' })}
-          </div>
-        </div>
+        <div class="volunteer-card-blank-lower" aria-hidden="true"></div>
       </div>
     </div>
   `;
@@ -186,19 +180,14 @@ function renderVolunteerRoleIdentifier(member, options = {}) {
   const nameText = String(m.name || options.name || 'OPEN').trim();
   const color = escapeHtml(m.note_color || m.noteColor || options.color || '#572e88');
   const framed = options.framed !== false;
-  const isCardFront = options.variant === 'card-front';
   const roleHtml = volunteerRoleIdentifierBreakRole(roleText, 16);
   const roleLines = roleHtml.split('<br>');
   const roleLineCount = roleLines.length;
   const longestRoleLine = roleLines.reduce((longest, line) => line.length > longest.length ? line : longest, '');
-  const roleSize = isCardFront
-    ? volunteerRoleIdentifierTextSize(longestRoleLine, 14.2, 6.2, 13)
-    : volunteerRoleIdentifierTextSize(longestRoleLine, 2.4, 0.98, 13, 'rem');
-  const nameSize = isCardFront
-    ? volunteerRoleIdentifierTextSize(nameText, 8.8, 4.6, 14)
-    : volunteerRoleIdentifierTextSize(nameText, 1.62, 0.78, 14, 'rem');
+  const roleSize = volunteerRoleIdentifierTextSize(longestRoleLine, 2.4, 0.98, 13, 'rem');
+  const nameSize = volunteerRoleIdentifierTextSize(nameText, 1.62, 0.78, 14, 'rem');
 
-  return `<div class="volunteer-role-identifier${framed ? ' is-framed' : ''}${isCardFront ? ' is-card-front' : ''}" style="--volunteer-role-color:${color};--volunteer-role-size:${roleSize};--volunteer-name-size:${nameSize};--volunteer-role-line-height:${roleLineCount > 1 ? '0.9' : '0.95'};">
+  return `<div class="volunteer-role-identifier${framed ? ' is-framed' : ''}" style="--volunteer-role-color:${color};--volunteer-role-size:${roleSize};--volunteer-name-size:${nameSize};--volunteer-role-line-height:${roleLineCount > 1 ? '0.9' : '0.95'};">
     <span class="volunteer-role-identifier-dot-box" aria-hidden="true">
       <span class="volunteer-role-identifier-dot"></span>
     </span>
