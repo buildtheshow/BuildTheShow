@@ -161,21 +161,9 @@ function renderVolunteerCard(member, options = {}) {
 function renderVolunteerCardBack(member, options = {}) {
   const escapeHtml = typeof esc === 'function' ? esc : productionTeamCardEscape;
   const m = member || {};
-  const role = String(m.role || 'Volunteer').trim();
-  const name = String(m.name || 'OPEN').trim();
   const color = String(m.note_color || m.noteColor || options.color || '#572e88').trim();
-  const email = String(m.email || '').trim();
-  const phone = window.BTSPhone?.format(m.phone || m.phone_number || '') || (m.phone || m.phone_number || '');
-  const passcode = String(m.passcode || '').trim();
   return `<div class="volunteer-card-wrap" style="--volunteer-card-color:${escapeHtml(color)};">
-    <div class="volunteer-card-back">
-      ${renderVolunteerRoleIdentifier({ role, name, note_color: color }, { framed: false })}
-      <div class="volunteer-card-back-lines">
-        <div><span>Phone:</span><strong>${escapeHtml(phone || 'No phone saved')}</strong></div>
-        <div><span>Email:</span><strong>${escapeHtml(email || 'No email saved')}</strong></div>
-        <div><span>Passcode:</span><strong>${escapeHtml(passcode || 'Not set')}</strong></div>
-      </div>
-    </div>
+    <div class="volunteer-card-back" aria-label="Blank volunteer card back"></div>
   </div>`;
 }
 
@@ -198,7 +186,7 @@ function renderVolunteerRoleIdentifier(member, options = {}) {
     ? volunteerRoleIdentifierTextSize(nameText, 10.8, 5.2, 14)
     : volunteerRoleIdentifierTextSize(nameText, 1.62, 0.78, 14, 'rem');
 
-  return `<div class="volunteer-role-identifier${framed ? ' is-framed' : ''}${isCardFront ? ' is-card-front' : ''}" style="--volunteer-role-color:${color};--volunteer-role-size:${roleSize};--volunteer-name-size:${nameSize};--volunteer-role-line-height:${roleLineCount > 1 ? '0.9' : '0.95'};">
+  return `<div class="volunteer-role-identifier${framed ? ' is-framed' : ''}${isCardFront ? ' is-card-front' : ''}" data-volunteer-role-identifier style="--volunteer-role-color:${color};--volunteer-role-base-size:${roleSize};--volunteer-name-base-size:${nameSize};--volunteer-role-size:${roleSize};--volunteer-name-size:${nameSize};--volunteer-role-line-height:${roleLineCount > 1 ? '0.9' : '0.95'};">
     <span class="volunteer-role-identifier-dot-box" aria-hidden="true">
       <span class="volunteer-role-identifier-dot"></span>
     </span>
@@ -232,6 +220,124 @@ function volunteerRoleIdentifierBreakRole(roleText, maxCharsPerLine = 16) {
   });
   if (line) lines.push(line);
   return lines.join('<br>');
+}
+
+function volunteerRoleIdentifierParseSize(size) {
+  const match = String(size || '').trim().match(/^(-?\d*\.?\d+)([a-z%]+)$/i);
+  if (!match) return null;
+  return {
+    value: Number(match[1]),
+    unit: match[2]
+  };
+}
+
+function volunteerRoleIdentifierScaleSize(size, scale) {
+  const parsed = volunteerRoleIdentifierParseSize(size);
+  if (!parsed || !Number.isFinite(parsed.value)) return size;
+  return `${Number((parsed.value * scale).toFixed(4))}${parsed.unit}`;
+}
+
+function volunteerRoleIdentifierMeasureFits(identifier) {
+  const copy = identifier?.querySelector?.('.volunteer-role-identifier-copy');
+  const role = identifier?.querySelector?.('.volunteer-role-identifier-role');
+  const name = identifier?.querySelector?.('.volunteer-role-identifier-name');
+  if (!identifier || !copy || !role || !name) return true;
+
+  const copyRect = copy.getBoundingClientRect();
+  if (copyRect.width <= 0) return true;
+
+  const tolerance = 1;
+  const widthFits = role.scrollWidth <= copy.clientWidth + tolerance
+    && name.scrollWidth <= copy.clientWidth + tolerance;
+  const heightLimit = copy.clientHeight || identifier.clientHeight;
+  const heightFits = !heightLimit || copy.scrollHeight <= heightLimit + tolerance;
+  const identifierHeightFits = !identifier.clientHeight || identifier.scrollHeight <= identifier.clientHeight + tolerance;
+  return widthFits && heightFits && identifierHeightFits;
+}
+
+function fitVolunteerRoleIdentifier(identifier) {
+  if (!identifier?.isConnected) return;
+
+  const baseRoleSize = identifier.style.getPropertyValue('--volunteer-role-base-size')
+    || identifier.style.getPropertyValue('--volunteer-role-size');
+  const baseNameSize = identifier.style.getPropertyValue('--volunteer-name-base-size')
+    || identifier.style.getPropertyValue('--volunteer-name-size');
+  if (!volunteerRoleIdentifierParseSize(baseRoleSize) || !volunteerRoleIdentifierParseSize(baseNameSize)) return;
+
+  const maxScale = identifier.classList.contains('is-card-front') ? 1.14 : 1;
+  const minScale = 0.05;
+  let low = minScale;
+  let high = maxScale;
+  let best = minScale;
+
+  const applyScale = (scale) => {
+    identifier.style.setProperty('--volunteer-role-size', volunteerRoleIdentifierScaleSize(baseRoleSize, scale));
+    identifier.style.setProperty('--volunteer-name-size', volunteerRoleIdentifierScaleSize(baseNameSize, scale));
+  };
+
+  applyScale(high);
+  if (volunteerRoleIdentifierMeasureFits(identifier)) {
+    best = high;
+  } else {
+    for (let i = 0; i < 14; i += 1) {
+      const mid = (low + high) / 2;
+      applyScale(mid);
+      if (volunteerRoleIdentifierMeasureFits(identifier)) {
+        best = mid;
+        low = mid;
+      } else {
+        high = mid;
+      }
+    }
+  }
+
+  applyScale(best);
+}
+
+let volunteerRoleIdentifierFitQueued = false;
+
+function fitVolunteerRoleIdentifiers(root = document) {
+  const scope = root?.querySelectorAll ? root : document;
+  const identifiers = scope.matches?.('.volunteer-role-identifier')
+    ? [scope]
+    : Array.from(scope.querySelectorAll?.('.volunteer-role-identifier') || []);
+  identifiers.forEach(fitVolunteerRoleIdentifier);
+}
+
+function scheduleVolunteerRoleIdentifierFit(root = document) {
+  if (typeof window === 'undefined') return;
+  if (volunteerRoleIdentifierFitQueued) return;
+  volunteerRoleIdentifierFitQueued = true;
+  window.requestAnimationFrame(() => {
+    volunteerRoleIdentifierFitQueued = false;
+    fitVolunteerRoleIdentifiers(root);
+  });
+}
+
+function initVolunteerRoleIdentifierAutoFit() {
+  if (typeof window === 'undefined' || window.__btsVolunteerRoleIdentifierAutoFit) return;
+  window.__btsVolunteerRoleIdentifierAutoFit = true;
+
+  const onReady = () => scheduleVolunteerRoleIdentifierFit(document);
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', onReady, { once: true });
+  } else {
+    onReady();
+  }
+  window.addEventListener('load', onReady, { once: true });
+  window.addEventListener('resize', () => scheduleVolunteerRoleIdentifierFit(document), { passive: true });
+
+  if (typeof MutationObserver === 'function') {
+    const observer = new MutationObserver((mutations) => {
+      if (mutations.some(mutation => Array.from(mutation.addedNodes || []).some(node => (
+        node.nodeType === 1
+        && (node.matches?.('.volunteer-role-identifier') || node.querySelector?.('.volunteer-role-identifier'))
+      )))) {
+        scheduleVolunteerRoleIdentifierFit(document);
+      }
+    });
+    observer.observe(document.documentElement, { childList: true, subtree: true });
+  }
 }
 
 function renderCreativeTeamLayoutTemplate(member, options = {}) {
@@ -279,8 +385,11 @@ window.BTSProductionTeamTemplates = Object.assign({}, window.BTSProductionTeamTe
   renderVolunteerCard,
   renderVolunteerCardBack,
   renderVolunteerRoleIdentifier,
+  fitVolunteerRoleIdentifiers,
   renderCreativeTeamLayoutTemplate
 });
+
+initVolunteerRoleIdentifierAutoFit();
 
 function productionTeamCardEscape(value) {
   if (typeof esc === 'function') return esc(value);
