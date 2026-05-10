@@ -138,8 +138,6 @@ function renderVolunteerCard(member, options = {}) {
   const color = String(m.note_color || m.noteColor || options.color || '#572e88').trim();
   const headshot = String(m.headshot_url || m.headshot || '').trim();
   const isMini = options.variant === 'mini';
-  const roleSize = getProductionTeamCardTextSize(role, 10.6, 5.2, 8);
-  const nameSize = getProductionTeamCardTextSize(name, 5.8, 3.1, 14);
   const imageHtml = headshot
     ? `<img src="${escapeHtml(headshot)}" alt="${escapeHtml(name)}" class="casting-card-image" loading="lazy" onerror="this.outerHTML='<div class=\\'casting-card-image-placeholder\\'>👤</div>'" />`
     : `<div class="casting-card-image-placeholder">👤</div>`;
@@ -151,19 +149,48 @@ function renderVolunteerCard(member, options = {}) {
           ${imageHtml}
         </div>
         <div class="casting-card-lower">
-          <div class="casting-card-lower-icons">
-            <div class="volunteer-card-colour-dot" title="Volunteer colour" aria-hidden="true"></div>
-          </div>
-          <div class="casting-card-caption volunteer-card-identity">
-            <div class="casting-card-first-name" style="font-size:${roleSize};">${escapeHtml(role)}</div>
-            <div class="casting-card-last-name" style="font-size:${nameSize};">${escapeHtml(name)}</div>
-            <div class="casting-card-meta-line"></div>
-          </div>
+          <div class="casting-card-lower-icons" aria-hidden="true"></div>
+          <div class="casting-card-caption volunteer-card-identity" aria-hidden="true"></div>
           <div class="casting-card-skill-dots" aria-hidden="true"></div>
         </div>
       </div>
     </div>
   `;
+}
+
+function renderVolunteerCardBack(member, options = {}) {
+  const escapeHtml = typeof esc === 'function' ? esc : productionTeamCardEscape;
+  const m = member || {};
+  const role = String(m.role || 'Volunteer').trim();
+  const name = String(m.name || 'OPEN').trim();
+  const color = String(m.note_color || m.noteColor || options.color || '#572e88').trim();
+  const email = String(m.email || '').trim();
+  const phone = window.BTSPhone?.format(m.phone || m.phone_number || '') || (m.phone || m.phone_number || '');
+  const passcode = String(m.passcode || '').trim();
+  return `<div class="volunteer-card-wrap" style="--volunteer-card-color:${escapeHtml(color)};">
+    <div class="volunteer-card-back">
+      ${renderVolunteerRoleIdentifier({ role, name, note_color: color }, { framed: false })}
+      <div class="volunteer-card-back-lines">
+        <div><span>Phone:</span><strong>${escapeHtml(phone || 'No phone saved')}</strong></div>
+        <div><span>Email:</span><strong>${escapeHtml(email || 'No email saved')}</strong></div>
+        <div><span>Passcode:</span><strong>${escapeHtml(passcode || 'Not set')}</strong></div>
+      </div>
+    </div>
+  </div>`;
+}
+
+function renderVolunteerRoleIdentifier(member, options = {}) {
+  const escapeHtml = typeof esc === 'function' ? esc : productionTeamCardEscape;
+  const m = member || {};
+  const role = escapeHtml(m.role || options.role || 'Volunteer');
+  const name = escapeHtml(m.name || options.name || 'OPEN');
+  const color = escapeHtml(m.note_color || m.noteColor || options.color || '#572e88');
+  const framed = options.framed !== false;
+  return `<div class="volunteer-role-identifier${framed ? ' is-framed' : ''}" style="--volunteer-card-color:${color};">
+    <span class="volunteer-role-identifier-dot" aria-hidden="true"></span>
+    <span class="volunteer-role-identifier-role">${role}</span>
+    <span class="volunteer-role-identifier-name">${name}</span>
+  </div>`;
 }
 
 function renderCreativeTeamLayoutTemplate(member, options = {}) {
@@ -209,6 +236,8 @@ function getProductionTeamCardTextSize(text, baseSize, minSize, maxChars) {
 window.BTSProductionTeamTemplates = Object.assign({}, window.BTSProductionTeamTemplates, {
   renderProductionTeamCard,
   renderVolunteerCard,
+  renderVolunteerCardBack,
+  renderVolunteerRoleIdentifier,
   renderCreativeTeamLayoutTemplate
 });
 
