@@ -192,10 +192,10 @@ function renderVolunteerRoleIdentifier(member, options = {}) {
   const roleLineCount = roleLines.length;
   const longestRoleLine = roleLines.reduce((longest, line) => line.length > longest.length ? line : longest, '');
   const roleSize = isCardFront
-    ? volunteerRoleIdentifierTextSize(longestRoleLine, 9.2, 5.2, 13)
+    ? volunteerRoleIdentifierTextSize(longestRoleLine, 11.6, 6.2, 13)
     : volunteerRoleIdentifierTextSize(longestRoleLine, 2.4, 0.98, 13, 'rem');
   const nameSize = isCardFront
-    ? volunteerRoleIdentifierTextSize(nameText, 6.1, 4.1, 14)
+    ? volunteerRoleIdentifierTextSize(nameText, 7.7, 4.6, 14)
     : volunteerRoleIdentifierTextSize(nameText, 1.62, 0.78, 14, 'rem');
 
   return `<div class="volunteer-role-identifier${framed ? ' is-framed' : ''}${isCardFront ? ' is-card-front' : ''}" style="--volunteer-role-color:${color};--volunteer-role-size:${roleSize};--volunteer-name-size:${nameSize};--volunteer-role-line-height:${roleLineCount > 1 ? '0.9' : '0.95'};">
