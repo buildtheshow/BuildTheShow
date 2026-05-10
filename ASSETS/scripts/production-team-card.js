@@ -149,7 +149,9 @@ function renderVolunteerCard(member, options = {}) {
           ${imageHtml}
         </div>
         <div class="volunteer-card-blank-lower">
-          ${renderVolunteerRoleIdentifier({ role, name, note_color: color }, { framed: false, variant: 'card-front' })}
+          <div class="volunteer-card-identifier-frame">
+            ${renderVolunteerRoleIdentifier({ role, name, note_color: color }, { framed: false, variant: 'card-front' })}
+          </div>
         </div>
       </div>
     </div>
