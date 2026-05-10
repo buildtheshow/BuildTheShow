@@ -148,11 +148,7 @@ function renderVolunteerCard(member, options = {}) {
         <div class="casting-card-image-area">
           ${imageHtml}
         </div>
-        <div class="casting-card-lower">
-          <div class="casting-card-lower-icons" aria-hidden="true"></div>
-          <div class="casting-card-caption volunteer-card-identity" aria-hidden="true"></div>
-          <div class="casting-card-skill-dots" aria-hidden="true"></div>
-        </div>
+        <div class="casting-card-lower volunteer-card-blank-lower" aria-hidden="true"></div>
       </div>
     </div>
   `;
