@@ -12651,9 +12651,11 @@
     .template-volunteer-card-preview .volunteer-role-identifier-name {
       overflow: visible;
       text-overflow: clip;
+      white-space: normal;
     }
     .template-volunteer-card-preview .volunteer-role-identifier-role {
       font-size: var(--template-volunteer-role-size, clamp(1.75rem, 3.5vw, 2.8rem));
+      line-height: var(--template-volunteer-role-line-height, 0.95);
     }
     .template-volunteer-card-preview .volunteer-role-identifier-name {
       font-size: var(--template-volunteer-name-size, clamp(1.15rem, 2vw, 1.85rem));
@@ -12667,6 +12669,12 @@
       grid-template-columns: 1.18rem minmax(0, 1fr);
       column-gap: 0.34rem;
       margin: 0;
+    }
+    .template-volunteer-card-preview .volunteer-role-identifier.is-card-front .volunteer-role-identifier-role {
+      display: -webkit-box;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 2;
+      overflow: hidden;
     }
     .template-volunteer-card-preview .volunteer-role-identifier.is-card-front .volunteer-role-identifier-dot {
       width: 0.62rem;
@@ -21606,20 +21614,40 @@
       const ratio = value.length > maxChars ? maxChars / value.length : 1;
       return `${Math.max(minSize, Number((baseSize * ratio).toFixed(3)))}rem`;
     };
+    const templateVolunteerBreakRole = (roleText, maxCharsPerLine = 16, maxLines = 3) => {
+      const words = String(roleText || '').trim().split(/\s+/).filter(Boolean);
+      if (!words.length) return 'Volunteer';
+      const lines = [];
+      let line = '';
+      words.forEach(word => {
+        const candidate = line ? `${line} ${word}` : word;
+        const shouldBreakAfterPrevious = /[&/]$/.test(line);
+        if (line && (candidate.length > maxCharsPerLine || shouldBreakAfterPrevious) && lines.length < maxLines - 1) {
+          lines.push(line);
+          line = word;
+        } else {
+          line = candidate;
+        }
+      });
+      if (line) lines.push(line);
+      return lines.join('<br>');
+    };
     const renderTemplateVolunteerRoleIdentifier = ({ name, role, note_color }, options = {}) => {
       const roleText = String(role || 'Volunteer').trim();
       const nameText = String(name || 'OPEN').trim();
       const color = String(note_color || '#572e88').trim();
       const isCardFront = options.variant === 'card-front';
+      const roleHtml = templateVolunteerBreakRole(roleText, isCardFront ? 14 : 16, isCardFront ? 2 : 3);
+      const roleLineCount = roleHtml.split('<br>').length;
       const roleSize = isCardFront
-        ? templateVolunteerTextSize(roleText, 1.12, 0.42, 13)
-        : templateVolunteerTextSize(roleText, 2.8, 0.9, 13);
+        ? templateVolunteerTextSize(roleText, 1.12, 0.48, roleLineCount > 1 ? 24 : 13)
+        : templateVolunteerTextSize(roleText, 2.8, 1.08, roleLineCount > 1 ? 34 : 13);
       const nameSize = isCardFront
         ? templateVolunteerTextSize(nameText, 0.76, 0.36, 14)
         : templateVolunteerTextSize(nameText, 1.85, 0.82, 14);
-      return `<div class="volunteer-role-identifier${isCardFront ? ' is-card-front' : ''}" style="--volunteer-role-color:${esc(color)};--template-volunteer-role-size:${roleSize};--template-volunteer-name-size:${nameSize};">
+      return `<div class="volunteer-role-identifier${isCardFront ? ' is-card-front' : ''}" style="--volunteer-role-color:${esc(color)};--template-volunteer-role-size:${roleSize};--template-volunteer-name-size:${nameSize};--template-volunteer-role-line-height:${roleLineCount > 1 ? '0.9' : '0.95'};">
         <span class="volunteer-role-identifier-dot" aria-hidden="true"></span>
-        <span class="volunteer-role-identifier-role">${esc(roleText)}</span>
+        <span class="volunteer-role-identifier-role">${roleHtml.split('<br>').map(esc).join('<br>')}</span>
         <span class="volunteer-role-identifier-name">${esc(nameText)}</span>
       </div>`;
     };
