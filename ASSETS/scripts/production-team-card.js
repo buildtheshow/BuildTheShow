@@ -156,9 +156,21 @@ function renderVolunteerCard(member, options = {}) {
 function renderVolunteerCardBack(member, options = {}) {
   const escapeHtml = typeof esc === 'function' ? esc : productionTeamCardEscape;
   const m = member || {};
+  const role = String(m.role || 'Volunteer').trim();
+  const name = String(m.name || 'OPEN').trim();
   const color = String(m.note_color || m.noteColor || options.color || '#572e88').trim();
+  const email = String(m.email || '').trim();
+  const phone = window.BTSPhone?.format(m.phone || m.phone_number || '') || (m.phone || m.phone_number || '');
+  const passcode = String(m.passcode || '').trim();
   return `<div class="volunteer-card-wrap" style="--volunteer-card-color:${escapeHtml(color)};">
-    <div class="volunteer-card-back" aria-label="Blank volunteer card back"></div>
+    <div class="volunteer-card-back">
+      ${renderVolunteerRoleIdentifier({ role, name, note_color: color }, { framed: false })}
+      <div class="volunteer-card-back-lines">
+        <div><span>Phone:</span><strong>${escapeHtml(phone || 'No phone saved')}</strong></div>
+        <div><span>Email:</span><strong>${escapeHtml(email || 'No email saved')}</strong></div>
+        <div><span>Passcode:</span><strong>${escapeHtml(passcode || 'Not set')}</strong></div>
+      </div>
+    </div>
   </div>`;
 }
 
