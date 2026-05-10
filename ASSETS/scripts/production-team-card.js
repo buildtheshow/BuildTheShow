@@ -138,6 +138,8 @@ function renderVolunteerCard(member, options = {}) {
   const color = String(m.note_color || m.noteColor || options.color || '#572e88').trim();
   const headshot = String(m.headshot_url || m.headshot || '').trim();
   const isMini = options.variant === 'mini';
+  const roleSize = getProductionTeamCardTextSize(role, 10.6, 5.2, 8);
+  const nameSize = getProductionTeamCardTextSize(name, 5.8, 3.1, 14);
   const imageHtml = headshot
     ? `<img src="${escapeHtml(headshot)}" alt="${escapeHtml(name)}" class="casting-card-image" loading="lazy" onerror="this.outerHTML='<div class=\\'casting-card-image-placeholder\\'>👤</div>'" />`
     : `<div class="casting-card-image-placeholder">👤</div>`;
@@ -152,7 +154,11 @@ function renderVolunteerCard(member, options = {}) {
           <div class="casting-card-lower-icons">
             <div class="volunteer-card-colour-dot" title="Volunteer colour" aria-hidden="true"></div>
           </div>
-          <div class="casting-card-caption" aria-hidden="true"></div>
+          <div class="casting-card-caption volunteer-card-identity">
+            <div class="casting-card-first-name" style="font-size:${roleSize};">${escapeHtml(role)}</div>
+            <div class="casting-card-last-name" style="font-size:${nameSize};">${escapeHtml(name)}</div>
+            <div class="casting-card-meta-line"></div>
+          </div>
           <div class="casting-card-skill-dots" aria-hidden="true"></div>
         </div>
       </div>
