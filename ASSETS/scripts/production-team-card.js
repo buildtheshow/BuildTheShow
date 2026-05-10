@@ -130,6 +130,36 @@ function renderProductionTeamCard(member, options = {}) {
   `;
 }
 
+function renderVolunteerCard(member, options = {}) {
+  const escapeHtml = typeof esc === 'function' ? esc : productionTeamCardEscape;
+  const m = member || {};
+  const role = String(m.role || 'Volunteer').trim();
+  const name = String(m.name || 'OPEN').trim();
+  const color = String(m.note_color || m.noteColor || options.color || '#572e88').trim();
+  const headshot = String(m.headshot_url || m.headshot || '').trim();
+  const isMini = options.variant === 'mini';
+  const imageHtml = headshot
+    ? `<img src="${escapeHtml(headshot)}" alt="${escapeHtml(name)}" class="casting-card-image" loading="lazy" onerror="this.outerHTML='<div class=\\'casting-card-image-placeholder\\'>👤</div>'" />`
+    : `<div class="casting-card-image-placeholder">👤</div>`;
+
+  return `
+    <div class="volunteer-card-wrap${isMini ? ' volunteer-card-wrap--mini' : ''}" style="--volunteer-card-color:${escapeHtml(color)};">
+      <div class="casting-card volunteer-card${isMini ? ' volunteer-card--mini' : ''} has-padding">
+        <div class="casting-card-image-area">
+          ${imageHtml}
+        </div>
+        <div class="casting-card-lower">
+          <div class="casting-card-lower-icons">
+            <div class="volunteer-card-colour-dot" title="Volunteer colour" aria-hidden="true"></div>
+          </div>
+          <div class="casting-card-caption" aria-hidden="true"></div>
+          <div class="casting-card-skill-dots" aria-hidden="true"></div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
 function renderCreativeTeamLayoutTemplate(member, options = {}) {
   const escapeHtml = typeof esc === 'function' ? esc : productionTeamCardEscape;
   const m = member || {};
@@ -172,6 +202,7 @@ function getProductionTeamCardTextSize(text, baseSize, minSize, maxChars) {
 
 window.BTSProductionTeamTemplates = Object.assign({}, window.BTSProductionTeamTemplates, {
   renderProductionTeamCard,
+  renderVolunteerCard,
   renderCreativeTeamLayoutTemplate
 });
 
