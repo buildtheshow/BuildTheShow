@@ -304,6 +304,8 @@ function fitVolunteerRoleIdentifier(identifier) {
   const maxScale = identifier.classList.contains('is-card-front') ? 1.14 : 1;
   const minScale = 0.05;
 
+  // Template rule: role and name fit independently.
+  // Role wraps at 16 characters per line; name stays one line and only shrinks to fit its own width or the total stack height.
   const applyScales = (roleScale, nameScale) => {
     identifier.style.setProperty('--volunteer-role-size', volunteerRoleIdentifierScaleSize(baseRoleSize, roleScale));
     identifier.style.setProperty('--volunteer-name-size', volunteerRoleIdentifierScaleSize(baseNameSize, nameScale));
