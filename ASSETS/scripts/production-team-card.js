@@ -198,11 +198,11 @@ function renderVolunteerCardBack(member, options = {}) {
         <p>${escapeHtml(bio || 'No bio added yet.')}</p>
       </div>
       <div class="volunteer-card-back-actions" aria-label="Volunteer card actions">
-        <span>Edit</span>
-        <span>Email<br>Invite</span>
-        <span>Copy<br>Link</span>
-        <span>Copy<br>Passcode</span>
-        <span>Download<br>Headshot</span>
+        <button type="button">Edit</button>
+        <button type="button">Email Invite</button>
+        <button type="button">Copy Link</button>
+        <button type="button">Copy Passcode</button>
+        <button type="button">Download Headshot</button>
       </div>
     </div>
   </div>`;
