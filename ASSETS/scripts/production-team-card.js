@@ -135,20 +135,19 @@ function renderVolunteerCard(member, options = {}) {
   const m = member || {};
   const role = String(m.role || 'Volunteer').trim();
   const name = String(m.name || 'OPEN').trim();
-  const color = String(m.note_color || m.noteColor || options.color || '#572e88').trim();
   const headshot = String(m.headshot_url || m.headshot || '').trim();
   const isMini = options.variant === 'mini';
   const imageHtml = headshot
-    ? `<img src="${escapeHtml(headshot)}" alt="${escapeHtml(name)}" class="casting-card-image" loading="lazy" onerror="this.outerHTML='<div class=\\'casting-card-image-placeholder\\'>👤</div>'" />`
-    : `<div class="casting-card-image-placeholder">👤</div>`;
+    ? `<img src="${escapeHtml(headshot)}" alt="${escapeHtml(name)}" class="volunteer-card-image" loading="lazy" onerror="this.outerHTML='<div class=\\'volunteer-card-image-placeholder\\'>👤</div>'" />`
+    : `<div class="volunteer-card-image-placeholder">👤</div>`;
 
   return `
-    <div class="volunteer-card-wrap${isMini ? ' volunteer-card-wrap--mini' : ''}" style="--volunteer-card-color:${escapeHtml(color)};">
-      <div class="casting-card volunteer-card${isMini ? ' volunteer-card--mini' : ''} has-padding">
-        <div class="casting-card-image-area">
+    <div class="volunteer-card-wrap${isMini ? ' volunteer-card-wrap--mini' : ''}">
+      <div class="volunteer-card${isMini ? ' volunteer-card--mini' : ''}">
+        <div class="volunteer-card-image-area">
           ${imageHtml}
         </div>
-        <div class="casting-card-lower volunteer-card-blank-lower" aria-hidden="true"></div>
+        <div class="volunteer-card-blank-lower" aria-hidden="true"></div>
       </div>
     </div>
   `;
@@ -180,10 +179,8 @@ function renderVolunteerRoleIdentifier(member, options = {}) {
   const m = member || {};
   const role = escapeHtml(m.role || options.role || 'Volunteer');
   const name = escapeHtml(m.name || options.name || 'OPEN');
-  const color = escapeHtml(m.note_color || m.noteColor || options.color || '#572e88');
   const framed = options.framed !== false;
-  return `<div class="volunteer-role-identifier${framed ? ' is-framed' : ''}" style="--volunteer-card-color:${color};">
-    <span class="volunteer-role-identifier-dot" aria-hidden="true"></span>
+  return `<div class="volunteer-role-identifier${framed ? ' is-framed' : ''}">
     <span class="volunteer-role-identifier-role">${role}</span>
     <span class="volunteer-role-identifier-name">${name}</span>
   </div>`;
