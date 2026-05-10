@@ -255,8 +255,45 @@ function volunteerRoleIdentifierMeasureFits(identifier) {
   return widthFits && heightFits && identifierHeightFits;
 }
 
+function volunteerRoleIdentifierStackFits(identifier, copy) {
+  const tolerance = 1;
+  const heightLimit = copy.clientHeight || identifier.clientHeight;
+  const heightFits = !heightLimit || copy.scrollHeight <= heightLimit + tolerance;
+  const identifierHeightFits = !identifier.clientHeight || identifier.scrollHeight <= identifier.clientHeight + tolerance;
+  return heightFits && identifierHeightFits;
+}
+
+function volunteerRoleIdentifierTextFits(textElement, copy) {
+  return textElement.scrollWidth <= copy.clientWidth + 1;
+}
+
+function volunteerRoleIdentifierFindScale({ minScale, maxScale, testScale }) {
+  let low = minScale;
+  let high = maxScale;
+  let best = minScale;
+
+  if (testScale(high)) return high;
+
+  for (let i = 0; i < 14; i += 1) {
+    const mid = (low + high) / 2;
+    if (testScale(mid)) {
+      best = mid;
+      low = mid;
+    } else {
+      high = mid;
+    }
+  }
+
+  return best;
+}
+
 function fitVolunteerRoleIdentifier(identifier) {
   if (!identifier?.isConnected) return;
+
+  const copy = identifier.querySelector?.('.volunteer-role-identifier-copy');
+  const role = identifier.querySelector?.('.volunteer-role-identifier-role');
+  const name = identifier.querySelector?.('.volunteer-role-identifier-name');
+  if (!copy || !role || !name || copy.getBoundingClientRect().width <= 0) return;
 
   const baseRoleSize = identifier.style.getPropertyValue('--volunteer-role-base-size')
     || identifier.style.getPropertyValue('--volunteer-role-size');
@@ -266,32 +303,55 @@ function fitVolunteerRoleIdentifier(identifier) {
 
   const maxScale = identifier.classList.contains('is-card-front') ? 1.14 : 1;
   const minScale = 0.05;
-  let low = minScale;
-  let high = maxScale;
-  let best = minScale;
 
-  const applyScale = (scale) => {
-    identifier.style.setProperty('--volunteer-role-size', volunteerRoleIdentifierScaleSize(baseRoleSize, scale));
-    identifier.style.setProperty('--volunteer-name-size', volunteerRoleIdentifierScaleSize(baseNameSize, scale));
+  const applyScales = (roleScale, nameScale) => {
+    identifier.style.setProperty('--volunteer-role-size', volunteerRoleIdentifierScaleSize(baseRoleSize, roleScale));
+    identifier.style.setProperty('--volunteer-name-size', volunteerRoleIdentifierScaleSize(baseNameSize, nameScale));
   };
 
-  applyScale(high);
-  if (volunteerRoleIdentifierMeasureFits(identifier)) {
-    best = high;
-  } else {
-    for (let i = 0; i < 14; i += 1) {
-      const mid = (low + high) / 2;
-      applyScale(mid);
-      if (volunteerRoleIdentifierMeasureFits(identifier)) {
-        best = mid;
-        low = mid;
-      } else {
-        high = mid;
-      }
+  let roleScale = volunteerRoleIdentifierFindScale({
+    minScale,
+    maxScale,
+    testScale: (scale) => {
+      applyScales(scale, maxScale);
+      return volunteerRoleIdentifierTextFits(role, copy);
     }
+  });
+
+  let nameScale = volunteerRoleIdentifierFindScale({
+    minScale,
+    maxScale,
+    testScale: (scale) => {
+      applyScales(roleScale, scale);
+      return volunteerRoleIdentifierTextFits(name, copy);
+    }
+  });
+
+  applyScales(roleScale, nameScale);
+  if (!volunteerRoleIdentifierStackFits(identifier, copy)) {
+    roleScale = volunteerRoleIdentifierFindScale({
+      minScale,
+      maxScale: roleScale,
+      testScale: (scale) => {
+        applyScales(scale, nameScale);
+        return volunteerRoleIdentifierTextFits(role, copy) && volunteerRoleIdentifierStackFits(identifier, copy);
+      }
+    });
+    applyScales(roleScale, nameScale);
   }
 
-  applyScale(best);
+  if (!volunteerRoleIdentifierStackFits(identifier, copy)) {
+    nameScale = volunteerRoleIdentifierFindScale({
+      minScale,
+      maxScale: nameScale,
+      testScale: (scale) => {
+        applyScales(roleScale, scale);
+        return volunteerRoleIdentifierTextFits(name, copy) && volunteerRoleIdentifierStackFits(identifier, copy);
+      }
+    });
+  }
+
+  applyScales(roleScale, nameScale);
 }
 
 let volunteerRoleIdentifierFitQueued = false;
