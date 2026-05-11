@@ -6404,11 +6404,34 @@
       letter-spacing: 0.06em;
       text-transform: uppercase;
     }
+    .team-edit-section-title {
+      margin: 1rem 0 0.55rem;
+      color: #4b326f;
+      font-size: 0.76rem;
+      font-weight: 950;
+      letter-spacing: 0.07em;
+      text-transform: uppercase;
+    }
     .team-menu-checks {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 0.65rem;
+      margin: 0.45rem 0 0.9rem;
+    }
+    .team-menu-group {
+      display: grid;
+      gap: 0.38rem;
+      align-content: start;
+      padding: 0.46rem;
+      border: 1px solid rgba(87,46,136,0.12);
+      border-radius: 12px;
+      background: rgba(247,243,251,0.64);
+    }
+    .team-menu-subchecks {
       display: flex;
       flex-wrap: wrap;
-      gap: 0.5rem;
-      margin: 0.45rem 0 0.9rem;
+      gap: 0.35rem;
+      padding-left: 0.28rem;
     }
     .team-menu-check {
       position: relative;
@@ -6427,6 +6450,16 @@
       cursor: pointer;
       user-select: none;
       transition: background 0.16s ease, border-color 0.16s ease, color 0.16s ease, transform 0.16s ease;
+    }
+    .team-menu-check--parent {
+      width: 100%;
+      box-sizing: border-box;
+    }
+    .team-menu-check--sub {
+      min-height: 1.95rem;
+      padding: 0.33rem 0.48rem 0.33rem 0.68rem;
+      font-size: 0.72rem;
+      font-weight: 820;
     }
     .team-menu-check:hover {
       transform: translateY(-1px);
@@ -6457,6 +6490,10 @@
       transition: background 0.16s ease;
       flex: 0 0 auto;
     }
+    .team-menu-check--sub::after {
+      width: 1.25rem;
+      height: 0.74rem;
+    }
     .team-menu-check::before {
       content: "";
       position: absolute;
@@ -6469,6 +6506,11 @@
       transition: transform 0.16s ease, background 0.16s ease;
       z-index: 1;
     }
+    .team-menu-check--sub::before {
+      right: 1.06rem;
+      width: 0.48rem;
+      height: 0.48rem;
+    }
     .team-menu-check:has(input:checked)::after {
       background: rgba(255,255,255,0.32);
       box-shadow: inset 0 0 0 1px rgba(255,255,255,0.16);
@@ -6476,6 +6518,9 @@
     .team-menu-check:has(input:checked)::before {
       transform: translateX(0.62rem);
       background: #fff;
+    }
+    .team-menu-check--sub:has(input:checked)::before {
+      transform: translateX(0.48rem);
     }
     .team-member-meta {
       display: flex;
@@ -20990,7 +21035,7 @@
 <script src="/ASSETS/scripts/phone-format.js?v=nanp-smart-20260424"></script>
 <script src="/ASSETS/scripts/casting-card.js"></script>
 <script src="/ASSETS/scripts/production-team-card.js?v=production-team-volunteer-cards-20260510"></script>
-<script src="/ASSETS/scripts/production-team-access.js?v=team-member-role-select-20260510"></script>
+<script src="/ASSETS/scripts/production-team-access.js?v=team-member-menu-access-20260510"></script>
 <script src="/SHARED/Components/casting-card-back.js?v=selftapes-tab-20260504k"></script>
 <script src="/SHARED/Components/audition-status-strip.js"></script>
 <script src="/SHARED/Components/ai-character-importer.js"></script>
@@ -21418,8 +21463,28 @@
     const fallbackTab = allowedTopTabs.has('auditions') ? 'auditions' : ([...allowedTopTabs][0] || 'profile');
     const prodTab = allowedTopTabs.has(nav.prodTab) ? nav.prodTab : fallbackTab;
     if (prodTab === 'auditions') {
-      const subTab = nav.auditionsSubTab && nav.auditionsSubTab !== 'overview' ? nav.auditionsSubTab : 'dashboard';
+      const auditionFallback = teamMenuAllows(allowedTopTabs, 'auditions:settings') ? 'setup'
+        : teamMenuAllows(allowedTopTabs, 'auditions:schedule') ? 'audschedule'
+        : teamMenuAllows(allowedTopTabs, 'auditions:allperformers') ? 'allperformers'
+        : 'dashboard';
+      const auditionSubKeys = {
+        setup: 'auditions:settings',
+        audschedule: 'auditions:schedule',
+        allperformers: 'auditions:allperformers',
+      };
+      const navAudKey = auditionSubKeys[nav.auditionsSubTab] || '';
+      const subTab = navAudKey && teamMenuAllows(allowedTopTabs, navAudKey) ? nav.auditionsSubTab : auditionFallback;
       openAuditionsSubTab(subTab);
+      return;
+    }
+    if (prodTab === 'registration') {
+      const regFallback = teamMenuAllows(allowedTopTabs, 'registration:dashboard') ? 'dashboard'
+        : teamMenuAllows(allowedTopTabs, 'registration:offers') ? 'offers'
+        : teamMenuAllows(allowedTopTabs, 'registration:form') ? 'form'
+        : teamMenuAllows(allowedTopTabs, 'registration:cast') ? 'cast'
+        : 'settings';
+      const navRegKey = nav.registrationSubTab ? `registration:${nav.registrationSubTab}` : '';
+      openRegistrationSubTab(navRegKey && teamMenuAllows(allowedTopTabs, navRegKey) ? nav.registrationSubTab : regFallback);
       return;
     }
     switchProdTab(prodTab);
@@ -21557,8 +21622,14 @@
     document.getElementById('auditions-wrap')?.style.setProperty('display', menuAccess.has('auditions') ? '' : 'none');
     document.getElementById('registration-wrap')?.style.setProperty('display', menuAccess.has('registration') ? '' : 'none');
     document.getElementById('team-profile-tab')?.style.setProperty('display', '');
-    document.getElementById('asub-setup')?.style.setProperty('display', 'none');
-    document.getElementById('asub-checkin')?.style.setProperty('display', 'none');
+    document.getElementById('asub-setup')?.style.setProperty('display', teamMenuAllows(menuAccess, 'auditions:settings') ? '' : 'none');
+    document.getElementById('asub-audschedule')?.style.setProperty('display', teamMenuAllows(menuAccess, 'auditions:schedule') ? '' : 'none');
+    document.getElementById('asub-allperformers')?.style.setProperty('display', teamMenuAllows(menuAccess, 'auditions:allperformers') ? '' : 'none');
+    document.getElementById('rsub-dashboard')?.style.setProperty('display', teamMenuAllows(menuAccess, 'registration:dashboard') ? '' : 'none');
+    document.getElementById('rsub-offers')?.style.setProperty('display', teamMenuAllows(menuAccess, 'registration:offers') ? '' : 'none');
+    document.getElementById('rsub-form')?.style.setProperty('display', teamMenuAllows(menuAccess, 'registration:form') ? '' : 'none');
+    document.getElementById('rsub-cast')?.style.setProperty('display', teamMenuAllows(menuAccess, 'registration:cast') ? '' : 'none');
+    document.getElementById('rsub-settings')?.style.setProperty('display', teamMenuAllows(menuAccess, 'registration:settings') ? '' : 'none');
     document.getElementById('view-contact-info-btn')?.style.setProperty('display', 'none');
     document.querySelectorAll('[data-producer-only], .producer-only').forEach(el => { el.style.display = 'none'; });
     renderAuditionsSidebarSubmenu();
@@ -28522,14 +28593,35 @@ We look forward to seeing your work!
 
   const TEAM_PORTAL_MENU_ITEMS = [
     { key: 'overview', label: 'Overview' },
-    { key: 'team', label: 'Production Team' },
+    { key: 'team', label: 'Production Team', children: [
+      { key: 'team:overview', label: 'Team' },
+      { key: 'team:open', label: 'Open Roles' },
+      { key: 'team:applicants', label: 'Applications' },
+    ] },
     { key: 'calendar', label: 'Production Calendar' },
-    { key: 'auditions', label: 'Auditions' },
+    { key: 'auditions', label: 'Auditions', children: [
+      { key: 'auditions:settings', label: 'Settings' },
+      { key: 'auditions:schedule', label: 'Audition Schedule' },
+      { key: 'auditions:allperformers', label: 'All Performers' },
+      { key: 'auditions:sessions', label: 'Audition Sessions' },
+      { key: 'auditions:casting', label: 'Casting Board' },
+      { key: 'auditions:finalcasting', label: 'Final Casting' },
+    ] },
     { key: 'castlist', label: 'Cast List' },
-    { key: 'registration', label: 'Registration' },
+    { key: 'registration', label: 'Registration', children: [
+      { key: 'registration:dashboard', label: 'Dashboard' },
+      { key: 'registration:offers', label: 'Role Offers' },
+      { key: 'registration:form', label: 'Registration Form' },
+      { key: 'registration:cast', label: 'Registered Cast' },
+      { key: 'registration:settings', label: 'Settings' },
+    ] },
     { key: 'emails', label: 'Email Templates' },
     { key: 'test', label: 'Template Test' },
-    { key: 'settings', label: 'Settings' },
+    { key: 'settings', label: 'Settings', children: [
+      { key: 'settings:details', label: 'Details' },
+      { key: 'settings:modules', label: 'Modules' },
+      { key: 'settings:danger', label: 'Danger Zone' },
+    ] },
   ];
 
   const TEAM_ACCESS_LEVELS = [
@@ -28551,7 +28643,18 @@ We look forward to seeing your work!
   function teamMemberMenuAccess(member = {}) {
     const raw = Array.isArray(member.menu_access) ? member.menu_access : null;
     const fallback = teamAccessLevelConfig(normalizeTeamRole(member.access_level || member.role)).menu;
-    return new Set((raw && raw.length ? raw : fallback).filter(Boolean));
+    const set = new Set((raw && raw.length ? raw : fallback).filter(Boolean));
+    TEAM_PORTAL_MENU_ITEMS.forEach(item => {
+      if ((item.children || []).some(child => set.has(child.key))) set.add(item.key);
+    });
+    return set;
+  }
+
+  function teamMenuAllows(menuAccess, key) {
+    if (!menuAccess) return false;
+    if (menuAccess.has(key)) return true;
+    const parent = String(key || '').split(':')[0];
+    return !!parent && menuAccess.has(parent);
   }
 
   // Built-in system templates (platform-provided, cannot be edited or deleted)
@@ -28838,7 +28941,8 @@ We look forward to seeing your work!
     const access = document.getElementById('new-tm-access')?.value || 'creative';
     const defaults = new Set(teamAccessLevelConfig(access).menu || []);
     document.querySelectorAll('.new-tm-menu').forEach(input => {
-      input.checked = defaults.has(input.value);
+      const parent = input.dataset.parentMenu || '';
+      input.checked = defaults.has(input.value) || (parent && defaults.has(parent));
     });
   }
 
@@ -29017,15 +29121,7 @@ We look forward to seeing your work!
     const departmentOptions = departmentNames
       .map(name => `<option value="${esc(name)}">${esc(name)}</option>`)
       .join('');
-    const accessOptions = TEAM_ACCESS_LEVELS
-      .map(level => `<option value="${esc(level.key)}">${esc(level.label)}</option>`)
-      .join('');
-    const menuChecks = TEAM_PORTAL_MENU_ITEMS
-      .map(item => `<label class="team-menu-check">
-        <input type="checkbox" class="new-tm-menu" value="${esc(item.key)}" ${teamAccessLevelConfig('creative').menu.includes(item.key) ? 'checked' : ''} />
-        <span>${esc(item.label)}</span>
-      </label>`)
-      .join('');
+    const menuChecks = renderTeamPortalMenuChecks?.('new-tm-menu', new Set(teamAccessLevelConfig('creative').menu || [])) || '';
 
     const accessSection = `
       <div class="team-page-shell">
@@ -29069,10 +29165,6 @@ We look forward to seeing your work!
             <label>
               <span class="team-member-questionnaire-label">Title / role</span>
               <input class="form-input" id="new-tm-role" placeholder="Director, Usher, Builder..." />
-            </label>
-            <label>
-              <span class="team-member-questionnaire-label">Access</span>
-              <select class="form-select" id="new-tm-access" onchange="syncNewTeamMemberMenuDefaults()">${accessOptions}</select>
             </label>
           </div>
           <div class="team-member-questionnaire-label">Menu items</div>
@@ -29743,7 +29835,15 @@ We look forward to seeing your work!
     const finalCastingItem = `<div class="prod-sub-item" id="asub-finalcasting" onclick="openFinalCastingSubTab()" style="display:flex;align-items:center;"><span style="flex:0 0 auto;width:0.42rem;height:0.42rem;border-radius:999px;background:#111827;box-shadow:0 0 0.4rem rgba(17,24,39,0.55);margin-right:0.45rem;display:inline-block;vertical-align:middle;"></span>Final Casting</div>`;
     host.innerHTML = beforeCallback.map(sessionItem).join('') + castingItem + callbackSessions.map(sessionItem).join('') + finalCastingItem;
     if (teamAccessMode) {
-      document.getElementById('asub-setup')?.style.setProperty('display', 'none');
+      const menuAccess = teamMemberMenuAccess(teamAccessMember);
+      document.getElementById('asub-setup')?.style.setProperty('display', teamMenuAllows(menuAccess, 'auditions:settings') ? '' : 'none');
+      document.getElementById('asub-audschedule')?.style.setProperty('display', teamMenuAllows(menuAccess, 'auditions:schedule') ? '' : 'none');
+      document.getElementById('asub-allperformers')?.style.setProperty('display', teamMenuAllows(menuAccess, 'auditions:allperformers') ? '' : 'none');
+      document.getElementById('asub-casting')?.style.setProperty('display', teamMenuAllows(menuAccess, 'auditions:casting') ? '' : 'none');
+      document.getElementById('asub-finalcasting')?.style.setProperty('display', teamMenuAllows(menuAccess, 'auditions:finalcasting') ? '' : 'none');
+      host.querySelectorAll('[id^="asub-session-"]').forEach(item => {
+        item.style.display = teamMenuAllows(menuAccess, 'auditions:sessions') ? '' : 'none';
+      });
     }
     // Re-apply whichever sidebar item was active before the re-render
     if (_sidebarSubId) document.getElementById(_sidebarSubId)?.classList.add('active');

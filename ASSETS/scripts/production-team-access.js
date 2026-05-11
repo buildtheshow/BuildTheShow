@@ -264,6 +264,47 @@ async function handleProductionTeamEditRoleChange(select) {
   showToast?.(existing ? 'Role already exists.' : 'Role added.');
 }
 
+function teamPortalMenuSelected(selectedMenus, key, parentKey = '') {
+  return selectedMenus?.has?.(key) || (parentKey && selectedMenus?.has?.(parentKey));
+}
+
+function renderTeamPortalMenuChecks(inputClass, selectedMenus = new Set()) {
+  const safe = productionTeamAccessEscape;
+  const items = window.TEAM_PORTAL_MENU_ITEMS || TEAM_PORTAL_MENU_ITEMS || [];
+  return items.map(item => {
+    const children = item.children || [];
+    const parentChecked = selectedMenus.has(item.key) || children.some(child => selectedMenus.has(child.key));
+    const childHtml = children.length ? `<div class="team-menu-subchecks">
+      ${children.map(child => `<label class="team-menu-check team-menu-check--sub">
+        <input type="checkbox" class="${safe(inputClass)}" value="${safe(child.key)}" data-parent-menu="${safe(item.key)}" ${teamPortalMenuSelected(selectedMenus, child.key, item.key) ? 'checked' : ''} onchange="syncTeamPortalMenuParentState('${safe(inputClass)}', '${safe(item.key)}')" />
+        <span>${safe(child.label)}</span>
+      </label>`).join('')}
+    </div>` : '';
+    return `<div class="team-menu-group">
+      <label class="team-menu-check team-menu-check--parent">
+        <input type="checkbox" class="${safe(inputClass)}" value="${safe(item.key)}" ${parentChecked ? 'checked' : ''} onchange="toggleTeamPortalMenuGroup(this, '${safe(inputClass)}')" />
+        <span>${safe(item.label)}</span>
+      </label>
+      ${childHtml}
+    </div>`;
+  }).join('');
+}
+
+function toggleTeamPortalMenuGroup(input, inputClass) {
+  const group = input?.closest?.('.team-menu-group');
+  if (!group) return;
+  group.querySelectorAll(`input.${inputClass}[data-parent-menu]`).forEach(child => {
+    child.checked = input.checked;
+  });
+}
+
+function syncTeamPortalMenuParentState(inputClass, parentKey) {
+  const children = Array.from(document.querySelectorAll(`input.${inputClass}[data-parent-menu="${parentKey}"]`));
+  const parent = document.querySelector(`input.${inputClass}[value="${parentKey}"]`);
+  if (!parent || !children.length) return;
+  parent.checked = children.some(child => child.checked);
+}
+
 function creativeRolesForTeamMember(member) {
   const creative = teamConfig?.find(d => d.name === 'Artistic Team') || teamConfig?.find(d => d.name === 'Creative Team');
   if (!creative) return [];
@@ -492,18 +533,10 @@ function openProductionTeamMemberEdit(memberId) {
     .map(name => `<option value="${safe(name)}"${String(selectedDepartment || '') === String(name) ? ' selected' : ''}>${safe(name)}</option>`)
     .join('');
   const roleOptions = productionTeamEditRoleOptions(selectedDepartment, member.role || '');
-  const accessOptions = (window.TEAM_ACCESS_LEVELS || TEAM_ACCESS_LEVELS || [])
-    .map(level => `<option value="${safe(level.key)}"${normalizeTeamRole(member.access_level || member.role) === level.key ? ' selected' : ''}>${safe(level.label)}</option>`)
-    .join('');
   const selectedMenus = teamMemberMenuAccess?.(member) || new Set();
-  const menuChecks = (window.TEAM_PORTAL_MENU_ITEMS || TEAM_PORTAL_MENU_ITEMS || [])
-    .map(item => `<label class="team-menu-check">
-      <input type="checkbox" class="ptm-edit-menu" value="${safe(item.key)}" ${selectedMenus.has(item.key) ? 'checked' : ''} />
-      <span>${safe(item.label)}</span>
-    </label>`)
-    .join('');
+  const menuChecks = renderTeamPortalMenuChecks('ptm-edit-menu', selectedMenus);
   overlay.innerHTML = `
-    <div class="modal production-team-member-edit-card" style="max-width:620px;width:min(94vw,620px);" onclick="event.stopPropagation()">
+    <div class="modal production-team-member-edit-card" style="max-width:760px;width:min(94vw,760px);" onclick="event.stopPropagation()">
       <div class="modal-header">
         <div>
           <div class="modal-title">Edit Team Member</div>
@@ -511,22 +544,11 @@ function openProductionTeamMemberEdit(memberId) {
         </div>
         <button class="modal-close" type="button" aria-label="Close" onclick="closeProductionTeamMemberEdit()">×</button>
       </div>
+      <div class="team-edit-section-title">Contact Info</div>
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:0.75rem;">
         <label>
           <span style="display:block;font-size:0.78rem;font-weight:800;margin-bottom:0.3rem;">Name</span>
           <input id="ptm-edit-name" class="form-input" value="${safe(member.name || '')}" />
-        </label>
-        <label>
-          <span style="display:block;font-size:0.78rem;font-weight:800;margin-bottom:0.3rem;">Role</span>
-          <select id="ptm-edit-role" class="form-select" data-previous-role="${safe(member.role || '')}" onchange="this.dataset.previousRole=this.value==='__add_new__'?(this.dataset.previousRole||''):this.value;handleProductionTeamEditRoleChange(this)">${roleOptions}</select>
-        </label>
-        <label>
-          <span style="display:block;font-size:0.78rem;font-weight:800;margin-bottom:0.3rem;">Department</span>
-          <select id="ptm-edit-department" class="form-select" onchange="handleProductionTeamEditDepartmentChange()">${departmentOptions}</select>
-        </label>
-        <label>
-          <span style="display:block;font-size:0.78rem;font-weight:800;margin-bottom:0.3rem;">Access</span>
-          <select id="ptm-edit-access" class="form-select">${accessOptions}</select>
         </label>
         <label>
           <span style="display:block;font-size:0.78rem;font-weight:800;margin-bottom:0.3rem;">Email</span>
@@ -536,17 +558,28 @@ function openProductionTeamMemberEdit(memberId) {
           <span style="display:block;font-size:0.78rem;font-weight:800;margin-bottom:0.3rem;">Phone</span>
           <input id="ptm-edit-phone" class="form-input" type="tel" value="${safe(window.BTSPhone?.format(member.phone || member.phone_number || '') || (member.phone || member.phone_number || ''))}" />
         </label>
-        <label>
-          <span style="display:block;font-size:0.78rem;font-weight:800;margin-bottom:0.3rem;">Card Colour</span>
-          ${teamColorPickerHtml(member.note_color || nextAvailableTeamColor(member.id), member.id)}
-        </label>
       </div>
       <label style="display:block;margin-top:0.8rem;">
         <span style="display:block;font-size:0.78rem;font-weight:800;margin-bottom:0.3rem;">Bio</span>
         <textarea id="ptm-edit-bio" class="form-textarea" style="min-height:130px;">${safe(member.bio || '')}</textarea>
       </label>
+      <div class="team-edit-section-title">Department Info</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:0.75rem;">
+        <label>
+          <span style="display:block;font-size:0.78rem;font-weight:800;margin-bottom:0.3rem;">Department</span>
+          <select id="ptm-edit-department" class="form-select" onchange="handleProductionTeamEditDepartmentChange()">${departmentOptions}</select>
+        </label>
+        <label>
+          <span style="display:block;font-size:0.78rem;font-weight:800;margin-bottom:0.3rem;">Role</span>
+          <select id="ptm-edit-role" class="form-select" data-previous-role="${safe(member.role || '')}" onchange="this.dataset.previousRole=this.value==='__add_new__'?(this.dataset.previousRole||''):this.value;handleProductionTeamEditRoleChange(this)">${roleOptions}</select>
+        </label>
+        <label>
+          <span style="display:block;font-size:0.78rem;font-weight:800;margin-bottom:0.3rem;">Card Colour</span>
+          ${teamColorPickerHtml(member.note_color || nextAvailableTeamColor(member.id), member.id)}
+        </label>
+      </div>
       <div style="margin-top:0.8rem;">
-        <div style="display:block;font-size:0.78rem;font-weight:800;margin-bottom:0.45rem;">Menu items</div>
+        <div class="team-edit-section-title">Menu Items</div>
         <div class="team-menu-checks">${menuChecks}</div>
       </div>
       <div style="display:flex;align-items:center;justify-content:space-between;gap:0.75rem;margin-top:0.95rem;">
@@ -570,11 +603,12 @@ async function saveProductionTeamMemberEdit(memberId, btn = null) {
   const msg = document.getElementById('ptm-edit-msg');
   const phoneInput = document.getElementById('ptm-edit-phone');
   const rawPhone = phoneInput?.value || '';
+  const existingMember = (auditionTeamMembers || []).find(member => String(member.id || '') === String(memberId || '')) || {};
   const payload = {
     name: (document.getElementById('ptm-edit-name')?.value || '').trim(),
     role: (document.getElementById('ptm-edit-role')?.value || '').trim(),
     department: (document.getElementById('ptm-edit-department')?.value || '').trim() || null,
-    access_level: (document.getElementById('ptm-edit-access')?.value || '').trim() || 'creative',
+    access_level: existingMember.access_level || 'creative',
     menu_access: Array.from(document.querySelectorAll('.ptm-edit-menu:checked')).map(input => input.value).filter(Boolean),
     email: (document.getElementById('ptm-edit-email')?.value || '').trim().toLowerCase(),
     phone: (window.BTSPhone?.format(rawPhone) || rawPhone).trim() || null,
