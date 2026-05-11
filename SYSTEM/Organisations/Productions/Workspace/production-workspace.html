@@ -6574,6 +6574,16 @@
       display: grid;
       justify-items: center;
       min-width: 0;
+      border: 0;
+      background: none;
+      padding: 0;
+      cursor: pointer;
+      font-family: inherit;
+    }
+    .team-role-card-shell:focus-visible {
+      outline: 3px solid color-mix(in srgb, var(--dept-ink, #fff) 70%, transparent);
+      outline-offset: 4px;
+      border-radius: 8px;
     }
     .team-role-card-shell.is-open .production-team-card,
     .team-role-card-shell.is-open .volunteer-card {
@@ -6622,6 +6632,52 @@
     }
     .team-department-actions .btn-secondary:hover {
       background: color-mix(in srgb, var(--dept-ink, #fff) 22%, transparent);
+    }
+    .team-card-preview-modal {
+      width: min(92vw, 390px);
+      display: grid;
+      gap: 0.8rem;
+      justify-items: center;
+      border-radius: 8px;
+      background: #fff;
+      padding: 1rem;
+      box-shadow: 0 28px 70px rgba(26,21,48,0.24);
+    }
+    .team-card-preview-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+      width: 100%;
+    }
+    .team-card-preview-title {
+      min-width: 0;
+      color: #1a1530;
+      font-size: 0.78rem;
+      font-weight: 950;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .team-card-preview-close {
+      display: grid;
+      place-items: center;
+      width: 2rem;
+      height: 2rem;
+      border: 1px solid rgba(87,46,136,0.18);
+      border-radius: 8px;
+      background: #fff;
+      color: #572e88;
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 1.2rem;
+      font-weight: 850;
+      line-height: 1;
+    }
+    .team-card-preview-stage {
+      width: min(100%, 304px);
     }
     .team-department-grid {
       display: grid;
@@ -28775,6 +28831,41 @@ We look forward to seeing your work!
     saveTeamConfig();
   }
 
+  function openProductionTeamCardPreview(encodedMember) {
+    let member = null;
+    try {
+      member = JSON.parse(decodeURIComponent(encodedMember || ''));
+    } catch (error) {
+      console.warn('[BTS] Could not open production team card preview', error);
+      return;
+    }
+    if (!member || typeof window.BTSProductionTeamTemplates?.renderProductionTeamCard !== 'function') return;
+    document.getElementById('production-team-card-preview-modal')?.remove();
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay open';
+    overlay.id = 'production-team-card-preview-modal';
+    overlay.onclick = event => {
+      if (event.target === overlay) closeProductionTeamCardPreview();
+    };
+    const title = `${member.role || 'Team Role'} · ${member.name || 'OPEN'}`;
+    overlay.innerHTML = `
+      <div class="team-card-preview-modal" onclick="event.stopPropagation();">
+        <div class="team-card-preview-head">
+          <div class="team-card-preview-title">${esc(title)}</div>
+          <button type="button" class="team-card-preview-close" onclick="closeProductionTeamCardPreview()" aria-label="Close">×</button>
+        </div>
+        <div class="team-card-preview-stage">
+          ${window.BTSProductionTeamTemplates.renderProductionTeamCard(member, { showManagement: !!member.id })}
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+    window.BTSProductionTeamTemplates?.fitVolunteerRoleIdentifiers?.(overlay);
+  }
+
+  function closeProductionTeamCardPreview() {
+    document.getElementById('production-team-card-preview-modal')?.remove();
+  }
+
   function renderTeamView(container) {
     const normalizedRoleName = (value) => String(value || '').trim().toLowerCase();
     const memberMatchesRole = (member, role) => normalizedRoleName(member.role) === normalizedRoleName(role.name);
@@ -28787,9 +28878,15 @@ We look forward to seeing your work!
         note_color: color.h,
         is_active: true,
       };
-      return `<div class="team-role-card-shell${isOpen ? ' is-open' : ''}" style="${teamDepartmentStyle(department)}">
+      const previewPayload = encodeURIComponent(JSON.stringify({
+        ...cardMember,
+        role: role?.name || cardMember.role,
+        note_color: cardMember.note_color || color.h,
+        department
+      })).replace(/'/g, '%27');
+      return `<button type="button" class="team-role-card-shell${isOpen ? ' is-open' : ''}" style="${teamDepartmentStyle(department)}" onclick="openProductionTeamCardPreview('${previewPayload}')" aria-label="Open ${esc(cardMember.name || 'team member')} card">
         ${window.BTSProductionTeamTemplates?.renderProductionTeamCard?.({ ...cardMember, role: role?.name || cardMember.role, note_color: cardMember.note_color || color.h }, { variant: 'mini' }) || ''}
-      </div>`;
+      </button>`;
     };
     const departmentNames = productionTeamDepartmentNames();
     const groupedMembers = new Map(departmentNames.map(name => [name, []]));
