@@ -55,14 +55,14 @@ function renderVolunteerCard(member, options = {}) {
   const role = String(m.role || 'Volunteer').trim();
   const name = String(m.name || 'OPEN').trim();
   const color = String(m.note_color || m.noteColor || options.color || '#572e88').trim();
-  const headshot = String(m.headshot_url || m.headshot || '').trim();
   const isMini = options.variant === 'mini';
   const isOpenState = options.state === 'open'
     || m.card_state === 'open'
-    || (!String(m.id || '').trim() && (!String(m.name || '').trim() || String(m.name || '').trim().toUpperCase() === 'OPEN'));
+    || (!String(m.id || '').trim() && ['', 'OPEN', 'OPEN ROLE'].includes(String(m.name || '').trim().toUpperCase()));
   const displayName = isOpenState
     ? 'OPEN ROLE'
     : name;
+  const headshot = isOpenState ? '' : String(m.headshot_url || m.headshot || '').trim();
   const imageHtml = headshot
     ? `<img src="${escapeHtml(headshot)}" alt="${escapeHtml(displayName)}" class="volunteer-card-image" loading="lazy" onerror="this.outerHTML='<div class=\\'volunteer-card-image-placeholder\\'>👤</div>'" />`
     : `<div class="volunteer-card-image-placeholder">👤</div>`;
