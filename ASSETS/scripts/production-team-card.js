@@ -3,6 +3,8 @@
  * Casting-card-style card for organiser/team access displays.
  */
 
+const VOLUNTEER_ROLE_IDENTIFIER_MAX_LINE_CHARS = 20;
+
 function renderProductionTeamCard(member, options = {}) {
   const escapeHtml = typeof esc === 'function'
     ? esc
@@ -95,7 +97,7 @@ function renderVolunteerCardBack(member, options = {}) {
   const passcode = String(m.passcode || '').trim();
   const bio = String(m.bio || '').trim();
   const headshot = String(m.headshot_url || m.headshot || '').trim();
-  const roleHtml = volunteerRoleIdentifierBreakRole(role, 20);
+  const roleHtml = volunteerRoleIdentifierBreakRole(role);
   const roleLines = roleHtml.split('<br>');
   const longestRoleLine = roleLines.reduce((longest, line) => line.length > longest.length ? line : longest, '');
   const roleSize = volunteerRoleIdentifierTextSize(longestRoleLine, 1.58, 0.78, 13, 'rem');
@@ -151,7 +153,7 @@ function renderVolunteerRoleIdentifier(member, options = {}) {
   const color = escapeHtml(m.note_color || m.noteColor || options.color || '#572e88');
   const framed = options.framed !== false;
   const isCardFront = options.variant === 'card-front';
-  const roleHtml = volunteerRoleIdentifierBreakRole(roleText, 20);
+  const roleHtml = volunteerRoleIdentifierBreakRole(roleText);
   const roleLines = roleHtml.split('<br>');
   const roleLineCount = roleLines.length;
   const longestRoleLine = roleLines.reduce((longest, line) => line.length > longest.length ? line : longest, '');
@@ -181,7 +183,7 @@ function volunteerRoleIdentifierTextSize(text, baseSize, minSize, maxChars, unit
   return `${Math.max(minSize, Number((baseSize * ratio).toFixed(3)))}${unit}`;
 }
 
-function volunteerRoleIdentifierBreakRole(roleText, maxCharsPerLine = 20) {
+function volunteerRoleIdentifierBreakRole(roleText, maxCharsPerLine = VOLUNTEER_ROLE_IDENTIFIER_MAX_LINE_CHARS) {
   const words = String(roleText || '').trim().split(/\s+/).filter(Boolean);
   if (!words.length) return 'Volunteer';
   const lines = [];
