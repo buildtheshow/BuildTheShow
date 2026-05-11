@@ -153,19 +153,19 @@ function renderVolunteerRoleIdentifier(member, options = {}) {
   const roleLineCount = roleLines.length;
   const longestRoleLine = roleLines.reduce((longest, line) => line.length > longest.length ? line : longest, '');
   const roleSize = isCardFront
-    ? volunteerRoleIdentifierTextSize(longestRoleLine, 18, 7, 13)
-    : volunteerRoleIdentifierTextSize(longestRoleLine, 2.4, 0.98, 13, 'rem');
+    ? volunteerRoleIdentifierTextSize(longestRoleLine, 10.8, 5.2, 13)
+    : volunteerRoleIdentifierTextSize(longestRoleLine, 1.62, 0.78, 13, 'rem');
   const nameSize = isCardFront
-    ? volunteerRoleIdentifierTextSize(nameText, 10.8, 5.2, 14)
-    : volunteerRoleIdentifierTextSize(nameText, 1.62, 0.78, 14, 'rem');
+    ? volunteerRoleIdentifierTextSize(nameText, 18, 7, 14)
+    : volunteerRoleIdentifierTextSize(nameText, 2.4, 0.98, 14, 'rem');
 
   return `<div class="volunteer-role-identifier${framed ? ' is-framed' : ''}${isCardFront ? ' is-card-front' : ''}" data-volunteer-role-identifier style="--volunteer-role-color:${color};--volunteer-role-base-size:${roleSize};--volunteer-name-base-size:${nameSize};--volunteer-role-size:${roleSize};--volunteer-name-size:${nameSize};--volunteer-role-line-height:${roleLineCount > 1 ? '0.9' : '0.95'};">
     <span class="volunteer-role-identifier-dot-box" aria-hidden="true">
       <span class="volunteer-role-identifier-dot"></span>
     </span>
     <span class="volunteer-role-identifier-copy">
-      <span class="volunteer-role-identifier-role">${roleHtml.split('<br>').map(escapeHtml).join('<br>')}</span>
       <span class="volunteer-role-identifier-name">${escapeHtml(nameText)}</span>
+      <span class="volunteer-role-identifier-role">${roleHtml.split('<br>').map(escapeHtml).join('<br>')}</span>
     </span>
   </div>`;
 }
