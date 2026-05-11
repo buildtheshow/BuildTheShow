@@ -58,7 +58,6 @@ function renderVolunteerCard(member, options = {}) {
   const name = String(m.name || 'OPEN').trim();
   const color = String(m.note_color || m.noteColor || options.color || '#572e88').trim();
   const isMini = options.variant === 'mini';
-  const showPhoto = options.showPhoto !== false;
   const isOpenState = options.state === 'open'
     || m.card_state === 'open'
     || (!String(m.id || '').trim() && ['', 'OPEN', 'OPEN ROLE'].includes(String(m.name || '').trim().toUpperCase()));
@@ -66,18 +65,6 @@ function renderVolunteerCard(member, options = {}) {
     ? 'OPEN ROLE'
     : name;
   const headshot = isOpenState ? '' : String(m.headshot_url || m.headshot || '').trim();
-
-  // Identifier-only: when showPhoto is false, the role identifier fills the whole card.
-  if (!showPhoto) {
-    return `
-      <div class="volunteer-card-wrap${isMini ? ' volunteer-card-wrap--mini' : ''}">
-        <div class="volunteer-card${isMini ? ' volunteer-card--mini' : ''}" data-volunteer-card-state="${isOpenState ? 'open' : 'filled'}" style="grid-template-rows:1fr;padding:8%;">
-          ${renderVolunteerRoleIdentifier({ role, name: displayName, note_color: color }, { framed: false, variant: 'card-front' })}
-        </div>
-      </div>
-    `;
-  }
-
   const imageHtml = headshot
     ? `<img src="${escapeHtml(headshot)}" alt="${escapeHtml(displayName)}" class="volunteer-card-image" loading="lazy" onerror="this.outerHTML='<div class=\\'volunteer-card-image-placeholder\\'>👤</div>'" />`
     : `<div class="volunteer-card-image-placeholder">👤</div>`;
