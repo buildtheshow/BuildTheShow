@@ -896,3 +896,19 @@ function downloadTeamBio(memberId) {
   a.remove();
   URL.revokeObjectURL(url);
 }
+
+window.BTSProductionTeamAccess = {
+  ...(window.BTSProductionTeamAccess || {}),
+  openProductionTeamMemberEdit,
+  closeProductionTeamMemberEdit,
+  saveProductionTeamMemberEdit,
+  handleProductionTeamEditDepartmentChange,
+  handleProductionTeamEditRoleChange,
+  selectProductionTeamEditColor,
+  toggleTeamPortalMenuGroup,
+  syncTeamPortalMenuParentState,
+  renderTeamPortalMenuChecks,
+  productionTeamEditDepartmentNames,
+  productionTeamEditRoleOptions,
+  teamColorPickerHtml,
+};
