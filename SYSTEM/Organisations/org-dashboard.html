@@ -1605,7 +1605,7 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
 
 <script src="/SHARED/Components/page-loader.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="/ASSETS/scripts/production-team-card.js?v=flipcard-20260511"></script>
+<script src="/ASSETS/scripts/production-team-card.js?v=fulltemplate-20260511"></script>
 <!--
   Required SQL migrations for org profile & branding:
   ALTER TABLE organizations ADD COLUMN IF NOT EXISTS bio text;
@@ -1945,10 +1945,13 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
         name,
         is_active: true,
         card_state: isOpenRole ? 'open' : 'filled',
+        email: member?.email || '',
+        phone: member?.phone || member?.phone_number || '',
+        bio: member?.bio || '',
+        headshot_url: member?.headshot_url || member?.avatar_url || '',
+        note_color: member?.note_color || '#572e88',
       };
-      const cardHtml = window.BTSProductionTeamTemplates?.renderProductionTeamCard?.(cardMember, {
-        showManagement: false,
-      }) || '';
+      const cardHtml = window.BTSProductionTeamTemplates?.renderProductionTeamCard?.(cardMember) || '';
       return `<div class="team-role-card-shell">${cardHtml}</div>`;
     };
 
@@ -2015,6 +2018,7 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
       orgMembers = members || [];
     } catch(e) {}
 
+    window._orgBoardMembers = orgMembers;
     tbody.innerHTML = renderOrgBoardMembersLayout(orgMembers);
 
     // Load pending invites
@@ -2133,6 +2137,30 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
     if (!confirm('Remove this member from the organisation?')) return;
     await sb.from('org_members').delete().eq('id', id);
     loadMembers();
+  }
+
+  function openProductionTeamMemberEdit(id) {
+    const member = (window._orgBoardMembers || []).find(m => String(m.id) === String(id));
+    openInviteModal();
+    if (member?.email) document.getElementById('invite-email').value = member.email;
+    if (member?.title) document.getElementById('invite-title').value = member.title;
+  }
+
+  function emailTeamInvite(id, btn) {
+    const member = (window._orgBoardMembers || []).find(m => String(m.id) === String(id));
+    openInviteModal();
+    if (member?.email) document.getElementById('invite-email').value = member.email;
+    if (member?.title) document.getElementById('invite-title').value = member.title;
+  }
+
+  function copyTeamPortalLink(id, btn) {
+    navigator.clipboard.writeText(window.location.href).then(() => {
+      if (btn) { const orig = btn.textContent; btn.textContent = 'Copied!'; setTimeout(() => btn.textContent = orig, 1500); }
+    });
+  }
+
+  function removeProductionTeamMember(id, btn) {
+    removeMember(id);
   }
 
   // ── Tab switching ─────────────────────────────────────
