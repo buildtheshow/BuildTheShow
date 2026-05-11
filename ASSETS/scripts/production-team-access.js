@@ -124,13 +124,25 @@ async function updateTeamMemberWithColorGuard(memberId, payload) {
     .select('*')
     .single();
   if (isTeamMemberSchemaColumnError(result.error)) {
+    const metadataSafePayload = { ...payload };
+    delete metadataSafePayload.access_level;
+    delete metadataSafePayload.menu_access;
     result = await sb
       .from('production_team_members')
-      .update(stripTeamMemberMetadataColumns(payload))
+      .update(metadataSafePayload)
       .eq('production_id', prodId)
       .eq('id', memberId)
       .select('*')
       .single();
+    if (isTeamMemberSchemaColumnError(result.error)) {
+      result = await sb
+        .from('production_team_members')
+        .update(stripTeamMemberMetadataColumns(payload))
+        .eq('production_id', prodId)
+        .eq('id', memberId)
+        .select('*')
+        .single();
+    }
   }
   if (!isTeamColorConstraintError(result.error)) return result;
 
@@ -355,19 +367,32 @@ async function syncTeamMemberToProductionTeam(member, patch = {}) {
   if (!member || !teamConfig) return;
   const departmentName = patch.department || member.department || '';
   let department = departmentName ? teamConfig.find(dept => dept.name === departmentName) : null;
-  let role = findCreativeRoleForTeamMember(member);
-  if (!role && department) {
-    const roleName = patch.role || member.role || 'Team Member';
-    const memberId = String(member.id || '');
-    const memberEmail = String(patch.email || member.email || '').trim().toLowerCase();
-    role = (department.roles || []).find(item =>
-      String(item.team_member_id || '') === memberId ||
-      (memberEmail && String(item.email || '').trim().toLowerCase() === memberEmail)
-    );
-    if (!role) {
-      role = { id: crypto.randomUUID(), name: roleName, filled: false, person: '', email: '', notes: '' };
-      department.roles = [...(department.roles || []), role];
-    }
+  if (!department && departmentName) {
+    department = { name: departmentName, open: true, roles: [] };
+    teamConfig.push(department);
+  }
+  if (!department) return;
+  const roleName = patch.role || member.role || 'Team Member';
+  const memberId = String(member.id || '');
+  const oldEmail = String(member.email || '').trim().toLowerCase();
+  const nextEmail = String(patch.email || member.email || '').trim().toLowerCase();
+  (teamConfig || []).forEach(dept => {
+    (dept.roles || []).forEach(item => {
+      const linkedById = memberId && String(item.team_member_id || '') === memberId;
+      const linkedByEmail = (oldEmail || nextEmail) && [oldEmail, nextEmail].includes(String(item.email || '').trim().toLowerCase());
+      if (!linkedById && !linkedByEmail) return;
+      item.person = '';
+      item.team_member_id = null;
+      item.email = '';
+      item.filled = false;
+    });
+  });
+  let role = (department.roles || []).find(item =>
+    String(item.name || '').trim().toLowerCase() === String(roleName || '').trim().toLowerCase()
+  );
+  if (!role) {
+    role = { id: crypto.randomUUID(), name: roleName, filled: false, person: '', email: '', notes: '' };
+    department.roles = [...(department.roles || []), role];
   }
   if (!role) return;
   if (Object.prototype.hasOwnProperty.call(patch, 'name')) role.person = patch.name || '';
