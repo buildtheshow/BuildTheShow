@@ -1571,87 +1571,7 @@
 </div>
 
 <!-- Invite Member Modal -->
-<div class="modal-overlay" id="invite-modal">
-  <div class="modal org-member-edit-card">
-    <div class="modal-header">
-      <div>
-        <div class="modal-title">Invite to Board</div>
-        <div class="modal-subtitle">Add someone to the organisation board and choose what they can open.</div>
-      </div>
-      <button class="modal-close" onclick="closeInviteModal()">✕</button>
-    </div>
-    <div id="invite-error" class="form-error"></div>
-    <div id="invite-success" style="display:none;background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.3);border-radius:8px;padding:0.75rem 1rem;font-size:0.875rem;color:#166534;margin-bottom:1rem;"></div>
-    <div class="team-edit-layout">
-      <div class="team-edit-menu-pane">
-        <aside class="team-menu-sidebar-preview">
-          <div class="team-menu-sidebar-head">
-            <div class="team-menu-sidebar-kicker">Organisation Menu</div>
-            <div class="team-menu-sidebar-copy">Choose what this board member can open.</div>
-          </div>
-          <div class="team-menu-sidebar-list">
-            <label class="team-menu-check team-menu-nav-item">
-              <input type="checkbox" class="org-invite-menu" value="dashboard" checked onchange="syncOrgInviteAccessFromMenu()" />
-              <span>Dashboard</span>
-              <i aria-hidden="true"></i>
-            </label>
-            <label class="team-menu-check team-menu-nav-item">
-              <input type="checkbox" class="org-invite-menu" value="members" checked onchange="syncOrgInviteAccessFromMenu()" />
-              <span>Board Members</span>
-              <i aria-hidden="true"></i>
-            </label>
-            <label class="team-menu-check team-menu-nav-item">
-              <input type="checkbox" class="org-invite-menu" value="productions" checked onchange="syncOrgInviteAccessFromMenu()" />
-              <span>Productions</span>
-              <i aria-hidden="true"></i>
-            </label>
-            <label class="team-menu-check team-menu-nav-item">
-              <input type="checkbox" class="org-invite-menu" value="past" checked onchange="syncOrgInviteAccessFromMenu()" />
-              <span>Past Productions</span>
-              <i aria-hidden="true"></i>
-            </label>
-            <label class="team-menu-check team-menu-nav-item">
-              <input type="checkbox" class="org-invite-menu" value="files" checked onchange="syncOrgInviteAccessFromMenu()" />
-              <span>Files</span>
-              <i aria-hidden="true"></i>
-            </label>
-            <label class="team-menu-check team-menu-nav-item">
-              <input type="checkbox" class="org-invite-menu" value="settings" onchange="syncOrgInviteAccessFromMenu()" />
-              <span>Settings</span>
-              <i aria-hidden="true"></i>
-            </label>
-          </div>
-        </aside>
-      </div>
-      <div class="team-edit-form-pane">
-        <div class="team-edit-section-title">Contact Info</div>
-        <div class="form-group">
-          <label class="form-label">Email or Profile ID</label>
-          <input class="form-input" id="invite-email" type="text" placeholder="member@example.com or BTS-223SK-01" autocomplete="off" />
-          <p style="font-size:0.75rem;color:#9a90b0;margin-top:0.3rem;">Enter their email address, or their Build The Show profile ID.</p>
-        </div>
-        <div class="team-edit-section-title">Department Info</div>
-        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:0.75rem;">
-          <div class="form-group">
-            <label class="form-label">Organisation Role</label>
-            <select class="form-input" id="invite-title" onchange="this.dataset.previousRole=this.value==='__add_new__'?(this.dataset.previousRole||''):this.value;handleOrgBoardRoleChange(this)"></select>
-          </div>
-          <div class="form-group">
-            <label class="form-label">Workspace Access</label>
-            <select class="form-input" id="invite-access" onchange="syncOrgInviteMenuFromAccess()">
-              <option value="viewer">Viewer</option>
-              <option value="editor">Editor</option>
-              <option value="admin">Admin</option>
-            </select>
-          </div>
-        </div>
-      </div>
-    </div>
-    <div style="display:flex;justify-content:flex-end;margin-top:0.95rem;">
-      <button class="btn-primary" id="send-invite-btn" onclick="sendInvite()">Send Invitation</button>
-    </div>
-  </div>
-</div>
+<div class="modal-overlay" id="invite-modal"></div>
 
 <!-- Past Production - Add Choice Modal -->
 <div class="modal-overlay" id="past-show-choice-modal">
@@ -1825,6 +1745,7 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
 <script src="/SHARED/Components/page-loader.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="/ASSETS/scripts/production-team-card.js?v=mgmt-20260511b"></script>
+<script src="/ASSETS/scripts/team-edit-modal-template.js?v=shared-edit-modal-20260511"></script>
 <!--
   Required SQL migrations for org profile & branding:
   ALTER TABLE organizations ADD COLUMN IF NOT EXISTS bio text;
@@ -2162,7 +2083,7 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
     return 'viewer';
   }
 
-  function renderOrgBoardMenuChecks(selectedMenus = new Set()) {
+  function renderOrgBoardMenuChecks(selectedMenus = new Set(), inputClass = 'org-edit-menu', onChange = 'syncOrgBoardAccessFromMenu()') {
     return `<aside class="team-menu-sidebar-preview">
       <div class="team-menu-sidebar-head">
         <div class="team-menu-sidebar-kicker">Organisation Menu</div>
@@ -2170,7 +2091,7 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
       </div>
       <div class="team-menu-sidebar-list">
         ${ORG_BOARD_MENU_ITEMS.map(item => `<label class="team-menu-check team-menu-nav-item">
-          <input type="checkbox" class="org-edit-menu" value="${esc(item.key)}" ${selectedMenus.has(item.key) ? 'checked' : ''} onchange="syncOrgBoardAccessFromMenu()" />
+          <input type="checkbox" class="${esc(inputClass)}" value="${esc(item.key)}" ${selectedMenus.has(item.key) ? 'checked' : ''} onchange="${esc(onChange)}" />
           <span>${esc(item.label)}</span>
           <i aria-hidden="true"></i>
         </label>`).join('')}
@@ -2236,8 +2157,7 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
   }
 
   function showOrgInviteForRole(role = '') {
-    openInviteModal();
-    setOrgInviteRoleOptions(role);
+    openInviteModal(role);
   }
 
   function toggleOrgBoardMembers() {
@@ -2356,14 +2276,66 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
   }
 
   // ── Invite modal ───────────────────────────────────────
-  function openInviteModal() {
-    document.getElementById('invite-modal').classList.add('open');
-    setOrgInviteRoleOptions('');
-    document.getElementById('invite-email').value = '';
-    document.getElementById('invite-access').value = 'editor';
+  function openInviteModal(role = '') {
+    const overlay = document.getElementById('invite-modal');
+    const selectedAccess = 'editor';
+    const selectedMenus = orgBoardMenusForAccess(selectedAccess);
+    overlay.innerHTML = window.BTSTeamEditModalTemplate.render({
+      title: 'Invite to Board',
+      subtitle: 'Add someone to the organisation board and choose what they can open.',
+      cardClass: 'production-team-member-edit-card org-member-edit-card',
+      menuHtml: renderOrgBoardMenuChecks(selectedMenus, 'org-invite-menu', 'syncOrgInviteAccessFromMenu()'),
+      closeOnclick: 'closeInviteModal()',
+      contactHtml: `<div id="invite-error" class="form-error"></div>
+        <div id="invite-success" style="display:none;background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.3);border-radius:8px;padding:0.75rem 1rem;font-size:0.875rem;color:#166534;margin-bottom:1rem;"></div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:0.75rem;">
+          <label>
+            <span style="display:block;font-size:0.78rem;font-weight:800;margin-bottom:0.3rem;">Name</span>
+            <input class="form-input" type="text" value="Pending invite" disabled />
+          </label>
+          <label>
+            <span style="display:block;font-size:0.78rem;font-weight:800;margin-bottom:0.3rem;">Email or Profile ID</span>
+            <input class="form-input" id="invite-email" type="text" placeholder="member@example.com or BTS-223SK-01" autocomplete="off" />
+          </label>
+          <label>
+            <span style="display:block;font-size:0.78rem;font-weight:800;margin-bottom:0.3rem;">Phone</span>
+            <input class="form-input" type="text" value="Invite first" disabled />
+          </label>
+        </div>
+        <label style="display:block;margin-top:0.8rem;">
+          <span style="display:block;font-size:0.78rem;font-weight:800;margin-bottom:0.3rem;">Bio</span>
+          <textarea class="form-textarea" style="min-height:130px;" disabled>Invite first, then this board member can add profile details.</textarea>
+        </label>`,
+      departmentHtml: `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:0.75rem;">
+          <label>
+            <span style="display:block;font-size:0.78rem;font-weight:800;margin-bottom:0.3rem;">Department</span>
+            <input class="form-input" value="Board Members" disabled />
+          </label>
+          <label>
+            <span style="display:block;font-size:0.78rem;font-weight:800;margin-bottom:0.3rem;">Role</span>
+            <select class="form-input" id="invite-title" data-previous-role="${esc(role || '')}" onchange="this.dataset.previousRole=this.value==='__add_new__'?(this.dataset.previousRole||''):this.value;handleOrgBoardRoleChange(this)">
+              ${orgBoardRoleOptions(role || '')}
+            </select>
+          </label>
+          <label>
+            <span style="display:block;font-size:0.78rem;font-weight:800;margin-bottom:0.3rem;">Workspace Access</span>
+            <select class="form-input" id="invite-access" onchange="syncOrgInviteMenuFromAccess()">
+              <option value="viewer">Viewer</option>
+              <option value="editor" selected>Editor</option>
+              <option value="admin">Admin</option>
+            </select>
+          </label>
+        </div>`,
+      footerHtml: `<div style="display:flex;align-items:center;justify-content:space-between;gap:0.75rem;margin-top:0.95rem;">
+          <div style="font-size:0.8rem;color:#8a7aa4;"></div>
+          <div style="display:flex;gap:0.5rem;">
+            <button class="btn-secondary" type="button" onclick="closeInviteModal()">Cancel</button>
+            <button class="btn-primary" id="send-invite-btn" type="button" onclick="sendInvite()">Send Invitation</button>
+          </div>
+        </div>`
+    });
+    overlay.classList.add('open');
     syncOrgInviteMenuFromAccess();
-    document.getElementById('invite-error').classList.remove('visible');
-    document.getElementById('invite-success').style.display = 'none';
     document.getElementById('invite-email').focus();
   }
   function closeInviteModal() {
@@ -2467,56 +2439,62 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
     overlay.onclick = e => { if (e.target === overlay) overlay.remove(); };
     const selectedAccess = member.access_level || 'editor';
     const selectedMenus = orgBoardMenusForAccess(selectedAccess);
-    overlay.innerHTML = `
-      <div class="modal org-member-edit-card" onclick="event.stopPropagation()">
-        <div class="modal-header">
-          <div>
-            <div class="modal-title">Edit Board Member</div>
-            <div class="modal-subtitle">Update how this person appears on the organisation board.</div>
-          </div>
-          <button class="modal-close" onclick="document.getElementById('org-member-edit-modal').remove()">×</button>
+    overlay.innerHTML = window.BTSTeamEditModalTemplate.render({
+      title: 'Edit Team Member',
+      subtitle: 'Update the details shown on their production team card.',
+      cardClass: 'production-team-member-edit-card org-member-edit-card',
+      menuHtml: renderOrgBoardMenuChecks(selectedMenus),
+      closeOnclick: "document.getElementById('org-member-edit-modal').remove()",
+      contactHtml: `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:0.75rem;">
+          <label>
+            <span style="display:block;font-size:0.78rem;font-weight:800;margin-bottom:0.3rem;">Name</span>
+            <input class="form-input" id="org-edit-name" type="text" value="${esc(orgMemberDisplayName(member))}" disabled />
+          </label>
+          <label>
+            <span style="display:block;font-size:0.78rem;font-weight:800;margin-bottom:0.3rem;">Email</span>
+            <input class="form-input" id="org-edit-email" type="email" value="${esc(member.email || '')}" disabled />
+          </label>
+          <label>
+            <span style="display:block;font-size:0.78rem;font-weight:800;margin-bottom:0.3rem;">Phone</span>
+            <input class="form-input" type="text" value="Not saved" disabled />
+          </label>
         </div>
-        <div class="team-edit-layout">
-          <div class="team-edit-menu-pane">${renderOrgBoardMenuChecks(selectedMenus)}</div>
-          <div class="team-edit-form-pane">
-            <div class="team-edit-section-title">Contact Info</div>
-            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:0.75rem;">
-              <label>
-                <span style="display:block;font-size:0.78rem;font-weight:800;margin-bottom:0.3rem;">Name</span>
-                <input class="form-input" id="org-edit-name" type="text" value="${esc(orgMemberDisplayName(member))}" disabled />
-              </label>
-              <label>
-                <span style="display:block;font-size:0.78rem;font-weight:800;margin-bottom:0.3rem;">Email</span>
-                <input class="form-input" id="org-edit-email" type="email" value="${esc(member.email || '')}" disabled />
-              </label>
-            </div>
-            <div class="team-edit-section-title">Department Info</div>
-            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:0.75rem;">
-              <label>
-                <span style="display:block;font-size:0.78rem;font-weight:800;margin-bottom:0.3rem;">Role</span>
-                <select class="form-input" id="org-edit-title" data-previous-role="${esc(member.title || '')}" onchange="this.dataset.previousRole=this.value==='__add_new__'?(this.dataset.previousRole||''):this.value;handleOrgBoardRoleChange(this)">
-                  ${orgBoardRoleOptions(member.title || '')}
-                </select>
-              </label>
-              <label>
-                <span style="display:block;font-size:0.78rem;font-weight:800;margin-bottom:0.3rem;">Workspace Access</span>
-                <select class="form-input" id="org-edit-access" onchange="syncOrgBoardMenuFromAccess()">
-                  <option value="viewer"${selectedAccess === 'viewer' ? ' selected' : ''}>Viewer</option>
-                  <option value="editor"${selectedAccess === 'editor' ? ' selected' : ''}>Editor</option>
-                  <option value="admin"${selectedAccess === 'admin' ? ' selected' : ''}>Admin</option>
-                </select>
-              </label>
-            </div>
-          </div>
-        </div>
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:0.75rem;margin-top:0.95rem;">
+        <label style="display:block;margin-top:0.8rem;">
+          <span style="display:block;font-size:0.78rem;font-weight:800;margin-bottom:0.3rem;">Bio</span>
+          <textarea class="form-textarea" style="min-height:130px;" disabled>No organisation bio saved yet.</textarea>
+        </label>`,
+      departmentHtml: `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:0.75rem;">
+          <label>
+            <span style="display:block;font-size:0.78rem;font-weight:800;margin-bottom:0.3rem;">Department</span>
+            <input class="form-input" value="Board Members" disabled />
+          </label>
+          <label>
+            <span style="display:block;font-size:0.78rem;font-weight:800;margin-bottom:0.3rem;">Role</span>
+            <select class="form-input" id="org-edit-title" data-previous-role="${esc(member.title || '')}" onchange="this.dataset.previousRole=this.value==='__add_new__'?(this.dataset.previousRole||''):this.value;handleOrgBoardRoleChange(this)">
+              ${orgBoardRoleOptions(member.title || '')}
+            </select>
+          </label>
+          <label>
+            <span style="display:block;font-size:0.78rem;font-weight:800;margin-bottom:0.3rem;">Card Colour</span>
+            <input class="form-input" value="Board black" disabled />
+          </label>
+          <label>
+            <span style="display:block;font-size:0.78rem;font-weight:800;margin-bottom:0.3rem;">Workspace Access</span>
+            <select class="form-input" id="org-edit-access" onchange="syncOrgBoardMenuFromAccess()">
+              <option value="viewer"${selectedAccess === 'viewer' ? ' selected' : ''}>Viewer</option>
+              <option value="editor"${selectedAccess === 'editor' ? ' selected' : ''}>Editor</option>
+              <option value="admin"${selectedAccess === 'admin' ? ' selected' : ''}>Admin</option>
+            </select>
+          </label>
+        </div>`,
+      footerHtml: `<div style="display:flex;align-items:center;justify-content:space-between;gap:0.75rem;margin-top:0.95rem;">
           <div id="org-edit-msg" style="font-size:0.8rem;color:#8a7aa4;"></div>
           <div style="display:flex;gap:0.5rem;">
-            <button class="btn-secondary" onclick="document.getElementById('org-member-edit-modal').remove()">Cancel</button>
-            <button class="btn-primary" id="org-edit-save-btn">Save</button>
+            <button class="btn-secondary" type="button" onclick="document.getElementById('org-member-edit-modal').remove()">Cancel</button>
+            <button class="btn-primary" type="button" id="org-edit-save-btn">Save</button>
           </div>
-        </div>
-      </div>`;
+        </div>`
+    });
     document.body.appendChild(overlay);
     overlay.querySelector('#org-edit-save-btn').onclick = async () => {
       const titleSelect = document.getElementById('org-edit-title');
