@@ -188,6 +188,82 @@ function selectProductionTeamEditColor(color) {
   });
 }
 
+function productionTeamAccessEscape(value) {
+  if (typeof esc === 'function') return esc(value);
+  return String(value ?? '').replace(/[&<>"']/g, char => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;'
+  }[char]));
+}
+
+function productionTeamEditDepartmentNames() {
+  const configured = (teamConfig || []).map(dept => dept?.name).filter(Boolean);
+  const fallback = (window.PRODUCTION_TEAM_DEPARTMENTS || PRODUCTION_TEAM_DEPARTMENTS || []).filter(Boolean);
+  return configured.length ? configured : fallback;
+}
+
+function productionTeamEditRolesForDepartment(departmentName) {
+  const department = (teamConfig || []).find(dept => String(dept?.name || '') === String(departmentName || ''));
+  return (department?.roles || []).map(role => String(role?.name || '').trim()).filter(Boolean);
+}
+
+function productionTeamEditRoleOptions(departmentName, selectedRole = '') {
+  const safe = productionTeamAccessEscape;
+  const selected = String(selectedRole || '').trim();
+  const roleNames = productionTeamEditRolesForDepartment(departmentName);
+  const options = [];
+  const seen = new Set();
+  [...roleNames, selected].forEach(roleName => {
+    const normalized = roleName.trim();
+    const key = normalized.toLowerCase();
+    if (!normalized || seen.has(key)) return;
+    seen.add(key);
+    options.push(`<option value="${safe(normalized)}"${normalized === selected ? ' selected' : ''}>${safe(normalized)}</option>`);
+  });
+  options.push('<option value="__add_new__">+ Add new role...</option>');
+  return options.join('');
+}
+
+function refreshProductionTeamEditRoleOptions(selectedRole = '') {
+  const department = document.getElementById('ptm-edit-department')?.value || '';
+  const roleSelect = document.getElementById('ptm-edit-role');
+  if (!roleSelect) return;
+  roleSelect.innerHTML = productionTeamEditRoleOptions(department, selectedRole || roleSelect.value);
+}
+
+function handleProductionTeamEditDepartmentChange() {
+  refreshProductionTeamEditRoleOptions();
+}
+
+async function handleProductionTeamEditRoleChange(select) {
+  if (!select || select.value !== '__add_new__') return;
+  const previousRole = select.dataset.previousRole || '';
+  const departmentName = document.getElementById('ptm-edit-department')?.value || '';
+  const roleName = window.prompt('New role title:')?.trim();
+  if (!roleName) {
+    refreshProductionTeamEditRoleOptions(previousRole);
+    return;
+  }
+  const department = (teamConfig || []).find(dept => String(dept?.name || '') === String(departmentName || ''));
+  if (!department) {
+    refreshProductionTeamEditRoleOptions(previousRole);
+    showToast?.('Choose a department before adding a role.', true);
+    return;
+  }
+  department.roles = department.roles || [];
+  const existing = department.roles.find(role => String(role?.name || '').trim().toLowerCase() === roleName.toLowerCase());
+  if (!existing) {
+    department.roles.push({ id: crypto.randomUUID(), name: roleName, filled: false, notes: '' });
+    await saveTeamConfig();
+  }
+  refreshProductionTeamEditRoleOptions(roleName);
+  document.getElementById('ptm-edit-role')?.setAttribute('data-previous-role', roleName);
+  showToast?.(existing ? 'Role already exists.' : 'Role added.');
+}
+
 function creativeRolesForTeamMember(member) {
   const creative = teamConfig?.find(d => d.name === 'Artistic Team') || teamConfig?.find(d => d.name === 'Creative Team');
   if (!creative) return [];
@@ -411,9 +487,11 @@ function openProductionTeamMemberEdit(memberId) {
   overlay.onclick = event => {
     if (event.target === overlay) closeProductionTeamMemberEdit();
   };
-  const departmentOptions = (window.PRODUCTION_TEAM_DEPARTMENTS || PRODUCTION_TEAM_DEPARTMENTS || [])
-    .map(name => `<option value="${safe(name)}"${String(member.department || '') === String(name) ? ' selected' : ''}>${safe(name)}</option>`)
+  const selectedDepartment = member.department || teamMemberDepartment?.(member) || productionTeamEditDepartmentNames()[0] || '';
+  const departmentOptions = productionTeamEditDepartmentNames()
+    .map(name => `<option value="${safe(name)}"${String(selectedDepartment || '') === String(name) ? ' selected' : ''}>${safe(name)}</option>`)
     .join('');
+  const roleOptions = productionTeamEditRoleOptions(selectedDepartment, member.role || '');
   const accessOptions = (window.TEAM_ACCESS_LEVELS || TEAM_ACCESS_LEVELS || [])
     .map(level => `<option value="${safe(level.key)}"${normalizeTeamRole(member.access_level || member.role) === level.key ? ' selected' : ''}>${safe(level.label)}</option>`)
     .join('');
@@ -440,11 +518,11 @@ function openProductionTeamMemberEdit(memberId) {
         </label>
         <label>
           <span style="display:block;font-size:0.78rem;font-weight:800;margin-bottom:0.3rem;">Role</span>
-          <input id="ptm-edit-role" class="form-input" value="${safe(member.role || '')}" />
+          <select id="ptm-edit-role" class="form-select" data-previous-role="${safe(member.role || '')}" onchange="this.dataset.previousRole=this.value==='__add_new__'?(this.dataset.previousRole||''):this.value;handleProductionTeamEditRoleChange(this)">${roleOptions}</select>
         </label>
         <label>
           <span style="display:block;font-size:0.78rem;font-weight:800;margin-bottom:0.3rem;">Department</span>
-          <select id="ptm-edit-department" class="form-select">${departmentOptions}</select>
+          <select id="ptm-edit-department" class="form-select" onchange="handleProductionTeamEditDepartmentChange()">${departmentOptions}</select>
         </label>
         <label>
           <span style="display:block;font-size:0.78rem;font-weight:800;margin-bottom:0.3rem;">Access</span>
