@@ -6622,7 +6622,8 @@
     }
     .team-department-sections {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+      grid-template-columns: repeat(auto-fill, minmax(380px, 380px));
+      justify-content: start;
       align-items: start;
       gap: 1rem;
       margin-top: 0.2rem;
@@ -6693,7 +6694,7 @@
     }
     .team-department-tree {
       display: grid;
-      gap: 0.5rem;
+      gap: 0.72rem;
       border-radius: 8px;
       background: color-mix(in srgb, var(--dept-ink, #fff) 13%, transparent);
       padding: 0.55rem;
@@ -6702,22 +6703,27 @@
     .team-department-section.is-collapsed .team-department-empty {
       display: none;
     }
-    .team-role-branch {
+    .team-role-group {
       display: grid;
-      gap: 0;
-      position: relative;
+      gap: 0.38rem;
     }
-    .team-role-branch:not(:first-child) {
-      padding-top: 0;
-      border-top: 0;
+    .team-role-group + .team-role-group {
+      padding-top: 0.62rem;
+      border-top: 1px solid color-mix(in srgb, var(--dept-ink, #fff) 18%, transparent);
     }
-    .team-role-branch.is-lead .team-role-people {
-      grid-template-columns: minmax(0, 1fr);
+    .team-role-group-title {
+      color: color-mix(in srgb, var(--dept-ink, #fff) 78%, transparent);
+      font-size: 0.62rem;
+      font-weight: 950;
+      letter-spacing: 0.08em;
+      line-height: 1;
+      text-transform: uppercase;
     }
     .team-role-people {
       display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
+      grid-template-columns: repeat(4, 4.8rem);
       gap: 0.42rem;
+      justify-content: start;
       min-width: 0;
     }
     .team-role-card-shell {
@@ -29139,27 +29145,40 @@ We look forward to seeing your work!
       const countLabel = `${members.length} ${members.length === 1 ? 'person' : 'people'}`;
       const isCollapsed = (teamConfig || []).find(dept => dept.name === department)?.open === false;
       const assignedMemberIds = new Set();
-      const roleTree = roles.map(role => {
+      const filledCards = [];
+      const openCards = [];
+      roles.forEach(role => {
         const roleMembers = members.filter(member => memberMatchesRole(member, role));
         roleMembers.forEach(member => assignedMemberIds.add(String(member.id || '')));
         const syntheticMember = !roleMembers.length && (role.person || role.team_member_id)
           ? { id: role.team_member_id || '', role: role.name || 'Team Role', name: role.person || 'OPEN', email: role.email || '', note_color: teamDepartmentColor(department).h }
           : null;
-        const peopleHtml = roleMembers.length
-          ? roleMembers.map(member => renderRoleCard(role, member, department)).join('')
-          : renderRoleCard(role, syntheticMember, department, !syntheticMember);
-        return `<div class="team-role-branch">
-          <div class="team-role-people">${peopleHtml}</div>
-        </div>`;
-      }).join('');
+        if (roleMembers.length) {
+          roleMembers.forEach(member => filledCards.push(renderRoleCard(role, member, department)));
+        } else if (syntheticMember) {
+          filledCards.push(renderRoleCard(role, syntheticMember, department));
+        } else {
+          openCards.push(renderRoleCard(role, null, department, true));
+        }
+      });
       const unmatchedMembers = members.filter(member => !assignedMemberIds.has(String(member.id || '')));
-      const unmatchedTree = unmatchedMembers.length
-        ? `<div class="team-role-branch">
-            <div class="team-role-people">${unmatchedMembers.map(member => renderRoleCard({ name: member.role || 'Team Member' }, member, department)).join('')}</div>
+      unmatchedMembers.forEach(member => {
+        filledCards.push(renderRoleCard({ name: member.role || 'Team Member' }, member, department));
+      });
+      const filledHtml = filledCards.length
+        ? `<div class="team-role-group">
+            <div class="team-role-group-title">Filled Roles</div>
+            <div class="team-role-people">${filledCards.join('')}</div>
           </div>`
         : '';
-      const treeHtml = roleTree || unmatchedTree
-        ? `<div class="team-department-tree">${roleTree}${unmatchedTree}</div>`
+      const openHtml = openCards.length
+        ? `<div class="team-role-group">
+            <div class="team-role-group-title">Open Roles</div>
+            <div class="team-role-people">${openCards.join('')}</div>
+          </div>`
+        : '';
+      const treeHtml = filledHtml || openHtml
+        ? `<div class="team-department-tree">${filledHtml}${openHtml}</div>`
         : '';
       return `<section class="team-department-section${isCollapsed ? ' is-collapsed' : ''}" style="${teamDepartmentStyle(department)}">
         <div class="team-department-head">
