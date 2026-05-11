@@ -57,15 +57,16 @@ function renderVolunteerCard(member, options = {}) {
   const color = String(m.note_color || m.noteColor || options.color || '#572e88').trim();
   const headshot = String(m.headshot_url || m.headshot || '').trim();
   const isMini = options.variant === 'mini';
-  const isOpenSlot = !String(m.id || '').trim() && (!String(m.name || '').trim() || String(m.name || '').trim().toUpperCase() === 'OPEN');
-  const displayName = isOpenSlot ? 'OPEN ROLE' : name;
+  const displayName = !String(m.id || '').trim() && (!String(m.name || '').trim() || String(m.name || '').trim().toUpperCase() === 'OPEN')
+    ? 'OPEN ROLE'
+    : name;
   const imageHtml = headshot
     ? `<img src="${escapeHtml(headshot)}" alt="${escapeHtml(displayName)}" class="volunteer-card-image" loading="lazy" onerror="this.outerHTML='<div class=\\'volunteer-card-image-placeholder\\'>👤</div>'" />`
     : `<div class="volunteer-card-image-placeholder">👤</div>`;
 
   return `
     <div class="volunteer-card-wrap${isMini ? ' volunteer-card-wrap--mini' : ''}">
-      <div class="volunteer-card${isMini ? ' volunteer-card--mini' : ''}${isOpenSlot ? ' volunteer-card--open-slot' : ''}">
+      <div class="volunteer-card${isMini ? ' volunteer-card--mini' : ''}">
         <div class="volunteer-card-image-area">
           ${imageHtml}
         </div>
@@ -143,29 +144,28 @@ function renderVolunteerRoleIdentifier(member, options = {}) {
   const escapeHtml = typeof esc === 'function' ? esc : productionTeamCardEscape;
   const m = member || {};
   const roleText = String(m.role || options.role || 'Volunteer').trim();
-  const nameText = options.hideName ? '' : String(m.name || options.name || 'OPEN').trim();
+  const nameText = String(m.name || options.name || 'OPEN').trim();
   const color = escapeHtml(m.note_color || m.noteColor || options.color || '#572e88');
   const framed = options.framed !== false;
   const isCardFront = options.variant === 'card-front';
-  const isOpenSlot = options.openSlot === true;
   const roleHtml = volunteerRoleIdentifierBreakRole(roleText, 16);
   const roleLines = roleHtml.split('<br>');
   const roleLineCount = roleLines.length;
   const longestRoleLine = roleLines.reduce((longest, line) => line.length > longest.length ? line : longest, '');
   const roleSize = isCardFront
-    ? volunteerRoleIdentifierTextSize(longestRoleLine, isOpenSlot ? 24 : 18, isOpenSlot ? 9 : 7, 13)
+    ? volunteerRoleIdentifierTextSize(longestRoleLine, 18, 7, 13)
     : volunteerRoleIdentifierTextSize(longestRoleLine, 2.4, 0.98, 13, 'rem');
   const nameSize = isCardFront
     ? volunteerRoleIdentifierTextSize(nameText, 10.8, 5.2, 14)
     : volunteerRoleIdentifierTextSize(nameText, 1.62, 0.78, 14, 'rem');
 
-  return `<div class="volunteer-role-identifier${framed ? ' is-framed' : ''}${isCardFront ? ' is-card-front' : ''}${isOpenSlot ? ' is-open-slot' : ''}" data-volunteer-role-identifier style="--volunteer-role-color:${color};--volunteer-role-base-size:${roleSize};--volunteer-name-base-size:${nameSize};--volunteer-role-size:${roleSize};--volunteer-name-size:${nameSize};--volunteer-role-line-height:${roleLineCount > 1 ? '0.9' : '0.95'};">
+  return `<div class="volunteer-role-identifier${framed ? ' is-framed' : ''}${isCardFront ? ' is-card-front' : ''}" data-volunteer-role-identifier style="--volunteer-role-color:${color};--volunteer-role-base-size:${roleSize};--volunteer-name-base-size:${nameSize};--volunteer-role-size:${roleSize};--volunteer-name-size:${nameSize};--volunteer-role-line-height:${roleLineCount > 1 ? '0.9' : '0.95'};">
     <span class="volunteer-role-identifier-dot-box" aria-hidden="true">
       <span class="volunteer-role-identifier-dot"></span>
     </span>
     <span class="volunteer-role-identifier-copy">
       <span class="volunteer-role-identifier-role">${roleHtml.split('<br>').map(escapeHtml).join('<br>')}</span>
-      ${options.hideName ? '' : `<span class="volunteer-role-identifier-name">${escapeHtml(nameText)}</span>`}
+      <span class="volunteer-role-identifier-name">${escapeHtml(nameText)}</span>
     </span>
   </div>`;
 }
