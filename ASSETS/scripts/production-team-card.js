@@ -23,7 +23,7 @@ function renderProductionTeamCard(member, options = {}) {
   const showManagement = options.showManagement !== false;
   const isMini = options.variant === 'mini';
   if (isMini) {
-    return renderVolunteerCard(m, { variant: 'mini' });
+    return renderVolunteerCard(m, { variant: 'mini', state: options.state || m.card_state });
   }
 
   return `
@@ -57,7 +57,10 @@ function renderVolunteerCard(member, options = {}) {
   const color = String(m.note_color || m.noteColor || options.color || '#572e88').trim();
   const headshot = String(m.headshot_url || m.headshot || '').trim();
   const isMini = options.variant === 'mini';
-  const displayName = !String(m.id || '').trim() && (!String(m.name || '').trim() || String(m.name || '').trim().toUpperCase() === 'OPEN')
+  const isOpenState = options.state === 'open'
+    || m.card_state === 'open'
+    || (!String(m.id || '').trim() && (!String(m.name || '').trim() || String(m.name || '').trim().toUpperCase() === 'OPEN'));
+  const displayName = isOpenState
     ? 'OPEN ROLE'
     : name;
   const imageHtml = headshot
@@ -66,7 +69,7 @@ function renderVolunteerCard(member, options = {}) {
 
   return `
     <div class="volunteer-card-wrap${isMini ? ' volunteer-card-wrap--mini' : ''}">
-      <div class="volunteer-card${isMini ? ' volunteer-card--mini' : ''}">
+      <div class="volunteer-card${isMini ? ' volunteer-card--mini' : ''}" data-volunteer-card-state="${isOpenState ? 'open' : 'filled'}">
         <div class="volunteer-card-image-area">
           ${imageHtml}
         </div>
