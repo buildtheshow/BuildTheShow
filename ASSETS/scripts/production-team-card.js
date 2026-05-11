@@ -167,6 +167,7 @@ function renderVolunteerRoleIdentifier(member, options = {}) {
       <span class="volunteer-role-identifier-name">${escapeHtml(nameText)}</span>
       <span class="volunteer-role-identifier-role">${roleHtml.split('<br>').map(escapeHtml).join('<br>')}</span>
     </span>
+    <span class="volunteer-role-identifier-balance-box" aria-hidden="true"></span>
   </div>`;
 }
 
