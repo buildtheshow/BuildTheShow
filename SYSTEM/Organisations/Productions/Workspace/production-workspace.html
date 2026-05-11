@@ -6701,7 +6701,8 @@
       padding: 0.18rem 0 0;
     }
     .team-department-section.is-collapsed .team-department-tree,
-    .team-department-section.is-collapsed .team-department-empty {
+    .team-department-section.is-collapsed .team-department-empty,
+    .team-department-section.is-collapsed .team-department-actions {
       display: none;
     }
     .team-role-group {
@@ -28667,6 +28668,11 @@ We look forward to seeing your work!
     'Marketing & Publicity',
     'Front of House',
   ];
+  const PRODUCER_DEPARTMENT_NAMES = new Set(['producer', 'producers', 'producer(s)']);
+
+  function isProducerDepartmentName(name) {
+    return PRODUCER_DEPARTMENT_NAMES.has(String(name || '').trim().toLowerCase());
+  }
 
   const TEAM_PORTAL_MENU_ITEMS = [
     { key: 'overview', label: 'Overview' },
@@ -28819,11 +28825,20 @@ We look forward to seeing your work!
     } else {
       // Migrate: ensure staff/volunteer production departments exist.
       let dirty = false;
-      const legacyProducer = teamConfig.find(d => d.name === 'Producer(s)');
-      const artistic = teamConfig.find(d => d.name === 'Artistic Team') || teamConfig.find(d => d.name === 'Creative Team');
-      if (legacyProducer?.roles?.length && artistic) {
-        artistic.roles = [...(artistic.roles || []), ...legacyProducer.roles];
-        teamConfig = teamConfig.filter(d => d.name !== 'Producer(s)');
+      let artistic = teamConfig.find(d => d.name === 'Artistic Team') || teamConfig.find(d => d.name === 'Creative Team');
+      if (!artistic) {
+        artistic = { name: 'Artistic Team', open: true, roles: [] };
+        teamConfig.unshift(artistic);
+        dirty = true;
+      }
+      const producerDepartments = teamConfig.filter(d => isProducerDepartmentName(d.name));
+      const producerRoles = producerDepartments.flatMap(d => d.roles || []);
+      if (producerRoles.length) {
+        artistic.roles = [...(artistic.roles || []), ...producerRoles];
+        dirty = true;
+      }
+      if (producerDepartments.length) {
+        teamConfig = teamConfig.filter(d => !isProducerDepartmentName(d.name));
         dirty = true;
       }
       PRODUCTION_TEAM_DEPARTMENTS.forEach(name => {
@@ -29026,7 +29041,7 @@ We look forward to seeing your work!
   function productionTeamDepartmentNames() {
     const names = (teamConfig || [])
       .map(dept => String(dept.name || '').trim())
-      .filter(Boolean);
+      .filter(name => name && !isProducerDepartmentName(name));
     return names.length ? names : PRODUCTION_TEAM_DEPARTMENTS;
   }
 
@@ -29039,7 +29054,7 @@ We look forward to seeing your work!
       if (linkedDept?.name) return linkedDept.name;
     }
     const value = String(member.department || '').trim();
-    if (value === 'Producer(s)' || value === 'Creative Team') return 'Artistic Team';
+    if (isProducerDepartmentName(value) || value === 'Creative Team') return 'Artistic Team';
     const departments = productionTeamDepartmentNames();
     return departments.includes(value) ? value : (departments[0] || 'Production & Rehearsal Support');
   }
@@ -29286,18 +29301,23 @@ We look forward to seeing your work!
   function addProducer() {
     const name = prompt('Producer name:');
     if (!name || !name.trim()) return;
-    const producers = teamConfig.find(d => d.name === 'Producer(s)');
-    if (producers) {
-      producers.roles.push({ id: crypto.randomUUID(), name: 'Producer', person: name.trim(), filled: true, notes: '' });
+    const artistic = teamConfig.find(d => d.name === 'Artistic Team') || teamConfig.find(d => d.name === 'Creative Team');
+    if (artistic) {
+      artistic.roles.push({ id: crypto.randomUUID(), name: 'Producer', person: name.trim(), filled: true, notes: '' });
       saveTeamConfig();
       renderTeamView(document.getElementById('tm-container'));
     }
   }
 
   function removeProducer(ri) {
-    const producers = teamConfig.find(d => d.name === 'Producer(s)');
-    if (!producers) return;
-    producers.roles.splice(ri, 1);
+    const artistic = teamConfig.find(d => d.name === 'Artistic Team') || teamConfig.find(d => d.name === 'Creative Team');
+    if (!artistic) return;
+    const producerRoles = (artistic.roles || [])
+      .map((role, index) => ({ role, index }))
+      .filter(item => String(item.role?.name || '').trim().toLowerCase() === 'producer');
+    const target = producerRoles[ri];
+    if (!target) return;
+    artistic.roles.splice(target.index, 1);
     saveTeamConfig();
     renderTeamView(document.getElementById('tm-container'));
   }
