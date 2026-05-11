@@ -425,7 +425,7 @@ function openProductionTeamMemberEdit(memberId) {
     </label>`)
     .join('');
   overlay.innerHTML = `
-    <div class="modal-card" style="max-width:620px;width:min(94vw,620px);" onclick="event.stopPropagation()">
+    <div class="modal production-team-member-edit-card" style="max-width:620px;width:min(94vw,620px);" onclick="event.stopPropagation()">
       <div class="modal-header">
         <div>
           <div class="modal-title">Edit Team Member</div>
