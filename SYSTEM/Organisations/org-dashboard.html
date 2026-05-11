@@ -1572,32 +1572,84 @@
 
 <!-- Invite Member Modal -->
 <div class="modal-overlay" id="invite-modal">
-  <div class="modal">
+  <div class="modal org-member-edit-card">
     <div class="modal-header">
-      <div class="modal-title">Invite to Board</div>
+      <div>
+        <div class="modal-title">Invite to Board</div>
+        <div class="modal-subtitle">Add someone to the organisation board and choose what they can open.</div>
+      </div>
       <button class="modal-close" onclick="closeInviteModal()">✕</button>
     </div>
     <div id="invite-error" class="form-error"></div>
     <div id="invite-success" style="display:none;background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.3);border-radius:8px;padding:0.75rem 1rem;font-size:0.875rem;color:#166534;margin-bottom:1rem;"></div>
-    <div class="form-group">
-      <label class="form-label">Organisation Role</label>
-      <input class="form-input" id="invite-title" type="text" list="org-title-suggestions" placeholder="e.g. President, Treasurer, Artistic Director" autocomplete="off" />
-      <p style="font-size:0.75rem;color:#9a90b0;margin-top:0.3rem;">This is how they'll appear on your team. Start typing to see suggestions, or enter any title.</p>
+    <div class="team-edit-layout">
+      <div class="team-edit-menu-pane">
+        <aside class="team-menu-sidebar-preview">
+          <div class="team-menu-sidebar-head">
+            <div class="team-menu-sidebar-kicker">Organisation Menu</div>
+            <div class="team-menu-sidebar-copy">Choose what this board member can open.</div>
+          </div>
+          <div class="team-menu-sidebar-list">
+            <label class="team-menu-check team-menu-nav-item">
+              <input type="checkbox" class="org-invite-menu" value="dashboard" checked onchange="syncOrgInviteAccessFromMenu()" />
+              <span>Dashboard</span>
+              <i aria-hidden="true"></i>
+            </label>
+            <label class="team-menu-check team-menu-nav-item">
+              <input type="checkbox" class="org-invite-menu" value="members" checked onchange="syncOrgInviteAccessFromMenu()" />
+              <span>Board Members</span>
+              <i aria-hidden="true"></i>
+            </label>
+            <label class="team-menu-check team-menu-nav-item">
+              <input type="checkbox" class="org-invite-menu" value="productions" checked onchange="syncOrgInviteAccessFromMenu()" />
+              <span>Productions</span>
+              <i aria-hidden="true"></i>
+            </label>
+            <label class="team-menu-check team-menu-nav-item">
+              <input type="checkbox" class="org-invite-menu" value="past" checked onchange="syncOrgInviteAccessFromMenu()" />
+              <span>Past Productions</span>
+              <i aria-hidden="true"></i>
+            </label>
+            <label class="team-menu-check team-menu-nav-item">
+              <input type="checkbox" class="org-invite-menu" value="files" checked onchange="syncOrgInviteAccessFromMenu()" />
+              <span>Files</span>
+              <i aria-hidden="true"></i>
+            </label>
+            <label class="team-menu-check team-menu-nav-item">
+              <input type="checkbox" class="org-invite-menu" value="settings" onchange="syncOrgInviteAccessFromMenu()" />
+              <span>Settings</span>
+              <i aria-hidden="true"></i>
+            </label>
+          </div>
+        </aside>
+      </div>
+      <div class="team-edit-form-pane">
+        <div class="team-edit-section-title">Contact Info</div>
+        <div class="form-group">
+          <label class="form-label">Email or Profile ID</label>
+          <input class="form-input" id="invite-email" type="text" placeholder="member@example.com or BTS-223SK-01" autocomplete="off" />
+          <p style="font-size:0.75rem;color:#9a90b0;margin-top:0.3rem;">Enter their email address, or their Build The Show profile ID.</p>
+        </div>
+        <div class="team-edit-section-title">Department Info</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:0.75rem;">
+          <div class="form-group">
+            <label class="form-label">Organisation Role</label>
+            <select class="form-input" id="invite-title" onchange="this.dataset.previousRole=this.value==='__add_new__'?(this.dataset.previousRole||''):this.value;handleOrgBoardRoleChange(this)"></select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Workspace Access</label>
+            <select class="form-input" id="invite-access" onchange="syncOrgInviteMenuFromAccess()">
+              <option value="viewer">Viewer</option>
+              <option value="editor">Editor</option>
+              <option value="admin">Admin</option>
+            </select>
+          </div>
+        </div>
+      </div>
     </div>
-    <div class="form-group">
-      <label class="form-label">Email or Profile ID</label>
-      <input class="form-input" id="invite-email" type="text" placeholder="member@example.com or BTS-223SK-01" autocomplete="off" />
-      <p style="font-size:0.75rem;color:#9a90b0;margin-top:0.3rem;">Enter their email address, or their Build The Show profile ID (e.g. BTS-223SK-01).</p>
+    <div style="display:flex;justify-content:flex-end;margin-top:0.95rem;">
+      <button class="btn-primary" id="send-invite-btn" onclick="sendInvite()">Send Invitation</button>
     </div>
-    <div class="form-group">
-      <label class="form-label">Workspace Access</label>
-      <select class="form-input" id="invite-access">
-        <option value="editor">Editor (can edit productions and settings)</option>
-        <option value="viewer">Viewer (read-only access)</option>
-        <option value="admin">Admin (full access including team management)</option>
-      </select>
-    </div>
-    <button class="btn-primary" id="send-invite-btn" onclick="sendInvite()" style="width:100%;justify-content:center;">Send Invitation</button>
   </div>
 </div>
 
@@ -2139,6 +2191,19 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
     });
   }
 
+  function syncOrgInviteAccessFromMenu() {
+    const selectedMenus = new Set(Array.from(document.querySelectorAll('.org-invite-menu:checked')).map(input => input.value));
+    const access = document.getElementById('invite-access');
+    if (access) access.value = orgBoardAccessFromMenus(selectedMenus);
+  }
+
+  function syncOrgInviteMenuFromAccess() {
+    const selectedMenus = orgBoardMenusForAccess(document.getElementById('invite-access')?.value || 'editor');
+    document.querySelectorAll('.org-invite-menu').forEach(input => {
+      input.checked = selectedMenus.has(input.value);
+    });
+  }
+
   function orgBoardRoleOptions(selectedRole = '') {
     const selected = String(selectedRole || '').trim();
     const seen = new Set();
@@ -2154,6 +2219,14 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
     return options.join('');
   }
 
+  function setOrgInviteRoleOptions(selectedRole = '') {
+    const select = document.getElementById('invite-title');
+    if (!select) return;
+    select.innerHTML = orgBoardRoleOptions(selectedRole);
+    select.dataset.previousRole = selectedRole || '';
+    if (selectedRole) select.value = selectedRole;
+  }
+
   function handleOrgBoardRoleChange(select) {
     if (!select || select.value !== '__add_new__') return;
     const previous = select.dataset.previousRole || '';
@@ -2164,8 +2237,7 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
 
   function showOrgInviteForRole(role = '') {
     openInviteModal();
-    const input = document.getElementById('invite-title');
-    if (input && role) input.value = role;
+    setOrgInviteRoleOptions(role);
   }
 
   function toggleOrgBoardMembers() {
@@ -2286,12 +2358,13 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
   // ── Invite modal ───────────────────────────────────────
   function openInviteModal() {
     document.getElementById('invite-modal').classList.add('open');
-    document.getElementById('invite-title').value = '';
+    setOrgInviteRoleOptions('');
     document.getElementById('invite-email').value = '';
     document.getElementById('invite-access').value = 'editor';
+    syncOrgInviteMenuFromAccess();
     document.getElementById('invite-error').classList.remove('visible');
     document.getElementById('invite-success').style.display = 'none';
-    document.getElementById('invite-title').focus();
+    document.getElementById('invite-email').focus();
   }
   function closeInviteModal() {
     document.getElementById('invite-modal').classList.remove('open');
@@ -2302,7 +2375,8 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
 
   async function sendInvite() {
     const input       = document.getElementById('invite-email').value.trim();
-    const title       = document.getElementById('invite-title').value.trim();
+    const titleSelect = document.getElementById('invite-title');
+    const title       = (titleSelect.value === '__add_new__' ? (titleSelect.dataset.previousRole || '') : titleSelect.value).trim();
     const access_level = document.getElementById('invite-access').value;
     const errEl       = document.getElementById('invite-error');
     const succEl      = document.getElementById('invite-success');
