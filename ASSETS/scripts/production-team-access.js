@@ -554,6 +554,7 @@ function openProductionTeamMemberEdit(memberId) {
         <button class="modal-close" type="button" aria-label="Close" onclick="closeProductionTeamMemberEdit()">×</button>
       </div>
       <div class="team-edit-layout">
+        <div class="team-edit-menu-pane">${menuChecks}</div>
         <div class="team-edit-form-pane">
           <div class="team-edit-section-title">Contact Info</div>
           <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:0.75rem;">
@@ -590,7 +591,6 @@ function openProductionTeamMemberEdit(memberId) {
             </label>
           </div>
         </div>
-        <div class="team-edit-menu-pane">${menuChecks}</div>
       </div>
       <div style="display:flex;align-items:center;justify-content:space-between;gap:0.75rem;margin-top:0.95rem;">
         <div id="ptm-edit-msg" style="font-size:0.8rem;color:#8a7aa4;"></div>
