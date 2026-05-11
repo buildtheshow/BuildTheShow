@@ -6838,21 +6838,30 @@
     #production-team-member-edit-modal {
       z-index: 860;
     }
-    #production-team-member-edit-modal .production-team-member-edit-card {
-      padding: 1.35rem;
+    #production-team-member-edit-modal .apm-shell {
+      max-width: 560px;
     }
-    #production-team-member-edit-modal .modal-header {
-      align-items: flex-start;
+    #production-team-member-edit-modal .apm-header {
+      align-items: center;
       gap: 1rem;
-      margin-bottom: 1rem;
     }
-    #production-team-member-edit-modal .modal-subtitle {
-      margin-top: 0.2rem;
-      color: #8f82a8;
-      font-size: 0.82rem;
-      font-weight: 650;
-      line-height: 1.35;
+    #production-team-member-edit-modal .apm-header-info {
+      min-width: 0;
     }
+    .ptme-swatch-row { display:flex;flex-wrap:wrap;gap:0.45rem;align-items:center; }
+    .ptme-color-swatch { width:1.55rem;height:1.55rem;border-radius:50%;border:2.5px solid transparent;cursor:pointer;transition:transform 0.12s,box-shadow 0.12s;flex-shrink:0;padding:0; }
+    .ptme-color-swatch.selected { transform:scale(1.18);box-shadow:0 0 0 2px #fff,0 0 0 4.5px rgba(87,46,136,0.45); }
+    .ptme-color-swatch:hover:not(.selected) { transform:scale(1.12); }
+    .ptme-color-custom { width:2rem;height:1.55rem;border-radius:6px;border:1.5px solid rgba(87,46,136,0.18);cursor:pointer;padding:0;background:none; }
+    .ptme-active-row { display:flex;align-items:center;gap:0.75rem; }
+    .ptme-toggle { position:relative;display:inline-block;width:2.4rem;height:1.35rem;flex-shrink:0; }
+    .ptme-toggle input { opacity:0;width:0;height:0;position:absolute; }
+    .ptme-toggle-track { position:absolute;inset:0;border-radius:999px;background:#d0c8e0;cursor:pointer;transition:background 0.2s; }
+    .ptme-toggle input:checked + .ptme-toggle-track { background:#572e88; }
+    .ptme-toggle-thumb { position:absolute;top:0.175rem;left:0.175rem;width:1rem;height:1rem;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,0.18);transition:left 0.2s;pointer-events:none; }
+    .ptme-toggle input:checked ~ .ptme-toggle-thumb { left:1.225rem; }
+    .ptme-headshot-placeholder { width:120px;height:150px;border-radius:10px;background:linear-gradient(180deg,#f5f1e7 0%,#eee6d8 100%);display:flex;align-items:center;justify-content:center;font-size:2.5rem;color:#b9bfca;margin-bottom:1rem;border:2px dashed rgba(87,46,136,0.2); }
+    .ptme-headshot-preview { width:120px;height:150px;border-radius:10px;object-fit:cover;object-position:top;border:2px solid rgba(87,46,136,0.15);display:block;margin-bottom:1rem; }
     @media (max-height: 680px) {
       .production-team-lightbox-scene {
         height: min(76vh, 620px);
@@ -22421,6 +22430,14 @@
             bodyHtml: volunteerCategoryReferenceHtml
           })}
         </div>
+        <div>
+          <div class="template-volunteer-variant-heading">Edit</div>
+          ${renderTemplateTestPreview({
+            title: 'Edit Modal',
+            note: 'Opens when Edit is clicked on the card back. Tabs: Profile, Contact, Headshot.',
+            bodyHtml: `<button type="button" onclick="openPtmEditModalPreview()" style="background:#572e88;color:#fff;border:none;border-radius:8px;padding:0.5rem 1.2rem;font-size:0.85rem;font-weight:700;cursor:pointer;letter-spacing:0.02em;font-family:var(--bts-font);">Open Edit Modal</button>`
+          })}
+        </div>
       </div>`
     });
     const auditionFlowSectionHtml = renderTemplateTestSection({
@@ -29048,6 +29065,221 @@ We look forward to seeing your work!
   function closeProductionTeamCardPreview() {
     document.getElementById('production-team-card-preview-modal')?.remove();
   }
+
+  // ── Production Team Member Edit Modal ──────────────────────────
+  const _ptmeSwatchColors = ['#572e88','#c2487a','#0891b2','#0d8a5a','#e07b2a','#111111'];
+  let _ptmeMember = null;
+  let _ptmeTab = 'profile';
+  let _ptmeSelectedColor = '#572e88';
+  let _ptmeHeadshotFile = null;
+  let _ptmeHeadshotObjectUrl = null;
+  let _ptmeActive = true;
+  let _ptmeIsPreview = false;
+
+  function openProductionTeamMemberEdit(id) {
+    const member = (auditionTeamMembers || []).find(m => String(m.id) === String(id));
+    if (!member) return;
+    _ptmeIsPreview = false;
+    _ptmeMember = member;
+    _ptmeOpenModal();
+  }
+
+  function openPtmEditModalPreview() {
+    _ptmeIsPreview = true;
+    _ptmeMember = {
+      id: 'preview',
+      name: 'Katherine Hepburn',
+      role: 'Marketing & Communications Director',
+      note_color: '#43b8b0',
+      email: 'katherine.hepburn@example.com',
+      phone: '(250) 555-0192',
+      bio: 'Coordinates promotion, messaging, print deadlines, and public-facing production communications.',
+      headshot_url: '',
+      is_active: true,
+      department: 'Marketing & Publicity',
+    };
+    _ptmeOpenModal();
+  }
+
+  function _ptmeOpenModal() {
+    _ptmeTab = 'profile';
+    _ptmeSelectedColor = _ptmeMember.note_color || _ptmeMember.noteColor || '#572e88';
+    _ptmeActive = _ptmeMember.is_active !== false;
+    _ptmeHeadshotFile = null;
+    if (_ptmeHeadshotObjectUrl) { URL.revokeObjectURL(_ptmeHeadshotObjectUrl); _ptmeHeadshotObjectUrl = null; }
+
+    document.querySelectorAll('.apm-tab[data-ptmetab]').forEach(t => t.classList.toggle('active', t.dataset.ptmetab === 'profile'));
+    document.getElementById('ptme-header-name').textContent = _ptmeMember.name || '—';
+    document.getElementById('ptme-header-role').textContent = _ptmeMember.role || '';
+    document.getElementById('ptme-header-dept').textContent = _ptmeMember.department || '';
+    document.getElementById('ptme-status').textContent = '';
+    document.getElementById('ptme-status').className = 'apm-save-status';
+
+    const cardEl = document.getElementById('ptme-header-card');
+    if (cardEl) {
+      const cardHtml = window.BTSProductionTeamTemplates?.renderVolunteerCard?.(_ptmeMember, { variant: 'mini' }) || '';
+      cardEl.innerHTML = cardHtml;
+      requestAnimationFrame(() => window.BTSProductionTeamTemplates?.fitVolunteerRoleIdentifiers?.(cardEl));
+    }
+
+    document.getElementById('production-team-member-edit-modal').style.display = 'flex';
+    _ptmeRenderBody();
+  }
+
+  function closePtmEditModal() {
+    document.getElementById('production-team-member-edit-modal').style.display = 'none';
+    if (_ptmeHeadshotObjectUrl) { URL.revokeObjectURL(_ptmeHeadshotObjectUrl); _ptmeHeadshotObjectUrl = null; }
+    _ptmeHeadshotFile = null;
+  }
+
+  function switchPtmEditTab(tab) {
+    _ptmeTab = tab;
+    document.querySelectorAll('.apm-tab[data-ptmetab]').forEach(t => t.classList.toggle('active', t.dataset.ptmetab === tab));
+    _ptmeRenderBody();
+  }
+
+  function _ptmeRenderBody() {
+    const body = document.getElementById('ptme-body');
+    if (!body) return;
+    const map = { profile: _ptmeProfileHtml, contact: _ptmeContactHtml, headshot: _ptmeHeadshotHtml };
+    body.innerHTML = (map[_ptmeTab] || (() => ''))();
+  }
+
+  function _ptmeProfileHtml() {
+    const m = _ptmeMember;
+    const swatches = _ptmeSwatchColors.map(c =>
+      `<button type="button" class="ptme-color-swatch${_ptmeSelectedColor === c ? ' selected' : ''}" style="background:${c};" title="${c}" onclick="ptmeSelectColor('${c}')"></button>`
+    ).join('');
+    return `
+      <div class="apm-section-title">Name &amp; Role</div>
+      <div class="apm-form-group"><div class="apm-form-label">Display Name</div><input class="apm-form-input" id="ptme-name" type="text" value="${esc(m.name || '')}" placeholder="Full name" /></div>
+      <div class="apm-form-group"><div class="apm-form-label">Role / Title</div><input class="apm-form-input" id="ptme-role" type="text" value="${esc(m.role || '')}" placeholder="e.g. Stage Manager, Director" /></div>
+      <div class="apm-section-title">Bio</div>
+      <div class="apm-form-group"><textarea class="apm-form-input" id="ptme-bio" rows="4" placeholder="Brief bio shown on the card back">${esc(m.bio || '')}</textarea></div>
+      <div class="apm-section-title">Card</div>
+      <div class="apm-form-group">
+        <div class="apm-form-label">Card Colour</div>
+        <div class="ptme-swatch-row">
+          ${swatches}
+          <input type="color" class="ptme-color-custom" value="${esc(_ptmeSelectedColor)}" title="Custom colour" oninput="ptmeSelectColor(this.value)" />
+        </div>
+      </div>
+      <div class="apm-form-group">
+        <div class="apm-form-label">Status</div>
+        <div class="ptme-active-row">
+          <label class="ptme-toggle">
+            <input type="checkbox" id="ptme-active" ${_ptmeActive ? 'checked' : ''} onchange="_ptmeActive=this.checked;document.getElementById('ptme-active-label').textContent=this.checked?'Active':'Inactive'" />
+            <span class="ptme-toggle-track"></span>
+            <span class="ptme-toggle-thumb"></span>
+          </label>
+          <span id="ptme-active-label" style="font-size:0.83rem;color:#1a1530;font-weight:600;">${_ptmeActive ? 'Active' : 'Inactive'}</span>
+        </div>
+      </div>`;
+  }
+
+  function _ptmeContactHtml() {
+    const m = _ptmeMember;
+    return `
+      <div class="apm-section-title">Contact</div>
+      <div class="apm-form-group"><div class="apm-form-label">Email</div><input class="apm-form-input" id="ptme-email" type="email" value="${esc(m.email || '')}" placeholder="email@address.com" /></div>
+      <div class="apm-form-group"><div class="apm-form-label">Phone</div><input class="apm-form-input" id="ptme-phone" type="tel" value="${esc(m.phone || m.phone_number || '')}" placeholder="(416) 555-0000" /></div>`;
+  }
+
+  function _ptmeHeadshotHtml() {
+    const m = _ptmeMember;
+    if (_ptmeHeadshotFile) {
+      return `
+        <div style="display:flex;gap:1.5rem;align-items:flex-start;flex-wrap:wrap;">
+          <div>
+            <div class="apm-form-label" style="margin-bottom:0.4rem;">Current</div>
+            ${m.headshot_url ? `<img src="${esc(m.headshot_url)}" class="ptme-headshot-preview" />` : `<div class="ptme-headshot-placeholder">👤</div>`}
+          </div>
+          <div>
+            <div class="apm-form-label" style="margin-bottom:0.4rem;">New</div>
+            <img src="${esc(_ptmeHeadshotObjectUrl)}" class="ptme-headshot-preview" />
+          </div>
+        </div>
+        <p style="font-size:0.82rem;color:#6a5a80;margin:0 0 0.75rem;">Replace the current headshot with this photo?</p>
+        <div style="display:flex;gap:0.5rem;">
+          <button onclick="ptmeConfirmHeadshot()" style="background:#572e88;color:#fff;border:none;border-radius:8px;padding:0.45rem 1rem;font-size:0.82rem;font-weight:700;cursor:pointer;">Yes, use this photo</button>
+          <button onclick="ptmeCancelHeadshot()" style="background:none;border:1px solid rgba(87,46,136,0.2);border-radius:8px;padding:0.45rem 1rem;font-size:0.82rem;font-weight:600;color:#572e88;cursor:pointer;">Cancel</button>
+        </div>`;
+    }
+    return `
+      ${m.headshot_url ? `<img src="${esc(m.headshot_url)}" class="ptme-headshot-preview" />` : `<div class="ptme-headshot-placeholder">👤</div>`}
+      <p style="font-size:0.82rem;color:#6a5a80;margin:0 0 0.75rem;">${m.headshot_url ? 'Current headshot.' : 'No headshot on file yet.'}</p>
+      <button onclick="document.getElementById('ptme-headshot-input').click()" style="background:#572e88;color:#fff;border:none;border-radius:8px;padding:0.45rem 1rem;font-size:0.82rem;font-weight:700;cursor:pointer;">Change Headshot</button>
+      <input id="ptme-headshot-input" type="file" accept="image/*" style="display:none;" onchange="ptmePickHeadshot(this)" />`;
+  }
+
+  function ptmeSelectColor(color) {
+    _ptmeSelectedColor = color;
+    const cardEl = document.getElementById('ptme-header-card');
+    if (cardEl && window.BTSProductionTeamTemplates?.renderVolunteerCard) {
+      cardEl.innerHTML = window.BTSProductionTeamTemplates.renderVolunteerCard({ ..._ptmeMember, note_color: color }, { variant: 'mini' });
+      requestAnimationFrame(() => window.BTSProductionTeamTemplates?.fitVolunteerRoleIdentifiers?.(cardEl));
+    }
+    _ptmeRenderBody();
+  }
+
+  function ptmePickHeadshot(input) {
+    const file = input?.files?.[0];
+    if (!file) return;
+    if (_ptmeHeadshotObjectUrl) URL.revokeObjectURL(_ptmeHeadshotObjectUrl);
+    _ptmeHeadshotFile = file;
+    _ptmeHeadshotObjectUrl = URL.createObjectURL(file);
+    _ptmeRenderBody();
+  }
+
+  function ptmeConfirmHeadshot() {
+    const statusEl = document.getElementById('ptme-status');
+    if (statusEl) { statusEl.className = 'apm-save-status saving'; statusEl.textContent = 'Uploading…'; }
+    setTimeout(() => {
+      if (statusEl) { statusEl.className = 'apm-save-status saved'; statusEl.textContent = 'Headshot updated.'; }
+      if (_ptmeHeadshotObjectUrl) URL.revokeObjectURL(_ptmeHeadshotObjectUrl);
+      _ptmeMember = { ..._ptmeMember, headshot_url: '' };
+      _ptmeHeadshotFile = null; _ptmeHeadshotObjectUrl = null;
+      _ptmeRenderBody();
+    }, 800);
+  }
+
+  function ptmeCancelHeadshot() {
+    if (_ptmeHeadshotObjectUrl) URL.revokeObjectURL(_ptmeHeadshotObjectUrl);
+    _ptmeHeadshotFile = null; _ptmeHeadshotObjectUrl = null;
+    _ptmeRenderBody();
+  }
+
+  async function savePtmEdits() {
+    const statusEl = document.getElementById('ptme-status');
+    if (statusEl) { statusEl.className = 'apm-save-status saving'; statusEl.textContent = 'Saving…'; }
+    const name = document.getElementById('ptme-name')?.value?.trim() || _ptmeMember.name;
+    const role = document.getElementById('ptme-role')?.value?.trim() || _ptmeMember.role;
+    const bio  = document.getElementById('ptme-bio')?.value?.trim()  || '';
+    if (_ptmeIsPreview) {
+      setTimeout(() => {
+        if (statusEl) { statusEl.className = 'apm-save-status saved'; statusEl.textContent = 'Saved! (preview only)'; }
+      }, 600);
+      return;
+    }
+    try {
+      await sb.from('audition_team_members').update({
+        name, role, bio,
+        note_color: _ptmeSelectedColor,
+        is_active: _ptmeActive,
+      }).eq('id', _ptmeMember.id);
+      if (statusEl) { statusEl.className = 'apm-save-status saved'; statusEl.textContent = 'Saved.'; }
+      loadTeam?.();
+    } catch(e) {
+      if (statusEl) { statusEl.className = 'apm-save-status error'; statusEl.textContent = 'Save failed — try again.'; }
+    }
+  }
+
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+      const m = document.getElementById('production-team-member-edit-modal');
+      if (m && m.style.display !== 'none') { e.stopPropagation(); closePtmEditModal(); }
+    }
+  }, true);
 
   function renderTeamView(container) {
     const normalizedRoleName = (value) => String(value || '').trim().toLowerCase();
@@ -48112,6 +48344,32 @@ We look forward to seeing your work!
 </div>
 
 <!-- ── All Performers Performer Modal ───────────────────────── -->
+<!-- ── Production Team Member Edit Modal ─────────────────────── -->
+<div id="production-team-member-edit-modal" class="apm-overlay" style="display:none;" onclick="if(event.target===this)closePtmEditModal()">
+  <div class="apm-shell" onclick="event.stopPropagation()">
+    <div class="apm-header">
+      <div id="ptme-header-card" style="width:4.8rem;height:6rem;flex-shrink:0;overflow:visible;"></div>
+      <div class="apm-header-info">
+        <div class="apm-header-name" id="ptme-header-name">—</div>
+        <div class="apm-header-meta" id="ptme-header-role"></div>
+        <div class="apm-header-meta" id="ptme-header-dept" style="margin-top:0.12rem;"></div>
+      </div>
+      <button class="apm-close" onclick="closePtmEditModal()" title="Close">✕</button>
+    </div>
+    <div class="apm-tabs">
+      <button class="apm-tab active" data-ptmetab="profile" onclick="switchPtmEditTab('profile')">Profile</button>
+      <button class="apm-tab" data-ptmetab="contact" onclick="switchPtmEditTab('contact')">Contact</button>
+      <button class="apm-tab" data-ptmetab="headshot" onclick="switchPtmEditTab('headshot')">Headshot</button>
+    </div>
+    <div class="apm-body" id="ptme-body"></div>
+    <div class="apm-footer">
+      <span class="apm-save-status" id="ptme-status"></span>
+      <button onclick="closePtmEditModal()" style="background:none;border:1px solid rgba(87,46,136,0.2);border-radius:8px;padding:0.45rem 1rem;font-size:0.82rem;font-weight:600;color:#572e88;cursor:pointer;">Cancel</button>
+      <button id="ptme-save-btn" onclick="savePtmEdits()" style="background:#572e88;color:#fff;border:none;border-radius:8px;padding:0.45rem 1.1rem;font-size:0.82rem;font-weight:700;cursor:pointer;">Save Changes</button>
+    </div>
+  </div>
+</div>
+
 <div id="ap-performer-modal" class="apm-overlay" style="display:none;" onclick="apmOverlayClick(event)">
   <div class="apm-shell" onclick="event.stopPropagation()">
     <div class="apm-header">
