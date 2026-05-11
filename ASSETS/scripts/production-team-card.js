@@ -161,6 +161,7 @@ function renderVolunteerCard(member, options = {}) {
 function renderVolunteerCardBack(member, options = {}) {
   const escapeHtml = typeof esc === 'function' ? esc : productionTeamCardEscape;
   const m = member || {};
+  const id = String(m.id || '').trim();
   const role = String(m.role || 'Volunteer').trim();
   const name = String(m.name || 'OPEN').trim();
   const color = String(m.note_color || m.noteColor || options.color || '#572e88').trim();
@@ -168,11 +169,20 @@ function renderVolunteerCardBack(member, options = {}) {
   const phone = window.BTSPhone?.format(m.phone || m.phone_number || '') || (m.phone || m.phone_number || '');
   const passcode = String(m.passcode || '').trim();
   const bio = String(m.bio || '').trim();
+  const headshot = String(m.headshot_url || m.headshot || '').trim();
   const roleHtml = volunteerRoleIdentifierBreakRole(role, 16);
   const roleLines = roleHtml.split('<br>');
   const longestRoleLine = roleLines.reduce((longest, line) => line.length > longest.length ? line : longest, '');
   const roleSize = volunteerRoleIdentifierTextSize(longestRoleLine, 1.58, 0.78, 13, 'rem');
   const nameSize = volunteerRoleIdentifierTextSize(name, 0.92, 0.56, 14, 'rem');
+  const jsId = escapeHtml(JSON.stringify(id));
+  const editAction = id ? ` onclick="event.stopPropagation();openProductionTeamMemberEdit(${jsId})"` : ' disabled';
+  const inviteAction = id ? ` onclick="event.stopPropagation();emailTeamInvite(${jsId}, this)"` : ' disabled';
+  const copyLinkAction = id ? ` onclick="event.stopPropagation();copyTeamPortalLink(${jsId}, this)"` : ' disabled';
+  const removeAction = id ? ` onclick="event.stopPropagation();removeProductionTeamMember(${jsId}, this)"` : '';
+  const downloadAction = headshot
+    ? `<a href="${escapeHtml(headshot)}" target="_blank" download>Download Headshot</a>`
+    : '<button type="button" disabled>Download Headshot</button>';
 
   return `<div class="volunteer-card-wrap" style="--volunteer-card-color:${escapeHtml(color)};">
     <div class="volunteer-card-back">
@@ -182,7 +192,7 @@ function renderVolunteerCardBack(member, options = {}) {
           <span class="volunteer-card-back-role" style="font-size:${roleSize};">${roleHtml.split('<br>').map(escapeHtml).join('<br>')}</span>
           <span class="volunteer-card-back-name" style="font-size:${nameSize};">${escapeHtml(name)}</span>
         </div>
-        <button class="volunteer-card-back-trash" type="button" title="Remove volunteer" aria-label="Remove ${escapeHtml(name)}">
+        <button class="volunteer-card-back-trash" type="button" title="Remove volunteer" aria-label="Remove ${escapeHtml(name)}"${removeAction}>
           <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
             <path d="M9 4h6l1 2h4v2H4V6h4l1-2Zm-1 6h2v8H8v-8Zm6 0h2v8h-2v-8Zm-3 0h2v8h-2v-8ZM6 9h12l-1 12H7L6 9Z"></path>
           </svg>
@@ -190,7 +200,7 @@ function renderVolunteerCardBack(member, options = {}) {
         <div class="volunteer-card-back-contact">
           <div><span>Phone:</span><strong>${escapeHtml(phone || 'No phone saved')}</strong></div>
           <div><span>Email:</span><strong>${escapeHtml(email || 'No email saved')}</strong></div>
-          <div class="volunteer-card-back-passcode"><span>Passcode:</span><strong>${escapeHtml(passcode || 'Not set')}</strong><em>Save</em><em>↻</em></div>
+          <div class="volunteer-card-back-passcode"><span>Passcode:</span><strong>${escapeHtml(passcode || 'Not set')}</strong></div>
         </div>
       </div>
       <div class="volunteer-card-back-bio">
@@ -198,11 +208,10 @@ function renderVolunteerCardBack(member, options = {}) {
         <p>${escapeHtml(bio || 'No bio added yet.')}</p>
       </div>
       <div class="volunteer-card-back-actions" aria-label="Volunteer card actions">
-        <button type="button">Edit</button>
-        <button type="button">Email Invite</button>
-        <button type="button">Copy Link</button>
-        <button type="button">Copy Passcode</button>
-        <button type="button">Download Headshot</button>
+        <button type="button"${editAction}>Edit</button>
+        <button type="button"${inviteAction}>Email Invite</button>
+        <button type="button"${copyLinkAction}>Copy Link</button>
+        ${downloadAction}
       </div>
     </div>
   </div>`;
