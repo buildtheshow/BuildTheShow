@@ -265,13 +265,15 @@ function fitVolunteerRoleIdentifier(identifier) {
   const copy = identifier.querySelector?.('.volunteer-role-identifier-copy');
   const role = identifier.querySelector?.('.volunteer-role-identifier-role');
   const name = identifier.querySelector?.('.volunteer-role-identifier-name');
-  if (!copy || !role || !name || copy.getBoundingClientRect().width <= 0) return;
+  if (!copy || !role || copy.getBoundingClientRect().width <= 0) return;
 
   const baseRoleSize = identifier.style.getPropertyValue('--volunteer-role-base-size')
     || identifier.style.getPropertyValue('--volunteer-role-size');
   const baseNameSize = identifier.style.getPropertyValue('--volunteer-name-base-size')
     || identifier.style.getPropertyValue('--volunteer-name-size');
-  if (!volunteerRoleIdentifierParseSize(baseRoleSize) || !volunteerRoleIdentifierParseSize(baseNameSize)) return;
+  if (!volunteerRoleIdentifierParseSize(baseRoleSize)) return;
+  const hasName = Boolean(name && name.textContent.trim());
+  if (hasName && !volunteerRoleIdentifierParseSize(baseNameSize)) return;
 
   const maxScale = identifier.classList.contains('is-card-front') ? 1.14 : 1;
   const minScale = 0.05;
@@ -280,7 +282,9 @@ function fitVolunteerRoleIdentifier(identifier) {
   // Role wraps at 16 characters per line; name stays one line and only shrinks to fit its own width or the total stack height.
   const applyScales = (roleScale, nameScale) => {
     identifier.style.setProperty('--volunteer-role-size', volunteerRoleIdentifierScaleSize(baseRoleSize, roleScale));
-    identifier.style.setProperty('--volunteer-name-size', volunteerRoleIdentifierScaleSize(baseNameSize, nameScale));
+    if (hasName) {
+      identifier.style.setProperty('--volunteer-name-size', volunteerRoleIdentifierScaleSize(baseNameSize, nameScale));
+    }
   };
 
   let roleScale = volunteerRoleIdentifierFindScale({
@@ -292,14 +296,17 @@ function fitVolunteerRoleIdentifier(identifier) {
     }
   });
 
-  let nameScale = volunteerRoleIdentifierFindScale({
-    minScale,
-    maxScale,
-    testScale: (scale) => {
-      applyScales(roleScale, scale);
-      return volunteerRoleIdentifierTextFits(name, copy);
-    }
-  });
+  let nameScale = maxScale;
+  if (hasName) {
+    nameScale = volunteerRoleIdentifierFindScale({
+      minScale,
+      maxScale,
+      testScale: (scale) => {
+        applyScales(roleScale, scale);
+        return volunteerRoleIdentifierTextFits(name, copy);
+      }
+    });
+  }
 
   applyScales(roleScale, nameScale);
   if (!volunteerRoleIdentifierStackFits(identifier, copy)) {
@@ -314,7 +321,7 @@ function fitVolunteerRoleIdentifier(identifier) {
     applyScales(roleScale, nameScale);
   }
 
-  if (!volunteerRoleIdentifierStackFits(identifier, copy)) {
+  if (hasName && !volunteerRoleIdentifierStackFits(identifier, copy)) {
     nameScale = volunteerRoleIdentifierFindScale({
       minScale,
       maxScale: nameScale,
