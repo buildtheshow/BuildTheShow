@@ -21354,6 +21354,13 @@
     return String(value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
   }
 
+  function normalizeProductionPathLookupValue(value) {
+    return normalizePathLookupValue(String(value || '')
+      .replace(/^(test|demo)[^a-zA-Z0-9]+/i, '')
+      .replace(/\bdisney'?s\b/ig, '')
+      .replace(/\b(19|20)\d{2}\b/g, ''));
+  }
+
   async function resolveAdminProductionIdDirect(parts = adminProductionPathParts()) {
     if (!parts.org || !parts.show) return '';
     try {
@@ -21366,11 +21373,16 @@
         .order('created_at', { ascending: false });
       if (error) throw error;
       const target = normalizePathLookupValue(parts.show);
+      const looseTarget = normalizeProductionPathLookupValue(parts.show);
       const match = (data || []).find(row => {
-        const slug = normalizePathLookupValue(row.slug);
-        const title = normalizePathLookupValue(row.title);
-        const titleWithoutTest = normalizePathLookupValue(String(row.title || '').replace(/^(test|demo)[^a-zA-Z0-9]+/i, ''));
-        return slug === target || title === target || titleWithoutTest === target;
+        const candidates = [row.slug, row.title].map(value => ({
+          exact: normalizePathLookupValue(value),
+          loose: normalizeProductionPathLookupValue(value),
+        }));
+        return candidates.some(({ exact, loose }) => (
+          exact === target ||
+          (looseTarget && loose && (loose === looseTarget || loose.includes(looseTarget) || looseTarget.includes(loose)))
+        ));
       });
       return match?.id || '';
     } catch (error) {
