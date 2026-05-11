@@ -1605,7 +1605,7 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
 
 <script src="/SHARED/Components/page-loader.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="/ASSETS/scripts/production-team-card.js?v=fulltemplate-20260511"></script>
+<script src="/ASSETS/scripts/production-team-card.js?v=mgmt-20260511"></script>
 <!--
   Required SQL migrations for org profile & branding:
   ALTER TABLE organizations ADD COLUMN IF NOT EXISTS bio text;
@@ -1949,7 +1949,7 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
         phone: member?.phone || member?.phone_number || '',
         bio: member?.bio || '',
         headshot_url: member?.headshot_url || member?.avatar_url || '',
-        note_color: member?.note_color || '#572e88',
+        note_color: member?.note_color || '#111111',
       };
       const cardHtml = window.BTSProductionTeamTemplates?.renderProductionTeamCard?.(cardMember) || '';
       return `<div class="team-role-card-shell">${cardHtml}</div>`;
@@ -2141,22 +2141,81 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
 
   function openProductionTeamMemberEdit(id) {
     const member = (window._orgBoardMembers || []).find(m => String(m.id) === String(id));
-    openInviteModal();
-    if (member?.email) document.getElementById('invite-email').value = member.email;
-    if (member?.title) document.getElementById('invite-title').value = member.title;
+    if (!member) return;
+    document.getElementById('org-member-edit-modal')?.remove();
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay open';
+    overlay.id = 'org-member-edit-modal';
+    overlay.onclick = e => { if (e.target === overlay) overlay.remove(); };
+    overlay.innerHTML = `
+      <div class="modal" style="max-width:440px;" onclick="event.stopPropagation()">
+        <div class="modal-header">
+          <div class="modal-title">Edit Board Member</div>
+          <button class="modal-close" onclick="document.getElementById('org-member-edit-modal').remove()">×</button>
+        </div>
+        <div style="padding:1.25rem;display:grid;gap:0.85rem;">
+          <label style="display:grid;gap:0.3rem;font-size:0.82rem;font-weight:600;color:#1a1530;">
+            Role / Title
+            <input class="form-input" id="org-edit-title" type="text" value="${esc(member.title || '')}" placeholder="e.g. President, Treasurer" />
+          </label>
+          <label style="display:grid;gap:0.3rem;font-size:0.82rem;font-weight:600;color:#1a1530;">
+            Access Level
+            <select class="form-input" id="org-edit-access">
+              <option value="editor"${(member.access_level || 'editor') === 'editor' ? ' selected' : ''}>Editor</option>
+              <option value="viewer"${member.access_level === 'viewer' ? ' selected' : ''}>Viewer</option>
+            </select>
+          </label>
+          <div style="display:flex;gap:0.6rem;justify-content:flex-end;margin-top:0.5rem;">
+            <button class="btn-secondary" onclick="document.getElementById('org-member-edit-modal').remove()">Cancel</button>
+            <button class="btn-primary" id="org-edit-save-btn">Save Changes</button>
+          </div>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+    overlay.querySelector('#org-edit-save-btn').onclick = async () => {
+      const title = document.getElementById('org-edit-title').value.trim();
+      const access_level = document.getElementById('org-edit-access').value;
+      await sb.from('org_members').update({ title, access_level }).eq('id', id);
+      overlay.remove();
+      loadMembers();
+    };
   }
 
-  function emailTeamInvite(id, btn) {
+  async function emailTeamInvite(id, btn) {
     const member = (window._orgBoardMembers || []).find(m => String(m.id) === String(id));
-    openInviteModal();
-    if (member?.email) document.getElementById('invite-email').value = member.email;
-    if (member?.title) document.getElementById('invite-title').value = member.title;
+    if (!member?.email) return;
+    const markDone = typeof ptcBtnFeedback === 'function' ? ptcBtnFeedback(btn, { working: 'Sending...', done: 'Sent', restore: false }) : null;
+    try {
+      const { data: inv, error: invErr } = await sb.from('org_invitations').insert({
+        org_id: currentOrg.id,
+        email: member.email,
+        title: member.title || null,
+        access_level: member.access_level || 'editor',
+        invited_by: currentUser.id,
+      }).select().single();
+      if (invErr) throw invErr;
+      const inviteUrl = new URL('/invite?token=' + inv.token, window.location.href).href;
+      await fetch('https://tkmaiktxpwqfbgeojbnf.supabase.co/functions/v1/send-invite', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRrbWFpa3R4cHdxZmJnZW9qYm5mIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM3MzE4MTcsImV4cCI6MjA4OTMwNzgxN30.TkTZBNWUatk3Y6Vmfv1hIRR3DfVjgwauwa76Pf00J_8` },
+        body: JSON.stringify({ to: member.email, orgName: currentOrg.name, title: member.title || null, access_level: member.access_level || 'editor', inviteUrl }),
+      });
+      markDone?.(true);
+    } catch(e) {
+      markDone?.(false);
+    }
   }
 
-  function copyTeamPortalLink(id, btn) {
-    navigator.clipboard.writeText(window.location.href).then(() => {
-      if (btn) { const orig = btn.textContent; btn.textContent = 'Copied!'; setTimeout(() => btn.textContent = orig, 1500); }
-    });
+  async function copyTeamPortalLink(id, btn) {
+    const link = window.location.href;
+    const markDone = typeof ptcBtnFeedback === 'function' ? ptcBtnFeedback(btn, { done: 'Copied' }) : null;
+    try {
+      await navigator.clipboard.writeText(link);
+      markDone?.(true);
+    } catch {
+      markDone?.(false);
+      prompt('Copy this link:', link);
+    }
   }
 
   function removeProductionTeamMember(id, btn) {
