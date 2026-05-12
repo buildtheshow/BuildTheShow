@@ -918,16 +918,12 @@
       accent-color: #572e88;
       flex: 0 0 auto;
     }
-    /* ── Role Offers board ── */
+    /* ── Offer Responses board ── */
     .reg-offers-board {
-      display: flex;
-      gap: 1rem;
-      align-items: flex-start;
+      display: block;
       padding: 1.25rem 1.5rem 2rem;
-      flex-wrap: nowrap;
     }
     .reg-offers-col {
-      flex: 1;
       min-width: 0;
       background: transparent;
       border-radius: 8px;
@@ -938,26 +934,25 @@
       display: flex;
       align-items: center;
       gap: 0.5rem;
-      padding: 0.7rem 1rem;
+      padding: 0 0 0.8rem;
       font-weight: 800;
       font-size: 0.8rem;
       letter-spacing: 0.04em;
       text-transform: uppercase;
     }
-    .reg-offers-col-head.pending  { background: #efab45; color: #1a1008; border-bottom: 0; }
-    .reg-offers-col-head.accepted { background: #7ea889; color: #102316; border-bottom: 0; }
-    .reg-offers-col-head.rejected { background: #d65f91; color: #ffffff; border-bottom: 0; }
+    .reg-offers-col-head.accepted { color: #1a1530; border-bottom: 2px solid rgba(87,46,136,0.12); }
     .reg-offers-col-count {
-      background: rgba(0,0,0,0.08);
+      background: #7ea889;
+      color: #102316;
       border-radius: 8px;
       padding: 0.1em 0.55em;
       font-size: 0.75rem;
       font-weight: 700;
     }
     .reg-offers-col-cards {
-      padding: 0.75rem;
-      display: flex;
-      flex-direction: column;
+      padding: 1rem 0 0;
+      display: grid;
+      grid-template-columns: repeat(4, minmax(120px, 1fr));
       gap: 0.75rem;
       min-height: 4rem;
     }
@@ -966,6 +961,12 @@
       flex-direction: column;
       align-items: center;
       gap: 0.35rem;
+      min-width: 0;
+    }
+    .reg-offer-item .casting-card {
+      width: 100%;
+      max-width: 170px;
+      cursor: default;
     }
     .reg-offer-role-label {
       font-size: 0.72rem;
@@ -985,11 +986,13 @@
       text-align: center;
       color: #c3b9d9;
       font-size: 0.78rem;
+      grid-column: 1 / -1;
     }
     @media (max-width: 720px) {
-      .reg-offers-board { flex-direction: column; padding: 0.75rem; }
+      .reg-offers-board { padding: 0.75rem; }
+      .reg-offers-col-cards { grid-template-columns: repeat(2, minmax(110px, 1fr)); }
     }
-    /* ─── end Role Offers board ─── */
+    /* ─── end Offer Responses board ─── */
     @media (max-width: 1050px) {
       .registration-glance {
         grid-template-columns: 1fr;
@@ -19808,22 +19811,14 @@
                 <div class="aud-settings-title-row">
                   <div class="aud-settings-title">Offer Responses</div>
                 </div>
-                <div class="aud-settings-subtitle">This is the bridge from casting into registration. Accepted offers become the Cast List; registration then tracks the admin details still missing.</div>
+                <div class="aud-settings-subtitle">Only accepted offers appear here. Declined roles stay back in casting so registration only tracks people joining the show.</div>
               </div>
             </div>
             <div class="aud-settings-divider"></div>
             <div id="reg-offers-board" class="reg-offers-board">
               <div class="reg-offers-col">
-                <div class="reg-offers-col-head pending">Awaiting Response <span class="reg-offers-col-count">0</span></div>
-                <div class="reg-offers-col-cards"><div class="reg-offers-empty">No offer responses waiting</div></div>
-              </div>
-              <div class="reg-offers-col">
-                <div class="reg-offers-col-head accepted">Accepted to Cast List <span class="reg-offers-col-count">0</span></div>
+                <div class="reg-offers-col-head accepted">Accepted Performers <span class="reg-offers-col-count">0</span></div>
                 <div class="reg-offers-col-cards"><div class="reg-offers-empty">No accepted cast yet</div></div>
-              </div>
-              <div class="reg-offers-col">
-                <div class="reg-offers-col-head rejected">Declined <span class="reg-offers-col-count">0</span></div>
-                <div class="reg-offers-col-cards"><div class="reg-offers-empty">No declined offers</div></div>
               </div>
             </div>
           </div>
@@ -30797,7 +30792,7 @@ We look forward to seeing your work!
     const { data: assignments, error } = await sb.from('casting_assignments')
       .select('*')
       .eq('production_id', prodId)
-      .in('state', ['chosen', 'ensemble_manual', 'offer_accepted', 'offer_declined']);
+      .eq('state', 'offer_accepted');
 
     if (error) {
       board.innerHTML = `<div style="padding:2.5rem;color:#c0392b;font-size:0.875rem;text-align:center;width:100%;">Could not load offers.</div>`;
@@ -30807,14 +30802,10 @@ We look forward to seeing your work!
     const appMap  = new Map((allApplicants || []).map(a => [a.id, a]));
     const charMap = new Map((characters    || []).map(c => [c.id, c]));
 
-    const groups = { chosen: [], offer_accepted: [], offer_declined: [] };
-    (assignments || []).forEach(a => {
-      const state = a.state === 'ensemble_manual' ? 'chosen' : a.state;
-      if (groups[state]) groups[state].push(a);
-    });
+    const acceptedAssignments = (assignments || []);
 
-    const makeCol = (label, stateKey, colorClass, emptyText) => {
-      const items = groups[stateKey].map(a => {
+    const makeAcceptedCol = () => {
+      const items = acceptedAssignments.map(a => {
         const app  = appMap.get(a.applicant_id);
         const char = charMap.get(a.character_id);
         if (!app) return '';
@@ -30824,16 +30815,12 @@ We look forward to seeing your work!
       }).filter(Boolean);
 
       return `<div class="reg-offers-col">
-        <div class="reg-offers-col-head ${colorClass}">${label} <span class="reg-offers-col-count">${items.length}</span></div>
-        <div class="reg-offers-col-cards">${items.length ? items.join('') : `<div class="reg-offers-empty">${emptyText}</div>`}</div>
+        <div class="reg-offers-col-head accepted">Accepted Performers <span class="reg-offers-col-count">${items.length}</span></div>
+        <div class="reg-offers-col-cards">${items.length ? items.join('') : `<div class="reg-offers-empty">No accepted cast yet</div>`}</div>
       </div>`;
     };
 
-    board.innerHTML = [
-      makeCol('Awaiting Response',     'chosen',          'pending',  'No offer responses waiting'),
-      makeCol('Accepted to Cast List', 'offer_accepted',  'accepted', 'No accepted cast yet'),
-      makeCol('Declined',              'offer_declined',  'rejected', 'No declined offers'),
-    ].join('');
+    board.innerHTML = makeAcceptedCol();
   }
 
   function openRegistrationSubTab(subTab = 'dashboard') {
