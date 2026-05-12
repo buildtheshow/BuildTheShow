@@ -237,7 +237,7 @@ function renderCastingCard(data, options = {}) {
   // Caption display
   const isInTheShow = variant === 'inTheShow';
   const firstLine = isInTheShow ? [first_name, last_name].filter(Boolean).join(' ') : (first_name || '');
-  const secondLine = isInTheShow ? character_name : `${last_name || ''}`;
+  const secondLine = isInTheShow ? (character_name ? `"${character_name}"` : '') : `${last_name || ''}`;
   const thirdParts = [];
   if (!isInTheShow && age !== null && age !== undefined && age !== '') thirdParts.push(String(age));
   if (!isInTheShow && pronouns) thirdParts.push(String(pronouns));
