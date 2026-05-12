@@ -73,8 +73,13 @@
       padding: clamp(2rem, 5vw, 4.5rem);
       color: #fff;
       background:
-        radial-gradient(circle at 18% 18%, rgba(239,171,69,0.34), transparent 28%),
-        linear-gradient(145deg, #6d3aa3 0%, #572e88 44%, #26133f 100%);
+        radial-gradient(
+          circle at 50% 35%,
+          #7741ab 0%,
+          #572e88 35%,
+          #241140 72%,
+          #241140 100%
+        );
       box-shadow: 0 28px 80px rgba(38,19,63,0.24);
       overflow: hidden;
       position: relative;
@@ -89,6 +94,15 @@
       background-image: url('/ASSETS/Images/Grid-purple.png');
       background-size: 720px auto;
       opacity: 0.18;
+    }
+    .invite-hero::after {
+      content: "";
+      position: absolute;
+      inset: -15% -10% 20%;
+      background:
+        radial-gradient(ellipse at 50% 0%, rgba(255,255,255,0.2), transparent 56%),
+        radial-gradient(ellipse at 50% 18%, rgba(193,142,255,0.18), transparent 66%);
+      pointer-events: none;
     }
     .invite-hero > * { position: relative; z-index: 1; }
     .hero-kicker {
@@ -121,7 +135,7 @@
       margin-top: 3rem;
       padding: 1rem 1.15rem;
       border-left: 5px solid var(--invite-gold);
-      background: rgba(255,255,255,0.09);
+      background: transparent;
       color: rgba(255,255,255,0.86);
       font-weight: 800;
       line-height: 1.35;
@@ -167,6 +181,40 @@
       letter-spacing: 0.14em;
       text-transform: uppercase;
     }
+    .org-logo-feature {
+      width: 100%;
+      min-height: 184px;
+      margin: 0 0 1.6rem;
+      border: 2px solid rgba(87,46,136,0.12);
+      border-radius: 16px;
+      background:
+        linear-gradient(135deg, rgba(87,46,136,0.06), rgba(239,171,69,0.08)),
+        #ffffff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1.4rem;
+      overflow: hidden;
+    }
+    .org-logo-feature img {
+      display: none;
+      width: min(100%, 360px);
+      max-height: 136px;
+      object-fit: contain;
+    }
+    .org-logo-fallback {
+      width: 112px;
+      height: 112px;
+      border-radius: 24px;
+      background: var(--invite-purple);
+      color: #fff;
+      display: grid;
+      place-items: center;
+      font-size: 2rem;
+      font-weight: 900;
+      letter-spacing: 0;
+      box-shadow: 0 18px 36px rgba(87,46,136,0.18);
+    }
     .auth-card-title {
       font-size: clamp(2rem, 3.4vw, 3.1rem);
       font-weight: 900;
@@ -181,35 +229,6 @@
       margin: 0 0 1.6rem;
       font-weight: 700;
       line-height: 1.45;
-    }
-    .invite-details {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 0.9rem;
-      margin: 1.4rem 0 1.7rem;
-    }
-    .invite-detail {
-      min-height: 116px;
-      border: 2px solid rgba(87,46,136,0.12);
-      border-radius: 12px;
-      background: #fff;
-      padding: 1rem;
-      display: flex;
-      flex-direction: column;
-      justify-content: space-between;
-    }
-    .detail-title {
-      color: var(--invite-muted);
-      font-size: 0.72rem;
-      font-weight: 900;
-      letter-spacing: 0.12em;
-      text-transform: uppercase;
-    }
-    .detail-value {
-      color: var(--invite-ink);
-      font-size: 1.25rem;
-      font-weight: 900;
-      line-height: 1;
     }
     .role-pill {
       display: inline-block;
@@ -308,7 +327,7 @@
       .invite-hero { border-radius: 18px; padding: 2rem 1.4rem; }
       .auth-card { padding: 0.8rem; border-radius: 18px; }
       .auth-card-inner { padding: 1.1rem; }
-      .invite-details { grid-template-columns: 1fr; }
+      .org-logo-feature { min-height: 150px; }
     }
   </style>
 </head>
@@ -366,19 +385,12 @@
           <div class="org-badge" id="org-badge">Organisation</div>
           <div class="invite-label">Invitation</div>
         </div>
+        <div class="org-logo-feature" aria-label="Organisation logo">
+          <img id="org-logo-large" alt="" />
+          <div class="org-logo-fallback" id="org-logo-fallback">ORG</div>
+        </div>
         <h1 class="auth-card-title" id="invite-heading">You've been invited</h1>
         <p class="auth-card-subtitle" id="invite-subheading">Join as a <span class="role-pill" id="invite-role-pill"></span></p>
-
-        <div class="invite-details" aria-label="Invitation details">
-          <div class="invite-detail">
-            <div class="detail-title">Role</div>
-            <div class="detail-value" id="invite-role-name">Team Member</div>
-          </div>
-          <div class="invite-detail">
-            <div class="detail-title">Access</div>
-            <div class="detail-value" id="invite-access-label">Workspace</div>
-          </div>
-        </div>
 
         <div class="auth-error" id="accept-error"></div>
 
@@ -438,7 +450,7 @@
 
       // Load invitation
       const { data: inv, error } = await sb.from('org_invitations')
-        .select('*, organizations(name, custom_id)')
+        .select('*, organizations(name, custom_id, logo_url)')
         .eq('token', token)
         .is('used_at', null)
         .gt('expires_at', new Date().toISOString())
@@ -449,11 +461,19 @@
 
       const org = inv.organizations;
       document.getElementById('org-badge').textContent = org.name + (org.custom_id ? ' · ' + org.custom_id : '');
+      const logoImg = document.getElementById('org-logo-large');
+      const logoFallback = document.getElementById('org-logo-fallback');
+      const orgInitials = (org.name || 'ORG').split(/\s+/).filter(Boolean).slice(0, 3).map(word => word[0]).join('').toUpperCase();
+      logoFallback.textContent = orgInitials || 'ORG';
+      if (org.logo_url) {
+        logoImg.src = org.logo_url;
+        logoImg.alt = `${org.name} logo`;
+        logoImg.style.display = 'block';
+        logoFallback.style.display = 'none';
+      }
       document.getElementById('invite-heading').textContent = `Join ${org.name}`;
       const roleLabel = inv.title || (inv.access_level === 'viewer' ? 'Viewer' : 'Editor');
       document.getElementById('invite-role-pill').textContent = roleLabel;
-      document.getElementById('invite-role-name').textContent = roleLabel;
-      document.getElementById('invite-access-label').textContent = inv.access_level === 'viewer' ? 'View access' : 'Edit access';
       document.getElementById('invite-subheading').innerHTML = `You've been invited to join as <span class="role-pill">${roleLabel}</span>`;
 
       if (currentUser) {
