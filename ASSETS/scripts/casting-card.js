@@ -243,7 +243,7 @@ function renderCastingCard(data, options = {}) {
   if (!isInTheShow && pronouns) thirdParts.push(String(pronouns));
   const thirdLine = thirdParts.join(' | ');
   const firstNameSize = firstNameFontSize || getCastingCardTextSize(firstLine, isInTheShow ? 7.2 : 10.6, isInTheShow ? 3.4 : 5.2, isInTheShow ? 22 : 8);
-  const lastNameSize = getCastingCardTextSize(secondLine, isInTheShow ? 4.7 : 5.8, isInTheShow ? 2.4 : 3.1, isInTheShow ? 24 : 14);
+  const lastNameSize = getCastingCardTextSize(secondLine, isInTheShow ? 7.05 : 5.8, isInTheShow ? 3.6 : 3.1, isInTheShow ? 24 : 14);
   const metaLineSize = getCastingCardTextSize(thirdLine, 4.2, 2.3, 18);
   
   // ── Video call badge ──────────────────────────────────────────
