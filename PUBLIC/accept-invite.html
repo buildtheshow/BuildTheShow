@@ -381,9 +381,9 @@
         <div class="auth-error" id="accept-error"></div>
 
         <div id="accept-logged-out">
-          <p class="auth-card-subtitle accept-action-copy">Log in or create an account to accept this invitation.</p>
+          <p class="auth-card-subtitle accept-action-copy">Log in or create an account with a password to accept this invitation.</p>
           <a id="accept-login-btn" href="/login" class="btn--accent" style="text-decoration:none;text-align:center;margin-bottom:0.75rem;">Log In to Accept</a>
-          <a id="accept-signup-btn" href="/signup" class="btn--accent btn--dark" style="text-decoration:none;text-align:center;">Create Account</a>
+          <a id="accept-signup-btn" href="/signup" class="btn--accent btn--dark" style="text-decoration:none;text-align:center;">Create Account & Password</a>
         </div>
 
         <div id="accept-logged-in" style="display:none;">
@@ -493,7 +493,7 @@
         headshot_url: invitation.headshot_url || null,
         note_color: invitation.note_color || null,
       };
-      let { error: memErr } = await sb.from('org_members').insert(memberPayload);
+      let { data: memberRows, error: memErr } = await sb.from('org_members').insert(memberPayload).select('id');
       if (memErr && String(memErr.message || '').toLowerCase().includes('schema cache')) {
         const legacyPayload = { ...memberPayload };
         delete legacyPayload.display_name;
@@ -502,7 +502,7 @@
         delete legacyPayload.bio;
         delete legacyPayload.headshot_url;
         delete legacyPayload.note_color;
-        ({ error: memErr } = await sb.from('org_members').insert(legacyPayload));
+        ({ data: memberRows, error: memErr } = await sb.from('org_members').insert(legacyPayload).select('id'));
       }
 
       if (memErr && !memErr.message.includes('duplicate')) {
@@ -515,13 +515,28 @@
 
       document.getElementById('accepted-msg').textContent = `You've joined ${invitation.organizations.name}.`;
 
-      // Route to the right dashboard based on account type
-      try {
-        const { data: prof } = await sb.from('profiles').select('id').eq('user_id', currentUser.id).maybeSingle();
-        document.querySelector('.state-accepted a').href = prof ? '/member' : '/org/dashboard';
-      } catch (err) { console.error('Could not determine dashboard route:', err); }
+      const inviteProfilePrefill = {
+        org_member_id: memberRows?.[0]?.id || null,
+        name: invitation.invitee_name || null,
+        email: invitation.email || currentUser.email || null,
+        phone: invitation.phone || null,
+        bio: invitation.bio || null,
+        headshot_url: invitation.headshot_url || null,
+        role: invitation.title || null,
+        org_name: invitation.organizations?.name || null,
+      };
+      sessionStorage.setItem('bts_invite_profile_prefill', JSON.stringify(inviteProfilePrefill));
 
-      show('state-accepted');
+      // Route straight to profile setup so the person can finish their public info.
+      try {
+        const { data: prof } = await sb.from('profiles').select('id').eq('user_id', currentUser.id).limit(1).maybeSingle();
+        window.location.href = prof?.id
+          ? `/member/profile/create?edit=${encodeURIComponent(prof.id)}&from=invite`
+          : '/member/profile/create?from=invite';
+      } catch (err) {
+        console.error('Could not determine profile route:', err);
+        window.location.href = '/member/profile/create?from=invite';
+      }
     }
 
     init();

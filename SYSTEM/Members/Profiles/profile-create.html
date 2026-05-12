@@ -823,6 +823,14 @@
           </datalist>
         </div>
 
+        <div class="form-group">
+          <label class="form-label" for="bio">Bio <span class="optional">optional</span></label>
+          <textarea class="form-input" id="bio" name="bio" rows="4"
+            placeholder="A short intro for teams, cast lists, and organisation records."
+            style="resize:vertical;min-height:110px;"></textarea>
+          <p class="form-hint">You can keep this simple. Add experience, interests, or anything the team should know.</p>
+        </div>
+
         <div class="form-divider"></div>
 
         <!-- ── Photos ──────────────────────────────────── -->
@@ -887,6 +895,12 @@
     const agePill          = document.getElementById('age-pill');
     const guardianSection  = document.getElementById('guardian-section');
     const minorAnnouncement = document.getElementById('minor-announcement');
+    let inviteProfilePrefill = null;
+    try {
+      inviteProfilePrefill = JSON.parse(sessionStorage.getItem('bts_invite_profile_prefill') || 'null');
+    } catch (_) {
+      inviteProfilePrefill = null;
+    }
 
     function showError(msg) {
       errorMsg.textContent = msg;
@@ -1014,6 +1028,7 @@
       document.getElementById('credit-name').value = p.credit_name || '';
       document.getElementById('nickname').value    = p.nickname    || '';
       document.getElementById('pronouns').value    = p.pronouns    || '';
+      document.getElementById('bio').value         = p.bio         || '';
       if (p.guardian_name)  document.getElementById('guardian-name').value  = p.guardian_name;
       if (p.guardian_email) document.getElementById('guardian-email').value = p.guardian_email;
       if (p.guardian_phone) document.getElementById('guardian-phone').value = window.BTSPhone?.format(p.guardian_phone) || p.guardian_phone;
@@ -1022,6 +1037,25 @@
       headshotSlots = savedUrls.slice(0, MAX_SHOTS).map(url => ({ file: null, previewUrl: url, savedUrl: url }));
       renderHeadshotGrid();
       updateAgeDisplay();
+    }
+
+    function applyInvitePrefill() {
+      if (!inviteProfilePrefill) return;
+
+      const displayName = inviteProfilePrefill.name || '';
+      if (displayName) {
+        const parts = displayName.trim().split(/\s+/);
+        if (!document.getElementById('legal-first').value) document.getElementById('legal-first').value = parts[0] || '';
+        if (!document.getElementById('legal-last').value) document.getElementById('legal-last').value = parts.slice(1).join(' ');
+        if (!document.getElementById('credit-name').value) document.getElementById('credit-name').value = displayName;
+      }
+      if (inviteProfilePrefill.bio && !document.getElementById('bio').value) {
+        document.getElementById('bio').value = inviteProfilePrefill.bio;
+      }
+      if (inviteProfilePrefill.headshot_url && !headshotSlots.length) {
+        headshotSlots = [{ file: null, previewUrl: inviteProfilePrefill.headshot_url, savedUrl: inviteProfilePrefill.headshot_url }];
+        renderHeadshotGrid();
+      }
     }
 
     // ── Auth guard ───────────────────────────────────────
@@ -1051,13 +1085,19 @@
           .select('*').eq('id', editProfileId).eq('user_id', user.id).single();
         if (!profile) { window.location.href = '/member'; return; }
         prefillForm(profile);
+        applyInvitePrefill();
         submitBtn.textContent = 'Save Changes';
-        document.querySelector('h1') && (document.querySelector('h1').textContent = 'Edit Profile');
+        document.querySelector('h1') && (document.querySelector('h1').textContent = inviteProfilePrefill ? 'Finish Your Profile' : 'Edit Profile');
         // Show "Configure Sections" link in edit mode
         const sectionsWrap = document.getElementById('sections-link-wrap');
         const sectionsLink = document.getElementById('sections-link');
         sectionsLink.href = `/member/profile/edit?id=${editProfileId}`;
         sectionsWrap.style.display = 'block';
+      } else {
+        applyInvitePrefill();
+        if (inviteProfilePrefill) {
+          document.querySelector('h1') && (document.querySelector('h1').textContent = 'Finish Your Profile');
+        }
       }
     }
 
@@ -1093,6 +1133,7 @@
       const creditName = document.getElementById('credit-name').value.trim();
       const nickname   = document.getElementById('nickname').value.trim();
       const pronouns   = document.getElementById('pronouns').value.trim();
+      const bio        = document.getElementById('bio').value.trim();
 
       if (!legalFirst || !legalLast) {
         showError('Legal first and last name are required.');
@@ -1193,6 +1234,7 @@
         credit_name:        creditName,
         nickname:           nickname   || null,
         pronouns:           pronouns   || null,
+        bio:                bio        || null,
         headshot_url:       headshotUrl,
         headshot_urls:      uploadedUrls,
         guardian_name:      guardianName,
@@ -1224,6 +1266,7 @@
       }
 
       // New profiles go to section setup; edits return to profile dashboard
+      sessionStorage.removeItem('bts_invite_profile_prefill');
       if (!editProfileId && newProfileId) {
         window.location.href = `/member/profile/edit?id=${newProfileId}`;
       } else {
