@@ -252,6 +252,22 @@ function renderCastingCard(data, options = {}) {
     : '';
 
   // ── Build the card HTML ───────────────────────────────────────
+  if (isInTheShow) {
+    return `
+      <div class="${cardClasses}" ${attrs.join(' ')}>
+        <div class="casting-card-image-area">
+          ${imageHTML}
+          ${indicatorsHTML}
+          ${videoCallBadge}
+        </div>
+        <div class="casting-card-lower">
+          <div class="casting-card-lower-name" style="font-size:${firstNameSize};">${esc(firstLine)}</div>
+          <div class="casting-card-lower-role" style="font-size:${lastNameSize};">${esc(secondLine)}</div>
+        </div>
+      </div>
+    `;
+  }
+
   return `
     <div class="${cardClasses}" ${attrs.join(' ')}>
       <div class="casting-card-image-area">
