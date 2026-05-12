@@ -986,6 +986,25 @@
       max-width: 170px;
       cursor: default;
     }
+    .reg-offer-item .in-show-flip,
+    .reg-offer-item .in-show-flip .inroom-flip-inner {
+      width: 100%;
+      max-width: 170px;
+      min-height: 0;
+      aspect-ratio: 4 / 5;
+      margin: 0 auto;
+    }
+    .reg-offer-item .in-show-flip .inroom-face {
+      background: transparent;
+      border: 0;
+      box-shadow: none;
+      padding: 0;
+    }
+    .reg-offer-item .in-show-flip .inroom-back-card-surface,
+    .reg-offer-item .in-show-flip .inroom-front-card-wrap {
+      padding: 0 !important;
+      overflow: hidden !important;
+    }
     .reg-offers-empty {
       padding: 2rem 1rem;
       text-align: center;
@@ -22239,6 +22258,99 @@
       </div>`;
   }
 
+  function splitInTheShowName(name = '') {
+    const parts = String(name || '').trim().split(/\s+/).filter(Boolean);
+    return {
+      first: parts[0] || '',
+      last: parts.slice(1).join(' '),
+    };
+  }
+
+  function renderInTheShowCardFrontTemplate({
+    name = '',
+    role = '',
+    headshot_url = '',
+  } = {}) {
+    const nameParts = splitInTheShowName(name);
+    return renderCastingCard({
+      first_name: nameParts.first || name,
+      last_name: nameParts.last,
+      character_name: role,
+      headshot_url,
+    }, {
+      size: 'compact',
+      hasPadding: true,
+      hasIcons: false,
+      draggable: false,
+      state: null,
+      variant: 'inTheShow',
+    });
+  }
+
+  function renderInTheShowCardBackTemplate({
+    name = '',
+    role = '',
+    phone = '',
+    email = '',
+    emergencyName = '',
+    emergencyPhone = '',
+    absences = '',
+    notes = '',
+    registrationStatus = 'Forms signed',
+    paymentStatus = 'Payment pending',
+  } = {}) {
+    return `
+      <div class="in-show-back-card">
+        <div class="in-show-back-kicker">In The Show</div>
+        <div>
+          <div class="in-show-back-name">${esc(name)}</div>
+          <div class="in-show-back-role">"${esc(role)}"</div>
+        </div>
+        <div class="in-show-back-sections">
+          <div class="in-show-back-section">
+            <div class="in-show-back-label">Contact</div>
+            <div class="in-show-back-line">${esc(phone)}</div>
+            <div class="in-show-back-line">${esc(email)}</div>
+          </div>
+          <div class="in-show-back-section">
+            <div class="in-show-back-label">Emergency</div>
+            <div class="in-show-back-line">${esc(emergencyName)}</div>
+            <div class="in-show-back-line">${esc(emergencyPhone)}</div>
+          </div>
+          <div class="in-show-back-section">
+            <div class="in-show-back-label">Upcoming Absences</div>
+            <div class="in-show-back-note">${esc(absences)}</div>
+          </div>
+          <div class="in-show-back-section">
+            <div class="in-show-back-label">Special Notes</div>
+            <div class="in-show-back-note">${esc(notes)}</div>
+          </div>
+        </div>
+        <div class="in-show-back-status">
+          <span>${esc(registrationStatus)}</span>
+          <span>${esc(paymentStatus)}</span>
+        </div>
+      </div>`;
+  }
+
+  function renderInTheShowFlippableCardTemplate({
+    id = '',
+    front = {},
+    back = {},
+    flipped = false,
+  } = {}) {
+    const flipClick = `(function(event){event.stopPropagation();event.currentTarget.closest('.inroom-flip')?.classList.toggle('flipped');})(event)`;
+    return window.BTSAuditionTemplates.renderCastingCardFlipShellTemplate({
+      shellClass: 'inroom-flip in-show-flip',
+      id,
+      flipped,
+      frontHtml: renderInTheShowCardFrontTemplate(front),
+      backHtml: renderInTheShowCardBackTemplate(back),
+      frontClick: flipClick,
+      backClick: flipClick,
+    });
+  }
+
   function renderTemplateTest() {
     const host = document.getElementById('template-test-content');
     if (!host) return;
@@ -22334,17 +22446,29 @@
     };
 
     const frontHtml = buildStandardCastingCardHtml(app);
-    const inTheShowCardHtml = renderCastingCard({
-      first_name: samplePerformer.firstName,
-      last_name: samplePerformer.lastName,
-      character_name: 'Bert',
+    const inTheShowFrontData = {
+      name: samplePerformer.name,
+      role: 'Bert',
       headshot_url: samplePerformer.headshot,
-    }, {
-      size: 'compact',
-      hasPadding: true,
-      hasIcons: false,
-      state: null,
-      variant: 'inTheShow',
+    };
+    const inTheShowBackData = {
+      name: samplePerformer.name,
+      role: 'Bert',
+      phone: '(250) 555 0148',
+      email: `${samplePerformer.firstName}.${samplePerformer.lastName || 'cast'}`.replace(/\s+/g, '.').toLowerCase() + '@example.com',
+      emergencyName: 'Emergency: Morgan Bennett',
+      emergencyPhone: '(250) 555 0199',
+      absences: 'May 28 - school concert. June 2 - family trip.',
+      notes: 'Carries inhaler. Parent pickup only after evening rehearsals.',
+      registrationStatus: 'Forms signed',
+      paymentStatus: 'Deposit paid',
+    };
+    const inTheShowCardHtml = renderInTheShowCardFrontTemplate(inTheShowFrontData);
+    const inTheShowBackHtml = renderInTheShowCardBackTemplate(inTheShowBackData);
+    const inTheShowFlippableHtml = renderInTheShowFlippableCardTemplate({
+      id: 'template-test-in-show-flip',
+      front: inTheShowFrontData,
+      back: inTheShowBackData,
     });
     const backHtml = buildCastingCardBack(app, {
       includeInRoomScores: true,
@@ -22574,61 +22698,6 @@
       .replace(/data-panel="(irb-tab-[^"]+)"/g, `data-panel="$1-${suffix}"`);
     const backPreviewHtml = namespaceBackTemplate(backHtml, 'template-test-back');
     const cleanFlipBackHtml = namespaceBackTemplate(backHtml, 'template-test-og-flip');
-    const renderInTheShowBackTemplate = ({
-      name = '',
-      role = '',
-      phone = '',
-      email = '',
-      emergencyName = '',
-      emergencyPhone = '',
-      absences = '',
-      notes = '',
-      registrationStatus = 'Forms signed',
-      paymentStatus = 'Payment pending',
-    } = {}) => `
-      <div class="in-show-back-card">
-        <div class="in-show-back-kicker">In The Show</div>
-        <div>
-          <div class="in-show-back-name">${esc(name)}</div>
-          <div class="in-show-back-role">"${esc(role)}"</div>
-        </div>
-        <div class="in-show-back-sections">
-          <div class="in-show-back-section">
-            <div class="in-show-back-label">Contact</div>
-            <div class="in-show-back-line">${esc(phone)}</div>
-            <div class="in-show-back-line">${esc(email)}</div>
-          </div>
-          <div class="in-show-back-section">
-            <div class="in-show-back-label">Emergency</div>
-            <div class="in-show-back-line">${esc(emergencyName)}</div>
-            <div class="in-show-back-line">${esc(emergencyPhone)}</div>
-          </div>
-          <div class="in-show-back-section">
-            <div class="in-show-back-label">Upcoming Absences</div>
-            <div class="in-show-back-note">${esc(absences)}</div>
-          </div>
-          <div class="in-show-back-section">
-            <div class="in-show-back-label">Special Notes</div>
-            <div class="in-show-back-note">${esc(notes)}</div>
-          </div>
-        </div>
-        <div class="in-show-back-status">
-          <span>${esc(registrationStatus)}</span>
-          <span>${esc(paymentStatus)}</span>
-        </div>
-      </div>`;
-    const inTheShowBackHtml = renderInTheShowBackTemplate({
-      name: samplePerformer.name,
-      role: 'Bert',
-      phone: '(250) 555 0148',
-      email: `${samplePerformer.firstName}.${samplePerformer.lastName || 'cast'}`.replace(/\s+/g, '.').toLowerCase() + '@example.com',
-      emergencyName: 'Emergency: Morgan Bennett',
-      emergencyPhone: '(250) 555 0199',
-      absences: 'May 28 - school concert. June 2 - family trip.',
-      notes: 'Carries inhaler. Parent pickup only after evening rehearsals.',
-      registrationStatus: 'Forms signed',
-      paymentStatus: 'Deposit paid',
-    });
     const checkedInPreviewPeople = [
       { time: '9:40 AM', state: 'Through', className: 'is-done' },
       { time: '9:50 AM', state: 'Through', className: 'is-done' },
@@ -22959,12 +23028,7 @@
             ${renderTemplateTestPreview({
               title: 'In The Show Flippable',
               note: 'Accepted-cast front plus registration-focused back.',
-              bodyHtml: `<div class="template-flip-shadow-frame">${window.BTSAuditionTemplates.renderCastingCardFlipShellTemplate({
-                shellClass: 'inroom-flip',
-                id: 'template-test-in-show-flip',
-                frontHtml: inTheShowCardHtml,
-                backHtml: inTheShowBackHtml
-              })}</div>`
+              bodyHtml: `<div class="template-flip-shadow-frame">${inTheShowFlippableHtml}</div>`
             })}
           </div>
         </div>
@@ -30973,6 +31037,15 @@ We look forward to seeing your work!
     });
   }
 
+  function registrationAnswerValue(app, keys = [], fallback = '') {
+    const ca = applicantCustomAnswers(app) || {};
+    for (const key of keys) {
+      const value = ca[key];
+      if (value !== undefined && value !== null && String(value).trim()) return String(value).trim();
+    }
+    return fallback;
+  }
+
   function registrationAgreementComplete(app) {
     return registrationAnswerTruthy(app, [
       '__bts_registration_agreement_signed',
@@ -31033,20 +31106,33 @@ We look forward to seeing your work!
   function buildRegistrationInTheShowCardHtml(app, assignment = {}) {
     const ca = applicantCustomAnswers(app);
     const preferredName = String(ca['Preferred Name'] || '').trim();
-    const fullName = String(preferredName || app?.name || 'Open Role').trim();
-    const nameParts = fullName.split(/\s+/).filter(Boolean);
-    return renderCastingCard({
-      first_name: nameParts[0] || fullName,
-      last_name: nameParts.slice(1).join(' '),
-      character_name: registrationAssignmentRoleName(assignment),
-      headshot_url: app?.headshot_url || '',
-    }, {
-      size: 'compact',
-      hasPadding: true,
-      hasIcons: false,
-      draggable: false,
-      state: null,
-      variant: 'inTheShow',
+    const baseName = String(app?.name || 'Open Role').trim();
+    const baseParts = baseName.split(/\s+/).filter(Boolean);
+    const fullName = preferredName
+      ? [preferredName, ...baseParts.slice(1)].join(' ').trim()
+      : baseName;
+    const role = registrationAssignmentRoleName(assignment);
+    const formsDone = registrationFormsComplete(app);
+    const paidDone = registrationPaymentComplete(app);
+    return renderInTheShowFlippableCardTemplate({
+      id: `registration-in-show-${String(app?.id || assignment?.id || 'card').replace(/[^a-zA-Z0-9_-]/g, '')}`,
+      front: {
+        name: fullName,
+        role,
+        headshot_url: app?.headshot_url || '',
+      },
+      back: {
+        name: fullName,
+        role,
+        phone: app?.phone || registrationAnswerValue(app, ['Phone', 'Phone Number', 'Performer Phone', 'Guardian Phone'], 'No phone saved'),
+        email: app?.email || registrationAnswerValue(app, ['Email', 'Email Address', 'Performer Email', 'Guardian Email'], 'No email saved'),
+        emergencyName: registrationAnswerValue(app, ['Emergency Contact Name', 'Emergency Contact', 'Emergency Name'], 'Emergency contact not saved'),
+        emergencyPhone: registrationAnswerValue(app, ['Emergency Contact Phone', 'Emergency Phone', 'Emergency Number'], 'Emergency phone not saved'),
+        absences: registrationAnswerValue(app, ['Upcoming Absences', 'Absences', 'Conflicts', 'List any conflicts'], 'No absences saved'),
+        notes: registrationAnswerValue(app, ['Special Notes', 'Medical Notes', 'Accessibility Notes', 'Additional Notes'], 'No special notes saved'),
+        registrationStatus: formsDone ? 'Forms signed' : 'Forms needed',
+        paymentStatus: paidDone ? 'Payment received' : (registrationPaymentRequired() ? 'Payment pending' : 'No fee'),
+      },
     });
   }
 
