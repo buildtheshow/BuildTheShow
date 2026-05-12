@@ -149,6 +149,7 @@ function renderCastingCard(data, options = {}) {
     role_openness = 'open',
     attendance_mode = null,
     skill_dots = null,
+    character_name = '',
   } = data;
   
   // Build classes
@@ -157,6 +158,7 @@ function renderCastingCard(data, options = {}) {
     size === 'sm' ? 'casting-card--sm' : '',
     size === 'compact' ? 'casting-card--compact' : '',
     variant === 'callbackSimple' ? 'casting-card--callback-simple' : '',
+    variant === 'inTheShow' ? 'casting-card--in-show' : '',
     grid === 'sticky' ? 'casting-card-grid-sticky-item' : '',
     hasPadding ? 'has-padding' : '',
     state ? `state-${state}` : ''
@@ -233,14 +235,15 @@ function renderCastingCard(data, options = {}) {
   }
   
   // Caption display
-  const firstLine = first_name || '';
-  const secondLine = `${last_name || ''}`;
+  const isInTheShow = variant === 'inTheShow';
+  const firstLine = isInTheShow ? [first_name, last_name].filter(Boolean).join(' ') : (first_name || '');
+  const secondLine = isInTheShow ? character_name : `${last_name || ''}`;
   const thirdParts = [];
-  if (age !== null && age !== undefined && age !== '') thirdParts.push(String(age));
-  if (pronouns) thirdParts.push(String(pronouns));
+  if (!isInTheShow && age !== null && age !== undefined && age !== '') thirdParts.push(String(age));
+  if (!isInTheShow && pronouns) thirdParts.push(String(pronouns));
   const thirdLine = thirdParts.join(' | ');
-  const firstNameSize = firstNameFontSize || getCastingCardTextSize(firstLine, 10.6, 5.2, 8);
-  const lastNameSize = getCastingCardTextSize(secondLine, 5.8, 3.1, 14);
+  const firstNameSize = firstNameFontSize || getCastingCardTextSize(firstLine, isInTheShow ? 6.8 : 10.6, isInTheShow ? 3.8 : 5.2, isInTheShow ? 18 : 8);
+  const lastNameSize = getCastingCardTextSize(secondLine, isInTheShow ? 4.4 : 5.8, isInTheShow ? 2.8 : 3.1, isInTheShow ? 22 : 14);
   const metaLineSize = getCastingCardTextSize(thirdLine, 4.2, 2.3, 18);
   
   // ── Video call badge ──────────────────────────────────────────
@@ -261,8 +264,8 @@ function renderCastingCard(data, options = {}) {
           ${iconStackHTML}
         </div>
         <div class="casting-card-caption">
-          <div class="casting-card-first-name" style="font-size:${firstNameSize};">${esc(first_name)}</div>
-          <div class="casting-card-last-name" style="font-size:${lastNameSize};">${esc(last_name)}</div>
+          <div class="casting-card-first-name" style="font-size:${firstNameSize};">${esc(firstLine)}</div>
+          <div class="casting-card-last-name" style="font-size:${lastNameSize};">${esc(secondLine)}</div>
           <div class="casting-card-meta-line" style="font-size:${metaLineSize};">${esc(thirdLine)}</div>
         </div>
         ${skillDotsHTML}
