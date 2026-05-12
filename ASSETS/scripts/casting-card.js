@@ -261,7 +261,7 @@ function renderCastingCard(data, options = {}) {
           ${videoCallBadge}
         </div>
         <div class="casting-card-lower">
-          <div class="casting-card-lower-name" style="font-size:${firstNameSize};">${esc(firstLine)}</div>
+          <div class="casting-card-lower-name" data-fit-height="true">${esc(firstLine)}</div>
           <div class="casting-card-lower-role" style="font-size:${lastNameSize};">${esc(secondLine)}</div>
         </div>
       </div>
@@ -346,6 +346,25 @@ function ccardDragEnd(e) {
   e.target.classList.remove('dragging');
 }
 
+// ── Fit performer name to fill container height ───────────────
+function fitCastingCardNames(root) {
+  root = root || document;
+  const els = Array.from(root.querySelectorAll('.casting-card-lower-name[data-fit-height]'));
+  els.forEach(function(el) {
+    el.style.fontSize = '';
+    const cH = el.clientHeight;
+    const cW = el.clientWidth;
+    if (!cH || !cW) return;
+    let lo = 4, hi = cH * 1.5;
+    for (let i = 0; i < 20; i++) {
+      const mid = (lo + hi) / 2;
+      el.style.fontSize = mid + 'px';
+      if (el.scrollWidth <= cW) { lo = mid; } else { hi = mid; }
+    }
+    el.style.fontSize = lo + 'px';
+  });
+}
+
 // ── Export for use in other modules ────────────────────────────
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
@@ -356,6 +375,7 @@ if (typeof module !== 'undefined' && module.exports) {
     generateCastingBoardIndicators,
     ccardDragStart,
     ccardDragEnd,
+    fitCastingCardNames,
     esc
   };
 }
