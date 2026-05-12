@@ -2059,7 +2059,12 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
 
   function orgMemberDisplayName(member = {}) {
     const profile = member.profiles || {};
-    return profile.display_name || profile.custom_id || member.email || 'Member';
+    return member.display_name || profile.display_name || profile.custom_id || member.email || 'Member';
+  }
+
+  function isOrgSchemaColumnError(error) {
+    const text = String(error?.message || error?.details || error?.hint || '').toLowerCase();
+    return text.includes('schema cache') || text.includes('column') || text.includes('could not find');
   }
 
   const ORG_BOARD_MENU_ITEMS = [
@@ -2291,7 +2296,7 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:0.75rem;">
           <label>
             <span style="display:block;font-size:0.78rem;font-weight:800;margin-bottom:0.3rem;">Name</span>
-            <input class="form-input" type="text" value="Pending invite" disabled />
+            <input class="form-input" id="invite-name" type="text" placeholder="Full name" autocomplete="off" />
           </label>
           <label>
             <span style="display:block;font-size:0.78rem;font-weight:800;margin-bottom:0.3rem;">Email or Profile ID</span>
@@ -2299,12 +2304,12 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
           </label>
           <label>
             <span style="display:block;font-size:0.78rem;font-weight:800;margin-bottom:0.3rem;">Phone</span>
-            <input class="form-input" type="text" value="Invite first" disabled />
+            <input class="form-input" id="invite-phone" type="tel" placeholder="(250) 555 0000" autocomplete="off" />
           </label>
         </div>
         <label style="display:block;margin-top:0.8rem;">
           <span style="display:block;font-size:0.78rem;font-weight:800;margin-bottom:0.3rem;">Bio</span>
-          <textarea class="form-textarea" style="min-height:130px;" disabled>Invite first, then this board member can add profile details.</textarea>
+          <textarea class="form-textarea" id="invite-bio" style="min-height:130px;" placeholder="Board bio or notes for this role."></textarea>
         </label>`,
       departmentHtml: `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:0.75rem;">
           <label>
@@ -2347,6 +2352,9 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
 
   async function sendInvite() {
     const input       = document.getElementById('invite-email').value.trim();
+    const inviteeName = document.getElementById('invite-name')?.value?.trim() || '';
+    const phone       = document.getElementById('invite-phone')?.value?.trim() || '';
+    const bio         = document.getElementById('invite-bio')?.value?.trim() || '';
     const titleSelect = document.getElementById('invite-title');
     const title       = (titleSelect.value === '__add_new__' ? (titleSelect.dataset.previousRole || '') : titleSelect.value).trim();
     const access_level = document.getElementById('invite-access').value;
@@ -2383,13 +2391,24 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
     btn.textContent = 'Sending...';
 
     // Create invitation record
-    const { data: inv, error: invErr } = await sb.from('org_invitations').insert({
+    const invitePayload = {
       org_id: currentOrg.id,
       email,
+      invitee_name: inviteeName || null,
+      phone: phone || null,
+      bio: bio || null,
       title: title || null,
       access_level,
       invited_by: currentUser.id,
-    }).select().single();
+    };
+    let { data: inv, error: invErr } = await sb.from('org_invitations').insert(invitePayload).select().single();
+    if (invErr && isOrgSchemaColumnError(invErr)) {
+      const legacyPayload = { ...invitePayload };
+      delete legacyPayload.invitee_name;
+      delete legacyPayload.phone;
+      delete legacyPayload.bio;
+      ({ data: inv, error: invErr } = await sb.from('org_invitations').insert(legacyPayload).select().single());
+    }
 
     if (invErr) {
       errEl.textContent = invErr.message; errEl.classList.add('visible');
@@ -2448,20 +2467,20 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
       contactHtml: `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:0.75rem;">
           <label>
             <span style="display:block;font-size:0.78rem;font-weight:800;margin-bottom:0.3rem;">Name</span>
-            <input class="form-input" id="org-edit-name" type="text" value="${esc(orgMemberDisplayName(member))}" disabled />
+            <input class="form-input" id="org-edit-name" type="text" value="${esc(orgMemberDisplayName(member))}" />
           </label>
           <label>
             <span style="display:block;font-size:0.78rem;font-weight:800;margin-bottom:0.3rem;">Email</span>
-            <input class="form-input" id="org-edit-email" type="email" value="${esc(member.email || '')}" disabled />
+            <input class="form-input" id="org-edit-email" type="email" value="${esc(member.email || '')}" />
           </label>
           <label>
             <span style="display:block;font-size:0.78rem;font-weight:800;margin-bottom:0.3rem;">Phone</span>
-            <input class="form-input" type="text" value="Not saved" disabled />
+            <input class="form-input" id="org-edit-phone" type="tel" value="${esc(member.phone || member.phone_number || '')}" />
           </label>
         </div>
         <label style="display:block;margin-top:0.8rem;">
           <span style="display:block;font-size:0.78rem;font-weight:800;margin-bottom:0.3rem;">Bio</span>
-          <textarea class="form-textarea" style="min-height:130px;" disabled>No organisation bio saved yet.</textarea>
+          <textarea class="form-textarea" id="org-edit-bio" style="min-height:130px;">${esc(member.bio || '')}</textarea>
         </label>`,
       departmentHtml: `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:0.75rem;">
           <label>
@@ -2500,7 +2519,24 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
       const titleSelect = document.getElementById('org-edit-title');
       const title = titleSelect.value === '__add_new__' ? (titleSelect.dataset.previousRole || '').trim() : titleSelect.value.trim();
       const access_level = document.getElementById('org-edit-access').value;
-      await sb.from('org_members').update({ title, access_level }).eq('id', id);
+      const payload = {
+        title,
+        access_level,
+        display_name: document.getElementById('org-edit-name')?.value?.trim() || null,
+        email: document.getElementById('org-edit-email')?.value?.trim() || null,
+        phone: document.getElementById('org-edit-phone')?.value?.trim() || null,
+        bio: document.getElementById('org-edit-bio')?.value?.trim() || null,
+      };
+      let { error } = await sb.from('org_members').update(payload).eq('id', id);
+      if (error && isOrgSchemaColumnError(error)) {
+        const legacyPayload = { title, access_level };
+        ({ error } = await sb.from('org_members').update(legacyPayload).eq('id', id));
+      }
+      if (error) {
+        const msg = document.getElementById('org-edit-msg');
+        if (msg) msg.textContent = error.message || 'Could not save board member.';
+        return;
+      }
       overlay.remove();
       loadMembers();
     };

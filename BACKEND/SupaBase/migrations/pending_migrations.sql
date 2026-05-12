@@ -1622,3 +1622,23 @@ GRANT EXECUTE ON FUNCTION team_next_signal_list_for_session(uuid,text) TO anon, 
 GRANT EXECUTE ON FUNCTION team_next_signal_upsert_for_session(uuid,text,uuid,text,text,text,text,uuid,text,text,uuid[],uuid,text,text,uuid[],text) TO anon, authenticated;
 ALTER TABLE email_templates
   ADD COLUMN IF NOT EXISTS reviewed_at timestamptz;
+
+-- ── Organisation board member card details ───────────────────
+-- Board cards can be edited before/after invite acceptance. Pending
+-- invite details stay with org_invitations; accepted member overrides
+-- live on org_members so organisation-specific display info does not
+-- mutate a person's global profile unexpectedly.
+ALTER TABLE org_invitations
+  ADD COLUMN IF NOT EXISTS invitee_name text,
+  ADD COLUMN IF NOT EXISTS phone text,
+  ADD COLUMN IF NOT EXISTS bio text,
+  ADD COLUMN IF NOT EXISTS headshot_url text,
+  ADD COLUMN IF NOT EXISTS note_color text;
+
+ALTER TABLE org_members
+  ADD COLUMN IF NOT EXISTS display_name text,
+  ADD COLUMN IF NOT EXISTS email text,
+  ADD COLUMN IF NOT EXISTS phone text,
+  ADD COLUMN IF NOT EXISTS bio text,
+  ADD COLUMN IF NOT EXISTS headshot_url text,
+  ADD COLUMN IF NOT EXISTS note_color text;
