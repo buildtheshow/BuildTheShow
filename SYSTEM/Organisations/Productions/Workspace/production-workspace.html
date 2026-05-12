@@ -927,30 +927,41 @@
     }
     /* ── Accepted Cast board ── */
     .reg-offers-board {
-      display: block;
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 1rem;
       padding: 1.25rem 1.5rem 2rem;
     }
     .reg-offers-col {
       min-width: 0;
-      background: transparent;
+      background: #f4eefb;
       border-radius: 8px;
       border: 0;
       overflow: hidden;
+      padding: 1rem;
     }
+    .reg-offers-col.forms { background: #e7f4fb; }
+    .reg-offers-col.paid { background: #fff0ce; }
     .reg-offers-col-head {
       display: flex;
       align-items: center;
+      justify-content: space-between;
       gap: 0.5rem;
-      padding: 0 0 0.8rem;
+      padding: 0 0 0.7rem;
       font-weight: 800;
       font-size: 0.8rem;
       letter-spacing: 0.04em;
       text-transform: uppercase;
     }
-    .reg-offers-col-head.accepted { color: #1a1530; border-bottom: 2px solid rgba(87,46,136,0.12); }
+    .reg-offers-col-head.accepted,
+    .reg-offers-col-head.forms,
+    .reg-offers-col-head.paid {
+      color: #1a1530;
+      border-bottom: 2px solid #ffffff;
+    }
     .reg-offers-col-count {
-      background: #7ea889;
-      color: #102316;
+      background: #ffffff;
+      color: #1a1530;
       border-radius: 8px;
       padding: 0.1em 0.55em;
       font-size: 0.75rem;
@@ -959,7 +970,7 @@
     .reg-offers-col-cards {
       padding: 1rem 0 0;
       display: grid;
-      grid-template-columns: repeat(4, minmax(120px, 1fr));
+      grid-template-columns: repeat(2, minmax(112px, 1fr));
       gap: 0.75rem;
       min-height: 4rem;
     }
@@ -981,6 +992,17 @@
       color: #c3b9d9;
       font-size: 0.78rem;
       grid-column: 1 / -1;
+    }
+    .reg-offers-col-note {
+      color: #5f526f;
+      font-size: 0.72rem;
+      font-weight: 700;
+      line-height: 1.35;
+      padding-top: 0.6rem;
+    }
+    @media (max-width: 1180px) {
+      .reg-offers-board { grid-template-columns: 1fr; }
+      .reg-offers-col-cards { grid-template-columns: repeat(4, minmax(110px, 1fr)); }
     }
     @media (max-width: 720px) {
       .reg-offers-board { padding: 0.75rem; }
@@ -19801,9 +19823,17 @@
             </div>
             <div class="aud-settings-divider"></div>
             <div id="reg-offers-board" class="reg-offers-board">
-              <div class="reg-offers-col">
-                <div class="reg-offers-col-head accepted">Accepted Cast <span class="reg-offers-col-count">0</span></div>
-                <div class="reg-offers-col-cards"><div class="reg-offers-empty">No accepted cast yet</div></div>
+              <div class="reg-offers-col accepted">
+                <div class="reg-offers-col-head accepted">Role Accepted <span class="reg-offers-col-count">0</span></div>
+                <div class="reg-offers-col-cards"><div class="reg-offers-empty">No accepted cast waiting on forms</div></div>
+              </div>
+              <div class="reg-offers-col forms">
+                <div class="reg-offers-col-head forms">Forms Signed <span class="reg-offers-col-count">0</span></div>
+                <div class="reg-offers-col-cards"><div class="reg-offers-empty">No signed forms yet</div></div>
+              </div>
+              <div class="reg-offers-col paid">
+                <div class="reg-offers-col-head paid">Paid <span class="reg-offers-col-count">0</span></div>
+                <div class="reg-offers-col-cards"><div class="reg-offers-empty">No payments received yet</div></div>
               </div>
             </div>
           </div>
@@ -30784,6 +30814,21 @@ We look forward to seeing your work!
     ]);
   }
 
+  function registrationPaymentRequired() {
+    const s = (typeof prod?.registration_settings === 'object' && prod.registration_settings) ? prod.registration_settings : {};
+    const paymentRule = String(s.payment_rule || '').trim().toLowerCase();
+    return s.require_payment === true || paymentRule === 'required for completion' || !!String(s.fee || '').trim();
+  }
+
+  function registrationFormsComplete(app) {
+    const s = (typeof prod?.registration_settings === 'object' && prod.registration_settings) ? prod.registration_settings : {};
+    const needsAgreements = s.require_agreements !== false;
+    const needsEmergency = s.require_emergency !== false || s.require_medical !== false;
+    const agreementsDone = !needsAgreements || registrationAgreementComplete(app);
+    const emergencyDone = !needsEmergency || registrationEmergencyComplete(app);
+    return agreementsDone && emergencyDone;
+  }
+
   async function loadRegistrationDashboard() {
     const completeEl = document.getElementById('registration-complete-count');
     const paymentEl = document.getElementById('registration-payment-count');
@@ -30792,9 +30837,10 @@ We look forward to seeing your work!
     try {
       const accepted = await getRegistrationAcceptedCast();
       const total = accepted.length;
+      const paymentRequired = registrationPaymentRequired();
       const payments = accepted.filter(({ app }) => registrationPaymentComplete(app)).length;
       const complete = accepted.filter(({ app }) =>
-        registrationAgreementComplete(app) && registrationEmergencyComplete(app) && registrationPaymentComplete(app)
+        registrationFormsComplete(app) && (!paymentRequired || registrationPaymentComplete(app))
       ).length;
       if (completeEl) completeEl.textContent = `${complete} / ${total}`;
       if (paymentEl) paymentEl.textContent = `${payments} / ${total}`;
@@ -30820,20 +30866,58 @@ We look forward to seeing your work!
       return;
     }
 
-    const makeAcceptedCol = () => {
-      const items = accepted.map(({ app }) => {
+    const paymentRequired = registrationPaymentRequired();
+    const groups = {
+      accepted: [],
+      forms: [],
+      paid: [],
+    };
+    accepted.forEach(item => {
+      const app = item?.app;
+      if (!app) return;
+      const formsDone = registrationFormsComplete(app);
+      const paidDone = registrationPaymentComplete(app);
+      if (!formsDone) groups.accepted.push(item);
+      else if (paymentRequired && paidDone) groups.paid.push(item);
+      else groups.forms.push(item);
+    });
+
+    const makeCards = (items = []) => items.map(({ app }) => {
         if (!app) return '';
         const cardHtml = buildStandardCastingCardHtml(app, { draggable: false });
         return `<div class="reg-offer-item">${cardHtml}</div>`;
-      }).filter(Boolean);
+      }).filter(Boolean).join('');
 
-      return `<div class="reg-offers-col">
-        <div class="reg-offers-col-head accepted">Accepted Cast <span class="reg-offers-col-count">${items.length}</span></div>
-        <div class="reg-offers-col-cards">${items.length ? items.join('') : `<div class="reg-offers-empty">No accepted cast yet</div>`}</div>
+    const makeCol = ({ key, title, empty, note }) => {
+      const items = groups[key] || [];
+      const cards = makeCards(items);
+      return `<div class="reg-offers-col ${key}">
+        <div class="reg-offers-col-head ${key}">${title} <span class="reg-offers-col-count">${items.length}</span></div>
+        ${note ? `<div class="reg-offers-col-note">${note}</div>` : ''}
+        <div class="reg-offers-col-cards">${cards || `<div class="reg-offers-empty">${empty}</div>`}</div>
       </div>`;
     };
 
-    board.innerHTML = makeAcceptedCol();
+    board.innerHTML = [
+      makeCol({
+        key: 'accepted',
+        title: 'Role Accepted',
+        empty: 'No accepted cast waiting on forms',
+        note: 'Accepted the role, still needs required forms.',
+      }),
+      makeCol({
+        key: 'forms',
+        title: 'Forms Signed',
+        empty: 'No signed forms yet',
+        note: paymentRequired ? 'Forms are complete, payment still needs to be marked received.' : 'Forms are complete. No payment requirement is currently on.',
+      }),
+      makeCol({
+        key: 'paid',
+        title: 'Paid',
+        empty: paymentRequired ? 'No payments received yet' : 'Payment is not required right now',
+        note: paymentRequired ? 'Forms are complete and payment is marked received.' : 'Turn on payment requirements in Settings if this production has a fee.',
+      }),
+    ].join('');
   }
 
   function openRegistrationSubTab(subTab = 'dashboard') {
