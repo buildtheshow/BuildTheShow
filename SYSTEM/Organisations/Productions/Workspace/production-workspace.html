@@ -19752,7 +19752,7 @@
                 <div class="registration-glance-label">Registration Complete</div>
                 <div class="registration-glance-copy">Agreement signed, emergency form complete, and registration requirements done.</div>
               </div>
-              <div class="registration-glance-count">0 / 0</div>
+              <div class="registration-glance-count" id="registration-complete-count">0 / 0</div>
             </div>
             <div class="registration-glance-card is-payment">
               <div>
@@ -19760,7 +19760,7 @@
                 <div class="registration-glance-label">Payments Received</div>
                 <div class="registration-glance-copy">Payments marked received for registered cast members.</div>
               </div>
-              <div class="registration-glance-count">0 / 0</div>
+              <div class="registration-glance-count" id="registration-payment-count">0 / 0</div>
             </div>
           </div>
 
@@ -30629,6 +30629,7 @@ We look forward to seeing your work!
     if (title) title.textContent = meta.title;
     if (copy) copy.textContent = meta.copy;
     setSidebarSubmenuState('registration', `rsub-${key}`);
+    if (key === 'dashboard') loadRegistrationDashboard();
     if (key === 'settings') loadRegistrationSettings();
     if (key === 'offers')   loadRegistrationOffers();
   }
@@ -30767,31 +30768,109 @@ We look forward to seeing your work!
     showToast('Registration settings saved.');
   }
 
+  async function getRegistrationAcceptedCast() {
+    if (!allApplicants.length) await loadApplicants({ skipRender: true, skipCastingSync: true }).catch(() => {});
+    const { data: assignments, error } = await sb.from('casting_assignments')
+      .select('*')
+      .eq('production_id', prodId)
+      .eq('state', 'offer_accepted');
+    if (error) throw error;
+    const appMap = new Map((allApplicants || []).map(a => [String(a.id), a]));
+    const acceptedByApplicant = new Map();
+    (assignments || []).forEach(row => {
+      const appId = String(row?.applicant_id || '');
+      if (!appId || acceptedByApplicant.has(appId)) return;
+      const app = appMap.get(appId);
+      if (app) acceptedByApplicant.set(appId, { app, assignment: row });
+    });
+    return [...acceptedByApplicant.values()];
+  }
+
+  function registrationAnswerTruthy(app, keys = []) {
+    const ca = applicantCustomAnswers(app) || {};
+    const truthy = new Set(['yes', 'true', 'complete', 'completed', 'signed', 'paid', 'received', 'done']);
+    return keys.some(key => {
+      const value = ca[key];
+      if (value === true) return true;
+      if (typeof value === 'number') return value > 0;
+      const normalized = String(value || '').trim().toLowerCase();
+      return truthy.has(normalized);
+    });
+  }
+
+  function registrationAgreementComplete(app) {
+    return registrationAnswerTruthy(app, [
+      '__bts_registration_agreement_signed',
+      '__bts_registration_agreements_signed',
+      'registration_agreement_signed',
+      'registration_agreements_signed',
+      'cast_agreement_signed',
+      'agreement_signed',
+      'agreements_signed',
+    ]);
+  }
+
+  function registrationEmergencyComplete(app) {
+    return registrationAnswerTruthy(app, [
+      '__bts_registration_emergency_complete',
+      '__bts_registration_emergency_form_complete',
+      'registration_emergency_complete',
+      'emergency_form_complete',
+      'emergency_contact_complete',
+      'medical_form_complete',
+    ]);
+  }
+
+  function registrationPaymentComplete(app) {
+    return registrationAnswerTruthy(app, [
+      '__bts_registration_payment_received',
+      '__bts_registration_paid',
+      'registration_payment_received',
+      'registration_paid',
+      'payment_received',
+      'payment_paid',
+      'payment_status',
+    ]);
+  }
+
+  async function loadRegistrationDashboard() {
+    const completeEl = document.getElementById('registration-complete-count');
+    const paymentEl = document.getElementById('registration-payment-count');
+    if (completeEl) completeEl.textContent = '… / …';
+    if (paymentEl) paymentEl.textContent = '… / …';
+    try {
+      const accepted = await getRegistrationAcceptedCast();
+      const total = accepted.length;
+      const payments = accepted.filter(({ app }) => registrationPaymentComplete(app)).length;
+      const complete = accepted.filter(({ app }) =>
+        registrationAgreementComplete(app) && registrationEmergencyComplete(app) && registrationPaymentComplete(app)
+      ).length;
+      if (completeEl) completeEl.textContent = `${complete} / ${total}`;
+      if (paymentEl) paymentEl.textContent = `${payments} / ${total}`;
+    } catch (error) {
+      console.warn('[BTS] registration dashboard load failed', error);
+      if (completeEl) completeEl.textContent = '0 / 0';
+      if (paymentEl) paymentEl.textContent = '0 / 0';
+    }
+  }
+
   async function loadRegistrationOffers() {
     const board = document.getElementById('reg-offers-board');
     if (!board) return;
     board.innerHTML = `<div style="padding:2.5rem;color:#9a90b0;font-size:0.875rem;text-align:center;width:100%;">Loading offers…</div>`;
 
-    if (!allApplicants.length) await loadApplicants({ skipRender: true, skipCastingSync: true }).catch(() => {});
     await expirePastDueCastOffers().catch(error => console.warn('[BTS] registration offer expiry check failed', error));
 
-    const { data: assignments, error } = await sb.from('casting_assignments')
-      .select('*')
-      .eq('production_id', prodId)
-      .eq('state', 'offer_accepted');
-
-    if (error) {
+    let accepted = [];
+    try {
+      accepted = await getRegistrationAcceptedCast();
+    } catch (error) {
       board.innerHTML = `<div style="padding:2.5rem;color:#c0392b;font-size:0.875rem;text-align:center;width:100%;">Could not load offers.</div>`;
       return;
     }
 
-    const appMap  = new Map((allApplicants || []).map(a => [a.id, a]));
-
-    const acceptedAssignments = (assignments || []);
-
     const makeAcceptedCol = () => {
-      const items = acceptedAssignments.map(a => {
-        const app  = appMap.get(a.applicant_id);
+      const items = accepted.map(({ app }) => {
         if (!app) return '';
         const cardHtml = buildStandardCastingCardHtml(app, { draggable: false });
         return `<div class="reg-offer-item">${cardHtml}</div>`;
