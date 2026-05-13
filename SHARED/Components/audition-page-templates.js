@@ -768,4 +768,5 @@
     priority: 100,
     render: renderAuditionPageHeaderTemplate
   });
+
 })();
