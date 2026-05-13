@@ -2474,13 +2474,35 @@
       // Fetch time slots for all sessions (for flip card display)
       if (sessions && sessions.length) {
         try {
-          const { data: allSlots } = await sb.from('audition_time_slots')
-            .select('id,session_id,slot_time,slot_date,label,capacity,is_available')
-            .in('session_id', sessions.map(s => s.id))
-            .order('slot_time');
+          const [{ data: allSlots }, { data: infoApps }] = await Promise.all([
+            sb.from('audition_time_slots')
+              .select('id,session_id,slot_time,slot_date,label,capacity')
+              .in('session_id', sessions.map(s => s.id))
+              .order('slot_time'),
+            sb.from('audition_applications')
+              .select('slot_id,slot_assignments,status')
+              .eq('production_id', resolvedId),
+          ]);
+          // Compute live occupancy per slot (mirrors booking picker logic)
+          const infoOccupancy = {};
+          (infoApps || []).forEach(app => {
+            if (String(app.status || '').toLowerCase().includes('cancel')) return;
+            const assignments = Array.isArray(app.slot_assignments) ? app.slot_assignments : [];
+            if (assignments.length) {
+              assignments.forEach(({ slot_id }) => {
+                if (slot_id) infoOccupancy[slot_id] = (infoOccupancy[slot_id] || 0) + 1;
+              });
+            } else if (app.slot_id) {
+              infoOccupancy[app.slot_id] = (infoOccupancy[app.slot_id] || 0) + 1;
+            }
+          });
           (allSlots || []).forEach(slot => {
             if (!slotsBySession[slot.session_id]) slotsBySession[slot.session_id] = [];
-            slotsBySession[slot.session_id].push(slot);
+            const cap = Number(slot.capacity) || 0;
+            slotsBySession[slot.session_id].push({
+              ...slot,
+              _full: cap > 0 && (infoOccupancy[slot.id] || 0) >= cap,
+            });
           });
         } catch (_) {}
       }
@@ -3283,7 +3305,7 @@
             ? `<div class="ai-si-slot-pills">
                 ${slots.map(s => {
                   const t = fmtTimeStr(s.slot_time);
-                  const full = s.is_available === false;
+                  const full = s._full === true;
                   return `<div class="ai-si-slot-pill${full ? ' ai-si-slot-pill-full' : ''}">${esc(t)}</div>`;
                 }).join('')}
               </div>`
