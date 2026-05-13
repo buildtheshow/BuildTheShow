@@ -1115,18 +1115,22 @@
       display: flex;
       flex-direction: row;
       align-items: flex-start;
-      gap: 0.6rem;
+      justify-content: space-between;
+      gap: 0.75rem;
       cursor: pointer;
     }
     .reg-step-check > input[type="checkbox"] {
       flex-shrink: 0;
+      order: 2;
       accent-color: #572e88;
       width: 1rem;
       height: 1rem;
-      margin-top: 0.15rem;
+      margin-top: 0.2rem;
       cursor: pointer;
     }
     .reg-step-check > div {
+      order: 1;
+      flex: 1;
       display: flex;
       flex-direction: column;
       gap: 0.2rem;
@@ -1137,12 +1141,48 @@
       font-weight: 700;
       color: #1a1530;
       line-height: 1.3;
+      transition: opacity 0.15s;
     }
     .reg-step-check-help {
       color: #8a78a8;
       font-size: 0.66rem;
       font-weight: 500;
       line-height: 1.5;
+      transition: opacity 0.15s;
+    }
+    .reg-step-check:has(input:not(:checked)) .reg-step-check-label,
+    .reg-step-check:has(input:not(:checked)) .reg-step-check-help {
+      opacity: 0.38;
+    }
+    .bts-settings-field-tile-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 0.5rem;
+    }
+    .bts-settings-field-tile-header .bts-settings-field-tile-label {
+      flex: 1;
+    }
+    .bts-tile-toggle {
+      flex-shrink: 0;
+      width: 1.05rem;
+      height: 1.05rem;
+      accent-color: #572e88;
+      cursor: pointer;
+      margin-top: 0.3rem;
+    }
+    .bts-tile--off {
+      opacity: 0.38;
+      transition: opacity 0.15s;
+    }
+    .bts-tile--off input:not(.bts-tile-toggle),
+    .bts-tile--off select,
+    .bts-tile--off textarea {
+      pointer-events: none;
+    }
+    .bts-tile--off .bts-tile-toggle {
+      opacity: 1;
+      pointer-events: auto;
     }
     .reg-step-actions {
       display: flex;
@@ -21211,9 +21251,11 @@
                         <div class="bts-settings-field-tile-helper">The deadline shown to the performer on their registration page. Leave blank for no deadline.</div>
                       </div>
                       <div class="bts-settings-field-tile">
-                        <div class="bts-settings-field-tile-label">Send Registration Link Automatically</div>
-                        <select id="reg-sequential-casting" class="form-select"><option>On</option><option>Off</option></select>
-                        <div class="bts-settings-field-tile-helper">When On, BTS emails the registration link as soon as a performer accepts their role.</div>
+                        <div class="bts-settings-field-tile-header">
+                          <div class="bts-settings-field-tile-label">Send Registration Link Automatically</div>
+                          <input id="reg-sequential-casting" type="checkbox" class="bts-tile-toggle" aria-label="Send registration link automatically" />
+                        </div>
+                        <div class="bts-settings-field-tile-helper">When on, BTS emails the registration link as soon as a performer accepts their role.</div>
                       </div>
                     </div>
                   </div>
@@ -32552,6 +32594,7 @@ We look forward to seeing your work!
     setSidebarSubmenuState('registration', `rsub-${key}`);
     if (key === 'dashboard') loadRegistrationDashboard();
     if (key === 'settings') {
+      initTileToggles();
       loadRegistrationSettings();
       switchRegistrationSettingsTab(settingsTab, false);
     }
@@ -32640,7 +32683,7 @@ We look forward to seeing your work!
     if (!s.offer_deadline && typeof ensureWorkspaceData === 'function') {
       ensureWorkspaceData(['auditionSessions']).then(applyDefaultRegistrationDueDate).catch(() => {});
     }
-    sv('reg-sequential-casting',   s.sequential_casting   === false ? 'Off' : 'On');
+    sc('reg-sequential-casting',   s.sequential_casting   !== false);
     sc('reg-return-declined',      s.return_declined      !== false);
     sc('reg-mark-expired',         s.mark_expired         !== false);
     sc('reg-form-performer-identity',       s.form_performer_identity       !== false);
@@ -32701,6 +32744,42 @@ We look forward to seeing your work!
     sc('reg-notif-offer-reminder', s.notif_offer_reminder !== false);
     sc('reg-notif-reg-incomplete', s.notif_reg_incomplete !== false);
     sc('reg-notif-reminders',      s.notif_reminders      === true);
+    syncTileToggles();
+  }
+
+  function initTileToggles() {
+    document.querySelectorAll('.bts-settings-field-tile').forEach(tile => {
+      if (tile.querySelector('.bts-tile-toggle')) return;
+      const labelEl = tile.querySelector('.bts-settings-field-tile-label');
+      if (!labelEl) return;
+      const header = document.createElement('div');
+      header.className = 'bts-settings-field-tile-header';
+      labelEl.parentNode.insertBefore(header, labelEl);
+      header.appendChild(labelEl);
+      const toggle = document.createElement('input');
+      toggle.type = 'checkbox';
+      toggle.className = 'bts-tile-toggle';
+      toggle.checked = true;
+      toggle.setAttribute('aria-label', 'Enable this setting');
+      header.appendChild(toggle);
+      toggle.addEventListener('change', () => {
+        tile.classList.toggle('bts-tile--off', !toggle.checked);
+      });
+    });
+  }
+
+  function syncTileToggles() {
+    document.querySelectorAll('.bts-settings-field-tile').forEach(tile => {
+      const toggle = tile.querySelector('.bts-tile-toggle');
+      if (!toggle) return;
+      const inputs = tile.querySelectorAll('input:not(.bts-tile-toggle), select, textarea');
+      const hasValue = [...inputs].some(el => {
+        if (el.type === 'checkbox') return el.checked;
+        return (el.value || '').trim() !== '';
+      });
+      toggle.checked = hasValue;
+      tile.classList.toggle('bts-tile--off', !hasValue);
+    });
   }
 
   async function saveRegistrationSettings() {
@@ -32710,7 +32789,7 @@ We look forward to seeing your work!
     const registrationDueTime = gv('reg-offer-deadline-time') || '23:59';
     const s = {
       offer_deadline:        registrationDueDate ? `${registrationDueDate}T${registrationDueTime}` : '',
-      sequential_casting:    gv('reg-sequential-casting') === 'On',
+      sequential_casting:    gc('reg-sequential-casting'),
       return_declined:       gc('reg-return-declined'),
       mark_expired:          gc('reg-mark-expired'),
       form_performer_identity:       gc('reg-form-performer-identity'),
