@@ -943,6 +943,12 @@
       color: #aaa;
       text-decoration: line-through;
     }
+    .ai-si-slot-pill-count {
+      margin-left: 0.35rem;
+      font-size: 0.68rem;
+      font-weight: 500;
+      opacity: 0.6;
+    }
     .ai-si-slot-empty {
       font-size: 0.78rem;
       color: #9a90b0;
@@ -2499,9 +2505,12 @@
           (allSlots || []).forEach(slot => {
             if (!slotsBySession[slot.session_id]) slotsBySession[slot.session_id] = [];
             const cap = Number(slot.capacity) || 0;
+            const booked = infoOccupancy[slot.id] || 0;
             slotsBySession[slot.session_id].push({
               ...slot,
-              _full: cap > 0 && (infoOccupancy[slot.id] || 0) >= cap,
+              _full: cap > 0 && booked >= cap,
+              _booked: booked,
+              _cap: cap,
             });
           });
         } catch (_) {}
@@ -3306,7 +3315,10 @@
                 ${slots.map(s => {
                   const t = fmtTimeStr(s.slot_time);
                   const full = s._full === true;
-                  return `<div class="ai-si-slot-pill${full ? ' ai-si-slot-pill-full' : ''}">${esc(t)}</div>`;
+                  const cap = s._cap || 0;
+                  const open = cap > 1 ? Math.max(0, cap - (s._booked || 0)) : 0;
+                  const countTag = cap > 1 && !full ? `<span class="ai-si-slot-pill-count">${open}/${cap}</span>` : '';
+                  return `<div class="ai-si-slot-pill${full ? ' ai-si-slot-pill-full' : ''}">${esc(t)}${countTag}</div>`;
                 }).join('')}
               </div>`
             : `<div class="ai-si-slot-empty">Slots not yet published</div>`;
