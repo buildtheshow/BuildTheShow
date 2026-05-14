@@ -8,6 +8,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Submit Your Self Tape</title>
   <link rel="stylesheet" href="/ASSETS/styles/styles.css?v=typography-safe-20260421-2025" />
+  <link rel="stylesheet" href="/ASSETS/styles/casting-card.css" />
   <style>
     body { background: #efefef; }
 
@@ -94,31 +95,22 @@
     .ss-card-sub { font-size: 0.88rem; color: #572e88; margin-bottom: 1.4rem; line-height: 1.4; font-weight: 600; }
 
     /* ── Performer casting card ── */
-    .ss-performer-banner {
-      display: flex; align-items: flex-start; gap: 1rem;
-      margin-bottom: 1.4rem;
-    }
-    .ss-cast-portrait {
-      flex-shrink: 0; width: 88px;
-      border-radius: 8px; overflow: hidden;
-      border: 2px solid rgba(87,46,136,0.18);
-      box-shadow: 0 6px 20px rgba(0,0,0,0.14), 0 1px 4px rgba(0,0,0,0.08);
-      background: #ebe6f1;
-    }
-    .ss-cast-portrait img {
-      width: 100%; aspect-ratio: 3/4;
-      object-fit: cover; object-position: center top; display: block;
-    }
-    .ss-cast-portrait-placeholder {
-      width: 100%; aspect-ratio: 3/4;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 2rem; font-weight: 900; color: #572e88;
-    }
-    .ss-cast-info { display: flex; flex-direction: column; justify-content: center; padding-top: 0.25rem; }
-    .ss-performer-name { font-size: 1rem; font-weight: 900; color: #000000; line-height: 1.2; margin-bottom: 0.25rem; }
-    .ss-performer-email { font-size: 0.78rem; color: #572e88; font-weight: 600; }
-    .ss-wrong-person { font-size: 0.73rem; color: #572e88; margin-top: 0.35rem; }
+    .ss-performer-banner { margin-bottom: 1.4rem; }
+    .ss-cast-card-wrap { width: 140px; }
+    .ss-cast-card-wrap .casting-card { cursor: default; }
+    .ss-cast-card-wrap .casting-card:hover { transform: none; box-shadow: 0 6px 16px rgba(15,23,42,0.12); }
+    .ss-wrong-person { font-size: 0.73rem; color: #572e88; margin-top: 0.6rem; }
     .ss-wrong-person a { color: #572e88; font-weight: 700; }
+
+    /* ── Hero bottom (poster + badge) ── */
+    .ss-hero-bottom { display: flex; align-items: flex-end; gap: 1rem; }
+    .ss-hero-poster {
+      width: 66px; aspect-ratio: 3/4;
+      object-fit: cover; object-position: center top;
+      border-radius: 4px; display: block; flex-shrink: 0;
+      box-shadow: 4px 8px 20px rgba(0,0,0,0.45), 0 1px 4px rgba(0,0,0,0.25);
+      transform: rotate(-3deg);
+    }
 
     /* ── Previous submission ── */
     .ss-prev-submission {
@@ -300,7 +292,10 @@
           <h1 class="ss-hero-title">Submit<br>Your Tape</h1>
           <p class="ss-hero-copy">Paste the link to your video when you're ready to send it in. YouTube, Vimeo, Google Drive, and Dropbox are all accepted.</p>
         </div>
-        <div class="ss-hero-badge" id="ss-show-head"></div>
+        <div class="ss-hero-bottom">
+          <div id="ss-poster-wrap"></div>
+          <div class="ss-hero-badge" id="ss-show-head"></div>
+        </div>
       </section>
 
       <!-- Right: form card -->
@@ -385,6 +380,7 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script defer src="/ASSETS/scripts/casting-card.js"></script>
 <script>
   'use strict';
 
@@ -621,25 +617,36 @@
   function ssRenderOrgLogo() {
     const wrap = document.getElementById('ss-org-logo-wrap');
     if (!wrap || !_prod?.org_logo) return;
-    wrap.innerHTML = `<img src="${esc(_prod.org_logo)}" class="ss-org-logo" alt="" />`;
+    const filterStyle = _prod.org_logo_is_white ? '' : ' style="filter:brightness(0) invert(1);"';
+    wrap.innerHTML = `<img src="${esc(_prod.org_logo)}" class="ss-org-logo" alt=""${filterStyle} />`;
+  }
+
+  function ssRenderPoster() {
+    const wrap = document.getElementById('ss-poster-wrap');
+    if (!wrap || !_prod?.poster_url) return;
+    wrap.innerHTML = `<img src="${esc(_prod.poster_url)}" class="ss-hero-poster" alt="" />`;
   }
 
   function ssRenderPerformerBanner() {
     const container = document.getElementById('ss-performer-banner');
     if (!container || !_app) return;
-    const name    = _app.name || 'Performer';
-    const email   = _app.email || '';
-    const initial = esc((name[0] || '?').toUpperCase());
-    const portraitInner = _app.headshot_url
-      ? `<img src="${esc(_app.headshot_url)}" alt="" />`
-      : `<div class="ss-cast-portrait-placeholder">${initial}</div>`;
+    const nameParts  = (_app.name || 'Performer').trim().split(/\s+/);
+    const firstName  = nameParts[0] || '';
+    const lastName   = nameParts.slice(1).join(' ') || '';
+    const cardData   = {
+      first_name:         firstName,
+      last_name:          lastName,
+      headshot_url:       _app.headshot_url || '',
+      casting_categories: [],
+      role_openness:      'open',
+      attendance_mode:    _app.attendance_mode || null,
+    };
+    const cardHtml = typeof renderCastingCard === 'function'
+      ? renderCastingCard(cardData, { hasIcons: false, draggable: false })
+      : `<div style="padding:1rem;font-size:0.9rem;font-weight:700;">${esc(_app.name || 'Performer')}</div>`;
     container.innerHTML = `
-      <div class="ss-cast-portrait">${portraitInner}</div>
-      <div class="ss-cast-info">
-        <div class="ss-performer-name">${esc(name)}</div>
-        ${email ? `<div class="ss-performer-email">${esc(email)}</div>` : ''}
-        <div class="ss-wrong-person">Not you? <a href="javascript:void(0)">Contact the production</a> for a new link.</div>
-      </div>`;
+      <div class="ss-cast-card-wrap">${cardHtml}</div>
+      <div class="ss-wrong-person">Not you? <a href="javascript:void(0)">Contact the production</a> for a new link.</div>`;
   }
 
   function ssRenderPrevSubmissions() {
@@ -699,7 +706,7 @@
     try {
       const [prodRes, appRes, prevRes] = await Promise.all([
         sb.from('productions').select('id, title, poster_url, organization_id').eq('id', prodId).maybeSingle(),
-        sb.from('audition_applications').select('id, name, email, headshot_url').eq('id', appId).eq('production_id', prodId).maybeSingle(),
+        sb.from('audition_applications').select('id, name, email, headshot_url, attendance_mode').eq('id', appId).eq('production_id', prodId).maybeSingle(),
         sb.from('self_tape_submissions')
           .select('*').eq('applicant_id', appId).eq('production_id', prodId).eq('scope', submissionScope)
           .order('submitted_at', { ascending: false }),
@@ -718,13 +725,15 @@
 
       let orgName = '';
       let orgLogo = null;
+      let orgLogoIsWhite = false;
       if (prodRes.data.organization_id) {
         const { data: org } = await sb.from('organizations').select('name, logo_url, brand_logo_url, white_logo_url').eq('id', prodRes.data.organization_id).maybeSingle();
         orgName = org?.name || '';
-        orgLogo = org?.logo_url || org?.brand_logo_url || org?.white_logo_url || null;
+        if (org?.white_logo_url) { orgLogo = org.white_logo_url; orgLogoIsWhite = true; }
+        else { orgLogo = org?.logo_url || org?.brand_logo_url || null; }
       }
 
-      _prod = { ...prodRes.data, org_name: orgName, org_logo: orgLogo };
+      _prod = { ...prodRes.data, org_name: orgName, org_logo: orgLogo, org_logo_is_white: orgLogoIsWhite };
       _app  = appRes.data;
       _prevSubmissions = prevRes.data || [];
 
@@ -740,6 +749,7 @@
 
       ssRenderShowHead();
       ssRenderOrgLogo();
+      ssRenderPoster();
       ssRenderPerformerBanner();
       ssRenderPrevSubmissions();
       ssAddTapeRow(false); // first row — not removable
