@@ -49847,25 +49847,33 @@ We look forward to seeing your work!
     if (!app?.email) { showToast('No email address for this performer.', true); return; }
     if (buttonEl) { buttonEl.disabled = true; buttonEl.textContent = 'Sending...'; }
     try {
-      let bookingId = app.booking_id || null;
-      if (!bookingId && app.email) {
-        const { data: bookingRows } = await sb.from('audition_bookings')
-          .select('id').eq('production_id', prodId).eq('email', app.email)
-          .order('created_at', { ascending: false }).limit(1);
-        bookingId = bookingRows?.[0]?.id || null;
-      }
-      if (!bookingId) {
-        showToast('No booking record found — self tape link cannot be sent for manually-added performers.', true);
+      const { data: templates } = await sb.from('email_templates')
+        .select('subject, body').eq('production_id', prodId).eq('category', 'self_tape_booked')
+        .order('created_at', { ascending: false }).limit(1);
+      if (!templates?.length) {
+        showToast('No self tape email template found. Create one in the Emails tab first.', true);
         if (buttonEl) { buttonEl.disabled = false; buttonEl.textContent = 'Send Email'; }
         return;
       }
       await loadPerformanceScheduleSummary();
       const context = withEmailButtonContext(_apmBuildEmailContext());
-      const sent = await resendConfirmationEmail(bookingId, 'self_tape_booked', {
-        email: app.email, name: app.name || '', context,
+      const subject = _applyEmailContext(templates[0].subject || '', context);
+      const body    = finalCastingEmailPreviewBodyHtml(_applyEmailContext(templates[0].body || '', context));
+      const res = await fetch('https://tkmaiktxpwqfbgeojbnf.supabase.co/functions/v1/send-email', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRrbWFpa3R4cHdxZmJnZW9qYm5mIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM3MzE4MTcsImV4cCI6MjA4OTMwNzgxN30.TkTZBNWUatk3Y6Vmfv1hIRR3DfVjgwauwa76Pf00J_8',
+        },
+        body: JSON.stringify({ production_id: prodId, test_email: app.email, subject, body }),
       });
+      const data = await res.json().catch(() => ({}));
       closeSelfTapeEmailPreview();
-      if (sent) showToast('Self tape link sent to ' + (app.name || app.email) + '.');
+      if (data.ok) {
+        showToast('Self tape link sent to ' + (app.name || app.email) + '.');
+      } else {
+        showToast('Could not send: ' + (data.error || 'Unknown error'), true);
+      }
     } catch (err) {
       console.error('[APM] sendSelfTapeEmail error', err);
       if (buttonEl) { buttonEl.disabled = false; buttonEl.textContent = 'Send Email'; }
