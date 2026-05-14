@@ -175,6 +175,13 @@
     }
     .ss-platform-detected.visible { display: flex; }
 
+    /* ── Link verification status ── */
+    .ss-link-verify { font-size: 0.76rem; margin-top: 0.4rem; line-height: 1.45; display: none; }
+    .ss-link-verify.checking { display: block; color: rgba(87,46,136,0.5); }
+    .ss-link-verify.ok  { display: block; color: #245b2f; font-weight: 600; }
+    .ss-link-verify.warn { display: block; color: #7d2b25; font-weight: 600; }
+    .ss-link-verify.unverifiable { display: block; color: #765b08; }
+
     /* ── Platform guide accordion ── */
     .ss-platform-guide { margin-top: 0; margin-bottom: 1.4rem; }
     .ss-guide-toggle {
@@ -537,7 +544,9 @@
     const banner  = row?.querySelector('.ss-platform-detected');
     const icon    = row?.querySelector('.ss-platform-icon');
     const lbl     = row?.querySelector('.ss-platform-lbl');
+    const verify  = row?.querySelector('.ss-link-verify');
     const platform = ssDetectPlatform(input.value);
+    if (verify) { verify.className = 'ss-link-verify'; verify.textContent = ''; }
     if (!banner) return;
     if (platform) {
       icon.textContent = platform.icon;
@@ -545,6 +554,49 @@
       banner.classList.add('visible');
     } else {
       banner.classList.remove('visible');
+    }
+  }
+
+  async function ssVerifyLink(input) {
+    const url    = (input.value || '').trim();
+    const row    = input.closest('.ss-link-row');
+    const verify = row?.querySelector('.ss-link-verify');
+    if (!verify || !url) return;
+
+    const platform = ssDetectPlatform(url);
+    if (!platform) return;
+
+    verify.className = 'ss-link-verify checking';
+    verify.textContent = 'Checking your link...';
+
+    try {
+      if (platform.id === 'youtube') {
+        const res = await fetch(`https://www.youtube.com/oembed?url=${encodeURIComponent(url)}&format=json`);
+        if (res.ok) {
+          const data = await res.json();
+          verify.className = 'ss-link-verify ok';
+          verify.textContent = `Looks good — we can see "${data.title}"`;
+        } else {
+          verify.className = 'ss-link-verify warn';
+          verify.textContent = 'This video looks like it may be private. Open the link in a private window to double-check.';
+        }
+      } else if (platform.id === 'vimeo') {
+        const res = await fetch(`https://vimeo.com/api/oembed.json?url=${encodeURIComponent(url)}`);
+        if (res.ok) {
+          const data = await res.json();
+          verify.className = 'ss-link-verify ok';
+          verify.textContent = `Looks good — we can see "${data.title}"`;
+        } else {
+          verify.className = 'ss-link-verify warn';
+          verify.textContent = 'This video looks like it may be private. Open the link in a private window to double-check.';
+        }
+      } else {
+        verify.className = 'ss-link-verify unverifiable';
+        verify.textContent = `We can't check ${platform.label} links automatically. Open it in a private window to make sure anyone can watch it.`;
+      }
+    } catch {
+      verify.className = 'ss-link-verify unverifiable';
+      verify.textContent = 'We were not able to check this link. Please open it in a private window to confirm anyone can watch it.';
     }
   }
 
@@ -566,11 +618,13 @@
         <label class="ss-label">Video link</label>
         <input class="ss-input ss-url-input" type="url"
           placeholder="Paste the link to your video here"
-          oninput="ssHandleUrlInput(this)" />
+          oninput="ssHandleUrlInput(this)"
+          onblur="ssVerifyLink(this)" />
         <div class="ss-platform-detected">
           <span class="ss-platform-icon"></span>
           <span class="ss-platform-lbl"></span>
         </div>
+        <div class="ss-link-verify"></div>
       </div>
       <div class="ss-form-group" style="margin-bottom:0;">
         <label class="ss-label">What will we see? <span style="font-weight:400;color:#8a7ca5;">(optional)</span></label>
