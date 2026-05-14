@@ -38252,9 +38252,7 @@ We look forward to seeing your work!
       checked_in: update.checked_in ?? app.checked_in ?? false,
       checked_in_at: update.checked_in_at ?? app.checked_in_at ?? null,
       session_checkins: update.session_checkins !== undefined ? update.session_checkins : (app.session_checkins ?? null),
-      audition_method: update.audition_method !== undefined ? (update.audition_method || null) : undefined,
     };
-    if (applicationUpdate.audition_method === undefined) delete applicationUpdate.audition_method;
 
     const bookingUpdate = {
       // pronouns and custom_answers are Clio-only — never mirror back to Apollo bookings
@@ -41796,13 +41794,22 @@ We look forward to seeing your work!
     if (!mode) return '';
     if (['in_person', 'in person', 'in-person', 'onsite', 'on_site', 'on site'].includes(mode)) return 'In Person';
     if (['video_call', 'video call', 'video', 'virtual', 'online', 'zoom', 'google meet', 'meet'].includes(mode)) return 'On a Video Call';
+    if (mode === 'self_tape') return 'Self Tape';
+    if (mode === 'n/a' || mode === 'na') return 'N/A';
     return '';
   }
 
   function getApplicantAttendanceForSession(app, sessionId = '') {
+    // Per-session attendance dict takes priority
+    const appAnswers = applicantCustomAnswers(app);
+    const perSession = (typeof appAnswers.session_attendance === 'object' && appAnswers.session_attendance) || null;
+    if (perSession && sessionId && perSession[sessionId] !== undefined) {
+      const v = String(perSession[sessionId] || '').trim().toLowerCase();
+      const label = attendanceModeLabelForValue(v);
+      return { value: v, label, isVideoCall: label === 'On a Video Call' };
+    }
     const bookingRow = sessionId ? getApplicantBookingRowForSession(app, sessionId) : null;
     const bookingAnswers = applicantCustomAnswers(bookingRow);
-    const appAnswers = applicantCustomAnswers(app);
     const rawValue =
       bookingRow?.attendance_mode ||
       bookingAnswers['Attendance Type'] ||
@@ -49109,7 +49116,7 @@ We look forward to seeing your work!
 
   // ── All Performers Performer Modal (APM) ─────────────────────
   let _apmAppId = null, _apmApp = null, _apmTab = 'scheduling';
-  let _apmPendingSlots = {}, _apmPickingSessions = new Set(), _apmEdits = {}, _apmPendingAttendance = {}, _apmAttendanceConfirming = {}, _apmPendingSelfTape = {}, _apmSelfTapeConfirming = {};
+  let _apmPendingSlots = {}, _apmPickingSessions = new Set(), _apmEdits = {}, _apmPendingAttendance = {}, _apmAttendanceConfirming = {};
   let _apmHeadshotFile = null, _apmHeadshotObjectUrl = null;
   let _apmDangerConfirming = false;
   let _apmEmailCompose = null; // { category, subject, body } when composing
@@ -49146,7 +49153,7 @@ We look forward to seeing your work!
     const modal = document.getElementById('ap-performer-modal');
     if (modal) modal.style.display = 'none';
     _apmAppId = null; _apmApp = null;
-    _apmPendingSlots = {}; _apmPickingSessions = new Set(); _apmEdits = {}; _apmPendingAttendance = {}; _apmAttendanceConfirming = {}; _apmPendingSelfTape = {}; _apmSelfTapeConfirming = {};
+    _apmPendingSlots = {}; _apmPickingSessions = new Set(); _apmEdits = {}; _apmPendingAttendance = {}; _apmAttendanceConfirming = {};
 
     if (_apmHeadshotObjectUrl) { URL.revokeObjectURL(_apmHeadshotObjectUrl); _apmHeadshotObjectUrl = null; }
     _apmHeadshotFile = null;
@@ -49641,49 +49648,52 @@ We look forward to seeing your work!
         slotLabel = [dateStr, timeStr].filter(Boolean).join(' · ');
         slotClass = pendingSlotId !== undefined ? 'changed' : '';
       }
-      // Self tape state
-      const existingIsSelfTape = _apmApp?.audition_method === 'self_tape';
-      const pendingSelfTape = _apmPendingSelfTape.hasOwnProperty(session.id) ? _apmPendingSelfTape[session.id] : null;
-      const isSelfTape = pendingSelfTape === true || (existingIsSelfTape && pendingSelfTape !== false);
-      const selfTapeChangePending = pendingSelfTape === true && !existingIsSelfTape;
-      const selfTapeConfirmingMode = !!_apmSelfTapeConfirming[session.id];
-      if (isSelfTape && !currentSlot) { slotLabel = 'Self Tape'; slotClass = selfTapeChangePending ? 'changed' : ''; }
-      // Attendance mode
+      // Attendance mode (per-session — includes self_tape and n/a)
       const existingAttendance = getApplicantAttendanceForSession(_apmApp, session.id);
       const pendingAttendance = _apmPendingAttendance.hasOwnProperty(session.id) ? _apmPendingAttendance[session.id] : null;
       const currentAttendance = pendingAttendance !== null ? pendingAttendance : (existingAttendance.value || '');
       const isInPerson = currentAttendance === 'in_person' || currentAttendance === 'in person';
       const isVideo = currentAttendance === 'video_call' || currentAttendance === 'video' || currentAttendance === 'virtual';
+      const isNonSlot = currentAttendance === 'self_tape' || currentAttendance === 'n/a';
       const confirmingMode = _apmAttendanceConfirming[session.id] || null;
       const attendanceChanged = pendingAttendance !== null;
       const sid = esc(session.id);
+      // Session-type-specific buttons
+      const sessionType = session.type || 'audition';
+      const attendanceOptions = sessionType === 'audition'
+        ? [['in_person','In Person'],['video_call','Video Call'],['self_tape','Self Tape']]
+        : sessionType === 'dance_call'
+          ? [['in_person','In Person'],['n/a','N/A']]
+          : sessionType === 'callback'
+            ? [['in_person','In Person'],['video_call','Video Call']]
+            : [['in_person','In Person'],['video_call','Video Call'],['n/a','N/A']];
       const btnStyle = (active) => `background:${active?'#572e88':'#fff'};color:${active?'#fff':'#572e88'};border:1.5px solid ${active?'#572e88':'rgba(87,46,136,0.25)'};border-radius:20px;padding:0.18rem 0.65rem;font-size:0.75rem;font-weight:600;cursor:${active?'default':'pointer'};`;
-      const attendanceRow = selfTapeConfirmingMode
+      const confirmLabel = confirmingMode === 'self_tape'
+        ? 'Convert to Self Tape? This will clear their slot.'
+        : confirmingMode === 'n/a'
+          ? 'Mark as N/A? This will clear their slot.'
+          : `Switch to <strong>${attendanceModeLabelForValue(confirmingMode)}</strong>?`;
+      const savedIsSelfTape = existingAttendance.value === 'self_tape' && sessionType === 'audition';
+      // Override slot label when non-slot attendance
+      if (isNonSlot && !currentSlot) {
+        slotLabel = attendanceModeLabelForValue(currentAttendance) || currentAttendance;
+        slotClass = attendanceChanged ? 'changed' : '';
+      }
+      const attendanceRow = confirmingMode
         ? `<div style="display:flex;gap:0.5rem;padding:0 1rem 0.75rem;align-items:center;flex-wrap:wrap;">
-             <span style="font-size:0.8rem;color:#1a1530;font-weight:600;">Convert to <strong>Self Tape</strong>? This will clear their slot.</span>
-             <button onclick="apmConfirmSelfTape('${sid}')" style="background:#572e88;color:#fff;border:none;border-radius:6px;padding:0.22rem 0.7rem;font-size:0.75rem;font-weight:600;cursor:pointer;">Yes, convert</button>
-             <button onclick="apmCancelSelfTapeConfirm('${sid}')" style="background:none;border:1px solid rgba(87,46,136,0.25);border-radius:6px;padding:0.22rem 0.7rem;font-size:0.75rem;font-weight:600;color:#6a5a80;cursor:pointer;">Cancel</button>
+             <span style="font-size:0.8rem;color:#1a1530;font-weight:600;">${confirmLabel}</span>
+             <button onclick="apmConfirmAttendance('${sid}','${esc(confirmingMode)}')" style="background:#572e88;color:#fff;border:none;border-radius:6px;padding:0.22rem 0.7rem;font-size:0.75rem;font-weight:600;cursor:pointer;">Yes</button>
+             <button onclick="apmCancelAttendanceConfirm('${sid}')" style="background:none;border:1px solid rgba(87,46,136,0.25);border-radius:6px;padding:0.22rem 0.7rem;font-size:0.75rem;font-weight:600;color:#6a5a80;cursor:pointer;">Cancel</button>
            </div>`
-        : isSelfTape
-          ? `<div style="display:flex;gap:0.4rem;padding:0 1rem 0.75rem;align-items:center;">
-               <span style="font-size:0.72rem;font-weight:700;color:#9a90b0;text-transform:uppercase;letter-spacing:0.05em;margin-right:0.25rem;">Attendance:</span>
-               <span style="background:#ebe6f1;color:#572e88;border-radius:20px;padding:0.18rem 0.65rem;font-size:0.75rem;font-weight:600;">Self Tape</span>
-               ${selfTapeChangePending ? `<span style="font-size:0.72rem;color:#572e88;font-weight:600;">· changed</span>` : ''}
-               ${existingIsSelfTape ? `<button onclick="apmLoadEmailComposer('self_tape_booked')" style="margin-left:0.5rem;background:#efab45;color:#000;border:none;border-radius:6px;padding:0.22rem 0.8rem;font-size:0.75rem;font-weight:700;cursor:pointer;font-family:inherit;">Send Link</button>` : ''}
-             </div>`
-          : confirmingMode
-            ? `<div style="display:flex;gap:0.5rem;padding:0 1rem 0.75rem;align-items:center;flex-wrap:wrap;">
-                 <span style="font-size:0.8rem;color:#1a1530;font-weight:600;">Switch to <strong>${confirmingMode === 'in_person' ? 'In Person' : 'Video Call'}</strong>?</span>
-                 <button onclick="apmConfirmAttendance('${sid}','${confirmingMode}')" style="background:#572e88;color:#fff;border:none;border-radius:6px;padding:0.22rem 0.7rem;font-size:0.75rem;font-weight:600;cursor:pointer;">Yes, change it</button>
-                 <button onclick="apmCancelAttendanceConfirm('${sid}')" style="background:none;border:1px solid rgba(87,46,136,0.25);border-radius:6px;padding:0.22rem 0.7rem;font-size:0.75rem;font-weight:600;color:#6a5a80;cursor:pointer;">Cancel</button>
-               </div>`
-            : `<div style="display:flex;gap:0.4rem;padding:0 1rem 0.75rem;align-items:center;flex-wrap:wrap;">
-                 <span style="font-size:0.72rem;font-weight:700;color:#9a90b0;text-transform:uppercase;letter-spacing:0.05em;margin-right:0.25rem;">Attendance:</span>
-                 <button onclick="${isInPerson ? '' : `apmRequestAttendance('${sid}','in_person')`}" style="${btnStyle(isInPerson)}${isInPerson?'pointer-events:none;':''}">In Person</button>
-                 <button onclick="${isVideo ? '' : `apmRequestAttendance('${sid}','video_call')`}" style="${btnStyle(isVideo)}${isVideo?'pointer-events:none;':''}">Video Call</button>
-                 <button onclick="apmRequestSelfTape('${sid}')" style="${btnStyle(false)}">Self Tape</button>
-                 ${attendanceChanged ? `<span style="font-size:0.72rem;color:#572e88;font-weight:600;">· changed</span>` : ''}
-               </div>`;
+        : `<div style="display:flex;gap:0.4rem;padding:0 1rem 0.75rem;align-items:center;flex-wrap:wrap;">
+             <span style="font-size:0.72rem;font-weight:700;color:#9a90b0;text-transform:uppercase;letter-spacing:0.05em;margin-right:0.25rem;">Attendance:</span>
+             ${attendanceOptions.map(([val, lbl]) => {
+               const active = currentAttendance === val;
+               return `<button onclick="${active ? '' : `apmRequestAttendance('${sid}','${val}')`}" style="${btnStyle(active)}${active?'pointer-events:none;':''}">${lbl}</button>`;
+             }).join('')}
+             ${savedIsSelfTape ? `<button onclick="apmLoadEmailComposer('self_tape_booked')" style="margin-left:0.25rem;background:#efab45;color:#000;border:none;border-radius:6px;padding:0.22rem 0.8rem;font-size:0.75rem;font-weight:700;cursor:pointer;font-family:inherit;">Send Link</button>` : ''}
+             ${attendanceChanged ? `<span style="font-size:0.72rem;color:#572e88;font-weight:600;">· changed</span>` : ''}
+           </div>`;
       const isOpen = _apmPickingSessions.has(session.id);
       return `
         <div class="apm-session-card">
@@ -49693,10 +49703,10 @@ We look forward to seeing your work!
               <div class="apm-session-name">${esc(session.name || sessionTypeLabel(session.type || 'audition'))}</div>
               <div class="apm-session-slot ${slotClass}">${esc(slotLabel)}</div>
             </div>
-            ${isSelfTape ? '' : `<button class="apm-change-btn ${isOpen ? 'open' : ''}" onclick="apmTogglePicker('${esc(session.id)}')">${isOpen ? 'Done' : 'Change'}</button>`}
+            ${isNonSlot ? '' : `<button class="apm-change-btn ${isOpen ? 'open' : ''}" onclick="apmTogglePicker('${esc(session.id)}')">${isOpen ? 'Done' : 'Change'}</button>`}
           </div>
           ${attendanceRow}
-          ${!isSelfTape && isOpen ? _apmSlotPickerHTML(session, effectiveSlotId) : ''}
+          ${!isNonSlot && isOpen ? _apmSlotPickerHTML(session, effectiveSlotId) : ''}
         </div>`;
     }).join('');
   }
@@ -49766,22 +49776,6 @@ We look forward to seeing your work!
     if (!orgSlug || !prod?.slug || !app?.id) return '';
     const code = apmBuildSubmissionCode(app.name, app.id);
     return `https://buildtheshow.com/${orgSlug}/${prod.slug}/SelfTape/${code}`;
-  }
-
-  function apmRequestSelfTape(sessionId) {
-    _apmSelfTapeConfirming[sessionId] = true;
-    if (_apmTab === 'scheduling') _apmRenderBody();
-  }
-
-  function apmConfirmSelfTape(sessionId) {
-    _apmPendingSelfTape[sessionId] = true;
-    delete _apmSelfTapeConfirming[sessionId];
-    if (_apmTab === 'scheduling') _apmRenderBody();
-  }
-
-  function apmCancelSelfTapeConfirm(sessionId) {
-    delete _apmSelfTapeConfirming[sessionId];
-    if (_apmTab === 'scheduling') _apmRenderBody();
   }
 
   function _apmPerformerHTML() {
@@ -49961,14 +49955,28 @@ We look forward to seeing your work!
     if (statusEl) { statusEl.className = 'apm-save-status saving'; statusEl.textContent = 'Saving…'; }
     try {
       const update = {};
-      // Attendance mode — stored on the application record
+      // Per-session attendance — stored in custom_answers.session_attendance
       if (Object.keys(_apmPendingAttendance).length) {
-        // Use the first changed session's attendance as the primary value (most productions have one session)
-        const firstMode = Object.values(_apmPendingAttendance)[0];
-        if (firstMode) update.attendance_mode = firstMode;
         const ca2 = update.custom_answers || { ...applicantCustomAnswers(_apmApp) };
-        Object.values(_apmPendingAttendance).forEach(mode => { if (mode) ca2['Attendance Type'] = attendanceModeLabelForValue(mode); });
+        const perSession = (typeof ca2.session_attendance === 'object' && ca2.session_attendance) ? { ...ca2.session_attendance } : {};
+        Object.entries(_apmPendingAttendance).forEach(([sessionId, mode]) => { perSession[sessionId] = mode; });
+        ca2.session_attendance = perSession;
+        // Derive application-level attendance_mode from primary audition session (legacy compat)
+        const primaryAuditionSession = getAuditionScheduleViewSessions().find(s => (s.type || 'audition') === 'audition');
+        const primaryMode = primaryAuditionSession ? (perSession[primaryAuditionSession.id] || '') : Object.values(perSession)[0] || '';
+        const legacyModes = ['in_person', 'in person', 'video_call', 'video', 'virtual'];
+        if (legacyModes.includes(primaryMode)) update.attendance_mode = primaryMode;
         update.custom_answers = ca2;
+        // Clear slots for non-slot attendance (self_tape, n/a)
+        const nonSlotSessions = Object.entries(perSession).filter(([, v]) => v === 'self_tape' || v === 'n/a').map(([k]) => k);
+        if (nonSlotSessions.length) {
+          const existing = Array.isArray(_apmApp?.slot_assignments) ? [..._apmApp.slot_assignments] : [];
+          nonSlotSessions.forEach(sessionId => {
+            const idx = existing.findIndex(x => x.session_id === sessionId);
+            if (idx >= 0) existing.splice(idx, 1);
+          });
+          update.slot_assignments = existing;
+        }
       }
       // Slot assignments
       if (Object.keys(_apmPendingSlots).length) {
@@ -50025,29 +50033,22 @@ We look forward to seeing your work!
         if (contactEmail) ca2['Contact Email'] = contactEmail; else delete ca2['Contact Email'];
         update.custom_answers = ca2;
       }
-      // Self tape conversion
-      const selfTapeJustConverted = Object.keys(_apmPendingSelfTape).some(sid => _apmPendingSelfTape[sid]);
-      if (selfTapeJustConverted) {
-        update.audition_method = 'self_tape';
-        update.attendance_mode = null;
-        const existing = Array.isArray(_apmApp?.slot_assignments) ? [..._apmApp.slot_assignments] : [];
-        Object.entries(_apmPendingSelfTape).forEach(([sessionId, val]) => {
-          if (!val) return;
-          const idx = existing.findIndex(x => x.session_id === sessionId);
-          if (idx >= 0) existing.splice(idx, 1);
-        });
-        update.slot_assignments = existing;
-      }
       // Headshot is handled separately via apmConfirmHeadshotUpload — not included here
 
       if (!Object.keys(update).length) {
         if (statusEl) { statusEl.className = 'apm-save-status'; statusEl.textContent = 'No changes to save.'; }
         return;
       }
+      // Detect self tape conversion for auto-email (before state reset)
+      const selfTapeJustConverted = Object.entries(_apmPendingAttendance).some(([sessionId, mode]) => {
+        if (mode !== 'self_tape') return false;
+        const sess = getAuditionScheduleViewSessions().find(s => s.id === sessionId);
+        return (sess?.type || 'audition') === 'audition';
+      });
       await syncApplicantEditsToSource(_apmApp, update);
       const idx = (allApplicants || []).findIndex(a => String(a.id) === String(_apmAppId));
       if (idx >= 0) { allApplicants[idx] = { ...allApplicants[idx], ...update }; _apmApp = allApplicants[idx]; }
-      _apmPendingSlots = {}; _apmPickingSessions = new Set(); _apmEdits = {}; _apmPendingAttendance = {}; _apmPendingSelfTape = {}; _apmSelfTapeConfirming = {};
+      _apmPendingSlots = {}; _apmPickingSessions = new Set(); _apmEdits = {}; _apmPendingAttendance = {}; _apmAttendanceConfirming = {};
       if (update.headshot_url !== undefined) {
         const pw = document.getElementById('apm-header-photo');
         if (pw) pw.innerHTML = update.headshot_url
@@ -50058,6 +50059,7 @@ We look forward to seeing your work!
       if (statusEl) { statusEl.className = 'apm-save-status saved'; statusEl.textContent = 'Saved!'; setTimeout(() => { if (statusEl) statusEl.textContent = ''; }, 2500); }
       _apmRenderBody();
       if (selfTapeJustConverted) apmLoadEmailComposer('self_tape_booked');
+
     } catch (err) {
       console.error('[APM] save error', err);
       if (statusEl) { statusEl.className = 'apm-save-status error'; statusEl.textContent = 'Error saving. Try again.'; }
