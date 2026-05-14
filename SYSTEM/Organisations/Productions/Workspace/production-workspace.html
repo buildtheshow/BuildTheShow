@@ -49683,7 +49683,7 @@ We look forward to seeing your work!
                const active = currentAttendance === val;
                return `<button onclick="${active ? '' : `apmRequestAttendance('${sid}','${val}')`}" style="${btnStyle(active)}${active?'pointer-events:none;':''}">${lbl}</button>`;
              }).join('')}
-             ${savedIsSelfTape ? `<button onclick="apmLoadEmailComposer('self_tape_booked')" style="margin-left:0.25rem;background:#efab45;color:#000;border:none;border-radius:6px;padding:0.22rem 0.8rem;font-size:0.75rem;font-weight:700;cursor:pointer;font-family:inherit;">Send Link</button>` : ''}
+             ${savedIsSelfTape ? `<button onclick="openSelfTapeEmailPreview(_apmApp)" style="margin-left:0.25rem;background:#efab45;color:#000;border:none;border-radius:6px;padding:0.22rem 0.8rem;font-size:0.75rem;font-weight:700;cursor:pointer;font-family:inherit;">Send Link</button>` : ''}
              ${attendanceChanged ? `<span style="font-size:0.72rem;color:#572e88;font-weight:600;">· changed</span>` : ''}
            </div>`;
       const isOpen = _apmPickingSessions.has(session.id);
@@ -49768,6 +49768,108 @@ We look forward to seeing your work!
     if (!orgSlug || !prod?.slug || !app?.id) return '';
     const code = apmBuildSubmissionCode(app.name, app.id);
     return `https://buildtheshow.com/${orgSlug}/${prod.slug}/SelfTape/${code}`;
+  }
+
+  async function openSelfTapeEmailPreview(app) {
+    if (!app) return;
+    try {
+      const { data: templates } = await sb.from('email_templates')
+        .select('subject, body').eq('production_id', prodId).eq('category', 'self_tape_booked')
+        .order('created_at', { ascending: false }).limit(1);
+      if (!templates?.length) {
+        showToast('No self tape email template found. Create one in the Emails tab first.', true);
+        return;
+      }
+      const template = templates[0];
+      await loadPerformanceScheduleSummary();
+      const context = withEmailButtonContext(_apmBuildEmailContext());
+      const subject = _applyEmailContext(template.subject || '', context) || 'Your self tape submission link';
+      const body = finalCastingEmailPreviewBodyHtml(_applyEmailContext(template.body || '', context));
+      const from = orgName || prod?.org_name || 'Build The Show';
+      const toName = app.name || 'performer';
+      document.getElementById('apm-self-tape-preview-overlay')?.remove();
+      const overlay = document.createElement('div');
+      overlay.id = 'apm-self-tape-preview-overlay';
+      overlay.className = 'et-preview-overlay';
+      overlay.onclick = e => { if (e.target === overlay) closeSelfTapeEmailPreview(); };
+      overlay.innerHTML = `
+        <div class="et-preview-modal" role="dialog" aria-modal="true" aria-label="Email preview">
+          <div class="et-preview-modal-head">
+            <div>
+              <div class="et-preview-modal-title">Self Tape Link Email</div>
+              <div class="et-preview-modal-subtitle">This email will be sent to ${esc(toName)}.</div>
+            </div>
+            <button type="button" class="et-preview-modal-close" onclick="closeSelfTapeEmailPreview()" aria-label="Close preview">×</button>
+          </div>
+          <div class="et-preview-modal-body">
+            <div class="et-preview-message">
+              <div class="et-preview-subject-line">
+                ${esc(subject)}
+                <span class="et-preview-chip-row">
+                  <span class="et-preview-chip">External</span>
+                  <span class="et-preview-chip grey">Inbox ×</span>
+                </span>
+              </div>
+              <div class="et-preview-subject-tools" aria-hidden="true"><span>⎙</span><span>↗</span></div>
+              <div class="et-preview-email-card">
+                <div class="et-preview-email-header">
+                  <div class="et-preview-avatar">${esc(String(from || 'B').slice(0, 1).toUpperCase())}</div>
+                  <div class="et-preview-from-block">
+                    <div class="et-preview-from-name">${esc(from)} <span class="et-preview-from-addr">&lt;no-reply@buildtheshow.com&gt;</span></div>
+                    <div class="et-preview-meta"><div class="et-preview-meta-row">to ${esc(toName)} ▾</div></div>
+                  </div>
+                  <div class="et-preview-date">now</div>
+                  <div class="et-preview-actions" aria-hidden="true"><span>☆</span><span>☺</span><span>↩</span><span>⋮</span></div>
+                </div>
+                <div class="et-preview-body-content">${body}</div>
+              </div>
+              <div class="et-preview-footer">
+                <button type="button" class="btn-secondary" onclick="closeSelfTapeEmailPreview()">Cancel</button>
+                <button type="button" class="btn-primary" id="apm-self-tape-send-btn" onclick="sendSelfTapeEmail('${esc(String(app.id))}', this)">Send Email</button>
+              </div>
+            </div>
+          </div>
+        </div>`;
+      document.body.appendChild(overlay);
+    } catch (err) {
+      console.error('[APM] self tape preview error', err);
+      showToast('Could not load email preview. Try again.', true);
+    }
+  }
+
+  function closeSelfTapeEmailPreview() {
+    document.getElementById('apm-self-tape-preview-overlay')?.remove();
+  }
+
+  async function sendSelfTapeEmail(appId, buttonEl) {
+    const app = (allApplicants || []).find(a => String(a.id) === String(appId));
+    if (!app?.email) { showToast('No email address for this performer.', true); return; }
+    if (buttonEl) { buttonEl.disabled = true; buttonEl.textContent = 'Sending...'; }
+    try {
+      let bookingId = app.booking_id || null;
+      if (!bookingId && app.email) {
+        const { data: bookingRows } = await sb.from('audition_bookings')
+          .select('id').eq('production_id', prodId).eq('email', app.email)
+          .order('created_at', { ascending: false }).limit(1);
+        bookingId = bookingRows?.[0]?.id || null;
+      }
+      if (!bookingId) {
+        showToast('No booking record found — self tape link cannot be sent for manually-added performers.', true);
+        if (buttonEl) { buttonEl.disabled = false; buttonEl.textContent = 'Send Email'; }
+        return;
+      }
+      await loadPerformanceScheduleSummary();
+      const context = withEmailButtonContext(_apmBuildEmailContext());
+      const sent = await resendConfirmationEmail(bookingId, 'self_tape_booked', {
+        email: app.email, name: app.name || '', context,
+      });
+      closeSelfTapeEmailPreview();
+      if (sent) showToast('Self tape link sent to ' + (app.name || app.email) + '.');
+    } catch (err) {
+      console.error('[APM] sendSelfTapeEmail error', err);
+      if (buttonEl) { buttonEl.disabled = false; buttonEl.textContent = 'Send Email'; }
+      showToast('Error sending email. Try again.', true);
+    }
   }
 
   function _apmPerformerHTML() {
@@ -50046,7 +50148,7 @@ We look forward to seeing your work!
       renderAllPerformers();
       if (statusEl) { statusEl.className = 'apm-save-status saved'; statusEl.textContent = 'Saved!'; setTimeout(() => { if (statusEl) statusEl.textContent = ''; }, 2500); }
       _apmRenderBody();
-      if (selfTapeJustConverted) apmLoadEmailComposer('self_tape_booked');
+      if (selfTapeJustConverted) openSelfTapeEmailPreview(_apmApp);
 
     } catch (err) {
       console.error('[APM] save error', err);
