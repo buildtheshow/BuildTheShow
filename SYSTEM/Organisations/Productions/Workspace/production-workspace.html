@@ -38244,6 +38244,7 @@ We look forward to seeing your work!
       notes: update.notes,
       date_conflicts: update.date_conflicts,
       custom_answers: update.custom_answers,
+      audition_method: update.audition_method,
       pronouns: update.pronouns ?? app.pronouns ?? null,
       guardian_name: update.guardian_name ?? app.guardian_name ?? null,
       guardian_contact: update.guardian_contact ?? app.guardian_contact ?? null,
@@ -41817,6 +41818,7 @@ We look forward to seeing your work!
       app?.attendance_mode ||
       appAnswers['Attendance Type'] ||
       appAnswers['attendance_mode'] ||
+      app?.audition_method ||
       '';
     const label = attendanceModeLabelForValue(rawValue);
     return {
@@ -50090,6 +50092,7 @@ We look forward to seeing your work!
         const primaryMode = primaryAuditionSession ? (perSession[primaryAuditionSession.id] || '') : Object.values(perSession)[0] || '';
         const legacyModes = ['in_person', 'in person', 'video_call', 'video', 'virtual'];
         if (legacyModes.includes(primaryMode)) update.attendance_mode = primaryMode;
+        if (primaryMode === 'self_tape') update.audition_method = 'self_tape';
         update.custom_answers = ca2;
         // Clear slots for non-slot attendance (self_tape, n/a)
         const nonSlotSessions = Object.entries(perSession).filter(([, v]) => v === 'self_tape' || v === 'n/a').map(([k]) => k);
@@ -50165,9 +50168,16 @@ We look forward to seeing your work!
       }
       // Detect self tape conversion for auto-email (before state reset)
       const selfTapeJustConverted = Object.values(_apmPendingAttendance).includes('self_tape');
-      await syncApplicantEditsToSource(_apmApp, update);
+      const saveErr = await syncApplicantEditsToSource(_apmApp, update);
+      if (saveErr) {
+        console.error('[APM] save failed:', saveErr);
+        if (statusEl) { statusEl.className = 'apm-save-status error'; statusEl.textContent = 'Error saving. Try again.'; }
+        return;
+      }
       const idx = (allApplicants || []).findIndex(a => String(a.id) === String(_apmAppId));
       if (idx >= 0) { allApplicants[idx] = { ...allApplicants[idx], ...update }; _apmApp = allApplicants[idx]; }
+      // Keep the data cache fresh so realtime doesn't immediately re-fetch and overwrite with stale DB data
+      applicantsLoadedAt = Date.now();
       _apmPendingSlots = {}; _apmPickingSessions = new Set(); _apmEdits = {}; _apmPendingAttendance = {}; _apmAttendanceConfirming = {};
       if (update.headshot_url !== undefined) {
         const pw = document.getElementById('apm-header-photo');
