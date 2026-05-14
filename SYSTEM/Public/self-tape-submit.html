@@ -94,23 +94,44 @@
     .ss-card-title { font-size: 1.4rem; font-weight: 900; color: #000000; margin-bottom: 0.25rem; }
     .ss-card-sub { font-size: 0.88rem; color: #572e88; margin-bottom: 1.4rem; line-height: 1.4; font-weight: 600; }
 
-    /* ── Performer casting card ── */
-    .ss-performer-banner { margin-bottom: 1.4rem; }
-    .ss-cast-card-wrap { width: 140px; }
-    .ss-cast-card-wrap .casting-card { cursor: default; }
-    .ss-cast-card-wrap .casting-card:hover { transform: none; box-shadow: 0 6px 16px rgba(15,23,42,0.12); }
-    .ss-wrong-person { font-size: 0.73rem; color: #572e88; margin-top: 0.6rem; }
-    .ss-wrong-person a { color: #572e88; font-weight: 700; }
-
-    /* ── Hero bottom (poster + badge) ── */
-    .ss-hero-bottom { display: flex; align-items: flex-end; gap: 1rem; }
-    .ss-hero-poster {
-      width: 66px; aspect-ratio: 3/4;
-      object-fit: cover; object-position: center top;
-      border-radius: 4px; display: block; flex-shrink: 0;
-      box-shadow: 4px 8px 20px rgba(0,0,0,0.45), 0 1px 4px rgba(0,0,0,0.25);
-      transform: rotate(-3deg);
+    /* ── Performer banner (right card — simple) ── */
+    .ss-performer-banner {
+      display: flex; align-items: center; gap: 0.75rem;
+      background: #ebe6f1; border: 1.5px solid rgba(87,46,136,0.2);
+      border-radius: 12px; padding: 0.85rem 1rem; margin-bottom: 1.25rem;
     }
+    .ss-performer-avatar {
+      width: 38px; height: 38px; border-radius: 50%;
+      background: #572e88; color: #ffffff;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1rem; font-weight: 900; flex-shrink: 0; overflow: hidden;
+    }
+    .ss-performer-avatar img { width: 100%; height: 100%; object-fit: cover; object-position: center top; border-radius: 50%; }
+    .ss-performer-name { font-size: 0.9rem; font-weight: 800; color: #000000; }
+    .ss-performer-email { font-size: 0.75rem; color: #572e88; }
+    .ss-wrong-person { font-size: 0.75rem; color: #572e88; margin-top: 0.2rem; }
+    .ss-wrong-person a { color: #572e88; }
+
+    /* ── Hero toss (poster + casting card, left panel) ── */
+    .ss-hero-toss { display: flex; align-items: flex-end; }
+    .ss-hero-poster {
+      width: 118px; aspect-ratio: 3/4;
+      object-fit: cover; object-position: center top;
+      border-radius: 5px; display: block; flex-shrink: 0;
+      box-shadow: 8px 16px 38px rgba(0,0,0,0.6), 0 2px 6px rgba(0,0,0,0.3);
+      transform: rotate(-6deg);
+      position: relative; z-index: 1;
+    }
+    .ss-hero-cast-wrap { width: 90px; flex-shrink: 0; margin-left: -20px; position: relative; z-index: 2; }
+    .ss-hero-cast-wrap .casting-card {
+      transform: rotate(5deg);
+      box-shadow: 8px 16px 38px rgba(0,0,0,0.55), 0 2px 6px rgba(0,0,0,0.28) !important;
+      cursor: default;
+    }
+    .ss-hero-cast-wrap .casting-card:hover { transform: rotate(5deg) translateY(-3px); }
+
+    /* ── Hero bottom (show badge) ── */
+    .ss-hero-bottom { display: flex; align-items: flex-end; gap: 1rem; }
 
     /* ── Previous submission ── */
     .ss-prev-submission {
@@ -292,8 +313,11 @@
           <h1 class="ss-hero-title">Submit<br>Your Tape</h1>
           <p class="ss-hero-copy">Paste the link to your video when you're ready to send it in. YouTube, Vimeo, Google Drive, and Dropbox are all accepted.</p>
         </div>
-        <div class="ss-hero-bottom">
+        <div class="ss-hero-toss">
           <div id="ss-poster-wrap"></div>
+          <div id="ss-hero-cast-wrap"></div>
+        </div>
+        <div class="ss-hero-bottom">
           <div class="ss-hero-badge" id="ss-show-head"></div>
         </div>
       </section>
@@ -628,26 +652,36 @@
     wrap.innerHTML = `<img src="${esc(_prod.poster_url)}" class="ss-hero-poster" alt="" />`;
   }
 
-  function ssRenderPerformerBanner() {
-    const container = document.getElementById('ss-performer-banner');
-    if (!container || !_app) return;
-    const nameParts  = (_app.name || 'Performer').trim().split(/\s+/);
-    const firstName  = nameParts[0] || '';
-    const lastName   = nameParts.slice(1).join(' ') || '';
-    const cardData   = {
-      first_name:         firstName,
-      last_name:          lastName,
+  function ssRenderHeroCastCard() {
+    const wrap = document.getElementById('ss-hero-cast-wrap');
+    if (!wrap || !_app || typeof renderCastingCard !== 'function') return;
+    const nameParts = (_app.name || 'Performer').trim().split(/\s+/);
+    wrap.innerHTML = renderCastingCard({
+      first_name:         nameParts[0] || '',
+      last_name:          nameParts.slice(1).join(' ') || '',
       headshot_url:       _app.headshot_url || '',
       casting_categories: [],
       role_openness:      'open',
       attendance_mode:    _app.attendance_mode || null,
-    };
-    const cardHtml = typeof renderCastingCard === 'function'
-      ? renderCastingCard(cardData, { hasIcons: false, draggable: false })
-      : `<div style="padding:1rem;font-size:0.9rem;font-weight:700;">${esc(_app.name || 'Performer')}</div>`;
+    }, { hasIcons: false, draggable: false });
+  }
+
+  function ssRenderPerformerBanner() {
+    const container = document.getElementById('ss-performer-banner');
+    if (!container || !_app) return;
+    const name    = _app.name || 'Performer';
+    const email   = _app.email || '';
+    const initial = esc((name[0] || '?').toUpperCase());
+    const avatarInner = _app.headshot_url
+      ? `<img src="${esc(_app.headshot_url)}" alt="" />`
+      : initial;
     container.innerHTML = `
-      <div class="ss-cast-card-wrap">${cardHtml}</div>
-      <div class="ss-wrong-person">Not you? <a href="javascript:void(0)">Contact the production</a> for a new link.</div>`;
+      <div class="ss-performer-avatar">${avatarInner}</div>
+      <div>
+        <div class="ss-performer-name">${esc(name)}</div>
+        ${email ? `<div class="ss-performer-email">${esc(email)}</div>` : ''}
+        <div class="ss-wrong-person">Not you? <a href="javascript:void(0)">Contact the production</a> for a new link.</div>
+      </div>`;
   }
 
   function ssRenderPrevSubmissions() {
@@ -751,6 +785,7 @@
       ssRenderShowHead();
       ssRenderOrgLogo();
       ssRenderPoster();
+      ssRenderHeroCastCard();
       ssRenderPerformerBanner();
       ssRenderPrevSubmissions();
       ssAddTapeRow(false); // first row — not removable
