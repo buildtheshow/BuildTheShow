@@ -13865,6 +13865,14 @@
       justify-content: space-between;
       gap: 6cqw;
     }
+    .template-brand-tile-main {
+      min-width: 0;
+      max-height: 72cqw;
+      display: grid;
+      grid-template-rows: auto minmax(0, auto) minmax(0, 1fr);
+      align-content: start;
+      overflow: hidden;
+    }
     .template-brand-card--settings .template-brand-tile-content,
     .template-brand-card--settings-off .template-brand-tile-content {
       display: flex;
@@ -13895,6 +13903,9 @@
       overflow-wrap: anywhere;
     }
     .template-brand-tile-body {
+      max-height: 28cqw;
+      min-width: 0;
+      overflow: hidden;
       font-size: 5.2cqw;
       font-weight: 800;
       line-height: 1.32;
@@ -19965,7 +19976,8 @@
                   <div class="aud-session-config-item">
                     <div class="aud-section-label">Submission Deadline <span style="font-weight:400;text-transform:none;letter-spacing:0;font-size:0.75rem;color:#b0a0cc;">(optional)</span></div>
                     <input type="datetime-local" id="st-settings-deadline" class="form-input" style="width:100%;" onchange="autoSaveSelfTapeDeadline()" />
-                    <div id="st-deadline-status" style="font-size:0.74rem;color:rgba(87,46,136,0.5);margin-top:0.25rem;min-height:1rem;"></div>
+                    <div style="font-size:0.74rem;color:rgba(87,46,136,0.5);margin-top:0.25rem;line-height:1.4;">Available in emails as <code style="font-size:0.7rem;background:rgba(87,46,136,0.08);padding:0.08rem 0.26rem;border-radius:4px;">{{self_tape_deadline}}</code>.</div>
+                    <div id="st-deadline-status" style="font-size:0.74rem;color:rgba(87,46,136,0.5);margin-top:0.2rem;min-height:1rem;"></div>
                   </div>
 
                   <div class="aud-session-config-item aud-session-config-item--instructions" style="grid-column:1 / -1;">
@@ -24484,11 +24496,11 @@
       <div class="template-brand-palette">${renderBrandSwatches(brandPaletteSecondary)}</div>`;
     const renderBrandCard = (variant = 'square', mode = 'empty', color = '#572e88', ink = '#ffffff') => {
       const contentHtml = mode === 'content'
-        ? `<div>
+        ? `<div class="template-brand-tile-main">
             <div class="template-brand-tile-kicker">Registration</div>
             <div class="template-brand-tile-title">Welcome to the team.</div>
+            <div class="template-brand-tile-body">Keep the message simple, clear, and easy to act on.</div>
           </div>
-          <div class="template-brand-tile-body">Keep the message simple, clear, and easy to act on.</div>
           <button type="button" class="template-brand-tile-button">Open</button>`
         : mode === 'metric'
           ? `<div>
@@ -27016,6 +27028,16 @@
     return etFirstRealValue(session[field]) || etPlaceholder(label);
   }
 
+  function etFormatSelfTapeDeadline(value) {
+    const raw = String(value || '').trim();
+    if (!raw) return '';
+    const match = raw.match(/^(\d{4}-\d{2}-\d{2})(?:[T\s](\d{2}:\d{2})(?::\d{2})?)?/);
+    if (!match) return raw;
+    const date = fmtDate(match[1]);
+    const time = match[2] ? formatTime12h(match[2]) : '';
+    return [date, time ? `at ${time}` : ''].filter(Boolean).join(' ');
+  }
+
   const ET_VARIABLES = [
     // ── Contact ─────────────────────────────────────────────────
     {
@@ -27163,6 +27185,7 @@
         { token: '{{submission_link}}', label: 'Submission Link', sample: () => (orgSlug && prod?.slug) ? `https://buildtheshow.com/${orgSlug}/${prod.slug}/SelfTape/JAMIE4827` : 'https://buildtheshow.com/self-tape/submit?app=…' },
         { token: '{{submission_button}}', label: 'Submission Button', sample: () => emailActionButtonHtml((orgSlug && prod?.slug) ? `https://buildtheshow.com/${orgSlug}/${prod.slug}/SelfTape/JAMIE4827` : 'https://buildtheshow.com/self-tape/submit?app=…', 'Submit Self Tape') },
         { token: '{{self_tape_instructions}}', label: 'What to Film', sample: () => prod?.wizard_data?.self_tape_instructions || etPlaceholder('self tape instructions') },
+        { token: '{{self_tape_deadline}}', label: 'Submission Deadline', sample: () => etFormatSelfTapeDeadline(prod?.wizard_data?.self_tape_deadline) || etPlaceholder('self tape deadline') },
         { token: '{{show_name}}',       label: 'Show Name',       sample: () => prod?.title || etPlaceholder('show name') },
         { token: '{{performer_name}}',  label: 'Performer Name',  sample: () => etSamplePerson(1).name },
       ],
@@ -27282,7 +27305,7 @@
       note: 'This automatic email sends after a performer accepts. It should feel celebratory and include the registration link.'
     },
       self_tape_booked: {
-        required: ['{{performer_name}}', '{{submission_link}}'],
+        required: ['{{performer_name}}', '{{submission_link}}', '{{self_tape_deadline}}'],
         recommended: ['{{show_name}}'],
       note: 'This email is sent automatically when a performer registers. It must include {{submission_link}}. Without it, they cannot submit their tape.'
     },
@@ -27481,6 +27504,7 @@
       producer_role: producerSignoffContext().producer_role || 'Producer',
       producer_email: producerSignoffContext().producer_email || etPlaceholder('producer email'),
       producer_signoff: producerSignoffContext().producer_signoff || etPlaceholder('producer sign-off'),
+      self_tape_deadline: etFormatSelfTapeDeadline(prod?.wizard_data?.self_tape_deadline) || etPlaceholder('self tape deadline'),
     };
     return lookup[key] || lookup[key.toLowerCase()] || etPlaceholder(key);
   }
@@ -28251,7 +28275,7 @@ If you have any questions, don't hesitate to reach out.
 
 Your self tape registration for {{show_name}} is all set.
 
-Your casting card has already been created on the production side, and your tape can be submitted anytime using the personal link below. There is no scheduled time slot. Please film on your own time and send us the link before {{general_audition_date}}.
+Your audition information has been sent through, and your tape can be submitted anytime using the personal link below. There is no scheduled time slot. Please film on your own time and send us the link before {{self_tape_deadline}}.
 
 ─────────────────────────────
 WHAT TO INCLUDE IN YOUR SELF TAPE
@@ -28506,14 +28530,14 @@ Thank you,
     const currentBody = String(t.body || '');
     const currentName = String(t.name || '');
     const cleanName = currentName.replace(/\s*[—–]\s*/g, ' ').replace(/\s+/g, ' ').trim();
-    const needsBody = !(currentBody.includes('please send us an email') && !currentBody.includes('—'));
+    const needsBody = !(currentBody.includes('Your audition information has been sent through') && currentBody.includes('{{self_tape_deadline}}') && currentBody.includes('please send us an email') && !currentBody.includes('—'));
     const needsName = Boolean(cleanName && cleanName !== currentName);
     if (!needsBody && !needsName) return;
     const newBody = `Hi {{contact_name}},
 
 Your self tape registration for {{show_name}} is all set.
 
-Your casting card has already been created on the production side, and your tape can be submitted anytime using the personal link below. There is no scheduled time slot. Please film on your own time and send us the link before {{general_audition_date}}.
+Your audition information has been sent through, and your tape can be submitted anytime using the personal link below. There is no scheduled time slot. Please film on your own time and send us the link before {{self_tape_deadline}}.
 
 ─────────────────────────────
 WHAT TO INCLUDE IN YOUR SELF TAPE
@@ -28649,7 +28673,7 @@ Thank you,
         return `<button type="button" class="template-brand-card template-brand-card--portrait template-brand-card--content" style="${cardStyle}" onclick="filterEmailTemplates('${home.key}')">
           <div class="template-brand-card-inner">
             <div class="template-brand-tile-content">
-              <div>
+              <div class="template-brand-tile-main">
                 <div class="template-brand-tile-kicker">Email Templates</div>
                 <div class="template-brand-tile-title">${esc(section.label)}</div>
                 <div class="template-brand-tile-body">${esc(summary)}</div>
@@ -28706,7 +28730,7 @@ Thank you,
               onclick="openEditEmailTemplate('${t.id}')">
               <div class="template-brand-card-inner">
                 <div class="template-brand-tile-content">
-                  <div>
+                  <div class="template-brand-tile-main">
                     <div class="template-brand-tile-kicker">${esc(section.label)}</div>
                     <div class="template-brand-tile-title">${esc(t.name || meta.label || 'Untitled')}</div>
                     <div class="template-brand-tile-body">${esc(bodyText)}</div>
@@ -28732,7 +28756,7 @@ Thank you,
               onclick="openNewEmailTemplate()">
               <div class="template-brand-card-inner">
                 <div class="template-brand-tile-content">
-                  <div>
+                  <div class="template-brand-tile-main">
                     <div class="template-brand-tile-kicker">Custom</div>
                     <div class="template-brand-tile-title">+ New Template</div>
                     <div class="template-brand-tile-body">Start a reusable email for this production.</div>
@@ -49373,6 +49397,7 @@ Thank you,
       org_email:             orgEmail         || '',
       director_name:         prod?.director   || '',
       ...producerSignoffContext(),
+      self_tape_deadline:    etFormatSelfTapeDeadline(prod?.wizard_data?.self_tape_deadline) || '',
       audition_session:      primarySession?.name     || '',
       audition_date:         primarySession?.date     ? fmtDate(primarySession.date) : '',
       audition_time:         primaryTime,

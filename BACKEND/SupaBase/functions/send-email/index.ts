@@ -98,7 +98,7 @@ serve(async (req) => {
     // Fetch production + all sessions in parallel
     const [{ data: prodRec }, { data: testSessions }, { data: testPerformanceEvents }] = await Promise.all([
       prodIdTest
-        ? sb.from('productions').select('title,subtitle,venue,org_name,org_email,director,start_date,end_date').eq('id', prodIdTest).maybeSingle()
+        ? sb.from('productions').select('title,subtitle,venue,org_name,org_email,director,start_date,end_date,wizard_data').eq('id', prodIdTest).maybeSingle()
         : Promise.resolve({ data: null }),
       prodIdTest
         ? sb.from('audition_sessions').select('id,name,type,date,start_time,location,prepare_text').eq('production_id', prodIdTest).order('sort_order', { ascending: true })
@@ -109,6 +109,7 @@ serve(async (req) => {
     ]);
 
     const p = (prodRec || {}) as Record<string, unknown>;
+    const testWizardData = isRecord(p.wizard_data) ? p.wizard_data as Record<string, unknown> : {};
     const sessions = (testSessions || []) as Record<string, unknown>[];
 
     const fromName  = String(p.org_name  || p.title  || 'Build The Show');
@@ -152,6 +153,7 @@ serve(async (req) => {
       '{{all_audition_sessions}}': sessions.map(s => `${s.name || 'Session'}: ${s.date ? fmtDate(String(s.date)) : 'TBC'}${s.start_time ? ' at ' + fmtTime(String(s.start_time)) : ''}`).join('\n'),
       // General Auditions (real)
       '{{general_audition_date}}':  generalSess?.date        ? fmtDate(String(generalSess.date))        : '',
+      '{{self_tape_deadline}}':      fmtDateTimeLocal(firstDefinedString(testWizardData.self_tape_deadline)),
       '{{general_audition_time}}':  generalSess?.start_time  ? fmtTime(String(generalSess.start_time))  : '',
       '{{general_audition_venue}}': String(generalSess?.location || p.venue || ''),
       '{{general_audition_name}}':  String(generalSess?.name || ''),
@@ -702,6 +704,11 @@ serve(async (req) => {
     directContext.performance_schedule,
     ((performanceEvents || []) as Record<string, unknown>[]).map(formatScheduleEvent).filter(Boolean).join('\n'),
   );
+  const selfTapeDeadline = fmtDateTimeLocal(firstDefinedString(
+    directContext.self_tape_deadline,
+    directWizardData.self_tape_deadline,
+    prodWizardData.self_tape_deadline,
+  ));
   const teamPortalLink = firstDefinedString(
     directContext.portal_link,
     `https://buildtheshow.com/audition-team?prod=${productionId}`,
@@ -752,6 +759,7 @@ serve(async (req) => {
     '{{submission_link}}':       firstDefinedString(directContext.submission_link, directContext.self_tape_submission_link),
     '{{callback_self_tape_link}}': firstDefinedString(directContext.callback_self_tape_link),
     '{{self_tape_instructions}}': firstDefinedString(directContext.self_tape_instructions, directWizardData.self_tape_instructions, prodWizardData.self_tape_instructions),
+    '{{self_tape_deadline}}':      selfTapeDeadline,
     '{{general_audition_date}}':  firstDefinedString(directContext.general_audition_date, generalAuditionSession ? fmtDate(String(generalAuditionSession.date || '')) : ''),
     '{{general_audition_time}}':  firstDefinedString(directContext.general_audition_time, slotForSession(generalAuditionSession)?.slot_time ? fmtTime(String(slotForSession(generalAuditionSession)?.slot_time || '')) : '', generalAuditionSession ? fmtTime(String(generalAuditionSession.start_time || '')) : ''),
     '{{general_audition_venue}}': firstDefinedString(directContext.general_audition_venue, generalAuditionSession ? String(generalAuditionSession.location || audVenue) : audVenue),
@@ -981,6 +989,16 @@ function fmtTime(timeStr: string): string {
     const h12  = h % 12 || 12;
     return m === 0 ? `${h12}${ampm}` : `${h12}:${String(m).padStart(2, '0')}${ampm}`;
   } catch { return timeStr; }
+}
+
+function fmtDateTimeLocal(value: string): string {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  const match = raw.match(/^(\d{4}-\d{2}-\d{2})(?:[T\s](\d{2}:\d{2})(?::\d{2})?)?/);
+  if (!match) return raw;
+  const date = fmtDate(match[1]);
+  const time = match[2] ? fmtTime(match[2]) : '';
+  return [date, time ? `at ${time}` : ''].filter(Boolean).join(' ');
 }
 
 function formatScheduleEvent(row: Record<string, unknown>): string {
