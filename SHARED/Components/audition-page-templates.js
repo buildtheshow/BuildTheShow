@@ -741,6 +741,7 @@
     renderTemplateTestPreviewTemplate,
     renderTemplateTestCheckedInPreviewTemplate,
     renderBrandTileTemplate,
+    renderBrandTileTextTemplate,
     renderAuditionPageHeaderTemplate
   });
 
