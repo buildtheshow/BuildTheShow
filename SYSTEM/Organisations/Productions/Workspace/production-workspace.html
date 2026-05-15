@@ -23436,6 +23436,27 @@
     try { console.info(`[BTS route] ${event}`, detail); } catch {}
   }
 
+  const btsEscapedNonTextWarnings = new Set();
+  function coerceRouteTextValue(value, context = 'unknown') {
+    if (value === null || value === undefined) return '';
+    const type = typeof value;
+    if (type === 'string') return value;
+    if (type === 'number' || type === 'boolean' || type === 'bigint') return String(value);
+    const signature = `${context}:${type}:${Array.isArray(value) ? 'array' : Object.keys(value || {}).slice(0, 5).join(',')}`;
+    if (!btsEscapedNonTextWarnings.has(signature)) {
+      btsEscapedNonTextWarnings.add(signature);
+      btsRouteLog('non-string value passed to escape helper', {
+        context,
+        type: Array.isArray(value) ? 'array' : type,
+        keys: value && type === 'object' ? Object.keys(value).slice(0, 8) : [],
+        preview: (() => {
+          try { return JSON.stringify(value).slice(0, 180); } catch { return String(value).slice(0, 180); }
+        })()
+      });
+    }
+    return '';
+  }
+
   window.addEventListener('error', event => {
     btsRouteLog('failed async dependency', { message: event.message, source: event.filename, line: event.lineno });
   });
@@ -29623,7 +29644,7 @@ Thank you,
       if (!topEl) return;
       const marker = document.createElement('div');
       marker.className = 'holiday-marker';
-      marker.innerHTML = `<span class="holiday-dot"></span><span class="holiday-name">${h.name.replace(/</g,'&lt;')}</span>`;
+      marker.innerHTML = `<span class="holiday-dot"></span><span class="holiday-name">${esc(h.name)}</span>`;
       topEl.appendChild(marker);
     });
   }
@@ -46829,11 +46850,20 @@ Thank you,
     if (!host) return;
     if (!isWorkspaceDataReady('auditionSessions') || !isWorkspaceDataReady('applicants')) {
       host.innerHTML = '<div class="loading">Building your audition dashboard...</div>';
+      btsRouteLog('route dependency pending', { view: 'audition dashboard', dependencies: ['auditionSessions', 'applicants'] });
       ensureWorkspaceData(['auditionSessions', 'applicants'])
-        .then(loadAudDashboard)
+        .then(() => {
+          btsRouteLog('route dependency resolved', { view: 'audition dashboard', dependencies: ['auditionSessions', 'applicants'] });
+          loadAudDashboard();
+        })
         .catch((error) => {
           console.error('[BTS] audition dashboard load failed', error);
-          host.innerHTML = '<div class="loading">Couldn’t load the audition dashboard. Try General Auditions, then come back.</div>';
+          btsRouteLog('route dependency failed', { view: 'audition dashboard', message: error?.message || String(error || '') });
+          host.innerHTML = `
+            <div style="background:#fff;border:1px solid rgba(185,28,28,0.18);border-radius:12px;padding:1.25rem;color:#1a1530;max-width:560px;margin:2rem auto;">
+              <div style="font-weight:800;color:#b91c1c;margin-bottom:0.35rem;">Couldn’t load the audition dashboard.</div>
+              <div style="font-size:0.86rem;color:rgba(87,46,136,0.62);line-height:1.5;">Try refreshing. If this keeps happening, return to the dashboard and open the production again.</div>
+            </div>`;
         });
       return;
     }
@@ -46871,7 +46901,7 @@ Thank you,
           kicker: 'Auditions',
           title: 'Auditions at a glance.',
           copy: nextSessionCopy,
-          statValue: totalPerformers,
+          statValue: String(totalPerformers),
           statLabel: 'Performers'
         })}
         ${buildAuditionTypeFlow()}
@@ -46881,10 +46911,11 @@ Thank you,
         </div>`;
     } catch (error) {
       console.error('[BTS] audition dashboard render failed', error);
+      btsRouteLog('route dependency failed', { view: 'audition dashboard render', message: error?.message || String(error || '') });
       host.innerHTML = `
         <div style="background:#fff;border:1px solid rgba(185,28,28,0.18);border-radius:12px;padding:1.25rem;color:#1a1530;max-width:520px;margin:2rem auto;">
           <div style="font-weight:800;color:#b91c1c;margin-bottom:0.35rem;">Couldn’t load the audition dashboard.</div>
-          <div style="font-size:0.86rem;color:rgba(87,46,136,0.62);line-height:1.5;">Try General Auditions, then come back. The rest of the audition workspace is still available.</div>
+          <div style="font-size:0.86rem;color:rgba(87,46,136,0.62);line-height:1.5;">Try refreshing. The rest of the audition workspace is still available.</div>
         </div>`;
     }
   }
@@ -49224,9 +49255,21 @@ Thank you,
     if (!isWorkspaceDataReady('auditionSessions')) {
       renderAuditionHeaderFrame();
       host.innerHTML = '<div class="card" style="text-align:center;padding:3.5rem 2rem;color:rgba(87,46,136,0.5);">Loading audition sessions...</div>';
+      btsRouteLog('route dependency pending', { view: 'audition session workspace', dependencies: ['auditionConfig', 'auditionSessions'] });
       ensureWorkspaceData(['auditionConfig', 'auditionSessions'])
-        .then(() => renderAuditionSessionWorkspace())
-        .catch(() => renderAuditionSessionWorkspace());
+        .then(() => {
+          btsRouteLog('route dependency resolved', { view: 'audition session workspace', dependencies: ['auditionConfig', 'auditionSessions'] });
+          renderAuditionSessionWorkspace();
+        })
+        .catch((error) => {
+          console.error('[BTS] audition session workspace load failed', error);
+          btsRouteLog('route dependency failed', { view: 'audition session workspace', message: error?.message || String(error || '') });
+          host.innerHTML = `
+            <div class="card" style="text-align:center;padding:3.5rem 2rem;color:#1a1530;">
+              <div style="font-weight:800;color:#b91c1c;margin-bottom:0.35rem;">Couldn’t load this audition session.</div>
+              <div style="font-size:0.86rem;color:rgba(87,46,136,0.62);line-height:1.5;">Try refreshing. If this keeps happening, return to the dashboard and open the production again.</div>
+            </div>`;
+        });
       return;
     }
     const session = getActiveAuditionNavSession();
@@ -51569,8 +51612,11 @@ Thank you,
     return new Date(d + 'T00:00:00').toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' });
   }
   function esc(s) {
-    if (s === null || s === undefined) return '';
-    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    return coerceRouteTextValue(s, 'esc')
+      .replace(/&/g,'&amp;')
+      .replace(/</g,'&lt;')
+      .replace(/>/g,'&gt;')
+      .replace(/"/g,'&quot;');
   }
 
   function displayGender(raw) {
@@ -51947,7 +51993,9 @@ Thank you,
         .then(loader)
         .catch(error => {
           console.warn(`[BTS] workspace data load failed for ${key}`, error);
-          return null;
+          workspaceDataLoaded[key] = false;
+          btsRouteLog('failed async dependency', { key, message: error?.message || String(error || '') });
+          throw error;
         })
         .then(result => {
           workspaceDataLoaded[key] = true;
