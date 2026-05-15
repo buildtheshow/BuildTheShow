@@ -582,7 +582,7 @@ The card uses `container-type: inline-size` so `cqw` units resolve against the t
 
 - `empty` — no zones rendered, card shows only the background colour
 - `containers` — diagnostic/template-test mode; zones shown with coloured backgrounds (gold header, pink title, green body, red footer)
-- `text` — reusable layout-holder/ruler mode; uses the exact same four visible containers as the Square Brand Tile container breakdown, with Header, Title, Body, and Footer labels
+- `text` — reusable square layout-holder/ruler template; a temporary grey holder contains the same four visible containers as the Square Brand Tile container breakdown, inset by `7cqw`
 - `content` — kicker + title + body copy + button
 - `metric` — kicker + large number + metric label + progress bar
 - `settings` — kicker + toggle in header, setting label in title, optional input in body, helper text in footer

@@ -664,6 +664,34 @@
     </${safeTag}>`;
   }
 
+  function renderBrandTileTextTemplate(config = {}) {
+    const {
+      esc,
+      className = '',
+      style = '',
+      attrs = '',
+      ariaLabel = 'Brand Tile Text layout holder'
+    } = config;
+    const safeEsc = typeof esc === 'function'
+      ? esc
+      : (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    const labelAttr = ariaLabel ? ` aria-label="${safeEsc(ariaLabel)}"` : '';
+    const extraAttrs = attrs ? ` ${sanitizeAttrString(attrs)}` : '';
+    const classes = [
+      'template-brand-text-holder',
+      className
+    ].filter(Boolean).join(' ');
+
+    return `<div class="${safeEsc(classes)}" style="${style}"${labelAttr}${extraAttrs}>
+      <div class="template-brand-tile-content">
+        <div class="template-brand-tile-container template-brand-tile-container--header">Header</div>
+        <div class="template-brand-tile-container template-brand-tile-container--title">Title</div>
+        <div class="template-brand-tile-container template-brand-tile-container--body">Body</div>
+        <div class="template-brand-tile-container template-brand-tile-container--footer">Footer</div>
+      </div>
+    </div>`;
+  }
+
   function renderAuditionPageHeaderTemplate(config) {
     const {
       esc,
@@ -880,7 +908,7 @@
     name: 'Brand Tile Text',
     tags: { area: 'brand', component: 'tile', mode: 'text' },
     priority: 95,
-    render: (config) => renderBrandTileTemplate(Object.assign({}, config, { mode: 'text' }))
+    render: renderBrandTileTextTemplate
   });
 
   api.registerTemplate({
