@@ -670,7 +670,8 @@
       className = '',
       style = '',
       attrs = '',
-      ariaLabel = 'Brand Tile Text layout holder'
+      ariaLabel = 'Brand Tile Text layout holder',
+      invisible = false
     } = config;
     const safeEsc = typeof esc === 'function'
       ? esc
@@ -679,11 +680,13 @@
     const extraAttrs = attrs ? ` ${sanitizeAttrString(attrs)}` : '';
     const classes = [
       'template-brand-text-holder',
+      invisible ? 'template-brand-text-holder--invisible' : '',
       className
     ].filter(Boolean).join(' ');
+    const innerClass = invisible ? 'template-brand-text-holder-inner template-brand-text-holder-inner--invisible' : 'template-brand-text-holder-inner';
 
     return `<div class="${safeEsc(classes)}" style="${style}"${labelAttr}${extraAttrs}>
-      <div class="template-brand-text-holder-inner">
+      <div class="${innerClass}">
         <div class="template-brand-tile-container template-brand-tile-container--header"><div class="template-brand-tile-kicker">Header</div></div>
         <div class="template-brand-tile-container template-brand-tile-container--title"><div class="template-brand-tile-title">Title</div></div>
         <div class="template-brand-tile-container template-brand-tile-container--body"><div class="template-brand-tile-body">Body / Description</div></div>
