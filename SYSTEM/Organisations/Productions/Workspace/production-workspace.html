@@ -23549,6 +23549,50 @@
     );
   }
 
+  let workspaceRouteToken = 0;
+  let activeWorkspacePanelId = 'panel-overview';
+
+  function workspacePanelIdForTab(id) {
+    const panelId = (id === 'auditions' || id === 'casting' || id === 'castlist') ? 'casting' : id;
+    return `panel-${panelId}`;
+  }
+
+  function isWorkspaceRouteCurrent(token) {
+    return token === workspaceRouteToken;
+  }
+
+  function isWorkspacePanelActive(panelId) {
+    return activeWorkspacePanelId === panelId
+      && document.getElementById(panelId)?.classList.contains('active')
+      && document.getElementById(panelId)?.hidden !== true;
+  }
+
+  function enforceSingleWorkspacePanel(activePanelId) {
+    activeWorkspacePanelId = activePanelId;
+    const activePanels = [];
+    document.querySelectorAll('.tab-panel').forEach(panel => {
+      const isActive = panel.id === activePanelId;
+      panel.classList.toggle('active', isActive);
+      panel.hidden = !isActive;
+      panel.style.display = isActive ? '' : 'none';
+      if (isActive) activePanels.push(panel.id);
+    });
+    btsRouteLog('workspace panel cleanup', {
+      activePanelId,
+      activeCount: activePanels.length,
+      activePanels
+    });
+  }
+
+  function beginWorkspaceRoute(id) {
+    workspaceRouteToken += 1;
+    const token = workspaceRouteToken;
+    const activePanelId = workspacePanelIdForTab(id);
+    btsRouteLog('workspace route cleanup start', { id, activePanelId, token });
+    enforceSingleWorkspacePanel(activePanelId);
+    return token;
+  }
+
   async function waitForValidSession({ timeoutMs = 8000 } = {}) {
     btsRouteLog('session restore start');
     const timeout = new Promise(resolve => setTimeout(() => resolve({ timedOut: true }), timeoutMs));
@@ -33648,6 +33692,7 @@ Thank you,
   }
 
   async function loadRegistrationDashboard() {
+    if (!isWorkspacePanelActive('panel-registration')) return;
     const completeEl = document.getElementById('registration-complete-count');
     const paymentEl = document.getElementById('registration-payment-count');
     renderRegistrationAcceptedPreview([]);
@@ -33655,6 +33700,7 @@ Thank you,
     if (paymentEl) paymentEl.textContent = '… / …';
     try {
       const accepted = await getRegistrationAcceptedCast();
+      if (!isWorkspacePanelActive('panel-registration')) return;
       const total = accepted.length;
       const paymentRequired = registrationPaymentRequired();
       const payments = accepted.filter(({ app }) => registrationPaymentComplete(app)).length;
@@ -35481,6 +35527,7 @@ Thank you,
       queueWorkspaceNavigation('prod', { id });
       return;
     }
+    const routeToken = beginWorkspaceRoute(id);
     // If the wizard iframe is open, close it before navigating away
     const wizPanel = document.getElementById('wizard-iframe-panel');
     if (wizPanel && wizPanel.style.display !== 'none') {
@@ -35493,21 +35540,23 @@ Thank you,
       el.classList.toggle('active', el.dataset.tab === id);
     });
     if (id !== 'auditions' && id !== 'registration') setSidebarSubmenuState(null, null);
-    const panelId = (id === 'auditions' || id === 'casting' || id === 'castlist') ? 'casting' : id;
-    document.querySelectorAll('.tab-panel').forEach(el => el.classList.toggle('active', el.id === 'panel-' + panelId));
+    enforceSingleWorkspacePanel(workspacePanelIdForTab(id));
     document.querySelector('.prod-main').classList.toggle('checklist-active', id === 'checklist');
     if (id === 'overview') {
+      if (!isWorkspaceRouteCurrent(routeToken)) return;
       loadEvents();
       loadOverviewCards();
     }
     if (id === 'calendar') {
       setTimeout(async () => {
+        if (!isWorkspaceRouteCurrent(routeToken)) return;
         initCalendar();
         if (fcCalendar) fcCalendar.updateSize();
         // Ensure audition sessions are loaded and synced into production_events
         // so audition dates always appear regardless of which tab was opened first
         if (!audSessions.length) {
           await loadAudSessions();
+          if (!isWorkspaceRouteCurrent(routeToken)) return;
         } else {
           syncAuditionEvents();
         }
@@ -35516,35 +35565,50 @@ Thank you,
       }, 0);
     }
     if (id === 'team') {
+      if (!isWorkspaceRouteCurrent(routeToken)) return;
       loadTeamTab();
     }
     if (id === 'checklist') {
+      if (!isWorkspaceRouteCurrent(routeToken)) return;
       loadChecklistTab();
     }
     if (id === 'public') {
+      if (!isWorkspaceRouteCurrent(routeToken)) return;
       renderPublicPageTab();
     }
     if (id === 'files') {
+      if (!isWorkspaceRouteCurrent(routeToken)) return;
       loadFilesTab();
     }
     if (id === 'profile') {
+      if (!isWorkspaceRouteCurrent(routeToken)) return;
       renderTeamAccessProfile();
     }
     if (id === 'test') {
+      if (!isWorkspaceRouteCurrent(routeToken)) return;
       renderTemplateTest();
     }
     if (id === 'emails') {
+      if (!isWorkspaceRouteCurrent(routeToken)) return;
       loadEmailTemplates();
     }
     if (id === 'registration') {
+      if (!isWorkspaceRouteCurrent(routeToken)) return;
       const saved = loadWorkspaceNavState();
       switchRegistrationSubTab(saved.registrationSubTab || 'dashboard');
     }
     if (id === 'castlist') {
+      if (!isWorkspaceRouteCurrent(routeToken)) return;
       _audHeaderActiveTool = null;
       switchAudTab('castlist');
       saveWorkspaceNavState({ prodTab: 'castlist' });
     }
+    requestAnimationFrame(() => {
+      if (!isWorkspaceRouteCurrent(routeToken)) return;
+      enforceSingleWorkspacePanel(workspacePanelIdForTab(id));
+      const activeCount = document.querySelectorAll('.tab-panel.active').length;
+      if (activeCount !== 1) btsRouteLog('stale route block', { id, activeCount });
+    });
   }
   document.querySelectorAll('.prod-tab[data-tab]').forEach(el => {
     // submenu parents are handled by their own onclick handlers
@@ -45023,6 +45087,7 @@ Thank you,
   }
 
   function renderActiveCastingBoard() {
+    if (!isWorkspacePanelActive('panel-casting')) return;
     mountActiveCastingBoardSurface();
     if (!isWorkspaceDataReady('castingBoard')) {
       setCbv2Loading();
@@ -46165,6 +46230,7 @@ Thank you,
   }
 
   function renderCastList() {
+    if (!isWorkspacePanelActive('panel-casting')) return;
     if (!isWorkspaceDataReady('castList')) {
       const programmeHost = document.getElementById('cast-list-programme-host');
       const tbody = document.getElementById('cast-list-tbody');
@@ -46173,7 +46239,11 @@ Thank you,
       } else if (tbody) {
         tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;padding:2.5rem;color:rgba(87,46,136,0.5);">Loading cast list…</td></tr>';
       }
-      ensureWorkspaceData(['castList']).then(renderCastList).catch(renderCastList);
+      ensureWorkspaceData(['castList']).then(() => {
+        if (isWorkspacePanelActive('panel-casting')) renderCastList();
+      }).catch(() => {
+        if (isWorkspacePanelActive('panel-casting')) renderCastList();
+      });
       return;
     }
     const programmeHost = document.getElementById('cast-list-programme-host');
