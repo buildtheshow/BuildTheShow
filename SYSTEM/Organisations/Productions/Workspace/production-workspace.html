@@ -27425,9 +27425,12 @@
 
   function etTemplateIssues(template) {
     const issues = [];
+    const body = String(template?.body || '');
     if (!String(template?.subject || '').trim()) issues.push('Missing subject');
-    if (!etPlainSnippet(template?.body || '')) issues.push('Missing body');
-    if (!String(template?.body || '').includes('{{producer_signoff}}')) issues.push('Missing {{producer_signoff}}');
+    if (!etPlainSnippet(body)) issues.push('Missing body');
+    const hasProducerSignoff = body.includes('{{producer_signoff}}')
+      || (body.includes('{{producer_name}}') && body.includes('{{producer_role}}') && body.includes('{{producer_email}}'));
+    if (!hasProducerSignoff) issues.push('Missing producer sign-off');
     const requiredTokens = ET_SMART_RULES[template?.category]?.required || [];
     const combined = `${template?.subject || ''}\n${template?.body || ''}`;
     requiredTokens.forEach(token => {
@@ -28248,7 +28251,7 @@ If you have any questions, don't hesitate to reach out.
 
 Your self tape registration for {{show_name}} is all set.
 
-Your casting card has already been created on the production side, and your tape can be submitted anytime using the personal link below. There is no scheduled time slot — you film on your own time and send us the link before {{general_audition_date}}.
+Your casting card has already been created on the production side, and your tape can be submitted anytime using the personal link below. There is no scheduled time slot. Please film on your own time and send us the link before {{general_audition_date}}.
 
 ─────────────────────────────
 WHAT TO INCLUDE IN YOUR SELF TAPE
@@ -28261,10 +28264,10 @@ A FEW SELF TAPE TIPS
 ─────────────────────────────
 
 • Film somewhere bright where we can clearly see your face
-• Face a window or light source — do not have it behind you
+• Face a window or light source. Do not have it behind you
 • Make sure we can hear you clearly
 • Keep the camera as steady as possible
-• Do not stress about making it perfect — we just want to see you perform
+• Do not stress about making it perfect. We just want to see you perform
 
 ─────────────────────────────
 HOW TO SEND YOUR VIDEO
@@ -28287,11 +28290,14 @@ Once your video is uploaded, paste the link into your personal submission form b
 (or click this link: {{submission_link}})
 ─────────────────────────────
 
-Your submission link is unique to you — please do not share it with another performer.
+Your submission link is unique to you. Please do not share it with another performer.
 
-Keep this email until your tape has been submitted. If you have any questions, just reply.
+Keep this email until your tape has been submitted. If you have any questions, please send us an email.
 
-{{producer_signoff}}`,
+Thank you,
+{{producer_name}}
+{{producer_role}}
+{{producer_email}}`,
     },
   ];
 
@@ -28334,6 +28340,7 @@ Keep this email until your tape has been submitted. If you have any questions, j
     const text = String(body || '').trim();
     if (!text) return text;
     if (text.includes('{{producer_signoff}}')) return text;
+    if (text.includes('{{producer_name}}') && text.includes('{{producer_role}}') && text.includes('{{producer_email}}')) return text;
     const replaced = text
       .replace(/\n+\{\{director_name\}\}\s*\n\{\{org_name\}\}\s*$/i, '\n{{producer_signoff}}')
       .replace(/\n+\{\{org_name\}\}\s*$/i, '\n{{producer_signoff}}');
@@ -28496,12 +28503,17 @@ Keep this email until your tape has been submitted. If you have any questions, j
   async function etEnsureSelfTapeTemplateBody() {
     const t = _etTemplates.find(t => t.category === 'self_tape_booked');
     if (!t) return;
-    if (String(t.body || '').includes('Your casting card has already been created')) return;
+    const currentBody = String(t.body || '');
+    const currentName = String(t.name || '');
+    const cleanName = currentName.replace(/\s*[—–]\s*/g, ' ').replace(/\s+/g, ' ').trim();
+    const needsBody = !(currentBody.includes('please send us an email') && !currentBody.includes('—'));
+    const needsName = Boolean(cleanName && cleanName !== currentName);
+    if (!needsBody && !needsName) return;
     const newBody = `Hi {{contact_name}},
 
 Your self tape registration for {{show_name}} is all set.
 
-Your casting card has already been created on the production side, and your tape can be submitted anytime using the personal link below. There is no scheduled time slot — you film on your own time and send us the link before {{general_audition_date}}.
+Your casting card has already been created on the production side, and your tape can be submitted anytime using the personal link below. There is no scheduled time slot. Please film on your own time and send us the link before {{general_audition_date}}.
 
 ─────────────────────────────
 WHAT TO INCLUDE IN YOUR SELF TAPE
@@ -28514,10 +28526,10 @@ A FEW SELF TAPE TIPS
 ─────────────────────────────
 
 • Film somewhere bright where we can clearly see your face
-• Face a window or light source — do not have it behind you
+• Face a window or light source. Do not have it behind you
 • Make sure we can hear you clearly
 • Keep the camera as steady as possible
-• Do not stress about making it perfect — we just want to see you perform
+• Do not stress about making it perfect. We just want to see you perform
 
 ─────────────────────────────
 HOW TO SEND YOUR VIDEO
@@ -28540,14 +28552,20 @@ Once your video is uploaded, paste the link into your personal submission form b
 (or click this link: {{submission_link}})
 ─────────────────────────────
 
-Your submission link is unique to you — please do not share it with another performer.
+Your submission link is unique to you. Please do not share it with another performer.
 
-Keep this email until your tape has been submitted. If you have any questions, just reply.
+Keep this email until your tape has been submitted. If you have any questions, please send us an email.
 
-{{producer_signoff}}`;
-    const { error } = await sb.from('email_templates').update({ body: newBody }).eq('id', t.id);
+Thank you,
+{{producer_name}}
+{{producer_role}}
+{{producer_email}}`;
+    const updatePayload = needsBody ? { body: newBody } : {};
+    if (needsName) updatePayload.name = cleanName;
+    const { error } = await sb.from('email_templates').update(updatePayload).eq('id', t.id);
     if (!error) {
-      t.body = newBody;
+      if (needsBody) t.body = newBody;
+      if (needsName) t.name = cleanName;
     }
   }
 
