@@ -683,7 +683,7 @@
     ].filter(Boolean).join(' ');
 
     return `<div class="${safeEsc(classes)}" style="${style}"${labelAttr}${extraAttrs}>
-      <div class="template-brand-tile-content">
+      <div class="template-brand-text-holder-inner">
         <div class="template-brand-tile-container template-brand-tile-container--header">Header</div>
         <div class="template-brand-tile-container template-brand-tile-container--title">Title</div>
         <div class="template-brand-tile-container template-brand-tile-container--body">Body</div>
