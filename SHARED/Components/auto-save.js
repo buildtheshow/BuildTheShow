@@ -1,6 +1,6 @@
 /**
  * Build The Show — Auto Save
- * Google Docs-style auto-save for every page.
+ * Stable, background autosave for every page.
  *
  * Two ways to use:
  *
@@ -17,17 +17,22 @@
 (function () {
   'use strict';
 
-  const DEBOUNCE_MS    = 400;
+  const SHORT_DEBOUNCE_MS = 450;
+  const LONG_DEBOUNCE_MS  = 1400;
   const SAVED_HIDE_MS  = 2500;
   const ERROR_HIDE_MS  = 4500;
 
-  let _sb           = null;
-  let _timers       = {};   // batchKey → setTimeout id
-  let _batch        = {};   // batchKey → { table, id, updates }
-  let _inFlight     = 0;
-  let _statusEl     = null;
-  let _hideTimer    = null;
-  let _booted       = false;
+  let _sb              = null;
+  const _timers        = {};   // batchKey -> setTimeout id
+  const _batch         = {};   // batchKey -> { table, id, updates, fields, sourceEl }
+  const _fields        = new Map();
+  const _pendingValues = new Map();
+  const _dirtyFields   = new Set();
+  let _inFlight        = 0;
+  let _statusEl        = null;
+  let _hideTimer       = null;
+  let _booted          = false;
+  let _lastActiveAt    = 0;
 
   // ── Status pill ──────────────────────────────────────────────────────────
 
@@ -63,8 +68,8 @@
   }
 
   function showSaving()  { setStatus('Saving…', '#572e88', null); }
-  function showSaved()   { setStatus('All changes saved', '#22a06b', SAVED_HIDE_MS); }
-  function showError()   { setStatus('Could not save — check your connection', '#dc2626', ERROR_HIDE_MS); }
+  function showSaved()   { setStatus('Saved. You’re good.', '#22a06b', SAVED_HIDE_MS); }
+  function showError()   { setStatus('Couldn’t save. Try again.', '#dc2626', ERROR_HIDE_MS); }
 
   // ── Client discovery ─────────────────────────────────────────────────────
 
@@ -73,6 +78,104 @@
   }
 
   // ── Core save engine ─────────────────────────────────────────────────────
+
+  function statusTargetFor(el) {
+    const id = el?.dataset?.autosaveStatus;
+    if (id) return document.getElementById(id);
+    return el?.closest?.('[data-autosave-scope]')?.querySelector?.('[data-autosave-status]') || null;
+  }
+
+  function setInlineStatus(el, state) {
+    const target = statusTargetFor(el);
+    if (!target) return;
+    target.classList.remove('saving', 'saved', 'error', 'dirty', 'out-of-sync');
+    if (!state || state === 'idle') {
+      target.textContent = '';
+      return;
+    }
+    target.classList.add(state);
+    if (state === 'saving' || state === 'dirty') target.textContent = 'Saving…';
+    else if (state === 'saved') target.textContent = 'Saved. You’re good.';
+    else if (state === 'error') target.textContent = 'Couldn’t save. Try again.';
+    else if (state === 'out-of-sync') target.textContent = 'Out of sync. Finish typing to update.';
+  }
+
+  function elementKey(el) {
+    const a = attrsOf(el);
+    if (a) return `field:${a.table}:${a.id}:${a.field}`;
+    return el?.id ? `element:${location.pathname}:${el.id}` : '';
+  }
+
+  function isLongField(el) {
+    if (!el) return false;
+    if (el.dataset?.autosaveLong === 'true') return true;
+    if (el.dataset?.autosaveLong === 'false') return false;
+    return el.tagName === 'TEXTAREA' || el.isContentEditable || Number(el.getAttribute('rows') || 0) >= 3;
+  }
+
+  function debounceFor(el, fallback) {
+    const explicit = parseInt(el?.dataset?.autosaveDelay || '', 10);
+    if (Number.isFinite(explicit) && explicit > 0) return explicit;
+    if (Number.isFinite(fallback) && fallback > 0) return fallback;
+    return isLongField(el) ? LONG_DEBOUNCE_MS : SHORT_DEBOUNCE_MS;
+  }
+
+  function draftKey(key) {
+    return key ? `bts-autosave-draft:${key}` : '';
+  }
+
+  function saveDraft(key, value) {
+    if (!key) return;
+    try {
+      localStorage.setItem(draftKey(key), JSON.stringify({ value, savedAt: Date.now() }));
+    } catch {}
+  }
+
+  function clearDraft(key) {
+    if (!key) return;
+    try { localStorage.removeItem(draftKey(key)); } catch {}
+  }
+
+  function readDraft(key) {
+    if (!key) return null;
+    try {
+      const raw = localStorage.getItem(draftKey(key));
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  }
+
+  function registerActive(el) {
+    const key = elementKey(el);
+    if (!key) return;
+    _fields.set(key, { el, focusedAt: Date.now() });
+    _lastActiveAt = Date.now();
+  }
+
+  function releaseActive(el) {
+    const key = elementKey(el);
+    if (!key) return;
+    _fields.delete(key);
+    _lastActiveAt = Date.now();
+  }
+
+  function isActiveElement(el) {
+    return !!el && (document.activeElement === el || _fields.has(elementKey(el)));
+  }
+
+  function hasActiveEdit() {
+    const active = document.activeElement;
+    if (active && (
+      active.matches?.('input,textarea,select') ||
+      active.isContentEditable
+    )) return true;
+    return _fields.size > 0 || Date.now() - _lastActiveAt < 500;
+  }
+
+  function notifyFlushComplete() {
+    window.dispatchEvent(new CustomEvent('bts:autosave-flushed'));
+  }
 
   async function flushBatch(key) {
     const entry = _batch[key];
@@ -88,30 +191,53 @@
     }
 
     try {
+      Object.values(entry.fields || {}).forEach(fieldKey => {
+        _dirtyFields.delete(fieldKey);
+        setInlineStatus(_fields.get(fieldKey)?.el || entry.sourceEl, 'saving');
+      });
       const { error } = await sb.from(entry.table).update(entry.updates).eq('id', entry.id);
       if (error) throw error;
       _inFlight = Math.max(0, _inFlight - 1);
+      Object.values(entry.fields || {}).forEach(fieldKey => {
+        const pending = _pendingValues.get(fieldKey);
+        if (pending !== undefined) clearDraft(fieldKey);
+        setInlineStatus(_fields.get(fieldKey)?.el || entry.sourceEl, 'saved');
+      });
       if (_inFlight === 0 && Object.keys(_batch).length === 0) showSaved();
+      notifyFlushComplete();
     } catch (err) {
       _inFlight = Math.max(0, _inFlight - 1);
       console.error('[BTS AutoSave] save failed', { table: entry.table, id: entry.id, updates: entry.updates, err });
+      Object.values(entry.fields || {}).forEach(fieldKey => {
+        _dirtyFields.add(fieldKey);
+        setInlineStatus(_fields.get(fieldKey)?.el || entry.sourceEl, 'error');
+      });
       showError();
+      notifyFlushComplete();
     }
   }
 
-  function queueSave(table, id, field, value) {
+  function queueSave(table, id, field, value, options = {}) {
     if (!table || !id || !field) return;
     const key = `${table}::${id}`;
+    const fieldKey = `field:${table}:${id}:${field}`;
+    const sourceEl = options.sourceEl || _fields.get(fieldKey)?.el || null;
 
     if (!_batch[key]) {
-      _batch[key] = { table, id, updates: {} };
+      _batch[key] = { table, id, updates: {}, fields: {}, sourceEl };
       _inFlight++;
       showSaving();
     }
     _batch[key].updates[field] = value;
+    _batch[key].fields[field] = fieldKey;
+    if (sourceEl) _batch[key].sourceEl = sourceEl;
+    _pendingValues.set(fieldKey, value);
+    _dirtyFields.add(fieldKey);
+    setInlineStatus(sourceEl, 'dirty');
+    if (isLongField(sourceEl) || options.draft) saveDraft(fieldKey, value);
 
     if (_timers[key]) clearTimeout(_timers[key]);
-    _timers[key] = setTimeout(() => flushBatch(key), DEBOUNCE_MS);
+    _timers[key] = setTimeout(() => flushBatch(key), debounceFor(sourceEl, options.delay));
   }
 
   async function flushAll() {
@@ -133,21 +259,32 @@
     if (el.type === 'checkbox')  return el.checked;
     if (el.type === 'number')    return el.valueAsNumber;
     if (el.type === 'range')     return el.valueAsNumber;
+    if (el.isContentEditable)    return el.innerHTML;
     return el.value;
   }
 
   function onInput(e) {
     const a = attrsOf(e.target);
-    if (a) queueSave(a.table, a.id, a.field, valueOf(e.target));
+    if (a) {
+      registerActive(e.target);
+      queueSave(a.table, a.id, a.field, valueOf(e.target), { sourceEl: e.target });
+    }
   }
 
   function onBlur(e) {
     const a = attrsOf(e.target);
+    releaseActive(e.target);
     if (!a) return;
     const key = `${a.table}::${a.id}`;
     if (_batch[key]) {
       if (_timers[key]) { clearTimeout(_timers[key]); delete _timers[key]; }
       flushBatch(key);
+    }
+  }
+
+  function onFocus(e) {
+    if (attrsOf(e.target) || e.target?.matches?.('input,textarea,select') || e.target?.isContentEditable) {
+      registerActive(e.target);
     }
   }
 
@@ -160,6 +297,7 @@
   function boot() {
     if (_booted) return;
     _booted = true;
+    document.addEventListener('focus',            onFocus,            true);
     document.addEventListener('input',            onInput,            true);
     document.addEventListener('change',           onInput,            true);
     document.addEventListener('blur',             onBlur,             true);
@@ -197,8 +335,108 @@
       }
     },
 
+    queueSave,
+
+    createField(options = {}) {
+      const {
+        key,
+        element,
+        getValue,
+        save,
+        delay,
+        long = false,
+        draft = long,
+        onSaved,
+        onError,
+      } = options;
+      const el = typeof element === 'string' ? document.getElementById(element) : element;
+      if (!key || !el || typeof save !== 'function') return null;
+      const fieldKey = `custom:${key}`;
+      const existingDraft = (draft || long || isLongField(el)) ? readDraft(fieldKey) : null;
+      if (existingDraft && existingDraft.value != null) {
+        if (el.isContentEditable) el.innerHTML = existingDraft.value;
+        else if ('value' in el) el.value = existingDraft.value;
+        setInlineStatus(el, 'dirty');
+      }
+      let timer = null;
+      let latestValue = getValue ? getValue(el) : valueOf(el);
+      let savingToken = 0;
+      const setFieldStatus = state => setInlineStatus(el, state);
+      const writeDraft = value => {
+        if (draft || long || isLongField(el)) saveDraft(fieldKey, value);
+      };
+      const flush = async () => {
+        if (timer) { clearTimeout(timer); timer = null; }
+        const value = latestValue;
+        const token = ++savingToken;
+        _dirtyFields.delete(fieldKey);
+        setFieldStatus('saving');
+        showSaving();
+        try {
+          await save(value, { element: el, key: fieldKey });
+          if (token === savingToken) {
+            clearDraft(fieldKey);
+            setFieldStatus('saved');
+            showSaved();
+            if (typeof onSaved === 'function') onSaved(value, { element: el, key: fieldKey });
+            notifyFlushComplete();
+          }
+        } catch (err) {
+          _dirtyFields.add(fieldKey);
+          setFieldStatus('error');
+          showError();
+          if (typeof onError === 'function') onError(err, value, { element: el, key: fieldKey });
+          notifyFlushComplete();
+        }
+      };
+      const schedule = () => {
+        latestValue = getValue ? getValue(el) : valueOf(el);
+        registerActive(el);
+        _dirtyFields.add(fieldKey);
+        setFieldStatus('dirty');
+        writeDraft(latestValue);
+        if (timer) clearTimeout(timer);
+        timer = setTimeout(flush, debounceFor(el, delay || (long ? LONG_DEBOUNCE_MS : SHORT_DEBOUNCE_MS)));
+      };
+      el.addEventListener('focus', () => registerActive(el), true);
+      el.addEventListener('input', schedule, true);
+      el.addEventListener('change', schedule, true);
+      el.addEventListener('blur', () => {
+        releaseActive(el);
+        if (timer || _dirtyFields.has(fieldKey)) flush();
+      }, true);
+      return { schedule, flush, key: fieldKey };
+    },
+
+    hydrateValue(el, value, options = {}) {
+      const node = typeof el === 'string' ? document.getElementById(el) : el;
+      if (!node) return;
+      const next = value == null ? '' : String(value);
+      const key = options.key || elementKey(node);
+      const draft = options.long || isLongField(node) ? readDraft(key) : null;
+      if (draft && String(draft.value || '') !== next && !isActiveElement(node)) {
+        if (node.isContentEditable) node.innerHTML = draft.value || '';
+        else if ('value' in node) node.value = draft.value || '';
+        setInlineStatus(node, 'dirty');
+        return;
+      }
+      if (isActiveElement(node) && (node.value !== next && node.innerHTML !== next)) {
+        setInlineStatus(node, 'out-of-sync');
+        return;
+      }
+      if (node.type === 'checkbox') node.checked = !!value;
+      else if (node.isContentEditable) node.innerHTML = next;
+      else if ('value' in node) node.value = next;
+      else node.textContent = next;
+    },
+
     /** Flush all pending saves immediately (e.g. before a page nav). */
     flush: flushAll,
+
+    hasActiveEdit,
+    isFieldDirty(key) { return _dirtyFields.has(key); },
+    readDraft,
+    clearDraft,
 
     showSaving,
     showSaved,

@@ -25178,7 +25178,7 @@
     if (state === 'saving') {
       el.textContent = 'Saving…';
     } else if (state === 'saved') {
-      el.textContent = 'Saved!';
+      el.textContent = 'Saved. You’re good.';
       _saveFadeTimer = setTimeout(() => {
         el.classList.add('fade');
         setTimeout(() => { el.textContent = ''; el.className = ''; }, 400);
@@ -25192,9 +25192,9 @@
     clearTimeout(_modalSaveFadeTimer);
     el.className = `modal-save-indicator ${state || ''}`.trim();
     if (state === 'saving') {
-      el.textContent = 'Saving';
+      el.textContent = 'Saving…';
     } else if (state === 'saved') {
-      el.textContent = 'Saved';
+      el.textContent = 'Saved. You’re good.';
       _modalSaveFadeTimer = setTimeout(() => {
         el.classList.add('fade');
         setTimeout(() => {
@@ -25208,12 +25208,41 @@
     }
   }
 
+  const btsCustomAutosaveControllers = new Map();
+
+  function ensureCustomAutosaveField(key, element, options = {}) {
+    const el = typeof element === 'string' ? document.getElementById(element) : element;
+    if (!key || !el || !window.AutoSave?.createField) return null;
+    const existing = btsCustomAutosaveControllers.get(key);
+    if (existing?.element === el) return existing.controller;
+    const controller = window.AutoSave.createField({
+      key,
+      element: el,
+      long: options.long !== false,
+      delay: options.delay || 1400,
+      draft: options.draft !== false,
+      save: options.save,
+      onSaved: options.onSaved,
+      onError: options.onError || ((error) => {
+        console.error(`[BTS] autosave failed for ${key}`, error);
+      }),
+    });
+    if (controller) btsCustomAutosaveControllers.set(key, { element: el, controller });
+    return controller;
+  }
+
+  function scheduleCustomAutosave(key) {
+    btsCustomAutosaveControllers.get(key)?.controller?.schedule?.();
+  }
+
   // ── Settings autosave ──────────────────────────────────
   let _settingsSaveTimer = null;
   function scheduleSettingsSave() {
     showSaveStatus('saving');
     clearTimeout(_settingsSaveTimer);
-    _settingsSaveTimer = setTimeout(saveProdSettings, 800);
+    const active = document.activeElement;
+    const delay = active?.matches?.('textarea,[contenteditable="true"],.rich-editor') ? 1400 : 500;
+    _settingsSaveTimer = setTimeout(saveProdSettings, delay);
   }
   let events   = [];
   // checklist data loaded on tab open via loadChecklistTab()
@@ -25557,6 +25586,18 @@
       return;
     }
     if (!shouldRunAuditionsLiveLoop()) return;
+    if (window.AutoSave?.hasActiveEdit?.()) {
+      clearTimeout(auditionsRefreshTimer);
+      const resume = () => {
+        window.removeEventListener('bts:autosave-flushed', resume);
+        queueAuditionsRefresh(payload);
+      };
+      window.addEventListener('bts:autosave-flushed', resume, { once: true });
+      auditionsRefreshTimer = setTimeout(() => {
+        if (!window.AutoSave?.hasActiveEdit?.()) queueAuditionsRefresh(payload);
+      }, 1800);
+      return;
+    }
     clearTimeout(auditionsRefreshTimer);
     auditionsRefreshTimer = setTimeout(async () => {
       try {
@@ -26676,6 +26717,11 @@
   }
 
   function queueEmailTemplatesRefresh() {
+    if (document.getElementById('email-template-modal')?.style.display === 'flex' && window.AutoSave?.hasActiveEdit?.()) {
+      clearTimeout(emailTemplatesRefreshTimer);
+      emailTemplatesRefreshTimer = setTimeout(queueEmailTemplatesRefresh, 1800);
+      return;
+    }
     clearTimeout(emailTemplatesRefreshTimer);
     emailTemplatesRefreshTimer = setTimeout(async () => {
       try {
@@ -26705,6 +26751,7 @@
           loadRoomNextSignals({ maxAge: AUDITIONS_SIGNAL_POLL_MS - 1000 }),
         ]);
         if (Date.now() - _auditionsFullPollAt > AUDITIONS_FULL_POLL_MS) {
+          if (window.AutoSave?.hasActiveEdit?.()) return;
           _auditionsFullPollAt = Date.now();
           await refreshAuditionsLiveUi({ preserveModal: true });
         }
@@ -46151,29 +46198,32 @@ Thank you,
   }
 
   let dcNotesSaveTimer = null;
+  async function saveDcNotesValue(appId, value) {
+    const app = allApplicants.find(a => a.id === appId);
+    if (!app) return;
+    const existing = findAuditionObservation(appId, { sessionId: dcCurrentSessionId || null, area: 'dance_call', type: 'quick_note', key: 'notes', currentAuthorOnly: true });
+    if (String(value || '').trim()) {
+      await saveAuditionObservation(appId, { sessionId: dcCurrentSessionId || null, area: 'dance_call', type: 'quick_note', key: 'notes', body: value });
+    } else if (existing?.id) {
+      await deleteAuditionObservation(existing.id);
+    }
+    syncDanceCallCardBack(appId, dcCurrentSessionId);
+    refreshPerfLightboxContents();
+  }
+
+  function bindDcNotesAutosave(appId) {
+    const active = document.activeElement;
+    const textarea = active?.id === 'inroom-notes' ? active : document.getElementById('inroom-notes');
+    if (!textarea) return;
+    ensureCustomAutosaveField(`dance-call-notes:${prodId}:${dcCurrentSessionId || 'general'}:${appId}`, textarea, {
+      delay: 1400,
+      save: value => saveDcNotesValue(appId, value),
+    });
+  }
+
   function scheduleDcNotesSave(appId) {
-    clearTimeout(dcNotesSaveTimer);
-    showSaveStatus('saving');
-    const textarea = document.getElementById('inroom-notes');
-    const value = textarea ? textarea.value : '';
-    dcNotesSaveTimer = setTimeout(async () => {
-      const app = allApplicants.find(a => a.id === appId);
-      if (!app) return;
-      try {
-        const existing = findAuditionObservation(appId, { sessionId: dcCurrentSessionId || null, area: 'dance_call', type: 'quick_note', key: 'notes', currentAuthorOnly: true });
-        if (value.trim()) {
-          await saveAuditionObservation(appId, { sessionId: dcCurrentSessionId || null, area: 'dance_call', type: 'quick_note', key: 'notes', body: value.trim() });
-        } else if (existing?.id) {
-          await deleteAuditionObservation(existing.id);
-        }
-        showSaveStatus('saved');
-        syncDanceCallCardBack(appId, dcCurrentSessionId);
-        refreshPerfLightboxContents();
-      } catch (error) {
-        console.error('[BTS] dance call notes save failed', error);
-        showToast('Could not save dance call notes.', true);
-      }
-    }, 500);
+    bindDcNotesAutosave(appId);
+    scheduleCustomAutosave(`dance-call-notes:${prodId}:${dcCurrentSessionId || 'general'}:${appId}`);
   }
 
   function renderDanceCallInRoom(sessionId) {
@@ -48122,7 +48172,7 @@ Thank you,
             <div class="inroom-considered-list">${renderInRoomConsideredFor(app)}</div>
            </div>`;
     const notesTextHtml = `<textarea id="inroom-notes" class="inroom-notes-text" placeholder="Write down what you noticed in the room..." oninput="scheduleInRoomNotesSave('${app.id}')">${esc(applicantInRoomNotes(app, currentSession?.id))}</textarea>
-          <div class="inroom-save-hint">Notes save automatically.</div>`;
+          <div class="inroom-save-hint" data-autosave-status>Notes save automatically.</div>`;
     const templateQuery = {
       area: 'auditions',
       page: 'in-room',
@@ -48152,6 +48202,7 @@ Thank you,
     if (currentSession?.type === 'callback') {
       positionCallbackSecondaryCharacters(el);
     }
+    bindInRoomAutosaveFields(app.id, currentSession?.id || null);
     requestAnimationFrame(() => scrollCheckedInRailToActive(el));
     requestAnimationFrame(() => requestAnimationFrame(() => syncInRoomRightPanelHeight(el)));
     requestAnimationFrame(() => requestAnimationFrame(() => fitInRoomRoleChipTitles(el)));
@@ -48277,38 +48328,41 @@ Thank you,
     }
   }
 
-  function scheduleInRoomNotesSave(appId) {
-    clearTimeout(inRoomNotesTimer);
-    showSaveStatus('saving');
-    const textarea = document.getElementById('inroom-notes');
-    const value = textarea ? textarea.value : '';
+  async function saveInRoomNotesValue(appId, value) {
+    const app = allApplicants.find(a => a.id === appId);
+    if (!app) return;
     const session = getCurrentInRoomSession();
     const noteKey = inRoomNotesKey(session?.id);
-    inRoomNotesTimer = setTimeout(async () => {
-      const app = allApplicants.find(a => a.id === appId);
-      if (!app) return;
-      const nextAnswers = { ...applicantCustomAnswers(app) };
-      if (value.trim()) nextAnswers[noteKey] = value.trim();
-      else delete nextAnswers[noteKey];
-      try {
-        const error = await persistApplicantPatch(app, { custom_answers: nextAnswers });
-        if (error) throw error;
-        app.custom_answers = nextAnswers;
-        const existingObservation = findAuditionObservation(appId, {
-          sessionId: session?.id || null,
-          area: 'in_room',
-          type: 'quick_note',
-          key: 'notes',
-          currentAuthorOnly: true,
-        });
-        if (value.trim()) await saveAuditionObservation(appId, { sessionId: session?.id || null, area: 'in_room', type: 'quick_note', key: 'notes', body: value.trim() });
-        else if (existingObservation?.id) await deleteAuditionObservation(existingObservation.id);
-        showSaveStatus('saved');
-      } catch (error) {
-        console.error('[BTS] in-room notes save failed', error);
-        showToast('Could not save in the room notes.', true);
-      }
-    }, 500);
+    const nextAnswers = { ...applicantCustomAnswers(app) };
+    if (String(value || '').trim()) nextAnswers[noteKey] = value;
+    else delete nextAnswers[noteKey];
+    const error = await persistApplicantPatch(app, { custom_answers: nextAnswers });
+    if (error) throw error;
+    app.custom_answers = nextAnswers;
+    const existingObservation = findAuditionObservation(appId, {
+      sessionId: session?.id || null,
+      area: 'in_room',
+      type: 'quick_note',
+      key: 'notes',
+      currentAuthorOnly: true,
+    });
+    if (String(value || '').trim()) await saveAuditionObservation(appId, { sessionId: session?.id || null, area: 'in_room', type: 'quick_note', key: 'notes', body: value });
+    else if (existingObservation?.id) await deleteAuditionObservation(existingObservation.id);
+  }
+
+  function bindInRoomNotesAutosave(appId, sessionId) {
+    const textarea = document.getElementById('inroom-notes');
+    if (!textarea) return;
+    ensureCustomAutosaveField(`in-room-notes:${prodId}:${sessionId || 'general'}:${appId}`, textarea, {
+      delay: 1400,
+      save: value => saveInRoomNotesValue(appId, value),
+    });
+  }
+
+  function scheduleInRoomNotesSave(appId) {
+    const sessionId = getCurrentInRoomSession()?.id || null;
+    bindInRoomNotesAutosave(appId, sessionId);
+    scheduleCustomAutosave(`in-room-notes:${prodId}:${sessionId || 'general'}:${appId}`);
   }
 
   const inRoomRoleNotesTimers = new Map();
@@ -48354,38 +48408,47 @@ Thank you,
   }
 
   function scheduleInRoomRoleNotesSave(appId, sessionId, charId) {
-    const timerKey = `${sessionId}::${charId}`;
-    if (inRoomRoleNotesTimers.has(timerKey)) clearTimeout(inRoomRoleNotesTimers.get(timerKey));
-    showSaveStatus('saving');
+    bindInRoomRoleNotesAutosave(appId, sessionId, charId);
+    scheduleCustomAutosave(`in-room-role-notes:${prodId}:${sessionId || 'general'}:${appId}:${charId}`);
+  }
+
+  async function saveInRoomRoleNotesValue(appId, sessionId, charId, value) {
+    const app = allApplicants.find(a => a.id === appId);
+    if (!app) return;
+    const nextAnswers = { ...applicantCustomAnswers(app) };
+    const noteKey = inRoomRoleNotesKey(sessionId, charId);
+    if (String(value || '').trim()) nextAnswers[noteKey] = value;
+    else delete nextAnswers[noteKey];
+    const error = await persistApplicantPatch(app, { custom_answers: nextAnswers });
+    if (error) throw error;
+    app.custom_answers = nextAnswers;
+    const existingObservation = findAuditionObservation(appId, {
+      sessionId,
+      characterId: charId,
+      area: 'role_note',
+      type: 'body',
+      key: charId,
+      currentAuthorOnly: true,
+    });
+    if (String(value || '').trim()) await saveAuditionObservation(appId, { sessionId, characterId: charId, area: 'role_note', type: 'body', key: charId, body: value });
+    else if (existingObservation?.id) await deleteAuditionObservation(existingObservation.id);
+  }
+
+  function bindInRoomRoleNotesAutosave(appId, sessionId, charId) {
     const textarea = document.getElementById(`inroom-role-notes-${charId}`);
-    const value = textarea ? textarea.value : '';
-    inRoomRoleNotesTimers.set(timerKey, setTimeout(async () => {
-      const app = allApplicants.find(a => a.id === appId);
-      if (!app) return;
-      const nextAnswers = { ...applicantCustomAnswers(app) };
-      const noteKey = inRoomRoleNotesKey(sessionId, charId);
-      if (value.trim()) nextAnswers[noteKey] = value.trim();
-      else delete nextAnswers[noteKey];
-      try {
-        const error = await persistApplicantPatch(app, { custom_answers: nextAnswers });
-        if (error) throw error;
-        app.custom_answers = nextAnswers;
-        const existingObservation = findAuditionObservation(appId, {
-          sessionId,
-          characterId: charId,
-          area: 'role_note',
-          type: 'body',
-          key: charId,
-          currentAuthorOnly: true,
-        });
-        if (value.trim()) await saveAuditionObservation(appId, { sessionId, characterId: charId, area: 'role_note', type: 'body', key: charId, body: value.trim() });
-        else if (existingObservation?.id) await deleteAuditionObservation(existingObservation.id);
-        showSaveStatus('saved');
-      } catch (error) {
-        console.error('[BTS] in-room role notes save failed', error);
-        showToast('Could not save role notes.', true);
-      }
-    }, 500));
+    if (!textarea) return;
+    ensureCustomAutosaveField(`in-room-role-notes:${prodId}:${sessionId || 'general'}:${appId}:${charId}`, textarea, {
+      delay: 1400,
+      save: value => saveInRoomRoleNotesValue(appId, sessionId, charId, value),
+    });
+  }
+
+  function bindInRoomAutosaveFields(appId, sessionId) {
+    bindInRoomNotesAutosave(appId, sessionId);
+    document.querySelectorAll('[id^="inroom-role-notes-"]').forEach(textarea => {
+      const charId = textarea.id.replace('inroom-role-notes-', '');
+      if (charId) bindInRoomRoleNotesAutosave(appId, sessionId, charId);
+    });
   }
 
   function applyInRoomRoleDecisionUI(buttonEl, value, isClearing = false) {
@@ -48664,7 +48727,7 @@ Thank you,
     const scorePanelHtml = `<div class="inroom-score-card"><div class="inroom-roles-title" style="text-align:center;">Impressions</div>${renderInRoomScoreRows(app)}</div>`;
     const safeId = esc(String(app.id));
     const notesTextHtml = `<textarea id="inroom-notes" class="inroom-notes-text" placeholder="Write down what you noticed..." oninput="scheduleInRoomNotesSave('${safeId}')">${esc(applicantInRoomNotes(app, null))}</textarea>
-      <div class="inroom-save-hint">Notes save automatically.</div>`;
+      <div class="inroom-save-hint" data-autosave-status>Notes save automatically.</div>`;
 
     panel.innerHTML = window.BTSAuditionTemplates.renderTemplate(
       { area: 'auditions', page: 'in-room', sessionType: 'general' },
@@ -48689,6 +48752,7 @@ Thank you,
         roleChipsHtml: renderInRoomRoleChips(app, '', 'type', 'self_tape')
       }
     );
+    bindInRoomAutosaveFields(app.id, null);
 
     // Inject video panel into the empty "video" grid area
     const appSubs = (_selfTapeSubmissionsMap && _selfTapeSubmissionsMap[app.id]) || [];
