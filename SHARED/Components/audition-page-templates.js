@@ -638,11 +638,11 @@
       zoneBodyHtml = bodyHtml || `<div class="template-brand-tile-metric-label">${safeEsc(metricLabel || title)}</div>`;
       footerHtml   = `<div class="template-brand-tile-progress"><span style="width:${safeEsc(progressPercent || '0%')};"></span></div>`;
     } else if (safeMode === 'settings' || safeMode === 'settings-off') {
-      headerHtml   = kicker ? `<div class="template-brand-tile-kicker">${safeEsc(kicker)}</div>` : '';
-      titleHtml    = `<div class="template-brand-tile-settings-header">
-          <div class="template-brand-tile-settings-label">${safeEsc(title)}</div>
+      headerHtml   = `<div class="template-brand-tile-settings-header">
+          ${kicker ? `<div class="template-brand-tile-kicker">${safeEsc(kicker)}</div>` : ''}
           ${toggleHtml || ''}
         </div>`;
+      titleHtml    = `<div class="template-brand-tile-settings-label">${safeEsc(title)}</div>`;
       zoneBodyHtml = inputHtml || bodyHtml || '';
       footerHtml   = `<div class="template-brand-tile-settings-helper">${safeEsc(helper || body)}</div>`;
     }
