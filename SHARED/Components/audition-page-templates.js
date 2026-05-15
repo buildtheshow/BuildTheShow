@@ -634,12 +634,7 @@
       titleHtml    = title  ? `<div class="template-brand-tile-title">${safeEsc(title)}</div>`   : '';
       zoneBodyHtml = bodyHtml || (body ? `<div class="template-brand-tile-body">${safeEsc(body)}</div>` : '');
       footerHtml   = buttonHtml || (buttonLabel ? `<div class="template-brand-tile-button">${safeEsc(buttonLabel)}</div>` : '');
-    } else if (safeMode === 'text') {
-      headerHtml   = `<div class="template-brand-tile-kicker">${safeEsc(kicker || 'Header')}</div>`;
-      titleHtml    = `<div class="template-brand-tile-title">${safeEsc(title || 'Title')}</div>`;
-      zoneBodyHtml = bodyHtml || `<div class="template-brand-tile-body">${safeEsc(body || 'Body')}</div>`;
-      footerHtml   = buttonHtml || `<div class="template-brand-tile-body">${safeEsc(buttonLabel || helper || 'Footer')}</div>`;
-    } else if (safeMode === 'containers') {
+    } else if (safeMode === 'text' || safeMode === 'containers') {
       headerHtml   = 'Header';
       titleHtml    = 'Title';
       zoneBodyHtml = 'Body';
