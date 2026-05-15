@@ -409,6 +409,9 @@
       background: #572e88;
       box-shadow: 0 12px 30px rgba(87,46,136,0.16);
     }
+    .registration-hero.has-dashboard-metrics {
+      padding-right: 23rem;
+    }
     .registration-hero-top {
       display: flex;
       align-items: flex-start;
@@ -458,17 +461,48 @@
     }
     .registration-header-metrics {
       display: none;
-      grid-template-columns: repeat(2, minmax(112px, 150px));
-      gap: 0.8rem;
-      margin-top: 1.05rem;
+      position: absolute;
+      right: 1.5rem;
+      top: 50%;
+      transform: translateY(-36%);
+      grid-template-columns: repeat(2, minmax(132px, 1fr));
+      gap: 0.75rem;
       align-items: stretch;
+      width: min(20rem, calc(100% - 3rem));
     }
     .registration-header-metrics.active {
       display: grid;
     }
-    .registration-header-metrics .template-brand-card {
-      width: 100%;
-      box-shadow: 0 14px 26px rgba(26,21,48,0.18);
+    .registration-header-metric {
+      display: flex;
+      min-width: 0;
+      min-height: 7.2rem;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      border: 0;
+      border-radius: 8px;
+      background: rgba(255,255,255,0.14);
+      color: #ffffff;
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,0.05);
+      text-align: center;
+    }
+    .registration-header-metric-value {
+      color: #ffffff;
+      font-size: clamp(2.2rem, 5vw, 3.35rem);
+      font-weight: 950;
+      line-height: 0.9;
+      letter-spacing: 0;
+      white-space: nowrap;
+    }
+    .registration-header-metric-label {
+      margin-top: 0.55rem;
+      color: #ffffff;
+      font-size: 0.72rem;
+      font-weight: 950;
+      line-height: 1.15;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
     }
     .registration-glance {
       display: grid;
@@ -1722,6 +1756,15 @@
     @media (max-width: 1050px) {
       .registration-glance {
         grid-template-columns: 1fr;
+      }
+      .registration-hero.has-dashboard-metrics {
+        padding-right: 1.5rem;
+      }
+      .registration-header-metrics {
+        position: static;
+        width: 100%;
+        margin-top: 1rem;
+        transform: none;
       }
       .registration-workspace {
         grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -21026,7 +21069,7 @@
     <!-- Registration -->
     <div class="tab-panel" id="panel-registration">
       <div class="registration-shell">
-        <div class="registration-hero">
+        <div class="registration-hero has-dashboard-metrics">
           <div class="registration-hero-top">
             <div class="registration-kicker">Registration</div>
             <div class="registration-hero-actions" id="registration-settings-header-actions">
@@ -21036,6 +21079,7 @@
           </div>
           <div class="registration-title" id="registration-page-title">Registration Dashboard</div>
           <div class="registration-copy" id="registration-page-copy">Track what every accepted cast member still needs to finish before the production is admin-ready.</div>
+          <div class="registration-header-metrics active" id="registration-dashboard-header-metrics" aria-label="Registration dashboard metrics"></div>
         </div>
 
         <section class="registration-panel active" id="registration-panel-dashboard">
@@ -33125,35 +33169,15 @@ Thank you,
   function renderRegistrationDashboardHeaderMetrics({ complete = '0 / 0', payments = '0 / 0', total = 0 } = {}) {
     const host = document.getElementById('registration-dashboard-header-metrics');
     if (!host) return;
-    const percentFromCount = value => {
-      const [doneRaw, totalRaw] = String(value || '').split('/').map(part => Number(String(part).trim()));
-      if (!Number.isFinite(doneRaw) || !Number.isFinite(totalRaw) || totalRaw <= 0) return '0%';
-      return `${Math.max(0, Math.min(100, Math.round((doneRaw / totalRaw) * 100)))}%`;
-    };
     host.innerHTML = [
-      renderRegistrationBrandTile({
-        templateId: 'brand.tile.square',
-        mode: 'metric',
-        color: '#78bbd4',
-        ink: '#000000',
-        kicker: 'At a glance',
-        metricValue: complete,
-        metricLabel: 'Registration Complete',
-        progressPercent: percentFromCount(complete),
-        ariaLabel: `Registration complete ${complete}`
-      }),
-      renderRegistrationBrandTile({
-        templateId: 'brand.tile.square',
-        mode: 'metric',
-        color: '#769e7b',
-        ink: '#ffffff',
-        kicker: 'Money check',
-        metricValue: payments,
-        metricLabel: 'Payments Received',
-        progressPercent: percentFromCount(payments),
-        ariaLabel: `Payments received ${payments}`
-      })
-    ].join('');
+      { value: complete, label: 'Registrations Complete', aria: `Registrations complete ${complete}` },
+      { value: payments, label: 'Payments Received', aria: `Payments received ${payments}` }
+    ].map(metric => `
+      <div class="registration-header-metric" role="group" aria-label="${esc(metric.aria)}">
+        <div class="registration-header-metric-value">${esc(metric.value)}</div>
+        <div class="registration-header-metric-label">${esc(metric.label)}</div>
+      </div>
+    `).join('');
   }
 
   function getRegistrationPanelTileColours(source) {
@@ -33321,10 +33345,12 @@ Thank you,
     const copy = document.getElementById('registration-page-copy');
     const settingsActions = document.getElementById('registration-settings-header-actions');
     const dashboardMetrics = document.getElementById('registration-dashboard-header-metrics');
+    const hero = dashboardMetrics?.closest?.('.registration-hero');
     if (title) title.textContent = meta.title;
     if (copy) copy.textContent = meta.copy;
     if (settingsActions) settingsActions.classList.toggle('active', key === 'settings');
     if (dashboardMetrics) dashboardMetrics.classList.toggle('active', key === 'dashboard');
+    if (hero) hero.classList.toggle('has-dashboard-metrics', key === 'dashboard');
     setSidebarSubmenuState('registration', `rsub-${key}`);
     if (key === 'dashboard') loadRegistrationDashboard();
     if (key === 'settings') {
