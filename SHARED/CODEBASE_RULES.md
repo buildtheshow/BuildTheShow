@@ -564,6 +564,12 @@ All sizes are in `cqw` — relative to the tile's own width, so they scale with 
 
 The card uses `container-type: inline-size` so `cqw` units resolve against the tile, not the viewport.
 
+### Permitted Variants
+
+- `square` — compact 1:1 tile for navigation, states, and equal-weight options
+- `vertical` — portrait 4:5 tile for settings, longer labels, and richer single-item surfaces
+- `horizontal` — landscape 5:3 tile for wide status bars and summary rows
+
 ### Inner Padding
 
 - All non-empty modes: `8cqw` on `.template-brand-card-inner`

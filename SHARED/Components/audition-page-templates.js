@@ -609,8 +609,10 @@
       ? esc
       : (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     const safeTag = ['button', 'div', 'label', 'span'].includes(tagName) ? tagName : 'div';
-    const safeVariant = variant === 'portrait' || variant === 'vertical' ? 'portrait' : 'square';
-    const safeMode = ['empty', 'content', 'metric', 'settings', 'settings-off'].includes(mode) ? mode : 'content';
+    const safeVariant = variant === 'horizontal'
+      ? 'horizontal'
+      : (variant === 'portrait' || variant === 'vertical' ? 'portrait' : 'square');
+    const safeMode = ['empty', 'containers', 'content', 'metric', 'settings', 'settings-off'].includes(mode) ? mode : 'content';
     const resolvedStyle = [
       `--brand-tile-bg:${safeEsc(color)};`,
       `--brand-tile-ink:${safeEsc(ink)};`,
@@ -627,7 +629,7 @@
       className
     ].filter(Boolean).join(' ');
     let headerHtml = '', titleHtml = '', zoneBodyHtml = '', footerHtml = '';
-    if (safeMode === 'content') {
+    if (safeMode === 'content' || safeMode === 'containers') {
       headerHtml   = kicker ? `<div class="template-brand-tile-kicker">${safeEsc(kicker)}</div>` : '';
       titleHtml    = title  ? `<div class="template-brand-tile-title">${safeEsc(title)}</div>`   : '';
       zoneBodyHtml = bodyHtml || (body ? `<div class="template-brand-tile-body">${safeEsc(body)}</div>` : '');
@@ -866,6 +868,14 @@
     tags: { area: 'brand', component: 'tile', variant: 'vertical' },
     priority: 95,
     render: (config) => renderBrandTileTemplate(Object.assign({}, config, { variant: 'portrait' }))
+  });
+
+  api.registerTemplate({
+    id: 'brand.tile.horizontal',
+    name: 'Horizontal Brand Tile',
+    tags: { area: 'brand', component: 'tile', variant: 'horizontal' },
+    priority: 95,
+    render: (config) => renderBrandTileTemplate(Object.assign({}, config, { variant: 'horizontal' }))
   });
 
   api.registerTemplate({

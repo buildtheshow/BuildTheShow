@@ -1530,6 +1530,7 @@
     .reg-offers-board {
       display: grid;
       grid-template-columns: repeat(3, minmax(0, 1fr));
+      align-items: start;
       gap: 1rem;
       padding: 1.25rem 0 2rem;
     }
@@ -13805,6 +13806,9 @@
     .template-brand-card--portrait {
       aspect-ratio: 4 / 5;
     }
+    .template-brand-card--horizontal {
+      aspect-ratio: 5 / 3;
+    }
     .template-brand-card-inner {
       height: 100%;
       display: block;
@@ -24446,39 +24450,50 @@
       <div style="margin-bottom:0.5rem;font-size:0.72rem;font-weight:800;text-transform:uppercase;letter-spacing:0.08em;color:rgba(87,46,136,0.5);">Secondary</div>
       <div class="template-brand-palette">${renderBrandSwatches(brandPaletteSecondary)}</div>`;
     const renderBrandCard = (variant = 'square', mode = 'empty', color = '#572e88', ink = '#ffffff') => {
-      let headerHtml = '', titleHtml = '', bodyHtml = '', footerHtml = '';
+      const renderer = window.BTSAuditionTemplates?.renderTemplateById;
+      if (typeof renderer !== 'function') return '';
+      const templateId = variant === 'horizontal'
+        ? 'brand.tile.horizontal'
+        : (variant === 'portrait' ? 'brand.tile.vertical' : 'brand.tile.square');
+      const label = variant === 'horizontal' ? 'Horizontal' : (variant === 'portrait' ? 'Vertical' : 'Square');
+      const config = {
+        esc,
+        tagName: 'div',
+        mode,
+        color,
+        ink,
+        ariaLabel: `${label} ${mode} brand tile`,
+      };
       if (mode === 'content') {
-        headerHtml = '<div class="template-brand-tile-kicker">Registration</div>';
-        titleHtml  = '<div class="template-brand-tile-title">Welcome to the team.</div>';
-        bodyHtml   = '<div class="template-brand-tile-body">Keep the message simple, clear, and easy to act on.</div>';
-        footerHtml = '<button type="button" class="template-brand-tile-button">Open</button>';
+        Object.assign(config, {
+          kicker: 'Registration',
+          title: 'Welcome to the team.',
+          body: 'Keep the message simple, clear, and easy to act on.',
+          buttonLabel: 'Open',
+        });
       } else if (mode === 'metric') {
-        headerHtml = '<div class="template-brand-tile-kicker">At a glance</div>';
-        titleHtml  = '<div class="template-brand-tile-number">72%</div>';
-        bodyHtml   = '<div class="template-brand-tile-metric-label">Complete</div>';
-        footerHtml = '<div class="template-brand-tile-progress"><span></span></div>';
+        Object.assign(config, {
+          kicker: 'At a glance',
+          metricValue: '72%',
+          metricLabel: 'Complete',
+          progressPercent: '72%',
+        });
       } else if (mode === 'settings' || mode === 'settings-off') {
-        headerHtml = `<div class="template-brand-tile-settings-header">
-          <div class="template-brand-tile-kicker">Registration</div>
-          <input type="checkbox" class="template-brand-tile-settings-toggle" ${mode === 'settings' ? 'checked' : ''} aria-label="Enable this setting" />
-        </div>`;
-        titleHtml  = '<div class="template-brand-tile-settings-label">Send Registration Link Automatically</div>';
-        bodyHtml   = '';
-        footerHtml = '<div class="template-brand-tile-settings-helper">When on, BTS emails the registration link as soon as a performer accepts their role.</div>';
+        Object.assign(config, {
+          kicker: 'Registration',
+          title: 'Send Registration Link Automatically',
+          helper: 'When on, BTS emails the registration link as soon as a performer accepts their role.',
+          toggleHtml: `<input type="checkbox" class="template-brand-tile-settings-toggle" ${mode === 'settings' ? 'checked' : ''} aria-label="Enable this setting" />`,
+        });
       } else if (mode === 'containers') {
-        headerHtml = '<div class="template-brand-tile-kicker">Header</div>';
-        titleHtml  = '<div class="template-brand-tile-title">Title</div>';
-        bodyHtml   = '<div class="template-brand-tile-body">Body / Description</div>';
-        footerHtml = '<button type="button" class="template-brand-tile-button">Footer</button>';
+        Object.assign(config, {
+          kicker: 'Header',
+          title: 'Title',
+          body: 'Body / Description',
+          buttonLabel: 'Footer',
+        });
       }
-      const zonesHtml = mode === 'empty' ? '' : `
-        <div class="template-brand-tile-container template-brand-tile-container--header">${headerHtml}</div>
-        <div class="template-brand-tile-container template-brand-tile-container--title">${titleHtml}</div>
-        <div class="template-brand-tile-container template-brand-tile-container--body">${bodyHtml}</div>
-        <div class="template-brand-tile-container template-brand-tile-container--footer">${footerHtml}</div>`;
-      return `<div class="template-brand-card template-brand-card--${esc(variant)} template-brand-card--${esc(mode)}" style="--brand-tile-bg:${esc(color)};--brand-tile-ink:${esc(ink)};" aria-label="${variant === 'portrait' ? 'Vertical' : 'Square'} ${mode} brand tile">
-        <div class="template-brand-card-inner"><div class="template-brand-tile-content">${zonesHtml}</div></div>
-      </div>`;
+      return renderer(templateId, config);
     };
     const renderBrandTileVariants = (variant, color, ink) => `<div class="template-brand-tile-variants">
       <div class="template-brand-tile-variant">
@@ -24765,6 +24780,11 @@
             title: 'Vertical Brand Tile',
             note: 'Empty, content, and quick-glance versions using white type.',
             bodyHtml: renderBrandTileVariants('portrait', '#476aaa', '#ffffff')
+          })}
+          ${renderTemplateTestPreview({
+            title: 'Horizontal Brand Tile',
+            note: 'Landscape version for wide status bars and summary rows.',
+            bodyHtml: renderBrandTileVariants('horizontal', '#769e7b', '#ffffff')
           })}
         </div>
         ${renderTemplateTestPreview({
@@ -33643,7 +33663,7 @@ Thank you,
     };
     const meta = statusTileMeta[key] || statusTileMeta.accepted;
     const statusTile = renderRegistrationBrandTile({
-      templateId: 'brand.tile.square',
+      templateId: 'brand.tile.vertical',
       tagName: 'div',
       mode: 'content',
       className: 'reg-offers-col-status-tile',
