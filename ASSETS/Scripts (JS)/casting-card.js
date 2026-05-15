@@ -145,6 +145,7 @@ function renderCastingCard(data, options = {}) {
     age = null,
     pronouns = '',
     headshot_url = '',
+    character_name = '',
     casting_categories = [],
     role_openness = 'open',
     attendance_mode = null,
@@ -157,6 +158,7 @@ function renderCastingCard(data, options = {}) {
     size === 'sm' ? 'casting-card--sm' : '',
     size === 'compact' ? 'casting-card--compact' : '',
     variant === 'callbackSimple' ? 'casting-card--callback-simple' : '',
+    variant === 'inTheShow' ? 'casting-card--in-show' : '',
     grid === 'sticky' ? 'casting-card-grid-sticky-item' : '',
     hasPadding ? 'has-padding' : '',
     state ? `state-${state}` : ''
@@ -233,15 +235,16 @@ function renderCastingCard(data, options = {}) {
   }
   
   // Caption display
-  const firstLine = first_name || '';
-  const secondLine = `${last_name || ''}`;
+  const isInTheShow = variant === 'inTheShow';
+  const firstLine = isInTheShow ? [first_name, last_name].filter(Boolean).join(' ') : (first_name || '');
+  const secondLine = isInTheShow ? (character_name ? `"${character_name}"` : '') : `${last_name || ''}`;
   const thirdParts = [];
-  if (age !== null && age !== undefined && age !== '') thirdParts.push(String(age));
-  if (pronouns) thirdParts.push(String(pronouns));
+  if (!isInTheShow && age !== null && age !== undefined && age !== '') thirdParts.push(String(age));
+  if (!isInTheShow && pronouns) thirdParts.push(String(pronouns));
   const thirdLine = thirdParts.join(' | ');
-  const firstNameSize = firstNameFontSize || getCastingCardTextSize(firstLine, 10.6, 8.5, 8);
-  const lastNameSize = getCastingCardTextSize(secondLine, 5.8, 5.0, 14);
-  const metaLineSize = getCastingCardTextSize(thirdLine, 4.2, 3.8, 18);
+  const firstNameSize = firstNameFontSize || getCastingCardTextSize(firstLine, isInTheShow ? 7.2 : 10.6, isInTheShow ? 3.4 : 5.2, isInTheShow ? 22 : 8);
+  const lastNameSize = getCastingCardTextSize(secondLine, isInTheShow ? 7.05 : 5.8, isInTheShow ? 3.6 : 3.1, isInTheShow ? 24 : 14);
+  const metaLineSize = getCastingCardTextSize(thirdLine, 4.2, 2.3, 18);
   
   // ── Video call badge ──────────────────────────────────────────
   const videoCallBadge = isVideoCallAttendanceMode(attendance_mode)
@@ -249,6 +252,22 @@ function renderCastingCard(data, options = {}) {
     : '';
 
   // ── Build the card HTML ───────────────────────────────────────
+  if (isInTheShow) {
+    return `
+      <div class="${cardClasses}" ${attrs.join(' ')}>
+        <div class="casting-card-image-area">
+          ${imageHTML}
+          ${indicatorsHTML}
+          ${videoCallBadge}
+        </div>
+        <div class="casting-card-lower">
+          <div class="casting-card-lower-name" data-fit-height="true">${esc(firstLine)}</div>
+          <div class="casting-card-lower-role" style="font-size:${lastNameSize};">${esc(secondLine)}</div>
+        </div>
+      </div>
+    `;
+  }
+
   return `
     <div class="${cardClasses}" ${attrs.join(' ')}>
       <div class="casting-card-image-area">

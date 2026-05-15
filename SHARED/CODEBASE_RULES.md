@@ -75,6 +75,7 @@ Do not casually reintroduce `Applicants` in user-facing audition flows when we m
 - For brand tiles and filled information boxes, use main or secondary colours, not faded colours.
 - Text on filled brand colour surfaces must be `#ffffff`, `#000000`, or another explicitly chosen locked palette colour with strong contrast.
 - Do not reintroduce older ad hoc colours such as soft mauves, random teals, slate blues, or near-brand purples when a locked colour should be used.
+- Registration accepted-cast board colours are locked: `Role Accepted` uses gold `#efab45`, `Forms Signed` uses sky `#78bbd4`, and `Paid` uses green `#769e7b`.
 
 ### Production Visual Language
 
