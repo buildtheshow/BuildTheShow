@@ -582,6 +582,7 @@ The card uses `container-type: inline-size` so `cqw` units resolve against the t
 
 - `empty` — no zones rendered, card shows only the background colour
 - `containers` — diagnostic/template-test mode; zones shown with coloured backgrounds (gold header, pink title, green body, red footer)
+- `text` — layout ruler mode; zones remain normal brand-colour tile zones and show text labels for header, title, body, and footer
 - `content` — kicker + title + body copy + button
 - `metric` — kicker + large number + metric label + progress bar
 - `settings` — kicker + toggle in header, setting label in title, optional input in body, helper text in footer

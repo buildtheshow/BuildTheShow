@@ -609,8 +609,10 @@
       ? esc
       : (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     const safeTag = ['button', 'div', 'label', 'span'].includes(tagName) ? tagName : 'div';
-    const safeVariant = variant === 'portrait' || variant === 'vertical' ? 'portrait' : 'square';
-    const safeMode = ['empty', 'content', 'metric', 'settings', 'settings-off'].includes(mode) ? mode : 'content';
+    const safeVariant = variant === 'portrait' || variant === 'vertical'
+      ? 'portrait'
+      : (variant === 'horizontal' ? 'horizontal' : 'square');
+    const safeMode = ['empty', 'containers', 'text', 'content', 'metric', 'settings', 'settings-off'].includes(mode) ? mode : 'content';
     const resolvedStyle = [
       `--brand-tile-bg:${safeEsc(color)};`,
       `--brand-tile-ink:${safeEsc(ink)};`,
@@ -632,6 +634,16 @@
       titleHtml    = title  ? `<div class="template-brand-tile-title">${safeEsc(title)}</div>`   : '';
       zoneBodyHtml = bodyHtml || (body ? `<div class="template-brand-tile-body">${safeEsc(body)}</div>` : '');
       footerHtml   = buttonHtml || (buttonLabel ? `<div class="template-brand-tile-button">${safeEsc(buttonLabel)}</div>` : '');
+    } else if (safeMode === 'text') {
+      headerHtml   = `<div class="template-brand-tile-kicker">${safeEsc(kicker || 'Header')}</div>`;
+      titleHtml    = `<div class="template-brand-tile-title">${safeEsc(title || 'Title')}</div>`;
+      zoneBodyHtml = bodyHtml || `<div class="template-brand-tile-body">${safeEsc(body || 'Body')}</div>`;
+      footerHtml   = buttonHtml || `<div class="template-brand-tile-body">${safeEsc(buttonLabel || helper || 'Footer')}</div>`;
+    } else if (safeMode === 'containers') {
+      headerHtml   = 'Header';
+      titleHtml    = 'Title';
+      zoneBodyHtml = 'Body';
+      footerHtml   = 'Footer';
     } else if (safeMode === 'metric') {
       headerHtml   = kicker ? `<div class="template-brand-tile-kicker">${safeEsc(kicker)}</div>` : '';
       titleHtml    = `<div class="template-brand-tile-number">${safeEsc(metricValue)}</div>`;
@@ -866,6 +878,14 @@
     tags: { area: 'brand', component: 'tile', variant: 'vertical' },
     priority: 95,
     render: (config) => renderBrandTileTemplate(Object.assign({}, config, { variant: 'portrait' }))
+  });
+
+  api.registerTemplate({
+    id: 'brand.tile.text',
+    name: 'Brand Tile Text',
+    tags: { area: 'brand', component: 'tile', mode: 'text' },
+    priority: 95,
+    render: (config) => renderBrandTileTemplate(Object.assign({}, config, { mode: 'text' }))
   });
 
   api.registerTemplate({
