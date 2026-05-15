@@ -574,6 +574,91 @@
     </div>`;
   }
 
+  function sanitizeAttrString(value = '') {
+    return String(value || '').replace(/"/g, '&quot;');
+  }
+
+  function renderBrandTileTemplate(config = {}) {
+    const {
+      esc,
+      tagName = 'div',
+      variant = 'square',
+      mode = 'content',
+      color = '#572e88',
+      ink = '#ffffff',
+      divider = '',
+      className = '',
+      style = '',
+      attrs = '',
+      type = '',
+      ariaLabel = '',
+      kicker = '',
+      title = '',
+      body = '',
+      bodyHtml = '',
+      buttonLabel = '',
+      buttonHtml = '',
+      toggleHtml = '',
+      inputHtml = '',
+      helper = '',
+      metricValue = '',
+      metricLabel = '',
+      progressPercent = ''
+    } = config;
+    const safeEsc = typeof esc === 'function'
+      ? esc
+      : (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    const safeTag = ['button', 'div', 'label', 'span'].includes(tagName) ? tagName : 'div';
+    const safeVariant = variant === 'portrait' || variant === 'vertical' ? 'portrait' : 'square';
+    const safeMode = ['empty', 'content', 'metric', 'settings', 'settings-off'].includes(mode) ? mode : 'content';
+    const resolvedStyle = [
+      `--brand-tile-bg:${safeEsc(color)};`,
+      `--brand-tile-ink:${safeEsc(ink)};`,
+      divider ? `--brand-tile-divider:${safeEsc(divider)};` : '',
+      style
+    ].filter(Boolean).join('');
+    const typeAttr = safeTag === 'button' ? ` type="${safeEsc(type || 'button')}"` : '';
+    const labelAttr = ariaLabel ? ` aria-label="${safeEsc(ariaLabel)}"` : '';
+    const extraAttrs = attrs ? ` ${sanitizeAttrString(attrs)}` : '';
+    const classes = [
+      'template-brand-card',
+      `template-brand-card--${safeVariant}`,
+      `template-brand-card--${safeMode}`,
+      className
+    ].filter(Boolean).join(' ');
+    const resolvedContent = safeMode === 'settings' || safeMode === 'settings-off'
+      ? `<div class="template-brand-tile-settings-section-header">
+          <div class="template-brand-tile-settings-header">
+            <div class="template-brand-tile-settings-label">${safeEsc(title)}</div>
+            ${toggleHtml || ''}
+          </div>
+        </div>
+        <div class="template-brand-tile-settings-section-body">${inputHtml || bodyHtml || ''}</div>
+        <div class="template-brand-tile-settings-section-footer">
+          <div class="template-brand-tile-settings-helper">${safeEsc(helper || body)}</div>
+        </div>`
+      : safeMode === 'metric'
+        ? (bodyHtml || `<div>
+            ${kicker ? `<div class="template-brand-tile-kicker">${safeEsc(kicker)}</div>` : ''}
+            <div class="template-brand-tile-number">${safeEsc(metricValue)}</div>
+            <div class="template-brand-tile-metric-label">${safeEsc(metricLabel || title)}</div>
+          </div>
+          <div class="template-brand-tile-progress"><span style="width:${safeEsc(progressPercent || '0%')};"></span></div>`)
+        : safeMode === 'empty'
+          ? ''
+          : `<div class="template-brand-tile-main">
+              ${kicker ? `<div class="template-brand-tile-kicker">${safeEsc(kicker)}</div>` : ''}
+              ${title ? `<div class="template-brand-tile-title">${safeEsc(title)}</div>` : ''}
+              ${body ? `<div class="template-brand-tile-body">${safeEsc(body)}</div>` : ''}
+              ${bodyHtml || ''}
+            </div>
+            ${buttonHtml || (buttonLabel ? `<div class="template-brand-tile-button">${safeEsc(buttonLabel)}</div>` : '')}`;
+
+    return `<${safeTag} class="${safeEsc(classes)}" style="${resolvedStyle}"${typeAttr}${labelAttr}${extraAttrs}>
+      <div class="template-brand-card-inner"><div class="template-brand-tile-content">${resolvedContent}</div></div>
+    </${safeTag}>`;
+  }
+
   function renderAuditionPageHeaderTemplate(config) {
     const {
       esc,
@@ -619,6 +704,7 @@
     renderTemplateTestSectionTemplate,
     renderTemplateTestPreviewTemplate,
     renderTemplateTestCheckedInPreviewTemplate,
+    renderBrandTileTemplate,
     renderAuditionPageHeaderTemplate
   });
 
@@ -758,6 +844,30 @@
     tags: { area: 'template-test', component: 'checked-in-preview' },
     priority: 100,
     render: renderTemplateTestCheckedInPreviewTemplate
+  });
+
+  api.registerTemplate({
+    id: 'brand.tile',
+    name: 'Brand Tile',
+    tags: { area: 'brand', component: 'tile' },
+    priority: 90,
+    render: renderBrandTileTemplate
+  });
+
+  api.registerTemplate({
+    id: 'brand.tile.square',
+    name: 'Square Brand Tile',
+    tags: { area: 'brand', component: 'tile', variant: 'square' },
+    priority: 95,
+    render: (config) => renderBrandTileTemplate(Object.assign({}, config, { variant: 'square' }))
+  });
+
+  api.registerTemplate({
+    id: 'brand.tile.vertical',
+    name: 'Vertical Brand Tile',
+    tags: { area: 'brand', component: 'tile', variant: 'vertical' },
+    priority: 95,
+    render: (config) => renderBrandTileTemplate(Object.assign({}, config, { variant: 'portrait' }))
   });
 
   api.registerTemplate({
