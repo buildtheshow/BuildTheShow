@@ -46786,50 +46786,62 @@ Thank you,
       host.innerHTML = '<div class="loading">Building your audition dashboard...</div>';
       ensureWorkspaceData(['auditionSessions', 'applicants'])
         .then(loadAudDashboard)
-        .catch(() => loadAudDashboard());
+        .catch((error) => {
+          console.error('[BTS] audition dashboard load failed', error);
+          host.innerHTML = '<div class="loading">Couldn’t load the audition dashboard. Try General Auditions, then come back.</div>';
+        });
       return;
     }
-    const totalPerformers = new Set((allApplicants || []).map(app => app.id)).size;
-    const totalSessions = (audSessions || []).length;
-    const nextSession = [...(audSessions || [])]
-      .filter(session => session.date)
-      .sort((a, b) => `${a.date || '9999'} ${a.start_time || ''}`.localeCompare(`${b.date || '9999'} ${b.start_time || ''}`))
-      .find(session => {
-        const dateTime = new Date(`${session.date}T${String(session.start_time || '00:00').slice(0, 5)}:00`);
-        return Number.isNaN(dateTime.getTime()) ? session.date >= new Date().toISOString().slice(0, 10) : dateTime >= new Date();
-      });
+    try {
+      const totalPerformers = new Set((allApplicants || []).map(app => app.id)).size;
+      const totalSessions = (audSessions || []).length;
+      const nextSession = [...(audSessions || [])]
+        .filter(session => session.date)
+        .sort((a, b) => `${a.date || '9999'} ${a.start_time || ''}`.localeCompare(`${b.date || '9999'} ${b.start_time || ''}`))
+        .find(session => {
+          const dateTime = new Date(`${session.date}T${String(session.start_time || '00:00').slice(0, 5)}:00`);
+          return Number.isNaN(dateTime.getTime()) ? session.date >= new Date().toISOString().slice(0, 10) : dateTime >= new Date();
+        });
 
-    if (!totalSessions) {
+      if (!totalSessions) {
+        host.innerHTML = `
+          ${window.BTSAuditionTemplates.renderTemplateById('auditions.page-header', {
+            esc,
+            kicker: 'Auditions',
+            title: 'Map the audition journey first.',
+            copy: 'Set up auditions first. Once performers start signing up, this page becomes your live overview.',
+            statValue: '0',
+            statLabel: 'Performers'
+          })}
+          ${teamAccessMode ? '' : `<button class="aud-intro-btn-primary" type="button" onclick="openAuditionsSubTab('setup')" style="justify-self:start;">Set Up Auditions</button>`}`;
+        return;
+      }
+
+      const nextSessionCopy = nextSession
+        ? `Next audition: ${nextSession.name || sessionTypeLabel(nextSession.type)}, ${formatAuditionVisualSessionDate(nextSession)}.`
+        : 'Your audition overview is ready. Add dates or open a room to keep the flow moving.';
       host.innerHTML = `
         ${window.BTSAuditionTemplates.renderTemplateById('auditions.page-header', {
           esc,
           kicker: 'Auditions',
-          title: 'Map the audition journey first.',
-          copy: 'Set up auditions first. Once performers start signing up, this page becomes your live overview.',
-          statValue: '0',
+          title: 'Auditions at a glance.',
+          copy: nextSessionCopy,
+          statValue: totalPerformers,
           statLabel: 'Performers'
         })}
-        ${teamAccessMode ? '' : `<button class="aud-intro-btn-primary" type="button" onclick="openAuditionsSubTab('setup')" style="justify-self:start;">Set Up Auditions</button>`}`;
-      return;
+        ${buildAuditionTypeFlow()}
+        <div style="background:#fff;border:1px solid rgba(87,46,136,0.1);border-radius:16px;padding:1.25rem 1.5rem;margin-top:1.25rem;">
+          <div style="font-size:0.7rem;font-weight:800;text-transform:uppercase;letter-spacing:0.08em;color:rgba(87,46,136,0.5);margin-bottom:1rem;">Recent Performers</div>
+          <div style="display:flex;flex-wrap:wrap;gap:0.75rem;">${buildRecentPerformerCards()}</div>
+        </div>`;
+    } catch (error) {
+      console.error('[BTS] audition dashboard render failed', error);
+      host.innerHTML = `
+        <div style="background:#fff;border:1px solid rgba(185,28,28,0.18);border-radius:12px;padding:1.25rem;color:#1a1530;max-width:520px;margin:2rem auto;">
+          <div style="font-weight:800;color:#b91c1c;margin-bottom:0.35rem;">Couldn’t load the audition dashboard.</div>
+          <div style="font-size:0.86rem;color:rgba(87,46,136,0.62);line-height:1.5;">Try General Auditions, then come back. The rest of the audition workspace is still available.</div>
+        </div>`;
     }
-
-    const nextSessionCopy = nextSession
-      ? `Next audition: ${nextSession.name || sessionTypeLabel(nextSession.type)}, ${formatAuditionVisualSessionDate(nextSession)}.`
-      : 'Your audition overview is ready. Add dates or open a room to keep the flow moving.';
-    host.innerHTML = `
-      ${window.BTSAuditionTemplates.renderTemplateById('auditions.page-header', {
-        esc,
-        kicker: 'Auditions',
-        title: 'Auditions at a glance.',
-        copy: nextSessionCopy,
-        statValue: totalPerformers,
-        statLabel: 'Performers'
-      })}
-      ${buildAuditionTypeFlow()}
-      <div style="background:#fff;border:1px solid rgba(87,46,136,0.1);border-radius:16px;padding:1.25rem 1.5rem;margin-top:1.25rem;">
-        <div style="font-size:0.7rem;font-weight:800;text-transform:uppercase;letter-spacing:0.08em;color:rgba(87,46,136,0.5);margin-bottom:1rem;">Recent Performers</div>
-        <div style="display:flex;flex-wrap:wrap;gap:0.75rem;">${buildRecentPerformerCards()}</div>
-      </div>`;
   }
 
   let inRoomApplicantId = null;
@@ -51512,8 +51524,8 @@ Thank you,
     return new Date(d + 'T00:00:00').toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' });
   }
   function esc(s) {
-    if (!s) return '';
-    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    if (s === null || s === undefined) return '';
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
 
   function displayGender(raw) {
