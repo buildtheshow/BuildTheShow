@@ -563,6 +563,28 @@
       line-height: 1.32;
       opacity: 0.8;
     }
+    .registration-workspace-preview {
+      display: grid;
+      grid-template-columns: repeat(2, 34px);
+      gap: 0.34rem;
+      align-items: start;
+      min-height: 43px;
+      margin-top: 0.45rem;
+    }
+    .registration-workspace-preview:empty {
+      display: none;
+    }
+    .registration-workspace-preview .casting-card {
+      width: 34px;
+      height: 42.5px;
+      min-width: 34px;
+      box-shadow: 0 5px 12px rgba(0,0,0,0.2);
+      pointer-events: none;
+    }
+    .registration-workspace-preview .casting-card,
+    .registration-workspace-preview .casting-card * {
+      color: #000000;
+    }
     .registration-dashboard-link {
       display: inline-flex;
       align-items: center;
@@ -21042,6 +21064,7 @@
                 <div class="registration-workspace-kicker">Cast Intake</div>
                 <div class="registration-workspace-title">Accepted Cast</div>
                 <div class="registration-workspace-copy">See the performers who accepted and now need registration tracked.</div>
+                <div class="registration-workspace-preview" id="registration-accepted-preview" aria-label="Recently accepted cast"></div>
               </div>
               <span class="registration-dashboard-link primary">Open</span>
             </button>
@@ -33419,7 +33442,11 @@ Thank you,
       const app = appMap.get(appId);
       if (app) acceptedByApplicant.set(appId, { app, assignment: row });
     });
-    return [...acceptedByApplicant.values()];
+    return [...acceptedByApplicant.values()].sort((a, b) => {
+      const bTime = String(b?.assignment?.updated_at || b?.assignment?.created_at || b?.assignment?.id || '');
+      const aTime = String(a?.assignment?.updated_at || a?.assignment?.created_at || a?.assignment?.id || '');
+      return bTime.localeCompare(aTime);
+    });
   }
 
   function registrationAnswerTruthy(app, keys = []) {
@@ -33547,6 +33574,35 @@ Thank you,
     }).filter(Boolean).join('');
   }
 
+  function renderRegistrationAcceptedPreview(items = []) {
+    const host = document.getElementById('registration-accepted-preview');
+    if (!host) return;
+    const cards = (items || []).slice(0, 2).map(({ app }) => {
+      if (!app) return '';
+      const nameParts = String(app.name || 'Unknown').trim().split(/\s+/);
+      return renderCastingCard({
+        first_name: nameParts[0] || '',
+        last_name: nameParts.slice(1).join(' ') || '',
+        age: cbv2ApplicantAge(app),
+        pronouns: applicantPronouns(app),
+        headshot_url: app.headshot_url || '',
+        casting_categories: cbv2CastingCategories(app),
+        role_openness: cbv2RoleBadge(app),
+        attendance_mode: applicantAttendanceModeLabel(app) || null,
+      }, {
+        size: 'compact',
+        hasPadding: true,
+        hasIcons: false,
+        draggable: false,
+        state: null,
+      });
+    }).filter(Boolean).join('');
+    host.innerHTML = cards;
+    requestAnimationFrame(() => {
+      if (typeof fitCastingCardNames === 'function') fitCastingCardNames(host);
+    });
+  }
+
   function renderRegistrationCardColumn({ key, title, items = [], empty = '', note = '' } = {}) {
     const cards = renderRegistrationInTheShowCards(items);
     return `<div class="reg-offers-col ${key}">
@@ -33559,6 +33615,7 @@ Thank you,
   async function loadRegistrationDashboard() {
     const completeEl = document.getElementById('registration-complete-count');
     const paymentEl = document.getElementById('registration-payment-count');
+    renderRegistrationAcceptedPreview([]);
     if (completeEl) completeEl.textContent = '… / …';
     if (paymentEl) paymentEl.textContent = '… / …';
     try {
@@ -33571,10 +33628,12 @@ Thank you,
       ).length;
       if (completeEl) completeEl.textContent = `${complete} / ${total}`;
       if (paymentEl) paymentEl.textContent = `${payments} / ${total}`;
+      renderRegistrationAcceptedPreview(accepted);
     } catch (error) {
       console.warn('[BTS] registration dashboard load failed', error);
       if (completeEl) completeEl.textContent = '0 / 0';
       if (paymentEl) paymentEl.textContent = '0 / 0';
+      renderRegistrationAcceptedPreview([]);
     }
   }
 
