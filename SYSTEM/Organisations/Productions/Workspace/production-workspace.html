@@ -3536,67 +3536,8 @@
       letter-spacing: 0 !important;
       font-family: var(--bts-font);
     }
-    #panel-emails .page-header {
-      position: relative;
-      overflow: hidden;
-      display: flex;
-      flex-direction: column;
-      align-items: flex-start;
-      border: 0;
-      border-radius: 8px;
+    .et-page-header-slot {
       margin-bottom: 1.25rem;
-      padding: 1.4rem 1.5rem;
-      background: #572e88;
-      box-shadow: 0 12px 30px rgba(87,46,136,0.16);
-    }
-    #panel-emails .page-header::before {
-      content: 'Email Templates';
-      display: flex;
-      align-items: center;
-      gap: 0.42rem;
-      padding-left: 0.9rem;
-      margin-bottom: 0.55rem;
-      color: #efab45;
-      font-size: 0.72rem;
-      font-weight: 900;
-      line-height: 1;
-      text-transform: uppercase;
-    }
-    #panel-emails .page-header::after {
-      content: '';
-      position: absolute;
-      top: 1.52rem;
-      left: 1.5rem;
-      width: 0.48rem;
-      height: 0.48rem;
-      border-radius: 999px;
-      background: #efab45;
-    }
-    #panel-emails .page-title {
-      position: relative;
-      max-width: 860px;
-      color: #ffffff;
-      font-size: 2rem;
-      line-height: 1;
-      font-weight: 900;
-      letter-spacing: 0;
-    }
-    #panel-emails .page-subtitle {
-      max-width: 620px;
-      margin-top: 0.85rem;
-      color: #e8ddf6;
-      font-size: 0.98rem;
-      line-height: 1.65;
-    }
-    #panel-emails .page-actions .btn-primary {
-      border: 1px solid rgba(87,46,136,0.1);
-      border-radius: 18px;
-      background: rgba(255,255,255,0.72);
-      color: #1a1530;
-      box-shadow: none;
-      min-width: 150px;
-      padding: 1rem;
-      backdrop-filter: blur(8px);
     }
     #email-template-filters {
       display: flex;
@@ -4653,16 +4594,8 @@
       #panel-emails {
         padding: calc(0.25rem + env(safe-area-inset-top, 0px)) 0.85rem calc(1.5rem + env(safe-area-inset-bottom, 0px));
       }
-      #panel-emails .page-header {
+      .et-page-header-slot {
         margin-bottom: 0.85rem;
-      }
-      #panel-emails .page-title {
-        font-size: clamp(1.35rem, 7vw, 1.9rem);
-        line-height: 1.05;
-      }
-      #panel-emails .page-subtitle {
-        font-size: 0.86rem;
-        line-height: 1.35;
       }
       #email-template-filters {
         position: sticky;
@@ -13991,9 +13924,19 @@
     .template-brand-tile-actions .template-brand-tile-button {
       flex: 0 0 auto;
     }
-    .template-brand-tile-confirm {
+    .template-brand-tile-actions .template-brand-tile-confirm {
+      flex: 1 1 auto;
       margin-left: auto;
+      min-width: 0;
+      max-width: 68%;
+      padding: 3.1cqw 3.8cqw;
+      font-size: 3.9cqw;
       text-align: right;
+      white-space: nowrap;
+      overflow: hidden;
+    }
+    .template-brand-tile-confirm-date {
+      font-weight: 650;
     }
     .template-brand-tile-confirm.is-confirmed {
       background: color-mix(in srgb, var(--brand-tile-ink, #ffffff) 18%, transparent);
@@ -22084,12 +22027,7 @@
 
     <!-- Email Templates -->
     <div class="tab-panel" id="panel-emails">
-      <div class="page-header">
-        <div>
-          <div class="page-title">Email Templates</div>
-          <div class="page-subtitle">Manage the reusable emails sent from this production.</div>
-        </div>
-      </div>
+      <div id="email-template-page-header" class="et-page-header-slot"></div>
 
       <!-- Purpose filter -->
       <div id="email-template-filters"></div>
@@ -27448,6 +27386,20 @@
     }
   }
 
+  function etFormatReviewDateCompact(value) {
+    if (!value) return '';
+    try {
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) return String(value);
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      return `${year}/${month}/${day}`;
+    } catch {
+      return String(value);
+    }
+  }
+
   function etTemplateReviewState(template) {
     const reviewedAt = etReviewedAt(template);
     if (!reviewedAt) return { className: 'needs', label: 'Needs approval', detail: 'Review before it sends.', button: 'Approve' };
@@ -28599,9 +28551,24 @@ Keep this email until your tape has been submitted. If you have any questions, j
     }
   }
 
+  function renderEmailTemplatePageHeader() {
+    const host = document.getElementById('email-template-page-header');
+    if (!host) return;
+    const renderer = window.BTSAuditionTemplates?.renderTemplateById;
+    host.innerHTML = typeof renderer === 'function'
+      ? renderer('auditions.page-header', {
+        esc,
+        kicker: 'Email Templates',
+        title: 'Email Templates',
+        copy: 'Manage the reusable emails sent from this production.',
+      })
+      : '';
+  }
+
   async function loadEmailTemplates() {
     const list = document.getElementById('email-template-list');
     if (!list) return;
+    renderEmailTemplatePageHeader();
     etBuildFilterChips();
     list.innerHTML = '<div style="text-align:center;padding:3rem;color:rgba(87,46,136,0.5);font-size:0.875rem;">Loading…</div>';
     const { data, error } = await sb.from('email_templates')
@@ -28711,9 +28678,10 @@ Keep this email until your tape has been submitted. If you have any questions, j
             const bg  = section.color || '#efab45';
             const ink = section.ink   || '#000000';
             const bodyText = (meta.summary || meta.usedBy || 'Reusable production email') + (issues.length ? ' · Needs setup review' : '');
-            const confirmLabel = isConfirmed ? reviewState.label.replace(/^Approved/i, 'Confirmed') : (reviewState.className === 'stale' ? 'Confirm again' : 'Confirm');
+            const confirmedDate = etFormatReviewDateCompact(etReviewedAt(t));
+            const confirmLabel = isConfirmed ? `Confirmed (${confirmedDate})` : (reviewState.className === 'stale' ? 'Confirm again' : 'Confirm');
             const confirmHtml = isConfirmed
-              ? `<span class="template-brand-tile-button template-brand-tile-confirm is-confirmed" onclick="event.stopPropagation()">${esc(confirmLabel)}</span>`
+              ? `<span class="template-brand-tile-button template-brand-tile-confirm is-confirmed" onclick="event.stopPropagation()">Confirmed <span class="template-brand-tile-confirm-date">(${esc(confirmedDate)})</span></span>`
               : `<button class="template-brand-tile-button template-brand-tile-confirm" onclick="event.stopPropagation();markEmailTemplateApproved('${t.id}')">${esc(confirmLabel)}</button>`;
             return `<div class="template-brand-card template-brand-card--portrait template-brand-card--content"
               style="--brand-tile-bg:${esc(bg)};--brand-tile-ink:${esc(ink)};"
