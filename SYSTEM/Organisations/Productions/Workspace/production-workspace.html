@@ -15,6 +15,11 @@
     html { width: 100%; max-width: 100%; overflow-x: hidden; }
     body { margin: 0; width: 100%; max-width: 100%; overflow-x: hidden; background: #ffffff; font-family: var(--bts-font); color: #1a1530; display: flex; flex-direction: column; min-height: 100vh; min-height: 100dvh; }
     body.mobile-sidebar-open { overflow: hidden; }
+    body.workspace-restoring .prod-tabs,
+    body.workspace-restoring .mobile-nav-toggle {
+      pointer-events: none;
+      opacity: 0.58;
+    }
     .team-access-toolbar { display:flex; justify-content:space-between; align-items:center; gap:0.75rem; flex-wrap:wrap; margin-bottom:0.75rem; }
     .team-access-title { font-size:var(--bts-type-xs); font-weight:800; letter-spacing:var(--bts-tracking-label); text-transform:uppercase; color:var(--bts-muted); }
     .team-access-subtitle { font-size:var(--bts-type-sm); color:var(--bts-soft); margin-top:0.18rem; line-height:1.35; }
@@ -23380,6 +23385,67 @@
     'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRrbWFpa3R4cHdxZmJnZW9qYm5mIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM3MzE4MTcsImV4cCI6MjA4OTMwNzgxN30.TkTZBNWUatk3Y6Vmfv1hIRR3DfVjgwauwa76Pf00J_8'
   );
 
+  const BTS_ROUTE_DEBUG = true;
+  function btsRouteLog(event, detail = {}) {
+    if (!BTS_ROUTE_DEBUG) return;
+    try { console.info(`[BTS route] ${event}`, detail); } catch {}
+  }
+
+  window.addEventListener('error', event => {
+    btsRouteLog('failed async dependency', { message: event.message, source: event.filename, line: event.lineno });
+  });
+  window.addEventListener('unhandledrejection', event => {
+    btsRouteLog('failed async dependency', { message: event.reason?.message || String(event.reason || '') });
+  });
+
+  function setRouteLoading(message) {
+    document.body.classList.add('workspace-restoring');
+    window.PageLoader?.showMessage?.(message || 'Loading your production…');
+    btsRouteLog('loading', { message });
+  }
+
+  function clearRouteLoading() {
+    document.body.classList.remove('workspace-restoring');
+    window.PageLoader?.hide?.();
+    btsRouteLog('ready');
+  }
+
+  function showRouteBlocked(title, message) {
+    document.body.classList.remove('workspace-restoring');
+    window.PageLoader?.hide?.();
+    showWorkspaceNotFound(
+      title || 'Couldn’t load this production',
+      message || 'Try refreshing. If this keeps happening, you may not have access to this production.',
+      '/org/dashboard',
+      'Back to dashboard'
+    );
+  }
+
+  async function waitForValidSession({ timeoutMs = 8000 } = {}) {
+    btsRouteLog('session restore start');
+    const timeout = new Promise(resolve => setTimeout(() => resolve({ timedOut: true }), timeoutMs));
+    const sessionAttempt = sb.auth.getSession()
+      .then(({ data, error }) => ({ session: data?.session || null, error }))
+      .catch(error => ({ session: null, error }));
+    const result = await Promise.race([sessionAttempt, timeout]);
+    if (result?.timedOut) {
+      btsRouteLog('session restore timeout');
+      return null;
+    }
+    if (result?.error) btsRouteLog('session restore warning', { message: result.error.message });
+    if (!result?.session) {
+      btsRouteLog('session restore end', { ok: false });
+      return null;
+    }
+    const userResult = await sb.auth.getUser().catch(error => ({ data: null, error }));
+    if (userResult?.error || !userResult?.data?.user) {
+      btsRouteLog('session validation failed', { message: userResult?.error?.message });
+      return null;
+    }
+    btsRouteLog('session restore end', { ok: true, userId: userResult.data.user.id });
+    return { session: result.session, user: userResult.data.user };
+  }
+
   let prod     = null;
   let prodId   = null;
   let calDate  = new Date();
@@ -23388,6 +23454,8 @@
   let teamAccessEmail = '';
   let teamAccessPasscode = '';
   let teamAccessSessionToken = '';
+  let workspaceBootReady = false;
+  let queuedWorkspaceNavigation = null;
 
   function teamAccessStorageKey() {
     return `bts-team-access:${prodId || 'unknown'}`;
@@ -25310,6 +25378,7 @@
 
   // ── Init ─────────────────────────────────────────────
   async function init() {
+    setRouteLoading('Checking your session…');
     const params = new URLSearchParams(window.location.search);
     teamAccessMode = isTeamAccessRequest();
     prodId = params.get('id');
@@ -25334,20 +25403,43 @@
       return;
     }
 
-    const { data: { session } } = await sb.auth.getSession();
-    if (!session) { window.location.href = '/login'; return; }
-    await bootProductionWorkspace(params);
+    const auth = await waitForValidSession();
+    if (!auth?.session) {
+      btsRouteLog('route guard blocked', { reason: 'no valid session' });
+      window.location.href = '/login';
+      return;
+    }
+    await bootProductionWorkspace(params, { user: auth.user });
   }
 
-  async function bootProductionWorkspace(params) {
+  async function bootProductionWorkspace(params, context = {}) {
+    setRouteLoading('Loading your production…');
+    btsRouteLog('production context start', { prodId, userId: context.user?.id || null, teamAccessMode });
     const { data, error } = await sb.from('productions').select('*').eq('id', prodId).single();
     if (error || !data) {
+      btsRouteLog('production context failed', { message: error?.message, prodId });
       if (teamAccessMode) showTeamAccessLogin('Production not found. Check your link.');
-      else window.location.href = '/org/dashboard';
+      else showRouteBlocked('Couldn’t load this production', 'Try refreshing. If this keeps happening, you may not have access to this production.');
       return;
     }
 
     prod = data;
+    btsRouteLog('production context loaded', { prodId: prod.id, organizationId: prod.organization_id });
+    if (!teamAccessMode && prod.organization_id) {
+      btsRouteLog('permission check start', { organizationId: prod.organization_id });
+      const { data: orgAccess, error: orgAccessError } = await sb
+        .from('organizations')
+        .select('id,admin_id')
+        .eq('id', prod.organization_id)
+        .eq('admin_id', context.user?.id || '')
+        .maybeSingle();
+      if (orgAccessError || !orgAccess?.id) {
+        btsRouteLog('permission check failed', { message: orgAccessError?.message, organizationId: prod.organization_id });
+        showRouteBlocked('You do not have access to this production.', 'Sign in with the organisation admin account, or ask the production owner for access.');
+        return;
+      }
+      btsRouteLog('permission check end', { ok: true, organizationId: orgAccess.id });
+    }
     updateTeamUrlDisplays();
     ensureProductionSlug()
       .then(() => {
@@ -25369,6 +25461,7 @@
     // Checklists load on tab open
     const bootRouteNav = getWorkspaceNavStateFromRoute();
     if (isWorkspaceRouteInvalid()) {
+      window.PageLoader?.hide?.();
       showWorkspaceNotFound('Page not found', 'That page does not exist in this production workspace.', workspaceCanonicalBasePath(), 'Back to production');
       return;
     }
@@ -25442,36 +25535,70 @@
     if (savedNav?.auditionsSessionId) activeAuditionNavSessionId = savedNav.auditionsSessionId;
     if (savedNav?.auditionsSessionTool) activeAuditionNavTool = savedNav.auditionsSessionTool;
     if (savedNav?.inRoomApplicantId) inRoomApplicantId = savedNav.inRoomApplicantId;
-    if (routeNav?.prodTab === 'auditions') {
-      setTimeout(() => routeNav.auditionsSubTab ? openAuditionsSubTab(routeNav.auditionsSubTab) : switchAudTab('overview'), 100);
-    } else if (routeNav?.prodTab) {
-      setTimeout(() => switchProdTab(routeNav.prodTab), 100);
-    } else if (tabParam === 'casting') {
-      setTimeout(() => openCastingSubTab(subParam || 'castboard'), 100);
-    } else if (tabParam === 'auditions') {
-      setTimeout(() => subParam ? openAuditionsSubTab(subParam) : switchAudTab('overview'), 100);
-    } else if (tabParam) {
-      setTimeout(() => switchProdTab(tabParam), 100);
-    } else if (savedNav?.prodTab === 'auditions') {
-      setTimeout(() => savedNav.auditionsSubTab ? openAuditionsSubTab(savedNav.auditionsSubTab) : switchAudTab('overview'), 100);
-    } else if (savedNav?.prodTab) {
-      setTimeout(() => switchProdTab(savedNav.prodTab), 100);
-    }
+    applyInitialWorkspaceNavigation({ routeNav, tabParam, subParam, savedNav });
     if (hasExplicitNav) scheduleWorkspaceScrollRestore();
 
     setupAuditionsRealtime();
     setupAuditionsVisibilityHandler();
     setupEmailTemplatesRealtime();
     handleMobileSidebarViewport();
-    criticalWorkspaceData.finally(() => {
-      setTimeout(() => {
-        if (window.PageLoader) window.PageLoader.hide();
-      }, 180);
-    });
+    workspaceBootReady = true;
+    flushQueuedWorkspaceNavigation();
+    clearRouteLoading();
     setTimeout(() => {
       replaceWorkspaceHistoryState();
       workspaceHistoryReady = true;
     }, 250);
+  }
+
+  function runWorkspaceNavigation(action, detail = {}) {
+    btsRouteLog('route transition started', detail);
+    try {
+      action();
+      btsRouteLog('route transition completed', detail);
+    } catch (error) {
+      btsRouteLog('route transition failed', { ...detail, message: error?.message });
+      console.error('[BTS] route transition failed', error);
+      showRouteBlocked('Couldn’t load this production view', 'Try refreshing. If this keeps happening, return to the dashboard and open the production again.');
+    }
+  }
+
+  function applyInitialWorkspaceNavigation({ routeNav, tabParam, subParam, savedNav }) {
+    btsRouteLog('route guard start', { routeNav, tabParam, subParam, savedNav });
+    if (routeNav?.prodTab === 'auditions') {
+      runWorkspaceNavigation(() => routeNav.auditionsSubTab ? openAuditionsSubTab(routeNav.auditionsSubTab, { force: true }) : switchAudTab('overview'), { source: 'route', prodTab: 'auditions', subTab: routeNav.auditionsSubTab || 'overview' });
+    } else if (routeNav?.prodTab) {
+      runWorkspaceNavigation(() => switchProdTab(routeNav.prodTab, { force: true }), { source: 'route', prodTab: routeNav.prodTab });
+    } else if (tabParam === 'casting') {
+      runWorkspaceNavigation(() => openCastingSubTab(subParam || 'castboard'), { source: 'query', prodTab: 'casting', subTab: subParam || 'castboard' });
+    } else if (tabParam === 'auditions') {
+      runWorkspaceNavigation(() => subParam ? openAuditionsSubTab(subParam, { force: true }) : switchAudTab('overview'), { source: 'query', prodTab: 'auditions', subTab: subParam || 'overview' });
+    } else if (tabParam) {
+      runWorkspaceNavigation(() => switchProdTab(tabParam, { force: true }), { source: 'query', prodTab: tabParam });
+    } else if (savedNav?.prodTab === 'auditions') {
+      runWorkspaceNavigation(() => savedNav.auditionsSubTab ? openAuditionsSubTab(savedNav.auditionsSubTab, { force: true }) : switchAudTab('overview'), { source: 'saved', prodTab: 'auditions', subTab: savedNav.auditionsSubTab || 'overview' });
+    } else if (savedNav?.prodTab) {
+      runWorkspaceNavigation(() => switchProdTab(savedNav.prodTab, { force: true }), { source: 'saved', prodTab: savedNav.prodTab });
+    } else {
+      runWorkspaceNavigation(() => switchProdTab('overview', { force: true }), { source: 'default', prodTab: 'overview' });
+    }
+    btsRouteLog('route guard end');
+  }
+
+  function queueWorkspaceNavigation(type, payload) {
+    queuedWorkspaceNavigation = { type, payload };
+    btsRouteLog('nav queued before ready', queuedWorkspaceNavigation);
+    setRouteLoading('Loading your production…');
+  }
+
+  function flushQueuedWorkspaceNavigation() {
+    if (!queuedWorkspaceNavigation) return;
+    const queued = queuedWorkspaceNavigation;
+    queuedWorkspaceNavigation = null;
+    btsRouteLog('queued nav replay', queued);
+    if (queued.type === 'prod') switchProdTab(queued.payload.id, { force: true });
+    else if (queued.type === 'auditions') openAuditionsSubTab(queued.payload.subTab, { force: true });
+    else if (queued.type === 'registration') openRegistrationSubTab(queued.payload.subTab, { force: true });
   }
 
   async function refreshAuditionsLiveUi(options = {}) {
@@ -25615,7 +25742,7 @@
   function loadWorkspaceNavState() {
     try {
       const raw = localStorage.getItem(getWorkspaceNavStorageKey());
-      return raw ? JSON.parse(raw) : {};
+      return raw ? validateWorkspaceNavState(JSON.parse(raw)) : {};
     } catch {
       return {};
     }
@@ -25624,7 +25751,7 @@
   function saveWorkspaceNavState(next) {
     try {
       const current = loadWorkspaceNavState();
-      const merged = { ...current, ...next };
+      const merged = validateWorkspaceNavState({ ...current, ...next });
       localStorage.setItem(getWorkspaceNavStorageKey(), JSON.stringify(merged));
       queueWorkspaceHistoryState(merged);
     } catch {}
@@ -25649,6 +25776,19 @@
       scrollX: 0,
       scrollY: 0,
     };
+  }
+
+  function validateWorkspaceNavState(nav = {}) {
+    const next = { ...getDefaultWorkspaceNavState(), ...(nav || {}) };
+    const topTabs = new Set(['overview', 'team', 'calendar', 'auditions', 'castlist', 'registration', 'profile', 'emails', 'test', 'settings', 'checklist', 'messages', 'files']);
+    if (!topTabs.has(next.prodTab)) next.prodTab = 'overview';
+    const audTabs = new Set(['overview', 'dashboard', 'setup', 'schedule', 'auditions', 'audschedule', 'allperformers', 'checkin', 'inroom', 'callbacks', 'selftape', 'castboard', 'finalcasting', 'castlist']);
+    if (next.auditionsSubTab && !audTabs.has(next.auditionsSubTab) && !String(next.auditionsSubTab).startsWith('session:')) {
+      next.auditionsSubTab = 'dashboard';
+    }
+    const regTabs = new Set(['dashboard', 'offers', 'form', 'payments', 'agreements', 'settings']);
+    if (next.registrationSubTab && !regTabs.has(next.registrationSubTab)) next.registrationSubTab = 'dashboard';
+    return next;
   }
 
   function cleanWorkspaceRoutePart(value) {
@@ -25959,7 +26099,7 @@
     if (!state || state.prodId !== prodId || !state.nav) return;
     workspaceApplyingHistory = true;
     try {
-      const nav = state.nav;
+      const nav = validateWorkspaceNavState(state.nav);
       localStorage.setItem(getWorkspaceNavStorageKey(), JSON.stringify(nav));
       if (nav.auditionsSessionId) activeAuditionNavSessionId = nav.auditionsSessionId;
       if (nav.auditionsSessionTool) activeAuditionNavTool = nav.auditionsSessionTool;
@@ -33465,19 +33605,29 @@ Thank you,
     ].join('');
   }
 
-  function openRegistrationSubTab(subTab = 'dashboard') {
+  function openRegistrationSubTab(subTab = 'dashboard', options = {}) {
+    btsRouteLog('nav click received', { type: 'registration', subTab, ready: workspaceBootReady });
+    if (!workspaceBootReady && !options.force) {
+      queueWorkspaceNavigation('registration', { subTab });
+      return;
+    }
     closeMobileSidebar();
-    switchProdTab('registration');
+    switchProdTab('registration', { force: true });
     switchRegistrationSubTab(subTab);
   }
 
-  function openAuditionsSubTab(subTab) {
+  function openAuditionsSubTab(subTab, options = {}) {
+    btsRouteLog('nav click received', { type: 'auditions', subTab, ready: workspaceBootReady });
+    if (!workspaceBootReady && !options.force) {
+      queueWorkspaceNavigation('auditions', { subTab });
+      return;
+    }
     closeMobileSidebar();
     if (teamAccessMode) {
       const blocked = new Set(['overview','setup','checkin','run']);
       if (blocked.has(subTab)) subTab = 'dashboard';
     }
-    switchProdTab('auditions');
+    switchProdTab('auditions', { force: true });
     const isSessionSubTab = String(subTab).startsWith('session:');
     saveWorkspaceNavState({ auditionsSubTab: subTab });
 
@@ -35161,14 +35311,19 @@ Thank you,
     ].join('');
   }
 
-  function switchProdTab(id) {
+  function switchProdTab(id, options = {}) {
+    btsRouteLog('nav click received', { type: 'prod', id, ready: workspaceBootReady });
+    if (!workspaceBootReady && !options.force) {
+      queueWorkspaceNavigation('prod', { id });
+      return;
+    }
     // If the wizard iframe is open, close it before navigating away
     const wizPanel = document.getElementById('wizard-iframe-panel');
     if (wizPanel && wizPanel.style.display !== 'none') {
       closeWizardIframe(false);
     }
     closeMobileSidebar();
-    saveWorkspaceNavState({ prodTab: id });
+    runWorkspaceNavigation(() => saveWorkspaceNavState({ prodTab: id }), { type: 'save-nav-state', prodTab: id });
     syncAuditionsLiveLoop({ prodTab: id });
     document.querySelectorAll('.prod-tab[data-tab]').forEach(el => {
       el.classList.toggle('active', el.dataset.tab === id);

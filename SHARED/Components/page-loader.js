@@ -106,7 +106,7 @@
   function startCycle() {
     clearTimeout(failOpenTimer);
     failOpenTimer = setTimeout(function () {
-      window.PageLoader?.hide?.();
+      window.PageLoader?.showMessage?.('Still loading. Checking your session and workspace…');
     }, FAIL_OPEN_MS);
     cycleTimer = setInterval(function () {
       if (hidden) return;
@@ -124,6 +124,22 @@
 
   // ── Public API ────────────────────────────────────────────────────────────
   window.PageLoader = {
+    showMessage: function (text) {
+      const msgEl = document.getElementById('bts-pl-msg');
+      if (msgEl && text) {
+        msgEl.textContent = text;
+        msgEl.classList.remove('bts-pl-msg-fade');
+      }
+    },
+    showError: function (text) {
+      clearInterval(cycleTimer);
+      clearTimeout(failOpenTimer);
+      const msgEl = document.getElementById('bts-pl-msg');
+      if (msgEl) {
+        msgEl.textContent = text || 'Couldn’t load this page. Try refreshing.';
+        msgEl.classList.remove('bts-pl-msg-fade');
+      }
+    },
     hide: function () {
       if (hidden) return;
       hidden = true;

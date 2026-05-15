@@ -1810,6 +1810,47 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
     'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRrbWFpa3R4cHdxZmJnZW9qYm5mIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM3MzE4MTcsImV4cCI6MjA4OTMwNzgxN30.TkTZBNWUatk3Y6Vmfv1hIRR3DfVjgwauwa76Pf00J_8'
   );
 
+  const BTS_ROUTE_DEBUG = true;
+  let orgDashboardReady = false;
+
+  function btsRouteLog(event, detail = {}) {
+    if (!BTS_ROUTE_DEBUG) return;
+    try { console.info(`[BTS route] ${event}`, detail); } catch {}
+  }
+
+  window.addEventListener('error', event => {
+    btsRouteLog('failed async dependency', { message: event.message, source: event.filename, line: event.lineno });
+  });
+  window.addEventListener('unhandledrejection', event => {
+    btsRouteLog('failed async dependency', { message: event.reason?.message || String(event.reason || '') });
+  });
+
+  async function waitForValidSession({ timeoutMs = 8000 } = {}) {
+    btsRouteLog('session restore start');
+    window.PageLoader?.showMessage?.('Checking your session…');
+    const timeout = new Promise(resolve => setTimeout(() => resolve({ timedOut: true }), timeoutMs));
+    const sessionAttempt = sb.auth.getSession()
+      .then(({ data, error }) => ({ session: data?.session || null, error }))
+      .catch(error => ({ session: null, error }));
+    const result = await Promise.race([sessionAttempt, timeout]);
+    if (result?.timedOut) {
+      btsRouteLog('session restore timeout');
+      return null;
+    }
+    if (result?.error) btsRouteLog('session restore warning', { message: result.error.message });
+    if (!result?.session) {
+      btsRouteLog('session restore end', { ok: false });
+      return null;
+    }
+    const userResult = await sb.auth.getUser().catch(error => ({ data: null, error }));
+    if (userResult?.error || !userResult?.data?.user) {
+      btsRouteLog('session validation failed', { message: userResult?.error?.message });
+      return null;
+    }
+    btsRouteLog('session restore end', { ok: true, userId: userResult.data.user.id });
+    return { session: result.session, user: userResult.data.user };
+  }
+
   let currentOrg  = null;
   let currentUser = null;
   let allProds    = [];
@@ -1853,16 +1894,28 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
   ];
 
   async function init() {
-    const { data: { session } } = await sb.auth.getSession();
-    if (!session) { window.location.href = '/login'; return; }
-    currentUser = session.user;
+    const auth = await waitForValidSession();
+    if (!auth?.session) {
+      btsRouteLog('route guard blocked', { reason: 'no valid session' });
+      window.location.href = '/login';
+      return;
+    }
+    currentUser = auth.user;
     document.getElementById('sb-email').textContent = currentUser.email;
 
+    btsRouteLog('organisation context start', { userId: currentUser.id });
+    window.PageLoader?.showMessage?.('Loading your organisation…');
     const { data: org, error } = await sb.from('organizations')
       .select('*').eq('admin_id', currentUser.id).limit(1).single();
-    if (error || !org) { window.location.href = '/org/setup'; return; }
+    if (error || !org) {
+      btsRouteLog('organisation context failed', { message: error?.message });
+      window.location.href = '/org/setup';
+      return;
+    }
 
     currentOrg = org;
+    orgDashboardReady = true;
+    btsRouteLog('organisation context loaded', { organizationId: org.id });
     renderOrgInfo();
     loadProductions();
     loadMembers();
@@ -2599,6 +2652,12 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
 
   // ── Tab switching ─────────────────────────────────────
   function switchTab(id) {
+    btsRouteLog('nav click received', { type: 'org-tab', id, ready: orgDashboardReady });
+    if (!orgDashboardReady) {
+      window.PageLoader?.showMessage?.('Loading your organisation…');
+      return;
+    }
+    btsRouteLog('route transition started', { type: 'org-tab', id });
     document.querySelectorAll('.nav-item[data-tab]').forEach(el => el.classList.toggle('active', el.dataset.tab === id));
     document.querySelectorAll('.content-section').forEach(el => el.classList.toggle('active', el.id === 'tab-' + id));
     if (id === 'cronus' && typeof FullCalendar !== 'undefined') {
@@ -2606,6 +2665,7 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
     }
     if (id === 'files') loadOrgFilesTab();
     if (id === 'members') requestAnimationFrame(() => window.BTSProductionTeamTemplates?.fitVolunteerRoleIdentifiers?.(document.getElementById('members-tbody')));
+    btsRouteLog('route transition completed', { type: 'org-tab', id });
   }
   document.querySelectorAll('.nav-item[data-tab]').forEach(el => el.addEventListener('click', () => switchTab(el.dataset.tab)));
 
