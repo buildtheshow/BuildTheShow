@@ -534,6 +534,89 @@ These rules define the platform voice for all user-facing copy, labels, help tex
 4. Ask whether the fun is helping or getting in the way.
 5. If it is not obvious, rewrite it.
 
+## Brand Tile System
+
+These rules define the structure, sizing, copy behaviour, and permitted modes for all brand tiles across the platform. Locked May 15 2026.
+
+### What a Brand Tile Is
+
+A brand tile is a filled production-colour card used to surface a single piece of information, a setting, or a metric. Every brand tile in every part of the platform must use the shared template system — `renderBrandTileTemplate` in `SHARED/Components/audition-page-templates.js`. Do not build one-off brand tile HTML.
+
+### Zone Structure
+
+Every non-empty brand tile has exactly four zones, stacked as a flex column:
+
+1. **Header** — kicker label and optional toggle/checkbox
+2. **Title** — the main label or heading
+3. **Body** — form inputs, body copy, metric label, or empty
+4. **Footer** — helper text, a button, or a progress bar
+
+### Zone Sizes (locked)
+
+All sizes are in `cqw` — relative to the tile's own width, so they scale with every tile size automatically.
+
+| Zone | Height | Behaviour |
+|------|--------|-----------|
+| Header | `10cqw` | Rigid — never grows or shrinks |
+| Title | `28cqw` | Rigid — never grows or shrinks |
+| Body | Fills remaining space | The only zone that grows or shrinks |
+| Footer | `14cqw` | Rigid — never grows or shrinks |
+
+The card uses `container-type: inline-size` so `cqw` units resolve against the tile, not the viewport.
+
+### Inner Padding
+
+- All non-empty modes: `8cqw` on `.template-brand-card-inner`
+- Containers diagnostic mode only: `7cqw`
+
+### Copy Rules
+
+1. Copy only wraps at word boundaries — never mid-word or mid-character.
+2. If there is too much copy for a zone, the font shrinks to fit. Zones never expand to accommodate copy.
+3. Font shrinking is handled by `fitBrandTileTitles()` — must be called after tiles are rendered, using a double `requestAnimationFrame`.
+4. Font shrinking stops at `6px` minimum. Below that, content clips as a last resort only.
+5. The body zone does not shrink — copy flows naturally in whatever space it has.
+6. Zones have `overflow: hidden` as a safety net, but in practice the font-shrink pass prevents visible clipping.
+
+### Permitted Modes
+
+- `empty` — no zones rendered, card shows only the background colour
+- `containers` — diagnostic/template-test mode; zones shown with coloured backgrounds (gold header, pink title, green body, red footer)
+- `content` — kicker + title + body copy + button
+- `metric` — kicker + large number + metric label + progress bar
+- `settings` — kicker + toggle in header, setting label in title, optional input in body, helper text in footer
+- `settings-off` — same as settings but card renders at `25%` opacity
+
+### Settings Mode Rules
+
+1. The checkbox toggle lives in the **header zone**, alongside the kicker — not in the title zone.
+2. The setting label (the thing being toggled) lives in the **title zone**.
+3. Helper text always lives in the **footer zone**.
+4. Any form input or select associated with the setting lives in the **body zone**.
+5. Toggle size: `8cqw × 8cqw`. It must fit within the `10cqw` header without a margin-top offset.
+
+### What Must Not Happen
+
+1. Do not build brand tile HTML outside the shared template function.
+2. Do not use the old three-section structure (`settings-section-header`, `settings-section-body`, `settings-section-footer`).
+3. Do not let zones grow or shrink based on copy — the zone is always the fixed size.
+4. Do not use `overflow-wrap: anywhere` — it breaks words mid-character.
+5. Do not use left border accent bars on brand tiles.
+6. Do not use transparent, frosted, or see-through backgrounds on brand tiles — they must be fully filled with a brand colour.
+
+### CSS Classes
+
+- `.template-brand-card` — outer card (sets `container-type`, background, border-radius, shadow)
+- `.template-brand-card-inner` — inner padding wrapper
+- `.template-brand-tile-content` — flex column that holds the four zones
+- `.template-brand-tile-container` — base zone class
+- `.template-brand-tile-container--header/title/body/footer` — zone size modifiers
+- `.template-brand-tile-settings-header` — flex row inside the header zone (kicker + toggle)
+- `.template-brand-tile-kicker` — small uppercase label (`4.2cqw`)
+- `.template-brand-tile-settings-label` — setting title text (`9cqw`, bold)
+- `.template-brand-tile-settings-helper` — footer helper text (`3.8cqw`, italic)
+- `.template-brand-tile-settings-toggle` — checkbox input (`8cqw × 8cqw`)
+
 ## Visual Design Rules
 
 These rules cover hierarchy, spacing, labels, and how interface elements should compete for attention.
