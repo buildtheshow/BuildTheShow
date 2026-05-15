@@ -3653,6 +3653,7 @@
       border-radius: 0;
       box-shadow: none;
       background: transparent;
+      overflow: visible;
     }
     .et-inbox-toolbar {
       padding: 0.2rem 0.05rem 0.85rem;
@@ -3935,6 +3936,8 @@
       gap: clamp(0.85rem, 2vw, 1.25rem);
       width: 100%;
       max-width: 1120px;
+      padding: 0.35rem 0.35rem 0.8rem;
+      margin: -0.35rem;
     }
     #panel-emails .et-summary-bar { display: none; }
     .et-section-group {
@@ -13816,8 +13819,14 @@
       text-transform: uppercase;
     }
     .template-brand-card {
+      position: relative;
+      z-index: 1;
+      isolation: isolate;
       width: min(100%, 300px);
       background: var(--brand-tile-bg, #572e88);
+      background-color: var(--brand-tile-bg, #572e88);
+      background-blend-mode: normal;
+      mix-blend-mode: normal;
       border: none;
       border-radius: 8px;
       box-shadow: 0 18px 36px rgba(26,21,48,0.14), 0 4px 10px rgba(26,21,48,0.08);
@@ -13828,6 +13837,16 @@
       color: var(--brand-tile-ink, #ffffff);
       font-family: var(--bts-font);
       text-align: left;
+    }
+    .template-brand-card::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      z-index: -1;
+      border-radius: inherit;
+      background: var(--brand-tile-bg, #572e88);
+      opacity: 1;
+      pointer-events: none;
     }
     .template-brand-card--square {
       aspect-ratio: 1 / 1;
@@ -13885,6 +13904,10 @@
       font-weight: 950;
       letter-spacing: 0;
       line-height: 0.95;
+      max-height: 37cqw;
+      min-width: 0;
+      overflow: hidden;
+      overflow-wrap: anywhere;
     }
     .template-brand-tile-body {
       font-size: 5.2cqw;
@@ -13905,6 +13928,26 @@
       letter-spacing: 0;
       line-height: 1;
       cursor: pointer;
+    }
+    .template-brand-tile-actions {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 3cqw;
+      min-width: 0;
+    }
+    .template-brand-tile-actions .template-brand-tile-button {
+      flex: 0 0 auto;
+    }
+    .template-brand-tile-confirm {
+      margin-left: auto;
+      text-align: right;
+    }
+    .template-brand-tile-confirm.is-confirmed {
+      background: color-mix(in srgb, var(--brand-tile-ink, #ffffff) 18%, transparent);
+      color: var(--brand-tile-ink, #ffffff);
+      border: 1.5px solid color-mix(in srgb, var(--brand-tile-ink, #ffffff) 34%, transparent);
+      cursor: default;
     }
     .template-brand-tile-number {
       font-size: 24cqw;
@@ -25015,6 +25058,7 @@
     requestAnimationFrame(() => requestAnimationFrame(() => {
       if (typeof fitCastingCardNames === 'function') fitCastingCardNames(host);
       fitSettingsLabels(host);
+      if (typeof fitBrandTileTitles === 'function') fitBrandTileTitles(host);
     }));
     const cleanFlip = document.getElementById('template-test-og-flip');
     if (cleanFlip) {
@@ -28595,6 +28639,7 @@ Keep this email until your tape has been submitted. If you have any questions, j
           <div class="et-section-home-grid">${homeCards}</div>
         </div>
       </div>`;
+      fitBrandTileTitles(list);
       return;
     }
     const filtered = sorted.filter(t => etSectionMatchesFilter(t, _etCatFilter));
@@ -28621,9 +28666,15 @@ Keep this email until your tape has been submitted. If you have any questions, j
           ${templates.map(t => {
             const meta = etTemplateMeta(t.category);
             const issues = etTemplateIssues(t);
+            const reviewState = etTemplateReviewState(t);
+            const isConfirmed = reviewState.className === 'approved';
             const bg  = section.color || '#efab45';
             const ink = section.ink   || '#000000';
             const bodyText = (meta.summary || meta.usedBy || 'Reusable production email') + (issues.length ? ' · Needs setup review' : '');
+            const confirmLabel = isConfirmed ? reviewState.label.replace(/^Approved/i, 'Confirmed') : (reviewState.className === 'stale' ? 'Confirm again' : 'Confirm');
+            const confirmHtml = isConfirmed
+              ? `<span class="template-brand-tile-button template-brand-tile-confirm is-confirmed" onclick="event.stopPropagation()">${esc(confirmLabel)}</span>`
+              : `<button class="template-brand-tile-button template-brand-tile-confirm" onclick="event.stopPropagation();markEmailTemplateApproved('${t.id}')">${esc(confirmLabel)}</button>`;
             return `<div class="template-brand-card template-brand-card--portrait template-brand-card--content"
               style="--brand-tile-bg:${esc(bg)};--brand-tile-ink:${esc(ink)};"
               onclick="openEditEmailTemplate('${t.id}')">
@@ -28634,7 +28685,10 @@ Keep this email until your tape has been submitted. If you have any questions, j
                     <div class="template-brand-tile-title">${esc(t.name || meta.label || 'Untitled')}</div>
                     <div class="template-brand-tile-body">${esc(bodyText)}</div>
                   </div>
-                  <button class="template-brand-tile-button" onclick="event.stopPropagation();openEditEmailTemplate('${t.id}')">Edit</button>
+                  <div class="template-brand-tile-actions">
+                    <button class="template-brand-tile-button" onclick="event.stopPropagation();openEditEmailTemplate('${t.id}')">Edit</button>
+                    ${confirmHtml}
+                  </div>
                 </div>
               </div>
             </div>`;
@@ -28664,7 +28718,37 @@ Keep this email until your tape has been submitted. If you have any questions, j
         </section>
       </div>
     </div>`;
+    fitBrandTileTitles(list);
   }
+
+  function fitBrandTileTitles(root = document) {
+    const titles = root.querySelectorAll?.('.template-brand-card .template-brand-tile-title') || [];
+    titles.forEach(title => {
+      title.style.fontSize = '';
+      title.style.whiteSpace = 'normal';
+      if (!title.clientWidth || !title.clientHeight) return;
+      const minSize = 12;
+      let size = parseFloat(getComputedStyle(title).fontSize) || 24;
+      let attempts = 0;
+      while (
+        attempts < 34 &&
+        size > minSize &&
+        (title.scrollHeight > title.clientHeight + 1 || title.scrollWidth > title.clientWidth + 1)
+      ) {
+        size = Math.max(size * 0.92, minSize);
+        title.style.fontSize = `${size}px`;
+        attempts++;
+      }
+    });
+  }
+
+  let brandTileFitTimer = null;
+  function scheduleBrandTileTitleFit(root = document) {
+    clearTimeout(brandTileFitTimer);
+    brandTileFitTimer = setTimeout(() => fitBrandTileTitles(root), 80);
+  }
+
+  window.addEventListener('resize', () => scheduleBrandTileTitleFit(), { passive: true });
 
   function formatShortDateTime(value) {
     if (!value) return 'just now';
