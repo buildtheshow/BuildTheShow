@@ -626,33 +626,31 @@
       `template-brand-card--${safeMode}`,
       className
     ].filter(Boolean).join(' ');
-    const resolvedContent = safeMode === 'settings' || safeMode === 'settings-off'
-      ? `<div class="template-brand-tile-settings-section-header">
-          <div class="template-brand-tile-settings-header">
-            <div class="template-brand-tile-settings-label">${safeEsc(title)}</div>
-            ${toggleHtml || ''}
-          </div>
-        </div>
-        <div class="template-brand-tile-settings-section-body">${inputHtml || bodyHtml || ''}</div>
-        <div class="template-brand-tile-settings-section-footer">
-          <div class="template-brand-tile-settings-helper">${safeEsc(helper || body)}</div>
-        </div>`
-      : safeMode === 'metric'
-        ? (bodyHtml || `<div>
-            ${kicker ? `<div class="template-brand-tile-kicker">${safeEsc(kicker)}</div>` : ''}
-            <div class="template-brand-tile-number">${safeEsc(metricValue)}</div>
-            <div class="template-brand-tile-metric-label">${safeEsc(metricLabel || title)}</div>
-          </div>
-          <div class="template-brand-tile-progress"><span style="width:${safeEsc(progressPercent || '0%')};"></span></div>`)
-        : safeMode === 'empty'
-          ? ''
-          : `<div class="template-brand-tile-main">
-              ${kicker ? `<div class="template-brand-tile-kicker">${safeEsc(kicker)}</div>` : ''}
-              ${title ? `<div class="template-brand-tile-title">${safeEsc(title)}</div>` : ''}
-              ${body ? `<div class="template-brand-tile-body">${safeEsc(body)}</div>` : ''}
-              ${bodyHtml || ''}
-            </div>
-            ${buttonHtml || (buttonLabel ? `<div class="template-brand-tile-button">${safeEsc(buttonLabel)}</div>` : '')}`;
+    let headerHtml = '', titleHtml = '', zoneBodyHtml = '', footerHtml = '';
+    if (safeMode === 'content') {
+      headerHtml   = kicker ? `<div class="template-brand-tile-kicker">${safeEsc(kicker)}</div>` : '';
+      titleHtml    = title  ? `<div class="template-brand-tile-title">${safeEsc(title)}</div>`   : '';
+      zoneBodyHtml = bodyHtml || (body ? `<div class="template-brand-tile-body">${safeEsc(body)}</div>` : '');
+      footerHtml   = buttonHtml || (buttonLabel ? `<div class="template-brand-tile-button">${safeEsc(buttonLabel)}</div>` : '');
+    } else if (safeMode === 'metric') {
+      headerHtml   = kicker ? `<div class="template-brand-tile-kicker">${safeEsc(kicker)}</div>` : '';
+      titleHtml    = `<div class="template-brand-tile-number">${safeEsc(metricValue)}</div>`;
+      zoneBodyHtml = bodyHtml || `<div class="template-brand-tile-metric-label">${safeEsc(metricLabel || title)}</div>`;
+      footerHtml   = `<div class="template-brand-tile-progress"><span style="width:${safeEsc(progressPercent || '0%')};"></span></div>`;
+    } else if (safeMode === 'settings' || safeMode === 'settings-off') {
+      headerHtml   = kicker ? `<div class="template-brand-tile-kicker">${safeEsc(kicker)}</div>` : '';
+      titleHtml    = `<div class="template-brand-tile-settings-header">
+          <div class="template-brand-tile-settings-label">${safeEsc(title)}</div>
+          ${toggleHtml || ''}
+        </div>`;
+      zoneBodyHtml = inputHtml || bodyHtml || '';
+      footerHtml   = `<div class="template-brand-tile-settings-helper">${safeEsc(helper || body)}</div>`;
+    }
+    const resolvedContent = safeMode === 'empty' ? '' : `
+      <div class="template-brand-tile-container template-brand-tile-container--header">${headerHtml}</div>
+      <div class="template-brand-tile-container template-brand-tile-container--title">${titleHtml}</div>
+      <div class="template-brand-tile-container template-brand-tile-container--body">${zoneBodyHtml}</div>
+      <div class="template-brand-tile-container template-brand-tile-container--footer">${footerHtml}</div>`;
 
     return `<${safeTag} class="${safeEsc(classes)}" style="${resolvedStyle}"${typeAttr}${labelAttr}${extraAttrs}>
       <div class="template-brand-card-inner"><div class="template-brand-tile-content">${resolvedContent}</div></div>
