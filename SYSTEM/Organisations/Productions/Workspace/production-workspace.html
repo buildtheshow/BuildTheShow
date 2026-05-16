@@ -1567,8 +1567,9 @@
       color: inherit;
     }
     .reg-status-lane-anchor .template-brand-text-holder-inner--invisible .template-brand-tile-button {
-      color: inherit;
-      border-color: rgba(255,255,255,0.38);
+      background: var(--brand-tile-ink, #ffffff);
+      color: var(--brand-tile-bg, #572e88);
+      border: none;
     }
     .reg-status-lane-cards {
       flex: 1 1 0;
@@ -33678,13 +33679,18 @@ Thank you,
   }
 
   async function getRegistrationAcceptedCast() {
-    if (!allApplicants.length) await loadApplicants({ skipRender: true, skipCastingSync: true }).catch(() => {});
     const { data: assignments, error } = await sb.from('casting_assignments')
       .select('*')
       .eq('production_id', prodId)
       .eq('state', 'offer_accepted');
     if (error) throw error;
-    const appMap = new Map((allApplicants || []).map(a => [String(a.id), a]));
+    if (!assignments?.length) return [];
+    const applicantIds = [...new Set(assignments.map(r => r.applicant_id).filter(Boolean))];
+    const { data: applicants, error: appError } = await sb.from('audition_applications')
+      .select('*')
+      .in('id', applicantIds);
+    if (appError) throw appError;
+    const appMap = new Map((applicants || []).map(a => [String(a.id), a]));
     const acceptedByApplicant = new Map();
     (assignments || []).forEach(row => {
       const appId = String(row?.applicant_id || '');
