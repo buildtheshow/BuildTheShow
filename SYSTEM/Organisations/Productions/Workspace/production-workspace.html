@@ -25936,6 +25936,7 @@
   let _etTemplates = [];
   let _etEditing   = null; // id of template being edited, null = new
   let _etCatFilter = 'all';
+  let _etPendingOpenCategory = '';
   let performanceScheduleSummaryCache = '';
   let performanceScheduleSummaryLoaded = false;
 
@@ -26920,6 +26921,25 @@
       .sort((a, b) => String(b.updated_at || b.created_at || '').localeCompare(String(a.updated_at || a.created_at || '')))[0] || null;
   }
 
+  function openPendingEmailTemplateCategory() {
+    const category = String(_etPendingOpenCategory || '').trim();
+    if (!category) return;
+    const template = etLatestTemplateForCategory(category);
+    if (!template) return;
+    const meta = etTemplateMeta(category);
+    _etPendingOpenCategory = '';
+    _etCatFilter = meta.section || 'all';
+    renderEmailTemplates();
+    openEditEmailTemplate(template.id);
+  }
+
+  function openEmailTemplateForCategory(category) {
+    _etPendingOpenCategory = String(category || '').trim();
+    if (!_etPendingOpenCategory) return;
+    switchProdTab('emails');
+    window.setTimeout(openPendingEmailTemplateCategory, 0);
+  }
+
   function etVisibleEmailTemplates(templates = []) {
     const keptSystemCategories = new Set();
     return [...(templates || [])]
@@ -27539,6 +27559,7 @@ Thank you,
     }
     _etTemplates = data || [];
     renderEmailTemplates();
+    openPendingEmailTemplateCategory();
   }
 
   async function etNormalizeContactGreetings() {
@@ -27840,6 +27861,7 @@ Thank you,
     await etEnsureCastOfferTemplateLinks();
     await etEnsureSelfTapeTemplateBody();
     renderEmailTemplates();
+    openPendingEmailTemplateCategory();
   }
 
   function renderEmailTemplates() {
@@ -32222,6 +32244,7 @@ Thank you,
       helper = '',
       inputHtml = '',
       bodyHtml = '',
+      buttonHtml = '',
       toggleHtml = '',
       ariaLabel = title
     } = config;
@@ -32235,6 +32258,7 @@ Thank you,
       helper,
       inputHtml,
       bodyHtml,
+      buttonHtml,
       toggleHtml,
       ariaLabel
     });
@@ -32262,7 +32286,8 @@ Thank you,
       title: 'Send Registration Link Automatically',
       helper: 'When on, BTS sends the registration link as soon as a performer accepts their role.',
       toggleHtml: '<input type="checkbox" id="reg-sequential-casting" class="template-brand-tile-settings-toggle" checked aria-label="Send registration link automatically" />',
-      bodyHtml: '<div class="registration-intake-tile-note">Accepted role becomes active registration intake.</div>'
+      bodyHtml: '<div class="registration-intake-tile-note">When on, BTS sends the registration link as soon as a performer accepts their role.</div>',
+      buttonHtml: '<button type="button" class="template-brand-tile-button" onclick="event.stopPropagation();openEmailTemplateForCategory(\'cast_accepted\')">Edit Email</button>'
     });
     const acceptedRecordsTile = renderRegistrationIntakeSettingTile({
       title: 'Create Registration Records For Accepted Cast',

@@ -651,7 +651,9 @@
         </div>`;
       titleHtml    = `<div class="template-brand-tile-settings-label">${safeEsc(title)}</div>`;
       zoneBodyHtml = inputHtml || bodyHtml || '';
-      footerHtml   = `<div class="template-brand-tile-settings-helper">${safeEsc(helper || body)}</div>`;
+      footerHtml   = buttonHtml || (buttonLabel
+        ? `<div class="template-brand-tile-button">${safeEsc(buttonLabel)}</div>`
+        : `<div class="template-brand-tile-settings-helper">${safeEsc(helper || body)}</div>`);
     }
     const resolvedContent = safeMode === 'empty' ? '' : `
       <div class="template-brand-tile-container template-brand-tile-container--header">${headerHtml}</div>
