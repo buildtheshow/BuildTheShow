@@ -1052,6 +1052,7 @@
       ariaLabel = '',
       kicker = '',
       title = '',
+      anchorHeaderHtml = '',
       anchorBodyHtml = '',
       anchorFooterHtml = '',
       cardsHtml = ''
@@ -1062,11 +1063,10 @@
     const extraAttrs = attrs ? ` ${sanitizeAttrString(attrs)}` : '';
     const labelAttr = ariaLabel ? ` aria-label="${safeEsc(ariaLabel)}"` : '';
     const classes = ['reg-offers-col', 'template-brand-card', 'template-brand-card--horizontal', 'template-brand-card--content', className].filter(Boolean).join(' ');
+    const headerContent = anchorHeaderHtml || `<div class="template-brand-tile-kicker">${safeEsc(kicker)}</div>`;
     const anchorHtml = `<div class="template-brand-text-holder template-brand-text-holder--invisible">
       <div class="template-brand-text-holder-inner template-brand-text-holder-inner--invisible">
-        <div class="template-brand-tile-container template-brand-tile-container--header">
-          <div class="template-brand-tile-kicker">${safeEsc(kicker)}</div>
-        </div>
+        <div class="template-brand-tile-container template-brand-tile-container--header">${headerContent}</div>
         <div class="template-brand-tile-container template-brand-tile-container--title">
           <div class="template-brand-tile-title">${safeEsc(title)}</div>
         </div>
