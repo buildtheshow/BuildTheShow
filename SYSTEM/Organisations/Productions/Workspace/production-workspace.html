@@ -13607,11 +13607,27 @@
       overflow: hidden;
     }
     .template-brand-tile-settings-toggle {
+      appearance: none;
+      -webkit-appearance: none;
       flex-shrink: 0;
       width: 8cqw;
       height: 8cqw;
-      accent-color: var(--brand-tile-ink, #ffffff);
+      margin: 0;
+      border: 0;
+      border-radius: 2cqw;
+      background: #ffffff;
+      background-position: center;
+      background-repeat: no-repeat;
+      background-size: 72% 72%;
       cursor: pointer;
+    }
+    .template-brand-tile-settings-toggle:checked {
+      background-color: #ffffff;
+      background-image: url("data:image/svg+xml,%3Csvg width='28' height='28' viewBox='0 0 28 28' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M6 14.4l5.1 5.2L22.5 8' fill='none' stroke='%23000000' stroke-width='4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    }
+    .template-brand-tile-settings-toggle:focus-visible {
+      outline: 2px solid rgba(255,255,255,0.86);
+      outline-offset: 0.3cqw;
     }
     /* Footer: helper text */
     .template-brand-tile-settings-helper {
@@ -32079,6 +32095,29 @@ Thank you,
   let registrationSettingsSaveInFlight = false;
   let registrationSettingsSaveQueued = false;
   let registrationSettingsAcceptedMetricValue = '…';
+  let brandTileSettingsStateBound = false;
+
+  function syncBrandTileSettingsState(root = document) {
+    const scope = root || document;
+    scope.querySelectorAll('.template-brand-card--settings, .template-brand-card--settings-off').forEach(tile => {
+      const toggle = tile.querySelector('.template-brand-tile-settings-toggle');
+      if (!toggle) return;
+      const isOn = !!toggle.checked;
+      tile.classList.toggle('template-brand-card--settings', isOn);
+      tile.classList.toggle('template-brand-card--settings-off', !isOn);
+    });
+  }
+
+  function bindBrandTileSettingsState() {
+    if (brandTileSettingsStateBound) return;
+    brandTileSettingsStateBound = true;
+    document.addEventListener('change', event => {
+      const target = event.target;
+      if (!target?.matches?.('.template-brand-tile-settings-toggle')) return;
+      syncBrandTileSettingsState(target.closest('.template-brand-card') || document);
+    });
+  }
+  bindBrandTileSettingsState();
 
   function renderRegistrationSettingsPageHeader() {
     const host = document.getElementById('registration-settings-page-header');
@@ -32234,12 +32273,14 @@ Thank you,
     </div>`;
     host.dataset.registrationIntakeHydrated = 'true';
     requestAnimationFrame(() => requestAnimationFrame(() => {
+      try { syncBrandTileSettingsState(host); } catch (_) {}
       try { fitBrandTileTitles(host); } catch (_) {}
     }));
   }
 
   function loadRegistrationSettings() {
     registrationSettingsHydrating = true;
+    bindBrandTileSettingsState();
     bindRegistrationSettingsAutosave();
     hydrateRegistrationSettingsTemplateSurface();
     const s = (typeof prod?.registration_settings === 'object' && prod.registration_settings) ? prod.registration_settings : {};
@@ -32282,6 +32323,7 @@ Thank you,
     sc('reg-notif-offer-reminder',         s.notif_offer_reminder !== false);
     sc('reg-notif-reg-incomplete',         s.notif_reg_incomplete !== false);
     sc('reg-notif-reminders',              s.notif_reminders      === true);
+    syncBrandTileSettingsState(document.getElementById('registration-panel-settings') || document);
     const savedTab = loadWorkspaceNavState().registrationSettingsTab || 'intake';
     switchRegistrationSettingsTab(savedTab);
     registrationSettingsHydrating = false;
