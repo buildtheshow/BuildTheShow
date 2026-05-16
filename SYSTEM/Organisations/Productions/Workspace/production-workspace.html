@@ -957,42 +957,29 @@
       line-height: 1.25;
       resize: none;
     }
-    .reg-form-sections-lane {
-      flex-direction: column;
-      align-items: stretch;
-      gap: 0;
-      padding: 0;
-      flex-wrap: nowrap;
-    }
-    .reg-form-section-row {
-      display: flex;
-      align-items: flex-start;
-      gap: 0.85rem;
-      padding: 0.7rem 1rem;
-      border-bottom: 1px solid rgba(87,46,136,0.07);
-      background: #ffffff;
-    }
-    .reg-form-section-row:last-child { border-bottom: none; }
-    .reg-form-section-toggle {
+    .reg-status-lane-cards .template-brand-card {
+      width: 140px;
+      height: 140px;
       flex-shrink: 0;
-      margin-top: 0.18rem;
-      accent-color: #000000;
-      width: 1rem;
-      height: 1rem;
+      container-type: inline-size;
+    }
+    .reg-form-anchor-master {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      margin-top: 0.3rem;
+    }
+    .reg-form-anchor-master-toggle {
+      accent-color: #ffffff;
+      width: 0.95rem;
+      height: 0.95rem;
       cursor: pointer;
+      flex-shrink: 0;
     }
-    .reg-form-section-details { flex: 1; min-width: 0; }
-    .reg-form-section-name {
-      font-size: 0.83rem;
-      font-weight: 800;
-      color: #1a1530;
-      line-height: 1.2;
-    }
-    .reg-form-section-summary {
-      font-size: 0.73rem;
-      color: rgba(87,46,136,0.55);
-      margin-top: 0.18rem;
-      line-height: 1.35;
+    .reg-form-anchor-master-label {
+      font-size: 0.65rem;
+      font-weight: 700;
+      opacity: 0.8;
     }
     .rs-panel-action-bar {
       display: flex;
@@ -32384,6 +32371,9 @@ Thank you,
     if (!host) return;
     if (hostId === 'registration-forms-settings-surface') {
       host.innerHTML = `<div class="registration-settings-tile-surface"><div class="reg-offers-board">${tilesHtml}</div></div>`;
+      host.querySelectorAll('.reg-form-anchor-master-toggle').forEach(master => {
+        master.addEventListener('change', () => registrationFormMasterToggle(master));
+      });
       host.querySelectorAll('.template-brand-tile-settings-toggle').forEach(toggle => {
         toggle.addEventListener('change', () => {
           updateRegistrationFormGroupCount(toggle);
@@ -32430,6 +32420,8 @@ Thank you,
       const color = defs[0].color;
       const on = defs.filter(d => d.defaultOn).length;
       const total = defs.length;
+      const masterId = `reg-form-master-${group.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
+      const allOn = defs.every(d => d.defaultOn);
       const anchorHtml = `<div class="template-brand-text-holder template-brand-text-holder--invisible">
         <div class="template-brand-text-holder-inner template-brand-text-holder-inner--invisible">
           <div class="template-brand-tile-container template-brand-tile-container--header">
@@ -32438,9 +32430,14 @@ Thank you,
           <div class="template-brand-tile-container template-brand-tile-container--title">
             <div class="template-brand-tile-title">${esc(group)}</div>
           </div>
-          <div class="template-brand-tile-container template-brand-tile-container--body"></div>
+          <div class="template-brand-tile-container template-brand-tile-container--body">
+            <div class="reg-form-anchor-master">
+              <input type="checkbox" class="reg-form-anchor-master-toggle" id="${esc(masterId)}"${allOn ? ' checked' : ''} aria-label="Enable all ${esc(group)} forms" />
+              <label class="reg-form-anchor-master-label" for="${esc(masterId)}">Enable all</label>
+            </div>
+          </div>
           <div class="template-brand-tile-container template-brand-tile-container--footer">
-            <div class="template-brand-tile-button reg-form-group-count" data-total="${total}" data-on="${on}">${on} of ${total} on</div>
+            <div class="template-brand-tile-button reg-form-group-count">${on} of ${total} on</div>
           </div>
         </div>
       </div>`;
@@ -32471,6 +32468,20 @@ Thank you,
     const total = toggles.length;
     const counter = lane.querySelector('.reg-form-group-count');
     if (counter) counter.textContent = `${on} of ${total} on`;
+    const master = lane.querySelector('.reg-form-anchor-master-toggle');
+    if (master) master.checked = on === total;
+  }
+
+  function registrationFormMasterToggle(masterToggle) {
+    const lane = masterToggle.closest('.reg-status-lane');
+    if (!lane) return;
+    const checked = masterToggle.checked;
+    lane.querySelectorAll('.template-brand-tile-settings-toggle').forEach(t => {
+      t.checked = checked;
+      syncBrandTileSettingsState(t.closest('.template-brand-card') || lane);
+    });
+    updateRegistrationFormGroupCount(masterToggle);
+    scheduleRegistrationSettingsAutosave(400);
   }
 
   function hydrateRegistrationSettingsTemplateSurface() {
