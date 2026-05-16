@@ -852,26 +852,28 @@
     }
     /* ── Registration Settings (simple) ── */
     .rs-tab-bar {
-      display: grid;
-      grid-template-columns: repeat(5, minmax(0, 1fr));
-      gap: 1rem;
+      display: flex;
+      gap: 0.4rem;
+      flex-wrap: wrap;
       padding-bottom: 1.25rem;
       border-bottom: 1px solid rgba(87,46,136,0.12);
       margin-bottom: 1.5rem;
     }
     .rs-tab {
+      padding: 0.45rem 1rem;
+      border: 1.5px solid rgba(87,46,136,0.2);
+      border-radius: 8px;
+      background: transparent;
+      color: #4a3f62;
+      font-size: 0.82rem;
+      font-weight: 700;
       cursor: pointer;
-      width: 100%;
-    }
-    .rs-tab.template-brand-card {
-      max-width: none;
-    }
-    .rs-tab:not(.active) {
-      opacity: 0.72;
+      font-family: var(--bts-font);
     }
     .rs-tab.active {
-      outline: 3px solid rgba(0,0,0,0.22);
-      outline-offset: 3px;
+      background: var(--rs-tab-color, #572e88);
+      border-color: var(--rs-tab-color, #572e88);
+      color: var(--rs-tab-ink, #ffffff);
     }
     .rs-panel { display: none; }
     .rs-panel.active { display: block; }
@@ -909,6 +911,9 @@
     }
     .registration-settings-tiles .template-brand-card {
       width: 100%;
+    }
+    .registration-form-template-tile {
+      cursor: pointer;
     }
     .template-brand-tile-form-fields {
       display: grid;
@@ -952,7 +957,6 @@
       opacity: 0.86;
     }
     @media (max-width: 1280px) {
-      .rs-tab-bar,
       .registration-settings-tiles {
         grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
       }
@@ -20540,7 +20544,11 @@
           <div class="aud-settings-shell">
 
             <!-- Tab nav -->
-            <div class="rs-tab-bar" id="registration-settings-tab-surface"></div>
+            <div class="rs-tab-bar">
+              <button class="rs-tab active" style="--rs-tab-color:#efab45;--rs-tab-ink:#ffffff;" data-rs-tab="intake" onclick="switchRegistrationSettingsTab('intake')">Intake</button>
+              <button class="rs-tab" style="--rs-tab-color:#476aaa;--rs-tab-ink:#ffffff;" data-rs-tab="forms" onclick="switchRegistrationSettingsTab('forms')">Forms</button>
+              <button class="rs-tab" style="--rs-tab-color:#769e7b;--rs-tab-ink:#ffffff;" data-rs-tab="payments" onclick="switchRegistrationSettingsTab('payments')">Payments</button>
+            </div>
 
             <!-- ── INTAKE ── -->
             <div class="rs-panel active" id="rs-panel-intake">
@@ -21705,6 +21713,37 @@
       <textarea class="form-textarea" id="q-options" rows="4" placeholder="Option 1&#10;Option 2&#10;Option 3"></textarea>
     </div>
     <button class="btn-primary" onclick="submitQuestion()" style="width:100%;margin-top:0.5rem;">Add Question</button>
+  </div>
+</div>
+
+<!-- ── Registration Form Template modal ── -->
+<div class="modal-overlay" id="registration-form-template-modal">
+  <div class="modal" style="max-width:620px;">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title" id="registration-form-template-modal-title">Edit Form</div>
+        <div class="page-subtitle" id="registration-form-template-modal-subtitle" style="margin-top:0.2rem;">Update the fields families complete in this form.</div>
+      </div>
+      <button class="modal-close" type="button" aria-label="Close" onclick="closeRegistrationFormTemplateModal()">✕</button>
+    </div>
+    <input type="hidden" id="registration-form-template-key" />
+    <div class="form-group">
+      <label class="form-label" for="registration-form-template-title">Form Name</label>
+      <input class="form-input" id="registration-form-template-title" type="text" />
+    </div>
+    <div class="form-group">
+      <label class="form-label" for="registration-form-template-intro">Intro / Help Text</label>
+      <textarea class="form-textarea" id="registration-form-template-intro" rows="3" placeholder="Short instructions shown at the top of this form."></textarea>
+    </div>
+    <div class="form-group">
+      <label class="form-label" for="registration-form-template-fields">Fields / Questions</label>
+      <textarea class="form-textarea" id="registration-form-template-fields" rows="9" placeholder="One field per line. Example:&#10;Legal name *&#10;Preferred name&#10;Date of birth *"></textarea>
+      <div class="rs-checkbox-help">Use one line per field. Add * at the end of a line for required fields.</div>
+    </div>
+    <div style="display:flex;gap:0.6rem;margin-top:0.75rem;">
+      <button class="btn-secondary" type="button" onclick="closeRegistrationFormTemplateModal()" style="flex:1;justify-content:center;">Cancel</button>
+      <button class="btn-primary" type="button" onclick="saveRegistrationFormTemplateModal()" style="flex:2;justify-content:center;">Save Form</button>
+    </div>
   </div>
 </div>
 
@@ -31836,6 +31875,59 @@ Thank you,
   let registrationSettingsAcceptedMetricValue = '…';
   let registrationDashboardAcceptedMetricValue = '…';
   let brandTileSettingsStateBound = false;
+  let registrationFormTemplatesState = {};
+
+  const REGISTRATION_FORM_TEMPLATE_DEFS = [
+    {
+      key: 'performer_identity',
+      settingId: 'reg-form-performer-identity',
+      title: 'Performer Identity',
+      summary: 'Names, pronouns, date of birth, and performer basics.',
+      defaultFields: ['Legal name *', 'Preferred name', 'Pronouns', 'Date of birth *']
+    },
+    {
+      key: 'guardian_pickup',
+      settingId: 'reg-form-guardian-pickup',
+      title: 'Guardian & Pickup',
+      summary: 'Guardian contacts, approved pickup adults, and youth supervision details.',
+      defaultFields: ['Primary guardian name *', 'Primary guardian email *', 'Primary guardian phone *', 'Approved pickup adults']
+    },
+    {
+      key: 'emergency_medical',
+      settingId: 'reg-form-emergency-medical',
+      title: 'Emergency & Medical',
+      summary: 'Emergency contacts, allergies, medical notes, and care details.',
+      defaultFields: ['Emergency contact name *', 'Emergency contact phone *', 'Allergies', 'Medical notes']
+    },
+    {
+      key: 'conflicts_availability',
+      settingId: 'reg-form-conflicts-availability',
+      title: 'Conflicts & Availability',
+      summary: 'Conflicts, blackout dates, and rehearsal availability.',
+      defaultFields: ['Known conflicts *', 'Unavailable date ranges', 'Schedule notes']
+    },
+    {
+      key: 'programme_materials',
+      settingId: 'reg-form-programme-materials',
+      title: 'Programme Materials',
+      summary: 'Bio, headshot, name credit, and public programme details.',
+      defaultFields: ['Programme name *', 'Short bio', 'Headshot upload', 'Name pronunciation']
+    },
+    {
+      key: 'agreements',
+      settingId: 'reg-form-payments-agreements',
+      title: 'Agreements',
+      summary: 'Policies, signature acknowledgements, waivers, and media permissions.',
+      defaultFields: ['Cast agreement *', 'Code of conduct *', 'Media release', 'Guardian signature if needed']
+    },
+    {
+      key: 'custom_questions',
+      settingId: 'reg-form-custom-questions',
+      title: 'Custom Questions',
+      summary: 'Production-specific questions that do not belong in a standard form.',
+      defaultFields: ['T-shirt size', 'Dietary restrictions', 'Anything else staff should know?']
+    }
+  ];
 
   function syncBrandTileSettingsState(root = document) {
     const scope = root || document;
@@ -31970,7 +32062,6 @@ Thank you,
   function switchRegistrationSettingsTab(tab = 'intake') {
     tab = normalizeRegistrationSettingsTab(tab);
     hydrateRegistrationSettingsTemplateSurface();
-    renderRegistrationSettingsTabTiles(tab);
     document.querySelectorAll('.rs-tab').forEach(btn => {
       btn.classList.toggle('active', btn.dataset.rsTab === tab);
       if (btn.dataset.rsTab === tab) btn.setAttribute('aria-current', 'page');
@@ -31984,6 +32075,91 @@ Thank you,
 
   function registrationSettingsToggle(id, label, checked = true) {
     return `<input type="checkbox" id="${esc(id)}" class="template-brand-tile-settings-toggle" ${checked ? 'checked' : ''} aria-label="${esc(label)}" />`;
+  }
+
+  function registrationSettingsChecked(id, fallback = true) {
+    const el = document.getElementById(id);
+    return el ? !!el.checked : fallback;
+  }
+
+  function getRegistrationFormTemplateDef(key) {
+    return REGISTRATION_FORM_TEMPLATE_DEFS.find(def => def.key === key) || null;
+  }
+
+  function getRegistrationFormTemplate(key) {
+    const def = getRegistrationFormTemplateDef(key);
+    if (!def) return null;
+    const saved = registrationFormTemplatesState?.[key] || {};
+    return {
+      title: saved.title || def.title,
+      intro: saved.intro || def.summary,
+      fields: Array.isArray(saved.fields) && saved.fields.length ? saved.fields : def.defaultFields
+    };
+  }
+
+  function renderRegistrationFormTemplateTile(def, color) {
+    const template = getRegistrationFormTemplate(def.key);
+    return renderRegistrationSettingTile({
+      color,
+      kicker: 'Forms',
+      title: template?.title || def.title,
+      helper: def.summary,
+      toggleHtml: registrationSettingsToggle(def.settingId, `Enable ${def.title} form`, registrationSettingsChecked(def.settingId, def.key !== 'custom_questions')),
+      bodyHtml: `<div class="registration-settings-tile-note">${esc(template?.fields?.length || 0)} ${template?.fields?.length === 1 ? 'field' : 'fields'} in this form.</div>`,
+      buttonHtml: `<button type="button" class="template-brand-tile-button" onclick="event.stopPropagation();openRegistrationFormTemplateModal('${esc(def.key)}')">Edit Form</button>`,
+      className: 'registration-form-template-tile',
+      attrs: `data-registration-form-template-key=${def.key}`,
+      ariaLabel: `${def.title} form`
+    });
+  }
+
+  function openRegistrationFormTemplateModal(key) {
+    const def = getRegistrationFormTemplateDef(key);
+    const template = getRegistrationFormTemplate(key);
+    if (!def || !template) return;
+    const modal = document.getElementById('registration-form-template-modal');
+    const keyInput = document.getElementById('registration-form-template-key');
+    const titleInput = document.getElementById('registration-form-template-title');
+    const introInput = document.getElementById('registration-form-template-intro');
+    const fieldsInput = document.getElementById('registration-form-template-fields');
+    if (!modal || !keyInput || !titleInput || !introInput || !fieldsInput) return;
+    document.getElementById('registration-form-template-modal-title').textContent = `Edit ${def.title}`;
+    document.getElementById('registration-form-template-modal-subtitle').textContent = def.summary;
+    keyInput.value = key;
+    titleInput.value = template.title;
+    introInput.value = template.intro;
+    fieldsInput.value = (template.fields || []).join('\n');
+    modal.classList.add('open');
+  }
+
+  function closeRegistrationFormTemplateModal() {
+    document.getElementById('registration-form-template-modal')?.classList.remove('open');
+  }
+
+  function saveRegistrationFormTemplateModal() {
+    const key = document.getElementById('registration-form-template-key')?.value || '';
+    const def = getRegistrationFormTemplateDef(key);
+    if (!def) return;
+    const title = document.getElementById('registration-form-template-title')?.value?.trim() || def.title;
+    const intro = document.getElementById('registration-form-template-intro')?.value?.trim() || def.summary;
+    const fieldsText = document.getElementById('registration-form-template-fields')?.value || '';
+    const fields = fieldsText.split('\n').map(line => line.trim()).filter(Boolean);
+    registrationFormTemplatesState = {
+      ...(registrationFormTemplatesState || {}),
+      [key]: {
+        title,
+        intro,
+        fields: fields.length ? fields : def.defaultFields
+      }
+    };
+    const host = document.getElementById('registration-forms-settings-surface');
+    if (host) {
+      renderRegistrationSettingsSurface('registration-forms-settings-surface', renderRegistrationFormsTiles());
+      syncBrandTileSettingsState(host);
+      try { fitBrandTileTitles(host); } catch (_) {}
+    }
+    closeRegistrationFormTemplateModal();
+    scheduleRegistrationSettingsAutosave(50);
   }
 
   function renderRegistrationSettingTile(config = {}) {
@@ -32000,6 +32176,8 @@ Thank you,
       toggleHtml = '',
       fields = null,
       templateId = fields ? 'brand.tile.form' : 'brand.tile.square',
+      className = '',
+      attrs = '',
       ariaLabel = title
     } = config;
     const payload = {
@@ -32015,6 +32193,8 @@ Thank you,
       bodyHtml,
       buttonHtml,
       toggleHtml,
+      className,
+      attrs,
       ariaLabel
     };
     if (fields) payload.fields = fields;
@@ -32029,6 +32209,14 @@ Thank you,
         ${tilesHtml}
       </div>
     </div>`;
+    if (hostId === 'registration-forms-settings-surface') {
+      host.querySelectorAll('.registration-form-template-tile').forEach(tile => {
+        tile.addEventListener('click', event => {
+          if (event.target?.closest?.('button,input,select,textarea')) return;
+          openRegistrationFormTemplateModal(tile.dataset.registrationFormTemplateKey || '');
+        });
+      });
+    }
   }
 
   function registrationSettingsSelectHtml(id, label, options = []) {
@@ -32049,31 +32237,10 @@ Thank you,
     </div>`;
   }
 
-  function renderRegistrationSettingsTabTiles(activeTab = 'intake') {
-    const host = document.getElementById('registration-settings-tab-surface');
-    const renderer = window.BTSAuditionTemplates?.renderTemplateById;
-    if (!host || !renderer) return;
-    const tabs = [
-      { id: 'intake', kicker: 'Start', title: 'Intake', body: 'Links and deadlines.', color: '#efab45' },
-      { id: 'forms', kicker: 'Forms', title: 'Forms', body: 'Sections, rules, and release.', color: '#476aaa' },
-      { id: 'payments', kicker: 'Money', title: 'Payments', body: 'Fees, rules, and reminders.', color: '#769e7b' }
-    ];
-    host.innerHTML = tabs.map(tab => renderer('brand.tile.square', {
-      esc,
-      tagName: 'button',
-      mode: 'content',
-      color: tab.color,
-      ink: '#ffffff',
-      kicker: tab.kicker,
-      title: tab.title,
-      body: tab.body,
-      className: `rs-tab${tab.id === activeTab ? ' active' : ''}`,
-      attrs: `data-rs-tab=${tab.id}${tab.id === activeTab ? ' aria-current=page' : ''}`,
-      ariaLabel: `Open ${tab.title} registration settings`
-    })).join('');
-    host.querySelectorAll('.rs-tab').forEach(button => {
-      button.addEventListener('click', () => switchRegistrationSettingsTab(button.dataset.rsTab));
-    });
+  function renderRegistrationFormsTiles(color = '#476aaa') {
+    return REGISTRATION_FORM_TEMPLATE_DEFS
+      .map(def => renderRegistrationFormTemplateTile(def, color))
+      .join('');
   }
 
   function hydrateRegistrationSettingsTemplateSurface() {
@@ -32143,408 +32310,7 @@ Thank you,
       toggleHtml: registrationSettingsToggle('reg-mark-expired', 'Close expired response links'),
       bodyHtml: '<div class="registration-settings-tile-note">Keeps intake clean when offers go stale.</div>'
     });
-    const formTiles = [
-      renderRegistrationSettingTile({
-        color: formsColor,
-        kicker: 'Forms',
-        title: 'Performer Identity',
-        helper: 'Names, pronouns, date of birth, and performer basics.',
-        toggleHtml: registrationSettingsToggle('reg-form-performer-identity', 'Enable performer identity form'),
-        bodyHtml: '<div class="registration-settings-tile-note">Core performer details.</div>'
-      }),
-      renderRegistrationSettingTile({
-        color: formsColor,
-        kicker: 'Forms',
-        title: 'Guardian & Pickup',
-        helper: 'Parent/guardian contacts and pickup permissions.',
-        toggleHtml: registrationSettingsToggle('reg-form-guardian-pickup', 'Enable guardian and pickup form'),
-        bodyHtml: '<div class="registration-settings-tile-note">Family contact and release details.</div>'
-      }),
-      renderRegistrationSettingTile({
-        color: formsColor,
-        kicker: 'Forms',
-        title: 'Emergency & Medical',
-        helper: 'Emergency contacts, medical notes, allergies, and care details.',
-        toggleHtml: registrationSettingsToggle('reg-form-emergency-medical', 'Enable emergency and medical form'),
-        bodyHtml: '<div class="registration-settings-tile-note">Safety information for rehearsal and performance.</div>'
-      }),
-      renderRegistrationSettingTile({
-        color: formsColor,
-        kicker: 'Forms',
-        title: 'Conflicts & Availability',
-        helper: 'Collect conflicts before rehearsals and production planning lock.',
-        toggleHtml: registrationSettingsToggle('reg-form-conflicts-availability', 'Enable conflicts and availability form'),
-        bodyHtml: '<div class="registration-settings-tile-note">Schedule details from accepted cast.</div>'
-      }),
-      renderRegistrationSettingTile({
-        color: formsColor,
-        kicker: 'Forms',
-        title: 'Programme Materials',
-        helper: 'Bio, headshot, name credit, and public programme details.',
-        toggleHtml: registrationSettingsToggle('reg-form-programme-materials', 'Enable programme materials form'),
-        bodyHtml: '<div class="registration-settings-tile-note">What staff need for public materials.</div>'
-      }),
-      renderRegistrationSettingTile({
-        color: formsColor,
-        kicker: 'Forms',
-        title: 'Agreements',
-        helper: 'Policies, required confirmations, and signature-style agreements.',
-        toggleHtml: registrationSettingsToggle('reg-form-payments-agreements', 'Enable agreements form'),
-        bodyHtml: '<div class="registration-settings-tile-note">The agreement step families must complete.</div>'
-      }),
-      renderRegistrationSettingTile({
-        color: formsColor,
-        kicker: 'Forms',
-        title: 'Pre-Fill From Audition',
-        helper: 'Reuse information already collected during auditions when possible.',
-        toggleHtml: registrationSettingsToggle('reg-form-reuse-audition-info', 'Reuse audition information'),
-        bodyHtml: '<div class="registration-settings-tile-note">Avoids asking families twice.</div>'
-      }),
-      renderRegistrationSettingTile({
-        color: formsColor,
-        kicker: 'Forms',
-        title: 'Custom Questions',
-        helper: 'Turn on extra production-specific questions for this registration form.',
-        toggleHtml: registrationSettingsToggle('reg-form-custom-questions', 'Enable custom questions', false),
-        bodyHtml: '<div class="registration-settings-tile-note">Use when this show needs extra answers.</div>'
-      }),
-      renderRegistrationSettingTile({
-        color: formsColor,
-        kicker: 'Forms',
-        title: 'Lock After Submission',
-        helper: 'Prevents families from editing registration after they submit.',
-        toggleHtml: registrationSettingsToggle('reg-form-lock-after-submission', 'Lock after submission', false),
-        bodyHtml: '<div class="registration-settings-tile-note">Keeps final submitted answers stable.</div>'
-      }),
-      renderRegistrationSettingTile({
-        color: formsColor,
-        kicker: 'Forms',
-        title: 'Section Reordering',
-        helper: 'Allows staff to arrange registration form sections in the order that fits this production.',
-        toggleHtml: registrationSettingsToggle('reg-form-section-reordering', 'Enable form section reordering'),
-        bodyHtml: '<div class="registration-settings-tile-note">Keeps the form flexible as needs change.</div>'
-      }),
-      renderRegistrationSettingTile({
-        color: formsColor,
-        kicker: 'Forms',
-        title: 'Age-Driven Sections',
-        helper: 'Shows guardian, pickup, signature, and medical sections based on performer age.',
-        toggleHtml: registrationSettingsToggle('reg-form-age-driven-sections', 'Enable age-driven sections'),
-        bodyHtml: '<div class="registration-settings-tile-note">Families only see what applies.</div>'
-      }),
-      renderRegistrationSettingTile({
-        templateId: 'brand.tile.form',
-        color: formsColor,
-        kicker: 'Age Rules',
-        title: 'Child Performer',
-        helper: 'Performers below this age use child guardian and pickup rules.',
-        inputHtml: registrationSettingsSelectHtml('reg-child-age', 'Child performer age', ['Under 13', 'Under 12', 'Under 14'])
-      }),
-      renderRegistrationSettingTile({
-        templateId: 'brand.tile.form',
-        color: formsColor,
-        kicker: 'Age Rules',
-        title: 'Teen / Minor Performer',
-        helper: 'This age range is treated as minor performers for signatures and guardians.',
-        inputHtml: registrationSettingsSelectHtml('reg-teen-age', 'Teen or minor performer age', ['13 to 18', '12 to 17', '14 to 18'])
-      }),
-      renderRegistrationSettingTile({
-        templateId: 'brand.tile.form',
-        color: formsColor,
-        kicker: 'Age Rules',
-        title: 'Adult Performer',
-        helper: 'Performers at this age can usually sign their own forms.',
-        inputHtml: registrationSettingsSelectHtml('reg-adult-age', 'Adult performer age', ['19+', '18+'])
-      }),
-      renderRegistrationSettingTile({
-        templateId: 'brand.tile.form',
-        color: formsColor,
-        kicker: 'Age Rules',
-        title: 'Guardian Required',
-        helper: 'Sets when a guardian contact is required for registration completion.',
-        inputHtml: registrationSettingsSelectHtml('reg-guardian-under', 'Guardian required age', ['Under 19', 'Under 18', 'Always require'])
-      }),
-      renderRegistrationSettingTile({
-        templateId: 'brand.tile.form',
-        color: formsColor,
-        kicker: 'Age Rules',
-        title: 'Can Sign Own Forms',
-        helper: 'Sets when a performer can sign agreements without a guardian.',
-        inputHtml: registrationSettingsSelectHtml('reg-sign-own-age', 'Can sign own forms age', ['19+', '18+', 'Staff approval'])
-      }),
-      renderRegistrationSettingTile({
-        templateId: 'brand.tile.form',
-        color: formsColor,
-        kicker: 'Age Rules',
-        title: 'Pickup / Drop-off Required',
-        helper: 'Sets when approved pickup adults are required.',
-        inputHtml: registrationSettingsSelectHtml('reg-pickup-under', 'Pickup required age', ['Under 13', 'Under 16', 'Under 19', 'Never'])
-      }),
-      renderRegistrationSettingTile({
-        color: formsColor,
-        kicker: 'Age Rules',
-        title: 'Require Guardian',
-        helper: 'Makes guardian details a required completion item when age rules apply.',
-        toggleHtml: registrationSettingsToggle('reg-age-require-guardian', 'Require guardian by age'),
-        bodyHtml: '<div class="registration-settings-tile-note">Age-aware completion rule.</div>'
-      }),
-      renderRegistrationSettingTile({
-        color: formsColor,
-        kicker: 'Age Rules',
-        title: 'Require Pickup',
-        helper: 'Makes pickup details required for performers in the pickup age bracket.',
-        toggleHtml: registrationSettingsToggle('reg-age-require-pickup', 'Require pickup by age'),
-        bodyHtml: '<div class="registration-settings-tile-note">Age-aware completion rule.</div>'
-      }),
-      renderRegistrationSettingTile({
-        color: formsColor,
-        kicker: 'Age Rules',
-        title: 'Require Media Consent',
-        helper: 'Requires guardian media consent where age rules say it applies.',
-        toggleHtml: registrationSettingsToggle('reg-age-require-media', 'Require media consent by age'),
-        bodyHtml: '<div class="registration-settings-tile-note">Age-aware agreement rule.</div>'
-      }),
-      renderRegistrationSettingTile({
-        color: formsColor,
-        kicker: 'Age Rules',
-        title: 'Require Medical',
-        helper: 'Requires medical details where age rules say they apply.',
-        toggleHtml: registrationSettingsToggle('reg-age-require-medical', 'Require medical by age'),
-        bodyHtml: '<div class="registration-settings-tile-note">Age-aware safety rule.</div>'
-      }),
-      renderRegistrationSettingTile({
-        color: formsColor,
-        kicker: 'Required',
-        title: 'Performer Details',
-        helper: 'Registration cannot complete without performer basics.',
-        toggleHtml: registrationSettingsToggle('reg-require-performer', 'Require performer details'),
-        bodyHtml: '<div class="registration-settings-tile-note">Required for completion.</div>'
-      }),
-      renderRegistrationSettingTile({
-        color: formsColor,
-        kicker: 'Required',
-        title: 'Contact Details',
-        helper: 'Registration cannot complete without guardian/contact details.',
-        toggleHtml: registrationSettingsToggle('reg-require-contact', 'Require contact details'),
-        bodyHtml: '<div class="registration-settings-tile-note">Required for completion.</div>'
-      }),
-      renderRegistrationSettingTile({
-        color: formsColor,
-        kicker: 'Required',
-        title: 'Emergency Contact',
-        helper: 'Registration cannot complete without emergency contact details.',
-        toggleHtml: registrationSettingsToggle('reg-require-emergency', 'Require emergency contact'),
-        bodyHtml: '<div class="registration-settings-tile-note">Required for completion.</div>'
-      }),
-      renderRegistrationSettingTile({
-        color: formsColor,
-        kicker: 'Required',
-        title: 'Medical Details',
-        helper: 'Registration cannot complete until medical details are answered.',
-        toggleHtml: registrationSettingsToggle('reg-require-medical', 'Require medical details'),
-        bodyHtml: '<div class="registration-settings-tile-note">Required for completion.</div>'
-      }),
-      renderRegistrationSettingTile({
-        color: formsColor,
-        kicker: 'Required',
-        title: 'Conflicts',
-        helper: 'Registration cannot complete until conflicts are submitted.',
-        toggleHtml: registrationSettingsToggle('reg-require-conflicts', 'Require conflicts'),
-        bodyHtml: '<div class="registration-settings-tile-note">Required for completion.</div>'
-      }),
-      renderRegistrationSettingTile({
-        color: formsColor,
-        kicker: 'Required',
-        title: 'Bio',
-        helper: 'Require a performer bio for programme materials.',
-        toggleHtml: registrationSettingsToggle('reg-require-bio', 'Require performer bio', false),
-        bodyHtml: '<div class="registration-settings-tile-note">Optional completion gate.</div>'
-      }),
-      renderRegistrationSettingTile({
-        color: formsColor,
-        kicker: 'Required',
-        title: 'Headshot',
-        helper: 'Require a headshot upload for programme materials.',
-        toggleHtml: registrationSettingsToggle('reg-require-headshot', 'Require headshot', false),
-        bodyHtml: '<div class="registration-settings-tile-note">Optional completion gate.</div>'
-      }),
-      renderRegistrationSettingTile({
-        color: formsColor,
-        kicker: 'Required',
-        title: 'Agreements Signed',
-        helper: 'Registration cannot complete until required agreements are accepted.',
-        toggleHtml: registrationSettingsToggle('reg-require-agreements', 'Require agreements'),
-        bodyHtml: '<div class="registration-settings-tile-note">Required for completion.</div>'
-      }),
-      renderRegistrationSettingTile({
-        color: formsColor,
-        kicker: 'Agreements',
-        title: 'Cast Agreement',
-        helper: 'Requires the performer/family to accept the cast participation agreement.',
-        toggleHtml: registrationSettingsToggle('reg-agree-cast', 'Require cast agreement'),
-        bodyHtml: '<div class="registration-settings-tile-note">Agreement template control.</div>'
-      }),
-      renderRegistrationSettingTile({
-        color: formsColor,
-        kicker: 'Agreements',
-        title: 'Code of Conduct',
-        helper: 'Requires the code of conduct agreement before registration is complete.',
-        toggleHtml: registrationSettingsToggle('reg-agree-code', 'Require code of conduct'),
-        bodyHtml: '<div class="registration-settings-tile-note">Agreement template control.</div>'
-      }),
-      renderRegistrationSettingTile({
-        color: formsColor,
-        kicker: 'Agreements',
-        title: 'Media Release',
-        helper: 'Requires permission rules for photos, video, and marketing materials.',
-        toggleHtml: registrationSettingsToggle('reg-agree-media', 'Require media release'),
-        bodyHtml: '<div class="registration-settings-tile-note">Agreement template control.</div>'
-      }),
-      renderRegistrationSettingTile({
-        color: formsColor,
-        kicker: 'Agreements',
-        title: 'Liability Waiver',
-        helper: 'Requires waiver acknowledgement as part of registration.',
-        toggleHtml: registrationSettingsToggle('reg-agree-waiver', 'Require liability waiver'),
-        bodyHtml: '<div class="registration-settings-tile-note">Agreement template control.</div>'
-      }),
-      renderRegistrationSettingTile({
-        color: formsColor,
-        kicker: 'Agreements',
-        title: 'Guardian Signature',
-        helper: 'Requires guardian signature when performer age rules need it.',
-        toggleHtml: registrationSettingsToggle('reg-agree-guardian', 'Require guardian signature'),
-        bodyHtml: '<div class="registration-settings-tile-note">Agreement template control.</div>'
-      }),
-      renderRegistrationSettingTile({
-        color: formsColor,
-        kicker: 'Agreements',
-        title: 'Staff Review',
-        helper: 'Sends agreement changes or special cases to staff for review.',
-        toggleHtml: registrationSettingsToggle('reg-agree-staff-review', 'Require staff agreement review', false),
-        bodyHtml: '<div class="registration-settings-tile-note">Use for exceptions and approval checks.</div>'
-      }),
-      renderRegistrationSettingTile({
-        templateId: 'brand.tile.form',
-        color: formsColor,
-        kicker: 'Agreements',
-        title: 'Agreement Instructions',
-        helper: 'Intro text shown before agreement sections.',
-        inputHtml: registrationSettingsTextareaHtml('reg-agreement-instructions', 'Agreement instructions', 'Short agreement intro for families')
-      }),
-      renderRegistrationSettingTile({
-        templateId: 'brand.tile.form',
-        color: formsColor,
-        kicker: 'Rehearsals',
-        title: 'First Rehearsal Date',
-        helper: 'Shown on the registration form so cast know when things begin.',
-        fields: [{ id: 'reg-first-rehearsal', type: 'date', ariaLabel: 'First rehearsal date' }]
-      }),
-      renderRegistrationSettingTile({
-        templateId: 'brand.tile.form',
-        color: formsColor,
-        kicker: 'Rehearsals',
-        title: 'Rehearsal Schedule',
-        helper: 'Plain-language summary of the regular rehearsal pattern.',
-        inputHtml: registrationSettingsTextareaHtml('reg-rehearsal-schedule', 'Rehearsal schedule', 'Example: Tuesdays and Thursdays, 6:30-8:30 PM')
-      }),
-      renderRegistrationSettingTile({
-        templateId: 'brand.tile.form',
-        color: formsColor,
-        kicker: 'Rehearsals',
-        title: 'Key Dates',
-        helper: 'Fixed dates like tech week, dress rehearsal, and performance nights.',
-        inputHtml: registrationSettingsTextareaHtml('reg-key-dates', 'Key dates', 'Important dates families must know')
-      }),
-      renderRegistrationSettingTile({
-        color: formsColor,
-        kicker: 'Rehearsals',
-        title: 'Schedule Commitment',
-        helper: 'Requires families to confirm they understand the rehearsal commitment.',
-        toggleHtml: registrationSettingsToggle('reg-rehearsal-commitment', 'Require rehearsal commitment'),
-        bodyHtml: '<div class="registration-settings-tile-note">Commitment acknowledgement.</div>'
-      }),
-      renderRegistrationSettingTile({
-        color: formsColor,
-        kicker: 'Rehearsals',
-        title: 'Lock Conflicts',
-        helper: 'Locks conflicts after registration unless staff reopen them.',
-        toggleHtml: registrationSettingsToggle('reg-lock-conflicts', 'Lock conflicts after registration', false),
-        bodyHtml: '<div class="registration-settings-tile-note">Keeps scheduling stable.</div>'
-      }),
-      renderRegistrationSettingTile({
-        color: formsColor,
-        kicker: 'Completion',
-        title: 'Conflict Confirmation',
-        helper: 'Requires families to confirm conflicts are complete and accurate.',
-        toggleHtml: registrationSettingsToggle('reg-conflict-confirmation', 'Require conflict confirmation'),
-        bodyHtml: '<div class="registration-settings-tile-note">Required schedule acknowledgement.</div>'
-      }),
-      renderRegistrationSettingTile({
-        templateId: 'brand.tile.form',
-        color: formsColor,
-        kicker: 'Completion',
-        title: 'Edits After Submission',
-        helper: 'Controls what happens when families need changes after submitting.',
-        inputHtml: registrationSettingsSelectHtml('reg-edits-after', 'Edits after submission', ['Staff approval', 'Allowed until due date', 'Locked'])
-      }),
-      renderRegistrationSettingTile({
-        templateId: 'brand.tile.form',
-        color: formsColor,
-        kicker: 'Completion',
-        title: 'Registration Due Date',
-        helper: 'Internal completion due date used by the registration form.',
-        fields: [{ id: 'reg-due-date', type: 'date', ariaLabel: 'Registration due date' }]
-      }),
-      renderRegistrationSettingTile({
-        templateId: 'brand.tile.form',
-        color: formsColor,
-        kicker: 'Public',
-        title: 'Public Cast List',
-        helper: 'Controls whether registered cast can appear publicly after casting is ready.',
-        inputHtml: registrationSettingsSelectHtml('reg-cast-list', 'Public cast list', ['Hidden until released', 'Show cast names only', 'Show roles and names'])
-      }),
-      renderRegistrationSettingTile({
-        templateId: 'brand.tile.form',
-        color: formsColor,
-        kicker: 'Public',
-        title: 'Release Date',
-        helper: 'Earliest date public registration/cast info can be released.',
-        fields: [{ id: 'reg-release-date', type: 'date', ariaLabel: 'Public release date' }]
-      }),
-      renderRegistrationSettingTile({
-        templateId: 'brand.tile.form',
-        color: formsColor,
-        kicker: 'Public',
-        title: 'Public Info',
-        helper: 'Sets the level of performer information shown publicly.',
-        inputHtml: registrationSettingsSelectHtml('reg-public-info', 'Public info level', ['Names only', 'Names and roles', 'Names, roles, and bios'])
-      }),
-      renderRegistrationSettingTile({
-        color: formsColor,
-        kicker: 'Public',
-        title: 'Hide Contact Info',
-        helper: 'Keeps contact details private on public and shared views.',
-        toggleHtml: registrationSettingsToggle('reg-hide-contact', 'Hide contact information'),
-        bodyHtml: '<div class="registration-settings-tile-note">Privacy guardrail.</div>'
-      }),
-      renderRegistrationSettingTile({
-        color: formsColor,
-        kicker: 'Public',
-        title: 'Hide Private Notes',
-        helper: 'Keeps internal notes out of family-facing and public views.',
-        toggleHtml: registrationSettingsToggle('reg-hide-private', 'Hide private notes'),
-        bodyHtml: '<div class="registration-settings-tile-note">Privacy guardrail.</div>'
-      }),
-      renderRegistrationSettingTile({
-        color: formsColor,
-        kicker: 'Forms',
-        title: 'Incomplete Form Email',
-        helper: 'Controls reminders for accepted cast who have not finished forms.',
-        toggleHtml: registrationSettingsToggle('reg-notif-reg-incomplete', 'Enable incomplete registration email'),
-        bodyHtml: '<div class="registration-settings-tile-note">Reminder control only. Templates live in Email Templates.</div>'
-      })
-    ].join('');
+    const formTiles = renderRegistrationFormsTiles(formsColor);
     const paymentRuleHtml = `<div class="template-brand-tile-form-fields">
       <select id="reg-payment-rule" class="template-brand-tile-form-input form-input" aria-label="Payment rule">
         <option>Track only</option>
@@ -32618,8 +32384,11 @@ Thank you,
     registrationSettingsHydrating = true;
     bindBrandTileSettingsState();
     bindRegistrationSettingsAutosave();
-    hydrateRegistrationSettingsTemplateSurface();
     const s = (typeof prod?.registration_settings === 'object' && prod.registration_settings) ? prod.registration_settings : {};
+    registrationFormTemplatesState = (s.form_templates && typeof s.form_templates === 'object') ? s.form_templates : {};
+    const panel = document.getElementById('registration-panel-settings');
+    if (panel) delete panel.dataset.registrationSettingsHydrated;
+    hydrateRegistrationSettingsTemplateSurface();
     const sv = (id, val) => { const el = document.getElementById(id); if (el) el.value = val; };
     const sc = (id, v)   => { const el = document.getElementById(id); if (el) el.checked = v; };
     const splitDate = val => {
@@ -32705,8 +32474,15 @@ Thank you,
       return false;
     }
     registrationSettingsSaveInFlight = true;
-    const gv = id => document.getElementById(id)?.value || '';
-    const gc = id => document.getElementById(id)?.checked || false;
+    const currentSettings = (typeof prod?.registration_settings === 'object' && prod.registration_settings) ? prod.registration_settings : {};
+    const gv = (id, fallback = '') => {
+      const el = document.getElementById(id);
+      return el ? (el.value || '') : fallback;
+    };
+    const gc = (id, fallback = false) => {
+      const el = document.getElementById(id);
+      return el ? !!el.checked : fallback;
+    };
     const date = gv('reg-offer-deadline-date');
     const time = gv('reg-offer-deadline-time') || '23:59';
     const s = {
@@ -32723,47 +32499,47 @@ Thank you,
       form_payments_agreements:     gc('reg-form-payments-agreements'),
       form_reuse_audition_info:     gc('reg-form-reuse-audition-info'),
       form_custom_questions:        gc('reg-form-custom-questions'),
-      form_section_reordering:      gc('reg-form-section-reordering'),
-      form_age_driven_sections:     gc('reg-form-age-driven-sections'),
-      form_lock_after_submission:   gc('reg-form-lock-after-submission'),
-      child_age:                    gv('reg-child-age'),
-      teen_age:                     gv('reg-teen-age'),
-      adult_age:                    gv('reg-adult-age'),
-      guardian_under:               gv('reg-guardian-under'),
-      sign_own_age:                 gv('reg-sign-own-age'),
-      pickup_under:                 gv('reg-pickup-under'),
-      age_require_guardian:         gc('reg-age-require-guardian'),
-      age_require_pickup:           gc('reg-age-require-pickup'),
-      age_require_media:            gc('reg-age-require-media'),
-      age_require_medical:          gc('reg-age-require-medical'),
-      require_performer:            gc('reg-require-performer'),
-      require_contact:              gc('reg-require-contact'),
-      require_emergency:            gc('reg-require-emergency'),
-      require_medical:              gc('reg-require-medical'),
-      require_conflicts:            gc('reg-require-conflicts'),
-      require_bio:                  gc('reg-require-bio'),
-      require_headshot:             gc('reg-require-headshot'),
-      require_agreements:           gc('reg-require-agreements'),
-      agree_cast:                   gc('reg-agree-cast'),
-      agree_code:                   gc('reg-agree-code'),
-      agree_media:                  gc('reg-agree-media'),
-      agree_waiver:                 gc('reg-agree-waiver'),
-      agree_guardian:               gc('reg-agree-guardian'),
-      agree_staff_review:           gc('reg-agree-staff-review'),
-      agreement_instructions:       gv('reg-agreement-instructions'),
-      first_rehearsal:              gv('reg-first-rehearsal'),
-      rehearsal_schedule:           gv('reg-rehearsal-schedule'),
-      key_dates:                    gv('reg-key-dates'),
-      rehearsal_commitment:         gc('reg-rehearsal-commitment'),
-      lock_conflicts:               gc('reg-lock-conflicts'),
-      conflict_confirmation:        gc('reg-conflict-confirmation'),
-      edits_after:                  gv('reg-edits-after'),
-      due_date:                     gv('reg-due-date'),
-      cast_list:                    gv('reg-cast-list'),
-      release_date:                 gv('reg-release-date'),
-      public_info:                  gv('reg-public-info'),
-      hide_contact:                 gc('reg-hide-contact'),
-      hide_private:                 gc('reg-hide-private'),
+      form_section_reordering:      gc('reg-form-section-reordering', currentSettings.form_section_reordering !== false),
+      form_age_driven_sections:     gc('reg-form-age-driven-sections', currentSettings.form_age_driven_sections !== false),
+      form_lock_after_submission:   gc('reg-form-lock-after-submission', currentSettings.form_lock_after_submission === true),
+      child_age:                    gv('reg-child-age', currentSettings.child_age || ''),
+      teen_age:                     gv('reg-teen-age', currentSettings.teen_age || ''),
+      adult_age:                    gv('reg-adult-age', currentSettings.adult_age || ''),
+      guardian_under:               gv('reg-guardian-under', currentSettings.guardian_under || ''),
+      sign_own_age:                 gv('reg-sign-own-age', currentSettings.sign_own_age || ''),
+      pickup_under:                 gv('reg-pickup-under', currentSettings.pickup_under || ''),
+      age_require_guardian:         gc('reg-age-require-guardian', currentSettings.age_require_guardian !== false),
+      age_require_pickup:           gc('reg-age-require-pickup', currentSettings.age_require_pickup !== false),
+      age_require_media:            gc('reg-age-require-media', currentSettings.age_require_media !== false),
+      age_require_medical:          gc('reg-age-require-medical', currentSettings.age_require_medical !== false),
+      require_performer:            gc('reg-require-performer', currentSettings.require_performer !== false),
+      require_contact:              gc('reg-require-contact', currentSettings.require_contact !== false),
+      require_emergency:            gc('reg-require-emergency', currentSettings.require_emergency !== false),
+      require_medical:              gc('reg-require-medical', currentSettings.require_medical !== false),
+      require_conflicts:            gc('reg-require-conflicts', currentSettings.require_conflicts !== false),
+      require_bio:                  gc('reg-require-bio', currentSettings.require_bio === true),
+      require_headshot:             gc('reg-require-headshot', currentSettings.require_headshot === true),
+      require_agreements:           gc('reg-require-agreements', currentSettings.require_agreements !== false),
+      agree_cast:                   gc('reg-agree-cast', currentSettings.agree_cast !== false),
+      agree_code:                   gc('reg-agree-code', currentSettings.agree_code !== false),
+      agree_media:                  gc('reg-agree-media', currentSettings.agree_media !== false),
+      agree_waiver:                 gc('reg-agree-waiver', currentSettings.agree_waiver !== false),
+      agree_guardian:               gc('reg-agree-guardian', currentSettings.agree_guardian !== false),
+      agree_staff_review:           gc('reg-agree-staff-review', currentSettings.agree_staff_review === true),
+      agreement_instructions:       gv('reg-agreement-instructions', currentSettings.agreement_instructions || ''),
+      first_rehearsal:              gv('reg-first-rehearsal', currentSettings.first_rehearsal || ''),
+      rehearsal_schedule:           gv('reg-rehearsal-schedule', currentSettings.rehearsal_schedule || ''),
+      key_dates:                    gv('reg-key-dates', currentSettings.key_dates || ''),
+      rehearsal_commitment:         gc('reg-rehearsal-commitment', currentSettings.rehearsal_commitment !== false),
+      lock_conflicts:               gc('reg-lock-conflicts', currentSettings.lock_conflicts === true),
+      conflict_confirmation:        gc('reg-conflict-confirmation', currentSettings.conflict_confirmation !== false),
+      edits_after:                  gv('reg-edits-after', currentSettings.edits_after || ''),
+      due_date:                     gv('reg-due-date', currentSettings.due_date || ''),
+      cast_list:                    gv('reg-cast-list', currentSettings.cast_list || ''),
+      release_date:                 gv('reg-release-date', currentSettings.release_date || ''),
+      public_info:                  gv('reg-public-info', currentSettings.public_info || ''),
+      hide_contact:                 gc('reg-hide-contact', currentSettings.hide_contact !== false),
+      hide_private:                 gc('reg-hide-private', currentSettings.hide_private !== false),
       require_payment:              gc('reg-require-payment'),
       fee:                          gv('reg-fee'),
       payment_due:                  gv('reg-payment-due'),
@@ -32773,6 +32549,7 @@ Thank you,
       notif_offer_reminder:         gc('reg-notif-offer-reminder'),
       notif_reg_incomplete:         gc('reg-notif-reg-incomplete'),
       notif_reminders:              gc('reg-notif-reminders'),
+      form_templates:               registrationFormTemplatesState || {},
     };
     let error = null;
     try {
