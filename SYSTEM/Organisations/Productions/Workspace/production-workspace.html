@@ -32048,9 +32048,9 @@ Thank you,
     { key: 'transportation_waiver',  settingId: 'reg-form-transportation-waiver',  group: 'Agreements & Consent',   color: '#d1523d', defaultOn: false, title: 'Transportation / Travel Waiver',       summary: 'For festivals, tours, or out-of-town performances only.',                                                defaultFields: ['Transportation acknowledgement *', 'Travel consent *', 'Emergency contact for travel *'] },
     { key: 'physical_activity_waiver', settingId: 'reg-form-physical-activity-waiver', group: 'Agreements & Consent', color: '#d1523d', defaultOn: false, title: 'Stage Combat / Physical Activity Waiver', summary: 'For productions with fight choreography, flying, or significant physical staging risks.',          defaultFields: ['Physical activity acknowledgement *', 'Stage combat / physical risk consent *', 'Guardian signature (if participant is under 19) *'] },
     // ── SCHEDULING & COMMITMENT ──
-    { key: 'conflict_confirmation',  settingId: 'reg-form-conflict-confirmation',  group: 'Scheduling & Commitment', color: '#769e7b', defaultOn: true,  title: 'Conflict Confirmation',               summary: 'Confirm previously submitted conflicts and submit any remaining known conflicts.',                        defaultFields: ['Conflicts confirmed from audition', 'Any additional known conflicts', 'Schedule notes'] },
-    { key: 'rehearsal_commitment',   settingId: 'reg-form-rehearsal-commitment',   group: 'Scheduling & Commitment', color: '#769e7b', defaultOn: true,  title: 'Rehearsal Commitment',                summary: 'Rehearsal schedule, tech week, and performance date acknowledgement.',                                    defaultFields: ['Rehearsal schedule acknowledged *', 'Tech week acknowledged *', 'Performance dates acknowledged *'] },
-    { key: 'schedule_update_ack',    settingId: 'reg-form-schedule-update-ack',    group: 'Scheduling & Commitment', color: '#769e7b', defaultOn: false, title: 'Schedule Update Acknowledgement',     summary: 'Only sent if schedules significantly change after initial registration.',                                 defaultFields: ['Updated schedule acknowledged *', 'Signature *'] },
+    { key: 'conflict_confirmation',  settingId: 'reg-form-conflict-confirmation',  group: 'Agreements & Consent',   color: '#d1523d', defaultOn: true,  title: 'Conflict Confirmation',               summary: 'Confirm previously submitted conflicts and submit any remaining known conflicts.',                        defaultFields: ['Conflicts confirmed from audition', 'Any additional known conflicts', 'Schedule notes'] },
+    { key: 'rehearsal_commitment',   settingId: 'reg-form-rehearsal-commitment',   group: 'Agreements & Consent',   color: '#d1523d', defaultOn: true,  title: 'Rehearsal Commitment',                summary: 'Rehearsal schedule, tech week, and performance date acknowledgement.',                                    defaultFields: ['Rehearsal schedule acknowledged *', 'Tech week acknowledged *', 'Performance dates acknowledged *'] },
+    { key: 'schedule_update_ack',    settingId: 'reg-form-schedule-update-ack',    group: 'Agreements & Consent',   color: '#d1523d', defaultOn: false, title: 'Schedule Update Acknowledgement',     summary: 'Only sent if schedules significantly change after initial registration.',                                 defaultFields: ['Updated schedule acknowledged *', 'Signature *'] },
     // ── PAYMENT ──
     { key: 'production_fee',         settingId: 'reg-form-production-fee',         group: 'Payment',                color: '#769e7b', defaultOn: false, title: 'Production Fee Agreement',            summary: 'Payment amount, installment plan, due dates, refund policy, and scholarship information.',               defaultFields: ['Payment amount acknowledged *', 'Payment due date acknowledged *', 'Installment plan (if applicable)', 'Refund policy acknowledged *', 'Scholarship request (if applicable)'] },
     // ── COSTUMES & PROGRAMME ──
@@ -32384,9 +32384,10 @@ Thank you,
     if (!host) return;
     if (hostId === 'registration-forms-settings-surface') {
       host.innerHTML = `<div class="registration-settings-tile-surface"><div class="reg-offers-board">${tilesHtml}</div></div>`;
-      host.querySelectorAll('.reg-form-section-toggle').forEach(toggle => {
+      host.querySelectorAll('.template-brand-tile-settings-toggle').forEach(toggle => {
         toggle.addEventListener('change', () => {
           updateRegistrationFormGroupCount(toggle);
+          syncBrandTileSettingsState(toggle.closest('.template-brand-card') || host);
           scheduleRegistrationSettingsAutosave(400);
         });
       });
@@ -32443,19 +32444,19 @@ Thank you,
           </div>
         </div>
       </div>`;
-      const sectionsHtml = defs.map(def => `
-        <div class="reg-form-section-row">
-          <input type="checkbox" class="reg-form-section-toggle" id="${esc(def.settingId)}"${def.defaultOn ? ' checked' : ''} aria-label="${esc(def.title)}" />
-          <div class="reg-form-section-details">
-            <div class="reg-form-section-name">${esc(def.title)}</div>
-            <div class="reg-form-section-summary">${esc(def.summary)}</div>
-          </div>
-        </div>`).join('');
+      const sectionsHtml = defs.map(def => renderRegistrationSettingTile({
+        color,
+        kicker: group,
+        title: def.title,
+        helper: def.summary,
+        toggleHtml: registrationSettingsToggle(def.settingId, `Enable ${def.title}`, def.defaultOn),
+        ariaLabel: def.title
+      })).join('');
       return `<div class="reg-offers-col template-brand-card template-brand-card--horizontal template-brand-card--content" style="--brand-tile-bg:${esc(color)};--brand-tile-ink:#ffffff;" aria-label="${esc(group)}">
         <div class="template-brand-card-inner">
           <div class="reg-status-lane">
             <div class="reg-status-lane-anchor">${anchorHtml}</div>
-            <div class="reg-status-lane-cards reg-form-sections-lane">${sectionsHtml}</div>
+            <div class="reg-status-lane-cards">${sectionsHtml}</div>
           </div>
         </div>
       </div>`;
@@ -32465,7 +32466,7 @@ Thank you,
   function updateRegistrationFormGroupCount(toggle) {
     const lane = toggle.closest('.reg-status-lane');
     if (!lane) return;
-    const toggles = lane.querySelectorAll('.reg-form-section-toggle');
+    const toggles = lane.querySelectorAll('.template-brand-tile-settings-toggle');
     const on = [...toggles].filter(t => t.checked).length;
     const total = toggles.length;
     const counter = lane.querySelector('.reg-form-group-count');
