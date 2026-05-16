@@ -1139,6 +1139,10 @@
       padding: 0.75rem 1rem;
       align-content: flex-start;
     }
+    .reg-status-lane-cards.reg-form-group-disabled {
+      opacity: 0.38;
+      pointer-events: none;
+    }
     .reg-offer-item {
       height: 128px;
       width: 102px;
@@ -32456,7 +32460,7 @@ Thank you,
         kicker: group,
         title: def.title,
         bodyHtml: `<div class="template-brand-tile-body">${esc(def.summary)}</div>`,
-        buttonHtml: `<div class="template-brand-tile-button">${def.defaultOn ? 'Required' : 'Optional'}</div>`,
+        buttonHtml: `<div class="template-brand-tile-button">Edit</div>`,
         toggleHtml: registrationSettingsToggle(def.settingId, `Enable ${def.title}`, def.defaultOn),
         className: 'reg-form-subform',
         ariaLabel: def.title
@@ -32491,19 +32495,21 @@ Thank you,
     const total = toggles.length;
     const counter = lane.querySelector('.reg-form-group-count');
     if (counter) counter.textContent = `${on} of ${total} on`;
+  }
+
+  function syncRegistrationFormGroupState(lane) {
+    if (!lane) return;
     const master = lane.querySelector('.reg-form-anchor-master-toggle');
-    if (master) master.checked = on === total;
+    const cards = lane.querySelector('.reg-status-lane-cards');
+    if (!cards) return;
+    const enabled = master ? master.checked : true;
+    cards.classList.toggle('reg-form-group-disabled', !enabled);
   }
 
   function registrationFormMasterToggle(masterToggle) {
     const lane = masterToggle.closest('.reg-status-lane');
     if (!lane) return;
-    const checked = masterToggle.checked;
-    lane.querySelectorAll('.template-brand-tile-settings-toggle').forEach(t => {
-      t.checked = checked;
-      syncBrandTileSettingsState(t.closest('.template-brand-card') || lane);
-    });
-    updateRegistrationFormGroupCount(masterToggle);
+    syncRegistrationFormGroupState(lane);
     scheduleRegistrationSettingsAutosave(400);
   }
 
@@ -32692,6 +32698,16 @@ Thank you,
     sc('reg-notif-offer-reminder',         s.notif_offer_reminder !== false);
     sc('reg-notif-reg-incomplete',         s.notif_reg_incomplete !== false);
     sc('reg-notif-reminders',              s.notif_reminders      === true);
+    [...new Set(REGISTRATION_FORM_TEMPLATE_DEFS.map(d => d.group))].forEach(group => {
+      const masterId = `reg-form-master-${group.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
+      const dbKey = `form_group_${group.toLowerCase().replace(/[^a-z0-9]+/g, '_')}`;
+      const el = document.getElementById(masterId);
+      if (el) el.checked = s[dbKey] !== false;
+    });
+    const formsHost = document.getElementById('registration-forms-settings-surface');
+    if (formsHost) {
+      formsHost.querySelectorAll('.reg-status-lane').forEach(lane => syncRegistrationFormGroupState(lane));
+    }
     syncBrandTileSettingsState(document.getElementById('registration-panel-settings') || document);
     const savedTab = loadWorkspaceNavState().registrationSettingsTab || 'intake';
     switchRegistrationSettingsTab(normalizeRegistrationSettingsTab(savedTab));
@@ -32774,6 +32790,13 @@ Thank you,
       notif_reg_incomplete:         gc('reg-notif-reg-incomplete'),
       notif_reminders:              gc('reg-notif-reminders'),
       form_templates:               registrationFormTemplatesState || {},
+      ...Object.fromEntries(
+        [...new Set(REGISTRATION_FORM_TEMPLATE_DEFS.map(d => d.group))].map(group => {
+          const masterId = `reg-form-master-${group.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
+          const dbKey = `form_group_${group.toLowerCase().replace(/[^a-z0-9]+/g, '_')}`;
+          return [dbKey, gc(masterId, true)];
+        })
+      ),
     };
     let error = null;
     try {
