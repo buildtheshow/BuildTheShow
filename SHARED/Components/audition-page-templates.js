@@ -666,6 +666,40 @@
     </${safeTag}>`;
   }
 
+  function renderBrandTileWithFormTemplate(config = {}) {
+    const {
+      esc,
+      fields = [],
+      inputHtml = ''
+    } = config;
+    const safeEsc = typeof esc === 'function'
+      ? esc
+      : (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    const allowedTypes = new Set(['date', 'time', 'text', 'number', 'email', 'tel', 'url', 'search', 'month', 'week', 'datetime-local']);
+    const formHtml = inputHtml || `<div class="template-brand-tile-form-fields">
+      ${(Array.isArray(fields) ? fields : []).map(field => {
+        const type = allowedTypes.has(field?.type) ? field.type : 'text';
+        const attrs = [
+          field?.id ? `id="${safeEsc(field.id)}"` : '',
+          field?.name ? `name="${safeEsc(field.name)}"` : '',
+          `type="${safeEsc(type)}"`,
+          field?.value !== undefined ? `value="${safeEsc(field.value)}"` : '',
+          field?.placeholder ? `placeholder="${safeEsc(field.placeholder)}"` : '',
+          field?.ariaLabel ? `aria-label="${safeEsc(field.ariaLabel)}"` : '',
+          field?.min !== undefined ? `min="${safeEsc(field.min)}"` : '',
+          field?.max !== undefined ? `max="${safeEsc(field.max)}"` : '',
+          field?.step !== undefined ? `step="${safeEsc(field.step)}"` : '',
+          field?.attrs ? sanitizeAttrString(field.attrs) : ''
+        ].filter(Boolean).join(' ');
+        return `<input class="template-brand-tile-form-input form-input" ${attrs} />`;
+      }).join('')}
+    </div>`;
+    return renderBrandTileTemplate(Object.assign({}, config, {
+      mode: config.mode || 'settings',
+      inputHtml: formHtml
+    }));
+  }
+
   function renderBrandTileTextTemplate(config = {}) {
     const {
       esc,
@@ -754,6 +788,7 @@
     renderTemplateTestPreviewTemplate,
     renderTemplateTestCheckedInPreviewTemplate,
     renderBrandTileTemplate,
+    renderBrandTileWithFormTemplate,
     renderBrandTileTextTemplate,
     renderAuditionPageHeaderTemplate
   });
@@ -1020,6 +1055,14 @@
     tags: { area: 'brand', component: 'tile', mode: 'text' },
     priority: 95,
     render: renderBrandTileTextTemplate
+  });
+
+  api.registerTemplate({
+    id: 'brand.tile.form',
+    name: 'Brand Tile With Form',
+    tags: { area: 'brand', component: 'tile', mode: 'form' },
+    priority: 95,
+    render: renderBrandTileWithFormTemplate
   });
 
   api.registerTemplate({

@@ -113,6 +113,15 @@ Do not casually reintroduce `Applicants` in user-facing audition flows when we m
 - Local wrappers are allowed only for preview layout, spacing, and labels.
 - Do not let Template Test become the only place a reusable pattern exists.
 
+### Brand Tile With Form Pattern
+
+- Use the shared `brand.tile.form` template when a brand tile needs one or two compact form fields inside it.
+- This is the required pattern for settings tiles like `Registration Due By`, where the tile still needs the normal Brand Tile header, title, body, footer, colour, and toggle rules.
+- Form fields belong in the Brand Tile body zone and should use the shared `template-brand-tile-form-fields` and `template-brand-tile-form-input` structure.
+- Form fields inside filled brand tiles should use the subtle inset treatment, not white cards or page-local input boxes.
+- The top-right toggle remains the Brand Tile settings toggle. Turning it off must switch the tile to the `settings-off` state.
+- Do not create page-local form-card CSS for this pattern. Extend `brand.tile.form` if another page needs more field support.
+
 ### Audition Colour System
 
 - Audition UI should use one consistent colour system everywhere across production and public pages.
