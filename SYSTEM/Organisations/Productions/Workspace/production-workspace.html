@@ -427,6 +427,14 @@
     .registration-hero-actions.active {
       display: flex;
     }
+    .registration-hero-actions .aud-visual-total {
+      min-width: 132px;
+      padding: 0.78rem 0.95rem;
+      cursor: pointer;
+    }
+    .registration-hero-actions .aud-visual-total-value {
+      font-size: 2.35rem;
+    }
     .registration-kicker {
       display: flex;
       align-items: center;
@@ -1030,11 +1038,6 @@
       line-height: 1.25;
       opacity: 0.86;
     }
-    .registration-intake-save-row {
-      display: flex;
-      justify-content: flex-end;
-      gap: 0.75rem;
-    }
     /* ── Status Board ── */
     .reg-offers-board {
       display: flex;
@@ -1171,12 +1174,10 @@
       }
       .registration-hero-actions.active {
         width: 100%;
-        display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
+        display: flex;
       }
-      .registration-hero-actions .btn-primary,
-      .registration-hero-actions .btn-secondary {
-        justify-content: center;
+      .registration-hero-actions .aud-visual-total {
+        width: 100%;
       }
       .registration-header-metrics {
         grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -20584,7 +20585,10 @@
           <div class="registration-hero-top">
             <div class="registration-kicker">Registration</div>
             <div class="registration-hero-actions" id="registration-settings-header-actions">
-              <button type="button" class="btn-secondary" onclick="openRegistrationSubTab('offers')">Review Cast</button>
+              <div class="aud-visual-total" id="registration-settings-accepted-metric" role="button" tabindex="0" onclick="openRegistrationSubTab('offers')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openRegistrationSubTab('offers');}" aria-label="Open accepted cast status board">
+                <div class="aud-visual-total-value">…</div>
+                <div class="aud-visual-total-label">Roles Accepted</div>
+              </div>
             </div>
           </div>
           <div class="registration-title" id="registration-page-title">Registration Dashboard</div>
@@ -32055,7 +32059,7 @@ Thank you,
     if (hero) hero.classList.toggle('has-dashboard-metrics', key === 'dashboard');
     setSidebarSubmenuState('registration', `rsub-${key}`);
     if (key === 'dashboard') loadRegistrationDashboard();
-    if (key === 'settings')  { loadRegistrationSettings(); }
+    if (key === 'settings')  { loadRegistrationSettings(); loadRegistrationSettingsAcceptedMetric(); }
     if (key === 'offers')    loadRegistrationOffers();
     if (key === 'payments')  loadRegistrationPayments();
   }
@@ -32085,6 +32089,26 @@ Thank you,
   let registrationSettingsAutoSaveBound = false;
   let registrationSettingsSaveInFlight = false;
   let registrationSettingsSaveQueued = false;
+
+  function renderRegistrationSettingsAcceptedMetric(value = '…') {
+    const metric = document.getElementById('registration-settings-accepted-metric');
+    if (!metric) return;
+    const valueEl = metric.querySelector('.aud-visual-total-value');
+    const labelEl = metric.querySelector('.aud-visual-total-label');
+    if (valueEl) valueEl.textContent = String(value);
+    if (labelEl) labelEl.textContent = Number(value) === 1 ? 'Role Accepted' : 'Roles Accepted';
+  }
+
+  async function loadRegistrationSettingsAcceptedMetric() {
+    renderRegistrationSettingsAcceptedMetric('…');
+    try {
+      const accepted = await getRegistrationAcceptedCast();
+      renderRegistrationSettingsAcceptedMetric(accepted.length);
+    } catch (error) {
+      console.warn('[BTS] registration settings accepted metric failed', error);
+      renderRegistrationSettingsAcceptedMetric(0);
+    }
+  }
 
   function bindRegistrationSettingsAutosave() {
     const panel = document.getElementById('registration-panel-settings');
@@ -32187,10 +32211,6 @@ Thank you,
         ${autoSendTile}
         ${acceptedRecordsTile}
         ${expiredLinksTile}
-      </div>
-      <div class="registration-intake-save-row">
-        <button type="button" class="btn-secondary" onclick="openRegistrationSubTab('offers')">Review Cast</button>
-        <button type="button" class="btn-primary" onclick="saveRegistrationSettings()">Save Settings</button>
       </div>
     </div>`;
     host.dataset.registrationIntakeHydrated = 'true';
