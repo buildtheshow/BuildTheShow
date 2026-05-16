@@ -1549,10 +1549,10 @@
     .reg-status-lane {
       display: flex;
       align-items: stretch;
-      min-height: clamp(100px, 14cqw, 160px);
+      min-height: calc(128px + 1.5rem);
     }
     .reg-status-lane-anchor {
-      width: clamp(100px, 14cqw, 160px);
+      width: 160px;
       flex-shrink: 0;
       container-type: inline-size;
       background: rgba(0,0,0,0.02);
@@ -1584,16 +1584,18 @@
       align-content: flex-start;
     }
     .reg-offer-item {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 0.35rem;
-      min-width: 0;
-      overflow: visible;
+      height: 128px;
+      width: 102px;
+      flex-shrink: 0;
+      border-radius: 4px;
+      overflow: hidden;
+      box-shadow: 0 6px 18px rgba(15,23,42,0.32), 0 2px 6px rgba(15,23,42,0.18);
+      container-type: inline-size;
     }
     .reg-offer-item .casting-card {
-      width: 100%;
-      max-width: 125px;
+      width: 100% !important;
+      height: 100% !important;
+      max-width: unset !important;
       cursor: default;
     }
     .reg-offer-item .casting-card,
@@ -1607,36 +1609,6 @@
     .reg-offer-item .casting-card--in-show .casting-card-lower-role {
       color: #111111 !important;
     }
-    .reg-offer-item .in-show-flip,
-    .reg-offer-item .in-show-flip .inroom-flip-inner {
-      width: 100%;
-      max-width: 125px;
-      min-height: 0;
-      aspect-ratio: 4 / 5;
-      margin: 0 auto;
-      overflow: visible;
-    }
-    .reg-offer-item .in-show-flip {
-      border-radius: 4px;
-      box-shadow: 0 8px 24px rgba(15, 23, 42, 0.35), 0 2px 8px rgba(15, 23, 42, 0.2);
-    }
-    .reg-offer-item .in-show-flip::before { display: none; }
-    .reg-offer-item .in-show-flip .inroom-face {
-      background: transparent;
-      border: 0;
-      box-shadow: none;
-      padding: 0;
-    }
-    .reg-offer-item .in-show-flip .inroom-back-card-surface,
-    .reg-offer-item .in-show-flip .inroom-front-card-wrap {
-      padding: 0 !important;
-      overflow: hidden !important;
-    }
-    .reg-offer-item .in-show-flip .inroom-back-card-surface { container-type: inline-size; }
-    .reg-offer-item .inroom-face.back {
-      box-shadow: 0 6px 16px rgba(15, 23, 42, 0.12);
-      border-radius: 4px;
-    }
     .reg-offers-empty {
       padding: 2rem 1rem;
       text-align: center;
@@ -1647,7 +1619,7 @@
     @media (max-width: 720px) {
       .reg-offers-board { padding: 0.75rem; }
       .reg-status-lane { flex-direction: column; }
-      .reg-status-lane-anchor { width: 100%; min-height: clamp(90px, 22vw, 140px); }
+      .reg-status-lane-anchor { width: 100%; min-height: 100px; }
     }
     /* ─── end Status Board ─── */
     @media (max-width: 1050px) {
@@ -23170,7 +23142,7 @@
 <script src="/SHARED/Components/casting-card-back.js?v=selftapes-tab-20260504k"></script>
 <script src="/SHARED/Components/audition-status-strip.js"></script>
 <script src="/SHARED/Components/ai-character-importer.js"></script>
-<script src="/SHARED/Components/audition-page-templates.js?v=horiz-tile-reg-20260515g"></script>
+<script src="/SHARED/Components/audition-page-templates.js?v=horiz-tile-reg-20260515h"></script>
 <!-- VenuePicker uses OpenStreetMap/Nominatim - no API key needed -->
 <script>
   /* SQL needed:
@@ -33805,28 +33777,10 @@ Thank you,
       ? [preferredName, ...baseParts.slice(1)].join(' ').trim()
       : baseName;
     const role = registrationAssignmentRoleName(assignment);
-    const formsDone = registrationFormsComplete(app);
-    const paidDone = registrationPaymentComplete(app);
-    return renderInTheShowFlippableCardTemplate({
-      id: `registration-in-show-${String(app?.id || assignment?.id || 'card').replace(/[^a-zA-Z0-9_-]/g, '')}`,
-      front: {
-        name: fullName,
-        role,
-        headshot_url: app?.headshot_url || '',
-      },
-      back: {
-        name: fullName,
-        role,
-        contactName: fullName,
-        phone: app?.phone || registrationAnswerValue(app, ['Phone', 'Phone Number', 'Performer Phone', 'Guardian Phone'], 'No phone saved'),
-        email: app?.email || registrationAnswerValue(app, ['Email', 'Email Address', 'Performer Email', 'Guardian Email'], 'No email saved'),
-        emergencyName: registrationAnswerValue(app, ['Emergency Contact Name', 'Emergency Contact', 'Emergency Name'], 'Emergency contact not saved'),
-        emergencyPhone: registrationAnswerValue(app, ['Emergency Contact Phone', 'Emergency Phone', 'Emergency Number'], 'Emergency phone not saved'),
-        absences: registrationAnswerValue(app, ['Upcoming Absences', 'Absences', 'Conflicts', 'List any conflicts'], 'No absences saved'),
-        notes: registrationAnswerValue(app, ['Special Notes', 'Medical Notes', 'Accessibility Notes', 'Additional Notes'], 'No special notes saved'),
-        registrationStatus: formsDone ? 'Forms signed' : 'Forms needed',
-        paymentStatus: paidDone ? 'Payment received' : (registrationPaymentRequired() ? 'Payment pending' : 'No fee'),
-      },
+    return renderInTheShowCardFrontTemplate({
+      name: fullName,
+      role,
+      headshot_url: app?.headshot_url || '',
     });
   }
 
@@ -33837,15 +33791,11 @@ Thank you,
 
   function renderRegistrationInTheShowCards(items = []) {
     return items.map(({ app, assignment }) => {
-      if (!app) return `<div class="reg-offer-item" style="font-size:10px;color:red;padding:4px;">no app</div>`;
-      try {
-        const cardHtml = buildRegistrationInTheShowCardHtml(app, assignment);
-        if (!cardHtml) return `<div class="reg-offer-item" style="font-size:10px;color:red;padding:4px;">empty card</div>`;
-        return `<div class="reg-offer-item">${cardHtml}</div>`;
-      } catch (e) {
-        return `<div class="reg-offer-item" style="font-size:10px;color:red;padding:4px;max-width:120px;word-break:break-all;">${String(e?.message || e)}</div>`;
-      }
-    }).join('');
+      if (!app) return '';
+      const cardHtml = buildRegistrationInTheShowCardHtml(app, assignment);
+      if (!cardHtml) return '';
+      return `<div class="reg-offer-item">${cardHtml}</div>`;
+    }).filter(Boolean).join('');
   }
 
   function renderRegistrationAcceptedPreview(items = []) {
