@@ -18839,12 +18839,11 @@
           </span>
           <span class="tab-chevron" role="button" tabindex="0" aria-label="Toggle Registration menu" onclick="toggleRegistrationMenu(event)" onkeydown="handleSidebarChevronKey(event, 'registration')">▼</span>
         </div>
-        <div class="prod-submenu">
-          <div class="prod-sub-item" id="rsub-dashboard" onclick="openRegistrationSubTab('dashboard')">Dashboard</div>
-          <div class="prod-sub-item" id="rsub-offers" onclick="openRegistrationSubTab('offers')">Status Board</div>
-          <div class="prod-sub-item" id="rsub-payments" onclick="openRegistrationSubTab('payments')">Payments</div>
-          <div class="prod-sub-item" id="rsub-settings" onclick="openRegistrationSubTab('settings', { registrationSettingsTab: 'intake' })">Settings</div>
-        </div>
+          <div class="prod-submenu">
+            <div class="prod-sub-item" id="rsub-dashboard" onclick="openRegistrationSubTab('dashboard')">Dashboard</div>
+            <div class="prod-sub-item" id="rsub-payments" onclick="openRegistrationSubTab('payments')">Payments</div>
+            <div class="prod-sub-item" id="rsub-settings" onclick="openRegistrationSubTab('settings', { registrationSettingsTab: 'intake' })">Settings</div>
+          </div>
       </div>
 
       <div class="prod-tab" data-tab="profile" id="team-profile-tab" style="display:none;" onclick="switchProdTab('profile')">
@@ -20604,40 +20603,8 @@
         </div>
 
         <section class="registration-panel active" id="registration-panel-dashboard">
-          <div class="registration-workspace">
-            <button type="button" class="registration-workspace-section" style="--reg-tile-bg:#efab45;--reg-tile-ink:#ffffff;" onclick="openRegistrationSubTab('offers')">
-              <div>
-                <div class="registration-workspace-kicker">Cast Intake</div>
-                <div class="registration-workspace-title">Status Board</div>
-                <div class="registration-workspace-copy">See the performers who accepted and now need registration tracked.</div>
-                <div class="registration-workspace-preview" id="registration-accepted-preview" aria-label="Recently accepted cast"></div>
-              </div>
-              <span class="registration-dashboard-link primary">Open</span>
-            </button>
-
-            <button type="button" class="registration-workspace-section" style="--reg-tile-bg:#769e7b;--reg-tile-ink:#ffffff;" onclick="openRegistrationSubTab('payments')">
-              <div>
-                <div class="registration-workspace-kicker">Money Check</div>
-                <div class="registration-workspace-title">Payments</div>
-                <div class="registration-workspace-copy">Track received payments and payment settings.</div>
-              </div>
-              <span class="registration-dashboard-link">Open</span>
-            </button>
-
-            <button type="button" class="registration-workspace-section" style="--reg-tile-bg:#476aaa;--reg-tile-ink:#ffffff;" onclick="openRegistrationSubTab('settings'); switchRegistrationSettingsTab('form')">
-              <div>
-                <div class="registration-workspace-kicker">Production Admin</div>
-                <div class="registration-workspace-title">Registration Setup</div>
-                <div class="registration-workspace-copy">Adjust the form, age rules, agreements, and reminders.</div>
-              </div>
-              <span class="registration-dashboard-link">Open</span>
-            </button>
-          </div>
-        </section>
-
-        <section class="registration-panel" id="registration-panel-offers">
           <div class="aud-settings-shell">
-            <div id="reg-offers-board" class="reg-offers-board"></div>
+            <div id="reg-dashboard-board" class="reg-offers-board"></div>
           </div>
         </section>
 
@@ -32083,7 +32050,8 @@ Thank you,
   }
 
   function switchRegistrationSubTab(subTab = 'dashboard') {
-    const key = REGISTRATION_SUBPAGE_COPY[subTab] ? subTab : 'dashboard';
+    const requestedKey = subTab === 'offers' ? 'dashboard' : subTab;
+    const key = REGISTRATION_SUBPAGE_COPY[requestedKey] ? requestedKey : 'dashboard';
     saveWorkspaceNavState({ prodTab: 'registration', registrationSubTab: key });
     document.querySelectorAll('.registration-panel').forEach(panel => {
       panel.classList.toggle('active', panel.id === `registration-panel-${key}`);
@@ -32105,7 +32073,6 @@ Thank you,
     setSidebarSubmenuState('registration', `rsub-${key}`);
     if (key === 'dashboard') loadRegistrationDashboard();
     if (key === 'settings')  { loadRegistrationSettings(); loadRegistrationSettingsAcceptedMetric(); }
-    if (key === 'offers')    loadRegistrationOffers();
     if (key === 'payments')  loadRegistrationPayments();
   }
 
@@ -32113,10 +32080,6 @@ Thank you,
     dashboard: {
       title: 'Registration Dashboard',
       copy: 'Track what every accepted cast member still needs to finish before the production is admin-ready.',
-    },
-    offers: {
-      title: 'Status Board',
-      copy: 'Review accepted performers only. Declined roles stay in casting; registration tracks who needs agreements, emergency forms, and payment.',
     },
     payments: {
       title: 'Payments',
@@ -32281,7 +32244,7 @@ Thank you,
     const dueDateTile = renderRegistrationIntakeSettingTile({
       title: 'Registration Due By',
       helper: 'The deadline shown to performers on their registration page. Leave blank for no deadline.',
-      toggleHtml: '<input type="checkbox" class="template-brand-tile-settings-toggle" checked aria-label="Enable registration deadline" />',
+      toggleHtml: '<input type="checkbox" id="reg-offer-deadline-enabled" class="template-brand-tile-settings-toggle" checked aria-label="Enable registration deadline" />',
       inputHtml: `<div class="registration-intake-date-fields">
         <input id="reg-offer-deadline-date" class="form-input" type="date" aria-label="Registration due date" />
         <input id="reg-offer-deadline-time" class="form-input" type="time" value="23:59" aria-label="Registration due time" />
@@ -32330,6 +32293,7 @@ Thank you,
     const deadline = splitDate(s.offer_deadline);
     sv('reg-offer-deadline-date', deadline.date);
     sv('reg-offer-deadline-time', deadline.time);
+    sc('reg-offer-deadline-enabled',           !!deadline.date);
     sc('reg-sequential-casting',           s.sequential_casting   !== false);
     sc('reg-mark-expired',                 s.mark_expired         !== false);
     sc('reg-form-performer-identity',      s.form_performer_identity      !== false);
@@ -32376,7 +32340,7 @@ Thank you,
     const date = gv('reg-offer-deadline-date');
     const time = gv('reg-offer-deadline-time') || '23:59';
     const s = {
-      offer_deadline:               date ? `${date}T${time}` : '',
+      offer_deadline:               gc('reg-offer-deadline-enabled') && date ? `${date}T${time}` : '',
       sequential_casting:           gc('reg-sequential-casting'),
       mark_expired:                 gc('reg-mark-expired'),
       form_performer_identity:      gc('reg-form-performer-identity'),
