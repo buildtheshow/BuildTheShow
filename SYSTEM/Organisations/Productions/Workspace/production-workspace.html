@@ -400,6 +400,9 @@
       position: relative;
       z-index: 1;
     }
+    .registration-settings-page-header {
+      margin-bottom: 1.25rem;
+    }
     .registration-hero {
       position: relative;
       overflow: hidden;
@@ -418,22 +421,8 @@
       justify-content: space-between;
       gap: 1rem;
     }
-    .registration-hero-actions {
-      display: none;
-      align-items: center;
-      gap: 0.55rem;
-      flex: 0 0 auto;
-    }
-    .registration-hero-actions.active {
-      display: flex;
-    }
-    .registration-hero-actions .aud-visual-total {
-      min-width: 132px;
-      padding: 0.78rem 0.95rem;
+    .registration-settings-page-header .aud-visual-total {
       cursor: pointer;
-    }
-    .registration-hero-actions .aud-visual-total-value {
-      font-size: 2.35rem;
     }
     .registration-kicker {
       display: flex;
@@ -1171,13 +1160,6 @@
       .registration-hero-top {
         flex-direction: column;
         gap: 0.85rem;
-      }
-      .registration-hero-actions.active {
-        width: 100%;
-        display: flex;
-      }
-      .registration-hero-actions .aud-visual-total {
-        width: 100%;
       }
       .registration-header-metrics {
         grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -16544,6 +16526,14 @@
       color: #ffffff;
       letter-spacing: 0;
     }
+    .aud-visual-total-kicker {
+      margin-bottom: 0.35rem;
+      color: #e8ddf6;
+      font-size: 0.72rem;
+      font-weight: 850;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
     .aud-visual-total-label {
       margin-top: 0.35rem;
       font-size: 0.72rem;
@@ -20581,15 +20571,10 @@
     <!-- Registration -->
     <div class="tab-panel" id="panel-registration">
       <div class="registration-shell">
-        <div class="registration-hero has-dashboard-metrics">
+        <div class="registration-settings-page-header" id="registration-settings-page-header" hidden></div>
+        <div class="registration-hero has-dashboard-metrics" id="registration-default-header">
           <div class="registration-hero-top">
             <div class="registration-kicker">Registration</div>
-            <div class="registration-hero-actions" id="registration-settings-header-actions">
-              <div class="aud-visual-total" id="registration-settings-accepted-metric" role="button" tabindex="0" onclick="openRegistrationSubTab('offers')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openRegistrationSubTab('offers');}" aria-label="Open accepted cast status board">
-                <div class="aud-visual-total-value">…</div>
-                <div class="aud-visual-total-label">Roles Accepted</div>
-              </div>
-            </div>
           </div>
           <div class="registration-title" id="registration-page-title">Registration Dashboard</div>
           <div class="registration-copy" id="registration-page-copy">Track what every accepted cast member still needs to finish before the production is admin-ready.</div>
@@ -32049,14 +32034,17 @@ Thank you,
     const meta = REGISTRATION_SUBPAGE_COPY[key];
     const titleEl = document.getElementById('registration-page-title');
     const copyEl  = document.getElementById('registration-page-copy');
-    const settingsActions  = document.getElementById('registration-settings-header-actions');
     const dashboardMetrics = document.getElementById('registration-dashboard-header-metrics');
     const hero = dashboardMetrics?.closest?.('.registration-hero');
+    const defaultHeader = document.getElementById('registration-default-header');
+    const settingsHeader = document.getElementById('registration-settings-page-header');
+    if (defaultHeader) defaultHeader.hidden = key === 'settings';
+    if (settingsHeader) settingsHeader.hidden = key !== 'settings';
     if (titleEl) titleEl.textContent = meta.title;
     if (copyEl)  copyEl.textContent  = meta.copy;
-    if (settingsActions)  settingsActions.classList.toggle('active',  key === 'settings');
     if (dashboardMetrics) dashboardMetrics.classList.toggle('active', key === 'dashboard');
     if (hero) hero.classList.toggle('has-dashboard-metrics', key === 'dashboard');
+    if (key === 'settings') renderRegistrationSettingsPageHeader();
     setSidebarSubmenuState('registration', `rsub-${key}`);
     if (key === 'dashboard') loadRegistrationDashboard();
     if (key === 'settings')  { loadRegistrationSettings(); loadRegistrationSettingsAcceptedMetric(); }
@@ -32089,14 +32077,44 @@ Thank you,
   let registrationSettingsAutoSaveBound = false;
   let registrationSettingsSaveInFlight = false;
   let registrationSettingsSaveQueued = false;
+  let registrationSettingsAcceptedMetricValue = '…';
+
+  function renderRegistrationSettingsPageHeader() {
+    const host = document.getElementById('registration-settings-page-header');
+    if (!host || host.hidden) return;
+    const renderer = window.BTSAuditionTemplates?.renderTemplateById;
+    if (!renderer) {
+      setTimeout(renderRegistrationSettingsPageHeader, 60);
+      return;
+    }
+    const meta = REGISTRATION_SUBPAGE_COPY.settings;
+    const metricNumber = Number(registrationSettingsAcceptedMetricValue);
+    host.innerHTML = renderer('auditions.page-header', {
+      esc,
+      kicker: 'Registration',
+      title: meta.title,
+      copy: meta.copy,
+      statValue: registrationSettingsAcceptedMetricValue,
+      statKicker: metricNumber === 1 ? 'Role Accepted' : 'Roles Accepted',
+      statLabel: 'View Cast'
+    });
+    const metric = host.querySelector('.aud-visual-total');
+    if (metric) {
+      metric.setAttribute('role', 'button');
+      metric.setAttribute('tabindex', '0');
+      metric.setAttribute('aria-label', 'Open accepted cast status board');
+      metric.addEventListener('click', () => openRegistrationSubTab('offers'));
+      metric.addEventListener('keydown', event => {
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        event.preventDefault();
+        openRegistrationSubTab('offers');
+      });
+    }
+  }
 
   function renderRegistrationSettingsAcceptedMetric(value = '…') {
-    const metric = document.getElementById('registration-settings-accepted-metric');
-    if (!metric) return;
-    const valueEl = metric.querySelector('.aud-visual-total-value');
-    const labelEl = metric.querySelector('.aud-visual-total-label');
-    if (valueEl) valueEl.textContent = String(value);
-    if (labelEl) labelEl.textContent = Number(value) === 1 ? 'Role Accepted' : 'Roles Accepted';
+    registrationSettingsAcceptedMetricValue = String(value);
+    renderRegistrationSettingsPageHeader();
   }
 
   async function loadRegistrationSettingsAcceptedMetric() {

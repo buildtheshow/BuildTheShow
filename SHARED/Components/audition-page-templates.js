@@ -701,6 +701,7 @@
       kicker = 'Auditions',
       title = 'Auditions at a glance.',
       copy = '',
+      statKicker = '',
       statValue = '',
       statLabel = ''
     } = config;
@@ -711,7 +712,8 @@
           <h2 class="aud-visual-title">${esc(title)}</h2>
           ${copy ? `<p class="aud-visual-copy">${esc(copy)}</p>` : ''}
         </div>
-        ${statValue !== '' || statLabel ? `<div class="aud-visual-total">
+        ${statValue !== '' || statLabel || statKicker ? `<div class="aud-visual-total">
+          ${statKicker ? `<div class="aud-visual-total-kicker">${esc(statKicker)}</div>` : ''}
           <div class="aud-visual-total-value">${esc(statValue)}</div>
           <div class="aud-visual-total-label">${esc(statLabel)}</div>
         </div>` : ''}
