@@ -1003,6 +1003,46 @@
       margin-top: 1rem;
       border-top: 1px solid rgba(87,46,136,0.12);
     }
+    .registration-intake-surface {
+      display: grid;
+      gap: 1.25rem;
+    }
+    .registration-intake-tiles {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 1rem;
+      align-items: start;
+    }
+    .registration-intake-tiles .template-brand-card {
+      width: 100%;
+      min-height: 360px;
+    }
+    .registration-intake-date-fields {
+      display: grid;
+      gap: 0.55rem;
+    }
+    .registration-intake-date-fields .form-input {
+      min-height: 2.45rem;
+      border: 0;
+      border-radius: 8px;
+      background: #ffffff;
+      color: #1a1530;
+      font-family: var(--bts-font);
+      font-size: 0.86rem;
+      font-weight: 900;
+    }
+    .registration-intake-tile-note {
+      color: var(--brand-tile-ink, #ffffff);
+      font-size: 4.2cqw;
+      font-weight: 850;
+      line-height: 1.25;
+      opacity: 0.86;
+    }
+    .registration-intake-save-row {
+      display: flex;
+      justify-content: flex-end;
+      gap: 0.75rem;
+    }
     /* ── Status Board ── */
     .reg-offers-board {
       display: flex;
@@ -20630,46 +20670,7 @@
 
             <!-- ── INTAKE ── -->
             <div class="rs-panel active" id="rs-panel-intake">
-              <div class="settings-section-header">
-                <div>
-                  <div class="settings-section-title">Intake</div>
-                  <div class="settings-section-subtitle">When registration links go out and when they expire.</div>
-                </div>
-              </div>
-              <div class="rs-field-row">
-                <div class="form-group">
-                  <label class="form-label" for="reg-offer-deadline-date">Registration Due Date</label>
-                  <input id="reg-offer-deadline-date" class="form-input" type="date" />
-                </div>
-                <div class="form-group">
-                  <label class="form-label" for="reg-offer-deadline-time">Due Time</label>
-                  <input id="reg-offer-deadline-time" class="form-input" type="time" value="23:59" />
-                </div>
-              </div>
-              <div class="rs-checkbox-row">
-                <input type="checkbox" id="reg-sequential-casting" checked />
-                <div>
-                  <div class="rs-checkbox-label">Sequential casting</div>
-                  <div class="rs-checkbox-help">Only send registration links once a role is confirmed accepted.</div>
-                </div>
-              </div>
-              <div class="rs-checkbox-row">
-                <input type="checkbox" id="reg-return-declined" checked />
-                <div>
-                  <div class="rs-checkbox-label">Return declined registrations</div>
-                  <div class="rs-checkbox-help">Declined links come back to the pool for reassignment.</div>
-                </div>
-              </div>
-              <div class="rs-checkbox-row">
-                <input type="checkbox" id="reg-mark-expired" checked />
-                <div>
-                  <div class="rs-checkbox-label">Mark expired links</div>
-                  <div class="rs-checkbox-help">Automatically flag links that pass the due date without a response.</div>
-                </div>
-              </div>
-              <div class="rs-save-bar">
-                <button class="btn-primary" onclick="saveRegistrationSettings()">Save</button>
-              </div>
+              <div id="registration-intake-settings-surface"></div>
             </div>
 
             <!-- ── FORM SECTIONS ── -->
@@ -32108,9 +32109,91 @@ Thank you,
     saveWorkspaceNavState({ registrationSettingsTab: tab });
   }
 
-  function hydrateRegistrationSettingsTemplateSurface() {}
+  function renderRegistrationIntakeSettingTile(config = {}) {
+    const renderer = window.BTSAuditionTemplates?.renderTemplateById;
+    if (!renderer) return '';
+    const {
+      title = '',
+      helper = '',
+      inputHtml = '',
+      bodyHtml = '',
+      toggleHtml = '',
+      ariaLabel = title
+    } = config;
+    return renderer('brand.tile.vertical', {
+      esc,
+      mode: 'settings',
+      color: '#572e88',
+      ink: '#ffffff',
+      kicker: 'Intake',
+      title,
+      helper,
+      inputHtml,
+      bodyHtml,
+      toggleHtml,
+      ariaLabel
+    });
+  }
+
+  function hydrateRegistrationSettingsTemplateSurface() {
+    const host = document.getElementById('registration-intake-settings-surface');
+    const renderer = window.BTSAuditionTemplates?.renderTemplateById;
+    if (!host || !renderer) return;
+    const headerHtml = renderer('auditions.page-header', {
+      esc,
+      kicker: 'Registration Settings',
+      title: 'Intake',
+      copy: 'Control when accepted cast enter registration, what happens to declined offers, and when stale links close.',
+      statValue: '4',
+      statLabel: 'intake rules'
+    });
+    const dueDateTile = renderRegistrationIntakeSettingTile({
+      title: 'Registration Due By',
+      helper: 'The deadline shown to performers on their registration page. Leave blank for no deadline.',
+      toggleHtml: '<input type="checkbox" class="template-brand-tile-settings-toggle" checked aria-label="Enable registration deadline" />',
+      inputHtml: `<div class="registration-intake-date-fields">
+        <input id="reg-offer-deadline-date" class="form-input" type="date" aria-label="Registration due date" />
+        <input id="reg-offer-deadline-time" class="form-input" type="time" value="23:59" aria-label="Registration due time" />
+      </div>`
+    });
+    const autoSendTile = renderRegistrationIntakeSettingTile({
+      title: 'Send Registration Link Automatically',
+      helper: 'When on, BTS sends the registration link as soon as a performer accepts their role.',
+      toggleHtml: '<input type="checkbox" id="reg-sequential-casting" class="template-brand-tile-settings-toggle" checked aria-label="Send registration link automatically" />',
+      bodyHtml: '<div class="registration-intake-tile-note">Accepted role becomes active registration intake.</div>'
+    });
+    const acceptedRecordsTile = renderRegistrationIntakeSettingTile({
+      title: 'Create Registration Records For Accepted Cast',
+      helper: 'Accepted performers appear on the registration status board so staff can track forms, agreements, and payment.',
+      toggleHtml: '<input type="checkbox" id="reg-return-declined" class="template-brand-tile-settings-toggle" checked aria-label="Create registration records for accepted cast" />',
+      bodyHtml: '<div class="registration-intake-tile-note">Accepted cast are tracked here. Declined offers stay out of registration.</div>'
+    });
+    const expiredLinksTile = renderRegistrationIntakeSettingTile({
+      title: 'Close Expired Response Links',
+      helper: 'After the due date passes, BTS flags unanswered links so staff can follow up or recast.',
+      toggleHtml: '<input type="checkbox" id="reg-mark-expired" class="template-brand-tile-settings-toggle" checked aria-label="Close expired response links" />',
+      bodyHtml: '<div class="registration-intake-tile-note">Keeps intake clean when offers go stale.</div>'
+    });
+    host.innerHTML = `<div class="registration-intake-surface">
+      ${headerHtml}
+      <div class="registration-intake-tiles">
+        ${dueDateTile}
+        ${autoSendTile}
+        ${acceptedRecordsTile}
+        ${expiredLinksTile}
+      </div>
+      <div class="registration-intake-save-row">
+        <button type="button" class="btn-secondary" onclick="openRegistrationSubTab('offers')">Review Cast</button>
+        <button type="button" class="btn-primary" onclick="saveRegistrationSettings()">Save Settings</button>
+      </div>
+    </div>`;
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      try { fitBrandTileTitles(host); } catch (_) {}
+    }));
+  }
 
   function loadRegistrationSettings() {
+    hydrateRegistrationSettingsTemplateSurface();
     const s = (typeof prod?.registration_settings === 'object' && prod.registration_settings) ? prod.registration_settings : {};
     const sv = (id, val) => { const el = document.getElementById(id); if (el) el.value = val; };
     const sc = (id, v)   => { const el = document.getElementById(id); if (el) el.checked = v; };
