@@ -907,6 +907,100 @@
     render: (config) => renderBrandTileTemplate(Object.assign({}, config, { variant: 'portrait' }))
   });
 
+  function renderBrandTileHorizontalTemplate(config = {}) {
+    const {
+      esc,
+      tagName = 'div',
+      mode = 'content',
+      color = '#572e88',
+      ink = '#ffffff',
+      divider = '',
+      className = '',
+      style = '',
+      attrs = '',
+      ariaLabel = '',
+      kicker = '',
+      title = '',
+      body = '',
+      bodyHtml = '',
+      buttonLabel = '',
+      buttonHtml = '',
+    } = config;
+    const safeEsc = typeof esc === 'function'
+      ? esc
+      : (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    const safeTag = ['button', 'div', 'label', 'span'].includes(tagName) ? tagName : 'div';
+    const safeMode = ['empty', 'containers', 'content', 'metric', 'settings', 'settings-off'].includes(mode) ? mode : 'content';
+    const resolvedStyle = [
+      `--brand-tile-bg:${safeEsc(color)};`,
+      `--brand-tile-ink:${safeEsc(ink)};`,
+      divider ? `--brand-tile-divider:${safeEsc(divider)};` : '',
+      style
+    ].filter(Boolean).join('');
+    const labelAttr = ariaLabel ? ` aria-label="${safeEsc(ariaLabel)}"` : '';
+    const extraAttrs = attrs ? ` ${sanitizeAttrString(attrs)}` : '';
+    const classes = [
+      'template-brand-card',
+      'template-brand-card--horizontal',
+      `template-brand-card--${safeMode}`,
+      className
+    ].filter(Boolean).join(' ');
+    if (safeMode === 'empty') {
+      return `<${safeTag} class="${safeEsc(classes)}" style="${resolvedStyle}"${labelAttr}${extraAttrs}>
+        <div class="template-brand-card-inner"></div>
+      </${safeTag}>`;
+    }
+    let headerHtml = '', titleHtml = '', zoneBodyHtml = '', footerHtml = '';
+    if (safeMode === 'containers') {
+      headerHtml   = '<div class="template-brand-tile-kicker">Header</div>';
+      titleHtml    = '<div class="template-brand-tile-title">Title</div>';
+      zoneBodyHtml = '<div class="template-brand-tile-body">Body / Description</div>';
+      footerHtml   = '<button type="button" class="template-brand-tile-button">Footer</button>';
+    } else {
+      headerHtml   = kicker ? `<div class="template-brand-tile-kicker">${safeEsc(kicker)}</div>` : '';
+      titleHtml    = title  ? `<div class="template-brand-tile-title">${safeEsc(title)}</div>`   : '';
+      zoneBodyHtml = bodyHtml || (body ? `<div class="template-brand-tile-body">${safeEsc(body)}</div>` : '');
+      footerHtml   = buttonHtml || (buttonLabel ? `<div class="template-brand-tile-button">${safeEsc(buttonLabel)}</div>` : '');
+    }
+    const anchorHtml = safeMode === 'containers'
+      ? `<div class="template-brand-text-holder">
+          <div class="template-brand-text-holder-inner">
+            <div class="template-brand-tile-container template-brand-tile-container--header">${headerHtml}</div>
+            <div class="template-brand-tile-container template-brand-tile-container--title">${titleHtml}</div>
+            <div class="template-brand-tile-container template-brand-tile-container--body">${zoneBodyHtml}</div>
+            <div class="template-brand-tile-container template-brand-tile-container--footer">${footerHtml}</div>
+          </div>
+        </div>`
+      : `<div class="template-brand-text-holder template-brand-text-holder--invisible">
+          <div class="template-brand-text-holder-inner template-brand-text-holder-inner--invisible">
+            <div class="template-brand-tile-container template-brand-tile-container--header">${headerHtml}</div>
+            <div class="template-brand-tile-container template-brand-tile-container--title">${titleHtml}</div>
+            <div class="template-brand-tile-container template-brand-tile-container--body">${zoneBodyHtml}</div>
+            <div class="template-brand-tile-container template-brand-tile-container--footer">${footerHtml}</div>
+          </div>
+        </div>`;
+    return `<${safeTag} class="${safeEsc(classes)}" style="${resolvedStyle}"${labelAttr}${extraAttrs}>
+      <div class="template-brand-card-inner">
+        <div class="template-brand-horizontal-quad-split">
+          <div class="template-brand-horizontal-quad-cell template-brand-horizontal-quad-cell--anchor">
+            ${anchorHtml}
+          </div>
+          <div class="template-brand-horizontal-quad-cell template-brand-horizontal-quad-cell--right" aria-hidden="true"></div>
+          <div class="template-brand-horizontal-quad-cell template-brand-horizontal-quad-cell--bottom-left" aria-hidden="true"></div>
+          <div class="template-brand-horizontal-quad-cell template-brand-horizontal-quad-cell--bottom-right" aria-hidden="true"></div>
+        </div>
+      </div>
+    </${safeTag}>`;
+  }
+
+  api.registerTemplate({
+    id: 'brand.tile.horizontal',
+    name: 'Horizontal Brand Tile',
+    tags: { area: 'brand', component: 'tile', variant: 'horizontal' },
+    priority: 95,
+    render: renderBrandTileHorizontalTemplate
+  });
+
   api.registerTemplate({
     id: 'brand.tile.text',
     name: 'Brand Tile Text',
