@@ -1579,6 +1579,7 @@
       gap: 0.75rem;
       padding: 0.75rem 1rem;
       align-content: flex-start;
+      min-height: 340px;
     }
     .reg-offer-item {
       display: flex;
@@ -33690,7 +33691,16 @@ Thank you,
       .select('*')
       .in('id', applicantIds);
     if (appError) throw appError;
-    const appMap = new Map((applicants || []).map(a => [String(a.id), a]));
+    const foundIds = new Set((applicants || []).map(a => String(a.id)));
+    const missingIds = applicantIds.filter(id => !foundIds.has(String(id)));
+    let bookingApplicants = [];
+    if (missingIds.length) {
+      const { data: bookings } = await sb.from('audition_bookings')
+        .select('*')
+        .in('id', missingIds);
+      bookingApplicants = bookings || [];
+    }
+    const appMap = new Map([...(applicants || []), ...bookingApplicants].map(a => [String(a.id), a]));
     const acceptedByApplicant = new Map();
     (assignments || []).forEach(row => {
       const appId = String(row?.applicant_id || '');
