@@ -22582,7 +22582,6 @@
     }
     if (prodTab === 'registration') {
       const regFallback = teamMenuAllows(allowedTopTabs, 'registration:dashboard') ? 'dashboard'
-        : teamMenuAllows(allowedTopTabs, 'registration:offers') ? 'offers'
         : teamMenuAllows(allowedTopTabs, 'registration:payments') ? 'payments'
         : 'settings';
       const navRegKey = nav.registrationSubTab ? `registration:${nav.registrationSubTab}` : '';
@@ -22728,7 +22727,6 @@
     document.getElementById('asub-audschedule')?.style.setProperty('display', teamMenuAllows(menuAccess, 'auditions:schedule') ? '' : 'none');
     document.getElementById('asub-allperformers')?.style.setProperty('display', teamMenuAllows(menuAccess, 'auditions:allperformers') ? '' : 'none');
     document.getElementById('rsub-dashboard')?.style.setProperty('display', teamMenuAllows(menuAccess, 'registration:dashboard') ? '' : 'none');
-    document.getElementById('rsub-offers')?.style.setProperty('display', teamMenuAllows(menuAccess, 'registration:offers') ? '' : 'none');
     document.getElementById('rsub-payments')?.style.setProperty('display', teamMenuAllows(menuAccess, 'registration:payments') ? '' : 'none');
     document.getElementById('rsub-settings')?.style.setProperty('display', teamMenuAllows(menuAccess, 'registration:settings') ? '' : 'none');
     document.getElementById('view-contact-info-btn')?.style.setProperty('display', 'none');
@@ -24749,7 +24747,7 @@
       prodTab: 'overview',
       auditionsSubTab: 'overview',
       registrationSubTab: 'dashboard',
-      registrationSettingsTab: 'offers',
+      registrationSettingsTab: 'intake',
       auditionsDayTab: 'overview',
       auditionsSessionId: '',
       auditionsSessionTool: '',
@@ -24767,7 +24765,8 @@
     if (next.auditionsSubTab && !audTabs.has(next.auditionsSubTab) && !String(next.auditionsSubTab).startsWith('session:')) {
       next.auditionsSubTab = 'dashboard';
     }
-    const regTabs = new Set(['dashboard', 'offers', 'form', 'payments', 'agreements', 'settings']);
+    if (next.registrationSubTab === 'offers') next.registrationSubTab = 'dashboard';
+    const regTabs = new Set(['dashboard', 'form', 'payments', 'agreements', 'settings']);
     if (next.registrationSubTab && !regTabs.has(next.registrationSubTab)) next.registrationSubTab = 'dashboard';
     return next;
   }
@@ -24882,14 +24881,14 @@
         '': 'dashboard',
         dashboard: 'dashboard',
         overview: 'dashboard',
-        'role-offers': 'offers',
-        offers: 'offers',
-        'offer-responses': 'offers',
+        'role-offers': 'dashboard',
+        offers: 'dashboard',
+        'offer-responses': 'dashboard',
         'registration-form': 'settings',
         form: 'settings',
-        'registered-cast': 'offers',
-        'cast-registration': 'offers',
-        cast: 'offers',
+        'registered-cast': 'dashboard',
+        'cast-registration': 'dashboard',
+        cast: 'dashboard',
         payments: 'payments',
         documents: 'settings',
         agreements: 'settings',
@@ -24908,7 +24907,7 @@
         ...nav,
         prodTab: 'registration',
         registrationSubTab: registrationMap[child || ''] || 'dashboard',
-        registrationSettingsTab: registrationSettingsMap[child || ''] || nav.registrationSettingsTab || 'offers',
+        registrationSettingsTab: registrationSettingsMap[child || ''] || nav.registrationSettingsTab || 'intake',
       };
     }
     if (topLevel[section]) return { ...nav, prodTab: topLevel[section] };
@@ -24960,7 +24959,6 @@
     } else if (prodTab === 'registration') {
       const registrationRoutes = {
         dashboard: 'registration',
-        offers: 'registration/offer-responses',
         form: 'registration/settings',
         payments: 'registration/payments',
         agreements: 'registration/settings',
@@ -30515,7 +30513,6 @@ Thank you,
     { key: 'castlist', label: 'Cast List' },
     { key: 'registration', label: 'Registration', children: [
       { key: 'registration:dashboard', label: 'Dashboard' },
-      { key: 'registration:offers', label: 'Status Board' },
       { key: 'registration:payments', label: 'Payments' },
       { key: 'registration:settings', label: 'Settings' },
     ] },
@@ -32145,12 +32142,12 @@ Thank you,
     if (metric) {
       metric.setAttribute('role', 'button');
       metric.setAttribute('tabindex', '0');
-      metric.setAttribute('aria-label', 'Open accepted cast status board');
-      metric.addEventListener('click', () => openRegistrationSubTab('offers'));
+      metric.setAttribute('aria-label', 'Open registration dashboard');
+      metric.addEventListener('click', () => openRegistrationSubTab('dashboard'));
       metric.addEventListener('keydown', event => {
         if (event.key !== 'Enter' && event.key !== ' ') return;
         event.preventDefault();
-        openRegistrationSubTab('offers');
+        openRegistrationSubTab('dashboard');
       });
     }
   }
@@ -32194,6 +32191,7 @@ Thank you,
   }
 
   function switchRegistrationSettingsTab(tab = 'intake') {
+    tab = ['intake', 'form', 'rules', 'payment', 'notifications'].includes(tab) ? tab : 'intake';
     document.querySelectorAll('.rs-tab').forEach(btn => {
       btn.classList.toggle('active', btn.dataset.rsTab === tab);
     });
@@ -32324,7 +32322,8 @@ Thank you,
     sc('reg-notif-reminders',              s.notif_reminders      === true);
     syncBrandTileSettingsState(document.getElementById('registration-panel-settings') || document);
     const savedTab = loadWorkspaceNavState().registrationSettingsTab || 'intake';
-    switchRegistrationSettingsTab(savedTab);
+    const safeSavedTab = ['intake', 'form', 'rules', 'payment', 'notifications'].includes(savedTab) ? savedTab : 'intake';
+    switchRegistrationSettingsTab(safeSavedTab);
     registrationSettingsHydrating = false;
   }
 
@@ -32533,35 +32532,6 @@ Thank you,
     }).filter(Boolean).join('');
   }
 
-  function renderRegistrationAcceptedPreview(items = []) {
-    const host = document.getElementById('registration-accepted-preview');
-    if (!host) return;
-    const cards = (items || []).slice(0, 2).map(({ app }) => {
-      if (!app) return '';
-      const nameParts = String(app.name || 'Unknown').trim().split(/\s+/);
-      return renderCastingCard({
-        first_name: nameParts[0] || '',
-        last_name: nameParts.slice(1).join(' ') || '',
-        age: cbv2ApplicantAge(app),
-        pronouns: applicantPronouns(app),
-        headshot_url: app.headshot_url || '',
-        casting_categories: cbv2CastingCategories(app),
-        role_openness: cbv2RoleBadge(app),
-        attendance_mode: applicantAttendanceModeLabel(app) || null,
-      }, {
-        size: 'compact',
-        hasPadding: true,
-        hasIcons: false,
-        draggable: false,
-        state: null,
-      });
-    }).filter(Boolean).join('');
-    host.innerHTML = cards;
-    requestAnimationFrame(() => {
-      if (typeof fitCastingCardNames === 'function') fitCastingCardNames(host);
-    });
-  }
-
   function renderRegistrationCardColumn({ key, title, items = [], empty = '', note = '' } = {}) {
     const cards = renderRegistrationInTheShowCards(items);
     const statusTileMeta = {
@@ -32600,10 +32570,12 @@ Thank you,
 
   async function loadRegistrationDashboard() {
     if (!isWorkspacePanelActive('panel-registration')) return;
-    renderRegistrationAcceptedPreview([]);
     renderRegistrationDashboardHeaderMetrics({ complete: '… / …', payments: '… / …' });
+    const board = document.getElementById('reg-dashboard-board');
+    if (board) board.innerHTML = `<div style="padding:2.5rem;color:rgba(87,46,136,0.5);font-size:0.875rem;text-align:center;width:100%;">Loading registration…</div>`;
     try {
-      const accepted = await getRegistrationAcceptedCast();
+      await expirePastDueCastOffers().catch(error => console.warn('[BTS] registration offer expiry check failed', error));
+      const accepted = await loadRegistrationAcceptedCastForCards();
       if (!isWorkspacePanelActive('panel-registration')) return;
       const total = accepted.length;
       const paymentRequired = registrationPaymentRequired();
@@ -32612,29 +32584,17 @@ Thank you,
         registrationFormsComplete(app) && (!paymentRequired || registrationPaymentComplete(app))
       ).length;
       renderRegistrationDashboardHeaderMetrics({ complete: `${complete} / ${total}`, payments: `${payments} / ${total}`, total });
-      renderRegistrationAcceptedPreview(accepted);
+      renderRegistrationStatusBoard(accepted);
     } catch (error) {
       console.warn('[BTS] registration dashboard load failed', error);
       renderRegistrationDashboardHeaderMetrics({ complete: '0 / 0', payments: '0 / 0' });
-      renderRegistrationAcceptedPreview([]);
+      if (board) board.innerHTML = `<div style="padding:2.5rem;color:#c0392b;font-size:0.875rem;text-align:center;width:100%;">Could not load registration.</div>`;
     }
   }
 
-  async function loadRegistrationOffers() {
-    const board = document.getElementById('reg-offers-board');
+  function renderRegistrationStatusBoard(accepted = []) {
+    const board = document.getElementById('reg-dashboard-board');
     if (!board) return;
-    board.innerHTML = `<div style="padding:2.5rem;color:rgba(87,46,136,0.5);font-size:0.875rem;text-align:center;width:100%;">Loading offers…</div>`;
-
-    await expirePastDueCastOffers().catch(error => console.warn('[BTS] registration offer expiry check failed', error));
-
-    let accepted = [];
-    try {
-      accepted = await loadRegistrationAcceptedCastForCards();
-    } catch (error) {
-      board.innerHTML = `<div style="padding:2.5rem;color:#c0392b;font-size:0.875rem;text-align:center;width:100%;">Could not load offers.</div>`;
-      return;
-    }
-
     const paymentRequired = registrationPaymentRequired();
     const groups = {
       accepted: [],
