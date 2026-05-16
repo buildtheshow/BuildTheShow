@@ -790,6 +790,7 @@
     renderBrandTileTemplate,
     renderBrandTileWithFormTemplate,
     renderBrandTileTextTemplate,
+    renderBrandTileStatusLaneTemplate,
     renderAuditionPageHeaderTemplate
   });
 
@@ -1041,12 +1042,62 @@
     </${safeTag}>`;
   }
 
+  function renderBrandTileStatusLaneTemplate(config = {}) {
+    const {
+      esc,
+      color = '#572e88',
+      ink = '#ffffff',
+      className = '',
+      attrs = '',
+      ariaLabel = '',
+      kicker = '',
+      title = '',
+      anchorBodyHtml = '',
+      anchorFooterHtml = '',
+      cardsHtml = ''
+    } = config;
+    const safeEsc = typeof esc === 'function'
+      ? esc
+      : (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    const extraAttrs = attrs ? ` ${sanitizeAttrString(attrs)}` : '';
+    const labelAttr = ariaLabel ? ` aria-label="${safeEsc(ariaLabel)}"` : '';
+    const classes = ['reg-offers-col', 'template-brand-card', 'template-brand-card--horizontal', 'template-brand-card--content', className].filter(Boolean).join(' ');
+    const anchorHtml = `<div class="template-brand-text-holder template-brand-text-holder--invisible">
+      <div class="template-brand-text-holder-inner template-brand-text-holder-inner--invisible">
+        <div class="template-brand-tile-container template-brand-tile-container--header">
+          <div class="template-brand-tile-kicker">${safeEsc(kicker)}</div>
+        </div>
+        <div class="template-brand-tile-container template-brand-tile-container--title">
+          <div class="template-brand-tile-title">${safeEsc(title)}</div>
+        </div>
+        <div class="template-brand-tile-container template-brand-tile-container--body">${anchorBodyHtml}</div>
+        <div class="template-brand-tile-container template-brand-tile-container--footer">${anchorFooterHtml}</div>
+      </div>
+    </div>`;
+    return `<div class="${safeEsc(classes)}" style="--brand-tile-bg:${safeEsc(color)};--brand-tile-ink:${safeEsc(ink)};"${labelAttr}${extraAttrs}>
+      <div class="template-brand-card-inner">
+        <div class="reg-status-lane">
+          <div class="reg-status-lane-anchor">${anchorHtml}</div>
+          <div class="reg-status-lane-cards">${cardsHtml}</div>
+        </div>
+      </div>
+    </div>`;
+  }
+
   api.registerTemplate({
     id: 'brand.tile.horizontal',
     name: 'Horizontal Brand Tile',
     tags: { area: 'brand', component: 'tile', variant: 'horizontal' },
     priority: 95,
     render: renderBrandTileHorizontalTemplate
+  });
+
+  api.registerTemplate({
+    id: 'brand.tile.lane',
+    name: 'Status Lane Brand Tile',
+    tags: { area: 'brand', component: 'tile', variant: 'lane' },
+    priority: 95,
+    render: renderBrandTileStatusLaneTemplate
   });
 
   api.registerTemplate({
