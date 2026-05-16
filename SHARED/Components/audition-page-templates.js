@@ -703,10 +703,23 @@
       kicker = 'Auditions',
       title = 'Auditions at a glance.',
       copy = '',
+      stats = [],
       statKicker = '',
       statValue = '',
       statLabel = ''
     } = config;
+    const hasStats = Array.isArray(stats) && stats.length;
+    const metricsHtml = hasStats ? `<div class="aud-visual-totals">
+          ${stats.map(stat => `<div class="aud-visual-total">
+            ${stat.statKicker ? `<div class="aud-visual-total-kicker">${esc(stat.statKicker)}</div>` : ''}
+            <div class="aud-visual-total-value">${esc(stat.statValue ?? '')}</div>
+            <div class="aud-visual-total-label">${esc(stat.statLabel ?? '')}</div>
+          </div>`).join('')}
+        </div>` : ((statValue !== '' || statLabel || statKicker) ? `<div class="aud-visual-total">
+          ${statKicker ? `<div class="aud-visual-total-kicker">${esc(statKicker)}</div>` : ''}
+          <div class="aud-visual-total-value">${esc(statValue)}</div>
+          <div class="aud-visual-total-label">${esc(statLabel)}</div>
+        </div>` : '');
     return `<div class="aud-visual-hero">
       <div class="aud-visual-hero-content">
         <div>
@@ -714,11 +727,7 @@
           <h2 class="aud-visual-title">${esc(title)}</h2>
           ${copy ? `<p class="aud-visual-copy">${esc(copy)}</p>` : ''}
         </div>
-        ${statValue !== '' || statLabel || statKicker ? `<div class="aud-visual-total">
-          ${statKicker ? `<div class="aud-visual-total-kicker">${esc(statKicker)}</div>` : ''}
-          <div class="aud-visual-total-value">${esc(statValue)}</div>
-          <div class="aud-visual-total-label">${esc(statLabel)}</div>
-        </div>` : ''}
+        ${metricsHtml}
       </div>
     </div>`;
   }
