@@ -990,7 +990,7 @@
     .rs-checkbox-row input[type="checkbox"] {
       margin-top: 0.18rem;
       flex-shrink: 0;
-      accent-color: #572e88;
+      accent-color: #000000;
       width: 16px;
       height: 16px;
     }
@@ -17954,6 +17954,7 @@
     /* ── Toast ── */
     .toast { position:fixed; bottom:1.5rem; right:1.5rem; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.14); color:#e8e0ff; padding:0.7rem 1.2rem; border-radius:0.5rem; font-size:0.87rem; opacity:0; transform:translateY(6px); transition:opacity 0.2s,transform 0.2s; pointer-events:none; z-index:9999; }
     .toast.visible { opacity:1; transform:translateY(0); }
+    .toast.toast--success { background:#efab45; border-color:#efab45; color:#1a1530; font-weight:900; box-shadow:0 14px 34px rgba(87,46,136,0.22); }
     .toast.toast--error { background:rgba(220,60,60,0.12); border-color:rgba(220,60,60,0.35); color:#f08080; }
 
     @media (max-width: 900px) {
@@ -22221,6 +22222,7 @@
     clearTimeout(toastTimer);
     t.textContent = msg;
     t.classList.toggle('toast--error', isError);
+    t.classList.toggle('toast--success', !isError);
     t.classList.add('visible');
     toastTimer = setTimeout(() => t.classList.remove('visible'), 3000);
   }
@@ -32099,6 +32101,34 @@ Thank you,
   };
 
   // Registration Settings
+  let registrationSettingsHydrating = false;
+  let registrationSettingsAutoSaveTimer = null;
+  let registrationSettingsAutoSaveBound = false;
+  let registrationSettingsSaveInFlight = false;
+  let registrationSettingsSaveQueued = false;
+
+  function bindRegistrationSettingsAutosave() {
+    const panel = document.getElementById('registration-panel-settings');
+    if (!panel || registrationSettingsAutoSaveBound) return;
+    const handleSettingsInput = event => {
+      const target = event.target;
+      if (registrationSettingsHydrating || !target?.matches?.('input, select, textarea')) return;
+      if (!String(target.id || '').startsWith('reg-')) return;
+      scheduleRegistrationSettingsAutosave(event.type === 'input' ? 650 : 150);
+    };
+    panel.addEventListener('input', handleSettingsInput);
+    panel.addEventListener('change', handleSettingsInput);
+    registrationSettingsAutoSaveBound = true;
+  }
+
+  function scheduleRegistrationSettingsAutosave(delay = 500) {
+    if (registrationSettingsHydrating) return;
+    clearTimeout(registrationSettingsAutoSaveTimer);
+    registrationSettingsAutoSaveTimer = setTimeout(() => {
+      saveRegistrationSettings();
+    }, delay);
+  }
+
   function switchRegistrationSettingsTab(tab = 'intake') {
     document.querySelectorAll('.rs-tab').forEach(btn => {
       btn.classList.toggle('active', btn.dataset.rsTab === tab);
@@ -32191,6 +32221,8 @@ Thank you,
   }
 
   function loadRegistrationSettings() {
+    registrationSettingsHydrating = true;
+    bindRegistrationSettingsAutosave();
     hydrateRegistrationSettingsTemplateSurface();
     const s = (typeof prod?.registration_settings === 'object' && prod.registration_settings) ? prod.registration_settings : {};
     const sv = (id, val) => { const el = document.getElementById(id); if (el) el.value = val; };
@@ -32234,9 +32266,16 @@ Thank you,
     sc('reg-notif-reminders',              s.notif_reminders      === true);
     const savedTab = loadWorkspaceNavState().registrationSettingsTab || 'intake';
     switchRegistrationSettingsTab(savedTab);
+    registrationSettingsHydrating = false;
   }
 
   async function saveRegistrationSettings() {
+    clearTimeout(registrationSettingsAutoSaveTimer);
+    if (registrationSettingsSaveInFlight) {
+      registrationSettingsSaveQueued = true;
+      return false;
+    }
+    registrationSettingsSaveInFlight = true;
     const gv = id => document.getElementById(id)?.value || '';
     const gc = id => document.getElementById(id)?.checked || false;
     const date = gv('reg-offer-deadline-date');
@@ -32273,10 +32312,22 @@ Thank you,
       notif_reg_incomplete:         gc('reg-notif-reg-incomplete'),
       notif_reminders:              gc('reg-notif-reminders'),
     };
-    const { error } = await sb.from('productions').update({ registration_settings: s }).eq('id', prodId);
-    if (error) { showToast('Could not save settings.', true); return; }
+    let error = null;
+    try {
+      ({ error } = await sb.from('productions').update({ registration_settings: s }).eq('id', prodId));
+    } catch (err) {
+      error = err;
+    } finally {
+      registrationSettingsSaveInFlight = false;
+      if (registrationSettingsSaveQueued) {
+        registrationSettingsSaveQueued = false;
+        scheduleRegistrationSettingsAutosave(50);
+      }
+    }
+    if (error) { showToast('Could not save settings.', true); return false; }
     if (prod) prod.registration_settings = s;
-    showToast('Settings saved.');
+    showToast('Saved!');
+    return true;
   }
 
 
