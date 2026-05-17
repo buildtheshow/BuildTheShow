@@ -33836,15 +33836,25 @@ Thank you,
   function loadRegistrationPublicView() {
     const host = document.getElementById('registration-public-view-content');
     if (!host) return;
-    const sections = REGISTRATION_FORM_TEMPLATE_DEFS.filter(def => {
+    const enabledDefs = REGISTRATION_FORM_TEMPLATE_DEFS.filter(def => {
       const el = document.getElementById(def.settingId);
       return el ? el.checked : def.defaultOn;
     });
-    if (!sections.length) {
+    if (!enabledDefs.length) {
       host.innerHTML = `<div style="padding:3rem;text-align:center;color:rgba(87,46,136,0.4);font-size:0.88rem;">No form sections are enabled. Turn on sections in Forms settings to preview the registration form.</div>`;
       return;
     }
-    window._rpfSections = sections;
+
+    // Group enabled defs by their group name, preserving order
+    const groupOrder = [];
+    const groupMap = {};
+    enabledDefs.forEach(def => {
+      if (!groupMap[def.group]) { groupMap[def.group] = []; groupOrder.push(def.group); }
+      groupMap[def.group].push(def);
+    });
+    const groups = groupOrder.map(name => ({ name, defs: groupMap[name] }));
+
+    window._rpfSections = groups;
     window._rpfCurrent = 0;
     window._rpfCompleted = new Set();
 
@@ -33855,38 +33865,37 @@ Thank you,
       : 'Registration Open';
     const posterUrl = prod?.poster_url || '';
 
-    // Pre-fill data — from a sample performer if available, otherwise empty
     window._rpfSectionTexts = {};
     const prefill = window._rpfPrefillData || null;
     const hasPrefill = prefill && (prefill.first_name || prefill.email);
 
     const bgMap = { '#476aaa': '#e8ecf4', '#d1523d': '#fce8e6', '#769e7b': '#eaf4ec', '#ca7ea7': '#faeef6', '#efab45': '#fef5e8' };
 
-    const navItemsHtml = sections.map((def, i) => `
+    const navItemsHtml = groups.map((g, i) => `
       <div class="rpf-left-item${i === 0 ? ' rpf-active' : ''}" id="rpf-left-item-${i}" onclick="rpfGoTo(${i})">
         <div class="rpf-left-dot" id="rpf-dot-${i}">${i + 1}</div>
-        <div>
-          <div class="rpf-left-label">${esc(def.title)}</div>
-          <div class="rpf-left-group">${esc(def.group)}</div>
-        </div>
+        <div class="rpf-left-label">${esc(g.name)}</div>
       </div>`).join('');
 
-    const panelsHtml = sections.map((def, i) => {
-      const template = getRegistrationFormTemplate(def.key);
-      window._rpfSectionTexts = { ...(window._rpfSectionTexts || {}), ...(template?.sectionTexts || {}) };
-      const fields = (template?.fields?.length ? template.fields : def.defaultFields) || [];
-      const intro = template?.intro || '';
-      const isLast = i === sections.length - 1;
-      const fieldsHtml = fields.map(f => rpfRenderField(f, prefill)).join('');
-      const bgColor = bgMap[def.color] || '#ebe6f1';
-      return `<div class="rpf-panel${i === 0 ? ' rpf-active' : ''}" id="rpf-panel-${i}">
-        <div class="rpf-step-title">${esc(def.title)}</div>
-        ${intro ? `<div class="rpf-step-sub">${esc(intro)}</div>` : ''}
-        ${hasPrefill && i === 0 ? `<div class="rpf-prefill-badge">✓ Pre-filled from your profile</div>` : ''}
-        <div class="rpf-section" style="--rpf-head:${esc(def.color)};--rpf-bg:${bgColor};">
-          <div class="rpf-section-head">${esc(def.group)}</div>
+    const panelsHtml = groups.map((g, i) => {
+      const isLast = i === groups.length - 1;
+      const formsHtml = g.defs.map(def => {
+        const template = getRegistrationFormTemplate(def.key);
+        window._rpfSectionTexts = { ...(window._rpfSectionTexts || {}), ...(template?.sectionTexts || {}) };
+        const fields = (template?.fields?.length ? template.fields : def.defaultFields) || [];
+        const intro = template?.intro || '';
+        const fieldsHtml = fields.map(f => rpfRenderField(f, prefill)).join('');
+        const bgColor = bgMap[def.color] || '#ebe6f1';
+        return `<div class="rpf-section" style="--rpf-head:${esc(def.color)};--rpf-bg:${bgColor}; margin-bottom:1.25rem;">
+          <div class="rpf-section-head">${esc(def.title)}</div>
+          ${intro ? `<div class="rpf-step-sub" style="padding:0.75rem 1.25rem 0; font-size:0.82rem; color:#6b5e80;">${esc(intro)}</div>` : ''}
           <div class="rpf-section-body">${fieldsHtml}</div>
-        </div>
+        </div>`;
+      }).join('');
+      return `<div class="rpf-panel${i === 0 ? ' rpf-active' : ''}" id="rpf-panel-${i}">
+        <div class="rpf-step-title">${esc(g.name)}</div>
+        ${hasPrefill && i === 0 ? `<div class="rpf-prefill-badge">✓ Pre-filled from your profile</div>` : ''}
+        ${formsHtml}
         <div class="rpf-nav">
           <button class="rpf-btn-back" style="${i === 0 ? 'visibility:hidden' : ''}" onclick="rpfGoTo(${i - 1})">← Back</button>
           <div class="rpf-autosave"><div class="rpf-autosave-dot"></div> Saved automatically</div>
