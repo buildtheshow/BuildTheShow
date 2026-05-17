@@ -32562,22 +32562,10 @@ Thank you,
     });
   }
 
-  const REG_FORM_VARIABLES = [
-    { group: 'Show', color: '#55acda', bg: '#dff3ff', vars: [
-      { token: '{{organisation_name}}', label: 'Company Name' },
-      { token: '{{show_name}}',         label: 'Show Title' },
-    ]},
-    { group: 'Registration', color: '#572e88', bg: '#eadcff', vars: [
-      { token: '{{performer_name}}',      label: 'Performer Name' },
-      { token: '{{rehearsal_start_date}}',label: 'Rehearsal Start' },
-      { token: '{{performance_dates}}',   label: 'Performance Dates' },
-      { token: '{{due_date}}',            label: 'Due Date' },
-    ]},
-  ];
-
   function renderRegFormVarPanel() {
-    const groups = REG_FORM_VARIABLES.map(g => `
-      <details class="et-var-group-row" open>
+    const allGroups = [...ET_VARIABLES, ...buildSessionVarGroups({ includeCanonical: false })];
+    const groupsHtml = allGroups.map(g => `
+      <details class="et-var-group-row">
         <summary class="et-var-group-header">
           <span class="et-var-group-title">
             <span class="et-var-group-dot" style="background:${g.color};"></span>
@@ -32594,13 +32582,13 @@ Thank you,
       <div class="et-modal-vars-body">
         <div class="et-var-strip">
           <div class="et-custom-token-help">Click a variable to insert it at the cursor.</div>
-          <div class="et-var-groups" id="reg-form-var-groups">${groups}</div>
+          <div class="et-var-groups">${groupsHtml}</div>
           <div class="et-var-search-footer">
             <input type="text" class="et-custom-token-input" placeholder="Search variables…" oninput="regFormVarSearch(this)" />
             <div class="et-search-suggestions">
-              <button type="button" class="et-search-suggestion" onclick="regFormInsertVar('{{organisation_name}}')">Company</button>
+              <button type="button" class="et-search-suggestion" onclick="regFormInsertVar('{{org_name}}')">Company</button>
+              <button type="button" class="et-search-suggestion" onclick="regFormInsertVar('{{show_venue}}')">Venue</button>
               <button type="button" class="et-search-suggestion" onclick="regFormInsertVar('{{show_name}}')">Show</button>
-              <button type="button" class="et-search-suggestion" onclick="regFormInsertVar('{{performer_name}}')">Performer</button>
             </div>
           </div>
         </div>
@@ -32626,15 +32614,39 @@ Thank you,
   function regFormInsertVar(token) {
     const bodyArea = document.getElementById('registration-form-edit-body-area');
     const active = document.activeElement;
-    const el = (active?.tagName === 'TEXTAREA' && bodyArea?.contains(active))
-      ? active : window._regFormLastTextarea;
+    const isEditor = el => el && bodyArea?.contains(el) && (el.tagName === 'TEXTAREA' || el.contentEditable === 'true');
+    const el = isEditor(active) ? active : window._regFormLastTextarea;
     if (!el) return;
-    const start = el.selectionStart ?? el.value.length;
-    const end   = el.selectionEnd   ?? el.value.length;
-    el.value = el.value.slice(0, start) + token + el.value.slice(end);
-    const newPos = start + token.length;
     el.focus();
-    el.setSelectionRange(newPos, newPos);
+    document.execCommand('insertText', false, token);
+  }
+
+  const REG_FORM_RTE_TOOLBAR = `<div class="et-rte-toolbar">
+    <button type="button" class="et-rte-btn" title="Bold" onmousedown="event.preventDefault();document.execCommand('bold')"><b>B</b></button>
+    <button type="button" class="et-rte-btn" title="Italic" onmousedown="event.preventDefault();document.execCommand('italic')" style="font-style:italic;">I</button>
+    <button type="button" class="et-rte-btn" title="Underline" onmousedown="event.preventDefault();document.execCommand('underline')" style="text-decoration:underline;font-family:var(--bts-font);">U</button>
+    <button type="button" class="et-rte-btn" title="Strikethrough" onmousedown="event.preventDefault();document.execCommand('strikeThrough')" style="text-decoration:line-through;font-family:var(--bts-font);">S</button>
+    <div class="et-rte-sep"></div>
+    <button type="button" class="et-rte-btn" title="Bullet list" onmousedown="event.preventDefault();document.execCommand('insertUnorderedList')"><svg width="15" height="13" viewBox="0 0 15 13" fill="none"><circle cx="1.5" cy="2" r="1.5" fill="currentColor"/><rect x="5" y="1" width="9" height="2" rx="1" fill="currentColor"/><circle cx="1.5" cy="6.5" r="1.5" fill="currentColor"/><rect x="5" y="5.5" width="9" height="2" rx="1" fill="currentColor"/><circle cx="1.5" cy="11" r="1.5" fill="currentColor"/><rect x="5" y="10" width="9" height="2" rx="1" fill="currentColor"/></svg></button>
+    <button type="button" class="et-rte-btn" title="Numbered list" onmousedown="event.preventDefault();document.execCommand('insertOrderedList')"><svg width="15" height="13" viewBox="0 0 15 13" fill="none"><rect x="0" y="0.5" width="3" height="3" rx="0.6" fill="currentColor" opacity="0.65"/><rect x="5" y="1" width="9" height="2" rx="1" fill="currentColor"/><rect x="0" y="5" width="3" height="3" rx="0.6" fill="currentColor" opacity="0.65"/><rect x="5" y="5.5" width="9" height="2" rx="1" fill="currentColor"/><rect x="0" y="9.5" width="3" height="3" rx="0.6" fill="currentColor" opacity="0.65"/><rect x="5" y="10" width="9" height="2" rx="1" fill="currentColor"/></svg></button>
+    <div class="et-rte-sep"></div>
+    <button type="button" class="et-rte-btn" title="Align left" onmousedown="event.preventDefault();document.execCommand('justifyLeft')"><svg width="15" height="13" viewBox="0 0 15 13" fill="none"><rect y="0.5" width="15" height="2" rx="1" fill="currentColor"/><rect y="5" width="10" height="2" rx="1" fill="currentColor"/><rect y="9.5" width="13" height="2" rx="1" fill="currentColor"/></svg></button>
+    <button type="button" class="et-rte-btn" title="Align centre" onmousedown="event.preventDefault();document.execCommand('justifyCenter')"><svg width="15" height="13" viewBox="0 0 15 13" fill="none"><rect y="0.5" width="15" height="2" rx="1" fill="currentColor"/><rect x="2.5" y="5" width="10" height="2" rx="1" fill="currentColor"/><rect x="1" y="9.5" width="13" height="2" rx="1" fill="currentColor"/></svg></button>
+    <div class="et-rte-sep"></div>
+    <button type="button" class="et-rte-btn" title="Insert link" onmousedown="event.preventDefault();regFormInsertLink()"><svg width="15" height="14" viewBox="0 0 15 14" fill="none"><path d="M6.2 8.8a3 3 0 0 0 4.2 0l1.6-1.6a3 3 0 0 0-4.2-4.2L7 3.8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M8.4 5.2a3 3 0 0 0-4.2 0L2.6 6.8a3 3 0 0 0 4.2 4.2L7.6 10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></button>
+    <div class="et-rte-sep"></div>
+    <button type="button" class="et-rte-btn" title="Clear formatting" onmousedown="event.preventDefault();document.execCommand('removeFormat')" style="font-family:var(--bts-font);font-size:0.7rem;font-weight:700;width:auto;padding:0 6px;letter-spacing:0;">T<span style="font-size:0.55rem;vertical-align:super;">×</span></button>
+  </div>`;
+
+  function regFormInsertLink() {
+    const url = window.prompt('Link URL:');
+    if (url) document.execCommand('createLink', false, url);
+  }
+
+  function plainToHtml(text) {
+    if (!text) return '';
+    if (/<[a-zA-Z]/.test(text)) return text;
+    return text.split('\n\n').map(p => `<p>${p.replace(/\n/g, '<br>')}</p>`).join('');
   }
 
   function regFormSwitchTab(btn, tabId) {
@@ -32689,7 +32701,8 @@ Thank you,
       </div>
       <div class="reg-form-edit-section">
         <div class="reg-form-edit-section-label">Description <span class="reg-form-edit-section-hint">paragraph shown above the acknowledgement</span></div>
-        <textarea class="form-textarea reg-form-section-text-area" rows="14" placeholder="Describe what this section covers..."></textarea>
+        ${REG_FORM_RTE_TOOLBAR}
+          <div class="et-body-editor reg-form-section-text-area" contenteditable="true" onfocus="window._regFormLastTextarea=this" data-placeholder="Describe what this section covers..." style="min-height:180px;"></div>
       </div>
       <div class="reg-form-edit-section">
         <div class="reg-form-edit-section-label">Fields</div>
@@ -32757,11 +32770,10 @@ Thank you,
       </div>`).join('')}
       <button class="reg-form-edit-sidebar-add" onclick="regFormAddSection(this)">+ Add section</button>
     </div>`;
-    const introPanel = `<div class="reg-form-edit-tab-panel active" id="reg-tab-intro" style="gap:0.5rem;">
-      <div class="reg-form-edit-section" style="flex:1 1 0; min-height:0; display:flex; flex-direction:column;">
-        <div class="reg-form-edit-section-label">Welcome message <span class="reg-form-edit-section-hint">shown at the top of the form</span></div>
-        <textarea class="form-textarea" id="registration-form-template-intro" onfocus="window._regFormLastTextarea=this" placeholder="Welcome performers and explain what this form is about..." style="flex:1 1 0; min-height:0; resize:none;">${esc(template?.intro || '')}</textarea>
-      </div>
+    const introPanel = `<div class="reg-form-edit-tab-panel active" id="reg-tab-intro" style="gap:0; padding:0;">
+      <div class="reg-form-edit-section-label" style="padding:0.9rem 1.2rem 0.4rem; flex-shrink:0;">Welcome message <span class="reg-form-edit-section-hint">shown at the top of the form</span></div>
+      ${REG_FORM_RTE_TOOLBAR}
+      <div class="et-body-editor" id="registration-form-template-intro" contenteditable="true" onfocus="window._regFormLastTextarea=this" data-placeholder="Welcome performers and explain what this form is about..." style="flex:1 1 0; min-height:0;">${plainToHtml(template?.intro || '')}</div>
     </div>`;
     const sectionPanels = sections.map((s, i) => `
       <div class="reg-form-edit-tab-panel" id="reg-tab-s${i}" data-section-title="${esc(s.title)}" data-section-raw="${esc(s.raw)}">
@@ -32771,7 +32783,8 @@ Thank you,
         </div>
         <div class="reg-form-edit-section">
           <div class="reg-form-edit-section-label">Description <span class="reg-form-edit-section-hint">paragraph shown above the acknowledgement</span></div>
-          <textarea class="form-textarea reg-form-section-text-area" rows="14" onfocus="window._regFormLastTextarea=this" placeholder="Describe what this section covers...">${esc(sectionTexts[s.title] || '')}</textarea>
+          ${REG_FORM_RTE_TOOLBAR}
+          <div class="et-body-editor reg-form-section-text-area" contenteditable="true" onfocus="window._regFormLastTextarea=this" data-placeholder="Describe what this section covers..." style="min-height:180px;">${plainToHtml(sectionTexts[s.title] || '')}</div>
         </div>
         <div class="reg-form-edit-section">
           <div class="reg-form-edit-section-label">Fields</div>
@@ -32926,7 +32939,8 @@ Thank you,
   function saveRegistrationFormTemplateModal() {
     const modal = document.getElementById('registration-form-template-modal');
     const key = document.getElementById('registration-form-template-key')?.value || '';
-    const intro = document.getElementById('registration-form-template-intro')?.value?.trim() || '';
+    const introEl = document.getElementById('registration-form-template-intro');
+    const intro = (introEl?.value !== undefined ? introEl.value : introEl?.innerHTML || '').trim();
     const isTabs = modal?.dataset.mode === 'tabs';
 
     let fields = [];
@@ -32936,7 +32950,8 @@ Thank you,
       document.querySelectorAll('.reg-form-edit-tab-panel[data-section-title]').forEach(panel => {
         const title = panel.dataset.sectionTitle;
         const rawSection = panel.dataset.sectionRaw;
-        const text = panel.querySelector('.reg-form-section-text-area')?.value?.trim() || '';
+        const textEl = panel.querySelector('.reg-form-section-text-area');
+        const text = (textEl?.value !== undefined ? textEl.value : textEl?.innerHTML || '').trim();
         if (text) sectionTexts[title] = text;
         fields.push(rawSection);
         panel.querySelectorAll('.reg-form-edit-fields-list .reg-form-edit-field-row, .reg-form-edit-fields-list .reg-form-edit-section-divider-row').forEach(row => {
