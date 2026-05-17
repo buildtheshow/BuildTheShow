@@ -1302,6 +1302,11 @@
     textarea.rpf-input { resize:vertical; min-height:80px; }
     .rpf-agree-row { display:flex; align-items:flex-start; gap:0.55rem; font-size:0.8rem; color:#000000; line-height:1.45; cursor:pointer; margin-top:0.4rem; }
     .rpf-agree-row input { flex-shrink:0; margin-top:0.15rem; accent-color:#572e88; cursor:pointer; }
+    .rpf-solo-toggle-row { display:flex; align-items:center; gap:0.65rem; padding:0.7rem 0.9rem; background:rgba(87,46,136,0.06); border-radius:10px; cursor:pointer; margin-bottom:0.9rem; }
+    .rpf-solo-toggle-row input { width:1rem; height:1rem; accent-color:#572e88; cursor:pointer; flex-shrink:0; margin:0; }
+    .rpf-solo-toggle-label { font-size:0.82rem; font-weight:800; color:#000000; }
+    .rpf-pickup-add-btn { display:flex; align-items:center; justify-content:center; gap:0.45rem; width:100%; background:none; border:1.5px dashed rgba(87,46,136,0.3); border-radius:8px; padding:0.52rem 0.9rem; font-size:0.78rem; font-weight:800; color:#572e88; cursor:pointer; font-family:var(--bts-font); margin-bottom:0.75rem; transition:background 0.1s; }
+    .rpf-pickup-add-btn:hover { background:rgba(87,46,136,0.06); }
     .rpf-upload { border:2px dashed #572e88; border-radius:12px; padding:1.4rem; min-height:132px; display:flex; align-items:center; justify-content:center; flex-direction:column; gap:0.4rem; cursor:pointer; background:#ffffff; text-align:center; transition:background 0.15s,transform 0.15s; }
     .rpf-upload:hover { background:#ebe6f1; transform:translateY(-1px); }
     .rpf-upload img { width:32px; height:32px; opacity:0.65; margin-bottom:0.2rem; }
@@ -32303,8 +32308,8 @@ Thank you,
 
   const REGISTRATION_FORM_TEMPLATE_DEFS = [
     // ── CORE REGISTRATION ──
-    { key: 'cast_registration',        settingId: 'reg-form-cast-registration',        group: 'Core Registration',    color: '#476aaa', defaultOn: true,  title: 'Cast Registration',                       summary: 'Who they are and how to reach them.',                              defaultFields: ['Legal first name *', 'Legal last name *', 'Preferred name', 'Pronouns', 'Date of birth *', 'Contact email *', 'Contact phone number *', '{guard}Guardian first name *', '{guard}Guardian last name *', '{guard}Guardian relationship to performer *'] },
-    { key: 'pickup_dismissal',         settingId: 'reg-form-pickup-dismissal',         group: 'Core Registration',    color: '#476aaa', defaultOn: true,  title: 'Pickup & Dismissal',                      summary: 'Who is authorised to pick up the performer after rehearsals.',     defaultFields: ['Dismissal method *', 'Authorised pickup person — full name *', 'Authorised pickup person — relationship *', 'Authorised pickup person — phone *', 'Second authorised pickup person — full name', 'Second authorised pickup person — relationship', 'Second authorised pickup person — phone', 'Persons NOT authorised for pickup', 'Additional pickup notes'] },
+    { key: 'cast_registration',        settingId: 'reg-form-cast-registration',        group: 'Core Registration',    color: '#476aaa', defaultOn: true,  title: 'Cast Registration',                       summary: 'Who they are and how to reach them.',                              defaultFields: ['Legal first name *', 'Legal last name *', 'Preferred name *', 'Pronouns *', 'Date of birth *', 'Contact email *', 'Contact phone number *', '{guard}Guardian first name *', '{guard}Guardian last name *', '{guard}Guardian relationship to performer *'] },
+    { key: 'pickup_dismissal',         settingId: 'reg-form-pickup-dismissal',         group: 'Core Registration',    color: '#476aaa', defaultOn: true,  title: 'Pickup & Dismissal',                      summary: 'Who is authorised to pick up the performer after rehearsals.',     defaultFields: ['{solo-toggle}Performer can leave on their own', '{solo}Authorised pickup 1 full name *', '{solo}Authorised pickup 1 relationship to performer *', '{solo}Authorised pickup 1 phone number *', '{solo}Authorised pickup 2 full name', '{solo}Authorised pickup 2 relationship to performer', '{solo}Authorised pickup 2 phone number', '{pickup-add}', 'Additional pickup notes'] },
     { key: 'emergency_medical',        settingId: 'reg-form-emergency-medical',        group: 'Core Registration',    color: '#476aaa', defaultOn: true,  title: 'Emergency & Medical',                     summary: 'What to do if something goes wrong.',                              defaultFields: ['Emergency contact name *', 'Emergency contact phone *', 'Emergency contact relationship *', 'Allergies', 'Medications', 'Medical conditions', 'Emergency treatment authorisation *', 'Physician name', 'Physician phone', 'Personal health number', 'Insurance information'] },
     { key: 'accessibility',            settingId: 'reg-form-accessibility',            group: 'Core Registration',    color: '#476aaa', defaultOn: true,  title: 'Accessibility & Accommodation',            summary: 'What support they need to participate fully.',                     defaultFields: ['Mobility accommodations', 'Sensory accommodations', 'Neurodivergent supports', 'Communication needs', 'Additional accessibility requests'] },
     // ── AGREEMENTS & CONSENT ──
@@ -33301,6 +33306,32 @@ Thank you,
     return '';
   }
 
+  function rpfToggleSoloPickup(checkbox) {
+    const body = checkbox.closest('.rpf-section-body');
+    if (!body) return;
+    body.querySelectorAll('[data-rpf-solo]').forEach(el => {
+      el.style.display = checkbox.checked ? 'none' : '';
+    });
+  }
+
+  function rpfAddPickupPerson(btn) {
+    const body = btn.closest('.rpf-section-body');
+    if (!body) return;
+    const existing = body.querySelectorAll('[data-rpf-pickup-person]').length;
+    const num = existing + 3;
+    const group = document.createElement('div');
+    group.setAttribute('data-rpf-solo', '1');
+    group.setAttribute('data-rpf-pickup-person', '1');
+    group.innerHTML = [
+      `<div class="rpf-form-group"><label class="rpf-label">Authorised pickup ${num} full name</label><input type="text" class="rpf-input" placeholder="Authorised pickup ${num} full name..." /></div>`,
+      `<div class="rpf-form-group"><label class="rpf-label">Authorised pickup ${num} relationship to performer</label><input type="text" class="rpf-input" placeholder="Authorised pickup ${num} relationship to performer..." /></div>`,
+      `<div class="rpf-form-group"><label class="rpf-label">Authorised pickup ${num} phone number</label><input type="tel" class="rpf-input" placeholder="Authorised pickup ${num} phone number..." /></div>`,
+    ].join('');
+    btn.closest('.rpf-form-group').before(group);
+    const soloCheckbox = body.querySelector('.rpf-solo-toggle-row input');
+    if (soloCheckbox?.checked) group.style.display = 'none';
+  }
+
   function rpfCheckGuardianFields(dobInput) {
     const panel = dobInput.closest('.rpf-panel');
     if (!panel) return;
@@ -33317,22 +33348,39 @@ Thank you,
 
   function rpfRenderField(fieldStr, prefill) {
     const raw = String(fieldStr).trim();
-    const isGuard = raw.startsWith('{guard}');
-    const stripped = isGuard ? raw.slice(7) : raw;
+
+    if (raw === '{pickup-add}') {
+      return `<div class="rpf-form-group" data-rpf-solo="1"><button type="button" class="rpf-pickup-add-btn" onclick="rpfAddPickupPerson(this)">+ Add another person</button></div>`;
+    }
+
+    const isSoloToggle = raw.startsWith('{solo-toggle}');
+    if (isSoloToggle) {
+      const label = raw.slice(13).replace(/\s*\*$/, '').trim();
+      return `<div class="rpf-form-group"><label class="rpf-solo-toggle-row"><input type="checkbox" onchange="rpfToggleSoloPickup(this)" /><span class="rpf-solo-toggle-label">${esc(label)}</span></label></div>`;
+    }
+
+    const isSolo = raw.startsWith('{solo}');
+    const afterSolo = isSolo ? raw.slice(6) : raw;
+    const isGuard = afterSolo.startsWith('{guard}');
+    const stripped = isGuard ? afterSolo.slice(7) : afterSolo;
+
     const isRequired = stripped.endsWith('*');
     const label = stripped.replace(/\s*\*$/, '').trim();
     const type = rpfFieldType(label);
     const req = isRequired ? `<span class="rpf-req"> *</span>` : '';
     const val = rpfPrefillValue(label.toLowerCase(), prefill);
     const prefilled = val ? ' rpf-prefilled' : '';
+    const soloAttr = isSolo ? ' data-rpf-solo="1"' : '';
     const guardAttr = isGuard ? ' data-rpf-guard="1" style="display:none"' : '';
+    const wrapAttrs = soloAttr + guardAttr;
+
     if (type === 'checkbox') {
-      return `<div class="rpf-form-group"${guardAttr}>
+      return `<div class="rpf-form-group"${wrapAttrs}>
         <label class="rpf-agree-row"><input type="checkbox" /><span>${esc(label)}${req}</span></label>
       </div>`;
     }
     if (type === 'upload') {
-      return `<div class="rpf-form-group"${guardAttr}>
+      return `<div class="rpf-form-group"${wrapAttrs}>
         <label class="rpf-label">${esc(label)}${req}</label>
         <div class="rpf-upload">
           <img src="/ASSETS/Images/SelfTape.svg" alt="" />
@@ -33342,14 +33390,14 @@ Thank you,
       </div>`;
     }
     if (type === 'textarea') {
-      return `<div class="rpf-form-group"${guardAttr}>
+      return `<div class="rpf-form-group"${wrapAttrs}>
         <label class="rpf-label">${esc(label)}${req}</label>
         <textarea class="rpf-input${prefilled}" placeholder="${esc(label)}...">${esc(val)}</textarea>
       </div>`;
     }
     const dobAttr = type === 'date' && /date of birth|birth date/.test(label.toLowerCase())
       ? ' onchange="rpfCheckGuardianFields(this)"' : '';
-    return `<div class="rpf-form-group"${guardAttr}>
+    return `<div class="rpf-form-group"${wrapAttrs}>
       <label class="rpf-label">${esc(label)}${req}</label>
       <input type="${type}" class="rpf-input${prefilled}" ${type === 'date' ? '' : `placeholder="${esc(label)}..."`} value="${esc(val)}"${dobAttr} />
     </div>`;
