@@ -971,6 +971,9 @@
     .reg-form-subform.template-brand-card--settings-off {
       box-shadow: none;
     }
+    .reg-form-add-new > .template-brand-card-inner { opacity:0.55; transition:opacity 0.15s; }
+    .reg-form-add-new:hover > .template-brand-card-inner { opacity:0.85; }
+    .reg-form-add-new { cursor:pointer; outline:2px dashed rgba(255,255,255,0.28); outline-offset:-3px; }
     .reg-form-subform > .template-brand-card-inner {
       flex: 1 1 auto;
       min-height: 0;
@@ -22127,7 +22130,14 @@
       <div class="reg-form-edit-title" id="registration-form-edit-title"></div>
       <div class="reg-form-edit-summary" id="registration-form-edit-summary"></div>
     </div>
+    <input type="hidden" id="registration-form-create-group" />
     <div class="reg-form-edit-body">
+      <div class="reg-form-edit-section" id="registration-form-create-fields" style="display:none;">
+        <div class="reg-form-edit-section-label">Form title</div>
+        <input type="text" class="form-input" id="registration-form-create-title" placeholder="e.g. Covid Protocol Agreement" />
+        <div class="reg-form-edit-section-label" style="margin-top:0.6rem;">Description <span class="reg-form-edit-section-hint">shown on the settings tile</span></div>
+        <input type="text" class="form-input" id="registration-form-create-summary" placeholder="What this form covers..." />
+      </div>
       <div class="reg-form-edit-section">
         <div class="reg-form-edit-section-label">Intro text <span class="reg-form-edit-section-hint">shown at the top of this form</span></div>
         <textarea class="form-textarea" id="registration-form-template-intro" rows="2" placeholder="Short instructions for performers filling out this section..."></textarea>
@@ -32306,7 +32316,7 @@ Thank you,
     'Optional':             'Add only what this show needs.',
   };
 
-  const REGISTRATION_FORM_TEMPLATE_DEFS = [
+  let REGISTRATION_FORM_TEMPLATE_DEFS = [
     // ── CORE REGISTRATION ──
     { key: 'cast_registration',        settingId: 'reg-form-cast-registration',        group: 'Core Registration',    color: '#476aaa', defaultOn: true,  title: 'Cast Registration',                       summary: 'Who they are and how to reach them.',                              defaultFields: ['Legal first name *', 'Legal last name *', 'Preferred name *', 'Pronouns *', 'Date of birth *', 'Contact email *', 'Contact phone number *', '{guard}Guardian first name *', '{guard}Guardian last name *', '{guard}Guardian relationship to performer *'] },
     { key: 'pickup_dismissal',         settingId: 'reg-form-pickup-dismissal',         group: 'Core Registration',    color: '#476aaa', defaultOn: true,  title: 'Pickup & Dismissal',                      summary: 'Who is authorised to pick up the performer after rehearsals.',     defaultFields: ['{solo-toggle}Performer can leave on their own', '{solo}Authorised pickup 1 full name *', '{solo}Authorised pickup 1 relationship to performer *', '{solo}Authorised pickup 1 phone number *', '{solo}Authorised pickup 2 full name', '{solo}Authorised pickup 2 relationship to performer', '{solo}Authorised pickup 2 phone number', '{pickup-add}', 'Additional pickup notes'] },
@@ -32562,6 +32572,7 @@ Thank you,
     if (!def || !template) return;
     const modal = document.getElementById('registration-form-template-modal');
     if (!modal) return;
+    document.getElementById('registration-form-create-fields').style.display = 'none';
     document.getElementById('registration-form-template-key').value = key;
     document.getElementById('registration-form-edit-kicker').textContent = def.group;
     document.getElementById('registration-form-edit-title').textContent = def.title;
@@ -32570,6 +32581,25 @@ Thank you,
     document.getElementById('registration-form-edit-header').style.setProperty('--reg-form-edit-color', def.color);
     const list = document.getElementById('registration-form-template-fields-list');
     list.innerHTML = (template.fields || []).map(renderRegistrationFormFieldRow).join('');
+    modal.classList.add('open');
+  }
+
+  function openRegistrationFormCreateModal(group) {
+    const modal = document.getElementById('registration-form-template-modal');
+    if (!modal) return;
+    const color = REGISTRATION_FORM_TEMPLATE_DEFS.find(d => d.group === group)?.color || '#572e88';
+    const newKey = `custom_${Date.now()}`;
+    document.getElementById('registration-form-create-fields').style.display = '';
+    document.getElementById('registration-form-create-title').value = '';
+    document.getElementById('registration-form-create-summary').value = '';
+    document.getElementById('registration-form-create-group').value = group;
+    document.getElementById('registration-form-template-key').value = newKey;
+    document.getElementById('registration-form-edit-kicker').textContent = group;
+    document.getElementById('registration-form-edit-title').textContent = 'New Form';
+    document.getElementById('registration-form-edit-summary').textContent = 'Fill in the details below.';
+    document.getElementById('registration-form-template-intro').value = '';
+    document.getElementById('registration-form-edit-header').style.setProperty('--reg-form-edit-color', color);
+    document.getElementById('registration-form-template-fields-list').innerHTML = '';
     modal.classList.add('open');
   }
 
@@ -32618,8 +32648,6 @@ Thank you,
 
   function saveRegistrationFormTemplateModal() {
     const key = document.getElementById('registration-form-template-key')?.value || '';
-    const def = getRegistrationFormTemplateDef(key);
-    if (!def) return;
     const intro = document.getElementById('registration-form-template-intro')?.value?.trim() || '';
     const rows = document.querySelectorAll('#registration-form-template-fields-list .reg-form-edit-field-row');
     const fields = [...rows].map(row => {
@@ -32627,14 +32655,24 @@ Thank you,
       const isRequired = row.querySelector('.reg-form-edit-field-req')?.classList.contains('is-required');
       return name ? (isRequired ? `${name} *` : name) : null;
     }).filter(Boolean);
-    registrationFormTemplatesState = {
-      ...(registrationFormTemplatesState || {}),
-      [key]: {
-        title: def.title,
-        intro,
-        fields: fields.length ? fields : def.defaultFields
-      }
-    };
+
+    if (key.startsWith('custom_')) {
+      const title = document.getElementById('registration-form-create-title')?.value?.trim() || 'Custom Form';
+      const summary = document.getElementById('registration-form-create-summary')?.value?.trim() || '';
+      const group = document.getElementById('registration-form-create-group')?.value || 'Optional';
+      const color = REGISTRATION_FORM_TEMPLATE_DEFS.find(d => d.group === group)?.color || '#572e88';
+      const settingId = `reg-form-${key}`;
+      REGISTRATION_FORM_TEMPLATE_DEFS.push({ key, settingId, group, color, defaultOn: true, title, summary, defaultFields: fields });
+      registrationFormTemplatesState = { ...(registrationFormTemplatesState || {}), [key]: { title, intro, fields } };
+    } else {
+      const def = getRegistrationFormTemplateDef(key);
+      if (!def) return;
+      registrationFormTemplatesState = {
+        ...(registrationFormTemplatesState || {}),
+        [key]: { title: def.title, intro, fields: fields.length ? fields : def.defaultFields }
+      };
+    }
+
     const host = document.getElementById('registration-forms-settings-surface');
     if (host) {
       renderRegistrationSettingsSurface('registration-forms-settings-surface', renderRegistrationFormsTiles());
@@ -32740,6 +32778,17 @@ Thank you,
       const total = defs.length;
       const masterId = `reg-form-master-${group.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
       const allOn = defs.every(d => d.defaultOn);
+      const addNewTile = renderRegistrationSettingTile({
+        color,
+        kicker: group,
+        title: 'Add a Form',
+        bodyHtml: `<div class="template-brand-tile-body">Create a custom section for this group.</div>`,
+        buttonHtml: `<button type="button" class="template-brand-tile-button" onclick="event.stopPropagation();openRegistrationFormCreateModal(${JSON.stringify(group)})">+ Create</button>`,
+        toggleHtml: '',
+        className: 'reg-form-add-new',
+        ariaLabel: `Add a custom form to ${group}`,
+        attrs: `onclick="openRegistrationFormCreateModal(${JSON.stringify(group).replace(/"/g, '&quot;')})"`,
+      });
       const sectionsHtml = defs.map(def => renderRegistrationSettingTile({
         color,
         kicker: group,
@@ -32749,7 +32798,7 @@ Thank you,
         toggleHtml: registrationSettingsToggle(def.settingId, `Enable ${def.title}`, def.defaultOn),
         className: 'reg-form-subform',
         ariaLabel: def.title
-      })).join('');
+      })).join('') + addNewTile;
       const renderer = window.BTSAuditionTemplates?.renderTemplateById;
       if (!renderer) return '';
       return renderer('brand.tile.lane', {
