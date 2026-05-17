@@ -33694,6 +33694,7 @@ Thank you,
     group.setAttribute('data-rpf-solo', '1');
     group.setAttribute('data-rpf-pickup-person', '1');
     group.innerHTML = [
+      `<div class="rpf-form-section-divider">Person ${num}</div>`,
       `<div class="rpf-form-group"><label class="rpf-label">Authorised pickup ${num} full name</label><input type="text" class="rpf-input" placeholder="Authorised pickup ${num} full name..." /></div>`,
       `<div class="rpf-form-group"><label class="rpf-label">Authorised pickup ${num} relationship to performer</label><input type="text" class="rpf-input" placeholder="Authorised pickup ${num} relationship to performer..." /></div>`,
       `<div class="rpf-form-group"><label class="rpf-label">Authorised pickup ${num} phone number</label><input type="tel" class="rpf-input" placeholder="Authorised pickup ${num} phone number..." /></div>`,
@@ -33750,6 +33751,12 @@ Thank you,
 
     const isRequired = stripped.endsWith('*');
     const label = stripped.replace(/\s*\*$/, '').trim();
+
+    // Pickup person section header — prepend "Person N" divider before the name field
+    const pickupNameMatch = label.match(/^Authorised pickup (\d+) full name$/i);
+    const pickupDivider = pickupNameMatch
+      ? `<div class="rpf-form-section-divider" style="margin-top:${pickupNameMatch[1] === '1' ? '0' : '1.4rem'};">Person ${pickupNameMatch[1]}</div>`
+      : '';
     const type = rpfFieldType(label);
     const req = isRequired ? `<span class="rpf-req"> *</span>` : '';
     const val = rpfPrefillValue(label.toLowerCase(), prefill);
@@ -33759,13 +33766,13 @@ Thank you,
     const guardAttr = isGuard ? ' data-rpf-guard="1" style="display:none"' : '';
     const wrapAttrs = soloAttr + minorAttr + guardAttr;
 
+    let fieldHtml;
     if (type === 'checkbox') {
-      return `<div class="rpf-form-group"${wrapAttrs}>
+      fieldHtml = `<div class="rpf-form-group"${wrapAttrs}>
         <label class="rpf-agree-row"><input type="checkbox" /><span>${esc(label)}${req}</span></label>
       </div>`;
-    }
-    if (type === 'upload') {
-      return `<div class="rpf-form-group"${wrapAttrs}>
+    } else if (type === 'upload') {
+      fieldHtml = `<div class="rpf-form-group"${wrapAttrs}>
         <label class="rpf-label">${esc(label)}${req}</label>
         <div class="rpf-upload">
           <img src="/ASSETS/Images/SelfTape.svg" alt="" />
@@ -33773,19 +33780,20 @@ Thank you,
           <div class="rpf-upload-sub">JPG, PNG or PDF — max 10MB</div>
         </div>
       </div>`;
-    }
-    if (type === 'textarea') {
-      return `<div class="rpf-form-group"${wrapAttrs}>
+    } else if (type === 'textarea') {
+      fieldHtml = `<div class="rpf-form-group"${wrapAttrs}>
         <label class="rpf-label">${esc(label)}${req}</label>
         <textarea class="rpf-input${prefilled}" placeholder="${esc(label)}...">${esc(val)}</textarea>
       </div>`;
+    } else {
+      const dobAttr = type === 'date' && /date of birth|birth date/.test(label.toLowerCase())
+        ? ' onchange="rpfCheckGuardianFields(this)"' : '';
+      fieldHtml = `<div class="rpf-form-group"${wrapAttrs}>
+        <label class="rpf-label">${esc(label)}${req}</label>
+        <input type="${type}" class="rpf-input${prefilled}" ${type === 'date' ? '' : `placeholder="${esc(label)}..."`} value="${esc(val)}"${dobAttr} />
+      </div>`;
     }
-    const dobAttr = type === 'date' && /date of birth|birth date/.test(label.toLowerCase())
-      ? ' onchange="rpfCheckGuardianFields(this)"' : '';
-    return `<div class="rpf-form-group"${wrapAttrs}>
-      <label class="rpf-label">${esc(label)}${req}</label>
-      <input type="${type}" class="rpf-input${prefilled}" ${type === 'date' ? '' : `placeholder="${esc(label)}..."`} value="${esc(val)}"${dobAttr} />
-    </div>`;
+    return pickupDivider + fieldHtml;
   }
 
   function rpfUpdateSteps(current, completed) {
