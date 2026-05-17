@@ -1194,10 +1194,20 @@
     .reg-form-edit-sidebar-remove:hover { color:#d1523d; }
     .reg-form-edit-sidebar-add { margin:0.4rem 0.7rem 0; padding:0.45rem 0.7rem; font-size:0.68rem; font-weight:800; color:var(--reg-form-edit-color, #572e88); background:none; border:1.5px dashed rgba(87,46,136,0.25); border-radius:7px; cursor:pointer; font-family:var(--bts-font); text-align:left; transition:background 0.1s; }
     .reg-form-edit-sidebar-add:hover { background:rgba(87,46,136,0.06); }
-    .reg-form-edit-tab-body { flex:1; overflow-y:auto; padding:1.2rem 1.5rem; }
+    .reg-form-edit-tab-body { flex:1; min-width:0; overflow-y:auto; padding:1.2rem 1.5rem; }
     .reg-form-edit-tab-panel { display:none; flex-direction:column; gap:1.1rem; }
     .reg-form-edit-tab-panel.active { display:flex; }
     .rpf-section-text { font-size:0.84rem; color:#333; line-height:1.65; margin:0.15rem 0 0.75rem; white-space:pre-wrap; }
+    .reg-form-edit-var-panel { width:190px; flex-shrink:0; border-left:2px solid #ebe6f1; display:flex; flex-direction:column; overflow-y:auto; scrollbar-width:thin; background:#fafafa; padding:0.9rem 0.75rem; gap:0.6rem; }
+    .reg-form-edit-var-panel-heading { font-size:0.6rem; font-weight:900; text-transform:uppercase; letter-spacing:0.09em; color:rgba(0,0,0,0.35); margin-bottom:0.1rem; }
+    .reg-form-edit-var-group { display:flex; flex-direction:column; gap:0.3rem; }
+    .reg-form-edit-var-group-label { font-size:0.62rem; font-weight:800; display:flex; align-items:center; gap:0.35rem; }
+    .reg-form-edit-var-group-dot { width:7px; height:7px; border-radius:50%; flex-shrink:0; }
+    .reg-form-edit-var-chips { display:flex; flex-direction:column; gap:0.25rem; }
+    .reg-form-edit-var-chip { display:flex; flex-direction:column; align-items:flex-start; gap:0.05rem; padding:0.35rem 0.55rem; border-radius:7px; border:none; cursor:pointer; font-family:var(--bts-font); text-align:left; transition:filter 0.1s, transform 0.1s; }
+    .reg-form-edit-var-chip:hover { filter:brightness(0.9); transform:translateY(-1px); }
+    .reg-form-edit-var-chip-label { font-size:0.72rem; font-weight:700; line-height:1.2; }
+    .reg-form-edit-var-chip-token { font-size:0.55rem; font-weight:500; opacity:0.6; font-family:'Courier New',monospace; }
 .reg-form-edit-fields-list {
       display: flex;
       flex-direction: column;
@@ -32561,6 +32571,53 @@ Thank you,
     });
   }
 
+  const REG_FORM_VARIABLES = [
+    { group: 'Show', color: '#55acda', bg: '#dff3ff', vars: [
+      { token: '{{organisation_name}}', label: 'Company Name' },
+      { token: '{{show_name}}',         label: 'Show Title' },
+    ]},
+    { group: 'Registration', color: '#572e88', bg: '#eadcff', vars: [
+      { token: '{{performer_name}}',      label: 'Performer Name' },
+      { token: '{{rehearsal_start_date}}',label: 'Rehearsal Start' },
+      { token: '{{performance_dates}}',   label: 'Performance Dates' },
+      { token: '{{due_date}}',            label: 'Due Date' },
+    ]},
+  ];
+
+  function renderRegFormVarPanel() {
+    const groups = REG_FORM_VARIABLES.map(g => `
+      <div class="reg-form-edit-var-group">
+        <div class="reg-form-edit-var-group-label">
+          <span class="reg-form-edit-var-group-dot" style="background:${g.color};"></span>
+          <span style="color:${g.color};">${esc(g.group)}</span>
+        </div>
+        <div class="reg-form-edit-var-chips">
+          ${g.vars.map(v => `<button type="button" class="reg-form-edit-var-chip" style="background:${g.bg};" onclick="regFormInsertVar('${v.token}')">
+            <span class="reg-form-edit-var-chip-label" style="color:${g.color};">${esc(v.label)}</span>
+            <span class="reg-form-edit-var-chip-token">${esc(v.token)}</span>
+          </button>`).join('')}
+        </div>
+      </div>`).join('');
+    return `<div class="reg-form-edit-var-panel">
+      <div class="reg-form-edit-var-panel-heading">Variables</div>
+      ${groups}
+    </div>`;
+  }
+
+  function regFormInsertVar(token) {
+    const bodyArea = document.getElementById('registration-form-edit-body-area');
+    const active = document.activeElement;
+    const el = (active?.tagName === 'TEXTAREA' && bodyArea?.contains(active))
+      ? active : window._regFormLastTextarea;
+    if (!el) return;
+    const start = el.selectionStart ?? el.value.length;
+    const end   = el.selectionEnd   ?? el.value.length;
+    el.value = el.value.slice(0, start) + token + el.value.slice(end);
+    const newPos = start + token.length;
+    el.focus();
+    el.setSelectionRange(newPos, newPos);
+  }
+
   function regFormSwitchTab(btn, tabId) {
     const wrap = btn.closest('.modal');
     if (!wrap) return;
@@ -32682,7 +32739,7 @@ Thank you,
     const introPanel = `<div class="reg-form-edit-tab-panel active" id="reg-tab-intro">
       <div class="reg-form-edit-section">
         <div class="reg-form-edit-section-label">Welcome message <span class="reg-form-edit-section-hint">shown at the top of the form</span></div>
-        <textarea class="form-textarea" id="registration-form-template-intro" rows="18" placeholder="Welcome performers and explain what this form is about...">${esc(template?.intro || '')}</textarea>
+        <textarea class="form-textarea" id="registration-form-template-intro" rows="18" onfocus="window._regFormLastTextarea=this" placeholder="Welcome performers and explain what this form is about...">${esc(template?.intro || '')}</textarea>
       </div>
     </div>`;
     const sectionPanels = sections.map((s, i) => `
@@ -32693,7 +32750,7 @@ Thank you,
         </div>
         <div class="reg-form-edit-section">
           <div class="reg-form-edit-section-label">Description <span class="reg-form-edit-section-hint">paragraph shown above the acknowledgement</span></div>
-          <textarea class="form-textarea reg-form-section-text-area" rows="14" placeholder="Describe what this section covers...">${esc(sectionTexts[s.title] || '')}</textarea>
+          <textarea class="form-textarea reg-form-section-text-area" rows="14" onfocus="window._regFormLastTextarea=this" placeholder="Describe what this section covers...">${esc(sectionTexts[s.title] || '')}</textarea>
         </div>
         <div class="reg-form-edit-section">
           <div class="reg-form-edit-section-label">Fields</div>
@@ -32701,7 +32758,7 @@ Thank you,
           <button type="button" class="reg-form-edit-add-field" onclick="addRegistrationFormFieldToPanel(this)">+ Add field</button>
         </div>
       </div>`).join('');
-    return `<div class="reg-form-edit-tab-wrap">${sidebar}<div class="reg-form-edit-tab-body">${introPanel}${sectionPanels}</div></div>`;
+    return `<div class="reg-form-edit-tab-wrap">${sidebar}<div class="reg-form-edit-tab-body">${introPanel}${sectionPanels}</div>${renderRegFormVarPanel()}</div>`;
   }
 
   function renderRegistrationFormFieldRow(field) {
