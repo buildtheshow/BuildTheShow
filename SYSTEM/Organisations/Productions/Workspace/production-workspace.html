@@ -1368,12 +1368,17 @@
     .rpf-pickup-add-btn { display:flex; align-items:center; justify-content:center; gap:0.45rem; width:100%; background:none; border:1.5px dashed rgba(87,46,136,0.3); border-radius:8px; padding:0.52rem 0.9rem; font-size:0.78rem; font-weight:800; color:#572e88; cursor:pointer; font-family:var(--bts-font); margin-bottom:0.75rem; transition:background 0.1s; }
     .rpf-pickup-add-btn:hover { background:rgba(87,46,136,0.06); }
     /* Media Release — modal */
-    .mr-perm-list { display:flex; flex-direction:column; margin-top:0.5rem; border:1px solid rgba(87,46,136,0.12); border-radius:10px; overflow:hidden; }
-    .mr-perm-row { display:grid; grid-template-columns:1fr auto; align-items:center; gap:1rem; padding:0.7rem 1rem; border-bottom:1px solid rgba(87,46,136,0.08); background:#fff; }
+    .mr-perm-list { display:flex; flex-direction:column; margin-top:0.75rem; border:1px solid rgba(87,46,136,0.12); border-radius:10px; overflow:hidden; }
+    .mr-perm-row { display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:0.85rem; padding:0.75rem 1rem; border-bottom:1px solid rgba(87,46,136,0.08); background:#fff; }
     .mr-perm-row:last-child { border-bottom:none; }
-    .mr-perm-label { font-size:0.82rem; font-weight:600; color:#1a1530; min-width:0; }
-    .mr-perm-mode { width:108px; font-size:0.79rem; font-family:var(--bts-font); flex-shrink:0; display:block; box-sizing:border-box; border:1px solid rgba(87,46,136,0.22); border-radius:6px; padding:0.3rem 0.5rem; background:#fff; color:#1a1530; cursor:pointer; }
-    .mr-perm-help { font-size:0.78rem; color:#7a6a95; line-height:1.55; margin-bottom:1rem; }
+    .mr-perm-label { font-size:0.82rem; font-weight:600; color:#1a1530; min-width:0; line-height:1.4; }
+    .mr-perm-help { font-size:0.78rem; color:#7a6a95; line-height:1.55; margin-bottom:0; }
+    .mr-perm-toggle-wrap { display:flex; align-items:center; cursor:pointer; flex-shrink:0; }
+    .mr-perm-toggle-wrap input { display:none; }
+    .mr-perm-toggle-track { width:34px; height:20px; border-radius:10px; background:rgba(87,46,136,0.15); position:relative; transition:background 0.15s; flex-shrink:0; }
+    .mr-perm-toggle-thumb { position:absolute; top:3px; left:3px; width:14px; height:14px; border-radius:50%; background:#fff; box-shadow:0 1px 3px rgba(0,0,0,0.25); transition:left 0.15s; }
+    .mr-perm-toggle-wrap input:checked ~ .mr-perm-toggle-track { background:#572e88; }
+    .mr-perm-toggle-wrap input:checked ~ .mr-perm-toggle-track .mr-perm-toggle-thumb { left:17px; }
     .mr-perm-add-btn { display:block; width:100%; margin-top:0.75rem; padding:0.5rem 0.9rem; font-size:0.76rem; font-weight:800; color:#572e88; background:none; border:1.5px dashed rgba(87,46,136,0.25); border-radius:8px; cursor:pointer; font-family:var(--bts-font); text-align:left; transition:background 0.12s; }
     .mr-perm-add-btn:hover { background:rgba(87,46,136,0.05); }
     .mr-perm-row--custom { grid-template-columns:1fr auto; }
@@ -32979,14 +32984,13 @@ Thank you,
   }
 
   function renderMediaReleaseModalBody(template) {
-    const permRows = (template.permissions || MEDIA_RELEASE_DEFAULT_PERMISSIONS).map((p, i) => `
-      <div class="mr-perm-row">
+    const permRows = (template.permissions || MEDIA_RELEASE_DEFAULT_PERMISSIONS).map(p => `
+      <div class="mr-perm-row" data-perm-id="${esc(p.id)}">
+        <label class="mr-perm-toggle-wrap">
+          <input type="checkbox" class="mr-perm-visible" data-perm-id="${esc(p.id)}" data-perm-label="${esc(p.label)}"${p.mode !== 'hidden' ? ' checked' : ''} />
+          <span class="mr-perm-toggle-track"><span class="mr-perm-toggle-thumb"></span></span>
+        </label>
         <div class="mr-perm-label">${esc(p.label)}</div>
-        <select class="mr-perm-mode" data-perm-id="${esc(p.id)}" data-perm-label="${esc(p.label)}">
-          <option value="required"${p.mode === 'required' ? ' selected' : ''}>I agree (locked)</option>
-          <option value="optional"${p.mode === 'optional' ? ' selected' : ''}>I agree / I disagree</option>
-          <option value="hidden"${p.mode === 'hidden' ? ' selected' : ''}>Not shown</option>
-        </select>
       </div>`).join('');
 
     const sidebar = `<div class="reg-form-edit-tab-sidebar">
@@ -33033,7 +33037,7 @@ Thank you,
     </div>`;
 
     const permsPanel = `<div class="reg-form-edit-tab-panel" id="mr-tab-permissions" style="padding:1.25rem 1.4rem;gap:0;overflow-y:auto;">
-      <div class="mr-perm-help"><strong>I agree (locked)</strong> — signer must agree. <strong>I agree / I disagree</strong> — signer can choose. <strong>Not shown</strong> — hidden from the form.</div>
+      <div class="mr-perm-help">Toggle which permissions appear on the form. Each one the signer sees will have an <strong>I agree</strong> and <strong>I disagree</strong> option.</div>
       <div class="mr-perm-list" id="mr-perm-list-body">${permRows}</div>
       <button type="button" class="mr-perm-add-btn" onclick="mrAddPermission()">+ Add permission</button>
     </div>`;
@@ -33051,18 +33055,16 @@ Thank you,
     const id = `custom_${Date.now()}`;
     const row = document.createElement('div');
     row.className = 'mr-perm-row mr-perm-row--custom';
+    row.dataset.permId = id;
     row.innerHTML = `
-      <input type="text" class="mr-perm-custom-input" data-perm-id="${id}" placeholder="Describe this permission…" />
-      <div style="display:flex;align-items:center;gap:0.5rem;">
-        <select class="mr-perm-mode" data-perm-id="${id}" data-perm-label="">
-          <option value="required">I agree (locked)</option>
-          <option value="optional" selected>I agree / I disagree</option>
-          <option value="hidden">Not shown</option>
-        </select>
-        <button type="button" class="mr-perm-remove-btn" onclick="this.closest('.mr-perm-row').remove()" title="Remove">✕</button>
-      </div>`;
+      <label class="mr-perm-toggle-wrap">
+        <input type="checkbox" class="mr-perm-visible" data-perm-id="${id}" data-perm-label="" checked />
+        <span class="mr-perm-toggle-track"><span class="mr-perm-toggle-thumb"></span></span>
+      </label>
+      <input type="text" class="mr-perm-label mr-perm-custom-input" placeholder="Describe this permission…" />
+      <button type="button" class="mr-perm-remove-btn" onclick="this.closest('.mr-perm-row').remove()" title="Remove">✕</button>`;
     row.querySelector('.mr-perm-custom-input').addEventListener('input', function() {
-      this.closest('.mr-perm-row').querySelector('.mr-perm-mode').dataset.permLabel = this.value;
+      this.closest('.mr-perm-row').querySelector('.mr-perm-visible').dataset.permLabel = this.value;
     });
     list.appendChild(row);
     row.querySelector('.mr-perm-custom-input').focus();
@@ -33075,11 +33077,12 @@ Thank you,
     const intro = introEl?.innerHTML?.trim() || '';
     const agreementTextAdult = adultEl?.innerHTML?.trim() || '';
     const agreementTextMinor = minorEl?.innerHTML?.trim() || '';
-    const permissions = [...document.querySelectorAll('#mr-perm-list-body .mr-perm-mode')].map(sel => {
-      const row = sel.closest('.mr-perm-row');
+    const permissions = [...document.querySelectorAll('#mr-perm-list-body .mr-perm-visible')].map(cb => {
+      const row = cb.closest('.mr-perm-row');
       const customInput = row?.querySelector('.mr-perm-custom-input');
-      const label = customInput ? customInput.value.trim() : sel.dataset.permLabel;
-      return { id: sel.dataset.permId, label, mode: sel.value };
+      const label = customInput ? customInput.value.trim() : cb.dataset.permLabel;
+      const mode = cb.checked ? 'optional' : 'hidden';
+      return { id: cb.dataset.permId, label, mode };
     }).filter(p => p.label);
     const consentVersion = new Date().toISOString();
     registrationFormTemplatesState = {
