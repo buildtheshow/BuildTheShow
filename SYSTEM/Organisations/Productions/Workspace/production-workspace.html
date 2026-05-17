@@ -22254,7 +22254,7 @@
     <div id="registration-form-edit-body-area"></div>
     <div class="reg-form-edit-footer">
       <button class="btn-secondary" type="button" onclick="closeRegistrationFormTemplateModal()">Cancel</button>
-      <button class="btn-primary" type="button" onclick="saveRegistrationFormTemplateModal()">Save</button>
+      <button class="btn-primary" type="button" id="reg-form-template-save-btn" onclick="saveRegistrationFormTemplateModal(this)">Save</button>
     </div>
   </div>
 </div>
@@ -33086,7 +33086,20 @@ Thank you,
     row.querySelector('.mr-perm-custom-input').focus();
   }
 
-  function saveMediaReleaseModal() {
+  function btnSaveFeedback(btn) {
+    if (!btn) return () => {};
+    const original = btn.textContent;
+    btn.disabled = true;
+    const t = setTimeout(() => { btn.textContent = 'Saving…'; }, 300);
+    return function done() {
+      clearTimeout(t);
+      btn.disabled = false;
+      btn.textContent = 'Saved';
+      setTimeout(() => { btn.textContent = original; }, 1800);
+    };
+  }
+
+  async function saveMediaReleaseModal(btn) {
     const introEl = document.getElementById('mr-intro-editor');
     const adultEl = document.getElementById('mr-agreement-adult-editor');
     const minorEl = document.getElementById('mr-agreement-minor-editor');
@@ -33107,7 +33120,9 @@ Thank you,
     };
     const host = document.getElementById('registration-forms-settings-surface');
     if (host) host.innerHTML = renderRegistrationFormsSettings();
-    saveRegistrationSettings();
+    const done = btnSaveFeedback(btn || document.getElementById('reg-form-template-save-btn'));
+    await saveRegistrationSettings();
+    done();
     closeRegistrationFormTemplateModal();
   }
 
@@ -33198,9 +33213,9 @@ Thank you,
     document.getElementById('reg-public-form-preview-modal')?.classList.remove('open');
   }
 
-  function saveRegistrationFormTemplateModal() {
+  async function saveRegistrationFormTemplateModal(btn) {
     const modal = document.getElementById('registration-form-template-modal');
-    if (modal?.dataset.mode === 'media_release') { saveMediaReleaseModal(); return; }
+    if (modal?.dataset.mode === 'media_release') { saveMediaReleaseModal(btn); return; }
     const key = document.getElementById('registration-form-template-key')?.value || '';
     const introEl = document.getElementById('registration-form-template-intro');
     const intro = (introEl?.value !== undefined ? introEl.value : introEl?.innerHTML || '').trim();
@@ -33254,8 +33269,10 @@ Thank you,
       syncBrandTileSettingsState(host);
       requestAnimationFrame(() => requestAnimationFrame(() => { try { fitBrandTileTitles(host); } catch (_) {} }));
     }
+    const done = btnSaveFeedback(btn || document.getElementById('reg-form-template-save-btn'));
+    await saveRegistrationSettings();
+    done();
     closeRegistrationFormTemplateModal();
-    scheduleRegistrationSettingsAutosave(50);
   }
 
   function renderRegistrationSettingTile(config = {}) {
