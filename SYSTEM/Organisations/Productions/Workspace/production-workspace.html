@@ -1172,11 +1172,16 @@
     .reg-form-edit-section-divider-row button { background:none; border:none; color:rgba(87,46,136,0.4); font-size:0.7rem; cursor:pointer; padding:0 0.2rem; line-height:1; }
     .reg-form-edit-section-divider-row button:hover { color:#d1523d; }
     .reg-form-edit-tab-wrap { display:flex; max-height:58vh; overflow:hidden; }
-    .reg-form-edit-tab-sidebar { width:150px; flex-shrink:0; border-right:2px solid #ebe6f1; display:flex; flex-direction:column; overflow-y:auto; scrollbar-width:none; padding:0.5rem 0; background:#fafafa; }
+    .reg-form-edit-tab-sidebar { width:158px; flex-shrink:0; border-right:2px solid #ebe6f1; display:flex; flex-direction:column; overflow-y:auto; scrollbar-width:none; padding:0.4rem 0; background:#fafafa; }
     .reg-form-edit-tab-sidebar::-webkit-scrollbar { display:none; }
-    .reg-form-edit-tab-btn { text-align:left; padding:0.55rem 1rem; font-size:0.7rem; font-weight:700; color:rgba(0,0,0,0.45); border:none; border-left:2.5px solid transparent; background:none; cursor:pointer; line-height:1.35; font-family:var(--bts-font); transition:all 0.12s; }
+    .reg-form-edit-sidebar-item { display:flex; align-items:center; }
+    .reg-form-edit-tab-btn { flex:1; text-align:left; padding:0.52rem 0.9rem; font-size:0.7rem; font-weight:700; color:rgba(0,0,0,0.45); border:none; border-left:2.5px solid transparent; background:none; cursor:pointer; line-height:1.35; font-family:var(--bts-font); transition:all 0.12s; min-width:0; }
     .reg-form-edit-tab-btn:hover { color:var(--reg-form-edit-color, #572e88); background:rgba(87,46,136,0.04); }
     .reg-form-edit-tab-btn.active { color:var(--reg-form-edit-color, #572e88); background:rgba(87,46,136,0.07); border-left-color:var(--reg-form-edit-color, #572e88); font-weight:800; }
+    .reg-form-edit-sidebar-remove { flex-shrink:0; background:none; border:none; color:rgba(0,0,0,0.2); font-size:0.65rem; cursor:pointer; padding:0 0.55rem 0 0; line-height:1; transition:color 0.1s; }
+    .reg-form-edit-sidebar-remove:hover { color:#d1523d; }
+    .reg-form-edit-sidebar-add { margin:0.4rem 0.7rem 0; padding:0.45rem 0.7rem; font-size:0.68rem; font-weight:800; color:var(--reg-form-edit-color, #572e88); background:none; border:1.5px dashed rgba(87,46,136,0.25); border-radius:7px; cursor:pointer; font-family:var(--bts-font); text-align:left; transition:background 0.1s; }
+    .reg-form-edit-sidebar-add:hover { background:rgba(87,46,136,0.06); }
     .reg-form-edit-tab-body { flex:1; overflow-y:auto; padding:1.2rem 1.5rem; }
     .reg-form-edit-tab-panel { display:none; flex-direction:column; gap:1.1rem; }
     .reg-form-edit-tab-panel.active { display:flex; }
@@ -32544,6 +32549,61 @@ Thank you,
     document.getElementById(tabId)?.classList.add('active');
   }
 
+  function regFormUpdateSectionTitle(input, tabId) {
+    const panel = document.getElementById(tabId);
+    if (!panel) return;
+    const title = input.value || 'New Section';
+    panel.dataset.sectionTitle = title;
+    panel.dataset.sectionRaw = `{section}${title}`;
+    const btn = document.querySelector(`.reg-form-edit-tab-btn[data-for-tab="${tabId}"]`);
+    if (btn) btn.textContent = title;
+  }
+
+  function regFormRemoveSection(removeBtn, tabId) {
+    const panel = document.getElementById(tabId);
+    const wasActive = panel?.classList.contains('active');
+    removeBtn.closest('.reg-form-edit-sidebar-item')?.remove();
+    panel?.remove();
+    if (wasActive) {
+      const firstBtn = document.querySelector('.reg-form-edit-tab-btn[data-for-tab="reg-tab-intro"]');
+      if (firstBtn) regFormSwitchTab(firstBtn, 'reg-tab-intro');
+    }
+  }
+
+  function regFormAddSection(addBtn) {
+    const sidebar = addBtn.closest('.reg-form-edit-tab-sidebar');
+    const tabBody = sidebar?.nextElementSibling;
+    if (!sidebar || !tabBody) return;
+    const newId = `reg-tab-new-${Date.now()}`;
+    const title = 'New Section';
+    const item = document.createElement('div');
+    item.className = 'reg-form-edit-sidebar-item';
+    item.innerHTML = `<button class="reg-form-edit-tab-btn" data-for-tab="${newId}" onclick="regFormSwitchTab(this,'${newId}')">${esc(title)}</button>
+      <button class="reg-form-edit-sidebar-remove" onclick="regFormRemoveSection(this,'${newId}')" title="Remove section">✕</button>`;
+    addBtn.before(item);
+    const panel = document.createElement('div');
+    panel.className = 'reg-form-edit-tab-panel';
+    panel.id = newId;
+    panel.dataset.sectionTitle = title;
+    panel.dataset.sectionRaw = `{section}${title}`;
+    panel.innerHTML = `<div class="reg-form-edit-section">
+        <div class="reg-form-edit-section-label">Section title</div>
+        <input type="text" class="form-input reg-form-section-title-input" value="${esc(title)}" oninput="regFormUpdateSectionTitle(this,'${newId}')" />
+      </div>
+      <div class="reg-form-edit-section">
+        <div class="reg-form-edit-section-label">Description <span class="reg-form-edit-section-hint">paragraph shown above the acknowledgement</span></div>
+        <textarea class="form-textarea reg-form-section-text-area" rows="4" placeholder="Describe what this section covers..."></textarea>
+      </div>
+      <div class="reg-form-edit-section">
+        <div class="reg-form-edit-section-label">Fields</div>
+        <div class="reg-form-edit-fields-list"></div>
+        <button type="button" class="reg-form-edit-add-field" onclick="addRegistrationFormFieldToPanel(this)">+ Add field</button>
+      </div>`;
+    tabBody.appendChild(panel);
+    regFormSwitchTab(item.querySelector('.reg-form-edit-tab-btn'), newId);
+    panel.querySelector('.reg-form-section-title-input')?.select();
+  }
+
   function addRegistrationFormFieldToPanel(btn) {
     const list = btn.previousElementSibling;
     if (!list || !list.classList.contains('reg-form-edit-fields-list')) return;
@@ -32591,8 +32651,12 @@ Thank you,
       }
     }
     const sidebar = `<div class="reg-form-edit-tab-sidebar">
-      <button class="reg-form-edit-tab-btn active" onclick="regFormSwitchTab(this,'reg-tab-intro')">Intro</button>
-      ${sections.map((s, i) => `<button class="reg-form-edit-tab-btn" onclick="regFormSwitchTab(this,'reg-tab-s${i}')">${esc(s.title)}</button>`).join('')}
+      <button class="reg-form-edit-tab-btn active" data-for-tab="reg-tab-intro" onclick="regFormSwitchTab(this,'reg-tab-intro')">Intro</button>
+      ${sections.map((s, i) => `<div class="reg-form-edit-sidebar-item">
+        <button class="reg-form-edit-tab-btn" data-for-tab="reg-tab-s${i}" onclick="regFormSwitchTab(this,'reg-tab-s${i}')">${esc(s.title)}</button>
+        <button class="reg-form-edit-sidebar-remove" onclick="regFormRemoveSection(this,'reg-tab-s${i}')" title="Remove section">✕</button>
+      </div>`).join('')}
+      <button class="reg-form-edit-sidebar-add" onclick="regFormAddSection(this)">+ Add section</button>
     </div>`;
     const introPanel = `<div class="reg-form-edit-tab-panel active" id="reg-tab-intro">
       <div class="reg-form-edit-section">
@@ -32602,6 +32666,10 @@ Thank you,
     </div>`;
     const sectionPanels = sections.map((s, i) => `
       <div class="reg-form-edit-tab-panel" id="reg-tab-s${i}" data-section-title="${esc(s.title)}" data-section-raw="${esc(s.raw)}">
+        <div class="reg-form-edit-section">
+          <div class="reg-form-edit-section-label">Section title</div>
+          <input type="text" class="form-input reg-form-section-title-input" value="${esc(s.title)}" oninput="regFormUpdateSectionTitle(this,'reg-tab-s${i}')" />
+        </div>
         <div class="reg-form-edit-section">
           <div class="reg-form-edit-section-label">Description <span class="reg-form-edit-section-hint">paragraph shown above the acknowledgement</span></div>
           <textarea class="form-textarea reg-form-section-text-area" rows="4" placeholder="Describe what this section covers...">${esc(sectionTexts[s.title] || '')}</textarea>
