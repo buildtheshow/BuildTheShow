@@ -32303,7 +32303,8 @@ Thank you,
 
   const REGISTRATION_FORM_TEMPLATE_DEFS = [
     // ── CORE REGISTRATION ──
-    { key: 'cast_registration',        settingId: 'reg-form-cast-registration',        group: 'Core Registration',    color: '#476aaa', defaultOn: true,  title: 'Cast Registration',                       summary: 'Who they are and how to reach them.',                              defaultFields: ['First name *', 'Last name *', 'Preferred name', 'Pronouns', 'Date of birth *', 'Participant email', 'Primary guardian first name *', 'Primary guardian last name *', 'Primary guardian phone *', 'Primary guardian email *', 'Alternate guardian first name', 'Alternate guardian last name', 'Alternate guardian phone', 'Alternate guardian email', 'Mailing address *', 'Pickup permissions (if participant is underage)'] },
+    { key: 'cast_registration',        settingId: 'reg-form-cast-registration',        group: 'Core Registration',    color: '#476aaa', defaultOn: true,  title: 'Cast Registration',                       summary: 'Who they are and how to reach them.',                              defaultFields: ['Legal first name *', 'Legal last name *', 'Preferred name', 'Pronouns', 'Date of birth *', 'Contact email *', 'Contact phone number *', '{guard}Guardian first name *', '{guard}Guardian last name *', '{guard}Guardian relationship to performer *'] },
+    { key: 'pickup_dismissal',         settingId: 'reg-form-pickup-dismissal',         group: 'Core Registration',    color: '#476aaa', defaultOn: true,  title: 'Pickup & Dismissal',                      summary: 'Who is authorised to pick up the performer after rehearsals.',     defaultFields: ['Dismissal method *', 'Authorised pickup person — full name *', 'Authorised pickup person — relationship *', 'Authorised pickup person — phone *', 'Second authorised pickup person — full name', 'Second authorised pickup person — relationship', 'Second authorised pickup person — phone', 'Persons NOT authorised for pickup', 'Additional pickup notes'] },
     { key: 'emergency_medical',        settingId: 'reg-form-emergency-medical',        group: 'Core Registration',    color: '#476aaa', defaultOn: true,  title: 'Emergency & Medical',                     summary: 'What to do if something goes wrong.',                              defaultFields: ['Emergency contact name *', 'Emergency contact phone *', 'Emergency contact relationship *', 'Allergies', 'Medications', 'Medical conditions', 'Emergency treatment authorisation *', 'Physician name', 'Physician phone', 'Personal health number', 'Insurance information'] },
     { key: 'accessibility',            settingId: 'reg-form-accessibility',            group: 'Core Registration',    color: '#476aaa', defaultOn: true,  title: 'Accessibility & Accommodation',            summary: 'What support they need to participate fully.',                     defaultFields: ['Mobility accommodations', 'Sensory accommodations', 'Neurodivergent supports', 'Communication needs', 'Additional accessibility requests'] },
     // ── AGREEMENTS & CONSENT ──
@@ -33281,38 +33282,57 @@ Thank you,
   function rpfPrefillValue(label, prefill) {
     if (!prefill) return '';
     const n = label.toLowerCase();
-    if (/first name/.test(n))                return prefill.first_name || '';
-    if (/last name/.test(n))                 return prefill.last_name || '';
-    if (/preferred name/.test(n))            return prefill.preferred_name || '';
-    if (/pronoun/.test(n))                   return prefill.pronouns || '';
-    if (/date of birth|birth date/.test(n))  return prefill.date_of_birth || '';
-    if (/participant email/.test(n))         return prefill.email || '';
+    if (/legal first name|^first name/.test(n))  return prefill.first_name || '';
+    if (/legal last name|^last name/.test(n))    return prefill.last_name || '';
+    if (/preferred name/.test(n))                return prefill.preferred_name || '';
+    if (/pronoun/.test(n))                       return prefill.pronouns || '';
+    if (/date of birth|birth date/.test(n))      return prefill.date_of_birth || '';
+    if (/contact email|participant email/.test(n)) return prefill.email || '';
+    if (/contact phone/.test(n) && !/guardian/.test(n)) return prefill.phone || '';
     if (/\bphone\b/.test(n) && !/guardian/.test(n)) return prefill.phone || '';
-    if (/mailing address/.test(n))           return prefill.address || '';
-    if (/primary guardian.*first/.test(n))   return prefill.guardian_first || '';
-    if (/primary guardian.*last/.test(n))    return prefill.guardian_last || '';
-    if (/primary guardian.*phone/.test(n))   return prefill.guardian_phone || '';
-    if (/primary guardian.*email/.test(n))   return prefill.guardian_email || '';
-    if (/emergency contact name/.test(n))    return prefill.emergency_name || '';
-    if (/emergency contact phone/.test(n))   return prefill.emergency_phone || '';
-    if (/emergency contact rel/.test(n))     return prefill.emergency_rel || '';
+    if (/mailing address/.test(n))               return prefill.address || '';
+    if (/guardian first name|guardian.*first/.test(n)) return prefill.guardian_first || '';
+    if (/guardian last name|guardian.*last/.test(n))   return prefill.guardian_last || '';
+    if (/guardian.*phone/.test(n))               return prefill.guardian_phone || '';
+    if (/guardian.*email/.test(n))               return prefill.guardian_email || '';
+    if (/emergency contact name/.test(n))        return prefill.emergency_name || '';
+    if (/emergency contact phone/.test(n))       return prefill.emergency_phone || '';
+    if (/emergency contact rel/.test(n))         return prefill.emergency_rel || '';
     return '';
   }
 
+  function rpfCheckGuardianFields(dobInput) {
+    const panel = dobInput.closest('.rpf-panel');
+    if (!panel) return;
+    const dob = new Date(dobInput.value);
+    const today = new Date();
+    let age = today.getFullYear() - dob.getFullYear();
+    const m = today.getMonth() - dob.getMonth();
+    if (m < 0 || (m === 0 && today.getDate() < dob.getDate())) age--;
+    const isUnder18 = dobInput.value && age < 18;
+    panel.querySelectorAll('[data-rpf-guard]').forEach(el => {
+      el.style.display = isUnder18 ? '' : 'none';
+    });
+  }
+
   function rpfRenderField(fieldStr, prefill) {
-    const isRequired = String(fieldStr).trim().endsWith('*');
-    const label = String(fieldStr).trim().replace(/\s*\*$/, '').trim();
+    const raw = String(fieldStr).trim();
+    const isGuard = raw.startsWith('{guard}');
+    const stripped = isGuard ? raw.slice(7) : raw;
+    const isRequired = stripped.endsWith('*');
+    const label = stripped.replace(/\s*\*$/, '').trim();
     const type = rpfFieldType(label);
     const req = isRequired ? `<span class="rpf-req"> *</span>` : '';
     const val = rpfPrefillValue(label.toLowerCase(), prefill);
     const prefilled = val ? ' rpf-prefilled' : '';
+    const guardAttr = isGuard ? ' data-rpf-guard="1" style="display:none"' : '';
     if (type === 'checkbox') {
-      return `<div class="rpf-form-group">
+      return `<div class="rpf-form-group"${guardAttr}>
         <label class="rpf-agree-row"><input type="checkbox" /><span>${esc(label)}${req}</span></label>
       </div>`;
     }
     if (type === 'upload') {
-      return `<div class="rpf-form-group">
+      return `<div class="rpf-form-group"${guardAttr}>
         <label class="rpf-label">${esc(label)}${req}</label>
         <div class="rpf-upload">
           <img src="/ASSETS/Images/SelfTape.svg" alt="" />
@@ -33322,14 +33342,16 @@ Thank you,
       </div>`;
     }
     if (type === 'textarea') {
-      return `<div class="rpf-form-group">
+      return `<div class="rpf-form-group"${guardAttr}>
         <label class="rpf-label">${esc(label)}${req}</label>
         <textarea class="rpf-input${prefilled}" placeholder="${esc(label)}...">${esc(val)}</textarea>
       </div>`;
     }
-    return `<div class="rpf-form-group">
+    const dobAttr = type === 'date' && /date of birth|birth date/.test(label.toLowerCase())
+      ? ' onchange="rpfCheckGuardianFields(this)"' : '';
+    return `<div class="rpf-form-group"${guardAttr}>
       <label class="rpf-label">${esc(label)}${req}</label>
-      <input type="${type}" class="rpf-input${prefilled}" ${type === 'date' ? '' : `placeholder="${esc(label)}..."`} value="${esc(val)}" />
+      <input type="${type}" class="rpf-input${prefilled}" ${type === 'date' ? '' : `placeholder="${esc(label)}..."`} value="${esc(val)}"${dobAttr} />
     </div>`;
   }
 
