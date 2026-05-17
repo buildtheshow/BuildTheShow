@@ -1423,6 +1423,15 @@
     .tp-option-row:last-child { border-bottom:none; }
     .tp-option-label { display:flex; align-items:flex-start; gap:0.55rem; font-size:0.82rem; font-weight:600; color:#1a1530; cursor:pointer; line-height:1.4; }
     .tp-option-label input[type="checkbox"] { margin-top:2px; flex-shrink:0; accent-color:#572e88; width:0.95rem; height:0.95rem; cursor:pointer; }
+    /* Add Form picker */
+    .add-form-picker-cards { display:flex; flex-direction:column; padding:0.75rem 1rem 0.1rem; }
+    .add-form-picker-card { text-align:left; background:#fff; border:1.5px solid #ebe6f1; border-radius:12px; padding:0.95rem 1.1rem; cursor:pointer; font-family:var(--bts-font); transition:border-color 0.12s,background 0.12s; margin-bottom:0.55rem; display:flex; flex-direction:column; gap:0.25rem; }
+    .add-form-picker-card:last-child { margin-bottom:0; }
+    .add-form-picker-card:hover { border-color:#572e88; background:rgba(87,46,136,0.03); }
+    .add-form-picker-card:focus-visible { outline:2px solid #572e88; outline-offset:2px; }
+    .add-form-picker-card-tag { display:inline-block; font-size:0.6rem; font-weight:900; letter-spacing:0.1em; text-transform:uppercase; padding:0.15rem 0.6rem; border-radius:20px; margin-bottom:0.1rem; width:fit-content; background:#ebe6f1; color:#572e88; }
+    .add-form-picker-card-title { font-size:0.9rem; font-weight:900; color:#1a1530; }
+    .add-form-picker-card-desc { font-size:0.78rem; color:#7a6a95; line-height:1.5; }
     /* Code of Conduct — public form */
     .rpf-coc { padding:0.25rem 0 0.5rem; display:flex; flex-direction:column; gap:1.4rem; }
     .rpf-coc-section { display:flex; flex-direction:column; gap:0.5rem; }
@@ -22287,6 +22296,35 @@
   </div>
 </div>
 
+<div class="modal-overlay" id="add-form-picker-modal" onclick="if(event.target===this)closeAddFormPicker()">
+  <div class="modal" style="max-width:540px;width:100%;padding:0;overflow:hidden;">
+    <div style="padding:1.3rem 1.4rem 1rem;border-bottom:1px solid #ebe6f1;">
+      <div style="font-size:0.62rem;font-weight:900;letter-spacing:0.1em;text-transform:uppercase;color:#9980b8;margin-bottom:0.25rem;" id="add-form-picker-kicker"></div>
+      <div style="font-size:1.05rem;font-weight:900;color:#1a1530;line-height:1.2;">What kind of form do you want to add?</div>
+    </div>
+    <div class="add-form-picker-cards">
+      <button type="button" class="add-form-picker-card" onclick="closeAddFormPicker();openRegistrationFormCreateModal(window._addFormPickerGroup,'flat')">
+        <div class="add-form-picker-card-tag">Simple Form</div>
+        <div class="add-form-picker-card-title">Flat fields</div>
+        <div class="add-form-picker-card-desc">A straight list of questions and inputs. Good for measurements, bios, contact information, and anything that's just labelled fields.</div>
+      </button>
+      <button type="button" class="add-form-picker-card" onclick="closeAddFormPicker();openRegistrationFormCreateModal(window._addFormPickerGroup,'sections')">
+        <div class="add-form-picker-card-tag">Sections</div>
+        <div class="add-form-picker-card-title">Sectioned form</div>
+        <div class="add-form-picker-card-desc">Fields organized under named headings, each with a short intro. Good for multi-part agreements with distinct topics.</div>
+      </button>
+      <button type="button" class="add-form-picker-card" onclick="closeAddFormPicker();openRegistrationFormCreateModal(window._addFormPickerGroup,'document')">
+        <div class="add-form-picker-card-tag">Document</div>
+        <div class="add-form-picker-card-title">Document form</div>
+        <div class="add-form-picker-card-desc">An intro, a body of text, and a signature block. For permissions, authorisations, or consent forms that need a specific layout.</div>
+      </button>
+    </div>
+    <div style="padding:0.85rem 1.2rem;border-top:1px solid #ebe6f1;display:flex;justify-content:flex-end;margin-top:0.6rem;">
+      <button class="btn-secondary" type="button" onclick="closeAddFormPicker()">Cancel</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="reg-public-form-preview-modal">
   <div class="modal" style="max-width:680px;width:100%;">
     <div class="modal-header">
@@ -33575,7 +33613,20 @@ Thank you,
     modal.classList.add('open');
   }
 
-  function openRegistrationFormCreateModal(group) {
+  let _addFormPickerGroup = null;
+
+  function openAddFormPicker(group) {
+    _addFormPickerGroup = group;
+    window._addFormPickerGroup = group;
+    document.getElementById('add-form-picker-kicker').textContent = group;
+    document.getElementById('add-form-picker-modal')?.classList.add('open');
+  }
+
+  function closeAddFormPicker() {
+    document.getElementById('add-form-picker-modal')?.classList.remove('open');
+  }
+
+  function openRegistrationFormCreateModal(group, type = 'flat') {
     const modal = document.getElementById('registration-form-template-modal');
     if (!modal) return;
     const color = REGISTRATION_FORM_TEMPLATE_DEFS.find(d => d.group === group)?.color || '#572e88';
@@ -33587,9 +33638,33 @@ Thank you,
     document.getElementById('registration-form-edit-summary').textContent = 'Fill in the details below.';
     document.getElementById('registration-form-edit-header').style.setProperty('--reg-form-edit-color', color);
     const bodyArea = document.getElementById('registration-form-edit-body-area');
-    bodyArea.innerHTML = renderRegistrationFormFlatBody('', [], true);
-    modal.dataset.mode = 'flat';
-    modal.querySelector('.modal')?.classList.remove('reg-form-edit-modal--tabs');
+
+    if (type === 'sections') {
+      const tempDef = { key: newKey, title: 'New Form', group, defaultFields: ['{section}Section 1'] };
+      const tempTemplate = { intro: '', fields: ['{section}Section 1'], sectionTexts: {} };
+      const createHtml = `<div id="registration-form-create-fields" style="flex-shrink:0;padding:0.7rem 1.2rem;border-bottom:1px solid #ebe6f1;display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;background:#fafafa;">
+        <div><div class="reg-form-edit-section-label" style="margin-bottom:0.35rem;">Form title</div><input type="text" class="form-input" id="registration-form-create-title" placeholder="e.g. Understudy Agreement" /></div>
+        <div><div class="reg-form-edit-section-label" style="margin-bottom:0.35rem;">Description</div><input type="text" class="form-input" id="registration-form-create-summary" placeholder="What this form covers..." /></div>
+      </div>`;
+      bodyArea.innerHTML = createHtml + renderRegistrationFormTabBody(tempDef, tempTemplate);
+      modal.dataset.mode = 'tabs';
+      modal.querySelector('.modal')?.classList.add('reg-form-edit-modal--tabs');
+    } else if (type === 'document') {
+      const docFields = [
+        'I have read and agree to the terms above *',
+        '{minor-toggle}Performer is under 19',
+        '{minor}Parent or guardian full name *',
+        '{minor}Parent or guardian relationship to performer *',
+        '{minor}Parent or guardian signature *',
+      ];
+      bodyArea.innerHTML = renderRegistrationFormFlatBody('', docFields, true);
+      modal.dataset.mode = 'flat';
+      modal.querySelector('.modal')?.classList.remove('reg-form-edit-modal--tabs');
+    } else {
+      bodyArea.innerHTML = renderRegistrationFormFlatBody('', [], true);
+      modal.dataset.mode = 'flat';
+      modal.querySelector('.modal')?.classList.remove('reg-form-edit-modal--tabs');
+    }
     modal.classList.add('open');
   }
 
@@ -33803,11 +33878,11 @@ Thank you,
         kicker: group,
         title: 'Add a Form',
         bodyHtml: `<div class="template-brand-tile-body">Create a custom section for this group.</div>`,
-        buttonHtml: `<button type="button" class="template-brand-tile-button" onclick="event.stopPropagation();openRegistrationFormCreateModal(${JSON.stringify(group)})">+ Create</button>`,
+        buttonHtml: `<button type="button" class="template-brand-tile-button" onclick="event.stopPropagation();openAddFormPicker(${JSON.stringify(group)})">+ Create</button>`,
         toggleHtml: '',
         className: 'reg-form-add-new',
         ariaLabel: `Add a custom form to ${group}`,
-        attrs: `onclick="openRegistrationFormCreateModal(${JSON.stringify(group).replace(/"/g, '&quot;')})"`,
+        attrs: `onclick="openAddFormPicker(${JSON.stringify(group).replace(/"/g, '&quot;')})"`,
       });
       const sectionsHtml = defs.map(def => renderRegistrationSettingTile({
         color,
