@@ -32491,6 +32491,10 @@ Thank you,
 
   const CODE_OF_CONDUCT_DEFAULT_ACK = `<p>By signing below, I confirm that I have read and understood the Code of Conduct for {{organisation_name}}'s production of {{show_name}}.</p><p>I agree to uphold the community standards and expectations outlined in this Code of Conduct, and I understand that failure to do so may impact my participation in the production.</p>`;
 
+  const MEDICAL_TREATMENT_DEFAULT_INTRO = `<p>In the event of an emergency, {{organisation_name}} may need to seek medical treatment for a participant while under the supervision of the production team.</p>`;
+
+  const MEDICAL_TREATMENT_DEFAULT_AGREEMENT = `<p>I authorise {{organisation_name}} and its representatives to seek emergency medical treatment for {{performer_name}} if reasonable attempts to contact emergency contacts or guardians cannot be made in time.</p><p>I understand that every reasonable effort will be made to contact the participant's emergency contacts or guardians as soon as possible.</p>`;
+
   let REGISTRATION_FORM_TEMPLATE_DEFS = [
     // ── CORE REGISTRATION ──
     { key: 'cast_registration',        settingId: 'reg-form-cast-registration',        group: 'Core Registration',    color: '#476aaa', defaultOn: true,  title: 'Cast Registration',                       summary: 'Who they are and how to reach them.',                              defaultFields: ['Legal first name *', 'Legal last name *', 'Preferred name *', 'Pronouns *', 'Date of birth *', 'Contact email *', 'Contact phone number *', '{guard}Guardian first name *', '{guard}Guardian last name *', '{guard}Guardian relationship to performer *'] },
@@ -32501,8 +32505,7 @@ Thank you,
     { key: 'cast_agreement',           settingId: 'reg-form-cast-agreement',           group: 'Agreements & Consent', color: '#d1523d', defaultOn: true,  title: 'Cast Agreement',                          summary: 'The being in the show agreement.',                                 defaultFields: ['{section}Rehearsal Expectations', 'Rehearsal expectations acknowledged *', '{section}Attendance Policy', 'Attendance expectations and policies acknowledged *', '{section}Tech Week and Performance Commitment', 'Tech week and performances are mandatory acknowledged *', '{section}Illness and Safety Expectations', 'Illness and safety expectations acknowledged *', '{section}Final Acknowledgement', 'I understand the expectations and commitments required to participate in this production *', '{section}Signature', 'Performer signature *', 'Date *', '{minor-toggle}Performer is under 18', '{minor}Guardian signature *', '{minor}Guardian relationship to performer *'] },
     { key: 'code_of_conduct',          settingId: 'reg-form-code-of-conduct',          group: 'Agreements & Consent', color: '#d1523d', defaultOn: true,  title: 'Code of Conduct',                         summary: 'Behaviour and community expectations.',                            defaultFields: ['{code-of-conduct}'] },
     { key: 'media_release',            settingId: 'reg-form-media-release',            group: 'Agreements & Consent', color: '#d1523d', defaultOn: true,  title: 'Media Release',                           summary: 'Permissions around image and video use.',                          defaultFields: ['{media-release}'] },
-    { key: 'liability_waiver',         settingId: 'reg-form-liability-waiver',         group: 'Agreements & Consent', color: '#d1523d', defaultOn: true,  title: 'Liability / Participation Waiver',         summary: 'Acknowledgement of participation risks.',                          defaultFields: ['Physical activity acknowledged *', 'Participation risks acknowledged *', 'General liability release (type full legal name to sign) *'] },
-    { key: 'medical_treatment_auth',   settingId: 'reg-form-medical-treatment-auth',   group: 'Agreements & Consent', color: '#d1523d', defaultOn: true,  title: 'Medical Treatment Authorisation',          summary: 'Permission to seek emergency medical treatment.',                  defaultFields: ['Permission to seek emergency treatment *', 'Guardian consent (if performer is under 18) *'] },
+    { key: 'medical_treatment_auth',   settingId: 'reg-form-medical-treatment-auth',   group: 'Agreements & Consent', color: '#d1523d', defaultOn: true,  title: 'Medical Treatment Authorisation',          summary: 'Permission to seek emergency medical treatment.',                  defaultFields: ['{medical-treatment-auth}'] },
 
     { key: 'transportation_waiver',    settingId: 'reg-form-transportation-waiver',    group: 'Agreements & Consent', color: '#d1523d', defaultOn: false, title: 'Transportation / Travel Waiver',           summary: 'For trips and out-of-town performances.',                          defaultFields: ['Transportation acknowledgement *', 'Travel consent *', 'Emergency contact for travel *'] },
     { key: 'physical_activity_waiver', settingId: 'reg-form-physical-activity-waiver', group: 'Agreements & Consent', color: '#d1523d', defaultOn: false, title: 'Physical Performance Acknowledgement',     summary: 'For productions with stage combat, flying, or elevated physical requirements.', defaultFields: ['Physical performance requirements acknowledged *', 'Elevated physical risk acknowledged *', 'Guardian consent (if performer is under 18) *'] },
@@ -32705,6 +32708,10 @@ Thank you,
       base.sections = Array.isArray(saved.sections) && saved.sections.length ? saved.sections : CODE_OF_CONDUCT_DEFAULT_SECTIONS;
       base.acknowledgementText = saved.acknowledgementText !== undefined ? saved.acknowledgementText : CODE_OF_CONDUCT_DEFAULT_ACK;
     }
+    if (key === 'medical_treatment_auth') {
+      base.intro = saved.intro !== undefined ? saved.intro : MEDICAL_TREATMENT_DEFAULT_INTRO;
+      base.agreementText = saved.agreementText !== undefined ? saved.agreementText : MEDICAL_TREATMENT_DEFAULT_AGREEMENT;
+    }
     return base;
   }
 
@@ -32712,10 +32719,13 @@ Thank you,
     const template = getRegistrationFormTemplate(def.key);
     const isMediaRelease = def.key === 'media_release';
     const isCodeOfConduct = def.key === 'code_of_conduct';
+    const isMedicalTreatmentAuth = def.key === 'medical_treatment_auth';
     const bodyNote = isMediaRelease
       ? (() => { const on = (template.permissions || []).filter(p => p.mode !== 'hidden').length; return `${on} permission${on === 1 ? '' : 's'} shown.`; })()
       : isCodeOfConduct
       ? (() => { const vis = (template.sections || CODE_OF_CONDUCT_DEFAULT_SECTIONS).filter(s => s.visible !== false).length; return `${vis} section${vis === 1 ? '' : 's'} visible.`; })()
+      : isMedicalTreatmentAuth
+      ? 'Emergency medical authorisation.'
       : `${esc(template?.fields?.length || 0)} ${template?.fields?.length === 1 ? 'field' : 'fields'} in this form.`;
     return renderRegistrationSettingTile({
       color,
@@ -33347,9 +33357,83 @@ Thank you,
     }
   }
 
+  function openMedicalTreatmentAuthModal() {
+    const def = getRegistrationFormTemplateDef('medical_treatment_auth');
+    const template = getRegistrationFormTemplate('medical_treatment_auth');
+    const modal = document.getElementById('registration-form-template-modal');
+    if (!def || !template || !modal) return;
+    document.getElementById('registration-form-template-key').value = 'medical_treatment_auth';
+    document.getElementById('registration-form-edit-kicker').textContent = def.group;
+    document.getElementById('registration-form-edit-title').textContent = def.title;
+    document.getElementById('registration-form-edit-summary').textContent = def.summary;
+    document.getElementById('registration-form-edit-header').style.setProperty('--reg-form-edit-color', def.color);
+    const bodyArea = document.getElementById('registration-form-edit-body-area');
+    bodyArea.innerHTML = renderMedicalTreatmentAuthModalBody(template);
+    modal.dataset.mode = 'medical_treatment_auth';
+    modal.querySelector('.modal')?.classList.add('reg-form-edit-modal--tabs');
+    modal.classList.add('open');
+  }
+
+  function renderMedicalTreatmentAuthModalBody(template) {
+    const sidebar = `<div class="reg-form-edit-tab-sidebar">
+      <div class="reg-form-edit-sidebar-item">
+        <button class="reg-form-edit-tab-btn active" onclick="regFormSwitchTab(this,'mta-tab-intro')">Introduction</button>
+      </div>
+      <div class="reg-form-edit-sidebar-item">
+        <button class="reg-form-edit-tab-btn" onclick="regFormSwitchTab(this,'mta-tab-agreement')">Agreement Wording</button>
+      </div>
+    </div>`;
+
+    const introPanel = `<div class="reg-form-edit-tab-panel active" id="mta-tab-intro" style="gap:0;padding:0;">
+      <div class="reg-form-edit-section-label" style="padding:0.9rem 1.2rem 0.4rem;flex-shrink:0;">Introduction</div>
+      <div style="padding:0 1.2rem 0.75rem;flex-shrink:0;font-size:0.78rem;color:#7a6a95;line-height:1.5;">This appears before the agreement. It explains why the authorisation is needed and what it covers.</div>
+      ${REG_FORM_RTE_TOOLBAR}
+      <div class="et-body-editor" id="mta-intro-editor" contenteditable="true" onfocus="window._regFormLastTextarea=this"
+           data-placeholder="In the event of an emergency…"
+           style="flex:1 1 0;min-height:0;">${template.intro || MEDICAL_TREATMENT_DEFAULT_INTRO}</div>
+    </div>`;
+
+    const agreementPanel = `<div class="reg-form-edit-tab-panel" id="mta-tab-agreement" style="gap:0;padding:0;">
+      <div class="reg-form-edit-section-label" style="padding:0.9rem 1.2rem 0.4rem;flex-shrink:0;">Agreement wording</div>
+      <div style="padding:0 1.2rem 0.75rem;flex-shrink:0;font-size:0.78rem;color:#7a6a95;line-height:1.5;">The authorisation statement the signer agrees to. Use {{performer_name}} to refer to the participant, and {{organisation_name}} for your organisation.</div>
+      ${REG_FORM_RTE_TOOLBAR}
+      <div class="et-body-editor" id="mta-agreement-editor" contenteditable="true" onfocus="window._regFormLastTextarea=this"
+           data-placeholder="I authorise {{organisation_name}} and its representatives to seek emergency medical treatment…"
+           style="flex:1 1 0;min-height:0;">${template.agreementText || MEDICAL_TREATMENT_DEFAULT_AGREEMENT}</div>
+    </div>`;
+
+    const btsFooter = `<div class="mr-bts-notice mr-bts-notice--footer">
+      <span class="mr-bts-notice-label">Build The Show Notice&ensp;—&ensp;</span><span class="mr-bts-notice-body">${esc(MEDIA_RELEASE_BTS_NOTICE)}</span>
+    </div>`;
+
+    return `<div class="reg-form-edit-tab-wrap">${sidebar}<div class="reg-form-edit-tab-body">${introPanel}${agreementPanel}</div>${renderRegFormVarPanel()}</div>${btsFooter}`;
+  }
+
+  async function saveMedicalTreatmentAuthModal(btn) {
+    const introEl = document.getElementById('mta-intro-editor');
+    const agreementEl = document.getElementById('mta-agreement-editor');
+    const intro = introEl?.innerHTML?.trim() || '';
+    const agreementText = agreementEl?.innerHTML?.trim() || '';
+    registrationFormTemplatesState = {
+      ...(registrationFormTemplatesState || {}),
+      medical_treatment_auth: { title: 'Medical Treatment Authorisation', intro, agreementText, fields: ['{medical-treatment-auth}'], sectionTexts: {} },
+    };
+    const host = document.getElementById('registration-forms-settings-surface');
+    if (host) {
+      renderRegistrationSettingsSurface('registration-forms-settings-surface', renderRegistrationFormsTiles());
+      syncBrandTileSettingsState(host);
+      requestAnimationFrame(() => requestAnimationFrame(() => { try { fitBrandTileTitles(host); } catch (_) {} }));
+    }
+    const done = btnSaveFeedback(btn || document.getElementById('reg-form-template-save-btn'));
+    await saveRegistrationSettings();
+    done();
+    setTimeout(() => closeRegistrationFormTemplateModal(), 900);
+  }
+
   function openRegistrationFormTemplateModal(key) {
     if (key === 'media_release') { openMediaReleaseModal(); return; }
     if (key === 'code_of_conduct') { openCodeOfConductModal(); return; }
+    if (key === 'medical_treatment_auth') { openMedicalTreatmentAuthModal(); return; }
     const def = getRegistrationFormTemplateDef(key);
     const template = getRegistrationFormTemplate(key);
     if (!def || !template) return;
@@ -33439,6 +33523,7 @@ Thank you,
     const modal = document.getElementById('registration-form-template-modal');
     if (modal?.dataset.mode === 'media_release') { saveMediaReleaseModal(btn); return; }
     if (modal?.dataset.mode === 'code_of_conduct') { saveCodeOfConductModal(btn); return; }
+    if (modal?.dataset.mode === 'medical_treatment_auth') { saveMedicalTreatmentAuthModal(btn); return; }
     const key = document.getElementById('registration-form-template-key')?.value || '';
     const introEl = document.getElementById('registration-form-template-intro');
     const intro = (introEl?.value !== undefined ? introEl.value : introEl?.innerHTML || '').trim();
@@ -34351,6 +34436,50 @@ Thank you,
     </div>`;
   }
 
+  function rpfRenderMedicalTreatmentAuthSection(template, prefill) {
+    const sub = window._rpfSubTokens || (h => h);
+    const intro = sub(template?.intro || MEDICAL_TREATMENT_DEFAULT_INTRO);
+    const agreementText = sub(template?.agreementText || MEDICAL_TREATMENT_DEFAULT_AGREEMENT);
+
+    const age = rpfCalcAge(prefill?.date_of_birth);
+    const isMinor = age !== null ? age < 19 : false;
+    const ageUnknown = age === null;
+
+    const adultSig = `<div class="rpf-mr-sig-block"${isMinor ? ' style="display:none"' : ''}>
+      <label class="rpf-agree-row"><input type="checkbox" name="mta_legal_ack"${isMinor ? '' : ' required'} /><span>I have read and agree to the above authorisation.<span class="rpf-req"> *</span></span></label>
+      <div class="rpf-mr-sig-row">
+        <div class="rpf-mr-sig-field"><label>Performer name<span class="rpf-req"> *</span></label><input type="text" name="mta_signer_name"${isMinor ? '' : ' required'} autocomplete="name" value="${esc([prefill?.preferred_name || prefill?.first_name || '', prefill?.last_name || ''].filter(Boolean).join(' '))}" /></div>
+        <div class="rpf-mr-sig-field"><label>Date<span class="rpf-req"> *</span></label><input type="date" name="mta_signed_date"${isMinor ? '' : ' required'} /></div>
+      </div>
+    </div>`;
+
+    const guardianSig = `<div class="rpf-mr-guardian-block"${isMinor || ageUnknown ? '' : ' style="display:none"'}>
+      <div class="rpf-mr-guardian-label">Parent / Guardian Signature</div>
+      <div class="rpf-mr-sig-block">
+        <label class="rpf-agree-row"><input type="checkbox" name="mta_guardian_legal_ack"${isMinor ? ' required' : ''} /><span>I have read and agree to the above authorisation on behalf of the participant named above.<span class="rpf-req"> *</span></span></label>
+        <div class="rpf-mr-sig-row">
+          <div class="rpf-mr-sig-field"><label>Parent or guardian full name<span class="rpf-req"> *</span></label><input type="text" name="mta_guardian_name"${isMinor ? ' required' : ''} autocomplete="name" /></div>
+          <div class="rpf-mr-sig-field"><label>Relationship to participant<span class="rpf-req"> *</span></label><input type="text" name="mta_guardian_relationship"${isMinor ? ' required' : ''} /></div>
+        </div>
+        <div class="rpf-mr-sig-row">
+          <div class="rpf-mr-sig-field"><label>Parent or guardian signature<span class="rpf-req"> *</span></label><input type="text" name="mta_guardian_sig"${isMinor ? ' required' : ''} /></div>
+          <div class="rpf-mr-sig-field"><label>Date<span class="rpf-req"> *</span></label><input type="date" name="mta_guardian_date"${isMinor ? ' required' : ''} /></div>
+        </div>
+      </div>
+    </div>`;
+
+    return `<div class="rpf-media-release">
+      <div class="rpf-mr-text">${intro}</div>
+      <hr class="rpf-mr-divider" />
+      <div class="rpf-mr-text">${agreementText}</div>
+      <hr class="rpf-mr-divider" />
+      <div class="rpf-mr-section-label">Signature</div>
+      ${!isMinor ? adultSig : ''}
+      ${(isMinor || ageUnknown) ? guardianSig : ''}
+      ${age !== null ? `<input type="hidden" name="mta_signer_age" value="${age}" />` : ''}
+    </div>`;
+  }
+
   function rpfRenderField(fieldStr, prefill) {
     const raw = String(fieldStr).trim();
 
@@ -34362,6 +34491,11 @@ Thank you,
     if (raw === '{code-of-conduct}') {
       const template = getRegistrationFormTemplate('code_of_conduct');
       return rpfRenderCodeOfConductSection(template, prefill);
+    }
+
+    if (raw === '{medical-treatment-auth}') {
+      const template = getRegistrationFormTemplate('medical_treatment_auth');
+      return rpfRenderMedicalTreatmentAuthSection(template, prefill);
     }
 
     if (raw.startsWith('{section}')) {
