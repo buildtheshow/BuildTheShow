@@ -1171,6 +1171,15 @@
     .reg-form-edit-section-divider-row { display:flex; align-items:center; justify-content:space-between; padding:0.3rem 0.5rem; background:rgba(87,46,136,0.07); border-radius:6px; font-size:0.62rem; font-weight:900; text-transform:uppercase; letter-spacing:0.08em; color:#572e88; }
     .reg-form-edit-section-divider-row button { background:none; border:none; color:rgba(87,46,136,0.4); font-size:0.7rem; cursor:pointer; padding:0 0.2rem; line-height:1; }
     .reg-form-edit-section-divider-row button:hover { color:#d1523d; }
+    .reg-form-edit-tab-nav { display:flex; overflow-x:auto; scrollbar-width:none; border-bottom:2px solid #ebe6f1; background:#fafafa; padding:0 1.2rem; gap:0; flex-shrink:0; }
+    .reg-form-edit-tab-nav::-webkit-scrollbar { display:none; }
+    .reg-form-edit-tab-btn { padding:0.6rem 0.9rem; font-size:0.7rem; font-weight:800; color:rgba(0,0,0,0.4); border:none; background:none; cursor:pointer; white-space:nowrap; border-bottom:2.5px solid transparent; margin-bottom:-2px; font-family:var(--bts-font); transition:color 0.12s; }
+    .reg-form-edit-tab-btn:hover { color:var(--reg-form-edit-color, #572e88); }
+    .reg-form-edit-tab-btn.active { color:var(--reg-form-edit-color, #572e88); border-bottom-color:var(--reg-form-edit-color, #572e88); }
+    .reg-form-edit-tab-body { padding:1.2rem 1.5rem; max-height:55vh; overflow-y:auto; }
+    .reg-form-edit-tab-panel { display:none; flex-direction:column; gap:1.1rem; }
+    .reg-form-edit-tab-panel.active { display:flex; }
+    .rpf-section-text { font-size:0.84rem; color:#333; line-height:1.65; margin:0.15rem 0 0.75rem; white-space:pre-wrap; }
     .reg-form-edit-fields-list {
       display: flex;
       flex-direction: column;
@@ -22127,32 +22136,16 @@
 
 <!-- ── Registration Form Template modal ── -->
 <div class="modal-overlay" id="registration-form-template-modal">
-  <div class="modal reg-form-edit-modal" style="max-width:560px;padding:0;overflow:hidden;">
+  <div class="modal reg-form-edit-modal" style="max-width:600px;padding:0;overflow:hidden;">
     <input type="hidden" id="registration-form-template-key" />
+    <input type="hidden" id="registration-form-create-group" />
     <div class="reg-form-edit-header" id="registration-form-edit-header">
       <button class="reg-form-edit-close" type="button" aria-label="Close" onclick="closeRegistrationFormTemplateModal()">✕</button>
       <div class="reg-form-edit-kicker" id="registration-form-edit-kicker"></div>
       <div class="reg-form-edit-title" id="registration-form-edit-title"></div>
       <div class="reg-form-edit-summary" id="registration-form-edit-summary"></div>
     </div>
-    <input type="hidden" id="registration-form-create-group" />
-    <div class="reg-form-edit-body">
-      <div class="reg-form-edit-section" id="registration-form-create-fields" style="display:none;">
-        <div class="reg-form-edit-section-label">Form title</div>
-        <input type="text" class="form-input" id="registration-form-create-title" placeholder="e.g. Covid Protocol Agreement" />
-        <div class="reg-form-edit-section-label" style="margin-top:0.6rem;">Description <span class="reg-form-edit-section-hint">shown on the settings tile</span></div>
-        <input type="text" class="form-input" id="registration-form-create-summary" placeholder="What this form covers..." />
-      </div>
-      <div class="reg-form-edit-section">
-        <div class="reg-form-edit-section-label">Intro text <span class="reg-form-edit-section-hint">shown at the top of this form</span></div>
-        <textarea class="form-textarea" id="registration-form-template-intro" rows="2" placeholder="Short instructions for performers filling out this section..."></textarea>
-      </div>
-      <div class="reg-form-edit-section">
-        <div class="reg-form-edit-section-label">Fields <span class="reg-form-edit-section-hint">collected in this form</span></div>
-        <div id="registration-form-template-fields-list" class="reg-form-edit-fields-list"></div>
-        <button type="button" class="reg-form-edit-add-field" onclick="addRegistrationFormField()">+ Add field</button>
-      </div>
-    </div>
+    <div id="registration-form-edit-body-area"></div>
     <div class="reg-form-edit-footer">
       <button class="btn-secondary" type="button" onclick="closeRegistrationFormTemplateModal()">Cancel</button>
       <button class="btn-primary" type="button" onclick="saveRegistrationFormTemplateModal()">Save</button>
@@ -32541,6 +32534,84 @@ Thank you,
     });
   }
 
+  function regFormSwitchTab(btn, tabId) {
+    const wrap = btn.closest('.modal');
+    if (!wrap) return;
+    wrap.querySelectorAll('.reg-form-edit-tab-btn').forEach(b => b.classList.remove('active'));
+    wrap.querySelectorAll('.reg-form-edit-tab-panel').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById(tabId)?.classList.add('active');
+  }
+
+  function addRegistrationFormFieldToPanel(btn) {
+    const list = btn.previousElementSibling;
+    if (!list || !list.classList.contains('reg-form-edit-fields-list')) return;
+    const div = document.createElement('div');
+    div.innerHTML = renderRegistrationFormFieldRow('');
+    const row = div.firstElementChild;
+    list.appendChild(row);
+    row.querySelector('.reg-form-edit-field-input')?.focus();
+  }
+
+  function renderRegistrationFormFlatBody(intro, fields, showCreateFields) {
+    const createSection = showCreateFields ? `
+      <div class="reg-form-edit-section" id="registration-form-create-fields">
+        <div class="reg-form-edit-section-label">Form title</div>
+        <input type="text" class="form-input" id="registration-form-create-title" placeholder="e.g. Covid Protocol Agreement" />
+        <div class="reg-form-edit-section-label" style="margin-top:0.6rem;">Description <span class="reg-form-edit-section-hint">shown on the settings tile</span></div>
+        <input type="text" class="form-input" id="registration-form-create-summary" placeholder="What this form covers..." />
+      </div>` : '';
+    return `<div class="reg-form-edit-body">
+      ${createSection}
+      <div class="reg-form-edit-section">
+        <div class="reg-form-edit-section-label">Intro text <span class="reg-form-edit-section-hint">shown at the top of this form</span></div>
+        <textarea class="form-textarea" id="registration-form-template-intro" rows="2" placeholder="Short instructions for performers...">${esc(intro)}</textarea>
+      </div>
+      <div class="reg-form-edit-section">
+        <div class="reg-form-edit-section-label">Fields <span class="reg-form-edit-section-hint">collected in this form</span></div>
+        <div id="registration-form-template-fields-list" class="reg-form-edit-fields-list">${fields.map(renderRegistrationFormFieldRow).join('')}</div>
+        <button type="button" class="reg-form-edit-add-field" onclick="addRegistrationFormField()">+ Add field</button>
+      </div>
+    </div>`;
+  }
+
+  function renderRegistrationFormTabBody(def, template) {
+    const allFields = (template?.fields?.length ? template.fields : def.defaultFields) || [];
+    const sectionTexts = template?.sectionTexts || {};
+    const sections = [];
+    let current = null;
+    for (const f of allFields) {
+      const raw = String(f).trim();
+      if (raw.startsWith('{section}')) {
+        current = { title: raw.slice(9), raw, fields: [] };
+        sections.push(current);
+      } else if (current) {
+        current.fields.push(f);
+      }
+    }
+    const tabs = [{ id: 'reg-tab-intro', label: 'Intro' }, ...sections.map((s, i) => ({ id: `reg-tab-s${i}`, label: s.title }))];
+    const tabNav = `<div class="reg-form-edit-tab-nav">${tabs.map((t, i) => `<button class="reg-form-edit-tab-btn${i === 0 ? ' active' : ''}" onclick="regFormSwitchTab(this,'${t.id}')">${esc(t.label)}</button>`).join('')}</div>`;
+    const introPanel = `<div class="reg-form-edit-tab-panel active" id="reg-tab-intro">
+      <div class="reg-form-edit-section">
+        <div class="reg-form-edit-section-label">Welcome message <span class="reg-form-edit-section-hint">shown at the top of the form</span></div>
+        <textarea class="form-textarea" id="registration-form-template-intro" rows="3" placeholder="Welcome performers and explain what this form is about...">${esc(template?.intro || '')}</textarea>
+      </div>
+    </div>`;
+    const sectionPanels = sections.map((s, i) => `
+      <div class="reg-form-edit-tab-panel" id="reg-tab-s${i}" data-section-title="${esc(s.title)}" data-section-raw="${esc(s.raw)}">
+        <div class="reg-form-edit-section">
+          <div class="reg-form-edit-section-label">Description <span class="reg-form-edit-section-hint">paragraph shown above the acknowledgement</span></div>
+          <textarea class="form-textarea reg-form-section-text-area" rows="4" placeholder="Describe the expectations for this section...">${esc(sectionTexts[s.title] || '')}</textarea>
+        </div>
+        <div class="reg-form-edit-section">
+          <div class="reg-form-edit-section-label">Fields</div>
+          <div class="reg-form-edit-fields-list">${s.fields.map(renderRegistrationFormFieldRow).join('')}</div>
+          <button type="button" class="reg-form-edit-add-field" onclick="addRegistrationFormFieldToPanel(this)">+ Add field</button>
+        </div>
+      </div>`).join('');
+    return `${tabNav}<div class="reg-form-edit-tab-body">${introPanel}${sectionPanels}</div>`;
+  }
+
   function renderRegistrationFormFieldRow(field) {
     const raw = String(field).trim();
 
@@ -32602,15 +32673,18 @@ Thank you,
     if (!def || !template) return;
     const modal = document.getElementById('registration-form-template-modal');
     if (!modal) return;
-    document.getElementById('registration-form-create-fields').style.display = 'none';
     document.getElementById('registration-form-template-key').value = key;
     document.getElementById('registration-form-edit-kicker').textContent = def.group;
     document.getElementById('registration-form-edit-title').textContent = def.title;
     document.getElementById('registration-form-edit-summary').textContent = def.summary;
-    document.getElementById('registration-form-template-intro').value = template.intro || '';
     document.getElementById('registration-form-edit-header').style.setProperty('--reg-form-edit-color', def.color);
-    const list = document.getElementById('registration-form-template-fields-list');
-    list.innerHTML = (template.fields || []).map(renderRegistrationFormFieldRow).join('');
+    const fields = template?.fields?.length ? template.fields : def.defaultFields;
+    const hasSections = fields.some(f => String(f).startsWith('{section}'));
+    const bodyArea = document.getElementById('registration-form-edit-body-area');
+    bodyArea.innerHTML = hasSections
+      ? renderRegistrationFormTabBody(def, template)
+      : renderRegistrationFormFlatBody(template.intro || '', fields, false);
+    modal.dataset.mode = hasSections ? 'tabs' : 'flat';
     modal.classList.add('open');
   }
 
@@ -32619,17 +32693,15 @@ Thank you,
     if (!modal) return;
     const color = REGISTRATION_FORM_TEMPLATE_DEFS.find(d => d.group === group)?.color || '#572e88';
     const newKey = `custom_${Date.now()}`;
-    document.getElementById('registration-form-create-fields').style.display = '';
-    document.getElementById('registration-form-create-title').value = '';
-    document.getElementById('registration-form-create-summary').value = '';
     document.getElementById('registration-form-create-group').value = group;
     document.getElementById('registration-form-template-key').value = newKey;
     document.getElementById('registration-form-edit-kicker').textContent = group;
     document.getElementById('registration-form-edit-title').textContent = 'New Form';
     document.getElementById('registration-form-edit-summary').textContent = 'Fill in the details below.';
-    document.getElementById('registration-form-template-intro').value = '';
     document.getElementById('registration-form-edit-header').style.setProperty('--reg-form-edit-color', color);
-    document.getElementById('registration-form-template-fields-list').innerHTML = '';
+    const bodyArea = document.getElementById('registration-form-edit-body-area');
+    bodyArea.innerHTML = renderRegistrationFormFlatBody('', [], true);
+    modal.dataset.mode = 'flat';
     modal.classList.add('open');
   }
 
@@ -32677,16 +32749,40 @@ Thank you,
   }
 
   function saveRegistrationFormTemplateModal() {
+    const modal = document.getElementById('registration-form-template-modal');
     const key = document.getElementById('registration-form-template-key')?.value || '';
     const intro = document.getElementById('registration-form-template-intro')?.value?.trim() || '';
-    const rows = document.querySelectorAll('#registration-form-template-fields-list .reg-form-edit-field-row, #registration-form-template-fields-list .reg-form-edit-section-divider-row');
-    const fields = [...rows].map(row => {
-      if (row.classList.contains('reg-form-edit-section-divider-row')) return row.dataset.fieldRaw || null;
-      const prefix = row.dataset.fieldPrefix || '';
-      const name = row.querySelector('.reg-form-edit-field-input')?.value?.trim() || '';
-      const isRequired = row.querySelector('.reg-form-edit-field-req')?.classList.contains('is-required');
-      return name ? (prefix + name + (isRequired ? ' *' : '')) : null;
-    }).filter(Boolean);
+    const isTabs = modal?.dataset.mode === 'tabs';
+
+    let fields = [];
+    let sectionTexts = {};
+
+    if (isTabs) {
+      document.querySelectorAll('.reg-form-edit-tab-panel[data-section-title]').forEach(panel => {
+        const title = panel.dataset.sectionTitle;
+        const rawSection = panel.dataset.sectionRaw;
+        const text = panel.querySelector('.reg-form-section-text-area')?.value?.trim() || '';
+        if (text) sectionTexts[title] = text;
+        fields.push(rawSection);
+        panel.querySelectorAll('.reg-form-edit-fields-list .reg-form-edit-field-row, .reg-form-edit-fields-list .reg-form-edit-section-divider-row').forEach(row => {
+          if (row.classList.contains('reg-form-edit-section-divider-row')) { fields.push(row.dataset.fieldRaw || null); return; }
+          const prefix = row.dataset.fieldPrefix || '';
+          const name = row.querySelector('.reg-form-edit-field-input')?.value?.trim() || '';
+          const isRequired = row.querySelector('.reg-form-edit-field-req')?.classList.contains('is-required');
+          if (name) fields.push(prefix + name + (isRequired ? ' *' : ''));
+        });
+      });
+      fields = fields.filter(Boolean);
+    } else {
+      const rows = document.querySelectorAll('#registration-form-template-fields-list .reg-form-edit-field-row, #registration-form-template-fields-list .reg-form-edit-section-divider-row');
+      fields = [...rows].map(row => {
+        if (row.classList.contains('reg-form-edit-section-divider-row')) return row.dataset.fieldRaw || null;
+        const prefix = row.dataset.fieldPrefix || '';
+        const name = row.querySelector('.reg-form-edit-field-input')?.value?.trim() || '';
+        const isRequired = row.querySelector('.reg-form-edit-field-req')?.classList.contains('is-required');
+        return name ? (prefix + name + (isRequired ? ' *' : '')) : null;
+      }).filter(Boolean);
+    }
 
     if (key.startsWith('custom_')) {
       const title = document.getElementById('registration-form-create-title')?.value?.trim() || 'Custom Form';
@@ -32695,13 +32791,13 @@ Thank you,
       const color = REGISTRATION_FORM_TEMPLATE_DEFS.find(d => d.group === group)?.color || '#572e88';
       const settingId = `reg-form-${key}`;
       REGISTRATION_FORM_TEMPLATE_DEFS.push({ key, settingId, group, color, defaultOn: true, title, summary, defaultFields: fields });
-      registrationFormTemplatesState = { ...(registrationFormTemplatesState || {}), [key]: { title, intro, fields } };
+      registrationFormTemplatesState = { ...(registrationFormTemplatesState || {}), [key]: { title, intro, fields, sectionTexts } };
     } else {
       const def = getRegistrationFormTemplateDef(key);
       if (!def) return;
       registrationFormTemplatesState = {
         ...(registrationFormTemplatesState || {}),
-        [key]: { title: def.title, intro, fields: fields.length ? fields : def.defaultFields }
+        [key]: { title: def.title, intro, fields: fields.length ? fields : def.defaultFields, sectionTexts }
       };
     }
 
@@ -33440,7 +33536,8 @@ Thank you,
 
     if (raw.startsWith('{section}')) {
       const title = raw.slice(9);
-      return `<div class="rpf-form-section-divider">${esc(title)}</div>`;
+      const text = window._rpfSectionTexts?.[title] || '';
+      return `<div class="rpf-form-section-divider">${esc(title)}</div>${text ? `<p class="rpf-section-text">${esc(text)}</p>` : ''}`;
     }
 
     if (raw === '{pickup-add}') {
@@ -33587,6 +33684,7 @@ Thank you,
     const posterUrl = prod?.poster_url || '';
 
     // Pre-fill data — from a sample performer if available, otherwise empty
+    window._rpfSectionTexts = {};
     const prefill = window._rpfPrefillData || null;
     const hasPrefill = prefill && (prefill.first_name || prefill.email);
 
@@ -33603,6 +33701,7 @@ Thank you,
 
     const panelsHtml = sections.map((def, i) => {
       const template = getRegistrationFormTemplate(def.key);
+      window._rpfSectionTexts = { ...(window._rpfSectionTexts || {}), ...(template?.sectionTexts || {}) };
       const fields = (template?.fields?.length ? template.fields : def.defaultFields) || [];
       const intro = template?.intro || '';
       const isLast = i === sections.length - 1;
