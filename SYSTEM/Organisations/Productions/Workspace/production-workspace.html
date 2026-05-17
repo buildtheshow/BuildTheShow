@@ -1143,7 +1143,7 @@
     }
     .reg-form-edit-body {
       padding: 1.2rem 1.5rem;
-      max-height: 58vh;
+      flex: 1 1 0;
       overflow-y: auto;
       display: flex;
       flex-direction: column;
@@ -1171,7 +1171,8 @@
     .reg-form-edit-section-divider-row { display:flex; align-items:center; justify-content:space-between; padding:0.3rem 0.5rem; background:rgba(87,46,136,0.07); border-radius:6px; font-size:0.62rem; font-weight:900; text-transform:uppercase; letter-spacing:0.08em; color:#572e88; }
     .reg-form-edit-section-divider-row button { background:none; border:none; color:rgba(87,46,136,0.4); font-size:0.7rem; cursor:pointer; padding:0 0.2rem; line-height:1; }
     .reg-form-edit-section-divider-row button:hover { color:#d1523d; }
-    .reg-form-edit-tab-wrap { display:flex; max-height:68vh; overflow:hidden; }
+    #registration-form-edit-body-area { flex:1 1 0; overflow:hidden; display:flex; flex-direction:column; }
+    .reg-form-edit-tab-wrap { display:flex; flex:1 1 0; overflow:hidden; }
     .reg-form-edit-tab-sidebar { width:158px; flex-shrink:0; border-right:2px solid #ebe6f1; display:flex; flex-direction:column; overflow-y:auto; scrollbar-width:none; padding:0.4rem 0; background:#fafafa; }
     .reg-form-edit-tab-sidebar::-webkit-scrollbar { display:none; }
     .reg-form-edit-sidebar-item { display:flex; align-items:center; }
@@ -1186,6 +1187,8 @@
     .reg-form-edit-tab-panel { display:none; flex-direction:column; gap:1.1rem; }
     .reg-form-edit-tab-panel.active { display:flex; }
     .rpf-section-text { font-size:0.84rem; color:#333; line-height:1.65; margin:0.15rem 0 0.75rem; white-space:pre-wrap; }
+    .reg-form-var-bar { display:flex; align-items:center; flex-wrap:wrap; gap:0.4rem; padding:0.65rem 1.2rem; border-top:2px solid #ebe6f1; background:#fafafa; }
+    .reg-form-var-bar-label { font-size:0.62rem; font-weight:800; text-transform:uppercase; letter-spacing:0.07em; color:rgba(0,0,0,0.35); margin-right:0.2rem; white-space:nowrap; }
     .reg-form-edit-fields-list {
       display: flex;
       flex-direction: column;
@@ -1269,13 +1272,7 @@
       border-color: var(--reg-form-edit-color, #572e88);
       color: var(--reg-form-edit-color, #572e88);
     }
-    .reg-form-edit-footer {
-      display: flex;
-      gap: 0.6rem;
-      padding: 0.9rem 1.5rem;
-      border-top: 1px solid #f0ebf8;
-      justify-content: flex-end;
-    }
+    .reg-form-edit-footer { flex-shrink:0; display:flex; gap:0.6rem; padding:0.9rem 1.5rem; border-top:1px solid #f0ebf8; justify-content:flex-end; }
     /* ── Registration Public Form Preview ── */
     .rpf-shell { display:flex; height:100%; min-height:500px; background:#efefef; font-family:var(--bts-font); overflow:hidden; }
     .rpf-left-bar { width:200px; flex-shrink:0; background:#572e88; display:flex; flex-direction:column; overflow:hidden; position:relative; }
@@ -22142,7 +22139,7 @@
 
 <!-- ── Registration Form Template modal ── -->
 <div class="modal-overlay" id="registration-form-template-modal">
-  <div class="modal reg-form-edit-modal" style="max-width:860px;padding:0;overflow:hidden;">
+  <div class="modal reg-form-edit-modal" style="max-width:min(92vw,980px);max-height:90vh;padding:0;overflow:hidden;display:flex;flex-direction:column;">
     <input type="hidden" id="registration-form-template-key" />
     <input type="hidden" id="registration-form-create-group" />
     <div class="reg-form-edit-header" id="registration-form-edit-header">
@@ -32555,6 +32552,29 @@ Thank you,
     });
   }
 
+  const REG_FORM_VARIABLES = [
+    { label: 'Organisation',      token: '{{organisation_name}}' },
+    { label: 'Show name',         token: '{{show_name}}' },
+    { label: 'Rehearsal start',   token: '{{rehearsal_start_date}}' },
+    { label: 'Performer name',    token: '{{performer_name}}' },
+    { label: 'Performance dates', token: '{{performance_dates}}' },
+    { label: 'Due date',          token: '{{due_date}}' },
+  ];
+
+  function regFormInsertVar(token) {
+    const bodyArea = document.getElementById('registration-form-edit-body-area');
+    const active = document.activeElement;
+    const el = (active?.tagName === 'TEXTAREA' && bodyArea?.contains(active))
+      ? active : window._regFormLastTextarea;
+    if (!el) return;
+    const start = el.selectionStart ?? el.value.length;
+    const end   = el.selectionEnd   ?? el.value.length;
+    el.value = el.value.slice(0, start) + token + el.value.slice(end);
+    const newPos = start + token.length;
+    el.focus();
+    el.setSelectionRange(newPos, newPos);
+  }
+
   function regFormSwitchTab(btn, tabId) {
     const wrap = btn.closest('.modal');
     if (!wrap) return;
@@ -32673,10 +32693,14 @@ Thank you,
       </div>`).join('')}
       <button class="reg-form-edit-sidebar-add" onclick="regFormAddSection(this)">+ Add section</button>
     </div>`;
+    const varBar = `<div class="reg-form-var-bar">
+      <span class="reg-form-var-bar-label">Insert</span>
+      ${REG_FORM_VARIABLES.map(v => `<button type="button" class="et-var-chip" onclick="regFormInsertVar('${v.token}')"><span class="et-var-chip-label">${esc(v.label)}</span><span class="et-var-chip-token">${esc(v.token)}</span></button>`).join('')}
+    </div>`;
     const introPanel = `<div class="reg-form-edit-tab-panel active" id="reg-tab-intro">
       <div class="reg-form-edit-section">
         <div class="reg-form-edit-section-label">Welcome message <span class="reg-form-edit-section-hint">shown at the top of the form</span></div>
-        <textarea class="form-textarea" id="registration-form-template-intro" rows="8" placeholder="Welcome performers and explain what this form is about...">${esc(template?.intro || '')}</textarea>
+        <textarea class="form-textarea" id="registration-form-template-intro" rows="8" onfocus="window._regFormLastTextarea=this" placeholder="Welcome performers and explain what this form is about...">${esc(template?.intro || '')}</textarea>
       </div>
     </div>`;
     const sectionPanels = sections.map((s, i) => `
@@ -32687,7 +32711,7 @@ Thank you,
         </div>
         <div class="reg-form-edit-section">
           <div class="reg-form-edit-section-label">Description <span class="reg-form-edit-section-hint">paragraph shown above the acknowledgement</span></div>
-          <textarea class="form-textarea reg-form-section-text-area" rows="9" placeholder="Describe what this section covers...">${esc(sectionTexts[s.title] || '')}</textarea>
+          <textarea class="form-textarea reg-form-section-text-area" rows="9" onfocus="window._regFormLastTextarea=this" placeholder="Describe what this section covers...">${esc(sectionTexts[s.title] || '')}</textarea>
         </div>
         <div class="reg-form-edit-section">
           <div class="reg-form-edit-section-label">Fields</div>
@@ -32695,7 +32719,7 @@ Thank you,
           <button type="button" class="reg-form-edit-add-field" onclick="addRegistrationFormFieldToPanel(this)">+ Add field</button>
         </div>
       </div>`).join('');
-    return `<div class="reg-form-edit-tab-wrap">${sidebar}<div class="reg-form-edit-tab-body">${introPanel}${sectionPanels}</div></div>`;
+    return `<div class="reg-form-edit-tab-wrap">${sidebar}<div class="reg-form-edit-tab-body">${introPanel}${sectionPanels}</div></div>${varBar}`;
   }
 
   function renderRegistrationFormFieldRow(field) {
