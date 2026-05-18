@@ -3839,6 +3839,9 @@
     #email-template-list {
       padding: 0 0 1rem;
     }
+    #email-template-list.is-brand-tile-fitting .template-brand-card {
+      visibility: hidden;
+    }
     .et-template-cards {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
@@ -28581,6 +28584,7 @@ Thank you,
   function renderEmailTemplates() {
     const list = document.getElementById('email-template-list');
     if (!list) return;
+    list.classList.add('is-brand-tile-fitting');
     etBuildFilterChips();
     renderEmailTemplateSummary();
     const visibleTemplates = etVisibleEmailTemplates(_etTemplates || []);
@@ -28598,7 +28602,10 @@ Thank you,
     });
     if (_etCatFilter === 'all') {
       const renderer = window.BTSAuditionTemplates?.renderTemplateById;
-      if (!renderer) return;
+      if (!renderer) {
+        list.classList.remove('is-brand-tile-fitting');
+        return;
+      }
       const homeCards = ET_HOME_SECTIONS.map(home => {
         const section = etSectionMeta(home.key);
         const count = sorted.filter(t => etSectionMatchesFilter(t, home.key)).length;
@@ -28624,7 +28631,7 @@ Thank you,
           <div class="et-section-home-grid">${homeCards}</div>
         </div>
       </div>`;
-      scheduleBrandTileTitleFit(list);
+      scheduleBrandTileTitleFit(list, { hideUntilFit: true, delay: 0 });
       return;
     }
     const filtered = sorted.filter(t => etSectionMatchesFilter(t, _etCatFilter));
@@ -28690,7 +28697,7 @@ Thank you,
         </section>
       </div>
     </div>`;
-    scheduleBrandTileTitleFit(list);
+    scheduleBrandTileTitleFit(list, { hideUntilFit: true, delay: 0 });
   }
 
   function fitBrandTileTitles(root = document) {
@@ -28725,11 +28732,18 @@ Thank you,
   }
 
   let brandTileFitTimer = null;
-  function scheduleBrandTileTitleFit(root = document) {
+  function scheduleBrandTileTitleFit(root = document, options = {}) {
+    const { hideUntilFit = false, delay = 80 } = options;
     clearTimeout(brandTileFitTimer);
     brandTileFitTimer = setTimeout(() => {
-      requestAnimationFrame(() => requestAnimationFrame(() => fitBrandTileTitles(root)));
-    }, 80);
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        try {
+          fitBrandTileTitles(root);
+        } finally {
+          if (hideUntilFit) root.classList?.remove('is-brand-tile-fitting');
+        }
+      }));
+    }, delay);
   }
 
   window.addEventListener('resize', () => scheduleBrandTileTitleFit(), { passive: true });
