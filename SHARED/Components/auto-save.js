@@ -35,11 +35,14 @@
   let _lastActiveAt    = 0;
 
   // ── Status pill ──────────────────────────────────────────────────────────
-  // If the page defines window.showToast(msg, isError), we delegate to it so
-  // all save feedback uses the same gold pill the user sees everywhere else.
-  // If not, we create our own matching pill.
+  // Uses the page’s existing #toast element if present (manipulates it directly
+  // with BTS toast classes). Falls back to creating its own matching gold pill.
 
-  function ensureStatusEl() {
+  function getToastEl() {
+    return document.getElementById(‘toast’) || null;
+  }
+
+  function ensureOwnPill() {
     if (_statusEl) return _statusEl;
     const el = document.createElement(‘div’);
     el.id = ‘bts-autosave-status’;
@@ -60,12 +63,22 @@
   }
 
   function setStatus(text, isError, hideAfter) {
-    if (window.showToast && typeof window.showToast === ‘function’) {
-      window.showToast(text, isError || false);
+    if (_hideTimer) { clearTimeout(_hideTimer); _hideTimer = null; }
+    const pageToast = getToastEl();
+    if (pageToast) {
+      pageToast.textContent = text;
+      pageToast.classList.remove(‘toast--success’, ‘toast--error’, ‘visible’);
+      void pageToast.offsetWidth; // force reflow so transition replays
+      pageToast.classList.toggle(‘toast--success’, !isError);
+      pageToast.classList.toggle(‘toast--error’, !!isError);
+      pageToast.classList.add(‘visible’);
+      if (hideAfter) {
+        _hideTimer = setTimeout(() => pageToast.classList.remove(‘visible’, ‘toast--success’, ‘toast--error’), hideAfter);
+      }
       return;
     }
-    const el = ensureStatusEl();
-    if (_hideTimer) { clearTimeout(_hideTimer); _hideTimer = null; }
+    // No page toast — use own pill
+    const el = ensureOwnPill();
     el.textContent = text;
     if (isError) {
       el.style.background = ‘rgba(220,60,60,0.12)’;
