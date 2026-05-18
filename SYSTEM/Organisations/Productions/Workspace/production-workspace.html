@@ -32565,13 +32565,16 @@ Thank you,
   let paymentSettingsState = {};
 
   const PAYMENT_DEFAULT_STATE = {
-    mode: 'none',
+    mode: 'none',           // 'none' | 'flat' | 'deposit' | 'external'
     fee: '',
     currency: 'CAD',
-    due_date: '',
+    fee_due_date: '',
+    late_fee_date: '',
     deposit_amount: '',
     deposit_due_date: '',
-    completion_rule: 'none',
+    remaining_balance_due_date: '',
+    completion_rule: 'none', // lives here but displayed in Intake settings
+    plans_enabled: false,
     plans: [],
     sibling_discount_enabled: false,
     sibling_first_child: '',
@@ -33847,22 +33850,24 @@ Thank you,
     if (!modal) return;
     document.getElementById('payment-settings-modal-mode').value = mode;
     const s = getPaymentSettings();
-    const titles = { required: 'Payment Required', plans: 'Payment Plans', discounts: 'Discounts & Credits', instructions: 'Payment Instructions' };
+    const titles = { fee: 'Production Fee', plans: 'Payment Plans', discounts: 'Discounts & Credits', instructions: 'Payment Instructions', completion: 'Registration Completion' };
     const summaries = {
-      required: 'Set whether fees exist, the base amount, due date, and how payment gates registration completion.',
-      plans: 'Build installment schedules families can choose from during registration.',
+      fee: 'Set whether this production charges a fee, what kind, and how much.',
+      plans: 'Let families split their payment into installments.',
       discounts: 'Configure sibling discounts, volunteer credits, and financial assistance options.',
       instructions: 'Write the payment instructions shown to families when a balance is due.',
+      completion: 'Choose what payment status is required before registration is marked complete.',
     };
     document.getElementById('payment-settings-edit-title').textContent = titles[mode] || 'Payment Settings';
     document.getElementById('payment-settings-edit-summary').textContent = summaries[mode] || '';
     const body = document.getElementById('payment-settings-edit-body-area');
-    if (mode === 'required')      body.innerHTML = renderPaymentRequiredModalBody(s);
+    if (mode === 'fee')           body.innerHTML = renderProductionFeeModalBody(s);
     else if (mode === 'plans')    body.innerHTML = renderPaymentPlansModalBody(s);
     else if (mode === 'discounts') body.innerHTML = renderPaymentDiscountsModalBody(s);
     else if (mode === 'instructions') body.innerHTML = renderPaymentInstructionsModalBody(s);
+    else if (mode === 'completion') body.innerHTML = renderCompletionRulesModalBody(s);
     modal.classList.add('open');
-    if (mode === 'required') payUpdateFeeFields();
+    if (mode === 'fee') payUpdateFeeFields();
   }
 
   function closePaymentSettingsModal() {
@@ -33872,15 +33877,17 @@ Thank you,
   async function savePaymentSettingsModal(btn) {
     const mode = document.getElementById('payment-settings-modal-mode')?.value;
     const s = getPaymentSettings();
-    if (mode === 'required') {
+    if (mode === 'fee') {
       s.mode = document.querySelector('#payment-settings-edit-body-area input[name="pay-mode"]:checked')?.value || 'none';
       s.fee = document.getElementById('pay-fee')?.value?.trim() || '';
       s.currency = document.getElementById('pay-currency')?.value || 'CAD';
-      s.due_date = document.getElementById('pay-due-date')?.value || '';
+      s.fee_due_date = document.getElementById('pay-fee-due-date')?.value || '';
+      s.late_fee_date = document.getElementById('pay-late-fee-date')?.value || '';
       s.deposit_amount = document.getElementById('pay-deposit-amount')?.value?.trim() || '';
       s.deposit_due_date = document.getElementById('pay-deposit-due-date')?.value || '';
-      s.completion_rule = document.querySelector('#payment-settings-edit-body-area input[name="pay-completion"]:checked')?.value || 'none';
+      s.remaining_balance_due_date = document.getElementById('pay-remaining-balance-date')?.value || '';
     } else if (mode === 'plans') {
+      s.plans_enabled = document.getElementById('pay-plans-enabled')?.checked || false;
       s.plans = payCollectPlans();
     } else if (mode === 'discounts') {
       s.sibling_discount_enabled = document.getElementById('pay-sibling-enabled')?.checked || false;
@@ -33895,6 +33902,8 @@ Thank you,
       s.scholarship_note = document.getElementById('pay-scholarship-note')?.value?.trim() || '';
     } else if (mode === 'instructions') {
       s.instructions = document.getElementById('pay-instructions-editor')?.innerHTML?.trim() || '';
+    } else if (mode === 'completion') {
+      s.completion_rule = document.querySelector('#payment-settings-edit-body-area input[name="pay-completion"]:checked')?.value || 'none';
     }
     paymentSettingsState = Object.assign({}, paymentSettingsState || {}, s);
     const host = document.getElementById('registration-payments-settings-surface');
@@ -33903,24 +33912,25 @@ Thank you,
       syncBrandTileSettingsState(host);
       requestAnimationFrame(() => requestAnimationFrame(() => { try { fitBrandTileTitles(host); } catch (_) {} }));
     }
+    if (mode === 'completion') {
+      const intakeHost = document.getElementById('registration-intake-settings-surface');
+      if (intakeHost) {
+        syncBrandTileSettingsState(intakeHost);
+        requestAnimationFrame(() => requestAnimationFrame(() => { try { fitBrandTileTitles(intakeHost); } catch (_) {} }));
+      }
+    }
     const done = btnSaveFeedback(btn || document.getElementById('payment-settings-save-btn'));
     await saveRegistrationSettings();
     done();
     setTimeout(() => closePaymentSettingsModal(), 900);
   }
 
-  function renderPaymentRequiredModalBody(s) {
+  function renderProductionFeeModalBody(s) {
     const modes = [
-      { value: 'none',     title: 'No fees',                       desc: 'No registration fees for this production. Remove all payment prompts from the registration flow.' },
-      { value: 'track',    title: 'Track payments only',           desc: 'Record payment status internally. No fee is shown to families — useful for invoicing outside BTS.' },
-      { value: 'deposit',  title: 'Deposit required',              desc: 'A deposit is required before registration is complete. The remaining balance can be tracked separately.' },
-      { value: 'required', title: 'Full fee required',             desc: 'The full production fee must be paid before registration is marked complete.' },
-    ];
-    const completionRules = [
-      { value: 'none',           title: 'No payment requirement',    desc: 'Registration completes regardless of payment status.' },
-      { value: 'deposit',        title: 'Deposit required',          desc: 'Registration is marked complete once the deposit is paid.' },
-      { value: 'full',           title: 'Full payment required',     desc: 'Registration is marked complete only when the full balance is paid.' },
-      { value: 'admin_approval', title: 'Admin approval required',   desc: 'A staff member must manually approve registration completion.' },
+      { value: 'none',     title: 'No Production Fee',              desc: 'This production does not charge participation fees. Payment prompts are removed from the registration flow.' },
+      { value: 'flat',     title: 'Flat Production Fee',            desc: 'Families pay a single production fee for participation. Set the amount, currency, and due date.' },
+      { value: 'deposit',  title: 'Deposit + Remaining Balance',    desc: 'Families pay a deposit first, then the remaining balance by a second date.' },
+      { value: 'external', title: 'External Payment Handling',      desc: 'Payments happen outside BTS — e-transfer, invoice, cash, or school bookkeeping. Balances can still be tracked internally.' },
     ];
     const modeRows = modes.map(m => `<label class="pay-mode-option">
       <input type="radio" name="pay-mode" value="${m.value}" ${s.mode === m.value ? 'checked' : ''} onchange="payUpdateFeeFields()" />
@@ -33929,76 +33939,90 @@ Thank you,
         <span class="pay-mode-option-desc">${esc(m.desc)}</span>
       </span>
     </label>`).join('');
-    const completionRows = completionRules.map(r => `<label class="pay-mode-option">
-      <input type="radio" name="pay-completion" value="${r.value}" ${s.completion_rule === r.value ? 'checked' : ''} />
+    const flatFields = `<div id="pay-flat-fields" class="pay-conditional-block">
+      <div class="reg-form-edit-section-label" style="margin-bottom:0.35rem;">Fee details</div>
+      <div class="pay-fields-group pay-fields-group--three">
+        <div>
+          <div class="pay-field-label">Production fee</div>
+          <input type="text" id="pay-fee" class="form-input" placeholder="e.g. $350.00" value="${esc(s.fee)}" />
+        </div>
+        <div>
+          <div class="pay-field-label">Currency</div>
+          <select id="pay-currency" class="form-input">
+            <option value="CAD" ${s.currency === 'CAD' ? 'selected' : ''}>CAD — Canadian Dollar</option>
+            <option value="USD" ${s.currency === 'USD' ? 'selected' : ''}>USD — US Dollar</option>
+          </select>
+        </div>
+        <div>
+          <div class="pay-field-label">Due date</div>
+          <input type="date" id="pay-fee-due-date" class="form-input" value="${esc(s.fee_due_date || s.due_date || '')}" />
+        </div>
+        <div style="grid-column:1/-1;">
+          <div class="pay-field-label">Late payment date (optional)</div>
+          <input type="date" id="pay-late-fee-date" class="form-input" value="${esc(s.late_fee_date || '')}" />
+        </div>
+      </div>
+    </div>`;
+    const depositFields = `<div id="pay-deposit-fields" class="pay-conditional-block">
+      <div class="reg-form-edit-section-label" style="margin-bottom:0.35rem;">Deposit details</div>
+      <div class="pay-fields-group pay-fields-group--three">
+        <div>
+          <div class="pay-field-label">Deposit amount</div>
+          <input type="text" id="pay-deposit-amount" class="form-input" placeholder="e.g. $100.00" value="${esc(s.deposit_amount)}" />
+        </div>
+        <div>
+          <div class="pay-field-label">Deposit due date</div>
+          <input type="date" id="pay-deposit-due-date" class="form-input" value="${esc(s.deposit_due_date)}" />
+        </div>
+        <div>
+          <div class="pay-field-label">Remaining balance due</div>
+          <input type="date" id="pay-remaining-balance-date" class="form-input" value="${esc(s.remaining_balance_due_date || '')}" />
+        </div>
+      </div>
+    </div>`;
+    return `<div class="reg-form-edit-tab-wrap">
+      <div class="reg-form-edit-tab-body" style="padding:1.25rem 1.4rem;gap:0.9rem;overflow-y:auto;">
+        <div>
+          <div class="reg-form-edit-section-label" style="margin-bottom:0.55rem;">Does this production charge a fee?</div>
+          <div class="pay-mode-options">${modeRows}</div>
+        </div>
+        ${flatFields}${depositFields}
+      </div>
+    </div>`;
+  }
+
+  function renderCompletionRulesModalBody(s) {
+    const rules = [
+      { value: 'none',           title: 'Registration can complete with an unpaid balance', desc: 'Most common for community theatre. Payment is tracked but does not block registration completion.' },
+      { value: 'deposit',        title: 'Deposit required before registration completion',  desc: 'Registration is marked complete once the deposit is paid. The remaining balance can come later.' },
+      { value: 'full',           title: 'Full payment required before registration completion', desc: 'Registration is only complete when the full balance is paid.' },
+      { value: 'admin_approval', title: 'Manual approval required',                         desc: 'A staff member must manually approve registration completion, regardless of payment status.' },
+    ];
+    const ruleRows = rules.map(r => `<label class="pay-mode-option">
+      <input type="radio" name="pay-completion" value="${r.value}" ${(s.completion_rule || 'none') === r.value ? 'checked' : ''} />
       <span class="pay-mode-option-text">
         <span class="pay-mode-option-title">${esc(r.title)}</span>
         <span class="pay-mode-option-desc">${esc(r.desc)}</span>
       </span>
     </label>`).join('');
-    const sidebar = `<div class="reg-form-edit-tab-sidebar">
-      <div class="reg-form-edit-sidebar-item"><button class="reg-form-edit-tab-btn active" onclick="regFormSwitchTab(this,'pay-req-tab-settings')">Settings</button></div>
-      <div class="reg-form-edit-sidebar-item"><button class="reg-form-edit-tab-btn" onclick="regFormSwitchTab(this,'pay-req-tab-completion')">Completion Rules</button></div>
-    </div>`;
-    const settingsPanel = `<div class="reg-form-edit-tab-panel active" id="pay-req-tab-settings" style="padding:1.25rem 1.4rem;gap:0.9rem;overflow-y:auto;">
-      <div class="reg-form-edit-section-label" style="margin-bottom:0.35rem;">Payment mode</div>
-      <div class="pay-mode-options">${modeRows}</div>
-      <div id="pay-fee-fields" class="pay-conditional-block">
-        <div class="reg-form-edit-section-label" style="margin-bottom:0.35rem;">Fee details</div>
-        <div class="pay-fields-group">
-          <div>
-            <div class="pay-field-label">Base production fee</div>
-            <input type="text" id="pay-fee" class="form-input" placeholder="e.g. $350.00" value="${esc(s.fee)}" />
-          </div>
-          <div>
-            <div class="pay-field-label">Currency</div>
-            <select id="pay-currency" class="form-input">
-              <option value="CAD" ${s.currency === 'CAD' ? 'selected' : ''}>CAD — Canadian Dollar</option>
-              <option value="USD" ${s.currency === 'USD' ? 'selected' : ''}>USD — US Dollar</option>
-            </select>
-          </div>
-          <div>
-            <div class="pay-field-label">Due date</div>
-            <input type="date" id="pay-due-date" class="form-input" value="${esc(s.due_date)}" />
-          </div>
-        </div>
-      </div>
-      <div id="pay-deposit-fields" class="pay-conditional-block">
-        <div class="reg-form-edit-section-label" style="margin-bottom:0.35rem;">Deposit details</div>
-        <div class="pay-fields-group">
-          <div>
-            <div class="pay-field-label">Deposit amount</div>
-            <input type="text" id="pay-deposit-amount" class="form-input" placeholder="e.g. $100.00" value="${esc(s.deposit_amount)}" />
-          </div>
-          <div>
-            <div class="pay-field-label">Deposit due date</div>
-            <input type="date" id="pay-deposit-due-date" class="form-input" value="${esc(s.deposit_due_date)}" />
-          </div>
-        </div>
+    return `<div class="reg-form-edit-tab-wrap">
+      <div class="reg-form-edit-tab-body" style="padding:1.25rem 1.4rem;gap:0;overflow-y:auto;">
+        <div style="font-size:0.78rem;color:#7a6a95;line-height:1.5;margin-bottom:0.75rem;">Choose what payment status, if any, is required before a cast member's registration is marked complete.</div>
+        <div class="pay-mode-options">${ruleRows}</div>
       </div>
     </div>`;
-    const completionPanel = `<div class="reg-form-edit-tab-panel" id="pay-req-tab-completion" style="padding:1.25rem 1.4rem;gap:0;overflow-y:auto;">
-      <div class="reg-form-edit-section-label" style="margin-bottom:0.35rem;">When is registration complete?</div>
-      <div style="font-size:0.78rem;color:#7a6a95;line-height:1.5;margin-bottom:0.75rem;">Choose what payment status is required before a cast member's registration is marked complete.</div>
-      <div class="pay-mode-options">${completionRows}</div>
-    </div>`;
-    return `<div class="reg-form-edit-tab-wrap">${sidebar}<div class="reg-form-edit-tab-body">${settingsPanel}${completionPanel}</div></div>`;
   }
 
   function payUpdateFeeFields() {
     const mode = document.querySelector('#payment-settings-edit-body-area input[name="pay-mode"]:checked')?.value || 'none';
-    const feeFields = document.getElementById('pay-fee-fields');
+    const flatFields = document.getElementById('pay-flat-fields');
     const depositFields = document.getElementById('pay-deposit-fields');
-    const feeGrid = feeFields?.querySelector('.pay-fields-group');
-    if (feeFields) feeFields.style.display = (mode === 'none' || mode === 'track') ? 'none' : '';
+    if (flatFields)    flatFields.style.display    = mode === 'flat'    ? '' : 'none';
     if (depositFields) depositFields.style.display = mode === 'deposit' ? '' : 'none';
-    if (feeGrid) {
-      const dueDateCell = feeGrid.children[2];
-      if (dueDateCell) dueDateCell.style.display = mode === 'deposit' ? 'none' : '';
-    }
   }
 
   function renderPaymentPlansModalBody(s) {
+    const plansEnabled = s.plans_enabled || false;
     const plans = s.plans || [];
     const activePlanId = plans[0]?.id || null;
     const sidebarItems = plans.map(p => `
@@ -34007,16 +34031,28 @@ Thank you,
         <button class="pay-plan-remove-btn" onclick="payRemovePlan('${esc(p.id)}')" title="Remove plan">✕</button>
       </div>`).join('');
     const sidebar = `<div class="reg-form-edit-tab-sidebar">
-      ${sidebarItems}
-      <button class="pay-add-plan-btn" onclick="payAddPlan()">+ Add Payment Plan</button>
+      <div style="padding:0.75rem 0.9rem 0.5rem;border-bottom:1px solid #ebe6f1;flex-shrink:0;">
+        <label class="pay-toggle-row" style="margin-bottom:0;">
+          <input type="checkbox" id="pay-plans-enabled" ${plansEnabled ? 'checked' : ''} onchange="payTogglePlansEnabled(this)" />
+          Enable payment plans
+        </label>
+      </div>
+      <div id="pay-plans-sidebar-list" ${plansEnabled ? '' : 'style="display:none"'}>
+        ${sidebarItems}
+        <button class="pay-add-plan-btn" onclick="payAddPlan()">+ Add Plan</button>
+      </div>
     </div>`;
     const planPanels = plans.map((p, i) => renderPaymentPlanPanel(p, i === 0)).join('');
-    const emptyState = !plans.length ? `<div class="reg-form-edit-tab-panel active" id="pay-plan-empty" style="padding:2rem 1.5rem;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0.6rem;text-align:center;">
-      <div style="font-size:0.88rem;font-weight:800;color:#1a1530;">No payment plans yet</div>
-      <div style="font-size:0.78rem;color:#7a6a95;max-width:280px;line-height:1.5;">When no plans are configured, families pay in full. Add plans to give families installment options.</div>
+    const plansOffState = !plansEnabled ? `<div class="reg-form-edit-tab-panel active" id="pay-plans-off" style="padding:2rem 1.5rem;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0.6rem;text-align:center;">
+      <div style="font-size:0.88rem;font-weight:800;color:#1a1530;">Payment plans are off</div>
+      <div style="font-size:0.78rem;color:#7a6a95;max-width:280px;line-height:1.5;">When plans are off, families pay according to the main production fee. Enable plans to give families installment options.</div>
+    </div>` : '';
+    const emptyState = plansEnabled && !plans.length ? `<div class="reg-form-edit-tab-panel active" id="pay-plan-empty" style="padding:2rem 1.5rem;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0.6rem;text-align:center;">
+      <div style="font-size:0.88rem;font-weight:800;color:#1a1530;">No plans yet</div>
+      <div style="font-size:0.78rem;color:#7a6a95;max-width:280px;line-height:1.5;">Add installment plans families can choose from during registration.</div>
       <button class="pay-add-installment-btn" style="margin-top:0.5rem;" onclick="payAddPlan()">+ Add Your First Plan</button>
     </div>` : '';
-    return `<div class="reg-form-edit-tab-wrap">${sidebar}<div class="reg-form-edit-tab-body">${planPanels}${emptyState}</div></div>`;
+    return `<div class="reg-form-edit-tab-wrap">${sidebar}<div class="reg-form-edit-tab-body">${plansOffState}${planPanels}${emptyState}</div></div>`;
   }
 
   function renderPaymentPlanPanel(plan, isActive) {
@@ -34038,38 +34074,16 @@ Thank you,
         <div class="pay-installment-list" id="pay-installments-${esc(plan.id)}">${installmentRows}</div>
         <button type="button" class="pay-add-installment-btn" onclick="payAddInstallment('${esc(plan.id)}')">+ Add Installment</button>
       </div>
-      <div class="pay-plan-section">
-        <div class="pay-plan-section-label">Late fee</div>
-        <label class="pay-toggle-row" style="margin-bottom:0.4rem;">
-          <input type="checkbox" id="pay-late-fee-enabled-${esc(plan.id)}" ${plan.late_fee_enabled ? 'checked' : ''} onchange="payToggleLateFeePlan('${esc(plan.id)}')" />
-          Charge a late fee
-        </label>
-        <div id="pay-late-fee-fields-${esc(plan.id)}" class="pay-indent-fields" ${plan.late_fee_enabled ? '' : 'style="display:none"'}>
-          <div class="pay-fields-group">
-            <div>
-              <div class="pay-field-label">Late fee amount</div>
-              <input type="text" id="pay-late-fee-amount-${esc(plan.id)}" class="form-input" placeholder="e.g. $25.00" value="${esc(plan.late_fee_amount || '')}" />
-            </div>
-            <div>
-              <div class="pay-field-label">Days after due date</div>
-              <input type="number" id="pay-late-fee-days-${esc(plan.id)}" class="form-input" placeholder="e.g. 14" value="${esc(String(plan.late_fee_days ?? 14))}" min="1" />
-            </div>
-          </div>
-        </div>
-      </div>
-      <div class="pay-plan-section">
-        <div class="pay-plan-section-label">Reminders</div>
-        <label class="pay-toggle-row">
-          <input type="checkbox" id="pay-plan-remind-${esc(plan.id)}" ${plan.reminders_enabled ? 'checked' : ''} />
-          Send installment reminders
-        </label>
+      <div class="pay-plan-section" style="border-bottom:none;margin-bottom:0;">
+        <div class="pay-plan-section-label">Description (optional)</div>
+        <textarea id="pay-plan-desc-${esc(plan.id)}" class="form-input pay-plan-desc-input" rows="2" placeholder="e.g. Split into two equal payments — one at registration and one before the show.">${esc(plan.description || '')}</textarea>
       </div>
     </div>`;
   }
 
   function payAddPlan() {
     const id = `plan_${Date.now()}`;
-    const plan = { id, name: 'New Plan', installments: [{ amount: '', due_date: '' }], late_fee_enabled: false, late_fee_amount: '', late_fee_days: 14, reminders_enabled: false };
+    const plan = { id, name: 'New Plan', installments: [{ amount: '', due_date: '' }], description: '' };
     paymentSettingsState = Object.assign({}, paymentSettingsState || {});
     paymentSettingsState.plans = [...(paymentSettingsState.plans || []), plan];
     const sidebar = document.querySelector('#payment-settings-edit-body-area .reg-form-edit-tab-sidebar');
@@ -34079,7 +34093,7 @@ Thank you,
     const item = document.createElement('div');
     item.className = 'reg-form-edit-sidebar-item';
     item.style.cssText = 'display:flex;align-items:center;gap:0.2rem;padding-right:0.4rem;';
-    item.innerHTML = `<button class="pay-plan-sidebar-btn" onclick="paySwitchPlan(this,'${id}')">${esc(plan.name)}</button><button class="pay-plan-remove-btn" onclick="payRemovePlan('${id}')" title="Remove plan">✕</button>`;
+    item.innerHTML = `<button class="pay-plan-sidebar-btn" onclick="paySwitchPlan(this,'${id}')">${esc(plan.name)}</button><button class="pay-plan-remove-btn" onclick="payRemovePlan('${CSS.escape(id)}')" title="Remove plan">✕</button>`;
     sidebar.insertBefore(item, addBtn);
     const emptyState = body.querySelector('#pay-plan-empty');
     if (emptyState) emptyState.remove();
@@ -34137,12 +34151,6 @@ Thank you,
     });
   }
 
-  function payToggleLateFeePlan(planId) {
-    const cb = document.getElementById(`pay-late-fee-enabled-${CSS.escape(planId)}`);
-    const fields = document.getElementById(`pay-late-fee-fields-${CSS.escape(planId)}`);
-    if (fields) fields.style.display = cb?.checked ? '' : 'none';
-  }
-
   function payCollectPlans() {
     const plans = [];
     document.querySelectorAll('#payment-settings-edit-body-area .reg-form-edit-tab-panel[data-plan-id]').forEach(panel => {
@@ -34152,13 +34160,31 @@ Thank you,
         amount: row.querySelector('.pay-inst-amount')?.value?.trim() || '',
         due_date: row.querySelector('.pay-inst-date')?.value || '',
       }));
-      const late_fee_enabled = panel.querySelector(`#pay-late-fee-enabled-${CSS.escape(id)}`)?.checked || false;
-      const late_fee_amount = panel.querySelector(`#pay-late-fee-amount-${CSS.escape(id)}`)?.value?.trim() || '';
-      const late_fee_days = parseInt(panel.querySelector(`#pay-late-fee-days-${CSS.escape(id)}`)?.value || '14', 10) || 14;
-      const reminders_enabled = panel.querySelector(`#pay-plan-remind-${CSS.escape(id)}`)?.checked || false;
-      plans.push({ id, name, installments, late_fee_enabled, late_fee_amount, late_fee_days, reminders_enabled });
+      const description = panel.querySelector('.pay-plan-desc-input')?.value?.trim() || '';
+      plans.push({ id, name, installments, description });
     });
     return plans;
+  }
+
+  function payTogglePlansEnabled(checkbox) {
+    const list = document.getElementById('pay-plans-sidebar-list');
+    const body = document.querySelector('#payment-settings-edit-body-area .reg-form-edit-tab-body');
+    if (list) list.style.display = checkbox.checked ? '' : 'none';
+    if (!checkbox.checked && body) {
+      body.querySelectorAll('.reg-form-edit-tab-panel').forEach(p => p.classList.remove('active'));
+      const offState = body.querySelector('#pay-plans-off');
+      if (offState) offState.classList.add('active');
+      else body.insertAdjacentHTML('afterbegin', `<div class="reg-form-edit-tab-panel active" id="pay-plans-off" style="padding:2rem 1.5rem;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0.6rem;text-align:center;"><div style="font-size:0.88rem;font-weight:800;color:#1a1530;">Payment plans are off</div><div style="font-size:0.78rem;color:#7a6a95;max-width:280px;line-height:1.5;">Enable plans to give families installment options.</div></div>`);
+    } else if (checkbox.checked && body) {
+      body.querySelector('#pay-plans-off')?.remove();
+      const firstPlanBtn = document.querySelector('#payment-settings-edit-body-area .pay-plan-sidebar-btn');
+      if (firstPlanBtn) {
+        const id = firstPlanBtn.getAttribute('onclick')?.match(/'([^']+)'/)?.[1];
+        paySwitchPlan(firstPlanBtn, id);
+      } else {
+        body.insertAdjacentHTML('beforeend', `<div class="reg-form-edit-tab-panel active" id="pay-plan-empty" style="padding:2rem 1.5rem;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0.6rem;text-align:center;"><div style="font-size:0.88rem;font-weight:800;color:#1a1530;">No plans yet</div><div style="font-size:0.78rem;color:#7a6a95;max-width:280px;line-height:1.5;">Add installment plans families can choose from.</div><button class="pay-add-installment-btn" style="margin-top:0.5rem;" onclick="payAddPlan()">+ Add Your First Plan</button></div>`);
+      }
+    }
   }
 
   function renderPaymentDiscountsModalBody(s) {
@@ -34616,18 +34642,20 @@ Thank you,
     const renderer = window.BTSAuditionTemplates?.renderTemplateById;
     if (!renderer) return '';
 
-    const modeLabels = { none: 'No Fees', track: 'Track Only', deposit: 'Deposit Required', required: 'Fees Required' };
-    const modeLabel = modeLabels[s.mode] || 'No Fees';
-    const feeNote = s.mode === 'none'
-      ? 'No registration fees for this production.'
-      : s.mode === 'track'
-      ? 'Payment tracked internally — not required for completion.'
+    const modeLabels = { none: 'No Production Fee', flat: 'Flat Production Fee', deposit: 'Deposit + Balance', external: 'External Payment' };
+    const modeLabel = modeLabels[s.mode] || 'No Production Fee';
+    const feeNote = s.mode === 'flat'
+      ? (() => { const parts = []; if (s.fee) parts.push(`Fee: ${s.fee}`); if (s.fee_due_date) parts.push(`Due: ${s.fee_due_date}`); return parts.join(' · ') || 'Flat fee configured.'; })()
       : s.mode === 'deposit'
-      ? (() => { const parts = []; if (s.deposit_amount) parts.push(`Deposit: ${s.deposit_amount}`); if (s.due_date) parts.push(`Due: ${s.due_date}`); return parts.join(' · ') || 'Deposit required before completion.'; })()
-      : (() => { const parts = []; if (s.fee) parts.push(`Fee: ${s.fee}`); if (s.due_date) parts.push(`Due: ${s.due_date}`); return parts.join(' · ') || 'Fee required before completion.'; })();
+      ? (() => { const parts = []; if (s.deposit_amount) parts.push(`Deposit: ${s.deposit_amount}`); if (s.deposit_due_date) parts.push(`Due: ${s.deposit_due_date}`); return parts.join(' · ') || 'Deposit + remaining balance.'; })()
+      : s.mode === 'external'
+      ? 'Payments handled outside BTS. Balances tracked internally.'
+      : 'No registration fees for this production.';
 
     const planCount = (s.plans || []).length;
-    const planNote = planCount ? `${planCount} payment plan${planCount === 1 ? '' : 's'} available.` : 'No plans — families pay in full.';
+    const planNote = !s.plans_enabled
+      ? 'Payment plans off — families pay according to the fee structure.'
+      : planCount ? `${planCount} plan${planCount === 1 ? '' : 's'} available.` : 'Plans enabled — none configured yet.';
 
     const discountParts = [];
     if (s.sibling_discount_enabled) discountParts.push('Sibling discount');
@@ -34642,11 +34670,11 @@ Thank you,
     const tile1 = renderRegistrationSettingTile({
       color,
       kicker: 'Payments',
-      title: modeLabel,
-      helper: 'Controls whether registration fees exist and what mode they run in.',
+      title: 'Production Fee',
+      helper: modeLabel,
       bodyHtml: `<div class="registration-settings-tile-note">${esc(feeNote)}</div>`,
-      buttonHtml: `<button type="button" class="template-brand-tile-button" onclick="event.stopPropagation();openPaymentSettingsModal('required')">Edit Settings</button>`,
-      ariaLabel: 'Payment required settings',
+      buttonHtml: `<button type="button" class="template-brand-tile-button" onclick="event.stopPropagation();openPaymentSettingsModal('fee')">Edit</button>`,
+      ariaLabel: 'Production fee settings',
     });
     const tile2 = renderRegistrationSettingTile({
       color,
@@ -34681,8 +34709,8 @@ Thank you,
       title: 'Payment Reminders',
       helper: 'Automated reminders for outstanding balances and upcoming due dates.',
       toggleHtml: registrationSettingsToggle('reg-notif-reminders', 'Enable payment reminders', s.reminders_enabled),
-      bodyHtml: `<div class="registration-settings-tile-note">Email templates live in Production &rarr; Email Templates.</div>`,
-      buttonHtml: `<button type="button" class="template-brand-tile-button" onclick="event.stopPropagation();openEmailTemplateForCategory?.('payment_reminder')">Edit Email</button>`,
+      bodyHtml: `<div class="registration-settings-tile-note">Controls whether BTS sends automatic payment reminders to families with outstanding balances.</div>`,
+      buttonHtml: '',
       ariaLabel: 'Payment reminders',
     });
     return [tile1, tile2, tile3, tile4, tile5].join('');
@@ -34761,10 +34789,21 @@ Thank you,
       bodyHtml: '<div class="registration-settings-tile-note">Keeps intake clean when offers go stale.</div>'
     });
     const formTiles = renderRegistrationFormsTiles(formsColor);
+    const completionRuleLabels = { none: 'Unpaid balances allowed', deposit: 'Deposit required', full: 'Full payment required', admin_approval: 'Manual approval required' };
+    const completionTile = renderRegistrationSettingTile({
+      color: intakeColor,
+      kicker: 'Intake',
+      title: 'Registration Completion',
+      helper: 'Choose what payment status, if any, is required before registration is marked complete.',
+      bodyHtml: `<div class="registration-settings-tile-note" id="reg-completion-rule-note">${esc(completionRuleLabels[getPaymentSettings().completion_rule] || 'Unpaid balances allowed')}</div>`,
+      buttonHtml: `<button type="button" class="template-brand-tile-button" onclick="event.stopPropagation();openPaymentSettingsModal('completion')">Edit</button>`,
+      ariaLabel: 'Registration completion rule',
+    });
     renderRegistrationSettingsSurface('registration-intake-settings-surface', [
       dueDateTile,
       autoSendTile,
-      expiredLinksTile
+      expiredLinksTile,
+      completionTile
     ].join(''));
     renderRegistrationSettingsSurface('registration-forms-settings-surface', formTiles);
     renderRegistrationSettingsSurface('registration-payments-settings-surface', renderPaymentSettingsTiles());
