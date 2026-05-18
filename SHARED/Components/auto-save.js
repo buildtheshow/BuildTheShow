@@ -35,41 +35,59 @@
   let _lastActiveAt    = 0;
 
   // ── Status pill ──────────────────────────────────────────────────────────
+  // If the page defines window.showToast(msg, isError), we delegate to it so
+  // all save feedback uses the same gold pill the user sees everywhere else.
+  // If not, we create our own matching pill.
 
   function ensureStatusEl() {
     if (_statusEl) return _statusEl;
-    const el = document.createElement('div');
-    el.id = 'bts-autosave-status';
+    const el = document.createElement(‘div’);
+    el.id = ‘bts-autosave-status’;
     el.style.cssText = [
-      'position:fixed;top:12px;right:16px;z-index:99999',
-      'font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif',
-      'font-size:0.72rem;font-weight:500',
-      'color:#6b7280;background:rgba(255,255,255,0.94)',
-      'backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)',
-      'border:1px solid rgba(0,0,0,0.08);border-radius:20px',
-      'padding:4px 13px;pointer-events:none',
-      'opacity:0;transition:opacity 0.18s ease',
-      'box-shadow:0 1px 6px rgba(0,0,0,0.07)',
-    ].join(';');
+      ‘position:fixed;bottom:1.5rem;right:1.5rem;z-index:99999’,
+      ‘font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif’,
+      ‘font-size:0.87rem;font-weight:900’,
+      ‘color:#1a1530;background:#efab45’,
+      ‘border:1px solid #efab45;border-radius:0.5rem’,
+      ‘padding:0.7rem 1.2rem;pointer-events:none’,
+      ‘opacity:0;transform:translateY(6px)’,
+      ‘transition:opacity 0.2s,transform 0.2s’,
+      ‘box-shadow:0 14px 34px rgba(87,46,136,0.22)’,
+    ].join(‘;’);
     document.body.appendChild(el);
     _statusEl = el;
     return el;
   }
 
-  function setStatus(text, color, hideAfter) {
+  function setStatus(text, isError, hideAfter) {
+    if (window.showToast && typeof window.showToast === ‘function’) {
+      window.showToast(text, isError || false);
+      return;
+    }
     const el = ensureStatusEl();
     if (_hideTimer) { clearTimeout(_hideTimer); _hideTimer = null; }
     el.textContent = text;
-    el.style.color = color || '#6b7280';
-    el.style.opacity = '1';
+    if (isError) {
+      el.style.background = ‘rgba(220,60,60,0.12)’;
+      el.style.borderColor = ‘rgba(220,60,60,0.35)’;
+      el.style.color = ‘#f08080’;
+    } else {
+      el.style.background = ‘#efab45’;
+      el.style.borderColor = ‘#efab45’;
+      el.style.color = ‘#1a1530’;
+    }
+    el.style.opacity = ‘1’;
+    el.style.transform = ‘translateY(0)’;
     if (hideAfter) {
-      _hideTimer = setTimeout(() => { if (_statusEl) _statusEl.style.opacity = '0'; }, hideAfter);
+      _hideTimer = setTimeout(() => {
+        if (_statusEl) { _statusEl.style.opacity = ‘0’; _statusEl.style.transform = ‘translateY(6px)’; }
+      }, hideAfter);
     }
   }
 
-  function showSaving()  { setStatus('Saving…', '#572e88', null); }
-  function showSaved()   { setStatus('Saved. You’re good.', '#22a06b', SAVED_HIDE_MS); }
-  function showError()   { setStatus('Couldn’t save. Try again.', '#dc2626', ERROR_HIDE_MS); }
+  function showSaving()  { /* silent — saved confirmation is enough */ }
+  function showSaved()   { setStatus(‘Saved!’, false, SAVED_HIDE_MS); }
+  function showError()   { setStatus("Couldn’t save. Try again.", true, ERROR_HIDE_MS); }
 
   // ── Client discovery ─────────────────────────────────────────────────────
 
