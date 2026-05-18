@@ -11,6 +11,31 @@ It turns the coding principles you want into concrete rules for this codebase:
 - UI labels that match the data model
 - ask questions when anything is not certain
 
+## JavaScript File Editing — Critical Rule
+
+**Never use the Edit tool to modify `.js` files.** The Edit tool converts straight quotes (`'`, `"`) into curly/typographic quotes (`'`, `'`, `"`, `"`), which causes `SyntaxError: Invalid character` crashes that break the entire script silently.
+
+**Always use Write or Bash/Python to edit `.js` files.**
+
+After any `.js` change, verify with:
+```bash
+python3 -c "
+with open('path/to/file.js', 'r') as f: c = f.read()
+print('CLEAN' if not any(x in c for x in ['‘','’','“','”']) else 'CURLY QUOTES FOUND')
+"
+```
+
+If curly quotes are found, fix with:
+```bash
+python3 -c "
+with open('file.js','r',encoding='utf-8') as f: c=f.read()
+c=c.replace('‘',\"'\").replace('’',\"'\").replace('“','\"').replace('”','\"')
+with open('file.js','w',encoding='utf-8') as f: f.write(c)
+"
+```
+
+Also bump the `?v=N` cache-bust version in every HTML file that loads the changed `.js`.
+
 ## Core Principles
 
 1. Optimize for readability before cleverness.
