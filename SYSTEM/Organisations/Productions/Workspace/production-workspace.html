@@ -14253,8 +14253,10 @@
       letter-spacing: 0;
       line-height: 0.95;
       min-width: 0;
-      word-break: break-word;
-      overflow-wrap: break-word;
+      max-width: 100%;
+      word-break: normal;
+      overflow-wrap: normal;
+      hyphens: manual;
     }
     .template-brand-tile-body {
       min-width: 0;
@@ -14262,8 +14264,9 @@
       font-weight: 800;
       line-height: 1.32;
       opacity: 0.84;
-      word-break: break-word;
-      overflow-wrap: break-word;
+      word-break: normal;
+      overflow-wrap: normal;
+      hyphens: manual;
     }
     .template-brand-tile-button {
       align-self: flex-start;
@@ -14284,7 +14287,9 @@
       align-items: flex-end;
       justify-content: space-between;
       gap: 3cqw;
+      width: 100%;
       min-width: 0;
+      overflow: hidden;
     }
     .template-brand-tile-actions .template-brand-tile-button {
       flex: 0 0 auto;
@@ -28619,7 +28624,7 @@ Thank you,
           <div class="et-section-home-grid">${homeCards}</div>
         </div>
       </div>`;
-      fitBrandTileTitles(list);
+      scheduleBrandTileTitleFit(list);
       return;
     }
     const filtered = sorted.filter(t => etSectionMatchesFilter(t, _etCatFilter));
@@ -28685,39 +28690,46 @@ Thank you,
         </section>
       </div>
     </div>`;
-    fitBrandTileTitles(list);
+    scheduleBrandTileTitleFit(list);
   }
 
   function fitBrandTileTitles(root = document) {
-    const titles = root.querySelectorAll?.(
-      '.template-brand-card .template-brand-tile-title, ' +
-      '.template-brand-card--settings .template-brand-tile-settings-label, ' +
-      '.template-brand-card--settings-off .template-brand-tile-settings-label'
-    ) || [];
-    titles.forEach(title => {
-      title.style.fontSize = '';
-      const isSettings = title.classList.contains('template-brand-tile-settings-label');
-      title.style.whiteSpace = 'normal';
-      if (!title.clientWidth || !title.clientHeight) return;
-      const minSize = isSettings ? 6 : 12;
-      let size = parseFloat(getComputedStyle(title).fontSize) || 24;
-      let attempts = 0;
-      while (
-        attempts < 34 &&
-        size > minSize &&
-        (title.scrollHeight > title.clientHeight + 1 || title.scrollWidth > title.clientWidth + 1)
-      ) {
-        size = Math.max(size * 0.92, minSize);
-        title.style.fontSize = `${size}px`;
-        attempts++;
-      }
+    const LOCKED_ZONE_SELECTORS = [
+      '.template-brand-tile-container--header',
+      '.template-brand-tile-container--title',
+      '.template-brand-tile-container--footer',
+    ];
+    const MIN_PX = 6;
+    const cards = root.querySelectorAll?.('.template-brand-card:not(.template-brand-card--empty)') || [];
+    cards.forEach(card => {
+      LOCKED_ZONE_SELECTORS.forEach(selector => {
+        const zone = card.querySelector(selector);
+        const el = zone?.firstElementChild;
+        if (!zone || !el) return;
+        el.style.fontSize = '';
+        el.style.whiteSpace = 'normal';
+        if (!zone.clientWidth || !zone.clientHeight) return;
+        let size = parseFloat(getComputedStyle(el).fontSize) || 24;
+        let attempts = 0;
+        while (
+          attempts < 72 &&
+          size > MIN_PX &&
+          (el.scrollHeight > zone.clientHeight + 1 || el.scrollWidth > zone.clientWidth + 1)
+        ) {
+          size = Math.max(size - 0.5, MIN_PX);
+          el.style.fontSize = `${size}px`;
+          attempts++;
+        }
+      });
     });
   }
 
   let brandTileFitTimer = null;
   function scheduleBrandTileTitleFit(root = document) {
     clearTimeout(brandTileFitTimer);
-    brandTileFitTimer = setTimeout(() => fitBrandTileTitles(root), 80);
+    brandTileFitTimer = setTimeout(() => {
+      requestAnimationFrame(() => requestAnimationFrame(() => fitBrandTileTitles(root)));
+    }, 80);
   }
 
   window.addEventListener('resize', () => scheduleBrandTileTitleFit(), { passive: true });
