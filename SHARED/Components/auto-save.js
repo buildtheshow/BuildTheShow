@@ -35,28 +35,28 @@
   let _lastActiveAt    = 0;
 
   // ── Status pill ──────────────────────────────────────────────────────────
-  // Uses the page’s existing #toast element if present (manipulates it directly
+  // Uses the page's existing #toast element if present (manipulates it directly
   // with BTS toast classes). Falls back to creating its own matching gold pill.
 
   function getToastEl() {
-    return document.getElementById(‘toast’) || null;
+    return document.getElementById('toast') || null;
   }
 
   function ensureOwnPill() {
     if (_statusEl) return _statusEl;
-    const el = document.createElement(‘div’);
-    el.id = ‘bts-autosave-status’;
+    const el = document.createElement('div');
+    el.id = 'bts-autosave-status';
     el.style.cssText = [
-      ‘position:fixed;bottom:1.5rem;right:1.5rem;z-index:99999’,
-      ‘font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif’,
-      ‘font-size:0.87rem;font-weight:900’,
-      ‘color:#1a1530;background:#efab45’,
-      ‘border:1px solid #efab45;border-radius:0.5rem’,
-      ‘padding:0.7rem 1.2rem;pointer-events:none’,
-      ‘opacity:0;transform:translateY(6px)’,
-      ‘transition:opacity 0.2s,transform 0.2s’,
-      ‘box-shadow:0 14px 34px rgba(87,46,136,0.22)’,
-    ].join(‘;’);
+      'position:fixed;bottom:1.5rem;right:1.5rem;z-index:99999',
+      'font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif',
+      'font-size:0.87rem;font-weight:900',
+      'color:#1a1530;background:#efab45',
+      'border:1px solid #efab45;border-radius:0.5rem',
+      'padding:0.7rem 1.2rem;pointer-events:none',
+      'opacity:0;transform:translateY(6px)',
+      'transition:opacity 0.2s,transform 0.2s',
+      'box-shadow:0 14px 34px rgba(87,46,136,0.22)',
+    ].join(';');
     document.body.appendChild(el);
     _statusEl = el;
     return el;
@@ -67,13 +67,13 @@
     const pageToast = getToastEl();
     if (pageToast) {
       pageToast.textContent = text;
-      pageToast.classList.remove(‘toast--success’, ‘toast--error’, ‘visible’);
+      pageToast.classList.remove('toast--success', 'toast--error', 'visible');
       void pageToast.offsetWidth; // force reflow so transition replays
-      pageToast.classList.toggle(‘toast--success’, !isError);
-      pageToast.classList.toggle(‘toast--error’, !!isError);
-      pageToast.classList.add(‘visible’);
+      pageToast.classList.toggle('toast--success', !isError);
+      pageToast.classList.toggle('toast--error', !!isError);
+      pageToast.classList.add('visible');
       if (hideAfter) {
-        _hideTimer = setTimeout(() => pageToast.classList.remove(‘visible’, ‘toast--success’, ‘toast--error’), hideAfter);
+        _hideTimer = setTimeout(() => pageToast.classList.remove('visible', 'toast--success', 'toast--error'), hideAfter);
       }
       return;
     }
@@ -81,25 +81,25 @@
     const el = ensureOwnPill();
     el.textContent = text;
     if (isError) {
-      el.style.background = ‘rgba(220,60,60,0.12)’;
-      el.style.borderColor = ‘rgba(220,60,60,0.35)’;
-      el.style.color = ‘#f08080’;
+      el.style.background = 'rgba(220,60,60,0.12)';
+      el.style.borderColor = 'rgba(220,60,60,0.35)';
+      el.style.color = '#f08080';
     } else {
-      el.style.background = ‘#efab45’;
-      el.style.borderColor = ‘#efab45’;
-      el.style.color = ‘#1a1530’;
+      el.style.background = '#efab45';
+      el.style.borderColor = '#efab45';
+      el.style.color = '#1a1530';
     }
-    el.style.opacity = ‘1’;
-    el.style.transform = ‘translateY(0)’;
+    el.style.opacity = '1';
+    el.style.transform = 'translateY(0)';
     if (hideAfter) {
       _hideTimer = setTimeout(() => {
-        if (_statusEl) { _statusEl.style.opacity = ‘0’; _statusEl.style.transform = ‘translateY(6px)’; }
+        if (_statusEl) { _statusEl.style.opacity = '0'; _statusEl.style.transform = 'translateY(6px)'; }
       }, hideAfter);
     }
   }
 
   function showSaving()  { /* silent — saved confirmation is enough */ }
-  function showSaved()   { setStatus(‘Saved!’, false, SAVED_HIDE_MS); }
+  function showSaved()   { setStatus('Saved!', false, SAVED_HIDE_MS); }
   function showError()   { setStatus("Couldn't save. Try again.", true, ERROR_HIDE_MS); }
 
   // ── Client discovery ─────────────────────────────────────────────────────
