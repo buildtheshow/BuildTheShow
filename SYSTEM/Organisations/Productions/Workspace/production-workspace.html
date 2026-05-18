@@ -34379,6 +34379,9 @@ Thank you,
       <div class="reg-form-edit-sidebar-item">
         <button class="reg-form-edit-tab-btn" onclick="regFormSwitchTab(this,'pf-tab-agreement')">Agreement Wording</button>
       </div>
+      <div class="reg-form-edit-sidebar-item">
+        <button class="reg-form-edit-tab-btn" onclick="regFormSwitchTab(this,'pf-tab-fee-details')">Fee Details</button>
+      </div>
     </div>`;
 
     const introPanel = `<div class="reg-form-edit-tab-panel active" id="pf-tab-intro" style="gap:0;padding:0;">
@@ -34388,10 +34391,6 @@ Thank you,
       <div class="et-body-editor" id="pf-intro-editor" contenteditable="true" onfocus="window._regFormLastTextarea=this"
            data-placeholder="This section outlines the production fees, payment options, and financial policies for participation in {{show_name}}."
            style="flex:1 1 0;min-height:0;">${template?.intro || PRODUCTION_FEE_DEFAULT_INTRO}</div>
-      <div style="padding:1rem 1.2rem;background:rgba(118,158,123,0.07);border-top:1px solid rgba(118,158,123,0.15);font-size:0.78rem;color:#5a7e60;line-height:1.5;flex-shrink:0;">
-        <strong>The fee details are auto-generated from Registration &rarr; Settings &rarr; Payments.</strong><br />
-        Configure amounts, due dates, discounts, and payment instructions there.
-      </div>
     </div>`;
 
     const agreementPanel = `<div class="reg-form-edit-tab-panel" id="pf-tab-agreement" style="gap:0;padding:0;">
@@ -34403,11 +34402,107 @@ Thank you,
            style="flex:1 1 0;min-height:0;">${template?.agreementText || PRODUCTION_FEE_DEFAULT_ACK}</div>
     </div>`;
 
+    const feeDetailsPanel = renderProductionFeeDetailsPanel();
+
     const btsFooter = `<div class="mr-bts-notice mr-bts-notice--footer">
       <span class="mr-bts-notice-label">Build The Show Notice&ensp;—&ensp;</span><span class="mr-bts-notice-body">${esc(MEDIA_RELEASE_BTS_NOTICE)}</span>
     </div>`;
 
-    return `<div class="reg-form-edit-tab-wrap">${sidebar}<div class="reg-form-edit-tab-body">${introPanel}${agreementPanel}</div>${renderRegFormVarPanel()}</div>${btsFooter}`;
+    return `<div class="reg-form-edit-tab-wrap">${sidebar}<div class="reg-form-edit-tab-body">${introPanel}${agreementPanel}${feeDetailsPanel}</div>${renderRegFormVarPanel()}</div>${btsFooter}`;
+  }
+
+  function renderProductionFeeDetailsPanel() {
+    const s = getPaymentSettings();
+    const currSym = { CAD: '$', USD: '$', GBP: '£' }[s.currency || 'CAD'] || '$';
+    const currCode = s.currency && s.currency !== 'CAD' ? ` ${s.currency}` : '';
+    const fmtAmt = v => v ? `${currSym}${parseFloat(v).toFixed(2)}${currCode}` : null;
+    const fmtDate = d => d ? new Date(d + 'T00:00:00').toLocaleDateString('en-CA', { month: 'long', day: 'numeric', year: 'numeric' }) : null;
+
+    const row = (label, value) => `<div class="rpf-pf-row"><span class="rpf-pf-row-label">${esc(label)}</span><span class="rpf-pf-row-value">${esc(value)}</span></div>`;
+    const none = text => `<div class="rpf-pf-none">${esc(text)}</div>`;
+
+    // ── Fee ──
+    let feeRows = '';
+    if (!s.mode || s.mode === 'none') {
+      feeRows = none('No production fee configured.');
+    } else if (s.mode === 'flat') {
+      const rows = [
+        s.fee        ? row('Registration fee', fmtAmt(s.fee))           : null,
+        s.fee_due_date  ? row('Due date',        fmtDate(s.fee_due_date)) : null,
+        s.late_fee_date ? row('Late fee after',  fmtDate(s.late_fee_date)) : null,
+      ].filter(Boolean).join('');
+      feeRows = rows || none('Fee amount not set yet.');
+    } else if (s.mode === 'split') {
+      const insts = (s.split_installments || []).filter((_, i) => i < (s.split_count || 2));
+      if (insts.length) {
+        feeRows = insts.map((inst, i) => {
+          const parts = [fmtAmt(inst.amount), inst.due_date ? `due ${fmtDate(inst.due_date)}` : null].filter(Boolean).join(' — ');
+          return row(`Payment ${i + 1}`, parts || 'Amount not set');
+        }).join('');
+        if (s.split_allow_upfront) feeRows += `<div class="rpf-pf-intro-note">Families may also pay the full amount upfront.</div>`;
+      } else {
+        feeRows = none('Payment amounts not set yet.');
+      }
+    }
+
+    // ── Discounts ──
+    const discountRows = [];
+    if (s.sibling_discount_enabled) {
+      const parts = [
+        s.sibling_first_child  ? `First child: ${fmtAmt(s.sibling_first_child)}`   : null,
+        s.sibling_additional   ? `Additional: ${fmtAmt(s.sibling_additional)}`     : null,
+        s.sibling_by_household ? 'Applied per household'                            : null,
+      ].filter(Boolean).join(' · ');
+      discountRows.push(row('Sibling Discount', parts || 'Enabled'));
+    }
+    if (s.volunteer_discount_enabled) {
+      const parts = [
+        s.volunteer_hours    ? `${s.volunteer_hours} hrs required`            : null,
+        s.volunteer_discount ? `${fmtAmt(s.volunteer_discount)} off`          : null,
+        s.volunteer_approval === 'auto' ? 'Auto-approved' : 'Manually approved',
+      ].filter(Boolean).join(' · ');
+      discountRows.push(row('Volunteer Discount', parts || 'Enabled'));
+    }
+    if (s.scholarship_enabled) {
+      discountRows.push(row('Financial Assistance', s.scholarship_note ? esc(s.scholarship_note) : 'Available on request'));
+    }
+    const discountsHtml = discountRows.length
+      ? `<div class="rpf-pf-block"><div class="rpf-pf-block-title">Discounts &amp; Financial Assistance</div>${discountRows.join('')}</div>`
+      : `<div class="rpf-pf-block"><div class="rpf-pf-block-title">Discounts &amp; Financial Assistance</div>${none('None configured.')}</div>`;
+
+    // ── Payment Instructions ──
+    const instrHtml = s.instructions
+      ? `<div class="rpf-pf-block"><div class="rpf-pf-block-title">Payment Instructions</div><div class="rpf-pf-text" style="font-size:0.8rem;">${s.instructions}</div></div>`
+      : `<div class="rpf-pf-block"><div class="rpf-pf-block-title">Payment Instructions</div>${none('None written yet.')}</div>`;
+
+    // ── Checkout options ──
+    const checkoutOn = [
+      s.checkout_pay_now_enabled  ? 'Pay now (online)'   : null,
+      s.checkout_etransfer_enabled ? 'E-transfer'         : null,
+      s.checkout_square_enabled    ? 'Square'             : null,
+      s.checkout_pay_later_enabled ? 'Personal pay link'  : null,
+    ].filter(Boolean);
+    const checkoutHtml = `<div class="rpf-pf-block"><div class="rpf-pf-block-title">Checkout Options</div>${
+      checkoutOn.length ? checkoutOn.map(o => row('', o)).join('') : none('No checkout methods enabled.')
+    }</div>`;
+
+    return `<div class="reg-form-edit-tab-panel" id="pf-tab-fee-details" style="padding:1.25rem 1.4rem;overflow-y:auto;gap:0;">
+      <div style="background:rgba(118,158,123,0.09);border:1.5px solid rgba(118,158,123,0.25);border-radius:10px;padding:0.65rem 0.9rem;margin-bottom:1.1rem;font-size:0.78rem;color:#4a7a52;line-height:1.5;">
+        This is a read-only view of your current payment configuration. To make changes, go to <strong>Registration &rarr; Settings &rarr; Payments</strong>.
+      </div>
+      <div class="rpf-pf" style="padding:0;gap:1.1rem;">
+        <div class="rpf-pf-block">
+          <div class="rpf-pf-block-title">Production Fee</div>
+          ${feeRows}
+        </div>
+        <hr class="rpf-pf-divider" />
+        ${discountsHtml}
+        <hr class="rpf-pf-divider" />
+        ${instrHtml}
+        <hr class="rpf-pf-divider" />
+        ${checkoutHtml}
+      </div>
+    </div>`;
   }
 
   async function saveProductionFeeFormModal(btn) {
