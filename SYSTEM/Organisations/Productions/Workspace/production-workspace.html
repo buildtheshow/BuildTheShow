@@ -36438,10 +36438,18 @@ Thank you,
     rpfUpdateAgeNote(dobInput);
     if (panel) {
       const age = rpfCalcAge(dobInput.value);
-      const isUnder18 = age !== null && age < 19;
+      const isUnder19 = age !== null && age < 19;
       panel.querySelectorAll('[data-rpf-guard]').forEach(el => {
-        el.style.display = isUnder18 ? '' : 'none';
+        el.style.display = isUnder19 ? '' : 'none';
       });
+      const soloCheckbox = panel.querySelector('.rpf-solo-toggle-row input');
+      if (soloCheckbox && age !== null) {
+        const shouldLeaveAlone = age >= 19;
+        if (soloCheckbox.checked !== shouldLeaveAlone) {
+          soloCheckbox.checked = shouldLeaveAlone;
+          rpfToggleSoloPickup(soloCheckbox);
+        }
+      }
     }
   }
 
@@ -36801,7 +36809,9 @@ Thank you,
     const isSoloToggle = raw.startsWith('{solo-toggle}');
     if (isSoloToggle) {
       const label = raw.slice(13).replace(/\s*\*$/, '').trim();
-      return `<div class="rpf-form-group"><label class="rpf-solo-toggle-row"><input type="checkbox" onchange="rpfToggleSoloPickup(this)" /><span class="rpf-solo-toggle-label">${esc(label)}</span></label></div>`;
+      const _soloAge = rpfCalcAge(prefill?.date_of_birth);
+      const _isAdult = _soloAge !== null && _soloAge >= 19;
+      return `<div class="rpf-form-group"><label class="rpf-solo-toggle-row"><input type="checkbox"${_isAdult ? ' checked' : ''} onchange="rpfToggleSoloPickup(this)" /><span class="rpf-solo-toggle-label">${esc(label)}</span></label></div>`;
     }
 
     const isSolo = raw.startsWith('{solo}');
@@ -37097,6 +37107,7 @@ Thank you,
     hydrateRegistrationPublicUrl();
     requestAnimationFrame(() => requestAnimationFrame(() => {
       host.querySelectorAll('[data-rpf-dob]').forEach(input => rpfCheckGuardianFields(input));
+      host.querySelectorAll('.rpf-solo-toggle-row input').forEach(cb => { if (cb.checked) rpfToggleSoloPickup(cb); });
       if (typeof fitCastingCardNames === 'function') fitCastingCardNames(host);
       const targetGroup = window._rpfTargetGroup;
       if (targetGroup) {
