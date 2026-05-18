@@ -32565,14 +32565,13 @@ Thank you,
   let paymentSettingsState = {};
 
   const PAYMENT_DEFAULT_STATE = {
-    mode: 'none',           // 'none' | 'flat' | 'deposit' | 'external'
+    mode: 'none',           // 'none' | 'flat' | 'split' | 'external'
     fee: '',
     currency: 'CAD',
     fee_due_date: '',
     late_fee_date: '',
-    deposit_amount: '',
-    deposit_due_date: '',
-    remaining_balance_due_date: '',
+    split_count: 2,
+    split_installments: [],
     completion_rule: 'none', // lives here but displayed in Intake settings
     plans_enabled: false,
     plans: [],
@@ -33883,9 +33882,11 @@ Thank you,
       s.currency = document.getElementById('pay-currency')?.value || 'CAD';
       s.fee_due_date = document.getElementById('pay-fee-due-date')?.value || '';
       s.late_fee_date = document.getElementById('pay-late-fee-date')?.value || '';
-      s.deposit_amount = document.getElementById('pay-deposit-amount')?.value?.trim() || '';
-      s.deposit_due_date = document.getElementById('pay-deposit-due-date')?.value || '';
-      s.remaining_balance_due_date = document.getElementById('pay-remaining-balance-date')?.value || '';
+      s.split_count = parseInt(document.getElementById('pay-split-count')?.value || '2', 10) || 2;
+      s.split_installments = [...document.querySelectorAll('#pay-split-fields .pay-installment-row')].map(row => ({
+        amount: row.querySelector('.pay-inst-amount')?.value?.trim() || '',
+        due_date: row.querySelector('.pay-inst-date')?.value || '',
+      }));
     } else if (mode === 'plans') {
       s.plans_enabled = document.getElementById('pay-plans-enabled')?.checked || false;
       s.plans = payCollectPlans();
@@ -33929,7 +33930,7 @@ Thank you,
     const modes = [
       { value: 'none',     title: 'No Production Fee',              desc: 'This production does not charge participation fees. Payment prompts are removed from the registration flow.' },
       { value: 'flat',     title: 'Flat Production Fee',            desc: 'Families pay a single production fee for participation. Set the amount, currency, and due date.' },
-      { value: 'deposit',  title: 'Deposit + Remaining Balance',    desc: 'Families pay a deposit first, then the remaining balance by a second date.' },
+      { value: 'split',    title: 'Split Fee',                      desc: 'Break the total fee into 2, 3, 4, or 5 payments, each with its own amount and due date.' },
       { value: 'external', title: 'External Payment Handling',      desc: 'Payments happen outside BTS — e-transfer, invoice, cash, or school bookkeeping. Balances can still be tracked internally.' },
     ];
     const modeRows = modes.map(m => `<label class="pay-mode-option">
@@ -33963,22 +33964,25 @@ Thank you,
         </div>
       </div>
     </div>`;
-    const depositFields = `<div id="pay-deposit-fields" class="pay-conditional-block">
-      <div class="reg-form-edit-section-label" style="margin-bottom:0.35rem;">Deposit details</div>
-      <div class="pay-fields-group pay-fields-group--three">
-        <div>
-          <div class="pay-field-label">Deposit amount</div>
-          <input type="text" id="pay-deposit-amount" class="form-input" placeholder="e.g. $100.00" value="${esc(s.deposit_amount)}" />
-        </div>
-        <div>
-          <div class="pay-field-label">Deposit due date</div>
-          <input type="date" id="pay-deposit-due-date" class="form-input" value="${esc(s.deposit_due_date)}" />
-        </div>
-        <div>
-          <div class="pay-field-label">Remaining balance due</div>
-          <input type="date" id="pay-remaining-balance-date" class="form-input" value="${esc(s.remaining_balance_due_date || '')}" />
-        </div>
+    const splitCount = s.split_count || 2;
+    const savedInstallments = Array.isArray(s.split_installments) ? s.split_installments : [];
+    const splitRows = Array.from({ length: splitCount }, (_, i) => {
+      const inst = savedInstallments[i] || { amount: '', due_date: '' };
+      return `<div class="pay-installment-row" data-inst-idx="${i}">
+        <span class="pay-installment-num">#${i + 1}</span>
+        <input type="text" class="form-input pay-inst-amount" placeholder="Amount" value="${esc(inst.amount)}" />
+        <input type="date" class="form-input pay-inst-date" value="${esc(inst.due_date)}" />
+      </div>`;
+    }).join('');
+    const splitFields = `<div id="pay-split-fields" class="pay-conditional-block">
+      <div class="reg-form-edit-section-label" style="margin-bottom:0.45rem;">Split fee details</div>
+      <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.65rem;">
+        <div class="pay-field-label" style="margin-bottom:0;white-space:nowrap;">Number of payments</div>
+        <select id="pay-split-count" class="form-input" style="width:auto;" onchange="payUpdateSplitRows(this.value)">
+          ${[2,3,4,5].map(n => `<option value="${n}" ${splitCount === n ? 'selected' : ''}>${n} payments</option>`).join('')}
+        </select>
       </div>
+      <div class="pay-installment-list" id="pay-split-installment-list">${splitRows}</div>
     </div>`;
     return `<div class="reg-form-edit-tab-wrap">
       <div class="reg-form-edit-tab-body" style="padding:1.25rem 1.4rem;gap:0.9rem;overflow-y:auto;">
@@ -33986,7 +33990,7 @@ Thank you,
           <div class="reg-form-edit-section-label" style="margin-bottom:0.55rem;">Does this production charge a fee?</div>
           <div class="pay-mode-options">${modeRows}</div>
         </div>
-        ${flatFields}${depositFields}
+        ${flatFields}${splitFields}
       </div>
     </div>`;
   }
@@ -34016,9 +34020,9 @@ Thank you,
   function payUpdateFeeFields() {
     const mode = document.querySelector('#payment-settings-edit-body-area input[name="pay-mode"]:checked')?.value || 'none';
     const flatFields = document.getElementById('pay-flat-fields');
-    const depositFields = document.getElementById('pay-deposit-fields');
-    if (flatFields)    flatFields.style.display    = mode === 'flat'    ? '' : 'none';
-    if (depositFields) depositFields.style.display = mode === 'deposit' ? '' : 'none';
+    const splitFields = document.getElementById('pay-split-fields');
+    if (flatFields)  flatFields.style.display  = mode === 'flat'  ? '' : 'none';
+    if (splitFields) splitFields.style.display = mode === 'split' ? '' : 'none';
   }
 
   function renderPaymentPlansModalBody(s) {
@@ -34164,6 +34168,25 @@ Thank you,
       plans.push({ id, name, installments, description });
     });
     return plans;
+  }
+
+  function payUpdateSplitRows(count) {
+    const n = parseInt(count, 10) || 2;
+    const list = document.getElementById('pay-split-installment-list');
+    if (!list) return;
+    const rows = list.querySelectorAll('.pay-installment-row');
+    const current = rows.length;
+    if (n > current) {
+      for (let i = current; i < n; i++) {
+        const row = document.createElement('div');
+        row.className = 'pay-installment-row';
+        row.dataset.instIdx = i;
+        row.innerHTML = `<span class="pay-installment-num">#${i + 1}</span><input type="text" class="form-input pay-inst-amount" placeholder="Amount" /><input type="date" class="form-input pay-inst-date" />`;
+        list.appendChild(row);
+      }
+    } else if (n < current) {
+      for (let i = current - 1; i >= n; i--) rows[i]?.remove();
+    }
   }
 
   function payTogglePlansEnabled(checkbox) {
@@ -34642,12 +34665,12 @@ Thank you,
     const renderer = window.BTSAuditionTemplates?.renderTemplateById;
     if (!renderer) return '';
 
-    const modeLabels = { none: 'No Production Fee', flat: 'Flat Production Fee', deposit: 'Deposit + Balance', external: 'External Payment' };
+    const modeLabels = { none: 'No Production Fee', flat: 'Flat Production Fee', split: 'Split Fee', external: 'External Payment' };
     const modeLabel = modeLabels[s.mode] || 'No Production Fee';
     const feeNote = s.mode === 'flat'
       ? (() => { const parts = []; if (s.fee) parts.push(`Fee: ${s.fee}`); if (s.fee_due_date) parts.push(`Due: ${s.fee_due_date}`); return parts.join(' · ') || 'Flat fee configured.'; })()
-      : s.mode === 'deposit'
-      ? (() => { const parts = []; if (s.deposit_amount) parts.push(`Deposit: ${s.deposit_amount}`); if (s.deposit_due_date) parts.push(`Due: ${s.deposit_due_date}`); return parts.join(' · ') || 'Deposit + remaining balance.'; })()
+      : s.mode === 'split'
+      ? (() => { const n = s.split_count || 2; const filled = (s.split_installments || []).filter(i => i.amount).length; return filled ? `${n} payments — ${filled} amount${filled === 1 ? '' : 's'} set.` : `Fee split into ${n} payments.`; })()
       : s.mode === 'external'
       ? 'Payments handled outside BTS. Balances tracked internally.'
       : 'No registration fees for this production.';
