@@ -100,7 +100,7 @@
 
   function showSaving()  { /* silent — saved confirmation is enough */ }
   function showSaved()   { setStatus(‘Saved!’, false, SAVED_HIDE_MS); }
-  function showError()   { setStatus("Couldn’t save. Try again.", true, ERROR_HIDE_MS); }
+  function showError()   { setStatus("Couldn't save. Try again.", true, ERROR_HIDE_MS); }
 
   // ── Client discovery ─────────────────────────────────────────────────────
 
@@ -125,9 +125,9 @@
       return;
     }
     target.classList.add(state);
-    if (state === 'saving' || state === 'dirty') target.textContent = 'Saving…';
-    else if (state === 'saved') target.textContent = 'Saved. You’re good.';
-    else if (state === 'error') target.textContent = 'Couldn’t save. Try again.';
+    if (state === 'saving' || state === 'dirty') target.textContent = 'Saving...';
+    else if (state === 'saved') target.textContent = 'Saved!';
+    else if (state === 'error') target.textContent = "Couldn't save. Try again.";
     else if (state === 'out-of-sync') target.textContent = 'Out of sync. Finish typing to update.';
   }
 
