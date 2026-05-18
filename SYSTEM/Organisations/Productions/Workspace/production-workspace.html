@@ -1562,15 +1562,22 @@
       white-space: nowrap;
     }
     .registration-public-browser-tag {
+      appearance: none;
       border: 1px solid rgba(87,46,136,0.14);
       border-radius: 999px;
       background: rgba(87,46,136,0.07);
       color: #572e88;
       padding: 0.36rem 0.68rem;
+      font-family: var(--bts-font);
       font-size: 0.68rem;
       font-weight: 900;
       line-height: 1;
       white-space: nowrap;
+      cursor: pointer;
+    }
+    .registration-public-browser-tag:hover {
+      border-color: rgba(87,46,136,0.28);
+      background: rgba(87,46,136,0.12);
     }
     .registration-public-viewport {
       min-height: 0;
@@ -36176,6 +36183,96 @@ Thank you,
     }));
   }
 
+  function openRegistrationPublicPreviewTab() {
+    const previewWindow = window.open('', '_blank');
+    if (!previewWindow) {
+      showToast('Allow pop-ups to open the public registration preview.', true);
+      return;
+    }
+    window._rpfPrefillData = rpfSampleAuditionApplicationPrefill();
+    loadRegistrationPublicView();
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      const viewport = document.querySelector('#registration-public-view-content .registration-public-viewport');
+      const previewUrl = `${window.location.origin}/${orgSlug || 'organisation'}/${prod?.slug || 'production'}/Registration`;
+      const styleHtml = Array.from(document.querySelectorAll('link[rel="stylesheet"], style'))
+        .map(node => node.outerHTML)
+        .join('\n');
+      const contentHtml = viewport?.innerHTML || '<div class="rpf-shell"><div class="rpf-main"><div class="rpf-page">Registration preview unavailable.</div></div></div>';
+      previewWindow.document.open();
+      previewWindow.document.write(`<!doctype html>
+<html lang="en">
+<head>
+  <base href="${esc(window.location.origin)}/">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Katherine Hepburn Registration Preview - Build The Show</title>
+  ${styleHtml}
+  <style>
+    html, body { width: 100%; min-height: 100%; margin: 0; overflow: hidden; background: #efefef; }
+    body { display: block; font-family: var(--bts-font); }
+    .rpf-shell { height: 100vh; min-height: 100vh; }
+    .rpf-main { height: 100vh; }
+    .rpf-page { padding-top: 2.5rem; }
+  </style>
+</head>
+<body data-preview-url="${esc(previewUrl)}">
+  ${contentHtml}
+  <script>
+    window._rpfCurrent = 0;
+    window._rpfCompleted = new Set();
+    function rpfUpdateSteps(current, completed) {
+      document.querySelectorAll('.rpf-left-item').forEach((item, index) => {
+        item.classList.toggle('rpf-active', index === current);
+        item.classList.toggle('rpf-done', completed.has(index));
+        const dot = item.querySelector('.rpf-left-dot');
+        if (dot) dot.textContent = completed.has(index) ? '✓' : String(index + 1);
+      });
+    }
+    function rpfGoTo(index) {
+      const panels = Array.from(document.querySelectorAll('.rpf-panel'));
+      if (index < 0 || index >= panels.length) return;
+      const previous = window._rpfCurrent || 0;
+      if (index > previous) window._rpfCompleted.add(previous);
+      window._rpfCurrent = index;
+      panels.forEach((panel, panelIndex) => panel.classList.toggle('rpf-active', panelIndex === index));
+      rpfUpdateSteps(index, window._rpfCompleted);
+      document.getElementById('rpf-wizard-body')?.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+    function rpfSubmit() {
+      alert('Preview only: this shows what Katherine Hepburn would see before submitting.');
+    }
+    function rpfToggleSoloPickup(checkbox) {
+      const body = checkbox.closest('.rpf-section-body');
+      if (!body) return;
+      body.querySelectorAll('[data-rpf-solo]').forEach(el => { el.style.display = checkbox.checked ? 'none' : ''; });
+    }
+    function rpfToggleMinorFields(checkbox) {
+      const body = checkbox.closest('.rpf-section-body');
+      if (!body) return;
+      body.querySelectorAll('[data-rpf-minor]').forEach(el => { el.style.display = checkbox.checked ? '' : 'none'; });
+    }
+    function rpfAddPickupPerson(btn) {
+      const body = btn.closest('.rpf-section-body');
+      if (!body) return;
+      const existing = body.querySelectorAll('[data-rpf-pickup-person]').length;
+      const num = existing + 3;
+      const group = document.createElement('div');
+      group.setAttribute('data-rpf-solo', '1');
+      group.setAttribute('data-rpf-pickup-person', '1');
+      group.innerHTML = '<div class="rpf-pickup-person-heading">Person ' + num + '</div>' +
+        '<div class="rpf-form-group rpf-pickup-field"><label class="rpf-label">Full name</label><input type="text" class="rpf-input" placeholder="Authorised pickup ' + num + ' full name..." /></div>' +
+        '<div class="rpf-form-group rpf-pickup-field"><label class="rpf-label">Relationship to performer</label><input type="text" class="rpf-input" placeholder="Authorised pickup ' + num + ' relationship to performer..." /></div>' +
+        '<div class="rpf-form-group rpf-pickup-field rpf-pickup-field--last"><label class="rpf-label">Phone number</label><input type="tel" class="rpf-input" placeholder="Authorised pickup ' + num + ' phone number..." /></div>';
+      btn.closest('.rpf-form-group')?.before(group);
+    }
+    function rpfCheckGuardianFields() {}
+  <\/script>
+</body>
+</html>`);
+      previewWindow.document.close();
+    }));
+  }
+
   function rpfToggleMinorFields(checkbox) {
     const body = checkbox.closest('.rpf-section-body');
     if (!body) return;
@@ -36694,7 +36791,7 @@ Thank you,
         <div class="registration-public-browser-bar">
           <div class="registration-public-browser-dots" aria-hidden="true"><span></span><span></span><span></span></div>
           <div class="registration-public-url">${esc(window.location.origin)}/registration-preview</div>
-          <div class="registration-public-browser-tag">Public preview</div>
+          <button type="button" class="registration-public-browser-tag" onclick="openRegistrationPublicPreviewTab()">Public preview</button>
         </div>
         <div class="registration-public-viewport">
           <div style="padding:3rem;text-align:center;color:rgba(87,46,136,0.4);font-size:0.88rem;">No form sections are enabled. Turn on sections in Forms settings to preview the registration form.</div>
@@ -36804,7 +36901,7 @@ Thank you,
       <div class="registration-public-browser-bar">
         <div class="registration-public-browser-dots" aria-hidden="true"><span></span><span></span><span></span></div>
         <div class="registration-public-url">${esc(previewUrl)}</div>
-        <div class="registration-public-browser-tag">Public preview</div>
+        <button type="button" class="registration-public-browser-tag" onclick="openRegistrationPublicPreviewTab()">Public preview</button>
       </div>
       <div class="registration-public-viewport">
         <div class="rpf-shell">
