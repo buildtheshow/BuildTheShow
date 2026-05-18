@@ -33380,7 +33380,7 @@ Thank you,
   };
 
   const REGISTRATION_FORM_DEFAULT_INTRO = {
-    cast_agreement: ``,
+    cast_agreement: `Welcome to {{organisation_name}}'s production of {{show_name}}!\n\nWe are so excited to have you joining the cast. Community theatre is built on teamwork, communication, and commitment, and every person involved plays an important role in bringing the production to life.\n\nThis agreement is here to make sure everyone clearly understands the expectations and responsibilities involved in participating in the production. Please take the time to read through each section carefully before signing.\n\nIf you have any questions at any point, please reach out to the production team. We are always happy to help.`,
   };
 
   const REGISTRATION_FORM_DEFAULT_SECTION_TEXTS = {
@@ -37285,6 +37285,91 @@ Thank you,
     </div>`;
   }
 
+  function rpfRenderCastAgreementSection(template, prefill) {
+    const sub = window._rpfSubTokens || (h => h);
+    const fields = (template?.fields?.length ? template.fields : getRegistrationFormTemplateDef('cast_agreement')?.defaultFields) || [];
+    const sectionTexts = template?.sectionTexts || REGISTRATION_FORM_DEFAULT_SECTION_TEXTS.cast_agreement || {};
+    const sectionTitles = [];
+    let ackTitle = 'Final Acknowledgement';
+    let ackText = sectionTexts[ackTitle] || '';
+    let ackLabel = 'I agree to follow the expectations and commitments required for participation in this production';
+
+    fields.forEach((field, index) => {
+      const raw = String(field || '').trim();
+      if (!raw.startsWith('{section}')) return;
+      const title = raw.slice(9).trim();
+      const nextRaw = String(fields[index + 1] || '').trim();
+      const nextLabel = nextRaw && !nextRaw.startsWith('{') ? nextRaw.replace(/\*$/, '').trim() : '';
+      if (/^signature$/i.test(title)) return;
+      if (/final acknowledgement/i.test(title)) {
+        ackTitle = title;
+        ackText = sectionTexts[title] || ackText;
+        if (nextLabel) ackLabel = nextLabel;
+        return;
+      }
+      sectionTitles.push(title);
+    });
+
+    if (!sectionTitles.length) {
+      Object.keys(sectionTexts).forEach(title => {
+        if (/final acknowledgement/i.test(title)) {
+          ackTitle = title;
+          ackText = sectionTexts[title] || ackText;
+        } else {
+          sectionTitles.push(title);
+        }
+      });
+    }
+
+    const age = rpfCalcAge(prefill?.date_of_birth);
+    const isMinor = age !== null ? age < 19 : false;
+    const ageUnknown = age === null;
+    const performerName = [prefill?.preferred_name || prefill?.first_name || '', prefill?.last_name || ''].filter(Boolean).join(' ');
+    const intro = sub(template?.intro || '');
+
+    const sectionsHtml = sectionTitles.map(title => `
+      <div class="rpf-coc-section">
+        <div class="rpf-coc-section-title">${esc(title)}</div>
+        <div class="rpf-coc-section-body">${sub(sectionTexts[title] || '')}</div>
+      </div>`).join('');
+
+    const adultSig = `<div class="rpf-mr-sig-block"${isMinor ? ' style="display:none"' : ''}>
+      <label class="rpf-agree-row"><input type="checkbox" name="ca_legal_ack"${isMinor ? '' : ' required'} /><span>${esc(ackLabel)}<span class="rpf-req"> *</span></span></label>
+      <div class="rpf-mr-sig-row">
+        <div class="rpf-mr-sig-field"><label>Performer name<span class="rpf-req"> *</span></label><input type="text" name="ca_signer_name"${isMinor ? '' : ' required'} autocomplete="name" value="${esc(performerName)}" /></div>
+        <div class="rpf-mr-sig-field"><label>Date<span class="rpf-req"> *</span></label><input type="date" name="ca_signed_date"${isMinor ? '' : ' required'} /></div>
+      </div>
+    </div>`;
+
+    const guardianSig = `<div class="rpf-mr-guardian-block"${isMinor || ageUnknown ? '' : ' style="display:none"'}>
+      <div class="rpf-mr-guardian-label">Parent / Guardian Signature</div>
+      <div class="rpf-mr-sig-block">
+        <label class="rpf-agree-row"><input type="checkbox" name="ca_guardian_legal_ack"${isMinor ? ' required' : ''} /><span>${esc(ackLabel)} on behalf of the participant named above.<span class="rpf-req"> *</span></span></label>
+        <div class="rpf-mr-sig-row">
+          <div class="rpf-mr-sig-field"><label>Parent or guardian full name<span class="rpf-req"> *</span></label><input type="text" name="ca_guardian_name"${isMinor ? ' required' : ''} autocomplete="name" /></div>
+          <div class="rpf-mr-sig-field"><label>Relationship to participant<span class="rpf-req"> *</span></label><input type="text" name="ca_guardian_relationship"${isMinor ? ' required' : ''} /></div>
+        </div>
+        <div class="rpf-mr-sig-row">
+          <div class="rpf-mr-sig-field rpf-sig-field-wrap"><label>Parent or guardian signature<span class="rpf-req"> *</span></label><input type="text" name="ca_guardian_sig" oninput="rpfUpdateSigPreview(this)"${isMinor ? ' required' : ''} /></div>
+          <div class="rpf-mr-sig-field"><label>Date<span class="rpf-req"> *</span></label><input type="date" name="ca_guardian_date"${isMinor ? ' required' : ''} /></div>
+        </div>
+      </div>
+    </div>`;
+
+    return `<div class="rpf-coc">
+      ${intro ? `<div class="rpf-mr-section-label">What this covers</div><div class="rpf-mr-text">${intro}</div>` : ''}
+      ${sectionsHtml}
+      <hr class="rpf-coc-divider" />
+      <div class="rpf-mr-section-label">${esc(ackTitle)}</div>
+      <div class="rpf-mr-text">${sub(ackText)}</div>
+      <hr class="rpf-coc-divider" />
+      <div class="rpf-mr-section-label">Signature</div>
+      ${!isMinor ? adultSig : ''}
+      ${(isMinor || ageUnknown) ? guardianSig : ''}
+      ${age !== null ? `<input type="hidden" name="ca_signer_age" value="${age}" />` : ''}
+    </div>`;
+  }
+
   function rpfRenderCodeOfConductSection(template, prefill) {
     const sub = window._rpfSubTokens || (h => h);
     const sections = (template?.sections || CODE_OF_CONDUCT_DEFAULT_SECTIONS).filter(s => s.visible !== false);
@@ -37808,6 +37893,11 @@ Thank you,
   function rpfRenderField(fieldStr, prefill) {
     const raw = String(fieldStr).trim();
 
+    if (raw === '{cast-agreement}') {
+      const template = getRegistrationFormTemplate('cast_agreement');
+      return rpfRenderCastAgreementSection(template, prefill);
+    }
+
     if (raw === '{media-release}') {
       const template = getRegistrationFormTemplate('media_release');
       return rpfRenderMediaReleaseSection(template, prefill);
@@ -38113,7 +38203,9 @@ Thank you,
         window._rpfSectionTexts = { ...(window._rpfSectionTexts || {}), ...(template?.sectionTexts || {}) };
         const fields = (template?.fields?.length ? template.fields : def.defaultFields) || [];
         const intro = window._rpfSubTokens(template?.intro || '');
-        const fieldsHtml = fields.map(f => rpfRenderField(f, prefill)).join('');
+        const fieldsHtml = def.key === 'cast_agreement'
+          ? rpfRenderCastAgreementSection(template, prefill)
+          : fields.map(f => rpfRenderField(f, prefill)).join('');
         const bgColor = bgMap[def.color] || '#ebe6f1';
         const _filledCount = (fieldsHtml.match(/rpf-prefilled/g) || []).length;
         const _totalCount = (fieldsHtml.match(/class="rpf-input/g) || []).length;
@@ -38128,7 +38220,7 @@ Thank you,
           : _progressHtml;
         return `<div class="rpf-section${accordionClass}" style="--rpf-head:${esc(def.color)};--rpf-bg:${bgColor}; margin-bottom:${useAccordion ? '0.5rem' : '1.25rem'};">
           <div class="rpf-section-head"${headClick}><span>${esc(def.title)}</span>${metaHtml}</div>
-          ${intro ? `<div class="rpf-step-sub rpf-rich-text" style="padding:0.75rem 1.25rem 0; font-size:0.82rem; color:#6b5e80;">${intro}</div>` : ''}
+          ${intro && def.key !== 'cast_agreement' ? `<div class="rpf-step-sub rpf-rich-text" style="padding:0.75rem 1.25rem 0; font-size:0.82rem; color:#6b5e80;">${intro}</div>` : ''}
           <div class="rpf-section-body">${fieldsHtml}</div>
         </div>`;
       }).join('');
