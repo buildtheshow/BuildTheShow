@@ -1511,6 +1511,84 @@
       color: var(--reg-form-edit-color, #572e88);
     }
     .reg-form-edit-footer { flex-shrink:0; display:flex; gap:0.6rem; padding:0.9rem 1.5rem; border-top:1px solid #f0ebf8; justify-content:flex-end; }
+    /* ── Registration Form Preview Toolbar ── */
+    .rpv-toolbar {
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1.2rem;
+      padding: 0.85rem 1.6rem;
+      background: #ffffff;
+      border-bottom: 1px solid rgba(26,21,48,0.07);
+    }
+    .rpv-toolbar-left { min-width: 0; }
+    .rpv-toolbar-kicker {
+      font-size: 0.58rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: rgba(87,46,136,0.5);
+      margin-bottom: 0.12rem;
+    }
+    .rpv-toolbar-title {
+      font-size: 0.95rem;
+      font-weight: 900;
+      color: #1a1530;
+      line-height: 1.15;
+    }
+    .rpv-toolbar-copy {
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: #6b5e80;
+      margin-top: 0.1rem;
+      line-height: 1.35;
+    }
+    .rpv-toolbar-right {
+      display: flex;
+      align-items: center;
+      gap: 0.65rem;
+      flex-shrink: 0;
+    }
+    .rpv-preview-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      padding: 0.28rem 0.72rem;
+      background: rgba(239,171,69,0.12);
+      border: 1px solid rgba(239,171,69,0.3);
+      border-radius: 999px;
+      font-size: 0.68rem;
+      font-weight: 800;
+      color: #8a5f10;
+      white-space: nowrap;
+    }
+    .rpv-preview-pill::before {
+      content: '';
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #efab45;
+      flex-shrink: 0;
+    }
+    .rpv-action-btn {
+      appearance: none;
+      border: 1.5px solid rgba(87,46,136,0.22);
+      border-radius: 10px;
+      background: #ffffff;
+      color: #572e88;
+      padding: 0.48rem 0.9rem;
+      font-family: var(--bts-font);
+      font-size: 0.75rem;
+      font-weight: 900;
+      cursor: pointer;
+      white-space: nowrap;
+      line-height: 1;
+    }
+    .rpv-action-btn:hover {
+      background: rgba(87,46,136,0.05);
+      border-color: rgba(87,46,136,0.4);
+    }
     /* ── Registration Public Form Preview ── */
     .registration-public-mockup {
       height: 100%;
@@ -18998,14 +19076,17 @@
         width: 0.52rem;
         height: 0.52rem;
       }
-      .rpf-autofill-card {
-        grid-template-columns: 1fr;
-        gap: 0.68rem;
+      .rpv-toolbar {
+        flex-wrap: wrap;
+        gap: 0.75rem;
+        padding: 0.7rem 1rem;
       }
-      .rpf-autofill-btn {
-        width: 100%;
-        min-height: 42px;
+      .rpv-toolbar-right {
+        flex-wrap: wrap;
+        gap: 0.45rem;
       }
+      .rpv-preview-pill { font-size: 0.62rem; }
+      .rpv-action-btn { font-size: 0.7rem; padding: 0.42rem 0.72rem; }
 
       .mobile-nav-toggle {
         display: inline-flex;
@@ -21655,6 +21736,7 @@
         </section>
 
         <section class="registration-panel" id="registration-panel-publicview">
+          <div class="rpv-toolbar" id="registration-publicview-toolbar"></div>
           <div class="aud-settings-shell">
             <div id="registration-public-view-content"></div>
           </div>
@@ -33096,7 +33178,7 @@ Thank you,
     });
     const defaultHeader = document.getElementById('registration-default-header');
     const settingsHeader = document.getElementById('registration-settings-page-header');
-    if (defaultHeader) defaultHeader.hidden = key === 'settings';
+    if (defaultHeader) defaultHeader.hidden = key === 'settings' || key === 'publicview';
     if (settingsHeader) settingsHeader.hidden = key !== 'settings';
     if (key !== 'settings') renderRegistrationDefaultPageHeader(key);
     if (key === 'settings') renderRegistrationSettingsPageHeader();
@@ -33169,6 +33251,11 @@ Thank you,
     etransfer_email: '',
     square_location_id: '',
     instructions: '',
+    refund_enabled: true,
+    refund_deadline: '',
+    refund_admin_fee: '',
+    refund_contact_email: '',
+    refund_policy: '',
     reminders_enabled: false,
   };
 
@@ -34425,7 +34512,7 @@ Thank you,
   }
 
   function renderProductionFeeDetailsPanel() {
-    const s = getPaymentSettings();
+    const s = registrationCurrentPaymentSettings();
     const currSym = { CAD: '$', USD: '$', GBP: '£' }[s.currency || 'CAD'] || '$';
     const currCode = s.currency && s.currency !== 'CAD' ? ` ${s.currency}` : '';
     const fmtAmt = v => v ? `${currSym}${parseFloat(v).toFixed(2)}${currCode}` : null;
@@ -34842,12 +34929,13 @@ Thank you,
     if (!modal) return;
     document.getElementById('payment-settings-modal-mode').value = mode;
     const s = getPaymentSettings();
-    const titles = { fee: 'Production Fee', plans: 'Payment Plans', discounts: 'Discounts & Credits', checkout: 'Checkout & Instructions', completion: 'Registration Completion' };
+    const titles = { fee: 'Production Fee', plans: 'Payment Plans', discounts: 'Discounts & Credits', checkout: 'Checkout & Instructions', refunds: 'Refund Information', completion: 'Registration Completion' };
     const summaries = {
       fee: 'Set whether this production charges a fee, what kind, and how much.',
       plans: 'Let families split their payment into installments.',
       discounts: 'Configure sibling discounts, volunteer credits, and financial assistance options.',
       checkout: 'Configure checkout flow, payment methods, and the instructions shown to families.',
+      refunds: 'Set the refund policy families see before they pay.',
       completion: 'Choose what payment status is required before registration is marked complete.',
     };
     document.getElementById('payment-settings-edit-title').textContent = titles[mode] || 'Payment Settings';
@@ -34857,6 +34945,7 @@ Thank you,
     else if (mode === 'plans')    body.innerHTML = renderPaymentPlansModalBody(s);
     else if (mode === 'discounts') body.innerHTML = renderPaymentDiscountsModalBody(s);
     else if (mode === 'checkout') body.innerHTML = renderCheckoutSettingsModalBody(s);
+    else if (mode === 'refunds') body.innerHTML = renderRefundSettingsModalBody(s);
     else if (mode === 'instructions') body.innerHTML = renderPaymentInstructionsModalBody(s);
     else if (mode === 'completion') body.innerHTML = renderCompletionRulesModalBody(s);
     modal.classList.add('open');
@@ -34905,6 +34994,12 @@ Thank you,
       s.checkout_square_enabled = document.getElementById('pay-checkout-square')?.checked === true;
       s.square_location_id = document.getElementById('pay-checkout-square-location')?.value?.trim() || '';
       s.instructions = document.getElementById('pay-instructions-editor')?.innerHTML?.trim() || '';
+    } else if (mode === 'refunds') {
+      s.refund_enabled = document.getElementById('pay-refund-enabled')?.checked !== false;
+      s.refund_deadline = document.getElementById('pay-refund-deadline')?.value || '';
+      s.refund_admin_fee = document.getElementById('pay-refund-admin-fee')?.value?.trim() || '';
+      s.refund_contact_email = document.getElementById('pay-refund-contact-email')?.value?.trim() || '';
+      s.refund_policy = document.getElementById('pay-refund-policy-editor')?.innerHTML?.trim() || '';
     } else if (mode === 'completion') {
       s.completion_rule = document.querySelector('#payment-settings-edit-body-area input[name="pay-completion"]:checked')?.value || 'none';
     }
@@ -35095,6 +35190,46 @@ Thank you,
     </div>`;
 
     return `<div class="reg-form-edit-tab-wrap">${sidebar}<div class="reg-form-edit-tab-body">${flowPanel}${methodsPanel}${instructionsPanel}</div>${coVarPanel}</div>`;
+  }
+
+  function renderRefundSettingsModalBody(s) {
+    const defaultPolicy = '<p>Refund requests are reviewed by the production team. Please contact us as soon as possible if your performer can no longer participate.</p><p>Refunds may depend on rehearsal start dates, costume purchases, scripts, licensing costs, and payment processing fees.</p>';
+    const policy = (s.refund_policy && s.refund_policy.replace(/<[^>]*>/g, '').trim()) ? s.refund_policy : defaultPolicy;
+    const sidebar = `<div class="reg-form-edit-tab-sidebar">
+      <div class="reg-form-edit-sidebar-item"><button class="reg-form-edit-tab-btn active" onclick="regFormSwitchTab(this,'pay-refund-policy')">Policy</button></div>
+      <div class="reg-form-edit-sidebar-item"><button class="reg-form-edit-tab-btn" onclick="regFormSwitchTab(this,'pay-refund-details')">Details</button></div>
+    </div>`;
+    const policyPanel = `<div class="reg-form-edit-tab-panel active" id="pay-refund-policy" style="gap:0;padding:0;">
+      <div class="reg-form-edit-section-label" style="padding:1.2rem 1.5rem 0.4rem;flex-shrink:0;">Refund Policy</div>
+      <div style="padding:0 1.5rem 0.75rem;flex-shrink:0;font-size:0.78rem;color:#7a6a95;line-height:1.5;">This is the plain-language refund information families see before they pay. Keep it calm, specific, and easy to scan.</div>
+      ${REG_FORM_RTE_TOOLBAR}
+      <div class="et-body-editor" id="pay-refund-policy-editor" contenteditable="true" onfocus="window._regFormLastTextarea=this" style="flex:1 1 0;min-height:0;">${policy}</div>
+    </div>`;
+    const detailsPanel = `<div class="reg-form-edit-tab-panel" id="pay-refund-details" style="padding:1.25rem 1.4rem;gap:0.85rem;overflow-y:auto;">
+      <div class="reg-form-edit-section-label">Refund Details</div>
+      <label class="pay-toggle-row" style="align-items:flex-start;">
+        <input type="checkbox" id="pay-refund-enabled" ${s.refund_enabled !== false ? 'checked' : ''} style="margin-top:0.15rem;" />
+        <span>
+          <span style="font-size:0.84rem;font-weight:800;color:#1a1530;display:block;">Show refund information</span>
+          <span style="font-size:0.74rem;color:#7a6a95;font-weight:550;">Include the refund policy in registration/payment checkout screens.</span>
+        </span>
+      </label>
+      <div class="pay-fields-group">
+        <div>
+          <div class="pay-field-label">Refund request deadline <span style="opacity:0.45;text-transform:none;letter-spacing:0;font-weight:400;font-size:0.65rem;">optional</span></div>
+          <input type="date" id="pay-refund-deadline" class="form-input" value="${esc(s.refund_deadline || '')}" />
+        </div>
+        <div>
+          <div class="pay-field-label">Non-refundable/admin fee <span style="opacity:0.45;text-transform:none;letter-spacing:0;font-weight:400;font-size:0.65rem;">optional</span></div>
+          <input type="text" id="pay-refund-admin-fee" class="form-input" placeholder="e.g. $25 processing fee" value="${esc(s.refund_admin_fee || '')}" />
+        </div>
+      </div>
+      <div>
+        <div class="pay-field-label">Refund contact email <span style="opacity:0.45;text-transform:none;letter-spacing:0;font-weight:400;font-size:0.65rem;">optional</span></div>
+        <input type="email" id="pay-refund-contact-email" class="form-input" placeholder="payments@example.com" value="${esc(s.refund_contact_email || orgEtransferEmail || '')}" />
+      </div>
+    </div>`;
+    return `<div class="reg-form-edit-tab-wrap">${sidebar}<div class="reg-form-edit-tab-body">${policyPanel}${detailsPanel}</div></div>`;
   }
 
   function showSquareConnectionExplainer() {
@@ -35843,6 +35978,16 @@ Thank you,
       s.checkout_pay_later_enabled !== false ? 'Pay later' : '',
     ].filter(Boolean).join(' / ') || 'Checkout hidden';
 
+    const refundPolicyText = s.refund_policy ? s.refund_policy.replace(/<[^>]+>/g, '').trim() : '';
+    const refundLines = s.refund_enabled === false
+      ? ['Refund information hidden from families.']
+      : [
+          s.refund_deadline ? `Requests by: ${s.refund_deadline}` : 'No refund deadline set.',
+          s.refund_admin_fee ? `Admin fee: ${s.refund_admin_fee}` : 'No admin fee listed.',
+          s.refund_contact_email ? `Contact: ${s.refund_contact_email}` : 'No refund contact set.',
+          refundPolicyText ? `${refundPolicyText.slice(0, 50)}…` : 'No refund policy text set.',
+        ];
+
     const tile1 = renderRegistrationSettingTile({
       color,
       kicker: 'Payments',
@@ -35870,6 +36015,15 @@ Thank you,
       buttonHtml: `<button type="button" class="template-brand-tile-button" onclick="event.stopPropagation();openPaymentSettingsModal('checkout')">Edit</button>`,
       ariaLabel: 'Checkout and payment instructions',
     });
+    const tileRefunds = renderRegistrationSettingTile({
+      color,
+      kicker: 'Payments',
+      title: 'Refund Information',
+      helper: s.refund_enabled === false ? 'Hidden from families.' : 'Policy, deadline, fees, and refund contact.',
+      bodyHtml: tileLines(refundLines),
+      buttonHtml: `<button type="button" class="template-brand-tile-button" onclick="event.stopPropagation();openPaymentSettingsModal('refunds')">Edit Refunds</button>`,
+      ariaLabel: 'Refund information settings',
+    });
     const tile5 = renderRegistrationSettingTile({
       color,
       kicker: 'Payments',
@@ -35880,7 +36034,7 @@ Thank you,
       buttonHtml: '<button type="button" class="template-brand-tile-button" onclick="event.stopPropagation();openEmailTemplateForCategory(\'payment_reminder\')">Edit Template</button>',
       ariaLabel: 'Payment reminders',
     });
-    return [tile1, tile3, tileCheckout, tile5].join('');
+    return [tile1, tile3, tileCheckout, tileRefunds, tile5].join('');
   }
 
   function updateRegistrationFormGroupCount(toggle) {
@@ -37375,7 +37529,7 @@ Thank you,
 
   function rpfRenderProductionFeeSection(template, prefill) {
     const sub = window._rpfSubTokens || (h => h);
-    const s = getPaymentSettings();
+    const s = registrationCurrentPaymentSettings();
     const age = rpfCalcAge(prefill?.date_of_birth);
     const isMinor = age !== null ? age < 19 : false;
     const ageUnknown = age === null;
@@ -37698,6 +37852,22 @@ Thank you,
     const host = document.getElementById('registration-public-view-content');
     if (!host) return;
 
+    // Render the toolbar header inside the fixed panel
+    const toolbarHost = document.getElementById('registration-publicview-toolbar');
+    if (toolbarHost) {
+      const meta = REGISTRATION_SUBPAGE_COPY.publicview;
+      toolbarHost.innerHTML = `
+        <div class="rpv-toolbar-left">
+          <div class="rpv-toolbar-kicker">Registration</div>
+          <div class="rpv-toolbar-title">${esc(meta.title)}</div>
+          <div class="rpv-toolbar-copy">${esc(meta.copy)}</div>
+        </div>
+        <div class="rpv-toolbar-right">
+          <div class="rpv-preview-pill">Previewing with sample data</div>
+          <button class="rpv-action-btn" onclick="openRegistrationPublicPreviewDestination()">Open live form ↗</button>
+        </div>`;
+    }
+
     // Hydrate form templates from prod data if Settings tab hasn't been visited yet this session.
     if (!Object.keys(registrationFormTemplatesState || {}).length) {
       const _rs = (typeof prod?.registration_settings === 'object' && prod.registration_settings) ? prod.registration_settings : {};
@@ -37824,21 +37994,6 @@ Thank you,
         </div>
       </div>`;
     }).join('');
-    const autofillHtml = hasPrefill
-      ? `<div class="rpf-autofill-card">
-          <div>
-            <div class="rpf-autofill-title">Audition application details added</div>
-            <div class="rpf-autofill-copy">We filled the basics we already had. Please review anything highlighted before submitting.</div>
-          </div>
-          <button type="button" class="rpf-autofill-btn" onclick="rpfAutofillFromAuditionApplication()">Refresh autofill</button>
-        </div>`
-      : `<div class="rpf-autofill-card">
-          <div>
-            <div class="rpf-autofill-title">Save time on registration</div>
-            <div class="rpf-autofill-copy">Use the details from the audition application and review only what changed.</div>
-          </div>
-          <button type="button" class="rpf-autofill-btn" onclick="rpfAutofillFromAuditionApplication()">Autofill from audition application</button>
-        </div>`;
 
     host.innerHTML = `<div class="registration-public-mockup">
       <div class="registration-public-browser-bar">
@@ -37880,7 +38035,6 @@ Thank you,
           </div>
           <div class="rpf-main" id="rpf-wizard-body">
             <div class="rpf-page">
-              ${autofillHtml}
               <div class="rpf-card">
                 <div class="rpf-body">${panelsHtml}</div>
               </div>
