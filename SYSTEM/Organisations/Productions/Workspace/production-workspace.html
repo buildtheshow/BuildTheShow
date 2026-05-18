@@ -34212,7 +34212,11 @@ Thank you,
       <div class="reg-form-edit-sidebar-item">
         <button class="reg-form-edit-tab-btn active" onclick="regFormSwitchTab(this,'cm-tab-intro')">Introduction</button>
       </div>
+      <div class="reg-form-edit-sidebar-item">
+        <button class="reg-form-edit-tab-btn" onclick="regFormSwitchTab(this,'cm-tab-fields')">Fields</button>
+      </div>
     </div>`;
+
     const introPanel = `<div class="reg-form-edit-tab-panel active" id="cm-tab-intro" style="gap:0;padding:0;">
       <div class="reg-form-edit-section-label" style="padding:0.9rem 1.2rem 0.4rem;flex-shrink:0;">Introduction <span class="reg-form-edit-section-hint">shown above the size fields</span></div>
       <div style="padding:0 1.2rem 0.75rem;flex-shrink:0;font-size:0.78rem;color:#7a6a95;line-height:1.5;">Optional welcome message. Use {{show_name}} or {{organisation_name}} to personalise it.</div>
@@ -34221,11 +34225,42 @@ Thank you,
            data-placeholder="Help us fit your costumes perfectly! Please fill in your measurements as accurately as you can."
            style="flex:1 1 0;min-height:0;">${plainToHtml(template?.intro || '')}</div>
     </div>`;
-    const notice = `<div style="padding:1rem 1.2rem;background:rgba(202,126,167,0.07);border-top:1px solid rgba(202,126,167,0.15);font-size:0.78rem;color:#8c4a6e;line-height:1.5;flex-shrink:0;">
-      <strong>Size fields are standardised and built-in.</strong><br />
-      Clothing sizes, shoe sizes, height, hair, and notes are always included — families choose from searchable grouped dropdowns.
+
+    const cmFieldRow = (label, type, hint, required) => `
+      <div style="display:flex;align-items:baseline;justify-content:space-between;padding:0.38rem 0;border-bottom:1px solid rgba(202,126,167,0.1);">
+        <span style="font-size:0.83rem;color:#1a1530;">${esc(label)}${required ? '<span style="color:#d1523d;"> *</span>' : ''}</span>
+        <span style="font-size:0.7rem;font-weight:700;color:#b09ec8;background:rgba(202,126,167,0.1);border-radius:999px;padding:0.1rem 0.5rem;white-space:nowrap;">${esc(type)}</span>
+      </div>`;
+
+    const cmSectionHead = label => `<div style="font-size:0.72rem;font-weight:900;text-transform:uppercase;letter-spacing:0.07em;color:#ca7ea7;padding:1rem 0 0.3rem;border-bottom:1.5px solid rgba(202,126,167,0.2);margin-bottom:0.1rem;">${esc(label)}</div>`;
+
+    const fieldsPanel = `<div class="reg-form-edit-tab-panel" id="cm-tab-fields" style="gap:0;overflow-y:auto;">
+      <div style="padding:0.9rem 1.2rem 0.4rem;font-size:0.75rem;font-weight:900;text-transform:uppercase;letter-spacing:0.06em;color:#7a6a95;flex-shrink:0;">Form Fields</div>
+      <div style="padding:0 1.2rem 0.5rem;font-size:0.76rem;color:#9a8db5;line-height:1.5;flex-shrink:0;">These fields are always included. Families choose from searchable grouped dropdowns — sizes are labelled to avoid confusion (Adult 4 vs Youth 4).</div>
+      <div style="padding:0 1.2rem 1.2rem;overflow-y:auto;flex:1 1 0;">
+        ${cmSectionHead('Clothing Sizes')}
+        ${cmFieldRow('Top Size', 'searchable dropdown', '', true)}
+        ${cmFieldRow('Bottom Size', 'searchable dropdown', 'Youth, Alpha, Numeric, Waist', true)}
+        ${cmFieldRow('Dress Size', 'searchable dropdown', 'Youth, Alpha, Numeric', false)}
+        ${cmSectionHead('Footwear')}
+        ${cmFieldRow('Shoe Size', 'searchable dropdown', "Kids', Women's, Men's", true)}
+        ${cmSectionHead('Physical Details')}
+        ${cmFieldRow('Height', 'searchable dropdown', "3'0\" to 7'2\" — every inch", true)}
+        ${cmFieldRow('Hair Length', 'searchable dropdown', 'Bald to Hip-length', false)}
+        ${cmFieldRow('Hair Colour', 'searchable dropdown', 'Natural + fashion shades', false)}
+        ${cmSectionHead('Additional Notes')}
+        ${cmFieldRow('Costume concerns or special considerations', 'text area', '', false)}
+        ${cmFieldRow('Makeup or material allergies', 'text area', '', false)}
+        ${cmFieldRow('Sensory notes', 'text area', '', false)}
+        ${cmFieldRow('Anything else the costume team should know', 'text area', '', false)}
+        <div style="margin-top:1rem;padding:0.75rem;background:rgba(202,126,167,0.07);border-radius:8px;font-size:0.75rem;color:#8c4a6e;line-height:1.5;">
+          <strong>* Required field</strong> — all other fields are optional.<br />
+          Dropdown options are grouped and searchable. Example for Bottom Size: Youth XS–XL, Adult XS–5XL, Adult 0–30, 24W–48W, Custom / Unsure.
+        </div>
+      </div>
     </div>`;
-    return `<div class="reg-form-edit-tab-wrap">${sidebar}<div class="reg-form-edit-tab-body">${introPanel}${notice}</div>${renderRegFormVarPanel()}</div>`;
+
+    return `<div class="reg-form-edit-tab-wrap">${sidebar}<div class="reg-form-edit-tab-body">${introPanel}${fieldsPanel}</div>${renderRegFormVarPanel()}</div>`;
   }
 
   async function saveCostumeMeasurementsFormModal(btn) {
@@ -37460,10 +37495,23 @@ Thank you,
   function loadRegistrationPublicView() {
     const host = document.getElementById('registration-public-view-content');
     if (!host) return;
-    const enabledDefs = REGISTRATION_FORM_TEMPLATE_DEFS.filter(def => {
+
+    // Hydrate form templates from prod data if Settings tab hasn't been visited yet this session.
+    if (!Object.keys(registrationFormTemplatesState || {}).length) {
+      const _rs = (typeof prod?.registration_settings === 'object' && prod.registration_settings) ? prod.registration_settings : {};
+      if (_rs.form_templates && typeof _rs.form_templates === 'object') {
+        registrationFormTemplatesState = _rs.form_templates;
+      }
+    }
+
+    const _savedFormSettings = (typeof prod?.registration_settings === 'object' && prod.registration_settings) ? prod.registration_settings : {};
+    const _isDefEnabled = def => {
       const el = document.getElementById(def.settingId);
-      return el ? el.checked : def.defaultOn;
-    });
+      if (el) return el.checked;
+      const _dbKey = def.settingId.replace(/^reg-/, '').replace(/-/g, '_');
+      return def.defaultOn ? _savedFormSettings[_dbKey] !== false : _savedFormSettings[_dbKey] === true;
+    };
+    const enabledDefs = REGISTRATION_FORM_TEMPLATE_DEFS.filter(_isDefEnabled);
     if (!enabledDefs.length) {
       const previewUrl = registrationPublicFallbackUrl();
       host.innerHTML = `<div class="registration-public-mockup">
