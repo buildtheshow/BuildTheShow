@@ -33522,6 +33522,9 @@ Thank you,
       base.agreementText = saved.agreementText !== undefined ? saved.agreementText : PHYSICAL_PERFORMANCE_DEFAULT_AGREEMENT;
       base.optionalSections = Array.isArray(saved.optionalSections) ? saved.optionalSections : [];
     }
+    if (key === 'costume_measurements') {
+      base.cm_config = (saved.cm_config && typeof saved.cm_config === 'object') ? saved.cm_config : {};
+    }
     return base;
   }
 
@@ -34208,12 +34211,60 @@ Thank you,
   }
 
   function renderCostumeMeasurementsFormModalBody(template) {
-    const sidebar = `<div class="reg-form-edit-tab-sidebar">
-      <div class="reg-form-edit-sidebar-item">
-        <button class="reg-form-edit-tab-btn active" onclick="regFormSwitchTab(this,'cm-tab-intro')">Introduction</button>
-      </div>
-      <div class="reg-form-edit-sidebar-item">
-        <button class="reg-form-edit-tab-btn" onclick="regFormSwitchTab(this,'cm-tab-fields')">Fields</button>
+    const g   = RPF_COSTUME_SIZE_GROUPS;
+    const cfg = template?.cm_config || {};
+
+    const pill = opt => `<span style="display:inline-block;font-size:0.7rem;color:#7a6a95;background:rgba(202,126,167,0.12);border-radius:999px;padding:0.07rem 0.45rem;margin:0.1rem 0.12rem;">${esc(opt)}</span>`;
+
+    const buildGroup = (fieldKey, grp, savedGroups) => {
+      const safeId = (fieldKey + '_' + grp.group).replace(/[^a-z0-9]/gi, '_');
+      const isOn = savedGroups ? savedGroups[grp.group] !== false : true;
+      return `<div id="cm-grp-${safeId}" style="margin-bottom:0.9rem;${isOn ? '' : 'opacity:0.4;'}">
+        <label style="display:flex;align-items:center;gap:0.45rem;font-size:0.8rem;font-weight:700;color:#1a1530;cursor:pointer;margin-bottom:0.3rem;">
+          <input type="checkbox" data-cm-group-field="${esc(fieldKey)}" data-cm-group-name="${esc(grp.group)}"${isOn ? ' checked' : ''}
+                 onchange="document.getElementById('cm-grp-${safeId}').style.opacity=this.checked?'1':'0.4'" />
+          ${esc(grp.group)}
+        </label>
+        <div style="padding-left:1rem;display:flex;flex-wrap:wrap;">${grp.options.map(pill).join('')}</div>
+      </div>`;
+    };
+
+    const buildSizePanel = (fieldKey, groups, defaultRequired) => {
+      const fc       = cfg[fieldKey] || {};
+      const included = fc.included !== false;
+      const required = fc.required !== undefined ? fc.required : defaultRequired;
+      return `<div class="reg-form-edit-tab-panel" id="cm-tab-${fieldKey}" style="gap:0;padding:0;">
+        <div style="padding:0.8rem 1.2rem;border-bottom:1px solid rgba(202,126,167,0.12);flex-shrink:0;display:flex;gap:1.8rem;align-items:center;flex-wrap:wrap;">
+          <label style="display:flex;align-items:center;gap:0.4rem;font-size:0.82rem;cursor:pointer;">
+            <input type="checkbox" id="cm-include-${fieldKey}"${included ? ' checked' : ''} />
+            Include on form
+          </label>
+          <label style="display:flex;align-items:center;gap:0.4rem;font-size:0.82rem;cursor:pointer;">
+            <input type="checkbox" id="cm-required-${fieldKey}"${required ? ' checked' : ''} />
+            Required
+          </label>
+        </div>
+        <div style="padding:0.6rem 1.2rem 0.2rem;font-size:0.69rem;font-weight:900;text-transform:uppercase;letter-spacing:0.07em;color:#b09ec8;flex-shrink:0;">Option groups — uncheck to hide from families</div>
+        <div style="flex:1 1 0;overflow-y:auto;padding:0.3rem 1.2rem 1rem;">${groups.map(grp => buildGroup(fieldKey, grp, fc.groups || null)).join('')}</div>
+      </div>`;
+    };
+
+    const noteDefs = [
+      { key: 'note_costume', label: 'Costume concerns or special considerations' },
+      { key: 'note_allergy', label: 'Makeup or material allergies' },
+      { key: 'note_sensory', label: 'Sensory notes' },
+      { key: 'note_other',   label: 'Anything else the costume team should know' },
+    ];
+    const notesPanel = `<div class="reg-form-edit-tab-panel" id="cm-tab-notes" style="gap:0;padding:0;">
+      <div style="padding:0.8rem 1.2rem 0.3rem;font-size:0.69rem;font-weight:900;text-transform:uppercase;letter-spacing:0.07em;color:#b09ec8;flex-shrink:0;">Note fields — uncheck to remove from form</div>
+      <div style="flex:1 1 0;overflow-y:auto;padding:0.3rem 1.2rem 1rem;">
+        ${noteDefs.map(n => {
+          const included = cfg[n.key]?.included !== false;
+          return `<label style="display:flex;align-items:flex-start;gap:0.5rem;padding:0.6rem 0;border-bottom:1px solid rgba(202,126,167,0.1);cursor:pointer;font-size:0.82rem;color:#1a1530;line-height:1.4;">
+            <input type="checkbox" id="cm-include-${n.key}"${included ? ' checked' : ''} style="margin-top:0.18rem;flex-shrink:0;" />
+            ${esc(n.label)}
+          </label>`;
+        }).join('')}
       </div>
     </div>`;
 
@@ -34222,53 +34273,66 @@ Thank you,
       <div style="padding:0 1.2rem 0.75rem;flex-shrink:0;font-size:0.78rem;color:#7a6a95;line-height:1.5;">Optional welcome message. Use {{show_name}} or {{organisation_name}} to personalise it.</div>
       ${REG_FORM_RTE_TOOLBAR}
       <div class="et-body-editor" id="cm-intro-editor" contenteditable="true" onfocus="window._regFormLastTextarea=this"
-           data-placeholder="Help us fit your costumes perfectly! Please fill in your measurements as accurately as you can."
+           data-placeholder="Help us fit your costumes perfectly!"
            style="flex:1 1 0;min-height:0;">${plainToHtml(template?.intro || '')}</div>
     </div>`;
 
-    const cmFieldRow = (label, type, hint, required) => `
-      <div style="display:flex;align-items:baseline;justify-content:space-between;padding:0.38rem 0;border-bottom:1px solid rgba(202,126,167,0.1);">
-        <span style="font-size:0.83rem;color:#1a1530;">${esc(label)}${required ? '<span style="color:#d1523d;"> *</span>' : ''}</span>
-        <span style="font-size:0.7rem;font-weight:700;color:#b09ec8;background:rgba(202,126,167,0.1);border-radius:999px;padding:0.1rem 0.5rem;white-space:nowrap;">${esc(type)}</span>
-      </div>`;
-
-    const cmSectionHead = label => `<div style="font-size:0.72rem;font-weight:900;text-transform:uppercase;letter-spacing:0.07em;color:#ca7ea7;padding:1rem 0 0.3rem;border-bottom:1.5px solid rgba(202,126,167,0.2);margin-bottom:0.1rem;">${esc(label)}</div>`;
-
-    const fieldsPanel = `<div class="reg-form-edit-tab-panel" id="cm-tab-fields" style="gap:0;overflow-y:auto;">
-      <div style="padding:0.9rem 1.2rem 0.4rem;font-size:0.75rem;font-weight:900;text-transform:uppercase;letter-spacing:0.06em;color:#7a6a95;flex-shrink:0;">Form Fields</div>
-      <div style="padding:0 1.2rem 0.5rem;font-size:0.76rem;color:#9a8db5;line-height:1.5;flex-shrink:0;">These fields are always included. Families choose from searchable grouped dropdowns — sizes are labelled to avoid confusion (Adult 4 vs Youth 4).</div>
-      <div style="padding:0 1.2rem 1.2rem;overflow-y:auto;flex:1 1 0;">
-        ${cmSectionHead('Clothing Sizes')}
-        ${cmFieldRow('Top Size', 'searchable dropdown', '', true)}
-        ${cmFieldRow('Bottom Size', 'searchable dropdown', 'Youth, Alpha, Numeric, Waist', true)}
-        ${cmFieldRow('Dress Size', 'searchable dropdown', 'Youth, Alpha, Numeric', false)}
-        ${cmSectionHead('Footwear')}
-        ${cmFieldRow('Shoe Size', 'searchable dropdown', "Kids', Women's, Men's", true)}
-        ${cmSectionHead('Physical Details')}
-        ${cmFieldRow('Height', 'searchable dropdown', "3'0\" to 7'2\" — every inch", true)}
-        ${cmFieldRow('Hair Length', 'searchable dropdown', 'Bald to Hip-length', false)}
-        ${cmFieldRow('Hair Colour', 'searchable dropdown', 'Natural + fashion shades', false)}
-        ${cmSectionHead('Additional Notes')}
-        ${cmFieldRow('Costume concerns or special considerations', 'text area', '', false)}
-        ${cmFieldRow('Makeup or material allergies', 'text area', '', false)}
-        ${cmFieldRow('Sensory notes', 'text area', '', false)}
-        ${cmFieldRow('Anything else the costume team should know', 'text area', '', false)}
-        <div style="margin-top:1rem;padding:0.75rem;background:rgba(202,126,167,0.07);border-radius:8px;font-size:0.75rem;color:#8c4a6e;line-height:1.5;">
-          <strong>* Required field</strong> — all other fields are optional.<br />
-          Dropdown options are grouped and searchable. Example for Bottom Size: Youth XS–XL, Adult XS–5XL, Adult 0–30, 24W–48W, Custom / Unsure.
-        </div>
-      </div>
+    const sidebar = `<div class="reg-form-edit-tab-sidebar">
+      <div class="reg-form-edit-sidebar-item"><button class="reg-form-edit-tab-btn active" onclick="regFormSwitchTab(this,'cm-tab-intro')">Introduction</button></div>
+      <div class="reg-form-edit-sidebar-group-label">Clothing Sizes</div>
+      <div class="reg-form-edit-sidebar-item"><button class="reg-form-edit-tab-btn" onclick="regFormSwitchTab(this,'cm-tab-top_size')">Top Size</button></div>
+      <div class="reg-form-edit-sidebar-item"><button class="reg-form-edit-tab-btn" onclick="regFormSwitchTab(this,'cm-tab-bottom_size')">Bottom Size</button></div>
+      <div class="reg-form-edit-sidebar-item"><button class="reg-form-edit-tab-btn" onclick="regFormSwitchTab(this,'cm-tab-dress_size')">Dress Size</button></div>
+      <div class="reg-form-edit-sidebar-group-label">Footwear</div>
+      <div class="reg-form-edit-sidebar-item"><button class="reg-form-edit-tab-btn" onclick="regFormSwitchTab(this,'cm-tab-shoe_size')">Shoe Size</button></div>
+      <div class="reg-form-edit-sidebar-group-label">Physical Details</div>
+      <div class="reg-form-edit-sidebar-item"><button class="reg-form-edit-tab-btn" onclick="regFormSwitchTab(this,'cm-tab-height')">Height</button></div>
+      <div class="reg-form-edit-sidebar-item"><button class="reg-form-edit-tab-btn" onclick="regFormSwitchTab(this,'cm-tab-hair_length')">Hair Length</button></div>
+      <div class="reg-form-edit-sidebar-item"><button class="reg-form-edit-tab-btn" onclick="regFormSwitchTab(this,'cm-tab-hair_colour')">Hair Colour</button></div>
+      <div class="reg-form-edit-sidebar-group-label">Notes</div>
+      <div class="reg-form-edit-sidebar-item"><button class="reg-form-edit-tab-btn" onclick="regFormSwitchTab(this,'cm-tab-notes')">Additional Notes</button></div>
     </div>`;
 
-    return `<div class="reg-form-edit-tab-wrap">${sidebar}<div class="reg-form-edit-tab-body">${introPanel}${fieldsPanel}</div>${renderRegFormVarPanel()}</div>`;
+    const panels = [
+      introPanel,
+      buildSizePanel('top_size',    g.top,       true),
+      buildSizePanel('bottom_size', g.bottom,    true),
+      buildSizePanel('dress_size',  g.dress,     false),
+      buildSizePanel('shoe_size',   g.shoe,      true),
+      buildSizePanel('height',      g.height,    true),
+      buildSizePanel('hair_length', g.hairLength, false),
+      buildSizePanel('hair_colour', g.hairColour, false),
+      notesPanel,
+    ].join('');
+
+    return `<div class="reg-form-edit-tab-wrap">${sidebar}<div class="reg-form-edit-tab-body">${panels}</div></div>`;
   }
 
   async function saveCostumeMeasurementsFormModal(btn) {
-    const introEl = document.getElementById('cm-intro-editor');
-    const intro = introEl?.innerHTML?.trim() || '';
+    const intro = document.getElementById('cm-intro-editor')?.innerHTML?.trim() || '';
+
+    const sizeKeys = ['top_size', 'bottom_size', 'dress_size', 'shoe_size', 'height', 'hair_length', 'hair_colour'];
+    const noteKeys = ['note_costume', 'note_allergy', 'note_sensory', 'note_other'];
+    const cm_config = {};
+
+    sizeKeys.forEach(key => {
+      const included = document.getElementById(`cm-include-${key}`)?.checked ?? true;
+      const required = document.getElementById(`cm-required-${key}`)?.checked ?? false;
+      const groups = {};
+      document.querySelectorAll(`[data-cm-group-field="${key}"]`).forEach(cb => {
+        groups[cb.dataset.cmGroupName] = cb.checked;
+      });
+      cm_config[key] = { included, required, groups: Object.keys(groups).length ? groups : null };
+    });
+
+    noteKeys.forEach(key => {
+      const included = document.getElementById(`cm-include-${key}`)?.checked ?? true;
+      cm_config[key] = { included };
+    });
+
     registrationFormTemplatesState = {
       ...(registrationFormTemplatesState || {}),
-      costume_measurements: { title: 'Costume Measurements', intro, fields: ['{costume-measurements}'], sectionTexts: {} },
+      costume_measurements: { title: 'Costume Measurements', intro, fields: ['{costume-measurements}'], sectionTexts: {}, cm_config },
     };
     const host = document.getElementById('registration-forms-settings-surface');
     if (host) {
@@ -37116,60 +37180,56 @@ Thank you,
 
   function rpfRenderCostumeMeasurementsSection(template, prefill) {
     const sub = window._rpfSubTokens || (h => h);
+    const cfg = template?.cm_config || {};
+    const g   = RPF_COSTUME_SIZE_GROUPS;
+
     const introRaw = template?.intro || '';
     const introHtml = introRaw ? `<div class="rpf-pf-text" style="margin-bottom:0.5rem;">${sub(introRaw)}</div>` : '';
 
-    const g = RPF_COSTUME_SIZE_GROUPS;
+    const isIncluded = (key, def = true)  => cfg[key]?.included !== undefined ? cfg[key].included !== false : def;
+    const isRequired = (key, def = false) => cfg[key]?.required !== undefined ? !!cfg[key].required : def;
+    const filteredGroups = (key, allGroups) => {
+      const saved = cfg[key]?.groups;
+      if (!saved) return allGroups;
+      return allGroups.filter(grp => saved[grp.group] !== false);
+    };
 
-    const clothingSection = `
-      <div>
-        <div class="rpf-cm-section-head">Clothing Sizes</div>
-        ${rpfCsdField({ name: 'cm_top_size',    label: 'Top Size',    groups: g.top,    hint: 'Examples: Youth L, Adult M, Adult 2XL', required: true })}
-        ${rpfCsdField({ name: 'cm_bottom_size', label: 'Bottom Size', groups: g.bottom, hint: 'Examples: Youth M, Adult 10, 32W', required: true })}
-        ${rpfCsdField({ name: 'cm_dress_size',  label: 'Dress Size',  groups: g.dress,  hint: 'Examples: Youth 10, Adult M, Adult 8' })}
-      </div>`;
+    const sizeFields = [
+      isIncluded('top_size',    true)  ? rpfCsdField({ name: 'cm_top_size',    label: 'Top Size',    groups: filteredGroups('top_size',    g.top),       hint: 'Examples: Youth L, Adult M, Adult 2XL',                required: isRequired('top_size',    true) }) : '',
+      isIncluded('bottom_size', true)  ? rpfCsdField({ name: 'cm_bottom_size', label: 'Bottom Size', groups: filteredGroups('bottom_size', g.bottom),    hint: 'Examples: Youth M, Adult 10, 32W',                     required: isRequired('bottom_size', true) }) : '',
+      isIncluded('dress_size',  true)  ? rpfCsdField({ name: 'cm_dress_size',  label: 'Dress Size',  groups: filteredGroups('dress_size',  g.dress),     hint: 'Examples: Youth 10, Adult M, Adult 8',                 required: isRequired('dress_size',  false) }) : '',
+    ].filter(Boolean);
 
-    const footwearSection = `
-      <div>
-        <div class="rpf-cm-section-head">Footwear</div>
-        ${rpfCsdField({ name: 'cm_shoe_size', label: 'Shoe Size', groups: g.shoe, hint: "Examples: Kids 4, Women's 8, Men's 10", required: true })}
-      </div>`;
+    const footwearFields = [
+      isIncluded('shoe_size', true) ? rpfCsdField({ name: 'cm_shoe_size', label: 'Shoe Size', groups: filteredGroups('shoe_size', g.shoe), hint: "Examples: Kids 4, Women's 8, Men's 10", required: isRequired('shoe_size', true) }) : '',
+    ].filter(Boolean);
 
-    const physicalSection = `
-      <div>
-        <div class="rpf-cm-section-head">Physical Details</div>
-        ${rpfCsdField({ name: 'cm_height',      label: 'Height',      groups: g.height,     hint: "Examples: 5'4\" (163 cm), 4'11\" (150 cm)", required: true })}
-        ${rpfCsdField({ name: 'cm_hair_length',  label: 'Hair Length', groups: g.hairLength, hint: 'Examples: Short (1–3 in), Shoulder-length (8–12 in)' })}
-        ${rpfCsdField({ name: 'cm_hair_colour',  label: 'Hair Colour', groups: g.hairColour, hint: 'Examples: Medium Brown, Light Blonde / Platinum' })}
-      </div>`;
+    const physicalFields = [
+      isIncluded('height',      true)  ? rpfCsdField({ name: 'cm_height',      label: 'Height',      groups: filteredGroups('height',      g.height),     hint: "Examples: 5'4\" (163 cm), 4'11\" (150 cm)",            required: isRequired('height',      true) }) : '',
+      isIncluded('hair_length', false) ? rpfCsdField({ name: 'cm_hair_length', label: 'Hair Length', groups: filteredGroups('hair_length', g.hairLength), hint: 'Examples: Short (1–3 in), Shoulder-length (8–12 in)', required: isRequired('hair_length', false) }) : '',
+      isIncluded('hair_colour', false) ? rpfCsdField({ name: 'cm_hair_colour', label: 'Hair Colour', groups: filteredGroups('hair_colour', g.hairColour), hint: 'Examples: Medium Brown, Light Blonde / Platinum',      required: isRequired('hair_colour', false) }) : '',
+    ].filter(Boolean);
 
-    const notesSection = `
-      <div>
-        <div class="rpf-cm-section-head">Additional Notes</div>
-        <div class="rpf-form-group">
-          <label class="rpf-label">Costume concerns or special considerations</label>
-          <textarea class="rpf-input" name="cm_costume_notes" rows="2" placeholder="Anything the costume team should know about fit, comfort, or preferences…"></textarea>
-        </div>
-        <div class="rpf-form-group">
-          <label class="rpf-label">Makeup or material allergies</label>
-          <textarea class="rpf-input" name="cm_allergy_notes" rows="2" placeholder="e.g. latex allergy, sensitive skin, reactions to specific fabrics…"></textarea>
-        </div>
-        <div class="rpf-form-group">
-          <label class="rpf-label">Sensory notes</label>
-          <textarea class="rpf-input" name="cm_sensory_notes" rows="2" placeholder="e.g. cannot tolerate tight collars, itchy fabrics, or heavy headpieces…"></textarea>
-        </div>
-        <div class="rpf-form-group">
-          <label class="rpf-label">Anything else the costume team should know</label>
-          <textarea class="rpf-input" name="cm_other_notes" rows="2" placeholder="Any other notes…"></textarea>
-        </div>
-      </div>`;
+    const notesDefs = [
+      { key: 'note_costume', name: 'cm_costume_notes', label: 'Costume concerns or special considerations', ph: 'Anything the costume team should know about fit, comfort, or preferences…' },
+      { key: 'note_allergy', name: 'cm_allergy_notes', label: 'Makeup or material allergies',               ph: 'e.g. latex allergy, sensitive skin, reactions to specific fabrics…' },
+      { key: 'note_sensory', name: 'cm_sensory_notes', label: 'Sensory notes',                              ph: 'e.g. cannot tolerate tight collars, itchy fabrics, or heavy headpieces…' },
+      { key: 'note_other',   name: 'cm_other_notes',   label: 'Anything else the costume team should know', ph: 'Any other notes…' },
+    ];
+    const noteFields = notesDefs
+      .filter(n => isIncluded(n.key, true))
+      .map(n => `<div class="rpf-form-group"><label class="rpf-label">${esc(n.label)}</label><textarea class="rpf-input" name="${esc(n.name)}" rows="2" placeholder="${esc(n.ph)}"></textarea></div>`);
+
+    const section = (head, fields) => fields.length
+      ? `<div><div class="rpf-cm-section-head">${esc(head)}</div>${fields.join('')}</div>`
+      : '';
 
     return `<div class="rpf-cm">
       ${introHtml}
-      ${clothingSection}
-      ${footwearSection}
-      ${physicalSection}
-      ${notesSection}
+      ${section('Clothing Sizes',   sizeFields)}
+      ${section('Footwear',         footwearFields)}
+      ${section('Physical Details', physicalFields)}
+      ${noteFields.length ? `<div><div class="rpf-cm-section-head">Additional Notes</div>${noteFields.join('')}</div>` : ''}
     </div>`;
   }
 
