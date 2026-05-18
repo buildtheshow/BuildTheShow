@@ -1925,6 +1925,22 @@
     .rpf-coc-section-body ul { margin:0 0 0.45em; padding-left:1.4em; }
     .rpf-coc-section-body li { margin-bottom:0.15em; }
     .rpf-coc-divider { border:none; border-top:1px solid rgba(87,46,136,0.12); margin:0.15rem 0; }
+    .rpf-pf { padding:0.25rem 0 0.5rem; display:flex; flex-direction:column; gap:1.4rem; }
+    .rpf-pf-divider { border:none; border-top:1px solid rgba(118,158,123,0.2); margin:0.15rem 0; }
+    .rpf-pf-block { display:flex; flex-direction:column; gap:0.6rem; }
+    .rpf-pf-block-title { font-size:0.82rem; font-weight:900; text-transform:uppercase; letter-spacing:0.04em; color:#769e7b; }
+    .rpf-pf-row { display:flex; justify-content:space-between; align-items:baseline; gap:0.5rem; font-size:0.85rem; border-bottom:1px solid rgba(87,46,136,0.06); padding-bottom:0.3rem; }
+    .rpf-pf-row-label { color:#5a4e6d; }
+    .rpf-pf-row-value { font-weight:700; color:#1a1530; }
+    .rpf-pf-text { font-size:0.84rem; color:#333; line-height:1.65; }
+    .rpf-pf-text p { margin:0 0 0.45em; }
+    .rpf-pf-text p:last-child { margin-bottom:0; }
+    .rpf-pf-text ul { margin:0 0 0.45em; padding-left:1.4em; }
+    .rpf-pf-text li { margin-bottom:0.15em; }
+    .rpf-pf-discount-row { font-size:0.84rem; color:#5a4e6d; display:flex; align-items:center; gap:0.45rem; }
+    .rpf-pf-discount-row::before { content:''; display:inline-block; width:0.45rem; height:0.45rem; border-radius:50%; background:#769e7b; flex-shrink:0; }
+    .rpf-pf-none { font-size:0.83rem; color:rgba(87,46,136,0.4); font-style:italic; }
+    .rpf-pf-intro-note { font-size:0.82rem; color:#7a6a95; font-style:italic; padding:0.4rem 0; }
     /* Media Release — public form */
     @import url("https://fonts.googleapis.com/css2?family=Pinyon+Script&display=swap");
     .rpf-media-release { padding:0.25rem 0 0.5rem; display:flex; flex-direction:column; gap:1rem; }
@@ -33224,7 +33240,7 @@ Thank you,
     { key: 'transportation_waiver',    settingId: 'reg-form-transportation-waiver',    group: 'Agreements & Consent', color: '#d1523d', defaultOn: false, title: 'Transportation & Travel Permission',       summary: 'For off-site activities, festivals, workshops, and organised travel.', defaultFields: ['{travel-permission}'] },
     { key: 'physical_activity_waiver', settingId: 'reg-form-physical-activity-waiver', group: 'Agreements & Consent', color: '#d1523d', defaultOn: false, title: 'Special Performance Acknowledgement',     summary: 'For productions with stage combat, flying, lifts, or elevated physical requirements.', defaultFields: ['{physical-performance}'] },
     // ── PAYMENT ──
-    { key: 'production_fee',           settingId: 'reg-form-production-fee',           group: 'Payment',              color: '#769e7b', defaultOn: false, title: 'Production Fee Agreement',                summary: 'Fee, due date, installment plan, and refund policy.',              defaultFields: ['Payment amount acknowledged *', 'Payment due date acknowledged *', 'Installment plan (if applicable)', 'Refund policy acknowledged *', 'Scholarship request (if applicable)'] },
+    { key: 'production_fee',           settingId: 'reg-form-production-fee',           group: 'Payment',              color: '#769e7b', defaultOn: false, title: 'Production Fee Agreement',                summary: 'Auto-generated from Payments settings. Families read and sign.',   defaultFields: ['{production-fee}'] },
     // ── COSTUMES & PROGRAMME ──
     { key: 'costume_measurements',     settingId: 'reg-form-costume-measurements',     group: 'Costumes & Programme', color: '#ca7ea7', defaultOn: true,  title: 'Costume Measurements',                    summary: 'Sizes and hair info for fittings and costume pulls.',              defaultFields: ['Height *', 'Top size *', 'Bottom size *', 'Shoe size *', 'Hair colour', 'Hair length', 'Hair type'] },
     { key: 'hair_makeup',              settingId: 'reg-form-hair-makeup',              group: 'Costumes & Programme', color: '#ca7ea7', defaultOn: true,  title: 'Hair & Makeup',                           summary: 'Allergies and sensitivities for your H&M team.',                  defaultFields: ['Skin allergies or sensitivities', 'Makeup sensitivities', 'Wig considerations', 'Other notes for hair and makeup'] },
@@ -33701,6 +33717,12 @@ Thank you,
   function renderRegistrationFormFieldRow(field) {
     const raw = String(field).trim();
 
+    if (raw === '{production-fee}') {
+      return `<div class="reg-form-edit-section-divider-row" data-field-raw="${esc(raw)}" style="background:rgba(118,158,123,0.07);cursor:default;">
+        <span style="color:#769e7b;">Auto-generated from Payments settings</span>
+      </div>`;
+    }
+
     if (raw.startsWith('{section}')) {
       const title = raw.slice(9);
       return `<div class="reg-form-edit-section-divider-row" data-field-raw="${esc(raw)}">
@@ -34088,6 +34110,66 @@ Thank you,
       const firstPanelId = firstBtn?.getAttribute('onclick')?.match(/,'([^']+)'\)/)?.[1];
       if (firstBtn && firstPanelId) regFormSwitchTab(firstBtn, firstPanelId);
     }
+  }
+
+  function openProductionFeeFormModal() {
+    const def = getRegistrationFormTemplateDef('production_fee');
+    const template = getRegistrationFormTemplate('production_fee');
+    const modal = document.getElementById('registration-form-template-modal');
+    if (!def || !template || !modal) return;
+    document.getElementById('registration-form-template-key').value = 'production_fee';
+    document.getElementById('registration-form-edit-kicker').textContent = def.group;
+    document.getElementById('registration-form-edit-title').textContent = def.title;
+    document.getElementById('registration-form-edit-summary').textContent = def.summary;
+    document.getElementById('registration-form-edit-header').style.setProperty('--reg-form-edit-color', def.color);
+    const bodyArea = document.getElementById('registration-form-edit-body-area');
+    bodyArea.innerHTML = renderProductionFeeFormModalBody(template);
+    modal.dataset.mode = 'production_fee';
+    modal.querySelector('.modal')?.classList.add('reg-form-edit-modal--tabs');
+    modal.classList.add('open');
+  }
+
+  function renderProductionFeeFormModalBody(template) {
+    const sidebar = `<div class="reg-form-edit-tab-sidebar">
+      <div class="reg-form-edit-sidebar-item">
+        <button class="reg-form-edit-tab-btn active" onclick="regFormSwitchTab(this,'pf-tab-intro')">Introduction</button>
+      </div>
+    </div>`;
+
+    const introPanel = `<div class="reg-form-edit-tab-panel active" id="pf-tab-intro" style="gap:0;padding:0;">
+      <div class="reg-form-edit-section-label" style="padding:0.9rem 1.2rem 0.4rem;flex-shrink:0;">Introduction <span class="reg-form-edit-section-hint">shown at the top of the form before the fee details</span></div>
+      <div style="padding:0 1.2rem 0.75rem;flex-shrink:0;font-size:0.78rem;color:#7a6a95;line-height:1.5;">Welcome families and explain what the fee is for. Use {{show_name}} and {{organisation_name}} to personalise it.</div>
+      ${REG_FORM_RTE_TOOLBAR}
+      <div class="et-body-editor" id="pf-intro-editor" contenteditable="true" onfocus="window._regFormLastTextarea=this"
+           data-placeholder="This section outlines the production fees, payment options, and financial policies for participation in {{show_name}}."
+           style="flex:1 1 0;min-height:0;">${plainToHtml(template?.intro || '')}</div>
+    </div>`;
+
+    const notice = `<div style="padding:1rem 1.2rem;background:rgba(118,158,123,0.07);border-top:1px solid rgba(118,158,123,0.15);font-size:0.78rem;color:#5a7e60;line-height:1.5;flex-shrink:0;">
+      <strong>The fee details below are auto-generated from Registration &rarr; Settings &rarr; Payments.</strong><br />
+      Configure amounts, due dates, discounts, and payment instructions there. They will appear automatically on this form.
+    </div>`;
+
+    return `<div class="reg-form-edit-tab-wrap">${sidebar}<div class="reg-form-edit-tab-body">${introPanel}${notice}</div>${renderRegFormVarPanel()}</div>`;
+  }
+
+  async function saveProductionFeeFormModal(btn) {
+    const introEl = document.getElementById('pf-intro-editor');
+    const intro = introEl?.innerHTML?.trim() || '';
+    registrationFormTemplatesState = {
+      ...(registrationFormTemplatesState || {}),
+      production_fee: { title: 'Production Fee Agreement', intro, fields: ['{production-fee}'], sectionTexts: {} },
+    };
+    const host = document.getElementById('registration-forms-settings-surface');
+    if (host) {
+      renderRegistrationSettingsSurface('registration-forms-settings-surface', renderRegistrationFormsTiles());
+      syncBrandTileSettingsState(host);
+      requestAnimationFrame(() => requestAnimationFrame(() => { try { fitBrandTileTitles(host); } catch (_) {} }));
+    }
+    const done = btnSaveFeedback(btn || document.getElementById('reg-form-template-save-btn'));
+    await saveRegistrationSettings();
+    done();
+    setTimeout(() => closeRegistrationFormTemplateModal(), 900);
   }
 
   function openMedicalTreatmentAuthModal() {
@@ -35003,6 +35085,7 @@ Thank you,
     if (key === 'medical_treatment_auth') { openMedicalTreatmentAuthModal(); return; }
     if (key === 'transportation_waiver') { openTravelPermissionModal(); return; }
     if (key === 'physical_activity_waiver') { openPhysicalPerformanceModal(); return; }
+    if (key === 'production_fee') { openProductionFeeFormModal(); return; }
     const def = getRegistrationFormTemplateDef(key);
     const template = getRegistrationFormTemplate(key);
     if (!def || !template) return;
@@ -35132,6 +35215,7 @@ Thank you,
     if (modal?.dataset.mode === 'medical_treatment_auth') { saveMedicalTreatmentAuthModal(btn); return; }
     if (modal?.dataset.mode === 'transportation_waiver') { saveTravelPermissionModal(btn); return; }
     if (modal?.dataset.mode === 'physical_activity_waiver') { savePhysicalPerformanceModal(btn); return; }
+    if (modal?.dataset.mode === 'production_fee') { saveProductionFeeFormModal(btn); return; }
     const key = document.getElementById('registration-form-template-key')?.value || '';
     const introEl = document.getElementById('registration-form-template-intro');
     const intro = (introEl?.value !== undefined ? introEl.value : introEl?.innerHTML || '').trim();
@@ -36765,6 +36849,128 @@ Thank you,
     </div>`;
   }
 
+  function rpfRenderProductionFeeSection(template, prefill) {
+    const sub = window._rpfSubTokens || (h => h);
+    const s = getPaymentSettings();
+    const age = rpfCalcAge(prefill?.date_of_birth);
+    const isMinor = age !== null ? age < 19 : false;
+    const ageUnknown = age === null;
+
+    const currSym = { CAD: '$', USD: '$', GBP: '£' }[s.currency || 'CAD'] || '$';
+    const currCode = s.currency && s.currency !== 'CAD' ? ` ${s.currency}` : '';
+    const fmtAmt = v => v ? `${currSym}${parseFloat(v).toFixed(2)}${currCode}` : null;
+    const fmtDate = d => d ? new Date(d + 'T00:00:00').toLocaleDateString('en-CA', { month: 'long', day: 'numeric', year: 'numeric' }) : null;
+
+    // ── Production Fee Summary ──
+    let feeRows = '';
+    if (s.mode === 'none' || !s.mode) {
+      feeRows = `<div class="rpf-pf-none">No production fee has been configured for this show.</div>`;
+    } else if (s.mode === 'flat') {
+      const rows = [
+        s.fee ? { label: 'Registration fee', value: fmtAmt(s.fee) } : null,
+        s.fee_due_date ? { label: 'Due date', value: fmtDate(s.fee_due_date) } : null,
+        s.late_fee_date ? { label: 'Late payment after', value: fmtDate(s.late_fee_date) } : null,
+      ].filter(Boolean);
+      feeRows = rows.map(r => `<div class="rpf-pf-row"><span class="rpf-pf-row-label">${esc(r.label)}</span><span class="rpf-pf-row-value">${esc(r.value)}</span></div>`).join('');
+    } else if (s.mode === 'split') {
+      const insts = (s.split_installments || []).filter((_, i) => i < (s.split_count || 2));
+      if (insts.length) {
+        feeRows = insts.map((inst, i) => {
+          const parts = [fmtAmt(inst.amount), inst.due_date ? `due ${fmtDate(inst.due_date)}` : null].filter(Boolean).join(' — ');
+          return `<div class="rpf-pf-row"><span class="rpf-pf-row-label">Payment ${i + 1}</span><span class="rpf-pf-row-value">${esc(parts || 'Amount not set')}</span></div>`;
+        }).join('');
+      } else {
+        feeRows = `<div class="rpf-pf-none">Payment amounts have not been configured yet.</div>`;
+      }
+    }
+
+    // ── Discounts & Financial Assistance ──
+    const discountItems = [];
+    if (s.sibling_discount_enabled) {
+      const parts = [
+        s.sibling_first_child ? `First child: ${fmtAmt(s.sibling_first_child) || s.sibling_first_child}` : null,
+        s.sibling_additional ? `Additional siblings: ${fmtAmt(s.sibling_additional) || s.sibling_additional}` : null,
+        s.sibling_by_household ? 'Applied per household' : null,
+      ].filter(Boolean);
+      discountItems.push({ title: 'Sibling Discount', detail: parts.join(' · ') });
+    }
+    if (s.volunteer_discount_enabled) {
+      const parts = [
+        s.volunteer_hours ? `${s.volunteer_hours} volunteer hours required` : null,
+        s.volunteer_discount ? `${fmtAmt(s.volunteer_discount) || s.volunteer_discount} discount` : null,
+      ].filter(Boolean);
+      discountItems.push({ title: 'Volunteer Discount', detail: parts.join(' · ') });
+    }
+    if (s.scholarship_enabled) {
+      discountItems.push({ title: 'Financial Assistance', detail: 'Available — contact the production team for details.' });
+    }
+
+    const discountsHtml = discountItems.length ? `
+      <hr class="rpf-pf-divider" />
+      <div class="rpf-pf-block">
+        <div class="rpf-pf-block-title">Discounts &amp; Financial Assistance</div>
+        ${discountItems.map(d => `<div class="rpf-pf-discount-row"><span><strong>${esc(d.title)}</strong>${d.detail ? ` — ${esc(d.detail)}` : ''}</span></div>`).join('')}
+      </div>` : '';
+
+    // ── Payment Instructions ──
+    const instrHtml = s.instructions ? `
+      <hr class="rpf-pf-divider" />
+      <div class="rpf-pf-block">
+        <div class="rpf-pf-block-title">Payment Instructions</div>
+        <div class="rpf-pf-text">${sub(s.instructions)}</div>
+      </div>` : '';
+
+    // ── Intro ──
+    const introRaw = template?.intro || '';
+    const introHtml = introRaw ? `<div class="rpf-pf-text">${sub(introRaw)}</div>` : '';
+
+    // ── Acknowledgement ──
+    const ackHtml = `<div style="margin-top:0.25rem;">
+      <label class="rpf-agree-row"><input type="checkbox" name="pf_ack" required /><span>I understand the payment expectations and policies outlined above.<span class="rpf-req"> *</span></span></label>
+    </div>`;
+
+    // ── Signature — age-based ──
+    const performerName = [prefill?.preferred_name || prefill?.first_name || '', prefill?.last_name || ''].filter(Boolean).join(' ');
+    const adultSig = `<div class="rpf-mr-sig-block"${isMinor ? ' style="display:none"' : ''}>
+      <div class="rpf-mr-sig-row">
+        <div class="rpf-mr-sig-field"><label>Performer name<span class="rpf-req"> *</span></label><input type="text" name="pf_signer_name"${isMinor ? '' : ' required'} autocomplete="name" value="${esc(performerName)}" /></div>
+        <div class="rpf-mr-sig-field"><label>Date<span class="rpf-req"> *</span></label><input type="date" name="pf_signed_date"${isMinor ? '' : ' required'} /></div>
+      </div>
+    </div>`;
+
+    const guardianSig = `<div class="rpf-mr-guardian-block"${isMinor || ageUnknown ? '' : ' style="display:none"'}>
+      <div class="rpf-mr-guardian-label">Parent / Guardian Signature</div>
+      <div class="rpf-mr-sig-block">
+        <div class="rpf-mr-sig-row">
+          <div class="rpf-mr-sig-field"><label>Parent or guardian full name<span class="rpf-req"> *</span></label><input type="text" name="pf_guardian_name"${isMinor ? ' required' : ''} autocomplete="name" /></div>
+          <div class="rpf-mr-sig-field"><label>Relationship to participant<span class="rpf-req"> *</span></label><input type="text" name="pf_guardian_relationship"${isMinor ? ' required' : ''} /></div>
+        </div>
+        <div class="rpf-mr-sig-row">
+          <div class="rpf-mr-sig-field rpf-sig-field-wrap"><label>Parent or guardian signature<span class="rpf-req"> *</span></label><input type="text" name="pf_guardian_sig" oninput="rpfUpdateSigPreview(this)"${isMinor ? ' required' : ''} /></div>
+          <div class="rpf-mr-sig-field"><label>Date<span class="rpf-req"> *</span></label><input type="date" name="pf_guardian_date"${isMinor ? ' required' : ''} /></div>
+        </div>
+      </div>
+    </div>`;
+
+    return `<div class="rpf-pf">
+      ${introHtml}
+      <div class="rpf-pf-block">
+        <div class="rpf-pf-block-title">Production Fee</div>
+        ${feeRows}
+      </div>
+      ${discountsHtml}
+      ${instrHtml}
+      <hr class="rpf-pf-divider" />
+      <div class="rpf-mr-section-label">Acknowledgement</div>
+      ${ackHtml}
+      <hr class="rpf-pf-divider" />
+      <div class="rpf-mr-section-label">Signature</div>
+      ${!isMinor ? adultSig : ''}
+      ${(isMinor || ageUnknown) ? guardianSig : ''}
+      ${age !== null ? `<input type="hidden" name="pf_signer_age" value="${age}" />` : ''}
+    </div>`;
+  }
+
   function rpfRenderField(fieldStr, prefill) {
     const raw = String(fieldStr).trim();
 
@@ -36791,6 +36997,11 @@ Thank you,
     if (raw === '{physical-performance}') {
       const template = getRegistrationFormTemplate('physical_activity_waiver');
       return rpfRenderPhysicalPerformanceSection(template, prefill);
+    }
+
+    if (raw === '{production-fee}') {
+      const template = getRegistrationFormTemplate('production_fee');
+      return rpfRenderProductionFeeSection(template, prefill);
     }
 
     if (raw.startsWith('{section}')) {
