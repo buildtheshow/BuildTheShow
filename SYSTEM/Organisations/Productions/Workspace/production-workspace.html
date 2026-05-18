@@ -32963,6 +32963,7 @@ Thank you,
     // ── COSTUMES & PROGRAMME ──
     { key: 'costume_measurements',     settingId: 'reg-form-costume-measurements',     group: 'Costumes & Programme', color: '#ca7ea7', defaultOn: true,  title: 'Costume Measurements',                    summary: 'Sizes and hair info for fittings and costume pulls.',              defaultFields: ['Height *', 'Top size *', 'Bottom size *', 'Shoe size *', 'Hair colour', 'Hair length', 'Hair type'] },
     { key: 'hair_makeup',              settingId: 'reg-form-hair-makeup',              group: 'Costumes & Programme', color: '#ca7ea7', defaultOn: true,  title: 'Hair & Makeup',                           summary: 'Allergies and sensitivities for your H&M team.',                  defaultFields: ['Skin allergies or sensitivities', 'Makeup sensitivities', 'Wig considerations', 'Other notes for hair and makeup'] },
+    { key: 'programme_credit',          settingId: 'reg-form-programme-credit',          group: 'Costumes & Programme', color: '#ca7ea7', defaultOn: true,  title: 'Programme Credit',                        summary: 'The name they want printed in the programme.',                     defaultFields: ['Name as it should appear in the programme *', 'Pronouns in programme listing (optional)'] },
     { key: 'cast_bio',                 settingId: 'reg-form-cast-bio',                 group: 'Costumes & Programme', color: '#ca7ea7', defaultOn: true,  title: 'Cast Bio',                                summary: 'Programme bio and credits, straight from the performer.',          defaultFields: ['Programme bio (50 words or less) *', 'Previous credits', 'Fun fact'] },
     { key: 'headshot',                 settingId: 'reg-form-headshot',                 group: 'Costumes & Programme', color: '#ca7ea7', defaultOn: true,  title: 'Headshot Submission',                     summary: 'Photo for the programme and marketing materials.',                 defaultFields: ['Programme headshot upload *', 'Marketing headshot upload'] },
     // ── OPTIONAL / CONDITIONAL ──
@@ -35013,13 +35014,18 @@ Thank you,
       if (!seen.has(def.group)) { seen.set(def.group, []); groups.push(def.group); }
       seen.get(def.group).push(def);
     });
+    const _savedFormSettings = (typeof prod?.registration_settings === 'object' && prod.registration_settings) ? prod.registration_settings : {};
+    const isDefEnabled = def => {
+      const _dbKey = def.settingId.replace(/^reg-/, '').replace(/-/g, '_');
+      return def.defaultOn ? _savedFormSettings[_dbKey] !== false : _savedFormSettings[_dbKey] === true;
+    };
     return groups.map(group => {
       const defs = seen.get(group);
       const color = defs[0].color;
-      const on = defs.filter(d => d.defaultOn).length;
+      const on = defs.filter(isDefEnabled).length;
       const total = defs.length;
       const masterId = `reg-form-master-${group.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
-      const allOn = defs.every(d => d.defaultOn);
+      const allOn = defs.every(isDefEnabled);
       const addNewTile = renderRegistrationSettingTile({
         color,
         kicker: group,
@@ -35037,7 +35043,7 @@ Thank you,
         title: def.title,
         bodyHtml: `<div class="template-brand-tile-body">${esc(def.summary)}</div>`,
         buttonHtml: `<button type="button" class="template-brand-tile-button" onclick="event.stopPropagation();openRegistrationFormTemplateModal('${esc(def.key)}')">Edit</button>`,
-        toggleHtml: registrationSettingsToggle(def.settingId, `Enable ${def.title}`, def.defaultOn),
+        toggleHtml: registrationSettingsToggle(def.settingId, `Enable ${def.title}`, isDefEnabled(def)),
         className: 'reg-form-subform',
         ariaLabel: def.title
       })).join('') + addNewTile;
