@@ -1548,6 +1548,7 @@
     .registration-public-browser-dots span:nth-child(2) { background: #efab45; }
     .registration-public-browser-dots span:nth-child(3) { background: #769e7b; }
     .registration-public-url {
+      display: block;
       min-width: 0;
       border: 1px solid rgba(87,46,136,0.12);
       border-radius: 999px;
@@ -1560,6 +1561,11 @@
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
+      text-decoration: none;
+    }
+    .registration-public-url:hover {
+      border-color: rgba(87,46,136,0.26);
+      color: #572e88;
     }
     .registration-public-browser-tag {
       appearance: none;
@@ -1682,6 +1688,7 @@
     .rpf-input { width:100%; padding:0.52rem 0.75rem; border:1.5px solid #ebe6f1; border-radius:8px; font-size:0.875rem; font-family:var(--bts-font); color:#000000; background:#fff; outline:none; box-sizing:border-box; transition:border-color 0.15s; }
     .rpf-input:focus { border-color:#572e88; }
     .rpf-input.rpf-prefilled { background:#f7f3ff; border-color:#c4aaee; }
+    .rpf-age-note { margin-top:0.38rem; font-size:0.72rem; font-weight:800; color:#572e88; }
     textarea.rpf-input { resize:vertical; min-height:80px; }
     .rpf-agree-row { display:flex; align-items:flex-start; gap:0.55rem; font-size:0.8rem; color:#000000; line-height:1.45; cursor:pointer; margin-top:0.4rem; }
     .rpf-agree-row input { flex-shrink:0; margin-top:0.15rem; accent-color:#572e88; cursor:pointer; }
@@ -27256,8 +27263,8 @@
         { token: '{{cast_response_button}}', label: 'Review Offer Button', sample: () => emailActionButtonHtml('https://buildtheshow.com/ryt/show/CastOffer/JAMIE04827', 'Review Role Offer') },
         { token: '{{cast_offer_deadline}}', label: 'Offer Reply Deadline', sample: 'Friday, May 15, 2026 at 5:00 PM' },
         { token: '{{cast_offer_deadline_note}}', label: 'Offer Deadline Sentence', sample: 'Please respond by Friday, May 15, 2026 at 5:00 PM. If we do not hear from you by then, we will mark this role offer as declined so the production team can keep casting moving.' },
-        { token: '{{registration_link}}', label: 'Registration Link', sample: 'https://buildtheshow.com/ryt/show/CastOffer/JAMIE04827/Registration' },
-        { token: '{{registration_button}}', label: 'Registration Button', sample: () => emailActionButtonHtml('https://buildtheshow.com/ryt/show/CastOffer/JAMIE04827/Registration', 'Complete Registration') },
+        { token: '{{registration_link}}', label: 'Registration Link', sample: 'https://buildtheshow.com/ryt/mary-poppins-jr-2026/registration/DAPHNE05544' },
+        { token: '{{registration_button}}', label: 'Registration Button', sample: () => emailActionButtonHtml('https://buildtheshow.com/ryt/mary-poppins-jr-2026/registration/DAPHNE05544', 'Complete Registration') },
       ],
     },
     // ── Rehearsals ───────────────────────────────────────────────
@@ -35842,9 +35849,7 @@ Thank you,
     const token = String(assignment?.response_token || assignment?.token || app?.cast_offer_token || app?.id || '').trim();
     const code = castOfferCode(app);
     const links = token ? castOfferLinks(token, code) : {};
-    const base = links.registration || '';
-    const segment = String(settings.checkout_link_prefix || 'pay').replace(/^\/+|\/+$/g, '') || 'pay';
-    return base ? `${base}/${encodeURIComponent(segment)}` : '';
+    return links.payments || '';
   }
 
   function registrationPaymentMemoCode(app, settings = registrationCurrentPaymentSettings()) {
@@ -36183,8 +36188,96 @@ Thank you,
     }));
   }
 
-  function openRegistrationPublicPreviewTab() {
-    const previewWindow = window.open('', '_blank');
+  function registrationPublicFallbackUrl() {
+    return `${window.location.origin}/${orgSlug || 'organisation'}/${prod?.slug || 'production'}/registration/DAPHNE05544`;
+  }
+
+  function registrationPublicCandidateScore(item = {}) {
+    const app = item?.app || item || {};
+    const haystack = [
+      app.name,
+      app.first_name,
+      app.last_name,
+      app.email,
+      applicantCustomAnswers(app)?.['Preferred Name'],
+    ].filter(Boolean).join(' ').toLowerCase();
+    if (haystack.includes('daphne')) return 0;
+    if (haystack.includes('katherine') && haystack.includes('hepburn')) return 1;
+    if (haystack.includes('katherine')) return 2;
+    return 3;
+  }
+
+  async function resolveRegistrationPublicUrl({ createIdentity = false } = {}) {
+    try {
+      const accepted = await loadRegistrationAcceptedCastForCards();
+      const candidate = [...(accepted || [])]
+        .sort((a, b) => registrationPublicCandidateScore(a) - registrationPublicCandidateScore(b))[0];
+      const app = candidate?.app || null;
+      if (!app) return '';
+      const ca = applicantCustomAnswers(app);
+      const existingToken = ca[CAST_OFFER_KEYS.token] || candidate?.assignment?.response_token || candidate?.assignment?.token || app.cast_offer_token || '';
+      const existingCode = ca[CAST_OFFER_KEYS.code] || (existingToken ? castOfferCode(app) : '');
+      if (existingToken || existingCode) {
+        const links = castOfferLinks(existingToken || existingCode, existingCode || existingToken);
+        if (links.registration) return links.registration;
+      }
+      if (!createIdentity) return '';
+      const identity = await ensureCastOfferIdentity(app);
+      return castOfferLinks(identity.token, identity.code).registration || '';
+    } catch (error) {
+      console.warn('[BTS] registration public URL resolve failed', error);
+      return '';
+    }
+  }
+
+  async function hydrateRegistrationPublicUrl() {
+    const anchor = document.getElementById('registration-public-url-link');
+    if (!anchor) return;
+    const resolved = await resolveRegistrationPublicUrl();
+    if (!resolved || !document.body.contains(anchor)) return;
+    anchor.href = resolved;
+    anchor.textContent = resolved;
+    anchor.dataset.realUrl = '1';
+  }
+
+  async function openRegistrationPublicPreviewDestination() {
+    const anchor = document.getElementById('registration-public-url-link');
+    const existing = anchor?.dataset.realUrl === '1' ? anchor.href : '';
+    if (existing) {
+      window.open(existing, '_blank', 'noopener');
+      return;
+    }
+    const pendingWindow = window.open('', '_blank');
+    if (!pendingWindow) {
+      showToast('Allow pop-ups to open the public registration preview.', true);
+      return;
+    }
+    pendingWindow.document.open();
+    pendingWindow.document.write('<!doctype html><title>Opening registration...</title><body style="margin:0;display:grid;place-items:center;min-height:100vh;font-family:system-ui,sans-serif;color:#572e88;background:#fff;">Opening registration...</body>');
+    pendingWindow.document.close();
+    const resolved = await resolveRegistrationPublicUrl({ createIdentity: true });
+    if (resolved) {
+      if (anchor) {
+        anchor.href = resolved;
+        anchor.textContent = resolved;
+        anchor.dataset.realUrl = '1';
+      }
+      pendingWindow.location.href = resolved;
+      return;
+    }
+    openRegistrationPublicPreviewTab(pendingWindow);
+  }
+
+  function handleRegistrationPublicUrlClick(event) {
+    const anchor = event?.currentTarget;
+    if (anchor?.dataset?.realUrl === '1') return true;
+    event?.preventDefault?.();
+    openRegistrationPublicPreviewDestination();
+    return false;
+  }
+
+  function openRegistrationPublicPreviewTab(existingWindow = null) {
+    const previewWindow = existingWindow || window.open('', '_blank');
     if (!previewWindow) {
       showToast('Allow pop-ups to open the public registration preview.', true);
       return;
@@ -36193,7 +36286,7 @@ Thank you,
     loadRegistrationPublicView();
     requestAnimationFrame(() => requestAnimationFrame(() => {
       const viewport = document.querySelector('#registration-public-view-content .registration-public-viewport');
-      const previewUrl = `${window.location.origin}/${orgSlug || 'organisation'}/${prod?.slug || 'production'}/Registration`;
+      const previewUrl = registrationPublicFallbackUrl();
       const styleHtml = Array.from(document.querySelectorAll('link[rel="stylesheet"], style'))
         .map(node => node.outerHTML)
         .join('\n');
@@ -36265,7 +36358,39 @@ Thank you,
         '<div class="rpf-form-group rpf-pickup-field rpf-pickup-field--last"><label class="rpf-label">Phone number</label><input type="tel" class="rpf-input" placeholder="Authorised pickup ' + num + ' phone number..." /></div>';
       btn.closest('.rpf-form-group')?.before(group);
     }
-    function rpfCheckGuardianFields() {}
+    function rpfParseDateValue(value) {
+      if (!value) return null;
+      if (value instanceof Date) return value;
+      const m = String(value).match(/^(\\d{4})-(\\d{2})-(\\d{2})$/);
+      if (m) return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+      return new Date(value);
+    }
+    function rpfCalcAge(dob) {
+      const d = rpfParseDateValue(dob);
+      if (!d || isNaN(d)) return null;
+      const today = new Date();
+      let age = today.getFullYear() - d.getFullYear();
+      const m = today.getMonth() - d.getMonth();
+      if (m < 0 || (m === 0 && today.getDate() < d.getDate())) age--;
+      return age >= 0 ? age : null;
+    }
+    function rpfUpdateAgeNote(dobInput) {
+      const note = dobInput.closest('.rpf-form-group')?.querySelector('[data-rpf-age-note]');
+      if (!note) return;
+      const age = rpfCalcAge(dobInput.value);
+      note.textContent = age === null ? '' : 'Age today: ' + age + ' ' + (age === 1 ? 'year old' : 'years old');
+      note.style.display = age === null ? 'none' : '';
+    }
+    function rpfCheckGuardianFields(dobInput) {
+      rpfUpdateAgeNote(dobInput);
+      const panel = dobInput.closest('.rpf-panel');
+      if (!panel) return;
+      const age = rpfCalcAge(dobInput.value);
+      const isUnder18 = age !== null && age < 19;
+      panel.querySelectorAll('[data-rpf-guard]').forEach(el => {
+        el.style.display = isUnder18 ? '' : 'none';
+      });
+    }
   <\/script>
 </body>
 </html>`);
@@ -36310,27 +36435,46 @@ Thank you,
 
   function rpfCheckGuardianFields(dobInput) {
     const panel = dobInput.closest('.rpf-panel');
-    if (!panel) return;
-    const dob = new Date(dobInput.value);
-    const today = new Date();
-    let age = today.getFullYear() - dob.getFullYear();
-    const m = today.getMonth() - dob.getMonth();
-    if (m < 0 || (m === 0 && today.getDate() < dob.getDate())) age--;
-    const isUnder18 = dobInput.value && age < 19;
-    panel.querySelectorAll('[data-rpf-guard]').forEach(el => {
-      el.style.display = isUnder18 ? '' : 'none';
-    });
+    rpfUpdateAgeNote(dobInput);
+    if (panel) {
+      const age = rpfCalcAge(dobInput.value);
+      const isUnder18 = age !== null && age < 19;
+      panel.querySelectorAll('[data-rpf-guard]').forEach(el => {
+        el.style.display = isUnder18 ? '' : 'none';
+      });
+    }
+  }
+
+  function rpfParseDateValue(value) {
+    if (!value) return null;
+    if (value instanceof Date) return value;
+    const match = String(value).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (match) return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+    return new Date(value);
   }
 
   function rpfCalcAge(dob) {
-    if (!dob) return null;
-    const d = new Date(dob);
-    if (isNaN(d)) return null;
+    const d = rpfParseDateValue(dob);
+    if (!d || isNaN(d)) return null;
     const today = new Date();
     let age = today.getFullYear() - d.getFullYear();
     const m = today.getMonth() - d.getMonth();
     if (m < 0 || (m === 0 && today.getDate() < d.getDate())) age--;
-    return age;
+    return age >= 0 ? age : null;
+  }
+
+  function rpfAgeNoteText(dob) {
+    const age = rpfCalcAge(dob);
+    if (age === null) return '';
+    return `Age today: ${age} ${age === 1 ? 'year old' : 'years old'}`;
+  }
+
+  function rpfUpdateAgeNote(dobInput) {
+    const note = dobInput.closest('.rpf-form-group')?.querySelector('[data-rpf-age-note]');
+    if (!note) return;
+    const text = rpfAgeNoteText(dobInput.value);
+    note.textContent = text;
+    note.style.display = text ? '' : 'none';
   }
 
   function rpfRenderMediaReleaseSection(template, prefill) {
@@ -36710,11 +36854,13 @@ Thank you,
         <textarea class="rpf-input${prefilled}" placeholder="${esc(label)}...">${esc(val)}</textarea>
       </div>`;
     } else {
-      const dobAttr = type === 'date' && /date of birth|birth date/.test(label.toLowerCase())
-        ? ' onchange="rpfCheckGuardianFields(this)"' : '';
+      const isDobField = type === 'date' && /date of birth|birth date/.test(label.toLowerCase());
+      const dobAttr = isDobField ? ' data-rpf-dob="1" oninput="rpfCheckGuardianFields(this)" onchange="rpfCheckGuardianFields(this)"' : '';
+      const ageNote = isDobField ? `<div class="rpf-age-note" data-rpf-age-note${rpfAgeNoteText(val) ? '' : ' style="display:none"'}>${esc(rpfAgeNoteText(val))}</div>` : '';
       fieldHtml = `<div class="rpf-form-group${pickupClass}"${wrapAttrs}>
         <label class="rpf-label">${esc(displayLabel)}${req}</label>
         <input type="${type}" class="rpf-input${prefilled}" ${type === 'date' ? '' : `placeholder="${esc(label)}..."`} value="${esc(val)}"${dobAttr} />
+        ${ageNote}
       </div>`;
     }
     return pickupDivider + fieldHtml;
@@ -36787,16 +36933,18 @@ Thank you,
       return el ? el.checked : def.defaultOn;
     });
     if (!enabledDefs.length) {
+      const previewUrl = registrationPublicFallbackUrl();
       host.innerHTML = `<div class="registration-public-mockup">
         <div class="registration-public-browser-bar">
           <div class="registration-public-browser-dots" aria-hidden="true"><span></span><span></span><span></span></div>
-          <div class="registration-public-url">${esc(window.location.origin)}/registration-preview</div>
-          <button type="button" class="registration-public-browser-tag" onclick="openRegistrationPublicPreviewTab()">Public preview</button>
+          <a class="registration-public-url" id="registration-public-url-link" href="${esc(previewUrl)}" target="_blank" rel="noopener" onclick="return handleRegistrationPublicUrlClick(event)">${esc(previewUrl)}</a>
+          <button type="button" class="registration-public-browser-tag" onclick="openRegistrationPublicPreviewDestination()">Public preview</button>
         </div>
         <div class="registration-public-viewport">
           <div style="padding:3rem;text-align:center;color:rgba(87,46,136,0.4);font-size:0.88rem;">No form sections are enabled. Turn on sections in Forms settings to preview the registration form.</div>
         </div>
       </div>`;
+      hydrateRegistrationPublicUrl();
       return;
     }
 
@@ -36819,7 +36967,7 @@ Thank you,
       ? `Due ${new Date(deadline).toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' })}`
       : 'Registration Open';
     const posterUrl = prod?.poster_url || '';
-    const previewUrl = `${window.location.origin}/${orgSlug || 'organisation'}/${prod?.slug || 'production'}/Registration`;
+    const previewUrl = registrationPublicFallbackUrl();
 
     window._rpfSectionTexts = {};
     const prefill = window._rpfPrefillData || null;
@@ -36900,8 +37048,8 @@ Thank you,
     host.innerHTML = `<div class="registration-public-mockup">
       <div class="registration-public-browser-bar">
         <div class="registration-public-browser-dots" aria-hidden="true"><span></span><span></span><span></span></div>
-        <div class="registration-public-url">${esc(previewUrl)}</div>
-        <button type="button" class="registration-public-browser-tag" onclick="openRegistrationPublicPreviewTab()">Public preview</button>
+        <a class="registration-public-url" id="registration-public-url-link" href="${esc(previewUrl)}" target="_blank" rel="noopener" onclick="return handleRegistrationPublicUrlClick(event)">${esc(previewUrl)}</a>
+        <button type="button" class="registration-public-browser-tag" onclick="openRegistrationPublicPreviewDestination()">Public preview</button>
       </div>
       <div class="registration-public-viewport">
         <div class="rpf-shell">
@@ -36946,7 +37094,9 @@ Thank you,
         </div>
       </div>
     </div>`;
+    hydrateRegistrationPublicUrl();
     requestAnimationFrame(() => requestAnimationFrame(() => {
+      host.querySelectorAll('[data-rpf-dob]').forEach(input => rpfCheckGuardianFields(input));
       if (typeof fitCastingCardNames === 'function') fitCastingCardNames(host);
       const targetGroup = window._rpfTargetGroup;
       if (targetGroup) {
@@ -38344,11 +38494,13 @@ Thank you,
   function castOfferLinks(token, code = token) {
     if (orgSlug && prod?.slug && code) {
       const base = `${window.location.origin}/${encodeURIComponent(orgSlug)}/${encodeURIComponent(prod.slug)}/CastOffer/${encodeURIComponent(code)}`;
+      const showBase = `${window.location.origin}/${encodeURIComponent(orgSlug)}/${encodeURIComponent(prod.slug)}`;
       return {
         review: base,
         accept: `${base}/YES`,
         decline: `${base}/NO`,
-        registration: `${base}/Registration`,
+        registration: `${showBase}/registration/${encodeURIComponent(code)}`,
+        payments: `${showBase}/payments/${encodeURIComponent(code)}`,
       };
     }
     const base = castOfferFallbackBaseUrl(token);
@@ -38357,6 +38509,7 @@ Thank you,
       accept: `${base}&action=accept`,
       decline: `${base}&action=decline`,
       registration: `${base}&view=registration`,
+      payments: `${base}&view=payments`,
     };
   }
 
