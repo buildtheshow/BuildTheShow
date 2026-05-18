@@ -33282,6 +33282,10 @@ Thank you,
     { id: 'custom',    label: 'Custom Safety Wording',        default_text: `<p>Please describe any additional safety requirements, expectations, or acknowledgements specific to this production.</p>` },
   ];
 
+  const PRODUCTION_FEE_DEFAULT_INTRO = `<p>This section outlines the production fees, payment options, and financial policies for participation in {{show_name}} with {{organisation_name}}.</p><p>Please review the fee information below carefully. If you have questions about fees or financial assistance, contact the production team before completing registration.</p>`;
+
+  const PRODUCTION_FEE_DEFAULT_ACK = `<p>I have read and understood the production fee structure, payment schedule, and financial policies outlined above.</p><p>I agree to meet all payment obligations as described, and I understand that participation in {{show_name}} is contingent on compliance with these payment expectations.</p>`;
+
   const TRAVEL_PERMISSION_DEFAULT_INTRO = `<p>This form covers off-site activities, festivals, workshops, and performances requiring organised travel or transportation arranged by {{organisation_name}}.</p>`;
 
   const TRAVEL_PERMISSION_DEFAULT_AGREEMENT = `<p>I give permission for {{performer_name}} to participate in approved production-related travel, transportation, performances, festivals, workshops, and other off-site activities organised by {{organisation_name}}.</p><p>I understand that transportation may be arranged through approved drivers, parent volunteers, organisation representatives, buses, vans, or other production-approved transportation methods.</p><p>I understand that every reasonable effort will be made to contact emergency contacts or guardians in the event of an emergency.</p><p>Participants are expected to follow all instructions provided by the production team, supervisors, drivers, and venue staff while participating in off-site activities.</p>`;
@@ -33521,6 +33525,10 @@ Thank you,
       base.intro = saved.intro !== undefined ? saved.intro : PHYSICAL_PERFORMANCE_DEFAULT_INTRO;
       base.agreementText = saved.agreementText !== undefined ? saved.agreementText : PHYSICAL_PERFORMANCE_DEFAULT_AGREEMENT;
       base.optionalSections = Array.isArray(saved.optionalSections) ? saved.optionalSections : [];
+    }
+    if (key === 'production_fee') {
+      base.intro = saved.intro !== undefined ? saved.intro : PRODUCTION_FEE_DEFAULT_INTRO;
+      base.agreementText = saved.agreementText !== undefined ? saved.agreementText : PRODUCTION_FEE_DEFAULT_ACK;
     }
     if (key === 'costume_measurements') {
       base.cm_config = (saved.cm_config && typeof saved.cm_config === 'object') ? saved.cm_config : {};
@@ -34369,7 +34377,7 @@ Thank you,
         <button class="reg-form-edit-tab-btn active" onclick="regFormSwitchTab(this,'pf-tab-intro')">Introduction</button>
       </div>
       <div class="reg-form-edit-sidebar-item">
-        <button class="reg-form-edit-tab-btn" onclick="regFormSwitchTab(this,'pf-tab-preview')">Preview</button>
+        <button class="reg-form-edit-tab-btn" onclick="regFormSwitchTab(this,'pf-tab-agreement')">Agreement Wording</button>
       </div>
     </div>`;
 
@@ -34379,29 +34387,37 @@ Thank you,
       ${REG_FORM_RTE_TOOLBAR}
       <div class="et-body-editor" id="pf-intro-editor" contenteditable="true" onfocus="window._regFormLastTextarea=this"
            data-placeholder="This section outlines the production fees, payment options, and financial policies for participation in {{show_name}}."
-           style="flex:1 1 0;min-height:0;">${plainToHtml(template?.intro || '')}</div>
+           style="flex:1 1 0;min-height:0;">${template?.intro || PRODUCTION_FEE_DEFAULT_INTRO}</div>
       <div style="padding:1rem 1.2rem;background:rgba(118,158,123,0.07);border-top:1px solid rgba(118,158,123,0.15);font-size:0.78rem;color:#5a7e60;line-height:1.5;flex-shrink:0;">
         <strong>The fee details are auto-generated from Registration &rarr; Settings &rarr; Payments.</strong><br />
-        Configure amounts, due dates, discounts, and payment instructions there. Use the Preview tab to see what families will see.
+        Configure amounts, due dates, discounts, and payment instructions there.
       </div>
     </div>`;
 
-    const previewPanel = `<div class="reg-form-edit-tab-panel" id="pf-tab-preview" style="padding:1.2rem;overflow-y:auto;">
-      <div style="font-size:0.72rem;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;color:rgba(87,46,136,0.45);margin-bottom:1rem;">Live preview — reads from your current Payments settings</div>
-      <div style="background:#fff;border:1.5px solid rgba(87,46,136,0.1);border-radius:12px;padding:1.4rem 1.5rem;max-width:520px;">
-        ${rpfRenderProductionFeeSection(template, null)}
-      </div>
+    const agreementPanel = `<div class="reg-form-edit-tab-panel" id="pf-tab-agreement" style="gap:0;padding:0;">
+      <div class="reg-form-edit-section-label" style="padding:0.9rem 1.2rem 0.4rem;flex-shrink:0;">Agreement wording</div>
+      <div style="padding:0 1.2rem 0.75rem;flex-shrink:0;font-size:0.78rem;color:#7a6a95;line-height:1.5;">The acknowledgement statement families sign below the fee details. Use {{show_name}} and {{organisation_name}} to personalise it.</div>
+      ${REG_FORM_RTE_TOOLBAR}
+      <div class="et-body-editor" id="pf-agreement-editor" contenteditable="true" onfocus="window._regFormLastTextarea=this"
+           data-placeholder="I have read and understood the production fee structure and agree to meet all payment obligations…"
+           style="flex:1 1 0;min-height:0;">${template?.agreementText || PRODUCTION_FEE_DEFAULT_ACK}</div>
     </div>`;
 
-    return `<div class="reg-form-edit-tab-wrap">${sidebar}<div class="reg-form-edit-tab-body">${introPanel}${previewPanel}</div>${renderRegFormVarPanel()}</div>`;
+    const btsFooter = `<div class="mr-bts-notice mr-bts-notice--footer">
+      <span class="mr-bts-notice-label">Build The Show Notice&ensp;—&ensp;</span><span class="mr-bts-notice-body">${esc(MEDIA_RELEASE_BTS_NOTICE)}</span>
+    </div>`;
+
+    return `<div class="reg-form-edit-tab-wrap">${sidebar}<div class="reg-form-edit-tab-body">${introPanel}${agreementPanel}</div>${renderRegFormVarPanel()}</div>${btsFooter}`;
   }
 
   async function saveProductionFeeFormModal(btn) {
     const introEl = document.getElementById('pf-intro-editor');
+    const agreementEl = document.getElementById('pf-agreement-editor');
     const intro = introEl?.innerHTML?.trim() || '';
+    const agreementText = agreementEl?.innerHTML?.trim() || '';
     registrationFormTemplatesState = {
       ...(registrationFormTemplatesState || {}),
-      production_fee: { title: 'Production Fee Agreement', intro, fields: ['{production-fee}'], sectionTexts: {} },
+      production_fee: { title: 'Production Fee Agreement', intro, agreementText, fields: ['{production-fee}'], sectionTexts: {} },
     };
     const host = document.getElementById('registration-forms-settings-surface');
     if (host) {
@@ -37322,8 +37338,10 @@ Thank you,
     const introHtml = introRaw ? `<div class="rpf-pf-text">${sub(introRaw)}</div>` : '';
 
     // ── Acknowledgement ──
+    const ackRaw = template?.agreementText || PRODUCTION_FEE_DEFAULT_ACK;
     const ackHtml = `<div style="margin-top:0.25rem;">
-      <label class="rpf-agree-row"><input type="checkbox" name="pf_ack" required /><span>I understand the payment expectations and policies outlined above.<span class="rpf-req"> *</span></span></label>
+      <div class="rpf-pf-text" style="margin-bottom:0.6rem;">${sub(ackRaw)}</div>
+      <label class="rpf-agree-row"><input type="checkbox" name="pf_ack" required /><span>I agree to the payment expectations and policies outlined above.<span class="rpf-req"> *</span></span></label>
     </div>`;
 
     // ── Signature — age-based ──
