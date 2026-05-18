@@ -33940,11 +33940,12 @@ Thank you,
         <span class="pay-mode-option-desc">${esc(m.desc)}</span>
       </span>
     </label>`).join('');
-    const flatFields = `<div id="pay-flat-fields" class="pay-conditional-block">
-      <div class="reg-form-edit-section-label" style="margin-bottom:0.35rem;">Fee details</div>
-      <div class="pay-fields-group pay-fields-group--three">
+    const showFeeFields = s.mode === 'flat' || s.mode === 'split';
+    const feeBlock = `<div id="pay-fee-block" class="pay-conditional-block" ${showFeeFields ? '' : 'style="display:none"'}>
+      <div class="reg-form-edit-section-label" style="margin-bottom:0.35rem;">Total production fee</div>
+      <div class="pay-fields-group">
         <div>
-          <div class="pay-field-label">Production fee</div>
+          <div class="pay-field-label">Total fee</div>
           <input type="text" id="pay-fee" class="form-input" placeholder="e.g. $350.00" value="${esc(s.fee)}" />
         </div>
         <div>
@@ -33954,11 +33955,16 @@ Thank you,
             <option value="USD" ${s.currency === 'USD' ? 'selected' : ''}>USD — US Dollar</option>
           </select>
         </div>
+      </div>
+    </div>`;
+    const flatSpecific = `<div id="pay-flat-fields" class="pay-conditional-block" ${s.mode === 'flat' ? '' : 'style="display:none"'}>
+      <div class="reg-form-edit-section-label" style="margin-bottom:0.35rem;">Due date</div>
+      <div class="pay-fields-group">
         <div>
-          <div class="pay-field-label">Due date</div>
+          <div class="pay-field-label">Fee due date</div>
           <input type="date" id="pay-fee-due-date" class="form-input" value="${esc(s.fee_due_date || s.due_date || '')}" />
         </div>
-        <div style="grid-column:1/-1;">
+        <div>
           <div class="pay-field-label">Late payment date (optional)</div>
           <input type="date" id="pay-late-fee-date" class="form-input" value="${esc(s.late_fee_date || '')}" />
         </div>
@@ -33974,10 +33980,9 @@ Thank you,
         <input type="date" class="form-input pay-inst-date" value="${esc(inst.due_date)}" />
       </div>`;
     }).join('');
-    const splitFields = `<div id="pay-split-fields" class="pay-conditional-block">
-      <div class="reg-form-edit-section-label" style="margin-bottom:0.45rem;">Split fee details</div>
+    const splitFields = `<div id="pay-split-fields" class="pay-conditional-block" ${s.mode === 'split' ? '' : 'style="display:none"'}>
       <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.65rem;">
-        <div class="pay-field-label" style="margin-bottom:0;white-space:nowrap;">Number of payments</div>
+        <div class="reg-form-edit-section-label" style="margin-bottom:0;white-space:nowrap;">Split into</div>
         <select id="pay-split-count" class="form-input" style="width:auto;" onchange="payUpdateSplitRows(this.value)">
           ${[2,3,4,5].map(n => `<option value="${n}" ${splitCount === n ? 'selected' : ''}>${n} payments</option>`).join('')}
         </select>
@@ -33990,7 +33995,7 @@ Thank you,
           <div class="reg-form-edit-section-label" style="margin-bottom:0.55rem;">Does this production charge a fee?</div>
           <div class="pay-mode-options">${modeRows}</div>
         </div>
-        ${flatFields}${splitFields}
+        ${feeBlock}${flatSpecific}${splitFields}
       </div>
     </div>`;
   }
@@ -34019,8 +34024,10 @@ Thank you,
 
   function payUpdateFeeFields() {
     const mode = document.querySelector('#payment-settings-edit-body-area input[name="pay-mode"]:checked')?.value || 'none';
+    const feeBlock   = document.getElementById('pay-fee-block');
     const flatFields = document.getElementById('pay-flat-fields');
     const splitFields = document.getElementById('pay-split-fields');
+    if (feeBlock)    feeBlock.style.display    = (mode === 'flat' || mode === 'split') ? '' : 'none';
     if (flatFields)  flatFields.style.display  = mode === 'flat'  ? '' : 'none';
     if (splitFields) splitFields.style.display = mode === 'split' ? '' : 'none';
   }
@@ -34675,10 +34682,6 @@ Thank you,
       ? 'Payments handled outside BTS. Balances tracked internally.'
       : 'No registration fees for this production.';
 
-    const planCount = (s.plans || []).length;
-    const planNote = !s.plans_enabled
-      ? 'Payment plans off — families pay according to the fee structure.'
-      : planCount ? `${planCount} plan${planCount === 1 ? '' : 's'} available.` : 'Plans enabled — none configured yet.';
 
     const discountParts = [];
     if (s.sibling_discount_enabled) discountParts.push('Sibling discount');
@@ -34698,15 +34701,6 @@ Thank you,
       bodyHtml: `<div class="registration-settings-tile-note">${esc(feeNote)}</div>`,
       buttonHtml: `<button type="button" class="template-brand-tile-button" onclick="event.stopPropagation();openPaymentSettingsModal('fee')">Edit</button>`,
       ariaLabel: 'Production fee settings',
-    });
-    const tile2 = renderRegistrationSettingTile({
-      color,
-      kicker: 'Payments',
-      title: 'Payment Plans',
-      helper: 'Optional installment schedules families can select during registration.',
-      bodyHtml: `<div class="registration-settings-tile-note">${esc(planNote)}</div>`,
-      buttonHtml: `<button type="button" class="template-brand-tile-button" onclick="event.stopPropagation();openPaymentSettingsModal('plans')">Manage Plans</button>`,
-      ariaLabel: 'Payment plans',
     });
     const tile3 = renderRegistrationSettingTile({
       color,
@@ -34736,7 +34730,7 @@ Thank you,
       buttonHtml: '',
       ariaLabel: 'Payment reminders',
     });
-    return [tile1, tile2, tile3, tile4, tile5].join('');
+    return [tile1, tile3, tile4, tile5].join('');
   }
 
   function updateRegistrationFormGroupCount(toggle) {
