@@ -33867,7 +33867,7 @@ Thank you,
     else if (mode === 'instructions') body.innerHTML = renderPaymentInstructionsModalBody(s);
     else if (mode === 'completion') body.innerHTML = renderCompletionRulesModalBody(s);
     modal.classList.add('open');
-    if (mode === 'fee') payUpdateFeeFields();
+    if (mode === 'fee') { payUpdateFeeFields(); payRecalcSplitTotal(); }
   }
 
   function closePaymentSettingsModal() {
@@ -33954,6 +33954,7 @@ Thank you,
           <select id="pay-currency" class="form-input">
             <option value="CAD" ${s.currency === 'CAD' ? 'selected' : ''}>CAD — Canadian Dollar</option>
             <option value="USD" ${s.currency === 'USD' ? 'selected' : ''}>USD — US Dollar</option>
+            <option value="GBP" ${s.currency === 'GBP' ? 'selected' : ''}>GBP — British Pound</option>
           </select>
         </div>
       </div>
@@ -33989,10 +33990,7 @@ Thank you,
         </select>
       </div>
       <div class="pay-installment-list" id="pay-split-installment-list">${splitRows}</div>
-      <div id="pay-split-total-bar" style="display:flex;align-items:center;justify-content:space-between;padding:0.45rem 0.7rem;border-radius:8px;background:#f4f1f9;margin-top:0.4rem;font-size:0.8rem;">
-        <span style="color:#7a6a95;">Payments total</span>
-        <span id="pay-split-total-value" style="font-weight:700;color:#1a1530;">—</span>
-      </div>
+      <div id="pay-split-total-bar" style="margin-top:0.5rem;padding:0.6rem 0.75rem;border-radius:8px;background:#f4f1f9;font-size:0.82rem;font-family:monospace;"></div>
       <label class="reg-form-toggle-row" style="margin-top:0.75rem;">
         <input type="checkbox" id="pay-split-allow-upfront" ${s.split_allow_upfront ? 'checked' : ''} />
         <span class="reg-form-toggle-label">Allow full payment up front</span>
@@ -34208,20 +34206,30 @@ Thank you,
   }
 
   function payRecalcSplitTotal() {
-    const el = document.getElementById('pay-split-total-value');
-    if (!el) return;
+    const bar = document.getElementById('pay-split-total-bar');
+    if (!bar) return;
     const amounts = [...document.querySelectorAll('#pay-split-installment-list .pay-inst-amount')]
       .map(i => parseFloat(i.value.replace(/[^0-9.]/g, '')) || 0);
     const total = amounts.reduce((a, b) => a + b, 0);
     const hasAny = amounts.some(a => a > 0);
-    el.textContent = hasAny ? total.toFixed(2) : '—';
     const totalFee = parseFloat(document.getElementById('pay-fee')?.value?.replace(/[^0-9.]/g, '') || '') || 0;
-    if (hasAny && totalFee > 0) {
-      const match = Math.abs(total - totalFee) < 0.01;
-      el.style.color = match ? '#769e7b' : '#d1523d';
-    } else {
-      el.style.color = '#1a1530';
-    }
+    const match = hasAny && totalFee > 0 && Math.abs(total - totalFee) < 0.01;
+    const over  = hasAny && totalFee > 0 && total > totalFee + 0.01;
+    const under = hasAny && totalFee > 0 && total < totalFee - 0.01;
+    const totalColor = match ? '#769e7b' : (over || under) ? '#d1523d' : '#1a1530';
+    const fmt = n => n > 0 ? n.toFixed(2) : '—';
+    const addends = amounts.map((a, i) =>
+      `<span style="color:#7a6a95;margin-right:0.25rem;">${i > 0 ? '+' : ' '}</span><span style="color:#1a1530;font-weight:600;">${fmt(a)}</span>`
+    ).join('<span style="color:#b0a8c4;padding:0 0.35rem;">&nbsp;</span>');
+    const note = over ? ' <span style="color:#d1523d;font-size:0.74rem;font-family:sans-serif;">over by ' + (total - totalFee).toFixed(2) + '</span>'
+                : under ? ' <span style="color:#d1523d;font-size:0.74rem;font-family:sans-serif;">short by ' + (totalFee - total).toFixed(2) + '</span>'
+                : match ? ' <span style="color:#769e7b;font-size:0.74rem;font-family:sans-serif;">matches total fee</span>' : '';
+    bar.innerHTML = `<div style="display:flex;align-items:center;gap:0.1rem;flex-wrap:wrap;">
+      ${addends}
+      <span style="color:#7a6a95;padding:0 0.4rem;">=</span>
+      <span style="font-weight:800;color:${totalColor};">${hasAny ? total.toFixed(2) : '—'}</span>
+      ${note}
+    </div>`;
   }
 
   function payTogglePlansEnabled(checkbox) {
