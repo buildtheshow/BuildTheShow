@@ -37574,55 +37574,69 @@ Thank you,
     const fmtAmt = v => v ? `${currSym}${parseFloat(v).toFixed(2)}${currCode}` : null;
     const fmtDate = d => d ? new Date(d + 'T00:00:00').toLocaleDateString('en-CA', { month: 'long', day: 'numeric', year: 'numeric' }) : null;
 
+    const row = (label, value, note = '') => `<div class="rpf-pf-row">
+      <span class="rpf-pf-row-label">${esc(label)}</span>
+      <span class="rpf-pf-row-value">${esc(value)}${note ? `<span class="rpf-pf-sub-note">${esc(note)}</span>` : ''}</span>
+    </div>`;
+    const subRow = (label, value, note = '') => `<div class="rpf-pf-sub-row">
+      <span class="rpf-pf-sub-row-label">${esc(label)}</span>
+      <span class="rpf-pf-sub-row-value">${esc(value)}${note ? `<span class="rpf-pf-sub-note">${esc(note)}</span>` : ''}</span>
+    </div>`;
+
     // ── Production Fee Summary ──
     let feeRows = '';
+    let feeTotal = '';
     if (s.mode === 'none' || !s.mode) {
       feeRows = `<div class="rpf-pf-none">No production fee has been configured for this show.</div>`;
     } else if (s.mode === 'flat') {
       const rows = [
-        s.fee ? { label: 'Registration fee', value: fmtAmt(s.fee) } : null,
-        s.fee_due_date ? { label: 'Due date', value: fmtDate(s.fee_due_date) } : null,
-        s.late_fee_date ? { label: 'Late payment after', value: fmtDate(s.late_fee_date) } : null,
-      ].filter(Boolean);
-      feeRows = rows.map(r => `<div class="rpf-pf-row"><span class="rpf-pf-row-label">${esc(r.label)}</span><span class="rpf-pf-row-value">${esc(r.value)}</span></div>`).join('');
+        s.fee           ? row('Registration fee',   fmtAmt(s.fee))            : null,
+        s.fee_due_date  ? row('Due date',            fmtDate(s.fee_due_date))  : null,
+        s.late_fee_date ? row('Late payment after',  fmtDate(s.late_fee_date)) : null,
+      ].filter(Boolean).join('');
+      feeRows = rows || `<div class="rpf-pf-none">Fee amount not yet configured.</div>`;
     } else if (s.mode === 'split') {
       const insts = (s.split_installments || []).filter((_, i) => i < (s.split_count || 2));
       if (insts.length) {
-        feeRows = insts.map((inst, i) => {
-          const parts = [fmtAmt(inst.amount), inst.due_date ? `due ${fmtDate(inst.due_date)}` : null].filter(Boolean).join(' — ');
-          return `<div class="rpf-pf-row"><span class="rpf-pf-row-label">Payment ${i + 1}</span><span class="rpf-pf-row-value">${esc(parts || 'Amount not set')}</span></div>`;
-        }).join('');
+        feeRows = insts.map((inst, i) => row(
+          `Payment ${i + 1}`,
+          fmtAmt(inst.amount) || 'Amount not set',
+          inst.due_date ? `Due ${fmtDate(inst.due_date)}` : ''
+        )).join('');
+        const total = insts.reduce((sum, inst) => sum + (parseFloat(inst.amount) || 0), 0);
+        if (total > 0) feeTotal = `<div class="rpf-pf-total-row"><span>Total</span><span>${fmtAmt(String(total))}</span></div>`;
+        if (s.split_allow_upfront) feeRows += `<div class="rpf-pf-intro-note">You may also pay the full amount upfront.</div>`;
       } else {
         feeRows = `<div class="rpf-pf-none">Payment amounts have not been configured yet.</div>`;
       }
     }
 
     // ── Discounts & Financial Assistance ──
-    const discountItems = [];
+    const discountBlocks = [];
     if (s.sibling_discount_enabled) {
-      const parts = [
-        s.sibling_first_child ? `First child: ${fmtAmt(s.sibling_first_child) || s.sibling_first_child}` : null,
-        s.sibling_additional ? `Additional siblings: ${fmtAmt(s.sibling_additional) || s.sibling_additional}` : null,
-        s.sibling_by_household ? 'Applied per household' : null,
-      ].filter(Boolean);
-      discountItems.push({ title: 'Sibling Discount', detail: parts.join(' · ') });
+      let inner = '';
+      if (s.sibling_first_child) inner += subRow('First child', fmtAmt(s.sibling_first_child));
+      if (s.sibling_additional)  inner += subRow('Additional child', fmtAmt(s.sibling_additional), s.sibling_by_household ? 'per household' : '');
+      if (!inner) inner = subRow('Sibling discount', 'Enabled');
+      discountBlocks.push(`<div><div class="rpf-pf-discount-head">Sibling Discount</div><div class="rpf-pf-sub-block">${inner}</div></div>`);
     }
     if (s.volunteer_discount_enabled) {
-      const parts = [
-        s.volunteer_hours ? `${s.volunteer_hours} volunteer hours required` : null,
-        s.volunteer_discount ? `${fmtAmt(s.volunteer_discount) || s.volunteer_discount} discount` : null,
-      ].filter(Boolean);
-      discountItems.push({ title: 'Volunteer Discount', detail: parts.join(' · ') });
+      let inner = '';
+      if (s.volunteer_hours)    inner += subRow('Hours required', `${s.volunteer_hours} hrs`);
+      if (s.volunteer_discount) inner += subRow('Discount', `${fmtAmt(s.volunteer_discount)} off`);
+      inner += subRow('Approval', s.volunteer_approval === 'auto' ? 'Automatic' : 'Manual');
+      discountBlocks.push(`<div><div class="rpf-pf-discount-head">Volunteer Discount</div><div class="rpf-pf-sub-block">${inner}</div></div>`);
     }
     if (s.scholarship_enabled) {
-      discountItems.push({ title: 'Financial Assistance', detail: 'Available — contact the production team for details.' });
+      const note = s.scholarship_note ? esc(s.scholarship_note) : 'Available — contact the production team for details.';
+      discountBlocks.push(`<div><div class="rpf-pf-discount-head">Financial Assistance</div><div class="rpf-pf-sub-block"><div class="rpf-pf-sub-row"><span class="rpf-pf-sub-row-value">${note}</span></div></div></div>`);
     }
 
-    const discountsHtml = discountItems.length ? `
+    const discountsHtml = discountBlocks.length ? `
       <hr class="rpf-pf-divider" />
       <div class="rpf-pf-block">
         <div class="rpf-pf-block-title">Discounts &amp; Financial Assistance</div>
-        ${discountItems.map(d => `<div class="rpf-pf-discount-row"><span><strong>${esc(d.title)}</strong>${d.detail ? ` — ${esc(d.detail)}` : ''}</span></div>`).join('')}
+        <div style="display:flex;flex-direction:column;gap:0.75rem;">${discountBlocks.join('')}</div>
       </div>` : '';
 
     // ── Payment Instructions ──
@@ -37672,6 +37686,7 @@ Thank you,
       <div class="rpf-pf-block">
         <div class="rpf-pf-block-title">Production Fee</div>
         ${feeRows}
+        ${feeTotal}
       </div>
       ${discountsHtml}
       ${instrHtml}
@@ -37961,15 +37976,17 @@ Thank you,
     const hasPrefill = prefill && (prefill.first_name || prefill.email);
 
     const _rpfPerformerName = prefill ? [prefill.preferred_name || prefill.first_name, prefill.last_name].filter(Boolean).join(' ') : '';
+    const _rpfPS = registrationCurrentPaymentSettings();
     const _rpfTokenMap = {
-      '{{organisation_name}}': orgName || '',
-      '{{org_name}}':          orgName || '',
-      '{{show_name}}':         prod?.title || prod?.name || '',
-      '{{show_venue}}':        prod?.venue || '',
+      '{{organisation_name}}':   orgName || '',
+      '{{org_name}}':            orgName || '',
+      '{{show_name}}':           prod?.title || prod?.name || '',
+      '{{show_venue}}':          prod?.venue || '',
       '{{rehearsal_start_date}}': prod?.start_date ? fmtDate(prod.start_date) : '',
       '{{rehearsal_end_date}}':   prod?.end_date   ? fmtDate(prod.end_date)   : '',
-      '{{performer_name}}':    _rpfPerformerName,
-      '{{performer_name}}':  _rpfPerformerName,
+      '{{performer_name}}':      _rpfPerformerName,
+      '{{etransfer_email}}':     _rpfPS.etransfer_email || orgEtransferEmail || '',
+      '{{org_email}}':           orgEtransferEmail || '',
     };
     window._rpfSubTokens = function(html) {
       if (!html) return html;
