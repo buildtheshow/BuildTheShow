@@ -33409,9 +33409,9 @@ Thank you,
 
   const CODE_OF_CONDUCT_DEFAULT_SECTIONS = [
     { id: 'intro',     title: 'Introduction',                    visible: true, content: `<p>{{organisation_name}} is committed to creating a safe, respectful, and welcoming environment for everyone involved in {{show_name}}.</p><p>By participating in this production, all cast members, volunteers, and production participants agree to contribute positively to the rehearsal and performance process.</p>` },
-    { id: 'respect',   title: 'Respect &amp; Inclusion',         visible: true, content: `<p>All participants are expected to treat others with kindness, respect, and professionalism.</p><p>Bullying, harassment, discrimination, intimidation, or inappropriate behaviour will not be tolerated.</p><p>This includes behaviour related to race, ethnicity, gender, gender identity or expression, sexual orientation, disability, religion, age, body size, or experience level.</p>` },
-    { id: 'rehearsal', title: 'Rehearsal &amp; Backstage Behaviour', visible: true, content: `<p>Participants are expected to:</p><ul><li>arrive on time and prepared</li><li>follow direction from the production team</li><li>help maintain a respectful rehearsal environment</li><li>treat rehearsal and backstage spaces with care</li></ul><p>Phones should remain silent during rehearsals unless approved by the production team.</p>` },
-    { id: 'safety',    title: 'Safety &amp; Boundaries',         visible: true, content: `<p>The physical and emotional safety of all participants is important.</p><p>No participant should ever feel pressured into physical contact, choreography, stage combat, or other activities that make them uncomfortable.</p><p>Participants are encouraged to speak with the production team if a concern arises.</p>` },
+    { id: 'respect',   title: 'Respect & Inclusion',             visible: true, content: `<p>All participants are expected to treat others with kindness, respect, and professionalism.</p><p>Bullying, harassment, discrimination, intimidation, or inappropriate behaviour will not be tolerated.</p><p>This includes behaviour related to race, ethnicity, gender, gender identity or expression, sexual orientation, disability, religion, age, body size, or experience level.</p>` },
+    { id: 'rehearsal', title: 'Rehearsal & Backstage Behaviour',   visible: true, content: `<p>Participants are expected to:</p><ul><li>arrive on time and prepared</li><li>follow direction from the production team</li><li>help maintain a respectful rehearsal environment</li><li>treat rehearsal and backstage spaces with care</li></ul><p>Phones should remain silent during rehearsals unless approved by the production team.</p>` },
+    { id: 'safety',    title: 'Safety & Boundaries',             visible: true, content: `<p>The physical and emotional safety of all participants is important.</p><p>No participant should ever feel pressured into physical contact, choreography, stage combat, or other activities that make them uncomfortable.</p><p>Participants are encouraged to speak with the production team if a concern arises.</p>` },
     { id: 'reporting', title: 'Reporting Concerns',              visible: true, content: `<p>If you experience or witness behaviour that violates this Code of Conduct, please report it to the production team.</p><p>All concerns will be taken seriously and handled appropriately.</p>` },
   ];
 
@@ -33654,6 +33654,28 @@ Thank you,
     return el ? !!el.checked : fallback;
   }
 
+  function registrationFormSettingKey(def) {
+    return def?.settingId ? def.settingId.replace(/^reg-/, '').replace(/-/g, '_') : '';
+  }
+
+  function registrationFormGroupSettingKey(group = '') {
+    return `form_group_${String(group).toLowerCase().replace(/[^a-z0-9]+/g, '_')}`;
+  }
+
+  function isRegistrationFormTemplateEnabled(def, settings = null, root = document) {
+    if (!def) return false;
+    const saved = settings || ((typeof prod?.registration_settings === 'object' && prod.registration_settings) ? prod.registration_settings : {});
+    const masterId = `reg-form-master-${String(def.group || '').toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
+    const masterEl = root?.getElementById?.(masterId) || document.getElementById(masterId);
+    const groupKey = registrationFormGroupSettingKey(def.group || '');
+    const groupOn = masterEl ? !!masterEl.checked : saved[groupKey] !== false;
+    if (!groupOn) return false;
+    const el = root?.getElementById?.(def.settingId) || document.getElementById(def.settingId);
+    if (el) return !!el.checked;
+    const dbKey = registrationFormSettingKey(def);
+    return def.defaultOn ? saved[dbKey] !== false : saved[dbKey] === true;
+  }
+
   function getRegistrationFormTemplateDef(key) {
     return REGISTRATION_FORM_TEMPLATE_DEFS.find(def => def.key === key) || null;
   }
@@ -33729,7 +33751,7 @@ Thank you,
       kicker: 'Forms',
       title: template?.title || def.title,
       helper: def.summary,
-      toggleHtml: registrationSettingsToggle(def.settingId, `Enable ${def.title} form`, registrationSettingsChecked(def.settingId, def.key !== 'custom_questions')),
+      toggleHtml: registrationSettingsToggle(def.settingId, `Enable ${def.title} form`, isRegistrationFormTemplateEnabled(def)),
       bodyHtml: `<div class="registration-settings-tile-note">${bodyNote}</div>`,
       buttonHtml: `<button type="button" class="template-brand-tile-button" onclick="event.stopPropagation();openRegistrationFormTemplateModal('${esc(def.key)}')">Edit Form</button>`,
       className: 'registration-form-template-tile',
@@ -35768,10 +35790,8 @@ Thank you,
   }
 
   function openRegistrationPublicFormPreview() {
-    const enabledSections = REGISTRATION_FORM_TEMPLATE_DEFS.filter(def => {
-      const el = document.getElementById(def.settingId);
-      return el ? el.checked : def.key !== 'custom_questions';
-    });
+    const settings = (typeof prod?.registration_settings === 'object' && prod.registration_settings) ? prod.registration_settings : {};
+    const enabledSections = REGISTRATION_FORM_TEMPLATE_DEFS.filter(def => isRegistrationFormTemplateEnabled(def, settings));
     const body = document.getElementById('reg-public-form-preview-body');
     if (!body) return;
     if (!enabledSections.length) {
@@ -35793,7 +35813,7 @@ Thank you,
         return `<div class="reg-public-preview-section">
           <div class="reg-public-preview-section-header">
             <div class="reg-public-preview-section-title">${esc(title)}</div>
-            ${intro ? `<div class="reg-public-preview-section-intro">${esc(intro)}</div>` : ''}
+            ${intro ? `<div class="reg-public-preview-section-intro">${intro}</div>` : ''}
           </div>
           <div class="reg-public-preview-fields">${fieldsHtml}</div>
         </div>`;
@@ -35963,10 +35983,7 @@ Thank you,
       seen.get(def.group).push(def);
     });
     const _savedFormSettings = (typeof prod?.registration_settings === 'object' && prod.registration_settings) ? prod.registration_settings : {};
-    const isDefEnabled = def => {
-      const _dbKey = def.settingId.replace(/^reg-/, '').replace(/-/g, '_');
-      return def.defaultOn ? _savedFormSettings[_dbKey] !== false : _savedFormSettings[_dbKey] === true;
-    };
+    const isDefEnabled = def => isRegistrationFormTemplateEnabled(def, _savedFormSettings);
     return groups.map(group => {
       const defs = seen.get(group);
       const color = defs[0].color;
@@ -36262,7 +36279,7 @@ Thank you,
     sc('reg-return-declined',              s.return_declined      !== false);
     sc('reg-mark-expired',                 s.mark_expired         !== false);
     REGISTRATION_FORM_TEMPLATE_DEFS.forEach(def => {
-      const dbKey = def.settingId.replace(/^reg-/, '').replace(/-/g, '_');
+      const dbKey = registrationFormSettingKey(def);
       sc(def.settingId, def.defaultOn ? s[dbKey] !== false : s[dbKey] === true);
     });
     sv('reg-child-age',                    s.child_age                    || 'Under 13');
@@ -36309,7 +36326,7 @@ Thank you,
     sc('reg-notif-reminders',              getPaymentSettings().reminders_enabled === true || s.notif_reminders === true);
     [...new Set(REGISTRATION_FORM_TEMPLATE_DEFS.map(d => d.group))].forEach(group => {
       const masterId = `reg-form-master-${group.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
-      const dbKey = `form_group_${group.toLowerCase().replace(/[^a-z0-9]+/g, '_')}`;
+      const dbKey = registrationFormGroupSettingKey(group);
       const el = document.getElementById(masterId);
       if (el) el.checked = s[dbKey] !== false;
     });
@@ -36348,7 +36365,7 @@ Thank you,
       return_declined:              gc('reg-return-declined'),
       mark_expired:                 gc('reg-mark-expired'),
       ...Object.fromEntries(REGISTRATION_FORM_TEMPLATE_DEFS.map(def => {
-        const dbKey = def.settingId.replace(/^reg-/, '').replace(/-/g, '_');
+        const dbKey = registrationFormSettingKey(def);
         return [dbKey, gc(def.settingId)];
       })),
       child_age:                    gv('reg-child-age', currentSettings.child_age || ''),
@@ -36398,7 +36415,7 @@ Thank you,
       ...Object.fromEntries(
         [...new Set(REGISTRATION_FORM_TEMPLATE_DEFS.map(d => d.group))].map(group => {
           const masterId = `reg-form-master-${group.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
-          const dbKey = `form_group_${group.toLowerCase().replace(/[^a-z0-9]+/g, '_')}`;
+          const dbKey = registrationFormGroupSettingKey(group);
           return [dbKey, gc(masterId, true)];
         })
       ),
@@ -38014,12 +38031,7 @@ Thank you,
     }
 
     const _savedFormSettings = (typeof prod?.registration_settings === 'object' && prod.registration_settings) ? prod.registration_settings : {};
-    const _isDefEnabled = def => {
-      const el = document.getElementById(def.settingId);
-      if (el) return el.checked;
-      const _dbKey = def.settingId.replace(/^reg-/, '').replace(/-/g, '_');
-      return def.defaultOn ? _savedFormSettings[_dbKey] !== false : _savedFormSettings[_dbKey] === true;
-    };
+    const _isDefEnabled = def => isRegistrationFormTemplateEnabled(def, _savedFormSettings);
     const enabledDefs = REGISTRATION_FORM_TEMPLATE_DEFS.filter(_isDefEnabled);
     if (!enabledDefs.length) {
       const previewUrl = registrationPublicFallbackUrl();
