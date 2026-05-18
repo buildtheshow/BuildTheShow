@@ -897,10 +897,16 @@ const value =
 ## Editing and Persistence
 
 1. Autosave is preferred for living records when the user is already in an edit surface.
-2. Save state feedback should be calm and truthful:
-- `Saving...`
-- `Saved`
-- clear error only when there is a real failure
+2. Save state feedback rules — the gold pill is the only save notification on the site:
+   - Success: gold pill, `background:#efab45`, `color:#1a1530`, `font-weight:900`, `box-shadow:0 14px 34px rgba(87,46,136,0.22)`, text reads `Saved!`
+   - Error: red tint pill, `background:rgba(220,60,60,0.12)`, `border-color:rgba(220,60,60,0.35)`, `color:#f08080`, text reads `Couldn't save. Try again.`
+   - No "Saving…" indicator — only the confirmation matters
+   - Position: `position:fixed; bottom:1.5rem; right:1.5rem; z-index:9999`
+   - Animation: slides up (`translateY(6px)` → `translateY(0)`), fades out after 3 seconds
+   - CSS classes: `.toast--success` for success, `.toast--error` for errors
+   - One notification at a time — always clear the previous timer before showing a new one
+   - `auto-save.js` delegates to `window.showToast(msg, isError)` if the page defines it; falls back to its own matching pill if not
+   - Every page that calls `showToast` must apply `toast--success` for non-errors and `toast--error` for errors
 
 3. Saving should not depend on unrelated mirror writes succeeding.
 4. Canonical record writes should succeed even if a secondary sync path fails.
