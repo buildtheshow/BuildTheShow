@@ -32565,13 +32565,14 @@ Thank you,
   let paymentSettingsState = {};
 
   const PAYMENT_DEFAULT_STATE = {
-    mode: 'none',           // 'none' | 'flat' | 'split' | 'external'
+    mode: 'none',           // 'none' | 'flat' | 'split'
     fee: '',
     currency: 'CAD',
     fee_due_date: '',
     late_fee_date: '',
     split_count: 2,
     split_installments: [],
+    split_allow_upfront: false,
     completion_rule: 'none', // lives here but displayed in Intake settings
     plans_enabled: false,
     plans: [],
@@ -33887,6 +33888,7 @@ Thank you,
         amount: row.querySelector('.pay-inst-amount')?.value?.trim() || '',
         due_date: row.querySelector('.pay-inst-date')?.value || '',
       }));
+      s.split_allow_upfront = document.getElementById('pay-split-allow-upfront')?.checked || false;
     } else if (mode === 'plans') {
       s.plans_enabled = document.getElementById('pay-plans-enabled')?.checked || false;
       s.plans = payCollectPlans();
@@ -33931,7 +33933,6 @@ Thank you,
       { value: 'none',     title: 'No Production Fee',              desc: 'This production does not charge participation fees. Payment prompts are removed from the registration flow.' },
       { value: 'flat',     title: 'Flat Production Fee',            desc: 'Families pay a single production fee for participation. Set the amount, currency, and due date.' },
       { value: 'split',    title: 'Split Fee',                      desc: 'Break the total fee into 2, 3, 4, or 5 payments, each with its own amount and due date.' },
-      { value: 'external', title: 'External Payment Handling',      desc: 'Payments happen outside BTS — e-transfer, invoice, cash, or school bookkeeping. Balances can still be tracked internally.' },
     ];
     const modeRows = modes.map(m => `<label class="pay-mode-option">
       <input type="radio" name="pay-mode" value="${m.value}" ${s.mode === m.value ? 'checked' : ''} onchange="payUpdateFeeFields()" />
@@ -33988,6 +33989,11 @@ Thank you,
         </select>
       </div>
       <div class="pay-installment-list" id="pay-split-installment-list">${splitRows}</div>
+      <label class="reg-form-toggle-row" style="margin-top:0.75rem;">
+        <input type="checkbox" id="pay-split-allow-upfront" ${s.split_allow_upfront ? 'checked' : ''} />
+        <span class="reg-form-toggle-label">Allow full payment up front</span>
+      </label>
+      <div style="font-size:0.76rem;color:#7a6a95;margin-top:0.2rem;padding-left:1.6rem;">Performers can choose to pay the total fee in one payment instead of following the split schedule.</div>
     </div>`;
     return `<div class="reg-form-edit-tab-wrap">
       <div class="reg-form-edit-tab-body" style="padding:1.25rem 1.4rem;gap:0.9rem;overflow-y:auto;">
@@ -34672,14 +34678,12 @@ Thank you,
     const renderer = window.BTSAuditionTemplates?.renderTemplateById;
     if (!renderer) return '';
 
-    const modeLabels = { none: 'No Production Fee', flat: 'Flat Production Fee', split: 'Split Fee', external: 'External Payment' };
+    const modeLabels = { none: 'No Production Fee', flat: 'Flat Production Fee', split: 'Split Fee' };
     const modeLabel = modeLabels[s.mode] || 'No Production Fee';
     const feeNote = s.mode === 'flat'
       ? (() => { const parts = []; if (s.fee) parts.push(`Fee: ${s.fee}`); if (s.fee_due_date) parts.push(`Due: ${s.fee_due_date}`); return parts.join(' · ') || 'Flat fee configured.'; })()
       : s.mode === 'split'
       ? (() => { const n = s.split_count || 2; const filled = (s.split_installments || []).filter(i => i.amount).length; return filled ? `${n} payments — ${filled} amount${filled === 1 ? '' : 's'} set.` : `Fee split into ${n} payments.`; })()
-      : s.mode === 'external'
-      ? 'Payments handled outside BTS. Balances tracked internally.'
       : 'No registration fees for this production.';
 
 
