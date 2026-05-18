@@ -28571,23 +28571,27 @@ Thank you,
       return String(b.updated_at || b.created_at || '').localeCompare(String(a.updated_at || a.created_at || ''));
     });
     if (_etCatFilter === 'all') {
+      const renderer = window.BTSAuditionTemplates?.renderTemplateById;
+      if (!renderer) return;
       const homeCards = ET_HOME_SECTIONS.map(home => {
         const section = etSectionMeta(home.key);
         const count = sorted.filter(t => etSectionMatchesFilter(t, home.key)).length;
-        const cardStyle = `--brand-tile-bg:${esc(section.color)};--brand-tile-ink:${esc(section.ink || '#ffffff')};`;
-        const summary = String(section.summary || '').split('•').map(part => part.trim()).filter(Boolean).join(' ');
-        return `<button type="button" class="template-brand-card template-brand-card--portrait template-brand-card--content" style="${cardStyle}" onclick="filterEmailTemplates('${home.key}')">
-          <div class="template-brand-card-inner">
-            <div class="template-brand-tile-content">
-              <div class="template-brand-tile-main">
-                <div class="template-brand-tile-kicker">Email Templates</div>
-                <div class="template-brand-tile-title">${esc(section.label)}</div>
-                <div class="template-brand-tile-body">${esc(summary)}</div>
-              </div>
-              <div class="template-brand-tile-button">${count} ${count === 1 ? 'template' : 'templates'}</div>
-            </div>
-          </div>
-        </button>`;
+        const summary = String(section.summary || '').split('•').map(part => part.trim()).filter(Boolean).join(' · ');
+        const countLabel = count + (count === 1 ? ' template' : ' templates');
+        const card = renderer('brand.tile.vertical', {
+          esc,
+          tagName: 'button',
+          type: 'button',
+          mode: 'content',
+          color: section.color,
+          ink: section.ink || '#ffffff',
+          kicker: 'Email Templates',
+          title: section.label,
+          body: summary,
+          buttonLabel: countLabel,
+          ariaLabel: section.label + ' email templates',
+        });
+        return card.replace(/^<button /, '<button onclick="filterEmailTemplates(\'' + home.key + '\')" ');
       }).join('');
       list.innerHTML = `<div class="et-inbox">
         <div class="et-template-cards et-template-library">
@@ -28619,35 +28623,33 @@ Thank you,
         </div>
         <div class="et-section-rows">
           ${templates.map(t => {
+            const rowRenderer = window.BTSAuditionTemplates?.renderTemplateById;
+            if (!rowRenderer) return '';
             const meta = etTemplateMeta(t.category);
             const issues = etTemplateIssues(t);
             const reviewState = etTemplateReviewState(t);
             const isConfirmed = reviewState.className === 'approved';
             const bg  = section.color || '#efab45';
-            const ink = section.ink   || '#000000';
+            const ink = section.ink || '#ffffff';
             const bodyText = (meta.summary || meta.usedBy || 'Reusable production email') + (issues.length ? ' · Needs setup review' : '');
             const confirmedDate = etFormatReviewDateCompact(etReviewedAt(t));
             const confirmLabel = isConfirmed ? `Confirmed (${confirmedDate})` : (reviewState.className === 'stale' ? 'Confirm again' : 'Confirm');
             const confirmHtml = isConfirmed
               ? `<span class="template-brand-tile-button template-brand-tile-confirm is-confirmed" onclick="event.stopPropagation()">Confirmed <span class="template-brand-tile-confirm-date">(${esc(confirmedDate)})</span></span>`
               : `<button class="template-brand-tile-button template-brand-tile-confirm" onclick="event.stopPropagation();markEmailTemplateApproved('${t.id}')">${esc(confirmLabel)}</button>`;
-            return `<div class="template-brand-card template-brand-card--portrait template-brand-card--content"
-              style="--brand-tile-bg:${esc(bg)};--brand-tile-ink:${esc(ink)};"
-              onclick="openEditEmailTemplate('${t.id}')">
-              <div class="template-brand-card-inner">
-                <div class="template-brand-tile-content">
-                  <div class="template-brand-tile-main">
-                    <div class="template-brand-tile-kicker">${esc(section.label)}</div>
-                    <div class="template-brand-tile-title">${esc(t.name || meta.label || 'Untitled')}</div>
-                    <div class="template-brand-tile-body">${esc(bodyText)}</div>
-                  </div>
-                  <div class="template-brand-tile-actions">
-                    <button class="template-brand-tile-button" onclick="event.stopPropagation();openEditEmailTemplate('${t.id}')">Edit</button>
-                    ${confirmHtml}
-                  </div>
-                </div>
-              </div>
-            </div>`;
+            const actionsHtml = `<div class="template-brand-tile-actions"><button class="template-brand-tile-button" onclick="event.stopPropagation();openEditEmailTemplate('${t.id}')">Edit</button>${confirmHtml}</div>`;
+            const card = rowRenderer('brand.tile.vertical', {
+              esc,
+              mode: 'content',
+              color: bg,
+              ink: ink,
+              kicker: section.label,
+              title: t.name || meta.label || 'Untitled',
+              body: bodyText,
+              buttonHtml: actionsHtml,
+              ariaLabel: 'Edit ' + esc(t.name || meta.label || 'Untitled') + ' template',
+            });
+            return card.replace(/^<div /, '<div onclick="openEditEmailTemplate(\'' + t.id + '\')" style="cursor:pointer;" ');
           }).join('')}
         </div>
       </section>`;
@@ -28657,19 +28659,24 @@ Thank you,
         ${groupHtml || `<div class="et-library-empty">No templates match this section yet.</div>`}
         <section class="et-section-group">
           <div class="et-section-rows">
-            <button type="button" class="template-brand-card template-brand-card--portrait template-brand-card--content"
-              style="--brand-tile-bg:#efefef;--brand-tile-ink:#572e88;border:2px dashed rgba(87,46,136,0.25);box-shadow:none;"
-              onclick="openNewEmailTemplate()">
-              <div class="template-brand-card-inner">
-                <div class="template-brand-tile-content">
-                  <div class="template-brand-tile-main">
-                    <div class="template-brand-tile-kicker">Custom</div>
-                    <div class="template-brand-tile-title">+ New Template</div>
-                    <div class="template-brand-tile-body">Start a reusable email for this production.</div>
-                  </div>
-                </div>
-              </div>
-            </button>
+            ${(() => {
+              const newCardRenderer = window.BTSAuditionTemplates?.renderTemplateById;
+              if (!newCardRenderer) return '';
+              const nc = newCardRenderer('brand.tile.vertical', {
+                esc,
+                tagName: 'button',
+                type: 'button',
+                mode: 'content',
+                color: '#efefef',
+                ink: '#572e88',
+                style: 'border:2px dashed rgba(87,46,136,0.25);box-shadow:none;',
+                kicker: 'Custom',
+                title: '+ New Template',
+                body: 'Start a reusable email for this production.',
+                ariaLabel: 'Create new email template',
+              });
+              return nc.replace(/^<button /, '<button onclick="openNewEmailTemplate()" ');
+            })()}
           </div>
         </section>
       </div>
