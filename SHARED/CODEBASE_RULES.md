@@ -638,11 +638,10 @@ Payment tiles inside registration status cards use the brand tile visual languag
 2. Unpaid instalment tiles are gold when they are not overdue.
 3. Unpaid instalment tiles are red only when their own due date has passed.
 4. Paid tiles should feel pressed into the card. Unpaid tiles should feel lifted from the page, but must not visually jump upward.
-5. The full balance tile is green when paid in full.
-6. The full balance tile is gold when money is still owing and the balance deadline has not passed.
-7. The full balance tile is red only when money is still owing and the balance deadline has passed.
-8. The balance deadline is the explicit fee due date when one is set. If there is no explicit fee due date, use the last instalment due date.
-9. Household, volunteer discount, scholarship, and other reductions do not live inside the balance tile. They belong in their own discounts or adjustments area.
+5. The full balance tile is a light blue summary tile. It does not use urgency colours.
+6. Balance urgency belongs on the instalment tiles, not the balance tile.
+7. The balance deadline is the explicit fee due date when one is set. If there is no explicit fee due date, use the last instalment due date.
+8. Household, volunteer discount, scholarship, and other reductions do not live inside the balance tile. They belong in their own discounts or adjustments area.
 
 ### What Must Not Happen
 
