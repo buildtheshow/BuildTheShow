@@ -975,6 +975,14 @@
     .rsc-progress-track { height:5px; background:rgba(87,46,136,0.1); border-radius:10px; overflow:hidden; }
     .rsc-progress-fill { height:100%; border-radius:10px; transition:width 0.5s ease; }
     .rsc-stage-label { font-size:0.63rem; font-weight:800; text-transform:uppercase; letter-spacing:0.08em; margin-top:0.22rem; }
+    .rsc-info { display:flex; flex-direction:column; border-top:1px solid rgba(87,46,136,0.08); padding:0.45rem 0 0.1rem; margin-top:0.55rem; gap:0.22rem; }
+    .rsc-info-row { display:flex; align-items:center; gap:0.45rem; }
+    .rsc-info-label { font-size:0.65rem; font-weight:700; color:rgba(87,46,136,0.5); flex:1; text-transform:uppercase; letter-spacing:0.06em; }
+    .rsc-info-chip { display:inline-flex; align-items:center; gap:0.2em; font-size:0.65rem; font-weight:800; padding:0.18em 0.55em; border-radius:5px; white-space:nowrap; cursor:default; }
+    .rsc-info-chip.ok   { background:rgba(118,158,123,0.15); color:#4a7a50; }
+    .rsc-info-chip.warn { background:rgba(239,171,69,0.18);  color:#8a5f10; }
+    .rsc-info-chip.flag { background:rgba(78,106,170,0.14);  color:#2d4f8a; cursor:pointer; }
+    .rsc-info-chip.muted { background:rgba(87,46,136,0.07); color:rgba(87,46,136,0.42); }
     .rsc-no-fee { font-size:0.72rem; color:rgba(87,46,136,0.42); padding:0.3rem 0 0.1rem; }
     .rsc-insts { display:flex; flex-direction:column; }
     .rsc-inst { display:flex; align-items:center; gap:0.4rem; padding:0.3rem 0; border-top:1px solid rgba(87,46,136,0.07); flex-wrap:wrap; }
@@ -25558,8 +25566,8 @@
               },
             });
             const mockAssign = (id, overrides = {}) => ({ id, character_id: null, character_name: 'Tracy Lord', reg_payment_notes: '', volunteer_discount_approved: false, scholarship_status: 'none', ...overrides });
-            const s1 = renderRegistrationStatusCard({ app: mockApp('tmpl-kh-1'), assignment: mockAssign('tmpl-sc-1') }, mockSettings, []);
-            const s2 = renderRegistrationStatusCard({ app: mockApp('tmpl-kh-2', { __bts_registration_agreement_signed: true }), assignment: mockAssign('tmpl-sc-2') }, mockSettings, [{ installment_index: 0, paid: true, paid_at: '2026-06-03T12:00:00Z' }]);
+            const s1 = renderRegistrationStatusCard({ app: mockApp('tmpl-kh-1', { 'Accessibility and accommodation needs': 'Requires seating near the aisle for quick exits due to a knee condition.' }), assignment: mockAssign('tmpl-sc-1') }, mockSettings, []);
+            const s2 = renderRegistrationStatusCard({ app: mockApp('tmpl-kh-2', { 'cast_agreement_signed': true }), assignment: mockAssign('tmpl-sc-2') }, mockSettings, [{ installment_index: 0, paid: true, paid_at: '2026-06-03T12:00:00Z' }]);
             const s3 = renderRegistrationStatusCard({ app: mockApp('tmpl-kh-3', { __bts_registration_agreement_signed: true }), assignment: mockAssign('tmpl-sc-3', { reg_payment_notes: 'Carries inhaler. Personal pickup after evening rehearsals.' }) }, mockSettings, [{ installment_index: 0, paid: true, paid_at: '2026-06-03T12:00:00Z' }, { installment_index: 1, paid: true, paid_at: '2026-07-05T10:00:00Z' }]);
             return [
               renderTemplateTestPreview({ title: 'Accepted', note: 'Cast accepted — form not yet submitted.', bodyHtml: s1 }),
@@ -39050,6 +39058,31 @@ Thank you,
     const stageColor = pct >= 100 ? '#769e7b' : pct >= 75 ? '#572e88' : '#efab45';
     const stageLabel = pct >= 100 ? 'Complete' : pct >= 75 ? 'Registered' : 'Accepted';
 
+    // Accessibility
+    const accessText = registrationAnswerValue(app, ['Accessibility and accommodation needs', 'Accessibility', '__bts_registration_accessibility']).trim();
+    const accessHtml = accessText
+      ? `<span class="rsc-info-chip flag" title="${esc(accessText)}">Has needs ℹ</span>`
+      : `<span class="rsc-info-chip muted">None</span>`;
+
+    // Agreements & Consent
+    const allSigned = !!registrationAgreementComplete(app);
+    const someSigned = !allSigned && registrationAnswerTruthy(app, [
+      'cast_agreement_signed', '__bts_registration_cast_agreement_signed',
+      'code_of_conduct_signed', '__bts_registration_code_of_conduct_signed',
+      'media_release_signed',  '__bts_registration_media_release_signed',
+      'I understand the rehearsal expectations for this production',
+    ]);
+    const agreementsHtml = allSigned
+      ? `<span class="rsc-info-chip ok">✓ All signed</span>`
+      : someSigned
+        ? `<span class="rsc-info-chip warn">Some pending</span>`
+        : `<span class="rsc-info-chip muted">Not yet</span>`;
+
+    const infoHtml = `<div class="rsc-info">
+      <div class="rsc-info-row"><span class="rsc-info-label">Accessibility</span>${accessHtml}</div>
+      <div class="rsc-info-row"><span class="rsc-info-label">Agreements</span>${agreementsHtml}</div>
+    </div>`;
+
     // Balance
     const balance = hasFee ? Math.max(0, ef.total - paidAmt) : 0;
     const paymentStatusLabel = !hasFee ? 'No fee' :
@@ -39133,6 +39166,7 @@ Thank you,
           <div class="rsc-progress-track"><div class="rsc-progress-fill" style="width:${pct}%;background:${stageColor};"></div></div>
           <div class="rsc-stage-label" style="color:${stageColor};">${stageLabel}</div>
         </div>
+        ${infoHtml}
         ${instsHtml}
         ${volHtml}${schHtml}
         <div class="rsc-footer">
