@@ -964,9 +964,11 @@
     .rpt-modal-cancel-btn { font-size:0.8rem; font-weight:700; padding:0.5em 1.1em; border-radius:8px; background:transparent; color:rgba(87,46,136,0.6); border:1.5px solid rgba(87,46,136,0.2); cursor:pointer; font-family:var(--bts-font); }
     /* ── Registration Status Card (rsc-) ── */
     .rsc-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(195px,1fr)); gap:1rem; margin-top:0.75rem; }
-    .rsc-card { background:#fff; border-radius:12px; box-shadow:0 2px 14px rgba(26,21,48,0.09); overflow:hidden; display:flex; flex-direction:column; }
+    .rsc-card { background:#fff; border-radius:12px; box-shadow:0 6px 28px rgba(26,21,48,0.16), 0 1px 4px rgba(26,21,48,0.07); overflow:hidden; display:flex; flex-direction:column; }
     .rsc-card-photo { overflow:hidden; flex-shrink:0; }
     .rsc-card-photo .casting-card { border-radius:0; box-shadow:none; cursor:default; display:block; }
+    .rsc-card-photo .inroom-flip { width:100%; }
+    .rsc-card-photo .in-show-flip::before { display:none; }
     .rsc-body { padding:0.8rem; display:flex; flex-direction:column; flex:1; }
     .rsc-progress { margin-bottom:0.6rem; }
     .rsc-progress-track { height:5px; background:rgba(87,46,136,0.1); border-radius:10px; overflow:hidden; }
@@ -976,7 +978,11 @@
     .rsc-insts { display:flex; flex-direction:column; }
     .rsc-inst { display:flex; align-items:center; gap:0.4rem; padding:0.3rem 0; border-top:1px solid rgba(87,46,136,0.07); flex-wrap:wrap; }
     .rsc-inst-label { font-size:0.7rem; font-weight:700; color:#572e88; flex:1; min-width:50px; line-height:1.2; }
+    .rsc-inst-due { font-size:0.6rem; font-weight:600; color:rgba(87,46,136,0.4); margin-top:1px; }
+    .rsc-inst-right { display:flex; flex-direction:column; align-items:flex-end; gap:0.15rem; }
     .rsc-inst-amount { font-size:0.72rem; font-weight:950; color:#1a1530; white-space:nowrap; }
+    .rsc-balance-wrap { flex:1; }
+    .rsc-discount-note { font-size:0.64rem; color:rgba(87,46,136,0.5); margin-bottom:0.1rem; }
     .rsc-mark-btn { font-size:0.64rem; padding:0.22em 0.55em; border-radius:6px; border:1.5px solid #efab45; background:#efab45; color:#1a1008; cursor:pointer; font-weight:800; font-family:var(--bts-font); white-space:nowrap; line-height:1.3; }
     .rsc-mark-btn:hover { background:#dd8233; border-color:#dd8233; }
     .rsc-paid-chip { display:inline-flex; align-items:center; gap:0.2em; background:#769e7b; color:#fff; font-size:0.64rem; font-weight:900; padding:0.22em 0.55em; border-radius:6px; cursor:pointer; border:none; font-family:var(--bts-font); white-space:nowrap; transition:background 0.15s; line-height:1.3; }
@@ -994,6 +1000,11 @@
     .rsc-hh-btn { font-size:0.64rem; font-weight:700; padding:0.22em 0.55em; border-radius:6px; border:1.5px dashed rgba(87,46,136,0.3); background:transparent; color:rgba(87,46,136,0.5); cursor:pointer; font-family:var(--bts-font); white-space:nowrap; line-height:1.3; }
     .rsc-hh-btn.linked { border-style:solid; border-color:#476aaa; color:#476aaa; background:rgba(71,106,170,0.06); }
     .rsc-hh-btn:hover { border-style:solid; border-color:#572e88; color:#572e88; }
+    .rsc-approve-btn { font-size:0.64rem; padding:0.22em 0.55em; border-radius:6px; border:1.5px solid rgba(87,46,136,0.25); background:transparent; color:rgba(87,46,136,0.6); cursor:pointer; font-weight:800; font-family:var(--bts-font); white-space:nowrap; line-height:1.3; transition:background 0.15s,border-color 0.15s; }
+    .rsc-approve-btn:hover { border-color:#572e88; color:#572e88; }
+    .rsc-approve-btn.approved { background:#769e7b; border-color:#769e7b; color:#fff; }
+    .rsc-approve-btn.approved:hover { background:#572e88; border-color:#572e88; }
+    .rsc-scholarship-sel { font-size:0.68rem; border:1px solid rgba(87,46,136,0.18); border-radius:7px; padding:0.28em 0.5em; color:#1a1530; background:#fff; cursor:pointer; font-family:var(--bts-font); }
     .registration-row-list {
       display: grid;
       gap: 0.65rem;
@@ -25523,37 +25534,30 @@
             <div class="template-card-variant-copy">Per-performer card used in the Status tracker — In The Show card + progress + payment</div>
           </div>
           <div class="template-test-grid" style="grid-template-columns:repeat(auto-fill,minmax(195px,1fr));">${(() => {
-            // Build 3 mock states: Accepted / Registered / Complete
-            const mockBase = { headshot: samplePerformer.headshot, name: samplePerformer.name };
-            const mockSettings = { mode: 'split', fee: '500', currency: 'CAD', split_count: 2,
+            const mockSettings = { mode: 'split', fee: '500', currency: 'CAD',
               split_installments: [{ amount: '250', due_date: '2026-06-01' }, { amount: '250', due_date: '2026-07-01' }],
               volunteer_discount_enabled: false, scholarship_enabled: false, sibling_discount_enabled: false };
-            const mockInstalls = [
-              { label: 'Deposit', amount: 250, dueDate: '2026-06-01' },
-              { label: 'Final Payment', amount: 250, dueDate: '2026-07-01' },
-            ];
-            const makeItem = (customAnswers = {}, assignOverride = {}) => ({
-              app: { id: 'tmpl-1', name: mockBase.name, headshot_url: mockBase.headshot, custom_answers: customAnswers },
-              assignment: { id: 'tmpl-assign-1', character_id: null, reg_payment_notes: '', volunteer_discount_approved: false, scholarship_status: 'none', ...assignOverride },
+            const mockApp = (id, answers = {}) => ({
+              id,
+              name: samplePerformer.name,
+              headshot_url: samplePerformer.headshot,
+              email: 'alex.bennett@example.com',
+              phone: '(250) 555-0148',
+              custom_answers: {
+                'Emergency Contact Name': 'Morgan Bennett',
+                'Emergency Contact Phone': '(250) 555-0199',
+                'Upcoming Absences': 'May 28 — school concert',
+                ...answers,
+              },
             });
-            // State 1: Accepted only (form not submitted, no payment)
-            const s1 = renderRegistrationStatusCard(makeItem({}), mockSettings, []);
-            // State 2: Registered, deposit paid
-            const s2 = renderRegistrationStatusCard(
-              makeItem({ __bts_registration_agreement_signed: true }),
-              mockSettings,
-              [{ installment_index: 0, paid: true, paid_at: '2026-06-03T12:00:00Z' }]
-            );
-            // State 3: Fully paid
-            const s3 = renderRegistrationStatusCard(
-              makeItem({ __bts_registration_agreement_signed: true }),
-              mockSettings,
-              [{ installment_index: 0, paid: true, paid_at: '2026-06-03T12:00:00Z' }, { installment_index: 1, paid: true, paid_at: '2026-07-05T10:00:00Z' }]
-            );
+            const mockAssign = (id) => ({ id, character_id: null, reg_payment_notes: '', volunteer_discount_approved: false, scholarship_status: 'none' });
+            const s1 = renderRegistrationStatusCard({ app: mockApp('tmpl-app-1'), assignment: mockAssign('tmpl-sc-1') }, mockSettings, []);
+            const s2 = renderRegistrationStatusCard({ app: mockApp('tmpl-app-2', { __bts_registration_agreement_signed: true }), assignment: mockAssign('tmpl-sc-2') }, mockSettings, [{ installment_index: 0, paid: true, paid_at: '2026-06-03T12:00:00Z' }]);
+            const s3 = renderRegistrationStatusCard({ app: mockApp('tmpl-app-3', { __bts_registration_agreement_signed: true }), assignment: { ...mockAssign('tmpl-sc-3'), reg_payment_notes: 'Parent pickup after evening rehearsals.' } }, mockSettings, [{ installment_index: 0, paid: true, paid_at: '2026-06-03T12:00:00Z' }, { installment_index: 1, paid: true, paid_at: '2026-07-05T10:00:00Z' }]);
             return [
-              renderTemplateTestPreview({ title: 'Accepted', note: 'Cast accepted — registration form not yet submitted.', bodyHtml: s1 }),
+              renderTemplateTestPreview({ title: 'Accepted', note: 'Cast accepted — form not yet submitted.', bodyHtml: s1 }),
               renderTemplateTestPreview({ title: 'Registered · Deposit paid', note: 'Form signed, first instalment received.', bodyHtml: s2 }),
-              renderTemplateTestPreview({ title: 'Complete', note: 'All payments received — fully done.', bodyHtml: s3 }),
+              renderTemplateTestPreview({ title: 'Complete', note: 'All payments received.', bodyHtml: s3 }),
             ].join('');
           })()}</div>
         </div>
@@ -39032,11 +39036,36 @@ Thank you,
     const paidAmt = hasFee ? records.filter(r => r.paid).reduce((s, r) => s + (ef.installments[r.installment_index]?.amount || 0), 0) : 0;
     const regDone = !!registrationAgreementComplete(app);
 
-    // Progress bar
+    // Progress
     const payFraction = hasFee && ef.total > 0 ? Math.min(paidAmt / ef.total, 1) : (regDone ? 1 : 0);
     const pct = Math.round(50 + (regDone ? 25 : 0) + 25 * payFraction);
     const stageColor = pct >= 100 ? '#769e7b' : pct >= 75 ? '#572e88' : '#efab45';
     const stageLabel = pct >= 100 ? 'Complete' : pct >= 75 ? 'Registered' : 'Accepted';
+
+    // Balance
+    const balance = hasFee ? Math.max(0, ef.total - paidAmt) : 0;
+    const paymentStatusLabel = !hasFee ? 'No fee' :
+      (balance === 0 && paidAmt > 0) ? 'Paid in full' :
+      balance > 0 ? `Balance: ${registrationFormatPaymentAmount(balance, settings)}` : 'No payments yet';
+
+    // Flippable casting card — back shows contact + registration/payment status
+    const flipCard = renderInTheShowFlippableCardTemplate({
+      id: `rsc-flip-${esc(assignId)}`,
+      front: { name, role: character?.name || '', headshot_url: app.headshot_url || app.headshot || '' },
+      back: {
+        name,
+        role: character?.name || '',
+        contactName: name,
+        phone: app.phone || registrationAnswerValue(app, ['Phone', 'Phone Number', '__bts_registration_phone', 'Contact Phone']),
+        email: app.email || registrationAnswerValue(app, ['Email', 'Email Address', '__bts_registration_email']),
+        emergencyName: registrationAnswerValue(app, ['Emergency Contact Name', '__bts_registration_emergency_name', 'Emergency Name', 'Emergency Contact']),
+        emergencyPhone: registrationAnswerValue(app, ['Emergency Contact Phone', '__bts_registration_emergency_phone', 'Emergency Phone']),
+        absences: registrationAnswerValue(app, ['Upcoming Absences', 'Absences', '__bts_registration_absences', 'Date Conflicts Notes']),
+        notes: String(assignment.reg_payment_notes || ''),
+        registrationStatus: regDone ? 'Forms signed' : 'Form pending',
+        paymentStatus: paymentStatusLabel,
+      },
+    });
 
     // Instalments
     let instsHtml = '';
@@ -39048,8 +39077,8 @@ Thank you,
         const isPaid = !!rec?.paid;
         const paidAt = isPaid && rec?.paid_at ? `<span class="rsc-paid-at"> · ${rptFormatDate(rec.paid_at)}</span>` : '';
         return `<div class="rsc-inst" id="rsc-inst-${esc(assignId)}-${idx}">
-          <div class="rsc-inst-label">${esc(inst.label)}${inst.dueDate ? `<div style="font-size:0.6rem;font-weight:600;color:rgba(87,46,136,0.4);margin-top:1px;">Due ${rptFormatDate(inst.dueDate)}</div>` : ''}</div>
-          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:0.15rem;">
+          <div class="rsc-inst-label">${esc(inst.label)}${inst.dueDate ? `<div class="rsc-inst-due">Due ${rptFormatDate(inst.dueDate)}</div>` : ''}</div>
+          <div class="rsc-inst-right">
             <div class="rsc-inst-amount">${registrationFormatPaymentAmount(inst.amount, settings)}</div>
             ${isPaid
               ? `<button class="rsc-paid-chip" onclick="rptTogglePaid('${esc(assignId)}',${idx},true)" title="Click to mark unpaid">✓ Received${paidAt}</button>`
@@ -39060,24 +39089,13 @@ Thank you,
       }).join('')}</div>`;
     }
 
-    // Balance
-    const balance = hasFee ? Math.max(0, ef.total - paidAmt) : 0;
-    const balanceHtml = !hasFee ? '' :
-      (balance === 0 && paidAmt > 0) ? `<span class="rsc-balance-clear">✓ Paid in full</span>` :
-      balance > 0 ? `<span class="rsc-balance-due">Balance: ${registrationFormatPaymentAmount(balance, settings)}</span>` :
-      `<span class="rsc-balance-none">No payments yet</span>`;
-    const discountNote = ef.discountLabel ? `<div style="font-size:0.65rem;color:rgba(87,46,136,0.5);margin-bottom:0.15rem;">${esc(ef.discountLabel)}</div>` : '';
-
-    // Household button
-    const hhBtn = hasFee ? `<button class="rsc-hh-btn${household ? ' linked' : ''}" onclick="rptOpenHouseholdModal('${esc(assignId)}')">${household ? `⌂ ${esc(household.name)}` : '+ Household'}</button>` : '';
-
     // Volunteer discount
     let volHtml = '';
     if (settings.volunteer_discount_enabled) {
       const approved = !!assignment.volunteer_discount_approved;
       volHtml = `<div class="rsc-discount">
-        <div class="rsc-discount-label">Volunteer <span style="font-weight:600;color:rgba(87,46,136,0.38);">(${registrationFormatPaymentAmount(parseFloat(settings.volunteer_discount) || 0, settings)} off)</span></div>
-        <button class="registration-action rpt-approve-btn${approved ? ' approved' : ''}" style="font-size:0.63rem;padding:0.2em 0.5em;" onclick="rptToggleVolunteerApproved('${esc(assignId)}',${approved},this)">${approved ? '✓ Approved' : 'Approve'}</button>
+        <div class="rsc-discount-label">Volunteer discount</div>
+        <button class="rsc-approve-btn${approved ? ' approved' : ''}" onclick="rptToggleVolunteerApproved('${esc(assignId)}',${approved},this)">${approved ? '✓ Approved' : 'Approve'}</button>
       </div>`;
     }
 
@@ -39087,7 +39105,7 @@ Thank you,
       const status = String(assignment.scholarship_status || 'none');
       schHtml = `<div class="rsc-discount">
         <div class="rsc-discount-label">Scholarship</div>
-        <select class="rpt-scholarship-sel" style="font-size:0.66rem;" onchange="rptSetScholarshipStatus('${esc(assignId)}',this.value)">
+        <select class="rsc-scholarship-sel" onchange="rptSetScholarshipStatus('${esc(assignId)}',this.value)">
           <option value="none"${status==='none'?' selected':''}>None</option>
           <option value="requested"${status==='requested'?' selected':''}>Requested</option>
           <option value="approved"${status==='approved'?' selected':''}>Approved</option>
@@ -39096,8 +39114,12 @@ Thank you,
       </div>`;
     }
 
+    // Household button
+    const hhBtn = hasFee ? `<button class="rsc-hh-btn${household ? ' linked' : ''}" onclick="rptOpenHouseholdModal('${esc(assignId)}')">${household ? `⌂ ${esc(household.name)}` : '+ Household'}</button>` : '';
+    const discountNote = ef.discountLabel ? `<div class="rsc-discount-note">${esc(ef.discountLabel)}</div>` : '';
+
     return `<div class="rsc-card" id="rpt-row-${esc(assignId)}">
-      <div class="rsc-card-photo">${renderInTheShowCardFrontTemplate({ name, role: character?.name || '', headshot_url: app.headshot_url || app.headshot || '' })}</div>
+      <div class="rsc-card-photo">${flipCard}</div>
       <div class="rsc-body">
         <div class="rsc-progress">
           <div class="rsc-progress-track"><div class="rsc-progress-fill" style="width:${pct}%;background:${stageColor};"></div></div>
@@ -39107,7 +39129,14 @@ Thank you,
         ${volHtml}${schHtml}
         <div class="rsc-footer">
           ${discountNote}
-          <div class="rsc-action-row">${balanceHtml}${hhBtn}</div>
+          <div class="rsc-action-row">
+            <div class="rsc-balance-wrap">${!hasFee ? '' :
+              (balance === 0 && paidAmt > 0) ? `<span class="rsc-balance-clear">✓ Paid in full</span>` :
+              balance > 0 ? `<span class="rsc-balance-due">Balance: ${registrationFormatPaymentAmount(balance, settings)}</span>` :
+              `<span class="rsc-balance-none">No payments yet</span>`
+            }</div>
+            ${hhBtn}
+          </div>
           <input class="rsc-notes" placeholder="Notes…" value="${esc(String(assignment.reg_payment_notes || ''))}" onchange="rptSaveNotes('${esc(assignId)}',this.value)" />
         </div>
       </div>
