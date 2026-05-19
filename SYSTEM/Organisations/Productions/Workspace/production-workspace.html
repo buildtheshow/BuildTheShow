@@ -965,9 +965,10 @@
     /* ── Registration Status Card (rsc-) ── */
     .rsc-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(360px,1fr)); gap:1.25rem; margin-top:0.75rem; }
     .rsc-card { background:#fff; border-radius:12px; box-shadow:0 6px 28px rgba(26,21,48,0.16), 0 1px 4px rgba(26,21,48,0.07); overflow:hidden; display:flex; flex-direction:column; }
-    .rsc-card-photo { overflow:hidden; flex-shrink:0; padding:0.75rem 0.75rem 0; background:#f4f1f9; }
-    .rsc-card-photo .casting-card { border-radius:8px; box-shadow:0 4px 16px rgba(26,21,48,0.22); cursor:default; display:block; }
+    .rsc-card-photo { overflow:hidden; flex-shrink:0; }
+    .rsc-card-photo .casting-card { border-radius:0; box-shadow:none; cursor:default; display:block; }
     .rsc-card-photo .inroom-flip { width:100%; }
+    .rsc-card-photo .inroom-flip-inner { min-height:0; }
     .rsc-card-photo .in-show-flip::before,
     .rsc-card-photo .inroom-flip::before { display:none !important; }
     .rsc-body { padding:0.8rem; display:flex; flex-direction:column; flex:1; }
@@ -981,7 +982,8 @@
     .rsc-info-chip { display:inline-flex; align-items:center; gap:0.2em; font-size:0.65rem; font-weight:800; padding:0.18em 0.55em; border-radius:5px; white-space:nowrap; cursor:default; }
     .rsc-info-chip.ok   { background:rgba(118,158,123,0.15); color:#4a7a50; }
     .rsc-info-chip.warn { background:rgba(239,171,69,0.18);  color:#8a5f10; }
-    .rsc-info-chip.flag { background:rgba(78,106,170,0.14);  color:#2d4f8a; cursor:pointer; }
+    .rsc-info-chip.flag { background:rgba(78,106,170,0.14); color:#2d4f8a; cursor:pointer; border:none; font-family:var(--bts-font); }
+    .rsc-info-chip.flag:hover { background:rgba(78,106,170,0.26); }
     .rsc-info-chip.muted { background:rgba(87,46,136,0.07); color:rgba(87,46,136,0.42); }
     .rsc-no-fee { font-size:0.72rem; color:rgba(87,46,136,0.42); padding:0.3rem 0 0.1rem; }
     .rsc-insts { display:flex; flex-direction:column; }
@@ -25551,7 +25553,8 @@
             };
             const mockSettings = { mode: 'split', fee: '500', currency: 'CAD',
               split_installments: [{ amount: '250', due_date: '2026-06-01' }, { amount: '250', due_date: '2026-07-01' }],
-              volunteer_discount_enabled: false, scholarship_enabled: false, sibling_discount_enabled: false };
+              volunteer_discount_enabled: true, volunteer_discount: '50', volunteer_hours: '10',
+              scholarship_enabled: true, sibling_discount_enabled: false };
             const mockApp = (id, answers = {}) => ({
               id,
               name: kh.name,
@@ -25565,7 +25568,7 @@
                 ...answers,
               },
             });
-            const mockAssign = (id, overrides = {}) => ({ id, character_id: null, character_name: 'Tracy Lord', reg_payment_notes: '', volunteer_discount_approved: false, scholarship_status: 'none', ...overrides });
+            const mockAssign = (id, overrides = {}) => ({ id, character_id: null, character_name: 'Glinda', reg_payment_notes: '', volunteer_discount_approved: false, scholarship_status: 'none', ...overrides });
             const s1 = renderRegistrationStatusCard({ app: mockApp('tmpl-kh-1', { 'Accessibility and accommodation needs': 'Requires seating near the aisle for quick exits due to a knee condition.' }), assignment: mockAssign('tmpl-sc-1') }, mockSettings, []);
             const s2 = renderRegistrationStatusCard({ app: mockApp('tmpl-kh-2', { 'cast_agreement_signed': true }), assignment: mockAssign('tmpl-sc-2') }, mockSettings, [{ installment_index: 0, paid: true, paid_at: '2026-06-03T12:00:00Z' }]);
             const s3 = renderRegistrationStatusCard({ app: mockApp('tmpl-kh-3', { __bts_registration_agreement_signed: true }), assignment: mockAssign('tmpl-sc-3', { reg_payment_notes: 'Carries inhaler. Personal pickup after evening rehearsals.' }) }, mockSettings, [{ installment_index: 0, paid: true, paid_at: '2026-06-03T12:00:00Z' }, { installment_index: 1, paid: true, paid_at: '2026-07-05T10:00:00Z' }]);
@@ -39061,7 +39064,7 @@ Thank you,
     // Accessibility
     const accessText = registrationAnswerValue(app, ['Accessibility and accommodation needs', 'Accessibility', '__bts_registration_accessibility']).trim();
     const accessHtml = accessText
-      ? `<span class="rsc-info-chip flag" title="${esc(accessText)}">Has needs ℹ</span>`
+      ? `<button class="rsc-info-chip flag" onclick="rscShowAccessibilityNote(${JSON.stringify(esc(name))},${JSON.stringify(esc(accessText))})">Has needs — View</button>`
       : `<span class="rsc-info-chip muted">None</span>`;
 
     // Agreements & Consent
@@ -39398,6 +39401,23 @@ Thank you,
     temp.innerHTML = rptRenderHouseholdsSection();
     const newCard = temp.firstElementChild;
     if (newCard) card.replaceWith(newCard);
+  }
+
+  function rscShowAccessibilityNote(name, text) {
+    const existing = document.getElementById('rsc-access-modal');
+    if (existing) existing.remove();
+    const modal = document.createElement('div');
+    modal.id = 'rsc-access-modal';
+    modal.className = 'rpt-household-modal';
+    modal.innerHTML = `<div class="rpt-household-modal-box" style="max-width:380px;">
+      <div class="rpt-household-modal-title">Accessibility — ${name}</div>
+      <div style="font-size:0.85rem;line-height:1.6;color:#1a1530;white-space:pre-wrap;">${text}</div>
+      <div class="rpt-household-modal-actions">
+        <button class="rpt-modal-save-btn" onclick="document.getElementById('rsc-access-modal')?.remove()">Close</button>
+      </div>
+    </div>`;
+    modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+    document.body.appendChild(modal);
   }
 
   function rptToggleHouseholdsPanel() {
