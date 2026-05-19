@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Registration | Build The Show</title>
+  <style>
+    @import url("https://fonts.googleapis.com/css2?family=Alex+Brush&display=swap");
+    :root {
+      --purple: #572e88;
+      --purple-dark: #1a1530;
+      --gold: #efab45;
+      --green: #769e7b;
+      --ink: #1a1530;
+      --muted: #6a5a80;
+      --soft: #9a90b0;
+      --line: rgba(87,46,136,0.12);
+      --bg: #efefef;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; }
+    body {
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+    .loading-shell {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 1rem;
+      padding: 2rem;
+      text-align: center;
+    }
+    .loading-logo {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      background: var(--purple);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+      font-size: 1.4rem;
+      font-weight: 900;
+    }
+    .loading-title {
+      font-size: 1rem;
+      font-weight: 700;
+      color: var(--purple);
+    }
+    .loading-copy {
+      font-size: 0.82rem;
+      color: var(--muted);
+      max-width: 280px;
+      line-height: 1.5;
+    }
+    .loading-spinner {
+      width: 24px;
+      height: 24px;
+      border: 2.5px solid rgba(87,46,136,0.15);
+      border-top-color: var(--purple);
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .error-shell {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.85rem;
+      padding: 2rem;
+      text-align: center;
+      max-width: 360px;
+    }
+    .error-icon { font-size: 2rem; }
+    .error-title { font-size: 1rem; font-weight: 700; color: var(--ink); }
+    .error-copy { font-size: 0.82rem; color: var(--muted); line-height: 1.5; }
+  </style>
+</head>
+<body>
+
+  <div class="loading-shell" id="loading-shell">
+    <div class="loading-logo">B</div>
+    <div class="loading-title">Loading your registration</div>
+    <div class="loading-spinner"></div>
+    <div class="loading-copy" id="loading-prod-name"></div>
+  </div>
+
+  <div class="error-shell" id="error-shell">
+    <div class="error-icon">🎭</div>
+    <div class="error-title" id="error-title">Link not found</div>
+    <div class="error-copy" id="error-copy">This registration link doesn't match any active production. It may have expired or been removed. Please contact your production team for a new link.</div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <script src="/SHARED/Components/auto-save.js?v=5"></script>
+  <script>
+
+    // ── Parse URL segments ──────────────────────────────────────────────────
+    // URL: /:org/:show/registration/:code
+    const _pathParts = window.location.pathname.replace(/^\//, '').split('/');
+    const _orgSlug   = _pathParts[0] || '';
+    const _showSlug  = _pathParts[1] || '';
+    const _regCode   = _pathParts[3] || new URLSearchParams(window.location.search).get('code') || '';
+
+    // ── Supabase ────────────────────────────────────────────────────────────
+    const SUPABASE_URL = 'https://cpvtmxnqnlzkmrgivvoe.supabase.co';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNwdnRteG5xbmx6a21yZ2l2dm9lIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MDI1OTgxNDQsImV4cCI6MjAxODE3NDE0NH0.f__kDFSGY2BFbhGnRbBjJCJc7RlGMmyKPYdHUhklOAk';
+    const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    window.sb = sb;
+
+    function showError(title, copy) {
+      document.getElementById('loading-shell').style.display = 'none';
+      const shell = document.getElementById('error-shell');
+      shell.style.display = 'flex';
+      if (title) document.getElementById('error-title').textContent = title;
+      if (copy)  document.getElementById('error-copy').textContent  = copy;
+    }
+
+    async function boot() {
+      if (!_regCode) {
+        showError('No registration code', 'This link is missing a registration code. Please use the link from your invitation email.');
+        return;
+      }
+
+      // Look up cast offer by code to get production + performer context
+      const { data: offer, error: offerErr } = await sb
+        .from('cast_offers')
+        .select('id, production_id, applicant_id, token, code')
+        .or(`token.eq.${_regCode},code.eq.${_regCode}`)
+        .maybeSingle();
+
+      if (offerErr || !offer) {
+        showError('Link not found', 'This registration link does not match any active production. It may have expired or been removed. Please contact your production team for a new link.');
+        return;
+      }
+
+      // Load production
+      const { data: prod, error: prodErr } = await sb
+        .from('productions')
+        .select('id, title, slug, registration_settings, poster_url, start_date, end_date, venue')
+        .eq('id', offer.production_id)
+        .maybeSingle();
+
+      if (prodErr || !prod) {
+        showError('Production not found', 'Unable to load this production. Please contact your production team.');
+        return;
+      }
+
+      const loadingCopy = document.getElementById('loading-prod-name');
+      if (loadingCopy) loadingCopy.textContent = prod.title || '';
+
+      // TODO: render full registration form here using the production's
+      // registration_settings and the performer's prefill data from applicant_id.
+      // This page is a stub — full rendering logic to be ported from
+      // production-workspace.html loadRegistrationPublicView().
+
+      // Temporary: show the production name and a coming-soon state
+      document.getElementById('loading-shell').innerHTML = `
+        <div style="display:flex;flex-direction:column;align-items:center;gap:0.75rem;padding:2rem;text-align:center;">
+          <div style="font-size:0.72rem;font-weight:800;text-transform:uppercase;letter-spacing:0.1em;color:rgba(87,46,136,0.55);">Registration</div>
+          <div style="font-size:1.35rem;font-weight:900;color:#1a1530;">${prod.title || 'Production'}</div>
+          <div style="font-size:0.85rem;color:#6a5a80;max-width:300px;line-height:1.5;">Your registration form is being set up. Check back soon or contact the production team.</div>
+        </div>`;
+    }
+
+    boot().catch(err => {
+      console.error('[BTS] registration boot failed', err);
+      showError('Something went wrong', 'Unable to load the registration form. Please try again or contact your production team.');
+    });
+
+  </script>
+</body>
+</html>
