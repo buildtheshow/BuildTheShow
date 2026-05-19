@@ -630,6 +630,20 @@ The card uses `container-type: inline-size` so `cqw` units resolve against the t
 4. Any form input or select associated with the setting lives in the **body zone**.
 5. Toggle size: `8cqw × 8cqw`. It must fit within the `10cqw` header without a margin-top offset.
 
+### Registration Status Payment Tiles
+
+Payment tiles inside registration status cards use the brand tile visual language, but their state colours must follow payment meaning exactly.
+
+1. Paid instalment tiles are green.
+2. Unpaid instalment tiles are gold when they are not overdue.
+3. Unpaid instalment tiles are red only when their own due date has passed.
+4. Paid tiles should feel pressed into the card. Unpaid tiles should feel lifted from the page, but must not visually jump upward.
+5. The full balance tile is green when paid in full.
+6. The full balance tile is gold when money is still owing and the balance deadline has not passed.
+7. The full balance tile is red only when money is still owing and the balance deadline has passed.
+8. The balance deadline is the explicit fee due date when one is set. If there is no explicit fee due date, use the last instalment due date.
+9. Household, volunteer discount, scholarship, and other reductions do not live inside the balance tile. They belong in their own discounts or adjustments area.
+
 ### What Must Not Happen
 
 1. Do not build brand tile HTML outside the shared template function.
