@@ -964,7 +964,8 @@
     .rpt-modal-cancel-btn { font-size:0.8rem; font-weight:700; padding:0.5em 1.1em; border-radius:8px; background:transparent; color:rgba(87,46,136,0.6); border:1.5px solid rgba(87,46,136,0.2); cursor:pointer; font-family:var(--bts-font); }
     /* ── Registration Status Card (rsc-) ── */
     .rsc-grid { display:grid; grid-template-columns:repeat(auto-fill,min(700px,100%)); gap:1.25rem; margin-top:0.75rem; }
-    .rsc-card { background:#fff; border-radius:12px; box-shadow:0 6px 28px rgba(26,21,48,0.16), 0 1px 4px rgba(26,21,48,0.07); overflow:hidden; display:flex; flex-direction:column; }
+    .rsc-card { background:#fff; border-radius:12px; box-shadow:0 6px 28px rgba(26,21,48,0.16), 0 1px 4px rgba(26,21,48,0.07); overflow:hidden; display:flex; flex-direction:column; position:relative; }
+    .rsc-household-ribbon { position:absolute; top:18px; right:-28px; width:110px; background:#476aaa; color:#fff; font-size:0.58rem; font-weight:900; text-transform:uppercase; letter-spacing:0.07em; text-align:center; padding:0.3em 0; transform:rotate(35deg); box-shadow:0 2px 6px rgba(71,106,170,0.35); pointer-events:none; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; z-index:10; }
     .rsc-card-photo { overflow:hidden; flex-shrink:0; }
     .rsc-card-photo .casting-card { border-radius:0; box-shadow:none; cursor:default; display:block; }
     .rsc-card-photo .inroom-flip { width:100%; }
@@ -1007,6 +1008,7 @@
     .rsc-paid-at { font-size:0.58rem; opacity:0.8; }
     .rsc-discount { display:flex; align-items:center; gap:0.45rem; padding:0.28rem 0; border-top:1px solid rgba(87,46,136,0.07); flex-wrap:wrap; }
     .rsc-discount-label { font-size:0.67rem; color:rgba(87,46,136,0.6); font-weight:700; flex:1; }
+    .rsc-adjustment-status { font-size:0.67rem; font-weight:800; color:rgba(87,46,136,0.48); min-width:0; max-width:45%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     .rsc-footer { border-top:1px solid rgba(87,46,136,0.1); margin-top:auto; padding-top:0.55rem; margin-top:0.55rem; display:flex; flex-direction:column; gap:0.3rem; }
     .rsc-balance-due { font-size:0.7rem; font-weight:950; color:#d1523d; }
     .rsc-balance-clear { font-size:0.7rem; font-weight:950; color:#769e7b; }
@@ -39237,18 +39239,24 @@ Thank you,
       const balanceTileBg = isPaidFull ? '#769e7b' : hasBalance ? '#d1523d' : '#476aaa';
       const balanceText = isPaidFull ? 'Paid' : hasBalance ? rscFmtTileAmt(balance, settings) : '—';
       const balanceBodyText = isPaidFull ? 'In full' : hasBalance ? 'Balance due' : 'No pmts yet';
-      const hhText = household ? `⌂ ${household.name.length > 8 ? household.name.slice(0,7) + '…' : household.name}` : '+ HH';
       const balanceTile = `<div class="template-brand-card template-brand-card--square template-brand-card--containers" style="--brand-tile-bg:${balanceTileBg};">
         <div class="template-brand-card-inner"><div class="template-brand-tile-content">
           <div class="template-brand-tile-container template-brand-tile-container--header"><div class="template-brand-tile-kicker">Balance</div></div>
           <div class="template-brand-tile-container template-brand-tile-container--title"><div class="template-brand-tile-title">${balanceText}</div></div>
           <div class="template-brand-tile-container template-brand-tile-container--body"><div class="template-brand-tile-body">${esc(balanceBodyText)}</div></div>
-          <div class="template-brand-tile-container template-brand-tile-container--footer"><button class="template-brand-tile-button" onclick="rptOpenHouseholdModal('${esc(assignId)}')">${esc(hhText)}</button></div>
+          <div class="template-brand-tile-container template-brand-tile-container--footer"></div>
         </div></div>
       </div>`;
 
       instsHtml = `<div class="rsc-inst-tiles">${instTiles}${balanceTile}</div>`;
     }
+
+    // Household and fee adjustments
+    const householdHtml = `<div class="rsc-discount">
+      <div class="rsc-discount-label">Household</div>
+      <span class="rsc-adjustment-status">${esc(household ? household.name : 'Not linked')}</span>
+      <button class="rsc-approve-btn" onclick="rptOpenHouseholdModal('${esc(assignId)}')">${household ? 'Manage' : 'Add'}</button>
+    </div>`;
 
     // Volunteer discount
     let volHtml = '';
@@ -39312,8 +39320,9 @@ Thank you,
 
     const discountNote = ef.discountLabel ? `<div class="rsc-discount-note">${esc(ef.discountLabel)}</div>` : '';
 
+    const householdRibbon = household ? `<div class="rsc-household-ribbon">${esc(household.name)}</div>` : '';
     return `<div class="rsc-card" id="rpt-row-${esc(assignId)}">
-      <div class="rsc-card-photo">${flipCard}</div>
+      ${householdRibbon}<div class="rsc-card-photo">${flipCard}</div>
       <div class="rsc-body">
         <div class="rsc-progress">
           <div class="rsc-progress-track"><div class="rsc-progress-fill" style="width:${pct}%;background:${stageColor};"></div></div>
@@ -39322,7 +39331,7 @@ Thank you,
         </div>
         ${infoHtml}
         ${instsHtml}
-        ${volHtml}${schHtml}
+        ${householdHtml}${volHtml}${schHtml}
         <div class="rsc-footer">
           ${discountNote}
           <input class="rsc-notes" placeholder="Notes…" value="${esc(String(assignment.reg_payment_notes || ''))}" onchange="rptSaveNotes('${esc(assignId)}',this.value)" />
