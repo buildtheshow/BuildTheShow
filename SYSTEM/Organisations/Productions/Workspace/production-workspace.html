@@ -1043,9 +1043,13 @@
     .rsc-paid-chip { display:inline-flex; align-items:center; gap:0.2em; background:#769e7b; color:#fff; font-size:0.64rem; font-weight:900; padding:0.22em 0.55em; border-radius:6px; cursor:pointer; border:none; font-family:var(--bts-font); white-space:nowrap; transition:background 0.15s; line-height:1.3; }
     .rsc-paid-chip:hover { background:#d1523d; }
     .rsc-paid-at { font-size:0.58rem; opacity:0.8; }
-    .rsc-discount { display:flex; align-items:center; gap:0.45rem; padding:0.28rem 0; border-top:1px solid rgba(87,46,136,0.07); flex-wrap:wrap; }
-    .rsc-discount-label { font-size:0.67rem; color:rgba(87,46,136,0.6); font-weight:700; flex:1; }
-    .rsc-adjustment-status { font-size:0.67rem; font-weight:800; color:rgba(87,46,136,0.48); min-width:0; max-width:45%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .rsc-adjustment-tiles { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:0.45rem; margin-top:0.65rem; }
+    .rsc-discount { display:grid; grid-template-rows:auto 1fr auto; gap:0.28rem; min-width:0; min-height:5rem; padding:0.55rem 0.58rem; border:1.5px solid rgba(87,46,136,0.12); border-radius:10px; background:#fbf9ff; box-shadow:0 5px 12px rgba(26,21,48,0.06); }
+    .rsc-discount-label { font-size:0.58rem; color:rgba(87,46,136,0.52); font-weight:950; text-transform:uppercase; letter-spacing:0.08em; line-height:1.05; }
+    .rsc-adjustment-status { align-self:center; font-size:0.78rem; font-weight:950; color:#1a1530; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .rsc-adjustment-status.ok { color:#4a7a50; }
+    .rsc-adjustment-status.warn { color:#8a5f10; }
+    .rsc-adjustment-status.muted { color:rgba(87,46,136,0.38); }
     .rsc-footer { border-top:1px solid rgba(87,46,136,0.1); margin-top:auto; padding-top:0.55rem; margin-top:0.55rem; display:flex; flex-direction:column; gap:0.3rem; }
     .rsc-balance-due { font-size:0.7rem; font-weight:950; color:#d1523d; }
     .rsc-balance-clear { font-size:0.7rem; font-weight:950; color:#769e7b; }
@@ -1077,6 +1081,7 @@
     .rsc-modal-danger-btn { font-size:0.8rem; font-weight:700; padding:0.5em 1.1em; border-radius:8px; background:rgba(209,82,61,0.1); color:#d1523d; border:1.5px solid rgba(209,82,61,0.25); cursor:pointer; font-family:var(--bts-font); }
     .rsc-modal-danger-btn:hover { background:rgba(209,82,61,0.2); }
     .rsc-approve-btn { font-size:0.64rem; padding:0.22em 0.55em; border-radius:6px; border:1.5px solid rgba(87,46,136,0.25); background:transparent; color:rgba(87,46,136,0.6); cursor:pointer; font-weight:800; font-family:var(--bts-font); white-space:nowrap; line-height:1.3; transition:background 0.15s,border-color 0.15s; }
+    .rsc-adjustment-tiles .rsc-approve-btn { width:100%; justify-content:center; background:#ffffff; }
     .rsc-approve-btn:hover { border-color:#572e88; color:#572e88; }
     .rsc-approve-btn.approved { background:#769e7b; border-color:#769e7b; color:#fff; }
     .rsc-approve-btn.approved:hover { background:#572e88; border-color:#572e88; }
@@ -39298,7 +39303,7 @@ Thank you,
     // Household and fee adjustments
     const householdHtml = `<div class="rsc-discount">
       <div class="rsc-discount-label">Household</div>
-      <span class="rsc-adjustment-status">${esc(household ? household.name : 'Not linked')}</span>
+      <span class="rsc-adjustment-status ${household ? 'ok' : 'muted'}">${esc(household ? household.name : 'Not linked')}</span>
       <button class="rsc-approve-btn" onclick="rptOpenHouseholdModal('${esc(assignId)}')">${household ? 'Manage' : 'Add'}</button>
     </div>`;
 
@@ -39307,9 +39312,10 @@ Thank you,
     if (settings.volunteer_discount_enabled) {
       const approved = !!assignment.volunteer_discount_approved;
       const volRequested = registrationAnswerTruthy(app, ['pf_volunteer_discount', 'volunteer_discount_interested', '__bts_registration_volunteer_discount_requested']);
-      const badge = volRequested ? ' <span style="font-size:0.6rem;font-weight:800;color:#4a7a50;background:rgba(118,158,123,0.15);padding:0.1em 0.4em;border-radius:4px;">Interested</span>' : '';
+      const volunteerStatus = approved ? 'Approved' : volRequested ? 'Interested' : 'Available';
       volHtml = `<div class="rsc-discount">
-        <div class="rsc-discount-label">Volunteer discount${badge}</div>
+        <div class="rsc-discount-label">Volunteer discount</div>
+        <span class="rsc-adjustment-status ${approved ? 'ok' : volRequested ? 'warn' : 'muted'}">${esc(volunteerStatus)}</span>
         <button class="rsc-approve-btn${approved ? ' approved' : ''}" onclick="rscOpenVolunteerModal(${JSON.stringify(assignId)})">${approved ? '✓ Approved' : 'Manage'}</button>
       </div>`;
     }
@@ -39319,10 +39325,10 @@ Thank you,
     if (settings.scholarship_enabled) {
       const status = String(assignment.scholarship_status || 'none');
       const schLabel = { none: 'None', requested: 'Requested', approved: 'Approved', declined: 'Declined' }[status] || status;
-      const schColor = { approved: '#4a7a50', requested: '#8a5f10', declined: '#d1523d' }[status] || 'rgba(87,46,136,0.4)';
+      const schClass = status === 'approved' ? 'ok' : status === 'requested' ? 'warn' : 'muted';
       schHtml = `<div class="rsc-discount">
         <div class="rsc-discount-label">Scholarship</div>
-        <span style="font-size:0.67rem;font-weight:800;color:${schColor};">${esc(schLabel)}</span>
+        <span class="rsc-adjustment-status ${schClass}">${esc(schLabel)}</span>
         <button class="rsc-approve-btn" onclick="rscOpenScholarshipModal(${JSON.stringify(assignId)})">Manage</button>
       </div>`;
     }
@@ -39374,7 +39380,7 @@ Thank you,
         </div>
         ${infoHtml}
         ${instsHtml}
-        ${householdHtml}${volHtml}${schHtml}
+        <div class="rsc-adjustment-tiles">${householdHtml}${volHtml}${schHtml}</div>
         <div class="rsc-footer">
           ${discountNote}
           <input class="rsc-notes" placeholder="Notes…" value="${esc(String(assignment.reg_payment_notes || ''))}" onchange="rptSaveNotes('${esc(assignId)}',this.value)" />
