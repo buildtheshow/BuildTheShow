@@ -1799,6 +1799,13 @@
     .rpf-input:not(.rpf-prefilled):not(:focus) { border-color:#ddd8e8; }
     .rpf-age-note { margin-top:0.38rem; font-size:0.72rem; font-weight:800; color:#572e88; }
     textarea.rpf-input { resize:vertical; min-height:80px; }
+    .rpf-medical-reveal { border:1px solid rgba(71,106,170,0.14); border-radius:10px; background:#ffffff; padding:0.72rem 0.85rem; }
+    .rpf-medical-toggle { display:flex; align-items:flex-start; gap:0.58rem; cursor:pointer; margin:0; font-size:0.82rem; font-weight:850; color:#1a1530; line-height:1.35; }
+    .rpf-medical-toggle input { flex:0 0 auto; margin-top:0.12rem; width:1rem; height:1rem; accent-color:#476aaa; cursor:pointer; }
+    .rpf-medical-details { display:none; margin-top:0.65rem; }
+    .rpf-medical-reveal:has(.rpf-medical-toggle input:checked) .rpf-medical-details { display:block; }
+    .rpf-medical-details .rpf-label { color:#364c7d; }
+    .rpf-support-reveal { border-color:rgba(71,106,170,0.14); }
     .rpf-agree-row { display:flex; align-items:flex-start; gap:0.55rem; font-size:0.8rem; color:#000000; line-height:1.45; cursor:pointer; margin-top:0.4rem; }
     .rpf-agree-row input { flex-shrink:0; margin-top:0.15rem; accent-color:#572e88; cursor:pointer; }
     .rpf-form-section-divider { margin:1.55rem 0 0.7rem; padding-bottom:0.45rem; border-bottom:1.5px solid rgba(87,46,136,0.12); font-size:1.02rem; font-weight:950; text-transform:none; letter-spacing:0; color:#1a1530; text-align:center; }
@@ -2106,13 +2113,13 @@
       border-bottom:2px solid rgba(118,158,123,0.24);
     }
     .rpf-pf-instructions .rpf-pf-text {
-      font-size:1.12rem;
-      line-height:1.7;
-      color:#1f2e22;
-      font-weight:650;
+      font-size:0.9rem;
+      line-height:1.65;
+      color:#333;
+      font-weight:500;
     }
     .rpf-pf-instructions .rpf-pf-text strong {
-      font-size:1.18em;
+      font-size:1.22em;
       font-weight:950;
       color:#1a1530;
     }
@@ -34724,7 +34731,13 @@ Thank you,
     const s = registrationCurrentPaymentSettings();
     const currSym = { CAD: '$', USD: '$', GBP: '£' }[s.currency || 'CAD'] || '$';
     const currCode = s.currency && s.currency !== 'CAD' ? ` ${s.currency}` : '';
-    const fmtAmt = v => v ? `${currSym}${parseFloat(v).toFixed(2)}${currCode}` : null;
+    const fmtAmt = v => {
+      if (!v) return null;
+      const n = parseFloat(v);
+      if (!Number.isFinite(n)) return null;
+      const amount = Number.isInteger(n) ? String(n) : n.toFixed(2);
+      return `${currSym}${amount}${currCode}`;
+    };
     const fmtDate = d => d ? new Date(d + 'T00:00:00').toLocaleDateString('en-CA', { month: 'long', day: 'numeric', year: 'numeric' }) : null;
 
     const row = (label, value, note = '') => `<div class="rpf-pf-row">
@@ -34758,7 +34771,7 @@ Thank you,
           inst.due_date ? `Due ${fmtDate(inst.due_date)}` : ''
         )).join('');
         const total = insts.reduce((sum, inst) => sum + (parseFloat(inst.amount) || 0), 0);
-        if (total > 0) feeTotal = `<div class="rpf-pf-total-row"><span>Total</span><span>${currSym}${total.toFixed(2)}${currCode}</span></div>`;
+        if (total > 0) feeTotal = `<div class="rpf-pf-total-row"><span>Total</span><span>${fmtAmt(String(total))}</span></div>`;
         if (s.split_allow_upfront) feeRows += `<div class="rpf-pf-intro-note">Families may also pay the full amount upfront.</div>`;
       } else {
         feeRows = none('Payment amounts not set yet.');
@@ -37654,7 +37667,13 @@ Thank you,
 
     const currSym = { CAD: '$', USD: '$', GBP: '£' }[s.currency || 'CAD'] || '$';
     const currCode = s.currency && s.currency !== 'CAD' ? ` ${s.currency}` : '';
-    const fmtAmt = v => v ? `${currSym}${parseFloat(v).toFixed(2)}${currCode}` : null;
+    const fmtAmt = v => {
+      if (!v) return null;
+      const n = parseFloat(v);
+      if (!Number.isFinite(n)) return null;
+      const amount = Number.isInteger(n) ? String(n) : n.toFixed(2);
+      return `${currSym}${amount}${currCode}`;
+    };
     const fmtDate = d => d ? new Date(d + 'T00:00:00').toLocaleDateString('en-CA', { month: 'long', day: 'numeric', year: 'numeric' }) : null;
 
     const row = (label, value, note = '') => `<div class="rpf-pf-row">
@@ -37941,9 +37960,44 @@ Thank you,
     const minorAttr = isMinor ? ' data-rpf-minor="1" style="display:none"' : '';
     const guardAttr = isGuard ? ' data-rpf-guard="1" style="display:none"' : '';
     const wrapAttrs = soloAttr + minorAttr + guardAttr;
+    const medicalReveal = {
+      allergies: {
+        check: 'Does the performer have any allergies?',
+        details: 'Tell us about allergies, reactions, triggers, and what we should do if they happen.',
+      },
+      medications: {
+        check: 'Does the performer take any medication?',
+        details: 'Tell us what they take, when they take it, and anything the team should know.',
+      },
+      'medical conditions': {
+        check: 'Does the performer have any medical conditions?',
+        details: 'Tell us what the production team needs to know to keep them safe and supported.',
+      },
+    }[label.toLowerCase()];
+    const supportReveal = /accessibility|accommodation/i.test(label)
+      ? {
+          check: 'Does the performer need accessibility or accommodation support?',
+          details: 'Tell us what would help them participate fully.',
+        }
+      : null;
 
     let fieldHtml;
-    if (type === 'checkbox') {
+    if (medicalReveal || supportReveal) {
+      const reveal = medicalReveal || supportReveal;
+      const fieldName = label.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
+      fieldHtml = `<div class="rpf-form-group${pickupClass}"${wrapAttrs}>
+        <div class="rpf-medical-reveal${supportReveal ? ' rpf-support-reveal' : ''}">
+          <label class="rpf-medical-toggle">
+            <input type="checkbox" name="${esc(fieldName)}_has" />
+            <span>${esc(reveal.check)}${req}</span>
+          </label>
+          <div class="rpf-medical-details">
+            <label class="rpf-label">${esc(reveal.details)}</label>
+            <textarea class="rpf-input" name="${esc(fieldName)}_details" rows="3" placeholder="Add details here..."></textarea>
+          </div>
+        </div>
+      </div>`;
+    } else if (type === 'checkbox') {
       fieldHtml = `<div class="rpf-form-group${pickupClass}"${wrapAttrs}>
         <label class="rpf-agree-row"><input type="checkbox" /><span>${esc(displayLabel)}${req}</span></label>
       </div>`;
