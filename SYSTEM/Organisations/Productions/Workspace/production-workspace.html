@@ -2080,6 +2080,18 @@
     .rpf-pf-sub-row-value { font-weight:700; color:#1a1530; text-align:right; }
     .rpf-pf-sub-note { font-size:0.68rem; font-weight:500; color:#7a6a95; margin-left:0.45rem; white-space:nowrap; }
     .rpf-pf-discount-head { font-size:0.83rem; font-weight:800; color:#1a1530; margin-bottom:0.28rem; }
+    .rpf-pf-help-copy { font-size:0.84rem; line-height:1.5; color:#5a4e6d; text-align:center; max-width:32rem; margin:0 auto 0.25rem; }
+    .rpf-pf-discount-list { display:flex; flex-direction:column; gap:0.72rem; }
+    .rpf-pf-discount-card { border:1px solid rgba(118,158,123,0.18); border-radius:12px; background:#ffffff; padding:0.9rem 1rem; box-shadow:0 8px 18px rgba(26,21,48,0.05); }
+    .rpf-pf-discount-check { display:flex; align-items:flex-start; gap:0.62rem; cursor:pointer; margin:0; }
+    .rpf-pf-discount-check input { flex:0 0 auto; margin-top:0.18rem; width:1rem; height:1rem; accent-color:#769e7b; cursor:pointer; }
+    .rpf-pf-discount-title { display:block; font-size:0.92rem; font-weight:950; color:#1a1530; line-height:1.2; }
+    .rpf-pf-discount-desc { display:block; font-size:0.8rem; color:#5a4e6d; line-height:1.45; margin-top:0.18rem; }
+    .rpf-pf-discount-facts { display:flex; flex-direction:column; gap:0.24rem; margin:0.72rem 0 0 1.62rem; padding:0.62rem 0 0; border-top:1px solid rgba(118,158,123,0.14); }
+    .rpf-pf-discount-fact { display:flex; justify-content:space-between; gap:0.7rem; font-size:0.78rem; line-height:1.35; }
+    .rpf-pf-discount-fact span:first-child { color:#7a6a95; }
+    .rpf-pf-discount-fact span:last-child { color:#1a1530; font-weight:800; text-align:right; }
+    .rpf-pf-discount-extra { margin:0.72rem 0 0 1.62rem; }
     .rpf-pf-total-row { display:flex; justify-content:space-between; align-items:baseline; gap:0.5rem; padding-top:0.45rem; border-top:2px solid rgba(87,46,136,0.12); font-size:0.88rem; font-weight:900; color:#1a1530; margin-top:0.2rem; }
     .rpf-pf-method-list { display:flex; flex-direction:column; gap:0.3rem; padding-top:0.1rem; }
     .rpf-pf-method-chip { display:block; padding:0.25rem 0; border-bottom:1px solid rgba(87,46,136,0.08); background:none; border-radius:0; font-size:0.8rem; font-weight:700; color:#423949; }
@@ -37620,9 +37632,17 @@ Thank you,
       <span class="rpf-pf-row-label">${esc(label)}</span>
       <span class="rpf-pf-row-value">${esc(value)}${note ? `<span class="rpf-pf-sub-note">${esc(note)}</span>` : ''}</span>
     </div>`;
-    const subRow = (label, value, note = '') => `<div class="rpf-pf-sub-row">
-      <span class="rpf-pf-sub-row-label">${esc(label)}</span>
-      <span class="rpf-pf-sub-row-value">${esc(value)}${note ? `<span class="rpf-pf-sub-note">${esc(note)}</span>` : ''}</span>
+    const discountFact = (label, value) => value ? `<div class="rpf-pf-discount-fact"><span>${esc(label)}</span><span>${esc(value)}</span></div>` : '';
+    const discountCard = ({ name, title, description, facts = '', extra = '' }) => `<div class="rpf-pf-discount-card">
+      <label class="rpf-pf-discount-check">
+        <input type="checkbox" name="${esc(name)}" />
+        <span>
+          <span class="rpf-pf-discount-title">${esc(title)}</span>
+          <span class="rpf-pf-discount-desc">${esc(description)}</span>
+        </span>
+      </label>
+      ${facts ? `<div class="rpf-pf-discount-facts">${facts}</div>` : ''}
+      ${extra ? `<div class="rpf-pf-discount-extra">${extra}</div>` : ''}
     </div>`;
 
     // ── Production Fee Summary ──
@@ -37658,46 +37678,49 @@ Thank you,
     // ── Discounts & Financial Assistance ──
     const discountBlocks = [];
     if (s.sibling_discount_enabled) {
-      let rateRows = '';
-      if (s.sibling_first_child) rateRows += subRow('First child fee', fmtAmt(s.sibling_first_child));
-      if (s.sibling_additional)  rateRows += subRow('Additional child fee', fmtAmt(s.sibling_additional), s.sibling_by_household ? 'per household' : '');
-      discountBlocks.push(`<div>
-        <div class="rpf-pf-discount-head">Sibling / Family Discount</div>
-        <div class="rpf-pf-sub-note" style="font-size:0.78rem;color:#7a6a95;margin-bottom:0.4rem;">Available if you have more than one family member participating in this production.</div>
-        ${rateRows ? `<div class="rpf-pf-sub-block" style="margin-bottom:0.55rem;">${rateRows}</div>` : ''}
-        <label class="rpf-agree-row" style="margin-top:0.2rem;"><input type="checkbox" name="pf_sibling_discount" /><span style="font-size:0.8rem;">Our family has more than one participant registered for this production</span></label>
-      </div>`);
+      const facts = [
+        s.sibling_first_child ? discountFact('First participant', fmtAmt(s.sibling_first_child)) : '',
+        s.sibling_additional ? discountFact('Each additional participant', `${fmtAmt(s.sibling_additional)}${s.sibling_by_household ? ' per household' : ''}`) : '',
+      ].filter(Boolean).join('');
+      discountBlocks.push(discountCard({
+        name: 'pf_sibling_discount',
+        title: 'More than one performer in this show',
+        description: 'Choose this if you are registering siblings or multiple family members.',
+        facts,
+      }));
     }
     if (s.volunteer_discount_enabled) {
-      let rateRows = '';
-      if (s.volunteer_hours)    rateRows += subRow('Volunteer hours required', `${s.volunteer_hours} hrs`);
-      if (s.volunteer_discount) rateRows += subRow('Discount amount', `${fmtAmt(s.volunteer_discount)} off`);
-      discountBlocks.push(`<div>
-        <div class="rpf-pf-discount-head">Volunteer Discount</div>
-        <div class="rpf-pf-sub-note" style="font-size:0.78rem;color:#7a6a95;margin-bottom:0.4rem;">One discount per family. Available to families where a parent or guardian volunteers the required hours for this production.</div>
-        ${rateRows ? `<div class="rpf-pf-sub-block" style="margin-bottom:0.55rem;">${rateRows}</div>` : ''}
-        <label class="rpf-agree-row" style="margin-top:0.2rem;"><input type="checkbox" name="pf_volunteer_discount" /><span style="font-size:0.8rem;">A family member plans to volunteer for this production</span></label>
-        <div class="rpf-form-group" style="margin-top:0.55rem;">
-          <label class="rpf-label" style="font-size:0.75rem;">Volunteer's name</label>
-          <input type="text" class="rpf-input" name="pf_volunteer_name" placeholder="Full name of the family member who will volunteer..." />
-        </div>
-      </div>`);
+      const facts = [
+        s.volunteer_discount ? discountFact('Discount', `${fmtAmt(s.volunteer_discount)} off`) : '',
+        s.volunteer_hours ? discountFact('Volunteer time', `${s.volunteer_hours} hours`) : '',
+      ].filter(Boolean).join('');
+      discountBlocks.push(discountCard({
+        name: 'pf_volunteer_discount',
+        title: 'Someone in our family can volunteer',
+        description: 'Choose this if a parent or guardian plans to volunteer and wants the volunteer discount reviewed.',
+        facts,
+        extra: `<div class="rpf-form-group" style="margin:0;">
+          <label class="rpf-label" style="font-size:0.75rem;">Volunteer name</label>
+          <input type="text" class="rpf-input" name="pf_volunteer_name" placeholder="Who will volunteer?" />
+        </div>`,
+      }));
     }
     if (s.scholarship_enabled) {
       const note = s.scholarship_note ? esc(s.scholarship_note) : 'Contact the production team for details.';
-      discountBlocks.push(`<div>
-        <div class="rpf-pf-discount-head">Financial Assistance</div>
-        <div class="rpf-pf-sub-note" style="font-size:0.78rem;color:#7a6a95;margin-bottom:0.4rem;">${note}</div>
-        <label class="rpf-agree-row" style="margin-top:0.2rem;"><input type="checkbox" name="pf_scholarship_request" /><span style="font-size:0.8rem;">I would like to inquire about financial assistance for this production</span></label>
-      </div>`);
+      discountBlocks.push(discountCard({
+        name: 'pf_scholarship_request',
+        title: 'I need help with fees',
+        description: 'Choose this if you would like the production team to follow up about financial assistance.',
+        facts: `<div class="rpf-pf-discount-fact"><span>Next step</span><span>${note}</span></div>`,
+      }));
     }
 
     const discountsHtml = discountBlocks.length ? `
       <hr class="rpf-pf-divider" />
       <div class="rpf-pf-block">
-        <div class="rpf-pf-block-title">Discounts &amp; Financial Assistance</div>
-        <div class="rpf-pf-intro-note" style="margin-bottom:0.65rem;">These options are available to families who qualify — they are not applied automatically. Check any that apply to your family.</div>
-        <div style="display:flex;flex-direction:column;gap:1rem;">${discountBlocks.join('')}</div>
+        <div class="rpf-pf-block-title">Can this fee be reduced?</div>
+        <div class="rpf-pf-help-copy">Check anything that applies. We will review it before confirming the final amount.</div>
+        <div class="rpf-pf-discount-list">${discountBlocks.join('')}</div>
       </div>` : '';
 
     // ── Payment Instructions ──
