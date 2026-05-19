@@ -346,7 +346,7 @@ function ccardDragEnd(e) {
   e.target.classList.remove('dragging');
 }
 
-// ── Fit performer name to fill container height ───────────────
+// ── Fit performer name to fill the title box without clipping ──
 function fitCastingCardNames(root) {
   root = root || document;
   const els = Array.from(root.querySelectorAll('.casting-card-lower-name[data-fit-height]'));
@@ -359,7 +359,7 @@ function fitCastingCardNames(root) {
     for (let i = 0; i < 20; i++) {
       const mid = (lo + hi) / 2;
       el.style.fontSize = mid + 'px';
-      if (el.scrollWidth <= cW) { lo = mid; } else { hi = mid; }
+      if (el.scrollWidth <= cW + 1 && el.scrollHeight <= cH + 1) { lo = mid; } else { hi = mid; }
     }
     el.style.fontSize = lo + 'px';
   });
