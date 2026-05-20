@@ -5537,9 +5537,9 @@
         margin: auto;
       }
       .perf-close-btn {
-        position: fixed;
-        top: max(0.85rem, env(safe-area-inset-top));
-        right: max(0.85rem, env(safe-area-inset-right));
+        position: absolute;
+        top: -3.65rem;
+        right: 0;
         z-index: 3;
         width: 52px;
         height: 52px;
@@ -33571,6 +33571,16 @@ If you have any questions, don't hesitate to reach out.
     }).join('');
   }
 
+  function renderInRoomPlaceholderRoleChips(filterType = '', sortMode = 'type') {
+    const session = getCurrentInRoomSession();
+    const list = getInRoomRoleList(null, session, filterType, sortMode);
+    return list.map(char => `
+      <button type="button" class="inroom-role-chip" data-char-id="${esc(char.id)}" disabled aria-disabled="true">
+        <div class="inroom-role-chip-title">${esc(char.name || 'Unnamed')}</div>
+      </button>
+    `).join('');
+  }
+
   function getInRoomRoleChipStateClass(app, session, sessionId, charId, requestedSet = null) {
     const requestedRoles = requestedSet || new Set(applicantRequestedRoleList(app).map(role => {
       const char = findCharacterForRequestedRole(role);
@@ -33602,12 +33612,13 @@ If you have any questions, don't hesitate to reach out.
 
   function filterInRoomRoleChips() {
     const app = allApplicants.find(a => a.id === inRoomApplicantId);
-    if (!app) return;
     const filterType = document.getElementById('inroom-role-filter')?.value || '';
     const sortMode   = document.getElementById('inroom-role-sort')?.value  || 'type';
     const grid = document.getElementById('inroom-roles-grid');
     if (!grid) return;
-    grid.innerHTML = renderInRoomRoleChips(app, filterType, sortMode);
+    grid.innerHTML = app
+      ? renderInRoomRoleChips(app, filterType, sortMode)
+      : renderInRoomPlaceholderRoleChips(filterType, sortMode);
     requestAnimationFrame(() => requestAnimationFrame(() => fitInRoomRoleChipTitles(grid)));
   }
 
@@ -33851,33 +33862,11 @@ If you have any questions, don't hesitate to reach out.
     const chosenId = requestedIsValid ? requestedId : (groups.current?.id || groups.waiting[0]?.id || groups.past[0]?.id || null);
     inRoomApplicantId = chosenId;
     if (chosenId) saveWorkspaceNavState({ inRoomApplicantId: chosenId });
-    const app = allApplicants.find(a => a.id === chosenId) || null;
-
-    if (!app) {
-      const isSessionContext = containerId === 'aud-session-inroom-content';
-      el.innerHTML = `
-        <div class="inroom-shell">
-          ${!isSessionContext ? window.BTSAuditionTemplates.renderTemplateById('auditions.in-room.checked-in-strip', {
-            esc,
-            label: 'Checked In',
-            trayCards: ''
-          }) : ''}
-          ${window.BTSAuditionTemplates.renderTemplate(
-            { area: 'auditions', component: 'empty-state' },
-            { icon: '🎭', title: 'No performer selected', message: 'Check in a performer, then click their thumbnail to open them in the room.' }
-          )}
-        </div>`;
-      return;
-    }
-
     const checkedInApps = getInRoomCheckedInApps();
     const inRoomSession = getSelectedAuditionSession();
     const currentSession = getCurrentInRoomSession();
+    const app = allApplicants.find(a => a.id === chosenId) || null;
     if (syncCurrentRoomFromState(currentSession, containerId, openFn, requestedId)) return;
-    const currentRoomState = getRoomState(getAuditionRoomMeta(currentSession).roomKey);
-    if (!roomStateIsWaiting(currentRoomState) && app?.id && String(currentRoomState?.current_applicant_id || '') !== String(app.id)) {
-      persistAuditionRoomState(buildRoomStatePayload({ session: currentSession, app, status: 'in_progress' })).catch(() => {});
-    }
     const inRoomColorSet = getTeamNoteColorSet(teamAccessMode ? teamAccessMember?.note_color : null);
     const inRoomThemeOpen = teamAccessMode
       ? `<div class="team-inroom-theme" style="--team-inroom-base:${esc(inRoomColorSet.base)};--team-inroom-dark:${esc(inRoomColorSet.dark)};--team-inroom-light:${esc(inRoomColorSet.light)};">`
@@ -33885,11 +33874,54 @@ If you have any questions, don't hesitate to reach out.
     const inRoomThemeClose = teamAccessMode ? `</div>` : '';
     const usesGeneralInRoomLayout = !currentSession?.type || currentSession.type === 'audition' || currentSession.type === 'callback';
     const isGeneralAuditionInRoom = usesGeneralInRoomLayout && currentSession?.type !== 'callback';
+    const trayCards = checkedInApps.map(a => inRoomThumbHtml(a, openFn, inRoomSession)).join('');
+    const roleTypeOptions = [...new Set(characters.map(c => c.role_type).filter(Boolean))].sort();
+    if (!app) {
+      const noSelectionScoreHtml = currentSession?.type === 'callback'
+        ? `<div class="inroom-considered-card inroom-callbacks-card">
+            <div class="inroom-roles-title" style="text-align:center;">Called Back For</div>
+            <div class="inroom-considered-list"><div class="inroom-considered-empty">No performer selected yet.</div></div>
+           </div>`
+        : `<div class="inroom-score-card">
+            <div class="inroom-roles-title" style="text-align:center;">Impressions</div>
+            <div class="inroom-considered-empty">Select a checked-in performer to start scoring.</div>
+           </div>`;
+      const noSelectionNotesHtml = `<div class="inroom-considered-empty" style="min-height:9rem;display:flex;align-items:center;justify-content:center;text-align:center;">No performer selected yet.</div>`;
+      const noSelectionCardHtml = `<div class="inroom-back-empty" style="min-height:100%;width:100%;display:flex;align-items:center;justify-content:center;text-align:center;padding:1rem;">No performer selected</div>`;
+      const templateQuery = {
+        area: 'auditions',
+        page: 'in-room',
+        sessionType: currentSession?.type === 'callback' ? 'callback' : (usesGeneralInRoomLayout ? 'general' : 'default')
+      };
+      el.innerHTML = inRoomThemeOpen + window.BTSAuditionTemplates.renderTemplate(templateQuery, {
+        app: null,
+        esc,
+        usesGeneralInRoomLayout,
+        isGeneralAuditionInRoom,
+        containerId,
+        trayCards,
+        currentSession,
+        teamAccessMode,
+        roleTypeOptions,
+        openFn,
+        inRoomFlipOpen: false,
+        cardFrontHtml: noSelectionCardHtml,
+        cardBackHtml: noSelectionCardHtml,
+        scorePanelHtml: noSelectionScoreHtml,
+        notesTextHtml: noSelectionNotesHtml,
+        nextButtonHtml: '',
+        callbackCharactersHtml: noSelectionScoreHtml,
+        roleChipsHtml: renderInRoomPlaceholderRoleChips()
+      }) + inRoomThemeClose;
+      return;
+    }
+    const currentRoomState = getRoomState(getAuditionRoomMeta(currentSession).roomKey);
+    if (!roomStateIsWaiting(currentRoomState) && app?.id && String(currentRoomState?.current_applicant_id || '') !== String(app.id)) {
+      persistAuditionRoomState(buildRoomStatePayload({ session: currentSession, app, status: 'in_progress' })).catch(() => {});
+    }
     if (currentSession?.type === 'callback' && !cbv2Loaded) {
       loadCbv2().then(() => renderInRoomPage(targetId || inRoomApplicantId, containerId, openFn));
     }
-    const trayCards = checkedInApps.map(a => inRoomThumbHtml(a, openFn, inRoomSession)).join('');
-    const roleTypeOptions = [...new Set(characters.map(c => c.role_type).filter(Boolean))].sort();
 
     const scorePanelHtml = currentSession?.type === 'callback'
       ? `<div class="inroom-considered-card inroom-callbacks-card">
