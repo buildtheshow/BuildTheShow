@@ -81,13 +81,15 @@ function buildCastingCardBack(app, opts = {}) {
     return `<span class="irb-section-label-stack"><span>${escStr(firstLine)}</span><span>${escStr(secondLine)}</span></span>`;
   }
 
-  function section(label, rows) {
+  function section(label, rows, color = null, fadedColor = null, ink = '#ffffff') {
     const filtered = rows.filter(([, v]) => v && String(v).trim() && v !== '—');
     if (!filtered.length) return '';
     const labelHtml = sectionLabelHtml(label);
+    const labelStyle = color ? ` style="background:${escStr(color)};color:${escStr(ink)};"` : '';
+    const rowsStyle  = fadedColor ? ` style="background:${escStr(fadedColor)};"` : '';
     return `<div class="irb-section">
-      <div class="irb-section-label">${labelHtml}</div>
-      <div class="irb-section-rows">
+      <div class="irb-section-label"${labelStyle}>${labelHtml}</div>
+      <div class="irb-section-rows"${rowsStyle}>
         ${filtered.map(([k, v]) =>
           `<div class="irb-row"><span class="irb-row-key">${escStr(k)}</span><span class="irb-row-val">${escStr(String(v))}</span></div>`
         ).join('')}
@@ -434,33 +436,33 @@ function buildCastingCardBack(app, opts = {}) {
     ['Role Openness', castingPref],
     ['Roles Requested', requestedRolesText()],
     ['Joining', attendanceModeLabel],
-  ]);
+  ], '#ca7ea7', '#f8eff4', '#ffffff');
 
   // ── Acting ────────────────────────────────────────────────────
   const actingSection = section('Acting', [
     ['Level',   ca['Acting Experience Level']],
     ['Details', ca['Acting Experience Details']],
-  ].filter(([, v]) => v));
+  ].filter(([, v]) => v), '#572e88', '#ebe6f1', '#ffffff');
 
   // ── Vocals ────────────────────────────────────────────────────
   const vocalSection = section('Vocals', [
     ['Level',      ca['Vocal Experience Level']],
     ['Voice Type', ca['Vocal Type']],
     ['Details',    ca['Vocal Experience Details']],
-  ].filter(([, v]) => v));
+  ].filter(([, v]) => v), '#476aaa', '#e8ecf4', '#ffffff');
 
   // ── Dance ─────────────────────────────────────────────────────
   const danceSection = section('Dance', [
     ['Level',   ca['Dance / Movement Experience Level']],
     ['Styles',  ca['Dance Styles']],
     ['Details', ca['Dance / Movement Details']],
-  ].filter(([, v]) => v));
+  ].filter(([, v]) => v), '#769e7b', '#ecf3ee', '#ffffff');
 
   // ── Skills & Experience ───────────────────────────────────────
   const skillsSection = section('Skills & Experience', [
     ['Special Skills',       ca['Special Skills'] || app.skills],
     ['Previous Experience',  ca['Previous Experience'] || app.experience],
-  ].filter(([, v]) => v));
+  ].filter(([, v]) => v), '#dd8233', '#fbeee6', '#ffffff');
 
   // ── Conflicts (schedule + conflicts together) ────────────────
   const availabilityRows = [
@@ -510,7 +512,7 @@ function buildCastingCardBack(app, opts = {}) {
   const availabilitySection = availabilityRows
     .filter(([, v]) => v)
     .length
-    ? section('Conflicts', availabilityRows.filter(([, v]) => v))
+    ? section('Conflicts', availabilityRows.filter(([, v]) => v), '#d1523d', '#f9e9e7', '#ffffff')
     : '';
 
   // ── Other custom answers ──────────────────────────────────────
@@ -534,14 +536,14 @@ function buildCastingCardBack(app, opts = {}) {
     })
     .filter(([, display]) => display && display.trim() && display !== '—');
   const customRows = providedAuditionTimeRows.length ? providedAuditionTimeRows : customAuditionTimeRows;
-  const customSection = customRows.length ? section('Audition Times', customRows) : '';
+  const customSection = customRows.length ? section('Audition Times', customRows, '#78bbd4', '#eef7fb', '#000000') : '';
 
   // ── Notes ─────────────────────────────────────────────────────
   const notesValue = ca['Additional Notes'] || app.notes;
   const notesSection = notesValue
     ? `<div class="irb-section">
-         <div class="irb-section-label">Notes</div>
-         <div class="irb-section-rows"><div class="irb-notes">${escStr(notesValue)}</div></div>
+         <div class="irb-section-label" style="background:#efab45;color:#000000;">Notes</div>
+         <div class="irb-section-rows" style="background:#fef5e8;"><div class="irb-notes">${escStr(notesValue)}</div></div>
        </div>`
     : '';
 
@@ -624,13 +626,13 @@ function buildCastingCardBack(app, opts = {}) {
         : '';
       const label = escStr(s.label || 'Self Tape');
       const url   = escStr(s.video_url || '');
-      return `<div class="irb-session-block" style="background:#eafaf1;border-left:3px solid #34d371;padding:0.45rem 0.5rem;border-radius:0 6px 6px 0;margin-bottom:0.4rem;">
-        <div style="font-size:0.72rem;font-weight:800;color:#1a7540;margin-bottom:0.2rem;">${label}</div>
+      return `<div class="irb-session-block" style="background:#ecf3ee;border:1.5px solid rgba(118,158,123,0.3);border-radius:6px;padding:0.45rem 0.5rem;margin-bottom:0.4rem;">
+        <div style="font-size:0.72rem;font-weight:800;color:#769e7b;margin-bottom:0.2rem;">${label}</div>
         <a href="${url}" target="_blank" rel="noopener"
-           style="font-size:0.7rem;color:#15803d;font-weight:600;word-break:break-all;text-decoration:underline;line-height:1.35;display:block;">
+           style="font-size:0.7rem;color:#476aaa;font-weight:600;word-break:break-all;text-decoration:underline;line-height:1.35;display:block;">
           ${url}
         </a>
-        ${date ? `<div style="font-size:0.65rem;color:#2d8a56;margin-top:0.2rem;">${date}</div>` : ''}
+        ${date ? `<div style="font-size:0.65rem;color:#769e7b;margin-top:0.2rem;">${date}</div>` : ''}
       </div>`;
     }).join('');
   }
