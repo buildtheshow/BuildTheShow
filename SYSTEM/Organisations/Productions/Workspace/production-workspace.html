@@ -27496,6 +27496,14 @@
     return true;
   }
 
+  function setHtmlIfChanged(el, html) {
+    if (!el) return false;
+    const next = String(html || '');
+    if (el.innerHTML === next) return false;
+    el.innerHTML = next;
+    return true;
+  }
+
   function refreshCheckinInPlace() {
     const inner = document.getElementById('checkin-list-inner');
     if (!inner) return;
@@ -27503,7 +27511,7 @@
     const session = getSelectedCheckInSession();
     const search  = document.getElementById('ci-search')?.value || '';
     try { renderCiStageHead(session); } catch {}
-    inner.innerHTML = buildCheckInListMarkup(session, search, ciFilter);
+    setHtmlIfChanged(inner, buildCheckInListMarkup(session, search, ciFilter));
     window.scrollTo({ top: savedY, behavior: 'instant' });
   }
 
@@ -57084,13 +57092,13 @@ Your submission link is unique to you. Please do not share it with another perfo
       const session = getSelectedCheckInSession();
       const search = document.getElementById('ci-search')?.value || '';
       renderCiStageHead(session);
-      inner.innerHTML = buildCheckInListMarkup(session, search, ciFilter);
+      setHtmlIfChanged(inner, buildCheckInListMarkup(session, search, ciFilter));
     }
     // Session workspace check-in list
     const sessionListEl = document.getElementById('aud-session-checkin-list');
     if (sessionListEl) {
       const session = getActiveAuditionNavSession();
-      if (session) sessionListEl.innerHTML = buildCheckInListMarkup(session, sessionCiSearchQuery, sessionCiFilter);
+      if (session) setHtmlIfChanged(sessionListEl, buildCheckInListMarkup(session, sessionCiSearchQuery, sessionCiFilter));
     }
   }
 
@@ -57099,6 +57107,8 @@ Your submission link is unique to you. Please do not share it with another perfo
     if (!host) return;
     if (!isWorkspaceDataReady('auditionSessions')) {
       renderAuditionHeaderFrame();
+      delete host.dataset.sessionWorkspaceSessionId;
+      delete host.dataset.sessionWorkspaceTool;
       host.innerHTML = '<div class="card" style="text-align:center;padding:3.5rem 2rem;color:rgba(87,46,136,0.5);">Loading audition sessions...</div>';
       btsRouteLog('route dependency pending', { view: 'audition session workspace', dependencies: ['auditionConfig', 'auditionSessions'] });
       ensureWorkspaceData(['auditionConfig', 'auditionSessions'])
@@ -57120,6 +57130,8 @@ Your submission link is unique to you. Please do not share it with another perfo
     const session = getActiveAuditionNavSession();
     if (!session) {
       renderAuditionHeaderFrame();
+      delete host.dataset.sessionWorkspaceSessionId;
+      delete host.dataset.sessionWorkspaceTool;
       host.innerHTML = '<div class="card" style="text-align:center;padding:3.5rem 2rem;color:rgba(87,46,136,0.5);">Add an audition session first.</div>';
       return;
     }
@@ -57129,6 +57141,16 @@ Your submission link is unique to you. Please do not share it with another perfo
       tool = 'inroom';
       activeAuditionNavTool = 'inroom';
       _audHeaderActiveTool = 'inroom';
+    }
+    const existingCheckinList = host.querySelector('#aud-session-checkin-list');
+    if (
+      tool === 'checkin' &&
+      existingCheckinList &&
+      host.dataset.sessionWorkspaceSessionId === String(session.id || '') &&
+      host.dataset.sessionWorkspaceTool === 'checkin'
+    ) {
+      setHtmlIfChanged(existingCheckinList, buildCheckInListMarkup(session, sessionCiSearchQuery, sessionCiFilter));
+      return;
     }
     const metaParts = [];
     if (session.date) metaParts.push({ label: 'Date', value: formatAuditionScheduleSessionDate(session.date) });
@@ -57152,6 +57174,8 @@ Your submission link is unique to you. Please do not share it with another perfo
       ? renderGeneralInRoomCheckedStrip('openAuditionSessionInRoom', 'Checked In')
       : '';
     renderAuditionHeaderFrame();
+    host.dataset.sessionWorkspaceSessionId = String(session.id || '');
+    host.dataset.sessionWorkspaceTool = String(tool || '');
     host.innerHTML = `
       ${checkedInStripHtml}
       ${isDanceCallInRoom ? `<div id="dc-checkin-strip-outer"></div>` : ''}
@@ -57181,7 +57205,7 @@ Your submission link is unique to you. Please do not share it with another perfo
       </div>`;
     if (tool === 'checkin') {
       const listEl = document.getElementById('aud-session-checkin-list');
-      if (listEl) listEl.innerHTML = buildCheckInListMarkup(session, sessionCiSearchQuery, sessionCiFilter);
+      if (listEl) setHtmlIfChanged(listEl, buildCheckInListMarkup(session, sessionCiSearchQuery, sessionCiFilter));
     }
     if (tool === 'inroom') {
       if (session.type === 'dance_call') {
