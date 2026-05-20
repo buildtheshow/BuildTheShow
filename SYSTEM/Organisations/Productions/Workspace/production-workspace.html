@@ -3544,6 +3544,7 @@
     .audition-schedule-booked-card {
       width: min(100%, 118px);
       cursor: pointer;
+      touch-action: manipulation;
     }
     .audition-schedule-booked-card .casting-card {
       width: 100%;
@@ -57366,7 +57367,8 @@ Thank you,
 
   function buildAuditionScheduleBookedCardHtml(app) {
     const dragAttrs = teamCan('editSchedule') ? `draggable="true" ondragstart="fatesDragStart(event,'${esc(app.id)}')" ondragend="fatesDragEnd(event)"` : '';
-    return `<div class="audition-schedule-booked-card" ${dragAttrs}>
+    const openAttrs = `onclick="openAuditionScheduleCardFromEvent(event,'${esc(app.id)}')" ontouchend="openAuditionScheduleCardFromEvent(event,'${esc(app.id)}')"`;
+    return `<div class="audition-schedule-booked-card" ${dragAttrs} ${openAttrs}>
       ${renderCastingCard({
         first_name: String(app.name || '').split(' ')[0] || '',
         last_name: String(app.name || '').split(' ').slice(1).join(' ') || '',
@@ -57383,7 +57385,6 @@ Thank you,
         draggable: false,
         state: null,
         title: `${app.name || 'Performer'}${cbv2ApplicantAge(app) ? ` (${cbv2ApplicantAge(app)})` : ''}`,
-        onClick: `openAuditionSchedulePerformer('${app.id}')`
       })}
     </div>`;
   }
@@ -57510,7 +57511,7 @@ Thank you,
   }
 
   function buildAudScheduleV2CardHtml(app) {
-    return `<div class="audition-schedule-booked-card aud-v2-card" onclick="openPerfLightbox('${esc(app.id)}')">
+    return `<div class="audition-schedule-booked-card aud-v2-card" onclick="openAuditionScheduleCardFromEvent(event,'${esc(app.id)}','lightbox')" ontouchend="openAuditionScheduleCardFromEvent(event,'${esc(app.id)}','lightbox')">
       ${renderCastingCard({
         first_name: String(app.name || '').split(' ')[0] || '',
         last_name: String(app.name || '').split(' ').slice(1).join(' ') || '',
@@ -57937,6 +57938,24 @@ Thank you,
     const el = document.getElementById('aud-schedule-content');
     if (!el) return;
     el.innerHTML = buildAuditionSchedulePlaceholderHtml();
+  }
+
+  let _auditionScheduleLastTouchOpenAt = 0;
+  function openAuditionScheduleCardFromEvent(event, appId, mode = 'modal') {
+    const eventType = String(event?.type || '');
+    const now = Date.now();
+    if (eventType === 'click' && now - _auditionScheduleLastTouchOpenAt < 650) return;
+    if (eventType.startsWith('touch')) _auditionScheduleLastTouchOpenAt = now;
+    if (event) {
+      event.preventDefault?.();
+      event.stopPropagation?.();
+    }
+    if (!appId) return;
+    if (mode === 'lightbox' && typeof openPerfLightbox === 'function') {
+      openPerfLightbox(appId);
+      return;
+    }
+    openAuditionSchedulePerformer(appId);
   }
 
   function openAuditionSchedulePerformer(appId) {
