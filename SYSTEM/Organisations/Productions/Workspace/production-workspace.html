@@ -27519,7 +27519,7 @@
     const stripEl = document.querySelector('[data-bts-template="checked-in-rail"]');
     if (!stripEl) return;
     const session       = getCurrentInRoomSession() || getSelectedAuditionSession();
-    const checkedInApps = getInRoomCheckedInApps();
+    const checkedInApps = getInRoomCheckedInApps(session);
     const openFn        = inRoomOpenFn || 'openInRoom';
     const trayCards     = checkedInApps.map(a => inRoomThumbHtml(a, openFn, session)).join('');
     const rowEl         = stripEl.querySelector('.template-checkin-row');
@@ -27530,7 +27530,7 @@
     }
     // If the currently shown person was unchecked, move to the next one
     if (inRoomApplicantId && !checkedInApps.some(a => a.id === inRoomApplicantId)) {
-      const groups = getInRoomGroups();
+      const groups = getInRoomGroups(session);
       const nextId = groups.current?.id || groups.waiting[0]?.id || groups.past[0]?.id || null;
       renderInRoomPage(nextId, inRoomContainerId, inRoomOpenFn);
     }
@@ -28640,6 +28640,8 @@
   function syncCurrentRoomFromState(session, containerId = inRoomContainerId, openFn = inRoomOpenFn, requestedId = null) {
     const state = getRoomState(getAuditionRoomMeta(session).roomKey);
     if (!state || state.status !== 'in_progress' || !state.current_applicant_id) return false;
+    const currentApp = allApplicants.find(app => String(app.id || '') === String(state.current_applicant_id || ''));
+    if (session?.id && (!currentApp || !isCheckedInForSession(currentApp, session.id))) return false;
     if (requestedId && String(requestedId) !== String(state.current_applicant_id)) return false;
     if (String(state.current_applicant_id) === String(inRoomApplicantId || '')) return false;
     inRoomApplicantId = state.current_applicant_id;
@@ -54765,17 +54767,23 @@ Your submission link is unique to you. Please do not share it with another perfo
   // Session views must only read their own attendance record.
   // The legacy checked_in flag is kept for no-session views only.
   function isCheckedInForSession(app, sessionId) {
-    const checkins = Array.isArray(app?.session_checkins) ? app.session_checkins : [];
     if (sessionId) {
-      const entry = checkins.find(x => String(x.session_id || '') === String(sessionId || ''));
+      const entry = getSessionCheckinEntry(app, sessionId);
       return !!entry?.checked_in;
     }
     return !!app?.checked_in;
   }
 
-  function getInRoomCheckedInApps() {
-    const session = getCurrentInRoomSession() || getSelectedAuditionSession();
+  function getSessionCheckinEntry(app, sessionId) {
+    if (!app || !sessionId) return null;
+    const checkins = Array.isArray(app.session_checkins) ? app.session_checkins : [];
+    return checkins.find(x => String(x.session_id || '') === String(sessionId || '')) || null;
+  }
+
+  function getInRoomCheckedInApps(sessionOverride = null) {
+    const session = sessionOverride || getCurrentInRoomSession() || getSelectedAuditionSession();
     let rows = allApplicants.filter(app => {
+      if (app?.status === 'no_show') return false;
       if (!session?.id) return !!app?.checked_in;
       return isCheckedInForSession(app, session.id);
     });
@@ -54788,15 +54796,17 @@ Your submission link is unique to you. Please do not share it with another perfo
       if (aTime && bTime) return aTime.localeCompare(bTime);
       if (aTime) return -1;
       if (bTime) return 1;
-      // Fall back to checked_in_at time
-      return String(a.checked_in_at || '').localeCompare(String(b.checked_in_at || ''));
+      // Fall back to this session's check-in time, then the legacy time.
+      const aCheckedAt = getSessionCheckinEntry(a, session?.id)?.checked_in_at || a.checked_in_at || '';
+      const bCheckedAt = getSessionCheckinEntry(b, session?.id)?.checked_in_at || b.checked_in_at || '';
+      return String(aCheckedAt).localeCompare(String(bCheckedAt));
     });
     return rows;
   }
 
-  function getInRoomGroups() {
-    const checkedIn = getInRoomCheckedInApps();
-    const session = getCurrentInRoomSession() || getSelectedAuditionSession();
+  function getInRoomGroups(sessionOverride = null) {
+    const session = sessionOverride || getCurrentInRoomSession() || getSelectedAuditionSession();
+    const checkedIn = getInRoomCheckedInApps(session);
     const sessionId = session?.id || null;
     const now = Date.now();
     const past = [];
@@ -55611,7 +55621,8 @@ Your submission link is unique to you. Please do not share it with another perfo
 
   function inRoomThumbHtml(app, openFn = 'openInRoom', session = null) {
     const now = Date.now();
-    const sessionId = session?.id || getSelectedAuditionSession()?.id || null;
+    const currentSession = session || getCurrentInRoomSession() || getSelectedAuditionSession();
+    const sessionId = currentSession?.id || null;
     const slot = sessionId ? getApplicantSlotForSession(app, sessionId) : null;
     const slotTimeStr = slot?.slot_time || slot?.start_time || '';
     const slotStart = (() => {
@@ -55625,9 +55636,9 @@ Your submission link is unique to you. Please do not share it with another perfo
       }
       return null;
     })();
-    const currentRoomState = getRoomState(getAuditionRoomMeta(session || getCurrentInRoomSession()).roomKey);
+    const currentRoomState = getRoomState(getAuditionRoomMeta(currentSession).roomKey);
     const currentId = String(inRoomApplicantId || currentRoomState?.current_applicant_id || '');
-    const checkedInQueue = getInRoomCheckedInApps();
+    const checkedInQueue = getInRoomCheckedInApps(currentSession);
     const appIndex = checkedInQueue.findIndex(candidate => String(candidate.id) === String(app?.id || ''));
     const currentIndex = currentId
       ? checkedInQueue.findIndex(candidate => String(candidate.id) === currentId)
@@ -56102,7 +56113,7 @@ Your submission link is unique to you. Please do not share it with another perfo
   function renderGeneralInRoomCheckedStrip(openFn = 'openAuditionSessionInRoom', label = 'Checked In') {
     try {
       const session = getCurrentInRoomSession() || getActiveAuditionNavSession() || getSelectedAuditionSession();
-      const checkedInApps = getInRoomCheckedInApps();
+      const checkedInApps = getInRoomCheckedInApps(session);
       const trayCards = checkedInApps.map(app => inRoomThumbHtml(app, openFn, session)).join('');
       const config = { esc, label, trayCards };
       return window.BTSAuditionTemplates.renderTemplateById('auditions.in-room.checked-in-strip', config);
@@ -56159,21 +56170,20 @@ Your submission link is unique to you. Please do not share it with another perfo
       ensureWorkspaceData(['inRoom']).then(() => renderInRoomPage(targetId || inRoomApplicantId, containerId, openFn)).catch(() => renderInRoomPage(targetId || inRoomApplicantId, containerId, openFn));
       return;
     }
-    const groups = getInRoomGroups();
+    const currentSession = getCurrentInRoomSession();
+    const groups = getInRoomGroups(currentSession);
+    const checkedInApps = getInRoomCheckedInApps(currentSession);
     const requestedId = targetId || inRoomApplicantId || null;
-    const requestedIsValid = requestedId ? getInRoomCheckedInApps().some(app => app.id === requestedId) : false;
+    const requestedIsValid = requestedId ? checkedInApps.some(app => app.id === requestedId) : false;
     const chosenId = requestedIsValid ? requestedId : (groups.current?.id || groups.waiting[0]?.id || groups.past[0]?.id || null);
     inRoomApplicantId = chosenId;
     if (chosenId) saveWorkspaceNavState({ inRoomApplicantId: chosenId });
-    const checkedInApps = getInRoomCheckedInApps();
-    const inRoomSession = getSelectedAuditionSession();
-    const currentSession = getCurrentInRoomSession();
     const app = allApplicants.find(a => a.id === chosenId) || null;
     if (syncCurrentRoomFromState(currentSession, containerId, openFn, requestedId)) return;
     const usesGeneralInRoomLayout = !currentSession?.type || currentSession.type === 'audition' || currentSession.type === 'callback';
     const isGeneralAuditionInRoom = usesGeneralInRoomLayout && currentSession?.type !== 'callback';
     const roleTypeOptions = [...new Set(characters.map(c => c.role_type).filter(Boolean))].sort();
-    const trayCards = checkedInApps.map(a => inRoomThumbHtml(a, openFn, inRoomSession)).join('');
+    const trayCards = checkedInApps.map(a => inRoomThumbHtml(a, openFn, currentSession)).join('');
     if (!app) {
       const noSelectionScoreHtml = currentSession?.type === 'callback'
         ? `<div class="inroom-considered-card inroom-callbacks-card">
