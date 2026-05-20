@@ -965,7 +965,7 @@
     /* ── Registration Status Card (rsc-) ── */
     .rsc-grid { display:grid; grid-template-columns:repeat(auto-fill,min(700px,100%)); gap:1.25rem; margin-top:0.75rem; }
     .rsc-card { background:#fff; border-radius:12px; box-shadow:0 6px 28px rgba(26,21,48,0.16), 0 1px 4px rgba(26,21,48,0.07); overflow:hidden; display:flex; flex-direction:column; position:relative; }
-    .rsc-household-ribbon { position:absolute; top:35px; right:-115px; width:300px; background:#efab45; color:#1a1530; font-size:0.78rem; font-weight:900; text-transform:uppercase; letter-spacing:0.06em; text-align:center; line-height:1.35; padding:0.8em 0; transform:rotate(35deg); box-shadow:0 3px 10px rgba(239,171,69,0.45); pointer-events:none; z-index:10; }
+    .rsc-household-ribbon { position:absolute; top:35px; right:-115px; width:300px; min-height:3.35rem; background:#efab45; color:#1a1530; font-size:0.78rem; font-weight:900; text-transform:uppercase; letter-spacing:0.06em; text-align:center; line-height:1.35; padding:0.55em 0; transform:rotate(35deg); box-shadow:0 3px 10px rgba(239,171,69,0.45); pointer-events:none; z-index:10; display:flex; align-items:center; justify-content:center; box-sizing:border-box; }
     .rsc-card-photo { overflow:hidden; flex-shrink:0; }
     .rsc-card-photo .casting-card { border-radius:0; box-shadow:none; cursor:default; display:block; }
     .rsc-card-photo .inroom-flip { width:100%; }
@@ -39203,7 +39203,8 @@ Thank you,
     if (settings.volunteer_discount_enabled && volRequested) {
       steps.push({ label: 'Volunteer Hours', done: !!assignment.volunteer_discount_approved });
     }
-    const schStatus = String(assignment.scholarship_status || 'none');
+    const schRequested = registrationAnswerTruthy(app, ['pf_scholarship_request', 'scholarship_request', '__bts_registration_scholarship_requested']);
+    const schStatus = String(assignment.scholarship_status || (schRequested ? 'requested' : 'none'));
     if (settings.scholarship_enabled && schStatus !== 'none') {
       steps.push({ label: 'Scholarship', done: schStatus === 'approved' || schStatus === 'declined' });
     }
@@ -39216,7 +39217,7 @@ Thank you,
     // Accessibility
     const accessText = registrationAnswerValue(app, ['Accessibility and accommodation needs', 'Accessibility', '__bts_registration_accessibility']).trim();
     const accessHtml = accessText
-      ? `<button class="rsc-info-chip flag" onclick="rscShowAccessibilityNote(${'${esc(assignId)}'})">View request</button>`
+      ? `<button class="rsc-info-chip flag" onclick="rscShowAccessibilityNote('${esc(assignId)}')">View request</button>`
       : `<span class="rsc-info-chip muted">None</span>`;
 
     // Agreements & Consent
@@ -39225,7 +39226,7 @@ Thank you,
     const cocSigned   = registrationAnswerTruthy(app, ['code_of_conduct_signed', '__bts_registration_code_of_conduct_signed']);
     const allSigned   = !!registrationAgreementComplete(app);
     const someSigned  = !allSigned && (mediaSigned || castSigned || cocSigned || registrationAnswerTruthy(app, ['I understand the rehearsal expectations for this production']));
-    const agreementsHtml = `<button class="rsc-info-chip ${allSigned ? 'ok' : someSigned ? 'warn' : 'muted'}" style="cursor:pointer;border:none;" onclick="rscShowAgreementsModal(${'${esc(assignId)}'})">${allSigned ? '✓ All signed' : someSigned ? 'Some pending' : 'Not yet'}</button>`;
+    const agreementsHtml = `<button class="rsc-info-chip ${allSigned ? 'ok' : someSigned ? 'warn' : 'muted'}" style="cursor:pointer;border:none;" onclick="rscShowAgreementsModal('${esc(assignId)}')">${allSigned ? '✓ All signed' : someSigned ? 'Some pending' : 'Not yet'}</button>`;
 
     const infoHtml = `<div class="rsc-info">
       <div class="rsc-info-row"><span class="rsc-info-label">Accessibility</span>${accessHtml}</div>
@@ -39272,8 +39273,8 @@ Thank you,
         const isOverdue = !isPaid && inst.dueDate && new Date(inst.dueDate) < new Date(new Date().toDateString());
         const tileBg = isPaid ? '#769e7b' : isOverdue ? '#d1523d' : '#efab45';
         const footerBtn = isPaid
-          ? `<button class="template-brand-tile-button" onclick="rscOpenPaymentDetailModal(${'${esc(assignId)}'},${idx})">✓ Done</button>`
-          : `<button class="template-brand-tile-button" onclick="rscOpenMarkPaidModal(${'${esc(assignId)}'},${idx})">Log Payment</button>`;
+          ? `<button class="template-brand-tile-button" onclick="rscOpenPaymentDetailModal('${esc(assignId)}',${idx})">✓ Done</button>`
+          : `<button class="template-brand-tile-button" onclick="rscOpenMarkPaidModal('${esc(assignId)}',${idx})">Log Payment</button>`;
         return `<div class="template-brand-card template-brand-card--square template-brand-card--containers rsc-inst-tile ${isPaid ? 'rsc-inst-tile--paid' : 'rsc-inst-tile--unpaid'}" id="rsc-inst-${esc(assignId)}-${idx}" style="--brand-tile-bg:${tileBg};">
           <div class="template-brand-card-inner"><div class="template-brand-tile-content">
             <div class="template-brand-tile-container template-brand-tile-container--header"><div class="template-brand-tile-kicker">${esc(tileLabel)}</div></div>
@@ -39305,10 +39306,15 @@ Thank you,
     }
 
     // Household and fee adjustments
+    const familyRequested = registrationAnswerTruthy(app, ['pf_sibling_discount', 'sibling_discount_requested', 'household_discount_requested', '__bts_registration_household_requested']);
+    const familyNames = registrationAnswerValue(app, ['pf_sibling_performer_names', 'sibling_performer_names', 'household_performer_names']);
+    const householdStatus = household ? household.name : familyRequested ? (familyNames ? `Requested: ${familyNames}` : 'Requested') : 'Not linked';
+    const householdClass = household ? 'ok' : familyRequested ? 'warn' : 'muted';
+    const householdButton = household ? 'Manage' : familyRequested ? 'Review' : 'Add';
     const householdHtml = `<div class="rsc-discount">
       <div class="rsc-discount-label">Household</div>
-      <span class="rsc-adjustment-status ${household ? 'ok' : 'muted'}">${esc(household ? household.name : 'Not linked')}</span>
-      <button class="rsc-approve-btn" onclick="rptOpenHouseholdModal('${esc(assignId)}')">${household ? 'Manage' : 'Add'}</button>
+      <span class="rsc-adjustment-status ${householdClass}" title="${esc(householdStatus)}">${esc(householdStatus)}</span>
+      <button class="rsc-approve-btn" onclick="rptOpenHouseholdModal('${esc(assignId)}')">${householdButton}</button>
     </div>`;
 
     // Volunteer discount
@@ -39320,20 +39326,21 @@ Thank you,
       volHtml = `<div class="rsc-discount">
         <div class="rsc-discount-label">Volunteer discount</div>
         <span class="rsc-adjustment-status ${approved ? 'ok' : volRequested ? 'warn' : 'muted'}">${esc(volunteerStatus)}</span>
-        <button class="rsc-approve-btn${approved ? ' approved' : ''}" onclick="rscOpenVolunteerModal(${'${esc(assignId)}'})">${approved ? '✓ Approved' : 'Manage'}</button>
+        <button class="rsc-approve-btn${approved ? ' approved' : ''}" onclick="rscOpenVolunteerModal('${esc(assignId)}')">${approved ? '✓ Approved' : 'Manage'}</button>
       </div>`;
     }
 
     // Scholarship
     let schHtml = '';
     if (settings.scholarship_enabled) {
-      const status = String(assignment.scholarship_status || 'none');
+      const requested = registrationAnswerTruthy(app, ['pf_scholarship_request', 'scholarship_request', '__bts_registration_scholarship_requested']);
+      const status = String(assignment.scholarship_status || (requested ? 'requested' : 'none'));
       const schLabel = { none: 'None', requested: 'Requested', approved: 'Approved', declined: 'Declined' }[status] || status;
       const schClass = status === 'approved' ? 'ok' : status === 'requested' ? 'warn' : 'muted';
       schHtml = `<div class="rsc-discount">
         <div class="rsc-discount-label">Scholarship</div>
         <span class="rsc-adjustment-status ${schClass}">${esc(schLabel)}</span>
-        <button class="rsc-approve-btn" onclick="rscOpenScholarshipModal(${'${esc(assignId)}'})">Manage</button>
+        <button class="rsc-approve-btn" onclick="rscOpenScholarshipModal('${esc(assignId)}')">Manage</button>
       </div>`;
     }
 
@@ -39366,7 +39373,7 @@ Thank you,
         currency: settings.currency || 'CAD',
       },
       scholarship: {
-        status: String(assignment.scholarship_status || 'none'),
+        status: String(assignment.scholarship_status || (registrationAnswerTruthy(app, ['pf_scholarship_request', 'scholarship_request', '__bts_registration_scholarship_requested']) ? 'requested' : 'none')),
         amount: String(assignment.scholarship_amount || ''),
         notes: String(assignment.scholarship_notes || ''),
       },
@@ -39752,7 +39759,7 @@ Thank you,
       </div>
       <div class="rpt-household-modal-actions">
         <button class="rpt-modal-cancel-btn" onclick="document.getElementById('rsc-mark-paid-modal')?.remove()">Cancel</button>
-        <button class="rpt-modal-save-btn" id="rsc-mp-save-btn" onclick="rscSaveMarkPaid(${'${esc(assignId)}'},${idx})">Log Payment</button>
+        <button class="rpt-modal-save-btn" id="rsc-mp-save-btn" onclick="rscSaveMarkPaid('${esc(assignId)}',${idx})">Log Payment</button>
       </div>
     </div>`;
     modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
@@ -39820,7 +39827,7 @@ Thank you,
       <div style="font-size:0.8rem;color:rgba(87,46,136,0.5);margin-bottom:0.25rem;">${esc(d.name)}</div>
       ${rows || '<div style="font-size:0.82rem;color:rgba(87,46,136,0.4);">No payment details on record.</div>'}
       <div class="rpt-household-modal-actions" style="justify-content:space-between;">
-        <button class="rsc-modal-danger-btn" onclick="rscUnmarkPaid(${'${esc(assignId)}'},${idx})">Remove Payment</button>
+        <button class="rsc-modal-danger-btn" onclick="rscUnmarkPaid('${esc(assignId)}',${idx})">Remove Payment</button>
         <button class="rpt-modal-save-btn" onclick="document.getElementById('rsc-payment-detail-modal')?.remove()">Close</button>
       </div>
     </div>`;
@@ -39883,10 +39890,10 @@ Thank you,
       <div class="rpt-household-modal-actions">
         <button class="rpt-modal-cancel-btn" onclick="document.getElementById('rsc-volunteer-modal')?.remove()">Cancel</button>
         ${v.approved
-          ? `<button class="rsc-modal-danger-btn" onclick="rscSaveVolunteer(${'${esc(assignId)}'},false)">Remove Approval</button>`
-          : `<button class="rpt-modal-save-btn" style="background:#769e7b;" onclick="rscSaveVolunteer(${'${esc(assignId)}'},true)">Approve Discount</button>`
+          ? `<button class="rsc-modal-danger-btn" onclick="rscSaveVolunteer('${esc(assignId)}',false)">Remove Approval</button>`
+          : `<button class="rpt-modal-save-btn" style="background:#769e7b;" onclick="rscSaveVolunteer('${esc(assignId)}',true)">Approve Discount</button>`
         }
-        <button class="rpt-modal-save-btn" onclick="rscSaveVolunteer(${'${esc(assignId)}'},${v.approved})">Save</button>
+        <button class="rpt-modal-save-btn" onclick="rscSaveVolunteer('${esc(assignId)}',${v.approved})">Save</button>
       </div>
     </div>`;
     modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
@@ -39944,7 +39951,7 @@ Thank you,
       </div>
       <div class="rpt-household-modal-actions">
         <button class="rpt-modal-cancel-btn" onclick="document.getElementById('rsc-scholarship-modal')?.remove()">Cancel</button>
-        <button class="rpt-modal-save-btn" onclick="rscSaveScholarship(${'${esc(assignId)}'})">Save</button>
+        <button class="rpt-modal-save-btn" onclick="rscSaveScholarship('${esc(assignId)}')">Save</button>
       </div>
     </div>`;
     modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
