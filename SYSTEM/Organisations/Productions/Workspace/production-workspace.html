@@ -267,6 +267,7 @@
         padding-right: max(0.5rem, env(safe-area-inset-right, 0px)) !important;
       }
     }
+    #hdr-status, #hdr-mobile-status { display: none; }
     .status-badge {
       font-size: 0.62rem;
       font-weight: 700;
@@ -54782,10 +54783,13 @@ Your submission link is unique to you. Please do not share it with another perfo
 
   function getInRoomCheckedInApps(sessionOverride = null) {
     const session = sessionOverride || getCurrentInRoomSession() || getSelectedAuditionSession();
+    if (session?.id) {
+      return getCheckInSessionApps(session, '', 'in')
+        .filter(app => app?.status !== 'no_show');
+    }
     let rows = allApplicants.filter(app => {
       if (app?.status === 'no_show') return false;
-      if (!session?.id) return !!app?.checked_in;
-      return isCheckedInForSession(app, session.id);
+      return !!app?.checked_in;
     });
     // Sort chronologically by the slot time for this session
     rows.sort((a, b) => {
@@ -56110,9 +56114,9 @@ Your submission link is unique to you. Please do not share it with another perfo
     }
   }
 
-  function renderGeneralInRoomCheckedStrip(openFn = 'openAuditionSessionInRoom', label = 'Checked In') {
+  function renderGeneralInRoomCheckedStrip(openFn = 'openAuditionSessionInRoom', label = 'Checked In', sessionOverride = null) {
     try {
-      const session = getCurrentInRoomSession() || getActiveAuditionNavSession() || getSelectedAuditionSession();
+      const session = sessionOverride || getCurrentInRoomSession() || getActiveAuditionNavSession() || getSelectedAuditionSession();
       const checkedInApps = getInRoomCheckedInApps(session);
       const trayCards = checkedInApps.map(app => inRoomThumbHtml(app, openFn, session)).join('');
       const config = { esc, label, trayCards };
@@ -57181,7 +57185,7 @@ Your submission link is unique to you. Please do not share it with another perfo
     const isGeneralAuditionInRoomWorkspace = tool === 'inroom' && session.type === 'audition';
     const isClassicInRoomWorkspace = tool === 'inroom' && (session.type === 'audition' || session.type === 'callback');
     const checkedInStripHtml = isClassicInRoomWorkspace
-      ? renderGeneralInRoomCheckedStrip('openAuditionSessionInRoom', 'Checked In')
+      ? renderGeneralInRoomCheckedStrip('openAuditionSessionInRoom', 'Checked In', session)
       : '';
     renderAuditionHeaderFrame();
     host.dataset.sessionWorkspaceSessionId = String(session.id || '');
