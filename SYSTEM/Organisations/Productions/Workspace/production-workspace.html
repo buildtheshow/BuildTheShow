@@ -45812,6 +45812,23 @@ Your submission link is unique to you. Please do not share it with another perfo
       const winnerSessionId = String(winner?.session_id || '').trim();
       if (winnerSessionId) winnerCheckinScope.add(winnerSessionId);
     }
+    const mergeSessionCheckinEntry = (existing, entry) => {
+      if (!existing) return { ...entry };
+      const existingUpdatedAt = Date.parse(existing.updated_at || '') || 0;
+      const entryUpdatedAt = Date.parse(entry.updated_at || '') || 0;
+      if (entryUpdatedAt || existingUpdatedAt) {
+        if (entryUpdatedAt > existingUpdatedAt) return { ...existing, ...entry };
+        if (existingUpdatedAt > entryUpdatedAt) return existing;
+      }
+      // Without a real attendance update timestamp, explicit absence wins so stale true values cannot revive someone who was clicked out.
+      if (entry.checked_in === false) return { ...existing, ...entry, checked_in: false, checked_in_at: null };
+      if (existing.checked_in === false) return existing;
+      const existingTime = Date.parse(existing.checked_in_at || existing.created_at || '') || 0;
+      const entryTime = Date.parse(entry.checked_in_at || entry.created_at || '') || 0;
+      if (entryTime > existingTime) return { ...existing, ...entry };
+      if (existingTime > entryTime) return existing;
+      return { ...existing, ...entry };
+    };
     const mergedSessionCheckins = sameSourceRecord && Array.isArray(winner?.session_checkins)
       ? winner.session_checkins
       : Array.isArray(base?.session_checkins) || Array.isArray(incoming?.session_checkins)
@@ -45826,7 +45843,7 @@ Your submission link is unique to you. Please do not share it with another perfo
             const sessionId = String(entry?.session_id || '').trim();
             if (!sessionId) return acc;
             const existingIndex = acc.findIndex(item => String(item?.session_id || '') === sessionId);
-            if (existingIndex >= 0) acc[existingIndex] = { ...acc[existingIndex], ...entry };
+            if (existingIndex >= 0) acc[existingIndex] = mergeSessionCheckinEntry(acc[existingIndex], entry);
             else acc.push(entry);
             return acc;
           }, Array.isArray(winner?.session_checkins) ? [...winner.session_checkins] : [])
@@ -46473,6 +46490,25 @@ Your submission link is unique to you. Please do not share it with another perfo
       _skipBookingMirror: !!patch._skipBookingMirror,
     };
     return syncApplicantEditsToSource(app, merged);
+  }
+
+  async function persistSessionCheckinsToAllSourceApplications(app, sessionCheckins) {
+    if (!app || !Array.isArray(sessionCheckins)) return null;
+    const ids = new Set([
+      ...(Array.isArray(app._sourceApplicationIds) ? app._sourceApplicationIds : []),
+      ...Object.values(app._sourceApplicationIdsBySession || {}),
+      app.id,
+    ].filter(id => id && !String(id).startsWith('booking-')).map(String));
+    if (!ids.size) return null;
+    try {
+      const { error } = await sb.from('audition_applications')
+        .update({ session_checkins: sessionCheckins })
+        .eq('production_id', prodId)
+        .in('id', [...ids]);
+      return error || null;
+    } catch (error) {
+      return error;
+    }
   }
 
   // ── Audition overview stats ───────────────────────────
@@ -54795,9 +54831,10 @@ Your submission link is unique to you. Please do not share it with another perfo
     const sid = String(sessionId || '').trim();
     const prevCheckins = Array.isArray(app?.session_checkins) ? app.session_checkins : [];
     if (!sid) return prevCheckins;
+    const changedAt = new Date().toISOString();
     const nextEntry = checkedIn
-      ? { session_id: sid, checked_in: true, checked_in_at: new Date().toISOString() }
-      : { session_id: sid, checked_in: false, checked_in_at: null };
+      ? { session_id: sid, checked_in: true, checked_in_at: changedAt, updated_at: changedAt }
+      : { session_id: sid, checked_in: false, checked_in_at: null, updated_at: changedAt };
     return [
       ...prevCheckins.filter(x => String(x?.session_id || '') !== sid),
       nextEntry,
@@ -57358,6 +57395,10 @@ Your submission link is unique to you. Please do not share it with another perfo
       if (sid) patch.session_checkins = nextCheckins;
       const error = await persistApplicantPatch(app, patch);
       if (error) throw error;
+      if (sid) {
+        const sourceError = await persistSessionCheckinsToAllSourceApplications(app, nextCheckins);
+        if (sourceError) throw sourceError;
+      }
       queueCiSecondaryRefresh();
       showSaveStatus('saved');
     } catch {
@@ -57414,6 +57455,8 @@ Your submission link is unique to you. Please do not share it with another perfo
     try {
       const error = await persistApplicantPatch(app, { session_checkins: newCheckins });
       if (error) throw error;
+      const sourceError = await persistSessionCheckinsToAllSourceApplications(app, newCheckins);
+      if (sourceError) throw sourceError;
       queueCiSecondaryRefresh();
       showSaveStatus('saved');
     } catch {
