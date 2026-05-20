@@ -422,6 +422,7 @@ async function upsertTeamAccessForCreativeRole(role) {
     name: role.person.trim(),
     email: role.email || null,
     role: role.name,
+    department: 'Artistic Team',
     note_color: noteColor,
     is_active: true,
   };

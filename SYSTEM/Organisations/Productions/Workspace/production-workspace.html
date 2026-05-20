@@ -20716,7 +20716,7 @@
         </div>
         <div class="prod-submenu">
           <div class="prod-sub-item" id="asub-dashboard" onclick="openAuditionsSubTab('dashboard')">Dashboard</div>
-          <div class="prod-sub-item" id="asub-setup" onclick="openAuditionsSubTab('setup')">Settings</div>
+          <div class="prod-sub-item" id="asub-setup" onclick="event.stopPropagation();openAuditionsSubTab('setup', { inner: 'settings' })">Settings</div>
           <div class="prod-sub-item" id="asub-audschedule" onclick="openAuditionsSubTab('audschedule')">Audition Schedule</div>
           <div class="prod-sub-item" id="asub-allperformers" onclick="openAuditionsSubTab('allperformers')">All Performers</div>
           <div id="asub-session-items"></div>
@@ -32693,7 +32693,6 @@ Thank you,
       if (dirty) await saveTeamConfig();
     }
 
-    (teamConfig || []).forEach(dept => { dept.open = false; });
     await loadAuditionTeamMembers();
     await syncCreativeRolesToTeamAccess({ silent: true });
     showTeamSubnav();
@@ -32865,7 +32864,18 @@ Thank you,
     const value = String(member.department || '').trim();
     if (isProducerDepartmentName(value) || value === 'Creative Team') return 'Artistic Team';
     const departments = productionTeamDepartmentNames();
-    return departments.includes(value) ? value : (departments[0] || 'Production & Rehearsal Support');
+    if (departments.includes(value)) return value;
+    // No department stored — match by role name against teamConfig so members synced
+    // from Artistic Team without a department field still land in the right section.
+    if (member.role) {
+      const normalRole = String(member.role).trim().toLowerCase();
+      const matchedDept = (teamConfig || []).find(dept =>
+        !isProducerDepartmentName(dept.name) &&
+        (dept.roles || []).some(r => String(r.name || '').trim().toLowerCase() === normalRole)
+      );
+      if (matchedDept?.name && departments.includes(matchedDept.name)) return matchedDept.name;
+    }
+    return departments[0] || 'Production & Rehearsal Support';
   }
 
   function teamDepartmentColor(department) {
@@ -33689,7 +33699,7 @@ Thank you,
   if (tab === 'castlist') { ensureWorkspaceData(['castList']).then(renderCastList).catch(renderCastList); }
   if (tab === 'callbacks') renderCallbacksFresh();
   if (tab === 'setup') {
-    const inner = document.querySelector('.aud-inner-btn.active');
+    const inner = document.querySelector('#aud-panel-setup .aud-inner-btn.active');
     if (!inner) {
       const savedNav = loadWorkspaceNavState();
       switchAudInner(savedNav.auditionSetupInnerTab || 'settings');
@@ -40238,6 +40248,7 @@ Thank you,
 
   function openAuditionsSubTab(subTab, options = {}) {
     btsRouteLog('nav click received', { type: 'auditions', subTab, ready: workspaceBootReady });
+    if (subTab === 'settings') subTab = 'setup';
     if (!workspaceBootReady && !options.force) {
       queueWorkspaceNavigation('auditions', { subTab });
       return;
@@ -40270,6 +40281,7 @@ Thank you,
       switchAudDayTab('dashboard');
     } else if (subTab === 'setup') {
       switchAudTab('setup');
+      switchAudInner(options.inner || 'settings');
     } else if (subTab === 'schedule') {
       switchAudTab('auditions');
       switchAudDayTab('schedule');
