@@ -3346,6 +3346,70 @@
       }
     }
 
+    /* ── Check-in two-column shell ── */
+    .ci-shell {
+      display: grid;
+      grid-template-columns: 180px minmax(0, 1fr);
+      gap: 1.25rem;
+      align-items: start;
+      width: 100%;
+    }
+    .ci-sidebar {
+      position: sticky;
+      top: 1rem;
+    }
+    .ci-stage { min-width: 0; }
+    .ci-stage-head {
+      margin-bottom: 0.85rem;
+    }
+    .ci-stage-title {
+      font-size: 1.35rem;
+      font-weight: 800;
+      color: #1a1530;
+      line-height: 1.15;
+      margin: 0 0 0.15rem;
+    }
+    .ci-stage-meta {
+      font-size: 0.78rem;
+      color: #86799f;
+      display: flex;
+      align-items: center;
+      gap: 0.55rem;
+      flex-wrap: wrap;
+    }
+    .ci-stage-tally {
+      font-weight: 700;
+      color: var(--ci-tally-color, #572e88);
+    }
+    .ci-stage-toolbar {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      flex-wrap: wrap;
+      margin-bottom: 0.85rem;
+    }
+    .ci-search-input {
+      flex: 1;
+      min-width: 140px;
+      max-width: 280px;
+      padding: 0.42rem 0.85rem;
+      border: 1.5px solid rgba(87,46,136,0.18);
+      border-radius: 8px;
+      font-size: 0.875rem;
+      font-family: var(--bts-font);
+      color: #1a1530;
+      outline: none;
+      background: #fff;
+    }
+    .ci-filter-group { display: flex; gap: 0.25rem; }
+    @media (max-width: 760px) {
+      .ci-shell { grid-template-columns: 1fr; }
+      .ci-sidebar { position: static; display: flex; flex-direction: column; gap: 0; }
+      .ci-sidebar .audition-schedule-sidebar-list { display: flex; flex-direction: row; flex-wrap: wrap; gap: 0.35rem; }
+      .ci-sidebar .audition-schedule-sidebar-item { width: auto; padding: 0.3rem 0.65rem; border-radius: 10px; }
+      .ci-search-input { max-width: 100%; }
+    }
+
     /* ── Content area ── */
     .prod-content { position: relative; z-index: 1; padding: 2rem 2.25rem; min-width: 0; max-width: 100%; }
     .tab-panel { display: none; }
@@ -22763,17 +22827,25 @@
 
         <!-- Check-In sub-tab -->
         <div id="adtab-checkin" class="adtab-panel" style="display:none;">
-          <div style="display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap;margin-bottom:1rem;">
-            <div id="ci-day-selector" class="ci-session-picker"></div>
-            <input id="ci-search" type="search" placeholder="Search performers…" oninput="renderCheckInList()" style="flex:1;min-width:160px;max-width:300px;padding:0.45rem 0.85rem;border:1.5px solid rgba(87,46,136,0.2);border-radius:8px;font-size:0.875rem;font-family: var(--bts-font);color:#1a1530;outline:none;background:#fff;" />
-            <div style="display:flex;gap:0.25rem;" id="ci-filter-btns">
-              <button class="applicant-filter active" data-ci-filter="all" onclick="setCiFilter('all')">All</button>
-              <button class="applicant-filter" data-ci-filter="out" onclick="setCiFilter('out')">Not Here</button>
-              <button class="applicant-filter" data-ci-filter="in" onclick="setCiFilter('in')">Checked In</button>
-            </div>
-          </div>
-          <div id="checkin-list-inner">
-            <div style="text-align:center;padding:3rem;color:rgba(87,46,136,0.5);font-size:0.875rem;">Select an audition day above.</div>
+          <div class="ci-shell">
+            <aside class="ci-sidebar">
+              <div class="audition-schedule-sidebar-head">Audition Days</div>
+              <div id="ci-day-selector" class="audition-schedule-sidebar-list"></div>
+            </aside>
+            <section class="ci-stage">
+              <div id="ci-stage-head"></div>
+              <div class="ci-stage-toolbar">
+                <input id="ci-search" type="search" placeholder="Search performers…" oninput="renderCheckInList()" class="ci-search-input" />
+                <div id="ci-filter-btns" class="ci-filter-group">
+                  <button class="applicant-filter active" data-ci-filter="all" onclick="setCiFilter('all')">All</button>
+                  <button class="applicant-filter" data-ci-filter="out" onclick="setCiFilter('out')">Not Here</button>
+                  <button class="applicant-filter" data-ci-filter="in" onclick="setCiFilter('in')">Checked In</button>
+                </div>
+              </div>
+              <div id="checkin-list-inner">
+                <div style="text-align:center;padding:3rem;color:rgba(87,46,136,0.5);font-size:0.875rem;">Select an audition day.</div>
+              </div>
+            </section>
           </div>
         </div><!-- end adtab-checkin -->
 
@@ -56760,12 +56832,31 @@ Your submission link is unique to you. Please do not share it with another perfo
     return `<div class="ci-card-grid">${apps.map(buildCard).join('')}</div>`;
   }
 
+  function renderCiStageHead(session) {
+    const el = document.getElementById('ci-stage-head');
+    if (!el) return;
+    if (!session) { el.innerHTML = ''; return; }
+    const accent = getAuditionScheduleSidebarMarkerColor(session.type || 'audition');
+    const dateStr = formatAuditionScheduleSessionDate(session.date);
+    const allApps = getCheckInSessionApps(session, '', 'all');
+    const checkedInCount = allApps.filter(app => isCheckedInForSession(app, session.id)).length;
+    const totalCount = allApps.length;
+    el.style.setProperty('--ci-tally-color', accent);
+    el.innerHTML = `
+      <div class="ci-stage-title">${esc(session.name || 'Audition Day')}</div>
+      <div class="ci-stage-meta">
+        ${dateStr ? `<span>${esc(dateStr)}</span><span>·</span>` : ''}
+        <span class="ci-stage-tally">${checkedInCount} / ${totalCount} checked in</span>
+      </div>`;
+  }
+
   function renderCheckInList() {
     // Old standalone check-in tab
     const inner = document.getElementById('checkin-list-inner');
     if (inner) {
       const session = getSelectedCheckInSession();
       const search = document.getElementById('ci-search')?.value || '';
+      renderCiStageHead(session);
       inner.innerHTML = buildCheckInListMarkup(session, search, ciFilter);
     }
     // Session workspace check-in list
