@@ -49373,20 +49373,34 @@ Thank you,
   }
 
   function getApplicantAttendanceForSession(app, sessionId = '') {
-    // Per-session attendance dict takes priority
+    const sid = String(sessionId || '').trim();
+    // Per-session attendance dict takes priority.
     const appAnswers = applicantCustomAnswers(app);
     const perSession = (typeof appAnswers.session_attendance === 'object' && appAnswers.session_attendance) || null;
-    if (perSession && sessionId && perSession[sessionId] !== undefined) {
-      const v = String(perSession[sessionId] || '').trim().toLowerCase();
+    if (perSession && sid && perSession[sid] !== undefined) {
+      const v = String(perSession[sid] || '').trim().toLowerCase();
       const label = attendanceModeLabelForValue(v);
       return { value: v, label, isVideoCall: label === 'On a Video Call' };
     }
-    const bookingRow = sessionId ? getApplicantBookingRowForSession(app, sessionId) : null;
+    const bookingRow = sid ? getApplicantBookingRowForSession(app, sid) : null;
     const bookingAnswers = applicantCustomAnswers(bookingRow);
-    const rawValue =
+    const bookingValue =
       bookingRow?.attendance_mode ||
       bookingAnswers['Attendance Type'] ||
       bookingAnswers['attendance_mode'] ||
+      '';
+    if (sid && bookingValue) {
+      const label = attendanceModeLabelForValue(bookingValue);
+      return {
+        value: String(bookingValue || '').trim().toLowerCase(),
+        label,
+        isVideoCall: label === 'On a Video Call',
+      };
+    }
+    if (sid && String(app?.session_id || '').trim() !== sid) {
+      return { value: '', label: '', isVideoCall: false };
+    }
+    const rawValue =
       app?.audition_method ||
       app?.attendance_mode ||
       appAnswers['Attendance Type'] ||
@@ -53652,10 +53666,10 @@ Thank you,
     // AND a slot assigned to it — never fall back to the legacy checked_in boolean
     const allCheckedIn = allApplicants.filter(a => {
       const checkins = Array.isArray(a.session_checkins) ? a.session_checkins : [];
-      const entry = checkins.find(x => x.session_id === sessionId);
+      const entry = checkins.find(x => String(x.session_id || '') === String(sessionId || ''));
       if (!entry?.checked_in) return false;
       const assignments = Array.isArray(a.slot_assignments) ? a.slot_assignments : [];
-      return assignments.some(x => x.session_id === sessionId && x.slot_id);
+      return assignments.some(x => String(x.session_id || '') === String(sessionId || '') && x.slot_id);
     });
 
     // Collect distinct slot times from checked-in performers (sorted)
@@ -54186,13 +54200,13 @@ Thank you,
     return Number.isNaN(dt.getTime()) ? null : dt;
   }
 
-  // Returns true if the performer is checked in for a specific session.
-  // Reads from session_checkins array first (per-session); falls back to legacy checked_in.
+  // Session views must only read their own attendance record.
+  // The legacy checked_in flag is kept for no-session views only.
   function isCheckedInForSession(app, sessionId) {
     const checkins = Array.isArray(app?.session_checkins) ? app.session_checkins : [];
     if (sessionId) {
-      const entry = checkins.find(x => x.session_id === sessionId);
-      if (entry !== undefined) return !!entry.checked_in;
+      const entry = checkins.find(x => String(x.session_id || '') === String(sessionId || ''));
+      return !!entry?.checked_in;
     }
     return !!app?.checked_in;
   }
@@ -56719,9 +56733,10 @@ Thank you,
     const prevCheckins = Array.isArray(app.session_checkins) ? [...app.session_checkins] : [];
     let newCheckins = prevCheckins;
     if (sessionId) {
+      const sid = String(sessionId);
       newCheckins = [
-        ...prevCheckins.filter(x => x.session_id !== sessionId),
-        ...(newCheckedIn ? [{ session_id: sessionId, checked_in: true, checked_in_at: newCheckedInAt }] : []),
+        ...prevCheckins.filter(x => String(x.session_id || '') !== sid),
+        ...(newCheckedIn ? [{ session_id: sid, checked_in: true, checked_in_at: newCheckedInAt }] : []),
       ];
     }
 
@@ -57423,6 +57438,10 @@ Thank you,
   function apmConfirmAttendance(sessionId, mode) {
     _apmPendingAttendance[sessionId] = mode;
     delete _apmAttendanceConfirming[sessionId];
+    if (mode === 'self_tape') {
+      saveApmChanges();
+      return;
+    }
     if (_apmTab === 'scheduling') _apmRenderBody();
   }
 
