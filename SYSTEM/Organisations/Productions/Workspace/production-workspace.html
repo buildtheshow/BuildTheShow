@@ -27270,7 +27270,7 @@
       }
       if (!inRoomApplicantId) return;
       try {
-        if (document.getElementById('adtab-inroom')?.style.display !== 'none' || document.getElementById('aud-session-inroom-content')) renderInRoomPage(inRoomApplicantId);
+        refreshVisibleInRoomForSession();
       } catch {}
     });
     queueWorkspaceWarmupForNav(bootNav);
@@ -27428,7 +27428,7 @@
         if (cbv2Loaded) await loadCbv2();
       } catch {}
       try {
-        if (document.getElementById('adtab-inroom')?.style.display !== 'none' || document.getElementById('aud-session-inroom-content')) renderInRoomPage(inRoomApplicantId);
+        refreshVisibleInRoomForSession();
       } catch {}
       try { refreshPerfLightboxContents(); } catch {}
       if (!activeModalApplicantId) return;
@@ -27534,6 +27534,16 @@
       const groups = getInRoomGroups(session);
       const nextId = groups.current?.id || groups.waiting[0]?.id || groups.past[0]?.id || null;
       renderInRoomPage(nextId, inRoomContainerId, inRoomOpenFn);
+    }
+  }
+
+  function refreshVisibleInRoomForSession() {
+    if (document.getElementById('aud-session-inroom-content')) {
+      renderInRoomPage(inRoomApplicantId, 'aud-session-inroom-content', 'openAuditionSessionInRoom');
+      return;
+    }
+    if (document.getElementById('adtab-inroom')?.style.display !== 'none') {
+      renderInRoomPage(inRoomApplicantId);
     }
   }
 
@@ -46210,7 +46220,7 @@ Your submission link is unique to you. Please do not share it with another perfo
     renderAllPerformers();
     renderSlots();
     if (document.getElementById('adtab-inroom')?.style.display !== 'none' || document.getElementById('aud-session-inroom-content')) {
-      renderInRoomPage(inRoomApplicantId);
+      refreshVisibleInRoomForSession();
     }
     return allApplicants;
   }
@@ -57031,10 +57041,10 @@ Your submission link is unique to you. Please do not share it with another perfo
         onClick: cardClick
       });
       const btnsHtml = isIn
-        ? `<button class="ci-card-btn do-contact" onclick="showCiContactModal('${app.id}')">Contact</button>`
-        : isNoShow
-          ? `<button class="ci-card-btn do-contact" onclick="showCiContactModal('${app.id}')">Contact</button>`
-          : `<button class="ci-card-btn do-contact" onclick="showCiContactModal('${app.id}')">Contact</button><button class="ci-card-btn do-noshow" onclick="setCiNoShow('${app.id}','${session.id}')">No Show</button>`;
+          ? `<button class="ci-card-btn do-contact" onclick="showCiContactModal('${app.id}','${session.id}')">Contact</button>`
+          : isNoShow
+          ? `<button class="ci-card-btn do-contact" onclick="showCiContactModal('${app.id}','${session.id}')">Contact</button>`
+          : `<button class="ci-card-btn do-contact" onclick="showCiContactModal('${app.id}','${session.id}')">Contact</button><button class="ci-card-btn do-noshow" onclick="setCiNoShow('${app.id}','${session.id}')">No Show</button>`;
       return `<div class="ci-card-wrap ${wrapClass}" style="--ci-accent:${esc(ciAccent)};--ci-accent-ring:${esc(ciAccentRing)};--ci-accent-glow:${esc(ciAccentGlow)};--ci-accent-08:${esc(ciAccent08)};--ci-accent-12:${esc(ciAccent12)};">
         ${timeStr && !isDanceCall ? `<div class="ci-card-time" style="color:${esc(ciAccent)};">${esc(formatSlotTime(timeStr))}</div>` : ''}
         ${cardHtml}
@@ -57250,12 +57260,17 @@ Your submission link is unique to you. Please do not share it with another perfo
     }
   }
 
-  function showCiContactModal(appId) {
+  function showCiContactModal(appId, sessionId = null) {
     const app = allApplicants.find(a => a.id === appId);
     if (!app) return;
+    const session = sessionId
+      ? (audSessions || []).find(candidate => String(candidate.id || '') === String(sessionId || ''))
+      : (getCurrentInRoomSession() || getActiveAuditionNavSession() || getSelectedCheckInSession());
+    const sid = session?.id || null;
     document.getElementById('ci-contact-modal')?.remove();
     const audNum = generateAuditionNumber(app);
-    const timeRaw = getApplicantSlotStartValue(app);
+    const sessionSlot = sid ? getApplicantSlotForSession(app, sid) : null;
+    const timeRaw = sessionSlot?.slot_time || sessionSlot?.start_time || getApplicantSlotStartValue(app);
     const timeStr = timeRaw ? formatSlotTime(timeRaw) : '—';
     const ca = applicantCustomAnswers(app);
     const contactName = applicantContactName(app);
@@ -57283,13 +57298,13 @@ Your submission link is unique to you. Please do not share it with another perfo
       </div>`
     ).join('');
 
-    const isIn = !!app.checked_in;
+    const isIn = sid ? isCheckedInForSession(app, sid) : !!app.checked_in;
     const isNoShow = app.status === 'no_show';
     const actionBtnsHtml = isIn
       ? ''
       : isNoShow
         ? ''
-        : `<button class="ci-contact-btn-danger" onclick="setCiNoShow('${appId}');document.getElementById('ci-contact-modal')?.remove()">No Show</button>`;
+        : `<button class="ci-contact-btn-danger" onclick="setCiNoShow('${appId}','${esc(sid || '')}');document.getElementById('ci-contact-modal')?.remove()">No Show</button>`;
 
     const modal = document.createElement('div');
     modal.id = 'ci-contact-modal';
@@ -57315,7 +57330,8 @@ Your submission link is unique to you. Please do not share it with another perfo
     ciSecondaryRefreshTimer = setTimeout(() => {
       try { loadAudDashboard(); } catch {}
       try {
-        if (document.getElementById('adtab-inroom')?.style.display !== 'none' || document.getElementById('aud-session-inroom-content')) renderInRoomPage(inRoomApplicantId);
+        if (document.getElementById('aud-session-inroom-content')) renderInRoomPage(inRoomApplicantId, 'aud-session-inroom-content', 'openAuditionSessionInRoom');
+        else if (document.getElementById('adtab-inroom')?.style.display !== 'none') renderInRoomPage(inRoomApplicantId);
       } catch {}
     }, 80);
   }
@@ -57384,18 +57400,10 @@ Your submission link is unique to you. Please do not share it with another perfo
     const app = allApplicants.find(a => a.id === appId);
     if (!app) return;
     const newCheckedIn = !currentlyIn;
-    const newCheckedInAt = newCheckedIn ? new Date().toISOString() : null;
 
     // Update per-session check-in array
     const prevCheckins = Array.isArray(app.session_checkins) ? [...app.session_checkins] : [];
-    let newCheckins = prevCheckins;
-    if (sessionId) {
-      const sid = String(sessionId);
-      newCheckins = [
-        ...prevCheckins.filter(x => String(x.session_id || '') !== sid),
-        ...(newCheckedIn ? [{ session_id: sid, checked_in: true, checked_in_at: newCheckedInAt }] : []),
-      ];
-    }
+    const newCheckins = sessionId ? withSessionCheckinState(app, sessionId, newCheckedIn) : prevCheckins;
 
     // Optimistic update
     app.session_checkins = newCheckins;
@@ -57412,7 +57420,9 @@ Your submission link is unique to you. Please do not share it with another perfo
       app.session_checkins = prevCheckins;
       renderCheckInList();
       showToast('Check-in failed', true);
+      return;
     }
+    refreshVisibleInRoomForSession();
   }
 
   // ── Mirror applicants list into Performers sub-tab ──
