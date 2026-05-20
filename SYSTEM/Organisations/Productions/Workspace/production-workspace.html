@@ -26973,6 +26973,7 @@
   let allSlots      = [];
   let auditionsRealtimeChannel = null;
   let auditionsRefreshTimer    = null;
+  let _applicantReconcileTimer = null;
   let _auditionsPollTimer      = null;
   let _auditionsFullPollAt     = 0;
   let _auditionsLiveRefreshRunning = false;
@@ -27353,8 +27354,70 @@
     });
   }
 
+  function patchApplicantFromPayload(newRow) {
+    if (!newRow?.id) return false;
+    const app = allApplicants.find(a => String(a.id) === String(newRow.id));
+    if (!app) return false;
+    if (newRow.session_checkins !== undefined) app.session_checkins = newRow.session_checkins;
+    if (newRow.checked_in      !== undefined) app.checked_in       = newRow.checked_in;
+    if (newRow.checked_in_at   !== undefined) app.checked_in_at    = newRow.checked_in_at;
+    if (newRow.status          !== undefined) app.status           = newRow.status;
+    return true;
+  }
+
+  function refreshCheckinInPlace() {
+    const inner = document.getElementById('checkin-list-inner');
+    if (!inner) return;
+    const savedY = window.scrollY;
+    const session = getSelectedCheckInSession();
+    const search  = document.getElementById('ci-search')?.value || '';
+    try { renderCiStageHead(session); } catch {}
+    inner.innerHTML = buildCheckInListMarkup(session, search, ciFilter);
+    window.scrollTo({ top: savedY, behavior: 'instant' });
+  }
+
+  function refreshInRoomTrayInPlace() {
+    const stripEl = document.querySelector('[data-bts-template="checked-in-rail"]');
+    if (!stripEl) return;
+    const session       = getCurrentInRoomSession() || getSelectedAuditionSession();
+    const checkedInApps = getInRoomCheckedInApps();
+    const openFn        = inRoomOpenFn || 'openInRoom';
+    const trayCards     = checkedInApps.map(a => inRoomThumbHtml(a, openFn, session)).join('');
+    const rowEl         = stripEl.querySelector('.template-checkin-row');
+    if (rowEl) {
+      const savedLeft   = rowEl.scrollLeft;
+      rowEl.innerHTML   = trayCards;
+      rowEl.scrollLeft  = savedLeft;
+    }
+    // If the currently shown person was unchecked, move to the next one
+    if (inRoomApplicantId && !checkedInApps.some(a => a.id === inRoomApplicantId)) {
+      const groups = getInRoomGroups();
+      const nextId = groups.current?.id || groups.waiting[0]?.id || groups.past[0]?.id || null;
+      renderInRoomPage(nextId, inRoomContainerId, inRoomOpenFn);
+    }
+  }
+
+  function handleApplicantRealtimeChange(newRow) {
+    if (!patchApplicantFromPayload(newRow)) return;
+    refreshCheckinInPlace();
+    refreshInRoomTrayInPlace();
+    // Silent background reconcile — force-fetch after 3s to catch anything the payload missed
+    clearTimeout(_applicantReconcileTimer);
+    _applicantReconcileTimer = setTimeout(async () => {
+      try {
+        await loadApplicants({ force: true });
+        refreshCheckinInPlace();
+        refreshInRoomTrayInPlace();
+      } catch {}
+    }, 3000);
+  }
+
   function queueAuditionsRefresh(payload = null) {
     if (document.visibilityState === 'hidden') return;
+    if (payload?.table === 'audition_applications' && payload?.new) {
+      handleApplicantRealtimeChange(payload.new);
+      return;
+    }
     if (payload?.table === 'production_audition_room_states') {
       if (payload?.new?.room_key) mergeAuditionRoomState(payload.new);
       else loadAuditionRoomStates({ force: true }).catch(() => {});
