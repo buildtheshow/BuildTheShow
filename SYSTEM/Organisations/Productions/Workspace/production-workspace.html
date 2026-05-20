@@ -28846,6 +28846,11 @@
     return [date, time ? `at ${time}` : ''].filter(Boolean).join(' ');
   }
 
+  function etSelfTapeDeadlineSample() {
+    const settingsInputValue = document.getElementById('st-settings-deadline')?.value || '';
+    return etFormatSelfTapeDeadline(settingsInputValue || prod?.wizard_data?.self_tape_deadline) || ET_SAMPLE_CONTEXT.selfTapeDeadline;
+  }
+
   const ET_VARIABLES = [
     // ── Contact ─────────────────────────────────────────────────
     {
@@ -28994,7 +28999,7 @@
         { token: '{{submission_link}}', label: 'Submission Link', sample: () => etSampleProductionUrl(`/SelfTape/${ET_SAMPLE_CONTEXT.selfTapeCode}`) },
         { token: '{{submission_button}}', label: 'Submission Button', sample: () => emailActionButtonHtml(etSampleProductionUrl(`/SelfTape/${ET_SAMPLE_CONTEXT.selfTapeCode}`), 'Submit Self Tape') },
         { token: '{{self_tape_instructions}}', label: 'What to Film', sample: () => prod?.wizard_data?.self_tape_instructions || 'Please sing 60 to 90 seconds of a musical theatre song and read the Glinda side provided in your audition information.' },
-        { token: '{{self_tape_deadline}}', label: 'Submission Deadline', sample: () => etFormatSelfTapeDeadline(prod?.wizard_data?.self_tape_deadline) || ET_SAMPLE_CONTEXT.selfTapeDeadline },
+        { token: '{{self_tape_deadline}}', label: 'Submission Deadline', sample: () => etSelfTapeDeadlineSample() },
         { token: '{{show_name}}',       label: 'Show Name',       sample: () => ET_SAMPLE_CONTEXT.showName },
         { token: '{{performer_name}}',  label: 'Performer Name',  sample: () => ET_SAMPLE_CONTEXT.performerName },
       ],
@@ -29314,7 +29319,7 @@
       producer_role: producerSignoffContext().producer_role || 'Producer',
       producer_email: producerSignoffContext().producer_email || etPlaceholder('producer email'),
       producer_signoff: producerSignoffContext().producer_signoff || etPlaceholder('producer sign-off'),
-      self_tape_deadline: etFormatSelfTapeDeadline(prod?.wizard_data?.self_tape_deadline) || ET_SAMPLE_CONTEXT.selfTapeDeadline,
+      self_tape_deadline: etSelfTapeDeadlineSample(),
     };
     return lookup[key] || lookup[key.toLowerCase()] || etPlaceholder(key);
   }
@@ -29359,7 +29364,7 @@
       role_names: ET_SAMPLE_CONTEXT.roleNames,
       registration_link: etSampleProductionUrl(`/registration/${ET_SAMPLE_CONTEXT.registrationCode}`),
       submission_link: etSampleProductionUrl(`/SelfTape/${ET_SAMPLE_CONTEXT.selfTapeCode}`),
-      self_tape_deadline: ET_SAMPLE_CONTEXT.selfTapeDeadline,
+      self_tape_deadline: etSelfTapeDeadlineSample(),
     }, key) || `Sample ${key}`;
   }
 
@@ -30207,10 +30212,7 @@ Once your video is uploaded, paste the link into your personal submission form b
 
 Your submission link is unique to you. Please do not share it with another performer. Keep this email until your tape has been submitted. If you have any questions, please send us an email.
 
-<br>
-
-Thank you so much!
-<p>{{producer_name}}<br>{{producer_role}}<br>{{producer_email}}</p>`,
+<p style="margin-top:2em;">Thank you so much!<br>{{producer_name}}<br>{{producer_role}}<br>{{producer_email}}</p>`,
     },
   ];
 
@@ -30420,7 +30422,8 @@ Thank you so much!
     const currentBody = String(t.body || '');
     const currentName = String(t.name || '');
     const cleanName = currentName.replace(/\s*[—–]\s*/g, ' ').replace(/\s+/g, ' ').trim();
-    const needsBody = !(currentBody.includes('Your audition information has been sent through') && currentBody.includes('{{self_tape_deadline}}') && currentBody.includes('<br>') && currentBody.includes('Thank you so much!') && !currentBody.includes('—') && !currentBody.includes('─') && currentBody.includes('<ul>') && currentBody.includes('<li>Film somewhere bright where we can clearly see your face</li>') && currentBody.includes('<em>Do not stress') && currentBody.includes('<p>{{producer_name}}<br>{{producer_role}}<br>{{producer_email}}</p>'));
+    const desiredSignoff = '<p style="margin-top:2em;">Thank you so much!<br>{{producer_name}}<br>{{producer_role}}<br>{{producer_email}}</p>';
+    const needsBody = !(currentBody.includes('Your audition information has been sent through') && currentBody.includes('{{self_tape_deadline}}') && currentBody.includes(desiredSignoff) && !currentBody.includes('—') && !currentBody.includes('─') && currentBody.includes('<ul>') && currentBody.includes('<li>Film somewhere bright where we can clearly see your face</li>') && currentBody.includes('<em>Do not stress'));
     const needsName = Boolean(cleanName && cleanName !== currentName);
     if (!needsBody && !needsName) return;
     const newBody = `Hi {{contact_name}},
@@ -30474,10 +30477,7 @@ Once your video is uploaded, paste the link into your personal submission form b
 
 Your submission link is unique to you. Please do not share it with another performer. Keep this email until your tape has been submitted. If you have any questions, please send us an email.
 
-<br>
-
-Thank you so much!
-<p>{{producer_name}}<br>{{producer_role}}<br>{{producer_email}}</p>`;
+<p style="margin-top:2em;">Thank you so much!<br>{{producer_name}}<br>{{producer_role}}<br>{{producer_email}}</p>`;
     const updatePayload = needsBody ? { body: newBody } : {};
     if (needsName) updatePayload.name = cleanName;
     const { error } = await sb.from('email_templates').update(updatePayload).eq('id', t.id);
