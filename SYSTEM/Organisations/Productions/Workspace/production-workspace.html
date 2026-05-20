@@ -3584,6 +3584,46 @@
         0 2px 4px rgba(15, 23, 42, 0.08),
         6px 10px 18px rgba(15, 23, 42, 0.12);
     }
+    .audition-schedule-placeholder-card {
+      width: 100%;
+      aspect-ratio: 3 / 4.1;
+      border: 1px dashed rgba(87,46,136,0.22);
+      border-radius: 6px;
+      background: rgba(255,255,255,0.74);
+      box-shadow:
+        inset 0 0 0 1px rgba(255,255,255,0.72),
+        0 2px 5px rgba(15,23,42,0.06);
+      padding: 0.38rem;
+      display: grid;
+      grid-template-rows: minmax(0, 1fr) auto;
+      gap: 0.34rem;
+      opacity: 0.76;
+      pointer-events: none;
+    }
+    .audition-schedule-placeholder-photo {
+      min-height: 0;
+      border-radius: 4px;
+      background:
+        linear-gradient(135deg, rgba(87,46,136,0.11), rgba(126,170,138,0.1)),
+        rgba(244,241,249,0.92);
+    }
+    .audition-schedule-placeholder-lines {
+      display: grid;
+      gap: 0.18rem;
+      padding: 0.05rem 0.05rem 0.02rem;
+    }
+    .audition-schedule-placeholder-lines span {
+      display: block;
+      height: 0.28rem;
+      border-radius: 999px;
+      background: rgba(87,46,136,0.14);
+    }
+    .audition-schedule-placeholder-lines span:nth-child(1) { width: 82%; height: 0.38rem; }
+    .audition-schedule-placeholder-lines span:nth-child(2) { width: 58%; }
+    .audition-schedule-placeholder-lines span:nth-child(3) { width: 34%; }
+    .audition-schedule-placeholder-card--full {
+      max-width: 100%;
+    }
     .audition-schedule-booked-count {
       font-size: 0.66rem;
       font-weight: 700;
@@ -14706,6 +14746,31 @@
       height: auto;
       max-height: none;
       justify-content: stretch;
+    }
+    @media (min-width: 761px) {
+      .inroom-main.inroom-main-flat .inroom-primary-container {
+        align-items: stretch;
+      }
+      .inroom-main.inroom-main-flat .inroom-right {
+        height: var(--inroom-panel-height, auto);
+        min-height: var(--inroom-panel-height, 0);
+        align-self: start;
+      }
+      .inroom-main.inroom-main-flat .inroom-score-card {
+        height: 100%;
+        min-height: var(--inroom-panel-height, 0);
+        justify-content: stretch;
+      }
+      .inroom-main.inroom-main-flat .inroom-score-card .inroom-score-row {
+        flex: 1 1 0;
+        min-height: 0;
+      }
+      .inroom-main.inroom-main-flat .inroom-score-card .inroom-score-options {
+        align-items: stretch;
+      }
+      .inroom-main.inroom-main-flat .inroom-score-card .inroom-score-btn {
+        height: 100%;
+      }
     }
     .inroom-main.inroom-main-flat .inroom-considered-card {
       min-height: 0;
@@ -27000,7 +27065,7 @@
       }
       if (!inRoomApplicantId) return;
       try {
-        if (document.getElementById('adtab-inroom')?.style.display !== 'none') renderInRoomPage(inRoomApplicantId);
+        if (document.getElementById('adtab-inroom')?.style.display !== 'none' || document.getElementById('aud-session-inroom-content')) renderInRoomPage(inRoomApplicantId);
       } catch {}
     });
     queueWorkspaceWarmupForNav(bootNav);
@@ -27158,7 +27223,7 @@
         if (cbv2Loaded) await loadCbv2();
       } catch {}
       try {
-        if (document.getElementById('adtab-inroom')?.style.display !== 'none') renderInRoomPage(inRoomApplicantId);
+        if (document.getElementById('adtab-inroom')?.style.display !== 'none' || document.getElementById('aud-session-inroom-content')) renderInRoomPage(inRoomApplicantId);
       } catch {}
       try { refreshPerfLightboxContents(); } catch {}
       if (!activeModalApplicantId) return;
@@ -45850,7 +45915,7 @@ Your submission link is unique to you. Please do not share it with another perfo
     renderApplicantsMirror();
     renderAllPerformers();
     renderSlots();
-    if (document.getElementById('adtab-inroom')?.style.display !== 'none') {
+    if (document.getElementById('adtab-inroom')?.style.display !== 'none' || document.getElementById('aud-session-inroom-content')) {
       renderInRoomPage(inRoomApplicantId);
     }
     return allApplicants;
@@ -55780,6 +55845,17 @@ Your submission link is unique to you. Please do not share it with another perfo
     const cardHeight = Math.round(card.getBoundingClientRect().height);
     if (!cardHeight) return;
     main.style.setProperty('--inroom-panel-height', `${cardHeight}px`);
+    if (!main._inRoomPanelResizeObserver && typeof ResizeObserver !== 'undefined') {
+      main._inRoomPanelResizeObserver = new ResizeObserver(() => {
+        requestAnimationFrame(() => syncInRoomRightPanelHeight(container));
+      });
+      main._inRoomPanelResizeObserver.observe(card);
+    }
+    card.querySelectorAll('img').forEach(img => {
+      if (img._inRoomPanelHeightBound) return;
+      img._inRoomPanelHeightBound = true;
+      img.addEventListener('load', () => requestAnimationFrame(() => syncInRoomRightPanelHeight(container)), { once: true });
+    });
   }
 
   function renderInRoomPage(targetId = null, containerId = 'inroom-content', openFn = 'openInRoom') {
@@ -55818,7 +55894,7 @@ Your submission link is unique to you. Please do not share it with another perfo
             <div class="inroom-considered-empty">Select a checked-in performer to start scoring.</div>
            </div>`;
       const noSelectionNotesHtml = `<div class="inroom-considered-empty" style="min-height:9rem;display:flex;align-items:center;justify-content:center;text-align:center;">No performer selected yet.</div>`;
-      const noSelectionCardHtml = `<div class="inroom-back-empty" style="min-height:100%;width:100%;display:flex;align-items:center;justify-content:center;text-align:center;padding:1rem;">No performer selected</div>`;
+      const noSelectionCardHtml = buildAuditionScheduleBlankCastingCardHtml('audition-schedule-placeholder-card--full');
       const templateQuery = {
         area: 'auditions',
         page: 'in-room',
@@ -56871,7 +56947,7 @@ Your submission link is unique to you. Please do not share it with another perfo
     ciSecondaryRefreshTimer = setTimeout(() => {
       try { loadAudDashboard(); } catch {}
       try {
-        if (document.getElementById('adtab-inroom')?.style.display !== 'none') renderInRoomPage(inRoomApplicantId);
+        if (document.getElementById('adtab-inroom')?.style.display !== 'none' || document.getElementById('aud-session-inroom-content')) renderInRoomPage(inRoomApplicantId);
       } catch {}
     }, 80);
   }
@@ -58250,6 +58326,32 @@ Your submission link is unique to you. Please do not share it with another perfo
     return results;
   }
 
+  function buildAuditionScheduleBlankCastingCardHtml(extraClass = '') {
+    return `<div class="casting-card audition-schedule-placeholder-card${extraClass ? ` ${esc(extraClass)}` : ''}" aria-hidden="true">
+      <div class="audition-schedule-placeholder-photo"></div>
+      <div class="audition-schedule-placeholder-lines">
+        <span></span>
+        <span></span>
+        <span></span>
+      </div>
+    </div>`;
+  }
+
+  function buildAuditionSchedulePlaceholderCardHtml() {
+    return `<div class="audition-schedule-booked-card aud-v2-card aud-v2-card-placeholder" aria-label="No checked-in performers yet">
+      ${buildAuditionScheduleBlankCastingCardHtml()}
+    </div>`;
+  }
+
+  function hasAuditionScheduleBookedPerformers(session, slots = getAuditionScheduleSessionSlots(session)) {
+    return slots.some(slot => getAudSlotState(slot) !== 'block' && getAuditionScheduleBookedPerformers(slot, session).length > 0);
+  }
+
+  function findFirstAuditionScheduleOpenSlotIndex(slots) {
+    const index = slots.findIndex(slot => getAudSlotState(slot) !== 'block');
+    return index >= 0 ? index : 0;
+  }
+
   function buildAuditionScheduleBookedCardHtml(app) {
     const dragAttrs = teamCan('editSchedule') ? `draggable="true" ondragstart="fatesDragStart(event,'${esc(app.id)}')" ondragend="fatesDragEnd(event)"` : '';
     const openAttrs = `onclick="openAuditionScheduleCardFromEvent(event,'${esc(app.id)}')" ontouchend="openAuditionScheduleCardFromEvent(event,'${esc(app.id)}')"`;
@@ -58289,19 +58391,22 @@ Your submission link is unique to you. Please do not share it with another perfo
   function buildAuditionScheduleHorizontalGridHtml(session) {
     const sessionSlots = getAuditionScheduleSessionSlots(session);
     if (!sessionSlots.length) return '';
-    return `<div class="audition-schedule-horizontal">${sessionSlots.map(slot => {
+    const hasBookedCards = hasAuditionScheduleBookedPerformers(session, sessionSlots);
+    const placeholderIndex = findFirstAuditionScheduleOpenSlotIndex(sessionSlots);
+    return `<div class="audition-schedule-horizontal">${sessionSlots.map((slot, index) => {
       const timeLabel = formatSlotTime(slot.slot_time || slot.start_time || '');
       const slotState = getAudSlotState(slot);
       const isBlocked = slotState === 'block';
       const bookedPerformers = isBlocked ? [] : getAuditionScheduleBookedPerformers(slot, session);
       const cardsHtml = bookedPerformers.map(buildAuditionScheduleBookedCardHtml).join('');
+      const placeholderHtml = !hasBookedCards && !isBlocked && index === placeholderIndex ? buildAuditionSchedulePlaceholderCardHtml() : '';
       const dropAttrs = isBlocked || !teamCan('editSchedule') ? '' : `ondragover="fatesDragOver(event,'${esc(slot.id)}')" ondragleave="fatesDragLeave(event)" ondrop="fatesDrop(event,'${esc(slot.id)}')"`;
       const confirmHtml = isBlocked || !teamCan('editSchedule') ? '' : buildFatesDropConfirmHtml(slot);
       return `
         <div class="audition-schedule-h-slot state-${esc(slotState)}" ${dropAttrs}>
           <div class="audition-schedule-h-slot-header">${esc(timeLabel)}${isBlocked ? ' · Blocked' : ''}</div>
           <div class="audition-schedule-h-slot-divider"></div>
-          <div class="audition-schedule-h-slot-cards">${confirmHtml}${cardsHtml}</div>
+          <div class="audition-schedule-h-slot-cards">${confirmHtml}${placeholderHtml}${cardsHtml}</div>
         </div>`;
     }).join('')}</div>`;
   }
@@ -58313,10 +58418,13 @@ Your submission link is unique to you. Please do not share it with another perfo
     const sessionSlots = getAuditionScheduleSessionSlots(session);
     if (sessionSlots.length) {
       const lastRowStartIndex = Math.max(0, sessionSlots.length - 7);
+      const hasBookedCards = hasAuditionScheduleBookedPerformers(session, sessionSlots);
+      const placeholderIndex = findFirstAuditionScheduleOpenSlotIndex(sessionSlots);
       return `<div class="audition-schedule-calendar-grid">${sessionSlots.map((slot, index) => {
         const timeLabel = formatSlotTime(slot.slot_time || slot.start_time || '');
         const slotState = getAudSlotState(slot);
         const isBlocked = slotState === 'block';
+        const placeholderHtml = !hasBookedCards && !isBlocked && index === placeholderIndex ? `<div class="audition-schedule-booked-stack">${buildAuditionSchedulePlaceholderCardHtml()}</div>` : '';
         const dropAttrs = isBlocked || !teamCan('editSchedule') ? '' : `ondragover="fatesDragOver(event,'${esc(slot.id)}')" ondragleave="fatesDragLeave(event)" ondrop="fatesDrop(event,'${esc(slot.id)}')"`;
         const confirmHtml = isBlocked || !teamCan('editSchedule') ? '' : buildFatesDropConfirmHtml(slot);
         return `
@@ -58324,6 +58432,7 @@ Your submission link is unique to you. Please do not share it with another perfo
             <div class="audition-schedule-time-label">${buildAuditionSchedulePlaceholderTimeLabelHtml(timeLabel)}</div>
             ${isBlocked ? `<div class="audition-schedule-slot-label">Blocked</div>` : ''}
             ${confirmHtml}
+            ${placeholderHtml}
             ${isBlocked ? '' : buildAuditionScheduleSlotCellContent(slot, session)}
           </div>`;
       }).join('')}</div>`;
@@ -58333,7 +58442,8 @@ Your submission link is unique to you. Please do not share it with another perfo
     const lastRowStartIndex = Math.max(0, emptyCellCount - 7);
     return `<div class="audition-schedule-calendar-grid">${Array.from({ length: emptyCellCount }, (_, index) => `
       <div class="audition-schedule-time-cell is-empty-grid ${index >= lastRowStartIndex ? 'is-last-row' : ''}">
-        <div class="audition-schedule-time-placeholder is-empty-grid"></div>
+        ${index === 0 ? '' : '<div class="audition-schedule-time-placeholder is-empty-grid"></div>'}
+        ${index === 0 ? `<div class="audition-schedule-booked-stack">${buildAuditionSchedulePlaceholderCardHtml()}</div>` : ''}
       </div>
     `).join('')}</div>`;
   }
@@ -58422,40 +58532,46 @@ Your submission link is unique to you. Please do not share it with another perfo
 
     if (isDance) {
       if (!sessionSlots.length) {
-        return `<div class="audition-schedule-horizontal">${Array.from({ length: 8 }, () =>
+        return `<div class="audition-schedule-horizontal">${Array.from({ length: 8 }, (_, index) =>
           `<div class="audition-schedule-h-slot state-open">
             <div class="audition-schedule-h-slot-header">—</div>
             <div class="audition-schedule-h-slot-divider"></div>
-            <div class="audition-schedule-h-slot-cards"></div>
+            <div class="audition-schedule-h-slot-cards">${index === 0 ? buildAuditionSchedulePlaceholderCardHtml() : ''}</div>
           </div>`).join('')}</div>`;
       }
-      return `<div class="audition-schedule-horizontal">${sessionSlots.map(slot => {
+      const hasBookedCards = hasAuditionScheduleBookedPerformers(session, sessionSlots);
+      const placeholderIndex = findFirstAuditionScheduleOpenSlotIndex(sessionSlots);
+      return `<div class="audition-schedule-horizontal">${sessionSlots.map((slot, index) => {
         const timeLabel = formatSlotTime(slot.slot_time || slot.start_time || '');
         const slotState = getAudSlotState(slot);
         const isBlocked = slotState === 'block';
         const performers = isBlocked ? [] : getAuditionScheduleBookedPerformers(slot, session);
+        const placeholderHtml = !hasBookedCards && !isBlocked && index === placeholderIndex ? buildAuditionSchedulePlaceholderCardHtml() : '';
         return `
           <div class="audition-schedule-h-slot state-${esc(slotState)}">
             <div class="audition-schedule-h-slot-header">${esc(timeLabel)}${isBlocked ? ' · Blocked' : ''}</div>
             <div class="audition-schedule-h-slot-divider"></div>
-            <div class="audition-schedule-h-slot-cards">${performers.map(buildAudScheduleV2CardHtml).join('')}</div>
+            <div class="audition-schedule-h-slot-cards">${placeholderHtml}${performers.map(buildAudScheduleV2CardHtml).join('')}</div>
           </div>`;
       }).join('')}</div>`;
     }
 
     if (sessionSlots.length) {
       const lastRowStartIndex = Math.max(0, sessionSlots.length - 7);
+      const hasBookedCards = hasAuditionScheduleBookedPerformers(session, sessionSlots);
+      const placeholderIndex = findFirstAuditionScheduleOpenSlotIndex(sessionSlots);
       return `<div class="audition-schedule-calendar-grid">${sessionSlots.map((slot, index) => {
         const timeLabel = formatSlotTime(slot.slot_time || slot.start_time || '');
         const slotState = getAudSlotState(slot);
         const isBlocked = slotState === 'block';
         const performers = isBlocked ? [] : getAuditionScheduleBookedPerformers(slot, session);
         const cardsHtml = performers.map(buildAudScheduleV2CardHtml).join('');
+        const placeholderHtml = !hasBookedCards && !isBlocked && index === placeholderIndex ? buildAuditionSchedulePlaceholderCardHtml() : '';
         return `
           <div class="audition-schedule-time-cell ${index >= lastRowStartIndex ? 'is-last-row' : ''} state-${esc(slotState)}">
             <div class="audition-schedule-time-label">${buildAuditionSchedulePlaceholderTimeLabelHtml(timeLabel)}</div>
             ${isBlocked ? `<div class="audition-schedule-slot-label">Blocked</div>` : ''}
-            ${cardsHtml ? `<div class="audition-schedule-booked-stack">${cardsHtml}</div>` : ''}
+            ${cardsHtml || placeholderHtml ? `<div class="audition-schedule-booked-stack">${placeholderHtml}${cardsHtml}</div>` : ''}
           </div>`;
       }).join('')}</div>`;
     }
@@ -58464,7 +58580,8 @@ Your submission link is unique to you. Please do not share it with another perfo
     const lastRowStartIndex = Math.max(0, emptyCellCount - 7);
     return `<div class="audition-schedule-calendar-grid">${Array.from({ length: emptyCellCount }, (_, i) => `
       <div class="audition-schedule-time-cell is-empty-grid${i >= lastRowStartIndex ? ' is-last-row' : ''}">
-        <div class="audition-schedule-time-placeholder is-empty-grid"></div>
+        ${i === 0 ? '' : '<div class="audition-schedule-time-placeholder is-empty-grid"></div>'}
+        ${i === 0 ? `<div class="audition-schedule-booked-stack">${buildAuditionSchedulePlaceholderCardHtml()}</div>` : ''}
       </div>`).join('')}</div>`;
   }
 
