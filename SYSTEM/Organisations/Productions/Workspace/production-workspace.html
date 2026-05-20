@@ -57542,16 +57542,26 @@ Thank you,
     if (!app) return;
     const appEmail = app.email || applicantCustomAnswers(app)['Contact Email'] || '';
     try {
-      const { data: templates } = await sb.from('email_templates')
-        .select('subject, body')
+      const { data: byName } = await sb.from('email_templates')
+        .select('subject, body, name, category')
         .eq('production_id', prodId)
-        .or('category.eq.self_tape_booked,name.ilike.%Self Tape Registration%')
-        .order('created_at', { ascending: false }).limit(1);
-      if (!templates?.length) {
+        .ilike('name', '%Self Tape Registration%')
+        .order('created_at', { ascending: false })
+        .limit(1);
+      let template = byName?.[0] || null;
+      if (!template) {
+        const { data: byCat } = await sb.from('email_templates')
+          .select('subject, body, name, category')
+          .eq('production_id', prodId)
+          .eq('category', 'self_tape_booked')
+          .order('created_at', { ascending: false })
+          .limit(1);
+        template = byCat?.[0] || null;
+      }
+      if (!template) {
         showToast('No self tape email template found. Create one in the Emails tab first.', true);
         return;
       }
-      const template = templates[0];
       await loadPerformanceScheduleSummary();
       const context = withEmailButtonContext(_apmBuildEmailContext());
       const subject = _applyEmailContext(template.subject || '', context) || 'Your self tape submission link';
