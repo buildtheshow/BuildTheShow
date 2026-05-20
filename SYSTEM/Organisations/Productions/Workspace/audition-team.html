@@ -16241,13 +16241,19 @@
     if (table === 'audition_applications') {
       if (payload?.new?.id) {
         const changed = mergeApplicantCheckInRow(payload.new);
+        await loadApplicants({ skipRender: true, skipCastingSync: true });
+        hydrateApplicantCheckInStore();
         if (changed) {
           try { renderCheckInList(); } catch {}
           try { refreshCheckedInStripOnly(); } catch {}
         }
+        try { renderAudSchedule(); } catch {}
+        try { renderAudScheduleV2(); } catch {}
         return;
       }
       await refreshAuditionsCheckInUi();
+      try { renderAudSchedule(); } catch {}
+      try { renderAudScheduleV2(); } catch {}
       return;
     }
     if (table === 'production_audition_notes' || table === 'production_audition_observations') {
@@ -16261,10 +16267,16 @@
       return;
     }
     if (table === 'audition_sessions' || table === 'audition_time_slots' || table === 'audition_bookings') {
-      await Promise.all([loadAudSessions(), loadSlots(), loadApplicants()]);
+      await Promise.all([
+        loadAudSessions({ skipMaintenance: true }),
+        loadSlots(),
+        loadApplicants({ skipRender: true, skipCastingSync: true }),
+      ]);
       hydrateApplicantCheckInStore();
       try { renderCheckInList(); } catch {}
       try { refreshCheckedInStripOnly(); } catch {}
+      try { renderAudSchedule(); } catch {}
+      try { renderAudScheduleV2(); } catch {}
       return;
     }
     await refreshAuditionsCheckInUi();
@@ -35029,12 +35041,8 @@ If you have any questions, don't hesitate to reach out.
     const el = document.getElementById('aud-schedule-v2-content');
     if (!el) return;
 
-    if (!audSessions.length) {
-      try { await loadAudSessions(); } catch {}
-    }
-    if (!allApplicants.length) {
-      try { await loadApplicants(); } catch {}
-    }
+    try { await loadAudSessions({ skipMaintenance: true }); } catch {}
+    try { await loadApplicants({ skipRender: true, skipCastingSync: true }); } catch {}
 
     const scheduleSessions = getAuditionScheduleViewSessions();
     if (!_audScheduleV2SessionId || !scheduleSessions.find(s => s.id === _audScheduleV2SessionId)) {
@@ -35234,22 +35242,16 @@ If you have any questions, don't hesitate to reach out.
     const el = document.getElementById('aud-schedule-content');
     if (!el) return;
 
-    // Use the shared session/slot state already loaded by Audition Settings.
-    // Only fetch if the page opened directly on Schedule before anything else loaded.
-    if (!audSessions.length) {
-      try {
-        await loadAudSessions();
-      } catch (error) {
-        console.warn('[BTS] audition schedule session load failed', error);
-      }
+    try {
+      await loadAudSessions({ skipMaintenance: true });
+    } catch (error) {
+      console.warn('[BTS] audition schedule session load failed', error);
     }
 
-    if (!allApplicants.length) {
-      try {
-        await loadApplicants();
-      } catch (error) {
-        console.warn('[BTS] audition schedule performer load failed', error);
-      }
+    try {
+      await loadApplicants({ skipRender: true, skipCastingSync: true });
+    } catch (error) {
+      console.warn('[BTS] audition schedule performer load failed', error);
     }
 
     el.innerHTML = buildAuditionSchedulePlaceholderHtml();
