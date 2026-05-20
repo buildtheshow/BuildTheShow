@@ -28176,6 +28176,43 @@
     return !startedAt || Date.now() - startedAt < INROOM_NEXT_WAITING_LABEL_MS;
   }
 
+  function clearAuditionRoomStateForApplicant(appId, sessionId) {
+    if (!appId || !sessionId) return false;
+    const session = audSessions.find(candidate => String(candidate.id || '') === String(sessionId || ''));
+    if (!session) return false;
+    const meta = getAuditionRoomMeta(session);
+    const state = getRoomState(meta.roomKey);
+    if (!state || String(state.current_applicant_id || '') !== String(appId || '')) return false;
+    const clearedAt = new Date().toISOString();
+    const cleared = {
+      ...state,
+      status: 'idle',
+      current_applicant_id: null,
+      current_group_key: null,
+      current_group_label: null,
+      current_group_member_ids: [],
+      next_applicant_id: null,
+      next_group_key: null,
+      next_group_label: null,
+      next_group_member_ids: [],
+      updated_at: clearedAt,
+      cleared_at: clearedAt,
+    };
+    mergeAuditionRoomState(cleared);
+    persistAuditionRoomState(cleared, { localFallback: true }).catch(() => {});
+    return true;
+  }
+
+  function clearStaleAuditionRoomState(session) {
+    if (!session?.id) return false;
+    const meta = getAuditionRoomMeta(session);
+    const state = getRoomState(meta.roomKey);
+    if (!state || state.status !== 'in_progress' || !state.current_applicant_id) return false;
+    const currentApp = allApplicants.find(app => String(app.id || '') === String(state.current_applicant_id || ''));
+    if (currentApp && isCheckedInForSession(currentApp, session.id)) return false;
+    return clearAuditionRoomStateForApplicant(state.current_applicant_id, session.id);
+  }
+
   function setInRoomNextButtonWaiting(buttonEl, waitingLabel = 'Waiting for next performer...') {
     if (!buttonEl) return;
     clearTimeout(buttonEl._btsNextWaitingTimer);
@@ -54901,6 +54938,42 @@ Your submission link is unique to you. Please do not share it with another perfo
     return rows;
   }
 
+  window.BTSDebugAttendance = function BTSDebugAttendance(sessionId = '') {
+    const session = sessionId
+      ? (audSessions || []).find(candidate => String(candidate.id || '') === String(sessionId || ''))
+      : (getActiveAuditionNavSession() || getCurrentInRoomSession() || getSelectedAuditionSession());
+    if (!session) {
+      console.warn('[BTS attendance debug] No audition session selected.');
+      return [];
+    }
+    const assigned = getCheckInSessionApps(session, '', 'all');
+    const checked = getCheckInSessionApps(session, '', 'in');
+    const roomState = getRoomState(getAuditionRoomMeta(session).roomKey);
+    const rows = assigned.map(app => {
+      const entry = getSessionCheckinEntry(app, session.id);
+      return {
+        session: session.name || sessionTypeLabel(session.type || 'audition'),
+        session_id: session.id,
+        performer: appDisplayName(app),
+        app_id: app.id,
+        source_ids: Array.isArray(app._sourceApplicationIds) ? app._sourceApplicationIds.join(', ') : '',
+        checked_in_for_session: !!entry?.checked_in,
+        checked_in_at: entry?.checked_in_at || '',
+        attendance_updated_at: entry?.updated_at || '',
+        status: app.status || '',
+        legacy_checked_in: !!app.checked_in,
+        slot: getApplicantSlotForSession(app, session.id)?.slot_time || getApplicantSlotStartValue(app) || '',
+      };
+    });
+    console.group(`[BTS attendance debug] ${session.name || session.id}`);
+    console.log('session', session);
+    console.log('checked-in count', checked.length, checked.map(appDisplayName));
+    console.log('room state', roomState || null);
+    console.table(rows);
+    console.groupEnd();
+    return { session, checkedIn: checked, roomState, rows };
+  };
+
   function getInRoomGroups(sessionOverride = null) {
     const session = sessionOverride || getCurrentInRoomSession() || getSelectedAuditionSession();
     const checkedIn = getInRoomCheckedInApps(session);
@@ -55847,6 +55920,7 @@ Your submission link is unique to you. Please do not share it with another perfo
 
   function updateInRoomConsideredPanel(app) {
     const currentSession = getCurrentInRoomSession();
+    clearStaleAuditionRoomState(currentSession);
     if (!currentSession || currentSession.type === 'audition' || currentSession.type === 'callback') return;
     const list = document.querySelector(`#${inRoomContainerId} .inroom-considered-list`);
     if (list) list.innerHTML = renderInRoomConsideredFor(app);
@@ -56268,6 +56342,7 @@ Your submission link is unique to you. Please do not share it with another perfo
       return;
     }
     const currentSession = getCurrentInRoomSession();
+    clearStaleAuditionRoomState(currentSession);
     const groups = getInRoomGroups(currentSession);
     const checkedInApps = getInRoomCheckedInApps(currentSession);
     const requestedId = targetId || inRoomApplicantId || null;
@@ -56275,6 +56350,7 @@ Your submission link is unique to you. Please do not share it with another perfo
     const chosenId = requestedIsValid ? requestedId : (groups.current?.id || groups.waiting[0]?.id || groups.past[0]?.id || null);
     inRoomApplicantId = chosenId;
     if (chosenId) saveWorkspaceNavState({ inRoomApplicantId: chosenId });
+    else saveWorkspaceNavState({ inRoomApplicantId: '' });
     const app = allApplicants.find(a => a.id === chosenId) || null;
     if (syncCurrentRoomFromState(currentSession, containerId, openFn, requestedId)) return;
     const usesGeneralInRoomLayout = !currentSession?.type || currentSession.type === 'audition' || currentSession.type === 'callback';
@@ -57431,6 +57507,7 @@ Your submission link is unique to you. Please do not share it with another perfo
       if (sid) {
         const sourceError = await persistSessionCheckinsToAllSourceApplications(app, nextCheckins);
         if (sourceError) throw sourceError;
+        clearAuditionRoomStateForApplicant(app.id, sid);
       }
       queueCiSecondaryRefresh();
       showSaveStatus('saved');
@@ -57490,6 +57567,7 @@ Your submission link is unique to you. Please do not share it with another perfo
       if (error) throw error;
       const sourceError = await persistSessionCheckinsToAllSourceApplications(app, newCheckins);
       if (sourceError) throw sourceError;
+      if (!newCheckedIn && sessionId) clearAuditionRoomStateForApplicant(app.id, sessionId);
       queueCiSecondaryRefresh();
       showSaveStatus('saved');
     } catch {
