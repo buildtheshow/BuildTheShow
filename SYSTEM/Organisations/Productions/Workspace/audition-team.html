@@ -15,11 +15,19 @@
     html { width: 100%; max-width: 100%; overflow-x: hidden; }
     body { margin: 0; width: 100%; max-width: 100%; overflow-x: hidden; background: #ffffff; font-family: var(--bts-font); color: #1a1530; display: flex; flex-direction: column; min-height: 100vh; min-height: 100dvh; }
     body.mobile-sidebar-open { overflow: hidden; }
+    body.team-access-zoom-locked { touch-action: pan-x pan-y; }
     .team-access-toolbar { display:flex; justify-content:space-between; align-items:center; gap:0.75rem; flex-wrap:wrap; margin-bottom:0.75rem; }
     .team-access-title { font-size:var(--bts-type-xs); font-weight:800; letter-spacing:var(--bts-tracking-label); text-transform:uppercase; color:var(--bts-muted); }
     .team-access-subtitle { font-size:var(--bts-type-sm); color:var(--bts-soft); margin-top:0.18rem; line-height:1.35; }
     .team-access-actions { display:flex; gap:0.45rem; flex-wrap:wrap; }
     .team-access-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(320px,1fr)); gap:1rem; }
+    @media (max-width: 900px) {
+      body.team-access-zoom-locked input,
+      body.team-access-zoom-locked select,
+      body.team-access-zoom-locked textarea {
+        font-size: 16px !important;
+      }
+    }
 
     .mobile-nav-toggle {
       display: none;
@@ -15390,8 +15398,39 @@
     showTeamAccessLogin('You have been logged out.');
   }
 
+  function installTeamAccessMobileZoomLock() {
+    if (!teamAccessMode || window.__btsTeamAccessZoomLocked) return;
+    window.__btsTeamAccessZoomLocked = true;
+    document.body?.classList.add('team-access-zoom-locked');
+    const viewport = document.querySelector('meta[name="viewport"]');
+    const lockedViewport = 'width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover';
+    if (viewport) viewport.setAttribute('content', lockedViewport);
+
+    const resetScale = () => {
+      if (viewport && viewport.getAttribute('content') !== lockedViewport) {
+        viewport.setAttribute('content', lockedViewport);
+      }
+      if (window.visualViewport && window.visualViewport.scale !== 1) {
+        requestAnimationFrame(() => viewport?.setAttribute('content', lockedViewport));
+      }
+    };
+    const preventGesture = event => event.preventDefault();
+    const preventMultiTouch = event => {
+      if (event.touches && event.touches.length > 1) event.preventDefault();
+    };
+
+    document.addEventListener('gesturestart', preventGesture, { passive: false });
+    document.addEventListener('gesturechange', preventGesture, { passive: false });
+    document.addEventListener('gestureend', event => { preventGesture(event); resetScale(); }, { passive: false });
+    document.addEventListener('touchmove', preventMultiTouch, { passive: false });
+    document.addEventListener('dblclick', preventGesture, { passive: false });
+    window.visualViewport?.addEventListener('resize', resetScale);
+    window.visualViewport?.addEventListener('scroll', resetScale);
+  }
+
   function applyTeamAccessMode() {
     if (!teamAccessMode) return;
+    installTeamAccessMobileZoomLock();
     document.body.classList.add('team-access-mode');
     const perms = teamAccessPermissions();
     const nameEl = document.getElementById('hdr-title');
@@ -15780,6 +15819,7 @@
     }
 
     if (teamAccessMode) {
+      installTeamAccessMobileZoomLock();
       showTeamAccessLogin();
       const remembered = loadRememberedTeamAccess();
       if (remembered?.sessionToken) {
@@ -20584,7 +20624,7 @@ If you have any questions, don't hesitate to reach out.
   function getDefaultTeamConfig() {
     return [
       { name: 'Producer(s)', standalone: true, open: true, noLead: true, roles: [] },
-      { name: 'Creative Team', standalone: false, open: true, noLead: true, roles: [
+      { name: 'Artistic Team', standalone: false, open: true, noLead: true, roles: [
         { id: crypto.randomUUID(), name: 'Director', filled: false, person: '', notes: '' },
         { id: crypto.randomUUID(), name: 'Choreographer', filled: false, person: '', notes: '' },
         { id: crypto.randomUUID(), name: 'Vocal Director', filled: false, person: '', notes: '' },
@@ -20605,21 +20645,25 @@ If you have any questions, don't hesitate to reach out.
       teamConfig = getDefaultTeamConfig();
       await saveTeamConfig();
     } else {
-      // Migrate: ensure Producer(s) and Creative Team sections exist
+      // Migrate: ensure Producer(s) and Artistic Team sections exist (rename Creative Team if present)
       let dirty = false;
       if (!teamConfig.find(d => d.name === 'Producer(s)')) {
         teamConfig.unshift({ name: 'Producer(s)', standalone: true, open: true, noLead: true, roles: [] });
         dirty = true;
       }
-      if (!teamConfig.find(d => d.name === 'Creative Team')) {
-        // Pull from old Artistic Team if present, otherwise blank
-        const artistic = teamConfig.find(d => d.name === 'Artistic Team');
-        const defaultRoles = ['Director', 'Choreographer', 'Vocal Director'];
-        const creativeRoles = defaultRoles.map(name => {
-          const old = artistic?.roles?.find(r => r.name === name);
-          return old ? { ...old, person: old.person || '' } : { id: crypto.randomUUID(), name, filled: false, person: '', notes: '' };
-        });
-        teamConfig.push({ name: 'Creative Team', standalone: false, open: true, noLead: true, roles: creativeRoles });
+      const existingCreative = teamConfig.find(d => d.name === 'Creative Team');
+      const existingArtistic = teamConfig.find(d => d.name === 'Artistic Team');
+      if (existingCreative && !existingArtistic) {
+        // Rename Creative Team to Artistic Team, preserving all data
+        existingCreative.name = 'Artistic Team';
+        dirty = true;
+      } else if (!existingCreative && !existingArtistic) {
+        // Neither exists — add a blank Artistic Team
+        teamConfig.push({ name: 'Artistic Team', standalone: false, open: true, noLead: true, roles: [
+          { id: crypto.randomUUID(), name: 'Director', filled: false, person: '', notes: '' },
+          { id: crypto.randomUUID(), name: 'Choreographer', filled: false, person: '', notes: '' },
+          { id: crypto.randomUUID(), name: 'Vocal Director', filled: false, person: '', notes: '' },
+        ]});
         dirty = true;
       }
       if (dirty) await saveTeamConfig();
@@ -20761,7 +20805,7 @@ If you have any questions, don't hesitate to reach out.
     openPanel.style.display  = 'none';
     appPanel.style.display   = 'none';
 
-    if (id === 'overview') {
+    if (id === 'overview' || id === 'filled') {
       container.style.display = 'block';
       renderTeamView(container);
     } else if (id === 'open') {
@@ -20786,7 +20830,7 @@ If you have any questions, don't hesitate to reach out.
           </div>
           <div class="team-access-actions">
             <button class="btn-primary" onclick="showAddTeamMemberForm()">+ Add Team Member</button>
-            <button class="btn-secondary" onclick="syncCreativeRolesToTeamAccess()">Sync from Creative Team</button>
+            <button class="btn-secondary" onclick="syncCreativeRolesToTeamAccess()">Sync from Artistic Team</button>
             <button class="btn-secondary" onclick="copyTeamPortalLink()">Copy Portal Link</button>
           </div>
         </div>
@@ -20831,7 +20875,7 @@ If you have any questions, don't hesitate to reach out.
   }
 
   function editCreativeRole(ri) {
-    const creative = teamConfig.find(d => d.name === 'Creative Team');
+    const creative = teamConfig.find(d => d.name === 'Artistic Team') || teamConfig.find(d => d.name === 'Creative Team');
     if (!creative) return;
     const role = creative.roles[ri];
     editingCreativeRoleIndex = ri;
@@ -20849,7 +20893,7 @@ If you have any questions, don't hesitate to reach out.
   }
 
   async function saveCreativeAssignment() {
-    const creative = teamConfig?.find(d => d.name === 'Creative Team');
+    const creative = teamConfig?.find(d => d.name === 'Artistic Team') || teamConfig?.find(d => d.name === 'Creative Team');
     const role = creative?.roles?.[editingCreativeRoleIndex];
     if (!role) return;
     const name = document.getElementById('creative-assign-name')?.value.trim() || '';
@@ -20872,7 +20916,7 @@ If you have any questions, don't hesitate to reach out.
   }
 
   async function clearCreativeAssignment() {
-    const creative = teamConfig?.find(d => d.name === 'Creative Team');
+    const creative = teamConfig?.find(d => d.name === 'Artistic Team') || teamConfig?.find(d => d.name === 'Creative Team');
     const role = creative?.roles?.[editingCreativeRoleIndex];
     if (!role) return;
     const oldPerson = role.person || '';

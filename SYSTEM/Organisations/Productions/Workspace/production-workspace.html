@@ -16,6 +16,7 @@
     html { width: 100%; max-width: 100%; overflow-x: hidden; }
     body { margin: 0; width: 100%; max-width: 100%; overflow-x: hidden; background: #ffffff; font-family: var(--bts-font); color: #1a1530; display: flex; flex-direction: column; min-height: 100vh; min-height: 100dvh; }
     body.mobile-sidebar-open { overflow: hidden; }
+    body.team-access-zoom-locked { touch-action: pan-x pan-y; }
     body.workspace-restoring .prod-tabs,
     body.workspace-restoring .mobile-nav-toggle {
       pointer-events: none;
@@ -26,6 +27,13 @@
     .team-access-subtitle { font-size:var(--bts-type-sm); color:var(--bts-soft); margin-top:0.18rem; line-height:1.35; }
     .team-access-actions { display:flex; gap:0.45rem; flex-wrap:wrap; }
     .team-access-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(320px,1fr)); gap:1rem; }
+    @media (max-width: 900px) {
+      body.team-access-zoom-locked input,
+      body.team-access-zoom-locked select,
+      body.team-access-zoom-locked textarea {
+        font-size: 16px !important;
+      }
+    }
 
     .mobile-nav-toggle {
       display: none;
@@ -24382,8 +24390,39 @@
     showTeamAccessLogin('You have been logged out.');
   }
 
+  function installTeamAccessMobileZoomLock() {
+    if (!teamAccessMode || window.__btsTeamAccessZoomLocked) return;
+    window.__btsTeamAccessZoomLocked = true;
+    document.body?.classList.add('team-access-zoom-locked');
+    const viewport = document.querySelector('meta[name="viewport"]');
+    const lockedViewport = 'width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover';
+    if (viewport) viewport.setAttribute('content', lockedViewport);
+
+    const resetScale = () => {
+      if (viewport && viewport.getAttribute('content') !== lockedViewport) {
+        viewport.setAttribute('content', lockedViewport);
+      }
+      if (window.visualViewport && window.visualViewport.scale !== 1) {
+        requestAnimationFrame(() => viewport?.setAttribute('content', lockedViewport));
+      }
+    };
+    const preventGesture = event => event.preventDefault();
+    const preventMultiTouch = event => {
+      if (event.touches && event.touches.length > 1) event.preventDefault();
+    };
+
+    document.addEventListener('gesturestart', preventGesture, { passive: false });
+    document.addEventListener('gesturechange', preventGesture, { passive: false });
+    document.addEventListener('gestureend', event => { preventGesture(event); resetScale(); }, { passive: false });
+    document.addEventListener('touchmove', preventMultiTouch, { passive: false });
+    document.addEventListener('dblclick', preventGesture, { passive: false });
+    window.visualViewport?.addEventListener('resize', resetScale);
+    window.visualViewport?.addEventListener('scroll', resetScale);
+  }
+
   function applyTeamAccessMode() {
     if (!teamAccessMode) return;
+    installTeamAccessMobileZoomLock();
     document.body.classList.add('team-access-mode');
     const perms = teamAccessPermissions();
     const nameEl = document.getElementById('hdr-title');
@@ -26141,6 +26180,7 @@
     }
 
     if (teamAccessMode) {
+      installTeamAccessMobileZoomLock();
       showTeamAccessLogin();
       const remembered = loadRememberedTeamAccess();
       if (remembered?.sessionToken) {
@@ -32508,10 +32548,18 @@ Thank you,
       if (teamConfig.some(dept => dept.name === 'Creative Team')) {
         const creative = teamConfig.find(dept => dept.name === 'Creative Team');
         const artistic = teamConfig.find(dept => dept.name === 'Artistic Team');
-        if (creative?.roles?.length && artistic) {
-          artistic.roles = [...(artistic.roles || []), ...creative.roles];
+        if (!artistic && creative) {
+          // No Artistic Team — rename Creative Team in place, preserving all roles and people
+          creative.name = 'Artistic Team';
+        } else if (artistic && creative?.roles?.length) {
+          // Both exist — merge Creative roles in without duplicating by name
+          const existingNames = new Set((artistic.roles || []).map(r => String(r.name || '').toLowerCase()));
+          const newRoles = (creative.roles || []).filter(r => !existingNames.has(String(r.name || '').toLowerCase()));
+          if (newRoles.length) artistic.roles = [...(artistic.roles || []), ...newRoles];
+          teamConfig = teamConfig.filter(dept => dept.name !== 'Creative Team');
+        } else {
+          teamConfig = teamConfig.filter(dept => dept.name !== 'Creative Team');
         }
-        teamConfig = teamConfig.filter(dept => dept.name !== 'Creative Team');
         dirty = true;
       }
       const defaultDepartments = BUILTIN_TEMPLATES[0].departments;
