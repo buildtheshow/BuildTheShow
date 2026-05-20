@@ -553,7 +553,6 @@ function buildCastingCardBack(app, opts = {}) {
     vocalSection,
     danceSection,
     skillsSection,
-    availabilitySection,
     notesSection,
     customSection,
   ].filter(Boolean).join('') || '<div class="irb-tab-empty">Nothing here yet.</div>';
