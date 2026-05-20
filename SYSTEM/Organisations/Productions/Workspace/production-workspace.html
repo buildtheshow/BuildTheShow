@@ -54781,6 +54781,19 @@ Your submission link is unique to you. Please do not share it with another perfo
     return checkins.find(x => String(x.session_id || '') === String(sessionId || '')) || null;
   }
 
+  function withSessionCheckinState(app, sessionId, checkedIn) {
+    const sid = String(sessionId || '').trim();
+    const prevCheckins = Array.isArray(app?.session_checkins) ? app.session_checkins : [];
+    if (!sid) return prevCheckins;
+    const nextEntry = checkedIn
+      ? { session_id: sid, checked_in: true, checked_in_at: new Date().toISOString() }
+      : { session_id: sid, checked_in: false, checked_in_at: null };
+    return [
+      ...prevCheckins.filter(x => String(x?.session_id || '') !== sid),
+      nextEntry,
+    ];
+  }
+
   function getInRoomCheckedInApps(sessionOverride = null) {
     const session = sessionOverride || getCurrentInRoomSession() || getSelectedAuditionSession();
     if (session?.id) {
@@ -57021,7 +57034,7 @@ Your submission link is unique to you. Please do not share it with another perfo
         ? `<button class="ci-card-btn do-contact" onclick="showCiContactModal('${app.id}')">Contact</button>`
         : isNoShow
           ? `<button class="ci-card-btn do-contact" onclick="showCiContactModal('${app.id}')">Contact</button>`
-          : `<button class="ci-card-btn do-contact" onclick="showCiContactModal('${app.id}')">Contact</button><button class="ci-card-btn do-noshow" onclick="setCiNoShow('${app.id}')">No Show</button>`;
+          : `<button class="ci-card-btn do-contact" onclick="showCiContactModal('${app.id}')">Contact</button><button class="ci-card-btn do-noshow" onclick="setCiNoShow('${app.id}','${session.id}')">No Show</button>`;
       return `<div class="ci-card-wrap ${wrapClass}" style="--ci-accent:${esc(ciAccent)};--ci-accent-ring:${esc(ciAccentRing)};--ci-accent-glow:${esc(ciAccentGlow)};--ci-accent-08:${esc(ciAccent08)};--ci-accent-12:${esc(ciAccent12)};">
         ${timeStr && !isDanceCall ? `<div class="ci-card-time" style="color:${esc(ciAccent)};">${esc(formatSlotTime(timeStr))}</div>` : ''}
         ${cardHtml}
@@ -57307,21 +57320,27 @@ Your submission link is unique to you. Please do not share it with another perfo
     }, 80);
   }
 
-  async function setCiNoShow(appId) {
+  async function setCiNoShow(appId, sessionId = null) {
     const app = allApplicants.find(a => a.id === appId);
     if (!app) return;
+    const sid = sessionId || getCurrentInRoomSession()?.id || getActiveAuditionNavSession()?.id || getSelectedCheckInSession()?.id || null;
     const prev = {
       status: app.status,
       checked_in: app.checked_in,
       checked_in_at: app.checked_in_at,
+      session_checkins: Array.isArray(app.session_checkins) ? [...app.session_checkins] : app.session_checkins,
     };
+    const nextCheckins = sid ? withSessionCheckinState(app, sid, false) : app.session_checkins;
     app.status = 'no_show';
     app.checked_in = false;
     app.checked_in_at = null;
+    if (sid) app.session_checkins = nextCheckins;
     renderCheckInList();
     showSaveStatus('saving');
     try {
-      const error = await persistApplicantPatch(app, { status: 'no_show', checked_in: false, checked_in_at: null });
+      const patch = { status: 'no_show', checked_in: false, checked_in_at: null };
+      if (sid) patch.session_checkins = nextCheckins;
+      const error = await persistApplicantPatch(app, patch);
       if (error) throw error;
       queueCiSecondaryRefresh();
       showSaveStatus('saved');
@@ -57329,6 +57348,7 @@ Your submission link is unique to you. Please do not share it with another perfo
       app.status = prev.status;
       app.checked_in = prev.checked_in;
       app.checked_in_at = prev.checked_in_at;
+      app.session_checkins = prev.session_checkins;
       renderCheckInList();
       showToast('Could not mark as no show', true);
     }
