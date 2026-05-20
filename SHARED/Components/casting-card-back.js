@@ -380,6 +380,17 @@ function buildCastingCardBack(app, opts = {}) {
     return String(value);
   }
 
+  function requestedRolesText() {
+    const source = app?.roles_requested || ca['Requested Roles'];
+    const roles = Array.isArray(source)
+      ? source.map(value => String(value || '').trim()).filter(Boolean)
+      : String(source || '')
+        .split(',')
+        .map(value => value.trim())
+        .filter(Boolean);
+    return roles.length ? roles.join(', ') : 'Any role';
+  }
+
   function isConflictDateKey(key) {
     return /^(conflict dates?|date conflicts?)$/i.test(String(key || '').trim());
   }
@@ -421,6 +432,7 @@ function buildCastingCardBack(app, opts = {}) {
     : null;
   const castingSection = section('Casting', [
     ['Role Openness', castingPref],
+    ['Roles Requested', requestedRolesText()],
     ['Joining', attendanceModeLabel],
   ]);
 
