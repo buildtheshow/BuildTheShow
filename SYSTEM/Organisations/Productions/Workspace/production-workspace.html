@@ -27488,9 +27488,14 @@
 
   function patchApplicantFromPayload(newRow) {
     if (!newRow?.id) return false;
-    const app = allApplicants.find(a => String(a.id) === String(newRow.id));
+    const rowId = String(newRow.id);
+    const app = allApplicants.find(a =>
+      String(a.id) === rowId ||
+      (Array.isArray(a._sourceApplicationIds) && a._sourceApplicationIds.map(String).includes(rowId)) ||
+      Object.values(a._sourceApplicationIdsBySession || {}).map(String).includes(rowId)
+    );
     if (!app) return false;
-    if (newRow.session_checkins !== undefined) app.session_checkins = newRow.session_checkins;
+    if (newRow.session_checkins !== undefined) app.session_checkins = mergeSessionCheckinLists(app.session_checkins, newRow.session_checkins);
     if (newRow.checked_in      !== undefined) app.checked_in       = newRow.checked_in;
     if (newRow.checked_in_at   !== undefined) app.checked_in_at    = newRow.checked_in_at;
     if (newRow.status          !== undefined) app.status           = newRow.status;
@@ -45791,6 +45796,36 @@ Your submission link is unique to you. Please do not share it with another perfo
     return '';
   }
 
+  function mergeSessionCheckinEntry(existing, entry) {
+    if (!existing) return { ...entry };
+    const existingUpdatedAt = Date.parse(existing.updated_at || '') || 0;
+    const entryUpdatedAt = Date.parse(entry.updated_at || '') || 0;
+    if (entryUpdatedAt || existingUpdatedAt) {
+      if (entryUpdatedAt > existingUpdatedAt) return { ...existing, ...entry };
+      if (existingUpdatedAt > entryUpdatedAt) return existing;
+    }
+    // Without a real attendance update timestamp, explicit absence wins so stale true values cannot revive someone who was clicked out.
+    if (entry.checked_in === false) return { ...existing, ...entry, checked_in: false, checked_in_at: null };
+    if (existing.checked_in === false) return existing;
+    const existingTime = Date.parse(existing.checked_in_at || existing.created_at || '') || 0;
+    const entryTime = Date.parse(entry.checked_in_at || entry.created_at || '') || 0;
+    if (entryTime > existingTime) return { ...existing, ...entry };
+    if (existingTime > entryTime) return existing;
+    return { ...existing, ...entry };
+  }
+
+  function mergeSessionCheckinLists(...lists) {
+    return lists.flatMap(list => Array.isArray(list) ? list : [])
+      .reduce((acc, entry) => {
+        const sessionId = String(entry?.session_id || '').trim();
+        if (!sessionId) return acc;
+        const existingIndex = acc.findIndex(item => String(item?.session_id || '') === sessionId);
+        if (existingIndex >= 0) acc[existingIndex] = mergeSessionCheckinEntry(acc[existingIndex], entry);
+        else acc.push({ ...entry });
+        return acc;
+      }, []);
+  }
+
   function mergePerformerProfileRecords(base, incoming) {
     const mergedAssignments = normalizeSlotAssignments([
       ...(Array.isArray(base?.slot_assignments) ? base.slot_assignments : slotAssignmentsFromFixedFields(base)),
@@ -45812,23 +45847,6 @@ Your submission link is unique to you. Please do not share it with another perfo
       const winnerSessionId = String(winner?.session_id || '').trim();
       if (winnerSessionId) winnerCheckinScope.add(winnerSessionId);
     }
-    const mergeSessionCheckinEntry = (existing, entry) => {
-      if (!existing) return { ...entry };
-      const existingUpdatedAt = Date.parse(existing.updated_at || '') || 0;
-      const entryUpdatedAt = Date.parse(entry.updated_at || '') || 0;
-      if (entryUpdatedAt || existingUpdatedAt) {
-        if (entryUpdatedAt > existingUpdatedAt) return { ...existing, ...entry };
-        if (existingUpdatedAt > entryUpdatedAt) return existing;
-      }
-      // Without a real attendance update timestamp, explicit absence wins so stale true values cannot revive someone who was clicked out.
-      if (entry.checked_in === false) return { ...existing, ...entry, checked_in: false, checked_in_at: null };
-      if (existing.checked_in === false) return existing;
-      const existingTime = Date.parse(existing.checked_in_at || existing.created_at || '') || 0;
-      const entryTime = Date.parse(entry.checked_in_at || entry.created_at || '') || 0;
-      if (entryTime > existingTime) return { ...existing, ...entry };
-      if (existingTime > entryTime) return existing;
-      return { ...existing, ...entry };
-    };
     const mergedSessionCheckins = sameSourceRecord && Array.isArray(winner?.session_checkins)
       ? winner.session_checkins
       : Array.isArray(base?.session_checkins) || Array.isArray(incoming?.session_checkins)
@@ -54276,8 +54294,7 @@ Your submission link is unique to you. Please do not share it with another perfo
     // Only include performers with an explicit check-in entry for this dance call session
     // AND a slot assigned to it — never fall back to the legacy checked_in boolean
     const allCheckedIn = allApplicants.filter(a => {
-      const checkins = Array.isArray(a.session_checkins) ? a.session_checkins : [];
-      const entry = checkins.find(x => String(x.session_id || '') === String(sessionId || ''));
+      const entry = getSessionCheckinEntry(a, sessionId);
       if (!entry?.checked_in) return false;
       const assignments = Array.isArray(a.slot_assignments) ? a.slot_assignments : [];
       return assignments.some(x => String(x.session_id || '') === String(sessionId || '') && x.slot_id);
@@ -54824,7 +54841,23 @@ Your submission link is unique to you. Please do not share it with another perfo
   function getSessionCheckinEntry(app, sessionId) {
     if (!app || !sessionId) return null;
     const checkins = Array.isArray(app.session_checkins) ? app.session_checkins : [];
-    return checkins.find(x => String(x.session_id || '') === String(sessionId || '')) || null;
+    const entries = checkins.filter(x => String(x?.session_id || '') === String(sessionId || ''));
+    if (!entries.length) return null;
+    return entries.reduce((winner, entry) => {
+      if (!winner) return entry;
+      const winnerUpdatedAt = Date.parse(winner.updated_at || '') || 0;
+      const entryUpdatedAt = Date.parse(entry.updated_at || '') || 0;
+      if (entryUpdatedAt || winnerUpdatedAt) {
+        if (entryUpdatedAt > winnerUpdatedAt) return entry;
+        if (winnerUpdatedAt > entryUpdatedAt) return winner;
+      }
+      if (entry.checked_in === false && winner.checked_in !== false) return entry;
+      if (winner.checked_in === false && entry.checked_in !== false) return winner;
+      const winnerCheckedAt = Date.parse(winner.checked_in_at || winner.created_at || '') || 0;
+      const entryCheckedAt = Date.parse(entry.checked_in_at || entry.created_at || '') || 0;
+      if (entryCheckedAt > winnerCheckedAt) return entry;
+      return winner;
+    }, null);
   }
 
   function withSessionCheckinState(app, sessionId, checkedIn) {
