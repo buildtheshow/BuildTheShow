@@ -45776,23 +45776,40 @@ Your submission link is unique to you. Please do not share it with another perfo
       ...(Array.isArray(incoming?.slot_assignments) ? incoming.slot_assignments : slotAssignmentsFromFixedFields(incoming)),
     ]);
     const mergedAssignmentFields = buildSlotAssignmentStorageFields(mergedAssignments);
-    const mergedSessionCheckins = Array.isArray(base?.session_checkins) || Array.isArray(incoming?.session_checkins)
-      ? [
-          ...(Array.isArray(base?.session_checkins) ? base.session_checkins : []),
-          ...(Array.isArray(incoming?.session_checkins) ? incoming.session_checkins : []),
-        ].reduce((acc, entry) => {
-          const sessionId = String(entry?.session_id || '').trim();
-          if (!sessionId) return acc;
-          const existingIndex = acc.findIndex(item => String(item?.session_id || '') === sessionId);
-          if (existingIndex >= 0) acc[existingIndex] = { ...acc[existingIndex], ...entry };
-          else acc.push(entry);
-          return acc;
-        }, [])
-      : (base?.session_checkins || incoming?.session_checkins || null);
 
     const winner = String(incoming?.updated_at || incoming?.created_at || '') >= String(base?.updated_at || base?.created_at || '')
       ? incoming
       : base;
+    const sameSourceRecord = base?.id && incoming?.id && String(base.id) === String(incoming.id);
+    const winnerCheckinScope = new Set();
+    if (Array.isArray(winner?.session_checkins)) {
+      const winnerAssignments = Array.isArray(winner?.slot_assignments) ? winner.slot_assignments : slotAssignmentsFromFixedFields(winner);
+      winnerAssignments.forEach(assignment => {
+        const sessionId = String(assignment?.session_id || '').trim();
+        if (sessionId) winnerCheckinScope.add(sessionId);
+      });
+      const winnerSessionId = String(winner?.session_id || '').trim();
+      if (winnerSessionId) winnerCheckinScope.add(winnerSessionId);
+    }
+    const mergedSessionCheckins = sameSourceRecord && Array.isArray(winner?.session_checkins)
+      ? winner.session_checkins
+      : Array.isArray(base?.session_checkins) || Array.isArray(incoming?.session_checkins)
+        ? [
+            ...(Array.isArray(base?.session_checkins) && base !== winner
+              ? base.session_checkins.filter(entry => !winnerCheckinScope.has(String(entry?.session_id || '').trim()))
+              : Array.isArray(base?.session_checkins) ? base.session_checkins : []),
+            ...(Array.isArray(incoming?.session_checkins) && incoming !== winner
+              ? incoming.session_checkins.filter(entry => !winnerCheckinScope.has(String(entry?.session_id || '').trim()))
+              : Array.isArray(incoming?.session_checkins) ? incoming.session_checkins : []),
+          ].reduce((acc, entry) => {
+            const sessionId = String(entry?.session_id || '').trim();
+            if (!sessionId) return acc;
+            const existingIndex = acc.findIndex(item => String(item?.session_id || '') === sessionId);
+            if (existingIndex >= 0) acc[existingIndex] = { ...acc[existingIndex], ...entry };
+            else acc.push(entry);
+            return acc;
+          }, Array.isArray(winner?.session_checkins) ? [...winner.session_checkins] : [])
+        : (base?.session_checkins || incoming?.session_checkins || null);
     const sourceApplicationIds = Array.from(new Set([
       ...(Array.isArray(base?._sourceApplicationIds) ? base._sourceApplicationIds : []),
       ...(Array.isArray(incoming?._sourceApplicationIds) ? incoming._sourceApplicationIds : []),
@@ -56958,6 +56975,9 @@ Your submission link is unique to you. Please do not share it with another perfo
       const badgeLabel = isIn ? 'Checked In' : (isNoShow ? 'No Show' : 'Upcoming');
       const ciSlot = getApplicantSlotForSession(app, session.id);
       const timeStr = ciSlot?.slot_time || ciSlot?.start_time || getApplicantSlotStartValue(app) || '';
+      const cardClick = isNoShow
+        ? `clearCiNoShow('${app.id}')`
+        : `toggleCheckIn('${app.id}',${isIn ? 'true' : 'false'},'${session.id}')`;
       const cardHtml = renderCastingCard({
         first_name: String(app.name || '').split(' ')[0] || '',
         last_name: String(app.name || '').split(' ').slice(1).join(' ') || '',
@@ -56973,13 +56993,13 @@ Your submission link is unique to you. Please do not share it with another perfo
         hasIcons: true,
         draggable: false,
         state: null,
-        onClick: `toggleCheckIn('${app.id}',${isIn ? 'true' : 'false'},'${session.id}')`
+        onClick: cardClick
       });
       const btnsHtml = isIn
-        ? `<button class="ci-card-btn do-contact" onclick="showCiContactModal('${app.id}')">Contact</button><button class="ci-card-btn do-undo" onclick="toggleCheckIn('${app.id}',true,'${session.id}')">Undo</button>`
+        ? `<button class="ci-card-btn do-contact" onclick="showCiContactModal('${app.id}')">Contact</button>`
         : isNoShow
-          ? `<button class="ci-card-btn do-contact" onclick="showCiContactModal('${app.id}')">Contact</button><button class="ci-card-btn do-undo" onclick="clearCiNoShow('${app.id}')">Undo</button>`
-          : `<button class="ci-card-btn do-checkin" onclick="toggleCheckIn('${app.id}',false,'${session.id}')">Check In</button><button class="ci-card-btn do-contact" onclick="showCiContactModal('${app.id}')">Contact</button><button class="ci-card-btn do-noshow" onclick="setCiNoShow('${app.id}')">No Show</button>`;
+          ? `<button class="ci-card-btn do-contact" onclick="showCiContactModal('${app.id}')">Contact</button>`
+          : `<button class="ci-card-btn do-contact" onclick="showCiContactModal('${app.id}')">Contact</button><button class="ci-card-btn do-noshow" onclick="setCiNoShow('${app.id}')">No Show</button>`;
       return `<div class="ci-card-wrap ${wrapClass}" style="--ci-accent:${esc(ciAccent)};--ci-accent-ring:${esc(ciAccentRing)};--ci-accent-glow:${esc(ciAccentGlow)};--ci-accent-08:${esc(ciAccent08)};--ci-accent-12:${esc(ciAccent12)};">
         ${timeStr && !isDanceCall ? `<div class="ci-card-time" style="color:${esc(ciAccent)};">${esc(formatSlotTime(timeStr))}</div>` : ''}
         ${cardHtml}
@@ -57215,11 +57235,10 @@ Your submission link is unique to you. Please do not share it with another perfo
     const isIn = !!app.checked_in;
     const isNoShow = app.status === 'no_show';
     const actionBtnsHtml = isIn
-      ? `<button class="ci-contact-btn-danger" onclick="toggleCheckIn('${appId}',true);document.getElementById('ci-contact-modal')?.remove()">Undo Check-In</button>`
+      ? ''
       : isNoShow
-        ? `<button class="ci-contact-btn-danger" onclick="clearCiNoShow('${appId}');document.getElementById('ci-contact-modal')?.remove()">Clear No Show</button>`
-        : `<button class="ci-contact-btn-primary" onclick="toggleCheckIn('${appId}',false);document.getElementById('ci-contact-modal')?.remove()">Check In</button>
-           <button class="ci-contact-btn-danger" onclick="setCiNoShow('${appId}');document.getElementById('ci-contact-modal')?.remove()">No Show</button>`;
+        ? ''
+        : `<button class="ci-contact-btn-danger" onclick="setCiNoShow('${appId}');document.getElementById('ci-contact-modal')?.remove()">No Show</button>`;
 
     const modal = document.createElement('div');
     modal.id = 'ci-contact-modal';
