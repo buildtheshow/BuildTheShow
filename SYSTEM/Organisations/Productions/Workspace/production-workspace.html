@@ -28757,6 +28757,21 @@
     };
   }
 
+  async function ensureEmailProducerContext() {
+    if (teamConfig === null && prodId) {
+      try {
+        const { data } = await sb.from('productions').select('wizard_data').eq('id', prodId).single();
+        const wdata = data?.wizard_data || {};
+        teamConfig = Array.isArray(wdata.team_config) ? wdata.team_config : null;
+      } catch (error) {
+        console.warn('[BTS] Could not load production team config for email preview.', error);
+      }
+    }
+    if (prodId && !auditionTeamMembers.length) {
+      await loadAuditionTeamMembers();
+    }
+  }
+
   function etProductionLocationFor(typeHint) {
     const type = String(typeHint || '').toLowerCase();
     if (type.includes('audition') || type.includes('dance') || type.includes('callback')) {
@@ -30466,6 +30481,7 @@ Keep this email until your tape has been submitted. If you have any questions, p
   async function loadEmailTemplates() {
     const list = document.getElementById('email-template-list');
     if (!list) return;
+    await ensureEmailProducerContext();
     renderEmailTemplatePageHeader();
     etBuildFilterChips();
     list.innerHTML = '<div style="text-align:center;padding:3rem;color:rgba(87,46,136,0.5);font-size:0.875rem;">Loading…</div>';
@@ -30800,7 +30816,8 @@ Keep this email until your tape has been submitted. If you have any questions, p
     document.getElementById('et-preview-overlay')?.remove();
   }
 
-  function openEmailTemplatePreview(templateId = null) {
+  async function openEmailTemplatePreview(templateId = null) {
+    await ensureEmailProducerContext();
     const template = templateId ? _etTemplates.find(t => String(t.id) === String(templateId)) : null;
     const subjectRaw = template ? (template.subject || '') : (document.getElementById('et-subject')?.value || '');
     const bodyRaw = template ? etToHtml(template.body || '') : (document.getElementById('et-body')?.innerHTML || '');
