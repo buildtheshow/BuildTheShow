@@ -28729,26 +28729,32 @@
     return '';
   }
 
-  function producerSignoffContext() {
-    const filledRoles = (teamConfig || [])
+  let _emailProducerSignoffContext = null;
+
+  function findProducerRoleInTeamConfig(config = []) {
+    const filledRoles = (config || [])
       .flatMap(dept => (dept?.roles || []).map(role => ({ ...role, department: dept?.name || '' })))
       .filter(role => role?.filled !== false && etFirstRealValue(role?.person, role?.name));
-    const producerRole = filledRoles.find(role => String(role?.name || '').toLowerCase() === 'producer')
+    return filledRoles.find(role => String(role?.name || '').toLowerCase() === 'producer')
       || filledRoles.find(role => String(role?.name || '').toLowerCase().includes('producer'))
       || filledRoles.find(role => String(role?.department || '').toLowerCase().includes('producer'));
-    const producerMember = (auditionTeamMembers || []).find(member => String(member?.role || '').toLowerCase().includes('producer'));
+  }
+
+  function buildProducerSignoffContextFromSources(config = [], members = [], productionSource = prod) {
+    const producerRole = findProducerRoleInTeamConfig(config);
+    const producerMember = (members || []).find(member => String(member?.role || '').toLowerCase().includes('producer'));
     const name = etFirstRealValue(
       producerRole?.person,
       producerMember?.name,
-      prod?.producer_name,
-      prod?.producer,
-      prod?.director,
+      productionSource?.producer_name,
+      productionSource?.producer,
+      productionSource?.director,
       orgName,
-      prod?.org_name,
+      productionSource?.org_name,
       'Producer'
     );
-    const role = etFirstRealValue(producerRole?.name, producerMember?.role, prod?.producer_role, 'Producer');
-    const email = etFirstRealValue(producerRole?.email, producerMember?.email, prod?.producer_email, orgEmail, prod?.org_email);
+    const role = etFirstRealValue(producerRole?.name, producerMember?.role, productionSource?.producer_role, 'Producer');
+    const email = etFirstRealValue(producerRole?.email, producerMember?.email, productionSource?.producer_email, orgEmail, productionSource?.org_email);
     return {
       producer_name: name,
       producer_role: role,
@@ -28757,19 +28763,28 @@
     };
   }
 
-  async function ensureEmailProducerContext() {
-    if (teamConfig === null && prodId) {
-      try {
-        const { data } = await sb.from('productions').select('wizard_data').eq('id', prodId).single();
-        const wdata = data?.wizard_data || {};
-        teamConfig = Array.isArray(wdata.team_config) ? wdata.team_config : null;
-      } catch (error) {
-        console.warn('[BTS] Could not load production team config for email preview.', error);
-      }
+  function producerSignoffContext() {
+    return _emailProducerSignoffContext || buildProducerSignoffContextFromSources(teamConfig || [], auditionTeamMembers || []);
+  }
+
+  async function loadEmailProducerSignoffFromSupabase() {
+    if (!prodId) {
+      _emailProducerSignoffContext = buildProducerSignoffContextFromSources(teamConfig || [], auditionTeamMembers || []);
+      return _emailProducerSignoffContext;
     }
-    if (prodId && !auditionTeamMembers.length) {
-      await loadAuditionTeamMembers();
+    try {
+      const [{ data: prodRow }, { data: members }] = await Promise.all([
+        sb.from('productions').select('wizard_data, producer_name, producer, producer_role, producer_email, director, org_name, org_email').eq('id', prodId).single(),
+        sb.from('production_team_members').select('*').eq('production_id', prodId).eq('is_active', true),
+      ]);
+      const wdata = prodRow?.wizard_data || {};
+      const savedTeamConfig = Array.isArray(wdata.team_config) ? wdata.team_config : [];
+      _emailProducerSignoffContext = buildProducerSignoffContextFromSources(savedTeamConfig, members || [], prodRow || prod);
+    } catch (error) {
+      console.warn('[BTS] Could not load producer sign-off from Supabase for email preview.', error);
+      _emailProducerSignoffContext = buildProducerSignoffContextFromSources(teamConfig || [], auditionTeamMembers || []);
     }
+    return _emailProducerSignoffContext;
   }
 
   function etProductionLocationFor(typeHint) {
@@ -30481,7 +30496,7 @@ Keep this email until your tape has been submitted. If you have any questions, p
   async function loadEmailTemplates() {
     const list = document.getElementById('email-template-list');
     if (!list) return;
-    await ensureEmailProducerContext();
+    await loadEmailProducerSignoffFromSupabase();
     renderEmailTemplatePageHeader();
     etBuildFilterChips();
     list.innerHTML = '<div style="text-align:center;padding:3rem;color:rgba(87,46,136,0.5);font-size:0.875rem;">Loading…</div>';
@@ -30817,7 +30832,7 @@ Keep this email until your tape has been submitted. If you have any questions, p
   }
 
   async function openEmailTemplatePreview(templateId = null) {
-    await ensureEmailProducerContext();
+    await loadEmailProducerSignoffFromSupabase();
     const template = templateId ? _etTemplates.find(t => String(t.id) === String(templateId)) : null;
     const subjectRaw = template ? (template.subject || '') : (document.getElementById('et-subject')?.value || '');
     const bodyRaw = template ? etToHtml(template.body || '') : (document.getElementById('et-body')?.innerHTML || '');
