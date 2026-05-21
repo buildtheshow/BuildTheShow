@@ -318,6 +318,10 @@ function syncTeamPortalMenuInputs(inputClass, defaults = new Set()) {
   document.querySelectorAll(`.${inputClass}`).forEach(input => {
     const parent = input.dataset.parentMenu || '';
     input.checked = defaults.has(input.value) || (parent && defaults.has(parent));
+    input.closest('.team-menu-check')?.classList.toggle('active', input.checked);
+  });
+  document.querySelectorAll(`.${inputClass}:not([data-parent-menu])`).forEach(input => {
+    syncTeamPortalMenuParentState(inputClass, input.value);
   });
 }
 
@@ -327,27 +331,23 @@ function renderTeamPortalMenuChecks(inputClass, selectedMenus = new Set()) {
   const rows = items.map(item => {
     const children = item.children || [];
     const parentChecked = selectedMenus.has(item.key) || children.some(child => selectedMenus.has(child.key));
-    const childHtml = children.length ? `<div class="team-menu-subchecks">
-      ${children.map(child => `<label class="team-menu-check team-menu-sub-item">
+    const iconHtml = item.icon ? `<span class="tab-icon-slot"><img src="${safe(item.icon)}" class="tab-icon" alt="" aria-hidden="true" /></span>` : '';
+    const childHtml = children.length ? `<div class="prod-submenu team-menu-subchecks" style="display:flex;">
+      ${children.map(child => `<label class="prod-sub-item team-menu-check team-menu-sub-item${teamPortalMenuSelected(selectedMenus, child.key, item.key) ? ' active' : ''}">
         <input type="checkbox" class="${safe(inputClass)}" value="${safe(child.key)}" data-parent-menu="${safe(item.key)}" ${teamPortalMenuSelected(selectedMenus, child.key, item.key) ? 'checked' : ''} onchange="syncTeamPortalMenuParentState('${safe(inputClass)}', '${safe(item.key)}')" />
         <span>${safe(child.label)}</span>
-        <i aria-hidden="true"></i>
       </label>`).join('')}
     </div>` : '';
-    return `<div class="team-menu-group${children.length ? ' has-children' : ''}">
-      <label class="team-menu-check team-menu-nav-item">
+    return `<div class="prod-tab-submenu-wrap team-menu-group${children.length ? ' has-children open' : ''}">
+      <label class="prod-tab team-menu-check team-menu-nav-item${parentChecked ? ' active' : ''}">
         <input type="checkbox" class="${safe(inputClass)}" value="${safe(item.key)}" ${parentChecked ? 'checked' : ''} onchange="toggleTeamPortalMenuGroup(this, '${safe(inputClass)}')" />
-        <span>${safe(item.label)}</span>
-        <i aria-hidden="true"></i>
+        <span class="prod-tab-label">${iconHtml}${safe(item.label)}</span>
+        ${children.length ? '<span class="tab-chevron" aria-hidden="true">▼</span>' : ''}
       </label>
       ${childHtml}
     </div>`;
   }).join('');
-  return `<aside class="team-menu-sidebar-preview">
-    <div class="team-menu-sidebar-head">
-      <div class="team-menu-sidebar-kicker">Workspace Menu</div>
-      <div class="team-menu-sidebar-copy">Choose exactly what this person can open.</div>
-    </div>
+  return `<aside class="team-menu-sidebar-preview prod-sidebar">
     <div class="team-menu-sidebar-list">${rows}</div>
   </aside>`;
 }
@@ -357,7 +357,9 @@ function toggleTeamPortalMenuGroup(input, inputClass) {
   if (!group) return;
   group.querySelectorAll(`input.${inputClass}[data-parent-menu]`).forEach(child => {
     child.checked = input.checked;
+    child.closest('.team-menu-check')?.classList.toggle('active', child.checked);
   });
+  input.closest('.team-menu-check')?.classList.toggle('active', input.checked);
 }
 
 function syncTeamPortalMenuParentState(inputClass, parentKey) {
@@ -365,6 +367,8 @@ function syncTeamPortalMenuParentState(inputClass, parentKey) {
   const parent = document.querySelector(`input.${inputClass}[value="${parentKey}"]`);
   if (!parent || !children.length) return;
   parent.checked = children.some(child => child.checked);
+  children.forEach(child => child.closest('.team-menu-check')?.classList.toggle('active', child.checked));
+  parent.closest('.team-menu-check')?.classList.toggle('active', parent.checked);
 }
 
 function creativeRolesForTeamMember(member) {
