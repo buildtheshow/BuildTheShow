@@ -442,8 +442,8 @@
       '<div class="pgm-panel-head">' +
         '<div><div class="pgm-panel-title">Digital Programme Preview</div><p>' + esc(selectedPaper().pageLabel) + ' · ' + pageRangeLabel(pages) + '</p></div>' +
         '<div class="pgm-preview-controls">' +
-          '<button class="spn-btn spn-btn--ghost pgm-preview-btn" type="button" ' + (canPrev ? 'onclick="MarketingProgrammeModule.setSpread(' + prevStart + ')"' : 'disabled') + '>Previous</button>' +
-          '<button class="spn-btn spn-btn--primary pgm-preview-btn" type="button" ' + (canNext ? 'onclick="MarketingProgrammeModule.setSpread(' + nextStart + ')"' : 'disabled') + '>Next</button>' +
+          '<button class="spn-btn spn-btn--ghost pgm-preview-btn" type="button" ' + (canPrev ? 'onclick="MarketingProgrammeModule.setSpread(' + prevStart + ')"' : 'disabled') + '>Flip Back</button>' +
+          '<button class="spn-btn spn-btn--primary pgm-preview-btn" type="button" ' + (canNext ? 'onclick="MarketingProgrammeModule.setSpread(' + nextStart + ')"' : 'disabled') + '>Flip Forward</button>' +
           '<button class="spn-btn spn-btn--ghost" disabled>Export Later</button>' +
         '</div>' +
       '</div>' +
@@ -455,7 +455,7 @@
             '<span>' + (index + 1) + '</span><strong>' + esc(page.title) + '</strong><em>' + esc(page.subtitle || 'Placed by template') + '</em>' +
           '</button>';
         }).join('') + '</div>' +
-        '<div class="pgm-preview-stage' + (isCover ? ' pgm-preview-stage--cover' : '') + '">' +
+        '<div class="pgm-preview-stage pgm-preview-stage--flipbook' + (isCover ? ' pgm-preview-stage--cover' : ' pgm-preview-stage--spread') + '">' +
           '<div class="pgm-preview-spread">' +
             renderPreviewPage(leftPage, leftIndex, 'left') +
             '<div class="pgm-preview-gutter" aria-hidden="true"></div>' +
