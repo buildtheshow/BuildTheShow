@@ -43,6 +43,7 @@
       detail: 'Folded to 5.5 x 8.5 in',
       note: 'Standard booklet programme',
       pageLabel: '5.5 x 8.5 in folded pages',
+      image: '/ASSETS/Images/programme-%205.5x11-folded-8.5x11.svg',
     },
     {
       id: 'letter-flat',
@@ -50,6 +51,7 @@
       detail: 'Not folded',
       note: 'Full letter pages',
       pageLabel: '8.5 x 11 in pages',
+      image: '/ASSETS/Images/programme-8.5x11.svg',
     },
     {
       id: 'tabloid-folded',
@@ -57,6 +59,7 @@
       detail: 'Folded to 8.5 x 11 in',
       note: 'Large booklet programme',
       pageLabel: '8.5 x 11 in folded pages',
+      image: '/ASSETS/Images/programme-8.5x11Folded-11x17.svg',
     },
   ];
 
@@ -370,7 +373,7 @@
         var isSelected = selected === paper.id;
         return '<label class="pgm-paper-card' + (isSelected ? ' is-selected' : '') + '">' +
           '<input type="radio" name="pgm-paper" value="' + esc(paper.id) + '"' + (isSelected ? ' checked' : '') + ' onchange="MarketingProgrammeModule.setSetting(\'paper\', this.value)" />' +
-          '<span class="pgm-paper-visual pgm-paper-visual--' + esc(paper.id) + '"><span></span></span>' +
+          '<span class="pgm-paper-visual pgm-paper-visual--' + esc(paper.id) + '"><img src="' + esc(paper.image) + '" alt="" /></span>' +
           '<span class="pgm-paper-copy">' +
             '<strong>' + esc(paper.label) + '</strong>' +
             '<em>' + esc(paper.detail) + '</em>' +
