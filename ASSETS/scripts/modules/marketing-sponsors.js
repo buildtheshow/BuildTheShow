@@ -84,16 +84,16 @@
   function bizName(id) { var b = SpnsState.businesses.find(function (x) { return x.id === id; }); return b ? b.name : ''; }
   function esc(s) { return s ? String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;') : ''; }
 
-  // -- Ad sizes visual tiles ----------------------------------------------------
+  // -- Ad sizes grouped visual --------------------------------------------------
 
   function parseAdDims(dims) {
     var m = String(dims || '').replace(/['"]/g, '').match(/^([\d.]+)[xX]([\d.]+)$/);
     return m ? { w: parseFloat(m[1]) || 1, h: parseFloat(m[2]) || 1 } : { w: 1, h: 1 };
   }
 
-  function renderAdSizesSection() {
+  function renderAdsGrouped() {
     var sizes = SpnsState.settings.adSizes;
-    if (!sizes || !sizes.length) return '';
+    if (!sizes || !sizes.length) return '<div class="spn-empty"><div class="spn-empty-icon">&#x1F4C4;</div><h3>No ad sizes configured</h3><p>Go to Settings to set up your programme ad sizes and pricing.</p></div>';
 
     var pageW = 8, pageH = 5;
     sizes.forEach(function (s) {
@@ -102,16 +102,15 @@
       if (d.h > pageH) pageH = d.h;
     });
 
-    var tiles = sizes.map(function (s, i) {
+    return sizes.map(function (s, i) {
       var d           = parseAdDims(s.dims);
       var adW         = Math.round(d.w / pageW * 100);
       var adH         = Math.round(d.h / pageH * 100);
       var color       = ADTILE_COLORS[i % ADTILE_COLORS.length];
       var dimsDisplay = String(s.dims).replace(/[xX]/, '" x ') + '"';
 
-      // booking counts for this size
-      var booked  = SpnsState.ads.filter(function (a) { return a.ad_size === s.id; });
-      var missing = booked.filter(function (a) { return !a.artwork_url && a.artwork_status === 'missing'; }).length;
+      var booked   = SpnsState.ads.filter(function (a) { return a.ad_size === s.id; });
+      var missing  = booked.filter(function (a) { return !a.artwork_url && a.artwork_status === 'missing'; }).length;
       var received = booked.filter(function (a) { return a.artwork_url; }).length;
       var statusLine = booked.length === 0
         ? 'No bookings yet'
@@ -119,51 +118,73 @@
           (received > 0 ? ' &middot; ' + received + ' with artwork' : '') +
           (missing > 0  ? ' &middot; ' + missing + ' missing artwork' : '');
 
-      // most recent artwork thumbnail for this size (shown on the programme page)
       var latestArt = null;
       for (var j = booked.length - 1; j >= 0; j--) {
         if (booked[j].artwork_url) { latestArt = booked[j].artwork_url; break; }
       }
 
       var adFill = latestArt
-        ? '<div class="spn-adtile-ad" style="width:' + adW + '%;height:' + adH + '%;background:none;">' +
-            '<img class="spn-adtile-ad-img" src="' + esc(latestArt) + '" alt="Ad artwork" />' +
-          '</div>'
-        : '<div class="spn-adtile-ad" style="width:' + adW + '%;height:' + adH + '%;">' +
-            '<div class="spn-adtile-ad-label">Ad</div>' +
-          '</div>';
+        ? '<div class="spn-adtile-ad" style="width:' + adW + '%;height:' + adH + '%;background:none;"><img class="spn-adtile-ad-img" src="' + esc(latestArt) + '" alt="Ad artwork" /></div>'
+        : '<div class="spn-adtile-ad" style="width:' + adW + '%;height:' + adH + '%;"><div class="spn-adtile-ad-label">Ad</div></div>';
 
-      return '<div class="template-brand-card template-brand-card--horizontal" style="--brand-tile-bg:' + color + ';--brand-tile-ink:#ffffff;">' +
-        '<div class="template-brand-card-inner">' +
-          '<div class="spn-adtile-layout">' +
-            '<div class="spn-adtile-page-wrap">' +
-              '<div class="spn-adtile-page">' + adFill + '</div>' +
-            '</div>' +
-            '<div class="spn-adtile-info">' +
-              '<div class="spn-adtile-kicker">Ad Size</div>' +
-              '<div class="spn-adtile-name">' + esc(s.label) + '</div>' +
-              '<div class="spn-adtile-dims">' + esc(dimsDisplay) + '</div>' +
-              '<div class="spn-adtile-pricing">' +
-                '<div class="spn-adtile-price"><div class="spn-adtile-price-label">Colour</div><div class="spn-adtile-price-val">$' + s.colour + '</div></div>' +
-                '<div class="spn-adtile-price"><div class="spn-adtile-price-label">B&amp;W</div><div class="spn-adtile-price-val">$' + s.bw + '</div></div>' +
+      var tile =
+        '<div class="template-brand-card template-brand-card--horizontal" style="--brand-tile-bg:' + color + ';--brand-tile-ink:#ffffff;">' +
+          '<div class="template-brand-card-inner">' +
+            '<div class="spn-adtile-layout">' +
+              '<div class="spn-adtile-page-wrap"><div class="spn-adtile-page">' + adFill + '</div></div>' +
+              '<div class="spn-adtile-info">' +
+                '<div class="spn-adtile-kicker">Ad Size</div>' +
+                '<div class="spn-adtile-name">' + esc(s.label) + '</div>' +
+                '<div class="spn-adtile-dims">' + esc(dimsDisplay) + '</div>' +
+                '<div class="spn-adtile-pricing">' +
+                  '<div class="spn-adtile-price"><div class="spn-adtile-price-label">Colour</div><div class="spn-adtile-price-val">$' + s.colour + '</div></div>' +
+                  '<div class="spn-adtile-price"><div class="spn-adtile-price-label">B&amp;W</div><div class="spn-adtile-price-val">$' + s.bw + '</div></div>' +
+                '</div>' +
+                '<div class="spn-adtile-status">' + statusLine + '</div>' +
               '</div>' +
-              '<div class="spn-adtile-status">' + statusLine + '</div>' +
             '</div>' +
           '</div>' +
-        '</div>' +
-      '</div>';
-    }).join('');
+        '</div>';
 
-    return '<div class="spn-adsize-tiles-section">' +
-      '<div class="spn-adsize-tiles-heading">Programme Ad Sizes &amp; Pricing</div>' +
-      '<div class="spn-adsize-tiles-grid">' + tiles + '</div>' +
-    '</div>';
+      var adRows = booked.map(function (a) {
+        var artCell = a.artwork_url
+          ? '<div class="spn-ad-art-cell"><img class="spn-ad-art-thumb" src="' + esc(a.artwork_url) + '" alt="Artwork" onclick="window.open(\'' + esc(a.artwork_url) + '\')" /><div class="spn-ad-art-actions">' + badgeArtwork(a.artwork_status) + '<button class="spn-btn spn-btn--danger spn-btn--sm" onclick="MarketingSponsorsModule.removeArtwork(\'' + a.id + '\')">Remove</button></div></div>'
+          : '<div class="spn-ad-art-cell">' + badgeArtwork(a.artwork_status) + '<button class="spn-btn spn-btn--ghost spn-btn--sm" data-upload-ad="' + a.id + '" onclick="MarketingSponsorsModule.uploadArtwork(\'' + a.id + '\')">Upload</button></div>';
+        return '<div class="spn-list-row spn-adgrp-cols">' +
+          '<div><div class="spn-list-name">' + (esc(bizName(a.business_id)) || '<span style="color:#b0a8c8">No business linked</span>') + '</div></div>' +
+          '<div class="spn-list-sub">' + (a.ad_type === 'bw' ? 'B&amp;W' : 'Colour') + '</div>' +
+          '<div class="spn-list-sub">' + fmtDollars(a.price_cents || 0) + '</div>' +
+          '<div>' + badgePayment(a.payment_status) + '</div>' +
+          '<div>' + artCell + '</div>' +
+          '<div class="spn-row-actions">' +
+            '<button class="spn-btn spn-btn--ghost spn-btn--sm" onclick="MarketingSponsorsModule.openAdModal(\'' + a.id + '\')">Edit</button>' +
+            '<button class="spn-btn spn-btn--danger spn-btn--sm" onclick="MarketingSponsorsModule.deleteAd(\'' + a.id + '\')">Delete</button>' +
+          '</div>' +
+        '</div>';
+      }).join('');
+
+      var adsList = booked.length
+        ? '<div class="spn-list spn-adsize-group-list">' +
+            '<div class="spn-list-head spn-adgrp-cols"><span>Business</span><span>Type</span><span>Price</span><span>Payment</span><span>Artwork</span><span></span></div>' +
+            adRows +
+          '</div>'
+        : '';
+
+      var addBtn =
+        '<div class="spn-adsize-group-footer">' +
+          '<button class="spn-btn spn-btn--ghost spn-btn--sm" onclick="MarketingSponsorsModule.openAdModal(null, \'' + s.id + '\')">+ Add ' + esc(s.label) + ' Ad</button>' +
+        '</div>';
+
+      return '<div class="spn-adsize-group">' + tile + adsList + addBtn + '</div>';
+    }).join('');
   }
 
-  function refreshAdSizesVisual() {
-    var el = document.getElementById('spn-ad-sizes-visual');
+  function refreshAdsGrouped() {
+    var el = document.getElementById('spn-ads-grouped');
     if (!el) return;
-    el.innerHTML = renderAdSizesSection();
+    el.innerHTML = renderAdsGrouped();
+    var count = document.getElementById('spn-ads-count');
+    if (count) count.textContent = SpnsState.ads.length + ' Programme Ad' + (SpnsState.ads.length !== 1 ? 's' : '');
   }
 
   // -- Artwork upload -----------------------------------------------------------
@@ -383,59 +404,22 @@
   // -- ADS ----------------------------------------------------------------------
 
   function loadAds() {
-    refreshAdSizesVisual();
-    return dbFetch('programme_ads').then(function (data) {
-      SpnsState.ads = data;
-    }).catch(function () {
-      SpnsState.ads = [];
-    }).then(function () {
-      refreshAdSizesVisual();
-      renderAds();
+    refreshAdsGrouped();
+    var bizPromise = SpnsState.businesses.length === 0
+      ? dbFetch('sponsor_businesses').then(function (d) { SpnsState.businesses = d; }).catch(function () {})
+      : Promise.resolve();
+    return bizPromise.then(function () {
+      return dbFetch('programme_ads').then(function (data) {
+        SpnsState.ads = data;
+      }).catch(function () {
+        SpnsState.ads = [];
+      }).then(function () {
+        refreshAdsGrouped();
+      });
     });
   }
 
-  function renderAds() {
-    var ads   = SpnsState.ads;
-    var count = document.getElementById('spn-ads-count');
-    if (count) count.textContent = ads.length + ' Programme Ad' + (ads.length !== 1 ? 's' : '');
-    var szLabel = function (s) { var sz = SpnsState.settings.adSizes.find(function (x) { return x.id === s; }); return sz ? sz.label : (s || ''); };
-    var head  = '<div class="spn-list-head spn-ad-cols"><span>Business</span><span>Size</span><span>Type</span><span>Price</span><span>Payment</span><span>Artwork</span><span></span></div>';
-    var listEl = document.getElementById('spn-ads-list');
-    if (!listEl) return;
-    if (!ads.length) {
-      listEl.innerHTML = head + '<div class="spn-list-empty"><div class="spn-empty"><div class="spn-empty-icon">&#x1F4C4;</div><h3>No ads booked yet</h3><p>Add a programme ad booking to track artwork, payment, and approval status.</p></div></div>';
-      return;
-    }
-    listEl.innerHTML = head + ads.map(function (a) {
-      var artCell = a.artwork_url
-        ? '<div class="spn-ad-art-cell">' +
-            '<img class="spn-ad-art-thumb" src="' + esc(a.artwork_url) + '" alt="Artwork" onclick="window.open(\'' + esc(a.artwork_url) + '\')" />' +
-            '<div class="spn-ad-art-actions">' +
-              badgeArtwork(a.artwork_status) +
-              '<button class="spn-btn spn-btn--danger spn-btn--sm" onclick="MarketingSponsorsModule.removeArtwork(\'' + a.id + '\')">Remove</button>' +
-            '</div>' +
-          '</div>'
-        : '<div class="spn-ad-art-cell">' +
-            badgeArtwork(a.artwork_status) +
-            '<button class="spn-btn spn-btn--ghost spn-btn--sm" data-upload-ad="' + a.id + '" onclick="MarketingSponsorsModule.uploadArtwork(\'' + a.id + '\')">Upload</button>' +
-          '</div>';
-
-      return '<div class="spn-list-row spn-ad-cols">' +
-        '<div class="spn-list-name">' + (esc(bizName(a.business_id)) || '<span style="color:#b0a8c8">No business</span>') + '</div>' +
-        '<div class="spn-list-sub">' + esc(szLabel(a.ad_size)) + '</div>' +
-        '<div class="spn-list-sub">' + (a.ad_type === 'bw' ? 'B&amp;W' : 'Colour') + '</div>' +
-        '<div class="spn-list-sub">' + fmtDollars(a.price_cents || 0) + '</div>' +
-        '<div>' + badgePayment(a.payment_status) + '</div>' +
-        '<div>' + artCell + '</div>' +
-        '<div class="spn-row-actions">' +
-          '<button class="spn-btn spn-btn--ghost spn-btn--sm" onclick="MarketingSponsorsModule.openAdModal(\'' + a.id + '\')">Edit</button>' +
-          '<button class="spn-btn spn-btn--danger spn-btn--sm" onclick="MarketingSponsorsModule.deleteAd(\'' + a.id + '\')">Delete</button>' +
-        '</div>' +
-      '</div>';
-    }).join('');
-  }
-
-  function openAdModal(id) {
+  function openAdModal(id, defaultSizeId) {
     var a = id ? SpnsState.ads.find(function (x) { return x.id === id; }) : null;
     document.getElementById('spn-ad-modal-title').textContent = a ? 'Edit Ad' : 'Add Programme Ad';
     document.getElementById('spn-ad-id').value = id || '';
@@ -449,6 +433,7 @@
     sizeSel.innerHTML = '<option value="">Select size...</option>' + SpnsState.settings.adSizes.map(function (s) {
       return '<option value="' + s.id + '"' + (a && a.ad_size === s.id ? ' selected' : '') + '>' + s.label + '</option>';
     }).join('');
+    if (!a && defaultSizeId) sizeSel.value = defaultSizeId;
 
     document.getElementById('spn-ad-type').value     = (a && a.ad_type)        || 'colour';
     document.getElementById('spn-ad-price').value    = a ? ((a.price_cents || 0) / 100).toFixed(2) : '';
@@ -465,6 +450,8 @@
     }
     sizeSel.onchange = autofillPrice;
     document.getElementById('spn-ad-type').onchange = autofillPrice;
+
+    if (!a && defaultSizeId) autofillPrice();
     document.getElementById('spn-ad-modal').classList.add('open');
   }
   function closeAdModal() { document.getElementById('spn-ad-modal').classList.remove('open'); }
@@ -691,7 +678,7 @@
       }
     }).catch(function () {}).then(function () {
       renderSettings();
-      refreshAdSizesVisual();
+      refreshAdsGrouped();
     });
   }
 
@@ -725,7 +712,7 @@
     var bw     = parseFloat(prompt('B&W price ($):', s.bw));        if (isNaN(bw))     return;
     SpnsState.settings.adSizes[i] = Object.assign({}, s, { label: label.trim(), dims: dims.trim(), colour: colour, bw: bw });
     renderSettings();
-    refreshAdSizesVisual();
+    refreshAdsGrouped();
   }
 
   function addTier() {
@@ -770,7 +757,7 @@
     }).then(function (r) {
       if (!r.ok) return r.text().then(function (t) { throw new Error(t); });
       alert('Settings saved.');
-      refreshAdSizesVisual();
+      refreshAdsGrouped();
     }).catch(function (e) { alert('Could not save settings: ' + e.message); });
   }
 
@@ -835,15 +822,11 @@
         '</div>' +
 
         '<div id="spn-panel-ads" class="spn-panel">' +
-          '<div id="spn-ad-sizes-visual"></div>' +
           '<div class="spn-toolbar">' +
             '<span class="spn-toolbar-title" id="spn-ads-count">Programme Ads</span>' +
             '<button class="spn-btn spn-btn--primary" onclick="MarketingSponsorsModule.openAdModal()">+ Add Ad</button>' +
           '</div>' +
-          '<div class="spn-list" id="spn-ads-list">' +
-            '<div class="spn-list-head spn-ad-cols"><span>Business</span><span>Size</span><span>Type</span><span>Price</span><span>Payment</span><span>Artwork</span><span></span></div>' +
-            '<div class="spn-loading-row">Loading...</div>' +
-          '</div>' +
+          '<div id="spn-ads-grouped"><div class="spn-loading-row">Loading...</div></div>' +
         '</div>' +
 
         '<div id="spn-panel-sponsors" class="spn-panel">' +
@@ -979,7 +962,7 @@
         el.addEventListener('click', function (e) { if (e.target === el) el.classList.remove('open'); });
       });
 
-      refreshAdSizesVisual();
+      refreshAdsGrouped();
       switchTab('overview');
     },
 
