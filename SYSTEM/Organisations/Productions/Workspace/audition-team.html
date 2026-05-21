@@ -16408,35 +16408,16 @@
     }
   }
 
-  function refreshCheckedInStripOnly() {
-    if (document.getElementById('dc-checkin-strip-outer')) {
-      if (dcCurrentSessionId) renderDanceCallInRoom(dcCurrentSessionId);
-      return;
-    }
-    const strip = document.querySelector('.template-checkin-rail[data-bts-template="checked-in-rail"]');
-    if (!strip) return;
-    const label = strip.querySelector('.template-checkin-label')?.textContent || 'Checked In';
-    try {
-      strip.outerHTML = renderGeneralInRoomCheckedStrip(inRoomOpenFn || 'openAuditionSessionInRoom', label);
-      requestAnimationFrame(() => scrollCheckedInRailToActive(document));
-    } catch (error) {
-      console.error('[BTS] checked-in strip refresh failed:', error);
-    }
-  }
-
   async function refreshAuditionsCheckInUi() {
     const changed = await loadApplicantCheckInState();
     if (!changed) return;
     try { renderCheckInList(); } catch {}
-    try { refreshCheckedInStripOnly(); } catch {}
     try {
       const standaloneInRoomPanel = document.getElementById('adtab-inroom');
       const standaloneInRoomVisible = !!standaloneInRoomPanel && standaloneInRoomPanel.style.display !== 'none';
       const sessionInRoomVisible = document.getElementById('aud-session-inroom-content');
       if (standaloneInRoomVisible) renderInRoomPage(inRoomApplicantId);
-      if (teamAccessMode && activeAuditionNavTool === 'inroom' && sessionInRoomVisible) {
-        refreshCheckedInStripOnly();
-      }
+      if (teamAccessMode && activeAuditionNavTool === 'inroom' && sessionInRoomVisible) renderInRoomPage(inRoomApplicantId, 'aud-session-inroom-content', 'openAuditionSessionInRoom');
     } catch {}
   }
 
@@ -16474,7 +16455,6 @@
         hydrateApplicantCheckInStore();
         if (changed) {
           try { renderCheckInList(); } catch {}
-          try { refreshCheckedInStripOnly(); } catch {}
         }
         try { renderAudSchedule(); } catch {}
         try { renderAudScheduleV2(); } catch {}
@@ -16503,7 +16483,6 @@
       ]);
       hydrateApplicantCheckInStore();
       try { renderCheckInList(); } catch {}
-      try { refreshCheckedInStripOnly(); } catch {}
       try { renderAudSchedule(); } catch {}
       try { renderAudScheduleV2(); } catch {}
       return;
@@ -33738,59 +33717,6 @@ If you have any questions, don't hesitate to reach out.
     return buildCastingCardBack(app, { includeInRoomScores: true, includeRoomNotes: true, impressionCategories: Object.values(INROOM_SCORE_LABELS), accentColor: backAccent, scoreColorSet, sessionNotes: collectAllSessionNotes(app), scoreObservations, bucketPlacements: collectDanceBucketPlacements(app), roleNotes: collectRoleNotes(app), characterAssignments: collectCharacterAssignments(app), auditionTimeRows: buildAuditionTimeRowsForCard(app) });
   }
 
-  function inRoomThumbHtml(app, openFn = 'openInRoom', session = null) {
-    const now = Date.now();
-    const currentSession = session || getCurrentInRoomSession() || getSelectedAuditionSession();
-    const sessionId = currentSession?.id || null;
-    const slot = sessionId ? getApplicantSlotForSession(app, sessionId) : null;
-    const slotTimeStr = slot?.slot_time || slot?.start_time || '';
-    const slotStart = (() => {
-      if (!slot) return null;
-      const d = getSlotStartDate(app, sessionId);
-      if (d) return d.getTime();
-      if (slotTimeStr) {
-        const today = new Date().toISOString().slice(0, 10);
-        const dt = new Date(`${slot.slot_date || slot.date || today}T${slotTimeStr.length === 5 ? slotTimeStr + ':00' : slotTimeStr}`);
-        return isNaN(dt.getTime()) ? null : dt.getTime();
-      }
-      return null;
-    })();
-    const currentRoomState = getRoomState(getAuditionRoomMeta(currentSession).roomKey);
-    const currentId = String(inRoomApplicantId || currentRoomState?.current_applicant_id || '');
-    const checkedInQueue = getInRoomCheckedInApps(currentSession);
-    const appIndex = checkedInQueue.findIndex(candidate => String(candidate.id) === String(app?.id || ''));
-    const currentIndex = currentId
-      ? checkedInQueue.findIndex(candidate => String(candidate.id) === currentId)
-      : -1;
-    const isCurrent  = currentId
-      ? String(app?.id || '') === currentId
-      : !!(slotStart && now >= slotStart && now < slotStart + (10 * 60 * 1000));
-    const isThrough = currentIndex >= 0 && appIndex >= 0
-      ? appIndex < currentIndex
-      : !!(slotStart && now >= slotStart + (10 * 60 * 1000) && !isCurrent);
-    const classes = ['template-checkin-tile'];
-    if (isCurrent) classes.push('is-next');
-    else if (isThrough) classes.push('is-done');
-    const nameParts = String(app?.name || '').trim().split(' ');
-    const cardHtml = renderCastingCard({
-      first_name: nameParts[0] || '',
-      last_name:  nameParts.slice(1).join(' ') || '',
-      age:        cbv2ApplicantAge(app),
-      pronouns:   applicantPronouns(app),
-      headshot_url:       app.headshot_url || '',
-      casting_categories: cbv2CastingCategories(app),
-      role_openness:      cbv2RoleBadge(app),
-      attendance_mode:    applicantAttendanceModeLabel(app) || null,
-    }, { size: 'compact', hasPadding: true, hasIcons: true });
-    const timeLabel = slotTimeStr ? `<div class="template-checkin-time">${esc(formatSlotTime(slotTimeStr))}</div>` : '';
-    const statusLabel = isCurrent ? 'Next' : (isThrough ? 'Through' : 'Ready');
-    return `<button type="button" class="${classes.join(' ')}" onclick="${openFn}('${app.id}')" title="${esc(app.name || '')}" aria-current="${isCurrent ? 'true' : 'false'}" style="flex:0 0 88px;width:88px;display:grid;grid-template-rows:0.78rem auto 0.86rem;justify-items:center;gap:0.22rem;">
-      ${timeLabel}
-      <div class="template-checkin-card">${cardHtml}</div>
-      <div class="template-checkin-status">${esc(statusLabel)}</div>
-    </button>`;
-  }
-
   function isCallbackRoleForApplicant(appId, charId) {
     return wasCalledBackForRole(appId, charId);
   }
@@ -34072,62 +33998,6 @@ If you have any questions, don't hesitate to reach out.
     applyCallbackRoleTileState(tileEl, !!applicantInRoomRoleChoice(app, sessionId, charId));
   }
 
-  function renderGeneralInRoomCheckedTrayCards(session, openFn = 'openAuditionSessionInRoom') {
-    if (!session?.id) return '';
-    const checkedInApps = getCheckInSessionApps(session, '', 'in')
-      .filter(app => app?.status !== 'no_show');
-    if (!checkedInApps.length) return `<div class="inroom-empty-note">No performers checked in yet.</div>`;
-    return checkedInApps.map(app => {
-      const slot = getApplicantSlotForSession(app, session.id);
-      const slotTimeStr = slot?.slot_time || slot?.start_time || '';
-      const nameParts = String(app?.name || '').trim().split(/\s+/);
-      const cardHtml = renderCastingCard({
-        first_name: nameParts[0] || '',
-        last_name: nameParts.slice(1).join(' ') || '',
-        age: cbv2ApplicantAge(app),
-        pronouns: applicantPronouns(app),
-        headshot_url: app.headshot_url || '',
-        casting_categories: cbv2CastingCategories(app),
-        role_openness: cbv2RoleBadge(app),
-        attendance_mode: applicantAttendanceModeLabel(app) || null,
-      }, { size: 'compact', hasPadding: true, hasIcons: true });
-      const isCurrent = String(app.id || '') === String(inRoomApplicantId || '');
-      return window.BTSAuditionTemplates.renderTemplateById('auditions.in-room.checked-in-tile', {
-        esc,
-        time: slotTimeStr ? formatSlotTime(slotTimeStr) : '',
-        name: app.name || '',
-        state: isCurrent ? 'Current' : 'Ready',
-        className: isCurrent ? 'is-next' : '',
-        cardHtml,
-        onclick: `${openFn}('${esc(String(app.id || ''))}')`,
-        tabindex: '0'
-      });
-    }).join('');
-  }
-
-  function renderGeneralInRoomCheckedStrip(openFn = 'openAuditionSessionInRoom', label = 'Checked In', sessionOverride = null) {
-    try {
-      const session = sessionOverride || getCurrentInRoomSession() || getActiveAuditionNavSession() || getSelectedAuditionSession();
-      if (!session?.id) return '';
-      const trayCards = renderGeneralInRoomCheckedTrayCards(session, openFn);
-      return window.BTSAuditionTemplates.renderTemplateById('auditions.in-room.checked-in-strip', { esc, label, trayCards });
-    } catch (error) {
-      console.error('[BTS] checked-in strip render failed', error);
-      return '';
-    }
-  }
-
-  function scrollCheckedInRailToActive(scope = document) {
-    const root = scope || document;
-    const list = root.querySelector?.('.template-checkin-row') || document.querySelector('.template-checkin-row');
-    if (!list) return;
-    const target = list.querySelector('.template-checkin-tile.is-next')
-      || list.querySelector('.template-checkin-tile:not(.is-done)')
-      || list.querySelector('.template-checkin-tile');
-    if (!target) return;
-    target.scrollIntoView({ block: 'nearest', inline: 'center', behavior: 'smooth' });
-  }
-
   function syncInRoomRightPanelHeight(container) {
     if (!container) return;
     const main = container.querySelector('.inroom-main.inroom-main-flat');
@@ -34172,7 +34042,6 @@ If you have any questions, don't hesitate to reach out.
     const inRoomThemeClose = teamAccessMode ? `</div>` : '';
     const usesGeneralInRoomLayout = !currentSession?.type || currentSession.type === 'audition' || currentSession.type === 'callback';
     const isGeneralAuditionInRoom = usesGeneralInRoomLayout && currentSession?.type !== 'callback';
-    const trayCards = renderGeneralInRoomCheckedTrayCards(currentSession, openFn);
     const roleTypeOptions = [...new Set(characters.map(c => c.role_type).filter(Boolean))].sort();
     if (!app) {
       const noSelectionScoreHtml = currentSession?.type === 'callback'
@@ -34197,7 +34066,7 @@ If you have any questions, don't hesitate to reach out.
         usesGeneralInRoomLayout,
         isGeneralAuditionInRoom,
         containerId,
-        trayCards,
+        trayCards: '',
         currentSession,
         teamAccessMode,
         roleTypeOptions,
@@ -34246,7 +34115,7 @@ If you have any questions, don't hesitate to reach out.
       usesGeneralInRoomLayout,
       isGeneralAuditionInRoom,
       containerId,
-      trayCards,
+      trayCards: '',
       currentSession,
       teamAccessMode,
       roleTypeOptions,
@@ -34260,7 +34129,6 @@ If you have any questions, don't hesitate to reach out.
       callbackCharactersHtml: renderCallbackCharacterChips(app),
       roleChipsHtml: renderInRoomRoleChips(app)
     }) + inRoomThemeClose;
-    requestAnimationFrame(() => scrollCheckedInRailToActive(el));
     requestAnimationFrame(() => requestAnimationFrame(() => syncInRoomRightPanelHeight(el)));
     requestAnimationFrame(() => requestAnimationFrame(() => fitInRoomRoleChipTitles(el)));
     // Re-fit on grid resize (window resize, panel expand/collapse, etc.)
@@ -34866,12 +34734,8 @@ If you have any questions, don't hesitate to reach out.
     const isGeneralAuditionInRoomWorkspace = tool === 'inroom' && session.type === 'audition';
     const isClassicInRoomWorkspace = tool === 'inroom' && (session.type === 'audition' || session.type === 'callback');
     const isDanceCallInRoom = tool === 'inroom' && session.type === 'dance_call';
-    const checkedInStripHtml = isClassicInRoomWorkspace
-      ? renderGeneralInRoomCheckedStrip('openAuditionSessionInRoom', 'Checked In', session)
-      : '';
     renderAuditionHeaderFrame();
     host.innerHTML = `
-      ${checkedInStripHtml}
       <div class="aud-session-shell${isClassicInRoomWorkspace ? ' aud-session-shell-general-inroom' : ''}" style="${sessionAccentVars};">
         <div class="aud-session-hero">
           <div class="aud-session-hero-copy">

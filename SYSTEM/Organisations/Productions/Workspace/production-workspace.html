@@ -21629,6 +21629,13 @@
           </div>
       </div>
 
+      <div class="prod-tab" data-tab="marketing" onclick="navigateToMarketing()">
+        <span class="prod-tab-label">
+          <span class="tab-icon-slot"><img src="/ASSETS/Images/Star.svg" class="tab-icon" alt="" aria-hidden="true" /></span>
+          Marketing
+        </span>
+      </div>
+
       <div class="prod-tab" data-tab="profile" id="team-profile-tab" style="display:none;" onclick="switchProdTab('profile')">
         <span class="tab-icon-slot"><img src="/ASSETS/Images/navemailtemplate.svg" class="tab-icon" alt="" aria-hidden="true" /></span>
         Profile
@@ -27520,23 +27527,6 @@
     window.scrollTo({ top: savedY, behavior: 'instant' });
   }
 
-  function refreshInRoomTrayInPlace() {
-    const stripEl = document.querySelector('[data-bts-template="checked-in-rail"]');
-    if (!stripEl) return;
-    const session       = getCurrentInRoomSession() || getSelectedAuditionSession();
-    const checkedInApps = session?.id ? getCheckInSessionApps(session, '', 'in').filter(app => app?.status !== 'no_show') : [];
-    const savedLeft = stripEl.querySelector('.template-checkin-row')?.scrollLeft || 0;
-    stripEl.outerHTML = renderGeneralInRoomCheckedStrip(inRoomOpenFn || 'openInRoom', 'Checked In', session);
-    const nextRow = document.querySelector('[data-bts-template="checked-in-rail"] .template-checkin-row');
-    if (nextRow) nextRow.scrollLeft = savedLeft;
-    // If the currently shown person was unchecked, move to the next one
-    if (inRoomApplicantId && !checkedInApps.some(a => a.id === inRoomApplicantId)) {
-      const groups = getInRoomGroups(session);
-      const nextId = groups.current?.id || groups.waiting[0]?.id || groups.past[0]?.id || null;
-      renderInRoomPage(nextId, inRoomContainerId, inRoomOpenFn);
-    }
-  }
-
   function refreshVisibleInRoomForSession() {
     if (document.getElementById('aud-session-inroom-content')) {
       renderInRoomPage(inRoomApplicantId, 'aud-session-inroom-content', 'openAuditionSessionInRoom');
@@ -27550,14 +27540,12 @@
   function handleApplicantRealtimeChange(newRow) {
     if (!patchApplicantFromPayload(newRow)) return;
     refreshCheckinInPlace();
-    refreshInRoomTrayInPlace();
     // Silent background reconcile — force-fetch after 3s to catch anything the payload missed
     clearTimeout(_applicantReconcileTimer);
     _applicantReconcileTimer = setTimeout(async () => {
       try {
         await loadApplicants({ force: true });
         refreshCheckinInPlace();
-        refreshInRoomTrayInPlace();
       } catch {}
     }, 3000);
   }
@@ -35218,6 +35206,11 @@ Your submission link is unique to you. Please do not share it with another perfo
       return;
     }
     setSidebarSubmenuState('registration', _sidebarSubId);
+  }
+
+  function navigateToMarketing() {
+    const id = new URLSearchParams(location.search).get('id');
+    window.location.href = '/SYSTEM/Organisations/Productions/Workspace/marketing.html' + (id ? '?id=' + encodeURIComponent(id) : '');
   }
 
   function switchRegistrationSubTab(subTab = 'dashboard') {
@@ -55779,59 +55772,6 @@ Your submission link is unique to you. Please do not share it with another perfo
     return buildCastingCardBack(app, { includeInRoomScores: true, includeRoomNotes: true, impressionCategories: Object.values(INROOM_SCORE_LABELS), accentColor: backAccent, scoreColorSet, sessionNotes: collectAllSessionNotes(app), scoreObservations: collectScoreObservations(app), bucketPlacements: collectDanceBucketPlacements(app), roleNotes: collectRoleNotes(app), characterAssignments: collectCharacterAssignments(app), auditionTimeRows: buildAuditionTimeRowsForCard(app) });
   }
 
-  function inRoomThumbHtml(app, openFn = 'openInRoom', session = null) {
-    const now = Date.now();
-    const currentSession = session || getCurrentInRoomSession() || getSelectedAuditionSession();
-    const sessionId = currentSession?.id || null;
-    const slot = sessionId ? getApplicantSlotForSession(app, sessionId) : null;
-    const slotTimeStr = slot?.slot_time || slot?.start_time || '';
-    const slotStart = (() => {
-      if (!slot) return null;
-      const d = getSlotStartDate(app, sessionId);
-      if (d) return d.getTime();
-      if (slotTimeStr) {
-        const today = new Date().toISOString().slice(0, 10);
-        const dt = new Date(`${slot.slot_date || slot.date || today}T${slotTimeStr.length === 5 ? slotTimeStr + ':00' : slotTimeStr}`);
-        return isNaN(dt.getTime()) ? null : dt.getTime();
-      }
-      return null;
-    })();
-    const currentRoomState = getRoomState(getAuditionRoomMeta(currentSession).roomKey);
-    const currentId = String(inRoomApplicantId || currentRoomState?.current_applicant_id || '');
-    const checkedInQueue = getInRoomCheckedInApps(currentSession);
-    const appIndex = checkedInQueue.findIndex(candidate => String(candidate.id) === String(app?.id || ''));
-    const currentIndex = currentId
-      ? checkedInQueue.findIndex(candidate => String(candidate.id) === currentId)
-      : -1;
-    const isCurrent  = currentId
-      ? String(app?.id || '') === currentId
-      : !!(slotStart && now >= slotStart && now < slotStart + (10 * 60 * 1000));
-    const isThrough = currentIndex >= 0 && appIndex >= 0
-      ? appIndex < currentIndex
-      : !!(slotStart && now >= slotStart + (10 * 60 * 1000) && !isCurrent);
-    const classes = ['template-checkin-tile'];
-    if (isCurrent) classes.push('is-next');
-    else if (isThrough) classes.push('is-done');
-    const nameParts = String(app?.name || '').trim().split(' ');
-    const cardHtml = renderCastingCard({
-      first_name: nameParts[0] || '',
-      last_name:  nameParts.slice(1).join(' ') || '',
-      age:        cbv2ApplicantAge(app),
-      pronouns:   applicantPronouns(app),
-      headshot_url:       app.headshot_url || '',
-      casting_categories: cbv2CastingCategories(app),
-      role_openness:      cbv2RoleBadge(app),
-      attendance_mode:    applicantAttendanceModeLabel(app) || null,
-    }, { size: 'compact', hasPadding: true, hasIcons: true });
-    const timeLabel = slotTimeStr ? `<div class="template-checkin-time">${esc(formatSlotTime(slotTimeStr))}</div>` : '';
-    const statusLabel = isCurrent ? 'Next' : (isThrough ? 'Through' : 'Ready');
-    return `<button type="button" class="${classes.join(' ')}" onclick="${openFn}('${app.id}')" title="${esc(app.name || '')}" aria-current="${isCurrent ? 'true' : 'false'}" style="flex:0 0 88px;width:88px;display:grid;grid-template-rows:0.78rem auto 0.86rem;justify-items:center;gap:0.22rem;">
-      ${timeLabel}
-      <div class="template-checkin-card">${cardHtml}</div>
-      <div class="template-checkin-status">${esc(statusLabel)}</div>
-    </button>`;
-  }
-
   function isCallbackRoleForApplicant(appId, charId) {
     return wasCalledBackForRole(appId, charId);
   }
@@ -56271,62 +56211,6 @@ Your submission link is unique to you. Please do not share it with another perfo
     }
   }
 
-  function renderGeneralInRoomCheckedTrayCards(session, openFn = 'openAuditionSessionInRoom') {
-    if (!session?.id) return '';
-    const checkedInApps = getCheckInSessionApps(session, '', 'in')
-      .filter(app => app?.status !== 'no_show');
-    if (!checkedInApps.length) return `<div class="inroom-empty-note">No performers checked in yet.</div>`;
-    return checkedInApps.map(app => {
-      const slot = getApplicantSlotForSession(app, session.id);
-      const slotTimeStr = slot?.slot_time || slot?.start_time || '';
-      const nameParts = String(app?.name || '').trim().split(/\s+/);
-      const cardHtml = renderCastingCard({
-        first_name: nameParts[0] || '',
-        last_name: nameParts.slice(1).join(' ') || '',
-        age: cbv2ApplicantAge(app),
-        pronouns: applicantPronouns(app),
-        headshot_url: app.headshot_url || '',
-        casting_categories: cbv2CastingCategories(app),
-        role_openness: cbv2RoleBadge(app),
-        attendance_mode: applicantAttendanceModeLabel(app) || null,
-      }, { size: 'compact', hasPadding: true, hasIcons: true });
-      const isCurrent = String(app.id || '') === String(inRoomApplicantId || '');
-      return window.BTSAuditionTemplates.renderTemplateById('auditions.in-room.checked-in-tile', {
-        esc,
-        time: slotTimeStr ? formatSlotTime(slotTimeStr) : '',
-        name: app.name || '',
-        state: isCurrent ? 'Current' : 'Ready',
-        className: isCurrent ? 'is-next' : '',
-        cardHtml,
-        onclick: `${openFn}('${esc(String(app.id || ''))}')`,
-        tabindex: '0'
-      });
-    }).join('');
-  }
-
-  function renderGeneralInRoomCheckedStrip(openFn = 'openAuditionSessionInRoom', label = 'Checked In', sessionOverride = null) {
-    try {
-      const session = sessionOverride || getCurrentInRoomSession() || getActiveAuditionNavSession() || getSelectedAuditionSession();
-      if (!session?.id) return '';
-      const trayCards = renderGeneralInRoomCheckedTrayCards(session, openFn);
-      return window.BTSAuditionTemplates.renderTemplateById('auditions.in-room.checked-in-strip', { esc, label, trayCards });
-    } catch (error) {
-      console.error('[BTS] checked-in strip render failed', error);
-      return '';
-    }
-  }
-
-  function scrollCheckedInRailToActive(scope = document) {
-    const root = scope || document;
-    const list = root.querySelector?.('.template-checkin-row') || document.querySelector('.template-checkin-row');
-    if (!list) return;
-    const target = list.querySelector('.template-checkin-tile.is-next')
-      || list.querySelector('.template-checkin-tile:not(.is-done)')
-      || list.querySelector('.template-checkin-tile');
-    if (!target) return;
-    target.scrollIntoView({ block: 'nearest', inline: 'center', behavior: 'smooth' });
-  }
-
   function syncInRoomRightPanelHeight(container) {
     if (!container) return;
     const main = container.querySelector('.inroom-main.inroom-main-flat');
@@ -56378,7 +56262,6 @@ Your submission link is unique to you. Please do not share it with another perfo
     const usesGeneralInRoomLayout = !currentSession?.type || currentSession.type === 'audition' || currentSession.type === 'callback';
     const isGeneralAuditionInRoom = usesGeneralInRoomLayout && currentSession?.type !== 'callback';
     const roleTypeOptions = [...new Set(characters.map(c => c.role_type).filter(Boolean))].sort();
-    const trayCards = renderGeneralInRoomCheckedTrayCards(currentSession, openFn);
     if (!app) {
       const noSelectionScoreHtml = currentSession?.type === 'callback'
         ? `<div class="inroom-considered-card inroom-callbacks-card">
@@ -56402,7 +56285,7 @@ Your submission link is unique to you. Please do not share it with another perfo
         usesGeneralInRoomLayout,
         isGeneralAuditionInRoom,
         containerId,
-        trayCards,
+        trayCards: '',
         currentSession,
         teamAccessMode,
         roleTypeOptions,
@@ -56451,7 +56334,7 @@ Your submission link is unique to you. Please do not share it with another perfo
       usesGeneralInRoomLayout,
       isGeneralAuditionInRoom,
       containerId,
-      trayCards,
+      trayCards: '',
       currentSession,
       teamAccessMode,
       roleTypeOptions,
@@ -56469,7 +56352,6 @@ Your submission link is unique to you. Please do not share it with another perfo
       positionCallbackSecondaryCharacters(el);
     }
     bindInRoomAutosaveFields(app.id, currentSession?.id || null);
-    requestAnimationFrame(() => scrollCheckedInRailToActive(el));
     requestAnimationFrame(() => requestAnimationFrame(() => syncInRoomRightPanelHeight(el)));
     requestAnimationFrame(() => requestAnimationFrame(() => fitInRoomRoleChipTitles(el)));
     // Re-fit on grid resize (window resize, panel expand/collapse, etc.)
@@ -57375,14 +57257,10 @@ Your submission link is unique to you. Please do not share it with another perfo
     const isDanceCallInRoom = tool === 'inroom' && session.type === 'dance_call';
     const isGeneralAuditionInRoomWorkspace = tool === 'inroom' && session.type === 'audition';
     const isClassicInRoomWorkspace = tool === 'inroom' && (session.type === 'audition' || session.type === 'callback');
-    const checkedInStripHtml = isClassicInRoomWorkspace
-      ? renderGeneralInRoomCheckedStrip('openAuditionSessionInRoom', 'Checked In', session)
-      : '';
     renderAuditionHeaderFrame();
     host.dataset.sessionWorkspaceSessionId = String(session.id || '');
     host.dataset.sessionWorkspaceTool = String(tool || '');
     host.innerHTML = `
-      ${checkedInStripHtml}
       <div class="aud-session-shell${isClassicInRoomWorkspace ? ' aud-session-shell-general-inroom' : ''}" style="${sessionAccentVars};">
         <div class="aud-session-hero">
           <div class="aud-session-hero-copy">
