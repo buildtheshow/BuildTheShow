@@ -562,13 +562,13 @@
       pill = '',
       railHtml = ''
     } = config;
-    return `<div class="template-checkedin-preview">
-      <div class="template-checkedin-head">
+    return `<div class="template-checkedin-preview" style="border-radius:16px;border:1.5px solid #e4deed;background:#fff;box-shadow:none;overflow:visible;">
+      <div class="template-checkedin-head" style="display:flex;align-items:center;justify-content:space-between;gap:1rem;padding:0.95rem 1.05rem 0.8rem;border-bottom:1px solid #e9e2f2;">
         <div>
-          <div class="template-checkedin-title">${esc(title)}</div>
-          ${meta ? `<div class="template-checkedin-meta">${esc(meta)}</div>` : ''}
+          <div class="template-checkedin-title" style="color:#1f1235;font-size:1rem;font-weight:950;line-height:1.15;">${esc(title)}</div>
+          ${meta ? `<div class="template-checkedin-meta" style="color:#7a6c90;font-size:0.76rem;font-weight:800;line-height:1.25;margin-top:0.1rem;">${esc(meta)}</div>` : ''}
         </div>
-        ${pill ? `<div class="template-checkedin-pill">${esc(pill)}</div>` : ''}
+        ${pill ? `<div class="template-checkedin-pill" style="display:inline-flex;align-items:center;min-height:1.9rem;padding:0 0.72rem;border-radius:999px;background:#eef6f0;color:#4f8a5c;font-size:0.72rem;font-weight:950;white-space:nowrap;">${esc(pill)}</div>` : ''}
       </div>
       ${railHtml}
     </div>`;
