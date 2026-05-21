@@ -36,11 +36,35 @@
     ['back', 'Back cover'],
   ];
 
+  var PAPER_OPTIONS = [
+    {
+      id: 'letter-folded',
+      label: '8.5&quot; x 11&quot;',
+      detail: 'Folded to 5.5&quot; x 8.5&quot;',
+      note: 'Standard booklet programme',
+      pageLabel: '5.5&quot; x 8.5&quot; folded pages',
+    },
+    {
+      id: 'letter-flat',
+      label: '8.5&quot; x 11&quot;',
+      detail: 'Not folded',
+      note: 'Full letter pages',
+      pageLabel: '8.5&quot; x 11&quot; pages',
+    },
+    {
+      id: 'tabloid-folded',
+      label: '11&quot; x 17&quot;',
+      detail: 'Folded to 8.5&quot; x 11&quot;',
+      note: 'Large booklet programme',
+      pageLabel: '8.5&quot; x 11&quot; folded pages',
+    },
+  ];
+
   var ProgrammeState = {
     prodId: null,
     container: null,
     settings: {
-      size: 'half-letter',
+      paper: 'letter-folded',
       output: 'print',
       booklet: 'saddle-stitch',
       template: 'classic-theatre',
@@ -249,13 +273,38 @@
     '</div>';
   }
 
+  function selectedPaper() {
+    return PAPER_OPTIONS.find(function (item) { return item.id === ProgrammeState.settings.paper; }) || PAPER_OPTIONS[0];
+  }
+
+  function renderPaperPicker() {
+    var selected = selectedPaper().id;
+    return '<div class="pgm-paper-picker" role="radiogroup" aria-label="Programme paper">' +
+      PAPER_OPTIONS.map(function (paper) {
+        var isSelected = selected === paper.id;
+        return '<label class="pgm-paper-card' + (isSelected ? ' is-selected' : '') + '">' +
+          '<input type="radio" name="pgm-paper" value="' + esc(paper.id) + '"' + (isSelected ? ' checked' : '') + ' onchange="MarketingProgrammeModule.setSetting(\'paper\', this.value)" />' +
+          '<span class="pgm-paper-visual pgm-paper-visual--' + esc(paper.id) + '"><span></span></span>' +
+          '<span class="pgm-paper-copy">' +
+            '<strong>' + paper.label + '</strong>' +
+            '<em>' + paper.detail + '</em>' +
+            '<small>' + esc(paper.note) + '</small>' +
+          '</span>' +
+        '</label>';
+      }).join('') +
+    '</div>';
+  }
+
   function renderSetupControls() {
     var checked = new Set(ProgrammeState.settings.sections);
+    var paper = selectedPaper();
     return '<div class="pgm-builder-grid">' +
       '<section class="pgm-panel">' +
         '<div class="pgm-panel-title">Programme Setup</div>' +
+        '<div class="pgm-paper-heading">Paper</div>' +
+        renderPaperPicker() +
+        '<div class="pgm-paper-note">Mockup pages below are shown as ' + paper.pageLabel + '.</div>' +
         '<div class="pgm-control-grid">' +
-          selectControl('Size', 'size', [['half-letter', 'Half-letter booklet'], ['letter', 'Letter'], ['a4', 'A4'], ['digital', 'Digital PDF']]) +
           selectControl('Output', 'output', [['print', 'Print'], ['digital', 'Digital'], ['proof', 'Proof only']]) +
           selectControl('Booklet', 'booklet', [['saddle-stitch', 'Saddle stitch'], ['single-pages', 'Single pages'], ['digital-scroll', 'Digital scroll']]) +
           selectControl('Template', 'template', [['classic-theatre', 'Classic Theatre'], ['modern-clean', 'Modern Clean'], ['youth-theatre', 'Youth Theatre'], ['sponsor-heavy', 'Sponsor Heavy']]) +
@@ -282,8 +331,9 @@
   function renderReadiness(pages) {
     var ready = buildReadiness();
     var blockers = ready.missingAds + ready.unapprovedAds + ready.missingBios + ready.missingHeadshots + ready.openDeliverables;
+    var paper = selectedPaper();
     return '<div class="pgm-status-grid">' +
-      statusTile('Page Estimate', String(pages.length), 'Structured pages in this mockup', 'info') +
+      statusTile('Page Estimate', String(pages.length), paper.pageLabel, 'info') +
       statusTile('Print Readiness', blockers ? 'Not Ready' : 'Ready', blockers ? blockers + ' item' + (blockers === 1 ? '' : 's') + ' need attention' : 'Ready for proof review', blockers ? 'warn' : 'good') +
       statusTile('Missing Ads', String(ready.missingAds), 'Artwork placeholders', statusClass(ready.missingAds)) +
       statusTile('Unapproved Art', String(ready.unapprovedAds), 'Needs artwork approval', statusClass(ready.unapprovedAds)) +
@@ -306,7 +356,7 @@
     else body = '<div class="pgm-placeholder-lines"><span></span><span></span><span></span><span></span></div>';
     return '<article class="pgm-page-card">' +
       '<div class="pgm-page-number">Page ' + (index + 1) + '</div>' +
-      '<div class="pgm-page-sheet pgm-page-sheet--' + esc(page.type) + '">' + body + '</div>' +
+      '<div class="pgm-page-sheet pgm-page-sheet--' + esc(page.type) + ' pgm-page-sheet--paper-' + esc(selectedPaper().id) + '">' + body + '</div>' +
       '<div class="pgm-page-caption"><strong>' + esc(page.title) + '</strong><span>' + esc(page.subtitle || '') + '</span></div>' +
     '</article>';
   }
