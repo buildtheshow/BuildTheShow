@@ -94,6 +94,7 @@
     },
     spreadStart: 0,
     sideTab: 'pages',
+    flipDirection: 'none',
     data: {
       production: null,
       businesses: [],
@@ -474,14 +475,14 @@
       '<div class="pgm-panel-head">' +
         '<div><div class="pgm-panel-title">Digital Programme Preview</div><p>' + esc(selectedPaper().pageLabel) + ' · ' + pageRangeLabel(pages) + '</p></div>' +
         '<div class="pgm-preview-controls">' +
-          '<button class="spn-btn spn-btn--ghost pgm-preview-btn" type="button" ' + (canPrev ? 'onclick="MarketingProgrammeModule.setSpread(' + prevStart + ')"' : 'disabled') + '>Flip Back</button>' +
-          '<button class="spn-btn spn-btn--primary pgm-preview-btn" type="button" ' + (canNext ? 'onclick="MarketingProgrammeModule.setSpread(' + nextStart + ')"' : 'disabled') + '>Flip Forward</button>' +
+          '<button class="spn-btn spn-btn--ghost pgm-preview-btn" type="button" ' + (canPrev ? "onclick=\"MarketingProgrammeModule.flipTo(" + prevStart + ", 'back')\"" : 'disabled') + '>Flip Back</button>' +
+          '<button class="spn-btn spn-btn--primary pgm-preview-btn" type="button" ' + (canNext ? "onclick=\"MarketingProgrammeModule.flipTo(" + nextStart + ", 'forward')\"" : 'disabled') + '>Flip Forward</button>' +
           '<button class="spn-btn spn-btn--ghost" disabled>Export Later</button>' +
         '</div>' +
       '</div>' +
       '<div class="pgm-preview-layout">' +
         renderPreviewSidebar(pages, start, isCover) +
-        '<div class="pgm-preview-stage pgm-preview-stage--flipbook' + (isCover ? ' pgm-preview-stage--cover' : ' pgm-preview-stage--spread') + '">' +
+        '<div class="pgm-preview-stage pgm-preview-stage--flipbook pgm-preview-stage--' + esc(ProgrammeState.flipDirection || 'none') + (isCover ? ' pgm-preview-stage--cover' : ' pgm-preview-stage--spread') + '">' +
           '<div class="pgm-preview-spread">' +
             renderPreviewPage(leftPage, leftIndex, 'left') +
             '<div class="pgm-preview-gutter" aria-hidden="true"></div>' +
@@ -565,6 +566,13 @@
     setSpread: function (start) {
       ProgrammeState.spreadStart = Number(start) || 0;
       ProgrammeState.sideTab = 'pages';
+      ProgrammeState.flipDirection = 'jump';
+      renderPlanner();
+    },
+    flipTo: function (start, direction) {
+      ProgrammeState.spreadStart = Number(start) || 0;
+      ProgrammeState.sideTab = 'pages';
+      ProgrammeState.flipDirection = direction === 'back' ? 'back' : 'forward';
       renderPlanner();
     },
     setSideTab: function (key) {
