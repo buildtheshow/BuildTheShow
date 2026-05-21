@@ -182,8 +182,8 @@
     } = config;
 
     return `<div class="template-checkin-rail" data-bts-template="checked-in-rail" style="display:grid;grid-template-columns:48px minmax(0,1fr);gap:0.5rem;align-items:stretch;min-width:0;border-radius:0 0 16px 16px;background:#fff;padding:0.55rem 0.65rem 0.75rem;overflow:hidden;">
-      <div class="template-checkin-label">${esc(label)}</div>
-      <div class="template-checkin-row" style="display:flex;flex-direction:row;flex-wrap:nowrap;align-items:flex-start;gap:0.55rem;min-width:0;max-width:100%;overflow-x:auto;overflow-y:hidden;padding:0.05rem 0.1rem 0.45rem;scrollbar-width:thin;-webkit-overflow-scrolling:touch;perspective:900px;">${trayCards}</div>
+      <div class="template-checkin-label" style="position:relative;display:flex;align-items:center;justify-content:center;align-self:stretch;min-height:100%;margin:-0.55rem 0 -0.75rem;padding:0.55rem 0 0.75rem;border-left:2px solid rgba(87,46,136,0.12);color:#1a1530;font-size:0.66rem;font-weight:950;letter-spacing:0.08em;line-height:1.1;text-align:center;text-transform:uppercase;writing-mode:vertical-rl;transform:rotate(180deg);user-select:none;">${esc(label)}</div>
+      <div class="template-checkin-row" style="display:flex;flex-direction:row;flex-wrap:nowrap;align-items:flex-start;gap:0.55rem;min-width:0;max-width:100%;min-height:7.25rem;overflow-x:auto;overflow-y:hidden;padding:0.05rem 0.1rem 0.45rem;scrollbar-width:thin;-webkit-overflow-scrolling:touch;perspective:900px;">${trayCards}</div>
     </div>`;
   }
 
@@ -445,9 +445,7 @@
       roleChipsHtml
     });
 
-    const trayHtml = usesGeneralInRoomLayout && containerId === 'aud-session-inroom-content'
-      ? ''
-      : renderCheckedInStripTemplate({ esc, label: 'Checked In', trayCards });
+    const trayHtml = renderCheckedInStripTemplate({ esc, label: 'Checked In', trayCards: trayCards || '' });
 
     const generalOpen = isGeneralAuditionInRoom
       ? `<div class="inroom-primary-container">
