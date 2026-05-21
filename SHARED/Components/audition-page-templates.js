@@ -445,7 +445,9 @@
       roleChipsHtml
     });
 
-    const trayHtml = renderCheckedInStripTemplate({ esc, label: 'Checked In', trayCards: trayCards || '' });
+    const trayHtml = trayCards
+      ? renderCheckedInStripTemplate({ esc, label: 'Checked In', trayCards })
+      : '';
 
     const generalOpen = isGeneralAuditionInRoom
       ? `<div class="inroom-primary-container">
