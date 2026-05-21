@@ -81,14 +81,15 @@
     window.location.href = '/SYSTEM/Organisations/Productions/Workspace/marketing-' + sec + '.html' + (id ? '?id=' + encodeURIComponent(id) : '');
   };
 
-  // Navigate to the Budget page.
-  window.navigateToBudget = function () {
+  // Navigate to the Budget page (tab = 'overview'|'budget'|'receipts'|'collect').
+  window.navigateToBudget = function (tab) {
+    const hash = tab ? '#' + tab : '';
     if (onSlugUrl()) {
       const base = productionBasePath();
-      if (base) { window.location.href = base + '/budget'; return; }
+      if (base) { window.location.href = base + '/budget' + hash; return; }
     }
     const id = new URLSearchParams(location.search).get('id');
-    window.location.href = '/SYSTEM/Organisations/Productions/Workspace/production-budget.html' + (id ? '?id=' + encodeURIComponent(id) : '');
+    window.location.href = '/SYSTEM/Organisations/Productions/Workspace/production-budget.html' + (id ? '?id=' + encodeURIComponent(id) : '') + hash;
   };
 
   // Navigate to the production workspace (another top-level tab).
@@ -131,12 +132,17 @@
     e.stopPropagation();
     document.getElementById('marketing-wrap')?.classList.toggle('open');
   };
+  window.toggleBudgetMenu = function (e) {
+    e.stopPropagation();
+    document.getElementById('budget-wrap')?.classList.toggle('open');
+  };
   window.handleSidebarChevronKey = function (e, s) {
     if (e.key !== 'Enter' && e.key !== ' ') return;
     e.preventDefault();
     if (s === 'auditions') window.toggleAuditionsMenu(e);
     else if (s === 'registration') window.toggleRegistrationMenu(e);
     else if (s === 'marketing') window.toggleMarketingMenu(e);
+    else if (s === 'budget') window.toggleBudgetMenu(e);
   };
   window.toggleMobileSidebar = function () {
     document.body.classList.toggle('mobile-sidebar-open');
@@ -156,7 +162,7 @@
    *   kickerLabel — fallback kicker text before production title loads (e.g. 'Marketing')
    *   pageTitle   — fallback document title suffix (e.g. 'Dashboard')
    */
-  const SIDEBAR_CACHE_KEY = 'bts-prod-sidebar-v4';
+  const SIDEBAR_CACHE_KEY = 'bts-prod-sidebar-v5';
 
   function applySidebarState(subId) {
     document.querySelectorAll('.prod-tab.active, .prod-sub-item.active').forEach(el => el.classList.remove('active'));
@@ -165,9 +171,11 @@
     if (subId) document.getElementById(subId)?.classList.add('active');
   }
 
-  function applyBudgetSidebarState() {
+  function applyBudgetSidebarState(subId) {
     document.querySelectorAll('.prod-tab.active, .prod-sub-item.active').forEach(el => el.classList.remove('active'));
-    document.getElementById('budget-tab')?.classList.add('active');
+    document.getElementById('budget-wrap')?.classList.add('open');
+    document.getElementById('budget-parent-tab')?.classList.add('is-open-parent', 'active');
+    if (subId) document.getElementById(subId)?.classList.add('active');
   }
 
   function loadSidebar(subId) {
@@ -188,11 +196,11 @@
       .catch(() => {});
   }
 
-  function loadBudgetSidebar() {
+  function loadBudgetSidebar(subId) {
     const cached = sessionStorage.getItem(SIDEBAR_CACHE_KEY);
     if (cached) {
       document.getElementById('prod-sidebar-host').innerHTML = cached;
-      applyBudgetSidebarState();
+      applyBudgetSidebarState(subId);
     }
     fetch('/SHARED/Navigation/production-sidebar.html')
       .then(r => r.text())
@@ -200,14 +208,19 @@
         sessionStorage.setItem(SIDEBAR_CACHE_KEY, html);
         if (!cached) {
           document.getElementById('prod-sidebar-host').innerHTML = html;
-          applyBudgetSidebarState();
+          applyBudgetSidebarState(subId);
         }
       })
       .catch(() => {});
   }
 
-  window.initBudgetPage = async function ({ pageTitle = 'Budget' } = {}) {
-    loadBudgetSidebar();
+  window.initBudgetPage = async function ({ pageTitle = 'Budget', subId } = {}) {
+    if (!subId) {
+      const hash = (location.hash || '').replace('#', '');
+      const tabMap = { overview: 'bsub-overview', budget: 'bsub-budget', receipts: 'bsub-receipts', collect: 'bsub-collect' };
+      subId = tabMap[hash] || 'bsub-overview';
+    }
+    loadBudgetSidebar(subId);
     const prodId = await resolveProductionId();
     if (!prodId) return;
     window.btsProdId = prodId;
