@@ -1,9 +1,10 @@
-/* marketing-page.js — shared init for all marketing sub-pages */
+/* marketing-page.js — shared init for all marketing and budget pages */
 (function () {
   'use strict';
 
   const SUPABASE_URL = 'https://tkmaiktxpwqfbgeojbnf.supabase.co';
   const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRrbWFpa3R4cHdxZmJnZW9qYm5mIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MDc4NTI4NTYsImV4cCI6MjAyMzQyODg1Nn0.tVxOMkaMdBnuqQbLdHl00h4WA7DV8LHuVxCt6z5LFCY';
+  const SIDEBAR_CACHE_KEY = 'bts-prod-sidebar-v6';
 
   // --- Path helpers ---------------------------------------------------------
 
@@ -11,8 +12,6 @@
     return window.location.pathname.replace(/\/+$/, '').split('/').filter(Boolean);
   }
 
-  // Returns { org, show } from a slug URL like /ryt/org/Productions/show-slug/...
-  // Returns { org: '', show: '' } when not on a slug URL.
   function productionSlugParts() {
     const parts = pathParts();
     const orgIndex = parts.findIndex(p => p.toLowerCase() === 'org');
@@ -26,7 +25,6 @@
     };
   }
 
-  // Returns the production base path, e.g. /ryt/org/Productions/show-slug
   function productionBasePath() {
     const parts = pathParts();
     const prodIndex = parts.findIndex(p => p.toLowerCase() === 'productions');
@@ -34,7 +32,6 @@
     return '/' + parts.slice(0, prodIndex + 2).join('/');
   }
 
-  // True when the current URL is a slug-based URL (not a ?id= file URL).
   function onSlugUrl() {
     const s = productionSlugParts();
     return !!(s.org && s.show);
@@ -63,14 +60,14 @@
       const id = await res.json();
       return id || '';
     } catch (err) {
-      console.error('[BTS] marketing production lookup failed', err);
+      console.error('[BTS] production lookup failed', err);
       return '';
     }
   }
 
   // --- Navigation -----------------------------------------------------------
 
-  // Navigate to another marketing sub-page, preserving slug or ?id= pattern.
+  // Marketing: navigate to a sub-page, e.g. navigateToMarketing('sponsors')
   window.navigateToMarketing = function (section) {
     const sec = section || 'dashboard';
     if (onSlugUrl()) {
@@ -81,7 +78,8 @@
     window.location.href = '/SYSTEM/Organisations/Productions/Workspace/marketing-' + sec + '.html' + (id ? '?id=' + encodeURIComponent(id) : '');
   };
 
-  // Navigate to the Budget page (tab = 'overview'|'budget'|'receipts'|'collect').
+  // Budget: navigate to the budget page, optionally opening a specific tab via hash
+  // tab = 'dashboard' | 'breakdown' | 'receipts' | 'collect'
   window.navigateToBudget = function (tab) {
     const hash = tab ? '#' + tab : '';
     if (onSlugUrl()) {
@@ -92,17 +90,13 @@
     window.location.href = '/SYSTEM/Organisations/Productions/Workspace/production-budget.html' + (id ? '?id=' + encodeURIComponent(id) : '') + hash;
   };
 
-  // Navigate to the production workspace (another top-level tab).
+  // Workspace: navigate back to the production workspace
   window.navigateToWorkspace = function (tab, sub) {
     if (onSlugUrl()) {
       const base = productionBasePath();
       if (base) {
         const dest = base + (tab ? '/' + tab : '');
-        if (sub) {
-          window.location.href = dest + '/' + sub;
-        } else {
-          window.location.href = dest;
-        }
+        window.location.href = sub ? dest + '/' + sub : dest;
         return;
       }
     }
@@ -153,112 +147,52 @@
     document.getElementById('mobile-nav-toggle')?.setAttribute('aria-expanded', 'false');
   };
 
-  // --- Main init ------------------------------------------------------------
+  // --- Sidebar loading & state ----------------------------------------------
 
-  /**
-   * Call once per marketing page.
-   * @param {{ subId: string, kickerLabel: string, pageTitle: string }} opts
-   *   subId       — the sidebar sub-item element ID to mark active (e.g. 'msub-dashboard')
-   *   kickerLabel — fallback kicker text before production title loads (e.g. 'Marketing')
-   *   pageTitle   — fallback document title suffix (e.g. 'Dashboard')
-   */
-  const SIDEBAR_CACHE_KEY = 'bts-prod-sidebar-v5';
+  // Loads the shared sidebar HTML from cache, then re-fetches in background.
+  // applyStateFn is called immediately after injection to set active classes.
+  function loadSidebarHtml(applyStateFn) {
+    const cached = sessionStorage.getItem(SIDEBAR_CACHE_KEY);
+    if (cached) {
+      document.getElementById('prod-sidebar-host').innerHTML = cached;
+      applyStateFn();
+    }
+    fetch('/SHARED/Navigation/production-sidebar.html?v=6')
+      .then(r => r.text())
+      .then(html => {
+        sessionStorage.setItem(SIDEBAR_CACHE_KEY, html);
+        if (!cached) {
+          document.getElementById('prod-sidebar-host').innerHTML = html;
+          applyStateFn();
+        }
+      })
+      .catch(() => {});
+  }
 
-  function applySidebarState(subId) {
+  // Marketing: open the Marketing submenu, mark correct sub-item active
+  function applyMarketingState(subId) {
     document.querySelectorAll('.prod-tab.active, .prod-sub-item.active').forEach(el => el.classList.remove('active'));
     document.getElementById('marketing-wrap')?.classList.add('open');
     document.getElementById('marketing-parent-tab')?.classList.add('is-open-parent', 'active');
     if (subId) document.getElementById(subId)?.classList.add('active');
   }
 
-  function applyBudgetSidebarState(subId) {
+  // Budget: open the Budget submenu, map the current hash to the correct sub-item
+  function applyBudgetState() {
+    const hash = (location.hash || '').replace('#', '');
+    const subIdMap = { dashboard: 'bsub-dashboard', breakdown: 'bsub-breakdown', receipts: 'bsub-receipts', collect: 'bsub-collect' };
+    const subId = subIdMap[hash] || 'bsub-dashboard';
     document.querySelectorAll('.prod-tab.active, .prod-sub-item.active').forEach(el => el.classList.remove('active'));
     document.getElementById('budget-wrap')?.classList.add('open');
     document.getElementById('budget-parent-tab')?.classList.add('is-open-parent', 'active');
-    if (subId) document.getElementById(subId)?.classList.add('active');
+    document.getElementById(subId)?.classList.add('active');
   }
 
-  function loadSidebar(subId) {
-    const cached = sessionStorage.getItem(SIDEBAR_CACHE_KEY);
-    if (cached) {
-      document.getElementById('prod-sidebar-host').innerHTML = cached;
-      applySidebarState(subId);
-    }
-    fetch('/SHARED/Navigation/production-sidebar.html?v=budget-20260520')
-      .then(r => r.text())
-      .then(html => {
-        sessionStorage.setItem(SIDEBAR_CACHE_KEY, html);
-        if (!cached) {
-          document.getElementById('prod-sidebar-host').innerHTML = html;
-          applySidebarState(subId);
-        }
-      })
-      .catch(() => {});
-  }
+  // --- Page init ------------------------------------------------------------
 
-  function loadBudgetSidebar(subId) {
-    const cached = sessionStorage.getItem(SIDEBAR_CACHE_KEY);
-    if (cached) {
-      document.getElementById('prod-sidebar-host').innerHTML = cached;
-      applyBudgetSidebarState(subId);
-    }
-    fetch('/SHARED/Navigation/production-sidebar.html?v=budget-20260520')
-      .then(r => r.text())
-      .then(html => {
-        sessionStorage.setItem(SIDEBAR_CACHE_KEY, html);
-        if (!cached) {
-          document.getElementById('prod-sidebar-host').innerHTML = html;
-          applyBudgetSidebarState(subId);
-        }
-      })
-      .catch(() => {});
-  }
+  window.initMarketingPage = async function ({ subId, pageTitle = '' } = {}) {
+    loadSidebarHtml(() => applyMarketingState(subId));
 
-  window.initBudgetPage = async function ({ pageTitle = 'Budget', subId } = {}) {
-    if (!subId) {
-      const hash = (location.hash || '').replace('#', '');
-      const tabMap = { overview: 'bsub-overview', budget: 'bsub-budget', receipts: 'bsub-receipts', collect: 'bsub-collect' };
-      subId = tabMap[hash] || 'bsub-overview';
-    }
-    loadBudgetSidebar(subId);
-    const prodId = await resolveProductionId();
-    if (!prodId) return;
-    window.btsProdId = prodId;
-    document.dispatchEvent(new CustomEvent('btsProdReady', { detail: { prodId } }));
-    try {
-      const res = await fetch(
-        `${SUPABASE_URL}/rest/v1/productions?id=eq.${encodeURIComponent(prodId)}&select=title,org_id,poster_url`,
-        { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` } }
-      );
-      const data = await res.json();
-      if (!data?.[0]) return;
-      const { title, org_id, poster_url } = data[0];
-      document.title = title + ' — ' + pageTitle;
-      const kicker = document.getElementById('bgt-prod-kicker');
-      if (kicker) kicker.textContent = title + ' / Budget';
-      const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
-      set('hdr-title', title);
-      set('hdr-mobile-title', title);
-      const orgHref = org_id
-        ? `/SYSTEM/Organisations/org-dashboard.html?id=${encodeURIComponent(org_id)}`
-        : '/SYSTEM/Organisations/org-dashboard.html';
-      ['sidebar-org-back', 'sidebar-mobile-org-back'].forEach(id => {
-        const el = document.getElementById(id); if (el) el.href = orgHref;
-      });
-      ['sidebar-poster-wrap', 'sidebar-mobile-poster-wrap'].forEach(id => {
-        const el = document.getElementById(id);
-        if (!el) return;
-        if (poster_url) { el.innerHTML = `<img src="${poster_url}" alt="Production poster" />`; el.classList.remove('hidden'); }
-        else { el.innerHTML = ''; el.classList.add('hidden'); }
-      });
-    } catch (_) {}
-  };
-
-  window.initMarketingPage = async function ({ subId, kickerLabel = 'Marketing', pageTitle = '' } = {}) {
-    // Load sidebar — cached path is synchronous so there's no flash between pages
-    loadSidebar(subId);
-
-    // Resolve production and populate UI
     const prodId = await resolveProductionId();
     if (!prodId) return;
     window.btsProdId = prodId;
@@ -289,12 +223,53 @@
         if (el) el.href = orgHref;
       });
 
-      // Poster
       ['sidebar-poster-wrap', 'sidebar-mobile-poster-wrap'].forEach(id => {
         const el = document.getElementById(id);
         if (!el) return;
         if (poster_url) {
-          el.innerHTML = `<img src="${poster_url}" alt="Production poster" />`;
+          el.innerHTML = '<img src="' + poster_url + '" alt="Production poster" />';
+          el.classList.remove('hidden');
+        } else {
+          el.innerHTML = '';
+          el.classList.add('hidden');
+        }
+      });
+    } catch (_) {}
+  };
+
+  window.initBudgetPage = async function ({ pageTitle = 'Budget' } = {}) {
+    loadSidebarHtml(applyBudgetState);
+
+    const prodId = await resolveProductionId();
+    if (!prodId) return;
+    window.btsProdId = prodId;
+    document.dispatchEvent(new CustomEvent('btsProdReady', { detail: { prodId } }));
+
+    try {
+      const res = await fetch(
+        `${SUPABASE_URL}/rest/v1/productions?id=eq.${encodeURIComponent(prodId)}&select=title,org_id,poster_url`,
+        { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` } }
+      );
+      const data = await res.json();
+      if (!data?.[0]) return;
+      const { title, org_id, poster_url } = data[0];
+      document.title = title + ' — ' + pageTitle;
+      const kicker = document.getElementById('bgt-prod-kicker');
+      if (kicker) kicker.textContent = title + ' / Budget';
+      const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+      set('hdr-title', title);
+      set('hdr-mobile-title', title);
+      const orgHref = org_id
+        ? `/SYSTEM/Organisations/org-dashboard.html?id=${encodeURIComponent(org_id)}`
+        : '/SYSTEM/Organisations/org-dashboard.html';
+      ['sidebar-org-back', 'sidebar-mobile-org-back'].forEach(id => {
+        const el = document.getElementById(id); if (el) el.href = orgHref;
+      });
+      ['sidebar-poster-wrap', 'sidebar-mobile-poster-wrap'].forEach(id => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        if (poster_url) {
+          el.innerHTML = '<img src="' + poster_url + '" alt="Production poster" />';
           el.classList.remove('hidden');
         } else {
           el.innerHTML = '';
