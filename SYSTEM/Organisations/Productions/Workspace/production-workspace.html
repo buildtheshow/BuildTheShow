@@ -24520,6 +24520,7 @@
 <script src="/ASSETS/scripts/production-team-access.js?v=edit-modal-namespace-20260511"></script>
 <script src="/SHARED/Components/casting-card-back.js?v=no-conflicts-20260519"></script>
 <script src="/SHARED/Components/audition-status-strip.js"></script>
+<script src="/SHARED/Components/audition-live-state.js?v=live-events-20260521"></script>
 <script src="/SHARED/Components/ai-character-importer.js"></script>
 <script src="/SHARED/Components/audition-page-templates.js?v=brand-tile-lane-20260516b"></script>
 <!-- VenuePicker uses OpenStreetMap/Nominatim - no API key needed -->
@@ -25282,6 +25283,7 @@
     if (!teamAccessMode) return;
     installTeamAccessMobileZoomLock();
     document.body.classList.add('team-access-mode');
+    document.querySelectorAll('#sidebar-org-back, #sidebar-mobile-org-back').forEach(link => { link.hidden = true; });
     const perms = teamAccessPermissions();
     const nameEl = document.getElementById('hdr-title');
     const subEl = document.getElementById('hdr-sub');
@@ -26971,6 +26973,10 @@
   let _auditionsLiveRefreshRunning = false;
   let _auditionsVisibilityBound = false;
   let _realtimeReconnectAttempt = 0;
+  let auditionLiveState = null;
+  const auditionLiveCheckins = new Map();
+  const auditionLiveRooms = new Map();
+  const auditionLiveRoomRequests = new Map();
   let auditionRoomStateTableAvailable = null;
   let auditionRoomStatesLoadedAt = 0;
   let auditionRoomStatesRetryAfter = 0;
@@ -27092,7 +27098,7 @@
       })
       .catch(error => console.warn('[BTS] production slug check failed', error));
     setupRoomReadyBroadcast();
-    flushCheckInPatchQueue();
+    setupAuditionLiveState();
     // Check if is_public column exists — non-blocking, safe to run in background
     sb.from('production_events').select('is_public').eq('production_id', prodId).limit(1)
       .then(({ error }) => { if (!error) _hasIsPublicColumn = true; });
@@ -27897,6 +27903,149 @@
     });
   }
 
+  function setupAuditionLiveState() {
+    if (auditionLiveState || !prodId || !window.BTSAuditionLiveState?.create) return;
+    auditionLiveState = window.BTSAuditionLiveState.create({
+      supabase: sb,
+      productionId: prodId,
+      teamAccess: {
+        enabled: !!teamAccessMode,
+        sessionToken: teamAccessSessionToken || '',
+      },
+      onState: handleAuditionLiveStateRow,
+      onEvent: handleAuditionLiveEventRow,
+      onError: error => console.warn('[BTS] audition live state unavailable:', error),
+    });
+    auditionLiveState.subscribe();
+    auditionLiveState.load().then(() => {
+      try { renderCheckInList(); } catch {}
+      try { refreshVisibleInRoomForSession(); } catch {}
+      try { renderInRoomReadySignals(); } catch {}
+    }).catch(() => {});
+  }
+
+  function auditionLiveCheckinKey(sessionId, appId) {
+    return window.BTSAuditionLiveState?.checkinStateKey?.(sessionId, appId) || `checkin:${sessionId || 'general'}:${appId || 'unknown'}`;
+  }
+
+  function auditionLiveRoomKey(roomKey) {
+    return window.BTSAuditionLiveState?.roomStateKey?.(roomKey) || `room:${roomKey || 'main'}`;
+  }
+
+  function auditionLiveRoomRequestKey(roomKey) {
+    return window.BTSAuditionLiveState?.roomRequestStateKey?.(roomKey) || `room-request:${roomKey || 'main'}`;
+  }
+
+  function handleAuditionLiveStateRow(row) {
+    if (!row?.state_key) return;
+    if (row.state_type === 'performer_checkin') {
+      auditionLiveCheckins.set(row.state_key, row);
+      const app = allApplicants.find(candidate => String(candidate.id || '') === String(row.application_id || ''));
+      if (app) {
+        refreshCheckInAfterLocalChange(app, row.session_id || null);
+        try { refreshVisibleInRoomForSession(); } catch {}
+      }
+      return;
+    }
+    if (row.state_type === 'room_state') {
+      auditionLiveRooms.set(row.state_key, row);
+      try { refreshVisibleInRoomForSession(); } catch {}
+      return;
+    }
+    if (row.state_type === 'room_request') {
+      auditionLiveRoomRequests.set(row.state_key, row);
+      mergeRoomNextSignal(liveRoomRequestToLegacySignal(row));
+      renderInRoomReadySignals();
+    }
+  }
+
+  function handleAuditionLiveEventRow(row) {
+    if (!row?.event_type) return;
+  }
+
+  function getAuditionLiveCheckinState(app, sessionId) {
+    if (!app?.id || !sessionId) return null;
+    return auditionLiveCheckins.get(auditionLiveCheckinKey(sessionId, app.id)) || null;
+  }
+
+  function getAuditionLiveCheckinStatus(app, sessionId) {
+    const state = getAuditionLiveCheckinState(app, sessionId);
+    if (!state) return null;
+    const status = state.status || state.payload?.status || '';
+    if (status === 'checked_in') return true;
+    if (status === 'not_here' || status === 'no_show' || status === 'unchecked') return false;
+    return null;
+  }
+
+  function liveRoomRequestToLegacySignal(row) {
+    const payload = row?.payload || {};
+    return {
+      ...(payload.signal || {}),
+      production_id: row.production_id || prodId,
+      session_id: row.session_id || payload.session_id || null,
+      room_key: row.room_key || payload.room_key || '',
+      room_id: payload.room_id || 'main',
+      room_name: payload.room_name || '',
+      status: row.status === 'active' ? 'ready' : (row.status || 'ready'),
+      current_applicant_id: payload.current_applicant_id || null,
+      current_group_key: payload.current_group_key || null,
+      current_group_label: payload.current_group_label || null,
+      current_group_member_ids: payload.current_group_member_ids || [],
+      next_applicant_id: row.application_id || payload.next_applicant_id || null,
+      next_group_key: payload.next_group_key || null,
+      next_group_label: payload.next_group_label || null,
+      next_group_member_ids: payload.next_group_member_ids || [],
+      next_label: payload.next_label || null,
+      requested_by: payload.requested_by || 'In the Room',
+      requested_at: row.updated_at || row.created_at || new Date().toISOString(),
+      updated_at: row.updated_at || row.created_at || new Date().toISOString(),
+    };
+  }
+
+  function liveRoomStateToLegacy(row) {
+    const payload = row?.payload || {};
+    return {
+      ...payload,
+      production_id: row.production_id || prodId,
+      session_id: row.session_id || payload.session_id || null,
+      room_key: row.room_key || payload.room_key || '',
+      status: row.status || payload.status || 'in_progress',
+      current_applicant_id: row.application_id || payload.current_applicant_id || null,
+      updated_at: row.updated_at || payload.updated_at || new Date().toISOString(),
+    };
+  }
+
+  function publishAuditionRoomRequestLive(signal) {
+    if (!auditionLiveState || !signal?.room_key) return Promise.resolve(null);
+    return auditionLiveState.publish({
+      event_type: 'room_requested_next',
+      session_id: signal.session_id || null,
+      application_id: signal.next_applicant_id || null,
+      room_key: signal.room_key,
+      state_key: auditionLiveRoomRequestKey(signal.room_key),
+      state_type: 'room_request',
+      status: 'active',
+      payload: {
+        ...signal,
+        signal,
+      },
+    });
+  }
+
+  function publishAuditionRoomStateLive(payload, eventType = 'room_started_audition', status = 'in_progress') {
+    if (!auditionLiveState || !payload?.room_key) return Promise.resolve(null);
+    return auditionLiveState.publish({
+      event_type: eventType,
+      session_id: payload.session_id || null,
+      application_id: payload.current_applicant_id || null,
+      room_key: payload.room_key,
+      state_key: auditionLiveRoomKey(payload.room_key),
+      state_type: 'room_state',
+      status,
+      payload,
+    });
+  }
+
   function appDisplayName(app) {
     return [app?.first_name, app?.last_name].filter(Boolean).join(' ') || app?.name || app?.performer_name || 'Performer';
   }
@@ -27938,6 +28087,8 @@
   }
 
   function getRoomState(roomKey) {
+    const live = auditionLiveRooms.get(auditionLiveRoomKey(roomKey));
+    if (live) return liveRoomStateToLegacy(live);
     return auditionRoomStates.get(roomKey) || null;
   }
 
@@ -28395,7 +28546,8 @@
     const nextSignal = buildRoomNextSignalPayload(payload);
     setInRoomNextButtonWaiting(buttonEl, 'Waiting for next performer...');
     broadcastRoomReadySignal(nextSignal);
-    await persistRoomNextSignal(nextSignal);
+    publishAuditionRoomRequestLive(nextSignal).catch(error => console.warn('[BTS] live room request save failed:', error));
+    persistRoomNextSignal(nextSignal).catch(error => console.warn('[BTS] legacy room request save failed:', error));
   }
 
   async function sendDanceCallNextRequest(sessionId, slotTime = '', buttonEl = null) {
@@ -28441,7 +28593,8 @@
     const nextSignal = buildRoomNextSignalPayload(payload);
     setInRoomNextButtonWaiting(buttonEl, 'Waiting for next group...');
     broadcastRoomReadySignal(nextSignal);
-    await persistRoomNextSignal(nextSignal);
+    publishAuditionRoomRequestLive(nextSignal).catch(error => console.warn('[BTS] live dance room request save failed:', error));
+    persistRoomNextSignal(nextSignal).catch(error => console.warn('[BTS] legacy dance room request save failed:', error));
   }
 
   function normalizeRoomReadyName(value) {
@@ -28530,7 +28683,10 @@
       sent_at: sentAt,
       updated_at: sentAt,
     });
-    await persistAuditionRoomState(payload, { localFallback: true });
+    publishAuditionRoomStateLive(payload, 'performer_sent_to_room', 'in_progress')
+      .catch(error => console.warn('[BTS] live sent-in state save failed:', error));
+    persistAuditionRoomState(payload, { localFallback: true })
+      .catch(error => console.warn('[BTS] legacy room state save failed:', error));
     renderInRoomReadySignals();
   }
 
@@ -31288,6 +31444,7 @@ Your submission link is unique to you. Please do not share it with another perfo
     }
     const orgBackHref = orgSlug ? `/${encodeURIComponent(orgSlug)}/ORG` : '/org/dashboard';
     document.querySelectorAll('#sidebar-org-back, #sidebar-mobile-org-back').forEach(link => {
+      link.hidden = !!teamAccessMode;
       link.href = orgBackHref;
       link.setAttribute('aria-label', `Back to ${orgPathDisplayLabel()}`);
     });
@@ -46617,91 +46774,34 @@ Your submission link is unique to you. Please do not share it with another perfo
     }
   }
 
-  function checkInPatchQueueKey() {
-    return `bts-checkin-patch-queue:${prodId || 'unknown'}`;
-  }
-
-  function normalizeCheckInPatchForQueue(patch = {}) {
-    const leanPatch = {};
-    if (patch.session_checkins !== undefined) leanPatch.session_checkins = patch.session_checkins;
-    if (patch.checked_in !== undefined) leanPatch.checked_in = patch.checked_in;
-    if (patch.checked_in_at !== undefined) leanPatch.checked_in_at = patch.checked_in_at;
-    if (patch.status !== undefined) leanPatch.status = normalizeApplicantStatus(patch.status);
-    return leanPatch;
-  }
-
-  function readCheckInPatchQueue() {
-    try {
-      const rows = JSON.parse(localStorage.getItem(checkInPatchQueueKey()) || '[]');
-      return Array.isArray(rows) ? rows : [];
-    } catch {
-      return [];
-    }
-  }
-
-  function writeCheckInPatchQueue(rows) {
-    try { localStorage.setItem(checkInPatchQueueKey(), JSON.stringify(rows || [])); } catch {}
-  }
-
-  let checkInPatchQueueFlushTimer = null;
-  let checkInPatchQueueFlushing = false;
-
-  function enqueueCheckInPatch(app, patch) {
-    const ids = sourceApplicationIdsForApplicant(app);
-    const leanPatch = normalizeCheckInPatchForQueue(patch);
-    if (!ids.length || !Object.keys(leanPatch).length) return false;
-    const queue = readCheckInPatchQueue();
-    queue.push({
-      id: crypto?.randomUUID?.() || `checkin-${Date.now()}-${Math.random().toString(16).slice(2)}`,
-      production_id: prodId,
-      ids,
-      patch: leanPatch,
-      attempts: 0,
-      created_at: new Date().toISOString(),
-    });
-    writeCheckInPatchQueue(queue);
-    scheduleCheckInPatchQueueFlush(120);
-    return true;
-  }
-
-  function scheduleCheckInPatchQueueFlush(delay = 500) {
-    clearTimeout(checkInPatchQueueFlushTimer);
-    checkInPatchQueueFlushTimer = setTimeout(flushCheckInPatchQueue, delay);
-  }
-
-  async function flushCheckInPatchQueue() {
-    if (checkInPatchQueueFlushing || !prodId) return;
-    let queue = readCheckInPatchQueue().filter(item => String(item?.production_id || prodId) === String(prodId));
-    if (!queue.length) return;
-    checkInPatchQueueFlushing = true;
-    try {
-      while (queue.length) {
-        const item = queue[0];
-        try {
-          const { error } = await sb.from('audition_applications')
-            .update(item.patch || {})
-            .eq('production_id', prodId)
-            .in('id', item.ids || []);
-          if (error) throw error;
-          queue.shift();
-          writeCheckInPatchQueue(queue);
-        } catch (error) {
-          item.attempts = Number(item.attempts || 0) + 1;
-          item.last_error = error?.message || String(error || 'Save failed');
-          queue[0] = item;
-          writeCheckInPatchQueue(queue);
-          console.warn('[BTS] queued check-in save will retry:', error);
-          scheduleCheckInPatchQueueFlush(Math.min(30000, 1000 * Math.max(2, item.attempts)));
-          return;
-        }
-      }
+  function publishAuditionCheckInLive(app, sessionId, eventType, status, patch = {}) {
+    if (!auditionLiveState || !app?.id || !sessionId) return Promise.resolve(null);
+    const slot = getApplicantSlotForSession(app, sessionId);
+    const payload = {
+      performer_name: appDisplayName(app),
+      status,
+      checked_in: status === 'checked_in',
+      checked_in_at: status === 'checked_in' ? (patch.checked_in_at || new Date().toISOString()) : null,
+      slot_id: slot?.id || null,
+      slot_time: slot?.slot_time || slot?.start_time || null,
+    };
+    return auditionLiveState.publish({
+      event_type: eventType,
+      session_id: sessionId,
+      application_id: app.id,
+      state_key: auditionLiveCheckinKey(sessionId, app.id),
+      state_type: 'performer_checkin',
+      status,
+      payload,
+    }).then(result => {
       showSaveStatus('saved');
-    } finally {
-      checkInPatchQueueFlushing = false;
-    }
+      return result;
+    }).catch(error => {
+      showSaveStatus('error');
+      showToast('Could not save live check-in status.', true);
+      throw error;
+    });
   }
-
-  window.addEventListener('online', () => scheduleCheckInPatchQueueFlush(250));
 
   // ── Audition overview stats ───────────────────────────
   function renderAudOverviewStats() {
@@ -55015,6 +55115,8 @@ Your submission link is unique to you. Please do not share it with another perfo
   // Session views must only read their own attendance record.
   // The legacy checked_in flag is kept for no-session views only.
   function isCheckedInForSession(app, sessionId) {
+    const liveStatus = getAuditionLiveCheckinStatus(app, sessionId);
+    if (liveStatus !== null) return liveStatus;
     if (sessionId) {
       const entry = getSessionCheckinEntry(app, sessionId);
       return !!entry?.checked_in;
@@ -56581,7 +56683,9 @@ Your submission link is unique to you. Please do not share it with another perfo
     }
     const currentRoomState = getRoomState(getAuditionRoomMeta(currentSession).roomKey);
     if (!roomStateIsWaiting(currentRoomState) && app?.id && String(currentRoomState?.current_applicant_id || '') !== String(app.id)) {
-      persistAuditionRoomState(buildRoomStatePayload({ session: currentSession, app, status: 'in_progress' })).catch(() => {});
+      const roomPayload = buildRoomStatePayload({ session: currentSession, app, status: 'in_progress' });
+      publishAuditionRoomStateLive(roomPayload, 'room_started_audition', 'in_progress').catch(() => {});
+      persistAuditionRoomState(roomPayload).catch(() => {});
     }
     if (currentSession?.type === 'callback' && !cbv2Loaded) {
       loadCbv2().then(() => renderInRoomPage(targetId || inRoomApplicantId, containerId, openFn));
@@ -57731,11 +57835,11 @@ Your submission link is unique to you. Please do not share it with another perfo
     showSaveStatus('saving');
     const patch = { status: 'no_show', checked_in: false, checked_in_at: null };
     if (sid) patch.session_checkins = nextCheckins;
-    if (!enqueueCheckInPatch(app, patch)) {
-      persistCheckInPatchFast(app, patch).then(error => {
-        if (error) console.warn('[BTS] check-in no-show save failed:', error);
-      });
-    }
+    publishAuditionCheckInLive(app, sid, 'performer_marked_no_show', 'no_show', patch)
+      .catch(error => console.warn('[BTS] live no-show save failed:', error));
+    persistCheckInPatchFast(app, patch).then(error => {
+      if (error) console.warn('[BTS] legacy no-show compatibility save failed:', error);
+    });
     if (sid) clearAuditionRoomStateForApplicant(app.id, sid);
     queueCiSecondaryRefresh();
     showSaveStatus('saved');
@@ -57748,11 +57852,13 @@ Your submission link is unique to you. Please do not share it with another perfo
     app.status = nextStatus;
     refreshCheckInAfterLocalChange(app);
     showSaveStatus('saving');
-    if (!enqueueCheckInPatch(app, { status: nextStatus })) {
-      persistCheckInPatchFast(app, { status: nextStatus }).then(error => {
-        if (error) console.warn('[BTS] clear no-show save failed:', error);
-      });
+    if (getActiveAuditionNavSession()?.id) {
+      publishAuditionCheckInLive(app, getActiveAuditionNavSession().id, 'performer_unchecked', 'not_here', { status: nextStatus })
+        .catch(error => console.warn('[BTS] live clear no-show save failed:', error));
     }
+    persistCheckInPatchFast(app, { status: nextStatus }).then(error => {
+      if (error) console.warn('[BTS] legacy clear no-show compatibility save failed:', error);
+    });
     queueCiSecondaryRefresh();
     showSaveStatus('saved');
   }
@@ -57781,11 +57887,18 @@ Your submission link is unique to you. Please do not share it with another perfo
       ? { session_checkins: newCheckins }
       : { checked_in: newCheckedIn, checked_in_at: app.checked_in_at };
     if (app.status !== prevStatus) patch.status = app.status;
-    if (!enqueueCheckInPatch(app, patch)) {
-      persistCheckInPatchFast(app, patch).then(error => {
-        if (error) console.warn('[BTS] check-in save failed:', error);
-      });
+    if (sessionId) {
+      publishAuditionCheckInLive(
+        app,
+        sessionId,
+        newCheckedIn ? 'performer_checked_in' : 'performer_unchecked',
+        newCheckedIn ? 'checked_in' : 'not_here',
+        patch
+      ).catch(error => console.warn('[BTS] live check-in save failed:', error));
     }
+    persistCheckInPatchFast(app, patch).then(error => {
+      if (error) console.warn('[BTS] legacy check-in compatibility save failed:', error);
+    });
     if (!newCheckedIn && sessionId) clearAuditionRoomStateForApplicant(app.id, sessionId);
     queueCiSecondaryRefresh();
     showSaveStatus('saved');

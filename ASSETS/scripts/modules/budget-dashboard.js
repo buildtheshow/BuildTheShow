@@ -1,6 +1,26 @@
-/* budget-dashboard.js — Dashboard page module */
+/* budget-dashboard.js — Dashboard module */
 (function () {
   'use strict';
+
+  function metricTile(id, kicker, value, label, color) {
+    var bg  = color || '#476aaa';
+    return '<div class="template-brand-card template-brand-card--square template-brand-card--metric" style="--brand-tile-bg:' + bg + ';--brand-tile-ink:#ffffff;">' +
+      '<div class="template-brand-card-inner"><div class="template-brand-tile-content">' +
+        '<div class="template-brand-tile-container template-brand-tile-container--header">' +
+          '<div class="template-brand-tile-kicker">' + kicker + '</div>' +
+        '</div>' +
+        '<div class="template-brand-tile-container template-brand-tile-container--title">' +
+          '<div class="template-brand-tile-number" id="' + id + '">' + value + '</div>' +
+        '</div>' +
+        '<div class="template-brand-tile-container template-brand-tile-container--body">' +
+          '<div class="template-brand-tile-metric-label">' + label + '</div>' +
+        '</div>' +
+        '<div class="template-brand-tile-container template-brand-tile-container--footer">' +
+          '<div class="template-brand-tile-progress"><span style="width:0%"></span></div>' +
+        '</div>' +
+      '</div></div>' +
+    '</div>';
+  }
 
   window.BudgetDashboardModule = {
 
@@ -8,22 +28,34 @@
       var s = window.BgtShared;
       s.BgtState.prodId = prodId;
 
-      container.innerHTML = [
-        '<div class="bgt-stat-grid" id="bgt-stats">',
-          '<div class="bgt-stat"><div class="bgt-stat-label">Planned Income</div><div class="bgt-stat-value">...</div></div>',
-          '<div class="bgt-stat"><div class="bgt-stat-label">Planned Expenses</div><div class="bgt-stat-value">...</div></div>',
-          '<div class="bgt-stat"><div class="bgt-stat-label">Net Position</div><div class="bgt-stat-value">...</div></div>',
-          '<div class="bgt-stat"><div class="bgt-stat-label">Actual Spent</div><div class="bgt-stat-value">...</div></div>',
-          '<div class="bgt-stat"><div class="bgt-stat-label">Budget Remaining</div><div class="bgt-stat-value">...</div></div>',
-          '<div class="bgt-stat"><div class="bgt-stat-label">Pending Receipts</div><div class="bgt-stat-value">...</div></div>',
-          '<div class="bgt-stat"><div class="bgt-stat-label">Total Receipts</div><div class="bgt-stat-value">...</div></div>',
-          '<div class="bgt-stat"><div class="bgt-stat-label">Expense Categories</div><div class="bgt-stat-value">...</div></div>',
-        '</div>',
-        '<div class="bgt-card">',
-          '<div class="bgt-card-title">Needs attention</div>',
-          '<div id="bgt-alerts" class="bgt-alert-list"><div style="color:#9a90b0;font-size:0.85rem">Loading...</div></div>',
-        '</div>',
-      ].join('');
+      container.innerHTML =
+        '<div class="aud-visual-hero">' +
+          '<div class="aud-visual-hero-content">' +
+            '<div>' +
+              '<div class="aud-visual-kicker"><span class="aud-visual-kicker-dot" aria-hidden="true"></span>Budgeting</div>' +
+              '<h1 class="aud-visual-title">At a glance.</h1>' +
+              '<p class="aud-visual-copy">Track income, expenses, and receipts for this production.</p>' +
+            '</div>' +
+            '<div class="aud-visual-total">' +
+              '<div class="aud-visual-total-kicker">Receipts</div>' +
+              '<div class="aud-visual-total-value" id="bgt-hero-count">0</div>' +
+            '</div>' +
+          '</div>' +
+        '</div>' +
+        '<div class="bgt-tile-grid" id="bgt-stats">' +
+          metricTile('bgt-stat-income',    'Budgeting', '...', 'Planned Income',    '#769e7b') +
+          metricTile('bgt-stat-expenses',  'Budgeting', '...', 'Planned Expenses',  '#476aaa') +
+          metricTile('bgt-stat-net',       'Budgeting', '...', 'Net Position',      '#572e88') +
+          metricTile('bgt-stat-spent',     'Budgeting', '...', 'Actual Spent',      '#dd8233') +
+          metricTile('bgt-stat-remaining', 'Budgeting', '...', 'Budget Remaining',  '#572e88') +
+          metricTile('bgt-stat-pending',   'Budgeting', '...', 'Pending Receipts',  '#efab45') +
+          metricTile('bgt-stat-total',     'Budgeting', '...', 'Total Receipts',    '#476aaa') +
+          metricTile('bgt-stat-cats',      'Budgeting', '...', 'Expense Categories','#ca7ea7') +
+        '</div>' +
+        '<div class="bgt-card">' +
+          '<div class="bgt-card-title">Needs attention</div>' +
+          '<div id="bgt-alerts" class="bgt-alert-list"><div style="color:#9a90b0;font-size:0.85rem">Loading...</div></div>' +
+        '</div>';
 
       this._load();
     },
@@ -48,35 +80,29 @@
       var approved  = rcts.filter(function (r) { return r.status === 'approved'; }).reduce(function (a, r) { return a + (r.amount_cents || 0); }, 0);
       var pending   = rcts.filter(function (r) { return r.status === 'pending'; }).length;
       var remaining = expenses - approved;
+      var expCats   = cats.filter(function (c) { return c.type === 'expense'; }).length;
 
-      function mkStat(label, val, sub, mod) {
-        return '<div class="bgt-stat' + (mod ? ' bgt-stat--' + mod : '') + '">' +
-          '<div class="bgt-stat-label">' + label + '</div>' +
-          '<div class="bgt-stat-value">' + val + '</div>' +
-          '<div class="bgt-stat-sub">' + sub + '</div>' +
-        '</div>';
+      function setTile(id, val) {
+        var el = document.getElementById(id);
+        if (el) el.textContent = val;
       }
 
-      var statsEl = document.getElementById('bgt-stats');
-      if (statsEl) {
-        statsEl.innerHTML = [
-          mkStat('Planned Income',    s.fmt$(income),    'Total income plan',    income > 0 ? 'good' : ''),
-          mkStat('Planned Expenses',  s.fmt$(expenses),  'Total expense plan',   ''),
-          mkStat('Net Position',      s.fmt$(net),       net >= 0 ? 'Surplus' : 'Deficit', net >= 0 ? 'good' : 'alert'),
-          mkStat('Actual Spent',      s.fmt$(approved),  'Approved receipts',    ''),
-          mkStat('Budget Remaining',  s.fmt$(remaining), 'Planned − actual', remaining < 0 ? 'alert' : remaining < expenses * 0.2 ? 'warn' : 'good'),
-          mkStat('Pending Receipts',  pending,           'Awaiting review',      pending > 0 ? 'warn' : ''),
-          mkStat('Total Receipts',    rcts.length,       'All submissions',      ''),
-          mkStat('Expense Categories', cats.filter(function (c) { return c.type === 'expense'; }).length, 'Tracking', ''),
-        ].join('');
-      }
+      setTile('bgt-hero-count',    rcts.length);
+      setTile('bgt-stat-income',   s.fmt$(income));
+      setTile('bgt-stat-expenses', s.fmt$(expenses));
+      setTile('bgt-stat-net',      s.fmt$(net));
+      setTile('bgt-stat-spent',    s.fmt$(approved));
+      setTile('bgt-stat-remaining',s.fmt$(remaining));
+      setTile('bgt-stat-pending',  pending);
+      setTile('bgt-stat-total',    rcts.length);
+      setTile('bgt-stat-cats',     expCats);
 
       var alerts = [];
       if (!cats.length)         alerts.push(['warn', 'No budget categories set up yet']);
-      if (net < 0 && cats.length) alerts.push(['err',  'Budget is in deficit by ' + s.fmt$(Math.abs(net))]);
-      if (remaining < 0)        alerts.push(['err',  'Overspent by ' + s.fmt$(Math.abs(remaining)) + ' based on approved receipts']);
+      if (net < 0 && cats.length) alerts.push(['err', 'Budget is in deficit by ' + s.fmt$(Math.abs(net))]);
+      if (remaining < 0)        alerts.push(['err', 'Overspent by ' + s.fmt$(Math.abs(remaining)) + ' based on approved receipts']);
       if (pending > 0)          alerts.push(['warn', pending + ' receipt' + (pending > 1 ? 's' : '') + ' waiting for review']);
-      if (!alerts.length)       alerts.push(['ok',   'Everything looks on track']);
+      if (!alerts.length)       alerts.push(['ok', 'Everything looks on track']);
 
       var alertsEl = document.getElementById('bgt-alerts');
       if (alertsEl) {

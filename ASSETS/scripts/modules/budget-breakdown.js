@@ -1,4 +1,4 @@
-/* budget-breakdown.js — Breakdown page module (income/expense categories) */
+/* budget-breakdown.js — Breakdown module (income/expense categories) */
 (function () {
   'use strict';
 
@@ -11,7 +11,17 @@
       s.BgtState.prodId = prodId;
       _container = container;
 
-      container.innerHTML = '<div id="bgt-budget-content"><div style="color:#9a90b0;padding:2rem;text-align:center">Loading...</div></div>' +
+      container.innerHTML =
+        '<div class="aud-visual-hero">' +
+          '<div class="aud-visual-hero-content">' +
+            '<div>' +
+              '<div class="aud-visual-kicker"><span class="aud-visual-kicker-dot" aria-hidden="true"></span>Budgeting</div>' +
+              '<h1 class="aud-visual-title">Breakdown.</h1>' +
+              '<p class="aud-visual-copy">Plan your income and expense categories. Set amounts, track actuals, and keep the budget on course.</p>' +
+            '</div>' +
+          '</div>' +
+        '</div>' +
+        '<div id="bgt-budget-content"><div style="color:#9a90b0;padding:2rem;text-align:center">Loading...</div></div>' +
         '<div class="bgt-modal-overlay" id="bgt-cat-modal">' +
           '<div class="bgt-modal">' +
             '<div class="bgt-modal-title" id="bgt-cat-modal-title">Add Category</div>' +

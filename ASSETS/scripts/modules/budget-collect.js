@@ -12,12 +12,38 @@
       _container = container;
 
       container.innerHTML =
+        '<div class="aud-visual-hero">' +
+          '<div class="aud-visual-hero-content">' +
+            '<div>' +
+              '<div class="aud-visual-kicker"><span class="aud-visual-kicker-dot" aria-hidden="true"></span>Budgeting</div>' +
+              '<h1 class="aud-visual-title">Collect.</h1>' +
+              '<p class="aud-visual-copy">Share the link with your team. They fill out what they spent and submit it directly. You review and approve from the Receipts page.</p>' +
+            '</div>' +
+          '</div>' +
+        '</div>' +
         '<div class="bgt-card">' +
           '<div class="bgt-card-title">Volunteer Receipt Submission</div>' +
           '<p style="font-size:0.88rem;color:#6b5f8a;margin:0 0 1.25rem;line-height:1.6">Share this link with your team. They fill in what they spent, their name, and their department. You review and approve from the Receipts page.</p>' +
-          '<div class="bgt-toggle-row">' +
-            '<button class="bgt-toggle" id="bgt-collect-toggle" onclick="BudgetCollectModule.toggleCollect()"></button>' +
-            '<span class="bgt-toggle-label" id="bgt-collect-toggle-label">Accepting submissions</span>' +
+          '<div class="bgt-tile-grid" style="max-width:320px;margin-bottom:1.25rem">' +
+            '<div class="template-brand-card template-brand-card--square template-brand-card--settings" id="bgt-collect-tile" style="--brand-tile-bg:#769e7b;--brand-tile-ink:#ffffff;">' +
+              '<div class="template-brand-card-inner">' +
+                '<div class="template-brand-tile-content">' +
+                  '<div class="template-brand-tile-container template-brand-tile-container--header">' +
+                    '<div class="template-brand-tile-settings-header">' +
+                      '<div class="template-brand-tile-kicker">Collect</div>' +
+                      '<input type="checkbox" class="template-brand-tile-settings-toggle" id="bgt-collect-toggle" onchange="BudgetCollectModule.toggleCollect()" />' +
+                    '</div>' +
+                  '</div>' +
+                  '<div class="template-brand-tile-container template-brand-tile-container--title">' +
+                    '<div class="template-brand-tile-settings-label" id="bgt-collect-toggle-label">Accepting Submissions</div>' +
+                  '</div>' +
+                  '<div class="template-brand-tile-container template-brand-tile-container--body"></div>' +
+                  '<div class="template-brand-tile-container template-brand-tile-container--footer">' +
+                    '<div class="template-brand-tile-settings-helper">When on, your team can submit receipts through the link below.</div>' +
+                  '</div>' +
+                '</div>' +
+              '</div>' +
+            '</div>' +
           '</div>' +
           '<div id="bgt-collect-link-wrap">' +
             '<div class="bgt-collect-link">' +
@@ -72,10 +98,18 @@
     _render: function () {
       var s        = window.BgtShared;
       var settings = s.BgtState.settings;
-      var toggle   = document.getElementById('bgt-collect-toggle');
-      var label    = document.getElementById('bgt-collect-toggle-label');
-      if (toggle) toggle.classList.toggle('on', !!(settings && settings.collect_enabled));
-      if (label)  label.textContent = (settings && settings.collect_enabled) ? 'Accepting submissions' : 'Submissions paused';
+      var enabled  = !!(settings && settings.collect_enabled);
+
+      var tile   = document.getElementById('bgt-collect-tile');
+      var toggle = document.getElementById('bgt-collect-toggle');
+      var label  = document.getElementById('bgt-collect-toggle-label');
+
+      if (tile) {
+        tile.classList.toggle('template-brand-card--settings',     enabled);
+        tile.classList.toggle('template-brand-card--settings-off', !enabled);
+      }
+      if (toggle) toggle.checked = enabled;
+      if (label)  label.textContent = enabled ? 'Accepting Submissions' : 'Submissions Paused';
 
       var url   = window.location.origin + '/SYSTEM/Organisations/Productions/Workspace/budget-submit.html?token=' + ((settings && settings.collect_token) || '');
       var urlEl = document.getElementById('bgt-collect-url');
@@ -93,9 +127,10 @@
     },
 
     toggleCollect: async function () {
-      var s      = window.BgtShared;
+      var s        = window.BgtShared;
       var settings = s.BgtState.settings;
-      var newVal = !(settings && settings.collect_enabled);
+      var toggle   = document.getElementById('bgt-collect-toggle');
+      var newVal   = toggle ? toggle.checked : !(settings && settings.collect_enabled);
       try {
         await fetch(s.SUPABASE_URL + '/rest/v1/budget_settings?production_id=eq.' + s.BgtState.prodId, {
           method: 'PATCH',

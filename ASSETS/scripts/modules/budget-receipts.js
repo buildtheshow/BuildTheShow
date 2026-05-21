@@ -12,6 +12,19 @@
       _container = container;
 
       container.innerHTML =
+        '<div class="aud-visual-hero">' +
+          '<div class="aud-visual-hero-content">' +
+            '<div>' +
+              '<div class="aud-visual-kicker"><span class="aud-visual-kicker-dot" aria-hidden="true"></span>Budgeting</div>' +
+              '<h1 class="aud-visual-title">Receipts.</h1>' +
+              '<p class="aud-visual-copy">Track every purchase. Add receipts manually or share the Collect link so your team can submit their own.</p>' +
+            '</div>' +
+            '<div class="aud-visual-total">' +
+              '<div class="aud-visual-total-kicker">Receipts</div>' +
+              '<div class="aud-visual-total-value" id="bgt-receipts-hero-count">—</div>' +
+            '</div>' +
+          '</div>' +
+        '</div>' +
         '<div class="bgt-toolbar">' +
           '<div style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center">' +
             '<span class="bgt-toolbar-title" id="bgt-receipts-count">Receipts</span>' +
@@ -82,6 +95,9 @@
       var filter = (document.getElementById('bgt-receipts-filter') || {}).value || 'all';
       var all    = s.BgtState.receipts;
       var list   = filter === 'all' ? all : all.filter(function (r) { return r.status === filter; });
+
+      var heroEl = document.getElementById('bgt-receipts-hero-count');
+      if (heroEl) heroEl.textContent = all.length;
 
       var countEl = document.getElementById('bgt-receipts-count');
       if (countEl) countEl.textContent = list.length + ' Receipt' + (list.length !== 1 ? 's' : '');
