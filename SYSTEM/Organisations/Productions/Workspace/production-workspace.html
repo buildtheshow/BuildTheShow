@@ -29348,6 +29348,19 @@
     return etFirstRealValue(prod?.venue);
   }
 
+  function formatTime12h(value) {
+    if (typeof formatSlotTime === 'function') return formatSlotTime(value);
+    const raw = String(value || '').trim();
+    const match = raw.match(/^(\d{1,2}):(\d{2})/);
+    if (!match) return raw;
+    let hour = Number(match[1]);
+    const minute = match[2];
+    if (!Number.isFinite(hour)) return raw;
+    const suffix = hour >= 12 ? 'PM' : 'AM';
+    hour = hour % 12 || 12;
+    return `${hour}:${minute} ${suffix}`;
+  }
+
   function etSessionValue(session, field, label, fallbackType = '') {
     if (!session && field === 'location') return etProductionLocationFor(fallbackType) || etPlaceholder(label);
     if (!session) return etPlaceholder(label);
@@ -29360,9 +29373,8 @@
   }
 
   function etSessionSampleValue(typeHint, field, label, fallback, fallbackType = '') {
-    if (fallback) return fallback;
     const value = etSessionValue(etFindSession(typeHint), field, label, fallbackType || typeHint);
-    return String(value || '').includes('(this is a placeholder') ? fallback : value;
+    return String(value || '').includes('(this is a placeholder') ? (fallback || value) : value;
   }
 
   function etFormatSelfTapeDeadline(value) {
@@ -29404,7 +29416,7 @@
       color: '#55acda',
       bg:    '#dff3ff',
       vars: [
-        { token: '{{show_name}}',  label: 'Show Title',        sample: () => ET_SAMPLE_CONTEXT.showName },
+        { token: '{{show_name}}',  label: 'Show Title',        sample: () => prod?.title || prod?.name || ET_SAMPLE_CONTEXT.showName },
         { token: '{{show_venue}}', label: 'Performance Venue', sample: () => etProductionLocationFor('performance') || ET_SAMPLE_CONTEXT.showVenue },
         { token: '{{org_name}}',   label: 'Company Name',      sample: () => orgName || prod?.org_name || ET_SAMPLE_CONTEXT.orgName },
       ],
@@ -29890,8 +29902,8 @@
       performer_first_name: ET_SAMPLE_CONTEXT.performerFirstName,
       performer_last_name: ET_SAMPLE_CONTEXT.performerLastName,
       performer_email: ET_SAMPLE_CONTEXT.performerEmail,
-      show_name: ET_SAMPLE_CONTEXT.showName,
-      production_name: ET_SAMPLE_CONTEXT.showName,
+      show_name: prod?.title || prod?.name || ET_SAMPLE_CONTEXT.showName,
+      production_name: prod?.title || prod?.name || ET_SAMPLE_CONTEXT.showName,
       org_name: orgName || prod?.org_name || ET_SAMPLE_CONTEXT.orgName,
       organisation_name: orgName || prod?.org_name || ET_SAMPLE_CONTEXT.orgName,
       role_name: ET_SAMPLE_CONTEXT.roleName,
@@ -29907,6 +29919,7 @@
     let result = text;
     [...ET_SUBSTITUTION_VARIABLES, ...buildSessionVarGroups()].forEach(group => {
       group.vars.forEach(v => {
+        if (!result.includes(v.token)) return;
         result = result.split(v.token).join(etSampleValue(v));
       });
     });

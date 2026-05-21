@@ -4,6 +4,7 @@
 
   var SUPABASE_URL  = 'https://tkmaiktxpwqfbgeojbnf.supabase.co';
   var SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRrbWFpa3R4cHdxZmJnZW9qYm5mIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MDc4NTI4NTYsImV4cCI6MjAyMzQyODg1Nn0.tVxOMkaMdBnuqQbLdHl00h4WA7DV8LHuVxCt6z5LFCY';
+  var STORAGE_BUCKET = 'programme-ads';
 
   var DEFAULT_AD_SIZES = [
     { id: 'card',    label: 'Card',      dims: '2x2.5', colour: 50,  bw: 35  },
@@ -94,7 +95,6 @@
     var sizes = SpnsState.settings.adSizes;
     if (!sizes || !sizes.length) return '';
 
-    // Calculate the programme page container as the max dimensions across all sizes
     var pageW = 8, pageH = 5;
     sizes.forEach(function (s) {
       var d = parseAdDims(s.dims);
@@ -103,21 +103,41 @@
     });
 
     var tiles = sizes.map(function (s, i) {
-      var d      = parseAdDims(s.dims);
-      var adW    = Math.round(d.w / pageW * 100);
-      var adH    = Math.round(d.h / pageH * 100);
-      var color  = ADTILE_COLORS[i % ADTILE_COLORS.length];
+      var d           = parseAdDims(s.dims);
+      var adW         = Math.round(d.w / pageW * 100);
+      var adH         = Math.round(d.h / pageH * 100);
+      var color       = ADTILE_COLORS[i % ADTILE_COLORS.length];
       var dimsDisplay = String(s.dims).replace(/[xX]/, '" x ') + '"';
+
+      // booking counts for this size
+      var booked  = SpnsState.ads.filter(function (a) { return a.ad_size === s.id; });
+      var missing = booked.filter(function (a) { return !a.artwork_url && a.artwork_status === 'missing'; }).length;
+      var received = booked.filter(function (a) { return a.artwork_url; }).length;
+      var statusLine = booked.length === 0
+        ? 'No bookings yet'
+        : booked.length + ' booked' +
+          (received > 0 ? ' &middot; ' + received + ' with artwork' : '') +
+          (missing > 0  ? ' &middot; ' + missing + ' missing artwork' : '');
+
+      // most recent artwork thumbnail for this size (shown on the programme page)
+      var latestArt = null;
+      for (var j = booked.length - 1; j >= 0; j--) {
+        if (booked[j].artwork_url) { latestArt = booked[j].artwork_url; break; }
+      }
+
+      var adFill = latestArt
+        ? '<div class="spn-adtile-ad" style="width:' + adW + '%;height:' + adH + '%;background:none;">' +
+            '<img class="spn-adtile-ad-img" src="' + esc(latestArt) + '" alt="Ad artwork" />' +
+          '</div>'
+        : '<div class="spn-adtile-ad" style="width:' + adW + '%;height:' + adH + '%;">' +
+            '<div class="spn-adtile-ad-label">Ad</div>' +
+          '</div>';
 
       return '<div class="template-brand-card template-brand-card--horizontal" style="--brand-tile-bg:' + color + ';--brand-tile-ink:#ffffff;">' +
         '<div class="template-brand-card-inner">' +
           '<div class="spn-adtile-layout">' +
             '<div class="spn-adtile-page-wrap">' +
-              '<div class="spn-adtile-page">' +
-                '<div class="spn-adtile-ad" style="width:' + adW + '%;height:' + adH + '%;">' +
-                  '<div class="spn-adtile-ad-label">Ad</div>' +
-                '</div>' +
-              '</div>' +
+              '<div class="spn-adtile-page">' + adFill + '</div>' +
             '</div>' +
             '<div class="spn-adtile-info">' +
               '<div class="spn-adtile-kicker">Ad Size</div>' +
@@ -127,6 +147,7 @@
                 '<div class="spn-adtile-price"><div class="spn-adtile-price-label">Colour</div><div class="spn-adtile-price-val">$' + s.colour + '</div></div>' +
                 '<div class="spn-adtile-price"><div class="spn-adtile-price-label">B&amp;W</div><div class="spn-adtile-price-val">$' + s.bw + '</div></div>' +
               '</div>' +
+              '<div class="spn-adtile-status">' + statusLine + '</div>' +
             '</div>' +
           '</div>' +
         '</div>' +
@@ -143,6 +164,42 @@
     var el = document.getElementById('spn-ad-sizes-visual');
     if (!el) return;
     el.innerHTML = renderAdSizesSection();
+  }
+
+  // -- Artwork upload -----------------------------------------------------------
+
+  function uploadArtwork(adId) {
+    var input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/jpeg,image/png,image/gif,image/webp,application/pdf';
+    input.onchange = function () {
+      var file = input.files[0];
+      if (!file) return;
+      var safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+      var path = SpnsState.prodId + '/' + adId + '/' + Date.now() + '_' + safeName;
+      var btn = document.querySelector('[data-upload-ad="' + adId + '"]');
+      if (btn) { btn.textContent = 'Uploading...'; btn.disabled = true; }
+      fetch(SUPABASE_URL + '/storage/v1/object/' + STORAGE_BUCKET + '/' + path, {
+        method: 'POST',
+        headers: { apikey: SUPABASE_ANON, Authorization: 'Bearer ' + SUPABASE_ANON, 'Content-Type': file.type },
+        body: file,
+      }).then(function (r) {
+        if (!r.ok) return r.text().then(function (t) { throw new Error(t); });
+        var url = SUPABASE_URL + '/storage/v1/object/public/' + STORAGE_BUCKET + '/' + path;
+        return dbUpdate('programme_ads', adId, { artwork_url: url, artwork_status: 'received' });
+      }).then(function () {
+        SpnsState.loaded.ads = false;
+        loadAds();
+      }).catch(function (e) { alert('Upload failed: ' + e.message); });
+    };
+    input.click();
+  }
+
+  function removeArtwork(adId) {
+    if (!confirm('Remove the uploaded artwork for this ad?')) return;
+    dbUpdate('programme_ads', adId, { artwork_url: null, artwork_status: 'missing' })
+      .then(function () { SpnsState.loaded.ads = false; loadAds(); })
+      .catch(function (e) { alert('Could not remove artwork: ' + e.message); });
   }
 
   // -- Metric tile for overview -------------------------------------------------
@@ -287,13 +344,13 @@
     var b = id ? SpnsState.businesses.find(function (x) { return x.id === id; }) : null;
     document.getElementById('spn-biz-modal-title').textContent = b ? 'Edit Business' : 'Add Business';
     document.getElementById('spn-biz-id').value        = id || '';
-    document.getElementById('spn-biz-name').value      = (b && b.name)                                         || '';
-    document.getElementById('spn-biz-contact').value   = (b && b.contact_name)                                 || '';
-    document.getElementById('spn-biz-email').value     = (b && b.contact_email)                                || '';
-    document.getElementById('spn-biz-phone').value     = (b && b.contact_phone)                                || '';
-    document.getElementById('spn-biz-website').value   = (b && b.website)                                      || '';
-    document.getElementById('spn-biz-instagram').value = (b && b.social_links && b.social_links.instagram)     || '';
-    document.getElementById('spn-biz-notes').value     = (b && b.notes)                                        || '';
+    document.getElementById('spn-biz-name').value      = (b && b.name)                                     || '';
+    document.getElementById('spn-biz-contact').value   = (b && b.contact_name)                             || '';
+    document.getElementById('spn-biz-email').value     = (b && b.contact_email)                            || '';
+    document.getElementById('spn-biz-phone').value     = (b && b.contact_phone)                            || '';
+    document.getElementById('spn-biz-website').value   = (b && b.website)                                  || '';
+    document.getElementById('spn-biz-instagram').value = (b && b.social_links && b.social_links.instagram) || '';
+    document.getElementById('spn-biz-notes').value     = (b && b.notes)                                    || '';
     document.getElementById('spn-biz-modal').classList.add('open');
   }
   function closeBizModal() { document.getElementById('spn-biz-modal').classList.remove('open'); }
@@ -346,17 +403,30 @@
     var listEl = document.getElementById('spn-ads-list');
     if (!listEl) return;
     if (!ads.length) {
-      listEl.innerHTML = head + '<div class="spn-list-empty"><div class="spn-empty"><div class="spn-empty-icon">&#x1F4C4;</div><h3>No ads yet</h3><p>Add programme ad bookings to track artwork, payment, and approval status.</p></div></div>';
+      listEl.innerHTML = head + '<div class="spn-list-empty"><div class="spn-empty"><div class="spn-empty-icon">&#x1F4C4;</div><h3>No ads booked yet</h3><p>Add a programme ad booking to track artwork, payment, and approval status.</p></div></div>';
       return;
     }
     listEl.innerHTML = head + ads.map(function (a) {
+      var artCell = a.artwork_url
+        ? '<div class="spn-ad-art-cell">' +
+            '<img class="spn-ad-art-thumb" src="' + esc(a.artwork_url) + '" alt="Artwork" onclick="window.open(\'' + esc(a.artwork_url) + '\')" />' +
+            '<div class="spn-ad-art-actions">' +
+              badgeArtwork(a.artwork_status) +
+              '<button class="spn-btn spn-btn--danger spn-btn--sm" onclick="MarketingSponsorsModule.removeArtwork(\'' + a.id + '\')">Remove</button>' +
+            '</div>' +
+          '</div>'
+        : '<div class="spn-ad-art-cell">' +
+            badgeArtwork(a.artwork_status) +
+            '<button class="spn-btn spn-btn--ghost spn-btn--sm" data-upload-ad="' + a.id + '" onclick="MarketingSponsorsModule.uploadArtwork(\'' + a.id + '\')">Upload</button>' +
+          '</div>';
+
       return '<div class="spn-list-row spn-ad-cols">' +
         '<div class="spn-list-name">' + (esc(bizName(a.business_id)) || '<span style="color:#b0a8c8">No business</span>') + '</div>' +
         '<div class="spn-list-sub">' + esc(szLabel(a.ad_size)) + '</div>' +
         '<div class="spn-list-sub">' + (a.ad_type === 'bw' ? 'B&amp;W' : 'Colour') + '</div>' +
         '<div class="spn-list-sub">' + fmtDollars(a.price_cents || 0) + '</div>' +
         '<div>' + badgePayment(a.payment_status) + '</div>' +
-        '<div>' + badgeArtwork(a.artwork_status) + '</div>' +
+        '<div>' + artCell + '</div>' +
         '<div class="spn-row-actions">' +
           '<button class="spn-btn spn-btn--ghost spn-btn--sm" onclick="MarketingSponsorsModule.openAdModal(\'' + a.id + '\')">Edit</button>' +
           '<button class="spn-btn spn-btn--danger spn-btn--sm" onclick="MarketingSponsorsModule.deleteAd(\'' + a.id + '\')">Delete</button>' +
@@ -584,8 +654,8 @@
     var id = document.getElementById('spn-deliv-id').value;
     var payload = {
       title:       title,
-      business_id: document.getElementById('spn-deliv-biz').value            || null,
-      due_date:    document.getElementById('spn-deliv-due').value             || null,
+      business_id: document.getElementById('spn-deliv-biz').value             || null,
+      due_date:    document.getElementById('spn-deliv-due').value              || null,
       assigned_to: document.getElementById('spn-deliv-assigned').value.trim() || null,
       status:      document.getElementById('spn-deliv-status').value,
       notes:       document.getElementById('spn-deliv-notes').value.trim()    || null,
@@ -649,26 +719,26 @@
 
   function editAdSize(i) {
     var s      = SpnsState.settings.adSizes[i];
-    var label  = prompt('Size name:', s.label);              if (label  == null) return;
-    var dims   = prompt('Dimensions (e.g. 4x5):', s.dims);   if (dims   == null) return;
+    var label  = prompt('Size name:', s.label);             if (label  == null) return;
+    var dims   = prompt('Dimensions (e.g. 4x5):', s.dims); if (dims   == null) return;
     var colour = parseFloat(prompt('Colour price ($):', s.colour)); if (isNaN(colour)) return;
-    var bw     = parseFloat(prompt('B&W price ($):', s.bw));         if (isNaN(bw))     return;
+    var bw     = parseFloat(prompt('B&W price ($):', s.bw));        if (isNaN(bw))     return;
     SpnsState.settings.adSizes[i] = Object.assign({}, s, { label: label.trim(), dims: dims.trim(), colour: colour, bw: bw });
     renderSettings();
     refreshAdSizesVisual();
   }
 
   function addTier() {
-    var label  = prompt('Tier name:');                           if (!label)         return;
-    var amount = parseFloat(prompt('Default amount ($):'));      if (isNaN(amount))  return;
+    var label  = prompt('Tier name:');                      if (!label)        return;
+    var amount = parseFloat(prompt('Default amount ($):')); if (isNaN(amount)) return;
     SpnsState.settings.tiers.push({ id: label.toLowerCase().replace(/\s+/g, '-'), label: label.trim(), amount: amount });
     renderSettings();
   }
 
   function editTier(i) {
     var t      = SpnsState.settings.tiers[i];
-    var label  = prompt('Tier name:', t.label);                  if (label  == null) return;
-    var amount = parseFloat(prompt('Default amount ($):', t.amount)); if (isNaN(amount)) return;
+    var label  = prompt('Tier name:', t.label);                        if (label  == null) return;
+    var amount = parseFloat(prompt('Default amount ($):', t.amount));  if (isNaN(amount))  return;
     SpnsState.settings.tiers[i] = Object.assign({}, t, { label: label.trim(), amount: amount });
     renderSettings();
   }
@@ -931,6 +1001,8 @@
     closeAdModal:    closeAdModal,
     saveAd:          saveAd,
     deleteAd:        deleteAd,
+    uploadArtwork:   uploadArtwork,
+    removeArtwork:   removeArtwork,
     openPkgModal:    openPkgModal,
     closePkgModal:   closePkgModal,
     savePkg:         savePkg,
