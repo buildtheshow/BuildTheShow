@@ -154,6 +154,79 @@ Build The Show operates on a connected platform architecture using Supabase, Git
 9. Debug the flow, not just the symptom.
 10. Treat code quality as part of the product.
 
+## AI Development Rules
+
+AI-assisted development must protect the shared architecture. The biggest failure mode is rebuilding instead of understanding.
+
+### Reuse Before Rebuild
+
+1. Before creating anything new, first search for an existing implementation.
+2. Search for existing components, shared layouts, templates, helpers, utilities, routing systems, naming conventions, styling systems, state patterns, database structures, business logic, and architecture rules.
+3. Reuse and extension are always preferred over replacement or duplication.
+4. The default assumption is: the system already contains something related to this.
+5. A new system must be proven necessary before it is created.
+
+### Mandatory AI Workflow
+
+1. Analyze the existing system before generating code.
+2. Identify existing components, shared layouts, routing systems, naming patterns, database structure, styling systems, state management, utilities, helpers, templates, and architecture rules.
+3. Ask: what existing systems already solve part of this problem?
+4. Extend shared systems instead of rebuilding them.
+5. Add variants, props, options, or central improvements to existing components when that fits the architecture.
+6. Add functionality into existing architecture instead of creating a feature island.
+7. Reuse shared utilities and established patterns.
+8. Before final output, verify that the change matches existing UI patterns, shared architecture, naming conventions, data ownership, and source-of-truth rules.
+9. Check whether the implementation duplicates logic, conflicts with existing systems, or is already implemented elsewhere.
+10. If behaviour could be abstracted or shared, prefer the shared path.
+
+### Template Rule
+
+1. If a template exists, use it.
+2. Do not recreate cards, layouts, forms, buttons, tables, modal structures, navigation systems, loaders, skeletons, empty states, or typography systems from scratch unless explicitly instructed.
+3. If the existing template is missing a needed capability, extend the template centrally.
+
+### Component Rule
+
+1. If a shared component already exists, extend it, add a supported variant, or improve it centrally.
+2. Do not create duplicate component names such as `Button2`, `ButtonNew`, `ProducerButton`, `PurpleButton`, or `SpecialButton` when the shared button system should be updated.
+3. Do not fork an existing component just to avoid understanding it.
+
+### Style Rule
+
+1. Follow existing spacing systems, typography systems, colour systems, border radius rules, shadow systems, layout grids, and navigation structures.
+2. Do not invent random styling systems.
+3. New visual patterns must fit the existing design language or become documented shared patterns.
+
+### Database Rule
+
+1. Before creating tables or fields, check whether the data already exists.
+2. Check for overlapping data, existing entities, existing relationships, and source-of-truth conflicts.
+3. Avoid duplicated columns, duplicated calculations, shadow state, disconnected tables, and frontend-only truth.
+4. Existing entities should support new behaviour whenever that preserves the domain model cleanly.
+
+### Architecture Rule
+
+1. New systems must connect into permissions, routing, shared navigation, shared layouts, realtime systems, organisation structure, production structure, reporting systems, and shared data models.
+2. Avoid standalone feature islands.
+3. Every new feature should strengthen the shared architecture, not fragment it.
+
+### File Structure Rule
+
+1. Place new files into existing folders, existing architecture patterns, and shared structures.
+2. Avoid random utility folders, duplicate directories, abandoned experiments, and inconsistent naming.
+3. New file names should follow the naming style already used by nearby files.
+
+### Expected AI Behaviour
+
+1. Good: found an existing modal system and extended it with a new variant.
+2. Bad: created a completely new modal implementation.
+3. Good: reused the production navigation shell.
+4. Bad: built another sidebar.
+5. Good: added fields to the existing attendance architecture.
+6. Bad: created a second attendance tracking system.
+7. Consistency is more important than novelty.
+8. Reuse is more important than reinvention.
+
 ## Domain Language
 
 These names should be treated as canonical unless there is a strong reason to change them.
