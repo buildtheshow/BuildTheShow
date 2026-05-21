@@ -13,9 +13,9 @@ It turns the coding principles you want into concrete rules for this codebase:
 
 ## JavaScript File Editing — Critical Rule
 
-**Never use the Edit tool to modify `.js` files.** The Edit tool converts straight quotes (`'`, `"`) into curly/typographic quotes (`'`, `'`, `"`, `"`), which causes `SyntaxError: Invalid character` crashes that break the entire script silently.
+**Never modify `.js` files with any tool or editor path that converts straight quotes (`'`, `"`) into curly/typographic quotes (`'`, `'`, `"`, `"`).** Curly quotes cause `SyntaxError: Invalid character` crashes that break scripts silently.
 
-**Always use Write or Bash/Python to edit `.js` files.**
+Use a safe editing method that preserves exact characters, then verify the file.
 
 After any `.js` change, verify with:
 ```bash
@@ -68,7 +68,7 @@ Build The Show operates on a connected platform architecture using Supabase, Git
 
 1. GitHub is the authoritative source for application code, version history, branches, deployments, rollback history, infrastructure configuration, documentation, migrations, and shared components.
 2. No production code should exist outside version control.
-3. Architecture changes must be committed through GitHub workflows.
+3. Architecture changes must enter the shared codebase through GitHub workflows before they are treated as production truth.
 4. GitHub history must remain readable and maintainable.
 5. Avoid mystery commits, duplicated files, abandoned components, orphaned systems, and temporary hacks left in production.
 6. Every system added must have a clear purpose, connect to the existing architecture, follow shared patterns, and remain maintainable long-term.
@@ -304,23 +304,24 @@ These are non-negotiable platform rules for how the system should be shaped and 
 
 ### Pages
 
-1. One page should do one job.
+1. One routed page should do one job.
 2. Do not build hidden page systems.
 3. Do not use tab systems that pretend to be pages.
 4. Do not use giant files with toggled sections as a substitute for page structure.
-5. If something behaves like a section, it should be a real page.
-6. Every page must answer who it is for, what the user does there, and what happens next.
+5. If something behaves like a section with its own user goal, it should be a routed page module.
+6. Every routed page must answer who it is for, what the user does there, and what happens next.
 7. A page may contain small local tabs only when the tabs are part of one job, such as modal details, filters, or compact settings within that page.
-8. If a tab has its own sidebar item, route, permissions, loading flow, saved state, or user goal, it is not a tab. It is a page.
+8. If a tab has its own sidebar item, route, permissions, loading flow, saved state, or user goal, it is not a tab. It is a routed page module.
 9. Pages should fetch only the data needed for that page's job.
 10. Pages should assemble shared components and pass data into them.
 11. Pages should not carry large feature systems that belong to their own route.
-12. New production work areas must be created as real pages from the start.
-13. Existing hidden-tab workspace areas should be migrated into real pages over time instead of extended further.
+12. New app work areas must be created as real routes with page modules/fragments from the start.
+13. Existing hidden-tab workspace areas should be migrated into routed page modules over time instead of extended further.
 14. In shell-based app areas, a "page" means a routed page module or fragment mounted into the main content outlet, not a full HTML document reload.
 15. Page fragments must not contain `<html>`, `<head>`, `<body>`, duplicated sidebars, duplicated topbars, or global app chrome.
 16. Page content must replace the previous content during navigation. Do not append new page content onto old page content.
 17. Page modules must clean up after themselves when unmounted.
+18. Standalone public/legal/auth documents may still be complete HTML documents when they are outside a persistent app shell.
 
 ### App Shell And Router
 
