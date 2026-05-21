@@ -49,6 +49,7 @@
     const onError = typeof options.onError === 'function' ? options.onError : () => {};
     const states = new Map();
     let channel = null;
+    let channelSubscribed = false;
 
     function mergeState(row) {
       if (!row?.state_key) return null;
@@ -101,6 +102,7 @@
         _pending: true,
       };
       mergeState(optimisticState);
+      broadcastStatePreview(optimisticState);
 
       try {
         let stateRows, error;
@@ -162,7 +164,14 @@
 
     function subscribe() {
       if (!sb || !productionId || channel) return channel;
-      channel = sb.channel(`production-audition-live-state:${productionId}`)
+      channel = sb.channel(`production-audition-live-state:${productionId}`, {
+        config: { broadcast: { self: false } }
+      })
+        .on('broadcast', { event: 'state_preview' }, payload => {
+          const state = payload?.payload?.state || payload?.state || payload;
+          if (state?.production_id && String(state.production_id) !== String(productionId)) return;
+          if (state?.state_key) mergeState({ ...state, _broadcast: true });
+        })
         .on('postgres_changes', {
           event: '*',
           schema: 'public',
@@ -179,14 +188,40 @@
         }, payload => {
           if (payload?.new) onEvent(payload.new);
         })
-        .subscribe();
+        .subscribe(status => {
+          channelSubscribed = status === 'SUBSCRIBED';
+        });
       return channel;
+    }
+
+    function broadcastStatePreview(state) {
+      if (!sb || !productionId || !state?.state_key) return;
+      if (!channel) subscribe();
+      const send = () => {
+        if (!channelSubscribed || !channel?.send) return false;
+        try {
+          channel.send({
+            type: 'broadcast',
+            event: 'state_preview',
+            payload: {
+              production_id: productionId,
+              state,
+              sent_at: nowIso(),
+            },
+          });
+          return true;
+        } catch {
+          return false;
+        }
+      };
+      if (!send()) setTimeout(send, 150);
     }
 
     function destroy() {
       if (channel) {
         try { sb.removeChannel(channel); } catch {}
         channel = null;
+        channelSubscribed = false;
       }
     }
 
