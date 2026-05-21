@@ -17034,6 +17034,43 @@
     return !startedAt || Date.now() - startedAt < INROOM_NEXT_WAITING_LABEL_MS;
   }
 
+  function clearAuditionRoomStateForApplicant(appId, sessionId) {
+    if (!appId || !sessionId) return false;
+    const session = audSessions.find(candidate => String(candidate.id || '') === String(sessionId || ''));
+    if (!session) return false;
+    const meta = getAuditionRoomMeta(session);
+    const state = getRoomState(meta.roomKey);
+    if (!state || String(state.current_applicant_id || '') !== String(appId || '')) return false;
+    const clearedAt = new Date().toISOString();
+    const cleared = {
+      ...state,
+      status: 'idle',
+      current_applicant_id: null,
+      current_group_key: null,
+      current_group_label: null,
+      current_group_member_ids: [],
+      next_applicant_id: null,
+      next_group_key: null,
+      next_group_label: null,
+      next_group_member_ids: [],
+      updated_at: clearedAt,
+      cleared_at: clearedAt,
+    };
+    mergeAuditionRoomState(cleared);
+    persistAuditionRoomState(cleared, { localFallback: true }).catch(() => {});
+    return true;
+  }
+
+  function clearStaleAuditionRoomState(session) {
+    if (!session?.id) return false;
+    const meta = getAuditionRoomMeta(session);
+    const state = getRoomState(meta.roomKey);
+    if (!state || state.status !== 'in_progress' || !state.current_applicant_id) return false;
+    const currentApp = allApplicants.find(app => String(app.id || '') === String(state.current_applicant_id || ''));
+    if (currentApp && isCheckedInForSession(currentApp, session.id)) return false;
+    return clearAuditionRoomStateForApplicant(state.current_applicant_id, session.id);
+  }
+
   function setInRoomNextButtonWaiting(buttonEl, waitingLabel = 'Waiting for next performer...') {
     if (!buttonEl) return;
     clearTimeout(buttonEl._btsNextWaitingTimer);
@@ -25135,6 +25172,25 @@ If you have any questions, don't hesitate to reach out.
     return syncApplicantEditsToSource(app, merged);
   }
 
+  async function persistSessionCheckinsToAllSourceApplications(app, sessionCheckins) {
+    if (!app || !Array.isArray(sessionCheckins)) return null;
+    const ids = new Set([
+      ...(Array.isArray(app._sourceApplicationIds) ? app._sourceApplicationIds : []),
+      ...Object.values(app._sourceApplicationIdsBySession || {}),
+      app.id,
+    ].filter(id => id && !String(id).startsWith('booking-')).map(String));
+    if (!ids.size) return null;
+    try {
+      const { error } = await sb.from('audition_applications')
+        .update({ session_checkins: sessionCheckins })
+        .eq('production_id', prodId)
+        .in('id', [...ids]);
+      return error || null;
+    } catch (error) {
+      return error;
+    }
+  }
+
   // ── Audition overview stats ───────────────────────────
   function renderAudOverviewStats() {
     const total      = allApplicants.length;
@@ -32770,12 +32826,25 @@ If you have any questions, don't hesitate to reach out.
     return !!app?.checked_in;
   }
 
-  function getInRoomCheckedInApps() {
-    const session = getCurrentInRoomSession() || getSelectedAuditionSession();
-    let rows = allApplicants.filter(app => {
-      if (!session?.id) return !!app?.checked_in;
-      return isCheckedInForSession(app, session.id);
-    });
+  function withSessionCheckinState(app, sessionId, checkedIn) {
+    const sid = String(sessionId || '').trim();
+    const prevCheckins = Array.isArray(app?.session_checkins) ? app.session_checkins : [];
+    if (!sid) return prevCheckins;
+    const changedAt = new Date().toISOString();
+    const nextEntry = checkedIn
+      ? { session_id: sid, checked_in: true, checked_in_at: changedAt, updated_at: changedAt }
+      : { session_id: sid, checked_in: false, checked_in_at: null, updated_at: changedAt };
+    return [
+      ...prevCheckins.filter(x => String(x?.session_id || '') !== sid),
+      nextEntry,
+    ];
+  }
+
+  function getInRoomCheckedInApps(sessionOverride = null) {
+    const session = sessionOverride || getCurrentInRoomSession() || getSelectedAuditionSession();
+    let rows = session?.id
+      ? getCheckInSessionApps(session, '', 'in')
+      : allApplicants.filter(app => !!app?.checked_in);
     // Sort chronologically by the slot time for this session
     rows.sort((a, b) => {
       const aSlot = session?.id ? getApplicantSlotForSession(a, session.id) : null;
@@ -32791,9 +32860,9 @@ If you have any questions, don't hesitate to reach out.
     return rows;
   }
 
-  function getInRoomGroups() {
-    const checkedIn = getInRoomCheckedInApps();
-    const session = getCurrentInRoomSession() || getSelectedAuditionSession();
+  function getInRoomGroups(sessionOverride = null) {
+    const session = sessionOverride || getCurrentInRoomSession() || getSelectedAuditionSession();
+    const checkedIn = getInRoomCheckedInApps(session);
     const sessionId = session?.id || null;
     const now = Date.now();
     const past = [];
@@ -33671,7 +33740,8 @@ If you have any questions, don't hesitate to reach out.
 
   function inRoomThumbHtml(app, openFn = 'openInRoom', session = null) {
     const now = Date.now();
-    const sessionId = session?.id || getSelectedAuditionSession()?.id || null;
+    const currentSession = session || getCurrentInRoomSession() || getSelectedAuditionSession();
+    const sessionId = currentSession?.id || null;
     const slot = sessionId ? getApplicantSlotForSession(app, sessionId) : null;
     const slotTimeStr = slot?.slot_time || slot?.start_time || '';
     const slotStart = (() => {
@@ -33685,9 +33755,9 @@ If you have any questions, don't hesitate to reach out.
       }
       return null;
     })();
-    const currentRoomState = getRoomState(getAuditionRoomMeta(session || getCurrentInRoomSession()).roomKey);
+    const currentRoomState = getRoomState(getAuditionRoomMeta(currentSession).roomKey);
     const currentId = String(inRoomApplicantId || currentRoomState?.current_applicant_id || '');
-    const checkedInQueue = getInRoomCheckedInApps();
+    const checkedInQueue = getInRoomCheckedInApps(currentSession);
     const appIndex = checkedInQueue.findIndex(candidate => String(candidate.id) === String(app?.id || ''));
     const currentIndex = currentId
       ? checkedInQueue.findIndex(candidate => String(candidate.id) === currentId)
@@ -33798,6 +33868,8 @@ If you have any questions, don't hesitate to reach out.
 
   function updateInRoomConsideredPanel(app) {
     const currentSession = getCurrentInRoomSession();
+    clearStaleAuditionRoomState(currentSession);
+    clearStaleAuditionRoomState(currentSession);
     if (!currentSession || currentSession.type === 'audition' || currentSession.type === 'callback') return;
     const list = document.querySelector(`#${inRoomContainerId} .inroom-considered-list`);
     if (list) list.innerHTML = renderInRoomConsideredFor(app);
@@ -34000,8 +34072,49 @@ If you have any questions, don't hesitate to reach out.
     applyCallbackRoleTileState(tileEl, !!applicantInRoomRoleChoice(app, sessionId, charId));
   }
 
-  function renderGeneralInRoomCheckedStrip(openFn = 'openAuditionSessionInRoom', label = 'Checked In') {
-    return '';
+  function renderGeneralInRoomCheckedTrayCards(session, openFn = 'openAuditionSessionInRoom') {
+    if (!session?.id) return '';
+    const checkedInApps = getCheckInSessionApps(session, '', 'in')
+      .filter(app => app?.status !== 'no_show');
+    if (!checkedInApps.length) return `<div class="inroom-empty-note">No performers checked in yet.</div>`;
+    return checkedInApps.map(app => {
+      const slot = getApplicantSlotForSession(app, session.id);
+      const slotTimeStr = slot?.slot_time || slot?.start_time || '';
+      const nameParts = String(app?.name || '').trim().split(/\s+/);
+      const cardHtml = renderCastingCard({
+        first_name: nameParts[0] || '',
+        last_name: nameParts.slice(1).join(' ') || '',
+        age: cbv2ApplicantAge(app),
+        pronouns: applicantPronouns(app),
+        headshot_url: app.headshot_url || '',
+        casting_categories: cbv2CastingCategories(app),
+        role_openness: cbv2RoleBadge(app),
+        attendance_mode: applicantAttendanceModeLabel(app) || null,
+      }, { size: 'compact', hasPadding: true, hasIcons: true });
+      const isCurrent = String(app.id || '') === String(inRoomApplicantId || '');
+      return window.BTSAuditionTemplates.renderTemplateById('auditions.in-room.checked-in-tile', {
+        esc,
+        time: slotTimeStr ? formatSlotTime(slotTimeStr) : '',
+        name: app.name || '',
+        state: isCurrent ? 'Current' : 'Ready',
+        className: isCurrent ? 'is-next' : '',
+        cardHtml,
+        onclick: `${openFn}('${esc(String(app.id || ''))}')`,
+        tabindex: '0'
+      });
+    }).join('');
+  }
+
+  function renderGeneralInRoomCheckedStrip(openFn = 'openAuditionSessionInRoom', label = 'Checked In', sessionOverride = null) {
+    try {
+      const session = sessionOverride || getCurrentInRoomSession() || getActiveAuditionNavSession() || getSelectedAuditionSession();
+      if (!session?.id) return '';
+      const trayCards = renderGeneralInRoomCheckedTrayCards(session, openFn);
+      return window.BTSAuditionTemplates.renderTemplateById('auditions.in-room.checked-in-strip', { esc, label, trayCards });
+    } catch (error) {
+      console.error('[BTS] checked-in strip render failed', error);
+      return '';
+    }
   }
 
   function scrollCheckedInRailToActive(scope = document) {
@@ -34040,17 +34153,16 @@ If you have any questions, don't hesitate to reach out.
       ensureWorkspaceData(['inRoom']).then(() => renderInRoomPage(targetId || inRoomApplicantId, containerId, openFn)).catch(() => renderInRoomPage(targetId || inRoomApplicantId, containerId, openFn));
       return;
     }
-    const groups = getInRoomGroups();
+    const currentSession = getCurrentInRoomSession();
+    clearStaleAuditionRoomState(currentSession);
+    const groups = getInRoomGroups(currentSession);
+    const checkedInApps = getInRoomCheckedInApps(currentSession);
     const requestedId = targetId || inRoomApplicantId || null;
-    const requestedIsValid = requestedId
-      ? (teamAccessMode ? allApplicants.some(app => app.id === requestedId) : getInRoomCheckedInApps().some(app => app.id === requestedId))
-      : false;
+    const requestedIsValid = requestedId ? checkedInApps.some(app => app.id === requestedId) : false;
     const chosenId = requestedIsValid ? requestedId : (groups.current?.id || groups.waiting[0]?.id || groups.past[0]?.id || null);
     inRoomApplicantId = chosenId;
     if (chosenId) saveWorkspaceNavState({ inRoomApplicantId: chosenId });
-    const checkedInApps = getInRoomCheckedInApps();
-    const inRoomSession = getSelectedAuditionSession();
-    const currentSession = getCurrentInRoomSession();
+    else saveWorkspaceNavState({ inRoomApplicantId: '' });
     const app = allApplicants.find(a => a.id === chosenId) || null;
     if (syncCurrentRoomFromState(currentSession, containerId, openFn, requestedId)) return;
     const inRoomColorSet = getTeamNoteColorSet(teamAccessMode ? teamAccessMember?.note_color : null);
@@ -34060,7 +34172,7 @@ If you have any questions, don't hesitate to reach out.
     const inRoomThemeClose = teamAccessMode ? `</div>` : '';
     const usesGeneralInRoomLayout = !currentSession?.type || currentSession.type === 'audition' || currentSession.type === 'callback';
     const isGeneralAuditionInRoom = usesGeneralInRoomLayout && currentSession?.type !== 'callback';
-    const trayCards = checkedInApps.map(a => inRoomThumbHtml(a, openFn, inRoomSession)).join('');
+    const trayCards = renderGeneralInRoomCheckedTrayCards(currentSession, openFn);
     const roleTypeOptions = [...new Set(characters.map(c => c.role_type).filter(Boolean))].sort();
     if (!app) {
       const noSelectionScoreHtml = currentSession?.type === 'callback'
@@ -34646,10 +34758,10 @@ If you have any questions, don't hesitate to reach out.
         onClick: `toggleCheckIn('${app.id}',${isIn ? 'true' : 'false'},'${session.id}')`
       });
       const btnsHtml = isIn
-        ? `<button class="ci-card-btn do-contact" onclick="showCiContactModal('${app.id}')">Contact</button><button class="ci-card-btn do-undo" onclick="toggleCheckIn('${app.id}',true,'${session.id}')">Undo</button>`
+        ? `<button class="ci-card-btn do-contact" onclick="showCiContactModal('${app.id}','${session.id}')">Contact</button><button class="ci-card-btn do-undo" onclick="toggleCheckIn('${app.id}',true,'${session.id}')">Undo</button>`
         : isNoShow
-          ? `<button class="ci-card-btn do-contact" onclick="showCiContactModal('${app.id}')">Contact</button><button class="ci-card-btn do-undo" onclick="clearCiNoShow('${app.id}')">Undo</button>`
-          : `<button class="ci-card-btn do-contact" onclick="showCiContactModal('${app.id}')">Contact</button><button class="ci-card-btn do-noshow" onclick="setCiNoShow('${app.id}')">No Show</button>`;
+          ? `<button class="ci-card-btn do-contact" onclick="showCiContactModal('${app.id}','${session.id}')">Contact</button><button class="ci-card-btn do-undo" onclick="clearCiNoShow('${app.id}')">Undo</button>`
+          : `<button class="ci-card-btn do-contact" onclick="showCiContactModal('${app.id}','${session.id}')">Contact</button><button class="ci-card-btn do-noshow" onclick="setCiNoShow('${app.id}','${session.id}')">No Show</button>`;
       return `<div class="ci-card-wrap ${wrapClass}" style="--ci-accent:${esc(ciAccent)};--ci-accent-ring:${esc(ciAccentRing)};--ci-accent-glow:${esc(ciAccentGlow)};--ci-accent-08:${esc(ciAccent08)};--ci-accent-12:${esc(ciAccent12)};">
         ${timeStr && !isDanceCall ? `<div class="ci-card-time" style="color:${esc(ciAccent)};">${esc(formatSlotTime(timeStr))}</div>` : ''}
         ${cardHtml}
@@ -34754,8 +34866,12 @@ If you have any questions, don't hesitate to reach out.
     const isGeneralAuditionInRoomWorkspace = tool === 'inroom' && session.type === 'audition';
     const isClassicInRoomWorkspace = tool === 'inroom' && (session.type === 'audition' || session.type === 'callback');
     const isDanceCallInRoom = tool === 'inroom' && session.type === 'dance_call';
+    const checkedInStripHtml = isClassicInRoomWorkspace
+      ? renderGeneralInRoomCheckedStrip('openAuditionSessionInRoom', 'Checked In', session)
+      : '';
     renderAuditionHeaderFrame();
     host.innerHTML = `
+      ${checkedInStripHtml}
       <div class="aud-session-shell${isClassicInRoomWorkspace ? ' aud-session-shell-general-inroom' : ''}" style="${sessionAccentVars};">
         <div class="aud-session-hero">
           <div class="aud-session-hero-copy">
@@ -34804,7 +34920,7 @@ If you have any questions, don't hesitate to reach out.
     }
   }
 
-  function showCiContactModal(appId) {
+  function showCiContactModal(appId, sessionId = null) {
     const app = allApplicants.find(a => a.id === appId);
     if (!app) return;
     document.getElementById('ci-contact-modal')?.remove();
@@ -34837,14 +34953,15 @@ If you have any questions, don't hesitate to reach out.
       </div>`
     ).join('');
 
-    const isIn = !!app.checked_in;
+    const sid = sessionId || activeCheckInSessionId || getSelectedAuditionSession()?.id || null;
+    const isIn = sid ? isCheckedInForSession(app, sid) : !!app.checked_in;
     const isNoShow = app.status === 'no_show';
     const actionBtnsHtml = isIn
-      ? `<button class="ci-contact-btn-danger" onclick="toggleCheckIn('${appId}',true);document.getElementById('ci-contact-modal')?.remove()">Undo Check-In</button>`
+      ? `<button class="ci-contact-btn-danger" onclick="toggleCheckIn('${appId}',true,'${esc(sid || '')}');document.getElementById('ci-contact-modal')?.remove()">Undo Check-In</button>`
       : isNoShow
         ? `<button class="ci-contact-btn-danger" onclick="clearCiNoShow('${appId}');document.getElementById('ci-contact-modal')?.remove()">Clear No Show</button>`
-        : `<button class="ci-contact-btn-primary" onclick="toggleCheckIn('${appId}',false);document.getElementById('ci-contact-modal')?.remove()">Check In</button>
-           <button class="ci-contact-btn-danger" onclick="setCiNoShow('${appId}');document.getElementById('ci-contact-modal')?.remove()">No Show</button>`;
+        : `<button class="ci-contact-btn-primary" onclick="toggleCheckIn('${appId}',false,'${esc(sid || '')}');document.getElementById('ci-contact-modal')?.remove()">Check In</button>
+           <button class="ci-contact-btn-danger" onclick="setCiNoShow('${appId}','${esc(sid || '')}');document.getElementById('ci-contact-modal')?.remove()">No Show</button>`;
 
     const modal = document.createElement('div');
     modal.id = 'ci-contact-modal';
@@ -34875,28 +34992,40 @@ If you have any questions, don't hesitate to reach out.
     }, 80);
   }
 
-  async function setCiNoShow(appId) {
+  async function setCiNoShow(appId, sessionId = null) {
     const app = allApplicants.find(a => a.id === appId);
     if (!app) return;
+    const sid = sessionId || activeCheckInSessionId || getSelectedAuditionSession()?.id || null;
     const prev = {
       status: app.status,
       checked_in: app.checked_in,
       checked_in_at: app.checked_in_at,
+      session_checkins: Array.isArray(app.session_checkins) ? [...app.session_checkins] : app.session_checkins,
     };
+    const nextCheckins = sid ? withSessionCheckinState(app, sid, false) : app.session_checkins;
     app.status = 'no_show';
     app.checked_in = false;
     app.checked_in_at = null;
+    if (sid) app.session_checkins = nextCheckins;
     renderCheckInList();
     showSaveStatus('saving');
     try {
-      const error = await persistApplicantPatch(app, { status: 'no_show', checked_in: false, checked_in_at: null });
+      const patch = { status: 'no_show', checked_in: false, checked_in_at: null };
+      if (sid) patch.session_checkins = nextCheckins;
+      const error = await persistApplicantPatch(app, patch);
       if (error) throw error;
+      if (sid) {
+        const sourceError = await persistSessionCheckinsToAllSourceApplications(app, nextCheckins);
+        if (sourceError) throw sourceError;
+        clearAuditionRoomStateForApplicant(app.id, sid);
+      }
       queueCiSecondaryRefresh();
       showSaveStatus('saved');
     } catch {
       app.status = prev.status;
       app.checked_in = prev.checked_in;
       app.checked_in_at = prev.checked_in_at;
+      app.session_checkins = prev.session_checkins;
       renderCheckInList();
       showToast('Could not mark as no show', true);
     }
@@ -34932,18 +35061,10 @@ If you have any questions, don't hesitate to reach out.
     const app = allApplicants.find(a => a.id === appId);
     if (!app) return;
     const newCheckedIn = !currentlyIn;
-    const newCheckedInAt = newCheckedIn ? new Date().toISOString() : null;
 
     // Update per-session check-in array
     const prevCheckins = Array.isArray(app.session_checkins) ? [...app.session_checkins] : [];
-    let newCheckins = prevCheckins;
-    if (sessionId) {
-      const sid = String(sessionId);
-      newCheckins = [
-        ...prevCheckins.filter(x => String(x.session_id || '') !== sid),
-        ...(newCheckedIn ? [{ session_id: sid, checked_in: true, checked_in_at: newCheckedInAt }] : []),
-      ];
-    }
+    const newCheckins = sessionId ? withSessionCheckinState(app, sessionId, newCheckedIn) : prevCheckins;
 
     // Optimistic update
     app.session_checkins = newCheckins;
@@ -34954,12 +35075,16 @@ If you have any questions, don't hesitate to reach out.
     try {
       const error = await persistApplicantPatch(app, { session_checkins: newCheckins });
       if (error) throw error;
+      const sourceError = await persistSessionCheckinsToAllSourceApplications(app, newCheckins);
+      if (sourceError) throw sourceError;
+      if (!newCheckedIn && sessionId) clearAuditionRoomStateForApplicant(app.id, sessionId);
       queueCiSecondaryRefresh();
       showSaveStatus('saved');
     } catch {
       app.session_checkins = prevCheckins;
       renderCheckInList();
       showToast('Check-in failed', true);
+      return;
     }
   }
 
