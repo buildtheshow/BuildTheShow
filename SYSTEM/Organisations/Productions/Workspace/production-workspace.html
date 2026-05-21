@@ -11,6 +11,7 @@
   <link rel="stylesheet" href="/ASSETS/styles/production-sidebar.css" />
   <link rel="stylesheet" href="/ASSETS/styles/casting-card.css?v=role-black-20260512" />
   <link rel="stylesheet" href="/ASSETS/styles/production-team-card.css?v=volunteer-left-text-20260511" />
+  <link rel="stylesheet" href="/ASSETS/styles/budget.css?v=module-20260520" />
   <style>
     @import url("https://fonts.googleapis.com/css2?family=Alex+Brush&display=swap");
     * { box-sizing: border-box; }
@@ -23804,6 +23805,9 @@
       </div>
     </div>
 
+    <!-- Budget -->
+    <div class="tab-panel" id="panel-budget"></div>
+
   </div>
 
   <!-- ── Add Role Modal ── -->
@@ -27219,6 +27223,8 @@
       runWorkspaceNavigation(() => openCastingSubTab(subParam || 'castboard'), { source: 'query', prodTab: 'casting', subTab: subParam || 'castboard' });
     } else if (tabParam === 'auditions') {
       runWorkspaceNavigation(() => openAuditionsSubTab(subParam || 'overview', { force: true }), { source: 'query', prodTab: 'auditions', subTab: subParam || 'overview' });
+    } else if (tabParam === 'budget') {
+      runWorkspaceNavigation(() => switchProdTab('budget', { force: true, sub: subParam || 'dashboard' }), { source: 'query', prodTab: 'budget', subTab: subParam || 'dashboard' });
     } else if (tabParam) {
       runWorkspaceNavigation(() => switchProdTab(tabParam, { force: true }), { source: 'query', prodTab: tabParam });
     } else if (savedNav?.prodTab === 'auditions') {
@@ -34946,8 +34952,17 @@ Your submission link is unique to you. Please do not share it with another perfo
   let activeAuditionNavSessionId = '';
   let activeAuditionNavTool = 'checkin';
 
+  function getAuditionPlaceholderSessions() {
+    return [
+      { id: 'placeholder-audition', name: 'General Auditions', type: 'audition', date: '' },
+      { id: 'placeholder-dance-call', name: 'Dance Call', type: 'dance_call', date: '' },
+      { id: 'placeholder-callback', name: 'Callbacks', type: 'callback', date: '' },
+    ];
+  }
+
   function getAuditionNavSessions() {
-    return [...(audSessions || [])]
+    const sourceSessions = (audSessions || []).length ? audSessions : getAuditionPlaceholderSessions();
+    return [...sourceSessions]
       .filter(session => !!session)
       .filter(session => !teamAccessMode || (session.enabled !== false && session.is_visible !== false && session.show_to_applicants !== false))
       .sort((a, b) => {
@@ -35045,10 +35060,35 @@ Your submission link is unique to you. Please do not share it with another perfo
     window.location.href = '/SYSTEM/Organisations/Productions/Workspace/' + page + '.html' + (id ? '?id=' + encodeURIComponent(id) : '');
   }
 
+  function loadScriptOnce(src) {
+    if (!window._btsLoadedScripts) window._btsLoadedScripts = new Set();
+    if (window._btsLoadedScripts.has(src)) return Promise.resolve();
+    return new Promise(function(resolve, reject) {
+      const s = document.createElement('script');
+      s.src = src;
+      s.onload = function() { window._btsLoadedScripts.add(src); resolve(); };
+      s.onerror = reject;
+      document.head.appendChild(s);
+    });
+  }
+
+  function loadBudgetModule(sub, pid, routeToken) {
+    const moduleNames = { dashboard: 'BudgetDashboardModule', breakdown: 'BudgetBreakdownModule', receipts: 'BudgetReceiptsModule', collect: 'BudgetCollectModule' };
+    const subSafe = moduleNames[sub] ? sub : 'dashboard';
+    const panel = document.getElementById('panel-budget');
+    if (!panel) return;
+    loadScriptOnce('/ASSETS/scripts/modules/budget-shared.js')
+      .then(() => loadScriptOnce('/ASSETS/scripts/modules/budget-' + subSafe + '.js'))
+      .then(() => {
+        if (!isWorkspaceRouteCurrent(routeToken)) return;
+        const mod = window[moduleNames[subSafe]];
+        if (mod && mod.init) mod.init(pid, panel);
+      })
+      .catch(() => { if (panel && isWorkspaceRouteCurrent(routeToken)) panel.innerHTML = '<div style="padding:2rem;color:#d1523d">Could not load budget content.</div>'; });
+  }
+
   function navigateToBudget(tab) {
-    const hash = tab ? '#' + tab : '';
-    const id = new URLSearchParams(location.search).get('id');
-    window.location.href = '/SYSTEM/Organisations/Productions/Workspace/production-budget.html' + (id ? '?id=' + encodeURIComponent(id) : '') + hash;
+    switchProdTab('budget', { sub: tab || 'dashboard' });
   }
 
   function toggleBudgetMenu(e) {
@@ -43077,6 +43117,13 @@ Your submission link is unique to you. Please do not share it with another perfo
       if (!isWorkspaceRouteCurrent(routeToken)) return;
       switchAudTab('castlist');
       saveWorkspaceNavState({ prodTab: 'castlist' });
+    }
+    if (id === 'budget') {
+      if (!isWorkspaceRouteCurrent(routeToken)) return;
+      const sub = (options && options.sub) || loadWorkspaceNavState().budgetSubTab || 'dashboard';
+      saveWorkspaceNavState({ prodTab: 'budget', budgetSubTab: sub });
+      setSidebarSubmenuState('budget', 'bsub-' + sub);
+      loadBudgetModule(sub, prodId, routeToken);
     }
     requestAnimationFrame(() => {
       if (!isWorkspaceRouteCurrent(routeToken)) return;
@@ -58654,11 +58701,7 @@ Your submission link is unique to you. Please do not share it with another perfo
     if (audSessions.length) {
       return [...audSessions].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
     }
-    return [
-      { id: 'placeholder-audition', name: 'General Auditions', type: 'audition', date: '' },
-      { id: 'placeholder-dance-call', name: 'Dance Call', type: 'dance_call', date: '' },
-      { id: 'placeholder-callback', name: 'Callbacks', type: 'callback', date: '' },
-    ];
+    return getAuditionPlaceholderSessions();
   }
 
   function getAuditionScheduleSelectedSession(scheduleSessions) {

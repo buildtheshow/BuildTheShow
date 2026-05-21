@@ -47,6 +47,54 @@ Also bump the `?v=N` cache-bust version in every HTML file that loads the change
 7. UI wording and saved data wording should match whenever possible.
 8. If anything is unclear or uncertain, ask before moving on.
 
+## Core Platform Stack
+
+Build The Show operates on a connected platform architecture using Supabase, GitHub, and Cloudflare. Each service has a clearly defined responsibility and must remain within its role.
+
+### Supabase Is The Source Of Truth
+
+1. Supabase is the authoritative backend system.
+2. Supabase owns database records, authentication, permissions, production data, volunteer data, audition data, attendance records, ticket inventory, organisation settings, file metadata, business logic, edge functions, and realtime subscriptions.
+3. All production truth originates from Supabase.
+4. No frontend page, component, local cache, export, report, email, dashboard, or temporary UI state may become the authoritative source of data.
+5. Frontend systems must always treat Supabase as canonical.
+6. Volunteer hours come from attendance records.
+7. Casting comes from assignment tables.
+8. Ticket availability comes from reservation records.
+9. Calendars come from production event tables.
+10. Do not recreate permanent business truth through duplicated frontend calculations.
+
+### GitHub Is The Source Of Truth For Code
+
+1. GitHub is the authoritative source for application code, version history, branches, deployments, rollback history, infrastructure configuration, documentation, migrations, and shared components.
+2. No production code should exist outside version control.
+3. Architecture changes must be committed through GitHub workflows.
+4. GitHub history must remain readable and maintainable.
+5. Avoid mystery commits, duplicated files, abandoned components, orphaned systems, and temporary hacks left in production.
+6. Every system added must have a clear purpose, connect to the existing architecture, follow shared patterns, and remain maintainable long-term.
+
+### Cloudflare Is The Edge And Delivery Layer
+
+1. Cloudflare owns DNS, CDN delivery, caching, edge routing, deployment hosting, performance optimization, security, SSL, and public traffic handling.
+2. Cloudflare is not the source of truth for application data.
+3. Cloudflare caches may improve performance, but cached content must always be replaceable by canonical Supabase data.
+4. Edge routing should deliver the application and route requests cleanly. It should not become a hidden business logic layer.
+
+### Platform Responsibility Boundaries
+
+1. Supabase stores and validates truth.
+2. GitHub stores and tracks code.
+3. Cloudflare delivers the application.
+4. The frontend renders views and interactions.
+5. Each layer must remain cleanly separated.
+6. Every displayed value should have a clear trace: UI -> API/query -> Supabase table -> authoritative record.
+7. If the source of a displayed value cannot be identified clearly, the architecture is wrong.
+8. Critical logic must exist server-side or in shared canonical systems, not only in frontend state.
+9. Ticket inventory locking, attendance calculations, volunteer hour totals, permissions, casting conflicts, and registration completion must not rely solely on frontend state.
+10. Changes made in one place must propagate everywhere automatically through shared data and subscriptions, not manual syncing.
+11. Changing a rehearsal date should update calendars, schedules, dashboards, reminders, conflict systems, and attendance systems from the same canonical record.
+12. The platform must feel like one connected operating system for theatre productions.
+
 ## Build The Show Commandments
 
 1. Write code for humans first.

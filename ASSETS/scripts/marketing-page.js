@@ -67,6 +67,16 @@
 
   // --- Navigation -----------------------------------------------------------
 
+  // Budget: if the workspace shell is loaded, use its in-shell router.
+  // Otherwise redirect to the workspace with the correct tab/sub params.
+  window.navigateToBudget = function (tab) {
+    const sec = tab || 'dashboard';
+    if (window.switchProdTab) { window.switchProdTab('budget', { sub: sec }); return; }
+    const id = new URLSearchParams(location.search).get('id');
+    const base = '/SYSTEM/Organisations/Productions/Workspace/production-workspace.html';
+    window.location.href = base + (id ? '?id=' + encodeURIComponent(id) : '') + '&tab=budget&sub=' + sec;
+  };
+
   // Marketing: navigate to a sub-page, e.g. navigateToMarketing('sponsors')
   window.navigateToMarketing = function (section) {
     const sec = section || 'dashboard';
@@ -76,18 +86,6 @@
     }
     const id = new URLSearchParams(location.search).get('id');
     window.location.href = '/SYSTEM/Organisations/Productions/Workspace/marketing-' + sec + '.html' + (id ? '?id=' + encodeURIComponent(id) : '');
-  };
-
-  // Budget: navigate to the budget page, optionally opening a specific tab via hash
-  // tab = 'dashboard' | 'breakdown' | 'receipts' | 'collect'
-  window.navigateToBudget = function (tab) {
-    const hash = tab ? '#' + tab : '';
-    if (onSlugUrl()) {
-      const base = productionBasePath();
-      if (base) { window.location.href = base + '/budget' + hash; return; }
-    }
-    const id = new URLSearchParams(location.search).get('id');
-    window.location.href = '/SYSTEM/Organisations/Productions/Workspace/production-budget.html' + (id ? '?id=' + encodeURIComponent(id) : '') + hash;
   };
 
   // Workspace: navigate back to the production workspace
@@ -108,7 +106,7 @@
     window.location.href = '/SYSTEM/Organisations/Productions/Workspace/production-workspace.html?' + p.toString();
   };
 
-  window.switchProdTab = function (tab) { window.navigateToWorkspace(tab); };
+  window.switchProdTab = window.switchProdTab || function (tab) { window.navigateToWorkspace(tab); };
   window.openAuditionsSubTab = function (sub) { window.navigateToWorkspace('auditions', sub); };
   window.openRegistrationSubTab = function (sub) { window.navigateToWorkspace('registration', sub); };
 
@@ -177,15 +175,12 @@
     if (subId) document.getElementById(subId)?.classList.add('active');
   }
 
-  // Budget: open the Budget submenu, map the current hash to the correct sub-item
-  function applyBudgetState() {
-    const hash = (location.hash || '').replace('#', '');
-    const subIdMap = { dashboard: 'bsub-dashboard', breakdown: 'bsub-breakdown', receipts: 'bsub-receipts', collect: 'bsub-collect' };
-    const subId = subIdMap[hash] || 'bsub-dashboard';
+  // Budget: open the Budget submenu, map the supplied subId to the correct sub-item
+  function applyBudgetState(subId) {
     document.querySelectorAll('.prod-tab.active, .prod-sub-item.active').forEach(el => el.classList.remove('active'));
     document.getElementById('budget-wrap')?.classList.add('open');
     document.getElementById('budget-parent-tab')?.classList.add('is-open-parent', 'active');
-    document.getElementById(subId)?.classList.add('active');
+    if (subId) document.getElementById(subId)?.classList.add('active');
   }
 
   // --- Page init ------------------------------------------------------------
@@ -237,8 +232,8 @@
     } catch (_) {}
   };
 
-  window.initBudgetPage = async function ({ pageTitle = 'Budget' } = {}) {
-    loadSidebarHtml(applyBudgetState);
+  window.initBudgetPage = async function ({ pageTitle = 'Budget', subId = 'bsub-dashboard' } = {}) {
+    loadSidebarHtml(() => applyBudgetState(subId));
 
     const prodId = await resolveProductionId();
     if (!prodId) return;
