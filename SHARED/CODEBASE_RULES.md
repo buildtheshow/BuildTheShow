@@ -95,6 +95,52 @@ Build The Show operates on a connected platform architecture using Supabase, Git
 11. Changing a rehearsal date should update calendars, schedules, dashboards, reminders, conflict systems, and attendance systems from the same canonical record.
 12. The platform must feel like one connected operating system for theatre productions.
 
+### Real-Time Platform Communication
+
+1. Build The Show must behave like one connected system.
+2. When a user takes an action in one place, every relevant page, dashboard, public view, and open device must update from the same authoritative data source.
+3. Pages must not send truth directly to other pages.
+4. Pages communicate by writing to and reading from the shared backend source of truth.
+5. The correct action flow is: user action -> write or update canonical database record -> validate permissions and business rules -> update shared backend state -> notify or refresh subscribed views -> all relevant open pages and devices update from the same record.
+6. One action must not create isolated UI data containers or page-only truth.
+7. APIs should fetch directly from core entities or purpose-built views/RPCs backed by core entities.
+8. Configuration changes must propagate automatically to internal dashboards, public pages, reports, reminders, and open devices that depend on them.
+9. Public pages and internal dashboards should reflect critical changes immediately without manual refresh.
+10. Open pages/devices should subscribe to or refetch from Supabase truth whenever relevant records change.
+11. Realtime subscriptions, explicit refetches, and post-write local reconciliation must all preserve the canonical backend record as truth.
+12. If two users act at the same time, the backend must protect data integrity with transactions, constraints, locks, or server-side RPCs where needed.
+13. Ticket inventory, seat holds, volunteer shift limits, audition slot holds, registration capacity, and simultaneous purchases require backend protection against race conditions.
+14. Attendance, volunteer hour totals, audition status changes, casting changes, registration completion, ticket holds, ticket purchases, volunteer shift claims, schedule changes, payment status, and public page updates must follow this shared-backend communication pattern.
+15. The frontend displays current state. The backend/database is the truth.
+16. No stale dashboards.
+17. No duplicated frontend-only state for production truth.
+18. No manual refresh required for critical production actions.
+
+### Page Refreshing And Targeted Live Updates
+
+1. Build The Show should not rely on full browser refreshes for normal app behaviour.
+2. The site should behave like a live application, not a stack of old-school webpages.
+3. When data changes, update only the affected section, component, card, table, count, status, or form state.
+4. Do not reload the full browser page for normal saves, status changes, navigation, or realtime updates.
+5. Do not rebuild the full layout when only one piece of data changed.
+6. Do not remount the sidebar, topbar, global navigation, auth state, notification system, modals, app background, or layout wrapper during normal app navigation or live updates.
+7. Do not flash the whole screen, lose scroll position, reset open panels, reset form progress, or clear filters unnecessarily.
+8. Keep the app shell mounted.
+9. Keep navigation mounted.
+10. Keep the current page mounted where possible.
+11. Show small loading states only where the changed data is being saved, fetched, or reconciled.
+12. Preserve the user's place on the page.
+13. The normal update flow is: user action -> write to Supabase -> Supabase confirms update -> relevant frontend state updates -> subscribed pages/devices receive updated data -> affected components rerender only.
+14. The route and layout should stay mounted during live updates.
+15. The browser should not visibly refresh unless the user intentionally reloads the page or the app is crossing a true authentication/session boundary.
+16. If someone sends a message, add the message to the thread while the page stays still.
+17. If someone marks a volunteer as attended, update the attendance status, hour total, and dependent counts without refreshing the dashboard.
+18. If someone claims a volunteer shift, update the shift card, spots remaining, and the user's shift list without refreshing the page.
+19. If someone changes a rehearsal date, update the calendar event, schedule cards, and conflict warnings without refreshing the app.
+20. For cross-device actions, device A writes to Supabase, device B listens for relevant changes, and device B updates only the affected UI section.
+21. Device B should not refresh the whole page to show realtime changes.
+22. Build The Show should feel like a stable frame with live data.
+
 ## Build The Show Commandments
 
 1. Write code for humans first.

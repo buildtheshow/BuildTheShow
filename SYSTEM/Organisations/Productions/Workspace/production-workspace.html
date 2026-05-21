@@ -41417,19 +41417,37 @@ Your submission link is unique to you. Please do not share it with another perfo
   function buildStaticCheckedInRailShell() {
     const renderer = window.BTSAuditionTemplates?.renderTemplateById;
     if (!renderer) return '';
-    const placeholderCardHtml = buildNoOneCheckedInCastingCardHtml();
-    const placeholderTileHtml = renderer('auditions.in-room.checked-in-tile', {
+    const session = getActiveAuditionNavSession?.() || getCurrentInRoomSession?.() || null;
+    const checkedInApps = session?.id ? getInRoomCheckedInApps(session) : [];
+    const groups = session?.id ? getInRoomGroups(session) : { past: [], current: null, waiting: [] };
+    const pastIds = new Set((groups.past || []).map(app => String(app.id || '')));
+    const currentId = String(groups.current?.id || '');
+    const trayCards = checkedInApps.length ? checkedInApps.map(app => {
+      const slot = getApplicantSlotForSession(app, session.id);
+      const time = formatSlotTime(slot?.slot_time || slot?.start_time || getApplicantSlotStartValue(app) || '');
+      const appId = String(app.id || '');
+      const state = pastIds.has(appId) ? 'Through' : (currentId && appId === currentId ? 'Next' : 'Ready');
+      const className = pastIds.has(appId) ? 'is-done' : (currentId && appId === currentId ? 'is-next' : '');
+      return renderer('auditions.in-room.checked-in-tile', {
+        esc,
+        time,
+        name: appDisplayName(app),
+        state,
+        className,
+        cardHtml: buildStandardCastingCardHtml(app, { size: 'compact', hasPadding: true, hasIcons: true, state: null })
+      });
+    }).join('') : renderer('auditions.in-room.checked-in-tile', {
       esc,
       time: '',
       name: 'No one checked in',
       state: '',
       className: 'is-placeholder',
-      cardHtml: placeholderCardHtml
+      cardHtml: buildNoOneCheckedInCastingCardHtml()
     });
     const checkinRailHtml = renderer('auditions.in-room.checked-in-strip', {
       esc,
       label: 'Checked In',
-      trayCards: placeholderTileHtml
+      trayCards
     });
     return `<div class="audition-flow-template-checkin" aria-hidden="true">
       <style>
@@ -56310,17 +56328,16 @@ Your submission link is unique to you. Please do not share it with another perfo
     clearStaleAuditionRoomState(currentSession);
     const usesGeneralInRoomLayout = !currentSession?.type || currentSession.type === 'audition' || currentSession.type === 'callback';
     const isGeneralAuditionInRoom = usesGeneralInRoomLayout && currentSession?.type !== 'callback';
-    const forceStaticGeneralInRoomPlaceholder = containerId === 'aud-session-inroom-content' && isGeneralAuditionInRoom;
     const groups = getInRoomGroups(currentSession);
     const checkedInApps = getInRoomCheckedInApps(currentSession);
     const requestedId = targetId || inRoomApplicantId || null;
-    const requestedIsValid = !forceStaticGeneralInRoomPlaceholder && requestedId ? checkedInApps.some(app => app.id === requestedId) : false;
-    const chosenId = forceStaticGeneralInRoomPlaceholder ? null : (requestedIsValid ? requestedId : (groups.current?.id || groups.waiting[0]?.id || groups.past[0]?.id || null));
+    const requestedIsValid = requestedId ? checkedInApps.some(app => app.id === requestedId) : false;
+    const chosenId = requestedIsValid ? requestedId : (groups.current?.id || groups.waiting[0]?.id || groups.past[0]?.id || null);
     inRoomApplicantId = chosenId;
     if (chosenId) saveWorkspaceNavState({ inRoomApplicantId: chosenId });
     else saveWorkspaceNavState({ inRoomApplicantId: '' });
-    const app = forceStaticGeneralInRoomPlaceholder ? null : (allApplicants.find(a => a.id === chosenId) || null);
-    if (!forceStaticGeneralInRoomPlaceholder && syncCurrentRoomFromState(currentSession, containerId, openFn, requestedId)) return;
+    const app = allApplicants.find(a => a.id === chosenId) || null;
+    if (syncCurrentRoomFromState(currentSession, containerId, openFn, requestedId)) return;
     const roleTypeOptions = [...new Set(characters.map(c => c.role_type).filter(Boolean))].sort();
     if (!app) {
       const noSelectionScoreHtml = currentSession?.type === 'callback'
