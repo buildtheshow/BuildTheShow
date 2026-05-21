@@ -39,8 +39,8 @@
   var PAPER_OPTIONS = [
     {
       id: 'letter-folded',
-      label: '11 x 8.5 in',
-      detail: 'Folded to 8.5 x 5.5 in',
+      label: '8.5 x 5.5 in',
+      detail: '(folded in half from 8.5 x 11 in paper)',
       note: 'Standard booklet programme',
       pageLabel: '8.5 x 5.5 in folded pages',
       image: '/ASSETS/Images/programme-%205.5x11-folded-8.5x11.svg',
@@ -48,15 +48,15 @@
     {
       id: 'letter-flat',
       label: '11 x 8.5 in',
-      detail: 'Not folded',
+      detail: '(not folded, from 8.5 x 11 in paper)',
       note: 'Full letter pages',
       pageLabel: '11 x 8.5 in pages',
       image: '/ASSETS/Images/programme-8.5x11.svg',
     },
     {
       id: 'tabloid-folded',
-      label: '17 x 11 in',
-      detail: 'Folded to 11 x 8.5 in',
+      label: '11 x 8.5 in',
+      detail: '(folded in half from 11 x 17 in paper)',
       note: 'Large booklet programme',
       pageLabel: '11 x 8.5 in folded pages',
       image: '/ASSETS/Images/programme-8.5x11Folded-11x17.svg',
