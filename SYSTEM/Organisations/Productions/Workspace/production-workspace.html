@@ -24335,13 +24335,24 @@
    */
 
   // ── Load shared sidebar ───────────────────────────────
-  fetch('/SHARED/Navigation/production-sidebar.html')
-    .then(res => res.text())
-    .then(html => {
-      document.getElementById('prod-sidebar-host').innerHTML = html;
+  (function () {
+    const _key = 'bts-prod-sidebar-v1';
+    const _cached = sessionStorage.getItem(_key);
+    if (_cached) {
+      document.getElementById('prod-sidebar-host').innerHTML = _cached;
       initProdSidebarEvents();
-    })
-    .catch(() => {});
+    }
+    fetch('/SHARED/Navigation/production-sidebar.html')
+      .then(res => res.text())
+      .then(html => {
+        sessionStorage.setItem(_key, html);
+        if (!_cached) {
+          document.getElementById('prod-sidebar-host').innerHTML = html;
+          initProdSidebarEvents();
+        }
+      })
+      .catch(() => {});
+  })();
 
   let toastTimer;
   function showToast(msg, isError = false) {
@@ -40990,6 +41001,18 @@ Your submission link is unique to you. Please do not share it with another perfo
     </div>`;
   }
 
+  function buildStaticCheckedInRailShell() {
+    const railHtml = window.BTSAuditionTemplates?.renderTemplateById
+      ? window.BTSAuditionTemplates.renderTemplateById('auditions.in-room.checked-in-strip', {
+          esc,
+          label: 'Checked In',
+          trayCards: ''
+        })
+      : '';
+    if (!railHtml) return '';
+    return `<div class="aud-session-static-checkin-shell" aria-hidden="true" style="margin:0.55rem 0 0.9rem;">${railHtml}</div>`;
+  }
+
   // ── Tab switching ─────────────────────────────────────
   function goToCalendarDate(dateStr) {
     switchProdTab('calendar');
@@ -56729,11 +56752,13 @@ Your submission link is unique to you. Please do not share it with another perfo
     const isGeneralAuditionInRoomWorkspace = tool === 'inroom' && session.type === 'audition';
     const isClassicInRoomWorkspace = tool === 'inroom' && (session.type === 'audition' || session.type === 'callback');
     const sessionToolTabsHtml = buildAuditionSessionToolTabs(session, tool);
+    const staticCheckInRailShellHtml = tool === 'inroom' ? buildStaticCheckedInRailShell() : '';
     renderAuditionHeaderFrame();
     host.dataset.sessionWorkspaceSessionId = String(session.id || '');
     host.dataset.sessionWorkspaceTool = String(tool || '');
     host.innerHTML = `
       ${sessionToolTabsHtml}
+      ${staticCheckInRailShellHtml}
       <div class="aud-session-shell${isClassicInRoomWorkspace ? ' aud-session-shell-general-inroom' : ''}" style="${sessionAccentVars};">
         <div class="aud-session-hero">
           <div class="aud-session-hero-copy">

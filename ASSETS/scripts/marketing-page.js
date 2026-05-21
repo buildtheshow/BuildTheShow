@@ -146,15 +146,35 @@
    *   kickerLabel — fallback kicker text before production title loads (e.g. 'Marketing')
    *   pageTitle   — fallback document title suffix (e.g. 'Dashboard')
    */
+  const SIDEBAR_CACHE_KEY = 'bts-prod-sidebar-v1';
+
+  function applySidebarState(subId) {
+    document.getElementById('marketing-wrap')?.classList.add('open');
+    document.getElementById('marketing-parent-tab')?.classList.add('is-open-parent');
+    if (subId) document.getElementById(subId)?.classList.add('active');
+  }
+
+  function loadSidebar(subId) {
+    const cached = sessionStorage.getItem(SIDEBAR_CACHE_KEY);
+    if (cached) {
+      document.getElementById('prod-sidebar-host').innerHTML = cached;
+      applySidebarState(subId);
+    }
+    fetch('/SHARED/Navigation/production-sidebar.html')
+      .then(r => r.text())
+      .then(html => {
+        sessionStorage.setItem(SIDEBAR_CACHE_KEY, html);
+        if (!cached) {
+          document.getElementById('prod-sidebar-host').innerHTML = html;
+          applySidebarState(subId);
+        }
+      })
+      .catch(() => {});
+  }
+
   window.initMarketingPage = async function ({ subId, kickerLabel = 'Marketing', pageTitle = '' } = {}) {
-    // Load sidebar
-    try {
-      const html = await fetch('/SHARED/Navigation/production-sidebar.html').then(r => r.text());
-      document.getElementById('prod-sidebar-host').innerHTML = html;
-      document.getElementById('marketing-wrap')?.classList.add('open');
-      document.getElementById('marketing-parent-tab')?.classList.add('is-open-parent');
-      if (subId) document.getElementById(subId)?.classList.add('active');
-    } catch (_) {}
+    // Load sidebar — cached path is synchronous so there's no flash between pages
+    loadSidebar(subId);
 
     // Resolve production and populate UI
     const prodId = await resolveProductionId();
