@@ -39,24 +39,24 @@
   var PAPER_OPTIONS = [
     {
       id: 'letter-folded',
-      label: '8.5&quot; x 11&quot;',
-      detail: 'Folded to 5.5&quot; x 8.5&quot;',
+      label: '8.5 x 11 in',
+      detail: 'Folded to 5.5 x 8.5 in',
       note: 'Standard booklet programme',
-      pageLabel: '5.5&quot; x 8.5&quot; folded pages',
+      pageLabel: '5.5 x 8.5 in folded pages',
     },
     {
       id: 'letter-flat',
-      label: '8.5&quot; x 11&quot;',
+      label: '8.5 x 11 in',
       detail: 'Not folded',
       note: 'Full letter pages',
-      pageLabel: '8.5&quot; x 11&quot; pages',
+      pageLabel: '8.5 x 11 in pages',
     },
     {
       id: 'tabloid-folded',
-      label: '11&quot; x 17&quot;',
-      detail: 'Folded to 8.5&quot; x 11&quot;',
+      label: '11 x 17 in',
+      detail: 'Folded to 8.5 x 11 in',
       note: 'Large booklet programme',
-      pageLabel: '8.5&quot; x 11&quot; folded pages',
+      pageLabel: '8.5 x 11 in folded pages',
     },
   ];
 
@@ -71,6 +71,7 @@
       bioLayout: 'headshot-grid',
       sections: ['cover', 'welcome', 'creative', 'cast', 'bios', 'sponsors', 'ads', 'thanks', 'back'],
     },
+    spreadStart: 0,
     data: {
       production: null,
       businesses: [],
@@ -286,8 +287,8 @@
           '<input type="radio" name="pgm-paper" value="' + esc(paper.id) + '"' + (isSelected ? ' checked' : '') + ' onchange="MarketingProgrammeModule.setSetting(\'paper\', this.value)" />' +
           '<span class="pgm-paper-visual pgm-paper-visual--' + esc(paper.id) + '"><span></span></span>' +
           '<span class="pgm-paper-copy">' +
-            '<strong>' + paper.label + '</strong>' +
-            '<em>' + paper.detail + '</em>' +
+            '<strong>' + esc(paper.label) + '</strong>' +
+            '<em>' + esc(paper.detail) + '</em>' +
             '<small>' + esc(paper.note) + '</small>' +
           '</span>' +
         '</label>';
@@ -344,7 +345,26 @@
     '</div>';
   }
 
-  function renderPagePreview(page, index) {
+  function spreadStartForPage(index) {
+    if (index <= 0) return 0;
+    return index % 2 ? index : index - 1;
+  }
+
+  function clampSpreadStart(pages) {
+    var max = Math.max(0, pages.length - 1);
+    if (ProgrammeState.spreadStart > max) ProgrammeState.spreadStart = spreadStartForPage(max);
+    if (ProgrammeState.spreadStart < 0) ProgrammeState.spreadStart = 0;
+  }
+
+  function pageRangeLabel(pages) {
+    var start = ProgrammeState.spreadStart;
+    if (!pages.length) return 'No pages';
+    if (start === 0) return 'Cover / Page 1 of ' + pages.length;
+    var end = Math.min(start + 1, pages.length - 1);
+    return 'Pages ' + (start + 1) + (end > start ? '-' + (end + 1) : '') + ' of ' + pages.length;
+  }
+
+  function pageBody(page) {
     var body = '';
     if (page.type === 'cover') body = '<div class="pgm-page-cover-title">' + esc(page.title) + '</div><div class="pgm-page-muted">' + esc(page.subtitle) + '</div>';
     else if (page.type === 'ads') body = renderAdPage(page);
@@ -354,9 +374,65 @@
     else if (page.type === 'cast') body = renderSimpleList(page.items, applicationName, 16);
     else if (page.type === 'characters') body = renderSimpleList(page.items, roleLabel, 18);
     else body = '<div class="pgm-placeholder-lines"><span></span><span></span><span></span><span></span></div>';
+    return body;
+  }
+
+  function renderPageSheet(page, index, side) {
+    if (!page) return '<div class="pgm-book-page pgm-book-page--blank pgm-book-page--' + esc(side || '') + '"></div>';
+    return '<article class="pgm-book-page pgm-book-page--' + esc(side || '') + '">' +
+      '<div class="pgm-page-sheet pgm-page-sheet--' + esc(page.type) + ' pgm-page-sheet--paper-' + esc(selectedPaper().id) + '">' + pageBody(page) + '</div>' +
+      '<div class="pgm-page-caption"><strong>' + esc(page.title) + '</strong><span>Page ' + (index + 1) + (page.subtitle ? ' · ' + esc(page.subtitle) : '') + '</span></div>' +
+    '</article>';
+  }
+
+  function renderProgrammeBook(pages) {
+    clampSpreadStart(pages);
+    var start = ProgrammeState.spreadStart;
+    var isCover = start === 0;
+    var leftPage = isCover ? null : pages[start];
+    var rightPage = isCover ? pages[0] : pages[start + 1];
+    var leftIndex = start;
+    var rightIndex = isCover ? 0 : start + 1;
+    if (!isCover && leftPage && !rightPage) {
+      rightPage = leftPage;
+      rightIndex = start;
+      leftPage = null;
+    }
+    var prevStart = start <= 1 ? 0 : Math.max(0, start - 2);
+    var nextStart = start === 0 ? 1 : start + 2;
+    var canPrev = start > 0;
+    var canNext = nextStart < pages.length;
+    return '<section class="pgm-panel pgm-book-panel">' +
+      '<div class="pgm-panel-head">' +
+        '<div><div class="pgm-panel-title">Programme Preview</div><p>' + esc(selectedPaper().pageLabel) + ' · ' + pageRangeLabel(pages) + '</p></div>' +
+        '<div class="pgm-book-controls">' +
+          '<button class="spn-btn spn-btn--ghost pgm-book-btn" type="button" ' + (canPrev ? 'onclick="MarketingProgrammeModule.setSpread(' + prevStart + ')"' : 'disabled') + ' aria-label="Previous pages">&lsaquo;</button>' +
+          '<button class="spn-btn spn-btn--ghost pgm-book-btn" type="button" ' + (canNext ? 'onclick="MarketingProgrammeModule.setSpread(' + nextStart + ')"' : 'disabled') + ' aria-label="Next pages">&rsaquo;</button>' +
+          '<button class="spn-btn spn-btn--ghost" disabled>Export Later</button>' +
+        '</div>' +
+      '</div>' +
+      '<div class="pgm-book-stage' + (isCover ? ' pgm-book-stage--cover' : '') + '">' +
+        '<div class="pgm-book-shadow" aria-hidden="true"></div>' +
+        '<div class="pgm-book-spread">' +
+          renderPageSheet(leftPage, leftIndex, 'left') +
+          '<div class="pgm-book-spine" aria-hidden="true"></div>' +
+          renderPageSheet(rightPage, rightIndex, 'right') +
+        '</div>' +
+      '</div>' +
+      '<div class="pgm-book-rail" aria-label="Programme pages">' + pages.map(function (page, index) {
+        var openStart = spreadStartForPage(index);
+        var active = openStart === start || (isCover && index === 0);
+        return '<button class="pgm-page-tab' + (active ? ' is-active' : '') + '" type="button" onclick="MarketingProgrammeModule.setSpread(' + openStart + ')">' +
+          '<span>' + (index + 1) + '</span><em>' + esc(page.title) + '</em>' +
+        '</button>';
+      }).join('') + '</div>' +
+    '</section>';
+  }
+
+  function renderPagePreview(page, index) {
     return '<article class="pgm-page-card">' +
       '<div class="pgm-page-number">Page ' + (index + 1) + '</div>' +
-      '<div class="pgm-page-sheet pgm-page-sheet--' + esc(page.type) + ' pgm-page-sheet--paper-' + esc(selectedPaper().id) + '">' + body + '</div>' +
+      '<div class="pgm-page-sheet pgm-page-sheet--' + esc(page.type) + ' pgm-page-sheet--paper-' + esc(selectedPaper().id) + '">' + pageBody(page) + '</div>' +
       '<div class="pgm-page-caption"><strong>' + esc(page.title) + '</strong><span>' + esc(page.subtitle || '') + '</span></div>' +
     '</article>';
   }
@@ -419,10 +495,7 @@
       '</section>' +
       renderSetupControls() +
       renderReadiness(pages) +
-      '<section class="pgm-panel">' +
-        '<div class="pgm-panel-head"><div><div class="pgm-panel-title">Page Mockup</div><p>Structured preview of where content lands. Missing material appears as placeholders.</p></div><button class="spn-btn spn-btn--ghost" disabled>Export Later</button></div>' +
-        '<div class="pgm-page-grid">' + pages.map(renderPagePreview).join('') + '</div>' +
-      '</section>';
+      renderProgrammeBook(pages);
   }
 
   window.MarketingProgrammeModule = {
@@ -437,6 +510,10 @@
     },
     setSetting: function (key, value) {
       ProgrammeState.settings[key] = value;
+      renderPlanner();
+    },
+    setSpread: function (start) {
+      ProgrammeState.spreadStart = Number(start) || 0;
       renderPlanner();
     },
     toggleSection: function (key, checked) {
