@@ -57234,16 +57234,13 @@ Your submission link is unique to you. Please do not share it with another perfo
     const sessionAccent = getAuditionScheduleSidebarMarkerColor(session.type || 'audition');
     const sessionAccentVars = `border-top:3px solid ${sessionAccent};--session-accent:${sessionAccent};--session-accent-07:${hexToRgba(sessionAccent,0.07)};--session-accent-08:${hexToRgba(sessionAccent,0.08)};--session-accent-12:${hexToRgba(sessionAccent,0.12)};--session-accent-20:${hexToRgba(sessionAccent,0.2)};--session-accent-25:${hexToRgba(sessionAccent,0.25)}`;
     const isDanceCallInRoom = tool === 'inroom' && session.type === 'dance_call';
-    const isGeneralAuditionInRoomWorkspace = tool === 'inroom' && session.type === 'audition';
+    const isGeneralAuditionSession = session.type === 'audition' || /general auditions?/i.test(String(session.name || ''));
+    const isGeneralAuditionInRoomWorkspace = tool === 'inroom' && isGeneralAuditionSession;
     const isClassicInRoomWorkspace = tool === 'inroom' && (session.type === 'audition' || session.type === 'callback');
+    const showStaticGeneralInRoomTemplate = isGeneralAuditionInRoomWorkspace;
     const sessionToolTabsHtml = buildAuditionSessionToolTabs(session, tool);
-    const staticCheckInRailShellHtml = tool === 'inroom' ? buildStaticCheckedInRailShell() : '';
-    renderAuditionHeaderFrame();
-    host.dataset.sessionWorkspaceSessionId = String(session.id || '');
-    host.dataset.sessionWorkspaceTool = String(tool || '');
-    host.innerHTML = `
-      ${sessionToolTabsHtml}
-      ${staticCheckInRailShellHtml}
+    const staticCheckInRailShellHtml = showStaticGeneralInRoomTemplate ? buildStaticCheckedInRailShell() : '';
+    const sessionShellHtml = showStaticGeneralInRoomTemplate ? '' : `
       <div class="aud-session-shell${isClassicInRoomWorkspace ? ' aud-session-shell-general-inroom' : ''}" style="${sessionAccentVars};">
         <div class="aud-session-hero">
           <div class="aud-session-hero-copy">
@@ -57269,11 +57266,18 @@ Your submission link is unique to you. Please do not share it with another perfo
           ${tool === 'castingboard' ? `<div id="aud-session-castboard-content" style="min-height:760px;"></div>` : ''}
         </div>
       </div>`;
+    renderAuditionHeaderFrame();
+    host.dataset.sessionWorkspaceSessionId = String(session.id || '');
+    host.dataset.sessionWorkspaceTool = String(tool || '');
+    host.innerHTML = `
+      ${sessionToolTabsHtml}
+      ${staticCheckInRailShellHtml}
+      ${sessionShellHtml}`;
     if (tool === 'checkin') {
       const listEl = document.getElementById('aud-session-checkin-list');
       if (listEl) setHtmlIfChanged(listEl, buildCheckInListMarkup(session, sessionCiSearchQuery, sessionCiFilter));
     }
-    if (tool === 'inroom') {
+    if (tool === 'inroom' && !showStaticGeneralInRoomTemplate) {
       if (session.type === 'dance_call') {
         renderDanceCallInRoom(session.id);
       } else if (session.type === 'callback' && !cbv2Loaded) {
