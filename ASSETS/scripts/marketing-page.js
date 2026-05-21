@@ -77,15 +77,14 @@
     window.location.href = base + (id ? '?id=' + encodeURIComponent(id) : '') + '&tab=budget&sub=' + sec;
   };
 
-  // Marketing: navigate to a sub-page, e.g. navigateToMarketing('sponsors')
+  // Marketing: if the workspace shell is loaded, use its in-shell router.
+  // Otherwise redirect to the workspace with the correct tab/sub params.
   window.navigateToMarketing = function (section) {
     const sec = section || 'dashboard';
-    if (onSlugUrl()) {
-      const base = productionBasePath();
-      if (base) { window.location.href = base + '/marketing/' + sec; return; }
-    }
+    if (window.switchProdTab) { window.switchProdTab('marketing', { sub: sec }); return; }
     const id = new URLSearchParams(location.search).get('id');
-    window.location.href = '/SYSTEM/Organisations/Productions/Workspace/marketing-' + sec + '.html' + (id ? '?id=' + encodeURIComponent(id) : '');
+    const base = '/SYSTEM/Organisations/Productions/Workspace/production-workspace.html';
+    window.location.href = base + (id ? '?id=' + encodeURIComponent(id) : '') + '&tab=marketing&sub=' + sec;
   };
 
   // Workspace: navigate back to the production workspace

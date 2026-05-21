@@ -8,10 +8,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Production Workspace - Build The Show</title>
   <link rel="stylesheet" href="/ASSETS/styles/styles.css?v=typography-safe-20260421-2025" />
-  <link rel="stylesheet" href="/ASSETS/styles/production-sidebar.css" />
+  <link rel="stylesheet" href="/ASSETS/styles/production-sidebar.css?v=nav-rules-20260521" />
   <link rel="stylesheet" href="/ASSETS/styles/casting-card.css?v=role-black-20260512" />
   <link rel="stylesheet" href="/ASSETS/styles/production-team-card.css?v=volunteer-left-text-20260511" />
   <link rel="stylesheet" href="/ASSETS/styles/budget.css?v=module-20260520" />
+  <link rel="stylesheet" href="/ASSETS/styles/marketing.css?v=module-20260521" />
   <style>
     @import url("https://fonts.googleapis.com/css2?family=Alex+Brush&display=swap");
     * { box-sizing: border-box; }
@@ -1896,7 +1897,7 @@
     .rpf-left-logo img { max-height:112px; max-width:200px; width:auto; display:block; filter:brightness(0) invert(1); opacity:0.9; }
     .rpf-left-logo-name { font-size:0.72rem; font-weight:850; color:rgba(255,255,255,0.7); letter-spacing:0.02em; }
     .rpf-left-cards { position:relative; height:175px; flex-shrink:0; margin:1.25rem 0.85rem 0.75rem; }
-    .rpf-card-poster { position:absolute; left:4px; top:8px; width:108px; height:150px; border-radius:10px; overflow:hidden; box-shadow:0 6px 20px rgba(0,0,0,0.45); transform:rotate(-6deg); background:#1a1530; }
+    .rpf-card-poster { position:absolute; left:4px; top:8px; width:108px; aspect-ratio:8.5 / 11; border-radius:8px; overflow:hidden; box-shadow:0 6px 20px rgba(0,0,0,0.45); transform:rotate(-6deg); background:#1a1530; }
     .rpf-card-poster img { width:100%; height:100%; object-fit:cover; display:block; }
     .rpf-card-poster-ph { width:100%; height:100%; display:flex; align-items:center; justify-content:center; background:rgba(255,255,255,0.1); font-size:2.2rem; }
     .rpf-card-inshow { position:absolute; right:4px; top:14px; width:114px; }
@@ -21469,9 +21470,7 @@
         width: clamp(232px, 68vw, 300px);
       }
 
-      .sidebar-mobile-poster {
-        width: 96px;
-      }
+      .sidebar-mobile-poster { width: 96px; }
 
       .aud-visual-total-value {
         font-size: 2.55rem;
@@ -23808,6 +23807,9 @@
     <!-- Budget -->
     <div class="tab-panel" id="panel-budget"></div>
 
+    <!-- Marketing -->
+    <div class="tab-panel" id="panel-marketing"></div>
+
   </div>
 
   <!-- ── Add Role Modal ── -->
@@ -24701,13 +24703,13 @@
 
   // ── Load shared sidebar ───────────────────────────────
   (function () {
-    const _key = 'bts-prod-sidebar-v6';
+    const _key = 'bts-prod-sidebar-v7';
     const _cached = sessionStorage.getItem(_key);
     if (_cached) {
       document.getElementById('prod-sidebar-host').innerHTML = _cached;
       initProdSidebarEvents();
     }
-    fetch('/SHARED/Navigation/production-sidebar.html?v=budget-20260520')
+    fetch('/SHARED/Navigation/production-sidebar.html?v=nav-rules-20260521')
       .then(res => res.text())
       .then(html => {
         sessionStorage.setItem(_key, html);
@@ -26969,8 +26971,6 @@
   let _auditionsLiveRefreshRunning = false;
   let _auditionsVisibilityBound = false;
   let _realtimeReconnectAttempt = 0;
-  let auditionsLiveBroadcastChannel = null;
-  let auditionsLiveBroadcastReady = false;
   let auditionRoomStateTableAvailable = null;
   let auditionRoomStatesLoadedAt = 0;
   let auditionRoomStatesRetryAfter = 0;
@@ -27092,7 +27092,6 @@
       })
       .catch(error => console.warn('[BTS] production slug check failed', error));
     setupRoomReadyBroadcast();
-    setupAuditionsLiveBroadcast();
     // Check if is_public column exists — non-blocking, safe to run in background
     sb.from('production_events').select('is_public').eq('production_id', prodId).limit(1)
       .then(({ error }) => { if (!error) _hasIsPublicColumn = true; });
@@ -27228,6 +27227,8 @@
       runWorkspaceNavigation(() => openAuditionsSubTab(subParam || 'overview', { force: true }), { source: 'query', prodTab: 'auditions', subTab: subParam || 'overview' });
     } else if (tabParam === 'budget') {
       runWorkspaceNavigation(() => switchProdTab('budget', { force: true, sub: subParam || 'dashboard' }), { source: 'query', prodTab: 'budget', subTab: subParam || 'dashboard' });
+    } else if (tabParam === 'marketing') {
+      runWorkspaceNavigation(() => switchProdTab('marketing', { force: true, sub: subParam || 'dashboard' }), { source: 'query', prodTab: 'marketing', subTab: subParam || 'dashboard' });
     } else if (tabParam) {
       runWorkspaceNavigation(() => switchProdTab(tabParam, { force: true }), { source: 'query', prodTab: tabParam });
     } else if (savedNav?.prodTab === 'auditions') {
@@ -28072,65 +28073,6 @@
     return `bts-room-ready-signal:${prodId || 'unknown'}`;
   }
 
-  function auditionsLiveBroadcastStorageKey() {
-    return `bts-auditions-live-broadcast:${prodId || 'unknown'}`;
-  }
-
-  function setupAuditionsLiveBroadcast() {
-    if (auditionsLiveBroadcastChannel || !prodId || !sb?.channel) return;
-    try {
-      auditionsLiveBroadcastChannel = sb.channel(`production-auditions-live:${prodId}`, {
-        config: { broadcast: { self: false } }
-      });
-      auditionsLiveBroadcastChannel
-        .on('broadcast', { event: 'room_ready' }, payload => handleRoomReadyBroadcast(payload?.payload || payload))
-        .on('broadcast', { event: 'checkin_changed' }, payload => handleCheckInBroadcast(payload?.payload || payload))
-        .subscribe(status => {
-          auditionsLiveBroadcastReady = status === 'SUBSCRIBED';
-        });
-    } catch (error) {
-      auditionsLiveBroadcastReady = false;
-      console.warn('[BTS] audition live broadcast unavailable:', error);
-    }
-    window.addEventListener('storage', event => {
-      if (event.key !== auditionsLiveBroadcastStorageKey() || !event.newValue) return;
-      try { handleAuditionsLiveStorageBroadcast(JSON.parse(event.newValue)); } catch {}
-    });
-  }
-
-  function sendAuditionsLiveBroadcast(eventName, payload) {
-    if (!eventName || !payload || !prodId) return;
-    const message = {
-      ...payload,
-      type: eventName,
-      production_id: prodId,
-      client_id: inRoomNextClientId,
-      sent_at: new Date().toISOString(),
-    };
-    setupAuditionsLiveBroadcast();
-    const sendRealtime = () => {
-      if (!auditionsLiveBroadcastReady || !auditionsLiveBroadcastChannel?.send) return false;
-      try {
-        auditionsLiveBroadcastChannel.send({
-          type: 'broadcast',
-          event: eventName,
-          payload: message,
-        });
-        return true;
-      } catch {
-        return false;
-      }
-    };
-    if (!sendRealtime()) setTimeout(sendRealtime, 350);
-    try { localStorage.setItem(auditionsLiveBroadcastStorageKey(), JSON.stringify(message)); } catch {}
-  }
-
-  function handleAuditionsLiveStorageBroadcast(message) {
-    if (!message || message.client_id === inRoomNextClientId) return;
-    if (message.type === 'room_ready') handleRoomReadyBroadcast(message);
-    if (message.type === 'checkin_changed') handleCheckInBroadcast(message);
-  }
-
   function handleRoomReadyBroadcast(message) {
     const signal = message?.signal || message?.state || message;
     if (!signal || String(signal.production_id || '') !== String(prodId || '') || !signal.room_key) return;
@@ -28163,44 +28105,6 @@
     setupRoomReadyBroadcast();
     try { inRoomNextBroadcastChannel?.postMessage(message); } catch {}
     try { localStorage.setItem(roomReadyBroadcastStorageKey(), JSON.stringify(message)); } catch {}
-    sendAuditionsLiveBroadcast('room_ready', message);
-  }
-
-  function refreshInRoomCheckedInRail() {
-    const railShell = document.querySelector('#aud-session-workspace .audition-flow-template-checkin');
-    if (!railShell || activeAuditionNavTool !== 'inroom') return;
-    const nextHtml = buildStaticCheckedInRailShell();
-    if (railShell.outerHTML !== nextHtml) railShell.outerHTML = nextHtml;
-  }
-
-  function handleCheckInBroadcast(message) {
-    const row = message?.app || message?.row || message;
-    if (!row || String(message?.production_id || row.production_id || '') !== String(prodId || '')) return;
-    const patched = patchApplicantFromPayload(row);
-    if (!patched) return;
-    refreshCheckinInPlace();
-    renderCheckInList();
-    refreshInRoomCheckedInRail();
-    refreshVisibleInRoomForSession();
-    if (row.session_id && message?.checked_in === false) clearAuditionRoomStateForApplicant(row.id, row.session_id);
-  }
-
-  function broadcastCheckInChange(app, sessionId, checkedIn, changedAt) {
-    if (!app?.id) return;
-    sendAuditionsLiveBroadcast('checkin_changed', {
-      app: {
-        id: app.id,
-        production_id: prodId,
-        session_id: sessionId || null,
-        checked_in: sessionId ? undefined : app.checked_in,
-        checked_in_at: sessionId ? undefined : app.checked_in_at,
-        session_checkins: Array.isArray(app.session_checkins) ? app.session_checkins : null,
-        status: app.status || null,
-      },
-      session_id: sessionId || null,
-      checked_in: !!checkedIn,
-      checked_in_at: checkedIn ? changedAt : null,
-    });
   }
 
   function getSessionQueue(session) {
@@ -35047,6 +34951,34 @@ Your submission link is unique to you. Please do not share it with another perfo
       const parent = document.getElementById(`${section}-parent-tab`);
       parent?.classList.add(activeSubEl ? 'is-open-parent' : 'active');
     }
+    syncSidebarMenuA11y();
+  }
+
+  function syncSidebarMenuA11y() {
+    ['auditions', 'registration', 'marketing', 'budget'].forEach(section => {
+      const wrap = document.getElementById(`${section}-wrap`);
+      const parent = document.getElementById(`${section}-parent-tab`);
+      const chevron = parent?.querySelector('.tab-chevron');
+      const expanded = wrap?.classList.contains('open') ? 'true' : 'false';
+      parent?.setAttribute('aria-expanded', expanded);
+      chevron?.setAttribute('aria-expanded', expanded);
+    });
+  }
+
+  function enhanceSidebarNavControls(root = document) {
+    root.querySelectorAll('.prod-tab[data-tab], .prod-sub-item, .prod-sub-group-link').forEach(el => {
+      if (!el.hasAttribute('role')) el.setAttribute('role', 'button');
+      if (!el.hasAttribute('tabindex')) el.setAttribute('tabindex', '0');
+      if (el.dataset.sidebarKeyBound === 'true') return;
+      el.dataset.sidebarKeyBound = 'true';
+      el.addEventListener('keydown', event => {
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        if (event.target.closest('.tab-chevron')) return;
+        event.preventDefault();
+        el.click();
+      });
+    });
+    syncSidebarMenuA11y();
   }
 
   let activeAuditionNavSessionId = '';
@@ -35112,6 +35044,7 @@ Your submission link is unique to you. Please do not share it with another perfo
     const castingItem = `<div class="prod-sub-item" id="asub-casting" onclick="openCastingSubTab('castboard')" style="display:flex;align-items:center;"><span style="flex:0 0 auto;width:0.42rem;height:0.42rem;border-radius:999px;background:#3b82f6;box-shadow:0 0 0.4rem #3b82f6;margin-right:0.45rem;display:inline-block;vertical-align:middle;"></span>Casting Board</div>`;
     const finalCastingItem = `<div class="prod-sub-item" id="asub-finalcasting" onclick="openFinalCastingSubTab()" style="display:flex;align-items:center;"><span style="flex:0 0 auto;width:0.42rem;height:0.42rem;border-radius:999px;background:#111827;box-shadow:0 0 0.4rem rgba(17,24,39,0.55);margin-right:0.45rem;display:inline-block;vertical-align:middle;"></span>Final Casting</div>`;
     host.innerHTML = beforeCallback.map(sessionItem).join('') + castingItem + callbackSessions.map(sessionItem).join('') + finalCastingItem;
+    enhanceSidebarNavControls(host);
     if (teamAccessMode) {
       const menuAccess = teamMemberMenuAccess(teamAccessMember);
       document.getElementById('asub-dashboard')?.style.setProperty('display', teamMenuAllows(menuAccess, 'auditions') ? '' : 'none');
@@ -35155,9 +35088,29 @@ Your submission link is unique to you. Please do not share it with another perfo
   }
 
   function navigateToMarketing(section) {
-    const id = new URLSearchParams(location.search).get('id');
-    const page = 'marketing-' + (section || 'dashboard');
-    window.location.href = '/SYSTEM/Organisations/Productions/Workspace/' + page + '.html' + (id ? '?id=' + encodeURIComponent(id) : '');
+    switchProdTab('marketing', { sub: section || 'dashboard' });
+  }
+
+  function loadMarketingModule(sub, pid, routeToken) {
+    const moduleNames = {
+      dashboard:  'MarketingDashboardModule',
+      sponsors:   'MarketingSponsorsModule',
+      assets:     'MarketingAssetsModule',
+      calendar:   'MarketingCalendarModule',
+      media:      'MarketingMediaModule',
+      programme:  'MarketingProgrammeModule',
+      tasks:      'MarketingTasksModule',
+    };
+    const subSafe = moduleNames[sub] ? sub : 'dashboard';
+    const panel = document.getElementById('panel-marketing');
+    if (!panel) return;
+    loadScriptOnce('/ASSETS/scripts/modules/marketing-' + subSafe + '.js')
+      .then(() => {
+        if (!isWorkspaceRouteCurrent(routeToken)) return;
+        const mod = window[moduleNames[subSafe]];
+        if (mod && mod.init) mod.init(pid, panel);
+      })
+      .catch(() => { if (panel && isWorkspaceRouteCurrent(routeToken)) panel.innerHTML = '<div style="padding:2rem;color:#d1523d">Could not load marketing content.</div>'; });
   }
 
   function loadScriptOnce(src) {
@@ -35192,15 +35145,31 @@ Your submission link is unique to you. Please do not share it with another perfo
   }
 
   function toggleBudgetMenu(e) {
-    e.stopPropagation();
+    e?.preventDefault?.();
+    e?.stopPropagation?.();
     const wrap = document.getElementById('budget-wrap');
-    if (wrap) wrap.classList.toggle('open');
+    const isOpen = !!wrap?.classList.contains('open');
+    if (isOpen) {
+      if (_sidebarSection === 'budget') return;
+      wrap.classList.remove('open');
+      syncSidebarMenuA11y();
+      return;
+    }
+    setSidebarSubmenuState('budget', _sidebarSubId);
   }
 
   function toggleMarketingMenu(e) {
-    e.stopPropagation();
+    e?.preventDefault?.();
+    e?.stopPropagation?.();
     const wrap = document.getElementById('marketing-wrap');
-    if (wrap) wrap.classList.toggle('open');
+    const isOpen = !!wrap?.classList.contains('open');
+    if (isOpen) {
+      if (_sidebarSection === 'marketing') return;
+      wrap.classList.remove('open');
+      syncSidebarMenuA11y();
+      return;
+    }
+    setSidebarSubmenuState('marketing', _sidebarSubId);
   }
 
   function switchRegistrationSubTab(subTab = 'dashboard') {
@@ -43251,6 +43220,13 @@ Your submission link is unique to you. Please do not share it with another perfo
       setSidebarSubmenuState('budget', 'bsub-' + sub);
       loadBudgetModule(sub, prodId, routeToken);
     }
+    if (id === 'marketing') {
+      if (!isWorkspaceRouteCurrent(routeToken)) return;
+      const sub = (options && options.sub) || loadWorkspaceNavState().marketingSubTab || 'dashboard';
+      saveWorkspaceNavState({ prodTab: 'marketing', marketingSubTab: sub });
+      setSidebarSubmenuState('marketing', 'msub-' + sub);
+      loadMarketingModule(sub, prodId, routeToken);
+    }
     requestAnimationFrame(() => {
       if (!isWorkspaceRouteCurrent(routeToken)) return;
       enforceSingleWorkspacePanel(workspacePanelIdForTab(id));
@@ -43259,6 +43235,7 @@ Your submission link is unique to you. Please do not share it with another perfo
     });
   }
   function initProdSidebarEvents() {
+    enhanceSidebarNavControls(document);
     document.querySelectorAll('.prod-tab[data-tab]').forEach(el => {
       // submenu parents are handled by their own onclick handlers
       if (el.id === 'auditions-parent-tab' || el.id === 'registration-parent-tab' || el.id === 'marketing-parent-tab' || el.id === 'budget-parent-tab') return;
@@ -57224,48 +57201,10 @@ Your submission link is unique to you. Please do not share it with another perfo
     const ciAccent08 = hexToRgba(ciAccent, 0.08);
     const ciAccent12 = hexToRgba(ciAccent, 0.12);
     const isDanceCall = session.type === 'dance_call';
+    const theme = { ciAccent, ciAccentRing, ciAccentGlow, ciAccent08, ciAccent12, isDanceCall };
 
     // Build a single performer card (shared between grouped and flat views)
-    const buildCard = (app) => {
-      const isIn = isCheckedInForSession(app, session.id);
-      const isNoShow = app.status === 'no_show';
-      const wrapClass = isIn ? 'ci-checked-in' : (isNoShow ? 'ci-no-show' : 'ci-upcoming');
-      const badgeClass = isIn ? 'in' : (isNoShow ? 'no-show' : 'out');
-      const badgeLabel = isIn ? 'Checked In' : (isNoShow ? 'No Show' : 'Upcoming');
-      const ciSlot = getApplicantSlotForSession(app, session.id);
-      const timeStr = ciSlot?.slot_time || ciSlot?.start_time || getApplicantSlotStartValue(app) || '';
-      const cardClick = isNoShow
-        ? `clearCiNoShow('${app.id}')`
-        : `toggleCheckIn('${app.id}',${isIn ? 'true' : 'false'},'${session.id}')`;
-      const cardHtml = renderCastingCard({
-        first_name: String(app.name || '').split(' ')[0] || '',
-        last_name: String(app.name || '').split(' ').slice(1).join(' ') || '',
-        age: cbv2ApplicantAge(app),
-        pronouns: applicantPronouns(app),
-        headshot_url: app.headshot_url || '',
-        casting_categories: cbv2CastingCategories(app),
-        role_openness: cbv2RoleBadge(app),
-        attendance_mode: applicantAttendanceModeLabel(app) || null,
-      }, {
-        size: 'standard',
-        hasPadding: true,
-        hasIcons: true,
-        draggable: false,
-        state: null,
-        onClick: cardClick
-      });
-      const btnsHtml = isIn
-          ? `<button class="ci-card-btn do-contact" onclick="showCiContactModal('${app.id}','${session.id}')">Contact</button>`
-          : isNoShow
-          ? `<button class="ci-card-btn do-contact" onclick="showCiContactModal('${app.id}','${session.id}')">Contact</button>`
-          : `<button class="ci-card-btn do-contact" onclick="showCiContactModal('${app.id}','${session.id}')">Contact</button><button class="ci-card-btn do-noshow" onclick="setCiNoShow('${app.id}','${session.id}')">No Show</button>`;
-      return `<div class="ci-card-wrap ${wrapClass}" style="--ci-accent:${esc(ciAccent)};--ci-accent-ring:${esc(ciAccentRing)};--ci-accent-glow:${esc(ciAccentGlow)};--ci-accent-08:${esc(ciAccent08)};--ci-accent-12:${esc(ciAccent12)};">
-        ${timeStr && !isDanceCall ? `<div class="ci-card-time" style="color:${esc(ciAccent)};">${esc(formatSlotTime(timeStr))}</div>` : ''}
-        ${cardHtml}
-        <span class="ci-card-status-badge ${badgeClass}">${badgeLabel}</span>
-        <div class="ci-card-btn-row">${btnsHtml}</div>
-      </div>`;
-    };
+    const buildCard = (app) => buildCheckInCardMarkup(session, app, theme);
 
     // Dance Call: group performers by time slot
     if (isDanceCall) {
@@ -57283,27 +57222,87 @@ Your submission link is unique to you. Please do not share it with another perfo
         if (b[0] === '__none__') return -1;
         return a[0].localeCompare(b[0]);
       });
-      const sessionSlots = audSlots[session.id] || [];
       const groupsHtml = sortedGroups.map(([, group]) => {
-        const checkedInCount = group.apps.filter(a => isCheckedInForSession(a, session.id)).length;
-        // Look up the actual slot to get its capacity
-        const matchedSlot = group.t ? sessionSlots.find(s => (s.slot_time || s.start_time || '') === group.t) : null;
-        const slotCapacity = matchedSlot ? (Number(matchedSlot.capacity) || 1) : null;
-        const capacityNote = slotCapacity && slotCapacity > 1 ? ` · ${slotCapacity} cap` : '';
-        return `<div class="ci-slot-group">
-          <div class="ci-slot-group-header">
-            <div class="ci-slot-group-dot" style="background:${esc(ciAccent)};"></div>
-            <div class="ci-slot-group-time" style="color:${esc(ciAccent)};">${esc(group.label)}</div>
-            <div class="ci-slot-group-tally">${checkedInCount} / ${group.apps.length} checked in${capacityNote}</div>
-          </div>
-          <div class="ci-card-grid">${group.apps.map(buildCard).join('')}</div>
-        </div>`;
+        return buildCheckInSlotGroupMarkup(session, group, theme);
       }).join('');
       return `<div class="ci-results-panel" style="--ci-accent:${esc(ciAccent)};"><div class="ci-results-inner">${groupsHtml}</div></div>`;
     }
 
     // All other session types: flat grid
     return `<div class="ci-results-panel" style="--ci-accent:${esc(ciAccent)};"><div class="ci-results-inner"><div class="ci-card-grid">${apps.map(buildCard).join('')}</div></div></div>`;
+  }
+
+  function checkInThemeForSession(session) {
+    const ciAccent = getAuditionScheduleSidebarMarkerColor(session?.type || 'audition');
+    return {
+      ciAccent,
+      ciAccentRing: hexToRgba(ciAccent, 0.55),
+      ciAccentGlow: hexToRgba(ciAccent, 0.18),
+      ciAccent08: hexToRgba(ciAccent, 0.08),
+      ciAccent12: hexToRgba(ciAccent, 0.12),
+      isDanceCall: session?.type === 'dance_call',
+    };
+  }
+
+  function checkInSlotGroupKeyForApp(app, session) {
+    const ciSlot = getApplicantSlotForSession(app, session?.id);
+    return ciSlot?.slot_time || ciSlot?.start_time || '__none__';
+  }
+
+  function buildCheckInCardMarkup(session, app, theme = checkInThemeForSession(session)) {
+    const isIn = isCheckedInForSession(app, session.id);
+    const isNoShow = app.status === 'no_show';
+    const wrapClass = isIn ? 'ci-checked-in' : (isNoShow ? 'ci-no-show' : 'ci-upcoming');
+    const badgeClass = isIn ? 'in' : (isNoShow ? 'no-show' : 'out');
+    const badgeLabel = isIn ? 'Checked In' : (isNoShow ? 'No Show' : 'Upcoming');
+    const ciSlot = getApplicantSlotForSession(app, session.id);
+    const timeStr = ciSlot?.slot_time || ciSlot?.start_time || getApplicantSlotStartValue(app) || '';
+    const cardClick = isNoShow
+      ? `clearCiNoShow('${app.id}')`
+      : `toggleCheckIn('${app.id}',${isIn ? 'true' : 'false'},'${session.id}')`;
+    const cardHtml = renderCastingCard({
+      first_name: String(app.name || '').split(' ')[0] || '',
+      last_name: String(app.name || '').split(' ').slice(1).join(' ') || '',
+      age: cbv2ApplicantAge(app),
+      pronouns: applicantPronouns(app),
+      headshot_url: app.headshot_url || '',
+      casting_categories: cbv2CastingCategories(app),
+      role_openness: cbv2RoleBadge(app),
+      attendance_mode: applicantAttendanceModeLabel(app) || null,
+    }, {
+      size: 'standard',
+      hasPadding: true,
+      hasIcons: true,
+      draggable: false,
+      state: null,
+      onClick: cardClick
+    });
+    const btnsHtml = isIn || isNoShow
+        ? `<button class="ci-card-btn do-contact" onclick="showCiContactModal('${app.id}','${session.id}')">Contact</button>`
+        : `<button class="ci-card-btn do-contact" onclick="showCiContactModal('${app.id}','${session.id}')">Contact</button><button class="ci-card-btn do-noshow" onclick="setCiNoShow('${app.id}','${session.id}')">No Show</button>`;
+    return `<div class="ci-card-wrap ${wrapClass}" data-ci-app-id="${esc(app.id)}" data-ci-session-id="${esc(session.id)}" data-ci-slot-key="${esc(checkInSlotGroupKeyForApp(app, session))}" style="--ci-accent:${esc(theme.ciAccent)};--ci-accent-ring:${esc(theme.ciAccentRing)};--ci-accent-glow:${esc(theme.ciAccentGlow)};--ci-accent-08:${esc(theme.ciAccent08)};--ci-accent-12:${esc(theme.ciAccent12)};">
+      ${timeStr && !theme.isDanceCall ? `<div class="ci-card-time" style="color:${esc(theme.ciAccent)};">${esc(formatSlotTime(timeStr))}</div>` : ''}
+      ${cardHtml}
+      <span class="ci-card-status-badge ${badgeClass}">${badgeLabel}</span>
+      <div class="ci-card-btn-row">${btnsHtml}</div>
+    </div>`;
+  }
+
+  function buildCheckInSlotGroupMarkup(session, group, theme = checkInThemeForSession(session)) {
+    const sessionSlots = audSlots[session.id] || [];
+    const checkedInCount = group.apps.filter(a => isCheckedInForSession(a, session.id)).length;
+    const matchedSlot = group.t ? sessionSlots.find(s => (s.slot_time || s.start_time || '') === group.t) : null;
+    const slotCapacity = matchedSlot ? (Number(matchedSlot.capacity) || 1) : null;
+    const capacityNote = slotCapacity && slotCapacity > 1 ? ` · ${slotCapacity} cap` : '';
+    const slotKey = group.t || '__none__';
+    return `<div class="ci-slot-group" data-ci-session-id="${esc(session.id)}" data-ci-slot-key="${esc(slotKey)}">
+      <div class="ci-slot-group-header">
+        <div class="ci-slot-group-dot" style="background:${esc(theme.ciAccent)};"></div>
+        <div class="ci-slot-group-time" style="color:${esc(theme.ciAccent)};">${esc(group.label)}</div>
+        <div class="ci-slot-group-tally">${checkedInCount} / ${group.apps.length} checked in${capacityNote}</div>
+      </div>
+      <div class="ci-card-grid">${group.apps.map(app => buildCheckInCardMarkup(session, app, theme)).join('')}</div>
+    </div>`;
   }
 
   function renderCiStageHead(session) {
@@ -57351,6 +57350,54 @@ Your submission link is unique to you. Please do not share it with another perfo
       const session = getActiveAuditionNavSession();
       if (session) setHtmlIfChanged(sessionListEl, buildCheckInListMarkup(session, sessionCiSearchQuery, sessionCiFilter));
     }
+  }
+
+  function replaceCheckInCardInContainer(container, session, app, search = '', filter = 'all') {
+    if (!container || !session?.id || !app?.id) return false;
+    if (filter !== 'all') return false;
+    const visibleApps = getCheckInSessionApps(session, search, filter);
+    if (!visibleApps.some(candidate => String(candidate.id) === String(app.id))) return false;
+    const theme = checkInThemeForSession(session);
+    if (session.type === 'dance_call') {
+      const slotKey = checkInSlotGroupKeyForApp(app, session);
+      const slotApps = visibleApps.filter(candidate => checkInSlotGroupKeyForApp(candidate, session) === slotKey);
+      const groupEl = [...container.querySelectorAll('.ci-slot-group')].find(el =>
+        String(el.dataset.ciSessionId || '') === String(session.id) &&
+        String(el.dataset.ciSlotKey || '') === String(slotKey)
+      );
+      if (!groupEl || !slotApps.length) return false;
+      const label = slotKey === '__none__' ? 'Unscheduled' : formatSlotTime(slotKey);
+      groupEl.outerHTML = buildCheckInSlotGroupMarkup(session, { t: slotKey === '__none__' ? '' : slotKey, label, apps: slotApps }, theme);
+      return true;
+    }
+    const cardEl = [...container.querySelectorAll('.ci-card-wrap')].find(el =>
+      String(el.dataset.ciSessionId || '') === String(session.id) &&
+      String(el.dataset.ciAppId || '') === String(app.id)
+    );
+    if (!cardEl) return false;
+    cardEl.outerHTML = buildCheckInCardMarkup(session, app, theme);
+    return true;
+  }
+
+  function refreshCheckInAfterLocalChange(app, sessionId = null) {
+    let handled = false;
+    const standalone = document.getElementById('checkin-list-inner');
+    if (standalone) {
+      const session = getSelectedCheckInSession();
+      if (session?.id && (!sessionId || String(session.id) === String(sessionId))) {
+        renderCiStageHead(session);
+        const search = document.getElementById('ci-search')?.value || '';
+        handled = replaceCheckInCardInContainer(standalone, session, app, search, ciFilter) || handled;
+      }
+    }
+    const sessionListEl = document.getElementById('aud-session-checkin-list');
+    if (sessionListEl) {
+      const session = getActiveAuditionNavSession();
+      if (session?.id && (!sessionId || String(session.id) === String(sessionId))) {
+        handled = replaceCheckInCardInContainer(sessionListEl, session, app, sessionCiSearchQuery, sessionCiFilter) || handled;
+      }
+    }
+    if (!handled) renderCheckInList();
   }
 
   function renderAuditionSessionWorkspace() {
@@ -57571,8 +57618,7 @@ Your submission link is unique to you. Please do not share it with another perfo
     app.checked_in = false;
     app.checked_in_at = null;
     if (sid) app.session_checkins = nextCheckins;
-    renderCheckInList();
-    broadcastCheckInChange(app, sid, false, new Date().toISOString());
+    refreshCheckInAfterLocalChange(app, sid);
     showSaveStatus('saving');
     try {
       const patch = { status: 'no_show', checked_in: false, checked_in_at: null };
@@ -57606,8 +57652,7 @@ Your submission link is unique to you. Please do not share it with another perfo
     };
     const nextStatus = 'applied';
     app.status = nextStatus;
-    renderCheckInList();
-    broadcastCheckInChange(app, null, !!app.checked_in, app.checked_in_at || new Date().toISOString());
+    refreshCheckInAfterLocalChange(app);
     showSaveStatus('saving');
     try {
       const error = await persistApplicantPatch(app, { status: nextStatus });
@@ -57644,8 +57689,7 @@ Your submission link is unique to you. Please do not share it with another perfo
       app.checked_in_at = newCheckedIn ? changedAt : null;
     }
     if (newCheckedIn && app.status === 'no_show') app.status = 'auditioning';
-    renderCheckInList();
-    broadcastCheckInChange(app, sessionId, newCheckedIn, changedAt);
+    refreshCheckInAfterLocalChange(app, sessionId);
     showSaveStatus('saving');
 
     try {
