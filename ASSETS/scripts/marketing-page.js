@@ -179,6 +179,8 @@
     // Resolve production and populate UI
     const prodId = await resolveProductionId();
     if (!prodId) return;
+    window.btsProdId = prodId;
+    document.dispatchEvent(new CustomEvent('btsProdReady', { detail: { prodId } }));
 
     try {
       const res = await fetch(
