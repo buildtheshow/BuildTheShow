@@ -60,6 +60,27 @@
     },
   ];
 
+  var TEMPLATE_OPTIONS = [
+    {
+      id: 'classic-theatre',
+      label: 'Classic Theatre',
+      detail: 'Balanced notes, cast, bios, sponsors, ads',
+      accent: '#572e88',
+    },
+    {
+      id: 'modern-clean',
+      label: 'Modern Clean',
+      detail: 'More white space, simple section flow',
+      accent: '#476aaa',
+    },
+    {
+      id: 'sponsor-heavy',
+      label: 'Sponsor Heavy',
+      detail: 'Earlier ad blocks and stronger sponsor placement',
+      accent: '#efab45',
+    },
+  ];
+
   var ProgrammeState = {
     prodId: null,
     container: null,
@@ -296,6 +317,20 @@
     '</div>';
   }
 
+  function renderTemplatePicker() {
+    var selected = ProgrammeState.settings.template;
+    return '<div class="pgm-template-picker" role="radiogroup" aria-label="Programme template">' +
+      TEMPLATE_OPTIONS.map(function (template) {
+        var isSelected = selected === template.id;
+        return '<label class="pgm-template-option' + (isSelected ? ' is-selected' : '') + '" style="--pgm-template-accent:' + esc(template.accent) + ';">' +
+          '<input type="radio" name="pgm-template" value="' + esc(template.id) + '"' + (isSelected ? ' checked' : '') + ' onchange="MarketingProgrammeModule.setSetting(\'template\', this.value)" />' +
+          '<span class="pgm-template-thumb" aria-hidden="true"><span></span><span></span><span></span></span>' +
+          '<span class="pgm-template-copy"><strong>' + esc(template.label) + '</strong><em>' + esc(template.detail) + '</em></span>' +
+        '</label>';
+      }).join('') +
+    '</div>';
+  }
+
   function renderSetupControls() {
     var checked = new Set(ProgrammeState.settings.sections);
     var paper = selectedPaper();
@@ -305,10 +340,11 @@
         '<div class="pgm-paper-heading">Paper</div>' +
         renderPaperPicker() +
         '<div class="pgm-paper-note">Mockup pages below are shown as ' + paper.pageLabel + '.</div>' +
+        '<div class="pgm-paper-heading">Template</div>' +
+        renderTemplatePicker() +
         '<div class="pgm-control-grid">' +
           selectControl('Output', 'output', [['print', 'Print'], ['digital', 'Digital'], ['proof', 'Proof only']]) +
           selectControl('Booklet', 'booklet', [['saddle-stitch', 'Saddle stitch'], ['single-pages', 'Single pages'], ['digital-scroll', 'Digital scroll']]) +
-          selectControl('Template', 'template', [['classic-theatre', 'Classic Theatre'], ['modern-clean', 'Modern Clean'], ['youth-theatre', 'Youth Theatre'], ['sponsor-heavy', 'Sponsor Heavy']]) +
           selectControl('Bio Layout', 'bioLayout', [['headshot-grid', 'Headshot grid'], ['text-compact', 'Compact text'], ['featured-bios', 'Featured bios']]) +
         '</div>' +
       '</section>' +
@@ -377,15 +413,15 @@
     return body;
   }
 
-  function renderPageSheet(page, index, side) {
-    if (!page) return '<div class="pgm-book-page pgm-book-page--blank pgm-book-page--' + esc(side || '') + '"></div>';
-    return '<article class="pgm-book-page pgm-book-page--' + esc(side || '') + '">' +
+  function renderPreviewPage(page, index, side) {
+    if (!page) return '<div class="pgm-preview-page pgm-preview-page--blank pgm-preview-page--' + esc(side || '') + '"></div>';
+    return '<article class="pgm-preview-page pgm-preview-page--' + esc(side || '') + '">' +
       '<div class="pgm-page-sheet pgm-page-sheet--' + esc(page.type) + ' pgm-page-sheet--paper-' + esc(selectedPaper().id) + '">' + pageBody(page) + '</div>' +
       '<div class="pgm-page-caption"><strong>' + esc(page.title) + '</strong><span>Page ' + (index + 1) + (page.subtitle ? ' · ' + esc(page.subtitle) : '') + '</span></div>' +
     '</article>';
   }
 
-  function renderProgrammeBook(pages) {
+  function renderProgrammePreview(pages) {
     clampSpreadStart(pages);
     var start = ProgrammeState.spreadStart;
     var isCover = start === 0;
@@ -402,39 +438,32 @@
     var nextStart = start === 0 ? 1 : start + 2;
     var canPrev = start > 0;
     var canNext = nextStart < pages.length;
-    return '<section class="pgm-panel pgm-book-panel">' +
+    return '<section class="pgm-panel pgm-preview-panel">' +
       '<div class="pgm-panel-head">' +
-        '<div><div class="pgm-panel-title">Programme Preview</div><p>' + esc(selectedPaper().pageLabel) + ' · ' + pageRangeLabel(pages) + '</p></div>' +
-        '<div class="pgm-book-controls">' +
-          '<button class="spn-btn spn-btn--ghost pgm-book-btn" type="button" ' + (canPrev ? 'onclick="MarketingProgrammeModule.setSpread(' + prevStart + ')"' : 'disabled') + ' aria-label="Previous pages">&lsaquo;</button>' +
-          '<button class="spn-btn spn-btn--ghost pgm-book-btn" type="button" ' + (canNext ? 'onclick="MarketingProgrammeModule.setSpread(' + nextStart + ')"' : 'disabled') + ' aria-label="Next pages">&rsaquo;</button>' +
+        '<div><div class="pgm-panel-title">Digital Programme Preview</div><p>' + esc(selectedPaper().pageLabel) + ' · ' + pageRangeLabel(pages) + '</p></div>' +
+        '<div class="pgm-preview-controls">' +
+          '<button class="spn-btn spn-btn--ghost pgm-preview-btn" type="button" ' + (canPrev ? 'onclick="MarketingProgrammeModule.setSpread(' + prevStart + ')"' : 'disabled') + '>Previous</button>' +
+          '<button class="spn-btn spn-btn--primary pgm-preview-btn" type="button" ' + (canNext ? 'onclick="MarketingProgrammeModule.setSpread(' + nextStart + ')"' : 'disabled') + '>Next</button>' +
           '<button class="spn-btn spn-btn--ghost" disabled>Export Later</button>' +
         '</div>' +
       '</div>' +
-      '<div class="pgm-book-stage' + (isCover ? ' pgm-book-stage--cover' : '') + '">' +
-        '<div class="pgm-book-shadow" aria-hidden="true"></div>' +
-        '<div class="pgm-book-spread">' +
-          renderPageSheet(leftPage, leftIndex, 'left') +
-          '<div class="pgm-book-spine" aria-hidden="true"></div>' +
-          renderPageSheet(rightPage, rightIndex, 'right') +
+      '<div class="pgm-preview-layout">' +
+        '<div class="pgm-preview-list" aria-label="Programme page plan">' + pages.map(function (page, index) {
+          var openStart = spreadStartForPage(index);
+          var active = openStart === start || (isCover && index === 0);
+          return '<button class="pgm-preview-row' + (active ? ' is-active' : '') + '" type="button" onclick="MarketingProgrammeModule.setSpread(' + openStart + ')">' +
+            '<span>' + (index + 1) + '</span><strong>' + esc(page.title) + '</strong><em>' + esc(page.subtitle || 'Placed by template') + '</em>' +
+          '</button>';
+        }).join('') + '</div>' +
+        '<div class="pgm-preview-stage' + (isCover ? ' pgm-preview-stage--cover' : '') + '">' +
+          '<div class="pgm-preview-spread">' +
+            renderPreviewPage(leftPage, leftIndex, 'left') +
+            '<div class="pgm-preview-gutter" aria-hidden="true"></div>' +
+            renderPreviewPage(rightPage, rightIndex, 'right') +
+          '</div>' +
         '</div>' +
       '</div>' +
-      '<div class="pgm-book-rail" aria-label="Programme pages">' + pages.map(function (page, index) {
-        var openStart = spreadStartForPage(index);
-        var active = openStart === start || (isCover && index === 0);
-        return '<button class="pgm-page-tab' + (active ? ' is-active' : '') + '" type="button" onclick="MarketingProgrammeModule.setSpread(' + openStart + ')">' +
-          '<span>' + (index + 1) + '</span><em>' + esc(page.title) + '</em>' +
-        '</button>';
-      }).join('') + '</div>' +
     '</section>';
-  }
-
-  function renderPagePreview(page, index) {
-    return '<article class="pgm-page-card">' +
-      '<div class="pgm-page-number">Page ' + (index + 1) + '</div>' +
-      '<div class="pgm-page-sheet pgm-page-sheet--' + esc(page.type) + ' pgm-page-sheet--paper-' + esc(selectedPaper().id) + '">' + pageBody(page) + '</div>' +
-      '<div class="pgm-page-caption"><strong>' + esc(page.title) + '</strong><span>' + esc(page.subtitle || '') + '</span></div>' +
-    '</article>';
   }
 
   function renderSimpleList(items, labelFn, max) {
@@ -495,7 +524,7 @@
       '</section>' +
       renderSetupControls() +
       renderReadiness(pages) +
-      renderProgrammeBook(pages);
+      renderProgrammePreview(pages);
   }
 
   window.MarketingProgrammeModule = {
