@@ -27156,6 +27156,8 @@
     const parts = window.location.pathname.replace(/\/+$/, '').split('/').filter(Boolean);
     const productionsIndex = parts.findIndex(part => part.toLowerCase() === 'productions');
     if (productionsIndex >= 0 && productionsIndex + 1 < parts.length) {
+      // 'Workspace' after 'Productions' means this is the file URL, not a slug URL — no route segments
+      if (parts[productionsIndex + 1].toLowerCase() === 'workspace') return [];
       return parts.slice(productionsIndex + 2).map(cleanWorkspaceRoutePart).filter(Boolean);
     }
     const teamIndex = parts.findIndex(part => part.toLowerCase() === 'team');
@@ -40973,6 +40975,19 @@ Your submission link is unique to you. Please do not share it with another perfo
     const first = sessions[0] || null;
     if (first) activeAuditionNavSessionId = first.id;
     return first;
+  }
+
+  function buildAuditionSessionToolTabs(session, activeTool) {
+    if (!session?.id) return '';
+    const sessionId = esc(session.id);
+    const tab = (tool, label) => `<button type="button" class="aud-day-topnav-btn${activeTool === tool ? ' active' : ''}" onclick="openAuditionSessionWorkspace('${sessionId}','${tool}')">${label}</button>`;
+    const tabs = [];
+    if (!teamAccessMode) tabs.push(tab('checkin', 'Check In'));
+    tabs.push(tab('inroom', 'In the Room'));
+    if (session.type === 'audition' && typeof renderSelfTapeTab === 'function') tabs.push(tab('selftape', 'Self Tapes'));
+    return `<div class="aud-session-topnav" style="--session-accent:${esc(getAuditionScheduleSidebarMarkerColor(session.type || 'audition'))};">
+      <div class="aud-day-topnav">${tabs.join('')}</div>
+    </div>`;
   }
 
   // ── Tab switching ─────────────────────────────────────
@@ -56713,10 +56728,12 @@ Your submission link is unique to you. Please do not share it with another perfo
     const isDanceCallInRoom = tool === 'inroom' && session.type === 'dance_call';
     const isGeneralAuditionInRoomWorkspace = tool === 'inroom' && session.type === 'audition';
     const isClassicInRoomWorkspace = tool === 'inroom' && (session.type === 'audition' || session.type === 'callback');
+    const sessionToolTabsHtml = buildAuditionSessionToolTabs(session, tool);
     renderAuditionHeaderFrame();
     host.dataset.sessionWorkspaceSessionId = String(session.id || '');
     host.dataset.sessionWorkspaceTool = String(tool || '');
     host.innerHTML = `
+      ${sessionToolTabsHtml}
       <div class="aud-session-shell${isClassicInRoomWorkspace ? ' aud-session-shell-general-inroom' : ''}" style="${sessionAccentVars};">
         <div class="aud-session-hero">
           <div class="aud-session-hero-copy">
@@ -56738,6 +56755,7 @@ Your submission link is unique to you. Please do not share it with another perfo
             <div id="aud-session-checkin-list"></div>
           ` : ''}
           ${tool === 'inroom' ? `<div id="aud-session-inroom-content" class="${session.type === 'dance_call' ? '' : 'inroom-shell'}"></div>` : ''}
+          ${tool === 'selftape' ? `<div id="selftape-content"></div>` : ''}
           ${tool === 'castingboard' ? `<div id="aud-session-castboard-content" style="min-height:760px;"></div>` : ''}
         </div>
       </div>`;
@@ -56753,6 +56771,9 @@ Your submission link is unique to you. Please do not share it with another perfo
       } else {
         renderInRoomPage(inRoomApplicantId, 'aud-session-inroom-content', 'openAuditionSessionInRoom');
       }
+    }
+    if (tool === 'selftape') {
+      renderSelfTapeTab();
     }
     if (tool === 'castingboard' && session.type === 'callback') {
       const target = document.getElementById('aud-session-castboard-content');
