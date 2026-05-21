@@ -81,6 +81,16 @@
     window.location.href = '/SYSTEM/Organisations/Productions/Workspace/marketing-' + sec + '.html' + (id ? '?id=' + encodeURIComponent(id) : '');
   };
 
+  // Navigate to the Budget page.
+  window.navigateToBudget = function () {
+    if (onSlugUrl()) {
+      const base = productionBasePath();
+      if (base) { window.location.href = base + '/budget'; return; }
+    }
+    const id = new URLSearchParams(location.search).get('id');
+    window.location.href = '/SYSTEM/Organisations/Productions/Workspace/production-budget.html' + (id ? '?id=' + encodeURIComponent(id) : '');
+  };
+
   // Navigate to the production workspace (another top-level tab).
   window.navigateToWorkspace = function (tab, sub) {
     if (onSlugUrl()) {
@@ -146,12 +156,18 @@
    *   kickerLabel — fallback kicker text before production title loads (e.g. 'Marketing')
    *   pageTitle   — fallback document title suffix (e.g. 'Dashboard')
    */
-  const SIDEBAR_CACHE_KEY = 'bts-prod-sidebar-v3';
+  const SIDEBAR_CACHE_KEY = 'bts-prod-sidebar-v4';
 
   function applySidebarState(subId) {
+    document.querySelectorAll('.prod-tab.active, .prod-sub-item.active').forEach(el => el.classList.remove('active'));
     document.getElementById('marketing-wrap')?.classList.add('open');
-    document.getElementById('marketing-parent-tab')?.classList.add('is-open-parent');
+    document.getElementById('marketing-parent-tab')?.classList.add('is-open-parent', 'active');
     if (subId) document.getElementById(subId)?.classList.add('active');
+  }
+
+  function applyBudgetSidebarState() {
+    document.querySelectorAll('.prod-tab.active, .prod-sub-item.active').forEach(el => el.classList.remove('active'));
+    document.getElementById('budget-tab')?.classList.add('active');
   }
 
   function loadSidebar(subId) {
@@ -171,6 +187,59 @@
       })
       .catch(() => {});
   }
+
+  function loadBudgetSidebar() {
+    const cached = sessionStorage.getItem(SIDEBAR_CACHE_KEY);
+    if (cached) {
+      document.getElementById('prod-sidebar-host').innerHTML = cached;
+      applyBudgetSidebarState();
+    }
+    fetch('/SHARED/Navigation/production-sidebar.html')
+      .then(r => r.text())
+      .then(html => {
+        sessionStorage.setItem(SIDEBAR_CACHE_KEY, html);
+        if (!cached) {
+          document.getElementById('prod-sidebar-host').innerHTML = html;
+          applyBudgetSidebarState();
+        }
+      })
+      .catch(() => {});
+  }
+
+  window.initBudgetPage = async function ({ pageTitle = 'Budget' } = {}) {
+    loadBudgetSidebar();
+    const prodId = await resolveProductionId();
+    if (!prodId) return;
+    window.btsProdId = prodId;
+    document.dispatchEvent(new CustomEvent('btsProdReady', { detail: { prodId } }));
+    try {
+      const res = await fetch(
+        `${SUPABASE_URL}/rest/v1/productions?id=eq.${encodeURIComponent(prodId)}&select=title,org_id,poster_url`,
+        { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` } }
+      );
+      const data = await res.json();
+      if (!data?.[0]) return;
+      const { title, org_id, poster_url } = data[0];
+      document.title = title + ' — ' + pageTitle;
+      const kicker = document.getElementById('bgt-prod-kicker');
+      if (kicker) kicker.textContent = title + ' / Budget';
+      const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+      set('hdr-title', title);
+      set('hdr-mobile-title', title);
+      const orgHref = org_id
+        ? `/SYSTEM/Organisations/org-dashboard.html?id=${encodeURIComponent(org_id)}`
+        : '/SYSTEM/Organisations/org-dashboard.html';
+      ['sidebar-org-back', 'sidebar-mobile-org-back'].forEach(id => {
+        const el = document.getElementById(id); if (el) el.href = orgHref;
+      });
+      ['sidebar-poster-wrap', 'sidebar-mobile-poster-wrap'].forEach(id => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        if (poster_url) { el.innerHTML = `<img src="${poster_url}" alt="Production poster" />`; el.classList.remove('hidden'); }
+        else { el.innerHTML = ''; el.classList.add('hidden'); }
+      });
+    } catch (_) {}
+  };
 
   window.initMarketingPage = async function ({ subId, kickerLabel = 'Marketing', pageTitle = '' } = {}) {
     // Load sidebar — cached path is synchronous so there's no flash between pages
