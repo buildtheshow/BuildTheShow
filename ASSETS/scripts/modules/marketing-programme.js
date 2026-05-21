@@ -93,7 +93,7 @@
       sections: ['cover', 'welcome', 'creative', 'cast', 'bios', 'sponsors', 'ads', 'thanks', 'back'],
     },
     spreadStart: 0,
-    sideTab: 'pages',
+    sideTab: 'setup',
     flipDirection: 'none',
     data: {
       production: null,
@@ -383,29 +383,17 @@
     '</div>';
   }
 
-  function renderPagePlanTab(pages, start, isCover) {
-    return '<div class="pgm-preview-list" aria-label="Programme page plan">' + pages.map(function (page, index) {
-      var openStart = spreadStartForPage(index);
-      var active = openStart === start || (isCover && index === 0);
-      return '<button class="pgm-preview-row' + (active ? ' is-active' : '') + '" type="button" onclick="MarketingProgrammeModule.setSpread(' + openStart + ')">' +
-        '<span>' + (index + 1) + '</span><strong>' + esc(page.title) + '</strong><em>' + esc(page.subtitle || 'Placed by template') + '</em>' +
-      '</button>';
-    }).join('') + '</div>';
-  }
-
   function renderSideTabButton(key, label) {
     return '<button class="pgm-side-tab' + (ProgrammeState.sideTab === key ? ' is-active' : '') + '" type="button" onclick="MarketingProgrammeModule.setSideTab(\'' + esc(key) + '\')">' + esc(label) + '</button>';
   }
 
   function renderPreviewSidebar(pages, start, isCover) {
-    var tab = ProgrammeState.sideTab || 'pages';
+    var tab = ProgrammeState.sideTab || 'setup';
     var body = tab === 'setup' ? renderSetupTab()
       : tab === 'status' ? '<div class="pgm-side-scroll">' + renderReadiness(pages) + '</div>'
-      : tab === 'sections' ? renderSectionsTab()
-      : renderPagePlanTab(pages, start, isCover);
+      : renderSectionsTab();
     return '<aside class="pgm-preview-sidebar">' +
       '<div class="pgm-side-tabs">' +
-        renderSideTabButton('pages', 'Pages') +
         renderSideTabButton('setup', 'Setup') +
         renderSideTabButton('status', 'Status') +
         renderSideTabButton('sections', 'Sections') +
@@ -454,6 +442,17 @@
     '</article>';
   }
 
+  function renderPageFilmstrip(pages, start, isCover) {
+    return '<div class="pgm-page-filmstrip" aria-label="Programme page thumbnails">' + pages.map(function (page, index) {
+      var openStart = spreadStartForPage(index);
+      var active = openStart === start || (isCover && index === 0);
+      return '<button class="pgm-page-thumb' + (active ? ' is-active' : '') + '" type="button" onclick="MarketingProgrammeModule.setSpread(' + openStart + ')">' +
+        '<span class="pgm-page-thumb-sheet pgm-page-sheet--' + esc(page.type) + ' pgm-page-sheet--paper-' + esc(selectedPaper().id) + '">' + pageBody(page) + '</span>' +
+        '<span class="pgm-page-thumb-meta"><strong>' + (index + 1) + '</strong><em>' + esc(page.title) + '</em></span>' +
+      '</button>';
+    }).join('') + '</div>';
+  }
+
   function renderProgrammePreview(pages) {
     clampSpreadStart(pages);
     var start = ProgrammeState.spreadStart;
@@ -489,6 +488,7 @@
             renderPreviewPage(rightPage, rightIndex, 'right') +
           '</div>' +
         '</div>' +
+        '<div class="pgm-filmstrip-wrap">' + renderPageFilmstrip(pages, start, isCover) + '</div>' +
       '</div>' +
     '</section>';
   }
@@ -565,18 +565,16 @@
     },
     setSpread: function (start) {
       ProgrammeState.spreadStart = Number(start) || 0;
-      ProgrammeState.sideTab = 'pages';
       ProgrammeState.flipDirection = 'jump';
       renderPlanner();
     },
     flipTo: function (start, direction) {
       ProgrammeState.spreadStart = Number(start) || 0;
-      ProgrammeState.sideTab = 'pages';
       ProgrammeState.flipDirection = direction === 'back' ? 'back' : 'forward';
       renderPlanner();
     },
     setSideTab: function (key) {
-      ProgrammeState.sideTab = key || 'pages';
+      ProgrammeState.sideTab = key || 'setup';
       renderPlanner();
     },
     toggleSection: function (key, checked) {
