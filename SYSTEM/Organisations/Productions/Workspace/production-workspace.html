@@ -24709,6 +24709,7 @@
     if (_cached) {
       document.getElementById('prod-sidebar-host').innerHTML = _cached;
       initProdSidebarEvents();
+      try { console.info('[BTS lifecycle]', { timestamp: new Date().toISOString(), functionName: 'production-sidebar-shell', route: window.location.pathname + window.location.search + window.location.hash, reason: 'mounted-from-cache' }); } catch {}
     }
     fetch('/SHARED/Navigation/production-sidebar.html?v=parent-toggle-20260521')
       .then(res => res.text())
@@ -24717,6 +24718,7 @@
         if (!_cached) {
           document.getElementById('prod-sidebar-host').innerHTML = html;
           initProdSidebarEvents();
+          try { console.info('[BTS lifecycle]', { timestamp: new Date().toISOString(), functionName: 'production-sidebar-shell', route: window.location.pathname + window.location.search + window.location.hash, reason: 'mounted-from-fetch' }); } catch {}
         }
       })
       .catch(() => {});
@@ -24743,6 +24745,21 @@
   function btsRouteLog(event, detail = {}) {
     if (!BTS_ROUTE_DEBUG) return;
     try { console.info(`[BTS route] ${event}`, detail); } catch {}
+  }
+
+  function btsLifecycleState(extra = {}) {
+    return {
+      timestamp: new Date().toISOString(),
+      route: window.location.pathname + window.location.search + window.location.hash,
+      prodId: prodId || prod?.id || '',
+      organizationId: prod?.organization_id || '',
+      dataStatus: prod ? 'loaded' : (workspaceBootReady ? 'empty' : 'loading'),
+      ...extra,
+    };
+  }
+
+  function btsLifecycleLog(functionName, detail = {}) {
+    try { console.info('[BTS lifecycle]', btsLifecycleState({ functionName, ...detail })); } catch {}
   }
 
   const btsEscapedNonTextWarnings = new Set();
@@ -24776,12 +24793,14 @@
   function setRouteLoading(message) {
     document.body.classList.add('workspace-restoring');
     window.PageLoader?.showMessage?.(message || 'Loading your production…');
+    btsLifecycleLog('setRouteLoading', { reason: message || 'loading', dataStatus: prod ? 'loaded-refetch' : 'loading' });
     btsRouteLog('loading', { message });
   }
 
   function clearRouteLoading() {
     document.body.classList.remove('workspace-restoring');
     window.PageLoader?.hide?.();
+    btsLifecycleLog('clearRouteLoading', { reason: 'ready', dataStatus: prod ? 'loaded' : 'empty' });
     btsRouteLog('ready');
   }
 
@@ -24836,6 +24855,13 @@
       activeCount: activePanels.length,
       activePanels
     });
+    btsLifecycleLog('enforceSingleWorkspacePanel', {
+      reason: 'route-panel-swap',
+      activePanelId,
+      loaded: !!prod,
+      empty: !prod,
+      activeCount: activePanels.length,
+    });
   }
 
   function beginWorkspaceRoute(id) {
@@ -24849,6 +24875,7 @@
   }
 
   async function waitForValidSession({ timeoutMs = 8000 } = {}) {
+    btsLifecycleLog('waitForValidSession', { reason: 'auth-session-check-start', dataStatus: 'loading' });
     btsRouteLog('session restore start');
     const timeout = new Promise(resolve => setTimeout(() => resolve({ timedOut: true }), timeoutMs));
     const sessionAttempt = sb.auth.getSession()
@@ -24856,19 +24883,23 @@
       .catch(error => ({ session: null, error }));
     const result = await Promise.race([sessionAttempt, timeout]);
     if (result?.timedOut) {
+      btsLifecycleLog('waitForValidSession', { reason: 'auth-session-timeout', dataStatus: 'error' });
       btsRouteLog('session restore timeout');
       return null;
     }
     if (result?.error) btsRouteLog('session restore warning', { message: result.error.message });
     if (!result?.session) {
+      btsLifecycleLog('waitForValidSession', { reason: 'auth-session-missing', dataStatus: 'empty' });
       btsRouteLog('session restore end', { ok: false });
       return null;
     }
     const userResult = await sb.auth.getUser().catch(error => ({ data: null, error }));
     if (userResult?.error || !userResult?.data?.user) {
+      btsLifecycleLog('waitForValidSession', { reason: 'auth-user-validation-failed', dataStatus: 'error', error: userResult?.error?.message || 'No user' });
       btsRouteLog('session validation failed', { message: userResult?.error?.message });
       return null;
     }
+    btsLifecycleLog('waitForValidSession', { reason: 'auth-session-ready', dataStatus: 'loaded', userId: userResult.data.user.id });
     btsRouteLog('session restore end', { ok: true, userId: userResult.data.user.id });
     return { session: result.session, user: userResult.data.user };
   }
@@ -24883,6 +24914,9 @@
   let teamAccessSessionToken = '';
   let workspaceBootReady = false;
   let queuedWorkspaceNavigation = null;
+  let workspaceBootToken = 0;
+  let workspaceBootPromise = null;
+  let workspaceBootSignature = '';
 
   function teamAccessStorageKey() {
     return `bts-team-access:${prodId || 'unknown'}`;
@@ -25054,6 +25088,7 @@
   }
 
   function showWorkspaceNotFound(title, message, actionHref = '/', actionLabel = 'Back to Build The Show') {
+    btsLifecycleLog('showWorkspaceNotFound', { reason: title || 'not-found', dataStatus: 'error' });
     if (window.PageLoader) window.PageLoader.hide();
     document.body.classList.remove('team-access-login-visible');
     document.getElementById('team-access-login-overlay')?.remove();
@@ -26960,17 +26995,20 @@
   let applicantSortDir = 'asc';
   let allApplicants = [];
   let applicantsLoadedAt = 0;
+  let applicantsLoadToken = 0;
   let allAuditionBookings = [];
   let _selfTapeSubmissionsMap = null; // Map<appId, submission[]> — populated by renderSelfTapeTab()
   let stSelectedAppId = null;
   let _hasIsPublicColumn = false; // set true once we confirm the column exists
   let allSlots      = [];
+  let allSlotsLoadToken = 0;
   let auditionsRealtimeChannel = null;
   let auditionsRefreshTimer    = null;
   let _applicantReconcileTimer = null;
   let _auditionsPollTimer      = null;
   let _auditionsFullPollAt     = 0;
   let _auditionsLiveRefreshRunning = false;
+  let _auditionsLiveRefreshToken = 0;
   let _auditionsVisibilityBound = false;
   let _realtimeReconnectAttempt = 0;
   let auditionLiveState = null;
@@ -27025,6 +27063,7 @@
 
   // ── Init ─────────────────────────────────────────────
   async function init() {
+    btsLifecycleLog('init', { reason: 'app-start', dataStatus: 'loading' });
     setRouteLoading('Checking your session…');
     const params = new URLSearchParams(window.location.search);
     teamAccessMode = isTeamAccessRequest();
@@ -27036,12 +27075,14 @@
       await showProductionPathNotFound();
       return;
     }
+    btsLifecycleLog('init', { reason: 'production-id-resolved', prodId, dataStatus: 'loading' });
     if (isWorkspaceRouteInvalid()) {
       showWorkspaceNotFound('Page not found', 'That page does not exist in this production workspace.', workspaceRouteBasePath(), 'Back to production');
       return;
     }
 
     if (teamAccessMode) {
+      btsLifecycleLog('init', { reason: 'team-access-login-required', dataStatus: 'loading' });
       installTeamAccessMobileZoomLock();
       showTeamAccessLogin();
       const remembered = loadRememberedTeamAccess();
@@ -27061,11 +27102,28 @@
   }
 
   async function bootProductionWorkspace(params, context = {}) {
+    if (workspaceBootReady && prod?.id && String(prod.id) === String(prodId || '') && !context.force) {
+      btsLifecycleLog('bootProductionWorkspace', { reason: 'skip-already-loaded', dataStatus: 'loaded' });
+      return;
+    }
+    const bootToken = ++workspaceBootToken;
+    workspaceBootSignature = `${prodId || ''}:${teamAccessMode ? (teamAccessSessionToken || 'team-login') : (context.user?.id || 'admin')}`;
+    btsLifecycleLog('bootProductionWorkspace', { reason: 'start', bootToken, bootSignature: workspaceBootSignature, dataStatus: prod ? 'loaded-refetch' : 'loading' });
     setRouteLoading('Loading your production…');
     btsRouteLog('production context start', { prodId, userId: context.user?.id || null, teamAccessMode });
     const { data, error } = await sb.from('productions').select('*').eq('id', prodId).single();
+    if (bootToken !== workspaceBootToken) {
+      btsLifecycleLog('bootProductionWorkspace', { reason: 'stale-production-response', bootToken, activeBootToken: workspaceBootToken });
+      return;
+    }
     if (error || !data) {
       btsRouteLog('production context failed', { message: error?.message, prodId });
+      btsLifecycleLog('bootProductionWorkspace', { reason: 'production-context-error', bootToken, dataStatus: prod ? 'loaded-preserved' : 'error', error: error?.message || 'No data' });
+      if (prod?.id && String(prod.id) === String(prodId || '')) {
+        clearRouteLoading();
+        showToast('Could not refresh production data. Keeping the current workspace open.', true);
+        return;
+      }
       if (teamAccessMode) showTeamAccessLogin('Production not found. Check your link.');
       else showRouteBlocked('Couldn’t load this production', 'Try refreshing. If this keeps happening, you may not have access to this production.');
       return;
@@ -27081,6 +27139,10 @@
         .eq('id', prod.organization_id)
         .eq('admin_id', context.user?.id || '')
         .maybeSingle();
+      if (bootToken !== workspaceBootToken) {
+        btsLifecycleLog('bootProductionWorkspace', { reason: 'stale-permission-response', bootToken, activeBootToken: workspaceBootToken });
+        return;
+      }
       if (orgAccessError || !orgAccess?.id) {
         btsRouteLog('permission check failed', { message: orgAccessError?.message, organizationId: prod.organization_id });
         showRouteBlocked('You do not have access to this production.', 'Sign in with the organisation admin account, or ask the production owner for access.');
@@ -27140,9 +27202,15 @@
     queueWorkspaceWarmupForNav(bootNav);
     // Load org name for auto-fill + init venue picker
     if (prod.organization_id) {
+      const orgLoadBootToken = bootToken;
       sb.from('organizations').select('name,email,slug,abbreviation,logo_url,logo_white_url,etransfer_email').eq('id', prod.organization_id).single()
         .then(({ data }) => {
+          if (orgLoadBootToken !== workspaceBootToken) {
+            btsLifecycleLog('organisation context load', { reason: 'stale-response', bootToken: orgLoadBootToken, activeBootToken: workspaceBootToken });
+            return;
+          }
           if (data) {
+            btsLifecycleLog('organisation context load', { reason: 'loaded', bootToken: orgLoadBootToken, organizationId: data.id || prod.organization_id });
             orgName    = data.name  || '';
             orgEmail   = data.email || '';
             orgAbbreviation = data.abbreviation || '';
@@ -27193,6 +27261,7 @@
     setupEmailTemplatesRealtime();
     handleMobileSidebarViewport();
     workspaceBootReady = true;
+    btsLifecycleLog('bootProductionWorkspace', { reason: 'ready', bootToken, dataStatus: 'loaded' });
     flushQueuedWorkspaceNavigation();
     const _rpfHashMatch = location.hash.match(/^#rpf-group:(.+)$/);
     if (_rpfHashMatch) {
@@ -27208,11 +27277,14 @@
   }
 
   function runWorkspaceNavigation(action, detail = {}) {
+    btsLifecycleLog('runWorkspaceNavigation', { reason: 'route-change-start', ...detail, dataStatus: prod ? 'loaded' : 'loading' });
     btsRouteLog('route transition started', detail);
     try {
       action();
+      btsLifecycleLog('runWorkspaceNavigation', { reason: 'route-change-complete', ...detail, dataStatus: prod ? 'loaded' : 'empty' });
       btsRouteLog('route transition completed', detail);
     } catch (error) {
+      btsLifecycleLog('runWorkspaceNavigation', { reason: 'route-change-error', ...detail, dataStatus: 'error', error: error?.message || String(error || '') });
       btsRouteLog('route transition failed', { ...detail, message: error?.message });
       console.error('[BTS] route transition failed', error);
       showRouteBlocked('Couldn’t load this production view', 'Try refreshing. If this keeps happening, return to the dashboard and open the production again.');
@@ -27247,6 +27319,7 @@
 
   function queueWorkspaceNavigation(type, payload) {
     queuedWorkspaceNavigation = { type, payload };
+    btsLifecycleLog('queueWorkspaceNavigation', { reason: 'queued-before-ready', type, payload, dataStatus: prod ? 'loaded-refetch' : 'loading' });
     btsRouteLog('nav queued before ready', queuedWorkspaceNavigation);
     setRouteLoading('Loading your production…');
   }
@@ -27264,6 +27337,8 @@
   async function refreshAuditionsLiveUi(options = {}) {
     if (_auditionsLiveRefreshRunning) return;
     _auditionsLiveRefreshRunning = true;
+    const refreshToken = ++_auditionsLiveRefreshToken;
+    btsLifecycleLog('refreshAuditionsLiveUi', { reason: options.reason || 'start', refreshToken, dataStatus: allApplicants.length ? 'loaded' : 'loading' });
     try {
       const preserveModal = options.preserveModal !== false;
       const preserveReschedule = options.preserveReschedule !== false;
@@ -27285,6 +27360,10 @@
         loadAuditionRoomStates({ maxAge: AUDITIONS_DATA_CACHE_MS }),
         loadRoomNextSignals({ maxAge: AUDITIONS_DATA_CACHE_MS }),
       ]);
+      if (refreshToken !== _auditionsLiveRefreshToken) {
+        btsLifecycleLog('refreshAuditionsLiveUi', { reason: 'stale-refresh-response', refreshToken, activeRefreshToken: _auditionsLiveRefreshToken });
+        return;
+      }
       try { renderApplicants(); } catch {}
       try { renderApplicantsMirror(); } catch {}
       try { renderSlots(); } catch {}
@@ -27315,6 +27394,7 @@
       } catch {}
     } finally {
       _auditionsLiveRefreshRunning = false;
+      btsLifecycleLog('refreshAuditionsLiveUi', { reason: 'end', refreshToken, dataStatus: allApplicants.length ? 'loaded' : 'empty' });
     }
   }
 
@@ -27350,7 +27430,16 @@
         return;
       }
       syncAuditionsLiveLoop();
-      if (shouldRunAuditionsLiveLoop()) queueAuditionsRefresh();
+      if (shouldRunAuditionsLiveLoop()) {
+        btsLifecycleLog('auditions visibility refresh', { reason: 'visibility-return-targeted-signals', dataStatus: allApplicants.length ? 'loaded' : 'loading' });
+        Promise.allSettled([
+          loadAuditionRoomStates({ force: true }),
+          loadRoomNextSignals({ force: true }),
+        ]).then(() => {
+          try { renderInRoomReadySignals(); } catch {}
+          try { refreshVisibleInRoomForSession(); } catch {}
+        });
+      }
     });
   }
 
@@ -27413,6 +27502,12 @@
   }
 
   function queueAuditionsRefresh(payload = null) {
+    btsLifecycleLog('queueAuditionsRefresh', {
+      reason: 'realtime-event-received',
+      table: payload?.table || '',
+      eventType: payload?.eventType || payload?.type || '',
+      dataStatus: allApplicants.length ? 'loaded' : 'loading',
+    });
     if (document.visibilityState === 'hidden') return;
     if (payload?.table === 'audition_applications' && payload?.new) {
       handleApplicantRealtimeChange(payload.new);
@@ -27450,6 +27545,7 @@
     clearTimeout(auditionsRefreshTimer);
     auditionsRefreshTimer = setTimeout(async () => {
       try {
+        btsLifecycleLog('refreshAuditionsLiveUi', { reason: 'targeted-realtime-refresh', table: payload?.table || '', dataStatus: allApplicants.length ? 'loaded' : 'loading' });
         await refreshAuditionsLiveUi({ preserveModal: true });
       } catch (err) {
         console.error('[BTS] auditions realtime refresh failed:', err);
@@ -27491,6 +27587,8 @@
       auditionsSubTab: 'overview',
       registrationSubTab: 'dashboard',
       registrationSettingsTab: 'intake',
+      marketingSubTab: 'dashboard',
+      budgetSubTab: 'dashboard',
       auditionsDayTab: 'overview',
       auditionsSessionId: '',
       auditionsSessionTool: '',
@@ -27502,7 +27600,7 @@
 
   function validateWorkspaceNavState(nav = {}) {
     const next = { ...getDefaultWorkspaceNavState(), ...(nav || {}) };
-    const topTabs = new Set(['overview', 'team', 'calendar', 'auditions', 'castlist', 'registration', 'profile', 'emails', 'test', 'settings', 'checklist', 'messages', 'files']);
+    const topTabs = new Set(['overview', 'team', 'calendar', 'auditions', 'castlist', 'registration', 'marketing', 'budget', 'profile', 'emails', 'test', 'settings', 'checklist', 'messages', 'files']);
     if (!topTabs.has(next.prodTab)) next.prodTab = 'overview';
     const audTabs = new Set(['overview', 'dashboard', 'setup', 'schedule', 'auditions', 'audschedule', 'allperformers', 'checkin', 'inroom', 'callbacks', 'selftape', 'castboard', 'finalcasting', 'castlist']);
     if (next.auditionsSubTab && !audTabs.has(next.auditionsSubTab) && !String(next.auditionsSubTab).startsWith('session:')) {
@@ -27511,6 +27609,10 @@
     if (next.registrationSubTab === 'offers') next.registrationSubTab = 'dashboard';
     const regTabs = new Set(['dashboard', 'form', 'payments', 'agreements', 'settings']);
     if (next.registrationSubTab && !regTabs.has(next.registrationSubTab)) next.registrationSubTab = 'dashboard';
+    const marketingTabs = new Set(['dashboard', 'sponsors', 'assets', 'programme', 'media', 'calendar', 'tasks']);
+    if (next.marketingSubTab && !marketingTabs.has(next.marketingSubTab)) next.marketingSubTab = 'dashboard';
+    const budgetTabs = new Set(['dashboard', 'breakdown', 'receipts', 'collect']);
+    if (next.budgetSubTab && !budgetTabs.has(next.budgetSubTab)) next.budgetSubTab = 'dashboard';
     return next;
   }
 
@@ -27575,6 +27677,14 @@
     if (section === 'registration') {
       const registrationRoutes = new Set(['', 'dashboard', 'overview', 'role-offers', 'offers', 'offer-responses', 'registration-form', 'form', 'registered-cast', 'cast', 'cast-registration', 'payments', 'documents', 'agreements', 'documents-agreements', 'conflicts', 'settings']);
       return !!detail || !registrationRoutes.has(child || '');
+    }
+    if (section === 'marketing') {
+      const marketingRoutes = new Set(['', 'dashboard', 'sponsors', 'assets', 'programme', 'program', 'media', 'calendar', 'tasks']);
+      return !!detail || !marketingRoutes.has(child || '');
+    }
+    if (section === 'budget' || section === 'budgeting') {
+      const budgetRoutes = new Set(['', 'dashboard', 'breakdown', 'receipts', 'collect']);
+      return !!detail || !budgetRoutes.has(child || '');
     }
     if (topLevel.has(section)) return segments.length > 1;
     if (section !== 'auditions') return true;
@@ -27656,6 +27766,38 @@
         registrationSettingsTab: registrationSettingsMap[child || ''] || nav.registrationSettingsTab || 'intake',
       };
     }
+    if (section === 'marketing') {
+      const marketingMap = {
+        '': 'dashboard',
+        dashboard: 'dashboard',
+        sponsors: 'sponsors',
+        assets: 'assets',
+        programme: 'programme',
+        program: 'programme',
+        media: 'media',
+        calendar: 'calendar',
+        tasks: 'tasks',
+      };
+      return {
+        ...nav,
+        prodTab: 'marketing',
+        marketingSubTab: marketingMap[child || ''] || 'dashboard',
+      };
+    }
+    if (section === 'budget' || section === 'budgeting') {
+      const budgetMap = {
+        '': 'dashboard',
+        dashboard: 'dashboard',
+        breakdown: 'breakdown',
+        receipts: 'receipts',
+        collect: 'collect',
+      };
+      return {
+        ...nav,
+        prodTab: 'budget',
+        budgetSubTab: budgetMap[child || ''] || 'dashboard',
+      };
+    }
     if (topLevel[section]) return { ...nav, prodTab: topLevel[section] };
     if (section !== 'auditions') return null;
     nav.prodTab = 'auditions';
@@ -27713,6 +27855,27 @@
         settings: 'registration/settings',
       };
       route = registrationRoutes[registrationSubTab] || 'registration';
+    } else if (prodTab === 'marketing') {
+      const marketingSubTab = state?.marketingSubTab || 'dashboard';
+      const marketingRoutes = {
+        dashboard: 'marketing',
+        sponsors: 'marketing/sponsors',
+        assets: 'marketing/assets',
+        programme: 'marketing/programme',
+        media: 'marketing/media',
+        calendar: 'marketing/calendar',
+        tasks: 'marketing/tasks',
+      };
+      route = marketingRoutes[marketingSubTab] || 'marketing';
+    } else if (prodTab === 'budget') {
+      const budgetSubTab = state?.budgetSubTab || 'dashboard';
+      const budgetRoutes = {
+        dashboard: 'budget',
+        breakdown: 'budget/breakdown',
+        receipts: 'budget/receipts',
+        collect: 'budget/collect',
+      };
+      route = budgetRoutes[budgetSubTab] || 'budget';
     } else {
       const tabRoutes = {
         overview: 'overview',
@@ -27794,6 +27957,8 @@
         auditionsSubTab: state?.auditionsSubTab || '',
         registrationSubTab: state?.registrationSubTab || '',
         registrationSettingsTab: state?.registrationSettingsTab || '',
+        marketingSubTab: state?.marketingSubTab || '',
+        budgetSubTab: state?.budgetSubTab || '',
         auditionsDayTab: state?.auditionsDayTab || '',
         auditionsSessionId: state?.auditionsSessionId || '',
         auditionsSessionTool: state?.auditionsSessionTool || '',
@@ -27902,6 +28067,7 @@
 
   function setupAuditionLiveState() {
     if (auditionLiveState || !prodId || !window.BTSAuditionLiveState?.create) return;
+    btsLifecycleLog('setupAuditionLiveState', { reason: 'subscribe-start', dataStatus: allApplicants.length ? 'loaded' : 'loading' });
     auditionLiveState = window.BTSAuditionLiveState.create({
       supabase: sb,
       productionId: prodId,
@@ -27914,6 +28080,7 @@
     });
     auditionLiveState.subscribe();
     auditionLiveState.load().then(() => {
+      btsLifecycleLog('setupAuditionLiveState', { reason: 'initial-state-loaded', dataStatus: allApplicants.length ? 'loaded' : 'loading' });
       try { renderCheckInList(); } catch {}
       try { refreshVisibleInRoomForSession(); } catch {}
       try { renderInRoomReadySignals(); } catch {}
@@ -27932,11 +28099,29 @@
     return window.BTSAuditionLiveState?.roomRequestStateKey?.(roomKey) || `room-request:${roomKey || 'main'}`;
   }
 
+  function isUuidValue(value) {
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(value || ''));
+  }
+
+  function liveApplicationIdForApp(app) {
+    if (isUuidValue(app?.id)) return app.id;
+    return sourceApplicationIdsForApplicant(app).find(isUuidValue) || null;
+  }
+
+  function liveApplicationIdForValue(value) {
+    return isUuidValue(value) ? value : null;
+  }
+
   function handleAuditionLiveStateRow(row) {
     if (!row?.state_key) return;
+    btsLifecycleLog('handleAuditionLiveStateRow', { reason: 'live-state-received', stateType: row.state_type || '', stateKey: row.state_key, dataStatus: allApplicants.length ? 'loaded' : 'loading' });
     if (row.state_type === 'performer_checkin') {
       auditionLiveCheckins.set(row.state_key, row);
-      const app = allApplicants.find(candidate => String(candidate.id || '') === String(row.application_id || ''));
+      const performerId = row.payload?.performer_id || row.application_id || '';
+      const app = allApplicants.find(candidate =>
+        String(candidate.id || '') === String(performerId || '') ||
+        String(candidate.id || '') === String(row.application_id || '')
+      );
       if (app) {
         refreshCheckInAfterLocalChange(app, row.session_id || null);
         try { refreshVisibleInRoomForSession(); } catch {}
@@ -27982,7 +28167,7 @@
       current_group_key: payload.current_group_key || null,
       current_group_label: payload.current_group_label || null,
       current_group_member_ids: payload.current_group_member_ids || [],
-      next_applicant_id: row.application_id || payload.next_applicant_id || null,
+      next_applicant_id: payload.next_applicant_id || row.application_id || null,
       next_group_key: payload.next_group_key || null,
       next_group_label: payload.next_group_label || null,
       next_group_member_ids: payload.next_group_member_ids || [],
@@ -28001,7 +28186,7 @@
       session_id: row.session_id || payload.session_id || null,
       room_key: row.room_key || payload.room_key || '',
       status: row.status || payload.status || 'in_progress',
-      current_applicant_id: row.application_id || payload.current_applicant_id || null,
+      current_applicant_id: payload.current_applicant_id || row.application_id || null,
       updated_at: row.updated_at || payload.updated_at || new Date().toISOString(),
     };
   }
@@ -28011,7 +28196,7 @@
     return auditionLiveState.publish({
       event_type: 'room_requested_next',
       session_id: signal.session_id || null,
-      application_id: signal.next_applicant_id || null,
+      application_id: liveApplicationIdForValue(signal.next_applicant_id),
       room_key: signal.room_key,
       state_key: auditionLiveRoomRequestKey(signal.room_key),
       state_type: 'room_request',
@@ -28028,7 +28213,7 @@
     return auditionLiveState.publish({
       event_type: eventType,
       session_id: payload.session_id || null,
-      application_id: payload.current_applicant_id || null,
+      application_id: liveApplicationIdForValue(payload.current_applicant_id),
       room_key: payload.room_key,
       state_key: auditionLiveRoomKey(payload.room_key),
       state_type: 'room_state',
@@ -28664,6 +28849,7 @@
 
   function setupAuditionsRealtime() {
     if (!prodId) return;
+    btsLifecycleLog('setupAuditionsRealtime', { reason: 'subscribe-start', dataStatus: allApplicants.length ? 'loaded' : 'loading' });
     if (_realtimeReconnectTimer) {
       clearTimeout(_realtimeReconnectTimer);
       _realtimeReconnectTimer = null;
@@ -28700,6 +28886,7 @@
     auditionsRealtimeChannel = ch.subscribe((status, err) => {
       if (auditionsRealtimeChannel !== ch) return;
       if (status === 'SUBSCRIBED') {
+        btsLifecycleLog('setupAuditionsRealtime', { reason: 'subscribed', dataStatus: allApplicants.length ? 'loaded' : 'loading' });
         if (_realtimeReconnectTimer) {
           clearTimeout(_realtimeReconnectTimer);
           _realtimeReconnectTimer = null;
@@ -28713,10 +28900,14 @@
           const shouldReconnectForRoomRealtime =
             (!includeRoomStatesRealtime && auditionRoomStateTableAvailable === true) ||
             (!includeNextSignalsRealtime && roomNextSignalsTableAvailable === true);
-          if (shouldReconnectForRoomRealtime) setupAuditionsRealtime();
+          if (shouldReconnectForRoomRealtime) {
+            btsLifecycleLog('setupAuditionsRealtime', { reason: 'room-signal-table-detected-resubscribe', dataStatus: allApplicants.length ? 'loaded' : 'loading' });
+            setupAuditionsRealtime();
+          }
         });
         console.log('[BTS] realtime live');
       } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+        btsLifecycleLog('setupAuditionsRealtime', { reason: 'subscription-dropped', status, dataStatus: allApplicants.length ? 'loaded' : 'error' });
         if (_realtimeReconnectTimer) return;
         setLiveIndicator('offline');
         const delay = Math.min(
@@ -28771,7 +28962,10 @@
         if (Date.now() - _auditionsFullPollAt > AUDITIONS_FULL_POLL_MS) {
           if (window.AutoSave?.hasActiveEdit?.()) return;
           _auditionsFullPollAt = Date.now();
-          await refreshAuditionsLiveUi({ preserveModal: true });
+          btsLifecycleLog('startAuditionsPoll', { reason: 'polling-fallback-targeted', dataStatus: allApplicants.length ? 'loaded' : 'loading' });
+          try { renderInRoomReadySignals(); } catch {}
+          try { refreshCheckinInPlace(); } catch {}
+          try { refreshVisibleInRoomForSession(); } catch {}
         }
       } catch {}
     }, AUDITIONS_SIGNAL_POLL_MS);
@@ -44150,12 +44344,24 @@ Your submission link is unique to you. Please do not share it with another perfo
   }
 
   // ── Auditions ─────────────────────────────────────────
+  let auditionConfigLoadToken = 0;
   async function loadAuditionConfig() {
+    const loadToken = ++auditionConfigLoadToken;
+    btsLifecycleLog('loadAuditionConfig', { reason: 'start', loadToken, dataStatus: auditionConfig ? 'loaded-refetch' : 'loading' });
     try {
       const { data } = await sb.from('audition_configs').select('*').eq('production_id', prodId).single();
+      if (loadToken !== auditionConfigLoadToken) {
+        btsLifecycleLog('loadAuditionConfig', { reason: 'stale-response', loadToken, activeLoadToken: auditionConfigLoadToken });
+        return auditionConfig;
+      }
       auditionConfig = data || null;
-    } catch { auditionConfig = null; }
+      btsLifecycleLog('loadAuditionConfig', { reason: auditionConfig ? 'loaded' : 'confirmed-empty', loadToken, dataStatus: auditionConfig ? 'loaded' : 'empty' });
+    } catch (error) {
+      btsLifecycleLog('loadAuditionConfig', { reason: 'error-preserved-existing-data', loadToken, dataStatus: auditionConfig ? 'loaded-preserved' : 'error', error: error?.message || String(error || '') });
+      if (!auditionConfig) auditionConfig = null;
+    }
     renderAuditionConfig();
+    return auditionConfig;
   }
 
   function showAuditionsPanel() { /* no-op, handled by renderAuditionConfig */ }
@@ -44163,6 +44369,7 @@ Your submission link is unique to you. Please do not share it with another perfo
   // ── Audition Session Card System ─────────────────────────────
   let audSessions = [];
   let audSessionsLoadedAt = 0;
+  let audSessionsLoadToken = 0;
   let audSlots = {};        // { [sessionId]: slot[] }
   const audCollapsed = new Set(); // session IDs that are collapsed
   const audCollapseInitialized = new Set(); // session IDs that have received their default collapse state
@@ -45068,9 +45275,15 @@ Your submission link is unique to you. Please do not share it with another perfo
   async function loadAudSessions(options = {}) {
     const { maxAge = 0, skipMaintenance = false } = options;
     if (maxAge && audSessionsLoadedAt && Date.now() - audSessionsLoadedAt < maxAge) return audSessions;
+    const loadToken = ++audSessionsLoadToken;
+    btsLifecycleLog('loadAudSessions', { reason: 'start', loadToken, dataStatus: audSessionsLoadedAt ? 'loaded-refetch' : 'loading' });
     const { data: sessions, error: sessionsError } = await sb.from('audition_sessions')
       .select('*').eq('production_id', prodId).order('sort_order', { ascending: true });
     if (sessionsError) throw sessionsError;
+    if (loadToken !== audSessionsLoadToken) {
+      btsLifecycleLog('loadAudSessions', { reason: 'stale-response', loadToken, activeLoadToken: audSessionsLoadToken });
+      return audSessions;
+    }
 
     if ((!sessions || sessions.length === 0) && !auditionConfig && !workspaceDataLoaded.auditionConfig) {
       try { await loadAuditionConfig(); } catch {}
@@ -45084,6 +45297,10 @@ Your submission link is unique to you. Please do not share it with another perfo
         { production_id: prodId, name: 'Callback',          type: 'callback',   format: 'in_person', is_visible: false, enabled: false, show_to_applicants: false, sort_order: 2 },
       ];
       const { data: created } = await sb.from('audition_sessions').insert(defaults).select();
+      if (loadToken !== audSessionsLoadToken) {
+        btsLifecycleLog('loadAudSessions', { reason: 'stale-create-response', loadToken, activeLoadToken: audSessionsLoadToken });
+        return audSessions;
+      }
       audSessions = (created || []).map(session => ({
         ...session,
         access_options: getSessionAccessOptions(session),
@@ -45101,6 +45318,10 @@ Your submission link is unique to you. Please do not share it with another perfo
       const sessionIds = audSessions.map(s => s.id);
       const { data: slots } = await sb.from('audition_time_slots')
         .select('*').in('session_id', sessionIds).order('slot_time', { ascending: true });
+      if (loadToken !== audSessionsLoadToken) {
+        btsLifecycleLog('loadAudSessions', { reason: 'stale-slots-response', loadToken, activeLoadToken: audSessionsLoadToken });
+        return audSessions;
+      }
       const newAudSlots = {};
       (slots || []).forEach(slot => {
         if (!newAudSlots[slot.session_id]) newAudSlots[slot.session_id] = [];
@@ -45112,6 +45333,7 @@ Your submission link is unique to you. Please do not share it with another perfo
     }
     // Initialize block state from session data
     audSessionsLoadedAt = Date.now();
+    btsLifecycleLog('loadAudSessions', { reason: audSessions.length ? 'loaded' : 'confirmed-empty', loadToken, dataStatus: audSessions.length ? 'loaded' : 'empty' });
     audSessions.forEach(s => _initBlocks(s));
     primeAudCollapsedState(audSessions);
     renderAudSessions();
@@ -45679,12 +45901,25 @@ Your submission link is unique to you. Please do not share it with another perfo
   async function loadSlots(options = {}) {
     const { maxAge = 0 } = options;
     if (maxAge && allSlotsLoadedAt && Date.now() - allSlotsLoadedAt < maxAge) return allSlots;
+    const loadToken = ++allSlotsLoadToken;
+    btsLifecycleLog('loadSlots', { reason: 'start', loadToken, dataStatus: allSlotsLoadedAt ? 'loaded-refetch' : 'loading' });
     try {
       const { data } = await sb.from('audition_slots')
         .select('*').eq('production_id', prodId).order('date').order('start_time');
+      if (loadToken !== allSlotsLoadToken) {
+        btsLifecycleLog('loadSlots', { reason: 'stale-response', loadToken, activeLoadToken: allSlotsLoadToken });
+        return allSlots;
+      }
       allSlots = data || [];
       allSlotsLoadedAt = Date.now();
-    } catch { allSlots = []; }
+      btsLifecycleLog('loadSlots', { reason: allSlots.length ? 'loaded' : 'confirmed-empty', loadToken, dataStatus: allSlots.length ? 'loaded' : 'empty' });
+    } catch (error) {
+      btsLifecycleLog('loadSlots', { reason: 'error-preserved-existing-data', loadToken, dataStatus: allSlotsLoadedAt ? 'loaded-preserved' : 'error', error: error?.message || String(error || '') });
+      if (!allSlotsLoadedAt) {
+        allSlots = [];
+        throw error;
+      }
+    }
     renderSlots();
     return allSlots;
   }
@@ -46379,6 +46614,8 @@ Your submission link is unique to you. Please do not share it with another perfo
   async function loadApplicants(options = {}) {
     const { skipRender = false, skipCastingSync = false, maxAge = 0 } = options;
     if (maxAge && applicantsLoadedAt && Date.now() - applicantsLoadedAt < maxAge) return allApplicants;
+    const loadToken = ++applicantsLoadToken;
+    btsLifecycleLog('loadApplicants', { reason: 'start', loadToken, dataStatus: applicantsLoadedAt ? 'loaded-refetch' : 'loading' });
     try {
       const [applicationsResult, bookingsResult] = await Promise.allSettled([
         sb.from('audition_applications')
@@ -46406,9 +46643,22 @@ Your submission link is unique to you. Please do not share it with another perfo
         }
         mergedApplicants = mergeApplicantBookingData(mergedApplicants, bookingData || []);
       } catch { allAuditionBookings = []; }
+      if (loadToken !== applicantsLoadToken) {
+        btsLifecycleLog('loadApplicants', { reason: 'stale-response', loadToken, activeLoadToken: applicantsLoadToken });
+        return allApplicants;
+      }
       allApplicants = collapsePerformerProfiles(mergedApplicants);
       applicantsLoadedAt = Date.now();
-    } catch (e) { console.error('loadApplicants error:', e); allApplicants = []; allAuditionBookings = []; }
+      btsLifecycleLog('loadApplicants', { reason: allApplicants.length ? 'loaded' : 'confirmed-empty', loadToken, dataStatus: allApplicants.length ? 'loaded' : 'empty' });
+    } catch (e) {
+      console.error('loadApplicants error:', e);
+      btsLifecycleLog('loadApplicants', { reason: 'error-preserved-existing-data', loadToken, dataStatus: applicantsLoadedAt ? 'loaded-preserved' : 'error', error: e?.message || String(e || '') });
+      if (!applicantsLoadedAt) {
+        allApplicants = [];
+        allAuditionBookings = [];
+        throw e;
+      }
+    }
     const ovCount = document.getElementById('ov-applicant-count');
     if (ovCount) ovCount.textContent = allApplicants.length;
     if (cbv2Loaded && !skipCastingSync) {
@@ -46716,6 +46966,8 @@ Your submission link is unique to you. Please do not share it with another perfo
     if (!auditionLiveState || !app?.id || !sessionId) return Promise.resolve(null);
     const slot = getApplicantSlotForSession(app, sessionId);
     const payload = {
+      performer_id: app.id,
+      application_id: liveApplicationIdForApp(app),
       performer_name: appDisplayName(app),
       status,
       checked_in: status === 'checked_in',
@@ -46726,7 +46978,7 @@ Your submission link is unique to you. Please do not share it with another perfo
     return auditionLiveState.publish({
       event_type: eventType,
       session_id: sessionId,
-      application_id: app.id,
+      application_id: liveApplicationIdForApp(app),
       state_key: auditionLiveCheckinKey(sessionId, app.id),
       state_type: 'performer_checkin',
       status,
@@ -46735,8 +46987,7 @@ Your submission link is unique to you. Please do not share it with another perfo
       showSaveStatus('saved');
       return result;
     }).catch(error => {
-      showSaveStatus('error');
-      showToast('Could not save live check-in status.', true);
+      console.warn('[BTS] live check-in status save failed; legacy compatibility save may still complete:', error);
       throw error;
     });
   }
@@ -60396,8 +60647,11 @@ Your submission link is unique to you. Please do not share it with another perfo
         .then(loader)
         .catch(error => {
           console.warn(`[BTS] workspace data load failed for ${key}`, error);
-          workspaceDataLoaded[key] = false;
+          const hadLoadedData = workspaceDataLoaded[key] === true;
+          if (!hadLoadedData) workspaceDataLoaded[key] = false;
+          btsLifecycleLog('ensureWorkspaceData', { reason: hadLoadedData ? 'dependency-error-preserved-ready-state' : 'dependency-error', key, dataStatus: hadLoadedData ? 'loaded-preserved' : 'error', error: error?.message || String(error || '') });
           btsRouteLog('failed async dependency', { key, message: error?.message || String(error || '') });
+          if (hadLoadedData) return null;
           throw error;
         })
         .then(result => {
