@@ -146,7 +146,7 @@
    *   kickerLabel — fallback kicker text before production title loads (e.g. 'Marketing')
    *   pageTitle   — fallback document title suffix (e.g. 'Dashboard')
    */
-  const SIDEBAR_CACHE_KEY = 'bts-prod-sidebar-v1';
+  const SIDEBAR_CACHE_KEY = 'bts-prod-sidebar-v3';
 
   function applySidebarState(subId) {
     document.getElementById('marketing-wrap')?.classList.add('open');
@@ -182,13 +182,13 @@
 
     try {
       const res = await fetch(
-        `${SUPABASE_URL}/rest/v1/productions?id=eq.${encodeURIComponent(prodId)}&select=title,org_id`,
+        `${SUPABASE_URL}/rest/v1/productions?id=eq.${encodeURIComponent(prodId)}&select=title,org_id,poster_url`,
         { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` } }
       );
       const data = await res.json();
       if (!data?.[0]?.title) return;
 
-      const { title, org_id } = data[0];
+      const { title, org_id, poster_url } = data[0];
       document.title = title + (pageTitle ? ' — ' + pageTitle + ' — Marketing' : ' — Marketing');
       const kicker = document.getElementById('mkt-prod-kicker');
       if (kicker) kicker.textContent = title + ' / Marketing';
@@ -203,6 +203,19 @@
       ['sidebar-org-back', 'sidebar-mobile-org-back'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.href = orgHref;
+      });
+
+      // Poster
+      ['sidebar-poster-wrap', 'sidebar-mobile-poster-wrap'].forEach(id => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        if (poster_url) {
+          el.innerHTML = `<img src="${poster_url}" alt="Production poster" />`;
+          el.classList.remove('hidden');
+        } else {
+          el.innerHTML = '';
+          el.classList.add('hidden');
+        }
       });
     } catch (_) {}
   };
