@@ -27092,6 +27092,7 @@
       })
       .catch(error => console.warn('[BTS] production slug check failed', error));
     setupRoomReadyBroadcast();
+    flushCheckInPatchQueue();
     // Check if is_public column exists — non-blocking, safe to run in background
     sb.from('production_events').select('is_public').eq('production_id', prodId).limit(1)
       .then(({ error }) => { if (!error) _hasIsPublicColumn = true; });
@@ -35071,7 +35072,7 @@ Your submission link is unique to you. Please do not share it with another perfo
       wrap.classList.remove('open');
       return;
     }
-    setSidebarSubmenuState('auditions', _sidebarSubId);
+    setSidebarSubmenuState('auditions', _sidebarSection === 'auditions' ? _sidebarSubId : null);
   }
 
   function toggleRegistrationMenu(e) {
@@ -35084,7 +35085,7 @@ Your submission link is unique to you. Please do not share it with another perfo
       wrap.classList.remove('open');
       return;
     }
-    setSidebarSubmenuState('registration', _sidebarSubId);
+    setSidebarSubmenuState('registration', _sidebarSection === 'registration' ? _sidebarSubId : null);
   }
 
   function navigateToMarketing(section) {
@@ -35155,7 +35156,7 @@ Your submission link is unique to you. Please do not share it with another perfo
       syncSidebarMenuA11y();
       return;
     }
-    setSidebarSubmenuState('budget', _sidebarSubId);
+    setSidebarSubmenuState('budget', _sidebarSection === 'budget' ? _sidebarSubId : null);
   }
 
   function toggleMarketingMenu(e) {
@@ -35169,7 +35170,7 @@ Your submission link is unique to you. Please do not share it with another perfo
       syncSidebarMenuA11y();
       return;
     }
-    setSidebarSubmenuState('marketing', _sidebarSubId);
+    setSidebarSubmenuState('marketing', _sidebarSection === 'marketing' ? _sidebarSubId : null);
   }
 
   function switchRegistrationSubTab(subTab = 'dashboard') {
@@ -46588,6 +46589,120 @@ Your submission link is unique to you. Please do not share it with another perfo
     }
   }
 
+  function sourceApplicationIdsForApplicant(app) {
+    return [...new Set([
+      ...(Array.isArray(app?._sourceApplicationIds) ? app._sourceApplicationIds : []),
+      ...Object.values(app?._sourceApplicationIdsBySession || {}),
+      app?.id,
+    ].filter(id => id && !String(id).startsWith('booking-')).map(String))];
+  }
+
+  async function persistCheckInPatchFast(app, patch) {
+    const ids = sourceApplicationIdsForApplicant(app);
+    if (!ids.length) return persistApplicantPatch(app, patch);
+    const leanPatch = {};
+    if (patch.session_checkins !== undefined) leanPatch.session_checkins = patch.session_checkins;
+    if (patch.checked_in !== undefined) leanPatch.checked_in = patch.checked_in;
+    if (patch.checked_in_at !== undefined) leanPatch.checked_in_at = patch.checked_in_at;
+    if (patch.status !== undefined) leanPatch.status = normalizeApplicantStatus(patch.status);
+    if (!Object.keys(leanPatch).length) return null;
+    try {
+      const { error } = await sb.from('audition_applications')
+        .update(leanPatch)
+        .eq('production_id', prodId)
+        .in('id', ids);
+      return error || null;
+    } catch (error) {
+      return error;
+    }
+  }
+
+  function checkInPatchQueueKey() {
+    return `bts-checkin-patch-queue:${prodId || 'unknown'}`;
+  }
+
+  function normalizeCheckInPatchForQueue(patch = {}) {
+    const leanPatch = {};
+    if (patch.session_checkins !== undefined) leanPatch.session_checkins = patch.session_checkins;
+    if (patch.checked_in !== undefined) leanPatch.checked_in = patch.checked_in;
+    if (patch.checked_in_at !== undefined) leanPatch.checked_in_at = patch.checked_in_at;
+    if (patch.status !== undefined) leanPatch.status = normalizeApplicantStatus(patch.status);
+    return leanPatch;
+  }
+
+  function readCheckInPatchQueue() {
+    try {
+      const rows = JSON.parse(localStorage.getItem(checkInPatchQueueKey()) || '[]');
+      return Array.isArray(rows) ? rows : [];
+    } catch {
+      return [];
+    }
+  }
+
+  function writeCheckInPatchQueue(rows) {
+    try { localStorage.setItem(checkInPatchQueueKey(), JSON.stringify(rows || [])); } catch {}
+  }
+
+  let checkInPatchQueueFlushTimer = null;
+  let checkInPatchQueueFlushing = false;
+
+  function enqueueCheckInPatch(app, patch) {
+    const ids = sourceApplicationIdsForApplicant(app);
+    const leanPatch = normalizeCheckInPatchForQueue(patch);
+    if (!ids.length || !Object.keys(leanPatch).length) return false;
+    const queue = readCheckInPatchQueue();
+    queue.push({
+      id: crypto?.randomUUID?.() || `checkin-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      production_id: prodId,
+      ids,
+      patch: leanPatch,
+      attempts: 0,
+      created_at: new Date().toISOString(),
+    });
+    writeCheckInPatchQueue(queue);
+    scheduleCheckInPatchQueueFlush(120);
+    return true;
+  }
+
+  function scheduleCheckInPatchQueueFlush(delay = 500) {
+    clearTimeout(checkInPatchQueueFlushTimer);
+    checkInPatchQueueFlushTimer = setTimeout(flushCheckInPatchQueue, delay);
+  }
+
+  async function flushCheckInPatchQueue() {
+    if (checkInPatchQueueFlushing || !prodId) return;
+    let queue = readCheckInPatchQueue().filter(item => String(item?.production_id || prodId) === String(prodId));
+    if (!queue.length) return;
+    checkInPatchQueueFlushing = true;
+    try {
+      while (queue.length) {
+        const item = queue[0];
+        try {
+          const { error } = await sb.from('audition_applications')
+            .update(item.patch || {})
+            .eq('production_id', prodId)
+            .in('id', item.ids || []);
+          if (error) throw error;
+          queue.shift();
+          writeCheckInPatchQueue(queue);
+        } catch (error) {
+          item.attempts = Number(item.attempts || 0) + 1;
+          item.last_error = error?.message || String(error || 'Save failed');
+          queue[0] = item;
+          writeCheckInPatchQueue(queue);
+          console.warn('[BTS] queued check-in save will retry:', error);
+          scheduleCheckInPatchQueueFlush(Math.min(30000, 1000 * Math.max(2, item.attempts)));
+          return;
+        }
+      }
+      showSaveStatus('saved');
+    } finally {
+      checkInPatchQueueFlushing = false;
+    }
+  }
+
+  window.addEventListener('online', () => scheduleCheckInPatchQueueFlush(250));
+
   // ── Audition overview stats ───────────────────────────
   function renderAudOverviewStats() {
     const total      = allApplicants.length;
@@ -57600,19 +57715,13 @@ Your submission link is unique to you. Please do not share it with another perfo
         if (document.getElementById('aud-session-inroom-content')) renderInRoomPage(inRoomApplicantId, 'aud-session-inroom-content', 'openAuditionSessionInRoom');
         else if (document.getElementById('adtab-inroom')?.style.display !== 'none') renderInRoomPage(inRoomApplicantId);
       } catch {}
-    }, 80);
+    }, 750);
   }
 
   async function setCiNoShow(appId, sessionId = null) {
     const app = allApplicants.find(a => a.id === appId);
     if (!app) return;
     const sid = sessionId || getCurrentInRoomSession()?.id || getActiveAuditionNavSession()?.id || getSelectedCheckInSession()?.id || null;
-    const prev = {
-      status: app.status,
-      checked_in: app.checked_in,
-      checked_in_at: app.checked_in_at,
-      session_checkins: Array.isArray(app.session_checkins) ? [...app.session_checkins] : app.session_checkins,
-    };
     const nextCheckins = sid ? withSessionCheckinState(app, sid, false) : app.session_checkins;
     app.status = 'no_show';
     app.checked_in = false;
@@ -57620,52 +57729,32 @@ Your submission link is unique to you. Please do not share it with another perfo
     if (sid) app.session_checkins = nextCheckins;
     refreshCheckInAfterLocalChange(app, sid);
     showSaveStatus('saving');
-    try {
-      const patch = { status: 'no_show', checked_in: false, checked_in_at: null };
-      if (sid) patch.session_checkins = nextCheckins;
-      const error = await persistApplicantPatch(app, patch);
-      if (error) throw error;
-      if (sid) {
-        const sourceError = await persistSessionCheckinsToAllSourceApplications(app, nextCheckins);
-        if (sourceError) throw sourceError;
-        clearAuditionRoomStateForApplicant(app.id, sid);
-      }
-      queueCiSecondaryRefresh();
-      showSaveStatus('saved');
-    } catch {
-      app.status = prev.status;
-      app.checked_in = prev.checked_in;
-      app.checked_in_at = prev.checked_in_at;
-      app.session_checkins = prev.session_checkins;
-      renderCheckInList();
-      showToast('Could not mark as no show', true);
+    const patch = { status: 'no_show', checked_in: false, checked_in_at: null };
+    if (sid) patch.session_checkins = nextCheckins;
+    if (!enqueueCheckInPatch(app, patch)) {
+      persistCheckInPatchFast(app, patch).then(error => {
+        if (error) console.warn('[BTS] check-in no-show save failed:', error);
+      });
     }
+    if (sid) clearAuditionRoomStateForApplicant(app.id, sid);
+    queueCiSecondaryRefresh();
+    showSaveStatus('saved');
   }
 
   async function clearCiNoShow(appId) {
     const app = allApplicants.find(a => a.id === appId);
     if (!app) return;
-    const prev = {
-      status: app.status,
-      checked_in: app.checked_in,
-      checked_in_at: app.checked_in_at,
-    };
     const nextStatus = 'applied';
     app.status = nextStatus;
     refreshCheckInAfterLocalChange(app);
     showSaveStatus('saving');
-    try {
-      const error = await persistApplicantPatch(app, { status: nextStatus });
-      if (error) throw error;
-      queueCiSecondaryRefresh();
-      showSaveStatus('saved');
-    } catch {
-      app.status = prev.status;
-      app.checked_in = prev.checked_in;
-      app.checked_in_at = prev.checked_in_at;
-      renderCheckInList();
-      showToast('Could not clear no show', true);
+    if (!enqueueCheckInPatch(app, { status: nextStatus })) {
+      persistCheckInPatchFast(app, { status: nextStatus }).then(error => {
+        if (error) console.warn('[BTS] clear no-show save failed:', error);
+      });
     }
+    queueCiSecondaryRefresh();
+    showSaveStatus('saved');
   }
 
   async function toggleCheckIn(appId, currentlyIn, sessionId = null) {
@@ -57675,9 +57764,6 @@ Your submission link is unique to you. Please do not share it with another perfo
     const newCheckedIn = !isCurrentlyIn;
 
     // Update per-session check-in array
-    const prevCheckins = Array.isArray(app.session_checkins) ? [...app.session_checkins] : [];
-    const prevLegacyCheckedIn = app.checked_in;
-    const prevLegacyCheckedInAt = app.checked_in_at;
     const prevStatus = app.status;
     const newCheckins = sessionId ? withSessionCheckinState(app, sessionId, newCheckedIn) : prevCheckins;
     const changedAt = new Date().toISOString();
@@ -57691,30 +57777,18 @@ Your submission link is unique to you. Please do not share it with another perfo
     if (newCheckedIn && app.status === 'no_show') app.status = 'auditioning';
     refreshCheckInAfterLocalChange(app, sessionId);
     showSaveStatus('saving');
-
-    try {
-      const patch = sessionId
-        ? { session_checkins: newCheckins }
-        : { checked_in: newCheckedIn, checked_in_at: app.checked_in_at };
-      if (app.status !== prevStatus) patch.status = app.status;
-      const error = await persistApplicantPatch(app, patch);
-      if (error) throw error;
-      if (sessionId) {
-        const sourceError = await persistSessionCheckinsToAllSourceApplications(app, newCheckins);
-        if (sourceError) throw sourceError;
-      }
-      if (!newCheckedIn && sessionId) clearAuditionRoomStateForApplicant(app.id, sessionId);
-      queueCiSecondaryRefresh();
-      showSaveStatus('saved');
-    } catch {
-      app.session_checkins = prevCheckins;
-      app.checked_in = prevLegacyCheckedIn;
-      app.checked_in_at = prevLegacyCheckedInAt;
-      app.status = prevStatus;
-      renderCheckInList();
-      showToast('Check-in failed', true);
-      return;
+    const patch = sessionId
+      ? { session_checkins: newCheckins }
+      : { checked_in: newCheckedIn, checked_in_at: app.checked_in_at };
+    if (app.status !== prevStatus) patch.status = app.status;
+    if (!enqueueCheckInPatch(app, patch)) {
+      persistCheckInPatchFast(app, patch).then(error => {
+        if (error) console.warn('[BTS] check-in save failed:', error);
+      });
     }
+    if (!newCheckedIn && sessionId) clearAuditionRoomStateForApplicant(app.id, sessionId);
+    queueCiSecondaryRefresh();
+    showSaveStatus('saved');
     refreshVisibleInRoomForSession();
   }
 
