@@ -184,7 +184,7 @@
       document.getElementById('prod-sidebar-host').innerHTML = cached;
       applySidebarState(subId);
     }
-    fetch('/SHARED/Navigation/production-sidebar.html')
+    fetch('/SHARED/Navigation/production-sidebar.html?v=budget-20260520')
       .then(r => r.text())
       .then(html => {
         sessionStorage.setItem(SIDEBAR_CACHE_KEY, html);
@@ -202,7 +202,7 @@
       document.getElementById('prod-sidebar-host').innerHTML = cached;
       applyBudgetSidebarState(subId);
     }
-    fetch('/SHARED/Navigation/production-sidebar.html')
+    fetch('/SHARED/Navigation/production-sidebar.html?v=budget-20260520')
       .then(r => r.text())
       .then(html => {
         sessionStorage.setItem(SIDEBAR_CACHE_KEY, html);

@@ -574,6 +574,79 @@
     </div>`;
   }
 
+  function isGeneralAuditionSession(session = {}) {
+    const type = String(session?.type || '').toLowerCase();
+    const name = String(session?.name || '');
+    return type === 'audition' || /general auditions?/i.test(name);
+  }
+
+  function renderStaticGeneralInRoomCheckinTemplate(config = {}) {
+    const {
+      esc,
+      renderCastingCard,
+      ariaHidden = true
+    } = config;
+    if (typeof esc !== 'function' || typeof renderCastingCard !== 'function') return '';
+    const checkinPeople = [
+      { time: '9:40 AM', first: 'Norma', last: 'Talmadge', status: 'Through', className: 'is-done' },
+      { time: '9:50 AM', first: 'John', last: 'Drew Barrymore', status: 'Through', className: 'is-done', img: '/ASSETS/Images/templates/sample-template-headshots/john-drew-barrymore-He:Him-.png' },
+      { time: '10:00 AM', first: 'Fred', last: 'Astaire', status: 'Through', className: 'is-done', img: '/ASSETS/Images/templates/sample-template-headshots/fred-astaire-He:Him-.png' },
+      { time: '10:20 AM', first: 'Clara', last: 'Bow', status: 'Through', className: 'is-done' },
+      { time: '10:30 AM', first: 'Sarah', last: 'Bernhardt', status: 'Next', className: 'is-next' },
+      { time: '10:40 AM', first: 'Ginger', last: 'Rogers', status: 'Ready', img: '/ASSETS/Images/templates/sample-template-headshots/ginger-rogers-She:Her-.png' },
+      { time: '10:50 AM', first: 'Joan', last: 'Crawford', status: 'Ready', img: '/ASSETS/Images/templates/sample-template-headshots/joan-crawford-She:Her-.png' },
+      { time: '11:00 AM', first: 'Katherine', last: 'Hepburn', status: 'Ready', img: '/ASSETS/Images/templates/sample-template-headshots/katherine-hepburn-She:Her-.png' },
+      { time: '11:10 AM', first: 'Gloria', last: 'Swanson', status: 'Ready', img: '/ASSETS/Images/templates/sample-template-headshots/gloria-swanson-She:Her-.png' },
+      { time: '11:30 AM', first: 'Eleonora', last: 'Duse', status: 'Ready', img: '/ASSETS/Images/templates/sample-template-headshots/eleonora-duse-She:Her-.png' },
+      { time: '11:40 AM', first: 'Jane', last: 'Austen', status: 'Ready', img: '/ASSETS/Images/templates/Volunteer Headshots/4.png' },
+      { time: '11:50 AM', first: 'Clara', last: 'Schumann', status: 'Ready', img: '/ASSETS/Images/templates/sample-template-headshots/clara-bow-She:Her-.png' },
+      { time: '12:40 PM', first: 'Marie', last: 'Curie', status: 'Ready', img: '/ASSETS/Images/templates/Volunteer Headshots/8.png' },
+      { time: '12:50 PM', first: 'Ada', last: 'Lovelace', status: 'Ready' },
+      { time: '1:00 PM', first: 'Oscar', last: 'Wilde', status: 'Ready', img: '/ASSETS/Images/templates/Volunteer Headshots/10.png' },
+      { time: '1:10 PM', first: 'Wolfgan', last: 'Amadeus Mozart', status: 'Ready' },
+    ];
+    const checkinTiles = checkinPeople.map(person => {
+      const cardHtml = renderCastingCard({
+        first_name: person.first,
+        last_name: person.last,
+        headshot_url: person.img || '',
+        attendance_mode: 'in_person',
+      }, {
+        size: 'compact',
+        hasPadding: true,
+        hasIcons: true,
+        state: null,
+      });
+      return renderTemplateById('auditions.in-room.checked-in-tile', {
+        esc,
+        time: person.time,
+        name: `${person.first} ${person.last}`,
+        state: person.status,
+        className: person.className || '',
+        cardHtml
+      });
+    }).join('');
+    const checkinRailHtml = renderTemplateById('auditions.in-room.checked-in-strip', {
+      esc,
+      label: 'Checked In',
+      trayCards: checkinTiles
+    });
+    return `<div class="audition-flow-template-checkin"${ariaHidden ? ' aria-hidden="true"' : ''}>
+      <style>
+        .audition-flow-template-checkin{margin:0.55rem 0 0.9rem;border:1.5px solid #e4deed;border-radius:0 0 16px 16px;background:#fff;box-shadow:none;overflow:hidden;}
+        .audition-flow-template-checkin .template-checkin-rail{border-radius:0 0 16px 16px;padding:0.72rem 0.85rem 0.95rem;}
+        .audition-flow-template-checkin .template-checkin-row{gap:0.72rem;min-height:8.35rem;padding-bottom:0.68rem;scrollbar-color:rgba(30,30,30,0.55) transparent;}
+        .audition-flow-template-checkin .template-checkin-row::-webkit-scrollbar{height:9px;}
+        .audition-flow-template-checkin .template-checkin-row::-webkit-scrollbar-track{background:transparent;}
+        .audition-flow-template-checkin .template-checkin-row::-webkit-scrollbar-thumb{background:rgba(30,30,30,0.55);border-radius:999px;}
+        .audition-flow-template-checkin .template-checkin-tile{flex-basis:108px;width:108px;grid-template-rows:1rem auto 1.05rem;gap:0.26rem;}
+        .audition-flow-template-checkin .template-checkin-time{font-size:0.78rem;line-height:1rem;}
+        .audition-flow-template-checkin .template-checkin-status{min-height:1.05rem;font-size:0.72rem;line-height:1rem;padding:0.03rem 0.52rem;}
+      </style>
+      ${checkinRailHtml}
+    </div>`;
+  }
+
   function sanitizeAttrString(value = '') {
     return String(value || '').replace(/"/g, '&quot;');
   }
@@ -791,7 +864,9 @@
     renderBrandTileWithFormTemplate,
     renderBrandTileTextTemplate,
     renderBrandTileStatusLaneTemplate,
-    renderAuditionPageHeaderTemplate
+    renderAuditionPageHeaderTemplate,
+    isGeneralAuditionSession,
+    renderStaticGeneralInRoomCheckinTemplate
   });
 
   window.BTSAuditionTemplates = api;
