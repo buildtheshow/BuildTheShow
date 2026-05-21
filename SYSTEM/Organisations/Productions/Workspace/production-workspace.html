@@ -24762,6 +24762,18 @@
     try { console.info('[BTS lifecycle]', btsLifecycleState({ functionName, ...detail })); } catch {}
   }
 
+  function btsLiveTimingLog(stage, detail = {}) {
+    try {
+      console.info('[BTS live timing]', {
+        stage,
+        at: new Date().toISOString(),
+        route: window.location.pathname + window.location.search + window.location.hash,
+        prodId: prodId || prod?.id || '',
+        ...detail,
+      });
+    } catch {}
+  }
+
   const btsEscapedNonTextWarnings = new Set();
   function coerceRouteTextValue(value, context = 'unknown') {
     if (value === null || value === undefined) return '';
@@ -27502,6 +27514,10 @@
   }
 
   function queueAuditionsRefresh(payload = null) {
+    btsLiveTimingLog('full_refresh_triggered', {
+      table: payload?.table || '',
+      eventType: payload?.eventType || payload?.type || '',
+    });
     btsLifecycleLog('queueAuditionsRefresh', {
       reason: 'realtime-event-received',
       table: payload?.table || '',
@@ -28077,6 +28093,7 @@
       },
       onState: handleAuditionLiveStateRow,
       onError: error => console.warn('[BTS] audition live state unavailable:', error),
+      onTiming: btsLiveTimingLog,
     });
     auditionLiveState.subscribe();
     auditionLiveState.load().then(() => {
@@ -28115,6 +28132,11 @@
   function handleAuditionLiveStateRow(row) {
     if (!row?.state_key) return;
     btsLifecycleLog('handleAuditionLiveStateRow', { reason: 'live-state-received', stateType: row.state_type || '', stateKey: row.state_key, dataStatus: allApplicants.length ? 'loaded' : 'loading' });
+    btsLiveTimingLog(row._broadcast ? 'broadcast_received_workspace' : 'supabase_state_received_workspace', {
+      trace_id: row.payload?.trace_id || row._trace_id || '',
+      state_type: row.state_type || '',
+      state_key: row.state_key || '',
+    });
     if (row.state_type === 'performer_checkin') {
       auditionLiveCheckins.set(row.state_key, row);
       const performerId = row.payload?.performer_id || row.application_id || '';
@@ -28124,6 +28146,12 @@
       );
       if (app) {
         refreshCheckInAfterLocalChange(app, row.session_id || null);
+        btsLiveTimingLog('ui_patched_from_live_state', {
+          trace_id: row.payload?.trace_id || row._trace_id || '',
+          state_type: row.state_type || '',
+          state_key: row.state_key || '',
+          appId: app.id || '',
+        });
         try { refreshVisibleInRoomForSession(); } catch {}
       }
       return;
@@ -28131,11 +28159,21 @@
     if (row.state_type === 'room_state') {
       auditionLiveRooms.set(row.state_key, row);
       try { refreshVisibleInRoomForSession(); } catch {}
+      btsLiveTimingLog('ui_patched_from_live_state', {
+        trace_id: row.payload?.trace_id || row._trace_id || '',
+        state_type: row.state_type || '',
+        state_key: row.state_key || '',
+      });
       return;
     }
     if (row.state_type === 'room_request') {
       mergeRoomNextSignal(liveRoomRequestToLegacySignal(row));
       renderInRoomReadySignals();
+      btsLiveTimingLog('ui_patched_from_live_state', {
+        trace_id: row.payload?.trace_id || row._trace_id || '',
+        state_type: row.state_type || '',
+        state_key: row.state_key || '',
+      });
     }
   }
 
@@ -28401,6 +28439,11 @@
     if (!signal || signal.status !== 'ready') return;
     mergeRoomNextSignal(signal);
     renderInRoomReadySignals();
+    btsLiveTimingLog('ui_patched_local', {
+      trace_id: signal.payload?.trace_id || signal.trace_id || '',
+      state_type: 'room_request',
+      roomKey: signal.room_key || '',
+    });
   }
 
   function getSessionQueue(session) {
@@ -28677,6 +28720,7 @@
   }
 
   async function sendInRoomNextRequest(appId, sessionId = '', buttonEl = null) {
+    btsLiveTimingLog('click', { action: 'room_requested_next', appId, sessionId: sessionId || '' });
     const session = (sessionId && audSessions.find(candidate => String(candidate.id) === String(sessionId))) || getCurrentInRoomSession() || getSelectedAuditionSession();
     const app = allApplicants.find(candidate => String(candidate.id) === String(appId)) || null;
     const meta = getAuditionRoomMeta(session);
@@ -28695,6 +28739,7 @@
   }
 
   async function sendDanceCallNextRequest(sessionId, slotTime = '', buttonEl = null) {
+    btsLiveTimingLog('click', { action: 'room_requested_next_group', sessionId: sessionId || '', slotTime });
     const session = audSessions.find(candidate => String(candidate.id) === String(sessionId)) || getActiveAuditionNavSession();
     const meta = getAuditionRoomMeta(session);
     const existing = getRoomState(meta.roomKey);
@@ -28797,6 +28842,7 @@
   }
 
   async function markNextPerformerSentIn(roomKey) {
+    btsLiveTimingLog('click', { action: 'performer_sent_to_room', roomKey });
     const state = getRoomNextSignal(roomKey);
     if (!state) return;
     const card = document.getElementById(`inroom-next-request-${roomKey}`);
@@ -57788,6 +57834,11 @@ Your submission link is unique to you. Please do not share it with another perfo
   }
 
   function refreshCheckInAfterLocalChange(app, sessionId = null) {
+    btsLiveTimingLog('ui_patch_requested', {
+      state_type: 'performer_checkin',
+      appId: app?.id || '',
+      sessionId: sessionId || '',
+    });
     let handled = false;
     const standalone = document.getElementById('checkin-list-inner');
     if (standalone) {
@@ -57806,6 +57857,12 @@ Your submission link is unique to you. Please do not share it with another perfo
       }
     }
     if (!handled) renderCheckInList();
+    btsLiveTimingLog('ui_patched_local', {
+      state_type: 'performer_checkin',
+      appId: app?.id || '',
+      sessionId: sessionId || '',
+      targeted: handled,
+    });
   }
 
   function renderAuditionSessionWorkspace() {
@@ -58012,6 +58069,7 @@ Your submission link is unique to you. Please do not share it with another perfo
   }
 
   async function setCiNoShow(appId, sessionId = null) {
+    btsLiveTimingLog('click', { action: 'no_show', appId, sessionId: sessionId || '' });
     const app = allApplicants.find(a => a.id === appId);
     if (!app) return;
     const sid = sessionId || getCurrentInRoomSession()?.id || getActiveAuditionNavSession()?.id || getSelectedCheckInSession()?.id || null;
@@ -58035,6 +58093,7 @@ Your submission link is unique to you. Please do not share it with another perfo
   }
 
   async function clearCiNoShow(appId) {
+    btsLiveTimingLog('click', { action: 'clear_no_show', appId });
     const app = allApplicants.find(a => a.id === appId);
     if (!app) return;
     const nextStatus = 'applied';
@@ -58053,6 +58112,7 @@ Your submission link is unique to you. Please do not share it with another perfo
   }
 
   async function toggleCheckIn(appId, currentlyIn, sessionId = null) {
+    btsLiveTimingLog('click', { action: 'toggle_checkin', appId, sessionId: sessionId || '' });
     const app = allApplicants.find(a => a.id === appId);
     if (!app) return;
     const isCurrentlyIn = sessionId ? isCheckedInForSession(app, sessionId) : !!app.checked_in;
@@ -58060,6 +58120,7 @@ Your submission link is unique to you. Please do not share it with another perfo
 
     // Update per-session check-in array
     const prevStatus = app.status;
+    const prevCheckins = Array.isArray(app.session_checkins) ? [...app.session_checkins] : [];
     const newCheckins = sessionId ? withSessionCheckinState(app, sessionId, newCheckedIn) : prevCheckins;
     const changedAt = new Date().toISOString();
 
