@@ -81,6 +81,17 @@
   function bizName(id) { var b = SpnsState.businesses.find(function (x) { return x.id === id; }); return b ? b.name : ''; }
   function esc(s) { return s ? String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;') : ''; }
 
+  function mktTile(id, kicker, value, label, color) {
+    return '<div class="template-brand-card template-brand-card--square template-brand-card--metric" style="--brand-tile-bg:' + color + ';--brand-tile-ink:#ffffff;">' +
+      '<div class="template-brand-card-inner"><div class="template-brand-tile-content">' +
+        '<div class="template-brand-tile-container template-brand-tile-container--header"><div class="template-brand-tile-kicker">' + kicker + '</div></div>' +
+        '<div class="template-brand-tile-container template-brand-tile-container--title"><div class="template-brand-tile-number" id="' + id + '">' + value + '</div></div>' +
+        '<div class="template-brand-tile-container template-brand-tile-container--body"><div class="template-brand-tile-metric-label">' + label + '</div></div>' +
+        '<div class="template-brand-tile-container template-brand-tile-container--footer"><div class="template-brand-tile-progress"><span style="width:0%"></span></div></div>' +
+      '</div></div>' +
+    '</div>';
+  }
+
   function badgePayment(s) {
     var m = { paid: ['paid','Paid'], unpaid: ['pending','Unpaid'], invoice_sent: ['review','Invoice Sent'], overdue: ['overdue','Overdue'] };
     var pair = m[s] || ['open', s || 'Unknown'];
@@ -139,21 +150,16 @@
       var upcoming  = delivList.filter(function (d) { return d.status !== 'done' && d.due_date && new Date(d.due_date) <= soon; }).length;
       var openDeliv = delivList.filter(function (d) { return d.status !== 'done'; }).length;
 
-      function mkStat(label, value, sub, mod) {
-        return '<div class="spn-stat' + (mod ? ' spn-stat--' + mod : '') + '"><div class="spn-stat-label">' + label + '</div><div class="spn-stat-value">' + value + '</div><div class="spn-stat-sub">' + sub + '</div></div>';
-      }
-
-      var statsEl = document.getElementById('spn-stats');
-      if (statsEl) statsEl.innerHTML = [
-        mkStat('Ad Revenue',        fmtDollars(adRev),  'Paid ads',           adRev > 0 ? 'good' : ''),
-        mkStat('Sponsor Revenue',   fmtDollars(spnRev), 'Paid packages',      spnRev > 0 ? 'good' : ''),
-        mkStat('Businesses',        bizList.length,     'Connected',          ''),
-        mkStat('Missing Artwork',   missingArt,         'Ads awaiting files', missingArt > 0 ? 'alert' : ''),
-        mkStat('Unpaid Invoices',   unpaid,             'Ads + sponsors',     unpaid > 0 ? 'warn' : ''),
-        mkStat('Due This Week',     upcoming,           'Deliverables',       upcoming > 0 ? 'warn' : ''),
-        mkStat('Open Deliverables', openDeliv,          'Not yet done',       openDeliv > 0 ? 'warn' : ''),
-        mkStat('Pending Approvals', pendingAppr,        'Ads to review',      pendingAppr > 0 ? 'warn' : ''),
-      ].join('');
+      function setTile(id, val) { var el = document.getElementById(id); if (el) el.textContent = val; }
+      setTile('spn-hero-biz-count', bizList.length);
+      setTile('spn-tile-ad-rev',    fmtDollars(adRev));
+      setTile('spn-tile-spn-rev',   fmtDollars(spnRev));
+      setTile('spn-tile-biz',       bizList.length);
+      setTile('spn-tile-art',       missingArt);
+      setTile('spn-tile-unpaid',    unpaid);
+      setTile('spn-tile-due',       upcoming);
+      setTile('spn-tile-open',      openDeliv);
+      setTile('spn-tile-pending',   pendingAppr);
 
       var alerts = [];
       if (missingArt > 0)  alerts.push(['err',  missingArt + ' ad' + (missingArt > 1 ? 's' : '') + ' missing artwork']);
@@ -648,6 +654,20 @@
       resetState(prodId);
 
       container.innerHTML =
+        '<div class="aud-visual-hero">' +
+          '<div class="aud-visual-hero-content">' +
+            '<div>' +
+              '<div class="aud-visual-kicker"><span class="aud-visual-kicker-dot" aria-hidden="true"></span>Marketing</div>' +
+              '<h1 class="aud-visual-title">Sponsors.</h1>' +
+              '<p class="aud-visual-copy">Track your programme ads, sponsor packages, and business partnerships all in one place.</p>' +
+            '</div>' +
+            '<div class="aud-visual-total">' +
+              '<div class="aud-visual-total-kicker">Businesses</div>' +
+              '<div class="aud-visual-total-value" id="spn-hero-biz-count">—</div>' +
+            '</div>' +
+          '</div>' +
+        '</div>' +
+
         '<div class="spn-tabs" role="tablist">' +
           '<button class="spn-tab active" data-panel="overview"     onclick="MarketingSponsorsModule.switchTab(\'overview\')">Overview</button>' +
           '<button class="spn-tab"        data-panel="businesses"   onclick="MarketingSponsorsModule.switchTab(\'businesses\')">Businesses</button>' +
@@ -659,15 +679,15 @@
         '</div>' +
 
         '<div id="spn-panel-overview" class="spn-panel active">' +
-          '<div class="spn-stat-grid" id="spn-stats">' +
-            '<div class="spn-stat"><div class="spn-stat-label">Ad Revenue</div><div class="spn-stat-value">...</div></div>' +
-            '<div class="spn-stat"><div class="spn-stat-label">Sponsor Revenue</div><div class="spn-stat-value">...</div></div>' +
-            '<div class="spn-stat"><div class="spn-stat-label">Businesses</div><div class="spn-stat-value">...</div></div>' +
-            '<div class="spn-stat"><div class="spn-stat-label">Missing Artwork</div><div class="spn-stat-value">...</div></div>' +
-            '<div class="spn-stat"><div class="spn-stat-label">Unpaid Invoices</div><div class="spn-stat-value">...</div></div>' +
-            '<div class="spn-stat"><div class="spn-stat-label">Due This Week</div><div class="spn-stat-value">...</div></div>' +
-            '<div class="spn-stat"><div class="spn-stat-label">Open Deliverables</div><div class="spn-stat-value">...</div></div>' +
-            '<div class="spn-stat"><div class="spn-stat-label">Pending Approvals</div><div class="spn-stat-value">...</div></div>' +
+          '<div class="mkt-tile-grid" id="spn-stats">' +
+            mktTile('spn-tile-ad-rev',  'Marketing', '...', 'Ad Revenue',        '#769e7b') +
+            mktTile('spn-tile-spn-rev', 'Marketing', '...', 'Sponsor Revenue',   '#769e7b') +
+            mktTile('spn-tile-biz',     'Marketing', '...', 'Businesses',        '#476aaa') +
+            mktTile('spn-tile-art',     'Marketing', '...', 'Missing Artwork',   '#d1523d') +
+            mktTile('spn-tile-unpaid',  'Marketing', '...', 'Unpaid Invoices',   '#dd8233') +
+            mktTile('spn-tile-due',     'Marketing', '...', 'Due This Week',     '#dd8233') +
+            mktTile('spn-tile-open',    'Marketing', '...', 'Open Deliverables', '#572e88') +
+            mktTile('spn-tile-pending', 'Marketing', '...', 'Pending Approvals', '#ca7ea7') +
           '</div>' +
           '<div class="spn-overview-grid">' +
             '<div class="spn-card"><div class="spn-card-title">Needs attention</div><div id="spn-alerts" class="spn-alert-list"><div class="spn-loading-row" style="padding:0;color:#9a90b0;font-size:0.85rem">Loading...</div></div></div>' +
