@@ -20,6 +20,8 @@
     { id: 'friend',     label: 'Friend',             amount: 50   },
   ];
 
+  var ADTILE_COLORS = ['#572e88', '#476aaa', '#769e7b', '#dd8233', '#d1523d', '#ca7ea7'];
+
   var SpnsState = {
     prodId: null,
     businesses: [],
@@ -81,46 +83,66 @@
   function bizName(id) { var b = SpnsState.businesses.find(function (x) { return x.id === id; }); return b ? b.name : ''; }
   function esc(s) { return s ? String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;') : ''; }
 
-  // -- Ad sizes visual grid -----------------------------------------------------
+  // -- Ad sizes visual tiles ----------------------------------------------------
 
-  function parseAdAspectRatio(dims) {
-    var clean = String(dims || '').replace(/['"x]/gi, function(c) { return c.toLowerCase() === 'x' ? 'X' : ''; });
+  function parseAdDims(dims) {
     var m = String(dims || '').replace(/['"]/g, '').match(/^([\d.]+)[xX]([\d.]+)$/);
-    if (!m) return 100;
-    var w = parseFloat(m[1]);
-    var h = parseFloat(m[2]);
-    return (w && h) ? Math.round(h / w * 100) : 100;
+    return m ? { w: parseFloat(m[1]) || 1, h: parseFloat(m[2]) || 1 } : { w: 1, h: 1 };
   }
 
   function renderAdSizesSection() {
     var sizes = SpnsState.settings.adSizes;
     if (!sizes || !sizes.length) return '';
-    var cards = sizes.map(function (s) {
-      var ratio = parseAdAspectRatio(s.dims);
-      var dimsLabel = String(s.dims || '').replace(/(\d)(x)(\d)/i, '$1" x $3"');
-      return '<div class="spn-adsize-card">' +
-        '<div class="spn-adsize-name">' + esc(s.label) + '</div>' +
-        '<div class="spn-adsize-dims">(' + esc(dimsLabel) + ')</div>' +
-        '<div class="spn-adsize-preview" style="padding-top:' + ratio + '%">' +
-          '<div class="spn-adsize-preview-art"></div>' +
-        '</div>' +
-        '<div class="spn-adsize-pricing">' +
-          '<div><strong>Colour:</strong> $' + esc(String(s.colour)) + '</div>' +
-          '<div><strong>B&amp;W:</strong> $' + esc(String(s.bw)) + '</div>' +
+
+    // Calculate the programme page container as the max dimensions across all sizes
+    var pageW = 8, pageH = 5;
+    sizes.forEach(function (s) {
+      var d = parseAdDims(s.dims);
+      if (d.w > pageW) pageW = d.w;
+      if (d.h > pageH) pageH = d.h;
+    });
+
+    var tiles = sizes.map(function (s, i) {
+      var d      = parseAdDims(s.dims);
+      var adW    = Math.round(d.w / pageW * 100);
+      var adH    = Math.round(d.h / pageH * 100);
+      var color  = ADTILE_COLORS[i % ADTILE_COLORS.length];
+      var dimsDisplay = String(s.dims).replace(/[xX]/, '" x ') + '"';
+
+      return '<div class="template-brand-card template-brand-card--horizontal" style="--brand-tile-bg:' + color + ';--brand-tile-ink:#ffffff;">' +
+        '<div class="template-brand-card-inner">' +
+          '<div class="spn-adtile-layout">' +
+            '<div class="spn-adtile-page-wrap">' +
+              '<div class="spn-adtile-page">' +
+                '<div class="spn-adtile-ad" style="width:' + adW + '%;height:' + adH + '%;">' +
+                  '<div class="spn-adtile-ad-label">Ad</div>' +
+                '</div>' +
+              '</div>' +
+            '</div>' +
+            '<div class="spn-adtile-info">' +
+              '<div class="spn-adtile-kicker">Ad Size</div>' +
+              '<div class="spn-adtile-name">' + esc(s.label) + '</div>' +
+              '<div class="spn-adtile-dims">' + esc(dimsDisplay) + '</div>' +
+              '<div class="spn-adtile-pricing">' +
+                '<div class="spn-adtile-price"><div class="spn-adtile-price-label">Colour</div><div class="spn-adtile-price-val">$' + s.colour + '</div></div>' +
+                '<div class="spn-adtile-price"><div class="spn-adtile-price-label">B&amp;W</div><div class="spn-adtile-price-val">$' + s.bw + '</div></div>' +
+              '</div>' +
+            '</div>' +
+          '</div>' +
         '</div>' +
       '</div>';
     }).join('');
-    return '<div class="spn-ad-sizes-section">' +
-      '<div class="spn-ad-sizes-heading">Programme Ad Sizes &amp; Pricing</div>' +
-      '<div class="spn-ad-sizes-grid">' + cards + '</div>' +
+
+    return '<div class="spn-adsize-tiles-section">' +
+      '<div class="spn-adsize-tiles-heading">Programme Ad Sizes &amp; Pricing</div>' +
+      '<div class="spn-adsize-tiles-grid">' + tiles + '</div>' +
     '</div>';
   }
 
   function refreshAdSizesVisual() {
     var el = document.getElementById('spn-ad-sizes-visual');
     if (!el) return;
-    var html = renderAdSizesSection();
-    el.innerHTML = html;
+    el.innerHTML = renderAdSizesSection();
   }
 
   // -- Metric tile for overview -------------------------------------------------
@@ -184,11 +206,12 @@
       var pkgList   = results[2];
       var delivList = results[3];
 
-      var adRev     = adList.filter(function (a) { return a.payment_status === 'paid'; }).reduce(function (s, a) { return s + (a.price_cents || 0); }, 0);
-      var spnRev    = pkgList.filter(function (p) { return p.payment_status === 'paid'; }).reduce(function (s, p) { return s + (p.amount_cents || 0); }, 0);
+      var adRev       = adList.filter(function (a) { return a.payment_status === 'paid'; }).reduce(function (s, a) { return s + (a.price_cents || 0); }, 0);
+      var spnRev      = pkgList.filter(function (p) { return p.payment_status === 'paid'; }).reduce(function (s, p) { return s + (p.amount_cents || 0); }, 0);
       var missingArt  = adList.filter(function (a) { return a.artwork_status === 'missing'; }).length;
       var pendingAppr = adList.filter(function (a) { return a.approval_status === 'pending'; }).length;
-      var unpaid = adList.filter(function (a) { return a.payment_status === 'unpaid'; }).length + pkgList.filter(function (p) { return p.payment_status === 'unpaid'; }).length;
+      var unpaid      = adList.filter(function (a) { return a.payment_status === 'unpaid'; }).length +
+                        pkgList.filter(function (p) { return p.payment_status === 'unpaid'; }).length;
       var today  = new Date(); today.setHours(0, 0, 0, 0);
       var soon   = new Date(today.getTime() + 7 * 86400000);
       var upcoming  = delivList.filter(function (d) { return d.status !== 'done' && d.due_date && new Date(d.due_date) <= soon; }).length;
@@ -264,13 +287,13 @@
     var b = id ? SpnsState.businesses.find(function (x) { return x.id === id; }) : null;
     document.getElementById('spn-biz-modal-title').textContent = b ? 'Edit Business' : 'Add Business';
     document.getElementById('spn-biz-id').value        = id || '';
-    document.getElementById('spn-biz-name').value      = (b && b.name)                          || '';
-    document.getElementById('spn-biz-contact').value   = (b && b.contact_name)                  || '';
-    document.getElementById('spn-biz-email').value     = (b && b.contact_email)                 || '';
-    document.getElementById('spn-biz-phone').value     = (b && b.contact_phone)                 || '';
-    document.getElementById('spn-biz-website').value   = (b && b.website)                       || '';
-    document.getElementById('spn-biz-instagram').value = (b && b.social_links && b.social_links.instagram) || '';
-    document.getElementById('spn-biz-notes').value     = (b && b.notes)                         || '';
+    document.getElementById('spn-biz-name').value      = (b && b.name)                                         || '';
+    document.getElementById('spn-biz-contact').value   = (b && b.contact_name)                                 || '';
+    document.getElementById('spn-biz-email').value     = (b && b.contact_email)                                || '';
+    document.getElementById('spn-biz-phone').value     = (b && b.contact_phone)                                || '';
+    document.getElementById('spn-biz-website').value   = (b && b.website)                                      || '';
+    document.getElementById('spn-biz-instagram').value = (b && b.social_links && b.social_links.instagram)     || '';
+    document.getElementById('spn-biz-notes').value     = (b && b.notes)                                        || '';
     document.getElementById('spn-biz-modal').classList.add('open');
   }
   function closeBizModal() { document.getElementById('spn-biz-modal').classList.remove('open'); }
@@ -281,27 +304,23 @@
     var id = document.getElementById('spn-biz-id').value;
     var payload = {
       name:          name,
-      contact_name:  document.getElementById('spn-biz-contact').value.trim()   || null,
-      contact_email: document.getElementById('spn-biz-email').value.trim()      || null,
-      contact_phone: document.getElementById('spn-biz-phone').value.trim()      || null,
-      website:       document.getElementById('spn-biz-website').value.trim()    || null,
+      contact_name:  document.getElementById('spn-biz-contact').value.trim()  || null,
+      contact_email: document.getElementById('spn-biz-email').value.trim()    || null,
+      contact_phone: document.getElementById('spn-biz-phone').value.trim()    || null,
+      website:       document.getElementById('spn-biz-website').value.trim()  || null,
       social_links:  { instagram: document.getElementById('spn-biz-instagram').value.trim() || null },
-      notes:         document.getElementById('spn-biz-notes').value.trim()      || null,
+      notes:         document.getElementById('spn-biz-notes').value.trim()    || null,
     };
     var p = id ? dbUpdate('sponsor_businesses', id, payload) : dbInsert('sponsor_businesses', payload);
-    p.then(function () {
-      closeBizModal();
-      SpnsState.loaded.businesses = false;
-      loadBusinesses();
-    }).catch(function (e) { alert('Could not save: ' + e.message); });
+    p.then(function () { closeBizModal(); SpnsState.loaded.businesses = false; loadBusinesses(); })
+     .catch(function (e) { alert('Could not save: ' + e.message); });
   }
 
   function deleteBiz(id, name) {
     if (!confirm('Delete "' + name + '"? This cannot be undone.')) return;
-    dbDelete('sponsor_businesses', id).then(function () {
-      SpnsState.loaded.businesses = false;
-      loadBusinesses();
-    }).catch(function (e) { alert('Could not delete: ' + e.message); });
+    dbDelete('sponsor_businesses', id)
+      .then(function () { SpnsState.loaded.businesses = false; loadBusinesses(); })
+      .catch(function (e) { alert('Could not delete: ' + e.message); });
   }
 
   // -- ADS ----------------------------------------------------------------------
@@ -376,7 +395,6 @@
     }
     sizeSel.onchange = autofillPrice;
     document.getElementById('spn-ad-type').onchange = autofillPrice;
-
     document.getElementById('spn-ad-modal').classList.add('open');
   }
   function closeAdModal() { document.getElementById('spn-ad-modal').classList.remove('open'); }
@@ -395,19 +413,15 @@
       notes:           document.getElementById('spn-ad-notes').value.trim() || null,
     };
     var p = id ? dbUpdate('programme_ads', id, payload) : dbInsert('programme_ads', payload);
-    p.then(function () {
-      closeAdModal();
-      SpnsState.loaded.ads = false;
-      loadAds();
-    }).catch(function (e) { alert('Could not save: ' + e.message); });
+    p.then(function () { closeAdModal(); SpnsState.loaded.ads = false; loadAds(); })
+     .catch(function (e) { alert('Could not save: ' + e.message); });
   }
 
   function deleteAd(id) {
     if (!confirm('Delete this ad? This cannot be undone.')) return;
-    dbDelete('programme_ads', id).then(function () {
-      SpnsState.loaded.ads = false;
-      loadAds();
-    }).catch(function (e) { alert('Could not delete: ' + e.message); });
+    dbDelete('programme_ads', id)
+      .then(function () { SpnsState.loaded.ads = false; loadAds(); })
+      .catch(function (e) { alert('Could not delete: ' + e.message); });
   }
 
   // -- SPONSOR PACKAGES ---------------------------------------------------------
@@ -483,19 +497,15 @@
       notes:          document.getElementById('spn-pkg-notes').value.trim()    || null,
     };
     var p2 = id ? dbUpdate('sponsor_packages', id, payload) : dbInsert('sponsor_packages', payload);
-    p2.then(function () {
-      closePkgModal();
-      SpnsState.loaded.sponsors = false;
-      loadPackages();
-    }).catch(function (e) { alert('Could not save: ' + e.message); });
+    p2.then(function () { closePkgModal(); SpnsState.loaded.sponsors = false; loadPackages(); })
+      .catch(function (e) { alert('Could not save: ' + e.message); });
   }
 
   function deletePkg(id) {
     if (!confirm('Delete this sponsor package? This cannot be undone.')) return;
-    dbDelete('sponsor_packages', id).then(function () {
-      SpnsState.loaded.sponsors = false;
-      loadPackages();
-    }).catch(function (e) { alert('Could not delete: ' + e.message); });
+    dbDelete('sponsor_packages', id)
+      .then(function () { SpnsState.loaded.sponsors = false; loadPackages(); })
+      .catch(function (e) { alert('Could not delete: ' + e.message); });
   }
 
   // -- DELIVERABLES -------------------------------------------------------------
@@ -546,10 +556,9 @@
   }
 
   function toggleDeliv(id, checked) {
-    dbUpdate('sponsor_deliverables', id, { status: checked ? 'done' : 'open' }).then(function () {
-      SpnsState.loaded.deliverables = false;
-      loadDeliverables();
-    }).catch(function (e) { alert('Could not update: ' + e.message); });
+    dbUpdate('sponsor_deliverables', id, { status: checked ? 'done' : 'open' })
+      .then(function () { SpnsState.loaded.deliverables = false; loadDeliverables(); })
+      .catch(function (e) { alert('Could not update: ' + e.message); });
   }
 
   function openDelivModal(id) {
@@ -575,26 +584,22 @@
     var id = document.getElementById('spn-deliv-id').value;
     var payload = {
       title:       title,
-      business_id: document.getElementById('spn-deliv-biz').value          || null,
-      due_date:    document.getElementById('spn-deliv-due').value           || null,
+      business_id: document.getElementById('spn-deliv-biz').value            || null,
+      due_date:    document.getElementById('spn-deliv-due').value             || null,
       assigned_to: document.getElementById('spn-deliv-assigned').value.trim() || null,
       status:      document.getElementById('spn-deliv-status').value,
-      notes:       document.getElementById('spn-deliv-notes').value.trim()  || null,
+      notes:       document.getElementById('spn-deliv-notes').value.trim()    || null,
     };
     var p = id ? dbUpdate('sponsor_deliverables', id, payload) : dbInsert('sponsor_deliverables', payload);
-    p.then(function () {
-      closeDelivModal();
-      SpnsState.loaded.deliverables = false;
-      loadDeliverables();
-    }).catch(function (e) { alert('Could not save: ' + e.message); });
+    p.then(function () { closeDelivModal(); SpnsState.loaded.deliverables = false; loadDeliverables(); })
+     .catch(function (e) { alert('Could not save: ' + e.message); });
   }
 
   function deleteDeliv(id) {
     if (!confirm('Delete this deliverable? This cannot be undone.')) return;
-    dbDelete('sponsor_deliverables', id).then(function () {
-      SpnsState.loaded.deliverables = false;
-      loadDeliverables();
-    }).catch(function (e) { alert('Could not delete: ' + e.message); });
+    dbDelete('sponsor_deliverables', id)
+      .then(function () { SpnsState.loaded.deliverables = false; loadDeliverables(); })
+      .catch(function (e) { alert('Could not delete: ' + e.message); });
   }
 
   // -- SETTINGS -----------------------------------------------------------------
@@ -644,8 +649,8 @@
 
   function editAdSize(i) {
     var s      = SpnsState.settings.adSizes[i];
-    var label  = prompt('Size name:', s.label);      if (label  == null) return;
-    var dims   = prompt('Dimensions (e.g. 4x5):', s.dims);       if (dims   == null) return;
+    var label  = prompt('Size name:', s.label);              if (label  == null) return;
+    var dims   = prompt('Dimensions (e.g. 4x5):', s.dims);   if (dims   == null) return;
     var colour = parseFloat(prompt('Colour price ($):', s.colour)); if (isNaN(colour)) return;
     var bw     = parseFloat(prompt('B&W price ($):', s.bw));         if (isNaN(bw))     return;
     SpnsState.settings.adSizes[i] = Object.assign({}, s, { label: label.trim(), dims: dims.trim(), colour: colour, bw: bw });
@@ -654,15 +659,15 @@
   }
 
   function addTier() {
-    var label  = prompt('Tier name:');            if (!label)      return;
-    var amount = parseFloat(prompt('Default amount ($):')); if (isNaN(amount)) return;
+    var label  = prompt('Tier name:');                           if (!label)         return;
+    var amount = parseFloat(prompt('Default amount ($):'));      if (isNaN(amount))  return;
     SpnsState.settings.tiers.push({ id: label.toLowerCase().replace(/\s+/g, '-'), label: label.trim(), amount: amount });
     renderSettings();
   }
 
   function editTier(i) {
     var t      = SpnsState.settings.tiers[i];
-    var label  = prompt('Tier name:', t.label);    if (label  == null) return;
+    var label  = prompt('Tier name:', t.label);                  if (label  == null) return;
     var amount = parseFloat(prompt('Default amount ($):', t.amount)); if (isNaN(amount)) return;
     SpnsState.settings.tiers[i] = Object.assign({}, t, { label: label.trim(), amount: amount });
     renderSettings();
