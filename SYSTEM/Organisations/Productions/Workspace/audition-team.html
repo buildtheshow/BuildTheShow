@@ -21317,40 +21317,43 @@ If you have any questions, don't hesitate to reach out.
   }
 
   function buildStaticCheckedInRailShell() {
-    const renderer = window.BTSAuditionTemplates?.renderTemplateById;
-    if (!renderer) return '';
     const session = getActiveAuditionNavSession?.() || getCurrentInRoomSession?.() || null;
     const checkedInApps = session?.id ? getInRoomCheckedInApps(session) : [];
     const groups = session?.id ? getInRoomGroups(session) : { past: [], current: null, waiting: [] };
     const pastIds = new Set((groups.past || []).map(app => String(app.id || '')));
     const currentId = String(groups.current?.id || '');
+    const renderTile = ({ time = '', name = '', state = '', className = '', cardHtml = '' } = {}) => {
+      const safeClassName = esc(className).trim();
+      return `<button type="button" class="template-checkin-tile${safeClassName ? ` ${safeClassName}` : ''}" title="${esc(name)}" tabindex="-1" aria-label="${esc(`${time} ${name} ${state}`)}" style="flex:0 0 88px;width:88px;display:grid;grid-template-rows:0.78rem auto 0.86rem;justify-items:center;gap:0.22rem;">
+        <div class="template-checkin-time">${esc(time)}</div>
+        <div class="template-checkin-card">${cardHtml}</div>
+        <div class="template-checkin-status">${esc(state)}</div>
+      </button>`;
+    };
     const trayCards = checkedInApps.length ? checkedInApps.map(app => {
       const slot = getApplicantSlotForSession(app, session.id);
       const time = formatSlotTime(slot?.slot_time || slot?.start_time || getApplicantSlotStartValue(app) || '');
       const appId = String(app.id || '');
       const state = pastIds.has(appId) ? 'Through' : (currentId && appId === currentId ? 'Next' : 'Ready');
       const className = pastIds.has(appId) ? 'is-done' : (currentId && appId === currentId ? 'is-next' : '');
-      return renderer('auditions.in-room.checked-in-tile', {
-        esc,
+      return renderTile({
         time,
         name: appDisplayName(app),
         state,
         className,
         cardHtml: buildStandardCastingCardHtml(app, { size: 'compact', hasPadding: true, hasIcons: true, state: null })
       });
-    }).join('') : renderer('auditions.in-room.checked-in-tile', {
-      esc,
+    }).join('') : renderTile({
       time: '',
       name: 'No one checked in',
       state: '',
       className: 'is-placeholder',
       cardHtml: buildNoOneCheckedInCastingCardHtml()
     });
-    const checkinRailHtml = renderer('auditions.in-room.checked-in-strip', {
-      esc,
-      label: 'Checked In',
-      trayCards
-    });
+    const checkinRailHtml = `<div class="template-checkin-rail" data-bts-template="checked-in-rail" style="display:grid;grid-template-columns:48px minmax(0,1fr);gap:0.5rem;align-items:stretch;min-width:0;border-radius:0 0 16px 16px;background:#fff;padding:0.55rem 0.65rem 0.75rem;overflow:hidden;">
+      <div class="template-checkin-label" style="position:relative;display:flex;align-items:center;justify-content:center;align-self:stretch;min-height:100%;margin:-0.55rem 0 -0.75rem;padding:0.55rem 0 0.75rem;border-left:2px solid rgba(87,46,136,0.12);color:#1a1530;font-size:0.66rem;font-weight:950;letter-spacing:0.08em;line-height:1.1;text-align:center;text-transform:uppercase;writing-mode:vertical-rl;transform:rotate(180deg);user-select:none;">Checked In</div>
+      <div class="template-checkin-row" style="display:flex;flex-direction:row;flex-wrap:nowrap;align-items:flex-start;gap:0.55rem;min-width:0;max-width:100%;min-height:7.25rem;overflow-x:auto;overflow-y:hidden;padding:0.05rem 0.1rem 0.45rem;scrollbar-width:thin;-webkit-overflow-scrolling:touch;perspective:900px;">${trayCards}</div>
+    </div>`;
     return `<div class="audition-flow-template-checkin" aria-hidden="true">
       <style>
         .audition-flow-template-checkin{margin:0.55rem 0 0.9rem;border:1.5px solid #e4deed;border-radius:0 0 16px 16px;background:#fff;box-shadow:none;overflow:hidden;}
