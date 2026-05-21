@@ -6,6 +6,12 @@
   var SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRrbWFpa3R4cHdxZmJnZW9qYm5mIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MDc4NTI4NTYsImV4cCI6MjAyMzQyODg1Nn0.tVxOMkaMdBnuqQbLdHl00h4WA7DV8LHuVxCt6z5LFCY';
   var STORAGE_BUCKET = 'programme-ads';
 
+  /* Dims stored as "HeightxWidth" (printing convention).
+     Programme is 8.5x11 folded in half = 5.5" wide x 8.5" tall (portrait).
+     Printable area: 5" wide x 8" tall. */
+  var PRINT_W = 5;
+  var PRINT_H = 8;
+
   var DEFAULT_AD_SIZES = [
     { id: 'card',    label: 'Card',      dims: '2x2.5', colour: 50,  bw: 35  },
     { id: 'quarter', label: '1/4 Page',  dims: '4x2.5', colour: 80,  bw: 60  },
@@ -84,29 +90,62 @@
   function bizName(id) { var b = SpnsState.businesses.find(function (x) { return x.id === id; }); return b ? b.name : ''; }
   function esc(s) { return s ? String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;') : ''; }
 
+  // -- Settings tile builder ---------------------------------------------------
+
+  function settingsTile(kicker, label, body, footer) {
+    return '<div class="template-brand-card template-brand-card--settings">' +
+      '<div class="template-brand-card-inner"><div class="template-brand-tile-content">' +
+        '<div class="template-brand-tile-container template-brand-tile-container--header">' +
+          '<div class="template-brand-tile-kicker">' + kicker + '</div>' +
+        '</div>' +
+        '<div class="template-brand-tile-container template-brand-tile-container--title">' +
+          '<div class="template-brand-tile-settings-label">' + label + '</div>' +
+        '</div>' +
+        '<div class="template-brand-tile-container template-brand-tile-container--body">' +
+          '<div class="spn-settings-tile-body">' + body + '</div>' +
+        '</div>' +
+        '<div class="template-brand-tile-container template-brand-tile-container--footer">' +
+          '<div class="spn-settings-tile-actions">' + footer + '</div>' +
+        '</div>' +
+      '</div></div>' +
+    '</div>';
+  }
+
+  function deadlineTile(kicker, label, inputId) {
+    return '<div class="template-brand-card template-brand-card--settings">' +
+      '<div class="template-brand-card-inner"><div class="template-brand-tile-content">' +
+        '<div class="template-brand-tile-container template-brand-tile-container--header">' +
+          '<div class="template-brand-tile-kicker">' + kicker + '</div>' +
+        '</div>' +
+        '<div class="template-brand-tile-container template-brand-tile-container--title">' +
+          '<div class="template-brand-tile-settings-label">' + label + '</div>' +
+        '</div>' +
+        '<div class="template-brand-tile-container template-brand-tile-container--body">' +
+          '<input type="date" id="' + inputId + '" class="spn-field input" style="width:100%;padding:0.45rem 0.6rem;border:1.5px solid rgba(87,46,136,0.18);border-radius:7px;font-family:inherit;font-size:0.84rem;color:#1a1530;background:#fff;" />' +
+        '</div>' +
+        '<div class="template-brand-tile-container template-brand-tile-container--footer"></div>' +
+      '</div></div>' +
+    '</div>';
+  }
+
   // -- Ad sizes grouped visual --------------------------------------------------
 
+  /* Dims format: "HxW" (height x width, printing convention).
+     e.g. '8x5' = 8" tall x 5" wide. First number = height, second = width. */
   function parseAdDims(dims) {
     var m = String(dims || '').replace(/['"]/g, '').match(/^([\d.]+)[xX]([\d.]+)$/);
-    return m ? { w: parseFloat(m[1]) || 1, h: parseFloat(m[2]) || 1 } : { w: 1, h: 1 };
+    return m ? { h: parseFloat(m[1]) || 1, w: parseFloat(m[2]) || 1 } : { h: 1, w: 1 };
   }
 
   function renderAdsGrouped() {
     var sizes = SpnsState.settings.adSizes;
     if (!sizes || !sizes.length) return '<div class="spn-empty"><div class="spn-empty-icon">&#x1F4C4;</div><h3>No ad sizes configured</h3><p>Go to Settings to set up your programme ad sizes and pricing.</p></div>';
 
-    var pageW = 8, pageH = 5;
-    sizes.forEach(function (s) {
-      var d = parseAdDims(s.dims);
-      if (d.w > pageW) pageW = d.w;
-      if (d.h > pageH) pageH = d.h;
-    });
-
     return sizes.map(function (s, i) {
-      var d           = parseAdDims(s.dims);
-      var adW         = Math.round(d.w / pageW * 100);
-      var adH         = Math.round(d.h / pageH * 100);
-      var color       = ADTILE_COLORS[i % ADTILE_COLORS.length];
+      var d     = parseAdDims(s.dims);
+      var adH   = Math.min(100, Math.round(d.h / PRINT_H * 100));
+      var adW   = Math.min(100, Math.round(d.w / PRINT_W * 100));
+      var color = ADTILE_COLORS[i % ADTILE_COLORS.length];
       var dimsDisplay = String(s.dims).replace(/[xX]/, '" x ') + '"';
 
       var booked   = SpnsState.ads.filter(function (a) { return a.ad_size === s.id; });
@@ -131,9 +170,12 @@
         '<div class="template-brand-card template-brand-card--horizontal" style="--brand-tile-bg:' + color + ';--brand-tile-ink:#ffffff;">' +
           '<div class="template-brand-card-inner">' +
             '<div class="spn-adtile-layout">' +
-              '<div class="spn-adtile-page-wrap"><div class="spn-adtile-page">' + adFill + '</div></div>' +
+              '<div class="spn-adtile-page-wrap">' +
+                '<div class="spn-adtile-page">' + adFill + '</div>' +
+                '<div class="spn-adtile-page-note">8.5&Prime;&times;11&Prime; folded in half</div>' +
+              '</div>' +
               '<div class="spn-adtile-info">' +
-                '<div class="spn-adtile-kicker">Ad Size</div>' +
+                '<div class="spn-adtile-kicker">Programme Ad Size</div>' +
                 '<div class="spn-adtile-name">' + esc(s.label) + '</div>' +
                 '<div class="spn-adtile-dims">' + esc(dimsDisplay) + '</div>' +
                 '<div class="spn-adtile-pricing">' +
@@ -450,7 +492,6 @@
     }
     sizeSel.onchange = autofillPrice;
     document.getElementById('spn-ad-type').onchange = autofillPrice;
-
     if (!a && defaultSizeId) autofillPrice();
     document.getElementById('spn-ad-modal').classList.add('open');
   }
@@ -494,7 +535,7 @@
   function renderPackages() {
     var pkgs  = SpnsState.packages;
     var count = document.getElementById('spn-pkgs-count');
-    if (count) count.textContent = pkgs.length + ' Sponsor' + (pkgs.length !== 1 ? 's' : '');
+    if (count) count.textContent = pkgs.length + ' Sponsor' + (pkgs.length !== 1 ? 'es' : '');
     var head  = '<div class="spn-list-head spn-pkg-cols"><span>Business</span><span>Tier</span><span>Amount</span><span>Payment</span><span></span></div>';
     var listEl = document.getElementById('spn-pkgs-list');
     if (!listEl) return;
@@ -684,30 +725,39 @@
 
   function renderSettings() {
     var aszEl = document.getElementById('spn-adsize-list');
-    if (aszEl) aszEl.innerHTML = SpnsState.settings.adSizes.map(function (s, i) {
-      return '<div class="spn-adsize-row">' +
-        '<div class="spn-tier-name">' + esc(s.label) + ' <span style="color:#9a90b0;font-weight:600">' + esc(String(s.dims)) + '</span></div>' +
-        '<div class="spn-tier-amount">Colour: $' + s.colour + '</div>' +
-        '<div class="spn-tier-amount" style="color:#6b5f8a">B&amp;W: $' + s.bw + '</div>' +
-        '<button class="spn-btn spn-btn--ghost spn-btn--sm" onclick="MarketingSponsorsModule.editAdSize(' + i + ')">Edit</button>' +
-      '</div>';
-    }).join('');
+    if (aszEl) aszEl.innerHTML = '<div class="spn-settings-tile-grid">' +
+      SpnsState.settings.adSizes.map(function (s, i) {
+        var dimsDisplay = String(s.dims).replace(/[xX]/, '" x ') + '"';
+        return settingsTile(
+          'Ad Size',
+          esc(s.label),
+          esc(dimsDisplay) + '<br>Colour: $' + s.colour + ' &nbsp;&middot;&nbsp; B&amp;W: $' + s.bw,
+          '<button class="spn-btn spn-btn--ghost spn-btn--sm" onclick="MarketingSponsorsModule.editAdSize(' + i + ')">Edit</button>'
+        );
+      }).join('') +
+    '</div>';
 
     var tierEl = document.getElementById('spn-tier-list');
-    if (tierEl) tierEl.innerHTML = SpnsState.settings.tiers.map(function (t, i) {
-      return '<div class="spn-tier-row">' +
-        '<div class="spn-tier-name">' + esc(t.label) + '</div>' +
-        '<div class="spn-tier-amount">$' + t.amount + '</div>' +
-        '<button class="spn-btn spn-btn--ghost spn-btn--sm" onclick="MarketingSponsorsModule.editTier(' + i + ')">Edit</button>' +
-        '<button class="spn-btn spn-btn--danger spn-btn--sm" onclick="MarketingSponsorsModule.deleteTier(' + i + ')">Remove</button>' +
-      '</div>';
-    }).join('') + '<button class="spn-btn spn-btn--ghost" style="margin-top:0.8rem" onclick="MarketingSponsorsModule.addTier()">+ Add Tier</button>';
+    if (tierEl) tierEl.innerHTML = '<div class="spn-settings-tile-grid">' +
+      SpnsState.settings.tiers.map(function (t, i) {
+        return settingsTile(
+          'Sponsor Tier',
+          esc(t.label),
+          '$' + t.amount,
+          '<button class="spn-btn spn-btn--ghost spn-btn--sm" onclick="MarketingSponsorsModule.editTier(' + i + ')">Edit</button>' +
+          '<button class="spn-btn spn-btn--danger spn-btn--sm" onclick="MarketingSponsorsModule.deleteTier(' + i + ')">Remove</button>'
+        );
+      }).join('') +
+      '<div style="grid-column:1/-1;padding-top:0.25rem">' +
+        '<button class="spn-btn spn-btn--ghost" onclick="MarketingSponsorsModule.addTier()">+ Add Tier</button>' +
+      '</div>' +
+    '</div>';
   }
 
   function editAdSize(i) {
     var s      = SpnsState.settings.adSizes[i];
-    var label  = prompt('Size name:', s.label);             if (label  == null) return;
-    var dims   = prompt('Dimensions (e.g. 4x5):', s.dims); if (dims   == null) return;
+    var label  = prompt('Size name:', s.label);                   if (label  == null) return;
+    var dims   = prompt('Dimensions H x W (e.g. 4x5):', s.dims); if (dims   == null) return;
     var colour = parseFloat(prompt('Colour price ($):', s.colour)); if (isNaN(colour)) return;
     var bw     = parseFloat(prompt('B&W price ($):', s.bw));        if (isNaN(bw))     return;
     SpnsState.settings.adSizes[i] = Object.assign({}, s, { label: label.trim(), dims: dims.trim(), colour: colour, bw: bw });
@@ -854,18 +904,25 @@
         '</div>' +
 
         '<div id="spn-panel-settings" class="spn-panel">' +
-          '<div class="spn-card">' +
-            '<div class="spn-settings-section"><div class="spn-settings-section-title">Programme Ad Sizes</div><div id="spn-adsize-list"></div></div>' +
-            '<div class="spn-settings-section"><div class="spn-settings-section-title">Sponsor Tiers</div><div id="spn-tier-list"></div></div>' +
-            '<div class="spn-settings-section">' +
-              '<div class="spn-settings-section-title">Deadlines</div>' +
-              '<div class="spn-row-2">' +
-                '<div class="spn-field"><label>Artwork submission deadline</label><input type="date" id="spn-deadline-artwork" /></div>' +
-                '<div class="spn-field"><label>Ad booking deadline</label><input type="date" id="spn-deadline-booking" /></div>' +
-              '</div>' +
-              '<div class="spn-field" style="max-width:280px"><label>Sponsor confirmation deadline</label><input type="date" id="spn-deadline-sponsor" /></div>' +
-              '<button class="spn-btn spn-btn--primary" onclick="MarketingSponsorsModule.saveSettings()">Save Settings</button>' +
+          '<div class="spn-settings-section">' +
+            '<div class="spn-settings-section-title">Programme Ad Sizes</div>' +
+            '<div class="spn-settings-section-desc">These sizes appear on your ad booking sheet. Dims are height x width (printing convention), on an 8.5x11 sheet folded in half.</div>' +
+            '<div id="spn-adsize-list"></div>' +
+          '</div>' +
+          '<div class="spn-settings-section">' +
+            '<div class="spn-settings-section-title">Sponsor Tiers</div>' +
+            '<div class="spn-settings-section-desc">Tiers are used when adding sponsor packages. Add any tiers your production offers.</div>' +
+            '<div id="spn-tier-list"></div>' +
+          '</div>' +
+          '<div class="spn-settings-section">' +
+            '<div class="spn-settings-section-title">Deadlines</div>' +
+            '<div class="spn-settings-section-desc">Set the key dates for your ad and sponsorship campaign. These are for your reference only.</div>' +
+            '<div class="spn-settings-tile-grid">' +
+              deadlineTile('Sponsors', 'Artwork Submission Deadline', 'spn-deadline-artwork') +
+              deadlineTile('Sponsors', 'Ad Booking Deadline', 'spn-deadline-booking') +
+              deadlineTile('Sponsors', 'Sponsor Confirmation Deadline', 'spn-deadline-sponsor') +
             '</div>' +
+            '<button class="spn-btn spn-btn--primary" onclick="MarketingSponsorsModule.saveSettings()">Save Settings</button>' +
           '</div>' +
         '</div>' +
 
