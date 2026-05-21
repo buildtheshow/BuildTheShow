@@ -21432,9 +21432,6 @@ If you have any questions, don't hesitate to reach out.
     return bar;
   }
 
-  // Tracks which of the 4 operational tabs is currently active for the persistent header
-  let _audHeaderActiveTool = null; // 'checkin' | 'inroom' | 'castingboard' | 'callbacks' | null
-
   function renderAuditionHeaderFrame(activeAudTab) {
     const headerLeft = document.getElementById('aud-page-header-left');
     if (!headerLeft) return;
@@ -21454,22 +21451,7 @@ If you have any questions, don't hesitate to reach out.
       return;
     }
 
-    if (!_audHeaderActiveTool) {
-      headerLeft.innerHTML = '';
-      return;
-    }
-
-    const session = getActiveAuditionNavSession();
-    const headerAccent = session
-      ? getAuditionScheduleSidebarMarkerColor(session.type || 'audition')
-      : '#572e88';
-
-    const ciClick  = session ? `openAuditionSessionWorkspace('${esc(session.id)}','checkin')` : `openAuditionsSubTab('checkin')`;
-    const irClick  = session ? `openAuditionSessionWorkspace('${esc(session.id)}','inroom')`  : `openAuditionsSubTab('inroom')`;
-    headerLeft.innerHTML = window.BTSAuditionTemplates.renderTemplate(
-      { area: 'auditions', portal: 'team', component: 'session-frame' },
-      { esc, headerAccent, teamAccessMode, activeTool: _audHeaderActiveTool, ciClick, irClick }
-    );
+    headerLeft.innerHTML = '';
   }
 
   function auditionPublicLink() {
@@ -21704,17 +21686,7 @@ If you have any questions, don't hesitate to reach out.
     const isSessionSubTab = String(subTab).startsWith('session:');
     saveWorkspaceNavState({ auditionsSubTab: subTab });
 
-    // Determine whether this navigation should keep or clear the persistent header
     const operationalTabs = new Set(['checkin','inroom','callbacks']);
-    if (operationalTabs.has(subTab)) {
-      _audHeaderActiveTool = subTab;
-    } else if (isSessionSubTab) {
-      // keeps whatever tool was last active; default to checkin
-      if (!_audHeaderActiveTool || !operationalTabs.has(_audHeaderActiveTool)) _audHeaderActiveTool = 'checkin';
-    } else {
-      // structural tab (settings, schedule, performers) — hide the header
-      _audHeaderActiveTool = null;
-    }
 
     if (subTab === 'overview') {
       switchAudTab('overview');
@@ -21770,11 +21742,9 @@ If you have any questions, don't hesitate to reach out.
   function openAuditionSessionWorkspace(sessionId, tool = 'checkin') {
     activeAuditionNavSessionId = sessionId;
     activeAuditionNavTool = tool;
-    _audHeaderActiveTool = tool; // keep header showing, update active tab
     saveWorkspaceNavState({ auditionsSessionId: sessionId, auditionsSessionTool: tool });
     openAuditionsSubTab(`session:${sessionId}`);
     activeAuditionNavTool = tool;
-    _audHeaderActiveTool = tool;
     renderAuditionSessionWorkspace();
   }
 
@@ -21885,7 +21855,6 @@ If you have any questions, don't hesitate to reach out.
       loadEmailTemplates();
     }
     if (id === 'castlist') {
-      _audHeaderActiveTool = null;
       switchAudTab('castlist');
       saveWorkspaceNavState({ prodTab: 'castlist' });
     }
@@ -34597,7 +34566,6 @@ If you have any questions, don't hesitate to reach out.
     if (teamAccessMode && tool === 'checkin') {
       tool = 'inroom';
       activeAuditionNavTool = 'inroom';
-      _audHeaderActiveTool = 'inroom';
     }
     const metaParts = [];
     if (session.date) metaParts.push({ label: 'Date', value: formatAuditionScheduleSessionDate(session.date) });
