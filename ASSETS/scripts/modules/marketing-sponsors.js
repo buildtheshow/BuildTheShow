@@ -167,23 +167,35 @@
         : '<div class="spn-adtile-ad" style="width:' + adW + '%;height:' + adH + '%;"><div class="spn-adtile-ad-label">Ad</div></div>';
 
       var tile =
-        '<div class="template-brand-card template-brand-card--horizontal" style="--brand-tile-bg:' + color + ';--brand-tile-ink:#ffffff;">' +
+        '<div class="template-brand-card template-brand-card--horizontal template-brand-card--content" style="--brand-tile-bg:' + color + ';--brand-tile-ink:#ffffff;">' +
           '<div class="template-brand-card-inner">' +
-            '<div class="spn-adtile-layout">' +
-              '<div class="spn-adtile-page-wrap">' +
-                '<div class="spn-adtile-page">' + adFill + '</div>' +
-                '<div class="spn-adtile-page-note">8.5&Prime;&times;11&Prime; folded in half</div>' +
-              '</div>' +
-              '<div class="spn-adtile-info">' +
-                '<div class="spn-adtile-kicker">Programme Ad Size</div>' +
-                '<div class="spn-adtile-name">' + esc(s.label) + '</div>' +
-                '<div class="spn-adtile-dims">' + esc(dimsDisplay) + '</div>' +
-                '<div class="spn-adtile-pricing">' +
-                  '<div class="spn-adtile-price"><div class="spn-adtile-price-label">Colour</div><div class="spn-adtile-price-val">$' + s.colour + '</div></div>' +
-                  '<div class="spn-adtile-price"><div class="spn-adtile-price-label">B&amp;W</div><div class="spn-adtile-price-val">$' + s.bw + '</div></div>' +
+            '<div class="template-brand-horizontal-quad-split">' +
+              '<div class="template-brand-horizontal-quad-cell template-brand-horizontal-quad-cell--anchor">' +
+                '<div class="template-brand-text-holder template-brand-text-holder--invisible">' +
+                  '<div class="template-brand-text-holder-inner template-brand-text-holder-inner--invisible">' +
+                    '<div class="template-brand-tile-container template-brand-tile-container--header">' +
+                      '<div class="template-brand-tile-kicker">Programme Ad Size</div>' +
+                    '</div>' +
+                    '<div class="template-brand-tile-container template-brand-tile-container--title">' +
+                      '<div class="template-brand-tile-title">' + esc(s.label) + '</div>' +
+                    '</div>' +
+                    '<div class="template-brand-tile-container template-brand-tile-container--body">' +
+                      '<div class="template-brand-tile-body">' + esc(dimsDisplay) + '<br>Colour: $' + s.colour + ' &nbsp;&middot;&nbsp; B&amp;W: $' + s.bw + '</div>' +
+                    '</div>' +
+                    '<div class="template-brand-tile-container template-brand-tile-container--footer">' +
+                      '<div class="spn-adtile-status">' + statusLine + '</div>' +
+                    '</div>' +
+                  '</div>' +
                 '</div>' +
-                '<div class="spn-adtile-status">' + statusLine + '</div>' +
               '</div>' +
+              '<div class="template-brand-horizontal-quad-cell template-brand-horizontal-quad-cell--right">' +
+                '<div class="spn-adtile-page-wrap">' +
+                  '<div class="spn-adtile-page">' + adFill + '</div>' +
+                  '<div class="spn-adtile-page-note">8.5&Prime;&times;11&Prime; folded in half</div>' +
+                '</div>' +
+              '</div>' +
+              '<div class="template-brand-horizontal-quad-cell template-brand-horizontal-quad-cell--bottom-left" aria-hidden="true"></div>' +
+              '<div class="template-brand-horizontal-quad-cell template-brand-horizontal-quad-cell--bottom-right" aria-hidden="true"></div>' +
             '</div>' +
           '</div>' +
         '</div>';

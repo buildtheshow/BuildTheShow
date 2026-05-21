@@ -93,6 +93,7 @@
       sections: ['cover', 'welcome', 'creative', 'cast', 'bios', 'sponsors', 'ads', 'thanks', 'back'],
     },
     spreadStart: 0,
+    sideTab: 'pages',
     data: {
       production: null,
       businesses: [],
@@ -331,29 +332,29 @@
     '</div>';
   }
 
-  function renderSetupControls() {
-    var checked = new Set(ProgrammeState.settings.sections);
+  function renderSetupTab() {
     var paper = selectedPaper();
-    return '<div class="pgm-builder-grid">' +
-      '<section class="pgm-panel">' +
-        '<div class="pgm-panel-title">Programme Setup</div>' +
-        '<div class="pgm-paper-heading">Paper</div>' +
-        renderPaperPicker() +
-        '<div class="pgm-paper-note">Mockup pages below are shown as ' + paper.pageLabel + '.</div>' +
-        '<div class="pgm-paper-heading">Template</div>' +
-        renderTemplatePicker() +
-        '<div class="pgm-control-grid">' +
-          selectControl('Output', 'output', [['print', 'Print'], ['digital', 'Digital'], ['proof', 'Proof only']]) +
-          selectControl('Booklet', 'booklet', [['saddle-stitch', 'Saddle stitch'], ['single-pages', 'Single pages'], ['digital-scroll', 'Digital scroll']]) +
-          selectControl('Bio Layout', 'bioLayout', [['headshot-grid', 'Headshot grid'], ['text-compact', 'Compact text'], ['featured-bios', 'Featured bios']]) +
-        '</div>' +
-      '</section>' +
-      '<section class="pgm-panel">' +
-        '<div class="pgm-panel-title">Included Sections</div>' +
-        '<div class="pgm-section-picker">' + SECTION_OPTIONS.map(function (item) {
-          return '<label class="pgm-section-option"><input type="checkbox" ' + (checked.has(item[0]) ? 'checked' : '') + ' onchange="MarketingProgrammeModule.toggleSection(\'' + esc(item[0]) + '\', this.checked)" /> <span>' + esc(item[1]) + '</span></label>';
-        }).join('') + '</div>' +
-      '</section>' +
+    return '<div class="pgm-side-scroll">' +
+      '<div class="pgm-paper-heading">Paper</div>' +
+      renderPaperPicker() +
+      '<div class="pgm-paper-note">Preview pages are shown as ' + paper.pageLabel + '.</div>' +
+      '<div class="pgm-paper-heading">Template</div>' +
+      renderTemplatePicker() +
+      '<div class="pgm-control-grid">' +
+        selectControl('Output', 'output', [['print', 'Print'], ['digital', 'Digital'], ['proof', 'Proof only']]) +
+        selectControl('Booklet', 'booklet', [['saddle-stitch', 'Saddle stitch'], ['single-pages', 'Single pages'], ['digital-scroll', 'Digital scroll']]) +
+        selectControl('Bio Layout', 'bioLayout', [['headshot-grid', 'Headshot grid'], ['text-compact', 'Compact text'], ['featured-bios', 'Featured bios']]) +
+      '</div>' +
+    '</div>';
+  }
+
+  function renderSectionsTab() {
+    var checked = new Set(ProgrammeState.settings.sections);
+    return '<div class="pgm-side-scroll">' +
+      '<div class="pgm-side-help">Choose which structured sections BTS should place into this programme.</div>' +
+      '<div class="pgm-section-picker">' + SECTION_OPTIONS.map(function (item) {
+        return '<label class="pgm-section-option"><input type="checkbox" ' + (checked.has(item[0]) ? 'checked' : '') + ' onchange="MarketingProgrammeModule.toggleSection(\'' + esc(item[0]) + '\', this.checked)" /> <span>' + esc(item[1]) + '</span></label>';
+      }).join('') + '</div>' +
     '</div>';
   }
 
@@ -379,6 +380,37 @@
       statusTile('Missing Headshots', String(ready.missingHeadshots), 'Bio image placeholders', statusClass(ready.missingHeadshots)) +
       statusTile('Open Deliverables', String(ready.openDeliverables), 'Sponsor promises not done', statusClass(ready.openDeliverables)) +
     '</div>';
+  }
+
+  function renderPagePlanTab(pages, start, isCover) {
+    return '<div class="pgm-preview-list" aria-label="Programme page plan">' + pages.map(function (page, index) {
+      var openStart = spreadStartForPage(index);
+      var active = openStart === start || (isCover && index === 0);
+      return '<button class="pgm-preview-row' + (active ? ' is-active' : '') + '" type="button" onclick="MarketingProgrammeModule.setSpread(' + openStart + ')">' +
+        '<span>' + (index + 1) + '</span><strong>' + esc(page.title) + '</strong><em>' + esc(page.subtitle || 'Placed by template') + '</em>' +
+      '</button>';
+    }).join('') + '</div>';
+  }
+
+  function renderSideTabButton(key, label) {
+    return '<button class="pgm-side-tab' + (ProgrammeState.sideTab === key ? ' is-active' : '') + '" type="button" onclick="MarketingProgrammeModule.setSideTab(\'' + esc(key) + '\')">' + esc(label) + '</button>';
+  }
+
+  function renderPreviewSidebar(pages, start, isCover) {
+    var tab = ProgrammeState.sideTab || 'pages';
+    var body = tab === 'setup' ? renderSetupTab()
+      : tab === 'status' ? '<div class="pgm-side-scroll">' + renderReadiness(pages) + '</div>'
+      : tab === 'sections' ? renderSectionsTab()
+      : renderPagePlanTab(pages, start, isCover);
+    return '<aside class="pgm-preview-sidebar">' +
+      '<div class="pgm-side-tabs">' +
+        renderSideTabButton('pages', 'Pages') +
+        renderSideTabButton('setup', 'Setup') +
+        renderSideTabButton('status', 'Status') +
+        renderSideTabButton('sections', 'Sections') +
+      '</div>' +
+      body +
+    '</aside>';
   }
 
   function spreadStartForPage(index) {
@@ -448,13 +480,7 @@
         '</div>' +
       '</div>' +
       '<div class="pgm-preview-layout">' +
-        '<div class="pgm-preview-list" aria-label="Programme page plan">' + pages.map(function (page, index) {
-          var openStart = spreadStartForPage(index);
-          var active = openStart === start || (isCover && index === 0);
-          return '<button class="pgm-preview-row' + (active ? ' is-active' : '') + '" type="button" onclick="MarketingProgrammeModule.setSpread(' + openStart + ')">' +
-            '<span>' + (index + 1) + '</span><strong>' + esc(page.title) + '</strong><em>' + esc(page.subtitle || 'Placed by template') + '</em>' +
-          '</button>';
-        }).join('') + '</div>' +
+        renderPreviewSidebar(pages, start, isCover) +
         '<div class="pgm-preview-stage pgm-preview-stage--flipbook' + (isCover ? ' pgm-preview-stage--cover' : ' pgm-preview-stage--spread') + '">' +
           '<div class="pgm-preview-spread">' +
             renderPreviewPage(leftPage, leftIndex, 'left') +
@@ -519,11 +545,6 @@
           '<div class="aud-visual-total"><div class="aud-visual-total-kicker">Estimated</div><div class="aud-visual-total-value">' + pages.length + '</div><div class="aud-visual-total-label">Pages</div></div>' +
         '</div>' +
       '</div>' +
-      '<section class="pgm-intro-band">' +
-        '<div><div class="pgm-kicker">Auto-layout planner</div><h2>' + esc(prod.title || prod.name || 'Production programme') + '</h2><p>BTS owns the structure: sections, sponsor hierarchy, ad placement, bios, placeholders, approvals, and readiness. This is a logistics planner, not a freeform design canvas.</p></div>' +
-      '</section>' +
-      renderSetupControls() +
-      renderReadiness(pages) +
       renderProgrammePreview(pages);
   }
 
@@ -543,6 +564,11 @@
     },
     setSpread: function (start) {
       ProgrammeState.spreadStart = Number(start) || 0;
+      ProgrammeState.sideTab = 'pages';
+      renderPlanner();
+    },
+    setSideTab: function (key) {
+      ProgrammeState.sideTab = key || 'pages';
       renderPlanner();
     },
     toggleSection: function (key, checked) {
