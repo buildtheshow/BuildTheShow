@@ -251,7 +251,12 @@ function handleProductionTeamEditDepartmentChange() {
 }
 
 async function handleProductionTeamEditRoleChange(select) {
-  if (!select || select.value !== '__add_new__') return;
+  if (!select) return;
+  if (select.value !== '__add_new__') {
+    const defaults = creativeLeadershipMenuDefaultsForRole(select.value);
+    if (defaults) syncTeamPortalMenuInputs('ptm-edit-menu', defaults);
+    return;
+  }
   const previousRole = select.dataset.previousRole || '';
   const departmentName = document.getElementById('ptm-edit-department')?.value || '';
   const roleName = window.prompt('New role title:')?.trim();
@@ -273,11 +278,47 @@ async function handleProductionTeamEditRoleChange(select) {
   }
   refreshProductionTeamEditRoleOptions(roleName);
   document.getElementById('ptm-edit-role')?.setAttribute('data-previous-role', roleName);
+  const defaults = creativeLeadershipMenuDefaultsForRole(roleName);
+  if (defaults) syncTeamPortalMenuInputs('ptm-edit-menu', defaults);
   showToast?.(existing ? 'Role already exists.' : 'Role added.');
 }
 
 function teamPortalMenuSelected(selectedMenus, key, parentKey = '') {
   return selectedMenus?.has?.(key) || (parentKey && selectedMenus?.has?.(parentKey));
+}
+
+function creativeLeadershipMenuDefaultsForRole(role = '') {
+  const defaults = window.BTSTeamAccessMenuDefaults;
+  if (defaults?.isCreativeAuditionLeadershipRole?.(role)) {
+    return new Set(defaults.creativeAuditionLeadershipMenuKeys || []);
+  }
+  const normalized = String(role || '').trim().toLowerCase();
+  if (['director', 'choreographer', 'vocal director'].includes(normalized)) {
+    return new Set(['overview', 'auditions', 'auditions:schedule', 'auditions:sessions', 'auditions:casting', 'auditions:finalcasting', 'castlist']);
+  }
+  return null;
+}
+
+function teamAccessMenuDefaultsForRole(role = '', accessLevel = 'creative') {
+  const defaults = window.BTSTeamAccessMenuDefaults;
+  const fromRole = defaults?.teamMenuDefaultsForRole?.(role, accessLevel);
+  if (fromRole) return new Set(fromRole);
+  const creativeDefaults = creativeLeadershipMenuDefaultsForRole(role);
+  if (creativeDefaults) return creativeDefaults;
+  return new Set(teamAccessLevelConfig?.(accessLevel)?.menu || []);
+}
+
+function selectedMenusForTeamMemberEditor(member = {}) {
+  return creativeLeadershipMenuDefaultsForRole(member.role)
+    || teamMemberMenuAccess?.(member)
+    || new Set();
+}
+
+function syncTeamPortalMenuInputs(inputClass, defaults = new Set()) {
+  document.querySelectorAll(`.${inputClass}`).forEach(input => {
+    const parent = input.dataset.parentMenu || '';
+    input.checked = defaults.has(input.value) || (parent && defaults.has(parent));
+  });
 }
 
 function renderTeamPortalMenuChecks(inputClass, selectedMenus = new Set()) {
@@ -569,7 +610,7 @@ function openProductionTeamMemberEdit(memberId) {
     .map(name => `<option value="${safe(name)}"${String(selectedDepartment || '') === String(name) ? ' selected' : ''}>${safe(name)}</option>`)
     .join('');
   const roleOptions = productionTeamEditRoleOptions(selectedDepartment, member.role || '');
-  const selectedMenus = teamMemberMenuAccess?.(member) || new Set();
+  const selectedMenus = selectedMenusForTeamMemberEditor(member);
   const menuChecks = renderTeamPortalMenuChecks('ptm-edit-menu', selectedMenus);
   const accessHtml = typeof renderTeamMemberAccessEditor === 'function'
     ? renderTeamMemberAccessEditor(member, { inputPrefix: 'ptm-edit-access' })
@@ -914,6 +955,7 @@ window.BTSProductionTeamAccess = {
   toggleTeamPortalMenuGroup,
   syncTeamPortalMenuParentState,
   renderTeamPortalMenuChecks,
+  teamAccessMenuDefaultsForRole,
   productionTeamEditDepartmentNames,
   productionTeamEditRoleOptions,
   teamColorPickerHtml,

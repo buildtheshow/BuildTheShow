@@ -33927,6 +33927,16 @@ Your submission link is unique to you. Please do not share it with another perfo
     'auditions:finalcasting',
     'castlist',
   ];
+  const CREATIVE_AUDITION_LEADERSHIP_PERMISSION_KEYS = new Set([
+    'overview',
+    'auditions.schedule',
+    'auditions.general',
+    'auditions.dance_call',
+    'auditions.callback',
+    'auditions.casting_board',
+    'auditions.final_casting',
+    'cast_list',
+  ]);
 
   const TEAM_ACCESS_LEVELS = [
     { key: 'producer', label: 'Producer / full production access', menu: ['overview', 'team', 'calendar', 'auditions', 'castlist', 'registration'] },
@@ -33955,6 +33965,10 @@ Your submission link is unique to you. Please do not share it with another perfo
   function teamMenuDefaultsForRole(role = '', accessLevel = 'creative') {
     if (isCreativeAuditionLeadershipRole(role)) return creativeAuditionLeadershipMenuSet();
     return new Set(teamAccessLevelConfig(normalizeTeamRole(accessLevel || role)).menu || []);
+  }
+
+  function creativeAuditionLeadershipPageAccessLevel(pageKey = '') {
+    return CREATIVE_AUDITION_LEADERSHIP_PERMISSION_KEYS.has(String(pageKey || '')) ? 'manage' : 'none';
   }
 
   window.BTSTeamAccessMenuDefaults = {
@@ -33990,6 +34004,9 @@ Your submission link is unique to you. Please do not share it with another perfo
       allow('auditions.callback', 'auditions:sessions');
       if ([...set].some(key => String(key).startsWith('auditions'))) set.add('auditions');
       return set;
+    }
+    if (isCreativeAuditionLeadershipRole(member.role)) {
+      return creativeAuditionLeadershipMenuSet();
     }
     const raw = Array.isArray(member.menu_access) ? member.menu_access : null;
     const fallback = Array.from(teamMenuDefaultsForRole(member.role, member.access_level || member.role));
@@ -34106,6 +34123,7 @@ Your submission link is unique to you. Please do not share it with another perfo
     const member = (auditionTeamMembers || []).find(item => String(item.id || '') === String(memberId)) || teamAccessMember || {};
     if (isProducerLikeTeamMember(member)) return 'manage';
     if (pageKey === 'production_team' && productionSpecialRowsForMember(memberId).some(row => row.permission_key === 'manage_access')) return 'manage';
+    if (isCreativeAuditionLeadershipRole(member.role)) return creativeAuditionLeadershipPageAccessLevel(pageKey);
     const memberRows = productionPermissionRowsForMember(memberId);
     const direct = memberRows.find(row => String(row.page_key || '') === String(pageKey || ''));
     if (direct) return normalizeProductionAccessLevel(direct.access_level);
@@ -34151,6 +34169,7 @@ Your submission link is unique to you. Please do not share it with another perfo
     const member = (auditionTeamMembers || []).find(item => String(item.id || '') === String(memberId)) || {};
     if (isProducerLikeTeamMember(member)) return 'manage';
     if (pageKey === 'production_team' && teamMemberHasSpecialPermission(memberId, 'manage_access')) return 'manage';
+    if (isCreativeAuditionLeadershipRole(member.role)) return creativeAuditionLeadershipPageAccessLevel(pageKey);
     const memberRows = (productionPagePermissions || []).filter(item => String(item.team_member_id || '') === String(memberId));
     const row = memberRows.find(item => item.page_key === pageKey);
     if (row) return normalizeProductionAccessLevel(row.access_level);
