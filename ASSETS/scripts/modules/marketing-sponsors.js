@@ -81,6 +81,47 @@
   function bizName(id) { var b = SpnsState.businesses.find(function (x) { return x.id === id; }); return b ? b.name : ''; }
   function esc(s) { return s ? String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;') : ''; }
 
+  // ── Ad sizes visual grid ──────────────────────────────────────────────────
+
+  function parseAdAspectRatio(dims) {
+    var clean = String(dims || '').replace(/['"]/g, '');
+    var m = clean.match(/^([\d.]+)[xX]([\d.]+)$/);
+    if (!m) return 100;
+    var w = parseFloat(m[1]);
+    var h = parseFloat(m[2]);
+    return (w && h) ? Math.round(h / w * 100) : 100;
+  }
+
+  function renderAdSizesSection() {
+    var sizes = SpnsState.settings.adSizes;
+    if (!sizes || !sizes.length) return '';
+    var cards = sizes.map(function (s) {
+      var ratio = parseAdAspectRatio(s.dims);
+      return '<div class="spn-adsize-card">' +
+        '<div class="spn-adsize-name">' + esc(s.label) + '</div>' +
+        '<div class="spn-adsize-dims">(' + esc(s.dims) + ')</div>' +
+        '<div class="spn-adsize-preview" style="padding-top:' + ratio + '%">' +
+          '<div class="spn-adsize-preview-art"></div>' +
+        '</div>' +
+        '<div class="spn-adsize-pricing">' +
+          '<div><strong>Colour:</strong> $' + s.colour + '</div>' +
+          '<div><strong>B&amp;W:</strong> $' + s.bw + '</div>' +
+        '</div>' +
+      '</div>';
+    }).join('');
+    return '<div class="spn-ad-sizes-section">' +
+      '<div class="spn-ad-sizes-heading">Programme Ad Sizes &amp; Pricing</div>' +
+      '<div class="spn-ad-sizes-grid">' + cards + '</div>' +
+    '</div>';
+  }
+
+  function refreshAdSizesVisual() {
+    var el = document.getElementById('spn-ad-sizes-visual');
+    if (el) el.innerHTML = renderAdSizesSection();
+  }
+
+  // ── Metric tile for overview ──────────────────────────────────────────────
+
   function mktTile(id, kicker, value, label, color) {
     return '<div class="template-brand-card template-brand-card--square template-brand-card--metric" style="--brand-tile-bg:' + color + ';--brand-tile-ink:#ffffff;">' +
       '<div class="template-brand-card-inner"><div class="template-brand-tile-content">' +
@@ -267,7 +308,10 @@
       SpnsState.ads = data;
     }).catch(function () {
       SpnsState.ads = [];
-    }).then(renderAds);
+    }).then(function () {
+      refreshAdSizesVisual();
+      renderAds();
+    });
   }
 
   function renderAds() {
@@ -566,7 +610,10 @@
           if (spEl)  spEl.value  = s.deadlines.sponsor  || '';
         }
       }
-    }).catch(function () {}).then(renderSettings);
+    }).catch(function () {}).then(function () {
+      renderSettings();
+      refreshAdSizesVisual();
+    });
   }
 
   function renderSettings() {
@@ -599,6 +646,7 @@
     var bw     = parseFloat(prompt('B&W price ($):', s.bw));         if (isNaN(bw))     return;
     SpnsState.settings.adSizes[i] = Object.assign({}, s, { label: label.trim(), dims: dims.trim(), colour: colour, bw: bw });
     renderSettings();
+    refreshAdSizesVisual();
   }
 
   function addTier() {
@@ -643,6 +691,7 @@
     }).then(function (r) {
       if (!r.ok) return r.text().then(function (t) { throw new Error(t); });
       alert('Settings saved.');
+      refreshAdSizesVisual();
     }).catch(function (e) { alert('Could not save settings: ' + e.message); });
   }
 
@@ -707,6 +756,7 @@
         '</div>' +
 
         '<div id="spn-panel-ads" class="spn-panel">' +
+          '<div id="spn-ad-sizes-visual"></div>' +
           '<div class="spn-toolbar">' +
             '<span class="spn-toolbar-title" id="spn-ads-count">Programme Ads</span>' +
             '<button class="spn-btn spn-btn--primary" onclick="MarketingSponsorsModule.openAdModal()">+ Add Ad</button>' +

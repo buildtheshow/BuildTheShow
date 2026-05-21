@@ -33909,7 +33909,6 @@ Your submission link is unique to you. Please do not share it with another perfo
   ];
   const CREATIVE_TEAM_DEFAULT_PERMISSION_KEYS = [
     'overview',
-    'auditions.dashboard',
     'auditions.schedule',
     'auditions.general',
     'auditions.dance_call',
@@ -33917,6 +33916,16 @@ Your submission link is unique to you. Please do not share it with another perfo
     'auditions.callback',
     'auditions.final_casting',
     'cast_list',
+  ];
+  const CREATIVE_AUDITION_LEADERSHIP_ROLES = new Set(['director', 'choreographer', 'vocal director']);
+  const CREATIVE_AUDITION_LEADERSHIP_MENU_KEYS = [
+    'overview',
+    'auditions',
+    'auditions:schedule',
+    'auditions:sessions',
+    'auditions:casting',
+    'auditions:finalcasting',
+    'castlist',
   ];
 
   const TEAM_ACCESS_LEVELS = [
@@ -33935,11 +33944,33 @@ Your submission link is unique to you. Please do not share it with another perfo
     return TEAM_ACCESS_LEVELS.find(level => level.key === key) || TEAM_ACCESS_LEVELS[1];
   }
 
+  function isCreativeAuditionLeadershipRole(role = '') {
+    return CREATIVE_AUDITION_LEADERSHIP_ROLES.has(String(role || '').trim().toLowerCase());
+  }
+
+  function creativeAuditionLeadershipMenuSet() {
+    return new Set(CREATIVE_AUDITION_LEADERSHIP_MENU_KEYS);
+  }
+
+  function teamMenuDefaultsForRole(role = '', accessLevel = 'creative') {
+    if (isCreativeAuditionLeadershipRole(role)) return creativeAuditionLeadershipMenuSet();
+    return new Set(teamAccessLevelConfig(normalizeTeamRole(accessLevel || role)).menu || []);
+  }
+
+  window.BTSTeamAccessMenuDefaults = {
+    isCreativeAuditionLeadershipRole,
+    creativeAuditionLeadershipMenuKeys: CREATIVE_AUDITION_LEADERSHIP_MENU_KEYS,
+    teamMenuDefaultsForRole,
+  };
+
   function teamMemberMenuAccess(member = {}) {
     if (productionAccessLoaded || productionPagePermissions.length) {
       const memberId = String(member.id || teamAccessMember?.id || '');
       if (isProducerLikeTeamMember(member)) {
         return new Set(['overview', 'team', 'calendar', 'auditions', 'castlist', 'registration', 'auditions:settings', 'auditions:schedule', 'auditions:allperformers', 'auditions:sessions', 'auditions:casting', 'auditions:finalcasting']);
+      }
+      if (isCreativeAuditionLeadershipRole(member.role)) {
+        return creativeAuditionLeadershipMenuSet();
       }
       const set = new Set();
       const allow = (pageKey, menuKey) => {
@@ -33961,7 +33992,7 @@ Your submission link is unique to you. Please do not share it with another perfo
       return set;
     }
     const raw = Array.isArray(member.menu_access) ? member.menu_access : null;
-    const fallback = teamAccessLevelConfig(normalizeTeamRole(member.access_level || member.role)).menu;
+    const fallback = Array.from(teamMenuDefaultsForRole(member.role, member.access_level || member.role));
     const set = new Set((raw && raw.length ? raw : fallback).filter(Boolean));
     TEAM_PORTAL_MENU_ITEMS.forEach(item => {
       if ((item.children || []).some(child => set.has(child.key))) set.add(item.key);
@@ -34305,6 +34336,21 @@ Your submission link is unique to you. Please do not share it with another perfo
     </div>`;
   }
 
+  function productionAccessSaveErrorMessage(error) {
+    const message = String(error?.message || '');
+    const code = String(error?.code || '');
+    const looksLikeMissingAccessSchema = code === 'PGRST205'
+      || /schema cache/i.test(message)
+      || /production_team_member_page_permissions/i.test(message)
+      || /production_team_member_special_permissions/i.test(message)
+      || /production_permission_pages/i.test(message)
+      || /team_member_manage_page_access_for_session/i.test(message);
+    if (looksLikeMissingAccessSchema) {
+      return 'Access tables are not available yet. Refresh in a minute, then save access again.';
+    }
+    return 'Could not save access: ' + (message || 'Supabase permission tables unavailable.');
+  }
+
   async function saveTeamMemberAccessEditor(memberId, options = {}) {
     if (!memberId || !canManageAccess(teamAccessMember?.id || '')) return true;
     const prefix = options.inputPrefix || 'ptm-access';
@@ -34412,7 +34458,12 @@ Your submission link is unique to you. Please do not share it with another perfo
       return true;
     } catch (error) {
       console.warn('[BTS] Could not save production team access.', error);
-      showToast?.('Could not save access: ' + (error.message || 'Supabase permission tables unavailable.'), true);
+      window.__btsLastProductionAccessSaveError = {
+        message: productionAccessSaveErrorMessage(error),
+        rawMessage: error?.message || '',
+        code: error?.code || '',
+      };
+      showToast?.(window.__btsLastProductionAccessSaveError.message, true);
       return false;
     }
   }
@@ -34728,7 +34779,8 @@ Your submission link is unique to you. Please do not share it with another perfo
   // ── Team tab - Audition team access ──
   function syncNewTeamMemberMenuDefaults() {
     const access = document.getElementById('new-tm-access')?.value || 'creative';
-    const defaults = new Set(teamAccessLevelConfig(access).menu || []);
+    const role = document.getElementById('new-tm-role')?.value || '';
+    const defaults = teamMenuDefaultsForRole(role, access);
     document.querySelectorAll('.new-tm-menu').forEach(input => {
       const parent = input.dataset.parentMenu || '';
       input.checked = defaults.has(input.value) || (parent && defaults.has(parent));
@@ -35219,7 +35271,7 @@ Your submission link is unique to you. Please do not share it with another perfo
             </label>
             <label>
               <span class="team-member-questionnaire-label">Title / role</span>
-              <input class="form-input" id="new-tm-role" placeholder="Director, Usher, Builder..." />
+              <input class="form-input" id="new-tm-role" placeholder="Director, Usher, Builder..." oninput="syncNewTeamMemberMenuDefaults()" />
             </label>
           </div>
           <div class="team-member-questionnaire-label">Menu items</div>

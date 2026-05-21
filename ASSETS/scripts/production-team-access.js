@@ -677,7 +677,8 @@ async function saveProductionTeamMemberEdit(memberId, btn = null) {
     const accessOk = await saveTeamMemberAccessEditor(memberId, { inputPrefix: 'ptm-edit-access' });
     if (!accessOk) {
       markDone?.(false);
-      if (msg) { msg.style.color = '#b91c1c'; msg.textContent = 'Profile saved, but access changes could not be saved.'; }
+      const accessMessage = window.__btsLastProductionAccessSaveError?.message || 'Profile saved, but access changes could not be saved.';
+      if (msg) { msg.style.color = '#b91c1c'; msg.textContent = accessMessage; }
       await loadAuditionTeamMembers();
       return;
     }

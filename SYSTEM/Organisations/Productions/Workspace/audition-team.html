@@ -33635,9 +33635,39 @@ Your submission link is unique to you. Please do not share it with another perfo
     return TEAM_ACCESS_LEVELS.find(level => level.key === key) || TEAM_ACCESS_LEVELS[1];
   }
 
+  const CREATIVE_AUDITION_LEADERSHIP_ROLES = new Set(['director', 'choreographer', 'vocal director']);
+  const CREATIVE_AUDITION_LEADERSHIP_MENU_KEYS = [
+    'overview',
+    'auditions',
+    'auditions:schedule',
+    'auditions:sessions',
+    'auditions:casting',
+    'auditions:finalcasting',
+    'castlist',
+  ];
+
+  function isCreativeAuditionLeadershipRole(role = '') {
+    return CREATIVE_AUDITION_LEADERSHIP_ROLES.has(String(role || '').trim().toLowerCase());
+  }
+
+  function creativeAuditionLeadershipMenuSet() {
+    return new Set(CREATIVE_AUDITION_LEADERSHIP_MENU_KEYS);
+  }
+
+  function teamMenuDefaultsForRole(role = '', accessLevel = 'creative') {
+    if (isCreativeAuditionLeadershipRole(role)) return creativeAuditionLeadershipMenuSet();
+    return new Set(teamAccessLevelConfig(normalizeTeamRole(accessLevel || role)).menu || []);
+  }
+
+  window.BTSTeamAccessMenuDefaults = {
+    isCreativeAuditionLeadershipRole,
+    creativeAuditionLeadershipMenuKeys: CREATIVE_AUDITION_LEADERSHIP_MENU_KEYS,
+    teamMenuDefaultsForRole,
+  };
+
   function teamMemberMenuAccess(member = {}) {
     const raw = Array.isArray(member.menu_access) ? member.menu_access : null;
-    const fallback = teamAccessLevelConfig(normalizeTeamRole(member.access_level || member.role)).menu;
+    const fallback = Array.from(teamMenuDefaultsForRole(member.role, member.access_level || member.role));
     const set = new Set((raw && raw.length ? raw : fallback).filter(Boolean));
     TEAM_PORTAL_MENU_ITEMS.forEach(item => {
       if ((item.children || []).some(child => set.has(child.key))) set.add(item.key);
@@ -33951,7 +33981,8 @@ Your submission link is unique to you. Please do not share it with another perfo
   // ── Team tab - Audition team access ──
   function syncNewTeamMemberMenuDefaults() {
     const access = document.getElementById('new-tm-access')?.value || 'creative';
-    const defaults = new Set(teamAccessLevelConfig(access).menu || []);
+    const role = document.getElementById('new-tm-role')?.value || '';
+    const defaults = teamMenuDefaultsForRole(role, access);
     document.querySelectorAll('.new-tm-menu').forEach(input => {
       const parent = input.dataset.parentMenu || '';
       input.checked = defaults.has(input.value) || (parent && defaults.has(parent));
@@ -34441,7 +34472,7 @@ Your submission link is unique to you. Please do not share it with another perfo
             </label>
             <label>
               <span class="team-member-questionnaire-label">Title / role</span>
-              <input class="form-input" id="new-tm-role" placeholder="Director, Usher, Builder..." />
+              <input class="form-input" id="new-tm-role" placeholder="Director, Usher, Builder..." oninput="syncNewTeamMemberMenuDefaults()" />
             </label>
           </div>
           <div class="team-member-questionnaire-label">Menu items</div>
