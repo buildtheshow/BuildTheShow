@@ -199,6 +199,14 @@ These are non-negotiable platform rules for how the system should be shaped and 
 4. Production pages use the shared production navigation.
 5. Production pages must not use custom sidebars.
 6. Navigation is defined per system level, not per page.
+7. Shared navigation is owned by the persistent app shell, not by individual pages.
+8. Navigation should not reload, remount, or duplicate the shell during normal in-app movement.
+9. Sidebar labels, route names, active states, and page titles must use the same product language.
+10. Expandable sidebar groups are allowed for wayfinding, but their children must still represent real destinations.
+11. Do not duplicate the same sidebar markup inside individual pages. Update the shared navigation source instead.
+12. Mobile navigation must use the same shared navigation source as desktop navigation.
+13. Active navigation state must be router-driven, not set independently by each page.
+14. Pages must never fetch, inject, or own the sidebar, topbar, auth state, notification system, global overlays, or global layout.
 
 ### Pages
 
@@ -208,6 +216,51 @@ These are non-negotiable platform rules for how the system should be shaped and 
 4. Do not use giant files with toggled sections as a substitute for page structure.
 5. If something behaves like a section, it should be a real page.
 6. Every page must answer who it is for, what the user does there, and what happens next.
+7. A page may contain small local tabs only when the tabs are part of one job, such as modal details, filters, or compact settings within that page.
+8. If a tab has its own sidebar item, route, permissions, loading flow, saved state, or user goal, it is not a tab. It is a page.
+9. Pages should fetch only the data needed for that page's job.
+10. Pages should assemble shared components and pass data into them.
+11. Pages should not carry large feature systems that belong to their own route.
+12. New production work areas must be created as real pages from the start.
+13. Existing hidden-tab workspace areas should be migrated into real pages over time instead of extended further.
+14. In shell-based app areas, a "page" means a routed page module or fragment mounted into the main content outlet, not a full HTML document reload.
+15. Page fragments must not contain `<html>`, `<head>`, `<body>`, duplicated sidebars, duplicated topbars, or global app chrome.
+16. Page content must replace the previous content during navigation. Do not append new page content onto old page content.
+17. Page modules must clean up after themselves when unmounted.
+
+### App Shell And Router
+
+1. App-like areas must use a persistent shell/router architecture.
+2. The shell mounts once per session and owns the sidebar, topbar, auth state, notifications, global overlays, global modals, and global stores.
+3. The router owns the current route, page content outlet, active nav state, breadcrumbs, history, transitions, and page lifecycle.
+4. Only the main content outlet should change during in-app navigation.
+5. The main content outlet should be a single known container, such as `#page-content`.
+6. Do not inject full HTML documents into the main content outlet.
+7. Do not fetch a complete page that includes app chrome and insert it inside another page.
+8. Use page fragments, templates, or page modules for routed content.
+9. Before rendering a new route, the router must unmount the current page and clear the content outlet.
+10. Prefer `replaceChildren()` or full replacement of the outlet contents over appending HTML.
+11. Every routed page module should expose an initialization path and a cleanup path.
+12. Page cleanup must remove page-owned event listeners, clear intervals/timeouts, disconnect observers, cancel pending async work, and dispose of mounted UI.
+13. Navigation must protect against race conditions from overlapping route changes.
+14. Use `AbortController`, navigation tokens, or equivalent route-version checks so stale async results cannot reinsert old content.
+15. Do not allow old pages to remain visible underneath new pages.
+16. Do not allow duplicate event listeners to accumulate across navigation.
+17. Prefer delegated listeners from stable shell containers when that keeps lifecycle simpler and clearer.
+18. The app should feel persistent, stable, and instant, like a desktop-style application shell.
+
+### Production Workspace Routing
+
+1. Production admin pages live inside an organisation and must use the production route family.
+2. The preferred production admin route shape is `/{ORG}/ORG/Productions/{SHOW}/{AREA}`.
+3. Nested production work areas may use `/{ORG}/ORG/Productions/{SHOW}/{AREA}/{SUBAREA}`.
+4. System file URLs may exist as implementation fallbacks, but they are not the product-facing route model.
+5. Clean routes should resolve through the production app shell/router without changing the source of truth.
+6. Production ID remains the private source-of-truth lock; slugs are human-readable routing identity.
+7. A route should not load another full page inside the current page.
+8. New routes should prefer purpose-built page modules/fragments plus shared scripts/components.
+9. If a legacy route still resolves into the workspace shell, do not add more unrelated work areas to that legacy shell pattern.
+10. The migration direction is: persistent shell, real route, routed page module, shared navigation, shared data.
 
 ### Component Architecture
 
