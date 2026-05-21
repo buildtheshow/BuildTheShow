@@ -23358,13 +23358,13 @@
 
               <div class="et-modal-actions">
                 <div style="display:flex;gap:0.4rem;align-items:center;">
-                  <button class="btn-secondary" style="font-size:0.82rem;padding:0.5rem 1rem;" onclick="closeEmailTemplateModal()">Cancel</button>
+                  <button type="button" class="btn-secondary" style="font-size:0.82rem;padding:0.5rem 1rem;" onclick="closeEmailTemplateModal()">Cancel</button>
                   <div id="et-modal-msg" class="et-modal-msg"></div>
                 </div>
                 <div style="display:flex;gap:0.4rem;">
-                  <button class="btn-secondary" style="font-size:0.82rem;padding:0.5rem 1rem;" id="et-preview-btn" onclick="openEmailTemplatePreview()">View Preview</button>
-                  <button class="btn-secondary" style="font-size:0.82rem;padding:0.5rem 1rem;" onclick="etToggleTestRow()">Send Test</button>
-                  <button class="btn-primary" style="font-size:0.82rem;padding:0.5rem 1.1rem;" id="et-save-btn" onclick="saveEmailTemplate()">Save</button>
+                  <button type="button" class="btn-secondary" style="font-size:0.82rem;padding:0.5rem 1rem;" id="et-preview-btn" onclick="openEmailTemplatePreview()">View Preview</button>
+                  <button type="button" class="btn-secondary" style="font-size:0.82rem;padding:0.5rem 1rem;" onclick="etToggleTestRow()">Send Test</button>
+                  <button type="button" class="btn-primary" style="font-size:0.82rem;padding:0.5rem 1.1rem;" id="et-save-btn" onclick="saveEmailTemplate()">Save</button>
                 </div>
               </div>
 
@@ -23374,8 +23374,8 @@
                 <input id="et-test-email-input" class="et-test-email-input" type="email"
                   placeholder="you@example.com"
                   onkeydown="if(event.key==='Enter')etSendTestEmail()" />
-                <button class="btn-primary" style="font-size:0.82rem;padding:0.46rem 1rem;" id="et-test-send-btn" onclick="etSendTestEmail()">Send</button>
-                <button class="btn-secondary" style="font-size:0.82rem;padding:0.46rem 0.8rem;" onclick="etToggleTestRow()">Cancel</button>
+                <button type="button" class="btn-primary" style="font-size:0.82rem;padding:0.46rem 1rem;" id="et-test-send-btn" onclick="etSendTestEmail()">Send</button>
+                <button type="button" class="btn-secondary" style="font-size:0.82rem;padding:0.46rem 0.8rem;" onclick="etToggleTestRow()">Cancel</button>
               </div>
             </div>
 
@@ -31373,8 +31373,7 @@ Your submission link is unique to you. Please do not share it with another perfo
     document.getElementById('et-preview-overlay')?.remove();
   }
 
-  async function openEmailTemplatePreview(templateId = null) {
-    await loadEmailProducerSignoffFromSupabase();
+  function renderEmailTemplatePreviewOverlay(templateId = null) {
     const template = templateId ? _etTemplates.find(t => String(t.id) === String(templateId)) : null;
     const subjectRaw = template ? (template.subject || '') : (document.getElementById('et-subject')?.value || '');
     const bodyRaw = template ? etToHtml(template.body || '') : (document.getElementById('et-body')?.innerHTML || '');
@@ -31382,6 +31381,7 @@ Your submission link is unique to you. Please do not share it with another perfo
     const body = firstDefinedString(finalCastingEmailPreviewBodyHtml(etSubstituteVars(bodyRaw)), '<p>Your email body will appear here.</p>');
     const from = firstDefinedString(prod?.org_name, orgName, 'Build The Show');
     const toName = ET_SAMPLE_CONTEXT.performerFirstName;
+    closeEmailTemplatePreview();
     const overlay = document.createElement('div');
     overlay.id = 'et-preview-overlay';
     overlay.className = 'et-preview-overlay';
@@ -31433,6 +31433,20 @@ Your submission link is unique to you. Please do not share it with another perfo
         </div>
       </div>`;
     document.body.appendChild(overlay);
+  }
+
+  function openEmailTemplatePreview(templateId = null) {
+    try {
+      renderEmailTemplatePreviewOverlay(templateId);
+      loadEmailProducerSignoffFromSupabase()
+        .then(() => {
+          if (document.getElementById('et-preview-overlay')) renderEmailTemplatePreviewOverlay(templateId);
+        })
+        .catch(error => console.warn('[BTS] Email preview sign-off refresh failed.', error));
+    } catch (error) {
+      console.error('[BTS] Email template preview failed.', error);
+      showToast('Could not open the email preview. Try saving and opening it again.', true);
+    }
   }
 
   async function duplicateEmailTemplate(id) {
