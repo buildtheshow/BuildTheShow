@@ -57499,28 +57499,46 @@ Your submission link is unique to you. Please do not share it with another perfo
   async function toggleCheckIn(appId, currentlyIn, sessionId = null) {
     const app = allApplicants.find(a => a.id === appId);
     if (!app) return;
-    const newCheckedIn = !currentlyIn;
+    const isCurrentlyIn = sessionId ? isCheckedInForSession(app, sessionId) : !!app.checked_in;
+    const newCheckedIn = !isCurrentlyIn;
 
     // Update per-session check-in array
     const prevCheckins = Array.isArray(app.session_checkins) ? [...app.session_checkins] : [];
+    const prevLegacyCheckedIn = app.checked_in;
+    const prevLegacyCheckedInAt = app.checked_in_at;
+    const prevStatus = app.status;
     const newCheckins = sessionId ? withSessionCheckinState(app, sessionId, newCheckedIn) : prevCheckins;
+    const changedAt = new Date().toISOString();
 
     // Optimistic update
     app.session_checkins = newCheckins;
-    if (!currentlyIn && app.status === 'no_show') app.status = 'auditioning';
+    if (!sessionId) {
+      app.checked_in = newCheckedIn;
+      app.checked_in_at = newCheckedIn ? changedAt : null;
+    }
+    if (newCheckedIn && app.status === 'no_show') app.status = 'auditioning';
     renderCheckInList();
     showSaveStatus('saving');
 
     try {
-      const error = await persistApplicantPatch(app, { session_checkins: newCheckins });
+      const patch = sessionId
+        ? { session_checkins: newCheckins }
+        : { checked_in: newCheckedIn, checked_in_at: app.checked_in_at };
+      if (app.status !== prevStatus) patch.status = app.status;
+      const error = await persistApplicantPatch(app, patch);
       if (error) throw error;
-      const sourceError = await persistSessionCheckinsToAllSourceApplications(app, newCheckins);
-      if (sourceError) throw sourceError;
+      if (sessionId) {
+        const sourceError = await persistSessionCheckinsToAllSourceApplications(app, newCheckins);
+        if (sourceError) throw sourceError;
+      }
       if (!newCheckedIn && sessionId) clearAuditionRoomStateForApplicant(app.id, sessionId);
       queueCiSecondaryRefresh();
       showSaveStatus('saved');
     } catch {
       app.session_checkins = prevCheckins;
+      app.checked_in = prevLegacyCheckedIn;
+      app.checked_in_at = prevLegacyCheckedInAt;
+      app.status = prevStatus;
       renderCheckInList();
       showToast('Check-in failed', true);
       return;
