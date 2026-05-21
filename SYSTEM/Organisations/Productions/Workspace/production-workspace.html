@@ -26976,7 +26976,6 @@
   let auditionLiveState = null;
   const auditionLiveCheckins = new Map();
   const auditionLiveRooms = new Map();
-  const auditionLiveRoomRequests = new Map();
   let auditionRoomStateTableAvailable = null;
   let auditionRoomStatesLoadedAt = 0;
   let auditionRoomStatesRetryAfter = 0;
@@ -26997,7 +26996,6 @@
   const auditionRoomStates = new Map();
   const roomNextSignals = new Map();
   const teamSentInNotificationKeys = new Set();
-  let inRoomNextBroadcastChannel = null;
   const inRoomNextClientId = (() => {
     try {
       const key = 'bts-inroom-next-client';
@@ -27097,7 +27095,6 @@
         cleanAdminWorkspaceUrl();
       })
       .catch(error => console.warn('[BTS] production slug check failed', error));
-    setupRoomReadyBroadcast();
     setupAuditionLiveState();
     // Check if is_public column exists — non-blocking, safe to run in background
     sb.from('production_events').select('is_public').eq('production_id', prodId).limit(1)
@@ -27913,7 +27910,6 @@
         sessionToken: teamAccessSessionToken || '',
       },
       onState: handleAuditionLiveStateRow,
-      onEvent: handleAuditionLiveEventRow,
       onError: error => console.warn('[BTS] audition live state unavailable:', error),
     });
     auditionLiveState.subscribe();
@@ -27953,14 +27949,9 @@
       return;
     }
     if (row.state_type === 'room_request') {
-      auditionLiveRoomRequests.set(row.state_key, row);
       mergeRoomNextSignal(liveRoomRequestToLegacySignal(row));
       renderInRoomReadySignals();
     }
-  }
-
-  function handleAuditionLiveEventRow(row) {
-    if (!row?.event_type) return;
   }
 
   function getAuditionLiveCheckinState(app, sessionId) {
@@ -28221,42 +28212,10 @@
     }, INROOM_NEXT_WAITING_LABEL_MS);
   }
 
-  function roomReadyBroadcastStorageKey() {
-    return `bts-room-ready-signal:${prodId || 'unknown'}`;
-  }
-
-  function handleRoomReadyBroadcast(message) {
-    const signal = message?.signal || message?.state || message;
-    if (!signal || String(signal.production_id || '') !== String(prodId || '') || !signal.room_key) return;
+  function applyRoomReadySignalLocally(signal) {
+    if (!signal || signal.status !== 'ready') return;
     mergeRoomNextSignal(signal);
     renderInRoomReadySignals();
-  }
-
-  function setupRoomReadyBroadcast() {
-    if (inRoomNextBroadcastChannel || !prodId) return;
-    try {
-      inRoomNextBroadcastChannel = new BroadcastChannel(`bts-room-ready:${prodId}`);
-      inRoomNextBroadcastChannel.onmessage = event => handleRoomReadyBroadcast(event.data);
-    } catch {
-      inRoomNextBroadcastChannel = { postMessage() {} };
-    }
-    window.addEventListener('storage', event => {
-      if (event.key !== roomReadyBroadcastStorageKey() || !event.newValue) return;
-      try { handleRoomReadyBroadcast(JSON.parse(event.newValue)); } catch {}
-    });
-  }
-
-  function broadcastRoomReadySignal(signal) {
-    if (!signal || signal.status !== 'ready') return;
-    const message = {
-      type: 'room_ready',
-      production_id: prodId,
-      sent_at: new Date().toISOString(),
-      signal,
-    };
-    setupRoomReadyBroadcast();
-    try { inRoomNextBroadcastChannel?.postMessage(message); } catch {}
-    try { localStorage.setItem(roomReadyBroadcastStorageKey(), JSON.stringify(message)); } catch {}
   }
 
   function getSessionQueue(session) {
@@ -28545,7 +28504,7 @@
     const payload = buildRoomStatePayload({ session, app, status: 'ready_for_next' });
     const nextSignal = buildRoomNextSignalPayload(payload);
     setInRoomNextButtonWaiting(buttonEl, 'Waiting for next performer...');
-    broadcastRoomReadySignal(nextSignal);
+    applyRoomReadySignalLocally(nextSignal);
     publishAuditionRoomRequestLive(nextSignal).catch(error => console.warn('[BTS] live room request save failed:', error));
     persistRoomNextSignal(nextSignal).catch(error => console.warn('[BTS] legacy room request save failed:', error));
   }
@@ -28592,7 +28551,7 @@
     });
     const nextSignal = buildRoomNextSignalPayload(payload);
     setInRoomNextButtonWaiting(buttonEl, 'Waiting for next group...');
-    broadcastRoomReadySignal(nextSignal);
+    applyRoomReadySignalLocally(nextSignal);
     publishAuditionRoomRequestLive(nextSignal).catch(error => console.warn('[BTS] live dance room request save failed:', error));
     persistRoomNextSignal(nextSignal).catch(error => console.warn('[BTS] legacy dance room request save failed:', error));
   }
@@ -46725,25 +46684,6 @@ Your submission link is unique to you. Please do not share it with another perfo
       _skipBookingMirror: !!patch._skipBookingMirror,
     };
     return syncApplicantEditsToSource(app, merged);
-  }
-
-  async function persistSessionCheckinsToAllSourceApplications(app, sessionCheckins) {
-    if (!app || !Array.isArray(sessionCheckins)) return null;
-    const ids = new Set([
-      ...(Array.isArray(app._sourceApplicationIds) ? app._sourceApplicationIds : []),
-      ...Object.values(app._sourceApplicationIdsBySession || {}),
-      app.id,
-    ].filter(id => id && !String(id).startsWith('booking-')).map(String));
-    if (!ids.size) return null;
-    try {
-      const { error } = await sb.from('audition_applications')
-        .update({ session_checkins: sessionCheckins })
-        .eq('production_id', prodId)
-        .in('id', [...ids]);
-      return error || null;
-    } catch (error) {
-      return error;
-    }
   }
 
   function sourceApplicationIdsForApplicant(app) {
