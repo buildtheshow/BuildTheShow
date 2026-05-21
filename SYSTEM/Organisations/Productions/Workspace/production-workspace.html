@@ -31373,12 +31373,30 @@ Your submission link is unique to you. Please do not share it with another perfo
     document.getElementById('et-preview-overlay')?.remove();
   }
 
+  function etPreviewValue(value, fallback = '') {
+    try {
+      return firstDefinedString(etSubstituteVars(value), fallback);
+    } catch (error) {
+      console.warn('[BTS] Email preview variable substitution failed.', error);
+      return firstDefinedString(value, fallback);
+    }
+  }
+
+  function etPreviewBodyHtml(value) {
+    try {
+      return firstDefinedString(finalCastingEmailPreviewBodyHtml(etPreviewValue(value)), '<p>Your email body will appear here.</p>');
+    } catch (error) {
+      console.warn('[BTS] Email preview body formatting failed.', error);
+      return firstDefinedString(value, '<p>Your email body will appear here.</p>');
+    }
+  }
+
   function renderEmailTemplatePreviewOverlay(templateId = null) {
     const template = templateId ? _etTemplates.find(t => String(t.id) === String(templateId)) : null;
     const subjectRaw = template ? (template.subject || '') : (document.getElementById('et-subject')?.value || '');
     const bodyRaw = template ? etToHtml(template.body || '') : (document.getElementById('et-body')?.innerHTML || '');
-    const subject = firstDefinedString(etSubstituteVars(subjectRaw), 'Email Preview');
-    const body = firstDefinedString(finalCastingEmailPreviewBodyHtml(etSubstituteVars(bodyRaw)), '<p>Your email body will appear here.</p>');
+    const subject = etPreviewValue(subjectRaw, 'Email Preview');
+    const body = etPreviewBodyHtml(bodyRaw);
     const from = firstDefinedString(prod?.org_name, orgName, 'Build The Show');
     const toName = ET_SAMPLE_CONTEXT.performerFirstName;
     closeEmailTemplatePreview();
@@ -31445,7 +31463,7 @@ Your submission link is unique to you. Please do not share it with another perfo
         .catch(error => console.warn('[BTS] Email preview sign-off refresh failed.', error));
     } catch (error) {
       console.error('[BTS] Email template preview failed.', error);
-      showToast('Could not open the email preview. Try saving and opening it again.', true);
+      showToast('Could not open the email preview.', true);
     }
   }
 
