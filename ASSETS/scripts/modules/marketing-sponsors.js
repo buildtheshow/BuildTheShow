@@ -163,7 +163,7 @@
       }
 
       var adFill = latestArt
-        ? '<div class="spn-adtile-ad" style="width:' + adW + '%;height:' + adH + '%;background:none;"><img class="spn-adtile-ad-img" src="' + esc(latestArt) + '" alt="Ad artwork" /></div>'
+        ? '<div class="spn-adtile-ad" style="width:' + adW + '%;height:' + adH + '%;background:#ffffff;"><img class="spn-adtile-ad-img" src="' + esc(latestArt) + '" alt="Ad artwork" /></div>'
         : '<div class="spn-adtile-ad" style="width:' + adW + '%;height:' + adH + '%;"><div class="spn-adtile-ad-label">Ad</div></div>';
 
       var tile =
