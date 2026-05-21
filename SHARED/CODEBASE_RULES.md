@@ -420,15 +420,33 @@ These are non-negotiable platform rules for how the system should be shaped and 
 ### Production Workspace Routing
 
 1. Production admin pages live inside an organisation and must use the production route family.
-2. The preferred production admin route shape is `/{ORG}/ORG/Productions/{SHOW}/{AREA}`.
-3. Nested production work areas may use `/{ORG}/ORG/Productions/{SHOW}/{AREA}/{SUBAREA}`.
-4. System file URLs may exist as implementation fallbacks, but they are not the product-facing route model.
-5. Clean routes should resolve through the production app shell/router without changing the source of truth.
-6. Production ID remains the private source-of-truth lock; slugs are human-readable routing identity.
-7. A route should not load another full page inside the current page.
-8. New routes should prefer purpose-built page modules/fragments plus shared scripts/components.
-9. If a legacy route still resolves into the workspace shell, do not add more unrelated work areas to that legacy shell pattern.
-10. The migration direction is: persistent shell, real route, routed page module, shared navigation, shared data.
+2. Build The Show URLs must be human-readable, predictable, scalable, organisation-first, production-centred, easy to mentally map, easy to permission-protect, and easy to route.
+3. Product-facing URLs must reflect the actual platform hierarchy: `Organisation -> Production -> Section -> Subsection`.
+4. The required production admin route shape is `/{organisation_slug}/ORG/Productions/{production_slug}/{section}`.
+5. Nested production work areas must use `/{organisation_slug}/ORG/Productions/{production_slug}/{section}/{subsection}`.
+6. Example production routes:
+   - `/ryt/ORG/Productions/mary-poppins-jr-2026/auditions`
+   - `/ryt/ORG/Productions/mary-poppins-jr-2026/cast-list`
+   - `/ryt/ORG/Productions/mary-poppins-jr-2026/marketing`
+   - `/ryt/ORG/Productions/mary-poppins-jr-2026/marketing/sponsors`
+   - `/ryt/ORG/Productions/mary-poppins-jr-2026/auditions/casting-board`
+7. Organisation must come first because it establishes brand context, permission context, organisation routing, and the parent data container.
+8. Productions must be nested inside organisations because productions are not standalone.
+9. Section and subsection names must describe real platform features or tools, such as `marketing`, `auditions`, `cast-list`, `registration`, `volunteers`, `marketing/sponsors`, `marketing/programme`, `auditions/general-auditions`, `auditions/dance-call`, `auditions/callback`, and `auditions/casting-board`.
+10. Do not create vague or internal product-facing routes such as `/portal`, `/system`, `/manage-page`, `/dashboard-v2`, `/workspace-v2`, or query-string identity such as `prod?id=284`.
+11. Use lowercase words and hyphens for slugs, sections, and subsections: `mary-poppins-jr-2026`, `cast-list`, `general-auditions`.
+12. Do not use camel case, underscores, database IDs, or implementation names in product-facing URLs: `MaryPoppins2026`, `mary_poppins_jr`, `production_472991`, and `workspace_v2` are not valid product route identities.
+13. Routes should match permission structure wherever possible. For example, permission key `auditions.casting_board` maps to route `/auditions/casting-board`.
+14. Keep URL structures stable. Stable routes support bookmarks, shared links, permissions, route guards, navigation, and future APIs.
+15. Avoid chaotic deep nesting such as `/organisation/department/system/module/workspace/internal/page`.
+16. A route should tell the user where they are, which organisation they are in, which production they are working on, and which tool they are using.
+17. System file URLs may exist as implementation fallbacks, but they are not the product-facing route model.
+18. Clean routes should resolve through the production app shell/router without changing the source of truth.
+19. Production ID remains the private source-of-truth lock; slugs are human-readable routing identity.
+20. A route should not load another full page inside the current page.
+21. New routes should prefer purpose-built page modules/fragments plus shared scripts/components.
+22. If a legacy route still resolves into the workspace shell, do not add more unrelated work areas to that legacy shell pattern.
+23. The migration direction is: persistent shell, real route, routed page module, shared navigation, shared data.
 
 ### Component Architecture
 
@@ -491,11 +509,11 @@ These are non-negotiable platform rules for how the system should be shaped and 
 
 ### URL Identity
 
-1. Public organisation profiles live at `/{ORG}`.
-2. Organisation admin lives at `/{ORG}/ORG`.
-3. Production-specific public pages use `/{ORG}/{SHOW}/{PURPOSE}`.
-4. Public audition pages use `/{ORG}/{SHOW}/Audition`.
-5. Team portals use `/{ORG}/{SHOW}/Team`, with the production ID still passed as the source-of-truth lock.
+1. Organisation profiles live at `/{organisation_slug}`.
+2. Organisation admin lives at `/{organisation_slug}/ORG`.
+3. Production admin pages live at `/{organisation_slug}/ORG/Productions/{production_slug}/{section}`.
+4. Production admin subpages live at `/{organisation_slug}/ORG/Productions/{production_slug}/{section}/{subsection}`.
+5. Production-specific public pages should still be organisation-first and production-centred. Any public route pattern must be documented before it is reused broadly.
 6. Organisation and show URL slugs are generated by the system, not entered or edited by users.
 7. Organisation setup must not ask users to choose or edit a manual link.
 8. Production settings must show generated URLs as read-only links.
@@ -505,6 +523,7 @@ These are non-negotiable platform rules for how the system should be shaped and 
 12. Theatre-relevant dark-theme words such as `death`, `murder`, `blood`, `drug`, `weed`, `crime`, `hell`, `suicide`, `gun`, and `war` are not blocked by themselves.
 13. Show URLs only need to be unique inside their organisation.
 14. Pretty URLs are for humans; IDs remain the source of truth for private/team access.
+15. Do not create random route structures per feature. New sections must follow the shared hierarchy and naming rules.
 
 ### Features
 

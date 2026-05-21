@@ -6,10 +6,10 @@
   var SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRrbWFpa3R4cHdxZmJnZW9qYm5mIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MDc4NTI4NTYsImV4cCI6MjAyMzQyODg1Nn0.tVxOMkaMdBnuqQbLdHl00h4WA7DV8LHuVxCt6z5LFCY';
 
   var DEFAULT_AD_SIZES = [
-    { id: 'card',    label: 'Card',      dims: '2"x2.5"', colour: 50,  bw: 35  },
-    { id: 'quarter', label: '1/4 Page',  dims: '4"x2.5"', colour: 80,  bw: 60  },
-    { id: 'half',    label: '1/2 Page',  dims: '4"x5"',   colour: 140, bw: 90  },
-    { id: 'full',    label: 'Full Page', dims: '8"x5"',   colour: 200, bw: 150 },
+    { id: 'card',    label: 'Card',      dims: '2x2.5', colour: 50,  bw: 35  },
+    { id: 'quarter', label: '1/4 Page',  dims: '4x2.5', colour: 80,  bw: 60  },
+    { id: 'half',    label: '1/2 Page',  dims: '4x5',   colour: 140, bw: 90  },
+    { id: 'full',    label: 'Full Page', dims: '8x5',   colour: 200, bw: 150 },
   ];
 
   var DEFAULT_TIERS = [
@@ -43,7 +43,7 @@
     SpnsState.loaded = {};
   }
 
-  // ── DB helpers ────────────────────────────────────────────────────────────
+  // -- DB helpers ---------------------------------------------------------------
 
   function dbFetch(table, extra) {
     var url = SUPABASE_URL + '/rest/v1/' + table + '?production_id=eq.' + SpnsState.prodId + (extra || '') + '&order=created_at.asc';
@@ -74,18 +74,18 @@
     }).then(function (r) { if (!r.ok) return r.text().then(function (t) { throw new Error(t); }); });
   }
 
-  // ── Formatters ────────────────────────────────────────────────────────────
+  // -- Formatters ---------------------------------------------------------------
 
   function fmtDollars(cents) { return '$' + (cents / 100).toFixed(2).replace(/\.00$/, ''); }
   function fmtDate(d) { if (!d) return ''; var parts = d.split('-'); return parts[1] + '/' + parts[2] + '/' + parts[0].slice(2); }
   function bizName(id) { var b = SpnsState.businesses.find(function (x) { return x.id === id; }); return b ? b.name : ''; }
   function esc(s) { return s ? String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;') : ''; }
 
-  // ── Ad sizes visual grid ──────────────────────────────────────────────────
+  // -- Ad sizes visual grid -----------------------------------------------------
 
   function parseAdAspectRatio(dims) {
-    var clean = String(dims || '').replace(/['"]/g, '');
-    var m = clean.match(/^([\d.]+)[xX]([\d.]+)$/);
+    var clean = String(dims || '').replace(/['"x]/gi, function(c) { return c.toLowerCase() === 'x' ? 'X' : ''; });
+    var m = String(dims || '').replace(/['"]/g, '').match(/^([\d.]+)[xX]([\d.]+)$/);
     if (!m) return 100;
     var w = parseFloat(m[1]);
     var h = parseFloat(m[2]);
@@ -97,15 +97,16 @@
     if (!sizes || !sizes.length) return '';
     var cards = sizes.map(function (s) {
       var ratio = parseAdAspectRatio(s.dims);
+      var dimsLabel = String(s.dims || '').replace(/(\d)(x)(\d)/i, '$1" x $3"');
       return '<div class="spn-adsize-card">' +
         '<div class="spn-adsize-name">' + esc(s.label) + '</div>' +
-        '<div class="spn-adsize-dims">(' + esc(s.dims) + ')</div>' +
+        '<div class="spn-adsize-dims">(' + esc(dimsLabel) + ')</div>' +
         '<div class="spn-adsize-preview" style="padding-top:' + ratio + '%">' +
           '<div class="spn-adsize-preview-art"></div>' +
         '</div>' +
         '<div class="spn-adsize-pricing">' +
-          '<div><strong>Colour:</strong> $' + s.colour + '</div>' +
-          '<div><strong>B&amp;W:</strong> $' + s.bw + '</div>' +
+          '<div><strong>Colour:</strong> $' + esc(String(s.colour)) + '</div>' +
+          '<div><strong>B&amp;W:</strong> $' + esc(String(s.bw)) + '</div>' +
         '</div>' +
       '</div>';
     }).join('');
@@ -117,10 +118,12 @@
 
   function refreshAdSizesVisual() {
     var el = document.getElementById('spn-ad-sizes-visual');
-    if (el) el.innerHTML = renderAdSizesSection();
+    if (!el) return;
+    var html = renderAdSizesSection();
+    el.innerHTML = html;
   }
 
-  // ── Metric tile for overview ──────────────────────────────────────────────
+  // -- Metric tile for overview -------------------------------------------------
 
   function mktTile(id, kicker, value, label, color) {
     return '<div class="template-brand-card template-brand-card--square template-brand-card--metric" style="--brand-tile-bg:' + color + ';--brand-tile-ink:#ffffff;">' +
@@ -149,7 +152,7 @@
     return '<span class="spn-badge spn-badge--' + pair[0] + '">' + pair[1] + '</span>';
   }
 
-  // ── Tab switching ─────────────────────────────────────────────────────────
+  // -- Tab switching ------------------------------------------------------------
 
   function switchTab(name) {
     document.querySelectorAll('.spn-tab').forEach(function (t) { t.classList.toggle('active', t.dataset.panel === name); });
@@ -167,7 +170,7 @@
     if (name === 'settings')     return loadSettings();
   }
 
-  // ── OVERVIEW ──────────────────────────────────────────────────────────────
+  // -- OVERVIEW -----------------------------------------------------------------
 
   function loadOverview() {
     return Promise.all([
@@ -222,7 +225,7 @@
     });
   }
 
-  // ── BUSINESSES ────────────────────────────────────────────────────────────
+  // -- BUSINESSES ---------------------------------------------------------------
 
   function loadBusinesses() {
     return dbFetch('sponsor_businesses').then(function (data) {
@@ -301,9 +304,10 @@
     }).catch(function (e) { alert('Could not delete: ' + e.message); });
   }
 
-  // ── ADS ───────────────────────────────────────────────────────────────────
+  // -- ADS ----------------------------------------------------------------------
 
   function loadAds() {
+    refreshAdSizesVisual();
     return dbFetch('programme_ads').then(function (data) {
       SpnsState.ads = data;
     }).catch(function () {
@@ -318,7 +322,7 @@
     var ads   = SpnsState.ads;
     var count = document.getElementById('spn-ads-count');
     if (count) count.textContent = ads.length + ' Programme Ad' + (ads.length !== 1 ? 's' : '');
-    var szLabel = function (s) { var sz = SpnsState.settings.adSizes.find(function (x) { return x.id === s; }); return sz ? sz.label + ' ' + sz.dims : (s || ''); };
+    var szLabel = function (s) { var sz = SpnsState.settings.adSizes.find(function (x) { return x.id === s; }); return sz ? sz.label : (s || ''); };
     var head  = '<div class="spn-list-head spn-ad-cols"><span>Business</span><span>Size</span><span>Type</span><span>Price</span><span>Payment</span><span>Artwork</span><span></span></div>';
     var listEl = document.getElementById('spn-ads-list');
     if (!listEl) return;
@@ -354,7 +358,7 @@
 
     var sizeSel = document.getElementById('spn-ad-size');
     sizeSel.innerHTML = '<option value="">Select size...</option>' + SpnsState.settings.adSizes.map(function (s) {
-      return '<option value="' + s.id + '"' + (a && a.ad_size === s.id ? ' selected' : '') + '>' + s.label + ' (' + s.dims + ')</option>';
+      return '<option value="' + s.id + '"' + (a && a.ad_size === s.id ? ' selected' : '') + '>' + s.label + '</option>';
     }).join('');
 
     document.getElementById('spn-ad-type').value     = (a && a.ad_type)        || 'colour';
@@ -406,7 +410,7 @@
     }).catch(function (e) { alert('Could not delete: ' + e.message); });
   }
 
-  // ── SPONSOR PACKAGES ──────────────────────────────────────────────────────
+  // -- SPONSOR PACKAGES ---------------------------------------------------------
 
   function loadPackages() {
     return dbFetch('sponsor_packages').then(function (data) {
@@ -494,7 +498,7 @@
     }).catch(function (e) { alert('Could not delete: ' + e.message); });
   }
 
-  // ── DELIVERABLES ──────────────────────────────────────────────────────────
+  // -- DELIVERABLES -------------------------------------------------------------
 
   function loadDeliverables() {
     var p1 = SpnsState.businesses.length === 0
@@ -593,7 +597,7 @@
     }).catch(function (e) { alert('Could not delete: ' + e.message); });
   }
 
-  // ── SETTINGS ─────────────────────────────────────────────────────────────
+  // -- SETTINGS -----------------------------------------------------------------
 
   function loadSettings() {
     return dbFetch('sponsor_settings', '&select=settings&limit=1').then(function (data) {
@@ -620,7 +624,7 @@
     var aszEl = document.getElementById('spn-adsize-list');
     if (aszEl) aszEl.innerHTML = SpnsState.settings.adSizes.map(function (s, i) {
       return '<div class="spn-adsize-row">' +
-        '<div class="spn-tier-name">' + esc(s.label) + ' <span style="color:#9a90b0;font-weight:600">' + esc(s.dims) + '</span></div>' +
+        '<div class="spn-tier-name">' + esc(s.label) + ' <span style="color:#9a90b0;font-weight:600">' + esc(String(s.dims)) + '</span></div>' +
         '<div class="spn-tier-amount">Colour: $' + s.colour + '</div>' +
         '<div class="spn-tier-amount" style="color:#6b5f8a">B&amp;W: $' + s.bw + '</div>' +
         '<button class="spn-btn spn-btn--ghost spn-btn--sm" onclick="MarketingSponsorsModule.editAdSize(' + i + ')">Edit</button>' +
@@ -641,7 +645,7 @@
   function editAdSize(i) {
     var s      = SpnsState.settings.adSizes[i];
     var label  = prompt('Size name:', s.label);      if (label  == null) return;
-    var dims   = prompt('Dimensions:', s.dims);       if (dims   == null) return;
+    var dims   = prompt('Dimensions (e.g. 4x5):', s.dims);       if (dims   == null) return;
     var colour = parseFloat(prompt('Colour price ($):', s.colour)); if (isNaN(colour)) return;
     var bw     = parseFloat(prompt('B&W price ($):', s.bw));         if (isNaN(bw))     return;
     SpnsState.settings.adSizes[i] = Object.assign({}, s, { label: label.trim(), dims: dims.trim(), colour: colour, bw: bw });
@@ -695,7 +699,7 @@
     }).catch(function (e) { alert('Could not save settings: ' + e.message); });
   }
 
-  // ── Module API ────────────────────────────────────────────────────────────
+  // -- Module API ---------------------------------------------------------------
 
   window.MarketingSponsorsModule = {
 
@@ -712,7 +716,7 @@
             '</div>' +
             '<div class="aud-visual-total">' +
               '<div class="aud-visual-total-kicker">Businesses</div>' +
-              '<div class="aud-visual-total-value" id="spn-hero-biz-count">—</div>' +
+              '<div class="aud-visual-total-value" id="spn-hero-biz-count">--</div>' +
             '</div>' +
           '</div>' +
         '</div>' +
@@ -729,14 +733,14 @@
 
         '<div id="spn-panel-overview" class="spn-panel active">' +
           '<div class="mkt-tile-grid" id="spn-stats">' +
-            mktTile('spn-tile-ad-rev',  'Marketing', '...', 'Ad Revenue',        '#769e7b') +
-            mktTile('spn-tile-spn-rev', 'Marketing', '...', 'Sponsor Revenue',   '#769e7b') +
-            mktTile('spn-tile-biz',     'Marketing', '...', 'Businesses',        '#476aaa') +
-            mktTile('spn-tile-art',     'Marketing', '...', 'Missing Artwork',   '#d1523d') +
-            mktTile('spn-tile-unpaid',  'Marketing', '...', 'Unpaid Invoices',   '#dd8233') +
-            mktTile('spn-tile-due',     'Marketing', '...', 'Due This Week',     '#dd8233') +
-            mktTile('spn-tile-open',    'Marketing', '...', 'Open Deliverables', '#572e88') +
-            mktTile('spn-tile-pending', 'Marketing', '...', 'Pending Approvals', '#ca7ea7') +
+            mktTile('spn-tile-ad-rev',  'Marketing', '--', 'Ad Revenue',        '#769e7b') +
+            mktTile('spn-tile-spn-rev', 'Marketing', '--', 'Sponsor Revenue',   '#769e7b') +
+            mktTile('spn-tile-biz',     'Marketing', '--', 'Businesses',        '#476aaa') +
+            mktTile('spn-tile-art',     'Marketing', '--', 'Missing Artwork',   '#d1523d') +
+            mktTile('spn-tile-unpaid',  'Marketing', '--', 'Unpaid Invoices',   '#dd8233') +
+            mktTile('spn-tile-due',     'Marketing', '--', 'Due This Week',     '#dd8233') +
+            mktTile('spn-tile-open',    'Marketing', '--', 'Open Deliverables', '#572e88') +
+            mktTile('spn-tile-pending', 'Marketing', '--', 'Pending Approvals', '#ca7ea7') +
           '</div>' +
           '<div class="spn-overview-grid">' +
             '<div class="spn-card"><div class="spn-card-title">Needs attention</div><div id="spn-alerts" class="spn-alert-list"><div class="spn-loading-row" style="padding:0;color:#9a90b0;font-size:0.85rem">Loading...</div></div></div>' +
@@ -900,40 +904,41 @@
         el.addEventListener('click', function (e) { if (e.target === el) el.classList.remove('open'); });
       });
 
+      refreshAdSizesVisual();
       switchTab('overview');
     },
 
     destroy: function () {
-      SpnsState.prodId     = null;
-      SpnsState.businesses = [];
-      SpnsState.ads        = [];
-      SpnsState.packages   = [];
+      SpnsState.prodId       = null;
+      SpnsState.businesses   = [];
+      SpnsState.ads          = [];
+      SpnsState.packages     = [];
       SpnsState.deliverables = [];
-      SpnsState.loaded     = {};
+      SpnsState.loaded       = {};
     },
 
-    switchTab:      switchTab,
-    openBizModal:   openBizModal,
-    closeBizModal:  closeBizModal,
-    saveBiz:        saveBiz,
-    deleteBiz:      deleteBiz,
-    openAdModal:    openAdModal,
-    closeAdModal:   closeAdModal,
-    saveAd:         saveAd,
-    deleteAd:       deleteAd,
-    openPkgModal:   openPkgModal,
-    closePkgModal:  closePkgModal,
-    savePkg:        savePkg,
-    deletePkg:      deletePkg,
-    openDelivModal: openDelivModal,
-    closeDelivModal:closeDelivModal,
-    saveDeliv:      saveDeliv,
-    deleteDeliv:    deleteDeliv,
-    toggleDeliv:    toggleDeliv,
-    editAdSize:     editAdSize,
-    addTier:        addTier,
-    editTier:       editTier,
-    deleteTier:     deleteTier,
-    saveSettings:   saveSettings,
+    switchTab:       switchTab,
+    openBizModal:    openBizModal,
+    closeBizModal:   closeBizModal,
+    saveBiz:         saveBiz,
+    deleteBiz:       deleteBiz,
+    openAdModal:     openAdModal,
+    closeAdModal:    closeAdModal,
+    saveAd:          saveAd,
+    deleteAd:        deleteAd,
+    openPkgModal:    openPkgModal,
+    closePkgModal:   closePkgModal,
+    savePkg:         savePkg,
+    deletePkg:       deletePkg,
+    openDelivModal:  openDelivModal,
+    closeDelivModal: closeDelivModal,
+    saveDeliv:       saveDeliv,
+    deleteDeliv:     deleteDeliv,
+    toggleDeliv:     toggleDeliv,
+    editAdSize:      editAdSize,
+    addTier:         addTier,
+    editTier:        editTier,
+    deleteTier:      deleteTier,
+    saveSettings:    saveSettings,
   };
 })();
