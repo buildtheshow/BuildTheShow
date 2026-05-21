@@ -56261,18 +56261,19 @@ Your submission link is unique to you. Please do not share it with another perfo
     }
     const currentSession = getCurrentInRoomSession();
     clearStaleAuditionRoomState(currentSession);
+    const usesGeneralInRoomLayout = !currentSession?.type || currentSession.type === 'audition' || currentSession.type === 'callback';
+    const isGeneralAuditionInRoom = usesGeneralInRoomLayout && currentSession?.type !== 'callback';
+    const forceStaticGeneralInRoomPlaceholder = containerId === 'aud-session-inroom-content' && isGeneralAuditionInRoom;
     const groups = getInRoomGroups(currentSession);
     const checkedInApps = getInRoomCheckedInApps(currentSession);
     const requestedId = targetId || inRoomApplicantId || null;
-    const requestedIsValid = requestedId ? checkedInApps.some(app => app.id === requestedId) : false;
-    const chosenId = requestedIsValid ? requestedId : (groups.current?.id || groups.waiting[0]?.id || groups.past[0]?.id || null);
+    const requestedIsValid = !forceStaticGeneralInRoomPlaceholder && requestedId ? checkedInApps.some(app => app.id === requestedId) : false;
+    const chosenId = forceStaticGeneralInRoomPlaceholder ? null : (requestedIsValid ? requestedId : (groups.current?.id || groups.waiting[0]?.id || groups.past[0]?.id || null));
     inRoomApplicantId = chosenId;
     if (chosenId) saveWorkspaceNavState({ inRoomApplicantId: chosenId });
     else saveWorkspaceNavState({ inRoomApplicantId: '' });
-    const app = allApplicants.find(a => a.id === chosenId) || null;
-    if (syncCurrentRoomFromState(currentSession, containerId, openFn, requestedId)) return;
-    const usesGeneralInRoomLayout = !currentSession?.type || currentSession.type === 'audition' || currentSession.type === 'callback';
-    const isGeneralAuditionInRoom = usesGeneralInRoomLayout && currentSession?.type !== 'callback';
+    const app = forceStaticGeneralInRoomPlaceholder ? null : (allApplicants.find(a => a.id === chosenId) || null);
+    if (!forceStaticGeneralInRoomPlaceholder && syncCurrentRoomFromState(currentSession, containerId, openFn, requestedId)) return;
     const roleTypeOptions = [...new Set(characters.map(c => c.role_type).filter(Boolean))].sort();
     if (!app) {
       const noSelectionScoreHtml = currentSession?.type === 'callback'
