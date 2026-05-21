@@ -171,20 +171,14 @@
           '<div class="template-brand-card-inner">' +
             '<div class="template-brand-horizontal-quad-split">' +
               '<div class="template-brand-horizontal-quad-cell template-brand-horizontal-quad-cell--anchor">' +
-                '<div class="template-brand-text-holder template-brand-text-holder--invisible">' +
-                  '<div class="template-brand-text-holder-inner template-brand-text-holder-inner--invisible">' +
-                    '<div class="template-brand-tile-container template-brand-tile-container--header">' +
-                      '<div class="template-brand-tile-kicker">Programme Ad Size</div>' +
-                    '</div>' +
-                    '<div class="template-brand-tile-container template-brand-tile-container--title">' +
-                      '<div class="template-brand-tile-title">' + esc(s.label) + '</div>' +
-                    '</div>' +
-                    '<div class="template-brand-tile-container template-brand-tile-container--body">' +
-                      '<div class="template-brand-tile-body">' + esc(dimsDisplay) + '<br>Colour: $' + s.colour + ' &nbsp;&middot;&nbsp; B&amp;W: $' + s.bw + '</div>' +
-                    '</div>' +
-                    '<div class="template-brand-tile-container template-brand-tile-container--footer">' +
-                      '<div class="spn-adtile-status">' + statusLine + '</div>' +
-                    '</div>' +
+                '<div class="spn-adtile-anchor">' +
+                  '<div>' +
+                    '<div class="template-brand-tile-kicker">Programme Ad Size</div>' +
+                    '<div class="template-brand-tile-title">' + esc(s.label) + '</div>' +
+                  '</div>' +
+                  '<div>' +
+                    '<div class="template-brand-tile-body">' + esc(dimsDisplay) + '<br>Colour: $' + s.colour + ' &middot; B&amp;W: $' + s.bw + '</div>' +
+                    '<div class="spn-adtile-status">' + statusLine + '</div>' +
                   '</div>' +
                 '</div>' +
               '</div>' +
@@ -226,7 +220,7 @@
 
       var addBtn =
         '<div class="spn-adsize-group-footer">' +
-          '<button class="spn-btn spn-btn--ghost spn-btn--sm" onclick="MarketingSponsorsModule.openAdModal(null, \'' + s.id + '\')">+ Add ' + esc(s.label) + ' Ad</button>' +
+          '<button class="spn-btn spn-btn--ghost spn-btn--sm" onclick="MarketingSponsorsModule.openAdModal(null,\'' + s.id + '\')">+ Add ' + esc(s.label) + ' Ad</button>' +
         '</div>';
 
       return '<div class="spn-adsize-group">' + tile + adsList + addBtn + '</div>';
@@ -547,7 +541,7 @@
   function renderPackages() {
     var pkgs  = SpnsState.packages;
     var count = document.getElementById('spn-pkgs-count');
-    if (count) count.textContent = pkgs.length + ' Sponsor' + (pkgs.length !== 1 ? 'es' : '');
+    if (count) count.textContent = pkgs.length + ' Sponsor' + (pkgs.length !== 1 ? 's' : '');
     var head  = '<div class="spn-list-head spn-pkg-cols"><span>Business</span><span>Tier</span><span>Amount</span><span>Payment</span><span></span></div>';
     var listEl = document.getElementById('spn-pkgs-list');
     if (!listEl) return;
