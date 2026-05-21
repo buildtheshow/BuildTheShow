@@ -15,6 +15,7 @@
       title = 'Edit Team Member',
       subtitle = 'Update the details shown on their production team card.',
       menuHtml = '',
+      accessHtml = '',
       contactHtml = '',
       departmentHtml = '',
       footerHtml = '',
@@ -39,6 +40,7 @@
             ${contactHtml}
             <div class="team-edit-section-title">Department Info</div>
             ${departmentHtml}
+            ${accessHtml ? `<div class="team-edit-section-title">Access</div>${accessHtml}` : ''}
           </div>
         </div>
         ${footerHtml}

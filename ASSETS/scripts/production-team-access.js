@@ -514,6 +514,7 @@ async function addTeamMemberDirect() {
   syncNewTeamMemberMenuDefaults?.();
   document.getElementById('add-team-member-form').style.display = 'none';
   await loadAuditionTeamMembers();
+  if (typeof ensureDefaultCreativeTeamAccess === 'function') await ensureDefaultCreativeTeamAccess();
   renderTeamView(document.getElementById('tm-container'));
   showToast(`${name} added. Send them the invite from the access row below.`);
 }
@@ -570,10 +571,14 @@ function openProductionTeamMemberEdit(memberId) {
   const roleOptions = productionTeamEditRoleOptions(selectedDepartment, member.role || '');
   const selectedMenus = teamMemberMenuAccess?.(member) || new Set();
   const menuChecks = renderTeamPortalMenuChecks('ptm-edit-menu', selectedMenus);
+  const accessHtml = typeof renderTeamMemberAccessEditor === 'function'
+    ? renderTeamMemberAccessEditor(member, { inputPrefix: 'ptm-edit-access' })
+    : '';
   overlay.innerHTML = window.BTSTeamEditModalTemplate?.render?.({
     title: 'Edit Team Member',
     subtitle: 'Update the details shown on their production team card.',
     menuHtml: menuChecks,
+    accessHtml,
     closeOnclick: 'closeProductionTeamMemberEdit()',
     contactHtml: `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:0.75rem;">
         <label>
@@ -668,7 +673,17 @@ async function saveProductionTeamMemberEdit(memberId, btn = null) {
     return;
   }
   await syncTeamMemberToProductionTeam(data || { id: memberId }, payload);
+  if (typeof saveTeamMemberAccessEditor === 'function') {
+    const accessOk = await saveTeamMemberAccessEditor(memberId, { inputPrefix: 'ptm-edit-access' });
+    if (!accessOk) {
+      markDone?.(false);
+      if (msg) { msg.style.color = '#b91c1c'; msg.textContent = 'Profile saved, but access changes could not be saved.'; }
+      await loadAuditionTeamMembers();
+      return;
+    }
+  }
   await loadAuditionTeamMembers();
+  if (typeof loadProductionAccessPermissions === 'function') await loadProductionAccessPermissions({ force: true });
   markDone?.(true);
   closeProductionTeamMemberEdit();
   renderTeamView(document.getElementById('tm-container'));

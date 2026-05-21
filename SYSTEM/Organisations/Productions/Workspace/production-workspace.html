@@ -24516,8 +24516,8 @@
 <script src="/ASSETS/scripts/phone-format.js?v=nanp-smart-20260424"></script>
 <script src="/ASSETS/scripts/casting-card.js?v=in-show-card-20260514"></script>
 <script src="/ASSETS/scripts/production-team-card.js?v=volunteer-modal-template-20260511"></script>
-<script src="/ASSETS/scripts/team-edit-modal-template.js?v=shared-edit-modal-20260511"></script>
-<script src="/ASSETS/scripts/production-team-access.js?v=edit-modal-namespace-20260511"></script>
+<script src="/ASSETS/scripts/team-edit-modal-template.js?v=access-editor-20260521"></script>
+<script src="/ASSETS/scripts/production-team-access.js?v=page-access-20260521"></script>
 <script src="/SHARED/Components/casting-card-back.js?v=no-conflicts-20260519"></script>
 <script src="/SHARED/Components/audition-status-strip.js"></script>
 <script src="/SHARED/Components/audition-live-state.js?v=live-events-broadcast-20260521"></script>
@@ -24929,6 +24929,11 @@
   let workspaceBootToken = 0;
   let workspaceBootPromise = null;
   let workspaceBootSignature = '';
+  let productionAccessLoaded = false;
+  let productionAccessLoadPromise = null;
+  let productionPermissionPages = [];
+  let productionPagePermissions = [];
+  let productionSpecialPermissions = [];
 
   function teamAccessStorageKey() {
     return `bts-team-access:${prodId || 'unknown'}`;
@@ -25351,6 +25356,7 @@
     document.getElementById('auditions-wrap')?.style.setProperty('display', menuAccess.has('auditions') ? '' : 'none');
     document.getElementById('registration-wrap')?.style.setProperty('display', menuAccess.has('registration') ? '' : 'none');
     document.getElementById('team-profile-tab')?.style.setProperty('display', '');
+    document.getElementById('asub-dashboard')?.style.setProperty('display', canAccessPage(teamAccessMember?.id, prodId, 'auditions.dashboard') ? '' : 'none');
     document.getElementById('asub-setup')?.style.setProperty('display', teamMenuAllows(menuAccess, 'auditions:settings') ? '' : 'none');
     document.getElementById('asub-audschedule')?.style.setProperty('display', teamMenuAllows(menuAccess, 'auditions:schedule') ? '' : 'none');
     document.getElementById('asub-allperformers')?.style.setProperty('display', teamMenuAllows(menuAccess, 'auditions:allperformers') ? '' : 'none');
@@ -25364,11 +25370,11 @@
 
   function teamCan(action) {
     if (!teamAccessMode) return true;
+    if (action === 'settings') return canManagePage(teamAccessMember?.id, prodId, 'auditions.dashboard');
+    if (action === 'editSchedule') return canEditPage(teamAccessMember?.id, prodId, 'auditions.schedule');
+    if (action === 'checkIn') return canEditPage(teamAccessMember?.id, prodId, 'auditions.dashboard');
     const perms = teamAccessPermissions();
     if (action === 'viewContact') return !!perms.canViewContact;
-    if (action === 'editSchedule') return !!perms.canEditSchedule;
-    if (action === 'checkIn') return !!perms.canCheckIn;
-    if (action === 'settings') return !!perms.canViewSettings;
     if (action === 'createNotes') return !!perms.canCreateNotes;
     return true;
   }
@@ -27120,6 +27126,7 @@
     }
     const bootToken = ++workspaceBootToken;
     workspaceBootSignature = `${prodId || ''}:${teamAccessMode ? (teamAccessSessionToken || 'team-login') : (context.user?.id || 'admin')}`;
+    window.__btsCurrentUserId = context.user?.id || '';
     btsLifecycleLog('bootProductionWorkspace', { reason: 'start', bootToken, bootSignature: workspaceBootSignature, dataStatus: prod ? 'loaded-refetch' : 'loading' });
     setRouteLoading('Loading your production…');
     btsRouteLog('production context start', { prodId, userId: context.user?.id || null, teamAccessMode });
@@ -27176,6 +27183,8 @@
     renderProdHeader();
     prefillSettings();
     applyModuleVisibility();
+    await loadProductionAccessPermissions({ force: true });
+    if (teamAccessMode) applyTeamAccessMode();
     if (params.get('openAiImport') === 'true') {
       setTimeout(() => openImportWithAIModal(), 800);
     }
@@ -33879,6 +33888,37 @@ Your submission link is unique to you. Please do not share it with another perfo
     ] },
   ];
 
+  const PRODUCTION_PERMISSION_LEVELS = ['none', 'view', 'edit', 'manage'];
+  const PRODUCTION_PERMISSION_LEVEL_LABELS = {
+    none: 'No access',
+    view: 'View',
+    edit: 'Edit',
+    manage: 'Manage',
+  };
+  const PRODUCTION_PERMISSION_PAGES = [
+    { page_key: 'overview', parent_page_key: null, label: 'Overview', sort_order: 10 },
+    { page_key: 'auditions.dashboard', parent_page_key: 'auditions', label: 'Dashboard', sort_order: 20 },
+    { page_key: 'auditions.schedule', parent_page_key: 'auditions', label: 'Audition Schedule', sort_order: 30 },
+    { page_key: 'auditions.general', parent_page_key: 'auditions', label: 'General Auditions', sort_order: 40 },
+    { page_key: 'auditions.dance_call', parent_page_key: 'auditions', label: 'Dance Call', sort_order: 50 },
+    { page_key: 'auditions.casting_board', parent_page_key: 'auditions', label: 'Casting Board', sort_order: 60 },
+    { page_key: 'auditions.callback', parent_page_key: 'auditions', label: 'Callback', sort_order: 70 },
+    { page_key: 'auditions.final_casting', parent_page_key: 'auditions', label: 'Final Casting', sort_order: 80 },
+    { page_key: 'cast_list', parent_page_key: null, label: 'Cast List', sort_order: 90 },
+    { page_key: 'production_team', parent_page_key: null, label: 'Production Team', sort_order: 100 },
+  ];
+  const CREATIVE_TEAM_DEFAULT_PERMISSION_KEYS = [
+    'overview',
+    'auditions.dashboard',
+    'auditions.schedule',
+    'auditions.general',
+    'auditions.dance_call',
+    'auditions.casting_board',
+    'auditions.callback',
+    'auditions.final_casting',
+    'cast_list',
+  ];
+
   const TEAM_ACCESS_LEVELS = [
     { key: 'producer', label: 'Producer / full production access', menu: ['overview', 'team', 'calendar', 'auditions', 'castlist', 'registration'] },
     { key: 'creative', label: 'Artistic team notes', menu: ['overview', 'auditions', 'castlist'] },
@@ -33896,6 +33936,30 @@ Your submission link is unique to you. Please do not share it with another perfo
   }
 
   function teamMemberMenuAccess(member = {}) {
+    if (productionAccessLoaded || productionPagePermissions.length) {
+      const memberId = String(member.id || teamAccessMember?.id || '');
+      if (isProducerLikeTeamMember(member)) {
+        return new Set(['overview', 'team', 'calendar', 'auditions', 'castlist', 'registration', 'auditions:settings', 'auditions:schedule', 'auditions:allperformers', 'auditions:sessions', 'auditions:casting', 'auditions:finalcasting']);
+      }
+      const set = new Set();
+      const allow = (pageKey, menuKey) => {
+        if (productionAccessRank(teamMemberEffectivePageAccess(memberId, pageKey)) >= productionAccessRank('view')) set.add(menuKey);
+      };
+      allow('overview', 'overview');
+      allow('production_team', 'team');
+      allow('cast_list', 'castlist');
+      allow('auditions.dashboard', 'auditions');
+      allow('auditions.dashboard', 'auditions:settings');
+      allow('auditions.schedule', 'auditions:schedule');
+      allow('auditions.general', 'auditions:allperformers');
+      allow('auditions.general', 'auditions:sessions');
+      allow('auditions.casting_board', 'auditions:casting');
+      allow('auditions.final_casting', 'auditions:finalcasting');
+      allow('auditions.dance_call', 'auditions:sessions');
+      allow('auditions.callback', 'auditions:sessions');
+      if ([...set].some(key => String(key).startsWith('auditions'))) set.add('auditions');
+      return set;
+    }
     const raw = Array.isArray(member.menu_access) ? member.menu_access : null;
     const fallback = teamAccessLevelConfig(normalizeTeamRole(member.access_level || member.role)).menu;
     const set = new Set((raw && raw.length ? raw : fallback).filter(Boolean));
@@ -33911,6 +33975,452 @@ Your submission link is unique to you. Please do not share it with another perfo
     const parent = String(key || '').split(':')[0];
     return !!parent && menuAccess.has(parent);
   }
+
+  function normalizeProductionAccessLevel(level) {
+    const value = String(level || '').trim().toLowerCase();
+    return PRODUCTION_PERMISSION_LEVELS.includes(value) ? value : 'none';
+  }
+
+  function productionAccessRank(level) {
+    return PRODUCTION_PERMISSION_LEVELS.indexOf(normalizeProductionAccessLevel(level));
+  }
+
+  function isProducerLikeTeamMember(member = {}) {
+    const role = String(member.role || member.access_level || '').trim().toLowerCase();
+    return role === 'producer' || role === 'admin' || role === 'administrator' || role === 'owner';
+  }
+
+  function productionAccessMemberIdForUser(userId = '') {
+    const id = String(userId || '').trim();
+    if (!id) return '';
+    const member = (auditionTeamMembers || []).find(item =>
+      String(item.id || '') === id ||
+      String(item.user_id || '') === id ||
+      String(item.email || '').trim().toLowerCase() === String(teamAccessEmail || '').trim().toLowerCase()
+    );
+    return member?.id || '';
+  }
+
+  function productionPermissionRowsForMember(userId = '') {
+    const memberId = productionAccessMemberIdForUser(userId) || String(userId || teamAccessMember?.id || '').trim();
+    return (productionPagePermissions || []).filter(row => String(row.team_member_id || row.user_id || '') === String(memberId));
+  }
+
+  function productionSpecialRowsForMember(userId = '') {
+    const memberId = productionAccessMemberIdForUser(userId) || String(userId || teamAccessMember?.id || '').trim();
+    return (productionSpecialPermissions || []).filter(row => String(row.team_member_id || row.user_id || '') === String(memberId));
+  }
+
+  function teamAccessPageKeyForMenuKey(key) {
+    const value = String(key || '');
+    const map = {
+      overview: 'overview',
+      castlist: 'cast_list',
+      'auditions': 'auditions.dashboard',
+      'auditions:settings': 'auditions.dashboard',
+      'auditions:schedule': 'auditions.schedule',
+      'auditions:allperformers': 'auditions.general',
+      'auditions:sessions': 'auditions.general',
+      'auditions:casting': 'auditions.casting_board',
+      'auditions:finalcasting': 'auditions.final_casting',
+    };
+    return map[value] || value.replace(':', '.');
+  }
+
+  function auditionPermissionKeyForSubTab(subTab = '') {
+    const value = String(subTab || '').replace(/^session:/, '');
+    if (String(subTab || '').startsWith('session:')) {
+      const session = (audSessions || []).find(item => String(item.id || '') === value);
+      const type = String(session?.type || '').toLowerCase();
+      if (type === 'dance_call') return 'auditions.dance_call';
+      if (type === 'callback') return 'auditions.callback';
+      return 'auditions.general';
+    }
+    const map = {
+      dashboard: 'auditions.dashboard',
+      overview: 'auditions.dashboard',
+      setup: 'auditions.dashboard',
+      settings: 'auditions.dashboard',
+      schedule: 'auditions.schedule',
+      audschedule: 'auditions.schedule',
+      auditions: 'auditions.general',
+      allperformers: 'auditions.general',
+      selftape: 'auditions.general',
+      checkin: 'auditions.dashboard',
+      inroom: 'auditions.general',
+      callbacks: 'auditions.callback',
+      callbacklist: 'auditions.callback',
+      castboard: 'auditions.casting_board',
+      casting: 'auditions.casting_board',
+      finalcasting: 'auditions.final_casting',
+    };
+    return map[value] || 'auditions.dashboard';
+  }
+
+  function productionPageKeyForTab(tab = '') {
+    if (tab === 'castlist') return 'cast_list';
+    if (tab === 'team') return 'production_team';
+    if (tab === 'auditions') return 'auditions.dashboard';
+    return tab;
+  }
+
+  function currentUserCanBypassTeamPagePermissions() {
+    return !teamAccessMode;
+  }
+
+  function accessLevelForMemberPage(userId, productionId, pageKey) {
+    if (String(productionId || prodId || '') !== String(prodId || productionId || '')) return 'none';
+    if (currentUserCanBypassTeamPagePermissions()) return 'manage';
+    const memberId = productionAccessMemberIdForUser(userId) || teamAccessMember?.id || '';
+    const member = (auditionTeamMembers || []).find(item => String(item.id || '') === String(memberId)) || teamAccessMember || {};
+    if (isProducerLikeTeamMember(member)) return 'manage';
+    if (pageKey === 'production_team' && productionSpecialRowsForMember(memberId).some(row => row.permission_key === 'manage_access')) return 'manage';
+    const memberRows = productionPermissionRowsForMember(memberId);
+    const direct = memberRows.find(row => String(row.page_key || '') === String(pageKey || ''));
+    if (direct) return normalizeProductionAccessLevel(direct.access_level);
+    if (memberRows.length) return 'none';
+    const legacyMenu = teamMemberMenuAccess(member);
+    return teamMenuAllows(legacyMenu, String(pageKey || '').replace('.', ':')) || teamMenuAllows(legacyMenu, String(pageKey || '').split('.')[0])
+      ? 'manage'
+      : 'none';
+  }
+
+  function canAccessPage(userId, productionId, pageKey) {
+    return productionAccessRank(accessLevelForMemberPage(userId, productionId, pageKey)) >= productionAccessRank('view');
+  }
+
+  function canViewPage(userId, productionId, pageKey) {
+    return canAccessPage(userId, productionId, pageKey);
+  }
+
+  function canEditPage(userId, productionId, pageKey) {
+    return productionAccessRank(accessLevelForMemberPage(userId, productionId, pageKey)) >= productionAccessRank('edit');
+  }
+
+  function canManagePage(userId, productionId, pageKey) {
+    return productionAccessRank(accessLevelForMemberPage(userId, productionId, pageKey)) >= productionAccessRank('manage');
+  }
+
+  function canManageAccess(userId = '') {
+    if (!teamAccessMode) return true;
+    const memberId = productionAccessMemberIdForUser(userId) || teamAccessMember?.id || '';
+    const member = (auditionTeamMembers || []).find(item => String(item.id || '') === String(memberId)) || teamAccessMember || {};
+    if (isProducerLikeTeamMember(member)) return true;
+    return productionSpecialRowsForMember(memberId).some(row => row.permission_key === 'manage_access');
+  }
+
+  function canGrantAccessLevel(userId, productionId, targetAccessLevel, pageKey = '') {
+    if (!canManageAccess(userId, productionId)) return false;
+    if (!teamAccessMode) return true;
+    if (!pageKey) return true;
+    return productionAccessRank(accessLevelForMemberPage(userId, productionId, pageKey)) >= productionAccessRank(targetAccessLevel);
+  }
+
+  function teamMemberEffectivePageAccess(memberId, pageKey) {
+    const member = (auditionTeamMembers || []).find(item => String(item.id || '') === String(memberId)) || {};
+    if (isProducerLikeTeamMember(member)) return 'manage';
+    if (pageKey === 'production_team' && teamMemberHasSpecialPermission(memberId, 'manage_access')) return 'manage';
+    const memberRows = (productionPagePermissions || []).filter(item => String(item.team_member_id || '') === String(memberId));
+    const row = memberRows.find(item => item.page_key === pageKey);
+    if (row) return normalizeProductionAccessLevel(row.access_level);
+    if (memberRows.length) return 'none';
+    const legacyKeys = new Set((Array.isArray(member.menu_access) && member.menu_access.length
+      ? member.menu_access
+      : teamAccessLevelConfig(normalizeTeamRole(member.access_level || member.role)).menu
+    ).filter(Boolean));
+    const legacyMenuKey = Object.entries({
+      overview: 'overview',
+      cast_list: 'castlist',
+      production_team: 'team',
+      'auditions.dashboard': 'auditions',
+      'auditions.schedule': 'auditions:schedule',
+      'auditions.general': 'auditions:allperformers',
+      'auditions.dance_call': 'auditions:sessions',
+      'auditions.callback': 'auditions:sessions',
+      'auditions.casting_board': 'auditions:casting',
+      'auditions.final_casting': 'auditions:finalcasting',
+    }).find(([key]) => key === pageKey)?.[1] || '';
+    const legacyParent = legacyMenuKey.split(':')[0];
+    return (legacyKeys.has(legacyMenuKey) || (legacyParent && legacyKeys.has(legacyParent))) ? 'manage' : 'none';
+  }
+
+  function teamMemberHasSpecialPermission(memberId, permissionKey) {
+    const member = (auditionTeamMembers || []).find(item => String(item.id || '') === String(memberId)) || {};
+    if (permissionKey === 'manage_access' && isProducerLikeTeamMember(member)) return true;
+    return (productionSpecialPermissions || []).some(row => String(row.team_member_id || '') === String(memberId) && row.permission_key === permissionKey);
+  }
+
+  async function loadProductionAccessPermissions(options = {}) {
+    if (!prodId) return false;
+    if (productionAccessLoadPromise && !options.force) return productionAccessLoadPromise;
+    productionAccessLoadPromise = (async () => {
+      try {
+        let pageRows = null;
+        let permissionRows = null;
+        let specialRows = null;
+        if (teamAccessMode && teamAccessSessionToken) {
+          const { data, error } = await sb.rpc('team_member_page_access_for_session', {
+            p_production_id: prodId,
+            p_session_token: teamAccessSessionToken,
+          });
+          if (!error && data) {
+            const rows = Array.isArray(data) ? data : [];
+            permissionRows = rows.filter(row => row.page_key);
+            specialRows = rows.filter(row => row.permission_key);
+          }
+        }
+        if (!permissionRows) {
+          const [pages, pagePerms, specialPerms] = await Promise.all([
+            sb.from('production_permission_pages').select('*').eq('is_active', true).order('sort_order', { ascending: true }),
+            sb.from('production_team_member_page_permissions').select('*').eq('production_id', prodId),
+            sb.from('production_team_member_special_permissions').select('*').eq('production_id', prodId),
+          ]);
+          if (pages.error || pagePerms.error || specialPerms.error) throw pages.error || pagePerms.error || specialPerms.error;
+          pageRows = pages.data || [];
+          permissionRows = pagePerms.data || [];
+          specialRows = specialPerms.data || [];
+        }
+        productionPermissionPages = pageRows?.length ? pageRows : PRODUCTION_PERMISSION_PAGES;
+        productionPagePermissions = permissionRows || [];
+        productionSpecialPermissions = specialRows || [];
+        productionAccessLoaded = true;
+        return true;
+      } catch (error) {
+        productionPermissionPages = PRODUCTION_PERMISSION_PAGES;
+        productionPagePermissions = [];
+        productionSpecialPermissions = [];
+        productionAccessLoaded = false;
+        console.warn('[BTS] production access permissions unavailable; using legacy menu access until SQL is applied.', error);
+        return false;
+      } finally {
+        productionAccessLoadPromise = null;
+      }
+    })();
+    return productionAccessLoadPromise;
+  }
+
+  function creativeTeamMemberIdsForDefaultAccess() {
+    const creative = teamConfig?.find(d => d.name === 'Artistic Team') || teamConfig?.find(d => d.name === 'Creative Team');
+    const roleMemberIds = new Set((creative?.roles || []).map(role => String(role.team_member_id || '')).filter(Boolean));
+    const creativeRoleNames = new Set((creative?.roles || []).map(role => String(role.name || '').trim().toLowerCase()).filter(Boolean));
+    return (auditionTeamMembers || [])
+      .filter(member => {
+        const role = String(member.role || '').trim().toLowerCase();
+        const dept = String(member.department || teamMemberDepartment(member) || '').trim().toLowerCase();
+        return roleMemberIds.has(String(member.id || ''))
+          || dept === 'artistic team'
+          || dept === 'creative team'
+          || creativeRoleNames.has(role)
+          || ['producer', 'director', 'vocal director', 'music director', 'musical director', 'choreographer'].includes(role);
+      })
+      .map(member => member.id)
+      .filter(Boolean);
+  }
+
+  async function ensureDefaultCreativeTeamAccess() {
+    if (!prodId || teamAccessMode) return false;
+    await loadProductionAccessPermissions();
+    const memberIds = creativeTeamMemberIdsForDefaultAccess();
+    if (!memberIds.length) return true;
+    const now = new Date().toISOString();
+    const existing = new Set((productionPagePermissions || []).map(row => `${row.team_member_id}:${row.page_key}`));
+    const inserts = [];
+    memberIds.forEach(memberId => {
+      CREATIVE_TEAM_DEFAULT_PERMISSION_KEYS.forEach(pageKey => {
+        const key = `${memberId}:${pageKey}`;
+        if (!existing.has(key)) {
+          inserts.push({
+            production_id: prodId,
+            team_member_id: memberId,
+            page_key: pageKey,
+            access_level: 'manage',
+            granted_by: null,
+            updated_at: now,
+          });
+        }
+      });
+    });
+    const specialExisting = new Set((productionSpecialPermissions || []).map(row => `${row.team_member_id}:${row.permission_key}`));
+    const specialInserts = (auditionTeamMembers || [])
+      .filter(isProducerLikeTeamMember)
+      .filter(member => !specialExisting.has(`${member.id}:manage_access`))
+      .map(member => ({
+        production_id: prodId,
+        team_member_id: member.id,
+        permission_key: 'manage_access',
+        granted_by: null,
+        updated_at: now,
+      }));
+    try {
+      if (inserts.length) {
+        const { error } = await sb.from('production_team_member_page_permissions').upsert(inserts, { onConflict: 'production_id,team_member_id,page_key' });
+        if (error) throw error;
+      }
+      if (specialInserts.length) {
+        const { error } = await sb.from('production_team_member_special_permissions').upsert(specialInserts, { onConflict: 'production_id,team_member_id,permission_key' });
+        if (error) throw error;
+      }
+      if (inserts.length || specialInserts.length) await loadProductionAccessPermissions({ force: true });
+      return true;
+    } catch (error) {
+      console.warn('[BTS] Could not seed default creative team access.', error);
+      return false;
+    }
+  }
+
+  function renderTeamMemberAccessEditor(member, options = {}) {
+    const memberId = String(member?.id || '');
+    if (!memberId || !canManageAccess(teamAccessMember?.id || '')) {
+      return `<div style="font-size:0.82rem;color:rgba(87,46,136,0.55);line-height:1.45;">Access settings are only visible to Producers, organisation admins, and people with manage access permission.</div>`;
+    }
+    const prefix = options.inputPrefix || 'ptm-access';
+    const rows = PRODUCTION_PERMISSION_PAGES
+      .filter(page => page.page_key !== 'production_team')
+      .map(page => {
+        const level = teamMemberEffectivePageAccess(memberId, page.page_key);
+        const indent = page.parent_page_key ? 'padding-left:1rem;' : '';
+        const optionsHtml = PRODUCTION_PERMISSION_LEVELS.map(accessLevel =>
+          `<option value="${accessLevel}"${level === accessLevel ? ' selected' : ''}>${esc(PRODUCTION_PERMISSION_LEVEL_LABELS[accessLevel])}</option>`
+        ).join('');
+        return `<label style="display:grid;grid-template-columns:minmax(0,1fr) 128px;gap:0.75rem;align-items:center;padding:0.38rem 0;border-bottom:1px solid rgba(87,46,136,0.08);${indent}">
+          <span style="font-size:0.82rem;font-weight:${page.parent_page_key ? '650' : '850'};color:#2d1b4e;">${esc(page.label)}</span>
+          <select class="form-select ${esc(prefix)}-page" data-page-key="${esc(page.page_key)}" style="font-size:0.78rem;padding:0.35rem 0.5rem;">${optionsHtml}</select>
+        </label>`;
+      }).join('');
+    const manageAccessChecked = teamMemberHasSpecialPermission(memberId, 'manage_access');
+    const producerLocked = isProducerLikeTeamMember(member);
+    return `<div class="team-access-editor" style="border:1.5px solid rgba(87,46,136,0.12);border-radius:8px;padding:0.8rem;background:#faf8fd;">
+      <div style="display:flex;flex-direction:column;gap:0.1rem;margin-bottom:0.55rem;">
+        <strong style="font-size:0.86rem;color:#2d1b4e;">Page access</strong>
+        <span style="font-size:0.76rem;color:rgba(87,46,136,0.55);">Controls both navigation visibility and direct page access.</span>
+      </div>
+      <div>${rows}</div>
+      <label style="display:flex;align-items:center;justify-content:space-between;gap:1rem;margin-top:0.75rem;padding-top:0.75rem;border-top:1px solid rgba(87,46,136,0.12);">
+        <span>
+          <strong style="display:block;font-size:0.82rem;color:#2d1b4e;">Can manage access</strong>
+          <span style="display:block;font-size:0.74rem;color:rgba(87,46,136,0.55);">Allows this person to grant or remove access for others.</span>
+        </span>
+        <input type="checkbox" id="${esc(prefix)}-manage-access" ${manageAccessChecked ? 'checked' : ''} ${producerLocked ? 'disabled' : ''} />
+      </label>
+    </div>`;
+  }
+
+  async function saveTeamMemberAccessEditor(memberId, options = {}) {
+    if (!memberId || !canManageAccess(teamAccessMember?.id || '')) return true;
+    const prefix = options.inputPrefix || 'ptm-access';
+    const targetMember = (auditionTeamMembers || []).find(member => String(member.id || '') === String(memberId)) || {};
+    const rows = Array.from(document.querySelectorAll(`.${prefix}-page`)).map(select => ({
+      page_key: select.dataset.pageKey || '',
+      access_level: normalizeProductionAccessLevel(select.value),
+    })).filter(row => row.page_key);
+    const wantsManageAccess = document.getElementById(`${prefix}-manage-access`)?.checked === true || isProducerLikeTeamMember(targetMember);
+    if (isProducerLikeTeamMember(targetMember) && rows.some(row => row.access_level !== 'manage')) {
+      showToast?.('Producer/admin access cannot be lowered.', true);
+      return false;
+    }
+    if (teamAccessMode) {
+      for (const row of rows) {
+        if (!canGrantAccessLevel(teamAccessMember?.id, prodId, row.access_level, row.page_key)) {
+          showToast?.('You cannot grant access higher than your own access.', true);
+          return false;
+        }
+      }
+    }
+    const currentManagers = new Set([
+      ...(auditionTeamMembers || []).filter(isProducerLikeTeamMember).map(member => String(member.id || '')),
+      ...(productionSpecialPermissions || []).filter(row => row.permission_key === 'manage_access').map(row => String(row.team_member_id || '')),
+    ].filter(Boolean));
+    const wasManager = currentManagers.has(String(memberId));
+    const hadManageAccess = teamMemberHasSpecialPermission(memberId, 'manage_access');
+    if (wasManager && !wantsManageAccess && currentManagers.size <= 1) {
+      showToast?.('At least one Producer/admin/access manager must remain.', true);
+      return false;
+    }
+    const previousRows = new Map((productionPagePermissions || [])
+      .filter(row => String(row.team_member_id || '') === String(memberId))
+      .map(row => [row.page_key, normalizeProductionAccessLevel(row.access_level)]));
+    const now = new Date().toISOString();
+    const grantedBy = teamAccessMode ? (teamAccessMember?.id || null) : (window.__btsCurrentUserId || null);
+    try {
+      if (teamAccessMode && teamAccessSessionToken) {
+        const { error } = await sb.rpc('team_member_manage_page_access_for_session', {
+          p_production_id: prodId,
+          p_session_token: teamAccessSessionToken,
+          p_target_team_member_id: memberId,
+          p_page_permissions: rows,
+          p_manage_access: wantsManageAccess,
+        });
+        if (error) throw error;
+        await loadProductionAccessPermissions({ force: true });
+        return true;
+      }
+      const upserts = rows.map(row => ({
+        production_id: prodId,
+        team_member_id: memberId,
+        page_key: row.page_key,
+        access_level: row.access_level,
+        granted_by: grantedBy,
+        updated_at: now,
+      }));
+      if (upserts.length) {
+        const { error } = await sb.from('production_team_member_page_permissions').upsert(upserts, { onConflict: 'production_id,team_member_id,page_key' });
+        if (error) throw error;
+      }
+      if (wantsManageAccess) {
+        const { error } = await sb.from('production_team_member_special_permissions').upsert({
+          production_id: prodId,
+          team_member_id: memberId,
+          permission_key: 'manage_access',
+          granted_by: grantedBy,
+          updated_at: now,
+        }, { onConflict: 'production_id,team_member_id,permission_key' });
+        if (error) throw error;
+      } else {
+        const { error } = await sb.from('production_team_member_special_permissions')
+          .delete()
+          .eq('production_id', prodId)
+          .eq('team_member_id', memberId)
+          .eq('permission_key', 'manage_access');
+        if (error) throw error;
+      }
+      const auditRows = rows
+        .filter(row => (previousRows.get(row.page_key) || 'none') !== row.access_level)
+        .map(row => ({
+          production_id: prodId,
+          changed_user_id: memberId,
+          changed_by_user_id: grantedBy,
+          page_key: row.page_key,
+          previous_access_level: previousRows.get(row.page_key) || 'none',
+          new_access_level: row.access_level,
+          created_at: now,
+        }));
+      if (hadManageAccess !== wantsManageAccess) {
+        auditRows.push({
+          production_id: prodId,
+          changed_user_id: memberId,
+          changed_by_user_id: grantedBy,
+          permission_key: 'manage_access',
+          previous_access_level: hadManageAccess ? 'manage' : 'none',
+          new_access_level: wantsManageAccess ? 'manage' : 'none',
+          created_at: now,
+        });
+      }
+      if (auditRows.length) {
+        await sb.from('production_access_audit_log').insert(auditRows);
+      }
+      await loadProductionAccessPermissions({ force: true });
+      return true;
+    } catch (error) {
+      console.warn('[BTS] Could not save production team access.', error);
+      showToast?.('Could not save access: ' + (error.message || 'Supabase permission tables unavailable.'), true);
+      return false;
+    }
+  }
+
+  window.renderTeamMemberAccessEditor = renderTeamMemberAccessEditor;
+  window.saveTeamMemberAccessEditor = saveTeamMemberAccessEditor;
+  window.loadProductionAccessPermissions = loadProductionAccessPermissions;
+  window.ensureDefaultCreativeTeamAccess = ensureDefaultCreativeTeamAccess;
 
   // Built-in system templates (platform-provided, cannot be edited or deleted)
   const BUILTIN_TEMPLATES = [
@@ -34067,6 +34577,7 @@ Your submission link is unique to you. Please do not share it with another perfo
 
     await loadAuditionTeamMembers();
     await syncCreativeRolesToTeamAccess({ silent: true });
+    await ensureDefaultCreativeTeamAccess();
     showTeamSubnav();
     switchTeamTab('overview');
   }
@@ -34074,11 +34585,17 @@ Your submission link is unique to you. Please do not share it with another perfo
   async function loadAuditionTeamMembers() {
     if (!prodId) return [];
     try {
-      const { data, error } = await sb.from('production_team_members')
-        .select('*')
-        .eq('production_id', prodId)
-        .eq('is_active', true)
-        .order('created_at', { ascending: true });
+      let result = teamAccessMode && teamAccessSessionToken
+        ? await sb.rpc('team_members_for_session', { p_production_id: prodId, p_session_token: teamAccessSessionToken })
+        : await sb.from('production_team_members')
+          .select('*')
+          .eq('production_id', prodId)
+          .eq('is_active', true)
+          .order('created_at', { ascending: true });
+      if (result.error && teamAccessMode) {
+        result = { data: teamAccessMember ? [teamAccessMember] : [], error: null };
+      }
+      const { data, error } = result;
       if (error) throw error;
       auditionTeamMembers = data || [];
     } catch (error) {
@@ -34308,7 +34825,7 @@ Your submission link is unique to you. Please do not share it with another perfo
     overlay.innerHTML = `
       <div class="perf-lightbox-scene production-team-lightbox-scene" onclick="event.stopPropagation();">
         <div class="production-team-lightbox-inner" id="production-team-card-preview-inner">
-          ${window.BTSProductionTeamTemplates.renderProductionTeamCard(member, { showManagement: !!member.id })}
+          ${window.BTSProductionTeamTemplates.renderProductionTeamCard(member, { showManagement: !!member.id && canManageAccess(teamAccessMember?.id || '') })}
         </div>
         <button class="perf-flip-btn" type="button" onclick="flipProductionTeamCard(document.querySelector('#production-team-card-preview-inner .production-team-card'))">
           <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
@@ -34590,6 +35107,7 @@ Your submission link is unique to you. Please do not share it with another perfo
       groupedMembers.get(dept).push(member);
     });
     const totalMembers = (auditionTeamMembers || []).length;
+    const canManageTeamAccessUi = canManageAccess(teamAccessMember?.id || '');
     const activeDepartments = departmentNames.filter(department => (groupedMembers.get(department) || []).length).length;
     const totalOpenRoles = (teamConfig || []).reduce((sum, dept) =>
       sum + (dept.roles || []).filter(role => !role.filled && !role.person && !role.team_member_id).length, 0);
@@ -34650,8 +35168,8 @@ Your submission link is unique to you. Please do not share it with another perfo
         </div>
         ${treeHtml}
         <div class="team-department-actions">
-          <button type="button" class="btn-secondary" onclick="showAddTeamMemberForDepartment(decodeURIComponent('${departmentPayload}'))" style="font-size:0.76rem;">Add Here</button>
-          <button type="button" class="btn-secondary" onclick="showTeamEditor()" style="font-size:0.76rem;">Edit Roles</button>
+          ${canManageTeamAccessUi ? `<button type="button" class="btn-secondary" onclick="showAddTeamMemberForDepartment(decodeURIComponent('${departmentPayload}'))" style="font-size:0.76rem;">Add Here</button>
+          <button type="button" class="btn-secondary" onclick="showTeamEditor()" style="font-size:0.76rem;">Edit Roles</button>` : ''}
         </div>
       </section>`;
     }).join('');
@@ -34680,8 +35198,8 @@ Your submission link is unique to you. Please do not share it with another perfo
             <div class="team-access-subtitle">Staff, artistic team, crew, and volunteers. Cast members live in Cast List, not here.</div>
           </div>
           <div class="team-access-actions">
-            <button class="btn-primary" onclick="showAddTeamMemberForm()">+ Add Team Member</button>
-            <button class="btn-secondary" onclick="copyTeamPortalLink()">Copy Portal Link</button>
+            ${canManageTeamAccessUi ? `<button class="btn-primary" onclick="showAddTeamMemberForm()">+ Add Team Member</button>
+            <button class="btn-secondary" onclick="copyTeamPortalLink()">Copy Portal Link</button>` : ''}
           </div>
         </div>
         <div id="add-team-member-form" class="team-member-questionnaire">
@@ -35404,14 +35922,16 @@ Your submission link is unique to you. Please do not share it with another perfo
     enhanceSidebarNavControls(host);
     if (teamAccessMode) {
       const menuAccess = teamMemberMenuAccess(teamAccessMember);
-      document.getElementById('asub-dashboard')?.style.setProperty('display', teamMenuAllows(menuAccess, 'auditions') ? '' : 'none');
+      document.getElementById('asub-dashboard')?.style.setProperty('display', canAccessPage(teamAccessMember?.id, prodId, 'auditions.dashboard') ? '' : 'none');
       document.getElementById('asub-setup')?.style.setProperty('display', teamMenuAllows(menuAccess, 'auditions:settings') ? '' : 'none');
       document.getElementById('asub-audschedule')?.style.setProperty('display', teamMenuAllows(menuAccess, 'auditions:schedule') ? '' : 'none');
       document.getElementById('asub-allperformers')?.style.setProperty('display', teamMenuAllows(menuAccess, 'auditions:allperformers') ? '' : 'none');
       document.getElementById('asub-casting')?.style.setProperty('display', teamMenuAllows(menuAccess, 'auditions:casting') ? '' : 'none');
       document.getElementById('asub-finalcasting')?.style.setProperty('display', teamMenuAllows(menuAccess, 'auditions:finalcasting') ? '' : 'none');
       host.querySelectorAll('[id^="asub-session-"]').forEach(item => {
-        item.style.display = teamMenuAllows(menuAccess, 'auditions:sessions') ? '' : 'none';
+        const sessionId = String(item.id || '').replace(/^asub-session-/, '');
+        const pageKey = auditionPermissionKeyForSubTab(`session:${sessionId}`);
+        item.style.display = teamMenuAllows(menuAccess, 'auditions:sessions') && canAccessPage(teamAccessMember?.id, prodId, pageKey) ? '' : 'none';
       });
     }
     // Re-apply whichever sidebar item was active before the re-render
@@ -41739,7 +42259,13 @@ Your submission link is unique to you. Please do not share it with another perfo
       if (blocked.has(subTab)) subTab = 'dashboard';
       if (subTab === 'setup' && !teamCan('settings')) subTab = 'dashboard';
     }
-    switchProdTab('auditions', { force: true });
+    const pageKey = auditionPermissionKeyForSubTab(subTab);
+    if (teamAccessMode && !canAccessPage(teamAccessMember?.id, prodId, pageKey)) {
+      btsRouteLog('route guard blocked', { reason: 'auditions-page-permission', subTab, pageKey });
+      showProductionAccessBlocked(pageKey);
+      return;
+    }
+    switchProdTab('auditions', { force: true, permissionPageKey: pageKey });
     const isSessionSubTab = String(subTab).startsWith('session:');
     saveWorkspaceNavState({ auditionsSubTab: subTab });
 
@@ -41923,8 +42449,12 @@ Your submission link is unique to you. Please do not share it with another perfo
   }
 
   function openCastingSubTab() {
+    if (teamAccessMode && !canAccessPage(teamAccessMember?.id, prodId, 'auditions.casting_board')) {
+      showProductionAccessBlocked('auditions.casting_board');
+      return;
+    }
     closeMobileSidebar();
-    switchProdTab('auditions');
+    switchProdTab('auditions', { permissionPageKey: 'auditions.casting_board' });
     setSidebarSubmenuState('auditions', 'asub-casting');
     cbv2SubView = 'board';
     setCastboardMode('general');
@@ -41932,12 +42462,36 @@ Your submission link is unique to you. Please do not share it with another perfo
   }
 
   function openFinalCastingSubTab() {
+    if (teamAccessMode && !canAccessPage(teamAccessMember?.id, prodId, 'auditions.final_casting')) {
+      showProductionAccessBlocked('auditions.final_casting');
+      return;
+    }
     closeMobileSidebar();
-    switchProdTab('auditions');
+    switchProdTab('auditions', { permissionPageKey: 'auditions.final_casting' });
     setSidebarSubmenuState('auditions', 'asub-finalcasting');
     switchAudTab('finalcasting');
     switchFinalCastingTab('board');
     saveWorkspaceNavState({ prodTab: 'auditions', auditionsSubTab: 'finalcasting' });
+  }
+
+  function showProductionAccessBlocked(pageKey = '') {
+    let targetPanel = document.getElementById('panel-access-blocked');
+    if (!targetPanel) {
+      targetPanel = document.createElement('div');
+      targetPanel.id = 'panel-access-blocked';
+      targetPanel.className = 'tab-panel';
+      document.querySelector('.prod-content')?.appendChild(targetPanel);
+    }
+    if (!targetPanel) return;
+    enforceSingleWorkspacePanel(targetPanel.id);
+    targetPanel.innerHTML = `
+      <div class="page-header">
+        <div>
+          <div class="page-title">You do not have access to this page.</div>
+          <div class="page-subtitle">Ask the Producer or organisation admin to update your production access.</div>
+        </div>
+      </div>
+      <div class="ov-card" style="padding:1rem;color:rgba(87,46,136,0.58);font-size:0.9rem;">Blocked page: ${esc(pageKey || 'production workspace')}</div>`;
   }
 
   let activeFinalCastingTab = 'board';
@@ -43491,6 +44045,12 @@ Your submission link is unique to you. Please do not share it with another perfo
     btsRouteLog('nav click received', { type: 'prod', id, ready: workspaceBootReady });
     if (!workspaceBootReady && !options.force) {
       queueWorkspaceNavigation('prod', { id });
+      return;
+    }
+    const pageKey = options.permissionPageKey || productionPageKeyForTab(id);
+    if (teamAccessMode && !['profile'].includes(id) && !canAccessPage(teamAccessMember?.id, prodId, pageKey)) {
+      btsRouteLog('route guard blocked', { reason: 'production-page-permission', id, pageKey });
+      showProductionAccessBlocked(pageKey);
       return;
     }
     const routeToken = beginWorkspaceRoute(id);
