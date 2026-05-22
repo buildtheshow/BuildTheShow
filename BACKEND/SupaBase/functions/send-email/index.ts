@@ -98,10 +98,10 @@ serve(async (req) => {
     // Fetch production + all sessions in parallel
     const [{ data: prodRec }, { data: testSessions }, { data: testPerformanceEvents }] = await Promise.all([
       prodIdTest
-        ? sb.from('productions').select('title,subtitle,venue,org_name,org_email,director,start_date,end_date,wizard_data').eq('id', prodIdTest).maybeSingle()
+        ? sb.from('productions').select('title,subtitle,venue,org_name,org_email,director,start_date,end_date,wizard_data,audition_location').eq('id', prodIdTest).maybeSingle()
         : Promise.resolve({ data: null }),
       prodIdTest
-        ? sb.from('audition_sessions').select('id,name,type,date,start_time,location,prepare_text').eq('production_id', prodIdTest).order('sort_order', { ascending: true })
+        ? sb.from('audition_sessions').select('id,name,type,date,start_time,location,prepare_text,video_meeting_link').eq('production_id', prodIdTest).order('sort_order', { ascending: true })
         : Promise.resolve({ data: [] }),
       prodIdTest
         ? sb.from('production_events').select('title,start_time,end_time,venue,event_type').eq('production_id', prodIdTest).eq('event_type', 'performance').order('start_time', { ascending: true })
@@ -147,6 +147,7 @@ serve(async (req) => {
       '{{audition_session}}':      primarySess ? String(primarySess.name || '') : '',
       '{{audition_date}}':         primarySess?.date        ? fmtDate(String(primarySess.date))        : '',
       '{{audition_time}}':         primarySess?.start_time  ? fmtTime(String(primarySess.start_time))  : '10:00 AM',
+      '{{video_meeting_link}}':    String(primarySess?.video_meeting_link || ''),
       '{{audition_venue}}':        String(primarySess?.location || p.venue || ''),
       '{{what_to_prepare}}':       'Please prepare 16 bars of a song in the style of the show.',
       '{{booking_link}}':          `https://buildtheshow.com/audition-info?prod=${prodIdTest}`,
@@ -517,13 +518,13 @@ serve(async (req) => {
 
   const [{ data: sessions }, { data: slots }, { data: allProductionSessions }, { data: performanceEvents }] = await Promise.all([
     sessionIds.length
-      ? sb.from('audition_sessions').select('id,name,session_date,date,start_time,location,prepare_text').in('id', [...new Set(sessionIds)])
+      ? sb.from('audition_sessions').select('id,name,session_date,date,start_time,location,prepare_text,video_meeting_link').in('id', [...new Set(sessionIds)])
       : Promise.resolve({ data: [] }),
     slotIds.length
       ? sb.from('audition_time_slots').select('id,slot_time,slot_date,label').in('id', [...new Set(slotIds)])
       : Promise.resolve({ data: [] }),
     productionId
-      ? sb.from('audition_sessions').select('id,name,type,date,start_time,location,prepare_text').eq('production_id', productionId).order('sort_order', { ascending: true })
+      ? sb.from('audition_sessions').select('id,name,type,date,start_time,location,prepare_text,video_meeting_link').eq('production_id', productionId).order('sort_order', { ascending: true })
       : Promise.resolve({ data: [] }),
     productionId
       ? sb.from('production_events').select('title,start_time,end_time,venue,event_type').eq('production_id', productionId).eq('event_type', 'performance').order('start_time', { ascending: true })
@@ -725,6 +726,7 @@ serve(async (req) => {
     '{{show_venue}}':            String(productionRecord.venue    || ''),
     '{{show_dates}}':            showDates,
     '{{audition_session}}':      sessionName,
+    '{{video_meeting_link}}':    String((primarySession as Record<string,unknown>)?.video_meeting_link || ''),
     '{{audition_date}}':         sessionDate,
     '{{audition_time}}':         slotTime,
     '{{audition_venue}}':        audVenue,
@@ -808,6 +810,7 @@ serve(async (req) => {
     if (!(vk in tokenValues)) tokenValues[vk] = String(session.location || audVenue);
     if (!(nk in tokenValues)) tokenValues[nk] = String(session.name || '');
     if (!(pk in tokenValues)) tokenValues[pk] = String(session.prepare_text || '');
+    if (!(mlk in tokenValues)) tokenValues[mlk] = String(session.video_meeting_link || '');
   }
 
   for (const [key, rawValue] of Object.entries(directContext)) {
@@ -851,6 +854,7 @@ serve(async (req) => {
     '{{callback_prepare}}',
     '{{callback_materials}}',
     '{{producer_signoff}}',
+    '{{video_meeting_link}}',
   ]);
 
   function substituteTemplate(text: string, escapeForHtml = false): string {

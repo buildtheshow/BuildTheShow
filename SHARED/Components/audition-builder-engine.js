@@ -209,9 +209,9 @@
     characterSetup: null,
     characterWhen: null,
     rounds: {
-      main: { date: '', start: '', end: '', slotLength: 7, buffer: 3, capacity: 1 },
-      dance: { date: '', start: '', end: '', slotLength: 60, buffer: 0, capacity: 18 },
-      callback: { date: '', start: '', end: '', slotLength: 10, buffer: 5, capacity: 1 },
+      main: { date: '', start: '', end: '', slotLength: 7, buffer: 3, capacity: 1, videoMeetingLink: '' },
+      dance: { date: '', start: '', end: '', slotLength: 60, buffer: 0, capacity: 18, videoMeetingLink: '' },
+      callback: { date: '', start: '', end: '', slotLength: 10, buffer: 5, capacity: 1, videoMeetingLink: '' },
     },
   };
 
@@ -642,6 +642,14 @@
     return lines.join(' ');
   }
 
+  function buildVideoMeetingLinkInstruction(state, roundType, flow) {
+    const roundState = state.rounds[roundType] || {};
+    if ((flow === 'video_live' || flow === 'dance_video_live' || flow === 'callback_video_live') && roundState.videoMeetingLink) {
+      return `The meeting link for this video call is: ${roundState.videoMeetingLink}`;
+    }
+    return '';
+  }
+
   function sessionBehavior(flow, roundType) {
     const behavior = {
       sessionFormat: 'in_person',
@@ -766,6 +774,7 @@
         show_to_applicants: behavior.isVisible,
         sort_order: sortOrder,
         slot_blocks: slotBlocks,
+        video_meeting_link: roundValues.videoMeetingLink || null,
       },
       blockId,
       shouldGenerateSlots: behavior.shouldGenerateSlots && hasDateTime,
