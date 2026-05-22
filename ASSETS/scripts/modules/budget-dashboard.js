@@ -90,7 +90,14 @@
       setTile('bgt-hero-count',    rcts.length);
       setTile('bgt-stat-income',   s.fmt$(income));
       setTile('bgt-stat-expenses', s.fmt$(expenses));
-      setTile('bgt-stat-net',      s.fmt$(net));
+
+      var netEl = document.getElementById('bgt-stat-net');
+      if (netEl) {
+        netEl.textContent = s.fmt$(net);
+        var card = netEl.closest('.template-brand-card');
+        if (card) card.style.setProperty('--brand-tile-bg', net >= 0 ? '#769e7b' : '#d1523d');
+      }
+
       setTile('bgt-stat-spent',    s.fmt$(approved));
       setTile('bgt-stat-remaining',s.fmt$(remaining));
       setTile('bgt-stat-pending',  pending);
