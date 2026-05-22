@@ -164,11 +164,11 @@
     var ads = SpnsState.ads.filter(function (a) { return a.ad_size === sizeId; });
     var d = parseAdDims(dims);
     var ratio = (d.w / d.h).toFixed(3);
-    var posterBg = SpnsState.posterUrl
-      ? 'background-image:url(' + JSON.stringify(SpnsState.posterUrl) + ');background-size:cover;background-position:center;'
-      : '';
-    var waitCard = '<div class="spn-ad-placeholder" style="aspect-ratio:' + ratio + ';' + posterBg + '">'
-      + (SpnsState.posterUrl ? '<div class="spn-ad-ph-blur"></div>' : '')
+    var posterInner = SpnsState.posterUrl
+      ? '<div class="spn-ad-ph-img" style="background-image:url(' + JSON.stringify(SpnsState.posterUrl) + ')"></div><div class="spn-ad-ph-overlay"></div>'
+      : '<div class="spn-ad-ph-empty"></div>';
+    var waitCard = '<div class="spn-ad-placeholder" style="aspect-ratio:' + ratio + '">'
+      + posterInner
       + '<span class="spn-ad-ph-label">Example</span>'
       + '</div>';
     var addCard = '<div class="reg-offer-item spn-ad-mini-add" onclick="MarketingSponsorsModule.openAdModal(undefined,' + JSON.stringify(sizeId) + ')" title="Add ad"><span>+</span></div>';
