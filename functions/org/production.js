@@ -3,6 +3,6 @@
 
 export async function onRequest(context) {
   const url = new URL(context.request.url);
-  const assetUrl = new URL('/SYSTEM/Organisations/Productions/Workspace/production-workspace.html', url);
+  const assetUrl = new URL('/production-workspace', url);
   return context.env.ASSETS.fetch(assetUrl);
 }

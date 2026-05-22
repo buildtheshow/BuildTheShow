@@ -129,6 +129,9 @@
       line-height: 1.45;
     }
     .status.error { background: #fff1f2; color: #be123c; }
+    .note-box { margin-top: 1rem; }
+    .note-box label { display:block; font-size:0.78rem; font-weight:800; color:#572e88; margin-bottom:0.35rem; }
+    .note-box textarea { width:100%; min-height:86px; border:1px solid #ddd6e8; border-radius:10px; padding:0.8rem; font:inherit; resize:vertical; box-sizing:border-box; }
     .hidden { display: none !important; }
   </style>
 </head>
@@ -167,6 +170,10 @@
       respondedAt: '__bts_callback_responded_at',
       sessionId: '__bts_callback_session_id',
       slotId: '__bts_callback_slot_id',
+      blockId: '__bts_callback_block_id',
+      callbackType: '__bts_callback_type',
+      consideredCharacterId: '__bts_callback_considered_character_id',
+      note: '__bts_callback_response_note',
       roleNames: '__bts_callback_role_names',
       previousSlotId: '__bts_callback_previous_slot_id',
     };
@@ -181,6 +188,7 @@
     let invite = null;
     let session = null;
     let slot = null;
+    let block = null;
     let slots = [];
     let selectedSlotId = '';
 
@@ -232,22 +240,39 @@
         status: ca[KEYS.status] || '',
         sessionId: ca[KEYS.sessionId] || '',
         slotId: ca[KEYS.slotId] || '',
+        blockId: ca[KEYS.blockId] || '',
+        callbackType: ca[KEYS.callbackType] || '',
+        consideredCharacterId: ca[KEYS.consideredCharacterId] || '',
         roleNames: ca[KEYS.roleNames] || '',
       };
+    }
+
+    function isGroupCallbackInvite() {
+      return invite?.callbackType === 'group' || !!invite?.blockId;
+    }
+
+    function callbackBlockTimeLabel(row) {
+      return [row?.start_time, row?.end_time].filter(Boolean).map(fmtTime).join(' - ');
     }
 
     function renderDetails() {
       const roleNames = invite.roleNames || 'Callback';
       $('title').textContent = `${prod?.title || 'Your callback'} callback`;
-      $('intro').textContent = `Hi ${app?.name || 'there'}, please respond to your callback invitation.`;
+      const isGroup = isGroupCallbackInvite();
+      $('intro').textContent = isGroup
+        ? `Hi ${app?.name || 'there'}, you have been invited to a shared callback block.`
+        : `Hi ${app?.name || 'there'}, please respond to your callback invitation.`;
       $('details').innerHTML = `
         <div class="detail"><div class="detail-label">Role</div><div class="detail-value">${esc(roleNames)}</div></div>
-        <div class="detail"><div class="detail-label">Date</div><div class="detail-value">${esc(fmtDate(session?.date || slot?.slot_date)) || 'TBC'}</div></div>
-        <div class="detail"><div class="detail-label">Time</div><div class="detail-value">${esc(fmtTime(slot?.slot_time || session?.start_time)) || 'TBC'}</div></div>
+        ${isGroup ? `<div class="detail"><div class="detail-label">Block</div><div class="detail-value">${esc(block?.title || 'Shared callback block')}</div></div>` : ''}
+        <div class="detail"><div class="detail-label">Date</div><div class="detail-value">${esc(fmtDate(session?.date || slot?.slot_date || block?.date)) || 'TBC'}</div></div>
+        <div class="detail"><div class="detail-label">Time</div><div class="detail-value">${esc(isGroup ? callbackBlockTimeLabel(block) : fmtTime(slot?.slot_time || session?.start_time)) || 'TBC'}</div></div>
         <div class="detail"><div class="detail-label">Location</div><div class="detail-value">${esc(session?.location || prod?.venue || 'TBC')}</div></div>
+        ${isGroup ? `<div class="note-box"><label for="callback-response-note">Optional note for the production team</label><textarea id="callback-response-note" placeholder="If you need to tell us anything about this callback block, add it here."></textarea></div>` : ''}
       `;
       $('details').classList.remove('hidden');
       $('actions').classList.remove('hidden');
+      $('reschedule-btn').style.display = isGroup ? 'none' : '';
     }
 
     async function loadInvite() {
@@ -270,6 +295,9 @@
       prod = prodData || {};
       session = sessionData || null;
       slot = slotData || null;
+      block = invite.blockId && Array.isArray(session?.slot_blocks)
+        ? session.slot_blocks.find(row => String(row.id || '') === String(invite.blockId || '')) || null
+        : null;
       renderDetails();
       if (['accepted', 'declined', 'rescheduled'].includes(invite.status)) {
         const label = invite.status === 'accepted' ? 'accepted' : invite.status === 'declined' ? 'declined' : 'rescheduled';
@@ -279,7 +307,7 @@
         setStatus('Please click Accept to confirm your callback time.');
       } else if (initialAction === 'decline') {
         setStatus('Please click Decline to release this callback time.');
-      } else if (initialAction === 'reschedule') {
+      } else if (initialAction === 'reschedule' && !isGroupCallbackInvite()) {
         showReschedule();
       }
     }
@@ -297,19 +325,32 @@
     }
 
     async function saveResponse(status, nextSessionId, nextSlotId, previousSlotId = '') {
+      const responseNote = String($('callback-response-note')?.value || '').trim();
       const ca = {
         ...answers(app),
         [KEYS.status]: status,
         [KEYS.respondedAt]: new Date().toISOString(),
         [KEYS.sessionId]: nextSessionId || '',
         [KEYS.slotId]: nextSlotId || '',
+        [KEYS.blockId]: invite.blockId || '',
+        [KEYS.callbackType]: invite.callbackType || '',
+        [KEYS.consideredCharacterId]: invite.consideredCharacterId || '',
+        ...(responseNote ? { [KEYS.note]: responseNote } : {}),
         ...(previousSlotId ? { [KEYS.previousSlotId]: previousSlotId } : {}),
       };
       const currentAssignments = Array.isArray(app.slot_assignments) ? app.slot_assignments : [];
-      const withoutCallback = currentAssignments.filter(x => x.session_id !== invite.sessionId);
+      const isGroup = isGroupCallbackInvite();
+      const withoutCallback = isGroup
+        ? currentAssignments.filter(x => !(x.session_id === invite.sessionId && x.block_id === invite.blockId && String(x.considered_character_id || '') === String(invite.consideredCharacterId || '')))
+        : currentAssignments.filter(x => !(x.session_id === invite.sessionId && !x.block_id && x.callback_type !== 'group'));
       const slotAssignments = status === 'declined'
         ? withoutCallback
-        : [...withoutCallback, { session_id: nextSessionId, slot_id: nextSlotId }];
+        : [
+            ...withoutCallback,
+            isGroup
+              ? { session_id: nextSessionId, block_id: invite.blockId, callback_type: 'group', considered_character_id: invite.consideredCharacterId || null }
+              : { session_id: nextSessionId, slot_id: nextSlotId, callback_type: 'individual' }
+          ];
       const { error } = await sb.from('audition_applications')
         .update({ custom_answers: ca, slot_assignments: slotAssignments })
         .eq('id', app.id);
@@ -407,6 +448,7 @@
       const materials = isDecline ? '' : await callbackMaterialsHtml();
       const activeSlot = slots.find(s => s.id === invite.slotId) || slot;
       const activeSession = activeSlot?.session || session;
+      const activeBlock = isGroupCallbackInvite() ? block : null;
       const category = isDecline ? 'callback_declined' : 'callback_confirmed';
       const { data } = await sb.functions.invoke('send-email', {
         body: {
@@ -420,9 +462,10 @@
           slot_id: activeSlot?.id || '',
           context: {
             role_name: invite.roleNames || '',
-            callback_date: fmtDate(activeSession?.date || activeSlot?.slot_date),
-            callback_time: fmtTime(activeSlot?.slot_time || activeSession?.start_time),
+            callback_date: fmtDate(activeSession?.date || activeSlot?.slot_date || activeBlock?.date),
+            callback_time: activeBlock ? callbackBlockTimeLabel(activeBlock) : fmtTime(activeSlot?.slot_time || activeSession?.start_time),
             callback_venue: activeSession?.location || prod?.venue || '',
+            callback_name: activeBlock?.title || activeSession?.name || '',
             callback_materials: materials,
             callback_self_tape_link: callbackSelfTapeLink(),
             show_name: prod?.title || '',

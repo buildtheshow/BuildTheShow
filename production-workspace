@@ -45420,7 +45420,7 @@ See you soon,
     const appsPerSlot = {};
     (allApplicants || []).forEach(app => {
       const assignments = Array.isArray(app.slot_assignments) ? app.slot_assignments : [];
-      const thisSession = assignments.find(x => x.session_id === sessionId && x.slot_id);
+      const thisSession = assignments.find(x => x.session_id === sessionId);
       const slotId = thisSession?.slot_id || (!assignments.length ? app.slot_id : null);
       if (!slotId) return;
       if (!appsPerSlot[slotId]) appsPerSlot[slotId] = [];
@@ -45465,9 +45465,6 @@ See you soon,
   }
 
   function buildBlockCardHTML(session, block, allSessionSlots) {
-    if (isCallbackGroupBlock(session, block)) {
-      return buildCallbackGroupBlockHTML(session, block);
-    }
     const sessionId = session?.id;
     const blockSlots = allSessionSlots.filter(s => s.block_id === block.id);
     const slotCount = blockSlots.length;
@@ -45540,108 +45537,6 @@ See you soon,
 
   function sessionTypeLabel(value) {
     return SESSION_TYPE_OPTIONS.find(o => o.value === value)?.label || 'General Audition';
-  }
-
-  function isCallbackGroupBlock(session, block) {
-    return String(session?.type || '').toLowerCase() === 'callback' && String(block?.callback_type || block?.type || '').toLowerCase() === 'group';
-  }
-
-  function callbackBlockCharacterIds(block) {
-    return Array.isArray(block?.character_ids) ? block.character_ids.map(String).filter(Boolean) : [];
-  }
-
-  function callbackBlockAssignments(sessionId, blockId) {
-    return (allApplicants || []).flatMap(app => {
-      const assignments = Array.isArray(app.slot_assignments) ? app.slot_assignments : [];
-      return assignments
-        .filter(a => String(a.session_id || '') === String(sessionId || '') && String(a.block_id || '') === String(blockId || ''))
-        .map(a => ({ app, assignment: a }));
-    });
-  }
-
-  function callbackBlockCharacterLabel(charId) {
-    return (characters || []).find(c => String(c.id) === String(charId))?.name || 'General callback';
-  }
-
-  function callbackBlockTimeLabel(block) {
-    return [block?.start_time, block?.end_time].filter(Boolean).map(formatSlotTime).join(' - ');
-  }
-
-  function buildCallbackGroupBlockHTML(session, block) {
-    const sessionId = session?.id || '';
-    const charIds = callbackBlockCharacterIds(block);
-    const assignments = callbackBlockAssignments(sessionId, block.id);
-    const title = block.title || 'Shared callback block';
-    const timeLabel = callbackBlockTimeLabel(block);
-    const assignedIds = new Set(assignments.map(x => String(x.app?.id || '')));
-    const performerOptions = (allApplicants || [])
-      .filter(app => app?.id && app?.name)
-      .sort(compareApplicantsAlphabetically)
-      .map(app => `<option value="${esc(app.id)}">${esc(app.name || app.email || 'Performer')}${assignedIds.has(String(app.id)) ? ' (already in block)' : ''}</option>`)
-      .join('');
-    const charOptions = (characters || [])
-      .sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')))
-      .map(char => {
-        const checked = charIds.includes(String(char.id));
-        return `<label style="display:inline-flex;align-items:center;gap:0.35rem;border:1px solid rgba(87,46,136,0.16);border-radius:999px;padding:0.28rem 0.58rem;font-size:0.76rem;font-weight:700;color:#572e88;background:${checked ? 'rgba(168,122,248,0.14)' : '#fff'};">
-          <input type="checkbox" ${checked ? 'checked' : ''} onchange="toggleCallbackBlockCharacter('${esc(sessionId)}','${esc(block.id)}','${esc(char.id)}',this.checked)" />
-          ${esc(char.name || 'Unnamed')}
-        </label>`;
-      }).join('') || '<span style="font-size:0.82rem;color:rgba(87,46,136,0.5);">Add characters first, then attach them here.</span>';
-    const assignmentGroups = (charIds.length ? charIds : ['']).map(charId => {
-      const rows = assignments.filter(x => String(x.assignment.considered_character_id || '') === String(charId || ''));
-      const chips = rows.length
-        ? rows.map(({ app }) => `<span style="display:inline-flex;align-items:center;gap:0.35rem;background:#fff;border:1px solid rgba(87,46,136,0.14);border-radius:999px;padding:0.26rem 0.5rem;font-size:0.76rem;font-weight:700;color:#1a1530;">${esc(app.name || app.email || 'Performer')}<button type="button" style="border:none;background:transparent;color:#b91c1c;font-weight:900;cursor:pointer;" onclick="removeCallbackGroupAssignment('${esc(sessionId)}','${esc(block.id)}','${esc(app.id)}','${esc(charId)}')">×</button></span>`).join('')
-        : '<span style="font-size:0.78rem;color:rgba(87,46,136,0.45);">No performers yet.</span>';
-      return `<div style="border:1px solid rgba(87,46,136,0.12);border-radius:8px;padding:0.75rem;background:rgba(255,255,255,0.68);">
-        <div style="font-size:0.75rem;font-weight:900;color:#572e88;text-transform:uppercase;letter-spacing:0.04em;margin-bottom:0.45rem;">${esc(callbackBlockCharacterLabel(charId))}</div>
-        <div style="display:flex;gap:0.4rem;flex-wrap:wrap;margin-bottom:0.65rem;">${chips}</div>
-        <div style="display:flex;gap:0.45rem;align-items:center;">
-          <select class="form-select" id="cb-group-add-${esc(block.id)}-${esc(charId || 'general')}" style="min-width:0;flex:1;">
-            <option value="">Add performer...</option>
-            ${performerOptions}
-          </select>
-          <button type="button" class="aud-block-gen-btn" onclick="addCallbackGroupAssignment('${esc(sessionId)}','${esc(block.id)}','${esc(charId)}')">Add</button>
-        </div>
-      </div>`;
-    }).join('');
-    return `<div class="aud-block-card" data-block-id="${esc(block.id)}" style="${buildAuditionScheduleCalendarThemeStyle('#2563eb')};border-color:rgba(37,99,235,0.28);background:linear-gradient(180deg,rgba(37,99,235,0.08),rgba(255,255,255,0.9));">
-      <div class="aud-block-top">
-        <div>
-          <div class="aud-block-heading">Shared callback block</div>
-          <div style="font-size:0.82rem;color:rgba(87,46,136,0.58);font-weight:700;">${esc(title)}${timeLabel ? ` · ${esc(timeLabel)}` : ''} · ${assignments.length} performer${assignments.length === 1 ? '' : 's'}</div>
-        </div>
-        <button type="button" class="aud-block-delete-btn" onclick="deleteBlock('${esc(sessionId)}','${esc(block.id)}')" title="Remove this block">✕</button>
-      </div>
-      <div class="aud-block-settings">
-        <div class="aud-block-field" style="min-width:210px;">
-          <span class="aud-block-label">Title</span>
-          <input class="form-input" value="${esc(title)}" onchange="updateBlock('${esc(sessionId)}','${esc(block.id)}','title',this.value)" />
-        </div>
-        <div class="aud-block-field aud-block-field--time">
-          <span class="aud-block-label">Time</span>
-          <div class="aud-block-time-value aud-block-time-edit">
-            <input type="time" class="form-input aud-block-time-input" value="${esc((block.start_time || session?.start_time || '').slice(0,5))}" onchange="updateBlock('${esc(sessionId)}','${esc(block.id)}','start_time',this.value)" />
-            <span class="aud-block-time-sep">to</span>
-            <input type="time" class="form-input aud-block-time-input" value="${esc((block.end_time || session?.end_time || '').slice(0,5))}" onchange="updateBlock('${esc(sessionId)}','${esc(block.id)}','end_time',this.value)" />
-          </div>
-        </div>
-      </div>
-      <div style="padding:0 1rem 1rem;">
-        <div class="aud-block-field" style="margin-bottom:0.8rem;">
-          <span class="aud-block-label">Description</span>
-          <textarea class="form-textarea" rows="2" onchange="updateBlock('${esc(sessionId)}','${esc(block.id)}','description',this.value)" placeholder="What is this group callback for?">${esc(block.description || '')}</textarea>
-        </div>
-        <div style="margin-bottom:0.9rem;">
-          <div class="aud-block-label" style="margin-bottom:0.45rem;">Included Characters</div>
-          <div style="display:flex;flex-wrap:wrap;gap:0.4rem;">${charOptions}</div>
-        </div>
-        <div>
-          <div class="aud-block-label" style="margin-bottom:0.45rem;">Assigned Performers by Consideration</div>
-          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:0.7rem;">${assignmentGroups}</div>
-        </div>
-      </div>
-    </div>`;
   }
 
   function updateAudSessionType(id, value) {
@@ -45882,10 +45777,7 @@ See you soon,
               <div class="aud-blocks-list" id="blocks-list-${session.id}">
                 ${blocksHTML}
               </div>
-              <div style="display:flex;gap:0.6rem;flex-wrap:wrap;">
-                <button class="aud-add-block-btn" onclick="addBlock('${session.id}')">+ Add Individual Slots</button>
-                ${session.type === 'callback' ? `<button class="aud-add-block-btn" style="background:#2563eb;" onclick="addCallbackGroupBlock('${session.id}')">+ Add Group Callback Block</button>` : ''}
-              </div>
+              <button class="aud-add-block-btn" onclick="addBlock('${session.id}')">+ Add Block</button>
               ${totalSlotCount ? `<div class="aud-slot-count-note aud-slot-count-note-total">${totalSlotCount} slot${totalSlotCount !== 1 ? 's' : ''} generated total</div>` : ''}
             </div>
 
@@ -45917,8 +45809,6 @@ See you soon,
 
   // ── Block (in-memory) store ──
   let audBlocks = {}; // { [sessionId]: [block,...] }
-  let audCallbackCharactersRequested = false;
-  let audCallbackApplicantsRequested = false;
 
   function _initBlocks(session) {
     if (!(session.id in audBlocks)) {
@@ -45964,23 +45854,6 @@ See you soon,
       capacity: 1,
       visibility: 'public',
       breaks: [],
-    });
-    _saveBlocks(sessionId);
-    _reRenderBlocksList(sessionId);
-  }
-
-  function addCallbackGroupBlock(sessionId) {
-    if (!(sessionId in audBlocks)) audBlocks[sessionId] = [];
-    const session = audSessions.find(s => s.id === sessionId);
-    audBlocks[sessionId].push({
-      id: 'grp_' + Date.now(),
-      callback_type: 'group',
-      title: 'Shared Callback Block',
-      description: '',
-      date: session?.date || '',
-      start_time: session?.start_time || '',
-      end_time: session?.end_time || '',
-      character_ids: [],
     });
     _saveBlocks(sessionId);
     _reRenderBlocksList(sessionId);
@@ -46032,60 +45905,6 @@ See you soon,
         }
       }
     }
-  }
-
-  function toggleCallbackBlockCharacter(sessionId, blockId, charId, checked) {
-    const block = (audBlocks[sessionId] || []).find(b => b.id === blockId);
-    if (!block) return;
-    const ids = new Set(callbackBlockCharacterIds(block));
-    if (checked) ids.add(String(charId));
-    else ids.delete(String(charId));
-    block.character_ids = [...ids];
-    _saveBlocks(sessionId);
-    _reRenderBlocksList(sessionId);
-  }
-
-  async function addCallbackGroupAssignment(sessionId, blockId, charId = '') {
-    const selectId = `cb-group-add-${blockId}-${charId || 'general'}`;
-    const performerId = document.getElementById(selectId)?.value || '';
-    if (!performerId) return;
-    const app = (allApplicants || []).find(a => String(a.id) === String(performerId));
-    if (!app) return;
-    const current = Array.isArray(app.slot_assignments) ? [...app.slot_assignments] : [];
-    const exists = current.some(a =>
-      String(a.session_id || '') === String(sessionId) &&
-      String(a.block_id || '') === String(blockId) &&
-      String(a.considered_character_id || '') === String(charId || '')
-    );
-    if (!exists) {
-      current.push({
-        session_id: sessionId,
-        block_id: blockId,
-        callback_type: 'group',
-        considered_character_id: charId || null,
-      });
-    }
-    const error = await persistApplicantPatch(app, { slot_assignments: current });
-    if (error) { showToast('Could not add performer to group block.', true); return; }
-    app.slot_assignments = current;
-    _reRenderBlocksList(sessionId);
-    showToast('Performer added to group callback.');
-  }
-
-  async function removeCallbackGroupAssignment(sessionId, blockId, performerId, charId = '') {
-    const app = (allApplicants || []).find(a => String(a.id) === String(performerId));
-    if (!app) return;
-    const current = Array.isArray(app.slot_assignments) ? [...app.slot_assignments] : [];
-    const next = current.filter(a => !(
-      String(a.session_id || '') === String(sessionId) &&
-      String(a.block_id || '') === String(blockId) &&
-      String(a.considered_character_id || '') === String(charId || '')
-    ));
-    const error = await persistApplicantPatch(app, { slot_assignments: next });
-    if (error) { showToast('Could not remove performer from group block.', true); return; }
-    app.slot_assignments = next;
-    _reRenderBlocksList(sessionId);
-    showToast('Performer removed from group callback.');
   }
 
   function toggleVisFooter(sessionId, checked) {
@@ -46332,14 +46151,6 @@ See you soon,
     const countBadge = document.getElementById('aud-session-count-badge');
     const footerAddBtn = document.getElementById('add-aud-btn');
     if (!container) return;
-    if (!characters.length && !audCallbackCharactersRequested && (audSessions || []).some(s => s.type === 'callback')) {
-      audCallbackCharactersRequested = true;
-      loadCharacters().then(() => renderAudSessions()).catch(() => {});
-    }
-    if (!allApplicants.length && !audCallbackApplicantsRequested && (audSessions || []).some(s => s.type === 'callback')) {
-      audCallbackApplicantsRequested = true;
-      loadApplicants().then(() => renderAudSessions()).catch(() => {});
-    }
     renderAuditionsSidebarSubmenu();
     if (countBadge) countBadge.textContent = String(audSessions.length || 0);
     if (!audSessions.length) {
@@ -48629,15 +48440,12 @@ See you soon,
       return;
     }
 
-    // Gather callback sessions + their slots and group blocks.
+    // Gather callback sessions + their slots (only available ones)
     const cbSessions = audSessions.filter(s => s.type === 'callback' && s.enabled);
-    const allCbSlots = cbSessions.flatMap(s => (audSlots[s.id] || []).map(slot => ({ session: s, slot, type: 'individual' })));
-    const allGroupBlocks = cbSessions.flatMap(s => (audBlocks[s.id] || [])
-      .filter(block => isCallbackGroupBlock(s, block))
-      .map(block => ({ session: s, block, type: 'group' })));
+    const allCbSlots = cbSessions.flatMap(s => (audSlots[s.id] || []).map(slot => ({ session: s, slot })));
 
-    if (!allCbSlots.length && !allGroupBlocks.length) {
-      showToast('No callback sessions, time slots, or group blocks set up yet. Add them in Audition Settings first.', true);
+    if (!allCbSlots.length) {
+      showToast('No callback sessions or time slots set up yet. Add them in Audition Settings first.', true);
       return;
     }
 
@@ -48654,35 +48462,11 @@ See you soon,
       `To: ${app.name || app.email}${roleNames ? ' · ' + roleNames : ''}`;
 
     let bodyHTML = '';
-    const requestedRoleNames = String(roleNames || '').split(',').map(v => v.trim().toLowerCase()).filter(Boolean);
     cbSessions.forEach(s => {
       const slots = audSlots[s.id] || [];
-      const groupBlocks = (audBlocks[s.id] || []).filter(block => isCallbackGroupBlock(s, block));
-      if (!slots.length && !groupBlocks.length) return;
+      if (!slots.length) return;
       const sessionDate = s.date ? new Date(`${s.date}T00:00:00`).toLocaleDateString('en-CA', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }) : '';
       bodyHTML += `<div class="cb-slot-session-label">${esc(s.name)}${sessionDate ? ' — ' + sessionDate : ''}</div>`;
-      groupBlocks.forEach(block => {
-        const blockCharIds = callbackBlockCharacterIds(block);
-        const blockCharNames = blockCharIds.map(callbackBlockCharacterLabel);
-        const matchingChar = requestedRoleNames.length
-          ? blockCharNames.find(name => requestedRoleNames.includes(String(name || '').toLowerCase()))
-          : blockCharNames[0] || '';
-        const consideredCharId = matchingChar
-          ? (characters || []).find(c => String(c.name || '').toLowerCase() === String(matchingChar).toLowerCase())?.id || ''
-          : (blockCharIds[0] || '');
-        const recommended = !!matchingChar;
-        const timeLabel = callbackBlockTimeLabel(block);
-        bodyHTML += `<label class="cb-slot-option" id="label-cbgroup-${esc(block.id)}-${esc(consideredCharId || 'general')}" onclick="selectCallbackGroupBlock('${esc(block.id)}','${esc(s.id)}','${esc(consideredCharId || '')}')">
-          <input type="radio" name="cb-slot-pick" value="${esc(block.id)}" style="display:none;" />
-          <div class="cb-slot-option-info">
-            <div class="cb-slot-option-time">${esc(block.title || 'Shared callback block')}${timeLabel ? ' · ' + esc(timeLabel) : ''}</div>
-            <div style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap;">
-              <div class="cb-slot-option-meta">Shared callback block${blockCharNames.length ? ' · ' + esc(blockCharNames.join(', ')) : ''}</div>
-              ${recommended ? `<span style="color:#2563eb;font-size:0.7rem;font-weight:800;">Best match</span>` : ''}
-            </div>
-          </div>
-        </label>`;
-      });
       slots.forEach(slot => {
         const uid = `cbslot-${slot.id}`;
         const timeLabel = formatSlotTime(slot.slot_time);
@@ -48721,25 +48505,13 @@ See you soon,
     _cbSlotSelectedId = slotId;
     const session = audSessions.find(s => s.id === sessionId);
     const slot    = (audSlots[sessionId] || []).find(s => s.id === slotId);
-    _cbSlotSelectedData = { session, slot, type: 'individual' };
+    _cbSlotSelectedData = { session, slot };
 
     // Visual selection
     document.querySelectorAll('.cb-slot-option').forEach(el => el.classList.remove('selected'));
     const label = document.getElementById(`label-cbslot-${slotId}`);
     if (label) label.classList.add('selected');
 
-    const sendBtn = document.getElementById('cb-slot-send-btn');
-    if (sendBtn) sendBtn.disabled = false;
-  }
-
-  function selectCallbackGroupBlock(blockId, sessionId, consideredCharacterId = '') {
-    const session = audSessions.find(s => s.id === sessionId);
-    const block = (audBlocks[sessionId] || []).find(b => b.id === blockId);
-    _cbSlotSelectedId = blockId;
-    _cbSlotSelectedData = { session, block, slot: null, type: 'group', consideredCharacterId };
-    document.querySelectorAll('.cb-slot-option').forEach(el => el.classList.remove('selected'));
-    const label = document.getElementById(`label-cbgroup-${blockId}-${consideredCharacterId || 'general'}`);
-    if (label) label.classList.add('selected');
     const sendBtn = document.getElementById('cb-slot-send-btn');
     if (sendBtn) sendBtn.disabled = false;
   }
@@ -48760,7 +48532,7 @@ See you soon,
     const sendBtn = document.getElementById('cb-slot-send-btn');
     if (sendBtn) { sendBtn.disabled = true; sendBtn.textContent = 'Sending…'; }
     try {
-      await _sendCallbackEmailDirect(app, _cbSlotModalRoles || '', session, slot, _cbSlotSelectedData);
+      await _sendCallbackEmailDirect(app, _cbSlotModalRoles || '', session, slot);
       document.getElementById('cb-slot-modal').style.display = 'none';
       renderCallbacksFresh();
       showToast('Callback request sent.');
@@ -48771,16 +48543,14 @@ See you soon,
   }
 
   // Core send — shared by modal confirm + bulk send
-  async function _sendCallbackEmailDirect(app, roleNames, session, slot, options = {}) {
+  async function _sendCallbackEmailDirect(app, roleNames, session, slot) {
     const token = await ensureCallbackResponseToken(app);
     const responseLinks = callbackResponseLinks(token);
     const callbackSelfTapeLink = callbackSelfTapeSubmissionLink(app, token);
     const sessionDate = session?.date
       ? new Date(`${session.date}T00:00:00`).toLocaleDateString('en-CA', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
       : '';
-    const isGroupBlock = options?.type === 'group' && options?.block;
-    const block = options?.block || null;
-    const callbackTime = isGroupBlock ? callbackBlockTimeLabel(block) : (slot?.slot_time ? formatSlotTime(slot.slot_time) : '');
+    const callbackTime = slot?.slot_time ? formatSlotTime(slot.slot_time) : '';
     const callbackVenue = session?.location || prod?.venue || '';
     const { data, error } = await sb.functions.invoke('send-email', {
       body: {
@@ -48801,8 +48571,7 @@ See you soon,
           callback_venue:   callbackVenue,
           callback_accept_link: responseLinks.accept,
           callback_decline_link: responseLinks.decline,
-          callback_reschedule_link: isGroupBlock ? '' : responseLinks.reschedule,
-          callback_name:     isGroupBlock ? (block.title || 'Shared Callback Block') : (session?.name || ''),
+          callback_reschedule_link: responseLinks.reschedule,
           callback_self_tape_link: callbackSelfTapeLink,
           audition_session: session?.name || '',
           show_name:        prod?.title || '',
@@ -48824,22 +48593,15 @@ See you soon,
     const fnError = data?.error || (error?.message || '');
     if (!data?.sent) throw new Error(fnError || 'Email was not sent.');
     try {
-      await markCallbackRequestSent(app, roleNames, session, slot, options);
+      await markCallbackRequestSent(app, roleNames, session, slot);
     } catch (markError) {
       console.warn('[BTS] callback email sent, but sent marker failed', markError);
     }
     // Write slot assignment back so check-in picks it up
-    if (session?.id && isGroupBlock && block?.id) {
+    if (session?.id && slot?.id) {
       const current = Array.isArray(app.slot_assignments) ? [...app.slot_assignments] : [];
-      const consideredCharacterId = options?.consideredCharacterId || '';
-      const updated = current.filter(x => !(x.session_id === session.id && x.block_id === block.id && String(x.considered_character_id || '') === String(consideredCharacterId || '')));
-      updated.push({ session_id: session.id, block_id: block.id, callback_type: 'group', considered_character_id: consideredCharacterId || null });
-      await sb.from('audition_applications').update({ slot_assignments: updated }).eq('id', app.id);
-      app.slot_assignments = updated;
-    } else if (session?.id && slot?.id) {
-      const current = Array.isArray(app.slot_assignments) ? [...app.slot_assignments] : [];
-      const updated = current.filter(x => !(x.session_id === session.id && !x.block_id && x.callback_type !== 'group'));
-      updated.push({ session_id: session.id, slot_id: slot.id, callback_type: 'individual' });
+      const updated = current.filter(x => x.session_id !== session.id);
+      updated.push({ session_id: session.id, slot_id: slot.id });
       await sb.from('audition_applications').update({ slot_assignments: updated }).eq('id', app.id);
       app.slot_assignments = updated;
       const occupancy = allApplicants.filter(a =>
@@ -50703,7 +50465,7 @@ See you soon,
       const sessionId = key.split(':')[1] || '';
       if (!hasAuditionSetup) return '—';
       const assignments = Array.isArray(app?.slot_assignments) ? app.slot_assignments : [];
-      const assignment = assignments.find(x => x.session_id === sessionId && x.slot_id);
+      const assignment = assignments.find(x => x.session_id === sessionId);
       if (!assignment?.slot_id) return '—';
       const attendance = getApplicantAttendanceForSession(app, sessionId);
       if (!attendance.label) return '—';
@@ -50714,7 +50476,7 @@ See you soon,
       if (!hasAuditionSetup) return '';
       // Clio reads from slot_assignments array — one slot per session.
       const assignments = Array.isArray(app?.slot_assignments) ? app.slot_assignments : [];
-      const assignment = assignments.find(x => x.session_id === sessionId && x.slot_id);
+      const assignment = assignments.find(x => x.session_id === sessionId);
       const effectiveSlotId = assignment?.slot_id || null;
 
       const slot = effectiveSlotId ? applicantAllKnownSlots().find(s => s.id === effectiveSlotId) : null;
@@ -51466,7 +51228,7 @@ See you soon,
   // Session-aware slot lookup — reads from slot_assignments first, falls back to legacy slot_id
   function getApplicantSlotForSession(app, sessionId) {
     const assignments = Array.isArray(app?.slot_assignments) ? app.slot_assignments : [];
-    const assignment = assignments.find(x => x.session_id === sessionId && x.slot_id);
+    const assignment = assignments.find(x => x.session_id === sessionId);
     const slotId = assignment?.slot_id || null;
     if (!slotId) return null;
     return applicantAllKnownSlots().find(s => s.id === slotId) || null;
@@ -52174,7 +51936,7 @@ See you soon,
 
     // Find this applicant's current slot for this session
     const currentAssignments = Array.isArray(app?.slot_assignments) ? app.slot_assignments : [];
-    const currentAssignment = currentAssignments.find(x => x.session_id === sessionIdToCheck && x.slot_id);
+    const currentAssignment = currentAssignments.find(x => x.session_id === sessionIdToCheck);
     const currentSlotId = currentAssignment?.slot_id || null;
 
     return candidates.map(slot => {
@@ -52561,10 +52323,10 @@ See you soon,
     const sessionId = activeRescheduleSessionId || newSlot?.session_id || app.session_id || null;
     if (!newSlot || !sessionId) throw new Error('Could not find the selected time slot.');
 
-    // slot_assignments may also include group callback blocks. Replace only the individual slot entry for this session.
+    // slot_assignments stores one entry per session — replace the existing entry for this session
     const existing   = Array.isArray(app.slot_assignments) ? app.slot_assignments : [];
-    const oldSlotId  = existing.find(x => x.session_id === sessionId && x.slot_id)?.slot_id || null;
-    const updated    = [...existing.filter(x => !(x.session_id === sessionId && x.slot_id)), { session_id: sessionId, slot_id: newSlotId, callback_type: 'individual' }];
+    const oldSlotId  = existing.find(x => x.session_id === sessionId)?.slot_id || null;
+    const updated    = [...existing.filter(x => x.session_id !== sessionId), { session_id: sessionId, slot_id: newSlotId }];
     const applicationPayload = {
       session_id: newSlot?.session_id || sessionId || app.session_id || null,
       slot_id: String(app.session_id || '') === String(sessionId || '') ? newSlotId : (app.slot_id ?? null),
@@ -55419,9 +55181,6 @@ See you soon,
     respondedAt: '__bts_callback_responded_at',
     sessionId: '__bts_callback_session_id',
     slotId: '__bts_callback_slot_id',
-    blockId: '__bts_callback_block_id',
-    callbackType: '__bts_callback_type',
-    consideredCharacterId: '__bts_callback_considered_character_id',
     roleNames: '__bts_callback_role_names',
   };
 
@@ -55436,9 +55195,6 @@ See you soon,
       respondedAt: ca[CALLBACK_INVITE_KEYS.respondedAt] || '',
       sessionId: ca[CALLBACK_INVITE_KEYS.sessionId] || '',
       slotId: ca[CALLBACK_INVITE_KEYS.slotId] || '',
-      blockId: ca[CALLBACK_INVITE_KEYS.blockId] || '',
-      callbackType: ca[CALLBACK_INVITE_KEYS.callbackType] || '',
-      consideredCharacterId: ca[CALLBACK_INVITE_KEYS.consideredCharacterId] || '',
       roleNames: ca[CALLBACK_INVITE_KEYS.roleNames] || '',
     };
   }
@@ -55513,7 +55269,7 @@ See you soon,
     return token;
   }
 
-  async function markCallbackRequestSent(app, roleNames, session, slot, options = {}) {
+  async function markCallbackRequestSent(app, roleNames, session, slot) {
     const now = new Date().toISOString();
     await saveCallbackInviteState(app, {
       [CALLBACK_INVITE_KEYS.status]: 'sent',
@@ -55521,9 +55277,6 @@ See you soon,
       [CALLBACK_INVITE_KEYS.respondedAt]: '',
       [CALLBACK_INVITE_KEYS.sessionId]: session?.id || '',
       [CALLBACK_INVITE_KEYS.slotId]: slot?.id || '',
-      [CALLBACK_INVITE_KEYS.blockId]: options?.block?.id || '',
-      [CALLBACK_INVITE_KEYS.callbackType]: options?.type || (slot?.id ? 'individual' : ''),
-      [CALLBACK_INVITE_KEYS.consideredCharacterId]: options?.consideredCharacterId || '',
       [CALLBACK_INVITE_KEYS.roleNames]: roleNames || '',
     });
   }
@@ -59491,7 +59244,7 @@ See you soon,
       const pendingSlotId   = _apmPendingSlots.hasOwnProperty(sess.id) ? _apmPendingSlots[sess.id] : undefined;
       const effectiveSlotId = pendingSlotId !== undefined
         ? pendingSlotId
-        : (assignments.find(x => x.session_id === sess.id && x.slot_id)?.slot_id || null);
+        : (assignments.find(x => x.session_id === sess.id)?.slot_id || null);
       if (effectiveSlotId) {
         const slot = applicantAllKnownSlots().find(s => s.id === effectiveSlotId);
         if (slot) return formatSlotTime(slot.slot_time || slot.start_time || '');
@@ -59558,7 +59311,7 @@ See you soon,
       callback_name: '',         callback_date: '',         callback_time: '',         callback_venue: '',         callback_prepare: '',
       custom_answers: customAnswers,
       session_id: primarySession?.id || _apmApp?.session_id || '',
-      slot_id:    assignments.find(x => x.session_id === primarySession?.id && x.slot_id)?.slot_id || _apmApp?.slot_id || '',
+      slot_id:    assignments.find(x => x.session_id === primarySession?.id)?.slot_id || _apmApp?.slot_id || '',
       production: {
         title: prod?.title || '', subtitle: prod?.subtitle || '', venue: prod?.venue || '',
         director: prod?.director || '', organization_id: prod?.organization_id || '',
@@ -59905,7 +59658,7 @@ See you soon,
     const assignments = Array.isArray(_apmApp?.slot_assignments) ? _apmApp.slot_assignments : [];
     return sessions.map(session => {
       const colour = getAuditionScheduleSidebarMarkerColor(session.type || 'audition');
-      const assignment = assignments.find(x => x.session_id === session.id && x.slot_id);
+      const assignment = assignments.find(x => x.session_id === session.id);
       const pendingSlotId = _apmPendingSlots.hasOwnProperty(session.id) ? _apmPendingSlots[session.id] : undefined;
       const effectiveSlotId = pendingSlotId !== undefined ? pendingSlotId : (assignment?.slot_id || null);
       const currentSlot = effectiveSlotId ? applicantAllKnownSlots().find(s => s.id === effectiveSlotId) : null;
@@ -60395,7 +60148,7 @@ See you soon,
         if (nonSlotSessions.length) {
           const existing = Array.isArray(_apmApp?.slot_assignments) ? [..._apmApp.slot_assignments] : [];
           nonSlotSessions.forEach(sessionId => {
-            const idx = existing.findIndex(x => x.session_id === sessionId && x.slot_id);
+            const idx = existing.findIndex(x => x.session_id === sessionId);
             if (idx >= 0) existing.splice(idx, 1);
           });
           update.slot_assignments = existing;
@@ -60405,7 +60158,7 @@ See you soon,
       if (Object.keys(_apmPendingSlots).length) {
         const existing = Array.isArray(_apmApp?.slot_assignments) ? [..._apmApp.slot_assignments] : [];
         Object.entries(_apmPendingSlots).forEach(([sessionId, slotId]) => {
-          const idx = existing.findIndex(x => x.session_id === sessionId && x.slot_id);
+          const idx = existing.findIndex(x => x.session_id === sessionId);
           if (!slotId) { if (idx >= 0) existing.splice(idx, 1); }
           else if (idx >= 0) existing[idx] = { ...existing[idx], slot_id: slotId };
           else existing.push({ session_id: sessionId, slot_id: slotId });
@@ -61066,7 +60819,7 @@ See you soon,
 
     // Don't drop onto the same slot
     const assignments = Array.isArray(app.slot_assignments) ? app.slot_assignments : [];
-    const currentForSession = assignments.find(x => x.session_id === toSlot.session_id && x.slot_id);
+    const currentForSession = assignments.find(x => x.session_id === toSlot.session_id);
     if (currentForSession?.slot_id === toSlotId) return;
 
     _fatesPendingDrop = { applicantId, toSlotId, toSessionId: toSlot.session_id };
@@ -61082,11 +60835,11 @@ See you soon,
     if (!app) return;
 
     const assignments = Array.isArray(app.slot_assignments) ? app.slot_assignments : [];
-    const oldAssignment = assignments.find(x => x.session_id === toSessionId && x.slot_id);
+    const oldAssignment = assignments.find(x => x.session_id === toSessionId);
     const oldSlotId = oldAssignment?.slot_id || null;
     const newAssignments = [
-      ...assignments.filter(x => !(x.session_id === toSessionId && x.slot_id)),
-      { session_id: toSessionId, slot_id: toSlotId, callback_type: 'individual' },
+      ...assignments.filter(x => x.session_id !== toSessionId),
+      { session_id: toSessionId, slot_id: toSlotId },
     ];
     const applicationId = getProfileApplicationIdForSession(app, toSessionId) || (!String(app.id || '').startsWith('booking-') ? app.id : null);
     if (!applicationId) {

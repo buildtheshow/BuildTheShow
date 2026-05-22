@@ -28,6 +28,10 @@ export async function onRequest(context) {
     ? context.params.path.join('/')
     : String(context.params.path || '');
   const key = rawPath.toLowerCase();
+  if (key === 'organisations/productions/workspace/production-workspace') {
+    return context.env.ASSETS.fetch(new URL('/production-workspace', url));
+  }
+
   const target = SYSTEM_REDIRECTS.get(key);
   if (target) {
     const next = new URL(target, url.origin);
