@@ -27,7 +27,7 @@
     { id: 'friend',     label: 'Friend',             amount: 50   },
   ];
 
-  var ADTILE_COLORS = ['#572e88', '#476aaa', '#769e7b', '#dd8233', '#d1523d', '#ca7ea7'];
+  var ADTILE_COLORS = ['#78bbd4', '#476aaa', '#769e7b', '#dd8233', '#d1523d', '#ca7ea7'];
 
   var SpnsState = {
     prodId: null,
@@ -169,9 +169,7 @@
                 '</div>' +
               '</div>' +
 
-              '<div class="template-brand-horizontal-quad-cell template-brand-horizontal-quad-cell--right spn-adpkg-right">' +
-                '<button class="spn-adpkg-edit-btn" onclick="MarketingSponsorsModule.editAdSize(' + i + ')" title="Edit pricing">Edit</button>' +
-              '</div>' +
+              '<div class="template-brand-horizontal-quad-cell template-brand-horizontal-quad-cell--right spn-adpkg-right" aria-hidden="true"></div>' +
 
               '<div class="template-brand-horizontal-quad-cell template-brand-horizontal-quad-cell--bottom-left" aria-hidden="true"></div>' +
               '<div class="template-brand-horizontal-quad-cell template-brand-horizontal-quad-cell--bottom-right" aria-hidden="true"></div>' +
