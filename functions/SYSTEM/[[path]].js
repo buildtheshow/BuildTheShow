@@ -15,7 +15,6 @@ const SYSTEM_REDIRECTS = new Map([
   ['members/volunteer/volunteer-hours.html', '/member/volunteer/hours'],
   ['organisations/org-dashboard.html', '/org/dashboard'],
   ['organisations/org-setup.html', '/org/setup'],
-  ['organisations/productions/workspace/production-workspace.html', '/org/production'],
   ['organisations/productions/setup/production-wizard.html', '/org/production/new'],
   ['organisations/productions/creative/creative-tasks.html', '/member/creative/tasks'],
   ['organisations/productions/creative/creative-files.html', '/member/creative/files'],
