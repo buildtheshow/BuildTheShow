@@ -22759,9 +22759,6 @@
 
         <!-- Schedule sub-tab -->
         <div id="adtab-schedule" class="adtab-panel" style="display:none;">
-          <div style="display:flex;align-items:center;justify-content:flex-end;margin-bottom:0.75rem;">
-            <button class="btn-secondary" onclick="exportAuditionSchedulePdf()" style="font-size:0.8rem;">Export Schedule PDF</button>
-          </div>
           <div id="aud-schedule-content"></div>
         </div>
 
@@ -24206,6 +24203,43 @@
 <!-- AI character review modal is injected by ai-character-importer.js -->
 
 <!-- ── Import Characters modal (kept for fallback paste) ── -->
+<!-- ── Schedule Download Modal ── -->
+<div class="modal-overlay" id="schedule-download-modal" onclick="if(event.target===this)closeScheduleDownloadModal()">
+  <div class="modal" style="max-width:480px;">
+    <div class="modal-header">
+      <div class="modal-title">Download Schedule</div>
+      <button class="modal-close" type="button" aria-label="Close" onclick="closeScheduleDownloadModal()">✕</button>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Sessions</label>
+      <select class="form-select" id="schedule-dl-sessions">
+        <option value="all">All sessions</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Columns to include</label>
+      <div style="display:flex;flex-direction:column;gap:0.5rem;margin-top:0.35rem;">
+        <label style="display:flex;align-items:center;gap:0.55rem;font-size:0.88rem;cursor:pointer;"><input type="checkbox" id="schedule-dl-col-number" checked> Audition #</label>
+        <label style="display:flex;align-items:center;gap:0.55rem;font-size:0.88rem;cursor:pointer;"><input type="checkbox" id="schedule-dl-col-age" checked> Age</label>
+        <label style="display:flex;align-items:center;gap:0.55rem;font-size:0.88rem;cursor:pointer;"><input type="checkbox" id="schedule-dl-col-pronouns"> Pronouns</label>
+        <label style="display:flex;align-items:center;gap:0.55rem;font-size:0.88rem;cursor:pointer;"><input type="checkbox" id="schedule-dl-col-roles" checked> Requested Roles</label>
+        <label style="display:flex;align-items:center;gap:0.55rem;font-size:0.88rem;cursor:pointer;"><input type="checkbox" id="schedule-dl-col-status" checked> Status</label>
+        <label style="display:flex;align-items:center;gap:0.55rem;font-size:0.88rem;cursor:pointer;"><input type="checkbox" id="schedule-dl-col-notes"> Notes (blank column)</label>
+      </div>
+    </div>
+    <div class="form-group">
+      <label style="display:flex;align-items:center;gap:0.55rem;font-size:0.88rem;cursor:pointer;">
+        <input type="checkbox" id="schedule-dl-empty-slots" checked>
+        Include empty / available slots
+      </label>
+    </div>
+    <div style="display:flex;gap:0.75rem;margin-top:0.5rem;">
+      <button class="btn-primary" onclick="downloadSchedulePdfWithOptions()" style="flex:1;justify-content:center;">Download PDF</button>
+      <button class="btn-secondary" onclick="closeScheduleDownloadModal()">Cancel</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="import-chars-modal">
   <div class="modal" style="max-width:500px;">
     <div class="modal-header">
@@ -51071,9 +51105,54 @@ See you soon!
     setTimeout(() => popup.print(), 250);
   }
 
-  function exportAuditionSchedulePdf() {
+  function openScheduleDownloadModal() {
     const sessions = getAuditionScheduleViewSessions();
+    const select = document.getElementById('schedule-dl-sessions');
+    if (!select) return;
+    const currentSessionId = activeAuditionScheduleSessionId || _audScheduleV2SessionId || '';
+    select.innerHTML = `<option value="all">All sessions</option>` +
+      sessions.map(s => `<option value="${esc(s.id)}"${s.id === currentSessionId ? ' selected' : ''}>${esc(s.name || 'Untitled Session')}</option>`).join('');
+    const modal = document.getElementById('schedule-download-modal');
+    if (modal) modal.classList.add('open');
+  }
+
+  function closeScheduleDownloadModal() {
+    const modal = document.getElementById('schedule-download-modal');
+    if (modal) modal.classList.remove('open');
+  }
+
+  function downloadSchedulePdfWithOptions() {
+    const sessionValue = document.getElementById('schedule-dl-sessions')?.value || 'all';
+    const cols = {
+      number:   document.getElementById('schedule-dl-col-number')?.checked ?? true,
+      age:      document.getElementById('schedule-dl-col-age')?.checked ?? true,
+      pronouns: document.getElementById('schedule-dl-col-pronouns')?.checked ?? false,
+      roles:    document.getElementById('schedule-dl-col-roles')?.checked ?? true,
+      status:   document.getElementById('schedule-dl-col-status')?.checked ?? true,
+      notes:    document.getElementById('schedule-dl-col-notes')?.checked ?? false,
+    };
+    const includeEmptySlots = document.getElementById('schedule-dl-empty-slots')?.checked ?? true;
+    closeScheduleDownloadModal();
+    exportAuditionSchedulePdf({ sessionId: sessionValue, cols, includeEmptySlots });
+  }
+
+  function exportAuditionSchedulePdf(opts = {}) {
+    const { sessionId = 'all', cols = {}, includeEmptySlots = true } = opts;
+    const showNumber   = cols.number   !== false;
+    const showAge      = cols.age      !== false;
+    const showPronouns = !!cols.pronouns;
+    const showRoles    = cols.roles    !== false;
+    const showStatus   = cols.status   !== false;
+    const showNotes    = !!cols.notes;
+
+    const allSessions = getAuditionScheduleViewSessions();
+    const sessions = sessionId === 'all'
+      ? allSessions
+      : allSessions.filter(s => s.id === sessionId);
+
     const prodTitle = prod?.title || prodName || 'Production';
+
+    const colCount = 1 + (showNumber ? 1 : 0) + (showAge ? 1 : 0) + (showPronouns ? 1 : 0) + (showRoles ? 1 : 0) + (showStatus ? 1 : 0) + (showNotes ? 1 : 0) + 1;
 
     const sessionHtml = sessions.map(session => {
       const sessionSlots = getAuditionScheduleSessionSlots(session);
@@ -51084,23 +51163,28 @@ See you soon!
         const timeLabel = formatSlotTime(slot.slot_time || slot.start_time || '');
 
         if (!performers.length) {
-          return `<tr class="slot-empty"><td>${esc(timeLabel)}</td><td colspan="5" style="color:#c4b8d8;font-style:italic;">Available</td></tr>`;
+          if (!includeEmptySlots) return '';
+          return `<tr class="slot-empty"><td>${esc(timeLabel)}</td><td colspan="${colCount - 1}" style="color:#c4b8d8;font-style:italic;">Available</td></tr>`;
         }
 
         return performers.map((app, i) => `
           <tr>
             ${i === 0 ? `<td rowspan="${performers.length}" class="time-cell">${esc(timeLabel)}</td>` : ''}
-            <td>${esc(generateAuditionNumber(app))}</td>
             <td>${esc(app.name || '—')}</td>
-            <td>${esc(String(cbv2ApplicantAge(app) ?? '—'))}</td>
-            <td>${esc(applicantRequestedRoles(app) || '—')}</td>
-            <td>${esc(applicantStatusLabel(app.status) || '—')}</td>
+            ${showNumber   ? `<td>${esc(generateAuditionNumber(app))}</td>` : ''}
+            ${showAge      ? `<td>${esc(String(cbv2ApplicantAge(app) ?? '—'))}</td>` : ''}
+            ${showPronouns ? `<td>${esc(applicantPronouns(app) || '—')}</td>` : ''}
+            ${showRoles    ? `<td>${esc(applicantRequestedRoles(app) || '—')}</td>` : ''}
+            ${showStatus   ? `<td>${esc(applicantStatusLabel(app.status) || '—')}</td>` : ''}
+            ${showNotes    ? `<td></td>` : ''}
           </tr>`).join('');
       }).join('');
 
       const emptyNotice = !sessionSlots.length
-        ? `<tr><td colspan="6" style="text-align:center;padding:1.2rem;color:#9a8ab0;font-style:italic;">No slots set up for this session yet.</td></tr>`
+        ? `<tr><td colspan="${colCount}" style="text-align:center;padding:1.2rem;color:#9a8ab0;font-style:italic;">No slots set up for this session yet.</td></tr>`
         : '';
+
+      const filteredRows = rowHtml.replace(/\s*\n\s*/g, '').trim();
 
       return `
         <div class="pdf-session">
@@ -51112,14 +51196,16 @@ See you soon!
             <thead>
               <tr>
                 <th>Time</th>
-                <th>Audition #</th>
                 <th>Performer</th>
-                <th>Age</th>
-                <th>Requested Roles</th>
-                <th>Status</th>
+                ${showNumber   ? '<th>Aud #</th>' : ''}
+                ${showAge      ? '<th>Age</th>' : ''}
+                ${showPronouns ? '<th>Pronouns</th>' : ''}
+                ${showRoles    ? '<th>Requested Roles</th>' : ''}
+                ${showStatus   ? '<th>Status</th>' : ''}
+                ${showNotes    ? '<th>Notes</th>' : ''}
               </tr>
             </thead>
-            <tbody>${rowHtml || emptyNotice}</tbody>
+            <tbody>${filteredRows || emptyNotice}</tbody>
           </table>
         </div>`;
     }).join('');
@@ -51139,7 +51225,7 @@ See you soon!
         <style>
           @page { size: portrait; margin: 12mm 14mm; }
           * { box-sizing: border-box; }
-          body { margin: 0; font-family: var(--bts-font); color: #1a1530; background: #fff; }
+          body { margin: 0; font-family: sans-serif; color: #1a1530; background: #fff; }
           .pdf-header { padding: 0 0 12px; margin-bottom: 20px; border-bottom: 2px solid #1a1530; display: flex; align-items: baseline; justify-content: space-between; }
           .pdf-title { font-size: 22px; font-weight: 900; margin: 0; }
           .pdf-sub { font-size: 12px; color: rgba(87,46,136,0.5); margin-top: 3px; }
@@ -60779,8 +60865,9 @@ See you soon!
       <div class="audition-schedule-shell">
         <section class="audition-schedule-stage-head">
           <div class="audition-schedule-stage-eyebrow">Schedule Layout</div>
-          <h2 class="audition-schedule-stage-title">${esc(selectedSession?.name || 'Time Slot Calendar')}</h2>
+          <h2 class="audition-schedule-stage-title">${esc(selectedSession?.name || ‘Time Slot Calendar’)}</h2>
           <p class="audition-schedule-stage-copy">This is the canonical audition schedule. Select an audition type on the left to open that audition’s time view. If a session has nothing booked yet, the board stays visible as a grey placeholder grid.</p>
+          <button type="button" class="btn-secondary" onclick="openScheduleDownloadModal()" style="margin-top:0.75rem;font-size:0.8rem;">Download Schedule</button>
         </section>
         <div class="audition-schedule-body">
           <aside class="audition-schedule-sidebar">
@@ -61001,6 +61088,7 @@ See you soon!
           <div class="audition-schedule-stage-eyebrow">Audition Schedule</div>
           <h2 class="audition-schedule-stage-title">${esc(selectedSession?.name || 'Time Slot Calendar')}</h2>
           <p class="audition-schedule-stage-copy">${String(selectedSession?.type || '') === 'self_tape' ? 'Review general audition self tape registrations and received submissions.' : 'Select an audition type on the left to view its time slots.'}</p>
+          <button type="button" class="btn-secondary" onclick="openScheduleDownloadModal()" style="margin-top:0.75rem;font-size:0.8rem;">Download Schedule</button>
         </section>
         <div class="audition-schedule-body">
           <aside class="audition-schedule-sidebar">
