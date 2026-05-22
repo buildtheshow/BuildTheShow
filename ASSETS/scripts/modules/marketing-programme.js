@@ -587,7 +587,7 @@
       '</div>' +
       '<div class="pgm-preview-layout">' +
         renderPreviewSidebar(pages, start, isCover) +
-        '<div class="pgm-preview-stage pgm-preview-stage--flipbook pgm-preview-stage--' + esc(ProgrammeState.flipDirection || 'none') + (isCover ? ' pgm-preview-stage--cover' : ' pgm-preview-stage--spread') + '">' +
+        '<div class="pgm-preview-stage pgm-preview-stage--flipbook pgm-preview-stage--paper-' + esc(selectedPaper().id) + ' pgm-preview-stage--' + esc(ProgrammeState.flipDirection || 'none') + (isCover ? ' pgm-preview-stage--cover' : ' pgm-preview-stage--spread') + '">' +
           '<div class="pgm-preview-spread">' +
             renderPreviewPage(leftPage, leftIndex, 'left') +
             '<div class="pgm-preview-gutter" aria-hidden="true"></div>' +
