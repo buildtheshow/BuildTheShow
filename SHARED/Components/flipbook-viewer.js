@@ -5,7 +5,7 @@
   var DEFAULT_PAGE_FLIP_SCRIPT = 'https://cdn.jsdelivr.net/npm/page-flip@2.0.7/dist/js/page-flip.browser.min.js';
   var DEFAULT_PDF_SCRIPT = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
   var DEFAULT_PDF_WORKER = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-  var DEFAULT_STYLESHEET = '/SHARED/Styles/flipbook-viewer.css';
+  var DEFAULT_STYLESHEET = '/SHARED/Styles/flipbook-viewer.css?v=20260521-real-viewer';
   var loadedScripts = {};
 
   function esc(value) {
@@ -58,14 +58,6 @@
   function createShell(container, options) {
     container.innerHTML =
       '<section class="bts-flipbook-viewer" tabindex="0" aria-label="' + esc(options.title || 'Flipbook viewer') + '">' +
-        '<div class="bts-flipbook-topbar">' +
-          '<div class="bts-flipbook-title">' + esc(options.title || 'Digital Programme') + '</div>' +
-          '<div class="bts-flipbook-actions">' +
-            '<button class="bts-flipbook-btn" type="button" data-action="zoom-out" aria-label="Zoom out">&minus;</button>' +
-            '<button class="bts-flipbook-btn" type="button" data-action="zoom-in" aria-label="Zoom in">+</button>' +
-            '<button class="bts-flipbook-btn" type="button" data-action="fullscreen" aria-label="Fullscreen">Full</button>' +
-          '</div>' +
-        '</div>' +
         '<div class="bts-flipbook-stage">' +
           '<button class="bts-flipbook-nav bts-flipbook-nav--prev" type="button" data-action="prev" aria-label="Previous page">&lsaquo;</button>' +
           '<div class="bts-flipbook-book-wrap">' +
@@ -168,37 +160,19 @@
     var parts = createShell(container, config);
     var destroyed = false;
     var pageFlip = null;
-    var zoom = 1;
-
-    function setZoom(next) {
-      zoom = Math.max(0.72, Math.min(1.28, next));
-      parts.wrap.style.setProperty('--bts-flipbook-scale', String(zoom));
-    }
 
     function next() {
-      if (pageFlip && pageFlip.flipNext) pageFlip.flipNext('bottom');
+      if (pageFlip && pageFlip.flipNext) pageFlip.flipNext();
     }
 
     function prev() {
-      if (pageFlip && pageFlip.flipPrev) pageFlip.flipPrev('bottom');
-    }
-
-    function fullscreen() {
-      var target = parts.root;
-      if (document.fullscreenElement) {
-        document.exitFullscreen();
-      } else if (target.requestFullscreen) {
-        target.requestFullscreen();
-      }
+      if (pageFlip && pageFlip.flipPrev) pageFlip.flipPrev();
     }
 
     function handleClick(event) {
       var action = event.target && event.target.getAttribute('data-action');
       if (action === 'next') next();
       if (action === 'prev') prev();
-      if (action === 'fullscreen') fullscreen();
-      if (action === 'zoom-in') setZoom(zoom + 0.08);
-      if (action === 'zoom-out') setZoom(zoom - 0.08);
     }
 
     function handleKey(event) {
@@ -209,9 +183,6 @@
       if (event.key === 'ArrowLeft') {
         event.preventDefault();
         prev();
-      }
-      if (event.key === 'Escape' && document.fullscreenElement === parts.root) {
-        document.exitFullscreen();
       }
     }
 
@@ -245,9 +216,6 @@
       ready: ready,
       next: next,
       prev: prev,
-      zoomIn: function () { setZoom(zoom + 0.08); },
-      zoomOut: function () { setZoom(zoom - 0.08); },
-      fullscreen: fullscreen,
       getPageFlip: function () { return pageFlip; },
       destroy: function () {
         destroyed = true;

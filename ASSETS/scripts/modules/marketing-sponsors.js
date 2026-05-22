@@ -196,8 +196,6 @@
     );
   }
 
-    return cards + addCard;
-  }
 
 
   function renderAdsGrouped() {

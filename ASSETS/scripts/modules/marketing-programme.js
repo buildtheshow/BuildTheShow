@@ -19,6 +19,7 @@
     { id: 'bronze', label: 'Bronze Sponsor', amount: 100 },
     { id: 'friend', label: 'Friend', amount: 50 },
   ];
+  var FLIPBOOK_SCRIPT = '/SHARED/Components/flipbook-viewer.js?v=20260521-real-viewer';
 
   var SECTION_OPTIONS = [
     ['cover', 'Cover'],
@@ -119,6 +120,7 @@
   var ProgrammeState = {
     prodId: null,
     container: null,
+    viewer: null,
     settings: {
       paper: 'letter-folded',
       output: 'print',
@@ -134,9 +136,7 @@
       },
       sections: ['cover', 'welcome', 'creative', 'cast', 'bios', 'sponsors', 'ads', 'thanks', 'back'],
     },
-    spreadStart: 0,
     openLayoutGroup: 'cast',
-    flipDirection: 'none',
     data: {
       production: null,
       businesses: [],
@@ -182,6 +182,28 @@
       console.warn('[BTS] Programme planner data unavailable.', error);
       return fallback;
     });
+  }
+
+  function loadScript(src) {
+    if (!src) return Promise.resolve();
+    if (src.indexOf('flipbook-viewer') !== -1 && window.createFlipbookViewer) return Promise.resolve();
+    window._btsProgrammeLoadedScripts = window._btsProgrammeLoadedScripts || {};
+    if (window._btsProgrammeLoadedScripts[src]) return window._btsProgrammeLoadedScripts[src];
+    window._btsProgrammeLoadedScripts[src] = new Promise(function (resolve, reject) {
+      var existing = document.querySelector('script[src="' + src + '"]');
+      if (existing) {
+        existing.addEventListener('load', resolve, { once: true });
+        existing.addEventListener('error', reject, { once: true });
+        return;
+      }
+      var script = document.createElement('script');
+      script.src = src;
+      script.async = true;
+      script.onload = resolve;
+      script.onerror = function () { reject(new Error('Could not load ' + src)); };
+      document.head.appendChild(script);
+    });
+    return window._btsProgrammeLoadedScripts[src];
   }
 
   function loadProgrammeData() {
@@ -441,29 +463,10 @@
     '</div>';
   }
 
-  function renderPreviewSidebar(pages, start, isCover) {
+  function renderPreviewSidebar() {
     return '<aside class="pgm-preview-sidebar">' +
       renderSetupTab() +
     '</aside>';
-  }
-
-  function spreadStartForPage(index) {
-    if (index <= 0) return 0;
-    return index % 2 ? index : index - 1;
-  }
-
-  function clampSpreadStart(pages) {
-    var max = Math.max(0, pages.length - 1);
-    if (ProgrammeState.spreadStart > max) ProgrammeState.spreadStart = spreadStartForPage(max);
-    if (ProgrammeState.spreadStart < 0) ProgrammeState.spreadStart = 0;
-  }
-
-  function pageRangeLabel(pages) {
-    var start = ProgrammeState.spreadStart;
-    if (!pages.length) return 'No pages';
-    if (start === 0) return 'Cover / Page 1 of ' + pages.length;
-    var end = Math.min(start + 1, pages.length - 1);
-    return 'Pages ' + (start + 1) + (end > start ? '-' + (end + 1) : '') + ' of ' + pages.length;
   }
 
   function pageBody(page) {
@@ -480,63 +483,78 @@
     return body;
   }
 
-  function renderPreviewPage(page, index, side, flipStart, flipDirection) {
-    if (!page) return '<div class="pgm-preview-page pgm-preview-page--blank pgm-preview-page--' + esc(side || '') + '"></div>';
-    var canFlip = flipStart != null && flipDirection;
-    return '<article class="pgm-preview-page pgm-preview-page--' + esc(side || '') + (canFlip ? ' pgm-preview-page--flippable' : '') + '"' +
-      (canFlip ? ' role="button" tabindex="0" aria-label="' + (flipDirection === 'forward' ? 'Flip forward' : 'Flip back') + '" onclick="MarketingProgrammeModule.flipTo(' + Number(flipStart) + ', \'' + esc(flipDirection) + '\')" onkeydown="MarketingProgrammeModule.handlePageKey(event, ' + Number(flipStart) + ', \'' + esc(flipDirection) + '\')"' : '') + '>' +
-      '<div class="pgm-page-sheet pgm-page-sheet--' + esc(page.type) + ' pgm-page-sheet--paper-' + esc(selectedPaper().id) + ' pgm-page-sheet--layout-' + esc(page.layout || 'default') + '">' + pageBody(page) + '<span class="pgm-page-number">' + (index + 1) + '</span></div>' +
-      '<div class="pgm-page-caption"><strong>' + esc(page.title) + '</strong><span>Page ' + (index + 1) + (page.subtitle ? ' · ' + esc(page.subtitle) : '') + '</span></div>' +
-    '</article>';
+  function svgEsc(value) {
+    return value == null ? '' : String(value)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
   }
 
-  function renderPageFilmstrip(pages, start, isCover) {
-    return '<div class="pgm-page-filmstrip" aria-label="Programme page thumbnails">' + pages.map(function (page, index) {
-      var openStart = spreadStartForPage(index);
-      var active = openStart === start || (isCover && index === 0);
-      return '<button class="pgm-page-thumb' + (active ? ' is-active' : '') + '" type="button" onclick="MarketingProgrammeModule.setSpread(' + openStart + ')">' +
-        '<span class="pgm-page-thumb-sheet pgm-page-sheet--' + esc(page.type) + ' pgm-page-sheet--paper-' + esc(selectedPaper().id) + ' pgm-page-sheet--layout-' + esc(page.layout || 'default') + '">' + pageBody(page) + '</span>' +
-        '<span class="pgm-page-thumb-meta"><strong>' + (index + 1) + '</strong><em>' + esc(page.title) + '</em></span>' +
-      '</button>';
-    }).join('') + '</div>';
+  function pagePixelSize() {
+    var paper = selectedPaper().id;
+    if (paper === 'letter-folded') return { width: 660, height: 1020 };
+    return { width: 765, height: 990 };
+  }
+
+  function pageSummaryLines(page) {
+    if (!page) return [];
+    if (page.type === 'cover') return [page.subtitle || 'Digital programme'];
+    if (Array.isArray(page.items) && page.items.length) {
+      return page.items.slice(0, 8).map(function (item) {
+        if (typeof item === 'string') return item;
+        if (item && item.name) return item.name;
+        if (item && (item.first_name || item.last_name)) return [item.first_name, item.last_name].filter(Boolean).join(' ');
+        if (item && item.role) return [item.role, item.name].filter(Boolean).join(': ');
+        if (item && item.business_id) return businessName(item.business_id);
+        return 'Programme item';
+      });
+    }
+    if (page.groups && page.groups.length) {
+      return page.groups.slice(0, 6).map(function (group) { return group.tier.label || group.tier.id || 'Sponsor tier'; });
+    }
+    if (page.type === 'bios') return ['Bio slots fill from cast registration', 'Missing bios become placeholders'];
+    if (page.type === 'ads') return ['Purchased ads are placed automatically', 'Missing artwork stays visible'];
+    return ['Waiting for source data'];
+  }
+
+  function programmePageImage(page, index) {
+    var size = pagePixelSize();
+    var isCover = page && page.type === 'cover';
+    var title = page && page.title ? page.title : 'Programme Page';
+    var lines = pageSummaryLines(page);
+    var accent = isCover ? '#572e88' : '#efab45';
+    var y = isCover ? Math.round(size.height * 0.44) : 170;
+    var lineSvg = lines.map(function (line, lineIndex) {
+      var yy = y + 96 + (lineIndex * 34);
+      return '<text x="70" y="' + yy + '" fill="#4a3d6b" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="700">' + svgEsc(String(line).slice(0, 42)) + '</text>';
+    }).join('');
+    var body = isCover
+      ? '<text x="' + (size.width / 2) + '" y="' + y + '" fill="#572e88" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="54" font-weight="900">' + svgEsc(title.slice(0, 20)) + '</text>' +
+        '<text x="' + (size.width / 2) + '" y="' + (y + 52) + '" fill="#8c80a2" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="24" font-weight="800">' + svgEsc((lines[0] || '').slice(0, 34)) + '</text>'
+      : '<rect x="56" y="70" width="' + (size.width - 112) + '" height="8" rx="4" fill="' + accent + '"/>' +
+        '<text x="70" y="130" fill="#1a1530" font-family="Arial, Helvetica, sans-serif" font-size="42" font-weight="900">' + svgEsc(title.slice(0, 24)) + '</text>' +
+        lineSvg;
+    var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + size.width + '" height="' + size.height + '" viewBox="0 0 ' + size.width + ' ' + size.height + '">' +
+      '<rect width="100%" height="100%" fill="#fffefb"/>' +
+      '<rect x="26" y="26" width="' + (size.width - 52) + '" height="' + (size.height - 52) + '" fill="#fffefb" stroke="#e4ddeb" stroke-width="2"/>' +
+      body +
+      '<text x="' + (size.width / 2) + '" y="' + (size.height - 38) + '" fill="#9a90b0" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="800">' + (index + 1) + '</text>' +
+    '</svg>';
+    return 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg);
+  }
+
+  function programmePageImages(pages) {
+    return (pages || []).map(programmePageImage);
   }
 
   function renderProgrammePreview(pages) {
-    clampSpreadStart(pages);
-    var start = ProgrammeState.spreadStart;
-    var isCover = start === 0;
-    var leftPage = isCover ? null : pages[start];
-    var rightPage = isCover ? pages[0] : pages[start + 1];
-    var leftIndex = start;
-    var rightIndex = isCover ? 0 : start + 1;
-    if (!isCover && leftPage && !rightPage) {
-      rightPage = leftPage;
-      rightIndex = start;
-      leftPage = null;
-    }
-    var prevStart = start <= 1 ? 0 : Math.max(0, start - 2);
-    var nextStart = start === 0 ? 1 : start + 2;
-    var canPrev = start > 0;
-    var canNext = nextStart < pages.length;
     return '<section class="pgm-panel pgm-preview-panel">' +
       '<div class="pgm-panel-head">' +
-        '<div><div class="pgm-panel-title">Digital Programme Preview</div><p>' + esc(selectedPaper().pageLabel) + ' · ' + pageRangeLabel(pages) + '</p></div>' +
-        '<div class="pgm-preview-controls">' +
-          '<button class="spn-btn spn-btn--ghost pgm-preview-btn" type="button" ' + (canPrev ? "onclick=\"MarketingProgrammeModule.flipTo(" + prevStart + ", 'back')\"" : 'disabled') + '>Flip Back</button>' +
-          '<button class="spn-btn spn-btn--primary pgm-preview-btn" type="button" ' + (canNext ? "onclick=\"MarketingProgrammeModule.flipTo(" + nextStart + ", 'forward')\"" : 'disabled') + '>Flip Forward</button>' +
-          '<button class="spn-btn spn-btn--ghost" disabled>Export Later</button>' +
-        '</div>' +
+        '<div><div class="pgm-panel-title">Digital Programme Preview</div><p>' + esc(selectedPaper().pageLabel) + ' · real page-turn viewer</p></div>' +
       '</div>' +
       '<div class="pgm-preview-layout">' +
-        renderPreviewSidebar(pages, start, isCover) +
-        '<div class="pgm-preview-stage pgm-preview-stage--flipbook pgm-preview-stage--paper-' + esc(selectedPaper().id) + ' pgm-preview-stage--' + esc(ProgrammeState.flipDirection || 'none') + (isCover ? ' pgm-preview-stage--cover' : ' pgm-preview-stage--spread') + '">' +
-          '<div class="pgm-preview-spread">' +
-            renderPreviewPage(leftPage, leftIndex, 'left', canPrev ? prevStart : null, canPrev ? 'back' : null) +
-            '<div class="pgm-preview-gutter" aria-hidden="true"></div>' +
-            renderPreviewPage(rightPage, rightIndex, 'right', canNext ? nextStart : null, canNext ? 'forward' : null) +
-          '</div>' +
-        '</div>' +
-        '<div class="pgm-filmstrip-wrap">' + renderPageFilmstrip(pages, start, isCover) + '</div>' +
+        renderPreviewSidebar() +
+        '<div class="pgm-real-flipbook-shell"><div id="pgm-flipbook-viewer" class="pgm-real-flipbook-viewer"></div></div>' +
       '</div>' +
     '</section>';
   }
@@ -590,6 +608,10 @@
   function renderPlanner() {
     var pages = buildProgrammePages();
     var prod = ProgrammeState.data.production || {};
+    if (ProgrammeState.viewer && ProgrammeState.viewer.destroy) {
+      ProgrammeState.viewer.destroy();
+      ProgrammeState.viewer = null;
+    }
     ProgrammeState.container.innerHTML =
       '<div class="aud-visual-hero">' +
         '<div class="aud-visual-hero-content">' +
@@ -602,6 +624,41 @@
         '</div>' +
       '</div>' +
       renderProgrammePreview(pages);
+    mountProgrammeFlipbook(pages);
+  }
+
+  function mountProgrammeFlipbook(pages) {
+    var host = document.getElementById('pgm-flipbook-viewer');
+    if (!host) return;
+    host.innerHTML = '<div class="spn-loading-row">Loading flipbook viewer...</div>';
+    loadScript(FLIPBOOK_SCRIPT).then(function () {
+      if (!window.createFlipbookViewer || !document.body.contains(host)) return;
+      ProgrammeState.viewer = window.createFlipbookViewer({
+        container: host,
+        pages: programmePageImages(pages),
+        title: 'Digital Programme',
+        startPage: 0,
+        width: pagePixelSize().width,
+        height: pagePixelSize().height,
+        pageFlip: {
+          maxWidth: 520,
+          maxHeight: 690,
+          minWidth: 230,
+          minHeight: 320,
+          flippingTime: 820,
+          maxShadowOpacity: 0.36,
+          showCover: true,
+          usePortrait: true,
+          mobileScrollSupport: true,
+        },
+      });
+      ProgrammeState.viewer.ready.catch(function (error) {
+        console.error('[BTS] Programme flipbook failed.', error);
+      });
+    }).catch(function (error) {
+      console.error('[BTS] Programme flipbook script failed.', error);
+      host.innerHTML = '<div class="spn-card"><div style="color:#d1523d;font-weight:800;">Could not load flipbook viewer.</div></div>';
+    });
   }
 
   window.MarketingProgrammeModule = {
@@ -630,25 +687,6 @@
         ProgrammeState.settings.bioLayout = value === 'bios-compact' ? 'text-compact' : value === 'bios-featured' ? 'featured-bios' : 'headshot-grid';
       }
       renderPlanner();
-    },
-    setSpread: function (start) {
-      ProgrammeState.spreadStart = Number(start) || 0;
-      ProgrammeState.flipDirection = 'jump';
-      renderPlanner();
-    },
-    flipTo: function (start, direction) {
-      var nextStart = Number(start) || 0;
-      var wasCover = ProgrammeState.spreadStart === 0;
-      ProgrammeState.spreadStart = Number(start) || 0;
-      ProgrammeState.flipDirection = direction === 'back'
-        ? (nextStart === 0 ? 'close' : 'back')
-        : (wasCover && nextStart > 0 ? 'open' : 'forward');
-      renderPlanner();
-    },
-    handlePageKey: function (event, start, direction) {
-      if (!event || (event.key !== 'Enter' && event.key !== ' ')) return;
-      event.preventDefault();
-      this.flipTo(start, direction);
     },
     toggleSection: function (key, checked) {
       var next = new Set(ProgrammeState.settings.sections);
