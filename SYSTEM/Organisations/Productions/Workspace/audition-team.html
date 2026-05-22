@@ -44352,6 +44352,9 @@ See you soon,
   }
 
   function buildBlockCardHTML(session, block, allSessionSlots) {
+    if (isCallbackGroupBlock(session, block)) {
+      return buildCallbackGroupBlockHTML(session, block);
+    }
     const sessionId = session?.id;
     const blockSlots = allSessionSlots.filter(s => s.block_id === block.id);
     const slotCount = blockSlots.length;
@@ -44424,6 +44427,108 @@ See you soon,
 
   function sessionTypeLabel(value) {
     return SESSION_TYPE_OPTIONS.find(o => o.value === value)?.label || 'General Audition';
+  }
+
+  function isCallbackGroupBlock(session, block) {
+    return String(session?.type || '').toLowerCase() === 'callback' && String(block?.callback_type || block?.type || '').toLowerCase() === 'group';
+  }
+
+  function callbackBlockCharacterIds(block) {
+    return Array.isArray(block?.character_ids) ? block.character_ids.map(String).filter(Boolean) : [];
+  }
+
+  function callbackBlockAssignments(sessionId, blockId) {
+    return (allApplicants || []).flatMap(app => {
+      const assignments = Array.isArray(app.slot_assignments) ? app.slot_assignments : [];
+      return assignments
+        .filter(a => String(a.session_id || '') === String(sessionId || '') && String(a.block_id || '') === String(blockId || ''))
+        .map(a => ({ app, assignment: a }));
+    });
+  }
+
+  function callbackBlockCharacterLabel(charId) {
+    return (characters || []).find(c => String(c.id) === String(charId))?.name || 'General callback';
+  }
+
+  function callbackBlockTimeLabel(block) {
+    return [block?.start_time, block?.end_time].filter(Boolean).map(formatSlotTime).join(' - ');
+  }
+
+  function buildCallbackGroupBlockHTML(session, block) {
+    const sessionId = session?.id || '';
+    const charIds = callbackBlockCharacterIds(block);
+    const assignments = callbackBlockAssignments(sessionId, block.id);
+    const title = block.title || 'Shared callback block';
+    const timeLabel = callbackBlockTimeLabel(block);
+    const assignedIds = new Set(assignments.map(x => String(x.app?.id || '')));
+    const performerOptions = (allApplicants || [])
+      .filter(app => app?.id && app?.name)
+      .sort(compareApplicantsAlphabetically)
+      .map(app => `<option value="${esc(app.id)}">${esc(app.name || app.email || 'Performer')}${assignedIds.has(String(app.id)) ? ' (already in block)' : ''}</option>`)
+      .join('');
+    const charOptions = (characters || [])
+      .sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')))
+      .map(char => {
+        const checked = charIds.includes(String(char.id));
+        return `<label style="display:inline-flex;align-items:center;gap:0.35rem;border:1px solid rgba(87,46,136,0.16);border-radius:999px;padding:0.28rem 0.58rem;font-size:0.76rem;font-weight:700;color:#572e88;background:${checked ? 'rgba(168,122,248,0.14)' : '#fff'};">
+          <input type="checkbox" ${checked ? 'checked' : ''} onchange="toggleCallbackBlockCharacter('${esc(sessionId)}','${esc(block.id)}','${esc(char.id)}',this.checked)" />
+          ${esc(char.name || 'Unnamed')}
+        </label>`;
+      }).join('') || '<span style="font-size:0.82rem;color:rgba(87,46,136,0.5);">Add characters first, then attach them here.</span>';
+    const assignmentGroups = (charIds.length ? charIds : ['']).map(charId => {
+      const rows = assignments.filter(x => String(x.assignment.considered_character_id || '') === String(charId || ''));
+      const chips = rows.length
+        ? rows.map(({ app }) => `<span style="display:inline-flex;align-items:center;gap:0.35rem;background:#fff;border:1px solid rgba(87,46,136,0.14);border-radius:999px;padding:0.26rem 0.5rem;font-size:0.76rem;font-weight:700;color:#1a1530;">${esc(app.name || app.email || 'Performer')}<button type="button" style="border:none;background:transparent;color:#b91c1c;font-weight:900;cursor:pointer;" onclick="removeCallbackGroupAssignment('${esc(sessionId)}','${esc(block.id)}','${esc(app.id)}','${esc(charId)}')">×</button></span>`).join('')
+        : '<span style="font-size:0.78rem;color:rgba(87,46,136,0.45);">No performers yet.</span>';
+      return `<div style="border:1px solid rgba(87,46,136,0.12);border-radius:8px;padding:0.75rem;background:rgba(255,255,255,0.68);">
+        <div style="font-size:0.75rem;font-weight:900;color:#572e88;text-transform:uppercase;letter-spacing:0.04em;margin-bottom:0.45rem;">${esc(callbackBlockCharacterLabel(charId))}</div>
+        <div style="display:flex;gap:0.4rem;flex-wrap:wrap;margin-bottom:0.65rem;">${chips}</div>
+        <div style="display:flex;gap:0.45rem;align-items:center;">
+          <select class="form-select" id="cb-group-add-${esc(block.id)}-${esc(charId || 'general')}" style="min-width:0;flex:1;">
+            <option value="">Add performer...</option>
+            ${performerOptions}
+          </select>
+          <button type="button" class="aud-block-gen-btn" onclick="addCallbackGroupAssignment('${esc(sessionId)}','${esc(block.id)}','${esc(charId)}')">Add</button>
+        </div>
+      </div>`;
+    }).join('');
+    return `<div class="aud-block-card" data-block-id="${esc(block.id)}" style="${buildAuditionScheduleCalendarThemeStyle('#2563eb')};border-color:rgba(37,99,235,0.28);background:linear-gradient(180deg,rgba(37,99,235,0.08),rgba(255,255,255,0.9));">
+      <div class="aud-block-top">
+        <div>
+          <div class="aud-block-heading">Shared callback block</div>
+          <div style="font-size:0.82rem;color:rgba(87,46,136,0.58);font-weight:700;">${esc(title)}${timeLabel ? ` · ${esc(timeLabel)}` : ''} · ${assignments.length} performer${assignments.length === 1 ? '' : 's'}</div>
+        </div>
+        <button type="button" class="aud-block-delete-btn" onclick="deleteBlock('${esc(sessionId)}','${esc(block.id)}')" title="Remove this block">✕</button>
+      </div>
+      <div class="aud-block-settings">
+        <div class="aud-block-field" style="min-width:210px;">
+          <span class="aud-block-label">Title</span>
+          <input class="form-input" value="${esc(title)}" onchange="updateBlock('${esc(sessionId)}','${esc(block.id)}','title',this.value)" />
+        </div>
+        <div class="aud-block-field aud-block-field--time">
+          <span class="aud-block-label">Time</span>
+          <div class="aud-block-time-value aud-block-time-edit">
+            <input type="time" class="form-input aud-block-time-input" value="${esc((block.start_time || session?.start_time || '').slice(0,5))}" onchange="updateBlock('${esc(sessionId)}','${esc(block.id)}','start_time',this.value)" />
+            <span class="aud-block-time-sep">to</span>
+            <input type="time" class="form-input aud-block-time-input" value="${esc((block.end_time || session?.end_time || '').slice(0,5))}" onchange="updateBlock('${esc(sessionId)}','${esc(block.id)}','end_time',this.value)" />
+          </div>
+        </div>
+      </div>
+      <div style="padding:0 1rem 1rem;">
+        <div class="aud-block-field" style="margin-bottom:0.8rem;">
+          <span class="aud-block-label">Description</span>
+          <textarea class="form-textarea" rows="2" onchange="updateBlock('${esc(sessionId)}','${esc(block.id)}','description',this.value)" placeholder="What is this group callback for?">${esc(block.description || '')}</textarea>
+        </div>
+        <div style="margin-bottom:0.9rem;">
+          <div class="aud-block-label" style="margin-bottom:0.45rem;">Included Characters</div>
+          <div style="display:flex;flex-wrap:wrap;gap:0.4rem;">${charOptions}</div>
+        </div>
+        <div>
+          <div class="aud-block-label" style="margin-bottom:0.45rem;">Assigned Performers by Consideration</div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:0.7rem;">${assignmentGroups}</div>
+        </div>
+      </div>
+    </div>`;
   }
 
   function updateAudSessionType(id, value) {
@@ -44664,7 +44769,10 @@ See you soon,
               <div class="aud-blocks-list" id="blocks-list-${session.id}">
                 ${blocksHTML}
               </div>
-              <button class="aud-add-block-btn" onclick="addBlock('${session.id}')">+ Add Block</button>
+              <div style="display:flex;gap:0.6rem;flex-wrap:wrap;">
+                <button class="aud-add-block-btn" onclick="addBlock('${session.id}')">+ Add Individual Slots</button>
+                ${session.type === 'callback' ? `<button class="aud-add-block-btn" style="background:#2563eb;" onclick="addCallbackGroupBlock('${session.id}')">+ Add Group Callback Block</button>` : ''}
+              </div>
               ${totalSlotCount ? `<div class="aud-slot-count-note aud-slot-count-note-total">${totalSlotCount} slot${totalSlotCount !== 1 ? 's' : ''} generated total</div>` : ''}
             </div>
 
@@ -44746,6 +44854,23 @@ See you soon,
     _reRenderBlocksList(sessionId);
   }
 
+  function addCallbackGroupBlock(sessionId) {
+    if (!(sessionId in audBlocks)) audBlocks[sessionId] = [];
+    const session = audSessions.find(s => s.id === sessionId);
+    audBlocks[sessionId].push({
+      id: 'grp_' + Date.now(),
+      callback_type: 'group',
+      title: 'Shared Callback Block',
+      description: '',
+      date: session?.date || '',
+      start_time: session?.start_time || '',
+      end_time: session?.end_time || '',
+      character_ids: [],
+    });
+    _saveBlocks(sessionId);
+    _reRenderBlocksList(sessionId);
+  }
+
   async function deleteBlock(sessionId, blockId) {
     if (!confirm('Remove this block and all its time slots?')) return;
     const session = audSessions.find(s => s.id === sessionId);
@@ -44792,6 +44917,60 @@ See you soon,
         }
       }
     }
+  }
+
+  function toggleCallbackBlockCharacter(sessionId, blockId, charId, checked) {
+    const block = (audBlocks[sessionId] || []).find(b => b.id === blockId);
+    if (!block) return;
+    const ids = new Set(callbackBlockCharacterIds(block));
+    if (checked) ids.add(String(charId));
+    else ids.delete(String(charId));
+    block.character_ids = [...ids];
+    _saveBlocks(sessionId);
+    _reRenderBlocksList(sessionId);
+  }
+
+  async function addCallbackGroupAssignment(sessionId, blockId, charId = '') {
+    const selectId = `cb-group-add-${blockId}-${charId || 'general'}`;
+    const performerId = document.getElementById(selectId)?.value || '';
+    if (!performerId) return;
+    const app = (allApplicants || []).find(a => String(a.id) === String(performerId));
+    if (!app) return;
+    const current = Array.isArray(app.slot_assignments) ? [...app.slot_assignments] : [];
+    const exists = current.some(a =>
+      String(a.session_id || '') === String(sessionId) &&
+      String(a.block_id || '') === String(blockId) &&
+      String(a.considered_character_id || '') === String(charId || '')
+    );
+    if (!exists) {
+      current.push({
+        session_id: sessionId,
+        block_id: blockId,
+        callback_type: 'group',
+        considered_character_id: charId || null,
+      });
+    }
+    const error = await persistApplicantPatch(app, { slot_assignments: current });
+    if (error) { showToast('Could not add performer to group block.', true); return; }
+    app.slot_assignments = current;
+    _reRenderBlocksList(sessionId);
+    showToast('Performer added to group callback.');
+  }
+
+  async function removeCallbackGroupAssignment(sessionId, blockId, performerId, charId = '') {
+    const app = (allApplicants || []).find(a => String(a.id) === String(performerId));
+    if (!app) return;
+    const current = Array.isArray(app.slot_assignments) ? [...app.slot_assignments] : [];
+    const next = current.filter(a => !(
+      String(a.session_id || '') === String(sessionId) &&
+      String(a.block_id || '') === String(blockId) &&
+      String(a.considered_character_id || '') === String(charId || '')
+    ));
+    const error = await persistApplicantPatch(app, { slot_assignments: next });
+    if (error) { showToast('Could not remove performer from group block.', true); return; }
+    app.slot_assignments = next;
+    _reRenderBlocksList(sessionId);
+    showToast('Performer removed from group callback.');
   }
 
   function toggleVisFooter(sessionId, checked) {

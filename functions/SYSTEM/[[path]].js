@@ -15,6 +15,7 @@ const SYSTEM_REDIRECTS = new Map([
   ['members/volunteer/volunteer-hours.html', '/member/volunteer/hours'],
   ['organisations/org-dashboard.html', '/org/dashboard'],
   ['organisations/org-setup.html', '/org/setup'],
+  ['organisations/productions/workspace/production-workspace.html', '/org/production'],
   ['organisations/productions/setup/production-wizard.html', '/org/production/new'],
   ['organisations/productions/creative/creative-tasks.html', '/member/creative/tasks'],
   ['organisations/productions/creative/creative-files.html', '/member/creative/files'],
@@ -35,5 +36,12 @@ export async function onRequest(context) {
     next.hash = url.hash;
     return Response.redirect(next.toString(), 308);
   }
+
+  if (rawPath && !rawPath.includes('.') && !rawPath.endsWith('/')) {
+    const htmlAssetUrl = new URL(`/SYSTEM/${rawPath}.html`, url);
+    const htmlAsset = await context.env.ASSETS.fetch(htmlAssetUrl);
+    if (htmlAsset.status !== 404) return htmlAsset;
+  }
+
   return context.env.ASSETS.fetch(context.request);
 }
