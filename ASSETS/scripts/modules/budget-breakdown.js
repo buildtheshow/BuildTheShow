@@ -151,12 +151,33 @@
             (expense.length ? expense.map(expenseRow).join('') : noExpense) +
           '</div>' +
         '</div>' +
-        '<div class="bgt-net">' +
-          '<div class="bgt-net-cell"><div class="bgt-net-label">Total Planned Income</div><div class="bgt-net-value bgt-net-value--good">' + s.fmt$(totalIncome) + '</div></div>' +
-          '<div class="bgt-net-cell"><div class="bgt-net-label">Total Planned Expenses</div><div class="bgt-net-value">' + s.fmt$(totalExpense) + '</div></div>' +
-          '<div class="bgt-net-cell"><div class="bgt-net-label">Net Position</div><div class="bgt-net-value ' + netClass + '">' + s.fmt$(net) + ' ' + (net >= 0 ? '(surplus)' : '(deficit)') + '</div></div>' +
+        '<div class="bgt-tile-grid" id="bgt-summary-tiles" style="grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1rem; margin-top: 2rem;">' +
+          '<div class="template-brand-card template-brand-card--square template-brand-card--metric" style="--brand-tile-bg:#efefef;--brand-tile-ink:#1a1530;--brand-tile-divider:#ddd;">' +
+            '<div class="template-brand-card-inner"><div class="template-brand-tile-content">' +
+              '<div class="template-brand-tile-container template-brand-tile-container--header"><div class="template-brand-tile-kicker">Budgeting</div></div>' +
+              '<div class="template-brand-tile-container template-brand-tile-container--title"><div class="template-brand-tile-number">' + s.fmt$(totalIncome) + '</div></div>' +
+              '<div class="template-brand-tile-container template-brand-tile-container--body"><div class="template-brand-tile-metric-label">Planned Income</div></div>' +
+              '<div class="template-brand-tile-container template-brand-tile-container--footer" style="border-top:1.5px solid #ccc;padding-top:4cqw;"><div class="template-brand-tile-settings-helper" style="color:#555">Total from all categories</div></div>' +
+            '</div></div>' +
+          '</div>' +
+          '<div class="template-brand-card template-brand-card--square template-brand-card--metric" style="--brand-tile-bg:' + (net >= 0 ? '#769e7b' : '#d1523d') + ';--brand-tile-ink:#ffffff;">' +
+            '<div class="template-brand-card-inner"><div class="template-brand-tile-content">' +
+              '<div class="template-brand-tile-container template-brand-tile-container--header"><div class="template-brand-tile-kicker">Budgeting</div></div>' +
+              '<div class="template-brand-tile-container template-brand-tile-container--title"><div class="template-brand-tile-number">' + s.fmt$(net) + '</div></div>' +
+              '<div class="template-brand-tile-container template-brand-tile-container--body"><div class="template-brand-tile-metric-label">Net Position</div></div>' +
+              '<div class="template-brand-tile-container template-brand-tile-container--footer" style="border-top:1.5px solid rgba(255,255,255,0.3);padding-top:4cqw;">' +
+                '<div class="template-brand-tile-settings-helper" style="color:#ffffff">' + (net >= 0 ? 'Surplus: we are in the black' : 'Deficit: we are over budget') + '</div>' +
+              '</div>' +
+            '</div></div>' +
+          '</div>' +
         '</div>' +
       '</div>';
+
+      if (typeof fitBrandTileTitles === 'function') {
+        requestAnimationFrame(function() {
+          fitBrandTileTitles(document.getElementById('bgt-summary-tiles'));
+        });
+      }
     },
 
     loadStarter: async function () {
@@ -174,7 +195,7 @@
         if (!r.ok) throw new Error(await r.text());
         s.BgtState.categories = [];
         await this._load();
-      } catch (e) { alert('Could not load starter: ' + e.message); }
+      } catch (e) { if (window.showToast) window.showToast('Couldn\'t load starter.', true); }
     },
 
     updatePlanned: async function (id, val) {
@@ -184,7 +205,8 @@
         await s.dbUpdate('budget_categories', id, { planned_cents: cents });
         var c = s.BgtState.categories.find(function (x) { return x.id === id; });
         if (c) c.planned_cents = cents;
-      } catch (e) { alert('Could not save: ' + e.message); }
+        if (window.showToast) window.showToast('Saved!');
+      } catch (e) { if (window.showToast) window.showToast('Couldn\'t save.', true); }
     },
 
     openCatModal: function (id, type) {
@@ -205,7 +227,7 @@
     saveCat: async function () {
       var s = window.BgtShared;
       var name = document.getElementById('bgt-cat-name').value.trim();
-      if (!name) { alert('Category name is required.'); return; }
+      if (!name) { if (window.showToast) window.showToast('Category name is required.', true); return; }
       var id   = document.getElementById('bgt-cat-id').value;
       var type = document.getElementById('bgt-cat-type').value;
       var payload = {
@@ -218,8 +240,9 @@
         else    await s.dbInsert('budget_categories', payload);
         this.closeCatModal();
         s.BgtState.categories = [];
+        if (window.showToast) window.showToast('Saved!');
         await this._load();
-      } catch (e) { alert('Could not save: ' + e.message); }
+      } catch (e) { if (window.showToast) window.showToast('Could not save category.', true); }
     },
 
     deleteCat: async function (id, name) {

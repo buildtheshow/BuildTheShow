@@ -132,22 +132,29 @@
       var toggle   = document.getElementById('bgt-collect-toggle');
       var newVal   = toggle ? toggle.checked : !(settings && settings.collect_enabled);
       try {
+        if (window.showToast) window.showToast('Saving...');
         await fetch(s.SUPABASE_URL + '/rest/v1/budget_settings?production_id=eq.' + s.BgtState.prodId, {
           method: 'PATCH',
           headers: { apikey: s.SUPABASE_ANON, Authorization: 'Bearer ' + s.SUPABASE_ANON, 'Content-Type': 'application/json' },
           body: JSON.stringify({ collect_enabled: newVal }),
         });
         if (s.BgtState.settings) s.BgtState.settings.collect_enabled = newVal;
+        if (window.showToast) window.showToast('Saved!');
         this._render();
-      } catch (e) { alert('Could not update: ' + e.message); }
+      } catch (e) { if (window.showToast) window.showToast('Couldn\'t save settings.', true); }
     },
 
     copyCollectLink: function () {
       var url = (document.getElementById('bgt-collect-url') || {}).textContent || '';
       if (navigator.clipboard) {
-        navigator.clipboard.writeText(url).then(function () { alert('Link copied!'); }).catch(function () { prompt('Copy this link:', url); });
+        navigator.clipboard.writeText(url).then(function () { 
+          if (window.showToast) window.showToast('Link copied!'); 
+        }).catch(function () { 
+           // Fallback if clipboard fails
+           if (window.showToast) window.showToast('Couldn\'t copy link. Try again.', true);
+        });
       } else {
-        prompt('Copy this link:', url);
+        if (window.showToast) window.showToast('Couldn\'t copy link. Try again.', true);
       }
     },
   };

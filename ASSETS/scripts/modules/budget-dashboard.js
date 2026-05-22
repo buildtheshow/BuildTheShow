@@ -4,7 +4,7 @@
 
   function metricTile(id, kicker, value, label, color) {
     var bg  = color || '#476aaa';
-    return '<div class="template-brand-card template-brand-card--square template-brand-card--metric" style="--brand-tile-bg:' + bg + ';--brand-tile-ink:#ffffff;">' +
+    return '<div class="template-brand-card template-brand-card--square template-brand-card--metric" style="--brand-tile-bg:' + bg + ';--brand-tile-ink:#ffffff;" id="' + id + '-card">' +
       '<div class="template-brand-card-inner"><div class="template-brand-tile-content">' +
         '<div class="template-brand-tile-container template-brand-tile-container--header">' +
           '<div class="template-brand-tile-kicker">' + kicker + '</div>' +
@@ -16,7 +16,7 @@
           '<div class="template-brand-tile-metric-label">' + label + '</div>' +
         '</div>' +
         '<div class="template-brand-tile-container template-brand-tile-container--footer">' +
-          '<div class="template-brand-tile-progress"><span style="width:0%"></span></div>' +
+          '<div class="template-brand-tile-settings-helper" id="' + id + '-helper"></div>' +
         '</div>' +
       '</div></div>' +
     '</div>';
@@ -103,6 +103,33 @@
       setTile('bgt-stat-pending',  pending);
       setTile('bgt-stat-total',    rcts.length);
       setTile('bgt-stat-cats',     expCats);
+
+      // Smart Insights and Scaling
+      if (typeof fitBrandTileTitles === 'function') {
+        requestAnimationFrame(function() {
+          fitBrandTileTitles(document.getElementById('bgt-stats'));
+        });
+      }
+
+      // Spent Percentage Logic
+      var spentEl = document.getElementById('bgt-stat-spent-helper');
+      if (spentEl && expenses > 0) {
+        var pct = Math.round((approved / expenses) * 100);
+        spentEl.textContent = pct + '% of planned budget spent';
+        var spentCard = document.getElementById('bgt-stat-spent-card');
+        if (spentCard && pct > 100) spentCard.style.setProperty('--brand-tile-bg', '#d1523d');
+      }
+
+      // Smart Insights
+      var remainingEl = document.getElementById('bgt-stat-remaining-helper');
+      if (remainingEl) {
+        if (remaining < 0) remainingEl.textContent = 'Budget exceeded';
+        else if (remaining < (expenses * 0.1) && expenses > 0) remainingEl.textContent = 'Low funds remaining';
+        else remainingEl.textContent = 'Funds available';
+      }
+
+      var pendingEl = document.getElementById('bgt-stat-pending-helper');
+      if (pendingEl) pendingEl.textContent = pending > 0 ? pending + ' items to review' : 'All clear';
 
       var alerts = [];
       if (!cats.length)         alerts.push(['warn', 'No budget categories set up yet']);
