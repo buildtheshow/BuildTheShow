@@ -14,6 +14,8 @@ const RESERVED_ROOTS = new Set([
 ]);
 
 const CLEAN_ROUTE_ASSETS = new Map([
+  ['production-workspace', '/production-workspace'],
+  ['audition-team', '/SYSTEM/Organisations/Productions/Workspace/audition-team.html'],
   ['login', '/SYSTEM/Members/Account/login.html'],
   ['signup', '/SYSTEM/Members/Account/signup.html'],
   ['forgot-password', '/SYSTEM/Members/Account/forgot-password.html'],
