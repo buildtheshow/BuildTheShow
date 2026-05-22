@@ -29,7 +29,10 @@ export async function onRequest(context) {
     : String(context.params.path || '');
   const key = rawPath.toLowerCase();
   if (key === 'organisations/productions/workspace/production-workspace') {
-    return context.env.ASSETS.fetch(new URL('/production-workspace', url));
+    const next = new URL('/production-workspace', url.origin);
+    next.search = url.search;
+    next.searchParams.set('bts_path', url.pathname);
+    return Response.redirect(next.toString(), 307);
   }
 
   const target = SYSTEM_REDIRECTS.get(key);
