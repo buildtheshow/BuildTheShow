@@ -137,34 +137,68 @@
     return m ? { h: parseFloat(m[1]) || 1, w: parseFloat(m[2]) || 1 } : { h: 1, w: 1 };
   }
 
-  function renderAdSlotCards(sizeId) {
-    var ads = SpnsState.ads.filter(function (a) { return a.ad_size === sizeId; });
-    var addCard = (
-      '<div class="spn-ad-slot-card spn-ad-slot-card--add" onclick="MarketingSponsorsModule.openAdModal(undefined,' + JSON.stringify(sizeId) + ')" title="Add ad">' +
-        '<span class="spn-ad-slot-plus">+</span>' +
+  function hzContentTile(color, kicker, title, body, footerHtml) {
+    return (
+      '<div class="template-brand-card template-brand-card--horizontal template-brand-card--content"' +
+        ' style="--brand-tile-bg:' + color + ';--brand-tile-ink:#ffffff;">' +
+        '<div class="template-brand-card-inner">' +
+          '<div class="template-brand-horizontal-quad-split">' +
+            '<div class="template-brand-horizontal-quad-cell template-brand-horizontal-quad-cell--anchor">' +
+              '<div class="template-brand-text-holder template-brand-text-holder--invisible">' +
+                '<div class="template-brand-text-holder-inner template-brand-text-holder-inner--invisible">' +
+                  '<div class="template-brand-tile-container template-brand-tile-container--header"><div class="template-brand-tile-kicker">' + kicker + '</div></div>' +
+                  '<div class="template-brand-tile-container template-brand-tile-container--title"><div class="template-brand-tile-title">' + title + '</div></div>' +
+                  '<div class="template-brand-tile-container template-brand-tile-container--body"><div class="template-brand-tile-body">' + body + '</div></div>' +
+                  '<div class="template-brand-tile-container template-brand-tile-container--footer">' + footerHtml + '</div>' +
+                '</div>' +
+              '</div>' +
+            '</div>' +
+            '<div class="template-brand-horizontal-quad-cell template-brand-horizontal-quad-cell--right" aria-hidden="true"></div>' +
+            '<div class="template-brand-horizontal-quad-cell template-brand-horizontal-quad-cell--bottom-left" aria-hidden="true"></div>' +
+            '<div class="template-brand-horizontal-quad-cell template-brand-horizontal-quad-cell--bottom-right" aria-hidden="true"></div>' +
+          '</div>' +
+        '</div>' +
       '</div>'
     );
-    var cards = ads.map(function (a) {
-      var biz  = bizName(a.business_id) || 'Unnamed';
+  }
+
+  function renderAdSlotCards(sizeId, color) {
+    var ads = SpnsState.ads.filter(function (a) { return a.ad_size === sizeId; });
+    if (!ads.length) {
+      return hzContentTile(
+        color,
+        'Ad Slot',
+        'Waiting',
+        'No booking yet',
+        '<button class="template-brand-tile-button" onclick="MarketingSponsorsModule.openAdModal(undefined,' + JSON.stringify(sizeId) + ')">+ Add Ad</button>'
+      );
+    }
+    return ads.map(function (a) {
+      var biz  = esc(bizName(a.business_id) || 'Unnamed Business');
       var type = a.ad_type === 'bw' ? 'B&W' : 'Colour';
       var paid = a.payment_status === 'paid';
       var art  = a.artwork_status === 'received' || a.artwork_status === 'approved' || a.artwork_status === 'print_ready';
-      return (
-        '<div class="spn-ad-slot-card spn-ad-slot-card--booked" onclick="MarketingSponsorsModule.openAdModal(' + JSON.stringify(a.id) + ')">' +
-          '<div class="spn-ad-slot-biz">' + esc(biz) + '</div>' +
-          '<div class="spn-ad-slot-type">' + esc(type) + '</div>' +
-          '<div class="spn-ad-slot-dots">' +
-            '<span class="spn-ad-slot-dot' + (paid ? ' spn-ad-slot-dot--on' : '') + '" title="Payment"></span>' +
-            '<span class="spn-ad-slot-dot' + (art  ? ' spn-ad-slot-dot--on' : '') + '" title="Artwork"></span>' +
-          '</div>' +
-        '</div>'
+      var status = (paid ? 'Paid' : 'Unpaid') + ' &middot; ' + (art ? 'Art received' : 'Art missing');
+      return hzContentTile(
+        color,
+        esc(type),
+        biz,
+        status,
+        '<button class="template-brand-tile-button" onclick="MarketingSponsorsModule.openAdModal(' + JSON.stringify(a.id) + ')">Edit</button>'
       );
-    }).join('');
-    if (!ads.length) {
-      return '<div class="spn-ad-slot-card spn-ad-slot-card--waiting"><span class="spn-ad-slot-waiting-label">Waiting</span></div>' + addCard;
-    }
+    }).join('') +
+    hzContentTile(
+      color,
+      'Ad Slot',
+      'Add Another',
+      '',
+      '<button class="template-brand-tile-button" onclick="MarketingSponsorsModule.openAdModal(undefined,' + JSON.stringify(sizeId) + ')">+ Add Ad</button>'
+    );
+  }
+
     return cards + addCard;
   }
+
 
   function renderAdsGrouped() {
     var sizes  = SpnsState.settings.adSizes;
@@ -199,7 +233,7 @@
               '</div>' +
 
               '<div class="template-brand-horizontal-quad-cell template-brand-horizontal-quad-cell--right spn-adpkg-slots">' +
-                renderAdSlotCards(s.id) +
+                renderAdSlotCards(s.id, color) +
               '</div>' +
 
               '<div class="template-brand-horizontal-quad-cell template-brand-horizontal-quad-cell--bottom-left" aria-hidden="true"></div>' +

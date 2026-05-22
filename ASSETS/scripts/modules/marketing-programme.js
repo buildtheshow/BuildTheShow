@@ -48,9 +48,9 @@
     {
       id: 'letter-flat',
       label: '11 x 8.5 in',
-      detail: '(not folded, from 8.5 x 11 in paper)',
-      note: 'Full letter pages',
-      pageLabel: '11 x 8.5 in pages',
+      detail: '(not folded; print front/back from 8.5 x 11 in paper)',
+      note: 'Loose full-letter sheets',
+      pageLabel: '11 x 8.5 in loose sheets',
       image: '/ASSETS/Images/programme-8.5x11.svg',
     },
     {
@@ -60,27 +60,6 @@
       note: 'Large booklet programme',
       pageLabel: '11 x 8.5 in folded pages',
       image: '/ASSETS/Images/programme-8.5x11Folded-11x17.svg',
-    },
-  ];
-
-  var TEMPLATE_OPTIONS = [
-    {
-      id: 'classic-theatre',
-      label: 'Classic Theatre',
-      detail: 'Balanced notes, cast, bios, sponsors, ads',
-      accent: '#572e88',
-    },
-    {
-      id: 'modern-clean',
-      label: 'Modern Clean',
-      detail: 'More white space, simple section flow',
-      accent: '#476aaa',
-    },
-    {
-      id: 'sponsor-heavy',
-      label: 'Sponsor Heavy',
-      detail: 'Earlier ad blocks and stronger sponsor placement',
-      accent: '#efab45',
     },
   ];
 
@@ -156,7 +135,7 @@
       sections: ['cover', 'welcome', 'creative', 'cast', 'bios', 'sponsors', 'ads', 'thanks', 'back'],
     },
     spreadStart: 0,
-    sideTab: 'setup',
+    openLayoutGroup: 'cast',
     flipDirection: 'none',
     data: {
       production: null,
@@ -384,33 +363,12 @@
     '</div>';
   }
 
-  function renderTemplatePicker() {
-    var selected = ProgrammeState.settings.template;
-    return '<div class="pgm-template-picker" role="radiogroup" aria-label="Programme template">' +
-      TEMPLATE_OPTIONS.map(function (template) {
-        var isSelected = selected === template.id;
-        return '<label class="pgm-template-option' + (isSelected ? ' is-selected' : '') + '" style="--pgm-template-accent:' + esc(template.accent) + ';">' +
-          '<input type="radio" name="pgm-template" value="' + esc(template.id) + '"' + (isSelected ? ' checked' : '') + ' onchange="MarketingProgrammeModule.setSetting(\'template\', this.value)" />' +
-          '<span class="pgm-template-thumb" aria-hidden="true"><span></span><span></span><span></span></span>' +
-          '<span class="pgm-template-copy"><strong>' + esc(template.label) + '</strong><em>' + esc(template.detail) + '</em></span>' +
-        '</label>';
-      }).join('') +
-    '</div>';
-  }
-
   function renderSetupTab() {
-    var paper = selectedPaper();
     return '<div class="pgm-side-scroll">' +
       '<div class="pgm-paper-heading">Paper</div>' +
       renderPaperPicker() +
-      '<div class="pgm-paper-note">Preview pages are shown as ' + paper.pageLabel + '.</div>' +
-      '<div class="pgm-paper-heading">Template</div>' +
-      renderTemplatePicker() +
-      '<div class="pgm-control-grid">' +
-        selectControl('Output', 'output', [['print', 'Print'], ['digital', 'Digital'], ['proof', 'Proof only']]) +
-        selectControl('Booklet', 'booklet', [['saddle-stitch', 'Saddle stitch'], ['single-pages', 'Single pages'], ['digital-scroll', 'Digital scroll']]) +
-        selectControl('Bio Layout', 'bioLayout', [['headshot-grid', 'Headshot grid'], ['text-compact', 'Compact text'], ['featured-bios', 'Featured bios']]) +
-      '</div>' +
+      '<div class="pgm-paper-heading">Pages</div>' +
+      renderPageLayoutsTab() +
     '</div>';
   }
 
@@ -445,11 +403,17 @@
 
   function renderPageLayoutsTab() {
     var selected = ProgrammeState.settings.pageLayouts || {};
-    return '<div class="pgm-side-scroll">' +
-      '<div class="pgm-side-help">Choose the page shapes BTS should use when it auto-places each type of programme content.</div>' +
-      '<div class="pgm-layout-groups">' + PAGE_LAYOUT_GROUPS.map(function (group) {
-        return '<section class="pgm-layout-group">' +
-          '<div class="pgm-layout-group-head"><strong>' + esc(group.title) + '</strong><span>' + esc(group.detail) + '</span></div>' +
+    var sectionLabels = {
+      cast: 'Cast List',
+      bios: 'Bios',
+      ads: 'Ads',
+      thanks: 'Thank Yous',
+      sponsors: 'Sponsors',
+    };
+    return '<div class="pgm-layout-groups">' + PAGE_LAYOUT_GROUPS.map(function (group) {
+        var selectedOption = group.options.find(function (option) { return option.id === selected[group.key]; }) || group.options[0];
+        return '<details class="pgm-layout-group" ' + (group.key === ProgrammeState.openLayoutGroup ? 'open' : '') + '>' +
+          '<summary class="pgm-layout-group-head"><strong>' + esc(sectionLabels[group.key] || group.title) + '</strong><span>' + esc(selectedOption.label) + '</span></summary>' +
           '<div class="pgm-layout-options">' + group.options.map(function (option) {
             var isSelected = selected[group.key] === option.id;
             return '<button class="pgm-layout-option' + (isSelected ? ' is-selected' : '') + '" type="button" onclick="MarketingProgrammeModule.setPageLayout(\'' + esc(group.key) + '\', \'' + esc(option.id) + '\')">' +
@@ -457,17 +421,8 @@
               '<span class="pgm-layout-option-copy"><strong>' + esc(option.label) + '</strong><em>' + esc(option.detail) + '</em></span>' +
             '</button>';
           }).join('') + '</div>' +
-        '</section>';
-      }).join('') + '</div>' +
-    '</div>';
-  }
-
-  function selectControl(label, key, options) {
-    return '<label class="pgm-control"><span>' + esc(label) + '</span><select onchange="MarketingProgrammeModule.setSetting(\'' + esc(key) + '\', this.value)">' +
-      options.map(function (item) {
-        return '<option value="' + esc(item[0]) + '"' + (ProgrammeState.settings[key] === item[0] ? ' selected' : '') + '>' + esc(item[1]) + '</option>';
-      }).join('') +
-    '</select></label>';
+        '</details>';
+      }).join('') + '</div>';
   }
 
   function renderReadiness(pages) {
@@ -486,24 +441,9 @@
     '</div>';
   }
 
-  function renderSideTabButton(key, label) {
-    return '<button class="pgm-side-tab' + (ProgrammeState.sideTab === key ? ' is-active' : '') + '" type="button" onclick="MarketingProgrammeModule.setSideTab(\'' + esc(key) + '\')">' + esc(label) + '</button>';
-  }
-
   function renderPreviewSidebar(pages, start, isCover) {
-    var tab = ProgrammeState.sideTab || 'setup';
-    var body = tab === 'setup' ? renderSetupTab()
-      : tab === 'status' ? '<div class="pgm-side-scroll">' + renderReadiness(pages) + '</div>'
-      : tab === 'page' ? renderPageLayoutsTab()
-      : renderSectionsTab();
     return '<aside class="pgm-preview-sidebar">' +
-      '<div class="pgm-side-tabs">' +
-        renderSideTabButton('setup', 'Setup') +
-        renderSideTabButton('page', 'Page') +
-        renderSideTabButton('status', 'Status') +
-        renderSideTabButton('sections', 'Sections') +
-      '</div>' +
-      body +
+      renderSetupTab() +
     '</aside>';
   }
 
@@ -685,6 +625,7 @@
     setPageLayout: function (key, value) {
       ProgrammeState.settings.pageLayouts = ProgrammeState.settings.pageLayouts || {};
       ProgrammeState.settings.pageLayouts[key] = value;
+      ProgrammeState.openLayoutGroup = key || ProgrammeState.openLayoutGroup;
       if (key === 'bios') {
         ProgrammeState.settings.bioLayout = value === 'bios-compact' ? 'text-compact' : value === 'bios-featured' ? 'featured-bios' : 'headshot-grid';
       }
@@ -708,10 +649,6 @@
       if (!event || (event.key !== 'Enter' && event.key !== ' ')) return;
       event.preventDefault();
       this.flipTo(start, direction);
-    },
-    setSideTab: function (key) {
-      ProgrammeState.sideTab = key || 'setup';
-      renderPlanner();
     },
     toggleSection: function (key, checked) {
       var next = new Set(ProgrammeState.settings.sections);
