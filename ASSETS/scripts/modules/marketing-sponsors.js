@@ -49,6 +49,7 @@
       adSizes: DEFAULT_AD_SIZES.map(function (s) { return Object.assign({}, s); }),
       tiers:   DEFAULT_TIERS.map(function (t) { return Object.assign({}, t); }),
     };
+    SpnsState.posterUrl = null;
     SpnsState.loaded = {};
   }
 
@@ -128,6 +129,14 @@
     '</div>';
   }
 
+  function fetchPosterUrl() {
+    var url = SUPABASE_URL + '/rest/v1/productions?id=eq.' + SpnsState.prodId + '&select=poster_url&limit=1';
+    return fetch(url, { headers: { apikey: SUPABASE_ANON, Authorization: 'Bearer ' + SUPABASE_ANON } })
+      .then(function (r) { return r.json(); })
+      .then(function (d) { return d && d[0] && d[0].poster_url || ''; })
+      .catch(function () { return ''; });
+  }
+
   // -- Ad sizes grouped visual --------------------------------------------------
 
   /* Dims format: "HxW" (height x width, printing convention).
@@ -154,8 +163,14 @@
   function renderAdSlotCards(sizeId, dims) {
     var ads = SpnsState.ads.filter(function (a) { return a.ad_size === sizeId; });
     var d = parseAdDims(dims);
-    var ratio = (d.h / d.w).toFixed(3);
-    var waitCard = '<div class="spn-ad-placeholder" style="aspect-ratio:' + ratio + '"><span>Waiting</span></div>';
+    var ratio = (d.w / d.h).toFixed(3);
+    var posterBg = SpnsState.posterUrl
+      ? 'background-image:url(' + JSON.stringify(SpnsState.posterUrl) + ');background-size:cover;background-position:center;'
+      : '';
+    var waitCard = '<div class="spn-ad-placeholder" style="aspect-ratio:' + ratio + ';' + posterBg + '">'
+      + (SpnsState.posterUrl ? '<div class="spn-ad-ph-blur"></div>' : '')
+      + '<span class="spn-ad-ph-label">Example</span>'
+      + '</div>';
     var addCard = '<div class="reg-offer-item spn-ad-mini-add" onclick="MarketingSponsorsModule.openAdModal(undefined,' + JSON.stringify(sizeId) + ')" title="Add ad"><span>+</span></div>';
     if (!ads.length) {
       return waitCard + addCard;
@@ -430,7 +445,10 @@
     var bizPromise = SpnsState.businesses.length === 0
       ? dbFetch('sponsor_businesses').then(function (d) { SpnsState.businesses = d; }).catch(function () {})
       : Promise.resolve();
-    return Promise.all([settingsPromise, bizPromise]).then(function () {
+    var posterPromise = SpnsState.loaded.poster
+      ? Promise.resolve()
+      : fetchPosterUrl().then(function (url) { SpnsState.posterUrl = url; SpnsState.loaded.poster = true; });
+    return Promise.all([settingsPromise, bizPromise, posterPromise]).then(function () {
       return dbFetch('programme_ads').then(function (data) {
         SpnsState.ads = data;
       }).catch(function () {
