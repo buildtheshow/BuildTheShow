@@ -43,14 +43,14 @@
           '</div>' +
         '</div>' +
         '<div class="bgt-tile-grid" id="bgt-stats">' +
-          metricTile('bgt-stat-income',    'Budgeting', '...', 'Planned Income',    '#769e7b') +
-          metricTile('bgt-stat-expenses',  'Budgeting', '...', 'Planned Expenses',  '#476aaa') +
-          metricTile('bgt-stat-net',       'Budgeting', '...', 'Net Position',      '#572e88') +
-          metricTile('bgt-stat-spent',     'Budgeting', '...', 'Actual Spent',      '#dd8233') +
-          metricTile('bgt-stat-remaining', 'Budgeting', '...', 'Budget Remaining',  '#572e88') +
-          metricTile('bgt-stat-pending',   'Budgeting', '...', 'Pending Receipts',  '#efab45') +
-          metricTile('bgt-stat-total',     'Budgeting', '...', 'Total Receipts',    '#476aaa') +
-          metricTile('bgt-stat-cats',      'Budgeting', '...', 'Expense Categories','#ca7ea7') +
+          metricTile('bgt-stat-income',    'Budgeting', '...', 'Planned Income<br><span style="font-size:0.75em;opacity:0.8;">(money coming in)</span>',    '#769e7b') +
+          metricTile('bgt-stat-expenses',  'Budgeting', '...', 'Planned Expenses<br><span style="font-size:0.75em;opacity:0.8;">(money going out)</span>',  '#476aaa') +
+          metricTile('bgt-stat-net',       'Budgeting', '...', 'Net Position<br><span style="font-size:0.75em;opacity:0.8;">(bottom line)</span>',      '#572e88') +
+          metricTile('bgt-stat-spent',     'Budgeting', '...', 'Actual Spent<br><span style="font-size:0.75em;opacity:0.8;">(real money spent)</span>',      '#dd8233') +
+          metricTile('bgt-stat-remaining', 'Budgeting', '...', 'Budget Remaining<br><span style="font-size:0.75em;opacity:0.8;">(what\'s left to spend)</span>',  '#572e88') +
+          metricTile('bgt-stat-pending',   'Budgeting', '...', 'Pending Receipts<br><span style="font-size:0.75em;opacity:0.8;">(waiting for review)</span>',  '#efab45') +
+          metricTile('bgt-stat-total',     'Budgeting', '...', 'Total Receipts<br><span style="font-size:0.75em;opacity:0.8;">(every submission)</span>',    '#476aaa') +
+          metricTile('bgt-stat-cats',      'Budgeting', '...', 'Expense Categories<br><span style="font-size:0.75em;opacity:0.8;">(budget buckets)</span>','#ca7ea7') +
         '</div>' +
         '<div class="bgt-card">' +
           '<div class="bgt-card-title">Needs attention</div>' +

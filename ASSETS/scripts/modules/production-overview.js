@@ -53,7 +53,7 @@
       if (!grid) return;
 
       var healthColor = net >= 0 ? '#769e7b' : '#d1523d';
-      var healthStatus = net >= 0 ? 'Surplus' : 'Deficit';
+      var healthStatus = net >= 0 ? 'Surplus (in the black)' : 'Deficit (over budget)';
 
       // Using the Brand Tile System for the health tile
       grid.innerHTML =
@@ -63,10 +63,10 @@
               '<div class="template-brand-tile-kicker">Budget Health</div>' +
             '</div>' +
             '<div class="template-brand-tile-container template-brand-tile-container--title">' +
-              '<div class="template-brand-tile-number" style="font-size:18cqw">' + s.fmt$(net) + '</div>' +
+              '<div class="template-brand-tile-number" style="font-size:18cqw; margin-bottom: 2cqw;">' + s.fmt$(net) + '</div>' +
             '</div>' +
             '<div class="template-brand-tile-container template-brand-tile-container--body">' +
-              '<div class="template-brand-tile-metric-label">' + healthStatus + '</div>' +
+              '<div class="template-brand-tile-metric-label">' + healthStatus + '<br><span style="font-size:0.7em;font-weight:700;opacity:0.65;text-transform:none;">(how we\'re doing)</span></div>' +
             '</div>' +
             '<div class="template-brand-tile-container template-brand-tile-container--footer">' +
               '<div class="template-brand-tile-settings-helper" style="color:#ffffff">' + (net >= 0 ? 'You are currently in a surplus' : 'You are currently in a deficit') + '</div>' +

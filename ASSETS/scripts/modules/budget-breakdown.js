@@ -127,7 +127,7 @@
       el.innerHTML = '<div class="bgt-card">' +
         '<div class="bgt-section">' +
           '<div class="bgt-section-header">' +
-            '<div class="bgt-section-title">Income</div>' +
+            '<div class="bgt-section-title">Income <span style="font-weight:400;font-size:0.82rem;color:#9a90b0;margin-left:0.4rem;">(money coming in)</span></div>' +
             '<div style="display:flex;align-items:center;gap:0.75rem">' +
               '<span class="bgt-section-total">Planned: ' + s.fmt$(totalIncome) + '</span>' +
               '<button class="bgt-btn bgt-btn--ghost bgt-btn--sm" onclick="BudgetBreakdownModule.openCatModal(null,\'income\')">+ Add</button>' +
@@ -140,7 +140,7 @@
         '</div>' +
         '<div class="bgt-section">' +
           '<div class="bgt-section-header">' +
-            '<div class="bgt-section-title">Expenses</div>' +
+            '<div class="bgt-section-title">Expenses <span style="font-weight:400;font-size:0.82rem;color:#9a90b0;margin-left:0.4rem;">(money going out)</span></div>' +
             '<div style="display:flex;align-items:center;gap:0.75rem">' +
               '<span class="bgt-section-total">Planned: ' + s.fmt$(totalExpense) + '</span>' +
               '<button class="bgt-btn bgt-btn--ghost bgt-btn--sm" onclick="BudgetBreakdownModule.openCatModal(null,\'expense\')">+ Add</button>' +
@@ -156,7 +156,7 @@
             '<div class="template-brand-card-inner"><div class="template-brand-tile-content">' +
               '<div class="template-brand-tile-container template-brand-tile-container--header"><div class="template-brand-tile-kicker">Budgeting</div></div>' +
               '<div class="template-brand-tile-container template-brand-tile-container--title"><div class="template-brand-tile-number">' + s.fmt$(totalIncome) + '</div></div>' +
-              '<div class="template-brand-tile-container template-brand-tile-container--body"><div class="template-brand-tile-metric-label">Planned Income</div></div>' +
+              '<div class="template-brand-tile-container template-brand-tile-container--body"><div class="template-brand-tile-metric-label">Planned Income<br><span style="font-size:0.75em;opacity:0.8;">(total expected)</span></div></div>' +
               '<div class="template-brand-tile-container template-brand-tile-container--footer" style="border-top:1.5px solid #ccc;padding-top:4cqw;"><div class="template-brand-tile-settings-helper" style="color:#555">Total from all categories</div></div>' +
             '</div></div>' +
           '</div>' +
@@ -164,7 +164,7 @@
             '<div class="template-brand-card-inner"><div class="template-brand-tile-content">' +
               '<div class="template-brand-tile-container template-brand-tile-container--header"><div class="template-brand-tile-kicker">Budgeting</div></div>' +
               '<div class="template-brand-tile-container template-brand-tile-container--title"><div class="template-brand-tile-number">' + s.fmt$(net) + '</div></div>' +
-              '<div class="template-brand-tile-container template-brand-tile-container--body"><div class="template-brand-tile-metric-label">Net Position</div></div>' +
+              '<div class="template-brand-tile-container template-brand-tile-container--body"><div class="template-brand-tile-metric-label">Net Position<br><span style="font-size:0.75em;opacity:0.8;">(bottom line)</span></div></div>' +
               '<div class="template-brand-tile-container template-brand-tile-container--footer" style="border-top:1.5px solid rgba(255,255,255,0.3);padding-top:4cqw;">' +
                 '<div class="template-brand-tile-settings-helper" style="color:#ffffff">' + (net >= 0 ? 'Surplus: we are in the black' : 'Deficit: we are over budget') + '</div>' +
               '</div>' +
