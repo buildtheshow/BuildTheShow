@@ -4003,6 +4003,7 @@
     .et-cat-booking_confirmation { background: rgba(127,175,139,0.18); color: #3f7a51; }
     .et-cat-self_tape_booked     { background: rgba(37,99,235,0.12);   color: #1d4ed8; }
     .et-cat-audition_reminder    { background: rgba(214,140,178,0.18); color: #9f537a; }
+    .et-cat-online_audition_reminder { background: rgba(37,99,235,0.14); color: #1d4ed8; }
     .et-cat-callback             { background: rgba(227,164,111,0.2);  color: #a4612b; }
     .et-cat-callback_confirmed   { background: rgba(101,150,113,0.16); color: #3f7a50; }
     .et-cat-callback_declined    { background: rgba(87,46,136,0.08);    color: #4b5563; }
@@ -28996,7 +28997,8 @@
     { value: 'all',                  label: 'All',                  color: '#7FAF8B' },
     { value: 'booking_confirmation', label: 'Booking Confirmation', color: '#7FAF8B' },
     { value: 'self_tape_booked',     label: 'Self Tape Registered', color: '#2563eb' },
-    { value: 'audition_reminder',    label: 'Audition Reminder',    color: '#D68CB2' },
+    { value: 'audition_reminder',    label: 'Audition Reminder - In Person', color: '#D68CB2' },
+    { value: 'online_audition_reminder', label: 'Audition Reminder - Online Video Call', color: '#2563eb' },
     { value: 'callback',             label: 'Callback Request',     color: '#E3A46F' },
     { value: 'callback_confirmed',   label: 'Callback Confirmed',   color: '#659671' },
     { value: 'callback_declined',    label: 'Callback Declined',    color: '#4B5563' },
@@ -29041,11 +29043,20 @@
     },
     audition_reminder: {
       section: 'auditions',
-      label: 'Audition Reminder',
+      label: 'Audition Reminder - In Person',
       sendType: 'manual',
       required: false,
       usedBy: 'Manual audition reminder sends',
-      summary: 'A quick reminder with audition logistics before the performer arrives.',
+      summary: 'A quick reminder with in-person audition logistics before the performer arrives.',
+      sendSummary: 'Sent manually when you choose.',
+    },
+    online_audition_reminder: {
+      section: 'auditions',
+      label: 'Audition Reminder - Online Video Call',
+      sendType: 'manual',
+      required: false,
+      usedBy: 'Manual video call audition reminder sends',
+      summary: 'A reminder with video call logistics for performers joining online.',
       sendSummary: 'Sent manually when you choose.',
     },
     callback: {
@@ -29209,6 +29220,7 @@
     generalAuditionTime: '9:00 AM',
     generalAuditionVenue: 'Emerald City Theatre',
     danceCallTime: '11:00 AM',
+    videoCallLink: 'https://meet.google.com/build-the-show',
     callbackDate: 'May 24, 2026',
     callbackTime: '10:00 AM',
     callbackVenue: 'Emerald City Theatre',
@@ -29571,6 +29583,7 @@
         { token: '{{opening_night}}',         label: 'Opening Night',   sample: () => prod?.end_date ? fmtDate(prod.end_date) : etPlaceholder('opening night') },
         { token: '{{booking_link}}',          label: 'Booking Link',    sample: () => etSampleProductionUrl(`/Auditions/${ET_SAMPLE_CONTEXT.selfTapeCode}`) },
         { token: '{{booking_button}}',        label: 'Booking Button',  sample: () => emailActionButtonHtml(etSampleProductionUrl(`/Auditions/${ET_SAMPLE_CONTEXT.selfTapeCode}`), 'Open Audition Booking') },
+        { token: '{{video_call_link}}',       label: 'Video Call Link', sample: () => prod?.wizard_data?.video_call_link || prod?.wizard_data?.video_link || ET_SAMPLE_CONTEXT.videoCallLink },
         { token: '{{all_audition_sessions}}', label: 'All Sessions',    sample: () => `General Auditions: ${ET_SAMPLE_CONTEXT.generalAuditionDate} at ${ET_SAMPLE_CONTEXT.generalAuditionTime}\nDance Call: ${ET_SAMPLE_CONTEXT.generalAuditionDate} at ${ET_SAMPLE_CONTEXT.danceCallTime}\nCallback: ${ET_SAMPLE_CONTEXT.callbackDate} at ${ET_SAMPLE_CONTEXT.callbackTime}` },
       ],
     },
@@ -29633,6 +29646,11 @@
       required: ['{{contact_name}}', '{{audition_date}}', '{{audition_time}}'],
       recommended: ['{{show_name}}', '{{audition_venue}}', '{{general_audition_prepare}}'],
       note: 'Reminders should feel short and calm, with the logistics easy to spot.'
+    },
+    online_audition_reminder: {
+      required: ['{{contact_name}}', '{{show_name}}', '{{video_call_link}}'],
+      recommended: ['{{general_audition_date}}', '{{general_audition_time}}', '{{dance_call_date}}', '{{dance_call_time}}'],
+      note: 'Online reminders should make the video link and timing easy to spot.'
     },
     callback: {
       required: ['{{contact_name}}', '{{callback_date}}', '{{callback_time}}', '{{callback_accept_link}}'],
@@ -30083,6 +30101,7 @@
     booking_confirmation: 'booking_confirmed',
     self_tape_booked:     'self_tape_registered',
     audition_reminder:    'manual',
+    online_audition_reminder: 'manual',
     callback:             'callback_set',
     callback_confirmed:   'callback_confirmed',
     callback_declined:    'callback_declined',
@@ -30434,7 +30453,7 @@ See you soon,
 {{producer_signoff}}`,
     },
     {
-      name: 'Audition Reminder',
+      name: 'Audition Reminder - In Person',
       category: 'audition_reminder',
       trigger: 'manual',
       subject: 'Reminder: your audition for {{show_name}} is coming up',
@@ -30452,6 +30471,53 @@ Location: {{audition_venue}}
 We're looking forward to seeing you. If anything has changed and you can no longer make it, please let us know as soon as possible so we can offer your slot to someone else.
 
 See you there,
+{{producer_signoff}}`,
+    },
+    {
+      name: 'Audition Reminder - Online Video Call',
+      category: 'online_audition_reminder',
+      trigger: 'manual',
+      subject: 'Reminder: your online audition for {{show_name}} is coming up',
+      body: `Hi {{contact_name}},
+
+Your online video audition for {{show_name}} is coming up soon, and we are so excited to meet you.
+
+Here is everything you are currently booked in for:
+
+General Audition
+{{general_audition_name}}
+Date: {{general_audition_date}}
+Time: {{general_audition_time}}
+
+Dance Call
+{{dance_call_name}}
+Date: {{dance_call_date}}
+Time: {{dance_call_time}}
+
+Your video call link:
+{{video_call_link}}
+
+What to prepare:
+
+For your general audition:
+{{general_audition_prepare}}
+
+For your dance call:
+{{dance_call_prepare}}
+
+A few quick reminders:
+
+Try to join a few minutes early so we can make sure everything is working properly before we begin.
+
+Set yourself up somewhere bright so we can clearly see your face.
+
+Wear something comfortable that you can move in for the dance call.
+
+Do not stress about making everything perfect. We are simply excited to meet you and see you perform.
+
+If anything changes and you can no longer attend, please let us know as soon as possible.
+
+See you soon,
 {{producer_signoff}}`,
     },
     {
@@ -31034,6 +31100,22 @@ Your submission link is unique to you. Please do not share it with another perfo
     }
   }
 
+  async function etEnsureAuditionReminderTemplateNames() {
+    const desiredNames = {
+      audition_reminder: 'Audition Reminder - In Person',
+      online_audition_reminder: 'Audition Reminder - Online Video Call',
+    };
+    const oldNames = new Set(['Audition Reminder', 'Online Audition Reminder']);
+    const updates = (_etTemplates || [])
+      .filter(t => desiredNames[t.category] && oldNames.has(String(t.name || '').trim()))
+      .map(t => ({ ...t, name: desiredNames[t.category] }));
+    if (!updates.length) return;
+    _etTemplates = (_etTemplates || []).map(t => updates.find(u => u.id === t.id) || t);
+    await Promise.all(updates.map(t =>
+      sb.from('email_templates').update({ name: t.name }).eq('id', t.id)
+    ));
+  }
+
   function renderEmailTemplatePageHeader() {
     const host = document.getElementById('email-template-page-header');
     if (!host) return;
@@ -31069,7 +31151,7 @@ Your submission link is unique to you. Please do not share it with another perfo
       return;
     }
     // Backfill required starter templates for productions that existed before they were added.
-    for (const requiredCategory of ['team_invite', 'callback', 'callback_confirmed', 'callback_declined', 'callback_self_tape', 'self_tape_booked', 'cast_announcement', 'cast_accepted', 'not_cast']) {
+    for (const requiredCategory of ['online_audition_reminder', 'team_invite', 'callback', 'callback_confirmed', 'callback_declined', 'callback_self_tape', 'self_tape_booked', 'cast_announcement', 'cast_accepted', 'not_cast']) {
       if (_etTemplates.some(t => t.category === requiredCategory)) continue;
       const starter = ET_STARTER_TEMPLATES.find(t => t.category === requiredCategory);
       if (starter) {
@@ -31085,6 +31167,7 @@ Your submission link is unique to you. Please do not share it with another perfo
     await etEnsureCastOfferLanguage();
     await etEnsureCastOfferTemplateLinks();
     await etEnsureSelfTapeTemplateBody();
+    await etEnsureAuditionReminderTemplateNames();
     renderEmailTemplates();
     openPendingEmailTemplateCategory();
   }
@@ -58992,7 +59075,8 @@ Your submission link is unique to you. Please do not share it with another perfo
 
   const _apmEmailCategories = [
     { value: 'booking_confirmation', label: 'Booking Confirmation' },
-    { value: 'audition_reminder',    label: 'Audition Reminder'    },
+    { value: 'audition_reminder',    label: 'Audition Reminder - In Person' },
+    { value: 'online_audition_reminder', label: 'Audition Reminder - Online Video Call' },
     { value: 'callback',             label: 'Callback Request'     },
     { value: 'callback_confirmed',   label: 'Callback Confirmed'   },
     { value: 'callback_declined',    label: 'Callback Declined'    },
@@ -59104,6 +59188,7 @@ Your submission link is unique to you. Please do not share it with another perfo
       ...producerSignoffContext(),
       self_tape_deadline:    etFormatSelfTapeDeadline(prod?.wizard_data?.self_tape_deadline) || '',
       self_tape_instructions: prod?.wizard_data?.self_tape_instructions || '',
+      video_call_link:       customAnswers['Video Call Link'] || customAnswers.video_call_link || customAnswers['Video Link'] || customAnswers['Meeting Link'] || prod?.wizard_data?.video_call_link || prod?.wizard_data?.video_link || '',
       audition_session:      primarySession?.name     || '',
       audition_date:         primarySession?.date     ? fmtDate(primarySession.date) : '',
       audition_time:         primaryTime,
