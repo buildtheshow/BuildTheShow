@@ -138,12 +138,58 @@
   }
 
   function renderAdsGrouped() {
-    var colors = ['#572e88', '#476aaa', '#769e7b', '#dd8233'];
-    return colors.map(function(color) {
-      return '<div class="template-brand-card template-brand-card--horizontal template-brand-card--empty" style="--brand-tile-bg:' + color + ';--brand-tile-ink:#ffffff;" aria-label="Horizontal empty brand tile">' +
-        '<div class="template-brand-card-inner"><div class="template-brand-tile-content"></div></div>' +
-      '</div>';
+    var sizes  = SpnsState.settings.adSizes;
+    var colors = ADTILE_COLORS;
+    var tiles  = sizes.map(function (s, i) {
+      var color       = colors[i % colors.length];
+      var dimsDisplay = String(s.dims || '').replace(/['"]/g, '').replace(/[xX]/, '\u2033 x ') + '\u2033';
+      return (
+        '<div class="template-brand-card template-brand-card--horizontal template-brand-card--content spn-adpkg-tile"' +
+          ' style="--brand-tile-bg:' + color + ';--brand-tile-ink:#ffffff;"' +
+          ' aria-label="' + esc(s.label) + ' ad size tile">' +
+          '<div class="template-brand-card-inner">' +
+            '<div class="template-brand-horizontal-quad-split">' +
+
+              '<div class="template-brand-horizontal-quad-cell template-brand-horizontal-quad-cell--anchor">' +
+                '<div class="template-brand-text-holder">' +
+                  '<div class="template-brand-text-holder-inner">' +
+                    '<div class="template-brand-tile-container template-brand-tile-container--header">' +
+                      '<div class="template-brand-tile-kicker">Ad Size</div>' +
+                    '</div>' +
+                    '<div class="template-brand-tile-container template-brand-tile-container--title">' +
+                      '<div class="template-brand-tile-title">' + esc(s.label) + '</div>' +
+                    '</div>' +
+                    '<div class="template-brand-tile-container template-brand-tile-container--body">' +
+                      '<div class="template-brand-tile-body">' + esc(dimsDisplay) + '</div>' +
+                    '</div>' +
+                    '<div class="template-brand-tile-container template-brand-tile-container--footer"></div>' +
+                  '</div>' +
+                '</div>' +
+              '</div>' +
+
+              '<div class="template-brand-horizontal-quad-cell template-brand-horizontal-quad-cell--right spn-adpkg-right">' +
+                '<div class="spn-adpkg-pricing">' +
+                  '<div class="spn-adpkg-price-row">' +
+                    '<span class="spn-adpkg-price-label">Colour</span>' +
+                    '<span class="spn-adpkg-price-val">$' + s.colour + '</span>' +
+                  '</div>' +
+                  '<div class="spn-adpkg-price-row">' +
+                    '<span class="spn-adpkg-price-label">Black &amp; White</span>' +
+                    '<span class="spn-adpkg-price-val">$' + s.bw + '</span>' +
+                  '</div>' +
+                '</div>' +
+                '<button class="spn-adpkg-edit-btn" onclick="MarketingSponsorsModule.editAdSize(' + i + ')" title="Edit pricing">Edit</button>' +
+              '</div>' +
+
+              '<div class="template-brand-horizontal-quad-cell template-brand-horizontal-quad-cell--bottom-left" aria-hidden="true"></div>' +
+              '<div class="template-brand-horizontal-quad-cell template-brand-horizontal-quad-cell--bottom-right" aria-hidden="true"></div>' +
+
+            '</div>' +
+          '</div>' +
+        '</div>'
+      );
     }).join('');
+    return '<div class="spn-adpkg-list">' + tiles + '</div>';
   }
 
   function refreshAdsGrouped() {
@@ -372,10 +418,20 @@
 
   function loadAds() {
     refreshAdsGrouped();
+    var settingsPromise = SpnsState.loaded.settings
+      ? Promise.resolve()
+      : dbFetch('sponsor_settings', '&select=settings&limit=1').then(function (data) {
+          SpnsState.loaded.settings = true;
+          if (data && data[0] && data[0].settings) {
+            var s = data[0].settings;
+            if (s.adSizes && s.adSizes.length) SpnsState.settings.adSizes = s.adSizes;
+            if (s.tiers   && s.tiers.length)   SpnsState.settings.tiers   = s.tiers;
+          }
+        }).catch(function () { SpnsState.loaded.settings = true; });
     var bizPromise = SpnsState.businesses.length === 0
       ? dbFetch('sponsor_businesses').then(function (d) { SpnsState.businesses = d; }).catch(function () {})
       : Promise.resolve();
-    return bizPromise.then(function () {
+    return Promise.all([settingsPromise, bizPromise]).then(function () {
       return dbFetch('programme_ads').then(function (data) {
         SpnsState.ads = data;
       }).catch(function () {
