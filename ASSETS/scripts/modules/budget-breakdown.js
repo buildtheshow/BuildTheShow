@@ -251,8 +251,9 @@
       try {
         await s.dbDelete('budget_categories', id);
         s.BgtState.categories = [];
+        if (window.showToast) window.showToast('Deleted!');
         await this._load();
-      } catch (e) { alert('Could not delete: ' + e.message); }
+      } catch (e) { if (window.showToast) window.showToast('Couldn\'t delete category.', true); }
     },
   };
 })();

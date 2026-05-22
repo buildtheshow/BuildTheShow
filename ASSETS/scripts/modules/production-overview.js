@@ -69,10 +69,16 @@
               '<div class="template-brand-tile-metric-label">' + healthStatus + '<br><span style="font-size:0.7em;font-weight:700;opacity:0.65;text-transform:none;">(how we\'re doing)</span></div>' +
             '</div>' +
             '<div class="template-brand-tile-container template-brand-tile-container--footer">' +
-              '<div class="template-brand-tile-settings-helper" style="color:#ffffff">' + (net >= 0 ? 'You are currently in a surplus' : 'You are currently in a deficit') + '</div>' +
+              '<div class="template-brand-tile-settings-helper" style="color:#ffffff">' + (net >= 0 ? 'Surplus: we are in the black' : 'Deficit: we are over budget') + '</div>' +
             '</div>' +
           '</div></div>' +
         '</div>';
+
+      if (typeof fitBrandTileTitles === 'function') {
+        requestAnimationFrame(function() {
+          fitBrandTileTitles(grid);
+        });
+      }
     }
   };
 })();
