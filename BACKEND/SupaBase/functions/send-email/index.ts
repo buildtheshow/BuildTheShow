@@ -800,11 +800,12 @@ serve(async (req) => {
   for (const session of ((allProductionSessions ?? []) as Record<string,unknown>[])) {
     const slug = sessionSlug(String(session.name || ''));
     if (!slug) continue;
-    const dk = `{{${slug}_date}}`;
-    const tk = `{{${slug}_time}}`;
-    const vk = `{{${slug}_venue}}`;
-    const nk = `{{${slug}_name}}`;
-    const pk = `{{${slug}_prepare}}`;
+    const dk  = `{{${slug}_date}}`;
+    const tk  = `{{${slug}_time}}`;
+    const vk  = `{{${slug}_venue}}`;
+    const nk  = `{{${slug}_name}}`;
+    const pk  = `{{${slug}_prepare}}`;
+    const mlk = `{{${slug}_meeting_link}}`;
     if (!(dk in tokenValues)) tokenValues[dk] = session.date        ? fmtDate(String(session.date))        : '';
     if (!(tk in tokenValues)) tokenValues[tk] = slotForSession(session)?.slot_time ? fmtTime(String(slotForSession(session)?.slot_time || '')) : (session.start_time ? fmtTime(String(session.start_time)) : '');
     if (!(vk in tokenValues)) tokenValues[vk] = String(session.location || audVenue);
