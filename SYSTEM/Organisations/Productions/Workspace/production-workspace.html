@@ -29643,8 +29643,8 @@
       note: 'Booking confirmations work best when they clearly restate the date, time, and where to go.'
     },
     audition_reminder: {
-      required: ['{{contact_name}}', '{{audition_date}}', '{{audition_time}}'],
-      recommended: ['{{show_name}}', '{{audition_venue}}', '{{general_audition_prepare}}'],
+      required: ['{{contact_name}}', '{{show_name}}'],
+      recommended: ['{{general_audition_date}}', '{{general_audition_time}}', '{{dance_call_date}}', '{{dance_call_time}}', '{{audition_venue}}', '{{general_audition_prepare}}', '{{dance_call_prepare}}'],
       note: 'Reminders should feel short and calm, with the logistics easy to spot.'
     },
     online_audition_reminder: {
@@ -30459,19 +30459,54 @@ See you soon,
       subject: 'Reminder: your audition for {{show_name}} is coming up',
       body: `Hi {{contact_name}},
 
-Just a quick reminder that your audition for {{show_name}} is coming up soon.
+Your audition for {{show_name}} is coming up soon, and we are so excited to meet you!
 
-Session: {{audition_session}}
-Date: {{audition_date}}
-Time: {{audition_time}}
-Location: {{audition_venue}}
+Here is a reminder of everything you are currently booked in for:
 
+{{general_audition_name}}
+Date: {{general_audition_date}}
+Time: {{general_audition_time}}
+
+{{dance_call_name}}
+Date: {{dance_call_date}}
+Time: {{dance_call_time}}
+
+Location:
+{{audition_venue}}
+
+WHAT EACH AUDITION IS FOR
+
+General Audition
+This is your main audition slot. We will get to know you a little better through singing, acting, and chatting together.
+
+Dance Call
+This is a group movement audition where we will teach a short combination together. We are not looking for perfection. We just want to see how you move, learn, and perform in the room.
+
+WHAT TO PREPARE
+
+For Your General Audition:
 {{general_audition_prepare}}
 
-We're looking forward to seeing you. If anything has changed and you can no longer make it, please let us know as soon as possible so we can offer your slot to someone else.
+For Your Dance Call:
+{{dance_call_prepare}}
 
-See you there,
-{{producer_signoff}}`,
+A FEW QUICK REMINDERS
+
+Please arrive a little early so you have time to check in before your audition begins
+
+Wear something comfortable that you can move in for the dance call
+
+Bring water if you would like
+
+Do not stress about making everything perfect. We are simply excited to meet you and see you perform
+
+If anything changes and you can no longer attend, please let us know as soon as possible so we can offer the spot to another performer.
+
+See you soon!
+
+{{producer_name}}
+({{producer_role}})
+{{producer_email}}`,
     },
     {
       name: 'Audition Reminder - Online Video Call',
@@ -31100,6 +31135,71 @@ Your submission link is unique to you. Please do not share it with another perfo
     }
   }
 
+  function etAuditionReminderInPersonBody() {
+    return `Hi {{contact_name}},
+
+Your audition for {{show_name}} is coming up soon, and we are so excited to meet you!
+
+Here is a reminder of everything you are currently booked in for:
+
+{{general_audition_name}}
+Date: {{general_audition_date}}
+Time: {{general_audition_time}}
+
+{{dance_call_name}}
+Date: {{dance_call_date}}
+Time: {{dance_call_time}}
+
+Location:
+{{audition_venue}}
+
+WHAT EACH AUDITION IS FOR
+
+General Audition
+This is your main audition slot. We will get to know you a little better through singing, acting, and chatting together.
+
+Dance Call
+This is a group movement audition where we will teach a short combination together. We are not looking for perfection. We just want to see how you move, learn, and perform in the room.
+
+WHAT TO PREPARE
+
+For Your General Audition:
+{{general_audition_prepare}}
+
+For Your Dance Call:
+{{dance_call_prepare}}
+
+A FEW QUICK REMINDERS
+
+Please arrive a little early so you have time to check in before your audition begins
+
+Wear something comfortable that you can move in for the dance call
+
+Bring water if you would like
+
+Do not stress about making everything perfect. We are simply excited to meet you and see you perform
+
+If anything changes and you can no longer attend, please let us know as soon as possible so we can offer the spot to another performer.
+
+See you soon!
+
+{{producer_name}}
+({{producer_role}})
+{{producer_email}}`;
+  }
+
+  async function etEnsureAuditionReminderTemplateBody() {
+    const updates = (_etTemplates || [])
+      .filter(t => t.category === 'audition_reminder')
+      .filter(t => /Just a quick reminder that your audition for \{\{show_name\}\} is coming up soon\./i.test(String(t.body || '')))
+      .map(t => ({ ...t, body: etAuditionReminderInPersonBody() }));
+    if (!updates.length) return;
+    _etTemplates = (_etTemplates || []).map(t => updates.find(u => u.id === t.id) || t);
+    await Promise.all(updates.map(t =>
+      sb.from('email_templates').update({ body: t.body }).eq('id', t.id)
+    ));
+  }
+
   async function etEnsureAuditionReminderTemplateNames() {
     const desiredNames = {
       audition_reminder: 'Audition Reminder - In Person',
@@ -31167,6 +31267,7 @@ Your submission link is unique to you. Please do not share it with another perfo
     await etEnsureCastOfferLanguage();
     await etEnsureCastOfferTemplateLinks();
     await etEnsureSelfTapeTemplateBody();
+    await etEnsureAuditionReminderTemplateBody();
     await etEnsureAuditionReminderTemplateNames();
     renderEmailTemplates();
     openPendingEmailTemplateCategory();
