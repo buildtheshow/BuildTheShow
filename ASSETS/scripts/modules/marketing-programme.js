@@ -540,9 +540,11 @@
     return body;
   }
 
-  function renderPreviewPage(page, index, side) {
+  function renderPreviewPage(page, index, side, flipStart, flipDirection) {
     if (!page) return '<div class="pgm-preview-page pgm-preview-page--blank pgm-preview-page--' + esc(side || '') + '"></div>';
-    return '<article class="pgm-preview-page pgm-preview-page--' + esc(side || '') + '">' +
+    var canFlip = flipStart != null && flipDirection;
+    return '<article class="pgm-preview-page pgm-preview-page--' + esc(side || '') + (canFlip ? ' pgm-preview-page--flippable' : '') + '"' +
+      (canFlip ? ' role="button" tabindex="0" aria-label="' + (flipDirection === 'forward' ? 'Flip forward' : 'Flip back') + '" onclick="MarketingProgrammeModule.flipTo(' + Number(flipStart) + ', \'' + esc(flipDirection) + '\')" onkeydown="MarketingProgrammeModule.handlePageKey(event, ' + Number(flipStart) + ', \'' + esc(flipDirection) + '\')"' : '') + '>' +
       '<div class="pgm-page-sheet pgm-page-sheet--' + esc(page.type) + ' pgm-page-sheet--paper-' + esc(selectedPaper().id) + ' pgm-page-sheet--layout-' + esc(page.layout || 'default') + '">' + pageBody(page) + '</div>' +
       '<div class="pgm-page-caption"><strong>' + esc(page.title) + '</strong><span>Page ' + (index + 1) + (page.subtitle ? ' · ' + esc(page.subtitle) : '') + '</span></div>' +
     '</article>';
@@ -589,9 +591,9 @@
         renderPreviewSidebar(pages, start, isCover) +
         '<div class="pgm-preview-stage pgm-preview-stage--flipbook pgm-preview-stage--paper-' + esc(selectedPaper().id) + ' pgm-preview-stage--' + esc(ProgrammeState.flipDirection || 'none') + (isCover ? ' pgm-preview-stage--cover' : ' pgm-preview-stage--spread') + '">' +
           '<div class="pgm-preview-spread">' +
-            renderPreviewPage(leftPage, leftIndex, 'left') +
+            renderPreviewPage(leftPage, leftIndex, 'left', canPrev ? prevStart : null, canPrev ? 'back' : null) +
             '<div class="pgm-preview-gutter" aria-hidden="true"></div>' +
-            renderPreviewPage(rightPage, rightIndex, 'right') +
+            renderPreviewPage(rightPage, rightIndex, 'right', canNext ? nextStart : null, canNext ? 'forward' : null) +
           '</div>' +
         '</div>' +
         '<div class="pgm-filmstrip-wrap">' + renderPageFilmstrip(pages, start, isCover) + '</div>' +
@@ -697,6 +699,11 @@
       ProgrammeState.spreadStart = Number(start) || 0;
       ProgrammeState.flipDirection = direction === 'back' ? 'back' : 'forward';
       renderPlanner();
+    },
+    handlePageKey: function (event, start, direction) {
+      if (!event || (event.key !== 'Enter' && event.key !== ' ')) return;
+      event.preventDefault();
+      this.flipTo(start, direction);
     },
     setSideTab: function (key) {
       ProgrammeState.sideTab = key || 'setup';

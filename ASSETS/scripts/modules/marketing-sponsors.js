@@ -142,7 +142,7 @@
     var colors = ADTILE_COLORS;
     var tiles  = sizes.map(function (s, i) {
       var color       = colors[i % colors.length];
-      var dimsDisplay = String(s.dims || '').replace(/['"]/g, '').replace(/[xX]/, '\u2033 x ') + '\u2033';
+      var dimsDisplay = String(s.dims || '').replace(/['"]/g, '').replace(/[xX]/, '\u2033 \u00d7 ') + '\u2033';
       return (
         '<div class="template-brand-card template-brand-card--horizontal template-brand-card--content spn-adpkg-tile"' +
           ' style="--brand-tile-bg:' + color + ';--brand-tile-ink:#ffffff;"' +
@@ -154,30 +154,22 @@
                 '<div class="template-brand-text-holder">' +
                   '<div class="template-brand-text-holder-inner">' +
                     '<div class="template-brand-tile-container template-brand-tile-container--header">' +
-                      '<div class="template-brand-tile-kicker">Ad Size</div>' +
+                      '<div class="template-brand-tile-kicker">' + esc(s.label) + '</div>' +
                     '</div>' +
                     '<div class="template-brand-tile-container template-brand-tile-container--title">' +
-                      '<div class="template-brand-tile-title">' + esc(s.label) + '</div>' +
+                      '<div class="template-brand-tile-title">' + esc(dimsDisplay) + '</div>' +
                     '</div>' +
                     '<div class="template-brand-tile-container template-brand-tile-container--body">' +
-                      '<div class="template-brand-tile-body">' + esc(dimsDisplay) + '</div>' +
+                      '<div class="template-brand-tile-body">Colour $' + s.colour + ' &nbsp;&middot;&nbsp; B&amp;W $' + s.bw + '</div>' +
                     '</div>' +
-                    '<div class="template-brand-tile-container template-brand-tile-container--footer"></div>' +
+                    '<div class="template-brand-tile-container template-brand-tile-container--footer">' +
+                      '<button class="template-brand-tile-button spn-adpkg-anchor-edit" onclick="MarketingSponsorsModule.editAdSize(' + i + ')" title="Edit pricing">Edit</button>' +
+                    '</div>' +
                   '</div>' +
                 '</div>' +
               '</div>' +
 
               '<div class="template-brand-horizontal-quad-cell template-brand-horizontal-quad-cell--right spn-adpkg-right">' +
-                '<div class="spn-adpkg-pricing">' +
-                  '<div class="spn-adpkg-price-row">' +
-                    '<span class="spn-adpkg-price-label">Colour</span>' +
-                    '<span class="spn-adpkg-price-val">$' + s.colour + '</span>' +
-                  '</div>' +
-                  '<div class="spn-adpkg-price-row">' +
-                    '<span class="spn-adpkg-price-label">Black &amp; White</span>' +
-                    '<span class="spn-adpkg-price-val">$' + s.bw + '</span>' +
-                  '</div>' +
-                '</div>' +
                 '<button class="spn-adpkg-edit-btn" onclick="MarketingSponsorsModule.editAdSize(' + i + ')" title="Edit pricing">Edit</button>' +
               '</div>' +
 
