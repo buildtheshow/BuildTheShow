@@ -151,11 +151,14 @@
     return '<div class="reg-offer-item">' + inner + '</div>';
   }
 
-  function renderAdSlotCards(sizeId) {
+  function renderAdSlotCards(sizeId, dims) {
     var ads = SpnsState.ads.filter(function (a) { return a.ad_size === sizeId; });
+    var d = parseAdDims(dims);
+    var ratio = (d.h / d.w).toFixed(3);
+    var waitCard = '<div class="spn-ad-placeholder" style="aspect-ratio:' + ratio + '"><span>Waiting</span></div>';
     var addCard = '<div class="reg-offer-item spn-ad-mini-add" onclick="MarketingSponsorsModule.openAdModal(undefined,' + JSON.stringify(sizeId) + ')" title="Add ad"><span>+</span></div>';
     if (!ads.length) {
-      return '<div class="reg-offer-item"><div class="spn-ad-mini-card spn-ad-mini-card--waiting"><span>Waiting</span></div></div>' + addCard;
+      return waitCard + addCard;
     }
     return ads.map(function (a) {
       var paid = a.payment_status === 'paid';
@@ -179,9 +182,9 @@
         ink:             '#ffffff',
         kicker:          'Ad Size',
         title:           s.label,
-        anchorBodyHtml:  '<div class="template-brand-tile-body">' + esc(dimsDisplay) + '<br>Colour $' + s.colour + ' &middot; B&amp;W $' + s.bw + '</div>',
+        anchorBodyHtml:  '<div class="template-brand-tile-body"><div class="spn-tile-info-row"><span class="spn-tile-info-label">Size</span> ' + esc(dimsDisplay) + '</div><div class="spn-tile-info-row"><span class="spn-tile-info-label">Colour</span> $' + s.colour + '</div><div class="spn-tile-info-row"><span class="spn-tile-info-label">B&amp;W</span> $' + s.bw + '</div></div>',
         anchorFooterHtml:'<button class="template-brand-tile-button" onclick="MarketingSponsorsModule.editAdSize(' + i + ')">Edit</button>',
-        cardsHtml:       renderAdSlotCards(s.id),
+        cardsHtml:       renderAdSlotCards(s.id, s.dims),
       });
     }).join('') + '</div>';
   }
