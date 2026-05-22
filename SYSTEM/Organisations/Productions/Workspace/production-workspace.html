@@ -22778,6 +22778,7 @@
               <button id="ap-view-aq-vocals-btn" class="applicant-filter" onclick="setApplicantSheetSection('aq_vocals')">Vocals</button>
               <button id="ap-view-aq-dance-btn" class="applicant-filter" onclick="setApplicantSheetSection('aq_dance')">Dance</button>
               <button id="ap-view-aq-skills-btn" class="applicant-filter" onclick="setApplicantSheetSection('aq_skills')">Skills</button>
+              <button id="ap-view-emails-sent-btn" class="applicant-filter" onclick="setApplicantSheetSection('emails_sent')">Emails Sent</button>
             </div>
           </div>
           <div class="catchsheet-wrap">
@@ -44080,6 +44081,12 @@ See you soon!
       } catch (markError) {
         console.warn('[BTS] cast offer email sent, but sent marker failed', markError);
       }
+    } else {
+      try {
+        await markApplicantEmailSent(app, category);
+      } catch (markError) {
+        console.warn('[BTS] final casting email sent, but email tracker marker failed', markError);
+      }
     }
   }
 
@@ -50164,6 +50171,7 @@ See you soon!
       'Additional Audition Session',
       'Additional Audition Sessions',
       'Additional Notes',
+      '__bts_email_sent_log',
       'In The Room - Vocals',
       'In The Room - Movement',
       'In The Room - Acting',
@@ -50236,6 +50244,7 @@ See you soon!
       'Additional Audition Session',
       'Additional Audition Sessions',
       'Additional Notes',
+      '__bts_email_sent_log',
       'In The Room - Vocals',
       'In The Room - Movement',
       'In The Room - Acting',
@@ -50370,6 +50379,16 @@ See you soon!
       ];
     }
 
+    if (applicantSheetSection === 'emails_sent') {
+      return [
+        { key: 'headshot', label: 'Headshot', minWidth: '80px' },
+        { key: 'name', label: 'Performer', minWidth: '190px' },
+        { key: 'emails_sent', label: 'Emails Sent', minWidth: '260px' },
+        { key: 'last_email_sent', label: 'Last Sent', minWidth: '150px' },
+        { key: 'email_sent_count', label: 'Total Sent', minWidth: '110px' },
+      ];
+    }
+
     return [
       { key: 'headshot', label: 'Headshot', minWidth: '80px' },
       { key: 'name', label: 'Performer', minWidth: '190px' },
@@ -50452,6 +50471,115 @@ See you soon!
     });
   }
 
+  const EMAIL_SENT_LOG_KEY = '__bts_email_sent_log';
+
+  function emailCategoryTrackerLabel(category) {
+    const labels = {
+      booking_confirmation: 'Booking Confirmation',
+      audition_reminder: 'Audition Reminder - In Person',
+      online_audition_reminder: 'Audition Reminder - Online Video Call',
+      callback: 'Callback Request',
+      callback_confirmed: 'Callback Confirmed',
+      callback_declined: 'Callback Declined',
+      callback_self_tape: 'Callback Self Tape',
+      self_tape_booked: 'Self Tape Link',
+      cast_announcement: 'Cast Offer',
+      cast_accepted: 'Role Accepted',
+      not_cast: 'Not Cast',
+      rehearsal: 'Rehearsal Info',
+      general: 'General',
+    };
+    return labels[category] || String(category || 'Email').replace(/_/g, ' ').replace(/\b\w/g, ch => ch.toUpperCase());
+  }
+
+  function emailSentDateDisplay(value) {
+    const date = new Date(value || '');
+    if (Number.isNaN(date.getTime())) return '';
+    return date.toLocaleString('en-CA', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+  }
+
+  function normalizeEmailSentLog(value) {
+    if (!Array.isArray(value)) return [];
+    return value
+      .map(item => {
+        if (!item || typeof item !== 'object') return null;
+        const sentAt = String(item.sent_at || item.sentAt || item.date || '').trim();
+        const category = String(item.category || item.type || 'general').trim();
+        return sentAt ? {
+          category,
+          label: String(item.label || emailCategoryTrackerLabel(category)).trim(),
+          sent_at: sentAt,
+          subject: String(item.subject || '').trim(),
+        } : null;
+      })
+      .filter(Boolean);
+  }
+
+  function applicantEmailSentEntries(app) {
+    const ca = applicantCustomAnswers(app);
+    const entries = normalizeEmailSentLog(ca[EMAIL_SENT_LOG_KEY]);
+    const callbackSentAt = ca.__bts_callback_email_sent_at || ca['__bts_callback_email_sent_at'] || app?.callback_email_sent_at || '';
+    if (callbackSentAt) {
+      entries.push({
+        category: 'callback',
+        label: emailCategoryTrackerLabel('callback'),
+        sent_at: callbackSentAt,
+        subject: '',
+      });
+    }
+    const castOfferSentAt = ca.__bts_cast_offer_sent_at || ca['__bts_cast_offer_sent_at'] || '';
+    if (castOfferSentAt) {
+      entries.push({
+        category: 'cast_announcement',
+        label: emailCategoryTrackerLabel('cast_announcement'),
+        sent_at: castOfferSentAt,
+        subject: ca.__bts_cast_offer_role_names ? `Roles: ${ca.__bts_cast_offer_role_names}` : '',
+      });
+    }
+    const deduped = new Map();
+    entries.forEach(entry => {
+      const key = `${entry.category || 'email'}::${entry.sent_at || ''}`;
+      if (!deduped.has(key)) deduped.set(key, entry);
+    });
+    return [...deduped.values()].sort((a, b) => String(b.sent_at || '').localeCompare(String(a.sent_at || '')));
+  }
+
+  function applicantEmailSentSummary(app) {
+    const entries = applicantEmailSentEntries(app);
+    if (!entries.length) return '—';
+    const visible = entries.slice(0, 5).map(entry => {
+      const date = emailSentDateDisplay(entry.sent_at);
+      const detail = entry.subject ? ` (${entry.subject})` : '';
+      return `${entry.label || emailCategoryTrackerLabel(entry.category)}${date ? ' · ' + date : ''}${detail}`;
+    });
+    if (entries.length > visible.length) visible.push(`+${entries.length - visible.length} more`);
+    return visible.join('\n');
+  }
+
+  function applicantLastEmailSentDisplay(app) {
+    const latest = applicantEmailSentEntries(app)[0];
+    return latest ? emailSentDateDisplay(latest.sent_at) || '—' : '—';
+  }
+
+  async function markApplicantEmailSent(app, category, extra = {}) {
+    if (!app?.id) return;
+    const currentAnswers = applicantCustomAnswers(app);
+    const log = normalizeEmailSentLog(currentAnswers[EMAIL_SENT_LOG_KEY]);
+    const entry = {
+      category: category || 'general',
+      label: extra.label || emailCategoryTrackerLabel(category),
+      sent_at: extra.sent_at || new Date().toISOString(),
+      subject: extra.subject || '',
+    };
+    const nextAnswers = {
+      ...currentAnswers,
+      [EMAIL_SENT_LOG_KEY]: [entry, ...log].slice(0, 50),
+    };
+    app.custom_answers = nextAnswers;
+    const error = await persistApplicantPatch(app, { custom_answers: nextAnswers });
+    if (error) throw error;
+  }
+
   function applicantColumnValue(app, key) {
     const ca = applicantCustomAnswers(app);
     const hasAuditionSetup = !!(audSessions || []).length;
@@ -50532,6 +50660,9 @@ See you soon!
       case 'dance_styles': return ca['Dance Styles'] || '—';
       case 'dance_details': return ca['Dance / Movement Details'] || '—';
       case 'special_skills': return ca['Special Skills'] || app.skills || '—';
+      case 'emails_sent': return applicantEmailSentSummary(app);
+      case 'last_email_sent': return applicantLastEmailSentDisplay(app);
+      case 'email_sent_count': return String(applicantEmailSentEntries(app).length || '—');
       case 'previous_experience': return ca['Previous Experience'] || app.experience || '—';
       case 'inroom_vocals': return ca[INROOM_SCORE_CA_KEYS.vocals] || '—';
       case 'inroom_acting': return ca[INROOM_SCORE_CA_KEYS.acting] || '—';
@@ -50689,7 +50820,7 @@ See you soon!
               : '');
           const shouldWrapTwoLines = ['session', 'slot', 'requested_roles', 'gender_roles', 'additional_notes', 'booking_summary'].includes(col.key);
           const isBookingColumn = ['booking_summary'].includes(col.key);
-          const shouldCollapse = ['aq_acting','aq_vocals','aq_dance','aq_skills'].includes(applicantSheetSection) && !['headshot', 'name'].includes(col.key);
+          const shouldCollapse = ['aq_acting','aq_vocals','aq_dance','aq_skills','emails_sent'].includes(applicantSheetSection) && !['headshot', 'name', 'email_sent_count'].includes(col.key);
           const nameWordWrap = col.key === 'name' && col._wordWrap;
           const baseStyle = `${(index === 0 || col.key === 'name') ? 'font-weight:600;color:#1a1530;' : 'font-size:0.8rem;color:rgba(87,46,136,0.5);'}${col.key === 'name' ? 'padding-left:1.4rem;' : ''}min-width:${col.minWidth || '120px'};max-width:${col.minWidth || '120px'};text-align:left;vertical-align:middle;${nameWordWrap ? 'white-space:normal;line-height:1.45;word-break:normal;overflow-wrap:normal;' : fitAuditionInfo ? 'white-space:normal;line-height:1.45;overflow-wrap:normal;word-break:normal;' : (col.key === 'open' || col.key === 'status' || col.key === 'submitted' || col.key === 'pronouns' || col.key === 'other_roles' || col.key === 'age' || col.key === 'contact_phone' || col.key === 'contact_email' || col.key === 'name' ? 'white-space:nowrap;' : 'line-height:1.45;white-space:normal;')}`;
           const innerStyle = fitAuditionInfo
@@ -50721,6 +50852,7 @@ See you soon!
       aq_vocals: 'Vocals',
       aq_dance: 'Dance',
       aq_skills: 'Skills',
+      emails_sent: 'Emails Sent',
     };
     return labels[applicantSheetSection] || 'Performers';
   }
@@ -50737,6 +50869,7 @@ See you soon!
       aq_vocals: ['view-aq-vocals-btn', 'ap-view-aq-vocals-btn'],
       aq_dance:  ['view-aq-dance-btn',  'ap-view-aq-dance-btn'],
       aq_skills: ['view-aq-skills-btn', 'ap-view-aq-skills-btn'],
+      emails_sent: ['ap-view-emails-sent-btn'],
     };
     Object.entries(btnIds).forEach(([key, ids]) => {
       ids.forEach(id => {
@@ -59477,6 +59610,12 @@ See you soon!
     });
     if (sent && category === 'cast_announcement') {
       await markCastOfferSent(_apmApp, context.__cast_offer_role_entries || [], context.__cast_offer_deadline || castOfferDeadlineFromSettings());
+    } else if (sent) {
+      try {
+        await markApplicantEmailSent(_apmApp, category, { subject });
+      } catch (markError) {
+        console.warn('[APM] email sent, but tracker marker failed', markError);
+      }
     }
     _apmEmailCompose = null;
     _apmRenderBody();
@@ -59924,6 +60063,11 @@ See you soon!
       });
       const data = await res.json().catch(() => ({}));
       if (data.ok) {
+        try {
+          await markApplicantEmailSent(app, 'self_tape_booked', { subject });
+        } catch (markError) {
+          console.warn('[APM] self tape email sent, but tracker marker failed', markError);
+        }
         const overlay = document.getElementById('apm-self-tape-preview-overlay');
         if (overlay) {
           overlay.innerHTML = `
