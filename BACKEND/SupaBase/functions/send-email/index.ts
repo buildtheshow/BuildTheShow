@@ -45,6 +45,7 @@ const STATUS_TO_CATEGORY: Record<string, string> = {
 // Fallback subjects if no template found
 const CATEGORY_SUBJECTS: Record<string, string> = {
   booking_confirmation: 'Your audition is confirmed!',
+  online_audition_reminder: 'Your online audition is coming up',
   callback:            'You have a callback!',
   callback_confirmed:  'Your callback is confirmed!',
   callback_declined:   'Callback response received',
@@ -60,6 +61,7 @@ const CATEGORY_TO_TRIGGER: Record<string, string> = {
   booking_confirmation: 'booking_confirmed',
   self_tape_booked:     'self_tape_registered',
   audition_reminder:    'manual',
+  online_audition_reminder: 'manual',
   callback:             'callback_set',
   callback_confirmed:   'callback_confirmed',
   callback_declined:    'callback_declined',
@@ -150,6 +152,7 @@ serve(async (req) => {
       '{{audition_venue}}':        String(primarySess?.location || p.venue || ''),
       '{{what_to_prepare}}':       'Please prepare 16 bars of a song in the style of the show.',
       '{{booking_link}}':          `https://buildtheshow.com/audition-info?prod=${prodIdTest}`,
+      '{{video_call_link}}':       firstDefinedString(testWizardData.video_call_link, testWizardData.video_link, 'https://meet.google.com/sample-audition'),
       '{{all_audition_sessions}}': sessions.map(s => `${s.name || 'Session'}: ${s.date ? fmtDate(String(s.date)) : 'TBC'}${s.start_time ? ' at ' + fmtTime(String(s.start_time)) : ''}`).join('\n'),
       // General Auditions (real)
       '{{general_audition_date}}':  generalSess?.date        ? fmtDate(String(generalSess.date))        : '',
@@ -713,6 +716,19 @@ serve(async (req) => {
     directContext.portal_link,
     `https://buildtheshow.com/audition-team?prod=${productionId}`,
   );
+  const videoCallLink = firstDefinedString(
+    directContext.video_call_link,
+    directContext.video_link,
+    directContext.meeting_link,
+    customAnswers['Video Call Link'],
+    customAnswers['video_call_link'],
+    customAnswers['Video Link'],
+    customAnswers['Meeting Link'],
+    directWizardData.video_call_link,
+    directWizardData.video_link,
+    prodWizardData.video_call_link,
+    prodWizardData.video_link,
+  );
 
   const tokenValues: Record<string, string> = {
     '{{contact_name}}':          contactFirstName,
@@ -731,6 +747,7 @@ serve(async (req) => {
     '{{audition_notes}}':        whatToPrepare,
     '{{what_to_prepare}}':       whatToPrepare,
     '{{booking_link}}':          bookingLink,
+    '{{video_call_link}}':       videoCallLink,
     '{{org_name}}':              orgName,
     '{{director_name}}':         director,
     '{{producer_name}}':         producerName,
