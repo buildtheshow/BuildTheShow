@@ -137,113 +137,55 @@
     return m ? { h: parseFloat(m[1]) || 1, w: parseFloat(m[2]) || 1 } : { h: 1, w: 1 };
   }
 
-  function hzContentTile(color, kicker, title, body, footerHtml) {
-    return (
-      '<div class="template-brand-card template-brand-card--horizontal template-brand-card--content"' +
-        ' style="--brand-tile-bg:' + color + ';--brand-tile-ink:#ffffff;">' +
-        '<div class="template-brand-card-inner">' +
-          '<div class="template-brand-horizontal-quad-split">' +
-            '<div class="template-brand-horizontal-quad-cell template-brand-horizontal-quad-cell--anchor">' +
-              '<div class="template-brand-text-holder template-brand-text-holder--invisible">' +
-                '<div class="template-brand-text-holder-inner template-brand-text-holder-inner--invisible">' +
-                  '<div class="template-brand-tile-container template-brand-tile-container--header"><div class="template-brand-tile-kicker">' + kicker + '</div></div>' +
-                  '<div class="template-brand-tile-container template-brand-tile-container--title"><div class="template-brand-tile-title">' + title + '</div></div>' +
-                  '<div class="template-brand-tile-container template-brand-tile-container--body"><div class="template-brand-tile-body">' + body + '</div></div>' +
-                  '<div class="template-brand-tile-container template-brand-tile-container--footer">' + footerHtml + '</div>' +
-                '</div>' +
-              '</div>' +
-            '</div>' +
-            '<div class="template-brand-horizontal-quad-cell template-brand-horizontal-quad-cell--right" aria-hidden="true"></div>' +
-            '<div class="template-brand-horizontal-quad-cell template-brand-horizontal-quad-cell--bottom-left" aria-hidden="true"></div>' +
-            '<div class="template-brand-horizontal-quad-cell template-brand-horizontal-quad-cell--bottom-right" aria-hidden="true"></div>' +
-          '</div>' +
-        '</div>' +
-      '</div>'
-    );
+  function adMiniCard(sizeId, biz, type, paid, art) {
+    var inner = biz
+      ? ('<div class="spn-ad-mini-card spn-ad-mini-card--booked" onclick="MarketingSponsorsModule.openAdModal(' + JSON.stringify(biz.id) + ')">' +
+           '<div class="spn-ad-mini-biz">' + esc(bizName(biz.business_id) || 'Unnamed') + '</div>' +
+           '<div class="spn-ad-mini-type">' + esc(type) + '</div>' +
+           '<div class="spn-ad-mini-dots">' +
+             '<span class="spn-ad-mini-dot' + (paid ? ' on' : '') + '"></span>' +
+             '<span class="spn-ad-mini-dot' + (art  ? ' on' : '') + '"></span>' +
+           '</div>' +
+         '</div>')
+      : '<div class="spn-ad-mini-card spn-ad-mini-card--waiting"><span>Waiting</span></div>';
+    return '<div class="reg-offer-item">' + inner + '</div>';
   }
 
-  function renderAdSlotCards(sizeId, color) {
+  function renderAdSlotCards(sizeId) {
     var ads = SpnsState.ads.filter(function (a) { return a.ad_size === sizeId; });
+    var addCard = '<div class="reg-offer-item spn-ad-mini-add" onclick="MarketingSponsorsModule.openAdModal(undefined,' + JSON.stringify(sizeId) + ')" title="Add ad"><span>+</span></div>';
     if (!ads.length) {
-      return hzContentTile(
-        color,
-        'Ad Slot',
-        'Waiting',
-        'No booking yet',
-        '<button class="template-brand-tile-button" onclick="MarketingSponsorsModule.openAdModal(undefined,' + JSON.stringify(sizeId) + ')">+ Add Ad</button>'
-      );
+      return '<div class="reg-offer-item"><div class="spn-ad-mini-card spn-ad-mini-card--waiting"><span>Waiting</span></div></div>' + addCard;
     }
     return ads.map(function (a) {
-      var biz  = esc(bizName(a.business_id) || 'Unnamed Business');
-      var type = a.ad_type === 'bw' ? 'B&W' : 'Colour';
       var paid = a.payment_status === 'paid';
       var art  = a.artwork_status === 'received' || a.artwork_status === 'approved' || a.artwork_status === 'print_ready';
-      var status = (paid ? 'Paid' : 'Unpaid') + ' &middot; ' + (art ? 'Art received' : 'Art missing');
-      return hzContentTile(
-        color,
-        esc(type),
-        biz,
-        status,
-        '<button class="template-brand-tile-button" onclick="MarketingSponsorsModule.openAdModal(' + JSON.stringify(a.id) + ')">Edit</button>'
-      );
-    }).join('') +
-    hzContentTile(
-      color,
-      'Ad Slot',
-      'Add Another',
-      '',
-      '<button class="template-brand-tile-button" onclick="MarketingSponsorsModule.openAdModal(undefined,' + JSON.stringify(sizeId) + ')">+ Add Ad</button>'
-    );
+      var type = a.ad_type === 'bw' ? 'B&W' : 'Colour';
+      return adMiniCard(sizeId, a, type, paid, art);
+    }).join('') + addCard;
   }
-
-
 
   function renderAdsGrouped() {
+    var renderer = window.BTSAuditionTemplates && window.BTSAuditionTemplates.renderTemplateById;
+    if (!renderer) return '<div class="spn-loading-row">Loading templates...</div>';
     var sizes  = SpnsState.settings.adSizes;
     var colors = ADTILE_COLORS;
-    var tiles  = sizes.map(function (s, i) {
+    return '<div class="spn-adpkg-list">' + sizes.map(function (s, i) {
       var color       = colors[i % colors.length];
-      var dimsDisplay = String(s.dims || '').replace(/['"]/g, '').replace(/[xX]/, '″ × ') + '″';
-      return (
-        '<div class="template-brand-card template-brand-card--horizontal template-brand-card--content spn-adpkg-tile"' +
-          ' style="--brand-tile-bg:' + color + ';--brand-tile-ink:#ffffff;"' +
-          ' aria-label="' + esc(s.label) + ' ad size tile">' +
-          '<div class="template-brand-card-inner">' +
-            '<div class="template-brand-horizontal-quad-split">' +
-
-              '<div class="template-brand-horizontal-quad-cell template-brand-horizontal-quad-cell--anchor">' +
-                '<div class="template-brand-text-holder">' +
-                  '<div class="template-brand-text-holder-inner">' +
-                    '<div class="template-brand-tile-container template-brand-tile-container--header">' +
-                      '<div class="template-brand-tile-kicker">' + esc(s.label) + '</div>' +
-                    '</div>' +
-                    '<div class="template-brand-tile-container template-brand-tile-container--title">' +
-                      '<div class="template-brand-tile-title">' + esc(dimsDisplay) + '</div>' +
-                    '</div>' +
-                    '<div class="template-brand-tile-container template-brand-tile-container--body">' +
-                      '<div class="template-brand-tile-body">Colour $' + s.colour + ' · B&amp;W $' + s.bw + '</div>' +
-                    '</div>' +
-                    '<div class="template-brand-tile-container template-brand-tile-container--footer">' +
-                      '<button class="template-brand-tile-button spn-adpkg-anchor-edit" onclick="MarketingSponsorsModule.editAdSize(' + i + ')" title="Edit pricing">Edit</button>' +
-                    '</div>' +
-                  '</div>' +
-                '</div>' +
-              '</div>' +
-
-              '<div class="template-brand-horizontal-quad-cell template-brand-horizontal-quad-cell--right spn-adpkg-slots">' +
-                renderAdSlotCards(s.id, color) +
-              '</div>' +
-
-              '<div class="template-brand-horizontal-quad-cell template-brand-horizontal-quad-cell--bottom-left" aria-hidden="true"></div>' +
-              '<div class="template-brand-horizontal-quad-cell template-brand-horizontal-quad-cell--bottom-right" aria-hidden="true"></div>' +
-
-            '</div>' +
-          '</div>' +
-        '</div>'
-      );
-    }).join('');
-    return '<div class="spn-adpkg-list">' + tiles + '</div>';
+      var dimsDisplay = String(s.dims || '').replace(/['"]/g, '').replace(/[xX]/, '″ x ') + '″';
+      return renderer('brand.tile.lane', {
+        esc:             esc,
+        color:           color,
+        ink:             '#ffffff',
+        kicker:          'Ad Size',
+        title:           s.label,
+        anchorBodyHtml:  '<div class="template-brand-tile-body">' + esc(dimsDisplay) + '<br>Colour $' + s.colour + ' &middot; B&amp;W $' + s.bw + '</div>',
+        anchorFooterHtml:'<button class="template-brand-tile-button" onclick="MarketingSponsorsModule.editAdSize(' + i + ')">Edit</button>',
+        cardsHtml:       renderAdSlotCards(s.id),
+      });
+    }).join('') + '</div>';
   }
+
 
 
   function refreshAdsGrouped() {
