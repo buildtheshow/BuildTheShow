@@ -138,7 +138,19 @@
   }
 
   function renderAdsGrouped() {
-    return '';
+    var colors = ['#572e88', '#476aaa', '#769e7b', '#dd8233'];
+    return colors.map(function(color) {
+      return '<div class="template-brand-card template-brand-card--horizontal template-brand-card--empty" style="--brand-tile-bg:' + color + ';--brand-tile-ink:#ffffff;">' +
+        '<div class="template-brand-card-inner">' +
+          '<div class="template-brand-horizontal-quad-split">' +
+            '<div class="template-brand-horizontal-quad-cell template-brand-horizontal-quad-cell--anchor"></div>' +
+            '<div class="template-brand-horizontal-quad-cell template-brand-horizontal-quad-cell--right" aria-hidden="true"></div>' +
+            '<div class="template-brand-horizontal-quad-cell template-brand-horizontal-quad-cell--bottom-left" aria-hidden="true"></div>' +
+            '<div class="template-brand-horizontal-quad-cell template-brand-horizontal-quad-cell--bottom-right" aria-hidden="true"></div>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
+    }).join('');
   }
 
   function refreshAdsGrouped() {
