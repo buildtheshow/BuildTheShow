@@ -545,7 +545,7 @@
     var canFlip = flipStart != null && flipDirection;
     return '<article class="pgm-preview-page pgm-preview-page--' + esc(side || '') + (canFlip ? ' pgm-preview-page--flippable' : '') + '"' +
       (canFlip ? ' role="button" tabindex="0" aria-label="' + (flipDirection === 'forward' ? 'Flip forward' : 'Flip back') + '" onclick="MarketingProgrammeModule.flipTo(' + Number(flipStart) + ', \'' + esc(flipDirection) + '\')" onkeydown="MarketingProgrammeModule.handlePageKey(event, ' + Number(flipStart) + ', \'' + esc(flipDirection) + '\')"' : '') + '>' +
-      '<div class="pgm-page-sheet pgm-page-sheet--' + esc(page.type) + ' pgm-page-sheet--paper-' + esc(selectedPaper().id) + ' pgm-page-sheet--layout-' + esc(page.layout || 'default') + '">' + pageBody(page) + '</div>' +
+      '<div class="pgm-page-sheet pgm-page-sheet--' + esc(page.type) + ' pgm-page-sheet--paper-' + esc(selectedPaper().id) + ' pgm-page-sheet--layout-' + esc(page.layout || 'default') + '">' + pageBody(page) + '<span class="pgm-page-number">' + (index + 1) + '</span></div>' +
       '<div class="pgm-page-caption"><strong>' + esc(page.title) + '</strong><span>Page ' + (index + 1) + (page.subtitle ? ' · ' + esc(page.subtitle) : '') + '</span></div>' +
     '</article>';
   }
@@ -696,8 +696,12 @@
       renderPlanner();
     },
     flipTo: function (start, direction) {
+      var nextStart = Number(start) || 0;
+      var wasCover = ProgrammeState.spreadStart === 0;
       ProgrammeState.spreadStart = Number(start) || 0;
-      ProgrammeState.flipDirection = direction === 'back' ? 'back' : 'forward';
+      ProgrammeState.flipDirection = direction === 'back'
+        ? (nextStart === 0 ? 'close' : 'back')
+        : (wasCover && nextStart > 0 ? 'open' : 'forward');
       renderPlanner();
     },
     handlePageKey: function (event, start, direction) {

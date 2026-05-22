@@ -137,12 +137,41 @@
     return m ? { h: parseFloat(m[1]) || 1, w: parseFloat(m[2]) || 1 } : { h: 1, w: 1 };
   }
 
+  function renderAdSlotCards(sizeId) {
+    var ads = SpnsState.ads.filter(function (a) { return a.ad_size === sizeId; });
+    var addCard = (
+      '<div class="spn-ad-slot-card spn-ad-slot-card--add" onclick="MarketingSponsorsModule.openAdModal(undefined,' + JSON.stringify(sizeId) + ')" title="Add ad">' +
+        '<span class="spn-ad-slot-plus">+</span>' +
+      '</div>'
+    );
+    var cards = ads.map(function (a) {
+      var biz  = bizName(a.business_id) || 'Unnamed';
+      var type = a.ad_type === 'bw' ? 'B&W' : 'Colour';
+      var paid = a.payment_status === 'paid';
+      var art  = a.artwork_status === 'received' || a.artwork_status === 'approved' || a.artwork_status === 'print_ready';
+      return (
+        '<div class="spn-ad-slot-card spn-ad-slot-card--booked" onclick="MarketingSponsorsModule.openAdModal(' + JSON.stringify(a.id) + ')">' +
+          '<div class="spn-ad-slot-biz">' + esc(biz) + '</div>' +
+          '<div class="spn-ad-slot-type">' + esc(type) + '</div>' +
+          '<div class="spn-ad-slot-dots">' +
+            '<span class="spn-ad-slot-dot' + (paid ? ' spn-ad-slot-dot--on' : '') + '" title="Payment"></span>' +
+            '<span class="spn-ad-slot-dot' + (art  ? ' spn-ad-slot-dot--on' : '') + '" title="Artwork"></span>' +
+          '</div>' +
+        '</div>'
+      );
+    }).join('');
+    if (!ads.length) {
+      return '<div class="spn-ad-slot-card spn-ad-slot-card--waiting"><span class="spn-ad-slot-waiting-label">Waiting</span></div>' + addCard;
+    }
+    return cards + addCard;
+  }
+
   function renderAdsGrouped() {
     var sizes  = SpnsState.settings.adSizes;
     var colors = ADTILE_COLORS;
     var tiles  = sizes.map(function (s, i) {
       var color       = colors[i % colors.length];
-      var dimsDisplay = String(s.dims || '').replace(/['"]/g, '').replace(/[xX]/, '\u2033 \u00d7 ') + '\u2033';
+      var dimsDisplay = String(s.dims || '').replace(/['"]/g, '').replace(/[xX]/, '″ × ') + '″';
       return (
         '<div class="template-brand-card template-brand-card--horizontal template-brand-card--content spn-adpkg-tile"' +
           ' style="--brand-tile-bg:' + color + ';--brand-tile-ink:#ffffff;"' +
@@ -160,7 +189,7 @@
                       '<div class="template-brand-tile-title">' + esc(dimsDisplay) + '</div>' +
                     '</div>' +
                     '<div class="template-brand-tile-container template-brand-tile-container--body">' +
-                      '<div class="template-brand-tile-body">Colour $' + s.colour + ' &nbsp;&middot;&nbsp; B&amp;W $' + s.bw + '</div>' +
+                      '<div class="template-brand-tile-body">Colour $' + s.colour + ' · B&amp;W $' + s.bw + '</div>' +
                     '</div>' +
                     '<div class="template-brand-tile-container template-brand-tile-container--footer">' +
                       '<button class="template-brand-tile-button spn-adpkg-anchor-edit" onclick="MarketingSponsorsModule.editAdSize(' + i + ')" title="Edit pricing">Edit</button>' +
@@ -169,7 +198,9 @@
                 '</div>' +
               '</div>' +
 
-              '<div class="template-brand-horizontal-quad-cell template-brand-horizontal-quad-cell--right spn-adpkg-right" aria-hidden="true"></div>' +
+              '<div class="template-brand-horizontal-quad-cell template-brand-horizontal-quad-cell--right spn-adpkg-slots">' +
+                renderAdSlotCards(s.id) +
+              '</div>' +
 
               '<div class="template-brand-horizontal-quad-cell template-brand-horizontal-quad-cell--bottom-left" aria-hidden="true"></div>' +
               '<div class="template-brand-horizontal-quad-cell template-brand-horizontal-quad-cell--bottom-right" aria-hidden="true"></div>' +
@@ -181,6 +212,7 @@
     }).join('');
     return '<div class="spn-adpkg-list">' + tiles + '</div>';
   }
+
 
   function refreshAdsGrouped() {
     var el = document.getElementById('spn-ads-grouped');
