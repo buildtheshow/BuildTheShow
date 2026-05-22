@@ -96,6 +96,14 @@
       var all    = s.BgtState.receipts;
       var list   = filter === 'all' ? all : all.filter(function (r) { return r.status === filter; });
 
+      var pendingCount = all.filter(function (r) { return r.status === 'pending'; }).length;
+      var reviewAlert = '';
+      if (pendingCount > 0 && filter !== 'pending') {
+        reviewAlert = '<div class="bgt-alert-item bgt-alert-item--warn" style="margin-bottom:1.5rem;cursor:pointer" onclick="document.getElementById(\'bgt-receipts-filter\').value=\'pending\'; BudgetReceiptsModule.filterReceipts();">' +
+          '<span class="bgt-alert-dot"></span>' + pendingCount + ' receipt' + (pendingCount > 1 ? 's' : '') + ' waiting for your review. <span style="text-decoration:underline;margin-left:0.5rem">Show review queue &rarr;</span>' +
+        '</div>';
+      }
+
       var heroEl = document.getElementById('bgt-receipts-hero-count');
       if (heroEl) heroEl.textContent = all.length;
 
@@ -116,16 +124,16 @@
         listEl.innerHTML = head + '<div class="bgt-list-empty"><div class="bgt-empty">' +
           '<div class="bgt-empty-icon">&#x1F9FE;</div>' +
           '<h3>No receipts yet</h3>' +
-          '<p>Add receipts manually or share the Collect link so your team can submit their own.</p>' +
+          '<p>Add receipts manually or share the Collect link so your team can submit their own. Once they submit them, they\'ll appear here for you to review!</p>' +
           '</div></div>';
         return;
       }
 
-      listEl.innerHTML = head + list.map(function (r) {
+      listEl.innerHTML = reviewAlert + head + list.map(function (r) {
         var desc = r.description && r.vendor ? '<div class="bgt-list-sub">' + s.esc(r.description) + '</div>' : '';
         var pending = r.status === 'pending'
           ? '<button class="bgt-btn bgt-btn--green bgt-btn--sm" onclick="BudgetReceiptsModule.approveReceipt(\'' + r.id + '\')">Approve</button>' +
-            '<button class="bgt-btn bgt-btn--danger bgt-btn--sm" onclick="BudgetReceiptsModule.rejectReceipt(\'' + r.id + '\')">Reject</button>'
+            '<button class="bgt-btn bgt-btn--danger bgt-btn--sm" style="margin-left:0.25rem" onclick="BudgetReceiptsModule.rejectReceipt(\'' + r.id + '\')">Reject</button>'
           : '';
         return '<div class="bgt-list-row bgt-receipt-cols">' +
           '<div class="bgt-list-sub">' + s.fmtDate(r.receipt_date) + '</div>' +
@@ -147,14 +155,26 @@
 
     approveReceipt: async function (id) {
       var s = window.BgtShared;
-      try { await s.dbUpdate('budget_receipts', id, { status: 'approved' }); s.BgtState.receipts = []; await this._load(); }
-      catch (e) { alert('Could not update: ' + e.message); }
+      try { 
+        await s.dbUpdate('budget_receipts', id, { status: 'approved' }); 
+        s.BgtState.receipts = []; 
+        if (window.showToast) window.showToast('Receipt approved!');
+        await this._load(); 
+      }
+      catch (e) { 
+        if (window.showToast) window.showToast('Couldn\'t save. Try again.', true);
+      }
     },
 
     rejectReceipt: async function (id) {
       var s = window.BgtShared;
-      try { await s.dbUpdate('budget_receipts', id, { status: 'rejected' }); s.BgtState.receipts = []; await this._load(); }
-      catch (e) { alert('Could not update: ' + e.message); }
+      try { 
+        await s.dbUpdate('budget_receipts', id, { status: 'rejected' }); 
+        s.BgtState.receipts = []; 
+        if (window.showToast) window.showToast('Receipt rejected.');
+        await this._load(); 
+      }
+      catch (e) { if (window.showToast) window.showToast('Couldn\'t save. Try again.', true); }
     },
 
     openReceiptModal: function (id) {
@@ -189,8 +209,8 @@
       var s      = window.BgtShared;
       var name   = document.getElementById('bgt-receipt-name').value.trim();
       var amount = parseFloat(document.getElementById('bgt-receipt-amount').value);
-      if (!name)         { alert('Submitted by name is required.'); return; }
-      if (isNaN(amount)) { alert('Amount is required.'); return; }
+      if (!name)         { if (window.showToast) window.showToast('Name is required.', true); return; }
+      if (isNaN(amount)) { if (window.showToast) window.showToast('Amount is required.', true); return; }
       var id = document.getElementById('bgt-receipt-id').value;
       var payload = {
         submitted_by_name:  name,
@@ -208,15 +228,21 @@
         else    await s.dbInsert('budget_receipts', payload);
         this.closeReceiptModal();
         s.BgtState.receipts = [];
+        if (window.showToast) window.showToast('Saved!');
         await this._load();
-      } catch (e) { alert('Could not save: ' + e.message); }
+      } catch (e) { if (window.showToast) window.showToast('Couldn\'t save. Try again.', true); }
     },
 
     deleteReceipt: async function (id) {
       var s = window.BgtShared;
       if (!confirm('Delete this receipt? This cannot be undone.')) return;
-      try { await s.dbDelete('budget_receipts', id); s.BgtState.receipts = []; await this._load(); }
-      catch (e) { alert('Could not delete: ' + e.message); }
+      try { 
+        await s.dbDelete('budget_receipts', id); 
+        s.BgtState.receipts = []; 
+        if (window.showToast) window.showToast('Deleted.');
+        await this._load(); 
+      }
+      catch (e) { if (window.showToast) window.showToast('Couldn\'t delete. Try again.', true); }
     },
   };
 })();

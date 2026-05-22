@@ -79,7 +79,8 @@
 
   function fmt$(cents) {
     if (cents == null) return '$0';
-    return '$' + (cents / 100).toLocaleString('en-CA', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+    var dollars = cents / 100;
+    return '$' + dollars.toLocaleString('en-CA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   }
 
   function fmtDate(d) {

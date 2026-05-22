@@ -138,16 +138,17 @@
           body: JSON.stringify({ collect_enabled: newVal }),
         });
         if (s.BgtState.settings) s.BgtState.settings.collect_enabled = newVal;
+        if (window.showToast) window.showToast('Saved!');
         this._render();
-      } catch (e) { alert('Could not update: ' + e.message); }
+      } catch (e) { if (window.showToast) window.showToast('Couldn\'t save. Try again.', true); }
     },
 
     copyCollectLink: function () {
       var url = (document.getElementById('bgt-collect-url') || {}).textContent || '';
       if (navigator.clipboard) {
-        navigator.clipboard.writeText(url).then(function () { alert('Link copied!'); }).catch(function () { prompt('Copy this link:', url); });
-      } else {
-        prompt('Copy this link:', url);
+        navigator.clipboard.writeText(url).then(function () {
+          if (window.showToast) window.showToast('Link copied!');
+        }).catch(function () { /* fallback if clipboard fails */ });
       }
     },
   };
