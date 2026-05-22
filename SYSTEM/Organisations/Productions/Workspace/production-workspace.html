@@ -59678,25 +59678,43 @@ See you soon!
     const body    = document.getElementById('apm-composer-body')?.innerHTML?.trim() || '';
     const bodyEl  = document.getElementById('apm-body');
     if (bodyEl) bodyEl.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100%;color:rgba(87,46,136,0.5);font-size:0.9rem;font-style:italic;">Sending…</div>`;
-    let bookingId = _apmApp?.booking_id || null;
-    if (!bookingId && _apmApp?.email) {
-      const { data: bookingRows } = await sb.from('audition_bookings')
-        .select('id').eq('production_id', prodId).eq('email', _apmApp.email)
-        .order('created_at', { ascending: false }).limit(1);
-      bookingId = bookingRows?.[0]?.id || null;
-    }
-    if (!bookingId) {
-      showToast('No booking record — email cannot be sent for manually-added performers.', true);
-      _apmEmailCompose = null;
-      _apmRenderBody();
-      _apmResetEmailRow();
-      return;
-    }
     const context = await _apmBuildEmailContextForCategory(category);
-    const sent = await resendConfirmationEmail(bookingId, category, {
-      email: _apmApp?.email || '', name: _apmApp?.name || '',
-      context, subject, body,
-    });
+    let sent = false;
+
+    if (category === 'booking_confirmation') {
+      let bookingId = _apmApp?.booking_id || null;
+      if (!bookingId && _apmApp?.email) {
+        const { data: bookingRows } = await sb.from('audition_bookings')
+          .select('id').eq('production_id', prodId).eq('email', _apmApp.email)
+          .order('created_at', { ascending: false }).limit(1);
+        bookingId = bookingRows?.[0]?.id || null;
+      }
+      if (!bookingId) {
+        showToast('No booking record found for this performer.', true);
+        _apmEmailCompose = null;
+        _apmRenderBody();
+        _apmResetEmailRow();
+        return;
+      }
+      sent = await resendConfirmationEmail(bookingId, category, {
+        email: _apmApp?.email || '', name: _apmApp?.name || '',
+        context, subject, body,
+      });
+    } else {
+      const { data, error } = await sb.functions.invoke('send-email', {
+        body: {
+          applicant_id:  _apmApp?.id || '',
+          production_id: prodId,
+          category,
+          email:         _apmApp?.email || '',
+          name:          _apmApp?.name  || '',
+          context,
+        },
+      });
+      if (error) { showToast('Could not send: ' + error.message, true); }
+      else if (!data?.sent) { showToast('Could not send: ' + (data?.error || 'Email was not sent.'), true); }
+      else { showToast('Email sent.'); sent = true; }
+    }
     if (sent && category === 'cast_announcement') {
       await markCastOfferSent(_apmApp, context.__cast_offer_role_entries || [], context.__cast_offer_deadline || castOfferDeadlineFromSettings());
     } else if (sent) {
