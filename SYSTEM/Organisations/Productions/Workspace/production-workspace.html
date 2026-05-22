@@ -30515,9 +30515,9 @@ See you soon!
       subject: 'Reminder: your online audition for {{show_name}} is coming up',
       body: `Hi {{contact_name}},
 
-Your online video audition for {{show_name}} is coming up soon, and we are so excited to meet you.
+Your online video audition for {{show_name}} is coming up soon, and we are so excited to meet you!
 
-Here is everything you are currently booked in for:
+Here is a reminder of everything you are currently booked in for:
 
 General Audition
 {{general_audition_name}}
@@ -30532,28 +30532,43 @@ Time: {{dance_call_time}}
 Your video call link:
 {{video_call_link}}
 
-What to prepare:
+WHAT EACH AUDITION IS FOR
 
-For your general audition:
+General Audition
+This is your main audition slot. We will get to know you a little better through singing, acting, and chatting together.
+
+Dance Call
+This is a group movement audition where we will teach a short combination together. We are not looking for perfection. We just want to see how you move, learn, and perform.
+
+WHAT TO PREPARE
+
+For Your General Audition:
 {{general_audition_prepare}}
 
-For your dance call:
+For Your Dance Call:
 {{dance_call_prepare}}
 
-A few quick reminders:
+A FEW QUICK REMINDERS
 
-Try to join a few minutes early so we can make sure everything is working properly before we begin.
+Try to join a few minutes early so we can make sure everything is working properly before we begin
 
-Set yourself up somewhere bright so we can clearly see your face.
+Set yourself up somewhere bright so we can clearly see your face
 
-Wear something comfortable that you can move in for the dance call.
+Try to face a window or light source instead of having it behind you
+
+Wear something comfortable that you can move in for the dance call
+
+During group auditions and dance calls, our production team is balancing both the room and the video call at the same time. Because of this, online auditions may be recorded so the team can properly review everyone afterward.
 
 Do not stress about making everything perfect. We are simply excited to meet you and see you perform.
 
 If anything changes and you can no longer attend, please let us know as soon as possible.
 
-See you soon,
-{{producer_signoff}}`,
+See you soon!
+
+{{producer_name}}
+({{producer_role}})
+{{producer_email}}`,
     },
     {
       name: 'Callback Response Request',
@@ -31200,6 +31215,75 @@ See you soon!
     ));
   }
 
+  function etOnlineAuditionReminderBody() {
+    return `Hi {{contact_name}},
+
+Your online video audition for {{show_name}} is coming up soon, and we are so excited to meet you!
+
+Here is a reminder of everything you are currently booked in for:
+
+{{general_audition_name}}
+Date: {{general_audition_date}}
+Time: {{general_audition_time}}
+
+{{dance_call_name}}
+Date: {{dance_call_date}}
+Time: {{dance_call_time}}
+
+Your video call link:
+{{video_call_link}}
+
+WHAT EACH AUDITION IS FOR
+
+General Audition
+This is your main audition slot. We will get to know you a little better through singing, acting, and chatting together.
+
+Dance Call
+This is a group movement audition where we will teach a short combination together. We are not looking for perfection. We just want to see how you move, learn, and perform.
+
+WHAT TO PREPARE
+
+For Your General Audition:
+{{general_audition_prepare}}
+
+For Your Dance Call:
+{{dance_call_prepare}}
+
+A FEW QUICK REMINDERS
+
+Try to join a few minutes early so we can make sure everything is working properly before we begin
+
+Set yourself up somewhere bright so we can clearly see your face
+
+Try to face a window or light source instead of having it behind you
+
+Wear something comfortable that you can move in for the dance call
+
+During group auditions and dance calls, our production team is balancing both the room and the video call at the same time. Because of this, online auditions may be recorded so the team can properly review everyone afterward.
+
+Do not stress about making everything perfect. We are simply excited to meet you and see you perform.
+
+If anything changes and you can no longer attend, please let us know as soon as possible.
+
+See you soon!
+
+{{producer_name}}
+({{producer_role}})
+{{producer_email}}`;
+  }
+
+  async function etEnsureOnlineAuditionReminderTemplateBody() {
+    const updates = (_etTemplates || [])
+      .filter(t => t.category === 'online_audition_reminder')
+      .filter(t => /Your online video audition for \{\{show_name\}\} is coming up soon, and we are so excited to meet you\./i.test(String(t.body || '')))
+      .map(t => ({ ...t, body: etOnlineAuditionReminderBody() }));
+    if (!updates.length) return;
+    _etTemplates = (_etTemplates || []).map(t => updates.find(u => u.id === t.id) || t);
+    await Promise.all(updates.map(t =>
+      sb.from('email_templates').update({ body: t.body }).eq('id', t.id)
+    ));
+  }
+
   async function etEnsureAuditionReminderTemplateNames() {
     const desiredNames = {
       audition_reminder: 'Audition Reminder - In Person',
@@ -31268,6 +31352,7 @@ See you soon!
     await etEnsureCastOfferTemplateLinks();
     await etEnsureSelfTapeTemplateBody();
     await etEnsureAuditionReminderTemplateBody();
+    await etEnsureOnlineAuditionReminderTemplateBody();
     await etEnsureAuditionReminderTemplateNames();
     renderEmailTemplates();
     openPendingEmailTemplateCategory();
