@@ -60147,17 +60147,18 @@ See you soon!
       await loadPerformanceScheduleSummary();
       const context = withEmailButtonContext(_apmBuildEmailContext());
       const subject = _applyEmailContext(templates[0].subject || '', context);
-      const body    = finalCastingEmailPreviewBodyHtml(_applyEmailContext(templates[0].body || '', context));
-      const res = await fetch('https://tkmaiktxpwqfbgeojbnf.supabase.co/functions/v1/send-email', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRrbWFpa3R4cHdxZmJnZW9qYm5mIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM3MzE4MTcsImV4cCI6MjA4OTMwNzgxN30.TkTZBNWUatk3Y6Vmfv1hIRR3DfVjgwauwa76Pf00J_8',
-        },
-        body: JSON.stringify({ production_id: prodId, test_email: appEmail, subject, body }),
+      const { data, error } = await sb.functions.invoke('send-email', {
+        body: {
+          applicant_id: app.id,
+          production_id: prodId,
+          category: 'self_tape_booked',
+          trigger: 'self_tape_booked',
+          email: appEmail,
+          name: app.name || '',
+          context,
+        }
       });
-      const data = await res.json().catch(() => ({}));
-      if (data.ok) {
+      if (!error && (data?.sent || data?.ok)) {
         try {
           await markApplicantEmailSent(app, 'self_tape_booked', { subject });
         } catch (markError) {
@@ -60177,7 +60178,7 @@ See you soon!
         }
       } else {
         if (buttonEl) { buttonEl.disabled = false; buttonEl.textContent = 'Send Email'; }
-        showToast('Could not send: ' + (data.error || 'Unknown error'), true);
+        showToast('Could not send: ' + (error?.message || data?.error || 'Unknown error'), true);
       }
     } catch (err) {
       console.error('[APM] sendSelfTapeEmail error', err);
