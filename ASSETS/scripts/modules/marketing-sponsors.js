@@ -171,16 +171,15 @@
       + posterInner
       + '<span class="spn-ad-ph-label">Example</span>'
       + '</div>';
-    var addCard = '<div class="reg-offer-item spn-ad-mini-add" onclick="MarketingSponsorsModule.openAdModal(undefined,' + JSON.stringify(sizeId) + ')" title="Add ad"><span>+</span></div>';
     if (!ads.length) {
-      return waitCard + addCard;
+      return waitCard;
     }
     return ads.map(function (a) {
       var paid = a.payment_status === 'paid';
       var art  = a.artwork_status === 'received' || a.artwork_status === 'approved' || a.artwork_status === 'print_ready';
       var type = a.ad_type === 'bw' ? 'B&W' : 'Colour';
       return adMiniCard(sizeId, a, type, paid, art);
-    }).join('') + addCard;
+    }).join('');
   }
 
   function renderAdsGrouped() {
