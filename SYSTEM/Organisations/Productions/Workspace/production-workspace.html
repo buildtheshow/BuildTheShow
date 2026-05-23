@@ -45062,9 +45062,10 @@ See you soon!
   }
 
   function callbackSidesPublicLink() {
+    if (orgSlug && prod?.slug) {
+      return `${window.location.origin}/${encodeURIComponent(orgSlug)}/${encodeURIComponent(prod.slug)}/Callbackmaterial`;
+    }
     const query = new URLSearchParams();
-    if (orgSlug) query.set('org', orgSlug);
-    if (prod?.slug) query.set('show', prod.slug);
     if (prodId) query.set('prod', prodId);
     return `${window.location.origin}/callback-sides${query.toString() ? `?${query.toString()}` : ''}`;
   }
@@ -49443,12 +49444,13 @@ See you soon!
     const settings = getMaterialsSettings();
     const visibleCharacters = (characters || []).filter(c => c.show_on_public_page !== false);
     const files = [];
-    const addFile = ({ type, role, kind, url, name, notes }) => {
+    const addFile = ({ type, role, characterId, kind, url, name, notes }) => {
       if (!url) return;
       files.push({
         type,
         typeLabel: materialLabelForType(type),
         role: role || 'Production',
+        characterId: characterId || '',
         kind: kind || 'File',
         url,
         name: name || materialFileNameFromUrl(url) || kind || 'Audition file',
@@ -49464,6 +49466,7 @@ See you soon!
           materialFileRecordsForSlot(char, 'audition', slot).forEach(file => addFile({
             type: 'audition',
             role: char.name || 'Audition role',
+            characterId: char.id || '',
             kind: slot.label,
             url: file.url,
             name: file.name,
@@ -49481,6 +49484,7 @@ See you soon!
           materialFileRecordsForSlot(char, 'callback', slot).forEach(file => addFile({
             type: 'callback',
             role: char.name || 'Callback role',
+            characterId: char.id || '',
             kind: slot.label,
             url: file.url,
             name: file.name,
@@ -49563,7 +49567,7 @@ See you soon!
           const publicKinds = [...new Set(roleFiles.map(file => auditionPublicFileKindLabel(file.kind)).filter(Boolean))];
           const kindsSummary = publicKinds.join(' & ');
           return `
-          <article class="template-brand-card template-brand-card--square template-brand-card--containers aud-file-brand-tile" data-role="${esc(role)}" style="--brand-tile-bg:#572e88;--brand-tile-ink:#ffffff;" aria-label="${esc(role)} ${esc(materialLabelForType(type))}">
+          <article class="template-brand-card template-brand-card--square template-brand-card--containers aud-file-brand-tile" data-role="${esc(role)}" data-character-id="${esc(roleFiles[0]?.characterId || '')}" data-material-type="${esc(type)}" style="--brand-tile-bg:#572e88;--brand-tile-ink:#ffffff;" aria-label="${esc(role)} ${esc(materialLabelForType(type))}">
             <div class="template-brand-card-inner">
               <div class="template-brand-tile-content">
                 <div class="template-brand-tile-container template-brand-tile-container--header">
@@ -49609,9 +49613,15 @@ See you soon!
     showToast(`Starting ${files.length} download${files.length === 1 ? '' : 's'}...`);
   }
 
-  function downloadAuditionCharacterFiles(roleName) {
+  function downloadAuditionCharacterFiles(roleName, type = '', characterId = '') {
     const files = (window._auditionPublicFiles || collectPublicAuditionFiles())
-      .filter(file => String(file.role || '') === String(roleName || ''));
+      .filter(file => {
+        const matchesCharacter = characterId
+          ? String(file.characterId || '') === String(characterId)
+          : String(file.role || '') === String(roleName || '');
+        const matchesType = type ? String(file.type || '') === String(type) : true;
+        return matchesCharacter && matchesType;
+      });
     if (!files.length) {
       showToast('No files for this character yet.', true);
       return;
@@ -49632,8 +49642,11 @@ See you soon!
   }
 
   function downloadAuditionCharacterFromTile(button) {
-    const roleName = button?.closest?.('[data-role]')?.dataset?.role || '';
-    downloadAuditionCharacterFiles(roleName);
+    const tile = button?.closest?.('[data-role]');
+    const roleName = tile?.dataset?.role || '';
+    const type = tile?.dataset?.materialType || '';
+    const characterId = tile?.dataset?.characterId || '';
+    downloadAuditionCharacterFiles(roleName, type, characterId);
   }
 
   function previewMaterialFile(url, fileName = 'Material file') {

@@ -313,7 +313,7 @@
 
     const params = new URLSearchParams(window.location.search);
     const pathParts = window.location.pathname.split('/').filter(Boolean).map(decodeURIComponent);
-    const routeIndex = pathParts.findIndex(part => /^callback-?sides$/i.test(part));
+    const routeIndex = pathParts.findIndex(part => /^callback-?(sides|materials?)$/i.test(part));
     const orgPathKey = params.get('org') || (routeIndex >= 2 ? pathParts[routeIndex - 2] : '');
     const prodSlug = params.get('slug') || params.get('show') || (routeIndex >= 1 ? pathParts[routeIndex - 1] : '');
     const prodId = params.get('prod') || params.get('id') || '';
@@ -380,6 +380,7 @@
           slots.forEach(slot => {
             materialFileRecordsForSlot(char, prodFiles, slot).forEach(file => {
               files.push({
+                characterId: char.id || '',
                 role: char.name || 'Callback role',
                 kind: slot.label,
                 url: file.url,
@@ -428,8 +429,12 @@
     }
 
     function downloadRoleFromTile(button) {
-      const role = button?.closest?.('[data-role]')?.dataset?.role || '';
-      downloadFiles(publicFiles.filter(file => String(file.role || '') === String(role)));
+      const tile = button?.closest?.('[data-role]');
+      const role = tile?.dataset?.role || '';
+      const characterId = tile?.dataset?.characterId || '';
+      downloadFiles(publicFiles.filter(file => characterId
+        ? String(file.characterId || '') === String(characterId)
+        : String(file.role || '') === String(role)));
     }
 
     function renderFiles(files) {
@@ -462,7 +467,7 @@
           ${Object.entries(byRole).sort(([a], [b]) => String(a).localeCompare(String(b), undefined, { sensitivity: 'base' })).map(([role, roleFiles]) => {
             const kinds = [...new Set(roleFiles.map(file => publicFileKindLabel(file.kind)).filter(Boolean))];
             const kindsSummary = kinds.join(' & ');
-            return `<article class="template-brand-card" data-role="${esc(role)}" style="--brand-tile-bg:#572e88;--brand-tile-ink:#ffffff;" aria-label="${esc(role)} callback material">
+            return `<article class="template-brand-card" data-role="${esc(role)}" data-character-id="${esc(roleFiles[0]?.characterId || '')}" style="--brand-tile-bg:#572e88;--brand-tile-ink:#ffffff;" aria-label="${esc(role)} callback material">
               <div class="template-brand-card-inner">
                 <div class="template-brand-tile-content">
                   <div class="template-brand-tile-container template-brand-tile-container--header">
