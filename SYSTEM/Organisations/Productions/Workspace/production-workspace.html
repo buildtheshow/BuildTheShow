@@ -11305,26 +11305,27 @@
     }
     .cb-slot-option {
       display: flex; align-items: center; gap: 0.75rem;
+      width: 100%; text-align: left; font-family: var(--bts-font);
       padding: 0.65rem 0.85rem; border-radius: 8px;
       border: 1px solid rgba(255,255,255,0.08);
       background: rgba(255,255,255,0.03); cursor: pointer;
       transition: background 0.15s, border-color 0.15s;
     }
     .cb-slot-option:hover { background: rgba(168,122,248,0.1); border-color: rgba(168,122,248,0.3); }
-    .cb-slot-option.selected { background: rgba(168,122,248,0.16); border-color: rgba(168,122,248,0.55); }
-    .cb-slot-option.selected::before {
-      content: "✓";
-      width: 1.25rem;
-      height: 1.25rem;
-      border-radius: 999px;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      background: #a87af8;
-      color: #fff;
-      font-size: 0.72rem;
-      font-weight: 900;
-      flex-shrink: 0;
+    .cb-slot-option.selected {
+      background: rgba(168,122,248,0.24);
+      border-color: #efab45;
+      box-shadow: 0 0 0 2px rgba(239,171,69,0.22), inset 4px 0 0 #efab45;
+    }
+    .cb-slot-option:disabled { opacity: 0.5; cursor: not-allowed; }
+    .cb-slot-option-check {
+      width: 1.35rem; height: 1.35rem; border-radius: 999px;
+      display: flex; align-items: center; justify-content: center;
+      border: 1.5px solid rgba(255,255,255,0.18);
+      color: transparent; flex-shrink: 0; font-size: 0.82rem; font-weight: 900;
+    }
+    .cb-slot-option.selected .cb-slot-option-check {
+      background: #efab45; border-color: #efab45; color: #1a1530;
     }
     .cb-slot-option input[type=radio] { accent-color: #a87af8; flex-shrink: 0; }
     .cb-slot-option-info { flex: 1; min-width: 0; }
@@ -48728,13 +48729,15 @@ See you soon!
 
     let bodyHTML = '<div class="cb-slot-help">Choose a callback time. You can choose a second time if this performer should attend more than one callback block.</div>';
     cbSessions.forEach(s => {
-      const slots = audSlots[s.id] || [];
+      const slots = [...(audSlots[s.id] || [])].sort((a, b) =>
+        String(a.slot_time || a.start_time || '').localeCompare(String(b.slot_time || b.start_time || ''))
+      );
       if (!slots.length) return;
       const sessionDate = s.date ? new Date(`${s.date}T00:00:00`).toLocaleDateString('en-CA', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }) : '';
       bodyHTML += `<div class="cb-slot-session-label">${esc(s.name)}${sessionDate ? ' — ' + sessionDate : ''}</div>`;
       slots.forEach(slot => {
         const uid = `cbslot-${slot.id}`;
-        const timeLabel = formatSlotTime(slot.slot_time);
+        const timeLabel = formatSlotTime(slot.slot_time || slot.start_time || '');
         const dateLabel = slot.slot_date && slot.slot_date !== s.date
           ? new Date(`${slot.slot_date}T00:00:00`).toLocaleDateString('en-CA', { weekday: 'short', month: 'short', day: 'numeric' })
           : '';
@@ -48749,8 +48752,14 @@ See you soon!
         const availLabel = isFull
           ? `<span style="color:#e05252;font-size:0.7rem;font-weight:700;">Full</span>`
           : `<span style="color:#7a7490;font-size:0.7rem;">${spotsLeft} spot${spotsLeft !== 1 ? 's' : ''} left</span>`;
-        bodyHTML += `<label class="cb-slot-option${isFull ? ' cb-slot-full' : ''}" id="label-${uid}" onclick="${isFull ? '' : `selectCallbackSlot('${esc(slot.id)}','${esc(s.id)}')`}" style="${isFull ? 'opacity:0.5;cursor:not-allowed;' : ''}">
+        bodyHTML += `<button type="button" class="cb-slot-option${isFull ? ' cb-slot-full' : ''}"
+          id="label-${uid}"
+          data-slot-id="${esc(slot.id)}"
+          data-session-id="${esc(s.id)}"
+          ${isFull ? 'disabled aria-disabled="true"' : ''}
+          aria-pressed="false">
           <input type="checkbox" name="cb-slot-pick" id="${uid}" value="${esc(slot.id)}" style="display:none;" ${isFull ? 'disabled' : ''} />
+          <span class="cb-slot-option-check" aria-hidden="true">✓</span>
           <div class="cb-slot-option-info">
             <div class="cb-slot-option-time">${esc(timeLabel)}${dateLabel ? ' · ' + esc(dateLabel) : ''}</div>
             <div style="display:flex;align-items:center;gap:0.5rem;">
@@ -48758,15 +48767,23 @@ See you soon!
               ${availLabel}
             </div>
           </div>
-        </label>`;
+        </button>`;
       });
     });
 
     document.getElementById('cb-slot-modal-body').innerHTML = bodyHTML || '<p style="color:#7a7490;font-size:0.85rem;">No time slots found for callback sessions.</p>';
+    bindCallbackSlotModalPicker();
     document.getElementById('cb-slot-modal').style.display = 'flex';
   }
 
-  function selectCallbackSlot(slotId, sessionId) {
+  function selectCallbackSlot(slotOrEl, sessionId = null) {
+    const slotId = typeof slotOrEl === 'object' && slotOrEl
+      ? slotOrEl.dataset.slotId
+      : slotOrEl;
+    sessionId = typeof slotOrEl === 'object' && slotOrEl
+      ? slotOrEl.dataset.sessionId
+      : sessionId;
+    if (!slotId || !sessionId) return;
     const session = audSessions.find(s => s.id === sessionId);
     const slot    = (audSlots[sessionId] || []).find(s => s.id === slotId);
     if (!session || !slot) return;
@@ -48783,10 +48800,20 @@ See you soon!
     }
     _cbSlotSelectedId = _cbSlotSelectedData[0]?.slot?.id || null;
 
-    document.querySelectorAll('.cb-slot-option').forEach(el => el.classList.remove('selected'));
+    document.querySelectorAll('.cb-slot-option').forEach(el => {
+      el.classList.remove('selected');
+      el.setAttribute('aria-pressed', 'false');
+      const input = el.querySelector('input[name="cb-slot-pick"]');
+      if (input) input.checked = false;
+    });
     _cbSlotSelectedData.forEach(item => {
       const label = document.getElementById(`label-cbslot-${item.slot?.id}`);
-      if (label) label.classList.add('selected');
+      if (label) {
+        label.classList.add('selected');
+        label.setAttribute('aria-pressed', 'true');
+        const input = label.querySelector('input[name="cb-slot-pick"]');
+        if (input) input.checked = true;
+      }
     });
 
     const sendBtn = document.getElementById('cb-slot-send-btn');
@@ -48794,6 +48821,17 @@ See you soon!
       sendBtn.disabled = !_cbSlotSelectedData.length;
       sendBtn.textContent = _cbSlotSelectedData.length > 1 ? 'Preview Email (2 times)' : 'Preview Email';
     }
+  }
+
+  function bindCallbackSlotModalPicker() {
+    const body = document.getElementById('cb-slot-modal-body');
+    if (!body || body.dataset.bound === 'true') return;
+    body.dataset.bound = 'true';
+    body.addEventListener('click', event => {
+      const option = event.target?.closest?.('.cb-slot-option');
+      if (!option || !body.contains(option) || option.disabled || option.classList.contains('cb-slot-full')) return;
+      selectCallbackSlot(option);
+    });
   }
 
   function closeCallbackSlotModal(e) {
