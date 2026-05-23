@@ -22499,23 +22499,6 @@
           </div>
         </div>
 
-        <!-- Files inner -->
-        <div id="aud-inner-files" class="aud-inner" style="display:none;">
-          <div class="aud-files-head">
-            <div>
-              <div class="page-title">Audition Files</div>
-              <div class="page-subtitle">A public-view mirror of audition uploads. Only files connected to visible roles and enabled material tabs are shown here.</div>
-            </div>
-            <div class="aud-files-actions">
-              <button type="button" class="btn-secondary" onclick="switchAudInner('materials')">Manage Uploads</button>
-              <button type="button" class="btn-primary" id="aud-files-download-all-btn" onclick="downloadAllAuditionFiles()">Download All</button>
-            </div>
-          </div>
-          <div id="audition-files-list">
-            <div class="materials-loading">Loading public files...</div>
-          </div>
-        </div>
-
         <!-- Questions inner -->
         <div id="aud-inner-questions" class="aud-inner" style="display:none;">
           <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;margin-bottom:0.5rem;">
@@ -22813,6 +22796,21 @@
         </div><!-- end aud-inner-prodinfo -->
 
       </div><!-- end aud-panel-setup -->
+
+      <!-- ── FILES ── -->
+      <div id="aud-panel-files" class="aud-panel" style="display:none;">
+        <div id="audition-files-page-header"></div>
+        <div class="aud-files-head">
+          <div></div>
+          <div class="aud-files-actions">
+            <button type="button" class="btn-secondary" onclick="openAuditionsSubTab('setup', { inner: 'materials' })">Manage Uploads</button>
+            <button type="button" class="btn-primary" id="aud-files-download-all-btn" onclick="downloadAllAuditionFiles()">Download All</button>
+          </div>
+        </div>
+        <div id="audition-files-list">
+          <div class="materials-loading">Loading public files...</div>
+        </div>
+      </div>
 
       <!-- ── SIGNUPS ── -->
       <div id="aud-panel-signups" class="aud-panel" style="display:none;">
@@ -36251,7 +36249,7 @@ See you soon!
   // ── Audition sub-tab switching ────────────────────────
   function switchAudTab(tab) {
       if (tab !== 'castlist') cleanupCastListPanel();
-      const auditionsTabs = new Set(['overview', 'setup', 'auditions', 'checkin', 'inroom', 'callbacks', 'castboard', 'finalcasting', 'castlist']);
+      const auditionsTabs = new Set(['overview', 'setup', 'files', 'auditions', 'checkin', 'inroom', 'callbacks', 'castboard', 'finalcasting', 'castlist']);
       if (auditionsTabs.has(tab)) {
         const navPatch = tab === 'auditions'
           ? { prodTab: 'auditions' }
@@ -36261,7 +36259,7 @@ See you soon!
       document.querySelectorAll('.aud-snav-btn[data-aud-tab]').forEach(el => {
     el.classList.toggle('active', el.dataset.audTab === tab);
   });
-     ['overview','setup','auditions','castboard','finalcasting','castlist','callbacks'].forEach(t => {
+     ['overview','setup','files','auditions','castboard','finalcasting','castlist','callbacks'].forEach(t => {
       const el = document.getElementById('aud-panel-' + t);
       if (el) {
         const isActive = t === tab;
@@ -36279,6 +36277,7 @@ See you soon!
   if (tab === 'castboard') { ensureWorkspaceData(['castingBoard']).then(renderActiveCastingBoard).catch(renderActiveCastingBoard); }
   if (tab === 'castlist') { ensureWorkspaceData(['castList']).then(renderCastList).catch(renderCastList); }
   if (tab === 'callbacks') renderCallbacksFresh();
+  if (tab === 'files') renderAuditionFilesPage();
   if (tab === 'setup') {
     const inner = document.querySelector('#aud-panel-setup .aud-inner-btn.active');
     if (!inner) {
@@ -36294,12 +36293,11 @@ See you soon!
     document.querySelectorAll('.aud-inner-btn[data-inner]').forEach(el => {
       el.classList.toggle('active', el.dataset.inner === inner);
     });
-    ['settings','characters','materials','files','questions','prodinfo'].forEach(i => {
+    ['settings','characters','materials','questions','prodinfo'].forEach(i => {
       const el = document.getElementById('aud-inner-' + i);
       if (el) el.style.display = (i === inner) ? '' : 'none';
     });
     if (inner === 'materials') renderMaterialsList();
-    if (inner === 'files') renderAuditionFilesPage();
     if (inner === 'characters') {
       const list = document.getElementById('characters-list');
       if (list && !isWorkspaceDataReady('characters')) {
@@ -42971,8 +42969,7 @@ See you soon!
       switchAudTab('setup');
       switchAudInner(options.inner || 'settings');
     } else if (subTab === 'files') {
-      switchAudTab('setup');
-      switchAudInner('files');
+      switchAudTab('files');
     } else if (subTab === 'schedule') {
       switchAudTab('auditions');
       switchAudDayTab('schedule');
@@ -49544,6 +49541,18 @@ See you soon!
   }
 
   function renderAuditionFilesPage() {
+    const header = document.getElementById('audition-files-page-header');
+    if (header && window.BTSAuditionTemplates?.renderTemplateById) {
+      const fileCount = (window._auditionPublicFiles || collectPublicAuditionFiles()).length;
+      header.innerHTML = window.BTSAuditionTemplates.renderTemplateById('auditions.page-header', {
+        esc,
+        kicker: 'Auditions',
+        title: 'Callback Sides',
+        copy: 'A public-view version of the callback material performers can access for visible roles.',
+        statValue: String(fileCount || 0),
+        statLabel: fileCount === 1 ? 'file' : 'files',
+      });
+    }
     const host = document.getElementById('audition-files-list');
     if (!host) return;
     if (!isWorkspaceDataReady('characters')) {
