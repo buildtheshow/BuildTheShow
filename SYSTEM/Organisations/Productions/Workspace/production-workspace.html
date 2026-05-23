@@ -11327,6 +11327,20 @@
     .cb-slot-option.selected .cb-slot-option-check {
       background: #efab45; border-color: #efab45; color: #1a1530;
     }
+    .cb-slot-option.is-recommended {
+      border-color: rgba(239,171,69,0.48);
+      background: rgba(239,171,69,0.08);
+    }
+    .cb-slot-recommended-tag {
+      font-size: 0.62rem;
+      font-weight: 900;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: #7a4b0d;
+      background: rgba(239,171,69,0.24);
+      border-radius: 999px;
+      padding: 0.12rem 0.38rem;
+    }
     .cb-slot-option input[type=radio] { accent-color: #a87af8; flex-shrink: 0; }
     .cb-slot-option-info { flex: 1; min-width: 0; }
     .cb-slot-option-time { font-size: 0.875rem; font-weight: 700; color: #ebe6f1; }
@@ -19417,6 +19431,56 @@
       width: 100%;
     }
     .aud-block-gen-btn:hover { filter: brightness(0.94); }
+    .aud-callback-block-config {
+      display: grid;
+      grid-template-columns: minmax(180px, 0.9fr) minmax(150px, 0.55fr) minmax(260px, 1.2fr) minmax(220px, 1fr);
+      gap: 0.65rem 0.75rem;
+      margin-bottom: 0.7rem;
+      padding: 0.75rem;
+      border: 1px solid rgba(87,46,136,0.1);
+      border-radius: 14px;
+      background: rgba(87,46,136,0.035);
+    }
+    .aud-callback-block-field {
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 0.32rem;
+    }
+    .aud-callback-chip-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.32rem;
+      max-height: 5.6rem;
+      overflow: auto;
+      padding-right: 0.15rem;
+    }
+    .aud-callback-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.25rem;
+      border: 1px solid rgba(87,46,136,0.16);
+      background: #fff;
+      color: rgba(53,39,86,0.72);
+      border-radius: 999px;
+      padding: 0.2rem 0.45rem;
+      font-size: 0.7rem;
+      font-weight: 750;
+      cursor: pointer;
+      user-select: none;
+    }
+    .aud-callback-chip input { display: none; }
+    .aud-callback-chip:has(input:checked) {
+      background: rgba(239,171,69,0.18);
+      border-color: rgba(239,171,69,0.7);
+      color: #5b3a11;
+    }
+    .aud-callback-block-note {
+      grid-column: 1 / -1;
+      font-size: 0.73rem;
+      line-height: 1.35;
+      color: rgba(87,46,136,0.54);
+    }
     .aud-breaks-row { display: flex; flex-wrap: wrap; gap: 0.35rem; align-items: center; margin-bottom: 0.4rem; }
     .aud-break-pill {
       display: inline-flex; align-items: center; gap: 0.3rem;
@@ -29634,6 +29698,7 @@
         { token: '{{callback_start_time}}', label: 'Start Time', sample: () => etSessionSampleValue('callback', 'time', 'callback start time', ET_SAMPLE_CONTEXT.callbackTime, 'callback') },
         { token: '{{callback_end_time}}', label: 'End Time', sample: () => '1:30 PM' },
         { token: '{{callback_time_range}}', label: 'Time Range', sample: () => `${ET_SAMPLE_CONTEXT.callbackTime} - 1:30 PM` },
+        { token: '{{callback_schedule}}', label: 'Callback Schedule', sample: () => '<strong>Individual Reads</strong><br>Date: May 24, 2026<br>Time: 1:20 PM - 1:30 PM' },
         { token: '{{callback_venue}}', label: 'Location',     sample: () => etSessionSampleValue('callback', 'location', 'callback location', ET_SAMPLE_CONTEXT.callbackVenue, 'callback') },
         { token: '{{callback_name}}',  label: 'Session Name', sample: () => etSessionSampleValue('callback', 'name', 'callback name', 'Callback', 'callback') },
         { token: '{{callback_prepare}}', label: 'What to Prepare', sample: () => etSessionSampleValue('callback', 'prepare', 'what to prepare for callbacks', 'Please review the Glinda side and be ready to sing the selected reprise.', 'callback') },
@@ -30740,10 +30805,10 @@ See you soon!
 <p><strong><u>Your callback details</u></strong></p>
 <ul>
   <li><strong>Role:</strong> {{role_name}}</li>
-  <li><strong>Date:</strong> {{callback_date}}</li>
-  <li><strong>Callback time:</strong> {{callback_start_time}}-{{callback_end_time}}</li>
-  <li><strong>Location:</strong> {{callback_venue}}</li>
 </ul>
+
+<p><strong><u>Your callback schedule</u></strong></p>
+{{callback_schedule}}
 
 <p><strong>Please respond below:</strong></p>
 <p>{{callback_accept_button}} {{callback_reschedule_button}} {{callback_decline_button}}</p>
@@ -31502,7 +31567,7 @@ See you soon!
   async function etEnsureCallbackRequestTemplateBody(templates = _etTemplates || []) {
     const updates = (templates || [])
       .filter(t => t.category === 'callback')
-      .filter(t => /We'd love to see you again|Please choose one of the options below|Callback response requested/i.test(String(t.body || '') + ' ' + String(t.subject || '')))
+      .filter(t => /We'd love to see you again|Please choose one of the options below|Callback response requested|\{\{callback_start_time\}\}-\{\{callback_end_time\}\}/i.test(String(t.body || '') + ' ' + String(t.subject || '')))
       .map(etUpdatedCallbackRequestTemplate);
     if (!updates.length) return;
     _etTemplates = (_etTemplates || []).map(t => updates.find(u => u.id === t.id) || t);
@@ -45801,6 +45866,92 @@ See you soon!
     _reRenderBlocksList(sessionId);
   }
 
+  const CALLBACK_BLOCK_TYPES = [
+    { value: 'individual', label: 'Individual' },
+    { value: 'group', label: 'Group' },
+    { value: 'vocal', label: 'Vocal' },
+    { value: 'dance', label: 'Dance / Movement' },
+    { value: 'chemistry', label: 'Chemistry' },
+    { value: 'open', label: 'Open / Holding' },
+  ];
+
+  const CALLBACK_BLOCK_MATERIALS = [
+    { value: 'sides', label: 'Sides' },
+    { value: 'vocal', label: 'Vocal' },
+    { value: 'dance', label: 'Dance' },
+    { value: 'none', label: 'No extra prep' },
+  ];
+
+  function callbackBlockTypeLabel(type) {
+    return CALLBACK_BLOCK_TYPES.find(option => option.value === type)?.label || 'Callback Block';
+  }
+
+  function callbackBlockTitle(block) {
+    return String(block?.title || '').trim() || callbackBlockTypeLabel(block?.callback_type || 'individual');
+  }
+
+  function callbackBlockMaterialLabels(block) {
+    const values = Array.isArray(block?.material_types) ? block.material_types : [];
+    return CALLBACK_BLOCK_MATERIALS
+      .filter(option => values.includes(option.value))
+      .map(option => option.label);
+  }
+
+  function buildCallbackBlockConfigHTML(session, block) {
+    if (session?.type !== 'callback') return '';
+    const sessionId = session.id;
+    const selectedCharacters = new Set(Array.isArray(block.character_ids) ? block.character_ids.map(String) : []);
+    const selectedMaterials = new Set(Array.isArray(block.material_types) ? block.material_types : []);
+    const blockType = block.callback_type || 'individual';
+    const roleChips = (characters || [])
+      .filter(char => char?.id && char.role_type !== 'Ensemble')
+      .map(char => {
+        const charId = String(char.id);
+        return `<label class="aud-callback-chip" title="${esc(char.name || '')}">
+          <input type="checkbox" ${selectedCharacters.has(charId) ? 'checked' : ''}
+            onchange="toggleCallbackBlockCharacter('${esc(sessionId)}','${esc(block.id)}','${esc(charId)}',this.checked)" />
+          <span>${esc(char.name || 'Unnamed')}</span>
+        </label>`;
+      }).join('') || '<div style="font-size:0.72rem;color:rgba(87,46,136,0.5);">Add characters first.</div>';
+    const materialChips = CALLBACK_BLOCK_MATERIALS.map(option => `
+      <label class="aud-callback-chip">
+        <input type="checkbox" ${selectedMaterials.has(option.value) ? 'checked' : ''}
+          onchange="toggleCallbackBlockMaterial('${esc(sessionId)}','${esc(block.id)}','${esc(option.value)}',this.checked)" />
+        <span>${esc(option.label)}</span>
+      </label>
+    `).join('');
+    return `
+      <div class="aud-callback-block-config">
+        <div class="aud-callback-block-field">
+          <span class="aud-block-label">Block title</span>
+          <input type="text" class="form-input" value="${esc(block.title || '')}" placeholder="e.g. Banks Family Group"
+            onchange="updateBlock('${esc(sessionId)}','${esc(block.id)}','title',this.value)" />
+        </div>
+        <div class="aud-callback-block-field">
+          <span class="aud-block-label">Block type</span>
+          <select class="form-select" onchange="updateBlock('${esc(sessionId)}','${esc(block.id)}','callback_type',this.value)">
+            ${CALLBACK_BLOCK_TYPES.map(option => `<option value="${option.value}"${blockType === option.value ? ' selected' : ''}>${esc(option.label)}</option>`).join('')}
+          </select>
+        </div>
+        <div class="aud-callback-block-field">
+          <span class="aud-block-label">Characters in this block</span>
+          <div class="aud-callback-chip-grid">${roleChips}</div>
+        </div>
+        <div class="aud-callback-block-field">
+          <span class="aud-block-label">Material expectation</span>
+          <div class="aud-callback-chip-grid">${materialChips}</div>
+        </div>
+        <div class="aud-callback-block-field" style="grid-column:1 / -1;">
+          <span class="aud-block-label">Block note for emails</span>
+          <textarea class="form-textarea" rows="2" placeholder="e.g. Banks/Mary group chemistry work, no extra prep required."
+            onchange="updateBlock('${esc(sessionId)}','${esc(block.id)}','instructions',this.value)">${esc(block.instructions || '')}</textarea>
+        </div>
+        <div class="aud-callback-block-note">
+          A performer gets one assignment for this block when any of their callback roles match these characters. Use group blocks for shared chemistry/vocal/dance calls, and individual blocks for one-at-a-time reads.
+        </div>
+      </div>`;
+  }
+
   function buildBlockCardHTML(session, block, allSessionSlots) {
     const sessionId = session?.id;
     const blockSlots = allSessionSlots.filter(s => s.block_id === block.id);
@@ -45816,9 +45967,10 @@ See you soon!
     return `
       <div class="aud-block-card" data-block-id="${block.id}" style="${themeStyle}">
         <div class="aud-block-top">
-          <div class="aud-block-heading">Calendar settings</div>
+          <div class="aud-block-heading">${session?.type === 'callback' ? esc(callbackBlockTitle(block)) : 'Calendar settings'}</div>
           <button type="button" class="aud-block-delete-btn" onclick="deleteBlock('${sessionId}','${block.id}')" title="Remove this block">✕</button>
         </div>
+        ${buildCallbackBlockConfigHTML(session, block)}
         <div class="aud-block-settings">
           <div class="aud-block-field aud-block-field--time">
             <span class="aud-block-label">Time</span>
@@ -46181,8 +46333,14 @@ See you soon!
   function addBlock(sessionId) {
     if (!(sessionId in audBlocks)) audBlocks[sessionId] = [];
     const session = audSessions.find(s => s.id === sessionId);
+    const isCallback = session?.type === 'callback';
     audBlocks[sessionId].push({
       id: 'blk_' + Date.now(),
+      title: isCallback ? (audBlocks[sessionId].length ? 'Callback Block' : 'Individual Reads') : '',
+      callback_type: isCallback ? 'individual' : '',
+      character_ids: [],
+      material_types: isCallback ? ['sides'] : [],
+      instructions: '',
       date: session?.date || '',
       start_time: session?.start_time || '',
       end_time: session?.end_time || '',
@@ -46194,6 +46352,26 @@ See you soon!
     });
     _saveBlocks(sessionId);
     _reRenderBlocksList(sessionId);
+  }
+
+  function toggleCallbackBlockCharacter(sessionId, blockId, charId, checked) {
+    const block = (audBlocks[sessionId] || []).find(b => b.id === blockId);
+    if (!block) return;
+    const set = new Set((Array.isArray(block.character_ids) ? block.character_ids : []).map(String));
+    if (checked) set.add(String(charId));
+    else set.delete(String(charId));
+    block.character_ids = [...set];
+    _saveBlocks(sessionId);
+  }
+
+  function toggleCallbackBlockMaterial(sessionId, blockId, material, checked) {
+    const block = (audBlocks[sessionId] || []).find(b => b.id === blockId);
+    if (!block) return;
+    const set = new Set(Array.isArray(block.material_types) ? block.material_types : []);
+    if (checked) set.add(material);
+    else set.delete(material);
+    block.material_types = [...set];
+    _saveBlocks(sessionId);
   }
 
   async function deleteBlock(sessionId, blockId) {
@@ -46220,6 +46398,9 @@ See you soon!
     const block = (audBlocks[sessionId] || []).find(b => b.id === blockId);
     if (block) block[field] = value;
     _saveBlocks(sessionId);
+    if (['title', 'callback_type', 'instructions'].includes(field)) {
+      _reRenderBlocksList(sessionId);
+    }
 
     // When capacity changes, push it immediately to all existing slots in this block
     // so Fates and the public page always read the correct value.
@@ -48807,6 +48988,7 @@ See you soon!
       `To: ${app.name || app.email}${roleNames ? ' · ' + roleNames : ''}`;
 
     let bodyHTML = '<div class="cb-slot-help">Choose a callback time. You can choose a second time if this performer should attend more than one callback block.</div>';
+    const callbackRoleIds = callbackRoleIdsFromNames(roleNames);
     cbSessions.forEach(s => {
       const slots = [...(audSlots[s.id] || [])].sort((a, b) =>
         String(a.slot_time || a.start_time || '').localeCompare(String(b.slot_time || b.start_time || ''))
@@ -48831,7 +49013,12 @@ See you soon!
         const availLabel = isFull
           ? `<span style="color:#e05252;font-size:0.7rem;font-weight:700;">Full</span>`
           : `<span style="color:#7a7490;font-size:0.7rem;">${spotsLeft} spot${spotsLeft !== 1 ? 's' : ''} left</span>`;
-        bodyHTML += `<button type="button" class="cb-slot-option${isFull ? ' cb-slot-full' : ''}"
+        const block = callbackBlockForSelection(s.id, slot);
+        const blockLabel = block ? callbackBlockTitle(block) : '';
+        const materialLabels = callbackBlockMaterialLabels(block);
+        const isRecommended = callbackBlockMatchesRoleIds(block, callbackRoleIds);
+        const blockMeta = [block?.callback_type ? callbackBlockTypeLabel(block.callback_type) : '', materialLabels.length ? materialLabels.join(', ') : ''].filter(Boolean).join(' · ');
+        bodyHTML += `<button type="button" class="cb-slot-option${isFull ? ' cb-slot-full' : ''}${isRecommended ? ' is-recommended' : ''}"
           id="label-${uid}"
           data-slot-id="${esc(slot.id)}"
           data-session-id="${esc(s.id)}"
@@ -48840,9 +49027,11 @@ See you soon!
           <input type="checkbox" name="cb-slot-pick" id="${uid}" value="${esc(slot.id)}" style="display:none;" ${isFull ? 'disabled' : ''} />
           <span class="cb-slot-option-check" aria-hidden="true">✓</span>
           <div class="cb-slot-option-info">
-            <div class="cb-slot-option-time">${esc(timeLabel)}${dateLabel ? ' · ' + esc(dateLabel) : ''}</div>
+            <div class="cb-slot-option-time">${blockLabel ? `${esc(blockLabel)} · ` : ''}${esc(timeLabel)}${dateLabel ? ' · ' + esc(dateLabel) : ''}</div>
             <div style="display:flex;align-items:center;gap:0.5rem;">
               ${s.location ? `<div class="cb-slot-option-meta">${esc(s.location)}</div>` : ''}
+              ${blockMeta ? `<div class="cb-slot-option-meta">${esc(blockMeta)}</div>` : ''}
+              ${isRecommended ? '<span class="cb-slot-recommended-tag">Recommended</span>' : ''}
               ${availLabel}
             </div>
           </div>
@@ -48919,6 +49108,48 @@ See you soon!
     _cbSlotModalAppId   = null;
     _cbSlotSelectedId   = null;
     _cbSlotSelectedData = [];
+  }
+
+  function callbackBlockForSelection(selectionOrSessionId, maybeSlot = null) {
+    const sessionId = typeof selectionOrSessionId === 'object'
+      ? selectionOrSessionId?.session?.id
+      : selectionOrSessionId;
+    const slot = typeof selectionOrSessionId === 'object' ? selectionOrSessionId?.slot : maybeSlot;
+    const blocks = audBlocks[sessionId] || [];
+    return blocks.find(block => String(block.id || '') === String(slot?.block_id || '')) || null;
+  }
+
+  function callbackRoleIdsFromNames(roleNames) {
+    const names = new Set(String(roleNames || '')
+      .split(',')
+      .map(role => role.trim().toLowerCase())
+      .filter(Boolean));
+    if (!names.size) return new Set();
+    return new Set((characters || [])
+      .filter(char => names.has(String(char.name || '').trim().toLowerCase()))
+      .map(char => String(char.id)));
+  }
+
+  function callbackBlockMatchesRoleIds(block, roleIds) {
+    if (!block || !roleIds?.size) return false;
+    const blockRoleIds = Array.isArray(block.character_ids) ? block.character_ids.map(String) : [];
+    if (!blockRoleIds.length) return false;
+    return blockRoleIds.some(id => roleIds.has(id));
+  }
+
+  function callbackBlockLabelForSelection(selection) {
+    const block = callbackBlockForSelection(selection);
+    return callbackBlockTitle(block || {});
+  }
+
+  function callbackBlockInstructionForSelection(selection) {
+    const block = callbackBlockForSelection(selection);
+    const materialLabels = callbackBlockMaterialLabels(block);
+    const parts = [];
+    if (block?.callback_type) parts.push(callbackBlockTypeLabel(block.callback_type));
+    if (materialLabels.length) parts.push(`Materials: ${materialLabels.join(', ')}`);
+    if (block?.instructions) parts.push(String(block.instructions));
+    return parts.join(' · ');
   }
 
   function buildCallbackMaterialsForRoles(roleNames, session = null) {
@@ -49001,6 +49232,25 @@ See you soon!
     return start && end ? `${start} - ${end}` : start || end || '';
   }
 
+  function buildCallbackScheduleHtml(selections) {
+    const normalized = normalizeCallbackSlotSelections(selections);
+    if (!normalized.length) return '';
+    return `<div style="margin:0.4rem 0 0.7rem;">${normalized.map(selection => {
+      const title = callbackBlockLabelForSelection(selection);
+      const date = formatCallbackSelectionDate(selection);
+      const time = callbackSelectionTimeRange(selection);
+      const venue = selection?.session?.location || prod?.venue || '';
+      const note = callbackBlockInstructionForSelection(selection);
+      return `<div style="padding:0.65rem 0.8rem;border:1px solid rgba(87,46,136,0.18);border-radius:8px;margin:0 0 0.5rem;background:#fbfafc;">
+        <div style="font-weight:800;color:#1a1530;margin-bottom:0.18rem;">${esc(title || 'Callback')}</div>
+        <div><strong>Date:</strong> ${esc(date)}</div>
+        <div><strong>Time:</strong> ${esc(time)}</div>
+        ${venue ? `<div><strong>Location:</strong> ${esc(venue)}</div>` : ''}
+        ${note ? `<div style="margin-top:0.25rem;color:rgba(87,46,136,0.68);font-size:0.92em;">${esc(note)}</div>` : ''}
+      </div>`;
+    }).join('')}</div>`;
+  }
+
   function formatCallbackRoleNamesForEmail(roleNames) {
     const roles = String(roleNames || '')
       .split(',')
@@ -49039,6 +49289,7 @@ See you soon!
     const callbackEndTime = joinCallbackLabels(normalized.map(formatCallbackSelectionEndTime));
     const callbackTimeRange = joinCallbackLabels(normalized.map(callbackSelectionTimeRange));
     const callbackVenue = joinCallbackLabels(normalized.map(item => item?.session?.location || prod?.venue || ''));
+    const callbackSchedule = buildCallbackScheduleHtml(normalized);
     const callbackMaterials = buildCallbackMaterialsForRoles(roleNames, primary.session || null);
     const callbackMaterialsLink = typeof callbackSidesPublicLink === 'function' ? callbackSidesPublicLink() : '';
     return {
@@ -49052,6 +49303,7 @@ See you soon!
       callback_start_time: callbackStartTime,
       callback_end_time: callbackEndTime,
       callback_time_range: callbackTimeRange,
+      callback_schedule: callbackSchedule,
       callback_venue:   callbackVenue,
       callback_accept_link: responseLinks.accept,
       callback_decline_link: responseLinks.decline,
