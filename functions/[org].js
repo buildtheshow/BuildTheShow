@@ -23,6 +23,8 @@ const CLEAN_ROUTE_ASSETS = new Map([
   ['invite', '/PUBLIC/accept-invite.html'],
   ['audition', '/SYSTEM/Public/audition.html'],
   ['audition-info', '/SYSTEM/Public/audition-info.html'],
+  ['callback-sides', '/PUBLIC/callback-sides.html'],
+  ['callbacksides', '/PUBLIC/callback-sides.html'],
   ['privacy', '/SHARED/Legal/privacy-policy.html'],
   ['terms', '/SHARED/Legal/terms-of-service.html'],
   ['copyright', '/SHARED/Legal/copyright-policy.html'],
