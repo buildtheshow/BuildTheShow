@@ -301,14 +301,14 @@ serve(async (req) => {
     try {
       const { data: app } = await sb
         .from('audition_applications')
-        .select('id,name,email,contact_name,role_interest,custom_answers,session_id,slot_id,time_slot_id,slot_assignments,production_id')
+        .select('id,name,email,role_interest,custom_answers,session_id,slot_id,time_slot_id,slot_assignments,production_id')
         .eq('id', applicantIdRaw)
         .maybeSingle();
       if (app) {
         if (app.email) performerEmail = String(app.email);
         if (app.name)  performerName  = String(app.name);
         customAnswers  = isRecord(app.custom_answers) ? app.custom_answers as Record<string, unknown> : {};
-        contactName    = firstDefinedString(contactName, (app as Record<string, unknown>).contact_name, customAnswers['Contact Name']);
+        contactName    = firstDefinedString(contactName, customAnswers['Contact Name']);
         roleInterest   = firstDefinedString(directContext.role_name, String(app.role_interest || ''));
         appSessionId   = String(app.session_id || '');
         appSlotId      = String(app.time_slot_id || app.slot_id || '');
