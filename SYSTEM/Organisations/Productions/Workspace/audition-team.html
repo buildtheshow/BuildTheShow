@@ -47269,8 +47269,7 @@ See you soon!
 
   let _cbSlotModalAppId   = null;
   let _cbSlotModalRoles   = '';
-  let _cbSlotSelectedId   = null;
-  let _cbSlotSelectedData = null; // { session, slot }
+  let _cbSelectedSlots    = []; // Array of { sessionId, slotId }
   let _callbackSourceRefreshPromise = null;
   let _renderCallbacksAfterRefresh = false;
 
@@ -47383,12 +47382,11 @@ See you soon!
 
     _cbSlotModalAppId   = appId;
     _cbSlotModalRoles   = roleNames || '';
-    _cbSlotSelectedId   = null;
-    _cbSlotSelectedData = null;
+    _cbSelectedSlots    = [];
 
     // Build slot list HTML
-    const sendBtn = document.getElementById('cb-slot-send-btn');
-    if (sendBtn) { sendBtn.disabled = true; sendBtn.textContent = 'Send Request'; }
+    const previewBtn = document.getElementById('cb-slot-preview-btn');
+    if (previewBtn) { previewBtn.disabled = true; previewBtn.textContent = 'Preview Email'; }
 
     document.getElementById('cb-slot-modal-sub').textContent =
       `To: ${app.name || app.email}${roleNames ? ' · ' + roleNames : ''}`;
@@ -47416,8 +47414,8 @@ See you soon!
         const availLabel = isFull
           ? `<span style="color:#e05252;font-size:0.7rem;font-weight:700;">Full</span>`
           : `<span style="color:#7a7490;font-size:0.7rem;">${spotsLeft} spot${spotsLeft !== 1 ? 's' : ''} left</span>`;
-        bodyHTML += `<label class="cb-slot-option${isFull ? ' cb-slot-full' : ''}" id="label-${uid}" onclick="${isFull ? '' : `selectCallbackSlot('${esc(slot.id)}','${esc(s.id)}')`}" style="${isFull ? 'opacity:0.5;cursor:not-allowed;' : ''}">
-          <input type="radio" name="cb-slot-pick" id="${uid}" value="${esc(slot.id)}" style="display:none;" ${isFull ? 'disabled' : ''} />
+        bodyHTML += `<div class="cb-slot-option${isFull ? ' cb-slot-full' : ''}" id="label-${uid}" onclick="${isFull ? '' : `selectCallbackSlot('${esc(slot.id)}','${esc(s.id)}')`}" style="cursor:pointer;${isFull ? 'opacity:0.5;cursor:not-allowed;' : ''}">
+          <input type="checkbox" name="cb-slot-pick" id="${uid}" value="${esc(slot.id)}" style="display:none;" ${isFull ? 'disabled' : ''} />
           <div class="cb-slot-option-info">
             <div class="cb-slot-option-time">${esc(timeLabel)}${dateLabel ? ' · ' + esc(dateLabel) : ''}</div>
             <div style="display:flex;align-items:center;gap:0.5rem;">
@@ -47425,7 +47423,7 @@ See you soon!
               ${availLabel}
             </div>
           </div>
-        </label>`;
+        </div>`;
       });
     });
 
@@ -47434,44 +47432,41 @@ See you soon!
   }
 
   function selectCallbackSlot(slotId, sessionId) {
-    _cbSlotSelectedId = slotId;
-    const session = audSessions.find(s => s.id === sessionId);
-    const slot    = (audSlots[sessionId] || []).find(s => s.id === slotId);
-    _cbSlotSelectedData = { session, slot };
+    const existingIdx = _cbSelectedSlots.findIndex(s => s.slotId === slotId);
+    if (existingIdx >= 0) {
+      _cbSelectedSlots.splice(existingIdx, 1);
+    } else {
+      if (_cbSelectedSlots.length >= 2) {
+        showToast("You can select up to 2 callback times.", true);
+        return;
+      }
+      _cbSelectedSlots.push({ sessionId, slotId });
+    }
 
     // Visual selection
-    document.querySelectorAll('.cb-slot-option').forEach(el => el.classList.remove('selected'));
-    const label = document.getElementById(`label-cbslot-${slotId}`);
-    if (label) label.classList.add('selected');
+    document.querySelectorAll('.cb-slot-option').forEach(el => {
+      const sId = el.id.replace('label-cbslot-', '');
+      el.classList.toggle('selected', _cbSelectedSlots.some(s => s.slotId === sId));
+    });
 
-    const sendBtn = document.getElementById('cb-slot-send-btn');
-    if (sendBtn) sendBtn.disabled = false;
+    const previewBtn = document.getElementById('cb-slot-preview-btn');
+    if (previewBtn) previewBtn.disabled = _cbSelectedSlots.length === 0;
   }
 
   function closeCallbackSlotModal(e) {
     if (e && e.target !== document.getElementById('cb-slot-modal')) return;
     document.getElementById('cb-slot-modal').style.display = 'none';
     _cbSlotModalAppId   = null;
-    _cbSlotSelectedId   = null;
-    _cbSlotSelectedData = null;
+    _cbSelectedSlots    = [];
   }
 
-  async function confirmSendCallbackEmail() {
-    if (!_cbSlotModalAppId || !_cbSlotSelectedData) return;
-    const app = allApplicants.find(a => a.id === _cbSlotModalAppId);
-    if (!app) return;
-    const { session, slot } = _cbSlotSelectedData;
-    const sendBtn = document.getElementById('cb-slot-send-btn');
-    if (sendBtn) { sendBtn.disabled = true; sendBtn.textContent = 'Sending…'; }
-    try {
-      await _sendCallbackEmailDirect(app, _cbSlotModalRoles || '', session, slot);
-      document.getElementById('cb-slot-modal').style.display = 'none';
-      renderCallbacksFresh();
-      showToast('Callback request sent.');
-    } catch (err) {
-      showToast('Could not send: ' + (err.message || 'Unknown error'), true);
-      if (sendBtn) { sendBtn.disabled = false; sendBtn.textContent = 'Send Request'; }
-    }
+  async function previewCallbackEmail() {
+    const appId = _cbSlotModalAppId;
+    const pendingSlots = {};
+    _cbSelectedSlots.forEach(s => { pendingSlots[s.sessionId] = s.slotId; });
+    closeCallbackSlotModal();
+    openApPerformerModal(appId, { tab: 'scheduling', pendingSlots });
+    apmLoadEmailComposer('callback');
   }
 
   // Core send — shared by modal confirm + bulk send
@@ -58179,15 +58174,26 @@ See you soon!
       return '';
     }
 
-    let primarySession = null, primaryTime = '';
-    for (const sess of sessions) {
+    const cbSessions = sessions.filter(s => s.type === 'callback');
+    const cbSlotInfos = cbSessions.map(sess => {
       const t = slotTimeForSession(sess);
-      if (t) { primarySession = sess; primaryTime = t; break; }
+      return t ? { date: sess.date, time: t } : null;
+    }).filter(Boolean);
+
+    let combinedCbDate = '', combinedCbTime = '';
+    if (cbSlotInfos.length === 1) {
+      combinedCbDate = fmtDate(cbSlotInfos[0].date);
+      combinedCbTime = cbSlotInfos[0].time;
+    } else if (cbSlotInfos.length > 1) {
+      const dates = [...new Set(cbSlotInfos.map(i => fmtDate(i.date)))];
+      combinedCbDate = dates.join(' and ');
+      if (dates.length === 1) combinedCbTime = cbSlotInfos.map(i => i.time).join(' and ');
+      else combinedCbTime = cbSlotInfos.map(i => `${i.time} (${fmtDate(i.date)})`).join(' and ');
     }
-    if (!primarySession) {
-      const legacySid = _apmApp?.session_id || null;
-      primarySession = legacySid ? (sessions.find(s => s.id === legacySid) || null) : null;
-    }
+
+    const generalSess = sessions.find(s => (s.type||'').toLowerCase().includes('audition') || (s.name||'').toLowerCase().includes('general'));
+    const primarySession = generalSess || cbSessions[0] || sessions[0];
+    const primaryTime = slotTimeForSession(primarySession) || combinedCbTime;
     const whatToPrepare = primarySession?.prepare_text || customAnswers['What to Prepare'] || customAnswers['what_to_prepare'] || '';
 
     const showDates = (prod?.start_date && prod?.end_date)
@@ -58224,8 +58230,8 @@ See you soon!
       self_tape_instructions: prod?.wizard_data?.self_tape_instructions || '',
       video_call_link:       customAnswers['Video Call Link'] || customAnswers.video_call_link || customAnswers['Video Link'] || customAnswers['Meeting Link'] || prod?.wizard_data?.video_call_link || prod?.wizard_data?.video_link || '',
       audition_session:      primarySession?.name     || '',
-      audition_date:         primarySession?.date     ? fmtDate(primarySession.date) : '',
-      audition_time:         primaryTime,
+      audition_date:         (generalSess?.date ? fmtDate(generalSess.date) : '') || combinedCbDate || (primarySession?.date ? fmtDate(primarySession.date) : ''),
+      audition_time:         (generalSess ? slotTimeForSession(generalSess) : '') || combinedCbTime || primaryTime,
       audition_venue:        primarySession?.location || prod?.venue || '',
       what_to_prepare:       whatToPrepare,
       role_name:             _apmApp?.role_interest   || '',
@@ -58235,7 +58241,7 @@ See you soon!
       all_audition_sessions: allSessionsSummary,
       general_audition_name: '', general_audition_date: '', general_audition_time: '', general_audition_venue: '', general_audition_prepare: '',
       dance_call_name: '',       dance_call_date: '',       dance_call_time: '',       dance_call_venue: '',       dance_call_prepare: '',
-      callback_name: '',         callback_date: '',         callback_time: '',         callback_venue: '',         callback_prepare: '',
+      callback_name: '',         callback_date: combinedCbDate, callback_time: combinedCbTime, callback_venue: '', callback_prepare: '',
       custom_answers: customAnswers,
       session_id: primarySession?.id || _apmApp?.session_id || '',
       slot_id:    assignments.find(x => x.session_id === primarySession?.id)?.slot_id || _apmApp?.slot_id || '',
@@ -58410,6 +58416,23 @@ See you soon!
     });
     if (sent && category === 'cast_announcement') {
       await markCastOfferSent(_apmApp, context.__cast_offer_role_entries || [], context.__cast_offer_deadline || castOfferDeadlineFromSettings());
+    }
+    // Persist pending slots if any
+    if (sent && Object.keys(_apmPendingSlots).length) {
+      const existing = Array.isArray(_apmApp?.slot_assignments) ? [..._apmApp.slot_assignments] : [];
+      Object.entries(_apmPendingSlots).forEach(([sessionId, slotId]) => {
+        const idx = existing.findIndex(x => x.session_id === sessionId);
+        if (!slotId) { if (idx >= 0) existing.splice(idx, 1); }
+        else if (idx >= 0) existing[idx] = { ...existing[idx], slot_id: slotId };
+        else existing.push({ session_id: sessionId, slot_id: slotId });
+      });
+      const update = { slot_assignments: existing };
+      const err = await syncApplicantEditsToSource(_apmApp, update);
+      if (!err) {
+        const idx = (allApplicants || []).findIndex(a => String(a.id) === String(_apmAppId));
+        if (idx >= 0) { allApplicants[idx] = { ...allApplicants[idx], ...update }; _apmApp = allApplicants[idx]; }
+        refreshAuditionSlotAvailability(Object.values(_apmPendingSlots).filter(Boolean)).catch(() => {});
+      }
     }
     _apmEmailCompose = null;
     _apmRenderBody();
@@ -59440,7 +59463,7 @@ See you soon!
       <div class="audition-schedule-shell">
         <section class="audition-schedule-stage-head">
           <div class="audition-schedule-stage-eyebrow">Schedule Layout</div>
-          <h2 class="audition-schedule-stage-title">${esc(selectedSession?.name || 'Time Slot Calendar')}</h2>
+          <h2 class="audition-schedule-stage-title">${esc(selectedSession?.name || ‘Time Slot Calendar’)}</h2>
           <p class="audition-schedule-stage-copy">This is the canonical audition schedule. Select an audition type on the left to open that audition’s time view. If a session has nothing booked yet, the board stays visible as a grey placeholder grid.</p>
           <button type="button" class="btn-secondary" onclick="openScheduleDownloadModal()" style="margin-top:0.75rem;font-size:0.8rem;">Download Schedule</button>
         </section>
@@ -60626,7 +60649,7 @@ See you soon!
     <div class="cb-slot-modal-body" id="cb-slot-modal-body"></div>
     <div class="cb-slot-modal-footer">
       <button class="btn-secondary" onclick="closeCallbackSlotModal()">Cancel</button>
-      <button class="btn-primary" id="cb-slot-send-btn" onclick="confirmSendCallbackEmail()" disabled>Send Request</button>
+      <button class="btn-primary" id="cb-slot-preview-btn" onclick="previewCallbackEmail()" disabled>Preview Email</button>
     </div>
   </div>
 </div>
