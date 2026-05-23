@@ -19881,14 +19881,14 @@
       font-size: 4cqw;
     }
     .aud-file-brand-tile .template-brand-tile-title {
-      font-size: 8.2cqw;
+      font-size: 10cqw;
       line-height: 1;
       overflow-wrap: anywhere;
       word-break: normal;
     }
     .aud-file-brand-tile .template-brand-tile-body {
-      font-size: 4.7cqw;
-      line-height: 1.18;
+      font-size: 4.4cqw;
+      line-height: 1.24;
     }
     .aud-file-brand-tile .template-brand-tile-button {
       width: 100%;
@@ -19899,10 +19899,27 @@
     .aud-file-brand-role {
       font-weight: 950;
     }
-    .aud-file-brand-note {
-      margin-top: 1.6cqw;
-      opacity: 0.78;
-      font-weight: 750;
+    .aud-file-brand-list {
+      display: flex;
+      flex-direction: column;
+      gap: 1.2cqw;
+      min-width: 0;
+    }
+    .aud-file-brand-list-item {
+      display: flex;
+      gap: 1.4cqw;
+      min-width: 0;
+      font-weight: 850;
+    }
+    .aud-file-brand-list-item::before {
+      content: '';
+      width: 1.4cqw;
+      height: 1.4cqw;
+      border-radius: 999px;
+      margin-top: 1.9cqw;
+      flex: 0 0 auto;
+      background: currentColor;
+      opacity: 0.82;
     }
     .aud-file-card {
       border: 1.5px solid rgba(87,46,136,0.1);
@@ -49555,29 +49572,36 @@ See you soon!
     host.innerHTML = `<div class="aud-files-shell">${['audition', 'callback'].map(type => {
       const group = byType[type] || [];
       if (!group.length) return '';
+      const byRole = group.reduce((acc, file) => {
+        const key = file.role || 'Production';
+        if (!acc[key]) acc[key] = [];
+        acc[key].push(file);
+        return acc;
+      }, {});
       return `<section class="aud-files-section">
         <div class="aud-files-section-head">
           <div class="aud-files-section-title">${esc(materialLabelForType(type))}</div>
           <div class="aud-files-section-meta">${group.length} file${group.length === 1 ? '' : 's'}</div>
         </div>
-        <div class="aud-files-list">${group.map(file => `
-          <article class="template-brand-card template-brand-card--portrait template-brand-card--containers aud-file-brand-tile" style="--brand-tile-bg:${type === 'callback' ? '#E3A46F' : '#7FAF8B'};--brand-tile-ink:${type === 'callback' ? '#1a1530' : '#ffffff'};" aria-label="${esc(file.name)}">
+        <div class="aud-files-list">${Object.entries(byRole).map(([role, roleFiles]) => `
+          <article class="template-brand-card template-brand-card--portrait template-brand-card--containers aud-file-brand-tile" style="--brand-tile-bg:#572e88;--brand-tile-ink:#ffffff;" aria-label="${esc(role)} ${esc(materialLabelForType(type))}">
             <div class="template-brand-card-inner">
               <div class="template-brand-tile-content">
                 <div class="template-brand-tile-container template-brand-tile-container--header">
-                  <div class="template-brand-tile-kicker">${esc(file.kind)}</div>
+                  <div class="template-brand-tile-kicker">${esc(type === 'callback' ? 'Callback Material' : 'Audition Material')}</div>
                 </div>
                 <div class="template-brand-tile-container template-brand-tile-container--title">
-                  <div class="template-brand-tile-title">${esc(file.name)}</div>
+                  <div class="template-brand-tile-title">${esc(role)}</div>
                 </div>
                 <div class="template-brand-tile-container template-brand-tile-container--body">
                   <div class="template-brand-tile-body">
-                    <div class="aud-file-brand-role">${esc(file.role)}</div>
-                    ${file.notes ? `<div class="aud-file-brand-note">${esc(String(file.notes).replace(/<[^>]+>/g, ' ')).trim()}</div>` : ''}
+                    <div class="aud-file-brand-list">
+                      ${roleFiles.map(file => `<div class="aud-file-brand-list-item">${esc(file.name || file.kind)}</div>`).join('')}
+                    </div>
                   </div>
                 </div>
                 <div class="template-brand-tile-container template-brand-tile-container--footer">
-                  <a class="template-brand-tile-button" href="${esc(file.url)}" target="_blank" rel="noopener" download="${esc(file.name)}">Download</a>
+                  <button type="button" class="template-brand-tile-button" onclick="downloadAuditionCharacterFiles('${esc(role)}')">Download</button>
                 </div>
               </div>
             </div>
@@ -49605,6 +49629,28 @@ See you soon!
       }, index * 120);
     });
     showToast(`Starting ${files.length} download${files.length === 1 ? '' : 's'}...`);
+  }
+
+  function downloadAuditionCharacterFiles(roleName) {
+    const files = (window._auditionPublicFiles || collectPublicAuditionFiles())
+      .filter(file => String(file.role || '') === String(roleName || ''));
+    if (!files.length) {
+      showToast('No files for this character yet.', true);
+      return;
+    }
+    files.forEach((file, index) => {
+      setTimeout(() => {
+        const link = document.createElement('a');
+        link.href = file.url;
+        link.target = '_blank';
+        link.rel = 'noopener';
+        link.download = file.name || materialFileNameFromUrl(file.url) || 'audition-file';
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+      }, index * 120);
+    });
+    showToast(`Starting ${files.length} download${files.length === 1 ? '' : 's'} for ${roleName}.`);
   }
 
   function previewMaterialFile(url, fileName = 'Material file') {
