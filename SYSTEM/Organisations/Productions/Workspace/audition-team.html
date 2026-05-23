@@ -11315,13 +11315,28 @@
     }
     .cb-slot-option {
       display: flex; align-items: center; gap: 0.75rem;
+      width: 100%; text-align: left; font-family: var(--bts-font);
       padding: 0.65rem 0.85rem; border-radius: 8px;
       border: 1px solid rgba(255,255,255,0.08);
       background: rgba(255,255,255,0.03); cursor: pointer;
       transition: background 0.15s, border-color 0.15s;
     }
     .cb-slot-option:hover { background: rgba(168,122,248,0.1); border-color: rgba(168,122,248,0.3); }
-    .cb-slot-option.selected { background: rgba(168,122,248,0.16); border-color: rgba(168,122,248,0.55); }
+    .cb-slot-option.selected {
+      background: rgba(168,122,248,0.24);
+      border-color: #efab45;
+      box-shadow: 0 0 0 2px rgba(239,171,69,0.22), inset 4px 0 0 #efab45;
+    }
+    .cb-slot-option:disabled { opacity: 0.5; cursor: not-allowed; }
+    .cb-slot-option-check {
+      width: 1.35rem; height: 1.35rem; border-radius: 999px;
+      display: flex; align-items: center; justify-content: center;
+      border: 1.5px solid rgba(255,255,255,0.18);
+      color: transparent; flex-shrink: 0; font-size: 0.82rem; font-weight: 900;
+    }
+    .cb-slot-option.selected .cb-slot-option-check {
+      background: #efab45; border-color: #efab45; color: #1a1530;
+    }
     .cb-slot-option input[type=radio] { accent-color: #a87af8; flex-shrink: 0; }
     .cb-slot-option-info { flex: 1; min-width: 0; }
     .cb-slot-option-time { font-size: 0.875rem; font-weight: 700; color: #ebe6f1; }
@@ -47416,13 +47431,14 @@ See you soon!
         const availLabel = isFull
           ? `<span style="color:#e05252;font-size:0.7rem;font-weight:700;">Full</span>`
           : `<span style="color:#7a7490;font-size:0.7rem;">${spotsLeft} spot${spotsLeft !== 1 ? 's' : ''} left</span>`;
-        bodyHTML += `<div class="cb-slot-option${isFull ? ' cb-slot-full' : ''}"
+        bodyHTML += `<button type="button" class="cb-slot-option${isFull ? ' cb-slot-full' : ''}"
           id="label-${uid}" 
           data-slot-id="${esc(slot.id)}" 
           data-session-id="${esc(s.id)}" 
-          onclick="${isFull ? '' : `selectCallbackSlot(this)`}" 
-          style="cursor:pointer;${isFull ? 'opacity:0.5;cursor:not-allowed;' : ''}">
+          ${isFull ? 'disabled aria-disabled="true"' : ''}
+          aria-pressed="false">
           <input type="radio" name="cb-slot-pick" id="${uid}" value="${esc(slot.id)}" style="display:none;" ${isFull ? 'disabled' : ''} />
+          <span class="cb-slot-option-check" aria-hidden="true">✓</span>
           <div class="cb-slot-option-info">
             <div class="cb-slot-option-time">${esc(timeLabel)}${dateLabel ? ' · ' + esc(dateLabel) : ''}</div>
             <div style="display:flex;align-items:center;gap:0.5rem;">
@@ -47430,17 +47446,20 @@ See you soon!
               ${availLabel}
             </div>
           </div>
-        </div>`;
+        </button>`;
       });
     });
 
     document.getElementById('cb-slot-modal-body').innerHTML = bodyHTML || '<p style="color:#7a7490;font-size:0.85rem;">No time slots found for callback sessions.</p>';
+    bindCallbackSlotModalPicker();
     document.getElementById('cb-slot-modal').style.display = 'flex';
   }
 
   function selectCallbackSlot(el) {
+    if (!el || el.disabled || el.classList.contains('cb-slot-full')) return;
     const slotId = el.dataset.slotId;
     const sessionId = el.dataset.sessionId;
+    if (!slotId || !sessionId) return;
     _cbSelectedSlots = [{ sessionId, slotId }];
 
     // Visual selection
@@ -47448,12 +47467,24 @@ See you soon!
       const sId = el.dataset.slotId;
       const selected = _cbSelectedSlots.some(s => s.slotId === sId);
       el.classList.toggle('selected', selected);
+      el.setAttribute('aria-pressed', selected ? 'true' : 'false');
       const input = el.querySelector('input[name="cb-slot-pick"]');
       if (input) input.checked = selected;
     });
 
     const previewBtn = document.getElementById('cb-slot-preview-btn');
     if (previewBtn) previewBtn.disabled = _cbSelectedSlots.length === 0;
+  }
+
+  function bindCallbackSlotModalPicker() {
+    const body = document.getElementById('cb-slot-modal-body');
+    if (!body || body.dataset.bound === 'true') return;
+    body.dataset.bound = 'true';
+    body.addEventListener('click', event => {
+      const option = event.target?.closest?.('.cb-slot-option');
+      if (!option || !body.contains(option)) return;
+      selectCallbackSlot(option);
+    });
   }
 
   function closeCallbackSlotModal(e) {
