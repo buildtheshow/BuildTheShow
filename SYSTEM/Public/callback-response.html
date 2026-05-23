@@ -263,7 +263,7 @@
       const ca = answers(app);
       invite = currentState();
       const [{ data: prodData }, { data: sessionData }, { data: slotData }] = await Promise.all([
-        sb.from('productions').select('id,title,name,subtitle,venue,director,organization_id,start_date,end_date,producer_name,producer,producer_role,producer_email,org_name,org_email').eq('id', prodId).maybeSingle(),
+        sb.from('productions').select('id,title,name,subtitle,venue,director,organization_id,start_date,end_date,producer_name,producer,producer_role,producer_email,org_name,org_email,wizard_data').eq('id', prodId).maybeSingle(),
         ca[KEYS.sessionId] ? sb.from('audition_sessions').select('*').eq('id', ca[KEYS.sessionId]).maybeSingle() : Promise.resolve({ data: null }),
         ca[KEYS.slotId] ? sb.from('audition_time_slots').select('*').eq('id', ca[KEYS.slotId]).maybeSingle() : Promise.resolve({ data: null }),
       ]);
@@ -322,13 +322,15 @@
     }
 
     async function loadOpenSlots() {
+      const rescheduleMap = prod?.wizard_data?.audition_session_reschedule || {};
+      const isSessionRescheduleable = session => rescheduleMap[String(session?.id || '')] !== false;
       const { data: sessions } = await sb.from('audition_sessions')
         .select('*')
         .eq('production_id', prodId)
-        .eq('type', 'callback')
         .eq('enabled', true)
         .order('date');
-      const sessionIds = (sessions || []).map(s => s.id).filter(Boolean);
+      const rescheduleSessions = (sessions || []).filter(isSessionRescheduleable);
+      const sessionIds = rescheduleSessions.map(s => s.id).filter(Boolean);
       const [{ data: slotRows }, { data: apps }] = await Promise.all([
         sessionIds.length
           ? sb.from('audition_time_slots').select('*').in('session_id', sessionIds).order('slot_time')
@@ -342,7 +344,7 @@
           if (x.slot_id) occupancy[x.slot_id] = (occupancy[x.slot_id] || 0) + 1;
         });
       });
-      const bySession = new Map((sessions || []).map(s => [s.id, s]));
+      const bySession = new Map(rescheduleSessions.map(s => [s.id, s]));
       slots = (slotRows || [])
         .map(s => ({ ...s, session: bySession.get(s.session_id), liveCount: occupancy[s.id] || 0 }))
         .filter(s => s.session && s.id !== invite.slotId && (s.liveCount < (Number(s.capacity) || 1)));
@@ -360,7 +362,7 @@
       $('slots').innerHTML = slots.map(s => `
         <button class="slot" type="button" data-slot-id="${esc(s.id)}">
           <strong>${esc(fmtTime(s.slot_time))}</strong>
-          <span>${esc(fmtDate(s.session?.date || s.slot_date))}${s.session?.location ? ` · ${esc(s.session.location)}` : ''}</span>
+          <span>${s.session?.name ? `${esc(s.session.name)} · ` : ''}${esc(fmtDate(s.session?.date || s.slot_date))}${s.session?.location ? ` · ${esc(s.session.location)}` : ''}</span>
         </button>
       `).join('');
       document.querySelectorAll('.slot').forEach(btn => {

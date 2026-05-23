@@ -46125,6 +46125,12 @@ See you soon!
     return prod?.wizard_data?.audition_session_prepare?.[session?.id] || '';
   }
 
+  function getAudSessionRescheduleable(session) {
+    const id = String(session?.id || '');
+    const mapped = prod?.wizard_data?.audition_session_reschedule?.[id];
+    return mapped !== false;
+  }
+
   function buildAudSessionThemeStyle(sessionType) {
     const accentColor = getAuditionScheduleSidebarMarkerColor(sessionType);
     return [
@@ -46165,6 +46171,7 @@ See you soon!
     const slots = audSlots[session.id] || [];
     const blocks = audBlocks[session.id] || [];
     const showToApplicants = session.show_to_applicants || session.is_visible || false;
+    const rescheduleable = getAudSessionRescheduleable(session);
     const bookingMode = session.booking_mode || 'timed';
 
     const curFmt = session.format === 'open_call' ? 'in_person' : (session.format || 'in_person');
@@ -46339,6 +46346,22 @@ See you soon!
             </label>
           </div>
         </div>
+        <div class="aud-card-footer-row${rescheduleable ? '' : ' vis-off'}" id="reschedule-footer-${session.id}" style="border-top:1px solid rgba(255,255,255,0.18);">
+          <div>
+            <div class="aud-vis-label">Allow Rescheduling</div>
+            <div class="aud-vis-hint">When on, performers can choose available slots from this audition when they reschedule</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:0.6rem;">
+            <span id="reschedule-status-${session.id}" style="font-size:0.75rem;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;color:${rescheduleable ? 'rgba(255,255,255,0.5)' : '#572e88'};">
+              ${rescheduleable ? 'Allowed' : 'Locked'}
+            </span>
+            <label class="aud-vis-toggle">
+              <input type="checkbox" ${rescheduleable ? 'checked' : ''}
+                     onchange="toggleRescheduleFooter('${session.id}', this.checked)" />
+              <span class="vis-slider"></span>
+            </label>
+          </div>
+        </div>
       </div>`;
   }
 
@@ -46480,6 +46503,24 @@ See you soon!
       statusEl.textContent = checked ? 'Visible' : 'Hidden';
       statusEl.style.color = checked ? 'rgba(255,255,255,0.5)' : '#572e88';
     }
+  }
+
+  async function toggleRescheduleFooter(sessionId, checked) {
+    if (!prod) prod = {};
+    if (!prod.wizard_data) prod.wizard_data = {};
+    if (!prod.wizard_data.audition_session_reschedule) prod.wizard_data.audition_session_reschedule = {};
+    prod.wizard_data.audition_session_reschedule[sessionId] = !!checked;
+    const footer = document.getElementById('reschedule-footer-' + sessionId);
+    if (footer) footer.classList.toggle('vis-off', !checked);
+    const statusEl = document.getElementById('reschedule-status-' + sessionId);
+    if (statusEl) {
+      statusEl.textContent = checked ? 'Allowed' : 'Locked';
+      statusEl.style.color = checked ? 'rgba(255,255,255,0.5)' : '#572e88';
+    }
+    showSaveStatus('saving');
+    const { error } = await sb.from('productions').update({ wizard_data: prod.wizard_data }).eq('id', prodId);
+    showSaveStatus(error ? 'error' : 'saved');
+    if (error) console.error('[BTS] save audition reschedule setting failed:', error.message);
   }
 
   function updateAudSelfBooking(sessionId, allowed) {
@@ -46954,8 +46995,10 @@ See you soon!
     if (!prod.wizard_data) prod.wizard_data = {};
     if (!prod.wizard_data.audition_session_access) prod.wizard_data.audition_session_access = {};
     if (!prod.wizard_data.audition_session_prepare) prod.wizard_data.audition_session_prepare = {};
+    if (!prod.wizard_data.audition_session_reschedule) prod.wizard_data.audition_session_reschedule = {};
     prod.wizard_data.audition_session_access[data.id] = normalizeSessionAccessOptions(newSession.access_options);
     prod.wizard_data.audition_session_prepare[data.id] = '';
+    prod.wizard_data.audition_session_reschedule[data.id] = true;
     await sb.from('productions').update({ wizard_data: prod.wizard_data }).eq('id', prodId);
     audSessions.push(newSession);
     audSlots[data.id] = [];
@@ -46977,6 +47020,9 @@ See you soon!
     }
     if (prod?.wizard_data?.audition_session_prepare?.[id] !== undefined) {
       delete prod.wizard_data.audition_session_prepare[id];
+    }
+    if (prod?.wizard_data?.audition_session_reschedule?.[id] !== undefined) {
+      delete prod.wizard_data.audition_session_reschedule[id];
     }
     await sb.from('productions').update({ wizard_data: prod.wizard_data }).eq('id', prodId);
     audSessions = audSessions.filter(s => s.id !== id);
@@ -47010,8 +47056,10 @@ See you soon!
     if (!prod.wizard_data) prod.wizard_data = {};
     if (!prod.wizard_data.audition_session_access) prod.wizard_data.audition_session_access = {};
     if (!prod.wizard_data.audition_session_prepare) prod.wizard_data.audition_session_prepare = {};
+    if (!prod.wizard_data.audition_session_reschedule) prod.wizard_data.audition_session_reschedule = {};
     prod.wizard_data.audition_session_access[data.id] = newSession.access_options;
     prod.wizard_data.audition_session_prepare[data.id] = String(session.prepare_text || '').trim();
+    prod.wizard_data.audition_session_reschedule[data.id] = getAudSessionRescheduleable(session);
     await sb.from('productions').update({ wizard_data: prod.wizard_data }).eq('id', prodId);
     audSessions.push(newSession);
     primeAudCollapsedState([newSession]);
