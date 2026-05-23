@@ -21,6 +21,12 @@ const CLEAN_ROUTE_ASSETS = new Map([
   ['org/production/new', '/SYSTEM/Organisations/Productions/Setup/production-wizard.html'],
 ]);
 
+function fetchAsset(context, assetPath) {
+  const url = new URL(context.request.url);
+  const assetUrl = new URL(assetPath, url);
+  return context.env.ASSETS.fetch(new Request(assetUrl.toString(), context.request));
+}
+
 export async function onRequest(context) {
   const org = String(context.params.org || '');
   const section = String(context.params.section || '');
@@ -34,8 +40,7 @@ export async function onRequest(context) {
     `${org.toLowerCase()}/${section.toLowerCase()}/${prod.toLowerCase()}`
   );
   if (cleanRouteAsset) {
-    const url = new URL(context.request.url);
-    return context.env.ASSETS.fetch(new URL(cleanRouteAsset, url));
+    return fetchAsset(context, cleanRouteAsset);
   }
 
   const isLegacyPurpose = /^auditions?$/i.test(section) || /^Archive\d{4}$/i.test(section);
@@ -46,14 +51,12 @@ export async function onRequest(context) {
     return new Response('Not found', { status: 404 });
   }
 
-  const url = new URL(context.request.url);
-  const assetUrl = new URL(
+  return fetchAsset(
+    context,
     isCallbackMaterialsPurpose
       ? '/SYSTEM/Public/callback-sides.html'
       : isTeamPurpose
       ? '/SYSTEM/Organisations/Productions/Workspace/audition-team.html'
-      : '/SYSTEM/Public/audition-info.html',
-    url
+      : '/SYSTEM/Public/audition-info.html'
   );
-  return context.env.ASSETS.fetch(assetUrl);
 }

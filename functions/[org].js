@@ -32,6 +32,12 @@ const CLEAN_ROUTE_ASSETS = new Map([
   ['member', '/SYSTEM/Members/Profiles/profile-select.html'],
 ]);
 
+function fetchAsset(context, assetPath) {
+  const url = new URL(context.request.url);
+  const assetUrl = new URL(assetPath, url);
+  return context.env.ASSETS.fetch(new Request(assetUrl.toString(), context.request));
+}
+
 export async function onRequest(context) {
   const org = String(context.params.org || '');
   if (RESERVED_ROOTS.has(org)) {
@@ -41,9 +47,8 @@ export async function onRequest(context) {
   const url = new URL(context.request.url);
   const cleanRouteAsset = CLEAN_ROUTE_ASSETS.get(org.toLowerCase());
   if (cleanRouteAsset) {
-    return context.env.ASSETS.fetch(new URL(cleanRouteAsset, url));
+    return fetchAsset(context, cleanRouteAsset);
   }
 
-  const assetUrl = new URL('/SYSTEM/Organisations/org-profile.html', url);
-  return context.env.ASSETS.fetch(assetUrl);
+  return fetchAsset(context, '/SYSTEM/Organisations/org-profile.html');
 }
