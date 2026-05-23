@@ -253,7 +253,7 @@
     async function loadInvite() {
       if (!token || !prodId) throw new Error('This callback link is missing information.');
       const { data: apps, error } = await sb.from('audition_applications')
-        .select('id,production_id,name,email,custom_answers,slot_assignments')
+        .select('id,production_id,name,email,contact_name,custom_answers,slot_assignments')
         .eq('production_id', prodId)
         .contains('custom_answers', { [KEYS.token]: token })
         .limit(1);
@@ -263,7 +263,7 @@
       const ca = answers(app);
       invite = currentState();
       const [{ data: prodData }, { data: sessionData }, { data: slotData }] = await Promise.all([
-        sb.from('productions').select('id,title,subtitle,venue,director,organization_id,start_date,end_date').eq('id', prodId).maybeSingle(),
+        sb.from('productions').select('id,title,name,subtitle,venue,director,organization_id,start_date,end_date,producer_name,producer,producer_role,producer_email,org_name,org_email').eq('id', prodId).maybeSingle(),
         ca[KEYS.sessionId] ? sb.from('audition_sessions').select('*').eq('id', ca[KEYS.sessionId]).maybeSingle() : Promise.resolve({ data: null }),
         ca[KEYS.slotId] ? sb.from('audition_time_slots').select('*').eq('id', ca[KEYS.slotId]).maybeSingle() : Promise.resolve({ data: null }),
       ]);
@@ -402,12 +402,54 @@
       }
     }
 
+    function htmlToEmailText(value) {
+      const raw = String(value || '')
+        .replace(/&nbsp;/gi, ' ')
+        .replace(/<br\s*\/?>/gi, '\n')
+        .replace(/<\/(div|p|li|h[1-6])>/gi, '\n')
+        .replace(/<(div|p|ul|ol|li|h[1-6])[^>]*>/gi, '')
+        .replace(/<strong[^>]*>/gi, '')
+        .replace(/<\/strong>/gi, '')
+        .replace(/<em[^>]*>/gi, '')
+        .replace(/<\/em>/gi, '')
+        .replace(/<a\b[^>]*href=["']([^"']+)["'][^>]*>(.*?)<\/a>/gi, (_match, href, label) => {
+          const cleanLabel = String(label || '').replace(/<[^>]+>/g, '').trim();
+          return cleanLabel && cleanLabel !== href ? `${cleanLabel}: ${href}` : href;
+        })
+        .replace(/<[^>]+>/g, '');
+      const textarea = document.createElement('textarea');
+      textarea.innerHTML = raw;
+      return textarea.value
+        .split('\n')
+        .map(line => line.trim())
+        .filter(Boolean)
+        .join('\n');
+    }
+
+    async function callbackMaterialsText() {
+      return htmlToEmailText(await callbackMaterialsHtml());
+    }
+
+    function contactFirstName() {
+      const ca = answers(app);
+      const full = app?.contact_name || ca['Contact Name'] || app?.name || '';
+      return String(full || '').trim().split(/\s+/)[0] || '';
+    }
+
+    function producerSignoff() {
+      const name = prod?.producer_name || prod?.producer || '';
+      const role = prod?.producer_role || 'Producer';
+      const email = prod?.producer_email || prod?.org_email || '';
+      return [name, role, email].filter(Boolean).join('\n');
+    }
+
     async function sendConfirmation(kind) {
       const isDecline = kind === 'declined';
-      const materials = isDecline ? '' : await callbackMaterialsHtml();
+      const materials = isDecline ? '' : await callbackMaterialsText();
       const activeSlot = slots.find(s => s.id === invite.slotId) || slot;
       const activeSession = activeSlot?.session || session;
       const category = isDecline ? 'callback_declined' : 'callback_confirmed';
+      const showName = prod?.title || prod?.name || '';
       const { data } = await sb.functions.invoke('send-email', {
         body: {
           applicant_id: app.id,
@@ -419,15 +461,25 @@
           session_id: activeSession?.id || '',
           slot_id: activeSlot?.id || '',
           context: {
+            contact_name: contactFirstName(),
+            performer_name: app.name || '',
+            performer_first_name: String(app.name || '').trim().split(/\s+/)[0] || '',
+            performer_email: app.email || '',
             role_name: invite.roleNames || '',
             callback_date: fmtDate(activeSession?.date || activeSlot?.slot_date),
             callback_time: fmtTime(activeSlot?.slot_time || activeSession?.start_time),
             callback_venue: activeSession?.location || prod?.venue || '',
             callback_materials: materials,
             callback_self_tape_link: callbackSelfTapeLink(),
-            show_name: prod?.title || '',
+            show_name: showName,
+            show_subtitle: prod?.subtitle || '',
             director_name: prod?.director || '',
-            org_name: '',
+            org_name: prod?.org_name || '',
+            org_email: prod?.org_email || '',
+            producer_name: prod?.producer_name || prod?.producer || '',
+            producer_role: prod?.producer_role || 'Producer',
+            producer_email: prod?.producer_email || prod?.org_email || '',
+            producer_signoff: producerSignoff(),
           },
         },
       });

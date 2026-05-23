@@ -30862,20 +30862,26 @@ Producer<br>
       category: 'callback_confirmed',
       trigger: 'callback_confirmed',
       subject: 'Your callback is confirmed: {{show_name}}',
-      body: `Hi {{contact_name}},
+      body: `<p>Hi {{contact_name}},</p>
 
-Your callback for {{show_name}} is confirmed.
+<p>Your callback for <strong>{{show_name}}</strong> is confirmed. Thank you for letting us know you can attend.</p>
 
-Role: {{role_name}}
-Date: {{callback_date}}
-Time: {{callback_time}}
-Location: {{callback_venue}}
+<p><strong><u>Your callback details</u></strong></p>
 
-Callback materials:
-{{callback_materials}}
+<ul>
+  <li><strong>Role:</strong> {{role_name}}</li>
+  <li><strong>Date:</strong> {{callback_date}}</li>
+  <li><strong>Time:</strong> {{callback_time}}</li>
+  <li><strong>Location:</strong> {{callback_venue}}</li>
+</ul>
 
-Warmly,
-{{producer_signoff}}`,
+<p><strong><u>Callback materials</u></strong></p>
+
+<p>{{callback_materials}}</p>
+
+<p>Please bring anything you need with you, and do not worry about being perfect. We are looking for strong choices, openness to direction, and a willingness to play.</p>
+
+<p>Warmly,<br>{{producer_signoff}}</p>`,
     },
     {
       name: 'Callback Declined Confirmation',
@@ -31407,6 +31413,47 @@ Your submission link is unique to you. Please do not share it with another perfo
     }
   }
 
+  async function etEnsureCallbackConfirmedTemplateBody() {
+    const t = _etTemplates.find(t => t.category === 'callback_confirmed');
+    if (!t) return;
+    const currentBody = String(t.body || '');
+    const currentName = String(t.name || '');
+    const isLegacyBody =
+      /Your callback for\s+\{\{show_name\}\}\s+is confirmed\./i.test(currentBody)
+      && /Callback materials:\s*\n?\s*\{\{callback_materials\}\}/i.test(currentBody)
+      && !currentBody.includes('<p>');
+    const needsName = currentName === 'Callback Confirmed Materials';
+    if (!isLegacyBody && !needsName) return;
+    const nextBody = `<p>Hi {{contact_name}},</p>
+
+<p>Your callback for <strong>{{show_name}}</strong> is confirmed. Thank you for letting us know you can attend.</p>
+
+<p><strong><u>Your callback details</u></strong></p>
+
+<ul>
+  <li><strong>Role:</strong> {{role_name}}</li>
+  <li><strong>Date:</strong> {{callback_date}}</li>
+  <li><strong>Time:</strong> {{callback_time}}</li>
+  <li><strong>Location:</strong> {{callback_venue}}</li>
+</ul>
+
+<p><strong><u>Callback materials</u></strong></p>
+
+<p>{{callback_materials}}</p>
+
+<p>Please bring anything you need with you, and do not worry about being perfect. We are looking for strong choices, openness to direction, and a willingness to play.</p>
+
+<p>Warmly,<br>{{producer_signoff}}</p>`;
+    const payload = {};
+    if (isLegacyBody) payload.body = nextBody;
+    if (needsName) payload.name = 'Callback Confirmed';
+    const { error } = await sb.from('email_templates').update(payload).eq('id', t.id);
+    if (!error) {
+      if (payload.body) t.body = payload.body;
+      if (payload.name) t.name = payload.name;
+    }
+  }
+
   function etAuditionReminderInPersonBody() {
     return `Hi {{contact_name}},
 
@@ -31646,6 +31693,7 @@ See you soon!
     await etEnsureAuditionReminderTemplateBody();
     await etEnsureOnlineAuditionReminderTemplateBody();
     await etEnsureCallbackRequestTemplateBody();
+    await etEnsureCallbackConfirmedTemplateBody();
     await etEnsureAuditionReminderTemplateNames();
     renderEmailTemplates();
     openPendingEmailTemplateCategory();
