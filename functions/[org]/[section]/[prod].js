@@ -2,6 +2,7 @@
 // Routes public production pages to the public production page.
 // Supported:
 // - /:org/:prod/Audition
+// - /:org/:prod/Callbacksides
 // - /:org/:prod/ArchiveYEAR
 // - /:org/:prod/Team
 // - /:org/Audition/:prod (legacy)
@@ -39,14 +40,17 @@ export async function onRequest(context) {
 
   const isLegacyPurpose = /^auditions?$/i.test(section) || /^Archive\d{4}$/i.test(section);
   const isTeamPurpose = /^team$/i.test(prod);
-  const isPurposeLast = /^auditions?$/i.test(prod) || /^Archive\d{4}$/i.test(prod) || isTeamPurpose;
+  const isCallbackSidesPurpose = /^callback-?sides$/i.test(prod);
+  const isPurposeLast = /^auditions?$/i.test(prod) || /^Archive\d{4}$/i.test(prod) || isTeamPurpose || isCallbackSidesPurpose;
   if (!isLegacyPurpose && !isPurposeLast) {
     return new Response('Not found', { status: 404 });
   }
 
   const url = new URL(context.request.url);
   const assetUrl = new URL(
-    isTeamPurpose
+    isCallbackSidesPurpose
+      ? '/SYSTEM/Public/callback-sides.html'
+      : isTeamPurpose
       ? '/SYSTEM/Organisations/Productions/Workspace/audition-team.html'
       : '/SYSTEM/Public/audition-info.html',
     url
