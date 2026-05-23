@@ -54,7 +54,7 @@ export async function onRequest(context) {
   return fetchAsset(
     context,
     isCallbackMaterialsPurpose
-      ? '/SYSTEM/Public/callback-sides.html'
+      ? '/PUBLIC/callback-sides'
       : isTeamPurpose
       ? '/SYSTEM/Organisations/Productions/Workspace/audition-team.html'
       : '/SYSTEM/Public/audition-info.html'
