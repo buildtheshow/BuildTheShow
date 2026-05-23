@@ -19607,38 +19607,6 @@
       background: var(--audition-schedule-accent-catchup, rgba(181,189,184,0.58));
     }
     .aud-block-slot-cell.state-break { background: #c9c7ca; }
-    .aud-block-slot-cell.reschedule-locked::after {
-      content: "";
-      position: absolute;
-      inset: 0;
-      border-radius: 7px;
-      background: rgba(26,21,48,0.12);
-      pointer-events: none;
-    }
-    .aud-slot-reschedule-btn {
-      position: absolute;
-      top: 0.3rem;
-      right: 0.3rem;
-      z-index: 2;
-      border: 1px solid rgba(87,46,136,0.16);
-      background: rgba(255,255,255,0.86);
-      color: #572e88;
-      border-radius: 999px;
-      min-width: 1.45rem;
-      height: 1.45rem;
-      padding: 0 0.35rem;
-      font-family: var(--bts-font);
-      font-size: 0.58rem;
-      font-weight: 800;
-      line-height: 1;
-      cursor: pointer;
-      box-shadow: 0 4px 10px rgba(26,21,48,0.08);
-    }
-    .aud-slot-reschedule-btn.is-locked {
-      color: #b91c1c;
-      border-color: rgba(185,28,28,0.2);
-      background: rgba(255,245,245,0.92);
-    }
     /* Time — centred, big */
     .aud-block-slot-time {
       font-size: 1.05rem;
@@ -45909,19 +45877,13 @@ See you soon!
 
     return `<div class="aud-block-calendar-grid">${blockSlots.map(slot => {
       const state    = getAudSlotState(slot);
-      const canReschedule = getAudSlotRescheduleable(slot);
       const cap      = Number(slot.capacity) || 1;
       const slotApps = appsPerSlot[slot.id] || [];
       const booked   = slotApps.length;
       const capLabel = `${booked}/${cap}`;
 
       return `
-      <div class="aud-block-slot-cell state-${esc(state)}${canReschedule ? '' : ' reschedule-locked'}" onclick="cycleAudSlotLabel('${slot.id}','${sessionId}')" title="Click to ${state === 'open' ? 'block' : 'open'} this slot">
-        <button class="aud-slot-reschedule-btn${canReschedule ? '' : ' is-locked'}" type="button"
-                onclick="event.stopPropagation();toggleSlotReschedule('${slot.id}','${sessionId}',${canReschedule ? 'false' : 'true'})"
-                title="${canReschedule ? 'Rescheduling allowed for this time' : 'Rescheduling locked for this time'}">
-          ${canReschedule ? 'R' : '×'}
-        </button>
+      <div class="aud-block-slot-cell state-${esc(state)}" onclick="cycleAudSlotLabel('${slot.id}','${sessionId}')" title="Click to ${state === 'open' ? 'block' : 'open'} this slot">
         <div class="aud-block-slot-time">${buildAuditionSchedulePlaceholderTimeLabelHtml(formatSlotTime(slot.slot_time || slot.start_time || ''))}</div>
         <div class="aud-block-slot-bottom">
           <button class="aud-block-slot-state state-${esc(state)}" type="button" tabindex="-1">${esc(getAudSlotLabel(slot))}</button>
@@ -45948,18 +45910,6 @@ See you soon!
     const next = current === 'open' ? 'Block' : 'Open';
     updateSlotField(slotId, sessionId, 'label', next);
     _reRenderBlocksList(sessionId);
-  }
-
-  async function toggleSlotReschedule(slotId, sessionId, checked) {
-    if (!prod) prod = {};
-    if (!prod.wizard_data) prod.wizard_data = {};
-    if (!prod.wizard_data.audition_slot_reschedule) prod.wizard_data.audition_slot_reschedule = {};
-    prod.wizard_data.audition_slot_reschedule[slotId] = !!checked;
-    showSaveStatus('saving');
-    _reRenderBlocksList(sessionId);
-    const { error } = await sb.from('productions').update({ wizard_data: prod.wizard_data }).eq('id', prodId);
-    showSaveStatus(error ? 'error' : 'saved');
-    if (error) console.error('[BTS] save slot reschedule setting failed:', error.message);
   }
 
   const CALLBACK_BLOCK_TYPES = [
@@ -46028,6 +45978,14 @@ See you soon!
           <select class="form-select" onchange="updateBlock('${esc(sessionId)}','${esc(block.id)}','callback_type',this.value)">
             ${CALLBACK_BLOCK_TYPES.map(option => `<option value="${option.value}"${blockType === option.value ? ' selected' : ''}>${esc(option.label)}</option>`).join('')}
           </select>
+        </div>
+        <div class="aud-callback-block-field">
+          <span class="aud-block-label">Rescheduling</span>
+          <label class="aud-callback-chip" style="width:max-content;">
+            <input type="checkbox" ${block.reschedule_allowed !== false ? 'checked' : ''}
+              onchange="updateBlock('${esc(sessionId)}','${esc(block.id)}','reschedule_allowed',this.checked)" />
+            <span>Allow this block</span>
+          </label>
         </div>
         <div class="aud-callback-block-field">
           <span class="aud-block-label">Characters in this block</span>
@@ -46173,12 +46131,6 @@ See you soon!
 
   function getSessionPrepareText(session) {
     return prod?.wizard_data?.audition_session_prepare?.[session?.id] || '';
-  }
-
-  function getAudSlotRescheduleable(slot) {
-    const id = String(slot?.id || '');
-    const mapped = prod?.wizard_data?.audition_slot_reschedule?.[id];
-    return mapped !== false;
   }
 
   function buildAudSessionThemeStyle(sessionType) {
@@ -46442,6 +46394,7 @@ See you soon!
       callback_type: isCallback ? 'individual' : '',
       character_ids: [],
       material_types: isCallback ? ['sides'] : [],
+      reschedule_allowed: true,
       instructions: '',
       date: session?.date || '',
       start_time: session?.start_time || '',
@@ -46500,7 +46453,7 @@ See you soon!
     const block = (audBlocks[sessionId] || []).find(b => b.id === blockId);
     if (block) block[field] = value;
     _saveBlocks(sessionId);
-    if (['title', 'callback_type', 'instructions'].includes(field)) {
+    if (['title', 'callback_type', 'instructions', 'reschedule_allowed'].includes(field)) {
       _reRenderBlocksList(sessionId);
     }
 

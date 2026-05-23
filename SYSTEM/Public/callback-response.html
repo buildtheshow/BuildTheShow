@@ -322,8 +322,6 @@
     }
 
     async function loadOpenSlots() {
-      const rescheduleMap = prod?.wizard_data?.audition_slot_reschedule || {};
-      const isSlotRescheduleable = slot => rescheduleMap[String(slot?.id || '')] !== false;
       const { data: sessions } = await sb.from('audition_sessions')
         .select('*')
         .eq('production_id', prodId)
@@ -344,12 +342,18 @@
         });
       });
       const bySession = new Map((sessions || []).map(s => [s.id, s]));
+      const isBlockRescheduleable = slot => {
+        const session = bySession.get(slot?.session_id);
+        const blocks = Array.isArray(session?.slot_blocks) ? session.slot_blocks : [];
+        const block = blocks.find(b => String(b.id || '') === String(slot?.block_id || ''));
+        return !block || block.reschedule_allowed !== false;
+      };
       slots = (slotRows || [])
         .map(s => ({ ...s, session: bySession.get(s.session_id), liveCount: occupancy[s.id] || 0 }))
         .filter(s => {
           const label = String(s.label || '').trim().toLowerCase();
           const isOpen = !['block', 'blocked', 'break', 'catchup'].includes(label);
-          return s.session && s.id !== invite.slotId && isOpen && isSlotRescheduleable(s) && (s.liveCount < (Number(s.capacity) || 1));
+          return s.session && s.id !== invite.slotId && isOpen && isBlockRescheduleable(s) && (s.liveCount < (Number(s.capacity) || 1));
         });
     }
 
