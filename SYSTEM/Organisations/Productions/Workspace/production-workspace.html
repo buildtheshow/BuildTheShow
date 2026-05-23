@@ -19823,6 +19823,110 @@
       text-align: center; padding: 2.5rem 1rem; color: rgba(87,46,136,0.5); font-size: 0.875rem;
       border: 1.5px dashed var(--mat-accent-border); border-radius: 12px; background: #fff;
     }
+    .aud-files-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 1rem;
+      margin-bottom: 1.1rem;
+    }
+    .aud-files-actions {
+      display: flex;
+      gap: 0.55rem;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+    .aud-files-shell {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 1rem;
+    }
+    .aud-files-section {
+      background: #fff;
+      border: 1.5px solid rgba(87,46,136,0.12);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .aud-files-section-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+      padding: 0.9rem 1rem;
+      border-bottom: 1px solid rgba(87,46,136,0.1);
+      background: rgba(87,46,136,0.025);
+    }
+    .aud-files-section-title {
+      font-size: 0.92rem;
+      font-weight: 850;
+      color: #1a1530;
+    }
+    .aud-files-section-meta {
+      font-size: 0.74rem;
+      font-weight: 750;
+      color: rgba(87,46,136,0.52);
+      white-space: nowrap;
+    }
+    .aud-files-list {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+      gap: 0.75rem;
+      padding: 1rem;
+    }
+    .aud-file-card {
+      border: 1.5px solid rgba(87,46,136,0.1);
+      border-radius: 8px;
+      padding: 0.8rem;
+      min-width: 0;
+      background: #fff;
+      display: flex;
+      flex-direction: column;
+      gap: 0.45rem;
+    }
+    .aud-file-card-top {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 0.65rem;
+    }
+    .aud-file-name {
+      font-size: 0.82rem;
+      font-weight: 850;
+      color: #1a1530;
+      line-height: 1.25;
+      word-break: break-word;
+    }
+    .aud-file-role {
+      font-size: 0.72rem;
+      font-weight: 750;
+      color: #572e88;
+      line-height: 1.25;
+    }
+    .aud-file-kind {
+      font-size: 0.66rem;
+      font-weight: 850;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: rgba(87,46,136,0.5);
+    }
+    .aud-file-note {
+      font-size: 0.75rem;
+      color: #6b5e80;
+      line-height: 1.4;
+    }
+    .aud-file-download {
+      margin-top: auto;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      text-decoration: none;
+      border-radius: 7px;
+      background: #572e88;
+      color: #fff;
+      font-size: 0.76rem;
+      font-weight: 850;
+      padding: 0.42rem 0.7rem;
+    }
     .materials-loading {
       padding: 1rem;
       color: #86799f;
@@ -22324,6 +22428,23 @@
           </div>
           <div id="materials-character-list">
             <div style="text-align:center;padding:3rem;color:rgba(87,46,136,0.5);font-size:0.875rem;">Add characters in Audition Settings first.</div>
+          </div>
+        </div>
+
+        <!-- Files inner -->
+        <div id="aud-inner-files" class="aud-inner" style="display:none;">
+          <div class="aud-files-head">
+            <div>
+              <div class="page-title">Audition Files</div>
+              <div class="page-subtitle">A public-view mirror of audition uploads. Only files connected to visible roles and enabled material tabs are shown here.</div>
+            </div>
+            <div class="aud-files-actions">
+              <button type="button" class="btn-secondary" onclick="switchAudInner('materials')">Manage Uploads</button>
+              <button type="button" class="btn-primary" id="aud-files-download-all-btn" onclick="downloadAllAuditionFiles()">Download All</button>
+            </div>
+          </div>
+          <div id="audition-files-list">
+            <div class="materials-loading">Loading public files...</div>
           </div>
         </div>
 
@@ -36105,11 +36226,12 @@ See you soon!
     document.querySelectorAll('.aud-inner-btn[data-inner]').forEach(el => {
       el.classList.toggle('active', el.dataset.inner === inner);
     });
-    ['settings','characters','materials','questions','prodinfo'].forEach(i => {
+    ['settings','characters','materials','files','questions','prodinfo'].forEach(i => {
       const el = document.getElementById('aud-inner-' + i);
       if (el) el.style.display = (i === inner) ? '' : 'none';
     });
     if (inner === 'materials') renderMaterialsList();
+    if (inner === 'files') renderAuditionFilesPage();
     if (inner === 'characters') {
       const list = document.getElementById('characters-list');
       if (list && !isWorkspaceDataReady('characters')) {
@@ -42782,7 +42904,7 @@ See you soon!
       switchAudInner(options.inner || 'settings');
     } else if (subTab === 'files') {
       switchAudTab('setup');
-      switchAudInner('materials');
+      switchAudInner('files');
     } else if (subTab === 'schedule') {
       switchAudTab('auditions');
       switchAudDayTab('schedule');
@@ -49240,6 +49362,123 @@ See you soon!
     } catch {
       return String(url).split('/').pop() || '';
     }
+  }
+
+  function collectPublicAuditionFiles() {
+    const settings = getMaterialsSettings();
+    const visibleCharacters = (characters || []).filter(c => c.show_on_public_page !== false);
+    const files = [];
+    const addFile = ({ type, role, kind, url, name, notes }) => {
+      if (!url) return;
+      files.push({
+        type,
+        typeLabel: materialLabelForType(type),
+        role: role || 'Production',
+        kind: kind || 'File',
+        url,
+        name: name || materialFileNameFromUrl(url) || kind || 'Audition file',
+        notes: notes || '',
+      });
+    };
+
+    if (settings.audition) {
+      visibleCharacters.forEach(char => {
+        addFile({
+          type: 'audition',
+          role: char.name || 'Audition role',
+          kind: 'Material',
+          url: char.audition_file_url,
+          name: char.audition_file_name,
+          notes: char.audition_material,
+        });
+      });
+    }
+
+    if (settings.callback) {
+      visibleCharacters.forEach(char => {
+        [
+          ['Sides', char.callback_side_url, char.callback_side_name, char.callback_side_notes],
+          ['Song Cut', char.callback_songcut_url, char.callback_songcut_name, char.callback_songcut_notes],
+          ['Other', char.callback_other_url, char.callback_other_name, char.callback_other_notes],
+          ['Material', char.callback_file_url, char.callback_file_name, char.callback_material],
+        ].forEach(([kind, url, name, notes]) => addFile({
+          type: 'callback',
+          role: char.name || 'Callback role',
+          kind,
+          url,
+          name,
+          notes,
+        }));
+      });
+    }
+
+    return files;
+  }
+
+  function renderAuditionFilesPage() {
+    const host = document.getElementById('audition-files-list');
+    if (!host) return;
+    if (!isWorkspaceDataReady('characters')) {
+      host.innerHTML = '<div class="materials-loading">Loading public files...</div>';
+      ensureWorkspaceData(['characters']).then(renderAuditionFilesPage).catch(renderAuditionFilesPage);
+      return;
+    }
+    const files = collectPublicAuditionFiles();
+    window._auditionPublicFiles = files;
+    const downloadBtn = document.getElementById('aud-files-download-all-btn');
+    if (downloadBtn) downloadBtn.disabled = !files.length;
+    if (!files.length) {
+      host.innerHTML = '<div class="materials-empty">No public audition files yet. Use Manage Uploads to add files to visible roles, then turn on the relevant material tab.</div>';
+      return;
+    }
+    const byType = files.reduce((acc, file) => {
+      if (!acc[file.type]) acc[file.type] = [];
+      acc[file.type].push(file);
+      return acc;
+    }, {});
+    host.innerHTML = `<div class="aud-files-shell">${['audition', 'callback'].map(type => {
+      const group = byType[type] || [];
+      if (!group.length) return '';
+      return `<section class="aud-files-section">
+        <div class="aud-files-section-head">
+          <div class="aud-files-section-title">${esc(materialLabelForType(type))}</div>
+          <div class="aud-files-section-meta">${group.length} file${group.length === 1 ? '' : 's'}</div>
+        </div>
+        <div class="aud-files-list">${group.map(file => `
+          <article class="aud-file-card">
+            <div class="aud-file-card-top">
+              <div>
+                <div class="aud-file-name">${esc(file.name)}</div>
+                <div class="aud-file-role">${esc(file.role)}</div>
+              </div>
+              <div class="aud-file-kind">${esc(file.kind)}</div>
+            </div>
+            ${file.notes ? `<div class="aud-file-note">${esc(String(file.notes).replace(/<[^>]+>/g, ' ')).trim()}</div>` : ''}
+            <a class="aud-file-download" href="${esc(file.url)}" target="_blank" rel="noopener" download="${esc(file.name)}">Download</a>
+          </article>`).join('')}</div>
+      </section>`;
+    }).join('')}</div>`;
+  }
+
+  function downloadAllAuditionFiles() {
+    const files = window._auditionPublicFiles || collectPublicAuditionFiles();
+    if (!files.length) {
+      showToast('No public audition files to download yet.', true);
+      return;
+    }
+    files.forEach((file, index) => {
+      setTimeout(() => {
+        const link = document.createElement('a');
+        link.href = file.url;
+        link.target = '_blank';
+        link.rel = 'noopener';
+        link.download = file.name || materialFileNameFromUrl(file.url) || 'audition-file';
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+      }, index * 120);
+    });
+    showToast(`Starting ${files.length} download${files.length === 1 ? '' : 's'}...`);
   }
 
   function previewMaterialFile(url, fileName = 'Material file') {
