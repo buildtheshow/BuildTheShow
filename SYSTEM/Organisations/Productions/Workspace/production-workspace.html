@@ -19896,6 +19896,17 @@
       font-size: 4.4cqw;
       padding: 3.1cqw 4.2cqw;
     }
+    .aud-file-brand-tile.template-brand-card--containers .template-brand-tile-container {
+      background: transparent;
+      border: 0;
+    }
+    .aud-file-brand-tile.template-brand-card--containers .template-brand-tile-container--header,
+    .aud-file-brand-tile.template-brand-card--containers .template-brand-tile-container--title,
+    .aud-file-brand-tile.template-brand-card--containers .template-brand-tile-container--body,
+    .aud-file-brand-tile.template-brand-card--containers .template-brand-tile-container--footer {
+      background: transparent;
+      color: var(--brand-tile-ink, #ffffff);
+    }
     .aud-file-brand-role {
       font-weight: 950;
     }
@@ -20209,6 +20220,20 @@
     .mat-file-item:first-child {
       border-top: 0;
       padding-top: 0;
+    }
+    .mat-pot-row {
+      display: flex;
+      align-items: center;
+      gap: 0.45rem;
+      width: 100%;
+      min-width: 0;
+      margin-top: 0.35rem;
+    }
+    .mat-pot-row select {
+      min-width: 0;
+      flex: 1 1 auto;
+      font-size: 0.72rem;
+      padding: 0.34rem 0.5rem;
     }
     .mat-file-link,
     .mat-file-action {
@@ -49314,6 +49339,14 @@ See you soon!
     return path.includes(`_${type}_${slot}_${charId}_`);
   }
 
+  function materialFileMatchesPotSlot(file, type, slot) {
+    if (!file || !type || !slot) return false;
+    const tags = Array.isArray(file.tags) ? file.tags.map(tag => String(tag || '').toLowerCase()) : [];
+    if (tags.includes(String(slot).toLowerCase()) && tags.some(tag => tag.includes('material'))) return true;
+    const path = String(file.file_path || file.path || '');
+    return path.includes(`_${type}_${slot}_`);
+  }
+
   function materialFileRecordsForSlot(char, type, slotMeta) {
     if (!char || !slotMeta) return [];
     const slot = slotMeta.key;
@@ -49338,6 +49371,29 @@ See you soon!
       });
     }
     return records;
+  }
+
+  function materialPotFilesForSlot(char, type, slotMeta) {
+    const attached = new Set(materialFileRecordsForSlot(char, type, slotMeta).map(file => file.url || file.path).filter(Boolean));
+    const seen = new Set();
+    return (prodFiles || [])
+      .filter(file => materialFileMatchesPotSlot(file, type, slotMeta.key))
+      .map(file => ({
+        id: file.id || '',
+        url: file.file_url || '',
+        path: file.file_path || '',
+        name: file.name || materialFileNameFromUrl(file.file_url || '') || `${slotMeta.label} file`,
+        file_type: file.file_type || null,
+        file_size: file.file_size || null,
+        folder_id: file.folder_id || null,
+      }))
+      .filter(file => file.id && file.url && !attached.has(file.url) && !attached.has(file.path))
+      .filter(file => {
+        const key = file.url || file.path;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
   }
 
   function getMaterialsSettings() {
@@ -49430,6 +49486,15 @@ See you soon!
         const notesId = `${meta.inputIdPrefix}-${slot.key}-${c.id}`;
         const cbId    = `${meta.inputIdPrefix}-tog-${slot.key}-${c.id}`;
         const files = materialFileRecordsForSlot(c, type, slot);
+        const potFiles = materialPotFilesForSlot(c, type, slot);
+        const potHTML = potFiles.length
+          ? `<div class="mat-pot-row">
+              <select class="form-select" aria-label="Pull ${esc(slot.label)} from pot" onchange="attachMaterialFileFromPot('${esc(c.id)}','${esc(type)}','${esc(slot.key)}',this)">
+                <option value="">Pull from pot...</option>
+                ${potFiles.map(file => `<option value="${esc(file.id)}">${esc(file.name)}</option>`).join('')}
+              </select>
+            </div>`
+          : '';
         const fileHTML = files.length
           ? `<div class="mat-file-list">${files.map(file => `
               <div class="mat-file-item">
@@ -49462,6 +49527,7 @@ See you soon!
               <input type="file" id="${esc(fileId)}" style="display:none;" multiple
                      onchange="uploadMatFile('${esc(c.id)}','${esc(type)}','${esc(slot.key)}',this)" />
               ${fileHTML}
+              ${potHTML}
             </div>
           </div>` : ''}
         </div>`;
@@ -49855,6 +49921,53 @@ See you soon!
     }
   }
 
+  async function attachMaterialFileFromPot(charId, type, slot, selectEl) {
+    const sourceId = selectEl?.value || '';
+    if (!sourceId) return;
+    const source = (prodFiles || []).find(file => String(file.id || '') === String(sourceId));
+    if (!source?.file_url) {
+      showToast('Could not find that file in the pot.', true);
+      if (selectEl) selectEl.value = '';
+      return;
+    }
+    try {
+      const meta = materialTypeMeta(type);
+      const slotMeta = meta.slots.find(s => s.key === slot);
+      if (!slotMeta) throw new Error('Unknown material slot.');
+      const fileRow = {
+        production_id: prodId,
+        folder_id: source.folder_id || null,
+        name: source.name || materialFileNameFromUrl(source.file_url) || `${slotMeta.label} file`,
+        file_url: source.file_url,
+        file_path: source.file_path || null,
+        file_type: source.file_type || null,
+        file_size: source.file_size || null,
+        tags: [type === 'callback' ? 'callback material' : 'audition material', slot, `character:${charId}`, 'pulled from pot'],
+      };
+      const { data: savedFile, error } = await sb.from('production_files').insert(fileRow).select().single();
+      if (error) throw error;
+      if (savedFile && !prodFiles.some(file => file.id === savedFile.id)) prodFiles.unshift(savedFile);
+      materialFilesLoadedOnce = true;
+      const c = characters.find(x => x.id === charId);
+      if (c && !c[slotMeta.urlField]) {
+        const updates = {
+          [slotMeta.urlField]: savedFile.file_url,
+          [slotMeta.pathField]: savedFile.file_path,
+          [slotMeta.nameField]: savedFile.name,
+        };
+        const { error: updateErr } = await sb.from('production_characters').update(updates).eq('id', charId);
+        if (updateErr) throw updateErr;
+        Object.assign(c, updates);
+      }
+      showToast('Material pulled from pot.');
+      renderMaterialsList();
+    } catch (error) {
+      showToast('Could not pull from pot: ' + (error?.message || 'Unknown error'), true);
+    } finally {
+      if (selectEl) selectEl.value = '';
+    }
+  }
+
   async function toggleMaterialSlot(charId, type, label, checked) {
     const meta = materialTypeMeta(type);
     const c = characters.find(x => x.id === charId);
@@ -49880,7 +49993,8 @@ See you soon!
       prodFiles = prodFiles.filter(file => String(file.id || '') !== String(fileId));
     }
     if (!error && filePath) {
-      await sb.storage.from('production-files').remove([filePath]).catch(() => {});
+      const stillReferenced = (prodFiles || []).some(file => String(file.file_path || '') === String(filePath));
+      if (!stillReferenced) await sb.storage.from('production-files').remove([filePath]).catch(() => {});
     }
     const c = characters.find(x => x.id === charId);
     const isLegacyMatch = c && (
