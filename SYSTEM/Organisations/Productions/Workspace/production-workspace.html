@@ -22318,8 +22318,8 @@
         <div id="aud-inner-materials" class="aud-inner" style="display:none;">
           <div class="page-header" style="margin-bottom:1.25rem;">
             <div>
-              <div class="page-title">Materials</div>
-              <div class="page-subtitle">Turn on audition material for each audition type so performers know what to prepare.<br>Then upload the files. Performers will receive them automatically when their time slot is confirmed.</div>
+              <div class="page-title">Audition Materials</div>
+              <div class="page-subtitle">Upload general audition prep and callback sides by role. Callback emails will pull only the sides for the roles each performer is called back for.</div>
             </div>
           </div>
           <div id="materials-character-list">
@@ -48653,6 +48653,33 @@ See you soon!
     _cbSlotSelectedData = null;
   }
 
+  function buildCallbackMaterialsForRoles(roleNames, session = null) {
+    const roles = String(roleNames || '')
+      .split(',')
+      .map(role => role.trim().toLowerCase())
+      .filter(Boolean);
+    const matchedCharacters = (characters || []).filter(char =>
+      roles.length && roles.some(role => String(char.name || '').trim().toLowerCase() === role)
+    );
+    const blocks = [];
+    if (session?.prepare_text) blocks.push(String(session.prepare_text));
+    matchedCharacters.forEach(char => {
+      const bits = [];
+      if (char.callback_material) bits.push(String(char.callback_material));
+      [
+        ['Sides', char.callback_side_url, char.callback_side_name, char.callback_side_notes],
+        ['Song Cut', char.callback_songcut_url, char.callback_songcut_name, char.callback_songcut_notes],
+        ['Other', char.callback_other_url, char.callback_other_name, char.callback_other_notes],
+        ['File', char.callback_file_url, char.callback_file_name, ''],
+      ].forEach(([label, url, name, notes]) => {
+        if (notes) bits.push(`${esc(label)}: ${esc(notes)}`);
+        if (url) bits.push(`${esc(label)}: <a href="${esc(url)}">${esc(name || url)}</a>`);
+      });
+      if (bits.length) blocks.push(`<strong>${esc(char.name || 'Callback Materials')}</strong><br>${bits.join('<br>')}`);
+    });
+    return blocks.join('<br><br>');
+  }
+
   async function confirmSendCallbackEmail() {
     if (!_cbSlotModalAppId || !_cbSlotSelectedData) return;
     const app = allApplicants.find(a => a.id === _cbSlotModalAppId);
@@ -48681,6 +48708,7 @@ See you soon!
       : '';
     const callbackTime = slot?.slot_time ? formatSlotTime(slot.slot_time) : '';
     const callbackVenue = session?.location || prod?.venue || '';
+    const callbackMaterials = buildCallbackMaterialsForRoles(roleNames, session);
     const { data, error } = await sb.functions.invoke('send-email', {
       body: {
         applicant_id: app.id,
@@ -48702,6 +48730,7 @@ See you soon!
           callback_decline_link: responseLinks.decline,
           callback_reschedule_link: responseLinks.reschedule,
           callback_self_tape_link: callbackSelfTapeLink,
+          callback_materials: callbackMaterials,
           audition_session: session?.name || '',
           show_name:        prod?.title || '',
           show_subtitle:    prod?.subtitle || '',
@@ -49071,11 +49100,7 @@ See you soon!
   }
 
   function materialTypesForProduction() {
-    const present = new Set((audSessions || []).map(s => materialPrefixForType(s.type || 'audition')));
-    if (!present.size) present.add('audition');
-    return SESSION_TYPE_OPTIONS
-      .map(o => o.value)
-      .filter(type => present.has(type));
+    return ['audition', 'callback'];
   }
 
   function hasMaterialForType(type) {
@@ -49280,7 +49305,7 @@ See you soon!
     }).join('');
     return `<div class="materials-toolbar">
       <div class="materials-type-panel">
-        <div class="materials-type-head">Audition Types</div>
+        <div class="materials-type-head">Material Tabs</div>
         <div class="materials-type-list" role="tablist" aria-label="Material type">${typeNav}</div>
       </div>
     </div>`;
