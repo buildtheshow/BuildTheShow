@@ -413,6 +413,7 @@
   </main>
 
   <script src="/SHARED/Components/audition-page-templates.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script>
     function esc(value) {
@@ -512,6 +513,30 @@
       return new Set((files || []).map(file => String(file.role || 'Production')).filter(Boolean)).size;
     }
 
+    function safeDownloadName(value, fallback = 'callback-material') {
+      const name = String(value || fallback)
+        .trim()
+        .replace(/[\\/:*?"<>|]+/g, '-')
+        .replace(/\s+/g, ' ')
+        .replace(/^\.+|\.+$/g, '');
+      return name || fallback;
+    }
+
+    function uniqueZipName(file, usedNames) {
+      const sourceName = safeDownloadName(file?.name || materialFileNameFromUrl(file?.url) || 'callback-file');
+      const dotIndex = sourceName.lastIndexOf('.');
+      const base = dotIndex > 0 ? sourceName.slice(0, dotIndex) : sourceName;
+      const ext = dotIndex > 0 ? sourceName.slice(dotIndex) : '';
+      let candidate = sourceName;
+      let count = 2;
+      while (usedNames.has(candidate.toLowerCase())) {
+        candidate = `${base} ${count}${ext}`;
+        count += 1;
+      }
+      usedNames.add(candidate.toLowerCase());
+      return candidate;
+    }
+
     function formatCallbackDateValue(dateValue) {
       if (!dateValue) return '';
       const raw = String(dateValue).trim();
@@ -571,8 +596,8 @@
         </section>`;
     }
 
-    function downloadFiles(files) {
-      (files || []).forEach((file, index) => {
+    function downloadFileLinks(files) {
+      (files || []).filter(file => file?.url).forEach((file, index) => {
         setTimeout(() => {
           const link = document.createElement('a');
           link.href = file.url;
@@ -586,13 +611,52 @@
       });
     }
 
-    function downloadRoleFromTile(button) {
+    function saveBlob(blob, filename) {
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 500);
+    }
+
+    async function downloadFiles(files, bundleName = 'callback-material') {
+      const validFiles = (files || []).filter(file => file?.url);
+      if (validFiles.length <= 1 || !window.JSZip) {
+        downloadFileLinks(validFiles);
+        return;
+      }
+      try {
+        const zip = new JSZip();
+        const usedNames = new Set();
+        await Promise.all(validFiles.map(async file => {
+          const response = await fetch(file.url);
+          if (!response.ok) throw new Error(`Could not download ${file.name || 'file'}.`);
+          zip.file(uniqueZipName(file, usedNames), await response.blob());
+        }));
+        const blob = await zip.generateAsync({ type: 'blob' });
+        saveBlob(blob, `${safeDownloadName(bundleName)}.zip`);
+      } catch (error) {
+        console.warn('[BTS] zip download failed, falling back to individual files', error);
+        downloadFileLinks(validFiles);
+      }
+    }
+
+    async function downloadRoleFromTile(button) {
       const tile = button?.closest?.('[data-role]');
       const role = tile?.dataset?.role || '';
       const characterId = tile?.dataset?.characterId || '';
-      downloadFiles(publicFiles.filter(file => characterId
+      const label = button?.textContent || 'Download';
+      button.disabled = true;
+      button.textContent = 'Preparing...';
+      const roleFiles = publicFiles.filter(file => characterId
         ? String(file.characterId || '') === String(characterId)
-        : String(file.role || '') === String(role)));
+        : String(file.role || '') === String(role));
+      await downloadFiles(roleFiles, `${role || 'callback'} callback material`);
+      button.textContent = label;
+      button.disabled = false;
     }
 
     function renderFiles(files) {
@@ -601,7 +665,14 @@
       publicFiles = files || [];
       if (downloadAllBtn) {
         downloadAllBtn.disabled = !publicFiles.length;
-        downloadAllBtn.onclick = () => downloadFiles(publicFiles);
+        downloadAllBtn.onclick = async () => {
+          const label = downloadAllBtn.textContent;
+          downloadAllBtn.disabled = true;
+          downloadAllBtn.textContent = 'Preparing...';
+          await downloadFiles(publicFiles, 'all callback material');
+          downloadAllBtn.textContent = label;
+          downloadAllBtn.disabled = !publicFiles.length;
+        };
       }
       if (!publicFiles.length) {
         content.className = 'state';
