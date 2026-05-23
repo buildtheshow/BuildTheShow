@@ -20142,6 +20142,26 @@
       margin-left: auto;
     }
     @media (max-width: 860px) { .mat-file-row, .mat-file-actions { justify-content: flex-start; } }
+    .mat-file-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.45rem;
+      flex: 1 1 100%;
+      min-width: 0;
+    }
+    .mat-file-item {
+      display: flex;
+      align-items: center;
+      gap: 0.55rem;
+      min-width: 0;
+      flex-wrap: wrap;
+      border-top: 1px solid rgba(87,46,136,0.08);
+      padding-top: 0.45rem;
+    }
+    .mat-file-item:first-child {
+      border-top: 0;
+      padding-top: 0;
+    }
     .mat-file-link,
     .mat-file-action {
       font-size: 0.75rem; color: #572e88; font-weight: 700; text-decoration: none; white-space: nowrap;
@@ -44843,6 +44863,7 @@ See you soon!
       const { data } = await sb.from('production_files')
         .select('*').eq('production_id', prodId).order('created_at', { ascending: false });
       prodFiles = data || [];
+      materialFilesLoadedOnce = true;
     } catch { prodFiles = []; }
 
     // Default to first folder
@@ -48796,14 +48817,13 @@ See you soon!
     matchedCharacters.forEach(char => {
       const bits = [];
       if (char.callback_material) bits.push(String(char.callback_material));
-      [
-        ['Sides', char.callback_side_url, char.callback_side_name, char.callback_side_notes],
-        ['Song Cut', char.callback_songcut_url, char.callback_songcut_name, char.callback_songcut_notes],
-        ['Other', char.callback_other_url, char.callback_other_name, char.callback_other_notes],
-        ['File', char.callback_file_url, char.callback_file_name, ''],
-      ].forEach(([label, url, name, notes]) => {
-        if (notes) bits.push(`${esc(label)}: ${esc(notes)}`);
-        if (url) bits.push(`${esc(label)}: <a href="${esc(url)}">${esc(name || url)}</a>`);
+      const callbackMeta = materialTypeMeta('callback');
+      callbackMeta.slots.forEach(slot => {
+        const notes = char[slot.notesField] || '';
+        if (notes) bits.push(`${esc(slot.label)}: ${esc(notes)}`);
+        materialFileRecordsForSlot(char, 'callback', slot).forEach(file => {
+          bits.push(`${esc(slot.label)}: <a href="${esc(file.url)}">${esc(file.name || file.url)}</a>`);
+        });
       });
       if (bits.length) blocks.push(`<strong>${esc(char.name || 'Callback Materials')}</strong><br>${bits.join('<br>')}`);
     });
@@ -49241,6 +49261,40 @@ See you soon!
     );
   }
 
+  function materialFileBelongsToSlot(file, charId, type, slot) {
+    if (!file || !charId || !type || !slot) return false;
+    const tags = Array.isArray(file.tags) ? file.tags.map(tag => String(tag || '').toLowerCase()) : [];
+    if (tags.includes(`character:${String(charId).toLowerCase()}`) && tags.includes(String(slot).toLowerCase())) return true;
+    const path = String(file.file_path || file.path || '');
+    return path.includes(`_${type}_${slot}_${charId}_`);
+  }
+
+  function materialFileRecordsForSlot(char, type, slotMeta) {
+    if (!char || !slotMeta) return [];
+    const slot = slotMeta.key;
+    const records = (prodFiles || [])
+      .filter(file => materialFileBelongsToSlot(file, char.id, type, slot))
+      .map(file => ({
+        id: file.id || '',
+        url: file.file_url || file.url || '',
+        path: file.file_path || '',
+        name: file.name || materialFileNameFromUrl(file.file_url || file.url || '') || `${slotMeta.label} file`,
+        isLegacy: false,
+      }))
+      .filter(file => file.url);
+    const legacyUrl = char[slotMeta.urlField] || '';
+    if (legacyUrl && !records.some(file => file.url === legacyUrl)) {
+      records.unshift({
+        id: '',
+        url: legacyUrl,
+        path: char[slotMeta.pathField] || '',
+        name: char[slotMeta.nameField] || materialFileNameFromUrl(legacyUrl) || `${slotMeta.label} file`,
+        isLegacy: true,
+      });
+    }
+    return records;
+  }
+
   function getMaterialsSettings() {
     const saved = prod?.wizard_data?.materials_enabled || {};
     const settings = {};
@@ -49253,6 +49307,27 @@ See you soon!
   }
 
   let activeMaterialsType = 'audition';
+  let materialFilesLoadPromise = null;
+  let materialFilesLoadedOnce = false;
+
+  async function ensureMaterialFilesLoaded() {
+    if (materialFilesLoadPromise) return materialFilesLoadPromise;
+    materialFilesLoadPromise = sb.from('production_files')
+      .select('*').eq('production_id', prodId).order('created_at', { ascending: false })
+      .then(({ data, error }) => {
+        if (error) throw error;
+        prodFiles = data || [];
+        materialFilesLoadedOnce = true;
+        return prodFiles;
+      })
+      .catch(error => {
+        console.warn('[BTS] material files load failed', error);
+        materialFilesLoadedOnce = true;
+        return prodFiles || [];
+      })
+      .finally(() => { materialFilesLoadPromise = null; });
+    return materialFilesLoadPromise;
+  }
 
   function materialTypeMeta(type) {
     const p = materialPrefixForType(type);
@@ -49305,20 +49380,22 @@ See you soon!
       const factsHTML = facts.length ? `<div class="mat-card-facts">${facts.join('')}</div>` : '';
       const slotsHTML = meta.slots.map(slot => {
         const on    = activeTypes.includes(slot.label);
-        const url   = c[slot.urlField]  || '';
-        const name  = c[slot.nameField] || materialFileNameFromUrl(url) || `${slot.label} file`;
         const notes = c[slot.notesField] || '';
         const fileId  = `${meta.fileIdPrefix}-${slot.key}-${c.id}`;
         const notesId = `${meta.inputIdPrefix}-${slot.key}-${c.id}`;
         const cbId    = `${meta.inputIdPrefix}-tog-${slot.key}-${c.id}`;
-        const fileHTML = url
-          ? `<span class="mat-file-name" title="${esc(name)}">${esc(name)}</span>
-             <div class="mat-file-actions">
-               <button type="button" class="mat-file-action" onclick="previewMaterialFile('${esc(url)}','${esc(name)}')">Preview</button>
-               <a class="mat-file-link" href="${esc(url)}" target="_blank" download="${esc(name)}">Download</a>
-               <button type="button" class="mat-file-action" onclick="deleteMaterialFile('${esc(c.id)}','${esc(type)}','${esc(slot.key)}')">Remove</button>
-             </div>`
-          : '<span class="mat-file-missing">No file</span>';
+        const files = materialFileRecordsForSlot(c, type, slot);
+        const fileHTML = files.length
+          ? `<div class="mat-file-list">${files.map(file => `
+              <div class="mat-file-item">
+                <span class="mat-file-name" title="${esc(file.name)}">${esc(file.name)}</span>
+                <div class="mat-file-actions">
+                  <button type="button" class="mat-file-action" onclick="previewMaterialFile('${esc(file.url)}','${esc(file.name)}')">Preview</button>
+                  <a class="mat-file-link" href="${esc(file.url)}" target="_blank" download="${esc(file.name)}">Download</a>
+                  <button type="button" class="mat-file-action" onclick="deleteMaterialFile('${esc(c.id)}','${esc(type)}','${esc(slot.key)}','${esc(file.id)}','${esc(file.path)}','${esc(file.url)}')">Remove</button>
+                </div>
+              </div>`).join('')}</div>`
+          : '<span class="mat-file-missing">No files yet</span>';
         return `<div class="mat-slot${on ? ' mat-slot--on' : ''}">
           <div class="mat-slot-header">
             <label class="mat-slot-toggle" for="${esc(cbId)}">
@@ -49336,8 +49413,8 @@ See you soon!
               <span class="mat-notes-status" id="${esc(notesId)}-status"></span>
             </div>
             <div class="mat-file-row">
-              <button class="mat-upload-btn" onclick="document.getElementById('${esc(fileId)}').click()">${url ? 'Replace file' : 'Upload file'}</button>
-              <input type="file" id="${esc(fileId)}" style="display:none;"
+              <button class="mat-upload-btn" onclick="document.getElementById('${esc(fileId)}').click()">Add files</button>
+              <input type="file" id="${esc(fileId)}" style="display:none;" multiple
                      onchange="uploadMatFile('${esc(c.id)}','${esc(type)}','${esc(slot.key)}',this)" />
               ${fileHTML}
             </div>
@@ -49382,33 +49459,36 @@ See you soon!
     };
 
     if (settings.audition) {
+      const auditionMeta = materialTypeMeta('audition');
       visibleCharacters.forEach(char => {
-        addFile({
-          type: 'audition',
-          role: char.name || 'Audition role',
-          kind: 'Material',
-          url: char.audition_file_url,
-          name: char.audition_file_name,
-          notes: char.audition_material,
+        auditionMeta.slots.forEach(slot => {
+          const notes = char[slot.notesField] || char.audition_material || '';
+          materialFileRecordsForSlot(char, 'audition', slot).forEach(file => addFile({
+            type: 'audition',
+            role: char.name || 'Audition role',
+            kind: slot.label,
+            url: file.url,
+            name: file.name,
+            notes,
+          }));
         });
       });
     }
 
     if (settings.callback) {
+      const callbackMeta = materialTypeMeta('callback');
       visibleCharacters.forEach(char => {
-        [
-          ['Sides', char.callback_side_url, char.callback_side_name, char.callback_side_notes],
-          ['Song Cut', char.callback_songcut_url, char.callback_songcut_name, char.callback_songcut_notes],
-          ['Other', char.callback_other_url, char.callback_other_name, char.callback_other_notes],
-          ['Material', char.callback_file_url, char.callback_file_name, char.callback_material],
-        ].forEach(([kind, url, name, notes]) => addFile({
-          type: 'callback',
-          role: char.name || 'Callback role',
-          kind,
-          url,
-          name,
-          notes,
-        }));
+        callbackMeta.slots.forEach(slot => {
+          const notes = char[slot.notesField] || '';
+          materialFileRecordsForSlot(char, 'callback', slot).forEach(file => addFile({
+            type: 'callback',
+            role: char.name || 'Callback role',
+            kind: slot.label,
+            url: file.url,
+            name: file.name,
+            notes,
+          }));
+        });
       });
     }
 
@@ -49421,6 +49501,11 @@ See you soon!
     if (!isWorkspaceDataReady('characters')) {
       host.innerHTML = '<div class="materials-loading">Loading public files...</div>';
       ensureWorkspaceData(['characters']).then(renderAuditionFilesPage).catch(renderAuditionFilesPage);
+      return;
+    }
+    if (!materialFilesLoadedOnce && !materialFilesLoadPromise) {
+      host.innerHTML = '<div class="materials-loading">Loading public files...</div>';
+      ensureMaterialFilesLoaded().then(renderAuditionFilesPage);
       return;
     }
     const files = collectPublicAuditionFiles();
@@ -49568,6 +49653,11 @@ See you soon!
   function renderMaterialsList(options = {}) {
     const el = document.getElementById('materials-character-list');
     if (!el) return;
+    if (!materialFilesLoadedOnce && !materialFilesLoadPromise) {
+      ensureMaterialFilesLoaded().then(() => {
+        if (document.getElementById('aud-inner-materials')?.style.display !== 'none') renderMaterialsList(options);
+      });
+    }
 
     const materialTypes = materialTypesForProduction();
     if (!materialTypes.includes(activeMaterialsType)) activeMaterialsType = materialTypes[0] || 'audition';
@@ -49600,11 +49690,11 @@ See you soon!
   }
 
   async function uploadMatFile(charId, type, slot, inputEl) {
-    const file = inputEl.files[0];
-    if (!file) return;
+    const files = Array.from(inputEl.files || []);
+    if (!files.length) return;
     const btn = inputEl.previousElementSibling;
     const originalBtnText = btn?.textContent || 'Upload';
-    if (btn) { btn.disabled = true; btn.textContent = 'Uploading...'; }
+    if (btn) { btn.disabled = true; btn.textContent = files.length > 1 ? `Uploading ${files.length}...` : 'Uploading...'; }
     let uploadPhase = 'upload';
     try {
       const meta = materialTypeMeta(type);
@@ -49612,40 +49702,51 @@ See you soon!
       if (!slotMeta) throw new Error('Unknown material slot: ' + slot);
       const materialsFolder = await ensureProductionFolder('Materials', '#7FAF8B');
       if (!materialsFolder?.id) throw new Error('Could not find or create the Materials folder.');
-      const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '-').replace(/-+/g, '-');
-      const path = `${prodId}/${materialsFolder.id}/${Date.now()}_${type}_${slot}_${charId}_${safeName}`;
-      const { error: upErr } = await sb.storage.from('production-files').upload(path, file, {
-        upsert: false,
-        contentType: file.type || 'application/octet-stream'
+      const savedRows = [];
+      for (const file of files) {
+        const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '-').replace(/-+/g, '-');
+        const path = `${prodId}/${materialsFolder.id}/${Date.now()}_${type}_${slot}_${charId}_${safeName}`;
+        const { error: upErr } = await sb.storage.from('production-files').upload(path, file, {
+          upsert: false,
+          contentType: file.type || 'application/octet-stream'
+        });
+        if (upErr) throw upErr;
+        const { data: urlData } = sb.storage.from('production-files').getPublicUrl(path);
+        const url = urlData?.publicUrl;
+        if (!url) throw new Error('No file URL returned after upload.');
+        const fileRow = {
+          production_id: prodId,
+          folder_id: materialsFolder.id,
+          name: file.name,
+          file_url: url,
+          file_path: path,
+          file_type: file.type || null,
+          file_size: file.size || null,
+          tags: [type === 'callback' ? 'callback material' : 'audition material', slot, `character:${charId}`],
+        };
+        uploadPhase = 'file record';
+        const { data: savedFile, error: fileErr } = await sb.from('production_files').insert(fileRow).select().single();
+        if (fileErr) throw fileErr;
+        if (savedFile) savedRows.push(savedFile);
+      }
+      savedRows.forEach(row => {
+        if (row && !prodFiles.some(f => f.id === row.id)) prodFiles.unshift(row);
       });
-      if (upErr) throw upErr;
-      const { data: urlData } = sb.storage.from('production-files').getPublicUrl(path);
-      const url = urlData?.publicUrl;
-      if (!url) throw new Error('No file URL returned after upload.');
-      const updates = {
-        [slotMeta.urlField]:  url,
-        [slotMeta.pathField]: path,
-        [slotMeta.nameField]: file.name,
-      };
-      uploadPhase = 'character';
-      const { error: updateErr } = await sb.from('production_characters').update(updates).eq('id', charId);
-      if (updateErr) throw updateErr;
-      const fileRow = {
-        production_id: prodId,
-        folder_id: materialsFolder.id,
-        name: file.name,
-        file_url: url,
-        file_path: path,
-        file_type: file.type || null,
-        file_size: file.size || null,
-        tags: [type === 'callback' ? 'callback material' : 'audition material', slot],
-      };
-      uploadPhase = 'file record';
-      const { data: savedFile } = await sb.from('production_files').insert(fileRow).select().single();
-      if (savedFile && !prodFiles.some(f => f.id === savedFile.id)) prodFiles.unshift(savedFile);
+      materialFilesLoadedOnce = true;
       const c = characters.find(x => x.id === charId);
-      if (c) Object.assign(c, updates);
-      showToast('Material uploaded.');
+      const shouldSetLegacy = c && !c[slotMeta.urlField] && savedRows[0];
+      if (shouldSetLegacy) {
+        const updates = {
+          [slotMeta.urlField]:  savedRows[0].file_url,
+          [slotMeta.pathField]: savedRows[0].file_path,
+          [slotMeta.nameField]: savedRows[0].name,
+        };
+        uploadPhase = 'character';
+        const { error: updateErr } = await sb.from('production_characters').update(updates).eq('id', charId);
+        if (updateErr) throw updateErr;
+        Object.assign(c, updates);
+      }
+      showToast(`${files.length} file${files.length === 1 ? '' : 's'} uploaded.`);
       renderMaterialsList();
     } catch(err) {
       const prefix = uploadPhase === 'upload' ? 'Upload failed'
@@ -49671,16 +49772,38 @@ See you soon!
     renderMaterialsList();
   }
 
-  async function deleteMaterialFile(charId, type, slot) {
+  async function deleteMaterialFile(charId, type, slot, fileId = '', filePath = '', fileUrl = '') {
     if (!confirm('Remove this file?')) return;
     const meta = materialTypeMeta(type);
     const slotMeta = meta.slots.find(s => s.key === slot);
     if (!slotMeta) return;
-    const updates = { [slotMeta.urlField]: null, [slotMeta.pathField]: null, [slotMeta.nameField]: null };
-    const { error } = await sb.from('production_characters').update(updates).eq('id', charId);
-    if (error) { showToast('Could not remove file: ' + error.message, true); return; }
+    let error = null;
+    if (fileId) {
+      const { error: delErr } = await sb.from('production_files').delete().eq('id', fileId);
+      if (delErr) error = delErr;
+      prodFiles = prodFiles.filter(file => String(file.id || '') !== String(fileId));
+    }
+    if (!error && filePath) {
+      await sb.storage.from('production-files').remove([filePath]).catch(() => {});
+    }
     const c = characters.find(x => x.id === charId);
-    if (c) Object.assign(c, updates);
+    const isLegacyMatch = c && (
+      (!fileUrl && !fileId) ||
+      (fileUrl && c[slotMeta.urlField] === fileUrl) ||
+      (filePath && c[slotMeta.pathField] === filePath)
+    );
+    if (!error && isLegacyMatch) {
+      const remaining = materialFileRecordsForSlot(c, type, slotMeta)
+        .filter(file => file.url !== fileUrl && file.path !== filePath && String(file.id || '') !== String(fileId || ''));
+      const replacement = remaining.find(file => file.url) || null;
+      const updates = replacement
+        ? { [slotMeta.urlField]: replacement.url, [slotMeta.pathField]: replacement.path || null, [slotMeta.nameField]: replacement.name || null }
+        : { [slotMeta.urlField]: null, [slotMeta.pathField]: null, [slotMeta.nameField]: null };
+      const { error: updateErr } = await sb.from('production_characters').update(updates).eq('id', charId);
+      if (updateErr) error = updateErr;
+      else Object.assign(c, updates);
+    }
+    if (error) { showToast('Could not remove file: ' + error.message, true); return; }
     showToast('File removed.');
     renderMaterialsList();
   }
