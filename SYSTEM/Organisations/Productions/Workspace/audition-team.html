@@ -48367,6 +48367,7 @@ See you soon!
     document.getElementById('char-modal-title').textContent = 'Add Character';
     document.getElementById('char-save-btn').textContent = 'Save Character';
     document.getElementById('char-error').textContent = '';
+    document.getElementById('char-error').classList.remove('visible');
     charModalFields(null);
     toggleCharVocalSection();
     document.getElementById('add-character-modal').classList.add('open');
@@ -48380,13 +48381,17 @@ See you soon!
     document.getElementById('char-modal-title').textContent = 'Edit Character';
     document.getElementById('char-save-btn').textContent = 'Save Changes';
     document.getElementById('char-error').textContent = '';
+    document.getElementById('char-error').classList.remove('visible');
     charModalFields(c);
     toggleCharVocalSection();
     document.getElementById('add-character-modal').classList.add('open');
     document.getElementById('char-name').focus();
   }
 
-  function closeAddCharacterModal() { document.getElementById('add-character-modal').classList.remove('open'); }
+  function closeAddCharacterModal() {
+    document.getElementById('add-character-modal').classList.remove('open');
+    document.getElementById('char-error')?.classList.remove('visible');
+  }
 
   function toggleCharVocalSection() {
     const roleType = (document.getElementById('char-role-type') || {}).value || '';
@@ -48413,28 +48418,48 @@ See you soon!
     };
   }
 
+  async function persistCharacterFields(fields, options = {}) {
+    const { id = null, insert = false } = options;
+    let attempt = { ...fields };
+    let lastError = null;
+    for (let i = 0; i < 8; i += 1) {
+      const query = insert
+        ? sb.from('production_characters').insert(attempt).select().single()
+        : sb.from('production_characters').update(attempt).eq('id', id);
+      const { data, error } = await query;
+      if (!error) return { data, fields: attempt, error: null };
+      lastError = error;
+      const missingColumn = String(error?.message || '').match(/Could not find the '([^']+)' column/i)?.[1];
+      if (!missingColumn || !(missingColumn in attempt)) break;
+      delete attempt[missingColumn];
+    }
+    return { data: null, fields: attempt, error: lastError };
+  }
+
   async function submitCharacter() {
     const fields = readCharModal();
     const errEl  = document.getElementById('char-error');
     const btn    = document.getElementById('char-save-btn');
     const defaultLabel = editingCharId ? 'Save Changes' : 'Save Character';
     errEl.textContent = '';
-    if (!fields.name) { errEl.textContent = 'Character name is required.'; return; }
+    errEl.classList.remove('visible');
+    if (!fields.name) { errEl.textContent = 'Character name is required.'; errEl.classList.add('visible'); return; }
     btn.disabled = true; btn.textContent = 'Saving…';
     try {
       if (editingCharId) {
-        const { error } = await sb.from('production_characters').update(fields).eq('id', editingCharId);
+        const { fields: savedFields, error } = await persistCharacterFields(fields, { id: editingCharId });
         if (error) throw error;
         const c = characters.find(x => x.id === editingCharId);
-        if (c) Object.assign(c, fields);
+        if (c) Object.assign(c, savedFields);
       } else {
         const payload = { ...fields, production_id: prodId, sort_order: characters.length };
-        const { data, error } = await sb.from('production_characters').insert(payload).select().single();
+        const { data, error } = await persistCharacterFields(payload, { insert: true });
         if (error) throw error;
         if (data) characters.push(data);
       }
     } catch (error) {
       errEl.textContent = error?.message || 'Could not save this character. Please try again.';
+      errEl.classList.add('visible');
       btn.disabled = false;
       btn.textContent = defaultLabel;
       return;
