@@ -2297,7 +2297,7 @@
       const regUrl = registrationLink();
       const btnStyle = 'display:inline-block;background:#572e88;color:#ffffff;text-decoration:none;font-weight:800;padding:14px 22px;border-radius:8px;';
       const regBtn = regUrl ? `<a href="${regUrl}" style="${btnStyle}">Complete Registration</a>` : '';
-      const { data } = await sb.functions.invoke('send-email', {
+      const { data, error: invokeErr } = await sb.functions.invoke('send-email', {
         body: {
           applicant_id: app.id, production_id: prodId,
           category: 'cast_accepted', trigger: 'cast_accepted',
@@ -2324,7 +2324,7 @@
           },
         },
       });
-      if (!data?.sent) throw new Error(data?.error || 'Accepted-role email was not sent.');
+      if (invokeErr || !data?.sent) throw new Error(data?.error || (invokeErr instanceof Error ? invokeErr.message : String(invokeErr || '')) || 'Accepted-role email was not sent.');
     }
 
     async function sendOfferResponseNotification(status) {
@@ -2461,8 +2461,9 @@
         }
         await saveResponse('accepted');
         let emailSent = true;
+        let emailError = '';
         try { await sendAcceptedEmail(); }
-        catch (e) { emailSent = false; console.warn('[BTS] role accepted email failed', e); }
+        catch (e) { emailSent = false; emailError = (e instanceof Error ? e.message : String(e)) || ''; console.warn('[BTS] role accepted email failed', e); }
         try { await sendOfferResponseNotification('accepted'); }
         catch (e) { console.warn('[BTS] producer accepted-role notification failed', e); }
         $('decision-panel').classList.remove('hidden');
@@ -2472,8 +2473,14 @@
         const regUrl = registrationLink();
         const regEl = $('reg-url');
         if (regEl && regUrl) regEl.href = regUrl;
-        $('reg-card').classList.toggle('hidden', emailSent);
+        const regCard = $('reg-card');
+        if (regCard) regCard.classList.remove('hidden');
+        const regNote = $('reg-card-note');
+        if (regNote) regNote.textContent = emailSent
+          ? 'A confirmation email is on its way. You can also go straight there now.'
+          : 'We could not send your confirmation email automatically. Use the button below to continue.';
         showSubmittedResponse('accepted', emailSent);
+        if (emailError) console.error('[BTS] cast_accepted email error detail:', emailError);
         setOfferLocked(true);
         clearStatus();
       } catch (err) {
