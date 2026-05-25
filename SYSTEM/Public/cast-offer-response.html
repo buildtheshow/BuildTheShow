@@ -1200,7 +1200,7 @@
               <button class="btn-decline-hero" id="decline-btn-top" type="button">No, I decline this role</button>
             </div>
             <p class="hero-cta-note" id="hero-producer-contact"></p>
-            <p class="hero-cta-note">Your registration link will be emailed to you after you accept.</p>
+            <p class="hero-cta-note">If you accept, your role will be confirmed. Registration information will be sent in the next couple of days.</p>
             <div class="response-submitted hero-submitted hidden" id="hero-response-submitted">
               <div class="response-submitted-title" id="hero-response-submitted-title"></div>
               <div class="response-submitted-note" id="hero-response-submitted-note"></div>
@@ -1257,8 +1257,8 @@
       <!-- Reg card -->
       <div class="reg-card hidden" id="reg-card">
         <div class="reg-card-accepted">Role accepted!</div>
-        <p class="reg-card-note" id="reg-card-note">Check your email for your registration link.</p>
-        <a href="#" id="reg-url" class="reg-link-btn">Go to Registration</a>
+        <p class="reg-card-note" id="reg-card-note">Your role is confirmed. Registration information will be sent in the next couple of days.</p>
+        <a href="#" id="reg-url" class="reg-link-btn hidden">Go to Registration</a>
       </div>
 
     </div>
@@ -1571,9 +1571,7 @@
 
     function submittedResponseNote(state, emailSent = true) {
       if (state === 'accepted') {
-        return emailSent
-          ? 'Check your email for your registration link.'
-          : 'Your role is confirmed. We could not send the registration email automatically, so please contact the production team.';
+        return 'Your role is confirmed. Registration information will be sent in the next couple of days.';
       }
       const contact = producerContact();
       return contact.email
@@ -2159,10 +2157,12 @@
     }
 
     function registrationLink() {
-      if (pretty?.code && pretty?.org && pretty?.show) {
-        return `${window.location.origin}/${encodeURIComponent(pretty.org)}/${encodeURIComponent(pretty.show)}/registration/${encodeURIComponent(pretty.code)}`;
-      }
-      return '';
+      const hash = new URLSearchParams();
+      if (pretty?.code || offerCode || token) hash.set('code', pretty?.code || offerCode || token);
+      if (app?.id) hash.set('app', app.id);
+      if (prodId) hash.set('prod', prodId);
+      const suffix = hash.toString() ? `#${hash.toString()}` : '';
+      return `${window.location.origin}/SYSTEM/Public/registration${suffix}`;
     }
 
     function paymentsLink() {
@@ -2475,16 +2475,15 @@
         const regUrl = registrationLink();
         const regEl = $('reg-url');
         if (regEl && regUrl) regEl.href = regUrl;
+        if (regEl) regEl.classList.add('hidden');
         const regCard = $('reg-card');
         if (regCard) regCard.classList.remove('hidden');
         const regNote = $('reg-card-note');
-        if (regNote) regNote.textContent = emailSent
-          ? 'A confirmation email is on its way. You can also go straight there now.'
-          : 'We could not send your confirmation email automatically. Use the button below to continue.';
+        if (regNote) regNote.textContent = 'Your role is confirmed. Registration information will be sent in the next couple of days.';
         showSubmittedResponse('accepted', emailSent);
         if (emailError) {
           console.error('[BTS] cast_accepted email error detail:', emailError);
-          setStatus(`Your role was accepted, but the registration email could not be sent automatically. Use the registration button below. (${emailError})`, 'error');
+          setStatus('Your role was accepted. Registration information will be sent in the next couple of days.', 'neutral');
         }
         setOfferLocked(true);
         if (!emailError) clearStatus();
