@@ -6,7 +6,7 @@ export async function onRequest(context) {
   const url = new URL(context.request.url);
   const assetUrl = new URL('/SYSTEM/Public/registration', url);
   try {
-    return await context.env.ASSETS.fetch(new Request(assetUrl.toString(), context.request));
+    return await fetch(new Request(assetUrl.toString(), context.request));
   } catch (error) {
     return new Response('Registration form is temporarily unavailable.', {
       status: 503,
