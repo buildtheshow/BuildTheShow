@@ -47384,6 +47384,11 @@ See you soon!
       status.textContent = enabled ? 'Visible' : 'Hidden';
       status.style.color = enabled ? 'rgba(255,255,255,0.5)' : '#572e88';
     }
+    const deadlineStatus = document.getElementById('st-deadline-status');
+    if (deadlineStatus && deadlineStatus.dataset.state !== 'saving') {
+      deadlineStatus.textContent = enabled ? '' : 'Hidden from performers until Show to Performers is on.';
+      deadlineStatus.style.color = enabled ? 'rgba(87,46,136,0.5)' : '#b45309';
+    }
   }
 
   async function saveSelfTapeEnabled(enabled) {
@@ -47405,16 +47410,20 @@ See you soon!
     const statusEl = document.getElementById('st-deadline-status');
     if (!el || !prod || !prodId) return;
     const value = el.value ? el.value : null;
-    if (statusEl) { statusEl.textContent = 'Saving...'; statusEl.style.color = 'rgba(87,46,136,0.5)'; }
+    if (statusEl) { statusEl.dataset.state = 'saving'; statusEl.textContent = 'Saving...'; statusEl.style.color = 'rgba(87,46,136,0.5)'; }
     const wizardData = { ...(prod.wizard_data || {}), self_tape_deadline: value };
     const { error } = await sb.from('productions').update({ wizard_data: wizardData }).eq('id', prodId);
     if (error) {
-      if (statusEl) { statusEl.textContent = 'Save failed.'; statusEl.style.color = '#b91c1c'; }
+      if (statusEl) { delete statusEl.dataset.state; statusEl.textContent = 'Save failed.'; statusEl.style.color = '#b91c1c'; }
       return;
     }
     prod.wizard_data = wizardData;
     if (statusEl) { statusEl.textContent = 'Saved'; statusEl.style.color = '#16a34a'; }
-    setTimeout(() => { if (statusEl && statusEl.textContent === 'Saved') statusEl.textContent = ''; }, 1600);
+    setTimeout(() => {
+      if (!statusEl || statusEl.textContent !== 'Saved') return;
+      delete statusEl.dataset.state;
+      _updateSelfTapeVisFooter(prod?.wizard_data?.self_tape_enabled !== false);
+    }, 1600);
   }
 
   function copySelftapeLink() {
