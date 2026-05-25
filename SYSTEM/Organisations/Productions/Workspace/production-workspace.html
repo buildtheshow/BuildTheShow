@@ -31019,7 +31019,7 @@ Warmly,
       name: 'Role Accepted Registration',
       category: 'cast_accepted',
       trigger: 'cast_accepted',
-      subject: 'Yay! You accepted your role in {{show_name}}',
+      subject: '{{role_name}} accepted | Cast registration for {{show_name}}',
       body: `Hi {{preferred_name}},
 
 We are so excited to officially welcome you to the cast of {{show_name}} as {{role_name}}!
@@ -31525,11 +31525,14 @@ Your submission link is unique to you. Please do not share it with another perfo
     if (!t) return;
     const currentBody = String(t.body || '');
     const currentName = String(t.name || '');
+    const currentSubject = String(t.subject || '').trim();
+    const desiredSubject = '{{role_name}} accepted | Cast registration for {{show_name}}';
     const legacyAcceptedBody =
       /Yay!\s+You have accepted the role of \{\{role_name\}\} in \{\{show_name\}\}\./i.test(currentBody)
       || /Your registration is now unlocked\.\s*Please use the link below to complete your cast registration:/i.test(currentBody);
     const needsName = currentName === 'Role Accepted Registration';
-    if (!legacyAcceptedBody && !needsName) return;
+    const needsSubject = !currentSubject || /Yay!\s+You accepted your role in \{\{show_name\}\}/i.test(currentSubject);
+    if (!legacyAcceptedBody && !needsName && !needsSubject) return;
     const nextBody = `Hi {{preferred_name}},
 
 We are so excited to officially welcome you to the cast of {{show_name}} as {{role_name}}!
@@ -31559,10 +31562,12 @@ Thank you so much!
     const payload = {};
     if (legacyAcceptedBody) payload.body = nextBody;
     if (needsName) payload.name = 'Role Accepted Registration';
+    if (needsSubject) payload.subject = desiredSubject;
     const { error } = await sb.from('email_templates').update(payload).eq('id', t.id);
     if (!error) {
       if (payload.body) t.body = payload.body;
       if (payload.name) t.name = payload.name;
+      if (payload.subject) t.subject = payload.subject;
     }
   }
 
