@@ -31007,7 +31007,7 @@ Warmly,
 <p>{{cast_response_button}}</p>
 <p><em>(or click here: {{cast_response_link}})</em></p>
 <p>Please make sure you respond through the link above so we can keep moving forward with casting, registration, and production planning.</p>
-<p>If you have any questions about your role before responding, please reach out to us first — we would be happy to chat.</p>
+<p>If you have any questions about your role before responding, please reach out to us first and we would be happy to chat.</p>
 <p><strong>Here are a few important production details:</strong></p>
 <p>Rehearsals begin at {{show_venue}} on <strong>{{rehearsal_start_date}}</strong>.</p>
 <p>{{rehearsal_schedule}}</p>
@@ -31284,7 +31284,7 @@ Your submission link is unique to you. Please do not share it with another perfo
 <p>{{cast_response_button}}</p>
 <p><em>(or click here: {{cast_response_link}})</em></p>
 <p>Please make sure you respond through the link above so we can keep moving forward with casting, registration, and production planning.</p>
-<p>If you have any questions about your role before responding, please reach out to us first — we would be happy to chat.</p>
+<p>If you have any questions about your role before responding, please reach out to us first and we would be happy to chat.</p>
 <p><strong>Here are a few important production details:</strong></p>
 <p>Rehearsals begin at {{show_venue}} on <strong>{{rehearsal_start_date}}</strong>.</p>
 <p>{{rehearsal_schedule}}</p>
@@ -31328,7 +31328,7 @@ Your submission link is unique to you. Please do not share it with another perfo
       .replace(/\n{2,}Here are the key production details:\s*\n+Rehearsals begin at \{\{show_venue\}\} on \{\{rehearsal_start_date\}\}\.\s*\n\{\{rehearsal_schedule\}\}\s*\n+Opening night is \{\{opening_night\}\} at \{\{show_venue\}\}\./gi, '')
       .replace(/\n{2,}Rehearsals begin(?: at \{\{show_venue\}\} on| on)? \{\{rehearsal_start_date\}\}\.\s*\n\{\{rehearsal_schedule\}\}\s*\n+Opening night is \{\{opening_night\}\} at \{\{show_venue\}\}\./gi, '')
       .trim();
-    const actionMarker = text.search(/(\n{2,}|<p[^>]*>)\s*(To view your offer and respond|Please choose one of the options below|Please review the offer page|Accept your role:\s*\{\{cast_accept_link\}\}|Decline this offer:\s*\{\{cast_decline_link\}\}|\{\{cast_accept_button\}\}|\{\{cast_response_button\}\})/i);
+    const actionMarker = text.search(/(\n{2,}|<p[^>]*>(?:<[^/][^>]*>)*)\s*(To view your offer and respond|Please choose one of the options below|Please review the offer page|Accept your role:\s*\{\{cast_accept_link\}\}|Decline this offer:\s*\{\{cast_decline_link\}\}|\{\{cast_accept_button\}\}|\{\{cast_response_button\}\})/i);
     if (actionMarker >= 0) text = text.slice(0, actionMarker).trim();
     const hasBlockHtml = /<(p|div)\b/i.test(text);
     const preamble = hasBlockHtml ? text : text.split(/\n{2,}/).map(para => `<p>${para.replace(/\n/g, '<br>')}</p>`).join('\n');
@@ -44640,7 +44640,7 @@ See you soon!
       ...producerSignoffContext(),
       rehearsal_start_date: rehearsalStartDateLabel(),
       opening_night: prod?.end_date ? fmtDate(prod.end_date) : (prod?.start_date ? fmtDate(prod.start_date) : ''),
-      rehearsal_schedule: performanceSchedule || '',
+      rehearsal_schedule: prod?.rehearsal_schedule || '',
       production: {
         title: prod?.title || '',
         subtitle: prod?.subtitle || '',
@@ -61033,7 +61033,16 @@ See you soon!
       const val = flat[key];
       return (val !== undefined && val !== null) ? String(val) : `{{${key}}}`;
     });
-    return emailStyleFallbackLinks(applied);
+    const cleaned = applied
+      // "at  on date" → "on date" (empty venue between "at" and "on")
+      .replace(/\bat\s+on\b/g, 'on')
+      // "at  ." → "." (empty venue at end of phrase, HTML or plain)
+      .replace(/\bat\s+\./g, '.')
+      .replace(/\bat\s+<\/strong>/g, '</strong>')
+      .replace(/\bat\s*\.\s*(<\/p>)/g, '.$1')
+      // "at  \n" → "\n" (empty venue at end of line)
+      .replace(/\bat\s*\n/g, '\n');
+    return emailStyleFallbackLinks(cleaned);
   }
 
   async function apmLoadEmailComposer(category) {
