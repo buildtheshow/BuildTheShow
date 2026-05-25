@@ -29790,7 +29790,6 @@
         { token: '{{cast_response_link}}', label: 'Review Offer Link', sample: () => etSampleProductionUrl(`/CastOffer/${ET_SAMPLE_CONTEXT.castOfferCode}`) },
         { token: '{{cast_response_button}}', label: 'Review Offer Button', sample: () => emailActionButtonHtml(etSampleProductionUrl(`/CastOffer/${ET_SAMPLE_CONTEXT.castOfferCode}`), 'Review Offer and Respond') },
         { token: '{{cast_offer_deadline}}', label: 'Offer Reply Deadline', sample: 'Friday, May 15, 2026 at 5:00 PM' },
-        { token: '{{cast_offer_deadline_note}}', label: 'Offer Deadline Sentence', sample: 'Please respond by Friday, May 15, 2026 at 5:00 PM. If we do not hear from you by then, we will mark this role offer as declined so the production team can keep casting moving.' },
         { token: '{{registration_link}}', label: 'Registration Link', sample: () => etSampleProductionUrl(`/registration/${ET_SAMPLE_CONTEXT.registrationCode}`) },
         { token: '{{registration_button}}', label: 'Registration Button', sample: () => emailActionButtonHtml(etSampleProductionUrl(`/registration/${ET_SAMPLE_CONTEXT.registrationCode}`), 'Complete Registration') },
       ],
@@ -29954,9 +29953,9 @@
       note: 'This request is only for callback tapes. It uses a callback scoped upload link, separate from the general audition self tape link.'
     },
     cast_announcement: {
-      required: ['{{contact_name}}', '{{role_name}}', '{{cast_response_link}}', '{{cast_offer_deadline_note}}'],
+      required: ['{{contact_name}}', '{{cast_response_link}}'],
       recommended: ['{{show_name}}', '{{rehearsal_start_date}}', '{{opening_night}}'],
-      note: 'Cast offers should celebrate the offer, give clear accept and decline links, and name the reply-by deadline before the offer is marked declined.'
+      note: 'Cast offers should celebrate the offer and link to the page where performers can accept or decline.'
     },
     cast_accepted: {
       required: ['{{contact_name}}', '{{role_name}}', '{{registration_link}}'],
@@ -30997,10 +30996,12 @@ Warmly,
       name: 'Role Offer',
       category: 'cast_announcement',
       trigger: 'cast_set',
-      subject: 'Role offer: {{role_name}} in {{show_name}}',
+      subject: 'Cast offer for {{show_name}}',
       body: `Hi {{contact_name}},
 
-We are absolutely thrilled to offer you the role of {{role_name}} in {{show_name}}.
+We are absolutely thrilled to offer you a place in {{show_name}}.
+
+Please open the offer page below to review the details and respond.
 
 This offer is not confirmed until you respond using the link below.
 
@@ -31018,8 +31019,6 @@ Declining means you are not participating in this production. If you want to ask
 
 (or click this link: {{cast_response_link}})
 ─────────────────────────────
-
-{{cast_offer_deadline_note}}
 
 With excitement,
 {{producer_signoff}}`,
@@ -31261,10 +31260,11 @@ Your submission link is unique to you. Please do not share it with another perfo
       next.name = 'Role Offer';
     }
     if (/you have been cast/i.test(String(next.subject || '')) || /congratulations/i.test(String(next.subject || ''))) {
-      next.subject = 'Role offer: {{role_name}} in {{show_name}}';
+      next.subject = 'Cast offer for {{show_name}}';
     }
     next.body = String(next.body || '')
-      .replace(/We are absolutely thrilled to offer you the role of \{\{role_name\}\} in \{\{show_name\}\}!/g, 'We are absolutely thrilled to offer you the role of {{role_name}} in {{show_name}}.')
+      .replace(/We are absolutely thrilled to offer you the role of \{\{role_name\}\} in \{\{show_name\}\}\./g, 'We are absolutely thrilled to offer you a place in {{show_name}}.\n\nPlease open the offer page below to review the details and respond.')
+      .replace(/We are absolutely thrilled to offer you the role of \{\{role_name\}\} in \{\{show_name\}\}!/g, 'We are absolutely thrilled to offer you a place in {{show_name}}.\n\nPlease open the offer page below to review the details and respond.')
       .replace(/This is going to be a wonderful production and we can't wait to have you on board\./g, 'This offer is not confirmed until you respond using the link below.')
       .replace(/This offer is not confirmed until you accept it using the link below\./g, 'This offer is not confirmed until you respond using the link below.');
     next.body = etNormalizeCastOfferTemplateBody(next.body);
@@ -31286,14 +31286,12 @@ Your submission link is unique to you. Please do not share it with another perfo
   }
 
   function etCastOfferResponseBlock() {
-    return `\n\nPlease review the offer page and choose accept or decline there so we can keep everything moving.\n\nDeclining means you are not participating in this production. If you want to ask about a different role or ensemble, please contact us before responding.\n\n─────────────────────────────\n{{cast_response_button}}\n\n(or click this link: {{cast_response_link}})\n─────────────────────────────\n\n{{cast_offer_deadline_note}}\n\nWith excitement,\n{{producer_signoff}}`;
+    return `\n\nPlease review the offer page and choose accept or decline there so we can keep everything moving.\n\nDeclining means you are not participating in this production. If you want to ask about a different role or ensemble, please contact us before responding.\n\n─────────────────────────────\n{{cast_response_button}}\n\n(or click this link: {{cast_response_link}})\n─────────────────────────────\n\nWith excitement,\n{{producer_signoff}}`;
   }
 
   function etCastOfferMissingBlock(template) {
     const hasLinks = etTemplateHasCastOfferLinks(template);
-    const hasDeadline = etTemplateHasCastOfferDeadline(template);
     if (!hasLinks) return etCastOfferResponseBlock();
-    if (!hasDeadline) return `\n\n{{cast_offer_deadline_note}}`;
     return '';
   }
 
@@ -31305,11 +31303,6 @@ Your submission link is unique to you. Please do not share it with another perfo
   function etTemplateHasCastOfferButtons(template) {
     const body = String(template?.body || '');
     return body.includes('{{cast_response_button}}');
-  }
-
-  function etTemplateHasCastOfferDeadline(template) {
-    const body = String(template?.body || '');
-    return body.includes('{{cast_offer_deadline_note}}') || body.includes('{{cast_offer_deadline}}');
   }
 
   function etCleanCastOfferTemplateBody(body) {
@@ -31337,14 +31330,13 @@ Your submission link is unique to you. Please do not share it with another perfo
     const castTemplates = (templates || []).filter(t => {
       if (t?.category !== 'cast_announcement') return false;
       const cleaned = etCleanCastOfferTemplateBody(t.body || '');
-      return cleaned !== String(t.body || '').trim() || !etTemplateHasCastOfferLinks({ ...t, body: cleaned }) || !etTemplateHasCastOfferButtons({ ...t, body: cleaned }) || !etTemplateHasCastOfferDeadline({ ...t, body: cleaned });
+      return cleaned !== String(t.body || '').trim() || !etTemplateHasCastOfferLinks({ ...t, body: cleaned }) || !etTemplateHasCastOfferButtons({ ...t, body: cleaned });
     });
     if (!castTemplates.length) return;
     const updates = castTemplates.map(t => ({
       ...t,
       body: etTemplateHasCastOfferLinks({ ...t, body: etCleanCastOfferTemplateBody(t.body || '') })
         && etTemplateHasCastOfferButtons({ ...t, body: etCleanCastOfferTemplateBody(t.body || '') })
-        && etTemplateHasCastOfferDeadline({ ...t, body: etCleanCastOfferTemplateBody(t.body || '') })
         ? etCleanCastOfferTemplateBody(t.body || '')
         : etNormalizeCastOfferTemplateBody(etCleanCastOfferTemplateBody(t.body || '')),
     }));
@@ -43933,14 +43925,14 @@ See you soon!
           languageCleaned.subject !== templates[0].subject ||
           currentBody !== String(templates[0].body || '').trim() ||
           !etTemplateHasCastOfferLinks({ ...templates[0], body: currentBody }) ||
-          !etTemplateHasCastOfferDeadline({ ...templates[0], body: currentBody })
+          !etTemplateHasCastOfferButtons({ ...templates[0], body: currentBody })
         ) {
           const responseBlock = etCastOfferMissingBlock({ ...templates[0], body: currentBody });
           const { error: updateError } = await sb.from('email_templates')
             .update({
               name: languageCleaned.name,
               subject: languageCleaned.subject,
-              body: etTemplateHasCastOfferLinks({ ...templates[0], body: currentBody }) && etTemplateHasCastOfferDeadline({ ...templates[0], body: currentBody }) ? currentBody : `${currentBody}${responseBlock}`,
+              body: etTemplateHasCastOfferLinks({ ...templates[0], body: currentBody }) && etTemplateHasCastOfferButtons({ ...templates[0], body: currentBody }) ? currentBody : `${currentBody}${responseBlock}`,
             })
             .eq('id', templates[0].id);
           if (updateError) throw updateError;
