@@ -27044,6 +27044,44 @@
     _settingsSaveTimer = setTimeout(saveProdSettings, delay);
   }
   let events   = [];
+  let _rehearsalStartDateCache = '';
+  let _rehearsalStartDateLoaded = false;
+  let _rehearsalStartDatePromise = null;
+
+  function rehearsalStartDateFallback() {
+    return prod?.rehearsal_start_date || prod?.rehearsal_start || prod?.start_date || '';
+  }
+
+  function rehearsalStartDateLabel() {
+    const raw = _rehearsalStartDateLoaded ? _rehearsalStartDateCache : (_rehearsalStartDateCache || rehearsalStartDateFallback());
+    return raw ? fmtDate(String(raw).slice(0, 10)) : '';
+  }
+
+  async function loadRehearsalStartDateFromCalendar(options = {}) {
+    if (!prodId) return rehearsalStartDateFallback();
+    const force = options.force === true;
+    if (_rehearsalStartDateLoaded && !force) return _rehearsalStartDateCache || rehearsalStartDateFallback();
+    if (_rehearsalStartDatePromise && !force) return _rehearsalStartDatePromise;
+    _rehearsalStartDatePromise = sb.from('production_events')
+      .select('start_time,event_type')
+      .eq('production_id', prodId)
+      .in('event_type', ['rehearsal', 'music_rehearsal', 'choreography'])
+      .order('start_time', { ascending: true })
+      .limit(1)
+      .then(({ data, error }) => {
+        if (error) throw error;
+        _rehearsalStartDateCache = data?.[0]?.start_time ? String(data[0].start_time).slice(0, 10) : '';
+        _rehearsalStartDateLoaded = true;
+        return _rehearsalStartDateCache || rehearsalStartDateFallback();
+      })
+      .catch(error => {
+        console.warn('[BTS] Could not load rehearsal start date from calendar.', error);
+        _rehearsalStartDateLoaded = true;
+        return rehearsalStartDateFallback();
+      })
+      .finally(() => { _rehearsalStartDatePromise = null; });
+    return _rehearsalStartDatePromise;
+  }
   // checklist data loaded on tab open via loadChecklistTab()
 
   let applicantSortKey = null;
@@ -29300,7 +29338,7 @@
       bg:    '#d9f8f9',
       vars: [
         { token: '{{rehearsal_schedule}}',   label: 'Full Rehearsal Schedule', sample: () => prod?.rehearsal_schedule || etPlaceholder('rehearsal schedule') },
-        { token: '{{rehearsal_start_date}}', label: 'Rehearsal Start',         sample: () => prod?.start_date ? fmtDate(prod.start_date) : etPlaceholder('rehearsal start date') },
+        { token: '{{rehearsal_start_date}}', label: 'Rehearsal Start',         sample: () => rehearsalStartDateLabel() || etPlaceholder('rehearsal start date') },
         { token: '{{rehearsal_end_date}}',   label: 'Rehearsal End',           sample: () => prod?.end_date ? fmtDate(prod.end_date) : etPlaceholder('rehearsal end date') },
       ],
     },
@@ -40364,9 +40402,10 @@ See you soon!
     </div>`;
   }
 
-  function loadRegistrationPublicView() {
+  async function loadRegistrationPublicView() {
     const host = document.getElementById('registration-public-view-content');
     if (!host) return;
+    await loadRehearsalStartDateFromCalendar({ force: true });
 
     // Render the toolbar header inside the fixed panel
     const toolbarHost = document.getElementById('registration-publicview-toolbar');
@@ -40448,7 +40487,7 @@ See you soon!
       '{{org_name}}':            orgName || '',
       '{{show_name}}':           prod?.title || prod?.name || '',
       '{{show_venue}}':          prod?.venue || '',
-      '{{rehearsal_start_date}}': prod?.start_date ? fmtDate(prod.start_date) : '',
+      '{{rehearsal_start_date}}': rehearsalStartDateLabel(),
       '{{rehearsal_end_date}}':   prod?.end_date   ? fmtDate(prod.end_date)   : '',
       '{{performer_name}}':      _rpfPerformerName,
       '{{child_name}}':          _rpfPerformerName,
@@ -43191,6 +43230,7 @@ See you soon!
     const rolesText = roleNames.length ? roleNames.join(', ') : '';
     const roleTypesText = [...new Set((roleEntries || []).map(role => role?.roleType || '').filter(Boolean))].join(', ');
     const performanceSchedule = await loadPerformanceScheduleSummary().catch(() => '');
+    await loadRehearsalStartDateFromCalendar().catch(() => '');
     const context = {
       contact_name: app.name || '',
       performer_name: app.name || '',
@@ -43217,7 +43257,7 @@ See you soon!
       org_email: orgEmail || '',
       director_name: prod?.director || '',
       ...producerSignoffContext(),
-      rehearsal_start_date: prod?.start_date ? fmtDate(prod.start_date) : '',
+      rehearsal_start_date: rehearsalStartDateLabel(),
       opening_night: prod?.end_date ? fmtDate(prod.end_date) : (prod?.start_date ? fmtDate(prod.start_date) : ''),
       rehearsal_schedule: performanceSchedule || '',
       production: {
@@ -58350,7 +58390,7 @@ See you soon!
       show_venue:            prod?.venue      || '',
       show_dates:            showDates,
       rehearsal_schedule:    prod?.rehearsal_schedule || '',
-      rehearsal_start_date:  prod?.start_date ? fmtDate(prod.start_date) : '',
+      rehearsal_start_date:  rehearsalStartDateLabel(),
       rehearsal_end_date:    prod?.end_date ? fmtDate(prod.end_date) : '',
       opening_night:         prod?.end_date ? fmtDate(prod.end_date) : '',
       performance_schedule:  performanceScheduleSummaryCache || '',
