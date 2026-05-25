@@ -553,6 +553,103 @@
       line-height: 1.2;
     }
     .card-body { padding: 0.85rem 1.1rem; }
+    .offer-fees-card .card-body {
+      background: #edf7ef;
+    }
+    .offer-fees-intro {
+      color: #5d5079;
+      font-size: 0.86rem;
+      line-height: 1.55;
+      margin: 0 0 1rem;
+    }
+    .offer-fees-block {
+      border-top: 1px solid rgba(101,150,113,0.22);
+      padding-top: 0.95rem;
+      margin-top: 0.95rem;
+    }
+    .offer-fees-block:first-child {
+      border-top: 0;
+      padding-top: 0;
+      margin-top: 0;
+    }
+    .offer-fees-title {
+      text-align: center;
+      font-size: 0.96rem;
+      font-weight: 850;
+      color: var(--ink);
+      margin-bottom: 0.75rem;
+    }
+    .offer-fees-row,
+    .offer-fees-total {
+      display: flex;
+      justify-content: space-between;
+      gap: 1rem;
+      border-top: 1px solid rgba(101,150,113,0.14);
+      padding: 0.68rem 0;
+      color: #4c4264;
+      font-size: 0.88rem;
+      line-height: 1.35;
+    }
+    .offer-fees-row:first-of-type { border-top: 0; }
+    .offer-fees-row strong,
+    .offer-fees-total strong { color: var(--ink); }
+    .offer-fees-note {
+      color: #7a6a95;
+      font-size: 0.82rem;
+      font-style: italic;
+      line-height: 1.5;
+      margin: 0.6rem 0;
+    }
+    .offer-fees-total {
+      font-weight: 850;
+      color: var(--ink);
+      border-top-color: rgba(101,150,113,0.24);
+    }
+    .offer-fees-discounts {
+      display: grid;
+      gap: 0.65rem;
+    }
+    .offer-fees-discount {
+      background: rgba(255,255,255,0.7);
+      border: 1px solid rgba(101,150,113,0.22);
+      border-radius: 8px;
+      padding: 0.75rem 0.85rem;
+    }
+    .offer-fees-discount-title {
+      color: var(--ink);
+      font-weight: 850;
+      font-size: 0.86rem;
+      margin-bottom: 0.22rem;
+    }
+    .offer-fees-discount-copy {
+      color: #5d5079;
+      font-size: 0.78rem;
+      line-height: 1.42;
+    }
+    .offer-fees-facts {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 0.45rem;
+      margin-top: 0.6rem;
+    }
+    .offer-fees-fact {
+      border: 1px solid rgba(87,46,136,0.12);
+      border-radius: 7px;
+      background: rgba(255,255,255,0.62);
+      padding: 0.55rem 0.65rem;
+    }
+    .offer-fees-fact-label {
+      display: block;
+      color: #71618f;
+      font-size: 0.68rem;
+      font-weight: 800;
+      margin-bottom: 0.16rem;
+    }
+    .offer-fees-fact-value {
+      color: var(--ink);
+      font-weight: 850;
+      font-size: 0.9rem;
+    }
 
     /* ═══════════════════════════════════════════
        SCHEDULE
@@ -1128,6 +1225,8 @@
     <!-- BODY -->
     <div class="body-pad hidden" id="body-pad">
 
+      <div id="offer-fees-section" class="hidden"></div>
+
       <!-- Schedule + Conflicts -->
       <div class="sched-conflicts-grid" id="breakdown"></div>
 
@@ -1582,6 +1681,153 @@
       return raw ? (formatDateLong(raw) || String(raw).slice(0, 10)) : '';
     }
 
+    function paymentSettings() {
+      const registrationSettings = prod?.registration_settings && typeof prod.registration_settings === 'object'
+        ? prod.registration_settings
+        : {};
+      return registrationSettings.payment_settings && typeof registrationSettings.payment_settings === 'object'
+        ? registrationSettings.payment_settings
+        : {};
+    }
+
+    function cleanPaymentAmount(value) {
+      const n = parseFloat(String(value || '').replace(/[^0-9.-]/g, ''));
+      return Number.isFinite(n) ? n : 0;
+    }
+
+    function formatFeeAmount(value, settings = paymentSettings()) {
+      const n = cleanPaymentAmount(value);
+      if (!n) return '';
+      const symbol = { CAD: '$', USD: '$', GBP: '£' }[settings.currency || 'CAD'] || '$';
+      const code = settings.currency && settings.currency !== 'CAD' ? ` ${settings.currency}` : '';
+      const amount = Number.isInteger(n) ? String(n) : n.toFixed(2);
+      return `${symbol}${amount}${code}`;
+    }
+
+    function formatFeeDate(value) {
+      if (!value) return '';
+      const raw = String(value).slice(0, 10);
+      const d = dateObj(raw);
+      return d
+        ? d.toLocaleDateString('en-CA', { month: 'long', day: 'numeric', year: 'numeric' })
+        : raw;
+    }
+
+    function offerFeeRow(label, amount, dueDate = '') {
+      const due = dueDate ? ` <em>(due ${esc(formatFeeDate(dueDate))})</em>` : '';
+      return `<div class="offer-fees-row"><span>${esc(label)}${due}</span><strong>${esc(amount || 'Amount not set')}</strong></div>`;
+    }
+
+    function offerFeeFact(label, value) {
+      if (!value) return '';
+      return `<div class="offer-fees-fact"><span class="offer-fees-fact-label">${esc(label)}</span><span class="offer-fees-fact-value">${esc(value)}</span></div>`;
+    }
+
+    function offerFeeDiscountCard(title, description, factsHtml = '') {
+      return `<div class="offer-fees-discount">
+        <div class="offer-fees-discount-title">${esc(title)}</div>
+        <div class="offer-fees-discount-copy">${esc(description)}</div>
+        ${factsHtml ? `<div class="offer-fees-facts">${factsHtml}</div>` : ''}
+      </div>`;
+    }
+
+    function renderOfferFees() {
+      const s = paymentSettings();
+      const mode = s.mode || 'none';
+      if (mode === 'none') return '';
+
+      let feeRows = '';
+      let total = 0;
+      if (mode === 'flat') {
+        total = cleanPaymentAmount(s.fee);
+        feeRows = s.fee
+          ? offerFeeRow('Registration fee', formatFeeAmount(s.fee, s), s.fee_due_date)
+          : '<p class="offer-fees-note">Fee amount will be confirmed by the production team.</p>';
+        if (s.late_fee_date) {
+          feeRows += `<p class="offer-fees-note">Late payment after ${esc(formatFeeDate(s.late_fee_date))}.</p>`;
+        }
+      } else if (mode === 'split') {
+        const count = Number(s.split_count) || 2;
+        const installments = (Array.isArray(s.split_installments) ? s.split_installments : [])
+          .filter((_, i) => i < count);
+        if (installments.length) {
+          feeRows = installments.map((inst, i) => {
+            const amount = cleanPaymentAmount(inst.amount);
+            total += amount;
+            return offerFeeRow(`Payment ${i + 1}`, formatFeeAmount(amount, s), inst.due_date || '');
+          }).join('');
+          if (s.split_allow_upfront) {
+            feeRows += '<p class="offer-fees-note">You may also pay the full amount upfront.</p>';
+          }
+        } else {
+          feeRows = '<p class="offer-fees-note">Payment amounts will be confirmed by the production team.</p>';
+        }
+      }
+
+      const discounts = [];
+      if (s.sibling_discount_enabled) {
+        const facts = [
+          s.sibling_first_child ? offerFeeFact('First performer fee', formatFeeAmount(s.sibling_first_child, s)) : '',
+          s.sibling_additional ? offerFeeFact('Additional performer fee', `${formatFeeAmount(s.sibling_additional, s)}${s.sibling_by_household ? ' per household' : ''}`) : '',
+        ].filter(Boolean).join('');
+        discounts.push(offerFeeDiscountCard(
+          'Same immediate family, more than one performer',
+          'A family rate may apply if another performer from your immediate family is also registered for this show.',
+          facts
+        ));
+      }
+      if (s.volunteer_discount_enabled) {
+        const facts = [
+          s.volunteer_discount ? offerFeeFact('Discount', `${formatFeeAmount(s.volunteer_discount, s)} off`) : '',
+          s.volunteer_hours ? offerFeeFact('Volunteer time', `${s.volunteer_hours} hours`) : '',
+        ].filter(Boolean).join('');
+        discounts.push(offerFeeDiscountCard(
+          'Someone in our family can volunteer',
+          'Volunteer options can be requested during registration and reviewed by the production team.',
+          facts
+        ));
+      }
+      if (s.scholarship_enabled) {
+        discounts.push(offerFeeDiscountCard(
+          'Financial assistance',
+          s.scholarship_note || 'Financial assistance can be requested during registration and reviewed by the production team.'
+        ));
+      }
+
+      const discountsHtml = discounts.length ? `
+        <div class="offer-fees-block">
+          <div class="offer-fees-title">Discounts &amp; Fee Reductions</div>
+          <p class="offer-fees-note">These options are reviewed after registration, before the final amount is confirmed.</p>
+          <div class="offer-fees-discounts">${discounts.join('')}</div>
+        </div>` : '';
+
+      const instructionsHtml = s.instructions ? `
+        <div class="offer-fees-block">
+          <div class="offer-fees-title">How to Pay</div>
+          <div class="offer-fees-intro">${s.instructions}</div>
+        </div>` : '';
+
+      return `<div class="bts-card offer-fees-card">
+        <div class="card-head">
+          <div class="card-head-icon"><img src="/ASSETS/Images/Financial%20-%20Reports.svg" alt="" /></div>
+          <div>
+            <div class="card-label">Registration</div>
+            <div class="card-title">Production Fees</div>
+          </div>
+        </div>
+        <div class="card-body">
+          <p class="offer-fees-intro">This is the production fee information for this show. Full payment details and any discount requests are completed during registration.</p>
+          <div class="offer-fees-block">
+            <div class="offer-fees-title">Production Fee</div>
+            ${feeRows || '<p class="offer-fees-note">Payment details will be confirmed by the production team.</p>'}
+            ${total > 0 ? `<div class="offer-fees-total"><span>Total</span><strong>${esc(formatFeeAmount(total, s))}</strong></div>` : ''}
+          </div>
+          ${discountsHtml}
+          ${instructionsHtml}
+        </div>
+      </div>`;
+    }
+
     function eventCard(ev) {
       const t0 = formatTime(ev.start_time);
       const t1 = formatTime(ev.end_time);
@@ -1878,6 +2124,13 @@
         })}
         ${orgCard}
       `;
+
+      const offerFeesHtml = renderOfferFees();
+      const offerFeesEl = $('offer-fees-section');
+      if (offerFeesEl) {
+        offerFeesEl.innerHTML = offerFeesHtml;
+        offerFeesEl.classList.toggle('hidden', !offerFeesHtml);
+      }
 
       // Deadline lives in the hero header.
       $('deadline-banner').classList.add('hidden');
