@@ -889,15 +889,7 @@ serve(async (req) => {
 
   // ── Resolve subject + body ────────────────────────────────────
   function ensureProducerSignoffBlock(value: string): string {
-    const text = String(value || '').trim();
-    const hasProducerSignoff =
-      text.includes('{{producer_signoff}}') ||
-      (text.includes('{{producer_name}}') && text.includes('{{producer_role}}') && text.includes('{{producer_email}}'));
-    if (!text || hasProducerSignoff) return text;
-    const replaced = text
-      .replace(/\n+\{\{director_name\}\}\s*\n\{\{org_name\}\}\s*$/i, '\n{{producer_signoff}}')
-      .replace(/\n+\{\{org_name\}\}\s*$/i, '\n{{producer_signoff}}');
-    return replaced.includes('{{producer_signoff}}') ? replaced : `${text}\n\n{{producer_signoff}}`;
+    return String(value || '').trim();
   }
   const sourceSubject = template?.subject || CATEGORY_SUBJECTS[category] || `Update from ${showName || 'Build The Show'}`;
   const sourceBody    = ensureProducerSignoffBlock(template?.body || '');
