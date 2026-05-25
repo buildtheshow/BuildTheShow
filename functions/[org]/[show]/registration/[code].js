@@ -4,6 +4,6 @@
 
 export async function onRequest(context) {
   const url = new URL(context.request.url);
-  const assetUrl = new URL('/SYSTEM/Public/cast-offer-response.html', url);
+  const assetUrl = new URL('/SYSTEM/Public/registration.html', url);
   return context.env.ASSETS.fetch(assetUrl);
 }
