@@ -582,6 +582,10 @@
   let _rpfCurrent  = 0;
   let _rpfCompleted = new Set();
   let _saveTimer   = null;
+  const CAST_OFFER_KEYS = {
+    code: '__bts_cast_offer_code',
+    token: '__bts_cast_offer_token',
+  };
 
   // ── Utilities ────────────────────────────────────────────────────────────────
   function esc(str) {
@@ -1565,24 +1569,49 @@
       return;
     }
 
-    // 1. Cast offer
-    const { data: offer, error: offerErr } = await sb
-      .from('cast_offers')
-      .select('id, production_id, applicant_id, token, code')
-      .or(`token.eq.${_regCode},code.eq.${_regCode}`)
-      .maybeSingle();
+    // 1. Resolve the same offer identity used by the cast-offer page.
+    const applicantSelect = 'id, production_id, name, email, pronouns, dob, custom_answers, headshot_url, phone, first_name, last_name, preferred_name';
+    let applicant = null;
+    async function findApplicantByOfferKey(key) {
+      const { data, error } = await sb
+        .from('audition_applications')
+        .select(applicantSelect)
+        .contains('custom_answers', { [key]: _regCode })
+        .limit(1);
+      if (error) throw error;
+      return data?.[0] || null;
+    }
+    applicant = await findApplicantByOfferKey(CAST_OFFER_KEYS.code);
+    if (!applicant) applicant = await findApplicantByOfferKey(CAST_OFFER_KEYS.token);
 
-    if (offerErr || !offer) {
+    let offer = null;
+    if (!applicant) {
+      const { data: offerMatch, error: offerErr } = await sb
+        .from('cast_offers')
+        .select('id, production_id, applicant_id, token, code')
+        .or(`token.eq.${_regCode},code.eq.${_regCode}`)
+        .maybeSingle();
+      if (offerErr) throw offerErr;
+      offer = offerMatch || null;
+    }
+
+    if (!applicant && !offer) {
       showError('Link not found', 'This registration link does not match any active production. It may have expired or been removed. Please contact your production team for a new link.');
       return;
     }
-    _offer = offer;
+    _offer = offer || {
+      id: '',
+      production_id: applicant?.production_id || '',
+      applicant_id: applicant?.id || '',
+      token: _regCode,
+      code: _regCode,
+    };
 
     // 2. Production
     const { data: prod, error: prodErr } = await sb
       .from('productions')
       .select('id, title, slug, registration_settings, poster_url, start_date, end_date, venue, organization_id')
-      .eq('id', offer.production_id)
+      .eq('id', _offer.production_id)
       .maybeSingle();
 
     if (prodErr || !prod) {
@@ -1606,13 +1635,16 @@
     }
 
     // 4. Applicant / prefill
-    if (offer.applicant_id) {
-      const { data: applicant } = await sb
+    if (applicant) {
+      _applicant = applicant;
+      _prefill = buildPrefill(_applicant);
+    } else if (_offer.applicant_id) {
+      const { data: applicantMatch } = await sb
         .from('audition_applications')
-        .select('id, name, email, pronouns, dob, custom_answers, headshot_url, phone, first_name, last_name, preferred_name')
-        .eq('id', offer.applicant_id)
+        .select(applicantSelect)
+        .eq('id', _offer.applicant_id)
         .maybeSingle();
-      _applicant = applicant || null;
+      _applicant = applicantMatch || null;
       _prefill = buildPrefill(_applicant);
     }
 
