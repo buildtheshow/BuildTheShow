@@ -45653,7 +45653,7 @@ See you soon!
         if (el) el.checked = true;
       });
       const selfTapeEl = document.getElementById('aud-self-tape-instructions');
-      if (selfTapeEl) selfTapeEl.innerHTML = prod?.wizard_data?.self_tape_instructions || '';
+      if (selfTapeEl) selfTapeEl.innerHTML = normaliseRichHtmlForEmail(prod?.wizard_data?.self_tape_instructions || '');
 
       // Self-tape settings block
       const stIsEnabled = prod?.wizard_data?.self_tape_enabled !== false;
@@ -45846,7 +45846,7 @@ See you soon!
   async function saveSelfTapeInstructions() {
     const el = document.getElementById('aud-self-tape-instructions');
     const statusEl = document.getElementById('aud-self-tape-status');
-    const value = el ? (el.innerHTML || '').trim() : '';
+    const value = el ? normaliseRichHtmlForEmail(el.innerHTML || '') : '';
     if (!prod) prod = {};
     const wizardData = { ...(prod.wizard_data || {}), self_tape_instructions: value };
     const { error } = await sb.from('productions').update({ wizard_data: wizardData }).eq('id', prodId);
@@ -48794,6 +48794,23 @@ See you soon!
       .replace(/<div>/g, '<p>')
       .replace(/<\/div>/g, '</p>')
       .replace(/<span>([\s\S]*?)<\/span>/g, '$1');
+  }
+
+  function decodePossiblyEscapedRichHtml(value) {
+    const raw = String(value || '').trim();
+    if (!raw) return '';
+    const textarea = document.createElement('textarea');
+    textarea.innerHTML = raw;
+    const decoded = textarea.value;
+    return /&lt;\/?(b|strong|i|em|u|a|br|p|div|ul|ol|li|h2|h3)\b/i.test(raw) ? decoded : raw;
+  }
+
+  function normaliseRichHtmlForEmail(value) {
+    const decoded = decodePossiblyEscapedRichHtml(value);
+    const source = /<(b|strong|i|em|u|a|br|p|div|ul|ol|li|h2|h3)\b/i.test(decoded)
+      ? decoded
+      : decoded.replace(/\n/g, '<br>');
+    return cleanRichHtml(source);
   }
 
   function handleAudPreparePaste(event, editorId) {
@@ -58399,7 +58416,7 @@ See you soon!
       director_name:         prod?.director   || '',
       ...producerSignoffContext(),
       self_tape_deadline:    etFormatSelfTapeDeadline(prod?.wizard_data?.self_tape_deadline) || '',
-      self_tape_instructions: prod?.wizard_data?.self_tape_instructions || '',
+      self_tape_instructions: normaliseRichHtmlForEmail(prod?.wizard_data?.self_tape_instructions || ''),
       video_call_link:       customAnswers['Video Call Link'] || customAnswers.video_call_link || customAnswers['Video Link'] || customAnswers['Meeting Link'] || prod?.wizard_data?.video_call_link || prod?.wizard_data?.video_link || '',
       audition_session:      primarySession?.name     || '',
       audition_date:         (generalSess?.date ? fmtDate(generalSess.date) : '') || combinedCbDate || (primarySession?.date ? fmtDate(primarySession.date) : ''),

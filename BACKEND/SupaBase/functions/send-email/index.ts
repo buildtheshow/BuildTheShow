@@ -850,6 +850,7 @@ serve(async (req) => {
     '{{dance_call_prepare}}',
     '{{callback_prepare}}',
     '{{callback_materials}}',
+    '{{self_tape_instructions}}',
     '{{producer_signoff}}',
   ]);
 

@@ -655,6 +655,53 @@
     return d.innerHTML;
   }
 
+  function stDecodePossiblyEscapedHtml(value) {
+    const raw = String(value || '').trim();
+    if (!raw) return '';
+    const textarea = document.createElement('textarea');
+    textarea.innerHTML = raw;
+    const decoded = textarea.value;
+    return /&lt;\/?(b|strong|i|em|u|a|br|p|div|ul|ol|li|h2|h3)\b/i.test(raw) ? decoded : raw;
+  }
+
+  function stCleanRichHtml(value) {
+    const decoded = stDecodePossiblyEscapedHtml(value);
+    const source = /<(b|strong|i|em|u|a|br|p|div|ul|ol|li|h2|h3)\b/i.test(decoded)
+      ? decoded
+      : decoded.replace(/\n/g, '<br>');
+    const doc = new DOMParser().parseFromString(`<div>${source}</div>`, 'text/html');
+    const allowed = new Set(['B','STRONG','I','EM','U','A','BR','P','DIV','UL','OL','LI','H2','H3']);
+    function clean(node) {
+      if (node.nodeType === Node.TEXT_NODE) return document.createTextNode(node.textContent || '');
+      if (node.nodeType !== Node.ELEMENT_NODE) return null;
+      if (!allowed.has(node.tagName)) {
+        const span = document.createElement('span');
+        [...node.childNodes].forEach(child => {
+          const cleaned = clean(child);
+          if (cleaned) span.appendChild(cleaned);
+        });
+        return span;
+      }
+      const tag = node.tagName === 'STRONG' ? 'B' : node.tagName === 'EM' ? 'I' : node.tagName;
+      const out = document.createElement(tag.toLowerCase());
+      if (tag === 'A') {
+        const href = node.getAttribute('href') || '';
+        if (href) out.setAttribute('href', href);
+      }
+      [...node.childNodes].forEach(child => {
+        const cleaned = clean(child);
+        if (cleaned) out.appendChild(cleaned);
+      });
+      return out;
+    }
+    const wrap = document.createElement('div');
+    [...(doc.body.firstElementChild?.childNodes || [])].forEach(child => {
+      const cleaned = clean(child);
+      if (cleaned) wrap.appendChild(cleaned);
+    });
+    return wrap.innerHTML.replace(/<span>([\s\S]*?)<\/span>/g, '$1');
+  }
+
   function stSubmissionCode(name, id) {
     const cleanName = String(name || 'Performer')
       .trim()
@@ -670,7 +717,7 @@
 
   function stSelfTapeInstructionsHtml() {
     const custom = String(_prod?.wizard_data?.self_tape_instructions || '').trim();
-    if (custom) return custom;
+    if (custom) return stCleanRichHtml(custom);
     return 'Record the material requested by the production. If no specific material was listed, choose something that clearly shows your voice, acting, movement, or personality.';
   }
 
@@ -1390,7 +1437,7 @@
         ...(conflicts.length ? { 'Conflict Dates': conflicts.map(c => c.title ? `${stDateLabel(c.date)}: ${c.title}` : stDateLabel(c.date)).join(', ') } : {}),
         ...(_stState.notes ? { 'Additional Notes': _stState.notes } : {})
       };
-      const selfTapeInstructions = String(_prod?.wizard_data?.self_tape_instructions || '').trim();
+      const selfTapeInstructions = stCleanRichHtml(_prod?.wizard_data?.self_tape_instructions || '');
       if (selfTapeInstructions) customAnswersPayload['Self Tape Instructions'] = selfTapeInstructions;
       const payload = {
         production_id: prodId,
@@ -1500,7 +1547,7 @@
           performer_email: email,
           show_name: _prod?.title || '',
           submission_link: submissionLink,
-          self_tape_instructions: _prod?.wizard_data?.self_tape_instructions || '',
+          self_tape_instructions: stCleanRichHtml(_prod?.wizard_data?.self_tape_instructions || ''),
           self_tape_deadline: _prod?.wizard_data?.self_tape_deadline || '',
         }
       };
