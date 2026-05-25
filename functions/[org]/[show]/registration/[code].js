@@ -4,6 +4,8 @@
 
 export async function onRequest(context) {
   const url = new URL(context.request.url);
-  const assetUrl = new URL('/SYSTEM/Public/registration', url);
-  return context.env.ASSETS.fetch(assetUrl);
+  const code = context.params.code || url.pathname.split('/').filter(Boolean).pop() || '';
+  const target = new URL('/SYSTEM/Public/registration', url.origin);
+  target.hash = `code=${encodeURIComponent(code)}`;
+  return Response.redirect(target.toString(), 302);
 }
