@@ -31270,7 +31270,8 @@ Your submission link is unique to you. Please do not share it with another perfo
       next.subject = '{{preferred_name}} in {{show_name}} | Casting';
     }
     const newPreamble = `<p>Hi {{preferred_name}},</p>\n<p>Thank you so much for auditioning for <strong>{{show_name}}</strong>!</p>\n<p>We know auditions can feel exciting, nerve-wracking, exhausting, and everything in between, and we want to genuinely thank you for the time, energy, and heart you put into this process. We spent a long time talking through casting, and we are so excited to officially offer you a place in the production.</p>`;
-    next.body = String(next.body || '')
+    const originalBody = String(next.body || '');
+    const normalizedBody = originalBody
       .replace(/Hi\s+\{\{contact_name\}\},/g, 'Hi {{preferred_name}},')
       // Replace old "absolutely thrilled" preamble (plain text or HTML) with the new thank-you preamble
       .replace(/<p>Hi \{\{preferred_name\}\},<\/p>\s*<p>We are absolutely thrilled to offer you (?:the role of \{\{role_name\}\}|a place) in \{\{show_name\}\}[.!]<\/p>(?:\s*<p>This offer is not confirmed[^<]*<\/p>)?(?:\s*<p>Please open the offer page[^<]*<\/p>)?/g, newPreamble)
@@ -31279,7 +31280,10 @@ Your submission link is unique to you. Please do not share it with another perfo
       .replace(/We are absolutely thrilled to offer you the role of \{\{role_name\}\} in \{\{show_name\}\}!/g, 'We are absolutely thrilled to offer you a place in {{show_name}}.\n\nPlease open the offer page below to review the details and respond.')
       .replace(/This is going to be a wonderful production and we can't wait to have you on board\./g, 'This offer is not confirmed until you respond using the link below.')
       .replace(/This offer is not confirmed until you accept it using the link below\./g, 'This offer is not confirmed until you respond using the link below.');
-    next.body = etNormalizeCastOfferTemplateBody(next.body);
+    const needsResponseBlock = normalizedBody !== originalBody
+      || !etTemplateHasCastOfferLinks({ ...next, body: normalizedBody })
+      || !etTemplateHasCastOfferButtons({ ...next, body: normalizedBody });
+    next.body = needsResponseBlock ? etNormalizeCastOfferTemplateBody(normalizedBody) : normalizedBody;
     return next;
   }
 
@@ -32245,6 +32249,7 @@ See you soon!
 
     const payload = { production_id: prodId, name, category, trigger, subject, body };
     let error;
+    let savedTemplate = null;
     let savedMessage = 'Template saved.';
     const editingTemplate = _etEditing ? _etTemplates.find(t => String(t.id) === String(_etEditing)) : null;
     const categoryCollision = _etTemplates.find(t =>
@@ -32264,14 +32269,42 @@ See you soon!
     }
     try {
       if (_etEditing) {
-        ({ error } = await sb.from('email_templates').update(payload).eq('id', _etEditing));
+        const result = await sb.from('email_templates')
+          .update(payload)
+          .eq('id', _etEditing)
+          .select('*')
+          .maybeSingle();
+        error = result.error;
+        savedTemplate = result.data;
+        if (!error && !savedTemplate) {
+          const fallbackTemplate = editingTemplate || etLatestTemplateForCategory(category);
+          if (!fallbackTemplate?.id) throw new Error('Could not find this template to save.');
+          const fallbackResult = await sb.from('email_templates')
+            .update(payload)
+            .eq('id', fallbackTemplate.id)
+            .select('*')
+            .maybeSingle();
+          error = fallbackResult.error;
+          savedTemplate = fallbackResult.data;
+        }
       } else {
         const existingCategoryTemplate = etLatestTemplateForCategory(category);
         if (existingCategoryTemplate?.id) {
-          ({ error } = await sb.from('email_templates').update(payload).eq('id', existingCategoryTemplate.id));
+          const result = await sb.from('email_templates')
+            .update(payload)
+            .eq('id', existingCategoryTemplate.id)
+            .select('*')
+            .maybeSingle();
+          error = result.error;
+          savedTemplate = result.data;
           savedMessage = `${etCategoryLabel(category)} updated.`;
         } else {
-          ({ error } = await sb.from('email_templates').insert(payload));
+          const result = await sb.from('email_templates')
+            .insert(payload)
+            .select('*')
+            .maybeSingle();
+          error = result.error;
+          savedTemplate = result.data;
         }
       }
     } catch (err) {
@@ -32286,6 +32319,17 @@ See you soon!
       }
       return;
     }
+    if (!savedTemplate) {
+      msg.textContent = 'Could not confirm the save. Please try again.';
+      msg.style.display = ''; msg.style.background = 'rgba(185,28,28,0.07)'; msg.style.color = '#b91c1c';
+      if (saveBtn) {
+        saveBtn.disabled = false;
+        saveBtn.textContent = originalSaveLabel;
+      }
+      return;
+    }
+    _etTemplates = (_etTemplates || []).filter(t => String(t.id) !== String(savedTemplate.id));
+    _etTemplates.unshift(savedTemplate);
     showToast(savedMessage);
     closeEmailTemplateModal();
     await loadEmailTemplates();
