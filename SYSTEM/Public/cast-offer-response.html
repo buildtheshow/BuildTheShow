@@ -2272,7 +2272,16 @@
       const { data: chars } = charIds.length
         ? await sb.from('production_characters').select('id,name,role_type,description').in('id', charIds)
         : { data: [] };
+      const hasEnsembleOffer = offeredAssignments.some(row => !row.character_id);
+      const { data: ensembleChars } = hasEnsembleOffer
+        ? await sb.from('production_characters')
+            .select('id,name,role_type,description')
+            .eq('production_id', prod.id)
+            .or('name.ilike.%ensemble%,role_type.eq.Ensemble')
+        : { data: [] };
       const charMap = new Map((chars || []).map(c => [String(c.id), c]));
+      const ensembleBreakdown = String((ensembleChars || [])
+        .find(c => String(c?.description || '').trim())?.description || '').trim();
       roleNames = offeredAssignments.map(row => row.character_id
         ? (charMap.get(String(row.character_id))?.name || 'Role')
         : 'Ensemble'
@@ -2281,7 +2290,7 @@
         const character = row.character_id ? charMap.get(String(row.character_id)) : null;
         return {
           name: row.character_id ? (character?.name || 'Role') : 'Ensemble',
-          summary: String(character?.description || '').trim(),
+          summary: String(row.character_id ? character?.description || '' : ensembleBreakdown).trim(),
         };
       }).filter(item => item.summary);
       const storedNames = String(ca[KEYS.roleNames] || '').split(',').map(n => n.trim()).filter(Boolean);
