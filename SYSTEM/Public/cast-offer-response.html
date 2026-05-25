@@ -117,6 +117,11 @@
       margin-bottom: 1rem;
       justify-content: center;
     }
+    .role-badges.multi-role {
+      flex-direction: column;
+      align-items: center;
+      gap: 0.2rem;
+    }
     .role-badge {
       color: rgba(255,255,255,0.9);
       padding: 0;
@@ -125,6 +130,10 @@
       line-height: 1.15;
       letter-spacing: 0;
       text-shadow: 0 8px 24px rgba(0,0,0,0.2);
+    }
+    .role-badges.many-roles .role-badge {
+      font-size: clamp(1.05rem, 2.6vw, 1.65rem);
+      line-height: 1.08;
     }
     .role-summary {
       max-width: 520px;
@@ -1278,6 +1287,18 @@
 
     function showTitle() { return prod?.title || prod?.show_name || 'this production'; }
 
+    function formatRoleList(names = []) {
+      const roles = (names || []).map(name => String(name || '').trim()).filter(Boolean);
+      if (!roles.length) return 'your role';
+      if (roles.length === 1) return roles[0];
+      if (roles.length === 2) return `${roles[0]} and ${roles[1]}`;
+      return `${roles.slice(0, -1).join(', ')}, and ${roles[roles.length - 1]}`;
+    }
+
+    function roleNoun(names = []) {
+      return (names || []).filter(Boolean).length === 1 ? 'role' : 'roles';
+    }
+
     function normalizeAssetUrl(value, bucket = 'org-logos') {
       const raw = String(value || '').trim();
       if (!raw) return '';
@@ -1764,7 +1785,8 @@
 
       // Hero text
       $('title').textContent = showName;
-      $('intro').textContent = `Hi ${app?.name || 'there'}, we would love to offer you the role of`;
+      const offeredRoleNoun = roleNoun(roleNames);
+      $('intro').textContent = `Hi ${app?.name || 'there'}, we would love to offer you the ${offeredRoleNoun} of`;
       if (deadlineText) {
         $('hero-deadline').textContent = `Please respond to this offer by ${deadlineText}. If we do not hear from you by then, we may offer the role to another performer.`;
         $('hero-deadline').classList.remove('hidden');
@@ -1773,6 +1795,8 @@
       }
 
       // Role display
+      $('roles').classList.toggle('multi-role', roleNames.length > 1);
+      $('roles').classList.toggle('many-roles', roleNames.length > 3);
       $('roles').innerHTML = roleNames.map(name => `<div class="role-badge">${esc(name)}</div>`).join('');
       const summaries = (roleSummaries || []).filter(item => item?.summary);
       if (summaries.length) {
@@ -1786,6 +1810,14 @@
       }
       $('roles').classList.remove('hidden');
       $('hero-cta').classList.remove('hidden');
+      ['accept-btn-top', 'accept-btn'].forEach(id => {
+        const btn = $(id);
+        if (btn) btn.textContent = roleNames.length > 1 ? 'Yes! I accept these roles' : 'Yes! I accept this role';
+      });
+      ['decline-btn-top', 'decline-btn', 'decline-confirm-btn'].forEach(id => {
+        const btn = $(id);
+        if (btn) btn.textContent = roleNames.length > 1 ? 'No, I decline these roles' : 'No, I decline this role';
+      });
 
       // Org logo box — swap placeholder for real content when available
       const logoUrl = orgLogoUrl('white');
@@ -2047,6 +2079,7 @@
     }
 
     async function sendAcceptedEmail() {
+      const rolesText = formatRoleList(roleNames);
       const { data } = await sb.functions.invoke('send-email', {
         body: {
           applicant_id: app.id, production_id: prodId,
@@ -2057,7 +2090,7 @@
             preferred_name: app.preferred_name || (app.name || '').trim().split(/\s+/)[0] || app.name || '',
             performer_name: app.name || '',
             performer_email: app.email || '',
-            role_name: roleNames.join(', '), role_names: roleNames.join(', '), roles: roleNames.join(', '),
+            role_name: rolesText, role_names: rolesText, roles: rolesText,
             registration_link: registrationLink(), cast_response_link: responseBaseUrl(),
             show_name: showTitle(), show_subtitle: prod?.subtitle || '',
             show_venue: prod?.venue || '', director_name: directorName(),
@@ -2077,6 +2110,7 @@
 
     async function sendOfferResponseNotification(status) {
       const contact = producerContact();
+      const rolesText = formatRoleList(roleNames);
       const { data } = await sb.functions.invoke('send-email', {
         body: {
           applicant_id: app.id,
@@ -2093,9 +2127,9 @@
             contact_name: app.name || '',
             performer_name: app.name || '',
             performer_email: app.email || '',
-            role_name: roleNames.join(', '),
-            role_names: roleNames.join(', '),
-            roles: roleNames.join(', '),
+            role_name: rolesText,
+            role_names: rolesText,
+            roles: rolesText,
             cast_response_link: responseBaseUrl(),
             show_name: showTitle(),
             show_subtitle: prod?.subtitle || '',
