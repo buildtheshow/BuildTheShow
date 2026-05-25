@@ -888,6 +888,61 @@
     }
     .btn-decline:hover { background: #fff1f2; border-color: #fda4af; }
     .btn-decline:disabled { opacity: 0.6; cursor: default; }
+    .decline-confirm {
+      padding: 0.9rem 1rem;
+      background: #fff8f9;
+      border: 1.5px solid #fecdd3;
+      border-radius: 10px;
+      margin-top: 0.5rem;
+    }
+    .decline-confirm-msg {
+      font-size: 0.8rem;
+      font-weight: 500;
+      color: #8f3f55;
+      line-height: 1.5;
+      margin: 0 0 0.3rem;
+    }
+    .decline-confirm-contact {
+      font-size: 0.78rem;
+      font-weight: 600;
+      color: #be123c;
+      margin: 0 0 0.75rem;
+    }
+    .decline-confirm-contact a { color: #be123c; }
+    .decline-confirm-actions {
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+    .btn-decline-confirm {
+      flex: 1;
+      background: #be123c;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: 0.6rem 1rem;
+      font: inherit;
+      font-size: 0.82rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .btn-decline-confirm:hover { background: #9f0f34; }
+    .btn-decline-confirm:disabled { opacity: 0.6; cursor: default; }
+    .btn-decline-cancel {
+      flex: 1;
+      background: #fff;
+      color: #6b7280;
+      border: 1.5px solid #e5e7eb;
+      border-radius: 8px;
+      padding: 0.6rem 1rem;
+      font: inherit;
+      font-size: 0.82rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .btn-decline-cancel:hover { background: #f9fafb; }
     .response-submitted {
       display: grid;
       gap: 0.5rem;
@@ -1018,9 +1073,10 @@
           <!-- Accept CTA — hidden until offer loads -->
           <div class="hidden" id="hero-cta">
             <div class="hero-response-actions">
-              <button class="btn-accept-hero" id="accept-btn-top" type="button">I Accept This Role</button>
-              <button class="btn-decline-hero" id="decline-btn-top" type="button">I Cannot Participate</button>
+              <button class="btn-accept-hero" id="accept-btn-top" type="button">Yes! I accept this role</button>
+              <button class="btn-decline-hero" id="decline-btn-top" type="button">No, I decline this role</button>
             </div>
+            <p class="hero-cta-note" id="hero-producer-contact"></p>
             <p class="hero-cta-note">Your registration link will appear right on this page after you accept.</p>
             <div class="response-submitted hero-submitted hidden" id="hero-response-submitted">
               <div class="response-submitted-title" id="hero-response-submitted-title"></div>
@@ -1058,10 +1114,19 @@
         <div class="decision-body">
           <div class="accept-col">
             <div id="response-actions">
-              <button class="btn-accept-main" id="accept-btn" type="button">Yes, I accept this role</button>
+              <button class="btn-accept-main" id="accept-btn" type="button">Yes! I accept this role</button>
               <div class="decline-area">
-                <p class="decline-note">Declining means you are not participating in this production. If you want to ask about a different role or ensemble, contact the team before responding.</p>
-                <button class="btn-decline" id="decline-btn" type="button">No, I cannot participate in this production</button>
+                <div id="decline-initial">
+                  <button class="btn-decline" id="decline-btn" type="button">No, I decline this role</button>
+                </div>
+                <div class="decline-confirm hidden" id="decline-confirm">
+                  <p class="decline-confirm-msg">Declining this role means you will not be participating in this production. If you would like to be part of the ensemble or have any questions, please reach out to the producer before declining.</p>
+                  <p class="decline-confirm-contact" id="decline-confirm-contact"></p>
+                  <div class="decline-confirm-actions">
+                    <button class="btn-decline-confirm" id="decline-confirm-btn" type="button">Yes, decline this role</button>
+                    <button class="btn-decline-cancel" id="decline-cancel-btn" type="button">Cancel</button>
+                  </div>
+                </div>
               </div>
             </div>
             <div class="response-submitted hidden" id="response-submitted">
@@ -1769,9 +1834,15 @@
       setOfferLocked();
       const producer = producerContact();
       const producerLabel = [producer.name, producer.email].filter(Boolean).join(', ');
-      $('producer-contact').innerHTML = producer.email
-        ? `If you have questions, email the ${producer.type === 'producer' ? 'producer' : 'organisation'}: ${esc(producer.name || (producer.type === 'producer' ? 'Producer' : 'Organisation'))}, <a href="mailto:${esc(producer.email)}">${esc(producer.email)}</a>.`
-        : `If you have questions, email the ${producer.type === 'producer' ? 'producer' : 'organisation'}${producerLabel ? `: ${esc(producerLabel)}` : ''}.`;
+      const producerTypeLabel = producer.type === 'producer' ? 'producer' : 'organisation';
+      const producerContactHtml = producer.email
+        ? `If you have questions, email the ${producerTypeLabel}: ${esc(producer.name || (producer.type === 'producer' ? 'Producer' : 'Organisation'))}, <a href="mailto:${esc(producer.email)}">${esc(producer.email)}</a>.`
+        : `If you have questions, email the ${producerTypeLabel}${producerLabel ? `: ${esc(producerLabel)}` : ''}.`;
+      $('producer-contact').innerHTML = producerContactHtml;
+      $('hero-producer-contact').innerHTML = producerContactHtml;
+      $('decline-confirm-contact').innerHTML = producer.email
+        ? `${esc(producer.name || (producer.type === 'producer' ? 'Producer' : 'Organisation'))}: <a href="mailto:${esc(producer.email)}">${esc(producer.email)}</a>`
+        : '';
 
       $('info-section').classList.remove('hidden');
       $('body-pad').classList.remove('hidden');
@@ -2125,9 +2196,17 @@
       }
     }
 
-    async function declineOffer() {
-      const confirmed = window.confirm('Are you sure you want to decline this offer? This tells the production team that you cannot participate in this production. If you want to ask about a different role or ensemble, contact the team before declining.');
-      if (!confirmed) return;
+    function showDeclineConfirm() {
+      $('decline-initial').classList.add('hidden');
+      $('decline-confirm').classList.remove('hidden');
+    }
+
+    function hideDeclineConfirm() {
+      $('decline-confirm').classList.add('hidden');
+      $('decline-initial').classList.remove('hidden');
+    }
+
+    async function submitDecline() {
       try {
         setBusy(true);
         await saveResponse('declined');
@@ -2143,6 +2222,7 @@
         clearStatus();
       } catch (err) {
         setStatus(err.message || 'Could not decline this offer.', 'error');
+        hideDeclineConfirm();
       } finally {
         setBusy(false);
       }
@@ -2150,8 +2230,10 @@
 
     $('accept-btn-top').addEventListener('click', acceptOffer);
     $('accept-btn').addEventListener('click', acceptOffer);
-    $('decline-btn-top').addEventListener('click', declineOffer);
-    $('decline-btn').addEventListener('click', declineOffer);
+    $('decline-btn-top').addEventListener('click', showDeclineConfirm);
+    $('decline-btn').addEventListener('click', showDeclineConfirm);
+    $('decline-confirm-btn').addEventListener('click', submitDecline);
+    $('decline-cancel-btn').addEventListener('click', hideDeclineConfirm);
     renderBreakdownShell();
     document.addEventListener('click', event => {
       if (offerIsLocked() && event.target.closest('#schedule-list .event, #conflict-list .conflict')) return;
