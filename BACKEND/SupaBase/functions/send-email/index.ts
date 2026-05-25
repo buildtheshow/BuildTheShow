@@ -1033,7 +1033,7 @@ function emailButtonLabelForToken(tokenName: string): string {
     callback_self_tape_button: 'Open Callback Self Tape',
     cast_accept_button: 'YES, I accept this role',
     cast_decline_button: 'NO, I decline this offer',
-    cast_response_button: 'Review Role Offer',
+    cast_response_button: 'Review Offer and Respond',
     registration_button: 'Complete Registration',
     portal_button: 'Open Audition Team Portal',
     submission_button: 'Submit Self Tape',
