@@ -890,7 +890,10 @@ serve(async (req) => {
   // ── Resolve subject + body ────────────────────────────────────
   function ensureProducerSignoffBlock(value: string): string {
     const text = String(value || '').trim();
-    if (!text || text.includes('{{producer_signoff}}')) return text;
+    const hasProducerSignoff =
+      text.includes('{{producer_signoff}}') ||
+      (text.includes('{{producer_name}}') && text.includes('{{producer_role}}') && text.includes('{{producer_email}}'));
+    if (!text || hasProducerSignoff) return text;
     const replaced = text
       .replace(/\n+\{\{director_name\}\}\s*\n\{\{org_name\}\}\s*$/i, '\n{{producer_signoff}}')
       .replace(/\n+\{\{org_name\}\}\s*$/i, '\n{{producer_signoff}}');
