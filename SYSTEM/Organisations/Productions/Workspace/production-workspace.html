@@ -29581,7 +29581,6 @@
       producer_name: name,
       producer_role: role,
       producer_email: email,
-      producer_signoff: [name, role, email].filter(Boolean).join('\n'),
     };
   }
 
@@ -29604,7 +29603,7 @@
       const savedTeamConfig = Array.isArray(wdata.team_config) ? wdata.team_config : [];
       _emailProducerSignoffContext = buildProducerSignoffContextFromSources(savedTeamConfig, members || [], prodRow || prod);
     } catch (error) {
-      console.warn('[BTS] Could not load producer sign-off from Supabase for email preview.', error);
+      console.warn('[BTS] Could not load producer details from Supabase for email preview.', error);
       _emailProducerSignoffContext = buildProducerSignoffContextFromSources(teamConfig || [], auditionTeamMembers || []);
     }
     return _emailProducerSignoffContext;
@@ -29710,16 +29709,15 @@
         { token: '{{org_name}}',   label: 'Company Name',      sample: () => orgName || prod?.org_name || ET_SAMPLE_CONTEXT.orgName },
       ],
     },
-    // ── Sign-Off ────────────────────────────────────────────────
+    // ── Producer ────────────────────────────────────────────────
     {
-      group: 'Producer Sign-Off',
+      group: 'Producer',
       color: '#572e88',
       bg:    '#eadcff',
       vars: [
         { token: '{{producer_name}}',    label: 'Producer Name', sample: () => producerSignoffContext().producer_name || etPlaceholder('producer name') },
         { token: '{{producer_role}}',    label: 'Producer Role', sample: () => producerSignoffContext().producer_role || 'Producer' },
         { token: '{{producer_email}}',   label: 'Producer Email', sample: () => producerSignoffContext().producer_email || etPlaceholder('producer email') },
-        { token: '{{producer_signoff}}', label: 'Producer Sign-Off', sample: () => producerSignoffContext().producer_signoff || 'Producer\nProducer\nproducer@example.com' },
       ],
     },
     // ── General Auditions ────────────────────────────────────────
@@ -30112,9 +30110,8 @@
     const body = String(template?.body || '');
     if (!String(template?.subject || '').trim()) issues.push('Missing subject');
     if (!etPlainSnippet(body)) issues.push('Missing body');
-    const hasProducerSignoff = body.includes('{{producer_signoff}}')
-      || (body.includes('{{producer_name}}') && body.includes('{{producer_role}}') && body.includes('{{producer_email}}'));
-    if (!hasProducerSignoff) issues.push('Missing producer sign-off');
+    const hasProducerDetails = body.includes('{{producer_name}}') && body.includes('{{producer_role}}') && body.includes('{{producer_email}}');
+    if (!hasProducerDetails) issues.push('Missing producer details');
     const requiredTokens = ET_SMART_RULES[template?.category]?.required || [];
     const combined = `${template?.subject || ''}\n${template?.body || ''}`;
     requiredTokens.forEach(token => {
@@ -30164,7 +30161,6 @@
       producer_name: producerSignoffContext().producer_name || etPlaceholder('producer name'),
       producer_role: producerSignoffContext().producer_role || 'Producer',
       producer_email: producerSignoffContext().producer_email || etPlaceholder('producer email'),
-      producer_signoff: producerSignoffContext().producer_signoff || etPlaceholder('producer sign-off'),
       self_tape_deadline: etSelfTapeDeadlineSample(),
     };
     return lookup[key] || lookup[key.toLowerCase()] || etPlaceholder(key);
@@ -30727,7 +30723,9 @@ Location: {{audition_venue}}
 If you need to reschedule or have any questions, please get in touch as soon as possible.
 
 See you soon,
-{{producer_signoff}}`,
+{{producer_name}}
+{{producer_role}}
+{{producer_email}}`,
     },
     {
       name: 'Audition Reminder - In Person',
@@ -30916,7 +30914,7 @@ Katie Clarkson<br>
 Producer<br>
 <a href="mailto:Katie@RainbowTheatre.com">Katie@RainbowTheatre.com</a></p>
 
-<p>{{producer_signoff}}</p>`,
+<p>{{producer_name}}<br>{{producer_role}}<br>{{producer_email}}</p>`,
     },
     {
       name: 'Callback Confirmed Materials',
@@ -30942,7 +30940,7 @@ Producer<br>
 
 <p>Please bring anything you need with you, and do not worry about being perfect. We are looking for strong choices, openness to direction, and a willingness to play.</p>
 
-<p>Warmly,<br>{{producer_signoff}}</p>`,
+<p>Warmly,<br>{{producer_name}}<br>{{producer_role}}<br>{{producer_email}}</p>`,
     },
     {
       name: 'Callback Declined Confirmation',
@@ -30954,7 +30952,9 @@ Producer<br>
 Thanks for letting us know that you can't attend this callback for {{show_name}}.
 
 Warmly,
-{{producer_signoff}}`,
+{{producer_name}}
+{{producer_role}}
+{{producer_email}}`,
     },
     {
       name: 'Callback Self Tape Request',
@@ -30993,7 +30993,9 @@ YOUR CALLBACK SELF TAPE LINK
 Please keep this email until your callback tape has been submitted.
 
 Warmly,
-{{producer_signoff}}`,
+{{producer_name}}
+{{producer_role}}
+{{producer_email}}`,
     },
     {
       name: 'Role Offer',
@@ -31013,7 +31015,7 @@ Warmly,
 <p>{{rehearsal_schedule}}</p>
 <p>Opening night is <strong>{{opening_night}}</strong> at {{show_venue}}.</p>
 <p>We are so excited to get started and cannot wait to see this cast come together.</p>
-<p>Thank you so much!<br>{{producer_signoff}}</p>`,
+<p>Thank you so much!<br>{{producer_name}}<br>{{producer_role}}<br>{{producer_email}}</p>`,
     },
     {
       name: 'Role Accepted Registration',
@@ -31043,7 +31045,9 @@ If you have any questions while filling things out, please feel free to reach ou
 We are so excited to get started!
 
 Thank you so much!
-{{producer_signoff}}`,
+{{producer_name}}
+{{producer_role}}
+{{producer_email}}`,
     },
     {
       name: 'Not Cast Kind Decline',
@@ -31061,7 +31065,9 @@ We truly hope to see you again at future auditions. Your talent absolutely did n
 Thank you again for your time and energy.
 
 With gratitude,
-{{producer_signoff}}`,
+{{producer_name}}
+{{producer_role}}
+{{producer_email}}`,
     },
     {
       name: 'Rehearsal Schedule Welcome to the Cast',
@@ -31081,7 +31087,9 @@ Please review the schedule carefully and flag any conflicts as soon as possible.
 
 We're so excited to get started. See you in the room!
 
-{{producer_signoff}}`,
+{{producer_name}}
+{{producer_role}}
+{{producer_email}}`,
     },
     {
       name: 'Team Access Invite',
@@ -31114,7 +31122,9 @@ ONCE YOU'RE IN:
 
 If you have any trouble logging in, reply to this email and we'll sort it out.
 
-{{producer_signoff}}`,
+{{producer_name}}
+{{producer_role}}
+{{producer_email}}`,
     },
     {
       name: 'General Announcement',
@@ -31129,7 +31139,9 @@ Just a quick update from the team at {{show_name}}.
 
 If you have any questions, don't hesitate to reach out.
 
-{{producer_signoff}}`,
+{{producer_name}}
+{{producer_role}}
+{{producer_email}}`,
     },
     {
       name: 'Self Tape Registration Confirmed',
@@ -31230,17 +31242,11 @@ Your submission link is unique to you. Please do not share it with another perfo
   function etNormalizeProducerSignoffBody(body) {
     const text = String(body || '').trim();
     if (!text) return text;
-    if (text.includes('{{producer_signoff}}')) return text;
-    if (text.includes('{{producer_name}}') && text.includes('{{producer_role}}') && text.includes('{{producer_email}}')) {
-      return text
-        .replace(/\{\{producer_name\}\}\s*<br\s*\/?>\s*\{\{producer_role\}\}\s*<br\s*\/?>\s*\{\{producer_email\}\}/gi, '{{producer_signoff}}')
-        .replace(/\{\{producer_name\}\}\s*\n\s*\{\{producer_role\}\}\s*\n\s*\{\{producer_email\}\}/gi, '{{producer_signoff}}');
-    }
-    const replaced = text
-      .replace(/\n+\{\{director_name\}\}\s*\n\{\{org_name\}\}\s*$/i, '\n{{producer_signoff}}')
-      .replace(/\n+\{\{org_name\}\}\s*$/i, '\n{{producer_signoff}}');
-    if (replaced.includes('{{producer_signoff}}')) return replaced;
-    return `${text}\n\n{{producer_signoff}}`;
+    const replacement = /<[a-z][\s\S]*>/i.test(text)
+      ? '{{producer_name}}<br>{{producer_role}}<br>{{producer_email}}'
+      : '{{producer_name}}\n{{producer_role}}\n{{producer_email}}';
+    const legacyToken = '{{producer_' + 'signoff}}';
+    return text.split(legacyToken).join(replacement);
   }
 
   async function etEnsureProducerSignoffs() {
@@ -31303,7 +31309,7 @@ Your submission link is unique to you. Please do not share it with another perfo
 <p>{{rehearsal_schedule}}</p>
 <p>Opening night is <strong>{{opening_night}}</strong> at {{show_venue}}.</p>
 <p>We are so excited to get started and cannot wait to see this cast come together.</p>
-<p>Thank you so much!<br>{{producer_signoff}}</p>`;
+<p>Thank you so much!<br>{{producer_name}}<br>{{producer_role}}<br>{{producer_email}}</p>`;
   }
 
   function etCastOfferMissingBlock(template) {
@@ -31334,8 +31340,6 @@ Your submission link is unique to you. Please do not share it with another perfo
     let text = etCleanCastOfferTemplateBody(body)
       .replace(/\n{2,}Please reply to this email to confirm your acceptance of this role\.[\s\S]*?everything you need to get started\./gi, '')
       .replace(/\n{2,}With excitement,\s*\n\{\{director_name\}\}\s*\n\{\{org_name\}\}/gi, '')
-      .replace(/\n{2,}With excitement,\s*\n\{\{producer_signoff\}\}/gi, '')
-      .replace(/\n{2,}\{\{producer_signoff\}\}/gi, '')
       .replace(/\n{2,}\{\{cast_offer_deadline_note\}\}/gi, '')
       .replace(/\n{2,}Please open the offer page below to review the details and respond\./gi, '')
       .replace(/\n{2,}Here are the key production details:\s*\n+Rehearsals begin at \{\{show_venue\}\} on \{\{rehearsal_start_date\}\}\.\s*\n\{\{rehearsal_schedule\}\}\s*\n+Opening night is \{\{opening_night\}\} at \{\{show_venue\}\}\./gi, '')
@@ -31511,7 +31515,7 @@ Your submission link is unique to you. Please do not share it with another perfo
 
 <p>Please bring anything you need with you, and do not worry about being perfect. We are looking for strong choices, openness to direction, and a willingness to play.</p>
 
-<p>Warmly,<br>{{producer_signoff}}</p>`;
+<p>Warmly,<br>{{producer_name}}<br>{{producer_role}}<br>{{producer_email}}</p>`;
     const payload = {};
     if (isLegacyBody) payload.body = nextBody;
     if (needsName) payload.name = 'Callback Confirmed';
@@ -31558,7 +31562,9 @@ If you have any questions while filling things out, please feel free to reach ou
 We are so excited to get started!
 
 Thank you so much!
-{{producer_signoff}}`;
+{{producer_name}}
+{{producer_role}}
+{{producer_email}}`;
     const payload = {};
     if (legacyAcceptedBody) payload.body = nextBody;
     if (needsName) payload.name = 'Role Accepted Registration';

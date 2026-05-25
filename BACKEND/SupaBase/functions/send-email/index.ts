@@ -143,7 +143,6 @@ serve(async (req) => {
       '{{producer_name}}': String(p.director || p.org_name || 'Producer'),
       '{{producer_role}}': 'Producer',
       '{{producer_email}}': String(p.org_email || 'producer@example.com'),
-      '{{producer_signoff}}': [String(p.director || p.org_name || 'Producer'), 'Producer', String(p.org_email || 'producer@example.com')].filter(Boolean).join('\n'),
       // Your Booking (uses general session as stand-in)
       '{{audition_session}}':      primarySess ? String(primarySess.name || '') : '',
       '{{audition_date}}':         primarySess?.date        ? fmtDate(String(primarySess.date))        : '',
@@ -592,7 +591,6 @@ serve(async (req) => {
   const producerName  = firstDefinedString(directContext.producer_name, producerMember?.name, director, orgName, 'Producer');
   const producerRole  = firstDefinedString(directContext.producer_role, producerMember?.role, 'Producer');
   const producerEmail = firstDefinedString(directContext.producer_email, producerMember?.email, orgEmail);
-  const producerSignoff = firstDefinedString(directContext.producer_signoff, [producerName, producerRole, producerEmail].filter(Boolean).join('\n'));
   if (isProducerNotification) {
     const notificationEmail = firstDefinedString(directContext.notification_email, producerEmail, orgEmail);
     if (!notificationEmail) return json({ ok: false, error: 'No producer or organisation email found for notification.' });
@@ -744,7 +742,6 @@ serve(async (req) => {
     '{{producer_name}}':         producerName,
     '{{producer_role}}':         producerRole,
     '{{producer_email}}':        producerEmail,
-    '{{producer_signoff}}':      producerSignoff,
     '{{role_name}}':             roleInterest,
     '{{role_type}}':             roleType,
     '{{role_names}}':            firstDefinedString(directContext.role_names, directContext.roles, roleInterest),
@@ -836,7 +833,6 @@ serve(async (req) => {
     producer_name: producerName,
     producer_role: producerRole,
     producer_email: producerEmail,
-    producer_signoff: producerSignoff,
     show_dates:    showDates,
   };
   const performerFieldValues: Record<string, unknown> = {
@@ -859,16 +855,13 @@ serve(async (req) => {
     '{{callback_prepare}}',
     '{{callback_materials}}',
     '{{self_tape_instructions}}',
-    '{{producer_signoff}}',
   ]);
 
   function substituteTemplate(text: string, escapeForHtml = false): string {
     let result = String(text || '');
     Object.entries(tokenValues).forEach(([token, value]) => {
       const isRaw = escapeForHtml && (rawHtmlTokens.has(token) || /^\{\{[a-z0-9_]+_prepare\}\}$/.test(token) || /^\{\{[a-z0-9_]+_button\}\}$/.test(token));
-      const renderedValue = token === '{{producer_signoff}}' && escapeForHtml
-        ? escHtml(value).replace(/\n/g, '<br>')
-        : ((escapeForHtml && !isRaw) ? escHtml(value) : value);
+      const renderedValue = (escapeForHtml && !isRaw) ? escHtml(value) : value;
       result = result.split(token).join(renderedValue);
     });
     result = result.replace(
@@ -888,11 +881,11 @@ serve(async (req) => {
   }
 
   // ── Resolve subject + body ────────────────────────────────────
-  function ensureProducerSignoffBlock(value: string): string {
+  function normalizeTemplateBody(value: string): string {
     return String(value || '').trim();
   }
   const sourceSubject = template?.subject || CATEGORY_SUBJECTS[category] || `Update from ${showName || 'Build The Show'}`;
-  const sourceBody    = ensureProducerSignoffBlock(template?.body || '');
+  const sourceBody    = normalizeTemplateBody(template?.body || '');
   const sourceBodyText = htmlToPlainText(String(sourceBody || ''));
 
   if (!sourceBodyText.trim()) {
