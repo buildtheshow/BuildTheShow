@@ -128,6 +128,7 @@ serve(async (req) => {
     const testTokens: Record<string, string> = {
       // Performer (sample)
       '{{contact_name}}':         'Morgan Lee',
+      '{{preferred_name}}':       'Jamie',
       '{{performer_name}}':       'Jamie Lee',
       '{{performer_first_name}}': 'Jamie',
       '{{performer_pronouns}}':   'she/her',
@@ -700,6 +701,12 @@ serve(async (req) => {
   );
   contactName = firstDefinedString(contactName, customAnswers['Contact Name']);
   const contactFirstName = firstNameOnly(contactName);
+  const preferredName = firstDefinedString(
+    directContext.preferred_name,
+    customAnswers['Preferred Name'],
+    customAnswers['preferred_name'],
+    firstName,
+  );
   const performanceSchedule = firstDefinedString(
     directContext.performance_schedule,
     ((performanceEvents || []) as Record<string, unknown>[]).map(formatScheduleEvent).filter(Boolean).join('\n'),
@@ -716,6 +723,7 @@ serve(async (req) => {
 
   const tokenValues: Record<string, string> = {
     '{{contact_name}}':          contactFirstName,
+    '{{preferred_name}}':        preferredName,
     '{{performer_name}}':        performerName,
     '{{performer_first_name}}':  firstName,
     '{{performer_pronouns}}':    pronouns,

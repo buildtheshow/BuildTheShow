@@ -29960,7 +29960,7 @@
       note: 'Cast offers should celebrate the offer and link to the page where performers can accept or decline.'
     },
     cast_accepted: {
-      required: ['{{contact_name}}', '{{role_name}}', '{{registration_link}}'],
+      required: ['{{preferred_name}}', '{{role_name}}', '{{registration_link}}'],
       recommended: ['{{show_name}}', '{{rehearsal_start_date}}', '{{opening_night}}'],
       note: 'This automatic email sends after a performer accepts. It should feel celebratory and include the registration link.'
     },
@@ -31020,25 +31020,32 @@ Warmly,
       category: 'cast_accepted',
       trigger: 'cast_accepted',
       subject: 'Yay! You accepted your role in {{show_name}}',
-      body: `Hi {{contact_name}},
+      body: `Hi {{preferred_name}},
 
-Yay! You have accepted the role of {{role_name}} in {{show_name}}.
+We are so excited to officially welcome you to the cast of {{show_name}} as {{role_name}}!
 
-We are so excited to have you in the cast.
+Thank you again for auditioning and accepting your role. We cannot wait to see this show start coming together and are so happy you will be part of it.
 
-Your registration is now unlocked. Please use the link below to complete your cast registration:
+Your cast registration is now unlocked. Please use the link below to complete your registration:
 
 {{registration_button}}
 
-(or click this link: {{registration_link}})
+(or click here: {{registration_link}})
 
 Rehearsals begin {{rehearsal_start_date}}.
+
 {{rehearsal_schedule}}
 
 Opening night is {{opening_night}} at {{show_venue}}.
 
-With excitement,
-{{producer_signoff}}`,
+If you have any questions while filling things out, please feel free to reach out.
+
+We are so excited to get started!
+
+Thank you so much!
+{{producer_name}}
+{{producer_role}}
+{{producer_email}}`,
     },
     {
       name: 'Not Cast Kind Decline',
@@ -31513,6 +31520,52 @@ Your submission link is unique to you. Please do not share it with another perfo
     }
   }
 
+  async function etEnsureCastAcceptedTemplateBody() {
+    const t = _etTemplates.find(t => t.category === 'cast_accepted');
+    if (!t) return;
+    const currentBody = String(t.body || '');
+    const currentName = String(t.name || '');
+    const legacyAcceptedBody =
+      /Yay!\s+You have accepted the role of \{\{role_name\}\} in \{\{show_name\}\}\./i.test(currentBody)
+      || /Your registration is now unlocked\.\s*Please use the link below to complete your cast registration:/i.test(currentBody);
+    const needsName = currentName === 'Role Accepted Registration';
+    if (!legacyAcceptedBody && !needsName) return;
+    const nextBody = `Hi {{preferred_name}},
+
+We are so excited to officially welcome you to the cast of {{show_name}} as {{role_name}}!
+
+Thank you again for auditioning and accepting your role. We cannot wait to see this show start coming together and are so happy you will be part of it.
+
+Your cast registration is now unlocked. Please use the link below to complete your registration:
+
+{{registration_button}}
+
+(or click here: {{registration_link}})
+
+Rehearsals begin {{rehearsal_start_date}}.
+
+{{rehearsal_schedule}}
+
+Opening night is {{opening_night}} at {{show_venue}}.
+
+If you have any questions while filling things out, please feel free to reach out.
+
+We are so excited to get started!
+
+Thank you so much!
+{{producer_name}}
+{{producer_role}}
+{{producer_email}}`;
+    const payload = {};
+    if (legacyAcceptedBody) payload.body = nextBody;
+    if (needsName) payload.name = 'Role Accepted Registration';
+    const { error } = await sb.from('email_templates').update(payload).eq('id', t.id);
+    if (!error) {
+      if (payload.body) t.body = payload.body;
+      if (payload.name) t.name = payload.name;
+    }
+  }
+
   function etAuditionReminderInPersonBody() {
     return `Hi {{contact_name}},
 
@@ -31753,6 +31806,7 @@ See you soon!
     await etEnsureOnlineAuditionReminderTemplateBody();
     await etEnsureCallbackRequestTemplateBody();
     await etEnsureCallbackConfirmedTemplateBody();
+    await etEnsureCastAcceptedTemplateBody();
     await etEnsureAuditionReminderTemplateNames();
     renderEmailTemplates();
     openPendingEmailTemplateCategory();
