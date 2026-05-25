@@ -2297,34 +2297,36 @@
       const regUrl = registrationLink();
       const btnStyle = 'display:inline-block;background:#572e88;color:#ffffff;text-decoration:none;font-weight:800;padding:14px 22px;border-radius:8px;';
       const regBtn = regUrl ? `<a href="${regUrl}" style="${btnStyle}">Complete Registration</a>` : '';
+      const context = {
+        contact_name: firstName,
+        preferred_name: preferredName,
+        performer_name: app.name || '',
+        performer_email: app.email || '',
+        role_name: rolesText, role_names: rolesText, roles: rolesText,
+        registration_link: regUrl,
+        registration_button: regBtn,
+        cast_response_link: responseBaseUrl(),
+        show_name: showTitle(), show_subtitle: prod?.subtitle || '',
+        show_venue: prod?.venue || '', director_name: directorName(),
+        rehearsal_start_date: rehearsalStartDateText(),
+        rehearsal_end_date: prod?.end_date ? (formatDateLong(prod.end_date) || prod.end_date) : '',
+        opening_night: prod?.end_date ? (formatDateLong(prod.end_date) || prod.end_date) : (prod?.start_date ? (formatDateLong(prod.start_date) || prod.start_date) : ''),
+        production: {
+          title: showTitle(), subtitle: prod?.subtitle || '', venue: prod?.venue || '',
+          director: directorName(), organization_id: prod?.organization_id || '',
+          start_date: prod?.start_date || '', end_date: prod?.end_date || '',
+        },
+      };
       const { data, error: invokeErr } = await sb.functions.invoke('send-email', {
         body: {
           applicant_id: app.id, production_id: prodId,
           category: 'cast_accepted', trigger: 'cast_accepted',
           email: app.email || '', name: app.name || '',
-          context: {
-            contact_name: firstName,
-            preferred_name: preferredName,
-            performer_name: app.name || '',
-            performer_email: app.email || '',
-            role_name: rolesText, role_names: rolesText, roles: rolesText,
-            registration_link: regUrl,
-            registration_button: regBtn,
-            cast_response_link: responseBaseUrl(),
-            show_name: showTitle(), show_subtitle: prod?.subtitle || '',
-            show_venue: prod?.venue || '', director_name: directorName(),
-            rehearsal_start_date: rehearsalStartDateText(),
-            rehearsal_end_date: prod?.end_date ? (formatDateLong(prod.end_date) || prod.end_date) : '',
-            opening_night: prod?.end_date ? (formatDateLong(prod.end_date) || prod.end_date) : (prod?.start_date ? (formatDateLong(prod.start_date) || prod.start_date) : ''),
-            production: {
-              title: showTitle(), subtitle: prod?.subtitle || '', venue: prod?.venue || '',
-              director: directorName(), organization_id: prod?.organization_id || '',
-              start_date: prod?.start_date || '', end_date: prod?.end_date || '',
-            },
-          },
+          ...context,
+          context,
         },
       });
-      if (invokeErr || !data?.sent) throw new Error(data?.error || (invokeErr instanceof Error ? invokeErr.message : String(invokeErr || '')) || 'Accepted-role email was not sent.');
+      if (invokeErr || !(data?.sent || data?.ok)) throw new Error(data?.error || (invokeErr instanceof Error ? invokeErr.message : String(invokeErr || '')) || 'Accepted-role email was not sent.');
     }
 
     async function sendOfferResponseNotification(status) {
@@ -2480,9 +2482,12 @@
           ? 'A confirmation email is on its way. You can also go straight there now.'
           : 'We could not send your confirmation email automatically. Use the button below to continue.';
         showSubmittedResponse('accepted', emailSent);
-        if (emailError) console.error('[BTS] cast_accepted email error detail:', emailError);
+        if (emailError) {
+          console.error('[BTS] cast_accepted email error detail:', emailError);
+          setStatus(`Your role was accepted, but the registration email could not be sent automatically. Use the registration button below. (${emailError})`, 'error');
+        }
         setOfferLocked(true);
-        clearStatus();
+        if (!emailError) clearStatus();
       } catch (err) {
         setStatus(err.message || 'Could not accept this offer.', 'error');
       } finally {
