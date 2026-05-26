@@ -288,6 +288,9 @@ serve(async (req) => {
   let customAnswers: Record<string, unknown> = isRecord(directContext.custom_answers) ? directContext.custom_answers as Record<string, unknown> : {};
   let roleInterest    = firstDefinedString(body.role_interest, directContext.role_name);
   let contactName     = firstDefinedString(directContext.contact_name, body.contact_name);
+  let secondaryContactName = firstDefinedString(directContext.secondary_contact_name, body.secondary_contact_name);
+  let secondaryContactEmail = firstDefinedString(directContext.secondary_contact_email, body.secondary_contact_email);
+  let secondaryContactPhone = firstDefinedString(directContext.secondary_contact_phone, body.secondary_contact_phone);
   let roleType        = firstDefinedString(directContext.role_type, body.role_type);
   let appSessionId    = firstDefinedString(body.session_id, directContext.session_id);
   let appSlotId       = firstDefinedString(body.slot_id, directContext.slot_id);
@@ -394,6 +397,28 @@ serve(async (req) => {
       }
     }
   }
+
+  secondaryContactName = firstDefinedString(
+    secondaryContactName,
+    customAnswers['Secondary Contact Name'],
+    customAnswers['secondary_contact_name'],
+    customAnswers['Additional Contact Name'],
+    customAnswers['additional_contact_name'],
+  );
+  secondaryContactEmail = firstDefinedString(
+    secondaryContactEmail,
+    customAnswers['Secondary Contact Email'],
+    customAnswers['secondary_contact_email'],
+    customAnswers['Additional Contact Email'],
+    customAnswers['additional_contact_email'],
+  );
+  secondaryContactPhone = firstDefinedString(
+    secondaryContactPhone,
+    customAnswers['Secondary Contact Phone'],
+    customAnswers['secondary_contact_phone'],
+    customAnswers['Additional Contact Phone'],
+    customAnswers['additional_contact_phone'],
+  );
 
   if (!productionId)   return json({ ok: false, error: 'Missing production_id' });
   if (!performerEmail && !['team_invite', 'cast_response_notification'].includes(category)) return json({ ok: false, error: 'No email address found for this performer' });
@@ -726,6 +751,9 @@ serve(async (req) => {
     '{{performer_first_name}}':  firstName,
     '{{performer_pronouns}}':    pronouns,
     '{{performer_email}}':       performerEmail,
+    '{{secondary_contact_name}}': secondaryContactName,
+    '{{secondary_contact_email}}': secondaryContactEmail,
+    '{{secondary_contact_phone}}': secondaryContactPhone,
     '{{show_name}}':             showName,
     '{{show_subtitle}}':         String(productionRecord.subtitle || ''),
     '{{show_venue}}':            String(productionRecord.venue    || ''),
@@ -926,6 +954,11 @@ serve(async (req) => {
     return json({ ok: false, error: 'Email sending is not configured (missing API key). Contact your admin.' });
   }
 
+  const secondaryCcEmail = normalizeEmailAddress(secondaryContactEmail);
+  const performerEmailNormalized = normalizeEmailAddress(performerEmail);
+  const ccAddresses = (secondaryCcEmail && secondaryCcEmail !== performerEmailNormalized)
+    ? [secondaryCcEmail]
+    : undefined;
   const bccAddresses = (orgEmail && orgEmail !== performerEmail)
     ? [orgEmail]
     : undefined;
@@ -939,6 +972,7 @@ serve(async (req) => {
     body: JSON.stringify({
       from:     fromField,
       to:       [performerEmail],
+      ...(ccAddresses ? { cc: ccAddresses } : {}),
       reply_to: replyTo,
       ...(bccAddresses ? { bcc: bccAddresses } : {}),
       subject,
@@ -1131,6 +1165,11 @@ function firstDefinedString(...values: unknown[]): string {
     if (s) return s;
   }
   return '';
+}
+
+function normalizeEmailAddress(value: unknown): string {
+  const email = String(value || '').trim().toLowerCase();
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? email : '';
 }
 
 function firstNameOnly(value: unknown): string {

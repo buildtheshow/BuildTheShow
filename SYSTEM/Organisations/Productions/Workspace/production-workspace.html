@@ -17698,14 +17698,12 @@
     .final-casting-offer-row {
       display: flex;
       flex-direction: column;
-      justify-content: space-between;
+      justify-content: flex-start;
       gap: 0.8rem;
       width: 100%;
       max-width: 100%;
       min-width: 0;
       box-sizing: border-box;
-      aspect-ratio: 4 / 7;
-      min-height: auto;
       padding: 0.9rem;
       border: none;
       border-radius: 8px;
@@ -17847,6 +17845,7 @@
       align-items: center;
       gap: 0.45rem;
       width: 100%;
+      margin-top: auto;
     }
     .final-casting-offers-panel--rejection .final-casting-offer-actions {
       grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -44838,6 +44837,7 @@ See you soon!
 
   async function buildFinalCastingEmailContext(app, category, roleNames = [], links = {}, roleEntries = [], deadline = castOfferDeadlineFromSettings()) {
     const roleList = roleNames.map(name => String(name || '').trim()).filter(Boolean);
+    const secondaryContact = applicantSecondaryContact(app);
     const rolesText = roleList.length <= 1
       ? (roleList[0] || '')
       : roleList.length === 2
@@ -44857,6 +44857,9 @@ See you soon!
       performer_email: app.email || '',
       performer_first_name: String(app.name || '').trim().split(/\s+/)[0] || '',
       performer_pronouns: app.pronouns || '',
+      secondary_contact_name: secondaryContact.name || '',
+      secondary_contact_email: secondaryContact.email || '',
+      secondary_contact_phone: secondaryContact.phone || '',
       role_name: rolesText,
       role_names: rolesText,
       roles: rolesText,
@@ -62183,6 +62186,7 @@ See you soon!
   function _apmContactHTML() {
     const app = _apmApp;
     const ca = applicantCustomAnswers(app);
+    const secondary = applicantSecondaryContact(app);
     return `
       <div class="apm-section-title">Performer Contact</div>
       <div class="apm-form-group"><div class="apm-form-label">Email</div><input class="apm-form-input" id="apm-email" type="email" value="${esc(app.email||'')}" placeholder="performer@email.com" /></div>
@@ -62195,6 +62199,12 @@ See you soon!
       <div class="apm-form-row">
         <div class="apm-form-group"><div class="apm-form-label">Contact Phone</div><input class="apm-form-input" id="apm-contact-phone" type="tel" value="${esc(ca['Contact Phone']||ca['contact_phone']||'')}" /></div>
         <div class="apm-form-group"><div class="apm-form-label">Contact Email</div><input class="apm-form-input" id="apm-contact-email" type="email" value="${esc(ca['Contact Email']||ca['contact_email']||'')}" /></div>
+      </div>
+      <div class="apm-section-title">Secondary Contact Information</div>
+      <div class="apm-form-group"><div class="apm-form-label">Secondary Contact Name</div><input class="apm-form-input" id="apm-secondary-contact-name" type="text" value="${esc(secondary.name||'')}" /></div>
+      <div class="apm-form-row">
+        <div class="apm-form-group"><div class="apm-form-label">Secondary Contact Phone</div><input class="apm-form-input" id="apm-secondary-contact-phone" type="tel" value="${esc(secondary.phone||'')}" /></div>
+        <div class="apm-form-group"><div class="apm-form-label">Secondary Contact Email</div><input class="apm-form-input" id="apm-secondary-contact-email" type="email" value="${esc(secondary.email||'')}" /></div>
       </div>`;
   }
 
@@ -62382,11 +62392,28 @@ See you soon!
       const contactName = document.getElementById('apm-contact-name')?.value.trim() || '';
       const contactPhone = document.getElementById('apm-contact-phone')?.value.trim() || '';
       const contactEmail = document.getElementById('apm-contact-email')?.value.trim() || '';
-      if (contactName || contactPhone || contactEmail) {
+      const secondaryContactName = document.getElementById('apm-secondary-contact-name')?.value.trim() || '';
+      const secondaryContactPhone = document.getElementById('apm-secondary-contact-phone')?.value.trim() || '';
+      const secondaryContactEmail = document.getElementById('apm-secondary-contact-email')?.value.trim() || '';
+      const currentSecondary = applicantSecondaryContact(_apmApp);
+      if (
+        contactName || contactPhone || contactEmail ||
+        secondaryContactName || secondaryContactPhone || secondaryContactEmail ||
+        currentSecondary.name || currentSecondary.phone || currentSecondary.email
+      ) {
         const ca2 = update.custom_answers || { ...applicantCustomAnswers(_apmApp) };
         if (contactName) ca2['Contact Name'] = contactName; else delete ca2['Contact Name'];
         if (contactPhone) ca2['Contact Phone'] = contactPhone; else delete ca2['Contact Phone'];
         if (contactEmail) ca2['Contact Email'] = contactEmail; else delete ca2['Contact Email'];
+        if (secondaryContactName) ca2['Secondary Contact Name'] = secondaryContactName; else delete ca2['Secondary Contact Name'];
+        if (secondaryContactPhone) ca2['Secondary Contact Phone'] = secondaryContactPhone; else delete ca2['Secondary Contact Phone'];
+        if (secondaryContactEmail) ca2['Secondary Contact Email'] = secondaryContactEmail; else delete ca2['Secondary Contact Email'];
+        delete ca2.secondary_contact_name;
+        delete ca2.secondary_contact_phone;
+        delete ca2.secondary_contact_email;
+        delete ca2['Additional Contact Name'];
+        delete ca2['Additional Contact Phone'];
+        delete ca2['Additional Contact Email'];
         update.custom_answers = ca2;
       }
       // Headshot is handled separately via apmConfirmHeadshotUpload — not included here
