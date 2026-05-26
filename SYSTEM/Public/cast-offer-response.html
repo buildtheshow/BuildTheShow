@@ -2202,16 +2202,21 @@
         const nextHex = (prefixNum + 1).toString(16).padStart(3, '0');
         const idLow = `${idPrefix}00000-0000-0000-0000-000000000000`;
         const idHigh = `${nextHex}00000-0000-0000-0000-000000000000`;
-        let q = sb.from('audition_bookings').select('*').gte('id', idLow);
-        if (nextHex.length === 3) q = q.lt('id', idHigh);
-        if (prodId) q = q.eq('production_id', prodId);
-        const { data: bookings } = await q;
-        const match = (bookings || []).find(r => {
+        let bkQ = sb.from('audition_bookings').select('*').gte('id', idLow);
+        let appQ = sb.from('audition_applications').select('*').gte('id', idLow);
+        if (nextHex.length === 3) { bkQ = bkQ.lt('id', idHigh); appQ = appQ.lt('id', idHigh); }
+        if (prodId) { bkQ = bkQ.eq('production_id', prodId); appQ = appQ.eq('production_id', prodId); }
+        const [{ data: bookings }, { data: apps }] = await Promise.all([bkQ, appQ]);
+        const all = [
+          ...(bookings || []).map(r => ({ ...r, _table: 'audition_bookings' })),
+          ...(apps || []).map(r => ({ ...r, _table: 'audition_applications' })),
+        ];
+        const match = all.find(r => {
           const rId = String(r.id || '').slice(0, 3).toLowerCase();
-          const rName = String(r.name || '').trim().split(/\s+/)[0].replace(/[^a-z0-9]/gi, '').toLowerCase();
-          return rId === idPrefix && (!namePart || rName === namePart);
-        }) || (bookings || []).find(r => String(r.id || '').slice(0, 3).toLowerCase() === idPrefix);
-        if (match) return { ...match, _table: 'audition_bookings' };
+          const rName = String(r.preferred_name || r.name || '').trim().split(/\s+/)[0].replace(/[^a-z0-9]/gi, '').toLowerCase();
+          return rId === idPrefix && rName === namePart;
+        });
+        if (match) return match;
       }
 
       return null;
