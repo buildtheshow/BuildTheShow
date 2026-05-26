@@ -2277,23 +2277,34 @@
       }
       assignments = assignmentRows || [];
 
-      // Email-based fallback: if no assignments found by app.id, search all IDs for this email
-      if (!assignments.length && app.email) {
-        const [{ data: siblingApps }, { data: siblingBookings }] = await Promise.all([
-          sb.from('audition_applications').select('id').eq('production_id', prodId).eq('email', app.email),
-          sb.from('audition_bookings').select('id').eq('production_id', prodId).eq('email', app.email),
-        ]);
-        const allIds = [
-          ...(siblingApps || []).map(r => r.id),
-          ...(siblingBookings || []).map(r => r.id),
-        ].filter(id => id && id !== app.id);
-        if (allIds.length) {
-          const { data: fallbackRows } = await sb.from('casting_assignments')
-            .select('id,production_id,character_id,applicant_id,state')
-            .eq('production_id', prodId)
-            .in('applicant_id', allIds)
-            .in('state', ['chosen', 'ensemble_manual', 'offer_accepted', 'offer_declined']);
-          assignments = fallbackRows || [];
+      // Fallback: if no assignments found by app.id, load all production assignments,
+      // look up each unique applicant_id by exact ID (anon-safe), match by first name.
+      // Handles mismatched applicant_id between casting_assignments and the offer code source record.
+      if (!assignments.length) {
+        const { data: allProdAssignments } = await sb.from('casting_assignments')
+          .select('id,production_id,character_id,applicant_id,state')
+          .eq('production_id', prodId)
+          .in('state', ['chosen', 'ensemble_manual', 'offer_accepted', 'offer_declined']);
+        const candidateIds = [...new Set(
+          (allProdAssignments || []).map(r => r.applicant_id).filter(id => id && id !== app.id)
+        )];
+        if (candidateIds.length) {
+          const [{ data: candidateApps }, { data: candidateBookings }] = await Promise.all([
+            sb.from('audition_applications').select('id,name,preferred_name').in('id', candidateIds),
+            sb.from('audition_bookings').select('id,name,preferred_name').in('id', candidateIds),
+          ]);
+          const candidates = [...(candidateApps || []), ...(candidateBookings || [])];
+          const appFirstName = String(app.preferred_name || app.name || '').trim()
+            .split(/\s+/)[0].replace(/[^a-z0-9]/gi, '').toLowerCase();
+          const matchedIds = new Set(
+            candidates
+              .filter(r => String(r.preferred_name || r.name || '').trim()
+                .split(/\s+/)[0].replace(/[^a-z0-9]/gi, '').toLowerCase() === appFirstName)
+              .map(r => r.id)
+          );
+          if (matchedIds.size) {
+            assignments = (allProdAssignments || []).filter(r => matchedIds.has(r.applicant_id));
+          }
         }
       }
 
@@ -2593,7 +2604,23 @@
     });
 
     loadOffer().catch(err => {
-      $('title').textContent = 'Cast offer unavailable';
+      // Render whatever org/prod context was loaded before the error, so the page isn't blank
+      const errorShowName = prod?.title || prod?.show_name || '';
+      if (errorShowName) $('title').textContent = errorShowName;
+      if (org?.name) {
+        $('org-name').textContent = org.name;
+        $('org-name').classList.remove('hidden');
+        $('org-placeholder').classList.add('hidden');
+      }
+      const errorLogoUrl = org?.logo_url || (org?.branding && (org.branding.logo_white || org.branding.logo_primary)) || '';
+      if (errorLogoUrl) {
+        $('org-logo').src = errorLogoUrl;
+        $('org-logo').alt = org.name || '';
+        $('org-logo').classList.remove('hidden');
+        $('org-strip').classList.add('has-logo');
+        $('org-placeholder').classList.add('hidden');
+        $('org-name').classList.add('hidden');
+      }
       $('intro').textContent = 'We could not open this cast offer link.';
       setStatus(err.message || 'Please contact the production team.', 'error');
     });
