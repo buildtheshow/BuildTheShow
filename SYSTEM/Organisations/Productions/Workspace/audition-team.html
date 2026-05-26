@@ -22286,6 +22286,7 @@
           <!-- Toolbar + Filter (single bar) -->
           <div style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap;margin-bottom:1rem;">
             <button class="btn-primary" onclick="openAddCharacterModal()" style="font-size:0.8rem;padding:0.4rem 0.85rem;">+ Add Character</button>
+            <button class="btn-secondary" onclick="addStarterEnsembleCharacter()" style="font-size:0.78rem;padding:0.38rem 0.75rem;">+ Add Ensemble</button>
             <button class="btn-secondary" onclick="openImportWithAIModal()" style="font-size:0.78rem;padding:0.38rem 0.75rem;">Import with AI</button>
             <button id="char-bulk-toggle-btn" class="btn-secondary" onclick="toggleBulkMode()" style="font-size:0.78rem;padding:0.38rem 0.75rem;">Select</button>
             <button class="btn-secondary" id="char-role-key-btn" onclick="toggleCharRoleKey()" style="font-size:0.78rem;padding:0.38rem 0.75rem;">Role Type Key</button>
@@ -47849,19 +47850,55 @@ See you soon!
       vocal_usage: 'Ensemble Vocals',
       show_on_public_page: true,
       show_on_form: true,
-      sort_order: characters.length,
+      sort_order: -1,
     };
   }
 
   async function ensureStarterEnsembleCharacter() {
     if (!prodId || starterEnsembleWasRemoved()) return;
-    if (characters.some(characterLooksLikeEnsemble)) return;
+    const ensembleChar = characters.find(characterLooksLikeEnsemble);
+    if (ensembleChar) {
+      const isStarterEnsemble = String(ensembleChar.name || '').trim().toLowerCase() === 'ensemble'
+        && String(ensembleChar.description || '').trim() === starterEnsemblePayload().description;
+      if (isStarterEnsemble && ensembleChar.sort_order !== -1) {
+        const { error } = await sb.from('production_characters').update({ sort_order: -1 }).eq('id', ensembleChar.id);
+        if (!error) ensembleChar.sort_order = -1;
+      }
+      return;
+    }
     const { data, error } = await persistCharacterFields(starterEnsemblePayload(), { insert: true });
     if (error) {
       console.warn('[BTS] Could not create starter ensemble character', error);
       return;
     }
     if (data) characters.push(data);
+  }
+
+  async function addStarterEnsembleCharacter() {
+    const existing = characters.find(characterLooksLikeEnsemble);
+    if (existing) {
+      if (existing.sort_order !== -1) {
+        const { error } = await sb.from('production_characters').update({ sort_order: -1 }).eq('id', existing.id);
+        if (error) { showToast('Could not move Ensemble to the top: ' + error.message, true); return; }
+        existing.sort_order = -1;
+      }
+      await setStarterEnsembleRemoved(false);
+      renderCharacters();
+      showToast('Ensemble is already in your character list.');
+      return;
+    }
+    try {
+      await setStarterEnsembleRemoved(false);
+      const { data, error } = await persistCharacterFields(starterEnsemblePayload(), { insert: true });
+      if (error) throw error;
+      if (data) characters.unshift(data);
+      renderCharacters();
+      renderMaterialsList();
+      updateCharInnerCount();
+      showToast('Ensemble added.');
+    } catch (error) {
+      showToast('Could not add Ensemble: ' + (error?.message || 'Please try again.'), true);
+    }
   }
 
   async function loadCharacters() {
@@ -47921,6 +47958,9 @@ See you soon!
     if (charFilterRole)  filtered = filtered.filter(c => c.role_type === charFilterRole);
     if (charFilterVocal) filtered = filtered.filter(c => c.vocal_type === charFilterVocal);
     filtered.sort((a, b) => {
+      const ensembleRank = (char) => characterLooksLikeEnsemble(char) ? 0 : 1;
+      const rankDiff = ensembleRank(a) - ensembleRank(b);
+      if (rankDiff) return rankDiff;
       if (sort === 'name')      return (a.name || '').localeCompare(b.name || '');
       if (sort === 'role_type') return (a.role_type || 'zzz').localeCompare(b.role_type || 'zzz');
       if (sort === 'vocal_type')return (a.vocal_type || 'zzz').localeCompare(b.vocal_type || 'zzz');
