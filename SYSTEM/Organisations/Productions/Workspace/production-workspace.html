@@ -722,6 +722,10 @@
     .rsc-hh-photo .inroom-flip::before,.rsc-hh-photo .in-show-flip::before { display:none !important; }
     .rsc-hh-photos--lone-top .rsc-hh-photo:first-child { flex:0 0 100%; max-width:50%; margin:0 auto; }
     .rsc-hh-group-banner { width:100%; background:#efab45; color:#1a1530; font-size:0.7rem; font-weight:900; text-transform:uppercase; letter-spacing:0.1em; text-align:center; padding:0.32rem 0.75rem; line-height:1.2; flex-shrink:0; }
+    .rsc-hh-payments { padding:0.5rem 0.5rem 0; }
+    .rsc-hh-payments .rsc-inst-tiles { margin-top:0; }
+    .rsc-hh-breakdown { display:flex; flex-direction:column; gap:0; width:100%; }
+    .rsc-hh-breakdown-row { font-size:max(0.46rem,4.4cqw); line-height:1.35; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
     .rsc-hh-members { display:grid; grid-template-columns:1fr 1fr; gap:0.5rem; padding:0.5rem; flex:1; }
     .rsc-hh-member { display:flex; flex-direction:column; gap:0.3rem; min-width:0; }
     .rsc-hh-member-name { font-size:0.72rem; font-weight:850; color:#1a1530; line-height:1.2; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
@@ -42479,6 +42483,72 @@ See you soon!
       return `<div class="rsc-hh-photo">${flipCard}</div>`;
     }).join('');
 
+    // Combined payment tiles (one set for the whole household)
+    const allEfData = items.map(item => ({
+      item,
+      ef: rptEffectiveFee(item, settings),
+      records: _rptPaymentRecords[String(item.assignment?.id || '')] || [],
+      assignId: String(item.assignment?.id || ''),
+      firstName: String(item.app?.name || 'Cast Member').trim().split(/\s+/)[0],
+    }));
+    const feeMode = settings.mode === 'flat' || settings.mode === 'split';
+    const anyHasFee = allEfData.some(d => feeMode && d.ef.total > 0);
+    const maxInstCount = anyHasFee ? Math.max(0, ...allEfData.map(d => d.ef.installments.length)) : 0;
+    let hhPaymentsHtml = '';
+    if (anyHasFee && maxInstCount > 0) {
+      const combinedTiles = [];
+      for (let idx = 0; idx < maxInstCount; idx++) {
+        const memberData = allEfData.map(d => {
+          const inst = d.ef.installments[idx];
+          if (!inst || inst.amount <= 0) return null;
+          const rec = d.records.find(r => r.installment_index === idx);
+          return { assignId: d.assignId, firstName: d.firstName, amount: inst.amount, dueDate: inst.dueDate || '', isPaid: !!rec?.paid };
+        }).filter(Boolean);
+        if (!memberData.length) continue;
+        const totalAmount = memberData.reduce((s, m) => s + m.amount, 0);
+        const allPaid = memberData.every(m => m.isPaid);
+        const somePaid = !allPaid && memberData.some(m => m.isPaid);
+        const anyOverdue = !allPaid && memberData.some(m => !m.isPaid && m.dueDate && new Date(m.dueDate) < new Date(new Date().toDateString()));
+        const tileLabel = maxInstCount === 1 ? 'Payment' : idx === 0 ? 'Deposit' : idx === maxInstCount - 1 ? 'Final' : `Pmt ${idx + 1}`;
+        const tileBg = allPaid ? '#769e7b' : anyOverdue ? '#d1523d' : '#efab45';
+        const breakdownHtml = memberData.map(m =>
+          `<div class="rsc-hh-breakdown-row">${esc(m.firstName)}: ${rscFmtTileAmt(m.amount, settings)}${m.isPaid ? ' ✓' : ''}</div>`
+        ).join('');
+        const footerBtn = allPaid
+          ? `<button class="template-brand-tile-button" style="opacity:0.7;pointer-events:none;">✓ All rcvd</button>`
+          : `<button class="template-brand-tile-button" onclick="rscLogHouseholdInstallmentPaid('${esc(household.id)}',${idx})">${somePaid ? 'Log remaining' : 'Log Payment'}</button>`;
+        combinedTiles.push(`<div class="template-brand-card template-brand-card--square template-brand-card--containers rsc-inst-tile ${allPaid ? 'rsc-inst-tile--paid' : 'rsc-inst-tile--unpaid'}" id="rsc-hh-inst-${esc(household.id)}-${idx}" style="--brand-tile-bg:${tileBg};">
+          <div class="template-brand-card-inner"><div class="template-brand-tile-content">
+            <div class="template-brand-tile-container template-brand-tile-container--header"><div class="template-brand-tile-kicker">${esc(tileLabel)}</div></div>
+            <div class="template-brand-tile-container template-brand-tile-container--title"><div class="template-brand-tile-title">${rscFmtTileAmt(totalAmount, settings)}</div></div>
+            <div class="template-brand-tile-container template-brand-tile-container--body"><div class="template-brand-tile-body rsc-hh-breakdown">${breakdownHtml}</div></div>
+            <div class="template-brand-tile-container template-brand-tile-container--footer">${footerBtn}</div>
+          </div></div>
+        </div>`);
+      }
+      // Combined balance tile
+      const totalFee = allEfData.reduce((s, d) => s + (feeMode && d.ef.total > 0 ? d.ef.total : 0), 0);
+      const totalPaid = allEfData.reduce((s, d) => s + (feeMode && d.ef.total > 0 ? d.records.filter(r => r.paid).reduce((ss, r) => ss + (d.ef.installments[r.installment_index]?.amount || 0), 0) : 0), 0);
+      const totalBalance = Math.max(0, totalFee - totalPaid);
+      const isPaidFullHh = totalBalance === 0 && totalPaid > 0;
+      const balanceTitleText = isPaidFullHh ? 'Paid' : totalBalance > 0 ? rscFmtTileAmt(totalBalance, settings) : '—';
+      const balBreakdownHtml = allEfData.map(d => {
+        if (!(feeMode && d.ef.total > 0)) return '';
+        const paidM = d.records.filter(r => r.paid).reduce((ss, r) => ss + (d.ef.installments[r.installment_index]?.amount || 0), 0);
+        const balM = Math.max(0, d.ef.total - paidM);
+        return `<div class="rsc-hh-breakdown-row">${esc(d.firstName)}: ${balM === 0 && paidM > 0 ? 'Paid ✓' : rscFmtTileAmt(balM, settings)}</div>`;
+      }).filter(Boolean).join('');
+      combinedTiles.push(`<div class="template-brand-card template-brand-card--square template-brand-card--containers" style="--brand-tile-bg:#6ea7d6;">
+        <div class="template-brand-card-inner"><div class="template-brand-tile-content">
+          <div class="template-brand-tile-container template-brand-tile-container--header"><div class="template-brand-tile-kicker">Balance</div></div>
+          <div class="template-brand-tile-container template-brand-tile-container--title"><div class="template-brand-tile-title">${balanceTitleText}</div></div>
+          <div class="template-brand-tile-container template-brand-tile-container--body"><div class="template-brand-tile-body rsc-hh-breakdown">${balBreakdownHtml}</div></div>
+          <div class="template-brand-tile-container template-brand-tile-container--footer"></div>
+        </div></div>
+      </div>`);
+      hhPaymentsHtml = `<div class="rsc-hh-payments"><div class="rsc-inst-tiles">${combinedTiles.join('')}</div></div>`;
+    }
+
     const membersHtml = items.map(item => {
       const app = item.app || {};
       const assignment = item.assignment || {};
@@ -42488,9 +42558,8 @@ See you soon!
       const roleName = character?.name || assignment.character_name || '';
       const ef = rptEffectiveFee(item, settings);
       const records = _rptPaymentRecords[assignId] || [];
-      const hasFee = (settings.mode === 'flat' || settings.mode === 'split') && ef.total > 0;
+      const hasFee = feeMode && ef.total > 0;
       const paidAmt = hasFee ? records.filter(r => r.paid).reduce((s, r) => s + (ef.installments[r.installment_index]?.amount || 0), 0) : 0;
-      const balance = hasFee ? Math.max(0, ef.total - paidAmt) : 0;
       const regDone = !!registrationAgreementComplete(app);
 
       // Progress
@@ -42533,48 +42602,6 @@ See you soon!
       const allSigned   = !!registrationAgreementComplete(app);
       const someSigned  = !allSigned && (mediaSigned || castSigned || cocSigned || registrationAnswerTruthy(app, ['I understand the rehearsal expectations for this production']));
       const agreementsHtml = `<button class="rsc-info-chip ${allSigned ? 'ok' : someSigned ? 'warn' : 'muted'}" style="cursor:pointer;border:none;" onclick="rscShowAgreementsModal('${esc(assignId)}')">${allSigned ? '✓ All signed' : someSigned ? 'Some pending' : 'Not yet'}</button>`;
-
-      // Instalments
-      let instsHtml = '';
-      if (!hasFee) {
-        instsHtml = `<div class="rsc-no-fee">${regDone ? 'No fee — registration complete' : 'Awaiting registration form'}</div>`;
-      } else {
-        const instCount = ef.installments.length;
-        const instTiles = ef.installments.map((inst, idx) => {
-          const rec = records.find(r => r.installment_index === idx);
-          const isPaid = !!rec?.paid;
-          const paidDate = isPaid && rec?.paid_at ? rptFormatDate(rec.paid_at) : '';
-          const tileLabel = instCount === 1 ? 'Payment' : idx === 0 ? 'Deposit' : idx === instCount - 1 ? 'Final' : `Pmt ${idx + 1}`;
-          const bodyText = isPaid ? (paidDate ? `Rcvd ${paidDate}` : 'Received') : (inst.dueDate ? `Due ${rptFormatDate(inst.dueDate)}` : 'No due date');
-          const isOverdue = !isPaid && inst.dueDate && new Date(inst.dueDate) < new Date(new Date().toDateString());
-          const tileBg = isPaid ? '#769e7b' : isOverdue ? '#d1523d' : '#efab45';
-          const footerBtn = isPaid
-            ? `<button class="template-brand-tile-button" onclick="rscOpenPaymentDetailModal('${esc(assignId)}',${idx})">✓ Done</button>`
-            : `<button class="template-brand-tile-button" onclick="rscOpenMarkPaidModal('${esc(assignId)}',${idx})">Log Payment</button>`;
-          return `<div class="template-brand-card template-brand-card--square template-brand-card--containers rsc-inst-tile ${isPaid ? 'rsc-inst-tile--paid' : 'rsc-inst-tile--unpaid'}" id="rsc-inst-${esc(assignId)}-${idx}" style="--brand-tile-bg:${tileBg};">
-            <div class="template-brand-card-inner"><div class="template-brand-tile-content">
-              <div class="template-brand-tile-container template-brand-tile-container--header"><div class="template-brand-tile-kicker">${esc(tileLabel)}</div></div>
-              <div class="template-brand-tile-container template-brand-tile-container--title"><div class="template-brand-tile-title">${rscFmtTileAmt(inst.amount, settings)}</div></div>
-              <div class="template-brand-tile-container template-brand-tile-container--body"><div class="template-brand-tile-body">${esc(bodyText)}</div></div>
-              <div class="template-brand-tile-container template-brand-tile-container--footer">${footerBtn}</div>
-            </div></div>
-          </div>`;
-        }).join('');
-        const isPaidFull = balance === 0 && paidAmt > 0;
-        const hasBalance = balance > 0;
-        const lastDueDate = ef.installments[ef.installments.length - 1]?.dueDate || '';
-        const balanceDeadline = settings.fee_due_date || lastDueDate;
-        const balanceText = isPaidFull ? 'Paid' : hasBalance ? rscFmtTileAmt(balance, settings) : '—';
-        const balanceBodyText = isPaidFull ? 'In full' : hasBalance ? (balanceDeadline ? `Due ${rptFormatDate(balanceDeadline)}` : 'Balance due') : 'No pmts yet';
-        instsHtml = `<div class="rsc-inst-tiles">${instTiles}<div class="template-brand-card template-brand-card--square template-brand-card--containers" style="--brand-tile-bg:#6ea7d6;">
-          <div class="template-brand-card-inner"><div class="template-brand-tile-content">
-            <div class="template-brand-tile-container template-brand-tile-container--header"><div class="template-brand-tile-kicker">Balance</div></div>
-            <div class="template-brand-tile-container template-brand-tile-container--title"><div class="template-brand-tile-title">${balanceText}</div></div>
-            <div class="template-brand-tile-container template-brand-tile-container--body"><div class="template-brand-tile-body">${esc(balanceBodyText)}</div></div>
-            <div class="template-brand-tile-container template-brand-tile-container--footer"></div>
-          </div></div>
-        </div></div>`;
-      }
 
       // Discounts & reductions
       const familyRequested = registrationAnswerTruthy(app, ['pf_sibling_discount', 'sibling_discount_requested', 'household_discount_requested', '__bts_registration_household_requested']);
@@ -42658,7 +42685,6 @@ See you soon!
           <div class="rsc-info-row"><span class="rsc-info-label">Accessibility</span>${accessHtml}</div>
           <div class="rsc-info-row"><span class="rsc-info-label">Agreements</span>${agreementsHtml}</div>
         </div>
-        ${instsHtml}
         <div class="rsc-adjustment-tiles">
           <div class="rsc-adjustment-tile">
             <div class="rsc-adjustment-title">Discounts & reductions</div>
@@ -42675,6 +42701,7 @@ See you soon!
     return `<div class="rsc-hh-group-card" id="rsc-hh-group-${esc(household.id)}">
       <div class="rsc-hh-photos${loneTop ? ' rsc-hh-photos--lone-top' : ''}">${photosHtml}</div>
       <div class="rsc-hh-group-banner">${esc(household.name)}</div>
+      ${hhPaymentsHtml}
       <div class="rsc-hh-members">${membersHtml}</div>
     </div>`;
   }
@@ -43067,6 +43094,41 @@ See you soon!
     } catch (err) {
       console.error('[BTS] rptTogglePaid failed', err);
       if (btn) { btn.disabled = false; btn.style.opacity = ''; }
+    }
+  }
+
+  async function rscLogHouseholdInstallmentPaid(householdId, installmentIndex) {
+    const hh = _rptHouseholds.find(h => String(h.id) === String(householdId));
+    if (!hh) return;
+    const btn = document.querySelector(`#rsc-hh-inst-${householdId}-${installmentIndex} .template-brand-tile-button`);
+    if (btn) { btn.disabled = true; btn.textContent = '…'; }
+    try {
+      const memberIds = hh.member_ids || [];
+      await Promise.all(memberIds.map(async mid => {
+        const existing = (_rptPaymentRecords[mid] || []).find(r => r.installment_index === installmentIndex);
+        if (existing?.paid) return;
+        const { data, error } = await sb.from('registration_payment_records')
+          .upsert({ production_id: prodId, casting_assignment_id: mid, installment_index: installmentIndex, paid: true, paid_at: new Date().toISOString(), updated_at: new Date().toISOString() }, { onConflict: 'casting_assignment_id,installment_index' })
+          .select().single();
+        if (error) throw error;
+        if (!_rptPaymentRecords[mid]) _rptPaymentRecords[mid] = [];
+        const recIdx = _rptPaymentRecords[mid].findIndex(r => r.installment_index === installmentIndex);
+        if (recIdx >= 0) _rptPaymentRecords[mid][recIdx] = data;
+        else _rptPaymentRecords[mid].push(data);
+      }));
+      const groupEl = document.getElementById(`rsc-hh-group-${householdId}`);
+      if (groupEl) {
+        const hhItems = (hh.member_ids || []).map(mid => _rptCastItems.find(i => String(i.assignment?.id) === String(mid))).filter(Boolean);
+        const temp = document.createElement('div');
+        temp.innerHTML = renderHouseholdGroupCard(hh, hhItems, registrationCurrentPaymentSettings());
+        const newEl = temp.firstElementChild;
+        if (newEl) groupEl.replaceWith(newEl);
+      }
+      rptRerenderSummary();
+      window.AutoSave?.showSaved?.();
+    } catch (err) {
+      console.error('[BTS] rscLogHouseholdInstallmentPaid failed', err);
+      if (btn) { btn.disabled = false; btn.textContent = 'Log Payment'; }
     }
   }
 
