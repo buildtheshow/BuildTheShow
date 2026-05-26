@@ -44199,9 +44199,13 @@ See you soon!
       if (!charId || !appId) return;
       const char = (characters || []).find(c => String(c.id) === String(charId));
       const roleName = char?.name || 'Role';
+      const assignment = finalCastingSelectedAssignments.find(a =>
+        String(a.character_id) === String(charId) && String(a.applicant_id) === String(appId)
+      );
       if (!roleMap.has(appId)) roleMap.set(appId, new Map());
       roleMap.get(appId).set(roleName, {
         id: charId,
+        assignmentId: assignment?.id || null,
         name: roleName,
         roleType: char?.role_type || 'Other',
         description: char?.description || '',
@@ -44209,9 +44213,13 @@ See you soon!
     });
     finalCastingEnsembleIds.forEach(appId => {
       const ensembleChar = getEnsembleCharacter();
+      const ensembleAssignment = finalCastingSelectedAssignments.find(a =>
+        String(a.applicant_id) === String(appId) && !a.character_id
+      );
       if (!roleMap.has(appId)) roleMap.set(appId, new Map());
       roleMap.get(appId).set('Ensemble', {
         id: '__ensemble__',
+        assignmentId: ensembleAssignment?.id || null,
         characterId: ensembleChar?.id || '',
         name: ensembleChar?.name || 'Ensemble',
         roleType: ensembleChar?.role_type || 'Ensemble',
@@ -45045,6 +45053,13 @@ See you soon!
   async function finalCastingSetOfferAssignmentState(appId, role, nextState) {
     if (!appId || !role) return;
     const isEnsembleRole = role.id === '__ensemble__';
+    if (role.assignmentId) {
+      const { error } = await sb.from('casting_assignments')
+        .update({ state: nextState })
+        .eq('id', role.assignmentId);
+      if (error) throw error;
+      return;
+    }
     let findQuery = sb.from('casting_assignments')
       .select('id')
       .eq('production_id', prodId)
