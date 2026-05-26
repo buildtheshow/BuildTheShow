@@ -22305,6 +22305,7 @@
               <button class="char-filter-pill" id="cfr-supporting" onclick="setCharFilterRole('Supporting')">Supporting</button>
               <button class="char-filter-pill" id="cfr-featured" onclick="setCharFilterRole('Featured')">Featured</button>
               <button class="char-filter-pill" id="cfr-cameo" onclick="setCharFilterRole('Cameo')">Cameo</button>
+              <button class="char-filter-pill" id="cfr-ensemble" onclick="setCharFilterRole('Ensemble')">Ensemble</button>
               <button class="char-filter-pill" id="cfr-group" onclick="setCharFilterRole('Group')">Group</button>
               <select id="char-filter-vocal" onchange="setCharFilterVocal(this.value)" style="font-size:0.74rem;font-family: var(--bts-font);color:#1a1530;background:#fff;border:1.5px solid rgba(87,46,136,0.2);border-radius:20px;padding:0.26rem 0.55rem;cursor:pointer;">
                 <option value="">All Voices</option>
@@ -47820,11 +47821,55 @@ See you soon!
     'Ensemble':   '#6b7280',
   };
 
+  function characterLooksLikeEnsemble(c = {}) {
+    const name = String(c.name || '').trim().toLowerCase();
+    const roleType = String(c.role_type || '').trim().toLowerCase();
+    return name === 'ensemble' || roleType === 'ensemble';
+  }
+
+  function starterEnsembleWasRemoved() {
+    return prod?.wizard_data?.starter_ensemble_removed === true;
+  }
+
+  async function setStarterEnsembleRemoved(removed) {
+    if (!prod) return;
+    const wizardData = { ...(prod.wizard_data || {}), starter_ensemble_removed: removed === true };
+    const { error } = await sb.from('productions').update({ wizard_data: wizardData }).eq('id', prodId);
+    if (error) throw error;
+    prod.wizard_data = wizardData;
+  }
+
+  function starterEnsemblePayload() {
+    return {
+      production_id: prodId,
+      name: 'Ensemble',
+      role_type: 'Ensemble',
+      performer_count: 10,
+      description: 'General ensemble, chorus, featured ensemble, swings, and flexible group casting.',
+      vocal_usage: 'Ensemble Vocals',
+      show_on_public_page: true,
+      show_on_form: true,
+      sort_order: characters.length,
+    };
+  }
+
+  async function ensureStarterEnsembleCharacter() {
+    if (!prodId || starterEnsembleWasRemoved()) return;
+    if (characters.some(characterLooksLikeEnsemble)) return;
+    const { data, error } = await persistCharacterFields(starterEnsemblePayload(), { insert: true });
+    if (error) {
+      console.warn('[BTS] Could not create starter ensemble character', error);
+      return;
+    }
+    if (data) characters.push(data);
+  }
+
   async function loadCharacters() {
     try {
       const { data } = await sb.from('production_characters')
         .select('*').eq('production_id', prodId).order('sort_order').order('created_at');
       characters = data || [];
+      await ensureStarterEnsembleCharacter();
     } catch { characters = []; }
     // Render calls are safe-wrapped — they may not find their DOM elements
     // if a different tab is active (e.g. Casting Board opened before Characters tab)
@@ -48451,9 +48496,21 @@ See you soon!
 
   async function deleteCharacter(id) {
     if (!confirm('Remove this character? This cannot be undone.')) return;
-    await sb.from('production_characters').delete().eq('id', id);
+    const removedChar = characters.find(c => c.id === id);
+    const { error } = await sb.from('production_characters').delete().eq('id', id);
+    if (error) {
+      showToast('Could not remove character: ' + error.message, true);
+      return;
+    }
+    if (removedChar && characterLooksLikeEnsemble(removedChar)) {
+      try {
+        await setStarterEnsembleRemoved(true);
+      } catch (error) {
+        showToast('Ensemble was removed, but the preference could not be saved: ' + (error?.message || 'Please try again.'), true);
+      }
+    }
     characters = characters.filter(c => c.id !== id);
-    renderCharacters(); renderMaterialsList();
+    renderCharacters(); renderMaterialsList(); updateCharInnerCount();
   }
 
   function charModalFields(c) {
@@ -48575,6 +48632,9 @@ See you soon!
         const { data, error } = await persistCharacterFields(payload, { insert: true });
         if (error) throw error;
         if (data) characters.push(data);
+      }
+      if (characterLooksLikeEnsemble(fields)) {
+        await setStarterEnsembleRemoved(false);
       }
     } catch (error) {
       errEl.textContent = error?.message || 'Could not save this character. Please try again.';
