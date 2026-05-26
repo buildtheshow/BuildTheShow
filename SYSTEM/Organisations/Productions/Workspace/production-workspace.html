@@ -29786,6 +29786,7 @@
         { token: '{{role_name}}', label: 'Role Name', sample: ET_SAMPLE_CONTEXT.roleName },
         { token: '{{role_names}}', label: 'All Offered Roles', sample: ET_SAMPLE_CONTEXT.roleNames },
         { token: '{{role_type}}', label: 'Role Type', sample: ET_SAMPLE_CONTEXT.roleType },
+        { token: '{{role_description}}', label: 'Role Description', sample: 'A brief description from the character card, including Ensemble breakdowns.' },
         { token: '{{cast_accept_link}}', label: 'Accept Offer Link', sample: () => etSampleProductionUrl(`/CastOffer/${ET_SAMPLE_CONTEXT.castOfferCode}/YES`) },
         { token: '{{cast_decline_link}}', label: 'Decline Offer Link', sample: () => etSampleProductionUrl(`/CastOffer/${ET_SAMPLE_CONTEXT.castOfferCode}/NO`) },
         { token: '{{cast_accept_button}}', label: 'Accept Offer Button', sample: () => emailActionButtonHtml(etSampleProductionUrl(`/CastOffer/${ET_SAMPLE_CONTEXT.castOfferCode}/YES`), 'YES, I accept this role') },
@@ -43490,7 +43491,7 @@ See you soon!
     const { data, error } = await sb.from('casting_assignments')
       .select('*')
       .eq('production_id', prodId)
-      .in('state', ['liked', 'chosen', 'offer_accepted', 'offer_declined']);
+      .in('state', ['liked', 'chosen', 'ensemble_manual', 'offer_accepted', 'offer_declined']);
 
     if (error) {
       grid.innerHTML = '<div style="padding:1.5rem 0.5rem;text-align:center;color:#c0392b;font-size:0.78rem;line-height:1.4;">Could not load the final pool.</div>';
@@ -43513,10 +43514,8 @@ See you soon!
   async function loadFinalCastingBoardVisuals() {
     await loadFinalCastingPool();
     finalCastingEnsembleLoaded = false;
-    await Promise.all([
-      renderFinalCastingCharacterNotes(),
-      renderFinalCastingEnsemble(),
-    ]);
+    await renderFinalCastingEnsemble();
+    await renderFinalCastingCharacterNotes();
     renderFinalCastingPool();
     renderFinalCastingList();
   }
@@ -43591,8 +43590,16 @@ See you soon!
   }
 
   function finalCastingCardsForCharacter(char) {
-    const assignments = finalCastingSelectedAssignments
-      .filter(a => a.character_id === char.id && (a.state === 'liked' || a.state === 'chosen' || a.state === 'offer_accepted' || a.state === 'offer_declined'))
+    const sourceAssignments = characterLooksLikeEnsemble(char)
+      ? [
+          ...finalCastingSelectedAssignments,
+          ...[...finalCastingEnsembleIds]
+            .filter(appId => !finalCastingSelectedAssignments.some(row => castingAssignmentIsEnsemble(row) && String(row.applicant_id) === String(appId)))
+            .map(appId => ({ applicant_id: appId, character_id: null, state: 'ensemble_manual' })),
+        ]
+      : finalCastingSelectedAssignments;
+    const assignments = sourceAssignments
+      .filter(a => castingAssignmentMatchesCharacter(a, char) && (a.state === 'liked' || a.state === 'chosen' || a.state === 'ensemble_manual' || a.state === 'offer_accepted' || a.state === 'offer_declined'))
       .sort((a, b) => {
         const declinedDiff = (a.state === 'offer_declined' ? 1 : 0) - (b.state === 'offer_declined' ? 1 : 0);
         if (declinedDiff) return declinedDiff;
@@ -43606,15 +43613,16 @@ See you soon!
       const app = allApplicants.find(candidate => candidate.id === a.applicant_id);
       if (!app) return '';
       const wantsRole = cbv2AppWantsRole(app, char);
+      const isEnsemblePlacement = castingAssignmentIsEnsemble(a);
       const pickKey = `${char.id}::${app.id}`;
-      const isLocked = finalCastingPickedKeys.has(pickKey);
+      const isLocked = isEnsemblePlacement || finalCastingPickedKeys.has(pickKey);
       const isDeclined = a.state === 'offer_declined';
       const cardHtml = buildStandardCastingCardHtml(app, {
         draggable: !isDeclined,
         state: isDeclined ? null : (isLocked ? 'chosen' : 'liked'),
-        onDragStart: isDeclined ? '' : `finalCastingDragStart(event,'${esc(app.id)}','${esc(char.id)}','role')`,
+        onDragStart: isDeclined ? '' : `finalCastingDragStart(event,'${esc(app.id)}','${isEnsemblePlacement ? '' : esc(char.id)}','${isEnsemblePlacement ? 'ensemble' : 'role'}')`,
         onDragEnd: isDeclined ? '' : 'finalCastingDragEnd(event)',
-        onClick: isDeclined ? '' : `toggleFinalCastingPick(event,'${esc(char.id)}','${esc(app.id)}')`,
+        onClick: isDeclined || isEnsemblePlacement ? '' : `toggleFinalCastingPick(event,'${esc(char.id)}','${esc(app.id)}')`,
       });
       const selectedClass = isDeclined ? ' is-declined' : (isLocked ? ' is-selected' : '');
       const visualCard = wantsRole ? `<div class="cbv2-wants-role-wrap">${cardHtml}</div>` : cardHtml;
@@ -44069,14 +44077,18 @@ See you soon!
         id: charId,
         name: roleName,
         roleType: char?.role_type || 'Other',
+        description: char?.description || '',
       });
     });
     finalCastingEnsembleIds.forEach(appId => {
+      const ensembleChar = getEnsembleCharacter();
       if (!roleMap.has(appId)) roleMap.set(appId, new Map());
       roleMap.get(appId).set('Ensemble', {
         id: '__ensemble__',
-        name: 'Ensemble',
-        roleType: 'Ensemble',
+        characterId: ensembleChar?.id || '',
+        name: ensembleChar?.name || 'Ensemble',
+        roleType: ensembleChar?.role_type || 'Ensemble',
+        description: ensembleChar?.description || '',
       });
     });
     return roleMap;
@@ -44228,6 +44240,7 @@ See you soon!
           id: row.character_id,
           name: roleName,
           roleType: char?.role_type || 'Other',
+          description: char?.description || '',
         });
       });
     const excludedFromRejectionsIds = new Set([...roleMap.keys(), ...declinedRoleMap.keys()]);
@@ -44236,6 +44249,10 @@ See you soon!
       const [charId] = String(key).split('::');
       if (charId) filledCharacterIds.add(String(charId));
     });
+    if (finalCastingEnsembleIds.size) {
+      const ensembleChar = getEnsembleCharacter();
+      if (ensembleChar?.id) filledCharacterIds.add(String(ensembleChar.id));
+    }
     const mapOfferRows = (sourceMap, extra = {}) => [...sourceMap.entries()]
       .map(([appId, roles]) => {
         const app = (allApplicants || []).find(candidate => String(candidate.id) === String(appId));
@@ -44268,6 +44285,7 @@ See you soon!
         roleEntries: [{
           name: char.name || 'Unnamed role',
           roleType: char.role_type || 'Other',
+          description: char.description || '',
         }],
         primaryRoleType: char.role_type || 'Other',
         unfilled: true,
@@ -44702,6 +44720,10 @@ See you soon!
         ? `${roleList[0]} and ${roleList[1]}`
         : `${roleList.slice(0, -1).join(', ')}, and ${roleList[roleList.length - 1]}`;
     const roleTypesText = [...new Set((roleEntries || []).map(role => role?.roleType || '').filter(Boolean))].join(', ');
+    const roleDescriptions = (roleEntries || [])
+      .map(role => String(role?.description || '').trim())
+      .filter(Boolean);
+    const roleDescriptionsText = [...new Set(roleDescriptions)].join('\n\n');
     const performanceSchedule = await loadPerformanceScheduleSummary().catch(() => '');
     await loadRehearsalStartDateFromCalendar({ force: true }).catch(() => '');
     const context = {
@@ -44715,6 +44737,8 @@ See you soon!
       role_names: rolesText,
       roles: rolesText,
       role_type: roleTypesText,
+      role_description: roleDescriptionsText,
+      role_descriptions: roleDescriptionsText,
       cast_response_link: links.review || '',
       cast_accept_link: links.accept || '',
       cast_decline_link: links.decline || '',
@@ -49842,6 +49866,25 @@ See you soon!
     return name === 'ensemble' || roleType === 'ensemble';
   }
 
+  function getEnsembleCharacter() {
+    return (characters || []).find(characterLooksLikeEnsemble) || null;
+  }
+
+  function castingAssignmentIsEnsemble(row = {}) {
+    return !row.character_id && ['ensemble_manual', 'ensemble_auto', 'offer_accepted', 'offer_declined'].includes(String(row.state || ''));
+  }
+
+  function castingAssignmentCharacter(row = {}) {
+    if (row.character_id) return (characters || []).find(c => String(c.id) === String(row.character_id)) || null;
+    return castingAssignmentIsEnsemble(row) ? getEnsembleCharacter() : null;
+  }
+
+  function castingAssignmentMatchesCharacter(row = {}, char = {}) {
+    if (!char?.id) return false;
+    if (String(row.character_id || '') === String(char.id)) return true;
+    return castingAssignmentIsEnsemble(row) && characterLooksLikeEnsemble(char);
+  }
+
   function starterEnsembleWasRemoved() {
     return prod?.wizard_data?.starter_ensemble_removed === true;
   }
@@ -54919,8 +54962,8 @@ See you soon!
       });
     } else if (sort === 'candidates') {
       chars.sort((a, b) => {
-        const ca = cbv2Assignments.filter(x => x.character_id === a.id).length;
-        const cb = cbv2Assignments.filter(x => x.character_id === b.id).length;
+        const ca = cbv2Assignments.filter(x => castingAssignmentMatchesCharacter(x, a)).length;
+        const cb = cbv2Assignments.filter(x => castingAssignmentMatchesCharacter(x, b)).length;
         return cb - ca;
       });
     }
@@ -55539,11 +55582,26 @@ See you soon!
     if (!char) return null;
     const activeBoardMode = getActiveCastingBoardMode();
     const isDecisionBoard = activeBoardMode === 'callbacks' || activeBoardMode === 'final';
-    let assigned = cbv2Assignments.filter(a => {
-      if (a.character_id !== charId) return false;
+    const sourceAssignments = characterLooksLikeEnsemble(char)
+      ? [
+          ...cbv2Assignments,
+          ...[...(cbv2EnsembleManual || new Set())]
+            .filter(appId => !cbv2Assignments.some(row => castingAssignmentIsEnsemble(row) && String(row.applicant_id) === String(appId)))
+            .map(appId => ({ applicant_id: appId, character_id: null, state: 'ensemble_manual' })),
+        ]
+      : cbv2Assignments;
+    let assigned = sourceAssignments.filter(a => {
+      if (!castingAssignmentMatchesCharacter(a, char)) return false;
       if (!allApplicants.some(app => app.id === a.applicant_id)) return false;
       if (isDecisionBoard && a.state === 'applied') return false;
-      return a.state === 'chosen' || a.state === 'liked' || a.state === 'applied';
+      return a.state === 'chosen' || a.state === 'liked' || a.state === 'applied' || a.state === 'ensemble_manual' || a.state === 'offer_accepted';
+    });
+    const seenAssigned = new Set();
+    assigned = assigned.filter(a => {
+      const key = String(a.applicant_id || '');
+      if (!key || seenAssigned.has(key)) return false;
+      seenAssigned.add(key);
+      return true;
     });
     assigned.sort((a, b) => {
       const stateDiff = (CB_STATE_ORDER[a.state] ?? 1) - (CB_STATE_ORDER[b.state] ?? 1);
@@ -55641,7 +55699,7 @@ See you soon!
     return cbv2SortedChars().filter(char => {
       if (char.cast_later) return false;
       // Show any role that has at least one placed (non-applied) card
-      return cbv2Assignments.some(a => a.character_id === char.id && a.state !== 'applied');
+      return cbv2Assignments.some(a => castingAssignmentMatchesCharacter(a, char) && a.state !== 'applied');
     });
   }
 
@@ -56851,7 +56909,7 @@ See you soon!
 
   function getCastListPerformerEntries(char) {
     const assigned = cbv2Assignments
-      .filter(a => a.character_id === char.id && (a.state === 'chosen' || a.state === 'offer_accepted'))
+      .filter(a => castingAssignmentMatchesCharacter(a, char) && (a.state === 'chosen' || a.state === 'offer_accepted'))
       .sort((a, b) => {
         const stateDiff = (a.state === 'offer_accepted' ? 0 : 1) - (b.state === 'offer_accepted' ? 0 : 1);
         if (stateDiff) return stateDiff;
@@ -61189,12 +61247,22 @@ See you soon!
           id: char.id,
           name: char.name || 'Role',
           roleType: char.role_type || 'Other',
+          description: char.description || '',
         };
       })
       .filter(Boolean);
     const hasEnsemble = (cbv2EnsembleManual || new Set()).has(app.id) ||
       (cbv2Assignments || []).some(a => String(a.applicant_id || '') === String(app.id || '') && !a.character_id && a.state === 'offer_accepted');
-    if (hasEnsemble) entries.push({ id: '__ensemble__', name: 'Ensemble', roleType: 'Ensemble' });
+    if (hasEnsemble) {
+      const ensembleChar = getEnsembleCharacter();
+      entries.push({
+        id: '__ensemble__',
+        characterId: ensembleChar?.id || '',
+        name: ensembleChar?.name || 'Ensemble',
+        roleType: ensembleChar?.role_type || 'Ensemble',
+        description: ensembleChar?.description || '',
+      });
+    }
     return entries;
   }
 
@@ -61206,6 +61274,7 @@ See you soon!
     const roleEntries = _apmCastOfferRoleEntries(_apmApp);
     const roleNames = roleEntries.map(role => role.name).filter(Boolean).join(', ');
     const roleTypes = [...new Set(roleEntries.map(role => role.roleType).filter(Boolean))].join(', ');
+    const roleDescriptions = [...new Set(roleEntries.map(role => String(role.description || '').trim()).filter(Boolean))].join('\n\n');
     const deadline = category === 'cast_announcement' ? castOfferDeadlineFromSettings() : { iso: '', text: '' };
     return withEmailButtonContext({
       ...context,
@@ -61213,6 +61282,8 @@ See you soon!
       role_names: roleNames || context.role_name || '',
       roles: roleNames || context.role_name || '',
       role_type: roleTypes || context.role_type || '',
+      role_description: roleDescriptions,
+      role_descriptions: roleDescriptions,
       cast_response_link: links.review,
       cast_accept_link: links.accept,
       cast_decline_link: links.decline,

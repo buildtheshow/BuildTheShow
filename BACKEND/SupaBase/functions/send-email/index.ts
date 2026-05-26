@@ -745,6 +745,8 @@ serve(async (req) => {
     '{{role_name}}':             roleInterest,
     '{{role_type}}':             roleType,
     '{{role_names}}':            firstDefinedString(directContext.role_names, directContext.roles, roleInterest),
+    '{{role_description}}':      firstDefinedString(directContext.role_description, directContext.role_descriptions),
+    '{{role_descriptions}}':     firstDefinedString(directContext.role_descriptions, directContext.role_description),
     '{{cast_response_link}}':    firstDefinedString(directContext.cast_response_link),
     '{{cast_accept_link}}':      firstDefinedString(directContext.cast_accept_link),
     '{{cast_decline_link}}':     firstDefinedString(directContext.cast_decline_link),
