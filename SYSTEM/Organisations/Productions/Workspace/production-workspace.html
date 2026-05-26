@@ -715,7 +715,7 @@
     .rsc-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:0.75rem; margin-top:0.75rem; }
     .rsc-card { background:#fff; border-radius:10px; box-shadow:0 4px 16px rgba(26,21,48,0.12), 0 1px 3px rgba(26,21,48,0.06); overflow:hidden; display:flex; flex-direction:column; position:relative; }
     .rsc-household-ribbon { position:absolute; top:22px; right:-105px; width:260px; min-height:2.6rem; background:#efab45; color:#1a1530; font-size:0.65rem; font-weight:900; text-transform:uppercase; letter-spacing:0.06em; text-align:center; line-height:1.35; padding:0.4em 0; transform:rotate(35deg); box-shadow:0 3px 10px rgba(239,171,69,0.45); pointer-events:none; z-index:10; display:flex; align-items:center; justify-content:center; box-sizing:border-box; }
-    .rsc-card-photo { overflow:hidden; flex-shrink:0; max-height:160px; }
+    .rsc-card-photo { overflow:hidden; flex-shrink:0; aspect-ratio:4/5; }
     .rsc-card-photo .casting-card { border-radius:0; box-shadow:none; cursor:default; display:block; }
     .rsc-card-photo .inroom-flip { width:100%; }
     .rsc-card-photo .inroom-flip-inner { min-height:0; }
@@ -40936,7 +40936,7 @@ See you soon!
   }
 
   function registrationPublicFallbackUrl() {
-    return `${window.location.origin}/registration/KATHERINE42725`;
+    return `${window.location.origin}/${orgSlug || 'organisation'}/${prod?.slug || 'production'}/registration/KATHERINE42725`;
   }
 
   function registrationPublicCandidateScore(item = {}) {
@@ -44720,7 +44720,6 @@ See you soon!
 
   function castOfferLinks(token, code = token) {
     const registrationCode = encodeURIComponent(code || token || '');
-    const registrationUrl = `${window.location.origin}/registration/${registrationCode}`;
     const fallbackRegistrationUrl = `${window.location.origin}/SYSTEM/Public/registration#code=${registrationCode}`;
     if (orgSlug && prod?.slug && code) {
       const base = `${window.location.origin}/${encodeURIComponent(orgSlug)}/${encodeURIComponent(prod.slug)}/CastOffer/${encodeURIComponent(code)}`;
@@ -44729,7 +44728,7 @@ See you soon!
         review: base,
         accept: `${base}/YES`,
         decline: `${base}/NO`,
-        registration: registrationUrl,
+        registration: `${showBase}/registration/${registrationCode}`,
         payments: `${showBase}/payments/${encodeURIComponent(code)}`,
       };
     }
@@ -44738,7 +44737,7 @@ See you soon!
       review: base,
       accept: `${base}&action=accept`,
       decline: `${base}&action=decline`,
-      registration: code || token ? registrationUrl : fallbackRegistrationUrl,
+      registration: fallbackRegistrationUrl,
       payments: `${base}&view=payments`,
     };
   }
@@ -45922,6 +45921,40 @@ See you soon!
     return prod.slug || '';
   }
 
+  function productionSlugYearLabel(title = prod?.title || '', seasonYear = prod?.season_year || '') {
+    const seasonMatch = String(seasonYear || '').match(/\b(19|20)\d{2}\b/);
+    if (seasonMatch) return seasonMatch[0];
+    const titleMatch = String(title || '').match(/\b(19|20)\d{2}\b/);
+    if (titleMatch) return titleMatch[0];
+    if (prod?.start_date) {
+      const year = new Date(prod.start_date + 'T00:00:00').getFullYear();
+      if (Number.isFinite(year)) return String(year);
+    }
+    return '';
+  }
+
+  function productionSlugMatchesTitle(slug, title) {
+    const cleanSlug = normalizeProductionPathLookupValue(slug);
+    const cleanTitle = normalizeProductionPathLookupValue(title);
+    return !!cleanSlug && !!cleanTitle && (cleanSlug === cleanTitle || cleanSlug.includes(cleanTitle) || cleanTitle.includes(cleanSlug));
+  }
+
+  async function resolveProductionSlugForSettingsSave(title, seasonYear) {
+    const current = String(prod?.slug || '').trim();
+    if (current && productionSlugMatchesTitle(current, title)) return current;
+    const year = productionSlugYearLabel(title, seasonYear);
+    const baseTitle = generateSlug(title || 'production') || 'production';
+    const baseWithYear = year && !new RegExp(`(?:^|-)${year}(?:-|$)`).test(baseTitle)
+      ? generateSlug(`${baseTitle} ${year}`)
+      : baseTitle;
+    const idSuffix = String(prodId || '').slice(0, 8);
+    const candidates = [baseWithYear, baseTitle, `${baseWithYear}-${idSuffix}`].filter(Boolean);
+    for (const candidate of [...new Set(candidates)]) {
+      if (candidate === current || await isProductionSlugAvailable(candidate)) return candidate;
+    }
+    return current;
+  }
+
   function renderGeneratedPublicUrlDisplays() {
     const link = getPageLink();
     ['pub-generated-link-text'].forEach(id => {
@@ -46084,11 +46117,13 @@ See you soon!
     showSaveStatus('saving');
     let error;
     try {
+      const nextSlug = await resolveProductionSlugForSettingsSave(title, season_year);
       ({ error } = await sb.from('productions').update({
         title, season_year: season_year || null,
         description: description || null, age_min, age_max,
         audition_locations, rehearsal_locations, performance_locations,
         holiday_country, holiday_region,
+        ...(nextSlug && nextSlug !== prod?.slug ? { slug: nextSlug } : {}),
       }).eq('id', prodId));
     } catch (err) {
       error = err;
@@ -46099,7 +46134,8 @@ See you soon!
       errEl.classList.add('visible');
       showSaveStatus('');
     } else {
-      prod = { ...prod, title, season_year, description, age_min, age_max, audition_locations, rehearsal_locations, performance_locations, holiday_country, holiday_region };
+      const nextSlug = await resolveProductionSlugForSettingsSave(title, season_year).catch(() => prod?.slug || '');
+      prod = { ...prod, title, season_year, description, age_min, age_max, audition_locations, rehearsal_locations, performance_locations, holiday_country, holiday_region, ...(nextSlug ? { slug: nextSlug } : {}) };
       renderProdHeader();
       showSaveStatus('saved');
     }
