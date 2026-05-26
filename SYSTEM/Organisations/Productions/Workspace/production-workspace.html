@@ -40965,11 +40965,13 @@ See you soon!
       const existingToken = ca[CAST_OFFER_KEYS.token] || candidate?.assignment?.response_token || candidate?.assignment?.token || app.cast_offer_token || '';
       const existingCode = ca[CAST_OFFER_KEYS.code] || (existingToken ? castOfferCode(app) : '');
       if (existingToken || existingCode) {
+        await syncProductionSlugForCurrentTitle().catch(error => console.warn('[BTS] production slug sync failed', error));
         const links = castOfferLinks(existingToken || existingCode, existingCode || existingToken);
         if (links.registration) return links.registration;
       }
       if (!createIdentity) return '';
       const identity = await ensureCastOfferIdentity(app);
+      await syncProductionSlugForCurrentTitle().catch(error => console.warn('[BTS] production slug sync failed', error));
       return castOfferLinks(identity.token, identity.code).registration || '';
     } catch (error) {
       console.warn('[BTS] registration public URL resolve failed', error);
@@ -42807,10 +42809,9 @@ See you soon!
 
   async function rptSaveHouseholdsToDb(households) {
     _rptHouseholds = households;
-    try {
-      await sb.from('productions').update({ registration_households: households }).eq('id', prodId);
-      if (prod) prod.registration_households = households;
-    } catch (err) { console.error('[BTS] rptSaveHouseholdsToDb failed', err); }
+    const { error } = await sb.from('productions').update({ registration_households: households }).eq('id', prodId);
+    if (error) throw error;
+    if (prod) prod.registration_households = households;
   }
 
   async function rptTogglePaid(assignmentId, installmentIndex, currentlyPaid) {
@@ -43287,8 +43288,16 @@ See you soon!
   }
 
   async function rptSaveHouseholdModal() {
-    const name = String(document.getElementById('rpt-hh-name')?.value || '').trim();
-    if (!name) { document.getElementById('rpt-hh-name')?.focus(); return; }
+    const nameInput = document.getElementById('rpt-hh-name');
+    const name = String(nameInput?.value || '').trim();
+    if (!name) {
+      if (nameInput) {
+        nameInput.style.borderColor = '#d1523d';
+        nameInput.placeholder = 'Please enter a family name';
+        nameInput.focus();
+      }
+      return;
+    }
     const checked = [...document.querySelectorAll('#rpt-household-modal .rpt-household-modal-member input:checked')];
     const memberIds = checked.map(cb => cb.value).filter(Boolean);
     let updated = _rptHouseholds.map(h => ({ ...h, member_ids: (h.member_ids || []).filter(id => !memberIds.includes(id)) })).filter(h => (h.member_ids || []).length > 0 || h.id === _rptHouseholdModalEditId);
@@ -43297,8 +43306,16 @@ See you soon!
     } else {
       updated.push({ id: (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : String(Date.now()), name, member_ids: memberIds });
     }
+    const saveBtn = document.querySelector('#rpt-household-modal .rpt-modal-save-btn');
+    if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'Saving…'; }
+    try {
+      await rptSaveHouseholdsToDb(updated);
+    } catch (err) {
+      if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Save Household'; }
+      alert('Could not save household: ' + (err?.message || 'Unknown error'));
+      return;
+    }
     document.getElementById('rpt-household-modal')?.remove();
-    await rptSaveHouseholdsToDb(updated);
     rptRerenderHouseholdsSection();
     memberIds.forEach(id => rptRerenderRow(id));
     rptRerenderSummary();
@@ -44872,6 +44889,7 @@ See you soon!
       throw new Error(`No ${missingLabel} template found.`);
     }
     const identity = ['cast_announcement', 'cast_accepted'].includes(category) ? await ensureCastOfferIdentity(app) : null;
+    if (identity) await syncProductionSlugForCurrentTitle().catch(error => console.warn('[BTS] production slug sync failed', error));
     const links = identity ? castOfferLinks(identity.token, identity.code) : {};
     const deadline = category === 'cast_announcement' ? castOfferDeadlineFromSettings() : { iso: '', text: '' };
     const { context } = await buildFinalCastingEmailContext(app, category, roleNames, links, roleEntries, deadline);
@@ -45010,6 +45028,7 @@ See you soon!
     try {
       const template = await loadFinalCastingEmailTemplate(category);
       const identity = ['cast_announcement', 'cast_accepted'].includes(category) ? await ensureCastOfferIdentity(item.app) : null;
+      if (identity) await syncProductionSlugForCurrentTitle().catch(error => console.warn('[BTS] production slug sync failed', error));
       const previewLinks = identity ? castOfferLinks(identity.token, identity.code) : {};
       const { context } = await buildFinalCastingEmailContext(item.app, category, item.roles || [], previewLinks, item.roleEntries || []);
       const subject = applyFinalCastingEmailContext(template.subject || '', context) || 'Email preview';
@@ -45200,6 +45219,7 @@ See you soon!
     if (!item?.app) return;
     try {
       const identity = await ensureCastOfferIdentity(item.app);
+      await syncProductionSlugForCurrentTitle().catch(error => console.warn('[BTS] production slug sync failed', error));
       const links = castOfferLinks(identity.token, identity.code);
       const url = links.review || links.accept || '';
       if (!url) throw new Error('No offer link found.');
@@ -45955,6 +45975,16 @@ See you soon!
     return current;
   }
 
+  async function syncProductionSlugForCurrentTitle() {
+    if (!prodId || !prod?.title) return prod?.slug || '';
+    const nextSlug = await resolveProductionSlugForSettingsSave(prod.title, prod.season_year || '');
+    if (!nextSlug || nextSlug === prod?.slug) return prod?.slug || '';
+    const { error } = await sb.from('productions').update({ slug: nextSlug }).eq('id', prodId);
+    if (error) throw error;
+    prod.slug = nextSlug;
+    return nextSlug;
+  }
+
   function renderGeneratedPublicUrlDisplays() {
     const link = getPageLink();
     ['pub-generated-link-text'].forEach(id => {
@@ -46116,8 +46146,9 @@ See you soon!
 
     showSaveStatus('saving');
     let error;
+    let nextSlug = prod?.slug || '';
     try {
-      const nextSlug = await resolveProductionSlugForSettingsSave(title, season_year);
+      nextSlug = await resolveProductionSlugForSettingsSave(title, season_year);
       ({ error } = await sb.from('productions').update({
         title, season_year: season_year || null,
         description: description || null, age_min, age_max,
@@ -46134,7 +46165,6 @@ See you soon!
       errEl.classList.add('visible');
       showSaveStatus('');
     } else {
-      const nextSlug = await resolveProductionSlugForSettingsSave(title, season_year).catch(() => prod?.slug || '');
       prod = { ...prod, title, season_year, description, age_min, age_max, audition_locations, rehearsal_locations, performance_locations, holiday_country, holiday_region, ...(nextSlug ? { slug: nextSlug } : {}) };
       renderProdHeader();
       showSaveStatus('saved');
