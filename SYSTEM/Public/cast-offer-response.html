@@ -2197,25 +2197,32 @@
       const idPrefix = (dashIdx >= 0 ? code.slice(dashIdx + 1) : '').toLowerCase();
       const namePart = (dashIdx >= 0 ? code.slice(0, dashIdx) : code).toLowerCase();
 
-      if (idPrefix.length === 3 && prodId) {
+      if (/^[0-9a-f]{3}$/.test(idPrefix)) {
+        // UUID range filter: find all records whose id starts with idPrefix
+        const prefixNum = parseInt(idPrefix, 16);
+        const nextHex = (prefixNum + 1).toString(16).padStart(3, '0');
+        const idLow = `${idPrefix}00000-0000-0000-0000-000000000000`;
+        const idHigh = `${nextHex}00000-0000-0000-0000-000000000000`;
         const appSel = 'id,production_id,name,preferred_name,email,custom_answers,date_conflicts,conflicts';
         const bkSel = 'id,production_id,name,email,custom_answers,session_id';
-        const [{ data: apps }, { data: bookings }] = await Promise.all([
-          sb.from('audition_applications').select(appSel).eq('production_id', prodId),
-          sb.from('audition_bookings').select(bkSel).eq('production_id', prodId),
-        ]);
+        let appQ = sb.from('audition_applications').select(appSel).gte('id', idLow);
+        let bkQ = sb.from('audition_bookings').select(bkSel).gte('id', idLow);
+        if (nextHex.length === 3) {
+          appQ = appQ.lt('id', idHigh);
+          bkQ = bkQ.lt('id', idHigh);
+        }
+        if (prodId) { appQ = appQ.eq('production_id', prodId); bkQ = bkQ.eq('production_id', prodId); }
+        const [{ data: apps }, { data: bookings }] = await Promise.all([appQ, bkQ]);
         const all = [
           ...(apps || []).map(r => ({ ...r, _table: 'audition_applications' })),
           ...(bookings || []).map(r => ({ ...r, _table: 'audition_bookings' })),
         ];
-        const byBoth = all.find(r => {
+        const match = all.find(r => {
           const rId = String(r.id || '').slice(0, 3).toLowerCase();
           const rName = String(r.preferred_name || r.name || '').trim().split(/\s+/)[0].replace(/[^a-z0-9]/gi, '').toLowerCase();
           return rId === idPrefix && (!namePart || rName === namePart);
-        });
-        if (byBoth) return byBoth;
-        const byId = all.find(r => String(r.id || '').slice(0, 3).toLowerCase() === idPrefix);
-        if (byId) return byId;
+        }) || all.find(r => String(r.id || '').slice(0, 3).toLowerCase() === idPrefix);
+        if (match) return match;
       }
 
       // Legacy fallback: JSONB lookup in audition_applications
