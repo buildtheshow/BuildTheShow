@@ -44497,16 +44497,10 @@ See you soon!
   }
 
   function castOfferCode(app) {
-    const cleanName = String(app?.name || app?.first_name || 'Performer')
-      .trim()
-      .split(/\s+/)[0]
-      .replace(/[^a-z0-9]/gi, '')
-      .toUpperCase()
-      .slice(0, 12) || 'PERFORMER';
-    const raw = String(app?.id || app?.email || cleanName);
-    let hash = 0;
-    for (let i = 0; i < raw.length; i += 1) hash = ((hash * 31) + raw.charCodeAt(i)) % 100000;
-    return `${cleanName}${String(hash).padStart(5, '0')}`;
+    const firstName = String(app?.preferred_name || app?.name || 'Performer')
+      .trim().split(/\s+/)[0].replace(/[^a-z0-9]/gi, '') || 'Performer';
+    const idPrefix = String(app?.id || '').slice(0, 3);
+    return `${firstName}-${idPrefix}`;
   }
 
   function castOfferFallbackBaseUrl(token) {
@@ -44588,9 +44582,8 @@ See you soon!
     if (!app?.id) return;
     const customAnswers = { ...applicantCustomAnswers(app), ...patch };
     app.custom_answers = customAnswers;
-    const { error } = await sb.from('audition_applications')
-      .update({ custom_answers: customAnswers })
-      .eq('id', app.id);
+    const table = app.session_id !== undefined ? 'audition_bookings' : 'audition_applications';
+    const { error } = await sb.from(table).update({ custom_answers: customAnswers }).eq('id', app.id);
     if (error) throw error;
   }
 
@@ -44631,16 +44624,8 @@ See you soon!
   }
 
   async function ensureCastOfferIdentity(app) {
-    const ca = applicantCustomAnswers(app);
-    const token = ca[CAST_OFFER_KEYS.token] || createCallbackResponseToken();
-    const code = ca[CAST_OFFER_KEYS.code] || castOfferCode(app);
-    if (token !== ca[CAST_OFFER_KEYS.token] || code !== ca[CAST_OFFER_KEYS.code]) {
-      await saveCastOfferState(app, {
-        [CAST_OFFER_KEYS.token]: token,
-        [CAST_OFFER_KEYS.code]: code,
-      });
-    }
-    return { token, code };
+    const code = castOfferCode(app);
+    return { token: code, code };
   }
 
   async function markCastOfferSent(app, roles = [], deadline = castOfferDeadlineFromSettings()) {
