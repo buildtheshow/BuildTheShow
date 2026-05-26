@@ -2208,8 +2208,8 @@
         if (prodId) { bkQ = bkQ.eq('production_id', prodId); appQ = appQ.eq('production_id', prodId); }
         const [{ data: bookings }, { data: apps }] = await Promise.all([bkQ, appQ]);
         const all = [
-          ...(bookings || []).map(r => ({ ...r, _table: 'audition_bookings' })),
           ...(apps || []).map(r => ({ ...r, _table: 'audition_applications' })),
+          ...(bookings || []).map(r => ({ ...r, _table: 'audition_bookings' })),
         ];
         const match = all.find(r => {
           const rId = String(r.id || '').slice(0, 3).toLowerCase();
@@ -2276,6 +2276,27 @@
         console.warn('[BTS] production team members unavailable for cast offer page', teamError);
       }
       assignments = assignmentRows || [];
+
+      // Email-based fallback: if no assignments found by app.id, search all IDs for this email
+      if (!assignments.length && app.email) {
+        const [{ data: siblingApps }, { data: siblingBookings }] = await Promise.all([
+          sb.from('audition_applications').select('id').eq('production_id', prodId).eq('email', app.email),
+          sb.from('audition_bookings').select('id').eq('production_id', prodId).eq('email', app.email),
+        ]);
+        const allIds = [
+          ...(siblingApps || []).map(r => r.id),
+          ...(siblingBookings || []).map(r => r.id),
+        ].filter(id => id && id !== app.id);
+        if (allIds.length) {
+          const { data: fallbackRows } = await sb.from('casting_assignments')
+            .select('id,production_id,character_id,applicant_id,state')
+            .eq('production_id', prodId)
+            .in('applicant_id', allIds)
+            .in('state', ['chosen', 'ensemble_manual', 'offer_accepted', 'offer_declined']);
+          assignments = fallbackRows || [];
+        }
+      }
+
       offeredAssignments = assignments.filter(row => {
         if (!roleIds.length) return true;
         if (!row.character_id) return roleIds.includes('__ensemble__');
