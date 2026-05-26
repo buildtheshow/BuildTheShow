@@ -42491,18 +42491,66 @@ See you soon!
       const hasFee = (settings.mode === 'flat' || settings.mode === 'split') && ef.total > 0;
       const paidAmt = hasFee ? records.filter(r => r.paid).reduce((s, r) => s + (ef.installments[r.installment_index]?.amount || 0), 0) : 0;
       const balance = hasFee ? Math.max(0, ef.total - paidAmt) : 0;
-      let instTilesHtml = '';
+      const regDone = !!registrationAgreementComplete(app);
+
+      // Progress
+      const steps = [];
+      steps.push({ label: 'Role Accepted', done: true });
+      steps.push({ label: 'Registration Complete', done: regDone });
       if (hasFee) {
         const instCount = ef.installments.length;
-        instTilesHtml = ef.installments.map((inst, idx) => {
+        ef.installments.forEach((inst, idx) => {
+          const rec = records.find(r => r.installment_index === idx);
+          const label = instCount === 1 ? 'Payment' : idx === 0 ? 'Deposit' : idx === instCount - 1 ? 'Final Payment' : `Payment ${idx + 1}`;
+          steps.push({ label, done: !!rec?.paid });
+        });
+      }
+      const volRequested = registrationAnswerTruthy(app, ['pf_volunteer_discount', 'volunteer_discount_interested', '__bts_registration_volunteer_discount_requested']);
+      if (settings.volunteer_discount_enabled && volRequested) {
+        steps.push({ label: 'Volunteer Hours', done: !!assignment.volunteer_discount_approved });
+      }
+      const schRequested = registrationAnswerTruthy(app, ['pf_scholarship_request', 'scholarship_request', '__bts_registration_scholarship_requested']);
+      const schStatus = String(assignment.scholarship_status || (schRequested ? 'requested' : 'none'));
+      if (settings.scholarship_enabled && schStatus !== 'none') {
+        steps.push({ label: 'Scholarship', done: schStatus === 'approved' || schStatus === 'declined' });
+      }
+      const stepCount = steps.length;
+      const completedSteps = steps.filter(s => s.done).length;
+      const pct = Math.round((completedSteps / stepCount) * 100);
+      const stageColor = pct >= 100 ? '#769e7b' : regDone ? '#572e88' : '#efab45';
+      const stageLabel = pct >= 100 ? 'Complete' : regDone ? 'Registered' : 'Accepted';
+
+      // Accessibility
+      const accessText = registrationAnswerValue(app, ['Accessibility and accommodation needs', 'Accessibility', '__bts_registration_accessibility']).trim();
+      const accessHtml = accessText
+        ? `<button class="rsc-info-chip flag" onclick="rscShowAccessibilityNote('${esc(assignId)}')">View request</button>`
+        : `<span class="rsc-info-chip muted">None</span>`;
+
+      // Agreements
+      const mediaSigned = registrationAnswerTruthy(app, ['media_release_signed', '__bts_registration_media_release_signed']);
+      const castSigned  = registrationAnswerTruthy(app, ['cast_agreement_signed', '__bts_registration_cast_agreement_signed']);
+      const cocSigned   = registrationAnswerTruthy(app, ['code_of_conduct_signed', '__bts_registration_code_of_conduct_signed']);
+      const allSigned   = !!registrationAgreementComplete(app);
+      const someSigned  = !allSigned && (mediaSigned || castSigned || cocSigned || registrationAnswerTruthy(app, ['I understand the rehearsal expectations for this production']));
+      const agreementsHtml = `<button class="rsc-info-chip ${allSigned ? 'ok' : someSigned ? 'warn' : 'muted'}" style="cursor:pointer;border:none;" onclick="rscShowAgreementsModal('${esc(assignId)}')">${allSigned ? '✓ All signed' : someSigned ? 'Some pending' : 'Not yet'}</button>`;
+
+      // Instalments
+      let instsHtml = '';
+      if (!hasFee) {
+        instsHtml = `<div class="rsc-no-fee">${regDone ? 'No fee — registration complete' : 'Awaiting registration form'}</div>`;
+      } else {
+        const instCount = ef.installments.length;
+        const instTiles = ef.installments.map((inst, idx) => {
           const rec = records.find(r => r.installment_index === idx);
           const isPaid = !!rec?.paid;
-          const tileLabel = instCount === 1 ? 'Pmt' : idx === 0 ? 'Deposit' : `Final`;
-          const bodyText = isPaid ? 'Rcvd' : (inst.dueDate ? `Due ${rptFormatDate(inst.dueDate)}` : '');
-          const tileBg = isPaid ? '#769e7b' : '#efab45';
+          const paidDate = isPaid && rec?.paid_at ? rptFormatDate(rec.paid_at) : '';
+          const tileLabel = instCount === 1 ? 'Payment' : idx === 0 ? 'Deposit' : idx === instCount - 1 ? 'Final' : `Pmt ${idx + 1}`;
+          const bodyText = isPaid ? (paidDate ? `Rcvd ${paidDate}` : 'Received') : (inst.dueDate ? `Due ${rptFormatDate(inst.dueDate)}` : 'No due date');
+          const isOverdue = !isPaid && inst.dueDate && new Date(inst.dueDate) < new Date(new Date().toDateString());
+          const tileBg = isPaid ? '#769e7b' : isOverdue ? '#d1523d' : '#efab45';
           const footerBtn = isPaid
-            ? `<button class="template-brand-tile-button" onclick="rscOpenPaymentDetailModal('${esc(assignId)}',${idx})">✓</button>`
-            : `<button class="template-brand-tile-button" onclick="rscOpenMarkPaidModal('${esc(assignId)}',${idx})">Log</button>`;
+            ? `<button class="template-brand-tile-button" onclick="rscOpenPaymentDetailModal('${esc(assignId)}',${idx})">✓ Done</button>`
+            : `<button class="template-brand-tile-button" onclick="rscOpenMarkPaidModal('${esc(assignId)}',${idx})">Log Payment</button>`;
           return `<div class="template-brand-card template-brand-card--square template-brand-card--containers rsc-inst-tile ${isPaid ? 'rsc-inst-tile--paid' : 'rsc-inst-tile--unpaid'}" id="rsc-inst-${esc(assignId)}-${idx}" style="--brand-tile-bg:${tileBg};">
             <div class="template-brand-card-inner"><div class="template-brand-tile-content">
               <div class="template-brand-tile-container template-brand-tile-container--header"><div class="template-brand-tile-kicker">${esc(tileLabel)}</div></div>
@@ -42512,21 +42560,115 @@ See you soon!
             </div></div>
           </div>`;
         }).join('');
-        const balanceTileBg = '#6ea7d6';
         const isPaidFull = balance === 0 && paidAmt > 0;
-        instTilesHtml += `<div class="template-brand-card template-brand-card--square template-brand-card--containers" style="--brand-tile-bg:${balanceTileBg};">
+        const hasBalance = balance > 0;
+        const lastDueDate = ef.installments[ef.installments.length - 1]?.dueDate || '';
+        const balanceDeadline = settings.fee_due_date || lastDueDate;
+        const balanceText = isPaidFull ? 'Paid' : hasBalance ? rscFmtTileAmt(balance, settings) : '—';
+        const balanceBodyText = isPaidFull ? 'In full' : hasBalance ? (balanceDeadline ? `Due ${rptFormatDate(balanceDeadline)}` : 'Balance due') : 'No pmts yet';
+        instsHtml = `<div class="rsc-inst-tiles">${instTiles}<div class="template-brand-card template-brand-card--square template-brand-card--containers" style="--brand-tile-bg:#6ea7d6;">
           <div class="template-brand-card-inner"><div class="template-brand-tile-content">
             <div class="template-brand-tile-container template-brand-tile-container--header"><div class="template-brand-tile-kicker">Balance</div></div>
-            <div class="template-brand-tile-container template-brand-tile-container--title"><div class="template-brand-tile-title">${isPaidFull ? 'Paid' : rscFmtTileAmt(balance, settings)}</div></div>
-            <div class="template-brand-tile-container template-brand-tile-container--body"><div class="template-brand-tile-body">${isPaidFull ? 'In full' : ''}</div></div>
+            <div class="template-brand-tile-container template-brand-tile-container--title"><div class="template-brand-tile-title">${balanceText}</div></div>
+            <div class="template-brand-tile-container template-brand-tile-container--body"><div class="template-brand-tile-body">${esc(balanceBodyText)}</div></div>
             <div class="template-brand-tile-container template-brand-tile-container--footer"></div>
           </div></div>
+        </div></div>`;
+      }
+
+      // Discounts & reductions
+      const familyRequested = registrationAnswerTruthy(app, ['pf_sibling_discount', 'sibling_discount_requested', 'household_discount_requested', '__bts_registration_household_requested']);
+      const familyNames = registrationAnswerValue(app, ['pf_sibling_performer_names', 'sibling_performer_names', 'household_performer_names']);
+      const hhStatus = household ? household.name : familyRequested ? (familyNames ? `Requested: ${familyNames}` : 'Requested') : 'Not linked';
+      const hhClass = household ? 'ok' : familyRequested ? 'warn' : 'muted';
+      const hhButton = household ? 'Manage' : familyRequested ? 'Review' : 'Add';
+      const hhDiscountHtml = `<div class="rsc-discount">
+        <div class="rsc-discount-label">Household</div>
+        <span class="rsc-adjustment-status ${hhClass}" title="${esc(hhStatus)}">${esc(hhStatus)}</span>
+        <button class="rsc-approve-btn" onclick="rptOpenHouseholdModal('${esc(assignId)}')">${hhButton}</button>
+      </div>`;
+      let hhVolHtml = '';
+      if (settings.volunteer_discount_enabled) {
+        const approved = !!assignment.volunteer_discount_approved;
+        const vReq = registrationAnswerTruthy(app, ['pf_volunteer_discount', 'volunteer_discount_interested', '__bts_registration_volunteer_discount_requested']);
+        const volunteerStatus = approved ? 'Approved' : vReq ? 'Interested' : 'Available';
+        hhVolHtml = `<div class="rsc-discount">
+          <div class="rsc-discount-label">Volunteer discount</div>
+          <span class="rsc-adjustment-status ${approved ? 'ok' : vReq ? 'warn' : 'muted'}">${esc(volunteerStatus)}</span>
+          <button class="rsc-approve-btn${approved ? ' approved' : ''}" onclick="rscOpenVolunteerModal('${esc(assignId)}')">${approved ? '✓ Approved' : 'Manage'}</button>
         </div>`;
       }
+      let hhSchHtml = '';
+      if (settings.scholarship_enabled) {
+        const sReq = registrationAnswerTruthy(app, ['pf_scholarship_request', 'scholarship_request', '__bts_registration_scholarship_requested']);
+        const sStatus = String(assignment.scholarship_status || (sReq ? 'requested' : 'none'));
+        const schLabel = { none: 'None', requested: 'Requested', approved: 'Approved', declined: 'Declined' }[sStatus] || sStatus;
+        const schClass = sStatus === 'approved' ? 'ok' : sStatus === 'requested' ? 'warn' : 'muted';
+        hhSchHtml = `<div class="rsc-discount">
+          <div class="rsc-discount-label">Scholarship</div>
+          <span class="rsc-adjustment-status ${schClass}">${esc(schLabel)}</span>
+          <button class="rsc-approve-btn" onclick="rscOpenScholarshipModal('${esc(assignId)}')">Manage</button>
+        </div>`;
+      }
+      const discountNote = ef.discountLabel ? `<div class="rsc-discount-note">${esc(ef.discountLabel)}</div>` : '';
+
+      // Populate modal data registry
+      const _mrTemplate = (typeof getRegistrationFormTemplate === 'function') ? getRegistrationFormTemplate('media_release') : null;
+      const _mrPermsConfig = _mrTemplate?.permissions || MEDIA_RELEASE_DEFAULT_PERMISSIONS;
+      window._rscModalData[assignId] = {
+        name,
+        accessText,
+        agreements: {
+          allSigned, someSigned, mediaSigned, castSigned, cocSigned,
+          answers: app.custom_answers || {},
+          mrPermDetails: _mrPermsConfig.filter(p => p.mode !== 'hidden').map(p => ({
+            id: p.id, label: p.label, mode: p.mode,
+            answer: String((app.custom_answers || {})[`mr_perm_${p.id}`] || '').toLowerCase(),
+          })),
+          consentVersion: String((app.custom_answers || {})['mr_consent_version'] || ''),
+          signerAge: String((app.custom_answers || {})['mr_signer_age'] || ''),
+        },
+        installments: ef.installments,
+        records,
+        volunteer: {
+          requested: registrationAnswerTruthy(app, ['pf_volunteer_discount', 'volunteer_discount_interested', '__bts_registration_volunteer_discount_requested']),
+          volunteerName: registrationAnswerValue(app, ['pf_volunteer_name', 'volunteer_name']),
+          hoursCompleted: String(assignment.volunteer_hours_completed || ''),
+          roleNotes: String(assignment.volunteer_role_notes || ''),
+          approved: !!assignment.volunteer_discount_approved,
+          requiredHours: String(settings.volunteer_hours || ''),
+          discountAmount: String(settings.volunteer_discount || ''),
+          currency: settings.currency || 'CAD',
+        },
+        scholarship: {
+          status: String(assignment.scholarship_status || (registrationAnswerTruthy(app, ['pf_scholarship_request', 'scholarship_request', '__bts_registration_scholarship_requested']) ? 'requested' : 'none')),
+          amount: String(assignment.scholarship_amount || ''),
+          notes: String(assignment.scholarship_notes || ''),
+        },
+      };
+
       return `<div class="rsc-hh-member" id="rpt-row-${esc(assignId)}">
         <div class="rsc-hh-member-name">${esc(name)}</div>
         ${roleName ? `<div class="rsc-hh-member-role">"${esc(roleName)}"</div>` : ''}
-        ${hasFee ? `<div class="rsc-inst-tiles" style="margin-top:0.25rem;">${instTilesHtml}</div>` : ''}
+        <div class="rsc-progress">
+          <div class="rsc-progress-track"><div class="rsc-progress-fill" style="width:${pct}%;background:${stageColor};"></div></div>
+          <div class="rsc-stage-label" style="color:${stageColor};">${stageLabel}</div>
+        </div>
+        <div class="rsc-info">
+          <div class="rsc-info-row"><span class="rsc-info-label">Accessibility</span>${accessHtml}</div>
+          <div class="rsc-info-row"><span class="rsc-info-label">Agreements</span>${agreementsHtml}</div>
+        </div>
+        ${instsHtml}
+        <div class="rsc-adjustment-tiles">
+          <div class="rsc-adjustment-tile">
+            <div class="rsc-adjustment-title">Discounts & reductions</div>
+            ${hhDiscountHtml}${hhVolHtml}${hhSchHtml}
+          </div>
+        </div>
+        <div class="rsc-footer">
+          ${discountNote}
+          <input class="rsc-notes" placeholder="Notes…" value="${esc(String(assignment.reg_payment_notes || ''))}" onchange="rptSaveNotes('${esc(assignId)}',this.value)" />
+        </div>
       </div>`;
     }).join('');
 
