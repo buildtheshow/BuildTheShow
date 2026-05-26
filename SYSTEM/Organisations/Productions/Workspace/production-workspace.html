@@ -17909,6 +17909,18 @@
       padding: 0.38rem 0.75rem;
       cursor: default;
     }
+    .final-casting-offer-actions.final-casting-offer-actions-accepted {
+      grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
+    }
+    .final-casting-offer-actions.final-casting-offer-actions-accepted .final-casting-offer-status {
+      grid-column: auto;
+    }
+    .final-casting-offer-registration-btn {
+      justify-content: center;
+      font-size: 0.68rem;
+      padding: 0.36rem 0.42rem;
+      line-height: 1.05;
+    }
     .final-casting-offer-menu {
       position: relative;
       align-self: stretch;
@@ -44535,8 +44547,12 @@ See you soon!
       const buttonDisabled = buttonIsStatus ? ' disabled' : '';
       const buttonClick = buttonIsStatus ? '' : ` onclick="${clickFn}('${esc(app.id)}', this)"`;
       const responseStatusHtml = kind === 'offer' && (responseState === 'accepted' || responseState === 'declined')
-        ? `<button type="button" class="btn-secondary final-casting-offer-status ${responseState === 'accepted' ? 'accepted' : 'declined'}" disabled>${responseState === 'accepted' ? 'Offer Accepted!' : 'Offer Rejected'}</button>`
+        ? responseState === 'accepted'
+          ? `<button type="button" class="btn-secondary final-casting-offer-status accepted" disabled>Offer Accepted!</button>
+             <button type="button" class="btn-secondary final-casting-offer-registration-btn" title="View Registration Email" onclick="previewFinalCastingRegistrationEmail('${esc(app.id)}')">View Reg Email</button>`
+          : `<button type="button" class="btn-secondary final-casting-offer-status declined" disabled>Offer Rejected</button>`
         : '';
+      const actionsClass = responseState === 'accepted' ? ' final-casting-offer-actions-accepted' : '';
       const offerActionsMenuHtml = kind === 'offer'
         ? `<details class="final-casting-offer-menu" onclick="event.stopPropagation()">
             <summary aria-label="Offer actions" title="Offer actions">⋯</summary>
@@ -44574,7 +44590,7 @@ See you soon!
             ` : ''}
           </div>
         </div>
-        <div class="final-casting-offer-actions">
+        <div class="final-casting-offer-actions${actionsClass}">
           ${responseStatusHtml || (app.email ? `
             <button type="button" class="btn-secondary" style="font-size:0.76rem;padding:0.38rem 0.75rem;justify-content:center;" onclick="${previewFn}('${esc(app.id)}')">Preview</button>
             <button type="button" class="${buttonClass}" style="font-size:0.76rem;padding:0.38rem 0.75rem;justify-content:center;"${buttonDisabled}${buttonClick}>${buttonLabel}</button>
@@ -44836,17 +44852,29 @@ See you soon!
 
   async function _sendFinalCastingEmailDirect(app, category, roleNames = [], roleEntries = []) {
     const hasTemplate = await ensureFinalCastingEmailTemplate(category);
-    if (!hasTemplate) throw new Error(category === 'cast_announcement' ? 'No cast announcement template found.' : 'No not cast template found.');
-    const identity = category === 'cast_announcement' ? await ensureCastOfferIdentity(app) : null;
+    if (!hasTemplate) {
+      const missingLabel = category === 'cast_announcement'
+        ? 'cast announcement'
+        : category === 'cast_accepted'
+          ? 'role accepted'
+          : 'not cast';
+      throw new Error(`No ${missingLabel} template found.`);
+    }
+    const identity = ['cast_announcement', 'cast_accepted'].includes(category) ? await ensureCastOfferIdentity(app) : null;
     const links = identity ? castOfferLinks(identity.token, identity.code) : {};
     const deadline = category === 'cast_announcement' ? castOfferDeadlineFromSettings() : { iso: '', text: '' };
     const { context } = await buildFinalCastingEmailContext(app, category, roleNames, links, roleEntries, deadline);
+    const trigger = category === 'cast_announcement'
+      ? 'cast_set'
+      : category === 'cast_accepted'
+        ? 'cast_accepted'
+        : 'not_cast_set';
     const { data, error } = await sb.functions.invoke('send-email', {
       body: {
         applicant_id: app.id,
         production_id: prodId,
         category,
-        trigger: category === 'cast_announcement' ? 'cast_set' : 'not_cast_set',
+        trigger,
         email: app.email || '',
         name: app.name || '',
         ...context,
@@ -44970,7 +44998,7 @@ See you soon!
     if (!item?.app) return;
     try {
       const template = await loadFinalCastingEmailTemplate(category);
-      const identity = category === 'cast_announcement' ? await ensureCastOfferIdentity(item.app) : null;
+      const identity = ['cast_announcement', 'cast_accepted'].includes(category) ? await ensureCastOfferIdentity(item.app) : null;
       const previewLinks = identity ? castOfferLinks(identity.token, identity.code) : {};
       const { context } = await buildFinalCastingEmailContext(item.app, category, item.roles || [], previewLinks, item.roleEntries || []);
       const subject = applyFinalCastingEmailContext(template.subject || '', context) || 'Email preview';
@@ -44978,8 +45006,16 @@ See you soon!
       const from = orgName || prod?.org_name || 'Build The Show';
       const toName = item.app.name || 'performer';
       const sendMode = Boolean(options.sendMode);
-      const sendLabel = category === 'cast_announcement' ? 'Send Offer' : 'Send Email';
-      const sendFn = category === 'cast_announcement' ? 'confirmFinalCastingOfferEmailSend' : 'confirmFinalCastingRejectionEmailSend';
+      const sendLabel = category === 'cast_announcement'
+        ? 'Send Offer'
+        : category === 'cast_accepted'
+          ? 'Send Registration Email'
+          : 'Send Email';
+      const sendFn = category === 'cast_announcement'
+        ? 'confirmFinalCastingOfferEmailSend'
+        : category === 'cast_accepted'
+          ? 'confirmFinalCastingRegistrationEmailSend'
+          : 'confirmFinalCastingRejectionEmailSend';
       const overlay = document.createElement('div');
       overlay.id = 'final-casting-email-preview-overlay';
       overlay.className = 'et-preview-overlay';
@@ -45052,6 +45088,12 @@ See you soon!
     const item = rejections.find(row => String(row.app.id) === String(appId));
     if (!item) return;
     openFinalCastingEmailPreview(item, 'not_cast');
+  }
+
+  function previewFinalCastingRegistrationEmail(appId) {
+    const item = finalCastingOfferItemForApp(appId);
+    if (!item) return;
+    openFinalCastingEmailPreview(item, 'cast_accepted', { sendMode: true });
   }
 
   function finalCastingOfferItemForApp(appId) {
@@ -45182,6 +45224,21 @@ See you soon!
     } catch (error) {
       if (buttonEl) { buttonEl.disabled = false; buttonEl.textContent = 'Send Offer'; }
       showToast('Could not send offer: ' + (error.message || 'Unknown error'), true);
+    }
+  }
+
+  async function confirmFinalCastingRegistrationEmailSend(appId, buttonEl = null) {
+    const item = finalCastingOfferItemForApp(appId);
+    if (!item?.app?.email) { showToast('No email address for this performer.', true); return; }
+    if (buttonEl) { buttonEl.disabled = true; buttonEl.textContent = 'Sending...'; }
+    try {
+      await _sendFinalCastingEmailDirect(item.app, 'cast_accepted', item.roles, item.roleEntries || []);
+      closeFinalCastingEmailPreview();
+      showToast(`Registration email sent to ${item.app.name || item.app.email}.`);
+      renderFinalCastingOffers();
+    } catch (error) {
+      if (buttonEl) { buttonEl.disabled = false; buttonEl.textContent = 'Send Registration Email'; }
+      showToast('Could not send registration email: ' + (error.message || 'Unknown error'), true);
     }
   }
 
