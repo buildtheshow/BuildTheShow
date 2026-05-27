@@ -42725,6 +42725,7 @@ See you soon!
           consentVersion: String((app.custom_answers || {})['mr_consent_version'] || ''),
           signerAge: String((app.custom_answers || {})['mr_signer_age'] || ''),
         },
+        registrationUrl: registrationLiveUrlForApp(app, assignment),
         installments: ef.installments,
         records,
         volunteer: {
@@ -42801,6 +42802,19 @@ See you soon!
       <div class="rsc-adjustment-tiles" style="padding:0.5rem 0.5rem 0;"><div class="rsc-adjustment-tile"><div class="rsc-adjustment-title">Discounts & reductions</div>${sharedDiscountsHtml}</div></div>
       <div class="rsc-hh-members">${membersHtml}</div>
     </div>`;
+  }
+
+  function registrationLiveUrlForApp(app = {}, assignment = {}) {
+    try {
+      const ca = applicantCustomAnswers(app);
+      const token = ca[CAST_OFFER_KEYS.token] || assignment.response_token || assignment.token || app.cast_offer_token || '';
+      const code = ca[CAST_OFFER_KEYS.code] || (token ? castOfferCode(app) : '');
+      if (!token && !code) return '';
+      return castOfferLinks(token || code, code || token).registration || '';
+    } catch (error) {
+      console.warn('[BTS] registration live URL build failed', error);
+      return '';
+    }
   }
 
   function renderRegistrationStatusCard(item, settings, _overrideRecords = null) {
@@ -42998,6 +43012,7 @@ See you soon!
         consentVersion: String((app.custom_answers || {})['mr_consent_version'] || ''),
         signerAge: String((app.custom_answers || {})['mr_signer_age'] || ''),
       },
+      registrationUrl: registrationLiveUrlForApp(app, assignment),
       installments: ef.installments,
       records,
       volunteer: {
@@ -43407,17 +43422,22 @@ See you soon!
     document.getElementById('rsc-reg-pdf-modal')?.remove();
     const d = window._rscModalData?.[assignId];
     const name = d?.name || 'Performer';
-    const pdfContent = pdfUrl
-      ? `<iframe src="${esc(pdfUrl)}" style="width:100%;height:60vh;border:none;border-radius:6px;background:#f5f5f5;" title="Registration PDF"></iframe>`
+    const liveUrl = d?.registrationUrl || '';
+    const viewUrl = liveUrl || pdfUrl || '';
+    const pdfContent = viewUrl
+      ? `<iframe src="${esc(viewUrl)}" style="width:100%;height:60vh;border:none;border-radius:6px;background:#f5f5f5;" title="Registration PDF"></iframe>`
       : `<div style="padding:2rem;text-align:center;color:rgba(87,46,136,0.5);font-size:0.85rem;background:#f9f7ff;border-radius:6px;">No PDF on file — submitted before PDF storage was enabled.<br>Use Resend Link to ask them to re-submit.</div>`;
-    const downloadBtn = pdfUrl
-      ? `<a href="${esc(pdfUrl)}" download target="_blank" class="rpt-modal-save-btn" style="text-decoration:none;">Download PDF</a>`
+    const downloadBtn = liveUrl
+      ? `<a href="${esc(liveUrl)}" target="_blank" class="rpt-modal-save-btn" style="text-decoration:none;">Open Fresh PDF</a>`
+      : pdfUrl
+        ? `<a href="${esc(pdfUrl)}" download target="_blank" class="rpt-modal-save-btn" style="text-decoration:none;">Download Stored PDF</a>`
       : '';
     const modal = document.createElement('div');
     modal.id = 'rsc-reg-pdf-modal';
     modal.className = 'rpt-household-modal';
     modal.innerHTML = `<div class="rpt-household-modal-box" style="max-width:760px;width:95vw;">
       <div class="rpt-household-modal-title">Registration — ${esc(name)}</div>
+      ${liveUrl ? `<div style="font-size:0.78rem;color:rgba(87,46,136,0.55);margin:-0.35rem 0 0.75rem;">Showing the live completed registration page so the PDF download uses the latest branded format.</div>` : ''}
       ${pdfContent}
       <div class="rpt-household-modal-actions" style="justify-content:space-between;">
         <div style="display:flex;gap:0.5rem;">
