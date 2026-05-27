@@ -42501,7 +42501,17 @@ See you soon!
       const _pct = Math.round((_steps.filter(s => s.done).length / _steps.length) * 100);
       const _stageColor = _pct >= 100 ? '#769e7b' : _regDone ? '#572e88' : '#efab45';
       const _stageLabel = _pct >= 100 ? 'Complete' : _regDone ? 'Registered' : 'Accepted';
-      return `<div class="rsc-hh-photo"><div class="rsc-hh-photo-img">${flipCard}</div><div class="rsc-progress" style="padding:0.4rem 0.55rem 0.35rem;"><div class="rsc-progress-track"><div class="rsc-progress-fill" style="width:${_pct}%;background:${_stageColor};"></div></div><div class="rsc-stage-label" style="color:${_stageColor};">${_stageLabel}</div></div></div>`;
+      const _accessText = registrationAnswerValue(app, ['Accessibility and accommodation needs', 'Accessibility', '__bts_registration_accessibility']).trim();
+      const _accessHtml = _accessText
+        ? `<button class="rsc-info-chip flag" onclick="rscShowAccessibilityNote('${esc(assignId)}')">View request</button>`
+        : `<span class="rsc-info-chip muted">None</span>`;
+      const _allSigned = !!registrationAgreementComplete(app);
+      const _mediaSigned = registrationAnswerTruthy(app, ['media_release_signed', '__bts_registration_media_release_signed']);
+      const _castSigned  = registrationAnswerTruthy(app, ['cast_agreement_signed', '__bts_registration_cast_agreement_signed']);
+      const _cocSigned   = registrationAnswerTruthy(app, ['code_of_conduct_signed', '__bts_registration_code_of_conduct_signed']);
+      const _someSigned  = !_allSigned && (_mediaSigned || _castSigned || _cocSigned || registrationAnswerTruthy(app, ['I understand the rehearsal expectations for this production']));
+      const _agreementsHtml = `<button class="rsc-info-chip ${_allSigned ? 'ok' : _someSigned ? 'warn' : 'muted'}" style="cursor:pointer;border:none;" onclick="rscShowAgreementsModal('${esc(assignId)}')">${_allSigned ? '✓ All signed' : _someSigned ? 'Some pending' : 'Not yet'}</button>`;
+      return `<div class="rsc-hh-photo"><div class="rsc-hh-photo-img">${flipCard}</div><div class="rsc-progress" style="padding:0.4rem 0.55rem 0.35rem;"><div class="rsc-progress-track"><div class="rsc-progress-fill" style="width:${_pct}%;background:${_stageColor};"></div></div><div class="rsc-stage-label" style="color:${_stageColor};">${_stageLabel}</div></div><div class="rsc-info" style="padding:0 0.55rem 0.4rem;"><div class="rsc-info-row"><span class="rsc-info-label">Accessibility</span>${_accessHtml}</div><div class="rsc-info-row"><span class="rsc-info-label">Agreements</span>${_agreementsHtml}</div></div></div>`;
     }).join('');
 
     // Combined payment tiles (one set for the whole household)
@@ -42696,29 +42706,65 @@ See you soon!
       };
 
       return `<div class="rsc-hh-member" id="rpt-row-${esc(assignId)}">
-        <div class="rsc-hh-member-name">${esc(name)}</div>
-        ${roleName ? `<div class="rsc-hh-member-role">"${esc(roleName)}"</div>` : ''}
-        <div class="rsc-info">
-          <div class="rsc-info-row"><span class="rsc-info-label">Accessibility</span>${accessHtml}</div>
-          <div class="rsc-info-row"><span class="rsc-info-label">Agreements</span>${agreementsHtml}</div>
-        </div>
-        <div class="rsc-adjustment-tiles">
-          <div class="rsc-adjustment-tile">
-            <div class="rsc-adjustment-title">Discounts & reductions</div>
-            ${hhDiscountHtml}${hhVolHtml}${hhSchHtml}
-          </div>
-        </div>
-        <div class="rsc-footer">
-          ${discountNote}
-          <input class="rsc-notes" placeholder="Notes…" value="${esc(String(assignment.reg_payment_notes || ''))}" onchange="rptSaveNotes('${esc(assignId)}',this.value)" />
-        </div>
+        <div class="rsc-hh-member-name" style="font-size:0.63rem;opacity:0.45;margin-bottom:0.15rem;">${esc(name.split(' ')[0])}</div>
+        ${discountNote}
+        <input class="rsc-notes" placeholder="Notes…" value="${esc(String(assignment.reg_payment_notes || ''))}" onchange="rptSaveNotes('${esc(assignId)}',this.value)" />
       </div>`;
     }).join('');
+
+    // Single shared discounts & reductions section (household status same for all; vol/scholarship per-member)
+    const _firstItem = items[0] || {};
+    const _firstAssignId = String(_firstItem.assignment?.id || '');
+    const _firstApp = _firstItem.app || {};
+    const _hhFamReq = registrationAnswerTruthy(_firstApp, ['pf_sibling_discount', 'sibling_discount_requested', 'household_discount_requested', '__bts_registration_household_requested']);
+    const _hhFamNames = registrationAnswerValue(_firstApp, ['pf_sibling_performer_names', 'sibling_performer_names', 'household_performer_names']);
+    const _hhStatusText = household ? household.name : _hhFamReq ? (_hhFamNames ? `Requested: ${_hhFamNames}` : 'Requested') : 'Not linked';
+    const _hhStatusClass = household ? 'ok' : _hhFamReq ? 'warn' : 'muted';
+    const _hhStatusBtn = household ? 'Manage' : _hhFamReq ? 'Review' : 'Add';
+    let sharedDiscountsHtml = `<div class="rsc-discount">
+      <div class="rsc-discount-label">Household</div>
+      <span class="rsc-adjustment-status ${_hhStatusClass}" title="${esc(_hhStatusText)}">${esc(_hhStatusText)}</span>
+      <button class="rsc-approve-btn" onclick="rptOpenHouseholdModal('${esc(_firstAssignId)}')">${_hhStatusBtn}</button>
+    </div>`;
+    if (settings.volunteer_discount_enabled) {
+      sharedDiscountsHtml += items.map(item => {
+        const _a = item.app || {};
+        const _s = item.assignment || {};
+        const _aid = String(_s.id || '');
+        const _fn = String(_a.name || '').trim().split(/\s+/)[0];
+        const _approved = !!_s.volunteer_discount_approved;
+        const _vReq = registrationAnswerTruthy(_a, ['pf_volunteer_discount', 'volunteer_discount_interested', '__bts_registration_volunteer_discount_requested']);
+        const _vStatus = _approved ? 'Approved' : _vReq ? 'Interested' : 'Available';
+        return `<div class="rsc-discount">
+          <div class="rsc-discount-label">Vol. — ${esc(_fn)}</div>
+          <span class="rsc-adjustment-status ${_approved ? 'ok' : _vReq ? 'warn' : 'muted'}">${esc(_vStatus)}</span>
+          <button class="rsc-approve-btn${_approved ? ' approved' : ''}" onclick="rscOpenVolunteerModal('${esc(_aid)}')">${_approved ? '✓' : 'Manage'}</button>
+        </div>`;
+      }).join('');
+    }
+    if (settings.scholarship_enabled) {
+      sharedDiscountsHtml += items.map(item => {
+        const _a = item.app || {};
+        const _s = item.assignment || {};
+        const _aid = String(_s.id || '');
+        const _fn = String(_a.name || '').trim().split(/\s+/)[0];
+        const _sReq = registrationAnswerTruthy(_a, ['pf_scholarship_request', 'scholarship_request', '__bts_registration_scholarship_requested']);
+        const _sStatus = String(_s.scholarship_status || (_sReq ? 'requested' : 'none'));
+        const _sLabel = { none: 'None', requested: 'Requested', approved: 'Approved', declined: 'Declined' }[_sStatus] || _sStatus;
+        const _sClass = _sStatus === 'approved' ? 'ok' : _sStatus === 'requested' ? 'warn' : 'muted';
+        return `<div class="rsc-discount">
+          <div class="rsc-discount-label">Scholarship — ${esc(_fn)}</div>
+          <span class="rsc-adjustment-status ${_sClass}">${esc(_sLabel)}</span>
+          <button class="rsc-approve-btn" onclick="rscOpenScholarshipModal('${esc(_aid)}')">Manage</button>
+        </div>`;
+      }).join('');
+    }
 
     return `<div class="rsc-hh-group-card" id="rsc-hh-group-${esc(household.id)}">
       <div class="rsc-hh-photos${loneTop ? ' rsc-hh-photos--lone-top' : ''}">${photosHtml}</div>
       <div class="rsc-hh-group-banner">${esc(household.name)}</div>
       ${hhPaymentsHtml}
+      <div class="rsc-adjustment-tiles" style="padding:0.5rem 0.5rem 0;"><div class="rsc-adjustment-tile"><div class="rsc-adjustment-title">Discounts & reductions</div>${sharedDiscountsHtml}</div></div>
       <div class="rsc-hh-members">${membersHtml}</div>
     </div>`;
   }
