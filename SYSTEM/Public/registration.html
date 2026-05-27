@@ -1534,8 +1534,9 @@
       </div>`;
     }).join('');
 
-    const orgLogoHtml = _org?.logo_url
-      ? `<img src="${esc(_org.logo_url)}" alt="${esc(_org.name || '')}" />`
+    const orgLogoUrl = _org?.logo_white_url || _org?.logo_url || '';
+    const orgLogoHtml = orgLogoUrl
+      ? `<img src="${esc(orgLogoUrl)}" alt="${esc(_org?.name || '')}" />`
       : `<div class="rpf-left-logo-name">${esc(_org?.name || _org?.abbreviation || 'Build The Show')}</div>`;
 
     const posterHtml = posterUrl
@@ -1585,15 +1586,27 @@
     if (!applicant) return null;
     const ca = applicant.custom_answers || {};
     const nameParts = String(applicant.name || '').trim().split(/\s+/);
+    const caValue = (...keys) => {
+      for (const key of keys) {
+        const value = ca[key];
+        if (value !== undefined && value !== null && String(value).trim() !== '') return String(value).trim();
+      }
+      return '';
+    };
+    const firstName = caValue('Legal first name', 'Legal First Name', 'First Name', 'first_name') || nameParts[0] || '';
     return {
-      first_name:     applicant.first_name  || ca['Legal first name'] || nameParts[0] || '',
-      last_name:      applicant.last_name   || ca['Legal last name']  || nameParts.slice(1).join(' ') || '',
-      preferred_name: applicant.preferred_name || ca['Preferred name'] || '',
-      pronouns:       applicant.pronouns    || ca['Pronouns'] || '',
-      date_of_birth:  applicant.dob         || ca['Date of birth'] || '',
-      email:          applicant.email       || '',
-      phone:          applicant.phone       || ca['Contact phone number'] || ca['Phone'] || '',
-      headshot_url:   applicant.headshot_url || '',
+      first_name:     firstName,
+      last_name:      caValue('Legal last name', 'Legal Last Name', 'Last Name', 'last_name') || nameParts.slice(1).join(' ') || '',
+      preferred_name: caValue('Preferred Name', 'Preferred name', 'preferred_name') || firstName,
+      pronouns:       caValue('Pronouns', 'pronouns') || '',
+      date_of_birth:  caValue('Date of Birth', 'Date of birth', 'Birth Date', 'Birthday', 'date_of_birth', 'dob'),
+      email:          applicant.email || caValue('Contact email', 'Contact Email', 'Email', 'email'),
+      phone:          caValue('Contact phone number', 'Contact Phone Number', 'Contact phone', 'Phone Number', 'Phone', 'phone'),
+      headshot_url:   applicant.headshot_url || caValue('headshot_url', 'Headshot URL', 'Headshot'),
+      guardian_first: caValue('Guardian first name', 'Guardian First Name', 'Parent/Guardian first name'),
+      guardian_last:  caValue('Guardian last name', 'Guardian Last Name', 'Parent/Guardian last name'),
+      guardian_phone: caValue('Guardian phone', 'Guardian Phone', 'Parent/Guardian phone'),
+      guardian_email: caValue('Guardian email', 'Guardian Email', 'Parent/Guardian email'),
     };
   }
 
@@ -1601,7 +1614,7 @@
     if (_resolvedProductionId || !_orgSlug || !_showSlug || /^system$/i.test(_orgSlug)) return;
     try {
       const orgKey = _orgSlug;
-      const { data: orgMatch } = await sb.from('organizations').select('id,name,logo_url,abbreviation,slug')
+      const { data: orgMatch } = await sb.from('organizations').select('id,name,logo_url,logo_white_url,abbreviation,slug')
         .or(`slug.eq.${orgKey},abbreviation.eq.${orgKey},abbreviation.eq.${orgKey.toUpperCase()},abbreviation.eq.${orgKey.toLowerCase()}`)
         .maybeSingle();
       const orgId = orgMatch?.id || '';
@@ -1635,7 +1648,8 @@
       if (error) throw error;
       const match = (data || []).find(row => {
         const rowId = String(row.id || '').slice(0, 3).toLowerCase();
-        const rowName = String(row.preferred_name || row.name || '').trim().split(/\s+/)[0].replace(/[^a-z0-9]/gi, '').toLowerCase();
+        const ca = row.custom_answers || {};
+        const rowName = String(ca['Preferred Name'] || ca['Preferred name'] || row.name || '').trim().split(/\s+/)[0].replace(/[^a-z0-9]/gi, '').toLowerCase();
         return rowId === idPrefix && rowName === namePart;
       });
       if (match) return match;
@@ -1718,7 +1732,7 @@
     if (prod.organization_id) {
       const { data: org } = await sb
         .from('organizations')
-        .select('name, logo_url, abbreviation')
+        .select('name, logo_url, logo_white_url, abbreviation')
         .eq('id', prod.organization_id)
         .maybeSingle();
       _org = org || null;
