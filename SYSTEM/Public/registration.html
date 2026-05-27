@@ -1739,31 +1739,72 @@
     return lines.length ? lines : [''];
   }
 
+  function rpfPdfAnswerFromDoc(doc, labels) {
+    const wanted = labels.map(label => String(label).toLowerCase());
+    for (const section of doc.sections || []) {
+      for (const row of section.answers || []) {
+        const label = String(row.label || '').toLowerCase();
+        if (wanted.some(w => label === w || label.includes(w))) return rpfTextForPdf(row.value);
+      }
+    }
+    return '';
+  }
+
+  function rpfPdfSignatureInfo(doc) {
+    const guardianName = rpfPdfAnswerFromDoc(doc, ['parent or guardian full name', 'final_guardian_name']);
+    const guardianRel = rpfPdfAnswerFromDoc(doc, ['relationship to performer', 'final_guardian_relationship']);
+    const guardianSig = rpfPdfAnswerFromDoc(doc, ['parent or guardian signature', 'final_guardian_sig']);
+    const guardianDate = rpfPdfAnswerFromDoc(doc, ['final_guardian_date', 'date']);
+    const performerSig = rpfPdfAnswerFromDoc(doc, ['performer signature', 'final_signer_name']);
+    const performerDate = rpfPdfAnswerFromDoc(doc, ['final_signed_date', 'date']);
+    const signer = guardianSig || guardianName || performerSig || doc.performer || 'N/A';
+    return {
+      signer,
+      printedName: guardianName || performerSig || doc.performer || 'N/A',
+      relationship: guardianRel || (guardianName ? 'Parent / Guardian' : 'Performer'),
+      signedDate: guardianDate || performerDate || doc.date || 'N/A',
+    };
+  }
+
   function rpfPdfLineItemsForContract(doc) {
     const items = [];
-    const add = (text, opts = {}) => items.push(Object.assign({ text: rpfTextForPdf(text), size: 10, font: 'F1', indent: 0, gap: 2 }, opts));
-    add(doc.title, { size: 17, font: 'F2', gap: 12 });
-    add('Registration Contract Record', { size: 11, font: 'F2', gap: 10 });
-    add(`Organisation: ${doc.organisation}`);
-    add(`Production: ${doc.production}`);
-    add(`Performer: ${doc.performer}`);
-    add(`Date: ${doc.date}`);
-    add(`Generated: ${doc.generatedAt}`, { gap: 12 });
-    add('This document records the complete registration wording presented to the performer/guardian and the submitted responses captured by Build The Show.', { gap: 14 });
+    const add = (text, opts = {}) => items.push(Object.assign({ type: 'text', text: rpfTextForPdf(text), size: 10, font: 'F1', indent: 0, gap: 2, align: 'left' }, opts));
+    const rule = (gap = 10) => items.push({ type: 'rule', gap });
+    const sig = rpfPdfSignatureInfo(doc);
 
+    add('REGISTRATION RECORD', { size: 18, font: 'F2', align: 'center', gap: 6 });
+    add(doc.title, { size: 11, font: 'F2', align: 'center', gap: 8 });
+    rule(12);
+
+    add('1. Details', { size: 12, font: 'F2', gap: 6 });
+    add(`1.1 Organisation: ${doc.organisation}`, { indent: 14 });
+    add(`1.2 Production: ${doc.production}`, { indent: 14 });
+    add(`1.3 Performer: ${doc.performer}`, { indent: 14 });
+    add(`1.4 Date: ${doc.date}`, { indent: 14 });
+    add(`1.5 Generated: ${doc.generatedAt}`, { indent: 14, gap: 10 });
+
+    add('2. Registration Wording and Responses', { size: 12, font: 'F2', gap: 6 });
     (doc.sections || []).forEach((section, index) => {
-      add(`${index + 1}. ${section.group ? `${section.group} - ` : ''}${section.title}`, { size: 12, font: 'F2', gap: 6 });
+      const clause = `2.${index + 1}`;
+      add(`${clause} ${section.group ? `${section.group} - ` : ''}${section.title}`, { size: 10.5, font: 'F2', indent: 14, gap: 4 });
       if (section.wording?.length) {
-        add('Contract wording shown:', { font: 'F2', gap: 3 });
-        section.wording.forEach(text => add(text, { indent: 14, gap: 3 }));
+        add('Wording shown:', { font: 'F2', indent: 28, gap: 2 });
+        section.wording.forEach((text, i) => add(`${clause}.${i + 1} ${text}`, { indent: 42, gap: 3 }));
       }
       if (section.answers?.length) {
-        add('Submitted responses:', { font: 'F2', gap: 3 });
-        section.answers.forEach(row => add(`${row.label}: ${row.value}`, { indent: 14, gap: 3 }));
+        add('Submitted responses:', { font: 'F2', indent: 28, gap: 2 });
+        section.answers.forEach(row => add(`${row.label}: ${row.value}`, { indent: 42, gap: 3 }));
       }
-      if (!section.wording?.length && !section.answers?.length) add('No wording or answers were captured for this section.', { indent: 14, gap: 8 });
-      add('', { gap: 6 });
+      if (!section.wording?.length && !section.answers?.length) add('N/A', { indent: 42, gap: 6 });
+      add('', { gap: 4 });
     });
+
+    add('3. Signature', { size: 12, font: 'F2', gap: 8 });
+    add(`Signature: ${sig.signer}`, { indent: 14, gap: 10 });
+    add('____________________________________________', { indent: 14, gap: 3 });
+    add(`Printed name: ${sig.printedName}`, { indent: 14 });
+    add(`Relationship / capacity: ${sig.relationship}`, { indent: 14 });
+    add(`Date: ${sig.signedDate}`, { indent: 14 });
     return items;
   }
 
@@ -1773,15 +1814,24 @@
       : data;
     const lineItems = rpfPdfLineItemsForContract(doc);
     const pages = [[]];
-    let y = 742;
+    let y = 720;
     lineItems.forEach(item => {
+      if (item.type === 'rule') {
+        if (y < 62) {
+          pages.push([]);
+          y = 720;
+        }
+        pages[pages.length - 1].push(Object.assign({}, item, { y }));
+        y -= item.gap || 10;
+        return;
+      }
       const maxChars = Math.max(28, Math.floor((512 - item.indent) / (item.size * 0.52)));
       const wrapped = item.text ? rpfWrapPdfLine(item.text, maxChars) : [''];
       wrapped.forEach((line, i) => {
         const lineHeight = Math.max(12, item.size * 1.35);
-        if (y - lineHeight < 48) {
+        if (y - lineHeight < 62) {
           pages.push([]);
-          y = 742;
+          y = 720;
         }
         pages[pages.length - 1].push(Object.assign({}, item, { text: line, y }));
         y -= lineHeight;
@@ -1793,8 +1843,15 @@
     objects.push(null);
     objects.push('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>');
     objects.push('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>');
-    pages.forEach(pageLines => {
-      const stream = pageLines.map(line => `BT\n/${line.font} ${line.size} Tf\n${50 + (line.indent || 0)} ${line.y} Td\n(${rpfPdfEscape(line.text)}) Tj\nET`).join('\n');
+    pages.forEach((pageLines, pageIndex) => {
+      const footer = `BT\n/F1 8 Tf\n50 34 Td\n(${rpfPdfEscape(doc.title)}) Tj\nET\nBT\n/F1 8 Tf\n500 34 Td\n(Page ${pageIndex + 1} of ${pages.length}) Tj\nET\n0.75 w\n50 46 m\n562 46 l\nS`;
+      const header = pageIndex > 0 ? `BT\n/F2 9 Tf\n50 750 Td\n(${rpfPdfEscape(doc.title)}) Tj\nET\n0.75 w\n50 738 m\n562 738 l\nS` : '';
+      const body = pageLines.map(line => {
+        if (line.type === 'rule') return `0.75 w\n50 ${line.y} m\n562 ${line.y} l\nS`;
+        const x = line.align === 'center' ? Math.max(50, 306 - (rpfTextForPdf(line.text).length * line.size * 0.24)) : 50 + (line.indent || 0);
+        return `BT\n/${line.font} ${line.size} Tf\n${x} ${line.y} Td\n(${rpfPdfEscape(line.text)}) Tj\nET`;
+      }).join('\n');
+      const stream = [header, body, footer].filter(Boolean).join('\n');
       const streamObjNum = objects.length + 2;
       const pageObjNum = objects.length + 1;
       objects.push(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents ${streamObjNum} 0 R >>`);
