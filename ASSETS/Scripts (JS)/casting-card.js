@@ -56,6 +56,17 @@ function getCastingCardTextSize(text, baseSize, minSize, maxChars) {
   return `${fitted}cqw`;
 }
 
+function formatInTheShowCharacterLine(characterName) {
+  const raw = String(characterName || '').trim();
+  if (!raw) return '';
+  const names = raw
+    .split(/\s*(?:,|;|\/|\s+\+\s+|\s+and\s+)\s*/i)
+    .map(name => name.trim().replace(/^["“”']+|["“”']+$/g, ''))
+    .filter(Boolean);
+  const parts = names.length > 1 ? names : [raw.replace(/^["“”']+|["“”']+$/g, '')];
+  return parts.map(name => `"${name}"`).join(' ');
+}
+
 function isVideoCallAttendanceMode(attendanceMode) {
   const normalized = String(attendanceMode || '').trim().toLowerCase();
   return normalized === 'video_call'
@@ -237,7 +248,7 @@ function renderCastingCard(data, options = {}) {
   // Caption display
   const isInTheShow = variant === 'inTheShow';
   const firstLine = isInTheShow ? [first_name, last_name].filter(Boolean).join(' ') : (first_name || '');
-  const secondLine = isInTheShow ? (character_name ? `"${character_name}"` : '') : `${last_name || ''}`;
+  const secondLine = isInTheShow ? formatInTheShowCharacterLine(character_name) : `${last_name || ''}`;
   const thirdParts = [];
   if (!isInTheShow && age !== null && age !== undefined && age !== '') thirdParts.push(String(age));
   if (!isInTheShow && pronouns) thirdParts.push(String(pronouns));
