@@ -1850,6 +1850,62 @@
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
 
+  function rpfRegistrationIsComplete() {
+    const value = _applicant?.custom_answers?.__bts_registration_complete;
+    return value === true || value === 'true';
+  }
+
+  function rpfSavedAnswerValue(saved, key) {
+    if (!saved || !key) return undefined;
+    if (saved[key] !== undefined) return saved[key];
+    const normalizedKey = String(key).toLowerCase().replace(/[^a-z0-9]+/g, '');
+    const actual = Object.keys(saved).find(k => String(k).toLowerCase().replace(/[^a-z0-9]+/g, '') === normalizedKey);
+    return actual ? saved[actual] : undefined;
+  }
+
+  function rpfApplySavedAnswers(saved = _applicant?.custom_answers || {}) {
+    const shell = document.getElementById('rpf-root');
+    if (!shell || !saved || typeof saved !== 'object') return;
+    shell.querySelectorAll('input, select, textarea').forEach(el => {
+      if (el.type === 'file') return;
+      const key = el.name || el.dataset.fieldName;
+      const value = rpfSavedAnswerValue(saved, key);
+      if (value === undefined || value === null) return;
+      if (el.type === 'checkbox') el.checked = value === true || value === 'true' || value === 'Yes' || value === 'yes' || value === 'on';
+      else if (el.type === 'radio') el.checked = String(el.value) === String(value);
+      else el.value = String(value);
+    });
+  }
+
+  function rpfMarkRegistrationCompleteNav() {
+    _rpfSections.forEach((_, i) => {
+      const item = document.getElementById(`rpf-left-item-${i}`);
+      const dot  = document.getElementById(`rpf-dot-${i}`);
+      if (item) { item.classList.remove('rpf-active'); item.classList.add('rpf-done'); }
+      if (dot)  dot.textContent = '✓';
+    });
+  }
+
+  function rpfShowSuccessScreen() {
+    rpfMarkRegistrationCompleteNav();
+    if (!window._rpfSubmittedAnswerRows) window._rpfSubmittedAnswerRows = rpfCollectAnswerRowsForPdf();
+    const body = document.getElementById('rpf-wizard-body');
+    if (!body) return;
+    body.innerHTML = `<div class="rpf-success">
+      <div class="rpf-success-kicker">Registration Complete</div>
+      <div class="rpf-success-big">You're&nbsp;in.</div>
+      <div class="rpf-success-show-badge">${esc(_prod?.title || 'Production')}</div>
+      <div class="rpf-success-copy">Your registration has been submitted. The production team will be in touch with next steps.</div>
+      <div class="rpf-success-card">
+        <div class="rpf-success-title">Check your inbox.</div>
+        <div class="rpf-success-body">A confirmation is on its way. If you do not see it within a few minutes, check your spam folder.</div>
+      </div>
+      <div class="rpf-success-actions">
+        <button type="button" class="rpf-download-answers-btn" onclick="rpfDownloadAnswersPdf()">Download PDF of answers</button>
+      </div>
+    </div>`;
+  }
+
   // ── Auto-save ─────────────────────────────────────────────────────────────────
   function scheduleSave(delay = 2000) {
     clearTimeout(_saveTimer);
@@ -1890,32 +1946,7 @@
       _applicant.custom_answers = merged;
       window._rpfSubmittedAnswerRows = pdfRows;
       showSavedIndicator();
-
-      // Mark all nav items done
-      _rpfSections.forEach((_, i) => {
-        const item = document.getElementById(`rpf-left-item-${i}`);
-        const dot  = document.getElementById(`rpf-dot-${i}`);
-        if (item) { item.classList.remove('rpf-active'); item.classList.add('rpf-done'); }
-        if (dot)  dot.textContent = '✓';
-      });
-
-      // Show success screen
-      const body = document.getElementById('rpf-wizard-body');
-      if (body) {
-        body.innerHTML = `<div class="rpf-success">
-          <div class="rpf-success-kicker">Registration Complete</div>
-          <div class="rpf-success-big">You're&nbsp;in.</div>
-          <div class="rpf-success-show-badge">${esc(_prod?.title || 'Production')}</div>
-          <div class="rpf-success-copy">Your registration has been submitted. The production team will be in touch with next steps.</div>
-          <div class="rpf-success-card">
-            <div class="rpf-success-title">Check your inbox.</div>
-            <div class="rpf-success-body">A confirmation is on its way. If you do not see it within a few minutes, check your spam folder.</div>
-          </div>
-          <div class="rpf-success-actions">
-            <button type="button" class="rpf-download-answers-btn" onclick="rpfDownloadAnswersPdf()">Download PDF of answers</button>
-          </div>
-        </div>`;
-      }
+      rpfShowSuccessScreen();
     } catch (err) {
       console.error('[BTS] submit failed', err);
       if (btn) { btn.disabled = false; btn.textContent = 'Submit Registration'; }
@@ -2195,6 +2226,11 @@
     document.title = `${prod.title || 'Registration'} | Build The Show`;
 
     renderForm();
+    rpfApplySavedAnswers(_applicant?.custom_answers);
+    if (rpfRegistrationIsComplete()) {
+      window._rpfSubmittedAnswerRows = rpfCollectAnswerRowsForPdf();
+      rpfShowSuccessScreen();
+    }
   }
 
   boot().catch(err => {
