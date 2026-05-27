@@ -1420,7 +1420,9 @@
     try {
       const collected = collectFormAnswers();
       const merged = Object.assign({}, _applicant.custom_answers || {}, collected);
-      await sb.from('audition_applications').update({ custom_answers: merged }).eq('id', _applicant.id);
+      const { error } = await sb.from('audition_applications').update({ custom_answers: merged }).eq('id', _applicant.id);
+      if (error) throw error;
+      _applicant.custom_answers = merged;
       showSavedIndicator();
     } catch (e) {
       console.warn('[BTS] autosave failed', e);
@@ -1434,16 +1436,17 @@
 
     clearTimeout(_saveTimer);
     try {
+      if (!_applicant?.id) throw new Error('Missing applicant record for registration submit.');
       const collected = collectFormAnswers();
       const merged = Object.assign({}, _applicant?.custom_answers || {}, collected, {
         __bts_registration_complete: true,
         __bts_registration_submitted_at: new Date().toISOString(),
       });
 
-      if (_applicant?.id) {
-        const { error } = await sb.from('audition_applications').update({ custom_answers: merged }).eq('id', _applicant.id);
-        if (error) throw error;
-      }
+      const { error } = await sb.from('audition_applications').update({ custom_answers: merged }).eq('id', _applicant.id);
+      if (error) throw error;
+      _applicant.custom_answers = merged;
+      showSavedIndicator();
 
       // Mark all nav items done
       _rpfSections.forEach((_, i) => {
