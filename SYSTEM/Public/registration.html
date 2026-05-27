@@ -568,7 +568,6 @@
   <!-- Save indicator -->
   <div class="rpf-save-indicator" id="rpf-save-indicator">Saved</div>
 
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
   <script>
   'use strict';
 
@@ -583,15 +582,20 @@
   const _productionId = _hashParams.get('prod') || new URLSearchParams(window.location.search).get('prod') || '';
 
   // ── Supabase ─────────────────────────────────────────────────────────────────
-  const SUPABASE_URL      = 'https://tkmaiktxpwqfbgeojbnf.supabase.co';
-  const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJ0a21haWt0eHB3cWZiZ2VvamJuZiIsInJvbGUiOiJhbm9uIiwiaWF0IjoxNzczNzMxODE3LCJleHAiOjIwODkzMDc4MTd9.TkTZBNWUatk3Y6Vmfv1hIRR3DfVjgwauwa76Pf00J_8';
-  const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  let sb = null;
+  async function ensureSupabaseClient() {
+    if (sb) return sb;
+    const mod = await import('/ASSETS/scripts/supabase.js');
+    sb = mod.supabase;
+    return sb;
+  }
 
   // ── Global state ──────────────────────────────────────────────────────────────
   let _offer      = null;
   let _prod       = null;
   let _org        = null;
   let _applicant  = null;
+  let _resolvedProductionId = _productionId || '';
   let _prefill    = null;
   let _regSettings = {};
   let _formTemplates = {};
@@ -1593,33 +1597,82 @@
     };
   }
 
-  async function boot() {
-    if (!_regCode && !_applicantId) {
-      showError('No registration code', 'This link is missing a registration code. Please use the link from your invitation email.');
-      return;
+  async function resolveProductionFromRegistrationPath() {
+    if (_resolvedProductionId || !_orgSlug || !_showSlug || /^system$/i.test(_orgSlug)) return;
+    try {
+      const orgKey = _orgSlug;
+      const { data: orgMatch } = await sb.from('organizations').select('id,name,logo_url,abbreviation,slug')
+        .or(`slug.eq.${orgKey},abbreviation.eq.${orgKey},abbreviation.eq.${orgKey.toUpperCase()},abbreviation.eq.${orgKey.toLowerCase()}`)
+        .maybeSingle();
+      const orgId = orgMatch?.id || '';
+      if (orgMatch) _org = orgMatch;
+      let q = sb.from('productions').select('id').ilike('slug', _showSlug);
+      if (orgId) q = q.eq('organization_id', orgId);
+      const { data: prodMatch } = await q.maybeSingle();
+      _resolvedProductionId = prodMatch?.id || '';
+    } catch (error) {
+      console.warn('[BTS] registration production path lookup failed', error);
+    }
+  }
+
+  async function findApplicantByRegistrationCode(applicantSelect) {
+    const code = String(_regCode || '').trim();
+    if (!code) return null;
+
+    const dashIdx = code.lastIndexOf('-');
+    const idPrefix = (dashIdx >= 0 ? code.slice(dashIdx + 1) : '').toLowerCase();
+    const namePart = (dashIdx >= 0 ? code.slice(0, dashIdx) : code).toLowerCase();
+
+    if (/^[0-9a-f]{3}$/.test(idPrefix)) {
+      const prefixNum = parseInt(idPrefix, 16);
+      const nextHex = (prefixNum + 1).toString(16).padStart(3, '0');
+      const idLow = `${idPrefix}00000-0000-0000-0000-000000000000`;
+      const idHigh = `${nextHex}00000-0000-0000-0000-000000000000`;
+      let q = sb.from('audition_applications').select(applicantSelect).gte('id', idLow);
+      if (nextHex.length === 3) q = q.lt('id', idHigh);
+      if (_resolvedProductionId) q = q.eq('production_id', _resolvedProductionId);
+      const { data, error } = await q;
+      if (error) throw error;
+      const match = (data || []).find(row => {
+        const rowId = String(row.id || '').slice(0, 3).toLowerCase();
+        const rowName = String(row.preferred_name || row.name || '').trim().split(/\s+/)[0].replace(/[^a-z0-9]/gi, '').toLowerCase();
+        return rowId === idPrefix && rowName === namePart;
+      });
+      if (match) return match;
     }
 
-    // 1. Resolve the same offer identity used by the cast-offer page.
-    const applicantSelect = 'id, production_id, name, email, custom_answers, date_conflicts, conflicts';
-    let applicant = null;
-    if (_applicantId) {
-      let byId = sb.from('audition_applications').select(applicantSelect).eq('id', _applicantId);
-      if (_productionId) byId = byId.eq('production_id', _productionId);
-      const { data, error } = await byId.maybeSingle();
-      if (error) throw error;
-      applicant = data || null;
-    }
     async function findApplicantByOfferKey(key) {
       const { data, error } = await sb
         .from('audition_applications')
         .select(applicantSelect)
-        .contains('custom_answers', { [key]: _regCode })
+        .contains('custom_answers', { [key]: code })
         .limit(1);
       if (error) throw error;
       return data?.[0] || null;
     }
-    if (!applicant && _regCode) applicant = await findApplicantByOfferKey(CAST_OFFER_KEYS.code);
-    if (!applicant && _regCode) applicant = await findApplicantByOfferKey(CAST_OFFER_KEYS.token);
+    return await findApplicantByOfferKey(CAST_OFFER_KEYS.code)
+      || await findApplicantByOfferKey(CAST_OFFER_KEYS.token);
+  }
+
+  async function boot() {
+    await ensureSupabaseClient();
+    if (!_regCode && !_applicantId) {
+      showError('No registration code', 'This link is missing a registration code. Please use the link from your invitation email.');
+      return;
+    }
+    await resolveProductionFromRegistrationPath();
+
+    // 1. Resolve the same offer identity used by the cast-offer page.
+    const applicantSelect = 'id, production_id, name, preferred_name, pronouns, phone, headshot_url, email, custom_answers, date_conflicts, conflicts';
+    let applicant = null;
+    if (_applicantId) {
+      let byId = sb.from('audition_applications').select(applicantSelect).eq('id', _applicantId);
+      if (_resolvedProductionId) byId = byId.eq('production_id', _resolvedProductionId);
+      const { data, error } = await byId.maybeSingle();
+      if (error) throw error;
+      applicant = data || null;
+    }
+    if (!applicant && _regCode) applicant = await findApplicantByRegistrationCode(applicantSelect);
 
     let offer = null;
     if (!applicant) {
@@ -1638,7 +1691,7 @@
     }
     _offer = offer || {
       id: '',
-      production_id: applicant?.production_id || _productionId || '',
+      production_id: applicant?.production_id || _resolvedProductionId || '',
       applicant_id: applicant?.id || '',
       token: _regCode,
       code: _regCode,
