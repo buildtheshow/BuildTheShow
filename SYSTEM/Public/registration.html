@@ -918,15 +918,22 @@
     if (/preferred name/.test(n))                return prefill.preferred_name || '';
     if (/pronoun/.test(n))                       return prefill.pronouns || '';
     if (/date of birth|birth date/.test(n))      return prefill.date_of_birth || '';
+    if (/secondary.*name|additional contact.*name/.test(n)) return prefill.secondary_name || '';
+    if (/secondary.*phone|additional contact.*phone/.test(n)) return prefill.secondary_phone || '';
+    if (/secondary.*email|additional contact.*email/.test(n)) return prefill.secondary_email || '';
+    if (/guardian first name|guardian.*first/.test(n)) return prefill.guardian_first || '';
+    if (/guardian last name|guardian.*last/.test(n))   return prefill.guardian_last  || '';
+    if (/guardian.*relationship|relationship.*performer/.test(n)) return prefill.guardian_relationship || '';
+    if (/guardian.*phone/.test(n)) return prefill.guardian_phone || '';
+    if (/guardian.*email/.test(n)) return prefill.guardian_email || '';
+    if (/emergency contact name/.test(n))  return prefill.emergency_name || prefill.guardian_first || '';
+    if (/emergency contact phone/.test(n)) return prefill.emergency_phone || prefill.guardian_phone || prefill.phone || '';
+    if (/authori[sz]ed pickup 1.*full name/.test(n)) return [prefill.guardian_first, prefill.guardian_last].filter(Boolean).join(' ');
+    if (/authori[sz]ed pickup 1.*relationship/.test(n)) return prefill.guardian_relationship || '';
+    if (/authori[sz]ed pickup 1.*phone/.test(n)) return prefill.guardian_phone || prefill.phone || '';
     if (/contact email|participant email/.test(n)) return prefill.email || '';
     if (/contact phone/.test(n) && !/guardian/.test(n)) return prefill.phone || '';
     if (/\bphone\b/.test(n) && !/guardian/.test(n)) return prefill.phone || '';
-    if (/guardian first name|guardian.*first/.test(n)) return prefill.guardian_first || '';
-    if (/guardian last name|guardian.*last/.test(n))   return prefill.guardian_last  || '';
-    if (/guardian.*phone/.test(n)) return prefill.guardian_phone || '';
-    if (/guardian.*email/.test(n)) return prefill.guardian_email || '';
-    if (/emergency contact name/.test(n))  return prefill.emergency_name || '';
-    if (/emergency contact phone/.test(n)) return prefill.emergency_phone || '';
     return '';
   }
 
@@ -1672,29 +1679,71 @@
     }, {});
   }
 
+  function splitRegistrationName(value) {
+    const parts = String(value || '').trim().split(/\s+/).filter(Boolean);
+    return {
+      first: parts[0] || '',
+      last: parts.slice(1).join(' '),
+    };
+  }
+
+  function parseRegistrationContactParts(value) {
+    const parts = String(value || '').split(/[·|,;]/).map(part => part.trim()).filter(Boolean);
+    return {
+      email: parts.find(part => /@/.test(part)) || '',
+      phone: parts.find(part => !/@/.test(part) && /\d/.test(part)) || '',
+    };
+  }
+
   function buildPrefill(applicant) {
     if (!applicant) return null;
     const ca = mergeRegistrationAnswers(_booking, applicant);
     const nameParts = String(applicant.name || '').trim().split(/\s+/);
     const caValue = (...keys) => registrationAnswerValue(ca, keys);
-    const guardianName = caValue('Guardian name', 'Guardian Name', 'Parent/Guardian name', 'Parent or guardian full name', 'Parent/Guardian full name');
-    const guardianParts = guardianName.split(/\s+/).filter(Boolean);
-    const firstName = caValue('Legal first name', 'Legal First Name', 'First Name', 'first_name') || _booking?.first_name || nameParts[0] || '';
-    const lastName = caValue('Legal last name', 'Legal Last Name', 'Last Name', 'last_name') || _booking?.last_name || nameParts.slice(1).join(' ') || '';
+    const guardianName = caValue(
+      'Guardian name',
+      'Guardian Name',
+      'Parent/Guardian name',
+      'Parent or guardian full name',
+      'Parent/Guardian full name'
+    ) || applicant.guardian_name || _booking?.guardian_name || '';
+    const guardianParts = splitRegistrationName(guardianName);
+    const guardianContactRaw = caValue(
+      'Guardian Contact',
+      'guardian_contact',
+      'Guardian contact',
+      'Parent/Guardian contact',
+      'Parent or guardian contact'
+    ) || applicant.guardian_contact || _booking?.guardian_contact || '';
+    const guardianContactParts = parseRegistrationContactParts(guardianContactRaw);
+    const firstName = caValue('Legal first name', 'Legal First Name', 'First Name', 'first_name')
+      || _booking?.first_name
+      || splitRegistrationName(_booking?.name).first
+      || nameParts[0]
+      || '';
+    const lastName = caValue('Legal last name', 'Legal Last Name', 'Last Name', 'last_name')
+      || _booking?.last_name
+      || splitRegistrationName(_booking?.name).last
+      || nameParts.slice(1).join(' ')
+      || '';
     return {
       first_name:     firstName,
       last_name:      lastName,
       preferred_name: caValue('Preferred Name', 'Preferred name', 'preferred_name') || firstName,
-      pronouns:       caValue('Pronouns', 'pronouns') || '',
-      date_of_birth:  caValue('Date of Birth', 'Date of birth', 'Birth Date', 'Birthday', 'date_of_birth', 'dob'),
+      pronouns:       applicant.pronouns || _booking?.pronouns || caValue('Pronouns', 'pronouns') || '',
+      date_of_birth:  applicant.date_of_birth || applicant.dob || applicant.birth_date || _booking?.date_of_birth || _booking?.dob || _booking?.birth_date || caValue('Date of Birth', 'Date of birth', 'Birth Date', 'Birthday', 'date_of_birth', 'dob'),
       email:          applicant.email || _booking?.email || caValue('Contact email', 'Contact Email', 'Participant email', 'Email', 'email'),
-      phone:          caValue('Contact phone number', 'Contact Phone Number', 'Contact phone', 'Participant phone', 'Phone Number', 'Phone', 'phone') || _booking?.phone || '',
+      phone:          applicant.phone || _booking?.phone || caValue('Contact phone number', 'Contact Phone Number', 'Contact phone', 'Participant phone', 'Phone Number', 'Phone', 'phone') || '',
       headshot_url:   applicant.headshot_url || _booking?.headshot_url || caValue('headshot_url', 'Headshot URL', 'Headshot'),
-      guardian_first: caValue('Guardian first name', 'Guardian First Name', 'Parent/Guardian first name', 'Parent or guardian first name') || guardianParts[0] || '',
-      guardian_last:  caValue('Guardian last name', 'Guardian Last Name', 'Parent/Guardian last name', 'Parent or guardian last name') || guardianParts.slice(1).join(' ') || '',
-      guardian_phone: caValue('Guardian phone', 'Guardian Phone', 'Parent/Guardian phone', 'Parent or guardian phone', 'Guardian contact phone', 'Parent phone'),
-      guardian_email: caValue('Guardian email', 'Guardian Email', 'Parent/Guardian email', 'Parent or guardian email', 'Guardian contact email', 'Parent email'),
+      guardian_first: caValue('Guardian first name', 'Guardian First Name', 'Parent/Guardian first name', 'Parent or guardian first name') || guardianParts.first || '',
+      guardian_last:  caValue('Guardian last name', 'Guardian Last Name', 'Parent/Guardian last name', 'Parent or guardian last name') || guardianParts.last || '',
+      guardian_phone: applicant.guardian_phone || _booking?.guardian_phone || guardianContactParts.phone || caValue('Guardian phone', 'Guardian Phone', 'Parent/Guardian phone', 'Parent or guardian phone', 'Guardian contact phone', 'Parent phone'),
+      guardian_email: applicant.guardian_email || _booking?.guardian_email || guardianContactParts.email || caValue('Guardian email', 'Guardian Email', 'Parent/Guardian email', 'Parent or guardian email', 'Guardian contact email', 'Parent email'),
       guardian_relationship: caValue('Guardian relationship to performer', 'Guardian Relationship to Performer', 'Parent/Guardian relationship', 'Parent or guardian relationship', 'Relationship to performer'),
+      contact_name: applicant.contact_name || _booking?.contact_name || caValue('Contact Name', 'Contact name', 'contact_name'),
+      secondary_name: caValue('Secondary Contact Name', 'secondary_contact_name', 'Additional Contact Name', 'additional_contact_name'),
+      secondary_phone: caValue('Secondary Contact Phone', 'secondary_contact_phone', 'Additional Contact Phone', 'additional_contact_phone'),
+      secondary_email: caValue('Secondary Contact Email', 'secondary_contact_email', 'Additional Contact Email', 'additional_contact_email'),
     };
   }
 
@@ -1702,7 +1751,7 @@
     if (!applicant?.id && !applicant?.email) return null;
     try {
       let query = sb.from('audition_bookings')
-        .select('id,applicant_id,production_id,name,email,phone,first_name,last_name,custom_answers,headshot_url')
+        .select('*')
         .eq('production_id', applicant.production_id || _resolvedProductionId || _offer?.production_id || '');
       if (applicant.id) query = query.eq('applicant_id', applicant.id);
       else query = query.eq('email', applicant.email);
@@ -1805,7 +1854,7 @@
     await resolveProductionFromRegistrationPath();
 
     // 1. Resolve the same offer identity used by the cast-offer page.
-    const applicantSelect = 'id, production_id, name, email, headshot_url, custom_answers, date_conflicts, conflicts';
+    const applicantSelect = '*';
     let applicant = null;
     if (_applicantId) {
       let byId = sb.from('audition_applications').select(applicantSelect).eq('id', _applicantId);
