@@ -652,6 +652,7 @@
   const _regCode   = _pathParts[3] || new URLSearchParams(window.location.search).get('code') || _hashParams.get('code') || '';
   const _applicantId = _hashParams.get('app') || new URLSearchParams(window.location.search).get('app') || '';
   const _productionId = _hashParams.get('prod') || new URLSearchParams(window.location.search).get('prod') || '';
+  const _pdfMode = _hashParams.get('pdf') === '1' || new URLSearchParams(window.location.search).get('pdf') === '1';
 
   // ── Supabase ─────────────────────────────────────────────────────────────────
   let sb = null;
@@ -1957,6 +1958,15 @@
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
 
+  async function rpfOpenAnswersPdfInline() {
+    const doc = window._rpfSubmittedAnswerRows || rpfCollectAnswerRowsForPdf();
+    if (!doc.logoData) doc.logoData = await rpfLoadPdfLogo(doc.logoUrl || _org?.logo_url || _org?.logo_white_url || '');
+    const pdf = rpfBuildAnswersPdf(doc);
+    const blob = new Blob([pdf], { type: 'application/pdf' });
+    const url = URL.createObjectURL(blob);
+    window.location.replace(url);
+  }
+
   function rpfRegistrationIsComplete() {
     const value = _applicant?.custom_answers?.__bts_registration_complete;
     return value === true || value === 'true';
@@ -2577,6 +2587,10 @@
     rpfApplySavedAnswers(_applicant?.custom_answers);
     if (rpfRegistrationIsComplete()) {
       window._rpfSubmittedAnswerRows = rpfCollectAnswerRowsForPdf();
+      if (_pdfMode) {
+        await rpfOpenAnswersPdfInline();
+        return;
+      }
       rpfShowSuccessScreen();
     }
   }
