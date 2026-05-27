@@ -708,6 +708,10 @@
     .rpt-household-modal-member:hover { background:rgba(87,46,136,0.05); }
     .rpt-household-modal-member input[type=checkbox] { accent-color:#572e88; cursor:pointer; }
     .rpt-household-modal-actions { display:flex; gap:0.5rem; justify-content:flex-end; padding-top:0.25rem; }
+    .rpt-hh-suggestion { background:rgba(87,46,136,0.07); border:1.5px solid rgba(87,46,136,0.18); border-radius:9px; padding:0.55rem 0.75rem; display:flex; flex-wrap:wrap; align-items:center; gap:0.45rem; }
+    .rpt-hh-suggestion-label { font-size:0.68rem; font-weight:800; color:rgba(87,46,136,0.6); text-transform:uppercase; letter-spacing:0.07em; flex-basis:100%; }
+    .rpt-hh-suggestion-name { font-size:0.8rem; font-weight:600; color:#1a1530; background:#fff; border:1.5px solid rgba(87,46,136,0.2); border-radius:6px; padding:0.22em 0.6em; }
+    .rpt-hh-suggestion-add { font-size:0.75rem; font-weight:700; color:#572e88; background:none; border:none; cursor:pointer; padding:0.2em 0.4em; margin-left:auto; font-family:var(--bts-font); text-decoration:underline; }
     .rpt-modal-save-btn { font-size:0.8rem; font-weight:700; padding:0.5em 1.1em; border-radius:8px; background:#572e88; color:#fff; border:none; cursor:pointer; font-family:var(--bts-font); }
     .rpt-modal-save-btn:hover { background:#3d1f66; }
     .rpt-modal-cancel-btn { font-size:0.8rem; font-weight:700; padding:0.5em 1.1em; border-radius:8px; background:transparent; color:rgba(87,46,136,0.6); border:1.5px solid rgba(87,46,136,0.2); cursor:pointer; font-family:var(--bts-font); }
@@ -43775,8 +43779,8 @@ See you soon!
     const existing = editId ? _rptHouseholds.find(h => h.id === editId) : null;
     const checkedIds = new Set(existing?.member_ids || (preselectedId ? [preselectedId] : []));
     let suggestedName = existing?.name || '';
+    let suggestedMembers = []; // {id, name} — shown as a suggestion panel, NOT auto-checked
 
-    // When reviewing a request, auto-detect family members by last name
     if (preselectedId && !editId) {
       const requester = _rptCastItems.find(i => String(i.assignment?.id) === String(preselectedId));
       if (requester) {
@@ -43788,23 +43792,27 @@ See you soon!
           : []);
         if (requesterLast) siblingLasts.add(requesterLast);
 
-        // Pre-check any cast member whose last name matches
+        // Collect suggested members by last name match (don't auto-check them)
         _rptCastItems.forEach(item => {
+          const id = String(item.assignment?.id || '');
           if (siblingLasts.has(_lastName(item.app?.name).toLowerCase()))
-            checkedIds.add(String(item.assignment?.id || ''));
+            suggestedMembers.push({ id, name: String(item.app?.name || 'Cast Member').trim() });
         });
 
-        // Build suggested name from unique last names of checked members
-        const lastNames = [...new Set(
-          [...checkedIds].map(id => {
-            const it = _rptCastItems.find(i => String(i.assignment?.id) === id);
-            return it ? _lastName(it.app?.name) : '';
-          }).filter(Boolean)
-        )];
+        // Build suggested household name from unique last names of matches
+        const lastNames = [...new Set(suggestedMembers.map(m => _lastName(m.name)).filter(Boolean))];
         if (lastNames.length === 1) suggestedName = lastNames[0];
         else if (lastNames.length >= 2) suggestedName = lastNames.slice(0, 2).join('-');
       }
     }
+
+    const suggestionHtml = suggestedMembers.length
+      ? `<div class="rpt-hh-suggestion">
+          <div class="rpt-hh-suggestion-label">Suggested members</div>
+          ${suggestedMembers.map(m => `<span class="rpt-hh-suggestion-name">${esc(m.name)}</span>`).join('')}
+          <button class="rpt-hh-suggestion-add" onclick="rptAddSuggestedHouseholdMembers(${JSON.stringify(suggestedMembers.map(m => m.id))})">Add all</button>
+        </div>`
+      : '';
 
     const modal = document.createElement('div');
     modal.className = 'rpt-household-modal';
@@ -43812,6 +43820,7 @@ See you soon!
     modal.innerHTML = `<div class="rpt-household-modal-box">
       <div class="rpt-household-modal-title">${existing ? 'Edit Household' : 'Create Household'}</div>
       <input class="rpt-household-modal-input" id="rpt-hh-name" placeholder="Family name (e.g. Smith Family)" value="${esc(suggestedName)}" />
+      ${suggestionHtml}
       <div class="rpt-household-modal-section-label">Members</div>
       <input class="rpt-household-modal-input" id="rpt-hh-search" placeholder="Search cast members…" oninput="rptFilterHouseholdMembers(this.value)" style="margin-bottom:0.25rem;" />
       <div class="rpt-household-modal-members" id="rpt-hh-members">${_rptCastItems.map(item => {
@@ -43825,6 +43834,14 @@ See you soon!
     </div>`;
     document.body.appendChild(modal);
     document.getElementById('rpt-hh-name')?.focus();
+  }
+
+  function rptAddSuggestedHouseholdMembers(ids) {
+    ids.forEach(id => {
+      const cb = document.querySelector(`#rpt-hh-members input[value="${CSS.escape(id)}"]`);
+      if (cb) cb.checked = true;
+    });
+    document.querySelector('.rpt-hh-suggestion')?.remove();
   }
 
   function rptFilterHouseholdMembers(query) {
