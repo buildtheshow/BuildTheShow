@@ -1773,32 +1773,48 @@
   function rpfPdfLineItemsForContract(doc) {
     const items = [];
     const add = (text, opts = {}) => items.push(Object.assign({ type: 'text', text: rpfTextForPdf(text), size: 10, font: 'F1', indent: 0, gap: 2, align: 'left', color: 'ink' }, opts));
-    const rule = (gap = 10) => items.push({ type: 'rule', gap, color: 'gold' });
     const sig = rpfPdfSignatureInfo(doc);
+    const sectionColors = ['purple', 'blue', 'green', 'pink'];
 
-    add('REGISTRATION SUMMARY', { size: 19, font: 'F2', align: 'center', gap: 6, color: 'white' });
-    add(doc.title, { size: 11, font: 'F2', align: 'center', gap: 8, color: 'purple' });
-    rule(12);
+    // Cover title — ZapfChancery for flair
+    add('Registration Summary', { size: 26, font: 'F3', align: 'center', gap: 4, color: 'purple' });
+    add(doc.production, { size: 13, font: 'F2', align: 'center', gap: 3, color: 'gold' });
+    add(doc.organisation, { size: 9, font: 'F1', align: 'center', gap: 10, color: 'muted' });
+    items.push({ type: 'rule', gap: 14, color: 'purple' });
 
-    add('1. Details', { size: 12, font: 'F2', gap: 6, color: 'purple' });
-    add(`1.1 Organisation: ${doc.organisation}`, { indent: 14 });
-    add(`1.2 Production: ${doc.production}`, { indent: 14 });
-    add(`1.3 Performer: ${doc.performer}`, { indent: 14 });
-    add(`1.4 Date: ${doc.date}`, { indent: 14 });
-    add(`1.5 Generated: ${doc.generatedAt}`, { indent: 14, gap: 10 });
+    // Details card
+    items.push({ type: 'sectionHeader', label: 'Registration Details', color: 'purple', num: '01', gap: 2 });
+    [
+      ['Organisation', doc.organisation],
+      ['Production', doc.production],
+      ['Performer', doc.performer],
+      ['Date Submitted', doc.date],
+      ['Document Generated', doc.generatedAt],
+    ].forEach(([label, value], i) => {
+      items.push({ type: 'answerRow', label: rpfTextForPdf(label), value: rpfTextForPdf(value), shade: i % 2 === 0, gap: 0 });
+    });
+    items.push({ type: 'spacer', h: 14 });
 
-    add('2. Registration Details', { size: 12, font: 'F2', gap: 6, color: 'purple' });
+    // Form sections
     (doc.sections || []).forEach((section, index) => {
-      const clause = `2.${index + 1}`;
-      add(`${clause} ${section.group ? `${section.group} - ` : ''}${section.title}`, { size: 10.5, font: 'F2', indent: 14, gap: 4, color: index % 2 ? 'green' : 'blue' });
+      const sectionColor = sectionColors[index % sectionColors.length];
+      const num = String(index + 2).padStart(2, '0');
+      const sectionLabel = [section.group, section.title]
+        .filter(Boolean)
+        .filter((v, i, a) => a.indexOf(v) === i)
+        .join(' - ');
+      items.push({ type: 'sectionHeader', label: rpfTextForPdf(sectionLabel), color: sectionColor, num, gap: 2 });
       if (section.wording?.length && !/^costume measurements$/i.test(section.title || '')) {
-        section.wording.forEach(text => add(text, { indent: 28, gap: 3 }));
+        items.push({ type: 'wordingBlock', lines: section.wording.map(rpfTextForPdf) });
       }
       if (section.answers?.length) {
-        section.answers.forEach(row => add(`${row.label}: ${row.value}`, { indent: 42, gap: 3 }));
+        section.answers.forEach((row, ri) => {
+          items.push({ type: 'answerRow', label: rpfTextForPdf(row.label), value: rpfTextForPdf(row.value), shade: ri % 2 === 0, gap: 0 });
+        });
+      } else if (!section.wording?.length) {
+        add('No information collected for this section.', { indent: 14, gap: 6, color: 'muted', size: 9 });
       }
-      if (!section.wording?.length && !section.answers?.length) add('N/A', { indent: 42, gap: 6 });
-      add('', { gap: 4 });
+      items.push({ type: 'spacer', h: 10 });
     });
 
     items.push({ type: 'signatureBlock', sig });
@@ -1813,32 +1829,51 @@
     const pages = [[]];
     let y = 720;
     lineItems.forEach(item => {
+      if (item.type === 'spacer') {
+        y -= item.h || 8;
+        return;
+      }
       if (item.type === 'rule') {
-        if (y < 62) {
-          pages.push([]);
-          y = 720;
-        }
+        if (y < 62) { pages.push([]); y = 720; }
         pages[pages.length - 1].push(Object.assign({}, item, { y }));
         y -= item.gap || 10;
         return;
       }
       if (item.type === 'signatureBlock') {
-        if (y < 230) {
-          pages.push([]);
-          y = 720;
-        }
+        if (y < 230) { pages.push([]); y = 720; }
         pages[pages.length - 1].push(Object.assign({}, item, { y: 178 }));
         y = 62;
+        return;
+      }
+      if (item.type === 'sectionHeader') {
+        const h = 28;
+        if (y - h < 62) { pages.push([]); y = 720; }
+        pages[pages.length - 1].push(Object.assign({}, item, { y, h }));
+        y -= h + (item.gap || 4);
+        return;
+      }
+      if (item.type === 'answerRow') {
+        const wrapLabel = rpfWrapPdfLine(item.label || '', 28);
+        const wrapValue = rpfWrapPdfLine(item.value || '', 52);
+        const rowH = Math.max(wrapLabel.length, wrapValue.length) * 14 + 8;
+        if (y - rowH < 62) { pages.push([]); y = 720; }
+        pages[pages.length - 1].push(Object.assign({}, item, { y, h: rowH, wrapLabel, wrapValue }));
+        y -= rowH + (item.gap || 0);
+        return;
+      }
+      if (item.type === 'wordingBlock') {
+        const allLines = (item.lines || []).flatMap(t => rpfWrapPdfLine(t, 70));
+        const blockH = allLines.length * 13 + 14;
+        if (y - blockH < 62) { pages.push([]); y = 720; }
+        pages[pages.length - 1].push(Object.assign({}, item, { y, h: blockH, allLines }));
+        y -= blockH + (item.gap || 8);
         return;
       }
       const maxChars = Math.max(28, Math.floor((512 - item.indent) / (item.size * 0.52)));
       const wrapped = item.text ? rpfWrapPdfLine(item.text, maxChars) : [''];
       wrapped.forEach((line, i) => {
         const lineHeight = Math.max(12, item.size * 1.35);
-        if (y - lineHeight < 62) {
-          pages.push([]);
-          y = 720;
-        }
+        if (y - lineHeight < 62) { pages.push([]); y = 720; }
         pages[pages.length - 1].push(Object.assign({}, item, { text: line, y }));
         y -= lineHeight;
         if (i === wrapped.length - 1) y -= item.gap || 0;
@@ -1866,6 +1901,8 @@
       white: '1 1 1',
       softGreen: '0.922 0.965 0.929',
       softGold: '1 0.969 0.902',
+      softPurple: '0.949 0.933 0.965',
+      lightRow: '0.941 0.929 0.961',
     }[name] || '0.102 0.082 0.188');
     pages.forEach((pageLines, pageIndex) => {
       const pageBrand = pageIndex === 0
@@ -1874,7 +1911,9 @@
       const footer = `q\n${color('green')} RG\n0.75 w\n50 46 m\n562 46 l\nS\nQ\nBT\n${color('muted')} rg\n/F1 8 Tf\n50 34 Td\n(${rpfPdfEscape(doc.title)}) Tj\nET\nBT\n${color('muted')} rg\n/F1 8 Tf\n500 34 Td\n(Page ${pageIndex + 1} of ${pages.length}) Tj\nET`;
       const header = pageIndex > 0 ? `BT\n${color('purple')} rg\n/F2 9 Tf\n50 738 Td\n(${rpfPdfEscape(doc.title)}) Tj\nET` : '';
       const body = pageLines.map(line => {
-        if (line.type === 'rule') return `q\n${color(line.color)} RG\n1.2 w\n50 ${line.y} m\n562 ${line.y} l\nS\nQ`;
+        if (line.type === 'rule') {
+          return `q\n${color(line.color)} RG\n1.2 w\n50 ${line.y} m\n562 ${line.y} l\nS\nQ`;
+        }
         if (line.type === 'signatureBlock') {
           const sig = line.sig || {};
           return [
@@ -1886,6 +1925,34 @@
             `BT\n${color('muted')} rg\n/F1 9 Tf\n64 ${line.y - 88} Td\n(Relationship / capacity: ${rpfPdfEscape(sig.relationship || 'N/A')}) Tj\nET`,
             `BT\n${color('ink')} rg\n/F1 9 Tf\n380 ${line.y - 72} Td\n(Date: ${rpfPdfEscape(sig.signedDate || 'N/A')}) Tj\nET`,
           ].join('\n');
+        }
+        if (line.type === 'sectionHeader') {
+          const bg = line.color || 'purple';
+          const fg = bg === 'gold' ? 'ink' : 'white';
+          const ty = line.y - line.h + 9;
+          return [
+            `q\n${color(bg)} rg\n50 ${line.y - line.h} 512 ${line.h} re f\nQ`,
+            `BT\n${color(fg)} rg\n/F3 12 Tf\n62 ${ty} Td\n(${rpfPdfEscape(line.num || '')}) Tj\nET`,
+            `BT\n${color(fg)} rg\n/F2 10 Tf\n88 ${ty} Td\n(${rpfPdfEscape(rpfWrapPdfLine(line.label || '', 62)[0] || '')}) Tj\nET`,
+          ].join('\n');
+        }
+        if (line.type === 'answerRow') {
+          const parts = [];
+          if (line.shade) parts.push(`q\n${color('lightRow')} rg\n50 ${line.y - line.h} 512 ${line.h} re f\nQ`);
+          (line.wrapLabel || ['']).forEach((lbl, i) => {
+            parts.push(`BT\n${color('ink')} rg\n/F2 9 Tf\n58 ${line.y - 8 - i * 14} Td\n(${rpfPdfEscape(lbl)}) Tj\nET`);
+          });
+          (line.wrapValue || ['']).forEach((val, i) => {
+            parts.push(`BT\n${color('muted')} rg\n/F1 9 Tf\n230 ${line.y - 8 - i * 14} Td\n(${rpfPdfEscape(val)}) Tj\nET`);
+          });
+          return parts.join('\n');
+        }
+        if (line.type === 'wordingBlock') {
+          const parts = [`q\n${color('softPurple')} rg\n50 ${line.y - line.h} 512 ${line.h} re f\nQ`];
+          (line.allLines || []).forEach((txt, i) => {
+            parts.push(`BT\n${color('muted')} rg\n/F1 8.5 Tf\n64 ${line.y - 10 - i * 13} Td\n(${rpfPdfEscape(txt)}) Tj\nET`);
+          });
+          return parts.join('\n');
         }
         const x = line.align === 'center' ? Math.max(50, 306 - (rpfTextForPdf(line.text).length * line.size * 0.24)) : 50 + (line.indent || 0);
         return `BT\n${color(line.color)} rg\n/${line.font} ${line.size} Tf\n${x} ${line.y} Td\n(${rpfPdfEscape(line.text)}) Tj\nET`;
