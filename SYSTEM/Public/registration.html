@@ -156,6 +156,54 @@
       background: rgba(255,255,255,0.1);
       font-size: 2.2rem;
     }
+    .rpf-card-performer {
+      position: absolute;
+      left: 92px;
+      top: 18px;
+      width: 108px;
+      min-height: 126px;
+      border-radius: 8px;
+      background: #fff;
+      box-shadow: 0 7px 22px rgba(0,0,0,0.36);
+      overflow: hidden;
+      transform: rotate(1.5deg);
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+    }
+    .rpf-card-performer-photo {
+      height: 82px;
+      background: #e9edf3;
+      display: grid;
+      place-items: center;
+      overflow: hidden;
+    }
+    .rpf-card-performer-photo img { width: 100%; height: 100%; object-fit: cover; object-position: top; display: block; }
+    .rpf-card-performer-initial {
+      color: #572e88;
+      font-size: 2rem;
+      font-weight: 950;
+    }
+    .rpf-card-performer-info {
+      padding: 0.24rem 0.34rem 0.34rem;
+      text-align: center;
+      color: #1a1530;
+      line-height: 1.08;
+    }
+    .rpf-card-performer-name {
+      font-size: 0.66rem;
+      font-weight: 950;
+      text-transform: uppercase;
+      letter-spacing: 0.02em;
+      word-break: break-word;
+    }
+    .rpf-card-performer-role {
+      margin-top: 0.1rem;
+      font-size: 0.52rem;
+      font-weight: 800;
+      color: rgba(26,21,48,0.68);
+      word-break: break-word;
+    }
 
     .rpf-left-info {
       padding: 0 1rem 0.85rem;
@@ -595,8 +643,10 @@
   let _prod       = null;
   let _org        = null;
   let _applicant  = null;
+  let _booking    = null;
   let _resolvedProductionId = _productionId || '';
   let _prefill    = null;
+  let _registrationRoleNames = [];
   let _regSettings = {};
   let _formTemplates = {};
   let _rpfSections = [];
@@ -1542,6 +1592,24 @@
     const posterHtml = posterUrl
       ? `<img src="${esc(posterUrl)}" alt="${esc(prodName)}" />`
       : `<div class="rpf-card-poster-ph">&#127917;</div>`;
+    const performerName = [_prefill?.preferred_name || _prefill?.first_name || '', _prefill?.last_name || ''].filter(Boolean).join(' ').trim();
+    const performerRole = _registrationRoleNames.length ? _registrationRoleNames.join(', ') : 'Cast Member';
+    const performerPhoto = _prefill?.headshot_url || '';
+    const performerInitial = String(_prefill?.preferred_name || _prefill?.first_name || performerName || '?').slice(0, 1).toUpperCase();
+    const performerCardHtml = performerName
+      ? `<div class="rpf-card-performer">
+          <div class="rpf-card-performer-photo">
+            ${performerPhoto
+              ? `<img src="${esc(performerPhoto)}" alt="${esc(performerName)}" onerror="this.outerHTML='<div class=\\'rpf-card-performer-initial\\'>${esc(performerInitial)}</div>'" />`
+              : `<div class="rpf-card-performer-initial">${esc(performerInitial)}</div>`
+            }
+          </div>
+          <div class="rpf-card-performer-info">
+            <div class="rpf-card-performer-name">${esc(performerName)}</div>
+            <div class="rpf-card-performer-role">${esc(performerRole)}</div>
+          </div>
+        </div>`
+      : '';
 
     const root = document.getElementById('rpf-root');
     root.innerHTML = `<div class="rpf-shell">
@@ -1549,6 +1617,7 @@
         <div class="rpf-left-logo">${orgLogoHtml}</div>
         <div class="rpf-left-cards">
           <div class="rpf-card-poster">${posterHtml}</div>
+          ${performerCardHtml}
         </div>
         <div class="rpf-left-info">
           <div class="rpf-left-prod-name">${esc(prodName)}</div>
@@ -1582,32 +1651,91 @@
   }
 
   // ── Data loading & boot ───────────────────────────────────────────────────────
+  function registrationAnswerValue(source, keys = []) {
+    const ca = source?.custom_answers || source || {};
+    const exactKeys = Object.keys(ca || {});
+    const normalized = new Map(exactKeys.map(key => [String(key).toLowerCase().replace(/[^a-z0-9]+/g, ''), key]));
+    for (const key of keys) {
+      if (ca[key] !== undefined && ca[key] !== null && String(ca[key]).trim() !== '') return String(ca[key]).trim();
+      const normalizedKey = String(key).toLowerCase().replace(/[^a-z0-9]+/g, '');
+      const actual = normalized.get(normalizedKey);
+      if (actual && ca[actual] !== undefined && ca[actual] !== null && String(ca[actual]).trim() !== '') return String(ca[actual]).trim();
+    }
+    return '';
+  }
+
+  function mergeRegistrationAnswers(...sources) {
+    return sources.reduce((merged, source) => {
+      const answers = source?.custom_answers || {};
+      if (answers && typeof answers === 'object') Object.assign(merged, answers);
+      return merged;
+    }, {});
+  }
+
   function buildPrefill(applicant) {
     if (!applicant) return null;
-    const ca = applicant.custom_answers || {};
+    const ca = mergeRegistrationAnswers(_booking, applicant);
     const nameParts = String(applicant.name || '').trim().split(/\s+/);
-    const caValue = (...keys) => {
-      for (const key of keys) {
-        const value = ca[key];
-        if (value !== undefined && value !== null && String(value).trim() !== '') return String(value).trim();
-      }
-      return '';
-    };
-    const firstName = caValue('Legal first name', 'Legal First Name', 'First Name', 'first_name') || nameParts[0] || '';
+    const caValue = (...keys) => registrationAnswerValue(ca, keys);
+    const guardianName = caValue('Guardian name', 'Guardian Name', 'Parent/Guardian name', 'Parent or guardian full name', 'Parent/Guardian full name');
+    const guardianParts = guardianName.split(/\s+/).filter(Boolean);
+    const firstName = caValue('Legal first name', 'Legal First Name', 'First Name', 'first_name') || _booking?.first_name || nameParts[0] || '';
+    const lastName = caValue('Legal last name', 'Legal Last Name', 'Last Name', 'last_name') || _booking?.last_name || nameParts.slice(1).join(' ') || '';
     return {
       first_name:     firstName,
-      last_name:      caValue('Legal last name', 'Legal Last Name', 'Last Name', 'last_name') || nameParts.slice(1).join(' ') || '',
+      last_name:      lastName,
       preferred_name: caValue('Preferred Name', 'Preferred name', 'preferred_name') || firstName,
       pronouns:       caValue('Pronouns', 'pronouns') || '',
       date_of_birth:  caValue('Date of Birth', 'Date of birth', 'Birth Date', 'Birthday', 'date_of_birth', 'dob'),
-      email:          applicant.email || caValue('Contact email', 'Contact Email', 'Email', 'email'),
-      phone:          caValue('Contact phone number', 'Contact Phone Number', 'Contact phone', 'Phone Number', 'Phone', 'phone'),
-      headshot_url:   applicant.headshot_url || caValue('headshot_url', 'Headshot URL', 'Headshot'),
-      guardian_first: caValue('Guardian first name', 'Guardian First Name', 'Parent/Guardian first name'),
-      guardian_last:  caValue('Guardian last name', 'Guardian Last Name', 'Parent/Guardian last name'),
-      guardian_phone: caValue('Guardian phone', 'Guardian Phone', 'Parent/Guardian phone'),
-      guardian_email: caValue('Guardian email', 'Guardian Email', 'Parent/Guardian email'),
+      email:          applicant.email || _booking?.email || caValue('Contact email', 'Contact Email', 'Participant email', 'Email', 'email'),
+      phone:          caValue('Contact phone number', 'Contact Phone Number', 'Contact phone', 'Participant phone', 'Phone Number', 'Phone', 'phone') || _booking?.phone || '',
+      headshot_url:   applicant.headshot_url || _booking?.headshot_url || caValue('headshot_url', 'Headshot URL', 'Headshot'),
+      guardian_first: caValue('Guardian first name', 'Guardian First Name', 'Parent/Guardian first name', 'Parent or guardian first name') || guardianParts[0] || '',
+      guardian_last:  caValue('Guardian last name', 'Guardian Last Name', 'Parent/Guardian last name', 'Parent or guardian last name') || guardianParts.slice(1).join(' ') || '',
+      guardian_phone: caValue('Guardian phone', 'Guardian Phone', 'Parent/Guardian phone', 'Parent or guardian phone', 'Guardian contact phone', 'Parent phone'),
+      guardian_email: caValue('Guardian email', 'Guardian Email', 'Parent/Guardian email', 'Parent or guardian email', 'Guardian contact email', 'Parent email'),
+      guardian_relationship: caValue('Guardian relationship to performer', 'Guardian Relationship to Performer', 'Parent/Guardian relationship', 'Parent or guardian relationship', 'Relationship to performer'),
     };
+  }
+
+  async function loadLinkedRegistrationBooking(applicant) {
+    if (!applicant?.id && !applicant?.email) return null;
+    try {
+      let query = sb.from('audition_bookings')
+        .select('id,applicant_id,production_id,name,email,phone,first_name,last_name,custom_answers,headshot_url')
+        .eq('production_id', applicant.production_id || _resolvedProductionId || _offer?.production_id || '');
+      if (applicant.id) query = query.eq('applicant_id', applicant.id);
+      else query = query.eq('email', applicant.email);
+      const { data, error } = await query.limit(1);
+      if (error) throw error;
+      if (data?.[0]) return data[0];
+    } catch (error) {
+      console.warn('[BTS] registration booking lookup failed', error);
+    }
+    return null;
+  }
+
+  async function loadRegistrationRoleNames(applicant) {
+    if (!applicant?.id || !applicant?.production_id) return [];
+    try {
+      const { data: assignments, error } = await sb.from('casting_assignments')
+        .select('id,character_id,state')
+        .eq('production_id', applicant.production_id)
+        .eq('applicant_id', applicant.id)
+        .in('state', ['chosen', 'ensemble_manual', 'offer_accepted']);
+      if (error) throw error;
+      const rows = assignments || [];
+      const charIds = rows.map(row => row.character_id).filter(Boolean);
+      const { data: chars } = charIds.length
+        ? await sb.from('production_characters').select('id,name').in('id', charIds)
+        : { data: [] };
+      const charMap = new Map((chars || []).map(char => [String(char.id), char.name]));
+      const names = rows.map(row => row.character_id ? (charMap.get(String(row.character_id)) || '') : 'Ensemble').filter(Boolean);
+      return [...new Set(names)];
+    } catch (error) {
+      console.warn('[BTS] registration role lookup failed', error);
+      return [];
+    }
   }
 
   async function resolveProductionFromRegistrationPath() {
@@ -1677,7 +1805,7 @@
     await resolveProductionFromRegistrationPath();
 
     // 1. Resolve the same offer identity used by the cast-offer page.
-    const applicantSelect = 'id, production_id, name, email, custom_answers, date_conflicts, conflicts';
+    const applicantSelect = 'id, production_id, name, email, headshot_url, custom_answers, date_conflicts, conflicts';
     let applicant = null;
     if (_applicantId) {
       let byId = sb.from('audition_applications').select(applicantSelect).eq('id', _applicantId);
@@ -1742,6 +1870,8 @@
     // 4. Applicant / prefill
     if (applicant) {
       _applicant = applicant;
+      _booking = await loadLinkedRegistrationBooking(_applicant);
+      _registrationRoleNames = await loadRegistrationRoleNames(_applicant);
       _prefill = buildPrefill(_applicant);
     } else if (_offer.applicant_id) {
       const { data: applicantMatch } = await sb
@@ -1750,6 +1880,8 @@
         .eq('id', _offer.applicant_id)
         .maybeSingle();
       _applicant = applicantMatch || null;
+      _booking = await loadLinkedRegistrationBooking(_applicant);
+      _registrationRoleNames = await loadRegistrationRoleNames(_applicant);
       _prefill = buildPrefill(_applicant);
     }
 
