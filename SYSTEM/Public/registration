@@ -1728,25 +1728,25 @@
 
   function rpfPdfLineItemsForContract(doc) {
     const items = [];
-    const add = (text, opts = {}) => items.push(Object.assign({ type: 'text', text: rpfTextForPdf(text), size: 10, font: 'F1', indent: 0, gap: 2, align: 'left' }, opts));
-    const rule = (gap = 10) => items.push({ type: 'rule', gap });
+    const add = (text, opts = {}) => items.push(Object.assign({ type: 'text', text: rpfTextForPdf(text), size: 10, font: 'F1', indent: 0, gap: 2, align: 'left', color: 'ink' }, opts));
+    const rule = (gap = 10) => items.push({ type: 'rule', gap, color: 'gold' });
     const sig = rpfPdfSignatureInfo(doc);
 
-    add('REGISTRATION SUMMARY', { size: 18, font: 'F2', align: 'center', gap: 6 });
-    add(doc.title, { size: 11, font: 'F2', align: 'center', gap: 8 });
+    add('REGISTRATION SUMMARY', { size: 19, font: 'F2', align: 'center', gap: 6, color: 'white' });
+    add(doc.title, { size: 11, font: 'F2', align: 'center', gap: 8, color: 'purple' });
     rule(12);
 
-    add('1. Details', { size: 12, font: 'F2', gap: 6 });
+    add('1. Details', { size: 12, font: 'F2', gap: 6, color: 'purple' });
     add(`1.1 Organisation: ${doc.organisation}`, { indent: 14 });
     add(`1.2 Production: ${doc.production}`, { indent: 14 });
     add(`1.3 Performer: ${doc.performer}`, { indent: 14 });
     add(`1.4 Date: ${doc.date}`, { indent: 14 });
     add(`1.5 Generated: ${doc.generatedAt}`, { indent: 14, gap: 10 });
 
-    add('2. Registration Details', { size: 12, font: 'F2', gap: 6 });
+    add('2. Registration Details', { size: 12, font: 'F2', gap: 6, color: 'purple' });
     (doc.sections || []).forEach((section, index) => {
       const clause = `2.${index + 1}`;
-      add(`${clause} ${section.group ? `${section.group} - ` : ''}${section.title}`, { size: 10.5, font: 'F2', indent: 14, gap: 4 });
+      add(`${clause} ${section.group ? `${section.group} - ` : ''}${section.title}`, { size: 10.5, font: 'F2', indent: 14, gap: 4, color: index % 2 ? 'green' : 'blue' });
       if (section.wording?.length && !/^costume measurements$/i.test(section.title || '')) {
         section.wording.forEach(text => add(text, { indent: 28, gap: 3 }));
       }
@@ -1806,29 +1806,45 @@
     objects.push('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>');
     objects.push('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>');
     objects.push('<< /Type /Font /Subtype /Type1 /BaseFont /ZapfChancery-MediumItalic >>');
+    const color = name => ({
+      purple: '0.341 0.180 0.533',
+      green: '0.463 0.620 0.482',
+      gold: '0.937 0.671 0.271',
+      blue: '0.278 0.416 0.667',
+      pink: '0.792 0.494 0.655',
+      ink: '0.102 0.082 0.188',
+      muted: '0.416 0.353 0.502',
+      white: '1 1 1',
+      softGreen: '0.922 0.965 0.929',
+      softGold: '1 0.969 0.902',
+    }[name] || '0.102 0.082 0.188');
     pages.forEach((pageLines, pageIndex) => {
-      const footer = `BT\n/F1 8 Tf\n50 34 Td\n(${rpfPdfEscape(doc.title)}) Tj\nET\nBT\n/F1 8 Tf\n500 34 Td\n(Page ${pageIndex + 1} of ${pages.length}) Tj\nET\n0.75 w\n50 46 m\n562 46 l\nS`;
-      const header = pageIndex > 0 ? `BT\n/F2 9 Tf\n50 750 Td\n(${rpfPdfEscape(doc.title)}) Tj\nET\n0.75 w\n50 738 m\n562 738 l\nS` : '';
+      const pageBrand = pageIndex === 0
+        ? `q\n${color('purple')} rg\n0 734 612 58 re f\n${color('gold')} rg\n0 728 612 6 re f\n${color('pink')} rg\n528 744 14 14 re f\n${color('green')} rg\n548 744 14 14 re f\n${color('gold')} rg\n568 744 14 14 re f\nQ`
+        : `q\n${color('purple')} rg\n0 758 612 10 re f\n${color('gold')} rg\n0 752 612 3 re f\nQ`;
+      const footer = `q\n${color('green')} RG\n0.75 w\n50 46 m\n562 46 l\nS\nQ\nBT\n${color('muted')} rg\n/F1 8 Tf\n50 34 Td\n(${rpfPdfEscape(doc.title)}) Tj\nET\nBT\n${color('muted')} rg\n/F1 8 Tf\n500 34 Td\n(Page ${pageIndex + 1} of ${pages.length}) Tj\nET`;
+      const header = pageIndex > 0 ? `BT\n${color('purple')} rg\n/F2 9 Tf\n50 738 Td\n(${rpfPdfEscape(doc.title)}) Tj\nET` : '';
       const body = pageLines.map(line => {
-        if (line.type === 'rule') return `0.75 w\n50 ${line.y} m\n562 ${line.y} l\nS`;
+        if (line.type === 'rule') return `q\n${color(line.color)} RG\n1.2 w\n50 ${line.y} m\n562 ${line.y} l\nS\nQ`;
         if (line.type === 'signatureBlock') {
           const sig = line.sig || {};
           return [
-            `BT\n/F2 12 Tf\n50 ${line.y} Td\n(Digital Signature) Tj\nET`,
-            `BT\n/F3 26 Tf\n64 ${line.y - 40} Td\n(${rpfPdfEscape(sig.signer || 'N/A')}) Tj\nET`,
-            `0.75 w\n50 ${line.y - 50} m\n300 ${line.y - 50} l\nS`,
-            `BT\n/F1 9 Tf\n50 ${line.y - 68} Td\n(Digitally signed by: ${rpfPdfEscape(sig.printedName || 'N/A')}) Tj\nET`,
-            `BT\n/F1 9 Tf\n50 ${line.y - 84} Td\n(Relationship / capacity: ${rpfPdfEscape(sig.relationship || 'N/A')}) Tj\nET`,
-            `BT\n/F1 9 Tf\n360 ${line.y - 68} Td\n(Date: ${rpfPdfEscape(sig.signedDate || 'N/A')}) Tj\nET`,
+            `q\n${color('softGold')} rg\n44 ${line.y - 108} 524 128 re f\n${color('gold')} RG\n1 w\n44 ${line.y - 108} 524 128 re S\nQ`,
+            `BT\n${color('purple')} rg\n/F2 12 Tf\n64 ${line.y} Td\n(Digital Signature) Tj\nET`,
+            `BT\n${color('purple')} rg\n/F3 28 Tf\n76 ${line.y - 40} Td\n(${rpfPdfEscape(sig.signer || 'N/A')}) Tj\nET`,
+            `q\n${color('green')} RG\n1 w\n64 ${line.y - 52} m\n320 ${line.y - 52} l\nS\nQ`,
+            `BT\n${color('ink')} rg\n/F1 9 Tf\n64 ${line.y - 72} Td\n(Digitally signed by: ${rpfPdfEscape(sig.printedName || 'N/A')}) Tj\nET`,
+            `BT\n${color('muted')} rg\n/F1 9 Tf\n64 ${line.y - 88} Td\n(Relationship / capacity: ${rpfPdfEscape(sig.relationship || 'N/A')}) Tj\nET`,
+            `BT\n${color('ink')} rg\n/F1 9 Tf\n380 ${line.y - 72} Td\n(Date: ${rpfPdfEscape(sig.signedDate || 'N/A')}) Tj\nET`,
           ].join('\n');
         }
         const x = line.align === 'center' ? Math.max(50, 306 - (rpfTextForPdf(line.text).length * line.size * 0.24)) : 50 + (line.indent || 0);
-        return `BT\n/${line.font} ${line.size} Tf\n${x} ${line.y} Td\n(${rpfPdfEscape(line.text)}) Tj\nET`;
+        return `BT\n${color(line.color)} rg\n/${line.font} ${line.size} Tf\n${x} ${line.y} Td\n(${rpfPdfEscape(line.text)}) Tj\nET`;
       }).join('\n');
-      const stream = [header, body, footer].filter(Boolean).join('\n');
+      const stream = [pageBrand, header, body, footer].filter(Boolean).join('\n');
       const streamObjNum = objects.length + 2;
       const pageObjNum = objects.length + 1;
-      objects.push(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents ${streamObjNum} 0 R >>`);
+      objects.push(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents ${streamObjNum} 0 R >>`);
       objects.push(`<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`);
       pageRefs.push(`${pageObjNum} 0 R`);
     });
