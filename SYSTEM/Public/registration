@@ -1429,32 +1429,134 @@
   }
 
   function rpfPdfLabelForField(el) {
+    const permRow = el.closest('.rpf-mr-perm-row');
+    if (permRow) return rpfTextForPdf(permRow.querySelector('.rpf-mr-perm-label')?.textContent || el.dataset.fieldName || el.name || 'Answer');
     const wrap = el.closest('.rpf-form-group, .rpf-mr-sig-field, .rpf-final-agree-box');
     const label = wrap?.querySelector('.rpf-label, label, .rpf-mr-guardian-label');
     const raw = label?.textContent || el.dataset.fieldName || el.name || 'Answer';
     return rpfTextForPdf(raw).replace(/\s*\*\s*/g, '').replace(/\s+/g, ' ');
   }
 
-  function rpfCollectAnswerRowsForPdf() {
-    const shell = document.getElementById('rpf-root');
-    if (!shell) return [];
+  function rpfPdfValueForField(el) {
+    if (el.type === 'checkbox') return el.checked ? 'Yes' : 'No';
+    if (el.type === 'radio') {
+      const selected = document.querySelector(`input[type="radio"][name="${CSS.escape(el.name)}"]:checked`);
+      if (!selected) return 'No selection';
+      return rpfTextForPdf(selected.closest('label')?.textContent || selected.value || 'Selected');
+    }
+    if (el.type === 'file') return el.files?.length ? Array.from(el.files).map(f => f.name).join(', ') : 'No file selected';
+    return rpfTextForPdf(el.value || 'Not provided');
+  }
+
+  function rpfPerformerNameForPdf() {
+    const fromPrefill = _prefill ? [_prefill.preferred_name || _prefill.first_name || '', _prefill.last_name || ''].filter(Boolean).join(' ') : '';
+    const collected = collectFormAnswers();
+    return rpfTextForPdf(fromPrefill || [collected['Preferred name'] || collected['Legal first name'] || '', collected['Legal last name'] || ''].filter(Boolean).join(' ') || 'Performer');
+  }
+
+  function rpfContractDateForPdf() {
+    const collected = collectFormAnswers();
+    return rpfTextForPdf(collected.final_guardian_date || collected.final_signed_date || rpfTodayInputValue());
+  }
+
+  function rpfContractTitleForPdf() {
+    return [
+      _org?.name || _org?.abbreviation || 'Organisation',
+      _prod?.title || 'Production',
+      rpfPerformerNameForPdf(),
+      rpfContractDateForPdf(),
+    ].map(rpfTextForPdf).filter(Boolean).join(' - ');
+  }
+
+  function rpfContractFileSlugForPdf(title) {
+    return String(title || 'registration-contract')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '')
+      .slice(0, 120) || 'registration-contract';
+  }
+
+  function rpfSectionWordingForPdf(section) {
+    const selectors = [
+      '.rpf-section-text',
+      '.rpf-form-section-divider',
+      '.rpf-coc-section-title',
+      '.rpf-coc-section-body',
+      '.rpf-mr-section-label',
+      '.rpf-mr-text',
+      '.rpf-mr-perm-label',
+      '.rpf-pf-block-title',
+      '.rpf-pf-row',
+      '.rpf-pf-split-row',
+      '.rpf-pf-none',
+      '.rpf-pf-text',
+      '.rpf-final-copy',
+      '.rpf-final-agree-box span',
+      '.rpf-mr-guardian-label',
+      '.rpf-cm-hint',
+      '.rpf-upload-sub',
+    ];
+    const seen = new Set();
+    const wording = [];
+    section.querySelectorAll(selectors.join(',')).forEach(node => {
+      if (node.closest('.rpf-csd-dropdown')) return;
+      const text = rpfTextForPdf(node.textContent);
+      if (!text || seen.has(text)) return;
+      seen.add(text);
+      wording.push(text);
+    });
+    return wording;
+  }
+
+  function rpfSectionAnswersForPdf(section) {
     const rows = [];
     const seen = new Set();
-    shell.querySelectorAll('input, select, textarea').forEach(el => {
-      if (el.type === 'hidden' || el.type === 'file' || el.disabled) return;
-      if (el.type === 'radio' && !el.checked) return;
+    const radioGroups = new Set();
+    section.querySelectorAll('input, select, textarea').forEach(el => {
+      if (el.disabled) return;
+      if (el.type === 'hidden') return;
+      if (el.closest('.rpf-csd-dropdown')) return;
+      if (el.type === 'radio') {
+        if (!el.name || radioGroups.has(el.name)) return;
+        radioGroups.add(el.name);
+      }
       const label = rpfPdfLabelForField(el);
-      let value = '';
-      if (el.type === 'checkbox') value = el.checked ? 'Yes' : '';
-      else value = el.value || '';
-      value = rpfTextForPdf(value);
-      if (!value) return;
-      const key = `${label}::${value}`;
+      const value = rpfPdfValueForField(el);
+      const key = `${label}::${el.name || el.dataset.fieldName || el.type}`;
       if (seen.has(key)) return;
       seen.add(key);
       rows.push({ label, value });
     });
     return rows;
+  }
+
+  function rpfCollectAnswerRowsForPdf() {
+    const shell = document.getElementById('rpf-root');
+    const title = rpfContractTitleForPdf();
+    const doc = {
+      title,
+      fileSlug: rpfContractFileSlugForPdf(title),
+      generatedAt: new Date().toLocaleString('en-CA'),
+      organisation: rpfTextForPdf(_org?.name || _org?.abbreviation || 'Organisation'),
+      production: rpfTextForPdf(_prod?.title || 'Production'),
+      performer: rpfPerformerNameForPdf(),
+      date: rpfContractDateForPdf(),
+      sections: [],
+    };
+    if (!shell) return doc;
+    shell.querySelectorAll('.rpf-panel').forEach(panel => {
+      const group = rpfTextForPdf(panel.querySelector('.rpf-step-title')?.textContent);
+      panel.querySelectorAll('.rpf-section').forEach(section => {
+        const title = rpfTextForPdf(section.querySelector('.rpf-section-head span')?.textContent || group || 'Section');
+        doc.sections.push({
+          group,
+          title,
+          wording: rpfSectionWordingForPdf(section),
+          answers: rpfSectionAnswersForPdf(section),
+        });
+      });
+    });
+    return doc;
   }
 
   function rpfWrapPdfLine(text, max = 78) {
@@ -1474,32 +1576,65 @@
     return lines.length ? lines : [''];
   }
 
-  function rpfBuildAnswersPdf(rows) {
-    const performer = _prefill ? [_prefill.preferred_name || _prefill.first_name || '', _prefill.last_name || ''].filter(Boolean).join(' ') : '';
-    const titleLines = [
-      `${_prod?.title || 'Production'} Registration Answers`,
-      performer ? `Performer: ${performer}` : '',
-      `Submitted: ${new Date().toLocaleString('en-CA')}`,
-      '',
-    ].filter(line => line !== '');
-    const contentLines = [...titleLines];
-    (rows || []).forEach(row => {
-      rpfWrapPdfLine(`${row.label}: ${row.value}`).forEach(line => contentLines.push(line));
-    });
-    if (!rows?.length) contentLines.push('No answers were available to export.');
+  function rpfPdfLineItemsForContract(doc) {
+    const items = [];
+    const add = (text, opts = {}) => items.push(Object.assign({ text: rpfTextForPdf(text), size: 10, font: 'F1', indent: 0, gap: 2 }, opts));
+    add(doc.title, { size: 17, font: 'F2', gap: 12 });
+    add('Registration Contract Record', { size: 11, font: 'F2', gap: 10 });
+    add(`Organisation: ${doc.organisation}`);
+    add(`Production: ${doc.production}`);
+    add(`Performer: ${doc.performer}`);
+    add(`Date: ${doc.date}`);
+    add(`Generated: ${doc.generatedAt}`, { gap: 12 });
+    add('This document records the complete registration wording presented to the performer/guardian and the submitted responses captured by Build The Show.', { gap: 14 });
 
-    const pages = [];
-    const linesPerPage = 46;
-    for (let i = 0; i < contentLines.length; i += linesPerPage) pages.push(contentLines.slice(i, i + linesPerPage));
+    (doc.sections || []).forEach((section, index) => {
+      add(`${index + 1}. ${section.group ? `${section.group} - ` : ''}${section.title}`, { size: 12, font: 'F2', gap: 6 });
+      if (section.wording?.length) {
+        add('Contract wording shown:', { font: 'F2', gap: 3 });
+        section.wording.forEach(text => add(text, { indent: 14, gap: 3 }));
+      }
+      if (section.answers?.length) {
+        add('Submitted responses:', { font: 'F2', gap: 3 });
+        section.answers.forEach(row => add(`${row.label}: ${row.value}`, { indent: 14, gap: 3 }));
+      }
+      if (!section.wording?.length && !section.answers?.length) add('No wording or answers were captured for this section.', { indent: 14, gap: 8 });
+      add('', { gap: 6 });
+    });
+    return items;
+  }
+
+  function rpfBuildAnswersPdf(data) {
+    const doc = Array.isArray(data)
+      ? { title: rpfContractTitleForPdf(), generatedAt: new Date().toLocaleString('en-CA'), organisation: _org?.name || _org?.abbreviation || 'Organisation', production: _prod?.title || 'Production', performer: rpfPerformerNameForPdf(), date: rpfContractDateForPdf(), sections: [{ group: 'Registration', title: 'Submitted Answers', wording: [], answers: data }] }
+      : data;
+    const lineItems = rpfPdfLineItemsForContract(doc);
+    const pages = [[]];
+    let y = 742;
+    lineItems.forEach(item => {
+      const maxChars = Math.max(28, Math.floor((512 - item.indent) / (item.size * 0.52)));
+      const wrapped = item.text ? rpfWrapPdfLine(item.text, maxChars) : [''];
+      wrapped.forEach((line, i) => {
+        const lineHeight = Math.max(12, item.size * 1.35);
+        if (y - lineHeight < 48) {
+          pages.push([]);
+          y = 742;
+        }
+        pages[pages.length - 1].push(Object.assign({}, item, { text: line, y }));
+        y -= lineHeight;
+        if (i === wrapped.length - 1) y -= item.gap || 0;
+      });
+    });
     const objects = ['<< /Type /Catalog /Pages 2 0 R >>'];
     const pageRefs = [];
     objects.push(null);
     objects.push('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>');
+    objects.push('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>');
     pages.forEach(pageLines => {
-      const stream = `BT\n/F1 11 Tf\n50 742 Td\n14 TL\n${pageLines.map(line => `(${rpfPdfEscape(line)}) Tj`).join('\nT*\n')}\nET`;
+      const stream = pageLines.map(line => `BT\n/${line.font} ${line.size} Tf\n${50 + (line.indent || 0)} ${line.y} Td\n(${rpfPdfEscape(line.text)}) Tj\nET`).join('\n');
       const streamObjNum = objects.length + 2;
       const pageObjNum = objects.length + 1;
-      objects.push(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents ${streamObjNum} 0 R >>`);
+      objects.push(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents ${streamObjNum} 0 R >>`);
       objects.push(`<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`);
       pageRefs.push(`${pageObjNum} 0 R`);
     });
@@ -1519,14 +1654,14 @@
   }
 
   window.rpfDownloadAnswersPdf = function() {
-    const rows = window._rpfSubmittedAnswerRows || rpfCollectAnswerRowsForPdf();
-    const pdf = rpfBuildAnswersPdf(rows);
-    const slug = String(_prod?.title || 'registration').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'registration';
+    const doc = window._rpfSubmittedAnswerRows || rpfCollectAnswerRowsForPdf();
+    const pdf = rpfBuildAnswersPdf(doc);
+    const slug = doc.fileSlug || rpfContractFileSlugForPdf(doc.title);
     const blob = new Blob([pdf], { type: 'application/pdf' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `${slug}-answers.pdf`;
+    a.download = `${slug}.pdf`;
     document.body.appendChild(a);
     a.click();
     a.remove();
