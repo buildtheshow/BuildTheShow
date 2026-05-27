@@ -43790,6 +43790,32 @@ See you soon!
       || String(a || '').localeCompare(String(b || ''));
   }
 
+  function rptNormalizeHouseholdName(value = '') {
+    return String(value || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim();
+  }
+
+  function rptHouseholdNameEntries(value = '') {
+    return String(value || '')
+      .split(/\n|,|;|&|\band\b/gi)
+      .map(rptNormalizeHouseholdName)
+      .filter(Boolean);
+  }
+
+  function rptHouseholdNameMatches(candidateName = '', entries = [], fallbackLasts = new Set()) {
+    const normalized = rptNormalizeHouseholdName(candidateName);
+    if (!normalized) return false;
+    const parts = normalized.split(' ').filter(Boolean);
+    const first = parts[0] || '';
+    const last = parts[parts.length - 1] || '';
+    if (last && fallbackLasts.has(last)) return true;
+    return entries.some(entry => {
+      const entryParts = entry.split(' ').filter(Boolean);
+      if (entry === normalized || entry === first || entry === last) return true;
+      if (entryParts.length > 1 && (normalized.includes(entry) || entry.includes(normalized))) return true;
+      return entryParts.some(part => part === first || part === last);
+    });
+  }
+
   function rptOpenHouseholdModal(preselectedId = null, editId = null) {
     _rptHouseholdModalEditId = editId;
     const existing = editId ? _rptHouseholds.find(h => h.id === editId) : null;
@@ -43803,15 +43829,14 @@ See you soon!
         const _lastName = n => String(n || '').trim().split(/\s+/).pop();
         const requesterLast = _lastName(requester.app?.name).toLowerCase();
         const siblingRaw = registrationAnswerValue(requester.app, ['pf_sibling_performer_names', 'sibling_performer_names', 'household_performer_names']);
-        const siblingLasts = new Set(siblingRaw
-          ? siblingRaw.split(/[,&\n]+/).map(n => _lastName(n).toLowerCase()).filter(Boolean)
-          : []);
+        const siblingEntries = rptHouseholdNameEntries(siblingRaw);
+        const siblingLasts = new Set(siblingEntries.map(n => _lastName(n).toLowerCase()).filter(Boolean));
         if (requesterLast) siblingLasts.add(requesterLast);
 
-        // Collect suggested members by last name match (don't auto-check them)
+        // Collect suggested members by typed registration names and last-name fallback (don't auto-check them)
         _rptCastItems.forEach(item => {
           const id = String(item.assignment?.id || '');
-          if (siblingLasts.has(_lastName(item.app?.name).toLowerCase()))
+          if (rptHouseholdNameMatches(item.app?.name, siblingEntries, siblingLasts))
             suggestedMembers.push({ id, name: String(item.app?.name || 'Cast Member').trim() });
         });
         suggestedMembers.sort((a, b) => rptCompareNamesByLastName(a.name, b.name));
