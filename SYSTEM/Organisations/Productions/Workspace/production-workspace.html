@@ -42379,7 +42379,16 @@ See you soon!
       const pos = (household.member_ids || []).indexOf(String(assignId));
       const rate = pos === 0 ? parseFloat(String(settings.sibling_first_child || '').replace(/[^0-9.]/g, '')) || 0
                              : parseFloat(String(settings.sibling_additional || '').replace(/[^0-9.]/g, '')) || 0;
-      if (rate > 0) return { installments: [{ label: 'Payment (sibling rate)', amount: rate, dueDate: base[0]?.dueDate || '' }], total: rate, discountLabel: 'Sibling rate' };
+      if (rate > 0) {
+        if (base.length > 0 && baseTotal > 0) {
+          const scaleFactor = rate / baseTotal;
+          const scaledInsts = base.map(inst => ({ ...inst, amount: Math.round(inst.amount * scaleFactor * 100) / 100 }));
+          const diff = Math.round((rate - scaledInsts.reduce((s, i) => s + i.amount, 0)) * 100) / 100;
+          if (diff !== 0) scaledInsts[scaledInsts.length - 1].amount += diff;
+          return { installments: scaledInsts, total: rate, discountLabel: 'Sibling rate' };
+        }
+        return { installments: [{ label: 'Payment (sibling rate)', amount: rate, dueDate: base[0]?.dueDate || '' }], total: rate, discountLabel: 'Sibling rate' };
+      }
     }
     let volAdj = 0;
     if (settings.volunteer_discount_enabled && item.assignment?.volunteer_discount_approved) {
