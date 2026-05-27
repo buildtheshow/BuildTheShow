@@ -43774,6 +43774,22 @@ See you soon!
 
   let _rptHouseholdModalEditId = null;
 
+  function rptNameSortParts(name = '') {
+    const parts = String(name || '').trim().split(/\s+/).filter(Boolean);
+    return {
+      last: (parts.pop() || '').toLowerCase(),
+      first: parts.join(' ').toLowerCase(),
+    };
+  }
+
+  function rptCompareNamesByLastName(a = '', b = '') {
+    const left = rptNameSortParts(a);
+    const right = rptNameSortParts(b);
+    return left.last.localeCompare(right.last)
+      || left.first.localeCompare(right.first)
+      || String(a || '').localeCompare(String(b || ''));
+  }
+
   function rptOpenHouseholdModal(preselectedId = null, editId = null) {
     _rptHouseholdModalEditId = editId;
     const existing = editId ? _rptHouseholds.find(h => h.id === editId) : null;
@@ -43798,6 +43814,7 @@ See you soon!
           if (siblingLasts.has(_lastName(item.app?.name).toLowerCase()))
             suggestedMembers.push({ id, name: String(item.app?.name || 'Cast Member').trim() });
         });
+        suggestedMembers.sort((a, b) => rptCompareNamesByLastName(a.name, b.name));
 
         // Build suggested household name from unique last names of matches
         const lastNames = [...new Set(suggestedMembers.map(m => _lastName(m.name)).filter(Boolean))];
@@ -43815,6 +43832,7 @@ See you soon!
       : '';
 
     const modal = document.createElement('div');
+    const sortedCastItems = [..._rptCastItems].sort((a, b) => rptCompareNamesByLastName(a.app?.name, b.app?.name));
     modal.className = 'rpt-household-modal';
     modal.id = 'rpt-household-modal';
     modal.innerHTML = `<div class="rpt-household-modal-box">
@@ -43823,7 +43841,7 @@ See you soon!
       ${suggestionHtml}
       <div class="rpt-household-modal-section-label">Members</div>
       <input class="rpt-household-modal-input" id="rpt-hh-search" placeholder="Search cast members…" oninput="rptFilterHouseholdMembers(this.value)" style="margin-bottom:0.25rem;" />
-      <div class="rpt-household-modal-members" id="rpt-hh-members">${_rptCastItems.map(item => {
+      <div class="rpt-household-modal-members" id="rpt-hh-members">${sortedCastItems.map(item => {
         const id = String(item.assignment?.id || '');
         return `<label class="rpt-household-modal-member"><input type="checkbox" value="${esc(id)}" ${checkedIds.has(id) ? 'checked' : ''} /><span>${esc(String(item.app?.name || 'Cast Member').trim())}</span></label>`;
       }).join('')}</div>
