@@ -585,6 +585,10 @@
       letter-spacing: 0.04em;
     }
     .rpf-success-actions { display: flex; justify-content: center; margin-top: 1.4rem; }
+    .rpf-success-signoff { margin-top: 2rem; font-size: 0.82rem; color: var(--muted); line-height: 1.7; }
+    .rpf-success-signoff strong { color: var(--ink); font-weight: 800; }
+    .rpf-resend-link { display: inline-block; margin-top: 0.6rem; font-size: 0.75rem; color: rgba(87,46,136,0.55); text-decoration: underline; cursor: pointer; background: none; border: none; padding: 0; font-family: inherit; }
+    .rpf-resend-link:hover { color: var(--purple); }
     .rpf-download-answers-btn {
       border: none;
       border-radius: 999px;
@@ -2006,8 +2010,50 @@
       <div class="rpf-success-actions">
         <button type="button" class="rpf-download-answers-btn" onclick="rpfDownloadAnswersPdf()">Download PDF of answers</button>
       </div>
+      <button type="button" class="rpf-resend-link" onclick="rpfResendConfirmationEmail()">Resend confirmation email</button>
+      ${(() => {
+        const pName = _prod?.producer_name || '';
+        const pRole = _prod?.producer_role || '';
+        const pEmail = _prod?.producer_email || '';
+        if (!pName && !pEmail) return '';
+        return `<div class="rpf-success-signoff">
+          Thank you,<br>
+          <strong>${esc(pName)}</strong>${pRole ? `<br>${esc(pRole)}` : ''}${pEmail ? `<br><a href="mailto:${esc(pEmail)}" style="color:inherit;">${esc(pEmail)}</a>` : ''}
+        </div>`;
+      })()}
     </div>`;
   }
+
+  // ── Resend confirmation email ─────────────────────────────────────────────────
+  window.rpfResendConfirmationEmail = async function() {
+    const btn = document.querySelector('.rpf-resend-link');
+    if (!btn || btn.disabled) return;
+    const email = _applicant?.email || _prefill?.email;
+    if (!email) { alert('No email address on file.'); return; }
+    btn.disabled = true;
+    btn.textContent = 'Sending…';
+    try {
+      const regUrl = window.location.href;
+      const prodName = _prod?.title || 'the production';
+      const pName = _prod?.producer_name || '';
+      const pRole = _prod?.producer_role || '';
+      const pEmail = _prod?.producer_email || '';
+      const signoff = pName ? `<p>Thank you,<br><strong>${pName}</strong>${pRole ? `<br>${pRole}` : ''}${pEmail ? `<br>${pEmail}` : ''}</p>` : '';
+      await sb.functions.invoke('send-email', {
+        body: {
+          to: email,
+          subject: `${prodName} — Registration Confirmed`,
+          html: `<p>Your registration for <strong>${prodName}</strong> has been received.</p><p>You can return to your registration at any time:<br><a href="${regUrl}">${regUrl}</a></p>${signoff}`,
+        },
+      });
+      btn.textContent = 'Sent!';
+      setTimeout(() => { btn.disabled = false; btn.textContent = 'Resend confirmation email'; }, 4000);
+    } catch (e) {
+      btn.disabled = false;
+      btn.textContent = 'Could not send — try again';
+      setTimeout(() => { btn.textContent = 'Resend confirmation email'; }, 4000);
+    }
+  };
 
   // ── Phone formatting ──────────────────────────────────────────────────────────
   function rpfFormatPhone(raw) {
@@ -2477,7 +2523,7 @@
     // 2. Production
     const { data: prod, error: prodErr } = await sb
       .from('productions')
-      .select('id, title, slug, registration_settings, poster_url, start_date, end_date, venue, organization_id')
+      .select('id, title, slug, registration_settings, poster_url, start_date, end_date, venue, organization_id, producer_name, producer_role, producer_email')
       .eq('id', _offer.production_id)
       .maybeSingle();
 
