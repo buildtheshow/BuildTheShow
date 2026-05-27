@@ -40922,6 +40922,8 @@ See you soon!
 
   function rpfFieldType(fieldName) {
     const n = (fieldName || '').toLowerCase().replace(/\s*\*$/, '').trim();
+    const pickupMatch = n.match(/^authori[sz]ed pickup \d+ (full name|relationship to performer|phone number)$/);
+    if (pickupMatch) return pickupMatch[1] === 'phone number' ? 'tel' : 'text';
     if (/upload|headshot|photo upload|submission/.test(n)) return 'upload';
     if (/date of birth|birth date|^date$|signature date|date of signature/.test(n)) return 'date';
     if (/\bemail\b/.test(n)) return 'email';
@@ -40935,6 +40937,12 @@ See you soon!
   function rpfPrefillValue(label, prefill) {
     if (!prefill) return '';
     const n = label.toLowerCase();
+    const pickupMatch = n.match(/^authori[sz]ed pickup (\d+) (full name|relationship to performer|phone number)$/);
+    if (pickupMatch) {
+      const [, num, part] = pickupMatch;
+      const suffix = part === 'full name' ? 'name' : part === 'relationship to performer' ? 'relationship' : 'phone';
+      return prefill[`pickup_${num}_${suffix}`] || '';
+    }
     if (/legal first name|^first name/.test(n))  return prefill.first_name || '';
     if (/legal last name|^last name/.test(n))    return prefill.last_name || '';
     if (/preferred name/.test(n))                return prefill.preferred_name || '';
@@ -40948,8 +40956,6 @@ See you soon!
     if (/guardian last name|guardian.*last/.test(n))   return prefill.guardian_last || '';
     if (/guardian.*phone/.test(n))               return prefill.guardian_phone || '';
     if (/guardian.*email/.test(n))               return prefill.guardian_email || '';
-    if (/authori[sz]ed pickup 1 full name/.test(n)) return prefill.pickup_1_name || [prefill.guardian_first, prefill.guardian_last].filter(Boolean).join(' ') || '';
-    if (/authori[sz]ed pickup 1 phone/.test(n)) return prefill.pickup_1_phone || prefill.guardian_phone || prefill.phone || '';
     if (/emergency contact name/.test(n))        return prefill.emergency_name || prefill.pickup_1_name || [prefill.guardian_first, prefill.guardian_last].filter(Boolean).join(' ') || '';
     if (/emergency contact phone/.test(n))       return prefill.emergency_phone || prefill.pickup_1_phone || prefill.guardian_phone || '';
     return '';

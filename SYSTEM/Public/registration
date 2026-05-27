@@ -6,6 +6,7 @@
   <title>Registration | Build The Show</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Alex+Brush&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/ASSETS/styles/casting-card.css?v=in-show-card-20260527" />
   <style>
     /* ── Design tokens ── */
     :root {
@@ -140,6 +141,22 @@
       display: flex; align-items: center; justify-content: center;
       background: rgba(255,255,255,0.1);
       font-size: 2.2rem;
+    }
+    .rpf-card-inshow {
+      position: absolute;
+      left: 92px;
+      top: 18px;
+      width: 108px;
+      transform: rotate(1.5deg);
+    }
+    .rpf-card-inshow .casting-card {
+      width: 100%;
+      cursor: default;
+      box-shadow: 0 7px 22px rgba(0,0,0,0.36);
+    }
+    .rpf-card-inshow .casting-card:hover {
+      transform: none;
+      box-shadow: 0 7px 22px rgba(0,0,0,0.36);
     }
 
     .rpf-left-info {
@@ -554,6 +571,7 @@
   <div class="rpf-save-indicator" id="rpf-save-indicator">Saved</div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <script src="/ASSETS/scripts/casting-card.js?v=in-show-card-20260527"></script>
   <script>
   'use strict';
 
@@ -818,6 +836,8 @@
   // ── Field type detection ──────────────────────────────────────────────────────
   function rpfFieldType(label) {
     const n = label.toLowerCase();
+    const pickupMatch = n.match(/^authori[sz]ed pickup \d+ (full name|relationship to performer|phone number)$/);
+    if (pickupMatch) return pickupMatch[1] === 'phone number' ? 'tel' : 'text';
     if (/upload|headshot|photo/.test(n)) return 'upload';
     if (/date of birth|birth date|signature date/.test(n)) return 'date';
     if (/\bemail\b/.test(n)) return 'email';
@@ -831,6 +851,12 @@
   function rpfPrefillValue(label, prefill) {
     if (!prefill) return '';
     const n = label.toLowerCase();
+    const pickupMatch = n.match(/^authori[sz]ed pickup (\d+) (full name|relationship to performer|phone number)$/);
+    if (pickupMatch) {
+      const [, num, part] = pickupMatch;
+      const suffix = part === 'full name' ? 'name' : part === 'relationship to performer' ? 'relationship' : 'phone';
+      return prefill[`pickup_${num}_${suffix}`] || '';
+    }
     if (/legal first name|^first name/.test(n))  return prefill.first_name || '';
     if (/legal last name|^last name/.test(n))    return prefill.last_name  || '';
     if (/preferred name/.test(n))                return prefill.preferred_name || '';
@@ -1509,6 +1535,17 @@
     const posterHtml = posterUrl
       ? `<img src="${esc(posterUrl)}" alt="${esc(prodName)}" />`
       : `<div class="rpf-card-poster-ph">&#127917;</div>`;
+    const performerFirst = _prefill?.preferred_name || _prefill?.first_name || '';
+    const performerLast = _prefill?.last_name || '';
+    const performerName = [performerFirst, performerLast].filter(Boolean).join(' ').trim();
+    const performerCardHtml = performerName && typeof window.renderCastingCard === 'function'
+      ? `<div class="rpf-card-inshow">${window.renderCastingCard({
+          first_name: performerFirst,
+          last_name: performerLast,
+          headshot_url: _prefill?.headshot_url || '',
+          character_name: 'Cast Member'
+        }, { variant: 'inTheShow' })}</div>`
+      : '';
 
     const root = document.getElementById('rpf-root');
     root.innerHTML = `<div class="rpf-shell">
@@ -1516,6 +1553,7 @@
         <div class="rpf-left-logo">${orgLogoHtml}</div>
         <div class="rpf-left-cards">
           <div class="rpf-card-poster">${posterHtml}</div>
+          ${performerCardHtml}
         </div>
         <div class="rpf-left-info">
           <div class="rpf-left-prod-name">${esc(prodName)}</div>
@@ -1537,6 +1575,7 @@
 
     // Post-render hooks
     requestAnimationFrame(() => requestAnimationFrame(() => {
+      if (typeof window.fitCastingCardNames === 'function') window.fitCastingCardNames(root);
       root.querySelectorAll('[data-rpf-dob]').forEach(el => rpfCheckGuardianFields(el));
       root.querySelectorAll('.rpf-sig-field-wrap input').forEach(el => rpfUpdateSigPreview(el));
       root.querySelectorAll('.rpf-solo-toggle-row input').forEach(cb => { if (cb.checked) rpfToggleSoloPickup(cb); });
@@ -1562,6 +1601,12 @@
       email:          applicant.email       || '',
       phone:          applicant.phone       || ca['Contact phone number'] || ca['Phone'] || '',
       headshot_url:   applicant.headshot_url || '',
+      pickup_1_name: ca['Authorised pickup 1 full name'] || ca['Authorized pickup 1 full name'] || ca['Pickup 1 full name'] || '',
+      pickup_1_relationship: ca['Authorised pickup 1 relationship to performer'] || ca['Authorized pickup 1 relationship to performer'] || ca['Pickup 1 relationship to performer'] || '',
+      pickup_1_phone: ca['Authorised pickup 1 phone number'] || ca['Authorized pickup 1 phone number'] || ca['Pickup 1 phone number'] || '',
+      pickup_2_name: ca['Authorised pickup 2 full name'] || ca['Authorized pickup 2 full name'] || ca['Pickup 2 full name'] || '',
+      pickup_2_relationship: ca['Authorised pickup 2 relationship to performer'] || ca['Authorized pickup 2 relationship to performer'] || ca['Pickup 2 relationship to performer'] || '',
+      pickup_2_phone: ca['Authorised pickup 2 phone number'] || ca['Authorized pickup 2 phone number'] || ca['Pickup 2 phone number'] || '',
     };
   }
 

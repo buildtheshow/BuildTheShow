@@ -6,6 +6,7 @@
   <title>Registration | Build The Show</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Alex+Brush&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/ASSETS/styles/casting-card.css?v=in-show-card-20260527" />
   <style>
     /* ── Design tokens ── */
     :root {
@@ -156,53 +157,21 @@
       background: rgba(255,255,255,0.1);
       font-size: 2.2rem;
     }
-    .rpf-card-performer {
+    .rpf-card-inshow {
       position: absolute;
       left: 92px;
       top: 18px;
       width: 108px;
-      min-height: 126px;
-      border-radius: 8px;
-      background: #fff;
-      box-shadow: 0 7px 22px rgba(0,0,0,0.36);
-      overflow: hidden;
       transform: rotate(1.5deg);
-      display: flex;
-      flex-direction: column;
-      align-items: stretch;
     }
-    .rpf-card-performer-photo {
-      height: 82px;
-      background: #e9edf3;
-      display: grid;
-      place-items: center;
-      overflow: hidden;
+    .rpf-card-inshow .casting-card {
+      width: 100%;
+      cursor: default;
+      box-shadow: 0 7px 22px rgba(0,0,0,0.36);
     }
-    .rpf-card-performer-photo img { width: 100%; height: 100%; object-fit: cover; object-position: top; display: block; }
-    .rpf-card-performer-initial {
-      color: #572e88;
-      font-size: 2rem;
-      font-weight: 950;
-    }
-    .rpf-card-performer-info {
-      padding: 0.24rem 0.34rem 0.34rem;
-      text-align: center;
-      color: #1a1530;
-      line-height: 1.08;
-    }
-    .rpf-card-performer-name {
-      font-size: 0.66rem;
-      font-weight: 950;
-      text-transform: uppercase;
-      letter-spacing: 0.02em;
-      word-break: break-word;
-    }
-    .rpf-card-performer-role {
-      margin-top: 0.1rem;
-      font-size: 0.52rem;
-      font-weight: 800;
-      color: rgba(26,21,48,0.68);
-      word-break: break-word;
+    .rpf-card-inshow .casting-card:hover {
+      transform: none;
+      box-shadow: 0 7px 22px rgba(0,0,0,0.36);
     }
 
     .rpf-left-info {
@@ -616,6 +585,7 @@
   <!-- Save indicator -->
   <div class="rpf-save-indicator" id="rpf-save-indicator">Saved</div>
 
+  <script src="/ASSETS/scripts/casting-card.js?v=in-show-card-20260527"></script>
   <script>
   'use strict';
 
@@ -900,6 +870,8 @@
   // ── Field type detection ──────────────────────────────────────────────────────
   function rpfFieldType(label) {
     const n = label.toLowerCase();
+    const pickupMatch = n.match(/^authori[sz]ed pickup \d+ (full name|relationship to performer|phone number)$/);
+    if (pickupMatch) return pickupMatch[1] === 'phone number' ? 'tel' : 'text';
     if (/upload|headshot|photo/.test(n)) return 'upload';
     if (/date of birth|birth date|signature date/.test(n)) return 'date';
     if (/\bemail\b/.test(n)) return 'email';
@@ -913,6 +885,12 @@
   function rpfPrefillValue(label, prefill) {
     if (!prefill) return '';
     const n = label.toLowerCase();
+    const pickupMatch = n.match(/^authori[sz]ed pickup (\d+) (full name|relationship to performer|phone number)$/);
+    if (pickupMatch) {
+      const [, num, part] = pickupMatch;
+      const suffix = part === 'full name' ? 'name' : part === 'relationship to performer' ? 'relationship' : 'phone';
+      return prefill[`pickup_${num}_${suffix}`] || '';
+    }
     if (/legal first name|^first name/.test(n))  return prefill.first_name || '';
     if (/legal last name|^last name/.test(n))    return prefill.last_name  || '';
     if (/preferred name/.test(n))                return prefill.preferred_name || '';
@@ -928,9 +906,6 @@
     if (/guardian.*email/.test(n)) return prefill.guardian_email || '';
     if (/emergency contact name/.test(n))  return prefill.emergency_name || prefill.guardian_first || '';
     if (/emergency contact phone/.test(n)) return prefill.emergency_phone || prefill.guardian_phone || prefill.phone || '';
-    if (/authori[sz]ed pickup 1.*full name/.test(n)) return [prefill.guardian_first, prefill.guardian_last].filter(Boolean).join(' ');
-    if (/authori[sz]ed pickup 1.*relationship/.test(n)) return prefill.guardian_relationship || '';
-    if (/authori[sz]ed pickup 1.*phone/.test(n)) return prefill.guardian_phone || prefill.phone || '';
     if (/contact email|participant email/.test(n)) return prefill.email || '';
     if (/contact phone/.test(n) && !/guardian/.test(n)) return prefill.phone || '';
     if (/\bphone\b/.test(n) && !/guardian/.test(n)) return prefill.phone || '';
@@ -1599,23 +1574,17 @@
     const posterHtml = posterUrl
       ? `<img src="${esc(posterUrl)}" alt="${esc(prodName)}" />`
       : `<div class="rpf-card-poster-ph">&#127917;</div>`;
-    const performerName = [_prefill?.preferred_name || _prefill?.first_name || '', _prefill?.last_name || ''].filter(Boolean).join(' ').trim();
+    const performerFirst = _prefill?.preferred_name || _prefill?.first_name || '';
+    const performerLast = _prefill?.last_name || '';
+    const performerName = [performerFirst, performerLast].filter(Boolean).join(' ').trim();
     const performerRole = _registrationRoleNames.length ? _registrationRoleNames.join(', ') : 'Cast Member';
-    const performerPhoto = _prefill?.headshot_url || '';
-    const performerInitial = String(_prefill?.preferred_name || _prefill?.first_name || performerName || '?').slice(0, 1).toUpperCase();
-    const performerCardHtml = performerName
-      ? `<div class="rpf-card-performer">
-          <div class="rpf-card-performer-photo">
-            ${performerPhoto
-              ? `<img src="${esc(performerPhoto)}" alt="${esc(performerName)}" onerror="this.outerHTML='<div class=\\'rpf-card-performer-initial\\'>${esc(performerInitial)}</div>'" />`
-              : `<div class="rpf-card-performer-initial">${esc(performerInitial)}</div>`
-            }
-          </div>
-          <div class="rpf-card-performer-info">
-            <div class="rpf-card-performer-name">${esc(performerName)}</div>
-            <div class="rpf-card-performer-role">${esc(performerRole)}</div>
-          </div>
-        </div>`
+    const performerCardHtml = performerName && typeof window.renderCastingCard === 'function'
+      ? `<div class="rpf-card-inshow">${window.renderCastingCard({
+          first_name: performerFirst,
+          last_name: performerLast,
+          headshot_url: _prefill?.headshot_url || '',
+          character_name: performerRole
+        }, { variant: 'inTheShow' })}</div>`
       : '';
 
     const root = document.getElementById('rpf-root');
@@ -1646,6 +1615,7 @@
 
     // Post-render hooks
     requestAnimationFrame(() => requestAnimationFrame(() => {
+      if (typeof window.fitCastingCardNames === 'function') window.fitCastingCardNames(root);
       root.querySelectorAll('[data-rpf-dob]').forEach(el => rpfCheckGuardianFields(el));
       root.querySelectorAll('.rpf-sig-field-wrap input').forEach(el => rpfUpdateSigPreview(el));
       root.querySelectorAll('.rpf-solo-toggle-row input').forEach(cb => { if (cb.checked) rpfToggleSoloPickup(cb); });
@@ -1744,6 +1714,12 @@
       secondary_name: caValue('Secondary Contact Name', 'secondary_contact_name', 'Additional Contact Name', 'additional_contact_name'),
       secondary_phone: caValue('Secondary Contact Phone', 'secondary_contact_phone', 'Additional Contact Phone', 'additional_contact_phone'),
       secondary_email: caValue('Secondary Contact Email', 'secondary_contact_email', 'Additional Contact Email', 'additional_contact_email'),
+      pickup_1_name: caValue('Authorised pickup 1 full name', 'Authorized pickup 1 full name', 'Pickup 1 full name'),
+      pickup_1_relationship: caValue('Authorised pickup 1 relationship to performer', 'Authorized pickup 1 relationship to performer', 'Pickup 1 relationship to performer'),
+      pickup_1_phone: caValue('Authorised pickup 1 phone number', 'Authorized pickup 1 phone number', 'Pickup 1 phone number'),
+      pickup_2_name: caValue('Authorised pickup 2 full name', 'Authorized pickup 2 full name', 'Pickup 2 full name'),
+      pickup_2_relationship: caValue('Authorised pickup 2 relationship to performer', 'Authorized pickup 2 relationship to performer', 'Pickup 2 relationship to performer'),
+      pickup_2_phone: caValue('Authorised pickup 2 phone number', 'Authorized pickup 2 phone number', 'Pickup 2 phone number'),
     };
   }
 
