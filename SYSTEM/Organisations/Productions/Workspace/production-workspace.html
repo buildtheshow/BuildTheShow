@@ -43728,12 +43728,44 @@ See you soon!
     _rptHouseholdModalEditId = editId;
     const existing = editId ? _rptHouseholds.find(h => h.id === editId) : null;
     const checkedIds = new Set(existing?.member_ids || (preselectedId ? [preselectedId] : []));
+    let suggestedName = existing?.name || '';
+
+    // When reviewing a request, auto-detect family members by last name
+    if (preselectedId && !editId) {
+      const requester = _rptCastItems.find(i => String(i.assignment?.id) === String(preselectedId));
+      if (requester) {
+        const _lastName = n => String(n || '').trim().split(/\s+/).pop();
+        const requesterLast = _lastName(requester.app?.name).toLowerCase();
+        const siblingRaw = registrationAnswerValue(requester.app, ['pf_sibling_performer_names', 'sibling_performer_names', 'household_performer_names']);
+        const siblingLasts = new Set(siblingRaw
+          ? siblingRaw.split(/[,&\n]+/).map(n => _lastName(n).toLowerCase()).filter(Boolean)
+          : []);
+        if (requesterLast) siblingLasts.add(requesterLast);
+
+        // Pre-check any cast member whose last name matches
+        _rptCastItems.forEach(item => {
+          if (siblingLasts.has(_lastName(item.app?.name).toLowerCase()))
+            checkedIds.add(String(item.assignment?.id || ''));
+        });
+
+        // Build suggested name from unique last names of checked members
+        const lastNames = [...new Set(
+          [...checkedIds].map(id => {
+            const it = _rptCastItems.find(i => String(i.assignment?.id) === id);
+            return it ? _lastName(it.app?.name) : '';
+          }).filter(Boolean)
+        )];
+        if (lastNames.length === 1) suggestedName = lastNames[0];
+        else if (lastNames.length >= 2) suggestedName = lastNames.slice(0, 2).join('-');
+      }
+    }
+
     const modal = document.createElement('div');
     modal.className = 'rpt-household-modal';
     modal.id = 'rpt-household-modal';
     modal.innerHTML = `<div class="rpt-household-modal-box">
       <div class="rpt-household-modal-title">${existing ? 'Edit Household' : 'Create Household'}</div>
-      <input class="rpt-household-modal-input" id="rpt-hh-name" placeholder="Family name (e.g. Smith Family)" value="${esc(existing?.name || '')}" />
+      <input class="rpt-household-modal-input" id="rpt-hh-name" placeholder="Family name (e.g. Smith Family)" value="${esc(suggestedName)}" />
       <div class="rpt-household-modal-section-label">Members</div>
       <input class="rpt-household-modal-input" id="rpt-hh-search" placeholder="Search cast members…" oninput="rptFilterHouseholdMembers(this.value)" style="margin-bottom:0.25rem;" />
       <div class="rpt-household-modal-members" id="rpt-hh-members">${_rptCastItems.map(item => {
