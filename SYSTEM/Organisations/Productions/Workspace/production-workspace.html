@@ -721,7 +721,7 @@
     .rsc-hh-photo-img .inroom-flip,.rsc-hh-photo-img .in-show-flip { width:100%; }
     .rsc-hh-photo-img .inroom-flip-inner { min-height:0; }
     .rsc-hh-photo-img .inroom-flip::before,.rsc-hh-photo-img .in-show-flip::before { display:none !important; }
-    .rsc-hh-stage-bar { text-align:center; padding:0.3rem 0.5rem; font-size:0.62rem; font-weight:900; text-transform:uppercase; letter-spacing:0.08em; color:#fff; flex-shrink:0; line-height:1.2; }
+
     .rsc-hh-photos--lone-top .rsc-hh-photo:first-child { flex:0 0 100%; max-width:50%; margin:0 auto; }
     .rsc-hh-group-banner { width:100%; background:#efab45; color:#1a1530; font-size:0.7rem; font-weight:900; text-transform:uppercase; letter-spacing:0.1em; text-align:center; padding:0.32rem 0.75rem; line-height:1.2; flex-shrink:0; }
     .rsc-hh-payments { padding:0.5rem 0.5rem 0; }
@@ -42491,16 +42491,17 @@ See you soon!
           email: app.email || '',
         },
       });
-      // Stage label for this member (same logic as membersHtml below)
+      // Stage progress for this member — matches rsc-progress template on standalone cards
       const _ef = rptEffectiveFee(item, settings);
       const _rec = _rptPaymentRecords[assignId] || [];
       const _hasFee = (settings.mode === 'flat' || settings.mode === 'split') && _ef.total > 0;
       const _regDone = !!registrationAgreementComplete(app);
-      const _paidAmt = _hasFee ? _rec.filter(r => r.paid).reduce((s, r) => s + (_ef.installments[r.installment_index]?.amount || 0), 0) : 0;
-      const _allInstPaid = _hasFee && _ef.installments.length > 0 && _ef.installments.every((_, i) => _rec.find(r => r.installment_index === i && r.paid));
-      const _stageColor = (_regDone && (!_hasFee || _allInstPaid)) ? '#769e7b' : _regDone ? '#572e88' : '#efab45';
-      const _stageLabel = (_regDone && (!_hasFee || _allInstPaid)) ? 'Complete' : _regDone ? 'Registered' : 'Accepted';
-      return `<div class="rsc-hh-photo"><div class="rsc-hh-photo-img">${flipCard}</div><div class="rsc-hh-stage-bar" style="background:${_stageColor};">${_stageLabel}</div></div>`;
+      const _steps = [{ done: true }, { done: _regDone }];
+      if (_hasFee) _ef.installments.forEach((_, i) => _steps.push({ done: !!_rec.find(r => r.installment_index === i && r.paid) }));
+      const _pct = Math.round((_steps.filter(s => s.done).length / _steps.length) * 100);
+      const _stageColor = _pct >= 100 ? '#769e7b' : _regDone ? '#572e88' : '#efab45';
+      const _stageLabel = _pct >= 100 ? 'Complete' : _regDone ? 'Registered' : 'Accepted';
+      return `<div class="rsc-hh-photo"><div class="rsc-hh-photo-img">${flipCard}</div><div class="rsc-progress" style="padding:0.4rem 0.55rem 0.35rem;"><div class="rsc-progress-track"><div class="rsc-progress-fill" style="width:${_pct}%;background:${_stageColor};"></div></div><div class="rsc-stage-label" style="color:${_stageColor};">${_stageLabel}</div></div></div>`;
     }).join('');
 
     // Combined payment tiles (one set for the whole household)
