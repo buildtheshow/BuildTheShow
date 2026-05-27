@@ -1699,6 +1699,7 @@
       fileSlug: rpfContractFileSlugForPdf(title),
       generatedAt: new Date().toLocaleString('en-CA'),
       organisation: rpfTextForPdf(_org?.name || _org?.abbreviation || 'Organisation'),
+      logoUrl: _org?.logo_url || _org?.logo_white_url || '',
       production: rpfTextForPdf(_prod?.title || 'Production'),
       performer: rpfPerformerNameForPdf(),
       date: rpfContractDateForPdf(),
@@ -1801,7 +1802,7 @@
 
   function rpfBuildAnswersPdf(data) {
     const doc = Array.isArray(data)
-      ? { title: rpfContractTitleForPdf(), generatedAt: new Date().toLocaleString('en-CA'), organisation: _org?.name || _org?.abbreviation || 'Organisation', production: _prod?.title || 'Production', performer: rpfPerformerNameForPdf(), date: rpfContractDateForPdf(), sections: [{ group: 'Registration', title: 'Submitted Answers', wording: [], answers: data }] }
+      ? { title: rpfContractTitleForPdf(), generatedAt: new Date().toLocaleString('en-CA'), organisation: _org?.name || _org?.abbreviation || 'Organisation', logoUrl: _org?.logo_url || _org?.logo_white_url || '', production: _prod?.title || 'Production', performer: rpfPerformerNameForPdf(), date: rpfContractDateForPdf(), sections: [{ group: 'Registration', title: 'Submitted Answers', wording: [], answers: data }] }
       : data;
     const lineItems = rpfPdfLineItemsForContract(doc);
     const pages = [[]];
@@ -1844,6 +1845,11 @@
     objects.push('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>');
     objects.push('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>');
     objects.push('<< /Type /Font /Subtype /Type1 /BaseFont /ZapfChancery-MediumItalic >>');
+    let logoObjNum = null;
+    if (doc.logoData?.data && doc.logoData?.width && doc.logoData?.height) {
+      logoObjNum = objects.length + 1;
+      objects.push(`<< /Type /XObject /Subtype /Image /Width ${doc.logoData.width} /Height ${doc.logoData.height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${doc.logoData.data.length} >>\nstream\n${doc.logoData.data}\nendstream`);
+    }
     const color = name => ({
       purple: '0.341 0.180 0.533',
       green: '0.463 0.620 0.482',
@@ -1858,7 +1864,7 @@
     }[name] || '0.102 0.082 0.188');
     pages.forEach((pageLines, pageIndex) => {
       const pageBrand = pageIndex === 0
-        ? `q\n${color('purple')} rg\n0 734 612 58 re f\n${color('gold')} rg\n0 728 612 6 re f\n${color('pink')} rg\n528 744 14 14 re f\n${color('green')} rg\n548 744 14 14 re f\n${color('gold')} rg\n568 744 14 14 re f\nQ`
+        ? `q\n${color('purple')} rg\n0 734 612 58 re f\n${color('gold')} rg\n0 728 612 6 re f\n${color('pink')} rg\n528 744 14 14 re f\n${color('green')} rg\n548 744 14 14 re f\n${color('gold')} rg\n568 744 14 14 re f\nQ${logoObjNum ? `\nq\n1 1 1 rg\n42 742 92 36 re f\nQ\nq\n82 0 0 28 47 746 cm\n/ImLogo Do\nQ` : `\nBT\n${color('white')} rg\n/F2 12 Tf\n48 754 Td\n(${rpfPdfEscape(doc.organisation)}) Tj\nET`}`
         : `q\n${color('purple')} rg\n0 758 612 10 re f\n${color('gold')} rg\n0 752 612 3 re f\nQ`;
       const footer = `q\n${color('green')} RG\n0.75 w\n50 46 m\n562 46 l\nS\nQ\nBT\n${color('muted')} rg\n/F1 8 Tf\n50 34 Td\n(${rpfPdfEscape(doc.title)}) Tj\nET\nBT\n${color('muted')} rg\n/F1 8 Tf\n500 34 Td\n(Page ${pageIndex + 1} of ${pages.length}) Tj\nET`;
       const header = pageIndex > 0 ? `BT\n${color('purple')} rg\n/F2 9 Tf\n50 738 Td\n(${rpfPdfEscape(doc.title)}) Tj\nET` : '';
@@ -1882,7 +1888,8 @@
       const stream = [pageBrand, header, body, footer].filter(Boolean).join('\n');
       const streamObjNum = objects.length + 2;
       const pageObjNum = objects.length + 1;
-      objects.push(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents ${streamObjNum} 0 R >>`);
+      const xObjects = logoObjNum ? ` /XObject << /ImLogo ${logoObjNum} 0 R >>` : '';
+      objects.push(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >>${xObjects} >> /Contents ${streamObjNum} 0 R >>`);
       objects.push(`<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`);
       pageRefs.push(`${pageObjNum} 0 R`);
     });
@@ -1901,8 +1908,38 @@
     return pdf;
   }
 
-  window.rpfDownloadAnswersPdf = function() {
+  function rpfLoadPdfLogo(url) {
+    return new Promise(resolve => {
+      if (!url) { resolve(null); return; }
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        try {
+          const canvas = document.createElement('canvas');
+          canvas.width = 240;
+          canvas.height = 96;
+          const ctx = canvas.getContext('2d');
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          const scale = Math.min(200 / img.naturalWidth, 72 / img.naturalHeight);
+          const w = Math.max(1, img.naturalWidth * scale);
+          const h = Math.max(1, img.naturalHeight * scale);
+          ctx.drawImage(img, (canvas.width - w) / 2, (canvas.height - h) / 2, w, h);
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
+          resolve({ width: canvas.width, height: canvas.height, data: atob(dataUrl.split(',')[1] || '') });
+        } catch (error) {
+          console.warn('[BTS] PDF logo could not be embedded', error);
+          resolve(null);
+        }
+      };
+      img.onerror = () => resolve(null);
+      img.src = url;
+    });
+  }
+
+  window.rpfDownloadAnswersPdf = async function() {
     const doc = window._rpfSubmittedAnswerRows || rpfCollectAnswerRowsForPdf();
+    if (!doc.logoData) doc.logoData = await rpfLoadPdfLogo(doc.logoUrl || _org?.logo_url || _org?.logo_white_url || '');
     const pdf = rpfBuildAnswersPdf(doc);
     const slug = doc.fileSlug || rpfContractFileSlugForPdf(doc.title);
     const blob = new Blob([pdf], { type: 'application/pdf' });
@@ -2018,6 +2055,7 @@
     try {
       if (!_applicant?.id) throw new Error('Missing applicant record for registration submit.');
       const pdfRows = rpfCollectAnswerRowsForPdf();
+      if (!pdfRows.logoData) pdfRows.logoData = await rpfLoadPdfLogo(pdfRows.logoUrl || _org?.logo_url || _org?.logo_white_url || '');
       const collected = collectFormAnswers();
       const merged = Object.assign({}, _applicant?.custom_answers || {}, collected, {
         __bts_registration_complete: true,
