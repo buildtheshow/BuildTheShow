@@ -1923,6 +1923,17 @@
         __bts_registration_submitted_at: new Date().toISOString(),
       });
 
+      // Upload PDF to storage so admin can view it
+      try {
+        const _pdfBlob = new Blob([rpfBuildAnswersPdf(pdfRows)], { type: 'application/pdf' });
+        const _pdfPath = `${_resolvedProductionId}/registrations/${_applicant.id}.pdf`;
+        const { data: _upData, error: _upErr } = await sb.storage.from('production-files').upload(_pdfPath, _pdfBlob, { upsert: true, contentType: 'application/pdf' });
+        if (!_upErr && _upData) {
+          const { data: _urlData } = sb.storage.from('production-files').getPublicUrl(_pdfPath);
+          if (_urlData?.publicUrl) merged.__bts_registration_pdf_url = _urlData.publicUrl;
+        }
+      } catch (_pdfUpErr) { console.warn('[BTS] registration PDF upload failed', _pdfUpErr); }
+
       const { error } = await sb.from('audition_applications').update({ custom_answers: merged }).eq('id', _applicant.id);
       if (error) throw error;
       _applicant.custom_answers = merged;

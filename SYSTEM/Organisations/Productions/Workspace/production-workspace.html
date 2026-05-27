@@ -42546,11 +42546,12 @@ See you soon!
         : `<span class="rsc-info-chip muted">None</span>`;
       const _allSigned = !!registrationFormsComplete(app);
       const _mediaSigned = registrationAnswerTruthy(app, ['media_release_signed', '__bts_registration_media_release_signed']);
-      const _castSigned  = registrationAnswerTruthy(app, ['cast_agreement_signed', '__bts_registration_cast_agreement_signed']);
-      const _cocSigned   = registrationAnswerTruthy(app, ['code_of_conduct_signed', '__bts_registration_code_of_conduct_signed']);
-      const _someSigned  = !_allSigned && (_mediaSigned || _castSigned || _cocSigned || registrationAnswerTruthy(app, ['I understand the rehearsal expectations for this production']));
-      const _agreementsHtml = `<button class="rsc-info-chip ${_allSigned ? 'ok' : _someSigned ? 'warn' : 'muted'}" style="cursor:pointer;border:none;" onclick="rscShowAgreementsModal('${esc(assignId)}')">${_allSigned ? '✓ All signed' : _someSigned ? 'Some pending' : 'Not yet'}</button>`;
-      return `<div class="rsc-hh-photo"><div class="rsc-hh-photo-img">${flipCard}</div><div class="rsc-progress" style="padding:0.4rem 0.55rem 0.35rem;"><div class="rsc-progress-track"><div class="rsc-progress-fill" style="width:${_pct}%;background:${_stageColor};"></div></div><div class="rsc-stage-label" style="color:${_stageColor};">${_stageLabel}</div></div><div class="rsc-info" style="padding:0 0.55rem 0.4rem;"><div class="rsc-info-row"><span class="rsc-info-label">Accessibility</span>${_accessHtml}</div><div class="rsc-info-row"><span class="rsc-info-label">Agreements</span>${_agreementsHtml}</div></div></div>`;
+      const _mediaHtml = _mediaSigned ? `<span class="rsc-info-chip ok">✓ Signed</span>` : `<span class="rsc-info-chip muted">Not yet</span>`;
+      const _pdfUrl = registrationAnswerValue(app, ['__bts_registration_pdf_url']).trim();
+      const _regHtml = _pdfUrl
+        ? `<button class="rsc-info-chip ok" style="cursor:pointer;border:none;" onclick="rscShowRegistrationPdf('${esc(assignId)}','${esc(_pdfUrl)}')">View PDF</button>`
+        : (_allSigned ? `<button class="rsc-info-chip warn" style="cursor:pointer;border:none;" onclick="rscResendRegistrationLink('${esc(assignId)}')">Resend link</button>` : `<span class="rsc-info-chip muted">Not submitted</span>`);
+      return `<div class="rsc-hh-photo"><div class="rsc-hh-photo-img">${flipCard}</div><div class="rsc-progress" style="padding:0.4rem 0.55rem 0.35rem;"><div class="rsc-progress-track"><div class="rsc-progress-fill" style="width:${_pct}%;background:${_stageColor};"></div></div><div class="rsc-stage-label" style="color:${_stageColor};">${_stageLabel}</div></div><div class="rsc-info" style="padding:0 0.55rem 0.4rem;"><div class="rsc-info-row"><span class="rsc-info-label">Accessibility</span>${_accessHtml}</div><div class="rsc-info-row"><span class="rsc-info-label">Media Release</span>${_mediaHtml}</div><div class="rsc-info-row"><span class="rsc-info-label">Registration</span>${_regHtml}</div></div></div>`;
     }).join('');
 
     // Combined payment tiles (one set for the whole household)
@@ -42860,9 +42861,18 @@ See you soon!
     const someSigned  = !allSigned && (mediaSigned || castSigned || cocSigned || registrationAnswerTruthy(app, ['I understand the rehearsal expectations for this production']));
     const agreementsHtml = `<button class="rsc-info-chip ${allSigned ? 'ok' : someSigned ? 'warn' : 'muted'}" style="cursor:pointer;border:none;" onclick="rscShowAgreementsModal('${esc(assignId)}')">${allSigned ? '✓ All signed' : someSigned ? 'Some pending' : 'Not yet'}</button>`;
 
+    const mediaSignedStandalone = registrationAnswerTruthy(app, ['media_release_signed', '__bts_registration_media_release_signed']);
+    const mediaHtml = mediaSignedStandalone
+      ? `<span class="rsc-info-chip ok">✓ Signed</span>`
+      : `<span class="rsc-info-chip muted">Not yet</span>`;
+    const pdfUrl = registrationAnswerValue(app, ['__bts_registration_pdf_url']).trim();
+    const regFormHtml = pdfUrl
+      ? `<button class="rsc-info-chip ok" style="cursor:pointer;border:none;" onclick="rscShowRegistrationPdf('${esc(assignId)}','${esc(pdfUrl)}')">View PDF</button>`
+      : (allSigned ? `<button class="rsc-info-chip warn" style="cursor:pointer;border:none;" onclick="rscResendRegistrationLink('${esc(assignId)}')">Resend link</button>` : `<span class="rsc-info-chip muted">Not submitted</span>`);
     const infoHtml = `<div class="rsc-info">
       <div class="rsc-info-row"><span class="rsc-info-label">Accessibility</span>${accessHtml}</div>
-      <div class="rsc-info-row"><span class="rsc-info-label">Agreements</span>${agreementsHtml}</div>
+      <div class="rsc-info-row"><span class="rsc-info-label">Media Release</span>${mediaHtml}</div>
+      <div class="rsc-info-row"><span class="rsc-info-label">Registration</span>${regFormHtml}</div>
     </div>`;
 
     // Balance
@@ -43396,6 +43406,46 @@ See you soon!
     </div>`;
     modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
     document.body.appendChild(modal);
+  }
+
+  function rscShowRegistrationPdf(assignId, pdfUrl) {
+    document.getElementById('rsc-reg-pdf-modal')?.remove();
+    const d = window._rscModalData?.[assignId];
+    const name = d?.name || 'Performer';
+    const modal = document.createElement('div');
+    modal.id = 'rsc-reg-pdf-modal';
+    modal.className = 'rpt-household-modal';
+    modal.innerHTML = `<div class="rpt-household-modal-box" style="max-width:760px;width:95vw;">
+      <div class="rpt-household-modal-title">Registration PDF — ${esc(name)}</div>
+      <iframe src="${esc(pdfUrl)}" style="width:100%;height:60vh;border:none;border-radius:6px;background:#f5f5f5;" title="Registration PDF"></iframe>
+      <div class="rpt-household-modal-actions" style="justify-content:space-between;">
+        <div style="display:flex;gap:0.5rem;">
+          <a href="${esc(pdfUrl)}" download target="_blank" class="rpt-modal-save-btn" style="text-decoration:none;">Download PDF</a>
+          <button class="rpt-modal-save-btn" style="background:transparent;color:#572e88;border:1.5px solid #572e88;" onclick="rscResendRegistrationLink('${esc(assignId)}');document.getElementById('rsc-reg-pdf-modal')?.remove();">Resend Link</button>
+        </div>
+        <button class="rpt-modal-save-btn" onclick="document.getElementById('rsc-reg-pdf-modal')?.remove()">Close</button>
+      </div>
+    </div>`;
+    modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+    document.body.appendChild(modal);
+  }
+
+  async function rscResendRegistrationLink(assignId) {
+    const d = window._rscModalData?.[assignId];
+    if (!d?.app?.email) { showToast('No email address on file for this performer.', true); return; }
+    try {
+      const regUrl = `${location.origin}/SYSTEM/Public/registration.html?app=${encodeURIComponent(d.app.id)}&prod=${encodeURIComponent(prodId)}`;
+      await fetch('/functions/v1/send-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${(await sb.auth.getSession()).data.session?.access_token}` },
+        body: JSON.stringify({
+          to: d.app.email,
+          subject: `${prod?.title || 'Production'} — Registration Form`,
+          html: `<p>Hi ${esc(d.name.split(' ')[0])},</p><p>Here is your registration link for ${esc(prod?.title || 'the production')}:</p><p><a href="${regUrl}">${regUrl}</a></p><p>If you have already submitted your registration, you can ignore this email.</p>`,
+        }),
+      });
+      showToast('Registration link sent to ' + d.app.email);
+    } catch (e) { showToast('Could not send email: ' + e.message, true); }
   }
 
   function rscOpenMarkPaidModal(assignId, idx) {
