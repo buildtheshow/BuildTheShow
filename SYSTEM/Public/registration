@@ -532,6 +532,18 @@
       padding: 0.45rem 1rem; border-radius: 20px;
       letter-spacing: 0.04em;
     }
+    .rpf-success-actions { display: flex; justify-content: center; margin-top: 1.4rem; }
+    .rpf-download-answers-btn {
+      border: none;
+      border-radius: 999px;
+      background: var(--purple);
+      color: #fff;
+      font: 800 0.8rem var(--font);
+      padding: 0.7rem 1.2rem;
+      cursor: pointer;
+      box-shadow: 0 7px 18px rgba(87,46,136,0.22);
+    }
+    .rpf-download-answers-btn:hover { background: var(--purple-dark); }
 
     /* ── Responsive: collapse sidebar on small screens ── */
     @media (max-width: 640px) {
@@ -1371,6 +1383,126 @@
     return answers;
   }
 
+  function rpfTextForPdf(value) {
+    return String(value ?? '')
+      .replace(/\u00a0/g, ' ')
+      .replace(/[“”]/g, '"')
+      .replace(/[‘’]/g, "'")
+      .replace(/[–—]/g, '-')
+      .replace(/[^\x09\x0A\x0D\x20-\x7E]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  function rpfPdfEscape(value) {
+    return rpfTextForPdf(value).replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)');
+  }
+
+  function rpfPdfLabelForField(el) {
+    const wrap = el.closest('.rpf-form-group, .rpf-mr-sig-field, .rpf-final-agree-box');
+    const label = wrap?.querySelector('.rpf-label, label, .rpf-mr-guardian-label');
+    const raw = label?.textContent || el.dataset.fieldName || el.name || 'Answer';
+    return rpfTextForPdf(raw).replace(/\s*\*\s*/g, '').replace(/\s+/g, ' ');
+  }
+
+  function rpfCollectAnswerRowsForPdf() {
+    const shell = document.getElementById('rpf-root');
+    if (!shell) return [];
+    const rows = [];
+    const seen = new Set();
+    shell.querySelectorAll('input, select, textarea').forEach(el => {
+      if (el.type === 'hidden' || el.type === 'file' || el.disabled) return;
+      if (el.type === 'radio' && !el.checked) return;
+      const label = rpfPdfLabelForField(el);
+      let value = '';
+      if (el.type === 'checkbox') value = el.checked ? 'Yes' : '';
+      else value = el.value || '';
+      value = rpfTextForPdf(value);
+      if (!value) return;
+      const key = `${label}::${value}`;
+      if (seen.has(key)) return;
+      seen.add(key);
+      rows.push({ label, value });
+    });
+    return rows;
+  }
+
+  function rpfWrapPdfLine(text, max = 78) {
+    const words = rpfTextForPdf(text).split(/\s+/).filter(Boolean);
+    const lines = [];
+    let line = '';
+    words.forEach(word => {
+      const next = line ? `${line} ${word}` : word;
+      if (next.length > max && line) {
+        lines.push(line);
+        line = word;
+      } else {
+        line = next;
+      }
+    });
+    if (line) lines.push(line);
+    return lines.length ? lines : [''];
+  }
+
+  function rpfBuildAnswersPdf(rows) {
+    const performer = _prefill ? [_prefill.preferred_name || _prefill.first_name || '', _prefill.last_name || ''].filter(Boolean).join(' ') : '';
+    const titleLines = [
+      `${_prod?.title || 'Production'} Registration Answers`,
+      performer ? `Performer: ${performer}` : '',
+      `Submitted: ${new Date().toLocaleString('en-CA')}`,
+      '',
+    ].filter(line => line !== '');
+    const contentLines = [...titleLines];
+    (rows || []).forEach(row => {
+      rpfWrapPdfLine(`${row.label}: ${row.value}`).forEach(line => contentLines.push(line));
+    });
+    if (!rows?.length) contentLines.push('No answers were available to export.');
+
+    const pages = [];
+    const linesPerPage = 46;
+    for (let i = 0; i < contentLines.length; i += linesPerPage) pages.push(contentLines.slice(i, i + linesPerPage));
+    const objects = ['<< /Type /Catalog /Pages 2 0 R >>'];
+    const pageRefs = [];
+    objects.push(null);
+    objects.push('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>');
+    pages.forEach(pageLines => {
+      const stream = `BT\n/F1 11 Tf\n50 742 Td\n14 TL\n${pageLines.map(line => `(${rpfPdfEscape(line)}) Tj`).join('\nT*\n')}\nET`;
+      const streamObjNum = objects.length + 2;
+      const pageObjNum = objects.length + 1;
+      objects.push(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents ${streamObjNum} 0 R >>`);
+      objects.push(`<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`);
+      pageRefs.push(`${pageObjNum} 0 R`);
+    });
+    objects[1] = `<< /Type /Pages /Kids [${pageRefs.join(' ')}] /Count ${pageRefs.length} >>`;
+
+    let pdf = '%PDF-1.4\n';
+    const offsets = [0];
+    objects.forEach((obj, idx) => {
+      offsets[idx + 1] = pdf.length;
+      pdf += `${idx + 1} 0 obj\n${obj}\nendobj\n`;
+    });
+    const xref = pdf.length;
+    pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+    offsets.slice(1).forEach(offset => { pdf += `${String(offset).padStart(10, '0')} 00000 n \n`; });
+    pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF`;
+    return pdf;
+  }
+
+  window.rpfDownloadAnswersPdf = function() {
+    const rows = window._rpfSubmittedAnswerRows || rpfCollectAnswerRowsForPdf();
+    const pdf = rpfBuildAnswersPdf(rows);
+    const slug = String(_prod?.title || 'registration').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'registration';
+    const blob = new Blob([pdf], { type: 'application/pdf' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${slug}-answers.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
+
   // ── Auto-save ─────────────────────────────────────────────────────────────────
   function scheduleSave(delay = 2000) {
     clearTimeout(_saveTimer);
@@ -1399,6 +1531,7 @@
     clearTimeout(_saveTimer);
     try {
       if (!_applicant?.id) throw new Error('Missing applicant record for registration submit.');
+      const pdfRows = rpfCollectAnswerRowsForPdf();
       const collected = collectFormAnswers();
       const merged = Object.assign({}, _applicant?.custom_answers || {}, collected, {
         __bts_registration_complete: true,
@@ -1408,6 +1541,7 @@
       const { error } = await sb.from('audition_applications').update({ custom_answers: merged }).eq('id', _applicant.id);
       if (error) throw error;
       _applicant.custom_answers = merged;
+      window._rpfSubmittedAnswerRows = pdfRows;
       showSavedIndicator();
 
       // Mark all nav items done
@@ -1429,6 +1563,9 @@
           <div class="rpf-success-card">
             <div class="rpf-success-title">Check your inbox.</div>
             <div class="rpf-success-body">A confirmation is on its way. If you do not see it within a few minutes, check your spam folder.</div>
+          </div>
+          <div class="rpf-success-actions">
+            <button type="button" class="rpf-download-answers-btn" onclick="rpfDownloadAnswersPdf()">Download PDF of answers</button>
           </div>
         </div>`;
       }
