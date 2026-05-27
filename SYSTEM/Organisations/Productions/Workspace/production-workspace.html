@@ -42729,37 +42729,32 @@ See you soon!
       <button class="rsc-approve-btn" onclick="rptOpenHouseholdModal('${esc(_firstAssignId)}')">${_hhStatusBtn}</button>
     </div>`;
     if (settings.volunteer_discount_enabled) {
-      sharedDiscountsHtml += items.map(item => {
-        const _a = item.app || {};
-        const _s = item.assignment || {};
-        const _aid = String(_s.id || '');
-        const _fn = String(_a.name || '').trim().split(/\s+/)[0];
-        const _approved = !!_s.volunteer_discount_approved;
-        const _vReq = registrationAnswerTruthy(_a, ['pf_volunteer_discount', 'volunteer_discount_interested', '__bts_registration_volunteer_discount_requested']);
-        const _vStatus = _approved ? 'Approved' : _vReq ? 'Interested' : 'Available';
-        return `<div class="rsc-discount">
-          <div class="rsc-discount-label">Vol. — ${esc(_fn)}</div>
-          <span class="rsc-adjustment-status ${_approved ? 'ok' : _vReq ? 'warn' : 'muted'}">${esc(_vStatus)}</span>
-          <button class="rsc-approve-btn${_approved ? ' approved' : ''}" onclick="rscOpenVolunteerModal('${esc(_aid)}')">${_approved ? '✓' : 'Manage'}</button>
-        </div>`;
-      }).join('');
+      const _volApprovedItems = items.filter(i => !!i.assignment?.volunteer_discount_approved);
+      const _volReqItems = items.filter(i => registrationAnswerTruthy(i.app, ['pf_volunteer_discount', 'volunteer_discount_interested', '__bts_registration_volunteer_discount_requested']));
+      const _volAllApproved = _volApprovedItems.length === items.length;
+      const _volSomeApproved = _volApprovedItems.length > 0 && !_volAllApproved;
+      const _volAnyReq = _volReqItems.length > 0 && _volApprovedItems.length === 0;
+      const _volStatus = _volAllApproved ? 'All approved' : _volSomeApproved ? `${_volApprovedItems.length} of ${items.length} approved` : _volAnyReq ? 'Interested' : 'Available';
+      const _volClass = (_volAllApproved || _volSomeApproved) ? 'ok' : _volAnyReq ? 'warn' : 'muted';
+      sharedDiscountsHtml += `<div class="rsc-discount">
+        <div class="rsc-discount-label">Volunteer discount</div>
+        <span class="rsc-adjustment-status ${_volClass}">${esc(_volStatus)}</span>
+        <button class="rsc-approve-btn${_volAllApproved ? ' approved' : ''}" onclick="rscOpenVolunteerModal('${esc(_firstAssignId)}')">${_volAllApproved ? '✓ Approved' : 'Manage'}</button>
+      </div>`;
     }
     if (settings.scholarship_enabled) {
-      sharedDiscountsHtml += items.map(item => {
-        const _a = item.app || {};
-        const _s = item.assignment || {};
-        const _aid = String(_s.id || '');
-        const _fn = String(_a.name || '').trim().split(/\s+/)[0];
-        const _sReq = registrationAnswerTruthy(_a, ['pf_scholarship_request', 'scholarship_request', '__bts_registration_scholarship_requested']);
-        const _sStatus = String(_s.scholarship_status || (_sReq ? 'requested' : 'none'));
-        const _sLabel = { none: 'None', requested: 'Requested', approved: 'Approved', declined: 'Declined' }[_sStatus] || _sStatus;
-        const _sClass = _sStatus === 'approved' ? 'ok' : _sStatus === 'requested' ? 'warn' : 'muted';
-        return `<div class="rsc-discount">
-          <div class="rsc-discount-label">Scholarship — ${esc(_fn)}</div>
-          <span class="rsc-adjustment-status ${_sClass}">${esc(_sLabel)}</span>
-          <button class="rsc-approve-btn" onclick="rscOpenScholarshipModal('${esc(_aid)}')">Manage</button>
-        </div>`;
-      }).join('');
+      const _schApproved = items.filter(i => i.assignment?.scholarship_status === 'approved');
+      const _schReq = items.filter(i => {
+        const s = String(i.assignment?.scholarship_status || '');
+        return s === 'requested' || (s === '' && registrationAnswerTruthy(i.app, ['pf_scholarship_request', 'scholarship_request', '__bts_registration_scholarship_requested']));
+      });
+      const _schStatus = _schApproved.length === items.length ? 'All approved' : _schApproved.length > 0 ? `${_schApproved.length} of ${items.length} approved` : _schReq.length > 0 ? 'Requested' : 'None';
+      const _schClass = _schApproved.length > 0 ? 'ok' : _schReq.length > 0 ? 'warn' : 'muted';
+      sharedDiscountsHtml += `<div class="rsc-discount">
+        <div class="rsc-discount-label">Scholarship</div>
+        <span class="rsc-adjustment-status ${_schClass}">${esc(_schStatus)}</span>
+        <button class="rsc-approve-btn" onclick="rscOpenScholarshipModal('${esc(_firstAssignId)}')">Manage</button>
+      </div>`;
     }
 
     return `<div class="rsc-hh-group-card" id="rsc-hh-group-${esc(household.id)}">
