@@ -1740,6 +1740,12 @@
     return '';
   }
 
+  function rpfPdfBlobFromBinaryString(pdf) {
+    const bytes = new Uint8Array(pdf.length);
+    for (let i = 0; i < pdf.length; i += 1) bytes[i] = pdf.charCodeAt(i) & 0xff;
+    return new Blob([bytes], { type: 'application/pdf' });
+  }
+
   function rpfSignatureImageForPdf(name) {
     const text = rpfTextForPdf(name);
     if (!text || typeof document === 'undefined') return null;
@@ -1862,7 +1868,7 @@
       const key = `${label}::${el.name || el.dataset.fieldName || el.type}`;
       if (seen.has(key)) return;
       seen.add(key);
-      rows.push({ label, value });
+      rows.push({ label, value, key: el.name || el.dataset.fieldName || '' });
     });
     return rows;
   }
@@ -1875,7 +1881,8 @@
       fileSlug: rpfContractFileSlugForPdf(title),
       generatedAt: rpfFormatPdfDate(new Date().toISOString(), true),
       organisation: rpfTextForPdf(_org?.name || _org?.abbreviation || 'Organisation'),
-      logoUrl: _org?.logo_url || _org?.logo_white_url || '',
+      logoUrl: _org?.logo_white_url || _org?.logo_url || '',
+      posterUrl: _prod?.poster_url || '',
       production: rpfTextForPdf(_prod?.title || 'Production'),
       performer: rpfPerformerNameForPdf(),
       date: rpfContractDateForPdf(),
@@ -1916,10 +1923,23 @@
 
   function rpfPdfAnswerFromDoc(doc, labels) {
     const wanted = labels.map(label => String(label).toLowerCase());
+    const normalize = value => String(value || '').toLowerCase();
     for (const section of doc.sections || []) {
       for (const row of section.answers || []) {
-        const label = String(row.label || '').toLowerCase();
-        if (wanted.some(w => label === w || label.includes(w))) return rpfTextForPdf(row.value);
+        const key = normalize(row.key);
+        if (wanted.some(w => key === w)) return rpfTextForPdf(row.value);
+      }
+    }
+    for (const section of doc.sections || []) {
+      for (const row of section.answers || []) {
+        const label = normalize(row.label);
+        if (wanted.some(w => label === w)) return rpfTextForPdf(row.value);
+      }
+    }
+    for (const section of doc.sections || []) {
+      for (const row of section.answers || []) {
+        const label = normalize(row.label);
+        if (wanted.some(w => label.includes(w))) return rpfTextForPdf(row.value);
       }
     }
     return '';
@@ -1938,11 +1958,11 @@
   }
 
   function rpfPdfSignatureInfo(doc) {
-    const guardianName = rpfPdfAnswerFromDoc(doc, ['parent or guardian full name', 'final_guardian_name']);
-    const guardianRel = rpfPdfAnswerFromDoc(doc, ['relationship to performer', 'final_guardian_relationship']);
-    const guardianSig = rpfPdfAnswerFromDoc(doc, ['parent or guardian signature', 'final_guardian_sig']);
+    const guardianName = rpfPdfAnswerFromDoc(doc, ['final_guardian_name', 'parent or guardian full name']);
+    const guardianRel = rpfPdfAnswerFromDoc(doc, ['final_guardian_relationship', 'relationship to performer']);
+    const guardianSig = rpfPdfAnswerFromDoc(doc, ['final_guardian_sig', 'parent or guardian signature']);
     const guardianDate = rpfPdfAnswerFromDoc(doc, ['final_guardian_date']);
-    const performerSig = rpfPdfAnswerFromDoc(doc, ['performer signature', 'final_signer_name']);
+    const performerSig = rpfPdfAnswerFromDoc(doc, ['final_signer_name', 'performer signature']);
     const performerDate = rpfPdfAnswerFromDoc(doc, ['final_signed_date']);
     const signer = guardianSig || guardianName || performerSig || doc.performer || 'N/A';
     return {
@@ -2005,7 +2025,7 @@
 
   function rpfBuildAnswersPdf(data) {
     const doc = Array.isArray(data)
-      ? { title: rpfContractTitleForPdf(), generatedAt: rpfFormatPdfDate(new Date().toISOString(), true), organisation: _org?.name || _org?.abbreviation || 'Organisation', logoUrl: _org?.logo_url || _org?.logo_white_url || '', production: _prod?.title || 'Production', performer: rpfPerformerNameForPdf(), date: rpfContractDateForPdf(), sections: [{ group: 'Registration', title: 'Submitted Answers', wording: [], answers: data }] }
+      ? { title: rpfContractTitleForPdf(), generatedAt: rpfFormatPdfDate(new Date().toISOString(), true), organisation: _org?.name || _org?.abbreviation || 'Organisation', logoUrl: _org?.logo_white_url || _org?.logo_url || '', posterUrl: _prod?.poster_url || '', production: _prod?.title || 'Production', performer: rpfPerformerNameForPdf(), date: rpfContractDateForPdf(), sections: [{ group: 'Registration', title: 'Submitted Answers', wording: [], answers: data }] }
       : data;
     const lineItems = rpfPdfLineItemsForContract(doc);
     const pages = [[]];
@@ -2016,7 +2036,27 @@
       pages.push([]);
       y = pageTop;
     };
-    lineItems.forEach(item => {
+    function rpfEstimatePdfItemHeight(item) {
+      if (!item) return 0;
+      if (item.type === 'spacer') return item.h || 8;
+      if (item.type === 'rule') return item.gap || 10;
+      if (item.type === 'sectionHeader') return 24 + (item.gap || 4);
+      if (item.type === 'answerRow') {
+        const wrapLabel = rpfWrapPdfLine(item.label || '', 34);
+        const wrapValue = rpfWrapPdfLine(item.value || '', 32);
+        return Math.max(wrapLabel.length, wrapValue.length) * 13 + 7 + (item.gap || 0);
+      }
+      if (item.type === 'wordingBlock') {
+        const lineCount = (item.lines || []).reduce((sum, w) => {
+          const str = typeof w === 'string' ? w : rpfTextForPdf(w.text || '');
+          return sum + rpfWrapPdfLine(str, 138).length;
+        }, 0);
+        return lineCount * 12 + 16 + (item.gap || 10);
+      }
+      const lineHeight = Math.max(12, (item.size || 9.5) * 1.35);
+      return lineHeight + (item.gap || 0);
+    }
+    lineItems.forEach((item, index) => {
       if (item.type === 'spacer') {
         y -= item.h || 8;
         return;
@@ -2028,21 +2068,24 @@
         return;
       }
       if (item.type === 'signatureBlock') {
-        if (y < 230) nextPage();
-        pages[pages.length - 1].push(Object.assign({}, item, { y: 178 }));
-        y = 62;
+        const blockH = 128;
+        if (y - blockH < 62) nextPage();
+        pages[pages.length - 1].push(Object.assign({}, item, { y }));
+        y -= blockH + 14;
         return;
       }
       if (item.type === 'sectionHeader') {
         const h = 24;
-        if (y - h < 62) nextPage();
+        const nextContent = lineItems[index + 1]?.type === 'spacer' ? lineItems[index + 2] : lineItems[index + 1];
+        const keepWith = Math.min(rpfEstimatePdfItemHeight(nextContent), 118);
+        if (y - h - (item.gap || 4) - keepWith < 62) nextPage();
         pages[pages.length - 1].push(Object.assign({}, item, { y, h }));
         y -= h + (item.gap || 4);
         return;
       }
       if (item.type === 'answerRow') {
-        const wrapLabel = rpfWrapPdfLine(item.label || '', 44);
-        const wrapValue = rpfWrapPdfLine(item.value || '', 44);
+        const wrapLabel = rpfWrapPdfLine(item.label || '', 34);
+        const wrapValue = rpfWrapPdfLine(item.value || '', 32);
         const rowH = Math.max(wrapLabel.length, wrapValue.length) * 13 + 7;
         if (y - rowH < 62) nextPage();
         pages[pages.length - 1].push(Object.assign({}, item, { y, h: rowH, wrapLabel, wrapValue }));
@@ -2053,7 +2096,7 @@
         const allLines = (item.lines || []).flatMap(w => {
           const str = typeof w === 'string' ? w : rpfTextForPdf(w.text || '');
           const bold = typeof w !== 'string' && !!w.bold;
-          return rpfWrapPdfLine(str, 106).map((t, i) => ({ text: t, bold: bold && i === 0 }));
+          return rpfWrapPdfLine(str, 138).map((t, i) => ({ text: t, bold: bold && i === 0 }));
         });
         const blockH = allLines.length * 12 + 16;
         if (y - blockH < 62) nextPage();
@@ -2082,8 +2125,14 @@
       logoObjNum = objects.length + 1;
       objects.push(`<< /Type /XObject /Subtype /Image /Width ${doc.logoData.width} /Height ${doc.logoData.height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${doc.logoData.data.length} >>\nstream\n${doc.logoData.data}\nendstream`);
     }
+    let posterObjNum = null;
+    if (doc.posterData?.data && doc.posterData?.width && doc.posterData?.height) {
+      posterObjNum = objects.length + 1;
+      objects.push(`<< /Type /XObject /Subtype /Image /Width ${doc.posterData.width} /Height ${doc.posterData.height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${doc.posterData.data.length} >>\nstream\n${doc.posterData.data}\nendstream`);
+    }
     const xObjectEntries = [];
     if (logoObjNum) xObjectEntries.push(`/ImLogo ${logoObjNum} 0 R`);
+    if (posterObjNum) xObjectEntries.push(`/ImPoster ${posterObjNum} 0 R`);
     let sigImageIndex = 0;
     pages.forEach(pageLines => {
       pageLines.forEach(line => {
@@ -2113,8 +2162,14 @@
       lightRow: '0.941 0.929 0.961',
     }[name] || '0.102 0.082 0.188');
     pages.forEach((pageLines, pageIndex) => {
+      const logoMark = logoObjNum
+        ? `\nq\n116 0 0 46 34 735 cm\n/ImLogo Do\nQ`
+        : `\nBT\n${color('white')} rg\n/F2 13 Tf\n50 754 Td\n(${rpfPdfEscape(doc.organisation)}) Tj\nET`;
+      const posterMark = posterObjNum
+        ? `\nq\n${color('white')} rg\n517 729 46 58 re f\nQ\nq\n42 0 0 54 519 731 cm\n/ImPoster Do\nQ`
+        : '';
       const pageBrand = pageIndex === 0
-        ? `q\n${color('purple')} rg\n0 724 612 68 re f\n${color('gold')} rg\n0 716 612 8 re f\nQ${logoObjNum ? `\nq\n88 0 0 34 48 744 cm\n/ImLogo Do\nQ` : `\nBT\n${color('white')} rg\n/F2 13 Tf\n50 754 Td\n(${rpfPdfEscape(doc.organisation)}) Tj\nET`}`
+        ? `q\n${color('purple')} rg\n0 724 612 68 re f\n${color('gold')} rg\n0 716 612 8 re f\nQ${logoMark}${posterMark}`
         : `q\n${color('purple')} rg\n0 758 612 10 re f\n${color('gold')} rg\n0 752 612 3 re f\nQ`;
       const footer = `q\n${color('green')} RG\n0.75 w\n50 46 m\n562 46 l\nS\nQ\nBT\n${color('muted')} rg\n/F1 8 Tf\n50 34 Td\n(${rpfPdfEscape(doc.title)}) Tj\nET\nBT\n${color('muted')} rg\n/F1 8 Tf\n500 34 Td\n(Page ${pageIndex + 1} of ${pages.length}) Tj\nET`;
       const header = pageIndex > 0 ? `BT\n${color('purple')} rg\n/F2 9 Tf\n50 738 Td\n(${rpfPdfEscape(doc.title)}) Tj\nET` : '';
@@ -2124,9 +2179,10 @@
         }
         if (line.type === 'signatureBlock') {
           const sig = line.sig || {};
+          const signatureFallback = `BT\n${color('purple')} rg\n/F3 26 Tf\n76 ${line.y - 38} Td\n(${rpfPdfEscape(sig.signer || 'N/A')}) Tj\nET`;
           const signatureMark = line.signatureImageName
-            ? `q\n252 0 0 67 72 ${line.y - 58} cm\n/${line.signatureImageName} Do\nQ`
-            : `BT\n${color('purple')} rg\n/F3 26 Tf\n76 ${line.y - 38} Td\n(${rpfPdfEscape(sig.signer || 'N/A')}) Tj\nET`;
+            ? `${signatureFallback}\nq\n252 0 0 67 72 ${line.y - 58} cm\n/${line.signatureImageName} Do\nQ`
+            : signatureFallback;
           return [
             `q\n${color('softGold')} rg\n44 ${line.y - 108} 524 128 re f\n${color('gold')} RG\n1 w\n44 ${line.y - 108} 524 128 re S\nQ`,
             `BT\n${color('purple')} rg\n/F2 12 Tf\n64 ${line.y} Td\n(Digital Signature) Tj\nET`,
@@ -2160,7 +2216,7 @@
             parts.push(`BT\n${color('ink')} rg\n/F2 8.8 Tf\n58 ${labelStartY - i * 13} Td\n(${rpfPdfEscape(lbl)}) Tj\nET`);
           });
           valueLines.forEach((val, i) => {
-            parts.push(`BT\n${color('ink')} rg\n/F1 8.8 Tf\n250 ${valueStartY - i * 13} Td\n(${rpfPdfEscape(val)}) Tj\nET`);
+            parts.push(`BT\n${color('ink')} rg\n/F1 8.8 Tf\n382 ${valueStartY - i * 13} Td\n(${rpfPdfEscape(val)}) Tj\nET`);
           });
           return parts.join('\n');
         }
@@ -2202,32 +2258,83 @@
     return pdf;
   }
 
-  function rpfLoadPdfLogo(url) {
+  function rpfDrawPdfImageToCanvas(img, opts = {}) {
+    const canvas = document.createElement('canvas');
+    canvas.width = opts.width || 240;
+    canvas.height = opts.height || 96;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = opts.background || '#ffffff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    const maxW = opts.maxWidth || canvas.width;
+    const maxH = opts.maxHeight || canvas.height;
+    const naturalW = img.naturalWidth || img.width || 1;
+    const naturalH = img.naturalHeight || img.height || 1;
+    const scaleFn = opts.fit === 'cover' ? Math.max : Math.min;
+    const scale = scaleFn(maxW / naturalW, maxH / naturalH);
+    const w = Math.max(1, naturalW * scale);
+    const h = Math.max(1, naturalH * scale);
+    ctx.drawImage(img, (canvas.width - w) / 2, (canvas.height - h) / 2, w, h);
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
+    return { width: canvas.width, height: canvas.height, data: rpfPdfBinaryFromBase64(dataUrl.split(',')[1] || '') };
+  }
+
+  function rpfLoadImageElement(src, useCors = false) {
     return new Promise(resolve => {
-      if (!url) { resolve(null); return; }
+      if (!src) { resolve(null); return; }
       const img = new Image();
-      img.crossOrigin = 'anonymous';
-      img.onload = () => {
-        try {
-          const canvas = document.createElement('canvas');
-          canvas.width = 240;
-          canvas.height = 96;
-          const ctx = canvas.getContext('2d');
-          ctx.fillStyle = '#ffffff';
-          ctx.fillRect(0, 0, canvas.width, canvas.height);
-          const scale = Math.min(200 / img.naturalWidth, 72 / img.naturalHeight);
-          const w = Math.max(1, img.naturalWidth * scale);
-          const h = Math.max(1, img.naturalHeight * scale);
-          ctx.drawImage(img, (canvas.width - w) / 2, (canvas.height - h) / 2, w, h);
-          const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
-          resolve({ width: canvas.width, height: canvas.height, data: atob(dataUrl.split(',')[1] || '') });
-        } catch (error) {
-          console.warn('[BTS] PDF logo could not be embedded', error);
-          resolve(null);
-        }
-      };
+      if (useCors) img.crossOrigin = 'anonymous';
+      img.onload = () => resolve(img);
       img.onerror = () => resolve(null);
-      img.src = url;
+      img.src = src;
+    });
+  }
+
+  async function rpfLoadPdfImage(url, opts = {}) {
+    if (!url || typeof document === 'undefined') return null;
+    let objectUrl = '';
+    try {
+      if (/^https?:/i.test(url) && typeof fetch === 'function' && typeof URL !== 'undefined') {
+        const response = await fetch(url, { mode: 'cors', cache: 'force-cache' });
+        if (response.ok) {
+          const blob = await response.blob();
+          objectUrl = URL.createObjectURL(blob);
+          const localImg = await rpfLoadImageElement(objectUrl);
+          if (localImg) return rpfDrawPdfImageToCanvas(localImg, opts);
+        }
+      }
+    } catch (error) {
+      console.warn('[BTS] PDF image fetch failed; trying direct image load', error);
+    } finally {
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    }
+    try {
+      const directImg = await rpfLoadImageElement(url, true);
+      return directImg ? rpfDrawPdfImageToCanvas(directImg, opts) : null;
+    } catch (error) {
+      console.warn('[BTS] PDF image could not be embedded', error);
+      return null;
+    }
+  }
+
+  function rpfLoadPdfLogo(url) {
+    return rpfLoadPdfImage(url, {
+      width: 300,
+      height: 120,
+      maxWidth: 270,
+      maxHeight: 86,
+      fit: 'contain',
+      background: '#572e88',
+    });
+  }
+
+  function rpfLoadPdfPoster(url) {
+    return rpfLoadPdfImage(url, {
+      width: 180,
+      height: 240,
+      maxWidth: 180,
+      maxHeight: 240,
+      fit: 'cover',
+      background: '#ffffff',
     });
   }
 
@@ -2243,10 +2350,11 @@
   window.rpfDownloadAnswersPdf = async function() {
     const doc = window._rpfSubmittedAnswerRows || rpfCollectAnswerRowsForPdf();
     await rpfEnsureSignatureFont();
-    if (!doc.logoData) doc.logoData = await rpfLoadPdfLogo(doc.logoUrl || _org?.logo_url || _org?.logo_white_url || '');
+    if (!doc.logoData) doc.logoData = await rpfLoadPdfLogo(doc.logoUrl || _org?.logo_white_url || _org?.logo_url || '');
+    if (!doc.posterData) doc.posterData = await rpfLoadPdfPoster(doc.posterUrl || _prod?.poster_url || '');
     const pdf = rpfBuildAnswersPdf(doc);
     const slug = doc.fileSlug || rpfContractFileSlugForPdf(doc.title);
-    const blob = new Blob([pdf], { type: 'application/pdf' });
+    const blob = rpfPdfBlobFromBinaryString(pdf);
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -2260,9 +2368,10 @@
   async function rpfOpenAnswersPdfInline() {
     const doc = window._rpfSubmittedAnswerRows || rpfCollectAnswerRowsForPdf();
     await rpfEnsureSignatureFont();
-    if (!doc.logoData) doc.logoData = await rpfLoadPdfLogo(doc.logoUrl || _org?.logo_url || _org?.logo_white_url || '');
+    if (!doc.logoData) doc.logoData = await rpfLoadPdfLogo(doc.logoUrl || _org?.logo_white_url || _org?.logo_url || '');
+    if (!doc.posterData) doc.posterData = await rpfLoadPdfPoster(doc.posterUrl || _prod?.poster_url || '');
     const pdf = rpfBuildAnswersPdf(doc);
-    const blob = new Blob([pdf], { type: 'application/pdf' });
+    const blob = rpfPdfBlobFromBinaryString(pdf);
     const url = URL.createObjectURL(blob);
     window.location.replace(url);
   }
@@ -2440,7 +2549,8 @@
     try {
       if (!_applicant?.id) throw new Error('Missing applicant record for registration submit.');
       const pdfRows = rpfCollectAnswerRowsForPdf();
-      if (!pdfRows.logoData) pdfRows.logoData = await rpfLoadPdfLogo(pdfRows.logoUrl || _org?.logo_url || _org?.logo_white_url || '');
+      if (!pdfRows.logoData) pdfRows.logoData = await rpfLoadPdfLogo(pdfRows.logoUrl || _org?.logo_white_url || _org?.logo_url || '');
+      if (!pdfRows.posterData) pdfRows.posterData = await rpfLoadPdfPoster(pdfRows.posterUrl || _prod?.poster_url || '');
       const collected = collectFormAnswers();
       const merged = Object.assign({}, _applicant?.custom_answers || {}, collected, {
         __bts_registration_complete: true,
@@ -2450,7 +2560,7 @@
       // Upload PDF to storage so admin can view it
       try {
         await rpfEnsureSignatureFont();
-        const _pdfBlob = new Blob([rpfBuildAnswersPdf(pdfRows)], { type: 'application/pdf' });
+        const _pdfBlob = rpfPdfBlobFromBinaryString(rpfBuildAnswersPdf(pdfRows));
         const _pdfPath = `${_resolvedProductionId}/registrations/${_applicant.id}.pdf`;
         const { data: _upData, error: _upErr } = await sb.storage.from('production-files').upload(_pdfPath, _pdfBlob, { upsert: true, contentType: 'application/pdf' });
         if (!_upErr && _upData) {
