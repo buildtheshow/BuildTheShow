@@ -34,7 +34,7 @@
 
   const VOLUNTEER_SUBNAV = [
     { label: 'Dashboard',       href: '/member/volunteer',              key: 'volunteer-hub' },
-    { label: 'Opportunities',   href: '/find?type=volunteer',    key: 'find-volunteer' },
+    { label: 'Opportunities',   href: '/volunteers',                    key: 'find-volunteer' },
     { label: 'Assigned Shifts', href: '/member/volunteer/shifts',          key: 'volunteer-shifts' },
     { label: 'Availability',    href: '/member/volunteer/best-fit',        key: 'volunteer-best-fit' },
     { label: 'Hours',           href: '/member/volunteer/hours',           key: 'volunteer-hours' },
