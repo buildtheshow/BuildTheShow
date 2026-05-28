@@ -9,7 +9,7 @@
   <title>Production Workspace - Build The Show</title>
   <link rel="stylesheet" href="/ASSETS/styles/styles.css?v=typography-safe-20260421-2025" />
   <link rel="stylesheet" href="/ASSETS/styles/production-sidebar.css?v=nav-rules-20260521" />
-  <link rel="stylesheet" href="/ASSETS/styles/casting-card.css?v=debug-fullbleed-20260528b" />
+  <link rel="stylesheet" href="/ASSETS/styles/casting-card.css?v=clean-20260528" />
   <link rel="stylesheet" href="/ASSETS/styles/production-team-card.css?v=volunteer-left-text-20260511" />
   <link rel="stylesheet" href="/ASSETS/styles/budget.css?v=module-20260520" />
   <link rel="stylesheet" href="/ASSETS/styles/marketing.css?v=module-20260521-real-flipbook-viewer" />
@@ -21921,6 +21921,28 @@
       </div>
     </div>
 
+    <!-- Volunteers -->
+    <div class="tab-panel" id="panel-volunteers">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Volunteers</div>
+          <div class="page-subtitle">Post volunteer roles, publish sign-up links, and connect families to the volunteer flow.</div>
+        </div>
+        <div style="display:flex;gap:0.5rem;flex-wrap:wrap;justify-content:flex-end;">
+          <a href="/volunteers" target="_blank" class="btn-secondary" style="font-size:0.8rem;text-decoration:none;">View Volunteer Page</a>
+          <a href="/volunteer/quiz" target="_blank" class="btn-secondary" style="font-size:0.8rem;text-decoration:none;">Best-Fit Quiz</a>
+          <button class="btn-primary" onclick="openOppModal()">+ Post Volunteer Role</button>
+        </div>
+      </div>
+      <div style="background:rgba(87,46,136,0.05);border:1px solid rgba(87,46,136,0.15);border-radius:10px;padding:0.875rem 1.1rem;margin-bottom:1.25rem;display:flex;align-items:flex-start;gap:0.75rem;">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#572e88" stroke-width="2" style="flex-shrink:0;margin-top:0.1rem;"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        <p style="font-size:0.82rem;color:#4a3d6b;margin:0;line-height:1.6;">Create <strong>Volunteer</strong> and <strong>Creative Team</strong> roles here. Published roles open through the dedicated volunteer sign-up page and can be included in registration emails.</p>
+      </div>
+      <div id="volunteers-opp-list">
+        <div class="loading">Loading volunteer roles...</div>
+      </div>
+    </div>
+
     <!-- Team -->
     <div class="tab-panel" id="panel-team">
 
@@ -25071,14 +25093,14 @@
 
   // ── Load shared sidebar ───────────────────────────────
   (function () {
-    const _key = 'bts-prod-sidebar-v8';
+    const _key = 'bts-prod-sidebar-v9';
     const _cached = sessionStorage.getItem(_key);
     if (_cached) {
       document.getElementById('prod-sidebar-host').innerHTML = _cached;
       initProdSidebarEvents();
       try { console.info('[BTS lifecycle]', { timestamp: new Date().toISOString(), functionName: 'production-sidebar-shell', route: window.location.pathname + window.location.search + window.location.hash, reason: 'mounted-from-cache' }); } catch {}
     }
-    fetch('/SHARED/Navigation/production-sidebar.html?v=parent-toggle-20260521')
+    fetch('/SHARED/Navigation/production-sidebar.html?v=volunteers-tab-20260528')
       .then(res => res.text())
       .then(html => {
         sessionStorage.setItem(_key, html);
@@ -35014,6 +35036,7 @@ See you soon!
       { key: 'team:open', label: 'Open Roles' },
       { key: 'team:applicants', label: 'Applications' },
     ] },
+    { key: 'volunteers', label: 'Volunteers', icon: '/ASSETS/Images/navproductionteam.svg' },
     { key: 'calendar', label: 'Production Calendar', icon: '/ASSETS/Images/navproductioncalendar.svg' },
     { key: 'auditions', label: 'Auditions', icon: '/ASSETS/Images/navauditions.svg', children: [
       { key: 'auditions:dashboard', label: 'Dashboard' },
@@ -35073,6 +35096,7 @@ See you soon!
   const PRODUCTION_PERMISSION_PAGES = [
     { page_key: 'overview', parent_page_key: null, label: 'Overview', sort_order: 10 },
     { page_key: 'production_team', parent_page_key: null, label: 'Production Team', sort_order: 20 },
+    { page_key: 'volunteers', parent_page_key: null, label: 'Volunteers', sort_order: 25 },
     { page_key: 'production_calendar', parent_page_key: null, label: 'Production Calendar', sort_order: 30 },
     { page_key: 'auditions.dashboard', parent_page_key: 'auditions', label: 'Auditions Dashboard', sort_order: 40 },
     { page_key: 'auditions.schedule', parent_page_key: 'auditions', label: 'Audition Schedule', sort_order: 50 },
@@ -35133,7 +35157,7 @@ See you soon!
   ]);
 
   const TEAM_ACCESS_LEVELS = [
-    { key: 'producer', label: 'Producer / full production access', menu: ['overview', 'team', 'calendar', 'auditions', 'castlist', 'registration'] },
+    { key: 'producer', label: 'Producer / full production access', menu: ['overview', 'team', 'volunteers', 'calendar', 'auditions', 'castlist', 'registration'] },
     { key: 'creative', label: 'Artistic team notes', menu: ['overview', 'auditions', 'castlist'] },
     { key: 'room', label: 'Audition room only', menu: ['auditions'] },
     { key: 'check_in', label: 'Check-in / front desk', menu: ['auditions'] },
@@ -35175,7 +35199,7 @@ See you soon!
     if (productionAccessLoaded || productionPagePermissions.length) {
       const memberId = String(member.id || teamAccessMember?.id || '');
       if (isProducerLikeTeamMember(member)) {
-        return new Set(['overview', 'team', 'calendar', 'auditions', 'castlist', 'registration', 'marketing', 'budget', 'emails', 'test', 'settings', 'auditions:dashboard', 'auditions:settings', 'auditions:schedule', 'auditions:allperformers', 'auditions:sessions', 'auditions:casting', 'auditions:finalcasting', 'registration:dashboard', 'registration:publicview', 'registration:payments', 'registration:settings', 'marketing:dashboard', 'marketing:sponsors', 'marketing:assets', 'marketing:programme', 'marketing:media', 'marketing:calendar', 'marketing:tasks', 'budget:dashboard', 'budget:breakdown', 'budget:receipts', 'budget:collect']);
+        return new Set(['overview', 'team', 'volunteers', 'calendar', 'auditions', 'castlist', 'registration', 'marketing', 'budget', 'emails', 'test', 'settings', 'auditions:dashboard', 'auditions:settings', 'auditions:schedule', 'auditions:allperformers', 'auditions:sessions', 'auditions:casting', 'auditions:finalcasting', 'registration:dashboard', 'registration:publicview', 'registration:payments', 'registration:settings', 'marketing:dashboard', 'marketing:sponsors', 'marketing:assets', 'marketing:programme', 'marketing:media', 'marketing:calendar', 'marketing:tasks', 'budget:dashboard', 'budget:breakdown', 'budget:receipts', 'budget:collect']);
       }
       if (isCreativeAuditionLeadershipRole(member.role)) {
         return creativeAuditionLeadershipMenuSet();
@@ -35186,6 +35210,7 @@ See you soon!
       };
       allow('overview', 'overview');
       allow('production_team', 'team');
+      allow('volunteers', 'volunteers');
       allow('production_calendar', 'calendar');
       allow('cast_list', 'castlist');
       allow('auditions.dashboard', 'auditions');
@@ -35343,6 +35368,7 @@ See you soon!
   function productionPageKeyForTab(tab = '') {
     if (tab === 'castlist') return 'cast_list';
     if (tab === 'team') return 'production_team';
+    if (tab === 'volunteers') return 'volunteers';
     if (tab === 'calendar') return 'production_calendar';
     if (tab === 'auditions') return 'auditions.dashboard';
     if (tab === 'registration') return 'registration.dashboard';
@@ -46374,6 +46400,10 @@ See you soon!
     if (id === 'team') {
       if (!isWorkspaceRouteCurrent(routeToken)) return;
       loadTeamTab();
+    }
+    if (id === 'volunteers') {
+      if (!isWorkspaceRouteCurrent(routeToken)) return;
+      loadOpportunities();
     }
     if (id === 'checklist') {
       if (!isWorkspaceRouteCurrent(routeToken)) return;
@@ -64767,7 +64797,9 @@ See you soon!
   async function loadOpportunities() {
     try {
       const { data } = await sb.from('opportunities')
-        .select('*').eq('production_id', prodId)
+        .select('*')
+        .eq('production_id', prodId)
+        .in('opportunity_type', ['volunteer', 'creative_team'])
         .order('created_at', { ascending: false });
       opportunities = data || [];
     } catch { opportunities = []; }
@@ -64775,18 +64807,20 @@ See you soon!
   }
 
   function renderOpportunities() {
-    const container = document.getElementById('opp-list');
+    const containers = [document.getElementById('opp-list'), document.getElementById('volunteers-opp-list')].filter(Boolean);
+    if (!containers.length) return;
     if (!opportunities.length) {
-      container.innerHTML = `
+      const emptyHtml = `
         <div class="empty-state">
           <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#c0b8d0" stroke-width="1.5" style="margin-bottom:0.75rem;"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
-          <h3>No opportunities yet</h3>
-          <p>Create an audition or volunteer opportunity to appear on the public Find page.</p>
-          <button class="btn-primary" onclick="openOppModal()">+ New Opportunity</button>
+          <h3>No volunteer roles yet</h3>
+          <p>Create a volunteer or creative team role to make it available through the volunteer sign-up flow.</p>
+          <button class="btn-primary" onclick="openOppModal()">+ New Volunteer Role</button>
         </div>`;
+      containers.forEach(container => { container.innerHTML = emptyHtml; });
       return;
     }
-    container.innerHTML = opportunities.map(opp => {
+    const listHtml = opportunities.map(opp => {
       const typeClass = opp.opportunity_type === 'volunteer' ? 'opp-type-volunteer' : 'opp-type-audition';
       const typeLabel = opp.opportunity_type === 'creative_team' ? 'Creative Team' : opp.opportunity_type === 'volunteer' ? 'Volunteer' : (opp.opportunity_type || 'Volunteer');
       const statusClass = `opp-status-${opp.status || 'draft'}`;
@@ -64821,6 +64855,7 @@ See you soon!
           </div>
         </div>`;
     }).join('');
+    containers.forEach(container => { container.innerHTML = listHtml; });
   }
 
   function openOppModal(oppId = null) {
