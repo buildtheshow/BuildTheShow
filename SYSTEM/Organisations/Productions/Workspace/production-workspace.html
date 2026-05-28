@@ -42540,7 +42540,8 @@ Thank you so much!
       return `<button class="rsc-info-chip ok action" onclick="rscShowRegistrationPdf('${esc(assignId)}','${esc(pdfUrl || '')}')">✓ View</button>`;
     }
     const sent = registrationEmailLinkSent(app);
-    return `<button class="rsc-info-chip ${sent ? 'warn' : 'danger'} action" onclick="rscResendRegistrationLink('${esc(assignId)}', this)">${sent ? 'Resend' : 'Not sent'}</button>`;
+    const action = sent ? 'rscResendRegistrationLink' : 'rscOpenRegistrationEmailPreview';
+    return `<button class="rsc-info-chip ${sent ? 'warn' : 'danger'} action" onclick="${action}('${esc(assignId)}', this)">${sent ? 'Resend' : 'Not sent'}</button>`;
   }
 
   // ── Payment Tracker helpers ───────────────────────────────────────
@@ -43639,6 +43640,36 @@ Thank you so much!
       await loadRegistrationPayments().catch(() => {});
     } catch (e) {
       if (buttonEl) { buttonEl.disabled = false; buttonEl.textContent = originalText || 'Resend'; }
+      showToast('Could not send email: ' + e.message, true);
+    }
+  }
+
+  async function rscOpenRegistrationEmailPreview(assignId) {
+    const d = window._rscModalData?.[assignId];
+    if (!d?.app?.email) { showToast('No email address on file for this performer.', true); return; }
+    await openFinalCastingEmailPreview({
+      app: d.app,
+      roles: d.roleNames || [],
+      roleEntries: [],
+    }, 'cast_accepted', {
+      sendMode: true,
+      sendFn: 'rscConfirmRegistrationEmailSend',
+      sendArg: assignId,
+    });
+  }
+
+  async function rscConfirmRegistrationEmailSend(assignId, buttonEl = null) {
+    const d = window._rscModalData?.[assignId];
+    if (!d?.app?.email) { showToast('No email address on file for this performer.', true); return; }
+    if (buttonEl) { buttonEl.disabled = true; buttonEl.textContent = 'Sending...'; }
+    try {
+      await _sendFinalCastingEmailDirect(d.app, 'cast_accepted', d.roleNames || [], []);
+      closeFinalCastingEmailPreview();
+      showToast('Registration link sent to ' + d.app.email);
+      await loadRegistrationDashboard().catch(() => {});
+      await loadRegistrationPayments().catch(() => {});
+    } catch (e) {
+      if (buttonEl) { buttonEl.disabled = false; buttonEl.textContent = 'Send Registration Email'; }
       showToast('Could not send email: ' + e.message, true);
     }
   }
@@ -45820,6 +45851,8 @@ Thank you so much!
         : category === 'cast_accepted'
           ? 'confirmFinalCastingRegistrationEmailSend'
           : 'confirmFinalCastingRejectionEmailSend';
+      const previewSendFn = options.sendFn || sendFn;
+      const previewSendArg = options.sendArg || item.app.id;
       const overlay = document.createElement('div');
       overlay.id = 'final-casting-email-preview-overlay';
       overlay.className = 'et-preview-overlay';
@@ -45864,7 +45897,7 @@ Thank you so much!
               ${sendMode ? `
                 <div class="et-preview-footer">
                   <button type="button" class="btn-secondary" onclick="closeFinalCastingEmailPreview()">Cancel</button>
-                  <button type="button" class="btn-primary" onclick="${sendFn}('${esc(item.app.id)}', this)">${esc(sendLabel)}</button>
+                  <button type="button" class="btn-primary" onclick="${previewSendFn}('${esc(previewSendArg)}', this)">${esc(sendLabel)}</button>
                 </div>
               ` : ''}
             </div>
