@@ -36,7 +36,7 @@
     { label: 'Dashboard',       href: '/member/volunteer',              key: 'volunteer-hub' },
     { label: 'Opportunities',   href: '/volunteers',                    key: 'find-volunteer' },
     { label: 'Assigned Shifts', href: '/member/volunteer/shifts',          key: 'volunteer-shifts' },
-    { label: 'Availability',    href: '/volunteer/quiz',                   key: 'volunteer-best-fit' },
+    { label: 'Availability',    href: '/volunteer-quiz',                   key: 'volunteer-best-fit' },
     { label: 'Hours',           href: '/member/volunteer/hours',           key: 'volunteer-hours' },
   ];
 
