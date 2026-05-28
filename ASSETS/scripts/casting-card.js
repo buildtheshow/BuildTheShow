@@ -277,7 +277,6 @@ function renderCastingCard(data, options = {}) {
           ${indicatorsHTML}
           ${videoCallBadge}
         </div>
-        <div class="casting-card-inshow-spacer"></div>
         <div class="casting-card-inshow-name" style="font-size:${nameSize};">${esc(fullName)}</div>
         <div class="casting-card-inshow-spacer"></div>
         <div class="casting-card-inshow-char" style="font-size:${charSize};">${charLine}</div>
