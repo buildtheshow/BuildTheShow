@@ -880,6 +880,33 @@
     }
   }
 
+  async function rpfLoadVolunteerLink() {
+    const fallback = `${window.location.origin}/find?type=volunteer`;
+    if (!_resolvedProductionId) return fallback;
+    try {
+      const today = new Date().toISOString().slice(0, 10);
+      const { data, error } = await sb.from('opportunities')
+        .select('id,close_date,opportunity_type,status')
+        .eq('production_id', _resolvedProductionId)
+        .eq('status', 'published')
+        .in('opportunity_type', ['volunteer', 'creative_team'])
+        .gte('close_date', today)
+        .order('close_date', { ascending: true })
+        .limit(1);
+      if (error) throw error;
+      const oppId = data?.[0]?.id || '';
+      return oppId ? `${window.location.origin}/opportunity?id=${encodeURIComponent(oppId)}` : fallback;
+    } catch (error) {
+      console.warn('[BTS] Could not load volunteer opportunity link for registration email.', error);
+      return fallback;
+    }
+  }
+
+  function rpfEmailButton(url, label, color = '#572e88') {
+    if (!url) return '';
+    return `<a href="${esc(url)}" style="display:inline-block;background:${color};color:#ffffff;text-decoration:none;font-weight:900;font-size:16px;line-height:1.2;padding:16px 24px;border-radius:10px;">${esc(label)}</a>`;
+  }
+
   function rpfPlainTextFromHtml(html) {
     return String(html || '')
       .replace(/<br\s*\/?>/gi, '\n')
@@ -2671,6 +2698,7 @@
     const pdfUrl = _applicant?.custom_answers?.__bts_registration_pdf_url || '';
     const scheduleSummaries = await rpfLoadProductionScheduleSummaries();
     const paymentSummary = rpfBuildPaymentEmailSummary();
+    const volunteerLink = await rpfLoadVolunteerLink();
     const { data, error } = await sb.functions.invoke('send-email', {
       body: {
         applicant_id: _applicant.id,
@@ -2688,6 +2716,8 @@
           production_schedule: scheduleSummaries.production_schedule || '',
           payment_schedule: paymentSummary,
           payment_information: paymentSummary,
+          volunteer_link: volunteerLink,
+          volunteer_button: rpfEmailButton(volunteerLink, 'View Volunteer Opportunities', '#3f6f47'),
           opening_night: _prod?.end_date ? new Date(`${_prod.end_date}T00:00:00`).toLocaleDateString('en-CA', { month: 'long', day: 'numeric', year: 'numeric' }) : '',
         },
       },
