@@ -1734,6 +1734,37 @@
     return rpfTextForPdf(value).replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)');
   }
 
+  function rpfPdfBinaryFromBase64(base64) {
+    if (typeof atob === 'function') return atob(base64);
+    if (typeof Buffer !== 'undefined') return Buffer.from(base64, 'base64').toString('binary');
+    return '';
+  }
+
+  function rpfSignatureImageForPdf(name) {
+    const text = rpfTextForPdf(name);
+    if (!text || typeof document === 'undefined') return null;
+    const canvas = document.createElement('canvas');
+    canvas.width = 900;
+    canvas.height = 240;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = '#572e88';
+    ctx.textBaseline = 'middle';
+    ctx.font = '132px "Alex Brush", cursive';
+    let width = ctx.measureText(text).width;
+    if (width > 830) {
+      const size = Math.max(76, Math.floor(132 * (830 / width)));
+      ctx.font = `${size}px "Alex Brush", cursive`;
+      width = ctx.measureText(text).width;
+    }
+    ctx.fillText(text, 28, 126);
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
+    const base64 = dataUrl.split(',')[1] || '';
+    const data = rpfPdfBinaryFromBase64(base64);
+    return data ? { data, width: canvas.width, height: canvas.height } : null;
+  }
+
   function rpfPdfLabelForField(el) {
     const permRow = el.closest('.rpf-mr-perm-row');
     if (permRow) return rpfTextForPdf(permRow.querySelector('.rpf-mr-perm-label')?.textContent || el.dataset.fieldName || el.name || 'Answer');
@@ -2010,8 +2041,8 @@
         return;
       }
       if (item.type === 'answerRow') {
-        const wrapLabel = rpfWrapPdfLine(item.label || '', 30);
-        const wrapValue = rpfWrapPdfLine(item.value || '', 58);
+        const wrapLabel = rpfWrapPdfLine(item.label || '', 44);
+        const wrapValue = rpfWrapPdfLine(item.value || '', 44);
         const rowH = Math.max(wrapLabel.length, wrapValue.length) * 13 + 7;
         if (y - rowH < 62) nextPage();
         pages[pages.length - 1].push(Object.assign({}, item, { y, h: rowH, wrapLabel, wrapValue }));
@@ -2051,6 +2082,22 @@
       logoObjNum = objects.length + 1;
       objects.push(`<< /Type /XObject /Subtype /Image /Width ${doc.logoData.width} /Height ${doc.logoData.height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${doc.logoData.data.length} >>\nstream\n${doc.logoData.data}\nendstream`);
     }
+    const xObjectEntries = [];
+    if (logoObjNum) xObjectEntries.push(`/ImLogo ${logoObjNum} 0 R`);
+    let sigImageIndex = 0;
+    pages.forEach(pageLines => {
+      pageLines.forEach(line => {
+        if (line.type !== 'signatureBlock') return;
+        const image = rpfSignatureImageForPdf(line.sig?.signer || '');
+        if (!image) return;
+        const objNum = objects.length + 1;
+        const name = `ImSig${++sigImageIndex}`;
+        line.signatureImageName = name;
+        line.signatureImage = image;
+        objects.push(`<< /Type /XObject /Subtype /Image /Width ${image.width} /Height ${image.height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${image.data.length} >>\nstream\n${image.data}\nendstream`);
+        xObjectEntries.push(`/${name} ${objNum} 0 R`);
+      });
+    });
     const color = name => ({
       purple: '0.341 0.180 0.533',
       green: '0.463 0.620 0.482',
@@ -2077,10 +2124,13 @@
         }
         if (line.type === 'signatureBlock') {
           const sig = line.sig || {};
+          const signatureMark = line.signatureImageName
+            ? `q\n252 0 0 67 72 ${line.y - 58} cm\n/${line.signatureImageName} Do\nQ`
+            : `BT\n${color('purple')} rg\n/F3 26 Tf\n76 ${line.y - 38} Td\n(${rpfPdfEscape(sig.signer || 'N/A')}) Tj\nET`;
           return [
             `q\n${color('softGold')} rg\n44 ${line.y - 108} 524 128 re f\n${color('gold')} RG\n1 w\n44 ${line.y - 108} 524 128 re S\nQ`,
             `BT\n${color('purple')} rg\n/F2 12 Tf\n64 ${line.y} Td\n(Digital Signature) Tj\nET`,
-            `BT\n${color('purple')} rg\n/F2 16 Tf\n76 ${line.y - 38} Td\n(${rpfPdfEscape(sig.signer || 'N/A')}) Tj\nET`,
+            signatureMark,
             `q\n${color('green')} RG\n1 w\n64 ${line.y - 52} m\n320 ${line.y - 52} l\nS\nQ`,
             `BT\n${color('ink')} rg\n/F1 9 Tf\n64 ${line.y - 72} Td\n(Digitally signed by: ${rpfPdfEscape(sig.printedName || 'N/A')}) Tj\nET`,
             `BT\n${color('muted')} rg\n/F1 9 Tf\n64 ${line.y - 88} Td\n(Relationship / capacity: ${rpfPdfEscape(sig.relationship || 'N/A')}) Tj\nET`,
@@ -2100,11 +2150,17 @@
         if (line.type === 'answerRow') {
           const parts = [];
           if (line.shade) parts.push(`q\n${color('lightRow')} rg\n50 ${line.y - line.h} 512 ${line.h} re f\nQ`);
-          (line.wrapLabel || ['']).forEach((lbl, i) => {
-            parts.push(`BT\n${color('ink')} rg\n/F2 8.8 Tf\n58 ${line.y - 9 - i * 13} Td\n(${rpfPdfEscape(lbl)}) Tj\nET`);
+          const labelLines = line.wrapLabel || [''];
+          const valueLines = line.wrapValue || [''];
+          const labelBlockH = labelLines.length * 13;
+          const valueBlockH = valueLines.length * 13;
+          const labelStartY = line.y - ((line.h - labelBlockH) / 2) - 8;
+          const valueStartY = line.y - ((line.h - valueBlockH) / 2) - 8;
+          labelLines.forEach((lbl, i) => {
+            parts.push(`BT\n${color('ink')} rg\n/F2 8.8 Tf\n58 ${labelStartY - i * 13} Td\n(${rpfPdfEscape(lbl)}) Tj\nET`);
           });
-          (line.wrapValue || ['']).forEach((val, i) => {
-            parts.push(`BT\n${color('ink')} rg\n/F1 8.8 Tf\n230 ${line.y - 9 - i * 13} Td\n(${rpfPdfEscape(val)}) Tj\nET`);
+          valueLines.forEach((val, i) => {
+            parts.push(`BT\n${color('ink')} rg\n/F1 8.8 Tf\n250 ${valueStartY - i * 13} Td\n(${rpfPdfEscape(val)}) Tj\nET`);
           });
           return parts.join('\n');
         }
@@ -2126,7 +2182,7 @@
       const stream = [pageBrand, header, body, footer].filter(Boolean).join('\n');
       const streamObjNum = objects.length + 2;
       const pageObjNum = objects.length + 1;
-      const xObjects = logoObjNum ? ` /XObject << /ImLogo ${logoObjNum} 0 R >>` : '';
+      const xObjects = xObjectEntries.length ? ` /XObject << ${xObjectEntries.join(' ')} >>` : '';
       objects.push(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >>${xObjects} >> /Contents ${streamObjNum} 0 R >>`);
       objects.push(`<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`);
       pageRefs.push(`${pageObjNum} 0 R`);
@@ -2175,8 +2231,18 @@
     });
   }
 
+  async function rpfEnsureSignatureFont() {
+    try {
+      if (document.fonts?.load) {
+        await document.fonts.load('132px "Alex Brush"');
+        await document.fonts.ready;
+      }
+    } catch {}
+  }
+
   window.rpfDownloadAnswersPdf = async function() {
     const doc = window._rpfSubmittedAnswerRows || rpfCollectAnswerRowsForPdf();
+    await rpfEnsureSignatureFont();
     if (!doc.logoData) doc.logoData = await rpfLoadPdfLogo(doc.logoUrl || _org?.logo_url || _org?.logo_white_url || '');
     const pdf = rpfBuildAnswersPdf(doc);
     const slug = doc.fileSlug || rpfContractFileSlugForPdf(doc.title);
@@ -2193,6 +2259,7 @@
 
   async function rpfOpenAnswersPdfInline() {
     const doc = window._rpfSubmittedAnswerRows || rpfCollectAnswerRowsForPdf();
+    await rpfEnsureSignatureFont();
     if (!doc.logoData) doc.logoData = await rpfLoadPdfLogo(doc.logoUrl || _org?.logo_url || _org?.logo_white_url || '');
     const pdf = rpfBuildAnswersPdf(doc);
     const blob = new Blob([pdf], { type: 'application/pdf' });
@@ -2382,6 +2449,7 @@
 
       // Upload PDF to storage so admin can view it
       try {
+        await rpfEnsureSignatureFont();
         const _pdfBlob = new Blob([rpfBuildAnswersPdf(pdfRows)], { type: 'application/pdf' });
         const _pdfPath = `${_resolvedProductionId}/registrations/${_applicant.id}.pdf`;
         const { data: _upData, error: _upErr } = await sb.storage.from('production-files').upload(_pdfPath, _pdfBlob, { upsert: true, contentType: 'application/pdf' });
