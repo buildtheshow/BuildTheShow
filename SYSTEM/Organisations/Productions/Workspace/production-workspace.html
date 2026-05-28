@@ -43630,12 +43630,13 @@ Thank you so much!
 
   async function rscResendRegistrationLink(assignId, buttonEl = null) {
     const d = window._rscModalData?.[assignId];
-    if (!d?.app?.email) { showToast('No email address on file for this performer.', true); return; }
+    const toEmail = applicantEmailAddress(d?.app);
+    if (!toEmail) { showToast('No email address on file for this performer.', true); return; }
     const originalText = buttonEl?.textContent || '';
     if (buttonEl) { buttonEl.disabled = true; buttonEl.textContent = 'Sending...'; }
     try {
       await _sendFinalCastingEmailDirect(d.app, 'cast_accepted', d.roleNames || [], []);
-      showToast('Registration link sent to ' + d.app.email);
+      showToast('Registration link sent to ' + toEmail);
       await loadRegistrationDashboard().catch(() => {});
       await loadRegistrationPayments().catch(() => {});
     } catch (e) {
@@ -43646,7 +43647,7 @@ Thank you so much!
 
   async function rscOpenRegistrationEmailPreview(assignId) {
     const d = window._rscModalData?.[assignId];
-    if (!d?.app?.email) { showToast('No email address on file for this performer.', true); return; }
+    if (!applicantEmailAddress(d?.app)) { showToast('No email address on file for this performer.', true); return; }
     await openFinalCastingEmailPreview({
       app: d.app,
       roles: d.roleNames || [],
@@ -43660,12 +43661,13 @@ Thank you so much!
 
   async function rscConfirmRegistrationEmailSend(assignId, buttonEl = null) {
     const d = window._rscModalData?.[assignId];
-    if (!d?.app?.email) { showToast('No email address on file for this performer.', true); return; }
+    const toEmail = applicantEmailAddress(d?.app);
+    if (!toEmail) { showToast('No email address on file for this performer.', true); return; }
     if (buttonEl) { buttonEl.disabled = true; buttonEl.textContent = 'Sending...'; }
     try {
       await _sendFinalCastingEmailDirect(d.app, 'cast_accepted', d.roleNames || [], []);
       closeFinalCastingEmailPreview();
-      showToast('Registration link sent to ' + d.app.email);
+      showToast('Registration link sent to ' + toEmail);
       await loadRegistrationDashboard().catch(() => {});
       await loadRegistrationPayments().catch(() => {});
     } catch (e) {
@@ -45693,6 +45695,8 @@ Thank you so much!
           : 'not cast';
       throw new Error(`No ${missingLabel} template found.`);
     }
+    const toEmail = applicantEmailAddress(app);
+    if (!toEmail) throw new Error('No email address on file for this performer.');
     const identity = ['cast_announcement', 'cast_accepted'].includes(category) ? await ensureCastOfferIdentity(app) : null;
     if (identity) await syncProductionSlugForCurrentTitle().catch(error => console.warn('[BTS] production slug sync failed', error));
     const links = identity ? castOfferLinks(identity.token, identity.code) : {};
@@ -45709,7 +45713,7 @@ Thank you so much!
         production_id: prodId,
         category,
         trigger,
-        email: app.email || '',
+        email: toEmail,
         name: app.name || '',
         ...context,
         context,
@@ -45767,7 +45771,7 @@ Thank you so much!
       contact_name: app.name || '',
       preferred_name: app.preferred_name || applicantCustomAnswers(app)['Preferred Name'] || String(app.name || '').trim().split(/\s+/)[0] || '',
       performer_name: app.name || '',
-      performer_email: app.email || '',
+      performer_email: applicantEmailAddress(app),
       performer_first_name: String(app.name || '').trim().split(/\s+/)[0] || '',
       performer_pronouns: app.pronouns || '',
       secondary_contact_name: secondaryContact.name || '',
@@ -52953,6 +52957,33 @@ Thank you so much!
   function applicantGuardianContact(app) {
     const ca = applicantCustomAnswers(app);
     return ca['Guardian Contact'] || app?.guardian_email || app?.guardian_phone || '';
+  }
+
+  function applicantEmailAddress(app) {
+    const ca = applicantCustomAnswers(app);
+    const candidates = [
+      app?.email,
+      app?.contact_email,
+      app?.performer_email,
+      ca['Contact Email'],
+      ca['Contact email'],
+      ca['Email'],
+      ca['Email Address'],
+      ca['Performer Email'],
+      ca['performer_email'],
+      ca['contact_email'],
+      ca['__bts_registration_email'],
+      app?.guardian_email,
+      ca['Guardian Email'],
+      ca['Guardian email'],
+      ca['Guardian Contact'],
+      applicantSecondaryContact(app).email,
+    ];
+    const match = candidates
+      .map(value => String(value || '').trim())
+      .map(value => value.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i)?.[0] || '')
+      .find(Boolean);
+    return match || '';
   }
 
   function applicantContactName(app) {
