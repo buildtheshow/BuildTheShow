@@ -264,6 +264,8 @@ function renderCastingCard(data, options = {}) {
 
   // ── Build the card HTML ───────────────────────────────────────
   if (isInTheShow) {
+    const fullName = [first_name, last_name].filter(Boolean).join(' ');
+    const nameSize = getCastingCardTextSize(fullName, 7.2, 3.4, 22);
     const charLine = character_name ? `"${esc(character_name)}"` : '';
     const charSize = getCastingCardTextSize(character_name, 5.8, 3.1, 14);
     return `
@@ -275,8 +277,7 @@ function renderCastingCard(data, options = {}) {
         </div>
         <div class="casting-card-lower casting-card-lower--inshow">
           <div class="casting-card-caption">
-            <div class="casting-card-first-name" style="font-size:${firstNameSize};">${esc(first_name)}</div>
-            <div class="casting-card-last-name" style="font-size:${lastNameSize};">${esc(last_name)}</div>
+            <div class="casting-card-first-name" style="font-size:${nameSize};">${esc(fullName)}</div>
             ${charLine ? `<div class="casting-card-char-line" style="font-size:${charSize};">${charLine}</div>` : ''}
             ${thirdLine ? `<div class="casting-card-meta-line" style="font-size:${metaLineSize};">${esc(thirdLine)}</div>` : ''}
           </div>
