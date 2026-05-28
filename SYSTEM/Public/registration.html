@@ -1671,6 +1671,7 @@
       '.rpf-final-agree-box span',
       '.rpf-mr-guardian-label',
     ];
+    const boldSelectors = new Set(['rpf-coc-section-title', 'rpf-form-section-divider', 'rpf-mr-section-label', 'rpf-pf-block-title', 'rpf-mr-guardian-label']);
     const seen = new Set();
     const wording = [];
     section.querySelectorAll(selectors.join(',')).forEach(node => {
@@ -1679,7 +1680,8 @@
       const text = rpfNodeTextForPdf(node);
       if (!text || seen.has(text)) return;
       seen.add(text);
-      wording.push(text);
+      const bold = [...node.classList].some(c => boldSelectors.has(c));
+      wording.push({ text, bold });
     });
     return wording;
   }
@@ -1815,7 +1817,7 @@
         .join(' - ');
       items.push({ type: 'sectionHeader', label: rpfTextForPdf(sectionLabel), color: sectionColor, num, gap: 2 });
       if (section.wording?.length && !/^costume measurements$/i.test(section.title || '')) {
-        items.push({ type: 'wordingBlock', lines: section.wording.map(rpfTextForPdf) });
+        items.push({ type: 'wordingBlock', lines: section.wording });
       }
       if (section.answers?.length) {
         section.answers.forEach((row, ri) => {
@@ -1824,7 +1826,7 @@
       } else if (!section.wording?.length) {
         add('No information collected for this section.', { indent: 14, gap: 6, color: 'muted', size: 9 });
       }
-      items.push({ type: 'spacer', h: 10 });
+      items.push({ type: 'spacer', h: 16 });
     });
 
     items.push({ type: 'signatureBlock', sig });
@@ -2112,6 +2114,26 @@
   }
 
   // ── Resend confirmation email ─────────────────────────────────────────────────
+  async function rpfSendRegistrationCompleteEmail() {
+    if (!_applicant?.id || !_resolvedProductionId) throw new Error('Missing registration email context.');
+    const regUrl = window.location.href;
+    const pdfUrl = _applicant?.custom_answers?.__bts_registration_pdf_url || '';
+    const { data, error } = await sb.functions.invoke('send-email', {
+      body: {
+        applicant_id: _applicant.id,
+        production_id: _resolvedProductionId,
+        category: 'registration_completed',
+        trigger: 'registration_completed',
+        context: {
+          registration_link: regUrl,
+          registration_pdf_url: pdfUrl,
+        },
+      },
+    });
+    if (error || data?.error) throw new Error(error?.message || data?.error || 'Could not send registration confirmation email.');
+    return data;
+  }
+
   window.rpfResendConfirmationEmail = async function() {
     const btn = document.querySelector('.rpf-resend-link');
     if (!btn || btn.disabled) return;
@@ -2120,22 +2142,11 @@
     btn.disabled = true;
     btn.textContent = 'Sending…';
     try {
-      const regUrl = window.location.href;
-      const prodName = _prod?.title || 'the production';
-      const pName = _prod?.producer_name || '';
-      const pRole = _prod?.producer_role || '';
-      const pEmail = _prod?.producer_email || '';
-      const signoff = pName ? `<p>Thank you,<br><strong>${pName}</strong>${pRole ? `<br>${pRole}` : ''}${pEmail ? `<br>${pEmail}` : ''}</p>` : '';
-      await sb.functions.invoke('send-email', {
-        body: {
-          to: email,
-          subject: `${prodName} — Registration Confirmed`,
-          html: `<p>Your registration for <strong>${prodName}</strong> has been received.</p><p>You can return to your registration at any time:<br><a href="${regUrl}">${regUrl}</a></p>${signoff}`,
-        },
-      });
+      await rpfSendRegistrationCompleteEmail();
       btn.textContent = 'Sent!';
       setTimeout(() => { btn.disabled = false; btn.textContent = 'Resend confirmation email'; }, 4000);
     } catch (e) {
+      console.warn('[BTS] registration confirmation email failed', e);
       btn.disabled = false;
       btn.textContent = 'Could not send — try again';
       setTimeout(() => { btn.textContent = 'Resend confirmation email'; }, 4000);
@@ -2211,6 +2222,11 @@
       _applicant.custom_answers = merged;
       window._rpfSubmittedAnswerRows = pdfRows;
       showSavedIndicator();
+      try {
+        await rpfSendRegistrationCompleteEmail();
+      } catch (emailErr) {
+        console.warn('[BTS] registration confirmation email failed', emailErr);
+      }
       rpfShowSuccessScreen();
     } catch (err) {
       console.error('[BTS] submit failed', err);

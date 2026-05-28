@@ -4077,6 +4077,7 @@
     }
     .et-cat-booking_confirmation { background: rgba(127,175,139,0.18); color: #3f7a51; }
     .et-cat-self_tape_booked     { background: rgba(37,99,235,0.12);   color: #1d4ed8; }
+    .et-cat-registration_completed { background: rgba(127,175,139,0.18); color: #3f7a51; }
     .et-cat-audition_reminder    { background: rgba(214,140,178,0.18); color: #9f537a; }
     .et-cat-online_audition_reminder { background: rgba(37,99,235,0.14); color: #1d4ed8; }
     .et-cat-callback             { background: rgba(227,164,111,0.2);  color: #a4612b; }
@@ -29491,6 +29492,7 @@
     { value: 'all',                  label: 'All',                  color: '#7FAF8B' },
     { value: 'booking_confirmation', label: 'Booking Confirmation', color: '#7FAF8B' },
     { value: 'self_tape_booked',     label: 'Self Tape Registered', color: '#2563eb' },
+    { value: 'registration_completed', label: 'Registration Complete', color: '#7FAF8B' },
     { value: 'audition_reminder',    label: 'Audition Reminder - In Person', color: '#D68CB2' },
     { value: 'online_audition_reminder', label: 'Audition Reminder - Online Video Call', color: '#2563eb' },
     { value: 'callback',             label: 'Callback Request',     color: '#E3A46F' },
@@ -29534,6 +29536,15 @@
       usedBy: 'Public self tape registration',
       summary: 'Gives the performer their self tape submission link and filming instructions.',
       sendSummary: 'Sends automatically after self tape registration.',
+    },
+    registration_completed: {
+      section: 'casting',
+      label: 'Registration Complete',
+      sendType: 'automatic',
+      required: true,
+      usedBy: 'Public registration form > Submit Registration',
+      summary: 'Confirms that cast registration has been received and gives the performer a return link.',
+      sendSummary: 'Sends after a performer completes registration.',
     },
     audition_reminder: {
       section: 'auditions',
@@ -30015,6 +30026,7 @@
         { token: '{{cast_offer_deadline}}', label: 'Offer Reply Deadline', sample: 'Friday, May 15, 2026 at 5:00 PM' },
         { token: '{{registration_link}}', label: 'Registration Link', sample: () => etSampleProductionUrl(`/registration/${ET_SAMPLE_CONTEXT.registrationCode}`) },
         { token: '{{registration_button}}', label: 'Registration Button', sample: () => emailActionButtonHtml(etSampleProductionUrl(`/registration/${ET_SAMPLE_CONTEXT.registrationCode}`), 'Complete Registration') },
+        { token: '{{registration_pdf_url}}', label: 'Registration PDF Link', sample: () => etSampleProductionUrl(`/files/registrations/${ET_SAMPLE_CONTEXT.registrationCode}.pdf`) },
       ],
     },
     // ── Rehearsals ───────────────────────────────────────────────
@@ -30184,6 +30196,11 @@
       required: ['{{preferred_name}}', '{{role_name}}', '{{registration_link}}'],
       recommended: ['{{show_name}}', '{{rehearsal_start_date}}', '{{opening_night}}'],
       note: 'This automatic email sends after a performer accepts. It should feel celebratory and include the registration link.'
+    },
+    registration_completed: {
+      required: ['{{preferred_name}}', '{{show_name}}', '{{registration_link}}'],
+      recommended: ['{{role_name}}', '{{producer_name}}', '{{producer_email}}'],
+      note: 'This automatic email sends after registration is submitted. It should confirm receipt and keep the registration link handy.'
     },
       self_tape_booked: {
         required: ['{{performer_name}}', '{{submission_link}}', '{{self_tape_deadline}}'],
@@ -30519,6 +30536,7 @@
     const labels = {
       booking_confirmed: 'Automatic: when a performer finishes booking an audition time',
       self_tape_registered: 'Automatic: when a performer registers for self tape',
+      registration_completed: 'Automatic: when a performer completes registration',
       callback_set: 'Manual action: when you send a callback response request from casting',
       callback_self_tape_requested: 'Manual action: when you request a callback self tape',
       cast_set: 'Manual action: when you send a role offer from Final Casting',
@@ -30534,6 +30552,7 @@
     const labels = {
       booking_confirmed: 'Auto booking',
       self_tape_registered: 'Auto self tape',
+      registration_completed: 'Auto registration',
       callback_set: 'Send from callbacks',
       callback_self_tape_requested: 'Send callback tape',
       callback_confirmed: 'Auto confirmation',
@@ -30551,6 +30570,7 @@
     const help = {
       booking_confirmed: 'How it sends: automatic. When it sends: immediately after a performer completes the public audition booking form and their audition slot/registration is saved.',
       self_tape_registered: 'How it sends: automatic. When it sends: immediately after a performer completes the public self tape registration form. This email must include {{submission_link}} so they can submit their tape later.',
+      registration_completed: 'How it sends: automatic. When it sends: immediately after a performer submits the cast registration form.',
       callback_set: 'How it sends: team triggered. When it sends: when you send the callback response request from casting. This email should include accept, decline, and reschedule links.',
       callback_self_tape_requested: 'How it sends: team triggered. When it sends: when you ask a callback performer to submit a callback self tape. This email must include {{callback_self_tape_link}}.',
       callback_confirmed: 'How it sends: automatic. When it sends: immediately after a performer accepts their callback or successfully reschedules themself. This is where callback materials belong.',
@@ -30589,6 +30609,7 @@
     { value: 'manual',               label: 'Manual only' },
     { value: 'booking_confirmed',    label: 'Auto: audition booked' },
     { value: 'self_tape_registered', label: 'Auto: self tape registered' },
+    { value: 'registration_completed', label: 'Auto: registration complete' },
     { value: 'callback_set',         label: 'Team sends: callback request' },
     { value: 'callback_self_tape_requested', label: 'Team sends: callback self tape' },
     { value: 'callback_confirmed',   label: 'Auto: callback confirmed' },
@@ -30602,6 +30623,7 @@
   const ET_DEFAULT_CUES = {
     booking_confirmation: 'booking_confirmed',
     self_tape_booked:     'self_tape_registered',
+    registration_completed: 'registration_completed',
     audition_reminder:    'manual',
     online_audition_reminder: 'manual',
     callback:             'callback_set',
@@ -31262,6 +31284,28 @@ Opening night is {{opening_night}} at {{show_venue}}.
 If you have any questions while filling things out, please feel free to reach out.
 
 We are so excited to get started!
+
+Thank you so much!
+{{producer_name}}
+{{producer_role}}
+{{producer_email}}`,
+    },
+    {
+      name: 'Registration Complete Confirmation',
+      category: 'registration_completed',
+      trigger: 'registration_completed',
+      subject: 'Registration received: {{show_name}}',
+      body: `Hi {{preferred_name}},
+
+Your registration for {{show_name}} has been received. Thank you for taking the time to complete everything.
+
+You can return to your registration at any time using the link below:
+
+{{registration_button}}
+
+(or click here: {{registration_link}})
+
+If anything needs a follow up, the production team will be in touch.
 
 Thank you so much!
 {{producer_name}}
@@ -32019,7 +32063,7 @@ See you soon!
       return;
     }
     // Backfill required starter templates for productions that existed before they were added.
-    for (const requiredCategory of ['online_audition_reminder', 'team_invite', 'callback', 'callback_confirmed', 'callback_declined', 'callback_self_tape', 'self_tape_booked', 'cast_announcement', 'cast_accepted', 'not_cast']) {
+    for (const requiredCategory of ['online_audition_reminder', 'team_invite', 'callback', 'callback_confirmed', 'callback_declined', 'callback_self_tape', 'self_tape_booked', 'registration_completed', 'cast_announcement', 'cast_accepted', 'not_cast']) {
       if (_etTemplates.some(t => t.category === requiredCategory)) continue;
       const starter = ET_STARTER_TEMPLATES.find(t => t.category === requiredCategory);
       if (starter) {

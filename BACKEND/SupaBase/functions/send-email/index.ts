@@ -49,6 +49,7 @@ const CATEGORY_SUBJECTS: Record<string, string> = {
   callback_confirmed:  'Your callback is confirmed!',
   callback_declined:   'Callback response received',
   callback_self_tape:  'Callback self tape request',
+  registration_completed: 'Registration received',
   cast_announcement:   'Role offer',
   cast_accepted:       'Yay! You accepted your role',
   not_cast:            'Regarding your audition',
@@ -59,6 +60,7 @@ const CATEGORY_SUBJECTS: Record<string, string> = {
 const CATEGORY_TO_TRIGGER: Record<string, string> = {
   booking_confirmation: 'booking_confirmed',
   self_tape_booked:     'self_tape_registered',
+  registration_completed: 'registration_completed',
   audition_reminder:    'manual',
   callback:             'callback_set',
   callback_confirmed:   'callback_confirmed',
@@ -180,6 +182,7 @@ serve(async (req) => {
       '{{cast_accept_link}}': 'https://buildtheshow.com/ryt/mary-poppins-jr-2026/CastOffer/JAMIE04827/YES',
       '{{cast_decline_link}}': 'https://buildtheshow.com/ryt/mary-poppins-jr-2026/CastOffer/JAMIE04827/NO',
       '{{registration_link}}': 'https://buildtheshow.com/ryt/mary-poppins-jr-2026/CastOffer/JAMIE04827/Registration',
+      '{{registration_pdf_url}}': 'https://buildtheshow.com/sample-registration.pdf',
       // Rehearsals (real)
       '{{rehearsal_start_date}}': p.start_date ? fmtDate(String(p.start_date)) : '',
       '{{rehearsal_schedule}}':   '',
@@ -781,6 +784,7 @@ serve(async (req) => {
     '{{cast_offer_deadline}}':   firstDefinedString(directContext.cast_offer_deadline),
     '{{cast_offer_deadline_note}}': firstDefinedString(directContext.cast_offer_deadline_note),
     '{{registration_link}}':     firstDefinedString(directContext.registration_link, directContext.cast_accept_link, directContext.cast_response_link),
+    '{{registration_pdf_url}}':  firstDefinedString(directContext.registration_pdf_url, customAnswers.__bts_registration_pdf_url),
     '{{rehearsal_start_date}}':  firstDefinedString(directContext.rehearsal_start_date, productionRecord.start_date ? fmtDate(String(productionRecord.start_date)) : ''),
     '{{rehearsal_schedule}}':    firstDefinedString(directContext.rehearsal_schedule, directProduction.rehearsal_schedule),
     '{{rehearsal_end_date}}':    firstDefinedString(directContext.rehearsal_end_date, productionRecord.end_date ? fmtDate(String(productionRecord.end_date)) : ''),
