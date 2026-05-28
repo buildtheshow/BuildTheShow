@@ -80,8 +80,8 @@ function getCastingCardVideoCallIconUrl() {
   const version = '20260415-2039';
   try {
     const scriptTag = Array.from(document.scripts || []).find(script =>
-      String(script?.src || '').includes('/ASSETS/Scripts%20(JS)/casting-card.js') ||
-      String(script?.src || '').includes('/ASSETS/scripts/casting-card.js') ||
+      String(script?.src || '').includes('//ASSETS/Scripts%20(JS)/casting-card.js') ||
+      String(script?.src || '').includes('//ASSETS/Scripts (JS)/casting-card.js') ||
       String(script?.src || '').endsWith('casting-card.js')
     );
     if (scriptTag?.src) {
@@ -90,7 +90,7 @@ function getCastingCardVideoCallIconUrl() {
       return url.href;
     }
   } catch {}
-  return `ASSETS/Images/VideoCall.svg?v=${version}`;
+  return `/ASSETS/Images/VideoCall.svg?v=${version}`;
 }
 
 // ── Determine Category Badge (gender) ────────────────────────
@@ -156,11 +156,11 @@ function renderCastingCard(data, options = {}) {
     age = null,
     pronouns = '',
     headshot_url = '',
-    character_name = '',
     casting_categories = [],
     role_openness = 'open',
     attendance_mode = null,
     skill_dots = null,
+    character_name = '',
   } = data;
   
   // Build classes
@@ -250,8 +250,8 @@ function renderCastingCard(data, options = {}) {
   const firstLine = isInTheShow ? [first_name, last_name].filter(Boolean).join(' ') : (first_name || '');
   const secondLine = isInTheShow ? formatInTheShowCharacterLine(character_name) : `${last_name || ''}`;
   const thirdParts = [];
-  if (!isInTheShow && age !== null && age !== undefined && age !== '') thirdParts.push(String(age));
-  if (!isInTheShow && pronouns) thirdParts.push(String(pronouns));
+  if (age !== null && age !== undefined && age !== '') thirdParts.push(String(age));
+  if (pronouns) thirdParts.push(String(pronouns));
   const thirdLine = thirdParts.join(' | ');
   const firstNameSize = firstNameFontSize || getCastingCardTextSize(firstLine, isInTheShow ? 7.2 : 10.6, isInTheShow ? 3.4 : 5.2, isInTheShow ? 22 : 8);
   const lastNameSize = getCastingCardTextSize(secondLine, isInTheShow ? 7.05 : 5.8, isInTheShow ? 3.6 : 3.1, isInTheShow ? 24 : 14);
@@ -274,6 +274,7 @@ function renderCastingCard(data, options = {}) {
         <div class="casting-card-lower">
           <div class="casting-card-lower-name" data-fit-height="true">${esc(firstLine)}</div>
           <div class="casting-card-lower-role" style="font-size:${lastNameSize};">${esc(secondLine)}</div>
+          ${thirdLine ? `<div class="casting-card-meta-line casting-card-lower-meta" style="font-size:${metaLineSize};">${esc(thirdLine)}</div>` : ''}
         </div>
       </div>
     `;
@@ -291,8 +292,8 @@ function renderCastingCard(data, options = {}) {
           ${iconStackHTML}
         </div>
         <div class="casting-card-caption">
-          <div class="casting-card-first-name" style="font-size:${firstNameSize};">${esc(first_name)}</div>
-          <div class="casting-card-last-name" style="font-size:${lastNameSize};">${esc(last_name)}</div>
+          <div class="casting-card-first-name" style="font-size:${firstNameSize};">${esc(firstLine)}</div>
+          <div class="casting-card-last-name" style="font-size:${lastNameSize};">${esc(secondLine)}</div>
           <div class="casting-card-meta-line" style="font-size:${metaLineSize};">${esc(thirdLine)}</div>
         </div>
         ${skillDotsHTML}
@@ -357,6 +358,25 @@ function ccardDragEnd(e) {
   e.target.classList.remove('dragging');
 }
 
+// ── Fit performer name to fill the title box without clipping ──
+function fitCastingCardNames(root) {
+  root = root || document;
+  const els = Array.from(root.querySelectorAll('.casting-card-lower-name[data-fit-height]'));
+  els.forEach(function(el) {
+    el.style.fontSize = '';
+    const cH = el.clientHeight;
+    const cW = el.clientWidth;
+    if (!cH || !cW) return;
+    let lo = 4, hi = cH * 1.5;
+    for (let i = 0; i < 20; i++) {
+      const mid = (lo + hi) / 2;
+      el.style.fontSize = mid + 'px';
+      if (el.scrollWidth <= cW + 1 && el.scrollHeight <= cH + 1) { lo = mid; } else { hi = mid; }
+    }
+    el.style.fontSize = lo + 'px';
+  });
+}
+
 // ── Export for use in other modules ────────────────────────────
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
@@ -367,6 +387,7 @@ if (typeof module !== 'undefined' && module.exports) {
     generateCastingBoardIndicators,
     ccardDragStart,
     ccardDragEnd,
+    fitCastingCardNames,
     esc
   };
 }

@@ -250,8 +250,8 @@ function renderCastingCard(data, options = {}) {
   const firstLine = isInTheShow ? [first_name, last_name].filter(Boolean).join(' ') : (first_name || '');
   const secondLine = isInTheShow ? formatInTheShowCharacterLine(character_name) : `${last_name || ''}`;
   const thirdParts = [];
-  if (!isInTheShow && age !== null && age !== undefined && age !== '') thirdParts.push(String(age));
-  if (!isInTheShow && pronouns) thirdParts.push(String(pronouns));
+  if (age !== null && age !== undefined && age !== '') thirdParts.push(String(age));
+  if (pronouns) thirdParts.push(String(pronouns));
   const thirdLine = thirdParts.join(' | ');
   const firstNameSize = firstNameFontSize || getCastingCardTextSize(firstLine, isInTheShow ? 7.2 : 10.6, isInTheShow ? 3.4 : 5.2, isInTheShow ? 22 : 8);
   const lastNameSize = getCastingCardTextSize(secondLine, isInTheShow ? 7.05 : 5.8, isInTheShow ? 3.6 : 3.1, isInTheShow ? 24 : 14);
@@ -274,6 +274,7 @@ function renderCastingCard(data, options = {}) {
         <div class="casting-card-lower">
           <div class="casting-card-lower-name" data-fit-height="true">${esc(firstLine)}</div>
           <div class="casting-card-lower-role" style="font-size:${lastNameSize};">${esc(secondLine)}</div>
+          ${thirdLine ? `<div class="casting-card-meta-line casting-card-lower-meta" style="font-size:${metaLineSize};">${esc(thirdLine)}</div>` : ''}
         </div>
       </div>
     `;
