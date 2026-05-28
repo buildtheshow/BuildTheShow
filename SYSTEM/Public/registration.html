@@ -1867,18 +1867,22 @@
       if (item.type === 'answerRow') {
         const wrapLabel = rpfWrapPdfLine(item.label || '', 28);
         const wrapValue = rpfWrapPdfLine(item.value || '', 52);
-        const rowH = Math.max(wrapLabel.length, wrapValue.length) * 14 + 8;
+        const rowH = Math.max(wrapLabel.length, wrapValue.length) * 16 + 8;
         if (y - rowH < 62) { pages.push([]); y = 720; }
         pages[pages.length - 1].push(Object.assign({}, item, { y, h: rowH, wrapLabel, wrapValue }));
         y -= rowH + (item.gap || 0);
         return;
       }
       if (item.type === 'wordingBlock') {
-        const allLines = (item.lines || []).flatMap(t => rpfWrapPdfLine(t, 70));
-        const blockH = allLines.length * 13 + 14;
+        const allLines = (item.lines || []).flatMap(w => {
+          const str = typeof w === 'string' ? w : rpfTextForPdf(w.text || '');
+          const bold = typeof w !== 'string' && !!w.bold;
+          return rpfWrapPdfLine(str, 70).map((t, i) => ({ text: t, bold: bold && i === 0 }));
+        });
+        const blockH = allLines.length * 15 + 18;
         if (y - blockH < 62) { pages.push([]); y = 720; }
         pages[pages.length - 1].push(Object.assign({}, item, { y, h: blockH, allLines }));
-        y -= blockH + (item.gap || 8);
+        y -= blockH + (item.gap || 10);
         return;
       }
       const maxChars = Math.max(28, Math.floor((512 - item.indent) / (item.size * 0.52)));
@@ -1952,17 +1956,22 @@
           const parts = [];
           if (line.shade) parts.push(`q\n${color('lightRow')} rg\n50 ${line.y - line.h} 512 ${line.h} re f\nQ`);
           (line.wrapLabel || ['']).forEach((lbl, i) => {
-            parts.push(`BT\n${color('ink')} rg\n/F2 9 Tf\n58 ${line.y - 8 - i * 14} Td\n(${rpfPdfEscape(lbl)}) Tj\nET`);
+            parts.push(`BT\n${color('ink')} rg\n/F2 9.5 Tf\n58 ${line.y - 9 - i * 16} Td\n(${rpfPdfEscape(lbl)}) Tj\nET`);
           });
           (line.wrapValue || ['']).forEach((val, i) => {
-            parts.push(`BT\n${color('muted')} rg\n/F1 9 Tf\n230 ${line.y - 8 - i * 14} Td\n(${rpfPdfEscape(val)}) Tj\nET`);
+            parts.push(`BT\n${color('ink')} rg\n/F1 9.5 Tf\n230 ${line.y - 9 - i * 16} Td\n(${rpfPdfEscape(val)}) Tj\nET`);
           });
           return parts.join('\n');
         }
         if (line.type === 'wordingBlock') {
           const parts = [`q\n${color('softPurple')} rg\n50 ${line.y - line.h} 512 ${line.h} re f\nQ`];
-          (line.allLines || []).forEach((txt, i) => {
-            parts.push(`BT\n${color('muted')} rg\n/F1 8.5 Tf\n64 ${line.y - 10 - i * 13} Td\n(${rpfPdfEscape(txt)}) Tj\nET`);
+          (line.allLines || []).forEach((w, i) => {
+            const txt = typeof w === 'string' ? w : (w.text || '');
+            const bold = typeof w !== 'string' && w.bold;
+            const font = bold ? 'F2' : 'F1';
+            const sz = bold ? 9 : 9;
+            const c = bold ? 'ink' : 'muted';
+            parts.push(`BT\n${color(c)} rg\n/${font} ${sz} Tf\n64 ${line.y - 13 - i * 15} Td\n(${rpfPdfEscape(txt)}) Tj\nET`);
           });
           return parts.join('\n');
         }
