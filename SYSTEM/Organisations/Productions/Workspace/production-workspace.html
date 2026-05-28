@@ -798,6 +798,8 @@
     .rsc-info-chip.warn { background:rgba(239,171,69,0.18);  color:#8a5f10; }
     .rsc-info-chip.flag { background:rgba(78,106,170,0.14); color:#2d4f8a; cursor:pointer; border:none; font-family:var(--bts-font); }
     .rsc-info-chip.flag:hover { background:rgba(78,106,170,0.26); }
+    .rsc-info-chip.action { cursor:pointer; border:none; font-family:var(--bts-font); }
+    .rsc-info-chip.action:hover { filter:brightness(0.96); }
     .rsc-info-chip.muted { background:rgba(87,46,136,0.07); color:rgba(87,46,136,0.42); }
     .rsc-no-fee { font-size:0.72rem; color:rgba(87,46,136,0.42); padding:0.3rem 0 0.1rem; }
     .rsc-inst-tiles { display:flex; gap:0.45rem; margin-top:0.55rem; flex-wrap:wrap; }
@@ -42532,6 +42534,18 @@ Thank you so much!
     }));
   }
 
+  function registrationEmailLinkSent(app) {
+    return applicantEmailSentEntries(app).some(entry => String(entry.category || '') === 'cast_accepted');
+  }
+
+  function renderRegistrationActionButton(app, assignId, pdfUrl, formsComplete) {
+    if (formsComplete) {
+      return `<button class="rsc-info-chip ok action" onclick="rscShowRegistrationPdf('${esc(assignId)}','${esc(pdfUrl || '')}')">View</button>`;
+    }
+    const sent = registrationEmailLinkSent(app);
+    return `<button class="rsc-info-chip ${sent ? 'warn' : 'muted'} action" onclick="rscResendRegistrationLink('${esc(assignId)}', this)">${sent ? 'Resend' : 'Not sent'}</button>`;
+  }
+
   // ── Payment Tracker helpers ───────────────────────────────────────
 
   function rptGetInstallments(settings) {
@@ -42690,9 +42704,7 @@ Thank you so much!
       const _allSigned = !!registrationFormsComplete(app);
       const _mediaHtml = _allSigned ? `<span class="rsc-info-chip ok">✓ Signed</span>` : `<span class="rsc-info-chip muted">Not yet</span>`;
       const _pdfUrl = registrationAnswerValue(app, ['__bts_registration_pdf_url']).trim();
-      const _regHtml = _allSigned
-        ? `<button class="rsc-info-chip ok" style="cursor:pointer;border:none;" onclick="rscShowRegistrationPdf('${esc(assignId)}','${esc(_pdfUrl)}')">View</button>`
-        : `<span class="rsc-info-chip muted">Not submitted</span>`;
+      const _regHtml = renderRegistrationActionButton(app, assignId, _pdfUrl, _allSigned);
       return `<div class="rsc-hh-photo"><div class="rsc-hh-photo-img">${flipCard}</div><div class="rsc-progress" style="padding:0.4rem 0.55rem 0.35rem;"><div class="rsc-progress-track"><div class="rsc-progress-fill" style="width:${_pct}%;background:${_stageColor};"></div></div><div class="rsc-stage-label" style="color:${_stageColor};">${_stageLabel}</div></div><div class="rsc-info" style="padding:0 0.55rem 0.4rem;"><div class="rsc-info-row"><span class="rsc-info-label">Accessibility</span>${_accessHtml}</div><div class="rsc-info-row"><span class="rsc-info-label">Media Release</span>${_mediaHtml}</div><div class="rsc-info-row"><span class="rsc-info-label">Registration</span>${_regHtml}</div></div></div>`;
     }).join('');
 
@@ -42870,6 +42882,7 @@ Thank you so much!
           signerAge: String((app.custom_answers || {})['mr_signer_age'] || ''),
         },
         registrationUrl: registrationLiveUrlForApp(app, assignment),
+        roleNames: roleName ? [roleName] : [],
         app,
         installments: ef.installments,
         records,
@@ -43046,9 +43059,7 @@ Thank you so much!
       ? `<span class="rsc-info-chip ok">✓ Signed</span>`
       : `<span class="rsc-info-chip muted">Not yet</span>`;
     const pdfUrl = registrationAnswerValue(app, ['__bts_registration_pdf_url']).trim();
-    const regFormHtml = allSigned
-      ? `<button class="rsc-info-chip ok" style="cursor:pointer;border:none;" onclick="rscShowRegistrationPdf('${esc(assignId)}','${esc(pdfUrl)}')">View</button>`
-      : `<span class="rsc-info-chip muted">Not submitted</span>`;
+    const regFormHtml = renderRegistrationActionButton(app, assignId, pdfUrl, allSigned);
     const infoHtml = `<div class="rsc-info">
       <div class="rsc-info-row"><span class="rsc-info-label">Accessibility</span>${accessHtml}</div>
       <div class="rsc-info-row"><span class="rsc-info-label">Media Release</span>${mediaHtml}</div>
@@ -43184,6 +43195,7 @@ Thank you so much!
         signerAge: String((app.custom_answers || {})['mr_signer_age'] || ''),
       },
       registrationUrl: registrationLiveUrlForApp(app, assignment),
+      roleNames: roleName ? [roleName] : [],
       app,
       installments: ef.installments,
       records,
@@ -43610,7 +43622,7 @@ Thank you so much!
       <div class="rpt-household-modal-actions" style="justify-content:space-between;">
         <div style="display:flex;gap:0.5rem;">
           ${downloadBtn}
-          <button class="rpt-modal-save-btn" style="background:transparent;color:#572e88;border:1.5px solid #572e88;" onclick="rscResendRegistrationLink('${esc(assignId)}');document.getElementById('rsc-reg-pdf-modal')?.remove();">Resend Link</button>
+          <button class="rpt-modal-save-btn" style="background:transparent;color:#572e88;border:1.5px solid #572e88;" onclick="rscResendRegistrationLink('${esc(assignId)}', this);document.getElementById('rsc-reg-pdf-modal')?.remove();">Resend Link</button>
         </div>
         <button class="rpt-modal-save-btn" onclick="document.getElementById('rsc-reg-pdf-modal')?.remove()">Close</button>
       </div>
@@ -43619,22 +43631,20 @@ Thank you so much!
     document.body.appendChild(modal);
   }
 
-  async function rscResendRegistrationLink(assignId) {
+  async function rscResendRegistrationLink(assignId, buttonEl = null) {
     const d = window._rscModalData?.[assignId];
     if (!d?.app?.email) { showToast('No email address on file for this performer.', true); return; }
+    const originalText = buttonEl?.textContent || '';
+    if (buttonEl) { buttonEl.disabled = true; buttonEl.textContent = 'Sending...'; }
     try {
-      const regUrl = `${location.origin}/SYSTEM/Public/registration.html?app=${encodeURIComponent(d.app.id)}&prod=${encodeURIComponent(prodId)}`;
-      await fetch('/functions/v1/send-email', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${(await sb.auth.getSession()).data.session?.access_token}` },
-        body: JSON.stringify({
-          to: d.app.email,
-          subject: `${prod?.title || 'Production'} — Registration Form`,
-          html: `<p>Hi ${esc(d.name.split(' ')[0])},</p><p>Here is your registration link for ${esc(prod?.title || 'the production')}:</p><p><a href="${regUrl}">${regUrl}</a></p><p>If you have already submitted your registration, you can ignore this email.</p>`,
-        }),
-      });
+      await _sendFinalCastingEmailDirect(d.app, 'cast_accepted', d.roleNames || [], []);
       showToast('Registration link sent to ' + d.app.email);
-    } catch (e) { showToast('Could not send email: ' + e.message, true); }
+      await loadRegistrationDashboard().catch(() => {});
+      await loadRegistrationPayments().catch(() => {});
+    } catch (e) {
+      if (buttonEl) { buttonEl.disabled = false; buttonEl.textContent = originalText || 'Resend'; }
+      showToast('Could not send email: ' + e.message, true);
+    }
   }
 
   function rscOpenMarkPaidModal(assignId, idx) {
