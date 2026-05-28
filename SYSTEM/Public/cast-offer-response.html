@@ -1348,6 +1348,9 @@
       if (typeof raw === 'string') { try { return JSON.parse(raw) || {}; } catch { return {}; } }
       return raw || {};
     };
+    const normalizeOfferCode = value => String(value || '').replace(/[^a-z0-9]/gi, '').toLowerCase();
+    const firstNameKey = record => String(record?.preferred_name || record?.name || '').trim()
+      .split(/\s+/)[0].replace(/[^a-z0-9]/gi, '').toLowerCase();
     const textValue = id => ($(id)?.value || '').trim();
     const firstTruthy = (...values) => values.find(value => String(value || '').trim()) || '';
     const setStatus = (message, mode = '') => {
@@ -2193,6 +2196,51 @@
       const code = offerCode || token;
       if (!code) return null;
 
+      const wantedCode = normalizeOfferCode(code);
+      const findStoredOfferMatch = rows => (rows || []).find(row => {
+        const ca = answers(row);
+        return [ca[KEYS.code], ca[KEYS.token]]
+          .some(value => normalizeOfferCode(value) === wantedCode);
+      }) || null;
+
+      const findLegacyOfferMatch = async () => {
+        if (!prodId || !wantedCode) return null;
+        const legacyMatch = wantedCode.match(/^([a-z]+)(\d{3,})$/);
+        if (!legacyMatch) return null;
+        const legacyFirstName = legacyMatch[1];
+        const legacyIdPrefix = legacyMatch[2].slice(0, 3).toLowerCase();
+
+        const { data: assignmentRows } = await sb.from('casting_assignments')
+          .select('applicant_id,state')
+          .eq('production_id', prodId)
+          .in('state', ['chosen', 'ensemble_manual', 'offer_accepted', 'offer_declined']);
+        const candidateIds = [...new Set((assignmentRows || []).map(row => row.applicant_id).filter(Boolean))];
+        if (!candidateIds.length) return null;
+
+        const [{ data: apps }, { data: bookings }] = await Promise.all([
+          sb.from('audition_applications').select('*').in('id', candidateIds),
+          sb.from('audition_bookings').select('*').in('id', candidateIds),
+        ]);
+        const all = [
+          ...(apps || []).map(r => ({ ...r, _table: 'audition_applications' })),
+          ...(bookings || []).map(r => ({ ...r, _table: 'audition_bookings' })),
+        ];
+
+        const storedMatch = findStoredOfferMatch(all);
+        if (storedMatch) return storedMatch;
+
+        if (/^[0-9a-f]{3}$/.test(legacyIdPrefix)) {
+          const idPrefixMatch = all.find(row => (
+            String(row.id || '').slice(0, 3).toLowerCase() === legacyIdPrefix &&
+            firstNameKey(row) === legacyFirstName
+          ));
+          if (idPrefixMatch) return idPrefixMatch;
+        }
+
+        const nameMatches = all.filter(row => firstNameKey(row) === legacyFirstName);
+        return nameMatches.length === 1 ? nameMatches[0] : null;
+      };
+
       const dashIdx = code.lastIndexOf('-');
       const idPrefix = (dashIdx >= 0 ? code.slice(dashIdx + 1) : '').toLowerCase();
       const namePart = (dashIdx >= 0 ? code.slice(0, dashIdx) : code).toLowerCase();
@@ -2217,9 +2265,11 @@
           return rId === idPrefix && rName === namePart;
         });
         if (match) return match;
+        const storedMatch = findStoredOfferMatch(all);
+        if (storedMatch) return storedMatch;
       }
 
-      return null;
+      return findLegacyOfferMatch();
     }
 
     async function loadOffer() {
