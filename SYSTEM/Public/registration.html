@@ -2077,7 +2077,7 @@
       if (item.type === 'sectionHeader') {
         const h = 24;
         const nextContent = lineItems[index + 1]?.type === 'spacer' ? lineItems[index + 2] : lineItems[index + 1];
-        const keepWith = Math.min(rpfEstimatePdfItemHeight(nextContent), 118);
+        const keepWith = Math.min(rpfEstimatePdfItemHeight(nextContent), 160, pageTop - 62);
         if (y - h - (item.gap || 4) - keepWith < 62) nextPage();
         pages[pages.length - 1].push(Object.assign({}, item, { y, h }));
         y -= h + (item.gap || 4);
@@ -2098,10 +2098,20 @@
           const bold = typeof w !== 'string' && !!w.bold;
           return rpfWrapPdfLine(str, 138).map((t, i) => ({ text: t, bold: bold && i === 0 }));
         });
-        const blockH = allLines.length * 12 + 16;
-        if (y - blockH < 62) nextPage();
-        pages[pages.length - 1].push(Object.assign({}, item, { y, h: blockH, allLines }));
-        y -= blockH + (item.gap || 10);
+        let remaining = allLines.slice();
+        while (remaining.length) {
+          const available = y - 62;
+          const maxLines = Math.floor((available - 16) / 12);
+          if (maxLines < 1) {
+            nextPage();
+            continue;
+          }
+          const chunk = remaining.splice(0, maxLines);
+          const blockH = chunk.length * 12 + 16;
+          pages[pages.length - 1].push(Object.assign({}, item, { y, h: blockH, allLines: chunk }));
+          y -= blockH + (remaining.length ? 0 : (item.gap || 10));
+          if (remaining.length) nextPage();
+        }
         return;
       }
       const maxChars = Math.max(28, Math.floor((512 - item.indent) / (item.size * 0.52)));
