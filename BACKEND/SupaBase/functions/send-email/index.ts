@@ -230,7 +230,7 @@ serve(async (req) => {
 
     const html = `<!DOCTYPE html>
 <html><head><meta charset="UTF-8"></head>
-<body style="font-family:sans-serif;color:#1a1530;max-width:600px;margin:0 auto;padding:2rem 1rem;">
+<body style="font-family:Arial,sans-serif;color:#1a1530;font-size:17px;line-height:1.62;max-width:640px;margin:0 auto;padding:2rem 1rem;">
   ${htmlBody}
   <hr style="margin:2rem 0;border:none;border-top:1px solid #e5e0f0;">
   <p style="font-size:0.75rem;color:#9a90b0;margin:0;">
@@ -653,7 +653,7 @@ serve(async (req) => {
     const html = `<!DOCTYPE html>
 <html>
 <head><meta charset="UTF-8" /></head>
-<body style="font-family:sans-serif;color:#1a1530;max-width:600px;margin:0 auto;padding:2rem 1rem;">
+<body style="font-family:Arial,sans-serif;color:#1a1530;font-size:17px;line-height:1.62;max-width:640px;margin:0 auto;padding:2rem 1rem;">
   <h1 style="font-size:24px;line-height:1.2;margin:0 0 14px;">Role offer ${escHtml(responseLabel)}</h1>
   <p style="margin:0 0 16px;color:#4a3d6b;line-height:1.5;">${escHtml(performerName || 'A performer')} has ${escHtml(responseLabel)} a role offer.</p>
   <table style="border-collapse:collapse;width:100%;margin:0 0 10px;">${htmlDetails}</table>
@@ -946,7 +946,7 @@ serve(async (req) => {
   const html = `<!DOCTYPE html>
 <html>
 <head><meta charset="UTF-8" /></head>
-<body style="font-family:sans-serif;color:#1a1530;max-width:600px;margin:0 auto;padding:2rem 1rem;">
+<body style="font-family:Arial,sans-serif;color:#1a1530;font-size:17px;line-height:1.62;max-width:640px;margin:0 auto;padding:2rem 1rem;">
   ${htmlBody}
   <hr style="margin:2rem 0;border:none;border-top:1px solid #e5e0f0;" />
   <p style="font-size:0.75rem;color:#9a90b0;margin:0;">
@@ -1082,8 +1082,8 @@ function emailButtonLabelForToken(tokenName: string): string {
 function emailActionButtonHtml(href: string, label: string, tone = 'primary'): string {
   if (!href) return '';
   const styles = tone === 'secondary'
-    ? 'display:inline-block;background:#ffffff;color:#572e88;text-decoration:none;font-weight:800;padding:12px 18px;border:1.5px solid #572e88;border-radius:8px;'
-    : 'display:inline-block;background:#572e88;color:#ffffff;text-decoration:none;font-weight:800;padding:14px 22px;border-radius:8px;';
+    ? 'display:inline-block;background:#ffffff;color:#572e88;text-decoration:none;font-weight:900;font-size:16px;line-height:1.2;padding:14px 20px;border:2px solid #572e88;border-radius:10px;'
+    : 'display:inline-block;background:#572e88;color:#ffffff;text-decoration:none;font-weight:900;font-size:16px;line-height:1.2;padding:16px 24px;border-radius:10px;';
   return `<a href="${escAttr(href)}" style="${styles}">${escHtml(label)}</a>`;
 }
 
