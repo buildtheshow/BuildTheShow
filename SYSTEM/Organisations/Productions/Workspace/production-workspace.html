@@ -29502,6 +29502,8 @@
   let _etCatFilter = 'all';
   let _etPendingOpenCategory = '';
   let performanceScheduleSummaryCache = '';
+  let eventScheduleSummaryCache = '';
+  let productionScheduleSummaryCache = '';
   let performanceScheduleSummaryLoaded = false;
 
   // ── Email Templates ──────────────────────────────────────────
@@ -30066,8 +30068,8 @@
       bg:    '#dff2dc',
       vars: [
         { token: '{{performance_schedule}}', label: 'Performance Schedule', sample: () => performanceScheduleSummaryCache || etPlaceholder('performance schedule') },
-        { token: '{{event_schedule}}', label: 'Full Event Schedule', sample: () => performanceScheduleSummaryCache || etPlaceholder('full event schedule') },
-        { token: '{{production_schedule}}', label: 'Full Production Schedule', sample: () => performanceScheduleSummaryCache || etPlaceholder('full production schedule') },
+        { token: '{{event_schedule}}', label: 'Full Event Schedule', sample: () => eventScheduleSummaryCache || etPlaceholder('full event schedule') },
+        { token: '{{production_schedule}}', label: 'Full Production Schedule', sample: () => productionScheduleSummaryCache || etPlaceholder('full production schedule') },
       ],
     },
     // ── Team Access ──────────────────────────────────────────────
@@ -30724,7 +30726,8 @@
     const label = datePart ? fmtDate(datePart) : '';
     const time = timePart ? formatSlotTime(timePart) : '';
     const venue = row.venue ? ` at ${row.venue}` : '';
-    return `${row.title || 'Performance'}: ${[label, time].filter(Boolean).join(' at ')}${venue}`;
+    const typeLabel = EVENT_LABELS[row.event_type] || row.event_type || 'Event';
+    return `${row.title || typeLabel}: ${[label, time].filter(Boolean).join(' at ')}${venue}`;
   }
 
   async function loadPerformanceScheduleSummary() {
@@ -30734,12 +30737,19 @@
       const { data, error } = await sb.from('production_events')
         .select('title,start_time,end_time,venue,event_type')
         .eq('production_id', prodId)
-        .eq('event_type', 'performance')
         .order('start_time', { ascending: true });
       if (error) throw error;
-      performanceScheduleSummaryCache = (data || []).map(formatEmailScheduleEvent).filter(Boolean).join('\n');
+      const sortedRows = [...(data || [])].sort((a, b) => String(a.start_time || '').localeCompare(String(b.start_time || '')));
+      const performanceRows = sortedRows.filter(row => String(row.event_type || '').toLowerCase() === 'performance');
+      const eventRows = sortedRows.filter(row => {
+        const type = String(row.event_type || '').toLowerCase();
+        return type && type !== 'performance' && type !== 'rehearsal' && type !== 'music_rehearsal' && type !== 'choreography';
+      });
+      performanceScheduleSummaryCache = performanceRows.map(formatEmailScheduleEvent).filter(Boolean).join('\n');
+      eventScheduleSummaryCache = eventRows.map(formatEmailScheduleEvent).filter(Boolean).join('\n');
+      productionScheduleSummaryCache = sortedRows.map(formatEmailScheduleEvent).filter(Boolean).join('\n');
     } catch (error) {
-      console.warn('[BTS] Could not load performance schedule for email context.', error);
+      console.warn('[BTS] Could not load production schedule for email context.', error);
     } finally {
       performanceScheduleSummaryLoaded = true;
     }
@@ -31326,7 +31336,11 @@ Warmly,
       <div style="white-space:pre-line;color:#1a1530;">{{rehearsal_schedule}}</div>
     </div>
     <div style="margin:16px 0 0;">
-      <div style="font-size:12px;font-weight:900;letter-spacing:0.1em;text-transform:uppercase;color:#8a5f10;margin-bottom:6px;">Performances and events</div>
+      <div style="font-size:12px;font-weight:900;letter-spacing:0.1em;text-transform:uppercase;color:#8a5f10;margin-bottom:6px;">Performances</div>
+      <div style="white-space:pre-line;color:#1a1530;">{{performance_schedule}}</div>
+    </div>
+    <div style="margin:16px 0 0;">
+      <div style="font-size:12px;font-weight:900;letter-spacing:0.1em;text-transform:uppercase;color:#8a5f10;margin-bottom:6px;">Events</div>
       <div style="white-space:pre-line;color:#1a1530;">{{event_schedule}}</div>
     </div>
   </div>
@@ -31876,7 +31890,11 @@ Your submission link is unique to you. Please do not share it with another perfo
       <div style="white-space:pre-line;color:#1a1530;">{{rehearsal_schedule}}</div>
     </div>
     <div style="margin:16px 0 0;">
-      <div style="font-size:12px;font-weight:900;letter-spacing:0.1em;text-transform:uppercase;color:#8a5f10;margin-bottom:6px;">Performances and events</div>
+      <div style="font-size:12px;font-weight:900;letter-spacing:0.1em;text-transform:uppercase;color:#8a5f10;margin-bottom:6px;">Performances</div>
+      <div style="white-space:pre-line;color:#1a1530;">{{performance_schedule}}</div>
+    </div>
+    <div style="margin:16px 0 0;">
+      <div style="font-size:12px;font-weight:900;letter-spacing:0.1em;text-transform:uppercase;color:#8a5f10;margin-bottom:6px;">Events</div>
       <div style="white-space:pre-line;color:#1a1530;">{{event_schedule}}</div>
     </div>
   </div>
