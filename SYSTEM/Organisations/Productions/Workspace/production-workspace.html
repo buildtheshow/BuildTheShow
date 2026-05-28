@@ -30029,6 +30029,7 @@
         { token: '{{registration_link}}', label: 'Registration Link', sample: () => { const h = new URLSearchParams({ prod: prodId || '', code: ET_SAMPLE_CONTEXT.registrationCode }); return `${window.location.origin}/SYSTEM/Public/registration#${h.toString()}`; } },
         { token: '{{registration_button}}', label: 'Registration Button', sample: () => { const h = new URLSearchParams({ prod: prodId || '', code: ET_SAMPLE_CONTEXT.registrationCode }); return emailActionButtonHtml(`${window.location.origin}/SYSTEM/Public/registration#${h.toString()}`, 'Complete Registration'); } },
         { token: '{{registration_pdf_url}}', label: 'Registration PDF Link', sample: () => etSampleProductionUrl(`/files/registrations/${ET_SAMPLE_CONTEXT.registrationCode}.pdf`) },
+        { token: '{{registration_pdf_button}}', label: 'Registration PDF Button', sample: () => emailActionButtonHtml(etSampleProductionUrl(`/files/registrations/${ET_SAMPLE_CONTEXT.registrationCode}.pdf`), 'View Registration PDF') },
       ],
     },
     // ── Rehearsals ───────────────────────────────────────────────
@@ -31289,10 +31290,16 @@ Thank you so much!
       name: 'Registration Complete Confirmation',
       category: 'registration_completed',
       trigger: 'registration_completed',
-      subject: 'Registration received: {{show_name}}',
+      subject: 'Registration complete: {{show_name}}',
       body: `Hi {{preferred_name}},
 
-Your registration for {{show_name}} has been received. Thank you for taking the time to complete everything.
+Your registration for {{show_name}} is complete. Thank you for taking the time to fill everything out.
+
+A copy of your registration is saved below for your records:
+
+{{registration_pdf_button}}
+
+(or open the PDF here: {{registration_pdf_url}})
 
 You can return to your registration at any time using the link below:
 
@@ -32016,6 +32023,39 @@ See you soon!
     ));
   }
 
+  async function etEnsureRegistrationCompletedTemplateBody() {
+    const t = (_etTemplates || []).find(t => t.category === 'registration_completed');
+    if (!t) return;
+    const body = String(t.body || '');
+    if (body.includes('registration_pdf')) return;
+    if (!body.includes('has been received. Thank you for taking the time to complete everything')) return;
+    const newSubject = 'Registration complete: {{show_name}}';
+    const newBody = `Hi {{preferred_name}},
+
+Your registration for {{show_name}} is complete. Thank you for taking the time to fill everything out.
+
+A copy of your registration is saved below for your records:
+
+{{registration_pdf_button}}
+
+(or open the PDF here: {{registration_pdf_url}})
+
+You can return to your registration at any time using the link below:
+
+{{registration_button}}
+
+(or click here: {{registration_link}})
+
+If anything needs a follow up, the production team will be in touch.
+
+Thank you so much!
+{{producer_name}}
+{{producer_role}}
+{{producer_email}}`;
+    _etTemplates = (_etTemplates || []).map(x => x.id === t.id ? { ...x, subject: newSubject, body: newBody } : x);
+    await sb.from('email_templates').update({ subject: newSubject, body: newBody }).eq('id', t.id);
+  }
+
   async function etEnsureAuditionReminderTemplateNames() {
     const desiredNames = {
       audition_reminder: 'Audition Reminder - In Person',
@@ -32089,6 +32129,7 @@ See you soon!
     await etEnsureCallbackRequestTemplateBody();
     await etEnsureCallbackConfirmedTemplateBody();
     await etEnsureCastAcceptedTemplateBody();
+    await etEnsureRegistrationCompletedTemplateBody();
     await etEnsureAuditionReminderTemplateNames();
     renderEmailTemplates();
     openPendingEmailTemplateCategory();
