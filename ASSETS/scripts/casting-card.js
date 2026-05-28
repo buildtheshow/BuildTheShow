@@ -247,8 +247,8 @@ function renderCastingCard(data, options = {}) {
   
   // Caption display
   const isInTheShow = variant === 'inTheShow';
-  const firstLine = isInTheShow ? [first_name, last_name].filter(Boolean).join(' ') : (first_name || '');
-  const secondLine = isInTheShow ? formatInTheShowCharacterLine(character_name) : `${last_name || ''}`;
+  const firstLine = first_name || '';
+  const secondLine = isInTheShow ? (last_name || '') : `${last_name || ''}`;
   const thirdParts = [];
   if (age !== null && age !== undefined && age !== '') thirdParts.push(String(age));
   if (pronouns) thirdParts.push(String(pronouns));
@@ -264,6 +264,8 @@ function renderCastingCard(data, options = {}) {
 
   // ── Build the card HTML ───────────────────────────────────────
   if (isInTheShow) {
+    const charLine = character_name ? `"${esc(character_name)}"` : '';
+    const charSize = getCastingCardTextSize(character_name, 5.8, 3.1, 14);
     return `
       <div class="${cardClasses}" ${attrs.join(' ')}>
         <div class="casting-card-image-area">
@@ -271,10 +273,13 @@ function renderCastingCard(data, options = {}) {
           ${indicatorsHTML}
           ${videoCallBadge}
         </div>
-        <div class="casting-card-lower">
-          <div class="casting-card-lower-name" data-fit-height="true">${esc(firstLine)}</div>
-          <div class="casting-card-lower-role" style="font-size:${lastNameSize};">${esc(secondLine)}</div>
-          ${thirdLine ? `<div class="casting-card-meta-line casting-card-lower-meta" style="font-size:${metaLineSize};">${esc(thirdLine)}</div>` : ''}
+        <div class="casting-card-lower casting-card-lower--inshow">
+          <div class="casting-card-caption">
+            <div class="casting-card-first-name" style="font-size:${firstNameSize};">${esc(first_name)}</div>
+            <div class="casting-card-last-name" style="font-size:${lastNameSize};">${esc(last_name)}</div>
+            ${charLine ? `<div class="casting-card-char-line" style="font-size:${charSize};">${charLine}</div>` : ''}
+            ${thirdLine ? `<div class="casting-card-meta-line" style="font-size:${metaLineSize};">${esc(thirdLine)}</div>` : ''}
+          </div>
         </div>
       </div>
     `;

@@ -544,7 +544,7 @@ serve(async (req) => {
     });
   }
 
-  const [{ data: sessions }, { data: slots }, { data: allProductionSessions }, { data: performanceEvents }] = await Promise.all([
+  const [{ data: sessions }, { data: slots }, { data: allProductionSessions }, { data: productionEvents }] = await Promise.all([
     sessionIds.length
       ? sb.from('audition_sessions').select('id,name,session_date,date,start_time,location,prepare_text').in('id', [...new Set(sessionIds)])
       : Promise.resolve({ data: [] }),
@@ -555,7 +555,7 @@ serve(async (req) => {
       ? sb.from('audition_sessions').select('id,name,type,date,start_time,location,prepare_text').eq('production_id', productionId).order('sort_order', { ascending: true })
       : Promise.resolve({ data: [] }),
     productionId
-      ? sb.from('production_events').select('title,start_time,end_time,venue,event_type').eq('production_id', productionId).eq('event_type', 'performance').order('start_time', { ascending: true })
+      ? sb.from('production_events').select('title,start_time,end_time,venue,event_type').eq('production_id', productionId).order('start_time', { ascending: true })
       : Promise.resolve({ data: [] }),
   ]);
 
@@ -736,7 +736,16 @@ serve(async (req) => {
   );
   const performanceSchedule = firstDefinedString(
     directContext.performance_schedule,
-    ((performanceEvents || []) as Record<string, unknown>[]).map(formatScheduleEvent).filter(Boolean).join('\n'),
+    ((productionEvents || []) as Record<string, unknown>[])
+      .filter(row => String(row.event_type || '').toLowerCase() === 'performance')
+      .map(formatScheduleEvent)
+      .filter(Boolean)
+      .join('\n'),
+  );
+  const eventSchedule = firstDefinedString(
+    directContext.event_schedule,
+    directContext.production_schedule,
+    formatProductionEventSchedule((productionEvents || []) as Record<string, unknown>[]),
   );
   const selfTapeDeadline = fmtDateTimeLocal(firstDefinedString(
     directContext.self_tape_deadline,
@@ -792,6 +801,8 @@ serve(async (req) => {
     '{{rehearsal_end_date}}':    firstDefinedString(directContext.rehearsal_end_date, productionRecord.end_date ? fmtDate(String(productionRecord.end_date)) : ''),
     '{{opening_night}}':         firstDefinedString(directContext.opening_night, productionRecord.end_date ? fmtDate(String(productionRecord.end_date)) : ''),
     '{{performance_schedule}}':  performanceSchedule,
+    '{{event_schedule}}':        eventSchedule,
+    '{{production_schedule}}':   eventSchedule,
     '{{team_member_name}}':      firstDefinedString(directContext.team_member_name, teamMember?.name, performerName),
     '{{team_member_role}}':      firstDefinedString(directContext.team_member_role, teamMember?.role),
     '{{team_member_email}}':     firstDefinedString(directContext.team_member_email, teamMember?.email, performerEmail),
@@ -1048,6 +1059,35 @@ function formatScheduleEvent(row: Record<string, unknown>): string {
   const time = timePart ? fmtTime(timePart) : '';
   const venue = row.venue ? ` - ${row.venue}` : '';
   return `${row.title || 'Performance'}: ${[date, time].filter(Boolean).join(' at ')}${venue}`;
+}
+
+function eventTypeLabel(value: unknown): string {
+  const normalized = String(value || 'event').toLowerCase().replace(/[_-]+/g, ' ');
+  const labels: Record<string, string> = {
+    performance: 'Performances',
+    rehearsal: 'Rehearsals',
+    tech: 'Tech',
+    tech rehearsal: 'Tech',
+    dress rehearsal: 'Dress rehearsals',
+    photo call: 'Photo calls',
+    meeting: 'Meetings',
+    event: 'Events',
+  };
+  return labels[normalized] || normalized.replace(/\b\w/g, ch => ch.toUpperCase());
+}
+
+function formatProductionEventSchedule(rows: Record<string, unknown>[]): string {
+  const grouped = new Map<string, string[]>();
+  for (const row of rows || []) {
+    const line = formatScheduleEvent(row);
+    if (!line) continue;
+    const label = eventTypeLabel(row.event_type);
+    if (!grouped.has(label)) grouped.set(label, []);
+    grouped.get(label)?.push(line);
+  }
+  return [...grouped.entries()]
+    .map(([label, lines]) => `${label}\n${lines.join('\n')}`)
+    .join('\n\n');
 }
 
 function escHtml(s: string): string {
