@@ -681,6 +681,7 @@
   let _rpfCurrent  = 0;
   let _rpfCompleted = new Set();
   let _saveTimer   = null;
+  let _rehearsalStartDate = '';
   const CAST_OFFER_KEYS = {
     code: '__bts_cast_offer_code',
     token: '__bts_cast_offer_token',
@@ -734,7 +735,7 @@
     { key: 'physical_activity_waiver', group: 'Agreements & Consent', color: '#d1523d', defaultOn: false, title: 'Special Performance Acknowledgement', defaultFields: ['{physical-performance}'] },
     { key: 'costume_measurements', group: 'Costumes',            color: '#ca7ea7', defaultOn: true,  title: 'Costume Measurements',                  defaultFields: ['{costume-measurements}'] },
     { key: 'hair_makeup',          group: 'Costumes',            color: '#ca7ea7', defaultOn: true,  title: 'Hair & Makeup',                         defaultFields: ['Skin allergies or sensitivities', 'Makeup sensitivities', 'Wig considerations', 'Other notes for hair and makeup'] },
-    { key: 'programme_credit',     group: 'Programme',           color: '#78bbd4', defaultOn: true,  title: 'Programme Credit',                      defaultFields: ['Exact programme name, first and last *'] },
+    { key: 'programme_credit',     group: 'Programme',           color: '#78bbd4', defaultOn: true,  title: 'Programme Credit',                      defaultFields: ['Exact first and last name *'] },
     { key: 'cast_bio',             group: 'Programme',           color: '#78bbd4', defaultOn: true,  title: 'Cast Bio',                              defaultFields: ['Programme bio (50 words or less) *', 'Previous credits', 'Fun fact'] },
     { key: 'headshot',             group: 'Programme',           color: '#78bbd4', defaultOn: true,  title: 'Headshot Submission',                   defaultFields: ['Headshot upload *'] },
     { key: 'production_fee',       group: 'Production Fees',     color: '#769e7b', defaultOn: false, title: 'Production Fees',                       defaultFields: ['{production-fee}'] },
@@ -762,7 +763,7 @@
       '{{org_name}}':          _org?.name || _org?.abbreviation || '',
       '{{show_name}}':         _prod?.title || '',
       '{{show_venue}}':        _prod?.venue || '',
-      '{{rehearsal_start_date}}': _prod?.start_date ? new Date(_prod.start_date + 'T00:00:00').toLocaleDateString('en-CA', { month: 'long', day: 'numeric', year: 'numeric' }) : '',
+      '{{rehearsal_start_date}}': rpfRehearsalStartDateLabel(),
       '{{rehearsal_end_date}}':   _prod?.end_date   ? new Date(_prod.end_date   + 'T00:00:00').toLocaleDateString('en-CA', { month: 'long', day: 'numeric', year: 'numeric' }) : '',
       '{{performer_name}}':  perfName,
       '{{child_name}}':      perfName,
@@ -778,6 +779,41 @@
       .replace(/\{\{[^}]+\}\}/g, t => map[t] ?? t)
       .replace(/<p>\s*<br\s*\/?>\s*<\/p>/gi, '')
       .replace(/<p>\s*&nbsp;\s*<\/p>/gi, '');
+  }
+
+  function rpfDateLabel(raw) {
+    const value = String(raw || '').trim();
+    if (!value) return '';
+    const date = new Date(`${value.slice(0, 10)}T00:00:00`);
+    if (Number.isNaN(date.getTime())) return value;
+    return date.toLocaleDateString('en-CA', { month: 'long', day: 'numeric', year: 'numeric' });
+  }
+
+  function rpfRehearsalStartDateFallback() {
+    return _regSettings?.first_rehearsal || _regSettings?.rehearsal_start_date || _regSettings?.rehearsal_start || _prod?.rehearsal_start_date || _prod?.rehearsal_start || '';
+  }
+
+  function rpfRehearsalStartDateLabel() {
+    return rpfDateLabel(_rehearsalStartDate || rpfRehearsalStartDateFallback());
+  }
+
+  async function rpfLoadRehearsalStartDate() {
+    if (!_resolvedProductionId) return '';
+    try {
+      const { data, error } = await sb.from('production_events')
+        .select('start_time,event_type')
+        .eq('production_id', _resolvedProductionId)
+        .or('event_type.ilike.rehearsal,event_type.ilike.music_rehearsal,event_type.ilike.choreography')
+        .order('start_time', { ascending: true })
+        .limit(1);
+      if (error) throw error;
+      _rehearsalStartDate = data?.[0]?.start_time ? String(data[0].start_time).slice(0, 10) : '';
+      return _rehearsalStartDate;
+    } catch (error) {
+      console.warn('[BTS] Could not load rehearsal start date from calendar.', error);
+      _rehearsalStartDate = '';
+      return '';
+    }
   }
 
   // ── Age helpers ──────────────────────────────────────────────────────────────
@@ -1005,7 +1041,7 @@
   function rpfDisplayFieldLabel(label) {
     const text = String(label || '').trim();
     if (/^name\s+as\s+it\s+should\s+appear\s+in\s+the\s+programme$/i.test(text)) {
-      return 'Exact programme name, first and last';
+      return 'Exact first and last name';
     }
     return text;
   }
@@ -1669,6 +1705,12 @@
 
   function rpfTextForPdf(value) {
     return String(value ?? '')
+      .replace(/&nbsp;/gi, ' ')
+      .replace(/&amp;/gi, '&')
+      .replace(/&lt;/gi, '<')
+      .replace(/&gt;/gi, '>')
+      .replace(/&quot;/gi, '"')
+      .replace(/&#39;|&apos;/gi, "'")
       .replace(/\u00a0/g, ' ')
       .replace(/[“”]/g, '"')
       .replace(/[‘’]/g, "'")
@@ -1800,7 +1842,7 @@
     const doc = {
       title,
       fileSlug: rpfContractFileSlugForPdf(title),
-      generatedAt: new Date().toLocaleString('en-CA'),
+      generatedAt: rpfFormatPdfDate(new Date().toISOString(), true),
       organisation: rpfTextForPdf(_org?.name || _org?.abbreviation || 'Organisation'),
       logoUrl: _org?.logo_url || _org?.logo_white_url || '',
       production: rpfTextForPdf(_prod?.title || 'Production'),
@@ -1852,6 +1894,18 @@
     return '';
   }
 
+  function rpfFormatPdfDate(value, withTime = false) {
+    const raw = String(value || '').trim();
+    if (!raw) return '';
+    const normalized = /^\d{4}-\d{2}-\d{2}$/.test(raw) ? `${raw}T00:00:00` : raw;
+    const date = new Date(normalized);
+    if (Number.isNaN(date.getTime())) return raw;
+    const options = withTime
+      ? { year: 'numeric', month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit' }
+      : { year: 'numeric', month: 'long', day: 'numeric' };
+    return date.toLocaleString('en-CA', options);
+  }
+
   function rpfPdfSignatureInfo(doc) {
     const guardianName = rpfPdfAnswerFromDoc(doc, ['parent or guardian full name', 'final_guardian_name']);
     const guardianRel = rpfPdfAnswerFromDoc(doc, ['relationship to performer', 'final_guardian_relationship']);
@@ -1870,15 +1924,14 @@
 
   function rpfPdfLineItemsForContract(doc) {
     const items = [];
-    const add = (text, opts = {}) => items.push(Object.assign({ type: 'text', text: rpfTextForPdf(text), size: 10, font: 'F1', indent: 0, gap: 2, align: 'left', color: 'ink' }, opts));
+    const add = (text, opts = {}) => items.push(Object.assign({ type: 'text', text: rpfTextForPdf(text), size: 9.5, font: 'F1', indent: 0, gap: 2, align: 'left', color: 'ink' }, opts));
     const sig = rpfPdfSignatureInfo(doc);
-    const sectionColors = ['purple', 'blue', 'green', 'pink'];
+    const sectionColors = ['purple'];
 
-    // Cover title — ZapfChancery for flair
-    add('Registration Summary', { size: 26, font: 'F3', align: 'center', gap: 4, color: 'purple' });
-    add(doc.production, { size: 13, font: 'F2', align: 'center', gap: 3, color: 'gold' });
-    add(doc.organisation, { size: 9, font: 'F1', align: 'center', gap: 10, color: 'muted' });
-    items.push({ type: 'rule', gap: 14, color: 'purple' });
+    add('Registration Summary', { size: 22, font: 'F2', align: 'center', gap: 12, color: 'purple' });
+    add(doc.production, { size: 12, font: 'F2', align: 'center', gap: 5, color: 'gold' });
+    add(doc.organisation, { size: 10, font: 'F1', align: 'center', gap: 18, color: 'muted' });
+    items.push({ type: 'rule', gap: 18, color: 'purple' });
 
     // Details card
     items.push({ type: 'sectionHeader', label: 'Registration Details', color: 'purple', num: '01', gap: 2 });
@@ -1886,7 +1939,7 @@
       ['Organisation', doc.organisation],
       ['Production', doc.production],
       ['Performer', doc.performer],
-      ['Date Submitted', doc.date],
+      ['Date Submitted', rpfFormatPdfDate(doc.date)],
       ['Document Generated', doc.generatedAt],
     ].forEach(([label, value], i) => {
       items.push({ type: 'answerRow', label: rpfTextForPdf(label), value: rpfTextForPdf(value), shade: i % 2 === 0, gap: 0 });
@@ -1921,40 +1974,46 @@
 
   function rpfBuildAnswersPdf(data) {
     const doc = Array.isArray(data)
-      ? { title: rpfContractTitleForPdf(), generatedAt: new Date().toLocaleString('en-CA'), organisation: _org?.name || _org?.abbreviation || 'Organisation', logoUrl: _org?.logo_url || _org?.logo_white_url || '', production: _prod?.title || 'Production', performer: rpfPerformerNameForPdf(), date: rpfContractDateForPdf(), sections: [{ group: 'Registration', title: 'Submitted Answers', wording: [], answers: data }] }
+      ? { title: rpfContractTitleForPdf(), generatedAt: rpfFormatPdfDate(new Date().toISOString(), true), organisation: _org?.name || _org?.abbreviation || 'Organisation', logoUrl: _org?.logo_url || _org?.logo_white_url || '', production: _prod?.title || 'Production', performer: rpfPerformerNameForPdf(), date: rpfContractDateForPdf(), sections: [{ group: 'Registration', title: 'Submitted Answers', wording: [], answers: data }] }
       : data;
     const lineItems = rpfPdfLineItemsForContract(doc);
     const pages = [[]];
-    let y = 720;
+    const firstPageTop = 678;
+    const pageTop = 720;
+    let y = firstPageTop;
+    const nextPage = () => {
+      pages.push([]);
+      y = pageTop;
+    };
     lineItems.forEach(item => {
       if (item.type === 'spacer') {
         y -= item.h || 8;
         return;
       }
       if (item.type === 'rule') {
-        if (y < 62) { pages.push([]); y = 720; }
+        if (y < 62) nextPage();
         pages[pages.length - 1].push(Object.assign({}, item, { y }));
         y -= item.gap || 10;
         return;
       }
       if (item.type === 'signatureBlock') {
-        if (y < 230) { pages.push([]); y = 720; }
+        if (y < 230) nextPage();
         pages[pages.length - 1].push(Object.assign({}, item, { y: 178 }));
         y = 62;
         return;
       }
       if (item.type === 'sectionHeader') {
-        const h = 28;
-        if (y - h < 62) { pages.push([]); y = 720; }
+        const h = 24;
+        if (y - h < 62) nextPage();
         pages[pages.length - 1].push(Object.assign({}, item, { y, h }));
         y -= h + (item.gap || 4);
         return;
       }
       if (item.type === 'answerRow') {
-        const wrapLabel = rpfWrapPdfLine(item.label || '', 28);
-        const wrapValue = rpfWrapPdfLine(item.value || '', 52);
-        const rowH = Math.max(wrapLabel.length, wrapValue.length) * 16 + 8;
-        if (y - rowH < 62) { pages.push([]); y = 720; }
+        const wrapLabel = rpfWrapPdfLine(item.label || '', 30);
+        const wrapValue = rpfWrapPdfLine(item.value || '', 58);
+        const rowH = Math.max(wrapLabel.length, wrapValue.length) * 13 + 7;
+        if (y - rowH < 62) nextPage();
         pages[pages.length - 1].push(Object.assign({}, item, { y, h: rowH, wrapLabel, wrapValue }));
         y -= rowH + (item.gap || 0);
         return;
@@ -1963,10 +2022,10 @@
         const allLines = (item.lines || []).flatMap(w => {
           const str = typeof w === 'string' ? w : rpfTextForPdf(w.text || '');
           const bold = typeof w !== 'string' && !!w.bold;
-          return rpfWrapPdfLine(str, 70).map((t, i) => ({ text: t, bold: bold && i === 0 }));
+          return rpfWrapPdfLine(str, 106).map((t, i) => ({ text: t, bold: bold && i === 0 }));
         });
-        const blockH = allLines.length * 15 + 18;
-        if (y - blockH < 62) { pages.push([]); y = 720; }
+        const blockH = allLines.length * 12 + 16;
+        if (y - blockH < 62) nextPage();
         pages[pages.length - 1].push(Object.assign({}, item, { y, h: blockH, allLines }));
         y -= blockH + (item.gap || 10);
         return;
@@ -1975,7 +2034,7 @@
       const wrapped = item.text ? rpfWrapPdfLine(item.text, maxChars) : [''];
       wrapped.forEach((line, i) => {
         const lineHeight = Math.max(12, item.size * 1.35);
-        if (y - lineHeight < 62) { pages.push([]); y = 720; }
+        if (y - lineHeight < 62) nextPage();
         pages[pages.length - 1].push(Object.assign({}, item, { text: line, y }));
         y -= lineHeight;
         if (i === wrapped.length - 1) y -= item.gap || 0;
@@ -1986,7 +2045,7 @@
     objects.push(null);
     objects.push('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>');
     objects.push('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>');
-    objects.push('<< /Type /Font /Subtype /Type1 /BaseFont /ZapfChancery-MediumItalic >>');
+    objects.push('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Oblique >>');
     let logoObjNum = null;
     if (doc.logoData?.data && doc.logoData?.width && doc.logoData?.height) {
       logoObjNum = objects.length + 1;
@@ -2008,7 +2067,7 @@
     }[name] || '0.102 0.082 0.188');
     pages.forEach((pageLines, pageIndex) => {
       const pageBrand = pageIndex === 0
-        ? `q\n${color('purple')} rg\n0 734 612 58 re f\n${color('gold')} rg\n0 728 612 6 re f\n${color('pink')} rg\n528 744 14 14 re f\n${color('green')} rg\n548 744 14 14 re f\n${color('gold')} rg\n568 744 14 14 re f\nQ${logoObjNum ? `\nq\n1 1 1 rg\n42 742 92 36 re f\nQ\nq\n82 0 0 28 47 746 cm\n/ImLogo Do\nQ` : `\nBT\n${color('white')} rg\n/F2 12 Tf\n48 754 Td\n(${rpfPdfEscape(doc.organisation)}) Tj\nET`}`
+        ? `q\n${color('purple')} rg\n0 724 612 68 re f\n${color('gold')} rg\n0 716 612 8 re f\nQ${logoObjNum ? `\nq\n88 0 0 34 48 744 cm\n/ImLogo Do\nQ` : `\nBT\n${color('white')} rg\n/F2 13 Tf\n50 754 Td\n(${rpfPdfEscape(doc.organisation)}) Tj\nET`}`
         : `q\n${color('purple')} rg\n0 758 612 10 re f\n${color('gold')} rg\n0 752 612 3 re f\nQ`;
       const footer = `q\n${color('green')} RG\n0.75 w\n50 46 m\n562 46 l\nS\nQ\nBT\n${color('muted')} rg\n/F1 8 Tf\n50 34 Td\n(${rpfPdfEscape(doc.title)}) Tj\nET\nBT\n${color('muted')} rg\n/F1 8 Tf\n500 34 Td\n(Page ${pageIndex + 1} of ${pages.length}) Tj\nET`;
       const header = pageIndex > 0 ? `BT\n${color('purple')} rg\n/F2 9 Tf\n50 738 Td\n(${rpfPdfEscape(doc.title)}) Tj\nET` : '';
@@ -2021,7 +2080,7 @@
           return [
             `q\n${color('softGold')} rg\n44 ${line.y - 108} 524 128 re f\n${color('gold')} RG\n1 w\n44 ${line.y - 108} 524 128 re S\nQ`,
             `BT\n${color('purple')} rg\n/F2 12 Tf\n64 ${line.y} Td\n(Digital Signature) Tj\nET`,
-            `BT\n${color('purple')} rg\n/F3 28 Tf\n76 ${line.y - 40} Td\n(${rpfPdfEscape(sig.signer || 'N/A')}) Tj\nET`,
+            `BT\n${color('purple')} rg\n/F2 16 Tf\n76 ${line.y - 38} Td\n(${rpfPdfEscape(sig.signer || 'N/A')}) Tj\nET`,
             `q\n${color('green')} RG\n1 w\n64 ${line.y - 52} m\n320 ${line.y - 52} l\nS\nQ`,
             `BT\n${color('ink')} rg\n/F1 9 Tf\n64 ${line.y - 72} Td\n(Digitally signed by: ${rpfPdfEscape(sig.printedName || 'N/A')}) Tj\nET`,
             `BT\n${color('muted')} rg\n/F1 9 Tf\n64 ${line.y - 88} Td\n(Relationship / capacity: ${rpfPdfEscape(sig.relationship || 'N/A')}) Tj\nET`,
@@ -2031,21 +2090,21 @@
         if (line.type === 'sectionHeader') {
           const bg = line.color || 'purple';
           const fg = bg === 'gold' ? 'ink' : 'white';
-          const ty = line.y - line.h + 9;
+          const ty = line.y - line.h + 8;
           return [
             `q\n${color(bg)} rg\n50 ${line.y - line.h} 512 ${line.h} re f\nQ`,
-            `BT\n${color(fg)} rg\n/F3 12 Tf\n62 ${ty} Td\n(${rpfPdfEscape(line.num || '')}) Tj\nET`,
-            `BT\n${color(fg)} rg\n/F2 10 Tf\n88 ${ty} Td\n(${rpfPdfEscape(rpfWrapPdfLine(line.label || '', 62)[0] || '')}) Tj\nET`,
+            `BT\n${color(fg)} rg\n/F2 9.5 Tf\n62 ${ty} Td\n(${rpfPdfEscape(line.num || '')}) Tj\nET`,
+            `BT\n${color(fg)} rg\n/F2 9.5 Tf\n88 ${ty} Td\n(${rpfPdfEscape(rpfWrapPdfLine(line.label || '', 66)[0] || '')}) Tj\nET`,
           ].join('\n');
         }
         if (line.type === 'answerRow') {
           const parts = [];
           if (line.shade) parts.push(`q\n${color('lightRow')} rg\n50 ${line.y - line.h} 512 ${line.h} re f\nQ`);
           (line.wrapLabel || ['']).forEach((lbl, i) => {
-            parts.push(`BT\n${color('ink')} rg\n/F2 9.5 Tf\n58 ${line.y - 9 - i * 16} Td\n(${rpfPdfEscape(lbl)}) Tj\nET`);
+            parts.push(`BT\n${color('ink')} rg\n/F2 8.8 Tf\n58 ${line.y - 9 - i * 13} Td\n(${rpfPdfEscape(lbl)}) Tj\nET`);
           });
           (line.wrapValue || ['']).forEach((val, i) => {
-            parts.push(`BT\n${color('ink')} rg\n/F1 9.5 Tf\n230 ${line.y - 9 - i * 16} Td\n(${rpfPdfEscape(val)}) Tj\nET`);
+            parts.push(`BT\n${color('ink')} rg\n/F1 8.8 Tf\n230 ${line.y - 9 - i * 13} Td\n(${rpfPdfEscape(val)}) Tj\nET`);
           });
           return parts.join('\n');
         }
@@ -2055,9 +2114,9 @@
             const txt = typeof w === 'string' ? w : (w.text || '');
             const bold = typeof w !== 'string' && w.bold;
             const font = bold ? 'F2' : 'F1';
-            const sz = bold ? 9 : 9;
+            const sz = bold ? 8.6 : 8.4;
             const c = bold ? 'ink' : 'muted';
-            parts.push(`BT\n${color(c)} rg\n/${font} ${sz} Tf\n64 ${line.y - 13 - i * 15} Td\n(${rpfPdfEscape(txt)}) Tj\nET`);
+            parts.push(`BT\n${color(c)} rg\n/${font} ${sz} Tf\n64 ${line.y - 12 - i * 12} Td\n(${rpfPdfEscape(txt)}) Tj\nET`);
           });
           return parts.join('\n');
         }
@@ -2751,6 +2810,7 @@
     }
     _prod = prod;
     _regSettings = (typeof prod.registration_settings === 'object' && prod.registration_settings) ? prod.registration_settings : {};
+    await rpfLoadRehearsalStartDate();
 
     const loadingCopy = document.getElementById('loading-prod-name');
     if (loadingCopy) loadingCopy.textContent = prod.title || '';
