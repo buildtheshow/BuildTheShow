@@ -880,6 +880,77 @@
     }
   }
 
+  function rpfPlainTextFromHtml(html) {
+    return String(html || '')
+      .replace(/<br\s*\/?>/gi, '\n')
+      .replace(/<\/p>/gi, '\n')
+      .replace(/<\/li>/gi, '\n')
+      .replace(/<li[^>]*>/gi, '- ')
+      .replace(/<[^>]+>/g, '')
+      .replace(/&nbsp;/g, ' ')
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, "'")
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
+  }
+
+  function rpfBuildPaymentEmailSummary() {
+    const s = _regSettings?.payment_settings || {};
+    const currency = String(s.currency || 'CAD').toUpperCase();
+    const currSym = { CAD: '$', USD: '$', GBP: '£' }[currency] || '$';
+    const currCode = currency !== 'CAD' ? ` ${currency}` : '';
+    const fmtAmt = value => {
+      const n = parseFloat(String(value || '').replace(/[^0-9.]/g, ''));
+      if (!Number.isFinite(n) || n <= 0) return '';
+      return `${currSym}${Number.isInteger(n) ? n : n.toFixed(2)}${currCode}`;
+    };
+    const fmtDate = value => rpfDateLabel(value) || '';
+    const lines = [];
+
+    if (!s.mode || s.mode === 'none') {
+      lines.push('No production fee has been configured for this show.');
+    } else if (s.mode === 'flat') {
+      if (s.fee) lines.push(`Registration fee: ${fmtAmt(s.fee) || s.fee}`);
+      if (s.fee_due_date) lines.push(`Due date: ${fmtDate(s.fee_due_date)}`);
+      if (s.late_fee_date) lines.push(`Late payment after: ${fmtDate(s.late_fee_date)}`);
+      if (!lines.length) lines.push('Production fee amount has not been configured yet.');
+    } else if (s.mode === 'split') {
+      const insts = (s.split_installments || []).filter((_, i) => i < (s.split_count || 2));
+      if (insts.length) {
+        insts.forEach((inst, index) => {
+          const due = inst.due_date ? ` due ${fmtDate(inst.due_date)}` : '';
+          lines.push(`Payment ${index + 1}: ${fmtAmt(inst.amount) || 'Amount not set'}${due}`);
+        });
+        const total = insts.reduce((sum, inst) => sum + (parseFloat(String(inst.amount || '').replace(/[^0-9.]/g, '')) || 0), 0);
+        if (total > 0) lines.push(`Total: ${fmtAmt(total)}`);
+        if (s.split_allow_upfront) lines.push('Full upfront payment is also available.');
+      } else {
+        lines.push('Payment amounts have not been configured yet.');
+      }
+    }
+
+    const info = [];
+    if (s.checkout_etransfer_enabled !== false && s.etransfer_email) info.push(`E-transfer: ${s.etransfer_email}`);
+    if (s.checkout_square_enabled === true) info.push('Square checkout is available.');
+    if (s.checkout_pay_later_enabled !== false) info.push('Pay later is available if needed.');
+    const instructions = rpfPlainTextFromHtml(subTokens(s.instructions || ''));
+    if (instructions) info.push(instructions);
+
+    const discounts = [];
+    if (s.sibling_discount_enabled) discounts.push('Sibling/family discount may apply.');
+    if (s.volunteer_discount_enabled) discounts.push('Volunteer discount may apply.');
+    if (s.scholarship_enabled) discounts.push(s.scholarship_note ? rpfPlainTextFromHtml(subTokens(s.scholarship_note)) : 'Financial assistance is available by request.');
+
+    return esc([
+      lines.join('\n'),
+      info.length ? `Payment information:\n${info.join('\n')}` : '',
+      discounts.length ? `Discounts and assistance:\n${discounts.join('\n')}` : '',
+    ].filter(Boolean).join('\n\n'));
+  }
+
   // ── Age helpers ──────────────────────────────────────────────────────────────
   function rpfParseDateValue(value) {
     if (!value) return null;
@@ -2599,6 +2670,7 @@
     const regUrl = window.location.href;
     const pdfUrl = _applicant?.custom_answers?.__bts_registration_pdf_url || '';
     const scheduleSummaries = await rpfLoadProductionScheduleSummaries();
+    const paymentSummary = rpfBuildPaymentEmailSummary();
     const { data, error } = await sb.functions.invoke('send-email', {
       body: {
         applicant_id: _applicant.id,
@@ -2614,6 +2686,8 @@
           performance_schedule: scheduleSummaries.performance_schedule || '',
           event_schedule: scheduleSummaries.event_schedule || '',
           production_schedule: scheduleSummaries.production_schedule || '',
+          payment_schedule: paymentSummary,
+          payment_information: paymentSummary,
           opening_night: _prod?.end_date ? new Date(`${_prod.end_date}T00:00:00`).toLocaleDateString('en-CA', { month: 'long', day: 'numeric', year: 'numeric' }) : '',
         },
       },
