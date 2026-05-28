@@ -731,7 +731,7 @@
     { key: 'physical_activity_waiver', group: 'Agreements & Consent', color: '#d1523d', defaultOn: false, title: 'Special Performance Acknowledgement', defaultFields: ['{physical-performance}'] },
     { key: 'costume_measurements', group: 'Costumes',            color: '#ca7ea7', defaultOn: true,  title: 'Costume Measurements',                  defaultFields: ['{costume-measurements}'] },
     { key: 'hair_makeup',          group: 'Costumes',            color: '#ca7ea7', defaultOn: true,  title: 'Hair & Makeup',                         defaultFields: ['Skin allergies or sensitivities', 'Makeup sensitivities', 'Wig considerations', 'Other notes for hair and makeup'] },
-    { key: 'programme_credit',     group: 'Programme',           color: '#78bbd4', defaultOn: true,  title: 'Programme Credit',                      defaultFields: ['Name as it should appear in the programme *'] },
+    { key: 'programme_credit',     group: 'Programme',           color: '#78bbd4', defaultOn: true,  title: 'Programme Credit',                      defaultFields: ['Exact programme name, first and last *'] },
     { key: 'cast_bio',             group: 'Programme',           color: '#78bbd4', defaultOn: true,  title: 'Cast Bio',                              defaultFields: ['Programme bio (50 words or less) *', 'Previous credits', 'Fun fact'] },
     { key: 'headshot',             group: 'Programme',           color: '#78bbd4', defaultOn: true,  title: 'Headshot Submission',                   defaultFields: ['Headshot upload *'] },
     { key: 'production_fee',       group: 'Production Fees',     color: '#769e7b', defaultOn: false, title: 'Production Fees',                       defaultFields: ['{production-fee}'] },
@@ -997,6 +997,22 @@
       if (!/\bsignature\b/i.test(label)) visible.push(field);
     });
     return visible;
+  }
+
+  function rpfDisplayFieldLabel(label) {
+    const text = String(label || '').trim();
+    if (/^name\s+as\s+it\s+should\s+appear\s+in\s+the\s+programme$/i.test(text)) {
+      return 'Exact programme name, first and last';
+    }
+    return text;
+  }
+
+  function rpfTemplateIntro(def, template) {
+    const intro = template?.intro ? String(template.intro) : '';
+    if (def?.key === 'programme_credit' && (!intro.trim() || /^the\s+name\s+they\s+want\s+printed\s+in\s+the\s+programme\.?$/i.test(intro.trim()))) {
+      return 'Enter the exact first and last name to print in the programme. This will be copied and pasted exactly as written.';
+    }
+    return intro;
   }
 
   // ── Costume measurements size groups (abbreviated) ────────────────────────────
@@ -1385,7 +1401,7 @@
       : '';
     const displayLabel = pickupMatch
       ? (pickupPart === 'full name' ? 'Full name' : pickupPart === 'relationship to performer' ? 'Relationship to performer' : 'Phone number')
-      : label;
+      : rpfDisplayFieldLabel(label);
 
     const type = rpfFieldType(label);
     const req  = isRequired ? `<span class="rpf-req"> *</span>` : '';
@@ -2307,7 +2323,7 @@
         }
         const template = _formTemplates[def.key] || null;
         const fields   = registrationFormVisibleFields(template?.fields?.length ? template.fields : def.defaultFields || []);
-        const intro    = template?.intro ? subTokens(template.intro) : '';
+        const intro    = rpfTemplateIntro(def, template) ? subTokens(rpfTemplateIntro(def, template)) : '';
         const bodyHtml = def.key === 'cast_agreement'
           ? rpfRenderCastAgreementSection(template)
           : fields.map(f => rpfRenderField(f)).join('');
