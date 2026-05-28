@@ -818,6 +818,68 @@
     }
   }
 
+  const RPF_EVENT_LABELS = {
+    rehearsal: 'Rehearsal',
+    music_rehearsal: 'Music Rehearsal',
+    choreography: 'Choreography',
+    tech: 'Tech',
+    dress: 'Dress Rehearsal',
+    performance: 'Performance',
+    strike: 'Strike',
+    cast_party: 'Cast Party',
+    costume_moveout: 'Costume Move-Out',
+    audition: 'Audition',
+    dance_call: 'Dance Call',
+    callback: 'Callback',
+    other_audition: 'Other Audition',
+    event: 'Event',
+    meeting: 'Meeting',
+    deadline: 'Deadline',
+  };
+
+  function rpfTimeLabel(raw) {
+    const value = String(raw || '').slice(11, 16);
+    if (!value) return '';
+    const [hh, mm] = value.split(':').map(Number);
+    if (Number.isNaN(hh) || Number.isNaN(mm)) return value;
+    const hour12 = ((hh + 11) % 12) + 1;
+    return `${hour12}:${String(mm).padStart(2, '0')} ${hh >= 12 ? 'PM' : 'AM'}`;
+  }
+
+  function rpfFormatScheduleEvent(row) {
+    if (!row?.start_time) return row?.title || RPF_EVENT_LABELS[row?.event_type] || 'Event';
+    const typeLabel = RPF_EVENT_LABELS[row.event_type] || row.event_type || 'Event';
+    const date = rpfDateLabel(String(row.start_time).slice(0, 10));
+    const time = rpfTimeLabel(row.start_time);
+    const venue = row.venue ? ` at ${row.venue}` : '';
+    return `${row.title || typeLabel}: ${[date, time].filter(Boolean).join(' at ')}${venue}`;
+  }
+
+  async function rpfLoadProductionScheduleSummaries() {
+    if (!_resolvedProductionId) return { performance_schedule: '', event_schedule: '', production_schedule: '' };
+    try {
+      const { data, error } = await sb.from('production_events')
+        .select('title,start_time,end_time,venue,event_type')
+        .eq('production_id', _resolvedProductionId)
+        .order('start_time', { ascending: true });
+      if (error) throw error;
+      const rows = [...(data || [])].sort((a, b) => String(a.start_time || '').localeCompare(String(b.start_time || '')));
+      const performanceRows = rows.filter(row => String(row.event_type || '').toLowerCase() === 'performance');
+      const eventRows = rows.filter(row => {
+        const type = String(row.event_type || '').toLowerCase();
+        return type && type !== 'performance' && type !== 'rehearsal' && type !== 'music_rehearsal' && type !== 'choreography';
+      });
+      return {
+        performance_schedule: performanceRows.map(rpfFormatScheduleEvent).filter(Boolean).join('\n'),
+        event_schedule: eventRows.map(rpfFormatScheduleEvent).filter(Boolean).join('\n'),
+        production_schedule: rows.map(rpfFormatScheduleEvent).filter(Boolean).join('\n'),
+      };
+    } catch (error) {
+      console.warn('[BTS] Could not load production schedule for registration email.', error);
+      return { performance_schedule: '', event_schedule: '', production_schedule: '' };
+    }
+  }
+
   // ── Age helpers ──────────────────────────────────────────────────────────────
   function rpfParseDateValue(value) {
     if (!value) return null;
@@ -2536,6 +2598,7 @@
     if (!_applicant?.id || !_resolvedProductionId) throw new Error('Missing registration email context.');
     const regUrl = window.location.href;
     const pdfUrl = _applicant?.custom_answers?.__bts_registration_pdf_url || '';
+    const scheduleSummaries = await rpfLoadProductionScheduleSummaries();
     const { data, error } = await sb.functions.invoke('send-email', {
       body: {
         applicant_id: _applicant.id,
@@ -2548,6 +2611,9 @@
           registration_pdf_button: pdfUrl ? `<a href="${pdfUrl.replace(/"/g,'&quot;')}" style="display:inline-block;background:#572e88;color:#ffffff;text-decoration:none;font-weight:900;font-size:16px;line-height:1.2;padding:16px 24px;border-radius:10px;">View Registration PDF</a>` : '',
           rehearsal_start_date: rpfRehearsalStartDateLabel(),
           rehearsal_schedule: _regSettings?.rehearsal_schedule || _prod?.rehearsal_schedule || '',
+          performance_schedule: scheduleSummaries.performance_schedule || '',
+          event_schedule: scheduleSummaries.event_schedule || '',
+          production_schedule: scheduleSummaries.production_schedule || '',
           opening_night: _prod?.end_date ? new Date(`${_prod.end_date}T00:00:00`).toLocaleDateString('en-CA', { month: 'long', day: 'numeric', year: 'numeric' }) : '',
         },
       },
