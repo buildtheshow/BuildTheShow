@@ -308,6 +308,9 @@
     .rpf-input:not(.rpf-prefilled):not(:focus) { border-color: #ddd8e8; }
     textarea.rpf-input { resize: vertical; min-height: 80px; }
     .rpf-age-note { margin-top: 0.38rem; font-size: 0.72rem; font-weight: 800; color: var(--purple); }
+    .rpf-input.rpf-input-error, input.rpf-input-error, select.rpf-input-error, textarea.rpf-input-error { border-color: #d1523d !important; background: #fff5f4 !important; }
+    .rpf-field-error { color: #d1523d; font-size: 0.75rem; font-weight: 700; margin-top: 0.35rem; }
+    .rpf-agree-row:has(input.rpf-input-error) { color: #d1523d; }
 
     /* ── Agree row / checkboxes ── */
     .rpf-agree-row {
@@ -1547,11 +1550,78 @@
     </div>`;
   }
 
+  // ── Validation ───────────────────────────────────────────────────────────────
+  function rpfIsFieldVisible(el) {
+    let node = el.parentElement;
+    while (node && node.id !== 'rpf-root') {
+      if (node.hidden || node.style.display === 'none') return false;
+      node = node.parentElement;
+    }
+    return true;
+  }
+
+  function rpfMarkFieldError(el) {
+    el.classList.add('rpf-input-error');
+    const group = el.closest('.rpf-form-group, .rpf-mr-sig-field, .rpf-final-agree-box, .rpf-mr-sig-block');
+    if (group && !group.querySelector('.rpf-field-error')) {
+      const err = document.createElement('div');
+      err.className = 'rpf-field-error';
+      err.textContent = 'This field is required.';
+      group.appendChild(err);
+    }
+  }
+
+  function rpfValidatePanel(panelIndex) {
+    const panel = document.querySelectorAll('.rpf-panel')[panelIndex];
+    if (!panel) return true;
+    let valid = true;
+
+    panel.querySelectorAll('.rpf-field-error').forEach(el => el.remove());
+    panel.querySelectorAll('.rpf-input-error').forEach(el => el.classList.remove('rpf-input-error'));
+
+    // Required attribute — checkboxes must be checked, text/date/etc must have value
+    panel.querySelectorAll('[required]').forEach(el => {
+      if (!rpfIsFieldVisible(el)) return;
+      const empty = el.type === 'checkbox' ? !el.checked : !el.value.trim();
+      if (empty) { rpfMarkFieldError(el); valid = false; }
+    });
+
+    // Visually required fields (label has .rpf-req) not already covered by [required]
+    panel.querySelectorAll('.rpf-form-group').forEach(group => {
+      if (!group.querySelector('.rpf-req')) return;
+      // CSD custom dropdown: validate the hidden value input
+      const csd = group.querySelector('.rpf-csd');
+      if (csd) {
+        const hidden = csd.querySelector('input[type="hidden"]');
+        const display = csd.querySelector('.rpf-csd-input');
+        if (hidden && !hidden.value.trim() && rpfIsFieldVisible(display || hidden)) {
+          rpfMarkFieldError(display || hidden); valid = false;
+        }
+        return;
+      }
+      // Regular inputs not already flagged by [required]
+      group.querySelectorAll('input:not([type="hidden"]):not([type="radio"]):not([required]), select:not([required]), textarea:not([required])').forEach(el => {
+        if (!rpfIsFieldVisible(el)) return;
+        const empty = el.type === 'checkbox' ? !el.checked : !el.value.trim();
+        if (empty) { rpfMarkFieldError(el); valid = false; }
+      });
+    });
+
+    return valid;
+  }
+
   // ── Navigation ───────────────────────────────────────────────────────────────
   window.rpfGoTo = function(index) {
     if (index < 0 || index >= _rpfSections.length) return;
     const prev = _rpfCurrent;
-    if (index > prev) _rpfCompleted.add(prev);
+    if (index > prev) {
+      if (!rpfValidatePanel(prev)) {
+        const panels = document.querySelectorAll('.rpf-panel');
+        panels[prev]?.querySelector('.rpf-input-error')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        return;
+      }
+      _rpfCompleted.add(prev);
+    }
     _rpfCurrent = index;
     rpfUpdateNav(index);
     document.querySelectorAll('.rpf-panel').forEach((p, i) => p.classList.toggle('rpf-active', i === index));
@@ -2195,6 +2265,21 @@
     el.setSelectionRange(pos + (newLen - oldLen), pos + (newLen - oldLen));
   }, true);
 
+  document.addEventListener('input', e => {
+    const el = e.target;
+    if (el.classList.contains('rpf-input-error') || el.closest('.rpf-input-error')) {
+      el.classList.remove('rpf-input-error');
+      el.closest('.rpf-form-group, .rpf-mr-sig-field, .rpf-final-agree-box, .rpf-mr-sig-block')?.querySelector('.rpf-field-error')?.remove();
+    }
+  }, true);
+  document.addEventListener('change', e => {
+    const el = e.target;
+    if (el.classList.contains('rpf-input-error')) {
+      el.classList.remove('rpf-input-error');
+      el.closest('.rpf-form-group, .rpf-mr-sig-field, .rpf-final-agree-box, .rpf-mr-sig-block')?.querySelector('.rpf-field-error')?.remove();
+    }
+  }, true);
+
   // ── Auto-save ─────────────────────────────────────────────────────────────────
   function scheduleSave(delay = 2000) {
     clearTimeout(_saveTimer);
@@ -2217,6 +2302,11 @@
 
   // ── Final submit ──────────────────────────────────────────────────────────────
   window.rpfSubmit = async function() {
+    if (!rpfValidatePanel(_rpfCurrent)) {
+      const panels = document.querySelectorAll('.rpf-panel');
+      panels[_rpfCurrent]?.querySelector('.rpf-input-error')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return;
+    }
     const btn = document.querySelector('.rpf-submit-btn');
     if (btn) { btn.disabled = true; btn.textContent = 'Submitting...'; }
 
