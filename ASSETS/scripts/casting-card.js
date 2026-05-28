@@ -272,16 +272,18 @@ function renderCastingCard(data, options = {}) {
     const metaSizeInShow = `${(nameNum * 0.50).toFixed(2)}cqw`;
     return `
       <div class="${cardClasses}" ${attrs.join(' ')}>
-        <div class="casting-card-image-area">
+        <div class="casting-card-inshow-photo">
           ${imageHTML}
           ${indicatorsHTML}
           ${videoCallBadge}
         </div>
-        <div class="casting-card-lower casting-card-lower--inshow">
-          <div class="casting-card-inshow-name" style="font-size:${nameSize};">${esc(fullName)}</div>
-          <div class="casting-card-inshow-char" style="font-size:${charSize};">${charLine}</div>
-          <div class="casting-card-inshow-meta" style="font-size:${metaSizeInShow};">${esc(thirdLine)}</div>
-        </div>
+        <div class="casting-card-inshow-spacer"></div>
+        <div class="casting-card-inshow-name" style="font-size:${nameSize};">${esc(fullName)}</div>
+        <div class="casting-card-inshow-spacer"></div>
+        <div class="casting-card-inshow-char" style="font-size:${charSize};">${charLine}</div>
+        <div class="casting-card-inshow-spacer"></div>
+        <div class="casting-card-inshow-meta" style="font-size:${metaSizeInShow};">${esc(thirdLine)}</div>
+        <div class="casting-card-inshow-spacer"></div>
       </div>
     `;
   }
