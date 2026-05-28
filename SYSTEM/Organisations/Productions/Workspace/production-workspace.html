@@ -706,6 +706,7 @@
     .rpt-household-modal-members { display:flex; flex-direction:column; gap:0.2rem; max-height:220px; overflow-y:auto; }
     .rpt-household-modal-member { display:flex; align-items:center; gap:0.6rem; padding:0.42rem 0.6rem; border-radius:8px; cursor:pointer; font-size:0.82rem; color:#1a1530; }
     .rpt-household-modal-member:hover { background:rgba(87,46,136,0.05); }
+    .rpt-household-modal-member.selected { background:rgba(87,46,136,0.1); font-weight:800; }
     .rpt-household-modal-member input[type=checkbox] { accent-color:#572e88; cursor:pointer; }
     .rpt-household-modal-actions { display:flex; gap:0.5rem; justify-content:flex-end; padding-top:0.25rem; }
     .rpt-hh-suggestion { background:rgba(87,46,136,0.07); border:1.5px solid rgba(87,46,136,0.18); border-radius:9px; padding:0.55rem 0.75rem; display:flex; flex-wrap:wrap; align-items:center; gap:0.45rem; }
@@ -43847,7 +43848,7 @@ See you soon!
       ? `<div class="rpt-hh-suggestion">
           <div class="rpt-hh-suggestion-label">Suggested members</div>
           ${suggestedMembers.map(m => `<span class="rpt-hh-suggestion-name">${esc(m.name)}</span>`).join('')}
-          <button class="rpt-hh-suggestion-add" onclick="rptSelectSuggestedHouseholdMembers(${JSON.stringify(suggestedMembers.map(m => m.id))}, this)">Select all</button>
+          <button class="rpt-hh-suggestion-add" data-member-ids="${esc(JSON.stringify(suggestedMembers.map(m => m.id)))}" onclick="rptSelectSuggestedHouseholdMembers(this)">Select all</button>
         </div>`
       : '';
 
@@ -43863,7 +43864,7 @@ See you soon!
       <input class="rpt-household-modal-input" id="rpt-hh-search" placeholder="Search cast members…" oninput="rptFilterHouseholdMembers(this.value)" style="margin-bottom:0.25rem;" />
       <div class="rpt-household-modal-members" id="rpt-hh-members">${sortedCastItems.map(item => {
         const id = String(item.assignment?.id || '');
-        return `<label class="rpt-household-modal-member"><input type="checkbox" value="${esc(id)}" ${checkedIds.has(id) ? 'checked' : ''} /><span>${esc(String(item.app?.name || 'Cast Member').trim())}</span></label>`;
+        return `<label class="rpt-household-modal-member${checkedIds.has(id) ? ' selected' : ''}"><input type="checkbox" value="${esc(id)}" ${checkedIds.has(id) ? 'checked' : ''} onchange="this.closest('.rpt-household-modal-member')?.classList.toggle('selected', this.checked)" /><span>${esc(String(item.app?.name || 'Cast Member').trim())}</span></label>`;
       }).join('')}</div>
       <div class="rpt-household-modal-actions">
         <button class="rpt-modal-cancel-btn" onclick="document.getElementById('rpt-household-modal')?.remove()">Cancel</button>
@@ -43874,10 +43875,14 @@ See you soon!
     document.getElementById('rpt-hh-name')?.focus();
   }
 
-  function rptSelectSuggestedHouseholdMembers(ids, button = null) {
+  function rptSelectSuggestedHouseholdMembers(button) {
+    const ids = JSON.parse(button?.dataset?.memberIds || '[]');
     ids.forEach(id => {
       const cb = document.querySelector(`#rpt-hh-members input[value="${CSS.escape(id)}"]`);
-      if (cb) cb.checked = true;
+      if (cb) {
+        cb.checked = true;
+        cb.dispatchEvent(new Event('change', { bubbles: true }));
+      }
     });
     if (button) {
       button.textContent = 'Selected';
