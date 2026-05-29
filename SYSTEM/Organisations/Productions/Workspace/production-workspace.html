@@ -8528,6 +8528,10 @@
 	      border-color: var(--vol-add-color, #572e88);
 	      box-shadow: 0 0 0 3px color-mix(in srgb, var(--vol-add-color, #572e88) 18%, transparent);
 	    }
+	    .vol-schedule-line.is-own-time input,
+	    .vol-schedule-line.is-own-time .vol-schedule-unit {
+	      opacity: 0.38;
+	    }
 	    .vol-schedule-field--full { grid-column: 1 / -1; }
 	    .vol-hours-toggle {
 	      display: grid;
@@ -66315,7 +66319,8 @@ See you soon!
 	      before_end: 'before end',
 	      after_end: 'after end',
 	      before_event_start: 'before day',
-	      after_event_end: 'after day'
+	      after_event_end: 'after day',
+	      own_time: 'own time'
 	    })[a] || a;
 	    const longAnchor = a => ({
 	      before_start: 'before event starts',
@@ -66323,7 +66328,8 @@ See you soon!
 	      before_end: 'before event ends',
 	      after_end: 'after event ends',
 	      before_event_start: 'before calendar day starts',
-	      after_event_end: 'after calendar day ends'
+	      after_event_end: 'after calendar day ends',
+	      own_time: 'works on their own time'
 	    })[a] || a;
 	    const startMins = parseInt(val.shiftStartMins, 10) || 0;
 	    const endMins = parseInt(val.shiftEndMins, 10) || 0;
@@ -66331,6 +66337,10 @@ See you soon!
 	    const endAnchor = val.shiftEndAnchor || 'after_end';
 	    const shortParts = [];
 	    const longParts = [];
+	    if (startAnchor === 'own_time' || endAnchor === 'own_time') {
+	      shortParts.push('Own time');
+	      longParts.push('Works on their own time');
+	    } else {
 	    if (startMins || startAnchor !== 'before_start') {
 	      shortParts.push(`${fmtMins(startMins)} ${shortAnchor(startAnchor)}`);
 	      longParts.push(`Starts ${fmtMins(startMins)} ${longAnchor(startAnchor)}`);
@@ -66342,6 +66352,7 @@ See you soon!
 	    if (!shortParts.length) {
 	      shortParts.push('Event time');
 	      longParts.push('Uses the event start and end time');
+	    }
 	    }
 	    if (val.hoursMode === 'full') {
 	      shortParts.push('Full credit');
@@ -66459,6 +66470,30 @@ See you soon!
 	    if (fullNote) fullNote.style.display = mode === 'full' ? '' : 'none';
 	  }
 
+	  function volScheduleAnchorChange(key, changedSide) {
+	    const startSelect = document.getElementById(`vsq-sched-sanchor-${key}`);
+	    const endSelect = document.getElementById(`vsq-sched-eanchor-${key}`);
+	    const startMins = document.getElementById(`vsq-sched-smins-${key}`);
+	    const endMins = document.getElementById(`vsq-sched-emins-${key}`);
+	    if (changedSide === 'start' && startSelect?.value !== 'own_time' && endSelect?.value === 'own_time') {
+	      endSelect.value = 'after_end';
+	    } else if (changedSide === 'end' && endSelect?.value !== 'own_time' && startSelect?.value === 'own_time') {
+	      startSelect.value = 'before_start';
+	    }
+	    const ownTimeSelected = startSelect?.value === 'own_time' || endSelect?.value === 'own_time';
+	    if (ownTimeSelected) {
+	      if (startSelect) startSelect.value = 'own_time';
+	      if (endSelect) endSelect.value = 'own_time';
+	      if (startMins) startMins.value = 0;
+	      if (endMins) endMins.value = 0;
+	    }
+	    [startMins, endMins].forEach(input => {
+	      if (input) input.disabled = ownTimeSelected;
+	    });
+	    document.getElementById(`vsq-sched-start-line-${key}`)?.classList.toggle('is-own-time', ownTimeSelected);
+	    document.getElementById(`vsq-sched-end-line-${key}`)?.classList.toggle('is-own-time', ownTimeSelected);
+	  }
+
 	  function volToggleSchedule(type, ri, typeLabel) {
 	    typeLabel = typeLabel || type;
 	    document.querySelectorAll('.vol-per-dropdown, .vol-schedule-popover, .vol-schedule-modal').forEach(el => el.remove());
@@ -66466,9 +66501,11 @@ See you soon!
 	    if (!btn) return;
 	    const key = `${type}-${ri}`;
 	    const saved = _staffingPlan[key] || {};
+	    const savedOwnTime = saved.shiftStartAnchor === 'own_time' || saved.shiftEndAnchor === 'own_time';
 	    const pop = document.createElement('div');
 	    pop.className = 'vol-schedule-modal';
 	    const anchorOpts = (sel) => [
+	      ['own_time',           `works on their own time`],
 	      ['before_start',       `before event starts`],
 	      ['after_start',        `after event starts`],
 	      ['before_end',         `before event ends`],
@@ -66488,18 +66525,18 @@ See you soon!
 	        <div class="vol-schedule-row">
 	          <div class="vol-schedule-field vol-schedule-field--full">
 	            <label>Starts</label>
-	            <div class="vol-schedule-line">
-	              <input type="number" min="0" max="480" id="vsq-sched-smins-${key}" value="${saved.shiftStartMins ?? ''}" placeholder="0" aria-label="Start offset in minutes" />
+	            <div class="vol-schedule-line${savedOwnTime ? ' is-own-time' : ''}" id="vsq-sched-start-line-${key}">
+	              <input type="number" min="0" max="480" id="vsq-sched-smins-${key}" value="${savedOwnTime ? 0 : (saved.shiftStartMins ?? '')}" placeholder="0" aria-label="Start offset in minutes" ${savedOwnTime ? 'disabled' : ''} />
 	              <span class="vol-schedule-unit">minutes</span>
-	              <select id="vsq-sched-sanchor-${key}" class="vol-schedule-select" aria-label="Start anchor">${anchorOpts(saved.shiftStartAnchor||'before_start')}</select>
+	              <select id="vsq-sched-sanchor-${key}" class="vol-schedule-select" aria-label="Start anchor" onchange="volScheduleAnchorChange('${key}','start')">${anchorOpts(savedOwnTime ? 'own_time' : (saved.shiftStartAnchor||'before_start'))}</select>
 	            </div>
 	          </div>
 	          <div class="vol-schedule-field vol-schedule-field--full">
 	            <label>Ends</label>
-	            <div class="vol-schedule-line">
-	              <input type="number" min="0" max="480" id="vsq-sched-emins-${key}" value="${saved.shiftEndMins ?? ''}" placeholder="0" aria-label="End offset in minutes" />
+	            <div class="vol-schedule-line${savedOwnTime ? ' is-own-time' : ''}" id="vsq-sched-end-line-${key}">
+	              <input type="number" min="0" max="480" id="vsq-sched-emins-${key}" value="${savedOwnTime ? 0 : (saved.shiftEndMins ?? '')}" placeholder="0" aria-label="End offset in minutes" ${savedOwnTime ? 'disabled' : ''} />
 	              <span class="vol-schedule-unit">minutes</span>
-	              <select id="vsq-sched-eanchor-${key}" class="vol-schedule-select" aria-label="End anchor">${anchorOpts(saved.shiftEndAnchor||'after_end')}</select>
+	              <select id="vsq-sched-eanchor-${key}" class="vol-schedule-select" aria-label="End anchor" onchange="volScheduleAnchorChange('${key}','end')">${anchorOpts(savedOwnTime ? 'own_time' : (saved.shiftEndAnchor||'after_end'))}</select>
 	            </div>
 	          </div>
 	          <div class="vol-schedule-field vol-schedule-field--full">
@@ -66539,10 +66576,16 @@ See you soon!
 
 	  function volSaveSchedule(type, ri) {
 	    const key = `${type}-${ri}`;
-	    const shiftStartMins = parseInt(document.getElementById(`vsq-sched-smins-${key}`)?.value, 10) || 0;
-	    const shiftStartAnchor = document.getElementById(`vsq-sched-sanchor-${key}`)?.value || 'before_start';
-	    const shiftEndMins = parseInt(document.getElementById(`vsq-sched-emins-${key}`)?.value, 10) || 0;
-	    const shiftEndAnchor = document.getElementById(`vsq-sched-eanchor-${key}`)?.value || 'after_end';
+	    let shiftStartMins = parseInt(document.getElementById(`vsq-sched-smins-${key}`)?.value, 10) || 0;
+	    let shiftStartAnchor = document.getElementById(`vsq-sched-sanchor-${key}`)?.value || 'before_start';
+	    let shiftEndMins = parseInt(document.getElementById(`vsq-sched-emins-${key}`)?.value, 10) || 0;
+	    let shiftEndAnchor = document.getElementById(`vsq-sched-eanchor-${key}`)?.value || 'after_end';
+	    if (shiftStartAnchor === 'own_time' || shiftEndAnchor === 'own_time') {
+	      shiftStartMins = 0;
+	      shiftEndMins = 0;
+	      shiftStartAnchor = 'own_time';
+	      shiftEndAnchor = 'own_time';
+	    }
 	    const hoursMode = document.querySelector(`input[name="vsq-hours-mode-${key}"]:checked`)?.value || 'auto';
 	    const countsFor = hoursMode === 'fixed' ? (parseFloat(document.getElementById(`vsq-sched-counts-${key}`)?.value) || 0) : 0;
 	    if (!_staffingPlan[key]) _staffingPlan[key] = {};
