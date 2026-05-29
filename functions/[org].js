@@ -11,6 +11,7 @@ const RESERVED_ROOTS = new Set([
   'SYSTEM',
   'functions',
   'supabase',
+  'volunteers',
 ]);
 
 const CLEAN_ROUTE_ASSETS = new Map([
@@ -20,7 +21,6 @@ const CLEAN_ROUTE_ASSETS = new Map([
   ['reset-password', '/SYSTEM/Members/Account/reset-password.html'],
   ['find', '/PUBLIC/find.html'],
   ['volunteer-quiz', '/PUBLIC/volunteer-quiz'],
-  ['volunteers', '/volunteers/index.html'],
   ['opportunity', '/PUBLIC/opportunity-detail.html'],
   ['invite', '/PUBLIC/accept-invite.html'],
   ['audition', '/SYSTEM/Public/audition.html'],
