@@ -8348,20 +8348,25 @@
 	      display: grid;
 	      gap: 0.65rem;
 	    }
-	    .vol-schedule-popover--modal {
-	      left: 50% !important;
-	      top: 50% !important;
-	      width: min(360px, calc(100vw - 32px)) !important;
-	      transform: translate(-50%, -50%);
-	      z-index: 9100;
-	    }
-	    .vol-schedule-popover--modal::before {
-	      content: '';
+	    .vol-schedule-modal {
 	      position: fixed;
-	      inset: -100vmax;
-	      z-index: -1;
-	      background: rgba(26,21,48,0.28);
-	      backdrop-filter: blur(2px);
+	      inset: 0;
+	      z-index: 9100;
+	      display: flex;
+	      align-items: center;
+	      justify-content: center;
+	      padding: 1rem;
+	      background: rgba(26,21,48,0.34);
+	    }
+	    .vol-schedule-dialog {
+	      width: min(390px, 100%);
+	      background: #fff;
+	      border: 1px solid rgba(87,46,136,0.12);
+	      border-radius: 8px;
+	      box-shadow: 0 22px 60px rgba(26,21,48,0.24);
+	      padding: 1rem;
+	      display: grid;
+	      gap: 0.75rem;
 	    }
 	    .vol-schedule-head {
 	      display: flex;
@@ -8382,12 +8387,12 @@
 	      font-family: inherit;
 	    }
 	    .vol-schedule-popover-title {
-	      font-size: 0.7rem;
+	      font-size: 0.72rem;
 	      font-weight: 900;
-	      letter-spacing: 0.08em;
+	      letter-spacing: 0.04em;
 	      text-transform: uppercase;
-	      color: #572e88;
-	      margin-bottom: 0.1rem;
+	      color: #1a1530;
+	      margin: 0;
 	    }
 	    .vol-schedule-row {
 	      display: grid;
@@ -8401,12 +8406,12 @@
 	    }
 	    .vol-schedule-field label {
 	      display: block;
-	      font-size: 0.6rem;
+	      font-size: 0.67rem;
 	      font-weight: 800;
 	      color: rgba(87,46,136,0.55);
-	      margin-bottom: 0.2rem;
-	      text-transform: uppercase;
-	      letter-spacing: 0.06em;
+	      margin-bottom: 0.25rem;
+	      text-transform: none;
+	      letter-spacing: 0;
 	    }
 	    .vol-schedule-field input,
 	    .vol-schedule-select {
@@ -8418,8 +8423,17 @@
 	      font-weight: 700;
 	      font-family: inherit;
 	      color: #1a1530;
-	      background: #fbf9ff;
+	      background-color: #fff;
 	      min-height: 34px;
+	    }
+	    .vol-schedule-select {
+	      appearance: none;
+	      -webkit-appearance: none;
+	      padding-right: 1.7rem;
+	      background-image: linear-gradient(45deg, transparent 50%, #572e88 50%), linear-gradient(135deg, #572e88 50%, transparent 50%);
+	      background-position: calc(100% - 13px) 14px, calc(100% - 8px) 14px;
+	      background-size: 5px 5px, 5px 5px;
+	      background-repeat: no-repeat;
 	    }
 	    .vol-schedule-field input:focus,
 	    .vol-schedule-select:focus {
@@ -8444,7 +8458,7 @@
 	      min-height: 34px;
 	      border: 1.5px solid rgba(87,46,136,0.16);
 	      border-radius: 7px;
-	      background: #fbf9ff;
+	      background: #fff;
 	      color: #572e88;
 	      font-size: 0.7rem;
 	      font-weight: 850;
@@ -8455,9 +8469,9 @@
 	      letter-spacing: 0;
 	    }
 	    .vol-hours-toggle input:checked + .vol-hours-option {
-	      background: #572e88;
-	      border-color: #572e88;
-	      color: #fff;
+	      background: #efab45;
+	      border-color: #efab45;
+	      color: #000;
 	    }
 	    .vol-hours-fixed-row {
 	      display: grid;
@@ -8467,10 +8481,10 @@
 	      margin-top: 0.4rem;
 	    }
 	    .vol-schedule-note {
-	      margin-top: 0.35rem;
-	      font-size: 0.68rem;
+	      margin-top: 0.28rem;
+	      font-size: 0.7rem;
 	      color: rgba(87,46,136,0.58);
-	      font-weight: 700;
+	      font-weight: 650;
 	      line-height: 1.35;
 	    }
 	    .vol-schedule-actions {
@@ -66244,14 +66258,13 @@ See you soon!
 
 	  function volToggleSchedule(type, ri, typeLabel) {
 	    typeLabel = typeLabel || type;
-	    document.querySelectorAll('.vol-per-dropdown, .vol-schedule-popover').forEach(el => el.remove());
+	    document.querySelectorAll('.vol-per-dropdown, .vol-schedule-popover, .vol-schedule-modal').forEach(el => el.remove());
 	    const btn = document.getElementById(`vsq-sched-btn-${type}-${ri}`);
 	    if (!btn) return;
-	    const rect = btn.getBoundingClientRect();
 	    const key = `${type}-${ri}`;
 	    const saved = _staffingPlan[key] || {};
 	    const pop = document.createElement('div');
-	    pop.className = 'vol-schedule-popover vol-schedule-popover--modal';
+	    pop.className = 'vol-schedule-modal';
 	    const anchorOpts = (sel) => [
 	      ['before_start',       `before role starts`],
 	      ['after_start',        `after role starts`],
@@ -66261,55 +66274,57 @@ See you soon!
 	      ['after_event_end',    `after event ends`],
 	    ].map(([v,l]) => `<option value="${v}" ${sel===v?'selected':''}>${l}</option>`).join('');
 	    pop.innerHTML = `
-	      <div class="vol-schedule-head">
-	        <div>
-	          <div class="vol-schedule-popover-title">Shift schedule</div>
-	          <div class="vol-schedule-note" style="margin-top:0.15rem;">Set when this role starts and ends relative to the event.</div>
+	      <div class="vol-schedule-dialog" role="dialog" aria-modal="true" aria-labelledby="vol-schedule-title-${key}">
+	        <div class="vol-schedule-head">
+	          <div>
+	            <div class="vol-schedule-popover-title" id="vol-schedule-title-${key}">Shift schedule</div>
+	            <div class="vol-schedule-note" style="margin-top:0.15rem;">Set the call time for this role.</div>
+	          </div>
+	          <button type="button" class="vol-schedule-close" onclick="document.querySelectorAll('.vol-schedule-modal').forEach(el => el.remove())" aria-label="Close schedule popup">×</button>
 	        </div>
-	        <button type="button" class="vol-schedule-close" onclick="document.querySelectorAll('.vol-schedule-popover').forEach(el => el.remove())" aria-label="Close schedule popup">×</button>
-	      </div>
-	      <div class="vol-schedule-row">
-	        <div class="vol-schedule-field vol-schedule-field--full">
-	          <label>Shift starts</label>
-	          <div class="vol-schedule-line">
-	            <input type="number" min="0" max="480" id="vsq-sched-smins-${key}" value="${saved.shiftStartMins ?? ''}" placeholder="0" aria-label="Minutes" />
-	            <select id="vsq-sched-sanchor-${key}" class="vol-schedule-select" aria-label="Start anchor">${anchorOpts(saved.shiftStartAnchor||'before_start')}</select>
+	        <div class="vol-schedule-row">
+	          <div class="vol-schedule-field vol-schedule-field--full">
+	            <label>Starts</label>
+	            <div class="vol-schedule-line">
+	              <input type="number" min="0" max="480" id="vsq-sched-smins-${key}" value="${saved.shiftStartMins ?? ''}" placeholder="0" aria-label="Start offset in minutes" />
+	              <select id="vsq-sched-sanchor-${key}" class="vol-schedule-select" aria-label="Start anchor">${anchorOpts(saved.shiftStartAnchor||'before_start')}</select>
+	            </div>
+	          </div>
+	          <div class="vol-schedule-field vol-schedule-field--full">
+	            <label>Ends</label>
+	            <div class="vol-schedule-line">
+	              <input type="number" min="0" max="480" id="vsq-sched-emins-${key}" value="${saved.shiftEndMins ?? ''}" placeholder="0" aria-label="End offset in minutes" />
+	              <select id="vsq-sched-eanchor-${key}" class="vol-schedule-select" aria-label="End anchor">${anchorOpts(saved.shiftEndAnchor||'after_end')}</select>
+	            </div>
+	          </div>
+	          <div class="vol-schedule-field vol-schedule-field--full">
+	            <label>Volunteer hours</label>
+	            <div class="vol-hours-toggle">
+	              <label>
+	                <input type="radio" name="vsq-hours-mode-${key}" value="auto" ${!saved.hoursMode || saved.hoursMode === 'auto' ? 'checked' : ''} onchange="volHoursModeChange('${key}')" />
+	                <span class="vol-hours-option">Auto</span>
+	              </label>
+	              <label>
+	                <input type="radio" name="vsq-hours-mode-${key}" value="fixed" ${saved.hoursMode === 'fixed' ? 'checked' : ''} onchange="volHoursModeChange('${key}')" />
+	                <span class="vol-hours-option">Fixed</span>
+	              </label>
+	            </div>
+	            <div id="vsq-hours-fixed-row-${key}" class="vol-hours-fixed-row" style="display:${saved.hoursMode === 'fixed' ? 'grid' : 'none'};">
+	              <input type="number" min="0" max="24" step="0.5" id="vsq-sched-counts-${key}" value="${saved.countsFor || ''}" placeholder="0" aria-label="Fixed hours" />
+	              <span style="font-size:0.72rem;color:#572e88;font-weight:800;">hours</span>
+	            </div>
+	            <div id="vsq-hours-auto-note-${key}" class="vol-schedule-note" style="display:${!saved.hoursMode || saved.hoursMode === 'auto' ? '' : 'none'};">Counts the shift length automatically.</div>
 	          </div>
 	        </div>
-	        <div class="vol-schedule-field vol-schedule-field--full">
-	          <label>Shift ends</label>
-	          <div class="vol-schedule-line">
-	            <input type="number" min="0" max="480" id="vsq-sched-emins-${key}" value="${saved.shiftEndMins ?? ''}" placeholder="0" aria-label="Minutes" />
-	            <select id="vsq-sched-eanchor-${key}" class="vol-schedule-select" aria-label="End anchor">${anchorOpts(saved.shiftEndAnchor||'after_end')}</select>
-	          </div>
+	        <div class="vol-schedule-actions">
+	          <button type="button" class="btn-primary" style="font-size:0.76rem;width:100%;justify-content:center;" onclick="volSaveSchedule('${type}','${ri}')">Save schedule</button>
 	        </div>
-	        <div class="vol-schedule-field vol-schedule-field--full">
-	          <label>Volunteer hours</label>
-	          <div class="vol-hours-toggle">
-	            <label>
-	              <input type="radio" name="vsq-hours-mode-${key}" value="auto" ${!saved.hoursMode || saved.hoursMode === 'auto' ? 'checked' : ''} onchange="volHoursModeChange('${key}')" />
-	              <span class="vol-hours-option">Auto</span>
-	            </label>
-	            <label>
-	              <input type="radio" name="vsq-hours-mode-${key}" value="fixed" ${saved.hoursMode === 'fixed' ? 'checked' : ''} onchange="volHoursModeChange('${key}')" />
-	              <span class="vol-hours-option">Fixed</span>
-	            </label>
-	          </div>
-	          <div id="vsq-hours-fixed-row-${key}" class="vol-hours-fixed-row" style="display:${saved.hoursMode === 'fixed' ? 'grid' : 'none'};">
-	            <input type="number" min="0" max="24" step="0.5" id="vsq-sched-counts-${key}" value="${saved.countsFor || ''}" placeholder="0" aria-label="Fixed hours" />
-	            <span style="font-size:0.72rem;color:#572e88;font-weight:800;">hours</span>
-	          </div>
-	          <div id="vsq-hours-auto-note-${key}" class="vol-schedule-note" style="display:${!saved.hoursMode || saved.hoursMode === 'auto' ? '' : 'none'};">Counts the shift length automatically.</div>
-	        </div>
-	      </div>
-	      <div class="vol-schedule-actions">
-	        <button type="button" class="btn-primary" style="font-size:0.76rem;width:100%;justify-content:center;" onclick="volSaveSchedule('${type}','${ri}')">Save schedule</button>
 	      </div>`;
 	    document.body.appendChild(pop);
 	    const close = e => {
-	      if (!pop.contains(e.target) && e.target !== btn) { pop.remove(); document.removeEventListener('click', close); }
+	      if (e.target === pop) pop.remove();
 	    };
-	    setTimeout(() => document.addEventListener('click', close), 10);
+	    pop.addEventListener('click', close);
 	  }
 
 	  function volSaveSchedule(type, ri) {
@@ -66330,7 +66345,7 @@ See you soon!
 	      if (countsFor) parts.push(`${countsFor}h discount`);
 	      indicator.textContent = parts.join(' · ');
 	    }
-	    document.querySelectorAll('.vol-schedule-popover').forEach(el => el.remove());
+	    document.querySelectorAll('.vol-schedule-popover, .vol-schedule-modal').forEach(el => el.remove());
 	    saveStaffingPlan(true);
 	  }
 
