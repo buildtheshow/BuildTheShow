@@ -66377,15 +66377,19 @@ See you soon!
 
 	  async function _doSaveStaffingPlan() {
 	    if (!prodId) { showSaveStatus('error'); console.warn('[BTS] staffing save: no prodId'); return; }
-	    const plan = {};
+	    // Also sync any vsq- DOM elements that are currently visible (belt-and-suspenders)
 	    document.querySelectorAll('[id^="vsq-"]').forEach(el => {
 	      if (el.id.includes('display') || el.id.includes('tile') || el.id.includes('per-btn') || el.id.includes('dropdown') || el.id.includes('sched-') || el.id.includes('hours-')) return;
 	      const key = el.id.replace('vsq-', '');
 	      const btn = document.getElementById(`vsq-per-btn-${key}`);
 	      const count = parseInt(el.value, 10);
-	      plan[key] = { ...(_staffingPlan[key] || {}), count: isNaN(count) ? 0 : count, perLabel: btn?.textContent?.trim() || '' };
+	      if (!_staffingPlan[key]) _staffingPlan[key] = {};
+	      _staffingPlan[key].count = isNaN(count) ? 0 : count;
+	      if (btn) _staffingPlan[key].perLabel = btn.textContent.trim();
 	    });
-	    console.log('[BTS] staffing save: writing plan to DB for prodId', prodId, plan);
+	    const plan = JSON.parse(JSON.stringify(_staffingPlan));
+	    if (!Object.keys(plan).length) { console.warn('[BTS] staffing save: plan is empty, skipping'); _staffingDirty = false; return; }
+	    console.log('[BTS] staffing save: writing', Object.keys(plan).length, 'keys for prodId', prodId);
 	    showSaveStatus('saving');
 	    const { data, error } = await sb.from('productions')
 	      .update({ volunteer_staffing_plan: plan })
@@ -66401,8 +66405,7 @@ See you soon!
 	      console.warn('[BTS] staffing save: update matched no rows — check RLS. prodId:', prodId);
 	      return;
 	    }
-	    console.log('[BTS] staffing save: success', data);
-	    _staffingPlan = plan;
+	    console.log('[BTS] staffing save: success', data[0]?.id);
 	    _staffingDirty = false;
 	    showSaveStatus('saved');
 	    try { applyStaffingPlanToTiles(); } catch (_) {}
@@ -66563,6 +66566,10 @@ See you soon!
 	    input.value = val;
 	    display.textContent = val;
 	    if (tile) tile.classList.toggle('vol-staffing-tile--inactive', val === 0);
+	    // Update memory immediately so the debounced save uses current values even if DOM changes
+	    const key = `${type}-${ri}`;
+	    if (!_staffingPlan[key]) _staffingPlan[key] = {};
+	    _staffingPlan[key].count = val;
 	    saveStaffingPlan();
 	  }
 
