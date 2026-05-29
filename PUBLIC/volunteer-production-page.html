@@ -837,23 +837,32 @@
     async function loadPage() {
       showOnly('vp-loading');
       try {
-        // 1. Find org
-        const { data: orgData, error: orgErr } = await sb
-          .from('organizations')
-          .select('id, name, email, slug')
-          .ilike('slug', orgSlug)
-          .maybeSingle();
-        if (orgErr || !orgData) { showOnly('vp-notfound'); return; }
+        // 1. Find org — try slug first, then abbreviation (URL may use either)
+        let orgData = null;
+        const orgBySlug = await sb.from('organizations').select('id, name, email, slug, abbreviation').ilike('slug', orgSlug).maybeSingle();
+        if (orgBySlug.data) {
+          orgData = orgBySlug.data;
+        } else {
+          const orgByAbbr = await sb.from('organizations').select('id, name, email, slug, abbreviation').ilike('abbreviation', orgSlug).maybeSingle();
+          if (orgByAbbr.data) orgData = orgByAbbr.data;
+        }
+        if (!orgData) { showOnly('vp-notfound'); return; }
         org = orgData;
 
-        // 2. Find production
-        const { data: prodData, error: prodErr } = await sb
-          .from('productions')
-          .select('id, name, title, slug, poster_url, season, org_name, organization_id, wizard_data')
-          .eq('organization_id', org.id)
-          .ilike('slug', showSlug)
-          .maybeSingle();
-        if (prodErr || !prodData) { showOnly('vp-notfound'); return; }
+        // 2. Find production — try slug, then title-derived match
+        let prodData = null;
+        const prodBySlug = await sb.from('productions').select('id, name, title, slug, poster_url, season, org_name, organization_id, wizard_data').eq('organization_id', org.id).ilike('slug', showSlug).maybeSingle();
+        if (prodBySlug.data) {
+          prodData = prodBySlug.data;
+        } else {
+          // Fall back: load all productions for this org and match slug-like title
+          const prodAll = await sb.from('productions').select('id, name, title, slug, poster_url, season, org_name, organization_id, wizard_data').eq('organization_id', org.id);
+          if (prodAll.data) {
+            const normalise = s => (s || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+            prodData = prodAll.data.find(p => normalise(p.slug) === normalise(showSlug) || normalise(p.title) === normalise(showSlug) || normalise(p.name) === normalise(showSlug)) || null;
+          }
+        }
+        if (!prodData) { showOnly('vp-notfound'); return; }
         prod = prodData;
 
         // 3. Load opportunities + their linked events
