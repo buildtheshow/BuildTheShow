@@ -65691,7 +65691,7 @@ See you soon!
 	                  </div>
 	                  <div class="template-brand-tile-container template-brand-tile-container--footer" style="display:flex;flex-direction:row;gap:1cqw;align-items:stretch;position:relative;">
 	                    <button type="button" class="template-brand-tile-button" style="flex:1;align-self:stretch;text-align:center;display:flex;align-items:center;justify-content:center;" id="vsq-per-btn-${esc(type)}-${ri}" onclick="volTogglePer('${esc(type)}','${ri}')">${esc(perLabel)}</button>
-	                    <button type="button" class="template-brand-tile-button" style="flex:1;align-self:stretch;text-align:center;display:flex;align-items:center;justify-content:center;" id="vsq-sched-btn-${esc(type)}-${ri}" onclick="volToggleSchedule('${esc(type)}','${ri}')">Schedule</button>
+	                    <button type="button" class="template-brand-tile-button" style="flex:1;align-self:stretch;text-align:center;display:flex;align-items:center;justify-content:center;" id="vsq-sched-btn-${esc(type)}-${ri}" onclick="volToggleSchedule('${esc(type)}','${ri}','${esc(cfg.label)}')">Schedule</button>
 	                  </div>
 	                </div>
 	              </div>
@@ -66053,7 +66053,7 @@ See you soon!
 	      if (timeEl && (val.minutesBefore || val.minutesAfter)) {
 	        const fmtMins = m => m >= 60 ? `${Math.floor(m/60)}h${m%60 ? `${m%60}m` : ''}` : `${m}m`;
 	        const parts = [];
-	        if (val.minutesBefore) parts.push(`${fmtMins(val.minutesBefore)} before end`);
+	        if (val.minutesBefore) parts.push(`${fmtMins(val.minutesBefore)} before start`);
 	        if (val.minutesAfter) parts.push(`${fmtMins(val.minutesAfter)} after end`);
 	        if (val.countsFor) parts.push(`${val.countsFor}h discount`);
 	        timeEl.textContent = parts.join(' · ');
@@ -66101,7 +66101,16 @@ See you soon!
 	    saveStaffingPlan();
 	  }
 
-	  function volToggleSchedule(type, ri) {
+	  function volHoursModeChange(key) {
+	    const mode = document.querySelector(`input[name="vsq-hours-mode-${key}"]:checked`)?.value || 'auto';
+	    const fixedRow = document.getElementById(`vsq-hours-fixed-row-${key}`);
+	    const autoNote = document.getElementById(`vsq-hours-auto-note-${key}`);
+	    if (fixedRow) fixedRow.style.display = mode === 'fixed' ? 'flex' : 'none';
+	    if (autoNote) autoNote.style.display = mode === 'auto' ? '' : 'none';
+	  }
+
+	  function volToggleSchedule(type, ri, typeLabel) {
+	    typeLabel = typeLabel || type;
 	    document.querySelectorAll('.vol-per-dropdown, .vol-schedule-popover').forEach(el => el.remove());
 	    const btn = document.getElementById(`vsq-sched-btn-${type}-${ri}`);
 	    if (!btn) return;
@@ -66115,25 +66124,36 @@ See you soon!
 	      <div class="vol-schedule-popover-title">Shift schedule</div>
 	      <div class="vol-schedule-row">
 	        <div class="vol-schedule-field vol-schedule-field--full">
-	          <label>How long before it ends?</label>
+	          <label>How long before ${typeLabel} starts?</label>
 	          <div style="display:flex;gap:0.4rem;align-items:center;">
 	            <input type="number" min="0" max="480" id="vsq-sched-before-${key}" value="${saved.minutesBefore || ''}" placeholder="0" style="width:64px;" />
-	            <span style="font-size:0.76rem;color:#572e88;font-weight:700;">minutes before it ends</span>
+	            <span style="font-size:0.76rem;color:#572e88;font-weight:700;">minutes before ${typeLabel} starts</span>
 	          </div>
 	        </div>
 	        <div class="vol-schedule-field vol-schedule-field--full">
-	          <label>How long after it ends?</label>
+	          <label>How long after ${typeLabel} ends?</label>
 	          <div style="display:flex;gap:0.4rem;align-items:center;">
 	            <input type="number" min="0" max="480" id="vsq-sched-after-${key}" value="${saved.minutesAfter || ''}" placeholder="0" style="width:64px;" />
-	            <span style="font-size:0.76rem;color:#572e88;font-weight:700;">minutes after it ends</span>
+	            <span style="font-size:0.76rem;color:#572e88;font-weight:700;">minutes after ${typeLabel} ends</span>
 	          </div>
 	        </div>
 	        <div class="vol-schedule-field vol-schedule-field--full">
-	          <label>Counts for (volunteer hours)</label>
-	          <div style="display:flex;gap:0.4rem;align-items:center;">
-	            <input type="number" min="0" max="24" step="0.5" id="vsq-sched-counts-${key}" value="${saved.countsFor || ''}" placeholder="0" style="width:64px;" />
-	            <span style="font-size:0.76rem;color:#572e88;font-weight:700;">hours toward discount</span>
+	          <label>Volunteer hours (toward discount)</label>
+	          <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;margin-bottom:0.3rem;">
+	            <label style="display:flex;align-items:center;gap:0.3rem;font-size:0.74rem;font-weight:700;color:#572e88;text-transform:none;letter-spacing:0;cursor:pointer;">
+	              <input type="radio" name="vsq-hours-mode-${key}" value="auto" ${!saved.hoursMode || saved.hoursMode === 'auto' ? 'checked' : ''} onchange="volHoursModeChange('${key}')" />
+	              Auto (shift length)
+	            </label>
+	            <label style="display:flex;align-items:center;gap:0.3rem;font-size:0.74rem;font-weight:700;color:#572e88;text-transform:none;letter-spacing:0;cursor:pointer;">
+	              <input type="radio" name="vsq-hours-mode-${key}" value="fixed" ${saved.hoursMode === 'fixed' ? 'checked' : ''} onchange="volHoursModeChange('${key}')" />
+	              Fixed amount
+	            </label>
 	          </div>
+	          <div id="vsq-hours-fixed-row-${key}" style="display:${saved.hoursMode === 'fixed' ? 'flex' : 'none'};gap:0.4rem;align-items:center;">
+	            <input type="number" min="0" max="24" step="0.5" id="vsq-sched-counts-${key}" value="${saved.countsFor || ''}" placeholder="0" style="width:64px;" />
+	            <span style="font-size:0.76rem;color:#572e88;font-weight:700;">hours</span>
+	          </div>
+	          <div id="vsq-hours-auto-note-${key}" style="display:${!saved.hoursMode || saved.hoursMode === 'auto' ? '' : 'none'};font-size:0.72rem;color:rgba(87,46,136,0.55);font-weight:700;">Calculated from start to end time automatically.</div>
 	        </div>
 	      </div>
 	      <button type="button" class="btn-primary" style="font-size:0.76rem;width:100%;justify-content:center;" onclick="volSaveSchedule('${type}','${ri}')">Save schedule</button>`;
@@ -66148,16 +66168,18 @@ See you soon!
 	    const key = `${type}-${ri}`;
 	    const minutesBefore = parseInt(document.getElementById(`vsq-sched-before-${key}`)?.value, 10) || 0;
 	    const minutesAfter = parseInt(document.getElementById(`vsq-sched-after-${key}`)?.value, 10) || 0;
-	    const countsFor = parseFloat(document.getElementById(`vsq-sched-counts-${key}`)?.value) || 0;
+	    const hoursMode = document.querySelector(`input[name="vsq-hours-mode-${key}"]:checked`)?.value || 'auto';
+	    const countsFor = hoursMode === 'fixed' ? (parseFloat(document.getElementById(`vsq-sched-counts-${key}`)?.value) || 0) : 0;
 	    if (!_staffingPlan[key]) _staffingPlan[key] = {};
 	    _staffingPlan[key].minutesBefore = minutesBefore;
 	    _staffingPlan[key].minutesAfter = minutesAfter;
+	    _staffingPlan[key].hoursMode = hoursMode;
 	    _staffingPlan[key].countsFor = countsFor;
 	    const indicator = document.getElementById(`vsq-time-${key}`);
 	    if (indicator) {
 	      const fmtMins = m => m >= 60 ? `${Math.floor(m/60)}h${m%60 ? `${m%60}m` : ''}` : `${m}m`;
 	      const parts = [];
-	      if (minutesBefore) parts.push(`${fmtMins(minutesBefore)} before end`);
+	      if (minutesBefore) parts.push(`${fmtMins(minutesBefore)} before start`);
 	      if (minutesAfter) parts.push(`${fmtMins(minutesAfter)} after end`);
 	      if (countsFor) parts.push(`${countsFor}h discount`);
 	      indicator.textContent = parts.join(' · ');
@@ -66287,7 +66309,7 @@ See you soon!
 	          </div>
 	          <div class="template-brand-tile-container template-brand-tile-container--footer" style="display:flex;flex-direction:row;gap:1cqw;align-items:stretch;">
 	            <button type="button" class="template-brand-tile-button" style="flex:1;align-self:stretch;display:flex;align-items:center;justify-content:center;" id="vsq-per-btn-${type}-${ri}" onclick="volTogglePer('${type}','${ri}')">${esc(perLabel)}</button>
-	            <button type="button" class="template-brand-tile-button" style="flex:1;align-self:stretch;display:flex;align-items:center;justify-content:center;" id="vsq-sched-btn-${type}-${ri}" onclick="volToggleSchedule('${type}','${ri}')">Schedule</button>
+	            <button type="button" class="template-brand-tile-button" style="flex:1;align-self:stretch;display:flex;align-items:center;justify-content:center;" id="vsq-sched-btn-${type}-${ri}" onclick="volToggleSchedule('${type}','${ri}','${type}')">Schedule</button>
 	          </div>
 	        </div>
 	      </div>`;
