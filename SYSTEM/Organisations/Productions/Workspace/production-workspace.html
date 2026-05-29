@@ -67221,22 +67221,40 @@ See you soon!
 	    const productionListEnd = addDays(productionListLast, 1) || productionListStart;
 	    const toTimeStr = m => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}:00`;
 	    const defaultScrollTime = toTimeStr(9 * 60);
-	    const findFirstVisibleEvent = calendar => {
+	    const timedCalendarEvents = fcEvents
+	      .filter(ev => !ev.allDay && getEventStart(ev))
+	      .sort((a, b) => getEventStart(a) - getEventStart(b));
+	    const findFirstVisibleTimedEvent = calendar => {
 	      const view = calendar?.view;
-	      if (!view) return timedProductionEvents[0] || null;
+	      if (!view) return timedCalendarEvents[0] || null;
 	      const startMs = view.activeStart.getTime();
 	      const endMs = view.activeEnd.getTime();
-	      return timedProductionEvents.find(ev => {
+	      return timedCalendarEvents.find(ev => {
 	        const date = getEventStart(ev);
 	        const ms = date?.getTime?.();
 	        return Number.isFinite(ms) && ms >= startMs && ms < endMs;
 	      }) || null;
 	    };
+	    let currentSlotMinTime = null;
+	    const slotMinForEvent = event => {
+	      const minutes = event ? getEventStartMinutes(event) : 9 * 60;
+	      return toTimeStr(Math.max(0, minutes ?? (9 * 60)));
+	    };
+	    const applyVisibleSlotMinTime = calendar => {
+	      if (!calendar || !calendar.view?.type?.startsWith('timeGrid')) return;
+	      const nextSlotMinTime = slotMinForEvent(findFirstVisibleTimedEvent(calendar));
+	      if (!nextSlotMinTime || nextSlotMinTime === currentSlotMinTime) return;
+	      currentSlotMinTime = nextSlotMinTime;
+	      try {
+	        calendar.setOption('slotMinTime', nextSlotMinTime);
+	        calendar.setOption('scrollTime', nextSlotMinTime);
+	      } catch (_) {}
+	    };
 	    const scrollToFirstVisibleEvent = calendar => {
 	      if (!calendar || !calendar.view?.type?.startsWith('timeGrid')) return;
-	      const event = findFirstVisibleEvent(calendar);
+	      const event = findFirstVisibleTimedEvent(calendar);
 	      const minutes = event ? getEventStartMinutes(event) : 9 * 60;
-	      const scrollMins = Math.max(0, (minutes ?? (9 * 60)) - 30);
+	      const scrollMins = Math.max(0, minutes ?? (9 * 60));
 	      const scrollTime = toTimeStr(scrollMins);
 	      try { calendar.scrollToTime(scrollTime); } catch (_) {}
 	      const slot = el.querySelector(`.fc-timegrid-slot[data-time="${scrollTime}"]`)
@@ -67269,9 +67287,9 @@ See you soon!
 	      dayMaxEvents: true,
 	      nowIndicator: true,
 	      timeZone: false,
-	      slotMinTime: '00:00:00',
+	      slotMinTime: slotMinForEvent(timedCalendarEvents[0]),
 	      slotMaxTime: '24:00:00',
-	      scrollTime: defaultScrollTime,
+	      scrollTime: slotMinForEvent(timedCalendarEvents[0]) || defaultScrollTime,
 	      expandRows: false,
 	      eventDisplay: 'block',
 	      events: fcEvents,
@@ -67314,7 +67332,10 @@ See you soon!
 	        }
 	      },
 	      datesSet() {
-	        setTimeout(() => scrollToFirstVisibleEvent(volCal), 0);
+	        setTimeout(() => {
+	          applyVisibleSlotMinTime(volCal);
+	          scrollToFirstVisibleEvent(volCal);
+	        }, 0);
 	      },
 	    });
 	    volCal.render();
