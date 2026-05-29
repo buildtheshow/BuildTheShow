@@ -7963,10 +7963,36 @@
 	      font-size: 0.62rem;
 	    }
 	    .vol-calendar-shell .volunteer-shift-event {
-	      box-shadow: inset 0 0 0 1px rgba(255,255,255,0.28);
+	      box-shadow: inset 4px 0 0 rgba(255,255,255,0.55);
 	    }
 	    .volunteer-shift-event .fc-event-main {
 	      padding: 2px 4px !important;
+	      justify-content: flex-start !important;
+	    }
+	    .vol-calendar-shell .production-container-event {
+	      opacity: 1 !important;
+	      border-radius: 6px;
+	      border-style: solid !important;
+	      border-width: 1px !important;
+	      box-shadow: inset 0 0 0 1px rgba(255,255,255,0.58);
+	      pointer-events: none;
+	    }
+	    .vol-calendar-shell .production-container-title {
+	      position: absolute;
+	      left: 0.42rem;
+	      top: 0.32rem;
+	      max-width: calc(100% - 0.84rem);
+	      padding: 0.12rem 0.36rem;
+	      border-radius: 999px;
+	      background: rgba(255,255,255,0.72);
+	      color: #352756;
+	      font-size: 0.58rem;
+	      font-weight: 900;
+	      line-height: 1.1;
+	      overflow: hidden;
+	      text-overflow: ellipsis;
+	      white-space: nowrap;
+	      box-shadow: 0 1px 4px rgba(26,21,48,0.06);
 	    }
 	    .vol-calendar-shell .fc-timegrid-body,
 	    .vol-calendar-shell .fc-timegrid-body table,
@@ -66987,12 +67013,32 @@ See you soon!
 	    el.innerHTML = '';
 
 	    // Use the same mapper as the Zeus calendar so timezone/allDay handling is identical.
+	    const pastelize = hex => {
+	      const raw = String(hex || '#572e88').replace('#', '');
+	      const full = raw.length === 3 ? raw.split('').map(ch => ch + ch).join('') : raw.padEnd(6, '0').slice(0, 6);
+	      const n = parseInt(full, 16);
+	      if (Number.isNaN(n)) return { bg: '#f4eef9', border: '#d8c8e6', ink: '#352756' };
+	      const r = (n >> 16) & 255;
+	      const g = (n >> 8) & 255;
+	      const b = n & 255;
+	      const mix = (channel, amount) => Math.round(channel + (255 - channel) * amount);
+	      return {
+	        bg: `rgb(${mix(r, 0.78)}, ${mix(g, 0.78)}, ${mix(b, 0.78)})`,
+	        border: `rgb(${mix(r, 0.52)}, ${mix(g, 0.52)}, ${mix(b, 0.52)})`,
+	        ink: '#2d2446',
+	      };
+	    };
 	    const fcEvents = volunteerPlanEvents.map(ev => {
 	      const mapped = dbEventToFC(ev);
+	      const pastel = pastelize(mapped.backgroundColor);
 	      return {
 	        ...mapped,
-	        textColor: '#fff',
-	        extendedProps: { ...mapped.extendedProps, kind: 'event' },
+	        backgroundColor: pastel.bg,
+	        borderColor: pastel.border,
+	        textColor: pastel.ink,
+	        display: 'background',
+	        classNames: ['production-container-event'],
+	        extendedProps: { ...mapped.extendedProps, kind: 'production_container', containerTitle: mapped.title, containerInk: pastel.ink },
 	      };
 	    });
 	    opportunities.forEach(opp => {
@@ -67161,7 +67207,7 @@ See you soon!
 	      const makeTitle = () => `${count} ${role.name}`;
 	      const makeShiftEvent = (base = {}) => ({
 	        title: makeTitle(),
-	        backgroundColor: color,
+	        backgroundColor: `${color}d9`,
 	        borderColor: color,
 	        textColor: '#fff',
 	        classNames: ['volunteer-shift-event'],
@@ -67204,7 +67250,7 @@ See you soon!
 	      .filter(item => item.date)
 	      .sort((a, b) => a.date - b.date);
 	    const timedProductionEvents = fcEvents
-	      .filter(ev => !ev.allDay && ev.extendedProps?.kind === 'event' && getEventStart(ev))
+	      .filter(ev => !ev.allDay && ['event','production_container'].includes(ev.extendedProps?.kind) && getEventStart(ev))
 	      .sort((a, b) => getEventStart(a) - getEventStart(b));
 	    // Jump to the first production event instead of landing on today, which may be empty.
 	    const firstEventDate = timedProductionEvents[0]?.start
@@ -67298,6 +67344,14 @@ See you soon!
 	          openOppModal(info.event.extendedProps.opp_id);
 	        }
 	      },
+	      eventDidMount(info) {
+	        if (info.event.extendedProps.kind !== 'production_container') return;
+	        const label = document.createElement('div');
+	        label.className = 'production-container-title';
+	        label.textContent = info.event.extendedProps.containerTitle || info.event.title || '';
+	        label.style.color = info.event.extendedProps.containerInk || '#352756';
+	        info.el.appendChild(label);
+	      },
 	      eventContent(arg) {
 	        try {
 	          const ev = arg.event;
@@ -67315,16 +67369,19 @@ See you soon!
 	          const wrap = document.createElement('div');
 	          wrap.style.cssText = 'width:100%;overflow:hidden;text-align:center;line-height:1.25;padding:1px 2px;';
 	          if (ev.extendedProps.kind === 'volunteer_shift') {
-	            const needed = ev.extendedProps.needed ? `${ev.extendedProps.needed} needed` : 'Shift';
-	            wrap.innerHTML = `<div style="font-size:0.56rem;font-weight:950;opacity:0.82;text-transform:uppercase;letter-spacing:0.05em;">${safe(needed)}</div>`
-	              + `<div style="font-size:0.72rem;font-weight:850;">${safe(ev.extendedProps.roleName || ev.title || '')}</div>`
-	              + `<div style="font-size:0.56rem;font-weight:800;opacity:0.84;">${safe(ev.extendedProps.department || '')}</div>`;
+	            const needed = ev.extendedProps.needed ? `${ev.extendedProps.needed}` : '';
+	            wrap.style.textAlign = 'left';
+	            wrap.innerHTML = `<div style="display:flex;align-items:center;gap:0.28rem;min-width:0;">`
+	              + `<span style="font-size:0.56rem;font-weight:950;line-height:1;background:rgba(255,255,255,0.24);border-radius:999px;padding:0.1rem 0.28rem;flex-shrink:0;">${safe(needed)}</span>`
+	              + `<span style="font-size:0.66rem;font-weight:850;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${safe(ev.extendedProps.roleName || ev.title || '')}</span>`
+	              + `</div>`;
 	          } else if (ev.extendedProps.kind === 'volunteer') {
 	            wrap.innerHTML = `<div style="font-size:0.58rem;font-weight:900;opacity:0.7;text-transform:uppercase;letter-spacing:0.05em;">Vol</div>`
 	              + `<div style="font-size:0.72rem;font-weight:700;">${safe(ev.title||'')}</div>`;
 	          } else {
-	            wrap.innerHTML = (timeStr ? `<div style="font-size:0.62rem;opacity:0.82;">${safe(timeStr)}</div>` : '')
-	              + `<div style="font-size:0.72rem;font-weight:700;">${safe(ev.title||'')}</div>`;
+	            wrap.style.textAlign = 'left';
+	            wrap.innerHTML = (timeStr ? `<div style="font-size:0.58rem;font-weight:850;opacity:0.7;">${safe(timeStr)}</div>` : '')
+	              + `<div style="font-size:0.68rem;font-weight:900;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${safe(ev.title||'')}</div>`;
 	          }
 	          return { domNodes: [wrap] };
 	        } catch(e) {
