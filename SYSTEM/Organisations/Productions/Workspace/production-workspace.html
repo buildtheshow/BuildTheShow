@@ -66385,8 +66385,10 @@ See you soon!
 	      if (el.id.includes('display') || el.id.includes('tile') || el.id.includes('per-btn') || el.id.includes('dropdown') || el.id.includes('sched-') || el.id.includes('hours-')) return;
 	      const key = el.id.replace('vsq-', '');
 	      const btn = document.getElementById(`vsq-per-btn-${key}`);
-	      plan[key] = { ...(_staffingPlan[key] || {}), count: parseInt(el.value, 10) || 0, perLabel: btn?.textContent?.trim() || '' };
+	      const count = parseInt(el.value, 10);
+	      plan[key] = { ...(_staffingPlan[key] || {}), count: isNaN(count) ? 0 : count, perLabel: btn?.textContent?.trim() || '' };
 	    });
+	    console.log('[BTS] staffing save: writing plan to DB for prodId', prodId, plan);
 	    showSaveStatus('saving');
 	    const { data, error } = await sb.from('productions')
 	      .update({ volunteer_staffing_plan: plan })
@@ -66399,12 +66401,14 @@ See you soon!
 	    }
 	    if (!data?.length) {
 	      showSaveStatus('error');
-	      console.warn('[BTS] staffing save: update matched no rows — RLS may be blocking write. prodId:', prodId);
+	      console.warn('[BTS] staffing save: update matched no rows — check RLS. prodId:', prodId);
 	      return;
 	    }
+	    console.log('[BTS] staffing save: success', data);
 	    _staffingPlan = plan;
 	    _staffingDirty = false;
 	    showSaveStatus('saved');
+	    try { applyStaffingPlanToTiles(); } catch (_) {}
 	  }
 
 	  function saveStaffingPlan(immediate = false) {
