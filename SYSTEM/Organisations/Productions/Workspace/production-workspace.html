@@ -7962,6 +7962,12 @@
 	    .vol-calendar-shell .fc-timegrid-slot-label {
 	      font-size: 0.62rem;
 	    }
+	    .vol-calendar-shell .volunteer-shift-event {
+	      box-shadow: inset 0 0 0 1px rgba(255,255,255,0.28);
+	    }
+	    .volunteer-shift-event .fc-event-main {
+	      padding: 2px 4px !important;
+	    }
 	    .vol-calendar-shell .fc-timegrid-body,
 	    .vol-calendar-shell .fc-timegrid-body table,
 	    .vol-calendar-shell .fc-timegrid-cols table {
@@ -66938,6 +66944,170 @@ See you soon!
 	      const date = getEventStart(ev);
 	      return date ? (date.getHours() * 60) + date.getMinutes() : null;
 	    };
+	    const DEPT_COLOURS_DASH = {
+	      'Front of House': '#476aaa',
+	      'Backstage & Rehearsal Support': '#dd8233',
+	      'Technical Crew': '#d1523d',
+	      'Design & Construction': '#769e7b',
+	      'Costume & Makeup': '#78bbd4',
+	      'Marketing & Publicity': '#efab45',
+	      'Other / Flexible': '#572e88',
+	    };
+	    const VOL_SHIFT_MAP = {
+	      dept_leads: { label: 'Department Lead', color: '#000000', roles: [
+	        { dept: 'Backstage & Rehearsal Support', name: 'Stage Manager', default: 1 },
+	        { dept: 'Front of House', name: 'Front of House Manager', default: 1 },
+	        { dept: 'Front of House', name: 'Concession Manager', default: 1 },
+	        { dept: 'Technical Crew', name: 'Lighting Designer / Technician', default: 1 },
+	        { dept: 'Design & Construction', name: 'Lead Builder', default: 1 },
+	        { dept: 'Design & Construction', name: 'Lead Set Painter', default: 1 },
+	        { dept: 'Design & Construction', name: 'Lead Prop Person', default: 1 },
+	        { dept: 'Costume & Makeup', name: 'Costume Coordinator', default: 1 },
+	        { dept: 'Marketing & Publicity', name: 'Marketing Director', default: 1 },
+	      ]},
+	      performance: { label: 'Performance', color: '#572e88', roles: [
+	        { dept: 'Front of House', name: 'Ushers', default: 4 },
+	        { dept: 'Front of House', name: 'Concession Workers', default: 2 },
+	        { dept: 'Front of House', name: 'Ticket Sales', default: 1 },
+	        { dept: 'Backstage & Rehearsal Support', name: 'Backstage Crew', default: 3 },
+	        { dept: 'Backstage & Rehearsal Support', name: 'Quick-Change Assistant', default: 1 },
+	        { dept: 'Backstage & Rehearsal Support', name: 'Child Wrangler', default: 0 },
+	        { dept: 'Technical Crew', name: 'Mic Wrangler', default: 1 },
+	        { dept: 'Technical Crew', name: 'Spotlight Operators', default: 2 },
+	      ]},
+	      tech: { label: 'Tech Rehearsal', color: '#476aaa', roles: [
+	        { dept: 'Technical Crew', name: 'Mic Wrangler', default: 1 },
+	        { dept: 'Backstage & Rehearsal Support', name: 'Quick-Change Assistant', default: 2 },
+	        { dept: 'Backstage & Rehearsal Support', name: 'Backstage Crew', default: 2 },
+	      ]},
+	      dress: { label: 'Dress Rehearsal', color: '#769e7b', roles: [
+	        { dept: 'Technical Crew', name: 'Mic Wrangler', default: 1 },
+	        { dept: 'Backstage & Rehearsal Support', name: 'Quick-Change Assistant', default: 2 },
+	        { dept: 'Backstage & Rehearsal Support', name: 'Backstage Crew', default: 2 },
+	        { dept: 'Backstage & Rehearsal Support', name: 'Child Wrangler', default: 0 },
+	      ]},
+	      rehearsal: { label: 'Rehearsal', color: '#78bbd4', roles: [
+	        { dept: 'Backstage & Rehearsal Support', name: 'Rehearsal Assistant', default: 1 },
+	        { dept: 'Backstage & Rehearsal Support', name: 'Child Wrangler', default: 0 },
+	      ]},
+	      music_rehearsal: { label: 'Music Rehearsal', color: '#78bbd4', roles: [
+	        { dept: 'Backstage & Rehearsal Support', name: 'Rehearsal Assistant', default: 1 },
+	      ]},
+	      choreography: { label: 'Choreography', color: '#ca7ea7', roles: [
+	        { dept: 'Backstage & Rehearsal Support', name: 'Rehearsal Assistant', default: 1 },
+	      ]},
+	      strike: { label: 'Strike', color: '#dd8233', roles: [
+	        { dept: 'Design & Construction', name: 'Set Strike Crew', default: 6 },
+	      ]},
+	      costume_moveout: { label: 'Costume Move-Out', color: '#d1523d', roles: [
+	        { dept: 'Costume & Makeup', name: 'Costume Move-Out Crew', default: 4 },
+	      ]},
+	      other: { label: 'Other', color: '#572e88', roles: [
+	        { dept: 'Costume & Makeup', name: 'Costume Washer', default: 0 },
+	        { dept: 'Front of House', name: 'Bakers / Treat Contributors', default: 0 },
+	        { dept: 'Marketing & Publicity', name: 'Promotion Distribution', default: 0 },
+	      ]},
+	    };
+	    const toLocalIso = date => {
+	      const pad = n => String(n).padStart(2, '0');
+	      return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}:00`;
+	    };
+	    const dateFromIso = iso => {
+	      if (!iso) return null;
+	      const d = new Date(String(iso).slice(0, 19));
+	      return Number.isNaN(d.getTime()) ? null : d;
+	    };
+	    const addMinutesToDate = (date, minutes) => {
+	      const d = new Date(date.getTime());
+	      d.setMinutes(d.getMinutes() + minutes);
+	      return d;
+	    };
+	    const eventDayDate = (date, hour, minute = 0) => {
+	      const d = new Date(date.getTime());
+	      d.setHours(hour, minute, 0, 0);
+	      return d;
+	    };
+	    const shiftAnchorDate = (anchor, evStart, evEnd) => {
+	      if (anchor === 'before_end' || anchor === 'after_end') return evEnd || evStart;
+	      if (anchor === 'before_event_start') return eventDayDate(evStart, 0);
+	      if (anchor === 'after_event_end') return eventDayDate(evStart, 23, 59);
+	      return evStart;
+	    };
+	    const shiftDateForAnchor = (anchor, base, mins) => {
+	      if (anchor === 'before_start' || anchor === 'before_end' || anchor === 'before_event_start') return addMinutesToDate(base, -mins);
+	      return addMinutesToDate(base, mins);
+	    };
+	    const buildShiftWindow = (ev, plan) => {
+	      const evStart = dateFromIso(ev.start_time);
+	      const evEnd = dateFromIso(ev.end_time) || (evStart ? addMinutesToDate(evStart, 120) : null);
+	      if (!evStart) return null;
+	      const startAnchor = plan.shiftStartAnchor || 'before_start';
+	      const endAnchor = plan.shiftEndAnchor || 'after_end';
+	      if (startAnchor === 'own_time' || endAnchor === 'own_time') {
+	        return { allDay: true, start: toDateOnly(evStart), end: null, summary: 'Own time' };
+	      }
+	      const startMins = parseInt(plan.shiftStartMins, 10) || 0;
+	      const endMins = parseInt(plan.shiftEndMins, 10) || 0;
+	      let start = shiftDateForAnchor(startAnchor, shiftAnchorDate(startAnchor, evStart, evEnd), startMins);
+	      let end = shiftDateForAnchor(endAnchor, shiftAnchorDate(endAnchor, evStart, evEnd), endMins);
+	      if (end <= start) end = evEnd && evEnd > start ? evEnd : addMinutesToDate(start, 60);
+	      return { allDay: false, start: toLocalIso(start), end: toLocalIso(end), summary: volScheduleSummary(plan).shortText };
+	    };
+	    const volunteerShiftEvents = [];
+	    const perEventTypes = new Set(['performance','tech','dress','rehearsal','music_rehearsal','choreography','strike','costume_moveout']);
+	    const productionFallbackDate = prod?.start_date || volunteerPlanEvents[0]?.start_time?.slice(0, 10) || toDateOnly(new Date());
+	    Object.entries(VOL_SHIFT_MAP).forEach(([type, cfg]) => {
+	      cfg.roles.forEach((role, ri) => {
+	      const key = `${type}-${ri}`;
+	      const plan = _staffingPlan?.[key] || {};
+	      const rawCount = plan.count ?? role.default ?? 0;
+	      const count = parseInt(rawCount, 10) || 0;
+	      if (count <= 0) return;
+	      const color = DEPT_COLOURS_DASH[role.dept] || cfg.color || '#572e88';
+	      const perLabel = String(plan.perLabel || '').toLowerCase();
+	      const shouldExpandPerEvent = perEventTypes.has(type) && !/production|total/.test(perLabel);
+	      const matchingEvents = shouldExpandPerEvent ? volunteerPlanEvents.filter(ev => (ev.event_type || 'event') === type) : [];
+	      const makeTitle = () => `${count} ${role.name}`;
+	      const makeShiftEvent = (base = {}) => ({
+	        title: makeTitle(),
+	        backgroundColor: color,
+	        borderColor: color,
+	        textColor: '#fff',
+	        classNames: ['volunteer-shift-event'],
+	        extendedProps: {
+	          kind: 'volunteer_shift',
+	          department: role.dept,
+	          roleName: role.name,
+	          needed: count,
+	          schedule: base.summary || volScheduleSummary(plan).shortText,
+	          sourceType: cfg.label,
+	          parentTitle: base.parentTitle || '',
+	        },
+	        ...base,
+	      });
+	      if (matchingEvents.length) {
+	        matchingEvents.forEach(ev => {
+	          const windowInfo = buildShiftWindow(ev, plan);
+	          if (!windowInfo) return;
+	          volunteerShiftEvents.push(makeShiftEvent({
+	            start: windowInfo.start,
+	            end: windowInfo.end || undefined,
+	            allDay: windowInfo.allDay,
+	            summary: windowInfo.summary,
+	            parentTitle: ev.title || cfg.label,
+	          }));
+	        });
+	      } else {
+	        const productionSummary = plan.perLabel || (type === 'other' ? 'Total needed' : 'Full production');
+	        volunteerShiftEvents.push(makeShiftEvent({
+	          start: productionFallbackDate,
+	          allDay: true,
+	          summary: /production|total/.test(perLabel) || !perEventTypes.has(type) ? productionSummary : volScheduleSummary(plan).shortText,
+	        }));
+	      }
+	      });
+	    });
+	    fcEvents.push(...volunteerShiftEvents);
 	    const datedEvents = fcEvents
 	      .map(ev => ({ ev, date: getEventStart(ev) }))
 	      .filter(item => item.date)
@@ -67035,7 +67205,12 @@ See you soon!
 	          const safe = s => String(s||'').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 	          const wrap = document.createElement('div');
 	          wrap.style.cssText = 'width:100%;overflow:hidden;text-align:center;line-height:1.25;padding:1px 2px;';
-	          if (ev.extendedProps.kind === 'volunteer') {
+	          if (ev.extendedProps.kind === 'volunteer_shift') {
+	            const needed = ev.extendedProps.needed ? `${ev.extendedProps.needed} needed` : 'Shift';
+	            wrap.innerHTML = `<div style="font-size:0.56rem;font-weight:950;opacity:0.82;text-transform:uppercase;letter-spacing:0.05em;">${safe(needed)}</div>`
+	              + `<div style="font-size:0.72rem;font-weight:850;">${safe(ev.extendedProps.roleName || ev.title || '')}</div>`
+	              + `<div style="font-size:0.56rem;font-weight:800;opacity:0.84;">${safe(ev.extendedProps.department || '')}</div>`;
+	          } else if (ev.extendedProps.kind === 'volunteer') {
 	            wrap.innerHTML = `<div style="font-size:0.58rem;font-weight:900;opacity:0.7;text-transform:uppercase;letter-spacing:0.05em;">Vol</div>`
 	              + `<div style="font-size:0.72rem;font-weight:700;">${safe(ev.title||'')}</div>`;
 	          } else {
