@@ -8039,7 +8039,7 @@
 	    }
 	    .vol-workflow-list {
 	      display: grid;
-	      grid-template-columns: repeat(5, minmax(0, 1fr));
+	      grid-template-columns: repeat(6, minmax(0, 1fr));
 	      gap: 0.45rem;
 	      margin-top: 0.7rem;
 	    }
@@ -8206,6 +8206,64 @@
 	      font-weight: 800;
 	      line-height: 1;
 	      padding: 0.42rem 0.62rem;
+	    }
+	    /* ── Checklist needs-attention state ── */
+	    .vol-step.needs-attention { color: #7a4200; }
+	    .vol-step.needs-attention .vol-step-num {
+	      background: rgba(221,130,51,0.14);
+	      color: #9a5200;
+	    }
+	    .vol-step.needs-attention .vol-step-title { color: #7a4200; }
+	    .vol-step.needs-attention .vol-step-sub { color: rgba(154,82,0,0.65); }
+	    /* ── Coverage / gap tracking ── */
+	    .vol-coverage-section {
+	      border-top: 3px solid #769e7b;
+	      padding-top: 0.95rem;
+	    }
+	    .vol-coverage-grid {
+	      display: grid;
+	      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+	      gap: 0.8rem;
+	      margin-top: 0.75rem;
+	    }
+	    .vol-coverage-card {
+	      background: #fff;
+	      border: 1px solid rgba(87,46,136,0.1);
+	      border-radius: 8px;
+	      padding: 0.85rem;
+	    }
+	    .vol-coverage-label {
+	      font-size: 0.62rem;
+	      font-weight: 900;
+	      text-transform: uppercase;
+	      letter-spacing: 0.1em;
+	      margin-bottom: 0.35rem;
+	    }
+	    .vol-coverage-label--attention { color: #9a5200; }
+	    .vol-coverage-label--open { color: #2f7d4f; }
+	    .vol-coverage-label--draft { color: #572e88; }
+	    .vol-coverage-empty {
+	      font-size: 0.74rem;
+	      color: rgba(87,46,136,0.44);
+	      font-style: italic;
+	    }
+	    /* ── Role card extras ── */
+	    .vol-role-needs {
+	      font-size: 0.64rem;
+	      font-weight: 850;
+	      color: #572e88;
+	      background: rgba(87,46,136,0.07);
+	      border-radius: 999px;
+	      padding: 0.1rem 0.42rem;
+	      white-space: nowrap;
+	      flex-shrink: 0;
+	    }
+	    .vol-role-warning {
+	      font-size: 0.66rem;
+	      font-weight: 750;
+	      color: #9a5200;
+	      margin-top: 0.25rem;
+	      line-height: 1.35;
 	    }
 	    @media (max-width: 900px) {
 	      .vol-status-grid,
@@ -24702,9 +24760,15 @@
 	            <input class="form-input" id="opp-vol-time" type="text" placeholder="e.g. Performance nights, June 3 at 6 PM, or flexible" />
           </div>
         </div>
-        <div class="form-group">
-          <label class="form-label">Age / Other Requirements <span class="opt">(optional)</span></label>
-          <input class="form-input" id="opp-vol-age" type="text" placeholder="e.g. Must be 16+, no experience needed" />
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Volunteers needed <span class="opt">(optional)</span></label>
+            <input class="form-input" id="opp-vol-needed" type="number" min="1" max="999" placeholder="e.g. 4" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Age / Other Requirements <span class="opt">(optional)</span></label>
+            <input class="form-input" id="opp-vol-age" type="text" placeholder="e.g. Must be 16+, no experience needed" />
+          </div>
         </div>
       </div>
 
@@ -65292,6 +65356,7 @@ See you soon!
 	    if (!containers.length) return;
 	    const activeVolunteerSubTab = loadWorkspaceNavState().volunteerSubTab || 'plan';
 	    const publishedCount = opportunities.filter(opp => opp.status === 'published').length;
+	    const rolesWithDates = opportunities.filter(o => o.time_commitment || o.close_date);
 	    const departmentMap = new Map(VOLUNTEER_DEPARTMENTS.map(dept => [dept.key, { ...dept, roles: [] }]));
 	    opportunities.forEach(opp => {
 	      const dept = volunteerDeptForOpp(opp);
@@ -65299,16 +65364,52 @@ See you soon!
 	    });
 	    const activeDeptCount = [...departmentMap.values()].filter(dept => dept.key !== 'other' && dept.roles.length).length;
 	    const suggestions = buildVolunteerSuggestions();
+
+	    // ── 6-step checklist ──
 	    const checklist = [
-	      { title: 'Add calendar dates', sub: volunteerPlanEvents.length ? `${volunteerPlanEvents.length} dates found` : 'Use Production Calendar', done: volunteerPlanEvents.length > 0 },
-	      { title: 'Generate role ideas', sub: suggestions.length ? `${suggestions.length} suggestions ready` : 'Calendar covered', done: suggestions.length > 0 || opportunities.length > 0 },
-	      { title: 'Create internal roles', sub: opportunities.length ? `${opportunities.length} roles created` : 'Start from suggestions', done: opportunities.length > 0 },
-	      { title: 'Publish sign-ups', sub: publishedCount ? `${publishedCount} public` : 'Drafts stay internal', done: publishedCount > 0 },
-	      { title: 'Share volunteer flow', sub: 'Volunteer page and quiz', done: publishedCount > 0 },
+	      {
+	        title: 'Add calendar dates',
+	        sub: volunteerPlanEvents.length ? `${volunteerPlanEvents.length} date${volunteerPlanEvents.length === 1 ? '' : 's'} connected` : 'Open the Production Calendar tab',
+	        done: volunteerPlanEvents.length > 0,
+	      },
+	      {
+	        title: 'Generate role ideas',
+	        sub: opportunities.length > 0 ? 'Roles already in progress' : suggestions.length ? `${suggestions.length} suggestion${suggestions.length === 1 ? '' : 's'} ready` : 'Connect calendar dates first',
+	        done: opportunities.length > 0 || suggestions.length > 0,
+	      },
+	      {
+	        title: 'Create internal roles',
+	        sub: opportunities.length ? `${opportunities.length} role${opportunities.length === 1 ? '' : 's'} in your plan` : 'Use a suggestion or create a custom role',
+	        done: opportunities.length > 0,
+	        attention: !opportunities.length && volunteerPlanEvents.length > 0,
+	      },
+	      {
+	        title: 'Connect roles to dates',
+	        sub: rolesWithDates.length === opportunities.length && opportunities.length > 0
+	          ? `All ${opportunities.length} role${opportunities.length === 1 ? '' : 's'} have dates or shifts`
+	          : rolesWithDates.length
+	          ? `${rolesWithDates.length} of ${opportunities.length} have dates — ${opportunities.length - rolesWithDates.length} still need them`
+	          : opportunities.length ? 'Families need to know when to show up' : 'Create roles first',
+	        done: opportunities.length > 0 && rolesWithDates.length === opportunities.length,
+	        attention: opportunities.length > 0 && rolesWithDates.length < opportunities.length,
+	      },
+	      {
+	        title: 'Publish sign-ups',
+	        sub: publishedCount ? `${publishedCount} role${publishedCount === 1 ? '' : 's'} open to families` : 'Roles stay internal until you publish them',
+	        done: publishedCount > 0,
+	        attention: opportunities.length > 0 && publishedCount === 0,
+	      },
+	      {
+	        title: 'Share volunteer flow',
+	        sub: publishedCount > 0 ? 'Volunteer page and quiz ready to share' : 'Publish at least one role first',
+	        done: publishedCount > 0,
+	      },
 	    ];
+
+	    // ── Step map ──
 	    const volunteerSteps = [
 	      { key: 'plan', label: 'Plan', sub: 'See the map' },
-	      { key: 'suggestions', label: 'Suggestions', sub: 'Use the calendar' },
+	      { key: 'suggestions', label: 'Suggestions', sub: 'From calendar' },
 	      { key: 'roles', label: 'Internal Roles', sub: 'Draft and edit' },
 	      { key: 'publish', label: 'Publish', sub: 'Open sign-ups' },
 	      { key: 'share', label: 'Share', sub: 'Send the links' },
@@ -65322,28 +65423,31 @@ See you soon!
 	            <span class="vol-map-sub">${esc(step.sub)}</span>
 	          </button>`).join('')}
 	      </div>`;
-	    const stepHeroHtml = {
-	      plan: ['Volunteer map', 'Start here when you feel lost. This shows what is done, what is next, and where each step lives.', 'Start with suggestions', 'suggestions'],
-	      suggestions: ['Calendar suggestions', 'Turn rehearsals, tech, performances, deadlines, and strike into role drafts. Nothing here is public yet.', 'Create custom role', 'roles'],
-	      roles: ['Internal roles', 'Clean up the role list before families see it. Drafts stay private until you publish them.', 'Publish roles', 'publish'],
-	      publish: ['Publish sign-ups', 'Choose which internal roles should be open to families. Published roles get public sign-up links.', 'Share links', 'share'],
-	      share: ['Share volunteer flow', 'Send families the volunteer page, the best-fit quiz, or direct sign-up links after roles are published.', 'Back to plan', 'plan'],
-	    }[activeVolunteerSubTab] || ['Volunteer map', 'Start here when you feel lost. This shows what is done, what is next, and where each step lives.', 'Start with suggestions', 'suggestions'];
+
+	    const stepHeroes = {
+	      plan:        ['Volunteer plan', 'Start here. This shows what is done, what needs attention, and where each step lives.', 'See suggestions', 'suggestions'],
+	      suggestions: ['Calendar suggestions', 'Turn rehearsals, tech, performances, and strike into role drafts. Nothing here is public yet.', 'Create custom role', 'roles'],
+	      roles:       ['Internal roles', 'Clean up the role list before families see it. Drafts stay private until you publish them.', 'Publish roles', 'publish'],
+	      publish:     ['Publish sign-ups', 'Choose which roles families can sign up for. Published roles get a public sign-up link.', 'Share links', 'share'],
+	      share:       ['Share volunteer flow', 'Send families the volunteer page, the quiz, or a direct sign-up link after roles are published.', 'Back to plan', 'plan'],
+	    };
+	    const sh = stepHeroes[activeVolunteerSubTab] || stepHeroes.plan;
 	    const heroHtml = `
 	      <div class="vol-step-hero">
 	        <div>
-	          <div class="vol-step-hero-title">${esc(stepHeroHtml[0])}</div>
-	          <div class="vol-step-hero-copy">${esc(stepHeroHtml[1])}</div>
+	          <div class="vol-step-hero-title">${esc(sh[0])}</div>
+	          <div class="vol-step-hero-copy">${esc(sh[1])}</div>
 	        </div>
-	        <button class="btn-primary" style="font-size:0.8rem;" onclick="navigateToVolunteers('${esc(stepHeroHtml[3])}')">${esc(stepHeroHtml[2])}</button>
+	        <button class="btn-primary" style="font-size:0.8rem;" onclick="navigateToVolunteers('${esc(sh[3])}')">${esc(sh[2])}</button>
 	      </div>`;
 
-	    const progressWidth = (done) => Math.max(8, Math.min(100, Math.round(done ? 100 : 18)));
+	    // ── Status tiles ──
+	    const tileProgress = (ratio) => Math.max(8, Math.min(100, Math.round(ratio * 100)));
 	    const statTiles = [
-	      { kicker: 'Plan', value: opportunities.length, label: 'Internal roles', bg: '#572e88', ink: '#ffffff', done: opportunities.length > 0 },
-	      { kicker: 'Public', value: publishedCount, label: 'Published sign-ups', bg: '#efab45', ink: '#000000', done: publishedCount > 0 },
-	      { kicker: 'Calendar', value: volunteerPlanEvents.length, label: 'Dates connected', bg: '#476aaa', ink: '#ffffff', done: volunteerPlanEvents.length > 0 },
-	      { kicker: 'Coverage', value: activeDeptCount, label: 'Departments started', bg: '#769e7b', ink: '#ffffff', done: activeDeptCount > 0 },
+	      { kicker: 'Plan', value: opportunities.length, label: 'Internal roles', bg: '#572e88', ink: '#ffffff', ratio: opportunities.length > 0 ? 1 : 0 },
+	      { kicker: 'Public', value: publishedCount, label: 'Sign-ups open', bg: '#efab45', ink: '#000000', ratio: opportunities.length > 0 ? publishedCount / opportunities.length : 0 },
+	      { kicker: 'Calendar', value: volunteerPlanEvents.length, label: 'Dates connected', bg: '#476aaa', ink: '#ffffff', ratio: volunteerPlanEvents.length > 0 ? 1 : 0 },
+	      { kicker: 'Coverage', value: rolesWithDates.length, label: `of ${Math.max(1, opportunities.length)} roles have dates`, bg: '#769e7b', ink: '#ffffff', ratio: opportunities.length > 0 ? rolesWithDates.length / opportunities.length : 0 },
 	    ];
 	    const statHtml = `
 	      <div class="vol-status-grid">
@@ -65352,23 +65456,77 @@ See you soon!
 	          bg: tile.bg,
 	          ink: tile.ink,
 	          kicker: `<div class="template-brand-tile-kicker">${esc(tile.kicker)}</div>`,
-	          title: `<div class="template-brand-tile-number">${esc(tile.value)}</div>`,
+	          title: `<div class="template-brand-tile-number">${esc(String(tile.value))}</div>`,
 	          body: `<div class="template-brand-tile-metric-label">${esc(tile.label)}</div>`,
-	          footer: `<div class="template-brand-tile-progress"><span style="width:${progressWidth(tile.done)}%;"></span></div>`
+	          footer: `<div class="template-brand-tile-progress"><span style="width:${tileProgress(tile.ratio)}%;"></span></div>`
 	        })).join('')}
 	      </div>`;
 
+	    // ── Checklist ──
 	    const checklistHtml = `
 	      <div class="vol-workflow">
 	        <div class="vol-workflow-title">Setup checklist</div>
 	        <div class="vol-workflow-list">
 	          ${checklist.map((step, i) => `
-	            <div class="vol-step ${step.done ? 'done' : ''}">
-	              <div class="vol-step-num">${step.done ? '✓' : i + 1}</div>
-	              <div class="vol-step-title">${esc(step.title)}</div>
-	              <div class="vol-step-sub">${esc(step.sub)}</div>
+	            <div class="vol-step ${step.done ? 'done' : step.attention ? 'needs-attention' : ''}">
+	              <div class="vol-step-num">${step.done ? '✓' : step.attention ? '!' : i + 1}</div>
+	              <div>
+	                <div class="vol-step-title">${esc(step.title)}</div>
+	                <div class="vol-step-sub">${esc(step.sub)}</div>
+	              </div>
 	            </div>`).join('')}
 	        </div>
+	      </div>`;
+
+	    // ── Coverage / gap tracking ──
+	    const gapAttention = opportunities.filter(o => o.status === 'published' && !o.summary && !o.description);
+	    const gapOpen = opportunities.filter(o => o.status === 'published' && (o.summary || o.description));
+	    const gapDraft = opportunities.filter(o => o.status !== 'published');
+	    const coverageAnswer = opportunities.length === 0
+	      ? 'No roles created yet. Work through the checklist above to get started.'
+	      : publishedCount === 0
+	      ? 'No sign-ups are open to families yet.'
+	      : gapAttention.length
+	      ? `${gapAttention.length} published role${gapAttention.length === 1 ? '' : 's'} need${gapAttention.length === 1 ? 's' : ''} a description before families can understand them.`
+	      : rolesWithDates.length < opportunities.length
+	      ? `${opportunities.length - rolesWithDates.length} role${(opportunities.length - rolesWithDates.length) === 1 ? '' : 's'} still need dates or shifts.`
+	      : `${publishedCount} role${publishedCount === 1 ? '' : 's'} open to families.${gapDraft.length ? ` ${gapDraft.length} still in draft.` : ' All roles are public.'}`;
+	    function coverageRoleChip(opp) {
+	      const needed = opp.volunteers_needed ? `${esc(String(opp.volunteers_needed))} needed · ` : '';
+	      return `<div class="vol-role-card" style="margin-bottom:0;padding:0.55rem 0.7rem;">
+	        <div class="vol-role-title">${esc(opp.production_title)}</div>
+	        <div class="vol-role-meta">${needed}${esc(opp.volunteer_role || '')}${opp.time_commitment ? ` · ${esc(opp.time_commitment)}` : ''}</div>
+	      </div>`;
+	    }
+	    const gapTrackingHtml = `
+	      <div class="vol-coverage-section">
+	        <div style="display:flex;justify-content:space-between;gap:1rem;align-items:flex-start;flex-wrap:wrap;margin-bottom:0.75rem;">
+	          <div>
+	            <div class="vol-section-title">Coverage check</div>
+	            <div class="vol-dept-sub">${esc(coverageAnswer)}</div>
+	          </div>
+	          <button class="btn-secondary" style="font-size:0.78rem;" onclick="navigateToVolunteers('publish')">Review publish status</button>
+	        </div>
+	        ${opportunities.length ? `
+	        <div class="vol-coverage-grid">
+	          ${gapAttention.length ? `
+	          <div class="vol-coverage-card">
+	            <div class="vol-coverage-label vol-coverage-label--attention">Needs attention (${gapAttention.length})</div>
+	            <div class="vol-dept-sub" style="margin-bottom:0.6rem;">Published with no description — families cannot tell what the role involves.</div>
+	            <div class="vol-role-stack">${gapAttention.map(coverageRoleChip).join('')}</div>
+	            <div class="vol-role-actions" style="margin-top:0.6rem;"><button class="btn-secondary" style="font-size:0.76rem;padding:0.34rem 0.72rem;" onclick="navigateToVolunteers('roles')">Fix these roles</button></div>
+	          </div>` : ''}
+	          <div class="vol-coverage-card">
+	            <div class="vol-coverage-label vol-coverage-label--open">Accepting sign-ups (${gapOpen.length})</div>
+	            <div class="vol-dept-sub" style="margin-bottom:0.6rem;">${gapOpen.length ? 'Open to families right now.' : 'No published roles with descriptions yet.'}</div>
+	            ${gapOpen.length ? `<div class="vol-role-stack">${gapOpen.map(coverageRoleChip).join('')}</div>` : `<div class="vol-coverage-empty">Publish a role to start tracking coverage here.</div>`}
+	          </div>
+	          <div class="vol-coverage-card">
+	            <div class="vol-coverage-label vol-coverage-label--draft">Not yet open (${gapDraft.length})</div>
+	            <div class="vol-dept-sub" style="margin-bottom:0.6rem;">${gapDraft.length ? 'Private drafts — visible only to your team.' : 'All roles are published.'}</div>
+	            ${gapDraft.length ? `<div class="vol-role-stack">${gapDraft.map(coverageRoleChip).join('')}</div>` : `<div class="vol-coverage-empty">No draft roles right now.</div>`}
+	          </div>
+	        </div>` : `<div class="vol-empty-dept" style="margin-top:0.5rem;">Create internal roles first, then coverage tracking will show here.</div>`}
 	      </div>`;
 
 	    const suggestionPalette = [
@@ -65404,36 +65562,37 @@ See you soon!
 	          <div class="vol-empty-dept" style="margin-top:0.8rem;">No new calendar suggestions right now. You can still create a custom internal role.</div>`}
 	      </div>`;
 
+	    // ── Role card ──
 	    function roleCardHtml(opp) {
 	      const typeClass = opp.opportunity_type === 'volunteer' ? 'opp-type-volunteer' : 'opp-type-audition';
-	      const typeLabel = opp.opportunity_type === 'creative_team' ? 'Creative Team' : opp.opportunity_type === 'volunteer' ? 'Volunteer' : (opp.opportunity_type || 'Volunteer');
+	      const typeLabel = opp.opportunity_type === 'creative_team' ? 'Creative Team' : 'Volunteer';
 	      const statusClass = `opp-status-${opp.status || 'draft'}`;
 	      const statusLabel = (opp.status || 'draft').charAt(0).toUpperCase() + (opp.status || 'draft').slice(1);
 	      const closeDate = opp.close_date ? `Deadline ${volunteerDateLabel(opp.close_date)}` : 'No deadline';
 	      const loc = opp.location_text || '';
 	      const isPublished = opp.status === 'published';
+	      const missingDesc = isPublished && !opp.summary && !opp.description;
+	      const missingDates = !opp.time_commitment && !opp.close_date;
 	      return `
-	        <div class="vol-role-card">
+	        <div class="vol-role-card"${missingDesc ? ' style="border-color:rgba(221,130,51,0.38);"' : ''}>
 	          <div class="vol-role-top">
-	            <div>
-	              <div class="vol-role-title">${esc(opp.production_title)}</div>
-	              <div class="vol-role-meta">
-	                ${esc(opp.volunteer_role || typeLabel)}
-	                ${opp.time_commitment ? ` · ${esc(opp.time_commitment)}` : ''}
-	                ${loc ? ` · ${esc(loc)}` : ''}
-	                · ${esc(closeDate)}
+	            <div style="min-width:0;flex:1;">
+	              <div style="display:flex;align-items:center;gap:0.45rem;flex-wrap:wrap;">
+	                <div class="vol-role-title">${esc(opp.production_title)}</div>
+	                ${opp.volunteers_needed ? `<span class="vol-role-needs">${esc(String(opp.volunteers_needed))} needed</span>` : ''}
 	              </div>
+	              <div class="vol-role-meta">${esc(opp.volunteer_role || typeLabel)}${opp.time_commitment ? ` · ${esc(opp.time_commitment)}` : ''}${loc ? ` · ${esc(loc)}` : ''} · ${esc(closeDate)}</div>
+	              ${missingDesc ? `<div class="vol-role-warning">Missing description — families cannot tell what this role involves.</div>` : ''}
+	              ${missingDates && isPublished ? `<div class="vol-role-warning">No dates or shifts set on this published role.</div>` : ''}
 	            </div>
 	            <span class="opp-status-badge ${statusClass}">${statusLabel}</span>
 	          </div>
 	          <div class="opp-card-meta" style="margin-top:0.55rem;">
-	              <span class="opp-type-badge ${typeClass}">${typeLabel}</span>
-	              ${opp.summary ? `<span>${esc(opp.summary)}</span>` : ''}
+	            <span class="opp-type-badge ${typeClass}">${typeLabel}</span>
+	            ${opp.summary ? `<span>${esc(opp.summary)}</span>` : ''}
 	          </div>
 	          <div class="vol-role-actions">
-	            ${isPublished
-	              ? `<a href="/volunteer/signup?id=${esc(opp.id)}" target="_blank" class="btn-secondary" style="font-size:0.76rem;padding:0.34rem 0.72rem;text-decoration:none;">View sign-up</a>`
-	              : ''}
+	            ${isPublished ? `<a href="/volunteer/signup?id=${esc(opp.id)}" target="_blank" class="btn-secondary" style="font-size:0.76rem;padding:0.34rem 0.72rem;text-decoration:none;">View sign-up</a>` : ''}
 	            <button class="btn-secondary" style="font-size:0.76rem;padding:0.34rem 0.72rem;" onclick="openOppModal('${esc(opp.id)}')">Edit</button>
 	            <button class="${isPublished ? 'btn-danger' : 'btn-primary'}" style="font-size:0.76rem;padding:0.34rem 0.8rem;" onclick="toggleOppStatus('${esc(opp.id)}','${esc(opp.status || 'draft')}')">
 	              ${isPublished ? 'Unpublish' : 'Publish'}
@@ -65553,7 +65712,7 @@ See you soon!
 	        </div>
 	      </div>`;
 	    const bodyByStep = {
-	      plan: `${statHtml}${checklistHtml}${suggestionHtml}${departmentHtml}`,
+	      plan: `${statHtml}${checklistHtml}${gapTrackingHtml}${suggestionHtml}${departmentHtml}`,
 	      suggestions: suggestionHtml,
 	      roles: departmentHtml,
 	      publish: publishHtml,
@@ -65587,6 +65746,7 @@ See you soon!
 	    document.getElementById('opp-vol-role').value = opp?.volunteer_role || preset?.volunteer_role || '';
 	    document.getElementById('opp-vol-time').value = opp?.time_commitment || preset?.time_commitment || '';
 	    document.getElementById('opp-vol-age').value = opp?.age_requirements || preset?.age_requirements || '';
+	    document.getElementById('opp-vol-needed').value = opp?.volunteers_needed || preset?.volunteers_needed || '';
 	    onOppTypeChange();
 	    document.getElementById('opp-modal').classList.add('open');
 	  }
@@ -65608,6 +65768,15 @@ See you soon!
 	    const title = document.getElementById('opp-prod-title').value.trim();
 	    const closeDate = document.getElementById('opp-close-date').value;
 	    if (!title) { errEl.textContent = 'Opportunity title is required.'; errEl.classList.add('visible'); return; }
+	    if (publish) {
+	      const summaryVal = document.getElementById('opp-summary').value.trim();
+	      const descVal = document.getElementById('opp-description').value.trim();
+	      if (!summaryVal && !descVal) {
+	        errEl.textContent = 'Add a summary or description before publishing. Families need to know what this role involves.';
+	        errEl.classList.add('visible');
+	        return;
+	      }
+	    }
 
 	    const saveBtn = document.getElementById('opp-save-btn');
     const pubBtn  = document.getElementById('opp-publish-btn');
@@ -65634,6 +65803,7 @@ See you soon!
       volunteer_role:    document.getElementById('opp-vol-role').value.trim() || null,
       time_commitment:   document.getElementById('opp-vol-time').value.trim() || null,
       age_requirements:  document.getElementById('opp-vol-age').value.trim() || null,
+      volunteers_needed: parseInt(document.getElementById('opp-vol-needed')?.value, 10) || null,
     };
 
     let error;
@@ -65663,7 +65833,12 @@ See you soon!
   }
 
   async function deleteOpp(id) {
-    if (!confirm('Delete this opportunity? This cannot be undone.')) return;
+    const opp = opportunities.find(o => o.id === id);
+    const isPublished = opp?.status === 'published';
+    const msg = isPublished
+      ? `This role is published and families may already have the sign-up link.\n\nDeleting it removes the public link permanently.\n\nDelete anyway?`
+      : `Delete this role? This cannot be undone.`;
+    if (!confirm(msg)) return;
     const { error } = await sb.from('opportunities').delete().eq('id', id);
     if (error) { showToast('Could not delete: ' + error.message, true); return; }
     loadOpportunities();
