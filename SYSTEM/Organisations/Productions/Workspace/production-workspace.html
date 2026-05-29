@@ -65809,6 +65809,20 @@ See you soon!
 	      ? volunteerPlanEvents[0].start_time.slice(0, 10)
 	      : null;
 
+	    // Find the earliest event start time across all events so the day grid
+	    // starts 30 mins before it — no wasted midnight-to-morning dead space
+	    let earliestMins = null;
+	    volunteerPlanEvents.forEach(ev => {
+	      const s = ev.start_time ? ev.start_time.slice(0, 19) : null;
+	      if (!s || !s.includes('T')) return;
+	      const [h, m] = s.slice(11, 16).split(':').map(Number);
+	      const total = h * 60 + m;
+	      if (earliestMins === null || total < earliestMins) earliestMins = total;
+	    });
+	    const toTimeStr = m => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}:00`;
+	    const slotStart = earliestMins !== null ? Math.max(0, earliestMins - 30) : 0;
+	    const slotMinTime = toTimeStr(slotStart);
+
 	    const isMobile = window.matchMedia('(max-width: 700px)').matches;
 	    const volCal = new FullCalendar.Calendar(el, {
 	      initialView: isMobile ? 'listMonth' : 'timeGridWeek',
@@ -65823,6 +65837,8 @@ See you soon!
 	      dayMaxEvents: true,
 	      nowIndicator: true,
 	      timeZone: false,
+	      slotMinTime,
+	      scrollTime: slotMinTime,
 	      eventDisplay: 'block',
 	      events: fcEvents,
 	      eventClick(info) {
