@@ -8339,6 +8339,65 @@
 	    }
 	    .vol-per-dropdown button:last-child { border-bottom: none; }
 	    .vol-per-dropdown button:hover { background: rgba(87,46,136,0.06); }
+	    .vol-schedule-popover {
+	      position: absolute;
+	      bottom: calc(100% + 6px);
+	      left: 0;
+	      right: 0;
+	      background: #fff;
+	      border: 1px solid rgba(87,46,136,0.15);
+	      border-radius: 10px;
+	      box-shadow: 0 8px 24px rgba(26,21,48,0.18);
+	      z-index: 200;
+	      padding: 0.75rem;
+	      display: grid;
+	      gap: 0.5rem;
+	    }
+	    .vol-schedule-popover-title {
+	      font-size: 0.68rem;
+	      font-weight: 900;
+	      letter-spacing: 0.08em;
+	      text-transform: uppercase;
+	      color: #572e88;
+	      margin-bottom: 0.1rem;
+	    }
+	    .vol-schedule-row {
+	      display: grid;
+	      grid-template-columns: 1fr 1fr;
+	      gap: 0.4rem;
+	    }
+	    .vol-schedule-field label {
+	      display: block;
+	      font-size: 0.62rem;
+	      font-weight: 800;
+	      color: rgba(87,46,136,0.55);
+	      margin-bottom: 0.2rem;
+	      text-transform: uppercase;
+	      letter-spacing: 0.06em;
+	    }
+	    .vol-schedule-field input {
+	      width: 100%;
+	      border: 1.5px solid rgba(87,46,136,0.18);
+	      border-radius: 6px;
+	      padding: 0.3rem 0.4rem;
+	      font-size: 0.78rem;
+	      font-weight: 700;
+	      font-family: inherit;
+	      color: #1a1530;
+	      background: #fbf9ff;
+	    }
+	    .vol-schedule-field input:focus {
+	      outline: none;
+	      border-color: #572e88;
+	    }
+	    .vol-schedule-field--full { grid-column: 1 / -1; }
+	    .vol-schedule-time-indicator {
+	      font-size: 3.5cqw;
+	      font-weight: 800;
+	      color: rgba(255,255,255,0.8);
+	      line-height: 1;
+	      margin-top: 1cqw;
+	    }
 	    .vol-staffing-tile--inactive {
 	      filter: grayscale(1);
 	      opacity: 0.38;
@@ -65621,8 +65680,8 @@ See you soon!
 	                  <div class="template-brand-tile-container template-brand-tile-container--title">
 	                    <div class="template-brand-tile-title">${esc(role.name)}</div>
 	                  </div>
-	                  <div class="template-brand-tile-container template-brand-tile-container--body">
-	                    <div class="vol-staffing-stepper">
+	                  <div class="template-brand-tile-container template-brand-tile-container--body" style="flex-direction:column;gap:0;">
+	                    <div class="vol-staffing-stepper" style="flex:1;">
 	                      <div class="vol-staffing-num" id="vsq-display-${esc(type)}-${ri}">${role.default}</div>
 	                      <div class="vol-staffing-arrows">
 	                        <button type="button" class="vol-staffing-arrow" onclick="volStep('${esc(type)}',${ri},1)">▲</button>
@@ -65630,10 +65689,11 @@ See you soon!
 	                      </div>
 	                      <input type="hidden" id="vsq-${esc(type)}-${ri}" value="${role.default}" />
 	                    </div>
+	                    <div class="vol-schedule-time-indicator" id="vsq-time-${esc(type)}-${ri}"></div>
 	                  </div>
 	                  <div class="template-brand-tile-container template-brand-tile-container--footer" style="display:flex;flex-direction:row;gap:1cqw;position:relative;">
 	                    <button type="button" class="template-brand-tile-button" style="flex:1;justify-content:center;" id="vsq-per-btn-${esc(type)}-${ri}" onclick="volTogglePer('${esc(type)}','${ri}')">${esc(perLabel)}</button>
-	                    <button type="button" class="template-brand-tile-button" style="flex:1;justify-content:center;" onclick="navigateToVolunteers('calendar')">Schedule</button>
+	                    <button type="button" class="template-brand-tile-button" style="flex:1;justify-content:center;" onclick="volToggleSchedule('${esc(type)}','${ri}')">Schedule</button>
 	                  </div>
 	                </div>
 	              </div>
@@ -65982,15 +66042,18 @@ See you soon!
 	  }
 
 	  function applyStaffingPlanToTiles() {
+	    const fmt = t => { if (!t) return ''; const [h, m] = t.split(':').map(Number); const ap = h >= 12 ? 'pm' : 'am'; return `${h % 12 || 12}:${String(m).padStart(2,'0')}${ap}`; };
 	    Object.entries(_staffingPlan).forEach(([key, val]) => {
 	      const input = document.getElementById(`vsq-${key}`);
 	      const display = document.getElementById(`vsq-display-${key}`);
 	      const btn = document.getElementById(`vsq-per-btn-${key}`);
 	      const tile = document.getElementById(`vsq-tile-${key}`);
+	      const timeEl = document.getElementById(`vsq-time-${key}`);
 	      if (input) input.value = val.count ?? 0;
 	      if (display) display.textContent = val.count ?? 0;
 	      if (btn && val.perLabel) btn.textContent = val.perLabel;
 	      if (tile) tile.classList.toggle('vol-staffing-tile--inactive', (val.count ?? 0) === 0);
+	      if (timeEl && val.startTime) timeEl.textContent = `${fmt(val.startTime)}${val.endTime ? ` – ${fmt(val.endTime)}` : ''}`;
 	    });
 	  }
 
@@ -66031,6 +66094,59 @@ See you soon!
 	    const input = document.getElementById(`vsq-${type}-${ri}`);
 	    if (input) input.dataset.perLabel = label;
 	    document.querySelectorAll('.vol-per-dropdown').forEach(el => el.remove());
+	    saveStaffingPlan();
+	  }
+
+	  function volToggleSchedule(type, ri) {
+	    document.querySelectorAll('.vol-schedule-popover').forEach(el => el.remove());
+	    const btn = document.querySelector(`[onclick="volToggleSchedule('${type}','${ri}')"]`);
+	    if (!btn) return;
+	    const footer = btn.closest('.template-brand-tile-container--footer');
+	    if (!footer) return;
+	    const key = `${type}-${ri}`;
+	    const saved = _staffingPlan[key] || {};
+	    const pop = document.createElement('div');
+	    pop.className = 'vol-schedule-popover';
+	    pop.innerHTML = `
+	      <div class="vol-schedule-popover-title">Shift schedule</div>
+	      <div class="vol-schedule-row">
+	        <div class="vol-schedule-field">
+	          <label>Start time</label>
+	          <input type="time" id="vsq-sched-start-${key}" value="${saved.startTime || ''}" />
+	        </div>
+	        <div class="vol-schedule-field">
+	          <label>End time</label>
+	          <input type="time" id="vsq-sched-end-${key}" value="${saved.endTime || ''}" />
+	        </div>
+	        <div class="vol-schedule-field vol-schedule-field--full">
+	          <label>Counts for</label>
+	          <input type="text" id="vsq-sched-counts-${key}" value="${saved.countsFor || ''}" placeholder="e.g. Performance night, Tech week" />
+	        </div>
+	      </div>
+	      <button type="button" class="btn-primary" style="font-size:0.76rem;width:100%;justify-content:center;" onclick="volSaveSchedule('${type}','${ri}')">Save schedule</button>`;
+	    footer.style.position = 'relative';
+	    footer.appendChild(pop);
+	    const close = e => {
+	      if (!pop.contains(e.target) && e.target !== btn) { pop.remove(); document.removeEventListener('click', close); }
+	    };
+	    setTimeout(() => document.addEventListener('click', close), 10);
+	  }
+
+	  function volSaveSchedule(type, ri) {
+	    const key = `${type}-${ri}`;
+	    const startTime = document.getElementById(`vsq-sched-start-${key}`)?.value || '';
+	    const endTime = document.getElementById(`vsq-sched-end-${key}`)?.value || '';
+	    const countsFor = document.getElementById(`vsq-sched-counts-${key}`)?.value?.trim() || '';
+	    if (!_staffingPlan[key]) _staffingPlan[key] = {};
+	    _staffingPlan[key].startTime = startTime;
+	    _staffingPlan[key].endTime = endTime;
+	    _staffingPlan[key].countsFor = countsFor;
+	    const indicator = document.getElementById(`vsq-time-${key}`);
+	    if (indicator) {
+	      const fmt = t => { if (!t) return ''; const [h, m] = t.split(':').map(Number); const ap = h >= 12 ? 'pm' : 'am'; return `${h % 12 || 12}:${String(m).padStart(2,'0')}${ap}`; };
+	      indicator.textContent = startTime ? `${fmt(startTime)}${endTime ? ` – ${fmt(endTime)}` : ''}` : '';
+	    }
+	    document.querySelectorAll('.vol-schedule-popover').forEach(el => el.remove());
 	    saveStaffingPlan();
 	  }
 
