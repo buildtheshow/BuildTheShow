@@ -65785,26 +65785,12 @@ See you soon!
 	    el.dataset.fcMounted = '1';
 	    el.innerHTML = '';
 
-	    const EVENT_COLORS = {
-	      audition: '#625bc3', rehearsal: '#7fcae3', music_rehearsal: '#7fcae3',
-	      choreography: '#86b8cc', tech: '#7ac177', dress: '#469b42',
-	      performance: '#2b6529', strike: '#7497e7', costume_moveout: '#f4735b',
-	      event: '#aa2943', meeting: '#7b7b7b', deadline: '#572e88',
-	    };
-
-	    const fcEvents = [];
-	    volunteerPlanEvents.forEach(ev => {
-	      fcEvents.push({
-	        id: ev.id,
-	        title: ev.title,
-	        start: ev.start_time,
-	        end: ev.end_time || undefined,
-	        backgroundColor: EVENT_COLORS[ev.event_type] || '#572e88',
-	        borderColor: EVENT_COLORS[ev.event_type] || '#572e88',
-	        textColor: '#fff',
-	        extendedProps: { kind: 'event', event_type: ev.event_type },
-	      });
-	    });
+	    // Use the same mapper as the Zeus calendar so timezone/allDay handling is identical
+	    const fcEvents = volunteerPlanEvents.map(ev => ({
+	      ...dbEventToFC(ev),
+	      textColor: '#fff',
+	      extendedProps: { ...dbEventToFC(ev).extendedProps, kind: 'event' },
+	    }));
 	    opportunities.forEach(opp => {
 	      if (!opp.close_date) return;
 	      fcEvents.push({
@@ -65818,9 +65804,15 @@ See you soon!
 	      });
 	    });
 
+	    // Jump to the first production event instead of landing on today (which may be empty)
+	    const firstEventDate = volunteerPlanEvents.length > 0
+	      ? volunteerPlanEvents[0].start_time.slice(0, 10)
+	      : null;
+
 	    const isMobile = window.matchMedia('(max-width: 700px)').matches;
 	    const volCal = new FullCalendar.Calendar(el, {
 	      initialView: isMobile ? 'listMonth' : 'timeGridWeek',
+	      initialDate: firstEventDate || undefined,
 	      headerToolbar: {
 	        left: 'prev,next today',
 	        center: 'title',
