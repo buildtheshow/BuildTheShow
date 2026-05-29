@@ -380,6 +380,8 @@
     const locationInput = document.getElementById('search-location');
     const retryBtn = document.getElementById('retry-btn');
     const today = new Date().toISOString().slice(0, 10);
+    const pageParams = new URLSearchParams(window.location.search);
+    const productionFilter = pageParams.get('prod') || pageParams.get('production') || pageParams.get('production_id') || '';
     let allRoles = [];
 
     function esc(str) {
@@ -456,13 +458,14 @@
       emptyState.classList.add('hidden');
       errorState.classList.add('hidden');
       try {
-        const { data, error } = await sb
+        let query = sb
           .from('opportunities')
-          .select('id,production_title,organization_name,location_text,primary_image_url,close_date,volunteer_role,opportunity_type,time_commitment,mode_tag,summary,description,status')
+          .select('id,production_id,production_title,organization_name,location_text,primary_image_url,close_date,volunteer_role,opportunity_type,time_commitment,mode_tag,summary,description,status')
           .eq('status', 'published')
           .in('opportunity_type', ['volunteer', 'creative_team'])
-          .or(`close_date.is.null,close_date.gte.${today}`)
-          .order('close_date', { ascending: true, nullsFirst: false });
+          .or(`close_date.is.null,close_date.gte.${today}`);
+        if (productionFilter) query = query.eq('production_id', productionFilter);
+        const { data, error } = await query.order('close_date', { ascending: true, nullsFirst: false });
 
         if (error) throw error;
         allRoles = data || [];
