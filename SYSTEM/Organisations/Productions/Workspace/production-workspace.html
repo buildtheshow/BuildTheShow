@@ -7929,6 +7929,11 @@
 	    }
 
 	    /* ── Volunteer Dashboard ── */
+	    .vd-url-banner { display:flex; align-items:center; gap:0.75rem; background:rgba(87,46,136,0.06); border:1px solid rgba(87,46,136,0.15); border-radius:8px; padding:0.55rem 0.85rem; margin-bottom:0.85rem; flex-wrap:wrap; }
+	    .vd-url-label { font-size:0.72rem; font-weight:700; color:#572e88; white-space:nowrap; }
+	    .vd-url-code { font-family:monospace; font-size:0.72rem; color:#1a1530; background:#fff; border:1px solid rgba(87,46,136,0.18); border-radius:4px; padding:0.15rem 0.45rem; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+	    .vd-url-copy { font-size:0.72rem; font-weight:700; color:#572e88; background:#fff; border:1px solid rgba(87,46,136,0.3); border-radius:5px; padding:0.2rem 0.6rem; cursor:pointer; white-space:nowrap; }
+	    .vd-url-copy:hover { background:#572e88; color:#fff; }
 	    .vd-stats-row { display:grid; grid-template-columns: repeat(4,1fr) 240px; gap:0.75rem; margin-bottom:1.25rem; }
 	    .vd-stat-card { background:#fff; border:1px solid rgba(87,46,136,0.1); border-radius:10px; padding:0.9rem 1rem; display:flex; align-items:center; gap:0.75rem; }
 	    .vd-stat-icon { width:36px; height:36px; border-radius:8px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
@@ -67075,6 +67080,70 @@ See you soon!
 	    const root = document.getElementById('vol-dashboard-root');
 	    if (!root) return;
 
+	    // ── Role lookup: maps _staffingPlan key index → role name + dept ─
+	    const PLAN_ROLE_MAP = {
+	      dept_leads:      [
+	        { name: 'Stage Manager',                dept: 'Backstage & Rehearsal Support' },
+	        { name: 'Front of House Manager',       dept: 'Front of House' },
+	        { name: 'Concession Manager',            dept: 'Front of House' },
+	        { name: 'Lighting Designer / Technician', dept: 'Technical Crew' },
+	        { name: 'Lead Builder',                  dept: 'Design & Construction' },
+	        { name: 'Lead Set Painter',              dept: 'Design & Construction' },
+	        { name: 'Lead Prop Person',              dept: 'Design & Construction' },
+	        { name: 'Costume Coordinator',           dept: 'Costume & Makeup' },
+	        { name: 'Marketing Director',            dept: 'Marketing & Publicity' },
+	      ],
+	      performance:     [
+	        { name: 'Ushers',                   dept: 'Front of House' },
+	        { name: 'Concession Workers',        dept: 'Front of House' },
+	        { name: 'Ticket Sales',              dept: 'Front of House' },
+	        { name: 'Backstage Crew',            dept: 'Backstage & Rehearsal Support' },
+	        { name: 'Quick-Change Assistant',    dept: 'Backstage & Rehearsal Support' },
+	        { name: 'Child Wrangler',            dept: 'Backstage & Rehearsal Support' },
+	        { name: 'Mic Wrangler',              dept: 'Technical Crew' },
+	        { name: 'Spotlight Operators',       dept: 'Technical Crew' },
+	      ],
+	      tech:            [
+	        { name: 'Mic Wrangler',              dept: 'Technical Crew' },
+	        { name: 'Quick-Change Assistant',    dept: 'Backstage & Rehearsal Support' },
+	        { name: 'Backstage Crew',            dept: 'Backstage & Rehearsal Support' },
+	      ],
+	      dress:           [
+	        { name: 'Mic Wrangler',              dept: 'Technical Crew' },
+	        { name: 'Quick-Change Assistant',    dept: 'Backstage & Rehearsal Support' },
+	        { name: 'Backstage Crew',            dept: 'Backstage & Rehearsal Support' },
+	        { name: 'Child Wrangler',            dept: 'Backstage & Rehearsal Support' },
+	      ],
+	      rehearsal:       [
+	        { name: 'Rehearsal Assistant',       dept: 'Backstage & Rehearsal Support' },
+	        { name: 'Child Wrangler',            dept: 'Backstage & Rehearsal Support' },
+	      ],
+	      music_rehearsal: [{ name: 'Rehearsal Assistant', dept: 'Backstage & Rehearsal Support' }],
+	      choreography:    [{ name: 'Rehearsal Assistant', dept: 'Backstage & Rehearsal Support' }],
+	      strike:          [
+	        { name: 'Set Strike Crew',           dept: 'Design & Construction' },
+	        { name: 'Costume Move-Out Crew',     dept: 'Costume & Makeup' },
+	      ],
+	      costume_moveout: [{ name: 'Costume Move-Out Crew', dept: 'Costume & Makeup' }],
+	      other:           [
+	        { name: 'Costume Washer',             dept: 'Costume & Makeup' },
+	        { name: 'Bakers / Treat Contributors', dept: 'Front of House' },
+	        { name: 'Promotion Distribution',     dept: 'Marketing & Publicity' },
+	      ],
+	    };
+
+	    // Derive planned roles for an event type from _staffingPlan
+	    function plannedRolesForType(eventType) {
+	      const fixed = (PLAN_ROLE_MAP[eventType] || []).map((role, ri) => {
+	        const count = _staffingPlan[`${eventType}-${ri}`]?.count ?? 0;
+	        return count > 0 ? { name: role.name, dept: role.dept, needed: count } : null;
+	      }).filter(Boolean);
+	      const custom = Object.entries(_staffingPlan)
+	        .filter(([k, v]) => k.startsWith(`${eventType}-custom-`) && v.roleName && (v.count ?? 0) > 0)
+	        .map(([, v]) => ({ name: v.roleName, dept: v.department || 'Other', needed: v.count }));
+	      return [...fixed, ...custom];
+	    }
+
 	    // ── Week dates ──────────────────────────────────────────
 	    const today = new Date();
 	    const sunday = new Date(today);
@@ -67088,9 +67157,10 @@ See you soon!
 	    const toDateStr = d => d.toISOString().split('T')[0];
 	    const fmtTime = t => {
 	      if (!t) return '';
-	      const [h, m] = t.split('T')[1]?.split(':') || t.split(':');
-	      const hr = parseInt(h,10); const mn = m || '00';
-	      return `${hr%12||12}:${mn}${hr<12?'am':'pm'}`;
+	      const part = t.includes('T') ? t.split('T')[1] : t;
+	      const [h, m] = part.split(':');
+	      const hr = parseInt(h,10);
+	      return `${hr%12||12}:${m||'00'}${hr<12?'am':'pm'}`;
 	    };
 
 	    // ── Group events by date ────────────────────────────────
@@ -67108,25 +67178,28 @@ See you soon!
 
 	    // ── Signups by opportunity_id ───────────────────────────
 	    const signupsByOpp = {};
-	    volunteerSignups.forEach(s => {
+	    (volunteerSignups || []).forEach(s => {
 	      if (s.status !== 'cancelled') signupsByOpp[s.opportunity_id] = (signupsByOpp[s.opportunity_id] || 0) + 1;
 	    });
 
-	    // ── Stats (this week) ───────────────────────────────────
+	    // ── Stats this week — from plan × events ────────────────
 	    const weekDateStrs = new Set(weekDays.map(toDateStr));
 	    const thisWeekEvents = volunteerPlanEvents.filter(ev => weekDateStrs.has(ev.start_time?.split('T')[0]));
-	    const thisWeekEventIds = new Set(thisWeekEvents.map(ev => ev.id));
 	    let totalNeeded=0, totalFilled=0, partialCount=0, emptyCount=0;
 	    const gapsByRole = {};
-	    opportunities.forEach(opp => {
-	      if (!opp.event_id || !thisWeekEventIds.has(opp.event_id)) return;
-	      const needed = opp.volunteers_needed || 0;
-	      const filled = signupsByOpp[opp.id] || 0;
-	      totalNeeded += needed;
-	      totalFilled += filled;
-	      if (filled >= needed && needed > 0) { /* filled */ }
-	      else if (filled === 0) { emptyCount++; if (needed>0) { gapsByRole[opp.production_title] = (gapsByRole[opp.production_title]||0)+(needed-filled); } }
-	      else partialCount++;
+	    thisWeekEvents.forEach(ev => {
+	      const planRoles = plannedRolesForType(ev.event_type);
+	      planRoles.forEach(pr => {
+	        // Check if there's a matching opportunity with signups
+	        const linkedOpp = (oppsByEvent[ev.id] || []).find(o => (o.production_title||'').toLowerCase() === pr.name.toLowerCase());
+	        const filled = linkedOpp ? (signupsByOpp[linkedOpp.id] || 0) : 0;
+	        const needed = pr.needed;
+	        totalNeeded += needed;
+	        totalFilled += filled;
+	        if (filled >= needed) { /* filled */ }
+	        else if (filled === 0) { emptyCount++; gapsByRole[pr.name] = (gapsByRole[pr.name]||0)+(needed-filled); }
+	        else partialCount++;
+	      });
 	    });
 	    const filledPct = totalNeeded ? Math.round(totalFilled/totalNeeded*100) : 0;
 	    const partialPct = totalNeeded ? Math.round(partialCount/totalNeeded*100) : 0;
@@ -67139,69 +67212,68 @@ See you soon!
 
 	    // ── Render event card ───────────────────────────────────
 	    function renderEventCard(ev) {
-	      const opps = oppsByEvent[ev.id] || [];
 	      const start = fmtTime(ev.start_time);
 	      const end = fmtTime(ev.end_time);
 	      const timeStr = [start, end].filter(Boolean).join(' – ');
 	      const color = eventColor(ev.event_type);
 	      const label = ev.title || (ev.event_type || 'Event').replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase());
+	      const planRoles = plannedRolesForType(ev.event_type);
 
-	      const rolesHtml = opps.map(opp => {
-	        const needed = opp.volunteers_needed || 0;
-	        const filled = signupsByOpp[opp.id] || 0;
-	        const dot = filled >= needed && needed > 0 ? '#22c55e' : filled > 0 ? '#f59e0b' : '#ef4444';
-	        const name = opp.production_title || 'Role';
-	        const dept = opp.volunteer_role || '';
-	        const deptShort = dept.split(' ')[0];
+	      const rolesHtml = planRoles.map(pr => {
+	        const linkedOpp = (oppsByEvent[ev.id] || []).find(o => (o.production_title||'').toLowerCase() === pr.name.toLowerCase());
+	        const filled = linkedOpp ? (signupsByOpp[linkedOpp.id] || 0) : 0;
+	        const needed = pr.needed;
+	        const dot = filled >= needed ? '#22c55e' : filled > 0 ? '#f59e0b' : '#ef4444';
+	        const cls = filled >= needed ? 'filled' : filled > 0 ? 'partial' : 'empty';
 	        return `<div class="vd-role-row">
 	          <span class="vd-role-dot" style="background:${dot}"></span>
-	          <span class="vd-role-name">${esc(name)}${dept ? ` <span class="vd-role-dept">(${esc(deptShort)})</span>` : ''}</span>
-	          <span class="vd-role-count ${filled>=needed&&needed>0?'filled':filled>0?'partial':'empty'}">${filled}/${needed}</span>
+	          <span class="vd-role-name">${esc(pr.name)}</span>
+	          <span class="vd-role-count ${cls}">${filled}/${needed}</span>
 	        </div>`;
 	      }).join('');
 
-	      const noRoles = opps.length === 0;
+	      const noRoles = planRoles.length === 0;
 	      return `<div class="vd-event-card" style="border-left:3px solid ${color};">
 	        <div class="vd-event-header">
 	          <span class="vd-event-label" style="color:${color};">${esc(label)}</span>
 	          <span class="vd-event-time">${esc(timeStr)}</span>
 	        </div>
 	        <div class="vd-roles-list">${rolesHtml}</div>
-	        ${noRoles ? `<div class="vd-no-role">No role set</div>` : ''}
-	        <button class="vd-add-role-btn" onclick="volDashAddRole('${esc(ev.id)}','${esc(label)}')">+ Add Role</button>
+	        ${noRoles ? `<div class="vd-no-role">No roles set — go to Plan to add them</div>` : ''}
+	        <button class="vd-add-role-btn" onclick="navigateToVolunteers('plan')">Edit in Plan →</button>
 	      </div>`;
 	    }
 
-	    // ── Week header range ───────────────────────────────────
+	    // ── Columns ─────────────────────────────────────────────
 	    const weekStart = fmt(weekDays[0]);
 	    const weekEnd = fmt(weekDays[6]);
-
-	    // ── Column cells ────────────────────────────────────────
 	    const cols = weekDays.map(d => {
 	      const ds = toDateStr(d);
 	      const isToday = ds === toDateStr(today);
 	      const evs = (eventsByDate[ds] || []).sort((a,b) => (a.start_time||'').localeCompare(b.start_time||''));
-	      const cards = evs.map(renderEventCard).join('');
 	      return `<div class="vd-day-col${isToday?' vd-today':''}">
 	        <div class="vd-day-head">
 	          <span class="vd-day-name">${fmtDay(d)}</span>
 	          <span class="vd-day-date ${isToday?'vd-today-badge':''}">${d.getDate()}</span>
 	        </div>
-	        <div class="vd-day-events">${cards || '<div class="vd-empty-day"></div>'}</div>
+	        <div class="vd-day-events">${evs.map(renderEventCard).join('') || '<div class="vd-empty-day"></div>'}</div>
 	      </div>`;
 	    }).join('');
+
+	    // ── Volunteer page URL ──────────────────────────────────
+	    const volPageUrl = volunteerPublicPageUrl();
+	    const fullVolUrl = `${window.location.origin}${volPageUrl}`;
 
 	    // ── Needs attention ─────────────────────────────────────
 	    const needsHtml = topGaps.length
 	      ? topGaps.map(([name, gaps]) => `<div class="vd-gap-row"><span class="vd-gap-dot"></span><span class="vd-gap-name">${esc(name)}</span><span class="vd-gap-count">${gaps} empty</span></div>`).join('')
-	      : `<div style="font-size:0.78rem;color:rgba(87,46,136,0.5);padding:0.25rem 0;">All roles covered this week</div>`;
+	      : `<div style="font-size:0.78rem;color:rgba(87,46,136,0.5);padding:0.25rem 0;">${totalNeeded > 0 ? 'All roles covered this week' : 'Set up roles in Plan first'}</div>`;
 
-	    // ── Full HTML ───────────────────────────────────────────
 	    root.innerHTML = `
 	      <div class="vd-stats-row">
 	        <div class="vd-stat-card">
 	          <div class="vd-stat-icon" style="background:#572e88;">
-	            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+	            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
 	          </div>
 	          <div>
 	            <div class="vd-stat-num">${totalNeeded}</div>
@@ -67245,8 +67317,13 @@ See you soon!
 	            ${topGaps.length ? `<span class="vd-needs-badge">${topGaps.length}</span>` : ''}
 	          </div>
 	          ${needsHtml}
-	          ${topGaps.length > 0 ? `<button class="vd-view-gaps-btn" onclick="navigateToVolunteers('publish')">View all gaps →</button>` : ''}
+	          ${topGaps.length > 0 ? `<button class="vd-view-gaps-btn" onclick="navigateToVolunteers('plan')">Edit in Plan →</button>` : ''}
 	        </div>
+	      </div>
+	      <div class="vd-url-banner">
+	        <span class="vd-url-label">Volunteer page link to share:</span>
+	        <code class="vd-url-code">${esc(fullVolUrl)}</code>
+	        <button class="vd-url-copy" onclick="navigator.clipboard.writeText(${JSON.stringify(fullVolUrl)}).then(()=>showToast('Link copied!'))">Copy</button>
 	      </div>
 	      <div class="vd-nav-row">
 	        <div style="display:flex;align-items:center;gap:0.5rem;">
@@ -67259,14 +67336,12 @@ See you soon!
 	          <button class="vd-view-btn vd-view-active">Week</button>
 	        </div>
 	      </div>
-	      <div class="vd-calendar-grid">
-	        ${cols}
-	      </div>
+	      <div class="vd-calendar-grid">${cols}</div>
 	      <div class="vd-legend-row">
 	        <span class="vd-legend-item"><span class="vd-legend-dot" style="background:#22c55e;"></span> Filled <span class="vd-legend-sub">All spots covered</span></span>
 	        <span class="vd-legend-item"><span class="vd-legend-dot" style="background:#f59e0b;"></span> Partial <span class="vd-legend-sub">Some spots open</span></span>
 	        <span class="vd-legend-item"><span class="vd-legend-dot" style="background:#ef4444;"></span> Empty <span class="vd-legend-sub">Needs volunteers</span></span>
-	        <span class="vd-legend-item"><span class="vd-legend-dot" style="background:#d1d5db;"></span> No Role Set <span class="vd-legend-sub">Add a role to this event</span></span>
+	        <span class="vd-legend-item"><span class="vd-legend-dot" style="background:#d1d5db;"></span> No Roles Set <span class="vd-legend-sub">Set counts in Plan</span></span>
 	        <span style="margin-left:auto;">
 	          <button class="btn-primary" style="font-size:0.78rem;" onclick="switchProdTab('calendar')">+ Add Event</button>
 	        </span>
