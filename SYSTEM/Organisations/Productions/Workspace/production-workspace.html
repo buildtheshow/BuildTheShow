@@ -7929,7 +7929,7 @@
 	    }
 	    .vol-map {
 	      display: grid;
-	      grid-template-columns: repeat(5, minmax(0, 1fr));
+	      grid-template-columns: repeat(6, minmax(0, 1fr));
 	      gap: 0.55rem;
 	      margin-bottom: 0.2rem;
 	    }
@@ -8242,6 +8242,30 @@
 	    .vol-coverage-label--attention { color: #9a5200; }
 	    .vol-coverage-label--open { color: #2f7d4f; }
 	    .vol-coverage-label--draft { color: #572e88; }
+	    /* ── Volunteer calendar legend ── */
+	    .vol-cal-legend {
+	      display: flex;
+	      flex-wrap: wrap;
+	      gap: 0.55rem;
+	      margin-bottom: 0.55rem;
+	    }
+	    .vol-cal-legend-dot {
+	      display: inline-flex;
+	      align-items: center;
+	      gap: 0.32rem;
+	      font-size: 0.7rem;
+	      font-weight: 750;
+	      color: #352756;
+	    }
+	    .vol-cal-legend-dot::before {
+	      content: '';
+	      display: block;
+	      width: 10px;
+	      height: 10px;
+	      border-radius: 3px;
+	      background: var(--lc, #572e88);
+	      flex-shrink: 0;
+	    }
 	    .vol-coverage-empty {
 	      font-size: 0.74rem;
 	      color: rgba(87,46,136,0.44);
@@ -28485,7 +28509,7 @@
     if (next.marketingSubTab && !marketingTabs.has(next.marketingSubTab)) next.marketingSubTab = 'dashboard';
     const budgetTabs = new Set(['dashboard', 'breakdown', 'receipts', 'collect']);
     if (next.budgetSubTab && !budgetTabs.has(next.budgetSubTab)) next.budgetSubTab = 'dashboard';
-    const volunteerTabs = new Set(['plan', 'suggestions', 'roles', 'publish', 'share']);
+    const volunteerTabs = new Set(['plan', 'suggestions', 'roles', 'publish', 'share', 'calendar']);
     if (next.volunteerSubTab && !volunteerTabs.has(next.volunteerSubTab)) next.volunteerSubTab = 'plan';
     return next;
   }
@@ -28562,7 +28586,7 @@
       return !!detail || !budgetRoutes.has(child || '');
     }
     if (section === 'volunteers') {
-      const volunteerRoutes = new Set(['', 'plan', 'suggestions', 'roles', 'internal-roles', 'publish', 'sign-ups', 'share']);
+      const volunteerRoutes = new Set(['', 'plan', 'suggestions', 'roles', 'internal-roles', 'publish', 'sign-ups', 'share', 'calendar']);
       return !!detail || !volunteerRoutes.has(child || '');
     }
     if (topLevel.has(section)) return segments.length > 1;
@@ -28688,6 +28712,7 @@
         publish: 'publish',
         'sign-ups': 'publish',
         share: 'share',
+        calendar: 'calendar',
       };
       return {
         ...nav,
@@ -28781,6 +28806,7 @@
         roles: 'volunteers/internal-roles',
         publish: 'volunteers/publish',
         share: 'volunteers/share',
+        calendar: 'volunteers/calendar',
       };
       route = volunteerRoutes[volunteerSubTab] || 'volunteers';
     } else {
@@ -65413,6 +65439,7 @@ See you soon!
 	      { key: 'roles', label: 'Internal Roles', sub: 'Draft and edit' },
 	      { key: 'publish', label: 'Publish', sub: 'Open sign-ups' },
 	      { key: 'share', label: 'Share', sub: 'Send the links' },
+	      { key: 'calendar', label: 'Calendar', sub: 'Full view' },
 	    ];
 	    const volunteerMapHtml = `
 	      <div class="vol-map" aria-label="Volunteer setup steps">
@@ -65430,6 +65457,7 @@ See you soon!
 	      roles:       ['Internal roles', 'Clean up the role list before families see it. Drafts stay private until you publish them.', 'Publish roles', 'publish'],
 	      publish:     ['Publish sign-ups', 'Choose which roles families can sign up for. Published roles get a public sign-up link.', 'Share links', 'share'],
 	      share:       ['Share volunteer flow', 'Send families the volunteer page, the quiz, or a direct sign-up link after roles are published.', 'Back to plan', 'plan'],
+	      calendar:    ['Production and Volunteer Calendar', 'Every rehearsal, tech, performance, and strike. Volunteer sign-up deadlines layered on top.', 'Back to plan', 'plan'],
 	    };
 	    const sh = stepHeroes[activeVolunteerSubTab] || stepHeroes.plan;
 	    const heroHtml = `
@@ -65711,18 +65739,157 @@ See you soon!
 	          </div>
 	        </div>
 	      </div>`;
+	    // ── Calendar view ──
+	    const calendarHtml = `
+	      <div>
+	        <div style="display:flex;justify-content:space-between;gap:1rem;align-items:center;margin-bottom:0.75rem;flex-wrap:wrap;">
+	          <div>
+	            <div class="vol-section-title">Production and Volunteer Calendar</div>
+	            <div class="vol-dept-sub">Every rehearsal, tech, performance, and strike — with volunteer sign-up deadlines layered on top in gold. Click any gold event to edit that role.</div>
+	          </div>
+	          <button class="btn-secondary" style="font-size:0.8rem;" onclick="switchProdTab('calendar')">Edit Production Events</button>
+	        </div>
+	        <div class="vol-cal-legend">
+	          <span class="vol-cal-legend-dot" style="--lc:#625bc3">Audition</span>
+	          <span class="vol-cal-legend-dot" style="--lc:#7fcae3">Rehearsal</span>
+	          <span class="vol-cal-legend-dot" style="--lc:#7ac177">Tech</span>
+	          <span class="vol-cal-legend-dot" style="--lc:#469b42">Dress</span>
+	          <span class="vol-cal-legend-dot" style="--lc:#2b6529">Performance</span>
+	          <span class="vol-cal-legend-dot" style="--lc:#7497e7">Strike</span>
+	          <span class="vol-cal-legend-dot" style="--lc:#f4735b">Costume Move-Out</span>
+	          <span class="vol-cal-legend-dot" style="--lc:#efab45">Volunteer Deadline</span>
+	        </div>
+	        ${!volunteerPlanEvents.length ? `
+	        <div class="vol-empty-board">
+	          <div>
+	            <div class="vol-empty-board-title">No production events yet</div>
+	            <div class="vol-dept-sub">Add events in the Production Calendar and they will appear here alongside your volunteer roles.</div>
+	          </div>
+	          <button class="btn-primary" style="font-size:0.8rem;" onclick="switchProdTab('calendar')">+ Add Calendar Events</button>
+	        </div>` : ''}
+	        <div id="vol-fc-view" style="background:#fff;border:1px solid rgba(87,46,136,0.1);border-radius:10px;padding:1rem;margin-top:0.6rem;${!volunteerPlanEvents.length ? 'display:none;' : ''}">
+	          <div style="text-align:center;padding:2rem;color:rgba(87,46,136,0.5);font-size:0.82rem;">Loading calendar...</div>
+	        </div>
+	      </div>`;
+
 	    const bodyByStep = {
 	      plan: `${statHtml}${checklistHtml}${gapTrackingHtml}${suggestionHtml}${departmentHtml}`,
 	      suggestions: suggestionHtml,
 	      roles: departmentHtml,
 	      publish: publishHtml,
 	      share: shareHtml,
+	      calendar: calendarHtml,
 	    };
 	    const html = `<div class="vol-plan">${volunteerMapHtml}${heroHtml}${bodyByStep[activeVolunteerSubTab] || bodyByStep.plan}</div>`;
 	    containers.forEach(container => {
 	      container.innerHTML = html;
-	      requestAnimationFrame(() => requestAnimationFrame(() => { try { fitBrandTileTitles(container); } catch (_) {} }));
+	      requestAnimationFrame(() => requestAnimationFrame(() => {
+	        try { fitBrandTileTitles(container); } catch (_) {}
+	        if (activeVolunteerSubTab === 'calendar') {
+	          try { initVolunteerCalendar(); } catch (_) {}
+	        }
+	      }));
 	    });
+	  }
+
+	  function initVolunteerCalendar() {
+	    const el = document.getElementById('vol-fc-view');
+	    if (!el || el.style.display === 'none') return;
+	    if (typeof FullCalendar === 'undefined') {
+	      const s = document.createElement('script');
+	      s.src = 'https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js';
+	      s.onload = () => initVolunteerCalendar();
+	      document.head.appendChild(s);
+	      return;
+	    }
+	    // Already mounted
+	    if (el.dataset.fcMounted === '1') return;
+	    el.dataset.fcMounted = '1';
+	    el.innerHTML = '';
+
+	    const EVENT_COLORS = {
+	      audition: '#625bc3', rehearsal: '#7fcae3', music_rehearsal: '#7fcae3',
+	      choreography: '#86b8cc', tech: '#7ac177', dress: '#469b42',
+	      performance: '#2b6529', strike: '#7497e7', costume_moveout: '#f4735b',
+	      event: '#aa2943', meeting: '#7b7b7b', deadline: '#572e88',
+	    };
+
+	    const fcEvents = [];
+	    volunteerPlanEvents.forEach(ev => {
+	      fcEvents.push({
+	        id: ev.id,
+	        title: ev.title,
+	        start: ev.start_time,
+	        end: ev.end_time || undefined,
+	        backgroundColor: EVENT_COLORS[ev.event_type] || '#572e88',
+	        borderColor: EVENT_COLORS[ev.event_type] || '#572e88',
+	        textColor: '#fff',
+	        extendedProps: { kind: 'event', event_type: ev.event_type },
+	      });
+	    });
+	    opportunities.forEach(opp => {
+	      if (!opp.close_date) return;
+	      fcEvents.push({
+	        title: opp.production_title,
+	        start: opp.close_date,
+	        allDay: true,
+	        backgroundColor: '#efab45',
+	        borderColor: '#b07f30',
+	        textColor: '#1a1530',
+	        extendedProps: { kind: 'volunteer', opp_id: opp.id },
+	      });
+	    });
+
+	    const isMobile = window.matchMedia('(max-width: 700px)').matches;
+	    const volCal = new FullCalendar.Calendar(el, {
+	      initialView: isMobile ? 'listMonth' : 'dayGridMonth',
+	      headerToolbar: {
+	        left: 'prev,next today',
+	        center: 'title',
+	        right: isMobile ? 'listMonth' : 'dayGridMonth,timeGridWeek,listMonth',
+	      },
+	      height: 'auto',
+	      fixedWeekCount: false,
+	      dayMaxEvents: true,
+	      nowIndicator: true,
+	      timeZone: false,
+	      eventDisplay: 'block',
+	      events: fcEvents,
+	      eventClick(info) {
+	        if (info.event.extendedProps.kind === 'volunteer') {
+	          openOppModal(info.event.extendedProps.opp_id);
+	        }
+	      },
+	      eventContent(arg) {
+	        try {
+	          const ev = arg.event;
+	          const fmtT = t => {
+	            if (!t) return '';
+	            const h = t.getUTCHours(), m = t.getUTCMinutes(), ap = h >= 12 ? 'pm' : 'am';
+	            return `${h % 12 || 12}:${String(m).padStart(2,'0')}${ap}`;
+	          };
+	          let timeStr = '';
+	          if (!ev.allDay && ev.start) {
+	            timeStr = fmtT(ev.start);
+	            if (ev.end) timeStr += ' – ' + fmtT(ev.end);
+	          }
+	          const safe = s => String(s||'').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+	          const wrap = document.createElement('div');
+	          wrap.style.cssText = 'width:100%;overflow:hidden;text-align:center;line-height:1.25;padding:1px 2px;';
+	          if (ev.extendedProps.kind === 'volunteer') {
+	            wrap.innerHTML = `<div style="font-size:0.58rem;font-weight:900;opacity:0.7;text-transform:uppercase;letter-spacing:0.05em;">Vol</div>`
+	              + `<div style="font-size:0.72rem;font-weight:700;">${safe(ev.title||'')}</div>`;
+	          } else {
+	            wrap.innerHTML = (timeStr ? `<div style="font-size:0.62rem;opacity:0.82;">${safe(timeStr)}</div>` : '')
+	              + `<div style="font-size:0.72rem;font-weight:700;">${safe(ev.title||'')}</div>`;
+	          }
+	          return { domNodes: [wrap] };
+	        } catch(e) {
+	          return { html: `<div style="padding:2px 4px;font-size:0.72rem;font-weight:600;">${String(arg.event.title||'')}</div>` };
+	        }
+	      },
+	    });
+	    volCal.render();
 	  }
 
 	  function openOppModal(oppId = null, preset = null) {
