@@ -837,33 +837,41 @@
     async function loadPage() {
       showOnly('vp-loading');
       try {
-        // 1. Find org — try slug first, then abbreviation (URL may use either)
-        let orgData = null;
-        const orgBySlug = await sb.from('organizations').select('id, name, email, slug, abbreviation').ilike('slug', orgSlug).maybeSingle();
-        if (orgBySlug.data) {
-          orgData = orgBySlug.data;
-        } else {
-          const orgByAbbr = await sb.from('organizations').select('id, name, email, slug, abbreviation').ilike('abbreviation', orgSlug).maybeSingle();
-          if (orgByAbbr.data) orgData = orgByAbbr.data;
-        }
-        if (!orgData) { showOnly('vp-notfound'); return; }
-        org = orgData;
+        // 1. Find production by showSlug — org RLS may block direct org lookup
+        //    so search productions by slug and soft-match the org from the URL
+        const normalise = s => (s || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+        const normShow  = normalise(showSlug);
+        const normOrg   = normalise(orgSlug);
 
-        // 2. Find production — try slug, then title-derived match
-        let prodData = null;
-        const prodBySlug = await sb.from('productions').select('id, name, title, slug, poster_url, season, org_name, organization_id, wizard_data').eq('organization_id', org.id).ilike('slug', showSlug).maybeSingle();
-        if (prodBySlug.data) {
-          prodData = prodBySlug.data;
-        } else {
-          // Fall back: load all productions for this org and match slug-like title
-          const prodAll = await sb.from('productions').select('id, name, title, slug, poster_url, season, org_name, organization_id, wizard_data').eq('organization_id', org.id);
-          if (prodAll.data) {
-            const normalise = s => (s || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-            prodData = prodAll.data.find(p => normalise(p.slug) === normalise(showSlug) || normalise(p.title) === normalise(showSlug) || normalise(p.name) === normalise(showSlug)) || null;
-          }
-        }
+        // Load all productions matching showSlug (slug or title)
+        const { data: prodRows, error: prodErr } = await sb
+          .from('productions')
+          .select('id, name, title, slug, poster_url, season, org_name, organization_id, wizard_data')
+          .or(`slug.ilike.${showSlug},title.ilike.${showSlug.replace(/-/g, ' ')}`);
+
+        if (prodErr) { console.error('[BTS] productions query error', prodErr); showOnly('vp-error'); return; }
+
+        // Prefer exact slug match; fallback to normalised title match
+        const allRows = prodRows || [];
+        let prodData = allRows.find(p => normalise(p.slug) === normShow)
+          || allRows.find(p => normalise(p.title) === normShow || normalise(p.name) === normShow)
+          || null;
+
         if (!prodData) { showOnly('vp-notfound'); return; }
         prod = prodData;
+
+        // 2. Try to get org info (may be blocked by RLS — degrade gracefully)
+        let orgData = { id: prod.organization_id, name: prod.org_name || orgSlug, email: null };
+        try {
+          const orgBySlug = await sb.from('organizations').select('id, name, email, slug, abbreviation').ilike('slug', orgSlug).maybeSingle();
+          if (orgBySlug.data) {
+            orgData = orgBySlug.data;
+          } else {
+            const orgByAbbr = await sb.from('organizations').select('id, name, email, slug, abbreviation').ilike('abbreviation', orgSlug).maybeSingle();
+            if (orgByAbbr.data) orgData = orgByAbbr.data;
+          }
+        } catch (_) { /* RLS blocks anon — use org_name from production row */ }
+        org = orgData;
 
         // 3. Load opportunities + their linked events
         const [oppResult, eventResult, signupResult] = await Promise.all([
