@@ -66023,7 +66023,7 @@ See you soon!
 	    });
 	  }
 
-	  const VOL_PER_OPTIONS = ['per performance', 'per rehearsal', 'per tech/dress', 'per event', 'per production', 'per week', 'total needed'];
+	  const VOL_PER_OPTIONS = ['per performance', 'per rehearsal', 'per production', 'total needed'];
 
 	  let _staffingPlan = {};
 	  let _staffingSaveTimer;
@@ -66047,7 +66047,13 @@ See you soon!
 	      if (display) display.textContent = val.count ?? 0;
 	      if (btn && val.perLabel) btn.textContent = val.perLabel;
 	      if (tile) tile.classList.toggle('vol-staffing-tile--inactive', (val.count ?? 0) === 0);
-	      if (timeEl && val.startTime) timeEl.textContent = `${fmt(val.startTime)}${val.endTime ? ` – ${fmt(val.endTime)}` : ''}`;
+	      if (timeEl && (val.minutesBefore || val.minutesAfter)) {
+	        const fmtMins = m => m >= 60 ? `${Math.floor(m/60)}h${m%60 ? `${m%60}m` : ''}` : `${m}m`;
+	        const parts = [];
+	        if (val.minutesBefore) parts.push(`${fmtMins(val.minutesBefore)} before end`);
+	        if (val.minutesAfter) parts.push(`${fmtMins(val.minutesAfter)} after end`);
+	        timeEl.textContent = parts.join(' · ');
+	      }
 	    });
 	  }
 
@@ -66104,17 +66110,23 @@ See you soon!
 	    pop.innerHTML = `
 	      <div class="vol-schedule-popover-title">Shift schedule</div>
 	      <div class="vol-schedule-row">
-	        <div class="vol-schedule-field">
-	          <label>Start time</label>
-	          <input type="time" id="vsq-sched-start-${key}" value="${saved.startTime || ''}" />
+	        <div class="vol-schedule-field vol-schedule-field--full">
+	          <label>How long before it ends?</label>
+	          <div style="display:flex;gap:0.4rem;align-items:center;">
+	            <input type="number" min="0" max="480" id="vsq-sched-before-${key}" value="${saved.minutesBefore || ''}" placeholder="0" style="width:64px;" />
+	            <span style="font-size:0.76rem;color:#572e88;font-weight:700;">minutes before it ends</span>
+	          </div>
 	        </div>
-	        <div class="vol-schedule-field">
-	          <label>End time</label>
-	          <input type="time" id="vsq-sched-end-${key}" value="${saved.endTime || ''}" />
+	        <div class="vol-schedule-field vol-schedule-field--full">
+	          <label>How long after it ends?</label>
+	          <div style="display:flex;gap:0.4rem;align-items:center;">
+	            <input type="number" min="0" max="480" id="vsq-sched-after-${key}" value="${saved.minutesAfter || ''}" placeholder="0" style="width:64px;" />
+	            <span style="font-size:0.76rem;color:#572e88;font-weight:700;">minutes after it ends</span>
+	          </div>
 	        </div>
 	        <div class="vol-schedule-field vol-schedule-field--full">
 	          <label>Counts for</label>
-	          <input type="text" id="vsq-sched-counts-${key}" value="${saved.countsFor || ''}" placeholder="e.g. Performance night, Tech week" />
+	          <input type="text" id="vsq-sched-counts-${key}" value="${saved.countsFor || ''}" placeholder="e.g. Performance nights, Tech week" />
 	        </div>
 	      </div>
 	      <button type="button" class="btn-primary" style="font-size:0.76rem;width:100%;justify-content:center;" onclick="volSaveSchedule('${type}','${ri}')">Save schedule</button>`;
@@ -66127,17 +66139,20 @@ See you soon!
 
 	  function volSaveSchedule(type, ri) {
 	    const key = `${type}-${ri}`;
-	    const startTime = document.getElementById(`vsq-sched-start-${key}`)?.value || '';
-	    const endTime = document.getElementById(`vsq-sched-end-${key}`)?.value || '';
+	    const minutesBefore = parseInt(document.getElementById(`vsq-sched-before-${key}`)?.value, 10) || 0;
+	    const minutesAfter = parseInt(document.getElementById(`vsq-sched-after-${key}`)?.value, 10) || 0;
 	    const countsFor = document.getElementById(`vsq-sched-counts-${key}`)?.value?.trim() || '';
 	    if (!_staffingPlan[key]) _staffingPlan[key] = {};
-	    _staffingPlan[key].startTime = startTime;
-	    _staffingPlan[key].endTime = endTime;
+	    _staffingPlan[key].minutesBefore = minutesBefore;
+	    _staffingPlan[key].minutesAfter = minutesAfter;
 	    _staffingPlan[key].countsFor = countsFor;
 	    const indicator = document.getElementById(`vsq-time-${key}`);
 	    if (indicator) {
-	      const fmt = t => { if (!t) return ''; const [h, m] = t.split(':').map(Number); const ap = h >= 12 ? 'pm' : 'am'; return `${h % 12 || 12}:${String(m).padStart(2,'0')}${ap}`; };
-	      indicator.textContent = startTime ? `${fmt(startTime)}${endTime ? ` – ${fmt(endTime)}` : ''}` : '';
+	      const fmtMins = m => m >= 60 ? `${Math.floor(m/60)}h${m%60 ? `${m%60}m` : ''}` : `${m}m`;
+	      const parts = [];
+	      if (minutesBefore) parts.push(`${fmtMins(minutesBefore)} before end`);
+	      if (minutesAfter) parts.push(`${fmtMins(minutesAfter)} after end`);
+	      indicator.textContent = parts.join(' · ');
 	    }
 	    document.querySelectorAll('.vol-schedule-popover').forEach(el => el.remove());
 	    saveStaffingPlan();
