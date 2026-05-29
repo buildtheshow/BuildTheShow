@@ -702,11 +702,174 @@
     // ── State ─────────────────────────────────────────────────────────────────
     let prod         = null;
     let org          = null;
-    let opps         = [];
-    let eventMap     = {};   // event_id → { event_type }
-    let approvedCounts = {}; // opportunity_id → number of non-cancelled signups
-    let activeFilter = 'all';
-    let selectedOpp  = null;
+    let opps           = [];
+    let eventMap       = {};  // event_id → event object
+    let signupCounts   = {};  // `roleName::shiftDate` → count of non-cancelled signups
+    let activeFilter   = 'all';
+    let selectedOpp    = null;
+
+    // ── Staffing map (mirrors workspace) ─────────────────────────────────────
+    const STAFFING_MAP = {
+      dept_leads:      { label: 'Department Lead',    perProd: true,  color: '#000000', roles: [
+        { dept: 'Backstage & Rehearsal Support', name: 'Stage Manager' },
+        { dept: 'Front of House',               name: 'Front of House Manager' },
+        { dept: 'Front of House',               name: 'Concession Manager' },
+        { dept: 'Technical Crew',               name: 'Lighting Designer / Technician' },
+        { dept: 'Design & Construction',        name: 'Lead Builder' },
+        { dept: 'Design & Construction',        name: 'Lead Set Painter' },
+        { dept: 'Design & Construction',        name: 'Lead Prop Person' },
+        { dept: 'Costume & Makeup',             name: 'Costume Coordinator' },
+        { dept: 'Marketing & Publicity',        name: 'Marketing Director' },
+      ]},
+      performance:     { label: 'Performance',        color: '#572e88', roles: [
+        { dept: 'Front of House',               name: 'Ushers' },
+        { dept: 'Front of House',               name: 'Concession Workers' },
+        { dept: 'Front of House',               name: 'Ticket Sales' },
+        { dept: 'Backstage & Rehearsal Support', name: 'Backstage Crew' },
+        { dept: 'Backstage & Rehearsal Support', name: 'Quick-Change Assistant' },
+        { dept: 'Backstage & Rehearsal Support', name: 'Child Wrangler' },
+        { dept: 'Technical Crew',               name: 'Mic Wrangler' },
+        { dept: 'Technical Crew',               name: 'Spotlight Operators' },
+      ]},
+      tech:            { label: 'Tech Rehearsal',     color: '#476aaa', roles: [
+        { dept: 'Technical Crew',               name: 'Mic Wrangler' },
+        { dept: 'Backstage & Rehearsal Support', name: 'Quick-Change Assistant' },
+        { dept: 'Backstage & Rehearsal Support', name: 'Backstage Crew' },
+      ]},
+      dress:           { label: 'Dress Rehearsal',    color: '#769e7b', roles: [
+        { dept: 'Technical Crew',               name: 'Mic Wrangler' },
+        { dept: 'Backstage & Rehearsal Support', name: 'Quick-Change Assistant' },
+        { dept: 'Backstage & Rehearsal Support', name: 'Backstage Crew' },
+        { dept: 'Backstage & Rehearsal Support', name: 'Child Wrangler' },
+      ]},
+      rehearsal:       { label: 'Rehearsal',          color: '#78bbd4', roles: [
+        { dept: 'Backstage & Rehearsal Support', name: 'Rehearsal Assistant' },
+        { dept: 'Backstage & Rehearsal Support', name: 'Child Wrangler' },
+      ]},
+      music_rehearsal: { label: 'Music Rehearsal',    color: '#78bbd4', roles: [
+        { dept: 'Backstage & Rehearsal Support', name: 'Rehearsal Assistant' },
+      ]},
+      choreography:    { label: 'Choreography',       color: '#ca7ea7', roles: [
+        { dept: 'Backstage & Rehearsal Support', name: 'Rehearsal Assistant' },
+      ]},
+      strike:          { label: 'Strike',             color: '#dd8233', roles: [
+        { dept: 'Design & Construction',        name: 'Set Strike Crew' },
+      ]},
+      costume_moveout: { label: 'Costume Move-Out',   color: '#d1523d', roles: [
+        { dept: 'Costume & Makeup',             name: 'Costume Move-Out Crew' },
+      ]},
+      other:           { label: 'Other',              perProd: true,  color: '#572e88', roles: [
+        { dept: 'Costume & Makeup',             name: 'Costume Washer' },
+        { dept: 'Front of House',               name: 'Bakers / Treat Contributors' },
+        { dept: 'Marketing & Publicity',        name: 'Promotion Distribution' },
+      ]},
+    };
+
+    function minsToTime(mins) {
+      if (mins == null) return '';
+      const h = Math.floor(mins / 60), m = mins % 60;
+      return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
+    }
+
+    // Generate virtual opps from staffing plan + events
+    function buildOppsFromPlan(staffingPlan, events) {
+      const result = [];
+      if (!staffingPlan || !events.length) return result;
+
+      Object.entries(STAFFING_MAP).forEach(([eventType, cfg]) => {
+        if (cfg.perProd) {
+          // Production-wide roles (dept leads, other) — one card per role
+          cfg.roles.forEach((role, ri) => {
+            const key = `${eventType}-${ri}`;
+            const planEntry = staffingPlan[key];
+            const count = planEntry?.count ?? 0;
+            if (count <= 0) return;
+            result.push({
+              id: key,
+              volunteer_role: role.name,
+              department: role.dept,
+              description: null,
+              volunteers_needed: count,
+              shift_date: null,
+              shift_start_time: null,
+              shift_end_time: null,
+              time_commitment: null,
+              event_id: null,
+              event_type: eventType,
+              _planKey: key,
+            });
+          });
+          // Custom prod-wide roles
+          Object.entries(staffingPlan).filter(([k]) => k.startsWith(`${eventType}-custom-`)).forEach(([k, v]) => {
+            if (!v.roleName || (v.count ?? 0) <= 0) return;
+            result.push({
+              id: k,
+              volunteer_role: v.roleName,
+              department: v.department || cfg.label,
+              description: null,
+              volunteers_needed: v.count,
+              shift_date: null,
+              shift_start_time: null,
+              shift_end_time: null,
+              time_commitment: null,
+              event_id: null,
+              event_type: eventType,
+              _planKey: k,
+            });
+          });
+        } else {
+          // Per-event roles — one card per matching event
+          const matchingEvents = events.filter(ev => ev.event_type === eventType)
+            .sort((a, b) => (a.start_time || '').localeCompare(b.start_time || ''));
+
+          matchingEvents.forEach(ev => {
+            const shiftDate = ev.start_time?.split('T')[0] || null;
+            cfg.roles.forEach((role, ri) => {
+              const key = `${eventType}-${ri}`;
+              const planEntry = staffingPlan[key];
+              const count = planEntry?.count ?? 0;
+              if (count <= 0) return;
+              const startTime = planEntry?.shiftStartMins != null ? minsToTime(planEntry.shiftStartMins) : (ev.start_time ? ev.start_time.split('T')[1]?.slice(0,5) : null);
+              const endTime   = planEntry?.shiftEndMins   != null ? minsToTime(planEntry.shiftEndMins)   : (ev.end_time   ? ev.end_time.split('T')[1]?.slice(0,5)   : null);
+              result.push({
+                id: `${ev.id}::${key}`,
+                volunteer_role: role.name,
+                department: role.dept,
+                description: null,
+                volunteers_needed: count,
+                shift_date: shiftDate,
+                shift_start_time: startTime,
+                shift_end_time: endTime,
+                time_commitment: null,
+                event_id: ev.id,
+                event_type: eventType,
+                _planKey: key,
+              });
+            });
+            // Custom per-event roles
+            Object.entries(staffingPlan).filter(([k]) => k.startsWith(`${eventType}-custom-`)).forEach(([k, v]) => {
+              if (!v.roleName || (v.count ?? 0) <= 0) return;
+              result.push({
+                id: `${ev.id}::${k}`,
+                volunteer_role: v.roleName,
+                department: v.department || cfg.label,
+                description: null,
+                volunteers_needed: v.count,
+                shift_date: shiftDate,
+                shift_start_time: null,
+                shift_end_time: null,
+                time_commitment: null,
+                event_id: ev.id,
+                event_type: eventType,
+                _planKey: k,
+              });
+            });
+          });
+        }
+      });
+
+      return result;
+    }
 
     // ── URL ───────────────────────────────────────────────────────────────────
     const pathParts = window.location.pathname.split('/').filter(Boolean);
@@ -802,7 +965,8 @@
     // ── Spots ─────────────────────────────────────────────────────────────────
     function spotsLeft(opp) {
       const needed = opp.volunteers_needed || 0;
-      const taken  = approvedCounts[opp.id] || 0;
+      const key    = `${opp.volunteer_role || ''}::${opp.shift_date || ''}`;
+      const taken  = signupCounts[key] || 0;
       return Math.max(0, needed - taken);
     }
 
@@ -880,32 +1044,35 @@
         } catch (_) { /* RLS blocks anon — use org_name from production row */ }
         org = orgData;
 
-        // 3. Load opportunities + their linked events
-        const [oppResult, eventResult, signupResult] = await Promise.all([
-          sb.from('opportunities')
-            .select('id, volunteer_role, production_title, description, summary, volunteers_needed, shift_date, shift_start_time, shift_end_time, time_commitment, department, event_id, status')
-            .eq('production_id', prod.id)
-            .eq('opportunity_type', 'volunteer')
-            .eq('status', 'published')
-            .order('shift_date', { ascending: true }),
+        // 3. Load staffing plan, events, and existing signups in parallel
+        const [planResult, eventResult, signupResult] = await Promise.all([
+          sb.from('productions')
+            .select('volunteer_staffing_plan')
+            .eq('id', prod.id)
+            .single(),
           sb.from('production_events')
-            .select('id, event_type')
-            .eq('production_id', prod.id),
+            .select('id, event_type, title, start_time, end_time')
+            .eq('production_id', prod.id)
+            .order('start_time', { ascending: true }),
           sb.from('volunteer_signups')
-            .select('opportunity_id, status')
+            .select('role_name, shift_date, status')
             .eq('production_id', prod.id)
             .not('status', 'in', '("declined","cancelled")'),
         ]);
 
-        opps = oppResult.data || [];
-
         // Build event map
-        (eventResult.data || []).forEach(ev => { eventMap[ev.id] = ev; });
+        const events = eventResult.data || [];
+        events.forEach(ev => { eventMap[ev.id] = ev; });
 
-        // Build approved/pending count per opportunity (pending holds a spot)
+        // Build signup counts keyed by roleName::shiftDate
         (signupResult.data || []).forEach(s => {
-          approvedCounts[s.opportunity_id] = (approvedCounts[s.opportunity_id] || 0) + 1;
+          const key = `${s.role_name || ''}::${s.shift_date || ''}`;
+          signupCounts[key] = (signupCounts[key] || 0) + 1;
         });
+
+        // Generate virtual opps from plan × events
+        const staffingPlan = planResult.data?.volunteer_staffing_plan || {};
+        opps = buildOppsFromPlan(staffingPlan, events);
 
         renderPage();
         showOnly('vp-page');
@@ -1098,12 +1265,11 @@
       try {
         const { error } = await sb.from('volunteer_signups').insert({
           production_id:    prod.id,
-          opportunity_id:   opp.id,
           name,
           email,
           message:          message || null,
           status:           'pending',
-          role_name:        opp.volunteer_role || opp.production_title || null,
+          role_name:        opp.volunteer_role || null,
           shift_date:       opp.shift_date     || null,
           shift_start_time: opp.shift_start_time || null,
           shift_end_time:   opp.shift_end_time   || null,
@@ -1111,8 +1277,9 @@
 
         if (error) throw error;
 
-        // Update local counts so spot reflects as taken
-        approvedCounts[opp.id] = (approvedCounts[opp.id] || 0) + 1;
+        // Update local counts so spot reflects as taken immediately
+        const countKey = `${opp.volunteer_role || ''}::${opp.shift_date || ''}`;
+        signupCounts[countKey] = (signupCounts[countKey] || 0) + 1;
         renderCards();
         showSignupSuccess(name);
 
