@@ -8311,6 +8311,34 @@
 	      font-family: inherit;
 	    }
 	    .vol-staffing-arrow:hover { opacity: 0.7; }
+	    .vol-per-dropdown {
+	      position: absolute;
+	      bottom: calc(100% + 4px);
+	      left: 0;
+	      right: 0;
+	      background: #fff;
+	      border: 1px solid rgba(87,46,136,0.15);
+	      border-radius: 8px;
+	      box-shadow: 0 6px 18px rgba(26,21,48,0.18);
+	      z-index: 200;
+	      overflow: hidden;
+	    }
+	    .vol-per-dropdown button {
+	      display: block;
+	      width: 100%;
+	      padding: 0.42rem 0.7rem;
+	      text-align: left;
+	      background: transparent;
+	      border: none;
+	      border-bottom: 1px solid rgba(87,46,136,0.07);
+	      font-size: 0.76rem;
+	      font-weight: 700;
+	      color: #1a1530;
+	      cursor: pointer;
+	      font-family: inherit;
+	    }
+	    .vol-per-dropdown button:last-child { border-bottom: none; }
+	    .vol-per-dropdown button:hover { background: rgba(87,46,136,0.06); }
 	    .vol-staffing-tile--inactive {
 	      filter: grayscale(1);
 	      opacity: 0.38;
@@ -65366,7 +65394,7 @@ See you soon!
 	  // ── Opportunities ─────────────────────────────────────
 	  async function loadOpportunities() {
 	    try {
-	      const [oppResult, eventResult] = await Promise.all([
+	      const [oppResult, eventResult, prodResult] = await Promise.all([
 	        sb.from('opportunities')
 	          .select('*')
 	          .eq('production_id', prodId)
@@ -65375,13 +65403,19 @@ See you soon!
 	        sb.from('production_events')
 	          .select('id,title,event_type,start_time,end_time')
 	          .eq('production_id', prodId)
-	          .order('start_time', { ascending: true })
+	          .order('start_time', { ascending: true }),
+	        sb.from('productions')
+	          .select('volunteer_staffing_plan')
+	          .eq('id', prodId)
+	          .single()
 	      ]);
 	      opportunities = oppResult.data || [];
 	      volunteerPlanEvents = eventResult.data || [];
+	      _staffingPlan = prodResult.data?.volunteer_staffing_plan || {};
 	    } catch {
 	      opportunities = [];
 	      volunteerPlanEvents = [];
+	      _staffingPlan = {};
 	    }
 	    renderOpportunities();
 	  }
@@ -65597,9 +65631,9 @@ See you soon!
 	                      <input type="hidden" id="vsq-${esc(type)}-${ri}" value="${role.default}" />
 	                    </div>
 	                  </div>
-	                  <div class="template-brand-tile-container template-brand-tile-container--footer" style="${cfg.scheduleBtn ? 'display:flex;flex-direction:row;gap:1cqw;' : ''}">
-	                    <button type="button" class="template-brand-tile-button" style="pointer-events:none;${cfg.scheduleBtn ? 'flex:1;justify-content:center;' : 'width:100%;justify-content:center;'}">${esc(perLabel)}</button>
-	                    ${cfg.scheduleBtn ? `<button type="button" class="template-brand-tile-button" style="flex:1;justify-content:center;" onclick="navigateToVolunteers('calendar')">Schedule</button>` : ''}
+	                  <div class="template-brand-tile-container template-brand-tile-container--footer" style="display:flex;flex-direction:row;gap:1cqw;position:relative;">
+	                    <button type="button" class="template-brand-tile-button" style="flex:1;justify-content:center;" id="vsq-per-btn-${esc(type)}-${ri}" onclick="volTogglePer('${esc(type)}','${ri}')">${esc(perLabel)}</button>
+	                    <button type="button" class="template-brand-tile-button" style="flex:1;justify-content:center;" onclick="navigateToVolunteers('calendar')">Schedule</button>
 	                  </div>
 	                </div>
 	              </div>
@@ -65928,8 +65962,76 @@ See you soon!
 	        if (activeVolunteerSubTab === 'calendar') {
 	          try { initVolunteerCalendar(); } catch (_) {}
 	        }
+	        if (activeVolunteerSubTab === 'plan') {
+	          try { applyStaffingPlanToTiles(); } catch (_) {}
+	        }
 	      }));
 	    });
+	  }
+
+	  const VOL_PER_OPTIONS = ['per performance', 'per rehearsal', 'per tech/dress', 'per event', 'per production', 'per week', 'total needed'];
+
+	  let _staffingPlan = {};
+	  let _staffingSaveTimer;
+
+	  async function loadStaffingPlan() {
+	    try {
+	      const { data } = await sb.from('productions').select('volunteer_staffing_plan').eq('id', prodId).single();
+	      _staffingPlan = data?.volunteer_staffing_plan || {};
+	    } catch { _staffingPlan = {}; }
+	  }
+
+	  function applyStaffingPlanToTiles() {
+	    Object.entries(_staffingPlan).forEach(([key, val]) => {
+	      const input = document.getElementById(`vsq-${key}`);
+	      const display = document.getElementById(`vsq-display-${key}`);
+	      const btn = document.getElementById(`vsq-per-btn-${key}`);
+	      const tile = document.getElementById(`vsq-tile-${key}`);
+	      if (input) input.value = val.count ?? 0;
+	      if (display) display.textContent = val.count ?? 0;
+	      if (btn && val.perLabel) btn.textContent = val.perLabel;
+	      if (tile) tile.classList.toggle('vol-staffing-tile--inactive', (val.count ?? 0) === 0);
+	    });
+	  }
+
+	  function saveStaffingPlan() {
+	    clearTimeout(_staffingSaveTimer);
+	    _staffingSaveTimer = setTimeout(async () => {
+	      const plan = {};
+	      document.querySelectorAll('[id^="vsq-"]').forEach(el => {
+	        if (el.id.includes('display') || el.id.includes('tile') || el.id.includes('per-btn') || el.id.includes('dropdown')) return;
+	        const key = el.id.replace('vsq-', '');
+	        const btn = document.getElementById(`vsq-per-btn-${key}`);
+	        plan[key] = { count: parseInt(el.value, 10) || 0, perLabel: btn?.textContent?.trim() || '' };
+	      });
+	      const { error } = await sb.from('productions').update({ volunteer_staffing_plan: plan }).eq('id', prodId);
+	      if (!error) { _staffingPlan = plan; showToast('Saved'); }
+	    }, 600);
+	  }
+
+	  function volTogglePer(type, ri) {
+	    document.querySelectorAll('.vol-per-dropdown').forEach(el => el.remove());
+	    const btn = document.getElementById(`vsq-per-btn-${type}-${ri}`);
+	    if (!btn) return;
+	    const footer = btn.closest('.template-brand-tile-container--footer');
+	    if (!footer) return;
+	    const dropdown = document.createElement('div');
+	    dropdown.className = 'vol-per-dropdown';
+	    dropdown.innerHTML = VOL_PER_OPTIONS.map(opt =>
+	      `<button type="button" onclick="volSetPer('${type}','${ri}','${opt}')">${opt}</button>`
+	    ).join('');
+	    footer.appendChild(dropdown);
+	    const close = e => { if (!dropdown.contains(e.target) && e.target !== btn) { dropdown.remove(); document.removeEventListener('click', close); } };
+	    setTimeout(() => document.addEventListener('click', close), 10);
+	  }
+
+	  function volSetPer(type, ri, label) {
+	    const btn = document.getElementById(`vsq-per-btn-${type}-${ri}`);
+	    if (btn) btn.textContent = label;
+	    const input = document.getElementById(`vsq-${type}-${ri}`);
+	    if (input) input.dataset.perLabel = label;
+	    document.querySelectorAll('.vol-per-dropdown').forEach(el => el.remove());
+	    saveStaffingPlan();
 	  }
 
 	  function volStep(type, ri, delta) {
@@ -65941,6 +66043,7 @@ See you soon!
 	    input.value = val;
 	    display.textContent = val;
 	    if (tile) tile.classList.toggle('vol-staffing-tile--inactive', val === 0);
+	    saveStaffingPlan();
 	  }
 
 	  function volAddRole(type, color) {
