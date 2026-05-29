@@ -8400,9 +8400,14 @@
 	    }
 	    .vol-schedule-line {
 	      display: grid;
-	      grid-template-columns: 54px minmax(0, 1fr);
+	      grid-template-columns: 64px auto minmax(0, 1fr);
 	      gap: 0.45rem;
-	      align-items: end;
+	      align-items: center;
+	    }
+	    .vol-schedule-unit {
+	      color: #572e88;
+	      font-size: 0.68rem;
+	      font-weight: 800;
 	    }
 	    .vol-schedule-field label {
 	      display: block;
@@ -8443,7 +8448,7 @@
 	    .vol-schedule-field--full { grid-column: 1 / -1; }
 	    .vol-hours-toggle {
 	      display: grid;
-	      grid-template-columns: 1fr 1fr;
+	      grid-template-columns: repeat(3, minmax(0, 1fr));
 	      gap: 0.35rem;
 	    }
 	    .vol-hours-toggle input {
@@ -66188,9 +66193,17 @@ See you soon!
 	      if (tile) tile.classList.toggle('vol-staffing-tile--inactive', (val.count ?? 0) === 0);
 	      if (timeEl && (val.shiftStartAnchor || val.shiftEndAnchor)) {
 	        const fmtMins = m => m >= 60 ? `${Math.floor(m/60)}h${m%60 ? `${m%60}m` : ''}` : `${m}m`;
-	        const anchorLabel = a => a === 'before_start' ? 'before start' : a === 'after_start' ? 'after start' : a === 'before_end' ? 'before end' : 'after end';
+	        const anchorLabel = a => ({
+	          before_start: 'before event starts',
+	          after_start: 'after event starts',
+	          before_end: 'before event ends',
+	          after_end: 'after event ends',
+	          before_event_start: 'before event starts',
+	          after_event_end: 'after event ends'
+	        })[a] || a;
 	        const parts = [`${fmtMins(val.shiftStartMins||0)} ${anchorLabel(val.shiftStartAnchor||'before_start')} → ${fmtMins(val.shiftEndMins||0)} ${anchorLabel(val.shiftEndAnchor||'after_end')}`];
-	        if (val.countsFor) parts.push(`${val.countsFor}h discount`);
+	        if (val.hoursMode === 'full') parts.push('full discount hours');
+	        else if (val.countsFor) parts.push(`${val.countsFor}h discount`);
 	        timeEl.textContent = parts.join(' · ');
 	      }
 	    });
@@ -66252,8 +66265,10 @@ See you soon!
 	    const mode = document.querySelector(`input[name="vsq-hours-mode-${key}"]:checked`)?.value || 'auto';
 	    const fixedRow = document.getElementById(`vsq-hours-fixed-row-${key}`);
 	    const autoNote = document.getElementById(`vsq-hours-auto-note-${key}`);
+	    const fullNote = document.getElementById(`vsq-hours-full-note-${key}`);
 	    if (fixedRow) fixedRow.style.display = mode === 'fixed' ? 'grid' : 'none';
 	    if (autoNote) autoNote.style.display = mode === 'auto' ? '' : 'none';
+	    if (fullNote) fullNote.style.display = mode === 'full' ? '' : 'none';
 	  }
 
 	  function volToggleSchedule(type, ri, typeLabel) {
@@ -66266,19 +66281,19 @@ See you soon!
 	    const pop = document.createElement('div');
 	    pop.className = 'vol-schedule-modal';
 	    const anchorOpts = (sel) => [
-	      ['before_start',       `before role starts`],
-	      ['after_start',        `after role starts`],
-	      ['before_end',         `before role ends`],
-	      ['after_end',          `after role ends`],
-	      ['before_event_start', `before event starts`],
-	      ['after_event_end',    `after event ends`],
+	      ['before_start',       `before event starts`],
+	      ['after_start',        `after event starts`],
+	      ['before_end',         `before event ends`],
+	      ['after_end',          `after event ends`],
+	      ['before_event_start', `before calendar day starts`],
+	      ['after_event_end',    `after calendar day ends`],
 	    ].map(([v,l]) => `<option value="${v}" ${sel===v?'selected':''}>${l}</option>`).join('');
 	    pop.innerHTML = `
 	      <div class="vol-schedule-dialog" role="dialog" aria-modal="true" aria-labelledby="vol-schedule-title-${key}">
 	        <div class="vol-schedule-head">
 	          <div>
 	            <div class="vol-schedule-popover-title" id="vol-schedule-title-${key}">Shift schedule</div>
-	            <div class="vol-schedule-note" style="margin-top:0.15rem;">Set the call time for this role.</div>
+	            <div class="vol-schedule-note" style="margin-top:0.15rem;">Set when this shift happens around the calendar event.</div>
 	          </div>
 	          <button type="button" class="vol-schedule-close" onclick="document.querySelectorAll('.vol-schedule-modal').forEach(el => el.remove())" aria-label="Close schedule popup">×</button>
 	        </div>
@@ -66287,6 +66302,7 @@ See you soon!
 	            <label>Starts</label>
 	            <div class="vol-schedule-line">
 	              <input type="number" min="0" max="480" id="vsq-sched-smins-${key}" value="${saved.shiftStartMins ?? ''}" placeholder="0" aria-label="Start offset in minutes" />
+	              <span class="vol-schedule-unit">minutes</span>
 	              <select id="vsq-sched-sanchor-${key}" class="vol-schedule-select" aria-label="Start anchor">${anchorOpts(saved.shiftStartAnchor||'before_start')}</select>
 	            </div>
 	          </div>
@@ -66294,6 +66310,7 @@ See you soon!
 	            <label>Ends</label>
 	            <div class="vol-schedule-line">
 	              <input type="number" min="0" max="480" id="vsq-sched-emins-${key}" value="${saved.shiftEndMins ?? ''}" placeholder="0" aria-label="End offset in minutes" />
+	              <span class="vol-schedule-unit">minutes</span>
 	              <select id="vsq-sched-eanchor-${key}" class="vol-schedule-select" aria-label="End anchor">${anchorOpts(saved.shiftEndAnchor||'after_end')}</select>
 	            </div>
 	          </div>
@@ -66308,12 +66325,17 @@ See you soon!
 	                <input type="radio" name="vsq-hours-mode-${key}" value="fixed" ${saved.hoursMode === 'fixed' ? 'checked' : ''} onchange="volHoursModeChange('${key}')" />
 	                <span class="vol-hours-option">Fixed</span>
 	              </label>
+	              <label>
+	                <input type="radio" name="vsq-hours-mode-${key}" value="full" ${saved.hoursMode === 'full' ? 'checked' : ''} onchange="volHoursModeChange('${key}')" />
+	                <span class="vol-hours-option">Full discount</span>
+	              </label>
 	            </div>
 	            <div id="vsq-hours-fixed-row-${key}" class="vol-hours-fixed-row" style="display:${saved.hoursMode === 'fixed' ? 'grid' : 'none'};">
 	              <input type="number" min="0" max="24" step="0.5" id="vsq-sched-counts-${key}" value="${saved.countsFor || ''}" placeholder="0" aria-label="Fixed hours" />
 	              <span style="font-size:0.72rem;color:#572e88;font-weight:800;">hours</span>
 	            </div>
 	            <div id="vsq-hours-auto-note-${key}" class="vol-schedule-note" style="display:${!saved.hoursMode || saved.hoursMode === 'auto' ? '' : 'none'};">Counts the shift length automatically.</div>
+	            <div id="vsq-hours-full-note-${key}" class="vol-schedule-note" style="display:${saved.hoursMode === 'full' ? '' : 'none'};">Counts as the full volunteer discount requirement.</div>
 	          </div>
 	        </div>
 	        <div class="vol-schedule-actions">
@@ -66340,9 +66362,10 @@ See you soon!
 	    const indicator = document.getElementById(`vsq-time-${key}`);
 	    if (indicator) {
 	      const fmtMins = m => m >= 60 ? `${Math.floor(m/60)}h${m%60 ? `${m%60}m` : ''}` : `${m}m`;
-	      const anchorLabel = a => ({before_start:'before start',after_start:'after start',before_end:'before end',after_end:'after end',before_event_start:'before event starts',after_event_end:'after event ends'})[a] || a;
+	      const anchorLabel = a => ({before_start:'before event starts',after_start:'after event starts',before_end:'before event ends',after_end:'after event ends',before_event_start:'before calendar day starts',after_event_end:'after calendar day ends'})[a] || a;
 	      const parts = [`${fmtMins(shiftStartMins)} ${anchorLabel(shiftStartAnchor)} → ${fmtMins(shiftEndMins)} ${anchorLabel(shiftEndAnchor)}`];
-	      if (countsFor) parts.push(`${countsFor}h discount`);
+	      if (hoursMode === 'full') parts.push('full discount hours');
+	      else if (countsFor) parts.push(`${countsFor}h discount`);
 	      indicator.textContent = parts.join(' · ');
 	    }
 	    document.querySelectorAll('.vol-schedule-popover, .vol-schedule-modal').forEach(el => el.remove());
