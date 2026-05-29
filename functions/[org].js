@@ -11,6 +11,7 @@ const RESERVED_ROOTS = new Set([
   'SYSTEM',
   'functions',
   'supabase',
+  'volunteer-quiz',
   'volunteers',
 ]);
 
