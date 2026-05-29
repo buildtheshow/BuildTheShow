@@ -66595,64 +66595,100 @@ See you soon!
 	  }
 
 	  async function applyStaffingBlock(eventType, eventCount) {
+	    const PER_EVENT_TYPES = ['performance','tech','dress','rehearsal','music_rehearsal','choreography','strike','costume_moveout'];
+	    const isPerEvent = PER_EVENT_TYPES.includes(eventType);
 	    const STAFFING_MAP_KEYS = {
-	      performance: [
-	        { name: 'Ushers', dept: 'Front of House' },
-	        { name: 'Concession Workers', dept: 'Front of House' },
-	        { name: 'Ticket Sales', dept: 'Front of House' },
-	        { name: 'Backstage Crew', dept: 'Backstage & Rehearsal Support' },
-	        { name: 'Quick-Change Assistant', dept: 'Backstage & Rehearsal Support' },
-	        { name: 'Child Wrangler', dept: 'Backstage & Rehearsal Support' },
-	        { name: 'Mic Wrangler', dept: 'Technical Crew' },
-	        { name: 'Spotlight Operators', dept: 'Technical Crew' },
+	      performance:      [
+	        { name: 'Ushers',                   dept: 'Front of House' },
+	        { name: 'Concession Workers',        dept: 'Front of House' },
+	        { name: 'Ticket Sales',              dept: 'Front of House' },
+	        { name: 'Backstage Crew',            dept: 'Backstage & Rehearsal Support' },
+	        { name: 'Quick-Change Assistant',    dept: 'Backstage & Rehearsal Support' },
+	        { name: 'Child Wrangler',            dept: 'Backstage & Rehearsal Support' },
+	        { name: 'Mic Wrangler',              dept: 'Technical Crew' },
+	        { name: 'Spotlight Operators',       dept: 'Technical Crew' },
 	      ],
-	      tech: [
-	        { name: 'Mic Wrangler', dept: 'Technical Crew' },
-	        { name: 'Quick-Change Assistant', dept: 'Backstage & Rehearsal Support' },
-	        { name: 'Backstage Crew', dept: 'Backstage & Rehearsal Support' },
+	      tech:             [
+	        { name: 'Mic Wrangler',              dept: 'Technical Crew' },
+	        { name: 'Quick-Change Assistant',    dept: 'Backstage & Rehearsal Support' },
+	        { name: 'Backstage Crew',            dept: 'Backstage & Rehearsal Support' },
 	      ],
-	      dress: [
-	        { name: 'Mic Wrangler', dept: 'Technical Crew' },
-	        { name: 'Quick-Change Assistant', dept: 'Backstage & Rehearsal Support' },
-	        { name: 'Backstage Crew', dept: 'Backstage & Rehearsal Support' },
-	        { name: 'Child Wrangler', dept: 'Backstage & Rehearsal Support' },
+	      dress:            [
+	        { name: 'Mic Wrangler',              dept: 'Technical Crew' },
+	        { name: 'Quick-Change Assistant',    dept: 'Backstage & Rehearsal Support' },
+	        { name: 'Backstage Crew',            dept: 'Backstage & Rehearsal Support' },
+	        { name: 'Child Wrangler',            dept: 'Backstage & Rehearsal Support' },
 	      ],
-	      rehearsal: [
-	        { name: 'Rehearsal Assistant', dept: 'Backstage & Rehearsal Support' },
-	        { name: 'Child Wrangler', dept: 'Backstage & Rehearsal Support' },
+	      rehearsal:        [
+	        { name: 'Rehearsal Assistant',       dept: 'Backstage & Rehearsal Support' },
+	        { name: 'Child Wrangler',            dept: 'Backstage & Rehearsal Support' },
 	      ],
-	      music_rehearsal: [{ name: 'Rehearsal Assistant', dept: 'Backstage & Rehearsal Support' }],
-	      choreography: [{ name: 'Rehearsal Assistant', dept: 'Backstage & Rehearsal Support' }],
-	      strike: [
-	        { name: 'Set Strike Crew', dept: 'Design & Construction' },
-	        { name: 'Costume Move-Out Crew', dept: 'Costume & Makeup' },
+	      music_rehearsal:  [{ name: 'Rehearsal Assistant', dept: 'Backstage & Rehearsal Support' }],
+	      choreography:     [{ name: 'Rehearsal Assistant', dept: 'Backstage & Rehearsal Support' }],
+	      strike:           [
+	        { name: 'Set Strike Crew',           dept: 'Design & Construction' },
+	        { name: 'Costume Move-Out Crew',     dept: 'Costume & Makeup' },
 	      ],
-	      costume_moveout: [{ name: 'Costume Move-Out Crew', dept: 'Costume & Makeup' }],
+	      costume_moveout:  [{ name: 'Costume Move-Out Crew', dept: 'Costume & Makeup' }],
 	    };
 	    const roles = STAFFING_MAP_KEYS[eventType] || [];
+	    const matchingEvents = isPerEvent
+	      ? volunteerPlanEvents.filter(e => e.event_type === eventType)
+	      : [];
 	    const inserts = [];
 	    roles.forEach((role, ri) => {
 	      const input = document.getElementById(`vsq-${eventType}-${ri}`);
 	      const qty = input ? parseInt(input.value, 10) : 0;
-	      if (!qty) return; // skip zeros
-	      const alreadyExists = opportunities.some(o =>
-	        (o.production_title || '').toLowerCase() === role.name.toLowerCase() &&
-	        (o.volunteer_role || '').toLowerCase().includes(role.dept.toLowerCase().split(' ')[0])
-	      );
-	      if (alreadyExists) return;
-	      inserts.push({
-	        opportunity_type: 'volunteer',
-	        mode_tag: 'In Person',
-	        production_title: role.name,
-	        organization_name: orgName || (prod?.title || ''),
-	        organization_id: prod?.organization_id || null,
-	        production_id: prodId,
-	        volunteer_role: role.dept,
-	        volunteers_needed: qty,
-	        time_commitment: `${eventType.charAt(0).toUpperCase() + eventType.slice(1).replace('_', ' ')} dates`,
-	        summary: `Help with ${role.dept.toLowerCase()} for ${prod?.title || 'this production'}.`,
-	        status: 'draft',
-	      });
+	      if (!qty) return;
+	      if (isPerEvent && matchingEvents.length) {
+	        // One record per calendar event date
+	        matchingEvents.forEach(ev => {
+	          const alreadyExists = opportunities.some(o =>
+	            (o.production_title || '').toLowerCase() === role.name.toLowerCase() &&
+	            o.event_id === ev.id
+	          );
+	          if (alreadyExists) return;
+	          const evDate = ev.start_time ? ev.start_time.split('T')[0] : null;
+	          const evLabel = evDate ? new Date(evDate + 'T12:00:00').toLocaleDateString('en-CA', { weekday: 'short', month: 'short', day: 'numeric' }) : ev.title || eventType;
+	          inserts.push({
+	            opportunity_type: 'volunteer',
+	            mode_tag: 'In Person',
+	            production_title: role.name,
+	            organization_name: orgName || (prod?.title || ''),
+	            organization_id: prod?.organization_id || null,
+	            production_id: prodId,
+	            volunteer_role: role.dept,
+	            volunteers_needed: qty,
+	            event_id: ev.id,
+	            event_date: evDate,
+	            time_commitment: evLabel,
+	            summary: `Help with ${role.dept.toLowerCase()} on ${evLabel} for ${prod?.title || 'this production'}.`,
+	            status: 'draft',
+	          });
+	        });
+	      } else {
+	        // Per-production: one record total
+	        const alreadyExists = opportunities.some(o =>
+	          (o.production_title || '').toLowerCase() === role.name.toLowerCase() &&
+	          !o.event_id
+	        );
+	        if (alreadyExists) return;
+	        inserts.push({
+	          opportunity_type: 'volunteer',
+	          mode_tag: 'In Person',
+	          production_title: role.name,
+	          organization_name: orgName || (prod?.title || ''),
+	          organization_id: prod?.organization_id || null,
+	          production_id: prodId,
+	          volunteer_role: role.dept,
+	          volunteers_needed: qty,
+	          event_id: null,
+	          event_date: null,
+	          time_commitment: 'Full production',
+	          summary: `${role.name} for ${prod?.title || 'this production'}.`,
+	          status: 'draft',
+	        });
+	      }
 	    });
 	    if (!inserts.length) {
 	      showToast('All non-zero roles already exist or all quantities are 0.');
