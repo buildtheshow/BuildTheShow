@@ -8499,11 +8499,18 @@
 	      margin-top: 0.1rem;
 	    }
 	    .vol-schedule-time-indicator {
-	      font-size: 3.5cqw;
+	      align-self: stretch;
+	      max-width: 100%;
+	      font-size: clamp(0.48rem, 3.2cqw, 0.64rem);
 	      font-weight: 800;
-	      color: rgba(255,255,255,0.8);
-	      line-height: 1;
-	      margin-top: 1cqw;
+	      color: rgba(255,255,255,0.92);
+	      line-height: 1.1;
+	      margin-top: 0.55cqw;
+	      min-height: 1.2em;
+	      white-space: nowrap;
+	      overflow: hidden;
+	      text-overflow: ellipsis;
+	      text-align: center;
 	    }
 	    .vol-staffing-tile--inactive {
 	      filter: grayscale(1);
@@ -66178,6 +66185,55 @@ See you soon!
 	    } catch { _staffingPlan = {}; }
 	  }
 
+	  function volScheduleSummary(val = {}) {
+	    const fmtMins = m => {
+	      const n = parseInt(m, 10) || 0;
+	      return n >= 60 ? `${Math.floor(n/60)}h${n%60 ? `${n%60}m` : ''}` : `${n}m`;
+	    };
+	    const shortAnchor = a => ({
+	      before_start: 'before start',
+	      after_start: 'after start',
+	      before_end: 'before end',
+	      after_end: 'after end',
+	      before_event_start: 'before day',
+	      after_event_end: 'after day'
+	    })[a] || a;
+	    const longAnchor = a => ({
+	      before_start: 'before event starts',
+	      after_start: 'after event starts',
+	      before_end: 'before event ends',
+	      after_end: 'after event ends',
+	      before_event_start: 'before calendar day starts',
+	      after_event_end: 'after calendar day ends'
+	    })[a] || a;
+	    const startMins = parseInt(val.shiftStartMins, 10) || 0;
+	    const endMins = parseInt(val.shiftEndMins, 10) || 0;
+	    const startAnchor = val.shiftStartAnchor || 'before_start';
+	    const endAnchor = val.shiftEndAnchor || 'after_end';
+	    const shortParts = [];
+	    const longParts = [];
+	    if (startMins || startAnchor !== 'before_start') {
+	      shortParts.push(`${fmtMins(startMins)} ${shortAnchor(startAnchor)}`);
+	      longParts.push(`Starts ${fmtMins(startMins)} ${longAnchor(startAnchor)}`);
+	    }
+	    if (endMins || endAnchor !== 'after_end') {
+	      shortParts.push(`${fmtMins(endMins)} ${shortAnchor(endAnchor)}`);
+	      longParts.push(`Ends ${fmtMins(endMins)} ${longAnchor(endAnchor)}`);
+	    }
+	    if (!shortParts.length) {
+	      shortParts.push('Event time');
+	      longParts.push('Uses the event start and end time');
+	    }
+	    if (val.hoursMode === 'full') {
+	      shortParts.push('Full credit');
+	      longParts.push('Counts as full discount hours');
+	    } else if (val.countsFor) {
+	      shortParts.push(`${val.countsFor}h credit`);
+	      longParts.push(`${val.countsFor} volunteer discount hours`);
+	    }
+	    return { shortText: shortParts.join(' · '), longText: longParts.join(' · ') };
+	  }
+
 	  function applyStaffingPlanToTiles() {
 	    const fmt = t => { if (!t) return ''; const [h, m] = t.split(':').map(Number); const ap = h >= 12 ? 'pm' : 'am'; return `${h % 12 || 12}:${String(m).padStart(2,'0')}${ap}`; };
 	    Object.entries(_staffingPlan).forEach(([key, val]) => {
@@ -66191,19 +66247,9 @@ See you soon!
 	      if (btn && val.perLabel) btn.textContent = val.perLabel;
 	      if (tile) tile.classList.toggle('vol-staffing-tile--inactive', (val.count ?? 0) === 0);
 	      if (timeEl && (val.shiftStartAnchor || val.shiftEndAnchor)) {
-	        const fmtMins = m => m >= 60 ? `${Math.floor(m/60)}h${m%60 ? `${m%60}m` : ''}` : `${m}m`;
-	        const anchorLabel = a => ({
-	          before_start: 'before event starts',
-	          after_start: 'after event starts',
-	          before_end: 'before event ends',
-	          after_end: 'after event ends',
-	          before_event_start: 'before event starts',
-	          after_event_end: 'after event ends'
-	        })[a] || a;
-	        const parts = [`${fmtMins(val.shiftStartMins||0)} ${anchorLabel(val.shiftStartAnchor||'before_start')} → ${fmtMins(val.shiftEndMins||0)} ${anchorLabel(val.shiftEndAnchor||'after_end')}`];
-	        if (val.hoursMode === 'full') parts.push('full discount hours');
-	        else if (val.countsFor) parts.push(`${val.countsFor}h discount`);
-	        timeEl.textContent = parts.join(' · ');
+	        const summary = volScheduleSummary(val);
+	        timeEl.textContent = summary.shortText;
+	        timeEl.title = summary.longText;
 	      }
 	    });
 	  }
@@ -66362,12 +66408,9 @@ See you soon!
 	    Object.assign(_staffingPlan[key], { shiftStartMins, shiftStartAnchor, shiftEndMins, shiftEndAnchor, hoursMode, countsFor });
 	    const indicator = document.getElementById(`vsq-time-${key}`);
 	    if (indicator) {
-	      const fmtMins = m => m >= 60 ? `${Math.floor(m/60)}h${m%60 ? `${m%60}m` : ''}` : `${m}m`;
-	      const anchorLabel = a => ({before_start:'before event starts',after_start:'after event starts',before_end:'before event ends',after_end:'after event ends',before_event_start:'before calendar day starts',after_event_end:'after calendar day ends'})[a] || a;
-	      const parts = [`${fmtMins(shiftStartMins)} ${anchorLabel(shiftStartAnchor)} → ${fmtMins(shiftEndMins)} ${anchorLabel(shiftEndAnchor)}`];
-	      if (hoursMode === 'full') parts.push('full discount hours');
-	      else if (countsFor) parts.push(`${countsFor}h discount`);
-	      indicator.textContent = parts.join(' · ');
+	      const summary = volScheduleSummary({ shiftStartMins, shiftStartAnchor, shiftEndMins, shiftEndAnchor, hoursMode, countsFor });
+	      indicator.textContent = summary.shortText;
+	      indicator.title = summary.longText;
 	    }
 	    document.querySelectorAll('.vol-schedule-popover, .vol-schedule-modal').forEach(el => el.remove());
 	    saveStaffingPlan(true);
