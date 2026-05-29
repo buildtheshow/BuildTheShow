@@ -66050,31 +66050,40 @@ See you soon!
 	      if (display) display.textContent = val.count ?? 0;
 	      if (btn && val.perLabel) btn.textContent = val.perLabel;
 	      if (tile) tile.classList.toggle('vol-staffing-tile--inactive', (val.count ?? 0) === 0);
-	      if (timeEl && (val.minutesBefore || val.minutesAfter)) {
+	      if (timeEl && (val.shiftStartAnchor || val.shiftEndAnchor)) {
 	        const fmtMins = m => m >= 60 ? `${Math.floor(m/60)}h${m%60 ? `${m%60}m` : ''}` : `${m}m`;
-	        const parts = [];
-	        if (val.minutesBefore) parts.push(`${fmtMins(val.minutesBefore)} before start`);
-	        if (val.minutesAfter) parts.push(`${fmtMins(val.minutesAfter)} after end`);
+	        const anchorLabel = a => a === 'before_start' ? 'before start' : a === 'after_start' ? 'after start' : a === 'before_end' ? 'before end' : 'after end';
+	        const parts = [`${fmtMins(val.shiftStartMins||0)} ${anchorLabel(val.shiftStartAnchor||'before_start')} → ${fmtMins(val.shiftEndMins||0)} ${anchorLabel(val.shiftEndAnchor||'after_end')}`];
 	        if (val.countsFor) parts.push(`${val.countsFor}h discount`);
 	        timeEl.textContent = parts.join(' · ');
 	      }
 	    });
 	  }
 
-	  function saveStaffingPlan() {
-	    clearTimeout(_staffingSaveTimer);
-	    _staffingSaveTimer = setTimeout(async () => {
-	      const plan = {};
-	      document.querySelectorAll('[id^="vsq-"]').forEach(el => {
-	        if (el.id.includes('display') || el.id.includes('tile') || el.id.includes('per-btn') || el.id.includes('dropdown')) return;
-	        const key = el.id.replace('vsq-', '');
-	        const btn = document.getElementById(`vsq-per-btn-${key}`);
-	        plan[key] = { count: parseInt(el.value, 10) || 0, perLabel: btn?.textContent?.trim() || '' };
-	      });
-	      const { error } = await sb.from('productions').update({ volunteer_staffing_plan: plan }).eq('id', prodId);
-	      if (!error) { _staffingPlan = plan; showToast('Saved'); }
-	    }, 600);
+	  let _staffingDirty = false;
+
+	  async function _doSaveStaffingPlan() {
+	    const plan = {};
+	    document.querySelectorAll('[id^="vsq-"]').forEach(el => {
+	      if (el.id.includes('display') || el.id.includes('tile') || el.id.includes('per-btn') || el.id.includes('dropdown') || el.id.includes('sched-') || el.id.includes('hours-')) return;
+	      const key = el.id.replace('vsq-', '');
+	      const btn = document.getElementById(`vsq-per-btn-${key}`);
+	      plan[key] = { ...(_staffingPlan[key] || {}), count: parseInt(el.value, 10) || 0, perLabel: btn?.textContent?.trim() || '' };
+	    });
+	    const { error } = await sb.from('productions').update({ volunteer_staffing_plan: plan }).eq('id', prodId);
+	    if (!error) { _staffingPlan = plan; _staffingDirty = false; showToast('Saved'); }
 	  }
+
+	  function saveStaffingPlan(immediate = false) {
+	    _staffingDirty = true;
+	    clearTimeout(_staffingSaveTimer);
+	    if (immediate) { _doSaveStaffingPlan(); return; }
+	    _staffingSaveTimer = setTimeout(_doSaveStaffingPlan, 600);
+	  }
+
+	  window.addEventListener('beforeunload', e => {
+	    if (_staffingDirty) { e.preventDefault(); e.returnValue = ''; }
+	  });
 
 	  function volTogglePer(type, ri) {
 	    document.querySelectorAll('.vol-per-dropdown, .vol-schedule-popover').forEach(el => el.remove());
@@ -66123,21 +66132,25 @@ See you soon!
 	    pop.className = 'vol-schedule-popover';
 	    const schedLeft = Math.min(rect.left, window.innerWidth - 268);
 	    pop.style.cssText = `left:${schedLeft}px;top:${rect.bottom + 4}px;width:260px;z-index:9000;`;
+	    const anchorOpts = (sel) => ['before_start','after_start','before_end','after_end'].map(v => `<option value="${v}" ${sel===v?'selected':''}>${v==='before_start'?`before ${typeLabel} starts`:v==='after_start'?`after ${typeLabel} starts`:v==='before_end'?`before ${typeLabel} ends`:`after ${typeLabel} ends`}</option>`).join('');
+	    const selStyle = `border:1.5px solid rgba(87,46,136,0.18);border-radius:6px;padding:0.28rem 0.3rem;font-size:0.72rem;font-weight:700;font-family:inherit;color:#1a1530;background:#fbf9ff;`;
 	    pop.innerHTML = `
 	      <div class="vol-schedule-popover-title">Shift schedule</div>
 	      <div class="vol-schedule-row">
 	        <div class="vol-schedule-field vol-schedule-field--full">
-	          <label>How long before ${typeLabel} starts?</label>
-	          <div style="display:flex;gap:0.4rem;align-items:center;">
-	            <input type="number" min="0" max="480" id="vsq-sched-before-${key}" value="${saved.minutesBefore || ''}" placeholder="0" style="width:64px;" />
-	            <span style="font-size:0.76rem;color:#572e88;font-weight:700;">minutes before ${typeLabel} starts</span>
+	          <label>Shift starts</label>
+	          <div style="display:flex;gap:0.4rem;align-items:center;flex-wrap:wrap;">
+	            <input type="number" min="0" max="480" id="vsq-sched-smins-${key}" value="${saved.shiftStartMins ?? ''}" placeholder="0" style="width:56px;" />
+	            <span style="font-size:0.72rem;color:#572e88;font-weight:700;">minutes</span>
+	            <select id="vsq-sched-sanchor-${key}" style="${selStyle}">${anchorOpts(saved.shiftStartAnchor||'before_start')}</select>
 	          </div>
 	        </div>
 	        <div class="vol-schedule-field vol-schedule-field--full">
-	          <label>How long after ${typeLabel} ends?</label>
-	          <div style="display:flex;gap:0.4rem;align-items:center;">
-	            <input type="number" min="0" max="480" id="vsq-sched-after-${key}" value="${saved.minutesAfter || ''}" placeholder="0" style="width:64px;" />
-	            <span style="font-size:0.76rem;color:#572e88;font-weight:700;">minutes after ${typeLabel} ends</span>
+	          <label>Shift ends</label>
+	          <div style="display:flex;gap:0.4rem;align-items:center;flex-wrap:wrap;">
+	            <input type="number" min="0" max="480" id="vsq-sched-emins-${key}" value="${saved.shiftEndMins ?? ''}" placeholder="0" style="width:56px;" />
+	            <span style="font-size:0.72rem;color:#572e88;font-weight:700;">minutes</span>
+	            <select id="vsq-sched-eanchor-${key}" style="${selStyle}">${anchorOpts(saved.shiftEndAnchor||'after_end')}</select>
 	          </div>
 	        </div>
 	        <div class="vol-schedule-field vol-schedule-field--full">
@@ -66169,26 +66182,24 @@ See you soon!
 
 	  function volSaveSchedule(type, ri) {
 	    const key = `${type}-${ri}`;
-	    const minutesBefore = parseInt(document.getElementById(`vsq-sched-before-${key}`)?.value, 10) || 0;
-	    const minutesAfter = parseInt(document.getElementById(`vsq-sched-after-${key}`)?.value, 10) || 0;
+	    const shiftStartMins = parseInt(document.getElementById(`vsq-sched-smins-${key}`)?.value, 10) || 0;
+	    const shiftStartAnchor = document.getElementById(`vsq-sched-sanchor-${key}`)?.value || 'before_start';
+	    const shiftEndMins = parseInt(document.getElementById(`vsq-sched-emins-${key}`)?.value, 10) || 0;
+	    const shiftEndAnchor = document.getElementById(`vsq-sched-eanchor-${key}`)?.value || 'after_end';
 	    const hoursMode = document.querySelector(`input[name="vsq-hours-mode-${key}"]:checked`)?.value || 'auto';
 	    const countsFor = hoursMode === 'fixed' ? (parseFloat(document.getElementById(`vsq-sched-counts-${key}`)?.value) || 0) : 0;
 	    if (!_staffingPlan[key]) _staffingPlan[key] = {};
-	    _staffingPlan[key].minutesBefore = minutesBefore;
-	    _staffingPlan[key].minutesAfter = minutesAfter;
-	    _staffingPlan[key].hoursMode = hoursMode;
-	    _staffingPlan[key].countsFor = countsFor;
+	    Object.assign(_staffingPlan[key], { shiftStartMins, shiftStartAnchor, shiftEndMins, shiftEndAnchor, hoursMode, countsFor });
 	    const indicator = document.getElementById(`vsq-time-${key}`);
 	    if (indicator) {
 	      const fmtMins = m => m >= 60 ? `${Math.floor(m/60)}h${m%60 ? `${m%60}m` : ''}` : `${m}m`;
-	      const parts = [];
-	      if (minutesBefore) parts.push(`${fmtMins(minutesBefore)} before start`);
-	      if (minutesAfter) parts.push(`${fmtMins(minutesAfter)} after end`);
+	      const anchorLabel = a => a === 'before_start' ? 'before start' : a === 'after_start' ? 'after start' : a === 'before_end' ? 'before end' : 'after end';
+	      const parts = [`${fmtMins(shiftStartMins)} ${anchorLabel(shiftStartAnchor)} → ${fmtMins(shiftEndMins)} ${anchorLabel(shiftEndAnchor)}`];
 	      if (countsFor) parts.push(`${countsFor}h discount`);
 	      indicator.textContent = parts.join(' · ');
 	    }
 	    document.querySelectorAll('.vol-schedule-popover').forEach(el => el.remove());
-	    saveStaffingPlan();
+	    saveStaffingPlan(true);
 	  }
 
 	  function volStep(type, ri, delta) {
