@@ -65693,7 +65693,7 @@ See you soon!
 	                </div>
 	              </div>
 	            </div>`).join('')}
-	          <button type="button" class="vol-staffing-add-tile" onclick="volAddRole('${esc(type)}','${esc(cfg.color)}')">
+	          <button type="button" class="vol-staffing-add-tile" onclick="volAddRole('${esc(type)}')">
 	            <span class="vol-staffing-add-tile-icon">+</span>
 	            <span>Add role</span>
 	          </button>
@@ -66170,28 +66170,68 @@ See you soon!
 	    saveStaffingPlan();
 	  }
 
-	  function volAddRole(type, color) {
-	    const name = prompt('Role name:');
-	    if (!name || !name.trim()) return;
-	    const grid = document.querySelector(`[onclick*="applyStaffingBlock('${type}'"]`)?.closest('.vol-staffing-block')?.querySelector('.vol-suggestion-grid');
+	  const DEPT_LIST = ['Front of House','Backstage & Rehearsal Support','Technical Crew','Design & Construction','Costume & Makeup','Marketing & Publicity'];
+	  const DEPT_COLOURS_LOCAL = { 'Front of House':'#476aaa','Backstage & Rehearsal Support':'#dd8233','Technical Crew':'#d1523d','Design & Construction':'#769e7b','Costume & Makeup':'#78bbd4','Marketing & Publicity':'#efab45' };
+
+	  function volAddRole(type) {
+	    document.querySelectorAll('.vol-add-role-popover').forEach(el => el.remove());
+	    const addBtn = document.querySelector(`button.vol-staffing-add-tile[onclick*="'${type}'"]`);
+	    if (!addBtn) return;
+	    const rect = addBtn.getBoundingClientRect();
+	    const pop = document.createElement('div');
+	    pop.className = 'vol-schedule-popover vol-add-role-popover';
+	    pop.style.cssText = `left:${Math.min(rect.left, window.innerWidth - 300)}px;top:${rect.bottom + 4}px;width:280px;z-index:9000;`;
+	    pop.innerHTML = `
+	      <div class="vol-schedule-popover-title">Add a role</div>
+	      <div class="vol-schedule-row">
+	        <div class="vol-schedule-field vol-schedule-field--full">
+	          <label>Role name</label>
+	          <input type="text" id="vol-add-name" placeholder="e.g. Costume Washer" />
+	        </div>
+	        <div class="vol-schedule-field vol-schedule-field--full">
+	          <label>Department</label>
+	          <select id="vol-add-dept" style="width:100%;border:1.5px solid rgba(87,46,136,0.18);border-radius:6px;padding:0.32rem 0.4rem;font-size:0.78rem;font-weight:700;font-family:inherit;color:#1a1530;background:#fbf9ff;">
+	            ${DEPT_LIST.map(d => `<option value="${d}">${d}</option>`).join('')}
+	          </select>
+	        </div>
+	        <div class="vol-schedule-field vol-schedule-field--full">
+	          <label>Description <span style="font-weight:500;text-transform:none;letter-spacing:0;">(optional)</span></label>
+	          <textarea id="vol-add-desc" rows="2" placeholder="What does this person do?" style="width:100%;border:1.5px solid rgba(87,46,136,0.18);border-radius:6px;padding:0.32rem 0.4rem;font-size:0.78rem;font-family:inherit;color:#1a1530;background:#fbf9ff;resize:none;"></textarea>
+	        </div>
+	      </div>
+	      <button type="button" class="btn-primary" style="font-size:0.76rem;width:100%;justify-content:center;" onclick="volConfirmAddRole('${type}')">Add role</button>`;
+	    document.body.appendChild(pop);
+	    pop.querySelector('#vol-add-name').focus();
+	    const close = e => { if (!pop.contains(e.target) && e.target !== addBtn) { pop.remove(); document.removeEventListener('click', close); } };
+	    setTimeout(() => document.addEventListener('click', close), 10);
+	  }
+
+	  function volConfirmAddRole(type) {
+	    const name = document.getElementById('vol-add-name')?.value?.trim();
+	    const dept = document.getElementById('vol-add-dept')?.value || 'Front of House';
+	    if (!name) { document.getElementById('vol-add-name')?.focus(); return; }
+	    document.querySelectorAll('.vol-add-role-popover').forEach(el => el.remove());
+	    const tileColor = DEPT_COLOURS_LOCAL[dept] || '#572e88';
+	    const grid = document.querySelector(`button.vol-staffing-add-tile[onclick*="'${type}'"]`)?.closest('.vol-suggestion-grid');
 	    if (!grid) return;
 	    const ri = `custom-${Date.now()}`;
 	    const addBtn = grid.querySelector('.vol-staffing-add-tile');
+	    const perLabel = type === 'performance' ? 'per performance' : (type === 'other' || type === 'dept_leads') ? 'total needed' : 'per event';
 	    const tile = document.createElement('div');
 	    tile.className = 'template-brand-card template-brand-card--square template-brand-card--content vol-staffing-tile';
 	    tile.id = `vsq-tile-${type}-${ri}`;
-	    tile.style.cssText = `--brand-tile-bg:${color};--brand-tile-ink:#fff;`;
+	    tile.style.cssText = `--brand-tile-bg:${tileColor};--brand-tile-ink:#fff;`;
 	    tile.innerHTML = `
 	      <div class="template-brand-card-inner">
 	        <div class="template-brand-tile-content">
 	          <div class="template-brand-tile-container template-brand-tile-container--header">
-	            <div class="template-brand-tile-kicker">${esc(type.charAt(0).toUpperCase() + type.slice(1).replace('_',' '))}</div>
+	            <div class="template-brand-tile-kicker">${esc(dept)}</div>
 	          </div>
 	          <div class="template-brand-tile-container template-brand-tile-container--title">
-	            <div class="template-brand-tile-title">${esc(name.trim())}</div>
+	            <div class="template-brand-tile-title">${esc(name)}</div>
 	          </div>
-	          <div class="template-brand-tile-container template-brand-tile-container--body">
-	            <div class="vol-staffing-stepper">
+	          <div class="template-brand-tile-container template-brand-tile-container--body" style="flex-direction:column;gap:0;">
+	            <div class="vol-staffing-stepper" style="flex:1;">
 	              <div class="vol-staffing-num" id="vsq-display-${type}-${ri}">1</div>
 	              <div class="vol-staffing-arrows">
 	                <button type="button" class="vol-staffing-arrow" onclick="volStep('${type}','${ri}',1)">▲</button>
@@ -66199,13 +66239,16 @@ See you soon!
 	              </div>
 	              <input type="hidden" id="vsq-${type}-${ri}" value="1" />
 	            </div>
+	            <div class="vol-schedule-time-indicator" id="vsq-time-${type}-${ri}"></div>
 	          </div>
-	          <div class="template-brand-tile-container template-brand-tile-container--footer">
-	            <button type="button" class="template-brand-tile-button" style="pointer-events:none;width:100%;justify-content:center;">per ${type === 'performance' ? 'performance' : 'event'}</button>
+	          <div class="template-brand-tile-container template-brand-tile-container--footer" style="display:flex;flex-direction:row;gap:1cqw;align-items:stretch;">
+	            <button type="button" class="template-brand-tile-button" style="flex:1;align-self:stretch;display:flex;align-items:center;justify-content:center;" id="vsq-per-btn-${type}-${ri}" onclick="volTogglePer('${type}','${ri}')">${esc(perLabel)}</button>
+	            <button type="button" class="template-brand-tile-button" style="flex:1;align-self:stretch;display:flex;align-items:center;justify-content:center;" id="vsq-sched-btn-${type}-${ri}" onclick="volToggleSchedule('${type}','${ri}')">Schedule</button>
 	          </div>
 	        </div>
 	      </div>`;
 	    grid.insertBefore(tile, addBtn);
+	    try { fitBrandTileTitles(tile); } catch (_) {}
 	  }
 
 	  async function applyStaffingBlock(eventType, eventCount) {
