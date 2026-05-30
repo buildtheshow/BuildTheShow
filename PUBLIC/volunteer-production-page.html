@@ -1256,6 +1256,12 @@
       return labels[type] || 'Volunteer';
     }
     function deriveCategory(opp) {
+      if (opp.timing_group) {
+        if (opp.timing_group === 'during_show') return 'during';
+        if (opp.timing_group === 'after_show') return 'after';
+        if (opp.timing_group === 'own_time' || opp.timing_group === 'pre_production') return 'flexible';
+        if (opp.timing_group === 'rehearsal') return 'before';
+      }
       const type = eventMap[opp.event_id]?.event_type || opp.event_type || '';
       if (DURING_TYPES.has(type)) return 'during';
       if (BEFORE_TYPES.has(type)) return 'before';
@@ -1276,6 +1282,40 @@
     function scheduleHours(item) { return item.credit_hours || (item.hours?.mins ? item.hours.mins / 60 : 0); }
     function discountRequiredHours() { return parseFloat(String(paymentSettings.volunteer_hours || '').replace(/[^0-9.]/g, '')) || 0; }
     function hasDiscountEnabled() { return !!paymentSettings.volunteer_discount_enabled && discountRequiredHours() > 0; }
+    function planEntryBaseType(key) {
+      return Object.keys(STAFFING_MAP).sort((a,b) => b.length - a.length).find(type => key === type || key.startsWith(`${type}-`)) || '';
+    }
+    function roleFromPlanEntry(key, entry = {}) {
+      const baseType = planEntryBaseType(key);
+      const cfg = STAFFING_MAP[baseType] || {};
+      const rawRi = key.startsWith(`${baseType}-`) ? key.slice(baseType.length + 1) : '';
+      const defaultRole = /^custom-/.test(rawRi) ? null : cfg.roles?.[Number(rawRi)];
+      return {
+        baseType,
+        roleName: entry.roleName || defaultRole?.name || 'Volunteer Shift',
+        department: entry.department || defaultRole?.dept || cfg.label || 'Volunteer',
+        description: entry.description || roleDescription(defaultRole?.name || entry.roleName, entry)
+      };
+    }
+    function planEntryAppliesTo(key, entry = {}) {
+      return Array.isArray(entry.appliesTo) && entry.appliesTo.length ? entry.appliesTo : [planEntryBaseType(key)].filter(Boolean);
+    }
+    function roleOpp(entryKey, entry, eventType, ev, count) {
+      const role = roleFromPlanEntry(entryKey, entry);
+      const timing = ev ? roleShiftTiming(ev, entry) : { shift_date: null, shift_start_time: null, shift_end_time: null, hours: null };
+      return {
+        id: ev ? `${ev.id}::${entryKey}::${eventType}` : `${entryKey}::${eventType}`,
+        volunteer_role: role.roleName,
+        department: role.department,
+        description: role.description,
+        volunteers_needed: count,
+        ...timing,
+        credit_hours: creditHoursFor(entry, timing.hours),
+        event_id: ev?.id || null,
+        event_type: eventType,
+        timing_group: entry.timingGroup || entry.timing_group || null
+      };
+    }
 
     function buildOppsFromPlan(staffingPlan, events) {
       const result = [];
@@ -1285,27 +1325,41 @@
           cfg.roles.forEach((role, ri) => {
             const key = `${eventType}-${ri}`, entry = staffingPlan[key], count = entry?.count ?? 0;
             if (count <= 0) return;
-            result.push({ id: key, volunteer_role: role.name, department: role.dept, description: roleDescription(role.name, entry), volunteers_needed: count, shift_date: null, shift_start_time: null, shift_end_time: null, hours: null, event_id: null, event_type: eventType });
+            if (!planEntryAppliesTo(key, entry).includes(eventType)) return;
+            result.push(roleOpp(key, entry, eventType, null, count));
           });
         } else {
           events.filter(ev => ev.event_type === eventType).sort((a,b)=>(a.start_time||'').localeCompare(b.start_time||'')).forEach(ev => {
             cfg.roles.forEach((role, ri) => {
               const key = `${eventType}-${ri}`, entry = staffingPlan[key], count = entry?.count ?? 0;
               if (count <= 0) return;
-              const timing = roleShiftTiming(ev, entry);
-              result.push({ id: `${ev.id}::${key}`, volunteer_role: role.name, department: role.dept, description: roleDescription(role.name, entry), volunteers_needed: count, ...timing, credit_hours: creditHoursFor(entry, timing.hours), event_id: ev.id, event_type: eventType });
+              if (!planEntryAppliesTo(key, entry).includes(eventType)) return;
+              result.push(roleOpp(key, entry, eventType, ev, count));
             });
           });
         }
         Object.entries(staffingPlan).filter(([k]) => k.startsWith(`${eventType}-custom-`)).forEach(([k, v]) => {
           if (!v.roleName || (v.count ?? 0) <= 0) return;
+          if (!planEntryAppliesTo(k, v).includes(eventType)) return;
           if (cfg.perProd) {
-            result.push({ id: k, volunteer_role: v.roleName, department: v.department || cfg.label, description: v.description || '', volunteers_needed: v.count, shift_date: null, shift_start_time: null, shift_end_time: null, hours: null, event_id: null, event_type: eventType });
+            result.push(roleOpp(k, v, eventType, null, v.count));
           } else {
             events.filter(ev => ev.event_type === eventType).forEach(ev => {
-              const timing = roleShiftTiming(ev, v);
-              result.push({ id: `${ev.id}::${k}`, volunteer_role: v.roleName, department: v.department || cfg.label, description: v.description || '', volunteers_needed: v.count, ...timing, credit_hours: creditHoursFor(v, timing.hours), event_id: ev.id, event_type: eventType });
+              result.push(roleOpp(k, v, eventType, ev, v.count));
             });
+          }
+        });
+      });
+      Object.entries(staffingPlan).forEach(([key, entry]) => {
+        const baseType = planEntryBaseType(key);
+        if (!baseType || (entry?.count ?? 0) <= 0) return;
+        planEntryAppliesTo(key, entry).filter(type => type && type !== baseType).forEach(type => {
+          const cfg = STAFFING_MAP[type];
+          if (!cfg) return;
+          if (cfg.perProd) {
+            result.push(roleOpp(key, entry, type, null, entry.count));
+          } else {
+            events.filter(ev => ev.event_type === type).forEach(ev => result.push(roleOpp(key, entry, type, ev, entry.count)));
           }
         });
       });
@@ -1554,6 +1608,7 @@
       { key: 'other', label: 'Other Help' }
     ];
     function timelineBucket(opp) {
+      if (opp.timing_group) return opp.timing_group;
       const type = eventMap[opp.event_id]?.event_type || opp.event_type || '';
       if (type === 'dept_leads') return 'pre_production';
       if (!opp.shift_date || type === 'other') return 'own_time';
@@ -1593,7 +1648,7 @@
       renderRows();
     }
     function roleGroupKey(opp) {
-      return [opp.volunteer_role || 'Volunteer Shift', opp.department || 'Other', opp.event_type || ''].join('::');
+      return [opp.volunteer_role || 'Volunteer Shift', opp.department || 'Other', opp.timing_group || ''].join('::');
     }
     function groupRoleOpps(items, options = {}) {
       return Object.values(groupBy(items, roleGroupKey))

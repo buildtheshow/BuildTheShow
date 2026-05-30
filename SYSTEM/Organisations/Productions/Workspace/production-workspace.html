@@ -8481,7 +8481,9 @@
 	      background: rgba(26,21,48,0.34);
 	    }
 	    .vol-schedule-dialog {
-	      width: min(390px, 100%);
+	      width: min(620px, 100%);
+	      max-height: min(840px, calc(100vh - 2rem));
+	      overflow-y: auto;
 	      background: #fff;
 	      border: 1px solid rgba(87,46,136,0.12);
 	      border-radius: 8px;
@@ -8569,6 +8571,11 @@
 	      display: grid;
 	      gap: 0.55rem;
 	    }
+	    .vol-schedule-grid {
+	      display: grid;
+	      grid-template-columns: repeat(2, minmax(0, 1fr));
+	      gap: 0.55rem;
+	    }
 	    .vol-schedule-line {
 	      display: grid;
 	      grid-template-columns: 64px auto minmax(0, 1fr);
@@ -8607,6 +8614,31 @@
 	      min-height: 78px;
 	      resize: vertical;
 	      line-height: 1.35;
+	    }
+	    .vol-schedule-checks {
+	      display: grid;
+	      grid-template-columns: repeat(2, minmax(0, 1fr));
+	      gap: 0.35rem;
+	    }
+	    .vol-schedule-check {
+	      display: flex;
+	      align-items: center;
+	      gap: 0.42rem;
+	      min-height: 34px;
+	      border: 1.5px solid rgba(87,46,136,0.14);
+	      border-radius: 7px;
+	      padding: 0.35rem 0.5rem;
+	      background: #fff;
+	      color: #1a1530;
+	      font-size: 0.7rem;
+	      font-weight: 750;
+	      line-height: 1.15;
+	    }
+	    .vol-schedule-check input {
+	      width: auto;
+	      min-height: 0;
+	      accent-color: #572e88;
+	      flex-shrink: 0;
 	    }
 	    .vol-schedule-select {
 	      appearance: none;
@@ -66568,6 +66600,7 @@ See you soon!
 	      acc[k] = (acc[k] || 0) + 1;
 	      return acc;
 	    }, {});
+	    _volStaffingRoleMeta = {};
 
 	    const staffingBlocks = Object.entries(STAFFING_MAP)
 	      .filter(([type, cfg]) => cfg.alwaysShow || eventCounts[type] > 0)
@@ -66577,15 +66610,15 @@ See you soon!
 	        const perLabel = cfg.perLabel || (type === 'performance' ? 'per performance' : 'per event');
 	        const allRoles = cfg.roles;
 	        const rolesHtml = `<div class="vol-suggestion-grid">
-	          ${allRoles.map((role, ri) => { const key = `${type}-${ri}`; const savedCount = _staffingPlan[key]?.count ?? role.default; const savedPerLabel = _staffingPlan[key]?.perLabel || perLabel; return `
-	            <div class="template-brand-card template-brand-card--square template-brand-card--content vol-staffing-tile${savedCount === 0 ? ' vol-staffing-tile--inactive' : ''}" id="vsq-tile-${esc(type)}-${ri}" style="--brand-tile-bg:${esc(DEPT_COLOURS[role.dept] || cfg.color)};--brand-tile-ink:#fff;">
+	          ${allRoles.map((role, ri) => { const key = `${type}-${ri}`; const saved = _staffingPlan[key] || {}; const roleName = saved.roleName || role.name; const deptName = saved.department || role.dept; _volStaffingRoleMeta[key] = { roleName, department: deptName, description: saved.description || volDefaultRoleDescription(deptName, roleName), typeLabel: cfg.label, eventType: type, color: DEPT_COLOURS[deptName] || cfg.color }; const savedCount = saved.count ?? role.default; const savedPerLabel = saved.perLabel || perLabel; return `
+	            <div class="template-brand-card template-brand-card--square template-brand-card--content vol-staffing-tile${savedCount === 0 ? ' vol-staffing-tile--inactive' : ''}" id="vsq-tile-${esc(type)}-${ri}" style="--brand-tile-bg:${esc(DEPT_COLOURS[deptName] || cfg.color)};--brand-tile-ink:#fff;">
 	              <div class="template-brand-card-inner">
 	                <div class="template-brand-tile-content">
 	                  <div class="template-brand-tile-container template-brand-tile-container--header">
 	                    <div class="template-brand-tile-kicker">${esc(cfg.label)}</div>
 	                  </div>
 	                  <div class="template-brand-tile-container template-brand-tile-container--title">
-	                    <div class="template-brand-tile-title">${esc(role.name)}</div>
+	                    <div class="template-brand-tile-title">${esc(roleName)}</div>
 	                  </div>
 	                  <div class="template-brand-tile-container template-brand-tile-container--body" style="flex-direction:column;gap:0;">
 	                    <div class="vol-staffing-stepper" style="flex:1;">
@@ -66605,7 +66638,7 @@ See you soon!
 	                </div>
 	              </div>
 	            </div>`; }).join('')}
-	          ${Object.entries(_staffingPlan).filter(([k, v]) => k.startsWith(type + '-custom-') && v.roleName).map(([k, v]) => { const ri = k.replace(type + '-', ''); const savedCount = v.count ?? 0; const savedPerLabel = v.perLabel || perLabel; const tileColor = DEPT_COLOURS[v.department] || cfg.color; return `
+	          ${Object.entries(_staffingPlan).filter(([k, v]) => k.startsWith(type + '-custom-') && v.roleName).map(([k, v]) => { const ri = k.replace(type + '-', ''); _volStaffingRoleMeta[k] = { roleName: v.roleName, department: v.department || 'Other', description: v.description || volDefaultRoleDescription(v.department || 'Other', v.roleName), typeLabel: cfg.label, eventType: type, color: DEPT_COLOURS[v.department] || cfg.color }; const savedCount = v.count ?? 0; const savedPerLabel = v.perLabel || perLabel; const tileColor = DEPT_COLOURS[v.department] || cfg.color; return `
 	            <div class="template-brand-card template-brand-card--square template-brand-card--content vol-staffing-tile${savedCount === 0 ? ' vol-staffing-tile--inactive' : ''}" id="vsq-tile-${esc(type)}-${ri}" style="--brand-tile-bg:${tileColor};--brand-tile-ink:#fff;">
 	              <div class="template-brand-card-inner">
 	                <div class="template-brand-tile-content">
@@ -67353,6 +67386,7 @@ See you soon!
 
 	  let _staffingPlan = {};
 	  let _staffingSaveTimer;
+	  let _volStaffingRoleMeta = {};
 
 	  async function loadStaffingPlan() {
 	    try {
@@ -67530,6 +67564,49 @@ See you soon!
 	    document.getElementById(`vsq-sched-end-line-${key}`)?.classList.toggle('is-own-time', ownTimeSelected);
 	  }
 
+	  const VOL_SHIFT_TYPE_OPTIONS = [
+	    ['dept_leads', 'Department Lead'],
+	    ['performance', 'Performance'],
+	    ['tech', 'Tech Rehearsal'],
+	    ['dress', 'Dress Rehearsal'],
+	    ['rehearsal', 'Rehearsal'],
+	    ['music_rehearsal', 'Music Rehearsal'],
+	    ['choreography', 'Choreography'],
+	    ['strike', 'Strike'],
+	    ['costume_moveout', 'Costume Move-Out'],
+	    ['cast_party', 'Cast Party'],
+	    ['crew', 'Crew'],
+	    ['crew_set', 'Crew - Set Building'],
+	    ['crew_set_painting', 'Crew - Set Painting'],
+	    ['crew_set_dressing', 'Crew - Set Dressing'],
+	    ['crew_costumes', 'Crew - Costumes'],
+	    ['crew_props', 'Crew - Props'],
+	    ['crew_hair_makeup', 'Crew - Hair & Makeup'],
+	    ['crew_wigs', 'Crew - Wigs'],
+	    ['crew_lighting', 'Crew - Lighting'],
+	    ['crew_sound', 'Crew - Sound'],
+	    ['other', 'Other / Flexible'],
+	  ];
+	  const VOL_TIMING_OPTIONS = [
+	    ['pre_production', 'Pre-Production Help'],
+	    ['rehearsal', 'Rehearsal Help'],
+	    ['own_time', 'On Your Own Time'],
+	    ['during_show', 'During the Show'],
+	    ['after_show', 'After the Show'],
+	    ['other', 'Other Help'],
+	  ];
+	  function volEventTypeLabel(type) {
+	    return (VOL_SHIFT_TYPE_OPTIONS.find(([value]) => value === type) || [type, type])[1];
+	  }
+	  function volDefaultTimingGroup(type) {
+	    if (type === 'dept_leads') return 'pre_production';
+	    if (['rehearsal','music_rehearsal','choreography'].includes(type)) return 'rehearsal';
+	    if (['performance','tech','dress'].includes(type)) return 'during_show';
+	    if (['strike','costume_moveout'].includes(type)) return 'after_show';
+	    if (String(type || '').startsWith('crew') || type === 'other') return 'own_time';
+	    return 'other';
+	  }
+
 	  function volToggleSchedule(type, ri, typeLabel) {
 	    typeLabel = typeLabel || type;
 	    document.querySelectorAll('.vol-per-dropdown, .vol-schedule-popover, .vol-schedule-modal').forEach(el => el.remove());
@@ -67537,9 +67614,22 @@ See you soon!
 	    if (!btn) return;
 	    const key = `${type}-${ri}`;
 	    const saved = _staffingPlan[key] || {};
+	    const meta = _volStaffingRoleMeta[key] || {};
+	    const roleName = saved.roleName || meta.roleName || '';
+	    const department = saved.department || meta.department || DEPT_LIST[0];
+	    const description = saved.description || meta.description || volDefaultRoleDescription(department, roleName || 'Volunteer role');
+	    const timingGroup = saved.timingGroup || saved.timing_group || volDefaultTimingGroup(type);
+	    const appliesTo = Array.isArray(saved.appliesTo) && saved.appliesTo.length ? saved.appliesTo : [type];
 	    const savedOwnTime = saved.shiftStartAnchor === 'own_time' || saved.shiftEndAnchor === 'own_time';
 	    const pop = document.createElement('div');
 	    pop.className = 'vol-schedule-modal';
+	    const departmentOptions = DEPT_LIST.map(d => `<option value="${esc(d)}" ${d === department ? 'selected' : ''}>${esc(d)}</option>`).join('');
+	    const timingOptions = VOL_TIMING_OPTIONS.map(([value, label]) => `<option value="${value}" ${value === timingGroup ? 'selected' : ''}>${esc(label)}</option>`).join('');
+	    const shiftTypeChecks = VOL_SHIFT_TYPE_OPTIONS.map(([value, label]) => `
+	      <label class="vol-schedule-check">
+	        <input type="checkbox" name="vsq-applies-${key}" value="${esc(value)}" ${appliesTo.includes(value) ? 'checked' : ''} />
+	        <span>${esc(label)}</span>
+	      </label>`).join('');
 	    const anchorOpts = (sel) => [
 	      ['own_time',           `works on their own time`],
 	      ['before_start',       `before event starts`],
@@ -67559,6 +67649,29 @@ See you soon!
 	          <button type="button" class="vol-schedule-close" onclick="document.querySelectorAll('.vol-schedule-modal').forEach(el => el.remove())" aria-label="Close schedule popup">×</button>
 	        </div>
 	        <div class="vol-schedule-row">
+	          <div class="vol-schedule-grid">
+	            <div class="vol-schedule-field">
+	              <label>Role name</label>
+	              <input type="text" id="vsq-role-name-${key}" value="${esc(roleName)}" placeholder="Role name" />
+	            </div>
+	            <div class="vol-schedule-field">
+	              <label>Department</label>
+	              <select id="vsq-dept-${key}" class="vol-schedule-select">${departmentOptions}</select>
+	            </div>
+	            <div class="vol-schedule-field vol-schedule-field--full">
+	              <label>Description</label>
+	              <textarea id="vsq-desc-${key}" rows="3" placeholder="What does this person do?">${esc(description)}</textarea>
+	            </div>
+	            <div class="vol-schedule-field vol-schedule-field--full">
+	              <label>Timing group on public page</label>
+	              <select id="vsq-timing-${key}" class="vol-schedule-select">${timingOptions}</select>
+	            </div>
+	            <div class="vol-schedule-field vol-schedule-field--full">
+	              <label>Shift options this role covers</label>
+	              <div class="vol-schedule-checks">${shiftTypeChecks}</div>
+	              <div class="vol-schedule-note">These are the calendar event types this role should be generated for.</div>
+	            </div>
+	          </div>
 	          <div class="vol-schedule-field vol-schedule-field--full">
 	            <label>Starts</label>
 	            <div class="vol-schedule-line${savedOwnTime ? ' is-own-time' : ''}" id="vsq-sched-start-line-${key}">
@@ -67624,14 +67737,27 @@ See you soon!
 	    }
 	    const hoursMode = document.querySelector(`input[name="vsq-hours-mode-${key}"]:checked`)?.value || 'auto';
 	    const countsFor = hoursMode === 'fixed' ? (parseFloat(document.getElementById(`vsq-sched-counts-${key}`)?.value) || 0) : 0;
+	    const roleName = document.getElementById(`vsq-role-name-${key}`)?.value?.trim() || _volStaffingRoleMeta[key]?.roleName || 'Volunteer Role';
+	    const department = document.getElementById(`vsq-dept-${key}`)?.value || _volStaffingRoleMeta[key]?.department || 'Other';
+	    const description = document.getElementById(`vsq-desc-${key}`)?.value?.trim() || volDefaultRoleDescription(department, roleName);
+	    const timingGroup = document.getElementById(`vsq-timing-${key}`)?.value || volDefaultTimingGroup(type);
+	    const appliesTo = [...document.querySelectorAll(`input[name="vsq-applies-${key}"]:checked`)].map(input => input.value);
+	    const coveredTypes = appliesTo.length ? appliesTo : [type];
 	    if (!_staffingPlan[key]) _staffingPlan[key] = {};
-	    Object.assign(_staffingPlan[key], { shiftStartMins, shiftStartAnchor, shiftEndMins, shiftEndAnchor, hoursMode, countsFor });
+	    Object.assign(_staffingPlan[key], { roleName, department, description, timingGroup, appliesTo: coveredTypes, shiftStartMins, shiftStartAnchor, shiftEndMins, shiftEndAnchor, hoursMode, countsFor });
+	    _volStaffingRoleMeta[key] = { ...(_volStaffingRoleMeta[key] || {}), roleName, department, description };
 	    const indicator = document.getElementById(`vsq-time-${key}`);
 	    if (indicator) {
 	      const summary = volScheduleSummary({ shiftStartMins, shiftStartAnchor, shiftEndMins, shiftEndAnchor, hoursMode, countsFor });
 	      indicator.textContent = summary.shortText;
 	      indicator.title = summary.longText;
 	    }
+	    const titleEl = document.querySelector(`#vsq-tile-${CSS.escape(type)}-${CSS.escape(String(ri))} .template-brand-tile-title`);
+	    const kickerEl = document.querySelector(`#vsq-tile-${CSS.escape(type)}-${CSS.escape(String(ri))} .template-brand-tile-kicker`);
+	    const tileEl = document.getElementById(`vsq-tile-${type}-${ri}`);
+	    if (titleEl) titleEl.textContent = roleName;
+	    if (kickerEl) kickerEl.textContent = volEventTypeLabel(type);
+	    if (tileEl) tileEl.style.setProperty('--brand-tile-bg', DEPT_COLOURS_LOCAL[department] || '#572e88');
 	    document.querySelectorAll('.vol-schedule-popover, .vol-schedule-modal').forEach(el => el.remove());
 	    saveStaffingPlan(true);
 	  }
@@ -67844,6 +67970,8 @@ See you soon!
 	      department: dept,
 	      roleName: name,
 	      description,
+	      timingGroup: volDefaultTimingGroup(type),
+	      appliesTo: [type],
 	      perLabel,
 	    };
 	    const tile = document.createElement('div');
@@ -67930,14 +68058,18 @@ See you soon!
 	      crew_sound:        [{ name: 'Sound Crew',          dept: 'Technical Crew',         ri: 0 }],
 	    };
 	    // Build role list: fixed roles from map + custom roles from _staffingPlan
-	    const fixedRoles = (STAFFING_MAP_KEYS[eventType] || []).map(r => ({
-	      name: r.name,
-	      dept: r.dept,
-	      qty: _staffingPlan[`${eventType}-${r.ri}`]?.count ?? 0,
-	    }));
+	    const fixedRoles = (STAFFING_MAP_KEYS[eventType] || []).map(r => {
+	      const entry = _staffingPlan[`${eventType}-${r.ri}`] || {};
+	      return {
+	        name: entry.roleName || r.name,
+	        dept: entry.department || r.dept,
+	        qty: entry.count ?? 0,
+	        description: entry.description || volDefaultRoleDescription(entry.department || r.dept, entry.roleName || r.name)
+	      };
+	    });
 	    const customRoles = Object.entries(_staffingPlan)
 	      .filter(([k, v]) => k.startsWith(`${eventType}-custom-`) && v.roleName && (v.count ?? 0) > 0)
-	      .map(([k, v]) => ({ name: v.roleName, dept: v.department || 'Other', qty: v.count }));
+	      .map(([k, v]) => ({ name: v.roleName, dept: v.department || 'Other', qty: v.count, description: v.description || volDefaultRoleDescription(v.department || 'Other', v.roleName) }));
 	    const allRolesToCreate = [...fixedRoles, ...customRoles].filter(r => r.qty > 0);
 	    const matchingEvents = isPerEvent
 	      ? volunteerPlanEvents.filter(e => e.event_type === eventType)
@@ -67965,7 +68097,8 @@ See you soon!
 	            event_id: ev.id,
 	            event_date: evDate,
 	            time_commitment: evLabel,
-	            summary: `Help with ${role.dept.toLowerCase()} on ${evLabel} for ${prod?.title || 'this production'}.`,
+	            summary: role.description || `Help with ${role.dept.toLowerCase()} on ${evLabel} for ${prod?.title || 'this production'}.`,
+	            description: role.description || '',
 	            status: 'draft',
 	          });
 	        });
@@ -67986,7 +68119,8 @@ See you soon!
 	          event_id: null,
 	          event_date: null,
 	          time_commitment: 'Full production',
-	          summary: `${role.name} for ${prod?.title || 'this production'}.`,
+	          summary: role.description || `${role.name} for ${prod?.title || 'this production'}.`,
+	          description: role.description || '',
 	          status: 'draft',
 	        });
 	      }
