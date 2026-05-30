@@ -1463,14 +1463,14 @@
         if (!selectedDepartment) {
           list.innerHTML = renderDepartmentTiles(departmentGroups);
         } else {
-          const roles = groupRoleOpps(items);
+          const roles = groupRoleOpps(items, { leadFirst: true });
           list.innerHTML = `<div class="vp-group-title">${roles.length} role${roles.length === 1 ? '' : 's'}</div>${roles.map(renderRoleCard).join('')}`;
         }
       } else if (activeView === 'all') {
         const groups = groupBy(items, o => o.department || 'Other');
         const roles = groupRoleOpps(items);
         meta.textContent = `${roles.length} role${roles.length === 1 ? '' : 's'}`;
-        list.innerHTML = Object.entries(groups).map(([dept, rows]) => `<div class="vp-group-title">${esc(departmentTile(dept).name || dept)}</div>${groupRoleOpps(rows).map(renderRoleCard).join('')}`).join('');
+        list.innerHTML = Object.entries(groups).map(([dept, rows]) => `<div class="vp-group-title">${esc(departmentTile(dept).name || dept)}</div>${groupRoleOpps(rows, { leadFirst: true }).map(renderRoleCard).join('')}`).join('');
       } else {
         meta.textContent = `${items.length} opportunit${items.length === 1 ? 'y' : 'ies'}`;
         list.innerHTML = items.map(renderCard).join('');
@@ -1528,13 +1528,20 @@
     function roleGroupKey(opp) {
       return [opp.volunteer_role || 'Volunteer Shift', opp.department || 'Other', opp.event_type || ''].join('::');
     }
-    function groupRoleOpps(items) {
+    function groupRoleOpps(items, options = {}) {
       return Object.values(groupBy(items, roleGroupKey))
         .map(rows => sortTimelineItems(rows))
-        .sort((a,b) =>
-          (a[0].department || '').localeCompare(b[0].department || '') ||
-          (a[0].volunteer_role || '').localeCompare(b[0].volunteer_role || '')
-        );
+        .sort((a,b) => {
+          if (options.leadFirst) {
+            const leadDelta = roleGroupLeadPriority(a) - roleGroupLeadPriority(b);
+            if (leadDelta) return leadDelta;
+          }
+          return (a[0].department || '').localeCompare(b[0].department || '') ||
+            (a[0].volunteer_role || '').localeCompare(b[0].volunteer_role || '');
+        });
+    }
+    function roleGroupLeadPriority(rows) {
+      return rows.some(opp => opp.event_type === 'dept_leads' && spotsLeft(opp) > 0) ? 0 : 1;
     }
     function jsArg(value) { return encodeURIComponent(value || ''); }
     function openRoleDates(items) {
