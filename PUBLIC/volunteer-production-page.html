@@ -507,15 +507,32 @@
       width: 44px;
       height: 44px;
       border-radius: 50%;
+      border: 0;
+      padding: 0;
       display: flex;
       align-items: center;
       justify-content: center;
       color: #fff;
       flex-shrink: 0;
+      cursor: pointer;
     }
+    .vp-role-icon:focus-visible,
+    .vp-title-toggle:focus-visible { outline: 3px solid rgba(87,46,136,0.22); outline-offset: 3px; }
     .vp-card-main { min-width: 0; }
     .vp-card-title-row { display: flex; align-items: center; gap: 0.55rem; flex-wrap: wrap; margin-bottom: 0.24rem; }
     .vp-card-title { font-size: 1rem; font-weight: 950; line-height: 1.2; }
+    .vp-title-toggle {
+      border: 0;
+      background: transparent;
+      color: inherit;
+      cursor: pointer;
+      font: inherit;
+      font-weight: inherit;
+      line-height: inherit;
+      padding: 0;
+      text-align: left;
+    }
+    .vp-title-toggle:hover { color: var(--purple); }
     .vp-card-summary {
       color: #625678;
       font-size: 0.82rem;
@@ -2332,11 +2349,12 @@
           : `${openDates.length} open date${openDates.length === 1 ? '' : 's'}`
         : 'No open dates';
       const locations = [...new Set(openDates.map(o => eventMap[o.event_id]?.venue).filter(Boolean))];
+      const detailsTarget = `decodeURIComponent('${jsArg(groupId)}')`;
       return `<article class="vp-card ${isOpen ? 'open' : ''} ${isFull ? 'is-full' : ''}">
-        <div class="vp-role-icon" style="background:${color};color:${isGold ? '#1a1008' : '#fff'};">${roleIcon(roleName, opp.department)}</div>
+        <button class="vp-role-icon" type="button" onclick="toggleDetails(${detailsTarget})" aria-expanded="${isOpen ? 'true' : 'false'}" aria-label="${isOpen ? 'Hide' : 'Learn more about'} ${esc(roleName)}" style="background:${color};color:${isGold ? '#1a1008' : '#fff'};">${roleIcon(roleName, opp.department)}</button>
         <div class="vp-card-main">
-          <div class="vp-card-title-row"><h3 class="vp-card-title">${esc(roleName)}</h3>${spotsSummaryHtml(items)}</div>
-          ${roleSummaryHtml(opp, `decodeURIComponent('${jsArg(groupId)}')`, isOpen)}
+          <div class="vp-card-title-row"><h3 class="vp-card-title"><button class="vp-title-toggle" type="button" onclick="toggleDetails(${detailsTarget})" aria-expanded="${isOpen ? 'true' : 'false'}">${esc(roleName)}</button></h3>${spotsSummaryHtml(items)}</div>
+          ${roleSummaryHtml(opp, detailsTarget, isOpen)}
           <div class="vp-card-facts">
             <span class="vp-fact">${ICONS.calendar}${esc(datesText)}</span>
             ${locations.length === 1 ? `<span class="vp-fact">${ICONS.pin}${esc(locations[0])}</span>` : ''}
@@ -2346,7 +2364,7 @@
         <div class="vp-card-actions">
           <button class="vp-add-btn ${isAdded ? 'added' : ''}" type="button" ${isFull ? 'disabled' : isSingle ? `onclick="toggleSchedule('${esc(single.id)}')"` : `onclick="toggleDetails(decodeURIComponent('${jsArg(groupId)}'))"`}>${isFull ? 'Full' : isSingle ? (isAdded ? 'Added' : `Add to My Schedule ${ICONS.plus}`) : 'Choose Dates'}</button>
         </div>
-        ${isOpen ? renderRoleDetails(items, `decodeURIComponent('${jsArg(groupId)}')`) : ''}
+        ${isOpen ? renderRoleDetails(items, detailsTarget) : ''}
       </article>`;
     }
     function renderCard(opp) {
@@ -2357,11 +2375,12 @@
       const isAdded = schedule.some(s => s.id === opp.id);
       const isFull = opp.volunteers_needed > 0 && spotsLeft(opp) === 0;
       const location = eventMap[opp.event_id]?.venue || '';
+      const detailsTarget = `decodeURIComponent('${jsArg(opp.id)}')`;
       return `<article class="vp-card ${isOpen ? 'open' : ''} ${isFull ? 'is-full' : ''}">
-        <div class="vp-role-icon" style="background:${color};color:${isGold ? '#1a1008' : '#fff'};">${roleIcon(roleName, opp.department)}</div>
+        <button class="vp-role-icon" type="button" onclick="toggleDetails(${detailsTarget})" aria-expanded="${isOpen ? 'true' : 'false'}" aria-label="${isOpen ? 'Hide' : 'Learn more about'} ${esc(roleName)}" style="background:${color};color:${isGold ? '#1a1008' : '#fff'};">${roleIcon(roleName, opp.department)}</button>
         <div class="vp-card-main">
-          <div class="vp-card-title-row"><h3 class="vp-card-title">${esc(roleName)}</h3>${spotsHtml(opp)}</div>
-          ${roleSummaryHtml(opp, `decodeURIComponent('${jsArg(opp.id)}')`, isOpen)}
+          <div class="vp-card-title-row"><h3 class="vp-card-title"><button class="vp-title-toggle" type="button" onclick="toggleDetails(${detailsTarget})" aria-expanded="${isOpen ? 'true' : 'false'}">${esc(roleName)}</button></h3>${spotsHtml(opp)}</div>
+          ${roleSummaryHtml(opp, detailsTarget, isOpen)}
           <div class="vp-card-facts">
             ${opp.shift_date ? `<span class="vp-fact">${ICONS.calendar}${esc(fmtDate(opp.shift_date, { short:true }))}</span>` : '<span class="vp-fact">Flexible - no fixed date</span>'}
             ${timeRange ? `<span class="vp-fact">${ICONS.clock}${esc(timeRange)}</span>` : ''}
@@ -2371,7 +2390,7 @@
         <div class="vp-card-actions">
           <button class="vp-add-btn ${isAdded ? 'added' : ''}" type="button" ${isFull ? 'disabled' : `onclick="toggleSchedule('${esc(opp.id)}')"`}>${isFull ? 'Full' : isAdded ? 'Added' : `Add to My Schedule ${ICONS.plus}`}</button>
         </div>
-        ${isOpen ? renderDetails(opp, location, `decodeURIComponent('${jsArg(opp.id)}')`) : ''}
+        ${isOpen ? renderDetails(opp, location, detailsTarget) : ''}
       </article>`;
     }
     function renderRoleDetails(items, targetId) {
