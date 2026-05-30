@@ -1306,6 +1306,8 @@
 
         renderPage();
         showOnly('vp-page');
+        const tokenParam = new URLSearchParams(window.location.search).get('token');
+        if (tokenParam) lookupByToken(tokenParam);
       } catch (err) {
         console.error('[BTS volunteer page]', err);
         showOnly('vp-error');
@@ -1901,19 +1903,22 @@
       btn.disabled = true;
       btn.textContent = 'Sending...';
       try {
-        const discountLines = discountRequested
-          ? [`Volunteer discount requested for performer: ${discountPerformer.trim()}`, `Volunteer discount target: ${formatHours(discountRequiredHours())} hours`]
-          : [];
+        const portalToken = crypto.randomUUID();
         const rows = schedule.map(opp => ({
           production_id: prod.id,
+          portal_token: portalToken,
           name,
           email,
-          message: [notes, phone ? `Phone: ${phone}` : '', ...discountLines, `Submitted with ${schedule.length} selected shift${schedule.length === 1 ? '' : 's'}.`].filter(Boolean).join('\n'),
+          phone: phone || null,
+          notes: notes || null,
           status: 'pending',
           role_name: opp.volunteer_role || null,
+          department: opp.department || null,
           shift_date: opp.shift_date || null,
           shift_start_time: opp.shift_start_time || null,
-          shift_end_time: opp.shift_end_time || null
+          shift_end_time: opp.shift_end_time || null,
+          discount_requested: discountRequested || false,
+          discount_performer: discountRequested ? discountPerformer.trim() || null : null,
         }));
         const { error } = await sb.from('volunteer_signups').insert(rows);
         if (error) throw error;
@@ -1923,11 +1928,20 @@
         renderRows();
         renderCart();
         const firstName = name.split(' ')[0] || name;
-        document.getElementById('vp-modal').innerHTML = `<div class="vp-modal-head" style="justify-content:flex-end;"><button class="vp-modal-close" type="button" onclick="closeModal()">&times;</button></div>
+        const portalUrl = `${window.location.origin}${window.location.pathname}?token=${portalToken}`;
+        document.getElementById('vp-modal').classList.remove('vp-modal--submit');
+        document.getElementById('vp-modal').innerHTML = `
+          <div class="vp-modal-head" style="justify-content:flex-end;"><button class="vp-modal-close" type="button" onclick="closeModal()">&times;</button></div>
           <div class="vp-modal-body"><div class="vp-success">
             <div class="vp-success-icon">&#10003;</div>
             <div class="vp-success-title">Request sent, ${esc(firstName)}!</div>
             <div class="vp-success-sub">Your ${count} shift request${count === 1 ? ' was' : 's were'} sent to the production team for review. Watch your inbox for confirmation.</div>
+            <div style="margin:1rem 0 0.5rem;font-size:0.78rem;font-weight:950;color:#1a1530;">Your volunteer portal link</div>
+            <div style="display:flex;gap:0.5rem;align-items:center;background:#f4f2f8;border-radius:8px;padding:0.6rem 0.75rem;margin-bottom:1rem;">
+              <span style="flex:1;font-size:0.72rem;color:#4a3d6b;word-break:break-all;font-family:monospace;">${esc(portalUrl)}</span>
+              <button class="vp-secondary-btn" type="button" style="white-space:nowrap;padding:0.4rem 0.75rem;font-size:0.75rem;width:auto;margin:0;" onclick="navigator.clipboard.writeText('${esc(portalUrl)}').then(()=>this.textContent='Copied!').catch(()=>{})">Copy link</button>
+            </div>
+            <div style="font-size:0.72rem;color:#6f6382;margin-bottom:1rem;">Bookmark this link to check your schedule and see when your shifts are confirmed.</div>
             <button class="vp-secondary-btn" type="button" onclick="closeModal()">Back to Shifts</button>
           </div></div>`;
       } catch (err) {
@@ -1961,25 +1975,47 @@
       btn.textContent = 'Looking you up...';
       try {
         const { data, error } = await sb.from('volunteer_signups')
-          .select('id,role_name,shift_date,shift_start_time,shift_end_time,status,approved_hours,created_at')
+          .select('id,role_name,department,shift_date,shift_start_time,shift_end_time,status,approved_hours,portal_token,created_at')
           .eq('production_id', prod.id).ilike('email', email).order('shift_date', { ascending: true });
         if (error) throw error;
-        const rows = data || [];
-        const totalHours = rows.filter(r => r.status === 'approved' || r.status === 'partially_filled').reduce((s,r) => s + (parseFloat(r.approved_hours) || 0), 0);
-        document.getElementById('vp-modal').innerHTML = `
-          <div class="vp-modal-head"><div class="vp-modal-title">My Volunteer Schedule</div><button class="vp-modal-close" type="button" onclick="closeModal()">&times;</button></div>
-          <div class="vp-modal-body">
-            <p style="font-size:0.78rem;color:#6f6382;margin-bottom:0.85rem;">Showing shifts for <strong>${esc(email)}</strong></p>
-            ${hasDiscountEnabled() ? `<div class="vp-discount-progress visible" style="margin:0 0 1rem;border:1px solid rgba(87,46,136,0.13);border-radius:8px;padding:0.85rem;"><div class="vp-progress-top"><span>Confirmed Volunteer Hours</span><span>${formatHours(totalHours)} / ${formatHours(discountRequiredHours())}</span></div><div class="vp-progress-track"><div class="vp-progress-fill" style="width:${Math.min(100,(totalHours/discountRequiredHours())*100)}%"></div></div></div>` : ''}
-            ${rows.length ? rows.map(portalItemHtml).join('') : `<div class="vp-cart-empty">No sign-ups found for <strong>${esc(email)}</strong>.</div>`}
-            <button class="vp-secondary-btn" type="button" style="margin-top:0.8rem;" onclick="openPortalModal()">Check a different email</button>
-          </div>`;
+        renderPortalView(data || [], null, email);
       } catch (err) {
         console.error('[BTS portal]', err);
         btn.disabled = false;
         btn.textContent = 'View My Schedule';
         showFormError(errEl, 'Something went wrong. Please try again.');
       }
+    }
+
+    async function lookupByToken(token) {
+      try {
+        const { data, error } = await sb.from('volunteer_signups')
+          .select('id,role_name,department,shift_date,shift_start_time,shift_end_time,status,approved_hours,portal_token,name,created_at')
+          .eq('portal_token', token).order('shift_date', { ascending: true });
+        if (error) throw error;
+        const rows = data || [];
+        if (!rows.length) { openPortalModal(); return; }
+        show('vp-modal-overlay');
+        document.body.style.overflow = 'hidden';
+        renderPortalView(rows, token, null);
+      } catch (err) {
+        console.error('[BTS portal token]', err);
+        openPortalModal();
+      }
+    }
+
+    function renderPortalView(rows, token, email) {
+      const totalHours = rows.filter(r => r.status === 'approved' || r.status === 'partially_filled').reduce((s,r) => s + (parseFloat(r.approved_hours) || 0), 0);
+      const firstName = rows[0]?.name ? rows[0].name.split(' ')[0] : null;
+      const portalUrl = token ? `${window.location.origin}${window.location.pathname}?token=${token}` : null;
+      document.getElementById('vp-modal').innerHTML = `
+        <div class="vp-modal-head"><div class="vp-modal-title">My Volunteer Schedule</div><button class="vp-modal-close" type="button" onclick="closeModal()">&times;</button></div>
+        <div class="vp-modal-body">
+          ${firstName ? `<p style="font-size:0.85rem;color:#6f6382;margin-bottom:0.85rem;">Hi <strong>${esc(firstName)}</strong> — here are your shift requests.</p>` : email ? `<p style="font-size:0.78rem;color:#6f6382;margin-bottom:0.85rem;">Showing shifts for <strong>${esc(email)}</strong></p>` : ''}
+          ${hasDiscountEnabled() ? `<div class="vp-discount-progress visible" style="margin:0 0 1rem;border:1px solid rgba(87,46,136,0.13);border-radius:8px;padding:0.85rem;"><div class="vp-progress-top"><span>Confirmed Volunteer Hours</span><span>${formatHours(totalHours)} / ${formatHours(discountRequiredHours())}</span></div><div class="vp-progress-track"><div class="vp-progress-fill" style="width:${Math.min(100,(totalHours/discountRequiredHours())*100)}%"></div></div></div>` : ''}
+          ${rows.length ? rows.map(portalItemHtml).join('') : `<div class="vp-cart-empty">No sign-ups found.</div>`}
+          ${portalUrl ? `<div style="margin-top:1rem;padding:0.75rem;background:#f4f2f8;border-radius:8px;font-size:0.72rem;color:#4a3d6b;">Bookmark this page to check back anytime: <span style="font-family:monospace;word-break:break-all;">${esc(portalUrl)}</span></div>` : `<button class="vp-secondary-btn" type="button" style="margin-top:0.8rem;" onclick="openPortalModal()">Check a different email</button>`}
+        </div>`;
     }
     function portalItemHtml(r) {
       const cls = r.status === 'approved' || r.status === 'partially_filled' ? 'approved' : (r.status === 'declined' ? 'declined' : 'pending');
