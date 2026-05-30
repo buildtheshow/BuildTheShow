@@ -7986,6 +7986,20 @@
 	    .vd-legend-dot { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
 	    .vd-legend-sub { font-weight:400; color:rgba(26,21,48,0.45); }
 	    @media(max-width:900px) { .vd-stats-row { grid-template-columns:repeat(2,1fr); } .vd-needs-panel { grid-column:span 2; } .vd-calendar-grid { grid-template-columns:repeat(3,1fr); } }
+	    /* Month view */
+	    .vd-month-grid { display:grid; grid-template-columns:repeat(7,1fr); border:1px solid rgba(87,46,136,0.12); border-radius:10px; overflow:hidden; background:#f8f6fc; }
+	    .vd-month-head-cell { background:#fff; border-bottom:1px solid rgba(87,46,136,0.1); border-right:1px solid rgba(87,46,136,0.08); padding:0.45rem 0; text-align:center; font-size:0.65rem; font-weight:700; color:rgba(87,46,136,0.55); text-transform:uppercase; letter-spacing:0.04em; }
+	    .vd-month-head-cell:last-child { border-right:none; }
+	    .vd-month-day-cell { min-height:72px; padding:0.35rem 0.3rem 0.25rem; border-right:1px solid rgba(87,46,136,0.08); border-bottom:1px solid rgba(87,46,136,0.08); background:#fff; vertical-align:top; }
+	    .vd-month-day-cell:nth-child(7n) { border-right:none; }
+	    .vd-month-outside { background:#f9f8fc; opacity:0.5; }
+	    .vd-month-today { background:rgba(87,46,136,0.04); }
+	    .vd-month-day-num { font-size:0.75rem; font-weight:800; color:#1a1530; width:22px; height:22px; display:flex; align-items:center; justify-content:center; border-radius:50%; margin-bottom:0.22rem; }
+	    .vd-month-today-num { background:#572e88; color:#fff; }
+	    .vd-month-ev-list { display:flex; flex-direction:column; gap:0.18rem; }
+	    .vd-month-ev { display:flex; align-items:center; gap:0.28rem; padding:0.1rem 0.28rem 0.1rem 0.22rem; border-radius:3px; background:#f4f1fa; overflow:hidden; }
+	    .vd-month-ev-dot { width:6px; height:6px; border-radius:50%; flex-shrink:0; }
+	    .vd-month-ev-name { font-size:0.62rem; font-weight:700; color:#1a1530; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 
 	    .vol-calendar-shell {
 	      background: #fff;
@@ -68433,6 +68447,8 @@ See you soon!
 	  }
 
 	  let _volDashWeekOffset = 0; // 0 = current week
+	  let _volDashMonthOffset = 0; // 0 = current month
+	  let _volDashViewMode = 'week'; // 'week' | 'month'
 
 	  function renderVolunteerDashboard() {
 	    const root = document.getElementById('vol-dashboard-root');
@@ -68630,6 +68646,45 @@ See you soon!
 	      </div>`;
 	    }).join('');
 
+	    // ── Month view ──────────────────────────────────────────
+	    const monthRef = new Date(today.getFullYear(), today.getMonth() + _volDashMonthOffset, 1);
+	    const monthLabel = monthRef.toLocaleDateString('en-CA', { month: 'long', year: 'numeric' });
+	    let monthHtml = '';
+	    if (_volDashViewMode === 'month') {
+	      const firstDay = new Date(monthRef);
+	      const startSun = new Date(firstDay); startSun.setDate(1 - firstDay.getDay());
+	      const DAY_HEADS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+	      const headRow = DAY_HEADS.map(d => `<div class="vd-month-head-cell">${d}</div>`).join('');
+	      const cells = [];
+	      const cur = new Date(startSun);
+	      for (let i = 0; i < 42; i++) {
+	        const ds = toDateStr(cur);
+	        const inMonth = cur.getMonth() === monthRef.getMonth();
+	        const isToday = ds === toDateStr(today);
+	        const evs = (eventsByDate[ds] || []).sort((a,b) => (a.start_time||'').localeCompare(b.start_time||''));
+	        const evDots = evs.map(ev => {
+	          const color = eventColor(ev.event_type);
+	          const planRoles = plannedRolesForType(ev.event_type);
+	          const { filled: evFilled, needed: evNeeded } = planRoles.reduce((acc, pr) => {
+	            const linkedOpp = (oppsByEvent[ev.id]||[]).find(o=>(o.production_title||'').toLowerCase()===pr.name.toLowerCase());
+	            acc.filled += linkedOpp ? (signupsByOpp[linkedOpp.id]||0) : 0;
+	            acc.needed += pr.needed;
+	            return acc;
+	          }, { filled:0, needed:0 });
+	          const dot = evNeeded === 0 ? '#d1d5db' : evFilled >= evNeeded ? '#22c55e' : evFilled > 0 ? '#f59e0b' : '#ef4444';
+	          const label = (ev.title || (ev.event_type||'Event').replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase())).slice(0,18);
+	          return `<div class="vd-month-ev" style="border-left:2.5px solid ${color};"><span class="vd-month-ev-dot" style="background:${dot};"></span><span class="vd-month-ev-name">${esc(label)}</span></div>`;
+	        }).join('');
+	        cells.push(`<div class="vd-month-day-cell${inMonth?'':' vd-month-outside'}${isToday?' vd-month-today':''}">
+	          <div class="vd-month-day-num${isToday?' vd-month-today-num':''}">${cur.getDate()}</div>
+	          <div class="vd-month-ev-list">${evDots}</div>
+	        </div>`);
+	        if (i === 34 && !inMonth && evs.length === 0) break; // trim 6th week if empty
+	        cur.setDate(cur.getDate() + 1);
+	      }
+	      monthHtml = headRow + cells.join('');
+	    }
+
 	    // ── Volunteer page URL ──────────────────────────────────
 	    const volPageUrl = volunteerPublicPageUrl();
 	    const fullVolUrl = `${window.location.origin}${volPageUrl}`;
@@ -68701,12 +68756,13 @@ See you soon!
 	          <button class="vd-nav-btn" onclick="volDashNav(1)">&#8250;</button>
 	          <button class="vd-nav-btn vd-today-btn" onclick="volDashToday()">Today</button>
 	        </div>
-	        <div class="vd-week-label">${weekStart} – ${weekEnd}</div>
-	        <div style="display:flex;align-items:center;gap:0.5rem;">
-	          <button class="vd-view-btn vd-view-active">Week</button>
+	        <div class="vd-week-label">${_volDashViewMode==='month' ? monthLabel : `${weekStart} – ${weekEnd}`}</div>
+	        <div style="display:flex;align-items:center;gap:0.4rem;">
+	          <button class="vd-view-btn ${_volDashViewMode==='week'?'vd-view-active':''}" onclick="volDashSetView('week')">Week</button>
+	          <button class="vd-view-btn ${_volDashViewMode==='month'?'vd-view-active':''}" onclick="volDashSetView('month')">Month</button>
 	        </div>
 	      </div>
-	      <div class="vd-calendar-grid">${cols}</div>
+	      <div class="${_volDashViewMode==='month'?'vd-month-grid':'vd-calendar-grid'}">${_volDashViewMode==='month'?monthHtml:cols}</div>
 	      <div class="vd-legend-row">
 	        <span class="vd-legend-item"><span class="vd-legend-dot" style="background:#22c55e;"></span> Filled <span class="vd-legend-sub">All spots covered</span></span>
 	        <span class="vd-legend-item"><span class="vd-legend-dot" style="background:#f59e0b;"></span> Partial <span class="vd-legend-sub">Some spots open</span></span>
@@ -68718,8 +68774,13 @@ See you soon!
 	      </div>`;
 	  }
 
-	  function volDashNav(dir) { _volDashWeekOffset += dir; renderVolunteerDashboard(); }
-	  function volDashToday() { _volDashWeekOffset = 0; renderVolunteerDashboard(); }
+	  function volDashNav(dir) {
+	    if (_volDashViewMode === 'month') _volDashMonthOffset += dir;
+	    else _volDashWeekOffset += dir;
+	    renderVolunteerDashboard();
+	  }
+	  function volDashToday() { _volDashWeekOffset = 0; _volDashMonthOffset = 0; renderVolunteerDashboard(); }
+	  function volDashSetView(mode) { _volDashViewMode = mode; renderVolunteerDashboard(); }
 
 	  function volDashAddRole(eventId, eventLabel) {
 	    // Open the Plan tab with a note about which event to link
