@@ -120,10 +120,11 @@
     .vp-title { font-size: clamp(1.7rem,4vw,2.45rem); line-height: 1.05; font-weight: 950; letter-spacing: 0; }
     .vp-sub { margin-top: 0.35rem; color: var(--muted); font-size: 0.95rem; line-height: 1.45; }
 
-    .vp-tabs-row { display: flex; align-items: center; justify-content: space-between; gap: 0.9rem; margin-bottom: 0.9rem; }
+    .vp-tabs-row { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.9rem; margin-bottom: 0.9rem; }
     .vp-tabs {
       display: grid;
       grid-template-columns: repeat(4, minmax(0,1fr));
+      flex: 1 1 720px;
       min-width: min(720px,100%);
       border: 1px solid var(--line);
       border-radius: 8px;
@@ -160,6 +161,39 @@
       font-weight: 800;
       min-height: 48px;
     }
+    .vp-filter-controls {
+      display: flex;
+      align-items: center;
+      gap: 0.55rem;
+      flex: 1 1 360px;
+      min-width: min(420px, 100%);
+    }
+    .vp-search {
+      position: relative;
+      flex: 1 1 220px;
+      min-width: 180px;
+    }
+    .vp-search svg {
+      position: absolute;
+      left: 0.72rem;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--purple);
+      opacity: 0.72;
+      pointer-events: none;
+    }
+    .vp-search-input {
+      width: 100%;
+      border: 1px solid var(--line);
+      background: #fff;
+      color: var(--ink);
+      border-radius: 8px;
+      padding: 0.64rem 0.78rem 0.64rem 2.35rem;
+      font-size: 0.84rem;
+      font-weight: 800;
+      min-height: 48px;
+    }
+    .vp-search-input::placeholder { color: #8d829c; }
 
     .vp-date-strip {
       display: grid;
@@ -747,6 +781,7 @@
       .vp-mobile-bar.visible { display: block; }
       .vp-tabs-row { align-items: stretch; flex-direction: column; }
       .vp-tabs { min-width: 0; width: 100%; }
+      .vp-filter-controls { min-width: 0; width: 100%; }
       .vp-filter-select { width: 100%; }
     }
     @media (max-width: 720px) {
@@ -763,6 +798,8 @@
       .vp-card-details { grid-column: 1 / -1; grid-template-columns: 1fr; padding: 0.75rem 0 0.1rem; }
       .vp-tab { font-size: 0.76rem; padding: 0.64rem 0.45rem; }
       .vp-tab svg { display: none; }
+      .vp-filter-controls { flex-direction: column; align-items: stretch; }
+      .vp-search { min-width: 0; }
       .vp-dept-grid { grid-template-columns: 1fr; }
       .vp-lead-grid { grid-template-columns: 1fr; }
     }
@@ -818,13 +855,19 @@
             <button class="vp-tab" type="button" id="tab-department" onclick="setView('department')" role="tab" aria-selected="false"><span id="icon-users"></span>View by Department</button>
             <button class="vp-tab" type="button" id="tab-all" onclick="setView('all')" role="tab" aria-selected="false"><span id="icon-list"></span>View All</button>
           </div>
-          <select class="vp-filter-select" id="vp-filter" onchange="setFilter(this.value)" aria-label="Filter shifts">
-            <option value="all">All shift types</option>
-            <option value="before">Rehearsals</option>
-            <option value="during">Performances and tech</option>
-            <option value="after">After the show</option>
-            <option value="flexible">No fixed date</option>
-          </select>
+          <div class="vp-filter-controls">
+            <label class="vp-search" for="vp-search">
+              <span id="icon-search"></span>
+              <input class="vp-search-input" id="vp-search" type="search" placeholder="Search roles" autocomplete="off" oninput="setSearch(this.value)" />
+            </label>
+            <select class="vp-filter-select" id="vp-filter" onchange="setFilter(this.value)" aria-label="Filter shifts">
+              <option value="all">All shift types</option>
+              <option value="before">Rehearsals</option>
+              <option value="during">Performances and tech</option>
+              <option value="after">After the show</option>
+              <option value="flexible">No fixed date</option>
+            </select>
+          </div>
         </div>
 
         <div class="vp-date-strip" id="vp-date-strip"></div>
@@ -862,7 +905,7 @@
 
     const DEPT_LEADS_DATE_KEY = '__department_leads__';
     let prod = null, org = null, opps = [], eventMap = {}, signupCounts = {};
-    let activeView = 'day', activeFilter = 'all', selectedDate = null, dateOffset = 0, selectedDepartment = null;
+    let activeView = 'day', activeFilter = 'all', searchTerm = '', selectedDate = null, dateOffset = 0, selectedDepartment = null;
     let schedule = [], openCards = new Set(), discountRequested = false, discountPerformer = '', paymentSettings = {};
 
     const ICONS = {
@@ -871,6 +914,7 @@
       pin: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 10c0 6-8 12-8 12S4 16 4 10a8 8 0 1 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>',
       users: '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>',
       list: '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>',
+      search: '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>',
       plus: '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 5v14M5 12h14"/></svg>',
       chevron: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg>',
       check: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m20 6-11 11-5-5"/></svg>',
@@ -1202,6 +1246,7 @@
       document.getElementById('icon-timeline').innerHTML = ICONS.clock;
       document.getElementById('icon-users').innerHTML = ICONS.users;
       document.getElementById('icon-list').innerHTML = ICONS.list;
+      document.getElementById('icon-search').innerHTML = ICONS.search;
 
       selectedDate = openDepartmentLeads().length ? DEPT_LEADS_DATE_KEY : (availableDates()[0] || null);
       renderDateStrip();
@@ -1217,7 +1262,7 @@
       return openDepartmentLeads().length ? [DEPT_LEADS_DATE_KEY, ...dates] : dates;
     }
     function filteredOpps() {
-      return activeFilter === 'all' ? opps : opps.filter(o => deriveCategory(o) === activeFilter);
+      return opps.filter(o => (activeFilter === 'all' || deriveCategory(o) === activeFilter) && matchesSearch(o));
     }
     function visibleOpps() {
       const base = filteredOpps();
@@ -1230,7 +1275,7 @@
     }
     function openDepartmentLeads() {
       return opps
-        .filter(o => o.event_type === 'dept_leads' && spotsLeft(o) > 0)
+        .filter(o => o.event_type === 'dept_leads' && spotsLeft(o) > 0 && (activeFilter === 'all' || activeFilter === 'flexible') && matchesSearch(o))
         .sort((a,b) => (a.department || '').localeCompare(b.department || '') || (a.volunteer_role || '').localeCompare(b.volunteer_role || ''));
     }
     function setView(view) {
@@ -1256,11 +1301,39 @@
       activeFilter = value;
       if (activeView === 'day') {
         const dates = dayStripItems();
-        if (dates.length && !dates.includes(selectedDate)) selectedDate = dates[0];
+        if (!dates.includes(selectedDate)) selectedDate = dates[0] || null;
         dateOffset = 0;
         renderDateStrip();
       }
       renderRows();
+    }
+    function setSearch(value) {
+      searchTerm = String(value || '').trim().toLowerCase();
+      selectedDepartment = null;
+      if (activeView === 'day') {
+        const dates = dayStripItems();
+        selectedDate = dates[0] || null;
+        dateOffset = 0;
+        renderDateStrip();
+      }
+      renderRows();
+    }
+    function matchesSearch(opp) {
+      if (!searchTerm) return true;
+      const event = eventMap[opp.event_id] || {};
+      const haystack = [
+        opp.volunteer_role,
+        opp.department,
+        opp.description,
+        opp.event_type,
+        categoryLabel(opp),
+        event.title,
+        event.venue,
+        opp.shift_date,
+        opp.shift_date ? fmtDate(opp.shift_date, { short:true }) : '',
+        fmtTimeRange(opp.shift_start_time, opp.shift_end_time)
+      ].filter(Boolean).join(' ').toLowerCase();
+      return searchTerm.split(/\s+/).every(term => haystack.includes(term));
     }
     function renderDateStrip() {
       const strip = document.getElementById('vp-date-strip');
