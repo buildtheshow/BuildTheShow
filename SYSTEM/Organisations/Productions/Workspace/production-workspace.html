@@ -9145,6 +9145,15 @@
     .vol-req-action-decline  { background: #d1523d; color: #fff; }
     .vol-req-action-approve span, .vol-req-action-partial span, .vol-req-action-decline span { font-size: 0.62rem; opacity: 0.78; font-weight: 750; }
     .vol-req-actions-note { text-align: center; font-size: 0.62rem; color: rgba(87,46,136,0.35); margin-top: 0.45rem; display: flex; align-items: center; justify-content: center; gap: 0.22rem; }
+    .vol-req-panel-outer { border: 1px solid rgba(87,46,136,0.12); border-radius: 10px; overflow: hidden; background: #fff; }
+    .vol-req-topbar { display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid rgba(87,46,136,0.1); background: #fff; flex-wrap: wrap; gap: 0.5rem; padding-right: 0.75rem; }
+    .vol-req-topbar .vol-req-tabs { border-bottom: none; flex: 1; }
+    .vol-req-filter-controls { display: flex; gap: 0.4rem; align-items: center; flex-shrink: 0; }
+    .vol-req-filter-select { font-family: var(--bts-font); font-size: 0.72rem; font-weight: 750; color: #1a1530; border: 1px solid rgba(87,46,136,0.18); border-radius: 6px; padding: 0.32rem 0.55rem; background: #fff; cursor: pointer; }
+    .vol-req-layout { border: none; border-radius: 0; min-height: 520px; display: flex; background: #fff; }
+    .vol-req-item-chevron { flex-shrink: 0; color: rgba(87,46,136,0.25); margin-left: 0.25rem; margin-top: 0.15rem; }
+    .vol-req-quote { position: relative; padding: 0.75rem 0.75rem 0.75rem 1.75rem; background: #f8f7fc; border-radius: 8px; font-style: italic; font-size: 0.82rem; color: #4a3d6b; line-height: 1.55; }
+    .vol-req-quote::before { content: '\201C'; position: absolute; left: 0.4rem; top: 0.1rem; font-size: 2.2rem; color: rgba(87,46,136,0.18); font-style: normal; line-height: 1; }
     @media (max-width: 900px) {
       .vol-req-layout { flex-direction: column; }
       .vol-req-list-panel { width: 100%; max-height: 320px; border-right: none; border-bottom: 1px solid rgba(87,46,136,0.1); }
@@ -66826,6 +66835,8 @@ See you soon!
   const VOL_REQ_PAGE_SIZE = 5;
   let _volReqFilter = 'all';
   let _volReqSelected = null;
+  let _volReqDept = 'all';
+  let _volReqSort = 'newest';
 
   function volReqTimeAgo(dateStr) {
     if (!dateStr) return '';
@@ -66896,11 +66907,16 @@ See you soon!
       .reduce((sum, r) => sum + (parseFloat(r.approved_hours) || 0), 0);
 
     const counts = { all: volunteerRequests.length, pending: pending.length, approved: approved.length, partial: partial.length, declined: declined.length };
-    const filtered = _volReqFilter === 'all' ? volunteerRequests
+    let filtered = _volReqFilter === 'all' ? volunteerRequests
       : _volReqFilter === 'pending'  ? pending
       : _volReqFilter === 'approved' ? approved
       : _volReqFilter === 'partial'  ? partial
       : declined;
+    const allDepts = [...new Set(volunteerRequests.map(r => r.opportunities?.department || r.department || '').filter(Boolean))].sort();
+    if (_volReqDept !== 'all') filtered = filtered.filter(r => (r.opportunities?.department || r.department || '') === _volReqDept);
+    if (_volReqSort === 'oldest') filtered = [...filtered].sort((a,b) => (a.created_at||'').localeCompare(b.created_at||''));
+    else if (_volReqSort === 'name') filtered = [...filtered].sort((a,b) => (a.name||'').localeCompare(b.name||''));
+    else if (_volReqSort === 'date') filtered = [...filtered].sort((a,b) => (a.shift_date||'').localeCompare(b.shift_date||''));
 
     const totalPages = Math.ceil(filtered.length / VOL_REQ_PAGE_SIZE);
     const page = Math.min(_volReqPage, Math.max(0, totalPages - 1));
@@ -66931,13 +66947,21 @@ See you soon!
       { key: 'partial', label: 'Partially Filled' },
       { key: 'declined', label: 'Declined' },
     ];
-    const tabsHtml = '<div class="vol-req-tabs">'
-      + tabDefs.map(t => {
-          const cnt = counts[t.key];
-          const active = _volReqFilter === t.key ? ' active' : '';
-          const badge = cnt > 0 ? ' <span class="vol-req-tab-count">' + cnt + '</span>' : '';
-          return '<button class="vol-req-tab' + active + '" onclick="volReqSetFilter(\'' + t.key + '\')">' + esc(t.label) + badge + '</button>';
-        }).join('')
+    const tabInner = tabDefs.map(t => {
+        const cnt = counts[t.key];
+        const active = _volReqFilter === t.key ? ' active' : '';
+        const badge = cnt > 0 ? ' <span class="vol-req-tab-count">' + cnt + '</span>' : '';
+        return '<button class="vol-req-tab' + active + '" onclick="volReqSetFilter(\'' + t.key + '\')">' + esc(t.label) + badge + '</button>';
+      }).join('');
+    const deptOptions = '<option value="all">All Departments</option>' + allDepts.map(d => '<option value="' + esc(d) + '"' + (_volReqDept === d ? ' selected' : '') + '>' + esc(d) + '</option>').join('');
+    const sortOptions = [['newest','Newest First'],['oldest','Oldest First'],['name','A–Z by Name'],['date','By Shift Date']]
+      .map(([v,l]) => '<option value="' + v + '"' + (_volReqSort === v ? ' selected' : '') + '>' + l + '</option>').join('');
+    const tabsHtml = '<div class="vol-req-topbar">'
+      + '<div class="vol-req-tabs">' + tabInner + '</div>'
+      + '<div class="vol-req-filter-controls">'
+      +   '<select class="vol-req-filter-select" onchange="volReqSetDept(this.value)">' + deptOptions + '</select>'
+      +   '<select class="vol-req-filter-select" onchange="volReqSetSort(this.value)">' + sortOptions + '</select>'
+      + '</div>'
       + '</div>';
 
     // List items
@@ -66959,6 +66983,7 @@ See you soon!
             +   '<span class="' + volReqBadgeClass(req.status || 'pending') + '">' + volReqBadgeLabel(req.status || 'pending') + '</span>'
             +   '<span class="vol-req-item-ago">Requested ' + volReqTimeAgo(req.created_at) + '</span>'
             + '</div>'
+            + '<svg class="vol-req-item-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>'
             + '</div>';
         }).join('');
 
@@ -66988,7 +67013,7 @@ See you soon!
       const dateLabel = volReqDateLabel(req);
       const dept = opp.department || '';
       const spotsNeeded = opp.volunteers_needed ? opp.volunteers_needed + ' volunteer' + (opp.volunteers_needed === 1 ? '' : 's') : '';
-      const message = req.message || '';
+      const message = req.notes || req.message || '';
       const status = req.status || 'pending';
       const isPending = status === 'pending';
 
@@ -67007,10 +67032,10 @@ See you soon!
         + (spotsNeeded ? '<div class="vol-req-detail-row"><div class="vol-req-detail-row-icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg></div><div><div class="vol-req-detail-row-label">Spots Needed</div><div class="vol-req-detail-row-value">' + esc(spotsNeeded) + '</div></div></div>' : '')
         + (dept ? '<div class="vol-req-detail-row"><div class="vol-req-detail-row-icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/></svg></div><div><div class="vol-req-detail-row-label">Department</div><div class="vol-req-detail-row-value">' + esc(dept) + '</div></div></div>' : '')
         + '</div>'
-        + (message ? '<div class="vol-req-detail-section"><div class="vol-req-detail-section-title">From the Volunteer</div><div class="vol-req-detail-message">' + esc(message) + '</div></div>' : '')
+        + (message ? '<div class="vol-req-detail-section"><div class="vol-req-detail-section-title">From the Volunteer</div><div class="vol-req-quote">' + esc(message) + '</div></div>' : '')
         + (isPending ? '<div class="vol-req-actions">'
           +   '<button class="vol-req-action-approve" onclick="volReqRespond(' + JSON.stringify({id: req.id}).replace(/</g,'\u003c') + ', \'approved\')"><span>&#10003;</span> Approve' + (req.approved_hours ? '<span>' + req.approved_hours + ' hours</span>' : '') + '</button>'
-          +   '<button class="vol-req-action-partial" onclick="volReqRespond(' + JSON.stringify({id: req.id}).replace(/</g,'\u003c') + ', \'partially_filled\')"><span>&#9719;</span> Approve &amp; Mark Partial</button>'
+          +   '<button class="vol-req-action-partial" onclick="volReqRespond(' + JSON.stringify({id: req.id}).replace(/</g,'\u003c') + ', \'partially_filled\')"><span>&#9719;</span> Approve &amp; Mark Partial' + (req.approved_hours ? '<span>' + (Math.ceil(req.approved_hours / 2)) + ' hours</span>' : '') + '</button>'
           +   '<button class="vol-req-action-decline" onclick="volReqRespond(' + JSON.stringify({id: req.id}).replace(/</g,'\u003c') + ', \'declined\')"><span>&#10005;</span> Decline</button>'
           + '</div>'
           + '<div class="vol-req-actions-note"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg> You can add a message after taking action.</div>'
@@ -67028,13 +67053,15 @@ See you soon!
       +   '<button class="btn-primary" style="font-size:0.78rem;" onclick="openCreateInternalVolunteerRole()">+ Create Role</button>'
       + '</div></div>'
       + statsHtml
-      + '<div class="vol-req-layout">'
-      +   '<div class="vol-req-list-panel">'
-      +     tabsHtml
-      +     '<div class="vol-req-list" id="vol-req-list">' + listItemsHtml + '</div>'
-      +     paginationHtml
+      + '<div class="vol-req-panel-outer">'
+      +   tabsHtml
+      +   '<div class="vol-req-layout">'
+      +     '<div class="vol-req-list-panel">'
+      +       '<div class="vol-req-list" id="vol-req-list">' + listItemsHtml + '</div>'
+      +       paginationHtml
+      +     '</div>'
+      +     '<div class="vol-req-detail-panel" id="vol-req-detail">' + detailHtml(_volReqSelected) + '</div>'
       +   '</div>'
-      +   '<div class="vol-req-detail-panel" id="vol-req-detail">' + detailHtml(_volReqSelected) + '</div>'
       + '</div>';
   }
 
@@ -67044,6 +67071,8 @@ See you soon!
     _volReqSelected = null;
     renderVolunteerRequests();
   }
+  function volReqSetDept(dept) { _volReqDept = dept; _volReqPage = 0; renderVolunteerRequests(); }
+  function volReqSetSort(sort) { _volReqSort = sort; _volReqPage = 0; renderVolunteerRequests(); }
 
   function volReqSetPage(p) {
     _volReqPage = p;
