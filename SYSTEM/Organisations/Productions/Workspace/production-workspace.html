@@ -67106,6 +67106,19 @@ See you soon!
         : personShifts.every(s => s.status === 'declined') ? 'declined' : 'partially_filled';
       const pendingShifts = personShifts.filter(s => (s.status || 'pending') === 'pending');
 
+      // Hours calc
+      function shiftHrs(s) {
+        if (!s.shift_start_time || !s.shift_end_time) return 0;
+        const [sh,sm] = s.shift_start_time.slice(0,5).split(':').map(Number);
+        const [eh,em] = s.shift_end_time.slice(0,5).split(':').map(Number);
+        return Math.max(0, (eh*60+em - sh*60-sm) / 60);
+      }
+      const totalRequestedHrs = personShifts.reduce((sum,s) => sum + shiftHrs(s), 0);
+      const totalApprovedHrs  = personShifts.filter(s => s.status === 'approved').reduce((sum,s) => sum + (parseFloat(s.approved_hours) || shiftHrs(s)), 0);
+      const discountRequested = personShifts.some(s => s.discount_requested);
+      const discountPerformer = personShifts.find(s => s.discount_performer)?.discount_performer || '';
+      const fmtHrs = h => Number.isInteger(h) ? h + ' hr' + (h===1?'':'s') : h.toFixed(1) + ' hrs';
+
       const shiftRows = personShifts.map(s => {
         const dateLabel = volReqDateLabel(s);
         const dept = s.department || '';
@@ -67134,6 +67147,21 @@ See you soon!
         +     '<div class="vol-req-detail-time">Requested ' + volReqTimeAgo(p.created_at) + '</div>'
         + '</div></div>'
         + '<span class="' + volReqBadgeClass(overallStatus) + '">' + volReqBadgeLabel(overallStatus) + '</span>'
+        + '</div>'
+        + '<div style="display:flex;flex-wrap:wrap;gap:0.5rem;padding:0.85rem 1.5rem;border-bottom:1px solid rgba(87,46,136,0.08);background:#faf9fc;">'
+        +   '<div style="flex:1;min-width:120px;background:#fff;border:1px solid rgba(87,46,136,0.1);border-radius:8px;padding:0.6rem 0.75rem;">'
+        +     '<div style="font-size:0.62rem;font-weight:900;text-transform:uppercase;letter-spacing:0.05em;color:rgba(87,46,136,0.45);margin-bottom:0.2rem;">Hours Requested</div>'
+        +     '<div style="font-size:1.05rem;font-weight:900;color:#1a1530;">' + fmtHrs(totalRequestedHrs) + '</div>'
+        +   '</div>'
+        +   '<div style="flex:1;min-width:120px;background:#fff;border:1px solid rgba(87,46,136,0.1);border-radius:8px;padding:0.6rem 0.75rem;">'
+        +     '<div style="font-size:0.62rem;font-weight:900;text-transform:uppercase;letter-spacing:0.05em;color:rgba(87,46,136,0.45);margin-bottom:0.2rem;">Hours Approved</div>'
+        +     '<div style="font-size:1.05rem;font-weight:900;color:' + (totalApprovedHrs > 0 ? '#2d6e35' : '#1a1530') + ';">' + fmtHrs(totalApprovedHrs) + '</div>'
+        +   '</div>'
+        +   (discountRequested
+            ? '<div style="flex:1;min-width:140px;background:#fff;border:1px solid rgba(87,46,136,0.1);border-radius:8px;padding:0.6rem 0.75rem;">'
+            +   '<div style="font-size:0.62rem;font-weight:900;text-transform:uppercase;letter-spacing:0.05em;color:rgba(87,46,136,0.45);margin-bottom:0.2rem;">Volunteer Discount For</div>'
+            +   '<div style="font-size:0.85rem;font-weight:800;color:#572e88;">' + esc(discountPerformer || 'Not specified') + '</div>'
+            + '</div>' : '')
         + '</div>'
         + (p.notes ? '<div class="vol-req-detail-section"><div class="vol-req-detail-section-title">From the Volunteer</div><div class="vol-req-quote">' + esc(p.notes) + '</div></div>' : '')
         + '<div class="vol-req-detail-section"><div class="vol-req-detail-section-title">Requested Shifts</div>' + shiftRows + '</div>'
