@@ -1314,7 +1314,7 @@
 
     const DEPT_LEADS_DATE_KEY = '__department_leads__';
     let prod = null, org = null, opps = [], eventMap = {}, signupCounts = {};
-    let activeView = 'day', activeFilter = 'all', searchTerm = '', selectedDate = null, dateOffset = 0, selectedDepartment = null;
+    let activeView = 'day', activeFilter = 'all', searchTerm = '', selectedDate = null, dateOffset = 0, selectedDepartment = null, selectedTimingBucket = null;
     let schedule = [], openCards = new Set(), openTimingGroups = new Set(), timingGroupsTouched = false, discountRequested = false, discountPerformer = '', paymentSettings = {};
 
     const ICONS = {
@@ -1893,6 +1893,7 @@
         return selectedDate ? base.filter(o => o.shift_date === selectedDate) : base.filter(o => !o.shift_date);
       }
       if (activeView === 'department' && selectedDepartment) return base.filter(o => (o.department || 'Other') === selectedDepartment);
+      if (activeView === 'timeline' && selectedTimingBucket) return base.filter(o => timelineBucket(o) === selectedTimingBucket);
       return [...base].sort((a,b) => (a.shift_date || 'z').localeCompare(b.shift_date || 'z') || (a.volunteer_role || '').localeCompare(b.volunteer_role || ''));
     }
     function openDepartmentLeads() {
@@ -1903,6 +1904,7 @@
     function setView(view) {
       activeView = view;
       selectedDepartment = null;
+      selectedTimingBucket = null;
       ['day','timeline','department','all'].forEach(v => {
         const el = document.getElementById(`tab-${v}`);
         el.classList.toggle('active', v === view);
@@ -1946,6 +1948,7 @@
     function setSearch(value) {
       searchTerm = String(value || '').trim().toLowerCase();
       selectedDepartment = null;
+      selectedTimingBucket = null;
       timingGroupsTouched = false;
       openTimingGroups.clear();
       if (activeView === 'day') {
@@ -2010,9 +2013,15 @@
         icon.innerHTML = ICONS.calendar;
         meta.textContent = '';
       } else if (activeView === 'timeline') {
-        title.textContent = 'Timing';
         icon.innerHTML = ICONS.clock;
-        meta.textContent = '';
+        if (selectedTimingBucket) {
+          const bt = TIMING_TILES[selectedTimingBucket] || { label: selectedTimingBucket };
+          title.textContent = bt.name || bt.label;
+          meta.innerHTML = '<button class="vp-dept-back" type="button" onclick="backToTimingBuckets()">Back to Timing</button>';
+        } else {
+          title.textContent = 'Timing';
+          meta.textContent = '';
+        }
       } else if (activeView === 'department') {
         title.textContent = selectedDepartment ? (departmentTile(selectedDepartment).name || selectedDepartment) : 'Departments';
         icon.innerHTML = ICONS.users;
@@ -2037,11 +2046,16 @@
         return;
       }
       if (activeView === 'timeline') {
-        const groups = timelineGroups(items);
-        const roleCount = groups.reduce((sum, group) => sum + groupRoleOpps(group.items).length, 0);
-        if (!timingGroupsTouched && groups.length && !groups.some(group => openTimingGroups.has(group.key))) openTimingGroups.add(groups[0].key);
-        meta.textContent = `${roleCount} role${roleCount === 1 ? '' : 's'}`;
-        list.innerHTML = groups.map(renderTimingGroup).join('');
+        const allGroups = timelineGroups(filteredOpps());
+        if (!selectedTimingBucket) {
+          const bucketCount = allGroups.length;
+          meta.textContent = `${bucketCount} timing group${bucketCount === 1 ? '' : 's'}`;
+          list.innerHTML = renderTimingTiles(allGroups);
+        } else {
+          const roles = groupRoleOpps(items, { leadFirst: true });
+          meta.innerHTML = '<button class="vp-dept-back" type="button" onclick="backToTimingBuckets()">Back to Timing</button>';
+          list.innerHTML = `<div class="vp-group-title">${roles.length} role${roles.length === 1 ? '' : 's'}</div>${roles.map(renderRoleCard).join('')}`;
+        }
       } else if (activeView === 'department') {
         if (!selectedDepartment) {
           list.innerHTML = renderDepartmentTiles(departmentGroups);
@@ -2094,6 +2108,51 @@
       return TIMELINE_BUCKETS
         .map(bucket => ({ ...bucket, items: sortTimelineItems(grouped[bucket.key] || []) }))
         .filter(bucket => bucket.items.length);
+    }
+    const TIMING_TILES = {
+      pre_production:  { name: 'Pre-Production Help',      kicker: 'Before Rehearsals Start', body: 'Setup, planning, and early production work before the cast is in the room.', color: '#572e88', ink: '#ffffff' },
+      rehearsal:       { name: 'Rehearsal Help',           kicker: 'During Rehearsals',       body: 'Supporting the cast and crew throughout the rehearsal process.', color: '#476aaa', ink: '#ffffff' },
+      build_work:      { name: 'Build & Production Work',  kicker: 'Sets, Costumes & Tech',   body: 'Building, painting, costuming, and technical production work.', color: '#769e7b', ink: '#ffffff' },
+      own_time:        { name: 'On Your Own Time',         kicker: 'Flexible Schedule',        body: 'Roles you can do on your own schedule — no fixed date required.', color: '#78bbd4', ink: '#ffffff' },
+      during_show:     { name: 'During the Show',          kicker: 'Show Days',               body: 'Front of house, backstage, tech, and audience support on performance days.', color: '#efab45', ink: '#1a1008' },
+      after_show:      { name: 'After the Show',           kicker: 'Strike & Wrap',           body: 'Striking the set, returning costumes, cleanup, and celebration.', color: '#d1523d', ink: '#ffffff' },
+      other:           { name: 'Other Help',               kicker: 'Everything Else',          body: 'Additional volunteer opportunities that don\'t fit a single category.', color: '#ca7ea7', ink: '#ffffff' },
+    };
+    function renderTimingTiles(groups) {
+      return `<div class="vp-dept-grid">${groups.map(group => {
+        const tile = TIMING_TILES[group.key] || { name: group.label, kicker: 'Timing', body: '', color: '#572e88', ink: '#ffffff' };
+        const roles = groupRoleOpps(group.items);
+        const buttonInk = tile.ink === '#ffffff' ? tile.color : tile.ink;
+        return `<div class="template-brand-card template-brand-card--square role-tile"
+             style="--brand-tile-bg:${esc(tile.color)};--brand-tile-ink:${esc(tile.ink)};--brand-tile-button-ink:${esc(buttonInk)};"
+             data-timing-bucket="${esc(group.key)}" tabindex="0" role="button"
+             aria-label="View ${esc(tile.name)} roles">
+          <div class="template-brand-card-inner">
+            <div class="template-brand-tile-content">
+              <div class="template-brand-tile-container template-brand-tile-container--header">
+                <div class="template-brand-tile-kicker">${esc(tile.kicker)}</div>
+              </div>
+              <div class="template-brand-tile-container template-brand-tile-container--title">
+                <div class="template-brand-tile-title">${esc(tile.name)}</div>
+              </div>
+              <div class="template-brand-tile-container template-brand-tile-container--body">
+                <div class="template-brand-tile-body">${esc(tile.body)}</div>
+              </div>
+              <div class="template-brand-tile-container template-brand-tile-container--footer">
+                <div class="template-brand-tile-button">View ${roles.length} role${roles.length === 1 ? '' : 's'}</div>
+              </div>
+            </div>
+          </div>
+        </div>`;
+      }).join('')}</div>`;
+    }
+    function selectTimingBucket(key) {
+      selectedTimingBucket = key;
+      renderRows();
+    }
+    function backToTimingBuckets() {
+      selectedTimingBucket = null;
+      renderRows();
     }
     function renderTimingGroup(group) {
       const roles = groupRoleOpps(group.items);
@@ -2631,14 +2690,16 @@
       if (e.key === 'Escape' && !document.getElementById('vp-modal-overlay').classList.contains('hidden')) closeModal();
     });
     document.addEventListener('click', e => {
-      const tile = e.target.closest('.role-tile[data-department]');
-      if (tile) selectDepartment(tile.dataset.department);
+      const deptTile = e.target.closest('.role-tile[data-department]');
+      if (deptTile) { selectDepartment(deptTile.dataset.department); return; }
+      const timingTile = e.target.closest('.role-tile[data-timing-bucket]');
+      if (timingTile) selectTimingBucket(timingTile.dataset.timingBucket);
     });
     document.addEventListener('keydown', e => {
-      const tile = e.target.closest?.('.role-tile[data-department]');
-      if (!tile || (e.key !== 'Enter' && e.key !== ' ')) return;
-      e.preventDefault();
-      selectDepartment(tile.dataset.department);
+      const deptTile = e.target.closest?.('.role-tile[data-department]');
+      if (deptTile && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); selectDepartment(deptTile.dataset.department); return; }
+      const timingTile = e.target.closest?.('.role-tile[data-timing-bucket]');
+      if (timingTile && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); selectTimingBucket(timingTile.dataset.timingBucket); }
     });
     loadPage();
   </script>
