@@ -1794,11 +1794,27 @@
       openCards.has(id) ? openCards.delete(id) : openCards.add(id);
       renderRows();
     }
+    function shiftsOverlap(a, b) {
+      if (!a.shift_date || !b.shift_date || a.shift_date !== b.shift_date) return false;
+      if (!a.shift_start_time || !b.shift_start_time) return false;
+      const toMins = t => { const [h,m] = t.slice(0,5).split(':').map(Number); return h*60+m; };
+      const aS = toMins(a.shift_start_time), aE = a.shift_end_time ? toMins(a.shift_end_time) : aS+60;
+      const bS = toMins(b.shift_start_time), bE = b.shift_end_time ? toMins(b.shift_end_time) : bS+60;
+      return aS < bE && bS < aE;
+    }
     function toggleSchedule(id) {
       const opp = opps.find(o => o.id === id);
       if (!opp) return;
-      if (schedule.some(s => s.id === id)) schedule = schedule.filter(s => s.id !== id);
-      else schedule.push(opp);
+      if (schedule.some(s => s.id === id)) {
+        schedule = schedule.filter(s => s.id !== id);
+      } else {
+        const conflict = schedule.find(s => shiftsOverlap(s, opp));
+        if (conflict) {
+          showToast(\`This shift overlaps with \${conflict.volunteer_role || 'another shift'} you already added.\`);
+          return;
+        }
+        schedule.push(opp);
+      }
       renderRows();
       renderCart();
     }

@@ -23172,8 +23172,7 @@
 	        <div class="aud-visual-hero-content" style="align-items:flex-start;">
 	          <div>
 	            <div class="aud-visual-kicker"><span class="aud-visual-kicker-dot" aria-hidden="true"></span>Volunteers</div>
-	            <h2 class="aud-visual-title" style="font-size:clamp(1.8rem,4vw,3rem);">Overview</h2>
-	            <p class="aud-visual-copy">Build the roles, connect them to dates, and track who shows up for every shift.</p>
+	            <h2 class="aud-visual-title" id="vol-hero-title" style="font-size:clamp(1.8rem,4vw,3rem);">Overview</h2>\n\t            <p class="aud-visual-copy" id="vol-hero-copy">Build the roles, connect them to dates, and track who shows up for every shift.</p>
 	          </div>
 	          <div class="vol-plan-actions" style="flex-direction:column;align-items:flex-end;">
 	            <button type="button" class="btn-primary" onclick="openCreateInternalVolunteerRole()" style="white-space:nowrap;">+ Create Internal Role</button>
@@ -66370,6 +66369,13 @@ See you soon!
 	    const containers = [document.getElementById('opp-list'), document.getElementById('volunteers-opp-list')].filter(Boolean);
 	    if (!containers.length) return;
 	    const activeVolunteerSubTab = loadWorkspaceNavState().volunteerSubTab || 'calendar';
+	    // Update the purple hero banner to match the current sub-tab
+	    const _volHeroTitles = { calendar: 'Overview', plan: 'Volunteer Plan', suggestions: 'Suggestions', roles: 'Internal Roles', publish: 'Publish', share: 'Share', requests: 'Role Requests' };
+	    const _volHeroCopies = { calendar: 'Build the roles, connect them to dates, and track who shows up for every shift.', plan: 'Build the roles, connect them to dates, and track who shows up for every shift.', suggestions: 'Turn your calendar events into volunteer role drafts.', roles: 'Review and manage your internal volunteer roles.', publish: 'Choose which roles are open to families.', share: 'Share the volunteer page and sign-up links.', requests: 'Review and respond to volunteers who have requested roles.' };
+	    const _heroTitleEl = document.getElementById('vol-hero-title');
+	    const _heroCopyEl  = document.getElementById('vol-hero-copy');
+	    if (_heroTitleEl) _heroTitleEl.textContent = _volHeroTitles[activeVolunteerSubTab] || 'Overview';
+	    if (_heroCopyEl)  _heroCopyEl.textContent  = _volHeroCopies[activeVolunteerSubTab] || '';
 	    const publishedCount = opportunities.filter(opp => opp.status === 'published').length;
 	    const rolesWithDates = opportunities.filter(o => o.time_commitment || o.close_date);
 	    const departmentMap = new Map(VOLUNTEER_DEPARTMENTS.map(dept => [dept.key, { ...dept, roles: [] }]));
@@ -67119,13 +67125,22 @@ See you soon!
       const discountPerformer = personShifts.find(s => s.discount_performer)?.discount_performer || '';
       const fmtHrs = h => Number.isInteger(h) ? h + ' hr' + (h===1?'':'s') : h.toFixed(1) + ' hrs';
 
+      function reqShiftsOverlap(a, b) {
+        if (a.id === b.id || !a.shift_date || !b.shift_date || a.shift_date !== b.shift_date) return false;
+        if (!a.shift_start_time || !b.shift_start_time) return false;
+        const toM = t => { const [h,m] = t.slice(0,5).split(':').map(Number); return h*60+m; };
+        const aS=toM(a.shift_start_time), aE=a.shift_end_time?toM(a.shift_end_time):aS+60;
+        const bS=toM(b.shift_start_time), bE=b.shift_end_time?toM(b.shift_end_time):bS+60;
+        return aS < bE && bS < aE;
+      }
       const shiftRows = personShifts.map(s => {
         const dateLabel = volReqDateLabel(s);
         const dept = s.department || '';
         const isPending = (s.status || 'pending') === 'pending';
-        return '<div class="vol-req-shift-row">'
+        const hasConflict = personShifts.some(other => reqShiftsOverlap(s, other));
+        return '<div class="vol-req-shift-row' + (hasConflict ? ' vol-req-shift-conflict' : '') + '">'
           + '<div class="vol-req-shift-row-info">'
-          +   '<div class="vol-req-shift-row-role">' + esc(s.role_name || 'Volunteer') + '</div>'
+          +   '<div class="vol-req-shift-row-role">' + esc(s.role_name || 'Volunteer') + (hasConflict ? ' <span style="background:#fef2f2;color:#b33a25;font-size:0.58rem;font-weight:900;padding:0.1rem 0.35rem;border-radius:4px;letter-spacing:0.04em;text-transform:uppercase;margin-left:0.3rem;">Time conflict</span>' : '') + '</div>'
           +   '<div class="vol-req-shift-row-date">' + esc(dateLabel || 'Flexible') + (dept ? ' &middot; ' + esc(dept) : '') + '</div>'
           + '</div>'
           + '<div class="vol-req-shift-row-actions">'
