@@ -1683,6 +1683,11 @@
       const h = Math.floor(mins / 60), m = mins % 60;
       return { label: m ? `${h}h ${m}m` : `${h} hr${h === 1 ? '' : 's'}`, mins };
     }
+    function entryField(entry, camelName, snakeName, fallback = null) {
+      if (entry?.[camelName] !== undefined && entry?.[camelName] !== null && entry?.[camelName] !== '') return entry[camelName];
+      if (entry?.[snakeName] !== undefined && entry?.[snakeName] !== null && entry?.[snakeName] !== '') return entry[snakeName];
+      return fallback;
+    }
     function applyAnchor(base, mins, anchor) {
       const start = parseEventDateTime(base.start_time);
       const end = parseEventDateTime(base.end_time);
@@ -1696,12 +1701,14 @@
       return normalizeDateMinutes((start || end).date, (start || end).mins - mins);
     }
     function roleShiftTiming(ev, entry = {}) {
-      const ownTime = entry.shiftStartAnchor === 'own_time' || entry.shiftEndAnchor === 'own_time';
+      const shiftStartAnchor = entryField(entry, 'shiftStartAnchor', 'shift_start_anchor', 'before_start');
+      const shiftEndAnchor = entryField(entry, 'shiftEndAnchor', 'shift_end_anchor', 'after_end');
+      const ownTime = shiftStartAnchor === 'own_time' || shiftEndAnchor === 'own_time';
       if (ownTime) return { shift_date: null, shift_start_time: null, shift_end_time: null, hours: null };
-      const startMins = parseInt(entry.shiftStartMins, 10) || 0;
-      const endMins = parseInt(entry.shiftEndMins, 10) || 0;
-      const start = applyAnchor(ev, startMins, entry.shiftStartAnchor || 'before_start');
-      const end = applyAnchor(ev, endMins, entry.shiftEndAnchor || 'after_end');
+      const startMins = parseInt(entryField(entry, 'shiftStartMins', 'shift_start_mins', 0), 10) || 0;
+      const endMins = parseInt(entryField(entry, 'shiftEndMins', 'shift_end_mins', 0), 10) || 0;
+      const start = applyAnchor(ev, startMins, shiftStartAnchor);
+      const end = applyAnchor(ev, endMins, shiftEndAnchor);
       const hours = start && end ? calcHoursBetween(start, end) : null;
       return {
         shift_date: start?.date || ev.start_time?.slice(0, 10) || null,
