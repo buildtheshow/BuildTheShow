@@ -123,8 +123,8 @@
     .vp-tabs-row { display: flex; align-items: center; justify-content: space-between; gap: 0.9rem; margin-bottom: 0.9rem; }
     .vp-tabs {
       display: grid;
-      grid-template-columns: repeat(3, minmax(0,1fr));
-      min-width: min(560px,100%);
+      grid-template-columns: repeat(4, minmax(0,1fr));
+      min-width: min(720px,100%);
       border: 1px solid var(--line);
       border-radius: 8px;
       background: #fff;
@@ -786,6 +786,7 @@
         <div class="vp-tabs-row">
           <div class="vp-tabs" role="tablist" aria-label="Volunteer shift views">
             <button class="vp-tab active" type="button" id="tab-day" onclick="setView('day')" role="tab" aria-selected="true"><span id="icon-calendar"></span>View by Day</button>
+            <button class="vp-tab" type="button" id="tab-timeline" onclick="setView('timeline')" role="tab" aria-selected="false"><span id="icon-timeline"></span>View by Timing</button>
             <button class="vp-tab" type="button" id="tab-department" onclick="setView('department')" role="tab" aria-selected="false"><span id="icon-users"></span>View by Department</button>
             <button class="vp-tab" type="button" id="tab-all" onclick="setView('all')" role="tab" aria-selected="false"><span id="icon-list"></span>View All</button>
           </div>
@@ -1170,6 +1171,7 @@
       document.getElementById('vp-page-sub').textContent = `Choose shifts for ${showName} that work for you and add them to your schedule. No account needed.`;
       if (prod.poster_url) document.getElementById('vp-poster').innerHTML = `<img src="${esc(prod.poster_url)}" alt="${esc(showName)} poster" />`;
       document.getElementById('icon-calendar').innerHTML = ICONS.calendar;
+      document.getElementById('icon-timeline').innerHTML = ICONS.clock;
       document.getElementById('icon-users').innerHTML = ICONS.users;
       document.getElementById('icon-list').innerHTML = ICONS.list;
 
@@ -1206,7 +1208,7 @@
     function setView(view) {
       activeView = view;
       selectedDepartment = null;
-      ['day','department','all'].forEach(v => {
+      ['day','timeline','department','all'].forEach(v => {
         const el = document.getElementById(`tab-${v}`);
         el.classList.toggle('active', v === view);
         el.setAttribute('aria-selected', v === view ? 'true' : 'false');
@@ -1268,6 +1270,10 @@
         title.textContent = selectedDate === DEPT_LEADS_DATE_KEY ? 'Department Leads' : (selectedDate ? fmtDate(selectedDate) : 'No Fixed Date');
         icon.innerHTML = ICONS.calendar;
         meta.textContent = '';
+      } else if (activeView === 'timeline') {
+        title.textContent = 'Timing';
+        icon.innerHTML = ICONS.clock;
+        meta.textContent = '';
       } else if (activeView === 'department') {
         title.textContent = selectedDepartment ? (departmentTile(selectedDepartment).name || selectedDepartment) : 'Departments';
         icon.innerHTML = ICONS.users;
@@ -1291,7 +1297,11 @@
         list.innerHTML = '<div class="vp-empty">No open shifts match this view yet. Try another tab or filter.</div>';
         return;
       }
-      if (activeView === 'department') {
+      if (activeView === 'timeline') {
+        const groups = timelineGroups(items);
+        meta.textContent = `${items.length} opportunit${items.length === 1 ? 'y' : 'ies'}`;
+        list.innerHTML = groups.map(group => `<div class="vp-group-title">${esc(group.label)}</div>${group.items.map(renderCard).join('')}`).join('');
+      } else if (activeView === 'department') {
         if (!selectedDepartment) {
           list.innerHTML = renderDepartmentTiles(departmentGroups);
         } else {
@@ -1308,6 +1318,36 @@
     }
     function groupBy(items, fn) {
       return items.reduce((acc, item) => { const k = fn(item); (acc[k] ||= []).push(item); return acc; }, {});
+    }
+    const TIMELINE_BUCKETS = [
+      { key: 'pre_production', label: 'Pre-Production Help' },
+      { key: 'rehearsal', label: 'Rehearsal Help' },
+      { key: 'own_time', label: 'On Your Own Time' },
+      { key: 'during_show', label: 'During the Show' },
+      { key: 'after_show', label: 'After the Show' },
+      { key: 'other', label: 'Other Help' }
+    ];
+    function timelineBucket(opp) {
+      const type = eventMap[opp.event_id]?.event_type || opp.event_type || '';
+      if (type === 'dept_leads') return 'pre_production';
+      if (!opp.shift_date || type === 'other') return 'own_time';
+      if (BEFORE_TYPES.has(type)) return 'rehearsal';
+      if (DURING_TYPES.has(type)) return 'during_show';
+      if (AFTER_TYPES.has(type)) return 'after_show';
+      return 'other';
+    }
+    function sortTimelineItems(items) {
+      return [...items].sort((a,b) =>
+        (a.shift_date || 'z').localeCompare(b.shift_date || 'z') ||
+        (a.shift_start_time || '').localeCompare(b.shift_start_time || '') ||
+        (a.volunteer_role || '').localeCompare(b.volunteer_role || '')
+      );
+    }
+    function timelineGroups(items) {
+      const grouped = groupBy(items, timelineBucket);
+      return TIMELINE_BUCKETS
+        .map(bucket => ({ ...bucket, items: sortTimelineItems(grouped[bucket.key] || []) }))
+        .filter(bucket => bucket.items.length);
     }
     function departmentTile(dept) {
       return DEPARTMENT_TILES[dept] || {
