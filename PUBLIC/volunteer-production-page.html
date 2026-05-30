@@ -451,6 +451,34 @@
     .vp-detail-check svg { color: var(--purple); flex-shrink: 0; }
     .vp-detail-grid { display: grid; grid-template-columns: 110px 1fr; gap: 0.52rem 0.8rem; font-size: 0.82rem; color: #3f3553; }
     .vp-detail-grid strong { color: var(--ink); }
+    .vp-date-list { display: flex; flex-direction: column; gap: 0.48rem; }
+    .vp-date-row {
+      display: grid;
+      grid-template-columns: minmax(0,1fr) auto;
+      align-items: center;
+      gap: 0.65rem;
+      border: 1px solid rgba(87,46,136,0.13);
+      border-radius: 8px;
+      padding: 0.55rem;
+      background: rgba(247,244,250,0.65);
+    }
+    .vp-date-main { min-width: 0; }
+    .vp-date-primary { font-size: 0.82rem; font-weight: 950; color: var(--ink); }
+    .vp-date-secondary { display: flex; flex-wrap: wrap; gap: 0.45rem 0.65rem; margin-top: 0.16rem; font-size: 0.76rem; color: #554a68; }
+    .vp-date-secondary span { display: inline-flex; align-items: center; gap: 0.25rem; }
+    .vp-date-add {
+      border: 1px solid var(--purple);
+      border-radius: 8px;
+      min-height: 34px;
+      padding: 0.4rem 0.65rem;
+      background: var(--purple);
+      color: #fff;
+      font-size: 0.74rem;
+      font-weight: 950;
+      white-space: nowrap;
+    }
+    .vp-date-add.added { background: #fff; color: var(--purple); }
+    .vp-date-add:disabled { border-color: #d9d2e7; background: #e8e3ef; color: var(--muted); cursor: not-allowed; }
 
     .vp-empty {
       border: 1px dashed rgba(87,46,136,0.25);
@@ -1299,18 +1327,21 @@
       }
       if (activeView === 'timeline') {
         const groups = timelineGroups(items);
-        meta.textContent = `${items.length} opportunit${items.length === 1 ? 'y' : 'ies'}`;
-        list.innerHTML = groups.map(group => `<div class="vp-group-title">${esc(group.label)}</div>${group.items.map(renderCard).join('')}`).join('');
+        const roleCount = groups.reduce((sum, group) => sum + groupRoleOpps(group.items).length, 0);
+        meta.textContent = `${roleCount} role${roleCount === 1 ? '' : 's'}`;
+        list.innerHTML = groups.map(group => `<div class="vp-group-title">${esc(group.label)}</div>${groupRoleOpps(group.items).map(renderRoleCard).join('')}`).join('');
       } else if (activeView === 'department') {
         if (!selectedDepartment) {
           list.innerHTML = renderDepartmentTiles(departmentGroups);
         } else {
-          list.innerHTML = `<div class="vp-group-title">${items.length} opportunit${items.length === 1 ? 'y' : 'ies'}</div>${items.map(renderCard).join('')}`;
+          const roles = groupRoleOpps(items);
+          list.innerHTML = `<div class="vp-group-title">${roles.length} role${roles.length === 1 ? '' : 's'}</div>${roles.map(renderRoleCard).join('')}`;
         }
       } else if (activeView === 'all') {
-        const groups = groupBy(items, o => o.shift_date ? fmtDate(o.shift_date, { short:true }) : 'No Fixed Date');
-        meta.textContent = `${items.length} opportunit${items.length === 1 ? 'y' : 'ies'}`;
-        list.innerHTML = Object.entries(groups).map(([date, rows]) => `<div class="vp-group-title">${esc(date)}</div>${rows.map(renderCard).join('')}`).join('');
+        const groups = groupBy(items, o => o.department || 'Other');
+        const roles = groupRoleOpps(items);
+        meta.textContent = `${roles.length} role${roles.length === 1 ? '' : 's'}`;
+        list.innerHTML = Object.entries(groups).map(([dept, rows]) => `<div class="vp-group-title">${esc(departmentTile(dept).name || dept)}</div>${groupRoleOpps(rows).map(renderRoleCard).join('')}`).join('');
       } else {
         meta.textContent = `${items.length} opportunit${items.length === 1 ? 'y' : 'ies'}`;
         list.innerHTML = items.map(renderCard).join('');
@@ -1348,6 +1379,30 @@
       return TIMELINE_BUCKETS
         .map(bucket => ({ ...bucket, items: sortTimelineItems(grouped[bucket.key] || []) }))
         .filter(bucket => bucket.items.length);
+    }
+    function roleGroupKey(opp) {
+      return [opp.volunteer_role || 'Volunteer Shift', opp.department || 'Other', opp.event_type || ''].join('::');
+    }
+    function groupRoleOpps(items) {
+      return Object.values(groupBy(items, roleGroupKey))
+        .map(rows => sortTimelineItems(rows))
+        .sort((a,b) =>
+          (a[0].department || '').localeCompare(b[0].department || '') ||
+          (a[0].volunteer_role || '').localeCompare(b[0].volunteer_role || '')
+        );
+    }
+    function jsArg(value) { return encodeURIComponent(value || ''); }
+    function openRoleDates(items) {
+      return sortTimelineItems(items).filter(opp => spotsLeft(opp) > 0);
+    }
+    function spotsSummaryHtml(items) {
+      const openDates = openRoleDates(items);
+      const totalLeft = openDates.reduce((sum, opp) => sum + spotsLeft(opp), 0);
+      if (!totalLeft) return '<span class="vp-spots full">Full</span>';
+      if (openDates.length > 1) return `<span class="vp-spots">${openDates.length} open dates</span>`;
+      if (totalLeft === 1) return '<span class="vp-spots last">1 spot left</span>';
+      if (totalLeft <= 3) return `<span class="vp-spots low">${totalLeft} spots left</span>`;
+      return `<span class="vp-spots">${totalLeft} spots left</span>`;
     }
     function departmentTile(dept) {
       return DEPARTMENT_TILES[dept] || {
@@ -1405,6 +1460,40 @@
         <button class="vp-lead-action ${isAdded ? 'added' : ''}" type="button" onclick="toggleSchedule('${esc(opp.id)}')">${isAdded ? 'Added' : `Add to My Schedule ${ICONS.plus}`}</button>
       </article>`;
     }
+    function renderRoleCard(items) {
+      const openDates = openRoleDates(items);
+      const opp = openDates[0] || items[0];
+      const roleName = opp.volunteer_role || 'Volunteer Shift';
+      const color = iconColor(opp), isGold = color === '#efab45';
+      const groupId = roleGroupKey(opp);
+      const isOpen = openCards.has(groupId);
+      const isSingle = openDates.length === 1;
+      const single = openDates[0];
+      const isAdded = isSingle && schedule.some(s => s.id === single.id);
+      const isFull = !openDates.length;
+      const datesText = openDates.length
+        ? openDates.every(o => !o.shift_date)
+          ? 'Flexible - no fixed date'
+          : `${openDates.length} open date${openDates.length === 1 ? '' : 's'}`
+        : 'No open dates';
+      const locations = [...new Set(openDates.map(o => eventMap[o.event_id]?.venue).filter(Boolean))];
+      return `<article class="vp-card ${isOpen ? 'open' : ''} ${isFull ? 'is-full' : ''}">
+        <div class="vp-role-icon" style="background:${color};color:${isGold ? '#1a1008' : '#fff'};">${roleIcon(roleName, opp.department)}</div>
+        <div class="vp-card-main">
+          <div class="vp-card-title-row"><h3 class="vp-card-title">${esc(roleName)}</h3>${spotsSummaryHtml(items)}</div>
+          <div class="vp-card-facts">
+            <span class="vp-fact">${ICONS.calendar}${esc(datesText)}</span>
+            ${locations.length === 1 ? `<span class="vp-fact">${ICONS.pin}${esc(locations[0])}</span>` : ''}
+            ${opp.department ? `<span class="vp-fact">${ICONS.users}${esc(departmentTile(opp.department).name || opp.department)}</span>` : ''}
+          </div>
+        </div>
+        <div class="vp-card-actions">
+          <button class="vp-details-btn" type="button" onclick="toggleDetails(decodeURIComponent('${jsArg(groupId)}'))">${isOpen ? 'Hide Details' : 'View Details'} ${ICONS.chevron}</button>
+          <button class="vp-add-btn ${isAdded ? 'added' : ''}" type="button" ${isFull ? 'disabled' : isSingle ? `onclick="toggleSchedule('${esc(single.id)}')"` : `onclick="toggleDetails(decodeURIComponent('${jsArg(groupId)}'))"`}>${isFull ? 'Full' : isSingle ? (isAdded ? 'Added' : `Add to My Schedule ${ICONS.plus}`) : 'Choose Dates'}</button>
+        </div>
+        ${isOpen ? renderRoleDetails(items) : ''}
+      </article>`;
+    }
     function renderCard(opp) {
       const roleName = opp.volunteer_role || 'Volunteer Shift';
       const color = iconColor(opp), isGold = color === '#efab45';
@@ -1429,6 +1518,43 @@
         </div>
         ${isOpen ? renderDetails(opp, location) : ''}
       </article>`;
+    }
+    function renderRoleDetails(items) {
+      const openDates = openRoleDates(items);
+      const opp = items[0];
+      return `<div class="vp-card-details">
+        <div>
+          <div class="vp-detail-label">Role Description</div>
+          <div class="vp-detail-copy">${esc(opp.description || `Helps with ${String(opp.department || 'volunteer').toLowerCase()} tasks for this production.`)}</div>
+          <div class="vp-detail-list">
+            <span class="vp-detail-check">${ICONS.check} No experience needed</span>
+            <span class="vp-detail-check">${ICONS.check} Training provided</span>
+            <span class="vp-detail-check">${ICONS.check} Arrive ready to check in with the production team</span>
+          </div>
+        </div>
+        <div>
+          <div class="vp-detail-label">Open Dates</div>
+          <div class="vp-date-list">${openDates.length ? openDates.map(renderRoleDateRow).join('') : '<div class="vp-cart-empty">This role is currently full.</div>'}</div>
+        </div>
+      </div>`;
+    }
+    function renderRoleDateRow(opp) {
+      const isAdded = schedule.some(s => s.id === opp.id);
+      const isFull = spotsLeft(opp) === 0;
+      const location = eventMap[opp.event_id]?.venue || '';
+      const date = opp.shift_date ? fmtDate(opp.shift_date, { short:true }) : 'Flexible - no fixed date';
+      const time = fmtTimeRange(opp.shift_start_time, opp.shift_end_time) || 'Flexible';
+      return `<div class="vp-date-row">
+        <div class="vp-date-main">
+          <div class="vp-date-primary">${esc(date)}</div>
+          <div class="vp-date-secondary">
+            <span>${ICONS.clock}${esc(time)}</span>
+            ${location ? `<span>${ICONS.pin}${esc(location)}</span>` : ''}
+            <span>${spotsLeft(opp) === 1 ? '1 spot left' : `${spotsLeft(opp)} spots left`}</span>
+          </div>
+        </div>
+        <button class="vp-date-add ${isAdded ? 'added' : ''}" type="button" ${isFull ? 'disabled' : `onclick="toggleSchedule('${esc(opp.id)}')"`}>${isFull ? 'Full' : isAdded ? 'Added' : `Add ${ICONS.plus}`}</button>
+      </div>`;
     }
     function renderDetails(opp, location) {
       return `<div class="vp-card-details">
