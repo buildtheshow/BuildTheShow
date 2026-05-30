@@ -924,6 +924,88 @@
     .vp-status.approved { background: rgba(45,125,69,0.13); color: var(--green); }
     .vp-status.declined { background: rgba(184,68,50,0.12); color: var(--red); }
 
+    /* ── Portal Login ── */
+    .vp-portal-login {
+      min-height: 60vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem 1.25rem;
+    }
+    .vp-portal-login-card {
+      width: min(420px, 100%);
+      background: #fff;
+      border: 1px solid rgba(87,46,136,0.15);
+      border-radius: 14px;
+      padding: 2rem 1.75rem;
+      box-shadow: 0 18px 50px rgba(26,21,48,0.09);
+    }
+    .vp-portal-login-kicker {
+      font-size: 0.72rem;
+      font-weight: 900;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--purple);
+      margin-bottom: 0.55rem;
+    }
+    .vp-portal-login-title {
+      font-size: 1.55rem;
+      font-weight: 950;
+      line-height: 1.1;
+      margin-bottom: 0.4rem;
+    }
+    .vp-portal-login-sub {
+      color: var(--muted);
+      font-size: 0.88rem;
+      line-height: 1.45;
+      margin-bottom: 1.4rem;
+    }
+    .vp-portal-login-field { margin-bottom: 0.9rem; }
+    .vp-portal-login-label {
+      display: block;
+      font-size: 0.75rem;
+      font-weight: 950;
+      color: var(--ink);
+      margin-bottom: 0.3rem;
+    }
+    .vp-portal-login-input {
+      width: 100%;
+      border: 1.5px solid rgba(87,46,136,0.22);
+      border-radius: 8px;
+      padding: 0.72rem 0.85rem;
+      font-size: 0.95rem;
+      font-family: inherit;
+      color: var(--ink);
+      outline: 0;
+      background: #fff;
+    }
+    .vp-portal-login-input:focus { border-color: var(--purple); box-shadow: 0 0 0 3px rgba(87,46,136,0.1); }
+    .vp-portal-login-error {
+      display: none;
+      background: rgba(184,68,50,0.1);
+      color: #b84432;
+      border-radius: 7px;
+      padding: 0.6rem 0.8rem;
+      font-size: 0.82rem;
+      font-weight: 700;
+      margin-bottom: 0.9rem;
+    }
+    .vp-portal-login-error.visible { display: block; }
+    .vp-portal-login-btn {
+      width: 100%;
+      border: 0;
+      border-radius: 8px;
+      background: var(--purple);
+      color: #fff;
+      min-height: 48px;
+      font-size: 0.95rem;
+      font-weight: 950;
+      cursor: pointer;
+    }
+    .vp-portal-login-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+    .vp-portal-login-hint { margin-top: 0.75rem; font-size: 0.76rem; color: var(--muted); text-align: center; line-height: 1.45; }
+
     /* ── Portal Dashboard ── */
     .vpd-home {
       max-width: 680px;
@@ -1187,8 +1269,28 @@
       </div>
     </nav>
 
+    <!-- Portal login gate -->
+    <div id="vp-portal-login" class="vp-portal-login hidden">
+      <div class="vp-portal-login-card">
+        <div class="vp-portal-login-kicker">Volunteer Portal</div>
+        <h2 class="vp-portal-login-title">Welcome back.</h2>
+        <p class="vp-portal-login-sub">Enter the email you used to sign up and the 4-digit passcode from your confirmation email.</p>
+        <div class="vp-portal-login-field">
+          <label class="vp-portal-login-label" for="vp-portal-email">Email address</label>
+          <input class="vp-portal-login-input" id="vp-portal-email" type="email" placeholder="you@example.com" autocomplete="email" />
+        </div>
+        <div class="vp-portal-login-field">
+          <label class="vp-portal-login-label" for="vp-portal-code">4-digit passcode</label>
+          <input class="vp-portal-login-input" id="vp-portal-code" type="text" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" placeholder="e.g. 4829" autocomplete="one-time-code" />
+        </div>
+        <div class="vp-portal-login-error" id="vp-portal-error">That email and passcode combination was not found. Check your confirmation email and try again.</div>
+        <button class="vp-portal-login-btn" id="vp-portal-login-btn" type="button" onclick="portalLogin()">Access My Portal</button>
+        <p class="vp-portal-login-hint">No passcode? Check your volunteer confirmation email or <button style="background:none;border:none;color:var(--purple);font-weight:800;cursor:pointer;padding:0;font-family:inherit;font-size:inherit;" onclick="showShiftBrowser()">browse open shifts</button> to sign up.</p>
+      </div>
+    </div>
+
     <!-- Portal home dashboard -->
-    <div id="vp-portal-home" class="vpd-home">
+    <div id="vp-portal-home" class="vpd-home hidden">
       <div>
         <div class="vpd-greeting-name">Welcome back, Katherine.</div>
         <div class="vpd-greeting-sub">Thank you for helping make the magic happen.</div>
@@ -1637,17 +1739,91 @@
     function show(id) { document.getElementById(id)?.classList.remove('hidden'); }
     function hide(id) { document.getElementById(id)?.classList.add('hidden'); }
     function showOnly(id) { ['vp-loading','vp-notfound','vp-error','vp-page'].forEach(hide); show(id); }
-    function showPortalHome() {
-      document.getElementById('vp-portal-home').style.display = '';
+    // ── Portal passcode (deterministic hash of email + prodId) ──
+    function portalPasscode(email, productionId) {
+      const str = (email || '').toLowerCase().trim() + (productionId || '');
+      let h = 0;
+      for (let i = 0; i < str.length; i++) { h = Math.imul(31, h) + str.charCodeAt(i) | 0; }
+      return String(Math.abs(h) % 9000 + 1000);
+    }
+
+    function showPortalLogin() {
+      document.getElementById('vp-portal-login').classList.remove('hidden');
+      document.getElementById('vp-portal-home').classList.add('hidden');
+      document.getElementById('vp-main').style.display = 'none';
+    }
+    function showPortalHome(volunteerData) {
+      document.getElementById('vp-portal-login').classList.add('hidden');
+      document.getElementById('vp-portal-home').classList.remove('hidden');
       document.getElementById('vp-main').style.display = 'none';
       const homeBtn = document.getElementById('vpd-home-btn');
-      if (homeBtn) homeBtn.style.display = 'none';
+      if (homeBtn) homeBtn.style.display = '';
+      if (volunteerData) renderPortalDashboard(volunteerData);
     }
     function showShiftBrowser() {
-      document.getElementById('vp-portal-home').style.display = 'none';
+      document.getElementById('vp-portal-login').classList.add('hidden');
+      document.getElementById('vp-portal-home').classList.add('hidden');
       document.getElementById('vp-main').style.display = '';
       const homeBtn = document.getElementById('vpd-home-btn');
       if (homeBtn) homeBtn.style.display = '';
+    }
+
+    async function portalLogin() {
+      const email = (document.getElementById('vp-portal-email')?.value || '').trim().toLowerCase();
+      const code  = (document.getElementById('vp-portal-code')?.value  || '').trim();
+      const errEl = document.getElementById('vp-portal-error');
+      const btn   = document.getElementById('vp-portal-login-btn');
+      errEl.classList.remove('visible');
+      if (!email || !code) { errEl.textContent = 'Please enter your email and passcode.'; errEl.classList.add('visible'); return; }
+      btn.disabled = true; btn.textContent = 'Checking...';
+      try {
+        // Find any approved signups for this email in this production
+        const { data: signups } = await sb.from('volunteer_signups')
+          .select('*')
+          .eq('production_id', prod?.id || new URLSearchParams(location.search).get('id') || '')
+          .ilike('volunteer_email', email)
+          .neq('status', 'cancelled');
+        if (!signups || signups.length === 0) throw new Error('not_found');
+        // Verify passcode
+        const expectedCode = portalPasscode(email, prod?.id || '');
+        if (code !== expectedCode) throw new Error('wrong_code');
+        // Store session
+        sessionStorage.setItem('vp_portal_email', email);
+        sessionStorage.setItem('vp_portal_prod', prod?.id || '');
+        showPortalHome({ email, signups });
+      } catch (e) {
+        errEl.textContent = e.message === 'not_found'
+          ? 'No volunteer sign-ups found for that email on this production.'
+          : 'That email and passcode combination was not found. Check your confirmation email and try again.';
+        errEl.classList.add('visible');
+      } finally {
+        btn.disabled = false; btn.textContent = 'Access My Portal';
+      }
+    }
+
+    function renderPortalDashboard(volunteerData) {
+      const { email, signups } = volunteerData;
+      const firstName = signups[0]?.first_name || email.split('@')[0] || 'Volunteer';
+      const approved  = signups.filter(s => s.status === 'approved' || s.status === 'checked_in' || s.status === 'completed');
+      const pending   = signups.filter(s => s.status === 'pending');
+      const checkedIn = signups.filter(s => s.status === 'checked_in' || s.status === 'completed');
+
+      const totalHrsEl  = document.getElementById('vpd-total-hrs');
+      const greetingEl  = document.querySelector('.vpd-greeting-name');
+      const subEl       = document.querySelector('.vpd-greeting-sub');
+      if (greetingEl) greetingEl.textContent = `Welcome back, ${firstName}.`;
+      if (subEl) subEl.textContent = `You have ${approved.length} approved shift${approved.length === 1 ? '' : 's'} for this production.`;
+
+      // Build shift list for "Your Next Shift" card
+      const nextShift = approved.find(s => !['checked_in','completed'].includes(s.status)) || approved[0];
+      const nextTitleEl = document.querySelector('.vpd-next-title');
+      if (nextTitleEl && nextShift) {
+        nextTitleEl.textContent = nextShift.role_name || nextShift.volunteer_role || 'Volunteer Shift';
+      }
+
+      // Stats
+      const statNums = document.querySelectorAll('.vpd-stat-num');
+      if (statNums[0]) statNums[0].textContent = checkedIn.length + ' / ' + approved.length;
     }
     function fmtDate(val, opts = {}) {
       if (!val) return '';
@@ -1902,6 +2078,22 @@
 
         renderPage();
         showOnly('vp-page');
+        const viewParam = new URLSearchParams(window.location.search).get('view');
+        if (viewParam === 'portal') {
+          // Check for existing session
+          const savedEmail = sessionStorage.getItem('vp_portal_email');
+          const savedProd  = sessionStorage.getItem('vp_portal_prod');
+          if (savedEmail && savedProd === prod.id) {
+            const { data: signups } = await sb.from('volunteer_signups')
+              .select('*')
+              .eq('production_id', prod.id)
+              .ilike('volunteer_email', savedEmail)
+              .neq('status', 'cancelled');
+            showPortalHome({ email: savedEmail, signups: signups || [] });
+          } else {
+            showPortalLogin();
+          }
+        } else { showShiftBrowser(); }
         const tokenParam = new URLSearchParams(window.location.search).get('token');
         if (tokenParam) lookupByToken(tokenParam);
       } catch (err) {
@@ -1928,8 +2120,6 @@
       renderDateStrip();
       renderRows();
       renderCart();
-      const viewParam = new URLSearchParams(window.location.search).get('view');
-      if (viewParam === 'portal') { showPortalHome(); } else { showShiftBrowser(); }
     }
 
     function availableDates() {

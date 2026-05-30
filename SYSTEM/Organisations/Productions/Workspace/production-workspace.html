@@ -67422,6 +67422,13 @@ See you soon!
     </div>`;
   }
 
+  function volunteerPasscode(email, productionId) {
+    const str = (email || '').toLowerCase().trim() + (productionId || '');
+    let h = 0;
+    for (let i = 0; i < str.length; i++) { h = Math.imul(31, h) + str.charCodeAt(i) | 0; }
+    return String(Math.abs(h) % 9000 + 1000);
+  }
+
   async function volMarkCheckin(signupId, currentlyChecked) {
     const newStatus = currentlyChecked ? 'approved' : 'checked_in';
     const { error } = await sb.from('volunteer_signups').update({ status: newStatus }).eq('id', signupId);
@@ -67796,6 +67803,10 @@ See you soon!
           _volReqSelected = volunteerRequests[idx];
         }
       }
+      if (newStatus === 'approved' || newStatus === 'declined') {
+        const signup = volunteerRequests.find(r => r.id === id);
+        if (signup) await volSendStatusEmail(signup, newStatus);
+      }
     } catch (e) {
       console.warn('[BTS] volReqRespond:', e?.message);
     }
@@ -67809,8 +67820,48 @@ See you soon!
         const idx = volunteerRequests.findIndex(r => r.id === id);
         if (idx >= 0) volunteerRequests[idx] = { ...volunteerRequests[idx], status: newStatus };
       });
+      if (newStatus === 'approved' || newStatus === 'declined') {
+        const updated = ids.map(id => volunteerRequests.find(r => r.id === id)).filter(Boolean);
+        for (const signup of updated) { try { await volSendStatusEmail(signup, newStatus); } catch {} }
+      }
     } catch (e) { console.warn('[BTS] volReqRespondAll:', e?.message); }
     renderVolunteerRequests();
+  }
+
+  async function volSendStatusEmail(signup, status) {
+    const category = status === 'approved' ? 'volunteer_approved' : 'volunteer_declined';
+    const trigger  = status === 'approved' ? 'volunteer_approved' : 'volunteer_declined';
+    const toEmail  = signup.volunteer_email || signup.email || '';
+    if (!toEmail) return;
+    const template = (_etTemplates || []).find(t => t.category === category);
+    if (!template) return;
+    const opp = (opportunities || []).find(o => o.id === signup.opportunity_id) || {};
+    const passcode = volunteerPasscode(toEmail, prodId);
+    const firstName = signup.first_name || signup.volunteer_name?.split(' ')[0] || '';
+    const volUrl = window.location.origin + volunteerPublicPageUrl();
+    const portalUrl = volUrl + (volUrl.includes('?') ? '&' : '?') + 'view=portal';
+    const shiftDate = opp.shift_date ? new Date(opp.shift_date + 'T12:00').toLocaleDateString('en-CA', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }) : '';
+    const ctx = {
+      preferred_name:         firstName || toEmail,
+      contact_name:           [signup.first_name, signup.last_name].filter(Boolean).join(' ') || toEmail,
+      show_name:              prod?.title || prod?.name || '',
+      producer_name:          org?.contact_name || org?.name || '',
+      producer_role:          '',
+      producer_email:         org?.contact_email || '',
+      volunteer_email:        toEmail,
+      volunteer_passcode:     passcode,
+      volunteer_role:         opp.production_title || opp.volunteer_role || signup.role_name || '',
+      volunteer_shift_dates:  shiftDate,
+      volunteer_portal_url:   portalUrl,
+      volunteer_portal_button: `<a href="${portalUrl}" style="display:inline-block;background:#572e88;color:#fff;font-weight:900;font-size:15px;padding:13px 26px;border-radius:8px;text-decoration:none;">View My Volunteer Portal</a>`,
+      volunteer_link:         volUrl,
+      volunteer_button:       `<a href="${volUrl}" style="display:inline-block;background:#572e88;color:#fff;font-weight:900;font-size:15px;padding:13px 26px;border-radius:8px;text-decoration:none;">View Volunteer Opportunities</a>`,
+    };
+    try {
+      await sb.functions.invoke('send-email', {
+        body: { production_id: prodId, category, trigger, email: toEmail, name: ctx.contact_name, ...ctx, context: ctx },
+      });
+    } catch (e) { console.warn('[BTS] volSendStatusEmail:', e?.message); }
   }
 
 
