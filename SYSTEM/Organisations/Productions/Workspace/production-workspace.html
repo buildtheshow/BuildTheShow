@@ -8749,8 +8749,8 @@
 	      cursor: pointer;
 	      user-select: none;
 	    }
-	    .vol-type-row:has(.vol-scope-row) .vol-schedule-check,
-	    .vol-type-row:has(.vol-event-dates) .vol-schedule-check {
+	    .vol-type-row:has(.vol-scope-row:not([style*="display:none"])) .vol-schedule-check,
+	    .vol-type-row:has(.vol-event-dates:not([style*="display:none"])) .vol-schedule-check {
 	      border-bottom-left-radius: 0;
 	      border-bottom-right-radius: 0;
 	    }
@@ -67869,7 +67869,7 @@ See you soon!
 	        const canPick = DATE_PICKABLE.has(value);
 	        const matchEvs = canPick ? volunteerPlanEvents.filter(e => e.event_type === value).sort((a,b) => (a.start_time||'').localeCompare(b.start_time||'')) : [];
 	        const scopeData = savedEventScope[value] || { mode: 'all' };
-	        const scopeMode = isChecked ? (scopeData.mode || 'all') : 'all';
+	        const scopeMode = scopeData.mode || 'all';
 	        const selIds = (scopeMode === 'specific' && Array.isArray(scopeData.ids)) ? scopeData.ids : [];
 	        const dateItems = matchEvs.map(ev => {
 	          const ds = ev.start_time ? ev.start_time.split('T')[0] : '';
@@ -67879,11 +67879,11 @@ See you soon!
 	          return `<label class="vol-event-date-item"><input type="checkbox" name="vsq-ev-${value}-${key}" value="${esc(ev.id)}" ${evChk?'checked':''} onclick="event.stopPropagation()" /><span>${esc(lbl)}</span></label>`;
 	        }).join('');
 	        let scopeWidget = '';
-	        if (canPick && isChecked) {
+	        if (canPick) {
 	          if (matchEvs.length) {
-	            scopeWidget = `<div class="vol-scope-row" id="vsq-scope-${value}-${key}" data-mode="${scopeMode}"><button type="button" class="vol-scope-btn ${scopeMode==='all'?'is-active':''}" data-mode="all" onclick="volScopeMode('${key}','${value}','all')">All dates</button><button type="button" class="vol-scope-btn ${scopeMode==='specific'?'is-active':''}" data-mode="specific" onclick="volScopeMode('${key}','${value}','specific')">Pick dates</button></div><div class="vol-event-dates" id="vsq-datelist-${value}-${key}" style="display:${scopeMode==='specific'?'':'none'}">${dateItems}</div>`;
+	            scopeWidget = `<div class="vol-scope-row" id="vsq-scope-${value}-${key}" data-mode="${scopeMode}" style="display:${isChecked?'':'none'}"><button type="button" class="vol-scope-btn ${scopeMode==='all'?'is-active':''}" data-mode="all" onclick="volScopeMode('${key}','${value}','all')">All dates</button><button type="button" class="vol-scope-btn ${scopeMode==='specific'?'is-active':''}" data-mode="specific" onclick="volScopeMode('${key}','${value}','specific')">Pick dates</button></div><div class="vol-event-dates" id="vsq-datelist-${value}-${key}" style="display:${isChecked && scopeMode==='specific'?'':'none'}">${dateItems}</div>`;
 	          } else {
-	            scopeWidget = `<div class="vol-scope-row" id="vsq-scope-${value}-${key}" data-mode="all"><span class="vol-scope-note">Add calendar events to pick specific dates.</span></div>`;
+	            scopeWidget = `<div class="vol-scope-row" id="vsq-scope-${value}-${key}" data-mode="all" style="display:${isChecked?'':'none'}"><span class="vol-scope-note">Add calendar events to pick specific dates.</span></div>`;
 	          }
 	        }
 	        return `<div class="vol-type-row"><label class="vol-schedule-check"><input type="checkbox" name="vsq-applies-${key}" value="${esc(value)}" ${isChecked?'checked':''} onchange="volCoverageTypeToggle('${key}','${value}',this.checked)" /><span>${esc(volEventTypeLabel(value))}</span></label>${scopeWidget}</div>`;
@@ -68006,7 +68006,10 @@ See you soon!
 	    const scopeRow = document.getElementById(`vsq-scope-${type}-${key}`);
 	    const dateList = document.getElementById(`vsq-datelist-${type}-${key}`);
 	    if (scopeRow) scopeRow.style.display = checked ? '' : 'none';
-	    if (!checked && dateList) dateList.style.display = 'none';
+	    if (dateList) {
+	      dateList.style.display = checked && scopeRow?.dataset.mode === 'specific' ? '' : 'none';
+	      if (checked && scopeRow?.dataset.mode === 'all') dateList.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = true);
+	    }
 	  }
 
 	  function volScopeMode(key, type, mode) {
