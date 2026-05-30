@@ -66535,9 +66535,20 @@ See you soon!
 	    try { return fmtDate(String(raw).slice(0, 10)); } catch { return String(raw).slice(0, 10); }
 	  }
 
+	  function volCalendarEventType(event = {}) {
+	    const rawType = event.event_type || 'event';
+	    const title = String(event.title || '').trim();
+	    if (/cast\s*party/i.test(title)) return 'cast_party';
+	    return rawType;
+	  }
+
+	  function volCalendarEventMatches(event, type) {
+	    return volCalendarEventType(event) === type;
+	  }
+
 	  function volunteerEventCounts() {
 	    return volunteerPlanEvents.reduce((counts, event) => {
-	      const key = event.event_type || 'event';
+	      const key = volCalendarEventType(event);
 	      counts[key] = (counts[key] || 0) + 1;
 	      return counts;
 	    }, {});
@@ -66827,7 +66838,7 @@ See you soon!
 	    };
 
 	    const eventCounts = volunteerPlanEvents.reduce((acc, ev) => {
-	      const k = ev.event_type || 'event';
+	      const k = volCalendarEventType(ev);
 	      acc[k] = (acc[k] || 0) + 1;
 	      return acc;
 	    }, {});
@@ -67780,8 +67791,9 @@ See you soon!
 	    }
 	    const prepHours = parseFloat(val.prepHours ?? val.prep_hours) || 0;
 	    if (prepHours > 0) {
-	      shortParts.push(`+ ${fmtHours(prepHours)} prep`);
-	      longParts.push(`Adds ${fmtHours(prepHours)} prep credit`);
+	      const noCount = val.prepNoCount;
+	      shortParts.push(`+ ${fmtHours(prepHours)} prep${noCount ? ' (tracked)' : ''}`);
+	      longParts.push(noCount ? `${fmtHours(prepHours)} prep hrs tracked (not counted)` : `Adds ${fmtHours(prepHours)} prep credit`);
 	    }
 	    return { shortText: shortParts.join(' · '), longText: longParts.join(' · ') };
 	  }
@@ -67977,7 +67989,7 @@ See you soon!
 	      const chips = group.types.map(value => {
 	        const isChecked = appliesTo.includes(value);
 	        const canPick = DATE_PICKABLE.has(value);
-	        const matchEvs = canPick ? volunteerPlanEvents.filter(e => e.event_type === value).sort((a,b) => (a.start_time||'').localeCompare(b.start_time||'')) : [];
+	        const matchEvs = canPick ? volunteerPlanEvents.filter(e => volCalendarEventMatches(e, value)).sort((a,b) => (a.start_time||'').localeCompare(b.start_time||'')) : [];
 	        const scopeData = savedEventScope[value] || { mode: 'all' };
 	        const scopeMode = scopeData.mode || 'all';
 	        const selIds = (scopeMode === 'specific' && Array.isArray(scopeData.ids)) ? scopeData.ids : [];
@@ -68101,6 +68113,10 @@ See you soon!
 	                  <input type="number" min="0" max="24" step="0.25" id="vsq-sched-prep-${key}" value="${saved.prepHours ?? saved.prep_hours ?? ''}" placeholder="0" aria-label="Prep hours" />
 	                  <span style="font-size:0.72rem;color:#572e88;font-weight:800;">prep hrs</span>
 	                </div>
+	                <label style="display:flex;align-items:center;gap:0.45rem;margin-top:0.35rem;cursor:pointer;">
+	                  <input type="checkbox" id="vsq-sched-prep-nocount-${key}" ${saved.prepNoCount ? 'checked' : ''} style="accent-color:#572e88;width:14px;height:14px;" />
+	                  <span style="font-size:0.72rem;color:#554a68;font-weight:700;">Track only — don't count toward hours</span>
+	                </label>
 	                <div class="vol-schedule-note">Adds extra credit for prep work outside the scheduled shift.</div>
 	              </div>
 	            </div>
@@ -68154,6 +68170,7 @@ See you soon!
 	    const hoursMode = document.querySelector(`input[name="vsq-hours-mode-${key}"]:checked`)?.value || 'auto';
 	    const countsFor = hoursMode === 'fixed' ? (parseFloat(document.getElementById(`vsq-sched-counts-${key}`)?.value) || 0) : 0;
 	    const prepHours = parseFloat(document.getElementById(`vsq-sched-prep-${key}`)?.value) || 0;
+	    const prepNoCount = document.getElementById(`vsq-sched-prep-nocount-${key}`)?.checked || false;
 	    const roleName = document.getElementById(`vsq-role-name-${key}`)?.value?.trim() || _volStaffingRoleMeta[key]?.roleName || 'Volunteer Role';
 	    const department = document.getElementById(`vsq-dept-${key}`)?.value || _volStaffingRoleMeta[key]?.department || 'Other';
 	    const description = document.getElementById(`vsq-desc-${key}`)?.value?.trim() || volDefaultRoleDescription(department, roleName);
@@ -68172,7 +68189,7 @@ See you soon!
 	      }
 	    });
 	    if (!_staffingPlan[key]) _staffingPlan[key] = {};
-	    Object.assign(_staffingPlan[key], { roleName, department, description, timingGroup, appliesTo: coveredTypes, eventScope, shiftStartMins, shiftStartAnchor, shiftEndMins, shiftEndAnchor, hoursMode, countsFor, prepHours });
+	    Object.assign(_staffingPlan[key], { roleName, department, description, timingGroup, appliesTo: coveredTypes, eventScope, shiftStartMins, shiftStartAnchor, shiftEndMins, shiftEndAnchor, hoursMode, countsFor, prepHours, prepNoCount });
 	    _volStaffingRoleMeta[key] = { ...(_volStaffingRoleMeta[key] || {}), roleName, department, description };
 	    const indicator = document.getElementById(`vsq-time-${key}`);
 	    if (indicator) {
@@ -68502,7 +68519,7 @@ See you soon!
 	      .map(([k, v]) => ({ name: v.roleName, dept: v.department || 'Other', qty: v.count, description: v.description || volDefaultRoleDescription(v.department || 'Other', v.roleName) }));
 	    const allRolesToCreate = [...fixedRoles, ...customRoles].filter(r => r.qty > 0);
 	    const matchingEvents = isPerEvent
-	      ? volunteerPlanEvents.filter(e => e.event_type === eventType)
+	      ? volunteerPlanEvents.filter(e => volCalendarEventMatches(e, eventType))
 	      : [];
 	    const inserts = [];
 	    allRolesToCreate.forEach(role => {
@@ -68693,7 +68710,7 @@ See you soon!
 	    let totalNeeded=0, totalFilled=0, partialCount=0, emptyCount=0;
 	    const gapsByRole = {};
 	    thisWeekEvents.forEach(ev => {
-	      const planRoles = plannedRolesForType(ev.event_type);
+	      const planRoles = plannedRolesForType(volCalendarEventType(ev));
 	      planRoles.forEach(pr => {
 	        // Check if there's a matching opportunity with signups
 	        const linkedOpp = (oppsByEvent[ev.id] || []).find(o => (o.production_title||'').toLowerCase() === pr.name.toLowerCase());
@@ -68712,7 +68729,7 @@ See you soon!
 	    const topGaps = Object.entries(gapsByRole).sort((a,b)=>b[1]-a[1]).slice(0,3);
 
 	    // ── Event type colour map ───────────────────────────────
-	    const EVENT_COLORS = { performance:'#572e88', rehearsal:'#78bbd4', tech:'#476aaa', dress:'#769e7b', music_rehearsal:'#ca7ea7', choreography:'#ca7ea7', strike:'#dd8233', costume_moveout:'#d1523d', other:'#efab45' };
+	    const EVENT_COLORS = { performance:'#572e88', rehearsal:'#78bbd4', tech:'#476aaa', dress:'#769e7b', music_rehearsal:'#ca7ea7', choreography:'#ca7ea7', strike:'#dd8233', costume_moveout:'#d1523d', cast_party:'#aa2943', other:'#efab45' };
 	    const eventColor = type => EVENT_COLORS[type] || '#572e88';
 
 	    // ── Render event card ───────────────────────────────────
@@ -68720,9 +68737,10 @@ See you soon!
 	      const start = fmtTime(ev.start_time);
 	      const end = fmtTime(ev.end_time);
 	      const timeStr = [start, end].filter(Boolean).join(' – ');
-	      const color = eventColor(ev.event_type);
-	      const label = ev.title || (ev.event_type || 'Event').replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase());
-	      const planRoles = plannedRolesForType(ev.event_type);
+	      const normalizedType = volCalendarEventType(ev);
+	      const color = eventColor(normalizedType);
+	      const label = ev.title || (normalizedType || 'Event').replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase());
+	      const planRoles = plannedRolesForType(normalizedType);
 
 	      const rolesHtml = planRoles.map(pr => {
 	        const linkedOpp = (oppsByEvent[ev.id] || []).find(o => (o.production_title||'').toLowerCase() === pr.name.toLowerCase());
@@ -68782,8 +68800,9 @@ See you soon!
 	        const isToday = ds === toDateStr(today);
 	        const evs = (eventsByDate[ds] || []).sort((a,b) => (a.start_time||'').localeCompare(b.start_time||''));
 	        const evDots = evs.map(ev => {
-	          const color = eventColor(ev.event_type);
-	          const planRoles = plannedRolesForType(ev.event_type);
+	          const normalizedType = volCalendarEventType(ev);
+	          const color = eventColor(normalizedType);
+	          const planRoles = plannedRolesForType(normalizedType);
 	          const { filled: evFilled, needed: evNeeded } = planRoles.reduce((acc, pr) => {
 	            const linkedOpp = (oppsByEvent[ev.id]||[]).find(o=>(o.production_title||'').toLowerCase()===pr.name.toLowerCase());
 	            acc.filled += linkedOpp ? (signupsByOpp[linkedOpp.id]||0) : 0;
@@ -68791,7 +68810,7 @@ See you soon!
 	            return acc;
 	          }, { filled:0, needed:0 });
 	          const dot = evNeeded === 0 ? '#d1d5db' : evFilled >= evNeeded ? '#22c55e' : evFilled > 0 ? '#f59e0b' : '#ef4444';
-	          const label = (ev.title || (ev.event_type||'Event').replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase())).slice(0,18);
+	          const label = (ev.title || (normalizedType||'Event').replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase())).slice(0,18);
 	          return `<div class="vd-month-ev" style="border-left:2.5px solid ${color};"><span class="vd-month-ev-dot" style="background:${dot};"></span><span class="vd-month-ev-name">${esc(label)}</span></div>`;
 	        }).join('');
 	        cells.push(`<div class="vd-month-day-cell${inMonth?'':' vd-month-outside'}${isToday?' vd-month-today':''}">
