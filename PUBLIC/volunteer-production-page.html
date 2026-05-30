@@ -787,6 +787,7 @@
       'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRrbWFpa3R4cHdxZmJnZW9qYm5mIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM3MzE4MTcsImV4cCI6MjA4OTMwNzgxN30.TkTZBNWUatk3Y6Vmfv1hIRR3DfVjgwauwa76Pf00J_8'
     );
 
+    const DEPT_LEADS_DATE_KEY = '__department_leads__';
     let prod = null, org = null, opps = [], eventMap = {}, signupCounts = {};
     let activeView = 'day', activeFilter = 'all', selectedDate = null, dateOffset = 0, selectedDepartment = null;
     let schedule = [], openCards = new Set(), discountTracking = false, paymentSettings = {};
@@ -1129,8 +1130,7 @@
       document.getElementById('icon-list').innerHTML = ICONS.list;
       document.getElementById('icon-star-large').innerHTML = ICONS.star;
 
-      const dates = availableDates();
-      selectedDate = dates[0] || null;
+      selectedDate = openDepartmentLeads().length ? DEPT_LEADS_DATE_KEY : (availableDates()[0] || null);
       if (hasDiscountEnabled()) {
         const amount = paymentSettings.volunteer_discount ? ` for ${paymentSettings.volunteer_discount} off` : '';
         document.getElementById('vp-discount-copy').textContent = `Complete ${discountRequiredHours()} volunteer hours${amount}. You can track your selected hours while building your schedule.`;
@@ -1144,12 +1144,19 @@
     function availableDates() {
       return [...new Set(opps.map(o => o.shift_date).filter(Boolean))].sort();
     }
+    function dayStripItems() {
+      const dates = availableDates().filter(d => filteredOpps().some(o => o.shift_date === d));
+      return openDepartmentLeads().length ? [DEPT_LEADS_DATE_KEY, ...dates] : dates;
+    }
     function filteredOpps() {
       return activeFilter === 'all' ? opps : opps.filter(o => deriveCategory(o) === activeFilter);
     }
     function visibleOpps() {
       const base = filteredOpps();
-      if (activeView === 'day') return selectedDate ? base.filter(o => o.shift_date === selectedDate) : base.filter(o => !o.shift_date);
+      if (activeView === 'day') {
+        if (selectedDate === DEPT_LEADS_DATE_KEY) return openDepartmentLeads();
+        return selectedDate ? base.filter(o => o.shift_date === selectedDate) : base.filter(o => !o.shift_date);
+      }
       if (activeView === 'department' && selectedDepartment) return base.filter(o => (o.department || 'Other') === selectedDepartment);
       return [...base].sort((a,b) => (a.shift_date || 'z').localeCompare(b.shift_date || 'z') || (a.volunteer_role || '').localeCompare(b.volunteer_role || ''));
     }
@@ -1180,7 +1187,7 @@
     function setFilter(value) {
       activeFilter = value;
       if (activeView === 'day') {
-        const dates = availableDates().filter(d => filteredOpps().some(o => o.shift_date === d));
+        const dates = dayStripItems();
         if (dates.length && !dates.includes(selectedDate)) selectedDate = dates[0];
         dateOffset = 0;
         renderDateStrip();
@@ -1189,20 +1196,24 @@
     }
     function renderDateStrip() {
       const strip = document.getElementById('vp-date-strip');
-      const dates = availableDates().filter(d => filteredOpps().some(o => o.shift_date === d));
+      const dates = dayStripItems();
       if (!dates.length) { strip.innerHTML = ''; return; }
       if (!selectedDate || !dates.includes(selectedDate)) selectedDate = dates[0];
       const slice = dates.slice(dateOffset, dateOffset + 6);
       strip.innerHTML = `
         <button class="vp-date-nav" type="button" onclick="shiftDates(-1)" aria-label="Previous dates">&lt;</button>
-        ${slice.map(d => {
-          const parts = fmtDate(d, { short:true }).split(', ');
-          return `<button class="vp-date-btn ${d === selectedDate ? 'active' : ''}" type="button" onclick="selectDate('${esc(d)}')"><span>${esc(parts[0] || '')}</span><span>${esc(parts[1] || parts[0] || d)}</span></button>`;
-        }).join('')}
+        ${slice.map(renderDateStripButton).join('')}
         <button class="vp-date-nav" type="button" onclick="shiftDates(1)" aria-label="Next dates">&gt;</button>`;
     }
+    function renderDateStripButton(value) {
+      if (value === DEPT_LEADS_DATE_KEY) {
+        return `<button class="vp-date-btn ${value === selectedDate ? 'active' : ''}" type="button" onclick="selectDate('${DEPT_LEADS_DATE_KEY}')"><span>Start Here</span><span>Dept. Leads</span></button>`;
+      }
+      const parts = fmtDate(value, { short:true }).split(', ');
+      return `<button class="vp-date-btn ${value === selectedDate ? 'active' : ''}" type="button" onclick="selectDate('${esc(value)}')"><span>${esc(parts[0] || '')}</span><span>${esc(parts[1] || parts[0] || value)}</span></button>`;
+    }
     function shiftDates(dir) {
-      const dates = availableDates().filter(d => filteredOpps().some(o => o.shift_date === d));
+      const dates = dayStripItems();
       dateOffset = Math.max(0, Math.min(Math.max(0, dates.length - 6), dateOffset + dir));
       renderDateStrip();
     }
@@ -1216,7 +1227,7 @@
       const items = visibleOpps();
       const departmentGroups = groupBy(filteredOpps(), o => o.department || 'Other');
       if (activeView === 'day') {
-        title.textContent = selectedDate ? fmtDate(selectedDate) : 'No Fixed Date';
+        title.textContent = selectedDate === DEPT_LEADS_DATE_KEY ? 'Department Leads' : (selectedDate ? fmtDate(selectedDate) : 'No Fixed Date');
         icon.innerHTML = ICONS.calendar;
         meta.textContent = '';
       } else if (activeView === 'department') {
@@ -1229,11 +1240,13 @@
         meta.textContent = '';
       }
       if (activeView === 'day') {
-        const leads = openDepartmentLeads();
+        if (selectedDate === DEPT_LEADS_DATE_KEY) {
+          meta.textContent = `${items.length} lead role${items.length === 1 ? '' : 's'}`;
+          list.innerHTML = items.length ? renderLeadTiles(items) : '<div class="vp-empty">All department lead roles are filled.</div>';
+          return;
+        }
         meta.textContent = `${items.length} shift${items.length === 1 ? '' : 's'}`;
-        const leadHtml = leads.length ? renderLeadTiles(leads) : '';
-        const dayHtml = items.length ? items.map(renderCard).join('') : '<div class="vp-empty">No dated shifts match this view yet. Try another date or filter.</div>';
-        list.innerHTML = leadHtml + dayHtml;
+        list.innerHTML = items.length ? items.map(renderCard).join('') : '<div class="vp-empty">No dated shifts match this view yet. Try another date or filter.</div>';
         return;
       }
       if (!items.length) {
