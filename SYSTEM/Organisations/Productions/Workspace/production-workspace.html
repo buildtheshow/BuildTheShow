@@ -31935,7 +31935,7 @@
       note: 'Sent automatically when a volunteer submits their schedule. Let them know their request was received and what happens next.'
     },
     volunteer_approved: {
-      required: ['{{preferred_name}}', '{{show_name}}', '{{volunteer_role}}'],
+      required: ['{{preferred_name}}', '{{organisation_name}}', '{{volunteer_role}}'],
       recommended: ['{{volunteer_shift_dates}}', '{{volunteer_portal_url}}', '{{volunteer_passcode}}'],
       note: 'Sent when a volunteer shift is approved. Include the shift details so they can add it to their calendar.'
     },
@@ -33272,24 +33272,26 @@ Your submission link is unique to you. Please do not share it with another perfo
       body: `<div style="font-family:Arial,sans-serif;color:#1a1530;font-size:17px;line-height:1.62;">
   <div style="margin:0 0 22px;">
     <div style="display:inline-block;background:#eaf4ec;color:#3f7a51;font-size:12px;font-weight:900;letter-spacing:0.12em;text-transform:uppercase;border-radius:999px;padding:7px 11px;margin-bottom:14px;">Volunteer Confirmed</div>
-    <h1 style="font-size:28px;line-height:1.12;margin:0 0 10px;font-weight:900;color:#1a1530;">You are confirmed, {{preferred_name}}.</h1>
-    <p style="margin:0;font-size:18px;color:#3f3654;">Your volunteer request for <strong>{{show_name}}</strong> has been approved. We are so glad to have you on the team.</p>
+    <h1 style="font-size:28px;line-height:1.12;margin:0 0 10px;font-weight:900;color:#1a1530;">Hi {{preferred_name}},</h1>
+    <p style="margin:0;font-size:18px;color:#3f3654;">Your volunteer request has been approved, and we're excited to have you join the team at <strong>{{organisation_name}}</strong>.</p>
   </div>
+  <p style="margin:0 0 16px;color:#3f3654;">Community theatre runs on volunteers. Every person who gives their time helps create opportunities for performers, supports families, welcomes audiences, and helps bring a production to life. We are incredibly grateful that you've chosen to be part of it.</p>
   <div style="background:#eaf4ec;border:1.5px solid #c7dfcc;border-radius:14px;padding:20px 22px;margin:22px 0;">
-    <h2 style="font-size:20px;line-height:1.15;margin:0 0 8px;font-weight:900;color:#3f6f47;">Your shift</h2>
+    <h2 style="font-size:20px;line-height:1.15;margin:0 0 8px;font-weight:900;color:#3f6f47;">Your Shift</h2>
     <p style="margin:0 0 8px;color:#4a3d6b;"><strong>Role:</strong> {{volunteer_role}}</p>
     <p style="margin:0;color:#4a3d6b;"><strong>Dates:</strong> {{volunteer_shift_dates}}</p>
   </div>
   <div style="background:#f7f4fb;border:1.5px solid #ded6ea;border-radius:14px;padding:20px 22px;margin:22px 0;">
-    <h2 style="font-size:20px;line-height:1.15;margin:0 0 8px;font-weight:900;color:#572e88;">Your volunteer portal</h2>
-    <p style="margin:0 0 14px;color:#4a3d6b;">Use your portal to view your schedule, track your hours, and see any updates from the production team.</p>
-    <p style="margin:0 0 6px;color:#4a3d6b;"><strong>Login email:</strong> {{volunteer_email}}</p>
+    <h2 style="font-size:20px;line-height:1.15;margin:0 0 8px;font-weight:900;color:#572e88;">Your Volunteer Portal</h2>
+    <p style="margin:0 0 14px;color:#4a3d6b;">You can use your volunteer portal to view your schedule, track your volunteer hours, and stay up to date with any information from the production team.</p>
+    <p style="margin:0 0 6px;color:#4a3d6b;"><strong>Login Email:</strong> {{volunteer_email}}</p>
     <p style="margin:0 0 16px;color:#4a3d6b;"><strong>Passcode:</strong> <span style="font-size:22px;font-weight:900;letter-spacing:0.2em;color:#572e88;">{{volunteer_passcode}}</span></p>
     <p style="margin:0 0 10px;">{{volunteer_portal_button}}</p>
-    <p style="margin:0;font-size:13px;color:#6f6288;">Portal link: <a href="{{volunteer_portal_url}}" style="color:#572e88;font-weight:800;">{{volunteer_portal_url}}</a></p>
+    <p style="margin:0;font-size:13px;color:#6f6288;">Portal Link: <a href="{{volunteer_portal_url}}" style="color:#572e88;font-weight:800;">{{volunteer_portal_url}}</a></p>
   </div>
-  <p style="margin:0 0 16px;color:#3f3654;">If anything changes or you have questions before your shift, please get in touch.</p>
-  <p style="margin:24px 0 0;">Looking forward to having you there,<br><strong>{{producer_name}}</strong><br>{{producer_role}}<br><a href="mailto:{{producer_email}}" style="color:#572e88;font-weight:800;">{{producer_email}}</a></p>
+  <p style="margin:0 0 16px;color:#3f3654;">Thank you for being part of the team. We truly couldn't do this without volunteers like you.</p>
+  <p style="margin:0 0 16px;color:#3f3654;">If anything changes or you have any questions, please reach out.</p>
+  <p style="margin:24px 0 0;">Thank you,<br><strong>{{organisation_name}}</strong></p>
 </div>`,
     },
     {
@@ -33932,6 +33934,20 @@ See you soon!
     await sb.from('email_templates').update({ subject: starter.subject, body: starter.body }).eq('id', t.id);
   }
 
+  async function etEnsureVolunteerApprovedTemplateBody() {
+    const t = (_etTemplates || []).find(t => t.category === 'volunteer_approved');
+    if (!t) return;
+    const starter = ET_STARTER_TEMPLATES.find(t => t.category === 'volunteer_approved');
+    if (!starter) return;
+    const body = String(t.body || '');
+    const isOldDefault = body.includes('You are confirmed, {{preferred_name}}.')
+      || body.includes('Your volunteer request for <strong>{{show_name}}</strong> has been approved.')
+      || body.includes('Use your portal to view your schedule, track your hours, and see any updates from the production team.');
+    if (!isOldDefault) return;
+    _etTemplates = (_etTemplates || []).map(x => x.id === t.id ? { ...x, subject: starter.subject, body: starter.body } : x);
+    await sb.from('email_templates').update({ subject: starter.subject, body: starter.body }).eq('id', t.id);
+  }
+
   async function etEnsureAuditionReminderTemplateNames() {
     const desiredNames = {
       audition_reminder: 'Audition Reminder - In Person',
@@ -34007,6 +34023,7 @@ See you soon!
     await etEnsureCastAcceptedTemplateBody();
     await etEnsureRegistrationCompletedTemplateBody();
     await etEnsureVolunteerRequestTemplateBody();
+    await etEnsureVolunteerApprovedTemplateBody();
     await etEnsureAuditionReminderTemplateNames();
     renderEmailTemplates();
     openPendingEmailTemplateCategory();
