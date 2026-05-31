@@ -54,6 +54,9 @@ const CATEGORY_SUBJECTS: Record<string, string> = {
   cast_accepted:       'Yay! You accepted your role',
   not_cast:            'Regarding your audition',
   cast_response_notification: 'Role offer response received',
+  volunteer_submitted: 'We received your volunteer request',
+  volunteer_approved: 'Volunteer shift confirmed',
+  volunteer_declined: 'Volunteer request update',
   general:             'A message from the production team',
 };
 
@@ -72,6 +75,9 @@ const CATEGORY_TO_TRIGGER: Record<string, string> = {
   not_cast:             'not_cast_set',
   rehearsal:            'manual',
   team_invite:          'team_invite',
+  volunteer_submitted:  'volunteer_submitted',
+  volunteer_approved:   'volunteer_approved',
+  volunteer_declined:   'volunteer_declined',
   general:              'manual',
 };
 

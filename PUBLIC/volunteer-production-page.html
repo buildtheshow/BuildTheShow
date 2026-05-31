@@ -1837,6 +1837,48 @@
       return `${h%12||12}:${String(m).padStart(2,'0')} ${h<12?'AM':'PM'}`;
     }
     function fmtTimeRange(s,e) { const a=fmtTime(s), b=fmtTime(e); return a && b ? `${a} - ${b}` : a || b || ''; }
+    function volunteerPasscode(email, productionId) {
+      const str = (email || '').toLowerCase().trim() + (productionId || '');
+      let h = 0;
+      for (let i = 0; i < str.length; i++) { h = Math.imul(31, h) + str.charCodeAt(i) | 0; }
+      return String(Math.abs(h) % 9000 + 1000);
+    }
+    async function sendVolunteerRequestEmail({ name, email, portalToken, requestedShifts }) {
+      if (!email || !prod?.id) return;
+      const firstShift = requestedShifts[0] || {};
+      const volUrl = `${window.location.origin}${window.location.pathname}`;
+      const portalUrl = `${volUrl}?view=portal`;
+      const shiftDates = requestedShifts.map(opp => {
+        const date = opp.shift_date ? fmtDate(opp.shift_date, { short:true }) : 'Flexible';
+        const time = fmtTimeRange(opp.shift_start_time, opp.shift_end_time);
+        const role = opp.volunteer_role || opp.role_name || 'Volunteer';
+        return [date, time, role].filter(Boolean).join(' · ');
+      }).join('\n');
+      const passcode = volunteerPasscode(email, prod.id);
+      const ctx = {
+        preferred_name: name.split(' ')[0] || name,
+        contact_name: name,
+        show_name: prod.title || prod.name || '',
+        producer_name: org?.contact_name || org?.name || '',
+        producer_role: '',
+        producer_email: org?.contact_email || '',
+        volunteer_email: email,
+        volunteer_passcode: passcode,
+        volunteer_role: firstShift.volunteer_role || firstShift.role_name || 'Volunteer',
+        volunteer_shift_dates: shiftDates,
+        volunteer_portal_url: portalUrl,
+        volunteer_portal_button: `<a href="${portalUrl}" style="display:inline-block;background:#572e88;color:#fff;font-weight:900;font-size:15px;padding:13px 26px;border-radius:8px;text-decoration:none;">View My Volunteer Portal</a>`,
+        volunteer_link: volUrl,
+        volunteer_button: `<a href="${volUrl}" style="display:inline-block;background:#572e88;color:#fff;font-weight:900;font-size:15px;padding:13px 26px;border-radius:8px;text-decoration:none;">View Volunteer Opportunities</a>`,
+      };
+      try {
+        await sb.functions.invoke('send-email', {
+          body: { production_id: prod.id, category: 'volunteer_submitted', trigger: 'volunteer_submitted', email, name, ...ctx, context: ctx },
+        });
+      } catch (err) {
+        console.warn('[BTS volunteer request email]', err?.message || err);
+      }
+    }
     function calcHours(start, end) {
       if (!start || !end) return null;
       const [sh, sm] = start.split(':').map(Number), [eh, em] = end.split(':').map(Number);
@@ -2838,6 +2880,8 @@
         }));
         const { error } = await sb.from('volunteer_signups').insert(rows);
         if (error) throw error;
+        const requestedShifts = schedule.slice();
+        sendVolunteerRequestEmail({ name, email, portalToken, requestedShifts });
         schedule.forEach(opp => { signupCounts[spotsKey(opp)] = (signupCounts[spotsKey(opp)] || 0) + 1; });
         const count = schedule.length;
         schedule = [];
