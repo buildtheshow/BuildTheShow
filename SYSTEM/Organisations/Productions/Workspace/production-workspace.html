@@ -67895,8 +67895,8 @@ See you soon!
           + '<div class="vol-req-shift-row-actions">'
           + '<span class="' + volReqBadgeClass(s.status || 'pending') + '" style="margin-right:0.4rem;">' + volReqBadgeLabel(s.status || 'pending') + '</span>'
           + (isPending
-            ? '<button class="vol-req-shift-approve" onclick="volReqRespond(' + JSON.stringify({id:s.id}).replace(/</g,'<') + ',\'approved\')" title="Approve">&#10003;</button>'
-            + '<button class="vol-req-shift-decline" onclick="volReqRespond(' + JSON.stringify({id:s.id}).replace(/</g,'<') + ',\'declined\')" title="Decline">&#10005;</button>'
+            ? '<button class="vol-req-shift-approve" onclick="volReqRespond(' + JSON.stringify({id:s.id}).replace(/</g,'<') + ',\'approved\')" title="Approve and review email">&#10003;</button>'
+            + '<button class="vol-req-shift-decline" onclick="volReqRespond(' + JSON.stringify({id:s.id}).replace(/</g,'<') + ',\'declined\')" title="Decline and review email">&#10005;</button>'
             : '')
           + '</div>'
           + '</div>';
@@ -67932,7 +67932,7 @@ See you soon!
         + (pendingShifts.length > 1
           ? '<div class="vol-req-actions"><button class="vol-req-action-approve" onclick="volReqRespondAll(' + JSON.stringify(pendingShifts.map(s=>s.id)).replace(/</g,'<') + ',\'approved\')"><span>&#10003;</span> Approve All ' + pendingShifts.length + ' Pending Shifts</button></div>'
           : '')
-        + '<div class="vol-req-actions-note"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg> You can add a message after taking action.</div>';
+        + '<div class="vol-req-actions-note"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg> You will review the email before the action is saved.</div>';
     }
 
     root.innerHTML = '<div class="vol-req-header">'
@@ -67977,40 +67977,209 @@ See you soon!
     renderVolunteerRequests();
   }
 
+  let _volReqEmailReview = null;
+
+  async function volReqEnsureTemplate(category) {
+    let template = (_etTemplates || []).find(t => t.category === category);
+    if (template) return template;
+    const { data } = await sb.from('email_templates')
+      .select('*')
+      .eq('production_id', prodId)
+      .eq('category', category)
+      .order('created_at', { ascending: false })
+      .limit(1);
+    template = data?.[0] || null;
+    if (template) {
+      _etTemplates = [template, ...(_etTemplates || []).filter(t => String(t.id) !== String(template.id))];
+      return template;
+    }
+    const starter = ET_STARTER_TEMPLATES.find(t => t.category === category);
+    if (!starter) return null;
+    const { data: inserted, error } = await sb.from('email_templates')
+      .insert({ ...starter, production_id: prodId })
+      .select('*')
+      .single();
+    if (error) throw error;
+    _etTemplates = [inserted, ...(_etTemplates || [])];
+    return inserted;
+  }
+
+  function volReqSignupName(signup = {}) {
+    return [signup.first_name, signup.last_name].filter(Boolean).join(' ') || signup.volunteer_name || signup.name || signup.email || '';
+  }
+
+  function volReqFirstName(signup = {}) {
+    return signup.first_name || String(signup.volunteer_name || signup.name || '').trim().split(/\s+/)[0] || '';
+  }
+
+  function volReqStatusEmailContext(signups, status) {
+    const rows = (Array.isArray(signups) ? signups : [signups]).filter(Boolean);
+    const first = rows[0] || {};
+    const toEmail = first.volunteer_email || first.email || '';
+    const passcode = volunteerPasscode(toEmail, prodId);
+    const volUrl = window.location.origin + volunteerPublicPageUrl();
+    const portalUrl = volUrl + (volUrl.includes('?') ? '&' : '?') + 'view=portal';
+    const roles = [...new Set(rows.map(s => s.role_name || s.volunteer_role || '').filter(Boolean))];
+    const dates = rows.map(s => {
+      const base = volReqDateLabel(s);
+      const role = s.role_name || s.volunteer_role || '';
+      if (!base || base === 'Flexible') return role ? `${role}: Flexible / ongoing` : 'Flexible / ongoing';
+      return role ? `${role}: ${base}` : base;
+    }).filter(Boolean);
+    const contactName = volReqSignupName(first) || toEmail;
+    const preferred = volReqFirstName(first) || contactName || toEmail;
+    return {
+      preferred_name:         preferred,
+      contact_name:           contactName,
+      name:                   contactName,
+      show_name:              prod?.title || prod?.name || '',
+      organisation_name:      org?.name || orgName || '',
+      organization_name:      org?.name || orgName || '',
+      producer_name:          org?.contact_name || org?.name || '',
+      producer_role:          '',
+      producer_email:         org?.contact_email || '',
+      volunteer_email:        toEmail,
+      volunteer_passcode:     passcode,
+      volunteer_role:         roles.join(', ') || first.role_name || 'Volunteer',
+      volunteer_shift_dates:  dates.join('; ') || 'Flexible / ongoing',
+      volunteer_portal_url:   portalUrl,
+      volunteer_portal_button: `<a href="${portalUrl}" style="display:inline-block;background:#572e88;color:#fff;font-weight:900;font-size:15px;padding:13px 26px;border-radius:8px;text-decoration:none;">View My Volunteer Portal</a>`,
+      volunteer_link:         volUrl,
+      volunteer_button:       `<a href="${volUrl}" style="display:inline-block;background:#572e88;color:#fff;font-weight:900;font-size:15px;padding:13px 26px;border-radius:8px;text-decoration:none;">View Volunteer Opportunities</a>`,
+      request_status:         status,
+    };
+  }
+
+  function closeVolReqEmailReview() {
+    document.getElementById('vol-req-email-review-overlay')?.remove();
+    _volReqEmailReview = null;
+  }
+
+  async function openVolReqEmailReview(ids, newStatus) {
+    const idList = (Array.isArray(ids) ? ids : [ids]).map(String);
+    const signups = idList.map(id => volunteerRequests.find(r => String(r.id) === id)).filter(Boolean);
+    if (!signups.length) return;
+    const category = newStatus === 'approved' ? 'volunteer_approved' : 'volunteer_declined';
+    const actionLabel = newStatus === 'approved' ? 'Approve' : 'Decline';
+    const sendLabel = newStatus === 'approved' ? 'Send Email & Approve' : 'Send Email & Decline';
+    const noEmailLabel = newStatus === 'approved' ? 'Approve Without Sending' : 'Decline Without Sending';
+    try {
+      const template = await volReqEnsureTemplate(category);
+      if (!template) throw new Error('No volunteer email template found.');
+      const context = volReqStatusEmailContext(signups, newStatus);
+      const subject = _applyEmailContext(template.subject || '', context) || (newStatus === 'approved' ? 'Volunteer shift confirmed' : 'Volunteer request update');
+      const body = finalCastingEmailPreviewBodyHtml(_applyEmailContext(template.body || '', context)) || '<p>Email body preview.</p>';
+      const toEmail = context.volunteer_email || '';
+      const toName = context.preferred_name || context.contact_name || toEmail;
+      const from = orgName || prod?.org_name || 'Build The Show';
+      closeVolReqEmailReview();
+      _volReqEmailReview = { ids: idList, status: newStatus, category, context };
+      const overlay = document.createElement('div');
+      overlay.id = 'vol-req-email-review-overlay';
+      overlay.className = 'et-preview-overlay';
+      overlay.style.zIndex = '10000';
+      overlay.onclick = event => { if (event.target === overlay) closeVolReqEmailReview(); };
+      overlay.innerHTML = `
+        <div class="et-preview-modal" role="dialog" aria-modal="true" aria-label="Volunteer email review">
+          <div class="et-preview-modal-head">
+            <div>
+              <div class="et-preview-modal-title">${esc(actionLabel)} Volunteer Request</div>
+              <div class="et-preview-modal-subtitle">Review and edit the exact email before saving this decision for ${esc(toName)}.</div>
+            </div>
+            <button type="button" class="et-preview-modal-close" onclick="closeVolReqEmailReview()" aria-label="Close preview">×</button>
+          </div>
+          <div class="et-preview-modal-body">
+            <div class="et-preview-message">
+              <div style="margin-bottom:0.75rem;">
+                <div style="font-size:0.68rem;font-weight:800;text-transform:uppercase;letter-spacing:0.07em;color:rgba(87,46,136,0.52);margin-bottom:0.35rem;">Subject</div>
+                <input id="vol-req-preview-subject" type="text" value="${esc(subject)}" style="width:100%;box-sizing:border-box;border:1.5px solid rgba(87,46,136,0.18);border-radius:8px;padding:0.58rem 0.75rem;font-family:inherit;font-size:0.88rem;font-weight:700;color:#1a1530;outline:none;" />
+              </div>
+              <div class="et-preview-email-card">
+                <div class="et-preview-email-header">
+                  <div class="et-preview-avatar">${esc(String(from || 'B').slice(0, 1).toUpperCase())}</div>
+                  <div class="et-preview-from-block">
+                    <div class="et-preview-from-name">${esc(from)} <span class="et-preview-from-addr">&lt;no-reply@buildtheshow.com&gt;</span></div>
+                    <div class="et-preview-meta"><div class="et-preview-meta-row">to ${esc(toEmail || toName)} ▾</div></div>
+                  </div>
+                  <div class="et-preview-date">now</div>
+                  <div class="et-preview-actions" aria-hidden="true"><span>☆</span><span>☺</span><span>↩</span><span>⋮</span></div>
+                </div>
+                <div class="et-body-wrap" style="border:0;border-top:1px solid rgba(87,46,136,0.08);border-radius:0;overflow:hidden;">
+                  <div class="et-rte-toolbar" style="border-bottom:1px solid rgba(87,46,136,0.1);border-radius:0;">
+                    <button type="button" class="et-rte-btn" title="Bold" onmousedown="event.preventDefault();document.execCommand('bold')"><b>B</b></button>
+                    <button type="button" class="et-rte-btn" title="Italic" onmousedown="event.preventDefault();document.execCommand('italic')" style="font-style:italic;">I</button>
+                    <button type="button" class="et-rte-btn" title="Underline" onmousedown="event.preventDefault();document.execCommand('underline')" style="text-decoration:underline;font-family:var(--bts-font);">U</button>
+                    <div class="et-rte-sep"></div>
+                    <button type="button" class="et-rte-btn" title="Bullet list" onmousedown="event.preventDefault();document.execCommand('insertUnorderedList')"><svg width="15" height="13" viewBox="0 0 15 13" fill="none"><circle cx="1.5" cy="2" r="1.5" fill="currentColor"/><rect x="5" y="1" width="9" height="2" rx="1" fill="currentColor"/><circle cx="1.5" cy="6.5" r="1.5" fill="currentColor"/><rect x="5" y="5.5" width="9" height="2" rx="1" fill="currentColor"/><circle cx="1.5" cy="11" r="1.5" fill="currentColor"/><rect x="5" y="10" width="9" height="2" rx="1" fill="currentColor"/></svg></button>
+                    <div class="et-rte-sep"></div>
+                    <button type="button" class="et-rte-btn" title="Clear formatting" onmousedown="event.preventDefault();document.execCommand('removeFormat')" style="font-size:0.7rem;font-weight:700;width:auto;padding:0 6px;">T<span style="font-size:0.55rem;vertical-align:super;">×</span></button>
+                  </div>
+                  <div id="vol-req-preview-body" class="et-body-editor" contenteditable="true" style="min-height:260px;padding:1.1rem 1.25rem;">${body}</div>
+                </div>
+              </div>
+              <div class="et-preview-footer">
+                <button type="button" class="btn-secondary" onclick="closeVolReqEmailReview()">Cancel</button>
+                <button type="button" class="btn-secondary" id="vol-req-no-email-btn" onclick="volReqConfirmReviewedDecision(false, this)">${esc(noEmailLabel)}</button>
+                <button type="button" class="btn-primary" id="vol-req-send-email-btn" onclick="volReqConfirmReviewedDecision(true, this)">${esc(sendLabel)}</button>
+              </div>
+            </div>
+          </div>
+        </div>`;
+      document.body.appendChild(overlay);
+    } catch (e) {
+      showToast('Could not open email review: ' + (e.message || 'Unknown error'), true);
+    }
+  }
+
+  async function volReqApplyStatus(ids, newStatus) {
+    await sb.from('volunteer_signups').update({ status: newStatus }).in('id', ids);
+    ids.forEach(id => {
+      const idx = volunteerRequests.findIndex(r => String(r.id) === String(id));
+      if (idx >= 0) volunteerRequests[idx] = { ...volunteerRequests[idx], status: newStatus };
+    });
+  }
+
+  async function volReqConfirmReviewedDecision(sendEmail, buttonEl) {
+    if (!_volReqEmailReview) return;
+    const review = _volReqEmailReview;
+    const label = buttonEl?.textContent || '';
+    if (buttonEl) { buttonEl.disabled = true; buttonEl.textContent = sendEmail ? 'Sending...' : 'Saving...'; }
+    try {
+      if (sendEmail) {
+        const subject = document.getElementById('vol-req-preview-subject')?.value?.trim() || '';
+        const body = document.getElementById('vol-req-preview-body')?.innerHTML?.trim() || '';
+        const { data, error } = await sb.functions.invoke('send-email', {
+          body: {
+            production_id: prodId,
+            category: review.category,
+            trigger: review.category,
+            email: review.context.volunteer_email || '',
+            name: review.context.contact_name || review.context.preferred_name || '',
+            reviewed_subject: subject,
+            reviewed_body: body,
+            ...review.context,
+            context: review.context,
+          },
+        });
+        if (error || data?.error || data?.ok === false) throw new Error(data?.error || error?.message || 'Email was not sent.');
+      }
+      await volReqApplyStatus(review.ids, review.status);
+      closeVolReqEmailReview();
+      renderVolunteerRequests();
+      showToast(sendEmail ? 'Email sent and request updated.' : 'Request updated without sending email.');
+    } catch (e) {
+      showToast('Could not update request: ' + (e.message || 'Unknown error'), true);
+      if (buttonEl) { buttonEl.disabled = false; buttonEl.textContent = label; }
+    }
+  }
+
   async function volReqRespond(ref, newStatus) {
     const id = ref.id;
-    try {
-      await sb.from('volunteer_signups').update({ status: newStatus }).eq('id', id);
-      const idx = volunteerRequests.findIndex(r => r.id === id);
-      if (idx >= 0) {
-        volunteerRequests[idx] = { ...volunteerRequests[idx], status: newStatus };
-        if (_volReqSelected && _volReqSelected.id === id) {
-          _volReqSelected = volunteerRequests[idx];
-        }
-      }
-      if (newStatus === 'approved' || newStatus === 'declined') {
-        const signup = volunteerRequests.find(r => r.id === id);
-        if (signup) await volSendStatusEmail(signup, newStatus);
-      }
-    } catch (e) {
-      console.warn('[BTS] volReqRespond:', e?.message);
-    }
-    renderVolunteerRequests();
+    await openVolReqEmailReview([id], newStatus);
   }
 
   async function volReqRespondAll(ids, newStatus) {
-    try {
-      await sb.from('volunteer_signups').update({ status: newStatus }).in('id', ids);
-      ids.forEach(id => {
-        const idx = volunteerRequests.findIndex(r => r.id === id);
-        if (idx >= 0) volunteerRequests[idx] = { ...volunteerRequests[idx], status: newStatus };
-      });
-      if (newStatus === 'approved' || newStatus === 'declined') {
-        const updated = ids.map(id => volunteerRequests.find(r => r.id === id)).filter(Boolean);
-        for (const signup of updated) { try { await volSendStatusEmail(signup, newStatus); } catch {} }
-      }
-    } catch (e) { console.warn('[BTS] volReqRespondAll:', e?.message); }
-    renderVolunteerRequests();
+    await openVolReqEmailReview(ids, newStatus);
   }
 
   async function volSendStatusEmail(signup, status) {

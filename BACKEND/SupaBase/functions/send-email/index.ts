@@ -254,6 +254,8 @@ serve(async (req) => {
     return json({ ok: true });
   }
 
+  const reviewedSubject = firstDefinedString(body.reviewed_subject, body.subject_override, body.edited_subject);
+  const reviewedBody = firstDefinedString(body.reviewed_body, body.body_override, body.edited_body);
   const hasRawEmailCopy = ['subject', 'message', 'body_html', 'html', 'text'].some(key =>
     typeof body[key] === 'string' && String(body[key] || '').trim()
   );
@@ -940,8 +942,8 @@ serve(async (req) => {
   function normalizeTemplateBody(value: string): string {
     return String(value || '').trim();
   }
-  const sourceSubject = template?.subject || CATEGORY_SUBJECTS[category] || `Update from ${showName || 'Build The Show'}`;
-  const sourceBody    = normalizeTemplateBody(template?.body || '');
+  const sourceSubject = reviewedSubject || template?.subject || CATEGORY_SUBJECTS[category] || `Update from ${showName || 'Build The Show'}`;
+  const sourceBody    = normalizeTemplateBody(reviewedBody || template?.body || '');
   const sourceBodyText = htmlToPlainText(String(sourceBody || ''));
 
   if (!sourceBodyText.trim()) {
