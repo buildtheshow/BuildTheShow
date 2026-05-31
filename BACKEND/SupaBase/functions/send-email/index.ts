@@ -765,6 +765,7 @@ serve(async (req) => {
 
   const tokenValues: Record<string, string> = {
     '{{contact_name}}':          contactFirstName,
+    '{{name}}':                  firstDefinedString(directContext.name, performerName, contactName, contactFirstName),
     '{{preferred_name}}':        preferredName,
     '{{performer_name}}':        performerName,
     '{{performer_first_name}}':  firstName,
@@ -785,6 +786,8 @@ serve(async (req) => {
     '{{what_to_prepare}}':       whatToPrepare,
     '{{booking_link}}':          bookingLink,
     '{{org_name}}':              orgName,
+    '{{organisation_name}}':     firstDefinedString(directContext.organisation_name, directContext.organization_name, orgName),
+    '{{organization_name}}':     firstDefinedString(directContext.organization_name, directContext.organisation_name, orgName),
     '{{director_name}}':         director,
     '{{producer_name}}':         producerName,
     '{{producer_role}}':         producerRole,

@@ -31609,6 +31609,7 @@
       color: '#a87af8',
       bg:    '#eadcff',
       vars: [
+        { token: '{{name}}',               label: 'Name',                     sample: () => ET_SAMPLE_CONTEXT.contactName },
         { token: '{{contact_name}}',       label: 'Contact Name',             sample: () => ET_SAMPLE_CONTEXT.contactName },
         { token: '{{preferred_name}}',     label: 'Preferred Name',           sample: () => ET_SAMPLE_CONTEXT.preferredName },
         { token: '{{performer_name}}',     label: 'Performer Name',           sample: () => ET_SAMPLE_CONTEXT.performerName },
@@ -31929,7 +31930,7 @@
       note: 'General emails are strongest when they still feel personal and production-specific.'
     },
     volunteer_submitted: {
-      required: ['{{preferred_name}}', '{{show_name}}', '{{volunteer_role}}'],
+      required: ['{{name}}', '{{organisation_name}}', '{{volunteer_role}}'],
       recommended: ['{{volunteer_shift_dates}}', '{{volunteer_portal_url}}', '{{volunteer_passcode}}'],
       note: 'Sent automatically when a volunteer submits their schedule. Let them know their request was received and what happens next.'
     },
@@ -33242,25 +33243,25 @@ Your submission link is unique to you. Please do not share it with another perfo
       body: `<div style="font-family:Arial,sans-serif;color:#1a1530;font-size:17px;line-height:1.62;">
   <div style="margin:0 0 22px;">
     <div style="display:inline-block;background:#eef2ff;color:#4338ca;font-size:12px;font-weight:900;letter-spacing:0.12em;text-transform:uppercase;border-radius:999px;padding:7px 11px;margin-bottom:14px;">Volunteer Request Received</div>
-    <h1 style="font-size:28px;line-height:1.12;margin:0 0 10px;font-weight:900;color:#1a1530;">Thanks for signing up, {{preferred_name}}.</h1>
-    <p style="margin:0;font-size:18px;color:#3f3654;">Your request to volunteer for <strong>{{show_name}}</strong> has been received. We will review it and get back to you shortly.</p>
+    <h1 style="font-size:28px;line-height:1.12;margin:0 0 10px;font-weight:900;color:#1a1530;">Hi {{name}},</h1>
+    <p style="margin:0;font-size:18px;color:#3f3654;">Thank you for signing up to volunteer with <strong>{{organisation_name}}</strong>.</p>
   </div>
+  <p style="margin:0 0 16px;color:#3f3654;">We've received your request and will be taking a look at scheduling and availability soon. Once everything has been reviewed, we'll send you a confirmation with your volunteer assignment.</p>
   <div style="background:#f7f4fb;border:1.5px solid #ded6ea;border-radius:14px;padding:20px 22px;margin:22px 0;">
-    <h2 style="font-size:20px;line-height:1.15;margin:0 0 8px;font-weight:900;color:#572e88;">Your request</h2>
+    <h2 style="font-size:20px;line-height:1.15;margin:0 0 8px;font-weight:900;color:#572e88;">Your Request</h2>
     <p style="margin:0 0 8px;color:#4a3d6b;"><strong>Role:</strong> {{volunteer_role}}</p>
-    <p style="margin:0 0 8px;color:#4a3d6b;"><strong>Dates:</strong> {{volunteer_shift_dates}}</p>
-    <p style="margin:0;color:#4a3d6b;">We will review availability and confirm your spot as quickly as we can.</p>
+    <p style="margin:0;color:#4a3d6b;"><strong>Dates:</strong> {{volunteer_shift_dates}}</p>
   </div>
   <div style="background:#fffaf0;border:1.5px solid #f1d8a5;border-radius:14px;padding:20px 22px;margin:22px 0;">
-    <h2 style="font-size:20px;line-height:1.15;margin:0 0 8px;font-weight:900;color:#8a5f10;">Your volunteer portal</h2>
-    <p style="margin:0 0 14px;color:#4a3d6b;">Once approved, you can track your schedule and hours through your volunteer portal. Here are your login details for when you are ready.</p>
-    <p style="margin:0 0 6px;color:#4a3d6b;"><strong>Login email:</strong> {{volunteer_email}}</p>
+    <h2 style="font-size:20px;line-height:1.15;margin:0 0 8px;font-weight:900;color:#8a5f10;">Your Volunteer Portal</h2>
+    <p style="margin:0 0 14px;color:#4a3d6b;">Once you're approved, you can use your volunteer portal to view your schedule, track your volunteer hours, and stay up to date throughout the production.</p>
+    <p style="margin:0 0 6px;color:#4a3d6b;"><strong>Login Email:</strong> {{volunteer_email}}</p>
     <p style="margin:0 0 16px;color:#4a3d6b;"><strong>Passcode:</strong> <span style="font-size:22px;font-weight:900;letter-spacing:0.2em;color:#572e88;">{{volunteer_passcode}}</span></p>
     <p style="margin:0 0 10px;">{{volunteer_portal_button}}</p>
-    <p style="margin:0;font-size:13px;color:#6f6288;">Portal link: <a href="{{volunteer_portal_url}}" style="color:#572e88;font-weight:800;">{{volunteer_portal_url}}</a></p>
+    <p style="margin:0;font-size:13px;color:#6f6288;">Portal Link: <a href="{{volunteer_portal_url}}" style="color:#572e88;font-weight:800;">{{volunteer_portal_url}}</a></p>
   </div>
-  <p style="margin:0 0 16px;color:#3f3654;">If you have any questions in the meantime, feel free to reach out.</p>
-  <p style="margin:24px 0 0;">Thank you,<br><strong>{{producer_name}}</strong><br>{{producer_role}}<br><a href="mailto:{{producer_email}}" style="color:#572e88;font-weight:800;">{{producer_email}}</a></p>
+  <p style="margin:0 0 16px;color:#3f3654;">We're excited to have you involved and appreciate your willingness to help make this production happen.</p>
+  <p style="margin:24px 0 0;">Thank you,<br><strong>{{organisation_name}}</strong></p>
 </div>`,
     },
     {
@@ -33917,6 +33918,20 @@ See you soon!
     await sb.from('email_templates').update({ subject: desired.subject, body: desired.body }).eq('id', t.id);
   }
 
+  async function etEnsureVolunteerRequestTemplateBody() {
+    const t = (_etTemplates || []).find(t => t.category === 'volunteer_submitted');
+    if (!t) return;
+    const starter = ET_STARTER_TEMPLATES.find(t => t.category === 'volunteer_submitted');
+    if (!starter) return;
+    const body = String(t.body || '');
+    const isOldDefault = body.includes('Thanks for signing up, {{preferred_name}}.')
+      || body.includes('Your request to volunteer for <strong>{{show_name}}</strong> has been received.')
+      || body.includes('Here are your login details for when you are ready.');
+    if (!isOldDefault) return;
+    _etTemplates = (_etTemplates || []).map(x => x.id === t.id ? { ...x, subject: starter.subject, body: starter.body } : x);
+    await sb.from('email_templates').update({ subject: starter.subject, body: starter.body }).eq('id', t.id);
+  }
+
   async function etEnsureAuditionReminderTemplateNames() {
     const desiredNames = {
       audition_reminder: 'Audition Reminder - In Person',
@@ -33991,6 +34006,7 @@ See you soon!
     await etEnsureCallbackConfirmedTemplateBody();
     await etEnsureCastAcceptedTemplateBody();
     await etEnsureRegistrationCompletedTemplateBody();
+    await etEnsureVolunteerRequestTemplateBody();
     await etEnsureAuditionReminderTemplateNames();
     renderEmailTemplates();
     openPendingEmailTemplateCategory();
@@ -67979,7 +67995,10 @@ See you soon!
     const ctx = {
       preferred_name:         firstName || toEmail,
       contact_name:           [signup.first_name, signup.last_name].filter(Boolean).join(' ') || toEmail,
+      name:                   [signup.first_name, signup.last_name].filter(Boolean).join(' ') || signup.name || firstName || toEmail,
       show_name:              prod?.title || prod?.name || '',
+      organisation_name:      org?.name || orgName || '',
+      organization_name:      org?.name || orgName || '',
       producer_name:          org?.contact_name || org?.name || '',
       producer_role:          '',
       producer_email:         org?.contact_email || '',
