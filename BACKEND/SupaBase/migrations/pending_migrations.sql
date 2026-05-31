@@ -17,6 +17,14 @@ SET is_public = true
 WHERE event_type IN ('audition','dance_call','callback','other_audition','performance','dress','tech')
   AND is_public IS DISTINCT FROM true;
 
+-- ── 1d. Production events: deadline marker flag ─────────────
+-- Allows calendar items to be saved as a single deadline datetime instead of a start/end event.
+ALTER TABLE production_events ADD COLUMN IF NOT EXISTS is_deadline boolean DEFAULT false;
+UPDATE production_events
+SET is_deadline = true
+WHERE event_type = 'deadline'
+  AND is_deadline IS DISTINCT FROM true;
+
 -- ── 1b. Organisation link slugs ───────────────────────────────
 -- Used for clean audition URLs: buildtheshow.com/RYT/Audition/Annie2026
 ALTER TABLE organizations ADD COLUMN IF NOT EXISTS slug text;

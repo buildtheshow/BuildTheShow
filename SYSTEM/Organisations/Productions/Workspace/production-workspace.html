@@ -26009,10 +26009,23 @@
           <optgroup label="General">
             <option value="event">Event</option>
             <option value="meeting">Meeting</option>
+            <option value="deadline">Deadline</option>
           </optgroup>
         </select>
       </div>
-      <div class="form-row">
+      <div class="form-group" style="margin-bottom:0.5rem;">
+        <div style="display:flex;gap:0.4rem;">
+          <button type="button" id="ev-mode-startend" onclick="setEventMode('startend')"
+            style="flex:1;padding:0.42rem 0.7rem;border-radius:7px;font-size:0.78rem;font-weight:800;border:1.5px solid #572e88;background:#572e88;color:#fff;cursor:pointer;">
+            Start / End
+          </button>
+          <button type="button" id="ev-mode-deadline" onclick="setEventMode('deadline')"
+            style="flex:1;padding:0.42rem 0.7rem;border-radius:7px;font-size:0.78rem;font-weight:800;border:1.5px solid rgba(87,46,136,0.25);background:#fff;color:#572e88;cursor:pointer;">
+            Deadline
+          </button>
+        </div>
+      </div>
+      <div id="ev-startend-row" class="form-row">
         <div class="form-group">
           <label class="form-label">Start</label>
           <input class="form-input" id="ev-start" type="datetime-local" placeholder="Select a date and time" />
@@ -26022,6 +26035,12 @@
           <input class="form-input" id="ev-end" type="datetime-local" placeholder="Select a date and time" />
         </div>
       </div>
+      <div id="ev-deadline-row" class="form-group" style="display:none;">
+        <label class="form-label">Deadline</label>
+        <input class="form-input" id="ev-deadline" type="datetime-local" placeholder="Select a deadline" />
+        <div style="font-size:0.72rem;color:rgba(87,46,136,0.55);margin-top:0.28rem;line-height:1.4;">Shows as a deadline marker on the calendar. No start or end time required.</div>
+      </div>
+      <input type="hidden" id="ev-is-deadline" value="0" />
       <div class="form-group">
         <label class="form-label">Venue <span class="opt">(optional)</span></label>
         <div id="ev-venue-picker"></div>
@@ -29014,6 +29033,7 @@
   let _selfTapeSubmissionsMap = null; // Map<appId, submission[]> — populated by renderSelfTapeTab()
   let stSelectedAppId = null;
   let _hasIsPublicColumn = false; // set true once we confirm the column exists
+  let _hasIsDeadlineColumn = false; // set true once deadline event support exists
   let allSlots      = [];
   let allSlotsLoadToken = 0;
   let auditionsRealtimeChannel = null;
@@ -29178,6 +29198,9 @@
     // Check if is_public column exists — non-blocking, safe to run in background
     sb.from('production_events').select('is_public').eq('production_id', prodId).limit(1)
       .then(({ error }) => { if (!error) _hasIsPublicColumn = true; });
+    // Check if is_deadline column exists — fall back to event_type=deadline until migrated
+    sb.from('production_events').select('is_deadline').eq('production_id', prodId).limit(1)
+      .then(({ error }) => { if (!error) _hasIsDeadlineColumn = true; });
     renderProdHeader();
     prefillSettings();
     applyModuleVisibility();
@@ -34952,6 +34975,20 @@ See you soon!
       eventContent(arg) {
         try {
           const ev = arg.event;
+          // Deadline events render as a compact due badge.
+          if (ev.extendedProps.is_deadline) {
+            const fmtT = t => {
+              if (!t) return '';
+              const h = t.getUTCHours(), m = t.getUTCMinutes(), ap = h >= 12 ? 'pm' : 'am';
+              return `${h % 12 || 12}:${String(m).padStart(2,'0')}${ap}`;
+            };
+            const wrap = document.createElement('div');
+            wrap.style.cssText = 'width:100%;display:flex;align-items:center;gap:4px;padding:1px 4px;overflow:hidden;';
+            const safeTxt = s => String(s||'').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+            const time = fmtT(ev.start);
+            wrap.innerHTML = `<span style="font-size:9px;font-weight:900;letter-spacing:0;text-transform:uppercase;flex-shrink:0;" title="Deadline">Due</span><span style="font-size:10px;font-weight:800;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${safeTxt(time ? `${time} ${ev.title || ''}` : ev.title || '')}</span>`;
+            return { domNodes: [wrap] };
+          }
           const fmtT = t => {
             if (!t) return '';
             const h = t.getUTCHours(), m = t.getUTCMinutes(), ap = h >= 12 ? 'pm' : 'am';
@@ -34969,7 +35006,6 @@ See you soon!
             + `<div class="zeus-event-label">${safeTxt(ev.title || '')}</div>`;
           return { domNodes: [wrap] };
         } catch(e) {
-          // Fallback: let FullCalendar render the title only
           return { html: `<div style="padding:2px 4px;font-size:0.75rem;font-weight:600;">${String(arg.event.title||'')}</div>` };
         }
       },
@@ -35040,6 +35076,7 @@ See you soon!
 
   function dbEventToFC(e) {
     const colour = EVENT_COLOURS[e.event_type] || '#572e88';
+    const isDeadline = !!(e.is_deadline || e.event_type === 'deadline');
     // Strip timezone so FullCalendar treats times as local/floating — prevents UTC→local conversion
     const stripTz = t => t ? t.slice(0, 19) : null;
     return {
@@ -35048,9 +35085,9 @@ See you soon!
       start: stripTz(e.start_time),
       end: stripTz(e.end_time),
       allDay: e.all_day || false,
-      backgroundColor: colour,
+      backgroundColor: isDeadline ? colour + 'cc' : colour,
       borderColor: colour,
-      extendedProps: { event_type: e.event_type, venue: e.venue, notes: e.notes, is_public: e.is_public ?? false },
+      extendedProps: { event_type: e.event_type, venue: e.venue, notes: e.notes, is_public: e.is_public ?? false, is_deadline: isDeadline },
     };
   }
 
@@ -35107,11 +35144,17 @@ See you soon!
       delBtn.style.display = '';
       document.getElementById('ev-title').value = ev.title || '';
       document.getElementById('ev-type').value  = ev.extendedProps.event_type || 'rehearsal';
-      document.getElementById('ev-start').value = toDateTimeLocal(ev.start);
-      document.getElementById('ev-end').value   = toDateTimeLocal(ev.end);
       document.getElementById('ev-venue').value = ev.extendedProps.venue || '';
       document.getElementById('ev-notes').value = ev.extendedProps.notes || '';
       document.getElementById('ev-is-public').checked = ev.extendedProps.is_public ?? _defaultPublic(ev.extendedProps.event_type);
+      if (ev.extendedProps.is_deadline) {
+        setEventMode('deadline');
+        document.getElementById('ev-deadline').value = toDateTimeLocal(ev.start);
+      } else {
+        setEventMode('startend');
+        document.getElementById('ev-start').value = toDateTimeLocal(ev.start);
+        document.getElementById('ev-end').value   = toDateTimeLocal(ev.end);
+      }
       VenuePicker.render('ev-venue-picker', ev.extendedProps.venue || '', (name) => {
         document.getElementById('ev-venue').value = name;
       });
@@ -35123,9 +35166,11 @@ See you soon!
       document.getElementById('ev-type').value  = evType;
       document.getElementById('ev-start').value = toDateTimeLocal(opts.startStr);
       document.getElementById('ev-end').value   = toDateTimeLocal(opts.endStr);
+      document.getElementById('ev-deadline').value = toDateTimeLocal(opts.startStr);
       document.getElementById('ev-venue').value = defaultVenue;
       document.getElementById('ev-notes').value = '';
       document.getElementById('ev-is-public').checked = _defaultPublic(evType);
+      setEventMode(evType === 'deadline' || opts.isDeadline ? 'deadline' : 'startend');
       VenuePicker.render('ev-venue-picker', defaultVenue, (name) => {
         document.getElementById('ev-venue').value = name;
       });
@@ -35171,13 +35216,33 @@ See you soon!
     _renderLocChips(chipType);
   }
 
+  function setEventMode(mode) {
+    const isDeadline = mode === 'deadline';
+    document.getElementById('ev-startend-row').style.display  = isDeadline ? 'none' : '';
+    document.getElementById('ev-deadline-row').style.display  = isDeadline ? '' : 'none';
+    document.getElementById('ev-is-deadline').value           = isDeadline ? '1' : '0';
+    const btnSE = document.getElementById('ev-mode-startend');
+    const btnDL = document.getElementById('ev-mode-deadline');
+    const active   = 'background:#572e88;color:#fff;border-color:#572e88;';
+    const inactive = 'background:#fff;color:#572e88;border-color:rgba(87,46,136,0.25);';
+    btnSE.style.cssText = btnSE.style.cssText.replace(/background[^;]+;|color[^;]+;|border-color[^;]+;/g, '') + (isDeadline ? inactive : active);
+    btnDL.style.cssText = btnDL.style.cssText.replace(/background[^;]+;|color[^;]+;|border-color[^;]+;/g, '') + (isDeadline ? active : inactive);
+  }
+
   function closeEventModal() {
     document.getElementById('event-modal').classList.remove('open');
+    setEventMode('startend'); // reset to default
     if (fcCalendar) fcCalendar.unselect();
   }
 
   document.getElementById('event-modal').addEventListener('click', e => {
     if (e.target === e.currentTarget) closeEventModal();
+  });
+
+  // Auto-switch to deadline mode when Deadline event type selected
+  document.getElementById('ev-type').addEventListener('change', () => {
+    if (document.getElementById('ev-type').value === 'deadline') setEventMode('deadline');
+    else if (document.getElementById('ev-is-deadline').value === '1') setEventMode('startend');
   });
 
   // Auto-copy date from start to end when end is blank or on same day
@@ -35194,18 +35259,19 @@ See you soon!
   });
 
   async function submitEventModal() {
-    const title  = document.getElementById('ev-title').value.trim();
-    const type   = document.getElementById('ev-type').value;
-    const start  = document.getElementById('ev-start').value;
-    const end    = document.getElementById('ev-end').value;
-    const venue  = document.getElementById('ev-venue').value.trim();
-    const notes  = document.getElementById('ev-notes').value.trim();
-    const errEl  = document.getElementById('event-error');
-    const btn    = document.getElementById('save-event-btn');
+    const title      = document.getElementById('ev-title').value.trim();
+    const type       = document.getElementById('ev-type').value;
+    const isDeadline = document.getElementById('ev-is-deadline').value === '1';
+    const start      = isDeadline ? document.getElementById('ev-deadline').value : document.getElementById('ev-start').value;
+    const end        = isDeadline ? document.getElementById('ev-deadline').value : document.getElementById('ev-end').value;
+    const venue      = document.getElementById('ev-venue').value.trim();
+    const notes      = document.getElementById('ev-notes').value.trim();
+    const errEl      = document.getElementById('event-error');
+    const btn        = document.getElementById('save-event-btn');
 
     errEl.classList.remove('visible');
     if (!title) { errEl.textContent = 'Event title is required.'; errEl.classList.add('visible'); return; }
-    if (!start) { errEl.textContent = 'Start date and time is required.'; errEl.classList.add('visible'); return; }
+    if (!start) { errEl.textContent = isDeadline ? 'Deadline date and time is required.' : 'Start date and time is required.'; errEl.classList.add('visible'); return; }
 
     btn.disabled = true; btn.textContent = 'Saving…';
 
@@ -35213,16 +35279,19 @@ See you soon!
     const fmtLocal = s => s ? (s.length === 16 ? s + ':00' : s.slice(0, 19)) : null;
     const defaultEnd = start.slice(0, 11) + '18:00:00';
     const isPublic = document.getElementById('ev-is-public').checked;
+    const payloadType = isDeadline && !_hasIsDeadlineColumn ? 'deadline' : type;
     const payload = {
       title,
-      event_type: type,
+      event_type: payloadType,
       start_time: fmtLocal(start),
-      end_time:   fmtLocal(end) || defaultEnd,
+      end_time:   isDeadline ? fmtLocal(start) : (fmtLocal(end) || defaultEnd),
       venue:      venue || null,
       notes:      notes || null,
     };
     // Only add is_public if the column exists — prevents errors before SQL migration is run
     if (_hasIsPublicColumn) payload.is_public = isPublic;
+    // Only add is_deadline if the column exists; pre-migration saves use event_type=deadline.
+    if (_hasIsDeadlineColumn) payload.is_deadline = isDeadline;
 
     let error, savedEventId = editingEventId;
     try {
@@ -35243,10 +35312,10 @@ See you soon!
 
     if (error) { errEl.textContent = error.message; errEl.classList.add('visible'); return; }
 
-    await _seedDefaultLocationFromEvent(type, payload.venue);
+    await _seedDefaultLocationFromEvent(payloadType, payload.venue);
 
     // Keep matching audition_session in sync with Zeus (Zeus is source of truth for timing)
-    await _reverseSync(type, title, payload.start_time, payload.end_time, savedEventId, payload.venue);
+    await _reverseSync(payloadType, title, payload.start_time, payload.end_time, savedEventId, payload.venue);
 
     closeEventModal();
     if (fcCalendar) fcCalendar.refetchEvents();
