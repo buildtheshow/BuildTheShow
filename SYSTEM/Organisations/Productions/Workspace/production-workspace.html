@@ -31727,6 +31727,7 @@
         { token: '{{volunteer_passcode}}', label: 'Volunteer Portal Passcode', sample: () => '4829' },
         { token: '{{volunteer_role}}', label: 'Volunteer Role', sample: () => 'Rehearsal Assistant' },
         { token: '{{volunteer_shift_dates}}', label: 'Volunteer Shift Dates', sample: () => 'Mon, Aug 11 · Tue, Aug 12 · Wed, Aug 13' },
+        { token: '{{volunteer_point_person}}', label: 'Volunteer Point Person', sample: () => 'Lead Set Builder' },
       ],
     },
     // ── Rehearsals ───────────────────────────────────────────────
@@ -31931,12 +31932,12 @@
     },
     volunteer_submitted: {
       required: ['{{name}}', '{{organisation_name}}', '{{volunteer_role}}'],
-      recommended: ['{{volunteer_shift_dates}}', '{{volunteer_portal_url}}', '{{volunteer_passcode}}'],
+      recommended: ['{{volunteer_shift_dates}}', '{{volunteer_point_person}}', '{{volunteer_portal_url}}', '{{volunteer_passcode}}'],
       note: 'Sent automatically when a volunteer submits their schedule. Let them know their request was received and what happens next.'
     },
     volunteer_approved: {
       required: ['{{preferred_name}}', '{{organisation_name}}', '{{volunteer_role}}'],
-      recommended: ['{{volunteer_shift_dates}}', '{{volunteer_portal_url}}', '{{volunteer_passcode}}'],
+      recommended: ['{{volunteer_shift_dates}}', '{{volunteer_point_person}}', '{{volunteer_portal_url}}', '{{volunteer_passcode}}'],
       note: 'Sent when a volunteer shift is approved. Include the shift details so they can add it to their calendar.'
     },
     volunteer_declined: {
@@ -67129,7 +67130,7 @@ See you soon!
 	        const perLabel = cfg.perLabel || (type === 'performance' ? 'per performance' : 'per event');
 	        const allRoles = cfg.roles;
 	        const rolesHtml = `<div class="vol-suggestion-grid">
-	          ${allRoles.map((role, ri) => { const key = `${type}-${ri}`; const saved = _staffingPlan[key] || {}; const roleName = saved.roleName || role.name; const deptName = saved.department || role.dept; _volStaffingRoleMeta[key] = { roleName, department: deptName, description: saved.description || volDefaultRoleDescription(deptName, roleName), typeLabel: cfg.label, eventType: type, color: DEPT_COLOURS[deptName] || cfg.color }; const savedCount = saved.count ?? role.default; const savedPerLabel = volCountModeLabel(saved.countMode || saved.count_mode || volCountModeFromLabel(saved.perLabel || perLabel, type)); return `
+	          ${allRoles.map((role, ri) => { const key = `${type}-${ri}`; const saved = _staffingPlan[key] || {}; const roleName = saved.roleName || role.name; const deptName = saved.department || role.dept; _volStaffingRoleMeta[key] = { roleName, department: deptName, description: saved.description || volDefaultRoleDescription(deptName, roleName), checkInWith: saved.checkInWith || saved.check_in_with || '', typeLabel: cfg.label, eventType: type, color: DEPT_COLOURS[deptName] || cfg.color }; const savedCount = saved.count ?? role.default; const savedPerLabel = volCountModeLabel(saved.countMode || saved.count_mode || volCountModeFromLabel(saved.perLabel || perLabel, type)); return `
 	            <div class="template-brand-card template-brand-card--square template-brand-card--content vol-staffing-tile${savedCount === 0 ? ' vol-staffing-tile--inactive' : ''}" id="vsq-tile-${esc(type)}-${ri}" style="--brand-tile-bg:${esc(DEPT_COLOURS[deptName] || cfg.color)};--brand-tile-ink:#fff;">
 	              <div class="template-brand-card-inner">
 	                <div class="template-brand-tile-content">
@@ -67157,7 +67158,7 @@ See you soon!
 	                </div>
 	              </div>
 	            </div>`; }).join('')}
-	          ${Object.entries(_staffingPlan).filter(([k, v]) => k.startsWith(type + '-custom-') && v.roleName).map(([k, v]) => { const ri = k.replace(type + '-', ''); _volStaffingRoleMeta[k] = { roleName: v.roleName, department: v.department || 'Other', description: v.description || volDefaultRoleDescription(v.department || 'Other', v.roleName), typeLabel: cfg.label, eventType: type, color: DEPT_COLOURS[v.department] || cfg.color }; const savedCount = v.count ?? 0; const savedPerLabel = volCountModeLabel(v.countMode || v.count_mode || volCountModeFromLabel(v.perLabel || perLabel, type)); const tileColor = DEPT_COLOURS[v.department] || cfg.color; return `
+	          ${Object.entries(_staffingPlan).filter(([k, v]) => k.startsWith(type + '-custom-') && v.roleName).map(([k, v]) => { const ri = k.replace(type + '-', ''); _volStaffingRoleMeta[k] = { roleName: v.roleName, department: v.department || 'Other', description: v.description || volDefaultRoleDescription(v.department || 'Other', v.roleName), checkInWith: v.checkInWith || v.check_in_with || '', typeLabel: cfg.label, eventType: type, color: DEPT_COLOURS[v.department] || cfg.color }; const savedCount = v.count ?? 0; const savedPerLabel = volCountModeLabel(v.countMode || v.count_mode || volCountModeFromLabel(v.perLabel || perLabel, type)); const tileColor = DEPT_COLOURS[v.department] || cfg.color; return `
 	            <div class="template-brand-card template-brand-card--square template-brand-card--content vol-staffing-tile${savedCount === 0 ? ' vol-staffing-tile--inactive' : ''}" id="vsq-tile-${esc(type)}-${ri}" style="--brand-tile-bg:${tileColor};--brand-tile-ink:#fff;">
 	              <div class="template-brand-card-inner">
 	                <div class="template-brand-tile-content">
@@ -67898,13 +67899,14 @@ See you soon!
       const shiftRows = personShifts.map(s => {
         const dateLabel = volReqDateLabel(s);
         const dept = s.department || '';
+        const pointPerson = s.check_in_with || s.checkInWith || s.volunteer_point_person || '';
         const isPending = (s.status || 'pending') === 'pending';
         const hasConflict = personShifts.some(other => reqShiftsOverlap(s, other));
         const colour = shiftColour(s);
         return '<div class="vol-req-shift-row' + (hasConflict ? ' vol-req-shift-conflict' : '') + '" style="border-left:3px solid ' + colour + ';padding-left:0.6rem;">'
           + '<div class="vol-req-shift-row-info">'
           +   '<div class="vol-req-shift-row-role" style="color:' + colour + ';">' + esc(s.role_name || 'Volunteer') + (hasConflict ? ' <span style="background:#fef2f2;color:#b33a25;font-size:0.58rem;font-weight:900;padding:0.1rem 0.35rem;border-radius:4px;letter-spacing:0.04em;text-transform:uppercase;margin-left:0.3rem;">Time conflict</span>' : '') + '</div>'
-          +   '<div class="vol-req-shift-row-date">' + esc(dateLabel || 'Flexible') + (dept ? ' &middot; ' + esc(dept) : '') + '</div>'
+          +   '<div class="vol-req-shift-row-date">' + esc(dateLabel || 'Flexible') + (dept ? ' &middot; ' + esc(dept) : '') + (pointPerson ? ' &middot; Checks in with ' + esc(pointPerson) : '') + '</div>'
           + '</div>'
           + '<div class="vol-req-shift-row-actions">'
           + '<span class="' + volReqBadgeClass(s.status || 'pending') + '" style="margin-right:0.4rem;">' + volReqBadgeLabel(s.status || 'pending') + '</span>'
@@ -68034,6 +68036,7 @@ See you soon!
     const volUrl = window.location.origin + volunteerPublicPageUrl();
     const portalUrl = volUrl + (volUrl.includes('?') ? '&' : '?') + 'view=portal';
     const roles = [...new Set(rows.map(s => s.role_name || s.volunteer_role || '').filter(Boolean))];
+    const pointPeople = [...new Set(rows.map(s => s.check_in_with || s.checkInWith || s.volunteer_point_person || '').filter(Boolean))];
     const dates = rows.map(s => {
       const base = volReqDateLabel(s);
       const role = s.role_name || s.volunteer_role || '';
@@ -68056,6 +68059,7 @@ See you soon!
       volunteer_passcode:     passcode,
       volunteer_role:         roles.join(', ') || first.role_name || 'Volunteer',
       volunteer_shift_dates:  dates.join('; ') || 'Flexible / ongoing',
+      volunteer_point_person: pointPeople.join(', '),
       volunteer_portal_url:   portalUrl,
       volunteer_portal_button: `<a href="${portalUrl}" style="display:inline-block;background:#572e88;color:#fff;font-weight:900;font-size:15px;padding:13px 26px;border-radius:8px;text-decoration:none;">View My Volunteer Portal</a>`,
       volunteer_link:         volUrl,
@@ -68209,6 +68213,7 @@ See you soon!
     const volUrl = window.location.origin + volunteerPublicPageUrl();
     const portalUrl = volUrl + (volUrl.includes('?') ? '&' : '?') + 'view=portal';
     const shiftDate = opp.shift_date ? new Date(opp.shift_date + 'T12:00').toLocaleDateString('en-CA', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }) : '';
+    const pointPerson = signup.check_in_with || signup.checkInWith || opp.check_in_with || opp.checkInWith || '';
     const ctx = {
       preferred_name:         firstName || toEmail,
       contact_name:           [signup.first_name, signup.last_name].filter(Boolean).join(' ') || toEmail,
@@ -68223,6 +68228,7 @@ See you soon!
       volunteer_passcode:     passcode,
       volunteer_role:         opp.production_title || opp.volunteer_role || signup.role_name || '',
       volunteer_shift_dates:  shiftDate,
+      volunteer_point_person: pointPerson,
       volunteer_portal_url:   portalUrl,
       volunteer_portal_button: `<a href="${portalUrl}" style="display:inline-block;background:#572e88;color:#fff;font-weight:900;font-size:15px;padding:13px 26px;border-radius:8px;text-decoration:none;">View My Volunteer Portal</a>`,
       volunteer_link:         volUrl,
@@ -68557,6 +68563,7 @@ See you soon!
 	    const roleName = saved.roleName || meta.roleName || '';
 	    const department = saved.department || meta.department || DEPT_LIST[0];
 	    const description = saved.description || meta.description || volDefaultRoleDescription(department, roleName || 'Volunteer role');
+	    const checkInWith = saved.checkInWith || saved.check_in_with || meta.checkInWith || meta.check_in_with || '';
 	    const countMode = saved.countMode || saved.count_mode || volCountModeFromLabel(saved.perLabel, type) || volDefaultCountMode(type);
 	    const timingGroup = saved.timingGroup || saved.timing_group || volDefaultTimingGroup(type);
 	    const appliesTo = Array.isArray(saved.appliesTo) && saved.appliesTo.length ? saved.appliesTo : [type];
@@ -68633,6 +68640,10 @@ See you soon!
 	              <div class="vol-schedule-field">
 	                <label>Department</label>
 	                <select id="vsq-dept-${key}" class="vol-schedule-select">${departmentOptions}</select>
+	              </div>
+	              <div class="vol-schedule-field vol-schedule-field--full">
+	                <label>Checks in with <span style="font-size:0.68rem;color:rgba(87,46,136,0.48);font-weight:700;">(optional)</span></label>
+	                <input type="text" id="vsq-checkin-${key}" value="${esc(checkInWith)}" placeholder="e.g. Lead Set Builder, Stage Manager, Producer" />
 	              </div>
 	              <div class="vol-schedule-field vol-schedule-field--full">
 	                <label>Description</label>
@@ -68772,6 +68783,7 @@ See you soon!
 	    const roleName = document.getElementById(`vsq-role-name-${key}`)?.value?.trim() || _volStaffingRoleMeta[key]?.roleName || 'Volunteer Role';
 	    const department = document.getElementById(`vsq-dept-${key}`)?.value || _volStaffingRoleMeta[key]?.department || 'Other';
 	    const description = document.getElementById(`vsq-desc-${key}`)?.value?.trim() || volDefaultRoleDescription(department, roleName);
+	    const checkInWith = document.getElementById(`vsq-checkin-${key}`)?.value?.trim() || '';
 	    const countMode = document.querySelector(`input[name="vsq-count-mode-${key}"]:checked`)?.value || volDefaultCountMode(type);
 	    const timingGroup = document.getElementById(`vsq-timing-${key}`)?.value || volDefaultTimingGroup(type);
 	    const appliesTo = [...document.querySelectorAll(`input[name="vsq-applies-${key}"]:checked`)].map(input => input.value);
@@ -68788,8 +68800,8 @@ See you soon!
 	      }
 	    });
 	    if (!_staffingPlan[key]) _staffingPlan[key] = {};
-	    Object.assign(_staffingPlan[key], { roleName, department, description, timingGroup, countMode, perLabel: volCountModeLabel(countMode, type), appliesTo: coveredTypes, eventScope, shiftStartMins, shiftStartAnchor, shiftEndMins, shiftEndAnchor, hoursMode, countsFor, prepHours: 0, prepNoCount: false, outsideTimelineWork });
-	    _volStaffingRoleMeta[key] = { ...(_volStaffingRoleMeta[key] || {}), roleName, department, description };
+	    Object.assign(_staffingPlan[key], { roleName, department, description, checkInWith, check_in_with: checkInWith, timingGroup, countMode, perLabel: volCountModeLabel(countMode, type), appliesTo: coveredTypes, eventScope, shiftStartMins, shiftStartAnchor, shiftEndMins, shiftEndAnchor, hoursMode, countsFor, prepHours: 0, prepNoCount: false, outsideTimelineWork });
+	    _volStaffingRoleMeta[key] = { ...(_volStaffingRoleMeta[key] || {}), roleName, department, description, checkInWith };
 	    const indicator = document.getElementById(`vsq-time-${key}`);
 	    if (indicator) {
 	      const summary = volScheduleSummary({ shiftStartMins, shiftStartAnchor, shiftEndMins, shiftEndAnchor, hoursMode, countsFor, outsideTimelineWork });
@@ -69115,12 +69127,13 @@ See you soon!
 	        dept: entry.department || r.dept,
 	        qty: entry.count ?? 0,
 	        description: entry.description || volDefaultRoleDescription(entry.department || r.dept, entry.roleName || r.name),
+	        checkInWith: entry.checkInWith || entry.check_in_with || '',
 	        planEntry: entry,
 	      };
 	    });
 	    const customRoles = Object.entries(_staffingPlan)
 	      .filter(([k, v]) => k.startsWith(`${eventType}-custom-`) && v.roleName && (v.count ?? 0) > 0)
-	      .map(([k, v]) => ({ name: v.roleName, dept: v.department || 'Other', qty: v.count, description: v.description || volDefaultRoleDescription(v.department || 'Other', v.roleName), planEntry: v }));
+	      .map(([k, v]) => ({ name: v.roleName, dept: v.department || 'Other', qty: v.count, description: v.description || volDefaultRoleDescription(v.department || 'Other', v.roleName), checkInWith: v.checkInWith || v.check_in_with || '', planEntry: v }));
 	    const allRolesToCreate = [...fixedRoles, ...customRoles].filter(r => r.qty > 0);
 	    const matchingEvents = isPerEvent
 	      ? volunteerPlanEvents.filter(e => volCalendarEventMatches(e, eventType))

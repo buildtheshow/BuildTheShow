@@ -1859,6 +1859,7 @@
         return [date, time, role].filter(Boolean).join(' · ');
       }).join('\n');
       const passcode = volunteerPasscode(email, prod.id);
+      const pointPeople = [...new Set(requestedShifts.map(opp => opp.check_in_with || opp.checkInWith || '').filter(Boolean))];
       const ctx = {
         name,
         preferred_name: name.split(' ')[0] || name,
@@ -1873,6 +1874,7 @@
         volunteer_passcode: passcode,
         volunteer_role: firstShift.volunteer_role || firstShift.role_name || 'Volunteer',
         volunteer_shift_dates: shiftDates,
+        volunteer_point_person: pointPeople.join(', '),
         volunteer_portal_url: portalUrl,
         volunteer_portal_button: `<a href="${portalUrl}" style="display:inline-block;background:#572e88;color:#fff;font-weight:900;font-size:15px;padding:13px 26px;border-radius:8px;text-decoration:none;">View My Volunteer Portal</a>`,
         volunteer_link: volUrl,
@@ -2023,7 +2025,8 @@
         baseType,
         roleName: entry.roleName || defaultRole?.name || 'Volunteer Shift',
         department: entry.department || defaultRole?.dept || cfg.label || 'Volunteer',
-        description: entry.description || roleDescription(defaultRole?.name || entry.roleName, entry)
+        description: entry.description || roleDescription(defaultRole?.name || entry.roleName, entry),
+        checkInWith: entry.checkInWith || entry.check_in_with || ''
       };
     }
     function planEntryAppliesTo(key, entry = {}) {
@@ -2065,6 +2068,7 @@
         volunteer_role: role.roleName,
         department: role.department,
         description: role.description,
+        check_in_with: role.checkInWith,
         volunteers_needed: count,
         ...timing,
         credit_hours: creditHoursFor(entry, timing.hours),
@@ -2687,6 +2691,7 @@
             <span class="vp-detail-check">${ICONS.check} No experience needed</span>
             <span class="vp-detail-check">${ICONS.check} Training provided</span>
             <span class="vp-detail-check">${ICONS.check} Arrive ready to check in with the production team</span>
+            ${opp.check_in_with ? `<span class="vp-detail-check">${ICONS.users} Checks in with ${esc(opp.check_in_with)}</span>` : ''}
           </div>
         </div>
         <div>
@@ -2724,11 +2729,13 @@
             <span class="vp-detail-check">${ICONS.check} No experience needed</span>
             <span class="vp-detail-check">${ICONS.check} Training provided</span>
             <span class="vp-detail-check">${ICONS.check} Arrive ready to check in with the production team</span>
+            ${opp.check_in_with ? `<span class="vp-detail-check">${ICONS.users} Checks in with ${esc(opp.check_in_with)}</span>` : ''}
           </div>
           ${requiredDates.length ? `<div class="vp-detail-label" style="margin-top:0.8rem;">Required Dates</div><div class="vp-detail-list">${requiredDates.map(d => `<span class="vp-detail-check">${ICONS.calendar}${esc(d)}</span>`).join('')}</div>` : ''}
         </div>
         <div class="vp-detail-grid">
           <strong>Department</strong><span>${esc(opp.department || 'Volunteer')}</span>
+          ${opp.check_in_with ? `<strong>Checks in with</strong><span>${esc(opp.check_in_with)}</span>` : ''}
           <strong>Location</strong><span>${esc(location || 'TBD')}</span>
           <strong>Time</strong><span>${esc(fmtTimeRange(opp.shift_start_time, opp.shift_end_time) || 'Flexible')}</span>
           <strong>Shift Type</strong><span>${esc(categoryLabel(opp))}</span>
@@ -2920,6 +2927,7 @@
           status: 'pending',
           role_name: opp.volunteer_role || null,
           department: opp.department || null,
+          check_in_with: opp.check_in_with || null,
           shift_date: opp.shift_date || null,
           shift_start_time: opp.shift_start_time || null,
           shift_end_time: opp.shift_end_time || null,
@@ -2992,7 +3000,7 @@
       btn.textContent = 'Looking you up...';
       try {
         const { data, error } = await sb.from('volunteer_signups')
-          .select('id,role_name,department,shift_date,shift_start_time,shift_end_time,required_dates,status,approved_hours,portal_token,created_at')
+          .select('id,role_name,department,check_in_with,shift_date,shift_start_time,shift_end_time,required_dates,status,approved_hours,portal_token,created_at')
           .eq('production_id', prod.id).ilike('email', email).order('shift_date', { ascending: true });
         if (error) throw error;
         renderPortalView(data || [], null, email);
@@ -3007,7 +3015,7 @@
     async function lookupByToken(token) {
       try {
         const { data, error } = await sb.from('volunteer_signups')
-          .select('id,role_name,department,shift_date,shift_start_time,shift_end_time,required_dates,status,approved_hours,portal_token,name,created_at')
+          .select('id,role_name,department,check_in_with,shift_date,shift_start_time,shift_end_time,required_dates,status,approved_hours,portal_token,name,created_at')
           .eq('portal_token', token).order('shift_date', { ascending: true });
         if (error) throw error;
         const rows = data || [];
@@ -3044,6 +3052,7 @@
       return `<div class="vp-portal-item">
         <div class="vp-portal-role">${esc(r.role_name || 'Volunteer Shift')}</div>
         <div class="vp-portal-meta">${esc(meta)}</div>
+        ${r.check_in_with ? `<div class="vp-progress-note">Checks in with ${esc(r.check_in_with)}</div>` : ''}
         <span class="vp-status ${cls}">${label}</span>
         ${cls === 'approved' && r.approved_hours ? `<div class="vp-progress-note">${esc(parseFloat(r.approved_hours))} hours confirmed</div>` : ''}
       </div>`;
