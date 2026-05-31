@@ -35087,7 +35087,15 @@ See you soon!
       allDay: e.all_day || false,
       backgroundColor: isDeadline ? colour + 'cc' : colour,
       borderColor: colour,
-      extendedProps: { event_type: e.event_type, venue: e.venue, notes: e.notes, is_public: e.is_public ?? false, is_deadline: isDeadline },
+      extendedProps: {
+        event_type: e.event_type,
+        venue: e.venue,
+        notes: e.notes,
+        is_public: e.is_public ?? false,
+        is_deadline: isDeadline,
+        raw_start_time: e.start_time || null,
+        raw_end_time: e.end_time || null,
+      },
     };
   }
 
@@ -35117,6 +35125,24 @@ See you soon!
     const pad = n => String(n).padStart(2, '0');
     return val.getUTCFullYear() + '-' + pad(val.getUTCMonth() + 1) + '-' + pad(val.getUTCDate()) +
            'T' + pad(val.getUTCHours()) + ':' + pad(val.getUTCMinutes());
+  }
+
+  function defaultEndDateTimeLocal(startValue) {
+    if (!startValue) return '';
+    const date = startValue.slice(0, 10);
+    const time = startValue.slice(11) || '09:00';
+    const [h, m] = time.split(':').map(n => parseInt(n, 10));
+    if (!Number.isFinite(h) || !Number.isFinite(m)) return date + 'T18:00';
+    const end = new Date(Date.UTC(
+      parseInt(date.slice(0, 4), 10),
+      parseInt(date.slice(5, 7), 10) - 1,
+      parseInt(date.slice(8, 10), 10),
+      h + 1,
+      m
+    ));
+    const pad = n => String(n).padStart(2, '0');
+    return end.getUTCFullYear() + '-' + pad(end.getUTCMonth() + 1) + '-' + pad(end.getUTCDate()) +
+           'T' + pad(end.getUTCHours()) + ':' + pad(end.getUTCMinutes());
   }
 
   function openEventModal(opts = {}) {
@@ -35149,11 +35175,12 @@ See you soon!
       document.getElementById('ev-is-public').checked = ev.extendedProps.is_public ?? _defaultPublic(ev.extendedProps.event_type);
       if (ev.extendedProps.is_deadline) {
         setEventMode('deadline');
-        document.getElementById('ev-deadline').value = toDateTimeLocal(ev.start);
+        document.getElementById('ev-deadline').value = toDateTimeLocal(ev.extendedProps.raw_start_time || ev.start);
       } else {
         setEventMode('startend');
-        document.getElementById('ev-start').value = toDateTimeLocal(ev.start);
-        document.getElementById('ev-end').value   = toDateTimeLocal(ev.end);
+        const startValue = toDateTimeLocal(ev.extendedProps.raw_start_time || ev.start);
+        document.getElementById('ev-start').value = startValue;
+        document.getElementById('ev-end').value   = toDateTimeLocal(ev.extendedProps.raw_end_time || ev.end) || defaultEndDateTimeLocal(startValue);
       }
       VenuePicker.render('ev-venue-picker', ev.extendedProps.venue || '', (name) => {
         document.getElementById('ev-venue').value = name;
