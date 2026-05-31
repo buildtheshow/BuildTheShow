@@ -1781,7 +1781,7 @@
         const { data: signups } = await sb.from('volunteer_signups')
           .select('*')
           .eq('production_id', prod?.id || new URLSearchParams(location.search).get('id') || '')
-          .ilike('volunteer_email', email)
+          .or(`email.ilike.${email},volunteer_email.ilike.${email}`)
           .neq('status', 'cancelled');
         if (!signups || signups.length === 0) throw new Error('not_found');
         // Verify passcode
@@ -1837,6 +1837,9 @@
       return `${h%12||12}:${String(m).padStart(2,'0')} ${h<12?'AM':'PM'}`;
     }
     function fmtTimeRange(s,e) { const a=fmtTime(s), b=fmtTime(e); return a && b ? `${a} - ${b}` : a || b || ''; }
+    function requiredDatesForSignup(row = {}) {
+      return Array.isArray(row.required_dates) ? row.required_dates.filter(Boolean) : [];
+    }
     function volunteerPasscode(email, productionId) {
       const str = (email || '').toLowerCase().trim() + (productionId || '');
       let h = 0;
@@ -2921,6 +2924,7 @@
           shift_date: opp.shift_date || null,
           shift_start_time: opp.shift_start_time || null,
           shift_end_time: opp.shift_end_time || null,
+          required_dates: Array.isArray(opp.required_dates) ? opp.required_dates.filter(Boolean) : [],
           discount_requested: discountRequested || false,
           discount_performer: discountRequested ? discountPerformer.trim() || null : null,
         }));
@@ -2989,7 +2993,7 @@
       btn.textContent = 'Looking you up...';
       try {
         const { data, error } = await sb.from('volunteer_signups')
-          .select('id,role_name,department,shift_date,shift_start_time,shift_end_time,status,approved_hours,portal_token,created_at')
+          .select('id,role_name,department,shift_date,shift_start_time,shift_end_time,required_dates,status,approved_hours,portal_token,created_at')
           .eq('production_id', prod.id).ilike('email', email).order('shift_date', { ascending: true });
         if (error) throw error;
         renderPortalView(data || [], null, email);
@@ -3004,7 +3008,7 @@
     async function lookupByToken(token) {
       try {
         const { data, error } = await sb.from('volunteer_signups')
-          .select('id,role_name,department,shift_date,shift_start_time,shift_end_time,status,approved_hours,portal_token,name,created_at')
+          .select('id,role_name,department,shift_date,shift_start_time,shift_end_time,required_dates,status,approved_hours,portal_token,name,created_at')
           .eq('portal_token', token).order('shift_date', { ascending: true });
         if (error) throw error;
         const rows = data || [];
@@ -3034,9 +3038,13 @@
     function portalItemHtml(r) {
       const cls = r.status === 'approved' || r.status === 'partially_filled' ? 'approved' : (r.status === 'declined' ? 'declined' : 'pending');
       const label = cls === 'approved' ? 'Confirmed' : cls === 'declined' ? 'Not Approved' : 'Pending Review';
+      const requiredDates = requiredDatesForSignup(r);
+      const meta = r.shift_date
+        ? `${fmtDate(r.shift_date, { short:true })}${r.shift_start_time ? ' - ' + fmtTimeRange(r.shift_start_time, r.shift_end_time) : ''}`
+        : (requiredDates.length ? requiredDates.join(' · ') : 'No fixed date');
       return `<div class="vp-portal-item">
         <div class="vp-portal-role">${esc(r.role_name || 'Volunteer Shift')}</div>
-        <div class="vp-portal-meta">${r.shift_date ? esc(fmtDate(r.shift_date, { short:true })) : 'No fixed date'}${r.shift_start_time ? ' - ' + esc(fmtTimeRange(r.shift_start_time, r.shift_end_time)) : ''}</div>
+        <div class="vp-portal-meta">${esc(meta)}</div>
         <span class="vp-status ${cls}">${label}</span>
         ${cls === 'approved' && r.approved_hours ? `<div class="vp-progress-note">${esc(parseFloat(r.approved_hours))} hours confirmed</div>` : ''}
       </div>`;
