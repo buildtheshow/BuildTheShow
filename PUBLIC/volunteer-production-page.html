@@ -2026,6 +2026,12 @@
     function planEntryAppliesTo(key, entry = {}) {
       return Array.isArray(entry.appliesTo) && entry.appliesTo.length ? entry.appliesTo : [planEntryBaseType(key)].filter(Boolean);
     }
+    function planEntryAllowsEvent(entry = {}, eventType, eventId) {
+      const scope = entry.eventScope?.[eventType] || entry.event_scope?.[eventType];
+      if (!scope || scope.mode !== 'specific') return true;
+      const ids = Array.isArray(scope.ids) ? scope.ids.map(String) : [];
+      return ids.includes(String(eventId || ''));
+    }
     function roleOpp(entryKey, entry, eventType, ev, count) {
       const role = roleFromPlanEntry(entryKey, entry);
       const timing = ev ? roleShiftTiming(ev, entry) : { shift_date: null, shift_start_time: null, shift_end_time: null, hours: null };
@@ -2060,6 +2066,7 @@
               const key = `${eventType}-${ri}`, entry = staffingPlan[key], count = entry?.count ?? 0;
               if (count <= 0) return;
               if (!planEntryAppliesTo(key, entry).includes(eventType)) return;
+              if (!planEntryAllowsEvent(entry, eventType, ev.id)) return;
               result.push(roleOpp(key, entry, eventType, ev, count));
             });
           });
@@ -2071,6 +2078,7 @@
             result.push(roleOpp(k, v, eventType, null, v.count));
           } else {
             events.filter(ev => ev.event_type === eventType).forEach(ev => {
+              if (!planEntryAllowsEvent(v, eventType, ev.id)) return;
               result.push(roleOpp(k, v, eventType, ev, v.count));
             });
           }
@@ -2079,13 +2087,17 @@
       Object.entries(staffingPlan).forEach(([key, entry]) => {
         const baseType = planEntryBaseType(key);
         if (!baseType || (entry?.count ?? 0) <= 0) return;
+        if (baseType === 'dept_leads') return;
         planEntryAppliesTo(key, entry).filter(type => type && type !== baseType).forEach(type => {
           const cfg = STAFFING_MAP[type];
           if (!cfg) return;
           if (cfg.perProd) {
             result.push(roleOpp(key, entry, type, null, entry.count));
           } else {
-            events.filter(ev => ev.event_type === type).forEach(ev => result.push(roleOpp(key, entry, type, ev, entry.count)));
+            events.filter(ev => ev.event_type === type).forEach(ev => {
+              if (!planEntryAllowsEvent(entry, type, ev.id)) return;
+              result.push(roleOpp(key, entry, type, ev, entry.count));
+            });
           }
         });
       });
