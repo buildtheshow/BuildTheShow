@@ -34975,29 +34975,29 @@ See you soon!
       eventContent(arg) {
         try {
           const ev = arg.event;
+          const timeFromValue = val => {
+            const normalized = toDateTimeLocal(val);
+            if (!normalized) return '';
+            const [hRaw, mRaw] = normalized.slice(11, 16).split(':').map(n => parseInt(n, 10));
+            if (!Number.isFinite(hRaw) || !Number.isFinite(mRaw)) return '';
+            const ap = hRaw >= 12 ? 'pm' : 'am';
+            return `${hRaw % 12 || 12}:${String(mRaw).padStart(2,'0')}${ap}`;
+          };
           // Deadline events render as a compact due badge.
           if (ev.extendedProps.is_deadline) {
-            const fmtT = t => {
-              if (!t) return '';
-              const h = t.getUTCHours(), m = t.getUTCMinutes(), ap = h >= 12 ? 'pm' : 'am';
-              return `${h % 12 || 12}:${String(m).padStart(2,'0')}${ap}`;
-            };
             const wrap = document.createElement('div');
             wrap.style.cssText = 'width:100%;display:flex;align-items:center;gap:4px;padding:1px 4px;overflow:hidden;';
             const safeTxt = s => String(s||'').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-            const time = fmtT(ev.start);
+            const time = timeFromValue(ev.extendedProps.raw_start_time || ev.start);
             wrap.innerHTML = `<span style="font-size:9px;font-weight:900;letter-spacing:0;text-transform:uppercase;flex-shrink:0;" title="Deadline">Due</span><span style="font-size:10px;font-weight:800;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${safeTxt(time ? `${time} ${ev.title || ''}` : ev.title || '')}</span>`;
             return { domNodes: [wrap] };
           }
-          const fmtT = t => {
-            if (!t) return '';
-            const h = t.getUTCHours(), m = t.getUTCMinutes(), ap = h >= 12 ? 'pm' : 'am';
-            return `${h % 12 || 12}:${String(m).padStart(2,'0')}${ap}`;
-          };
           let timeStr = '';
           if (!ev.allDay && ev.start) {
-            timeStr = fmtT(ev.start);
-            if (ev.end) timeStr += ' - ' + fmtT(ev.end);
+            const startTime = timeFromValue(ev.extendedProps.raw_start_time || ev.start);
+            const endTime = timeFromValue(ev.extendedProps.raw_end_time || ev.end);
+            timeStr = startTime;
+            if (endTime) timeStr += ' - ' + endTime;
           }
           const wrap = document.createElement('div');
           wrap.style.cssText = 'width:100%;overflow:hidden;text-align:center;line-height:1.25;';
@@ -35290,7 +35290,7 @@ See you soon!
     const type       = document.getElementById('ev-type').value;
     const isDeadline = document.getElementById('ev-is-deadline').value === '1';
     const start      = isDeadline ? document.getElementById('ev-deadline').value : document.getElementById('ev-start').value;
-    const end        = isDeadline ? document.getElementById('ev-deadline').value : document.getElementById('ev-end').value;
+    let end          = isDeadline ? document.getElementById('ev-deadline').value : document.getElementById('ev-end').value;
     const venue      = document.getElementById('ev-venue').value.trim();
     const notes      = document.getElementById('ev-notes').value.trim();
     const errEl      = document.getElementById('event-error');
@@ -35299,6 +35299,10 @@ See you soon!
     errEl.classList.remove('visible');
     if (!title) { errEl.textContent = 'Event title is required.'; errEl.classList.add('visible'); return; }
     if (!start) { errEl.textContent = isDeadline ? 'Deadline date and time is required.' : 'Start date and time is required.'; errEl.classList.add('visible'); return; }
+    if (!isDeadline && end && start && end < start && end.slice(0, 10) !== start.slice(0, 10)) {
+      end = start.slice(0, 10) + 'T' + (end.slice(11, 16) || start.slice(11, 16) || '18:00');
+      document.getElementById('ev-end').value = end;
+    }
 
     btn.disabled = true; btn.textContent = 'Saving…';
 
