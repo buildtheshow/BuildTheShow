@@ -68411,29 +68411,31 @@ See you soon!
 	  let _staffingDirty = false;
 
 	  async function _doSaveStaffingPlan() {
-	    if (!prodId) { showSaveStatus('error'); console.warn('[BTS] staffing save: no prodId'); return; }
+	    if (!prodId) { showSaveStatus('error'); console.warn('[BTS] staffing save: no prodId'); return false; }
 	    // Use in-memory plan only — DOM may have stale duplicate elements from old renders
 	    const plan = JSON.parse(JSON.stringify(_staffingPlan));
-	    if (!Object.keys(plan).length) { console.warn('[BTS] staffing save: plan empty, skipping'); _staffingDirty = false; return; }
+	    if (!Object.keys(plan).length) { console.warn('[BTS] staffing save: plan empty, skipping'); _staffingDirty = false; return true; }
 	    console.log('[BTS] staffing save: writing', Object.keys(plan).length, 'keys, dept_leads-8:', plan['dept_leads-8']?.count);
 	    showSaveStatus('saving');
 	    const { data, error } = await sb.from('productions')
 	      .update({ volunteer_staffing_plan: plan })
 	      .eq('id', prodId)
 	      .select('id');
-	    if (error) { showSaveStatus('error'); console.error('[BTS] staffing save error:', error.message); return; }
-	    if (!data?.length) { showSaveStatus('error'); console.warn('[BTS] staffing save: no rows updated — check RLS. prodId:', prodId); return; }
+	    if (error) { showSaveStatus('error'); console.error('[BTS] staffing save error:', error.message); return false; }
+	    if (!data?.length) { showSaveStatus('error'); console.warn('[BTS] staffing save: no rows updated — check RLS. prodId:', prodId); return false; }
 	    console.log('[BTS] staffing save: success, dept_leads-8 count saved as', plan['dept_leads-8']?.count);
 	    _staffingDirty = false;
 	    showSaveStatus('saved');
 	    try { applyStaffingPlanToTiles(); } catch (_) {}
+	    return true;
 	  }
 
 	  function saveStaffingPlan(immediate = false) {
 	    _staffingDirty = true;
 	    clearTimeout(_staffingSaveTimer);
-	    if (immediate) { _doSaveStaffingPlan(); return; }
+	    if (immediate) return _doSaveStaffingPlan();
 	    _staffingSaveTimer = setTimeout(_doSaveStaffingPlan, 600);
+	    return Promise.resolve(true);
 	  }
 
 	  window.addEventListener('beforeunload', e => {
@@ -68732,7 +68734,7 @@ See you soon!
 	            </div>
 	          </section>
 	          <div class="vol-schedule-actions">
-	            <button type="button" class="btn-primary" style="font-size:0.76rem;width:100%;justify-content:center;" onclick="volSaveSchedule('${type}','${ri}')">Save role setup</button>
+	            <button type="button" class="btn-primary" id="vsq-save-btn-${key}" style="font-size:0.76rem;width:100%;justify-content:center;" onclick="volSaveSchedule('${type}','${ri}')">Save role setup</button>
 	          </div>
 	        </div>
 	      </div>`;
@@ -68765,8 +68767,11 @@ See you soon!
 	    }
 	  }
 
-	  function volSaveSchedule(type, ri) {
+	  async function volSaveSchedule(type, ri) {
 	    const key = `${type}-${ri}`;
+	    const saveBtn = document.getElementById(`vsq-save-btn-${key}`);
+	    const originalLabel = saveBtn?.textContent || 'Save role setup';
+	    if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'Saving...'; }
 	    let shiftStartMins = parseInt(document.getElementById(`vsq-sched-smins-${key}`)?.value, 10) || 0;
 	    let shiftStartAnchor = document.getElementById(`vsq-sched-sanchor-${key}`)?.value || 'before_start';
 	    let shiftEndMins = parseInt(document.getElementById(`vsq-sched-emins-${key}`)?.value, 10) || 0;
@@ -68816,8 +68821,13 @@ See you soon!
 	    if (titleEl) titleEl.textContent = roleName;
 	    if (kickerEl) kickerEl.textContent = volEventTypeLabel(type);
 	    if (tileEl) tileEl.style.setProperty('--brand-tile-bg', DEPT_COLOURS_LOCAL[department] || '#572e88');
-	    document.querySelectorAll('.vol-schedule-popover, .vol-schedule-modal').forEach(el => el.remove());
-	    saveStaffingPlan(true);
+	    const saved = await saveStaffingPlan(true);
+	    if (saved) {
+	      document.querySelectorAll('.vol-schedule-popover, .vol-schedule-modal').forEach(el => el.remove());
+	    } else if (saveBtn) {
+	      saveBtn.disabled = false;
+	      saveBtn.textContent = originalLabel;
+	    }
 	  }
 
 	  function volStep(type, ri, delta) {
