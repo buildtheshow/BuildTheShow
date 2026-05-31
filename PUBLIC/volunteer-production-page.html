@@ -1849,7 +1849,8 @@
       const volUrl = `${window.location.origin}${window.location.pathname}`;
       const portalUrl = `${volUrl}?view=portal`;
       const shiftDates = requestedShifts.map(opp => {
-        const date = opp.shift_date ? fmtDate(opp.shift_date, { short:true }) : 'Flexible';
+        const requiredDates = Array.isArray(opp.required_dates) ? opp.required_dates.filter(Boolean) : [];
+        const date = opp.shift_date ? fmtDate(opp.shift_date, { short:true }) : (requiredDates.length ? requiredDates.join('; ') : 'Flexible');
         const time = fmtTimeRange(opp.shift_start_time, opp.shift_end_time);
         const role = opp.volunteer_role || opp.role_name || 'Volunteer';
         return [date, time, role].filter(Boolean).join(' · ');
@@ -2024,7 +2025,15 @@
       };
     }
     function planEntryAppliesTo(key, entry = {}) {
-      return Array.isArray(entry.appliesTo) && entry.appliesTo.length ? entry.appliesTo : [planEntryBaseType(key)].filter(Boolean);
+      return Array.isArray(entry.appliesTo) ? entry.appliesTo : [planEntryBaseType(key)].filter(Boolean);
+    }
+    function planEntryCountMode(key, entry = {}) {
+      const mode = entry.countMode || entry.count_mode;
+      if (mode === 'per_production' || mode === 'per_event') return mode;
+      const label = String(entry.perLabel || entry.per_label || '').toLowerCase();
+      if (label.includes('production') || label.includes('total')) return 'per_production';
+      const baseType = planEntryBaseType(key);
+      return STAFFING_MAP[baseType]?.perProd ? 'per_production' : 'per_event';
     }
     function planEntryAllowsEvent(entry = {}, eventType, eventId) {
       const scope = entry.eventScope?.[eventType] || entry.event_scope?.[eventType];
@@ -2032,7 +2041,21 @@
       const ids = Array.isArray(scope.ids) ? scope.ids.map(String) : [];
       return ids.includes(String(eventId || ''));
     }
-    function roleOpp(entryKey, entry, eventType, ev, count) {
+    function requiredDateLabels(entry, events) {
+      const types = new Set(planEntryAppliesTo('', entry).filter(type => type && !STAFFING_MAP[type]?.perProd && type !== 'other'));
+      const rows = events
+        .filter(ev => types.has(ev.event_type) && planEntryAllowsEvent(entry, ev.event_type, ev.id))
+        .sort((a,b) => (a.start_time || '').localeCompare(b.start_time || ''));
+      return rows.map(ev => {
+        const timing = roleShiftTiming(ev, entry);
+        const date = timing.shift_date || ev.start_time?.slice(0, 10) || '';
+        const dateText = date ? fmtDate(date, { short: true }) : (ev.title || 'Required date');
+        const timeText = fmtTimeRange(timing.shift_start_time, timing.shift_end_time);
+        const title = ev.title && ev.title !== ev.event_type ? ev.title : '';
+        return [dateText, timeText, title].filter(Boolean).join(' - ');
+      });
+    }
+    function roleOpp(entryKey, entry, eventType, ev, count, requiredDates = []) {
       const role = roleFromPlanEntry(entryKey, entry);
       const timing = ev ? roleShiftTiming(ev, entry) : { shift_date: null, shift_start_time: null, shift_end_time: null, hours: null };
       return {
@@ -2045,6 +2068,8 @@
         credit_hours: creditHoursFor(entry, timing.hours),
         event_id: ev?.id || null,
         event_type: eventType,
+        count_mode: planEntryCountMode(entryKey, entry),
+        required_dates: requiredDates,
         timing_group: entry.timingGroup || entry.timing_group || null
       };
     }
@@ -2057,15 +2082,18 @@
           cfg.roles.forEach((role, ri) => {
             const key = `${eventType}-${ri}`, entry = staffingPlan[key], count = entry?.count ?? 0;
             if (count <= 0) return;
-            if (!planEntryAppliesTo(key, entry).includes(eventType)) return;
-            result.push(roleOpp(key, entry, eventType, null, count));
+            result.push(roleOpp(key, entry, eventType, null, count, requiredDateLabels(entry, events)));
           });
         } else {
-          events.filter(ev => ev.event_type === eventType).sort((a,b)=>(a.start_time||'').localeCompare(b.start_time||'')).forEach(ev => {
-            cfg.roles.forEach((role, ri) => {
-              const key = `${eventType}-${ri}`, entry = staffingPlan[key], count = entry?.count ?? 0;
-              if (count <= 0) return;
-              if (!planEntryAppliesTo(key, entry).includes(eventType)) return;
+          cfg.roles.forEach((role, ri) => {
+            const key = `${eventType}-${ri}`, entry = staffingPlan[key], count = entry?.count ?? 0;
+            if (count <= 0) return;
+            if (planEntryCountMode(key, entry) === 'per_production') {
+              result.push(roleOpp(key, entry, eventType, null, count, requiredDateLabels(entry, events)));
+              return;
+            }
+            if (!planEntryAppliesTo(key, entry).includes(eventType)) return;
+            events.filter(ev => ev.event_type === eventType).sort((a,b)=>(a.start_time||'').localeCompare(b.start_time||'')).forEach(ev => {
               if (!planEntryAllowsEvent(entry, eventType, ev.id)) return;
               result.push(roleOpp(key, entry, eventType, ev, count));
             });
@@ -2073,10 +2101,10 @@
         }
         Object.entries(staffingPlan).filter(([k]) => k.startsWith(`${eventType}-custom-`)).forEach(([k, v]) => {
           if (!v.roleName || (v.count ?? 0) <= 0) return;
-          if (!planEntryAppliesTo(k, v).includes(eventType)) return;
-          if (cfg.perProd) {
-            result.push(roleOpp(k, v, eventType, null, v.count));
+          if (cfg.perProd || planEntryCountMode(k, v) === 'per_production') {
+            result.push(roleOpp(k, v, eventType, null, v.count, requiredDateLabels(v, events)));
           } else {
+            if (!planEntryAppliesTo(k, v).includes(eventType)) return;
             events.filter(ev => ev.event_type === eventType).forEach(ev => {
               if (!planEntryAllowsEvent(v, eventType, ev.id)) return;
               result.push(roleOpp(k, v, eventType, ev, v.count));
@@ -2087,7 +2115,7 @@
       Object.entries(staffingPlan).forEach(([key, entry]) => {
         const baseType = planEntryBaseType(key);
         if (!baseType || (entry?.count ?? 0) <= 0) return;
-        if (baseType === 'dept_leads') return;
+        if (planEntryCountMode(key, entry) === 'per_production') return;
         planEntryAppliesTo(key, entry).filter(type => type && type !== baseType).forEach(type => {
           const cfg = STAFFING_MAP[type];
           if (!cfg) return;
@@ -2635,7 +2663,7 @@
           <div class="vp-card-title-row"><h3 class="vp-card-title"><button class="vp-title-toggle" type="button" onclick="toggleDetails(${detailsTarget})" aria-expanded="${isOpen ? 'true' : 'false'}">${esc(roleName)}</button></h3>${spotsHtml(opp)}</div>
           ${roleSummaryHtml(opp, detailsTarget, isOpen)}
           <div class="vp-card-facts">
-            ${opp.shift_date ? `<span class="vp-fact">${ICONS.calendar}${esc(fmtDate(opp.shift_date, { short:true }))}</span>` : '<span class="vp-fact">Flexible - no fixed date</span>'}
+            ${opp.shift_date ? `<span class="vp-fact">${ICONS.calendar}${esc(fmtDate(opp.shift_date, { short:true }))}</span>` : `<span class="vp-fact">${Array.isArray(opp.required_dates) && opp.required_dates.length ? ICONS.calendar + esc(opp.required_dates.length + ' required date' + (opp.required_dates.length === 1 ? '' : 's')) : 'Flexible - no fixed date'}</span>`}
             ${timeRange ? `<span class="vp-fact">${ICONS.clock}${esc(timeRange)}</span>` : ''}
             ${location ? `<span class="vp-fact">${ICONS.pin}${esc(location)}</span>` : ''}
           </div>
@@ -2685,6 +2713,7 @@
       </div>`;
     }
     function renderDetails(opp, location, targetId) {
+      const requiredDates = Array.isArray(opp.required_dates) ? opp.required_dates.filter(Boolean) : [];
       return `<div class="vp-card-details">
         <div>
           <div class="vp-detail-label">Role Description</div>
@@ -2694,6 +2723,7 @@
             <span class="vp-detail-check">${ICONS.check} Training provided</span>
             <span class="vp-detail-check">${ICONS.check} Arrive ready to check in with the production team</span>
           </div>
+          ${requiredDates.length ? `<div class="vp-detail-label" style="margin-top:0.8rem;">Required Dates</div><div class="vp-detail-list">${requiredDates.map(d => `<span class="vp-detail-check">${ICONS.calendar}${esc(d)}</span>`).join('')}</div>` : ''}
         </div>
         <div class="vp-detail-grid">
           <strong>Department</strong><span>${esc(opp.department || 'Volunteer')}</span>
@@ -2781,10 +2811,11 @@
     }
     function cartItemHtml(opp) {
       const color = iconColor(opp), isGold = color === '#efab45';
+      const requiredDates = Array.isArray(opp.required_dates) ? opp.required_dates.filter(Boolean) : [];
       return `<div class="vp-cart-item">
         <div class="vp-cart-dot" style="background:${color};color:${isGold ? '#1a1008' : '#fff'};">${roleIcon(opp.volunteer_role, opp.department)}</div>
         <div>
-          <div class="vp-cart-date">${esc(opp.shift_date ? fmtDate(opp.shift_date, { short:true }) : 'No fixed date')}</div>
+          <div class="vp-cart-date">${esc(opp.shift_date ? fmtDate(opp.shift_date, { short:true }) : (requiredDates.length ? `${requiredDates.length} required date${requiredDates.length === 1 ? '' : 's'}` : 'No fixed date'))}</div>
           <div class="vp-cart-role">${esc(opp.volunteer_role || 'Volunteer Shift')}</div>
           <div class="vp-cart-meta">${esc(fmtTimeRange(opp.shift_start_time, opp.shift_end_time) || 'Flexible')}${opp.department ? '<br>' + esc(opp.department) : ''}</div>
         </div>
