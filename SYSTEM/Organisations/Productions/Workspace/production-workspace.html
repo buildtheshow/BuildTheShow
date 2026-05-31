@@ -68305,11 +68305,9 @@ See you soon!
 	      shortParts.push(`${val.countsFor}h credit`);
 	      longParts.push(`${val.countsFor} volunteer discount hours`);
 	    }
-	    const prepHours = parseFloat(val.prepHours ?? val.prep_hours) || 0;
-	    if (prepHours > 0) {
-	      const noCount = val.prepNoCount;
-	      shortParts.push(`+ ${fmtHours(prepHours)} prep${noCount ? ' (tracked)' : ''}`);
-	      longParts.push(noCount ? `${fmtHours(prepHours)} prep hrs tracked (not counted)` : `Adds ${fmtHours(prepHours)} prep credit`);
+	    if (val.outsideTimelineWork || val.outside_timeline_work) {
+	      shortParts.push('outside-time work');
+	      longParts.push('Includes work outside scheduled times');
 	    }
 	    return { shortText: shortParts.join(' · '), longText: longParts.join(' · ') };
 	  }
@@ -68714,15 +68712,11 @@ See you soon!
 	                </div>
 	                <div id="vsq-hours-auto-note-${key}" class="vol-schedule-note" style="display:${!saved.hoursMode || saved.hoursMode === 'auto' ? '' : 'none'};">Counts the shift length automatically.</div>
 	                <div id="vsq-hours-full-note-${key}" class="vol-schedule-note" style="display:${saved.hoursMode === 'full' ? '' : 'none'};">Counts as the full volunteer discount requirement.</div>
-	                <div class="vol-hours-fixed-row" style="display:grid;margin-top:0.45rem;">
-	                  <input type="number" min="0" max="24" step="0.25" id="vsq-sched-prep-${key}" value="${saved.prepHours ?? saved.prep_hours ?? ''}" placeholder="0" aria-label="Prep hours" />
-	                  <span style="font-size:0.72rem;color:#572e88;font-weight:800;">prep hrs</span>
-	                </div>
 	                <label style="display:flex;align-items:center;gap:0.45rem;margin-top:0.35rem;cursor:pointer;">
-	                  <input type="checkbox" id="vsq-sched-prep-nocount-${key}" ${saved.prepNoCount ? 'checked' : ''} style="accent-color:#572e88;width:14px;height:14px;" />
-	                  <span style="font-size:0.72rem;color:#554a68;font-weight:700;">Track only — don't count toward hours</span>
+	                  <input type="checkbox" id="vsq-sched-outside-${key}" ${saved.outsideTimelineWork || saved.outside_timeline_work || saved.prepNoCount || (parseFloat(saved.prepHours ?? saved.prep_hours) > 0) ? 'checked' : ''} style="accent-color:#572e88;width:14px;height:14px;" />
+	                  <span style="font-size:0.72rem;color:#554a68;font-weight:700;">Includes work outside scheduled times</span>
 	                </label>
-	                <div class="vol-schedule-note">Adds extra credit for prep work outside the scheduled shift.</div>
+	                <div class="vol-schedule-note">Flags that this role has planning, prep, communication, or follow-up work outside the listed dates/times.</div>
 	              </div>
 	            </div>
 	          </section>
@@ -68774,8 +68768,7 @@ See you soon!
 	    }
 	    const hoursMode = document.querySelector(`input[name="vsq-hours-mode-${key}"]:checked`)?.value || 'auto';
 	    const countsFor = hoursMode === 'fixed' ? (parseFloat(document.getElementById(`vsq-sched-counts-${key}`)?.value) || 0) : 0;
-	    const prepHours = parseFloat(document.getElementById(`vsq-sched-prep-${key}`)?.value) || 0;
-	    const prepNoCount = document.getElementById(`vsq-sched-prep-nocount-${key}`)?.checked || false;
+	    const outsideTimelineWork = document.getElementById(`vsq-sched-outside-${key}`)?.checked || false;
 	    const roleName = document.getElementById(`vsq-role-name-${key}`)?.value?.trim() || _volStaffingRoleMeta[key]?.roleName || 'Volunteer Role';
 	    const department = document.getElementById(`vsq-dept-${key}`)?.value || _volStaffingRoleMeta[key]?.department || 'Other';
 	    const description = document.getElementById(`vsq-desc-${key}`)?.value?.trim() || volDefaultRoleDescription(department, roleName);
@@ -68795,11 +68788,11 @@ See you soon!
 	      }
 	    });
 	    if (!_staffingPlan[key]) _staffingPlan[key] = {};
-	    Object.assign(_staffingPlan[key], { roleName, department, description, timingGroup, countMode, perLabel: volCountModeLabel(countMode, type), appliesTo: coveredTypes, eventScope, shiftStartMins, shiftStartAnchor, shiftEndMins, shiftEndAnchor, hoursMode, countsFor, prepHours, prepNoCount });
+	    Object.assign(_staffingPlan[key], { roleName, department, description, timingGroup, countMode, perLabel: volCountModeLabel(countMode, type), appliesTo: coveredTypes, eventScope, shiftStartMins, shiftStartAnchor, shiftEndMins, shiftEndAnchor, hoursMode, countsFor, prepHours: 0, prepNoCount: false, outsideTimelineWork });
 	    _volStaffingRoleMeta[key] = { ...(_volStaffingRoleMeta[key] || {}), roleName, department, description };
 	    const indicator = document.getElementById(`vsq-time-${key}`);
 	    if (indicator) {
-	      const summary = volScheduleSummary({ shiftStartMins, shiftStartAnchor, shiftEndMins, shiftEndAnchor, hoursMode, countsFor, prepHours });
+	      const summary = volScheduleSummary({ shiftStartMins, shiftStartAnchor, shiftEndMins, shiftEndAnchor, hoursMode, countsFor, outsideTimelineWork });
 	      indicator.textContent = summary.shortText;
 	      indicator.title = summary.longText;
 	    }
