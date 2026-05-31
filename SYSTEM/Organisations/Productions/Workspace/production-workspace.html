@@ -67031,6 +67031,30 @@ See you soon!
 	      'Marketing & Publicity':        '#efab45',
 	    };
 
+	    function staffingEntryForOpportunity(opp) {
+	      if (!opp?.event_id) return {};
+	      const ev = volunteerPlanEvents.find(e => String(e.id) === String(opp.event_id));
+	      const eventType = ev ? volCalendarEventType(ev) : '';
+	      const cfg = STAFFING_MAP[eventType];
+	      const target = String(opp.production_title || '').toLowerCase();
+	      const fixedIndex = cfg?.roles?.findIndex((role, ri) => {
+	        const saved = _staffingPlan[`${eventType}-${ri}`] || {};
+	        return String(saved.roleName || role.name || '').toLowerCase() === target;
+	      }) ?? -1;
+	      if (fixedIndex >= 0) return _staffingPlan[`${eventType}-${fixedIndex}`] || {};
+	      const custom = Object.entries(_staffingPlan).find(([key, val]) =>
+	        key.startsWith(`${eventType}-custom-`) && String(val?.roleName || '').toLowerCase() === target
+	      );
+	      return custom?.[1] || {};
+	    }
+
+	    function opportunityTimeCommitment(opp) {
+	      if (!opp?.event_id) return opp?.time_commitment || '';
+	      const ev = volunteerPlanEvents.find(e => String(e.id) === String(opp.event_id));
+	      if (!ev) return opp?.time_commitment || '';
+	      return volShiftCommitmentLabel(ev, staffingEntryForOpportunity(opp)) || opp?.time_commitment || '';
+	    }
+
 	    const eventCounts = volunteerPlanEvents.reduce((acc, ev) => {
 	      const k = volCalendarEventType(ev);
 	      acc[k] = (acc[k] || 0) + 1;
@@ -67187,9 +67211,10 @@ See you soon!
 	      : `${publishedCount} role${publishedCount === 1 ? '' : 's'} open to families.${gapDraft.length ? ` ${gapDraft.length} still in draft.` : ' All roles are public.'}`;
 	    function coverageRoleChip(opp) {
 	      const needed = opp.volunteers_needed ? `${esc(String(opp.volunteers_needed))} needed · ` : '';
+	      const displayTime = opportunityTimeCommitment(opp);
 	      return `<div class="vol-role-card" style="margin-bottom:0;padding:0.55rem 0.7rem;">
 	        <div class="vol-role-title">${esc(opp.production_title)}</div>
-	        <div class="vol-role-meta">${needed}${esc(opp.volunteer_role || '')}${opp.time_commitment ? ` · ${esc(opp.time_commitment)}` : ''}</div>
+	        <div class="vol-role-meta">${needed}${esc(opp.volunteer_role || '')}${displayTime ? ` · ${esc(displayTime)}` : ''}</div>
 	      </div>`;
 	    }
 	    const gapTrackingHtml = `
@@ -67265,6 +67290,7 @@ See you soon!
 	      const isPublished = opp.status === 'published';
 	      const missingDesc = isPublished && !opp.summary && !opp.description;
 	      const missingDates = !opp.time_commitment && !opp.close_date;
+	      const displayTime = opportunityTimeCommitment(opp);
 	      return `
 	        <div class="vol-role-card"${missingDesc ? ' style="border-color:rgba(221,130,51,0.38);"' : ''}>
 	          <div class="vol-role-top">
@@ -67273,7 +67299,7 @@ See you soon!
 	                <div class="vol-role-title">${esc(opp.production_title)}</div>
 	                ${opp.volunteers_needed ? `<span class="vol-role-needs">${esc(String(opp.volunteers_needed))} needed</span>` : ''}
 	              </div>
-	              <div class="vol-role-meta">${esc(opp.volunteer_role || typeLabel)}${opp.time_commitment ? ` · ${esc(opp.time_commitment)}` : ''}${loc ? ` · ${esc(loc)}` : ''} · ${esc(closeDate)}</div>
+	              <div class="vol-role-meta">${esc(opp.volunteer_role || typeLabel)}${displayTime ? ` · ${esc(displayTime)}` : ''}${loc ? ` · ${esc(loc)}` : ''} · ${esc(closeDate)}</div>
 	              ${missingDesc ? `<div class="vol-role-warning">Missing description — families cannot tell what this role involves.</div>` : ''}
 	              ${missingDates && isPublished ? `<div class="vol-role-warning">No dates or shifts set on this published role.</div>` : ''}
 	            </div>
@@ -68043,6 +68069,76 @@ See you soon!
 	    return { shortText: shortParts.join(' · '), longText: longParts.join(' · ') };
 	  }
 
+	  function volParseEventDateTime(value) {
+	    if (!value) return null;
+	    const [date, time = '00:00:00'] = String(value).split('T');
+	    if (!date) return null;
+	    const [h = '0', m = '0'] = time.split(':');
+	    return { date, mins: (parseInt(h, 10) || 0) * 60 + (parseInt(m, 10) || 0) };
+	  }
+
+	  function volNormalizeDateMinutes(dateStr, mins) {
+	    if (!dateStr || !Number.isFinite(mins)) return null;
+	    const dayOffset = Math.floor(mins / 1440);
+	    const dayMins = ((mins % 1440) + 1440) % 1440;
+	    const d = new Date(dateStr + 'T12:00:00');
+	    d.setDate(d.getDate() + dayOffset);
+	    const pad = n => String(n).padStart(2, '0');
+	    return {
+	      date: `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`,
+	      time: `${pad(Math.floor(dayMins / 60))}:${pad(dayMins % 60)}:00`,
+	      mins: dayMins,
+	    };
+	  }
+
+	  function volApplyShiftAnchor(ev, mins, anchor) {
+	    const start = volParseEventDateTime(ev?.start_time);
+	    const end = volParseEventDateTime(ev?.end_time);
+	    if (!start && !end) return null;
+	    if (anchor === 'own_time') return null;
+	    if (anchor === 'after_start') return volNormalizeDateMinutes(start.date, start.mins + mins);
+	    if (anchor === 'before_end') return volNormalizeDateMinutes((end || start).date, (end || start).mins - mins);
+	    if (anchor === 'before_event_start') return volNormalizeDateMinutes((start || end).date, -mins);
+	    if (anchor === 'after_event_end') return volNormalizeDateMinutes((end || start).date, 1440 + mins);
+	    if (anchor === 'after_end') return volNormalizeDateMinutes((end || start).date, (end || start).mins + mins);
+	    return volNormalizeDateMinutes((start || end).date, (start || end).mins - mins);
+	  }
+
+	  function volRoleShiftTiming(ev, entry = {}) {
+	    const shiftStartAnchor = entry.shiftStartAnchor || entry.shift_start_anchor || 'before_start';
+	    const shiftEndAnchor = entry.shiftEndAnchor || entry.shift_end_anchor || 'after_end';
+	    if (shiftStartAnchor === 'own_time' || shiftEndAnchor === 'own_time') {
+	      return { shift_date: null, shift_start_time: null, shift_end_time: null };
+	    }
+	    const startMins = parseInt(entry.shiftStartMins ?? entry.shift_start_mins, 10) || 0;
+	    const endMins = parseInt(entry.shiftEndMins ?? entry.shift_end_mins, 10) || 0;
+	    const start = volApplyShiftAnchor(ev, startMins, shiftStartAnchor);
+	    const end = volApplyShiftAnchor(ev, endMins, shiftEndAnchor);
+	    return {
+	      shift_date: start?.date || ev?.start_time?.slice(0, 10) || null,
+	      shift_start_time: start?.time || null,
+	      shift_end_time: end?.time || null,
+	    };
+	  }
+
+	  function volFmtShiftTime(value) {
+	    if (!value) return '';
+	    const part = String(value).includes('T') ? String(value).split('T')[1] : String(value);
+	    const [h = '0', m = '00'] = part.split(':');
+	    const hr = parseInt(h, 10) || 0;
+	    return `${hr % 12 || 12}:${m || '00'}${hr < 12 ? 'am' : 'pm'}`;
+	  }
+
+	  function volShiftCommitmentLabel(ev, entry = {}) {
+	    const timing = volRoleShiftTiming(ev, entry);
+	    const date = timing.shift_date || ev?.start_time?.slice(0, 10);
+	    const dateLabel = date ? new Date(date + 'T12:00:00').toLocaleDateString('en-CA', { weekday: 'short', month: 'short', day: 'numeric' }) : (ev?.title || '');
+	    const start = volFmtShiftTime(timing.shift_start_time);
+	    const end = volFmtShiftTime(timing.shift_end_time);
+	    const range = [start, end].filter(Boolean).join(' – ');
+	    return [dateLabel, range].filter(Boolean).join(' · ');
+	  }
+
 	  function applyStaffingPlanToTiles() {
 	    const fmt = t => { if (!t) return ''; const [h, m] = t.split(':').map(Number); const ap = h >= 12 ? 'pm' : 'am'; return `${h % 12 || 12}:${String(m).padStart(2,'0')}${ap}`; };
 	    Object.entries(_staffingPlan).forEach(([key, val]) => {
@@ -68756,12 +68852,13 @@ See you soon!
 	        name: entry.roleName || r.name,
 	        dept: entry.department || r.dept,
 	        qty: entry.count ?? 0,
-	        description: entry.description || volDefaultRoleDescription(entry.department || r.dept, entry.roleName || r.name)
+	        description: entry.description || volDefaultRoleDescription(entry.department || r.dept, entry.roleName || r.name),
+	        planEntry: entry,
 	      };
 	    });
 	    const customRoles = Object.entries(_staffingPlan)
 	      .filter(([k, v]) => k.startsWith(`${eventType}-custom-`) && v.roleName && (v.count ?? 0) > 0)
-	      .map(([k, v]) => ({ name: v.roleName, dept: v.department || 'Other', qty: v.count, description: v.description || volDefaultRoleDescription(v.department || 'Other', v.roleName) }));
+	      .map(([k, v]) => ({ name: v.roleName, dept: v.department || 'Other', qty: v.count, description: v.description || volDefaultRoleDescription(v.department || 'Other', v.roleName), planEntry: v }));
 	    const allRolesToCreate = [...fixedRoles, ...customRoles].filter(r => r.qty > 0);
 	    const matchingEvents = isPerEvent
 	      ? volunteerPlanEvents.filter(e => volCalendarEventMatches(e, eventType))
@@ -68776,7 +68873,7 @@ See you soon!
 	          );
 	          if (alreadyExists) return;
 	          const evDate = ev.start_time ? ev.start_time.split('T')[0] : null;
-	          const evLabel = evDate ? new Date(evDate + 'T12:00:00').toLocaleDateString('en-CA', { weekday: 'short', month: 'short', day: 'numeric' }) : ev.title || eventType;
+	          const evLabel = volShiftCommitmentLabel(ev, role.planEntry) || (evDate ? new Date(evDate + 'T12:00:00').toLocaleDateString('en-CA', { weekday: 'short', month: 'short', day: 'numeric' }) : ev.title || eventType);
 	          inserts.push({
 	            opportunity_type: 'volunteer',
 	            mode_tag: 'In Person',
