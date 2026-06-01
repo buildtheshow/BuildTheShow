@@ -8832,6 +8832,30 @@
 	      max-height: 210px;
 	      overflow-y: auto;
 	    }
+	    .vol-event-date-actions {
+	      position: sticky;
+	      top: 0;
+	      z-index: 2;
+	      display: flex;
+	      gap: 0.35rem;
+	      padding: 0.42rem 0.5rem;
+	      background: color-mix(in srgb, var(--vol-editor-color, #572e88) 6%, #fff);
+	      border-bottom: 1px solid color-mix(in srgb, var(--vol-editor-color, #572e88) 16%, #fff);
+	    }
+	    .vol-event-date-action {
+	      border: 1.5px solid color-mix(in srgb, var(--vol-editor-color, #572e88) 20%, #fff);
+	      background: #fff;
+	      color: var(--vol-editor-color, #572e88);
+	      border-radius: 999px;
+	      padding: 0.18rem 0.55rem;
+	      font-size: 0.66rem;
+	      font-weight: 900;
+	      font-family: var(--bts-font);
+	      cursor: pointer;
+	    }
+	    .vol-event-date-action:hover {
+	      background: color-mix(in srgb, var(--vol-editor-color, #572e88) 10%, #fff);
+	    }
 	    .vol-event-date-item {
 	      display: flex;
 	      align-items: center;
@@ -67071,7 +67095,10 @@ See you soon!
 	  }
 
 	  function volCalendarEventMatches(event, type) {
-	    return volCalendarEventType(event) === type;
+	    const eventType = volCalendarEventType(event);
+	    if (type === 'crew') return eventType === 'crew' || eventType.startsWith('crew_');
+	    if (type === 'audition') return eventType === 'audition';
+	    return eventType === type;
 	  }
 
 	  function volunteerEventCounts() {
@@ -68779,6 +68806,10 @@ See you soon!
 
 	  const VOL_SHIFT_TYPE_OPTIONS = [
 	    ['dept_leads', 'Department Lead'],
+	    ['audition', 'Audition'],
+	    ['dance_call', 'Dance Call'],
+	    ['callback', 'Callback'],
+	    ['other_audition', 'Other Audition'],
 	    ['performance', 'Performance'],
 	    ['tech', 'Tech Rehearsal'],
 	    ['dress', 'Dress Rehearsal'],
@@ -68788,6 +68819,8 @@ See you soon!
 	    ['strike', 'Strike'],
 	    ['costume_moveout', 'Costume Move-Out'],
 	    ['cast_party', 'Cast Party'],
+	    ['event', 'Event'],
+	    ['meeting', 'Meeting'],
 	    ['crew', 'Crew'],
 	    ['crew_set', 'Crew - Set Building'],
 	    ['crew_set_painting', 'Crew - Set Painting'],
@@ -68798,6 +68831,7 @@ See you soon!
 	    ['crew_wigs', 'Crew - Wigs'],
 	    ['crew_lighting', 'Crew - Lighting'],
 	    ['crew_sound', 'Crew - Sound'],
+	    ['deadline', 'Deadline'],
 	    ['other', 'Other / Flexible'],
 	  ];
 	  const VOL_TIMING_OPTIONS = [
@@ -68814,6 +68848,7 @@ See you soon!
 	  }
 	  function volDefaultTimingGroup(type) {
 	    if (type === 'dept_leads') return 'pre_production';
+	    if (['audition','dance_call','callback','other_audition','event','meeting','deadline'].includes(type)) return 'other';
 	    if (['rehearsal','music_rehearsal','choreography'].includes(type)) return 'rehearsal';
 	    if (['performance','tech','dress'].includes(type)) return 'during_show';
 	    if (['strike','costume_moveout'].includes(type)) return 'after_show';
@@ -68858,6 +68893,7 @@ See you soon!
 	  }
 	  const VOL_SHIFT_TYPE_GROUPS = [
 	    { label: 'Start Here', types: ['dept_leads', 'other'] },
+	    { label: 'Other Calendar Dates', types: ['audition', 'dance_call', 'callback', 'other_audition', 'event', 'meeting', 'deadline'] },
 	    { label: 'Rehearsals', types: ['rehearsal', 'music_rehearsal', 'choreography'] },
 	    { label: 'Show Week', types: ['tech', 'dress', 'performance'] },
 	    { label: 'After The Show', types: ['strike', 'costume_moveout', 'cast_party'] },
@@ -68887,7 +68923,7 @@ See you soon!
 	    const timingOptions = VOL_TIMING_OPTIONS.map(([value, label]) => `<option value="${value}" ${value === timingGroup ? 'selected' : ''}>${esc(label)}</option>`).join('');
 	    const checkInOptions = volCheckInSuggestions(key, checkInWith).map(value => `<option value="${esc(value)}"></option>`).join('');
 	    const savedEventScope = saved.eventScope || {};
-	    const DATE_PICKABLE = new Set(['rehearsal','music_rehearsal','choreography','tech','dress','performance','strike','costume_moveout','cast_party']);
+	    const DATE_PICKABLE = new Set(VOL_SHIFT_TYPE_OPTIONS.map(([value]) => value).filter(value => !['dept_leads', 'other'].includes(value)));
 	    const shiftTypeChecks = `<div class="vol-coverage-groups">${VOL_SHIFT_TYPE_GROUPS.map(group => {
 	      const isCrew = group.label === 'On Your Own Time';
 	      const hasCheckedCrew = isCrew && group.types.some(v => appliesTo.includes(v));
@@ -68908,7 +68944,7 @@ See you soon!
 	        let scopeWidget = '';
 	        if (canPick) {
 	          if (matchEvs.length) {
-	            scopeWidget = `<div class="vol-scope-row" id="vsq-scope-${value}-${key}" data-mode="${scopeMode}" style="display:${isChecked?'':'none'}"><button type="button" class="vol-scope-btn ${scopeMode==='all'?'is-active':''}" data-mode="all" onclick="volScopeMode('${key}','${value}','all')">All dates</button><button type="button" class="vol-scope-btn ${scopeMode==='specific'?'is-active':''}" data-mode="specific" onclick="volScopeMode('${key}','${value}','specific')">Pick dates</button></div><div class="vol-event-dates" id="vsq-datelist-${value}-${key}" style="display:${isChecked && scopeMode==='specific'?'':'none'}">${dateItems}</div>`;
+	            scopeWidget = `<div class="vol-scope-row" id="vsq-scope-${value}-${key}" data-mode="${scopeMode}" style="display:${isChecked?'':'none'}"><button type="button" class="vol-scope-btn ${scopeMode==='all'?'is-active':''}" data-mode="all" onclick="volScopeMode('${key}','${value}','all')">All dates</button><button type="button" class="vol-scope-btn ${scopeMode==='specific'?'is-active':''}" data-mode="specific" onclick="volScopeMode('${key}','${value}','specific')">Pick dates</button></div><div class="vol-event-dates" id="vsq-datelist-${value}-${key}" style="display:${isChecked && scopeMode==='specific'?'':'none'}"><div class="vol-event-date-actions"><button type="button" class="vol-event-date-action" onclick="volScopeSelectDates('${key}','${value}',true)">Select all</button><button type="button" class="vol-event-date-action" onclick="volScopeSelectDates('${key}','${value}',false)">Select none</button></div>${dateItems}</div>`;
 	          } else {
 	            scopeWidget = `<div class="vol-scope-row" id="vsq-scope-${value}-${key}" data-mode="all" style="display:${isChecked?'':'none'}"><span class="vol-scope-note">Add calendar events to pick specific dates.</span></div>`;
 	          }
@@ -69076,6 +69112,19 @@ See you soon!
 	    if (dateList) {
 	      dateList.style.display = mode === 'specific' ? '' : 'none';
 	      if (mode === 'all') dateList.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = true);
+	    }
+	  }
+
+	  function volScopeSelectDates(key, type, checked) {
+	    const scopeRow = document.getElementById(`vsq-scope-${type}-${key}`);
+	    const dateList = document.getElementById(`vsq-datelist-${type}-${key}`);
+	    if (scopeRow) {
+	      scopeRow.dataset.mode = 'specific';
+	      scopeRow.querySelectorAll('.vol-scope-btn').forEach(btn => btn.classList.toggle('is-active', btn.dataset.mode === 'specific'));
+	    }
+	    if (dateList) {
+	      dateList.style.display = '';
+	      dateList.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = checked);
 	    }
 	  }
 
