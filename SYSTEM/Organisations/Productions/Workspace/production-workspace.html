@@ -6739,10 +6739,11 @@
     .fc .fc-event-main { padding: 3px 5px !important; width: 100%; display: flex; align-items: center; justify-content: center; }
     .zeus-event-time  { font-size: 0.67rem; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: clip; }
     .zeus-event-label { font-size: 0.7rem;  font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: clip; }
-    .fc .fc-daygrid-event.zeus-deadline-stripe { min-height: 0 !important; max-height: 18px !important; padding: 0 4px !important; margin-bottom: 3px !important; opacity: 0.97; }
-    .fc .fc-daygrid-event.zeus-deadline-stripe .fc-event-main { padding: 0 2px !important; align-items: center; justify-content: flex-start; }
-    .zeus-deadline-title { font-size: 10px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; min-width: 0; }
-    .zeus-deadline-time  { font-size: 9px; font-weight: 600; opacity: 0.8; white-space: nowrap; flex-shrink: 0; }
+    /* Deadline badge — lives in the day-number row, not the event stack */
+    .zeus-deadline-day-badge { display: inline-flex; align-items: center; gap: 3px; border-radius: 3px; padding: 2px 5px; font-size: 9px; font-weight: 700; white-space: nowrap; overflow: hidden; cursor: pointer; color: #fff; margin: 3px 0 0 3px; max-width: calc(100% - 28px); flex-shrink: 1; min-width: 0; transition: opacity 0.15s; }
+    .zeus-deadline-day-badge:hover { opacity: 0.85; }
+    .zeus-deadline-badge-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex: 1; }
+    .zeus-deadline-badge-time  { opacity: 0.82; flex-shrink: 0; white-space: nowrap; }
     .fc .fc-now-indicator-line { border-color: #e53935; }
     .fc .fc-scrollgrid { border-color: #e8e4f0; }
     .fc td, .fc th { border-color: #e8e4f0 !important; }
@@ -35071,15 +35072,9 @@ See you soon!
             const ap = hRaw >= 12 ? 'pm' : 'am';
             return `${hRaw % 12 || 12}:${String(mRaw).padStart(2,'0')}${ap}`;
           };
-          // Deadline events render as a thin stripe at the top of the day cell.
+          // Deadline events are injected into the day-number row via eventDidMount — return nothing here.
           if (ev.extendedProps.is_deadline) {
-            const wrap = document.createElement('div');
-            wrap.style.cssText = 'width:100%;display:flex;align-items:center;gap:5px;overflow:hidden;';
-            const safeTxt = s => String(s||'').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-            const time = timeFromValue(ev.extendedProps.raw_start_time || ev.start);
-            const timeHtml = time ? `<span class="zeus-deadline-time">· ${safeTxt(time)}</span>` : '';
-            wrap.innerHTML = `<span class="zeus-deadline-title">${safeTxt(ev.title || 'Deadline')}</span>${timeHtml}`;
-            return { domNodes: [wrap] };
+            return { domNodes: [document.createElement('span')] };
           }
           let timeStr = '';
           if (!ev.allDay && ev.start) {
@@ -35100,7 +35095,33 @@ See you soon!
       },
       eventDidMount(info) {
         if (info.event.extendedProps.is_deadline) {
-          info.el.classList.add('zeus-deadline-stripe');
+          // Inject a badge into the day-number row and hide the event from the stack
+          const dayEl = info.el.closest('.fc-daygrid-day');
+          const topEl = dayEl && dayEl.querySelector('.fc-daygrid-day-top');
+          if (topEl) {
+            const safeTxt = s => String(s||'').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+            const rawTime = info.event.extendedProps.raw_start_time || info.event.start;
+            const normalized = toDateTimeLocal(rawTime);
+            let timeLabel = '';
+            if (normalized) {
+              const [hRaw, mRaw] = normalized.slice(11, 16).split(':').map(n => parseInt(n, 10));
+              if (Number.isFinite(hRaw) && Number.isFinite(mRaw)) {
+                const ap = hRaw >= 12 ? 'pm' : 'am';
+                timeLabel = `${hRaw % 12 || 12}:${String(mRaw).padStart(2,'0')}${ap}`;
+              }
+            }
+            const bg = info.event.backgroundColor || '#b91c1c';
+            const badge = document.createElement('div');
+            badge.className = 'zeus-deadline-day-badge';
+            badge.dataset.deadlineEventId = info.event.id;
+            badge.style.background = bg;
+            badge.innerHTML = `<span class="zeus-deadline-badge-title">${safeTxt(info.event.title || 'Deadline')}</span>`
+              + (timeLabel ? `<span class="zeus-deadline-badge-time">· ${timeLabel}</span>` : '');
+            badge.addEventListener('click', e => { e.stopPropagation(); openEventModal({ fcEvent: info.event }); });
+            topEl.appendChild(badge);
+          }
+          // Collapse the FC event element so it takes no space in the stack
+          info.el.style.setProperty('display', 'none', 'important');
           return;
         }
         ['.zeus-event-time', '.zeus-event-label'].forEach(sel => {
@@ -35113,6 +35134,11 @@ See you soon!
             node.style.fontSize = size + 'px';
           }
         });
+      },
+      eventWillUnmount(info) {
+        if (info.event.extendedProps.is_deadline) {
+          document.querySelectorAll(`[data-deadline-event-id="${info.event.id}"]`).forEach(el => el.remove());
+        }
       },
       datesSet() {
         _renderHolidayDots();
