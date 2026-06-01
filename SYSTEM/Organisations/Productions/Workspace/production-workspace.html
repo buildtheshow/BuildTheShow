@@ -6739,6 +6739,10 @@
     .fc .fc-event-main { padding: 3px 5px !important; width: 100%; display: flex; align-items: center; justify-content: center; }
     .zeus-event-time  { font-size: 0.67rem; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: clip; }
     .zeus-event-label { font-size: 0.7rem;  font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: clip; }
+    .fc .fc-daygrid-event.zeus-deadline-stripe { min-height: 0 !important; max-height: 18px !important; padding: 0 4px !important; margin-bottom: 3px !important; opacity: 0.97; }
+    .fc .fc-daygrid-event.zeus-deadline-stripe .fc-event-main { padding: 0 2px !important; align-items: center; justify-content: flex-start; }
+    .zeus-deadline-title { font-size: 10px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; min-width: 0; }
+    .zeus-deadline-time  { font-size: 9px; font-weight: 600; opacity: 0.8; white-space: nowrap; flex-shrink: 0; }
     .fc .fc-now-indicator-line { border-color: #e53935; }
     .fc .fc-scrollgrid { border-color: #e8e4f0; }
     .fc td, .fc th { border-color: #e8e4f0 !important; }
@@ -35043,13 +35047,14 @@ See you soon!
             const ap = hRaw >= 12 ? 'pm' : 'am';
             return `${hRaw % 12 || 12}:${String(mRaw).padStart(2,'0')}${ap}`;
           };
-          // Deadline events render as a compact due badge.
+          // Deadline events render as a thin stripe at the top of the day cell.
           if (ev.extendedProps.is_deadline) {
             const wrap = document.createElement('div');
-            wrap.style.cssText = 'width:100%;display:flex;align-items:center;gap:4px;padding:1px 4px;overflow:hidden;';
+            wrap.style.cssText = 'width:100%;display:flex;align-items:center;gap:5px;overflow:hidden;';
             const safeTxt = s => String(s||'').replace(/</g,'&lt;').replace(/>/g,'&gt;');
             const time = timeFromValue(ev.extendedProps.raw_start_time || ev.start);
-            wrap.innerHTML = `<span style="font-size:9px;font-weight:900;letter-spacing:0;text-transform:uppercase;flex-shrink:0;" title="Deadline">Due</span><span style="font-size:10px;font-weight:800;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${safeTxt(time ? `${time} ${ev.title || ''}` : ev.title || '')}</span>`;
+            const timeHtml = time ? `<span class="zeus-deadline-time">· ${safeTxt(time)}</span>` : '';
+            wrap.innerHTML = `<span class="zeus-deadline-title">${safeTxt(ev.title || 'Deadline')}</span>${timeHtml}`;
             return { domNodes: [wrap] };
           }
           let timeStr = '';
@@ -35070,6 +35075,10 @@ See you soon!
         }
       },
       eventDidMount(info) {
+        if (info.event.extendedProps.is_deadline) {
+          info.el.classList.add('zeus-deadline-stripe');
+          return;
+        }
         ['.zeus-event-time', '.zeus-event-label'].forEach(sel => {
           const node = info.el.querySelector(sel);
           if (!node) return;
@@ -37747,6 +37756,8 @@ See you soon!
   // Current team config (array of departments)
   let teamConfig = null; // null = not loaded yet
   let auditionTeamMembers = [];
+  let volunteerTeamPlan = {};
+  let volunteerTeamSignups = [];
   let auditionAuthoredNotes = [];
   let auditionObservations = [];
   let auditionAuthoredNotesLoadedAt = 0;
@@ -37781,9 +37792,10 @@ See you soon!
     const container = document.getElementById('tm-container');
     if (!container) return;
 
-    const { data: prodRow } = await sb.from('productions').select('wizard_data').eq('id', prodId).single();
+    const { data: prodRow } = await sb.from('productions').select('wizard_data,volunteer_staffing_plan').eq('id', prodId).single();
     const wdata = prodRow?.wizard_data || {};
     teamConfig = wdata.team_config || null;
+    volunteerTeamPlan = prodRow?.volunteer_staffing_plan || {};
 
     if (!teamConfig) {
       teamConfig = getDefaultTeamConfig();
@@ -37860,6 +37872,7 @@ See you soon!
     }
 
     await loadAuditionTeamMembers();
+    await loadVolunteerTeamSignups();
     await syncCreativeRolesToTeamAccess({ silent: true });
     await ensureDefaultCreativeTeamAccess();
     showTeamSubnav();
@@ -37887,6 +37900,22 @@ See you soon!
       console.warn('[BTS] production_team_members unavailable. Run the team portal Supabase SQL.', error);
     }
     return auditionTeamMembers;
+  }
+
+  async function loadVolunteerTeamSignups() {
+    if (!prodId) return [];
+    try {
+      const { data, error } = await sb.from('volunteer_signups')
+        .select('id,name,email,phone,role_name,department,check_in_with,approved_hours,status,shift_date,shift_start_time,shift_end_time,created_at')
+        .eq('production_id', prodId)
+        .in('status', ['approved', 'checked_in', 'completed']);
+      if (error) throw error;
+      volunteerTeamSignups = data || [];
+    } catch (error) {
+      volunteerTeamSignups = [];
+      console.warn('[BTS] volunteer_signups unavailable for production team bridge.', error);
+    }
+    return volunteerTeamSignups;
   }
 
   function showTeamSubnav() {
@@ -38027,6 +38056,196 @@ See you soon!
     return names.length ? names : PRODUCTION_TEAM_DEPARTMENTS;
   }
 
+  const VOLUNTEER_TEAM_PLAN_ROLE_DEFAULTS = {
+    dept_leads: [
+      { name: 'Stage Manager', department: 'Production & Rehearsal Support' },
+      { name: 'Front of House Manager', department: 'Front of House' },
+      { name: 'Concession Manager', department: 'Front of House' },
+      { name: 'Lighting Designer / Technician', department: 'Technical Crew' },
+      { name: 'Lead Builder', department: 'Design & Construction Crew' },
+      { name: 'Lead Set Painter', department: 'Design & Construction Crew' },
+      { name: 'Lead Prop Person', department: 'Design & Construction Crew' },
+      { name: 'Costume Designer', department: 'Costume & Makeup Department' },
+      { name: 'Marketing Director', department: 'Marketing & Publicity' },
+      { name: 'Cast Party Coordinator', department: 'Production & Rehearsal Support' },
+    ],
+    performance: [
+      { name: 'Ushers', department: 'Front of House' },
+      { name: 'Concession Workers', department: 'Front of House' },
+      { name: 'Ticket Sales', department: 'Front of House' },
+      { name: 'Backstage Crew', department: 'Production & Rehearsal Support' },
+      { name: 'Quick-Change Assistant', department: 'Production & Rehearsal Support' },
+      { name: 'Child Wrangler', department: 'Production & Rehearsal Support' },
+      { name: 'Mic Wrangler', department: 'Technical Crew' },
+      { name: 'Spotlight Operators', department: 'Technical Crew' },
+    ],
+    tech: [
+      { name: 'Mic Wrangler', department: 'Technical Crew' },
+      { name: 'Quick-Change Assistant', department: 'Production & Rehearsal Support' },
+      { name: 'Backstage Crew', department: 'Production & Rehearsal Support' },
+    ],
+    dress: [
+      { name: 'Mic Wrangler', department: 'Technical Crew' },
+      { name: 'Quick-Change Assistant', department: 'Production & Rehearsal Support' },
+      { name: 'Backstage Crew', department: 'Production & Rehearsal Support' },
+      { name: 'Child Wrangler', department: 'Production & Rehearsal Support' },
+    ],
+    rehearsal: [
+      { name: 'Rehearsal Assistant', department: 'Production & Rehearsal Support' },
+      { name: 'Child Wrangler', department: 'Production & Rehearsal Support' },
+    ],
+    music_rehearsal: [{ name: 'Rehearsal Assistant', department: 'Production & Rehearsal Support' }],
+    choreography: [{ name: 'Rehearsal Assistant', department: 'Production & Rehearsal Support' }],
+    strike: [{ name: 'Set Strike Crew', department: 'Design & Construction Crew' }],
+    costume_moveout: [{ name: 'Costume Move-Out Crew', department: 'Costume & Makeup Department' }],
+    cast_party: [{ name: 'Cast Party Helper', department: 'Production & Rehearsal Support' }],
+    crew: [{ name: 'Build Crew Helper', department: 'Design & Construction Crew' }],
+    crew_set: [{ name: 'Set Builder', department: 'Design & Construction Crew' }],
+    crew_set_painting: [{ name: 'Set Painter', department: 'Design & Construction Crew' }],
+    crew_set_dressing: [{ name: 'Set Dresser', department: 'Design & Construction Crew' }],
+    crew_costumes: [{ name: 'Costume Work Helper', department: 'Costume & Makeup Department' }],
+    crew_props: [{ name: 'Props Helper', department: 'Design & Construction Crew' }],
+    crew_hair_makeup: [{ name: 'Hair & Makeup Crew', department: 'Costume & Makeup Department' }],
+    crew_wigs: [{ name: 'Wig Crew', department: 'Costume & Makeup Department' }],
+    crew_lighting: [{ name: 'Lighting Crew', department: 'Technical Crew' }],
+    crew_sound: [{ name: 'Sound Crew', department: 'Technical Crew' }],
+    other: [
+      { name: 'Costume Washer', department: 'Costume & Makeup Department' },
+      { name: 'Bakers / Treat Contributors', department: 'Front of House' },
+      { name: 'Promotion Distribution', department: 'Marketing & Publicity' },
+    ],
+  };
+
+  const VOLUNTEER_TEAM_PLAN_TYPES = Object.keys(VOLUNTEER_TEAM_PLAN_ROLE_DEFAULTS).sort((a, b) => b.length - a.length);
+
+  function teamDepartmentFromVolunteerDepartment(value) {
+    const raw = String(value || '').trim();
+    const map = {
+      'Backstage & Rehearsal Support': 'Production & Rehearsal Support',
+      'Design & Construction': 'Design & Construction Crew',
+      'Costume & Makeup': 'Costume & Makeup Department',
+      'Front of House': 'Front of House',
+      'Technical Crew': 'Technical Crew',
+      'Marketing & Publicity': 'Marketing & Publicity',
+    };
+    return map[raw] || raw || 'Production & Rehearsal Support';
+  }
+
+  function volunteerPlanEntryBaseType(key) {
+    const raw = String(key || '');
+    return VOLUNTEER_TEAM_PLAN_TYPES.find(type => raw === type || raw.startsWith(`${type}-`)) || 'other';
+  }
+
+  function volunteerPlanEntryDefaultRole(key) {
+    const base = volunteerPlanEntryBaseType(key);
+    const suffix = String(key || '').startsWith(`${base}-`) ? String(key).slice(base.length + 1) : '';
+    if (!suffix || suffix.startsWith('custom-')) return null;
+    const index = parseInt(suffix, 10);
+    return Number.isFinite(index) ? (VOLUNTEER_TEAM_PLAN_ROLE_DEFAULTS[base] || [])[index] : null;
+  }
+
+  function normalizedProductionRoleName(value) {
+    return String(value || '').trim().toLowerCase().replace(/\s+/g, ' ');
+  }
+
+  function volunteerPlanRoleGroups(plan = {}) {
+    const groups = new Map();
+    Object.entries(plan || {}).forEach(([key, rawEntry]) => {
+      const entry = rawEntry || {};
+      const count = Math.max(0, parseInt(entry.count, 10) || 0);
+      if (!count) return;
+      const fallback = volunteerPlanEntryDefaultRole(key) || {};
+      const roleName = String(entry.roleName || entry.role_name || fallback.name || 'Volunteer Role').trim();
+      const department = teamDepartmentFromVolunteerDepartment(entry.department || fallback.department);
+      const groupKey = `${department}::${normalizedProductionRoleName(roleName)}`;
+      const existing = groups.get(groupKey) || {
+        id: groupKey,
+        department,
+        roleName,
+        count: 0,
+        description: entry.description || '',
+        checkInWith: entry.checkInWith || entry.check_in_with || '',
+        sourceKeys: [],
+      };
+      existing.count += count;
+      if (!existing.description && entry.description) existing.description = entry.description;
+      if (!existing.checkInWith && (entry.checkInWith || entry.check_in_with)) existing.checkInWith = entry.checkInWith || entry.check_in_with;
+      existing.sourceKeys.push(key);
+      groups.set(groupKey, existing);
+    });
+    return [...groups.values()];
+  }
+
+  function teamVolunteerHoursLabel(value) {
+    const hours = parseFloat(value) || 0;
+    if (!hours) return '';
+    const label = Number.isInteger(hours) ? String(hours) : hours.toFixed(1).replace(/\.0$/, '');
+    return `${label} approved hr${hours === 1 ? '' : 's'}`;
+  }
+
+  function teamVolunteerSignupHours(signup = {}) {
+    const approved = parseFloat(signup.approved_hours);
+    if (Number.isFinite(approved) && approved > 0) return approved;
+    const start = String(signup.shift_start_time || '').slice(0, 5);
+    const end = String(signup.shift_end_time || '').slice(0, 5);
+    if (!start || !end) return 0;
+    const [sh, sm] = start.split(':').map(Number);
+    const [eh, em] = end.split(':').map(Number);
+    if (![sh, sm, eh, em].every(Number.isFinite)) return 0;
+    let diff = ((eh * 60) + em) - ((sh * 60) + sm);
+    if (diff < 0) diff += 24 * 60;
+    return Math.max(0, diff / 60);
+  }
+
+  function teamVolunteerMemberKey(member = {}) {
+    const email = String(member.email || member.volunteer_email || '').trim().toLowerCase();
+    const name = String(member.name || '').trim().toLowerCase();
+    return `${email || name}::${normalizedProductionRoleName(member.role || member.role_name)}`;
+  }
+
+  function teamVolunteerMemberMetaText(member = {}) {
+    const pieces = [];
+    const hoursLabel = teamVolunteerHoursLabel(member.volunteer_approved_hours);
+    const checkInWith = String(member.check_in_with || member.checkInWith || '').trim();
+    if (hoursLabel) pieces.push(hoursLabel);
+    if (checkInWith) pieces.push(`Checks in with ${checkInWith}`);
+    return pieces.join(' · ');
+  }
+
+  function buildApprovedVolunteerTeamMembers(signups = []) {
+    const grouped = new Map();
+    (signups || []).forEach(signup => {
+      const role = String(signup.role_name || 'Volunteer').trim();
+      const name = String(signup.name || signup.email || 'Volunteer').trim();
+      const email = String(signup.email || '').trim();
+      const key = `${email.toLowerCase() || name.toLowerCase()}::${normalizedProductionRoleName(role)}`;
+      const department = teamDepartmentFromVolunteerDepartment(signup.department);
+      const existing = grouped.get(key) || {
+        id: `volunteer-${key}`,
+        source: 'volunteer_signup',
+        role,
+        name,
+        email,
+        phone: signup.phone || '',
+        department,
+        note_color: teamDepartmentColor(department).h,
+        is_active: true,
+        card_state: 'filled',
+        check_in_with: signup.check_in_with || '',
+        volunteer_approved_hours: 0,
+        volunteer_shift_count: 0,
+      };
+      existing.volunteer_approved_hours += teamVolunteerSignupHours(signup);
+      existing.volunteer_shift_count += 1;
+      if (!existing.check_in_with && signup.check_in_with) existing.check_in_with = signup.check_in_with;
+      grouped.set(key, existing);
+    });
+    return [...grouped.values()].map(member => {
+      const meta = teamVolunteerMemberMetaText(member);
+      return meta ? { ...member, bio: meta } : member;
+    });
+  }
+
   function teamMemberDepartment(member = {}) {
     const memberId = String(member.id || '');
     if (memberId) {
@@ -38038,6 +38257,7 @@ See you soon!
     const value = String(member.department || '').trim();
     if (isProducerDepartmentName(value) || value === 'Creative Team') return 'Artistic Team';
     const departments = productionTeamDepartmentNames();
+    if (DEPT_COLORS[value]) return value;
     if (departments.includes(value)) return value;
     // No department stored — match by role name against teamConfig so members synced
     // from Artistic Team without a department field still land in the right section.
@@ -38110,7 +38330,7 @@ See you soon!
     overlay.innerHTML = `
       <div class="perf-lightbox-scene production-team-lightbox-scene" onclick="event.stopPropagation();">
         <div class="production-team-lightbox-inner" id="production-team-card-preview-inner">
-          ${window.BTSProductionTeamTemplates.renderProductionTeamCard(member, { showManagement: !!member.id && canManageAccess(teamAccessMember?.id || '') })}
+          ${window.BTSProductionTeamTemplates.renderProductionTeamCard(member, { showManagement: !!member.id && member.source !== 'volunteer_signup' && canManageAccess(teamAccessMember?.id || '') })}
         </div>
         <button class="perf-flip-btn" type="button" onclick="flipProductionTeamCard(document.querySelector('#production-team-card-preview-inner .production-team-card'))">
           <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
@@ -38353,15 +38573,14 @@ See you soon!
   }
 
   function renderTeamView(container) {
-    const normalizedRoleName = (value) => String(value || '').trim().toLowerCase();
     const memberMatchesRole = (member, role) =>
       (member?.id && role?.team_member_id && String(member.id) === String(role.team_member_id))
-      || normalizedRoleName(member.role) === normalizedRoleName(role.name);
+      || normalizedProductionRoleName(member.role) === normalizedProductionRoleName(role.name);
     // Template boundary: this page places volunteer cards; the shared template owns card markup and styling.
     const renderRoleCard = (role, member, department) => {
       const color = teamDepartmentColor(department);
       const isOpenRole = !member;
-      const cardMember = member || {
+      const rawCardMember = member || {
         id: '',
         role: role?.name || 'Team Role',
         name: 'OPEN ROLE',
@@ -38369,6 +38588,10 @@ See you soon!
         is_active: true,
         card_state: 'open',
       };
+      const volunteerMeta = member ? teamVolunteerMemberMetaText(member) : '';
+      const cardMember = volunteerMeta && !String(rawCardMember.bio || '').includes(volunteerMeta)
+        ? { ...rawCardMember, bio: [rawCardMember.bio, volunteerMeta].filter(Boolean).join('\n') }
+        : rawCardMember;
       const previewPayload = encodeURIComponent(JSON.stringify({
         ...cardMember,
         role: role?.name || cardMember.role,
@@ -38384,19 +38607,70 @@ See you soon!
         ${cardHtml}
       </button>`;
     };
-    const departmentNames = productionTeamDepartmentNames();
+    const volunteerPlanGroups = volunteerPlanRoleGroups(volunteerTeamPlan);
+    const approvedVolunteerMembers = buildApprovedVolunteerTeamMembers(volunteerTeamSignups);
+    const approvedVolunteerByKey = new Map(approvedVolunteerMembers.map(member => [teamVolunteerMemberKey(member), member]));
+    const enrichedTeamMembers = (auditionTeamMembers || []).map(member => {
+      const match = approvedVolunteerByKey.get(teamVolunteerMemberKey(member));
+      if (!match) return member;
+      approvedVolunteerByKey.delete(teamVolunteerMemberKey(member));
+      const meta = teamVolunteerMemberMetaText(match);
+      return {
+        ...member,
+        volunteer_approved_hours: match.volunteer_approved_hours,
+        volunteer_shift_count: match.volunteer_shift_count,
+        check_in_with: match.check_in_with || member.check_in_with,
+        bio: meta && !String(member.bio || '').includes(meta)
+          ? [member.bio, meta].filter(Boolean).join('\n')
+          : member.bio,
+      };
+    });
+    const allTeamMembers = [...enrichedTeamMembers, ...approvedVolunteerByKey.values()];
+    const departmentNames = [
+      ...new Set([
+        ...productionTeamDepartmentNames(),
+        ...volunteerPlanGroups.map(group => group.department),
+        ...allTeamMembers.map(member => teamMemberDepartment(member)),
+      ].filter(Boolean))
+    ];
     const groupedMembers = new Map(departmentNames.map(name => [name, []]));
-    (auditionTeamMembers || []).forEach(member => {
+    allTeamMembers.forEach(member => {
       const dept = teamMemberDepartment(member);
       if (!groupedMembers.has(dept)) groupedMembers.set(dept, []);
       groupedMembers.get(dept).push(member);
     });
-    const totalMembers = (auditionTeamMembers || []).length;
+    const roleDepartments = new Map(departmentNames.map(name => {
+      const dept = (teamConfig || []).find(item => item.name === name);
+      return [name, [...(dept?.roles || [])]];
+    }));
+    volunteerPlanGroups.forEach(group => {
+      if (!roleDepartments.has(group.department)) roleDepartments.set(group.department, []);
+      const roles = roleDepartments.get(group.department);
+      const existingCount = roles.filter(role => normalizedProductionRoleName(role.name) === normalizedProductionRoleName(group.roleName)).length;
+      for (let index = existingCount; index < group.count; index += 1) {
+        roles.push({
+          id: `vol-plan-${group.id}-${index}`,
+          name: group.roleName,
+          filled: false,
+          notes: group.description || '',
+          source: 'volunteer_plan',
+          volunteer_plan_keys: group.sourceKeys,
+          checkInWith: group.checkInWith || '',
+        });
+      }
+    });
+    const totalMembers = allTeamMembers.length;
     const canManageTeamAccessUi = canManageAccess(teamAccessMember?.id || '');
     const activeDepartments = departmentNames.filter(department => (groupedMembers.get(department) || []).length).length;
-    const totalOpenRoles = (teamConfig || []).reduce((sum, dept) =>
-      sum + (dept.roles || []).filter(role => !role.filled && !role.person && !role.team_member_id).length, 0);
-    const roleDepartments = new Map((teamConfig || []).map(dept => [dept.name, dept.roles || []]));
+    const totalOpenRoles = [...roleDepartments.entries()].reduce((sum, [department, roles]) => {
+      const members = groupedMembers.get(department) || [];
+      return sum + (roles || []).filter(role =>
+        !role.filled
+        && !role.person
+        && !role.team_member_id
+        && !members.some(member => memberMatchesRole(member, role))
+      ).length;
+    }, 0);
     const departmentSections = departmentNames.map(department => {
       const members = groupedMembers.get(department) || [];
       const roles = roleDepartments.get(department) || [];
