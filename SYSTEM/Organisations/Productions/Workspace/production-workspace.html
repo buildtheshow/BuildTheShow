@@ -68820,6 +68820,42 @@ See you soon!
 	    if (String(type || '').startsWith('crew') || type === 'other') return 'own_time';
 	    return 'other';
 	  }
+	  function volCheckInSuggestions(currentKey = '', currentValue = '') {
+	    const suggestions = new Set([
+	      'Producer',
+	      'Stage Manager',
+	      'Assistant Stage Manager',
+	      'Volunteer Coordinator',
+	      'Front of House Manager',
+	      'Concession Manager',
+	      'Lead Builder',
+	      'Lead Set Painter',
+	      'Lead Prop Person',
+	      'Costume Designer',
+	      'Marketing Director',
+	    ]);
+	    (teamConfig || []).forEach(dept => {
+	      (dept.roles || []).forEach(role => {
+	        if (role?.name) suggestions.add(String(role.name).trim());
+	        if (role?.person) suggestions.add(String(role.person).trim());
+	      });
+	    });
+	    (auditionTeamMembers || []).forEach(member => {
+	      if (member?.role) suggestions.add(String(member.role).trim());
+	      if (member?.name) suggestions.add(String(member.name).trim());
+	    });
+	    Object.entries(_staffingPlan || {}).forEach(([key, entry]) => {
+	      if (key === currentKey) return;
+	      if (entry?.roleName) suggestions.add(String(entry.roleName).trim());
+	      if (entry?.checkInWith || entry?.check_in_with) suggestions.add(String(entry.checkInWith || entry.check_in_with).trim());
+	    });
+	    if (currentValue) suggestions.add(String(currentValue).trim());
+	    return [...suggestions]
+	      .map(value => value.trim())
+	      .filter(Boolean)
+	      .filter((value, index, list) => list.findIndex(item => item.toLowerCase() === value.toLowerCase()) === index)
+	      .sort((a, b) => a.localeCompare(b));
+	  }
 	  const VOL_SHIFT_TYPE_GROUPS = [
 	    { label: 'Start Here', types: ['dept_leads', 'other'] },
 	    { label: 'Rehearsals', types: ['rehearsal', 'music_rehearsal', 'choreography'] },
@@ -68849,6 +68885,7 @@ See you soon!
 	    pop.className = 'vol-schedule-modal';
 	    const departmentOptions = DEPT_LIST.map(d => `<option value="${esc(d)}" ${d === department ? 'selected' : ''}>${esc(d)}</option>`).join('');
 	    const timingOptions = VOL_TIMING_OPTIONS.map(([value, label]) => `<option value="${value}" ${value === timingGroup ? 'selected' : ''}>${esc(label)}</option>`).join('');
+	    const checkInOptions = volCheckInSuggestions(key, checkInWith).map(value => `<option value="${esc(value)}"></option>`).join('');
 	    const savedEventScope = saved.eventScope || {};
 	    const DATE_PICKABLE = new Set(['rehearsal','music_rehearsal','choreography','tech','dress','performance','strike','costume_moveout','cast_party']);
 	    const shiftTypeChecks = `<div class="vol-coverage-groups">${VOL_SHIFT_TYPE_GROUPS.map(group => {
@@ -68919,7 +68956,8 @@ See you soon!
 	              </div>
 	              <div class="vol-schedule-field vol-schedule-field--full">
 	                <label>Checks in with <span style="font-size:0.68rem;color:rgba(87,46,136,0.48);font-weight:700;">(optional)</span></label>
-	                <input type="text" id="vsq-checkin-${key}" value="${esc(checkInWith)}" placeholder="e.g. Lead Set Builder, Stage Manager, Producer" />
+	                <input type="text" id="vsq-checkin-${key}" value="${esc(checkInWith)}" list="vsq-checkin-options-${key}" placeholder="Choose or type: Lead Set Builder, Stage Manager, Producer" />
+	                <datalist id="vsq-checkin-options-${key}">${checkInOptions}</datalist>
 	              </div>
 	              <div class="vol-schedule-field vol-schedule-field--full">
 	                <label>Description</label>
