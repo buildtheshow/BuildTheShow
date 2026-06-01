@@ -3775,7 +3775,8 @@ If you cannot find any productions, return an empty array: []`;
 
   function initCronusCalendar() {
     if (cronusCalendar) {
-      cronusCalendar.refetchEvents();
+      // Always re-fetch from DB when the tab is revisited — in-memory cache may be stale
+      loadCronusData().then(() => cronusCalendar.refetchEvents());
       return;
     }
     const el = document.getElementById('cronus-cal');
@@ -3855,9 +3856,16 @@ If you cannot find any productions, return an empty array: []`;
 
 <script defer src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js"></script>
 <script>
-  // Load Cronus data after FullCalendar is ready
-  window.addEventListener('load', () => {
-    if (currentOrg) loadCronusData();
+  // Load Cronus data after FullCalendar is ready, then subscribe to live updates
+  window.addEventListener('load', async () => {
+    if (!currentOrg) return;
+    await loadCronusData();
+    sb.channel('cronus-prod-events')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'production_events' }, async () => {
+        await loadCronusData();
+        if (cronusCalendar) cronusCalendar.refetchEvents();
+      })
+      .subscribe();
   });
 </script>
 <script>
