@@ -1610,6 +1610,9 @@
     }
 
     const STAFFING_MAP = {
+      audition: { label: 'Audition', color: '#625bc3', roles: [] },
+      event: { label: 'Event', color: '#aa2943', roles: [] },
+      meeting: { label: 'Meeting', color: '#7b7b7b', roles: [] },
       dept_leads: { label: 'Department Lead', perProd: true, color: '#1a1530', roles: [
         { dept: 'Backstage & Rehearsal Support', name: 'Stage Manager' }, { dept: 'Front of House', name: 'Front of House Manager' }, { dept: 'Front of House', name: 'Concession Manager' }, { dept: 'Technical Crew', name: 'Lighting Designer / Technician' }, { dept: 'Design & Construction', name: 'Lead Builder' }, { dept: 'Design & Construction', name: 'Lead Set Painter' }, { dept: 'Design & Construction', name: 'Lead Prop Person' }, { dept: 'Costume & Makeup', name: 'Costume Designer' }, { dept: 'Marketing & Publicity', name: 'Marketing Director' }, { dept: 'Backstage & Rehearsal Support', name: 'Cast Party Coordinator' }
       ]},
@@ -2029,8 +2032,31 @@
         checkInWith: entry.checkInWith || entry.check_in_with || ''
       };
     }
+    function planCanonicalType(type) {
+      if (['dance_call', 'callback', 'other_audition'].includes(type)) return 'audition';
+      if (['music_rehearsal', 'choreography'].includes(type)) return 'rehearsal';
+      if (String(type || '').startsWith('crew_')) return 'crew';
+      if (['cast_party', 'deadline'].includes(type)) return 'event';
+      return type;
+    }
+    function planTypeAliases(type) {
+      if (type === 'audition') return ['audition', 'dance_call', 'callback', 'other_audition'];
+      if (type === 'rehearsal') return ['rehearsal', 'music_rehearsal', 'choreography'];
+      if (type === 'crew') return ['crew', 'crew_set', 'crew_set_painting', 'crew_set_dressing', 'crew_costumes', 'crew_props', 'crew_hair_makeup', 'crew_wigs', 'crew_lighting', 'crew_sound'];
+      if (type === 'event') return ['event', 'cast_party', 'deadline'];
+      return [type];
+    }
+    function eventPlanType(ev = {}) {
+      const raw = ev.event_type || '';
+      if (/cast\s*party/i.test(ev.title || '')) return 'cast_party';
+      return raw;
+    }
+    function planEventMatchesType(ev, type) {
+      return planTypeAliases(type).includes(eventPlanType(ev));
+    }
     function planEntryAppliesTo(key, entry = {}) {
-      return Array.isArray(entry.appliesTo) ? entry.appliesTo : [planEntryBaseType(key)].filter(Boolean);
+      const rawTypes = Array.isArray(entry.appliesTo) ? entry.appliesTo : [planEntryBaseType(key)].filter(Boolean);
+      return [...new Set(rawTypes.map(planCanonicalType).filter(Boolean))];
     }
     function planEntryCountMode(key, entry = {}) {
       const mode = entry.countMode || entry.count_mode;
@@ -2041,15 +2067,17 @@
       return STAFFING_MAP[baseType]?.perProd ? 'per_production' : 'per_event';
     }
     function planEntryAllowsEvent(entry = {}, eventType, eventId) {
-      const scope = entry.eventScope?.[eventType] || entry.event_scope?.[eventType];
-      if (!scope || scope.mode !== 'specific') return true;
-      const ids = Array.isArray(scope.ids) ? scope.ids.map(String) : [];
+      const scopes = planTypeAliases(eventType)
+        .map(type => entry.eventScope?.[type] || entry.event_scope?.[type])
+        .filter(scope => scope && scope.mode === 'specific' && Array.isArray(scope.ids));
+      if (!scopes.length) return true;
+      const ids = scopes.flatMap(scope => scope.ids).map(String);
       return ids.includes(String(eventId || ''));
     }
     function requiredDateLabels(entry, events) {
       const types = new Set(planEntryAppliesTo('', entry).filter(type => type && !STAFFING_MAP[type]?.perProd && type !== 'other'));
       const rows = events
-        .filter(ev => types.has(ev.event_type) && planEntryAllowsEvent(entry, ev.event_type, ev.id))
+        .filter(ev => [...types].some(type => planEventMatchesType(ev, type) && planEntryAllowsEvent(entry, type, ev.id)))
         .sort((a,b) => (a.start_time || '').localeCompare(b.start_time || ''));
       return rows.map(ev => {
         const timing = roleShiftTiming(ev, entry);
@@ -2099,7 +2127,7 @@
               return;
             }
             if (!planEntryAppliesTo(key, entry).includes(eventType)) return;
-            events.filter(ev => ev.event_type === eventType).sort((a,b)=>(a.start_time||'').localeCompare(b.start_time||'')).forEach(ev => {
+            events.filter(ev => planEventMatchesType(ev, eventType)).sort((a,b)=>(a.start_time||'').localeCompare(b.start_time||'')).forEach(ev => {
               if (!planEntryAllowsEvent(entry, eventType, ev.id)) return;
               result.push(roleOpp(key, entry, eventType, ev, count));
             });
@@ -2111,7 +2139,7 @@
             result.push(roleOpp(k, v, eventType, null, v.count, requiredDateLabels(v, events)));
           } else {
             if (!planEntryAppliesTo(k, v).includes(eventType)) return;
-            events.filter(ev => ev.event_type === eventType).forEach(ev => {
+            events.filter(ev => planEventMatchesType(ev, eventType)).forEach(ev => {
               if (!planEntryAllowsEvent(v, eventType, ev.id)) return;
               result.push(roleOpp(k, v, eventType, ev, v.count));
             });
@@ -2128,7 +2156,7 @@
           if (cfg.perProd) {
             result.push(roleOpp(key, entry, type, null, entry.count));
           } else {
-            events.filter(ev => ev.event_type === type).forEach(ev => {
+            events.filter(ev => planEventMatchesType(ev, type)).forEach(ev => {
               if (!planEntryAllowsEvent(entry, type, ev.id)) return;
               result.push(roleOpp(key, entry, type, ev, entry.count));
             });

@@ -67122,8 +67122,10 @@ See you soon!
 
 	  function volCalendarEventMatches(event, type) {
 	    const eventType = volCalendarEventType(event);
+	    if (type === 'audition') return ['audition', 'dance_call', 'callback', 'other_audition'].includes(eventType);
+	    if (type === 'rehearsal') return ['rehearsal', 'music_rehearsal', 'choreography'].includes(eventType);
 	    if (type === 'crew') return eventType === 'crew' || eventType.startsWith('crew_');
-	    if (type === 'audition') return eventType === 'audition';
+	    if (type === 'event') return ['event', 'cast_party', 'deadline'].includes(eventType);
 	    return eventType === type;
 	  }
 
@@ -68837,8 +68839,8 @@ See you soon!
 	    ['callback', 'Callback'],
 	    ['other_audition', 'Other Audition'],
 	    ['performance', 'Performance'],
-	    ['tech', 'Tech Rehearsal'],
-	    ['dress', 'Dress Rehearsal'],
+	    ['tech', 'Tech'],
+	    ['dress', 'Dress'],
 	    ['rehearsal', 'Rehearsal'],
 	    ['music_rehearsal', 'Music Rehearsal'],
 	    ['choreography', 'Choreography'],
@@ -68874,12 +68876,36 @@ See you soon!
 	  }
 	  function volDefaultTimingGroup(type) {
 	    if (type === 'dept_leads') return 'pre_production';
-	    if (['audition','dance_call','callback','other_audition','event','meeting','deadline'].includes(type)) return 'other';
+	    if (['audition','dance_call','callback','other_audition','event','meeting','deadline','cast_party'].includes(type)) return 'other';
 	    if (['rehearsal','music_rehearsal','choreography'].includes(type)) return 'rehearsal';
 	    if (['performance','tech','dress'].includes(type)) return 'during_show';
 	    if (['strike','costume_moveout'].includes(type)) return 'after_show';
 	    if (String(type || '').startsWith('crew') || type === 'other') return 'own_time';
 	    return 'other';
+	  }
+	  function volAttendanceCanonicalType(type) {
+	    if (['dance_call', 'callback', 'other_audition'].includes(type)) return 'audition';
+	    if (['music_rehearsal', 'choreography'].includes(type)) return 'rehearsal';
+	    if (String(type || '').startsWith('crew_')) return 'crew';
+	    if (['cast_party', 'deadline'].includes(type)) return 'event';
+	    return type;
+	  }
+	  function volNormalizeAttendanceTypes(types = []) {
+	    return [...new Set((types || []).map(volAttendanceCanonicalType).filter(Boolean))];
+	  }
+	  function volAttendanceTypeAliases(type) {
+	    if (type === 'audition') return ['audition', 'dance_call', 'callback', 'other_audition'];
+	    if (type === 'rehearsal') return ['rehearsal', 'music_rehearsal', 'choreography'];
+	    if (type === 'crew') return ['crew', 'crew_set', 'crew_set_painting', 'crew_set_dressing', 'crew_costumes', 'crew_props', 'crew_hair_makeup', 'crew_wigs', 'crew_lighting', 'crew_sound'];
+	    if (type === 'event') return ['event', 'cast_party', 'deadline'];
+	    return [type];
+	  }
+	  function volSavedScopeForAttendanceType(savedEventScope = {}, type) {
+	    const scopes = volAttendanceTypeAliases(type).map(alias => savedEventScope[alias]).filter(Boolean);
+	    if (!scopes.length) return { mode: 'all' };
+	    const specific = scopes.filter(scope => scope.mode === 'specific' && Array.isArray(scope.ids));
+	    if (!specific.length) return { mode: 'all' };
+	    return { mode: 'specific', ids: [...new Set(specific.flatMap(scope => scope.ids))] };
 	  }
 	  function volCheckInSuggestions(currentKey = '', currentValue = '') {
 	    const suggestions = new Set([
@@ -68918,12 +68944,8 @@ See you soon!
 	      .sort((a, b) => a.localeCompare(b));
 	  }
 	  const VOL_SHIFT_TYPE_GROUPS = [
-	    { label: 'Start Here', types: ['dept_leads', 'other'] },
-	    { label: 'Other Calendar Dates', types: ['audition', 'dance_call', 'callback', 'other_audition', 'event', 'meeting', 'deadline'] },
-	    { label: 'Rehearsals', types: ['rehearsal', 'music_rehearsal', 'choreography'] },
-	    { label: 'Show Week', types: ['tech', 'dress', 'performance'] },
-	    { label: 'After The Show', types: ['strike', 'costume_moveout', 'cast_party'] },
-	    { label: 'On Your Own Time', types: ['crew', 'crew_set', 'crew_set_painting', 'crew_set_dressing', 'crew_costumes', 'crew_props', 'crew_hair_makeup', 'crew_wigs', 'crew_lighting', 'crew_sound'] },
+	    { label: 'No fixed calendar dates', types: ['dept_leads', 'other'] },
+	    { label: 'Production Calendar', types: ['audition', 'rehearsal', 'tech', 'dress', 'performance', 'strike', 'costume_moveout', 'event', 'meeting', 'crew'] },
 	  ];
 
 	  function volToggleSchedule(type, ri, typeLabel) {
@@ -68940,7 +68962,8 @@ See you soon!
 	    const checkInWith = saved.checkInWith || saved.check_in_with || meta.checkInWith || meta.check_in_with || '';
 	    const countMode = saved.countMode || saved.count_mode || volCountModeFromLabel(saved.perLabel, type) || volDefaultCountMode(type);
 	    const timingGroup = saved.timingGroup || saved.timing_group || volDefaultTimingGroup(type);
-	    const appliesTo = Array.isArray(saved.appliesTo) && saved.appliesTo.length ? saved.appliesTo : [type];
+	    const rawAppliesTo = Array.isArray(saved.appliesTo) && saved.appliesTo.length ? saved.appliesTo : [type];
+	    const appliesTo = volNormalizeAttendanceTypes(rawAppliesTo);
 	    const savedOwnTime = saved.shiftStartAnchor === 'own_time' || saved.shiftEndAnchor === 'own_time';
 	    const editorColor = DEPT_COLOURS_LOCAL[department] || meta.color || '#572e88';
 	    const pop = document.createElement('div');
@@ -68957,7 +68980,7 @@ See you soon!
 	        const isChecked = appliesTo.includes(value);
 	        const canPick = DATE_PICKABLE.has(value);
 	        const matchEvs = canPick ? volunteerPlanEvents.filter(e => volCalendarEventMatches(e, value)).sort((a,b) => (a.start_time||'').localeCompare(b.start_time||'')) : [];
-	        const scopeData = savedEventScope[value] || { mode: 'all' };
+	        const scopeData = volSavedScopeForAttendanceType(savedEventScope, value);
 	        const scopeMode = scopeData.mode || 'all';
 	        const selIds = (scopeMode === 'specific' && Array.isArray(scopeData.ids)) ? scopeData.ids : [];
 	        const dateItems = matchEvs.map(ev => {
