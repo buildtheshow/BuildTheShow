@@ -23630,6 +23630,7 @@
         <span class="fc-legend-item" draggable="true" data-event-type="strike"          data-label="Strike"          style="--c:#7497e7">Strike</span>
         <span class="fc-legend-item" draggable="true" data-event-type="costume_moveout" data-label="Costume Move-Out" style="--c:#f4735b">Costume Move-Out</span>
         <span class="fc-legend-item" draggable="true" data-event-type="event"           data-label="Event"           style="--c:#aa2943">Event</span>
+        <span class="fc-legend-item" draggable="true" data-event-type="deadline"        data-label="Deadline"        data-is-deadline="1" style="--c:#b91c1c">Deadline</span>
         <span class="fc-legend-item" draggable="true" data-event-type="meeting"         data-label="Meeting"         style="--c:#7b7b7b">Meeting</span>
         <span class="fc-legend-item" draggable="true" data-event-type="crew"            data-label="Crew"            style="--c:#efab45">Crew</span>
         <span class="fc-legend-hint">← drag onto a date to add</span>
@@ -26009,11 +26010,11 @@
       </div>
       <div class="form-error-msg" id="event-error"></div>
       <div class="form-group">
-        <label class="form-label">Event Title</label>
+        <label class="form-label" id="ev-title-label">Event Title</label>
         <input class="form-input" id="ev-title" type="text" placeholder="e.g. Full Cast Rehearsal" />
       </div>
       <div class="form-group">
-        <label class="form-label">Event Type</label>
+        <label class="form-label" id="ev-type-label">Event Type</label>
         <select class="form-select" id="ev-type">
           <optgroup label="Auditions">
             <option value="audition">Audition</option>
@@ -26046,11 +26047,10 @@
           <optgroup label="General">
             <option value="event">Event</option>
             <option value="meeting">Meeting</option>
-            <option value="deadline">Deadline</option>
           </optgroup>
         </select>
       </div>
-      <div class="form-group" style="margin-bottom:0.5rem;">
+      <div class="form-group" id="ev-mode-toggle-row" style="margin-bottom:0.5rem;display:none;">
         <div style="display:flex;gap:0.4rem;">
           <button type="button" id="ev-mode-startend" onclick="setEventMode('startend')"
             style="flex:1;padding:0.42rem 0.7rem;border-radius:7px;font-size:0.78rem;font-weight:800;border:1.5px solid #572e88;background:#572e88;color:#fff;cursor:pointer;">
@@ -35055,7 +35055,8 @@ See you soon!
         const el = info.draggedEl;
         const eventType = el.dataset.eventType || 'rehearsal';
         const label     = el.dataset.label     || 'Event';
-        openEventModal({ startStr: info.dateStr + 'T09:00', eventType, label });
+        const isDeadline = el.dataset.isDeadline === '1' || eventType === 'deadline';
+        openEventModal({ startStr: info.dateStr + 'T09:00', eventType, label, isDeadline });
         // Prevent FullCalendar from creating a ghost event automatically
         info.revert();
       },
@@ -35197,24 +35198,40 @@ See you soon!
     event.preventDefault();
     const eventType = item.dataset.eventType || 'rehearsal';
     const label = item.dataset.label || item.textContent?.trim() || 'Event';
+    const isDeadline = item.dataset.isDeadline === '1' || eventType === 'deadline';
     const today = new Date();
     const pad = n => String(n).padStart(2, '0');
     const startStr = `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}T09:00`;
-    openEventModal({ startStr, eventType, label });
+    openEventModal({ startStr, eventType, label, isDeadline });
   }
 
+  const CALENDAR_DEADLINE_AREA_PREFIX = '[bts:deadline_area:';
+
   function calendarNotesHaveDeadlineMarker(notes) {
-    return String(notes || '').includes(CALENDAR_DEADLINE_NOTE_MARKER);
+    const text = String(notes || '');
+    return text.includes(CALENDAR_DEADLINE_NOTE_MARKER) || text.includes(CALENDAR_DEADLINE_AREA_PREFIX);
   }
 
   function stripCalendarDeadlineMarker(notes) {
-    return String(notes || '').replace(CALENDAR_DEADLINE_NOTE_MARKER, '').replace(/\n{3,}/g, '\n\n').trim();
+    return String(notes || '')
+      .replace(CALENDAR_DEADLINE_NOTE_MARKER, '')
+      .replace(/\[bts:deadline_area:[^\]]+\]/g, '')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
   }
 
-  function notesForCalendarDeadline(notes, isDeadline) {
+  function calendarDeadlineAreaFromNotes(notes) {
+    const match = String(notes || '').match(/\[bts:deadline_area:([^\]]+)\]/);
+    return match ? match[1] : '';
+  }
+
+  function notesForCalendarDeadline(notes, isDeadline, deadlineArea = '') {
     const cleanNotes = stripCalendarDeadlineMarker(notes);
-    if (!isDeadline || _hasIsDeadlineColumn) return cleanNotes || null;
-    return [cleanNotes, CALENDAR_DEADLINE_NOTE_MARKER].filter(Boolean).join('\n');
+    if (!isDeadline) return cleanNotes || null;
+    const markers = [];
+    if (deadlineArea) markers.push(`${CALENDAR_DEADLINE_AREA_PREFIX}${deadlineArea}]`);
+    if (!_hasIsDeadlineColumn) markers.push(CALENDAR_DEADLINE_NOTE_MARKER);
+    return [cleanNotes, ...markers].filter(Boolean).join('\n') || null;
   }
 
   function dbEventToFC(e) {
@@ -35232,6 +35249,7 @@ See you soon!
       borderColor: colour,
       extendedProps: {
         event_type: e.event_type,
+        deadline_area: calendarDeadlineAreaFromNotes(e.notes),
         venue: e.venue,
         notes: stripCalendarDeadlineMarker(e.notes),
         is_public: e.is_public ?? false,
@@ -35293,7 +35311,12 @@ See you soon!
     const modal = document.getElementById('event-modal');
     const saveBtn = document.getElementById('save-event-btn');
     const delBtn  = document.getElementById('delete-event-btn');
-    document.getElementById('event-modal-title').textContent = 'Add Event';
+    const titleEl = document.getElementById('event-modal-title');
+    const titleLabelEl = document.getElementById('ev-title-label');
+    const typeLabelEl = document.getElementById('ev-type-label');
+    titleEl.textContent = 'Add Event';
+    if (titleLabelEl) titleLabelEl.textContent = 'Event Title';
+    if (typeLabelEl) typeLabelEl.textContent = 'Event Type';
     document.getElementById('event-error').classList.remove('visible');
     saveBtn.textContent = 'Add to Calendar';
     delBtn.style.display = 'none';
@@ -35307,16 +35330,20 @@ See you soon!
     if (opts.fcEvent) {
       // Editing existing
       const ev = opts.fcEvent;
+      const isExistingDeadline = !!ev.extendedProps.is_deadline;
       editingEventId = ev.id;
-      document.getElementById('event-modal-title').textContent = 'Edit Event';
+      titleEl.textContent = isExistingDeadline ? 'Edit Deadline' : 'Edit Event';
       saveBtn.textContent = 'Save Changes';
       delBtn.style.display = '';
       document.getElementById('ev-title').value = ev.title || '';
-      document.getElementById('ev-type').value  = ev.extendedProps.is_deadline ? 'deadline' : (ev.extendedProps.event_type || 'rehearsal');
+      if (titleLabelEl) titleLabelEl.textContent = isExistingDeadline ? 'Deadline Title' : 'Event Title';
+      if (typeLabelEl) typeLabelEl.textContent = isExistingDeadline ? 'Deadline department / area' : 'Event Type';
+      const deadlineArea = ev.extendedProps.deadline_area || (isExistingDeadline && ev.extendedProps.event_type !== 'deadline' ? ev.extendedProps.event_type : '') || 'event';
+      document.getElementById('ev-type').value  = isExistingDeadline ? deadlineArea : (ev.extendedProps.event_type || 'rehearsal');
       document.getElementById('ev-venue').value = ev.extendedProps.venue || '';
       document.getElementById('ev-notes').value = ev.extendedProps.notes || '';
       document.getElementById('ev-is-public').checked = ev.extendedProps.is_public ?? _defaultPublic(ev.extendedProps.event_type);
-      if (ev.extendedProps.is_deadline) {
+      if (isExistingDeadline) {
         setEventMode('deadline');
         document.getElementById('ev-deadline').value = toDateTimeLocal(ev.extendedProps.raw_start_time || ev.start);
       } else {
@@ -35330,17 +35357,22 @@ See you soon!
       });
     } else {
       // New event, pre-fill dates if from a selection or drag
-      const evType = opts.isDeadline ? 'deadline' : (opts.eventType || 'rehearsal');
+      const isDeadline = !!opts.isDeadline;
+      const evType = isDeadline ? (opts.deadlineArea || 'event') : (opts.eventType || 'rehearsal');
       const defaultVenue = _defaultVenueForType(evType);
-      document.getElementById('ev-title').value = opts.label || '';
+      titleEl.textContent = isDeadline ? 'Add Deadline' : 'Add Event';
+      saveBtn.textContent = isDeadline ? 'Add Deadline' : 'Add to Calendar';
+      if (titleLabelEl) titleLabelEl.textContent = isDeadline ? 'Deadline Title' : 'Event Title';
+      if (typeLabelEl) typeLabelEl.textContent = isDeadline ? 'Deadline department / area' : 'Event Type';
+      document.getElementById('ev-title').value = isDeadline ? '' : (opts.label || '');
       document.getElementById('ev-type').value  = evType;
       document.getElementById('ev-start').value = toDateTimeLocal(opts.startStr);
       document.getElementById('ev-end').value   = toDateTimeLocal(opts.endStr);
       document.getElementById('ev-deadline').value = toDateTimeLocal(opts.startStr);
       document.getElementById('ev-venue').value = defaultVenue;
       document.getElementById('ev-notes').value = '';
-      document.getElementById('ev-is-public').checked = _defaultPublic(evType);
-      setEventMode(evType === 'deadline' || opts.isDeadline ? 'deadline' : 'startend');
+      document.getElementById('ev-is-public').checked = isDeadline ? false : _defaultPublic(evType);
+      setEventMode(isDeadline ? 'deadline' : 'startend');
       VenuePicker.render('ev-venue-picker', defaultVenue, (name) => {
         document.getElementById('ev-venue').value = name;
       });
@@ -35391,8 +35423,11 @@ See you soon!
     document.getElementById('ev-startend-row').style.display  = isDeadline ? 'none' : '';
     document.getElementById('ev-deadline-row').style.display  = isDeadline ? '' : 'none';
     document.getElementById('ev-is-deadline').value           = isDeadline ? '1' : '0';
+    const modeRow = document.getElementById('ev-mode-toggle-row');
+    if (modeRow) modeRow.style.display = 'none';
     const btnSE = document.getElementById('ev-mode-startend');
     const btnDL = document.getElementById('ev-mode-deadline');
+    if (!btnSE || !btnDL) return;
     const active   = 'background:#572e88;color:#fff;border-color:#572e88;';
     const inactive = 'background:#fff;color:#572e88;border-color:rgba(87,46,136,0.25);';
     btnSE.style.cssText = btnSE.style.cssText.replace(/background[^;]+;|color[^;]+;|border-color[^;]+;/g, '') + (isDeadline ? inactive : active);
@@ -35407,12 +35442,6 @@ See you soon!
 
   document.getElementById('event-modal').addEventListener('click', e => {
     if (e.target === e.currentTarget) closeEventModal();
-  });
-
-  // Auto-switch to deadline mode when Deadline event type selected
-  document.getElementById('ev-type').addEventListener('change', () => {
-    if (document.getElementById('ev-type').value === 'deadline') setEventMode('deadline');
-    else if (document.getElementById('ev-is-deadline').value === '1') setEventMode('startend');
   });
 
   // Auto-copy date from start to end when end is blank or on same day
@@ -35432,6 +35461,7 @@ See you soon!
     const title      = document.getElementById('ev-title').value.trim();
     const type       = document.getElementById('ev-type').value;
     const isDeadline = document.getElementById('ev-is-deadline').value === '1';
+    const deadlineArea = isDeadline ? type : '';
     const start      = isDeadline ? document.getElementById('ev-deadline').value : document.getElementById('ev-start').value;
     let end          = isDeadline ? document.getElementById('ev-deadline').value : document.getElementById('ev-end').value;
     const venue      = document.getElementById('ev-venue').value.trim();
@@ -35440,7 +35470,7 @@ See you soon!
     const btn        = document.getElementById('save-event-btn');
 
     errEl.classList.remove('visible');
-    if (!title) { errEl.textContent = 'Event title is required.'; errEl.classList.add('visible'); return; }
+    if (!title) { errEl.textContent = isDeadline ? 'Deadline title is required.' : 'Event title is required.'; errEl.classList.add('visible'); return; }
     if (!start) { errEl.textContent = isDeadline ? 'Deadline date and time is required.' : 'Start date and time is required.'; errEl.classList.add('visible'); return; }
     if (!isDeadline && end && start && end < start && end.slice(0, 10) !== start.slice(0, 10)) {
       end = start.slice(0, 10) + 'T' + (end.slice(11, 16) || start.slice(11, 16) || '18:00');
@@ -35459,7 +35489,7 @@ See you soon!
       start_time: fmtLocal(start),
       end_time:   isDeadline ? null : (fmtLocal(end) || defaultEnd),
       venue:      venue || null,
-      notes:      notesForCalendarDeadline(notes, isDeadline),
+      notes:      notesForCalendarDeadline(notes, isDeadline, deadlineArea),
     };
     // Only add is_public if the column exists — prevents errors before SQL migration is run
     if (_hasIsPublicColumn) payload.is_public = isPublic;
@@ -67173,7 +67203,7 @@ See you soon!
 	    if (type === 'audition') return ['audition', 'dance_call', 'callback', 'other_audition'].includes(eventType);
 	    if (type === 'rehearsal') return ['rehearsal', 'music_rehearsal', 'choreography'].includes(eventType);
 	    if (type === 'crew') return eventType === 'crew' || eventType.startsWith('crew_');
-	    if (type === 'event') return ['event', 'cast_party', 'deadline'].includes(eventType);
+	    if (type === 'event') return ['event', 'cast_party'].includes(eventType);
 	    return eventType === type;
 	  }
 
