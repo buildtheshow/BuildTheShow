@@ -2009,7 +2009,11 @@
       if (left <= 3) return `<span class="vp-spots low">${left} spots left</span>`;
       return `<span class="vp-spots">${left} spots left</span>`;
     }
-    function scheduleHours(item) { return item.credit_hours || (item.hours?.mins ? item.hours.mins / 60 : 0); }
+    function scheduleHours(item) {
+      if (item.is_full_discount) return 0;
+      return item.credit_hours || (item.hours?.mins ? item.hours.mins / 60 : 0);
+    }
+    function scheduleHasFullDiscount() { return schedule.some(s => s.is_full_discount); }
     function discountRequiredHours() { return parseFloat(String(paymentSettings.volunteer_hours || '').replace(/[^0-9.]/g, '')) || 0; }
     function hasDiscountEnabled() { return !!paymentSettings.volunteer_discount_enabled && discountRequiredHours() > 0; }
     function planEntryBaseType(key) {
@@ -2096,6 +2100,7 @@
         volunteers_needed: count,
         ...timing,
         credit_hours: creditHoursFor(entry, timing.hours),
+        is_full_discount: entryField(entry, 'hoursMode', 'hours_mode', 'auto') === 'full',
         event_id: ev?.id || null,
         event_type: eventType,
         count_mode: planEntryCountMode(entryKey, entry),
@@ -2812,9 +2817,10 @@
       updateScheduleCounts();
     }
     function cartMarkup(sheet = false) {
+      const hasFullDiscount = scheduleHasFullDiscount();
       const totalHours = schedule.reduce((sum, s) => sum + scheduleHours(s), 0);
       const required = discountRequiredHours();
-      const progress = required ? Math.min(100, Math.round((totalHours / required) * 100)) : 0;
+      const progress = hasFullDiscount ? 100 : (required ? Math.min(100, Math.round((totalHours / required) * 100)) : 0);
       return `<div class="vp-cart-head">
         <div class="vp-cart-title">My Volunteer Schedule</div>
         <span class="vp-count-pill">${schedule.length}</span>
@@ -2825,7 +2831,7 @@
       </div>
       <div class="vp-cart-summary">
         <div class="vp-summary-row"><span>Total Shifts</span><strong>${schedule.length}</strong></div>
-        <div class="vp-summary-row"><span>Total Hours</span><strong>${formatHours(totalHours)}</strong></div>
+        <div class="vp-summary-row"><span>Total Hours</span><strong>${hasFullDiscount ? 'Full discount' : formatHours(totalHours)}</strong></div>
       </div>
       <div class="vp-cart-discount ${hasDiscountEnabled() ? 'visible' : ''}">
         <label class="vp-discount-check">
@@ -2840,9 +2846,9 @@
           <input type="text" id="vp-discount-performer" value="${esc(discountPerformer)}" placeholder="Performer this discount is for" oninput="setDiscountPerformer(this.value)" />
         </div>
         <div class="vp-discount-progress ${discountRequested ? 'visible' : ''}">
-          <div class="vp-progress-top"><span>Volunteer Discount Progress</span><span>${formatHours(totalHours)} / ${formatHours(required)}</span></div>
+          <div class="vp-progress-top"><span>Volunteer Discount Progress</span><span>${hasFullDiscount ? 'Qualifies in full' : `${formatHours(totalHours)} / ${formatHours(required)}`}</span></div>
           <div class="vp-progress-track"><div class="vp-progress-fill" style="width:${progress}%"></div></div>
-          <div class="vp-progress-note">${Math.max(0, required - totalHours).toFixed(1).replace(/\.0$/,'')} hours to go</div>
+          <div class="vp-progress-note">${hasFullDiscount ? 'This role counts as the full volunteer discount requirement.' : `${Math.max(0, required - totalHours).toFixed(1).replace(/\.0$/,'')} hours to go`}</div>
         </div>
       </div>
       <button class="vp-submit-cart" type="button" ${schedule.length ? '' : 'disabled'} onclick="openSubmitModal()">Request Volunteer Hours ${ICONS.arrow}</button>
