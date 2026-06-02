@@ -68552,11 +68552,46 @@ See you soon!
     }
   }
 
+  function volReqApprovedHoursForSignup(signup = {}) {
+    const existing = parseFloat(signup.approved_hours);
+    if (Number.isFinite(existing) && existing > 0) return existing;
+    const start = String(signup.shift_start_time || '').slice(0, 5);
+    const end = String(signup.shift_end_time || '').slice(0, 5);
+    if (!start || !end) return 0;
+    const [sh, sm] = start.split(':').map(Number);
+    const [eh, em] = end.split(':').map(Number);
+    if (![sh, sm, eh, em].every(Number.isFinite)) return 0;
+    let diff = ((eh * 60) + em) - ((sh * 60) + sm);
+    if (diff < 0) diff += 24 * 60;
+    return Math.max(0, diff / 60);
+  }
+
   async function volReqApplyStatus(ids, newStatus) {
-    await sb.from('volunteer_signups').update({ status: newStatus }).in('id', ids);
+    if (newStatus === 'approved') {
+      const rows = ids.map(id => volunteerRequests.find(r => String(r.id) === String(id))).filter(Boolean);
+      const updates = rows.length ? rows : ids.map(id => ({ id }));
+      const results = await Promise.all(updates.map(row => {
+        const payload = { status: newStatus };
+        const approvedHours = volReqApprovedHoursForSignup(row);
+        if (approvedHours > 0) payload.approved_hours = approvedHours;
+        return sb.from('volunteer_signups').update(payload).eq('id', row.id);
+      }));
+      const failed = results.find(result => result.error);
+      if (failed?.error) throw failed.error;
+    } else {
+      const { error } = await sb.from('volunteer_signups').update({ status: newStatus }).in('id', ids);
+      if (error) throw error;
+    }
     ids.forEach(id => {
       const idx = volunteerRequests.findIndex(r => String(r.id) === String(id));
-      if (idx >= 0) volunteerRequests[idx] = { ...volunteerRequests[idx], status: newStatus };
+      if (idx >= 0) {
+        const approvedHours = newStatus === 'approved' ? volReqApprovedHoursForSignup(volunteerRequests[idx]) : 0;
+        volunteerRequests[idx] = {
+          ...volunteerRequests[idx],
+          status: newStatus,
+          ...(approvedHours > 0 ? { approved_hours: approvedHours } : {}),
+        };
+      }
     });
   }
 
