@@ -26,3 +26,6 @@ alter table public.volunteer_signups
   add column if not exists discount_requested  boolean default false,
   add column if not exists discount_performer  text,
   add column if not exists created_at          timestamptz default now();
+
+-- Drop NOT NULL on email so internal signups without an email are valid
+alter table public.volunteer_signups alter column email drop not null;
