@@ -29071,6 +29071,7 @@
   let stSelectedAppId = null;
   let _hasIsPublicColumn = false; // set true once we confirm the column exists
   let _hasIsDeadlineColumn = false; // set true once deadline event support exists
+  const CALENDAR_DEADLINE_NOTE_MARKER = '[bts:is_deadline]';
   let allSlots      = [];
   let allSlotsLoadToken = 0;
   let auditionsRealtimeChannel = null;
@@ -35202,9 +35203,23 @@ See you soon!
     openEventModal({ startStr, eventType, label });
   }
 
+  function calendarNotesHaveDeadlineMarker(notes) {
+    return String(notes || '').includes(CALENDAR_DEADLINE_NOTE_MARKER);
+  }
+
+  function stripCalendarDeadlineMarker(notes) {
+    return String(notes || '').replace(CALENDAR_DEADLINE_NOTE_MARKER, '').replace(/\n{3,}/g, '\n\n').trim();
+  }
+
+  function notesForCalendarDeadline(notes, isDeadline) {
+    const cleanNotes = stripCalendarDeadlineMarker(notes);
+    if (!isDeadline || _hasIsDeadlineColumn) return cleanNotes || null;
+    return [cleanNotes, CALENDAR_DEADLINE_NOTE_MARKER].filter(Boolean).join('\n');
+  }
+
   function dbEventToFC(e) {
     const colour = EVENT_COLOURS[e.event_type] || '#572e88';
-    const isDeadline = !!(e.is_deadline || e.event_type === 'deadline');
+    const isDeadline = !!(e.is_deadline || e.event_type === 'deadline' || calendarNotesHaveDeadlineMarker(e.notes));
     // Strip timezone so FullCalendar treats times as local/floating — prevents UTC→local conversion
     const stripTz = t => t ? t.slice(0, 19) : null;
     return {
@@ -35218,7 +35233,7 @@ See you soon!
       extendedProps: {
         event_type: e.event_type,
         venue: e.venue,
-        notes: e.notes,
+        notes: stripCalendarDeadlineMarker(e.notes),
         is_public: e.is_public ?? false,
         is_deadline: isDeadline,
         raw_start_time: e.start_time || null,
@@ -35438,14 +35453,13 @@ See you soon!
     const fmtLocal = s => s ? (s.length === 16 ? s + ':00' : s.slice(0, 19)) : null;
     const defaultEnd = start.slice(0, 11) + '18:00:00';
     const isPublic = document.getElementById('ev-is-public').checked;
-    const payloadType = isDeadline && !_hasIsDeadlineColumn ? 'deadline' : type;
     const payload = {
       title,
-      event_type: payloadType,
+      event_type: type,
       start_time: fmtLocal(start),
       end_time:   isDeadline ? null : (fmtLocal(end) || defaultEnd),
       venue:      venue || null,
-      notes:      notes || null,
+      notes:      notesForCalendarDeadline(notes, isDeadline),
     };
     // Only add is_public if the column exists — prevents errors before SQL migration is run
     if (_hasIsPublicColumn) payload.is_public = isPublic;
@@ -67337,7 +67351,7 @@ See you soon!
 	        { dept: 'Front of House',               name: 'Concession Manager',             default: 1, checkInWith: 'Producer' },
 	        { dept: 'Technical Crew',               name: 'Lighting Designer / Technician', default: 1, checkInWith: 'Producer' },
 	        { dept: 'Design & Construction',        name: 'Lead Builder',                  default: 1, checkInWith: 'Producer' },
-	        { dept: 'Design & Construction',        name: 'Lead Set Painter',              default: 1, checkInWith: 'Lead Builder' },
+	        { dept: 'Design & Construction',        name: 'Lead Set Painter',              default: 1, checkInWith: 'Producer' },
 	        { dept: 'Design & Construction',        name: 'Lead Prop Person',              default: 1, checkInWith: 'Producer' },
 	        { dept: 'Costume & Makeup',             name: 'Costume Designer',            default: 1, checkInWith: 'Producer' },
 	        { dept: 'Marketing & Publicity',        name: 'Marketing Director',             default: 1, checkInWith: 'Producer' },
@@ -68743,11 +68757,9 @@ See you soon!
 	      if (display) display.textContent = val.count ?? 0;
 	      if (modeEl) modeEl.textContent = volCountModeLabel(val.countMode || val.count_mode || volCountModeFromLabel(val.perLabel, key.split('-')[0]), key.split('-')[0]);
 	      if (tile) tile.classList.toggle('vol-staffing-tile--inactive', (val.count ?? 0) === 0);
-	      if (val.shiftStartAnchor || val.shiftEndAnchor) {
-	        const summary = volScheduleSummary(val);
-	        if (timingEl) { timingEl.textContent = summary.timingText; timingEl.title = summary.longText; }
-	        if (creditEl) creditEl.textContent = summary.creditText;
-	      }
+	      const att = volAttendanceSummary(val);
+	      if (timingEl) timingEl.textContent = att.typesText;
+	      if (creditEl) creditEl.textContent = att.scopeText;
 	    });
 	  }
 
@@ -68913,6 +68925,26 @@ See you soon!
 	    if (type === 'crew') return ['crew', 'crew_set', 'crew_set_painting', 'crew_set_dressing', 'crew_costumes', 'crew_props', 'crew_hair_makeup', 'crew_wigs', 'crew_lighting', 'crew_sound'];
 	    if (type === 'event') return ['event', 'cast_party', 'deadline'];
 	    return [type];
+	  }
+	  const VOL_TYPE_SHORT = {
+	    dept_leads: 'Dept Lead', other: 'Flexible',
+	    performance: 'Performance', tech: 'Tech', dress: 'Dress', rehearsal: 'Rehearsal',
+	    music_rehearsal: 'Rehearsal', choreography: 'Rehearsal', audition: 'Audition',
+	    strike: 'Strike', costume_moveout: 'Costume M/O', cast_party: 'Cast Party',
+	    crew: 'Crew', crew_set: 'Set Build', crew_set_painting: 'Set Paint',
+	    crew_set_dressing: 'Set Dress', crew_costumes: 'Costumes', crew_props: 'Props',
+	    crew_hair_makeup: 'Hair & Makeup', crew_wigs: 'Wigs', crew_lighting: 'Lighting', crew_sound: 'Sound',
+	    event: 'Event', meeting: 'Meeting',
+	  };
+	  function volAttendanceSummary(val = {}) {
+	    const appliesTo = val.appliesTo || [];
+	    if (!appliesTo.length) return { typesText: '', scopeText: '' };
+	    const typesText = appliesTo.map(t => VOL_TYPE_SHORT[t] || t).join(' · ');
+	    const scope = val.eventScope || {};
+	    const anySpecific = appliesTo.some(t => scope[t]?.mode === 'specific');
+	    const anyAll = appliesTo.some(t => !scope[t] || scope[t]?.mode === 'all');
+	    const scopeText = (anySpecific && anyAll) ? 'Mixed dates' : anySpecific ? 'Specific dates' : 'All dates';
+	    return { typesText, scopeText };
 	  }
 	  function volSavedScopeForAttendanceType(savedEventScope = {}, type) {
 	    const scopes = volAttendanceTypeAliases(type).map(alias => savedEventScope[alias]).filter(Boolean);
@@ -69231,11 +69263,11 @@ See you soon!
 	    if (!_staffingPlan[key]) _staffingPlan[key] = {};
 	    Object.assign(_staffingPlan[key], { roleName, department, description, checkInWith, check_in_with: checkInWith, timingGroup, countMode, perLabel: volCountModeLabel(countMode, type), appliesTo: coveredTypes, eventScope, shiftStartMins, shiftStartAnchor, shiftEndMins, shiftEndAnchor, hoursMode, countsFor, prepHours: 0, prepNoCount: false, outsideTimelineWork });
 	    _volStaffingRoleMeta[key] = { ...(_volStaffingRoleMeta[key] || {}), roleName, department, description, checkInWith };
-	    const _saveSummary = volScheduleSummary({ shiftStartMins, shiftStartAnchor, shiftEndMins, shiftEndAnchor, hoursMode, countsFor, outsideTimelineWork });
+	    const _saveAtt = volAttendanceSummary(_staffingPlan[key]);
 	    const timingEl = document.getElementById(`vsq-timing-${key}`);
 	    const creditEl = document.getElementById(`vsq-credit-${key}`);
-	    if (timingEl) { timingEl.textContent = _saveSummary.timingText; timingEl.title = _saveSummary.longText; }
-	    if (creditEl) creditEl.textContent = _saveSummary.creditText;
+	    if (timingEl) timingEl.textContent = _saveAtt.typesText;
+	    if (creditEl) creditEl.textContent = _saveAtt.scopeText;
 	    const countModeEl = document.getElementById(`vsq-count-mode-${key}`);
 	    if (countModeEl) countModeEl.textContent = volCountModeLabel(countMode, type);
 	    const titleEl = document.querySelector(`#vsq-tile-${CSS.escape(type)}-${CSS.escape(String(ri))} .template-brand-tile-title`);
