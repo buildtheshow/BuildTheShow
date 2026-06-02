@@ -68186,8 +68186,8 @@ See you soon!
 
     // Tabs + filters
     const tabDefs = [
-      { key: 'all', label: 'All Requests' }, { key: 'pending', label: 'Pending' },
-      { key: 'approved', label: 'Approved' }, { key: 'partial', label: 'Partially Filled' }, { key: 'declined', label: 'Declined' },
+      { key: 'pending', label: 'Pending' }, { key: 'approved', label: 'Approved' },
+      { key: 'declined', label: 'Declined' }, { key: 'all', label: 'All' },
     ];
     const tabInner = tabDefs.map(t => {
         const cnt = counts[t.key];
@@ -68346,7 +68346,10 @@ See you soon!
         + '<div class="vol-req-detail-id">'
         + avatarHtml(p.name, p.avatar_url, 'vol-req-detail-avatar')
         + '<div><div class="vol-req-detail-name">' + esc(p.name || 'Unknown') + '</div>'
-        +     '<div class="vol-req-detail-role">' + esc(p.email || '') + '</div>'
+        +     '<div class="vol-req-detail-role" style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap;">'
+        +       esc(p.email || '')
+        +       (p.email ? '<button type="button" onclick="volResendCode(' + JSON.stringify(p.email) + ',' + JSON.stringify(p.name||'') + ')" style="background:none;border:1px solid rgba(87,46,136,0.25);border-radius:5px;padding:0.12rem 0.45rem;font-size:0.62rem;font-weight:800;color:#572e88;cursor:pointer;font-family:inherit;white-space:nowrap;">Resend code</button>' : '')
+        +     '</div>'
         +     (p.phone ? '<div class="vol-req-detail-time">' + esc(p.phone) + '</div>' : '')
         +     '<div class="vol-req-detail-time">Requested ' + volReqTimeAgo(p.created_at) + '</div>'
         + '</div></div>'
@@ -68657,6 +68660,39 @@ See you soon!
     } catch (e) {
       showToast('Could not update request: ' + (e.message || 'Unknown error'), true);
       if (buttonEl) { buttonEl.disabled = false; buttonEl.textContent = label; }
+    }
+  }
+
+  async function volResendCode(email, name) {
+    if (!email || !prodId) return;
+    const btn = event?.target;
+    const origText = btn?.textContent;
+    if (btn) { btn.disabled = true; btn.textContent = 'Sending...'; }
+    try {
+      const volUrl = volunteerPublicPageUrl ? (window.location.origin + volunteerPublicPageUrl()) : '';
+      const portalUrl = volUrl + (volUrl.includes('?') ? '&' : '?') + 'view=portal';
+      const passcode = volunteerPasscode ? volunteerPasscode(email, prodId) : '';
+      const firstName = String(name || email).split(' ')[0] || email;
+      const ctx = {
+        ...volEmailOrgContext(),
+        preferred_name: firstName,
+        contact_name: name || email,
+        name: name || email,
+        show_name: prod?.title || prod?.name || '',
+        volunteer_email: email,
+        volunteer_passcode: passcode,
+        volunteer_portal_url: portalUrl,
+        volunteer_link: volUrl,
+      };
+      const { data, error } = await sb.functions.invoke('send-email', {
+        body: { production_id: prodId, category: 'volunteer_submitted', trigger: 'volunteer_submitted', email, name: name || email, ...ctx, context: ctx },
+      });
+      if (error || data?.ok === false) throw new Error(data?.error || error?.message || 'Could not send email.');
+      showToast('Confirmation email resent to ' + email + '.');
+      if (btn) { btn.disabled = false; btn.textContent = 'Sent ✓'; setTimeout(() => { if (btn) btn.textContent = origText; }, 3000); }
+    } catch (e) {
+      showToast('Could not resend: ' + (e.message || 'Unknown error'), true);
+      if (btn) { btn.disabled = false; btn.textContent = origText; }
     }
   }
 
