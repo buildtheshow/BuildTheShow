@@ -2049,7 +2049,17 @@
       if (!opp.shift_date) return 'flexible';
       return 'before';
     }
-    function spotsKey(opp) { return `${opp.volunteer_role || ''}::${opp.shift_date || ''}`; }
+    function canonicalVolunteerRoleName(name) {
+      const raw = String(name || '').trim();
+      const key = raw.toLowerCase().replace(/\s+/g, ' ');
+      const renames = {
+        'build crew helper': 'Set Builders',
+        'set builder': 'Set Builders',
+        'costume work helper': 'Costume Helper'
+      };
+      return renames[key] || raw;
+    }
+    function spotsKey(opp) { return `${canonicalVolunteerRoleName(opp.volunteer_role) || ''}::${opp.shift_date || ''}`; }
     function spotsLeft(opp) { return Math.max(0, (opp.volunteers_needed || 0) - (signupCounts[spotsKey(opp)] || 0)); }
     function spotsHtml(opp) {
       if (!opp.volunteers_needed) return '';
@@ -2076,7 +2086,7 @@
       const defaultRole = /^custom-/.test(rawRi) ? null : cfg.roles?.[Number(rawRi)];
       return {
         baseType,
-        roleName: entry.roleName || defaultRole?.name || 'Volunteer Shift',
+        roleName: canonicalVolunteerRoleName(entry.roleName || defaultRole?.name || 'Volunteer Shift'),
         department: entry.department || defaultRole?.dept || cfg.label || 'Volunteer',
         description: entry.description || roleDescription(defaultRole?.name || entry.roleName, entry),
         checkInWith: entry.checkInWith || entry.check_in_with || ''
@@ -2215,7 +2225,43 @@
           }
         });
       });
-      return result;
+      return dedupeVolunteerOpps(result);
+    }
+
+    function dedupeVolunteerOpps(items) {
+      const byKey = new Map();
+      items.forEach(opp => {
+        const roleName = canonicalVolunteerRoleName(opp.volunteer_role || '');
+        const dateKey = opp.event_id
+          ? `event:${opp.event_id}`
+          : `date:${opp.shift_date || ''}:${opp.shift_start_time || ''}:${opp.shift_end_time || ''}`;
+        const requiredKey = (opp.required_dates || []).join('|');
+        const key = [
+          roleName.toLowerCase(),
+          String(opp.department || '').trim().toLowerCase(),
+          dateKey,
+          opp.count_mode || '',
+          requiredKey
+        ].join('::');
+        const current = byKey.get(key);
+        const normalized = { ...opp, volunteer_role: roleName };
+        if (!current) {
+          byKey.set(key, normalized);
+          return;
+        }
+        byKey.set(key, {
+          ...current,
+          ...normalized,
+          id: current.id || normalized.id,
+          description: (current.description || '').length >= (normalized.description || '').length ? current.description : normalized.description,
+          volunteers_needed: Math.max(current.volunteers_needed || 0, normalized.volunteers_needed || 0),
+          credit_hours: Math.max(current.credit_hours || 0, normalized.credit_hours || 0),
+          required_dates: (current.required_dates || []).length >= (normalized.required_dates || []).length ? current.required_dates : normalized.required_dates,
+          has_outside_work: !!(current.has_outside_work || normalized.has_outside_work),
+          is_full_discount: !!(current.is_full_discount || normalized.is_full_discount),
+        });
+      });
+      return [...byKey.values()];
     }
 
     async function loadPage() {
@@ -3060,15 +3106,25 @@
       btn.disabled = true;
       btn.textContent = 'Sending...';
       try {
-        // Reuse existing portal token if this email has already submitted for this production
+        // Check if volunteer is linking to an existing schedule via their code
+        const returningChecked = document.getElementById('su-returning')?.checked;
+        const returningEmail = (document.getElementById('su-returning-email')?.value || '').trim().toLowerCase();
+        const returningCode = (document.getElementById('su-returning-code')?.value || '').trim();
         let portalToken = crypto.randomUUID();
         let isReturning = false;
-        try {
-          const { data: existing } = await sb.from('volunteer_signups')
-            .select('portal_token').eq('production_id', prod.id).ilike('email', email)
-            .not('status', 'eq', 'cancelled').limit(1).single();
-          if (existing?.portal_token) { portalToken = existing.portal_token; isReturning = true; }
-        } catch (_) { /* no existing signups — use new token */ }
+        if (returningChecked && returningEmail && returningCode) {
+          const expectedCode = volunteerPasscode(returningEmail, prod.id);
+          if (returningCode !== expectedCode) {
+            btn.disabled = false; btn.textContent = 'Request Selected Shifts';
+            return showFormError(errEl, 'That volunteer code does not match. Check your confirmation email and try again.');
+          }
+          try {
+            const { data: existing } = await sb.from('volunteer_signups')
+              .select('portal_token').eq('production_id', prod.id).ilike('email', returningEmail)
+              .not('status', 'eq', 'cancelled').limit(1).single();
+            if (existing?.portal_token) { portalToken = existing.portal_token; isReturning = true; }
+          } catch (_) { /* code correct but no existing signups yet — use new token */ }
+        }
         const rows = schedule.map(opp => ({
           production_id: prod.id,
           portal_token: portalToken,
@@ -3103,7 +3159,7 @@
           <div class="vp-modal-head" style="justify-content:flex-end;"><button class="vp-modal-close" type="button" onclick="closeModal()">&times;</button></div>
           <div class="vp-modal-body"><div class="vp-success">
             <div class="vp-success-icon">&#10003;</div>
-            <div class="vp-success-title">${isReturning ? `Added to your schedule, ${esc(firstName)}!` : `Request sent, ${esc(firstName)}!`}</div>
+            <div class="vp-success-title">${isReturning ? `Added to your schedule, ${esc(firstName)}!` : `You're in, ${esc(firstName)}!`}</div>
             <div class="vp-success-sub">Your ${count} shift request${count === 1 ? ' was' : 's were'} sent to the production team for review. Watch your inbox for confirmation.</div>
             <div style="margin:1rem 0 0.5rem;font-size:0.78rem;font-weight:950;color:#1a1530;">Your volunteer portal link</div>
             <div style="display:flex;gap:0.5rem;align-items:center;background:#f4f2f8;border-radius:8px;padding:0.6rem 0.75rem;margin-bottom:1rem;">
