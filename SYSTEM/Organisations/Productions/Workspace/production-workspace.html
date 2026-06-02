@@ -67482,7 +67482,7 @@ See you soon!
 	        const perLabel = cfg.perLabel || (type === 'performance' ? 'per performance' : 'per event');
 	        const allRoles = cfg.roles;
 	        const rolesHtml = `<div class="vol-suggestion-grid">
-	          ${allRoles.map((role, ri) => { const key = `${type}-${ri}`; const saved = _staffingPlan[key] || {}; const roleName = saved.roleName || role.name; const deptName = saved.department || role.dept; _volStaffingRoleMeta[key] = { roleName, department: deptName, description: saved.description || volDefaultRoleDescription(deptName, roleName), checkInWith: saved.checkInWith || saved.check_in_with || role.checkInWith || '', typeLabel: cfg.label, eventType: type, color: DEPT_COLOURS[deptName] || cfg.color }; const savedCount = saved.count ?? role.default; const savedPerLabel = volCountModeLabel(saved.countMode || saved.count_mode || volCountModeFromLabel(saved.perLabel || perLabel, type)); return `
+	          ${allRoles.map((role, ri) => { const key = `${type}-${ri}`; const saved = _staffingPlan[key] || {}; if (saved.hidden) return ''; const roleName = saved.roleName || role.name; const deptName = saved.department || role.dept; _volStaffingRoleMeta[key] = { roleName, department: deptName, description: saved.description || volDefaultRoleDescription(deptName, roleName), checkInWith: saved.checkInWith || saved.check_in_with || role.checkInWith || '', typeLabel: cfg.label, eventType: type, color: DEPT_COLOURS[deptName] || cfg.color }; const savedCount = saved.count ?? role.default; const savedPerLabel = volCountModeLabel(saved.countMode || saved.count_mode || volCountModeFromLabel(saved.perLabel || perLabel, type)); return `
 	            <div class="template-brand-card template-brand-card--square template-brand-card--content vol-staffing-tile${savedCount === 0 ? ' vol-staffing-tile--inactive' : ''}" id="vsq-tile-${esc(type)}-${ri}" style="--brand-tile-bg:${esc(DEPT_COLOURS[deptName] || cfg.color)};--brand-tile-ink:#fff;">
 	              <div class="template-brand-card-inner">
 	                <div class="template-brand-tile-content">
@@ -69179,6 +69179,7 @@ See you soon!
 	          </section>
 	          <div class="vol-schedule-actions">
 	            <button type="button" class="btn-primary" id="vsq-save-btn-${key}" style="font-size:0.76rem;width:100%;justify-content:center;" onclick="volSaveSchedule('${type}','${ri}')">Save role setup</button>
+	            <button type="button" class="btn-secondary" style="font-size:0.72rem;width:100%;justify-content:center;color:#b91c1c;border-color:rgba(185,28,28,0.3);margin-top:0.4rem;" onclick="volRemoveRole('${type}','${ri}')">Remove this role</button>
 	          </div>
 	        </div>
 	      </div>`;
@@ -69298,6 +69299,18 @@ See you soon!
 	      saveBtn.disabled = false;
 	      saveBtn.textContent = originalLabel;
 	    }
+	  }
+
+	  async function volRemoveRole(type, ri) {
+	    if (!confirm('Remove this role from the plan? You can add it back any time.')) return;
+	    const key = `${type}-${ri}`;
+	    if (!_staffingPlan[key]) _staffingPlan[key] = {};
+	    _staffingPlan[key].hidden = true;
+	    _staffingPlan[key].count = 0;
+	    await saveStaffingPlan(true);
+	    const tile = document.getElementById(`vsq-tile-${key}`);
+	    if (tile) tile.style.display = 'none';
+	    document.querySelectorAll('.vol-schedule-popover, .vol-schedule-modal').forEach(el => el.remove());
 	  }
 
 	  function volStep(type, ri, delta) {
