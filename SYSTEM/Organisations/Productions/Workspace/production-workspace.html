@@ -9463,8 +9463,8 @@
     .vol-req-shift-row-info { flex: 1; min-width: 0; }
     .vol-req-shift-row-role { font-size: 0.82rem; font-weight: 800; color: #1a1530; }
     .vol-req-shift-row-date { font-size: 0.72rem; color: rgba(87,46,136,0.5); margin-top: 0.1rem; }
-    .vol-req-shift-row-actions { display: flex; align-items: center; gap: 0.25rem; flex-shrink: 0; }
-    .vol-req-shift-approve, .vol-req-shift-decline { width: 26px; height: 26px; border-radius: 6px; border: none; cursor: pointer; font-size: 0.72rem; font-weight: 900; display: flex; align-items: center; justify-content: center; }
+    .vol-req-shift-row-actions { display: flex; align-items: center; gap: 0.35rem; flex-shrink: 0; flex-wrap: wrap; justify-content: flex-end; }
+    .vol-req-shift-approve, .vol-req-shift-decline { min-width: 76px; min-height: 30px; padding: 0.32rem 0.55rem; border-radius: 6px; border: none; cursor: pointer; font-size: 0.68rem; font-weight: 900; font-family: var(--bts-font); display: inline-flex; align-items: center; justify-content: center; gap: 0.22rem; line-height: 1; white-space: nowrap; }
     .vol-req-shift-approve { background: rgba(118,158,123,0.15); color: #2d6e35; }
     .vol-req-shift-approve:hover { background: #769e7b; color: #fff; }
     .vol-req-shift-decline { background: rgba(209,82,61,0.1); color: #b33a25; }
@@ -68125,12 +68125,14 @@ See you soon!
     const allDepts = [...new Set(volunteerRequests.map(r => r.department || '').filter(Boolean))].sort();
     if (_volReqDept !== 'all') filtered = filtered.filter(r => (r.department || '') === _volReqDept);
 
-    // Group filtered shifts by person (email)
+    // Group filtered shifts by portal_token (each submission is its own independent portal)
+    // Submissions only combine when they share the same portal_token (explicitly connected by org or volunteer)
     const personMap = new Map();
     filtered.forEach(req => {
-      const key = (req.email || 'unknown').toLowerCase();
+      const key = req.portal_token || req.id || (req.email || 'unknown').toLowerCase();
       if (!personMap.has(key)) {
-        personMap.set(key, { email: key, name: req.name || 'Unknown', phone: req.phone || null,
+        personMap.set(key, { email: (req.email || '').toLowerCase(), portalToken: req.portal_token || null,
+          name: req.name || 'Unknown', phone: req.phone || null,
           notes: req.notes || req.message || '', avatar_url: req.avatar_url || null,
           created_at: req.created_at, shifts: [] });
       }
@@ -68209,12 +68211,13 @@ See you soon!
     const listItemsHtml = pagePeople.length === 0
       ? '<div class="vol-req-empty-list"><div>No requests in this category yet.</div></div>'
       : pagePeople.map(person => {
-          const active = _volReqSelected === person.email ? ' active' : '';
+          const portalKey = person.portalToken || person.email;
+          const active = _volReqSelected === portalKey ? ' active' : '';
           const status = personStatus(person);
           const roles = personRoles(person);
           const dateRange = personDateRange(person);
           const shiftCount = person.shifts.length;
-          return '<div class="vol-req-item' + active + '" data-email="' + esc(person.email) + '" onclick="volReqSelect(this.dataset.email)">'
+          return '<div class="vol-req-item' + active + '" data-portal-key="' + esc(portalKey) + '" onclick="volReqSelect(this.dataset.portalKey)">'
             + avatarHtml(person.name, person.avatar_url, 'vol-req-item-avatar')
             + '<div class="vol-req-item-body">'
             +   '<div class="vol-req-item-row1">'
@@ -68252,7 +68255,8 @@ See you soon!
     // Detail panel — shows all shifts for the selected person
     function detailHtml(selectedEmail) {
       if (!selectedEmail) return '<div class="vol-req-detail-empty"><div style="font-size:1.8rem;opacity:0.25">\u{1F465}</div><div style="font-size:0.8rem;font-weight:700;">Select a person to review their shifts</div></div>';
-      const personShifts = volunteerRequests.filter(r => (r.email || '').toLowerCase() === selectedEmail);
+      // selectedEmail is actually a portalKey (portal_token or email fallback)
+      const personShifts = volunteerRequests.filter(r => (r.portal_token && r.portal_token === selectedEmail) || (!r.portal_token && (r.email || '').toLowerCase() === selectedEmail));
       if (!personShifts.length) return '<div class="vol-req-detail-empty"><div style="font-size:0.8rem;font-weight:700;">No shifts found</div></div>';
       const p = { name: personShifts[0].name, email: personShifts[0].email, phone: personShifts[0].phone, notes: personShifts[0].notes || personShifts[0].message, avatar_url: personShifts[0].avatar_url, created_at: personShifts[0].created_at };
       const overallStatus = personShifts.some(s => (s.status||'pending') === 'pending') ? 'pending'
@@ -68321,6 +68325,13 @@ See you soon!
         const desc     = s.description || opp?.description || opp?.summary || '';
         const timeCommit = s.time_commitment || opp?.time_commitment || '';
 
+        const rowActions = isPending
+          ? '<div class="vol-req-shift-row-actions">'
+          +   '<button type="button" class="vol-req-shift-approve" data-id="' + esc(s.id) + '" title="Approve this shift" aria-label="Approve ' + esc(s.role_name || 'this shift') + '" onclick="volReqRespond(this.dataset.id, \'approved\')"><span aria-hidden="true">&#10003;</span> Approve</button>'
+          +   '<button type="button" class="vol-req-shift-decline" data-id="' + esc(s.id) + '" title="Decline this shift" aria-label="Decline ' + esc(s.role_name || 'this shift') + '" onclick="volReqRespond(this.dataset.id, \'declined\')"><span aria-hidden="true">&#10005;</span> Decline</button>'
+          + '</div>'
+          : '';
+
         return '<div class="vol-req-shift-row' + (hasConflict ? ' vol-req-shift-conflict' : '') + '" style="border-left:3px solid ' + colour + ';padding-left:0.75rem;padding-top:0.6rem;padding-bottom:0.6rem;">'
           + '<div style="flex:1;min-width:0;">'
           +   '<div style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap;margin-bottom:0.2rem;">'
@@ -68339,6 +68350,7 @@ See you soon!
           +   '</div>'
           +   (desc ? '<div style="font-size:0.75rem;color:#4a3d6b;line-height:1.5;font-style:italic;border-top:1px solid rgba(87,46,136,0.07);padding-top:0.35rem;margin-top:0.1rem;">' + esc(desc) + '</div>' : '')
           + '</div>'
+          + rowActions
           + '</div>';
       }).join('');
 
@@ -68425,8 +68437,8 @@ See you soon!
     renderVolunteerRequests();
   }
 
-  function volReqSelect(email) {
-    _volReqSelected = email;
+  function volReqSelect(portalKey) {
+    _volReqSelected = portalKey;
     renderVolunteerRequests();
   }
 
@@ -68698,7 +68710,7 @@ See you soon!
   }
 
   async function volReqRespond(ref, newStatus) {
-    const id = ref.id;
+    const id = typeof ref === 'object' ? ref.id : ref;
     await openVolReqEmailReview([id], newStatus);
   }
 
