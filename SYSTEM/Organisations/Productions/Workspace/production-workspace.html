@@ -67104,8 +67104,10 @@ See you soon!
 	      opportunities = oppResult.data || [];
 	      volunteerPlanEvents = eventResult.data || [];
 	      volunteerSignups = signupResult.data || [];
-	      if (!_staffingDirty) { _staffingPlan = prodResult.data?.volunteer_staffing_plan || {}; }
-	      else { console.log('[BTS] staffing load: skipping plan overwrite — save pending'); }
+	      if (!_staffingDirty) {
+	        _staffingPlan = prodResult.data?.volunteer_staffing_plan || {};
+	        _migrateStaffingPlanNames();
+	      } else { console.log('[BTS] staffing load: skipping plan overwrite — save pending'); }
 	    } catch (e) {
 	      console.warn('[BTS] loadOpportunities error:', e?.message);
 	      opportunities = [];
@@ -67402,7 +67404,7 @@ See you soon!
 	        { dept: 'Backstage & Rehearsal Support', name: 'Cast Party Helper',             default: 4, checkInWith: 'Cast Party Coordinator' },
 	      ]},
 	      crew: { label: 'Stagecraft', color: '#efab45', roles: [
-	        { dept: 'Design & Construction',        name: 'Set Builder',                default: 4, checkInWith: 'Lead Builder' },
+	        { dept: 'Design & Construction',        name: 'Set Builders',               default: 4, checkInWith: 'Lead Builder' },
 	        { dept: 'Design & Construction',        name: 'Set Painter',                default: 4, checkInWith: 'Lead Set Painter' },
 	        { dept: 'Design & Construction',        name: 'Set Dresser',                default: 3, checkInWith: 'Lead Prop Person' },
 	        { dept: 'Costume & Makeup',             name: 'Costume Helper',             default: 3, checkInWith: 'Costume Designer' },
@@ -68589,17 +68591,20 @@ See you soon!
 	  let _staffingSaveTimer;
 	  let _volStaffingRoleMeta = {};
 
+	  function _migrateStaffingPlanNames() {
+	    const renames = { 'Build Crew Helper': 'Set Builders', 'Set Builder': 'Set Builders', 'Costume Work Helper': 'Costume Helper' };
+	    let migrated = false;
+	    Object.values(_staffingPlan).forEach(val => {
+	      if (val?.roleName && renames[val.roleName]) { val.roleName = renames[val.roleName]; migrated = true; }
+	    });
+	    if (migrated) saveStaffingPlan(true);
+	  }
+
 	  async function loadStaffingPlan() {
 	    try {
 	      const { data } = await sb.from('productions').select('volunteer_staffing_plan').eq('id', prodId).single();
 	      _staffingPlan = data?.volunteer_staffing_plan || {};
-	      // Migrate stale role names
-	      const _renames = { 'Build Crew Helper': 'Set Builder', 'Costume Work Helper': 'Costume Helper' };
-	      let _migrated = false;
-	      Object.values(_staffingPlan).forEach(val => {
-	        if (val?.roleName && _renames[val.roleName]) { val.roleName = _renames[val.roleName]; _migrated = true; }
-	      });
-	      if (_migrated) saveStaffingPlan(true);
+	      _migrateStaffingPlanNames();
 	    } catch { _staffingPlan = {}; }
 	  }
 
