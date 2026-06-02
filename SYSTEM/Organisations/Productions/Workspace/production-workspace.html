@@ -6727,6 +6727,7 @@
     .fc .fc-col-header-cell { background: #f7f4fc; }
     .fc .fc-col-header-cell-cushion { color: #6b5e8a; font-weight: 600; font-size: 0.78rem; text-decoration: none; }
     .fc .fc-daygrid-day-number { color: #4a3f62; text-decoration: none; font-size: 0.82rem; }
+    .fc .fc-daygrid-day-frame { position: relative; }
     .fc .fc-day-today { background: rgba(87,46,136,0.04) !important; }
     .fc .fc-day-today .fc-daygrid-day-number,
     .fc .fc-day-today .fc-col-header-cell-cushion { color: #572e88; font-weight: 700; }
@@ -6739,8 +6740,9 @@
     .fc .fc-event-main { padding: 3px 5px !important; width: 100%; display: flex; align-items: center; justify-content: center; }
     .zeus-event-time  { font-size: 0.67rem; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: clip; }
     .zeus-event-label { font-size: 0.7rem;  font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: clip; }
-    /* Deadline badge — lives in the day-number row, not the event stack */
-    .zeus-deadline-day-badge { position: relative; z-index: 3; display: inline-flex; align-items: center; gap: 3px; border-radius: 3px; padding: 2px 5px; font-size: 9px; font-weight: 700; white-space: nowrap; overflow: hidden; cursor: pointer; color: #fff; margin: 3px 0 0 3px; max-width: calc(100% - 28px); flex-shrink: 1; min-width: 0; transition: opacity 0.15s; }
+    /* Deadline badge — floats in the day cell so out-of-month dates do not fade it */
+    .zeus-deadline-badge-stack { position: absolute; top: 20px; left: 3px; right: 28px; z-index: 4; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; pointer-events: none; }
+    .zeus-deadline-day-badge { position: relative; z-index: 3; display: inline-flex; align-items: center; gap: 3px; border-radius: 3px; padding: 2px 5px; font-size: 9px; font-weight: 700; white-space: nowrap; overflow: hidden; cursor: pointer; color: #fff; max-width: 100%; flex-shrink: 1; min-width: 0; transition: opacity 0.15s; pointer-events: auto; }
     .zeus-deadline-day-badge:hover { opacity: 0.85; }
     .zeus-deadline-badge-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex: 1; }
     .zeus-deadline-badge-time  { opacity: 0.82; flex-shrink: 0; white-space: nowrap; }
@@ -35113,10 +35115,10 @@ See you soon!
         if (info.event.extendedProps.is_deadline) {
           // Find the day cell by date (more reliable than closest() before FC finishes placing the element)
           const dateStr = (info.event.extendedProps.raw_start_time || info.event.startStr || '').slice(0, 10);
-          const topEl = dateStr
-            ? document.querySelector(`#fc-calendar .fc-daygrid-day[data-date="${dateStr}"] .fc-daygrid-day-top`)
+          const dayFrame = dateStr
+            ? document.querySelector(`#fc-calendar .fc-daygrid-day[data-date="${dateStr}"] .fc-daygrid-day-frame`)
             : null;
-          if (topEl) {
+          if (dayFrame) {
             const safeTxt = s => String(s||'').replace(/</g,'&lt;').replace(/>/g,'&gt;');
             const normalized = toDateTimeLocal(info.event.extendedProps.raw_start_time || info.event.start);
             let timeLabel = '';
@@ -35144,7 +35146,13 @@ See you soon!
               window._pendingDeadlineFCEvent = null;
               openEventModal({ fcEvent: ev });
             });
-            topEl.appendChild(badge);
+            let stack = dayFrame.querySelector(':scope > .zeus-deadline-badge-stack');
+            if (!stack) {
+              stack = document.createElement('div');
+              stack.className = 'zeus-deadline-badge-stack';
+              dayFrame.appendChild(stack);
+            }
+            stack.appendChild(badge);
             // Only hide the FC event element if the badge was successfully injected
             info.el.style.setProperty('display', 'none', 'important');
           }
