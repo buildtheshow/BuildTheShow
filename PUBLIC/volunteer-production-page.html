@@ -726,6 +726,13 @@
       border-top: 1px solid rgba(87,46,136,0.08);
     }
     .vp-cart-date-row:first-child { border-top: 0; }
+    .vp-cart-date-row.deadline {
+      background: rgba(209,82,61,0.08);
+      border-top-color: rgba(209,82,61,0.16);
+    }
+    .vp-cart-date-row.deadline:first-child { border-top: 0; }
+    .vp-cart-date-row.deadline .vp-cart-date-day { color: #9e3e2f; }
+    .vp-cart-date-row.deadline .vp-cart-date-detail { color: #9e3e2f; font-weight: 850; }
     .vp-cart-date-day {
       color: #352756;
       font-size: 0.72rem;
@@ -2143,7 +2150,11 @@
         const timing = roleShiftTiming(ev, entry);
         const date = timing.shift_date || ev.start_time?.slice(0, 10) || '';
         const dateText = date ? fmtDate(date, { short: true }) : (ev.title || 'Required date');
-        const timeText = fmtTimeRange(timing.shift_start_time, timing.shift_end_time);
+        const isDeadline = eventPlanType(ev) === 'deadline' || /deadline/i.test(ev.title || '');
+        const deadlineTime = fmtTime(timing.shift_start_time || ev.start_time?.match(/T(\d{2}:\d{2})/)?.[1]);
+        const timeText = isDeadline
+          ? (deadlineTime ? `Due by ${deadlineTime}` : 'Deadline')
+          : fmtTimeRange(timing.shift_start_time, timing.shift_end_time);
         const title = ev.title && ev.title !== ev.event_type ? ev.title : '';
         return [dateText, timeText, title].filter(Boolean).join(' - ');
       });
@@ -2958,15 +2969,7 @@
       const dateLabel = opp.shift_date ? fmtDate(opp.shift_date, { short:true }) : (requiredDates.length ? `${requiredDates.length} required date${requiredDates.length === 1 ? '' : 's'}` : 'No fixed date');
       const datesDetail = requiredDates.length
         ? `<div class="vp-cart-date-list">
-            ${requiredDates.map(d => {
-              const parts = d.split(' - ');
-              const date = parts[0] || '';
-              const rest = parts.slice(1).join(' · ');
-              return `<div class="vp-cart-date-row">
-                <span class="vp-cart-date-day">${esc(date)}</span>
-                ${rest ? `<span class="vp-cart-date-detail">${esc(rest)}</span>` : '<span></span>'}
-              </div>`;
-            }).join('')}
+            ${requiredDates.map(renderCartRequiredDate).join('')}
           </div>`
         : '';
       return `<div class="vp-cart-item">
@@ -2981,6 +2984,17 @@
           ${datesDetail}
         </div>
         <button class="vp-remove" type="button" onclick="removeSchedule('${esc(opp.id)}')" aria-label="Remove shift">&times;</button>
+      </div>`;
+    }
+    function renderCartRequiredDate(value) {
+      const parts = String(value || '').split(' - ');
+      const date = parts[0] || '';
+      const restParts = parts.slice(1);
+      const isDeadline = restParts.some(part => /^due by\b/i.test(part) || /^deadline$/i.test(part)) || /deadline/i.test(value || '');
+      const rest = restParts.join(' · ');
+      return `<div class="vp-cart-date-row ${isDeadline ? 'deadline' : ''}">
+        <span class="vp-cart-date-day">${esc(date)}</span>
+        ${rest ? `<span class="vp-cart-date-detail">${esc(rest)}</span>` : '<span></span>'}
       </div>`;
     }
     function formatHours(hours) {
