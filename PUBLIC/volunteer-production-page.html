@@ -3060,7 +3060,15 @@
       btn.disabled = true;
       btn.textContent = 'Sending...';
       try {
-        const portalToken = crypto.randomUUID();
+        // Reuse existing portal token if this email has already submitted for this production
+        let portalToken = crypto.randomUUID();
+        let isReturning = false;
+        try {
+          const { data: existing } = await sb.from('volunteer_signups')
+            .select('portal_token').eq('production_id', prod.id).ilike('email', email)
+            .not('status', 'eq', 'cancelled').limit(1).single();
+          if (existing?.portal_token) { portalToken = existing.portal_token; isReturning = true; }
+        } catch (_) { /* no existing signups — use new token */ }
         const rows = schedule.map(opp => ({
           production_id: prod.id,
           portal_token: portalToken,
@@ -3095,7 +3103,7 @@
           <div class="vp-modal-head" style="justify-content:flex-end;"><button class="vp-modal-close" type="button" onclick="closeModal()">&times;</button></div>
           <div class="vp-modal-body"><div class="vp-success">
             <div class="vp-success-icon">&#10003;</div>
-            <div class="vp-success-title">Request sent, ${esc(firstName)}!</div>
+            <div class="vp-success-title">${isReturning ? `Added to your schedule, ${esc(firstName)}!` : `Request sent, ${esc(firstName)}!`}</div>
             <div class="vp-success-sub">Your ${count} shift request${count === 1 ? ' was' : 's were'} sent to the production team for review. Watch your inbox for confirmation.</div>
             <div style="margin:1rem 0 0.5rem;font-size:0.78rem;font-weight:950;color:#1a1530;">Your volunteer portal link</div>
             <div style="display:flex;gap:0.5rem;align-items:center;background:#f4f2f8;border-radius:8px;padding:0.6rem 0.75rem;margin-bottom:1rem;">
