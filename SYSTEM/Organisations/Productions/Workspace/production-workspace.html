@@ -35061,7 +35061,12 @@ See you soon!
         info.revert();
       },
       select(info) {
-        if (info.jsEvent?.target?.closest?.('.zeus-deadline-day-badge')) return;
+        if (window._pendingDeadlineFCEvent) {
+          const ev = window._pendingDeadlineFCEvent;
+          window._pendingDeadlineFCEvent = null;
+          openEventModal({ fcEvent: ev });
+          return;
+        }
         openEventModal({ startStr: info.startStr, endStr: info.endStr });
       },
       eventClick(info) {
@@ -35129,7 +35134,16 @@ See you soon!
             badge.style.background = bg;
             badge.innerHTML = `<span class="zeus-deadline-badge-title">${safeTxt(info.event.title || 'Deadline')}</span>`
               + (timeLabel ? `<span class="zeus-deadline-badge-time">· ${timeLabel}</span>` : '');
-            badge.addEventListener('click', e => { e.stopPropagation(); openEventModal({ fcEvent: info.event }); });
+            badge.addEventListener('pointerdown', () => {
+              window._pendingDeadlineFCEvent = info.event;
+              setTimeout(() => { window._pendingDeadlineFCEvent = null; }, 600);
+            });
+            badge.addEventListener('click', e => {
+              e.stopPropagation();
+              const ev = window._pendingDeadlineFCEvent || info.event;
+              window._pendingDeadlineFCEvent = null;
+              openEventModal({ fcEvent: ev });
+            });
             topEl.appendChild(badge);
             // Only hide the FC event element if the badge was successfully injected
             info.el.style.setProperty('display', 'none', 'important');
