@@ -35312,7 +35312,7 @@ See you soon!
       saveBtn.textContent = 'Save Changes';
       delBtn.style.display = '';
       document.getElementById('ev-title').value = ev.title || '';
-      document.getElementById('ev-type').value  = ev.extendedProps.event_type || 'rehearsal';
+      document.getElementById('ev-type').value  = ev.extendedProps.is_deadline ? 'deadline' : (ev.extendedProps.event_type || 'rehearsal');
       document.getElementById('ev-venue').value = ev.extendedProps.venue || '';
       document.getElementById('ev-notes').value = ev.extendedProps.notes || '';
       document.getElementById('ev-is-public').checked = ev.extendedProps.is_public ?? _defaultPublic(ev.extendedProps.event_type);
@@ -35330,7 +35330,7 @@ See you soon!
       });
     } else {
       // New event, pre-fill dates if from a selection or drag
-      const evType = opts.eventType || 'rehearsal';
+      const evType = opts.isDeadline ? 'deadline' : (opts.eventType || 'rehearsal');
       const defaultVenue = _defaultVenueForType(evType);
       document.getElementById('ev-title').value = opts.label || '';
       document.getElementById('ev-type').value  = evType;
@@ -35455,7 +35455,7 @@ See you soon!
     const isPublic = document.getElementById('ev-is-public').checked;
     const payload = {
       title,
-      event_type: type,
+      event_type: isDeadline ? 'deadline' : type,
       start_time: fmtLocal(start),
       end_time:   isDeadline ? null : (fmtLocal(end) || defaultEnd),
       venue:      venue || null,
@@ -67089,17 +67089,14 @@ See you soon!
 	          .eq('production_id', prodId)
 	          .in('opportunity_type', ['volunteer', 'creative_team'])
 	          .order('created_at', { ascending: false }),
-	        sb.from('production_events')
-	          .select('id,title,event_type,start_time,end_time')
-	          .eq('production_id', prodId)
-	          .order('start_time', { ascending: true }),
+	        loadVolunteerPlanEventsForRoles(),
 	        sb.from('productions')
 	          .select('volunteer_staffing_plan')
 	          .eq('id', prodId)
 	          .single(),
 	      ]);
 	      opportunities = oppResult.data || [];
-	      volunteerPlanEvents = eventResult.data || [];
+	      volunteerPlanEvents = eventResult || [];
 	      try {
 	        const { data: signupData, error: signupError } = await sb.from('volunteer_signups')
 	          .select('opportunity_id,status')
@@ -67122,6 +67119,25 @@ See you soon!
 	      _staffingPlan = {};
 	    }
 	    renderOpportunities();
+	  }
+
+	  async function loadVolunteerPlanEventsForRoles() {
+	    try {
+	      const { data, error } = await sb.from('production_events')
+	        .select('id,title,event_type,start_time,end_time,is_deadline,notes')
+	        .eq('production_id', prodId)
+	        .order('start_time', { ascending: true });
+	      if (error) throw error;
+	      return data || [];
+	    } catch (error) {
+	      console.warn('[BTS] deadline fields unavailable for volunteer role dates:', error?.message);
+	      const { data, error: fallbackError } = await sb.from('production_events')
+	        .select('id,title,event_type,start_time,end_time')
+	        .eq('production_id', prodId)
+	        .order('start_time', { ascending: true });
+	      if (fallbackError) throw fallbackError;
+	      return data || [];
+	    }
 	  }
 
 	  const VOLUNTEER_DEPARTMENTS = [
@@ -67147,6 +67163,7 @@ See you soon!
 	  function volCalendarEventType(event = {}) {
 	    const rawType = event.event_type || 'event';
 	    const title = String(event.title || '').trim();
+	    if (event.is_deadline || rawType === 'deadline' || calendarNotesHaveDeadlineMarker(event.notes)) return 'deadline';
 	    if (/cast\s*party/i.test(title)) return 'cast_party';
 	    return rawType;
 	  }
@@ -69006,7 +69023,7 @@ See you soon!
 	    if (['dance_call', 'callback', 'other_audition'].includes(type)) return 'audition';
 	    if (['music_rehearsal', 'choreography'].includes(type)) return 'rehearsal';
 	    if (String(type || '').startsWith('crew_')) return 'crew';
-	    if (['cast_party', 'deadline'].includes(type)) return 'event';
+	    if (type === 'cast_party') return 'event';
 	    return type;
 	  }
 	  function volNormalizeAttendanceTypes(types = []) {
@@ -69016,7 +69033,7 @@ See you soon!
 	    if (type === 'audition') return ['audition', 'dance_call', 'callback', 'other_audition'];
 	    if (type === 'rehearsal') return ['rehearsal', 'music_rehearsal', 'choreography'];
 	    if (type === 'crew') return ['crew', 'crew_set', 'crew_set_painting', 'crew_set_dressing', 'crew_costumes', 'crew_props', 'crew_hair_makeup', 'crew_wigs', 'crew_lighting', 'crew_sound'];
-	    if (type === 'event') return ['event', 'cast_party', 'deadline'];
+	    if (type === 'event') return ['event', 'cast_party'];
 	    return [type];
 	  }
 	  const VOL_TYPE_SHORT = {
@@ -69027,7 +69044,7 @@ See you soon!
 	    crew: 'Crew', crew_set: 'Set Build', crew_set_painting: 'Set Paint',
 	    crew_set_dressing: 'Set Dress', crew_costumes: 'Costumes', crew_props: 'Props',
 	    crew_hair_makeup: 'Hair & Makeup', crew_wigs: 'Wigs', crew_lighting: 'Lighting', crew_sound: 'Sound',
-	    event: 'Event', meeting: 'Meeting',
+	    event: 'Event', meeting: 'Meeting', deadline: 'Deadline',
 	  };
 	  function volAttendanceSummary(val = {}) {
 	    const appliesTo = val.appliesTo || [];
@@ -69085,7 +69102,7 @@ See you soon!
 	  }
 	  const VOL_SHIFT_TYPE_GROUPS = [
 	    { label: 'No set dates', types: ['dept_leads', 'other'] },
-	    { label: 'Must attend calendar dates', types: ['audition', 'rehearsal', 'tech', 'dress', 'performance', 'strike', 'costume_moveout', 'event', 'meeting', 'crew'] },
+	    { label: 'Must attend calendar dates', types: ['audition', 'rehearsal', 'tech', 'dress', 'performance', 'strike', 'costume_moveout', 'event', 'deadline', 'meeting', 'crew'] },
 	  ];
 
 	  function volToggleSchedule(type, ri, typeLabel) {
