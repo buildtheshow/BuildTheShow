@@ -35095,13 +35095,14 @@ See you soon!
       },
       eventDidMount(info) {
         if (info.event.extendedProps.is_deadline) {
-          // Inject a badge into the day-number row and hide the event from the stack
-          const dayEl = info.el.closest('.fc-daygrid-day');
-          const topEl = dayEl && dayEl.querySelector('.fc-daygrid-day-top');
+          // Find the day cell by date (more reliable than closest() before FC finishes placing the element)
+          const dateStr = (info.event.extendedProps.raw_start_time || info.event.startStr || '').slice(0, 10);
+          const topEl = dateStr
+            ? document.querySelector(`#fc-calendar .fc-daygrid-day[data-date="${dateStr}"] .fc-daygrid-day-top`)
+            : null;
           if (topEl) {
             const safeTxt = s => String(s||'').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-            const rawTime = info.event.extendedProps.raw_start_time || info.event.start;
-            const normalized = toDateTimeLocal(rawTime);
+            const normalized = toDateTimeLocal(info.event.extendedProps.raw_start_time || info.event.start);
             let timeLabel = '';
             if (normalized) {
               const [hRaw, mRaw] = normalized.slice(11, 16).split(':').map(n => parseInt(n, 10));
@@ -35119,9 +35120,9 @@ See you soon!
               + (timeLabel ? `<span class="zeus-deadline-badge-time">· ${timeLabel}</span>` : '');
             badge.addEventListener('click', e => { e.stopPropagation(); openEventModal({ fcEvent: info.event }); });
             topEl.appendChild(badge);
+            // Only hide the FC event element if the badge was successfully injected
+            info.el.style.setProperty('display', 'none', 'important');
           }
-          // Collapse the FC event element so it takes no space in the stack
-          info.el.style.setProperty('display', 'none', 'important');
           return;
         }
         ['.zeus-event-time', '.zeus-event-label'].forEach(sel => {
