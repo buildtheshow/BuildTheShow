@@ -69279,6 +69279,20 @@ See you soon!
 	    if (tileEl) tileEl.style.setProperty('--brand-tile-bg', DEPT_COLOURS_LOCAL[department] || '#572e88');
 	    const saved = await saveStaffingPlan(true);
 	    if (saved) {
+	      // Auto-sync description + count to any existing opportunity records for this role
+	      const qty = parseInt(document.getElementById(`vsq-${key}`)?.value, 10) || 0;
+	      const norm = s => String(s || '').trim().toLowerCase();
+	      const matchingOpps = (opportunities || []).filter(o =>
+	        norm(o.production_title) === norm(roleName) && o.status !== 'cancelled'
+	      );
+	      if (matchingOpps.length) {
+	        await Promise.all(matchingOpps.map(o =>
+	          sb.from('opportunities')
+	            .update({ description, summary: description, volunteers_needed: qty })
+	            .eq('id', o.id)
+	        ));
+	        await loadOpportunities();
+	      }
 	      document.querySelectorAll('.vol-schedule-popover, .vol-schedule-modal').forEach(el => el.remove());
 	    } else if (saveBtn) {
 	      saveBtn.disabled = false;
