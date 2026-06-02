@@ -2077,10 +2077,12 @@
       return `<span class="vp-spots">${left} spots left</span>`;
     }
     function scheduleHours(item) {
+      const datedHours = parseFloat(item.required_date_hours) || (item.hours?.mins ? item.hours.mins / 60 : 0);
+      if (datedHours > 0) return datedHours;
       if (item.is_full_discount) return 0;
-      return item.credit_hours || (item.hours?.mins ? item.hours.mins / 60 : 0);
+      return parseFloat(item.credit_hours) || 0;
     }
-    function scheduleHasFullDiscount() { return schedule.some(s => s.is_full_discount); }
+    function scheduleHasFullDiscount() { return schedule.some(s => s.is_full_discount && scheduleHours(s) <= 0); }
     function discountRequiredHours() { return parseFloat(String(paymentSettings.volunteer_hours || '').replace(/[^0-9.]/g, '')) || 0; }
     function hasDiscountEnabled() { return !!paymentSettings.volunteer_discount_enabled && discountRequiredHours() > 0; }
     function planEntryBaseType(key) {
@@ -2141,11 +2143,14 @@
       const ids = scopes.flatMap(scope => scope.ids).map(String);
       return ids.includes(String(eventId || ''));
     }
-    function requiredDateLabels(entry, events) {
+    function requiredDateEvents(entry, events) {
       const types = new Set(planEntryAppliesTo('', entry).filter(type => type && !STAFFING_MAP[type]?.perProd && type !== 'other'));
-      const rows = events
+      return events
         .filter(ev => [...types].some(type => planEventMatchesType(ev, type) && planEntryAllowsEvent(entry, type, ev.id)))
         .sort((a,b) => (a.start_time || '').localeCompare(b.start_time || ''));
+    }
+    function requiredDateLabels(entry, events) {
+      const rows = requiredDateEvents(entry, events);
       return rows.map(ev => {
         const timing = roleShiftTiming(ev, entry);
         const date = timing.shift_date || ev.start_time?.slice(0, 10) || '';
@@ -2156,7 +2161,15 @@
         return [dateText, timeText, title].filter(Boolean).join(' - ');
       });
     }
-    function roleOpp(entryKey, entry, eventType, ev, count, requiredDates = []) {
+    function requiredDateHoursFor(entry, events) {
+      return requiredDateEvents(entry, events).reduce((sum, ev) => {
+        const isDeadline = eventPlanType(ev) === 'deadline' || /deadline/i.test(ev.title || '');
+        if (isDeadline) return sum;
+        const timing = roleShiftTiming(ev, entry);
+        return sum + (timing.hours?.mins ? timing.hours.mins / 60 : 0);
+      }, 0);
+    }
+    function roleOpp(entryKey, entry, eventType, ev, count, requiredDates = [], requiredDateHours = 0) {
       const role = roleFromPlanEntry(entryKey, entry);
       const timing = ev ? roleShiftTiming(ev, entry) : { shift_date: null, shift_start_time: null, shift_end_time: null, hours: null };
       return {
@@ -2174,6 +2187,7 @@
         event_type: eventType,
         count_mode: planEntryCountMode(entryKey, entry),
         required_dates: requiredDates,
+        required_date_hours: requiredDateHours,
         timing_group: entry.timingGroup || entry.timing_group || null
       };
     }
@@ -2186,14 +2200,14 @@
           cfg.roles.forEach((role, ri) => {
             const key = `${eventType}-${ri}`, entry = staffingPlan[key], count = entry?.count ?? 0;
             if (count <= 0) return;
-            result.push(roleOpp(key, entry, eventType, null, count, requiredDateLabels(entry, events)));
+            result.push(roleOpp(key, entry, eventType, null, count, requiredDateLabels(entry, events), requiredDateHoursFor(entry, events)));
           });
         } else {
           cfg.roles.forEach((role, ri) => {
             const key = `${eventType}-${ri}`, entry = staffingPlan[key], count = entry?.count ?? 0;
             if (count <= 0) return;
             if (planEntryCountMode(key, entry) === 'per_production') {
-              result.push(roleOpp(key, entry, eventType, null, count, requiredDateLabels(entry, events)));
+              result.push(roleOpp(key, entry, eventType, null, count, requiredDateLabels(entry, events), requiredDateHoursFor(entry, events)));
               return;
             }
             if (!planEntryAppliesTo(key, entry).includes(eventType)) return;
@@ -2206,7 +2220,7 @@
         Object.entries(staffingPlan).filter(([k]) => k.startsWith(`${eventType}-custom-`)).forEach(([k, v]) => {
           if (!v.roleName || (v.count ?? 0) <= 0) return;
           if (cfg.perProd || planEntryCountMode(k, v) === 'per_production') {
-            result.push(roleOpp(k, v, eventType, null, v.count, requiredDateLabels(v, events)));
+            result.push(roleOpp(k, v, eventType, null, v.count, requiredDateLabels(v, events), requiredDateHoursFor(v, events)));
           } else {
             if (!planEntryAppliesTo(k, v).includes(eventType)) return;
             events.filter(ev => planEventMatchesType(ev, eventType)).forEach(ev => {
@@ -2264,6 +2278,7 @@
           description: (current.description || '').length >= (normalized.description || '').length ? current.description : normalized.description,
           volunteers_needed: Math.max(current.volunteers_needed || 0, normalized.volunteers_needed || 0),
           credit_hours: Math.max(current.credit_hours || 0, normalized.credit_hours || 0),
+          required_date_hours: Math.max(current.required_date_hours || 0, normalized.required_date_hours || 0),
           required_dates: (current.required_dates || []).length >= (normalized.required_dates || []).length ? current.required_dates : normalized.required_dates,
           has_outside_work: !!(current.has_outside_work || normalized.has_outside_work),
           is_full_discount: !!(current.is_full_discount || normalized.is_full_discount),
@@ -2964,6 +2979,8 @@
       const color = iconColor(opp), isGold = color === '#efab45';
       const requiredDates = Array.isArray(opp.required_dates) ? opp.required_dates.filter(Boolean) : [];
       const dateLabel = opp.shift_date ? fmtDate(opp.shift_date, { short:true }) : (requiredDates.length ? `${requiredDates.length} required date${requiredDates.length === 1 ? '' : 's'}` : 'No fixed date');
+      const hours = scheduleHours(opp);
+      const noSetHours = opp.is_full_discount && hours <= 0;
       const datesDetail = requiredDates.length
         ? `<div class="vp-cart-date-list">
             ${requiredDates.map(renderCartRequiredDate).join('')}
@@ -2976,7 +2993,7 @@
             <div class="vp-cart-date">${esc(dateLabel)}</div>
           </div>
           <div class="vp-cart-role">${esc(opp.volunteer_role || 'Volunteer Shift')}</div>
-          <div class="vp-cart-meta">${opp.department ? esc(opp.department) : ''}${opp.is_full_discount ? '<br><span style="font-style:italic;opacity:0.72;">No set hour count.</span>' : ''}</div>
+          <div class="vp-cart-meta">${opp.department ? esc(opp.department) : ''}${hours > 0 ? `<br><span style="font-weight:800;">${esc(formatHours(hours))} scheduled hour${Number(hours) === 1 ? '' : 's'}</span>` : ''}${noSetHours ? '<br><span style="font-style:italic;opacity:0.72;">No set hour count.</span>' : ''}</div>
           ${opp.has_outside_work ? `<div class="vp-cart-note">Includes work outside these dates.</div>` : ''}
           ${datesDetail}
         </div>
@@ -3047,7 +3064,8 @@
       }).join('');
       const singleDate = opp.shift_date ? fmtDate(opp.shift_date, { short:true }) : '';
       const timeRange = fmtTimeRange(opp.shift_start_time, opp.shift_end_time);
-      const hours = opp.is_full_discount ? null : (opp.credit_hours || scheduleHours(opp));
+      const hours = scheduleHours(opp);
+      const noSetHours = opp.is_full_discount && hours <= 0;
       return '<div style="border:1.5px solid rgba(87,46,136,0.13);border-radius:10px;overflow:hidden;margin-bottom:0.75rem;">'
         + '<div style="background:' + color + ';color:' + (isGold?'#1a1008':'#fff') + ';padding:0.65rem 0.9rem;display:flex;align-items:center;gap:0.6rem;">'
           + '<span>' + roleIcon(opp.volunteer_role, opp.department) + '</span>'
@@ -3065,7 +3083,7 @@
               : '')
           + (opp.has_outside_work ? '<div style="font-size:0.75rem;font-weight:800;color:#d1523d;padding:0.3rem 0.55rem;background:rgba(209,82,61,0.08);border-radius:6px;">This role also includes work outside these dates.</div>' : '')
           + '<div style="display:flex;gap:1rem;flex-wrap:wrap;">'
-            + (opp.is_full_discount ? '<div style="font-size:0.72rem;color:#6f6382;font-style:italic;">No set hour count.</div>' : (hours ? '<div style="font-size:0.72rem;font-weight:700;color:#4a3d6b;">' + formatHours(hours) + ' hour' + (Number(hours) === 1 ? '' : 's') + '</div>' : ''))
+            + (hours ? '<div style="font-size:0.72rem;font-weight:700;color:#4a3d6b;">' + formatHours(hours) + ' scheduled hour' + (Number(hours) === 1 ? '' : 's') + '</div>' : (noSetHours ? '<div style="font-size:0.72rem;color:#6f6382;font-style:italic;">No set hour count.</div>' : ''))
             + (opp.check_in_with ? '<div style="font-size:0.72rem;font-weight:700;color:#4a3d6b;">Check in with: <strong>' + esc(opp.check_in_with) + '</strong></div>' : '')
           + '</div>'
         + '</div>'
