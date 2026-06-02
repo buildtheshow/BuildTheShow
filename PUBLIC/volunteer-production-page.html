@@ -503,6 +503,8 @@
       border-color: rgba(87,46,136,0.22);
     }
     .vp-card.is-full { opacity: 0.58; }
+    .vp-lead-tile.is-full { opacity: 0.5; pointer-events: none; }
+    .vp-lead-tile.is-full .vp-lead-action { cursor: not-allowed; }
     .vp-role-icon {
       width: 44px;
       height: 44px;
@@ -2263,8 +2265,13 @@
     }
     function openDepartmentLeads() {
       return opps
-        .filter(o => o.event_type === 'dept_leads' && spotsLeft(o) > 0 && (activeFilter === 'all' || activeFilter === 'flexible') && matchesSearch(o))
-        .sort((a,b) => (a.department || '').localeCompare(b.department || '') || (a.volunteer_role || '').localeCompare(b.volunteer_role || ''));
+        .filter(o => o.event_type === 'dept_leads' && (activeFilter === 'all' || activeFilter === 'flexible') && matchesSearch(o))
+        .sort((a,b) => {
+          const aFull = spotsLeft(a) === 0 ? 1 : 0;
+          const bFull = spotsLeft(b) === 0 ? 1 : 0;
+          if (aFull !== bFull) return aFull - bFull;
+          return (a.department || '').localeCompare(b.department || '') || (a.volunteer_role || '').localeCompare(b.volunteer_role || '');
+        });
     }
     function setView(view) {
       activeView = view;
@@ -2399,7 +2406,7 @@
       if (activeView === 'day') {
         if (selectedDate === DEPT_LEADS_DATE_KEY) {
           meta.textContent = `${items.length} lead role${items.length === 1 ? '' : 's'}`;
-          list.innerHTML = items.length ? renderLeadTiles(items) : '<div class="vp-empty">All department lead roles are filled.</div>';
+          list.innerHTML = items.length ? renderLeadTiles(items) : '<div class="vp-empty">No department lead roles to show.</div>';
           return;
         }
         meta.textContent = `${items.length} shift${items.length === 1 ? '' : 's'}`;
@@ -2619,9 +2626,10 @@
       }).join('')}</div>`;
     }
     function renderLeadTiles(leads) {
+      const hasOpen = leads.some(o => spotsLeft(o) > 0);
       return `<div class="vp-lead-block">
-        <div class="vp-group-title">Department Leads Still Needed</div>
-        <div class="vp-lead-note">Do any of these intrigue you? We will teach you. Do not worry about already knowing how to do it.</div>
+        <div class="vp-group-title">${hasOpen ? 'Department Leads Still Needed' : 'Department Leads'}</div>
+        ${hasOpen ? '<div class="vp-lead-note">Do any of these intrigue you? We will teach you. Do not worry about already knowing how to do it.</div>' : ''}
         <div class="vp-lead-grid">${leads.map(renderLeadTile).join('')}</div>
       </div>`;
     }
@@ -2630,6 +2638,7 @@
       const isGold = color === '#efab45';
       const isAdded = schedule.some(s => s.id === opp.id);
       const left = spotsLeft(opp);
+      const isFull = left === 0;
       const roleName = opp.volunteer_role || 'Department Lead';
       const bullets = ROLE_GREAT_IF[roleName] || [];
       const bulletsHtml = bullets.length
@@ -2637,14 +2646,14 @@
            <ul class="vp-lead-great-list">${bullets.map(b => `<li>${b}</li>`).join('')}</ul>`
         : `<div class="vp-lead-desc">${esc(opp.description || '')}</div>`;
       const hasLearnMore = ROLE_LEARN_MORE[roleName] || ROLE_DESCRIPTIONS[roleName];
-      return `<article class="vp-lead-tile" style="--lead-bg:${esc(color)};--lead-ink:${isGold ? '#1a1008' : '#fff'};--lead-button-ink:${esc(color)};">
+      return `<article class="vp-lead-tile${isFull ? ' is-full' : ''}" style="--lead-bg:${esc(color)};--lead-ink:${isGold ? '#1a1008' : '#fff'};--lead-button-ink:${esc(color)};">
         <div class="vp-lead-kicker">${esc(opp.department || 'Department Lead')}</div>
         <div class="vp-lead-title">${esc(roleName)}</div>
         ${bulletsHtml}
         <div style="flex:1;"></div>
         ${hasLearnMore ? `<button class="vp-lead-learn" type="button" onclick="openLeadLearnMore('${esc(roleName)}')">Learn more about this role →</button>` : ''}
-        <div class="vp-lead-meta">${ICONS.users}${left === 1 ? '1 spot left' : `${left} spots left`}</div>
-        <button class="vp-lead-action ${isAdded ? 'added' : ''}" type="button" onclick="toggleSchedule('${esc(opp.id)}')">${isAdded ? 'Added' : `Add to My Schedule ${ICONS.plus}`}</button>
+        <div class="vp-lead-meta">${ICONS.users}${isFull ? 'Filled' : left === 1 ? '1 spot left' : `${left} spots left`}</div>
+        <button class="vp-lead-action" type="button" ${isFull ? 'disabled' : `onclick="toggleSchedule('${esc(opp.id)}')"`}>${isFull ? 'Filled' : isAdded ? 'Added' : `Add to My Schedule ${ICONS.plus}`}</button>
       </article>`;
     }
     function renderRoleCard(items) {
