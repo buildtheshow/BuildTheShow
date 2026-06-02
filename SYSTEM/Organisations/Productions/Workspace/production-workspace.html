@@ -67083,7 +67083,7 @@ See you soon!
 
 	  async function loadOpportunities() {
 	    try {
-	      const [oppResult, eventResult, prodResult, signupResult] = await Promise.all([
+	      const [oppResult, eventResult, prodResult] = await Promise.all([
 	        sb.from('opportunities')
 	          .select('*')
 	          .eq('production_id', prodId)
@@ -67097,13 +67097,19 @@ See you soon!
 	          .select('volunteer_staffing_plan')
 	          .eq('id', prodId)
 	          .single(),
-	        sb.from('volunteer_signups')
-	          .select('opportunity_id,status')
-	          .eq('production_id', prodId),
 	      ]);
 	      opportunities = oppResult.data || [];
 	      volunteerPlanEvents = eventResult.data || [];
-	      volunteerSignups = signupResult.data || [];
+	      try {
+	        const { data: signupData, error: signupError } = await sb.from('volunteer_signups')
+	          .select('opportunity_id,status')
+	          .eq('production_id', prodId);
+	        if (signupError) throw signupError;
+	        volunteerSignups = signupData || [];
+	      } catch (signupError) {
+	        console.warn('[BTS] volunteer opportunity signup counts unavailable:', signupError?.message);
+	        volunteerSignups = [];
+	      }
 	      if (!_staffingDirty) {
 	        _staffingPlan = prodResult.data?.volunteer_staffing_plan || {};
 	        _migrateStaffingPlanNames();
@@ -69877,7 +69883,7 @@ See you soon!
 	    // ── Signups by opportunity_id ───────────────────────────
 	    const signupsByOpp = {};
 	    (volunteerSignups || []).forEach(s => {
-	      if (s.status !== 'cancelled') signupsByOpp[s.opportunity_id] = (signupsByOpp[s.opportunity_id] || 0) + 1;
+	      if (s.status !== 'cancelled' && s.opportunity_id) signupsByOpp[s.opportunity_id] = (signupsByOpp[s.opportunity_id] || 0) + 1;
 	    });
 
 	    // ── Stats this week — from plan × events ────────────────
