@@ -857,6 +857,8 @@
 
   function rpfBuildEventScheduleHtml(rows) {
     if (!rows.length) return '';
+    const fmtT = t => t ? rpfTimeLabel(t) : '';
+    const fmtShort = iso => { const d = new Date(iso + 'T12:00:00'); return isNaN(d) ? iso : d.toLocaleDateString('en-CA', { month: 'short', day: 'numeric' }); };
     const groups = new Map();
     rows.forEach(row => {
       const key = (RPF_EVENT_LABELS[row.event_type] || row.event_type || 'Event').trim();
@@ -865,14 +867,31 @@
     });
     let html = '';
     groups.forEach((groupRows, typeLabel) => {
-      html += `<div style="margin:14px 0 4px;font-size:11px;font-weight:900;letter-spacing:0.1em;text-transform:uppercase;color:#572e88;">${typeLabel}</div>`;
-      groupRows.forEach(row => {
-        const date  = rpfDateLabel(String(row.start_time || '').slice(0, 10));
-        const time  = rpfTimeLabel(row.start_time);
-        const venue = row.venue ? ` &middot; ${row.venue}` : '';
-        const title = row.title && row.title !== typeLabel ? `<strong>${row.title}</strong> &middot; ` : '';
-        html += `<div style="font-size:14px;color:#1a1530;padding:2px 0;">${title}${date}${time ? ' &middot; ' + time : ''}${venue}</div>`;
-      });
+      const firstStart = fmtT(groupRows[0].start_time);
+      const firstEnd   = fmtT(groupRows[0].end_time);
+      const firstVenue = groupRows[0].venue || '';
+      const allSameTime  = groupRows.every(r => fmtT(r.start_time) === firstStart);
+      const allSameVenue = groupRows.every(r => (r.venue || '') === firstVenue);
+      const timeRange = firstStart ? (firstEnd && firstEnd !== firstStart ? `${firstStart} – ${firstEnd}` : firstStart) : '';
+      html += `<div style="margin:16px 0 6px;">`;
+      html += `<div style="font-size:11px;font-weight:900;letter-spacing:0.1em;text-transform:uppercase;color:#572e88;margin-bottom:4px;">${typeLabel}</div>`;
+      if (groupRows.length >= 3 && allSameTime && allSameVenue) {
+        const meta = [timeRange, firstVenue].filter(Boolean).join(' &middot; ');
+        if (meta) html += `<div style="font-size:13px;color:#6f6382;margin-bottom:5px;">${meta}</div>`;
+        const chips = groupRows.map(r => `<span style="display:inline-block;background:#f0ecf7;border-radius:6px;padding:2px 8px;margin:2px 3px 2px 0;font-size:13px;color:#1a1530;">${fmtShort(String(r.start_time || '').slice(0,10))}</span>`).join('');
+        html += `<div style="line-height:1.8;">${chips}</div>`;
+      } else {
+        groupRows.forEach(row => {
+          const date   = rpfDateLabel(String(row.start_time || '').slice(0, 10));
+          const start  = fmtT(row.start_time);
+          const end    = fmtT(row.end_time);
+          const tRange = start ? (end && end !== start ? `${start} – ${end}` : start) : '';
+          const venue  = row.venue ? ` &middot; ${row.venue}` : '';
+          const title  = row.title && row.title !== typeLabel ? `<strong>${row.title}</strong> &middot; ` : '';
+          html += `<div style="font-size:14px;color:#1a1530;padding:3px 0;">${title}<strong>${date}</strong>${tRange ? ' &middot; ' + tRange : ''}${venue}</div>`;
+        });
+      }
+      html += `</div>`;
     });
     return html;
   }
