@@ -31761,7 +31761,7 @@
         { token: '{{registration_pdf_url}}', label: 'Registration PDF Link', sample: () => etSampleProductionUrl(`/files/registrations/${ET_SAMPLE_CONTEXT.registrationCode}.pdf`) },
         { token: '{{registration_pdf_button}}', label: 'Registration PDF Button', sample: () => emailActionButtonHtml(etSampleProductionUrl(`/files/registrations/${ET_SAMPLE_CONTEXT.registrationCode}.pdf`), 'View Registration PDF') },
         { token: '{{payment_schedule}}', label: 'Payment Schedule', sample: () => etPaymentScheduleSample() },
-        { token: '{{payment_information}}', label: 'Payment Information', sample: () => 'Payment information:\nE-transfer: payments@example.com\nPlease include the performer name in the memo.' },
+        { token: '{{payment_information}}', label: 'Payment Information', sample: () => etPaymentInformationSample() },
         { token: '{{volunteer_link}}', label: 'Volunteer Link', sample: () => `${window.location.origin}/volunteers` },
         { token: '{{volunteer_button}}', label: 'Volunteer Button', sample: () => emailActionButtonHtml(`${window.location.origin}/volunteers`, 'View Volunteer Opportunities', 'secondary') },
         { token: '{{volunteer_portal_url}}', label: 'Volunteer Portal URL', sample: () => `${window.location.origin}/volunteers?view=portal` },
@@ -32126,12 +32126,12 @@
     return typeof varDef.sample === 'function' ? varDef.sample() : varDef.sample;
   }
 
-  function etPaymentScheduleSample() {
+  function etCurrentPaymentSampleSettings() {
     const savedSettings = (typeof prod?.registration_settings === 'object' && prod.registration_settings?.payment_settings)
       ? prod.registration_settings.payment_settings
       : {};
     const stateSettings = (typeof paymentSettingsState === 'object' && paymentSettingsState) ? paymentSettingsState : {};
-    const settings = Object.assign({
+    return Object.assign({
       mode: 'none',
       fee: '',
       currency: 'CAD',
@@ -32140,7 +32140,33 @@
       split_count: 2,
       split_installments: [],
       split_allow_upfront: false,
+      checkout_etransfer_enabled: true,
+      checkout_square_enabled: false,
+      checkout_pay_later_enabled: true,
+      etransfer_email: '',
+      instructions: '',
     }, savedSettings, stateSettings);
+  }
+
+  function etPlainTextFromHtml(html) {
+    return String(html || '')
+      .replace(/<br\s*\/?>/gi, '\n')
+      .replace(/<\/p>/gi, '\n')
+      .replace(/<\/li>/gi, '\n')
+      .replace(/<li[^>]*>/gi, '- ')
+      .replace(/<[^>]+>/g, '')
+      .replace(/&nbsp;/g, ' ')
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, "'")
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
+  }
+
+  function etPaymentScheduleSample() {
+    const settings = etCurrentPaymentSampleSettings();
     const currency = String(settings.currency || 'CAD').toUpperCase();
     const currSym = { CAD: '$', USD: '$', GBP: '£' }[currency] || '$';
     const currCode = currency !== 'CAD' ? ` ${currency}` : '';
@@ -32172,6 +32198,23 @@
       if (settings.split_allow_upfront) lines.push('Full upfront payment is also available.');
     }
     return lines.length ? lines.join('\n') : 'No production fee has been configured for this show.';
+  }
+
+  function etPaymentInformationSample() {
+    const settings = etCurrentPaymentSampleSettings();
+    const lines = [];
+    const etransferEmail = settings.etransfer_email || orgEtransferEmail || '';
+    if (settings.checkout_etransfer_enabled !== false && etransferEmail) lines.push(`E-transfer: ${etransferEmail}`);
+    if (settings.checkout_square_enabled === true) lines.push('Square checkout is available.');
+    if (settings.checkout_pay_later_enabled !== false) lines.push('Pay later is available if needed.');
+    const instructions = etPlainTextFromHtml(settings.instructions || '')
+      .replace(/\{\{etransfer_email\}\}/g, etransferEmail)
+      .replace(/\{\{org_email\}\}/g, orgEtransferEmail || etransferEmail)
+      .replace(/\{\{performer_name\}\}/g, ET_SAMPLE_CONTEXT.performerName)
+      .replace(/\{\{preferred_name\}\}/g, ET_SAMPLE_CONTEXT.preferredName)
+      .replace(/\{\{show_name\}\}/g, prod?.title || prod?.name || ET_SAMPLE_CONTEXT.showName);
+    if (instructions) lines.push(instructions);
+    return lines.length ? lines.join('\n') : 'No payment instructions have been configured yet.';
   }
 
   function firstDefinedString(...values) {
