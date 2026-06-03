@@ -57,6 +57,7 @@ const CATEGORY_SUBJECTS: Record<string, string> = {
   volunteer_submitted: 'We received your volunteer request',
   volunteer_approved: 'Volunteer shift confirmed',
   volunteer_declined: 'Volunteer request update',
+  volunteer_portal_info: 'Your production portal information',
   general:             'A message from the production team',
 };
 
@@ -78,6 +79,7 @@ const CATEGORY_TO_TRIGGER: Record<string, string> = {
   volunteer_submitted:  'volunteer_submitted',
   volunteer_approved:   'volunteer_approved',
   volunteer_declined:   'volunteer_declined',
+  volunteer_portal_info: 'volunteer_portal_info',
   general:              'manual',
 };
 

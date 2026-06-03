@@ -4012,6 +4012,7 @@
     .et-cat-not_cast             { background: rgba(75,85,99,0.16);   color: #4b5563; }
     .et-cat-rehearsal            { background: rgba(14,116,144,0.14);  color: #0e7490; }
     .et-cat-general              { background: rgba(157,139,196,0.2); color: #6b5a92; }
+    .et-cat-volunteer_portal_info { background: rgba(71,106,170,0.14); color: #34578f; }
     .et-cat-auditions  { background: rgba(127,175,139,0.18); color: #3f7a51; }
     .et-cat-casting    { background: rgba(227,164,111,0.2); color: #a4612b; }
     .et-cat-rehearsals { background: rgba(14,116,144,0.14); color: #0e7490; }
@@ -28842,6 +28843,7 @@
     { value: 'team_invite',          label: 'Team Access Invite',   color: '#B8AECF' },
     { value: 'payment_reminder',      label: 'Payment Reminder',      color: '#d1523d' },
     { value: 'general',              label: 'General',              color: '#572e88' },
+    { value: 'volunteer_portal_info', label: 'Volunteer Portal Info', color: '#476aaa' },
   ];
 
   const ET_SECTION_META = {
@@ -28852,6 +28854,7 @@
     team_portal: { label: 'Team Portal', color: '#476aaa', ink: '#ffffff', summary: 'Invites • Access codes • Portal onboarding' },
     payments:    { label: 'Payments',    color: '#d1523d', ink: '#ffffff', summary: 'Payment reminders • Balance notices • Due dates' },
     general:     { label: 'General',     color: '#efab45', ink: '#ffffff', summary: 'Announcements • Updates • Flexible messages' },
+    volunteers:  { label: 'Volunteers',  color: '#ca7ea7', ink: '#ffffff', summary: 'Portal details • Volunteer connections' },
   };
 
   const EMAIL_TEMPLATE_META = {
@@ -28990,6 +28993,15 @@
       summary: 'A reminder to families with outstanding balances or upcoming due dates.',
       sendSummary: 'Sent manually when you choose.',
     },
+    volunteer_portal_info: {
+      section: 'volunteers',
+      label: 'Volunteer Portal Info',
+      sendType: 'team_action',
+      required: true,
+      usedBy: 'Registration > Status > Volunteer Discount',
+      summary: 'Sends a connected volunteer their portal link, login email, production code, and linked performer details.',
+      sendSummary: 'Sent when you choose Send Portal Info on a connected volunteer.',
+    },
   };
 
   const ET_HOME_SECTIONS = [
@@ -28999,6 +29011,7 @@
     { key: 'team_portal', sections: ['team_portal'] },
     { key: 'payments', sections: ['payments'] },
     { key: 'general', sections: ['general'] },
+    { key: 'volunteers', sections: ['volunteers'] },
   ];
 
   // Find the first session matching a type keyword (checks type field then name)
@@ -29329,6 +29342,13 @@
         { token: '{{cast_offer_deadline}}', label: 'Offer Reply Deadline', sample: 'Friday, May 15, 2026 at 5:00 PM' },
         { token: '{{registration_link}}', label: 'Registration Link', sample: () => etSampleProductionUrl(`/registration/${ET_SAMPLE_CONTEXT.registrationCode}`) },
         { token: '{{registration_button}}', label: 'Registration Button', sample: () => emailActionButtonHtml(etSampleProductionUrl(`/registration/${ET_SAMPLE_CONTEXT.registrationCode}`), 'Complete Registration') },
+        { token: '{{volunteer_portal_url}}', label: 'Volunteer Portal URL', sample: () => `${window.location.origin}/volunteers?view=portal` },
+        { token: '{{volunteer_portal_button}}', label: 'Volunteer Portal Button', sample: () => emailActionButtonHtml(`${window.location.origin}/volunteers?view=portal`, 'Open Production Portal') },
+        { token: '{{volunteer_email}}', label: 'Volunteer Email', sample: () => 'volunteer@example.com' },
+        { token: '{{volunteer_passcode}}', label: 'Production Code', sample: () => '482913' },
+        { token: '{{volunteer_role}}', label: 'Volunteer Role', sample: () => 'Rehearsal Assistant' },
+        { token: '{{volunteer_approved_hours}}', label: 'Volunteer Approved Hours', sample: () => '20 hours' },
+        { token: '{{volunteer_discount_performer}}', label: 'Connected Performer', sample: () => 'Katherine Hepburn' },
       ],
     },
     // ── Rehearsals ───────────────────────────────────────────────
@@ -29523,6 +29543,11 @@
       required: ['{{contact_name}}'],
       recommended: ['{{show_name}}', '{{director_name}}'],
       note: 'General emails are strongest when they still feel personal and production-specific.'
+    },
+    volunteer_portal_info: {
+      required: ['{{preferred_name}}', '{{volunteer_email}}', '{{volunteer_passcode}}', '{{volunteer_portal_url}}'],
+      recommended: ['{{volunteer_role}}', '{{volunteer_approved_hours}}', '{{volunteer_discount_performer}}'],
+      note: 'Sent manually from Registration Status after connecting a cast member to a volunteer. This should include the portal details they need to log in.'
     }
   };
 
@@ -29837,6 +29862,7 @@
       cast_accepted: 'Automatic: when a performer accepts their role offer',
       not_cast_set: 'Manual action: when you send a not cast email from casting',
       team_invite: 'Manual action: when you send a production team portal invite',
+      volunteer_portal_info: 'Team action: when you send volunteer portal login information',
       manual: 'Manual only: never sends until you choose to send it',
     };
     return labels[trigger] || 'Manual only: never sends until you choose to send it';
@@ -29854,6 +29880,7 @@
       cast_accepted: 'Auto accepted',
       not_cast_set: 'Send not cast',
       team_invite: 'Send team invite',
+      volunteer_portal_info: 'Send portal info',
       manual: 'Manual',
     };
     return labels[trigger] || 'Manual';
@@ -29871,6 +29898,7 @@
       cast_accepted: 'How it sends: automatic. When it sends: immediately after a performer accepts their role offer. This is where the registration link belongs.',
       not_cast_set: 'How it sends: team triggered. When it sends: only when you choose to send the not cast email to a performer from casting.',
       team_invite: 'How it sends: team triggered. When it sends: when you invite a production team member and send their portal link and access code.',
+      volunteer_portal_info: 'How it sends: team triggered. When it sends: when you send portal information from Registration > Status after connecting a volunteer to a cast member.',
       manual: 'How it sends: manual only. When it sends: never automatically. Use this for reminders, rehearsal info, and general updates that you decide to send yourself.',
     };
     return help[trigger] || help.manual;
@@ -29909,6 +29937,7 @@
     { value: 'cast_accepted',        label: 'Auto: role accepted' },
     { value: 'not_cast_set',         label: 'Team sends: not cast email' },
     { value: 'team_invite',          label: 'Team sends: portal invite' },
+    { value: 'volunteer_portal_info', label: 'Team sends: volunteer portal info' },
   ];
 
   const ET_DEFAULT_CUES = {
@@ -29925,6 +29954,7 @@
     not_cast:             'not_cast_set',
     rehearsal:            'manual',
     team_invite:          'team_invite',
+    volunteer_portal_info: 'volunteer_portal_info',
     general:              'manual',
   };
 
@@ -30641,6 +30671,34 @@ If you have any trouble logging in, reply to this email and we'll sort it out.
 {{producer_email}}`,
     },
     {
+      name: 'Volunteer Portal Information',
+      category: 'volunteer_portal_info',
+      trigger: 'volunteer_portal_info',
+      subject: 'Your Production Portal Information - {{organisation_name}} - {{show_name}}',
+      body: `<div style="font-family:Arial,sans-serif;color:#1a1530;font-size:17px;line-height:1.62;">
+  <div style="margin:0 0 22px;">
+    <div style="display:inline-block;background:#eef4ff;color:#34578f;font-size:12px;font-weight:900;letter-spacing:0.12em;text-transform:uppercase;border-radius:999px;padding:7px 11px;margin-bottom:14px;">Production Portal</div>
+    <h1 style="font-size:28px;line-height:1.12;margin:0 0 10px;font-weight:900;color:#1a1530;">Hi {{preferred_name}},</h1>
+    <p style="margin:0;font-size:18px;color:#3f3654;">Here is your production portal information for <strong>{{show_name}}</strong>.</p>
+  </div>
+  <div style="background:#f7f4fb;border:1.5px solid #ded6ea;border-radius:14px;padding:20px 22px;margin:22px 0;">
+    <h2 style="font-size:20px;line-height:1.15;margin:0 0 8px;font-weight:900;color:#572e88;">Your Login Details</h2>
+    <p style="margin:0 0 6px;color:#4a3d6b;"><strong>Login Email:</strong> {{volunteer_email}}</p>
+    <p style="margin:0 0 16px;color:#4a3d6b;"><strong>Production Code:</strong> <span style="font-size:22px;font-weight:900;letter-spacing:0.2em;color:#572e88;">{{volunteer_passcode}}</span></p>
+    <p style="margin:0 0 10px;">{{volunteer_portal_button}}</p>
+    <p style="margin:0;font-size:13px;color:#6f6288;">Portal Link: <a href="{{volunteer_portal_url}}" style="color:#572e88;font-weight:800;">{{volunteer_portal_url}}</a></p>
+  </div>
+  <div style="background:#f0f8f3;border:1.5px solid #c7dfcc;border-radius:14px;padding:20px 22px;margin:22px 0;">
+    <h2 style="font-size:20px;line-height:1.15;margin:0 0 8px;font-weight:900;color:#3f6f47;">Connected Information</h2>
+    <p style="margin:0 0 8px;color:#3f3654;"><strong>Connected performer:</strong> {{volunteer_discount_performer}}</p>
+    <p style="margin:0 0 8px;color:#3f3654;"><strong>Volunteer role:</strong> {{volunteer_role}}</p>
+    <p style="margin:0;color:#3f3654;"><strong>Approved hours:</strong> {{volunteer_approved_hours}}</p>
+  </div>
+  <p style="margin:0 0 16px;color:#3f3654;">You can use the portal to review your volunteer schedule and production information. Volunteer hours are managed from the volunteer side, so this email is just your access information.</p>
+  <p style="margin:24px 0 0;">Thank you,<br><strong>{{organisation_name}}</strong></p>
+</div>`,
+    },
+    {
       name: 'General Announcement',
       category: 'general',
       trigger: 'manual',
@@ -31179,7 +31237,7 @@ See you soon!
       return;
     }
     // Backfill required starter templates for productions that existed before they were added.
-    for (const requiredCategory of ['online_audition_reminder', 'team_invite', 'callback', 'callback_confirmed', 'callback_declined', 'callback_self_tape', 'self_tape_booked', 'cast_announcement', 'cast_accepted', 'not_cast']) {
+    for (const requiredCategory of ['online_audition_reminder', 'team_invite', 'callback', 'callback_confirmed', 'callback_declined', 'callback_self_tape', 'self_tape_booked', 'cast_announcement', 'cast_accepted', 'not_cast', 'volunteer_portal_info']) {
       if (_etTemplates.some(t => t.category === requiredCategory)) continue;
       const starter = ET_STARTER_TEMPLATES.find(t => t.category === requiredCategory);
       if (starter) {
@@ -41791,11 +41849,139 @@ See you soon!
       </div>
       <div class="rpt-household-modal-actions">
         <button class="rpt-modal-cancel-btn" onclick="document.getElementById('rsc-volunteer-modal')?.remove()">Cancel</button>
+        <button class="rpt-modal-save-btn" style="background:#476aaa;" onclick="rscSendVolunteerPortalInfo('${esc(assignId)}', this)">Send Portal Info</button>
         <button class="rpt-modal-save-btn" onclick="rscSaveVolunteer('${esc(assignId)}')">Save Connection</button>
       </div>
     </div>`;
     modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
     document.body.appendChild(modal);
+  }
+
+  function rscSelectedVolunteerGroup() {
+    const selectedKey = document.getElementById('rsc-vol-link')?.value || '';
+    return (window._rscVolunteerSelectGroups || []).find(group => group.key === selectedKey) || null;
+  }
+
+  function rscVolunteerPortalInfoUrl() {
+    let url = '';
+    const pSlug = prod?.slug || prod?.show_slug || prod?.production_slug || '';
+    if (orgSlug && pSlug) url = `/${encodeURIComponent(orgSlug)}/${encodeURIComponent(pSlug)}/volunteers`;
+    if (!url) {
+      const params = new URLSearchParams();
+      if (prodId) params.set('prod', prodId);
+      url = `/volunteers${params.toString() ? '?' + params.toString() : ''}`;
+    }
+    const absolute = /^https?:\/\//i.test(url) ? url : `${window.location.origin}${url.startsWith('/') ? '' : '/'}${url}`;
+    const separator = absolute.includes('?') ? '&' : '?';
+    return `${absolute}${separator}view=portal`;
+  }
+
+  function rscVolunteerApprovedHoursLabel(group) {
+    const hours = Number(group?.hours || 0);
+    if (!Number.isFinite(hours) || hours <= 0) return 'Tracked in the volunteer portal';
+    const label = Number.isInteger(hours) ? String(hours) : hours.toFixed(2).replace(/\.?0+$/, '');
+    return `${label} hour${hours === 1 ? '' : 's'}`;
+  }
+
+  async function rscEnsureVolunteerPortalTemplate() {
+    const category = 'volunteer_portal_info';
+    if ((_etTemplates || []).some(t => t.category === category)) return;
+    const starter = (ET_STARTER_TEMPLATES || []).find(t => t.category === category);
+    if (!starter || !prodId) return;
+    const { data: existing, error: existingError } = await sb.from('email_templates')
+      .select('*')
+      .eq('production_id', prodId)
+      .eq('category', category)
+      .limit(1);
+    if (existingError) throw existingError;
+    if (existing?.length) {
+      _etTemplates = [existing[0], ...(_etTemplates || []).filter(t => t.id !== existing[0].id)];
+      return;
+    }
+    const { data, error } = await sb.from('email_templates')
+      .insert({ ...starter, production_id: prodId })
+      .select('*')
+      .single();
+    if (error) throw error;
+    _etTemplates = [data, ...(_etTemplates || [])];
+  }
+
+  function rscVolunteerPortalEmailContext(assignId, group) {
+    const d = window._rscModalData?.[assignId] || {};
+    const row = group?.rows?.[0] || {};
+    const email = group?.email || row.email || row.volunteer_email || '';
+    const name = group?.name || row.name || row.volunteer_name || email;
+    const firstName = String(name || '').trim().split(/\s+/)[0] || 'Volunteer';
+    const portalUrl = rscVolunteerPortalInfoUrl();
+    const passcode = group?.code
+      || row.volunteer_passcode
+      || row.production_code
+      || row.portal_code
+      || '';
+    const orgLabel = orgName || prod?.org_name || 'Build The Show';
+    const context = {
+      organisation_name: orgLabel,
+      organization_name: orgLabel,
+      org_name: orgLabel,
+      show_name: prod?.title || prod?.name || '',
+      name,
+      contact_name: name,
+      preferred_name: firstName,
+      volunteer_name: name,
+      volunteer_email: email,
+      volunteer_passcode: passcode,
+      volunteer_portal_url: portalUrl,
+      volunteer_portal_button: typeof emailActionButtonHtml === 'function'
+        ? emailActionButtonHtml(portalUrl, 'Open Production Portal')
+        : `<a href="${esc(portalUrl)}">Open Production Portal</a>`,
+      volunteer_link: portalUrl,
+      volunteer_button: typeof emailActionButtonHtml === 'function'
+        ? emailActionButtonHtml(portalUrl, 'Open Production Portal')
+        : `<a href="${esc(portalUrl)}">Open Production Portal</a>`,
+      volunteer_role: group?.roles || 'Volunteer',
+      volunteer_shift_dates: group?.shiftDates || '',
+      volunteer_approved_hours: rscVolunteerApprovedHoursLabel(group),
+      volunteer_discount_performer: d.name || '',
+      performer_name: d.name || '',
+      cast_member_name: d.name || '',
+    };
+    return { email, name, context };
+  }
+
+  async function rscSendVolunteerPortalInfo(assignId, btn) {
+    const group = rscSelectedVolunteerGroup();
+    if (!group) {
+      showToast('Choose a connected volunteer first.', true);
+      return;
+    }
+    const { email, name, context } = rscVolunteerPortalEmailContext(assignId, group);
+    if (!email || !String(email).includes('@')) {
+      showToast('No volunteer email found for this connection.', true);
+      return;
+    }
+    const original = btn?.textContent || 'Send Portal Info';
+    if (btn) { btn.disabled = true; btn.textContent = 'Sending...'; }
+    try {
+      await rscEnsureVolunteerPortalTemplate();
+      const payload = {
+        production_id: prodId,
+        category: 'volunteer_portal_info',
+        trigger: 'volunteer_portal_info',
+        email,
+        name,
+        ...context,
+        context,
+      };
+      const { data, error } = await sb.functions.invoke('send-email', { body: payload });
+      if (error || data?.error) throw error || new Error(data.error);
+      showToast(`Portal info sent to ${email}`);
+      if (btn) btn.textContent = 'Sent';
+      window.setTimeout(() => { if (btn) { btn.disabled = false; btn.textContent = original; } }, 1400);
+    } catch (err) {
+      console.error('[BTS] rscSendVolunteerPortalInfo failed', err);
+      showToast('Could not send portal information.', true);
+      if (btn) { btn.disabled = false; btn.textContent = original; }
+    }
   }
 
   async function rscSaveVolunteer(assignId) {
