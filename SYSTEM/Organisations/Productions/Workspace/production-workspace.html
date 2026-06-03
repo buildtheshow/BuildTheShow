@@ -32584,10 +32584,11 @@
       const iso      = String(row.start_time || '').slice(0, 10);
       const d        = new Date(iso + 'T12:00:00');
       const dayFirst = isNaN(d) ? iso : `${d.getDate()} ${d.toLocaleDateString('en-CA', { month: 'long' }).toUpperCase()}, ${d.getFullYear()}`;
-      const date     = `<strong>${dayFirst}</strong>`;
+      const weekday  = !isNaN(d) ? ` &middot; <em>${d.toLocaleDateString('en-CA', { weekday: 'long' })}</em>` : '';
+      const date     = `<strong>${dayFirst}</strong>${weekday}`;
       const start    = fmtT(row.start_time);
       const end      = fmtT(row.end_time);
-      const tRange   = start ? ` <em>(${end && end !== start ? start + ' – ' + end : start})</em>` : '';
+      const tRange   = start ? ` &middot; <em>(${end && end !== start ? start + ' – ' + end : start})</em>` : '';
       const type     = `<strong>${row.title || EVENT_LABELS[row.event_type] || 'Event'}</strong>`;
       const location = row.venue ? ` | Location: ${row.venue}` : '';
       return `<div style="font-size:14px;color:#1a1530;padding:7px 0;border-bottom:1px solid rgba(87,46,136,0.08);">${date}${tRange} | ${type}${location}</div>`;
@@ -69057,9 +69058,13 @@ See you soon!
       +   '<label style="display:block;font-size:0.72rem;font-weight:900;color:#1a1530;margin-bottom:0.22rem;">Email Address</label>'
       +   '<input id="vecf-email" type="email" value="' + esc(p.email || '') + '" placeholder="email@example.com" style="width:100%;border:1.5px solid rgba(87,46,136,0.22);border-radius:8px;padding:0.6rem 0.75rem;font-family:inherit;font-size:0.9rem;outline:0;box-sizing:border-box;" />'
       + '</div>'
-      + '<div style="margin-bottom:1rem;">'
+      + '<div style="margin-bottom:0.7rem;">'
       +   '<label style="display:block;font-size:0.72rem;font-weight:900;color:#1a1530;margin-bottom:0.22rem;">Phone Number</label>'
       +   '<input id="vecf-phone" type="tel" value="' + esc(p.phone || '') + '" placeholder="(604) 555-0123" style="width:100%;border:1.5px solid rgba(87,46,136,0.22);border-radius:8px;padding:0.6rem 0.75rem;font-family:inherit;font-size:0.9rem;outline:0;box-sizing:border-box;" />'
+      + '</div>'
+      + '<div style="margin-bottom:1rem;">'
+      +   '<label style="display:block;font-size:0.72rem;font-weight:900;color:#1a1530;margin-bottom:0.22rem;">Production Code</label>'
+      +   '<input id="vecf-passcode" type="text" inputmode="numeric" maxlength="12" value="' + esc(volReqSignupPasscode(p) || '') + '" placeholder="Production Code" style="width:100%;border:1.5px solid rgba(87,46,136,0.22);border-radius:8px;padding:0.6rem 0.75rem;font-family:inherit;font-size:0.9rem;font-weight:800;letter-spacing:0.12em;outline:0;box-sizing:border-box;" />'
       + '</div>'
       + '<div id="vecf-error" style="display:none;color:#b84432;font-size:0.78rem;margin-bottom:0.7rem;"></div>'
       + '<div style="display:flex;gap:0.6rem;">'
@@ -69076,10 +69081,12 @@ See you soon!
     const nameVal  = (document.getElementById('vecf-name')?.value || '').trim();
     const emailVal = (document.getElementById('vecf-email')?.value || '').trim().toLowerCase();
     const phoneVal = (document.getElementById('vecf-phone')?.value || '').trim();
+    const passcodeVal = (document.getElementById('vecf-passcode')?.value || '').trim();
     const errEl    = document.getElementById('vecf-error');
     const saveBtn  = document.getElementById('vecf-save-btn');
     if (!nameVal) { errEl.textContent = 'Please enter a name.'; errEl.style.display = 'block'; return; }
     if (!emailVal || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailVal)) { errEl.textContent = 'Please enter a valid email address.'; errEl.style.display = 'block'; return; }
+    if (passcodeVal && !/^[A-Za-z0-9-]{3,12}$/.test(passcodeVal)) { errEl.textContent = 'Use 3-12 letters, numbers, or dashes for the Production Code.'; errEl.style.display = 'block'; return; }
     errEl.style.display = 'none';
     if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'Saving...'; }
     const matchingRows = volReqRowsForPortalKey(portalKey);
@@ -69093,6 +69100,7 @@ See you soon!
         last_name: parts.slice(1).join(' ') || '',
         email: emailVal,
         phone: phoneVal || null,
+        volunteer_passcode: passcodeVal || null,
       };
       const { error } = await sb.from('volunteer_signups').update(patch).in('id', ids);
       if (error) throw error;
