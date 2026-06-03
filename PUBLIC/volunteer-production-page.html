@@ -8,6 +8,7 @@
   <title>Volunteer | Build The Show</title>
   <link rel="stylesheet" href="/ASSETS/styles/styles.css?v=vol-prod-20260530-cart" />
   <link rel="stylesheet" href="/ASSETS/styles/casting-card.css?v=portal-connected-tabs" />
+  <link rel="stylesheet" href="/ASSETS/styles/production-sidebar.css" />
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
@@ -1638,6 +1639,82 @@
       .vp-lead-meta { font-size: 0.76rem; }
       .vp-lead-action { min-height: 40px; font-size: 0.78rem; }
     }
+
+    /* ── Portal sidebar layout ── */
+    body.vp-portal-active .vp-topbar { display: none; }
+    body.vp-portal-active { display: flex; min-height: 100vh; }
+    body.vp-portal-active .vpd-home {
+      margin-left: 220px;
+      width: calc(100% - 220px);
+      background: #f7f5fc;
+      min-height: 100vh;
+    }
+    body.vp-portal-active #vp-main,
+    body.vp-portal-active #vp-portal-login { display: none !important; }
+
+    /* Portal sidebar nav items */
+    .vp-psidebar-nav-item {
+      display: flex;
+      align-items: center;
+      gap: 0.7rem;
+      padding: 0.62rem 1.25rem;
+      font-size: 0.82rem;
+      font-weight: 800;
+      color: rgba(255,255,255,0.72);
+      cursor: pointer;
+      transition: background 0.12s, color 0.12s;
+      border: none;
+      background: none;
+      width: 100%;
+      text-align: left;
+      font-family: var(--bts-font);
+    }
+    .vp-psidebar-nav-item:hover { background: rgba(255,255,255,0.09); color: #fff; }
+    .vp-psidebar-nav-item.active { background: rgba(255,255,255,0.14); color: #fff; }
+    .vp-psidebar-nav-item img { width: 18px; height: 18px; opacity: 0.72; flex-shrink: 0; }
+    .vp-psidebar-nav-item.active img { opacity: 1; }
+    .vp-psidebar-footer {
+      margin-top: auto;
+      padding: 1rem 1.25rem;
+      border-top: 1px solid rgba(255,255,255,0.1);
+    }
+    .vp-psidebar-forget {
+      background: none;
+      border: none;
+      color: rgba(255,255,255,0.45);
+      font: inherit;
+      font-size: 0.7rem;
+      font-weight: 700;
+      cursor: pointer;
+      text-decoration: underline;
+      padding: 0;
+    }
+    .vp-psidebar-forget:hover { color: rgba(255,255,255,0.75); }
+    .vp-psidebar-greeting {
+      font-size: 0.8rem;
+      font-weight: 800;
+      color: #fff;
+      margin-top: 0.25rem;
+    }
+    .vp-psidebar-sub {
+      font-size: 0.68rem;
+      color: rgba(255,255,255,0.55);
+      margin-top: 0.2rem;
+      line-height: 1.35;
+    }
+
+    /* Remove old hero and tabs from portal mode */
+    .vpd-hero { display: none; }
+    .vpd-tabs { display: none !important; }
+    .vpd-remember-note { display: none !important; }
+    .vpd-body { padding-top: 1.75rem; }
+
+    @media (max-width: 700px) {
+      body.vp-portal-active .vpd-home { margin-left: 0; width: 100%; }
+      body.vp-portal-active #vp-portal-sidebar .prod-sidebar { transform: translateX(-100%); transition: transform 0.22s ease; }
+      body.vp-portal-active.mobile-sidebar-open #vp-portal-sidebar .prod-sidebar { transform: translateX(0); }
+      .mobile-nav-toggle { display: flex; }
+    }
   </style>
 </head>
 <body>
@@ -1673,6 +1750,26 @@
         </button>
       </div>
     </nav>
+
+    <!-- Portal sidebar (shown when logged into portal) -->
+    <button class="mobile-nav-toggle" id="vp-sidebar-mobile-toggle" type="button" aria-label="Open navigation" style="display:none;" onclick="document.body.classList.toggle('mobile-sidebar-open')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"></path></svg>
+    </button>
+    <div class="mobile-nav-scrim" onclick="document.body.classList.remove('mobile-sidebar-open')"></div>
+    <div class="prod-sidebar" id="vp-portal-sidebar" style="display:none;">
+      <div class="sidebar-top">
+        <img src="/ASSETS/Images/logo-long-white.png" alt="Build The Show" class="sidebar-logo-img" />
+      </div>
+      <div class="sidebar-prod">
+        <div class="sidebar-prod-title" id="vp-psidebar-show">Production Portal</div>
+        <div class="sidebar-prod-sub vp-psidebar-greeting" id="vp-psidebar-greeting"></div>
+        <div class="sidebar-prod-sub vp-psidebar-sub" id="vp-psidebar-sub"></div>
+      </div>
+      <nav id="vp-psidebar-nav" style="display:flex;flex-direction:column;margin-top:0.5rem;"></nav>
+      <div class="vp-psidebar-footer">
+        <button class="vp-psidebar-forget" id="vpd-forget-sidebar" type="button" onclick="forgetRememberedPortal()" style="display:none;">Not you? Forget this device.</button>
+      </div>
+    </div>
 
     <!-- Portal login gate -->
     <div id="vp-portal-login" class="vp-portal-login hidden">
@@ -2416,10 +2513,13 @@
       document.getElementById('vp-portal-login').classList.add('hidden');
       document.getElementById('vp-portal-home').classList.remove('hidden');
       document.getElementById('vp-main').style.display = 'none';
-      const homeBtn = document.getElementById('vpd-home-btn');
-      if (homeBtn) homeBtn.style.display = '';
-      const forgetBtn = document.getElementById('vpd-forget-remembered');
-      if (forgetBtn) forgetBtn.classList.toggle('hidden', !loadRememberedPortal());
+      document.body.classList.add('vp-portal-active');
+      const sidebar = document.getElementById('vp-portal-sidebar');
+      if (sidebar) sidebar.style.display = '';
+      const mobileToggle = document.getElementById('vp-sidebar-mobile-toggle');
+      if (mobileToggle) mobileToggle.style.display = '';
+      const forgetBtn = document.getElementById('vpd-forget-sidebar');
+      if (forgetBtn) forgetBtn.style.display = loadRememberedPortal() ? '' : 'none';
       if (portalData) renderProductionPortal(portalData);
       else if (currentPortalData) renderProductionPortal(currentPortalData);
     }
@@ -2427,8 +2527,11 @@
       document.getElementById('vp-portal-login').classList.add('hidden');
       document.getElementById('vp-portal-home').classList.add('hidden');
       document.getElementById('vp-main').style.display = '';
-      const homeBtn = document.getElementById('vpd-home-btn');
-      if (homeBtn) homeBtn.style.display = '';
+      document.body.classList.remove('vp-portal-active');
+      const sidebar = document.getElementById('vp-portal-sidebar');
+      if (sidebar) sidebar.style.display = 'none';
+      const mobileToggle = document.getElementById('vp-sidebar-mobile-toggle');
+      if (mobileToggle) mobileToggle.style.display = 'none';
     }
 
     async function portalLogin() {
@@ -3210,12 +3313,7 @@
     function renderPortalTab(key) {
       if (!currentPortalData) return;
       activePortalTab = key;
-      const tabs = portalTabsFor(currentPortalData);
-      const tabsEl = document.getElementById('vpd-tabs');
-      if (tabsEl) {
-        tabsEl.classList.toggle('hidden', tabs.length <= 1);
-        tabsEl.innerHTML = tabs.map(tab => `<button class="vpd-tab ${tab.key === key ? 'active' : ''}" type="button" onclick="renderPortalTab('${esc(tab.key)}')">${esc(tab.label)}</button>`).join('');
-      }
+      document.querySelectorAll('.vp-psidebar-nav-item').forEach(btn => btn.classList.toggle('active', btn.dataset.tab === key));
       const content = document.getElementById('vpd-tab-content');
       if (!content) return;
       if (key === 'overview') content.innerHTML = portalOverviewHtml(currentPortalData);
@@ -3229,20 +3327,33 @@
       const firstVolunteer = portalData.volunteer.rows[0];
       const firstName = firstPerformer ? performerDisplayName(firstPerformer).split(/\s+/)[0] : volunteerFirstName(firstVolunteer || {}, portalData.email);
       const volunteerStats = portalVolunteerStats(portalData.volunteer.rows, portalData.email, portalData.volunteer.linkedPerformers || []);
-      const greetingEl  = document.querySelector('.vpd-greeting-name');
-      const subEl       = document.querySelector('.vpd-greeting-sub');
-      if (greetingEl) greetingEl.textContent = `Welcome back, ${firstName}.`;
+
+      // Populate sidebar
+      const showEl = document.getElementById('vp-psidebar-show');
+      if (showEl) showEl.textContent = prod?.title || 'Production Portal';
+      const greetEl = document.getElementById('vp-psidebar-greeting');
+      if (greetEl) greetEl.textContent = `Welcome back, ${firstName}.`;
+      const subEl = document.getElementById('vp-psidebar-sub');
       if (subEl) {
         const bits = [];
         if (portalData.performers.length) bits.push(`${portalData.performers.length} performer record${portalData.performers.length === 1 ? '' : 's'}`);
-        if (portalData.volunteer.rows.length) bits.push(`${volunteerStats.upcomingApproved.length} approved volunteer shift${volunteerStats.upcomingApproved.length === 1 ? '' : 's'}`);
-        subEl.textContent = bits.length ? `You have ${bits.join(' and ')} for this production.` : 'Your production information is ready.';
+        if (portalData.volunteer.rows.length) bits.push(`${volunteerStats.upcomingApproved.length} upcoming shift${volunteerStats.upcomingApproved.length === 1 ? '' : 's'}`);
+        subEl.textContent = bits.join(' · ') || '';
       }
-      document.querySelectorAll('.vpd-hero-count-num').forEach(el => { el.textContent = portalData.performers.length + (portalData.volunteer.linkedPerformers || []).length + volunteerStats.upcomingApproved.length; });
-      document.querySelectorAll('.vpd-hero-count-label').forEach(el => { el.textContent = 'Connected items'; });
-      const showNameEl = document.getElementById('vpd-show-name');
-      if (showNameEl && prod?.title) showNameEl.textContent = prod.title;
+
+      // Build sidebar nav
       const tabs = portalTabsFor(portalData);
+      const NAV_ICONS = {
+        overview:      '/ASSETS/Images/navoverview.svg',
+        volunteer:     '/ASSETS/Images/Volunteers.svg',
+        performer:     '/ASSETS/Images/Performer.svg',
+        registration:  '/ASSETS/Images/Finance - Schedule.svg',
+      };
+      const navEl = document.getElementById('vp-psidebar-nav');
+      if (navEl) {
+        navEl.innerHTML = tabs.map(tab => `<button class="vp-psidebar-nav-item" data-tab="${esc(tab.key)}" type="button" onclick="renderPortalTab('${esc(tab.key)}')"><img src="${esc(NAV_ICONS[tab.key] || NAV_ICONS.overview)}" alt="" />${esc(tab.label)}</button>`).join('');
+      }
+
       renderPortalTab(tabs[0]?.key || 'overview');
     }
     function fmtDate(val, opts = {}) {
