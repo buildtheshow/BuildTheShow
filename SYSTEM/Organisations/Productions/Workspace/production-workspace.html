@@ -33309,7 +33309,7 @@ Your submission link is unique to you. Please do not share it with another perfo
       name: 'Volunteer Confirmation',
       category: 'volunteer_approved',
       trigger: 'volunteer_approved',
-      subject: "You're in! Volunteer confirmed for {{show_name}}",
+      subject: 'Your Volunteer Role Has Been Confirmed - {{organisation_name}} - {{show_name}}',
       body: `<div style="font-family:Arial,sans-serif;color:#1a1530;font-size:17px;line-height:1.62;">
   <div style="margin:0 0 22px;">
     <div style="display:inline-block;background:#eaf4ec;color:#3f7a51;font-size:12px;font-weight:900;letter-spacing:0.12em;text-transform:uppercase;border-radius:999px;padding:7px 11px;margin-bottom:14px;">Volunteer Confirmed</div>
@@ -33983,12 +33983,20 @@ See you soon!
     const starter = ET_STARTER_TEMPLATES.find(t => t.category === 'volunteer_approved');
     if (!starter) return;
     const body = String(t.body || '');
+    const subject = String(t.subject || '');
     const isOldDefault = body.includes('You are confirmed, {{preferred_name}}.')
       || body.includes('Your volunteer request for <strong>{{show_name}}</strong> has been approved.')
       || body.includes('Use your portal to view your schedule, track your hours, and see any updates from the production team.');
-    if (!isOldDefault) return;
-    _etTemplates = (_etTemplates || []).map(x => x.id === t.id ? { ...x, subject: starter.subject, body: starter.body } : x);
-    await sb.from('email_templates').update({ subject: starter.subject, body: starter.body }).eq('id', t.id);
+    const subjectNeedsUpdate = subject === "You're in! Volunteer confirmed for {{show_name}}"
+      || subject === 'Volunteer shift confirmed'
+      || /^You're in! Volunteer confirmed for /i.test(subject);
+    if (!isOldDefault && !subjectNeedsUpdate) return;
+    const next = {
+      subject: subjectNeedsUpdate ? starter.subject : subject,
+      body: isOldDefault ? starter.body : body,
+    };
+    _etTemplates = (_etTemplates || []).map(x => x.id === t.id ? { ...x, ...next } : x);
+    await sb.from('email_templates').update(next).eq('id', t.id);
   }
 
   async function etEnsureVolunteerDeclinedTemplateBody() {
@@ -68395,12 +68403,13 @@ See you soon!
           : '';
       })();
 
+      window._volReqEditKey = selectedEmail;
       return '<div class="vol-req-detail-header">'
         + '<div class="vol-req-detail-id">'
         + avatarHtml(p.name, p.avatar_url, 'vol-req-detail-avatar')
         + '<div><div class="vol-req-detail-name" style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap;">'
         +   esc(p.name || 'Unknown')
-        +   '<button type="button" onclick="volReqEditContact(' + JSON.stringify(selectedEmail) + ')" style="background:none;border:1px solid rgba(87,46,136,0.25);border-radius:5px;padding:0.1rem 0.4rem;font-size:0.6rem;font-weight:800;color:#572e88;cursor:pointer;font-family:inherit;white-space:nowrap;line-height:1.6;">Edit contact</button>'
+        +   '<button type="button" onclick="volReqEditContact(window._volReqEditKey)" style="background:none;border:1px solid rgba(87,46,136,0.25);border-radius:5px;padding:0.1rem 0.4rem;font-size:0.6rem;font-weight:800;color:#572e88;cursor:pointer;font-family:inherit;white-space:nowrap;line-height:1.6;">Edit contact</button>'
         + '</div>'
         +     '<div class="vol-req-detail-role" style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap;">'
         +       esc(p.email || '')
@@ -68586,7 +68595,7 @@ See you soon!
       const template = await volReqEnsureTemplate(category);
       if (!template) throw new Error('No volunteer email template found.');
       const context = volReqStatusEmailContext(signups, newStatus);
-      const subject = _applyEmailContext(template.subject || '', context) || (newStatus === 'approved' ? 'Volunteer shift confirmed' : 'Volunteer request update');
+      const subject = _applyEmailContext(template.subject || '', context) || (newStatus === 'approved' ? 'Your Volunteer Role Has Been Confirmed - ' + (context.organisation_name || '') + ' - ' + (context.show_name || '') : 'Volunteer request update');
       const body = finalCastingEmailPreviewBodyHtml(_applyEmailContext(template.body || '', context)) || '<p>Email body preview.</p>';
       const toEmail = context.volunteer_email || '';
       const toName = context.preferred_name || context.contact_name || toEmail;
@@ -68787,7 +68796,7 @@ See you soon!
       + '<div id="vecf-error" style="display:none;color:#b84432;font-size:0.78rem;margin-bottom:0.7rem;"></div>'
       + '<div style="display:flex;gap:0.6rem;">'
       +   '<button onclick="document.getElementById(\'vol-req-edit-contact-overlay\').remove()" style="flex:1;min-height:40px;border:1px solid rgba(87,46,136,0.22);border-radius:8px;background:#fff;color:#572e88;font-weight:800;font-family:inherit;cursor:pointer;font-size:0.85rem;">Cancel</button>'
-      +   '<button id="vecf-save-btn" onclick="volReqSaveContact(' + JSON.stringify(portalKey) + ')" style="flex:2;min-height:40px;border:none;border-radius:8px;background:#572e88;color:#fff;font-weight:900;font-family:inherit;cursor:pointer;font-size:0.85rem;">Save Changes</button>'
+      +   '<button id="vecf-save-btn" onclick="volReqSaveContact(window._volReqEditKey)" style="flex:2;min-height:40px;border:none;border-radius:8px;background:#572e88;color:#fff;font-weight:900;font-family:inherit;cursor:pointer;font-size:0.85rem;">Save Changes</button>'
       + '</div>'
       + '</div>';
     overlay.addEventListener('mousedown', e => { if (e.target === overlay) overlay.remove(); });
