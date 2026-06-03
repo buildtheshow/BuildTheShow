@@ -32578,12 +32578,7 @@
 
   function buildEventScheduleHtml(rows) {
     if (!rows.length) return '';
-    const fmtTime = t => t ? formatSlotTime(t.slice(11, 16)) : '';
-    const fmtShortDate = iso => {
-      const d = new Date(iso + 'T12:00:00');
-      return isNaN(d) ? iso : d.toLocaleDateString('en-CA', { month: 'short', day: 'numeric' });
-    };
-    // Group by type label
+    const fmtT = t => t ? formatSlotTime(String(t).slice(11, 16)) : '';
     const groups = new Map();
     rows.forEach(row => {
       const key = (EVENT_LABELS[row.event_type] || row.event_type || 'Event').trim();
@@ -32592,34 +32587,16 @@
     });
     let html = '';
     groups.forEach((groupRows, typeLabel) => {
-      // Check if all rows in this group share the same start time and venue
-      const firstTime  = fmtTime(groupRows[0].start_time);
-      const firstEnd   = fmtTime(groupRows[0].end_time);
-      const firstVenue = groupRows[0].venue || '';
-      const allSameTime  = groupRows.every(r => fmtTime(r.start_time) === firstTime);
-      const allSameVenue = groupRows.every(r => (r.venue || '') === firstVenue);
-      const timeRange = firstTime ? (firstEnd && firstEnd !== firstTime ? `${firstTime} – ${firstEnd}` : firstTime) : '';
-      html += `<div style="margin:16px 0 6px;">`;
-      // Type header
-      html += `<div style="font-size:11px;font-weight:900;letter-spacing:0.1em;text-transform:uppercase;color:#572e88;margin-bottom:4px;">${typeLabel}</div>`;
-      if (groupRows.length >= 3 && allSameTime && allSameVenue) {
-        // Compact mode: time+venue once, then dates as a wrapped list
-        const meta = [timeRange, firstVenue].filter(Boolean).join(' &middot; ');
-        if (meta) html += `<div style="font-size:13px;color:#6f6382;margin-bottom:5px;">${meta}</div>`;
-        const dateChips = groupRows.map(r => `<span style="display:inline-block;background:#f0ecf7;border-radius:6px;padding:2px 8px;margin:2px 3px 2px 0;font-size:13px;color:#1a1530;">${fmtShortDate(String(r.start_time || '').slice(0,10))}</span>`).join('');
-        html += `<div style="line-height:1.8;">${dateChips}</div>`;
-      } else {
-        // Individual rows: each gets its own line with full date + time range + venue
-        groupRows.forEach(row => {
-          const date    = fmtDate(String(row.start_time || '').slice(0, 10));
-          const start   = fmtTime(row.start_time);
-          const end     = fmtTime(row.end_time);
-          const tRange  = start ? (end && end !== start ? `${start} – ${end}` : start) : '';
-          const venue   = row.venue ? ` &middot; ${row.venue}` : '';
-          const title   = row.title && row.title !== typeLabel ? `<strong>${row.title}</strong> &middot; ` : '';
-          html += `<div style="font-size:14px;color:#1a1530;padding:3px 0;">${title}<strong>${date}</strong>${tRange ? ' &middot; ' + tRange : ''}${venue}</div>`;
-        });
-      }
+      html += `<div style="margin:18px 0 6px;"><div style="font-size:11px;font-weight:900;letter-spacing:0.1em;text-transform:uppercase;color:#572e88;margin-bottom:6px;">${typeLabel}</div>`;
+      groupRows.forEach(row => {
+        const date   = `<strong>${fmtDate(String(row.start_time || '').slice(0, 10))}</strong>`;
+        const start  = fmtT(row.start_time);
+        const end    = fmtT(row.end_time);
+        const tRange = start ? `<em>(${end && end !== start ? start + ' – ' + end : start})</em>` : '';
+        const title  = row.title && row.title !== typeLabel ? `<strong><u>${row.title}</u></strong> &middot; ` : '';
+        const venue  = row.venue ? ` &middot; ${row.venue}` : '';
+        html += `<div style="font-size:14px;color:#1a1530;padding:3px 0 3px 8px;">${title}${date}${tRange ? ' ' + tRange : ''}${venue}</div>`;
+      });
       html += `</div>`;
     });
     return html;
