@@ -1813,6 +1813,18 @@
       }
       return randomVolunteerPasscode();
     }
+    async function findVolunteerSignupsByCode(email, code) {
+      const normalized = (email || '').trim().toLowerCase();
+      const enteredCode = String(code || '').trim();
+      if (!normalized || !enteredCode || !prod?.id) return [];
+      const { data, error } = await sb.from('volunteer_signups')
+        .select('*')
+        .eq('production_id', prod.id)
+        .or(`email.ilike.${normalized},volunteer_email.ilike.${normalized}`)
+        .neq('status', 'cancelled');
+      if (error) throw error;
+      return (data || []).filter(row => signupPasscode(row) === enteredCode);
+    }
 
     function showPortalLogin() {
       document.getElementById('vp-portal-login').classList.remove('hidden');
@@ -1845,12 +1857,7 @@
       btn.disabled = true; btn.textContent = 'Checking...';
       try {
         // Find signups for this exact email + Volunteer Code identity in this production.
-        const { data: signups } = await sb.from('volunteer_signups')
-          .select('*')
-          .eq('production_id', prod?.id || new URLSearchParams(location.search).get('id') || '')
-          .or(`email.ilike.${email},volunteer_email.ilike.${email}`)
-          .eq('volunteer_passcode', code)
-          .neq('status', 'cancelled');
+        const signups = await findVolunteerSignupsByCode(email, code);
         if (!signups || signups.length === 0) throw new Error('not_found');
         let portalSignups = signups;
         const token = signups[0]?.portal_token;
@@ -3175,17 +3182,10 @@
         let isReturning = false;
         if (returningChecked && returningEmail && returningCode) {
           try {
-            const { data: existing } = await sb.from('volunteer_signups')
-              .select('portal_token,volunteer_passcode')
-              .eq('production_id', prod.id)
-              .ilike('email', returningEmail)
-              .eq('volunteer_passcode', returningCode)
-              .not('status', 'eq', 'cancelled')
-              .limit(1)
-              .single();
+            const existing = (await findVolunteerSignupsByCode(returningEmail, returningCode))[0] || null;
             if (existing?.portal_token) {
               portalToken = existing.portal_token;
-              portalPasscode = existing.volunteer_passcode || returningCode;
+              portalPasscode = signupPasscode(existing) || returningCode;
               isReturning = true;
             } else {
               btn.disabled = false; btn.textContent = 'Request Selected Shifts';
@@ -3285,14 +3285,8 @@
       btn.disabled = true;
       btn.textContent = 'Looking you up...';
       try {
-        const { data, error } = await sb.from('volunteer_signups')
-          .select('id,role_name,department,check_in_with,shift_date,shift_start_time,shift_end_time,required_dates,status,approved_hours,portal_token,volunteer_passcode,created_at')
-          .eq('production_id', prod.id)
-          .ilike('email', email)
-          .eq('volunteer_passcode', code)
-          .order('shift_date', { ascending: true });
-        if (error) throw error;
-        const rows = data || [];
+        const rows = (await findVolunteerSignupsByCode(email, code))
+          .sort((a, b) => String(a.shift_date || '').localeCompare(String(b.shift_date || '')));
         if (!rows.length) {
           btn.disabled = false;
           btn.textContent = 'View My Schedule';
