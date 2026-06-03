@@ -1177,24 +1177,58 @@
     .vpd-shift-list { display: grid; grid-template-columns: 1fr; gap: 0.85rem; }
     .vpd-shift-item {
       display: grid;
-      grid-template-columns: 14px minmax(0, 1fr);
-      gap: 0.9rem;
+      grid-template-columns: minmax(82px, 0.18fr) minmax(0, 1fr);
+      gap: 1rem;
       padding: 1rem;
       border-radius: 14px;
       border: 2px solid rgba(87,46,136,0.12);
       background: #fff;
       box-shadow: 0 6px 18px rgba(26,21,48,0.055);
     }
-    .vpd-shift-dot { width: 14px; height: 100%; min-height: 128px; border-radius: 999px; flex-shrink: 0; }
+    .vpd-shift-date {
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-start;
+      gap: 0.15rem;
+      min-height: 112px;
+      padding: 0.15rem 0.9rem 0.15rem 0;
+      border-right: 3px solid var(--line);
+    }
+    .vpd-shift-weekday,
+    .vpd-shift-month {
+      color: var(--muted);
+      font-size: 0.68rem;
+      font-weight: 950;
+      letter-spacing: 0.08em;
+      line-height: 1;
+      text-transform: uppercase;
+    }
+    .vpd-shift-day {
+      color: var(--ink);
+      font-size: clamp(2rem,4vw,3rem);
+      font-weight: 950;
+      letter-spacing: 0;
+      line-height: 0.95;
+    }
+    .vpd-shift-date-note {
+      color: var(--muted);
+      font-size: 0.78rem;
+      font-weight: 850;
+      line-height: 1.25;
+      margin-top: 0.15rem;
+    }
     .vpd-shift-main { flex: 1; min-width: 0; }
     .vpd-shift-top { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
     .vpd-shift-role { font-size: clamp(1.25rem,2.2vw,1.65rem); font-weight: 950; color: var(--ink); line-height: 1.05; }
     .vpd-shift-dept { font-size: 0.88rem; color: var(--muted); font-weight: 850; margin-top: 0.2rem; }
-    .vpd-shift-meta { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 0.55rem; margin-top: 0.85rem; }
+    .vpd-shift-time {
+      font-size: clamp(1.05rem,1.8vw,1.2rem);
+      font-weight: 950;
+      line-height: 1.15;
+      margin-top: 0.7rem;
+    }
+    .vpd-shift-meta { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.55rem; margin-top: 0.7rem; }
     .vpd-shift-fact { display: flex; flex-direction: column; gap: 0.12rem; min-width: 0; border-radius: 8px; padding: 0.62rem 0.7rem; background: var(--purple-soft); border: 1px solid rgba(87,46,136,0.1); }
-    .vpd-shift-fact--role { display: none; }
-    .vpd-shift-fact--start { background: rgba(87,46,136,0.08); }
-    .vpd-shift-fact--end { background: rgba(239,171,69,0.18); }
     .vpd-shift-fact--where { background: rgba(45,125,69,0.12); }
     .vpd-shift-fact--who { background: rgba(184,68,50,0.1); }
     .vpd-shift-label { font-size: 0.66rem; font-weight: 950; text-transform: uppercase; letter-spacing: 0.08em; color: var(--purple); }
@@ -1225,15 +1259,14 @@
       .vpd-hero { grid-template-columns: 1fr; }
       .vpd-hero-left { grid-column: auto; }
       .vpd-hero-count { grid-column: auto; justify-self: start; min-width: 116px; padding: 0.8rem; }
-      .vpd-shift-meta { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     }
     @media (max-width: 600px) {
       .vpd-stats { grid-template-columns: 1fr; }
       .vpd-hero { min-height: 0; }
       .vpd-brand-strip { align-items: stretch; flex-direction: column; }
       .vpd-org-logo { width: fit-content; max-width: 100%; }
-      .vpd-shift-item { grid-template-columns: 10px minmax(0, 1fr); padding: 0.85rem; }
-      .vpd-shift-dot { width: 10px; min-height: 180px; }
+      .vpd-shift-item { grid-template-columns: 1fr; padding: 0.85rem; }
+      .vpd-shift-date { min-height: 0; padding: 0 0 0.75rem; border-right: 0; border-bottom: 3px solid var(--line); }
       .vpd-shift-meta { grid-template-columns: 1fr; }
     }
     @media (max-width: 420px) {
@@ -2093,14 +2126,33 @@
         ${count ? `<div class="vpd-shift-list">${rows.map(dashboardShiftItemHtml).join('')}</div>` : `<div class="vpd-empty">${esc(emptyCopy)}</div>`}
       </section>`;
     }
-    function dashboardShiftDateHtml(row = {}) {
-      const requiredDates = requiredDatesForSignup(row);
-      if (row.shift_date) return esc(fmtDate(row.shift_date, { short: true }));
-      if (!requiredDates.length) return '<em style="font-style:normal;color:var(--muted);">Flexible — no fixed date</em>';
-      if (requiredDates.length === 1) return esc(fmtDate(requiredDates[0], { short: true }) || requiredDates[0]);
-      // Multiple dates — stack them, try to detect range
-      const tryFmt = d => { const f = fmtDate(d, { short: true }); return f || d; };
-      return requiredDates.map(d => `<span class="vpd-date-chip">${esc(tryFmt(d))}</span>`).join('');
+    function dashboardShiftDateBadgeHtml(row = {}, deptCol = 'var(--purple)') {
+      const dateVal = row.shift_date || requiredDatesForSignup(row)[0] || '';
+      if (!dateVal) {
+        return `<div class="vpd-shift-date" style="border-color:${deptCol};">
+          <span class="vpd-shift-weekday" style="color:${deptCol};">Flexible</span>
+          <span class="vpd-shift-day">Any</span>
+          <span class="vpd-shift-month">Date</span>
+          <span class="vpd-shift-date-note">No fixed date</span>
+        </div>`;
+      }
+      const d = new Date(String(dateVal).slice(0,10) + 'T12:00:00');
+      if (isNaN(d)) {
+        return `<div class="vpd-shift-date" style="border-color:${deptCol};">
+          <span class="vpd-shift-weekday" style="color:${deptCol};">Date</span>
+          <span class="vpd-shift-date-note">${esc(dateVal)}</span>
+        </div>`;
+      }
+      const weekday = d.toLocaleDateString('en-CA', { weekday: 'short' });
+      const day = d.toLocaleDateString('en-CA', { day: 'numeric' });
+      const monthYear = d.toLocaleDateString('en-CA', { month: 'short', year: 'numeric' });
+      const extraDates = requiredDatesForSignup(row).filter(date => date && date !== dateVal).length;
+      return `<div class="vpd-shift-date" style="border-color:${deptCol};">
+        <span class="vpd-shift-weekday" style="color:${deptCol};">${esc(weekday)}</span>
+        <span class="vpd-shift-day">${esc(day)}</span>
+        <span class="vpd-shift-month">${esc(monthYear)}</span>
+        ${extraDates ? `<span class="vpd-shift-date-note">+ ${esc(extraDates)} more date${extraDates === 1 ? '' : 's'}</span>` : ''}
+      </div>`;
     }
     const DASH_DEPT_COLOURS = {
       'Design & Construction': 'var(--green)',
@@ -2116,25 +2168,17 @@
       const deptCol = DASH_DEPT_COLOURS[row.department] || 'var(--purple)';
       const placeText = dashboardShiftPlaceText(row);
       const whoText = dashboardShiftWhoText(row);
+      const timeText = dashboardShiftTimeText(row);
       return `<article class="vpd-shift-item" style="border-left:4px solid ${deptCol};">
-        <div class="vpd-shift-dot" style="background:${deptCol};"></div>
+        ${dashboardShiftDateBadgeHtml(row, deptCol)}
         <div class="vpd-shift-main">
           <div class="vpd-shift-top">
             <div class="vpd-shift-role">${esc(row.role_name || row.volunteer_role || 'Volunteer Shift')}</div>
             <span class="vp-status ${cls}">${esc(dashboardStatusLabel(row.status))}</span>
           </div>
           ${row.department ? `<div class="vpd-shift-dept">${esc(row.department)}</div>` : ''}
+          <div class="vpd-shift-time" style="color:${deptCol};">${esc(timeText)}${hours ? ` <span style="font-size:0.8rem;font-weight:950;">(${esc(formatHours(hours))} hrs)</span>` : ''}</div>
           <div class="vpd-shift-meta">
-            <div class="vpd-shift-fact vpd-shift-fact--role">
-              <span class="vpd-shift-label">Role</span>
-              <span class="vpd-shift-value">${esc(row.role_name || row.volunteer_role || 'Volunteer Shift')}</span>
-            </div>
-            <div class="vpd-shift-fact vpd-shift-fact--when">
-              <span class="vpd-shift-label">When</span>
-              <span class="vpd-shift-value">${dashboardShiftDateHtml(row)}</span>
-            </div>
-            <div class="vpd-shift-fact vpd-shift-fact--start"><span class="vpd-shift-label">Start</span><span class="vpd-shift-value">${esc(dashboardShiftStartText(row))}</span></div>
-            <div class="vpd-shift-fact vpd-shift-fact--end"><span class="vpd-shift-label">End</span><span class="vpd-shift-value">${esc(dashboardShiftEndText(row))}${hours ? `<br><span style="color:${deptCol};font-size:0.78rem;font-weight:950;">${esc(formatHours(hours))} hrs</span>` : ''}</span></div>
             ${placeText ? `<div class="vpd-shift-fact vpd-shift-fact--where"><span class="vpd-shift-label">Where</span><span class="vpd-shift-value">${esc(placeText)}</span></div>` : ''}
             ${whoText ? `<div class="vpd-shift-fact vpd-shift-fact--who"><span class="vpd-shift-label">Talk To</span><span class="vpd-shift-value">${esc(whoText)}</span></div>` : ''}
           </div>
