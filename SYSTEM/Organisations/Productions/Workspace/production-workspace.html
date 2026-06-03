@@ -68540,6 +68540,23 @@ See you soon!
     if (btn) btn.innerHTML = collapsed ? '&#9650;' : '&#9660;';
   }
 
+  // Extract an ISO date (YYYY-MM-DD) from a required_dates label string
+  // Labels are stored as "Mon, Jul 27 - Set Building" or "Mon, Jul 27, 2026 – Set Building"
+  function extractCheckinIsoDate(label) {
+    if (!label) return null;
+    if (/^\d{4}-\d{2}-\d{2}$/.test(String(label).trim())) return String(label).trim().slice(0, 10);
+    const direct = new Date(String(label));
+    if (!isNaN(direct) && direct.getFullYear() > 2000) return direct.toISOString().slice(0, 10);
+    const yearMatch = String(label).match(/\b(20\d{2})\b/);
+    const year = yearMatch?.[1] || new Date().getFullYear();
+    const monthDay = String(label).split(/\s[-–]\s/)[0].match(/([A-Za-z]+)[.,]?\s+(\d{1,2})/);
+    if (monthDay) {
+      const d = new Date(`${monthDay[1].replace(/\./g, '')} ${monthDay[2]} ${year}`);
+      if (!isNaN(d) && d.getFullYear() > 2000) return d.toISOString().slice(0, 10);
+    }
+    return null;
+  }
+
   // ── Volunteer Check-In ─────────────────────────────────────────────────
   async function loadVolunteerCheckin() {
     const root = document.getElementById('vol-checkin-root');
@@ -68551,17 +68568,18 @@ See you soon!
 
     const today = new Date().toISOString().split('T')[0];
 
-    // Group by shift date — expand required_dates into individual entries
+    // Group by shift date — expand required_dates, parse label strings to ISO dates
     const byDate = {};
     signups.forEach(s => {
       const opp = opportunities.find(o => o.id === s.opportunity_id);
       const requiredDates = Array.isArray(s.required_dates) ? s.required_dates.filter(Boolean) : [];
-      const dates = s.shift_date ? [s.shift_date]
+      const rawDates = s.shift_date ? [s.shift_date]
         : requiredDates.length ? requiredDates
         : [opp?.shift_date || opp?.start_date || 'No fixed date'];
-      dates.forEach(date => {
-        if (!byDate[date]) byDate[date] = [];
-        byDate[date].push({ signup: s, opp });
+      rawDates.forEach(raw => {
+        const key = extractCheckinIsoDate(raw) || raw;
+        if (!byDate[key]) byDate[key] = [];
+        byDate[key].push({ signup: s, opp });
       });
     });
 
@@ -68585,7 +68603,10 @@ See you soon!
     const dateBlocks = dates.map(date => {
       const rows = byDate[date];
       const isToday = date === today;
-      const label = date === 'No fixed date' ? 'No Fixed Date' : new Date(date + 'T12:00').toLocaleDateString('en-CA', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+      const _d = new Date(date + 'T12:00');
+      const label = date === 'No fixed date' ? 'No Fixed Date'
+        : (!isNaN(_d) && _d.getFullYear() > 2000) ? _d.toLocaleDateString('en-CA', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
+        : date;
       const rowsHtml = rows.map(({ signup, opp }) => {
         const isCheckedIn = signup.status === 'checked_in' || signup.status === 'completed';
         const name = signup.name || [signup.first_name, signup.last_name].filter(Boolean).join(' ') || signup.email || signup.volunteer_email || 'Volunteer';
