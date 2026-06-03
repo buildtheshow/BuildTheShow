@@ -2352,6 +2352,23 @@
           console.warn('[BTS production portal] linked performer role lookup failed', error);
         }
       }
+      const assignmentIds = assignments.map(row => row.id).filter(Boolean);
+      let paymentMap = new Map();
+      if (assignmentIds.length) {
+        try {
+          const { data } = await sb.from('registration_payment_records')
+            .select('*')
+            .in('casting_assignment_id', assignmentIds)
+            .order('installment_index', { ascending: true });
+          (data || []).forEach(row => {
+            const key = String(row.casting_assignment_id || '');
+            if (!paymentMap.has(key)) paymentMap.set(key, []);
+            paymentMap.get(key).push(row);
+          });
+        } catch (error) {
+          console.warn('[BTS production portal] linked performer payment lookup failed', error);
+        }
+      }
       return assignments.map(assignment => {
         const app = appMap.get(String(assignment.applicant_id)) || {};
         const ca = applicantCustomAnswers(app);
@@ -2360,6 +2377,7 @@
         const fallbackRoles = String(ca.__bts_cast_offer_role_names || ca.Role || ca.role_name || '').split(',').map(s => s.trim()).filter(Boolean);
         return {
           assignment,
+          assignments: [{ ...assignment, role_name: role || 'Ensemble', payment_records: paymentMap.get(String(assignment.id)) || [] }],
           app,
           name,
           roles: [...new Set([role || 'Ensemble', ...fallbackRoles].filter(Boolean))],
@@ -2825,6 +2843,65 @@
       }
       return [{ label: 'Registration Fee', amount: parseFloat(String(s.fee || '').replace(/[^0-9.]/g, '')) || 0, dueDate: s.fee_due_date || '' }];
     }
+    function portalHouseholdForAssignment(assignmentId) {
+      const id = String(assignmentId || '');
+      return (Array.isArray(prod?.registration_households) ? prod.registration_households : [])
+        .find(h => (h.member_ids || []).map(String).includes(id)) || null;
+    }
+    function portalAssignmentEarnedVolunteerDiscount(assignment = {}) {
+      if (assignment.volunteer_discount_approved) return true;
+      const hours = parseFloat(String(assignment.volunteer_hours_completed || '').replace(/[^0-9.]/g, '')) || 0;
+      const required = discountRequiredHours();
+      return required > 0 ? hours >= required : hours > 0;
+    }
+    function portalHouseholdVolunteerDiscountEarned(household) {
+      if (!household) return false;
+      const assignments = allPortalPerformers().flatMap(p => p.assignments || []);
+      return (household.member_ids || []).some(memberId => {
+        const assignment = assignments.find(a => String(a?.id) === String(memberId));
+        return assignment && portalAssignmentEarnedVolunteerDiscount(assignment);
+      });
+    }
+    function portalScaleInstallments(base, total, labelSuffix = '') {
+      if (!base.length) return total > 0 ? [{ label: labelSuffix || 'Payment', amount: total, dueDate: '' }] : [];
+      const baseTotal = base.reduce((sum, inst) => sum + (inst.amount || 0), 0);
+      if (total <= 0) return base.map(inst => ({ ...inst, label: labelSuffix ? `${inst.label} (${labelSuffix})` : inst.label, amount: 0 }));
+      if (baseTotal <= 0) return [{ label: labelSuffix || base[0]?.label || 'Payment', amount: total, dueDate: base[0]?.dueDate || '' }];
+      const scaleFactor = total / baseTotal;
+      const scaled = base.map(inst => ({ ...inst, label: labelSuffix ? `${inst.label} (${labelSuffix})` : inst.label, amount: Math.round((inst.amount || 0) * scaleFactor * 100) / 100 }));
+      const diff = Math.round((total - scaled.reduce((sum, inst) => sum + (inst.amount || 0), 0)) * 100) / 100;
+      if (diff !== 0 && scaled.length) scaled[scaled.length - 1].amount += diff;
+      return scaled;
+    }
+    function portalEffectiveFee(assignment = {}) {
+      const base = paymentInstallments();
+      const baseTotal = base.reduce((sum, inst) => sum + (inst.amount || 0), 0);
+      const household = portalHouseholdForAssignment(assignment.id);
+      const householdIds = household ? (household.member_ids || []).map(String) : [];
+      const householdPos = household ? householdIds.indexOf(String(assignment.id || '')) : -1;
+      const parts = [];
+      let effectiveBase = baseTotal;
+      if (paymentSettings.sibling_discount_enabled && household) {
+        const rate = householdPos === 0
+          ? parseFloat(String(paymentSettings.sibling_first_child || '').replace(/[^0-9.]/g, '')) || 0
+          : parseFloat(String(paymentSettings.sibling_additional || '').replace(/[^0-9.]/g, '')) || 0;
+        if (rate > 0) effectiveBase = rate;
+        if (rate > 0) parts.push('Sibling rate');
+      }
+      const volunteerApplies = household
+        ? householdPos === 0 && portalHouseholdVolunteerDiscountEarned(household)
+        : portalAssignmentEarnedVolunteerDiscount(assignment);
+      const volAdj = paymentSettings.volunteer_discount_enabled && volunteerApplies
+        ? parseFloat(String(paymentSettings.volunteer_discount || '').replace(/[^0-9.]/g, '')) || 0
+        : 0;
+      const schAdj = assignment.scholarship_status === 'approved'
+        ? parseFloat(String(assignment.scholarship_amount || '').replace(/[^0-9.]/g, '')) || 0
+        : 0;
+      const total = Math.max(0, effectiveBase - volAdj - schAdj);
+      if (volAdj) parts.push(`Volunteer discount: -${moneyLabel(volAdj)}`);
+      if (schAdj) parts.push(`Scholarship: -${moneyLabel(schAdj)}`);
+      return { total, installments: portalScaleInstallments(base, total, parts.includes('Sibling rate') ? 'sibling rate' : ''), discountLabel: parts.join(' · ') };
+    }
     function performerKey(item = {}) {
       return String(item?.app?.id || item?.assignment?.applicant_id || item?.name || '');
     }
@@ -2837,11 +2914,13 @@
       (data?.volunteer?.linkedPerformers || []).forEach(item => {
         const key = performerKey(item);
         const current = map.get(key);
+        const linkedAssignments = [...(item.assignments || []), item.assignment].filter(Boolean);
         if (current) {
-          const mergedAssignments = [...(current.assignments || []), item.assignment].filter(Boolean);
-          map.set(key, { ...current, assignments: mergedAssignments, roles: [...new Set([...(current.roles || []), ...(item.roles || [])].filter(Boolean))], source: 'registration_linked' });
+          const byId = new Map([...(current.assignments || []), ...linkedAssignments].filter(Boolean).map(a => [String(a.id || Math.random()), a]));
+          map.set(key, { ...current, assignments: [...byId.values()], roles: [...new Set([...(current.roles || []), ...(item.roles || [])].filter(Boolean))], source: 'registration_linked' });
         } else {
-          map.set(key, { app: item.app || {}, assignments: [item.assignment].filter(Boolean), roles: item.roles || [], source: 'volunteer_linked', linkedSignupIds: item.linkedSignupIds || [] });
+          const byId = new Map(linkedAssignments.map(a => [String(a.id || Math.random()), a]));
+          map.set(key, { app: item.app || {}, assignments: [...byId.values()], roles: item.roles || [], source: 'volunteer_linked', linkedSignupIds: item.linkedSignupIds || [] });
         }
       });
       return [...map.values()];
@@ -2952,14 +3031,15 @@
       </div>`;
     }
     function performerPaymentSummary(performer = {}) {
-      const installments = paymentInstallments();
       const assignment = (performer.assignments || [])[0] || {};
+      const effective = portalEffectiveFee(assignment);
+      const installments = effective.installments;
       const records = assignment.payment_records || [];
-      const total = installments.reduce((sum, inst) => sum + (inst.amount || 0), 0);
+      const total = effective.total;
       const paid = records.filter(row => row.paid).reduce((sum, row) => sum + (installments[row.installment_index]?.amount || 0), 0);
       const balance = Math.max(0, total - paid);
       const next = installments.find((_, i) => !records.find(row => row.installment_index === i && row.paid));
-      return { total, paid, balance, next, records, installments };
+      return { total, paid, balance, next, records, installments, discountLabel: effective.discountLabel };
     }
     function registrationPaymentsHtml(performers = []) {
       if (!performers.length) return `<div class="vpd-card"><div class="vpd-empty">No registration records are connected to this portal yet.</div></div>`;
@@ -2984,6 +3064,7 @@
                 <div class="vpd-info-stack" style="margin-top:0.75rem;">
                   <div class="vpd-info-row"><div class="vpd-info-icon">${ICONS.check}</div><div><div class="vpd-info-title">${esc(status)}</div><div class="vpd-info-copy">${esc(status === 'Registration complete' ? 'Registration forms are on file.' : 'Use the registration button below to finish the performer forms.')}</div></div></div>
                   ${paymentEnabled ? `<div class="vpd-info-row"><div class="vpd-info-icon">${ICONS.calendar}</div><div><div class="vpd-info-title">${esc(pay.next ? `Next due: ${pay.next.label}` : 'No remaining payments')}</div><div class="vpd-info-copy">${esc(pay.next ? `${moneyLabel(pay.next.amount)} due ${pay.next.dueDate ? fmtDate(pay.next.dueDate, { short: true }) : 'date TBA'}` : `Total paid: ${moneyLabel(pay.paid) || '$0'}`)}</div></div></div>` : ''}
+                  ${pay.discountLabel ? `<div class="vpd-info-row"><div class="vpd-info-icon">${ICONS.star}</div><div><div class="vpd-info-title">Discounts applied</div><div class="vpd-info-copy">${esc(pay.discountLabel)}</div></div></div>` : ''}
                   ${vol ? `<div class="vpd-info-row"><div class="vpd-info-icon">${ICONS.users}</div><div><div class="vpd-info-title">Volunteer discount connected</div><div class="vpd-info-copy">${esc(`${vol.volunteer_signup_name} · ${vol.volunteer_hours_completed || 0} approved hours`)}</div></div></div>` : ''}
                 </div>
                 <div class="vpd-performer-actions" style="margin-top:0.8rem;"><a class="vpd-action-btn" href="${esc(performerRegistrationUrl(app))}">${esc(status === 'Registration complete' ? 'Review Registration' : 'Complete Registration')}</a></div>
@@ -3571,11 +3652,11 @@
       showOnly('vp-loading');
       try {
         let prodData = null;
-        const slugResult = await sb.from('productions').select('id,title,slug,poster_url,organization_id,registration_settings').eq('slug', showSlug).maybeSingle();
+        const slugResult = await sb.from('productions').select('id,title,slug,poster_url,organization_id,registration_settings,registration_households').eq('slug', showSlug).maybeSingle();
         if (slugResult.error) throw slugResult.error;
         prodData = slugResult.data;
         if (!prodData) {
-          const titleResult = await sb.from('productions').select('id,title,slug,poster_url,organization_id,registration_settings').ilike('title', showSlug.replace(/-/g,' ')).maybeSingle();
+          const titleResult = await sb.from('productions').select('id,title,slug,poster_url,organization_id,registration_settings,registration_households').ilike('title', showSlug.replace(/-/g,' ')).maybeSingle();
           if (!titleResult.error) prodData = titleResult.data;
         }
         if (!prodData) { showOnly('vp-notfound'); return; }

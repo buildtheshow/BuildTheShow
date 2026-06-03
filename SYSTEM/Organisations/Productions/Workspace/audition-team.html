@@ -40986,30 +40986,56 @@ See you soon!
     return _rptHouseholds.find(h => (h.member_ids || []).includes(String(assignmentId))) || null;
   }
 
+  function rptHouseholdVolunteerDiscountEarned(household, settings) {
+    if (!household) return false;
+    return (household.member_ids || []).some(memberId => {
+      const item = _rptCastItems.find(i => String(i.assignment?.id) === String(memberId));
+      return item?.assignment && rscVolunteerDiscountEarned(item.assignment, settings);
+    });
+  }
+
+  function rptScaleInstallments(base, total, labelSuffix = '') {
+    if (!base.length) return total > 0 ? [{ label: labelSuffix || 'Payment', amount: total, dueDate: '' }] : [];
+    const baseTotal = base.reduce((s, i) => s + i.amount, 0);
+    if (total <= 0) return base.map(inst => ({ ...inst, amount: 0, label: labelSuffix ? `${inst.label} (${labelSuffix})` : inst.label }));
+    if (baseTotal <= 0) return [{ label: labelSuffix || base[0]?.label || 'Payment', amount: total, dueDate: base[0]?.dueDate || '' }];
+    const scaleFactor = total / baseTotal;
+    const scaled = base.map(inst => ({ ...inst, label: labelSuffix ? `${inst.label} (${labelSuffix})` : inst.label, amount: Math.round(inst.amount * scaleFactor * 100) / 100 }));
+    const diff = Math.round((total - scaled.reduce((s, i) => s + i.amount, 0)) * 100) / 100;
+    if (diff !== 0 && scaled.length) scaled[scaled.length - 1].amount += diff;
+    return scaled;
+  }
+
   function rptEffectiveFee(item, settings) {
     const assignId = String(item.assignment?.id || '');
     const household = rptHouseholdFor(assignId);
     const base = rptGetInstallments(settings);
     const baseTotal = base.reduce((s, i) => s + i.amount, 0);
+    const householdMemberIds = household ? (household.member_ids || []).map(String) : [];
+    const householdPos = household ? householdMemberIds.indexOf(assignId) : -1;
+    let effectiveBase = baseTotal;
+    const parts = [];
     if (settings.sibling_discount_enabled && household) {
-      const pos = (household.member_ids || []).indexOf(String(assignId));
-      const rate = pos === 0 ? parseFloat(String(settings.sibling_first_child || '').replace(/[^0-9.]/g, '')) || 0
-                             : parseFloat(String(settings.sibling_additional || '').replace(/[^0-9.]/g, '')) || 0;
-      if (rate > 0) return { installments: [{ label: 'Payment (sibling rate)', amount: rate, dueDate: base[0]?.dueDate || '' }], total: rate, discountLabel: 'Sibling rate' };
+      const rate = householdPos === 0 ? parseFloat(String(settings.sibling_first_child || '').replace(/[^0-9.]/g, '')) || 0
+                                      : parseFloat(String(settings.sibling_additional || '').replace(/[^0-9.]/g, '')) || 0;
+      if (rate > 0) effectiveBase = rate;
+      if (rate > 0) parts.push('Sibling rate');
     }
     let volAdj = 0;
-    if (settings.volunteer_discount_enabled && rscVolunteerDiscountEarned(item.assignment, settings)) {
+    const volunteerApplies = household
+      ? householdPos === 0 && rptHouseholdVolunteerDiscountEarned(household, settings)
+      : rscVolunteerDiscountEarned(item.assignment, settings);
+    if (settings.volunteer_discount_enabled && volunteerApplies) {
       volAdj = parseFloat(String(settings.volunteer_discount || '').replace(/[^0-9.]/g, '')) || 0;
     }
     let schAdj = 0;
     if (item.assignment?.scholarship_status === 'approved') {
       schAdj = parseFloat(String(item.assignment?.scholarship_amount || '').replace(/[^0-9.]/g, '')) || 0;
     }
-    const total = Math.max(0, baseTotal - volAdj - schAdj);
-    const parts = [];
+    const total = Math.max(0, effectiveBase - volAdj - schAdj);
     if (volAdj) parts.push(`Vol. discount: -${registrationFormatPaymentAmount(volAdj, settings)}`);
     if (schAdj) parts.push(`Scholarship: -${registrationFormatPaymentAmount(schAdj, settings)}`);
-    return { installments: base, total, discountLabel: parts.length ? parts.join(' · ') : null };
+    return { installments: rptScaleInstallments(base, total, parts.includes('Sibling rate') ? 'sibling rate' : ''), total, discountLabel: parts.length ? parts.join(' · ') : null };
   }
 
   function rptPaidTotal(assignmentId, installments) {
