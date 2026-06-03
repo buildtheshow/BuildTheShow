@@ -33339,7 +33339,7 @@ Your submission link is unique to you. Please do not share it with another perfo
       name: 'Volunteer Decline',
       category: 'volunteer_declined',
       trigger: 'volunteer_declined',
-      subject: 'Regarding your volunteer request for {{show_name}}',
+      subject: 'Your Volunteer Role Has Been Denied - {{organisation_name}} - {{show_name}}',
       body: `<div style="font-family:Arial,sans-serif;color:#1a1530;font-size:17px;line-height:1.62;">
   <div style="margin:0 0 22px;">
     <div style="display:inline-block;background:#fef2f2;color:#b91c1c;font-size:12px;font-weight:900;letter-spacing:0.12em;text-transform:uppercase;border-radius:999px;padding:7px 11px;margin-bottom:14px;">Update on Your Volunteer Request</div>
@@ -34005,12 +34005,20 @@ See you soon!
     const starter = ET_STARTER_TEMPLATES.find(t => t.category === 'volunteer_declined');
     if (!starter) return;
     const body = String(t.body || '');
+    const subject = String(t.subject || '');
     const isOldDefault = body.includes('Thank you so much for offering to volunteer for <strong>{{show_name}}</strong>')
       || body.includes('Unfortunately we are not able to place you in the role you requested at this time.')
       || body.includes('If spots open up or the schedule changes, we will reach out right away.');
-    if (!isOldDefault) return;
-    _etTemplates = (_etTemplates || []).map(x => x.id === t.id ? { ...x, subject: starter.subject, body: starter.body } : x);
-    await sb.from('email_templates').update({ subject: starter.subject, body: starter.body }).eq('id', t.id);
+    const subjectNeedsUpdate = subject === 'Regarding your volunteer request for {{show_name}}'
+      || subject === 'Volunteer request update'
+      || /^Regarding your volunteer request for /i.test(subject);
+    if (!isOldDefault && !subjectNeedsUpdate) return;
+    const next = {
+      subject: subjectNeedsUpdate ? starter.subject : subject,
+      body: isOldDefault ? starter.body : body,
+    };
+    _etTemplates = (_etTemplates || []).map(x => x.id === t.id ? { ...x, ...next } : x);
+    await sb.from('email_templates').update(next).eq('id', t.id);
   }
 
   async function etEnsureVolunteerCodeLanguage() {
@@ -68595,7 +68603,7 @@ See you soon!
       const template = await volReqEnsureTemplate(category);
       if (!template) throw new Error('No volunteer email template found.');
       const context = volReqStatusEmailContext(signups, newStatus);
-      const subject = _applyEmailContext(template.subject || '', context) || (newStatus === 'approved' ? 'Your Volunteer Role Has Been Confirmed - ' + (context.organisation_name || '') + ' - ' + (context.show_name || '') : 'Volunteer request update');
+      const subject = _applyEmailContext(template.subject || '', context) || (newStatus === 'approved' ? 'Your Volunteer Role Has Been Confirmed - ' + (context.organisation_name || '') + ' - ' + (context.show_name || '') : 'Your Volunteer Role Has Been Denied - ' + (context.organisation_name || '') + ' - ' + (context.show_name || ''));
       const body = finalCastingEmailPreviewBodyHtml(_applyEmailContext(template.body || '', context)) || '<p>Email body preview.</p>';
       const toEmail = context.volunteer_email || '';
       const toName = context.preferred_name || context.contact_name || toEmail;
