@@ -46641,7 +46641,7 @@ See you soon!
       <div class="rpt-household-modal-actions">
         <button class="rpt-modal-cancel-btn" onclick="document.getElementById('rsc-volunteer-modal')?.remove()">Cancel</button>
         <button class="rpt-modal-save-btn" style="background:#476aaa;" onclick="rscSendVolunteerPortalInfo('${esc(assignId)}', this)">Send Portal Info</button>
-        <button class="rpt-modal-save-btn" onclick="rscSaveVolunteer('${esc(assignId)}')">Save Connection</button>
+        <button class="rpt-modal-save-btn" onclick="rscSaveVolunteer('${esc(assignId)}', this)">Save Connection</button>
       </div>
     </div>`;
     modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
@@ -46783,33 +46783,43 @@ See you soon!
     }
   }
 
-  async function rscSaveVolunteer(assignId) {
+  async function rscSaveVolunteer(assignId, btn) {
     const selectedKey = document.getElementById('rsc-vol-link')?.value || '';
     const selectedGroup = (window._rscVolunteerSelectGroups || []).find(group => group.key === selectedKey) || null;
     const settings = registrationCurrentPaymentSettings();
     const required = parseFloat(String(settings.volunteer_hours || '').replace(/[^0-9.]/g, '')) || 0;
     const earned = !!selectedGroup && (required > 0 ? selectedGroup.hours >= required : (selectedGroup.hours > 0 || selectedGroup.status === 'approved'));
-    document.getElementById('rsc-volunteer-modal')?.remove();
+    const original = btn?.textContent || 'Save Connection';
+    if (btn) { btn.disabled = true; btn.textContent = 'Saving...'; }
     try {
-      await sb.from('casting_assignments').update({
+      const { data, error } = await sb.from('casting_assignments').update({
         volunteer_discount_approved: earned,
         volunteer_hours_completed: selectedGroup?.hours || null,
         volunteer_role_notes: selectedGroup?.roles || null,
         volunteer_signup_ids: selectedGroup ? selectedGroup.ids : [],
         volunteer_signup_name: selectedGroup ? selectedGroup.name : null,
-      }).eq('id', assignId);
+      }).eq('id', assignId)
+        .select('id,volunteer_discount_approved,volunteer_hours_completed,volunteer_role_notes,volunteer_signup_ids,volunteer_signup_name')
+        .single();
+      if (error) throw error;
+      document.getElementById('rsc-volunteer-modal')?.remove();
       const item = _rptCastItems.find(i => String(i.assignment?.id) === String(assignId));
       if (item?.assignment) {
-        item.assignment.volunteer_discount_approved = earned;
-        item.assignment.volunteer_hours_completed = selectedGroup?.hours || null;
-        item.assignment.volunteer_role_notes = selectedGroup?.roles || null;
-        item.assignment.volunteer_signup_ids = selectedGroup ? selectedGroup.ids : [];
-        item.assignment.volunteer_signup_name = selectedGroup ? selectedGroup.name : null;
+        item.assignment.volunteer_discount_approved = data?.volunteer_discount_approved ?? earned;
+        item.assignment.volunteer_hours_completed = data?.volunteer_hours_completed ?? selectedGroup?.hours ?? null;
+        item.assignment.volunteer_role_notes = data?.volunteer_role_notes ?? selectedGroup?.roles ?? null;
+        item.assignment.volunteer_signup_ids = Array.isArray(data?.volunteer_signup_ids) ? data.volunteer_signup_ids : (selectedGroup ? selectedGroup.ids : []);
+        item.assignment.volunteer_signup_name = data?.volunteer_signup_name ?? (selectedGroup ? selectedGroup.name : null);
       }
       rptRerenderRow(assignId);
       rptRerenderSummary();
+      showToast(selectedGroup ? 'Volunteer connection saved.' : 'Volunteer connection removed.');
       window.AutoSave?.showSaved?.();
-    } catch (err) { console.error('[BTS] rscSaveVolunteer failed', err); }
+    } catch (err) {
+      console.error('[BTS] rscSaveVolunteer failed', err);
+      showToast('Could not save volunteer connection.', true);
+      if (btn) { btn.disabled = false; btn.textContent = original; }
+    }
   }
 
   function rscOpenScholarshipModal(assignId) {
