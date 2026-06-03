@@ -31764,7 +31764,7 @@
         { token: '{{volunteer_portal_url}}', label: 'Volunteer Portal URL', sample: () => `${window.location.origin}/volunteers?view=portal` },
         { token: '{{volunteer_portal_button}}', label: 'Volunteer Portal Button', sample: () => emailActionButtonHtml(`${window.location.origin}/volunteers?view=portal`, 'View My Volunteer Portal') },
         { token: '{{volunteer_email}}', label: 'Volunteer Email', sample: () => 'volunteer@example.com' },
-        { token: '{{volunteer_passcode}}', label: 'Volunteer Portal Passcode', sample: () => '4829' },
+        { token: '{{volunteer_passcode}}', label: 'Volunteer Code', sample: () => '4829' },
         { token: '{{volunteer_role}}', label: 'Volunteer Role', sample: () => 'Rehearsal Assistant' },
         { token: '{{volunteer_shift_dates}}', label: 'Volunteer Shift Dates', sample: () => 'Mon, Aug 11 · Tue, Aug 12 · Wed, Aug 13' },
         { token: '{{volunteer_point_person}}', label: 'Volunteer Point Person', sample: () => 'Lead Set Builder' },
@@ -33297,7 +33297,7 @@ Your submission link is unique to you. Please do not share it with another perfo
     <h2 style="font-size:20px;line-height:1.15;margin:0 0 8px;font-weight:900;color:#8a5f10;">Your Volunteer Portal</h2>
     <p style="margin:0 0 14px;color:#4a3d6b;">Once you're approved, you can use your volunteer portal to view your schedule, track your volunteer hours, and stay up to date throughout the production.</p>
     <p style="margin:0 0 6px;color:#4a3d6b;"><strong>Login Email:</strong> {{volunteer_email}}</p>
-    <p style="margin:0 0 16px;color:#4a3d6b;"><strong>Passcode:</strong> <span style="font-size:22px;font-weight:900;letter-spacing:0.2em;color:#572e88;">{{volunteer_passcode}}</span></p>
+    <p style="margin:0 0 16px;color:#4a3d6b;"><strong>Volunteer Code:</strong> <span style="font-size:22px;font-weight:900;letter-spacing:0.2em;color:#572e88;">{{volunteer_passcode}}</span></p>
     <p style="margin:0 0 10px;">{{volunteer_portal_button}}</p>
     <p style="margin:0;font-size:13px;color:#6f6288;">Portal Link: <a href="{{volunteer_portal_url}}" style="color:#572e88;font-weight:800;">{{volunteer_portal_url}}</a></p>
   </div>
@@ -33326,7 +33326,7 @@ Your submission link is unique to you. Please do not share it with another perfo
     <h2 style="font-size:20px;line-height:1.15;margin:0 0 8px;font-weight:900;color:#572e88;">Your Volunteer Portal</h2>
     <p style="margin:0 0 14px;color:#4a3d6b;">You can use your volunteer portal to view your schedule, track your volunteer hours, and stay up to date with any information from the production team.</p>
     <p style="margin:0 0 6px;color:#4a3d6b;"><strong>Login Email:</strong> {{volunteer_email}}</p>
-    <p style="margin:0 0 16px;color:#4a3d6b;"><strong>Passcode:</strong> <span style="font-size:22px;font-weight:900;letter-spacing:0.2em;color:#572e88;">{{volunteer_passcode}}</span></p>
+    <p style="margin:0 0 16px;color:#4a3d6b;"><strong>Volunteer Code:</strong> <span style="font-size:22px;font-weight:900;letter-spacing:0.2em;color:#572e88;">{{volunteer_passcode}}</span></p>
     <p style="margin:0 0 10px;">{{volunteer_portal_button}}</p>
     <p style="margin:0;font-size:13px;color:#6f6288;">Portal Link: <a href="{{volunteer_portal_url}}" style="color:#572e88;font-weight:800;">{{volunteer_portal_url}}</a></p>
   </div>
@@ -68021,6 +68021,9 @@ See you soon!
     for (let i = 0; i < str.length; i++) { h = Math.imul(31, h) + str.charCodeAt(i) | 0; }
     return String(Math.abs(h) % 9000 + 1000);
   }
+  function volReqSignupPasscode(signup = {}) {
+    return String(signup.volunteer_passcode || '').trim() || volunteerPasscode(signup.email || signup.volunteer_email || '', signup.production_id || prodId);
+  }
 
   async function volMarkCheckin(signupId, currentlyChecked) {
     const newStatus = currentlyChecked ? 'approved' : 'checked_in';
@@ -68258,11 +68261,13 @@ See you soon!
       // selectedEmail is actually a portalKey (portal_token or email fallback)
       const personShifts = volunteerRequests.filter(r => (r.portal_token && r.portal_token === selectedEmail) || (!r.portal_token && (r.email || '').toLowerCase() === selectedEmail));
       if (!personShifts.length) return '<div class="vol-req-detail-empty"><div style="font-size:0.8rem;font-weight:700;">No shifts found</div></div>';
-      const p = { name: personShifts[0].name, email: personShifts[0].email, phone: personShifts[0].phone, notes: personShifts[0].notes || personShifts[0].message, avatar_url: personShifts[0].avatar_url, created_at: personShifts[0].created_at };
+      const p = { name: personShifts[0].name, email: personShifts[0].email, phone: personShifts[0].phone, notes: personShifts[0].notes || personShifts[0].message, avatar_url: personShifts[0].avatar_url, created_at: personShifts[0].created_at, volunteer_passcode: volReqSignupPasscode(personShifts[0]) };
       const overallStatus = personShifts.some(s => (s.status||'pending') === 'pending') ? 'pending'
         : personShifts.every(s => s.status === 'approved') ? 'approved'
         : personShifts.every(s => s.status === 'declined') ? 'declined' : 'partially_filled';
       const pendingShifts = personShifts.filter(s => (s.status || 'pending') === 'pending');
+      const approvedShifts = personShifts.filter(s => s.status === 'approved');
+      const declinedShifts = personShifts.filter(s => s.status === 'declined');
 
       // Hours calc
       function shiftHrs(s) {
@@ -68327,8 +68332,8 @@ See you soon!
 
         const rowActions = isPending
           ? '<div class="vol-req-shift-row-actions">'
-          +   '<button type="button" class="vol-req-shift-approve" data-id="' + esc(s.id) + '" title="Approve this shift" aria-label="Approve ' + esc(s.role_name || 'this shift') + '" onclick="volReqRespond(this.dataset.id, \'approved\')"><span aria-hidden="true">&#10003;</span> Approve</button>'
-          +   '<button type="button" class="vol-req-shift-decline" data-id="' + esc(s.id) + '" title="Decline this shift" aria-label="Decline ' + esc(s.role_name || 'this shift') + '" onclick="volReqRespond(this.dataset.id, \'declined\')"><span aria-hidden="true">&#10005;</span> Decline</button>'
+          +   '<button type="button" class="vol-req-shift-approve" data-id="' + esc(s.id) + '" title="Approve this shift without sending an email" aria-label="Approve ' + esc(s.role_name || 'this shift') + '" onclick="volReqQuickRespond(this.dataset.id, \'approved\', this)"><span aria-hidden="true">&#10003;</span> Approve</button>'
+          +   '<button type="button" class="vol-req-shift-decline" data-id="' + esc(s.id) + '" title="Decline this shift without sending an email" aria-label="Decline ' + esc(s.role_name || 'this shift') + '" onclick="volReqQuickRespond(this.dataset.id, \'declined\', this)"><span aria-hidden="true">&#10005;</span> Decline</button>'
           + '</div>'
           : '';
 
@@ -68354,15 +68359,33 @@ See you soon!
           + '</div>';
       }).join('');
 
+      const summaryEmailActions = (() => {
+        const buttons = [];
+        if (approvedShifts.length) {
+          window._volReqApprovedIds = approvedShifts.map(s => s.id);
+          buttons.push('<button type="button" class="btn-secondary" style="font-size:0.78rem;" onclick="volReqRespondAll(window._volReqApprovedIds,\'approved\')">Email Approved Shifts</button>');
+        }
+        if (declinedShifts.length) {
+          window._volReqDeclinedIds = declinedShifts.map(s => s.id);
+          buttons.push('<button type="button" class="btn-secondary" style="font-size:0.78rem;" onclick="volReqRespondAll(window._volReqDeclinedIds,\'declined\')">Email Declined Shifts</button>');
+        }
+        return buttons.length
+          ? '<div style="display:flex;gap:0.5rem;flex-wrap:wrap;padding:0.75rem 1.5rem;border-top:1px solid rgba(87,46,136,0.08);background:#faf9fc;">' + buttons.join('') + '</div>'
+          : '';
+      })();
+
       return '<div class="vol-req-detail-header">'
         + '<div class="vol-req-detail-id">'
         + avatarHtml(p.name, p.avatar_url, 'vol-req-detail-avatar')
-        + '<div><div class="vol-req-detail-name">' + esc(p.name || 'Unknown') + '</div>'
+        + '<div><div class="vol-req-detail-name" style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap;">'
+        +   esc(p.name || 'Unknown')
+        +   '<button type="button" onclick="volReqEditContact(' + JSON.stringify(selectedEmail) + ')" style="background:none;border:1px solid rgba(87,46,136,0.25);border-radius:5px;padding:0.1rem 0.4rem;font-size:0.6rem;font-weight:800;color:#572e88;cursor:pointer;font-family:inherit;white-space:nowrap;line-height:1.6;">Edit contact</button>'
+        + '</div>'
         +     '<div class="vol-req-detail-role" style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap;">'
         +       esc(p.email || '')
-        +       (p.email ? '<button type="button" onclick="volResendCode(' + JSON.stringify(p.email) + ',' + JSON.stringify(p.name||'') + ')" style="background:none;border:1px solid rgba(87,46,136,0.25);border-radius:5px;padding:0.12rem 0.45rem;font-size:0.62rem;font-weight:800;color:#572e88;cursor:pointer;font-family:inherit;white-space:nowrap;">Resend code</button>' : '')
+        +       (p.email ? '<button type="button" onclick="volResendCode(' + JSON.stringify(p.email) + ',' + JSON.stringify(p.name||'') + ',' + JSON.stringify(p.volunteer_passcode || '') + ')" style="background:none;border:1px solid rgba(87,46,136,0.25);border-radius:5px;padding:0.12rem 0.45rem;font-size:0.62rem;font-weight:800;color:#572e88;cursor:pointer;font-family:inherit;white-space:nowrap;">Resend Volunteer Code</button>' : '')
         +     '</div>'
-        +     (p.email ? '<div class="vol-req-detail-time" style="display:flex;align-items:center;gap:0.35rem;">Volunteer code: <strong style="font-size:0.82rem;letter-spacing:0.08em;color:#352756;">' + (volunteerPasscode ? volunteerPasscode(p.email, prodId) : '—') + '</strong></div>' : '')
+        +     (p.email ? '<div class="vol-req-detail-time" style="display:flex;align-items:center;gap:0.35rem;">Volunteer Code: <strong style="font-size:0.82rem;letter-spacing:0.08em;color:#352756;">' + esc(p.volunteer_passcode || '—') + '</strong></div>' : '')
         +     (p.phone ? '<div class="vol-req-detail-time">' + esc(p.phone) + '</div>' : '')
         +     '<div class="vol-req-detail-time">Requested ' + volReqTimeAgo(p.created_at) + '</div>'
         + '</div></div>'
@@ -68397,7 +68420,8 @@ See you soon!
                 + '</div>';
             })()
           : '')
-        + '<div class="vol-req-actions-note"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg> You will review the email before the action is saved.</div>';
+        + summaryEmailActions
+        + '<div class="vol-req-actions-note"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg> Individual shift buttons save without email. Use the email buttons when you want to review and send one summary email.</div>';
     }
 
     root.innerHTML = '<div class="vol-req-header">'
@@ -68492,7 +68516,7 @@ See you soon!
     const rows = (Array.isArray(signups) ? signups : [signups]).filter(Boolean);
     const first = rows[0] || {};
     const toEmail = first.volunteer_email || first.email || '';
-    const passcode = volunteerPasscode(toEmail, prodId);
+    const passcode = volReqSignupPasscode(first);
     const volUrl = window.location.origin + volunteerPublicPageUrl();
     const portalUrl = volUrl + (volUrl.includes('?') ? '&' : '?') + 'view=portal';
     const roles = [...new Set(rows.map(s => s.role_name || s.volunteer_role || '').filter(Boolean))];
@@ -68676,7 +68700,7 @@ See you soon!
     }
   }
 
-  async function volResendCode(email, name) {
+  async function volResendCode(email, name, passcode) {
     if (!email || !prodId) return;
     const btn = event?.target;
     const origText = btn?.textContent;
@@ -68684,7 +68708,7 @@ See you soon!
     try {
       const volUrl = volunteerPublicPageUrl ? (window.location.origin + volunteerPublicPageUrl()) : '';
       const portalUrl = volUrl + (volUrl.includes('?') ? '&' : '?') + 'view=portal';
-      const passcode = volunteerPasscode ? volunteerPasscode(email, prodId) : '';
+      const volunteerCode = passcode || (volunteerPasscode ? volunteerPasscode(email, prodId) : '');
       const firstName = String(name || email).split(' ')[0] || email;
       const ctx = {
         ...volEmailOrgContext(),
@@ -68693,7 +68717,7 @@ See you soon!
         name: name || email,
         show_name: prod?.title || prod?.name || '',
         volunteer_email: email,
-        volunteer_passcode: passcode,
+        volunteer_passcode: volunteerCode,
         volunteer_portal_url: portalUrl,
         volunteer_link: volUrl,
       };
@@ -68709,9 +68733,110 @@ See you soon!
     }
   }
 
+  function volReqEditContact(portalKey) {
+    const personShifts = volunteerRequests.filter(r =>
+      (r.portal_token && r.portal_token === portalKey) ||
+      (!r.portal_token && (r.email || '').toLowerCase() === portalKey)
+    );
+    if (!personShifts.length) return;
+    const p = personShifts[0];
+    const existing = document.getElementById('vol-req-edit-contact-overlay');
+    if (existing) existing.remove();
+    const overlay = document.createElement('div');
+    overlay.id = 'vol-req-edit-contact-overlay';
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(23,18,43,0.55);display:flex;align-items:center;justify-content:center;padding:1rem;';
+    overlay.innerHTML =
+      '<div style="background:#fff;border-radius:12px;width:min(420px,100%);padding:1.5rem;box-shadow:0 24px 80px rgba(26,21,48,0.3);">'
+      + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;">'
+      +   '<div style="font-size:1rem;font-weight:900;color:#1a1530;">Edit Contact Info</div>'
+      +   '<button onclick="document.getElementById(\'vol-req-edit-contact-overlay\').remove()" style="background:none;border:none;color:#6f6382;font-size:1.4rem;cursor:pointer;line-height:1;padding:0;">&times;</button>'
+      + '</div>'
+      + '<div style="margin-bottom:0.7rem;">'
+      +   '<label style="display:block;font-size:0.72rem;font-weight:900;color:#1a1530;margin-bottom:0.22rem;">Full Name</label>'
+      +   '<input id="vecf-name" type="text" value="' + esc(p.name || '') + '" placeholder="Full name" style="width:100%;border:1.5px solid rgba(87,46,136,0.22);border-radius:8px;padding:0.6rem 0.75rem;font-family:inherit;font-size:0.9rem;outline:0;box-sizing:border-box;" />'
+      + '</div>'
+      + '<div style="margin-bottom:0.7rem;">'
+      +   '<label style="display:block;font-size:0.72rem;font-weight:900;color:#1a1530;margin-bottom:0.22rem;">Email Address</label>'
+      +   '<input id="vecf-email" type="email" value="' + esc(p.email || '') + '" placeholder="email@example.com" style="width:100%;border:1.5px solid rgba(87,46,136,0.22);border-radius:8px;padding:0.6rem 0.75rem;font-family:inherit;font-size:0.9rem;outline:0;box-sizing:border-box;" />'
+      + '</div>'
+      + '<div style="margin-bottom:1rem;">'
+      +   '<label style="display:block;font-size:0.72rem;font-weight:900;color:#1a1530;margin-bottom:0.22rem;">Phone Number</label>'
+      +   '<input id="vecf-phone" type="tel" value="' + esc(p.phone || '') + '" placeholder="(604) 555-0123" style="width:100%;border:1.5px solid rgba(87,46,136,0.22);border-radius:8px;padding:0.6rem 0.75rem;font-family:inherit;font-size:0.9rem;outline:0;box-sizing:border-box;" />'
+      + '</div>'
+      + '<div id="vecf-error" style="display:none;color:#b84432;font-size:0.78rem;margin-bottom:0.7rem;"></div>'
+      + '<div style="display:flex;gap:0.6rem;">'
+      +   '<button onclick="document.getElementById(\'vol-req-edit-contact-overlay\').remove()" style="flex:1;min-height:40px;border:1px solid rgba(87,46,136,0.22);border-radius:8px;background:#fff;color:#572e88;font-weight:800;font-family:inherit;cursor:pointer;font-size:0.85rem;">Cancel</button>'
+      +   '<button id="vecf-save-btn" onclick="volReqSaveContact(' + JSON.stringify(portalKey) + ')" style="flex:2;min-height:40px;border:none;border-radius:8px;background:#572e88;color:#fff;font-weight:900;font-family:inherit;cursor:pointer;font-size:0.85rem;">Save Changes</button>'
+      + '</div>'
+      + '</div>';
+    overlay.addEventListener('mousedown', e => { if (e.target === overlay) overlay.remove(); });
+    document.body.appendChild(overlay);
+    document.getElementById('vecf-name')?.focus();
+  }
+
+  async function volReqSaveContact(portalKey) {
+    const nameVal  = (document.getElementById('vecf-name')?.value || '').trim();
+    const emailVal = (document.getElementById('vecf-email')?.value || '').trim().toLowerCase();
+    const phoneVal = (document.getElementById('vecf-phone')?.value || '').trim();
+    const errEl    = document.getElementById('vecf-error');
+    const saveBtn  = document.getElementById('vecf-save-btn');
+    if (!nameVal) { errEl.textContent = 'Please enter a name.'; errEl.style.display = 'block'; return; }
+    if (!emailVal || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailVal)) { errEl.textContent = 'Please enter a valid email address.'; errEl.style.display = 'block'; return; }
+    errEl.style.display = 'none';
+    if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'Saving...'; }
+    const matchingRows = volunteerRequests.filter(r =>
+      (r.portal_token && r.portal_token === portalKey) ||
+      (!r.portal_token && (r.email || '').toLowerCase() === portalKey)
+    );
+    const ids = matchingRows.map(r => r.id);
+    if (!ids.length) { if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Save Changes'; } return; }
+    try {
+      const parts = nameVal.split(/\s+/);
+      const patch = {
+        name: nameVal,
+        first_name: parts[0] || '',
+        last_name: parts.slice(1).join(' ') || '',
+        email: emailVal,
+        phone: phoneVal || null,
+      };
+      const { error } = await sb.from('volunteer_signups').update(patch).in('id', ids);
+      if (error) throw error;
+      volunteerRequests = volunteerRequests.map(r => ids.includes(r.id) ? { ...r, ...patch } : r);
+      const hasPortalToken = matchingRows.some(r => r.portal_token);
+      if (!hasPortalToken) _volReqSelected = emailVal;
+      document.getElementById('vol-req-edit-contact-overlay')?.remove();
+      renderVolunteerRequests();
+      showToast('Contact info updated.');
+    } catch (e) {
+      if (errEl) { errEl.textContent = 'Could not save: ' + (e.message || 'Unknown error'); errEl.style.display = 'block'; }
+      if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Save Changes'; }
+    }
+  }
+
   async function volReqRespond(ref, newStatus) {
     const id = typeof ref === 'object' ? ref.id : ref;
     await openVolReqEmailReview([id], newStatus);
+  }
+
+  async function volReqQuickRespond(ref, newStatus, buttonEl) {
+    const id = typeof ref === 'object' ? ref.id : ref;
+    if (!id) return;
+    const label = buttonEl?.textContent || '';
+    if (buttonEl) {
+      buttonEl.disabled = true;
+      buttonEl.textContent = 'Saving...';
+    }
+    try {
+      await volReqApplyStatus([id], newStatus);
+      renderVolunteerRequests();
+      showToast((newStatus === 'approved' ? 'Shift approved' : 'Shift declined') + ' without sending an email.');
+    } catch (e) {
+      showToast('Could not update shift: ' + (e.message || 'Unknown error'), true);
+      if (buttonEl) {
+        buttonEl.disabled = false;
+        buttonEl.textContent = label;
+      }
+    }
   }
 
   async function volReqRespondAll(ids, newStatus) {
@@ -68726,7 +68851,7 @@ See you soon!
     const template = (_etTemplates || []).find(t => t.category === category);
     if (!template) return;
     const opp = (opportunities || []).find(o => o.id === signup.opportunity_id) || {};
-    const passcode = volunteerPasscode(toEmail, prodId);
+    const passcode = volReqSignupPasscode(signup);
     const firstName = signup.first_name || signup.volunteer_name?.split(' ')[0] || '';
     const volUrl = window.location.origin + volunteerPublicPageUrl();
     const portalUrl = volUrl + (volUrl.includes('?') ? '&' : '?') + 'view=portal';
