@@ -31760,7 +31760,7 @@
         { token: '{{registration_button}}', label: 'Registration Button', sample: () => { const h = new URLSearchParams({ prod: prodId || '', code: ET_SAMPLE_CONTEXT.registrationCode }); return emailActionButtonHtml(`${window.location.origin}/SYSTEM/Public/registration#${h.toString()}`, 'Complete Registration'); } },
         { token: '{{registration_pdf_url}}', label: 'Registration PDF Link', sample: () => etSampleProductionUrl(`/files/registrations/${ET_SAMPLE_CONTEXT.registrationCode}.pdf`) },
         { token: '{{registration_pdf_button}}', label: 'Registration PDF Button', sample: () => emailActionButtonHtml(etSampleProductionUrl(`/files/registrations/${ET_SAMPLE_CONTEXT.registrationCode}.pdf`), 'View Registration PDF') },
-        { token: '{{payment_schedule}}', label: 'Payment Schedule', sample: () => 'Payment 1: $250 due June 9, 2026\nPayment 2: $250 due August 6, 2026\nTotal: $500' },
+        { token: '{{payment_schedule}}', label: 'Payment Schedule', sample: () => etPaymentScheduleSample() },
         { token: '{{payment_information}}', label: 'Payment Information', sample: () => 'Payment information:\nE-transfer: payments@example.com\nPlease include the performer name in the memo.' },
         { token: '{{volunteer_link}}', label: 'Volunteer Link', sample: () => `${window.location.origin}/volunteers` },
         { token: '{{volunteer_button}}', label: 'Volunteer Button', sample: () => emailActionButtonHtml(`${window.location.origin}/volunteers`, 'View Volunteer Opportunities', 'secondary') },
@@ -32124,6 +32124,54 @@
 
   function etSampleValue(varDef) {
     return typeof varDef.sample === 'function' ? varDef.sample() : varDef.sample;
+  }
+
+  function etPaymentScheduleSample() {
+    const savedSettings = (typeof prod?.registration_settings === 'object' && prod.registration_settings?.payment_settings)
+      ? prod.registration_settings.payment_settings
+      : {};
+    const stateSettings = (typeof paymentSettingsState === 'object' && paymentSettingsState) ? paymentSettingsState : {};
+    const settings = Object.assign({
+      mode: 'none',
+      fee: '',
+      currency: 'CAD',
+      fee_due_date: '',
+      late_fee_date: '',
+      split_count: 2,
+      split_installments: [],
+      split_allow_upfront: false,
+    }, savedSettings, stateSettings);
+    const currency = String(settings.currency || 'CAD').toUpperCase();
+    const currSym = { CAD: '$', USD: '$', GBP: '£' }[currency] || '$';
+    const currCode = currency !== 'CAD' ? ` ${currency}` : '';
+    const cleanAmount = value => parseFloat(String(value || '').replace(/[^0-9.]/g, '')) || 0;
+    const fmtAmt = value => {
+      const n = cleanAmount(value);
+      if (!n) return '';
+      return `${currSym}${Number.isInteger(n) ? n : n.toFixed(2)}${currCode}`;
+    };
+    const fmtDate = value => {
+      if (!value) return '';
+      const d = new Date(`${String(value).slice(0, 10)}T00:00:00`);
+      return isNaN(d) ? String(value) : d.toLocaleDateString('en-CA', { month: 'long', day: 'numeric', year: 'numeric' });
+    };
+    const lines = [];
+    if (settings.mode === 'flat') {
+      if (settings.fee) lines.push(`Registration fee: ${fmtAmt(settings.fee) || settings.fee}`);
+      if (settings.fee_due_date) lines.push(`Due date: ${fmtDate(settings.fee_due_date)}`);
+      if (settings.late_fee_date) lines.push(`Late payment after: ${fmtDate(settings.late_fee_date)}`);
+    } else if (settings.mode === 'split') {
+      const insts = (Array.isArray(settings.split_installments) ? settings.split_installments : [])
+        .filter((_, i) => i < (parseInt(settings.split_count, 10) || 2));
+      insts.forEach((inst, index) => {
+        const due = inst.due_date ? ` due ${fmtDate(inst.due_date)}` : '';
+        lines.push(`Payment ${index + 1}: ${fmtAmt(inst.amount) || 'Amount not set'}${due}`);
+      });
+      const total = insts.reduce((sum, inst) => sum + cleanAmount(inst.amount), 0);
+      if (total > 0) lines.push(`Total: ${fmtAmt(total)}`);
+      if (settings.split_allow_upfront) lines.push('Full upfront payment is also available.');
+    }
+    return lines.length ? lines.join('\n') : 'No production fee has been configured for this show.';
   }
 
   function firstDefinedString(...values) {
