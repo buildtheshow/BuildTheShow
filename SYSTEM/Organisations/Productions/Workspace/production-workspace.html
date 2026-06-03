@@ -31766,7 +31766,8 @@
         { token: '{{volunteer_email}}', label: 'Volunteer Email', sample: () => 'volunteer@example.com' },
         { token: '{{volunteer_passcode}}', label: 'Volunteer Code', sample: () => '4829' },
         { token: '{{volunteer_role}}', label: 'Volunteer Role', sample: () => 'Rehearsal Assistant' },
-        { token: '{{volunteer_shift_dates}}', label: 'Volunteer Shift Dates', sample: () => 'Mon, Aug 11 · Tue, Aug 12 · Wed, Aug 13' },
+        { token: '{{volunteer_shift_dates}}', label: 'Volunteer Shift Dates', sample: () => 'Wednesday, August 5, 2026, 9:00 AM – 2:00 PM' },
+        { token: '{{volunteer_shifts_block}}', label: 'Volunteer Shift Block (full details)', sample: () => '<em>[Structured shift card with role, when, where, check-in]</em>' },
         { token: '{{volunteer_point_person}}', label: 'Volunteer Point Person', sample: () => 'Lead Set Builder' },
       ],
     },
@@ -33317,11 +33318,7 @@ Your submission link is unique to you. Please do not share it with another perfo
     <p style="margin:0;font-size:18px;color:#3f3654;">Your volunteer request has been approved, and we're excited to have you join the team at <strong>{{organisation_name}}</strong>.</p>
   </div>
   <p style="margin:0 0 16px;color:#3f3654;">Community theatre runs on volunteers. Every person who gives their time helps create opportunities for performers, supports families, welcomes audiences, and helps bring a production to life. We are incredibly grateful that you've chosen to be part of it.</p>
-  <div style="background:#eaf4ec;border:1.5px solid #c7dfcc;border-radius:14px;padding:20px 22px;margin:22px 0;">
-    <h2 style="font-size:20px;line-height:1.15;margin:0 0 8px;font-weight:900;color:#3f6f47;">Your Shift</h2>
-    <p style="margin:0 0 8px;color:#4a3d6b;"><strong>Role:</strong> {{volunteer_role}}</p>
-    <p style="margin:0;color:#4a3d6b;"><strong>Dates:</strong> {{volunteer_shift_dates}}</p>
-  </div>
+  {{volunteer_shifts_block}}
   <div style="background:#f7f4fb;border:1.5px solid #ded6ea;border-radius:14px;padding:20px 22px;margin:22px 0;">
     <h2 style="font-size:20px;line-height:1.15;margin:0 0 8px;font-weight:900;color:#572e88;">Your Volunteer Portal</h2>
     <p style="margin:0 0 14px;color:#4a3d6b;">You can use your volunteer portal to view your schedule, track your volunteer hours, and stay up to date with any information from the production team.</p>
@@ -68597,6 +68594,41 @@ See you soon!
     const dates = shiftDetailLines;
     const contactName = volReqSignupName(first) || toEmail;
     const preferred = volReqFirstName(first) || contactName || toEmail;
+    const isApproved = status === 'approved';
+    const cardBg    = isApproved ? '#eaf4ec' : '#fff4f2';
+    const cardBdr   = isApproved ? '#c7dfcc' : '#f1c0b8';
+    const headCol   = isApproved ? '#3f6f47' : '#8a2a1a';
+    const labelCol  = isApproved ? '#5a8262' : '#8a5a52';
+    const td1 = `style="padding:5px 14px 5px 0;font-size:13px;font-weight:900;text-transform:uppercase;letter-spacing:0.07em;color:${labelCol};vertical-align:top;white-space:nowrap;"`;
+    const td2 = `style="padding:5px 0;font-size:16px;font-weight:800;color:#1a1530;"`;
+    const shiftsBlockRows = rows.map(s => {
+      const role  = s.role_name || s.volunteer_role || 'Volunteer';
+      const dept  = s.department || '';
+      const point = s.check_in_with || s.checkInWith || s.volunteer_point_person || '';
+      const rd    = Array.isArray(s.required_dates) ? s.required_dates.filter(Boolean) : [];
+      let whenHtml = '';
+      if (s.shift_date && s.shift_start_time) {
+        const timeStr = fmtT(s.shift_start_time) + (s.shift_end_time ? ' – ' + fmtT(s.shift_end_time) : '');
+        whenHtml = fmtFullD(s.shift_date) + '<br>' + timeStr;
+      } else if (s.shift_date) {
+        whenHtml = 'Due by ' + fmtFullD(s.shift_date);
+      } else if (rd.length) {
+        whenHtml = rd.map(fmtFullD).join('<br>');
+      } else {
+        whenHtml = 'Flexible — own time';
+      }
+      const divider = rows.length > 1 ? `<tr><td colspan="2" style="padding:10px 0 4px;"><hr style="border:none;border-top:1px solid ${cardBdr};margin:0;"></td></tr>` : '';
+      return divider
+        + `<tr><td ${td1}>Role</td><td ${td2}>${role}</td></tr>`
+        + `<tr><td ${td1}>When</td><td ${td2}>${whenHtml}</td></tr>`
+        + (dept  ? `<tr><td ${td1}>Where</td><td ${td2}>${dept}</td></tr>` : '')
+        + (point ? `<tr><td ${td1}>Check&nbsp;in&nbsp;with</td><td ${td2}>${point}</td></tr>` : '');
+    }).join('');
+    const shiftsBlock =
+      `<div style="background:${cardBg};border:1.5px solid ${cardBdr};border-radius:14px;padding:20px 22px;margin:22px 0;">`
+      + `<h2 style="font-size:20px;line-height:1.15;margin:0 0 14px;font-weight:900;color:${headCol};">${rows.length === 1 ? 'Your Shift' : 'Your Shifts'}</h2>`
+      + `<table style="width:100%;border-collapse:collapse;">${shiftsBlockRows}</table>`
+      + `</div>`;
     return {
       ...volEmailOrgContext(),
       preferred_name:         preferred,
@@ -68607,6 +68639,7 @@ See you soon!
       volunteer_passcode:     passcode,
       volunteer_role:         roles.join(', ') || first.role_name || 'Volunteer',
       volunteer_shift_dates:  dates.join('<br>') || 'Flexible / ongoing',
+      volunteer_shifts_block: shiftsBlock,
       volunteer_point_person: pointPeople.join(', '),
       volunteer_portal_url:   portalUrl,
       volunteer_portal_button: `<a href="${portalUrl}" style="display:inline-block;background:#572e88;color:#fff;font-weight:900;font-size:15px;padding:13px 26px;border-radius:8px;text-decoration:none;">View My Volunteer Portal</a>`,
