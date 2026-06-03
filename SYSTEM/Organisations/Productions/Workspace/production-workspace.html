@@ -45221,6 +45221,15 @@ See you soon!
     return group?.name || assignment.volunteer_signup_name || '';
   }
 
+  function rscVolunteerDiscountEarned(assignment = {}, settings = registrationCurrentPaymentSettings()) {
+    if (assignment.volunteer_discount_approved) return true;
+    const group = rscVolunteerLinkedGroup(assignment);
+    if (!group) return false;
+    const required = parseFloat(String(settings.volunteer_hours || '').replace(/[^0-9.]/g, '')) || 0;
+    if (required > 0) return group.hours >= required;
+    return group.hours > 0 || group.status === 'approved';
+  }
+
   function rptGetInstallments(settings) {
     if (!settings || settings.mode === 'none') return [];
     if (settings.mode === 'split') {
@@ -45264,7 +45273,7 @@ See you soon!
       }
     }
     let volAdj = 0;
-    if (settings.volunteer_discount_enabled && item.assignment?.volunteer_discount_approved) {
+    if (settings.volunteer_discount_enabled && rscVolunteerDiscountEarned(item.assignment, settings)) {
       volAdj = parseFloat(String(settings.volunteer_discount || '').replace(/[^0-9.]/g, '')) || 0;
     }
     let schAdj = 0;
@@ -45475,7 +45484,7 @@ See you soon!
       }
       const volRequested = registrationAnswerTruthy(app, ['pf_volunteer_discount', 'volunteer_discount_interested', '__bts_registration_volunteer_discount_requested']);
       if (settings.volunteer_discount_enabled && volRequested) {
-        steps.push({ label: 'Volunteer Hours', done: !!assignment.volunteer_discount_approved });
+        steps.push({ label: 'Volunteer Hours', done: rscVolunteerDiscountEarned(assignment, settings) });
       }
       const schRequested = registrationAnswerTruthy(app, ['pf_scholarship_request', 'scholarship_request', '__bts_registration_scholarship_requested']);
       const schStatus = String(assignment.scholarship_status || (schRequested ? 'requested' : 'none'));
@@ -45515,14 +45524,14 @@ See you soon!
       </div>`;
       let hhVolHtml = '';
       if (settings.volunteer_discount_enabled) {
-        const approved = !!assignment.volunteer_discount_approved;
+        const approved = rscVolunteerDiscountEarned(assignment, settings);
         const vReq = registrationAnswerTruthy(app, ['pf_volunteer_discount', 'volunteer_discount_interested', '__bts_registration_volunteer_discount_requested']);
         const linkedVolunteer = rscVolunteerLinkedLabel(assignment);
-        const volunteerStatus = approved ? 'Approved' : linkedVolunteer ? `Linked: ${linkedVolunteer}` : vReq ? 'Interested' : 'Available';
+        const volunteerStatus = linkedVolunteer ? `Connected: ${linkedVolunteer}` : approved ? 'Approved' : vReq ? 'Interested' : 'Available';
         hhVolHtml = `<div class="rsc-discount">
           <div class="rsc-discount-label">Volunteer</div>
           <span class="rsc-adjustment-status ${approved || linkedVolunteer ? 'ok' : vReq ? 'warn' : 'muted'}">${esc(volunteerStatus)}</span>
-          <button class="rsc-approve-btn${approved ? ' approved' : ''}" onclick="rscOpenVolunteerModal('${esc(assignId)}')">${approved ? '✓ Approved' : 'Manage'}</button>
+          <button class="rsc-approve-btn${linkedVolunteer ? ' approved' : ''}" onclick="rscOpenVolunteerModal('${esc(assignId)}')">${linkedVolunteer ? 'Change' : 'Link'}</button>
         </div>`;
       }
       let hhSchHtml = '';
@@ -45567,7 +45576,7 @@ See you soon!
           roleNotes: String(assignment.volunteer_role_notes || ''),
           linkedIds: Array.isArray(assignment.volunteer_signup_ids) ? assignment.volunteer_signup_ids.map(String) : (assignment.volunteer_signup_id ? [String(assignment.volunteer_signup_id)] : []),
           linkedName: rscVolunteerLinkedLabel(assignment),
-          approved: !!assignment.volunteer_discount_approved,
+          approved: rscVolunteerDiscountEarned(assignment, settings),
           requiredHours: String(settings.volunteer_hours || ''),
           discountAmount: String(settings.volunteer_discount || ''),
           currency: settings.currency || 'CAD',
@@ -45601,17 +45610,18 @@ See you soon!
       <button class="rsc-approve-btn" onclick="rptOpenHouseholdModal('${esc(_firstAssignId)}')">${_hhStatusBtn}</button>
     </div>`;
     if (settings.volunteer_discount_enabled) {
-      const _volApprovedItems = items.filter(i => !!i.assignment?.volunteer_discount_approved);
+      const _volApprovedItems = items.filter(i => rscVolunteerDiscountEarned(i.assignment, settings));
+      const _volLinkedItems = items.filter(i => !!rscVolunteerLinkedLabel(i.assignment));
       const _volReqItems = items.filter(i => registrationAnswerTruthy(i.app, ['pf_volunteer_discount', 'volunteer_discount_interested', '__bts_registration_volunteer_discount_requested']));
       const _volAllApproved = _volApprovedItems.length === items.length;
       const _volSomeApproved = _volApprovedItems.length > 0 && !_volAllApproved;
       const _volAnyReq = _volReqItems.length > 0 && _volApprovedItems.length === 0;
-      const _volStatus = _volAllApproved ? 'All approved' : _volSomeApproved ? `${_volApprovedItems.length} of ${items.length} approved` : _volAnyReq ? 'Interested' : 'Available';
-      const _volClass = (_volAllApproved || _volSomeApproved) ? 'ok' : _volAnyReq ? 'warn' : 'muted';
+      const _volStatus = _volLinkedItems.length ? `${_volLinkedItems.length} connected` : _volAllApproved ? 'Connected' : _volSomeApproved ? `${_volApprovedItems.length} of ${items.length} connected` : _volAnyReq ? 'Interested' : 'Available';
+      const _volClass = (_volLinkedItems.length || _volAllApproved || _volSomeApproved) ? 'ok' : _volAnyReq ? 'warn' : 'muted';
       sharedDiscountsHtml += `<div class="rsc-discount">
         <div class="rsc-discount-label">Volunteer discount</div>
         <span class="rsc-adjustment-status ${_volClass}">${esc(_volStatus)}</span>
-        <button class="rsc-approve-btn${_volAllApproved ? ' approved' : ''}" onclick="rscOpenVolunteerModal('${esc(_firstAssignId)}')">${_volAllApproved ? '✓ Approved' : 'Manage'}</button>
+        <button class="rsc-approve-btn${_volLinkedItems.length ? ' approved' : ''}" onclick="rscOpenVolunteerModal('${esc(_firstAssignId)}')">${_volLinkedItems.length ? 'Change' : 'Link'}</button>
       </div>`;
     }
     if (settings.scholarship_enabled) {
@@ -45703,7 +45713,7 @@ See you soon!
     }
     const volRequested = registrationAnswerTruthy(app, ['pf_volunteer_discount', 'volunteer_discount_interested', '__bts_registration_volunteer_discount_requested']);
     if (settings.volunteer_discount_enabled && volRequested) {
-      steps.push({ label: 'Volunteer Hours', done: !!assignment.volunteer_discount_approved });
+      steps.push({ label: 'Volunteer Hours', done: rscVolunteerDiscountEarned(assignment, settings) });
     }
     const schRequested = registrationAnswerTruthy(app, ['pf_scholarship_request', 'scholarship_request', '__bts_registration_scholarship_requested']);
     const schStatus = String(assignment.scholarship_status || (schRequested ? 'requested' : 'none'));
@@ -45829,14 +45839,14 @@ See you soon!
     // Volunteer discount
     let volHtml = '';
     if (settings.volunteer_discount_enabled) {
-      const approved = !!assignment.volunteer_discount_approved;
+      const approved = rscVolunteerDiscountEarned(assignment, settings);
       const volRequested = registrationAnswerTruthy(app, ['pf_volunteer_discount', 'volunteer_discount_interested', '__bts_registration_volunteer_discount_requested']);
       const linkedVolunteer = rscVolunteerLinkedLabel(assignment);
-      const volunteerStatus = approved ? 'Approved' : linkedVolunteer ? `Linked: ${linkedVolunteer}` : volRequested ? 'Interested' : 'Available';
+      const volunteerStatus = linkedVolunteer ? `Connected: ${linkedVolunteer}` : approved ? 'Approved' : volRequested ? 'Interested' : 'Available';
       volHtml = `<div class="rsc-discount">
         <div class="rsc-discount-label">Volunteer discount</div>
         <span class="rsc-adjustment-status ${approved || linkedVolunteer ? 'ok' : volRequested ? 'warn' : 'muted'}">${esc(volunteerStatus)}</span>
-        <button class="rsc-approve-btn${approved ? ' approved' : ''}" onclick="rscOpenVolunteerModal('${esc(assignId)}')">${approved ? '✓ Approved' : 'Manage'}</button>
+        <button class="rsc-approve-btn${linkedVolunteer ? ' approved' : ''}" onclick="rscOpenVolunteerModal('${esc(assignId)}')">${linkedVolunteer ? 'Change' : 'Link'}</button>
       </div>`;
     }
 
@@ -45882,7 +45892,7 @@ See you soon!
         roleNotes: String(assignment.volunteer_role_notes || ''),
         linkedIds: Array.isArray(assignment.volunteer_signup_ids) ? assignment.volunteer_signup_ids.map(String) : (assignment.volunteer_signup_id ? [String(assignment.volunteer_signup_id)] : []),
         linkedName: rscVolunteerLinkedLabel(assignment),
-        approved: !!assignment.volunteer_discount_approved,
+        approved: rscVolunteerDiscountEarned(assignment, settings),
         requiredHours: String(settings.volunteer_hours || ''),
         discountAmount: String(settings.volunteer_discount || ''),
         currency: settings.currency || 'CAD',
@@ -45957,7 +45967,7 @@ See you soon!
     // Pills using existing registration-pill pattern + brand colours
     const pills = [];
     if (household) pills.push(`<span class="registration-pill" style="background:#476aaa;color:#fff;">${esc(household.name)}</span>`);
-    if (settings.volunteer_discount_enabled && assignment.volunteer_discount_approved) pills.push(`<span class="registration-pill" style="background:#ca7ea7;color:#fff;">Vol. Discount</span>`);
+    if (settings.volunteer_discount_enabled && rscVolunteerDiscountEarned(assignment, settings)) pills.push(`<span class="registration-pill" style="background:#ca7ea7;color:#fff;">Vol. Discount</span>`);
     if (settings.scholarship_enabled && assignment.scholarship_status && assignment.scholarship_status !== 'none') pills.push(`<span class="registration-pill gold">${esc(assignment.scholarship_status)}</span>`);
 
     // Installments
@@ -45998,10 +46008,11 @@ See you soon!
     // Volunteer discount control
     let volHtml = '';
     if (settings.volunteer_discount_enabled) {
-      const approved = !!assignment.volunteer_discount_approved;
+      const approved = rscVolunteerDiscountEarned(assignment, settings);
+      const linkedVolunteer = rscVolunteerLinkedLabel(assignment);
       volHtml = `<div class="rpt-discount-row">
         <div class="rpt-discount-label">Volunteer discount <span style="font-weight:600;color:rgba(87,46,136,0.45);">(${registrationFormatPaymentAmount(parseFloat(settings.volunteer_discount) || 0, settings)} off)</span></div>
-        <button class="registration-action rpt-approve-btn${approved ? ' approved' : ''}" onclick="rptToggleVolunteerApproved('${esc(assignId)}',${approved},this)">${approved ? '✓ Approved' : 'Approve'}</button>
+        <button class="registration-action rpt-approve-btn${linkedVolunteer ? ' approved' : ''}" onclick="rscOpenVolunteerModal('${esc(assignId)}')">${linkedVolunteer ? 'Change' : 'Link'}</button>
       </div>`;
     }
 
@@ -46578,46 +46589,35 @@ See you soon!
         ${suggestionNote}
         <div id="rsc-vol-linked-summary" style="background:#f8f7fc;border:1px solid rgba(87,46,136,0.1);border-radius:8px;padding:0.62rem 0.72rem;">${linkedSummary}</div>
       </div>
-      <div class="rsc-modal-row">
-        <div class="rsc-modal-label">Role / Volunteer Assignment</div>
-        <input class="rpt-household-modal-input" type="text" id="rsc-vol-role" placeholder="e.g. Front of House, Box Office, Stage Crew…" value="${esc(v.roleNotes)}" />
-      </div>
-      <div class="rsc-modal-row">
-        <div class="rsc-modal-label">Hours Completed</div>
-        <input class="rpt-household-modal-input" type="number" id="rsc-vol-hours" placeholder="0" min="0" step="0.5" value="${esc(v.hoursCompleted)}" />
-      </div>
       <div class="rpt-household-modal-actions">
         <button class="rpt-modal-cancel-btn" onclick="document.getElementById('rsc-volunteer-modal')?.remove()">Cancel</button>
-        ${v.approved
-          ? `<button class="rsc-modal-danger-btn" onclick="rscSaveVolunteer('${esc(assignId)}',false)">Remove Approval</button>`
-          : `<button class="rpt-modal-save-btn" style="background:#769e7b;" onclick="rscSaveVolunteer('${esc(assignId)}',true)">Approve Discount</button>`
-        }
-        <button class="rpt-modal-save-btn" onclick="rscSaveVolunteer('${esc(assignId)}',${v.approved})">Save</button>
+        <button class="rpt-modal-save-btn" onclick="rscSaveVolunteer('${esc(assignId)}')">Save Connection</button>
       </div>
     </div>`;
     modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
     document.body.appendChild(modal);
   }
 
-  async function rscSaveVolunteer(assignId, approved) {
-    const role  = document.getElementById('rsc-vol-role')?.value?.trim() || '';
-    const hours = document.getElementById('rsc-vol-hours')?.value?.trim() || '';
+  async function rscSaveVolunteer(assignId) {
     const selectedKey = document.getElementById('rsc-vol-link')?.value || '';
     const selectedGroup = (window._rscVolunteerSelectGroups || []).find(group => group.key === selectedKey) || null;
+    const settings = registrationCurrentPaymentSettings();
+    const required = parseFloat(String(settings.volunteer_hours || '').replace(/[^0-9.]/g, '')) || 0;
+    const earned = !!selectedGroup && (required > 0 ? selectedGroup.hours >= required : (selectedGroup.hours > 0 || selectedGroup.status === 'approved'));
     document.getElementById('rsc-volunteer-modal')?.remove();
     try {
       await sb.from('casting_assignments').update({
-        volunteer_discount_approved: !!approved,
-        volunteer_hours_completed: hours ? parseFloat(hours) : null,
-        volunteer_role_notes: role || null,
+        volunteer_discount_approved: earned,
+        volunteer_hours_completed: selectedGroup?.hours || null,
+        volunteer_role_notes: selectedGroup?.roles || null,
         volunteer_signup_ids: selectedGroup ? selectedGroup.ids : [],
         volunteer_signup_name: selectedGroup ? selectedGroup.name : null,
       }).eq('id', assignId);
       const item = _rptCastItems.find(i => String(i.assignment?.id) === String(assignId));
       if (item?.assignment) {
-        item.assignment.volunteer_discount_approved = !!approved;
-        item.assignment.volunteer_hours_completed = hours ? parseFloat(hours) : null;
-        item.assignment.volunteer_role_notes = role || null;
+        item.assignment.volunteer_discount_approved = earned;
+        item.assignment.volunteer_hours_completed = selectedGroup?.hours || null;
+        item.assignment.volunteer_role_notes = selectedGroup?.roles || null;
         item.assignment.volunteer_signup_ids = selectedGroup ? selectedGroup.ids : [];
         item.assignment.volunteer_signup_name = selectedGroup ? selectedGroup.name : null;
       }
