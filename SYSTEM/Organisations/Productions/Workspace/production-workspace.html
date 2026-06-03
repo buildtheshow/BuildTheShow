@@ -33979,7 +33979,7 @@ See you soon!
     if (!t) return;
     const starter = ET_STARTER_TEMPLATES.find(t => t.category === 'volunteer_approved');
     if (!starter) return;
-    const body = String(t.body || '');
+    let body = String(t.body || '');
     const subject = String(t.subject || '');
     const isOldDefault = body.includes('You are confirmed, {{preferred_name}}.')
       || body.includes('Your volunteer request for <strong>{{show_name}}</strong> has been approved.')
@@ -33987,7 +33987,16 @@ See you soon!
     const subjectNeedsUpdate = subject === "You're in! Volunteer confirmed for {{show_name}}"
       || subject === 'Volunteer shift confirmed'
       || /^You're in! Volunteer confirmed for /i.test(subject);
-    if (!isOldDefault && !subjectNeedsUpdate) return;
+    // Replace old static shift box with the new dynamic block token
+    const hasOldShiftBox = body.includes('<strong>Role:</strong> {{volunteer_role}}')
+      && body.includes('<strong>Dates:</strong> {{volunteer_shift_dates}}');
+    if (hasOldShiftBox) {
+      body = body.replace(
+        /<div style="background:#eaf4ec[\s\S]*?<\/div>\s*(?=\s*<div style="background:#f7f4fb)/,
+        '{{volunteer_shifts_block}}\n  '
+      );
+    }
+    if (!isOldDefault && !subjectNeedsUpdate && !hasOldShiftBox) return;
     const next = {
       subject: subjectNeedsUpdate ? starter.subject : subject,
       body: isOldDefault ? starter.body : body,
