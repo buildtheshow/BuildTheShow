@@ -33987,13 +33987,10 @@ See you soon!
     const subjectNeedsUpdate = subject === "You're in! Volunteer confirmed for {{show_name}}"
       || subject === 'Volunteer shift confirmed'
       || /^You're in! Volunteer confirmed for /i.test(subject);
-    // If the body still has the old static Role/Dates shift box, replace the whole body
-    const hasOldShiftBox = body.includes('{{volunteer_role}}') && body.includes('{{volunteer_shift_dates}}')
-      && !body.includes('{{volunteer_shifts_block}}');
-    if (!isOldDefault && !subjectNeedsUpdate && !hasOldShiftBox) return;
+    if (!isOldDefault && !subjectNeedsUpdate) return;
     const next = {
       subject: subjectNeedsUpdate ? starter.subject : subject,
-      body: (isOldDefault || hasOldShiftBox) ? starter.body : body,
+      body: isOldDefault ? starter.body : body,
     };
     _etTemplates = (_etTemplates || []).map(x => x.id === t.id ? { ...x, ...next } : x);
     await sb.from('email_templates').update(next).eq('id', t.id);
@@ -68670,13 +68667,14 @@ See you soon!
     try {
       let template = await volReqEnsureTemplate(category);
       if (!template) throw new Error('No volunteer email template found.');
-      // Upgrade old Role/Dates shift box to the new structured block if still present
-      if (template.body && template.body.includes('{{volunteer_role}}') && template.body.includes('{{volunteer_shift_dates}}') && !template.body.includes('{{volunteer_shifts_block}}')) {
-        const starter = ET_STARTER_TEMPLATES.find(t => t.category === category);
+      // If the saved template doesn't have the current shift block, reset it to the baseline
+      if (category === 'volunteer_approved' && template.body && !template.body.includes('{{volunteer_shifts_block}}')) {
+        const starter = ET_STARTER_TEMPLATES.find(t => t.category === 'volunteer_approved');
         if (starter) {
-          template = { ...template, body: starter.body };
+          const updated = { ...template, body: starter.body };
           sb.from('email_templates').update({ body: starter.body }).eq('id', template.id).then(() => {});
-          _etTemplates = (_etTemplates || []).map(x => x.id === template.id ? { ...x, body: starter.body } : x);
+          _etTemplates = (_etTemplates || []).map(x => x.id === template.id ? updated : x);
+          template = updated;
         }
       }
       const context = volReqStatusEmailContext(signups, newStatus);
