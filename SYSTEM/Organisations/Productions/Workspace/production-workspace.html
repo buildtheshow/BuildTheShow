@@ -68949,6 +68949,7 @@ See you soon!
         +   esc(p.name || 'Unknown')
         +   '<button type="button" onclick="volReqEditContact(window._volReqEditKey)" style="background:none;border:1px solid rgba(87,46,136,0.25);border-radius:5px;padding:0.1rem 0.4rem;font-size:0.6rem;font-weight:800;color:#572e88;cursor:pointer;font-family:inherit;white-space:nowrap;line-height:1.6;">Edit contact</button>'
         +   (combineCandidates.length ? '<button type="button" onclick="volReqOpenCombine(window._volReqCombineKey)" style="background:none;border:1px solid rgba(87,46,136,0.25);border-radius:5px;padding:0.1rem 0.4rem;font-size:0.6rem;font-weight:800;color:#572e88;cursor:pointer;font-family:inherit;white-space:nowrap;line-height:1.6;">Combine requests</button>' : '')
+        +   '<button type="button" onclick="volReqConfirmDelete(window._volReqEditKey)" style="background:none;border:1px solid rgba(180,50,30,0.3);border-radius:5px;padding:0.1rem 0.4rem;font-size:0.6rem;font-weight:800;color:#b33a25;cursor:pointer;font-family:inherit;white-space:nowrap;line-height:1.6;">Remove request</button>'
         + '</div>'
         +     '<div class="vol-req-detail-role" style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap;">'
         +       esc(p.email || '')
@@ -69408,6 +69409,42 @@ See you soon!
       showToast('Could not resend: ' + (e.message || 'Unknown error'), true);
       if (btn) { btn.disabled = false; btn.textContent = origText; }
     }
+  }
+
+  async function volReqConfirmDelete(portalKey) {
+    const rows = volReqRowsForPortalKey(portalKey);
+    if (!rows.length) return;
+    const p = rows[0];
+    const name = volReqSignupName(p) || p.email || 'this volunteer';
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:10001;background:rgba(23,18,43,0.55);display:flex;align-items:center;justify-content:center;padding:1rem;';
+    overlay.innerHTML = `
+      <div style="background:#fff;border-radius:14px;width:min(400px,100%);padding:1.75rem;box-shadow:0 24px 80px rgba(26,21,48,0.3);">
+        <div style="font-size:1.1rem;font-weight:900;color:#1a1530;margin-bottom:0.5rem;">Remove request?</div>
+        <div style="font-size:0.88rem;color:#4a3d6b;margin-bottom:1.25rem;line-height:1.5;">This will permanently delete all ${rows.length === 1 ? 'the' : rows.length + ''} shift request${rows.length > 1 ? 's' : ''} for <strong>${name}</strong>. This cannot be undone.</div>
+        <div style="display:flex;gap:0.75rem;">
+          <button type="button" onclick="this.closest('div[style*=fixed]').remove()" style="flex:1;padding:0.7rem;font-size:0.9rem;font-weight:800;border-radius:8px;border:1.5px solid rgba(87,46,136,0.2);background:#fff;color:#572e88;cursor:pointer;font-family:inherit;">Cancel</button>
+          <button type="button" id="vol-delete-confirm-btn" style="flex:1;padding:0.7rem;font-size:0.9rem;font-weight:800;border-radius:8px;border:none;background:#b33a25;color:#fff;cursor:pointer;font-family:inherit;">Yes, remove it</button>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+    overlay.querySelector('#vol-delete-confirm-btn').onclick = async () => {
+      const btn = overlay.querySelector('#vol-delete-confirm-btn');
+      btn.disabled = true; btn.textContent = 'Removing…';
+      try {
+        const ids = rows.map(r => r.id);
+        const { error } = await sb.from('volunteer_signups').delete().in('id', ids);
+        if (error) throw error;
+        overlay.remove();
+        _volReqSelected = null;
+        renderVolunteerRequests();
+        showToast('Request removed.');
+      } catch (e) {
+        btn.disabled = false; btn.textContent = 'Yes, remove it';
+        showToast('Could not remove request: ' + (e.message || 'Unknown error'), true);
+      }
+    };
+    overlay.onclick = e => { if (e.target === overlay) overlay.remove(); };
   }
 
   function volReqEditContact(portalKey) {
