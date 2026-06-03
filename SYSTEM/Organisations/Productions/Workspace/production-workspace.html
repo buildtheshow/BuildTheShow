@@ -68818,6 +68818,8 @@ See you soon!
       if (sendEmail) {
         const subject = document.getElementById('vol-req-preview-subject')?.value?.trim() || '';
         const body = document.getElementById('vol-req-preview-body')?.innerHTML?.trim() || '';
+        // Strip HTML-only tokens from context before sending — edge function escapes values on substitution
+        const { volunteer_shifts_block: _drop, ...safeContext } = review.context;
         const { data, error } = await sb.functions.invoke('send-email', {
           body: {
             production_id: prodId,
@@ -68827,8 +68829,10 @@ See you soon!
             name: review.context.contact_name || review.context.preferred_name || '',
             reviewed_subject: subject,
             reviewed_body: body,
-            ...review.context,
-            context: review.context,
+            message: body,
+            subject: subject,
+            ...safeContext,
+            context: safeContext,
           },
         });
         if (error || data?.error || data?.ok === false) throw new Error(data?.error || error?.message || 'Email was not sent.');
