@@ -45301,39 +45301,56 @@ See you soon!
     return _rptHouseholds.find(h => (h.member_ids || []).includes(String(assignmentId))) || null;
   }
 
+  function rptHouseholdVolunteerDiscountEarned(household, settings) {
+    if (!household) return false;
+    return (household.member_ids || []).some(memberId => {
+      const item = _rptCastItems.find(i => String(i.assignment?.id) === String(memberId));
+      return item?.assignment && rscVolunteerDiscountEarned(item.assignment, settings);
+    });
+  }
+
+  function rptScaleInstallments(base, total, labelSuffix = '') {
+    if (!base.length) return total > 0 ? [{ label: labelSuffix || 'Payment', amount: total, dueDate: '' }] : [];
+    const baseTotal = base.reduce((s, i) => s + i.amount, 0);
+    if (total <= 0) return base.map(inst => ({ ...inst, amount: 0, label: labelSuffix ? `${inst.label} (${labelSuffix})` : inst.label }));
+    if (baseTotal <= 0) return [{ label: labelSuffix || base[0]?.label || 'Payment', amount: total, dueDate: base[0]?.dueDate || '' }];
+    const scaleFactor = total / baseTotal;
+    const scaled = base.map(inst => ({ ...inst, label: labelSuffix ? `${inst.label} (${labelSuffix})` : inst.label, amount: Math.round(inst.amount * scaleFactor * 100) / 100 }));
+    const diff = Math.round((total - scaled.reduce((s, i) => s + i.amount, 0)) * 100) / 100;
+    if (diff !== 0 && scaled.length) scaled[scaled.length - 1].amount += diff;
+    return scaled;
+  }
+
   function rptEffectiveFee(item, settings) {
     const assignId = String(item.assignment?.id || '');
     const household = rptHouseholdFor(assignId);
     const base = rptGetInstallments(settings);
     const baseTotal = base.reduce((s, i) => s + i.amount, 0);
+    const householdMemberIds = household ? (household.member_ids || []).map(String) : [];
+    const householdPos = household ? householdMemberIds.indexOf(assignId) : -1;
+    let effectiveBase = baseTotal;
+    const parts = [];
     if (settings.sibling_discount_enabled && household) {
-      const pos = (household.member_ids || []).indexOf(String(assignId));
-      const rate = pos === 0 ? parseFloat(String(settings.sibling_first_child || '').replace(/[^0-9.]/g, '')) || 0
-                             : parseFloat(String(settings.sibling_additional || '').replace(/[^0-9.]/g, '')) || 0;
-      if (rate > 0) {
-        if (base.length > 0 && baseTotal > 0) {
-          const scaleFactor = rate / baseTotal;
-          const scaledInsts = base.map(inst => ({ ...inst, amount: Math.round(inst.amount * scaleFactor * 100) / 100 }));
-          const diff = Math.round((rate - scaledInsts.reduce((s, i) => s + i.amount, 0)) * 100) / 100;
-          if (diff !== 0) scaledInsts[scaledInsts.length - 1].amount += diff;
-          return { installments: scaledInsts, total: rate, discountLabel: 'Sibling rate' };
-        }
-        return { installments: [{ label: 'Payment (sibling rate)', amount: rate, dueDate: base[0]?.dueDate || '' }], total: rate, discountLabel: 'Sibling rate' };
-      }
+      const rate = householdPos === 0 ? parseFloat(String(settings.sibling_first_child || '').replace(/[^0-9.]/g, '')) || 0
+                                      : parseFloat(String(settings.sibling_additional || '').replace(/[^0-9.]/g, '')) || 0;
+      if (rate > 0) effectiveBase = rate;
+      if (rate > 0) parts.push('Sibling rate');
     }
     let volAdj = 0;
-    if (settings.volunteer_discount_enabled && rscVolunteerDiscountEarned(item.assignment, settings)) {
+    const volunteerApplies = household
+      ? householdPos === 0 && rptHouseholdVolunteerDiscountEarned(household, settings)
+      : rscVolunteerDiscountEarned(item.assignment, settings);
+    if (settings.volunteer_discount_enabled && volunteerApplies) {
       volAdj = parseFloat(String(settings.volunteer_discount || '').replace(/[^0-9.]/g, '')) || 0;
     }
     let schAdj = 0;
     if (item.assignment?.scholarship_status === 'approved') {
       schAdj = parseFloat(String(item.assignment?.scholarship_amount || '').replace(/[^0-9.]/g, '')) || 0;
     }
-    const total = Math.max(0, baseTotal - volAdj - schAdj);
-    const parts = [];
+    const total = Math.max(0, effectiveBase - volAdj - schAdj);
     if (volAdj) parts.push(`Vol. discount: -${registrationFormatPaymentAmount(volAdj, settings)}`);
     if (schAdj) parts.push(`Scholarship: -${registrationFormatPaymentAmount(schAdj, settings)}`);
-    return { installments: base, total, discountLabel: parts.length ? parts.join(' · ') : null };
+    return { installments: rptScaleInstallments(base, total, parts.includes('Sibling rate') ? 'sibling rate' : ''), total, discountLabel: parts.length ? parts.join(' · ') : null };
   }
 
   function rptPaidTotal(assignmentId, installments) {
@@ -46562,6 +46579,52 @@ See you soon!
     } catch (err) { console.error('[BTS] rscUnmarkPaid failed', err); }
   }
 
+  function rscVolunteerTargetScope(assignId, d = null) {
+    const id = String(assignId || '');
+    const household = typeof rptHouseholdFor === 'function' ? rptHouseholdFor(id) : null;
+    const memberIds = household
+      ? (household.member_ids || []).map(String).filter(memberId => _rptCastItems.some(i => String(i.assignment?.id) === memberId))
+      : [];
+    const assignmentIds = memberIds.length ? memberIds : (id ? [id] : []);
+    const memberNames = assignmentIds.map(memberId => {
+      const item = _rptCastItems.find(i => String(i.assignment?.id) === memberId);
+      return String(item?.app?.name || '').trim();
+    }).filter(Boolean);
+    const isHousehold = !!household && assignmentIds.length > 1;
+    const fallbackName = String(d?.name || 'Cast Member').trim();
+    return {
+      type: isHousehold ? 'household' : 'individual',
+      householdName: household?.name || '',
+      title: isHousehold ? `${household.name} Household` : fallbackName,
+      assignmentIds,
+      memberNames: memberNames.length ? memberNames : [fallbackName],
+    };
+  }
+
+  function rscVolunteerScopeLinkedIds(scope, d = null) {
+    const ids = [];
+    (scope?.assignmentIds || []).forEach(assignId => {
+      const item = _rptCastItems.find(i => String(i.assignment?.id) === String(assignId));
+      const assignment = item?.assignment || {};
+      if (Array.isArray(assignment.volunteer_signup_ids)) ids.push(...assignment.volunteer_signup_ids.map(String));
+      else if (assignment.volunteer_signup_id) ids.push(String(assignment.volunteer_signup_id));
+    });
+    if (!ids.length && Array.isArray(d?.volunteer?.linkedIds)) ids.push(...d.volunteer.linkedIds.map(String));
+    return [...new Set(ids.filter(Boolean))];
+  }
+
+  function rscVolunteerScopeRegistrationEmails(scope, d = null) {
+    const emails = [];
+    (scope?.assignmentIds || []).forEach(assignId => {
+      const item = _rptCastItems.find(i => String(i.assignment?.id) === String(assignId));
+      const email = rscRegistrationEmailForVolunteerLink(item?.app || {});
+      if (email) emails.push(email);
+    });
+    const fallback = rscRegistrationEmailForVolunteerLink(d?.app || {});
+    if (fallback) emails.push(fallback);
+    return [...new Set(emails.map(rscNormalizeEmail).filter(Boolean))];
+  }
+
   function rscApplyVolunteerSelection(key) {
     const groups = window._rscVolunteerSelectGroups || [];
     const group = groups.find(g => g.key === key) || null;
@@ -46590,15 +46653,17 @@ See you soon!
     const d = window._rscModalData?.[assignId];
     if (!d) return;
     const v = d.volunteer;
+    const scope = rscVolunteerTargetScope(assignId, d);
+    window._rscVolunteerActiveScope = scope;
     const symbol = { CAD: '$', USD: '$', GBP: '£' }[v.currency] || '$';
     const discountNote = v.discountAmount ? ` · ${symbol}${v.discountAmount} off` : '';
     const groups = rscVolunteerGroups();
     window._rscVolunteerSelectGroups = groups;
-    const linkedIds = new Set((v.linkedIds || []).map(String));
+    const linkedIds = new Set(rscVolunteerScopeLinkedIds(scope, d));
     const selectedGroup = groups.find(group => group.ids.some(id => linkedIds.has(String(id)))) || null;
-    const registrationEmail = rscRegistrationEmailForVolunteerLink(d.app);
-    const suggestedGroups = registrationEmail
-      ? groups.filter(group => group.rows.some(row => rscNormalizeEmail(row.email || row.volunteer_email) === registrationEmail))
+    const registrationEmails = rscVolunteerScopeRegistrationEmails(scope, d);
+    const suggestedGroups = registrationEmails.length
+      ? groups.filter(group => group.rows.some(row => registrationEmails.includes(rscNormalizeEmail(row.email || row.volunteer_email))))
       : [];
     const suggestedKeys = new Set(suggestedGroups.map(group => group.key));
     const optionForGroup = group => {
@@ -46612,9 +46677,12 @@ See you soon!
     const optionsHtml = `<option value="">Not connected</option>${suggestedHtml}${otherHtml ? `<optgroup label="All volunteers">${otherHtml}</optgroup>` : ''}`;
     const suggestionNote = suggestedGroups.length
       ? `<div style="font-size:0.68rem;color:#4a7a50;font-weight:800;margin-top:0.18rem;">Suggested because the volunteer email matches this registration.</div>`
-      : registrationEmail
-        ? `<div style="font-size:0.68rem;color:rgba(87,46,136,0.45);margin-top:0.18rem;">No volunteer found with ${esc(registrationEmail)}.</div>`
+      : registrationEmails.length
+        ? `<div style="font-size:0.68rem;color:rgba(87,46,136,0.45);margin-top:0.18rem;">No volunteer found with ${esc(registrationEmails.join(', '))}.</div>`
         : '';
+    const scopeNote = scope.type === 'household'
+      ? `<div style="font-size:0.74rem;color:rgba(87,46,136,0.56);line-height:1.45;margin-top:-0.1rem;">This connection will apply to ${esc(scope.memberNames.join(', '))}.</div>`
+      : '';
     const linkedSummary = selectedGroup
       ? `<div style="font-size:0.78rem;font-weight:850;color:#1a1530;">${esc(selectedGroup.name)}</div>
         <div style="font-size:0.72rem;color:rgba(87,46,136,0.55);line-height:1.45;">${esc(selectedGroup.roles || 'Volunteer')}${selectedGroup.hours ? ` · ${esc(String(selectedGroup.hours))} approved hr${selectedGroup.hours === 1 ? '' : 's'}` : ''}</div>`
@@ -46624,7 +46692,8 @@ See you soon!
     modal.id = 'rsc-volunteer-modal';
     modal.className = 'rpt-household-modal';
     modal.innerHTML = `<div class="rpt-household-modal-box" style="max-width:480px;">
-      <div class="rpt-household-modal-title">Volunteer Discount — ${esc(d.name)}</div>
+      <div class="rpt-household-modal-title">Volunteer Discount — ${esc(scope.title)}</div>
+      ${scopeNote}
       ${v.requested
         ? `<div class="rsc-vol-requested-banner">✓ This person indicated interest in a volunteer discount on their registration form.${v.volunteerName ? `<br>Volunteer: ${esc(v.volunteerName)}` : ''}</div>`
         : `<div style="font-size:0.78rem;color:rgba(87,46,136,0.4);">No volunteer interest recorded on this form.</div>`
@@ -46702,6 +46771,10 @@ See you soon!
 
   function rscVolunteerPortalEmailContext(assignId, group) {
     const d = window._rscModalData?.[assignId] || {};
+    const scope = rscVolunteerTargetScope(assignId, d);
+    const performerLabel = scope.type === 'household'
+      ? `${scope.householdName} household (${scope.memberNames.join(', ')})`
+      : (scope.memberNames[0] || d.name || '');
     const row = group?.rows?.[0] || {};
     const email = group?.email || row.email || row.volunteer_email || '';
     const name = group?.name || row.name || row.volunteer_name || email;
@@ -46739,9 +46812,9 @@ See you soon!
       volunteer_role: group?.roles || 'Volunteer',
       volunteer_shift_dates: group?.shiftDates || '',
       volunteer_approved_hours: rscVolunteerApprovedHoursLabel(group),
-      volunteer_discount_performer: d.name || '',
-      performer_name: d.name || '',
-      cast_member_name: d.name || '',
+      volunteer_discount_performer: performerLabel,
+      performer_name: performerLabel,
+      cast_member_name: performerLabel,
     };
     return { email, name, context };
   }
@@ -46784,6 +46857,9 @@ See you soon!
   }
 
   async function rscSaveVolunteer(assignId, btn) {
+    const d = window._rscModalData?.[assignId] || {};
+    const scope = rscVolunteerTargetScope(assignId, d);
+    const targetIds = (scope.assignmentIds || []).map(String).filter(Boolean);
     const selectedKey = document.getElementById('rsc-vol-link')?.value || '';
     const selectedGroup = (window._rscVolunteerSelectGroups || []).find(group => group.key === selectedKey) || null;
     const settings = registrationCurrentPaymentSettings();
@@ -46798,22 +46874,26 @@ See you soon!
         volunteer_role_notes: selectedGroup?.roles || null,
         volunteer_signup_ids: selectedGroup ? selectedGroup.ids : [],
         volunteer_signup_name: selectedGroup ? selectedGroup.name : null,
-      }).eq('id', assignId)
-        .select('id,volunteer_discount_approved,volunteer_hours_completed,volunteer_role_notes,volunteer_signup_ids,volunteer_signup_name')
-        .single();
+      }).in('id', targetIds)
+        .select('id,volunteer_discount_approved,volunteer_hours_completed,volunteer_role_notes,volunteer_signup_ids,volunteer_signup_name');
       if (error) throw error;
       document.getElementById('rsc-volunteer-modal')?.remove();
-      const item = _rptCastItems.find(i => String(i.assignment?.id) === String(assignId));
-      if (item?.assignment) {
-        item.assignment.volunteer_discount_approved = data?.volunteer_discount_approved ?? earned;
-        item.assignment.volunteer_hours_completed = data?.volunteer_hours_completed ?? selectedGroup?.hours ?? null;
-        item.assignment.volunteer_role_notes = data?.volunteer_role_notes ?? selectedGroup?.roles ?? null;
-        item.assignment.volunteer_signup_ids = Array.isArray(data?.volunteer_signup_ids) ? data.volunteer_signup_ids : (selectedGroup ? selectedGroup.ids : []);
-        item.assignment.volunteer_signup_name = data?.volunteer_signup_name ?? (selectedGroup ? selectedGroup.name : null);
-      }
-      rptRerenderRow(assignId);
+      const rowsById = new Map((data || []).map(row => [String(row.id), row]));
+      targetIds.forEach(targetId => {
+        const row = rowsById.get(String(targetId));
+        const item = _rptCastItems.find(i => String(i.assignment?.id) === String(targetId));
+        if (item?.assignment) {
+          item.assignment.volunteer_discount_approved = row?.volunteer_discount_approved ?? earned;
+          item.assignment.volunteer_hours_completed = row?.volunteer_hours_completed ?? selectedGroup?.hours ?? null;
+          item.assignment.volunteer_role_notes = row?.volunteer_role_notes ?? selectedGroup?.roles ?? null;
+          item.assignment.volunteer_signup_ids = Array.isArray(row?.volunteer_signup_ids) ? row.volunteer_signup_ids : (selectedGroup ? selectedGroup.ids : []);
+          item.assignment.volunteer_signup_name = row?.volunteer_signup_name ?? (selectedGroup ? selectedGroup.name : null);
+        }
+      });
+      [...new Set(targetIds)].forEach(targetId => rptRerenderRow(targetId));
       rptRerenderSummary();
-      showToast(selectedGroup ? 'Volunteer connection saved.' : 'Volunteer connection removed.');
+      const savedLabel = scope.type === 'household' ? `${scope.householdName} household` : (scope.memberNames[0] || 'cast member');
+      showToast(selectedGroup ? `Volunteer connection saved for ${savedLabel}.` : `Volunteer connection removed for ${savedLabel}.`);
       window.AutoSave?.showSaved?.();
     } catch (err) {
       console.error('[BTS] rscSaveVolunteer failed', err);
@@ -69076,6 +69156,8 @@ See you soon!
     return {
       organisation_name: name,
       organization_name: name,
+      org_name: name,
+      show_name: prod?.title || prod?.name || '',
       producer_name: name,
       producer_role: '',
       producer_email: orgEtransferEmail || '',
