@@ -2191,6 +2191,9 @@
       });
       const pastApproved = approved.filter(s => s.shift_date && !upcomingApproved.includes(s));
       const approvedHours = approved.reduce((sum, row) => sum + dashboardShiftHours(row), 0);
+      const discountRows = rows.filter(row => row.discount_requested || row.discount_performer);
+      const portalDiscountEnabled = hasDiscountEnabled() && discountRows.length > 0;
+      const discountPerson = (discountRows.find(row => row.discount_performer)?.discount_performer || '').trim();
 
       const totalHrsEl  = document.getElementById('vpd-total-hrs');
       const greetingEl  = document.querySelector('.vpd-greeting-name');
@@ -2227,22 +2230,23 @@
       const statNums = document.querySelectorAll('.vpd-stat-num');
       const statLabels = document.querySelectorAll('.vpd-stat-label');
       if (statNums[0]) {
-        const required = hasDiscountEnabled() ? discountRequiredHours() : 0;
+        const required = portalDiscountEnabled ? discountRequiredHours() : 0;
         statNums[0].innerHTML = required
           ? `${esc(formatHours(approvedHours))}<span class="vpd-stat-denom"> / ${esc(formatHours(required))}</span>`
           : esc(formatHours(approvedHours));
       }
       if (statLabels[0]) {
-        if (hasDiscountEnabled()) {
+        if (portalDiscountEnabled) {
           const remaining = Math.max(0, discountRequiredHours() - approvedHours);
-          statLabels[0].textContent = remaining ? `${formatHours(remaining)} to reach your goal` : '✓ Volunteer discount hours reached';
+          const target = discountPerson ? ` for ${discountPerson}` : '';
+          statLabels[0].textContent = remaining ? `${formatHours(remaining)} hours to go${target}` : `✓ Volunteer discount hours reached${target}`;
         } else {
           statLabels[0].textContent = 'Approved volunteer hours';
         }
       }
       const progressFill = document.querySelector('.vpd-progress-fill');
       if (progressFill) {
-        const required = hasDiscountEnabled() ? discountRequiredHours() : approvedHours;
+        const required = portalDiscountEnabled ? discountRequiredHours() : approvedHours;
         progressFill.style.width = required ? `${Math.min(100, (approvedHours / required) * 100)}%` : '0%';
       }
       if (statNums[1]) statNums[1].textContent = upcomingApproved.length;
@@ -3699,11 +3703,14 @@
       const totalHours = rows.filter(r => r.status === 'approved' || r.status === 'partially_filled').reduce((s,r) => s + (parseFloat(r.approved_hours) || 0), 0);
       const firstName = rows.length ? volunteerFirstName(rows[0], email) : null;
       const portalUrl = token ? `${window.location.origin}${window.location.pathname}?token=${token}` : null;
+      const discountRows = rows.filter(row => row.discount_requested || row.discount_performer);
+      const portalDiscountEnabled = hasDiscountEnabled() && discountRows.length > 0;
+      const discountPerson = (discountRows.find(row => row.discount_performer)?.discount_performer || '').trim();
       document.getElementById('vp-modal').innerHTML = `
         <div class="vp-modal-head"><div class="vp-modal-title">My Volunteer Schedule</div><button class="vp-modal-close" type="button" onclick="closeModal()">&times;</button></div>
         <div class="vp-modal-body">
           ${firstName ? `<p style="font-size:0.85rem;color:#6f6382;margin-bottom:0.85rem;">Hi <strong>${esc(firstName)}</strong> — here are your shift requests.</p>` : email ? `<p style="font-size:0.78rem;color:#6f6382;margin-bottom:0.85rem;">Showing shifts for <strong>${esc(email)}</strong></p>` : ''}
-          ${hasDiscountEnabled() ? `<div class="vp-discount-progress visible" style="margin:0 0 1rem;border:1px solid rgba(87,46,136,0.13);border-radius:8px;padding:0.85rem;"><div class="vp-progress-top"><span>Confirmed Volunteer Hours</span><span>${formatHours(totalHours)} / ${formatHours(discountRequiredHours())}</span></div><div class="vp-progress-track"><div class="vp-progress-fill" style="width:${Math.min(100,(totalHours/discountRequiredHours())*100)}%"></div></div></div>` : ''}
+          ${portalDiscountEnabled ? `<div class="vp-discount-progress visible" style="margin:0 0 1rem;border:1px solid rgba(87,46,136,0.13);border-radius:8px;padding:0.85rem;"><div class="vp-progress-top"><span>Confirmed Volunteer Hours${discountPerson ? ` for ${esc(discountPerson)}` : ''}</span><span>${formatHours(totalHours)} / ${formatHours(discountRequiredHours())}</span></div><div class="vp-progress-track"><div class="vp-progress-fill" style="width:${Math.min(100,(totalHours/discountRequiredHours())*100)}%"></div></div></div>` : ''}
           ${rows.length ? rows.map(portalItemHtml).join('') : `<div class="vp-cart-empty">No sign-ups found.</div>`}
           ${portalUrl ? `<div style="margin-top:1rem;padding:0.75rem;background:#f4f2f8;border-radius:8px;font-size:0.72rem;color:#4a3d6b;">Bookmark this page to check back anytime: <span style="font-family:monospace;word-break:break-all;">${esc(portalUrl)}</span></div>` : `<button class="vp-secondary-btn" type="button" style="margin-top:0.8rem;" onclick="openPortalModal()">Check a different email</button>`}
         </div>`;
