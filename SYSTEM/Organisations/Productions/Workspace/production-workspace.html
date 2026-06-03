@@ -26089,11 +26089,20 @@
         <label class="form-label">Notes <span class="opt">(optional)</span></label>
         <textarea class="form-textarea" id="ev-notes" rows="2" style="min-height:60px;"></textarea>
       </div>
-      <div class="form-group" style="display:flex;align-items:center;gap:0.75rem;padding:0.65rem 0.85rem;background:rgba(87,46,136,0.04);border-radius:10px;border:1.5px solid rgba(87,46,136,0.1);">
-        <input type="checkbox" id="ev-is-public" style="accent-color:#572e88;width:16px;height:16px;flex-shrink:0;cursor:pointer;" />
-        <div>
-          <label for="ev-is-public" style="font-size:0.84rem;font-weight:700;color:#1a1530;cursor:pointer;display:block;">Show on Public Calendar</label>
-          <div style="font-size:0.72rem;color:rgba(87,46,136,0.5);margin-top:0.1rem;">Performers will see this event on the audition page.</div>
+      <div class="form-group" style="display:flex;flex-direction:column;gap:0.5rem;">
+        <div style="display:flex;align-items:center;gap:0.75rem;padding:0.65rem 0.85rem;background:rgba(87,46,136,0.04);border-radius:10px;border:1.5px solid rgba(87,46,136,0.1);">
+          <input type="checkbox" id="ev-is-public" style="accent-color:#572e88;width:16px;height:16px;flex-shrink:0;cursor:pointer;" />
+          <div>
+            <label for="ev-is-public" style="font-size:0.84rem;font-weight:700;color:#1a1530;cursor:pointer;display:block;">Show on Audition Page</label>
+            <div style="font-size:0.72rem;color:rgba(87,46,136,0.5);margin-top:0.1rem;">Prospective performers will see this on the public audition info page.</div>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:0.75rem;padding:0.65rem 0.85rem;background:rgba(87,46,136,0.04);border-radius:10px;border:1.5px solid rgba(87,46,136,0.1);">
+          <input type="checkbox" id="ev-cast-schedule" style="accent-color:#572e88;width:16px;height:16px;flex-shrink:0;cursor:pointer;" />
+          <div>
+            <label for="ev-cast-schedule" style="font-size:0.84rem;font-weight:700;color:#1a1530;cursor:pointer;display:block;">Show in Cast Schedule</label>
+            <div style="font-size:0.72rem;color:rgba(87,46,136,0.5);margin-top:0.1rem;">Confirmed cast families will see this in their registration confirmation email.</div>
+          </div>
         </div>
       </div>
       <div style="display:flex;gap:0.75rem;">
@@ -32600,16 +32609,16 @@
     if (performanceScheduleSummaryLoaded) return performanceScheduleSummaryCache || '';
     try {
       const { data, error } = await sb.from('production_events')
-        .select('title,start_time,end_time,venue,event_type,is_public')
+        .select('title,start_time,end_time,venue,event_type,is_public,show_in_cast_schedule')
         .eq('production_id', prodId)
         .order('start_time', { ascending: true });
       if (error) throw error;
       const sortedRows = [...(data || [])].sort((a, b) => String(a.start_time || '').localeCompare(String(b.start_time || '')));
-      const performanceRows = sortedRows.filter(row => String(row.event_type || '').toLowerCase() === 'performance' && row.is_public !== false);
+      const performanceRows = sortedRows.filter(row => String(row.event_type || '').toLowerCase() === 'performance' && row.show_in_cast_schedule === true);
       const eventRows = sortedRows.filter(row => {
         const type = String(row.event_type || '').toLowerCase();
         if (['audition','dance_call','callback','other_audition'].includes(type)) return false;
-        return row.is_public === true;
+        return row.show_in_cast_schedule === true;
       });
       performanceScheduleSummaryCache = performanceRows.map(formatEmailScheduleEvent).filter(Boolean).join('\n');
       eventScheduleSummaryCache = buildEventScheduleHtml(eventRows.filter(Boolean));
@@ -35418,6 +35427,7 @@ See you soon!
         venue: e.venue,
         notes: stripCalendarDeadlineMarker(e.notes),
         is_public: e.is_public ?? false,
+        show_in_cast_schedule: e.show_in_cast_schedule ?? false,
         is_deadline: isDeadline,
         raw_start_time: e.start_time || null,
         raw_end_time: e.end_time || null,
@@ -35508,6 +35518,7 @@ See you soon!
       document.getElementById('ev-venue').value = ev.extendedProps.venue || '';
       document.getElementById('ev-notes').value = ev.extendedProps.notes || '';
       document.getElementById('ev-is-public').checked = ev.extendedProps.is_public ?? _defaultPublic(ev.extendedProps.event_type);
+      document.getElementById('ev-cast-schedule').checked = ev.extendedProps.show_in_cast_schedule ?? false;
       if (isExistingDeadline) {
         setEventMode('deadline');
         document.getElementById('ev-deadline').value = toDateTimeLocal(ev.extendedProps.raw_start_time || ev.start);
@@ -35537,6 +35548,7 @@ See you soon!
       document.getElementById('ev-venue').value = defaultVenue;
       document.getElementById('ev-notes').value = '';
       document.getElementById('ev-is-public').checked = isDeadline ? false : _defaultPublic(evType);
+      document.getElementById('ev-cast-schedule').checked = false;
       setEventMode(isDeadline ? 'deadline' : 'startend');
       VenuePicker.render('ev-venue-picker', defaultVenue, (name) => {
         document.getElementById('ev-venue').value = name;
@@ -35648,6 +35660,7 @@ See you soon!
     const fmtLocal = s => s ? (s.length === 16 ? s + ':00' : s.slice(0, 19)) : null;
     const defaultEnd = start.slice(0, 11) + '18:00:00';
     const isPublic = document.getElementById('ev-is-public').checked;
+    const isCastSchedule = document.getElementById('ev-cast-schedule').checked;
     const payload = {
       title,
       event_type: isDeadline ? 'deadline' : type,
@@ -35655,6 +35668,7 @@ See you soon!
       end_time:   isDeadline ? null : (fmtLocal(end) || defaultEnd),
       venue:      venue || null,
       notes:      notesForCalendarDeadline(notes, isDeadline, deadlineArea),
+      show_in_cast_schedule: isCastSchedule,
     };
     // Only add is_public if the column exists — prevents errors before SQL migration is run
     if (_hasIsPublicColumn) payload.is_public = isPublic;
@@ -39963,6 +39977,7 @@ See you soon!
   let _rptHouseholds = [];     // [{ id, name, member_ids }]
   let _rptCastItems = [];      // cached accepted cast for re-renders
   let _rptNotesTimers = {};    // debounce per assignment
+  let _rptVolunteerSignups = []; // cached volunteer rows for registration discount linking
 
   const PAYMENT_DEFAULT_STATE = {
     mode: 'none',           // 'none' | 'flat' | 'split'
@@ -45111,6 +45126,84 @@ See you soon!
 
   // ── Payment Tracker helpers ───────────────────────────────────────
 
+  async function loadRegistrationVolunteerSignups() {
+    try {
+      const { data, error } = await sb.from('volunteer_signups')
+        .select('*')
+        .eq('production_id', prodId)
+        .neq('status', 'cancelled')
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      _rptVolunteerSignups = data || [];
+    } catch (err) {
+      console.warn('[BTS] registration volunteer links unavailable:', err?.message);
+      _rptVolunteerSignups = [];
+    }
+    return _rptVolunteerSignups;
+  }
+
+  function rscVolunteerKey(row = {}) {
+    return row.portal_token || row.id || `${(row.email || row.volunteer_email || '').toLowerCase()}-${row.name || row.volunteer_name || ''}`;
+  }
+
+  function rscVolunteerName(row = {}) {
+    return row.name || row.volunteer_name || [row.first_name, row.last_name].filter(Boolean).join(' ') || row.email || row.volunteer_email || 'Volunteer';
+  }
+
+  function rscVolunteerSignupHours(row = {}) {
+    const approved = parseFloat(row.approved_hours);
+    if (Number.isFinite(approved) && approved > 0) return approved;
+    const start = String(row.shift_start_time || '').slice(0, 5);
+    const end = String(row.shift_end_time || '').slice(0, 5);
+    if (!start || !end) return 0;
+    const [sh, sm] = start.split(':').map(Number);
+    const [eh, em] = end.split(':').map(Number);
+    if (![sh, sm, eh, em].every(Number.isFinite)) return 0;
+    let diff = (eh * 60 + em) - (sh * 60 + sm);
+    if (diff < 0) diff += 24 * 60;
+    return Math.max(0, diff / 60);
+  }
+
+  function rscVolunteerGroups() {
+    const groups = new Map();
+    (_rptVolunteerSignups || []).forEach(row => {
+      const key = rscVolunteerKey(row);
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(row);
+    });
+    return [...groups.entries()].map(([key, rows]) => {
+      const first = rows[0] || {};
+      const approvedRows = rows.filter(r => r.status === 'approved' || r.status === 'checked_in' || r.status === 'completed');
+      const sourceRows = approvedRows.length ? approvedRows : rows;
+      const roleNames = [...new Set(sourceRows.map(r => r.role_name).filter(Boolean))];
+      const hours = approvedRows.reduce((sum, r) => sum + rscVolunteerSignupHours(r), 0);
+      return {
+        key,
+        ids: rows.map(r => r.id).filter(Boolean),
+        name: rscVolunteerName(first),
+        email: first.email || first.volunteer_email || '',
+        code: typeof volReqSignupPasscode === 'function' ? volReqSignupPasscode(first) : String(first.volunteer_passcode || ''),
+        roles: roleNames.join(', ') || 'Volunteer',
+        hours,
+        status: approvedRows.length ? 'approved' : (rows[0]?.status || 'pending'),
+        rows,
+      };
+    }).sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  function rscVolunteerLinkedGroup(assignment = {}) {
+    const ids = Array.isArray(assignment.volunteer_signup_ids)
+      ? assignment.volunteer_signup_ids.map(String)
+      : String(assignment.volunteer_signup_id || '').trim() ? [String(assignment.volunteer_signup_id)] : [];
+    if (!ids.length) return null;
+    return rscVolunteerGroups().find(group => group.ids.some(id => ids.includes(String(id)))) || null;
+  }
+
+  function rscVolunteerLinkedLabel(assignment = {}) {
+    const group = rscVolunteerLinkedGroup(assignment);
+    return group?.name || assignment.volunteer_signup_name || '';
+  }
+
   function rptGetInstallments(settings) {
     if (!settings || settings.mode === 'none') return [];
     if (settings.mode === 'split') {
@@ -45407,10 +45500,11 @@ See you soon!
       if (settings.volunteer_discount_enabled) {
         const approved = !!assignment.volunteer_discount_approved;
         const vReq = registrationAnswerTruthy(app, ['pf_volunteer_discount', 'volunteer_discount_interested', '__bts_registration_volunteer_discount_requested']);
-        const volunteerStatus = approved ? 'Approved' : vReq ? 'Interested' : 'Available';
+        const linkedVolunteer = rscVolunteerLinkedLabel(assignment);
+        const volunteerStatus = approved ? 'Approved' : linkedVolunteer ? `Linked: ${linkedVolunteer}` : vReq ? 'Interested' : 'Available';
         hhVolHtml = `<div class="rsc-discount">
           <div class="rsc-discount-label">Volunteer</div>
-          <span class="rsc-adjustment-status ${approved ? 'ok' : vReq ? 'warn' : 'muted'}">${esc(volunteerStatus)}</span>
+          <span class="rsc-adjustment-status ${approved || linkedVolunteer ? 'ok' : vReq ? 'warn' : 'muted'}">${esc(volunteerStatus)}</span>
           <button class="rsc-approve-btn${approved ? ' approved' : ''}" onclick="rscOpenVolunteerModal('${esc(assignId)}')">${approved ? '✓ Approved' : 'Manage'}</button>
         </div>`;
       }
@@ -45454,6 +45548,8 @@ See you soon!
           volunteerName: registrationAnswerValue(app, ['pf_volunteer_name', 'volunteer_name']),
           hoursCompleted: String(assignment.volunteer_hours_completed || ''),
           roleNotes: String(assignment.volunteer_role_notes || ''),
+          linkedIds: Array.isArray(assignment.volunteer_signup_ids) ? assignment.volunteer_signup_ids.map(String) : (assignment.volunteer_signup_id ? [String(assignment.volunteer_signup_id)] : []),
+          linkedName: rscVolunteerLinkedLabel(assignment),
           approved: !!assignment.volunteer_discount_approved,
           requiredHours: String(settings.volunteer_hours || ''),
           discountAmount: String(settings.volunteer_discount || ''),
@@ -45718,10 +45814,11 @@ See you soon!
     if (settings.volunteer_discount_enabled) {
       const approved = !!assignment.volunteer_discount_approved;
       const volRequested = registrationAnswerTruthy(app, ['pf_volunteer_discount', 'volunteer_discount_interested', '__bts_registration_volunteer_discount_requested']);
-      const volunteerStatus = approved ? 'Approved' : volRequested ? 'Interested' : 'Available';
+      const linkedVolunteer = rscVolunteerLinkedLabel(assignment);
+      const volunteerStatus = approved ? 'Approved' : linkedVolunteer ? `Linked: ${linkedVolunteer}` : volRequested ? 'Interested' : 'Available';
       volHtml = `<div class="rsc-discount">
         <div class="rsc-discount-label">Volunteer discount</div>
-        <span class="rsc-adjustment-status ${approved ? 'ok' : volRequested ? 'warn' : 'muted'}">${esc(volunteerStatus)}</span>
+        <span class="rsc-adjustment-status ${approved || linkedVolunteer ? 'ok' : volRequested ? 'warn' : 'muted'}">${esc(volunteerStatus)}</span>
         <button class="rsc-approve-btn${approved ? ' approved' : ''}" onclick="rscOpenVolunteerModal('${esc(assignId)}')">${approved ? '✓ Approved' : 'Manage'}</button>
       </div>`;
     }
@@ -45766,6 +45863,8 @@ See you soon!
         volunteerName: registrationAnswerValue(app, ['pf_volunteer_name', 'volunteer_name']),
         hoursCompleted: String(assignment.volunteer_hours_completed || ''),
         roleNotes: String(assignment.volunteer_role_notes || ''),
+        linkedIds: Array.isArray(assignment.volunteer_signup_ids) ? assignment.volunteer_signup_ids.map(String) : (assignment.volunteer_signup_id ? [String(assignment.volunteer_signup_id)] : []),
+        linkedName: rscVolunteerLinkedLabel(assignment),
         approved: !!assignment.volunteer_discount_approved,
         requiredHours: String(settings.volunteer_hours || ''),
         discountAmount: String(settings.volunteer_discount || ''),
@@ -46386,23 +46485,66 @@ See you soon!
     } catch (err) { console.error('[BTS] rscUnmarkPaid failed', err); }
   }
 
+  function rscApplyVolunteerSelection(key) {
+    const groups = window._rscVolunteerSelectGroups || [];
+    const group = groups.find(g => g.key === key) || null;
+    const roleEl = document.getElementById('rsc-vol-role');
+    const hoursEl = document.getElementById('rsc-vol-hours');
+    const summaryEl = document.getElementById('rsc-vol-linked-summary');
+    if (!group) {
+      if (summaryEl) summaryEl.innerHTML = '<div style="font-size:0.74rem;color:rgba(87,46,136,0.45);">No volunteer connected yet.</div>';
+      return;
+    }
+    if (roleEl) roleEl.value = group.roles || '';
+    if (hoursEl && group.hours) hoursEl.value = String(Number.isInteger(group.hours) ? group.hours : group.hours.toFixed(2).replace(/\.?0+$/, ''));
+    if (summaryEl) {
+      const meta = [
+        group.email,
+        group.code ? `Code ${group.code}` : '',
+        group.status ? group.status.replace(/_/g, ' ') : '',
+      ].filter(Boolean).join(' · ');
+      summaryEl.innerHTML = `<div style="font-size:0.78rem;font-weight:850;color:#1a1530;">${esc(group.name)}</div>
+        <div style="font-size:0.72rem;color:rgba(87,46,136,0.55);line-height:1.45;">${esc(group.roles || 'Volunteer')}${group.hours ? ` · ${esc(String(group.hours))} approved hr${group.hours === 1 ? '' : 's'}` : ''}</div>
+        ${meta ? `<div style="font-size:0.68rem;color:rgba(87,46,136,0.42);margin-top:0.1rem;">${esc(meta)}</div>` : ''}`;
+    }
+  }
+
   function rscOpenVolunteerModal(assignId) {
     const d = window._rscModalData?.[assignId];
     if (!d) return;
     const v = d.volunteer;
     const symbol = { CAD: '$', USD: '$', GBP: '£' }[v.currency] || '$';
     const discountNote = v.discountAmount ? ` · ${symbol}${v.discountAmount} off` : '';
+    const groups = rscVolunteerGroups();
+    window._rscVolunteerSelectGroups = groups;
+    const linkedIds = new Set((v.linkedIds || []).map(String));
+    const selectedGroup = groups.find(group => group.ids.some(id => linkedIds.has(String(id)))) || null;
+    const optionsHtml = ['<option value="">Not connected</option>'].concat(groups.map(group => {
+      const label = `${group.name}${group.roles ? ' - ' + group.roles : ''}${group.hours ? ' (' + group.hours + ' hrs)' : ''}`;
+      return `<option value="${esc(group.key)}"${selectedGroup?.key === group.key ? ' selected' : ''}>${esc(label)}</option>`;
+    })).join('');
+    const linkedSummary = selectedGroup
+      ? `<div style="font-size:0.78rem;font-weight:850;color:#1a1530;">${esc(selectedGroup.name)}</div>
+        <div style="font-size:0.72rem;color:rgba(87,46,136,0.55);line-height:1.45;">${esc(selectedGroup.roles || 'Volunteer')}${selectedGroup.hours ? ` · ${esc(String(selectedGroup.hours))} approved hr${selectedGroup.hours === 1 ? '' : 's'}` : ''}</div>`
+      : '<div style="font-size:0.74rem;color:rgba(87,46,136,0.45);">No volunteer connected yet.</div>';
     document.getElementById('rsc-volunteer-modal')?.remove();
     const modal = document.createElement('div');
     modal.id = 'rsc-volunteer-modal';
     modal.className = 'rpt-household-modal';
-    modal.innerHTML = `<div class="rpt-household-modal-box" style="max-width:430px;">
+    modal.innerHTML = `<div class="rpt-household-modal-box" style="max-width:480px;">
       <div class="rpt-household-modal-title">Volunteer Discount — ${esc(d.name)}</div>
       ${v.requested
         ? `<div class="rsc-vol-requested-banner">✓ This person indicated interest in a volunteer discount on their registration form.${v.volunteerName ? `<br>Volunteer: ${esc(v.volunteerName)}` : ''}</div>`
         : `<div style="font-size:0.78rem;color:rgba(87,46,136,0.4);">No volunteer interest recorded on this form.</div>`
       }
       ${v.requiredHours ? `<div style="font-size:0.74rem;color:rgba(87,46,136,0.5);">Required: ${esc(v.requiredHours)} hours${discountNote}</div>` : ''}
+      <div class="rsc-modal-row">
+        <div class="rsc-modal-label">Connected Volunteer</div>
+        <select class="rpt-household-modal-input" id="rsc-vol-link" onchange="rscApplyVolunteerSelection(this.value)">
+          ${optionsHtml}
+        </select>
+        <div id="rsc-vol-linked-summary" style="background:#f8f7fc;border:1px solid rgba(87,46,136,0.1);border-radius:8px;padding:0.62rem 0.72rem;">${linkedSummary}</div>
+      </div>
       <div class="rsc-modal-row">
         <div class="rsc-modal-label">Role / Volunteer Assignment</div>
         <input class="rpt-household-modal-input" type="text" id="rsc-vol-role" placeholder="e.g. Front of House, Box Office, Stage Crew…" value="${esc(v.roleNotes)}" />
@@ -46427,18 +46569,24 @@ See you soon!
   async function rscSaveVolunteer(assignId, approved) {
     const role  = document.getElementById('rsc-vol-role')?.value?.trim() || '';
     const hours = document.getElementById('rsc-vol-hours')?.value?.trim() || '';
+    const selectedKey = document.getElementById('rsc-vol-link')?.value || '';
+    const selectedGroup = (window._rscVolunteerSelectGroups || []).find(group => group.key === selectedKey) || null;
     document.getElementById('rsc-volunteer-modal')?.remove();
     try {
       await sb.from('casting_assignments').update({
         volunteer_discount_approved: !!approved,
         volunteer_hours_completed: hours ? parseFloat(hours) : null,
         volunteer_role_notes: role || null,
+        volunteer_signup_ids: selectedGroup ? selectedGroup.ids : [],
+        volunteer_signup_name: selectedGroup ? selectedGroup.name : null,
       }).eq('id', assignId);
       const item = _rptCastItems.find(i => String(i.assignment?.id) === String(assignId));
       if (item?.assignment) {
         item.assignment.volunteer_discount_approved = !!approved;
         item.assignment.volunteer_hours_completed = hours ? parseFloat(hours) : null;
         item.assignment.volunteer_role_notes = role || null;
+        item.assignment.volunteer_signup_ids = selectedGroup ? selectedGroup.ids : [];
+        item.assignment.volunteer_signup_name = selectedGroup ? selectedGroup.name : null;
       }
       rptRerenderRow(assignId);
       rptRerenderSummary();
@@ -46694,7 +46842,7 @@ See you soon!
     if (!root) return;
     root.innerHTML = `<div style="padding:2rem;color:rgba(87,46,136,0.5);font-size:0.82rem;text-align:center;">Loading tracker…</div>`;
     try {
-      const [items] = await Promise.all([loadRegistrationAcceptedCastForCards(), loadRegistrationPaymentRecords()]);
+      const [items] = await Promise.all([loadRegistrationAcceptedCastForCards(), loadRegistrationPaymentRecords(), loadRegistrationVolunteerSignups()]);
       _rptCastItems = items;
       rptLoadHouseholds();
       const settings = registrationCurrentPaymentSettings();
