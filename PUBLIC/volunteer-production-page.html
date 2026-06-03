@@ -1073,6 +1073,23 @@
       cursor: pointer;
     }
     .vp-portal-login-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+    .vp-portal-remember {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin: -0.2rem 0 0.9rem;
+      color: var(--purple);
+      font-size: 0.78rem;
+      font-weight: 800;
+      line-height: 1.3;
+      cursor: pointer;
+    }
+    .vp-portal-remember input {
+      width: 16px;
+      height: 16px;
+      accent-color: var(--purple);
+      flex-shrink: 0;
+    }
     .vp-portal-login-hint { margin-top: 0.75rem; font-size: 0.76rem; color: var(--muted); text-align: center; line-height: 1.45; }
 
     /* ── Portal Dashboard ── */
@@ -1152,6 +1169,18 @@
     .vpd-hero-count-label { font-size: 0.72rem; font-weight: 950; color: rgba(255,255,255,0.68); text-transform: uppercase; letter-spacing: 0.08em; margin-top: 0.5rem; }
     /* Body */
     .vpd-body { max-width: 1240px; width: 100%; margin: 0 auto; padding: 1.5rem clamp(1rem,4vw,2rem) 3rem; display: flex; flex-direction: column; gap: 1.5rem; }
+    .vpd-remember-note {
+      align-self: flex-end;
+      margin: -0.75rem 0 -0.55rem;
+      border: 0;
+      background: transparent;
+      color: var(--purple);
+      font: inherit;
+      font-size: 0.72rem;
+      font-weight: 850;
+      cursor: pointer;
+      text-decoration: underline;
+    }
     /* Base card */
     .vpd-card { background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 1.4rem; box-shadow: 0 4px 20px rgba(0,0,0,0.06); }
     .vpd-kicker { font-size: 0.65rem; font-weight: 950; text-transform: uppercase; letter-spacing: 0.12em; color: var(--purple); margin-bottom: 0.6rem; opacity: 0.7; }
@@ -1529,6 +1558,10 @@
           <label class="vp-portal-login-label" for="vp-portal-code">Volunteer Code</label>
           <input class="vp-portal-login-input" id="vp-portal-code" type="text" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" placeholder="e.g. 4829" autocomplete="one-time-code" />
         </div>
+        <label class="vp-portal-remember" for="vp-portal-remember">
+          <input id="vp-portal-remember" type="checkbox" />
+          <span>Remember me on this device</span>
+        </label>
         <div class="vp-portal-login-error" id="vp-portal-error">That email and Volunteer Code combination was not found. Check your confirmation email and try again.</div>
         <button class="vp-portal-login-btn" id="vp-portal-login-btn" type="button" onclick="portalLogin()">Access My Portal</button>
         <p class="vp-portal-login-hint">No Volunteer Code? Check your volunteer confirmation email or <button style="background:none;border:none;color:var(--purple);font-weight:800;cursor:pointer;padding:0;font-family:inherit;font-size:inherit;" onclick="showShiftBrowser()">browse open shifts</button> to sign up.</p>
@@ -1558,6 +1591,7 @@
 
       <!-- Content body -->
       <div class="vpd-body">
+        <button class="vpd-remember-note hidden" id="vpd-forget-remembered" type="button" onclick="forgetRememberedPortal()">Not you? Forget this device.</button>
         <!-- Stats row -->
         <div class="vpd-stats" id="vpd-stats-row">
           <div class="vpd-stat-tile vpd-stat-tile--green">
@@ -1980,6 +2014,48 @@
     function volunteerFirstName(row = {}, fallbackEmail = '') {
       return volunteerDisplayName(row, fallbackEmail).split(/\s+/).filter(Boolean)[0] || 'Volunteer';
     }
+    function rememberedPortalKey() {
+      return `bts_volunteer_portal_${prod?.id || 'unknown'}`;
+    }
+    function loadRememberedPortal() {
+      try {
+        const raw = localStorage.getItem(rememberedPortalKey());
+        if (!raw) return null;
+        const saved = JSON.parse(raw);
+        if (!saved?.email || !saved?.code || saved.production_id !== prod?.id) return null;
+        return saved;
+      } catch (_) {
+        return null;
+      }
+    }
+    function saveRememberedPortal(email, code) {
+      try {
+        localStorage.setItem(rememberedPortalKey(), JSON.stringify({
+          email,
+          code,
+          production_id: prod?.id || '',
+          remembered_at: new Date().toISOString()
+        }));
+      } catch (_) {}
+    }
+    function clearRememberedPortal() {
+      try { localStorage.removeItem(rememberedPortalKey()); } catch (_) {}
+    }
+    function forgetRememberedPortal() {
+      clearRememberedPortal();
+      sessionStorage.removeItem('vp_portal_email');
+      sessionStorage.removeItem('vp_portal_code');
+      sessionStorage.removeItem('vp_portal_prod');
+      const note = document.getElementById('vpd-forget-remembered');
+      if (note) note.classList.add('hidden');
+      showPortalLogin();
+      const emailEl = document.getElementById('vp-portal-email');
+      const codeEl = document.getElementById('vp-portal-code');
+      const rememberEl = document.getElementById('vp-portal-remember');
+      if (emailEl) emailEl.value = '';
+      if (codeEl) codeEl.value = '';
+      if (rememberEl) rememberEl.checked = false;
+    }
     async function generateUniqueVolunteerPasscode() {
       // Uniqueness is checked across ALL signups for this production — not scoped by email.
       // Codes are tied to individual signups; the only way to reuse a code is via the returning flow.
@@ -2054,6 +2130,15 @@
       document.getElementById('vp-portal-login').classList.remove('hidden');
       document.getElementById('vp-portal-home').classList.add('hidden');
       document.getElementById('vp-main').style.display = 'none';
+      const remembered = loadRememberedPortal();
+      const emailEl = document.getElementById('vp-portal-email');
+      const codeEl = document.getElementById('vp-portal-code');
+      const rememberEl = document.getElementById('vp-portal-remember');
+      if (remembered) {
+        if (emailEl && !emailEl.value) emailEl.value = remembered.email;
+        if (codeEl && !codeEl.value) codeEl.value = remembered.code;
+        if (rememberEl) rememberEl.checked = true;
+      }
     }
     function showPortalHome(volunteerData) {
       document.getElementById('vp-portal-login').classList.add('hidden');
@@ -2061,6 +2146,8 @@
       document.getElementById('vp-main').style.display = 'none';
       const homeBtn = document.getElementById('vpd-home-btn');
       if (homeBtn) homeBtn.style.display = '';
+      const forgetBtn = document.getElementById('vpd-forget-remembered');
+      if (forgetBtn) forgetBtn.classList.toggle('hidden', !loadRememberedPortal());
       if (volunteerData) renderPortalDashboard(volunteerData);
     }
     function showShiftBrowser() {
@@ -2076,6 +2163,7 @@
       const code  = (document.getElementById('vp-portal-code')?.value  || '').trim();
       const errEl = document.getElementById('vp-portal-error');
       const btn   = document.getElementById('vp-portal-login-btn');
+      const remember = !!document.getElementById('vp-portal-remember')?.checked;
       errEl.classList.remove('visible');
       if (!email || !code) { errEl.textContent = 'Please enter your email and Volunteer Code.'; errEl.classList.add('visible'); return; }
       btn.disabled = true; btn.textContent = 'Checking...';
@@ -2086,6 +2174,8 @@
         sessionStorage.setItem('vp_portal_email', email);
         sessionStorage.setItem('vp_portal_code', code);
         sessionStorage.setItem('vp_portal_prod', prod?.id || '');
+        if (remember) saveRememberedPortal(email, code);
+        else clearRememberedPortal();
         showPortalHome({ email, signups: portal.rows });
       } catch (e) {
         errEl.textContent = e.message === 'not_found'
@@ -2790,15 +2880,23 @@
         const viewParam = new URLSearchParams(window.location.search).get('view');
         if (viewParam === 'portal') {
           // Check for existing session
+          const remembered = loadRememberedPortal();
           const savedEmail = sessionStorage.getItem('vp_portal_email');
+          const savedCode = sessionStorage.getItem('vp_portal_code');
           const savedProd  = sessionStorage.getItem('vp_portal_prod');
-          if (savedEmail && savedProd === prod.id) {
-            const { data: signups } = await sb.from('volunteer_signups')
-              .select('*')
-              .eq('production_id', prod.id)
-              .or(`email.ilike.${savedEmail},volunteer_email.ilike.${savedEmail}`)
-              .neq('status', 'cancelled');
-            showPortalHome({ email: savedEmail, signups: signups || [] });
+          const savedCreds = remembered || (savedEmail && savedCode && savedProd === prod.id ? { email: savedEmail, code: savedCode } : null);
+          if (savedCreds) {
+            try {
+              const portal = await resolveVolunteerPortal(savedCreds.email, savedCreds.code);
+              if (portal.rows.length) {
+                showPortalHome({ email: savedCreds.email, signups: portal.rows });
+              } else {
+                clearRememberedPortal();
+                showPortalLogin();
+              }
+            } catch (_) {
+              showPortalLogin();
+            }
           } else {
             showPortalLogin();
           }
