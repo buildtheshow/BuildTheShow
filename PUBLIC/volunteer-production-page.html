@@ -1934,32 +1934,23 @@
     function volunteerFirstName(row = {}, fallbackEmail = '') {
       return volunteerDisplayName(row, fallbackEmail).split(/\s+/).filter(Boolean)[0] || 'Volunteer';
     }
-    async function generateUniqueVolunteerPasscode(email) {
-      const normalized = (email || '').trim().toLowerCase();
-      let existingRows = [];
+    async function generateUniqueVolunteerPasscode() {
+      // Uniqueness is checked across ALL signups for this production — not scoped by email.
+      // Codes are tied to individual signups; the only way to reuse a code is via the returning flow.
+      let usedCodes = new Set();
       try {
         let { data, error } = await sb.from('volunteer_signups')
-          .select('email,volunteer_email,production_id,volunteer_passcode')
+          .select('volunteer_passcode')
           .eq('production_id', prod.id)
-          .or(`email.ilike.${normalized},volunteer_email.ilike.${normalized}`)
           .neq('status', 'cancelled');
         if (error && missingVolunteerPasscodeColumn(error)) {
-          const fallback = await sb.from('volunteer_signups')
-            .select('email,volunteer_email,production_id')
-            .eq('production_id', prod.id)
-            .or(`email.ilike.${normalized},volunteer_email.ilike.${normalized}`)
-            .neq('status', 'cancelled');
-          data = fallback.data;
-          error = fallback.error;
-        }
-        if (error) throw error;
-        existingRows = data || [];
-      } catch (_) {
-        existingRows = [];
-      }
-      for (let attempt = 0; attempt < 12; attempt++) {
+          data = [];
+        } else if (error) throw error;
+        (data || []).forEach(row => { if (row.volunteer_passcode) usedCodes.add(String(row.volunteer_passcode).trim()); });
+      } catch (_) {}
+      for (let attempt = 0; attempt < 20; attempt++) {
         const code = randomVolunteerPasscode();
-        if (!existingRows.some(row => signupPasscode(row) === code)) return code;
+        if (!usedCodes.has(code)) return code;
       }
       return randomVolunteerPasscode();
     }
@@ -3609,7 +3600,7 @@
         const returningEmail = (document.getElementById('su-returning-email')?.value || '').trim().toLowerCase();
         const returningCode = (document.getElementById('su-returning-code')?.value || '').trim();
         let portalToken = crypto.randomUUID();
-        let portalPasscode = await generateUniqueVolunteerPasscode(email);
+        let portalPasscode = await generateUniqueVolunteerPasscode();
         let isReturning = false;
         if (returningChecked && returningEmail && returningCode) {
           try {
