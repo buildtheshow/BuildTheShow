@@ -915,6 +915,7 @@ serve(async (req) => {
     '{{self_tape_instructions}}',
     '{{volunteer_shifts_block}}',
     '{{org_logo_block}}',
+    '{{event_schedule}}',
   ]);
 
   function substituteTemplate(text: string, escapeForHtml = false): string {

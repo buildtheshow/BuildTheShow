@@ -32576,30 +32576,29 @@
     return `${row.title || typeLabel}: ${[label, time].filter(Boolean).join(' at ')}${venue}`;
   }
 
-  function summarizeEmailEventRows(rows) {
-    // Group by label so repeated events (e.g. 15 rehearsals) become one summary line.
+  function buildEventScheduleHtml(rows) {
+    if (!rows.length) return '';
+    // Group rows by type label
     const groups = new Map();
     rows.forEach(row => {
-      const key = (row.title || EVENT_LABELS[row.event_type] || 'Event').trim();
+      const key = (EVENT_LABELS[row.event_type] || row.event_type || 'Event').trim();
       if (!groups.has(key)) groups.set(key, []);
       groups.get(key).push(row);
     });
-    const lines = [];
-    groups.forEach((groupRows, label) => {
-      if (groupRows.length <= 2) {
-        groupRows.forEach(r => lines.push(formatEmailScheduleEvent(r)));
-      } else {
-        const first = groupRows[0];
-        const last  = groupRows[groupRows.length - 1];
-        const d1 = String(first.start_time || '').slice(0, 10);
-        const d2 = String(last.start_time  || '').slice(0, 10);
-        const time  = first.start_time ? ' at ' + formatSlotTime(String(first.start_time).slice(11, 16)) : '';
-        const venue = first.venue ? ` at ${first.venue}` : '';
-        const range = d1 === d2 ? fmtDate(d1) : `${fmtDate(d1)} – ${fmtDate(d2)}`;
-        lines.push(`${label}: ${range}${time}${venue} (${groupRows.length} dates)`);
-      }
+    let html = '';
+    groups.forEach((groupRows, typeLabel) => {
+      html += `<div style="margin:14px 0 4px;font-size:11px;font-weight:900;letter-spacing:0.1em;text-transform:uppercase;color:#572e88;">${typeLabel}</div>`;
+      groupRows.forEach(row => {
+        const datePart = String(row.start_time || '').slice(0, 10);
+        const timePart = String(row.start_time || '').slice(11, 16);
+        const date  = datePart ? fmtDate(datePart) : '';
+        const time  = timePart ? formatSlotTime(timePart) : '';
+        const venue = row.venue ? ` &middot; ${row.venue}` : '';
+        const title = row.title && row.title !== typeLabel ? `<strong>${row.title}</strong> &middot; ` : '';
+        html += `<div style="font-size:14px;color:#1a1530;padding:2px 0;">${title}${date}${time ? ' &middot; ' + time : ''}${venue}</div>`;
+      });
     });
-    return lines.join('\n');
+    return html;
   }
 
   async function loadPerformanceScheduleSummary() {
@@ -32619,7 +32618,7 @@
         return row.is_public === true;
       });
       performanceScheduleSummaryCache = performanceRows.map(formatEmailScheduleEvent).filter(Boolean).join('\n');
-      eventScheduleSummaryCache = summarizeEmailEventRows(eventRows.filter(Boolean));
+      eventScheduleSummaryCache = buildEventScheduleHtml(eventRows.filter(Boolean));
       productionScheduleSummaryCache = sortedRows.map(formatEmailScheduleEvent).filter(Boolean).join('\n');
     } catch (error) {
       console.warn('[BTS] Could not load production schedule for email context.', error);
@@ -33199,7 +33198,7 @@ Warmly,
     </div>
     <div style="margin:16px 0 0;">
       <div style="font-size:12px;font-weight:900;letter-spacing:0.1em;text-transform:uppercase;color:#8a5f10;margin-bottom:6px;">Events</div>
-      <div style="white-space:pre-line;color:#1a1530;">{{event_schedule}}</div>
+      <div style="color:#1a1530;">{{event_schedule}}</div>
     </div>
   </div>
   <div style="background:#f0f8f3;border:1.5px solid #c7dfcc;border-radius:14px;padding:20px 22px;margin:22px 0;">
@@ -33855,7 +33854,7 @@ Your submission link is unique to you. Please do not share it with another perfo
     </div>
     <div style="margin:16px 0 0;">
       <div style="font-size:12px;font-weight:900;letter-spacing:0.1em;text-transform:uppercase;color:#8a5f10;margin-bottom:6px;">Events</div>
-      <div style="white-space:pre-line;color:#1a1530;">{{event_schedule}}</div>
+      <div style="color:#1a1530;">{{event_schedule}}</div>
     </div>
   </div>
   <div style="background:#f0f8f3;border:1.5px solid #c7dfcc;border-radius:14px;padding:20px 22px;margin:22px 0;">
