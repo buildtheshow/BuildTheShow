@@ -1794,6 +1794,16 @@
     function signupPasscode(row = {}) {
       return String(row.volunteer_passcode || '').trim() || legacyVolunteerPasscode(row.email || row.volunteer_email || '', row.production_id || prod?.id || '');
     }
+    function volunteerDisplayName(row = {}, fallbackEmail = '') {
+      const explicit = row.preferred_name || row.first_name || row.volunteer_name || row.name || '';
+      const fullName = explicit || [row.first_name, row.last_name].filter(Boolean).join(' ');
+      if (fullName) return String(fullName).trim();
+      const email = fallbackEmail || row.email || row.volunteer_email || '';
+      return email ? String(email).split('@')[0] : 'Volunteer';
+    }
+    function volunteerFirstName(row = {}, fallbackEmail = '') {
+      return volunteerDisplayName(row, fallbackEmail).split(/\s+/).filter(Boolean)[0] || 'Volunteer';
+    }
     async function generateUniqueVolunteerPasscode(email) {
       const normalized = (email || '').trim().toLowerCase();
       let existingRows = [];
@@ -1901,7 +1911,7 @@
 
     function renderPortalDashboard(volunteerData) {
       const { email, signups } = volunteerData;
-      const firstName = signups[0]?.first_name || email.split('@')[0] || 'Volunteer';
+      const firstName = volunteerFirstName(signups[0] || {}, email);
       const approved  = signups.filter(s => s.status === 'approved' || s.status === 'checked_in' || s.status === 'completed');
       const pending   = signups.filter(s => s.status === 'pending');
       const checkedIn = signups.filter(s => s.status === 'checked_in' || s.status === 'completed');
@@ -3334,7 +3344,7 @@
 
     function renderPortalView(rows, token, email) {
       const totalHours = rows.filter(r => r.status === 'approved' || r.status === 'partially_filled').reduce((s,r) => s + (parseFloat(r.approved_hours) || 0), 0);
-      const firstName = rows[0]?.name ? rows[0].name.split(' ')[0] : null;
+      const firstName = rows.length ? volunteerFirstName(rows[0], email) : null;
       const portalUrl = token ? `${window.location.origin}${window.location.pathname}?token=${token}` : null;
       document.getElementById('vp-modal').innerHTML = `
         <div class="vp-modal-head"><div class="vp-modal-title">My Volunteer Schedule</div><button class="vp-modal-close" type="button" onclick="closeModal()">&times;</button></div>
