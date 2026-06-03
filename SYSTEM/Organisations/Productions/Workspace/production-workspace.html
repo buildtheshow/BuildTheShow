@@ -68070,6 +68070,9 @@ See you soon!
   function volReqSignupPasscode(signup = {}) {
     return String(signup.volunteer_passcode || '').trim() || volunteerPasscode(signup.email || signup.volunteer_email || '', signup.production_id || prodId);
   }
+  function volReqMissingPasscodeColumn(error) {
+    return /volunteer_passcode/i.test(error?.message || '') && /schema cache|column/i.test(error?.message || '');
+  }
   function volReqPortalKey(signup = {}) {
     return signup.portal_token || signup.id || (signup.email || signup.volunteer_email || 'unknown').toLowerCase();
   }
@@ -68993,18 +68996,22 @@ See you soon!
       const sourceIds = candidate.rows.map(r => r.id).filter(Boolean);
       if (!sourceIds.length) throw new Error('No request rows were found to combine.');
 
+      const updateVolunteerPortalRows = async (ids, includePasscode = true) => {
+        const payload = { portal_token: targetToken };
+        if (includePasscode) payload.volunteer_passcode = targetPasscode;
+        const result = await sb.from('volunteer_signups').update(payload).in('id', ids);
+        if (result.error && includePasscode && volReqMissingPasscodeColumn(result.error)) {
+          return sb.from('volunteer_signups').update({ portal_token: targetToken }).in('id', ids);
+        }
+        return result;
+      };
+
       const updates = [];
       const targetNeedsPatch = targetRows.some(r => r.portal_token !== targetToken || volReqSignupPasscode(r) !== targetPasscode);
       if (targetNeedsPatch && targetIds.length) {
-        updates.push(sb.from('volunteer_signups').update({
-          portal_token: targetToken,
-          volunteer_passcode: targetPasscode,
-        }).in('id', targetIds));
+        updates.push(updateVolunteerPortalRows(targetIds));
       }
-      updates.push(sb.from('volunteer_signups').update({
-        portal_token: targetToken,
-        volunteer_passcode: targetPasscode,
-      }).in('id', sourceIds));
+      updates.push(updateVolunteerPortalRows(sourceIds));
       const results = await Promise.all(updates);
       const failed = results.find(result => result.error);
       if (failed?.error) throw failed.error;

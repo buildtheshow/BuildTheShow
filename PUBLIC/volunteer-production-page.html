@@ -1882,6 +1882,9 @@
     function signupPasscode(row = {}) {
       return String(row.volunteer_passcode || '').trim() || legacyVolunteerPasscode(row.email || row.volunteer_email || '', row.production_id || prod?.id || '');
     }
+    function missingVolunteerPasscodeColumn(error) {
+      return /volunteer_passcode/i.test(error?.message || '') && /schema cache|column/i.test(error?.message || '');
+    }
     function volunteerDisplayName(row = {}, fallbackEmail = '') {
       const explicit = row.preferred_name || row.first_name || row.volunteer_name || row.name || '';
       const fullName = explicit || [row.first_name, row.last_name].filter(Boolean).join(' ');
@@ -1896,11 +1899,20 @@
       const normalized = (email || '').trim().toLowerCase();
       let existingRows = [];
       try {
-        const { data, error } = await sb.from('volunteer_signups')
+        let { data, error } = await sb.from('volunteer_signups')
           .select('email,volunteer_email,production_id,volunteer_passcode')
           .eq('production_id', prod.id)
           .or(`email.ilike.${normalized},volunteer_email.ilike.${normalized}`)
           .neq('status', 'cancelled');
+        if (error && missingVolunteerPasscodeColumn(error)) {
+          const fallback = await sb.from('volunteer_signups')
+            .select('email,volunteer_email,production_id')
+            .eq('production_id', prod.id)
+            .or(`email.ilike.${normalized},volunteer_email.ilike.${normalized}`)
+            .neq('status', 'cancelled');
+          data = fallback.data;
+          error = fallback.error;
+        }
         if (error) throw error;
         existingRows = data || [];
       } catch (_) {
@@ -1921,6 +1933,12 @@
         .eq('production_id', prod.id)
         .or(`email.ilike.${normalized},volunteer_email.ilike.${normalized}`)
         .neq('status', 'cancelled');
+      if (error && missingVolunteerPasscodeColumn(error) && options.select?.includes('volunteer_passcode')) {
+        return findVolunteerSignupsByCode(email, code, {
+          ...options,
+          select: options.select.split(',').map(part => part.trim()).filter(part => part !== 'volunteer_passcode').join(','),
+        });
+      }
       if (error) throw error;
       return (data || []).filter(row => signupPasscode(row) === enteredCode);
     }
@@ -1933,6 +1951,12 @@
       if (options.includeCancelled !== true) query.neq('status', 'cancelled');
       if (options.orderByShiftDate !== false) query.order('shift_date', { ascending: true });
       const { data, error } = await query;
+      if (error && missingVolunteerPasscodeColumn(error) && options.select?.includes('volunteer_passcode')) {
+        return loadVolunteerPortalRowsByToken(token, {
+          ...options,
+          select: options.select.split(',').map(part => part.trim()).filter(part => part !== 'volunteer_passcode').join(','),
+        });
+      }
       if (error) throw error;
       return data || [];
     }
@@ -3479,7 +3503,13 @@
           discount_requested: discountRequested || false,
           discount_performer: discountRequested ? discountPerformer.trim() || null : null,
         }));
-        const { error } = await sb.from('volunteer_signups').insert(rows);
+        let { error } = await sb.from('volunteer_signups').insert(rows);
+        if (error && missingVolunteerPasscodeColumn(error)) {
+          portalPasscode = legacyVolunteerPasscode(email, prod.id);
+          const fallbackRows = rows.map(({ volunteer_passcode, ...row }) => row);
+          const fallback = await sb.from('volunteer_signups').insert(fallbackRows);
+          error = fallback.error;
+        }
         if (error) throw error;
         const requestedShifts = schedule.slice();
         sendVolunteerRequestEmail({ name, email, portalToken, portalPasscode, requestedShifts });
@@ -3549,9 +3579,14 @@
       btn.disabled = true;
       btn.textContent = 'Looking you up...';
       try {
-        const portal = await resolveVolunteerPortal(email, code, {
+        let portal = await resolveVolunteerPortal(email, code, {
           select: 'id,role_name,department,check_in_with,shift_date,shift_start_time,shift_end_time,required_dates,status,approved_hours,portal_token,volunteer_passcode,name,email,volunteer_email,production_id,created_at',
         });
+        if (!portal.rows.length) {
+          portal = await resolveVolunteerPortal(email, code, {
+            select: 'id,role_name,department,check_in_with,shift_date,shift_start_time,shift_end_time,required_dates,status,approved_hours,portal_token,name,email,volunteer_email,production_id,created_at',
+          });
+        }
         if (!portal.rows.length) {
           btn.disabled = false;
           btn.textContent = 'View My Schedule';
@@ -3568,10 +3603,16 @@
 
     async function lookupByToken(token) {
       try {
-        const rows = await loadVolunteerPortalRowsByToken(token, {
+        let rows = await loadVolunteerPortalRowsByToken(token, {
           select: 'id,role_name,department,check_in_with,shift_date,shift_start_time,shift_end_time,required_dates,status,approved_hours,portal_token,volunteer_passcode,name,created_at',
           includeCancelled: true,
         });
+        if (!rows.length) {
+          rows = await loadVolunteerPortalRowsByToken(token, {
+            select: 'id,role_name,department,check_in_with,shift_date,shift_start_time,shift_end_time,required_dates,status,approved_hours,portal_token,name,created_at',
+            includeCancelled: true,
+          });
+        }
         if (!rows.length) { openPortalModal(); return; }
         show('vp-modal-overlay');
         document.body.style.overflow = 'hidden';
