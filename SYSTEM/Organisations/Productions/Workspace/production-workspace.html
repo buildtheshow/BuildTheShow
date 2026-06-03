@@ -23636,6 +23636,10 @@
         <span class="fc-legend-item" draggable="true" data-event-type="meeting"         data-label="Meeting"         style="--c:#efab45">Meeting</span>
         <span class="fc-legend-item" draggable="true" data-event-type="crew"            data-label="Crew"            style="--c:#986fc8">Crew</span>
         <span class="fc-legend-hint">← drag onto a date to add</span>
+        <span style="display:inline-flex;align-items:center;gap:0.75rem;margin-left:0.5rem;font-size:0.72rem;color:#6a5a80;">
+          <span style="display:inline-flex;align-items:center;gap:4px;"><span style="width:8px;height:8px;border-radius:50%;background:#ffffff;border:1.5px solid rgba(0,0,0,0.25);display:inline-block;flex-shrink:0;"></span>Audition Page</span>
+          <span style="display:inline-flex;align-items:center;gap:4px;"><span style="width:8px;height:8px;border-radius:50%;background:#1a1530;display:inline-block;flex-shrink:0;"></span>Cast Schedule</span>
+        </span>
         <label class="holidays-pill-toggle active" id="holidays-toggle-wrap" onclick="toggleHolidays()">
           <span class="hpt-track"><span class="hpt-thumb"></span></span>
           <span class="hpt-label">Holidays</span>
@@ -35241,7 +35245,7 @@ See you soon!
           const safeTxt = s => String(s||'').replace(/</g,'&lt;').replace(/>/g,'&gt;');
           const isPublic = ev.extendedProps.is_public;
           const isCast   = ev.extendedProps.show_in_cast_schedule;
-          const dots = (isPublic || isCast) ? `<div style="position:absolute;top:2px;right:3px;display:flex;gap:2px;align-items:center;">${isPublic ? '<span title="On Audition Page" style="width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,0.85);display:inline-block;flex-shrink:0;"></span>' : ''}${isCast ? '<span title="In Cast Schedule" style="width:6px;height:6px;border-radius:50%;background:#efab45;display:inline-block;flex-shrink:0;"></span>' : ''}</div>` : '';
+          const dots = (isPublic || isCast) ? `<div style="position:absolute;top:2px;right:3px;display:flex;gap:2px;align-items:center;">${isPublic ? '<span title="On Audition Page" style="width:6px;height:6px;border-radius:50%;background:#ffffff;border:1px solid rgba(0,0,0,0.2);display:inline-block;flex-shrink:0;"></span>' : ''}${isCast ? '<span title="In Cast Schedule" style="width:6px;height:6px;border-radius:50%;background:#1a1530;display:inline-block;flex-shrink:0;"></span>' : ''}</div>` : '';
           wrap.innerHTML = dots
             + (timeStr ? `<div class="zeus-event-time">${safeTxt(timeStr)}</div>` : '')
             + `<div class="zeus-event-label">${safeTxt(ev.title || '')}</div>`;
@@ -45154,6 +45158,15 @@ See you soon!
     return row.name || row.volunteer_name || [row.first_name, row.last_name].filter(Boolean).join(' ') || row.email || row.volunteer_email || 'Volunteer';
   }
 
+  function rscNormalizeEmail(value = '') {
+    return String(value || '').trim().toLowerCase();
+  }
+
+  function rscRegistrationEmailForVolunteerLink(app = {}) {
+    if (typeof applicantEmailAddress === 'function') return rscNormalizeEmail(applicantEmailAddress(app));
+    return rscNormalizeEmail(app.email || registrationAnswerValue(app, ['Contact Email', 'Email', 'Email Address', '__bts_registration_email']));
+  }
+
   function rscVolunteerSignupHours(row = {}) {
     const approved = parseFloat(row.approved_hours);
     if (Number.isFinite(approved) && approved > 0) return approved;
@@ -46523,10 +46536,25 @@ See you soon!
     window._rscVolunteerSelectGroups = groups;
     const linkedIds = new Set((v.linkedIds || []).map(String));
     const selectedGroup = groups.find(group => group.ids.some(id => linkedIds.has(String(id)))) || null;
-    const optionsHtml = ['<option value="">Not connected</option>'].concat(groups.map(group => {
+    const registrationEmail = rscRegistrationEmailForVolunteerLink(d.app);
+    const suggestedGroups = registrationEmail
+      ? groups.filter(group => group.rows.some(row => rscNormalizeEmail(row.email || row.volunteer_email) === registrationEmail))
+      : [];
+    const suggestedKeys = new Set(suggestedGroups.map(group => group.key));
+    const optionForGroup = group => {
       const label = `${group.name}${group.roles ? ' - ' + group.roles : ''}${group.hours ? ' (' + group.hours + ' hrs)' : ''}`;
       return `<option value="${esc(group.key)}"${selectedGroup?.key === group.key ? ' selected' : ''}>${esc(label)}</option>`;
-    })).join('');
+    };
+    const suggestedHtml = suggestedGroups.length
+      ? `<optgroup label="Suggested from registration email">${suggestedGroups.map(optionForGroup).join('')}</optgroup>`
+      : '';
+    const otherHtml = groups.filter(group => !suggestedKeys.has(group.key)).map(optionForGroup).join('');
+    const optionsHtml = `<option value="">Not connected</option>${suggestedHtml}${otherHtml ? `<optgroup label="All volunteers">${otherHtml}</optgroup>` : ''}`;
+    const suggestionNote = suggestedGroups.length
+      ? `<div style="font-size:0.68rem;color:#4a7a50;font-weight:800;margin-top:0.18rem;">Suggested because the volunteer email matches this registration.</div>`
+      : registrationEmail
+        ? `<div style="font-size:0.68rem;color:rgba(87,46,136,0.45);margin-top:0.18rem;">No volunteer found with ${esc(registrationEmail)}.</div>`
+        : '';
     const linkedSummary = selectedGroup
       ? `<div style="font-size:0.78rem;font-weight:850;color:#1a1530;">${esc(selectedGroup.name)}</div>
         <div style="font-size:0.72rem;color:rgba(87,46,136,0.55);line-height:1.45;">${esc(selectedGroup.roles || 'Volunteer')}${selectedGroup.hours ? ` · ${esc(String(selectedGroup.hours))} approved hr${selectedGroup.hours === 1 ? '' : 's'}` : ''}</div>`
@@ -46547,6 +46575,7 @@ See you soon!
         <select class="rpt-household-modal-input" id="rsc-vol-link" onchange="rscApplyVolunteerSelection(this.value)">
           ${optionsHtml}
         </select>
+        ${suggestionNote}
         <div id="rsc-vol-linked-summary" style="background:#f8f7fc;border:1px solid rgba(87,46,136,0.1);border-radius:8px;padding:0.62rem 0.72rem;">${linkedSummary}</div>
       </div>
       <div class="rsc-modal-row">
