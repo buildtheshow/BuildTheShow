@@ -68668,8 +68668,17 @@ See you soon!
     const sendLabel = newStatus === 'approved' ? 'Send Email & Approve' : 'Send Email & Decline';
     const noEmailLabel = newStatus === 'approved' ? 'Approve Without Sending' : 'Decline Without Sending';
     try {
-      const template = await volReqEnsureTemplate(category);
+      let template = await volReqEnsureTemplate(category);
       if (!template) throw new Error('No volunteer email template found.');
+      // Upgrade old Role/Dates shift box to the new structured block if still present
+      if (template.body && template.body.includes('{{volunteer_role}}') && template.body.includes('{{volunteer_shift_dates}}') && !template.body.includes('{{volunteer_shifts_block}}')) {
+        const starter = ET_STARTER_TEMPLATES.find(t => t.category === category);
+        if (starter) {
+          template = { ...template, body: starter.body };
+          sb.from('email_templates').update({ body: starter.body }).eq('id', template.id).then(() => {});
+          _etTemplates = (_etTemplates || []).map(x => x.id === template.id ? { ...x, body: starter.body } : x);
+        }
+      }
       const context = volReqStatusEmailContext(signups, newStatus);
       const subject = _applyEmailContext(template.subject || '', context) || (newStatus === 'approved' ? 'Your Volunteer Role Has Been Confirmed - ' + (context.organisation_name || '') + ' - ' + (context.show_name || '') : 'Your Volunteer Role Has Been Denied - ' + (context.organisation_name || '') + ' - ' + (context.show_name || ''));
       const body = finalCastingEmailPreviewBodyHtml(_applyEmailContext(template.body || '', context)) || '<p>Email body preview.</p>';
