@@ -3492,21 +3492,22 @@
           </div>
           <div class="vp-submit-col-form">
             <div id="vp-submit-error" class="vp-form-error"></div>
+            <div style="border:1.5px solid rgba(87,46,136,0.18);border-radius:10px;padding:0.85rem;margin-bottom:0.75rem;background:rgba(87,46,136,0.03);">
+              <label style="display:flex;align-items:center;gap:0.55rem;cursor:pointer;font-size:0.82rem;font-weight:800;color:#352756;">
+                <input type="checkbox" id="su-returning" style="accent-color:#572e88;width:15px;height:15px;flex-shrink:0;" onchange="toggleReturningFields(this.checked)" />
+                Already volunteering for this show?
+              </label>
+              <div id="su-returning-fields" style="display:none;flex-direction:column;gap:0.55rem;margin-top:0.65rem;">
+                <div style="font-size:0.72rem;color:#6f6382;line-height:1.4;">Enter the email and Volunteer Code from your confirmation email — we'll fill in your details automatically.</div>
+                <div class="vp-form-row" style="margin:0;"><label for="su-returning-email" style="font-size:0.72rem;">Email you used before</label><input type="email" id="su-returning-email" autocomplete="email" placeholder="jane@example.com" onblur="tryAutoFillReturning()" /></div>
+                <div class="vp-form-row" style="margin:0;"><label for="su-returning-code" style="font-size:0.72rem;">Your Volunteer Code</label><input type="text" id="su-returning-code" inputmode="numeric" maxlength="4" placeholder="e.g. 4821" style="letter-spacing:0.15em;font-weight:800;" onblur="tryAutoFillReturning()" /></div>
+                <div id="su-returning-status" style="font-size:0.72rem;min-height:1rem;"></div>
+              </div>
+            </div>
             <div class="vp-form-row"><label for="su-name">Full Name *</label><input type="text" id="su-name" autocomplete="name" placeholder="Jane Smith" /></div>
             <div class="vp-form-row"><label for="su-email">Email Address *</label><input type="email" id="su-email" autocomplete="email" placeholder="jane@example.com" /><div class="vp-form-hint">We will send confirmation to this address.</div></div>
             <div class="vp-form-row"><label for="su-phone">Phone Number *</label><input type="tel" id="su-phone" autocomplete="tel" placeholder="(604) 555-0123" required oninput="formatPhoneInput(this)" onchange="formatPhoneInput(this)" onblur="formatPhoneInput(this)" /></div>
             <div class="vp-form-row"><label for="su-notes">Anything we should know?</label><textarea id="su-notes" placeholder="Questions, access notes, or details for the team..."></textarea></div>
-            <div style="border:1.5px solid rgba(87,46,136,0.15);border-radius:10px;padding:0.85rem;margin-top:0.25rem;">
-              <label style="display:flex;align-items:center;gap:0.55rem;cursor:pointer;font-size:0.82rem;font-weight:800;color:#352756;">
-                <input type="checkbox" id="su-returning" style="accent-color:#572e88;width:15px;height:15px;flex-shrink:0;" onchange="document.getElementById('su-returning-fields').style.display=this.checked?'flex':'none'" />
-                Already signed up for this show?
-              </label>
-              <div id="su-returning-fields" style="display:none;flex-direction:column;gap:0.55rem;margin-top:0.65rem;">
-                <div style="font-size:0.72rem;color:#6f6382;line-height:1.4;">Enter the email and Volunteer Code from your confirmation email to add these shifts to your existing schedule.</div>
-                <div class="vp-form-row" style="margin:0;"><label for="su-returning-email" style="font-size:0.72rem;">Email you used before</label><input type="email" id="su-returning-email" autocomplete="email" placeholder="jane@example.com" /></div>
-                <div class="vp-form-row" style="margin:0;"><label for="su-returning-code" style="font-size:0.72rem;">Your Volunteer Code</label><input type="text" id="su-returning-code" inputmode="numeric" maxlength="4" placeholder="e.g. 4821" style="letter-spacing:0.15em;font-weight:800;" /></div>
-              </div>
-            </div>
             <button class="vp-modal-submit" id="vp-submit-btn" type="button" onclick="submitSchedule()">Request Selected Shifts</button>
           </div>
         </div>`;
@@ -3522,6 +3523,41 @@
       modal.innerHTML = '';
       renderCart();
     }
+    function toggleReturningFields(checked) {
+      document.getElementById('su-returning-fields').style.display = checked ? 'flex' : 'none';
+      if (!checked) {
+        document.getElementById('su-returning-status').textContent = '';
+        document.getElementById('su-returning-status').style.color = '';
+      }
+    }
+
+    async function tryAutoFillReturning() {
+      const email = (document.getElementById('su-returning-email')?.value || '').trim().toLowerCase();
+      const code  = (document.getElementById('su-returning-code')?.value  || '').trim();
+      const statusEl = document.getElementById('su-returning-status');
+      if (!email || !code) return;
+      statusEl.textContent = 'Looking up…';
+      statusEl.style.color = '#6f6382';
+      try {
+        const existing = (await findVolunteerSignupsByCode(email, code))[0] || null;
+        if (existing) {
+          const nameEl  = document.getElementById('su-name');
+          const emailEl = document.getElementById('su-email');
+          const phoneEl = document.getElementById('su-phone');
+          if (existing.name && !nameEl.value)  nameEl.value  = existing.name;
+          if (!emailEl.value) emailEl.value = existing.email || email;
+          if (existing.phone && !phoneEl.value) { phoneEl.value = existing.phone; formatPhoneInput(phoneEl); }
+          statusEl.textContent = 'Found — details filled in below.';
+          statusEl.style.color = '#3f7a51';
+        } else {
+          statusEl.textContent = 'No match found. Check your email and Volunteer Code.';
+          statusEl.style.color = '#c0392b';
+        }
+      } catch (_) {
+        statusEl.textContent = '';
+      }
+    }
+
     async function submitSchedule() {
       const name = document.getElementById('su-name').value.trim();
       const email = document.getElementById('su-email').value.trim();
