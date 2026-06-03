@@ -9286,7 +9286,7 @@
     }
     .vol-req-list { flex: 1; overflow-y: auto; min-height: 0; }
     .vol-req-item {
-      display: flex; align-items: center; gap: 0.65rem;
+      display: flex; align-items: flex-start; gap: 0.65rem;
       padding: 0.75rem 1rem;
       border-bottom: 1px solid rgba(87,46,136,0.07);
       cursor: pointer; transition: background 0.12s;
@@ -9299,16 +9299,22 @@
       background: rgba(87,46,136,0.1);
       display: flex; align-items: center; justify-content: center;
       font-size: 0.76rem; font-weight: 900; color: #572e88;
-      overflow: hidden; flex-shrink: 0;
+      overflow: hidden; flex-shrink: 0; margin-top: 0.1rem;
     }
     .vol-req-item-avatar img { width: 100%; height: 100%; object-fit: cover; }
     .vol-req-item-body { flex: 1; min-width: 0; }
     .vol-req-item-row1 { display: flex; align-items: center; justify-content: space-between; gap: 0.35rem; }
     .vol-req-item-name { font-size: 0.83rem; font-weight: 800; color: #1a1530; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; min-width: 0; }
-    .vol-req-item-role { font-size: 0.7rem; font-weight: 600; color: #572e88; margin-top: 0.1rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .vol-req-item-footer { display: flex; align-items: center; justify-content: space-between; margin-top: 0.14rem; gap: 0.35rem; }
-    .vol-req-item-date { font-size: 0.66rem; color: rgba(87,46,136,0.4); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; min-width: 0; }
-    .vol-req-item-ago { font-size: 0.61rem; color: rgba(87,46,136,0.32); font-weight: 600; white-space: nowrap; flex-shrink: 0; }
+    .vol-req-item-role { font-size: 0.7rem; font-weight: 700; color: #572e88; margin-top: 0.1rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .vol-req-item-shifts { margin-top: 0.38rem; display: flex; flex-direction: column; gap: 0.22rem; }
+    .vol-req-item-shift {
+      font-size: 0.69rem; font-weight: 700; color: #4a3d6b;
+      line-height: 1.3;
+    }
+    .vol-req-item-shift-time { color: #7a6a95; font-weight: 600; }
+    .vol-req-item-ago { display: block; margin-top: 0.3rem; font-size: 0.61rem; color: rgba(87,46,136,0.32); font-weight: 600; }
+    .vol-req-item-footer { display: none; }
+    .vol-req-item-date { display: none; }
     .vol-req-item-meta { display: none; }
     .vol-req-badge {
       display: inline-flex;
@@ -68267,6 +68273,29 @@ See you soon!
           const roles = personRoles(person);
           const dateRange = personDateRange(person);
           const shiftCount = person.shifts.length;
+          const sortedShifts = [...person.shifts].sort((a, b) =>
+            (a.shift_date || '9999').localeCompare(b.shift_date || '9999') ||
+            (a.shift_start_time || '').localeCompare(b.shift_start_time || '')
+          );
+          const shiftsHtml = sortedShifts.map(s => {
+            let dateStr = '';
+            if (s.shift_date) {
+              const d = new Date(s.shift_date + 'T12:00:00');
+              dateStr = d.toLocaleDateString('en-CA', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+            } else {
+              const rd = Array.isArray(s.required_dates) ? s.required_dates.filter(Boolean) : [];
+              dateStr = rd.length ? rd.join(', ') : 'Flexible — no fixed date';
+            }
+            let timeStr = '';
+            if (s.shift_start_time) {
+              timeStr = volReqFmtTime(s.shift_start_time);
+              if (s.shift_end_time) timeStr += ' – ' + volReqFmtTime(s.shift_end_time);
+            }
+            return '<div class="vol-req-item-shift">'
+              + esc(dateStr)
+              + (timeStr ? ' <span class="vol-req-item-shift-time">' + esc(timeStr) + '</span>' : '')
+              + '</div>';
+          }).join('');
           return '<div class="vol-req-item' + active + '" data-portal-key="' + esc(portalKey) + '" onclick="volReqSelect(this.dataset.portalKey)">'
             + avatarHtml(person.name, person.avatar_url, 'vol-req-item-avatar')
             + '<div class="vol-req-item-body">'
@@ -68275,10 +68304,8 @@ See you soon!
             +     '<span class="' + volReqBadgeClass(status) + '">' + volReqBadgeLabel(status) + '</span>'
             +   '</div>'
             +   '<div class="vol-req-item-role">' + esc(roles || 'Volunteer') + '</div>'
-            +   '<div class="vol-req-item-footer">'
-            +     '<span class="vol-req-item-date">' + esc(dateRange) + ' &middot; ' + shiftCount + ' shift' + (shiftCount === 1 ? '' : 's') + '</span>'
-            +     '<span class="vol-req-item-ago">' + volReqTimeAgo(person.created_at) + '</span>'
-            +   '</div>'
+            +   '<div class="vol-req-item-shifts">' + shiftsHtml + '</div>'
+            +   '<span class="vol-req-item-ago">' + volReqTimeAgo(person.created_at) + '</span>'
             + '</div>'
             + '<svg class="vol-req-item-chevron" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>'
             + '</div>';
