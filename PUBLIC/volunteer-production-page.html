@@ -2246,12 +2246,68 @@
         };
       });
     }
+    async function loadVolunteerLinkedPerformers(signups = []) {
+      if (!prod?.id || !Array.isArray(signups) || !signups.length) return [];
+      const signupIds = [...new Set(signups.map(row => String(row.id || '')).filter(Boolean))];
+      if (!signupIds.length) return [];
+      let assignments = [];
+      try {
+        const { data, error } = await sb.from('casting_assignments')
+          .select('id,applicant_id,character_id,state,volunteer_signup_ids,volunteer_signup_name,volunteer_hours_completed,volunteer_role_notes')
+          .eq('production_id', prod.id)
+          .overlaps('volunteer_signup_ids', signupIds);
+        if (error) throw error;
+        assignments = data || [];
+      } catch (error) {
+        console.warn('[BTS production portal] volunteer connection lookup failed', error);
+        return [];
+      }
+      if (!assignments.length) return [];
+      const appIds = [...new Set(assignments.map(row => row.applicant_id).filter(Boolean))];
+      const charIds = [...new Set(assignments.map(row => row.character_id).filter(Boolean))];
+      let appMap = new Map();
+      let charMap = new Map();
+      if (appIds.length) {
+        try {
+          const { data } = await sb.from('audition_applications').select('*').in('id', appIds);
+          appMap = new Map((data || []).map(app => [String(app.id), app]));
+        } catch (error) {
+          console.warn('[BTS production portal] linked performer app lookup failed', error);
+        }
+      }
+      if (charIds.length) {
+        try {
+          const { data } = await sb.from('production_characters').select('id,name').in('id', charIds);
+          charMap = new Map((data || []).map(char => [String(char.id), char.name]));
+        } catch (error) {
+          console.warn('[BTS production portal] linked performer role lookup failed', error);
+        }
+      }
+      return assignments.map(assignment => {
+        const app = appMap.get(String(assignment.applicant_id)) || {};
+        const ca = applicantCustomAnswers(app);
+        const name = performerDisplayName({ app, assignments: [assignment], roles: [] });
+        const role = assignment.character_id ? (charMap.get(String(assignment.character_id)) || '') : '';
+        const fallbackRoles = String(ca.__bts_cast_offer_role_names || ca.Role || ca.role_name || '').split(',').map(s => s.trim()).filter(Boolean);
+        return {
+          assignment,
+          app,
+          name,
+          roles: [...new Set([role || 'Ensemble', ...fallbackRoles].filter(Boolean))],
+          linkedSignupIds: Array.isArray(assignment.volunteer_signup_ids) ? assignment.volunteer_signup_ids.map(String) : [],
+        };
+      });
+    }
     async function resolveProductionPortal(email, code, options = {}) {
       const [volunteer, performerApps] = await Promise.all([
         resolveVolunteerPortal(email, code, options),
         findPerformerPortalApplicants(email, code),
       ]);
-      const performers = await loadPortalPerformerDetails(performerApps);
+      const [performers, volunteerLinkedPerformers] = await Promise.all([
+        loadPortalPerformerDetails(performerApps),
+        loadVolunteerLinkedPerformers(volunteer.rows),
+      ]);
+      volunteer.linkedPerformers = volunteerLinkedPerformers;
       return { email, code, volunteer, performers };
     }
 
@@ -2491,7 +2547,7 @@
         <div class="vpd-shift-status"><span class="vp-status ${cls}">${esc(dashboardStatusLabel(row.status))}</span></div>
       </article>`;
     }
-    function portalVolunteerStats(signups = [], email = '') {
+    function portalVolunteerStats(signups = [], email = '', linkedPerformers = []) {
       const rows = dashboardSortRows(signups || []);
       const approved  = rows.filter(s => dashboardStatusClass(s.status) === 'approved');
       const pending   = rows.filter(s => dashboardStatusClass(s.status) === 'pending');
@@ -2506,13 +2562,42 @@
       const pastApproved = approved.filter(s => s.shift_date && !upcomingApproved.includes(s));
       const approvedHours = approved.reduce((sum, row) => sum + dashboardShiftHours(row), 0);
       const discountRows = rows.filter(row => row.discount_requested || row.discount_performer);
-      const discountEnabled = hasDiscountEnabled() && discountRows.length > 0;
-      return { rows, approved, pending, denied, upcomingApproved, pastApproved, approvedHours, discountRows, discountEnabled };
+      const discountEnabled = hasDiscountEnabled() && (discountRows.length > 0 || linkedPerformers.length > 0);
+      return { rows, approved, pending, denied, upcomingApproved, pastApproved, approvedHours, discountRows, discountEnabled, linkedPerformers };
+    }
+    function volunteerLinkedPerformersHtml(linkedPerformers = []) {
+      if (!linkedPerformers.length) return '';
+      return `<section class="vpd-card">
+        <div class="vpd-section-head">
+          <div class="vpd-section-title-wrap">
+            <div class="vpd-section-icon">${ICONS.users}</div>
+            <div>
+              <div class="vpd-section-title">Connected Cast Member${linkedPerformers.length === 1 ? '' : 's'}</div>
+              <div class="vpd-section-sub">Volunteer discount connection saved by the production team.</div>
+            </div>
+          </div>
+          <div class="vpd-section-count-wrap">
+            <div class="vpd-section-count">${esc(linkedPerformers.length)}</div>
+            <span>${esc(linkedPerformers.length === 1 ? 'Link' : 'Links')}</span>
+          </div>
+        </div>
+        <div class="vpd-overview-list">
+          ${linkedPerformers.map(item => `
+            <div class="vpd-overview-item">
+              <div class="vpd-overview-date">Linked</div>
+              <div>
+                <div class="vpd-overview-title">${esc(item.name || 'Cast member')}</div>
+                <div class="vpd-overview-meta">${esc((item.roles || []).join(', ') || 'Performer')}</div>
+              </div>
+            </div>`).join('')}
+        </div>
+      </section>`;
     }
     function volunteerDashboardHtml(volunteerData) {
-      const { email, signups } = volunteerData;
-      const stats = portalVolunteerStats(signups, email);
-      const discountPerson = (stats.discountRows.find(row => row.discount_performer)?.discount_performer || '').trim();
+      const { email, signups, linkedPerformers = [] } = volunteerData;
+      const stats = portalVolunteerStats(signups, email, linkedPerformers);
+      const linkedNames = [...new Set((linkedPerformers || []).map(item => item.name).filter(Boolean))];
+      const discountPerson = linkedNames.join(', ') || (stats.discountRows.find(row => row.discount_performer)?.discount_performer || '').trim();
       const required = stats.discountEnabled ? discountRequiredHours() : 0;
       const remaining = Math.max(0, required - stats.approvedHours);
       const target = discountPerson ? ` for ${discountPerson}` : '';
@@ -2549,6 +2634,7 @@
           </div>
         </div>
         <div class="vpd-breakdown">
+          ${volunteerLinkedPerformersHtml(linkedPerformers)}
           ${dashboardSectionHtml('Upcoming Approved Shifts', 'Confirmed shifts still ahead.', stats.upcomingApproved)}
           ${dashboardSectionHtml('Pending Requests', 'Requests the production team has not decided on yet.', stats.pending)}
           ${dashboardSectionHtml('Denied Requests', 'Requests that were not approved for this production.', stats.denied)}
@@ -2650,17 +2736,20 @@
         .slice(0, limit);
     }
     function portalOverviewHtml(portalData) {
-      const volunteerStats = portalVolunteerStats(portalData.volunteer.rows, portalData.email);
+      const linkedPerformers = portalData.volunteer.linkedPerformers || [];
+      const volunteerStats = portalVolunteerStats(portalData.volunteer.rows, portalData.email, linkedPerformers);
       const events = upcomingProductionEvents(8);
       const people = portalData.performers.map(performerDisplayName);
+      const linkedPeople = [...new Set(linkedPerformers.map(item => item.name).filter(Boolean))];
       const volunteerNames = [...new Set((portalData.volunteer.rows || []).map(row => volunteerDisplayName(row, portalData.email)).filter(Boolean))];
-      const who = [...new Set([...people, ...volunteerNames])].join(', ');
+      const who = [...new Set([...people, ...linkedPeople, ...volunteerNames])].join(', ');
       return `<div class="vpd-overview-grid">
         <div class="vpd-card">
           <div class="vpd-section-title" style="font-size:1.2rem;">Quick Glance</div>
           <div class="vpd-overview-list">
             <div class="vpd-overview-item"><div class="vpd-overview-date">Who</div><div><div class="vpd-overview-title">${esc(who || 'Production participant')}</div><div class="vpd-overview-meta">Connected to this Production Code.</div></div></div>
             <div class="vpd-overview-item"><div class="vpd-overview-date">Performer</div><div><div class="vpd-overview-title">${esc(portalData.performers.length)} connected</div><div class="vpd-overview-meta">${esc(people.join(', ') || 'None')}</div></div></div>
+            <div class="vpd-overview-item"><div class="vpd-overview-date">Discount</div><div><div class="vpd-overview-title">${esc(linkedPeople.length)} cast connection${linkedPeople.length === 1 ? '' : 's'}</div><div class="vpd-overview-meta">${esc(linkedPeople.join(', ') || 'None linked yet')}</div></div></div>
             <div class="vpd-overview-item"><div class="vpd-overview-date">Volunteer</div><div><div class="vpd-overview-title">${esc(volunteerStats.upcomingApproved.length)} approved upcoming</div><div class="vpd-overview-meta">${esc(volunteerStats.pending.length)} pending request${volunteerStats.pending.length === 1 ? '' : 's'}</div></div></div>
           </div>
         </div>
@@ -2711,14 +2800,14 @@
       if (!content) return;
       if (key === 'overview') content.innerHTML = portalOverviewHtml(currentPortalData);
       else if (key === 'performer') content.innerHTML = performerDashboardHtml(currentPortalData.performers);
-      else content.innerHTML = volunteerDashboardHtml({ email: currentPortalData.email, signups: currentPortalData.volunteer.rows });
+      else content.innerHTML = volunteerDashboardHtml({ email: currentPortalData.email, signups: currentPortalData.volunteer.rows, linkedPerformers: currentPortalData.volunteer.linkedPerformers || [] });
     }
     function renderProductionPortal(portalData) {
       currentPortalData = portalData;
       const firstPerformer = portalData.performers[0];
       const firstVolunteer = portalData.volunteer.rows[0];
       const firstName = firstPerformer ? performerDisplayName(firstPerformer).split(/\s+/)[0] : volunteerFirstName(firstVolunteer || {}, portalData.email);
-      const volunteerStats = portalVolunteerStats(portalData.volunteer.rows, portalData.email);
+      const volunteerStats = portalVolunteerStats(portalData.volunteer.rows, portalData.email, portalData.volunteer.linkedPerformers || []);
       const greetingEl  = document.querySelector('.vpd-greeting-name');
       const subEl       = document.querySelector('.vpd-greeting-sub');
       if (greetingEl) greetingEl.textContent = `Welcome back, ${firstName}.`;
@@ -2728,7 +2817,7 @@
         if (portalData.volunteer.rows.length) bits.push(`${volunteerStats.upcomingApproved.length} approved volunteer shift${volunteerStats.upcomingApproved.length === 1 ? '' : 's'}`);
         subEl.textContent = bits.length ? `You have ${bits.join(' and ')} for this production.` : 'Your production information is ready.';
       }
-      document.querySelectorAll('.vpd-hero-count-num').forEach(el => { el.textContent = portalData.performers.length + volunteerStats.upcomingApproved.length; });
+      document.querySelectorAll('.vpd-hero-count-num').forEach(el => { el.textContent = portalData.performers.length + (portalData.volunteer.linkedPerformers || []).length + volunteerStats.upcomingApproved.length; });
       document.querySelectorAll('.vpd-hero-count-label').forEach(el => { el.textContent = 'Connected items'; });
       const showNameEl = document.getElementById('vpd-show-name');
       if (showNameEl && prod?.title) showNameEl.textContent = prod.title;
