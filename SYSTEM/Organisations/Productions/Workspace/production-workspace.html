@@ -33318,7 +33318,19 @@ Your submission link is unique to you. Please do not share it with another perfo
     <p style="margin:0;font-size:18px;color:#3f3654;">Your volunteer request has been approved, and we're excited to have you join the team at <strong>{{organisation_name}}</strong>.</p>
   </div>
   <p style="margin:0 0 16px;color:#3f3654;">Community theatre runs on volunteers. Every person who gives their time helps create opportunities for performers, supports families, welcomes audiences, and helps bring a production to life. We are incredibly grateful that you've chosen to be part of it.</p>
-  {{volunteer_shifts_block}}
+  <div style="background:#eaf4ec;border:1.5px solid #c7dfcc;border-radius:14px;padding:20px 24px;margin:22px 0;">
+    <h2 style="font-size:18px;font-weight:900;color:#3f6f47;margin:0 0 14px;">Your Shift</h2>
+    <table style="width:100%;border-collapse:collapse;font-size:15px;">
+      <tr>
+        <td style="width:70px;padding:0 14px 10px 0;font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:0.08em;color:#5a8262;vertical-align:top;">Role</td>
+        <td style="padding-bottom:10px;font-weight:800;color:#1a1530;vertical-align:top;">{{volunteer_role}}</td>
+      </tr>
+      <tr>
+        <td style="padding:0 14px 0 0;font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:0.08em;color:#5a8262;vertical-align:top;">When</td>
+        <td style="font-weight:700;color:#3f6f47;vertical-align:top;line-height:1.8;">{{volunteer_shift_dates}}</td>
+      </tr>
+    </table>
+  </div>
   <div style="background:#f7f4fb;border:1.5px solid #ded6ea;border-radius:14px;padding:20px 22px;margin:22px 0;">
     <h2 style="font-size:20px;line-height:1.15;margin:0 0 8px;font-weight:900;color:#572e88;">Your Volunteer Portal</h2>
     <p style="margin:0 0 14px;color:#4a3d6b;">You can use your volunteer portal to view your schedule, track your volunteer hours, and stay up to date with any information from the production team.</p>
@@ -68068,6 +68080,42 @@ See you soon!
       return (row.email || row.volunteer_email || '').toLowerCase() === portalKey;
     });
   }
+  function volReqNormalizeIdentity(value) {
+    return String(value || '').trim().toLowerCase();
+  }
+  function volReqGroupKey(signup = {}) {
+    return volReqPortalKey(signup);
+  }
+  function volReqIdentityGroups() {
+    const groups = new Map();
+    volunteerRequests.forEach(row => {
+      const key = volReqGroupKey(row);
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(row);
+    });
+    return [...groups.entries()].map(([key, rows]) => ({ key, rows, primary: rows[0] || {} }));
+  }
+  function volReqCombineCandidates(portalKey) {
+    const currentRows = volReqRowsForPortalKey(portalKey);
+    if (!currentRows.length) return [];
+    const currentNames = new Set(currentRows.map(r => volReqNormalizeIdentity(r.name || r.volunteer_name)).filter(Boolean));
+    const currentEmails = new Set(currentRows.map(r => volReqNormalizeIdentity(r.email || r.volunteer_email)).filter(Boolean));
+    const currentPhones = new Set(currentRows.map(r => String(r.phone || '').replace(/\D/g, '')).filter(Boolean));
+    return volReqIdentityGroups()
+      .filter(group => group.key !== portalKey)
+      .map(group => {
+        const names = group.rows.map(r => volReqNormalizeIdentity(r.name || r.volunteer_name)).filter(Boolean);
+        const emails = group.rows.map(r => volReqNormalizeIdentity(r.email || r.volunteer_email)).filter(Boolean);
+        const phones = group.rows.map(r => String(r.phone || '').replace(/\D/g, '')).filter(Boolean);
+        const score =
+          emails.some(v => currentEmails.has(v)) ? 3 :
+          phones.some(v => currentPhones.has(v)) ? 2 :
+          names.some(v => currentNames.has(v)) ? 1 : 0;
+        return { ...group, score };
+      })
+      .filter(group => group.score > 0)
+      .sort((a, b) => b.score - a.score || String(b.primary.created_at || '').localeCompare(String(a.primary.created_at || '')));
+  }
 
   async function volMarkCheckin(signupId, currentlyChecked) {
     const newStatus = currentlyChecked ? 'approved' : 'checked_in';
@@ -68417,12 +68465,15 @@ See you soon!
       window._volReqResendEmail    = p.email || '';
       window._volReqResendName     = p.name  || '';
       window._volReqResendPasscode = p.volunteer_passcode || '';
+      const combineCandidates = volReqCombineCandidates(selectedEmail);
+      window._volReqCombineKey = selectedEmail;
       return '<div class="vol-req-detail-header">'
         + '<div class="vol-req-detail-id">'
         + avatarHtml(p.name, p.avatar_url, 'vol-req-detail-avatar')
         + '<div><div class="vol-req-detail-name" style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap;">'
         +   esc(p.name || 'Unknown')
         +   '<button type="button" onclick="volReqEditContact(window._volReqEditKey)" style="background:none;border:1px solid rgba(87,46,136,0.25);border-radius:5px;padding:0.1rem 0.4rem;font-size:0.6rem;font-weight:800;color:#572e88;cursor:pointer;font-family:inherit;white-space:nowrap;line-height:1.6;">Edit contact</button>'
+        +   (combineCandidates.length ? '<button type="button" onclick="volReqOpenCombine(window._volReqCombineKey)" style="background:none;border:1px solid rgba(87,46,136,0.25);border-radius:5px;padding:0.1rem 0.4rem;font-size:0.6rem;font-weight:800;color:#572e88;cursor:pointer;font-family:inherit;white-space:nowrap;line-height:1.6;">Combine requests</button>' : '')
         + '</div>'
         +     '<div class="vol-req-detail-role" style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap;">'
         +       esc(p.email || '')
@@ -68569,98 +68620,20 @@ See you soon!
       return isNaN(d) ? iso : d.toLocaleDateString('en-CA', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
     };
     const fmtT = t => volReqFmtTime(t);
-    const shiftDetailLines = rows.map(s => {
-      const role   = s.role_name || s.volunteer_role || 'Volunteer';
-      const dept   = s.department || '';
-      const point  = s.check_in_with || s.checkInWith || s.volunteer_point_person || '';
-      const rd     = Array.isArray(s.required_dates) ? s.required_dates.filter(Boolean) : [];
-      let when = '';
+    // Build volunteer_shift_dates as one plain-text line per shift
+    // Uses <br> to separate shifts — safe for the edge function to substitute
+    const shiftDateLines = rows.map(s => {
+      const rd = Array.isArray(s.required_dates) ? s.required_dates.filter(Boolean) : [];
       if (s.shift_date && s.shift_start_time) {
         const timeStr = fmtT(s.shift_start_time) + (s.shift_end_time ? ' – ' + fmtT(s.shift_end_time) : '');
-        when = fmtFullD(s.shift_date) + ', ' + timeStr;
-      } else if (s.shift_date) {
-        when = 'Due by ' + fmtFullD(s.shift_date);
-      } else if (rd.length) {
-        when = rd.map(fmtFullD).join(', ');
-      } else {
-        when = 'Flexible — no fixed date';
+        return fmtFullD(s.shift_date) + ' · ' + timeStr;
       }
-      const parts = [role, when, dept, point ? 'Check in with ' + point : ''].filter(Boolean);
-      return parts.join(' · ');
+      if (s.shift_date) return 'Due by ' + fmtFullD(s.shift_date);
+      if (rd.length) return rd.map(fmtFullD).join(', ');
+      return 'Flexible — own time';
     });
-    const dates = shiftDetailLines;
     const contactName = volReqSignupName(first) || toEmail;
     const preferred = volReqFirstName(first) || contactName || toEmail;
-    const isApproved = status === 'approved';
-    const cardBg    = isApproved ? '#eaf4ec' : '#fff4f2';
-    const cardBdr   = isApproved ? '#c7dfcc' : '#f1c0b8';
-    const headCol   = isApproved ? '#3f6f47' : '#8a2a1a';
-    const accentCol = isApproved ? '#c7dfcc' : '#f1c0b8';
-    const timeCol   = isApproved ? '#3f6f47' : '#8a2a1a';
-    const shiftsBlockRows = rows.map((s, i) => {
-      const role  = s.role_name || s.volunteer_role || 'Volunteer';
-      const dept  = s.department || '';
-      const point = s.check_in_with || s.checkInWith || s.volunteer_point_person || '';
-      const location = s.location || s.venue || s.venue_name || s.room || s.where || s.check_in_location || '';
-      const rd    = Array.isArray(s.required_dates) ? s.required_dates.filter(Boolean) : [];
-
-      // Left column: day anchor
-      let dayTop = '', dayNum = '', dayBot = '';
-      if (s.shift_date) {
-        const d = new Date(s.shift_date + 'T12:00:00');
-        dayTop = d.toLocaleDateString('en-CA', { weekday: 'short' }).toUpperCase();
-        dayNum = String(d.getDate());
-        dayBot = d.toLocaleDateString('en-CA', { month: 'short', year: 'numeric' }).toUpperCase();
-      } else if (rd.length) {
-        dayTop = rd.length + ' DATES';
-        dayNum = '';
-        dayBot = '';
-      } else {
-        dayTop = 'FLEXIBLE';
-        dayNum = '';
-        dayBot = '';
-      }
-
-      // Right column: role, time, details
-      let timeHtml = '';
-      if (s.shift_date && s.shift_start_time) {
-        timeHtml = fmtT(s.shift_start_time) + (s.shift_end_time ? ' – ' + fmtT(s.shift_end_time) : '');
-      } else if (s.shift_date) {
-        timeHtml = 'Due by this date';
-      } else if (rd.length) {
-        timeHtml = rd.map(fmtFullD).join('<br>');
-      } else {
-        timeHtml = 'Own time — flexible';
-      }
-
-      const detailLines = [
-        location ? location : null,
-        dept     ? dept     : null,
-        point    ? 'Check in with ' + point : null,
-      ].filter(Boolean).join(' &middot; ');
-
-      const divider = i > 0
-        ? `<tr><td colspan="2" style="padding:0;height:1px;"><div style="height:1px;background:${accentCol};margin:14px 0;"></div></td></tr>`
-        : '';
-
-      return divider + `<tr>
-        <td style="vertical-align:top;width:76px;padding-right:18px;padding-top:2px;">
-          <div style="font-size:11px;font-weight:900;letter-spacing:0.1em;color:${timeCol};line-height:1.2;">${dayTop}</div>
-          ${dayNum ? `<div style="font-size:28px;font-weight:900;color:#1a1530;line-height:1;margin:1px 0;">${dayNum}</div>` : ''}
-          ${dayBot ? `<div style="font-size:10px;font-weight:700;color:#8a9e8e;letter-spacing:0.06em;">${dayBot}</div>` : ''}
-        </td>
-        <td style="vertical-align:top;padding-left:18px;border-left:2px solid ${accentCol};">
-          <div style="font-size:16px;font-weight:800;color:#1a1530;margin-bottom:3px;">${role}</div>
-          <div style="font-size:15px;font-weight:700;color:${timeCol};margin-bottom:${detailLines ? '5px' : '0'};">${timeHtml}</div>
-          ${detailLines ? `<div style="font-size:13px;color:#6b8c72;">${detailLines}</div>` : ''}
-        </td>
-      </tr>`;
-    }).join('');
-    const shiftsBlock =
-      `<div style="background:${cardBg};border:1.5px solid ${cardBdr};border-radius:14px;padding:20px 22px;margin:22px 0;">`
-      + `<h2 style="font-size:18px;line-height:1.15;margin:0 0 16px;font-weight:900;color:${headCol};">${rows.length === 1 ? 'Your Shift' : 'Your Shifts'}</h2>`
-      + `<table style="width:100%;border-collapse:collapse;">${shiftsBlockRows}</table>`
-      + `</div>`;
     return {
       ...volEmailOrgContext(),
       preferred_name:         preferred,
@@ -68670,8 +68643,7 @@ See you soon!
       volunteer_email:        toEmail,
       volunteer_passcode:     passcode,
       volunteer_role:         roles.join(', ') || first.role_name || 'Volunteer',
-      volunteer_shift_dates:  dates.join('<br>') || 'Flexible / ongoing',
-      volunteer_shifts_block: shiftsBlock,
+      volunteer_shift_dates:  shiftDateLines.join('<br>') || 'Flexible / ongoing',
       volunteer_point_person: pointPeople.join(', '),
       volunteer_portal_url:   portalUrl,
       volunteer_portal_button: `<a href="${portalUrl}" style="display:inline-block;background:#572e88;color:#fff;font-weight:900;font-size:15px;padding:13px 26px;border-radius:8px;text-decoration:none;">View My Volunteer Portal</a>`,
@@ -68818,8 +68790,6 @@ See you soon!
       if (sendEmail) {
         const subject = document.getElementById('vol-req-preview-subject')?.value?.trim() || '';
         const body = document.getElementById('vol-req-preview-body')?.innerHTML?.trim() || '';
-        // Strip HTML-only tokens from context before sending — edge function escapes values on substitution
-        const { volunteer_shifts_block: _drop, ...safeContext } = review.context;
         const { data, error } = await sb.functions.invoke('send-email', {
           body: {
             production_id: prodId,
@@ -68829,10 +68799,8 @@ See you soon!
             name: review.context.contact_name || review.context.preferred_name || '',
             reviewed_subject: subject,
             reviewed_body: body,
-            message: body,
-            subject: subject,
-            ...safeContext,
-            context: safeContext,
+            ...review.context,
+            context: review.context,
           },
         });
         if (error || data?.error || data?.ok === false) throw new Error(data?.error || error?.message || 'Email was not sent.');
@@ -68953,6 +68921,101 @@ See you soon!
     } catch (e) {
       if (errEl) { errEl.textContent = 'Could not save: ' + (e.message || 'Unknown error'); errEl.style.display = 'block'; }
       if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Save Changes'; }
+    }
+  }
+
+  function volReqOpenCombine(portalKey) {
+    const targetRows = volReqRowsForPortalKey(portalKey);
+    if (!targetRows.length) return;
+    const target = targetRows[0];
+    const candidates = volReqCombineCandidates(portalKey);
+    if (!candidates.length) {
+      showToast('No likely matches found to combine.');
+      return;
+    }
+    const existing = document.getElementById('vol-req-combine-overlay');
+    if (existing) existing.remove();
+    window._volReqCombineReview = { targetKey: portalKey, candidates };
+    const targetCode = volReqSignupPasscode(target);
+    const candidateRows = candidates.map((candidate, idx) => {
+      const row = candidate.primary || {};
+      const roles = [...new Set(candidate.rows.map(r => r.role_name).filter(Boolean))].join(', ') || 'Volunteer requests';
+      const email = row.email || row.volunteer_email || '';
+      const matchLabel = candidate.score === 3 ? 'Same email' : candidate.score === 2 ? 'Same phone' : 'Same name';
+      return '<div style="border:1px solid rgba(87,46,136,0.12);border-radius:8px;padding:0.8rem;display:flex;align-items:flex-start;gap:0.75rem;justify-content:space-between;">'
+        + '<div style="min-width:0;">'
+        +   '<div style="display:flex;align-items:center;gap:0.4rem;flex-wrap:wrap;">'
+        +     '<strong style="font-size:0.9rem;color:#1a1530;">' + esc(row.name || 'Unknown') + '</strong>'
+        +     '<span class="vol-req-badge vol-req-badge--pending" style="font-size:0.55rem;">' + esc(matchLabel) + '</span>'
+        +   '</div>'
+        +   '<div style="font-size:0.76rem;color:#572e88;font-weight:750;overflow-wrap:anywhere;">' + esc(email) + '</div>'
+        +   '<div style="font-size:0.72rem;color:#6f6382;margin-top:0.18rem;line-height:1.4;">' + esc(roles) + ' &middot; ' + candidate.rows.length + ' request' + (candidate.rows.length === 1 ? '' : 's') + '</div>'
+        +   '<div style="font-size:0.68rem;color:rgba(87,46,136,0.5);margin-top:0.2rem;">Current code: ' + esc(volReqSignupPasscode(row) || '—') + '</div>'
+        + '</div>'
+        + '<button type="button" onclick="volReqCombineIntoSelected(' + idx + ', this)" style="flex-shrink:0;border:none;border-radius:8px;background:#572e88;color:#fff;font-weight:900;font-size:0.72rem;font-family:inherit;cursor:pointer;padding:0.55rem 0.7rem;">Combine</button>'
+        + '</div>';
+    }).join('');
+    const overlay = document.createElement('div');
+    overlay.id = 'vol-req-combine-overlay';
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(23,18,43,0.55);display:flex;align-items:center;justify-content:center;padding:1rem;';
+    overlay.innerHTML =
+      '<div style="background:#fff;border-radius:12px;width:min(560px,100%);max-height:min(720px,92vh);overflow:auto;padding:1.5rem;box-shadow:0 24px 80px rgba(26,21,48,0.3);">'
+      + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.8rem;gap:1rem;">'
+      +   '<div><div style="font-size:1rem;font-weight:900;color:#1a1530;">Combine Volunteer Requests</div><div style="font-size:0.76rem;color:#6f6382;margin-top:0.15rem;">Move another request group under this Volunteer Code.</div></div>'
+      +   '<button onclick="document.getElementById(\'vol-req-combine-overlay\').remove()" style="background:none;border:none;color:#6f6382;font-size:1.4rem;cursor:pointer;line-height:1;padding:0;">&times;</button>'
+      + '</div>'
+      + '<div style="background:#f8f7fc;border:1px solid rgba(87,46,136,0.1);border-radius:8px;padding:0.75rem;margin-bottom:1rem;">'
+      +   '<div style="font-size:0.68rem;font-weight:900;text-transform:uppercase;letter-spacing:0.06em;color:rgba(87,46,136,0.5);margin-bottom:0.18rem;">Keep this account</div>'
+      +   '<div style="font-weight:900;color:#1a1530;">' + esc(target.name || 'Unknown') + '</div>'
+      +   '<div style="font-size:0.76rem;color:#572e88;font-weight:750;overflow-wrap:anywhere;">' + esc(target.email || target.volunteer_email || '') + '</div>'
+      +   '<div style="font-size:0.72rem;color:#6f6382;margin-top:0.18rem;">Volunteer Code: <strong style="letter-spacing:0.08em;color:#352756;">' + esc(targetCode || '—') + '</strong></div>'
+      + '</div>'
+      + '<div style="display:flex;flex-direction:column;gap:0.65rem;">' + candidateRows + '</div>'
+      + '<div style="font-size:0.68rem;color:rgba(87,46,136,0.48);line-height:1.45;margin-top:1rem;">After combining, both sets of requests will appear together in the producer list and in the volunteer portal for the matching email plus Volunteer Code.</div>'
+      + '</div>';
+    overlay.addEventListener('mousedown', e => { if (e.target === overlay) overlay.remove(); });
+    document.body.appendChild(overlay);
+  }
+
+  async function volReqCombineIntoSelected(candidateIndex, buttonEl) {
+    const review = window._volReqCombineReview;
+    if (!review) return;
+    const candidate = review.candidates?.[candidateIndex];
+    const targetRows = volReqRowsForPortalKey(review.targetKey);
+    if (!candidate || !targetRows.length) return;
+    const originalText = buttonEl?.textContent || '';
+    if (buttonEl) { buttonEl.disabled = true; buttonEl.textContent = 'Combining...'; }
+    try {
+      const targetToken = targetRows.find(r => r.portal_token)?.portal_token
+        || ((typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `vol-${Date.now()}-${Math.random().toString(16).slice(2)}`);
+      const targetPasscode = volReqSignupPasscode(targetRows[0]);
+      const targetIds = targetRows.map(r => r.id).filter(Boolean);
+      const sourceIds = candidate.rows.map(r => r.id).filter(Boolean);
+      if (!sourceIds.length) throw new Error('No request rows were found to combine.');
+
+      const updates = [];
+      const targetNeedsPatch = targetRows.some(r => r.portal_token !== targetToken || volReqSignupPasscode(r) !== targetPasscode);
+      if (targetNeedsPatch && targetIds.length) {
+        updates.push(sb.from('volunteer_signups').update({
+          portal_token: targetToken,
+          volunteer_passcode: targetPasscode,
+        }).in('id', targetIds));
+      }
+      updates.push(sb.from('volunteer_signups').update({
+        portal_token: targetToken,
+        volunteer_passcode: targetPasscode,
+      }).in('id', sourceIds));
+      const results = await Promise.all(updates);
+      const failed = results.find(result => result.error);
+      if (failed?.error) throw failed.error;
+
+      _volReqSelected = targetToken;
+      document.getElementById('vol-req-combine-overlay')?.remove();
+      await loadVolunteerRequests();
+      showToast('Volunteer requests combined under one Volunteer Code.');
+    } catch (e) {
+      showToast('Could not combine requests: ' + (e.message || 'Unknown error'), true);
+      if (buttonEl) { buttonEl.disabled = false; buttonEl.textContent = originalText; }
     }
   }
 
