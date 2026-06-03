@@ -913,6 +913,7 @@ serve(async (req) => {
     '{{callback_prepare}}',
     '{{callback_materials}}',
     '{{self_tape_instructions}}',
+    '{{volunteer_shifts_block}}',
   ]);
 
   function substituteTemplate(text: string, escapeForHtml = false): string {
