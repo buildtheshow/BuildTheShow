@@ -68595,37 +68595,70 @@ See you soon!
     const cardBg    = isApproved ? '#eaf4ec' : '#fff4f2';
     const cardBdr   = isApproved ? '#c7dfcc' : '#f1c0b8';
     const headCol   = isApproved ? '#3f6f47' : '#8a2a1a';
-    const labelCol  = isApproved ? '#5a8262' : '#8a5a52';
-    const td1 = `style="padding:5px 14px 5px 0;font-size:13px;font-weight:900;text-transform:uppercase;letter-spacing:0.07em;color:${labelCol};vertical-align:top;white-space:nowrap;"`;
-    const td2 = `style="padding:5px 0;font-size:16px;font-weight:800;color:#1a1530;"`;
-    const shiftsBlockRows = rows.map(s => {
+    const accentCol = isApproved ? '#c7dfcc' : '#f1c0b8';
+    const timeCol   = isApproved ? '#3f6f47' : '#8a2a1a';
+    const shiftsBlockRows = rows.map((s, i) => {
       const role  = s.role_name || s.volunteer_role || 'Volunteer';
       const dept  = s.department || '';
       const point = s.check_in_with || s.checkInWith || s.volunteer_point_person || '';
-      const rd    = Array.isArray(s.required_dates) ? s.required_dates.filter(Boolean) : [];
-      let whenHtml = '';
-      if (s.shift_date && s.shift_start_time) {
-        const timeStr = fmtT(s.shift_start_time) + (s.shift_end_time ? ' – ' + fmtT(s.shift_end_time) : '');
-        whenHtml = fmtFullD(s.shift_date) + '<br>' + timeStr;
-      } else if (s.shift_date) {
-        whenHtml = 'Due by ' + fmtFullD(s.shift_date);
-      } else if (rd.length) {
-        whenHtml = rd.map(fmtFullD).join('<br>');
-      } else {
-        whenHtml = 'Flexible — own time';
-      }
       const location = s.location || s.venue || s.venue_name || s.room || s.where || s.check_in_location || '';
-      const divider = rows.length > 1 ? `<tr><td colspan="2" style="padding:10px 0 4px;"><hr style="border:none;border-top:1px solid ${cardBdr};margin:0;"></td></tr>` : '';
-      return divider
-        + `<tr><td ${td1}>Role</td><td ${td2}>${role}</td></tr>`
-        + `<tr><td ${td1}>When</td><td ${td2}>${whenHtml}</td></tr>`
-        + (location ? `<tr><td ${td1}>Where</td><td ${td2}>${location}</td></tr>` : '')
-        + (dept     ? `<tr><td ${td1}>Department</td><td ${td2}>${dept}</td></tr>` : '')
-        + (point    ? `<tr><td ${td1}>Check&nbsp;in&nbsp;with</td><td ${td2}>${point}</td></tr>` : '');
+      const rd    = Array.isArray(s.required_dates) ? s.required_dates.filter(Boolean) : [];
+
+      // Left column: day anchor
+      let dayTop = '', dayNum = '', dayBot = '';
+      if (s.shift_date) {
+        const d = new Date(s.shift_date + 'T12:00:00');
+        dayTop = d.toLocaleDateString('en-CA', { weekday: 'short' }).toUpperCase();
+        dayNum = String(d.getDate());
+        dayBot = d.toLocaleDateString('en-CA', { month: 'short', year: 'numeric' }).toUpperCase();
+      } else if (rd.length) {
+        dayTop = rd.length + ' DATES';
+        dayNum = '';
+        dayBot = '';
+      } else {
+        dayTop = 'FLEXIBLE';
+        dayNum = '';
+        dayBot = '';
+      }
+
+      // Right column: role, time, details
+      let timeHtml = '';
+      if (s.shift_date && s.shift_start_time) {
+        timeHtml = fmtT(s.shift_start_time) + (s.shift_end_time ? ' – ' + fmtT(s.shift_end_time) : '');
+      } else if (s.shift_date) {
+        timeHtml = 'Due by this date';
+      } else if (rd.length) {
+        timeHtml = rd.map(fmtFullD).join('<br>');
+      } else {
+        timeHtml = 'Own time — flexible';
+      }
+
+      const detailLines = [
+        location ? location : null,
+        dept     ? dept     : null,
+        point    ? 'Check in with ' + point : null,
+      ].filter(Boolean).join(' &middot; ');
+
+      const divider = i > 0
+        ? `<tr><td colspan="2" style="padding:0;height:1px;"><div style="height:1px;background:${accentCol};margin:14px 0;"></div></td></tr>`
+        : '';
+
+      return divider + `<tr>
+        <td style="vertical-align:top;width:76px;padding-right:18px;padding-top:2px;">
+          <div style="font-size:11px;font-weight:900;letter-spacing:0.1em;color:${timeCol};line-height:1.2;">${dayTop}</div>
+          ${dayNum ? `<div style="font-size:28px;font-weight:900;color:#1a1530;line-height:1;margin:1px 0;">${dayNum}</div>` : ''}
+          ${dayBot ? `<div style="font-size:10px;font-weight:700;color:#8a9e8e;letter-spacing:0.06em;">${dayBot}</div>` : ''}
+        </td>
+        <td style="vertical-align:top;padding-left:18px;border-left:2px solid ${accentCol};">
+          <div style="font-size:16px;font-weight:800;color:#1a1530;margin-bottom:3px;">${role}</div>
+          <div style="font-size:15px;font-weight:700;color:${timeCol};margin-bottom:${detailLines ? '5px' : '0'};">${timeHtml}</div>
+          ${detailLines ? `<div style="font-size:13px;color:#6b8c72;">${detailLines}</div>` : ''}
+        </td>
+      </tr>`;
     }).join('');
     const shiftsBlock =
       `<div style="background:${cardBg};border:1.5px solid ${cardBdr};border-radius:14px;padding:20px 22px;margin:22px 0;">`
-      + `<h2 style="font-size:20px;line-height:1.15;margin:0 0 14px;font-weight:900;color:${headCol};">${rows.length === 1 ? 'Your Shift' : 'Your Shifts'}</h2>`
+      + `<h2 style="font-size:18px;line-height:1.15;margin:0 0 16px;font-weight:900;color:${headCol};">${rows.length === 1 ? 'Your Shift' : 'Your Shifts'}</h2>`
       + `<table style="width:100%;border-collapse:collapse;">${shiftsBlockRows}</table>`
       + `</div>`;
     return {
