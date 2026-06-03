@@ -68545,16 +68545,17 @@ See you soon!
     const root = document.getElementById('vol-checkin-root');
     if (!root) return;
 
-    const today = new Date().toISOString().split('T')[0];
-    const signups = volunteerSignups || [];
+    // Ensure full signup data is loaded (volunteerRequests has select('*'))
+    if (!volunteerRequests.length) await loadVolunteerRequests();
+    const signups = volunteerRequests.filter(s => s.status !== 'cancelled' && s.status !== 'declined');
 
-    // Group approved/pending signups by shift date
+    const today = new Date().toISOString().split('T')[0];
+
+    // Group by shift date — read date/role/hours directly from the signup row
     const byDate = {};
     signups.forEach(s => {
-      if (s.status === 'cancelled') return;
       const opp = opportunities.find(o => o.id === s.opportunity_id);
-      if (!opp) return;
-      const date = opp.shift_date || opp.start_date || 'No fixed date';
+      const date = s.shift_date || opp?.shift_date || opp?.start_date || 'No fixed date';
       if (!byDate[date]) byDate[date] = [];
       byDate[date].push({ signup: s, opp });
     });
@@ -68566,13 +68567,13 @@ See you soon!
       return;
     }
 
-    // Build per-volunteer hour totals
+    // Build per-volunteer hour totals from checked-in/completed rows
     const hoursByEmail = {};
     signups.forEach(s => {
       if (s.status !== 'checked_in' && s.status !== 'completed') return;
       const opp = opportunities.find(o => o.id === s.opportunity_id);
-      const hrs = parseFloat(opp?.volunteer_hours || opp?.hours || 0);
-      const key = s.volunteer_email || s.id;
+      const hrs = parseFloat(s.approved_hours || opp?.volunteer_hours || opp?.hours || 0);
+      const key = (s.email || s.volunteer_email || s.id || '').toLowerCase();
       hoursByEmail[key] = (hoursByEmail[key] || 0) + hrs;
     });
 
@@ -68582,10 +68583,11 @@ See you soon!
       const label = date === 'No fixed date' ? 'No Fixed Date' : new Date(date + 'T12:00').toLocaleDateString('en-CA', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
       const rowsHtml = rows.map(({ signup, opp }) => {
         const isCheckedIn = signup.status === 'checked_in' || signup.status === 'completed';
-        const name = [signup.first_name, signup.last_name].filter(Boolean).join(' ') || signup.volunteer_email || 'Volunteer';
-        const role = opp.production_title || opp.volunteer_role || 'Shift';
-        const hrs = parseFloat(opp.volunteer_hours || opp.hours || 0);
-        const totalHrs = hoursByEmail[signup.volunteer_email || signup.id] || 0;
+        const name = signup.name || [signup.first_name, signup.last_name].filter(Boolean).join(' ') || signup.email || signup.volunteer_email || 'Volunteer';
+        const role = signup.role_name || signup.volunteer_role || opp?.production_title || opp?.volunteer_role || 'Shift';
+        const hrs = parseFloat(signup.approved_hours || opp?.volunteer_hours || opp?.hours || 0);
+        const emailKey = (signup.email || signup.volunteer_email || signup.id || '').toLowerCase();
+        const totalHrs = hoursByEmail[emailKey] || 0;
         const dot = isCheckedIn ? '#22c55e' : '#d1d5db';
         return `<div class="vol-checkin-row ${isCheckedIn ? 'is-checked' : ''}">
           <span class="vol-checkin-dot" style="background:${dot};"></span>
