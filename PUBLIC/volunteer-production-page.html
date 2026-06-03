@@ -1713,6 +1713,14 @@
       .vp-lead-action { min-height: 40px; font-size: 0.78rem; }
     }
 
+    /* ── Portal calendar agenda view ── */
+    .vpd-agenda-list { padding: 0.75rem 1rem; display: flex; flex-direction: column; gap: 0; }
+    .vpd-agenda-date { font-size: 0.68rem; font-weight: 950; text-transform: uppercase; letter-spacing: 0.08em; color: var(--purple); padding: 0.75rem 0 0.3rem; }
+    .vpd-agenda-row { display: grid; grid-template-columns: 90px minmax(0,1fr); gap: 0.5rem; padding: 0.55rem 0.75rem; border-left: 3px solid var(--purple); margin-bottom: 0.4rem; background: #fff; border-radius: 0 6px 6px 0; }
+    .vpd-agenda-time { font-size: 0.72rem; font-weight: 800; color: var(--muted); padding-top: 0.1rem; }
+    .vpd-agenda-title { font-size: 0.84rem; font-weight: 900; color: var(--ink); }
+    .vpd-agenda-place { font-size: 0.72rem; color: var(--muted); margin-top: 0.1rem; }
+
     /* ── Portal sidebar layout ── */
     body.vp-portal-active .vp-topbar { display: none; }
     body.vp-portal-active { display: flex; min-height: 100vh; }
@@ -1961,6 +1969,17 @@
     let prod = null, org = null, opps = [], eventMap = {}, signupCounts = {};
     let activeView = 'day', activeFilter = 'all', searchTerm = '', selectedDate = null, dateOffset = 0, selectedDepartment = null, selectedTimingBucket = null;
     let schedule = [], openCards = new Set(), openTimingGroups = new Set(), timingGroupsTouched = false, discountRequested = false, discountPerformer = '', paymentSettings = {}, currentPortalData = null, activePortalTab = '';
+    let _portalCalOffset = 0, _portalCalView = 'month', _portalCalItems = [];
+    function portalCalNav(delta) { _portalCalOffset += delta; _reRenderPortalCal(); }
+    function portalCalToday() { _portalCalOffset = 0; _reRenderPortalCal(); }
+    function portalCalSetView(v) { _portalCalView = v; _reRenderPortalCal(); }
+    function _reRenderPortalCal() {
+      const el = document.getElementById('vpd-cal-section');
+      if (!el) return;
+      const tmp = document.createElement('div');
+      tmp.innerHTML = portalCalendarMonthHtml(_portalCalItems, _portalCalOffset, _portalCalView);
+      el.parentNode.replaceChild(tmp.firstElementChild, el);
+    }
 
     const ICONS = {
       calendar: '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>',
@@ -3363,10 +3382,11 @@
       }[kind] || 'Other';
     }
 
-    function portalCalendarMonthHtml(items = []) {
+    function portalCalendarMonthHtml(items = [], offset = _portalCalOffset, view = _portalCalView) {
       const dated = items.filter(item => item.date).sort((a, b) => String(a.date).localeCompare(String(b.date)) || String(a.time || '').localeCompare(String(b.time || '')));
       const baseDate = dated[0]?.date || new Date().toISOString().slice(0,10);
       const base = new Date(`${baseDate}T12:00:00`);
+      base.setMonth(base.getMonth() + offset);
       const year = base.getFullYear();
       const month = base.getMonth();
       const monthTitle = base.toLocaleDateString('en-CA', { month:'long', year:'numeric' });
@@ -3395,22 +3415,37 @@
           }).join('')}
         </div>`);
       }
-      return `<section class="vpd-command-card vpd-command-main">
+      return `<section class="vpd-command-card vpd-command-main" id="vpd-cal-section">
         <div class="vpd-month-toolbar">
           <div class="vpd-month-controls">
-            <button class="vpd-month-btn" type="button">Today</button>
-            <button class="vpd-month-btn icon" type="button" aria-label="Previous month">&#8249;</button>
-            <button class="vpd-month-btn icon" type="button" aria-label="Next month">&#8250;</button>
+            <button class="vpd-month-btn" type="button" onclick="portalCalToday()">Today</button>
+            <button class="vpd-month-btn icon" type="button" aria-label="Previous month" onclick="portalCalNav(-1)">&#8249;</button>
+            <button class="vpd-month-btn icon" type="button" aria-label="Next month" onclick="portalCalNav(1)">&#8250;</button>
           </div>
           <div class="vpd-month-title">${esc(monthTitle)}</div>
           <div class="vpd-view-toggle" aria-label="Calendar view">
-            <button class="active" type="button">Month</button>
-            <button type="button">Week</button>
-            <button type="button">Agenda</button>
+            <button class="${view === 'month' ? 'active' : ''}" type="button" onclick="portalCalSetView('month')">Month</button>
+            <button class="${view === 'agenda' ? 'active' : ''}" type="button" onclick="portalCalSetView('agenda')">Agenda</button>
           </div>
         </div>
-        <div class="vpd-month-weekdays">${['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(day => `<div class="vpd-month-weekday">${day}</div>`).join('')}</div>
-        <div class="vpd-month-grid">${cells.join('')}</div>
+        ${view === 'agenda' ? '' : `<div class="vpd-month-weekdays">${['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(day => `<div class="vpd-month-weekday">${day}</div>`).join('')}</div>`}
+        ${view === 'agenda'
+          ? `<div class="vpd-agenda-list">${(() => {
+              const monthItems = dated.filter(item => {
+                const d = new Date(`${item.date}T12:00:00`);
+                return d.getFullYear() === year && d.getMonth() === month;
+              });
+              if (!monthItems.length) return '<div class="vpd-empty" style="padding:1.25rem;">No events this month.</div>';
+              let lastDate = '';
+              return monthItems.map(item => {
+                const header = item.date !== lastDate ? `<div class="vpd-agenda-date">${esc(fmtDate(item.date, { short: true }))}</div>` : '';
+                lastDate = item.date;
+                const kind = portalItemKind(item);
+                const color = item.color || portalKindColor(kind);
+                return `${header}<div class="vpd-agenda-row" style="border-left-color:${esc(color)};"><div class="vpd-agenda-time">${esc(item.time || '')}</div><div><div class="vpd-agenda-title">${esc(item.title)}</div>${item.place ? `<div class="vpd-agenda-place">${esc(item.place)}</div>` : ''}</div></div>`;
+              }).join('');
+            })()}</div>`
+          : `<div class="vpd-month-grid">${cells.join('')}</div>`}
         <div class="vpd-month-footer">
           <div class="vpd-month-legend">
             ${['rehearsal','performance','volunteer','deadline','other'].map(kind => `<span><i class="vpd-cal-dot" style="background:${portalKindColor(kind)};"></i>${portalKindLabel(kind)}</span>`).join('')}
@@ -3525,6 +3560,8 @@
       const volunteerStats = portalVolunteerStats(portalData.volunteer.rows, portalData.email, linkedPerformers);
       const calendarItems = [...portalCalendarItems(portalData, 'overview'), ...portalPaymentCalendarItems(portalPerformers)]
         .sort((a, b) => String(a.date || '').localeCompare(String(b.date || '')) || String(a.time || '').localeCompare(String(b.time || '')));
+      _portalCalItems = calendarItems;
+      _portalCalOffset = 0;
       const upcoming = calendarItems.find(item => {
         const d = new Date(`${item.date}T12:00:00`);
         const today = new Date(); today.setHours(0,0,0,0);
@@ -3611,7 +3648,10 @@
       };
       const navEl = document.getElementById('vp-psidebar-nav');
       if (navEl) {
-        navEl.innerHTML = tabs.map(tab => `<button class="vp-psidebar-nav-item" data-tab="${esc(tab.key)}" type="button" onclick="renderPortalTab('${esc(tab.key)}')"><img src="${esc(NAV_ICONS[tab.key] || NAV_ICONS.overview)}" alt="" />${esc(tab.label)}</button>`).join('');
+        navEl.innerHTML = tabs.map(tab => `<button class="vp-psidebar-nav-item" data-tab="${esc(tab.key)}" type="button"><img src="${esc(NAV_ICONS[tab.key] || NAV_ICONS.overview)}" alt="" />${esc(tab.label)}</button>`).join('');
+        navEl.querySelectorAll('.vp-psidebar-nav-item').forEach(btn => {
+          btn.addEventListener('click', () => renderPortalTab(btn.dataset.tab));
+        });
       }
 
       renderPortalTab(tabs[0]?.key || 'overview');
