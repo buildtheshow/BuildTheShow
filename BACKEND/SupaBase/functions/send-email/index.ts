@@ -1079,9 +1079,9 @@ function eventTypeLabel(value: unknown): string {
     performance: 'Performances',
     rehearsal: 'Rehearsals',
     tech: 'Tech',
-    tech rehearsal: 'Tech',
-    dress rehearsal: 'Dress rehearsals',
-    photo call: 'Photo calls',
+    'tech rehearsal': 'Tech',
+    'dress rehearsal': 'Dress rehearsals',
+    'photo call': 'Photo calls',
     meeting: 'Meetings',
     event: 'Events',
   };
