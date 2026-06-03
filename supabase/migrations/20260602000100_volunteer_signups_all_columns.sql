@@ -11,6 +11,7 @@ alter table public.volunteer_signups
   add column if not exists volunteer_name      text,
   add column if not exists email               text,
   add column if not exists volunteer_email     text,
+  add column if not exists volunteer_passcode  text,
   add column if not exists phone               text,
   add column if not exists notes               text,
   add column if not exists message             text,

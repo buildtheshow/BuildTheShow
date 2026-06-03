@@ -128,7 +128,7 @@ function renderVolunteerCardBack(member, options = {}) {
         <div class="volunteer-card-back-contact">
           <div><span>Phone:</span><strong>${escapeHtml(phone || 'No phone saved')}</strong></div>
           <div><span>Email:</span><strong>${escapeHtml(email || 'No email saved')}</strong></div>
-          <div class="volunteer-card-back-passcode"><span>Passcode:</span><strong>${escapeHtml(passcode || 'Not set')}</strong></div>
+          <div class="volunteer-card-back-passcode"><span>Volunteer Code:</span><strong>${escapeHtml(passcode || 'Not set')}</strong></div>
         </div>
       </div>
       <div class="volunteer-card-back-bio">

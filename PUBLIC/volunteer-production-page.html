@@ -1338,18 +1338,18 @@
       <div class="vp-portal-login-card">
         <div class="vp-portal-login-kicker">Volunteer Portal</div>
         <h2 class="vp-portal-login-title">Welcome back.</h2>
-        <p class="vp-portal-login-sub">Enter the email you used to sign up and the 4-digit passcode from your confirmation email.</p>
+        <p class="vp-portal-login-sub">Enter the email you used to sign up and the Volunteer Code from your confirmation email.</p>
         <div class="vp-portal-login-field">
           <label class="vp-portal-login-label" for="vp-portal-email">Email address</label>
           <input class="vp-portal-login-input" id="vp-portal-email" type="email" placeholder="you@example.com" autocomplete="email" />
         </div>
         <div class="vp-portal-login-field">
-          <label class="vp-portal-login-label" for="vp-portal-code">4-digit passcode</label>
+          <label class="vp-portal-login-label" for="vp-portal-code">Volunteer Code</label>
           <input class="vp-portal-login-input" id="vp-portal-code" type="text" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" placeholder="e.g. 4829" autocomplete="one-time-code" />
         </div>
-        <div class="vp-portal-login-error" id="vp-portal-error">That email and passcode combination was not found. Check your confirmation email and try again.</div>
+        <div class="vp-portal-login-error" id="vp-portal-error">That email and Volunteer Code combination was not found. Check your confirmation email and try again.</div>
         <button class="vp-portal-login-btn" id="vp-portal-login-btn" type="button" onclick="portalLogin()">Access My Portal</button>
-        <p class="vp-portal-login-hint">No passcode? Check your volunteer confirmation email or <button style="background:none;border:none;color:var(--purple);font-weight:800;cursor:pointer;padding:0;font-family:inherit;font-size:inherit;" onclick="showShiftBrowser()">browse open shifts</button> to sign up.</p>
+        <p class="vp-portal-login-hint">No Volunteer Code? Check your volunteer confirmation email or <button style="background:none;border:none;color:var(--purple);font-weight:800;cursor:pointer;padding:0;font-family:inherit;font-size:inherit;" onclick="showShiftBrowser()">browse open shifts</button> to sign up.</p>
       </div>
     </div>
 
@@ -1417,29 +1417,6 @@
           </div>
           <a class="vpd-link" onclick="showShiftBrowser()">View Schedule &#8594;</a>
         </div>
-      </div>
-
-      <!-- Messages -->
-      <div class="vpd-card">
-        <div class="vpd-msgs-header">
-          <div class="vpd-kicker" style="margin:0;">Messages</div>
-          <img src="/ASSETS/Images/Messages.svg" alt="" width="42" height="42" style="opacity:0.65;" />
-        </div>
-        <div style="margin-top:0.5rem;">
-          <span class="vpd-unread-tag"><span class="vpd-unread-dot"></span>1 new message</span>
-        </div>
-        <div class="vpd-msg-row">
-          <div class="vpd-msg-dot"></div>
-          <div>
-            <div class="vpd-msg-name">Anne Thompson</div>
-            <div class="vpd-msg-preview">Can you arrive 15 minutes early on Friday?</div>
-          </div>
-          <div class="vpd-msg-meta">
-            <span class="vpd-msg-date">May 12</span>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
-          </div>
-        </div>
-        <a class="vpd-link" style="margin-top:0.35rem;">Open Messages &#8594;</a>
       </div>
 
       <!-- Find More Shifts -->
@@ -1799,12 +1776,42 @@
     function show(id) { document.getElementById(id)?.classList.remove('hidden'); }
     function hide(id) { document.getElementById(id)?.classList.add('hidden'); }
     function showOnly(id) { ['vp-loading','vp-notfound','vp-error','vp-page'].forEach(hide); show(id); }
-    // ── Portal passcode (deterministic hash of email + prodId) ──
-    function portalPasscode(email, productionId) {
+    // ── Portal passcodes ──
+    function legacyVolunteerPasscode(email, productionId) {
       const str = (email || '').toLowerCase().trim() + (productionId || '');
       let h = 0;
       for (let i = 0; i < str.length; i++) { h = Math.imul(31, h) + str.charCodeAt(i) | 0; }
       return String(Math.abs(h) % 9000 + 1000);
+    }
+    function randomVolunteerPasscode() {
+      const buf = new Uint32Array(1);
+      if (window.crypto?.getRandomValues) {
+        window.crypto.getRandomValues(buf);
+        return String((buf[0] % 9000) + 1000);
+      }
+      return String(Math.floor(Math.random() * 9000) + 1000);
+    }
+    function signupPasscode(row = {}) {
+      return String(row.volunteer_passcode || '').trim() || legacyVolunteerPasscode(row.email || row.volunteer_email || '', row.production_id || prod?.id || '');
+    }
+    async function generateUniqueVolunteerPasscode(email) {
+      const normalized = (email || '').trim().toLowerCase();
+      for (let attempt = 0; attempt < 12; attempt++) {
+        const code = randomVolunteerPasscode();
+        try {
+          const { data, error } = await sb.from('volunteer_signups')
+            .select('id')
+            .eq('production_id', prod.id)
+            .ilike('email', normalized)
+            .eq('volunteer_passcode', code)
+            .limit(1);
+          if (error) throw error;
+          if (!data?.length) return code;
+        } catch (_) {
+          return code;
+        }
+      }
+      return randomVolunteerPasscode();
     }
 
     function showPortalLogin() {
@@ -1834,27 +1841,37 @@
       const errEl = document.getElementById('vp-portal-error');
       const btn   = document.getElementById('vp-portal-login-btn');
       errEl.classList.remove('visible');
-      if (!email || !code) { errEl.textContent = 'Please enter your email and passcode.'; errEl.classList.add('visible'); return; }
+      if (!email || !code) { errEl.textContent = 'Please enter your email and Volunteer Code.'; errEl.classList.add('visible'); return; }
       btn.disabled = true; btn.textContent = 'Checking...';
       try {
-        // Find any approved signups for this email in this production
+        // Find signups for this exact email + Volunteer Code identity in this production.
         const { data: signups } = await sb.from('volunteer_signups')
           .select('*')
           .eq('production_id', prod?.id || new URLSearchParams(location.search).get('id') || '')
           .or(`email.ilike.${email},volunteer_email.ilike.${email}`)
+          .eq('volunteer_passcode', code)
           .neq('status', 'cancelled');
         if (!signups || signups.length === 0) throw new Error('not_found');
-        // Verify passcode
-        const expectedCode = portalPasscode(email, prod?.id || '');
-        if (code !== expectedCode) throw new Error('wrong_code');
+        let portalSignups = signups;
+        const token = signups[0]?.portal_token;
+        if (token) {
+          const { data: tokenRows, error: tokenError } = await sb.from('volunteer_signups')
+            .select('*')
+            .eq('production_id', prod?.id || '')
+            .eq('portal_token', token)
+            .neq('status', 'cancelled');
+          if (tokenError) throw tokenError;
+          portalSignups = tokenRows || signups;
+        }
         // Store session
         sessionStorage.setItem('vp_portal_email', email);
+        sessionStorage.setItem('vp_portal_code', code);
         sessionStorage.setItem('vp_portal_prod', prod?.id || '');
-        showPortalHome({ email, signups });
+        showPortalHome({ email, signups: portalSignups });
       } catch (e) {
         errEl.textContent = e.message === 'not_found'
           ? 'No volunteer sign-ups found for that email on this production.'
-          : 'That email and passcode combination was not found. Check your confirmation email and try again.';
+          : 'That email and Volunteer Code combination was not found. Check your confirmation email and try again.';
         errEl.classList.add('visible');
       } finally {
         btn.disabled = false; btn.textContent = 'Access My Portal';
@@ -1900,13 +1917,8 @@
     function requiredDatesForSignup(row = {}) {
       return Array.isArray(row.required_dates) ? row.required_dates.filter(Boolean) : [];
     }
-    function volunteerPasscode(email, productionId) {
-      const str = (email || '').toLowerCase().trim() + (productionId || '');
-      let h = 0;
-      for (let i = 0; i < str.length; i++) { h = Math.imul(31, h) + str.charCodeAt(i) | 0; }
-      return String(Math.abs(h) % 9000 + 1000);
-    }
-    async function sendVolunteerRequestEmail({ name, email, portalToken, requestedShifts }) {
+    const volunteerPasscode = legacyVolunteerPasscode;
+    async function sendVolunteerRequestEmail({ name, email, portalToken, portalPasscode, requestedShifts }) {
       if (!email || !prod?.id) return;
       const firstShift = requestedShifts[0] || {};
       const volUrl = `${window.location.origin}${window.location.pathname}`;
@@ -1918,7 +1930,7 @@
         const role = opp.volunteer_role || opp.role_name || 'Volunteer';
         return [date, time, role].filter(Boolean).join(' · ');
       }).join('\n');
-      const passcode = volunteerPasscode(email, prod.id);
+      const passcode = portalPasscode || legacyVolunteerPasscode(email, prod.id);
       const pointPeople = [...new Set(requestedShifts.map(opp => opp.check_in_with || opp.checkInWith || '').filter(Boolean))];
       const ctx = {
         name,
@@ -3119,9 +3131,9 @@
                 Already signed up for this show?
               </label>
               <div id="su-returning-fields" style="display:none;flex-direction:column;gap:0.55rem;margin-top:0.65rem;">
-                <div style="font-size:0.72rem;color:#6f6382;line-height:1.4;">Enter the email and 4-digit code from your confirmation email to add these shifts to your existing schedule.</div>
+                <div style="font-size:0.72rem;color:#6f6382;line-height:1.4;">Enter the email and Volunteer Code from your confirmation email to add these shifts to your existing schedule.</div>
                 <div class="vp-form-row" style="margin:0;"><label for="su-returning-email" style="font-size:0.72rem;">Email you used before</label><input type="email" id="su-returning-email" autocomplete="email" placeholder="jane@example.com" /></div>
-                <div class="vp-form-row" style="margin:0;"><label for="su-returning-code" style="font-size:0.72rem;">Your 4-digit volunteer code</label><input type="text" id="su-returning-code" inputmode="numeric" maxlength="4" placeholder="e.g. 4821" style="letter-spacing:0.15em;font-weight:800;" /></div>
+                <div class="vp-form-row" style="margin:0;"><label for="su-returning-code" style="font-size:0.72rem;">Your Volunteer Code</label><input type="text" id="su-returning-code" inputmode="numeric" maxlength="4" placeholder="e.g. 4821" style="letter-spacing:0.15em;font-weight:800;" /></div>
               </div>
             </div>
             <button class="vp-modal-submit" id="vp-submit-btn" type="button" onclick="submitSchedule()">Request Selected Shifts</button>
@@ -3159,23 +3171,35 @@
         const returningEmail = (document.getElementById('su-returning-email')?.value || '').trim().toLowerCase();
         const returningCode = (document.getElementById('su-returning-code')?.value || '').trim();
         let portalToken = crypto.randomUUID();
+        let portalPasscode = await generateUniqueVolunteerPasscode(email);
         let isReturning = false;
         if (returningChecked && returningEmail && returningCode) {
-          const expectedCode = volunteerPasscode(returningEmail, prod.id);
-          if (returningCode !== expectedCode) {
-            btn.disabled = false; btn.textContent = 'Request Selected Shifts';
-            return showFormError(errEl, 'That volunteer code does not match. Check your confirmation email and try again.');
-          }
           try {
             const { data: existing } = await sb.from('volunteer_signups')
-              .select('portal_token').eq('production_id', prod.id).ilike('email', returningEmail)
-              .not('status', 'eq', 'cancelled').limit(1).single();
-            if (existing?.portal_token) { portalToken = existing.portal_token; isReturning = true; }
-          } catch (_) { /* code correct but no existing signups yet — use new token */ }
+              .select('portal_token,volunteer_passcode')
+              .eq('production_id', prod.id)
+              .ilike('email', returningEmail)
+              .eq('volunteer_passcode', returningCode)
+              .not('status', 'eq', 'cancelled')
+              .limit(1)
+              .single();
+            if (existing?.portal_token) {
+              portalToken = existing.portal_token;
+              portalPasscode = existing.volunteer_passcode || returningCode;
+              isReturning = true;
+            } else {
+              btn.disabled = false; btn.textContent = 'Request Selected Shifts';
+              return showFormError(errEl, 'That email and Volunteer Code do not match. Check your confirmation email and try again.');
+            }
+          } catch (_) {
+            btn.disabled = false; btn.textContent = 'Request Selected Shifts';
+            return showFormError(errEl, 'That email and Volunteer Code do not match. Check your confirmation email and try again.');
+          }
         }
         const rows = schedule.map(opp => ({
           production_id: prod.id,
           portal_token: portalToken,
+          volunteer_passcode: portalPasscode,
           name,
           email,
           phone: phone || null,
@@ -3194,7 +3218,7 @@
         const { error } = await sb.from('volunteer_signups').insert(rows);
         if (error) throw error;
         const requestedShifts = schedule.slice();
-        sendVolunteerRequestEmail({ name, email, portalToken, requestedShifts });
+        sendVolunteerRequestEmail({ name, email, portalToken, portalPasscode, requestedShifts });
         schedule.forEach(opp => { signupCounts[spotsKey(opp)] = (signupCounts[spotsKey(opp)] || 0) + 1; });
         const count = schedule.length;
         schedule = [];
@@ -3212,6 +3236,7 @@
             <div class="vp-success-portal">
               <div class="vp-success-portal-label">Your volunteer portal link</div>
               <div class="vp-success-portal-url">${esc(portalUrl)}</div>
+              <div style="margin-top:0.5rem;font-size:0.78rem;color:#4a3d6b;">Volunteer Code: <strong style="font-size:1rem;letter-spacing:0.16em;color:#572e88;">${esc(portalPasscode)}</strong></div>
               <div style="display:flex;gap:0.5rem;align-items:center;justify-content:space-between;">
                 <div class="vp-success-portal-hint">Bookmark this to check your schedule and see when your shifts are confirmed.</div>
                 <button class="vp-secondary-btn" type="button" style="white-space:nowrap;padding:0.35rem 0.75rem;font-size:0.72rem;width:auto;margin:0;flex-shrink:0;" onclick="navigator.clipboard.writeText('${esc(portalUrl)}').then(()=>this.textContent='Copied!').catch(()=>{})">Copy link</button>
@@ -3240,28 +3265,50 @@
       document.getElementById('vp-modal').innerHTML = `
         <div class="vp-modal-head"><div class="vp-modal-title">My Volunteer Schedule</div><button class="vp-modal-close" type="button" onclick="closeModal()">&times;</button></div>
         <div class="vp-modal-body">
-          <p style="font-size:0.85rem;color:#6f6382;line-height:1.5;margin-bottom:1rem;">Enter the email address you used when you submitted your schedule.</p>
+          <p style="font-size:0.85rem;color:#6f6382;line-height:1.5;margin-bottom:1rem;">Enter the email address and Volunteer Code from your confirmation email.</p>
           <div id="vp-portal-error" class="vp-form-error"></div>
           <div class="vp-form-row"><label for="portal-email">Email Address *</label><input type="email" id="portal-email" autocomplete="email" placeholder="jane@example.com" /></div>
+          <div class="vp-form-row"><label for="portal-code">Volunteer Code *</label><input type="text" id="portal-code" inputmode="numeric" maxlength="4" autocomplete="one-time-code" placeholder="4821" style="letter-spacing:0.15em;font-weight:800;" /></div>
           <button class="vp-modal-submit" id="vp-portal-btn" type="button" onclick="lookupVolunteer()">View My Schedule</button>
         </div>`;
       show('vp-modal-overlay');
       document.body.style.overflow = 'hidden';
     }
     async function lookupVolunteer() {
-      const email = (document.getElementById('portal-email')?.value || '').trim();
+      const email = (document.getElementById('portal-email')?.value || '').trim().toLowerCase();
+      const code = (document.getElementById('portal-code')?.value || '').trim();
       const errEl = document.getElementById('vp-portal-error');
       const btn = document.getElementById('vp-portal-btn');
       errEl.classList.remove('visible');
       if (!email) return showFormError(errEl, 'Please enter your email address.');
+      if (!code) return showFormError(errEl, 'Please enter your Volunteer Code.');
       btn.disabled = true;
       btn.textContent = 'Looking you up...';
       try {
         const { data, error } = await sb.from('volunteer_signups')
-          .select('id,role_name,department,check_in_with,shift_date,shift_start_time,shift_end_time,required_dates,status,approved_hours,portal_token,created_at')
-          .eq('production_id', prod.id).ilike('email', email).order('shift_date', { ascending: true });
+          .select('id,role_name,department,check_in_with,shift_date,shift_start_time,shift_end_time,required_dates,status,approved_hours,portal_token,volunteer_passcode,created_at')
+          .eq('production_id', prod.id)
+          .ilike('email', email)
+          .eq('volunteer_passcode', code)
+          .order('shift_date', { ascending: true });
         if (error) throw error;
-        renderPortalView(data || [], null, email);
+        const rows = data || [];
+        if (!rows.length) {
+          btn.disabled = false;
+          btn.textContent = 'View My Schedule';
+          return showFormError(errEl, 'That email and Volunteer Code combination was not found.');
+        }
+        const token = rows[0]?.portal_token || null;
+        if (token) {
+          const { data: tokenRows, error: tokenError } = await sb.from('volunteer_signups')
+            .select('id,role_name,department,check_in_with,shift_date,shift_start_time,shift_end_time,required_dates,status,approved_hours,portal_token,volunteer_passcode,name,created_at')
+            .eq('production_id', prod.id)
+            .eq('portal_token', token)
+            .order('shift_date', { ascending: true });
+          if (tokenError) throw tokenError;
+          return renderPortalView(tokenRows || rows, token, email);
+        }
+        renderPortalView(rows, null, email);
       } catch (err) {
         console.error('[BTS portal]', err);
         btn.disabled = false;
@@ -3273,7 +3320,7 @@
     async function lookupByToken(token) {
       try {
         const { data, error } = await sb.from('volunteer_signups')
-          .select('id,role_name,department,check_in_with,shift_date,shift_start_time,shift_end_time,required_dates,status,approved_hours,portal_token,name,created_at')
+          .select('id,role_name,department,check_in_with,shift_date,shift_start_time,shift_end_time,required_dates,status,approved_hours,portal_token,volunteer_passcode,name,created_at')
           .eq('portal_token', token).order('shift_date', { ascending: true });
         if (error) throw error;
         const rows = data || [];
