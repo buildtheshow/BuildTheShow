@@ -34005,6 +34005,26 @@ See you soon!
     await sb.from('email_templates').update({ subject: starter.subject, body: starter.body }).eq('id', t.id);
   }
 
+  async function etEnsureVolunteerCodeLanguage() {
+    const volunteerCategories = new Set(['volunteer_submitted', 'volunteer_approved', 'volunteer_declined']);
+    const normalize = value => String(value || '')
+      .replace(/Volunteer Portal Passcode/gi, 'Volunteer Code')
+      .replace(/Volunteer Passcode/gi, 'Volunteer Code')
+      .replace(/\bpasscode\b/gi, 'Volunteer Code');
+    const updates = (_etTemplates || [])
+      .filter(t => volunteerCategories.has(t.category))
+      .map(t => ({ ...t, subject: normalize(t.subject), body: normalize(t.body) }))
+      .filter(t => {
+        const original = (_etTemplates || []).find(x => x.id === t.id);
+        return original && (t.subject !== String(original.subject || '') || t.body !== String(original.body || ''));
+      });
+    if (!updates.length) return;
+    _etTemplates = (_etTemplates || []).map(t => updates.find(u => u.id === t.id) || t);
+    await Promise.all(updates.map(t =>
+      sb.from('email_templates').update({ subject: t.subject, body: t.body }).eq('id', t.id)
+    ));
+  }
+
   async function etEnsureAuditionReminderTemplateNames() {
     const desiredNames = {
       audition_reminder: 'Audition Reminder - In Person',
@@ -34082,6 +34102,7 @@ See you soon!
     await etEnsureVolunteerRequestTemplateBody();
     await etEnsureVolunteerApprovedTemplateBody();
     await etEnsureVolunteerDeclinedTemplateBody();
+    await etEnsureVolunteerCodeLanguage();
     await etEnsureAuditionReminderTemplateNames();
     renderEmailTemplates();
     openPendingEmailTemplateCategory();
