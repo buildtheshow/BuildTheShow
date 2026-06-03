@@ -9311,6 +9311,20 @@
       font-size: 0.69rem; font-weight: 700; color: #4a3d6b;
       line-height: 1.3;
     }
+    .vol-req-item-shift--flex { color: #8a7fa0; font-style: italic; font-weight: 600; }
+    .vol-req-item-shift--deadline { color: #7a5200; }
+    .vol-req-item-shift-tag {
+      display: inline-block;
+      background: rgba(239,171,69,0.18);
+      color: #7a5200;
+      font-size: 0.6rem;
+      font-weight: 900;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      border-radius: 3px;
+      padding: 0.06rem 0.3rem;
+      vertical-align: baseline;
+    }
     .vol-req-item-shift-time { color: #7a6a95; font-weight: 600; }
     .vol-req-item-ago { display: block; margin-top: 0.3rem; font-size: 0.61rem; color: rgba(87,46,136,0.32); font-weight: 600; }
     .vol-req-item-footer { display: none; }
@@ -68277,24 +68291,44 @@ See you soon!
             (a.shift_date || '9999').localeCompare(b.shift_date || '9999') ||
             (a.shift_start_time || '').localeCompare(b.shift_start_time || '')
           );
+          const fmtFullDate = iso => {
+            const d = new Date(iso + 'T12:00:00');
+            return isNaN(d) ? iso : d.toLocaleDateString('en-CA', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+          };
           const shiftsHtml = sortedShifts.map(s => {
-            let dateStr = '';
-            if (s.shift_date) {
-              const d = new Date(s.shift_date + 'T12:00:00');
-              dateStr = d.toLocaleDateString('en-CA', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
-            } else {
-              const rd = Array.isArray(s.required_dates) ? s.required_dates.filter(Boolean) : [];
-              dateStr = rd.length ? rd.join(', ') : 'Flexible — no fixed date';
+            const rd = Array.isArray(s.required_dates) ? s.required_dates.filter(Boolean) : [];
+            const hasDate  = !!s.shift_date;
+            const hasStart = !!s.shift_start_time;
+            const hasEnd   = !!s.shift_end_time;
+            const hasRd    = rd.length > 0;
+
+            if (!hasDate && !hasRd) {
+              // Fully flexible
+              return '<div class="vol-req-item-shift vol-req-item-shift--flex">Flexible — own time</div>';
             }
-            let timeStr = '';
-            if (s.shift_start_time) {
-              timeStr = volReqFmtTime(s.shift_start_time);
-              if (s.shift_end_time) timeStr += ' – ' + volReqFmtTime(s.shift_end_time);
+
+            if (hasDate && hasStart) {
+              // Set hours — specific date and time window
+              const dateStr = fmtFullDate(s.shift_date);
+              const timeStr = volReqFmtTime(s.shift_start_time) + (hasEnd ? ' – ' + volReqFmtTime(s.shift_end_time) : '');
+              return '<div class="vol-req-item-shift">'
+                + esc(dateStr)
+                + ' <span class="vol-req-item-shift-time">' + esc(timeStr) + '</span>'
+                + '</div>';
             }
-            return '<div class="vol-req-item-shift">'
-              + esc(dateStr)
-              + (timeStr ? ' <span class="vol-req-item-shift-time">' + esc(timeStr) + '</span>' : '')
-              + '</div>';
+
+            if (hasDate && !hasStart) {
+              // Date set but no hours — treat as deadline
+              return '<div class="vol-req-item-shift vol-req-item-shift--deadline">'
+                + '<span class="vol-req-item-shift-tag">Due by</span> '
+                + esc(fmtFullDate(s.shift_date))
+                + '</div>';
+            }
+
+            // Required dates (multiple dates, no single shift_date)
+            return rd.map(d =>
+              '<div class="vol-req-item-shift">' + esc(fmtFullDate(d)) + '</div>'
+            ).join('');
           }).join('');
           return '<div class="vol-req-item' + active + '" data-portal-key="' + esc(portalKey) + '" onclick="volReqSelect(this.dataset.portalKey)">'
             + avatarHtml(person.name, person.avatar_url, 'vol-req-item-avatar')
