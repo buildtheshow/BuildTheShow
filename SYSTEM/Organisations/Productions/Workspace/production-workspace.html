@@ -32576,6 +32576,32 @@
     return `${row.title || typeLabel}: ${[label, time].filter(Boolean).join(' at ')}${venue}`;
   }
 
+  function summarizeEmailEventRows(rows) {
+    // Group by label so repeated events (e.g. 15 rehearsals) become one summary line.
+    const groups = new Map();
+    rows.forEach(row => {
+      const key = (row.title || EVENT_LABELS[row.event_type] || 'Event').trim();
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(row);
+    });
+    const lines = [];
+    groups.forEach((groupRows, label) => {
+      if (groupRows.length <= 2) {
+        groupRows.forEach(r => lines.push(formatEmailScheduleEvent(r)));
+      } else {
+        const first = groupRows[0];
+        const last  = groupRows[groupRows.length - 1];
+        const d1 = String(first.start_time || '').slice(0, 10);
+        const d2 = String(last.start_time  || '').slice(0, 10);
+        const time  = first.start_time ? ' at ' + formatSlotTime(String(first.start_time).slice(11, 16)) : '';
+        const venue = first.venue ? ` at ${first.venue}` : '';
+        const range = d1 === d2 ? fmtDate(d1) : `${fmtDate(d1)} – ${fmtDate(d2)}`;
+        lines.push(`${label}: ${range}${time}${venue} (${groupRows.length} dates)`);
+      }
+    });
+    return lines.join('\n');
+  }
+
   async function loadPerformanceScheduleSummary() {
     if (!prodId) return performanceScheduleSummaryCache || '';
     if (performanceScheduleSummaryLoaded) return performanceScheduleSummaryCache || '';
@@ -32593,7 +32619,7 @@
         return row.is_public === true;
       });
       performanceScheduleSummaryCache = performanceRows.map(formatEmailScheduleEvent).filter(Boolean).join('\n');
-      eventScheduleSummaryCache = eventRows.map(formatEmailScheduleEvent).filter(Boolean).join('\n');
+      eventScheduleSummaryCache = summarizeEmailEventRows(eventRows.filter(Boolean));
       productionScheduleSummaryCache = sortedRows.map(formatEmailScheduleEvent).filter(Boolean).join('\n');
     } catch (error) {
       console.warn('[BTS] Could not load production schedule for email context.', error);

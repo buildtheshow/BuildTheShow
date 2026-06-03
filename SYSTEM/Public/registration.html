@@ -855,6 +855,31 @@
     return `${row.title || typeLabel}: ${[date, time].filter(Boolean).join(' at ')}${venue}`;
   }
 
+  function rpfSummarizeEventRows(rows) {
+    const groups = new Map();
+    rows.forEach(row => {
+      const key = (row.title || RPF_EVENT_LABELS[row.event_type] || 'Event').trim();
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(row);
+    });
+    const lines = [];
+    groups.forEach((groupRows, label) => {
+      if (groupRows.length <= 2) {
+        groupRows.forEach(r => lines.push(rpfFormatScheduleEvent(r)));
+      } else {
+        const first = groupRows[0];
+        const last  = groupRows[groupRows.length - 1];
+        const d1 = rpfDateLabel(String(first.start_time || '').slice(0, 10));
+        const d2 = rpfDateLabel(String(last.start_time  || '').slice(0, 10));
+        const time  = first.start_time ? ' at ' + rpfTimeLabel(first.start_time) : '';
+        const venue = first.venue ? ` at ${first.venue}` : '';
+        const range = d1 === d2 ? d1 : `${d1} – ${d2}`;
+        lines.push(`${label}: ${range}${time}${venue} (${groupRows.length} dates)`);
+      }
+    });
+    return lines.join('\n');
+  }
+
   async function rpfLoadProductionScheduleSummaries() {
     if (!_resolvedProductionId) return { performance_schedule: '', event_schedule: '', production_schedule: '' };
     try {
@@ -872,7 +897,7 @@
       });
       return {
         performance_schedule: performanceRows.map(rpfFormatScheduleEvent).filter(Boolean).join('\n'),
-        event_schedule: eventRows.map(rpfFormatScheduleEvent).filter(Boolean).join('\n'),
+        event_schedule: rpfSummarizeEventRows(eventRows.filter(Boolean)),
         production_schedule: rows.map(rpfFormatScheduleEvent).filter(Boolean).join('\n'),
       };
     } catch (error) {
