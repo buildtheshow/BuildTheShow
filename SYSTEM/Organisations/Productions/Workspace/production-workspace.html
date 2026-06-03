@@ -68061,6 +68061,16 @@ See you soon!
   function volReqSignupPasscode(signup = {}) {
     return String(signup.volunteer_passcode || '').trim() || volunteerPasscode(signup.email || signup.volunteer_email || '', signup.production_id || prodId);
   }
+  function volReqPortalKey(signup = {}) {
+    return signup.portal_token || signup.id || (signup.email || signup.volunteer_email || 'unknown').toLowerCase();
+  }
+  function volReqRowsForPortalKey(portalKey) {
+    return volunteerRequests.filter(row => {
+      if (row.portal_token) return row.portal_token === portalKey;
+      if (row.id && row.id === portalKey) return true;
+      return (row.email || row.volunteer_email || '').toLowerCase() === portalKey;
+    });
+  }
 
   async function volMarkCheckin(signupId, currentlyChecked) {
     const newStatus = currentlyChecked ? 'approved' : 'checked_in';
@@ -68169,7 +68179,7 @@ See you soon!
     // Submissions only combine when they share the same portal_token (explicitly connected by org or volunteer)
     const personMap = new Map();
     filtered.forEach(req => {
-      const key = req.portal_token || req.id || (req.email || 'unknown').toLowerCase();
+      const key = volReqPortalKey(req);
       if (!personMap.has(key)) {
         personMap.set(key, { email: (req.email || '').toLowerCase(), portalToken: req.portal_token || null,
           name: req.name || 'Unknown', phone: req.phone || null,
@@ -68251,7 +68261,7 @@ See you soon!
     const listItemsHtml = pagePeople.length === 0
       ? '<div class="vol-req-empty-list"><div>No requests in this category yet.</div></div>'
       : pagePeople.map(person => {
-          const portalKey = person.portalToken || person.email;
+          const portalKey = person.portalToken || person.shifts[0]?.id || person.email;
           const active = _volReqSelected === portalKey ? ' active' : '';
           const status = personStatus(person);
           const roles = personRoles(person);
@@ -68295,8 +68305,8 @@ See you soon!
     // Detail panel — shows all shifts for the selected person
     function detailHtml(selectedEmail) {
       if (!selectedEmail) return '<div class="vol-req-detail-empty"><div style="font-size:1.8rem;opacity:0.25">\u{1F465}</div><div style="font-size:0.8rem;font-weight:700;">Select a person to review their shifts</div></div>';
-      // selectedEmail is actually a portalKey (portal_token or email fallback)
-      const personShifts = volunteerRequests.filter(r => (r.portal_token && r.portal_token === selectedEmail) || (!r.portal_token && (r.email || '').toLowerCase() === selectedEmail));
+      // selectedEmail is actually a portalKey (portal_token, signup id, or email fallback)
+      const personShifts = volReqRowsForPortalKey(selectedEmail);
       if (!personShifts.length) return '<div class="vol-req-detail-empty"><div style="font-size:0.8rem;font-weight:700;">No shifts found</div></div>';
       const p = { name: personShifts[0].name, email: personShifts[0].email, phone: personShifts[0].phone, notes: personShifts[0].notes || personShifts[0].message, avatar_url: personShifts[0].avatar_url, created_at: personShifts[0].created_at, volunteer_passcode: volReqSignupPasscode(personShifts[0]) };
       const overallStatus = personShifts.some(s => (s.status||'pending') === 'pending') ? 'pending'
@@ -68775,10 +68785,7 @@ See you soon!
   }
 
   function volReqEditContact(portalKey) {
-    const personShifts = volunteerRequests.filter(r =>
-      (r.portal_token && r.portal_token === portalKey) ||
-      (!r.portal_token && (r.email || '').toLowerCase() === portalKey)
-    );
+    const personShifts = volReqRowsForPortalKey(portalKey);
     if (!personShifts.length) return;
     const p = personShifts[0];
     const existing = document.getElementById('vol-req-edit-contact-overlay');
@@ -68825,10 +68832,7 @@ See you soon!
     if (!emailVal || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailVal)) { errEl.textContent = 'Please enter a valid email address.'; errEl.style.display = 'block'; return; }
     errEl.style.display = 'none';
     if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'Saving...'; }
-    const matchingRows = volunteerRequests.filter(r =>
-      (r.portal_token && r.portal_token === portalKey) ||
-      (!r.portal_token && (r.email || '').toLowerCase() === portalKey)
-    );
+    const matchingRows = volReqRowsForPortalKey(portalKey);
     const ids = matchingRows.map(r => r.id);
     if (!ids.length) { if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Save Changes'; } return; }
     try {

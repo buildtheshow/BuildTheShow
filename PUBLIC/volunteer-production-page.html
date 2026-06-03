@@ -1796,34 +1796,60 @@
     }
     async function generateUniqueVolunteerPasscode(email) {
       const normalized = (email || '').trim().toLowerCase();
+      let existingRows = [];
+      try {
+        const { data, error } = await sb.from('volunteer_signups')
+          .select('email,volunteer_email,production_id,volunteer_passcode')
+          .eq('production_id', prod.id)
+          .or(`email.ilike.${normalized},volunteer_email.ilike.${normalized}`)
+          .neq('status', 'cancelled');
+        if (error) throw error;
+        existingRows = data || [];
+      } catch (_) {
+        existingRows = [];
+      }
       for (let attempt = 0; attempt < 12; attempt++) {
         const code = randomVolunteerPasscode();
-        try {
-          const { data, error } = await sb.from('volunteer_signups')
-            .select('id')
-            .eq('production_id', prod.id)
-            .ilike('email', normalized)
-            .eq('volunteer_passcode', code)
-            .limit(1);
-          if (error) throw error;
-          if (!data?.length) return code;
-        } catch (_) {
-          return code;
-        }
+        if (!existingRows.some(row => signupPasscode(row) === code)) return code;
       }
       return randomVolunteerPasscode();
     }
-    async function findVolunteerSignupsByCode(email, code) {
+    async function findVolunteerSignupsByCode(email, code, options = {}) {
       const normalized = (email || '').trim().toLowerCase();
       const enteredCode = String(code || '').trim();
       if (!normalized || !enteredCode || !prod?.id) return [];
       const { data, error } = await sb.from('volunteer_signups')
-        .select('*')
+        .select(options.select || '*')
         .eq('production_id', prod.id)
         .or(`email.ilike.${normalized},volunteer_email.ilike.${normalized}`)
         .neq('status', 'cancelled');
       if (error) throw error;
       return (data || []).filter(row => signupPasscode(row) === enteredCode);
+    }
+    async function loadVolunteerPortalRowsByToken(token, options = {}) {
+      if (!token || !prod?.id) return [];
+      const query = sb.from('volunteer_signups')
+        .select(options.select || '*')
+        .eq('production_id', prod.id)
+        .eq('portal_token', token);
+      if (options.includeCancelled !== true) query.neq('status', 'cancelled');
+      if (options.orderByShiftDate !== false) query.order('shift_date', { ascending: true });
+      const { data, error } = await query;
+      if (error) throw error;
+      return data || [];
+    }
+    async function resolveVolunteerPortal(email, code, options = {}) {
+      const matches = await findVolunteerSignupsByCode(email, code, options);
+      if (!matches.length) return { rows: [], token: null };
+      const token = matches[0]?.portal_token || null;
+      if (!token) {
+        return {
+          rows: matches.sort((a, b) => String(a.shift_date || '').localeCompare(String(b.shift_date || ''))),
+          token: null,
+        };
+      }
+      const rows = await loadVolunteerPortalRowsByToken(token, options);
+      return { rows: rows.length ? rows : matches, token };
     }
 
     function showPortalLogin() {
@@ -1856,25 +1882,13 @@
       if (!email || !code) { errEl.textContent = 'Please enter your email and Volunteer Code.'; errEl.classList.add('visible'); return; }
       btn.disabled = true; btn.textContent = 'Checking...';
       try {
-        // Find signups for this exact email + Volunteer Code identity in this production.
-        const signups = await findVolunteerSignupsByCode(email, code);
-        if (!signups || signups.length === 0) throw new Error('not_found');
-        let portalSignups = signups;
-        const token = signups[0]?.portal_token;
-        if (token) {
-          const { data: tokenRows, error: tokenError } = await sb.from('volunteer_signups')
-            .select('*')
-            .eq('production_id', prod?.id || '')
-            .eq('portal_token', token)
-            .neq('status', 'cancelled');
-          if (tokenError) throw tokenError;
-          portalSignups = tokenRows || signups;
-        }
+        const portal = await resolveVolunteerPortal(email, code);
+        if (!portal.rows.length) throw new Error('not_found');
         // Store session
         sessionStorage.setItem('vp_portal_email', email);
         sessionStorage.setItem('vp_portal_code', code);
         sessionStorage.setItem('vp_portal_prod', prod?.id || '');
-        showPortalHome({ email, signups: portalSignups });
+        showPortalHome({ email, signups: portal.rows });
       } catch (e) {
         errEl.textContent = e.message === 'not_found'
           ? 'No volunteer sign-ups found for that email on this production.'
@@ -3285,24 +3299,15 @@
       btn.disabled = true;
       btn.textContent = 'Looking you up...';
       try {
-        const rows = (await findVolunteerSignupsByCode(email, code))
-          .sort((a, b) => String(a.shift_date || '').localeCompare(String(b.shift_date || '')));
-        if (!rows.length) {
+        const portal = await resolveVolunteerPortal(email, code, {
+          select: 'id,role_name,department,check_in_with,shift_date,shift_start_time,shift_end_time,required_dates,status,approved_hours,portal_token,volunteer_passcode,name,email,volunteer_email,production_id,created_at',
+        });
+        if (!portal.rows.length) {
           btn.disabled = false;
           btn.textContent = 'View My Schedule';
           return showFormError(errEl, 'That email and Volunteer Code combination was not found.');
         }
-        const token = rows[0]?.portal_token || null;
-        if (token) {
-          const { data: tokenRows, error: tokenError } = await sb.from('volunteer_signups')
-            .select('id,role_name,department,check_in_with,shift_date,shift_start_time,shift_end_time,required_dates,status,approved_hours,portal_token,volunteer_passcode,name,created_at')
-            .eq('production_id', prod.id)
-            .eq('portal_token', token)
-            .order('shift_date', { ascending: true });
-          if (tokenError) throw tokenError;
-          return renderPortalView(tokenRows || rows, token, email);
-        }
-        renderPortalView(rows, null, email);
+        renderPortalView(portal.rows, portal.token, email);
       } catch (err) {
         console.error('[BTS portal]', err);
         btn.disabled = false;
@@ -3313,11 +3318,10 @@
 
     async function lookupByToken(token) {
       try {
-        const { data, error } = await sb.from('volunteer_signups')
-          .select('id,role_name,department,check_in_with,shift_date,shift_start_time,shift_end_time,required_dates,status,approved_hours,portal_token,volunteer_passcode,name,created_at')
-          .eq('portal_token', token).order('shift_date', { ascending: true });
-        if (error) throw error;
-        const rows = data || [];
+        const rows = await loadVolunteerPortalRowsByToken(token, {
+          select: 'id,role_name,department,check_in_with,shift_date,shift_start_time,shift_end_time,required_dates,status,approved_hours,portal_token,volunteer_passcode,name,created_at',
+          includeCancelled: true,
+        });
         if (!rows.length) { openPortalModal(); return; }
         show('vp-modal-overlay');
         document.body.style.overflow = 'hidden';
