@@ -3279,12 +3279,38 @@
       const raw = String(ev.event_type || '').replace(/_/g, ' ');
       return raw ? raw.replace(/\b\w/g, c => c.toUpperCase()) : 'Production Event';
     }
-    function performerEvents() {
+    function portalEventText(ev = {}) {
+      return `${ev.event_type || ''} ${ev.title || ''} ${ev.arrive_note || ''} ${ev.bring_note || ''} ${ev.know_note || ''}`.toLowerCase();
+    }
+    function portalEventKeywords(performers = []) {
+      const generic = new Set(['ensemble', 'performer', 'cast member', 'role details coming soon']);
+      const words = [];
+      (performers || []).forEach(performer => {
+        words.push(performerDisplayName(performer));
+        performerRoleNames(performer).forEach(role => words.push(role));
+      });
+      return [...new Set(words.map(word => String(word || '').trim().toLowerCase()).filter(word => word.length >= 3 && !generic.has(word)))];
+    }
+    function portalTextHasKeyword(text, keyword) {
+      const escaped = String(keyword || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      return new RegExp(`(^|[^a-z0-9])${escaped}([^a-z0-9]|$)`, 'i').test(text);
+    }
+    function portalEventIsProductionWide(ev = {}) {
+      const type = String(ev.event_type || '').toLowerCase();
+      const text = portalEventText(ev);
+      if (['performance', 'tech', 'dress', 'cast_party'].includes(type)) return true;
+      return /full\s*cast|all\s*cast|entire\s*cast|whole\s*cast|company|everyone|all\s*performers|meet\s*&\s*greet|meet\s+and\s+greet|cast\s*party|preview|opening|closing/.test(text);
+    }
+    function performerEvents(performers = allPortalPerformers()) {
+      const people = performers || [];
+      const keywords = portalEventKeywords(people);
       return Object.values(eventMap || {})
         .filter(ev => ev?.start_time)
         .filter(ev => {
-          const text = `${ev.event_type || ''} ${ev.title || ''}`.toLowerCase();
-          return /rehearsal|music|choreography|tech|dress|performance|show|crew|cast|event/.test(text);
+          const text = portalEventText(ev);
+          if (!/rehearsal|music|choreography|tech|dress|performance|show|cast|event|meet|party/.test(text)) return false;
+          if (portalEventIsProductionWide(ev)) return true;
+          return keywords.some(keyword => portalTextHasKeyword(text, keyword));
         })
         .sort((a, b) => new Date(a.start_time) - new Date(b.start_time));
     }
@@ -3310,7 +3336,7 @@
           color: DASH_DEPT_COLOURS[row.department] || 'var(--purple)',
         }));
       });
-      const pItems = (mode === 'volunteer' ? [] : performerEvents()).map(ev => ({
+      const pItems = (mode === 'volunteer' ? [] : performerEvents(allPortalPerformers(portalData))).map(ev => ({
         type: 'performer',
         date: String(ev.start_time || '').slice(0,10),
         title: ev.title || eventDisplayType(ev),
@@ -3566,7 +3592,7 @@
     }
     function performerDashboardHtml(performers = []) {
       if (!performers.length) return `<div class="vpd-card"><div class="vpd-empty">No performer records found for this Production Code.</div></div>`;
-      const events = performerEvents().map(ev => ({
+      const events = performerEvents(performers).map(ev => ({
         type: 'performer',
         date: String(ev.start_time || '').slice(0,10),
         title: ev.title || eventDisplayType(ev),
@@ -3854,7 +3880,7 @@
 
     function portalUpdatesHtml(portalData, volunteerStats, performers) {
       const updates = [];
-      const nextPerformer = performerEvents()[0];
+      const nextPerformer = performerEvents(performers)[0];
       if (nextPerformer) updates.push({ icon: ICONS.calendar, tone:'blue', title: `${eventDisplayType(nextPerformer)} scheduled`, sub: `${fmtDate(String(nextPerformer.start_time || '').slice(0,10), { short:true })} - ${portalEventTime(nextPerformer)}` });
       if (volunteerStats.upcomingApproved.length) updates.push({ icon: ICONS.users, tone:'green', title: `${volunteerStats.upcomingApproved.length} approved volunteer shifts`, sub: 'Check the Volunteer page for report-to details.' });
       if (performers.length) updates.push({ icon: ICONS.star, tone:'', title: `${performers.length} connected performer${performers.length === 1 ? '' : 's'}`, sub: performers.map(performerDisplayName).join(', ') });
@@ -3900,7 +3926,7 @@
     }
 
     function portalOverviewBreakdownHtml(portalData, performers, volunteerStats) {
-      const performerRows = performerEvents().slice(0, 8).map(ev => ({
+      const performerRows = performerEvents(performers).slice(0, 8).map(ev => ({
         status: 'approved',
         shift_date: String(ev.start_time || '').slice(0,10),
         shift_start_time: String(ev.start_time || '').slice(11,16),
