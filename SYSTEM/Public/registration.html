@@ -2753,24 +2753,36 @@
 
   async function rpfEnsurePortalCode() {
     if (!_applicant?.id) return '';
-    let currentAnswers = _applicant.custom_answers || {};
+    const applicantAnswers = _applicant.custom_answers || {};
+    let booking = _booking || null;
+    let bookingAnswers = booking?.custom_answers || {};
     try {
-      const { data } = await sb.from('audition_bookings').select('custom_answers').eq('id', _applicant.id).maybeSingle();
-      if (data?.custom_answers) currentAnswers = data.custom_answers;
+      if (!booking) booking = await loadLinkedRegistrationBooking(_applicant);
+      if (booking) {
+        _booking = booking;
+        bookingAnswers = booking.custom_answers || {};
+      }
     } catch (_) {}
-    const existing = String(currentAnswers['__bts_portal_code'] || '').trim();
+    const existing = String(applicantAnswers['__bts_portal_code'] || bookingAnswers['__bts_portal_code'] || '').trim();
     if (existing) {
-      _applicant.custom_answers = { ...currentAnswers };
+      _applicant.custom_answers = { ...applicantAnswers, '__bts_portal_code': existing };
       return existing;
     }
     const buf = new Uint32Array(1);
     if (window.crypto?.getRandomValues) window.crypto.getRandomValues(buf);
     const code = String((buf[0] % 900000) + 100000);
+    const nextApplicantAnswers = { ...applicantAnswers, '__bts_portal_code': code };
+    _applicant.custom_answers = nextApplicantAnswers;
     try {
-      const merged = { ...currentAnswers, '__bts_portal_code': code };
-      await sb.from('audition_bookings').update({ custom_answers: merged }).eq('id', _applicant.id);
-      _applicant.custom_answers = merged;
+      await sb.from('audition_applications').update({ custom_answers: nextApplicantAnswers }).eq('id', _applicant.id);
     } catch (_) {}
+    if (booking?.id) {
+      try {
+        const nextBookingAnswers = { ...bookingAnswers, '__bts_portal_code': code };
+        await sb.from('audition_bookings').update({ custom_answers: nextBookingAnswers, portal_code: code }).eq('id', booking.id);
+        _booking = { ...booking, custom_answers: nextBookingAnswers };
+      } catch (_) {}
+    }
     return code;
   }
 
