@@ -43407,6 +43407,14 @@ See you soon!
     return fallback;
   }
 
+  function registrationAnswerPresent(app, keys = []) {
+    const ca = applicantCustomAnswers(app) || {};
+    return keys.some(key => {
+      const value = ca[key];
+      return value !== undefined && value !== null && String(value).trim() !== '';
+    });
+  }
+
   function registrationAgreementComplete(app) {
     return registrationAnswerTruthy(app, [
       '__bts_registration_agreement_signed',
@@ -43580,7 +43588,25 @@ See you soon!
   }
 
   function registrationFormsComplete(app) {
-    if (registrationAnswerTruthy(app, ['__bts_registration_complete'])) return true;
+    if (registrationAnswerTruthy(app, [
+      '__bts_registration_complete',
+      '__bts_registration_completed',
+      'registration_complete',
+      'registration_completed',
+      'registration_status',
+    ])) return true;
+    const registrationStatus = registrationAnswerValue(app, [
+      '__bts_registration_status',
+      'registration_status',
+      'registration_form_status',
+    ]).toLowerCase();
+    if (/complete|completed|submitted|received|signed/.test(registrationStatus)) return true;
+    if (registrationAnswerPresent(app, [
+      '__bts_registration_submitted_at',
+      '__bts_registration_completed_at',
+      '__bts_registration_pdf_url',
+      '__bts_registration_confirmation_sent_at',
+    ])) return true;
     const s = (typeof prod?.registration_settings === 'object' && prod.registration_settings) ? prod.registration_settings : {};
     const needsAgreements = s.require_agreements !== false;
     const needsEmergency = s.require_emergency !== false || s.require_medical !== false;
