@@ -3678,6 +3678,8 @@
       const nextInst  = allPay.flatMap(({ pay }) =>
         pay.installments.map((inst, i) => ({ inst, paid: !!(pay.records || []).find(r => r.installment_index === i && r.paid) }))
       ).find(x => !x.paid);
+      // For household, sum all unpaid instalments sharing the same due date as nextInst
+      const nextInstAmount = nextInst ? tlItems.filter(x => !x.isPaid && x.inst.dueDate === nextInst.inst.dueDate).reduce((s, x) => s + Number(x.inst.amount || 0), 0) : 0;
       const lastPaid  = allPaidRecords.sort((a,b) => (b.record.paid_at||'').localeCompare(a.record.paid_at||''))[0];
       const progressPct = (totalExpected + totalCredits) > 0 ? Math.round((totalPaid / (totalExpected + totalCredits)) * 100) : 0;
 
@@ -3716,7 +3718,7 @@
             </div>
             <div class="vp-pay-stat">
               <div class="vp-pay-stat-lbl">Next Payment</div>
-              <div class="vp-pay-stat-val">${esc(nextInst ? moneyLabel(nextInst.inst.amount) : (balanceDue <= 0 ? 'Paid' : '—'))}</div>
+              <div class="vp-pay-stat-val">${esc(nextInst ? moneyLabel(nextInstAmount || nextInst.inst.amount) : (balanceDue <= 0 ? 'Paid' : '—'))}</div>
               ${nextInst?.inst.dueDate ? `<div class="vp-pay-stat-sub">Due ${esc(fmtDate(nextInst.inst.dueDate, { short: true }))}</div>` : ''}
             </div>
             <div class="vp-pay-stat">
@@ -3815,14 +3817,19 @@
           <div class="vp-pay-tl">
             <div class="vp-pay-tl-hdr">Payment Timeline</div>
             ${(() => {
-              // Deduplicate timeline by installment index (household shows one entry per installment, not per performer)
-              const seen = new Set();
-              const deduped = tlItems.filter(x => { const k = String(x.inst.dueDate||'') + (x.inst.label||''); if (seen.has(k)) return false; seen.add(k); return true; });
-              return deduped.length ? deduped.map(({ inst, rec, isPaid }) => {
+              // Group timeline by due date — sum amounts across all performers for that date
+              const tlGroupMap = new Map();
+              tlItems.forEach(x => {
+                const k = String(x.inst.dueDate||'zzz') + '|' + (x.inst.label||'');
+                if (!tlGroupMap.has(k)) tlGroupMap.set(k, { ...x, totalAmt: 0 });
+                tlGroupMap.get(k).totalAmt += Number(x.inst.amount || 0);
+              });
+              const deduped = [...tlGroupMap.values()].sort((a,b) => a.sortKey.localeCompare(b.sortKey));
+              return deduped.length ? deduped.map(({ inst, rec, isPaid, totalAmt }) => {
                 const label = inst.label || 'Payment';
                 const dateStr = isPaid && rec?.paid_at ? fmtDate(rec.paid_at, { short: true }) : (inst.dueDate ? fmtDate(inst.dueDate, { short: true }) : 'TBA');
                 const meta = isPaid ? (rec?.payment_method ? paymentMethodLabel(rec.payment_method) : '') : '';
-                const amt = isPaid ? moneyLabel(paymentRecordAmount(rec, inst)) : moneyLabel(inst.amount);
+                const amt = isPaid ? moneyLabel(paymentRecordAmount(rec, inst)) : moneyLabel(totalAmt);
                 return `<div class="vp-pay-tl-item">
                   <div class="vp-pay-tl-col">
                     <div class="vp-pay-tl-dot ${isPaid ? 'done' : ''}">${isPaid ? `<svg viewBox="0 0 24 24"><path d="m20 6-11 11-5-5"/></svg>` : ''}</div>
