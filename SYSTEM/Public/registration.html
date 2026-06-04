@@ -2753,13 +2753,22 @@
 
   async function rpfEnsurePortalCode() {
     if (!_applicant?.id) return '';
-    const existing = String(_applicant?.custom_answers?.['__bts_portal_code'] || '').trim();
-    if (existing) return existing;
+    // Always re-fetch from DB to avoid overwriting form answers with stale in-memory state
+    let currentAnswers = _applicant.custom_answers || {};
+    try {
+      const { data } = await sb.from('audition_applications').select('custom_answers').eq('id', _applicant.id).maybeSingle();
+      if (data?.custom_answers) currentAnswers = data.custom_answers;
+    } catch (_) {}
+    const existing = String(currentAnswers['__bts_portal_code'] || '').trim();
+    if (existing) {
+      _applicant.custom_answers = { ...currentAnswers };
+      return existing;
+    }
     const buf = new Uint32Array(1);
     if (window.crypto?.getRandomValues) window.crypto.getRandomValues(buf);
     const code = String((buf[0] % 900000) + 100000);
     try {
-      const merged = { ...(_applicant.custom_answers || {}), '__bts_portal_code': code };
+      const merged = { ...currentAnswers, '__bts_portal_code': code };
       await sb.from('audition_applications').update({ custom_answers: merged }).eq('id', _applicant.id);
       _applicant.custom_answers = merged;
     } catch (_) {}
