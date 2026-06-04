@@ -2269,7 +2269,7 @@
     );
 
     const DEPT_LEADS_DATE_KEY = '__department_leads__';
-    let prod = null, org = null, opps = [], eventMap = {}, signupCounts = {};
+    let prod = null, org = null, opps = [], eventMap = {}, signupCounts = {}, productionContacts = [];
     let activeView = 'day', activeFilter = 'all', searchTerm = '', selectedDate = null, dateOffset = 0, selectedDepartment = null, selectedTimingBucket = null;
     let schedule = [], openCards = new Set(), openTimingGroups = new Set(), timingGroupsTouched = false, discountRequested = false, discountPerformer = '', paymentSettings = {}, currentPortalData = null, activePortalTab = '';
     let _portalOverviewMode = 'calendar', _portalCalOffset = 0, _portalCalView = 'month', _portalCalItems = [], _portalFcCalendar = null, _portalFcFallbackTimer = null;
@@ -4420,30 +4420,7 @@
         return !isNaN(d) && d >= today;
       }) || calendarItems[0] || null;
       const tabs = portalTabsFor(portalData);
-      const calendarHtml = `<div class="vpd-command-layout">
-        ${portalCalendarMonthHtml(calendarItems)}
-        <aside class="vpd-side-stack">
-          <section class="vpd-side-card">
-            <div class="vpd-side-head"><div class="vpd-side-title">Up Next</div><button class="vpd-side-link" type="button" onclick="renderPortalTab('overview')">View full schedule &rarr;</button></div>
-            ${upcoming ? (() => {
-              const kind = portalItemKind(upcoming);
-              const d = new Date(`${upcoming.date}T12:00:00`);
-              const weekday = d.toLocaleDateString('en-CA', { weekday:'short' });
-              const month = d.toLocaleDateString('en-CA', { month:'short' });
-              return `<div class="vpd-upnext">
-                <div class="vpd-up-date"><div class="vpd-up-date-month">${esc(weekday)}<br>${esc(month)}</div><div class="vpd-up-date-day">${esc(String(d.getDate()))}</div></div>
-                <div>
-                  <div class="vpd-up-type" style="color:${esc(upcoming.color || portalKindColor(kind))};"><span class="vpd-cal-dot" style="background:${esc(upcoming.color || portalKindColor(kind))};"></span>${esc(portalKindLabel(kind))}</div>
-                  <div class="vpd-up-title">${esc(upcoming.title)}</div>
-                  ${upcoming.time ? `<div class="vpd-up-meta">${ICONS.clock}<span>${esc(upcoming.time)}</span></div>` : ''}
-                  ${upcoming.place ? `<div class="vpd-up-meta">${ICONS.pin}<span>${esc(upcoming.place)}</span></div>` : ''}
-                  <button class="vpd-outline-btn" type="button" onclick="renderPortalTab('${kind === 'volunteer' ? 'volunteer' : kind === 'deadline' ? 'registration' : 'performer'}')">View Details</button>
-                </div>
-              </div>`;
-            })() : `<div class="vpd-empty" style="padding:1rem;">No upcoming dated items yet.</div>`}
-          </section>
-        </aside>
-      </div>`;
+      const calendarHtml = portalCalendarMonthHtml(calendarItems);
       const bodyHtml = _portalOverviewMode === 'breakdown'
         ? portalOverviewBreakdownHtml(portalData, portalPerformers, volunteerStats)
         : calendarHtml;
@@ -4989,12 +4966,14 @@
         const orgResult = await sb.from('organizations').select('id,name,email,slug,abbreviation,logo_url,logo_white_url,etransfer_email').eq('id', prod.organization_id).maybeSingle();
         if (!orgResult.error && orgResult.data) org = orgResult.data;
 
-        const [planResult, eventResult, signupResult] = await Promise.all([
+        const [planResult, eventResult, signupResult, contactResult] = await Promise.all([
           sb.from('productions').select('volunteer_staffing_plan').eq('id', prod.id).single(),
           sb.from('production_events').select('id,event_type,title,start_time,end_time,venue,arrive_note,bring_note,know_note,show_in_cast_schedule').eq('production_id', prod.id).order('start_time', { ascending: true }),
-          sb.from('volunteer_signups').select('role_name,shift_date,status').eq('production_id', prod.id).in('status', ['pending','approved','partially_filled'])
+          sb.from('volunteer_signups').select('role_name,shift_date,status').eq('production_id', prod.id).in('status', ['pending','approved','partially_filled']),
+          sb.from('production_team_members').select('name,email,phone,role,access_level,is_active').eq('production_id', prod.id).eq('is_active', true)
         ]);
         if (planResult.error) throw planResult.error;
+        productionContacts = contactResult.error ? [] : (contactResult.data || []);
         (eventResult.data || []).forEach(ev => { eventMap[ev.id] = ev; });
         (signupResult.data || []).forEach(s => { const k = `${s.role_name || ''}::${s.shift_date || ''}`; signupCounts[k] = (signupCounts[k] || 0) + 1; });
         opps = buildOppsFromPlan(planResult.data?.volunteer_staffing_plan || {}, eventResult.data || []);
