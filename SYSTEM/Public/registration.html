@@ -2718,6 +2718,53 @@
     return code;
   }
 
+  async function rpfMarkRegistrationConfirmationSent() {
+    if (!_applicant?.id) return;
+    const merged = {
+      ...(_applicant.custom_answers || {}),
+      __bts_registration_confirmation_sent_at: new Date().toISOString(),
+      __bts_registration_confirmation_error: '',
+    };
+    try {
+      await sb.from('audition_applications').update({ custom_answers: merged }).eq('id', _applicant.id);
+      _applicant.custom_answers = merged;
+    } catch (error) {
+      console.warn('[BTS] could not mark registration confirmation sent', error);
+    }
+  }
+
+  async function rpfMarkRegistrationConfirmationError(error) {
+    if (!_applicant?.id) return;
+    const merged = {
+      ...(_applicant.custom_answers || {}),
+      __bts_registration_confirmation_error: String(error?.message || error || 'Could not send confirmation email'),
+    };
+    try {
+      await sb.from('audition_applications').update({ custom_answers: merged }).eq('id', _applicant.id);
+      _applicant.custom_answers = merged;
+    } catch (_) {}
+  }
+
+  function rpfRegistrationConfirmationSent() {
+    return !!String(_applicant?.custom_answers?.__bts_registration_confirmation_sent_at || '').trim();
+  }
+
+  async function rpfAutoSendMissingRegistrationConfirmation() {
+    if (!_applicant?.id || !rpfRegistrationIsComplete() || rpfRegistrationConfirmationSent()) return;
+    if (window._rpfRegistrationAutoSendAttempted) return;
+    window._rpfRegistrationAutoSendAttempted = true;
+    try {
+      await rpfSendRegistrationCompleteEmail();
+      window._rpfLastConfirmationEmailError = null;
+      await rpfMarkRegistrationConfirmationSent();
+    } catch (error) {
+      console.warn('[BTS] automatic registration confirmation resend failed', error);
+      window._rpfLastConfirmationEmailError = error;
+      await rpfMarkRegistrationConfirmationError(error);
+      rpfShowSuccessScreen();
+    }
+  }
+
   async function rpfShowSuccessScreen() {
     rpfMarkRegistrationCompleteNav();
     if (!window._rpfSubmittedAnswerRows) window._rpfSubmittedAnswerRows = rpfCollectAnswerRowsForPdf();
@@ -2755,6 +2802,7 @@
 
       <div class="rpf-success-closing">Thank you for being part of ${showName}. We can't wait to get started.</div>
     </div>`;
+    rpfAutoSendMissingRegistrationConfirmation();
   }
 
   // ── Resend confirmation email ─────────────────────────────────────────────────
@@ -2836,11 +2884,13 @@
     try {
       await rpfSendRegistrationCompleteEmail();
       window._rpfLastConfirmationEmailError = null;
+      await rpfMarkRegistrationConfirmationSent();
       btn.textContent = 'Sent!';
       setTimeout(() => { btn.disabled = false; btn.textContent = 'Send email again'; }, 4000);
     } catch (e) {
       console.warn('[BTS] registration confirmation email failed', e);
       window._rpfLastConfirmationEmailError = e;
+      await rpfMarkRegistrationConfirmationError(e);
       btn.disabled = false;
       btn.textContent = 'Could not send — try again';
       setTimeout(() => { btn.textContent = 'Send email again'; }, 4000);
@@ -2941,9 +2991,11 @@
       try {
         await rpfSendRegistrationCompleteEmail();
         window._rpfLastConfirmationEmailError = null;
+        await rpfMarkRegistrationConfirmationSent();
       } catch (emailErr) {
         console.warn('[BTS] registration confirmation email failed', emailErr);
         window._rpfLastConfirmationEmailError = emailErr;
+        await rpfMarkRegistrationConfirmationError(emailErr);
       }
       rpfShowSuccessScreen();
     } catch (err) {
