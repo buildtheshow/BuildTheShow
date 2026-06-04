@@ -2101,7 +2101,7 @@
     let prod = null, org = null, opps = [], eventMap = {}, signupCounts = {};
     let activeView = 'day', activeFilter = 'all', searchTerm = '', selectedDate = null, dateOffset = 0, selectedDepartment = null, selectedTimingBucket = null;
     let schedule = [], openCards = new Set(), openTimingGroups = new Set(), timingGroupsTouched = false, discountRequested = false, discountPerformer = '', paymentSettings = {}, currentPortalData = null, activePortalTab = '';
-    let _portalOverviewMode = 'calendar', _portalCalOffset = 0, _portalCalView = 'month', _portalCalItems = [], _portalFcCalendar = null;
+    let _portalOverviewMode = 'calendar', _portalCalOffset = 0, _portalCalView = 'month', _portalCalItems = [], _portalFcCalendar = null, _portalFcFallbackTimer = null;
     function portalOverviewSetMode(mode) {
       _portalOverviewMode = mode === 'breakdown' ? 'breakdown' : 'calendar';
       renderPortalTab('overview');
@@ -3127,13 +3127,8 @@
           </div>
         </div>
         ${volunteerLinkedPerformersHtml(linkedPerformers)}
-        ${miniCalendarHtml(portalCalendarItems(currentPortalData, 'volunteer'), 'Volunteer Calendar')}
-        <section class="vpd-card">
-          <div class="vpd-section-head">
-            <div class="vpd-section-title-wrap"><div class="vpd-section-icon">${ICONS.list}</div><div><div class="vpd-section-title">Volunteer Shift Details</div><div class="vpd-section-sub">Dates, times, locations, reporting details, and first-time volunteer notes.</div></div></div>
-          </div>
-          ${detailListHtml(detailItems, 'No volunteer shifts found yet.')}
-        </section>
+        ${dashboardSectionHtml('Upcoming Approved Shifts', 'Confirmed shifts still ahead.', stats.upcomingApproved)}
+        ${stats.pending.length ? dashboardSectionHtml('Pending Requests', 'Shifts waiting for production team approval.', stats.pending) : ''}
         <div class="vpd-card">
           <div class="vpd-section-title" style="font-size:1.2rem;">What to Know Before You Arrive</div>
           <div class="vpd-info-stack" style="margin-top:0.9rem;">
@@ -3728,7 +3723,7 @@
 
     function renderPortalCalendarFallback() {
       const el = document.getElementById('vpd-fc-calendar');
-      if (!el || el.querySelector('.fc')) return;
+      if (!el || el.classList.contains('fc') || el.querySelector('.fc')) return;
       el.className = '';
       el.innerHTML = portalCalendarFallbackHtml();
     }
@@ -3740,6 +3735,7 @@
         const existing = document.querySelector('script[data-bts-fullcalendar]');
         if (existing) {
           existing.addEventListener('load', initPortalFullCalendar, { once: true });
+          existing.addEventListener('error', renderPortalCalendarFallback, { once: true });
           return;
         }
         const s = document.createElement('script');
@@ -3748,8 +3744,13 @@
         s.onload = initPortalFullCalendar;
         s.onerror = renderPortalCalendarFallback;
         document.head.appendChild(s);
-        setTimeout(renderPortalCalendarFallback, 8000);
+        if (_portalFcFallbackTimer) clearTimeout(_portalFcFallbackTimer);
+        _portalFcFallbackTimer = setTimeout(renderPortalCalendarFallback, 15000);
         return;
+      }
+      if (_portalFcFallbackTimer) {
+        clearTimeout(_portalFcFallbackTimer);
+        _portalFcFallbackTimer = null;
       }
       if (_portalFcCalendar) {
         try { _portalFcCalendar.destroy(); } catch (_) {}
