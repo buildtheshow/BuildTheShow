@@ -6747,10 +6747,7 @@
     .zeus-event-time  { font-size: 0.67rem; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: clip; }
     .zeus-event-label { font-size: 0.7rem;  font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: clip; }
     /* Deadline badge — floats in the day cell so out-of-month dates do not fade it */
-    .zeus-deadline-bar-stack { position: absolute; bottom: 0; left: 0; right: 0; z-index: 4; display: flex; flex-direction: column; align-items: stretch; gap: 0; pointer-events: none; }
-    .zeus-deadline-bar { display: flex; align-items: center; height: 13px; padding: 0 4px; font-size: 7.5px; font-weight: 800; letter-spacing: 0.02em; white-space: nowrap; overflow: hidden; cursor: pointer; color: #fff; pointer-events: auto; transition: filter 0.12s; }
-    .zeus-deadline-bar:hover { filter: brightness(1.12); }
-    .zeus-deadline-bar-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+    .fc-event-deadline .fc-event-time { display: none !important; }
     .fc .fc-now-indicator-line { border-color: #e53935; }
     .fc .fc-scrollgrid { border-color: #e8e4f0; }
     .fc td, .fc th { border-color: #e8e4f0 !important; }
@@ -35154,7 +35151,6 @@ See you soon!
   };
 
   let fcCalendar = null;
-  let _fcDeadlineEvents = []; // deadline FC events for the current view — re-populated on every fetch
   let editingEventId = null;
 
   // ── Holiday overlay ───────────────────────────────────
@@ -35347,8 +35343,6 @@ See you soon!
       },
       datesSet() {
         _renderHolidayDots();
-        // Re-inject deadline bars after FC redraws the date cells
-        requestAnimationFrame(() => requestAnimationFrame(() => _renderDeadlineBars()));
       },
       events(fetchInfo, successCb, failureCb) {
         sb.from('production_events')
@@ -35359,7 +35353,6 @@ See you soon!
           .then(({ data, error }) => {
             if (error) { failureCb(error); return; }
             const mapped = (data || []).map(dbEventToFC);
-            _fcDeadlineEvents = mapped.filter(e => e.extendedProps?.is_deadline);
             if (_showHolidays) {
               _holidays.forEach(h => {
                 mapped.push({
@@ -35373,26 +35366,12 @@ See you soon!
             }
             successCb(mapped);
             document.getElementById('ov-event-count').textContent = data ? data.length : 0;
-            // Inject deadline bars after FC finishes rendering events
-            requestAnimationFrame(() => requestAnimationFrame(() => _renderDeadlineBars()));
           });
       },
     });
     fcCalendar.render();
     const calendarEl = document.getElementById('fc-calendar');
-    if (calendarEl && !calendarEl.dataset.deadlineClickBound) {
-      calendarEl.dataset.deadlineClickBound = '1';
-      calendarEl.addEventListener('click', e => {
-        const badge = e.target?.closest?.('.zeus-deadline-bar');
-        if (!badge) return;
-        e.preventDefault();
-        const ev = fcCalendar?.getEventById?.(badge.dataset.deadlineEventId);
-        if (ev) {
-          e.stopPropagation();
-          openEventModal({ fcEvent: ev });
-        }
-        // If getEventById fails, fall through to the badge's own direct click handler
-      }, true);
+    if (calendarEl) {
     }
     loadVenueSuggestions();
     // Wire drag-and-drop from legend items onto calendar dates
@@ -35472,9 +35451,7 @@ See you soon!
       },
     };
     if (isDeadline) {
-      // FC tracks the event (so getEventById works / edit modal opens) but never renders it.
-      // _renderDeadlineBars() draws the thin bottom strips directly into the day cells.
-      return { ...base, start: stripTz(e.start_time), allDay: true, display: 'none' };
+      return { ...base, start: stripTz(e.start_time), allDay: true, classNames: ['fc-event-deadline'] };
     }
     return { ...base, start: stripTz(e.start_time), end: stripTz(e.end_time), allDay: e.all_day || false, classNames: [] };
   }
@@ -35523,36 +35500,6 @@ See you soon!
     const pad = n => String(n).padStart(2, '0');
     return end.getUTCFullYear() + '-' + pad(end.getUTCMonth() + 1) + '-' + pad(end.getUTCDate()) +
            'T' + pad(end.getUTCHours()) + ':' + pad(end.getUTCMinutes());
-  }
-
-  function _renderDeadlineBars() {
-    // Remove all existing bars so we start clean on every call
-    document.querySelectorAll('#fc-calendar .zeus-deadline-bar-stack').forEach(el => el.remove());
-    const safeTxt = s => String(s||'').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-    _fcDeadlineEvents.forEach(fcEv => {
-      const dateStr = (fcEv.extendedProps.raw_start_time || '').slice(0, 10);
-      if (!dateStr) return;
-      const dayFrame = document.querySelector(`#fc-calendar .fc-daygrid-day[data-date="${dateStr}"] .fc-daygrid-day-frame`);
-      if (!dayFrame) return;
-      let stack = dayFrame.querySelector(':scope > .zeus-deadline-bar-stack');
-      if (!stack) {
-        stack = document.createElement('div');
-        stack.className = 'zeus-deadline-bar-stack';
-        dayFrame.appendChild(stack);
-      }
-      const bar = document.createElement('div');
-      bar.className = 'zeus-deadline-bar';
-      bar.dataset.deadlineEventId = fcEv.id;
-      bar.style.background = fcEv.backgroundColor || '#c976a5';
-      bar.innerHTML = `<span class="zeus-deadline-bar-title">${safeTxt(fcEv.title || 'Deadline')}</span>`;
-      bar.addEventListener('click', e => {
-        e.preventDefault();
-        e.stopPropagation();
-        const ev = fcCalendar?.getEventById?.(fcEv.id);
-        openEventModal({ fcEvent: ev || fcEv });
-      });
-      stack.appendChild(bar);
-    });
   }
 
   function openEventModal(opts = {}) {
