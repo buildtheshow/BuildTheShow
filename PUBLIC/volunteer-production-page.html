@@ -1670,8 +1670,8 @@
     .vpd-overview-switch button:first-child { border-left:0; }
     .vpd-overview-switch button.active { background:var(--purple); color:#fff; }
     .vpd-command-layout { display:grid; grid-template-columns:minmax(0,1fr) 360px; gap:1.15rem; align-items:start; }
-    .vpd-command-card { background:#fff; border:1px solid var(--line); border-radius:12px; box-shadow:0 4px 20px rgba(0,0,0,0.05); overflow:hidden; }
-    .vpd-command-main { min-height:0; }
+    .vpd-command-card { background:#fff; border:1px solid var(--line); border-radius:12px; box-shadow:0 4px 20px rgba(0,0,0,0.05); overflow:hidden; min-width:0; }
+    .vpd-command-main { min-height:0; min-width:0; }
     .vpd-month-toolbar { display:grid; grid-template-columns:auto minmax(0,1fr) auto; align-items:center; gap:1rem; padding:0.95rem 1rem; background:#fff; }
     .vpd-month-controls { display:flex; align-items:center; gap:0.5rem; }
     .vpd-month-btn { min-height:44px; border:1px solid var(--line); border-radius:10px; background:#fff; color:var(--ink); font:inherit; font-size:0.82rem; font-weight:850; padding:0.5rem 0.72rem; display:inline-flex; align-items:center; justify-content:center; cursor:pointer; }
@@ -1737,6 +1737,8 @@
       overflow:hidden;
       box-shadow:0 2px 8px rgba(87,46,136,0.05);
       padding:1rem;
+      min-width:0;
+      width:100%;
     }
     .vpd-fc-wrap .fc .fc-toolbar-title { font-size:1.1rem; font-weight:700; color:#1a1530; }
     .vpd-fc-wrap .fc .fc-toolbar { gap:0.55rem; align-items:stretch; }
@@ -1767,8 +1769,8 @@
     .vpd-fc-wrap .fc .fc-event-title { padding:0 2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
     .vpd-fc-wrap .fc .fc-event-time { font-size:0.62rem; opacity:0.85; }
     .vpd-fc-wrap .fc .fc-event-main { padding:3px 5px !important; width:100%; display:flex; align-items:center; justify-content:center; }
-    .vpd-fc-wrap .zeus-event-time { font-size:0.67rem; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:clip; }
-    .vpd-fc-wrap .zeus-event-label { font-size:0.7rem; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:clip; }
+    .vpd-fc-wrap .zeus-event-time { font-size:0.67rem; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .vpd-fc-wrap .zeus-event-label { font-size:0.7rem; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
     .vpd-fc-wrap .fc-list { border-radius:10px; overflow:hidden; }
     .vpd-fc-wrap .fc-list-event { min-height:56px; }
     .vpd-fc-wrap .fc-list-event td { padding-top:0.85rem; padding-bottom:0.85rem; }
@@ -4427,16 +4429,17 @@
       return `${portalOverviewModeBarHtml()}${bodyHtml}`;
     }
     function portalContactHtml(portalData = currentPortalData) {
-      const orgName = org?.name || org?.organization_name || org?.organisation_name || 'Production team';
-      const email = org?.email || paymentSettings?.producer_email || paymentSettings?.contact_email || '';
-      const phone = org?.phone || org?.phone_number || org?.contact_phone || '';
+      const producer = [...productionContacts].sort((a, b) => {
+        const aRole = String(a.access_level || a.role || '').toLowerCase();
+        const bRole = String(b.access_level || b.role || '').toLowerCase();
+        const score = role => role.includes('producer') ? 0 : role.includes('owner') || role.includes('admin') ? 1 : 2;
+        return score(aRole) - score(bRole);
+      })[0] || {};
+      const name = producer.name || org?.contact_name || org?.name || 'Producer';
+      const role = producer.role || producer.access_level || paymentSettings?.producer_role || 'Producer';
+      const email = producer.email || paymentSettings?.producer_email || paymentSettings?.contact_email || org?.contact_email || org?.email || '';
+      const phone = producer.phone || paymentSettings?.producer_phone || paymentSettings?.contact_phone || '';
       const showName = prod?.title || prod?.name || 'this production';
-      const performers = allPortalPerformers(portalData || {});
-      const volunteerStats = portalVolunteerStats(portalData?.volunteer?.rows || [], portalData?.email || '', portalData?.volunteer?.linkedPerformers || []);
-      const connectedBits = [
-        performers.length ? `${performers.length} performer${performers.length === 1 ? '' : 's'}` : '',
-        volunteerStats.approved.length ? `${volunteerStats.approved.length} approved volunteer shift${volunteerStats.approved.length === 1 ? '' : 's'}` : ''
-      ].filter(Boolean).join(' · ') || 'Portal access';
       return `<div class="vpd-tab-content">
         <section class="vpd-card">
           <div class="vpd-section-head">
@@ -4444,35 +4447,29 @@
               <div class="vpd-section-icon">${ICONS.users}</div>
               <div>
                 <div class="vpd-section-title">Production Contact</div>
-                <div class="vpd-section-sub">Questions about ${esc(showName)}, schedules, registration, payments, or volunteer shifts.</div>
+                <div class="vpd-section-sub">Contact the producer for questions about ${esc(showName)}.</div>
               </div>
             </div>
           </div>
           <div class="vpd-contact-grid">
             <div class="vpd-contact-card">
-              <div class="vpd-contact-label">Organisation</div>
-              <div class="vpd-contact-value">${esc(orgName)}</div>
-              <div class="vpd-contact-copy">Use this contact for production-wide questions or if you are not sure who to ask.</div>
+              <div class="vpd-contact-label">Producer</div>
+              <div class="vpd-contact-value">${esc(name)}</div>
+              <div class="vpd-contact-copy">${esc(role)}</div>
             </div>
             <div class="vpd-contact-card">
               <div class="vpd-contact-label">Email</div>
               <div class="vpd-contact-value">${email ? `<a href="mailto:${esc(email)}">${esc(email)}</a>` : 'Not listed yet'}</div>
-              <div class="vpd-contact-copy">${email ? 'Best for schedule, registration, payment, and general production questions.' : 'Ask the production team to add an organisation email in settings.'}</div>
+              <div class="vpd-contact-copy">${email ? 'Best for production questions.' : 'No producer email has been added yet.'}</div>
             </div>
             ${phone ? `<div class="vpd-contact-card">
               <div class="vpd-contact-label">Phone</div>
               <div class="vpd-contact-value"><a href="tel:${esc(String(phone).replace(/[^0-9+]/g,''))}">${esc(phone)}</a></div>
-              <div class="vpd-contact-copy">Use for time-sensitive questions only.</div>
+              <div class="vpd-contact-copy">Use if a phone number was provided by the producer.</div>
             </div>` : ''}
-            <div class="vpd-contact-card">
-              <div class="vpd-contact-label">Connected to this portal</div>
-              <div class="vpd-contact-value">${esc(connectedBits)}</div>
-              <div class="vpd-contact-copy">${esc(performers.map(performerDisplayName).join(', ') || portalData?.email || '')}</div>
-            </div>
           </div>
           <div class="vpd-contact-actions">
-            ${email ? `<a class="vpd-action-btn" href="mailto:${esc(email)}?subject=${encodeURIComponent(showName + ' question')}">Email Production Contact</a>` : ''}
-            <button class="vpd-action-btn secondary" type="button" onclick="renderPortalTab('overview')">Back to Schedule</button>
+            ${email ? `<a class="vpd-action-btn" href="mailto:${esc(email)}?subject=${encodeURIComponent(showName + ' question')}">Email Producer</a>` : ''}
           </div>
         </section>
       </div>`;
