@@ -1070,9 +1070,13 @@ serve(async (req) => {
   }
 
   if (category === 'registration_completed' && applicantIdRaw) {
+    const nowIso = new Date().toISOString();
     const sentPatch = {
       ...registrationCustomAnswerPatch,
-      __bts_registration_confirmation_sent_at: new Date().toISOString(),
+      __bts_registration_complete: true,
+      __bts_registration_status: 'complete',
+      __bts_registration_submitted_at: customAnswers.__bts_registration_submitted_at || nowIso,
+      __bts_registration_confirmation_sent_at: nowIso,
       __bts_registration_confirmation_error: '',
     };
     try {
