@@ -3765,9 +3765,8 @@
               <button class="vp-pay-view-btn" type="button" data-view="full" onclick="this.closest('.vp-pc').querySelectorAll('.vp-pay-view-btn').forEach(b=>b.classList.remove('active'));this.classList.add('active');this.closest('.vp-pc').querySelector('.vp-pay-instalment-view').style.display='none';this.closest('.vp-pc').querySelector('.vp-pay-fullamount-view').style.display='';" style="flex:1;padding:0.5rem 0.85rem;font-size:0.72rem;font-weight:600;color:#555;background:#fff;border:none;cursor:pointer;font-family:inherit;">Pay in Full</button>
             </div>` : ''}
             <div class="vp-pay-instalment-view">
-              <div class="vp-pay-sec">Payment Schedule</div>
               ${(() => {
-                const maxInsts = Math.max(...allPay.map(({ pay }) => pay.installments.length));
+                const maxInsts = Math.max(0, ...allPay.map(({ pay }) => pay.installments.length));
                 return Array.from({ length: maxInsts }, (_, i) => {
                   const items = allPay.map(({ performer, pay }) => {
                     const inst = pay.installments[i];
@@ -3779,18 +3778,24 @@
                   const allPaid = items.length > 0 && items.every(x => x.isPaid);
                   const label = items[0]?.inst.label || `Payment ${i + 1}`;
                   const dueDate = items[0]?.inst.dueDate || '';
-                  const meta = allPaid ? (paymentRecordMeta(items[0].rec) || 'Received') : (dueDate ? fmtDate(dueDate, { short: true }) : 'TBA');
-                  const subRows = isHousehold ? `<div class="vp-pay-sched-sub-rows">${items.map(({ performer, inst, isPaid }) =>
-                    `<div class="vp-pay-sched-sub-row">
-                      <span class="vp-pay-sched-sub-name">${esc(performerDisplayName(performer))}</span>
-                      <span class="vp-pay-sched-sub-amt${isPaid ? ' g' : ''}">${esc(moneyLabel(inst.amount)||'$0')}</span>
+                  const dueTxt = allPaid ? (paymentRecordMeta(items[0].rec) || 'Received') : (dueDate ? `Due ${fmtDate(dueDate, { short: true })}` : 'Due date TBA');
+                  const perfRows = isHousehold ? `<div class="vp-inst-rows">${items.map(({ performer, inst }) =>
+                    `<div class="vp-inst-row">
+                      <span class="vp-inst-row-name"><span class="vp-inst-row-av" style="background:${_payAvatarColor(performerDisplayName(performer))};">${esc(_payInitials(performer))}</span>${esc(performerDisplayName(performer))}</span>
+                      <span class="vp-inst-row-amt">${esc(moneyLabel(inst.amount)||'$0')}</span>
                     </div>`
                   ).join('')}</div>` : '';
-                  return `<div class="vp-pay-sched-row${allPaid ? ' done' : ''}" style="border-bottom:0;">
-                    <div><div class="vp-pay-sched-name">${esc(label)}</div><div class="vp-pay-sched-sub">${esc(allPaid ? meta : '')}</div></div>
-                    <div class="vp-pay-sched-due">${esc(allPaid ? '' : meta)}</div>
-                    <div class="vp-pay-sched-amt">${esc(moneyLabel(totalAmt)||'$0')}</div>
-                  </div>${subRows}`;
+                  return `<div class="vp-inst-block${allPaid ? ' done' : ''}">
+                    <div class="vp-inst-hdr">
+                      <span class="vp-inst-hdr-label">Payment ${i + 1} of ${maxInsts}</span>
+                      <span class="vp-inst-hdr-tag">${allPaid ? 'Paid' : 'Upcoming'}</span>
+                    </div>
+                    <div class="vp-inst-main">
+                      <div><div class="vp-inst-name">${esc(label)}</div><div class="vp-inst-due">${esc(dueTxt)}</div></div>
+                      <div class="vp-inst-total">${esc(moneyLabel(totalAmt)||'$0')}</div>
+                    </div>
+                    ${perfRows}
+                  </div>`;
                 }).join('');
               })()}
             </div>
