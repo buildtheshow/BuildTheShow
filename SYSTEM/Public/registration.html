@@ -343,6 +343,7 @@
     }
     .rpf-solo-toggle-row input { width: 1rem; height: 1rem; accent-color: var(--purple); cursor: pointer; flex-shrink: 0; margin: 0; }
     .rpf-solo-toggle-label { font-size: 0.82rem; font-weight: 800; color: #000; }
+    .rpf-toggle-help { margin: -0.45rem 0 0.85rem 2.85rem; font-size: 0.74rem; line-height: 1.42; font-weight: 700; color: #6d5d83; }
     .rpf-pickup-person-heading {
       display: flex; align-items: center; justify-content: space-between;
       margin: 1rem 0 0; padding: 0.52rem 0.8rem;
@@ -735,7 +736,7 @@
 
   // ── Default form constants ───────────────────────────────────────────────────
   const REGISTRATION_FORM_TEMPLATE_DEFS = [
-    { key: 'cast_registration',   group: 'Core Registration',    color: '#476aaa', defaultOn: true,  title: 'Cast Registration',                     defaultFields: ['Legal first name *', 'Legal last name *', 'Preferred name *', 'Pronouns *', 'Date of birth *', 'Contact email *', 'Contact phone number *', '{guard}Guardian first name *', '{guard}Guardian last name *', '{guard}Guardian relationship to performer *'] },
+    { key: 'cast_registration',   group: 'Core Registration',    color: '#476aaa', defaultOn: true,  title: 'Cast Registration',                     defaultFields: ['Legal first name *', 'Legal last name *', 'Preferred name *', 'Pronouns *', 'Date of birth *', 'Contact email *', 'Contact phone number *', '{secondary-toggle}Add a secondary contact', '{secondary}Secondary Contact Name', '{secondary}Secondary Contact Email', '{secondary}Secondary Contact Phone', '{guard}Guardian first name *', '{guard}Guardian last name *', '{guard}Guardian relationship to performer *'] },
     { key: 'pickup_dismissal',    group: 'Core Registration',    color: '#476aaa', defaultOn: true,  title: 'Pickup & Dismissal',                    defaultFields: ['{solo-toggle}Performer can leave on their own', '{solo}Authorised pickup 1 full name *', '{solo}Authorised pickup 1 relationship to performer *', '{solo}Authorised pickup 1 phone number *', '{solo}Authorised pickup 2 full name', '{solo}Authorised pickup 2 relationship to performer', '{solo}Authorised pickup 2 phone number', '{pickup-add}', 'Additional pickup notes'] },
     { key: 'emergency_medical',   group: 'Core Registration',    color: '#476aaa', defaultOn: true,  title: 'Emergency & Medical',                   defaultFields: ['Emergency contact name *', 'Emergency contact phone *', 'Emergency contact relationship *', 'Allergies', 'Medications', 'Medical conditions'] },
     { key: 'accessibility',       group: 'Core Registration',    color: '#476aaa', defaultOn: true,  title: 'Accessibility & Accommodation',          defaultFields: ['Accessibility and accommodation needs'] },
@@ -1055,7 +1056,7 @@
     const age = rpfCalcAge(dobInput.value);
     const isUnder19 = age !== null && age < 19;
     panel.querySelectorAll('[data-rpf-guard]').forEach(el => { el.style.display = isUnder19 ? '' : 'none'; });
-    const soloCheckbox = panel.querySelector('.rpf-solo-toggle-row input:not([data-rpf-minor-toggle])');
+    const soloCheckbox = panel.querySelector('[data-rpf-solo-toggle]');
     if (soloCheckbox && age !== null) {
       const shouldBeChecked = age >= 19;
       if (soloCheckbox.checked !== shouldBeChecked) {
@@ -1081,6 +1082,12 @@
     body.querySelectorAll('[data-rpf-minor]').forEach(el => { el.style.display = checkbox.checked ? '' : 'none'; });
   };
 
+  window.rpfToggleSecondaryContact = function(checkbox) {
+    const body = checkbox.closest('.rpf-section-body, .rpf-panel');
+    if (!body) return;
+    body.querySelectorAll('[data-rpf-secondary]').forEach(el => { el.style.display = checkbox.checked ? '' : 'none'; });
+  };
+
   window.rpfAddPickupPerson = function(btn) {
     const body = btn.closest('.rpf-section-body');
     if (!body) return;
@@ -1094,7 +1101,7 @@
       <div class="rpf-form-group rpf-pickup-field"><label class="rpf-label">Relationship to performer</label><input type="text" class="rpf-input" data-field-name="Authorised pickup ${num} relationship to performer" /></div>
       <div class="rpf-form-group rpf-pickup-field rpf-pickup-field--last"><label class="rpf-label">Phone number</label><input type="tel" class="rpf-input" data-field-name="Authorised pickup ${num} phone number" /></div>`;
     btn.closest('.rpf-form-group')?.before(group);
-    const soloCheckbox = body.querySelector('.rpf-solo-toggle-row input');
+    const soloCheckbox = body.querySelector('[data-rpf-solo-toggle]');
     if (soloCheckbox?.checked) group.style.display = 'none';
   };
 
@@ -1234,10 +1241,29 @@
         return;
       }
       if (skipping) return;
-      const label = raw.replace(/^\{(?:minor|solo|guard)\}/, '').replace(/\s*\*$/, '').trim();
+      const label = raw.replace(/^\{(?:minor|solo|guard|secondary|secondary-toggle)\}/, '').replace(/\s*\*$/, '').trim();
       if (!/\bsignature\b/i.test(label)) visible.push(field);
     });
     return visible;
+  }
+
+  function registrationFormEnsureDefaultAdditions(key, fields = []) {
+    const list = registrationFormVisibleFields(fields);
+    if (key !== 'cast_registration') return list;
+    if (list.some(field => /\{secondary(?:-toggle)?\}|secondary contact|additional contact/i.test(String(field || '')))) return list;
+    const secondaryFields = [
+      '{secondary-toggle}Add a secondary contact',
+      '{secondary}Secondary Contact Name',
+      '{secondary}Secondary Contact Email',
+      '{secondary}Secondary Contact Phone',
+    ];
+    const insertAfter = list.findIndex(field => /^contact phone number\s*\*?$/i.test(String(field || '').replace(/^\{[^}]+\}/, '').trim()));
+    if (insertAfter >= 0) {
+      list.splice(insertAfter + 1, 0, ...secondaryFields);
+    } else {
+      list.push(...secondaryFields);
+    }
+    return list;
   }
 
   function rpfDisplayFieldLabel(label) {
@@ -1628,14 +1654,23 @@
       const label = raw.slice(13).replace(/\s*\*$/, '').trim();
       const _age = rpfCalcAge(_prefill?.date_of_birth);
       const _checked = _age !== null && _age >= 19;
-      return `<div class="rpf-form-group"><label class="rpf-solo-toggle-row"><input type="checkbox"${_checked ? ' checked' : ''} data-field-name="${esc(label)}" onchange="rpfToggleSoloPickup(this)" /><span class="rpf-solo-toggle-label">${esc(label)}</span></label></div>`;
+      return `<div class="rpf-form-group"><label class="rpf-solo-toggle-row"><input type="checkbox" data-rpf-solo-toggle="1"${_checked ? ' checked' : ''} data-field-name="${esc(label)}" onchange="rpfToggleSoloPickup(this)" /><span class="rpf-solo-toggle-label">${esc(label)}</span></label></div>`;
+    }
+
+    const isSecondaryToggle = raw.startsWith('{secondary-toggle}');
+    if (isSecondaryToggle) {
+      const label = raw.slice(18).replace(/\s*\*$/, '').trim() || 'Add a secondary contact';
+      const checked = !!(rpfPrefillValue('secondary contact email', _prefill) || rpfPrefillValue('secondary contact name', _prefill) || rpfPrefillValue('secondary contact phone', _prefill));
+      return `<div class="rpf-form-group"><label class="rpf-solo-toggle-row"><input type="checkbox" data-rpf-secondary-toggle="1"${checked ? ' checked' : ''} data-field-name="${esc(label)}" onchange="rpfToggleSecondaryContact(this)" /><span class="rpf-solo-toggle-label">${esc(label)}</span></label><div class="rpf-toggle-help">This person will receive the same production communications as the primary contact.</div></div>`;
     }
 
     const isSolo  = raw.startsWith('{solo}');
     const isMinor = raw.startsWith('{minor}');
     const afterPrefix = isSolo ? raw.slice(6) : isMinor ? raw.slice(7) : raw;
-    const isGuard = afterPrefix.startsWith('{guard}');
-    const stripped = isGuard ? afterPrefix.slice(7) : afterPrefix;
+    const isSecondary = afterPrefix.startsWith('{secondary}');
+    const afterSecondary = isSecondary ? afterPrefix.slice(11) : afterPrefix;
+    const isGuard = afterSecondary.startsWith('{guard}');
+    const stripped = isGuard ? afterSecondary.slice(7) : afterSecondary;
 
     const isRequired = stripped.endsWith('*');
     const label = stripped.replace(/\s*\*$/, '').trim();
@@ -1661,8 +1696,9 @@
 
     const soloAttr  = isSolo  ? ' data-rpf-solo="1"' : '';
     const minorAttr = isMinor ? ' data-rpf-minor="1" style="display:none"' : '';
+    const secondaryAttr = isSecondary ? ' data-rpf-secondary="1" style="display:none"' : '';
     const guardAttr = isGuard ? ' data-rpf-guard="1" style="display:none"' : '';
-    const wrapAttrs = soloAttr + minorAttr + guardAttr;
+    const wrapAttrs = soloAttr + minorAttr + secondaryAttr + guardAttr;
 
     // Medical / accessibility reveal pattern
     const medicalReveal = {
@@ -3075,7 +3111,7 @@
           </div>`;
         }
         const template = _formTemplates[def.key] || null;
-        const fields   = registrationFormVisibleFields(template?.fields?.length ? template.fields : def.defaultFields || []);
+        const fields   = registrationFormEnsureDefaultAdditions(def.key, template?.fields?.length ? template.fields : def.defaultFields || []);
         const intro    = rpfTemplateIntro(def, template) ? subTokens(rpfTemplateIntro(def, template)) : '';
         const bodyHtml = def.key === 'cast_agreement'
           ? rpfRenderCastAgreementSection(template)
@@ -3155,8 +3191,9 @@
       if (typeof window.fitCastingCardNames === 'function') window.fitCastingCardNames(root);
       root.querySelectorAll('[data-rpf-dob]').forEach(el => rpfCheckGuardianFields(el));
       root.querySelectorAll('.rpf-sig-field-wrap input').forEach(el => rpfUpdateSigPreview(el));
-      root.querySelectorAll('.rpf-solo-toggle-row input').forEach(cb => { if (cb.checked) rpfToggleSoloPickup(cb); });
+      root.querySelectorAll('[data-rpf-solo-toggle]').forEach(cb => { if (cb.checked) rpfToggleSoloPickup(cb); });
       root.querySelectorAll('[data-rpf-minor-toggle]').forEach(cb => rpfToggleMinorFields(cb));
+      root.querySelectorAll('[data-rpf-secondary-toggle]').forEach(cb => rpfToggleSecondaryContact(cb));
     }));
 
     // Bind autosave on any input/change

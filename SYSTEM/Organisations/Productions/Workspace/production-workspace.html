@@ -40424,6 +40424,14 @@ See you soon!
     }
   }
 
+  function registrationFormTileClick(event, card) {
+    if (event.target.closest('button, input, a')) return;
+    const toggle = card.querySelector('.template-brand-tile-settings-toggle');
+    if (!toggle) return;
+    toggle.checked = !toggle.checked;
+    toggle.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+
   function registrationSettingsToggle(id, label, checked = true) {
     return `<input type="checkbox" id="${esc(id)}" class="template-brand-tile-settings-toggle" ${checked ? 'checked' : ''} aria-label="${esc(label)}" />`;
   }
@@ -40777,14 +40785,14 @@ See you soon!
       const title = raw.slice(9).trim();
       return !/^signature$/i.test(title) && !/final acknowledgement|final acknowledgment/i.test(title);
     }
-    const label = raw.replace(/^\{(?:minor|solo|guard)\}/, '').replace(/\s*\*$/, '').trim();
+    const label = raw.replace(/^\{(?:minor|solo|guard|secondary|secondary-toggle)\}/, '').replace(/\s*\*$/, '').trim();
     return !/\bsignature\b/i.test(label);
   }
 
   function registrationFormDuplicateFieldKey(field) {
     const raw = String(field || '').trim();
     if (!raw || raw.startsWith('{')) return '';
-    const label = raw.replace(/^\{(?:minor|solo|guard)\}/, '').replace(/\s*\*$/, '').trim().toLowerCase();
+    const label = raw.replace(/^\{(?:minor|solo|guard|secondary|secondary-toggle)\}/, '').replace(/\s*\*$/, '').trim().toLowerCase();
     if (/^pronouns?\s+in\s+programme\s+listing/.test(label)) return 'programme-pronouns';
     if (/^emergency\s+treatment\s+authori[sz]ation$/.test(label)) return 'emergency-treatment-auth-core';
     if (/^marketing\s+headshot\s+upload$/.test(label)) return 'extra-headshot-upload';
@@ -40794,7 +40802,7 @@ See you soon!
   function registrationFormNormalizeVisibleField(field) {
     const raw = String(field || '').trim();
     if (!raw || raw.startsWith('{')) return field;
-    const label = raw.replace(/^\{(?:minor|solo|guard)\}/, '').replace(/\s*\*$/, '').trim().toLowerCase();
+    const label = raw.replace(/^\{(?:minor|solo|guard|secondary|secondary-toggle)\}/, '').replace(/\s*\*$/, '').trim().toLowerCase();
     if (/^programme\s+headshot\s+upload$/.test(label)) return 'Headshot upload *';
     if (/^name\s+as\s+it\s+should\s+appear\s+in\s+the\s+programme$/.test(label)) return 'Exact first and last name *';
     return field;
@@ -40826,6 +40834,25 @@ See you soon!
     return visible
       .map(registrationFormNormalizeVisibleField)
       .filter(field => !registrationFormDuplicateFieldKey(field));
+  }
+
+  function registrationFormEnsureDefaultAdditions(key, fields = []) {
+    const list = registrationFormVisibleFields(fields);
+    if (key !== 'cast_registration') return list;
+    if (list.some(field => /\{secondary(?:-toggle)?\}|secondary contact|additional contact/i.test(String(field || '')))) return list;
+    const secondaryFields = [
+      '{secondary-toggle}Add a secondary contact',
+      '{secondary}Secondary Contact Name',
+      '{secondary}Secondary Contact Email',
+      '{secondary}Secondary Contact Phone',
+    ];
+    const insertAfter = list.findIndex(field => /^contact phone number\s*\*?$/i.test(String(field || '').replace(/^\{[^}]+\}/, '').trim()));
+    if (insertAfter >= 0) {
+      list.splice(insertAfter + 1, 0, ...secondaryFields);
+    } else {
+      list.push(...secondaryFields);
+    }
+    return list;
   }
 
   function renderRegistrationFormTabBody(def, template) {
@@ -40903,7 +40930,7 @@ See you soon!
       </div>`;
     }
 
-    const PREFIXES = ['{solo-toggle}', '{minor-toggle}', '{solo}', '{minor}', '{guard}'];
+    const PREFIXES = ['{solo-toggle}', '{minor-toggle}', '{secondary-toggle}', '{solo}', '{minor}', '{guard}', '{secondary}'];
     let prefix = '';
     let stripped = raw;
     for (const p of PREFIXES) {
@@ -42887,7 +42914,8 @@ See you soon!
         buttonHtml: `<button type="button" class="template-brand-tile-button" onclick="event.stopPropagation();openRegistrationFormTemplateModal('${esc(def.key)}')">Edit</button>`,
         toggleHtml: registrationSettingsToggle(def.settingId, `Enable ${def.title}`, isDefEnabled(def)),
         className: 'reg-form-subform',
-        ariaLabel: def.title
+        ariaLabel: def.title,
+        attrs: 'onclick="registrationFormTileClick(event,this)"',
       })).join('') + addNewTile;
       const renderer = window.BTSAuditionTemplates?.renderTemplateById;
       if (!renderer) return '';
@@ -43750,6 +43778,9 @@ See you soon!
     if (/preferred name/.test(n))                return prefill.preferred_name || '';
     if (/pronoun/.test(n))                       return prefill.pronouns || '';
     if (/date of birth|birth date/.test(n))      return prefill.date_of_birth || '';
+    if (/secondary.*name|additional contact.*name/.test(n)) return prefill.secondary_name || '';
+    if (/secondary.*phone|additional contact.*phone/.test(n)) return prefill.secondary_phone || '';
+    if (/secondary.*email|additional contact.*email/.test(n)) return prefill.secondary_email || '';
     if (/contact email|participant email/.test(n)) return prefill.email || '';
     if (/contact phone/.test(n) && !/guardian/.test(n)) return prefill.phone || '';
     if (/\bphone\b/.test(n) && !/guardian/.test(n)) return prefill.phone || '';
@@ -44029,7 +44060,7 @@ See you soon!
       `<div class="rpf-form-group rpf-pickup-field rpf-pickup-field--last"><label class="rpf-label">Phone number</label><input type="tel" class="rpf-input" placeholder="Authorised pickup ${num} phone number..." /></div>`,
     ].join('');
     btn.closest('.rpf-form-group').before(group);
-    const soloCheckbox = body.querySelector('.rpf-solo-toggle-row input');
+    const soloCheckbox = body.querySelector('[data-rpf-solo-toggle]');
     if (soloCheckbox?.checked) group.style.display = 'none';
   }
 
@@ -44042,7 +44073,7 @@ See you soon!
       panel.querySelectorAll('[data-rpf-guard]').forEach(el => {
         el.style.display = isUnder19 ? '' : 'none';
       });
-      const soloCheckbox = panel.querySelector('.rpf-solo-toggle-row input:not([data-rpf-minor-toggle])');
+      const soloCheckbox = panel.querySelector('[data-rpf-solo-toggle]');
       if (soloCheckbox && age !== null) {
         const shouldLeaveAlone = age >= 19;
         if (soloCheckbox.checked !== shouldLeaveAlone) {
@@ -44698,7 +44729,7 @@ See you soon!
       const label = raw.slice(13).replace(/\s*\*$/, '').trim();
       const _soloAge = rpfCalcAge(prefill?.date_of_birth);
       const _isAdult = _soloAge !== null && _soloAge >= 19;
-      return `<div class="rpf-form-group"><label class="rpf-solo-toggle-row"><input type="checkbox"${_isAdult ? ' checked' : ''} onchange="rpfToggleSoloPickup(this)" /><span class="rpf-solo-toggle-label">${esc(label)}</span></label></div>`;
+      return `<div class="rpf-form-group"><label class="rpf-solo-toggle-row"><input type="checkbox" data-rpf-solo-toggle="1"${_isAdult ? ' checked' : ''} onchange="rpfToggleSoloPickup(this)" /><span class="rpf-solo-toggle-label">${esc(label)}</span></label></div>`;
     }
 
     const isSecondaryToggle = raw.startsWith('{secondary-toggle}');
@@ -45096,7 +45127,7 @@ See you soon!
     requestAnimationFrame(() => requestAnimationFrame(() => {
       host.querySelectorAll('[data-rpf-dob]').forEach(input => rpfCheckGuardianFields(input));
       host.querySelectorAll('.rpf-sig-field-wrap input').forEach(input => rpfUpdateSigPreview(input));
-      host.querySelectorAll('.rpf-solo-toggle-row input').forEach(cb => { if (cb.checked) rpfToggleSoloPickup(cb); });
+      host.querySelectorAll('[data-rpf-solo-toggle]').forEach(cb => { if (cb.checked) rpfToggleSoloPickup(cb); });
       host.querySelectorAll('[data-rpf-minor-toggle]').forEach(cb => { rpfToggleMinorFields(cb); });
       host.querySelectorAll('[data-rpf-secondary-toggle]').forEach(cb => { rpfToggleSecondaryContact(cb); });
       if (typeof fitCastingCardNames === 'function') fitCastingCardNames(host);
