@@ -3683,6 +3683,7 @@
         if (!lower) return false;
         if (lower.includes(lowerSendTo)) return false;
         if (lower.includes(lowerMemo)) return false;
+        if (performerNames && lower.includes(performerNames.toLowerCase()) && lower.includes(showName.toLowerCase())) return false;
         if (lower.includes('e-transfer') && lower.includes('send')) return false;
         if (lower.includes('description') || lower.includes('memo')) return false;
         if (lower.includes('match it to the right registration')) return false;
@@ -3882,27 +3883,29 @@
               })()}
             </div>
             ${hasSplitMode ? `<div class="vp-pay-fullamount-view" style="display:none;">
-              <div class="vp-pay-sec">Pay in Full</div>
-              ${allPay.map(({ performer, pay }) => {
-                const name = performerDisplayName(performer);
-                const who = isHousehold ? ` (${esc(name)})` : '';
-                return `<div class="vp-pay-sched-row">
-                  <div><div class="vp-pay-sched-name">Full balance${who}</div><div class="vp-pay-sched-sub">Pay the full amount at once</div></div>
-                  <div class="vp-pay-sched-due"></div>
-                  <div class="vp-pay-sched-amt">${esc(moneyLabel(pay.balance)||'$0')}</div>
-                </div>`;
-              }).join('')}
-              ${allDiscounts.length ? `
-                ${allDiscounts.map(({ line, performer }) => {
-                  const parts = line.split(/:\s*/);
-                  const dname = parts[0].replace(/-\$[\d.]+$/, '').trim();
-                  const detail = parts.slice(1).join(': ') || (isHousehold ? performerDisplayName(performer) : '');
+              ${(() => {
+                const basePerPerformer = paymentInstallments().reduce((s, inst) => s + Number(inst.amount || 0), 0);
+                const allFullPaid = allPay.every(({ pay }) => pay.balance <= 0);
+                const perfRows = allPay.map(({ performer, pay }) => {
+                  const nameHtml = isHousehold
+                    ? ('<span class="vp-inst-row-av" style="background:' + _payAvatarColor(performerDisplayName(performer)) + ';">' + esc(_payInitials(performer)) + '</span>' + esc(performerDisplayName(performer)))
+                    : 'Registration fee';
+                  return '<div class="vp-inst-row"><span class="vp-inst-row-name">' + nameHtml + '</span><span class="vp-inst-row-amt">' + esc(moneyLabel(basePerPerformer) || '$0') + '</span></div>';
+                }).join('');
+                const discRows = allDiscounts.map(({ line }) => {
+                  const dname = line.split(/:\s*/)[0].replace(/-\$[\d.]+$/, '').trim();
                   const m = line.match(/-([$£]?\s*[0-9.]+)/);
-                  const amt = m ? `-$${m[1].trim().replace(/^[$£]/,'')}` : '';
-                  return `<div class="vp-pay-disc-row"><div><div class="vp-pay-disc-name">${esc(dname)}</div>${detail ? `<div class="vp-pay-disc-sub">${esc(detail)}</div>` : ''}</div><div class="vp-pay-disc-amt">${esc(amt)}</div></div>`;
-                }).join('')}
-                <div class="vp-pay-disc-row total-row"><div class="vp-pay-disc-name">Total Discounts</div><div class="vp-pay-disc-amt">-${esc(moneyLabel(totalDiscount)||'$0')}</div></div>
-              ` : ''}
+                  const amt = m ? ('-$' + m[1].trim().replace(/^[$£]/, '')) : '';
+                  if (!amt) return '';
+                  return '<div class="vp-inst-row"><span class="vp-inst-row-name" style="color:#9b6fa8;">' + esc(dname) + '</span><span class="vp-inst-row-amt" style="color:#9b6fa8;">' + esc(amt) + '</span></div>';
+                }).join('');
+                const totalRow = '<div class="vp-inst-row" style="border-top:2px solid #e3dff0;"><span class="vp-inst-row-name" style="font-weight:700;color:#1a1530;">Total due</span><span class="vp-inst-row-amt" style="font-size:0.88rem;font-weight:800;color:' + (allFullPaid ? '#2a6035' : '#1a1530') + ';">' + esc(moneyLabel(balanceDue) || '$0') + '</span></div>';
+                return '<div class="vp-inst-block' + (allFullPaid ? ' done' : '') + '">'
+                  + '<div class="vp-inst-hdr"><span class="vp-inst-hdr-label">Pay in Full</span><span class="vp-inst-hdr-tag">' + (allFullPaid ? 'Paid' : 'Upcoming') + '</span></div>'
+                  + '<div class="vp-inst-main" style="padding-bottom:0.2rem;"><div class="vp-inst-name">Full balance</div><div class="vp-inst-due">Pay the full amount at once</div></div>'
+                  + '<div class="vp-inst-rows">' + perfRows + discRows + totalRow + '</div>'
+                  + '</div>';
+              })()}
             </div>` : ''}
             <div class="vp-pay-totals">
               ${totalCredits > 0 ? `<div class="vp-pay-tot-row"><span>Subtotal before discounts</span><span>${esc(moneyLabel(totalExpected + totalCredits)||'$0')}</span></div>` : ''}
