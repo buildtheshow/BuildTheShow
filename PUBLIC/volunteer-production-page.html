@@ -1555,6 +1555,10 @@
     .vp-pay-sched-due { font-size:0.68rem; font-weight:400; color:#bbb; text-align:right; }
     .vp-pay-sched-amt { font-size:0.82rem; font-weight:800; text-align:right; color:#1a1530; }
     .vp-pay-sched-row.done .vp-pay-sched-amt { color:#2a6035; }
+    .vp-pay-sched-sub-rows { padding:0 0.85rem 0.45rem; border-bottom:1px solid #f0edf6; background:#faf8fd; }
+    .vp-pay-sched-sub-row { display:flex; justify-content:space-between; align-items:baseline; padding:0.18rem 0; }
+    .vp-pay-sched-sub-name { font-size:0.68rem; color:#888; }
+    .vp-pay-sched-sub-amt { font-size:0.68rem; font-weight:600; color:#666; }
     /* Discount rows */
     .vp-pay-disc-row { display:flex; justify-content:space-between; align-items:baseline; gap:0.5rem; padding:0.42rem 0.85rem; border-bottom:1px solid #f0edf6; }
     .vp-pay-disc-row:last-of-type { border-bottom:0; }
@@ -3747,35 +3751,34 @@
               <button class="vp-pay-view-btn" type="button" data-view="full" onclick="this.closest('.vp-pc').querySelectorAll('.vp-pay-view-btn').forEach(b=>b.classList.remove('active'));this.classList.add('active');this.closest('.vp-pc').querySelector('.vp-pay-instalment-view').style.display='none';this.closest('.vp-pc').querySelector('.vp-pay-fullamount-view').style.display='';" style="flex:1;padding:0.5rem 0.85rem;font-size:0.72rem;font-weight:600;color:#555;background:#fff;border:none;cursor:pointer;font-family:inherit;">Pay in Full</button>
             </div>` : ''}
             <div class="vp-pay-instalment-view">
-              ${isHousehold
-                ? allPay.map(({ performer, pay }) => {
-                    const perfName = performerDisplayName(performer);
-                    const rows = pay.installments.map((inst, i) => {
-                      const rec = (pay.records || []).find(r => r.installment_index === i && r.paid);
-                      const isPaid = !!rec;
-                      const meta = isPaid ? (paymentRecordMeta(rec) || 'Received') : (inst.dueDate ? fmtDate(inst.dueDate, { short: true }) : 'TBA');
-                      return `<div class="vp-pay-sched-row${isPaid ? ' done' : ''}">
-                        <div><div class="vp-pay-sched-name">${esc(inst.label || 'Payment')}</div><div class="vp-pay-sched-sub">${esc(isPaid ? meta : '')}</div></div>
-                        <div class="vp-pay-sched-due">${esc(isPaid ? '' : meta)}</div>
-                        <div class="vp-pay-sched-amt">${esc(moneyLabel(inst.amount)||'$0')}</div>
-                      </div>`;
-                    }).join('');
-                    return `<div class="vp-pay-sec">${esc(perfName)}</div>${rows}`;
-                  }).join('')
-                : `<div class="vp-pay-sec">Payment Schedule</div>
-                   ${allPay.flatMap(({ pay }) =>
-                     pay.installments.map((inst, i) => {
-                       const rec = (pay.records || []).find(r => r.installment_index === i && r.paid);
-                       const isPaid = !!rec;
-                       const meta = isPaid ? (paymentRecordMeta(rec) || 'Received') : (inst.dueDate ? fmtDate(inst.dueDate, { short: true }) : 'TBA');
-                       return `<div class="vp-pay-sched-row${isPaid ? ' done' : ''}">
-                         <div><div class="vp-pay-sched-name">${esc(inst.label || 'Payment')}</div><div class="vp-pay-sched-sub">${esc(isPaid ? meta : '')}</div></div>
-                         <div class="vp-pay-sched-due">${esc(isPaid ? '' : meta)}</div>
-                         <div class="vp-pay-sched-amt">${esc(moneyLabel(inst.amount)||'$0')}</div>
-                       </div>`;
-                     })
-                   ).join('')}`
-              }
+              <div class="vp-pay-sec">Payment Schedule</div>
+              ${(() => {
+                const maxInsts = Math.max(...allPay.map(({ pay }) => pay.installments.length));
+                return Array.from({ length: maxInsts }, (_, i) => {
+                  const items = allPay.map(({ performer, pay }) => {
+                    const inst = pay.installments[i];
+                    if (!inst) return null;
+                    const rec = (pay.records || []).find(r => r.installment_index === i && r.paid);
+                    return { performer, inst, rec, isPaid: !!rec };
+                  }).filter(Boolean);
+                  const totalAmt = items.reduce((s, x) => s + Number(x.inst.amount || 0), 0);
+                  const allPaid = items.length > 0 && items.every(x => x.isPaid);
+                  const label = items[0]?.inst.label || `Payment ${i + 1}`;
+                  const dueDate = items[0]?.inst.dueDate || '';
+                  const meta = allPaid ? (paymentRecordMeta(items[0].rec) || 'Received') : (dueDate ? fmtDate(dueDate, { short: true }) : 'TBA');
+                  const subRows = isHousehold ? `<div class="vp-pay-sched-sub-rows">${items.map(({ performer, inst, isPaid }) =>
+                    `<div class="vp-pay-sched-sub-row">
+                      <span class="vp-pay-sched-sub-name">${esc(performerDisplayName(performer))}</span>
+                      <span class="vp-pay-sched-sub-amt${isPaid ? ' g' : ''}">${esc(moneyLabel(inst.amount)||'$0')}</span>
+                    </div>`
+                  ).join('')}</div>` : '';
+                  return `<div class="vp-pay-sched-row${allPaid ? ' done' : ''}" style="border-bottom:0;">
+                    <div><div class="vp-pay-sched-name">${esc(label)}</div><div class="vp-pay-sched-sub">${esc(allPaid ? meta : '')}</div></div>
+                    <div class="vp-pay-sched-due">${esc(allPaid ? '' : meta)}</div>
+                    <div class="vp-pay-sched-amt">${esc(moneyLabel(totalAmt)||'$0')}</div>
+                  </div>${subRows}`;
+                }).join('');
+              })()}
             </div>
             ${hasSplitMode ? `<div class="vp-pay-fullamount-view" style="display:none;">
               <div class="vp-pay-sec">Pay in Full</div>
