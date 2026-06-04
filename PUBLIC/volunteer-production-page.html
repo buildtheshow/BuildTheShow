@@ -745,6 +745,73 @@
     .vp-cart-role { font-size: 0.86rem; font-weight: 950; line-height: 1.18; color: var(--ink); overflow-wrap: anywhere; }
     .vp-cart-meta { font-size: 0.73rem; color: var(--muted); margin-top: 0.16rem; line-height: 1.3; }
     .vp-cart-note { margin-top: 0.32rem; font-size: 0.7rem; font-weight: 800; color: #d1523d; line-height: 1.25; }
+    .vp-cart-group {
+      border: 1px solid rgba(87,46,136,0.13);
+      border-radius: 8px;
+      padding: 0.72rem;
+      display: grid;
+      grid-template-columns: 30px minmax(0,1fr);
+      gap: 0.62rem;
+      align-items: start;
+    }
+    .vp-cart-group-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 0.7rem;
+      min-width: 0;
+    }
+    .vp-cart-group-count {
+      flex: 0 0 auto;
+      border-radius: 999px;
+      background: rgba(87,46,136,0.08);
+      color: var(--purple);
+      font-size: 0.68rem;
+      font-weight: 950;
+      line-height: 1;
+      padding: 0.32rem 0.52rem;
+      white-space: nowrap;
+    }
+    .vp-cart-chip-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.32rem;
+      margin-top: 0.62rem;
+    }
+    .vp-cart-chip {
+      min-height: 30px;
+      border: 1px solid rgba(87,46,136,0.12);
+      border-radius: 999px;
+      background: rgba(87,46,136,0.055);
+      color: var(--purple);
+      display: inline-flex;
+      align-items: center;
+      gap: 0.34rem;
+      padding: 0.26rem 0.36rem 0.26rem 0.55rem;
+      max-width: 100%;
+      font-size: 0.68rem;
+      font-weight: 900;
+      line-height: 1.1;
+    }
+    .vp-cart-chip span {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .vp-cart-chip button {
+      border: 0;
+      background: transparent;
+      color: var(--purple);
+      width: 20px;
+      height: 20px;
+      border-radius: 999px;
+      font-size: 1rem;
+      line-height: 1;
+      padding: 0;
+      flex: 0 0 auto;
+    }
+    .vp-cart-chip button:hover { background: rgba(87,46,136,0.1); }
     .vp-cart-date-list {
       margin-top: 0.55rem;
       border: 1px solid rgba(87,46,136,0.1);
@@ -2114,6 +2181,21 @@
       .vp-filter-select { width: 100%; }
     }
     @media (max-width: 720px) {
+      .vp-cart.in-sheet { padding: 0.85rem; }
+      .vp-cart.in-sheet .vp-cart-head { margin-bottom: 0.45rem; }
+      .vp-cart.in-sheet .vp-cart-title { font-size: 1rem; line-height: 1.1; }
+      .vp-cart.in-sheet .vp-cart-sub { font-size: 0.72rem; margin-bottom: 0.7rem; }
+      .vp-cart.in-sheet .vp-cart-list { gap: 0.48rem; }
+      .vp-cart.in-sheet .vp-cart-group { padding: 0.62rem; grid-template-columns: 28px minmax(0,1fr); gap: 0.52rem; }
+      .vp-cart.in-sheet .vp-cart-dot { width: 28px; height: 28px; }
+      .vp-cart.in-sheet .vp-cart-role { font-size: 0.82rem; }
+      .vp-cart.in-sheet .vp-cart-meta { font-size: 0.7rem; }
+      .vp-cart.in-sheet .vp-cart-chip-list { gap: 0.25rem; margin-top: 0.48rem; }
+      .vp-cart.in-sheet .vp-cart-chip { width: 100%; justify-content: space-between; border-radius: 8px; }
+      .vp-cart.in-sheet .vp-cart-summary { margin-top: 0.75rem; padding-top: 0.7rem; gap: 0.38rem; }
+      .vp-cart.in-sheet .vp-cart-discount { margin-top: 0.75rem; padding-top: 0.7rem; }
+      .vp-cart.in-sheet .vp-submit-cart { margin-top: 0.75rem; }
+      .vp-cart.in-sheet .vp-cart-foot { margin-top: 0.45rem; }
       .vp-topbar {
         display: grid;
         grid-template-columns: minmax(0, 1fr) auto;
@@ -6379,7 +6461,7 @@
       </div>
       <div class="vp-cart-sub">Review your selected shifts before submitting.</div>
       <div class="vp-cart-list">
-        ${schedule.length ? schedule.map(cartItemHtml).join('') : '<div class="vp-cart-empty">Choose a shift and add it here. You will enter your name and contact info once when you submit.</div>'}
+        ${schedule.length ? cartGroupsHtml() : '<div class="vp-cart-empty">Choose a shift and add it here. You will enter your name and contact info once when you submit.</div>'}
       </div>
       <div class="vp-cart-summary">
         <div class="vp-summary-row"><span>Total Shifts</span><strong>${schedule.length}</strong></div>
@@ -6406,6 +6488,58 @@
       <button class="vp-submit-cart" type="button" ${schedule.length ? '' : 'disabled'} onclick="openSubmitModal()">Request Volunteer Hours ${ICONS.arrow}</button>
       <div class="vp-cart-foot">You can edit your schedule until it is approved.</div>
       ${sheet ? '<button class="vp-secondary-btn" style="margin-top:0.8rem;" type="button" onclick="closeModal()">Keep Browsing</button>' : ''}`;
+    }
+    function cartGroupKey(opp) {
+      return [
+        opp.volunteer_role || 'Volunteer Shift',
+        opp.department || '',
+        opp.check_in_with || '',
+        opp.has_outside_work ? 'outside' : '',
+        opp.is_full_discount ? 'full-discount' : '',
+      ].join('::');
+    }
+    function cartGroupsHtml() {
+      const groups = [];
+      const byKey = new Map();
+      schedule.forEach(opp => {
+        const key = cartGroupKey(opp);
+        if (!byKey.has(key)) {
+          const group = { key, role: opp.volunteer_role || 'Volunteer Shift', department: opp.department || '', checkIn: opp.check_in_with || '', outside: !!opp.has_outside_work, items: [] };
+          byKey.set(key, group);
+          groups.push(group);
+        }
+        byKey.get(key).items.push(opp);
+      });
+      return groups.map(cartGroupHtml).join('');
+    }
+    function cartShiftLabel(opp) {
+      const requiredDates = Array.isArray(opp.required_dates) ? opp.required_dates.filter(Boolean) : [];
+      const dateLabel = opp.shift_date ? fmtDate(opp.shift_date, { short:true }) : (requiredDates.length ? `${requiredDates.length} required dates` : 'Flexible');
+      const time = fmtTimeRange(opp.shift_start_time, opp.shift_end_time);
+      return [dateLabel, time].filter(Boolean).join(' · ');
+    }
+    function cartGroupHtml(group) {
+      const first = group.items[0] || {};
+      const color = iconColor(first), isGold = color === '#efab45';
+      const totalHours = group.items.reduce((sum, item) => sum + scheduleHours(item), 0);
+      const noSetHours = group.items.some(item => item.is_full_discount && scheduleHours(item) <= 0);
+      const count = group.items.length;
+      return `<div class="vp-cart-group">
+        <div class="vp-cart-dot" style="background:${color};color:${isGold ? 'var(--ink)' : '#fff'};">${roleIcon(first.volunteer_role, first.department)}</div>
+        <div class="vp-cart-main">
+          <div class="vp-cart-group-head">
+            <div>
+              <div class="vp-cart-role">${esc(group.role)}</div>
+              <div class="vp-cart-meta">${group.department ? esc(group.department) : ''}${totalHours > 0 ? `<br><span style="font-weight:800;">${esc(formatHours(totalHours))} scheduled hour${Number(totalHours) === 1 ? '' : 's'}</span>` : ''}${noSetHours ? '<br><span style="font-style:italic;opacity:0.72;">No set hour count.</span>' : ''}${group.checkIn ? `<br>Check in with: <strong>${esc(group.checkIn)}</strong>` : ''}</div>
+            </div>
+            <span class="vp-cart-group-count">${count} ${count === 1 ? 'shift' : 'shifts'}</span>
+          </div>
+          ${group.outside ? `<div class="vp-cart-note">Includes work outside these dates.</div>` : ''}
+          <div class="vp-cart-chip-list">
+            ${group.items.map(item => `<div class="vp-cart-chip"><span>${esc(cartShiftLabel(item))}</span><button type="button" onclick="removeSchedule('${esc(item.id)}')" aria-label="Remove ${esc(cartShiftLabel(item))}">&times;</button></div>`).join('')}
+          </div>
+        </div>
+      </div>`;
     }
     function cartItemHtml(opp) {
       const color = iconColor(opp), isGold = color === '#efab45';
