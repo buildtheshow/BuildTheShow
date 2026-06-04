@@ -59913,8 +59913,22 @@ See you soon!
       const { data: urlData } = sb.storage.from(bucket).getPublicUrl(data.path);
       const newUrl = (urlData?.publicUrl || '') + '?t=' + Date.now();
       if (!urlData?.publicUrl) throw new Error('Could not get public headshot link.');
-      // Save new URL — same URL as before since we overwrote in place, but with fresh cache-bust param
-      await syncApplicantEditsToSource(_apmApp, { headshot_url: newUrl });
+      // Save new URL to ALL application rows for this performer so every lookup path gets it
+      const _hsEmail = String(_apmApp.email || '').trim();
+      if (_hsEmail && prodId) {
+        await sb.from('audition_applications')
+          .update({ headshot_url: newUrl })
+          .eq('production_id', prodId)
+          .eq('email', _hsEmail)
+          .catch(() => {});
+        await sb.from('audition_bookings')
+          .update({ headshot_url: newUrl })
+          .eq('production_id', prodId)
+          .eq('email', _hsEmail)
+          .catch(() => {});
+      } else {
+        await syncApplicantEditsToSource(_apmApp, { headshot_url: newUrl });
+      }
       const idx = (allApplicants || []).findIndex(a => String(a.id) === String(_apmAppId));
       if (idx >= 0) { allApplicants[idx] = { ...allApplicants[idx], headshot_url: newUrl }; _apmApp = allApplicants[idx]; }
       // Clean up preview
