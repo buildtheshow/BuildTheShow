@@ -518,6 +518,12 @@ serve(async (req) => {
       email: firstDefinedString(directContext.org_email, directContext.organization_email, directProduction.org_email),
     };
   }
+  org = {
+    ...(org || {}),
+    name: firstDefinedString(directContext.org_name, directContext.organisation_name, directContext.organization_name, org?.name),
+    abbreviation: firstDefinedString(directContext.org_abbreviation, directContext.organization_abbreviation, org?.abbreviation),
+    email: firstDefinedString(directContext.org_email, directContext.organization_email, org?.email),
+  };
 
   let producerMember: Record<string, unknown> | null = null;
   try {
@@ -625,7 +631,7 @@ serve(async (req) => {
   // ── Build tokens ──────────────────────────────────────────────
   const firstName    = (performerName.split(' ')[0] || 'Performer');
   const orgName      = String(org?.name  || '');
-  const orgShortName = firstDefinedString(org?.abbreviation, directContext.org_abbreviation, directContext.organization_abbreviation);
+  const orgShortName = firstDefinedString(directContext.from_name, directContext.fromName, org?.abbreviation, directContext.org_abbreviation, directContext.organization_abbreviation);
   const orgEmail     = String(org?.email || '');
   const showName     = String(productionRecord.title || '');
   const director     = String(productionRecord.director || '');
@@ -968,7 +974,7 @@ serve(async (req) => {
   const htmlBody      = styleFallbackLinksHtml(bodyLooksHtml ? substituteTemplate(sourceBody, true) : plainTextToHtml(templatedBody, rawHtmlSnippets));
   const bodyText      = (bodyLooksHtml || rawHtmlSnippets.length) ? htmlToPlainText(templatedBody) : templatedBody;
 
-  const fromName  = firstDefinedString(directContext.from_name, directContext.fromName, orgShortName, orgName, 'Build The Show');
+  const fromName  = firstDefinedString(orgShortName, orgName, showName, 'Build The Show');
   const fromEmail = FROM_EMAIL || `noreply@buildtheshow.com`;
   const fromField = `${fromName} <${fromEmail}>`;
   const replyTo   = orgEmail || undefined;
