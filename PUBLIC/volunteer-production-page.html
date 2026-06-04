@@ -3278,17 +3278,35 @@
       if (!apps.length || !prod?.id) return [];
       const bookingIds = apps.map(app => app.id).filter(Boolean);
 
-      // Bookings get promoted to audition_applications — look up those promoted IDs
-      // so we can find casting_assignments which reference audition_applications.id
+      // Bookings get promoted to audition_applications — find those IDs via three strategies
       let promotedIds = [...bookingIds];
+      const _addAppIds = ids => { promotedIds = [...new Set([...promotedIds, ...ids.filter(Boolean)])]; };
+
+      // 1. booking_id column on audition_applications
       try {
         const { data } = await sb.from('audition_applications')
-          .select('id,booking_id')
+          .select('id')
           .eq('production_id', prod.id)
           .in('booking_id', bookingIds);
-        if (data?.length) promotedIds = [...bookingIds, ...data.map(r => r.id).filter(Boolean)];
+        if (data?.length) _addAppIds(data.map(r => r.id));
       } catch (_) {}
-      // Fallback: also look up by email in case booking_id was never written
+
+      // 2. Portal code — same code stored in custom_answers at registration complete
+      const portalCodes = [...new Set(apps.flatMap(a => {
+        const ca = applicantCustomAnswers(a);
+        return [a.portal_code, ca.__bts_portal_code].map(v => String(v || '').trim()).filter(Boolean);
+      }))];
+      for (const code of portalCodes) {
+        try {
+          const { data } = await sb.from('audition_applications')
+            .select('id')
+            .eq('production_id', prod.id)
+            .filter('custom_answers->>__bts_portal_code', 'eq', code);
+          if (data?.length) _addAppIds(data.map(r => r.id));
+        } catch (_) {}
+      }
+
+      // 3. Email — last resort
       const emails = [...new Set(apps.map(a => String(a.email || '').toLowerCase().trim()).filter(Boolean))];
       if (emails.length) {
         try {
@@ -3296,7 +3314,7 @@
             .select('id')
             .eq('production_id', prod.id)
             .in('email', emails);
-          if (data?.length) promotedIds = [...new Set([...promotedIds, ...data.map(r => r.id).filter(Boolean)])];
+          if (data?.length) _addAppIds(data.map(r => r.id));
         } catch (_) {}
       }
 
