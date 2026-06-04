@@ -3320,15 +3320,16 @@
 
       // Bookings get promoted to audition_applications — find those IDs via three strategies
       let promotedIds = [...bookingIds];
+      let appHeadshotUrl = '';
       const _addAppIds = ids => { promotedIds = [...new Set([...promotedIds, ...ids.filter(Boolean)])]; };
 
       // 1. booking_id column on audition_applications
       try {
         const { data } = await sb.from('audition_applications')
-          .select('id')
+          .select('id,headshot_url')
           .eq('production_id', prod.id)
           .in('booking_id', bookingIds);
-        if (data?.length) _addAppIds(data.map(r => r.id));
+        if (data?.length) { _addAppIds(data.map(r => r.id)); data.forEach(r => { if (r.headshot_url) appHeadshotUrl = r.headshot_url; }); }
       } catch (_) {}
 
       // 2. Portal code — same code stored in custom_answers at registration complete
@@ -3339,10 +3340,10 @@
       for (const code of portalCodes) {
         try {
           const { data } = await sb.from('audition_applications')
-            .select('id')
+            .select('id,headshot_url')
             .eq('production_id', prod.id)
             .filter('custom_answers->>__bts_portal_code', 'eq', code);
-          if (data?.length) _addAppIds(data.map(r => r.id));
+          if (data?.length) { _addAppIds(data.map(r => r.id)); data.forEach(r => { if (r.headshot_url) appHeadshotUrl = r.headshot_url; }); }
         } catch (_) {}
       }
 
@@ -3351,10 +3352,10 @@
       if (emails.length) {
         try {
           const { data } = await sb.from('audition_applications')
-            .select('id')
+            .select('id,headshot_url')
             .eq('production_id', prod.id)
             .in('email', emails);
-          if (data?.length) _addAppIds(data.map(r => r.id));
+          if (data?.length) { _addAppIds(data.map(r => r.id)); data.forEach(r => { if (r.headshot_url) appHeadshotUrl = r.headshot_url; }); }
         } catch (_) {}
       }
 
@@ -3379,16 +3380,6 @@
         } catch (error) {
           console.warn('[BTS production portal] character lookup failed', error);
         }
-      }
-
-      // Fetch latest headshot from audition_applications — may differ from booking row if updated in workspace
-      let appHeadshotUrl = '';
-      const appOnlyIds = promotedIds.filter(id => !bookingIds.includes(id));
-      if (appOnlyIds.length) {
-        try {
-          const { data } = await sb.from('audition_applications').select('id,headshot_url').in('id', appOnlyIds);
-          appHeadshotUrl = (data || []).map(r => r.headshot_url).filter(Boolean)[0] || '';
-        } catch (_) {}
       }
 
       const assignmentIds = assignments.map(row => row.id).filter(Boolean);
