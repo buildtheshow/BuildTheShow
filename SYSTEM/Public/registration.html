@@ -729,6 +729,10 @@
     el._hideTimer = setTimeout(() => el.classList.remove('visible'), 1800);
   }
 
+  function rpfCurrentProductionId() {
+    return String(_resolvedProductionId || _applicant?.production_id || _offer?.production_id || _prod?.id || _productionId || '').trim();
+  }
+
   // ── Default form constants ───────────────────────────────────────────────────
   const REGISTRATION_FORM_TEMPLATE_DEFS = [
     { key: 'cast_registration',   group: 'Core Registration',    color: '#476aaa', defaultOn: true,  title: 'Cast Registration',                     defaultFields: ['Legal first name *', 'Legal last name *', 'Preferred name *', 'Pronouns *', 'Date of birth *', 'Contact email *', 'Contact phone number *', '{guard}Guardian first name *', '{guard}Guardian last name *', '{guard}Guardian relationship to performer *'] },
@@ -806,11 +810,12 @@
   }
 
   async function rpfLoadRehearsalStartDate() {
-    if (!_resolvedProductionId) return '';
+    const productionId = rpfCurrentProductionId();
+    if (!productionId) return '';
     try {
       const { data, error } = await sb.from('production_events')
         .select('start_time,event_type')
-        .eq('production_id', _resolvedProductionId)
+        .eq('production_id', productionId)
         .or('event_type.ilike.rehearsal,event_type.ilike.music_rehearsal,event_type.ilike.choreography')
         .order('start_time', { ascending: true })
         .limit(1);
@@ -881,11 +886,12 @@
   }
 
   async function rpfLoadProductionScheduleSummaries() {
-    if (!_resolvedProductionId) return { performance_schedule: '', event_schedule: '', production_schedule: '' };
+    const productionId = rpfCurrentProductionId();
+    if (!productionId) return { performance_schedule: '', event_schedule: '', production_schedule: '' };
     try {
       const { data, error } = await sb.from('production_events')
         .select('title,start_time,end_time,venue,event_type,is_public,show_in_cast_schedule')
-        .eq('production_id', _resolvedProductionId)
+        .eq('production_id', productionId)
         .order('start_time', { ascending: true });
       if (error) throw error;
       const rows = [...(data || [])].sort((a, b) => String(a.start_time || '').localeCompare(String(b.start_time || '')));
@@ -908,12 +914,13 @@
 
   async function rpfLoadVolunteerLink() {
     const fallback = `${window.location.origin}/volunteers`;
-    if (!_resolvedProductionId) return fallback;
+    const productionId = rpfCurrentProductionId();
+    if (!productionId) return fallback;
     try {
       const today = new Date().toISOString().slice(0, 10);
       const { data, error } = await sb.from('opportunities')
         .select('id,close_date,opportunity_type,status')
-        .eq('production_id', _resolvedProductionId)
+        .eq('production_id', productionId)
         .eq('status', 'published')
         .in('opportunity_type', ['volunteer', 'creative_team'])
         .gte('close_date', today)
@@ -2816,7 +2823,8 @@
   }
 
   async function rpfSendRegistrationCompleteEmail() {
-    if (!_applicant?.id || !_resolvedProductionId) throw new Error('Missing registration email context.');
+    const productionId = rpfCurrentProductionId();
+    if (!_applicant?.id || !productionId) throw new Error('Missing registration email context.');
     const regUrl = window.location.href;
     const pdfUrl = _applicant?.custom_answers?.__bts_registration_pdf_url || '';
     const scheduleSummaries = await rpfLoadProductionScheduleSummaries();
@@ -2827,7 +2835,7 @@
     const { data, error } = await sb.functions.invoke('send-email', {
       body: {
         applicant_id: _applicant.id,
-        production_id: _resolvedProductionId,
+        production_id: productionId,
         category: 'registration_completed',
         trigger: 'registration_completed',
         context: {
@@ -2975,7 +2983,7 @@
       try {
         await rpfEnsureSignatureFont();
         const _pdfBlob = rpfPdfBlobFromBinaryString(rpfBuildAnswersPdf(pdfRows));
-        const _pdfPath = `${_resolvedProductionId}/registrations/${_applicant.id}.pdf`;
+        const _pdfPath = `${rpfCurrentProductionId()}/registrations/${_applicant.id}.pdf`;
         const { data: _upData, error: _upErr } = await sb.storage.from('production-files').upload(_pdfPath, _pdfBlob, { upsert: true, contentType: 'application/pdf' });
         if (!_upErr && _upData) {
           const { data: _urlData } = sb.storage.from('production-files').getPublicUrl(_pdfPath);
