@@ -2696,12 +2696,28 @@
     });
   }
 
-  function rpfShowSuccessScreen() {
+  async function rpfEnsurePortalCode() {
+    if (!_applicant?.id) return '';
+    const existing = String(_applicant?.custom_answers?.['__bts_portal_code'] || '').trim();
+    if (existing) return existing;
+    const buf = new Uint32Array(1);
+    if (window.crypto?.getRandomValues) window.crypto.getRandomValues(buf);
+    const code = String((buf[0] % 900000) + 100000);
+    try {
+      const merged = { ...(_applicant.custom_answers || {}), '__bts_portal_code': code };
+      await sb.from('audition_applications').update({ custom_answers: merged }).eq('id', _applicant.id);
+      _applicant.custom_answers = merged;
+    } catch (_) {}
+    return code;
+  }
+
+  async function rpfShowSuccessScreen() {
     rpfMarkRegistrationCompleteNav();
     if (!window._rpfSubmittedAnswerRows) window._rpfSubmittedAnswerRows = rpfCollectAnswerRowsForPdf();
     const body = document.getElementById('rpf-wizard-body');
     if (!body) return;
     const showName = esc(_prod?.title || 'the production');
+    const portalCode = await rpfEnsurePortalCode();
     const portalUrl = (() => {
       try {
         const slug = _prod?.slug || '';
@@ -2713,7 +2729,8 @@
     const portalBlock = portalUrl ? `
       <div class="rpf-success-card" style="background:#f0f4ff;border-color:#c5d0ea;margin-bottom:1rem;">
         <div class="rpf-success-title" style="color:#572e88;">Your production portal</div>
-        <div class="rpf-success-body" style="margin-bottom:0.75rem;">Log in any time to see your schedule, shifts, and production updates. Your Production Code is in your confirmation email.</div>
+        <div class="rpf-success-body" style="margin-bottom:0.6rem;">Log in any time to see your schedule, shifts, and production updates.</div>
+        ${portalCode ? `<div style="font-size:0.75rem;color:#6f6288;margin-bottom:0.2rem;">Production Code</div><div style="font-size:1.9rem;font-weight:900;letter-spacing:0.15em;color:#572e88;margin-bottom:0.7rem;">${esc(portalCode)}</div>` : ''}
         <a href="${esc(portalUrl)}" style="display:inline-block;background:#572e88;color:#fff;text-decoration:none;font-weight:800;font-size:0.85rem;padding:0.55rem 1.25rem;border-radius:8px;">Access My Portal →</a>
       </div>` : '';
     body.innerHTML = `<div class="rpf-success">
