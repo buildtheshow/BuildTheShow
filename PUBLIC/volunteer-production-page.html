@@ -1295,6 +1295,10 @@
     .vpd-link:hover { text-decoration: underline; }
     /* Breakdown */
     .vpd-breakdown { display: flex; flex-direction: column; gap: 1rem; }
+    .vpd-perf-layout { display: flex; gap: 1.25rem; align-items: flex-start; }
+    .vpd-perf-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1rem; }
+    .vpd-perf-sidebar { display: flex; flex-direction: column; gap: 1rem; flex-shrink: 0; width: 220px; position: sticky; top: 1rem; }
+    @media (max-width: 700px) { .vpd-perf-layout { flex-direction: column-reverse; } .vpd-perf-sidebar { width: 100%; flex-direction: row; flex-wrap: wrap; position: static; } }
     .vpd-section-head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: 1rem; }
     .vpd-section-title-wrap { display: flex; align-items: center; gap: 0.85rem; min-width: 0; }
     .vpd-section-icon { width: 50px; height: 50px; border-radius: 50%; background: var(--light-grey); color: var(--purple); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
@@ -4089,55 +4093,48 @@
         color: EVENT_COLORS[ev.event_type] || 'var(--orange)',
         note: `${eventDisplayType(ev)} for connected performer schedules. Arrive early and watch production messages for performer-specific call notes.`,
       }));
-      return `<div class="vpd-breakdown">
-      <div class="vpd-performer-grid">
-        ${performers.map(item => {
-          const app = item.app || {};
-          const ca = applicantCustomAnswers(app);
-          const roles = item.roles?.length ? item.roles.join(', ') : (ca.__bts_cast_offer_role_names || 'Role details coming soon');
-          const pdfUrl = ca.__bts_registration_pdf_url || '';
-          const rawName = performerDisplayName(item);
-          const parts = rawName.split(/\s+/);
-          const cardData = {
-            first_name: parts[0] || rawName,
-            last_name: parts.slice(1).join(' '),
-            headshot_url: app.headshot_url || app.headshot || '',
-            character_name: roles,
-            casting_categories: [],
-            role_openness: 'open',
-          };
-          const castingCard = typeof renderCastingCard === 'function'
-            ? renderCastingCard(cardData, { variant: 'inTheShow', hasIcons: false })
-            : '';
-          return `<div class="vpd-card vpd-performer-card">
-            ${castingCard ? `<div style="max-width:260px;width:100%;align-self:center;">${castingCard}</div>` : ''}
-          </div>`;
-        }).join('')}
-      </div>
-      <section class="vpd-command-card vpd-command-main">
-        <div class="vpd-fc-wrap fc-wrap">
-          <div id="vpd-fc-performer-calendar"></div>
+      const castingCardsHtml = performers.map(item => {
+        const app = item.app || {};
+        const ca = applicantCustomAnswers(app);
+        const roles = item.roles?.length ? item.roles.join(', ') : (ca.__bts_cast_offer_role_names || 'Role details coming soon');
+        const rawName = performerDisplayName(item);
+        const parts = rawName.split(/\s+/);
+        const cardData = {
+          first_name: parts[0] || rawName,
+          last_name: parts.slice(1).join(' '),
+          headshot_url: app.headshot_url || app.headshot || '',
+          character_name: roles,
+          casting_categories: [],
+          role_openness: 'open',
+        };
+        const castingCard = typeof renderCastingCard === 'function'
+          ? renderCastingCard(cardData, { variant: 'inTheShow', hasIcons: false })
+          : '';
+        return castingCard ? `<div style="max-width:220px;width:100%;">${castingCard}</div>` : '';
+      }).filter(Boolean).join('');
+
+      return `<div class="vpd-perf-layout">
+        <div class="vpd-perf-main">
+          <section class="vpd-command-card vpd-command-main">
+            <div class="vpd-fc-wrap fc-wrap">
+              <div id="vpd-fc-performer-calendar"></div>
+            </div>
+            <div class="vpd-month-footer">
+              <div class="vpd-month-legend">
+                ${['rehearsal','performance','other'].map(kind => `<span><i class="vpd-cal-dot" style="background:${portalKindColor(kind)};"></i>${portalKindLabel(kind)}</span>`).join('')}
+              </div>
+            </div>
+          </section>
+          <section class="vpd-card">
+            <div class="vpd-section-head">
+              <div class="vpd-section-title-wrap"><div class="vpd-section-icon">${ICONS.calendar}</div><div><div class="vpd-section-title">Performer Schedule Details</div><div class="vpd-section-sub">Rehearsals, performances, call-time guidance, and what to bring.</div></div></div>
+            </div>
+            ${detailListHtml(events, 'No performer events are scheduled yet.')}
+          </section>
         </div>
-        <div class="vpd-month-footer">
-          <div class="vpd-month-legend">
-            ${['rehearsal','performance','other'].map(kind => `<span><i class="vpd-cal-dot" style="background:${portalKindColor(kind)};"></i>${portalKindLabel(kind)}</span>`).join('')}
-          </div>
+        <div class="vpd-perf-sidebar">
+          ${castingCardsHtml}
         </div>
-      </section>
-      <section class="vpd-card">
-        <div class="vpd-section-head">
-          <div class="vpd-section-title-wrap"><div class="vpd-section-icon">${ICONS.calendar}</div><div><div class="vpd-section-title">Performer Schedule Details</div><div class="vpd-section-sub">Rehearsals, performances, call-time guidance, and what to bring.</div></div></div>
-        </div>
-        ${detailListHtml(events, 'No performer events are scheduled yet.')}
-      </section>
-      <div class="vpd-card">
-        <div class="vpd-section-title" style="font-size:1.2rem;">Performer Arrival Notes</div>
-        <div class="vpd-info-stack" style="margin-top:0.9rem;">
-          <div class="vpd-info-row"><div class="vpd-info-icon">${ICONS.clock}</div><div><div class="vpd-info-title">Arrive early, not exactly on time</div><div class="vpd-info-copy">Plan buffer time for parking, sign-in, bathroom, costume/mic needs, and getting settled before the call begins.</div></div></div>
-          <div class="vpd-info-row"><div class="vpd-info-icon">${ICONS.list}</div><div><div class="vpd-info-title">Bring the basics every time</div><div class="vpd-info-copy">Water, script or materials if assigned, comfortable shoes, and any costume or rehearsal items requested by the team.</div></div></div>
-          <div class="vpd-info-row"><div class="vpd-info-icon">${ICONS.users}</div><div><div class="vpd-info-title">Check performer-specific updates</div><div class="vpd-info-copy">Calendar items show production-level calls. If the team sends role-specific notes, follow those details first.</div></div></div>
-        </div>
-      </div>
       </div>`;
     }
     function upcomingProductionEvents(limit = 8) {
