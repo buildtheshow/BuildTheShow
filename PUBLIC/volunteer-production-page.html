@@ -1303,7 +1303,7 @@
     .vpd-perf-event-meta { display:flex; align-items:flex-start; gap:0.45rem; font-size:0.82rem; font-weight:800; line-height:1.25; }
     .vpd-perf-event-meta svg { width:16px; height:16px; flex-shrink:0; margin-top:0.05rem; }
     .vpd-perf-event-place { color:var(--ink); }
-    .vpd-perf-event-notes { margin-top:0.7rem; padding:0.7rem 0 0; border-top:1px solid var(--line); display:flex; flex-direction:column; gap:0.42rem; }
+    .vpd-perf-event-notes { margin-top:0.5rem; padding-top:0.48rem; border-top:1px solid var(--line); display:flex; flex-direction:column; gap:0.32rem; }
     .vpd-perf-note { display:flex; gap:0.45rem; font-size:0.8rem; color:var(--ink); line-height:1.4; }
     .vpd-perf-note-label { flex-shrink:0; font-weight:950; }
     @media (max-width: 760px) {
@@ -3782,9 +3782,11 @@
               <div class="vpd-perf-event-meta" style="color:${col};">${ICONS.clock}<span>${esc(item.time || 'Time TBD')}</span></div>
               <div class="vpd-perf-event-meta vpd-perf-event-place" style="color:${col};">${ICONS.pin}<span>${esc(item.place || 'TBD')}</span></div>
             </div>
-            <div class="vpd-perf-event-title">${esc(item.title)}</div>
+            <div class="vpd-perf-event-main">
+              <div class="vpd-perf-event-title">${esc(item.title)}</div>
+              ${notes ? `<div class="vpd-perf-event-notes">${notes}</div>` : ''}
+            </div>
           </div>
-          ${notes ? `<div class="vpd-perf-event-notes">${notes}</div>` : ''}
         </article>`;
       }).join('')}</div>`;
     }
@@ -4500,19 +4502,46 @@
       el.innerHTML = '';
       const _todayStr = new Date().toISOString().slice(0,10);
       const _firstUpcoming = (_portalCalItems || []).filter(i => i.date >= _todayStr).sort((a,b) => a.date.localeCompare(b.date))[0];
+
+      function showMobileDayPanel(dateStr) {
+        const panel = document.getElementById('vpd-fc-day-panel');
+        if (!panel) return;
+        const items = (_portalCalItems || []).filter(i => i.date === dateStr);
+        if (!items.length) { panel.innerHTML = ''; panel.style.display = 'none'; return; }
+        const d = new Date(dateStr + 'T12:00:00');
+        const label = d.toLocaleDateString('en-CA', { weekday: 'long', month: 'long', day: 'numeric' });
+        panel.style.display = '';
+        panel.innerHTML = `<div class="vpd-day-panel-hdr">${esc(label)}</div>`
+          + items.map((item, i) => {
+            const kind = portalItemKind(item);
+            const col = portalKindColor(kind);
+            const idx = _portalCalItems.indexOf(item);
+            return `<button class="vpd-day-panel-row" type="button" onclick="openPortalCalendarDetail(${idx})" style="border-left:4px solid ${col};">
+              <div class="vpd-day-panel-title">${esc(item.title)}</div>
+              ${item.time ? `<div class="vpd-day-panel-meta">${esc(item.time)}${item.place && item.place !== 'TBD' ? ' · ' + esc(item.place) : ''}</div>` : ''}
+            </button>`;
+          }).join('');
+      }
+
       _portalFcCalendar = new FullCalendar.Calendar(el, {
-        initialView: isMobileCalendar ? 'listMonth' : 'dayGridMonth',
+        initialView: 'dayGridMonth',
         initialDate: _firstUpcoming?.date || _todayStr,
         headerToolbar: isMobileCalendar
-          ? { left: 'prev,next', center: 'title', right: 'listMonth' }
+          ? { left: 'prev,next', center: 'title', right: '' }
           : { left: 'prev,next today', center: 'title', right: 'dayGridMonth,listMonth' },
         height: 'auto',
         fixedWeekCount: false,
         nowIndicator: true,
-        dayMaxEvents: 4,
-        eventDisplay: 'block',
+        dayMaxEvents: isMobileCalendar ? false : 4,
+        eventDisplay: isMobileCalendar ? 'list-item' : 'block',
         events: portalFullCalendarEvents(),
         eventContent(arg) {
+          if (isMobileCalendar) {
+            const dot = document.createElement('div');
+            dot.className = 'vpd-fc-dot';
+            dot.style.background = arg.event.backgroundColor;
+            return { domNodes: [dot] };
+          }
           const safeTxt = s => String(s || '').replace(/</g,'&lt;').replace(/>/g,'&gt;');
           const timeStr = (arg.event.extendedProps.display_time || '')
             .replace(/(\d+):00\s*(am|pm)/gi, '$1$2')
@@ -4524,9 +4553,17 @@
             + `<div class="zeus-event-label">${safeTxt(arg.event.title || '')}</div>`;
           return { domNodes: [wrap] };
         },
+        dateClick(info) {
+          if (!isMobileCalendar) return;
+          showMobileDayPanel(info.dateStr);
+        },
         eventClick(info) {
           info.jsEvent.preventDefault();
-          openPortalCalendarDetail(info.event.extendedProps.item_index);
+          if (isMobileCalendar) {
+            showMobileDayPanel(info.event.startStr);
+          } else {
+            openPortalCalendarDetail(info.event.extendedProps.item_index);
+          }
         },
       });
       _portalFcCalendar.render();
