@@ -3775,6 +3775,7 @@
               ${(() => {
                 const maxInsts = Math.max(0, ...allPay.map(({ pay }) => pay.installments.length));
                 return Array.from({ length: maxInsts }, (_, i) => {
+                  const isLast = i === maxInsts - 1;
                   const items = allPay.map(({ performer, pay }) => {
                     const inst = pay.installments[i];
                     if (!inst) return null;
@@ -3786,12 +3787,24 @@
                   const label = items[0]?.inst.label || `Payment ${i + 1}`;
                   const dueDate = items[0]?.inst.dueDate || '';
                   const dueTxt = allPaid ? (paymentRecordMeta(items[0].rec) || 'Received') : (dueDate ? `Due ${fmtDate(dueDate, { short: true })}` : 'Due date TBA');
-                  const perfRows = isHousehold ? `<div class="vp-inst-rows">${items.map(({ performer, inst }) =>
+                  const perfRows = isHousehold ? items.map(({ performer, inst }) =>
                     `<div class="vp-inst-row">
                       <span class="vp-inst-row-name"><span class="vp-inst-row-av" style="background:${_payAvatarColor(performerDisplayName(performer))};">${esc(_payInitials(performer))}</span>${esc(performerDisplayName(performer))}</span>
                       <span class="vp-inst-row-amt">${esc(moneyLabel(inst.amount)||'$0')}</span>
                     </div>`
-                  ).join('')}</div>` : '';
+                  ).join('') : '';
+                  // Discounts attach to the final payment block
+                  const discountRows = isLast && allDiscounts.length ? allDiscounts.map(({ line, performer }) => {
+                    const dname = line.split(/:\s*/)[0].replace(/-\$[\d.]+$/, '').trim();
+                    const detail = isHousehold ? performerDisplayName(performer) : '';
+                    const m = line.match(/-([$£]?\s*[0-9.]+)/);
+                    const amt = m ? `-$${m[1].trim().replace(/^[$£]/,'')}` : '';
+                    return `<div class="vp-inst-row" style="border-top:1px dashed #e3dff0;">
+                      <span class="vp-inst-row-name" style="color:#9b6fa8;">${esc(dname)}${detail ? ` · ${esc(detail)}` : ''}</span>
+                      <span class="vp-inst-row-amt" style="color:#9b6fa8;">${esc(amt)}</span>
+                    </div>`;
+                  }).join('') : '';
+                  const hasRows = perfRows || discountRows;
                   return `<div class="vp-inst-block${allPaid ? ' done' : ''}">
                     <div class="vp-inst-hdr">
                       <span class="vp-inst-hdr-label">Payment ${i + 1} of ${maxInsts}</span>
@@ -3801,7 +3814,7 @@
                       <div><div class="vp-inst-name">${esc(label)}</div><div class="vp-inst-due">${esc(dueTxt)}</div></div>
                       <div class="vp-inst-total">${esc(moneyLabel(totalAmt)||'$0')}</div>
                     </div>
-                    ${perfRows}
+                    ${hasRows ? `<div class="vp-inst-rows">${perfRows}${discountRows}</div>` : ''}
                   </div>`;
                 }).join('');
               })()}
@@ -3817,19 +3830,18 @@
                   <div class="vp-pay-sched-amt">${esc(moneyLabel(pay.balance)||'$0')}</div>
                 </div>`;
               }).join('')}
+              ${allDiscounts.length ? `
+                ${allDiscounts.map(({ line, performer }) => {
+                  const parts = line.split(/:\s*/);
+                  const dname = parts[0].replace(/-\$[\d.]+$/, '').trim();
+                  const detail = parts.slice(1).join(': ') || (isHousehold ? performerDisplayName(performer) : '');
+                  const m = line.match(/-([$£]?\s*[0-9.]+)/);
+                  const amt = m ? `-$${m[1].trim().replace(/^[$£]/,'')}` : '';
+                  return `<div class="vp-pay-disc-row"><div><div class="vp-pay-disc-name">${esc(dname)}</div>${detail ? `<div class="vp-pay-disc-sub">${esc(detail)}</div>` : ''}</div><div class="vp-pay-disc-amt">${esc(amt)}</div></div>`;
+                }).join('')}
+                <div class="vp-pay-disc-row total-row"><div class="vp-pay-disc-name">Total Discounts</div><div class="vp-pay-disc-amt">-${esc(moneyLabel(totalDiscount)||'$0')}</div></div>
+              ` : ''}
             </div>` : ''}
-            ${allDiscounts.length ? `
-              <div class="vp-pay-sec">Discounts &amp; Credits</div>
-              ${allDiscounts.map(({ line, performer }) => {
-                const parts = line.split(/:\s*/);
-                const dname = parts[0].replace(/-\$[\d.]+$/, '').trim();
-                const detail = parts.slice(1).join(': ') || (isHousehold ? performerDisplayName(performer) : '');
-                const m = line.match(/-([$£]?\s*[0-9.]+)/);
-                const amt = m ? `-$${m[1].trim().replace(/^[$£]/,'')}` : '';
-                return `<div class="vp-pay-disc-row"><div><div class="vp-pay-disc-name">${esc(dname)}</div>${detail ? `<div class="vp-pay-disc-sub">${esc(detail)}</div>` : ''}</div><div class="vp-pay-disc-amt">${esc(amt)}</div></div>`;
-              }).join('')}
-              <div class="vp-pay-disc-row total-row"><div class="vp-pay-disc-name">Total Discounts</div><div class="vp-pay-disc-amt">-${esc(moneyLabel(totalDiscount)||'$0')}</div></div>
-            ` : ''}
             <div class="vp-pay-totals">
               ${totalCredits > 0 ? `<div class="vp-pay-tot-row"><span>Subtotal before credits</span><span>${esc(moneyLabel(totalExpected + totalCredits)||'$0')}</span></div>` : ''}
               ${totalCredits > 0 ? `<div class="vp-pay-tot-row"><span>Credits applied</span><span style="color:#2a6035;">-${esc(moneyLabel(totalCredits)||'$0')}</span></div>` : ''}
