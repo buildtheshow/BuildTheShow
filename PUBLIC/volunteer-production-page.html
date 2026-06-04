@@ -3447,15 +3447,9 @@
     function performerEvents(performers = allPortalPerformers()) {
       const people = performers || [];
       if (!people.length) return [];
-      const keywords = portalEventKeywords(people);
       return Object.values(eventMap || {})
         .filter(ev => ev?.start_time)
-        .filter(ev => {
-          const text = portalEventText(ev);
-          if (portalEventIsPerformerFacing(ev)) return true;
-          if (portalEventIsProductionWide(ev)) return true;
-          return keywords.some(keyword => portalTextHasKeyword(text, keyword));
-        })
+        .filter(ev => ev.show_in_cast_schedule === true)
         .sort((a, b) => new Date(a.start_time) - new Date(b.start_time));
     }
     function upcomingRows(rows = []) {
@@ -3682,8 +3676,6 @@
       const nextInst  = allPay.flatMap(({ pay }) =>
         pay.installments.map((inst, i) => ({ inst, paid: !!(pay.records || []).find(r => r.installment_index === i && r.paid) }))
       ).find(x => !x.paid);
-      // For household, sum all unpaid instalments sharing the same due date as nextInst
-      const nextInstAmount = nextInst ? tlItems.filter(x => !x.isPaid && x.inst.dueDate === nextInst.inst.dueDate).reduce((s, x) => s + Number(x.inst.amount || 0), 0) : 0;
       const lastPaid  = allPaidRecords.sort((a,b) => (b.record.paid_at||'').localeCompare(a.record.paid_at||''))[0];
       const progressPct = (totalExpected + totalCredits) > 0 ? Math.round((totalPaid / (totalExpected + totalCredits)) * 100) : 0;
 
@@ -3703,6 +3695,8 @@
           return { inst, rec, performer, pay, isPaid: !!rec, sortKey: inst.dueDate || 'zzz' };
         })
       ).sort((a, b) => a.sortKey.localeCompare(b.sortKey));
+      // Sum all unpaid instalments sharing the same due date as nextInst (combines household performers)
+      const nextInstAmount = nextInst ? tlItems.filter(x => !x.isPaid && x.inst.dueDate === nextInst.inst.dueDate).reduce((s, x) => s + Number(x.inst.amount || 0), 0) : 0;
 
       // No registration action buttons on the payment page
 
@@ -4829,7 +4823,7 @@
 
         const [planResult, eventResult, signupResult] = await Promise.all([
           sb.from('productions').select('volunteer_staffing_plan').eq('id', prod.id).single(),
-          sb.from('production_events').select('id,event_type,title,start_time,end_time,venue,arrive_note,bring_note,know_note').eq('production_id', prod.id).order('start_time', { ascending: true }),
+          sb.from('production_events').select('id,event_type,title,start_time,end_time,venue,arrive_note,bring_note,know_note,show_in_cast_schedule').eq('production_id', prod.id).order('start_time', { ascending: true }),
           sb.from('volunteer_signups').select('role_name,shift_date,status').eq('production_id', prod.id).in('status', ['pending','approved','partially_filled'])
         ]);
         if (planResult.error) throw planResult.error;
