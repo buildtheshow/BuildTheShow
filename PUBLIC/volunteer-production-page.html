@@ -3725,10 +3725,10 @@
         </div>
         <div class="vpd-breakdown">
           ${volunteerLinkedPerformersHtml(linkedPerformers)}
-          ${dashboardSectionHtml('Upcoming Approved Shifts', 'Confirmed shifts still ahead.', stats.upcomingApproved)}
-          ${dashboardSectionHtml('Pending Requests', 'Requests the production team has not decided on yet.', stats.pending)}
-          ${dashboardSectionHtml('Denied Requests', 'Requests that were not approved for this production.', stats.denied)}
-          ${stats.pastApproved.length ? dashboardSectionHtml('Past Approved Shifts', 'Approved shifts that have already passed.', stats.pastApproved) : ''}
+          ${dashboardSectionHtml('Upcoming Approved Shifts', 'Confirmed shifts still ahead.', stats.upcomingApproved.map(r => ({ ...r, item_kind: 'volunteer', source_dept: r.department || '' })), { compact: true, hideYear: false, email: portalData?.email || '' })}
+          ${dashboardSectionHtml('Pending Requests', 'Requests the production team has not decided on yet.', stats.pending.map(r => ({ ...r, item_kind: 'volunteer', source_dept: r.department || '' })), { compact: true, hideYear: false, email: portalData?.email || '' })}
+          ${dashboardSectionHtml('Denied Requests', 'Requests that were not approved for this production.', stats.denied.map(r => ({ ...r, item_kind: 'volunteer', source_dept: r.department || '' })), { compact: true, hideYear: false, email: portalData?.email || '' })}
+          ${stats.pastApproved.length ? dashboardSectionHtml('Past Approved Shifts', 'Approved shifts that have already passed.', stats.pastApproved.map(r => ({ ...r, item_kind: 'volunteer', source_dept: r.department || '' })), { compact: true, hideYear: false, email: portalData?.email || '' }) : ''}
         </div>
         <div class="vpd-card">
           <div class="vpd-cta-inner">
@@ -3760,8 +3760,8 @@
       });
       return `<div class="vpd-breakdown">
         ${volunteerRoleTilesHtml(allRows)}
-        ${dashboardSectionHtml('Upcoming Approved Shifts', 'Confirmed shifts still ahead.', stats.upcomingApproved)}
-        ${stats.pending.length ? dashboardSectionHtml('Pending Requests', 'Shifts waiting for production team approval.', stats.pending) : ''}
+        ${dashboardSectionHtml('Upcoming Approved Shifts', 'Confirmed shifts still ahead.', stats.upcomingApproved.map(r => ({ ...r, item_kind: 'volunteer', source_dept: r.department || '' })), { compact: true, hideYear: false, email })}
+        ${stats.pending.length ? dashboardSectionHtml('Pending Requests', 'Shifts waiting for production team approval.', stats.pending.map(r => ({ ...r, item_kind: 'volunteer', source_dept: r.department || '' })), { compact: true, hideYear: false, email }) : ''}
         <div class="vpd-card">
           <div class="vpd-section-title" style="font-size:1.2rem;">What to Know Before You Arrive</div>
           <div class="vpd-info-stack" style="margin-top:0.9rem;">
@@ -4491,17 +4491,21 @@
     }
     function performerDashboardHtml(performers = []) {
       if (!performers.length) return `<div class="vpd-card"><div class="vpd-empty">No performer records found for this Production Code.</div></div>`;
-      const events = performerEvents(performers).map(ev => ({
+      const performerCalItems = performerEvents(performers).map(ev => ({
         type: 'performer',
         date: String(ev.start_time || '').slice(0,10),
         title: ev.title || eventDisplayType(ev),
         time: portalEventTime(ev),
         place: ev.venue || 'TBD',
-        color: EVENT_COLORS[ev.event_type] || 'var(--orange)',
+        color: EVENT_COLORS[ev.event_type] || portalKindColor(PORTAL_KIND_BY_ZEUS_TYPE[ev.event_type] || 'other'),
+        people: portalEventPeople(ev, performers),
         arrive: ev.arrive_note || '',
         bring: ev.bring_note || '',
         note: ev.notes || ev.know_note || '',
+        source: ev,
       }));
+      const events = performerCalItems; // kept for calendar rendering
+      const breakdownRows = performerCalItems.map(item => portalCalendarItemToBreakdownRow(item, currentPortalData?.email || ''));
       const castingCardsHtml = performers.map(item => {
         const app = item.app || {};
         const ca = applicantCustomAnswers(app);
@@ -4534,12 +4538,7 @@
               </div>
             </div>
           </section>
-          <section class="vpd-card">
-            <div class="vpd-section-head">
-              <div class="vpd-section-title-wrap"><div class="vpd-section-icon">${ICONS.calendar}</div><div><div class="vpd-section-title">Performer Schedule Details</div><div class="vpd-section-sub">Rehearsals, performances, call-time guidance, and what to bring.</div></div></div>
-            </div>
-            ${detailListHtml(events, 'No performer events are scheduled yet.')}
-          </section>
+          ${dashboardSectionHtml('Performer Schedule Details', 'Rehearsals, performances, call-time guidance, and what to bring.', breakdownRows, { compact: true, hideYear: false, email: currentPortalData?.email || '' })}
         </div>
         <div class="vpd-perf-sidebar">
           ${castingCardsHtml}
