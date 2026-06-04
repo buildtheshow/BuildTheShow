@@ -2293,7 +2293,23 @@
         if (storedMatch) return storedMatch;
       }
 
-      return findLegacyOfferMatch();
+      const legacyResult = await findLegacyOfferMatch();
+      if (legacyResult) return legacyResult;
+
+      // Fallback: if code is a plain number (e.g. 552661 from an older send), scan all production apps
+      if (prodId && /^\d+$/.test(wantedCode)) {
+        const [{ data: apps }, { data: bookings }] = await Promise.all([
+          sb.from('audition_applications').select('*').eq('production_id', prodId),
+          sb.from('audition_bookings').select('*').eq('production_id', prodId),
+        ]);
+        const all = [
+          ...((apps || []).map(r => ({ ...r, _table: 'audition_applications' }))),
+          ...((bookings || []).map(r => ({ ...r, _table: 'audition_bookings' }))),
+        ];
+        return findStoredOfferMatch(all);
+      }
+
+      return null;
     }
 
     async function loadOffer() {
