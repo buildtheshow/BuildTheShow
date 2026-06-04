@@ -59896,37 +59896,25 @@ See you soon!
     try {
       const file = _apmHeadshotFile;
       const ext = file.type === 'image/png' ? 'png' : file.type === 'image/webp' ? 'webp' : 'jpg';
-      const safeName = file.name.replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/\.[^.]+$/, `.${ext}`);
-      const path = `${prodId}/applicants/${_apmApp.id}-${Date.now()}-${safeName}`;
-      const { data, error } = await sb.storage.from('audition-headshots').upload(path, file, { upsert: true, contentType: file.type });
+
+      // Upload to the same bucket + path as the original so the URL never changes
+      // and audition_bookings / audition_applications stay in sync automatically
+      let bucket = 'profile-headshots';
+      let path = `auditions/${prodId}/${_apmApp.id}.${ext}`;
+      const existingUrl = String(_apmApp.headshot_url || '').split('?')[0];
+      const storageMatch = existingUrl.match(/\/storage\/v1\/object\/public\/([^/]+)\/(.+)$/);
+      if (storageMatch) {
+        bucket = storageMatch[1];
+        path = storageMatch[2];
+      }
+
+      const { data, error } = await sb.storage.from(bucket).upload(path, file, { upsert: true, contentType: file.type });
       if (error) throw error;
-      const { data: urlData } = sb.storage.from('audition-headshots').getPublicUrl(data.path);
+      const { data: urlData } = sb.storage.from(bucket).getPublicUrl(data.path);
       const newUrl = (urlData?.publicUrl || '') + '?t=' + Date.now();
       if (!urlData?.publicUrl) throw new Error('Could not get public headshot link.');
-      const oldUrl = _apmApp.headshot_url || '';
-      // Save new URL to the primary record
+      // Save new URL — same URL as before since we overwrote in place, but with fresh cache-bust param
       await syncApplicantEditsToSource(_apmApp, { headshot_url: newUrl });
-      // Update ALL rows for this performer by email — applications and bookings
-      // so the performer portal sees the new headshot regardless of which row or table it reads from
-      const _headshotEmail = String(_apmApp.email || '').trim();
-      if (_headshotEmail && prodId) {
-        await sb.from('audition_applications')
-          .update({ headshot_url: newUrl })
-          .eq('production_id', prodId)
-          .eq('email', _headshotEmail)
-          .neq('id', String(_apmApp.id || ''))
-          .catch(() => {});
-        await sb.from('audition_bookings')
-          .update({ headshot_url: newUrl })
-          .eq('production_id', prodId)
-          .eq('email', _headshotEmail)
-          .catch(() => {});
-      }
-      // Delete old headshot only after the new URL has been saved.
-      if (oldUrl && oldUrl.includes('audition-headshots')) {
-        const oldPath = oldUrl.split('/audition-headshots/')[1]?.split('?')[0];
-        if (oldPath) await sb.storage.from('audition-headshots').remove([oldPath]).catch(() => {});
-      }
       const idx = (allApplicants || []).findIndex(a => String(a.id) === String(_apmAppId));
       if (idx >= 0) { allApplicants[idx] = { ...allApplicants[idx], headshot_url: newUrl }; _apmApp = allApplicants[idx]; }
       // Clean up preview
