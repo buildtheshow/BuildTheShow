@@ -440,7 +440,7 @@ serve(async (req) => {
   // ── Fetch production + template + org ────────────────────────
   const [{ data: prod }, { data: templates }] = await Promise.all([
     sb.from('productions')
-      .select('id,title,subtitle,venue,director,organization_id,start_date,end_date,wizard_data')
+      .select('id,title,slug,subtitle,venue,director,organization_id,start_date,end_date,wizard_data,registration_settings')
       .eq('id', productionId)
       .maybeSingle(),
     sb.from('email_templates')
@@ -492,6 +492,7 @@ serve(async (req) => {
   const productionRecord = {
     id: productionId,
     title: firstDefinedString(directContext.show_name, directProduction.title, prod?.title),
+    slug: firstDefinedString(directProduction.slug, prod?.slug),
     subtitle: firstDefinedString(directContext.show_subtitle, directProduction.subtitle, prod?.subtitle),
     venue: firstDefinedString(directContext.show_venue, directContext.audition_venue, directProduction.venue, prod?.venue),
     director: firstDefinedString(directContext.director_name, directProduction.director, prod?.director),
@@ -505,7 +506,7 @@ serve(async (req) => {
     try {
       const { data } = await sb
         .from('organizations')
-        .select('name,email,abbreviation')
+        .select('name,email,abbreviation,slug')
         .eq('id', String(productionRecord.organization_id))
         .maybeSingle();
       org = data as Record<string, unknown> | null;
@@ -516,6 +517,7 @@ serve(async (req) => {
       name: firstDefinedString(directContext.org_name, directContext.organization_name, directProduction.org_name),
       abbreviation: firstDefinedString(directContext.org_abbreviation, directContext.organization_abbreviation, directProduction.org_abbreviation),
       email: firstDefinedString(directContext.org_email, directContext.organization_email, directProduction.org_email),
+      slug: firstDefinedString(directContext.org_slug, directContext.organization_slug, directProduction.org_slug),
     };
   }
   org = {
@@ -523,6 +525,7 @@ serve(async (req) => {
     name: firstDefinedString(directContext.org_name, directContext.organisation_name, directContext.organization_name, org?.name),
     abbreviation: firstDefinedString(directContext.org_abbreviation, directContext.organization_abbreviation, org?.abbreviation),
     email: firstDefinedString(directContext.org_email, directContext.organization_email, org?.email),
+    slug: firstDefinedString(directContext.org_slug, directContext.organization_slug, org?.slug),
   };
 
   let producerMember: Record<string, unknown> | null = null;
@@ -638,6 +641,31 @@ serve(async (req) => {
   const producerName  = firstDefinedString(directContext.producer_name, producerMember?.name, director, orgName, 'Producer');
   const producerRole  = firstDefinedString(directContext.producer_role, producerMember?.role, 'Producer');
   const producerEmail = firstDefinedString(directContext.producer_email, producerMember?.email, orgEmail);
+  const registrationSettings = isRecord(directContext.registration_settings)
+    ? directContext.registration_settings as Record<string, unknown>
+    : (isRecord((prod as Record<string, unknown> | null)?.registration_settings)
+      ? (prod as Record<string, unknown>).registration_settings as Record<string, unknown>
+      : {});
+  const publicBaseUrl = productionPublicBaseUrl(org, productionRecord);
+  let registrationPortalCode = firstDefinedString(directContext.volunteer_passcode, customAnswers.__bts_portal_code);
+  let registrationCustomAnswerPatch: Record<string, unknown> = {};
+  if (category === 'registration_completed' && applicantIdRaw && !registrationPortalCode) {
+    registrationPortalCode = String(Math.floor(100000 + Math.random() * 900000));
+    registrationCustomAnswerPatch.__bts_portal_code = registrationPortalCode;
+    customAnswers = { ...customAnswers, ...registrationCustomAnswerPatch };
+  }
+  const registrationOfferCode = firstDefinedString(customAnswers.__bts_cast_offer_code, customAnswers.cast_offer_code, directContext.registration_code);
+  const registrationLink = firstDefinedString(
+    directContext.registration_link,
+    publicBaseUrl && registrationOfferCode ? `${publicBaseUrl}/registration/${encodeURIComponent(registrationOfferCode)}` : '',
+    directContext.cast_accept_link,
+    directContext.cast_response_link,
+  );
+  const volunteerPortalUrl = firstDefinedString(
+    directContext.volunteer_portal_url,
+    publicBaseUrl ? `${publicBaseUrl}/portal` : '',
+  );
+  const paymentEmailDetails = buildPaymentEmailDetails(registrationSettings);
   if (isProducerNotification) {
     const notificationEmail = firstDefinedString(directContext.notification_email, producerEmail, orgEmail);
     if (!notificationEmail) return json({ ok: false, error: 'No producer or organisation email found for notification.' });
@@ -815,7 +843,7 @@ serve(async (req) => {
     '{{cast_decline_link}}':     firstDefinedString(directContext.cast_decline_link),
     '{{cast_offer_deadline}}':   firstDefinedString(directContext.cast_offer_deadline),
     '{{cast_offer_deadline_note}}': firstDefinedString(directContext.cast_offer_deadline_note),
-    '{{registration_link}}':     firstDefinedString(directContext.registration_link, directContext.cast_accept_link, directContext.cast_response_link),
+    '{{registration_link}}':     registrationLink,
     '{{registration_pdf_url}}':  firstDefinedString(directContext.registration_pdf_url, customAnswers.__bts_registration_pdf_url),
     '{{registration_pdf_button}}': (() => { const u = firstDefinedString(directContext.registration_pdf_url, customAnswers.__bts_registration_pdf_url); return firstDefinedString(directContext.registration_pdf_button, u ? `<a href="${escHtml(u)}" style="display:inline-block;background:#572e88;color:#ffffff;text-decoration:none;font-weight:800;padding:14px 22px;border-radius:8px;">View Registration PDF</a>` : ''); })(),
     '{{rehearsal_start_date}}':  firstDefinedString(directContext.rehearsal_start_date, productionRecord.start_date ? fmtDate(String(productionRecord.start_date)) : ''),
@@ -825,6 +853,13 @@ serve(async (req) => {
     '{{performance_schedule}}':  performanceSchedule,
     '{{event_schedule}}':        eventSchedule,
     '{{production_schedule}}':   eventSchedule,
+    '{{payment_schedule}}':      firstDefinedString(directContext.payment_schedule, paymentEmailDetails.schedule),
+    '{{payment_information}}':   firstDefinedString(directContext.payment_information, paymentEmailDetails.information),
+    '{{volunteer_link}}':        firstDefinedString(directContext.volunteer_link),
+    '{{volunteer_button}}':      firstDefinedString(directContext.volunteer_button),
+    '{{volunteer_portal_url}}':  volunteerPortalUrl,
+    '{{volunteer_portal_button}}': firstDefinedString(directContext.volunteer_portal_button, volunteerPortalUrl ? emailActionButtonHtml(volunteerPortalUrl, 'Open Production Portal') : ''),
+    '{{volunteer_passcode}}':    registrationPortalCode,
     '{{team_member_name}}':      firstDefinedString(directContext.team_member_name, teamMember?.name, performerName),
     '{{team_member_role}}':      firstDefinedString(directContext.team_member_role, teamMember?.role),
     '{{team_member_email}}':     firstDefinedString(directContext.team_member_email, teamMember?.email, performerEmail),
@@ -1028,6 +1063,23 @@ serve(async (req) => {
     const resendMsg = (err as Record<string, string>).message || (err as Record<string, string>).name || JSON.stringify(err);
     console.error('[send-email] Resend error:', err);
     return json({ ok: false, error: `Resend API error: ${resendMsg}` });
+  }
+
+  if (category === 'registration_completed' && applicantIdRaw) {
+    const sentPatch = {
+      ...registrationCustomAnswerPatch,
+      __bts_registration_confirmation_sent_at: new Date().toISOString(),
+      __bts_registration_confirmation_error: '',
+    };
+    try {
+      const mergedAnswers = { ...customAnswers, ...sentPatch };
+      await sb
+        .from('audition_applications')
+        .update({ custom_answers: mergedAnswers })
+        .eq('id', applicantIdRaw);
+    } catch (markErr) {
+      console.warn('[send-email] Could not mark registration confirmation sent:', markErr);
+    }
   }
 
   return json({ ok: true, sent: true, category, trigger: requestedTrigger, performer_email: performerEmail });
@@ -1257,6 +1309,94 @@ function lookupFlexibleValue(source: Record<string, unknown>, rawKey: string): s
     if (normalizeLookupKey(key) === target) return firstDefinedString(value);
   }
   return '';
+}
+
+function productionPublicBaseUrl(org: Record<string, unknown> | null, production: Record<string, unknown>): string {
+  const orgPart = firstDefinedString(org?.slug, org?.abbreviation).toLowerCase();
+  const prodPart = firstDefinedString(production.slug);
+  if (!orgPart || !prodPart) return '';
+  return `https://buildtheshow.com/${encodeURIComponent(orgPart)}/${encodeURIComponent(prodPart)}`;
+}
+
+function buildPaymentEmailDetails(registrationSettings: Record<string, unknown>): { schedule: string; information: string } {
+  const paymentSettings = isRecord(registrationSettings.payment_settings)
+    ? registrationSettings.payment_settings as Record<string, unknown>
+    : {};
+  const mode = firstDefinedString(paymentSettings.mode, 'none');
+  const currency = firstDefinedString(paymentSettings.currency, 'CAD').toUpperCase();
+  const currencySymbol: Record<string, string> = { CAD: '$', USD: '$', GBP: '£' };
+  const symbol = currencySymbol[currency] || '$';
+  const suffix = currency !== 'CAD' ? ` ${currency}` : '';
+  const amountLabel = (value: unknown): string => {
+    const n = Number.parseFloat(String(value || '').replace(/[^0-9.]/g, ''));
+    if (!Number.isFinite(n) || n <= 0) return '';
+    return `${symbol}${Number.isInteger(n) ? n : n.toFixed(2)}${suffix}`;
+  };
+  const dateLabel = (value: unknown): string => {
+    const raw = firstDefinedString(value);
+    if (!raw) return '';
+    return fmtDate(raw);
+  };
+  const lines: string[] = [];
+
+  if (!mode || mode === 'none') {
+    lines.push('No production fee has been configured for this show.');
+  } else if (mode === 'flat') {
+    const fee = amountLabel(paymentSettings.fee) || firstDefinedString(paymentSettings.fee);
+    if (fee) lines.push(`Registration fee: ${fee}`);
+    const due = dateLabel(paymentSettings.fee_due_date);
+    if (due) lines.push(`Due date: ${due}`);
+    const late = dateLabel(paymentSettings.late_fee_date);
+    if (late) lines.push(`Late payment after: ${late}`);
+    if (!lines.length) lines.push('Production fee amount has not been configured yet.');
+  } else if (mode === 'split') {
+    const rawInstallments = Array.isArray(paymentSettings.split_installments)
+      ? paymentSettings.split_installments.filter(isRecord) as Record<string, unknown>[]
+      : [];
+    const count = Number.parseInt(firstDefinedString(paymentSettings.split_count, rawInstallments.length || 2), 10) || 2;
+    const installments = rawInstallments.slice(0, count);
+    if (installments.length) {
+      installments.forEach((inst, index) => {
+        const amount = amountLabel(inst.amount) || 'Amount not set';
+        const due = dateLabel(inst.due_date);
+        lines.push(`Payment ${index + 1}: ${amount}${due ? ` due ${due}` : ''}`);
+      });
+      const total = installments.reduce((sum, inst) => {
+        const n = Number.parseFloat(String(inst.amount || '').replace(/[^0-9.]/g, ''));
+        return sum + (Number.isFinite(n) ? n : 0);
+      }, 0);
+      if (total > 0) lines.push(`Total: ${amountLabel(total)}`);
+      if (paymentSettings.split_allow_upfront) lines.push('Full upfront payment is also available.');
+    } else {
+      lines.push('Payment amounts have not been configured yet.');
+    }
+  }
+
+  const info: string[] = [];
+  if (paymentSettings.checkout_etransfer_enabled !== false && paymentSettings.etransfer_email) {
+    info.push(`E-transfer: ${firstDefinedString(paymentSettings.etransfer_email)}`);
+  }
+  if (paymentSettings.checkout_square_enabled === true) info.push('Square checkout is available.');
+  if (paymentSettings.checkout_pay_later_enabled !== false) info.push('Pay later is available if needed.');
+  const instructions = htmlToPlainText(firstDefinedString(paymentSettings.instructions));
+  if (instructions) info.push(instructions);
+
+  const discounts: string[] = [];
+  if (paymentSettings.sibling_discount_enabled) discounts.push('Sibling/family discount may apply.');
+  if (paymentSettings.volunteer_discount_enabled) discounts.push('Volunteer discount may apply.');
+  if (paymentSettings.scholarship_enabled) {
+    discounts.push(paymentSettings.scholarship_note
+      ? htmlToPlainText(firstDefinedString(paymentSettings.scholarship_note))
+      : 'Financial assistance is available by request.');
+  }
+
+  return {
+    schedule: lines.join('\n'),
+    information: [
+      info.join('\n'),
+      discounts.length ? `Discounts and assistance:\n${discounts.join('\n')}` : '',
+    ].filter(Boolean).join('\n\n'),
+  };
 }
 
 function wait(ms: number): Promise<void> {
