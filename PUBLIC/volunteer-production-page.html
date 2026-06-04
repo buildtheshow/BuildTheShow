@@ -1335,7 +1335,7 @@
       padding: 0.24rem 1rem;
       margin: -0.75rem -1rem 0.6rem;
     }
-    /* Breakdown volunteer card — simple grid, avoids vpd-shift-item grid-row conflicts */
+    /* Breakdown cards — unified layout for both performer and volunteer items */
     .vpd-bv-card {
       background: #fff;
       border-radius: 10px;
@@ -1343,18 +1343,20 @@
       box-shadow: 0 4px 14px rgba(0,0,0,0.04);
       overflow: hidden;
     }
-    .vpd-bv-card > .vpd-type-bar { margin: 0 0 0; padding: 0.24rem 0.9rem; }
+    .vpd-bv-card > .vpd-type-bar { margin: 0; padding: 0.24rem 0.9rem; }
     .vpd-bv-body {
       display: grid;
       grid-template-columns: 96px minmax(0, 1fr);
       grid-template-rows: auto auto;
-      gap: 0.5rem 0.75rem;
+      gap: 0.5rem 0;
       padding: 0.75rem;
       align-items: start;
     }
     .vpd-bv-body .vpd-shift-date   { grid-column: 1; grid-row: 1; }
     .vpd-bv-body .vpd-shift-role-icon { grid-column: 1; grid-row: 2; align-self: start; justify-self: center; }
-    .vpd-bv-right { grid-column: 2; grid-row: 1 / span 2; display: flex; flex-direction: column; gap: 0.42rem; }
+    .vpd-bv-icon { grid-column: 1; grid-row: 2; width: 74px; height: 74px; object-fit: contain; justify-self: center; align-self: start; padding: 0.1rem; }
+    .vpd-bv-right { grid-column: 2; grid-row: 1 / span 2; display: flex; flex-direction: column; gap: 0.4rem; border-left: 1px solid var(--line); padding-left: 0.8rem; }
+    .vpd-bv-divider { border-top: 1px solid var(--line); margin: 0.1rem 0; }
     .vpd-perf-event-row { display:grid; grid-template-columns:76px minmax(0,1fr); gap:0.9rem; align-items:start; }
     .vpd-perf-event-info { min-width:0; display:flex; flex-direction:column; gap:0.35rem; justify-content:center; }
     .vpd-perf-event-title { font-size:1rem; font-weight:800; color:var(--ink); line-height:1.2; }
@@ -2045,7 +2047,6 @@
 
       /* vpd-perf-event in breakdown: match Performer Schedule Details layout on mobile */
       .vpd-perf-event { padding: 0.65rem 0.8rem !important; }
-      .vpd-perf-event > .vpd-type-bar { margin: -0.65rem -0.8rem 0.5rem; }
     }
     @media (max-width: 420px) {
       .vpd-stats { grid-template-columns: 1fr; }
@@ -3424,8 +3425,13 @@
       const compactPlace = isPayment ? '' : (placeText || 'TBD');
       const notesText = String(row.row_notes || row.notes || row.note || '').trim();
       if (compact) {
+        const BV_ICONS = {
+          rehearsal:   '/ASSETS/Images/Rehearsals.svg',
+          performance: '/ASSETS/Images/Performer.svg',
+          deadline:    '/ASSETS/Images/Checklist.svg',
+          other:       '/ASSETS/Images/Production.svg',
+        };
         if (row.item_kind === 'volunteer') {
-          // Full volunteer card — simple custom layout avoids vpd-shift-item grid-row conflicts
           return `<article class="vpd-bv-card" style="border-left:4px solid ${deptCol};">
             <div class="vpd-type-bar" style="background:${deptCol};">${esc(row.department)}</div>
             <div class="vpd-bv-body">
@@ -3434,34 +3440,34 @@
               <div class="vpd-bv-right">
                 ${timeText ? `<div class="vpd-shift-time" style="color:${deptCol};"><span class="vpd-shift-time-icon">${ICONS.clock}</span><span>${esc(timeText)}${hours ? `<span class="vpd-shift-time-detail">(${esc(formatHours(hours))} hrs)</span>` : ''}</span></div>` : ''}
                 <div class="vpd-shift-fact vpd-shift-fact--where"><span class="vpd-shift-place-icon" style="color:${deptCol};">${ICONS.pin}</span><span class="vpd-shift-value">${esc(placeText || 'TBD')}</span></div>
-                <div class="vpd-shift-main">
-                  <div class="vpd-shift-role">${esc(roleName)}</div>
-                  ${peopleText ? `<div class="vpd-shift-people"><strong>${esc(peopleLabel)}:</strong> ${esc(peopleText)}</div>` : ''}
-                  ${notesText ? `<div class="vpd-shift-notes"><strong>Notes:</strong> ${esc(notesText)}</div>` : ''}
-                </div>
+                <div class="vpd-bv-divider"></div>
+                <div class="vpd-shift-dept" style="color:${deptCol};">${esc(row.department)}</div>
+                <div class="vpd-shift-role">${esc(roleName)}</div>
+                ${peopleText ? `<div class="vpd-shift-people"><strong>${esc(peopleLabel)}:</strong> ${esc(peopleText)}</div>` : ''}
+                ${notesText ? `<div class="vpd-shift-notes"><strong>Notes:</strong> ${esc(notesText)}</div>` : ''}
                 <div class="vpd-shift-fact vpd-shift-fact--who"><span class="vpd-shift-check-icon" style="color:${deptCol};">${ICONS.users}</span><span class="vpd-shift-value">${esc(whoText || 'Production team')}</span></div>
                 <div class="vpd-shift-status"><span class="vp-status ${cls}">${esc(dashboardStatusLabel(row.status))}</span></div>
               </div>
             </div>
           </article>`;
         }
-        // Performer-style card — matches the Performer Schedule Details look
-        const perfNotes = [
-          notesText ? `<div class="vpd-perf-note"><span class="vpd-perf-note-label" style="color:${deptCol};">Notes:</span><span style="white-space:pre-wrap;">${esc(notesText)}</span></div>` : '',
-        ].filter(Boolean).join('');
-        return `<article class="vpd-perf-event" style="border-left:4px solid ${deptCol};">
+        // Performer / deadline / other card
+        return `<article class="vpd-bv-card" style="border-left:4px solid ${deptCol};">
           <div class="vpd-type-bar" style="background:${deptCol};">${esc(row.department)}</div>
-          <div class="vpd-perf-event-row">
+          <div class="vpd-bv-body">
             ${dashboardShiftDateBadgeHtml(row, deptCol, { ...options, hideYear: false })}
-            <div class="vpd-perf-event-info">
-              <div class="vpd-perf-event-title">${esc(roleName)}</div>
-              ${timeText ? `<div class="vpd-perf-event-meta" style="color:${deptCol};">${ICONS.clock}<span>${esc(timeText)}</span></div>` : ''}
-              ${compactPlace ? `<div class="vpd-perf-event-meta" style="color:${deptCol};">${ICONS.pin}<span>${esc(compactPlace)}</span></div>` : ''}
-              ${peopleText ? `<div class="vpd-perf-event-meta" style="color:${deptCol};">${ICONS.users}<span>${esc(peopleText)}</span></div>` : ''}
-              ${row.payment_amount ? `<div class="vpd-perf-event-meta" style="color:${deptCol};"><span>${esc(row.payment_amount)}${row.payment_for ? ` · ${esc(row.payment_for)}` : ''}</span></div>` : ''}
+            <img class="vpd-bv-icon" src="${esc(BV_ICONS[row.item_kind] || '/ASSETS/Images/Production.svg')}" alt="">
+            <div class="vpd-bv-right">
+              ${timeText ? `<div class="vpd-shift-time" style="color:${deptCol};"><span class="vpd-shift-time-icon">${ICONS.clock}</span><span>${esc(timeText)}</span></div>` : ''}
+              ${compactPlace ? `<div class="vpd-shift-fact vpd-shift-fact--where"><span class="vpd-shift-place-icon" style="color:${deptCol};">${ICONS.pin}</span><span class="vpd-shift-value">${esc(compactPlace)}</span></div>` : ''}
+              ${peopleText ? `<div class="vpd-shift-fact"><span style="color:${deptCol};">${ICONS.users}</span><span class="vpd-shift-value">${esc(peopleText)}</span></div>` : ''}
+              ${row.payment_amount ? `<div class="vpd-shift-fact"><span class="vpd-shift-value">${esc(row.payment_amount)}${row.payment_for ? ` · ${esc(row.payment_for)}` : ''}</span></div>` : ''}
+              <div class="vpd-bv-divider"></div>
+              <div class="vpd-shift-dept" style="color:${deptCol};">${esc(row.department)}</div>
+              <div class="vpd-shift-role">${esc(roleName)}</div>
+              ${notesText ? `<div class="vpd-shift-notes"><strong>Notes:</strong> <span style="white-space:pre-wrap;">${esc(notesText)}</span></div>` : ''}
             </div>
           </div>
-          ${perfNotes ? `<div class="vpd-perf-event-notes">${perfNotes}</div>` : ''}
         </article>`;
       }
       const mobileInfo = isPayment ? '' : `<div class="vpd-shift-mobile-info" style="color:${deptCol};">
