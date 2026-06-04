@@ -59904,8 +59904,19 @@ See you soon!
       const newUrl = (urlData?.publicUrl || '') + '?t=' + Date.now();
       if (!urlData?.publicUrl) throw new Error('Could not get public headshot link.');
       const oldUrl = _apmApp.headshot_url || '';
-      // Save new URL
+      // Save new URL to the primary record
       await syncApplicantEditsToSource(_apmApp, { headshot_url: newUrl });
+      // Also update ALL other audition_applications rows for this performer by email
+      // so the performer portal always sees the new headshot regardless of which row it finds
+      const _headshotEmail = String(_apmApp.email || '').trim();
+      if (_headshotEmail && prodId) {
+        await sb.from('audition_applications')
+          .update({ headshot_url: newUrl })
+          .eq('production_id', prodId)
+          .eq('email', _headshotEmail)
+          .neq('id', String(_apmApp.id || ''))
+          .catch(() => {});
+      }
       // Delete old headshot only after the new URL has been saved.
       if (oldUrl && oldUrl.includes('audition-headshots')) {
         const oldPath = oldUrl.split('/audition-headshots/')[1]?.split('?')[0];
