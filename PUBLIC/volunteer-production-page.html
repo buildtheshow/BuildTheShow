@@ -4048,7 +4048,16 @@
           </div>`;
         }).join('')}
       </div>
-      ${miniCalendarHtml(events, 'Performer Calendar')}
+      <section class="vpd-command-card vpd-command-main">
+        <div class="vpd-fc-wrap fc-wrap">
+          <div id="vpd-fc-performer-calendar"></div>
+        </div>
+        <div class="vpd-month-footer">
+          <div class="vpd-month-legend">
+            ${['rehearsal','performance','other'].map(kind => `<span><i class="vpd-cal-dot" style="background:${portalKindColor(kind)};"></i>${portalKindLabel(kind)}</span>`).join('')}
+          </div>
+        </div>
+      </section>
       <section class="vpd-card">
         <div class="vpd-section-head">
           <div class="vpd-section-title-wrap"><div class="vpd-section-icon">${ICONS.calendar}</div><div><div class="vpd-section-title">Performer Schedule Details</div><div class="vpd-section-sub">Rehearsals, performances, call-time guidance, and what to bring.</div></div></div>
@@ -4314,6 +4323,56 @@
       _portalFcCalendar.render();
     }
 
+    let _performerFcCalendar = null;
+    function initPerformerFullCalendar() {
+      const el = document.getElementById('vpd-fc-performer-calendar');
+      if (!el) return;
+      if (typeof FullCalendar === 'undefined') {
+        const existing = document.querySelector('script[data-bts-fullcalendar]');
+        if (existing) { existing.addEventListener('load', initPerformerFullCalendar, { once: true }); return; }
+        const s = document.createElement('script');
+        s.src = 'https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js';
+        s.dataset.btsFullcalendar = '1';
+        s.onload = initPerformerFullCalendar;
+        document.head.appendChild(s);
+        return;
+      }
+      if (_performerFcCalendar) { try { _performerFcCalendar.destroy(); } catch (_) {} _performerFcCalendar = null; }
+      const performerItems = (_portalCalItems || []).filter(item => item.type === 'performer' && item.date);
+      const todayStr = new Date().toISOString().slice(0,10);
+      const firstUpcoming = performerItems.filter(i => i.date >= todayStr).sort((a,b) => a.date.localeCompare(b.date))[0];
+      const isMobile = window.matchMedia('(max-width: 700px)').matches;
+      const fcEvents = performerItems.map((item, i) => {
+        const kind = portalItemKind(item);
+        const color = portalKindColor(kind);
+        return { id: `perf-${i}`, title: item.title, start: item.date, allDay: true, backgroundColor: color, borderColor: color, textColor: '#fff', extendedProps: { item_index: _portalCalItems.indexOf(item), display_time: item.time || '', kind } };
+      });
+      el.innerHTML = '';
+      _performerFcCalendar = new FullCalendar.Calendar(el, {
+        initialView: isMobile ? 'listMonth' : 'dayGridMonth',
+        initialDate: firstUpcoming?.date || todayStr,
+        headerToolbar: isMobile
+          ? { left: 'prev,next', center: 'title', right: 'listMonth' }
+          : { left: 'prev,next today', center: 'title', right: 'dayGridMonth,listMonth' },
+        height: 'auto',
+        fixedWeekCount: false,
+        nowIndicator: true,
+        dayMaxEvents: 4,
+        eventDisplay: 'block',
+        events: fcEvents,
+        eventContent(arg) {
+          const safeTxt = s => String(s || '').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+          const timeStr = (arg.event.extendedProps.display_time || '').replace(/(\d+):00\s*(am|pm)/gi,'$1$2').replace(/(\d+:\d+)\s*(am|pm)/gi,'$1$2').trim();
+          const wrap = document.createElement('div');
+          wrap.style.cssText = 'width:100%;overflow:hidden;text-align:center;line-height:1.25;';
+          wrap.innerHTML = (timeStr ? `<div class="zeus-event-time">${safeTxt(timeStr)}</div>` : '') + `<div class="zeus-event-label">${safeTxt(arg.event.title)}</div>`;
+          return { domNodes: [wrap] };
+        },
+        eventClick(info) { info.jsEvent.preventDefault(); openPortalCalendarDetail(info.event.extendedProps.item_index); },
+      });
+      _performerFcCalendar.render();
+    }
+
     function portalPaymentCalendarItems(performers = []) {
       // Build per-instalment items then group by date+label so household performers share one calendar event
       const raw = performers.flatMap(performer => {
@@ -4557,6 +4616,7 @@
       else if (key === 'contact') content.innerHTML = portalContactHtml(currentPortalData);
       else content.innerHTML = volunteerFullTabHtml({ email: currentPortalData.email, signups: currentPortalData.volunteer.rows, linkedPerformers: currentPortalData.volunteer.linkedPerformers || [] });
       if (key === 'overview' && _portalOverviewMode === 'calendar') setTimeout(initPortalFullCalendar, 0);
+      if (key === 'performer') setTimeout(initPerformerFullCalendar, 0);
     }
     function renderProductionPortal(portalData) {
       currentPortalData = portalData;
