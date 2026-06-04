@@ -31783,8 +31783,8 @@
         { token: '{{cast_response_link}}', label: 'Review Offer Link', sample: () => etSampleProductionUrl(`/CastOffer/${ET_SAMPLE_CONTEXT.castOfferCode}`) },
         { token: '{{cast_response_button}}', label: 'Review Offer Button', sample: () => emailActionButtonHtml(etSampleProductionUrl(`/CastOffer/${ET_SAMPLE_CONTEXT.castOfferCode}`), 'Review Offer and Respond') },
         { token: '{{cast_offer_deadline}}', label: 'Offer Reply Deadline', sample: 'Friday, May 15, 2026 at 5:00 PM' },
-        { token: '{{registration_link}}', label: 'Registration Link', sample: () => { const h = new URLSearchParams({ prod: prodId || '', code: ET_SAMPLE_CONTEXT.registrationCode }); return `${window.location.origin}/SYSTEM/Public/registration#${h.toString()}`; } },
-        { token: '{{registration_button}}', label: 'Registration Button', sample: () => { const h = new URLSearchParams({ prod: prodId || '', code: ET_SAMPLE_CONTEXT.registrationCode }); return emailActionButtonHtml(`${window.location.origin}/SYSTEM/Public/registration#${h.toString()}`, 'Complete Registration'); } },
+        { token: '{{registration_link}}', label: 'Registration Link', sample: () => etSampleProductionUrl(`/registration/${ET_SAMPLE_CONTEXT.registrationCode}`) },
+        { token: '{{registration_button}}', label: 'Registration Button', sample: () => emailActionButtonHtml(etSampleProductionUrl(`/registration/${ET_SAMPLE_CONTEXT.registrationCode}`), 'Complete Registration') },
         { token: '{{registration_pdf_url}}', label: 'Registration PDF Link', sample: () => etSampleProductionUrl(`/files/registrations/${ET_SAMPLE_CONTEXT.registrationCode}.pdf`) },
         { token: '{{registration_pdf_button}}', label: 'Registration PDF Button', sample: () => emailActionButtonHtml(etSampleProductionUrl(`/files/registrations/${ET_SAMPLE_CONTEXT.registrationCode}.pdf`), 'View Registration PDF') },
         { token: '{{payment_schedule}}', label: 'Payment Schedule', sample: () => etPaymentScheduleSample() },
@@ -48601,12 +48601,23 @@ See you soon!
     return `${base}?prod=${encodeURIComponent(prodId)}&token=${encodeURIComponent(token)}`;
   }
 
+  function productionPublicBaseUrl() {
+    const orgPath = orgSlug || (orgAbbreviation || '').replace(/[^a-zA-Z0-9]/g, '') || '';
+    if (!orgPath || !prod?.slug) return '';
+    return `${window.location.origin}/${encodeURIComponent(orgPath)}/${encodeURIComponent(prod.slug)}`;
+  }
+
+  function registrationUrlForCode(code = '', appId = '') {
+    const cleanBase = productionPublicBaseUrl();
+    if (cleanBase && code) return `${cleanBase}/registration/${encodeURIComponent(code)}`;
+    const registrationHash = new URLSearchParams({ prod: prodId || '' });
+    if (appId) registrationHash.set('app', appId);
+    if (code) registrationHash.set('code', code);
+    return `${window.location.origin}/SYSTEM/Public/registration#${registrationHash.toString()}`;
+  }
+
   function castOfferLinks(token, code = token) {
-    const registrationHash = new URLSearchParams({
-      prod: prodId || '',
-      code: code || token || '',
-    });
-    const fallbackRegistrationUrl = `${window.location.origin}/SYSTEM/Public/registration#${registrationHash.toString()}`;
+    const registrationUrl = registrationUrlForCode(code || token || '');
     if (orgSlug && prod?.slug && code) {
       const base = `${window.location.origin}/${encodeURIComponent(orgSlug)}/${encodeURIComponent(prod.slug)}/CastOffer/${encodeURIComponent(code)}`;
       const showBase = `${window.location.origin}/${encodeURIComponent(orgSlug)}/${encodeURIComponent(prod.slug)}`;
@@ -48614,7 +48625,7 @@ See you soon!
         review: base,
         accept: `${base}/YES`,
         decline: `${base}/NO`,
-        registration: fallbackRegistrationUrl,
+        registration: registrationUrl,
         payments: `${showBase}/payments/${encodeURIComponent(code)}`,
       };
     }
@@ -48623,7 +48634,7 @@ See you soon!
       review: base,
       accept: `${base}&action=accept`,
       decline: `${base}&action=decline`,
-      registration: fallbackRegistrationUrl,
+      registration: registrationUrl,
       payments: `${base}&view=payments`,
     };
   }
@@ -48831,12 +48842,8 @@ See you soon!
     await loadRehearsalStartDateFromCalendar({ force: true }).catch(() => '');
     const registrationUrl = links.registration ? new URL(links.registration, window.location.origin) : null;
     const registrationHash = new URLSearchParams(registrationUrl?.hash?.replace(/^#/, '') || '');
-    const registrationParams = new URLSearchParams({ prod: prodId || '' });
-    if (app?.id) registrationParams.set('app', app.id);
-    if (registrationHash.get('code')) registrationParams.set('code', registrationHash.get('code'));
-    const registrationLink = app?.id
-      ? `${window.location.origin}/SYSTEM/Public/registration#${registrationParams.toString()}`
-      : (links.registration || links.review || '');
+    const registrationCode = registrationHash.get('code') || applicantCustomAnswers(app)[CAST_OFFER_KEYS.code] || applicantCustomAnswers(app)[CAST_OFFER_KEYS.token] || '';
+    const registrationLink = links.registration || (app?.id ? registrationUrlForCode(registrationCode, app.id) : (links.review || ''));
     const context = {
       contact_name: app.name || '',
       preferred_name: app.preferred_name || applicantCustomAnswers(app)['Preferred Name'] || String(app.name || '').trim().split(/\s+/)[0] || '',
