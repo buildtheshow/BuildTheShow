@@ -1250,6 +1250,13 @@
     .vpd-performer-actions { display: flex; flex-wrap: wrap; gap: 0.55rem; }
     .vpd-action-btn { display: inline-flex; align-items: center; justify-content: center; min-height: 38px; padding: 0.55rem 0.85rem; border-radius: 8px; border: 1px solid var(--purple); background: var(--purple); color: #fff; font-size: 0.78rem; font-weight: 950; text-decoration: none; }
     .vpd-action-btn.secondary { background: #fff; color: var(--purple); }
+    .vpd-contact-grid { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 1rem; }
+    .vpd-contact-card { border: 1px solid var(--line); border-radius: 10px; padding: 1rem; background: var(--light-grey); }
+    .vpd-contact-label { color: var(--muted); font-size: 0.62rem; font-weight: 950; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 0.28rem; }
+    .vpd-contact-value { color: var(--ink); font-size: 1rem; font-weight: 900; line-height: 1.25; overflow-wrap: anywhere; }
+    .vpd-contact-copy { color: var(--muted); font-size: 0.8rem; font-weight: 700; line-height: 1.45; margin-top: 0.35rem; }
+    .vpd-contact-actions { display:flex; flex-wrap:wrap; gap:0.55rem; margin-top:1rem; }
+    @media (max-width: 760px) { .vpd-contact-grid { grid-template-columns: 1fr; } }
     /* Base card */
     .vpd-card { background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 1.4rem; box-shadow: 0 4px 20px rgba(0,0,0,0.06); }
     .vpd-kicker { font-size: 0.65rem; font-weight: 950; text-transform: uppercase; letter-spacing: 0.12em; color: var(--purple); margin-bottom: 0.6rem; opacity: 0.7; }
@@ -4359,6 +4366,57 @@
         : calendarHtml;
       return `${portalOverviewModeBarHtml()}${bodyHtml}`;
     }
+    function portalContactHtml(portalData = currentPortalData) {
+      const orgName = org?.name || org?.organization_name || org?.organisation_name || 'Production team';
+      const email = org?.email || paymentSettings?.producer_email || paymentSettings?.contact_email || '';
+      const phone = org?.phone || org?.phone_number || org?.contact_phone || '';
+      const showName = prod?.title || prod?.name || 'this production';
+      const performers = allPortalPerformers(portalData || {});
+      const volunteerStats = portalVolunteerStats(portalData?.volunteer?.rows || [], portalData?.email || '', portalData?.volunteer?.linkedPerformers || []);
+      const connectedBits = [
+        performers.length ? `${performers.length} performer${performers.length === 1 ? '' : 's'}` : '',
+        volunteerStats.approved.length ? `${volunteerStats.approved.length} approved volunteer shift${volunteerStats.approved.length === 1 ? '' : 's'}` : ''
+      ].filter(Boolean).join(' · ') || 'Portal access';
+      return `<div class="vpd-tab-content">
+        <section class="vpd-card">
+          <div class="vpd-section-head">
+            <div class="vpd-section-title-wrap">
+              <div class="vpd-section-icon">${ICONS.users}</div>
+              <div>
+                <div class="vpd-section-title">Production Contact</div>
+                <div class="vpd-section-sub">Questions about ${esc(showName)}, schedules, registration, payments, or volunteer shifts.</div>
+              </div>
+            </div>
+          </div>
+          <div class="vpd-contact-grid">
+            <div class="vpd-contact-card">
+              <div class="vpd-contact-label">Organisation</div>
+              <div class="vpd-contact-value">${esc(orgName)}</div>
+              <div class="vpd-contact-copy">Use this contact for production-wide questions or if you are not sure who to ask.</div>
+            </div>
+            <div class="vpd-contact-card">
+              <div class="vpd-contact-label">Email</div>
+              <div class="vpd-contact-value">${email ? `<a href="mailto:${esc(email)}">${esc(email)}</a>` : 'Not listed yet'}</div>
+              <div class="vpd-contact-copy">${email ? 'Best for schedule, registration, payment, and general production questions.' : 'Ask the production team to add an organisation email in settings.'}</div>
+            </div>
+            ${phone ? `<div class="vpd-contact-card">
+              <div class="vpd-contact-label">Phone</div>
+              <div class="vpd-contact-value"><a href="tel:${esc(String(phone).replace(/[^0-9+]/g,''))}">${esc(phone)}</a></div>
+              <div class="vpd-contact-copy">Use for time-sensitive questions only.</div>
+            </div>` : ''}
+            <div class="vpd-contact-card">
+              <div class="vpd-contact-label">Connected to this portal</div>
+              <div class="vpd-contact-value">${esc(connectedBits)}</div>
+              <div class="vpd-contact-copy">${esc(performers.map(performerDisplayName).join(', ') || portalData?.email || '')}</div>
+            </div>
+          </div>
+          <div class="vpd-contact-actions">
+            ${email ? `<a class="vpd-action-btn" href="mailto:${esc(email)}?subject=${encodeURIComponent(showName + ' question')}">Email Production Contact</a>` : ''}
+            <button class="vpd-action-btn secondary" type="button" onclick="renderPortalTab('overview')">Back to Schedule</button>
+          </div>
+        </section>
+      </div>`;
+    }
     function portalTabsFor(data) {
       const hasVolunteer = !!data.volunteer.rows.length;
       const hasPerformer = !!allPortalPerformers(data).length;
@@ -4368,6 +4426,7 @@
         hasVolunteer ? { key: 'volunteer', label: 'Volunteer' } : null,
         hasPerformer ? { key: 'performer', label: allPortalPerformers(data).length > 1 ? 'Performers' : 'Performer' } : null,
         hasPayments ? { key: 'registration', label: 'Registration' } : null,
+        { key: 'contact', label: 'Production Contact' },
       ].filter(Boolean);
     }
     function renderPortalTab(key) {
@@ -4379,6 +4438,7 @@
       if (key === 'overview') content.innerHTML = portalOverviewHtml(currentPortalData);
       else if (key === 'performer') content.innerHTML = performerDashboardHtml(allPortalPerformers(currentPortalData));
       else if (key === 'registration') content.innerHTML = registrationPaymentsHtml(allPortalPerformers(currentPortalData));
+      else if (key === 'contact') content.innerHTML = portalContactHtml(currentPortalData);
       else content.innerHTML = volunteerFullTabHtml({ email: currentPortalData.email, signups: currentPortalData.volunteer.rows, linkedPerformers: currentPortalData.volunteer.linkedPerformers || [] });
       if (key === 'overview' && _portalOverviewMode === 'calendar') setTimeout(initPortalFullCalendar, 0);
     }
@@ -4409,6 +4469,7 @@
         volunteer:     '/ASSETS/Images/Volunteers.svg',
         performer:     '/ASSETS/Images/Performer.svg',
         registration:  '/ASSETS/Images/Finance - Schedule.svg',
+        contact:       '/ASSETS/Images/Production Team.svg',
       };
       const navEl = document.getElementById('vp-psidebar-nav');
       if (navEl) {
