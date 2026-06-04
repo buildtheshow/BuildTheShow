@@ -1495,7 +1495,7 @@
     .vpd-detail-card { border:1px solid var(--line); border-radius:8px; overflow:hidden; background:#fff; }
     .vpd-detail-card-head { display:grid; grid-template-columns:88px minmax(0,1fr) auto; gap:0.8rem; align-items:center; padding:0.78rem; border-left:4px solid var(--purple); }
     .vpd-detail-date { color:var(--purple); font-size:0.65rem; font-weight:950; text-transform:uppercase; letter-spacing:0.06em; }
-    .vpd-detail-title { color:var(--ink); font-size:0.98rem; font-weight:950; line-height:1.12; }
+    .vpd-detail-card .vpd-detail-title { color:var(--ink); font-size:0.98rem; font-weight:950; line-height:1.12; }
     .vpd-detail-meta { color:var(--muted); font-size:0.76rem; font-weight:750; line-height:1.35; margin-top:0.16rem; }
     .vpd-detail-card .vpd-detail-body { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:0.65rem; padding:0 0.78rem 0.78rem; }
     .vpd-detail-bit { border-top:1px solid var(--line); padding-top:0.55rem; }
@@ -3688,6 +3688,36 @@
         .filter(Boolean)
         .join('\n');
     }
+    async function copyPortalText(btn, encodedText) {
+      const text = decodeURIComponent(encodedText || '');
+      try {
+        if (navigator.clipboard?.writeText) {
+          await navigator.clipboard.writeText(text);
+        } else {
+          const temp = document.createElement('textarea');
+          temp.value = text;
+          temp.setAttribute('readonly', '');
+          temp.style.position = 'fixed';
+          temp.style.left = '-9999px';
+          document.body.appendChild(temp);
+          temp.select();
+          document.execCommand('copy');
+          document.body.removeChild(temp);
+        }
+        if (btn) {
+          const original = btn.textContent;
+          btn.textContent = 'Copied';
+          btn.classList.add('copied');
+          setTimeout(() => {
+            btn.textContent = original || 'Copy memo';
+            btn.classList.remove('copied');
+          }, 1200);
+        }
+      } catch (err) {
+        if (btn) btn.textContent = 'Copy failed';
+        console.warn('[BTS portal copy]', err);
+      }
+    }
     function paymentHowToHtml(rawInstructions = '', performers = [], orgName = '', meta = {}) {
       const performerNames = performers.map(performerDisplayName).filter(Boolean).join(', ');
       const showName = prod?.title || prod?.name || 'this production';
@@ -3739,7 +3769,10 @@
               <div class="vp-pay-how-num">2</div>
               <div>
                 <div class="vp-pay-how-title">Put this in the memo / description</div>
-                <div class="vp-pay-how-value vp-pay-how-memo">${esc(memoText)}</div>
+                <div class="vp-pay-how-copy-row">
+                  <div class="vp-pay-how-value vp-pay-how-memo">${esc(memoText)}</div>
+                  <button class="vp-pay-copy-btn" type="button" onclick="copyPortalText(this, '${encodeURIComponent(memoText)}')">Copy memo</button>
+                </div>
               </div>
             </div>
             <div class="vp-pay-how-step">
@@ -4179,9 +4212,9 @@
           ${portalCalendarItemDetailHtml(item)}
           <div class="vpd-detail-actions">
             <button class="vpd-detail-btn secondary" type="button" onclick="closeModal()">Close</button>
-            ${kind === 'deadline' ? `<button class="vpd-detail-btn" type="button" onclick="closeModal();renderPortalTab('registration')">Open Registration</button>` : ''}
-            ${kind === 'volunteer' ? `<button class="vpd-detail-btn" type="button" onclick="closeModal();renderPortalTab('volunteer')">Open Volunteer</button>` : ''}
-            ${kind === 'rehearsal' || kind === 'performance' || kind === 'other' ? `<button class="vpd-detail-btn" type="button" onclick="closeModal();renderPortalTab('performer')">Open Performer</button>` : ''}
+            ${kind === 'deadline' ? `<button class="vpd-detail-btn" type="button" onclick="closeModal();renderPortalTab('registration')">Go to Payments</button>` : ''}
+            ${kind === 'volunteer' ? `<button class="vpd-detail-btn" type="button" onclick="closeModal();renderPortalTab('volunteer')">View My Shifts</button>` : ''}
+            ${kind === 'rehearsal' || kind === 'performance' || kind === 'other' ? `<button class="vpd-detail-btn" type="button" onclick="closeModal();renderPortalTab('performer')">View Schedule</button>` : ''}
           </div>
         </div>`;
       show('vp-modal-overlay');
