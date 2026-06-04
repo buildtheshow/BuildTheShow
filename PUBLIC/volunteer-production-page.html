@@ -1257,6 +1257,14 @@
     .vpd-contact-copy { color: var(--muted); font-size: 0.8rem; font-weight: 700; line-height: 1.45; margin-top: 0.35rem; }
     .vpd-contact-actions { display:flex; flex-wrap:wrap; gap:0.55rem; margin-top:1rem; }
     @media (max-width: 760px) { .vpd-contact-grid { grid-template-columns: 1fr; } }
+    .vpd-role-tile-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); gap:0.75rem; }
+    .vpd-role-tile { display:grid; grid-template-columns:42px minmax(0,1fr); align-items:center; gap:0.75rem; width:100%; min-height:78px; padding:0.8rem; border:1px solid var(--line); border-left:4px solid var(--purple); border-radius:10px; background:#fff; text-align:left; font-family:inherit; cursor:pointer; box-shadow:0 3px 12px rgba(0,0,0,0.035); }
+    .vpd-role-tile:hover { border-color:rgba(87,46,136,0.35); box-shadow:0 6px 18px rgba(87,46,136,0.12); }
+    .vpd-role-tile-icon { width:42px; height:42px; border-radius:50%; display:flex; align-items:center; justify-content:center; background:var(--light-grey); }
+    .vpd-role-tile-icon svg { width:23px; height:23px; }
+    .vpd-role-tile-title { color:var(--ink); font-size:0.92rem; font-weight:950; line-height:1.1; }
+    .vpd-role-tile-meta { margin-top:0.18rem; color:var(--muted); font-size:0.68rem; font-weight:850; line-height:1.25; }
+    .vpd-role-tile-action { margin-top:0.25rem; color:var(--purple); font-size:0.64rem; font-weight:950; letter-spacing:0.06em; text-transform:uppercase; }
     /* Base card */
     .vpd-card { background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 1.4rem; box-shadow: 0 4px 20px rgba(0,0,0,0.06); }
     .vpd-kicker { font-size: 0.65rem; font-weight: 950; text-transform: uppercase; letter-spacing: 0.12em; color: var(--purple); margin-bottom: 0.6rem; opacity: 0.7; }
@@ -2477,6 +2485,12 @@
       document.body.style.overflow = 'hidden';
     }
 
+    function openVolunteerRoleTile(button) {
+      const roleName = button?.dataset?.role || '';
+      if (!roleName) return;
+      openLeadLearnMore(roleName);
+    }
+
     const STAFFING_MAP = {
       audition: { label: 'Audition', color: '#572e88', roles: [] },
       event: { label: 'Event', color: '#ca7ea7', roles: [] },
@@ -3245,6 +3259,52 @@
         </div>
       </section>`;
     }
+    function volunteerRoleTilesHtml(rows = []) {
+      const roleMap = new Map();
+      (rows || []).forEach(row => {
+        const roleName = row.role_name || row.volunteer_role || '';
+        if (!roleName) return;
+        const key = canonicalVolunteerRoleName(roleName).toLowerCase();
+        const opp = findOpportunityForSignup(row) || {};
+        const dept = row.department || opp.department || '';
+        const current = roleMap.get(key) || {
+          roleName,
+          dept,
+          color: DASH_DEPT_COLOURS[dept] || iconColor(opp) || 'var(--purple)',
+          count: 0,
+        };
+        current.count += 1;
+        if (!current.dept && dept) current.dept = dept;
+        roleMap.set(key, current);
+      });
+      const roles = [...roleMap.values()].sort((a, b) => a.roleName.localeCompare(b.roleName));
+      if (!roles.length) return '';
+      return `<section class="vpd-card">
+        <div class="vpd-section-head">
+          <div class="vpd-section-title-wrap">
+            <div class="vpd-section-icon">${ICONS.star}</div>
+            <div>
+              <div class="vpd-section-title">Volunteer Roles</div>
+              <div class="vpd-section-sub">Click a role to learn what it involves.</div>
+            </div>
+          </div>
+          <div class="vpd-section-count-wrap">
+            <div class="vpd-section-count">${esc(roles.length)}</div>
+            <span>${esc(roles.length === 1 ? 'Role' : 'Roles')}</span>
+          </div>
+        </div>
+        <div class="vpd-role-tile-grid">
+          ${roles.map(role => `<button class="vpd-role-tile" type="button" data-role="${esc(role.roleName)}" style="border-left-color:${esc(role.color)};" onclick="openVolunteerRoleTile(this)">
+            <span class="vpd-role-tile-icon" style="color:${esc(role.color)};">${roleIcon(role.roleName, role.dept)}</span>
+            <span>
+              <span class="vpd-role-tile-title">${esc(role.roleName)}</span>
+              <span class="vpd-role-tile-meta">${esc([role.dept, `${role.count} shift${role.count === 1 ? '' : 's'}`].filter(Boolean).join(' · '))}</span>
+              <span class="vpd-role-tile-action">Learn more</span>
+            </span>
+          </button>`).join('')}
+        </div>
+      </section>`;
+    }
     function volunteerDashboardHtml(volunteerData) {
       const { email, signups, linkedPerformers = [] } = volunteerData;
       const stats = portalVolunteerStats(signups, email, linkedPerformers);
@@ -3321,6 +3381,7 @@
         };
       });
       return `<div class="vpd-breakdown">
+        ${volunteerRoleTilesHtml(allRows)}
         ${dashboardSectionHtml('Upcoming Approved Shifts', 'Confirmed shifts still ahead.', stats.upcomingApproved)}
         ${stats.pending.length ? dashboardSectionHtml('Pending Requests', 'Shifts waiting for production team approval.', stats.pending) : ''}
         <div class="vpd-card">
