@@ -2631,6 +2631,25 @@
     a.click();
     a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
+    // Fallback: if the submit-time upload failed, save to storage now
+    const _appId = _applicant?.id;
+    const _prodId = rpfCurrentProductionId();
+    const _existingUrl = _applicant?.custom_answers?.__bts_registration_pdf_url;
+    if (_appId && _prodId && !_existingUrl) {
+      try {
+        const _pdfPath = `${_prodId}/registrations/${_appId}.pdf`;
+        const { data: _upData, error: _upErr } = await sb.storage.from('production-files').upload(_pdfPath, blob, { upsert: true, contentType: 'application/pdf' });
+        if (!_upErr && _upData) {
+          const { data: _urlData } = sb.storage.from('production-files').getPublicUrl(_pdfPath);
+          if (_urlData?.publicUrl) {
+            await sb.from('audition_applications').update({
+              custom_answers: Object.assign({}, _applicant.custom_answers, { __bts_registration_pdf_url: _urlData.publicUrl })
+            }).eq('id', _appId);
+            if (_applicant.custom_answers) _applicant.custom_answers.__bts_registration_pdf_url = _urlData.publicUrl;
+          }
+        }
+      } catch (_e) { /* silent — download already succeeded */ }
+    }
   };
 
   async function rpfOpenAnswersPdfInline() {
