@@ -3058,6 +3058,7 @@
       return requiredDates.length ? requiredDates.join(' · ') : 'Flexible - no fixed date';
     }
     function dashboardShiftTimeText(row = {}) {
+      if (row.display_time) return row.display_time;
       return fmtTimeRange(row.shift_start_time, row.shift_end_time) || 'Flexible';
     }
     function dashboardShiftStartText(row = {}) {
@@ -3213,7 +3214,7 @@
     function dashboardShiftItemHtml(row = {}, options = {}) {
       const cls = dashboardStatusClass(row.status);
       const hours = dashboardShiftHours(row);
-      const deptCol = DASH_DEPT_COLOURS[row.department] || 'var(--purple)';
+      const deptCol = row.color || DASH_DEPT_COLOURS[row.department] || 'var(--purple)';
       const placeText = dashboardShiftPlaceText(row);
       const whoText = dashboardShiftWhoText(row);
       const timeText = dashboardShiftTimeText(row);
@@ -3659,6 +3660,7 @@
         time: portalEventTime(ev),
         place: ev.venue || 'TBD',
         color: EVENT_COLORS[ev.event_type] || 'var(--orange)',
+        people: portalEventPeople(ev, allPortalPerformers(portalData)),
         arrive: ev.arrive_note || '',
         bring:  ev.bring_note || '',
         note:   ev.know_note || '',
@@ -4518,6 +4520,7 @@
         title: `${g.label} Due`,
         time: moneyLabel(g.totalAmount),
         place: g.performers.map(p => performerDisplayName(p)).join(', '),
+        people: g.performers.map(p => performerDisplayName(p)),
         color: portalKindColor('deadline'),
         source: { performer: g.performer, installment: g.inst, installmentIndex: g.index, payment: g.pay },
       }));
@@ -4606,44 +4609,29 @@
       </div>`;
     }
 
-    function portalOverviewBreakdownHtml(portalData, performers, volunteerStats) {
-      const performerRows = performerEvents(performers).map(ev => ({
-        status: 'approved',
-        shift_date: String(ev.start_time || '').slice(0,10),
-        shift_start_time: String(ev.start_time || '').slice(11,16),
-        shift_end_time: String(ev.end_time || '').slice(11,16),
-        role_name: ev.title || eventDisplayType(ev),
-        volunteer_role: ev.title || eventDisplayType(ev),
-        department: /performance|show|preview/i.test(`${ev.event_type || ''} ${ev.title || ''}`) ? 'Performance' : 'Rehearsal',
-        venue: ev.venue || 'TBD',
-        check_in_with: 'Production team',
-        people: portalEventPeople(ev, performers),
-      }));
-      const paymentRows = performers.flatMap(performer => {
-        const pay = performerPaymentSummary(performer);
-        return (pay.installments || []).map((inst, index) => {
-          const paid = (pay.records || []).some(row => row.installment_index === index && row.paid);
-          if (paid || !inst.dueDate) return null;
-          return {
-            status: 'pending',
-            shift_date: inst.dueDate,
-            role_name: `${inst.label} Due`,
-            volunteer_role: `${inst.label} Due`,
-            department: 'Payment / Deadline',
-            venue: '',
-            check_in_with: '',
-            payment_for: performerDisplayName(performer),
-            people: [performerDisplayName(performer)],
-            payment_amount: moneyLabel(inst.amount),
-          };
-        }).filter(Boolean);
-      });
-      const chronologicalRows = dashboardSortRows([
-        ...volunteerStats.upcomingApproved,
-        ...performerRows,
-        ...paymentRows,
-        ...volunteerStats.pending,
-      ]);
+    function portalCalendarItemToBreakdownRow(item = {}, email = '') {
+      const kind = portalItemKind(item);
+      const source = item.source || {};
+      const base = kind === 'volunteer' ? source : {};
+      return {
+        ...base,
+        status: kind === 'deadline' ? 'pending' : 'approved',
+        shift_date: item.date || '',
+        display_time: item.time || '',
+        role_name: item.title || portalKindLabel(kind),
+        volunteer_role: item.title || portalKindLabel(kind),
+        department: portalKindLabel(kind),
+        venue: kind === 'deadline' ? (item.place || '-') : (item.place || 'TBD'),
+        payment_for: kind === 'deadline' ? item.place : '',
+        payment_amount: kind === 'deadline' ? item.time : '',
+        people: item.people || (kind === 'deadline' && item.place ? item.place.split(',').map(name => name.trim()).filter(Boolean) : []),
+        color: item.color || portalKindColor(kind),
+        source_item: item,
+      };
+    }
+
+    function portalOverviewBreakdownHtml(portalData, calendarItems = []) {
+      const chronologicalRows = (calendarItems || []).map(item => portalCalendarItemToBreakdownRow(item, portalData.email));
       return `<div class="vpd-overview-breakdown">
         ${dashboardSectionHtml('Chronological Schedule', 'Everything connected to this portal, sorted by date and time.', chronologicalRows, { compact: true, hideYear: true, email: portalData.email })}
       </div>`;
@@ -4665,7 +4653,7 @@
       const tabs = portalTabsFor(portalData);
       const calendarHtml = portalCalendarMonthHtml(calendarItems);
       const bodyHtml = _portalOverviewMode === 'breakdown'
-        ? portalOverviewBreakdownHtml(portalData, portalPerformers, volunteerStats)
+        ? portalOverviewBreakdownHtml(portalData, calendarItems)
         : calendarHtml;
       return `${portalOverviewModeBarHtml()}${bodyHtml}`;
     }
