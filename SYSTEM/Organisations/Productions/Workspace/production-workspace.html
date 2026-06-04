@@ -70459,6 +70459,66 @@ See you soon!
 	    }
 	  }
 
+	  function volCanonicalSignupRoleName(name = '') {
+	    const raw = String(name || '').trim();
+	    const key = raw.toLowerCase().replace(/\s+/g, ' ');
+	    const renames = {
+	      'build crew helper': 'set builders',
+	      'set builder': 'set builders',
+	      'set builders': 'set builders',
+	      'costume work helper': 'costume helper'
+	    };
+	    return renames[key] || key;
+	  }
+
+	  function volRequiredDatesForRoleSetup(type, entry = {}) {
+	    const appliesTo = Array.isArray(entry.appliesTo) && entry.appliesTo.length ? entry.appliesTo : [type].filter(Boolean);
+	    const eventScope = entry.eventScope || {};
+	    const rows = (volunteerPlanEvents || [])
+	      .filter(ev => appliesTo.some(t => volCalendarEventMatches(ev, t)))
+	      .filter(ev => appliesTo.some(t => {
+	        if (!volCalendarEventMatches(ev, t)) return false;
+	        const scope = eventScope[t] || { mode: 'all' };
+	        return scope.mode !== 'specific' || (scope.ids || []).map(String).includes(String(ev.id));
+	      }))
+	      .sort((a, b) => String(a.start_time || '').localeCompare(String(b.start_time || '')));
+	    return [...new Set(rows.map(ev => {
+	      const commitment = volShiftCommitmentLabel(ev, entry) || (ev.start_time ? String(ev.start_time).slice(0, 10) : '');
+	      const title = String(ev.title || '').trim();
+	      return [commitment, title && title !== ev.event_type ? title : ''].filter(Boolean).join(' - ');
+	    }).filter(Boolean))];
+	  }
+
+	  async function volSyncRequiredDatesToExistingSignups(type, entry = {}) {
+	    const requiredDates = volRequiredDatesForRoleSetup(type, entry);
+	    if (!requiredDates.length) return 0;
+	    const roleName = entry.roleName || '';
+	    const roleKey = volCanonicalSignupRoleName(roleName);
+	    if (!roleKey) return 0;
+	    const { data, error } = await sb.from('volunteer_signups')
+	      .select('id,role_name,volunteer_role,shift_date,required_dates,status')
+	      .eq('production_id', prodId);
+	    if (error) throw error;
+	    const rows = (data || []).filter(row => {
+	      if (['cancelled', 'declined'].includes(String(row.status || '').toLowerCase())) return false;
+	      if (row.shift_date) return false;
+	      const rowRole = volCanonicalSignupRoleName(row.role_name || row.volunteer_role || '');
+	      return rowRole === roleKey;
+	    });
+	    if (!rows.length) return 0;
+	    const results = await Promise.all(rows.map(row =>
+	      sb.from('volunteer_signups')
+	        .update({ required_dates: requiredDates })
+	        .eq('id', row.id)
+	        .select('id')
+	    ));
+	    const failed = results.find(result => result.error);
+	    if (failed?.error) throw failed.error;
+	    const updated = results.reduce((sum, result) => sum + (result.data?.length || 0), 0);
+	    if (updated && typeof loadVolunteerRequests === 'function') await loadVolunteerRequests();
+	    return updated;
+	  }
+
 	  async function volSaveSchedule(type, ri) {
 	    const key = `${type}-${ri}`;
 	    const saveBtn = document.getElementById(`vsq-save-btn-${key}`);
@@ -70528,6 +70588,13 @@ See you soon!
 	        ));
 	        await loadOpportunities();
 	      }
+	      try {
+	        const synced = await volSyncRequiredDatesToExistingSignups(type, _staffingPlan[key]);
+	        if (synced) showToast(`Updated ${synced} existing volunteer request${synced === 1 ? '' : 's'} with the selected dates.`);
+	      } catch (syncError) {
+	        console.warn('[BTS] volunteer signup date sync failed:', syncError?.message || syncError);
+	        showToast('Role saved, but existing signups could not be updated with the selected dates.', true);
+	      }
 	      document.querySelectorAll('.vol-schedule-popover, .vol-schedule-modal').forEach(el => el.remove());
 	    } else if (saveBtn) {
 	      saveBtn.disabled = false;
@@ -70595,6 +70662,7 @@ See you soon!
     const key = `${type}-${ri}`;
     const meta = _volStaffingRoleMeta[key] || {};
     const entry = _staffingPlan[key] || {};
+    const requiredDates = volRequiredDatesForRoleSetup(type, entry);
     const name = document.getElementById('vol-fill-name')?.value?.trim() || '';
     const email = document.getElementById('vol-fill-email')?.value?.trim() || '';
     const phone = document.getElementById('vol-fill-phone')?.value?.trim() || '';
@@ -70615,7 +70683,7 @@ See you soon!
       department: entry.department || meta.department || '',
       check_in_with: entry.checkInWith || entry.check_in_with || meta.checkInWith || null,
       shift_date: null,
-      required_dates: [],
+      required_dates: requiredDates,
     });
     if (error) {
       btn.disabled = false; btn.textContent = 'Mark as Filled';
