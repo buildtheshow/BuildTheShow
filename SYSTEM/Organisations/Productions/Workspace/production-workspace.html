@@ -2134,6 +2134,7 @@
     .rpf-solo-toggle-row { display:flex; align-items:center; gap:0.65rem; padding:0.7rem 0.9rem; background:rgba(87,46,136,0.06); border-radius:10px; cursor:pointer; margin-bottom:0.9rem; }
     .rpf-solo-toggle-row input { width:1rem; height:1rem; accent-color:#572e88; cursor:pointer; flex-shrink:0; margin:0; }
     .rpf-solo-toggle-label { font-size:0.82rem; font-weight:800; color:#000000; }
+    .rpf-toggle-help { margin:-0.45rem 0 0.85rem 2.85rem; font-size:0.74rem; line-height:1.42; font-weight:700; color:#6d5d83; }
     .rpf-pickup-add-btn { display:flex; align-items:center; justify-content:center; gap:0.45rem; width:100%; background:none; border:1.5px dashed rgba(87,46,136,0.3); border-radius:8px; padding:0.52rem 0.9rem; font-size:0.78rem; font-weight:800; color:#572e88; cursor:pointer; font-family:var(--bts-font); margin-bottom:0.75rem; transition:background 0.1s; }
     .rpf-pickup-add-btn:hover { background:rgba(87,46,136,0.06); }
     /* Media Release - modal */
@@ -40226,7 +40227,7 @@ See you soon!
 
   let REGISTRATION_FORM_TEMPLATE_DEFS = [
     // ── CORE REGISTRATION ──
-    { key: 'cast_registration',        settingId: 'reg-form-cast-registration',        group: 'Core Registration',    color: '#476aaa', defaultOn: true,  title: 'Cast Registration',                       summary: 'Who they are and how to reach them.',                              defaultFields: ['Legal first name *', 'Legal last name *', 'Preferred name *', 'Pronouns *', 'Date of birth *', 'Contact email *', 'Contact phone number *', '{guard}Guardian first name *', '{guard}Guardian last name *', '{guard}Guardian relationship to performer *'] },
+    { key: 'cast_registration',        settingId: 'reg-form-cast-registration',        group: 'Core Registration',    color: '#476aaa', defaultOn: true,  title: 'Cast Registration',                       summary: 'Who they are and how to reach them.',                              defaultFields: ['Legal first name *', 'Legal last name *', 'Preferred name *', 'Pronouns *', 'Date of birth *', 'Contact email *', 'Contact phone number *', '{secondary-toggle}Add a secondary contact', '{secondary}Secondary Contact Name', '{secondary}Secondary Contact Email', '{secondary}Secondary Contact Phone', '{guard}Guardian first name *', '{guard}Guardian last name *', '{guard}Guardian relationship to performer *'] },
     { key: 'pickup_dismissal',         settingId: 'reg-form-pickup-dismissal',         group: 'Core Registration',    color: '#476aaa', defaultOn: true,  title: 'Pickup & Dismissal',                      summary: 'Who is authorised to pick up the performer after rehearsals.',     defaultFields: ['{solo-toggle}Performer can leave on their own', '{solo}Authorised pickup 1 full name *', '{solo}Authorised pickup 1 relationship to performer *', '{solo}Authorised pickup 1 phone number *', '{solo}Authorised pickup 2 full name', '{solo}Authorised pickup 2 relationship to performer', '{solo}Authorised pickup 2 phone number', '{pickup-add}', 'Additional pickup notes'] },
     { key: 'emergency_medical',        settingId: 'reg-form-emergency-medical',        group: 'Core Registration',    color: '#476aaa', defaultOn: true,  title: 'Emergency & Medical',                     summary: 'What to do if something goes wrong.',                              defaultFields: ['Emergency contact name *', 'Emergency contact phone *', 'Emergency contact relationship *', 'Allergies', 'Medications', 'Medical conditions'] },
     { key: 'accessibility',            settingId: 'reg-form-accessibility',            group: 'Core Registration',    color: '#476aaa', defaultOn: true,  title: 'Accessibility & Accommodation',            summary: 'What support they need to participate fully.',                     defaultFields: ['Accessibility and accommodation needs'] },
@@ -40368,6 +40369,13 @@ See you soon!
     };
     panel.addEventListener('input', handleSettingsInput);
     panel.addEventListener('change', handleSettingsInput);
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden' && registrationSettingsAutoSaveTimer) {
+        clearTimeout(registrationSettingsAutoSaveTimer);
+        registrationSettingsAutoSaveTimer = null;
+        saveRegistrationSettings();
+      }
+    }, { once: false });
     registrationSettingsAutoSaveBound = true;
   }
 
@@ -40466,7 +40474,7 @@ See you soon!
     const base = {
       title: saved.title || def.title,
       intro: registrationFormNormalizeTemplateIntro(key, saved.intro !== undefined ? saved.intro : (REGISTRATION_FORM_DEFAULT_INTRO[key] || def.summary)),
-      fields: registrationFormVisibleFields(Array.isArray(saved.fields) && saved.fields.length ? saved.fields : def.defaultFields),
+      fields: registrationFormEnsureDefaultAdditions(key, Array.isArray(saved.fields) && saved.fields.length ? saved.fields : def.defaultFields),
       sectionTexts: Object.keys(saved.sectionTexts || {}).length ? saved.sectionTexts : (REGISTRATION_FORM_DEFAULT_SECTION_TEXTS[key] || {}),
     };
     if (key === 'media_release') {
@@ -42814,7 +42822,7 @@ See you soon!
         toggle.addEventListener('change', () => {
           updateRegistrationFormGroupCount(toggle);
           syncBrandTileSettingsState(toggle.closest('.template-brand-card') || host);
-          scheduleRegistrationSettingsAutosave(400);
+          scheduleRegistrationSettingsAutosave(50);
         });
       });
     } else {
@@ -43998,6 +44006,14 @@ See you soon!
     });
   }
 
+  function rpfToggleSecondaryContact(checkbox) {
+    const body = checkbox.closest('.rpf-section-body');
+    if (!body) return;
+    body.querySelectorAll('[data-rpf-secondary]').forEach(el => {
+      el.style.display = checkbox.checked ? '' : 'none';
+    });
+  }
+
   function rpfAddPickupPerson(btn) {
     const body = btn.closest('.rpf-section-body');
     if (!body) return;
@@ -44685,11 +44701,20 @@ See you soon!
       return `<div class="rpf-form-group"><label class="rpf-solo-toggle-row"><input type="checkbox"${_isAdult ? ' checked' : ''} onchange="rpfToggleSoloPickup(this)" /><span class="rpf-solo-toggle-label">${esc(label)}</span></label></div>`;
     }
 
+    const isSecondaryToggle = raw.startsWith('{secondary-toggle}');
+    if (isSecondaryToggle) {
+      const label = raw.slice(18).replace(/\s*\*$/, '').trim() || 'Add a secondary contact';
+      const checked = !!(rpfPrefillValue('secondary contact email', prefill) || rpfPrefillValue('secondary contact name', prefill) || rpfPrefillValue('secondary contact phone', prefill));
+      return `<div class="rpf-form-group"><label class="rpf-solo-toggle-row"><input type="checkbox" data-rpf-secondary-toggle="1"${checked ? ' checked' : ''} onchange="rpfToggleSecondaryContact(this)" /><span class="rpf-solo-toggle-label">${esc(label)}</span></label><div class="rpf-toggle-help">This person will receive the same production communications as the primary contact.</div></div>`;
+    }
+
     const isSolo = raw.startsWith('{solo}');
     const isMinor = raw.startsWith('{minor}');
     const afterPrefix = isSolo ? raw.slice(6) : isMinor ? raw.slice(7) : raw;
-    const isGuard = afterPrefix.startsWith('{guard}');
-    const stripped = isGuard ? afterPrefix.slice(7) : afterPrefix;
+    const isSecondary = afterPrefix.startsWith('{secondary}');
+    const afterSecondary = isSecondary ? afterPrefix.slice(11) : afterPrefix;
+    const isGuard = afterSecondary.startsWith('{guard}');
+    const stripped = isGuard ? afterSecondary.slice(7) : afterSecondary;
 
     const isRequired = stripped.endsWith('*');
     const label = stripped.replace(/\s*\*$/, '').trim();
@@ -44713,8 +44738,9 @@ See you soon!
     const prefilled = val ? ' rpf-prefilled' : '';
     const soloAttr = isSolo ? ' data-rpf-solo="1"' : '';
     const minorAttr = isMinor ? ' data-rpf-minor="1" style="display:none"' : '';
+    const secondaryAttr = isSecondary ? ' data-rpf-secondary="1" style="display:none"' : '';
     const guardAttr = isGuard ? ' data-rpf-guard="1" style="display:none"' : '';
-    const wrapAttrs = soloAttr + minorAttr + guardAttr;
+    const wrapAttrs = soloAttr + minorAttr + secondaryAttr + guardAttr;
     const medicalReveal = {
       allergies: {
         check: 'Any allergies?',
@@ -45072,6 +45098,7 @@ See you soon!
       host.querySelectorAll('.rpf-sig-field-wrap input').forEach(input => rpfUpdateSigPreview(input));
       host.querySelectorAll('.rpf-solo-toggle-row input').forEach(cb => { if (cb.checked) rpfToggleSoloPickup(cb); });
       host.querySelectorAll('[data-rpf-minor-toggle]').forEach(cb => { rpfToggleMinorFields(cb); });
+      host.querySelectorAll('[data-rpf-secondary-toggle]').forEach(cb => { rpfToggleSecondaryContact(cb); });
       if (typeof fitCastingCardNames === 'function') fitCastingCardNames(host);
       const targetGroup = window._rpfTargetGroup;
       if (targetGroup) {
