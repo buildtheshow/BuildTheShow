@@ -950,7 +950,7 @@
       .trim();
   }
 
-  function rpfBuildPaymentEmailSummary() {
+  function rpfBuildPaymentEmailDetails() {
     const s = _regSettings?.payment_settings || {};
     const currency = String(s.currency || 'CAD').toUpperCase();
     const currSym = { CAD: '$', USD: '$', GBP: '£' }[currency] || '$';
@@ -997,11 +997,18 @@
     if (s.volunteer_discount_enabled) discounts.push('Volunteer discount may apply.');
     if (s.scholarship_enabled) discounts.push(s.scholarship_note ? rpfPlainTextFromHtml(subTokens(s.scholarship_note)) : 'Financial assistance is available by request.');
 
-    return esc([
-      lines.join('\n'),
-      info.length ? `Payment information:\n${info.join('\n')}` : '',
-      discounts.length ? `Discounts and assistance:\n${discounts.join('\n')}` : '',
-    ].filter(Boolean).join('\n\n'));
+    return {
+      schedule: esc(lines.join('\n')),
+      information: esc([
+        info.join('\n'),
+        discounts.length ? `Discounts and assistance:\n${discounts.join('\n')}` : '',
+      ].filter(Boolean).join('\n\n')),
+    };
+  }
+
+  function rpfBuildPaymentEmailSummary() {
+    const details = rpfBuildPaymentEmailDetails();
+    return [details.schedule, details.information].filter(Boolean).join('\n\n');
   }
 
   // ── Age helpers ──────────────────────────────────────────────────────────────
@@ -2738,14 +2745,11 @@
       <div class="rpf-success-big">Welcome to the cast!</div>
       <div class="rpf-success-show-badge">${showName}</div>
       ${portalBlock}
-      <div class="rpf-success-copy">We're so excited to have you joining us for ${showName}.<br><br>Your registration is complete, your spot is confirmed, and you're officially part of the show.<br><br>The production team now has everything they need, and we'll be in touch with rehearsal information, important updates, and everything you need to know as we get closer to rehearsals and opening night.</div>
+      <div class="rpf-success-copy">We're so excited to have you joining us for ${showName}.<br><br>Your registration is complete, your spot is confirmed, and you're officially part of the show.</div>
 
       <div class="rpf-success-next">
-        <div class="rpf-success-next-title">What happens next?</div>
-        <div class="rpf-success-check-row">Registration received</div>
-        <div class="rpf-success-check-row">Production team notified</div>
-        <div class="rpf-success-check-row">Confirmation email sent — if you don't see it in the next couple of minutes, please check your junk mail</div>
-        <div class="rpf-success-check-row">Your performer portal information has been sent</div>
+        <div class="rpf-success-next-title">One last thing</div>
+        <div class="rpf-success-body" style="text-align:left;">A confirmation email is on its way with a copy of your registration and your production portal information.<br><br>If you don't see it within the next few minutes, please check your junk or spam folder and mark Build The Show emails as safe so you don't miss important production updates throughout the production.</div>
       </div>
 
       <div class="rpf-success-section-title">Need a copy?</div>
@@ -2765,7 +2769,7 @@
     const regUrl = window.location.href;
     const pdfUrl = _applicant?.custom_answers?.__bts_registration_pdf_url || '';
     const scheduleSummaries = await rpfLoadProductionScheduleSummaries();
-    const paymentSummary = rpfBuildPaymentEmailSummary();
+    const paymentDetails = rpfBuildPaymentEmailDetails();
     const volunteerLink = await rpfLoadVolunteerLink();
     const { data, error } = await sb.functions.invoke('send-email', {
       body: {
@@ -2782,8 +2786,8 @@
           performance_schedule: scheduleSummaries.performance_schedule || '',
           event_schedule: scheduleSummaries.event_schedule || '',
           production_schedule: scheduleSummaries.production_schedule || '',
-          payment_schedule: paymentSummary,
-          payment_information: paymentSummary,
+          payment_schedule: paymentDetails.schedule,
+          payment_information: paymentDetails.information,
           volunteer_link: volunteerLink,
           volunteer_button: rpfEmailButton(volunteerLink, 'View Volunteer Opportunities', '#3f6f47'),
           opening_night: _prod?.end_date ? new Date(`${_prod.end_date}T00:00:00`).toLocaleDateString('en-CA', { month: 'long', day: 'numeric', year: 'numeric' }) : '',
