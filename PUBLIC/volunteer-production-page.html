@@ -3239,19 +3239,21 @@
       const enteredCode = String(code || '').trim();
       if (!enteredCode || !prod?.id) return [];
       const found = new Map();
-      for (const key of PORTAL_PERFORMER_CODE_KEYS) {
-        const { data, error } = await sb.from('audition_applications')
-          .select('*')
-          .eq('production_id', prod.id)
-          .contains('custom_answers', { [key]: enteredCode })
-          .limit(20);
-        if (error) {
-          console.warn('[BTS production portal] performer lookup failed', error);
-          continue;
+      for (const table of ['audition_bookings', 'audition_applications']) {
+        for (const key of PORTAL_PERFORMER_CODE_KEYS) {
+          const { data, error } = await sb.from(table)
+            .select('*')
+            .eq('production_id', prod.id)
+            .contains('custom_answers', { [key]: enteredCode })
+            .limit(20);
+          if (error) {
+            console.warn(`[BTS production portal] performer lookup failed (${table})`, error);
+            continue;
+          }
+          (data || []).forEach(app => {
+            if (portalApplicantMatchesEmail(app, email)) found.set(String(app.id), app);
+          });
         }
-        (data || []).forEach(app => {
-          if (portalApplicantMatchesEmail(app, email)) found.set(String(app.id), app);
-        });
       }
       return [...found.values()];
     }
