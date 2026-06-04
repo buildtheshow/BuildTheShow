@@ -3240,6 +3240,23 @@
       const wanted = normalizePortalEmail(email);
       return !!wanted && applicantEmailCandidates(app).includes(wanted);
     }
+    async function _upgradeBookingToApplication(booking) {
+      // Try booking_id first (exact link), then email ordered by updated_at so we get the most-recently-saved row
+      try {
+        const { data: byBookingId } = await sb.from('audition_applications')
+          .select('*').eq('production_id', prod.id).eq('booking_id', booking.id).order('updated_at', { ascending: false }).limit(1);
+        if (byBookingId?.[0]) return byBookingId[0];
+      } catch (_) {}
+      const bookingEmail = String(booking.email || '').toLowerCase().trim();
+      if (bookingEmail) {
+        try {
+          const { data: byEmail } = await sb.from('audition_applications')
+            .select('*').eq('production_id', prod.id).eq('email', bookingEmail).order('updated_at', { ascending: false }).limit(1);
+          if (byEmail?.[0]) return byEmail[0];
+        } catch (_) {}
+      }
+      return booking;
+    }
     async function findPerformerPortalApplicants(email, code) {
       const enteredCode = String(code || '').trim();
       if (!enteredCode || !prod?.id) return [];
@@ -3257,7 +3274,7 @@
         });
       } catch (_) {}
 
-      // Secondary: audition_bookings portal_code column — immediately upgrade to audition_applications row
+      // Secondary: audition_bookings portal_code column — upgrade to audition_applications row
       if (!found.size) {
         try {
           const { data } = await sb.from('audition_bookings')
@@ -3267,16 +3284,7 @@
             .limit(20);
           const matched = (data || []).filter(app => portalApplicantMatchesEmail(app, email));
           for (const booking of matched) {
-            const bookingEmail = String(booking.email || '').toLowerCase().trim();
-            let upgraded = null;
-            if (bookingEmail) {
-              try {
-                const { data: appRows } = await sb.from('audition_applications')
-                  .select('*').eq('production_id', prod.id).eq('email', bookingEmail).limit(1);
-                upgraded = appRows?.[0] || null;
-              } catch (_) {}
-            }
-            const row = upgraded || booking;
+            const row = await _upgradeBookingToApplication(booking);
             found.set(String(row.id), row);
           }
         } catch (_) {}
@@ -3293,16 +3301,7 @@
           if (error) continue;
           const matched = (data || []).filter(app => portalApplicantMatchesEmail(app, email));
           for (const booking of matched) {
-            const bookingEmail = String(booking.email || '').toLowerCase().trim();
-            let upgraded = null;
-            if (bookingEmail) {
-              try {
-                const { data: appRows } = await sb.from('audition_applications')
-                  .select('*').eq('production_id', prod.id).eq('email', bookingEmail).limit(1);
-                upgraded = appRows?.[0] || null;
-              } catch (_) {}
-            }
-            const row = upgraded || booking;
+            const row = await _upgradeBookingToApplication(booking);
             found.set(String(row.id), row);
           }
         }
