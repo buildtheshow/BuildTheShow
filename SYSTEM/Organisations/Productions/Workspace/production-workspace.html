@@ -6746,7 +6746,10 @@
     .fc .fc-event-main { padding: 3px 5px !important; width: 100%; display: flex; align-items: center; justify-content: center; }
     .zeus-event-time  { font-size: 0.67rem; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: clip; }
     .zeus-event-label { font-size: 0.7rem;  font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: clip; }
-    /* Deadline badge — floats in the day cell so out-of-month dates do not fade it */
+    .fc-event-deadline { padding: 0 !important; border-radius: 0 !important; border: none !important; box-shadow: none !important; }
+    .fc-event-deadline .fc-event-main { padding: 0 !important; }
+    .zeus-deadline-bar { height: 13px; display: flex; align-items: center; padding: 0 5px; font-size: 7.5px; font-weight: 800; letter-spacing: 0.02em; color: #fff; overflow: hidden; white-space: nowrap; cursor: pointer; width: 100%; }
+    .zeus-deadline-bar span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .fc .fc-now-indicator-line { border-color: #e53935; }
     .fc .fc-scrollgrid { border-color: #e8e4f0; }
     .fc td, .fc th { border-color: #e8e4f0 !important; }
@@ -35307,6 +35310,10 @@ See you soon!
             const ap = hRaw >= 12 ? 'pm' : 'am';
             return `${hRaw % 12 || 12}:${String(mRaw).padStart(2,'0')}${ap}`;
           };
+          if (ev.extendedProps.is_deadline) {
+            const safeTxt = s => String(s||'').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+            return { html: `<div class="zeus-deadline-bar"><span>${safeTxt(ev.title || 'Deadline')}</span></div>` };
+          }
           let timeStr = '';
           if (!ev.allDay && ev.start) {
             const startTime = timeFromValue(ev.extendedProps.raw_start_time || ev.start);
@@ -35329,6 +35336,16 @@ See you soon!
         }
       },
       eventDidMount(info) {
+        if (info.event.extendedProps.is_deadline) {
+          // Move the event harness to the bottom of its day frame so it pins to the cell bottom
+          const harness = info.el.closest('.fc-daygrid-event-harness');
+          const dayFrame = info.el.closest('.fc-daygrid-day-frame');
+          if (harness && dayFrame) {
+            harness.style.cssText = 'position:absolute;bottom:0;left:0;right:0;top:auto;z-index:4;';
+            dayFrame.appendChild(harness);
+          }
+          return;
+        }
         ['.zeus-event-time', '.zeus-event-label'].forEach(sel => {
           const node = info.el.querySelector(sel);
           if (!node) return;
@@ -35449,6 +35466,9 @@ See you soon!
         raw_end_time: e.end_time || null,
       },
     };
+    if (isDeadline) {
+      return { ...base, start: stripTz(e.start_time), allDay: true, classNames: ['fc-event-deadline'] };
+    }
     return { ...base, start: stripTz(e.start_time), end: stripTz(e.end_time), allDay: e.all_day || false, classNames: [] };
   }
 
