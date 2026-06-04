@@ -1415,8 +1415,11 @@
     .vpd-shift-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 0.55rem; }
     .vpd-shift-role { font-size: 0.96rem; font-weight: 950; color: var(--ink); line-height: 1.08; }
     .vpd-shift-dept { font-size: 0.58rem; font-weight: 950; letter-spacing: 0.08em; line-height: 1.15; margin-bottom: 0.22rem; text-transform: uppercase; }
+    .vpd-shift-people { margin-top: 0.2rem; color: var(--muted); font-size: 0.72rem; font-weight: 850; line-height: 1.25; }
+    .vpd-shift-people strong { color: var(--purple); font-weight: 950; }
     .vpd-shift-item.compact .vpd-shift-role { font-size: 0.88rem; }
     .vpd-shift-item.compact .vpd-shift-dept { font-size: 0.52rem; margin-bottom: 0.16rem; }
+    .vpd-shift-item.compact .vpd-shift-people { font-size: 0.66rem; margin-top: 0.14rem; }
     .vpd-shift-time {
       display: flex;
       align-items: flex-start;
@@ -3064,6 +3067,19 @@
     function dashboardShiftWhoText(row = {}) {
       return row.check_in_with || row.checkInWith || row.volunteer_point_person || 'Production team';
     }
+    function portalRowPeopleText(row = {}, options = {}) {
+      if (Array.isArray(row.people) && row.people.length) return row.people.filter(Boolean).join(', ');
+      if (row.payment_for) return row.payment_for;
+      if (row.person_name) return row.person_name;
+      if (row.department === 'Payment / Deadline') return row.payment_for || '';
+      const volunteerName = volunteerDisplayName(row, options.email || currentPortalData?.email || '');
+      return volunteerName && volunteerName !== 'Volunteer' ? volunteerName : '';
+    }
+    function portalRowPeopleLabel(row = {}) {
+      if (row.department === 'Payment / Deadline' || row.payment_for) return 'For';
+      if (Array.isArray(row.people) && row.people.length) return 'For';
+      return 'Volunteer';
+    }
     function dashboardShiftHours(row = {}) {
       const approved = parseFloat(row.approved_hours);
       if (approved > 0) return approved;
@@ -3192,6 +3208,8 @@
       const roleName = row.role_name || row.volunteer_role || 'Volunteer Shift';
       const roleSvg = roleIcon(roleName, row.department);
       const compact = !!options.compact;
+      const peopleText = portalRowPeopleText(row, options);
+      const peopleLabel = portalRowPeopleLabel(row);
       return `<article class="vpd-shift-item${compact ? ' compact' : ''}" style="border-left:4px solid ${deptCol};">
         ${dashboardShiftDateBadgeHtml(row, deptCol, options)}
         <div class="vpd-shift-time" style="color:${deptCol};">
@@ -3207,6 +3225,7 @@
           <div class="vpd-shift-main">
             ${row.department ? `<div class="vpd-shift-dept" style="color:${deptCol};">${esc(row.department)}</div>` : ''}
             <div class="vpd-shift-role">${esc(roleName)}</div>
+            ${peopleText ? `<div class="vpd-shift-people"><strong>${esc(peopleLabel)}:</strong> ${esc(peopleText)}</div>` : ''}
             ${row.payment_amount ? `<div class="vpd-shift-time-detail">${esc(row.payment_amount)}${row.payment_for ? ` · ${esc(row.payment_for)}` : ''}</div>` : ''}
           </div>
         </div>
@@ -3573,6 +3592,16 @@
         .filter(ev => ev?.start_time)
         .filter(ev => ev.show_in_cast_schedule === true)
         .sort((a, b) => new Date(a.start_time) - new Date(b.start_time));
+    }
+    function portalEventPeople(ev = {}, performers = []) {
+      const names = [...new Set((performers || []).map(performerDisplayName).filter(Boolean))];
+      if (!names.length) return [];
+      const text = portalEventText(ev);
+      const matched = (performers || []).filter(performer => {
+        const bits = [performerDisplayName(performer), ...performerRoleNames(performer)].filter(Boolean);
+        return bits.some(bit => portalTextHasKeyword(text, bit));
+      }).map(performerDisplayName).filter(Boolean);
+      return [...new Set(matched.length ? matched : names)];
     }
     function upcomingRows(rows = []) {
       const today = new Date(); today.setHours(0,0,0,0);
@@ -4559,6 +4588,7 @@
         department: /performance|show|preview/i.test(`${ev.event_type || ''} ${ev.title || ''}`) ? 'Performance' : 'Rehearsal',
         venue: ev.venue || 'TBD',
         check_in_with: 'Production team',
+        people: portalEventPeople(ev, performers),
       }));
       const paymentRows = performers.flatMap(performer => {
         const pay = performerPaymentSummary(performer);
@@ -4574,6 +4604,7 @@
             venue: '',
             check_in_with: '',
             payment_for: performerDisplayName(performer),
+            people: [performerDisplayName(performer)],
             payment_amount: moneyLabel(inst.amount),
           };
         }).filter(Boolean);
@@ -4585,7 +4616,7 @@
         ...volunteerStats.pending,
       ]);
       return `<div class="vpd-overview-breakdown">
-        ${dashboardSectionHtml('Chronological Schedule', 'Everything connected to this portal, sorted by date and time.', chronologicalRows, { compact: true, hideYear: true })}
+        ${dashboardSectionHtml('Chronological Schedule', 'Everything connected to this portal, sorted by date and time.', chronologicalRows, { compact: true, hideYear: true, email: portalData.email })}
       </div>`;
     }
 
