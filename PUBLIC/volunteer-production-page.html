@@ -952,7 +952,7 @@
     .vpd-detail-note { background: #f7f5fc; border: 1px solid #e7dff0; border-radius: 8px; padding: 0.78rem 0.85rem; }
     .vpd-detail-note-title { font-size: 0.62rem; font-weight: 950; text-transform: uppercase; letter-spacing: 0.09em; color: rgba(87,46,136,0.62); margin-bottom: 0.2rem; }
     .vpd-detail-note-body { font-size: 0.82rem; font-weight: 750; color: var(--ink); line-height: 1.42; white-space: pre-wrap; }
-    .vpd-detail-actions { display: flex; justify-content: flex-end; gap: 0.65rem; padding-top: 1rem; }
+    .vpd-detail-actions { display: flex; justify-content: flex-end; align-items: center; gap: 0.65rem; padding-top: 1rem; }
     .vpd-detail-btn { border: 2px solid var(--purple); border-radius: 8px; background: var(--purple); color: #fff; font-family: var(--bts-font); font-size: 0.82rem; font-weight: 950; padding: 0.55rem 0.9rem; cursor: pointer; }
     .vpd-detail-btn.secondary { background: #fff; color: var(--purple); }
     .vp-submit-review { display: flex; flex-direction: column; gap: 0.55rem; margin-bottom: 0.5rem; }
@@ -1473,7 +1473,7 @@
     .vpd-detail-date { color:var(--purple); font-size:0.65rem; font-weight:950; text-transform:uppercase; letter-spacing:0.06em; }
     .vpd-detail-title { color:var(--ink); font-size:0.98rem; font-weight:950; line-height:1.12; }
     .vpd-detail-meta { color:var(--muted); font-size:0.76rem; font-weight:750; line-height:1.35; margin-top:0.16rem; }
-    .vpd-detail-body { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:0.65rem; padding:0 0.78rem 0.78rem; }
+    .vpd-detail-card .vpd-detail-body { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:0.65rem; padding:0 0.78rem 0.78rem; }
     .vpd-detail-bit { border-top:1px solid var(--line); padding-top:0.55rem; }
     .vpd-detail-label { color:var(--purple); font-size:0.6rem; font-weight:950; letter-spacing:0.08em; text-transform:uppercase; }
     .vpd-detail-value { margin-top:0.16rem; color:var(--ink); font-size:0.78rem; font-weight:800; line-height:1.35; overflow-wrap:anywhere; }
@@ -4044,9 +4044,19 @@
     }
 
     function portalItemKind(item = {}) {
-      const text = `${item.type || ''} ${item.title || ''}`.toLowerCase();
-      if (item.type === 'volunteer' || /volunteer|usher|builder|wrangler|front of house|set painter/.test(text)) return 'volunteer';
+      if (item.type === 'volunteer') return 'volunteer';
+      if (item.type === 'deadline') return 'deadline';
+      // For performer events, classify by title
+      if (item.type === 'performer') {
+        const title = (item.title || '').toLowerCase();
+        if (/performance|preview|show/.test(title)) return 'performance';
+        if (/rehearsal|dance|music|run thru|cast/.test(title)) return 'rehearsal';
+        return 'other';
+      }
+      // Fallback text detection for unknown types
+      const text = `${item.title || ''}`.toLowerCase();
       if (/payment|deadline|due|form|registration|media release/.test(text)) return 'deadline';
+      if (/volunteer|usher|builder|wrangler|front of house|set painter/.test(text)) return 'volunteer';
       if (/performance|preview|show/.test(text)) return 'performance';
       if (/rehearsal|dance|music|run thru|cast/.test(text)) return 'rehearsal';
       return 'other';
@@ -4967,7 +4977,7 @@
           sb.from('productions').select('volunteer_staffing_plan').eq('id', prod.id).single(),
           sb.from('production_events').select('id,event_type,title,start_time,end_time,venue,arrive_note,bring_note,know_note,show_in_cast_schedule').eq('production_id', prod.id).order('start_time', { ascending: true }),
           sb.from('volunteer_signups').select('role_name,shift_date,status').eq('production_id', prod.id).in('status', ['pending','approved','partially_filled']),
-          sb.from('production_team_members').select('name,email,phone,role,access_level,is_active').eq('production_id', prod.id).eq('is_active', true)
+          sb.rpc('public_production_contact', { p_production_id: prod.id })
         ]);
         if (planResult.error) throw planResult.error;
         productionContacts = contactResult.error ? [] : (contactResult.data || []);
