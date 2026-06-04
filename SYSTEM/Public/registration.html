@@ -2725,14 +2725,7 @@
     if (!body) return;
     const showName = esc(_prod?.title || 'the production');
     const portalCode = await rpfEnsurePortalCode();
-    const portalUrl = (() => {
-      try {
-        const slug = _prod?.slug || '';
-        const org = String(window.location.pathname.split('/')[1] || '');
-        if (org && slug) return `${window.location.origin}/${org}/${slug}/volunteers?view=portal`;
-        return '';
-      } catch (_) { return ''; }
-    })();
+    const portalUrl = rpfPortalUrl();
     const portalBlock = portalUrl ? `
       <div class="rpf-success-card" style="background:#f0f4ff;border-color:#c5d0ea;margin-bottom:1rem;">
         <div class="rpf-success-title" style="color:#572e88;">Your production portal</div>
@@ -2764,6 +2757,15 @@
   }
 
   // ── Resend confirmation email ─────────────────────────────────────────────────
+  function rpfPortalUrl() {
+    try {
+      const slug = _prod?.slug || '';
+      const org = String(window.location.pathname.split('/')[1] || '');
+      if (org && slug) return `${window.location.origin}/${org}/${slug}/volunteers?view=portal`;
+    } catch (_) {}
+    return '';
+  }
+
   async function rpfSendRegistrationCompleteEmail() {
     if (!_applicant?.id || !_resolvedProductionId) throw new Error('Missing registration email context.');
     const regUrl = window.location.href;
@@ -2771,6 +2773,8 @@
     const scheduleSummaries = await rpfLoadProductionScheduleSummaries();
     const paymentDetails = rpfBuildPaymentEmailDetails();
     const volunteerLink = await rpfLoadVolunteerLink();
+    const portalUrl = rpfPortalUrl();
+    const portalCode = String(_applicant?.custom_answers?.['__bts_portal_code'] || '').trim();
     const { data, error } = await sb.functions.invoke('send-email', {
       body: {
         applicant_id: _applicant.id,
@@ -2790,6 +2794,9 @@
           payment_information: paymentDetails.information,
           volunteer_link: volunteerLink,
           volunteer_button: rpfEmailButton(volunteerLink, 'View Volunteer Opportunities', '#3f6f47'),
+          volunteer_portal_url: portalUrl,
+          volunteer_portal_button: portalUrl ? rpfEmailButton(portalUrl, 'Open Production Portal') : '',
+          volunteer_passcode: portalCode,
           opening_night: _prod?.end_date ? new Date(`${_prod.end_date}T00:00:00`).toLocaleDateString('en-CA', { month: 'long', day: 'numeric', year: 'numeric' }) : '',
         },
       },
