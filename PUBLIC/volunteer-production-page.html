@@ -6655,6 +6655,50 @@
         + '</div>'
       + '</div>';
     }
+    function submitGroupsHtml() {
+      const groups = [];
+      const byKey = new Map();
+      schedule.forEach(opp => {
+        const key = cartGroupKey(opp);
+        if (!byKey.has(key)) {
+          const group = { key, role: opp.volunteer_role || 'Volunteer Shift', department: opp.department || '', checkIn: opp.check_in_with || '', outside: !!opp.has_outside_work, items: [] };
+          byKey.set(key, group);
+          groups.push(group);
+        }
+        byKey.get(key).items.push(opp);
+      });
+      return groups.map(group => {
+        const first = group.items[0] || {};
+        const color = iconColor(first), isGold = color === '#efab45';
+        const totalHours = group.items.reduce((sum, item) => sum + scheduleHours(item), 0);
+        const count = group.items.length;
+        const noSetHours = group.items.some(item => item.is_full_discount && scheduleHours(item) <= 0);
+        return '<div class="vp-submit-shift-card">'
+          + '<div class="vp-submit-shift-head" style="background:' + color + ';color:' + (isGold?'var(--ink)':'#fff') + ';">'
+            + '<span>' + roleIcon(first.volunteer_role, first.department) + '</span>'
+            + '<div>'
+              + (group.department ? '<div class="vp-submit-shift-dept">' + esc(group.department) + '</div>' : '')
+              + '<div class="vp-submit-shift-role">' + esc(group.role) + '</div>'
+            + '</div>'
+          + '</div>'
+          + '<div class="vp-submit-shift-body">'
+            + (first.description ? '<p class="vp-submit-shift-desc">' + esc(first.description) + '</p>' : '')
+            + '<div class="vp-submit-shift-facts">'
+              + '<div class="vp-submit-shift-fact">' + count + ' selected shift' + (count === 1 ? '' : 's') + '</div>'
+              + (totalHours ? '<div class="vp-submit-shift-fact">' + formatHours(totalHours) + ' scheduled hour' + (Number(totalHours) === 1 ? '' : 's') + '</div>' : (noSetHours ? '<div class="vp-submit-shift-fact" style="font-style:italic;">No set hour count.</div>' : ''))
+              + (group.checkIn ? '<div class="vp-submit-shift-fact">Check in with: <strong>' + esc(group.checkIn) + '</strong></div>' : '')
+            + '</div>'
+            + (group.outside ? '<div class="vp-submit-outside-note">This role also includes work outside these dates.</div>' : '')
+            + '<div class="vp-submit-date-list">'
+              + group.items.map(item => {
+                const labelParts = cartShiftLabel(item).split(' · ');
+                return '<div class="vp-submit-date-chip"><strong>' + esc(labelParts[0] || 'Flexible') + '</strong>' + (labelParts.length > 1 ? '<span>' + esc(labelParts.slice(1).join(' · ')) + '</span>' : '') + '</div>';
+              }).join('')
+            + '</div>'
+          + '</div>'
+        + '</div>';
+      }).join('');
+    }
     function openSubmitModal() {
       if (!schedule.length) return;
       const modal = document.getElementById('vp-modal');
@@ -6663,7 +6707,7 @@
         <div class="vp-modal-head"><div class="vp-modal-title">Request Volunteer Hours</div><button class="vp-modal-close" type="button" onclick="closeModal()">&times;</button></div>
         <div class="vp-modal-body">
           <div class="vp-submit-col-shifts">
-            <div class="vp-submit-review">${schedule.map(submitItemHtml).join('')}</div>
+            <div class="vp-submit-review">${submitGroupsHtml()}</div>
             ${discountRequested ? `<div class="vp-cart-empty" style="margin-bottom:0.5rem;text-align:left;">Volunteer discount requested${discountPerformer.trim() ? ` for <strong>${esc(discountPerformer.trim())}</strong>` : ''}.</div>` : ''}
           </div>
           <div class="vp-submit-col-form">
