@@ -3320,16 +3320,15 @@
 
       // Bookings get promoted to audition_applications — find those IDs via three strategies
       let promotedIds = [...bookingIds];
-      let appHeadshotUrl = '';
       const _addAppIds = ids => { promotedIds = [...new Set([...promotedIds, ...ids.filter(Boolean)])]; };
 
       // 1. booking_id column on audition_applications
       try {
         const { data } = await sb.from('audition_applications')
-          .select('id,headshot_url')
+          .select('id')
           .eq('production_id', prod.id)
           .in('booking_id', bookingIds);
-        if (data?.length) { _addAppIds(data.map(r => r.id)); data.forEach(r => { if (r.headshot_url) appHeadshotUrl = r.headshot_url; }); }
+        if (data?.length) _addAppIds(data.map(r => r.id));
       } catch (_) {}
 
       // 2. Portal code — same code stored in custom_answers at registration complete
@@ -3340,10 +3339,10 @@
       for (const code of portalCodes) {
         try {
           const { data } = await sb.from('audition_applications')
-            .select('id,headshot_url')
+            .select('id')
             .eq('production_id', prod.id)
             .filter('custom_answers->>__bts_portal_code', 'eq', code);
-          if (data?.length) { _addAppIds(data.map(r => r.id)); data.forEach(r => { if (r.headshot_url) appHeadshotUrl = r.headshot_url; }); }
+          if (data?.length) _addAppIds(data.map(r => r.id));
         } catch (_) {}
       }
 
@@ -3352,10 +3351,10 @@
       if (emails.length) {
         try {
           const { data } = await sb.from('audition_applications')
-            .select('id,headshot_url')
+            .select('id')
             .eq('production_id', prod.id)
             .in('email', emails);
-          if (data?.length) { _addAppIds(data.map(r => r.id)); data.forEach(r => { if (r.headshot_url) appHeadshotUrl = r.headshot_url; }); }
+          if (data?.length) _addAppIds(data.map(r => r.id));
         } catch (_) {}
       }
 
@@ -3405,7 +3404,7 @@
         const roles = rows.map(row => row.character_id ? (charMap.get(String(row.character_id)) || '') : 'Ensemble').filter(Boolean);
         const fallbackRoles = String(ca.__bts_cast_offer_role_names || ca.Role || ca.role_name || '').split(',').map(s => s.trim()).filter(Boolean);
         return {
-          app: appHeadshotUrl ? { ...app, headshot_url: appHeadshotUrl } : app,
+          app,
           assignments: rows.map(row => ({ ...row, role_name: row.character_id ? (charMap.get(String(row.character_id)) || '') : 'Ensemble', payment_records: paymentMap.get(String(row.id)) || [] })),
           roles: [...new Set(roles.length ? roles : fallbackRoles)],
         };
