@@ -4275,22 +4275,32 @@
     }
 
     function portalPaymentCalendarItems(performers = []) {
-      return performers.flatMap(performer => {
+      // Build per-instalment items then group by date+label so household performers share one calendar event
+      const raw = performers.flatMap(performer => {
         const pay = performerPaymentSummary(performer);
         return (pay.installments || []).map((inst, index) => {
           const paid = (pay.records || []).some(row => row.installment_index === index && row.paid);
           if (paid || !inst.dueDate) return null;
-          return {
-            type: 'deadline',
-            date: inst.dueDate,
-            title: `${inst.label} Due`,
-            time: moneyLabel(inst.amount),
-            place: performerDisplayName(performer),
-            color: portalKindColor('deadline'),
-            source: { performer, installment: inst, installmentIndex: index, payment: pay },
-          };
+          return { date: inst.dueDate, label: inst.label || 'Payment', amount: Number(inst.amount || 0), performer, inst, index, pay };
         }).filter(Boolean);
       });
+      const grouped = new Map();
+      raw.forEach(item => {
+        const k = item.date + '|' + item.label;
+        if (!grouped.has(k)) grouped.set(k, { ...item, totalAmount: 0, performers: [] });
+        const g = grouped.get(k);
+        g.totalAmount += item.amount;
+        g.performers.push(item.performer);
+      });
+      return [...grouped.values()].map(g => ({
+        type: 'deadline',
+        date: g.date,
+        title: `${g.label} Due`,
+        time: moneyLabel(g.totalAmount),
+        place: g.performers.map(p => performerDisplayName(p)).join(', '),
+        color: portalKindColor('deadline'),
+        source: { performer: g.performer, installment: g.inst, installmentIndex: g.index, payment: g.pay },
+      }));
     }
 
     function portalActionItemsHtml(portalData, performers, volunteerStats) {
