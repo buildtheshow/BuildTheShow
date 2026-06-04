@@ -51,6 +51,21 @@
       background: var(--purple);
       display: flex; align-items: center; justify-content: center;
       color: #fff; font-size: 1.4rem; font-weight: 900;
+      overflow: hidden;
+    }
+    .loading-logo.has-org-logo {
+      width: 84px;
+      height: 84px;
+      border-radius: 18px;
+      background: #fff;
+      padding: 0.65rem;
+      box-shadow: 0 10px 28px rgba(26,21,48,0.08);
+    }
+    .loading-logo.has-org-logo img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      display: block;
     }
     .loading-title { font-size: 1rem; font-weight: 700; color: var(--purple); }
     .loading-copy  { font-size: 0.82rem; color: var(--muted); max-width: 280px; line-height: 1.5; }
@@ -293,6 +308,9 @@
     .rpf-input:not(.rpf-prefilled):not(:focus) { border-color: #ddd8e8; }
     textarea.rpf-input { resize: vertical; min-height: 80px; }
     .rpf-age-note { margin-top: 0.38rem; font-size: 0.72rem; font-weight: 800; color: var(--purple); }
+    .rpf-input.rpf-input-error, input.rpf-input-error, select.rpf-input-error, textarea.rpf-input-error { border-color: #d1523d !important; background: #fff5f4 !important; }
+    .rpf-field-error { color: #d1523d; font-size: 0.75rem; font-weight: 700; margin-top: 0.35rem; }
+    .rpf-agree-row:has(input.rpf-input-error) { color: #d1523d; }
 
     /* ── Agree row / checkboxes ── */
     .rpf-agree-row {
@@ -570,6 +588,16 @@
       letter-spacing: 0.04em;
     }
     .rpf-success-actions { display: flex; justify-content: center; margin-top: 1.4rem; }
+    .rpf-success-signoff { margin-top: 2rem; font-size: 0.82rem; color: var(--muted); line-height: 1.7; }
+    .rpf-success-signoff strong { color: var(--ink); font-weight: 800; }
+    .rpf-success-next { text-align: left; max-width: 420px; margin: 1.5rem auto 0; }
+    .rpf-success-next-title { font-size: 0.72rem; font-weight: 900; text-transform: uppercase; letter-spacing: 0.1em; color: var(--purple); margin-bottom: 0.6rem; }
+    .rpf-success-check-row { display: flex; align-items: flex-start; gap: 0.55rem; font-size: 0.84rem; color: var(--muted); line-height: 1.5; padding: 0.2rem 0; }
+    .rpf-success-check-row::before { content: '✓'; color: var(--green); font-weight: 900; flex-shrink: 0; }
+    .rpf-success-section-title { font-size: 0.95rem; font-weight: 900; color: var(--ink); margin: 1.5rem 0 0.35rem; text-align: center; }
+    .rpf-success-closing { margin-top: 1.75rem; font-size: 0.84rem; color: var(--muted); line-height: 1.6; max-width: 400px; margin-left: auto; margin-right: auto; }
+    .rpf-resend-link { display: inline-block; margin-top: 0.6rem; font-size: 0.75rem; color: rgba(87,46,136,0.55); text-decoration: underline; cursor: pointer; background: none; border: none; padding: 0; font-family: inherit; }
+    .rpf-resend-link:hover { color: var(--purple); }
     .rpf-download-answers-btn {
       border: none;
       border-radius: 999px;
@@ -620,7 +648,6 @@
   <!-- Save indicator -->
   <div class="rpf-save-indicator" id="rpf-save-indicator">Saved</div>
 
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
   <script src="/ASSETS/scripts/casting-card.js?v=in-show-card-20260527"></script>
   <script>
   'use strict';
@@ -635,24 +662,34 @@
   const _applicantId = _hashParams.get('app') || new URLSearchParams(window.location.search).get('app') || '';
   const _productionId = _hashParams.get('prod') || new URLSearchParams(window.location.search).get('prod') || '';
   const _pdfMode = _hashParams.get('pdf') === '1' || new URLSearchParams(window.location.search).get('pdf') === '1';
+  const _sampleMode = _hashParams.get('sample') === '1' || new URLSearchParams(window.location.search).get('sample') === '1';
+  const _downloadMode = _hashParams.get('download') === '1' || new URLSearchParams(window.location.search).get('download') === '1';
 
   // ── Supabase ─────────────────────────────────────────────────────────────────
-  const SUPABASE_URL      = 'https://cpvtmxnqnlzkmrgivvoe.supabase.co';
-  const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNwdnRteG5xbmx6a21yZ2l2dm9lIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MDI1OTgxNDQsImV4cCI6MjAxODE3NDE0NH0.f__kDFSGY2BFbhGnRbBjJCJc7RlGMmyKPYdHUhklOAk';
-  const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  let sb = null;
+  async function ensureSupabaseClient() {
+    if (sb) return sb;
+    const mod = await import('/ASSETS/scripts/supabase.js');
+    sb = mod.supabase;
+    return sb;
+  }
 
   // ── Global state ──────────────────────────────────────────────────────────────
   let _offer      = null;
   let _prod       = null;
   let _org        = null;
   let _applicant  = null;
+  let _booking    = null;
+  let _resolvedProductionId = _productionId || '';
   let _prefill    = null;
+  let _registrationRoleNames = [];
   let _regSettings = {};
   let _formTemplates = {};
   let _rpfSections = [];
   let _rpfCurrent  = 0;
   let _rpfCompleted = new Set();
   let _saveTimer   = null;
+  let _rehearsalStartDate = '';
   const CAST_OFFER_KEYS = {
     code: '__bts_cast_offer_code',
     token: '__bts_cast_offer_token',
@@ -661,6 +698,19 @@
   // ── Utilities ────────────────────────────────────────────────────────────────
   function esc(str) {
     return String(str ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+  }
+
+  function updateLoadingOrganisationLogo(org = null) {
+    const logo = document.getElementById('loading-logo');
+    if (!logo) return;
+    const logoUrl = org?.logo_url || '';
+    if (logoUrl) {
+      logo.classList.add('has-org-logo');
+      logo.innerHTML = `<img src="${esc(logoUrl)}" alt="${esc(org?.name || org?.abbreviation || 'Organisation')}" />`;
+      return;
+    }
+    logo.classList.remove('has-org-logo');
+    logo.textContent = (org?.abbreviation || org?.name || 'B').trim().slice(0, 1).toUpperCase() || 'B';
   }
 
   function showError(title, copy) {
@@ -693,7 +743,7 @@
     { key: 'physical_activity_waiver', group: 'Agreements & Consent', color: '#d1523d', defaultOn: false, title: 'Special Performance Acknowledgement', defaultFields: ['{physical-performance}'] },
     { key: 'costume_measurements', group: 'Costumes',            color: '#ca7ea7', defaultOn: true,  title: 'Costume Measurements',                  defaultFields: ['{costume-measurements}'] },
     { key: 'hair_makeup',          group: 'Costumes',            color: '#ca7ea7', defaultOn: true,  title: 'Hair & Makeup',                         defaultFields: ['Skin allergies or sensitivities', 'Makeup sensitivities', 'Wig considerations', 'Other notes for hair and makeup'] },
-    { key: 'programme_credit',     group: 'Programme',           color: '#78bbd4', defaultOn: true,  title: 'Programme Credit',                      defaultFields: ['Name as it should appear in the programme *'] },
+    { key: 'programme_credit',     group: 'Programme',           color: '#78bbd4', defaultOn: true,  title: 'Programme Credit',                      defaultFields: ['Exact first and last name *'] },
     { key: 'cast_bio',             group: 'Programme',           color: '#78bbd4', defaultOn: true,  title: 'Cast Bio',                              defaultFields: ['Programme bio (50 words or less) *', 'Previous credits', 'Fun fact'] },
     { key: 'headshot',             group: 'Programme',           color: '#78bbd4', defaultOn: true,  title: 'Headshot Submission',                   defaultFields: ['Headshot upload *'] },
     { key: 'production_fee',       group: 'Production Fees',     color: '#769e7b', defaultOn: false, title: 'Production Fees',                       defaultFields: ['{production-fee}'] },
@@ -721,7 +771,7 @@
       '{{org_name}}':          _org?.name || _org?.abbreviation || '',
       '{{show_name}}':         _prod?.title || '',
       '{{show_venue}}':        _prod?.venue || '',
-      '{{rehearsal_start_date}}': _prod?.start_date ? new Date(_prod.start_date + 'T00:00:00').toLocaleDateString('en-CA', { month: 'long', day: 'numeric', year: 'numeric' }) : '',
+      '{{rehearsal_start_date}}': rpfRehearsalStartDateLabel(),
       '{{rehearsal_end_date}}':   _prod?.end_date   ? new Date(_prod.end_date   + 'T00:00:00').toLocaleDateString('en-CA', { month: 'long', day: 'numeric', year: 'numeric' }) : '',
       '{{performer_name}}':  perfName,
       '{{child_name}}':      perfName,
@@ -737,6 +787,228 @@
       .replace(/\{\{[^}]+\}\}/g, t => map[t] ?? t)
       .replace(/<p>\s*<br\s*\/?>\s*<\/p>/gi, '')
       .replace(/<p>\s*&nbsp;\s*<\/p>/gi, '');
+  }
+
+  function rpfDateLabel(raw) {
+    const value = String(raw || '').trim();
+    if (!value) return '';
+    const date = new Date(`${value.slice(0, 10)}T00:00:00`);
+    if (Number.isNaN(date.getTime())) return value;
+    return date.toLocaleDateString('en-CA', { month: 'long', day: 'numeric', year: 'numeric' });
+  }
+
+  function rpfRehearsalStartDateFallback() {
+    return _regSettings?.first_rehearsal || _regSettings?.rehearsal_start_date || _regSettings?.rehearsal_start || _prod?.rehearsal_start_date || _prod?.rehearsal_start || '';
+  }
+
+  function rpfRehearsalStartDateLabel() {
+    return rpfDateLabel(_rehearsalStartDate || rpfRehearsalStartDateFallback());
+  }
+
+  async function rpfLoadRehearsalStartDate() {
+    if (!_resolvedProductionId) return '';
+    try {
+      const { data, error } = await sb.from('production_events')
+        .select('start_time,event_type')
+        .eq('production_id', _resolvedProductionId)
+        .or('event_type.ilike.rehearsal,event_type.ilike.music_rehearsal,event_type.ilike.choreography')
+        .order('start_time', { ascending: true })
+        .limit(1);
+      if (error) throw error;
+      _rehearsalStartDate = data?.[0]?.start_time ? String(data[0].start_time).slice(0, 10) : '';
+      return _rehearsalStartDate;
+    } catch (error) {
+      console.warn('[BTS] Could not load rehearsal start date from calendar.', error);
+      _rehearsalStartDate = '';
+      return '';
+    }
+  }
+
+  const RPF_EVENT_LABELS = {
+    rehearsal: 'Rehearsal',
+    music_rehearsal: 'Music Rehearsal',
+    choreography: 'Choreography',
+    tech: 'Tech',
+    dress: 'Dress Rehearsal',
+    performance: 'Performance',
+    strike: 'Strike',
+    cast_party: 'Cast Party',
+    costume_moveout: 'Costume Move-Out',
+    audition: 'Audition',
+    dance_call: 'Dance Call',
+    callback: 'Callback',
+    other_audition: 'Other Audition',
+    event: 'Event',
+    meeting: 'Meeting',
+    deadline: 'Deadline',
+  };
+
+  function rpfTimeLabel(raw) {
+    const value = String(raw || '').slice(11, 16);
+    if (!value) return '';
+    const [hh, mm] = value.split(':').map(Number);
+    if (Number.isNaN(hh) || Number.isNaN(mm)) return value;
+    const hour12 = ((hh + 11) % 12) + 1;
+    return `${hour12}:${String(mm).padStart(2, '0')} ${hh >= 12 ? 'PM' : 'AM'}`;
+  }
+
+  function rpfFormatScheduleEvent(row) {
+    if (!row?.start_time) return row?.title || RPF_EVENT_LABELS[row?.event_type] || 'Event';
+    const typeLabel = RPF_EVENT_LABELS[row.event_type] || row.event_type || 'Event';
+    const date = rpfDateLabel(String(row.start_time).slice(0, 10));
+    const time = rpfTimeLabel(row.start_time);
+    const venue = row.venue ? ` at ${row.venue}` : '';
+    return `${row.title || typeLabel}: ${[date, time].filter(Boolean).join(' at ')}${venue}`;
+  }
+
+  function rpfBuildEventScheduleHtml(rows) {
+    if (!rows.length) return '';
+    const fmtT = t => t ? rpfTimeLabel(t) : '';
+    const sorted = [...rows].sort((a, b) => String(a.start_time || '').localeCompare(String(b.start_time || '')));
+    return sorted.map(row => {
+      const iso      = String(row.start_time || '').slice(0, 10);
+      const d        = new Date(iso + 'T12:00:00');
+      const dayFirst = isNaN(d) ? iso : `${d.getDate()} ${d.toLocaleDateString('en-CA', { month: 'long' }).toUpperCase()}, ${d.getFullYear()}`;
+      const weekday  = !isNaN(d) ? d.toLocaleDateString('en-CA', { weekday: 'long' }) : '';
+      const start    = fmtT(row.start_time);
+      const end      = fmtT(row.end_time);
+      const tRange   = start ? `(${end && end !== start ? start + ' – ' + end : start})` : '';
+      const line1    = `<strong>${dayFirst}</strong> | <em>${[weekday, tRange].filter(Boolean).join(' ')}</em>`;
+      const type     = `<strong>${row.title || RPF_EVENT_LABELS[row.event_type] || 'Event'}</strong>`;
+      const location = row.venue ? ` | Location: ${row.venue}` : '';
+      return `<div style="font-size:14px;color:#1a1530;padding:8px 0;border-bottom:1px solid rgba(87,46,136,0.08);">${line1}<br>${type}${location}</div>`;
+    }).join('');
+  }
+
+  async function rpfLoadProductionScheduleSummaries() {
+    if (!_resolvedProductionId) return { performance_schedule: '', event_schedule: '', production_schedule: '' };
+    try {
+      const { data, error } = await sb.from('production_events')
+        .select('title,start_time,end_time,venue,event_type,is_public,show_in_cast_schedule')
+        .eq('production_id', _resolvedProductionId)
+        .order('start_time', { ascending: true });
+      if (error) throw error;
+      const rows = [...(data || [])].sort((a, b) => String(a.start_time || '').localeCompare(String(b.start_time || '')));
+      const performanceRows = rows.filter(row => String(row.event_type || '').toLowerCase() === 'performance' && row.show_in_cast_schedule === true);
+      const eventRows = rows.filter(row => {
+        const type = String(row.event_type || '').toLowerCase();
+        if (['audition','dance_call','callback','other_audition'].includes(type)) return false;
+        return row.show_in_cast_schedule === true;
+      });
+      return {
+        performance_schedule: performanceRows.map(rpfFormatScheduleEvent).filter(Boolean).join('\n'),
+        event_schedule: rpfBuildEventScheduleHtml(eventRows.filter(Boolean)),
+        production_schedule: rows.map(rpfFormatScheduleEvent).filter(Boolean).join('\n'),
+      };
+    } catch (error) {
+      console.warn('[BTS] Could not load production schedule for registration email.', error);
+      return { performance_schedule: '', event_schedule: '', production_schedule: '' };
+    }
+  }
+
+  async function rpfLoadVolunteerLink() {
+    const fallback = `${window.location.origin}/volunteers`;
+    if (!_resolvedProductionId) return fallback;
+    try {
+      const today = new Date().toISOString().slice(0, 10);
+      const { data, error } = await sb.from('opportunities')
+        .select('id,close_date,opportunity_type,status')
+        .eq('production_id', _resolvedProductionId)
+        .eq('status', 'published')
+        .in('opportunity_type', ['volunteer', 'creative_team'])
+        .gte('close_date', today)
+        .order('close_date', { ascending: true })
+        .limit(1);
+      if (error) throw error;
+      const oppId = data?.[0]?.id || '';
+      return oppId ? `${window.location.origin}/volunteer/signup?id=${encodeURIComponent(oppId)}` : fallback;
+    } catch (error) {
+      console.warn('[BTS] Could not load volunteer opportunity link for registration email.', error);
+      return fallback;
+    }
+  }
+
+  function rpfEmailButton(url, label, color = '#572e88') {
+    if (!url) return '';
+    return `<a href="${esc(url)}" style="display:inline-block;background:${color};color:#ffffff;text-decoration:none;font-weight:900;font-size:16px;line-height:1.2;padding:16px 24px;border-radius:10px;">${esc(label)}</a>`;
+  }
+
+  function rpfPlainTextFromHtml(html) {
+    return String(html || '')
+      .replace(/<br\s*\/?>/gi, '\n')
+      .replace(/<\/p>/gi, '\n')
+      .replace(/<\/li>/gi, '\n')
+      .replace(/<li[^>]*>/gi, '- ')
+      .replace(/<[^>]+>/g, '')
+      .replace(/&nbsp;/g, ' ')
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, "'")
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
+  }
+
+  function rpfBuildPaymentEmailDetails() {
+    const s = _regSettings?.payment_settings || {};
+    const currency = String(s.currency || 'CAD').toUpperCase();
+    const currSym = { CAD: '$', USD: '$', GBP: '£' }[currency] || '$';
+    const currCode = currency !== 'CAD' ? ` ${currency}` : '';
+    const fmtAmt = value => {
+      const n = parseFloat(String(value || '').replace(/[^0-9.]/g, ''));
+      if (!Number.isFinite(n) || n <= 0) return '';
+      return `${currSym}${Number.isInteger(n) ? n : n.toFixed(2)}${currCode}`;
+    };
+    const fmtDate = value => rpfDateLabel(value) || '';
+    const lines = [];
+
+    if (!s.mode || s.mode === 'none') {
+      lines.push('No production fee has been configured for this show.');
+    } else if (s.mode === 'flat') {
+      if (s.fee) lines.push(`Registration fee: ${fmtAmt(s.fee) || s.fee}`);
+      if (s.fee_due_date) lines.push(`Due date: ${fmtDate(s.fee_due_date)}`);
+      if (s.late_fee_date) lines.push(`Late payment after: ${fmtDate(s.late_fee_date)}`);
+      if (!lines.length) lines.push('Production fee amount has not been configured yet.');
+    } else if (s.mode === 'split') {
+      const insts = (s.split_installments || []).filter((_, i) => i < (s.split_count || 2));
+      if (insts.length) {
+        insts.forEach((inst, index) => {
+          const due = inst.due_date ? ` due ${fmtDate(inst.due_date)}` : '';
+          lines.push(`Payment ${index + 1}: ${fmtAmt(inst.amount) || 'Amount not set'}${due}`);
+        });
+        const total = insts.reduce((sum, inst) => sum + (parseFloat(String(inst.amount || '').replace(/[^0-9.]/g, '')) || 0), 0);
+        if (total > 0) lines.push(`Total: ${fmtAmt(total)}`);
+        if (s.split_allow_upfront) lines.push('Full upfront payment is also available.');
+      } else {
+        lines.push('Payment amounts have not been configured yet.');
+      }
+    }
+
+    const info = [];
+    if (s.checkout_etransfer_enabled !== false && s.etransfer_email) info.push(`E-transfer: ${s.etransfer_email}`);
+    if (s.checkout_square_enabled === true) info.push('Square checkout is available.');
+    if (s.checkout_pay_later_enabled !== false) info.push('Pay later is available if needed.');
+    const instructions = rpfPlainTextFromHtml(subTokens(s.instructions || ''));
+    if (instructions) info.push(instructions);
+
+    const discounts = [];
+    if (s.sibling_discount_enabled) discounts.push('Sibling/family discount may apply.');
+    if (s.volunteer_discount_enabled) discounts.push('Volunteer discount may apply.');
+    if (s.scholarship_enabled) discounts.push(s.scholarship_note ? rpfPlainTextFromHtml(subTokens(s.scholarship_note)) : 'Financial assistance is available by request.');
+
+    return {
+      schedule: esc(lines.join('\n')),
+      information: esc([
+        info.join('\n'),
+        discounts.length ? `Discounts and assistance:\n${discounts.join('\n')}` : '',
+      ].filter(Boolean).join('\n\n')),
+    };
+  }
+
+  function rpfBuildPaymentEmailSummary() {
+    const details = rpfBuildPaymentEmailDetails();
+    return [details.schedule, details.information].filter(Boolean).join('\n\n');
   }
 
   // ── Age helpers ──────────────────────────────────────────────────────────────
@@ -911,15 +1183,19 @@
     if (/preferred name/.test(n))                return prefill.preferred_name || '';
     if (/pronoun/.test(n))                       return prefill.pronouns || '';
     if (/date of birth|birth date/.test(n))      return prefill.date_of_birth || '';
+    if (/secondary.*name|additional contact.*name/.test(n)) return prefill.secondary_name || '';
+    if (/secondary.*phone|additional contact.*phone/.test(n)) return prefill.secondary_phone || '';
+    if (/secondary.*email|additional contact.*email/.test(n)) return prefill.secondary_email || '';
+    if (/guardian first name|guardian.*first/.test(n)) return prefill.guardian_first || '';
+    if (/guardian last name|guardian.*last/.test(n))   return prefill.guardian_last  || '';
+    if (/guardian.*relationship|relationship.*performer/.test(n)) return prefill.guardian_relationship || '';
+    if (/guardian.*phone/.test(n)) return prefill.guardian_phone || '';
+    if (/guardian.*email/.test(n)) return prefill.guardian_email || '';
+    if (/emergency contact name/.test(n))  return prefill.emergency_name || prefill.guardian_first || '';
+    if (/emergency contact phone/.test(n)) return prefill.emergency_phone || prefill.guardian_phone || prefill.phone || '';
     if (/contact email|participant email/.test(n)) return prefill.email || '';
     if (/contact phone/.test(n) && !/guardian/.test(n)) return prefill.phone || '';
     if (/\bphone\b/.test(n) && !/guardian/.test(n)) return prefill.phone || '';
-    if (/guardian first name|guardian.*first/.test(n)) return prefill.guardian_first || '';
-    if (/guardian last name|guardian.*last/.test(n))   return prefill.guardian_last  || '';
-    if (/guardian.*phone/.test(n)) return prefill.guardian_phone || '';
-    if (/guardian.*email/.test(n)) return prefill.guardian_email || '';
-    if (/emergency contact name/.test(n))  return prefill.emergency_name || '';
-    if (/emergency contact phone/.test(n)) return prefill.emergency_phone || '';
     return '';
   }
 
@@ -955,6 +1231,22 @@
       if (!/\bsignature\b/i.test(label)) visible.push(field);
     });
     return visible;
+  }
+
+  function rpfDisplayFieldLabel(label) {
+    const text = String(label || '').trim();
+    if (/^name\s+as\s+it\s+should\s+appear\s+in\s+the\s+programme$/i.test(text)) {
+      return 'Exact first and last name';
+    }
+    return text;
+  }
+
+  function rpfTemplateIntro(def, template) {
+    const intro = template?.intro ? String(template.intro) : '';
+    if (def?.key === 'programme_credit' && (!intro.trim() || /^the\s+name\s+they\s+want\s+printed\s+in\s+the\s+programme\.?$/i.test(intro.trim()))) {
+      return 'Enter the exact first and last name to print in the programme. This will be copied and pasted exactly as written.';
+    }
+    return intro;
   }
 
   // ── Costume measurements size groups (abbreviated) ────────────────────────────
@@ -1255,10 +1547,20 @@
         <div class="rpf-pf-discount-list">${discountBlocks.join('')}</div>
       </div>` : '';
 
+    const schedSummaryRows = mode === 'split'
+      ? (s.split_installments || []).filter((_, i) => i < (s.split_count || 2)).map((inst, i) => {
+          const dateLabel = inst.due_date ? ` — due ${fmtDate(inst.due_date)}` : '';
+          return `<div class="rpf-pf-row"><span class="rpf-pf-row-label">Payment ${i + 1}${dateLabel}</span><span class="rpf-pf-row-value">${esc(fmtAmt(inst.amount) || 'TBD')}</span></div>`;
+        }).join('')
+      : mode === 'flat' && s.fee
+        ? `<div class="rpf-pf-row"><span class="rpf-pf-row-label">Full fee${s.fee_due_date ? ` — due ${fmtDate(s.fee_due_date)}` : ''}</span><span class="rpf-pf-row-value">${esc(fmtAmt(s.fee))}</span></div>`
+        : '';
+
     const instrHtml = s.instructions ? `
       <hr class="rpf-pf-divider" />
       <div class="rpf-pf-block rpf-pf-instructions">
         <div class="rpf-pf-block-title">How to pay</div>
+        ${schedSummaryRows ? `<div style="margin-bottom:0.5rem;">${schedSummaryRows}</div>` : ''}
         <div class="rpf-pf-text">${subTokens(s.instructions)}</div>
       </div>` : '';
 
@@ -1343,7 +1645,7 @@
       : '';
     const displayLabel = pickupMatch
       ? (pickupPart === 'full name' ? 'Full name' : pickupPart === 'relationship to performer' ? 'Relationship to performer' : 'Phone number')
-      : label;
+      : rpfDisplayFieldLabel(label);
 
     const type = rpfFieldType(label);
     const req  = isRequired ? `<span class="rpf-req"> *</span>` : '';
@@ -1489,11 +1791,78 @@
     </div>`;
   }
 
+  // ── Validation ───────────────────────────────────────────────────────────────
+  function rpfIsFieldVisible(el) {
+    let node = el.parentElement;
+    while (node && node.id !== 'rpf-root') {
+      if (node.hidden || node.style.display === 'none') return false;
+      node = node.parentElement;
+    }
+    return true;
+  }
+
+  function rpfMarkFieldError(el) {
+    el.classList.add('rpf-input-error');
+    const group = el.closest('.rpf-form-group, .rpf-mr-sig-field, .rpf-final-agree-box, .rpf-mr-sig-block');
+    if (group && !group.querySelector('.rpf-field-error')) {
+      const err = document.createElement('div');
+      err.className = 'rpf-field-error';
+      err.textContent = 'This field is required.';
+      group.appendChild(err);
+    }
+  }
+
+  function rpfValidatePanel(panelIndex) {
+    const panel = document.querySelectorAll('.rpf-panel')[panelIndex];
+    if (!panel) return true;
+    let valid = true;
+
+    panel.querySelectorAll('.rpf-field-error').forEach(el => el.remove());
+    panel.querySelectorAll('.rpf-input-error').forEach(el => el.classList.remove('rpf-input-error'));
+
+    // Required attribute — checkboxes must be checked, text/date/etc must have value
+    panel.querySelectorAll('[required]').forEach(el => {
+      if (!rpfIsFieldVisible(el)) return;
+      const empty = el.type === 'checkbox' ? !el.checked : !el.value.trim();
+      if (empty) { rpfMarkFieldError(el); valid = false; }
+    });
+
+    // Visually required fields (label has .rpf-req) not already covered by [required]
+    panel.querySelectorAll('.rpf-form-group').forEach(group => {
+      if (!group.querySelector('.rpf-req')) return;
+      // CSD custom dropdown: validate the hidden value input
+      const csd = group.querySelector('.rpf-csd');
+      if (csd) {
+        const hidden = csd.querySelector('input[type="hidden"]');
+        const display = csd.querySelector('.rpf-csd-input');
+        if (hidden && !hidden.value.trim() && rpfIsFieldVisible(display || hidden)) {
+          rpfMarkFieldError(display || hidden); valid = false;
+        }
+        return;
+      }
+      // Regular inputs not already flagged by [required]
+      group.querySelectorAll('input:not([type="hidden"]):not([type="radio"]):not([required]), select:not([required]), textarea:not([required])').forEach(el => {
+        if (!rpfIsFieldVisible(el)) return;
+        const empty = el.type === 'checkbox' ? !el.checked : !el.value.trim();
+        if (empty) { rpfMarkFieldError(el); valid = false; }
+      });
+    });
+
+    return valid;
+  }
+
   // ── Navigation ───────────────────────────────────────────────────────────────
   window.rpfGoTo = function(index) {
     if (index < 0 || index >= _rpfSections.length) return;
     const prev = _rpfCurrent;
-    if (index > prev) _rpfCompleted.add(prev);
+    if (index > prev) {
+      if (!rpfValidatePanel(prev)) {
+        const panels = document.querySelectorAll('.rpf-panel');
+        panels[prev]?.querySelector('.rpf-input-error')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        return;
+      }
+      _rpfCompleted.add(prev);
+    }
     _rpfCurrent = index;
     rpfUpdateNav(index);
     document.querySelectorAll('.rpf-panel').forEach((p, i) => p.classList.toggle('rpf-active', i === index));
@@ -1541,6 +1910,12 @@
 
   function rpfTextForPdf(value) {
     return String(value ?? '')
+      .replace(/&nbsp;/gi, ' ')
+      .replace(/&amp;/gi, '&')
+      .replace(/&lt;/gi, '<')
+      .replace(/&gt;/gi, '>')
+      .replace(/&quot;/gi, '"')
+      .replace(/&#39;|&apos;/gi, "'")
       .replace(/\u00a0/g, ' ')
       .replace(/[“”]/g, '"')
       .replace(/[‘’]/g, "'")
@@ -1550,8 +1925,56 @@
       .trim();
   }
 
+  function rpfNodeTextForPdf(node) {
+    const html = node.innerHTML !== undefined ? node.innerHTML : (node.textContent || '');
+    return rpfTextForPdf(
+      html
+        .replace(/<br\s*\/?>/gi, ' ')
+        .replace(/<\/?(p|div|h[1-6]|li|ul|ol|blockquote)[^>]*>/gi, ' ')
+        .replace(/<[^>]+>/g, '')
+    );
+  }
+
   function rpfPdfEscape(value) {
     return rpfTextForPdf(value).replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)');
+  }
+
+  function rpfPdfBinaryFromBase64(base64) {
+    if (typeof atob === 'function') return atob(base64);
+    if (typeof Buffer !== 'undefined') return Buffer.from(base64, 'base64').toString('binary');
+    return '';
+  }
+
+  function rpfPdfBlobFromBinaryString(pdf) {
+    const bytes = new Uint8Array(pdf.length);
+    for (let i = 0; i < pdf.length; i += 1) bytes[i] = pdf.charCodeAt(i) & 0xff;
+    return new Blob([bytes], { type: 'application/pdf' });
+  }
+
+  function rpfSignatureImageForPdf(name) {
+    const text = rpfTextForPdf(name);
+    if (!text || typeof document === 'undefined') return null;
+    const canvas = document.createElement('canvas');
+    canvas.width = 900;
+    canvas.height = 240;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = '#572e88';
+    ctx.textBaseline = 'middle';
+    ctx.font = '132px "Alex Brush", cursive';
+    let width = ctx.measureText(text).width;
+    if (width > 830) {
+      const size = Math.max(76, Math.floor(132 * (830 / width)));
+      ctx.font = `${size}px "Alex Brush", cursive`;
+      width = ctx.measureText(text).width;
+    }
+    ctx.fillText(text, 28, 126);
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
+    const base64 = dataUrl.split(',')[1] || '';
+    const data = rpfPdfBinaryFromBase64(base64);
+    return data ? { data, width: canvas.width, height: canvas.height } : null;
   }
 
   function rpfPdfLabelForField(el) {
@@ -1610,7 +2033,6 @@
       '.rpf-coc-section-body',
       '.rpf-mr-section-label',
       '.rpf-mr-text',
-      '.rpf-mr-perm-label',
       '.rpf-pf-block-title',
       '.rpf-pf-row',
       '.rpf-pf-split-row',
@@ -1620,14 +2042,17 @@
       '.rpf-final-agree-box span',
       '.rpf-mr-guardian-label',
     ];
+    const boldSelectors = new Set(['rpf-coc-section-title', 'rpf-form-section-divider', 'rpf-mr-section-label', 'rpf-pf-block-title', 'rpf-mr-guardian-label']);
     const seen = new Set();
     const wording = [];
     section.querySelectorAll(selectors.join(',')).forEach(node => {
       if (node.closest('.rpf-csd-dropdown')) return;
-      const text = rpfTextForPdf(node.textContent);
+      if (node.classList.contains('rpf-mr-perms') || node.closest('.rpf-mr-perms')) return;
+      const text = rpfNodeTextForPdf(node);
       if (!text || seen.has(text)) return;
       seen.add(text);
-      wording.push(text);
+      const bold = [...node.classList].some(c => boldSelectors.has(c));
+      wording.push({ text, bold });
     });
     return wording;
   }
@@ -1649,7 +2074,7 @@
       const key = `${label}::${el.name || el.dataset.fieldName || el.type}`;
       if (seen.has(key)) return;
       seen.add(key);
-      rows.push({ label, value });
+      rows.push({ label, value, key: el.name || el.dataset.fieldName || '' });
     });
     return rows;
   }
@@ -1660,9 +2085,10 @@
     const doc = {
       title,
       fileSlug: rpfContractFileSlugForPdf(title),
-      generatedAt: new Date().toLocaleString('en-CA'),
+      generatedAt: rpfFormatPdfDate(new Date().toISOString(), true),
       organisation: rpfTextForPdf(_org?.name || _org?.abbreviation || 'Organisation'),
-      logoUrl: _org?.logo_url || _org?.logo_white_url || '',
+      logoUrl: _org?.logo_white_url || _org?.logo_url || '',
+      posterUrl: _prod?.poster_url || '',
       production: rpfTextForPdf(_prod?.title || 'Production'),
       performer: rpfPerformerNameForPdf(),
       date: rpfContractDateForPdf(),
@@ -1703,22 +2129,47 @@
 
   function rpfPdfAnswerFromDoc(doc, labels) {
     const wanted = labels.map(label => String(label).toLowerCase());
+    const normalize = value => String(value || '').toLowerCase();
     for (const section of doc.sections || []) {
       for (const row of section.answers || []) {
-        const label = String(row.label || '').toLowerCase();
-        if (wanted.some(w => label === w || label.includes(w))) return rpfTextForPdf(row.value);
+        const key = normalize(row.key);
+        if (wanted.some(w => key === w)) return rpfTextForPdf(row.value);
+      }
+    }
+    for (const section of doc.sections || []) {
+      for (const row of section.answers || []) {
+        const label = normalize(row.label);
+        if (wanted.some(w => label === w)) return rpfTextForPdf(row.value);
+      }
+    }
+    for (const section of doc.sections || []) {
+      for (const row of section.answers || []) {
+        const label = normalize(row.label);
+        if (wanted.some(w => label.includes(w))) return rpfTextForPdf(row.value);
       }
     }
     return '';
   }
 
+  function rpfFormatPdfDate(value, withTime = false) {
+    const raw = String(value || '').trim();
+    if (!raw) return '';
+    const normalized = /^\d{4}-\d{2}-\d{2}$/.test(raw) ? `${raw}T00:00:00` : raw;
+    const date = new Date(normalized);
+    if (Number.isNaN(date.getTime())) return raw;
+    const options = withTime
+      ? { year: 'numeric', month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit' }
+      : { year: 'numeric', month: 'long', day: 'numeric' };
+    return date.toLocaleString('en-CA', options);
+  }
+
   function rpfPdfSignatureInfo(doc) {
-    const guardianName = rpfPdfAnswerFromDoc(doc, ['parent or guardian full name', 'final_guardian_name']);
-    const guardianRel = rpfPdfAnswerFromDoc(doc, ['relationship to performer', 'final_guardian_relationship']);
-    const guardianSig = rpfPdfAnswerFromDoc(doc, ['parent or guardian signature', 'final_guardian_sig']);
-    const guardianDate = rpfPdfAnswerFromDoc(doc, ['final_guardian_date', 'date']);
-    const performerSig = rpfPdfAnswerFromDoc(doc, ['performer signature', 'final_signer_name']);
-    const performerDate = rpfPdfAnswerFromDoc(doc, ['final_signed_date', 'date']);
+    const guardianName = rpfPdfAnswerFromDoc(doc, ['final_guardian_name', 'parent or guardian full name']);
+    const guardianRel = rpfPdfAnswerFromDoc(doc, ['final_guardian_relationship', 'relationship to performer']);
+    const guardianSig = rpfPdfAnswerFromDoc(doc, ['final_guardian_sig', 'parent or guardian signature']);
+    const guardianDate = rpfPdfAnswerFromDoc(doc, ['final_guardian_date']);
+    const performerSig = rpfPdfAnswerFromDoc(doc, ['final_signer_name', 'performer signature']);
+    const performerDate = rpfPdfAnswerFromDoc(doc, ['final_signed_date']);
     const signer = guardianSig || guardianName || performerSig || doc.performer || 'N/A';
     return {
       signer,
@@ -1730,33 +2181,48 @@
 
   function rpfPdfLineItemsForContract(doc) {
     const items = [];
-    const add = (text, opts = {}) => items.push(Object.assign({ type: 'text', text: rpfTextForPdf(text), size: 10, font: 'F1', indent: 0, gap: 2, align: 'left', color: 'ink' }, opts));
-    const rule = (gap = 10) => items.push({ type: 'rule', gap, color: 'gold' });
+    const add = (text, opts = {}) => items.push(Object.assign({ type: 'text', text: rpfTextForPdf(text), size: 9.5, font: 'F1', indent: 0, gap: 2, align: 'left', color: 'ink' }, opts));
     const sig = rpfPdfSignatureInfo(doc);
+    const sectionColors = ['purple'];
 
-    add('REGISTRATION SUMMARY', { size: 19, font: 'F2', align: 'center', gap: 6, color: 'white' });
-    add(doc.title, { size: 11, font: 'F2', align: 'center', gap: 8, color: 'purple' });
-    rule(12);
+    add('Registration Summary', { size: 22, font: 'F2', align: 'center', gap: 12, color: 'purple' });
+    add(doc.production, { size: 12, font: 'F2', align: 'center', gap: 5, color: 'gold' });
+    add(doc.organisation, { size: 10, font: 'F1', align: 'center', gap: 18, color: 'muted' });
+    items.push({ type: 'rule', gap: 18, color: 'purple' });
 
-    add('1. Details', { size: 12, font: 'F2', gap: 6, color: 'purple' });
-    add(`1.1 Organisation: ${doc.organisation}`, { indent: 14 });
-    add(`1.2 Production: ${doc.production}`, { indent: 14 });
-    add(`1.3 Performer: ${doc.performer}`, { indent: 14 });
-    add(`1.4 Date: ${doc.date}`, { indent: 14 });
-    add(`1.5 Generated: ${doc.generatedAt}`, { indent: 14, gap: 10 });
+    // Details card
+    items.push({ type: 'sectionHeader', label: 'Registration Details', color: 'purple', num: '01', gap: 2 });
+    [
+      ['Organisation', doc.organisation],
+      ['Production', doc.production],
+      ['Performer', doc.performer],
+      ['Date Submitted', rpfFormatPdfDate(doc.date)],
+      ['Document Generated', doc.generatedAt],
+    ].forEach(([label, value], i) => {
+      items.push({ type: 'answerRow', label: rpfTextForPdf(label), value: rpfTextForPdf(value), shade: i % 2 === 0, gap: 0 });
+    });
+    items.push({ type: 'spacer', h: 14 });
 
-    add('2. Registration Details', { size: 12, font: 'F2', gap: 6, color: 'purple' });
+    // Form sections
     (doc.sections || []).forEach((section, index) => {
-      const clause = `2.${index + 1}`;
-      add(`${clause} ${section.group ? `${section.group} - ` : ''}${section.title}`, { size: 10.5, font: 'F2', indent: 14, gap: 4, color: index % 2 ? 'green' : 'blue' });
+      const sectionColor = sectionColors[index % sectionColors.length];
+      const num = String(index + 2).padStart(2, '0');
+      const sectionLabel = [section.group, section.title]
+        .filter(Boolean)
+        .filter((v, i, a) => a.indexOf(v) === i)
+        .join(' - ');
+      items.push({ type: 'sectionHeader', label: rpfTextForPdf(sectionLabel), color: sectionColor, num, gap: 2 });
       if (section.wording?.length && !/^costume measurements$/i.test(section.title || '')) {
-        section.wording.forEach(text => add(text, { indent: 28, gap: 3 }));
+        items.push({ type: 'wordingBlock', lines: section.wording });
       }
       if (section.answers?.length) {
-        section.answers.forEach(row => add(`${row.label}: ${row.value}`, { indent: 42, gap: 3 }));
+        section.answers.forEach((row, ri) => {
+          items.push({ type: 'answerRow', label: rpfTextForPdf(row.label), value: rpfTextForPdf(row.value), shade: ri % 2 === 0, gap: 0 });
+        });
+      } else if (!section.wording?.length) {
+        add('No information collected for this section.', { indent: 14, gap: 6, color: 'muted', size: 9 });
       }
-      if (!section.wording?.length && !section.answers?.length) add('N/A', { indent: 42, gap: 6 });
-      add('', { gap: 4 });
+      items.push({ type: 'spacer', h: 16 });
     });
 
     items.push({ type: 'signatureBlock', sig });
@@ -1765,38 +2231,104 @@
 
   function rpfBuildAnswersPdf(data) {
     const doc = Array.isArray(data)
-      ? { title: rpfContractTitleForPdf(), generatedAt: new Date().toLocaleString('en-CA'), organisation: _org?.name || _org?.abbreviation || 'Organisation', logoUrl: _org?.logo_url || _org?.logo_white_url || '', production: _prod?.title || 'Production', performer: rpfPerformerNameForPdf(), date: rpfContractDateForPdf(), sections: [{ group: 'Registration', title: 'Submitted Answers', wording: [], answers: data }] }
+      ? { title: rpfContractTitleForPdf(), generatedAt: rpfFormatPdfDate(new Date().toISOString(), true), organisation: _org?.name || _org?.abbreviation || 'Organisation', logoUrl: _org?.logo_white_url || _org?.logo_url || '', posterUrl: _prod?.poster_url || '', production: _prod?.title || 'Production', performer: rpfPerformerNameForPdf(), date: rpfContractDateForPdf(), sections: [{ group: 'Registration', title: 'Submitted Answers', wording: [], answers: data }] }
       : data;
     const lineItems = rpfPdfLineItemsForContract(doc);
     const pages = [[]];
-    let y = 720;
-    lineItems.forEach(item => {
+    const firstPageTop = 678;
+    const pageTop = 720;
+    let y = firstPageTop;
+    const nextPage = () => {
+      pages.push([]);
+      y = pageTop;
+    };
+    function rpfEstimatePdfItemHeight(item) {
+      if (!item) return 0;
+      if (item.type === 'spacer') return item.h || 8;
+      if (item.type === 'rule') return item.gap || 10;
+      if (item.type === 'sectionHeader') return 24 + (item.gap || 4);
+      if (item.type === 'answerRow') {
+        const wrapLabel = rpfWrapPdfLine(item.label || '', 62);
+        const wrapValue = rpfWrapPdfLine(item.value || '', 24);
+        return Math.max(wrapLabel.length, wrapValue.length) * 13 + 7 + (item.gap || 0);
+      }
+      if (item.type === 'wordingBlock') {
+        const lineCount = (item.lines || []).reduce((sum, w) => {
+          const str = typeof w === 'string' ? w : rpfTextForPdf(w.text || '');
+          return sum + rpfWrapPdfLine(str, 116).length;
+        }, 0);
+        return lineCount * 12 + 16 + (item.gap || 10);
+      }
+      const lineHeight = Math.max(12, (item.size || 9.5) * 1.35);
+      return lineHeight + (item.gap || 0);
+    }
+    lineItems.forEach((item, index) => {
+      if (item.type === 'spacer') {
+        y -= item.h || 8;
+        return;
+      }
       if (item.type === 'rule') {
-        if (y < 62) {
-          pages.push([]);
-          y = 720;
-        }
+        if (y < 62) nextPage();
         pages[pages.length - 1].push(Object.assign({}, item, { y }));
         y -= item.gap || 10;
         return;
       }
       if (item.type === 'signatureBlock') {
-        if (y < 230) {
-          pages.push([]);
-          y = 720;
+        const blockH = 108;
+        if (y > pageTop - 34 || y - 94 < 62) nextPage();
+        pages[pages.length - 1].push(Object.assign({}, item, { y }));
+        y -= blockH + 12;
+        return;
+      }
+      if (item.type === 'sectionHeader') {
+        const h = 24;
+        const nextContent = lineItems[index + 1]?.type === 'spacer' ? lineItems[index + 2] : lineItems[index + 1];
+        const keepWith = Math.min(rpfEstimatePdfItemHeight(nextContent), 160, pageTop - 62);
+        if (y - h - (item.gap || 4) - keepWith < 62) nextPage();
+        pages[pages.length - 1].push(Object.assign({}, item, { y, h }));
+        y -= h + (item.gap || 4);
+        return;
+      }
+      if (item.type === 'answerRow') {
+        const wrapLabel = rpfWrapPdfLine(item.label || '', 62);
+        const wrapValue = rpfWrapPdfLine(item.value || '', 24);
+        const rowH = Math.max(wrapLabel.length, wrapValue.length) * 13 + 7;
+        if (y - rowH < 62) nextPage();
+        pages[pages.length - 1].push(Object.assign({}, item, { y, h: rowH, wrapLabel, wrapValue }));
+        y -= rowH + (item.gap || 0);
+        return;
+      }
+      if (item.type === 'wordingBlock') {
+        const allLines = (item.lines || []).flatMap(w => {
+          const str = typeof w === 'string' ? w : rpfTextForPdf(w.text || '');
+          const bold = typeof w !== 'string' && !!w.bold;
+          return rpfWrapPdfLine(str, 116).map((t, i) => ({ text: t, bold: bold && i === 0 }));
+        });
+        let remaining = allLines.slice();
+        while (remaining.length) {
+          const wordingBottomLimit = 96;
+          const available = y - wordingBottomLimit;
+          let maxLines = Math.floor((available - 20) / 12);
+          if (remaining.length > maxLines && remaining.length - maxLines > 0 && remaining.length - maxLines < 3 && maxLines > 4) {
+            maxLines -= 3 - (remaining.length - maxLines);
+          }
+          if (maxLines < 1) {
+            nextPage();
+            continue;
+          }
+          const chunk = remaining.splice(0, maxLines);
+          const blockH = chunk.length * 12 + 16;
+          pages[pages.length - 1].push(Object.assign({}, item, { y, h: blockH, allLines: chunk }));
+          y -= blockH + (remaining.length ? 0 : (item.gap || 10));
+          if (remaining.length) nextPage();
         }
-        pages[pages.length - 1].push(Object.assign({}, item, { y: 178 }));
-        y = 62;
         return;
       }
       const maxChars = Math.max(28, Math.floor((512 - item.indent) / (item.size * 0.52)));
       const wrapped = item.text ? rpfWrapPdfLine(item.text, maxChars) : [''];
       wrapped.forEach((line, i) => {
         const lineHeight = Math.max(12, item.size * 1.35);
-        if (y - lineHeight < 62) {
-          pages.push([]);
-          y = 720;
-        }
+        if (y - lineHeight < 62) nextPage();
         pages[pages.length - 1].push(Object.assign({}, item, { text: line, y }));
         y -= lineHeight;
         if (i === wrapped.length - 1) y -= item.gap || 0;
@@ -1807,12 +2339,34 @@
     objects.push(null);
     objects.push('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>');
     objects.push('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>');
-    objects.push('<< /Type /Font /Subtype /Type1 /BaseFont /ZapfChancery-MediumItalic >>');
+    objects.push('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Oblique >>');
     let logoObjNum = null;
     if (doc.logoData?.data && doc.logoData?.width && doc.logoData?.height) {
       logoObjNum = objects.length + 1;
       objects.push(`<< /Type /XObject /Subtype /Image /Width ${doc.logoData.width} /Height ${doc.logoData.height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${doc.logoData.data.length} >>\nstream\n${doc.logoData.data}\nendstream`);
     }
+    let posterObjNum = null;
+    if (doc.posterData?.data && doc.posterData?.width && doc.posterData?.height) {
+      posterObjNum = objects.length + 1;
+      objects.push(`<< /Type /XObject /Subtype /Image /Width ${doc.posterData.width} /Height ${doc.posterData.height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${doc.posterData.data.length} >>\nstream\n${doc.posterData.data}\nendstream`);
+    }
+    const xObjectEntries = [];
+    if (logoObjNum) xObjectEntries.push(`/ImLogo ${logoObjNum} 0 R`);
+    if (posterObjNum) xObjectEntries.push(`/ImPoster ${posterObjNum} 0 R`);
+    let sigImageIndex = 0;
+    pages.forEach(pageLines => {
+      pageLines.forEach(line => {
+        if (line.type !== 'signatureBlock') return;
+        const image = rpfSignatureImageForPdf(line.sig?.signer || '');
+        if (!image) return;
+        const objNum = objects.length + 1;
+        const name = `ImSig${++sigImageIndex}`;
+        line.signatureImageName = name;
+        line.signatureImage = image;
+        objects.push(`<< /Type /XObject /Subtype /Image /Width ${image.width} /Height ${image.height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${image.data.length} >>\nstream\n${image.data}\nendstream`);
+        xObjectEntries.push(`/${name} ${objNum} 0 R`);
+      });
+    });
     const color = name => ({
       purple: '0.341 0.180 0.533',
       green: '0.463 0.620 0.482',
@@ -1824,26 +2378,79 @@
       white: '1 1 1',
       softGreen: '0.922 0.965 0.929',
       softGold: '1 0.969 0.902',
+      softPurple: '0.949 0.933 0.965',
+      lightRow: '0.941 0.929 0.961',
     }[name] || '0.102 0.082 0.188');
     pages.forEach((pageLines, pageIndex) => {
+      const logoMark = logoObjNum
+        ? `\nq\n116 0 0 46 34 735 cm\n/ImLogo Do\nQ`
+        : `\nBT\n${color('white')} rg\n/F2 13 Tf\n50 754 Td\n(${rpfPdfEscape(doc.organisation)}) Tj\nET`;
+      const posterMark = posterObjNum
+        ? `\nq\n${color('white')} rg\n517 729 46 58 re f\nQ\nq\n42 0 0 54 519 731 cm\n/ImPoster Do\nQ`
+        : '';
       const pageBrand = pageIndex === 0
-        ? `q\n${color('purple')} rg\n0 734 612 58 re f\n${color('gold')} rg\n0 728 612 6 re f\n${color('pink')} rg\n528 744 14 14 re f\n${color('green')} rg\n548 744 14 14 re f\n${color('gold')} rg\n568 744 14 14 re f\nQ${logoObjNum ? `\nq\n1 1 1 rg\n42 742 92 36 re f\nQ\nq\n82 0 0 28 47 746 cm\n/ImLogo Do\nQ` : `\nBT\n${color('white')} rg\n/F2 12 Tf\n48 754 Td\n(${rpfPdfEscape(doc.organisation)}) Tj\nET`}`
-        : `q\n${color('purple')} rg\n0 758 612 10 re f\n${color('gold')} rg\n0 752 612 3 re f\nQ`;
+        ? `q\n${color('purple')} rg\n0 724 612 68 re f\n${color('gold')} rg\n0 716 612 8 re f\nQ${logoMark}${posterMark}`
+        : '';
       const footer = `q\n${color('green')} RG\n0.75 w\n50 46 m\n562 46 l\nS\nQ\nBT\n${color('muted')} rg\n/F1 8 Tf\n50 34 Td\n(${rpfPdfEscape(doc.title)}) Tj\nET\nBT\n${color('muted')} rg\n/F1 8 Tf\n500 34 Td\n(Page ${pageIndex + 1} of ${pages.length}) Tj\nET`;
       const header = pageIndex > 0 ? `BT\n${color('purple')} rg\n/F2 9 Tf\n50 738 Td\n(${rpfPdfEscape(doc.title)}) Tj\nET` : '';
       const body = pageLines.map(line => {
-        if (line.type === 'rule') return `q\n${color(line.color)} RG\n1.2 w\n50 ${line.y} m\n562 ${line.y} l\nS\nQ`;
+        if (line.type === 'rule') {
+          return `q\n${color(line.color)} RG\n1.2 w\n50 ${line.y} m\n562 ${line.y} l\nS\nQ`;
+        }
         if (line.type === 'signatureBlock') {
           const sig = line.sig || {};
+          const signatureFallback = `BT\n${color('purple')} rg\n/F3 22 Tf\n72 ${line.y - 34} Td\n(${rpfPdfEscape(sig.signer || 'N/A')}) Tj\nET`;
+          const signatureMark = line.signatureImageName
+            ? `q\n218 0 0 58 72 ${line.y - 51} cm\n/${line.signatureImageName} Do\nQ`
+            : signatureFallback;
           return [
-            `q\n${color('softGold')} rg\n44 ${line.y - 108} 524 128 re f\n${color('gold')} RG\n1 w\n44 ${line.y - 108} 524 128 re S\nQ`,
-            `BT\n${color('purple')} rg\n/F2 12 Tf\n64 ${line.y} Td\n(Digital Signature) Tj\nET`,
-            `BT\n${color('purple')} rg\n/F3 28 Tf\n76 ${line.y - 40} Td\n(${rpfPdfEscape(sig.signer || 'N/A')}) Tj\nET`,
-            `q\n${color('green')} RG\n1 w\n64 ${line.y - 52} m\n320 ${line.y - 52} l\nS\nQ`,
-            `BT\n${color('ink')} rg\n/F1 9 Tf\n64 ${line.y - 72} Td\n(Digitally signed by: ${rpfPdfEscape(sig.printedName || 'N/A')}) Tj\nET`,
-            `BT\n${color('muted')} rg\n/F1 9 Tf\n64 ${line.y - 88} Td\n(Relationship / capacity: ${rpfPdfEscape(sig.relationship || 'N/A')}) Tj\nET`,
-            `BT\n${color('ink')} rg\n/F1 9 Tf\n380 ${line.y - 72} Td\n(Date: ${rpfPdfEscape(sig.signedDate || 'N/A')}) Tj\nET`,
+            `q\n${color('white')} rg\n44 ${line.y - 94} 524 108 re f\n${color('gold')} RG\n1 w\n44 ${line.y - 94} 524 108 re S\nQ`,
+            signatureMark,
+            `BT\n${color('purple')} rg\n/F2 10.5 Tf\n64 ${line.y - 6} Td\n(Digital Signature) Tj\nET`,
+            `q\n${color('green')} RG\n1 w\n64 ${line.y - 48} m\n302 ${line.y - 48} l\nS\nQ`,
+            `BT\n${color('ink')} rg\n/F1 8.6 Tf\n64 ${line.y - 66} Td\n(Digitally signed by: ${rpfPdfEscape(sig.printedName || 'N/A')}) Tj\nET`,
+            `BT\n${color('muted')} rg\n/F1 8.6 Tf\n64 ${line.y - 82} Td\n(Relationship / capacity: ${rpfPdfEscape(sig.relationship || 'N/A')}) Tj\nET`,
+            `BT\n${color('ink')} rg\n/F1 8.6 Tf\n380 ${line.y - 66} Td\n(Date: ${rpfPdfEscape(sig.signedDate || 'N/A')}) Tj\nET`,
           ].join('\n');
+        }
+        if (line.type === 'sectionHeader') {
+          const bg = line.color || 'purple';
+          const fg = bg === 'gold' ? 'ink' : 'white';
+          const ty = line.y - line.h + 8;
+          return [
+            `q\n${color(bg)} rg\n50 ${line.y - line.h} 512 ${line.h} re f\nQ`,
+            `BT\n${color(fg)} rg\n/F2 9.5 Tf\n62 ${ty} Td\n(${rpfPdfEscape(line.num || '')}) Tj\nET`,
+            `BT\n${color(fg)} rg\n/F2 9.5 Tf\n88 ${ty} Td\n(${rpfPdfEscape(rpfWrapPdfLine(line.label || '', 66)[0] || '')}) Tj\nET`,
+          ].join('\n');
+        }
+        if (line.type === 'answerRow') {
+          const parts = [];
+          if (line.shade) parts.push(`q\n${color('lightRow')} rg\n50 ${line.y - line.h} 512 ${line.h} re f\nQ`);
+          const labelLines = line.wrapLabel || [''];
+          const valueLines = line.wrapValue || [''];
+          const labelBlockH = labelLines.length * 13;
+          const valueBlockH = valueLines.length * 13;
+          const labelStartY = line.y - ((line.h - labelBlockH) / 2) - 8;
+          const valueStartY = line.y - ((line.h - valueBlockH) / 2) - 8;
+          labelLines.forEach((lbl, i) => {
+            parts.push(`BT\n${color('ink')} rg\n/F2 8.8 Tf\n58 ${labelStartY - i * 13} Td\n(${rpfPdfEscape(lbl)}) Tj\nET`);
+          });
+          valueLines.forEach((val, i) => {
+            parts.push(`BT\n${color('ink')} rg\n/F1 8.8 Tf\n430 ${valueStartY - i * 13} Td\n(${rpfPdfEscape(val)}) Tj\nET`);
+          });
+          return parts.join('\n');
+        }
+        if (line.type === 'wordingBlock') {
+          const parts = [`q\n${color('softPurple')} rg\n50 ${line.y - line.h} 512 ${line.h} re f\nQ`];
+          (line.allLines || []).forEach((w, i) => {
+            const txt = typeof w === 'string' ? w : (w.text || '');
+            const bold = typeof w !== 'string' && w.bold;
+            const font = bold ? 'F2' : 'F1';
+            const sz = bold ? 8.6 : 8.4;
+            const c = bold ? 'ink' : 'muted';
+            parts.push(`BT\n${color(c)} rg\n/${font} ${sz} Tf\n64 ${line.y - 12 - i * 12} Td\n(${rpfPdfEscape(txt)}) Tj\nET`);
+          });
+          return parts.join('\n');
         }
         const x = line.align === 'center' ? Math.max(50, 306 - (rpfTextForPdf(line.text).length * line.size * 0.24)) : 50 + (line.indent || 0);
         return `BT\n${color(line.color)} rg\n/${line.font} ${line.size} Tf\n${x} ${line.y} Td\n(${rpfPdfEscape(line.text)}) Tj\nET`;
@@ -1851,7 +2458,7 @@
       const stream = [pageBrand, header, body, footer].filter(Boolean).join('\n');
       const streamObjNum = objects.length + 2;
       const pageObjNum = objects.length + 1;
-      const xObjects = logoObjNum ? ` /XObject << /ImLogo ${logoObjNum} 0 R >>` : '';
+      const xObjects = xObjectEntries.length ? ` /XObject << ${xObjectEntries.join(' ')} >>` : '';
       objects.push(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >>${xObjects} >> /Contents ${streamObjNum} 0 R >>`);
       objects.push(`<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`);
       pageRefs.push(`${pageObjNum} 0 R`);
@@ -1871,41 +2478,103 @@
     return pdf;
   }
 
-  function rpfLoadPdfLogo(url) {
+  function rpfDrawPdfImageToCanvas(img, opts = {}) {
+    const canvas = document.createElement('canvas');
+    canvas.width = opts.width || 240;
+    canvas.height = opts.height || 96;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = opts.background || '#ffffff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    const maxW = opts.maxWidth || canvas.width;
+    const maxH = opts.maxHeight || canvas.height;
+    const naturalW = img.naturalWidth || img.width || 1;
+    const naturalH = img.naturalHeight || img.height || 1;
+    const scaleFn = opts.fit === 'cover' ? Math.max : Math.min;
+    const scale = scaleFn(maxW / naturalW, maxH / naturalH);
+    const w = Math.max(1, naturalW * scale);
+    const h = Math.max(1, naturalH * scale);
+    ctx.drawImage(img, (canvas.width - w) / 2, (canvas.height - h) / 2, w, h);
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
+    return { width: canvas.width, height: canvas.height, data: rpfPdfBinaryFromBase64(dataUrl.split(',')[1] || '') };
+  }
+
+  function rpfLoadImageElement(src, useCors = false) {
     return new Promise(resolve => {
-      if (!url) { resolve(null); return; }
+      if (!src) { resolve(null); return; }
       const img = new Image();
-      img.crossOrigin = 'anonymous';
-      img.onload = () => {
-        try {
-          const canvas = document.createElement('canvas');
-          canvas.width = 240;
-          canvas.height = 96;
-          const ctx = canvas.getContext('2d');
-          ctx.fillStyle = '#ffffff';
-          ctx.fillRect(0, 0, canvas.width, canvas.height);
-          const scale = Math.min(200 / img.naturalWidth, 72 / img.naturalHeight);
-          const w = Math.max(1, img.naturalWidth * scale);
-          const h = Math.max(1, img.naturalHeight * scale);
-          ctx.drawImage(img, (canvas.width - w) / 2, (canvas.height - h) / 2, w, h);
-          const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
-          resolve({ width: canvas.width, height: canvas.height, data: atob(dataUrl.split(',')[1] || '') });
-        } catch (error) {
-          console.warn('[BTS] PDF logo could not be embedded', error);
-          resolve(null);
-        }
-      };
+      if (useCors) img.crossOrigin = 'anonymous';
+      img.onload = () => resolve(img);
       img.onerror = () => resolve(null);
-      img.src = url;
+      img.src = src;
     });
+  }
+
+  async function rpfLoadPdfImage(url, opts = {}) {
+    if (!url || typeof document === 'undefined') return null;
+    let objectUrl = '';
+    try {
+      if (/^https?:/i.test(url) && typeof fetch === 'function' && typeof URL !== 'undefined') {
+        const response = await fetch(url, { mode: 'cors', cache: 'force-cache' });
+        if (response.ok) {
+          const blob = await response.blob();
+          objectUrl = URL.createObjectURL(blob);
+          const localImg = await rpfLoadImageElement(objectUrl);
+          if (localImg) return rpfDrawPdfImageToCanvas(localImg, opts);
+        }
+      }
+    } catch (error) {
+      console.warn('[BTS] PDF image fetch failed; trying direct image load', error);
+    } finally {
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    }
+    try {
+      const directImg = await rpfLoadImageElement(url, true);
+      return directImg ? rpfDrawPdfImageToCanvas(directImg, opts) : null;
+    } catch (error) {
+      console.warn('[BTS] PDF image could not be embedded', error);
+      return null;
+    }
+  }
+
+  function rpfLoadPdfLogo(url) {
+    return rpfLoadPdfImage(url, {
+      width: 300,
+      height: 120,
+      maxWidth: 270,
+      maxHeight: 86,
+      fit: 'contain',
+      background: '#572e88',
+    });
+  }
+
+  function rpfLoadPdfPoster(url) {
+    return rpfLoadPdfImage(url, {
+      width: 180,
+      height: 240,
+      maxWidth: 180,
+      maxHeight: 240,
+      fit: 'cover',
+      background: '#ffffff',
+    });
+  }
+
+  async function rpfEnsureSignatureFont() {
+    try {
+      if (document.fonts?.load) {
+        await document.fonts.load('132px "Alex Brush"');
+        await document.fonts.ready;
+      }
+    } catch {}
   }
 
   window.rpfDownloadAnswersPdf = async function() {
     const doc = window._rpfSubmittedAnswerRows || rpfCollectAnswerRowsForPdf();
-    if (!doc.logoData) doc.logoData = await rpfLoadPdfLogo(doc.logoUrl || _org?.logo_url || _org?.logo_white_url || '');
+    await rpfEnsureSignatureFont();
+    if (!doc.logoData) doc.logoData = await rpfLoadPdfLogo(doc.logoUrl || _org?.logo_white_url || _org?.logo_url || '');
+    if (!doc.posterData) doc.posterData = await rpfLoadPdfPoster(doc.posterUrl || _prod?.poster_url || '');
     const pdf = rpfBuildAnswersPdf(doc);
     const slug = doc.fileSlug || rpfContractFileSlugForPdf(doc.title);
-    const blob = new Blob([pdf], { type: 'application/pdf' });
+    const blob = rpfPdfBlobFromBinaryString(pdf);
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -1918,9 +2587,11 @@
 
   async function rpfOpenAnswersPdfInline() {
     const doc = window._rpfSubmittedAnswerRows || rpfCollectAnswerRowsForPdf();
-    if (!doc.logoData) doc.logoData = await rpfLoadPdfLogo(doc.logoUrl || _org?.logo_url || _org?.logo_white_url || '');
+    await rpfEnsureSignatureFont();
+    if (!doc.logoData) doc.logoData = await rpfLoadPdfLogo(doc.logoUrl || _org?.logo_white_url || _org?.logo_url || '');
+    if (!doc.posterData) doc.posterData = await rpfLoadPdfPoster(doc.posterUrl || _prod?.poster_url || '');
     const pdf = rpfBuildAnswersPdf(doc);
-    const blob = new Blob([pdf], { type: 'application/pdf' });
+    const blob = rpfPdfBlobFromBinaryString(pdf);
     const url = URL.createObjectURL(blob);
     window.location.replace(url);
   }
@@ -1952,6 +2623,77 @@
     });
   }
 
+  function rpfSampleRegistrationPrefill() {
+    return {
+      first_name: 'Katharine',
+      last_name: 'Hepburn',
+      preferred_name: 'Kate',
+      pronouns: 'She / Her',
+      date_of_birth: '1907-05-12',
+      email: 'kate.hepburn@example.com',
+      phone: '(555) 555-1907',
+      guardian_first: 'Laura',
+      guardian_last: 'Hepburn',
+      guardian_relationship: 'Mother',
+      guardian_phone: '(555) 555-0142',
+      guardian_email: 'laura.hepburn@example.com',
+      emergency_name: 'Laura Hepburn',
+      emergency_phone: '(555) 555-0142',
+      headshot_url: '/ASSETS/Images/templates/sample-template-headshots/katherine-hepburn-She:Her-.png',
+    };
+  }
+
+  function rpfSampleValueForInput(el) {
+    const label = rpfPdfLabelForField(el);
+    const n = String(label || el.name || el.dataset.fieldName || '').toLowerCase();
+    const prefill = rpfSampleRegistrationPrefill();
+    const direct = rpfPrefillValue(label, prefill);
+    if (direct) return direct;
+    if (/final_guardian_name|parent or guardian full name/.test(n)) return 'Laura Hepburn';
+    if (/final_guardian_relationship|relationship to performer/.test(n)) return 'Mother';
+    if (/final_guardian_sig|parent or guardian signature/.test(n)) return 'Laura Hepburn';
+    if (/final_guardian_date|final_signed_date|date$|signature date/.test(n)) return rpfTodayInputValue();
+    if (/final_signer_name|performer signature/.test(n)) return 'Kate Hepburn';
+    if (/authori[sz]ed pickup 1 full name/.test(n)) return 'Laura Hepburn';
+    if (/authori[sz]ed pickup 1 relationship/.test(n)) return 'Mother';
+    if (/authori[sz]ed pickup 1 phone/.test(n)) return '(555) 555-0142';
+    if (/authori[sz]ed pickup 2 full name/.test(n)) return 'Howard Hughes';
+    if (/authori[sz]ed pickup 2 relationship/.test(n)) return 'Family friend';
+    if (/authori[sz]ed pickup 2 phone/.test(n)) return '(555) 555-0199';
+    if (/allerg/.test(n)) return 'None reported';
+    if (/medication/.test(n)) return 'None';
+    if (/medical condition/.test(n)) return 'None reported';
+    if (/accessibility|accommodation|support/.test(n)) return 'No additional support requested for this sample.';
+    if (/programme|program.*credit|name.*programme/.test(n)) return 'Katharine Hepburn';
+    if (/other performer names|volunteer name|volunteer note/.test(n)) return 'N/A';
+    if (/discount|fee reduction|same immediate family|volunteer/.test(n)) return 'No';
+    if (/payment|acknowledged|expectation|policy|agree|consent|permission|waiver|release|confirm|understand|accept|read/.test(n)) return 'Yes';
+    if (/relationship/.test(n)) return 'Mother';
+    return 'Sample answer';
+  }
+
+  function rpfApplySampleAnswers() {
+    const shell = document.getElementById('rpf-root');
+    if (!shell) return;
+    shell.querySelectorAll('input, select, textarea').forEach(el => {
+      if (el.type === 'file') return;
+      if (el.type === 'checkbox') {
+        el.checked = true;
+      } else if (el.type === 'radio') {
+        const first = el.name && window.CSS?.escape
+          ? shell.querySelector(`input[type="radio"][name="${CSS.escape(el.name)}"]`)
+          : el.closest('.rpf-form-group, .rpf-section-body')?.querySelector('input[type="radio"]');
+        el.checked = !first || el === first;
+      } else if (!el.value || /N\/A|Sample answer/i.test(el.value)) {
+        el.value = rpfSampleValueForInput(el);
+      }
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+      el.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    shell.querySelectorAll('[data-rpf-dob]').forEach(input => rpfCheckGuardianFields(input));
+    shell.querySelectorAll('.rpf-sig-field-wrap input').forEach(input => rpfUpdateSigPreview(input));
+  }
+
   function rpfMarkRegistrationCompleteNav() {
     _rpfSections.forEach((_, i) => {
       const item = document.getElementById(`rpf-left-item-${i}`);
@@ -1961,25 +2703,164 @@
     });
   }
 
-  function rpfShowSuccessScreen() {
+  async function rpfEnsurePortalCode() {
+    if (!_applicant?.id) return '';
+    const existing = String(_applicant?.custom_answers?.['__bts_portal_code'] || '').trim();
+    if (existing) return existing;
+    const buf = new Uint32Array(1);
+    if (window.crypto?.getRandomValues) window.crypto.getRandomValues(buf);
+    const code = String((buf[0] % 900000) + 100000);
+    try {
+      const merged = { ...(_applicant.custom_answers || {}), '__bts_portal_code': code };
+      await sb.from('audition_applications').update({ custom_answers: merged }).eq('id', _applicant.id);
+      _applicant.custom_answers = merged;
+    } catch (_) {}
+    return code;
+  }
+
+  async function rpfShowSuccessScreen() {
     rpfMarkRegistrationCompleteNav();
     if (!window._rpfSubmittedAnswerRows) window._rpfSubmittedAnswerRows = rpfCollectAnswerRowsForPdf();
     const body = document.getElementById('rpf-wizard-body');
     if (!body) return;
+    const showName = esc(_prod?.title || 'the production');
+    const portalCode = await rpfEnsurePortalCode();
+    const portalUrl = rpfPortalUrl();
+    const emailFailed = window._rpfLastConfirmationEmailError;
+    const portalBlock = portalUrl ? `
+      <div class="rpf-success-card" style="background:#f0f4ff;border-color:#c5d0ea;margin-bottom:1rem;">
+        <div class="rpf-success-title" style="color:#572e88;">Your production portal</div>
+        <div class="rpf-success-body" style="margin-bottom:0.6rem;">Log in any time to see your schedule, shifts, and production updates.</div>
+        ${portalCode ? `<div style="font-size:0.75rem;color:#6f6288;margin-bottom:0.2rem;">Production Code</div><div style="font-size:1.9rem;font-weight:900;letter-spacing:0.15em;color:#572e88;margin-bottom:0.7rem;">${esc(portalCode)}</div>` : ''}
+        <a href="${esc(portalUrl)}" style="display:inline-block;background:#572e88;color:#fff;text-decoration:none;font-weight:800;font-size:0.85rem;padding:0.55rem 1.25rem;border-radius:8px;">Access My Portal →</a>
+      </div>` : '';
     body.innerHTML = `<div class="rpf-success">
       <div class="rpf-success-kicker">Registration Complete</div>
-      <div class="rpf-success-big">You're&nbsp;in.</div>
-      <div class="rpf-success-show-badge">${esc(_prod?.title || 'Production')}</div>
-      <div class="rpf-success-copy">Your registration has been submitted. The production team will be in touch with next steps.</div>
-      <div class="rpf-success-card">
-        <div class="rpf-success-title">Check your inbox.</div>
-        <div class="rpf-success-body">A confirmation is on its way. If you do not see it within a few minutes, check your spam folder.</div>
+      <div class="rpf-success-big">Welcome to the cast!</div>
+      <div class="rpf-success-show-badge">${showName}</div>
+      ${portalBlock}
+      <div class="rpf-success-copy">We're so excited to have you joining us for ${showName}.<br><br>Your registration is complete, your spot is confirmed, and you're officially part of the show.</div>
+
+      <div class="rpf-success-next">
+        <div class="rpf-success-next-title">One last thing</div>
+        <div class="rpf-success-body" style="text-align:left;">${emailFailed ? `We could not send the confirmation email automatically. Please use the button below to send it again, or contact the production team if it still does not arrive.` : `A confirmation email is on its way with a copy of your registration and your production portal information.`}<br><br>If you don't see it within the next few minutes, please check your junk or spam folder and mark Build The Show emails as safe so you don't miss important production updates throughout the production.</div>
       </div>
+
+      <div class="rpf-success-section-title">Need a copy?</div>
+      <div class="rpf-success-body" style="max-width:400px;margin:0 auto 1rem;">You can download a PDF copy of your registration below at any time.</div>
       <div class="rpf-success-actions">
-        <button type="button" class="rpf-download-answers-btn" onclick="rpfDownloadAnswersPdf()">Download PDF of answers</button>
+        <button type="button" class="rpf-download-answers-btn" onclick="rpfDownloadAnswersPdf()">Download Registration PDF</button>
       </div>
+      <button type="button" class="rpf-resend-link" onclick="rpfResendConfirmationEmail()">Send email again</button>
+
+      <div class="rpf-success-closing">Thank you for being part of ${showName}. We can't wait to get started.</div>
     </div>`;
   }
+
+  // ── Resend confirmation email ─────────────────────────────────────────────────
+  function rpfPortalUrl() {
+    try {
+      const slug = _prod?.slug || '';
+      const org = String(window.location.pathname.split('/')[1] || '');
+      if (org && slug) return `${window.location.origin}/${org}/${slug}/portal`;
+    } catch (_) {}
+    return '';
+  }
+
+  async function rpfSendRegistrationCompleteEmail() {
+    if (!_applicant?.id || !_resolvedProductionId) throw new Error('Missing registration email context.');
+    const regUrl = window.location.href;
+    const pdfUrl = _applicant?.custom_answers?.__bts_registration_pdf_url || '';
+    const scheduleSummaries = await rpfLoadProductionScheduleSummaries();
+    const paymentDetails = rpfBuildPaymentEmailDetails();
+    const volunteerLink = await rpfLoadVolunteerLink();
+    const portalUrl = rpfPortalUrl();
+    const portalCode = await rpfEnsurePortalCode();
+    const { data, error } = await sb.functions.invoke('send-email', {
+      body: {
+        applicant_id: _applicant.id,
+        production_id: _resolvedProductionId,
+        category: 'registration_completed',
+        trigger: 'registration_completed',
+        context: {
+          registration_link: regUrl,
+          registration_pdf_url: pdfUrl,
+          registration_pdf_button: pdfUrl ? `<a href="${pdfUrl.replace(/"/g,'&quot;')}" style="display:inline-block;background:#572e88;color:#ffffff;text-decoration:none;font-weight:900;font-size:16px;line-height:1.2;padding:16px 24px;border-radius:10px;">View Registration PDF</a>` : '',
+          rehearsal_start_date: rpfRehearsalStartDateLabel(),
+          rehearsal_schedule: _regSettings?.rehearsal_schedule || _prod?.rehearsal_schedule || '',
+          performance_schedule: scheduleSummaries.performance_schedule || '',
+          event_schedule: scheduleSummaries.event_schedule || '',
+          production_schedule: scheduleSummaries.production_schedule || '',
+          payment_schedule: paymentDetails.schedule,
+          payment_information: paymentDetails.information,
+          volunteer_link: volunteerLink,
+          volunteer_button: rpfEmailButton(volunteerLink, 'View Volunteer Opportunities', '#3f6f47'),
+          volunteer_portal_url: portalUrl,
+          volunteer_portal_button: portalUrl ? rpfEmailButton(portalUrl, 'Open Production Portal') : '',
+          volunteer_passcode: portalCode,
+          org_abbreviation: _org?.abbreviation || '',
+          organization_abbreviation: _org?.abbreviation || '',
+          from_name: _org?.abbreviation || _org?.name || '',
+          opening_night: _prod?.end_date ? new Date(`${_prod.end_date}T00:00:00`).toLocaleDateString('en-CA', { month: 'long', day: 'numeric', year: 'numeric' }) : '',
+        },
+      },
+    });
+    if (error || data?.error) throw new Error(error?.message || data?.error || 'Could not send registration confirmation email.');
+    return data;
+  }
+
+  window.rpfResendConfirmationEmail = async function() {
+    const btn = document.querySelector('.rpf-resend-link');
+    if (!btn || btn.disabled) return;
+    const email = _applicant?.email || _prefill?.email;
+    if (!email) { alert('No email address on file.'); return; }
+    btn.disabled = true;
+    btn.textContent = 'Sending…';
+    try {
+      await rpfSendRegistrationCompleteEmail();
+      window._rpfLastConfirmationEmailError = null;
+      btn.textContent = 'Sent!';
+      setTimeout(() => { btn.disabled = false; btn.textContent = 'Send email again'; }, 4000);
+    } catch (e) {
+      console.warn('[BTS] registration confirmation email failed', e);
+      window._rpfLastConfirmationEmailError = e;
+      btn.disabled = false;
+      btn.textContent = 'Could not send — try again';
+      setTimeout(() => { btn.textContent = 'Send email again'; }, 4000);
+    }
+  };
+
+  // ── Phone formatting ──────────────────────────────────────────────────────────
+  function rpfFormatPhone(raw) {
+    const digits = String(raw || '').replace(/\D/g, '').slice(0, 10);
+    if (digits.length <= 3) return digits;
+    if (digits.length <= 6) return `${digits.slice(0,3)}-${digits.slice(3)}`;
+    return `${digits.slice(0,3)}-${digits.slice(3,6)}-${digits.slice(6)}`;
+  }
+  document.addEventListener('input', e => {
+    const el = e.target;
+    if (el.type !== 'tel') return;
+    const pos = el.selectionStart;
+    const oldLen = el.value.length;
+    el.value = rpfFormatPhone(el.value);
+    const newLen = el.value.length;
+    el.setSelectionRange(pos + (newLen - oldLen), pos + (newLen - oldLen));
+  }, true);
+
+  document.addEventListener('input', e => {
+    const el = e.target;
+    if (el.classList.contains('rpf-input-error') || el.closest('.rpf-input-error')) {
+      el.classList.remove('rpf-input-error');
+      el.closest('.rpf-form-group, .rpf-mr-sig-field, .rpf-final-agree-box, .rpf-mr-sig-block')?.querySelector('.rpf-field-error')?.remove();
+    }
+  }, true);
+  document.addEventListener('change', e => {
+    const el = e.target;
+    if (el.classList.contains('rpf-input-error')) {
+      el.classList.remove('rpf-input-error');
+      el.closest('.rpf-form-group, .rpf-mr-sig-field, .rpf-final-agree-box, .rpf-mr-sig-block')?.querySelector('.rpf-field-error')?.remove();
+    }
+  }, true);
 
   // ── Auto-save ─────────────────────────────────────────────────────────────────
   function scheduleSave(delay = 2000) {
@@ -2003,6 +2884,11 @@
 
   // ── Final submit ──────────────────────────────────────────────────────────────
   window.rpfSubmit = async function() {
+    if (!rpfValidatePanel(_rpfCurrent)) {
+      const panels = document.querySelectorAll('.rpf-panel');
+      panels[_rpfCurrent]?.querySelector('.rpf-input-error')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return;
+    }
     const btn = document.querySelector('.rpf-submit-btn');
     if (btn) { btn.disabled = true; btn.textContent = 'Submitting...'; }
 
@@ -2010,18 +2896,38 @@
     try {
       if (!_applicant?.id) throw new Error('Missing applicant record for registration submit.');
       const pdfRows = rpfCollectAnswerRowsForPdf();
-      if (!pdfRows.logoData) pdfRows.logoData = await rpfLoadPdfLogo(pdfRows.logoUrl || _org?.logo_url || _org?.logo_white_url || '');
+      if (!pdfRows.logoData) pdfRows.logoData = await rpfLoadPdfLogo(pdfRows.logoUrl || _org?.logo_white_url || _org?.logo_url || '');
+      if (!pdfRows.posterData) pdfRows.posterData = await rpfLoadPdfPoster(pdfRows.posterUrl || _prod?.poster_url || '');
       const collected = collectFormAnswers();
       const merged = Object.assign({}, _applicant?.custom_answers || {}, collected, {
         __bts_registration_complete: true,
         __bts_registration_submitted_at: new Date().toISOString(),
       });
 
+      // Upload PDF to storage so admin can view it
+      try {
+        await rpfEnsureSignatureFont();
+        const _pdfBlob = rpfPdfBlobFromBinaryString(rpfBuildAnswersPdf(pdfRows));
+        const _pdfPath = `${_resolvedProductionId}/registrations/${_applicant.id}.pdf`;
+        const { data: _upData, error: _upErr } = await sb.storage.from('production-files').upload(_pdfPath, _pdfBlob, { upsert: true, contentType: 'application/pdf' });
+        if (!_upErr && _upData) {
+          const { data: _urlData } = sb.storage.from('production-files').getPublicUrl(_pdfPath);
+          if (_urlData?.publicUrl) merged.__bts_registration_pdf_url = _urlData.publicUrl;
+        }
+      } catch (_pdfUpErr) { console.warn('[BTS] registration PDF upload failed', _pdfUpErr); }
+
       const { error } = await sb.from('audition_applications').update({ custom_answers: merged }).eq('id', _applicant.id);
       if (error) throw error;
       _applicant.custom_answers = merged;
       window._rpfSubmittedAnswerRows = pdfRows;
       showSavedIndicator();
+      try {
+        await rpfSendRegistrationCompleteEmail();
+        window._rpfLastConfirmationEmailError = null;
+      } catch (emailErr) {
+        console.warn('[BTS] registration confirmation email failed', emailErr);
+        window._rpfLastConfirmationEmailError = emailErr;
+      }
       rpfShowSuccessScreen();
     } catch (err) {
       console.error('[BTS] submit failed', err);
@@ -2093,7 +2999,7 @@
         }
         const template = _formTemplates[def.key] || null;
         const fields   = registrationFormVisibleFields(template?.fields?.length ? template.fields : def.defaultFields || []);
-        const intro    = template?.intro ? subTokens(template.intro) : '';
+        const intro    = rpfTemplateIntro(def, template) ? subTokens(rpfTemplateIntro(def, template)) : '';
         const bodyHtml = def.key === 'cast_agreement'
           ? rpfRenderCastAgreementSection(template)
           : fields.map(f => rpfRenderField(f)).join('');
@@ -2120,8 +3026,9 @@
       </div>`;
     }).join('');
 
-    const orgLogoHtml = _org?.logo_url
-      ? `<img src="${esc(_org.logo_url)}" alt="${esc(_org.name || '')}" />`
+    const orgLogoUrl = _org?.logo_white_url || _org?.logo_url || '';
+    const orgLogoHtml = orgLogoUrl
+      ? `<img src="${esc(orgLogoUrl)}" alt="${esc(_org?.name || '')}" />`
       : `<div class="rpf-left-logo-name">${esc(_org?.name || _org?.abbreviation || 'Build The Show')}</div>`;
 
     const posterHtml = posterUrl
@@ -2130,12 +3037,13 @@
     const performerFirst = _prefill?.preferred_name || _prefill?.first_name || '';
     const performerLast = _prefill?.last_name || '';
     const performerName = [performerFirst, performerLast].filter(Boolean).join(' ').trim();
+    const performerRole = _registrationRoleNames.length ? _registrationRoleNames.join(', ') : 'Cast Member';
     const performerCardHtml = performerName && typeof window.renderCastingCard === 'function'
       ? `<div class="rpf-card-inshow">${window.renderCastingCard({
           first_name: performerFirst,
           last_name: performerLast,
           headshot_url: _prefill?.headshot_url || '',
-          character_name: 'Cast Member'
+          character_name: performerRole
         }, { variant: 'inTheShow' })}</div>`
       : '';
 
@@ -2180,74 +3088,242 @@
   }
 
   // ── Data loading & boot ───────────────────────────────────────────────────────
-  function buildPrefill(applicant) {
-    if (!applicant) return null;
-    const ca = applicant.custom_answers || {};
-    const nameParts = String(applicant.name || '').trim().split(/\s+/);
+  function registrationAnswerValue(source, keys = []) {
+    const ca = source?.custom_answers || source || {};
+    const exactKeys = Object.keys(ca || {});
+    const normalized = new Map(exactKeys.map(key => [String(key).toLowerCase().replace(/[^a-z0-9]+/g, ''), key]));
+    for (const key of keys) {
+      if (ca[key] !== undefined && ca[key] !== null && String(ca[key]).trim() !== '') return String(ca[key]).trim();
+      const normalizedKey = String(key).toLowerCase().replace(/[^a-z0-9]+/g, '');
+      const actual = normalized.get(normalizedKey);
+      if (actual && ca[actual] !== undefined && ca[actual] !== null && String(ca[actual]).trim() !== '') return String(ca[actual]).trim();
+    }
+    return '';
+  }
+
+  function mergeRegistrationAnswers(...sources) {
+    return sources.reduce((merged, source) => {
+      const answers = source?.custom_answers || {};
+      if (answers && typeof answers === 'object') Object.assign(merged, answers);
+      return merged;
+    }, {});
+  }
+
+  function splitRegistrationName(value) {
+    const parts = String(value || '').trim().split(/\s+/).filter(Boolean);
     return {
-      first_name:     applicant.first_name  || ca['Legal first name'] || nameParts[0] || '',
-      last_name:      applicant.last_name   || ca['Legal last name']  || nameParts.slice(1).join(' ') || '',
-      preferred_name: applicant.preferred_name || ca['Preferred name'] || '',
-      pronouns:       applicant.pronouns    || ca['Pronouns'] || '',
-      date_of_birth:  applicant.dob         || ca['Date of birth'] || '',
-      email:          applicant.email       || '',
-      phone:          applicant.phone       || ca['Contact phone number'] || ca['Phone'] || '',
-      headshot_url:   applicant.headshot_url || '',
-      pickup_1_name: ca['Authorised pickup 1 full name'] || ca['Authorized pickup 1 full name'] || ca['Pickup 1 full name'] || '',
-      pickup_1_relationship: ca['Authorised pickup 1 relationship to performer'] || ca['Authorized pickup 1 relationship to performer'] || ca['Pickup 1 relationship to performer'] || '',
-      pickup_1_phone: ca['Authorised pickup 1 phone number'] || ca['Authorized pickup 1 phone number'] || ca['Pickup 1 phone number'] || '',
-      pickup_2_name: ca['Authorised pickup 2 full name'] || ca['Authorized pickup 2 full name'] || ca['Pickup 2 full name'] || '',
-      pickup_2_relationship: ca['Authorised pickup 2 relationship to performer'] || ca['Authorized pickup 2 relationship to performer'] || ca['Pickup 2 relationship to performer'] || '',
-      pickup_2_phone: ca['Authorised pickup 2 phone number'] || ca['Authorized pickup 2 phone number'] || ca['Pickup 2 phone number'] || '',
+      first: parts[0] || '',
+      last: parts.slice(1).join(' '),
     };
   }
 
-  async function boot() {
-    if (!_regCode && !_applicantId) {
-      showError('No registration code', 'This link is missing a registration code. Please use the link from your invitation email.');
-      return;
+  function parseRegistrationContactParts(value) {
+    const parts = String(value || '').split(/[·|,;]/).map(part => part.trim()).filter(Boolean);
+    return {
+      email: parts.find(part => /@/.test(part)) || '',
+      phone: parts.find(part => !/@/.test(part) && /\d/.test(part)) || '',
+    };
+  }
+
+  function buildPrefill(applicant) {
+    if (!applicant) return null;
+    const ca = mergeRegistrationAnswers(_booking, applicant);
+    const nameParts = String(applicant.name || '').trim().split(/\s+/);
+    const caValue = (...keys) => registrationAnswerValue(ca, keys);
+    const guardianName = caValue(
+      'Guardian name',
+      'Guardian Name',
+      'Parent/Guardian name',
+      'Parent or guardian full name',
+      'Parent/Guardian full name'
+    ) || applicant.guardian_name || _booking?.guardian_name || '';
+    const guardianParts = splitRegistrationName(guardianName);
+    const guardianContactRaw = caValue(
+      'Guardian Contact',
+      'guardian_contact',
+      'Guardian contact',
+      'Parent/Guardian contact',
+      'Parent or guardian contact'
+    ) || applicant.guardian_contact || _booking?.guardian_contact || '';
+    const guardianContactParts = parseRegistrationContactParts(guardianContactRaw);
+    const firstName = caValue('Legal first name', 'Legal First Name', 'First Name', 'first_name')
+      || _booking?.first_name
+      || splitRegistrationName(_booking?.name).first
+      || nameParts[0]
+      || '';
+    const lastName = caValue('Legal last name', 'Legal Last Name', 'Last Name', 'last_name')
+      || _booking?.last_name
+      || splitRegistrationName(_booking?.name).last
+      || nameParts.slice(1).join(' ')
+      || '';
+    return {
+      first_name:     firstName,
+      last_name:      lastName,
+      preferred_name: caValue('Preferred Name', 'Preferred name', 'preferred_name') || firstName,
+      pronouns:       applicant.pronouns || _booking?.pronouns || caValue('Pronouns', 'pronouns') || '',
+      date_of_birth:  applicant.date_of_birth || applicant.dob || applicant.birth_date || _booking?.date_of_birth || _booking?.dob || _booking?.birth_date || caValue('Date of Birth', 'Date of birth', 'Birth Date', 'Birthday', 'date_of_birth', 'dob'),
+      email:          applicant.email || _booking?.email || caValue('Contact email', 'Contact Email', 'Participant email', 'Email', 'email'),
+      phone:          applicant.phone || _booking?.phone || caValue('Contact phone number', 'Contact Phone Number', 'Contact phone', 'Participant phone', 'Phone Number', 'Phone', 'phone') || '',
+      headshot_url:   applicant.headshot_url || _booking?.headshot_url || caValue('headshot_url', 'Headshot URL', 'Headshot'),
+      guardian_first: caValue('Guardian first name', 'Guardian First Name', 'Parent/Guardian first name', 'Parent or guardian first name') || guardianParts.first || '',
+      guardian_last:  caValue('Guardian last name', 'Guardian Last Name', 'Parent/Guardian last name', 'Parent or guardian last name') || guardianParts.last || '',
+      guardian_phone: applicant.guardian_phone || _booking?.guardian_phone || guardianContactParts.phone || caValue('Guardian phone', 'Guardian Phone', 'Parent/Guardian phone', 'Parent or guardian phone', 'Guardian contact phone', 'Parent phone'),
+      guardian_email: applicant.guardian_email || _booking?.guardian_email || guardianContactParts.email || caValue('Guardian email', 'Guardian Email', 'Parent/Guardian email', 'Parent or guardian email', 'Guardian contact email', 'Parent email'),
+      guardian_relationship: caValue('Guardian relationship to performer', 'Guardian Relationship to Performer', 'Parent/Guardian relationship', 'Parent or guardian relationship', 'Relationship to performer'),
+      contact_name: applicant.contact_name || _booking?.contact_name || caValue('Contact Name', 'Contact name', 'contact_name'),
+      secondary_name: caValue('Secondary Contact Name', 'secondary_contact_name', 'Additional Contact Name', 'additional_contact_name'),
+      secondary_phone: caValue('Secondary Contact Phone', 'secondary_contact_phone', 'Additional Contact Phone', 'additional_contact_phone'),
+      secondary_email: caValue('Secondary Contact Email', 'secondary_contact_email', 'Additional Contact Email', 'additional_contact_email'),
+      pickup_1_name: caValue('Authorised pickup 1 full name', 'Authorized pickup 1 full name', 'Pickup 1 full name'),
+      pickup_1_relationship: caValue('Authorised pickup 1 relationship to performer', 'Authorized pickup 1 relationship to performer', 'Pickup 1 relationship to performer'),
+      pickup_1_phone: caValue('Authorised pickup 1 phone number', 'Authorized pickup 1 phone number', 'Pickup 1 phone number'),
+      pickup_2_name: caValue('Authorised pickup 2 full name', 'Authorized pickup 2 full name', 'Pickup 2 full name'),
+      pickup_2_relationship: caValue('Authorised pickup 2 relationship to performer', 'Authorized pickup 2 relationship to performer', 'Pickup 2 relationship to performer'),
+      pickup_2_phone: caValue('Authorised pickup 2 phone number', 'Authorized pickup 2 phone number', 'Pickup 2 phone number'),
+    };
+  }
+
+  async function loadLinkedRegistrationBooking(applicant) {
+    if (!applicant?.id && !applicant?.email) return null;
+    try {
+      let query = sb.from('audition_bookings')
+        .select('*')
+        .eq('production_id', applicant.production_id || _resolvedProductionId || _offer?.production_id || '');
+      if (applicant.id) query = query.eq('applicant_id', applicant.id);
+      else query = query.eq('email', applicant.email);
+      const { data, error } = await query.limit(1);
+      if (error) throw error;
+      if (data?.[0]) return data[0];
+    } catch (error) {
+      console.warn('[BTS] registration booking lookup failed', error);
+    }
+    return null;
+  }
+
+  async function loadRegistrationRoleNames(applicant) {
+    if (!applicant?.id || !applicant?.production_id) return [];
+    try {
+      const { data: assignments, error } = await sb.from('casting_assignments')
+        .select('id,character_id,state')
+        .eq('production_id', applicant.production_id)
+        .eq('applicant_id', applicant.id)
+        .in('state', ['chosen', 'ensemble_manual', 'offer_accepted']);
+      if (error) throw error;
+      const rows = assignments || [];
+      const charIds = rows.map(row => row.character_id).filter(Boolean);
+      const { data: chars } = charIds.length
+        ? await sb.from('production_characters').select('id,name').in('id', charIds)
+        : { data: [] };
+      const charMap = new Map((chars || []).map(char => [String(char.id), char.name]));
+      const names = rows.map(row => row.character_id ? (charMap.get(String(row.character_id)) || '') : 'Ensemble').filter(Boolean);
+      return [...new Set(names)];
+    } catch (error) {
+      console.warn('[BTS] registration role lookup failed', error);
+      return [];
+    }
+  }
+
+  async function resolveProductionFromRegistrationPath() {
+    if (_resolvedProductionId || !_orgSlug || !_showSlug || /^system$/i.test(_orgSlug)) return;
+    try {
+      const orgKey = _orgSlug;
+      const { data: orgMatch } = await sb.from('organizations').select('id,name,logo_url,logo_white_url,abbreviation,slug')
+        .or(`slug.eq.${orgKey},abbreviation.eq.${orgKey},abbreviation.eq.${orgKey.toUpperCase()},abbreviation.eq.${orgKey.toLowerCase()}`)
+        .maybeSingle();
+      const orgId = orgMatch?.id || '';
+      if (orgMatch) _org = orgMatch;
+      let q = sb.from('productions').select('id').ilike('slug', _showSlug);
+      if (orgId) q = q.eq('organization_id', orgId);
+      const { data: prodMatch } = await q.maybeSingle();
+      _resolvedProductionId = prodMatch?.id || '';
+    } catch (error) {
+      console.warn('[BTS] registration production path lookup failed', error);
+    }
+  }
+
+  async function findApplicantByRegistrationCode(applicantSelect) {
+    const code = String(_regCode || '').trim();
+    if (!code) return null;
+
+    const dashIdx = code.lastIndexOf('-');
+    const idPrefix = (dashIdx >= 0 ? code.slice(dashIdx + 1) : '').toLowerCase();
+    const namePart = (dashIdx >= 0 ? code.slice(0, dashIdx) : code).toLowerCase();
+
+    if (/^[0-9a-f]{3}$/.test(idPrefix)) {
+      const prefixNum = parseInt(idPrefix, 16);
+      const nextHex = (prefixNum + 1).toString(16).padStart(3, '0');
+      const idLow = `${idPrefix}00000-0000-0000-0000-000000000000`;
+      const idHigh = `${nextHex}00000-0000-0000-0000-000000000000`;
+      let q = sb.from('audition_applications').select(applicantSelect).gte('id', idLow);
+      if (nextHex.length === 3) q = q.lt('id', idHigh);
+      if (_resolvedProductionId) q = q.eq('production_id', _resolvedProductionId);
+      const { data, error } = await q;
+      if (error) throw error;
+      const match = (data || []).find(row => {
+        const rowId = String(row.id || '').slice(0, 3).toLowerCase();
+        const ca = row.custom_answers || {};
+        const rowName = String(ca['Preferred Name'] || ca['Preferred name'] || row.name || '').trim().split(/\s+/)[0].replace(/[^a-z0-9]/gi, '').toLowerCase();
+        return rowId === idPrefix && rowName === namePart;
+      });
+      if (match) return match;
     }
 
-    // 1. Resolve the same offer identity used by the cast-offer page.
-    const applicantSelect = 'id, production_id, name, email, custom_answers, date_conflicts, conflicts';
-    let applicant = null;
-    if (_applicantId) {
-      let byId = sb.from('audition_applications').select(applicantSelect).eq('id', _applicantId);
-      if (_productionId) byId = byId.eq('production_id', _productionId);
-      const { data, error } = await byId.maybeSingle();
-      if (error) throw error;
-      applicant = data || null;
-    }
     async function findApplicantByOfferKey(key) {
       const { data, error } = await sb
         .from('audition_applications')
         .select(applicantSelect)
-        .contains('custom_answers', { [key]: _regCode })
+        .contains('custom_answers', { [key]: code })
         .limit(1);
       if (error) throw error;
       return data?.[0] || null;
     }
-    if (!applicant && _regCode) applicant = await findApplicantByOfferKey(CAST_OFFER_KEYS.code);
-    if (!applicant && _regCode) applicant = await findApplicantByOfferKey(CAST_OFFER_KEYS.token);
+    return await findApplicantByOfferKey(CAST_OFFER_KEYS.code)
+      || await findApplicantByOfferKey(CAST_OFFER_KEYS.token);
+  }
+
+  async function boot() {
+    await ensureSupabaseClient();
+    if (!_regCode && !_applicantId && !(_sampleMode && _productionId)) {
+      showError('No registration code', 'This link is missing a registration code. Please use the link from your invitation email.');
+      return;
+    }
+    if (_productionId) _resolvedProductionId = _productionId;
+    await resolveProductionFromRegistrationPath();
+
+    // 1. Resolve the same offer identity used by the cast-offer page.
+    const applicantSelect = '*';
+    let applicant = null;
+    if (_applicantId) {
+      let byId = sb.from('audition_applications').select(applicantSelect).eq('id', _applicantId);
+      if (_resolvedProductionId) byId = byId.eq('production_id', _resolvedProductionId);
+      const { data, error } = await byId.maybeSingle();
+      if (error) throw error;
+      applicant = data || null;
+    }
+    if (!applicant && _regCode && !_sampleMode) applicant = await findApplicantByRegistrationCode(applicantSelect);
 
     let offer = null;
-    if (!applicant) {
-      const { data: offerMatch, error: offerErr } = await sb
-        .from('cast_offers')
-        .select('id, production_id, applicant_id, token, code')
-        .or(`token.eq.${_regCode},code.eq.${_regCode}`)
-        .maybeSingle();
-      if (offerErr) throw offerErr;
-      offer = offerMatch || null;
+    if (!applicant && !_sampleMode) {
+      try {
+        const { data: offerMatch, error: offerErr } = await sb
+          .from('cast_offers')
+          .select('id, production_id, applicant_id, token, code')
+          .or(`token.eq.${_regCode},code.eq.${_regCode}`)
+          .maybeSingle();
+        if (offerErr) throw offerErr;
+        offer = offerMatch || null;
+      } catch (offerErr) {
+        console.warn('[BTS] legacy cast_offers lookup unavailable for registration link', offerErr);
+      }
     }
 
-    if (!applicant && !offer) {
+    if (!applicant && !offer && !_sampleMode) {
       showError('Link not found', 'This registration link does not match any active production. It may have expired or been removed. Please contact your production team for a new link.');
       return;
     }
     _offer = offer || {
       id: '',
-      production_id: applicant?.production_id || _productionId || '',
+      production_id: applicant?.production_id || _resolvedProductionId || '',
       applicant_id: applicant?.id || '',
       token: _regCode,
       code: _regCode,
@@ -2266,6 +3342,7 @@
     }
     _prod = prod;
     _regSettings = (typeof prod.registration_settings === 'object' && prod.registration_settings) ? prod.registration_settings : {};
+    await rpfLoadRehearsalStartDate();
 
     const loadingCopy = document.getElementById('loading-prod-name');
     if (loadingCopy) loadingCopy.textContent = prod.title || '';
@@ -2278,12 +3355,18 @@
         .eq('id', prod.organization_id)
         .maybeSingle();
       _org = org || null;
+      updateLoadingOrganisationLogo(_org);
     }
 
     // 4. Applicant / prefill
     if (applicant) {
       _applicant = applicant;
+      _booking = await loadLinkedRegistrationBooking(_applicant);
+      _registrationRoleNames = await loadRegistrationRoleNames(_applicant);
       _prefill = buildPrefill(_applicant);
+    } else if (_sampleMode) {
+      _prefill = rpfSampleRegistrationPrefill();
+      _registrationRoleNames = ['Glinda'];
     } else if (_offer.applicant_id) {
       const { data: applicantMatch } = await sb
         .from('audition_applications')
@@ -2291,6 +3374,8 @@
         .eq('id', _offer.applicant_id)
         .maybeSingle();
       _applicant = applicantMatch || null;
+      _booking = await loadLinkedRegistrationBooking(_applicant);
+      _registrationRoleNames = await loadRegistrationRoleNames(_applicant);
       _prefill = buildPrefill(_applicant);
     }
 
@@ -2302,7 +3387,14 @@
     document.title = `${prod.title || 'Registration'} | Build The Show`;
 
     renderForm();
-    rpfApplySavedAnswers(_applicant?.custom_answers);
+    if (_sampleMode) rpfApplySampleAnswers();
+    else rpfApplySavedAnswers(_applicant?.custom_answers);
+    if (_sampleMode && _pdfMode) {
+      window._rpfSubmittedAnswerRows = rpfCollectAnswerRowsForPdf();
+      if (_downloadMode) await rpfDownloadAnswersPdf();
+      else await rpfOpenAnswersPdfInline();
+      return;
+    }
     if (rpfRegistrationIsComplete()) {
       window._rpfSubmittedAnswerRows = rpfCollectAnswerRowsForPdf();
       if (_pdfMode) {

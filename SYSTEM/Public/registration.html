@@ -2726,6 +2726,7 @@
     const showName = esc(_prod?.title || 'the production');
     const portalCode = await rpfEnsurePortalCode();
     const portalUrl = rpfPortalUrl();
+    const emailFailed = window._rpfLastConfirmationEmailError;
     const portalBlock = portalUrl ? `
       <div class="rpf-success-card" style="background:#f0f4ff;border-color:#c5d0ea;margin-bottom:1rem;">
         <div class="rpf-success-title" style="color:#572e88;">Your production portal</div>
@@ -2742,7 +2743,7 @@
 
       <div class="rpf-success-next">
         <div class="rpf-success-next-title">One last thing</div>
-        <div class="rpf-success-body" style="text-align:left;">A confirmation email is on its way with a copy of your registration and your production portal information.<br><br>If you don't see it within the next few minutes, please check your junk or spam folder and mark Build The Show emails as safe so you don't miss important production updates throughout the production.</div>
+        <div class="rpf-success-body" style="text-align:left;">${emailFailed ? `We could not send the confirmation email automatically. Please use the button below to send it again, or contact the production team if it still does not arrive.` : `A confirmation email is on its way with a copy of your registration and your production portal information.`}<br><br>If you don't see it within the next few minutes, please check your junk or spam folder and mark Build The Show emails as safe so you don't miss important production updates throughout the production.</div>
       </div>
 
       <div class="rpf-success-section-title">Need a copy?</div>
@@ -2750,7 +2751,7 @@
       <div class="rpf-success-actions">
         <button type="button" class="rpf-download-answers-btn" onclick="rpfDownloadAnswersPdf()">Download Registration PDF</button>
       </div>
-      <button type="button" class="rpf-resend-link" onclick="rpfResendConfirmationEmail()">Resend Confirmation Email</button>
+      <button type="button" class="rpf-resend-link" onclick="rpfResendConfirmationEmail()">Send email again</button>
 
       <div class="rpf-success-closing">Thank you for being part of ${showName}. We can't wait to get started.</div>
     </div>`;
@@ -2774,7 +2775,7 @@
     const paymentDetails = rpfBuildPaymentEmailDetails();
     const volunteerLink = await rpfLoadVolunteerLink();
     const portalUrl = rpfPortalUrl();
-    const portalCode = String(_applicant?.custom_answers?.['__bts_portal_code'] || '').trim();
+    const portalCode = await rpfEnsurePortalCode();
     const { data, error } = await sb.functions.invoke('send-email', {
       body: {
         applicant_id: _applicant.id,
@@ -2797,6 +2798,9 @@
           volunteer_portal_url: portalUrl,
           volunteer_portal_button: portalUrl ? rpfEmailButton(portalUrl, 'Open Production Portal') : '',
           volunteer_passcode: portalCode,
+          org_abbreviation: _org?.abbreviation || '',
+          organization_abbreviation: _org?.abbreviation || '',
+          from_name: _org?.abbreviation || _org?.name || '',
           opening_night: _prod?.end_date ? new Date(`${_prod.end_date}T00:00:00`).toLocaleDateString('en-CA', { month: 'long', day: 'numeric', year: 'numeric' }) : '',
         },
       },
@@ -2814,13 +2818,15 @@
     btn.textContent = 'Sending…';
     try {
       await rpfSendRegistrationCompleteEmail();
+      window._rpfLastConfirmationEmailError = null;
       btn.textContent = 'Sent!';
-      setTimeout(() => { btn.disabled = false; btn.textContent = 'Resend confirmation email'; }, 4000);
+      setTimeout(() => { btn.disabled = false; btn.textContent = 'Send email again'; }, 4000);
     } catch (e) {
       console.warn('[BTS] registration confirmation email failed', e);
+      window._rpfLastConfirmationEmailError = e;
       btn.disabled = false;
       btn.textContent = 'Could not send — try again';
-      setTimeout(() => { btn.textContent = 'Resend confirmation email'; }, 4000);
+      setTimeout(() => { btn.textContent = 'Send email again'; }, 4000);
     }
   };
 
@@ -2917,8 +2923,10 @@
       showSavedIndicator();
       try {
         await rpfSendRegistrationCompleteEmail();
+        window._rpfLastConfirmationEmailError = null;
       } catch (emailErr) {
         console.warn('[BTS] registration confirmation email failed', emailErr);
+        window._rpfLastConfirmationEmailError = emailErr;
       }
       rpfShowSuccessScreen();
     } catch (err) {

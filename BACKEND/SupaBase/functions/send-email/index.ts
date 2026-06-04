@@ -505,7 +505,7 @@ serve(async (req) => {
     try {
       const { data } = await sb
         .from('organizations')
-        .select('name,email')
+        .select('name,email,abbreviation')
         .eq('id', String(productionRecord.organization_id))
         .maybeSingle();
       org = data as Record<string, unknown> | null;
@@ -514,6 +514,7 @@ serve(async (req) => {
   if (!org) {
     org = {
       name: firstDefinedString(directContext.org_name, directContext.organization_name, directProduction.org_name),
+      abbreviation: firstDefinedString(directContext.org_abbreviation, directContext.organization_abbreviation, directProduction.org_abbreviation),
       email: firstDefinedString(directContext.org_email, directContext.organization_email, directProduction.org_email),
     };
   }
@@ -624,6 +625,7 @@ serve(async (req) => {
   // ── Build tokens ──────────────────────────────────────────────
   const firstName    = (performerName.split(' ')[0] || 'Performer');
   const orgName      = String(org?.name  || '');
+  const orgShortName = firstDefinedString(org?.abbreviation, directContext.org_abbreviation, directContext.organization_abbreviation);
   const orgEmail     = String(org?.email || '');
   const showName     = String(productionRecord.title || '');
   const director     = String(productionRecord.director || '');
@@ -790,6 +792,7 @@ serve(async (req) => {
     '{{what_to_prepare}}':       whatToPrepare,
     '{{booking_link}}':          bookingLink,
     '{{org_name}}':              orgName,
+    '{{org_abbreviation}}':      orgShortName,
     '{{organisation_name}}':     firstDefinedString(directContext.organisation_name, directContext.organization_name, orgName),
     '{{organization_name}}':     firstDefinedString(directContext.organization_name, directContext.organisation_name, orgName),
     '{{director_name}}':         director,
@@ -965,7 +968,7 @@ serve(async (req) => {
   const htmlBody      = styleFallbackLinksHtml(bodyLooksHtml ? substituteTemplate(sourceBody, true) : plainTextToHtml(templatedBody, rawHtmlSnippets));
   const bodyText      = (bodyLooksHtml || rawHtmlSnippets.length) ? htmlToPlainText(templatedBody) : templatedBody;
 
-  const fromName  = orgName || 'Build The Show';
+  const fromName  = firstDefinedString(directContext.from_name, directContext.fromName, orgShortName, orgName, 'Build The Show');
   const fromEmail = FROM_EMAIL || `noreply@buildtheshow.com`;
   const fromField = `${fromName} <${fromEmail}>`;
   const replyTo   = orgEmail || undefined;
