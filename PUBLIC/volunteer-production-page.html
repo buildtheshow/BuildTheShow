@@ -2987,16 +2987,12 @@
       const { data, error } = await sb.from('volunteer_signups')
         .select(options.select || '*')
         .eq('production_id', prod.id)
-        .or(`email.ilike.${normalized},volunteer_email.ilike.${normalized}`)
         .neq('status', 'cancelled');
-      if (error && missingVolunteerPasscodeColumn(error) && options.select?.includes('volunteer_passcode')) {
-        return findVolunteerSignupsByCode(email, code, {
-          ...options,
-          select: options.select.split(',').map(part => part.trim()).filter(part => part !== 'volunteer_passcode').join(','),
-        });
-      }
       if (error) throw error;
-      return (data || []).filter(row => signupPasscode(row) === enteredCode);
+      return (data || []).filter(row => {
+        const rowEmail = (row.email || row.volunteer_email || '').trim().toLowerCase();
+        return rowEmail === normalized && signupPasscode(row) === enteredCode;
+      });
     }
     async function loadVolunteerPortalRowsByToken(token, options = {}) {
       if (!token || !prod?.id) return [];
