@@ -938,6 +938,23 @@
     .vp-modal-title { font-size: 1.08rem; font-weight: 950; line-height: 1.25; }
     .vp-modal-close { border: 0; background: transparent; color: var(--muted); font-size: 1.45rem; line-height: 1; }
     .vp-modal-body { padding: 1rem 1.25rem 1.25rem; }
+    .vp-modal--portal-detail { width: min(520px, 94vw); overflow: hidden; }
+    .vpd-detail-top { padding: 1.15rem 1.25rem 1rem; color: #fff; }
+    .vpd-detail-kicker { font-size: 0.64rem; font-weight: 950; text-transform: uppercase; letter-spacing: 0.1em; opacity: 0.84; margin-bottom: 0.25rem; }
+    .vpd-detail-title { font-size: 1.22rem; font-weight: 950; line-height: 1.16; padding-right: 1.5rem; }
+    .vpd-detail-close { position: absolute; top: 0.75rem; right: 0.85rem; border: 0; background: rgba(255,255,255,0.16); color: #fff; width: 32px; height: 32px; border-radius: 50%; font-size: 1.3rem; line-height: 1; cursor: pointer; }
+    .vpd-detail-body { padding: 1.1rem 1.25rem 1.25rem; }
+    .vpd-detail-grid { display: grid; gap: 0.7rem; margin-bottom: 1rem; }
+    .vpd-detail-row { display: grid; grid-template-columns: 88px minmax(0, 1fr); gap: 0.8rem; align-items: baseline; padding-bottom: 0.7rem; border-bottom: 1px solid #eee9f5; }
+    .vpd-detail-label { font-size: 0.62rem; font-weight: 950; text-transform: uppercase; letter-spacing: 0.09em; color: rgba(87,46,136,0.58); }
+    .vpd-detail-value { font-size: 0.9rem; font-weight: 800; color: var(--ink); line-height: 1.35; }
+    .vpd-detail-notes { display: grid; gap: 0.65rem; margin-top: 0.25rem; }
+    .vpd-detail-note { background: #f7f5fc; border: 1px solid #e7dff0; border-radius: 8px; padding: 0.78rem 0.85rem; }
+    .vpd-detail-note-title { font-size: 0.62rem; font-weight: 950; text-transform: uppercase; letter-spacing: 0.09em; color: rgba(87,46,136,0.62); margin-bottom: 0.2rem; }
+    .vpd-detail-note-body { font-size: 0.82rem; font-weight: 750; color: var(--ink); line-height: 1.42; white-space: pre-wrap; }
+    .vpd-detail-actions { display: flex; justify-content: flex-end; gap: 0.65rem; padding-top: 1rem; }
+    .vpd-detail-btn { border: 2px solid var(--purple); border-radius: 8px; background: var(--purple); color: #fff; font-family: var(--bts-font); font-size: 0.82rem; font-weight: 950; padding: 0.55rem 0.9rem; cursor: pointer; }
+    .vpd-detail-btn.secondary { background: #fff; color: var(--purple); }
     .vp-submit-review { display: flex; flex-direction: column; gap: 0.55rem; margin-bottom: 0.5rem; }
     .vp-form-row { margin-bottom: 0.82rem; }
     .vp-form-row label { display: block; color: var(--ink); font-size: 0.78rem; font-weight: 950; margin-bottom: 0.28rem; }
@@ -1572,6 +1589,7 @@
     .vp-pay-tl-desc { font-size:0.64rem; font-weight:400; color:#999; margin-top:0.05rem; }
     .vp-pay-tl-tag { display:inline-block; margin-top:0.18rem; padding:0.09rem 0.32rem; border-radius:3px; font-size:0.54rem; font-weight:600; text-transform:uppercase; letter-spacing:0.05em; background:#edeaf5; color:#7a5faa; }
     .vp-pay-tl-tag.p { background:#e4f2e8; color:#2a6035; }
+    .vp-pay-view-btn.active { background:#fff !important; color:#572e88 !important; border-bottom:2px solid #572e88 !important; }
     @media (max-width:660px) {
       .vp-pay-page { grid-template-columns:1fr; }
       .vp-pay-right { position:static; }
@@ -3447,6 +3465,7 @@
           time: dashboardShiftTimeText(row),
           place: dashboardShiftPlaceText(row),
           color: DASH_DEPT_COLOURS[row.department] || 'var(--purple)',
+          source: row,
         }));
       });
       const pItems = (mode === 'volunteer' ? [] : performerEvents(allPortalPerformers(portalData))).map(ev => ({
@@ -3459,6 +3478,7 @@
         arrive: ev.arrive_note || '',
         bring:  ev.bring_note || '',
         note:   ev.know_note || '',
+        source: ev,
       }));
       return [...vItems, ...pItems].filter(item => item.date).sort((a, b) => String(a.date).localeCompare(String(b.date)) || String(a.time).localeCompare(String(b.time)));
     }
@@ -3568,9 +3588,11 @@
       let h = 0; for (let i = 0; i < name.length; i++) h = Math.imul(31, h) + name.charCodeAt(i) | 0;
       return colors[Math.abs(h) % colors.length];
     }
-    function _payInitials(name) {
-      const parts = String(name || '').trim().split(/\s+/);
-      return parts.length >= 2 ? (parts[0][0] + parts[1][0]).toUpperCase() : String(name || '?').slice(0, 2).toUpperCase();
+    function _payInitials(performer) {
+      // Use first + last initial from name
+      const displayName = typeof performerDisplayName === 'function' ? performerDisplayName(performer) : String(performer || '');
+      const parts = displayName.trim().split(/\s+/);
+      return parts.length >= 2 ? (parts[0][0] + parts[parts.length - 1][0]).toUpperCase() : (parts[0] || '?').slice(0, 2).toUpperCase();
     }
     function registrationPaymentsHtml(performers = []) {
       if (!performers.length) return `<div class="vpd-card"><div class="vpd-empty">No registration records are connected to this portal yet.</div></div>`;
@@ -3592,7 +3614,9 @@
       const orgName   = org?.name || org?.organization_name || 'Build The Show';
       const logoUrl   = org?.logo_url || '';
       const issuedDate = fmtDate(new Date().toISOString().slice(0,10), { short: true });
-      const howToPay  = String(paymentSettings?.payment_instructions || '').trim();
+      const rawHowToPay = String(paymentSettings?.payment_instructions || '').trim();
+      const howToPay = rawHowToPay || (org?.email ? `Contact ${esc(orgName)} at ${esc(org.email)} to arrange payment.` : `Contact ${esc(orgName)} to arrange payment.`);
+      const hasSplitMode = paymentSettings?.mode === 'split' && (paymentInstallments().length > 1);
       const nextInst  = allPay.flatMap(({ pay }) =>
         pay.installments.map((inst, i) => ({ inst, paid: !!(pay.records || []).find(r => r.installment_index === i && r.paid) }))
       ).find(x => !x.paid);
@@ -3616,12 +3640,7 @@
         })
       ).sort((a, b) => a.sortKey.localeCompare(b.sortKey));
 
-      // Registration actions
-      const regActions = performers.map(p => {
-        const app = p.app || {};
-        const status = performerRegistrationStatus(app);
-        return `<a class="vpd-action-btn secondary" style="font-size:0.76rem;padding:0.45rem 0.75rem;" href="${esc(performerRegistrationUrl(app))}">${esc(status === 'Registration complete' ? `Review${isHousehold ? ` (${performerDisplayName(p)})` : ''}` : `Complete Registration${isHousehold ? ` (${performerDisplayName(p)})` : ''}`)}</a>`;
-      }).join('');
+      // No registration action buttons on the payment page
 
       // ── LEFT COLUMN ──
       const leftHtml = `
@@ -3658,7 +3677,7 @@
               const name = performerDisplayName(performer);
               const roles = performerRoleNames(performer).join(', ') || 'Performer';
               return `<div class="vp-pay-perf">
-                <div class="vp-pay-av" style="background:${_payAvatarColor(name)};">${esc(_payInitials(name))}</div>
+                <div class="vp-pay-av" style="background:${_payAvatarColor(name)};">${esc(_payInitials(performer))}</div>
                 <div><div class="vp-pay-perf-name">${esc(name)}</div><div class="vp-pay-perf-role">${esc(roles)}</div></div>
                 <div class="vp-pay-perf-nums">
                   <div class="vp-pay-pnum"><div class="vp-pay-pnum-lbl">Total</div><div class="vp-pay-pnum-val">${esc(moneyLabel(pay.total)||'$0')}</div></div>
@@ -3668,20 +3687,38 @@
               </div>`;
             }).join('')}` : ''}
           ${paymentEnabled ? `
-            <div class="vp-pay-sec">Schedule</div>
-            ${allPay.flatMap(({ performer, pay }) =>
-              pay.installments.map((inst, i) => {
-                const rec = (pay.records || []).find(r => r.installment_index === i && r.paid);
-                const isPaid = !!rec;
-                const who = isHousehold ? ` (${performerDisplayName(performer)})` : '';
-                const meta = isPaid ? (paymentRecordMeta(rec) || 'Payment received') : (inst.dueDate ? `Due ${fmtDate(inst.dueDate, { short: true })}` : 'Due date TBA');
-                return `<div class="vp-pay-sched-row${isPaid ? ' done' : ''}">
-                  <div><div class="vp-pay-sched-name">${esc((inst.label || 'Payment') + who)}</div><div class="vp-pay-sched-sub">${esc(meta)}</div></div>
-                  <div class="vp-pay-sched-due">${esc(inst.dueDate ? fmtDate(inst.dueDate, { short: true }) : '')}</div>
-                  <div class="vp-pay-sched-amt">${esc(moneyLabel(inst.amount)||'$0')}</div>
+            ${hasSplitMode ? `<div class="vp-pay-view-toggle" style="display:flex;gap:0;border-bottom:1px solid #e3dff0;">
+              <button class="vp-pay-view-btn active" type="button" data-view="instalment" onclick="this.closest('.vp-pc').querySelectorAll('.vp-pay-view-btn').forEach(b=>b.classList.remove('active'));this.classList.add('active');this.closest('.vp-pc').querySelector('.vp-pay-instalment-view').style.display='';this.closest('.vp-pc').querySelector('.vp-pay-fullamount-view').style.display='none';" style="flex:1;padding:0.5rem 0.85rem;font-size:0.72rem;font-weight:600;color:#572e88;background:#faf8fd;border:none;border-right:1px solid #e3dff0;cursor:pointer;font-family:inherit;">Pay by Instalment</button>
+              <button class="vp-pay-view-btn" type="button" data-view="full" onclick="this.closest('.vp-pc').querySelectorAll('.vp-pay-view-btn').forEach(b=>b.classList.remove('active'));this.classList.add('active');this.closest('.vp-pc').querySelector('.vp-pay-instalment-view').style.display='none';this.closest('.vp-pc').querySelector('.vp-pay-fullamount-view').style.display='';" style="flex:1;padding:0.5rem 0.85rem;font-size:0.72rem;font-weight:600;color:#555;background:#fff;border:none;cursor:pointer;font-family:inherit;">Pay in Full</button>
+            </div>` : ''}
+            <div class="vp-pay-instalment-view">
+              <div class="vp-pay-sec">Payment Schedule</div>
+              ${allPay.flatMap(({ performer, pay }) =>
+                pay.installments.map((inst, i) => {
+                  const rec = (pay.records || []).find(r => r.installment_index === i && r.paid);
+                  const isPaid = !!rec;
+                  const who = isHousehold ? ` (${performerDisplayName(performer)})` : '';
+                  const meta = isPaid ? (paymentRecordMeta(rec) || 'Received') : (inst.dueDate ? fmtDate(inst.dueDate, { short: true }) : 'TBA');
+                  return `<div class="vp-pay-sched-row${isPaid ? ' done' : ''}">
+                    <div><div class="vp-pay-sched-name">${esc((inst.label || 'Payment') + who)}</div><div class="vp-pay-sched-sub">${esc(isPaid ? meta : '')}</div></div>
+                    <div class="vp-pay-sched-due">${esc(isPaid ? '' : meta)}</div>
+                    <div class="vp-pay-sched-amt">${esc(moneyLabel(inst.amount)||'$0')}</div>
+                  </div>`;
+                })
+              ).join('')}
+            </div>
+            ${hasSplitMode ? `<div class="vp-pay-fullamount-view" style="display:none;">
+              <div class="vp-pay-sec">Pay in Full</div>
+              ${allPay.map(({ performer, pay }) => {
+                const name = performerDisplayName(performer);
+                const who = isHousehold ? ` (${esc(name)})` : '';
+                return `<div class="vp-pay-sched-row">
+                  <div><div class="vp-pay-sched-name">Full balance${who}</div><div class="vp-pay-sched-sub">Pay the full amount at once</div></div>
+                  <div class="vp-pay-sched-due"></div>
+                  <div class="vp-pay-sched-amt">${esc(moneyLabel(pay.balance)||'$0')}</div>
                 </div>`;
-              })
-            ).join('')}
+              }).join('')}
+            </div>` : ''}
             ${allDiscounts.length ? `
               <div class="vp-pay-sec">Discounts &amp; Credits</div>
               ${allDiscounts.map(({ line, performer }) => {
@@ -3696,13 +3733,12 @@
             ` : ''}
             <div class="vp-pay-totals">
               ${totalCredits > 0 ? `<div class="vp-pay-tot-row"><span>Subtotal before credits</span><span>${esc(moneyLabel(totalExpected + totalCredits)||'$0')}</span></div>` : ''}
-              ${totalCredits > 0 ? `<div class="vp-pay-tot-row"><span>Credits applied</span><span style="color:#2f6d3e;">-${esc(moneyLabel(totalCredits)||'$0')}</span></div>` : ''}
-              <div class="vp-pay-tot-row"><span>Payments received</span><span style="color:#2f6d3e;">${esc(moneyLabel(totalPaid)||'$0')}</span></div>
-              <div class="vp-pay-tot-row balance"><span>Balance due</span><span style="color:${balanceDue <= 0 ? '#2f6d3e' : '#1a1530'}">${esc(moneyLabel(balanceDue)||'$0')}</span></div>
+              ${totalCredits > 0 ? `<div class="vp-pay-tot-row"><span>Credits applied</span><span style="color:#2a6035;">-${esc(moneyLabel(totalCredits)||'$0')}</span></div>` : ''}
+              <div class="vp-pay-tot-row"><span>Paid so far</span><span style="color:#2a6035;">${esc(moneyLabel(totalPaid)||'$0')}</span></div>
+              <div class="vp-pay-tot-row balance"><span>Balance due</span><span style="color:${balanceDue <= 0 ? '#2a6035' : '#1a1530'}">${esc(moneyLabel(balanceDue)||'$0')}</span></div>
             </div>
           ` : ''}
-          ${howToPay ? `<div class="vp-pay-how"><span class="vp-pay-how-lbl">How to Pay</span>${esc(howToPay)}</div>` : ''}
-          ${regActions ? `<div style="padding:0.65rem 0.9rem;border-top:1px solid #e0dcea;display:flex;gap:0.5rem;flex-wrap:wrap;justify-content:flex-end;">${regActions}</div>` : ''}
+          <div class="vp-pay-how"><span class="vp-pay-how-lbl">How to Pay</span>${rawHowToPay ? esc(rawHowToPay) : `Contact ${esc(orgName)}${org?.email ? ` at ${esc(org.email)}` : ''} to arrange payment.`}</div>
         </div>`;
 
       // ── RIGHT COLUMN — sticky timeline ──
@@ -3710,27 +3746,31 @@
         <div class="vp-pc">
           <div class="vp-pay-tl">
             <div class="vp-pay-tl-hdr">Payment Timeline</div>
-            ${tlItems.length ? tlItems.map(({ inst, rec, performer, isPaid }) => {
-              const label = inst.label || 'Payment';
-              const who = isHousehold ? performerDisplayName(performer) : '';
-              const dateStr = isPaid && rec.paid_at ? fmtDate(rec.paid_at, { short: true }) : (inst.dueDate ? fmtDate(inst.dueDate, { short: true }) : 'TBA');
-              const meta = isPaid ? (paymentRecordMeta(rec) || '') : '';
-              const amt = isPaid ? moneyLabel(paymentRecordAmount(rec, inst)) : moneyLabel(inst.amount);
-              return `<div class="vp-pay-tl-item">
-                <div class="vp-pay-tl-col">
-                  <div class="vp-pay-tl-dot ${isPaid ? 'done' : ''}">${isPaid ? `<svg viewBox="0 0 24 24"><path d="m20 6-11 11-5-5"/></svg>` : ''}</div>
-                  <div class="vp-pay-tl-line"></div>
-                </div>
-                <div class="vp-pay-tl-body">
-                  <div class="vp-pay-tl-row">
-                    <div class="vp-pay-tl-date">${esc(dateStr)}</div>
-                    <div class="vp-pay-tl-amt ${isPaid ? 'g' : ''}">-${esc(amt||'$0')}</div>
+            ${(() => {
+              // Deduplicate timeline by installment index (household shows one entry per installment, not per performer)
+              const seen = new Set();
+              const deduped = tlItems.filter(x => { const k = String(x.inst.dueDate||'') + (x.inst.label||''); if (seen.has(k)) return false; seen.add(k); return true; });
+              return deduped.length ? deduped.map(({ inst, rec, isPaid }) => {
+                const label = inst.label || 'Payment';
+                const dateStr = isPaid && rec?.paid_at ? fmtDate(rec.paid_at, { short: true }) : (inst.dueDate ? fmtDate(inst.dueDate, { short: true }) : 'TBA');
+                const meta = isPaid ? (rec?.payment_method ? paymentMethodLabel(rec.payment_method) : '') : '';
+                const amt = isPaid ? moneyLabel(paymentRecordAmount(rec, inst)) : moneyLabel(inst.amount);
+                return `<div class="vp-pay-tl-item">
+                  <div class="vp-pay-tl-col">
+                    <div class="vp-pay-tl-dot ${isPaid ? 'done' : ''}">${isPaid ? `<svg viewBox="0 0 24 24"><path d="m20 6-11 11-5-5"/></svg>` : ''}</div>
+                    <div class="vp-pay-tl-line"></div>
                   </div>
-                  <div class="vp-pay-tl-desc">${esc(label)}${who ? ` · ${esc(who)}` : ''}${meta ? ` · ${esc(meta)}` : ''}</div>
-                  <span class="vp-pay-tl-tag ${isPaid ? 'p' : ''}">${esc(isPaid ? 'Paid' : 'Upcoming')}</span>
-                </div>
-              </div>`;
-            }).join('') : `<div style="color:#aaa;font-size:0.72rem;">No schedule yet.</div>`}
+                  <div class="vp-pay-tl-body">
+                    <div class="vp-pay-tl-row">
+                      <div class="vp-pay-tl-date">${esc(dateStr)}</div>
+                      <div class="vp-pay-tl-amt ${isPaid ? 'g' : ''}">-${esc(amt||'$0')}</div>
+                    </div>
+                    <div class="vp-pay-tl-desc">${esc(label)}${meta ? ` · ${esc(meta)}` : ''}</div>
+                    <span class="vp-pay-tl-tag ${isPaid ? 'p' : ''}">${esc(isPaid ? 'Paid' : 'Upcoming')}</span>
+                  </div>
+                </div>`;
+              }).join('') : `<div style="color:#aaa;font-size:0.72rem;">No schedule yet.</div>`;
+            })()}
           </div>
         </div>`;
 
@@ -3859,6 +3899,76 @@
       </section>`;
     }
 
+    function portalDetailRowHtml(label, value) {
+      if (value === undefined || value === null || String(value).trim() === '') return '';
+      return `<div class="vpd-detail-row"><div class="vpd-detail-label">${esc(label)}</div><div class="vpd-detail-value">${esc(value)}</div></div>`;
+    }
+
+    function portalDetailNoteHtml(label, value) {
+      if (value === undefined || value === null || String(value).trim() === '') return '';
+      return `<div class="vpd-detail-note"><div class="vpd-detail-note-title">${esc(label)}</div><div class="vpd-detail-note-body">${esc(value)}</div></div>`;
+    }
+
+    function portalCalendarItemDetailHtml(item = {}) {
+      const kind = portalItemKind(item);
+      const source = item.source || {};
+      const rows = [
+        portalDetailRowHtml('Date', item.date ? fmtDate(item.date, { short: false }) : ''),
+        portalDetailRowHtml('Time', item.time || ''),
+        portalDetailRowHtml(kind === 'deadline' ? 'For' : 'Where', item.place || ''),
+      ];
+      const notes = [];
+      if (kind === 'volunteer') {
+        rows.push(portalDetailRowHtml('Report to', dashboardShiftWhoText(source)));
+        rows.push(portalDetailRowHtml('Department', source.department || ''));
+        const hours = dashboardShiftHours(source);
+        rows.push(portalDetailRowHtml('Hours', hours ? `${formatHours(hours)} hrs` : ''));
+        notes.push(portalDetailNoteHtml('Know', source.description || source.notes || source.know_note || ''));
+        notes.push(portalDetailNoteHtml('Bring', source.bring_note || source.what_to_bring || ''));
+      } else if (kind === 'deadline') {
+        const inst = source.installment || {};
+        const pay = source.payment || {};
+        const paidRecord = (pay.records || []).find(row => row.installment_index === source.installmentIndex && row.paid);
+        rows.push(portalDetailRowHtml('Amount', moneyLabel(inst.amount) || item.time || ''));
+        rows.push(portalDetailRowHtml('Status', paidRecord ? `Paid - ${paymentRecordMeta(paidRecord) || 'Payment received'}` : 'Payment due'));
+        notes.push(portalDetailNoteHtml('Details', `This payment is connected to ${item.place || 'this performer'} on the Registration page.`));
+      } else {
+        rows.push(portalDetailRowHtml('Type', eventDisplayType(source)));
+        notes.push(portalDetailNoteHtml('Arrive', item.arrive || source.arrive_note || ''));
+        notes.push(portalDetailNoteHtml('Bring', item.bring || source.bring_note || ''));
+        notes.push(portalDetailNoteHtml('Know', item.note || source.know_note || ''));
+      }
+      return `<div class="vpd-detail-grid">${rows.filter(Boolean).join('')}</div>
+        <div class="vpd-detail-notes">${notes.filter(Boolean).join('') || portalDetailNoteHtml('Details', 'No extra notes have been added yet.')}</div>`;
+    }
+
+    function openPortalCalendarDetail(index) {
+      const item = _portalCalItems[Number(index)];
+      if (!item) return;
+      const kind = portalItemKind(item);
+      const color = item.color || portalKindColor(kind);
+      const modal = document.getElementById('vp-modal');
+      modal.classList.remove('vp-modal--submit');
+      modal.classList.remove('vp-modal--learn-more');
+      modal.classList.add('vp-modal--portal-detail');
+      modal.innerHTML = `<button class="vpd-detail-close" type="button" onclick="closeModal()">&times;</button>
+        <div class="vpd-detail-top" style="background:${esc(color)};">
+          <div class="vpd-detail-kicker">${esc(portalKindLabel(kind))}</div>
+          <div class="vpd-detail-title">${esc(item.title || portalKindLabel(kind))}</div>
+        </div>
+        <div class="vpd-detail-body">
+          ${portalCalendarItemDetailHtml(item)}
+          <div class="vpd-detail-actions">
+            <button class="vpd-detail-btn secondary" type="button" onclick="closeModal()">Close</button>
+            ${kind === 'deadline' ? `<button class="vpd-detail-btn" type="button" onclick="closeModal();renderPortalTab('registration')">Open Registration</button>` : ''}
+            ${kind === 'volunteer' ? `<button class="vpd-detail-btn" type="button" onclick="closeModal();renderPortalTab('volunteer')">Open Volunteer</button>` : ''}
+            ${kind === 'rehearsal' || kind === 'performance' || kind === 'other' ? `<button class="vpd-detail-btn" type="button" onclick="closeModal();renderPortalTab('performer')">Open Performer</button>` : ''}
+          </div>
+        </div>`;
+      show('vp-modal-overlay');
+      document.body.style.overflow = 'hidden';
+    }
+
     function portalFullCalendarEvents() {
       return (_portalCalItems || []).filter(item => item.date).map((item, index) => {
         const kind = portalItemKind(item);
@@ -3872,6 +3982,7 @@
           borderColor: color,
           textColor: '#ffffff',
           extendedProps: {
+            item_index: index,
             display_time: item.time || '',
             place: item.place || '',
             kind,
@@ -3889,7 +4000,8 @@
         lastDate = item.date;
         const kind = portalItemKind(item);
         const color = item.color || portalKindColor(kind);
-        return `${header}<div class="vpd-agenda-row" style="border-left-color:${esc(color)};"><div class="vpd-agenda-time">${esc(item.time || portalKindLabel(kind))}</div><div><div class="vpd-agenda-title">${esc(item.title)}</div>${item.place ? `<div class="vpd-agenda-place">${esc(item.place)}</div>` : ''}</div></div>`;
+        const index = _portalCalItems.indexOf(item);
+        return `${header}<button class="vpd-agenda-row" type="button" onclick="openPortalCalendarDetail(${index})" style="border-left-color:${esc(color)};width:100%;text-align:left;background:#fff;cursor:pointer;"><div class="vpd-agenda-time">${esc(item.time || portalKindLabel(kind))}</div><div><div class="vpd-agenda-title">${esc(item.title)}</div>${item.place ? `<div class="vpd-agenda-place">${esc(item.place)}</div>` : ''}</div></button>`;
       }).join('')}</div>`;
     }
 
@@ -3954,6 +4066,10 @@
             + `<div style="font-size:0.7rem;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${safeTxt(arg.event.title || '')}</div>`;
           return { domNodes: [wrap] };
         },
+        eventClick(info) {
+          info.jsEvent.preventDefault();
+          openPortalCalendarDetail(info.event.extendedProps.item_index);
+        },
       });
       _portalFcCalendar.render();
     }
@@ -3971,6 +4087,7 @@
             time: moneyLabel(inst.amount),
             place: performerDisplayName(performer),
             color: portalKindColor('deadline'),
+            source: { performer, installment: inst, installmentIndex: index, payment: pay },
           };
         }).filter(Boolean);
       });
@@ -5496,6 +5613,7 @@
       const modal = document.getElementById('vp-modal');
       modal.classList.remove('vp-modal--submit');
       modal.classList.remove('vp-modal--learn-more');
+      modal.classList.remove('vp-modal--portal-detail');
       modal.innerHTML = '';
       renderCart();
     }
