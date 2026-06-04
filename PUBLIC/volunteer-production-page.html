@@ -3276,13 +3276,25 @@
     }
     async function loadPortalPerformerDetails(apps = []) {
       if (!apps.length || !prod?.id) return [];
-      const appIds = apps.map(app => app.id).filter(Boolean);
+      const bookingIds = apps.map(app => app.id).filter(Boolean);
+
+      // Bookings get promoted to audition_applications — look up those promoted IDs
+      // so we can find casting_assignments which reference audition_applications.id
+      let promotedIds = [...bookingIds];
+      try {
+        const { data } = await sb.from('audition_applications')
+          .select('id,booking_id')
+          .eq('production_id', prod.id)
+          .in('booking_id', bookingIds);
+        if (data?.length) promotedIds = [...bookingIds, ...data.map(r => r.id).filter(Boolean)];
+      } catch (_) {}
+
       let assignments = [];
       try {
         const { data, error } = await sb.from('casting_assignments')
           .select('id,applicant_id,character_id,state,created_at,volunteer_discount_approved,volunteer_hours_completed,volunteer_role_notes,volunteer_signup_ids,volunteer_signup_name,scholarship_status,scholarship_amount,reg_payment_notes')
           .eq('production_id', prod.id)
-          .in('applicant_id', appIds)
+          .in('applicant_id', promotedIds)
           .in('state', ['chosen', 'ensemble_manual', 'offer_accepted', 'offer_declined']);
         if (error) throw error;
         assignments = data || [];
@@ -3318,7 +3330,7 @@
       }
       return apps.map(app => {
         const ca = applicantCustomAnswers(app);
-        const rows = assignments.filter(row => String(row.applicant_id) === String(app.id));
+        const rows = assignments.filter(row => promotedIds.includes(String(row.applicant_id)));
         const roles = rows.map(row => row.character_id ? (charMap.get(String(row.character_id)) || '') : 'Ensemble').filter(Boolean);
         const fallbackRoles = String(ca.__bts_cast_offer_role_names || ca.Role || ca.role_name || '').split(',').map(s => s.trim()).filter(Boolean);
         return {
