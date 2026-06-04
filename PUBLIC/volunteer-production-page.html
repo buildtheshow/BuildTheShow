@@ -1350,10 +1350,10 @@
       box-shadow: 0 4px 14px rgba(0,0,0,0.04);
     }
     .vpd-shift-item.compact {
-      grid-template-columns: 96px 160px minmax(130px, 0.9fr) minmax(220px, 1.4fr);
+      grid-template-columns: 76px minmax(170px, 0.9fr) minmax(0, 1.8fr);
       min-height: 58px;
-      padding: 0.48rem 0.85rem;
-      gap: 0.82rem;
+      padding: 0.52rem 0.85rem;
+      gap: 0.9rem;
     }
     .vpd-shift-date {
       display: flex;
@@ -1441,6 +1441,10 @@
       line-height: 1.15;
     }
     .vpd-shift-item.compact .vpd-shift-time { font-size: 0.82rem; gap: 0.42rem; }
+    .vpd-shift-time-stack { display: grid; gap: 0.34rem; min-width: 0; }
+    .vpd-shift-item.compact .vpd-shift-time-stack { align-self: center; }
+    .vpd-shift-item.compact .vpd-shift-time-stack:empty { display: none; }
+    .vpd-shift-item.compact .vpd-shift-time-stack:empty + .vpd-shift-what { grid-column: 2 / -1; }
     .vpd-shift-time-icon,
     .vpd-shift-place-icon,
     .vpd-shift-check-icon {
@@ -1867,7 +1871,7 @@
       .vpd-invoice-row { grid-template-columns:minmax(0,1fr) 104px 104px; }
       .vpd-shift-table-head { display: none; }
       .vpd-shift-item { grid-template-columns: 96px minmax(0, 1fr); align-items: start; }
-      .vpd-shift-time, .vpd-shift-meta, .vpd-shift-status { grid-column: 2; }
+      .vpd-shift-time, .vpd-shift-time-stack, .vpd-shift-meta, .vpd-shift-status { grid-column: 2; }
       .vpd-shift-what { grid-column: 2; grid-row: 1; }
       .vpd-shift-date { grid-row: 1 / span 4; }
     }
@@ -1895,7 +1899,7 @@
       .vpd-brand-strip { align-items: stretch; flex-direction: column; }
       .vpd-org-logo { width: fit-content; max-width: 100%; }
       .vpd-shift-item { grid-template-columns: 1fr; }
-      .vpd-shift-date, .vpd-shift-what, .vpd-shift-time, .vpd-shift-meta, .vpd-shift-status { grid-column: auto; grid-row: auto; }
+      .vpd-shift-date, .vpd-shift-what, .vpd-shift-time, .vpd-shift-time-stack, .vpd-shift-meta, .vpd-shift-status { grid-column: auto; grid-row: auto; }
     }
     @media (max-width: 420px) {
       .vpd-stats { grid-template-columns: 1fr; }
@@ -3151,7 +3155,7 @@
             <span>${esc(title.includes('Shift') ? (count === 1 ? 'Shift' : 'Shifts') : 'Items')}</span>
           </div>
         </div>
-        ${count ? `<div class="vpd-shift-table-head${compact ? ' compact' : ''}"><span>When</span><span>Time</span><span>Where</span><span>What</span>${compact ? '' : '<span>Check In With</span><span>Status</span>'}</div><div class="vpd-shift-list">${rows.map(row => dashboardShiftItemHtml(row, options)).join('')}</div>` : `<div class="vpd-empty">${esc(emptyCopy)}</div>`}
+        ${count ? `${compact ? '' : `<div class="vpd-shift-table-head"><span>When</span><span>Time</span><span>Where</span><span>What</span><span>Check In With</span><span>Status</span></div>`}<div class="vpd-shift-list">${rows.map(row => dashboardShiftItemHtml(row, options)).join('')}</div>` : `<div class="vpd-empty">${esc(emptyCopy)}</div>`}
       </section>`;
     }
     function dashboardShiftDateBadgeHtml(row = {}, deptCol = 'var(--purple)', options = {}) {
@@ -3215,14 +3219,35 @@
       const cls = dashboardStatusClass(row.status);
       const hours = dashboardShiftHours(row);
       const deptCol = row.color || DASH_DEPT_COLOURS[row.department] || 'var(--purple)';
+      const isPayment = row.department === 'Payment / Deadline' || !!row.payment_amount;
       const placeText = dashboardShiftPlaceText(row);
       const whoText = dashboardShiftWhoText(row);
-      const timeText = dashboardShiftTimeText(row);
+      const timeText = isPayment ? '' : dashboardShiftTimeText(row);
       const roleName = row.role_name || row.volunteer_role || 'Volunteer Shift';
       const roleSvg = roleIcon(roleName, row.department);
       const compact = !!options.compact;
       const peopleText = portalRowPeopleText(row, options);
       const peopleLabel = portalRowPeopleLabel(row);
+      const compactPlace = isPayment ? '' : (placeText || 'TBD');
+      if (compact) {
+        const timeStack = [
+          timeText ? `<div class="vpd-shift-time" style="color:${deptCol};"><span class="vpd-shift-time-icon">${ICONS.clock}</span><span>${esc(timeText)}${hours ? `<span class="vpd-shift-time-detail">(${esc(formatHours(hours))} hrs)</span>` : ''}</span></div>` : '',
+          compactPlace ? `<div class="vpd-shift-fact vpd-shift-fact--where"><span class="vpd-shift-place-icon" style="color:${deptCol};">${ICONS.pin}</span><span class="vpd-shift-value">${esc(compactPlace)}</span></div>` : '',
+        ].filter(Boolean).join('');
+        return `<article class="vpd-shift-item compact" style="border-left:4px solid ${deptCol};">
+          ${dashboardShiftDateBadgeHtml(row, deptCol, options)}
+          <div class="vpd-shift-time-stack">${timeStack}</div>
+          <div class="vpd-shift-what">
+            <span class="vpd-shift-role-icon" style="color:${deptCol};">${roleSvg}</span>
+            <div class="vpd-shift-main">
+              ${row.department ? `<div class="vpd-shift-dept" style="color:${deptCol};">${esc(row.department)}</div>` : ''}
+              <div class="vpd-shift-role">${esc(roleName)}</div>
+              ${peopleText ? `<div class="vpd-shift-people"><strong>${esc(peopleLabel)}:</strong> ${esc(peopleText)}</div>` : ''}
+              ${row.payment_amount ? `<div class="vpd-shift-time-detail">${esc(row.payment_amount)}${row.payment_for ? ` · ${esc(row.payment_for)}` : ''}</div>` : ''}
+            </div>
+          </div>
+        </article>`;
+      }
       return `<article class="vpd-shift-item${compact ? ' compact' : ''}" style="border-left:4px solid ${deptCol};">
         ${dashboardShiftDateBadgeHtml(row, deptCol, options)}
         <div class="vpd-shift-time" style="color:${deptCol};">
@@ -4642,7 +4667,7 @@
         role_name: item.title || portalKindLabel(kind),
         volunteer_role: item.title || portalKindLabel(kind),
         department: portalKindLabel(kind),
-        venue: kind === 'deadline' ? (item.place || '-') : (item.place || 'TBD'),
+        venue: kind === 'deadline' ? '' : (item.place || 'TBD'),
         payment_for: kind === 'deadline' ? item.place : '',
         payment_amount: kind === 'deadline' ? item.time : '',
         people: item.people || (kind === 'deadline' && item.place ? item.place.split(',').map(name => name.trim()).filter(Boolean) : []),
