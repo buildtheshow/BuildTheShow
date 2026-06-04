@@ -3340,6 +3340,17 @@
           console.warn('[BTS production portal] character lookup failed', error);
         }
       }
+
+      // Fetch latest headshot from audition_applications — may differ from booking row if updated in workspace
+      let appHeadshotUrl = '';
+      const appOnlyIds = promotedIds.filter(id => !bookingIds.includes(id));
+      if (appOnlyIds.length) {
+        try {
+          const { data } = await sb.from('audition_applications').select('id,headshot_url').in('id', appOnlyIds);
+          appHeadshotUrl = (data || []).map(r => r.headshot_url).filter(Boolean)[0] || '';
+        } catch (_) {}
+      }
+
       const assignmentIds = assignments.map(row => row.id).filter(Boolean);
       let paymentMap = new Map();
       if (assignmentIds.length) {
@@ -3363,7 +3374,7 @@
         const roles = rows.map(row => row.character_id ? (charMap.get(String(row.character_id)) || '') : 'Ensemble').filter(Boolean);
         const fallbackRoles = String(ca.__bts_cast_offer_role_names || ca.Role || ca.role_name || '').split(',').map(s => s.trim()).filter(Boolean);
         return {
-          app,
+          app: appHeadshotUrl ? { ...app, headshot_url: appHeadshotUrl } : app,
           assignments: rows.map(row => ({ ...row, role_name: row.character_id ? (charMap.get(String(row.character_id)) || '') : 'Ensemble', payment_records: paymentMap.get(String(row.id)) || [] })),
           roles: [...new Set(roles.length ? roles : fallbackRoles)],
         };
