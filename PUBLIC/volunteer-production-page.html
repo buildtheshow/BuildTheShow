@@ -3184,16 +3184,16 @@
         return assignment && portalAssignmentEarnedVolunteerDiscount(assignment);
       });
     }
-    function portalScaleInstallments(base, total, labelSuffix = '') {
-      if (!base.length) return total > 0 ? [{ label: labelSuffix || 'Payment', amount: total, dueDate: '' }] : [];
-      const baseTotal = base.reduce((sum, inst) => sum + (inst.amount || 0), 0);
-      if (total <= 0) return base.map(inst => ({ ...inst, label: labelSuffix ? `${inst.label} (${labelSuffix})` : inst.label, amount: 0 }));
-      if (baseTotal <= 0) return [{ label: labelSuffix || base[0]?.label || 'Payment', amount: total, dueDate: base[0]?.dueDate || '' }];
-      const scaleFactor = total / baseTotal;
-      const scaled = base.map(inst => ({ ...inst, label: labelSuffix ? `${inst.label} (${labelSuffix})` : inst.label, amount: Math.round((inst.amount || 0) * scaleFactor * 100) / 100 }));
-      const diff = Math.round((total - scaled.reduce((sum, inst) => sum + (inst.amount || 0), 0)) * 100) / 100;
-      if (diff !== 0 && scaled.length) scaled[scaled.length - 1].amount += diff;
-      return scaled;
+    function portalInstallmentsAfterCredits(base, credits = 0, labelSuffix = '') {
+      if (!base.length) return [];
+      const adjusted = base.map(inst => ({ ...inst, label: labelSuffix ? `${inst.label} (${labelSuffix})` : inst.label, amount: Number(inst.amount || 0) }));
+      let remainingCredit = Math.max(0, Number(credits || 0));
+      for (let i = adjusted.length - 1; i >= 1 && remainingCredit > 0; i--) {
+        const applied = Math.min(adjusted[i].amount || 0, remainingCredit);
+        adjusted[i].amount = Math.round((adjusted[i].amount - applied) * 100) / 100;
+        remainingCredit = Math.round((remainingCredit - applied) * 100) / 100;
+      }
+      return adjusted;
     }
     function portalEffectiveFee(assignment = {}) {
       const base = paymentInstallments();
@@ -3202,13 +3202,13 @@
       const householdIds = household ? (household.member_ids || []).map(String) : [];
       const householdPos = household ? householdIds.indexOf(String(assignment.id || '')) : -1;
       const parts = [];
-      let effectiveBase = baseTotal;
+      let creditTotal = 0;
       if (paymentSettings.sibling_discount_enabled && household) {
         const rate = householdPos === 0
           ? parseFloat(String(paymentSettings.sibling_first_child || '').replace(/[^0-9.]/g, '')) || 0
           : parseFloat(String(paymentSettings.sibling_additional || '').replace(/[^0-9.]/g, '')) || 0;
-        if (rate > 0) effectiveBase = rate;
-        if (rate > 0) parts.push('Sibling rate');
+        if (rate > 0 && baseTotal > rate) creditTotal += baseTotal - rate;
+        if (rate > 0) parts.push(`Sibling rate${baseTotal > rate ? `: -${moneyLabel(baseTotal - rate)}` : ''}`);
       }
       const volunteerApplies = household
         ? householdPos === 0 && portalHouseholdVolunteerDiscountEarned(household)
@@ -3219,10 +3219,12 @@
       const schAdj = assignment.scholarship_status === 'approved'
         ? parseFloat(String(assignment.scholarship_amount || '').replace(/[^0-9.]/g, '')) || 0
         : 0;
-      const total = Math.max(0, effectiveBase - volAdj - schAdj);
+      creditTotal += volAdj + schAdj;
+      const installments = portalInstallmentsAfterCredits(base, creditTotal, parts.some(p => p.startsWith('Sibling rate')) ? 'sibling rate' : '');
+      const total = installments.reduce((sum, inst) => sum + (inst.amount || 0), 0);
       if (volAdj) parts.push(`Volunteer discount: -${moneyLabel(volAdj)}`);
       if (schAdj) parts.push(`Scholarship: -${moneyLabel(schAdj)}`);
-      return { total, installments: portalScaleInstallments(base, total, parts.includes('Sibling rate') ? 'sibling rate' : ''), discountLabel: parts.join(' · ') };
+      return { total, installments, discountLabel: parts.join(' · ') };
     }
     function performerKey(item = {}) {
       return String(item?.app?.id || item?.assignment?.applicant_id || item?.name || '');
@@ -3277,14 +3279,18 @@
     }
     function portalCalendarItems(portalData, mode = 'overview') {
       const volunteerStats = portalVolunteerStats(portalData.volunteer.rows, portalData.email, portalData.volunteer.linkedPerformers || []);
-      const vItems = volunteerStats.upcomingApproved.map(row => ({
-        type: 'volunteer',
-        date: row.shift_date || requiredDatesForSignup(row)[0] || '',
-        title: row.role_name || row.volunteer_role || 'Volunteer Shift',
-        time: dashboardShiftTimeText(row),
-        place: dashboardShiftPlaceText(row),
-        color: DASH_DEPT_COLOURS[row.department] || 'var(--purple)',
-      }));
+      const vItems = volunteerStats.upcomingApproved.flatMap(row => {
+        const requiredDates = requiredDatesForSignup(row);
+        const dates = row.shift_date ? [row.shift_date] : requiredDates.length ? requiredDates : [''];
+        return dates.filter(Boolean).map(date => ({
+          type: 'volunteer',
+          date,
+          title: row.role_name || row.volunteer_role || 'Volunteer Shift',
+          time: dashboardShiftTimeText(row),
+          place: dashboardShiftPlaceText(row),
+          color: DASH_DEPT_COLOURS[row.department] || 'var(--purple)',
+        }));
+      });
       const pItems = (mode === 'volunteer' ? [] : performerEvents()).map(ev => ({
         type: 'performer',
         date: String(ev.start_time || '').slice(0,10),
@@ -3681,23 +3687,28 @@
       }
       const isMobileCalendar = window.matchMedia('(max-width: 700px)').matches;
       el.innerHTML = '';
+      const _todayStr = new Date().toISOString().slice(0,10);
+      const _firstUpcoming = (_portalCalItems || []).filter(i => i.date >= _todayStr).sort((a,b) => a.date.localeCompare(b.date))[0];
       _portalFcCalendar = new FullCalendar.Calendar(el, {
         initialView: isMobileCalendar ? 'listMonth' : 'dayGridMonth',
+        initialDate: _firstUpcoming?.date || _todayStr,
         headerToolbar: isMobileCalendar
           ? { left: 'prev,next', center: 'title', right: 'listMonth' }
-          : { left: 'prev,next today', center: 'title', right: 'dayGridMonth,timeGridWeek,timeGridDay,listMonth' },
+          : { left: 'prev,next today', center: 'title', right: 'dayGridMonth,listMonth' },
         height: 'auto',
         fixedWeekCount: false,
         nowIndicator: true,
+        dayMaxEvents: 4,
         eventDisplay: 'block',
         events: portalFullCalendarEvents(),
         eventContent(arg) {
           const safeTxt = s => String(s || '').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-          const timeStr = arg.event.extendedProps.display_time || '';
+          const rawTime = arg.event.extendedProps.display_time || '';
+          const shortTime = rawTime.replace(/(\d+):00\s*(am|pm)/gi, '$1$2').replace(/(\d+:\d+)\s*(am|pm)/gi, '$1$2').split(/\s*[-–]\s*/)[0].trim();
           const wrap = document.createElement('div');
-          wrap.style.cssText = 'width:100%;overflow:hidden;text-align:center;line-height:1.25;position:relative;';
-          wrap.innerHTML = (timeStr ? `<div class="zeus-event-time">${safeTxt(timeStr)}</div>` : '')
-            + `<div class="zeus-event-label">${safeTxt(arg.event.title || '')}</div>`;
+          wrap.style.cssText = 'width:100%;overflow:hidden;padding:1px 3px;line-height:1.3;';
+          wrap.innerHTML = (shortTime ? `<div style="font-size:0.6rem;opacity:0.88;font-weight:600;">${safeTxt(shortTime)}</div>` : '')
+            + `<div style="font-size:0.7rem;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${safeTxt(arg.event.title || '')}</div>`;
           return { domNodes: [wrap] };
         },
       });
