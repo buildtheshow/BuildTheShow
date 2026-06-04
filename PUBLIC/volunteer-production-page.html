@@ -2828,7 +2828,7 @@
         ink: '#ffffff'
       }
     };
-    const EVENT_COLORS = { performance:'#572e88', tech:'#476aaa', dress:'#769e7b', rehearsal:'#78bbd4', music_rehearsal:'#ca7ea7', choreography:'#ca7ea7', strike:'#dd8233', costume_moveout:'#d1523d', dept_leads:'#000000', other:'#572e88', cast_party:'#ca7ea7', crew:'#efab45', crew_set:'#efab45', crew_set_painting:'#efab45', crew_set_dressing:'#efab45', crew_costumes:'#efab45', crew_props:'#efab45', crew_hair_makeup:'#efab45', crew_wigs:'#efab45', crew_lighting:'#efab45', crew_sound:'#efab45' };
+    const EVENT_COLORS = { performance:'#476aaa', tech:'#476aaa', dress:'#476aaa', rehearsal:'#78bbd4', music_rehearsal:'#78bbd4', choreography:'#78bbd4', strike:'#d1523d', costume_moveout:'#dd8233', dept_leads:'#000000', other:'#769e7b', cast_party:'#ca7ea7', event:'#769e7b', meeting:'#efab45', crew:'#572e88', crew_set:'#572e88', crew_set_painting:'#572e88', crew_set_dressing:'#572e88', crew_costumes:'#572e88', crew_props:'#572e88', crew_hair_makeup:'#572e88', crew_wigs:'#572e88', crew_lighting:'#572e88', crew_sound:'#572e88' };
     const BEFORE_TYPES = new Set(['rehearsal','music_rehearsal','choreography']);
     const DURING_TYPES = new Set(['performance','tech','dress']);
     const AFTER_TYPES = new Set(['strike','costume_moveout','cast_party']);
@@ -3406,7 +3406,7 @@
       'Front of House': 'var(--blue)',
       'Marketing & Publicity': 'var(--gold)',
       'Rehearsal': 'var(--purple)',
-      'Performance': '#476aaa',
+      'Performance': 'var(--purple)',
       'Payment / Deadline': '#dd8233'
     };
     function dashboardShiftItemHtml(row = {}, options = {}) {
@@ -3451,7 +3451,31 @@
             </div>
           </article>`;
         }
-        // Performer / deadline / other card
+        if (row.item_kind === 'performance') {
+          const sourceEvent = row.source_item?.source || row.source || {};
+          const performanceNumber = portalPerformanceNumber(row);
+          const showTitle = prod?.title || prod?.name || 'This production';
+          const performanceHours = portalEventDurationHours(sourceEvent);
+          return `<article class="vpd-bv-card" style="border-left:4px solid ${deptCol};">
+            <div class="vpd-type-bar" style="background:${deptCol};">Performance</div>
+            <div class="vpd-bv-body">
+              ${dashboardShiftDateBadgeHtml(row, deptCol, { ...options, hideYear: false })}
+              <img class="vpd-bv-icon" src="/ASSETS/Images/Performer.svg" alt="">
+              <div class="vpd-bv-right">
+                <div class="vpd-shift-role">${esc(roleName || 'Performance')}</div>
+                ${timeText ? `<div class="vpd-shift-time" style="color:${deptCol};"><span class="vpd-shift-time-icon">${ICONS.clock}</span><span>${esc(timeText)}${performanceHours ? `<span class="vpd-shift-time-detail">(${esc(formatHours(performanceHours))} hrs)</span>` : ''}</span></div>` : ''}
+                <div class="vpd-shift-fact vpd-shift-fact--where"><span class="vpd-shift-place-icon" style="color:${deptCol};">${ICONS.pin}</span><span class="vpd-shift-value">${esc(compactPlace || 'TBD')}</span></div>
+                ${peopleText ? `<div class="vpd-shift-fact"><span style="color:${deptCol};">${ICONS.users}</span><span class="vpd-shift-value">${esc(peopleText)}</span></div>` : ''}
+                <div class="vpd-bv-divider"></div>
+                <div class="vpd-shift-dept" style="color:${deptCol};">Performance</div>
+                <div class="vpd-shift-role">${esc(showTitle)}</div>
+                <div class="vpd-shift-people"><strong>${esc(performanceNumber ? `Performance #${performanceNumber}` : eventDisplayType(sourceEvent) || 'Performance')}</strong></div>
+                ${notesText ? `<div class="vpd-shift-notes"><strong>Notes:</strong> <span style="white-space:pre-wrap;">${esc(notesText)}</span></div>` : ''}
+              </div>
+            </div>
+          </article>`;
+        }
+        // Rehearsal / deadline / other card
         return `<article class="vpd-bv-card" style="border-left:4px solid ${deptCol};">
           <div class="vpd-type-bar" style="background:${deptCol};">${esc(row.department)}</div>
           <div class="vpd-bv-body">
@@ -4494,12 +4518,12 @@
       performance:      'performance',
       preview:          'performance',
       deadline:         'deadline',
-      cast_party:       'other',
-      event:            'other',
-      strike:           'other',
-      costume_moveout:  'other',
-      meeting:          'other',
-      crew:             'other',
+      cast_party:       'cast_party',
+      event:            'event',
+      strike:           'strike',
+      costume_moveout:  'costume_moveout',
+      meeting:          'meeting',
+      crew:             'crew',
     };
 
     function portalItemKind(item = {}) {
@@ -4512,23 +4536,53 @@
       return 'other';
     }
 
+    function portalPerformanceNumber(row = {}) {
+      const sourceEvent = row.source_item?.source || row.source || {};
+      const sourceId = sourceEvent.id || row.event_id || '';
+      const sourceStart = sourceEvent.start_time || row.start_time || row.shift_date || '';
+      const sourceTitle = sourceEvent.title || row.role_name || row.volunteer_role || '';
+      const performances = Object.values(eventMap || {})
+        .filter(ev => ev?.start_time)
+        .filter(ev => portalItemKind({ type: 'performer', source: ev }) === 'performance')
+        .sort((a, b) => new Date(a.start_time) - new Date(b.start_time));
+      const index = performances.findIndex(ev => {
+        if (sourceId && ev.id === sourceId) return true;
+        const sameStart = sourceStart && String(ev.start_time || '').slice(0,16) === String(sourceStart).slice(0,16);
+        const sameTitle = !sourceTitle || String(ev.title || eventDisplayType(ev) || '').toLowerCase() === String(sourceTitle).toLowerCase();
+        return sameStart && sameTitle;
+      });
+      return index >= 0 ? index + 1 : 0;
+    }
+
     function portalKindColor(kind) {
       return {
-        rehearsal: '#78bbd4',
-        performance: '#476aaa',
-        volunteer: '#572e88',
-        deadline: '#ca7ea7',
-        other: '#769e7b',
+        rehearsal:       '#78bbd4',
+        performance:     '#476aaa',
+        volunteer:       '#572e88',
+        deadline:        '#ca7ea7',
+        strike:          '#d1523d',
+        costume_moveout: '#dd8233',
+        cast_party:      '#ca7ea7',
+        event:           '#769e7b',
+        meeting:         '#efab45',
+        crew:            '#572e88',
+        other:           '#769e7b',
       }[kind] || '#769e7b';
     }
 
     function portalKindLabel(kind) {
       return {
-        rehearsal: 'Rehearsal',
-        performance: 'Performance',
-        volunteer: 'Volunteer Shift',
-        deadline: 'Payment / Deadline',
-        other: 'Other',
+        rehearsal:       'Rehearsal',
+        performance:     'Performance',
+        volunteer:       'Volunteer Shift',
+        deadline:        'Payment / Deadline',
+        strike:          'Strike',
+        costume_moveout: 'Costume Move-Out',
+        cast_party:      'Cast Party',
+        event:           'Event',
+        meeting:         'Meeting',
+        crew:            'Crew',
+        other:           'Other',
       }[kind] || 'Other';
     }
 
