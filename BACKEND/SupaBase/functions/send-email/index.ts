@@ -440,7 +440,7 @@ serve(async (req) => {
   // ── Fetch production + template + org ────────────────────────
   const [{ data: prod }, { data: templates }] = await Promise.all([
     sb.from('productions')
-      .select('id,title,slug,subtitle,venue,director,organization_id,start_date,end_date,wizard_data,registration_settings')
+      .select('*')
       .eq('id', productionId)
       .maybeSingle(),
     sb.from('email_templates')
@@ -491,8 +491,8 @@ serve(async (req) => {
   const directWizardData = isRecord(directProduction.wizard_data) ? directProduction.wizard_data as Record<string, unknown> : {};
   const productionRecord = {
     id: productionId,
-    title: firstDefinedString(directContext.show_name, directProduction.title, prod?.title),
-    slug: firstDefinedString(directProduction.slug, prod?.slug),
+    title: firstDefinedString(directContext.show_name, directProduction.title, directProduction.name, prod?.title, (prod as Record<string, unknown> | null)?.name, prodWizardData.title, prodWizardData.show_name),
+    slug: firstDefinedString(directProduction.slug, prod?.slug, (prod as Record<string, unknown> | null)?.custom_id),
     subtitle: firstDefinedString(directContext.show_subtitle, directProduction.subtitle, prod?.subtitle),
     venue: firstDefinedString(directContext.show_venue, directContext.audition_venue, directProduction.venue, prod?.venue),
     director: firstDefinedString(directContext.director_name, directProduction.director, prod?.director),
@@ -793,6 +793,8 @@ serve(async (req) => {
     directContext.production_schedule,
     formatProductionEventSchedule((productionEvents || []) as Record<string, unknown>[]),
   );
+  const performanceScheduleHtml = scheduleTextToEmailHtml(performanceSchedule);
+  const eventScheduleHtml = scheduleTextToEmailHtml(eventSchedule);
   const selfTapeDeadline = fmtDateTimeLocal(firstDefinedString(
     directContext.self_tape_deadline,
     directWizardData.self_tape_deadline,
@@ -850,9 +852,9 @@ serve(async (req) => {
     '{{rehearsal_schedule}}':    firstDefinedString(directContext.rehearsal_schedule, directProduction.rehearsal_schedule),
     '{{rehearsal_end_date}}':    firstDefinedString(directContext.rehearsal_end_date, productionRecord.end_date ? fmtDate(String(productionRecord.end_date)) : ''),
     '{{opening_night}}':         firstDefinedString(directContext.opening_night, productionRecord.end_date ? fmtDate(String(productionRecord.end_date)) : ''),
-    '{{performance_schedule}}':  performanceSchedule,
-    '{{event_schedule}}':        eventSchedule,
-    '{{production_schedule}}':   eventSchedule,
+    '{{performance_schedule}}':  performanceScheduleHtml,
+    '{{event_schedule}}':        eventScheduleHtml,
+    '{{production_schedule}}':   eventScheduleHtml,
     '{{payment_schedule}}':      firstDefinedString(directContext.payment_schedule, paymentEmailDetails.schedule),
     '{{payment_information}}':   firstDefinedString(directContext.payment_information, paymentEmailDetails.information),
     '{{volunteer_link}}':        firstDefinedString(directContext.volunteer_link),
@@ -962,6 +964,8 @@ serve(async (req) => {
     '{{volunteer_shifts_block}}',
     '{{org_logo_block}}',
     '{{event_schedule}}',
+    '{{performance_schedule}}',
+    '{{production_schedule}}',
   ]);
 
   function substituteTemplate(text: string, escapeForHtml = false): string {
@@ -1165,6 +1169,20 @@ function formatProductionEventSchedule(rows: Record<string, unknown>[]): string 
   return [...grouped.entries()]
     .map(([label, lines]) => `${label}\n${lines.join('\n')}`)
     .join('\n\n');
+}
+
+function scheduleTextToEmailHtml(text: string): string {
+  const source = String(text || '').trim();
+  if (!source) return '';
+  if (/<[a-z][\s\S]*>/i.test(source)) return source;
+  const blocks = source.split(/\n{2,}/).map(block => block.trim()).filter(Boolean);
+  return blocks.map(block => {
+    const lines = block.split(/\n+/).map(line => line.trim()).filter(Boolean);
+    if (!lines.length) return '';
+    if (lines.length === 1) return `<div>${escHtml(lines[0])}</div>`;
+    const [heading, ...items] = lines;
+    return `<div style="margin:0 0 14px;"><strong>${escHtml(heading)}</strong><br>${items.map(escHtml).join('<br>')}</div>`;
+  }).filter(Boolean).join('');
 }
 
 function escHtml(s: string): string {
