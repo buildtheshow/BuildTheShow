@@ -3487,16 +3487,102 @@
       if (!performers.length) return `<div class="vpd-card"><div class="vpd-empty">No registration records are connected to this portal yet.</div></div>`;
       const installments = paymentInstallments();
       const paymentEnabled = installments.length > 0;
+      const isHousehold = performers.length > 1;
+
+      if (!isHousehold) {
+        return `<div class="vpd-breakdown"><div class="vpd-invoice-list">${registrationInvoiceHtml(performers[0], paymentEnabled)}</div></div>`;
+      }
+
+      // Household: single combined invoice
+      const allPay = performers.map(p => ({ performer: p, pay: performerPaymentSummary(p) }));
+      const householdTotal   = allPay.reduce((s, x) => s + x.pay.total, 0);
+      const householdPaid    = allPay.reduce((s, x) => s + x.pay.paid, 0);
+      const householdBalance = Math.max(0, householdTotal - householdPaid);
+      const subtotalBeforeCredits = allPay.reduce((sum, { pay }) => {
+        const creditTotal = paymentDiscountLines(pay.discountLabel).reduce((s, line) => {
+          const m = line.match(/-([$£]?\s*[0-9]+(?:\.[0-9]{1,2})?)/);
+          return s + (m ? parseFloat(m[1].replace(/[^0-9.]/g, '')) : 0);
+        }, 0);
+        return sum + pay.total + creditTotal;
+      }, 0);
+      const allDiscountLabels = [...new Set(allPay.flatMap(({ pay }) => paymentDiscountLines(pay.discountLabel)))];
+      const allPaidRecords = allPay.flatMap(({ performer, pay }) =>
+        (pay.records || []).filter(r => r.paid).map(r => ({ record: r, performer, pay }))
+      );
+
+      const chargeRows = allPay.map(({ performer, pay }) => {
+        const name = performerDisplayName(performer);
+        const roles = performerRoleNames(performer).join(', ') || 'Performer';
+        const instRows = paymentEnabled && pay.installments.length
+          ? pay.installments.map((inst, index) => {
+              const rec = (pay.records || []).find(r => r.installment_index === index && r.paid);
+              const isPaid = !!rec;
+              const meta = isPaid ? paymentRecordMeta(rec) || 'Payment received' : (inst.dueDate ? `Due ${fmtDate(inst.dueDate, { short: true })}` : 'Due date TBA');
+              return `<div class="vpd-invoice-row ${isPaid ? 'paid' : ''}">
+                <div class="vpd-invoice-desc"><div class="vpd-invoice-title">${esc(inst.label || `Payment ${index + 1}`)}</div><div class="vpd-invoice-meta">${esc(meta)}</div></div>
+                <div class="vpd-invoice-amount">${esc(moneyLabel(inst.amount) || '$0')}</div>
+                <div class="vpd-invoice-amount ${isPaid ? 'paid' : ''}">${esc(isPaid ? `-${moneyLabel(paymentRecordAmount(rec, inst))}` : 'Open')}</div>
+              </div>`;
+            }).join('')
+          : `<div class="vpd-receipt-empty">No payment schedule attached.</div>`;
+        const creditRows = paymentDiscountLines(pay.discountLabel).map(line =>
+          `<div class="vpd-invoice-row credit"><div class="vpd-invoice-desc"><div class="vpd-invoice-title">Credit / Discount</div><div class="vpd-invoice-meta">${esc(line)}</div></div><div class="vpd-invoice-amount credit">Applied</div><div class="vpd-invoice-amount credit">Included</div></div>`
+        ).join('');
+        return `<div class="vpd-invoice-row head" style="background:#eee8f8;">
+            <div>${esc(name)} <span style="font-weight:700;text-transform:none;letter-spacing:0;font-size:0.72rem;opacity:0.7;">${esc(roles)}</span></div>
+            <div class="vpd-invoice-amount">${esc(moneyLabel(pay.total) || '$0')}</div>
+            <div class="vpd-invoice-amount">${esc(performerRegistrationStatus(performer.app || {}))}</div>
+          </div>${instRows}${creditRows}`;
+      }).join('');
+
+      const receiptRows = allPaidRecords.length
+        ? allPaidRecords.map(({ record, performer, pay }) => {
+            const inst = pay.installments[record.installment_index] || {};
+            return `<div class="vpd-invoice-row paid">
+              <div class="vpd-invoice-desc"><div class="vpd-invoice-title">Receipt: ${esc(inst.label || `Payment ${Number(record.installment_index || 0) + 1}`)} — ${esc(performerDisplayName(performer))}</div><div class="vpd-invoice-meta">${esc(paymentRecordMeta(record) || 'Payment received')}</div></div>
+              <div class="vpd-invoice-amount paid">${esc(moneyLabel(paymentRecordAmount(record, inst)) || '$0')}</div>
+              <div class="vpd-invoice-amount paid">Received</div>
+            </div>`;
+          }).join('')
+        : `<div class="vpd-receipt-empty">No payments have been marked paid yet.</div>`;
+
+      const regActions = performers.map(p => {
+        const app = p.app || {};
+        const status = performerRegistrationStatus(app);
+        return `<a class="vpd-action-btn secondary" href="${esc(performerRegistrationUrl(app))}">${esc(status === 'Registration complete' ? `Review — ${performerDisplayName(p)}` : `Complete Registration — ${performerDisplayName(p)}`)}</a>`;
+      }).join('');
+
       return `<div class="vpd-breakdown">
-        <section class="vpd-card">
-          <div class="vpd-section-head">
-            <div class="vpd-section-title-wrap"><div class="vpd-section-icon">${ICONS.check}</div><div><div class="vpd-section-title">Registration / Payments</div><div class="vpd-section-sub">Forms, agreements, balances, discounts, and due dates connected to this portal.</div></div></div>
+        <article class="vpd-invoice">
+          <div class="vpd-invoice-head">
+            <div>
+              <div class="vpd-invoice-kicker">Household Invoice / Receipt</div>
+              <div class="vpd-invoice-name">${esc(prod?.title || 'Production')}</div>
+              <div class="vpd-invoice-role">${esc(performers.map(performerDisplayName).join(' · '))} · ${esc(String(performers.length))} performers</div>
+            </div>
+            <div class="vpd-invoice-balance">
+              <div class="vpd-invoice-balance-label">Balance Due</div>
+              <div class="vpd-invoice-balance-value ${householdBalance <= 0 && householdPaid > 0 ? 'paid' : ''}">${esc(paymentEnabled ? (householdBalance > 0 ? moneyLabel(householdBalance) : 'Paid') : 'See below')}</div>
+              ${paymentEnabled ? `<div class="vpd-invoice-status ${householdBalance > 0 ? 'due' : ''}">${esc(householdBalance > 0 ? 'Open' : 'Paid in full')}</div>` : ''}
+            </div>
           </div>
-          <div class="vpd-invoice-list">
-            ${performers.map(performer => registrationInvoiceHtml(performer, paymentEnabled)).join('')}
+          <div class="vpd-invoice-body">
+            <div class="vpd-invoice-table">
+              <div class="vpd-invoice-row head"><div>Description</div><div class="vpd-invoice-amount">Charge</div><div class="vpd-invoice-amount">Paid / Credit</div></div>
+              ${chargeRows}
+              <div class="vpd-invoice-row head"><div>Payment History</div><div class="vpd-invoice-amount">Amount</div><div class="vpd-invoice-amount">Status</div></div>
+              ${receiptRows}
+            </div>
+            <div class="vpd-invoice-totals">
+              <div class="vpd-invoice-total-row"><span>Total before credits</span><span>${esc(moneyLabel(subtotalBeforeCredits) || moneyLabel(householdTotal) || '$0')}</span></div>
+              ${allDiscountLabels.length ? `<div class="vpd-invoice-total-row"><span>Credits / discounts</span><span>${esc(allDiscountLabels.join(' · '))}</span></div>` : ''}
+              <div class="vpd-invoice-total-row"><span>Total expected</span><span>${esc(moneyLabel(householdTotal) || '$0')}</span></div>
+              <div class="vpd-invoice-total-row"><span>Payments received</span><span>${esc(moneyLabel(householdPaid) || '$0')}</span></div>
+              <div class="vpd-invoice-total-row balance"><strong>Balance due</strong><strong>${esc(paymentEnabled ? (moneyLabel(householdBalance) || '$0') : '—')}</strong></div>
+            </div>
+            <div class="vpd-invoice-actions">${regActions}</div>
           </div>
-        </section>
-        ${paymentScheduleSummaryHtml() || ''}
+        </article>
       </div>`;
     }
     function performerDashboardHtml(performers = []) {
@@ -3923,7 +4009,7 @@
         { key: 'overview', label: 'Overview' },
         hasVolunteer ? { key: 'volunteer', label: 'Volunteer' } : null,
         hasPerformer ? { key: 'performer', label: allPortalPerformers(data).length > 1 ? 'Performers' : 'Performer' } : null,
-        hasPayments ? { key: 'registration', label: 'Registration / Payments' } : null,
+        hasPayments ? { key: 'registration', label: 'Registration' } : null,
       ].filter(Boolean);
     }
     function renderPortalTab(key) {
