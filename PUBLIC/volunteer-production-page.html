@@ -3240,19 +3240,33 @@
       if (!enteredCode || !prod?.id) return [];
       const found = new Map();
 
-      // Primary: dedicated portal_code column on audition_bookings
+      // Primary: audition_applications — this is where headshot updates, role data, and registration live
       try {
-        const { data } = await sb.from('audition_bookings')
+        const { data } = await sb.from('audition_applications')
           .select('*')
           .eq('production_id', prod.id)
-          .eq('portal_code', enteredCode)
+          .filter('custom_answers->>__bts_portal_code', 'eq', enteredCode)
           .limit(20);
         (data || []).forEach(app => {
           if (portalApplicantMatchesEmail(app, email)) found.set(String(app.id), app);
         });
       } catch (_) {}
 
-      // Fallback: custom_answers keys on audition_bookings only
+      // Secondary: audition_bookings portal_code column
+      if (!found.size) {
+        try {
+          const { data } = await sb.from('audition_bookings')
+            .select('*')
+            .eq('production_id', prod.id)
+            .eq('portal_code', enteredCode)
+            .limit(20);
+          (data || []).forEach(app => {
+            if (portalApplicantMatchesEmail(app, email)) found.set(String(app.id), app);
+          });
+        } catch (_) {}
+      }
+
+      // Fallback: custom_answers keys on audition_bookings
       if (!found.size) {
         for (const key of PORTAL_PERFORMER_CODE_KEYS) {
           const { data, error } = await sb.from('audition_bookings')
@@ -3267,10 +3281,9 @@
         }
       }
 
-      // Deduplicate: if multiple rows found for the same email, keep the one with a casting assignment (or most recent)
+      // Deduplicate: keep the one whose code matches exactly
       const results = [...found.values()];
       if (results.length <= 1) return results;
-      const emailKey = normalizePortalEmail(email);
       const withCode = results.filter(a => String(a.portal_code || applicantCustomAnswers(a)['__bts_portal_code'] || '').trim() === enteredCode);
       return withCode.length ? [withCode[0]] : [results[0]];
     }
