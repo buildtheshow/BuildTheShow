@@ -5757,6 +5757,7 @@
     }
     function eventPlanType(ev = {}) {
       const raw = ev.event_type || '';
+      if (ev.is_deadline || raw === 'deadline' || /deadline/i.test(ev.title || '')) return 'deadline';
       if (/cast\s*party/i.test(ev.title || '')) return 'cast_party';
       return raw;
     }
@@ -5791,12 +5792,12 @@
     }
     function requiredDateLabels(entry, events) {
       // Returns ISO dates (YYYY-MM-DD) so the portal can parse and display them correctly
-      return requiredDateEvents(entry, events)
+      return [...new Set(requiredDateEvents(entry, events)
         .map(ev => {
           const timing = roleShiftTiming(ev, entry);
           return timing.shift_date || ev.start_time?.slice(0, 10) || '';
         })
-        .filter(Boolean);
+        .filter(Boolean))];
     }
     function requiredFirstTiming(entry, events) {
       const first = requiredDateEvents(entry, events)[0];
@@ -5950,7 +5951,7 @@
 
         const [planResult, eventResult, signupResult, contactResult] = await Promise.all([
           sb.from('productions').select('volunteer_staffing_plan').eq('id', prod.id).single(),
-          sb.from('production_events').select('id,event_type,title,start_time,end_time,venue,notes,arrive_note,bring_note,know_note,show_in_cast_schedule').eq('production_id', prod.id).order('start_time', { ascending: true }),
+          sb.from('production_events').select('id,event_type,title,start_time,end_time,venue,notes,arrive_note,bring_note,know_note,show_in_cast_schedule,is_deadline').eq('production_id', prod.id).order('start_time', { ascending: true }),
           sb.from('volunteer_signups').select('role_name,shift_date,status').eq('production_id', prod.id).in('status', ['pending','approved','partially_filled']),
           sb.rpc('public_production_contact', { p_production_id: prod.id })
         ]);
