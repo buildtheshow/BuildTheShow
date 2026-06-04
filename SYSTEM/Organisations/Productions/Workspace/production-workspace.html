@@ -45282,8 +45282,8 @@ See you soon!
   function rptGetInstallments(settings) {
     if (!settings || settings.mode === 'none') return [];
     if (settings.mode === 'split') {
-      return (settings.split_installments || []).map((inst, i) => ({
-        label: `Instalment ${i + 1}`,
+      return (settings.split_installments || []).map((inst, i, arr) => ({
+        label: i === 0 ? 'First Payment' : i === arr.length - 1 ? 'Final Payment' : `Payment ${i + 1}`,
         amount: parseFloat(String(inst.amount || '').replace(/[^0-9.]/g, '')) || 0,
         dueDate: inst.due_date || '',
       }));
@@ -45314,11 +45314,16 @@ See you soon!
     const baseTotal = base.reduce((s, i) => s + i.amount, 0);
     if (total <= 0) return base.map(inst => ({ ...inst, amount: 0, label: labelSuffix ? `${inst.label} (${labelSuffix})` : inst.label }));
     if (baseTotal <= 0) return [{ label: labelSuffix || base[0]?.label || 'Payment', amount: total, dueDate: base[0]?.dueDate || '' }];
-    const scaleFactor = total / baseTotal;
-    const scaled = base.map(inst => ({ ...inst, label: labelSuffix ? `${inst.label} (${labelSuffix})` : inst.label, amount: Math.round(inst.amount * scaleFactor * 100) / 100 }));
-    const diff = Math.round((total - scaled.reduce((s, i) => s + i.amount, 0)) * 100) / 100;
-    if (diff !== 0 && scaled.length) scaled[scaled.length - 1].amount += diff;
-    return scaled;
+    // Apply credits back-to-front (off final instalment first) to match portal behaviour
+    const credits = Math.round((baseTotal - total) * 100) / 100;
+    const adjusted = base.map(inst => ({ ...inst, label: labelSuffix ? `${inst.label} (${labelSuffix})` : inst.label, amount: Number(inst.amount || 0) }));
+    let remaining = Math.max(0, credits);
+    for (let i = adjusted.length - 1; i >= 1 && remaining > 0; i--) {
+      const applied = Math.min(adjusted[i].amount, remaining);
+      adjusted[i].amount = Math.round((adjusted[i].amount - applied) * 100) / 100;
+      remaining = Math.round((remaining - applied) * 100) / 100;
+    }
+    return adjusted;
   }
 
   function rptEffectiveFee(item, settings) {
@@ -45475,14 +45480,14 @@ See you soon!
           const inst = d.ef.installments[idx];
           if (!inst || inst.amount <= 0) return null;
           const rec = d.records.find(r => r.installment_index === idx);
-          return { assignId: d.assignId, firstName: d.firstName, amount: inst.amount, dueDate: inst.dueDate || '', isPaid: !!rec?.paid };
+          return { assignId: d.assignId, firstName: d.firstName, amount: inst.amount, dueDate: inst.dueDate || '', isPaid: !!rec?.paid, label: inst.label || '' };
         }).filter(Boolean);
         if (!memberData.length) continue;
         const totalAmount = memberData.reduce((s, m) => s + m.amount, 0);
         const allPaid = memberData.every(m => m.isPaid);
         const somePaid = !allPaid && memberData.some(m => m.isPaid);
         const anyOverdue = !allPaid && memberData.some(m => !m.isPaid && m.dueDate && new Date(m.dueDate) < new Date(new Date().toDateString()));
-        const tileLabel = maxInstCount === 1 ? 'Payment' : idx === 0 ? 'Deposit' : idx === maxInstCount - 1 ? 'Final' : `Pmt ${idx + 1}`;
+        const tileLabel = memberData[0]?.label || (maxInstCount === 1 ? 'Payment' : idx === 0 ? 'First Payment' : idx === maxInstCount - 1 ? 'Final Payment' : `Payment ${idx + 1}`);
         const tileBg = allPaid ? '#769e7b' : anyOverdue ? '#d1523d' : '#efab45';
         const breakdownHtml = memberData.map(m =>
           `<div class="rsc-hh-breakdown-row">${esc(m.firstName)}: ${rscFmtTileAmt(m.amount, settings)}${m.isPaid ? ' ✓' : ''}</div>`
