@@ -3253,7 +3253,7 @@
         });
       } catch (_) {}
 
-      // Secondary: audition_bookings portal_code column
+      // Secondary: audition_bookings portal_code column — immediately upgrade to audition_applications row
       if (!found.size) {
         try {
           const { data } = await sb.from('audition_bookings')
@@ -3261,13 +3261,24 @@
             .eq('production_id', prod.id)
             .eq('portal_code', enteredCode)
             .limit(20);
-          (data || []).forEach(app => {
-            if (portalApplicantMatchesEmail(app, email)) found.set(String(app.id), app);
-          });
+          const matched = (data || []).filter(app => portalApplicantMatchesEmail(app, email));
+          for (const booking of matched) {
+            const bookingEmail = String(booking.email || '').toLowerCase().trim();
+            let upgraded = null;
+            if (bookingEmail) {
+              try {
+                const { data: appRows } = await sb.from('audition_applications')
+                  .select('*').eq('production_id', prod.id).eq('email', bookingEmail).limit(1);
+                upgraded = appRows?.[0] || null;
+              } catch (_) {}
+            }
+            const row = upgraded || booking;
+            found.set(String(row.id), row);
+          }
         } catch (_) {}
       }
 
-      // Fallback: custom_answers keys on audition_bookings
+      // Fallback: custom_answers keys on audition_bookings — same upgrade
       if (!found.size) {
         for (const key of PORTAL_PERFORMER_CODE_KEYS) {
           const { data, error } = await sb.from('audition_bookings')
@@ -3276,9 +3287,20 @@
             .contains('custom_answers', { [key]: enteredCode })
             .limit(20);
           if (error) continue;
-          (data || []).forEach(app => {
-            if (portalApplicantMatchesEmail(app, email)) found.set(String(app.id), app);
-          });
+          const matched = (data || []).filter(app => portalApplicantMatchesEmail(app, email));
+          for (const booking of matched) {
+            const bookingEmail = String(booking.email || '').toLowerCase().trim();
+            let upgraded = null;
+            if (bookingEmail) {
+              try {
+                const { data: appRows } = await sb.from('audition_applications')
+                  .select('*').eq('production_id', prod.id).eq('email', bookingEmail).limit(1);
+                upgraded = appRows?.[0] || null;
+              } catch (_) {}
+            }
+            const row = upgraded || booking;
+            found.set(String(row.id), row);
+          }
         }
       }
 
