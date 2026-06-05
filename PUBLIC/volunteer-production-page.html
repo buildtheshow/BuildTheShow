@@ -6753,14 +6753,23 @@
       const opp = opps.find(o => o.id === addDropdownOppId);
       if (!opp || !forPerson) return;
       const n = forPerson.toLowerCase();
-      const alreadyInSlot = schedule.some(s => s.id === opp.id && (
-        (s.forPerson || '').toLowerCase() === n ||
-        (s.people || []).some(p => (p.name || '').toLowerCase() === n)
-      ));
-      if (alreadyInSlot) { addDropdownError = `${forPerson} is already signed up for this shift.`; renderRows(); return; }
-      const conflict = personConflictsWithSchedule(forPerson, [opp]);
-      if (conflict) { addDropdownError = `${forPerson} is already in ${conflict} at the same time.`; renderRows(); return; }
-      schedule.push({ ...opp, people: [], forPerson });
+      const existingItem = schedule.find(s => s.id === opp.id);
+      if (existingItem) {
+        // Slot already in cart — add as extra person to existing item
+        if ((existingItem.forPerson || '').toLowerCase() === n || (existingItem.people || []).some(p => (p.name || '').toLowerCase() === n)) {
+          addDropdownError = `${forPerson} is already signed up for this shift.`; renderRows(); return;
+        }
+        const conflict = personConflictsWithSchedule(forPerson, [opp]);
+        if (conflict) { addDropdownError = `${forPerson} is already in ${conflict} at the same time.`; renderRows(); return; }
+        const personId = `p_${Date.now()}_${Math.random().toString(36).slice(2,6)}`;
+        existingItem.people = existingItem.people || [];
+        existingItem.people.push({ id: personId, name: forPerson });
+      } else {
+        // New slot
+        const conflict = personConflictsWithSchedule(forPerson, [opp]);
+        if (conflict) { addDropdownError = `${forPerson} is already in ${conflict} at the same time.`; renderRows(); return; }
+        schedule.push({ ...opp, people: [], forPerson });
+      }
       const k = spotsKey(opp); signupCounts[k] = (signupCounts[k] || 0) + 1;
       addDropdownOppId = null; addDropdownError = null;
       renderRows(); renderCart();
