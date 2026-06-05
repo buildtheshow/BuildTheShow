@@ -935,6 +935,10 @@
     .vp-conflict-prompt-input:focus { border-color: var(--purple); }
     .vp-conflict-prompt-add { border: 0; background: var(--purple); color: #fff; border-radius: 6px; padding: 0.3rem 0.55rem; font-size: 0.68rem; font-weight: 900; cursor: pointer; white-space: nowrap; }
     .vp-conflict-prompt-cancel { border: 0; background: transparent; color: var(--muted); font-size: 0.68rem; font-weight: 800; cursor: pointer; padding: 0.3rem 0.4rem; white-space: nowrap; }
+    .vp-cart-error { display: flex; align-items: flex-start; gap: 0.5rem; background: rgba(209,82,61,0.1); border: 1.5px solid rgba(209,82,61,0.35); border-radius: 10px; padding: 0.65rem 0.75rem; margin-bottom: 0.65rem; }
+    .vp-cart-error-text { flex: 1; font-size: 0.72rem; font-weight: 800; color: var(--red); line-height: 1.4; }
+    .vp-cart-error-dismiss { border: 0; background: transparent; color: var(--red); font-size: 1rem; font-weight: 900; cursor: pointer; padding: 0; opacity: 0.7; flex-shrink: 0; line-height: 1; }
+    .vp-cart-error-dismiss:hover { opacity: 1; }
     .vp-cart-date-list {
       margin-top: 0.55rem;
       border: 1px solid rgba(87,46,136,0.1);
@@ -2834,7 +2838,7 @@
     let prod = null, org = null, opps = [], eventMap = {}, signupCounts = {}, productionContacts = [];
     let activeView = 'day', activeFilter = 'all', searchTerm = '', selectedDate = null, dateOffset = 0, selectedDepartment = null, selectedTimingBucket = null;
     let schedule = [], openCards = new Set(), openTimingGroups = new Set(), timingGroupsTouched = false, discountRequested = false, discountPerformer = '', paymentSettings = {}, currentPortalData = null, activePortalTab = '';
-    let addingPersonToGroup = null, conflictPendingOpp = null, assigningForGroup = null;
+    let addingPersonToGroup = null, conflictPendingOpp = null, assigningForGroup = null, cartErrorMessage = null;
     let _portalOverviewMode = 'calendar', _portalCalOffset = 0, _portalCalView = 'month', _portalCalItems = [], _portalFcCalendar = null, _portalFcFallbackTimer = null;
     function portalOverviewSetMode(mode) {
       _portalOverviewMode = mode === 'breakdown' ? 'breakdown' : 'calendar';
@@ -6729,38 +6733,40 @@
       }
       renderRows(); renderCart();
     }
+    function setCartError(msg) { cartErrorMessage = msg; renderCart(); requestAnimationFrame(() => document.getElementById('vp-cart-error-text')?.scrollIntoView({ block: 'nearest' })); }
+    function clearCartError() { cartErrorMessage = null; renderCart(); }
     function resolveConflictAsOtherPerson() {
       const input = document.getElementById('vp-conflict-name-input');
       const name = input?.value?.trim();
       if (!name) { input?.focus(); return; }
       const { opp } = conflictPendingOpp;
       const conflict = personConflictsWithSchedule(name, [opp]);
-      if (conflict) { showToast(`${name} is already signed up for ${conflict} at the same time.`); input?.focus(); return; }
+      if (conflict) { setCartError(`${name} can't be added — they're already signed up for ${conflict} at the same time.`); return; }
       schedule.push({ ...opp, people: [], forPerson: name });
-      conflictPendingOpp = null;
+      conflictPendingOpp = null; cartErrorMessage = null;
       signupCounts[spotsKey(opp)] = (signupCounts[spotsKey(opp)] || 0) + 1;
       renderRows(); renderCart();
     }
-    function cancelConflictAdd() { conflictPendingOpp = null; renderCart(); }
-    function removeSchedule(id) { schedule = schedule.filter(s => s.id !== id); addingPersonToGroup = null; conflictPendingOpp = null; renderRows(); renderCart(); }
+    function cancelConflictAdd() { conflictPendingOpp = null; cartErrorMessage = null; renderCart(); }
+    function removeSchedule(id) { schedule = schedule.filter(s => s.id !== id); addingPersonToGroup = null; conflictPendingOpp = null; cartErrorMessage = null; renderRows(); renderCart(); }
     function setForPersonOnGroup(groupKey, name) {
       const trimmed = name?.trim() || null;
       schedule.forEach(s => { if (cartGroupKey(s) === groupKey) s.forPerson = trimmed; });
-      assigningForGroup = null; renderRows(); renderCart();
+      assigningForGroup = null; cartErrorMessage = null; renderRows(); renderCart();
     }
     function openAssignForInput(groupKey) {
-      assigningForGroup = groupKey; renderCart();
+      assigningForGroup = groupKey; cartErrorMessage = null; renderCart();
       requestAnimationFrame(() => document.getElementById('vp-assign-for-input')?.focus());
     }
-    function cancelAssignFor() { assigningForGroup = null; renderCart(); }
+    function cancelAssignFor() { assigningForGroup = null; cartErrorMessage = null; renderCart(); }
     function confirmAssignFor() {
       const input = document.getElementById('vp-assign-for-input');
       const name = input?.value?.trim();
       const groupKey = assigningForGroup;
-      if (!name) { assigningForGroup = null; renderCart(); return; }
+      if (!name) { assigningForGroup = null; cartErrorMessage = null; renderCart(); return; }
       const groupItems = schedule.filter(s => cartGroupKey(s) === groupKey);
       const conflict = personConflictsWithSchedule(name, groupItems, groupKey);
-      if (conflict) { showToast(`${name} is already signed up for ${conflict} at the same time.`); input?.focus(); return; }
+      if (conflict) { setCartError(`${name} can't be assigned here — they're already signed up for ${conflict} at the same time.`); input?.focus(); return; }
       setForPersonOnGroup(groupKey, name);
     }
     function addPersonToCartGroup(groupKey, personName) {
@@ -6792,16 +6798,16 @@
       addingPersonToGroup = groupKey; renderCart();
       requestAnimationFrame(() => document.getElementById('vp-new-person-input')?.focus());
     }
-    function cancelAddPersonInput() { addingPersonToGroup = null; renderCart(); }
+    function cancelAddPersonInput() { addingPersonToGroup = null; cartErrorMessage = null; renderCart(); }
     function confirmAddPersonInput() {
       const input = document.getElementById('vp-new-person-input');
       if (!input) return;
       const name = input.value.trim();
       const groupKey = addingPersonToGroup;
-      if (!name) { addingPersonToGroup = null; renderCart(); return; }
+      if (!name) { addingPersonToGroup = null; cartErrorMessage = null; renderCart(); return; }
       const error = addPersonToCartGroup(groupKey, name);
-      if (error) { showToast(error); requestAnimationFrame(() => document.getElementById('vp-new-person-input')?.focus()); return; }
-      addingPersonToGroup = null;
+      if (error) { setCartError(error); requestAnimationFrame(() => document.getElementById('vp-new-person-input')?.focus()); return; }
+      addingPersonToGroup = null; cartErrorMessage = null;
       renderRows(); renderCart();
     }
 
@@ -6823,6 +6829,7 @@
         <span class="vp-count-pill">${schedule.length}</span>
       </div>
       <div class="vp-cart-sub">Review your selected shifts before submitting.</div>
+      ${cartErrorMessage ? `<div class="vp-cart-error"><span id="vp-cart-error-text" class="vp-cart-error-text">${esc(cartErrorMessage)}</span><button class="vp-cart-error-dismiss" type="button" onclick="clearCartError()" aria-label="Dismiss">&times;</button></div>` : ''}
       ${conflictPendingOpp ? `<div class="vp-conflict-prompt">
         <div class="vp-conflict-prompt-title">${esc(conflictPendingOpp.opp.volunteer_role || 'This role')} overlaps with ${esc(conflictPendingOpp.conflictRole)}.</div>
         <div class="vp-conflict-prompt-sub">If this is for a different person, enter their name and it'll be added for them instead.</div>
