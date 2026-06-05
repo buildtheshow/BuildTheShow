@@ -849,6 +849,68 @@
       flex: 0 0 auto;
     }
     .vp-cart-chip button:hover { background: rgba(87,46,136,0.1); }
+    .vp-cart-shift-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.42rem;
+      margin-top: 0.62rem;
+    }
+    .vp-cart-shift {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 26px;
+      gap: 0.45rem;
+      align-items: start;
+      padding: 0.58rem;
+      border: 1px solid rgba(87,46,136,0.12);
+      border-radius: 8px;
+      background: #fbf9ff;
+      min-width: 0;
+    }
+    .vp-cart-shift-date {
+      display: block;
+      font-size: 0.72rem;
+      font-weight: 950;
+      color: var(--purple);
+      line-height: 1.2;
+      overflow-wrap: anywhere;
+    }
+    .vp-cart-shift-time {
+      display: block;
+      margin-top: 0.08rem;
+      font-size: 0.7rem;
+      font-weight: 850;
+      color: var(--ink);
+      line-height: 1.25;
+      overflow-wrap: anywhere;
+    }
+    .vp-cart-shift-facts {
+      display: flex;
+      flex-direction: column;
+      gap: 0.12rem;
+      margin-top: 0.32rem;
+      min-width: 0;
+    }
+    .vp-cart-shift-fact {
+      font-size: 0.66rem;
+      font-weight: 750;
+      color: var(--muted);
+      line-height: 1.24;
+      overflow-wrap: anywhere;
+    }
+    .vp-cart-shift-fact strong { color: var(--purple); font-weight: 900; }
+    .vp-cart-shift-remove {
+      width: 24px;
+      height: 24px;
+      border: 0;
+      border-radius: 50%;
+      background: transparent;
+      color: var(--purple);
+      font-size: 1.02rem;
+      font-weight: 900;
+      line-height: 1;
+      cursor: pointer;
+    }
+    .vp-cart-shift-remove:hover { background: rgba(87,46,136,0.1); }
     .vp-cart-date-list {
       margin-top: 0.55rem;
       border: 1px solid rgba(87,46,136,0.1);
@@ -2227,8 +2289,8 @@
       .vp-cart.in-sheet .vp-cart-dot { width: 28px; height: 28px; }
       .vp-cart.in-sheet .vp-cart-role { font-size: 0.82rem; }
       .vp-cart.in-sheet .vp-cart-meta { font-size: 0.7rem; }
-      .vp-cart.in-sheet .vp-cart-chip-list { gap: 0.25rem; margin-top: 0.48rem; }
-      .vp-cart.in-sheet .vp-cart-chip { width: 100%; justify-content: space-between; border-radius: 8px; }
+      .vp-cart.in-sheet .vp-cart-shift-list { gap: 0.3rem; margin-top: 0.48rem; }
+      .vp-cart.in-sheet .vp-cart-shift { padding: 0.48rem; }
       .vp-cart.in-sheet .vp-cart-summary { margin-top: 0.75rem; padding-top: 0.7rem; gap: 0.38rem; }
       .vp-cart.in-sheet .vp-cart-discount { margin-top: 0.75rem; padding-top: 0.7rem; }
       .vp-cart.in-sheet .vp-submit-cart { margin-top: 0.75rem; }
@@ -6687,6 +6749,35 @@
       const time = fmtTimeRange(opp.shift_start_time, opp.shift_end_time);
       return [dateLabel, time].filter(Boolean).join(' · ');
     }
+    function cartShiftLocation(opp) {
+      return eventMap[opp.event_id]?.venue || opp.location || opp.venue || opp.venue_name || opp.where || '';
+    }
+    function cartShiftSortValue(opp) {
+      return `${opp.shift_date || '9999-12-31'}T${String(opp.shift_start_time || '99:99').slice(0,5)}`;
+    }
+    function cartShiftBreakdownHtml(opp, group = {}, options = {}) {
+      const requiredDates = Array.isArray(opp.required_dates) ? opp.required_dates.filter(Boolean) : [];
+      const dateLabel = opp.shift_date ? fmtDate(opp.shift_date, { short:true }) : (requiredDates.length ? `${requiredDates.length} required date${requiredDates.length === 1 ? '' : 's'}` : 'Flexible date');
+      const timeLabel = fmtTimeRange(opp.shift_start_time, opp.shift_end_time) || (opp.shift_date ? 'Time TBD' : 'Flexible time');
+      const location = cartShiftLocation(opp);
+      const hours = scheduleHours(opp);
+      const noSetHours = opp.is_full_discount && hours <= 0;
+      const checkIn = opp.check_in_with || group.checkIn || '';
+      const showRemove = options.showRemove !== false;
+      return `<div class="vp-cart-shift">
+        <div>
+          <span class="vp-cart-shift-date">${esc(dateLabel)}</span>
+          <span class="vp-cart-shift-time">${esc(timeLabel)}</span>
+          <div class="vp-cart-shift-facts">
+            ${location ? `<span class="vp-cart-shift-fact">Location: <strong>${esc(location)}</strong></span>` : '<span class="vp-cart-shift-fact">Location: <strong>TBD</strong></span>'}
+            ${hours > 0 ? `<span class="vp-cart-shift-fact">Hours: <strong>${esc(formatHours(hours))}</strong></span>` : (noSetHours ? '<span class="vp-cart-shift-fact"><strong>No set hour count.</strong></span>' : '')}
+            ${checkIn ? `<span class="vp-cart-shift-fact">Check in with: <strong>${esc(checkIn)}</strong></span>` : ''}
+            ${requiredDates.length ? `<span class="vp-cart-shift-fact">Required dates: <strong>${esc(requiredDates.length)}</strong></span>` : ''}
+          </div>
+        </div>
+        ${showRemove ? `<button class="vp-cart-shift-remove" type="button" onclick="removeSchedule('${esc(opp.id)}')" aria-label="Remove ${esc(cartShiftLabel(opp) || opp.volunteer_role || 'shift')}">&times;</button>` : '<span></span>'}
+      </div>`;
+    }
     function cartGroupHtml(group) {
       const first = group.items[0] || {};
       const color = iconColor(first), isGold = color === '#efab45';
@@ -6704,8 +6795,8 @@
             <span class="vp-cart-group-count">${count} ${count === 1 ? 'shift' : 'shifts'}</span>
           </div>
           ${group.outside ? `<div class="vp-cart-note">Includes work outside these dates.</div>` : ''}
-          <div class="vp-cart-chip-list">
-            ${group.items.map(item => `<div class="vp-cart-chip"><span>${esc(cartShiftLabel(item))}</span><button type="button" onclick="removeSchedule('${esc(item.id)}')" aria-label="Remove ${esc(cartShiftLabel(item))}">&times;</button></div>`).join('')}
+          <div class="vp-cart-shift-list">
+            ${group.items.slice().sort((a, b) => cartShiftSortValue(a).localeCompare(cartShiftSortValue(b))).map(item => cartShiftBreakdownHtml(item, group)).join('')}
           </div>
         </div>
       </div>`;
@@ -6730,6 +6821,7 @@
           <div class="vp-cart-role">${esc(opp.volunteer_role || 'Volunteer Shift')}</div>
           <div class="vp-cart-meta">${opp.department ? esc(opp.department) : ''}${hours > 0 ? `<br><span style="font-weight:800;">${esc(formatHours(hours))} scheduled hour${Number(hours) === 1 ? '' : 's'}</span>` : ''}${noSetHours ? '<br><span style="font-style:italic;opacity:0.72;">No set hour count.</span>' : ''}</div>
           ${opp.has_outside_work ? `<div class="vp-cart-note">Includes work outside these dates.</div>` : ''}
+          <div class="vp-cart-shift-list">${cartShiftBreakdownHtml(opp, {}, { showRemove: false })}</div>
           ${datesDetail}
         </div>
         <button class="vp-remove" type="button" onclick="removeSchedule('${esc(opp.id)}')" aria-label="Remove shift">&times;</button>
