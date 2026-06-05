@@ -26719,7 +26719,7 @@
 
   // ── Load shared sidebar ───────────────────────────────
   (function () {
-    const _key = 'bts-prod-sidebar-v10';
+    const _key = 'bts-prod-sidebar-v11';
     const _cached = sessionStorage.getItem(_key);
     if (_cached) {
       document.getElementById('prod-sidebar-host').innerHTML = _cached;
@@ -39735,6 +39735,8 @@ See you soon!
       const parent = document.getElementById(`${section}-parent-tab`);
       parent?.classList.add(activeSubEl ? 'is-open-parent' : 'active');
     }
+    const groupId = _SECTION_TO_GROUP[section];
+    if (groupId) openSidebarGroup(groupId);
     syncSidebarMenuA11y();
   }
 
@@ -39978,6 +39980,46 @@ See you soon!
       return;
     }
     setSidebarSubmenuState('marketing', _sidebarSection === 'marketing' ? _sidebarSubId : null);
+  }
+
+  const _SECTION_TO_GROUP = { team: 'plan', calendar: 'plan', auditions: 'cast', castlist: 'cast', registration: 'cast', marketing: 'promote', volunteers: 'run', budget: 'wrapup' };
+  const _ALL_GROUPS = ['plan', 'cast', 'rehearse', 'promote', 'run', 'wrapup'];
+
+  function openSidebarGroup(groupId) {
+    _ALL_GROUPS.forEach(id => {
+      const g = document.getElementById(`group-${id}`);
+      if (!g) return;
+      const open = id === groupId;
+      g.classList.toggle('open', open);
+      const header = g.querySelector('.sidebar-group-header');
+      if (header) header.setAttribute('aria-expanded', open ? 'true' : 'false');
+    });
+  }
+
+  function toggleSidebarGroup(groupId, e) {
+    e?.preventDefault?.();
+    e?.stopPropagation?.();
+    const grp = document.getElementById(`group-${groupId}`);
+    if (!grp) return;
+    const isOpen = grp.classList.contains('open');
+    _ALL_GROUPS.forEach(id => {
+      const g = document.getElementById(`group-${id}`);
+      if (!g) return;
+      g.classList.remove('open');
+      const header = g.querySelector('.sidebar-group-header');
+      if (header) header.setAttribute('aria-expanded', 'false');
+    });
+    if (!isOpen) {
+      grp.classList.add('open');
+      const header = grp.querySelector('.sidebar-group-header');
+      if (header) header.setAttribute('aria-expanded', 'true');
+    }
+  }
+
+  function handleGroupHeaderKey(e, groupId) {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    e.preventDefault();
+    toggleSidebarGroup(groupId, e);
   }
 
   function switchRegistrationSubTab(subTab = 'dashboard') {
@@ -49504,11 +49546,14 @@ See you soon!
   function initProdSidebarEvents() {
     enhanceSidebarNavControls(document);
     document.querySelectorAll('.prod-tab[data-tab]').forEach(el => {
-      // submenu parents are handled by their own onclick handlers
       if (el.id === 'volunteers-parent-tab' || el.id === 'auditions-parent-tab' || el.id === 'registration-parent-tab' || el.id === 'marketing-parent-tab' || el.id === 'budget-parent-tab') return;
       if (el.hasAttribute('onclick')) return;
+      if (!el.dataset.tab) return; // placeholder
       el.addEventListener('click', () => switchProdTab(el.dataset.tab));
     });
+    // Open the group for the current active section
+    const groupId = _SECTION_TO_GROUP[_sidebarSection];
+    if (groupId) openSidebarGroup(groupId);
   }
 
   // ── Files tab ─────────────────────────────────────────
