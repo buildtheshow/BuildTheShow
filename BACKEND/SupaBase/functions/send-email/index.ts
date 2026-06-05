@@ -971,13 +971,26 @@ serve(async (req) => {
     '{{event_schedule}}',
     '{{performance_schedule}}',
     '{{production_schedule}}',
+    '{{payment_schedule}}',
+    '{{payment_information}}',
   ]);
+
+  function decodeHtmlEntities(s: string): string {
+    return String(s || '')
+      .replace(/&#39;/g, "'")
+      .replace(/&quot;/g, '"')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&amp;/g, '&');
+  }
 
   function substituteTemplate(text: string, escapeForHtml = false): string {
     let result = String(text || '');
     Object.entries(tokenValues).forEach(([token, value]) => {
       const isRaw = escapeForHtml && (rawHtmlTokens.has(token) || /^\{\{[a-z0-9_]+_prepare\}\}$/.test(token) || /^\{\{[a-z0-9_]+_button\}\}$/.test(token));
-      const renderedValue = (escapeForHtml && !isRaw) ? escHtml(value) : value;
+      // Decode entities before escaping to prevent double-encoding of values stored with HTML entities (e.g. &#39; from DB)
+      const safeValue = (escapeForHtml && !isRaw) ? decodeHtmlEntities(value) : value;
+      const renderedValue = (escapeForHtml && !isRaw) ? escHtml(safeValue) : value;
       result = result.split(token).join(renderedValue);
     });
     result = result.replace(
@@ -1296,6 +1309,7 @@ function htmlToPlainText(html: string): string {
     .replace(/<\/div>/gi, '\n')
     .replace(/<[^>]+>/g, '')
     .replace(/&nbsp;/g, ' ')
+    .replace(/&#39;/g, "'")
     .replace(/&amp;/g, '&')
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>')
@@ -1417,12 +1431,17 @@ function buildPaymentEmailDetails(registrationSettings: Record<string, unknown>)
       : 'Financial assistance is available by request.');
   }
 
+  const toHtml = (items: string[]) =>
+    items.map(l => `<p style="margin:0 0 6px;line-height:1.5;">${escHtml(l)}</p>`).join('');
+
   return {
-    schedule: lines.join('\n'),
+    schedule: toHtml(lines),
     information: [
-      info.join('\n'),
-      discounts.length ? `Discounts and assistance:\n${discounts.join('\n')}` : '',
-    ].filter(Boolean).join('\n\n'),
+      toHtml(info),
+      discounts.length
+        ? `<p style="margin:8px 0 4px;font-weight:700;">Discounts and assistance:</p>${toHtml(discounts)}`
+        : '',
+    ].filter(Boolean).join(''),
   };
 }
 
