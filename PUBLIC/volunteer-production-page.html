@@ -7122,7 +7122,7 @@
             ${location ? `<div class="vp-cart-ticket-location">${esc(location)}</div>` : ''}
           </div>
           <div class="vp-cart-ticket-aside">
-            <button class="vp-cart-ticket-remove" type="button" style="color:${color};" onclick="${removeHtml}" aria-label="Remove">&times;</button>
+            ${removeHtml ? `<button class="vp-cart-ticket-remove" type="button" style="color:${color};" onclick="${removeHtml}" aria-label="Remove">&times;</button>` : ''}
             ${hours > 0 ? `<div class="vp-cart-ticket-hrs" style="color:${color};"><div class="vp-cart-ticket-hrs-num">${formatHours(hours)}</div><div class="vp-cart-ticket-hrs-label">HRS</div></div>` : noSetHours ? '' : ''}
           </div>
         </div>
@@ -7287,64 +7287,17 @@
         }
         byKey.get(key).items.push(opp);
       });
-      return groups.map(group => {
-        const first = group.items[0] || {};
-        const color = iconColor(first), isGold = color === '#efab45';
-        const totalHours = group.items.reduce((sum, item) => sum + scheduleHours(item), 0);
-        const count = group.items.length;
-        const noSetHours = group.items.some(item => item.is_full_discount && scheduleHours(item) <= 0);
-        const submitTotalDates = group.items.reduce((sum, item) => sum + ((Array.isArray(item.required_date_timings) ? item.required_date_timings.filter(t => t.date).length : 0) || 1), 0);
-        const submitCountLabel = submitTotalDates > count ? submitTotalDates + ' date' + (submitTotalDates === 1 ? '' : 's') : count + ' selected shift' + (count === 1 ? '' : 's');
-        const allNames = [first.forPerson, ...(first.people || []).map(p => p.name)].filter(Boolean);
-        return '<div class="vp-submit-shift-card">'
-          + '<div class="vp-submit-shift-head" style="background:' + color + ';color:' + (isGold?'var(--ink)':'#fff') + ';">'
-            + '<span>' + roleIcon(first.volunteer_role, first.department) + '</span>'
-            + '<div>'
-              + (group.department ? '<div class="vp-submit-shift-dept">' + esc(group.department) + '</div>' : '')
-              + '<div class="vp-submit-shift-role">' + esc(group.role) + '</div>'
-              + (allNames.length ? '<div class="vp-submit-volunteer-names">' + allNames.map(n => esc(n)).join(' &amp; ') + '</div>' : '')
-            + '</div>'
-          + '</div>'
-          + '<div class="vp-submit-shift-body">'
-            + (first.description ? '<p class="vp-submit-shift-desc">' + esc(first.description) + '</p>' : '')
-            + '<div class="vp-submit-shift-facts">'
-              + '<div class="vp-submit-shift-fact">' + submitCountLabel + '</div>'
-              + (totalHours ? '<div class="vp-submit-shift-fact">' + formatHours(totalHours) + ' scheduled hour' + (Number(totalHours) === 1 ? '' : 's') + '</div>' : (noSetHours ? '<div class="vp-submit-shift-fact" style="font-style:italic;">No set hour count.</div>' : ''))
-              + (group.checkIn ? '<div class="vp-submit-shift-fact">Check in with: <strong>' + esc(group.checkIn) + '</strong></div>' : '')
-            + '</div>'
-            + (group.outside ? '<div class="vp-submit-outside-note">This role also includes work outside these dates.</div>' : '')
-            + '<div class="vp-submit-date-list">'
-              + group.items.map(item => {
-                const requiredTimings = Array.isArray(item.required_date_timings) ? item.required_date_timings.filter(t => t.date) : [];
-                const requiredDates = Array.isArray(item.required_dates) ? item.required_dates.filter(Boolean) : [];
-                const itemLocation = cartShiftLocation(item);
-                const itemHours = scheduleHours(item);
-                const extraNames = [item.forPerson, ...(item.people || []).map(p => p.name)].filter(Boolean);
-                const namesHtml = extraNames.length ? '<div class="vp-submit-date-names">' + extraNames.map(n => esc(n)).join(' &amp; ') + '</div>' : '';
-                const metaHtml = (itemLocation ? '<div class="vp-submit-date-meta">' + esc(itemLocation) + '</div>' : '')
-                  + (itemHours ? '<div class="vp-submit-date-meta">' + formatHours(itemHours) + ' hr' + (itemHours === 1 ? '' : 's') + '</div>' : '');
-                if (requiredTimings.length > 0) {
-                  return requiredTimings.map(t => {
-                    const dateStr = esc(fmtDate(t.date, { short: true }) || t.date);
-                    const time = fmtTimeRange(t.shift_start_time || item.shift_start_time, t.shift_end_time || item.shift_end_time);
-                    const loc = t.venue || itemLocation;
-                    return '<div class="vp-submit-date-chip vp-submit-date-chip--full"><div class="vp-submit-date-chip-top"><strong>' + dateStr + '</strong>' + (time ? '<span>' + esc(time) + '</span>' : '') + '</div>' + (loc ? '<div class="vp-submit-date-meta">' + esc(loc) + '</div>' : '') + namesHtml + '</div>';
-                  }).join('');
-                }
-                if (requiredDates.length > 0) {
-                  return requiredDates.map(d => {
-                    const dateStr = esc(fmtDate(d, { short: true }) || d);
-                    const time = fmtTimeRange(item.shift_start_time, item.shift_end_time);
-                    return '<div class="vp-submit-date-chip vp-submit-date-chip--full"><div class="vp-submit-date-chip-top"><strong>' + dateStr + '</strong>' + (time ? '<span>' + esc(time) + '</span>' : '') + '</div>' + metaHtml + namesHtml + '</div>';
-                  }).join('');
-                }
-                const labelParts = cartShiftLabel(item).split(' · ');
-                return '<div class="vp-submit-date-chip vp-submit-date-chip--full"><div class="vp-submit-date-chip-top"><strong>' + esc(labelParts[0] || 'Flexible') + '</strong>' + (labelParts.length > 1 ? '<span>' + esc(labelParts.slice(1).join(' · ')) + '</span>' : '') + '</div>' + metaHtml + namesHtml + '</div>';
-              }).join('')
-            + '</div>'
-          + '</div>'
-        + '</div>';
-      }).join('');
+      const pairs = [];
+      groups.forEach(group => {
+        group.items.forEach(item => {
+          pairs.push({ item, group, name: item.forPerson || null });
+          (item.people || []).forEach(p => {
+            pairs.push({ item, group, name: p.name });
+          });
+        });
+      });
+      pairs.sort((a, b) => cartShiftSortValue(a.item).localeCompare(cartShiftSortValue(b.item)));
+      return pairs.map(({ item, group, name }) => cartTicketCardHtml(item, group, name, null)).join('');
     }
     function submitTotalsHtml() {
       const totalRoles = [...new Set(schedule.map(s => s.volunteer_role || '').filter(Boolean))].length || schedule.length;
