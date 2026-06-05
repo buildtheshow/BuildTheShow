@@ -1357,21 +1357,53 @@
 
   // ── Section renderers ────────────────────────────────────────────────────────
   function rpfRenderCostumeMeasurementsSection(template) {
-    const g = COSTUME_SIZE_GROUPS;
-    const fields = [
-      rpfCsdField({ name: 'cm_top_size',    label: 'Top Size',    groups: g.top,        hint: 'e.g. Youth L, Adult M, Adult 2XL',        required: true }),
-      rpfCsdField({ name: 'cm_bottom_size', label: 'Bottom Size', groups: g.bottom,     hint: 'e.g. Youth M, Adult 10, 32W',             required: true }),
-      rpfCsdField({ name: 'cm_dress_size',  label: 'Dress Size',  groups: g.dress,      hint: 'e.g. Youth 10, Adult M, Adult 8' }),
-      rpfCsdField({ name: 'cm_shoe_size',   label: 'Shoe Size',   groups: g.shoe,       hint: "e.g. Kids 4, Women's 8, Men's 10",       required: true }),
-      rpfCsdField({ name: 'cm_height',      label: 'Height',      groups: g.height,     hint: "e.g. 5'4\" (163 cm), 4'11\" (150 cm)",   required: true }),
-      rpfCsdField({ name: 'cm_hair_length', label: 'Hair Length', groups: g.hairLength, hint: 'e.g. Short (1–3 in), Shoulder-length' }),
-      rpfCsdField({ name: 'cm_hair_colour', label: 'Hair Colour', groups: g.hairColour, hint: 'e.g. Medium Brown, Light Blonde' }),
-    ].join('');
-    const notes = [
-      { name: 'cm_costume_notes', label: 'Costume concerns or special considerations', ph: 'Anything the costume team should know about fit, comfort, or preferences...' },
-      { name: 'cm_sensory_notes', label: 'Sensory notes', ph: 'e.g. cannot tolerate tight collars, itchy fabrics, or heavy headpieces...' },
-    ].map(n => `<div class="rpf-form-group"><label class="rpf-label">${esc(n.label)}</label><textarea class="rpf-input" data-field-name="${esc(n.label)}" rows="2" placeholder="${esc(n.ph)}"></textarea></div>`).join('');
-    return `<div class="rpf-cm">${fields}${notes}</div>`;
+    const cfg = template?.cm_config || {};
+    const g   = COSTUME_SIZE_GROUPS;
+
+    const isIncluded     = (key, def = true)  => cfg[key]?.included !== undefined ? cfg[key].included !== false : def;
+    const isRequired     = (key, def = false) => cfg[key]?.required !== undefined ? !!cfg[key].required : def;
+    const filteredGroups = (key, allGroups)   => {
+      const saved = cfg[key]?.groups;
+      if (!saved) return allGroups;
+      return allGroups.filter(grp => saved[grp.group] !== false);
+    };
+
+    const sizeFields = [
+      isIncluded('top_size',    true)  ? rpfCsdField({ name: 'cm_top_size',    label: 'Top Size',    groups: filteredGroups('top_size',    g.top),        hint: 'e.g. Youth L, Adult M, Adult 2XL',        required: isRequired('top_size',    true) }) : '',
+      isIncluded('bottom_size', true)  ? rpfCsdField({ name: 'cm_bottom_size', label: 'Bottom Size', groups: filteredGroups('bottom_size', g.bottom),     hint: 'e.g. Youth M, Adult 10, 32W',             required: isRequired('bottom_size', true) }) : '',
+      isIncluded('dress_size',  true)  ? rpfCsdField({ name: 'cm_dress_size',  label: 'Dress Size',  groups: filteredGroups('dress_size',  g.dress),      hint: 'e.g. Youth 10, Adult M, Adult 8',         required: isRequired('dress_size',  false) }) : '',
+    ].filter(Boolean);
+
+    const footwearFields = [
+      isIncluded('shoe_size', true) ? rpfCsdField({ name: 'cm_shoe_size', label: 'Shoe Size', groups: filteredGroups('shoe_size', g.shoe), hint: "e.g. Kids 4, Women's 8, Men's 10", required: isRequired('shoe_size', true) }) : '',
+    ].filter(Boolean);
+
+    const physicalFields = [
+      isIncluded('height',      true)  ? rpfCsdField({ name: 'cm_height',      label: 'Height',      groups: filteredGroups('height',      g.height),      hint: "e.g. 5'4\" (163 cm), 4'11\" (150 cm)",   required: isRequired('height',      true) }) : '',
+      isIncluded('hair_length', false) ? rpfCsdField({ name: 'cm_hair_length', label: 'Hair Length', groups: filteredGroups('hair_length', g.hairLength),  hint: 'e.g. Short (1–3 in), Shoulder-length',   required: isRequired('hair_length', false) }) : '',
+      isIncluded('hair_colour', false) ? rpfCsdField({ name: 'cm_hair_colour', label: 'Hair Colour', groups: filteredGroups('hair_colour', g.hairColour),  hint: 'e.g. Medium Brown, Light Blonde',         required: isRequired('hair_colour', false) }) : '',
+    ].filter(Boolean);
+
+    const notesDefs = [
+      { key: 'note_costume', name: 'cm_costume_notes', label: 'Costume concerns or special considerations', ph: 'Anything the costume team should know about fit, comfort, or preferences...' },
+      { key: 'note_allergy', name: 'cm_allergy_notes', label: 'Makeup or material allergies',               ph: 'e.g. latex allergy, sensitive skin, reactions to specific fabrics...',         defaultIncluded: false },
+      { key: 'note_sensory', name: 'cm_sensory_notes', label: 'Sensory notes',                              ph: 'e.g. cannot tolerate tight collars, itchy fabrics, or heavy headpieces...' },
+      { key: 'note_other',   name: 'cm_other_notes',   label: 'Anything else the costume team should know', ph: 'Any other notes...' },
+    ];
+    const noteFields = notesDefs
+      .filter(n => isIncluded(n.key, n.defaultIncluded !== false))
+      .map(n => `<div class="rpf-form-group"><label class="rpf-label">${esc(n.label)}</label><textarea class="rpf-input" data-field-name="${esc(n.label)}" name="${esc(n.name)}" rows="2" placeholder="${esc(n.ph)}"></textarea></div>`);
+
+    const section = (head, fields) => fields.length
+      ? `<div class="rpf-cm-section"><div class="rpf-cm-section-head">${esc(head)}</div><div class="rpf-cm-section-fields">${fields.join('')}</div></div>`
+      : '';
+
+    return `<div class="rpf-cm">
+      ${section('Clothing Sizes',   sizeFields)}
+      ${section('Footwear',         footwearFields)}
+      ${section('Physical Details', physicalFields)}
+      ${noteFields.join('')}
+    </div>`;
   }
 
   function rpfRenderMediaReleaseSection(template) {
