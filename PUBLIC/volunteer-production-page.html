@@ -6734,23 +6734,14 @@
       if (addDropdownOppId === oppId) { addDropdownOppId = null; addDropdownError = null; renderRows(); return; }
       addDropdownOppId = oppId; addDropdownError = null;
       renderRows();
+      requestAnimationFrame(() => document.getElementById(`vp-dd-input-${CSS.escape ? CSS.escape(oppId) : oppId}`)?.focus());
     }
     function closeAddDropdown() { if (!addDropdownOppId) return; addDropdownOppId = null; addDropdownError = null; renderRows(); }
     function addToScheduleFor(oppId, forPerson) {
       const opp = opps.find(o => o.id === oppId);
-      if (!opp) return;
-      if (forPerson === null) {
-        const conflict = schedule.find(s => s.forPerson === null && shiftsOverlap(s, opp));
-        if (conflict) {
-          addDropdownOppId = null; addDropdownError = null;
-          conflictPendingOpp = { opp, conflictRole: conflict.volunteer_role || 'another role' };
-          renderRows(); renderCart();
-          return;
-        }
-      } else {
-        const conflict = personConflictsWithSchedule(forPerson, [opp]);
-        if (conflict) { addDropdownError = `${forPerson} is already in ${conflict} at this time.`; renderRows(); return; }
-      }
+      if (!opp || !forPerson) return;
+      const conflict = personConflictsWithSchedule(forPerson, [opp]);
+      if (conflict) { addDropdownError = `${forPerson} is already in ${conflict} at the same time.`; renderRows(); return; }
       schedule.push({ ...opp, people: [], forPerson });
       const k = spotsKey(opp); signupCounts[k] = (signupCounts[k] || 0) + 1;
       addDropdownOppId = null; addDropdownError = null;
@@ -6771,13 +6762,9 @@
       const errHtml = isOpen && addDropdownError ? `<div class="vp-add-dropdown-error">${esc(addDropdownError)}</div>` : '';
       const ddHtml = isOpen ? `<div class="vp-add-dropdown" onclick="event.stopPropagation()">
         <div class="vp-add-dropdown-head">Who's volunteering?</div>
-        <div class="vp-add-dropdown-opts">
-          <button class="vp-add-dropdown-option" type="button" onclick="addToScheduleFor('${safeId}',null)"><span class="vp-dd-avatar vp-dd-avatar-me">✓</span>Me</button>
-          ${people.map(n => `<button class="vp-add-dropdown-option" type="button" onclick="addToScheduleFor('${safeId}','${esc(n)}')"><span class="vp-dd-avatar vp-dd-avatar-other">${esc(n.charAt(0).toUpperCase())}</span>${esc(n)}</button>`).join('')}
-        </div>
-        <hr class="vp-add-dropdown-divider">
+        ${people.length ? `<div class="vp-add-dropdown-opts">${people.map(n => `<button class="vp-add-dropdown-option" type="button" onclick="addToScheduleFor('${safeId}','${esc(n)}')"><span class="vp-dd-avatar vp-dd-avatar-other">${esc(n.charAt(0).toUpperCase())}</span>${esc(n)}</button>`).join('')}</div><hr class="vp-add-dropdown-divider">` : ''}
         <div class="vp-add-dropdown-new">
-          <div class="vp-add-dropdown-new-label">Someone new</div>
+          <div class="vp-add-dropdown-new-label">${people.length ? 'Someone new' : 'Enter their name'}</div>
           <div class="vp-add-dropdown-new-row">
             <input id="vp-dd-input-${safeId}" class="vp-add-dropdown-input" type="text" placeholder="Full name" autocomplete="name" onkeydown="if(event.key==='Enter')confirmDropdownNewPerson('${safeId}');if(event.key==='Escape'){event.stopPropagation();closeAddDropdown();}" onclick="event.stopPropagation()" />
             <button class="vp-add-dropdown-confirm" type="button" onclick="confirmDropdownNewPerson('${safeId}')">Add</button>
@@ -6804,7 +6791,7 @@
         const removing = schedule.filter(s => s.id === id);
         schedule = schedule.filter(s => s.id !== id);
         removing.forEach(item => { const k = spotsKey(item); const n = 1 + (item.people?.length || 0); signupCounts[k] = Math.max(0, (signupCounts[k] || n) - n); });
-        addingPersonToGroup = null; conflictPendingOpp = null; cartErrorMessage = null;
+        addingPersonToGroup = null; conflictPendingOpp = null; cartErrorMessage = null; addDropdownOppId = null;
         renderRows(); renderCart();
       }
     }
@@ -7370,10 +7357,8 @@
           discount_performer: discountRequested ? discountPerformer.trim() || null : null,
         });
         const rows = [
-          ...schedule.map(opp => opp.forPerson
-            ? { ...baseRow(opp), name: opp.forPerson, email: '', phone: null, notes: null }
-            : { ...baseRow(opp), name, email, phone: phone || null, notes: notes || null }),
-          ...schedule.flatMap(opp => (opp.people || []).map(person => ({ ...baseRow(opp), name: person.name, email: '', phone: null, notes: null }))),
+          ...schedule.map(opp => ({ ...baseRow(opp), name: opp.forPerson || name, email, phone: phone || null, notes: notes || null })),
+          ...schedule.flatMap(opp => (opp.people || []).map(person => ({ ...baseRow(opp), name: person.name, email, phone: null, notes: null }))),
         ];
         let { error } = await sb.from('volunteer_signups').insert(rows);
         if (error && missingVolunteerPasscodeColumn(error)) {
