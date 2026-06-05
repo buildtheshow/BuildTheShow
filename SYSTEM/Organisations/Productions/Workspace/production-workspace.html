@@ -26719,14 +26719,14 @@
 
   // ── Load shared sidebar ───────────────────────────────
   (function () {
-    const _key = 'bts-prod-sidebar-v12';
+    const _key = 'bts-prod-sidebar-v13';
     const _cached = sessionStorage.getItem(_key);
     if (_cached) {
       document.getElementById('prod-sidebar-host').innerHTML = _cached;
       initProdSidebarEvents();
       try { console.info('[BTS lifecycle]', { timestamp: new Date().toISOString(), functionName: 'production-sidebar-shell', route: window.location.pathname + window.location.search + window.location.hash, reason: 'mounted-from-cache' }); } catch {}
     }
-    fetch('/SHARED/Navigation/production-sidebar.html?v=sidebar-groups-20260605')
+    fetch('/SHARED/Navigation/production-sidebar.html?v=sidebar-v13-20260605')
       .then(res => res.text())
       .then(html => {
         sessionStorage.setItem(_key, html);
@@ -39721,12 +39721,12 @@ See you soon!
   function setSidebarSubmenuState(section, activeSubId) {
     _sidebarSection = section;
     _sidebarSubId   = activeSubId || null;
-    ['volunteers-wrap', 'auditions-wrap', 'registration-wrap', 'marketing-wrap', 'budget-wrap'].forEach(id => {
+    ['auditions-wrap', 'registration-wrap', 'casting-wrap', 'marketing-wrap', 'ticketing-wrap', 'budget-wrap'].forEach(id => {
       const wrap = document.getElementById(id);
       if (wrap) wrap.classList.toggle('open', !!section && id === `${section}-wrap`);
     });
-    document.querySelectorAll('.prod-sub-item, .prod-sub-group-link').forEach(el => el.classList.remove('active'));
-    document.querySelectorAll('#volunteers-parent-tab, #auditions-parent-tab, #registration-parent-tab, #marketing-parent-tab, #budget-parent-tab').forEach(el => {
+    document.querySelectorAll('.prod-sub-item, .prod-sub-group-link, .sidebar-direct-item').forEach(el => el.classList.remove('active'));
+    document.querySelectorAll('#auditions-parent-tab, #registration-parent-tab, #casting-parent-tab, #marketing-parent-tab, #ticketing-parent-tab, #budget-parent-tab').forEach(el => {
       el.classList.remove('active', 'is-open-parent');
     });
     const activeSubEl = activeSubId ? document.getElementById(activeSubId) : null;
@@ -39741,7 +39741,7 @@ See you soon!
   }
 
   function syncSidebarMenuA11y() {
-    ['volunteers', 'auditions', 'registration', 'marketing', 'budget'].forEach(section => {
+    ['auditions', 'registration', 'casting', 'marketing', 'ticketing', 'budget'].forEach(section => {
       const wrap = document.getElementById(`${section}-wrap`);
       const parent = document.getElementById(`${section}-parent-tab`);
       const chevron = parent?.querySelector('.tab-chevron');
@@ -39982,8 +39982,33 @@ See you soon!
     setSidebarSubmenuState('marketing', _sidebarSection === 'marketing' ? _sidebarSubId : null);
   }
 
-  const _SECTION_TO_GROUP = { team: 'plan', calendar: 'plan', auditions: 'cast', castlist: 'cast', registration: 'cast', marketing: 'promote', volunteers: 'run', budget: 'wrapup' };
-  const _ALL_GROUPS = ['plan', 'cast', 'rehearse', 'promote', 'run', 'wrapup'];
+  function toggleCastingMenu(e) {
+    e?.preventDefault?.();
+    e?.stopPropagation?.();
+    const wrap = document.getElementById('casting-wrap');
+    const isOpen = !!wrap?.classList.contains('open');
+    if (isOpen) { wrap.classList.remove('open'); syncSidebarMenuA11y(); return; }
+    setSidebarSubmenuState('casting', _sidebarSection === 'casting' ? _sidebarSubId : null);
+  }
+
+  function toggleTicketingMenu(e) {
+    e?.preventDefault?.();
+    e?.stopPropagation?.();
+    const wrap = document.getElementById('ticketing-wrap');
+    const isOpen = !!wrap?.classList.contains('open');
+    if (isOpen) { wrap.classList.remove('open'); syncSidebarMenuA11y(); return; }
+    setSidebarSubmenuState('ticketing', _sidebarSection === 'ticketing' ? _sidebarSubId : null);
+  }
+
+  const _SECTION_TO_GROUP = {
+    overview: 'overview', team: 'plan', calendar: 'plan',
+    auditions: 'cast', registration: 'cast', casting: 'cast', castlist: 'cast',
+    marketing: 'promote', ticketing: 'promote',
+    volunteers: 'volunteers',
+    budget: 'financials',
+    settings: 'settings'
+  };
+  const _ALL_GROUPS = ['overview', 'plan', 'cast', 'departments', 'promote', 'volunteers', 'financials', 'wrapup', 'settings'];
 
   function openSidebarGroup(groupId) {
     _ALL_GROUPS.forEach(id => {
@@ -47514,10 +47539,11 @@ See you soon!
 
   function handleSidebarChevronKey(e, section) {
     if (e.key !== 'Enter' && e.key !== ' ') return;
-    if (section === 'volunteers') toggleVolunteersMenu(e);
-    else if (section === 'auditions') toggleAuditionsMenu(e);
+    if (section === 'auditions') toggleAuditionsMenu(e);
     else if (section === 'registration') toggleRegistrationMenu(e);
+    else if (section === 'casting') toggleCastingMenu(e);
     else if (section === 'marketing') toggleMarketingMenu(e);
+    else if (section === 'ticketing') toggleTicketingMenu(e);
     else if (section === 'budget') toggleBudgetMenu(e);
   }
 
@@ -47534,7 +47560,7 @@ See you soon!
     }
     closeMobileSidebar();
     switchProdTab('auditions', { permissionPageKey: 'auditions.casting_board' });
-    setSidebarSubmenuState('auditions', 'asub-casting');
+    setSidebarSubmenuState('casting', 'csub-castingboard');
     cbv2SubView = 'board';
     setCastboardMode('general');
     switchAudTab('castboard');
@@ -47547,7 +47573,7 @@ See you soon!
     }
     closeMobileSidebar();
     switchProdTab('auditions', { permissionPageKey: 'auditions.final_casting' });
-    setSidebarSubmenuState('auditions', 'asub-finalcasting');
+    setSidebarSubmenuState('casting', 'csub-offers');
     switchAudTab('finalcasting');
     switchFinalCastingTab('board');
     saveWorkspaceNavState({ prodTab: 'auditions', auditionsSubTab: 'finalcasting' });
@@ -49452,6 +49478,7 @@ See you soon!
       el.classList.toggle('active', el.dataset.tab === id);
     });
     if (id !== 'volunteers' && id !== 'auditions' && id !== 'registration' && id !== 'marketing') setSidebarSubmenuState(null, null);
+    try { const _gId = _SECTION_TO_GROUP[id]; if (_gId && typeof openSidebarGroup === 'function') openSidebarGroup(_gId); } catch (e) {}
     enforceSingleWorkspacePanel(workspacePanelIdForTab(id));
     document.querySelector('.prod-main').classList.toggle('checklist-active', id === 'checklist');
     if (id === 'overview') {
@@ -49545,15 +49572,21 @@ See you soon!
   }
   function initProdSidebarEvents() {
     enhanceSidebarNavControls(document);
+    const _skipIds = ['auditions-parent-tab', 'registration-parent-tab', 'casting-parent-tab', 'marketing-parent-tab', 'ticketing-parent-tab', 'budget-parent-tab'];
     document.querySelectorAll('.prod-tab[data-tab]').forEach(el => {
-      if (el.id === 'volunteers-parent-tab' || el.id === 'auditions-parent-tab' || el.id === 'registration-parent-tab' || el.id === 'marketing-parent-tab' || el.id === 'budget-parent-tab') return;
+      if (_skipIds.includes(el.id)) return;
       if (el.hasAttribute('onclick')) return;
-      if (!el.dataset.tab) return; // placeholder
-      el.addEventListener('click', () => switchProdTab(el.dataset.tab));
+      if (!el.dataset.tab) return;
+      el.addEventListener('click', () => {
+        try { const gId = _SECTION_TO_GROUP[el.dataset.tab]; if (gId) openSidebarGroup(gId); } catch (e) {}
+        switchProdTab(el.dataset.tab);
+      });
     });
-    // Open the group for the current active section
-    const groupId = _SECTION_TO_GROUP[_sidebarSection];
-    if (groupId) openSidebarGroup(groupId);
+    try {
+      const section = _sidebarSection || document.querySelector('.prod-tab.active[data-tab]')?.dataset?.tab;
+      const groupId = _SECTION_TO_GROUP[section];
+      if (groupId) openSidebarGroup(groupId);
+    } catch (e) {}
   }
 
   // ── Files tab ─────────────────────────────────────────
