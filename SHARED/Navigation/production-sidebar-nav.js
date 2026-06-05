@@ -215,4 +215,73 @@
       .catch(function () {});
   };
 
+  // ── Production header loader ─────────────────────────────────────────────
+  // Fetches minimal production data from Supabase and populates the sidebar
+  // header on standalone production pages.
+
+  window.initProductionPage = async function (activeGroup) {
+    const idParam = prodId();
+
+    // Load sidebar HTML first so it shows immediately
+    window.loadProductionSidebar(activeGroup);
+
+    if (!idParam) return;
+
+    // Supabase client — anon key, read-only public data
+    if (typeof supabase === 'undefined') return;
+    const { createClient } = supabase;
+    const sb = createClient(
+      'https://tkmaiktxpwqfbgeojbnf.supabase.co',
+      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRrbWFpa3R4cHdxZmJnZW9qYm5mIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM3MzE4MTcsImV4cCI6MjA4OTMwNzgxN30.TkTZBNWUatk3Y6Vmfv1hIRR3DfVjgwauwa76Pf00J_8'
+    );
+
+    const { data: prod } = await sb
+      .from('productions')
+      .select('id, title, subtitle, season_year, status, venue, poster_url, organization_id, organizations(slug)')
+      .eq('id', idParam)
+      .single();
+
+    if (!prod) return;
+
+    document.title = prod.title + ' - Build The Show';
+
+    const setEl = function (id, val) {
+      const el = document.getElementById(id);
+      if (el) el.textContent = val;
+    };
+
+    const sub = [prod.subtitle, prod.season_year].filter(Boolean).join(' · ');
+    setEl('hdr-title', prod.title);
+    setEl('hdr-mobile-title', prod.title);
+    setEl('hdr-sub', sub || prod.venue || '');
+    setEl('hdr-mobile-sub', sub || prod.venue || '');
+
+    const labels = { setup: 'In Planning', auditions: 'Auditions Launched', casting: 'Show Cast', rehearsals: 'Rehearsing', performances: 'Performing', wrapped: 'Wrapped' };
+    const statusLabel = labels[prod.status] || 'Setup';
+    const statusClass = 'status-badge s-' + (prod.status || 'setup');
+    ['hdr-status', 'hdr-mobile-status'].forEach(function (id) {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.textContent = statusLabel;
+      el.className = statusClass + (id === 'hdr-mobile-status' ? ' sidebar-mobile-status' : '');
+      el.style.display = '';
+    });
+
+    const orgSlug = prod.organizations && prod.organizations.slug;
+    const orgHref = orgSlug ? '/' + encodeURIComponent(orgSlug) + '/ORG' : '/org/dashboard';
+    document.querySelectorAll('#sidebar-org-back, #sidebar-mobile-org-back').forEach(function (link) {
+      link.href = orgHref;
+    });
+
+    if (prod.poster_url) {
+      ['sidebar-poster-wrap', 'sidebar-mobile-poster-wrap'].forEach(function (id) {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.innerHTML = '<img src="' + prod.poster_url + '" alt="Production poster" />';
+        el.classList.remove('hidden');
+      });
+    }
+  };
+
+
 })();
