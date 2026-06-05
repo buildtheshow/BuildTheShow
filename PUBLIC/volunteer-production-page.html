@@ -5803,6 +5803,12 @@
       const first = requiredDateEvents(entry, events)[0];
       return first ? roleShiftTiming(first, entry) : null;
     }
+    function requiredDateTimings(entry, events) {
+      return requiredDateEvents(entry, events).map(ev => {
+        const timing = roleShiftTiming(ev, entry);
+        return { date: timing.shift_date || ev.start_time?.slice(0, 10) || '', shift_start_time: timing.shift_start_time || null, shift_end_time: timing.shift_end_time || null };
+      }).filter(t => t.date);
+    }
     function requiredDateHoursFor(entry, events) {
       return requiredDateEvents(entry, events).reduce((sum, ev) => {
         const isDeadline = eventPlanType(ev) === 'deadline' || /deadline/i.test(ev.title || '');
@@ -5811,7 +5817,7 @@
         return sum + (timing.hours?.mins ? timing.hours.mins / 60 : 0);
       }, 0);
     }
-    function roleOpp(entryKey, entry, eventType, ev, count, requiredDates = [], requiredDateHours = 0, firstRequiredTiming = null) {
+    function roleOpp(entryKey, entry, eventType, ev, count, requiredDates = [], requiredDateHours = 0, firstRequiredTiming = null, requiredTimings = []) {
       const role = roleFromPlanEntry(entryKey, entry);
       // For per-production roles with required dates, use timing from the first required event
       const timing = ev ? roleShiftTiming(ev, entry) : (firstRequiredTiming || { shift_date: null, shift_start_time: null, shift_end_time: null, hours: null });
@@ -5831,6 +5837,7 @@
         count_mode: planEntryCountMode(entryKey, entry),
         required_dates: requiredDates,
         required_date_hours: requiredDateHours,
+        required_date_timings: requiredTimings,
         timing_group: entry.timingGroup || entry.timing_group || null
       };
     }
@@ -5843,14 +5850,14 @@
           cfg.roles.forEach((role, ri) => {
             const key = `${eventType}-${ri}`, entry = staffingPlan[key], count = entry?.count ?? 0;
             if (count <= 0) return;
-            result.push(roleOpp(key, entry, eventType, null, count, requiredDateLabels(entry, events), requiredDateHoursFor(entry, events), requiredFirstTiming(entry, events)));
+            result.push(roleOpp(key, entry, eventType, null, count, requiredDateLabels(entry, events), requiredDateHoursFor(entry, events), requiredFirstTiming(entry, events), requiredDateTimings(entry, events)));
           });
         } else {
           cfg.roles.forEach((role, ri) => {
             const key = `${eventType}-${ri}`, entry = staffingPlan[key], count = entry?.count ?? 0;
             if (count <= 0) return;
             if (planEntryCountMode(key, entry) === 'per_production') {
-              result.push(roleOpp(key, entry, eventType, null, count, requiredDateLabels(entry, events), requiredDateHoursFor(entry, events), requiredFirstTiming(entry, events)));
+              result.push(roleOpp(key, entry, eventType, null, count, requiredDateLabels(entry, events), requiredDateHoursFor(entry, events), requiredFirstTiming(entry, events), requiredDateTimings(entry, events)));
               return;
             }
             if (!planEntryAppliesTo(key, entry).includes(eventType)) return;
@@ -5923,6 +5930,7 @@
           credit_hours: Math.max(current.credit_hours || 0, normalized.credit_hours || 0),
           required_date_hours: Math.max(current.required_date_hours || 0, normalized.required_date_hours || 0),
           required_dates: (current.required_dates || []).length >= (normalized.required_dates || []).length ? current.required_dates : normalized.required_dates,
+          required_date_timings: (current.required_date_timings || []).length >= (normalized.required_date_timings || []).length ? current.required_date_timings : normalized.required_date_timings,
           has_outside_work: !!(current.has_outside_work || normalized.has_outside_work),
           is_full_discount: !!(current.is_full_discount || normalized.is_full_discount),
         });
@@ -6853,10 +6861,12 @@
             + '<div class="vp-submit-date-list">'
               + group.items.map(item => {
                 const requiredDates = Array.isArray(item.required_dates) ? item.required_dates.filter(Boolean) : [];
+                const requiredTimings = Array.isArray(item.required_date_timings) ? item.required_date_timings : [];
                 if (requiredDates.length > 0) {
-                  const time = fmtTimeRange(item.shift_start_time, item.shift_end_time);
-                  return requiredDates.map(d => {
+                  return requiredDates.map((d, i) => {
                     const dateStr = esc(fmtDate(d, { short: true }) || d);
+                    const t = requiredTimings[i] || {};
+                    const time = fmtTimeRange(t.shift_start_time || item.shift_start_time, t.shift_end_time || item.shift_end_time);
                     return '<div class="vp-submit-date-chip"><strong>' + dateStr + '</strong>' + (time ? '<span>' + esc(time) + '</span>' : '') + '</div>';
                   }).join('');
                 }
