@@ -201,6 +201,14 @@
     function applyAndInit(html) {
       host.innerHTML = html;
       window.enhanceSidebarNavControls(host);
+      // Wire up data-tab items that have no onclick — same as workspace initProdSidebarEvents
+      host.querySelectorAll('.prod-tab[data-tab]').forEach(function (el) {
+        if (el.hasAttribute('onclick')) return;
+        if (!el.dataset.tab) return;
+        el.addEventListener('click', function () {
+          window.switchProdTab(el.dataset.tab);
+        });
+      });
       if (activeGroup) window.openSidebarGroup(activeGroup);
       // double-rAF so the browser has painted before we try to mark active
       requestAnimationFrame(function () {
