@@ -1241,12 +1241,23 @@
     .vpd-detail-actions { display: flex; justify-content: flex-end; align-items: center; gap: 0.65rem; padding-top: 1rem; }
     .vpd-detail-btn { border: 2px solid var(--purple); border-radius: 8px; background: var(--purple); color: #fff; font-family: var(--bts-font); font-size: 0.82rem; font-weight: 950; padding: 0.55rem 0.9rem; cursor: pointer; }
     .vpd-detail-btn.secondary { background: #fff; color: var(--purple); }
-    .vp-submit-review { display: flex; flex-direction: column; gap: 0.42rem; margin-bottom: 0.5rem; }
-    .vp-submit-dept-header { border-left: 3px solid; padding: 0.55rem 0.75rem; margin-top: 0.6rem; margin-bottom: 0.1rem; }
+    .vp-submit-review { display: flex; flex-direction: column; gap: 0.32rem; margin-bottom: 0.5rem; }
+    .vp-submit-dept-header { border-left: 3px solid; padding: 0.4rem 0.6rem; margin-top: 0.65rem; margin-bottom: 0.05rem; display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.2rem 0.45rem; }
     .vp-submit-dept-header:first-child { margin-top: 0; }
-    .vp-submit-dept-kicker { font-size: 0.58rem; font-weight: 900; text-transform: uppercase; letter-spacing: 0.1em; opacity: 0.75; margin-bottom: 0.1rem; }
-    .vp-submit-dept-name { font-size: 1rem; font-weight: 950; line-height: 1.15; }
-    .vp-submit-dept-body { font-size: 0.72rem; font-weight: 700; color: var(--muted); margin-top: 0.2rem; line-height: 1.4; }
+    .vp-submit-dept-kicker { font-size: 0.55rem; font-weight: 900; text-transform: uppercase; letter-spacing: 0.1em; opacity: 0.65; }
+    .vp-submit-dept-name { font-size: 0.88rem; font-weight: 950; line-height: 1.2; }
+    .vp-submit-dept-body { font-size: 0.68rem; font-weight: 700; color: var(--muted); line-height: 1.35; width: 100%; margin-top: 0.06rem; }
+    .vp-submit-role-header { font-size: 0.72rem; font-weight: 950; padding: 0.22rem 0.6rem; opacity: 0.85; margin-top: 0.18rem; }
+    .vp-cart-ticket--compact .vp-cart-ticket-date { padding: 0.55rem 0.3rem; }
+    .vp-cart-ticket--compact .vp-cart-ticket-month { font-size: 0.5rem; }
+    .vp-cart-ticket--compact .vp-cart-ticket-day { font-size: 1.45rem; }
+    .vp-cart-ticket--compact .vp-cart-ticket-weekday { font-size: 0.48rem; }
+    .vp-cart-ticket--compact .vp-cart-ticket-body { padding: 0.45rem 0.45rem 0.45rem 0.5rem; }
+    .vp-cart-ticket--compact .vp-cart-ticket-name { font-size: 0.9rem; }
+    .vp-cart-ticket--compact .vp-cart-ticket-time { font-size: 0.65rem; margin-top: 0.2rem; }
+    .vp-cart-ticket--compact .vp-cart-ticket-location { font-size: 0.62rem; }
+    .vp-cart-ticket--compact .vp-cart-ticket-hrs-num { font-size: 1.15rem; }
+    .vp-cart-ticket--compact .vp-cart-ticket-aside { min-height: 2.2rem; }
     .vp-submit-shift-card { border:1.5px solid rgba(87,46,136,0.13); border-radius:10px; overflow:hidden; margin-bottom:0.75rem; background:#fff; }
     .vp-submit-shift-head { padding:0.65rem 0.9rem; display:flex; align-items:center; gap:0.6rem; min-width:0; }
     .vp-submit-shift-head > div { min-width:0; }
@@ -7090,7 +7101,7 @@
         ${showRemove ? `<button class="vp-cart-shift-remove" type="button" onclick="removeSchedule('${esc(opp.id)}')" aria-label="Remove ${esc(cartShiftLabel(opp) || opp.volunteer_role || 'shift')}">&times;</button>` : ''}
       </div>`;
     }
-    function cartTicketCardHtml(opp, group, personName, removeHtml) {
+    function cartTicketCardHtml(opp, group, personName, removeHtml, opts = {}) {
       const color = iconColor(opp);
       const dateStr = opp.shift_date || '';
       let monthStr = '', dayStr = '', weekdayStr = '';
@@ -7115,13 +7126,14 @@
       const nameHtml = personName
         ? `<div class="vp-cart-ticket-name" style="color:${color};">${esc(personName)}</div>`
         : `<div class="vp-cart-ticket-name vp-cart-ticket-you" style="color:${color};">You</div>`;
-      return `<div class="vp-cart-ticket">
+      const compact = opts.compact;
+      return `<div class="vp-cart-ticket${compact ? ' vp-cart-ticket--compact' : ''}">
         <div class="vp-cart-ticket-date" style="background:${hexAlpha(color,0.1)};color:${color};">
           ${monthStr ? `<span class="vp-cart-ticket-month">${esc(monthStr)}</span><span class="vp-cart-ticket-day">${esc(dayStr)}</span><span class="vp-cart-ticket-weekday">${esc(weekdayStr)}</span>` : `<span class="vp-cart-ticket-day" style="font-size:1rem;opacity:0.5;">—</span>`}
         </div>
         <div class="vp-cart-ticket-body">
           <div class="vp-cart-ticket-info">
-            <div class="vp-cart-ticket-role">${esc(opp.volunteer_role || 'Volunteer Shift')}</div>
+            ${!opts.hideRole ? `<div class="vp-cart-ticket-role">${esc(opp.volunteer_role || 'Volunteer Shift')}</div>` : ''}
             ${nameHtml}
             ${timeLabel ? `<div class="vp-cart-ticket-time">${esc(timeLabel)}</div>` : ''}
             ${location ? `<div class="vp-cart-ticket-location">${esc(location)}</div>` : ''}
@@ -7281,36 +7293,37 @@
       + '</div>';
     }
     function submitGroupsHtml() {
-      // Build flat list of person×shift pairs
-      const pairs = [];
+      // Group schedule items by dept → role
+      const deptOrder = [], roleOrder = new Map();
+      const byDeptRole = new Map();
       schedule.forEach(opp => {
-        const group = { key: cartGroupKey(opp), role: opp.volunteer_role || 'Volunteer Shift', department: opp.department || '', checkIn: opp.check_in_with || '', outside: !!opp.has_outside_work, items: [opp] };
-        pairs.push({ item: opp, group, dept: opp.department || '', name: opp.forPerson || null });
-        (opp.people || []).forEach(p => {
-          pairs.push({ item: opp, group, dept: opp.department || '', name: p.name });
-        });
+        const dept = opp.department || '';
+        const role = opp.volunteer_role || 'Volunteer Shift';
+        const dk = dept, rk = dept + '::' + role;
+        if (!byDeptRole.has(dk)) { byDeptRole.set(dk, new Map()); deptOrder.push(dk); roleOrder.set(dk, []); }
+        const deptMap = byDeptRole.get(dk);
+        if (!deptMap.has(rk)) { deptMap.set(rk, { role, dept, opp, pairs: [] }); roleOrder.get(dk).push(rk); }
+        const entry = deptMap.get(rk);
+        entry.pairs.push({ item: opp, name: opp.forPerson || null });
+        (opp.people || []).forEach(p => entry.pairs.push({ item: opp, name: p.name }));
       });
-      // Group by department (preserving first-seen order)
-      const deptOrder = [];
-      const byDept = new Map();
-      pairs.forEach(p => {
-        if (!byDept.has(p.dept)) { byDept.set(p.dept, []); deptOrder.push(p.dept); }
-        byDept.get(p.dept).push(p);
-      });
-      // Sort each dept's pairs by date
-      byDept.forEach(list => list.sort((a, b) => cartShiftSortValue(a.item).localeCompare(cartShiftSortValue(b.item))));
       return deptOrder.map(dept => {
         const tile = DEPARTMENT_TILES[dept] || null;
         const color = DEPT_COLORS[dept] || '#572e88';
-        const headerHtml = tile
-          ? `<div class="vp-submit-dept-header" style="border-color:${color};">
-              <div class="vp-submit-dept-kicker" style="color:${color};">${esc(tile.kicker)}</div>
-              <div class="vp-submit-dept-name" style="color:${color};">${esc(tile.name)}</div>
-              <div class="vp-submit-dept-body">${esc(tile.body)}</div>
-            </div>`
-          : `<div class="vp-submit-dept-header" style="border-color:${color};"><div class="vp-submit-dept-name" style="color:${color};">${esc(dept || 'Other')}</div></div>`;
-        const tickets = byDept.get(dept).map(({ item, group, name }) => cartTicketCardHtml(item, group, name, null)).join('');
-        return headerHtml + tickets;
+        const deptHeaderHtml = `<div class="vp-submit-dept-header" style="border-color:${color};">
+          <span class="vp-submit-dept-kicker" style="color:${color};">${esc(tile ? tile.kicker : dept)}</span>
+          <span class="vp-submit-dept-name" style="color:${color};">${esc(tile ? tile.name : dept)}</span>
+          ${tile ? `<span class="vp-submit-dept-body">${esc(tile.body)}</span>` : ''}
+        </div>`;
+        const rolesHtml = roleOrder.get(dept).map(rk => {
+          const entry = byDeptRole.get(dept).get(rk);
+          entry.pairs.sort((a, b) => cartShiftSortValue(a.item).localeCompare(cartShiftSortValue(b.item)));
+          const group = { key: cartGroupKey(entry.opp), role: entry.role, department: dept, items: [entry.opp] };
+          const roleHeaderHtml = `<div class="vp-submit-role-header" style="color:${color};">${esc(entry.role)}</div>`;
+          const tickets = entry.pairs.map(({ item, name }) => cartTicketCardHtml(item, group, name, null, { hideRole: true, compact: true })).join('');
+          return roleHeaderHtml + tickets;
+        }).join('');
+        return deptHeaderHtml + rolesHtml;
       }).join('');
     }
     function submitTotalsHtml() {
