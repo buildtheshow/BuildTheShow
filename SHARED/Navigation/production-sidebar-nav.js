@@ -298,6 +298,9 @@
       var onclick = el.getAttribute('onclick') || '';
       if (onclick.indexOf("'" + currentFile + "'") !== -1 || onclick.indexOf('"' + currentFile + '"') !== -1) {
         el.classList.add('active');
+        // Belt-and-suspenders: force position:relative so ::before dot renders
+        // even if Cloudflare is serving a stale CSS file
+        el.style.position = 'relative';
       }
     });
   }
