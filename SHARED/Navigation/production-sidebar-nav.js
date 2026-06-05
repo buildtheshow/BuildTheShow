@@ -22,6 +22,10 @@
     return '/SYSTEM/Organisations/Productions/Workspace/' + file + '?id=' + encodeURIComponent(id);
   }
 
+  window.btsProdNav = function (file) {
+    location.href = pageUrl(file);
+  };
+
   // ── Group state ──────────────────────────────────────────────────────────
 
   const ALL_GROUPS = ['overview', 'plan', 'cast', 'departments', 'promote', 'ticketing', 'volunteers', 'financials', 'wrapup', 'settings', 'build'];
