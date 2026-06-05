@@ -6022,13 +6022,18 @@
         const [planResult, eventResult, signupResult, contactResult] = await Promise.all([
           sb.from('productions').select('volunteer_staffing_plan').eq('id', prod.id).single(),
           sb.from('production_events').select('id,event_type,title,start_time,end_time,venue,notes,arrive_note,bring_note,know_note,show_in_cast_schedule,is_deadline').eq('production_id', prod.id).order('start_time', { ascending: true }),
-          sb.from('volunteer_signups').select('role_name,shift_date,status').eq('production_id', prod.id).in('status', ['pending','approved','partially_filled']),
+          sb.from('volunteer_signups').select('role_name,shift_date,required_dates,status').eq('production_id', prod.id).in('status', ['pending','approved','partially_filled']),
           sb.rpc('public_production_contact', { p_production_id: prod.id })
         ]);
         if (planResult.error) throw planResult.error;
         productionContacts = contactResult.error ? [] : (contactResult.data || []);
         (eventResult.data || []).forEach(ev => { eventMap[ev.id] = ev; });
-        (signupResult.data || []).forEach(s => { const k = `${s.role_name || ''}::${s.shift_date || ''}`; signupCounts[k] = (signupCounts[k] || 0) + 1; });
+        (signupResult.data || []).forEach(s => {
+          const role = s.role_name || '';
+          const dates = new Set([s.shift_date || '']);
+          (Array.isArray(s.required_dates) ? s.required_dates : []).filter(Boolean).forEach(d => dates.add(d));
+          dates.forEach(d => { const k = `${role}::${d}`; signupCounts[k] = (signupCounts[k] || 0) + 1; });
+        });
         opps = buildOppsFromPlan(planResult.data?.volunteer_staffing_plan || {}, eventResult.data || []);
 
         renderPage();
@@ -6859,8 +6864,9 @@
       document.getElementById('vp-mobile-bar').classList.toggle('visible', schedule.length > 0);
     }
     function discountCopy() {
-      const amount = paymentSettings.volunteer_discount ? ` for ${formatDiscountAmount(paymentSettings.volunteer_discount)} off` : '';
-      return `Complete ${formatHours(discountRequiredHours())} volunteer hours${amount}.`;
+      const amount = paymentSettings.volunteer_discount ? ` (${formatDiscountAmount(paymentSettings.volunteer_discount)} off)` : '';
+      if (scheduleHasFullDiscount()) return `This role qualifies for the full volunteer discount${amount}.`;
+      return `Complete ${formatHours(discountRequiredHours())} volunteer hours for the discount${amount}.`;
     }
     function formatDiscountAmount(value) {
       const text = String(value || '').trim();
@@ -6944,6 +6950,8 @@
         const totalHours = group.items.reduce((sum, item) => sum + scheduleHours(item), 0);
         const count = group.items.length;
         const noSetHours = group.items.some(item => item.is_full_discount && scheduleHours(item) <= 0);
+        const submitTotalDates = group.items.reduce((sum, item) => sum + ((Array.isArray(item.required_date_timings) ? item.required_date_timings.filter(t => t.date).length : 0) || 1), 0);
+        const submitCountLabel = submitTotalDates > count ? submitTotalDates + ' date' + (submitTotalDates === 1 ? '' : 's') : count + ' selected shift' + (count === 1 ? '' : 's');
         return '<div class="vp-submit-shift-card">'
           + '<div class="vp-submit-shift-head" style="background:' + color + ';color:' + (isGold?'var(--ink)':'#fff') + ';">'
             + '<span>' + roleIcon(first.volunteer_role, first.department) + '</span>'
@@ -6955,20 +6963,26 @@
           + '<div class="vp-submit-shift-body">'
             + (first.description ? '<p class="vp-submit-shift-desc">' + esc(first.description) + '</p>' : '')
             + '<div class="vp-submit-shift-facts">'
-              + '<div class="vp-submit-shift-fact">' + count + ' selected shift' + (count === 1 ? '' : 's') + '</div>'
+              + '<div class="vp-submit-shift-fact">' + submitCountLabel + '</div>'
               + (totalHours ? '<div class="vp-submit-shift-fact">' + formatHours(totalHours) + ' scheduled hour' + (Number(totalHours) === 1 ? '' : 's') + '</div>' : (noSetHours ? '<div class="vp-submit-shift-fact" style="font-style:italic;">No set hour count.</div>' : ''))
               + (group.checkIn ? '<div class="vp-submit-shift-fact">Check in with: <strong>' + esc(group.checkIn) + '</strong></div>' : '')
             + '</div>'
             + (group.outside ? '<div class="vp-submit-outside-note">This role also includes work outside these dates.</div>' : '')
             + '<div class="vp-submit-date-list">'
               + group.items.map(item => {
+                const requiredTimings = Array.isArray(item.required_date_timings) ? item.required_date_timings.filter(t => t.date) : [];
                 const requiredDates = Array.isArray(item.required_dates) ? item.required_dates.filter(Boolean) : [];
-                const requiredTimings = Array.isArray(item.required_date_timings) ? item.required_date_timings : [];
-                if (requiredDates.length > 0) {
-                  return requiredDates.map((d, i) => {
-                    const dateStr = esc(fmtDate(d, { short: true }) || d);
-                    const t = requiredTimings[i] || {};
+                if (requiredTimings.length > 0) {
+                  return requiredTimings.map(t => {
+                    const dateStr = esc(fmtDate(t.date, { short: true }) || t.date);
                     const time = fmtTimeRange(t.shift_start_time || item.shift_start_time, t.shift_end_time || item.shift_end_time);
+                    return '<div class="vp-submit-date-chip"><strong>' + dateStr + '</strong>' + (time ? '<span>' + esc(time) + '</span>' : '') + '</div>';
+                  }).join('');
+                }
+                if (requiredDates.length > 0) {
+                  return requiredDates.map(d => {
+                    const dateStr = esc(fmtDate(d, { short: true }) || d);
+                    const time = fmtTimeRange(item.shift_start_time, item.shift_end_time);
                     return '<div class="vp-submit-date-chip"><strong>' + dateStr + '</strong>' + (time ? '<span>' + esc(time) + '</span>' : '') + '</div>';
                   }).join('');
                 }
@@ -7250,16 +7264,50 @@
           ${portalUrl ? `<div style="margin-top:1rem;padding:0.75rem;background:var(--light-grey);border-radius:8px;font-size:0.72rem;color:var(--purple);">Bookmark this page to check back anytime: <span style="font-family:monospace;word-break:break-all;">${esc(portalUrl)}</span></div>` : `<button class="vp-secondary-btn" type="button" style="margin-top:0.8rem;" onclick="openPortalModal()">Check a different email</button>`}
         </div>`;
     }
+    function findOppForPortalRow(r) {
+      if (!opps?.length) return null;
+      const rName = canonicalVolunteerRoleName(r.role_name || '').toLowerCase();
+      const rDate = r.shift_date || '';
+      const rRequired = requiredDatesForSignup(r);
+      if (rDate) {
+        const exact = opps.find(o => canonicalVolunteerRoleName(o.volunteer_role || '').toLowerCase() === rName && o.shift_date === rDate);
+        if (exact) return exact;
+      }
+      if (rRequired.length) {
+        const byRequired = opps.find(o => {
+          if (canonicalVolunteerRoleName(o.volunteer_role || '').toLowerCase() !== rName) return false;
+          return (Array.isArray(o.required_dates) ? o.required_dates : []).some(d => rRequired.includes(d));
+        });
+        if (byRequired) return byRequired;
+      }
+      return opps.find(o => canonicalVolunteerRoleName(o.volunteer_role || '').toLowerCase() === rName) || null;
+    }
     function portalItemHtml(r) {
       const cls = r.status === 'approved' || r.status === 'partially_filled' ? 'approved' : (r.status === 'declined' ? 'declined' : 'pending');
       const label = cls === 'approved' ? 'Confirmed' : cls === 'declined' ? 'Not Approved' : 'Pending Review';
       const requiredDates = requiredDatesForSignup(r);
-      const meta = r.shift_date
-        ? `${fmtDate(r.shift_date, { short:true })}${r.shift_start_time ? ' - ' + fmtTimeRange(r.shift_start_time, r.shift_end_time) : ''}`
-        : (requiredDates.length ? requiredDates.join(' · ') : 'No fixed date');
+      const matchedOpp = findOppForPortalRow(r);
+      const timings = Array.isArray(matchedOpp?.required_date_timings) ? matchedOpp.required_date_timings.filter(t => t.date) : [];
+      let datesHtml;
+      if (timings.length > 1) {
+        datesHtml = `<div class="vp-cart-date-list" style="margin:0.4rem 0 0.55rem;">${timings.map(t => {
+          const time = fmtTimeRange(t.shift_start_time || r.shift_start_time, t.shift_end_time || r.shift_end_time);
+          return `<div class="vp-cart-date-row"><span class="vp-cart-date-day">${esc(fmtDate(t.date, { short: true }))}</span>${time ? `<span class="vp-cart-date-detail">${esc(time)}</span>` : '<span></span>'}</div>`;
+        }).join('')}</div>`;
+      } else {
+        let meta;
+        if (r.shift_date) {
+          meta = fmtDate(r.shift_date, { short: true }) + (r.shift_start_time ? ' · ' + fmtTimeRange(r.shift_start_time, r.shift_end_time) : '');
+        } else if (requiredDates.length) {
+          meta = requiredDates.map(d => fmtDate(d, { short: true }) || d).join(' · ');
+        } else {
+          meta = 'No fixed date';
+        }
+        datesHtml = `<div class="vp-portal-meta">${esc(meta)}</div>`;
+      }
       return `<div class="vp-portal-item">
         <div class="vp-portal-role">${esc(r.role_name || 'Volunteer Shift')}</div>
-        <div class="vp-portal-meta">${esc(meta)}</div>
+        ${datesHtml}
         ${r.check_in_with ? `<div class="vp-progress-note">Checks in with ${esc(r.check_in_with)}</div>` : ''}
         <span class="vp-status ${cls}">${label}</span>
         ${cls === 'approved' && r.approved_hours ? `<div class="vp-progress-note">${esc(parseFloat(r.approved_hours))} hours confirmed</div>` : ''}
@@ -7269,12 +7317,17 @@
     async function refreshSignupCounts() {
       if (!prod?.id) return;
       const { data } = await sb.from('volunteer_signups')
-        .select('role_name,shift_date,status')
+        .select('role_name,shift_date,required_dates,status')
         .eq('production_id', prod.id)
         .in('status', ['pending','approved','partially_filled']);
       if (!data) return;
       signupCounts = {};
-      data.forEach(s => { const k = `${s.role_name || ''}::${s.shift_date || ''}`; signupCounts[k] = (signupCounts[k] || 0) + 1; });
+      data.forEach(s => {
+        const role = s.role_name || '';
+        const dates = new Set([s.shift_date || '']);
+        (Array.isArray(s.required_dates) ? s.required_dates : []).filter(Boolean).forEach(d => dates.add(d));
+        dates.forEach(d => { const k = `${role}::${d}`; signupCounts[k] = (signupCounts[k] || 0) + 1; });
+      });
       renderRows();
     }
     document.addEventListener('visibilitychange', () => {
