@@ -1222,6 +1222,17 @@
     .vp-submit-date-chip { display:flex; align-items:baseline; gap:0.5rem; padding:0.34rem 0.6rem; background:rgba(87,46,136,0.07); border-radius:6px; min-width:0; }
     .vp-submit-date-chip strong { flex:0 0 auto; font-size:0.75rem; font-weight:800; color:var(--purple); white-space:nowrap; }
     .vp-submit-date-chip span { min-width:0; font-size:0.7rem; color:var(--purple); overflow-wrap:anywhere; }
+    .vp-submit-date-chip--full { display:flex; flex-direction:column; gap:0.18rem; align-items:stretch; }
+    .vp-submit-date-chip-top { display:flex; align-items:baseline; gap:0.5rem; }
+    .vp-submit-date-chip-top strong { flex:0 0 auto; font-size:0.75rem; font-weight:800; color:var(--purple); white-space:nowrap; }
+    .vp-submit-date-chip-top span { font-size:0.7rem; color:var(--purple); }
+    .vp-submit-date-meta { font-size:0.66rem; color:var(--muted); font-weight:750; line-height:1.3; }
+    .vp-submit-date-names { font-size:0.66rem; font-weight:900; color:var(--purple); opacity:0.8; }
+    .vp-submit-totals { border-top:1.5px solid rgba(87,46,136,0.1); margin-top:0.75rem; padding-top:0.75rem; display:flex; flex-direction:column; gap:0.32rem; }
+    .vp-submit-totals-row { display:flex; justify-content:space-between; align-items:center; font-size:0.82rem; font-weight:800; color:var(--ink); }
+    .vp-submit-totals-row strong { font-weight:950; font-size:0.95rem; }
+    .vp-submit-totals-combined { color:var(--purple); }
+    .vp-submit-totals-discount { margin-top:0.35rem; font-size:0.74rem; font-weight:800; color:var(--purple); background:rgba(87,46,136,0.06); border-radius:7px; padding:0.45rem 0.6rem; }
     .vp-submit-outside-note { font-size:0.75rem; font-weight:800; color:#d1523d; padding:0.45rem 0.55rem; background:rgba(209,82,61,0.08); border-radius:6px; line-height:1.25; overflow-wrap:anywhere; }
     .vp-submit-shift-facts { display:flex; gap:0.55rem 1rem; flex-wrap:wrap; min-width:0; }
     .vp-submit-shift-fact { min-width:0; font-size:0.72rem; font-weight:700; color:var(--purple); line-height:1.35; overflow-wrap:anywhere; }
@@ -7239,27 +7250,49 @@
               + group.items.map(item => {
                 const requiredTimings = Array.isArray(item.required_date_timings) ? item.required_date_timings.filter(t => t.date) : [];
                 const requiredDates = Array.isArray(item.required_dates) ? item.required_dates.filter(Boolean) : [];
+                const itemLocation = cartShiftLocation(item);
+                const itemHours = scheduleHours(item);
+                const extraNames = [item.forPerson, ...(item.people || []).map(p => p.name)].filter(Boolean);
+                const namesHtml = extraNames.length > 1 ? '<div class="vp-submit-date-names">' + extraNames.map(n => esc(n)).join(' &amp; ') + '</div>' : '';
+                const metaHtml = (itemLocation ? '<div class="vp-submit-date-meta">' + esc(itemLocation) + '</div>' : '')
+                  + (itemHours ? '<div class="vp-submit-date-meta">' + formatHours(itemHours) + ' hr' + (itemHours === 1 ? '' : 's') + '</div>' : '');
                 if (requiredTimings.length > 0) {
                   return requiredTimings.map(t => {
                     const dateStr = esc(fmtDate(t.date, { short: true }) || t.date);
                     const time = fmtTimeRange(t.shift_start_time || item.shift_start_time, t.shift_end_time || item.shift_end_time);
-                    return '<div class="vp-submit-date-chip"><strong>' + dateStr + '</strong>' + (time ? '<span>' + esc(time) + '</span>' : '') + '</div>';
+                    const loc = t.venue || itemLocation;
+                    return '<div class="vp-submit-date-chip vp-submit-date-chip--full"><div class="vp-submit-date-chip-top"><strong>' + dateStr + '</strong>' + (time ? '<span>' + esc(time) + '</span>' : '') + '</div>' + (loc ? '<div class="vp-submit-date-meta">' + esc(loc) + '</div>' : '') + namesHtml + '</div>';
                   }).join('');
                 }
                 if (requiredDates.length > 0) {
                   return requiredDates.map(d => {
                     const dateStr = esc(fmtDate(d, { short: true }) || d);
                     const time = fmtTimeRange(item.shift_start_time, item.shift_end_time);
-                    return '<div class="vp-submit-date-chip"><strong>' + dateStr + '</strong>' + (time ? '<span>' + esc(time) + '</span>' : '') + '</div>';
+                    return '<div class="vp-submit-date-chip vp-submit-date-chip--full"><div class="vp-submit-date-chip-top"><strong>' + dateStr + '</strong>' + (time ? '<span>' + esc(time) + '</span>' : '') + '</div>' + metaHtml + namesHtml + '</div>';
                   }).join('');
                 }
                 const labelParts = cartShiftLabel(item).split(' · ');
-                return '<div class="vp-submit-date-chip"><strong>' + esc(labelParts[0] || 'Flexible') + '</strong>' + (labelParts.length > 1 ? '<span>' + esc(labelParts.slice(1).join(' · ')) + '</span>' : '') + '</div>';
+                return '<div class="vp-submit-date-chip vp-submit-date-chip--full"><div class="vp-submit-date-chip-top"><strong>' + esc(labelParts[0] || 'Flexible') + '</strong>' + (labelParts.length > 1 ? '<span>' + esc(labelParts.slice(1).join(' · ')) + '</span>' : '') + '</div>' + metaHtml + namesHtml + '</div>';
               }).join('')
             + '</div>'
           + '</div>'
         + '</div>';
       }).join('');
+    }
+    function submitTotalsHtml() {
+      const totalRoles = [...new Set(schedule.map(s => s.volunteer_role || '').filter(Boolean))].length || schedule.length;
+      const totalShifts = schedule.reduce((sum, s) => sum + ((Array.isArray(s.required_date_timings) ? s.required_date_timings.filter(t => t.date).length : 0) || (s.shift_date ? 1 : 0)), 0);
+      const totalHours = schedule.reduce((sum, s) => sum + scheduleHours(s), 0);
+      const extraHours = schedule.reduce((sum, s) => sum + scheduleHours(s) * ((s.people || []).length), 0);
+      const combinedHours = totalHours + extraHours;
+      const hasFullDiscount = scheduleHasFullDiscount();
+      return '<div class="vp-submit-totals">'
+        + '<div class="vp-submit-totals-row"><span>Roles</span><strong>' + totalRoles + '</strong></div>'
+        + '<div class="vp-submit-totals-row"><span>Shifts</span><strong>' + totalShifts + '</strong></div>'
+        + '<div class="vp-submit-totals-row"><span>Hours</span><strong>' + (hasFullDiscount ? '—' : formatHours(totalHours)) + '</strong></div>'
+        + (extraHours > 0 ? '<div class="vp-submit-totals-row vp-submit-totals-combined"><span>Combined hours</span><strong>' + formatHours(combinedHours) + '</strong></div>' : '')
+        + (discountRequested && discountPerformer.trim() ? '<div class="vp-submit-totals-discount">Volunteer discount requested for <strong>' + esc(discountPerformer.trim()) + '</strong></div>' : '')
+        + '</div>';
     }
     function openSubmitModal() {
       if (!schedule.length) return;
@@ -7275,7 +7308,7 @@
         <div class="vp-modal-body">
           <div class="vp-submit-col-shifts">
             <div class="vp-submit-review">${submitGroupsHtml()}</div>
-            ${discountRequested ? `<div class="vp-cart-empty" style="margin-bottom:0.5rem;text-align:left;">Volunteer discount requested${discountPerformer.trim() ? ` for <strong>${esc(discountPerformer.trim())}</strong>` : ''}.</div>` : ''}
+            ${submitTotalsHtml()}
           </div>
           <div class="vp-submit-col-form">
             <div id="vp-submit-error" class="vp-form-error"></div>
