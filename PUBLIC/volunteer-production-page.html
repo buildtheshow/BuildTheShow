@@ -5881,7 +5881,7 @@
     function requiredDateTimings(entry, events) {
       return requiredDateEvents(entry, events).map(ev => {
         const timing = roleShiftTiming(ev, entry);
-        return { date: timing.shift_date || ev.start_time?.slice(0, 10) || '', shift_start_time: timing.shift_start_time || null, shift_end_time: timing.shift_end_time || null };
+        return { date: timing.shift_date || ev.start_time?.slice(0, 10) || '', shift_start_time: timing.shift_start_time || null, shift_end_time: timing.shift_end_time || null, venue: ev.venue || null };
       }).filter(t => t.date);
     }
     function requiredDateHoursFor(entry, events) {
@@ -6777,7 +6777,7 @@
         ${schedule.length ? cartGroupsHtml() : '<div class="vp-cart-empty">Choose a shift and add it here. You will enter your name and contact info once when you submit.</div>'}
       </div>
       <div class="vp-cart-summary">
-        <div class="vp-summary-row"><span>Total Shifts</span><strong>${schedule.length}</strong></div>
+        <div class="vp-summary-row"><span>Total Roles</span><strong>${schedule.length}</strong></div>
         <div class="vp-summary-row"><span>Total Hours</span><strong>${hasFullDiscount ? '—' : formatHours(totalHours)}</strong></div>
       </div>
       <div class="vp-cart-discount ${hasDiscountEnabled() ? 'visible' : ''}">
@@ -6832,7 +6832,14 @@
       return [dateLabel, time].filter(Boolean).join(' · ');
     }
     function cartShiftLocation(opp) {
-      return eventMap[opp.event_id]?.venue || opp.location || opp.venue || opp.venue_name || opp.where || '';
+      if (opp.event_id) return eventMap[opp.event_id]?.venue || '';
+      const timings = Array.isArray(opp.required_date_timings) ? opp.required_date_timings.filter(t => t.date) : [];
+      if (timings.length > 0) {
+        const venues = [...new Set(timings.map(t => t.venue).filter(Boolean))];
+        if (venues.length === 1) return venues[0];
+        if (venues.length > 1) return venues.join(' / ');
+      }
+      return opp.location || opp.venue || opp.venue_name || opp.where || '';
     }
     function cartShiftSortValue(opp) {
       return `${opp.shift_date || '9999-12-31'}T${String(opp.shift_start_time || '99:99').slice(0,5)}`;
