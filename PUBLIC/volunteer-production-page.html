@@ -899,6 +899,7 @@
     }
     .vp-cart-shift-fact strong { color: var(--purple); font-weight: 900; }
     .vp-cart-shift-remove {
+      grid-row: 1;
       width: 24px;
       height: 24px;
       border: 0;
@@ -911,9 +912,8 @@
       cursor: pointer;
     }
     .vp-cart-shift-remove:hover { background: rgba(87,46,136,0.1); }
-    .vp-cart-who { margin: 0.42rem 0 0.2rem; }
-    .vp-cart-who-label { display: block; font-size: 0.62rem; font-weight: 900; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); margin-bottom: 0.28rem; }
-    .vp-cart-who-chips { display: flex; flex-wrap: wrap; gap: 0.3rem; align-items: center; }
+    .vp-cart-shift-people { display: flex; flex-wrap: wrap; gap: 0.22rem; margin-top: 0.3rem; grid-column: 1; }
+    .vp-cart-person-you { opacity: 0.55; }
     .vp-cart-people { display: flex; flex-direction: column; gap: 0.28rem; margin-top: 0.55rem; }
     .vp-cart-person-chip { display: flex; align-items: center; gap: 0.35rem; background: rgba(87,46,136,0.08); border-radius: 999px; padding: 0.18rem 0.3rem 0.18rem 0.55rem; width: fit-content; max-width: 100%; }
     .vp-cart-person-label { font-size: 0.68rem; font-weight: 900; color: var(--purple); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -7037,8 +7037,17 @@
         const timeLabel = fmtTimeRange(opp.shift_start_time, opp.shift_end_time) || (opp.shift_date ? 'Time TBD' : 'Flexible time');
         datesHtml = `<div class="vp-cart-date-list"><div class="vp-cart-date-row"><span class="vp-cart-date-day">${esc(dateLabel)}</span>${timeLabel ? `<span class="vp-cart-date-detail">${esc(timeLabel)}</span>` : '<span></span>'}</div></div>`;
       }
+      const groupSafeKey = group.key ? esc(group.key) : '';
+      const shiftForPerson = opp.forPerson || null;
+      const shiftExtraPeople = opp.people || [];
+      const primaryChipHtml = shiftForPerson
+        ? `<div class="vp-cart-person-chip">${groupSafeKey && !options.noEdit ? `<button class="vp-cart-name-edit" type="button" onclick="openAssignForInput('${groupSafeKey}')" title="Edit name">✎</button>` : ''}<span class="vp-cart-person-label">${esc(shiftForPerson)}</span><button class="vp-cart-person-remove" type="button" onclick="setForPersonOnGroup('${groupSafeKey}','')" aria-label="Remove ${esc(shiftForPerson)}">&times;</button></div>`
+        : `<div class="vp-cart-person-chip vp-cart-person-you"><span class="vp-cart-person-label">You</span></div>`;
+      const extraPeopleChipsHtml = shiftExtraPeople.map(p => `<div class="vp-cart-person-chip"><span class="vp-cart-person-label">${esc(p.name)}</span>${groupSafeKey ? `<button class="vp-cart-person-remove" type="button" onclick="removePersonFromCartGroup('${groupSafeKey}','${esc(p.id)}')" aria-label="Remove ${esc(p.name)}">&times;</button>` : ''}</div>`).join('');
+      const shiftPeopleHtml = `<div class="vp-cart-shift-people">${primaryChipHtml}${extraPeopleChipsHtml}</div>`;
       return `<div class="vp-cart-shift">
         ${datesHtml}
+        ${shiftPeopleHtml}
         ${showRemove ? `<button class="vp-cart-shift-remove" type="button" onclick="removeSchedule('${esc(opp.id)}')" aria-label="Remove ${esc(cartShiftLabel(opp) || opp.volunteer_role || 'shift')}">&times;</button>` : ''}
       </div>`;
     }
@@ -7058,14 +7067,6 @@
       const assignForEditHtml = isAssigningFor
         ? `<div class="vp-cart-name-edit-row"><input id="vp-assign-for-input" class="vp-add-person-input" type="text" placeholder="Volunteer's name" autocomplete="name" ${forPerson ? `value="${esc(forPerson)}"` : ''} onkeydown="if(event.key==='Enter')confirmAssignFor();if(event.key==='Escape')cancelAssignFor();" /><button class="vp-add-person-confirm" type="button" onclick="confirmAssignFor()">Save</button><button class="vp-add-person-cancel" type="button" onclick="cancelAssignFor()">Cancel</button></div>`
         : '';
-      const primaryChip = (!isAssigningFor && forPerson)
-        ? `<div class="vp-cart-volunteer-name">${esc(forPerson)}<button class="vp-cart-name-edit" type="button" onclick="openAssignForInput('${safeKey}')" title="Edit name">✎</button><button class="vp-cart-name-remove" type="button" onclick="setForPersonOnGroup('${safeKey}','')" title="Remove">&times;</button></div>`
-        : '';
-      const extraChips = extraPeople.map(p => `<div class="vp-cart-person-chip"><span class="vp-cart-person-label">${esc(p.name)}</span><button class="vp-cart-person-remove" type="button" onclick="removePersonFromCartGroup('${safeKey}','${esc(p.id)}')" aria-label="Remove ${esc(p.name)}">&times;</button></div>`).join('');
-      const hasWho = !!primaryChip || !!extraChips;
-      const whoHtml = hasWho
-        ? `<div class="vp-cart-who"><span class="vp-cart-who-label">Working ${count === 1 ? 'this shift' : 'all these shifts'}</span><div class="vp-cart-who-chips">${primaryChip}${extraChips}</div></div>`
-        : '';
       const addPersonHtml = isAddingHere
         ? `<div class="vp-add-person-row"><input id="vp-new-person-input" class="vp-add-person-input" type="text" placeholder="Volunteer's full name" autocomplete="name" onkeydown="if(event.key==='Enter')confirmAddPersonInput();if(event.key==='Escape')cancelAddPersonInput();" /><button class="vp-add-person-confirm" type="button" onclick="confirmAddPersonInput()">Add</button><button class="vp-add-person-cancel" type="button" onclick="cancelAddPersonInput()">Cancel</button></div>`
         : `<button class="vp-add-person-btn" type="button" onclick="openAddPersonInput('${safeKey}')">+ Add another volunteer to this role</button>`;
@@ -7080,11 +7081,10 @@
             <span class="vp-cart-group-count">${countLabel}</span>
           </div>
           ${group.outside ? `<div class="vp-cart-note">Includes work outside these dates.</div>` : ''}
+          ${assignForEditHtml}
           <div class="vp-cart-shift-list">
             ${group.items.slice().sort((a, b) => cartShiftSortValue(a).localeCompare(cartShiftSortValue(b))).map(item => cartShiftBreakdownHtml(item, group)).join('')}
           </div>
-          ${whoHtml}
-          ${assignForEditHtml}
           ${addPersonHtml}
         </div>
       </div>`;
