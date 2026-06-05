@@ -939,6 +939,23 @@
     .vp-cart-error-text { flex: 1; font-size: 0.72rem; font-weight: 800; color: var(--red); line-height: 1.4; }
     .vp-cart-error-dismiss { border: 0; background: transparent; color: var(--red); font-size: 1rem; font-weight: 900; cursor: pointer; padding: 0; opacity: 0.7; flex-shrink: 0; line-height: 1; }
     .vp-cart-error-dismiss:hover { opacity: 1; }
+    .vp-add-dropdown-wrap { position: relative; display: inline-flex; flex-direction: column; align-items: stretch; }
+    .vp-add-dropdown { position: absolute; bottom: calc(100% + 8px); right: 0; min-width: 240px; background: #fff; border-radius: 14px; box-shadow: 0 16px 48px rgba(87,46,136,0.22), 0 2px 10px rgba(0,0,0,0.07); border: 1px solid rgba(87,46,136,0.12); z-index: 300; overflow: hidden; }
+    .vp-add-dropdown-head { background: var(--purple); color: #fff; padding: 0.6rem 0.9rem; font-size: 0.68rem; font-weight: 950; text-transform: uppercase; letter-spacing: 0.08em; }
+    .vp-add-dropdown-opts { padding: 0.35rem 0; }
+    .vp-add-dropdown-option { display: flex; align-items: center; gap: 0.6rem; padding: 0.55rem 0.9rem; border: 0; background: transparent; width: 100%; text-align: left; cursor: pointer; font-size: 0.82rem; font-weight: 800; color: var(--ink); transition: background 0.1s; }
+    .vp-add-dropdown-option:hover { background: rgba(87,46,136,0.06); }
+    .vp-dd-avatar { width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.68rem; font-weight: 950; flex-shrink: 0; line-height: 1; }
+    .vp-dd-avatar-me { background: rgba(118,158,123,0.18); color: var(--green); font-size: 0.85rem; }
+    .vp-dd-avatar-other { background: rgba(87,46,136,0.12); color: var(--purple); }
+    .vp-add-dropdown-divider { border: 0; border-top: 1px solid rgba(87,46,136,0.09); margin: 0.25rem 0; }
+    .vp-add-dropdown-new { padding: 0.5rem 0.9rem 0.8rem; }
+    .vp-add-dropdown-new-label { font-size: 0.62rem; font-weight: 950; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 0.42rem; }
+    .vp-add-dropdown-new-row { display: flex; gap: 0.35rem; }
+    .vp-add-dropdown-input { flex: 1; min-width: 0; border: 1.5px solid rgba(87,46,136,0.22); border-radius: 7px; padding: 0.32rem 0.55rem; font-size: 0.76rem; font-weight: 800; color: var(--ink); background: #fff; outline: none; }
+    .vp-add-dropdown-input:focus { border-color: var(--purple); box-shadow: 0 0 0 3px rgba(87,46,136,0.1); }
+    .vp-add-dropdown-confirm { border: 0; background: var(--purple); color: #fff; border-radius: 7px; padding: 0.32rem 0.65rem; font-size: 0.72rem; font-weight: 900; cursor: pointer; white-space: nowrap; flex-shrink: 0; }
+    .vp-add-dropdown-error { font-size: 0.7rem; color: var(--red); font-weight: 800; margin-top: 0.38rem; line-height: 1.35; }
     .vp-cart-date-list {
       margin-top: 0.55rem;
       border: 1px solid rgba(87,46,136,0.1);
@@ -2839,6 +2856,7 @@
     let activeView = 'day', activeFilter = 'all', searchTerm = '', selectedDate = null, dateOffset = 0, selectedDepartment = null, selectedTimingBucket = null;
     let schedule = [], openCards = new Set(), openTimingGroups = new Set(), timingGroupsTouched = false, discountRequested = false, discountPerformer = '', paymentSettings = {}, currentPortalData = null, activePortalTab = '';
     let addingPersonToGroup = null, conflictPendingOpp = null, assigningForGroup = null, cartErrorMessage = null;
+    let addDropdownOppId = null, addDropdownError = null;
     let _portalOverviewMode = 'calendar', _portalCalOffset = 0, _portalCalView = 'month', _portalCalItems = [], _portalFcCalendar = null, _portalFcFallbackTimer = null;
     function portalOverviewSetMode(mode) {
       _portalOverviewMode = mode === 'breakdown' ? 'breakdown' : 'calendar';
@@ -6551,7 +6569,7 @@
         <div style="flex:1;"></div>
         ${hasLearnMore ? `<button class="vp-lead-learn" type="button" onclick="openLeadLearnMore('${esc(roleName)}')">Learn more about this role →</button>` : ''}
         <div class="vp-lead-meta">${ICONS.users}${isFull ? 'Filled' : left === 1 ? '1 spot left' : `${left} spots left`}</div>
-        <button class="vp-lead-action" type="button" ${isFull ? 'disabled' : `onclick="toggleSchedule('${esc(opp.id)}')"`}>${isFull ? 'Filled' : isAdded ? 'Added' : `Add to My Schedule ${ICONS.plus}`}</button>
+        ${addDropdownHtml(opp.id, isAdded, isFull, 'vp-lead-action', `Add to My Schedule ${ICONS.plus}`, 'Added')}
       </article>`;
     }
     function renderRoleCard(items) {
@@ -6584,7 +6602,7 @@
           </div>
         </div>
         <div class="vp-card-actions">
-          <button class="vp-add-btn ${isAdded ? 'added' : ''}" type="button" ${isFull ? 'disabled' : isSingle ? `onclick="toggleSchedule('${esc(single.id)}')"` : `onclick="toggleDetails(decodeURIComponent('${jsArg(groupId)}'))"`}>${isFull ? 'Full' : isSingle ? (isAdded ? 'Added' : `Add to My Schedule ${ICONS.plus}`) : 'Choose Dates'}</button>
+          ${isSingle ? addDropdownHtml(single.id, isAdded, isFull, 'vp-add-btn', `Add to My Schedule ${ICONS.plus}`, 'Added') : `<button class="vp-add-btn" type="button" ${isFull ? 'disabled' : `onclick="toggleDetails(decodeURIComponent('${jsArg(groupId)}'))"`}>${isFull ? 'Full' : 'Choose Dates'}</button>`}
         </div>
         ${isOpen ? renderRoleDetails(items, detailsTarget) : ''}
       </article>`;
@@ -6610,7 +6628,7 @@
           </div>
         </div>
         <div class="vp-card-actions">
-          <button class="vp-add-btn ${isAdded ? 'added' : ''}" type="button" ${isFull ? 'disabled' : `onclick="toggleSchedule('${esc(opp.id)}')"`}>${isFull ? 'Full' : isAdded ? 'Added' : `Add to My Schedule ${ICONS.plus}`}</button>
+          ${addDropdownHtml(opp.id, isAdded, isFull, 'vp-add-btn', `Add to My Schedule ${ICONS.plus}`, 'Added')}
         </div>
         ${isOpen ? renderDetails(opp, location, detailsTarget) : ''}
       </article>`;
@@ -6651,7 +6669,7 @@
             <span>${spotsLeft(opp) === 1 ? '1 spot left' : `${spotsLeft(opp)} spots left`}</span>
           </div>
         </div>
-        <button class="vp-date-add ${isAdded ? 'added' : ''}" type="button" ${isFull ? 'disabled' : `onclick="toggleSchedule('${esc(opp.id)}')"`}>${isFull ? 'Full' : isAdded ? 'Added' : `Add ${ICONS.plus}`}</button>
+        ${addDropdownHtml(opp.id, isAdded, isFull, 'vp-date-add', `Add ${ICONS.plus}`, 'Added')}
       </div>`;
     }
     function renderDetails(opp, location, targetId) {
@@ -6703,6 +6721,72 @@
       return false;
     }
     function shiftsOverlap(a, b) { return slotsConflict(getOppSlots(a), getOppSlots(b)); }
+    function cartPeopleNames() {
+      const names = new Set();
+      schedule.forEach(s => {
+        if (s.forPerson) names.add(s.forPerson);
+        (s.people || []).forEach(p => { if (p.name) names.add(p.name); });
+      });
+      return [...names];
+    }
+    function openAddDropdown(oppId, event) {
+      event?.stopPropagation();
+      if (addDropdownOppId === oppId) { addDropdownOppId = null; addDropdownError = null; renderRows(); return; }
+      addDropdownOppId = oppId; addDropdownError = null;
+      renderRows();
+    }
+    function closeAddDropdown() { if (!addDropdownOppId) return; addDropdownOppId = null; addDropdownError = null; renderRows(); }
+    function addToScheduleFor(oppId, forPerson) {
+      const opp = opps.find(o => o.id === oppId);
+      if (!opp) return;
+      if (forPerson === null) {
+        const conflict = schedule.find(s => s.forPerson === null && shiftsOverlap(s, opp));
+        if (conflict) {
+          addDropdownOppId = null; addDropdownError = null;
+          conflictPendingOpp = { opp, conflictRole: conflict.volunteer_role || 'another role' };
+          renderRows(); renderCart();
+          return;
+        }
+      } else {
+        const conflict = personConflictsWithSchedule(forPerson, [opp]);
+        if (conflict) { addDropdownError = `${forPerson} is already in ${conflict} at this time.`; renderRows(); return; }
+      }
+      schedule.push({ ...opp, people: [], forPerson });
+      const k = spotsKey(opp); signupCounts[k] = (signupCounts[k] || 0) + 1;
+      addDropdownOppId = null; addDropdownError = null;
+      renderRows(); renderCart();
+    }
+    function confirmDropdownNewPerson(oppId) {
+      const input = document.getElementById(`vp-dd-input-${CSS.escape ? CSS.escape(oppId) : oppId}`);
+      const name = input?.value?.trim();
+      if (!name) { input?.focus(); return; }
+      addToScheduleFor(oppId, name);
+    }
+    function addDropdownHtml(oppId, isAdded, isFull, btnClass, btnAddContent, btnAddedContent) {
+      const safeId = esc(oppId);
+      if (isFull) return `<button class="${btnClass}" type="button" disabled>Full</button>`;
+      if (isAdded) return `<button class="${btnClass} added" type="button" onclick="toggleSchedule('${safeId}')">${btnAddedContent || 'Added'}</button>`;
+      const isOpen = addDropdownOppId === oppId;
+      const people = cartPeopleNames();
+      const errHtml = isOpen && addDropdownError ? `<div class="vp-add-dropdown-error">${esc(addDropdownError)}</div>` : '';
+      const ddHtml = isOpen ? `<div class="vp-add-dropdown" onclick="event.stopPropagation()">
+        <div class="vp-add-dropdown-head">Who's volunteering?</div>
+        <div class="vp-add-dropdown-opts">
+          <button class="vp-add-dropdown-option" type="button" onclick="addToScheduleFor('${safeId}',null)"><span class="vp-dd-avatar vp-dd-avatar-me">✓</span>Me</button>
+          ${people.map(n => `<button class="vp-add-dropdown-option" type="button" onclick="addToScheduleFor('${safeId}','${esc(n)}')"><span class="vp-dd-avatar vp-dd-avatar-other">${esc(n.charAt(0).toUpperCase())}</span>${esc(n)}</button>`).join('')}
+        </div>
+        <hr class="vp-add-dropdown-divider">
+        <div class="vp-add-dropdown-new">
+          <div class="vp-add-dropdown-new-label">Someone new</div>
+          <div class="vp-add-dropdown-new-row">
+            <input id="vp-dd-input-${safeId}" class="vp-add-dropdown-input" type="text" placeholder="Full name" autocomplete="name" onkeydown="if(event.key==='Enter')confirmDropdownNewPerson('${safeId}');if(event.key==='Escape'){event.stopPropagation();closeAddDropdown();}" onclick="event.stopPropagation()" />
+            <button class="vp-add-dropdown-confirm" type="button" onclick="confirmDropdownNewPerson('${safeId}')">Add</button>
+          </div>
+          ${errHtml}
+        </div>
+      </div>` : '';
+      return `<div class="vp-add-dropdown-wrap"><button class="${btnClass}" type="button" onclick="openAddDropdown('${safeId}',event)">${btnAddContent}</button>${ddHtml}</div>`;
+    }
     function personConflictsWithSchedule(name, targetItems, excludeGroupKey = null) {
       const n = name.toLowerCase();
       for (const item of schedule) {
@@ -6716,22 +6800,13 @@
       return null;
     }
     function toggleSchedule(id) {
-      const opp = opps.find(o => o.id === id);
-      if (!opp) return;
       if (schedule.some(s => s.id === id)) {
+        const removing = schedule.filter(s => s.id === id);
         schedule = schedule.filter(s => s.id !== id);
-        addingPersonToGroup = null; conflictPendingOpp = null;
-      } else {
-        const conflict = schedule.find(s => s.forPerson === null && shiftsOverlap(s, opp));
-        if (conflict) {
-          conflictPendingOpp = { opp, conflictRole: conflict.volunteer_role || 'another role' };
-          renderCart();
-          requestAnimationFrame(() => document.getElementById('vp-conflict-name-input')?.focus());
-          return;
-        }
-        schedule.push({ ...opp, people: [], forPerson: null });
+        removing.forEach(item => { const k = spotsKey(item); const n = 1 + (item.people?.length || 0); signupCounts[k] = Math.max(0, (signupCounts[k] || n) - n); });
+        addingPersonToGroup = null; conflictPendingOpp = null; cartErrorMessage = null;
+        renderRows(); renderCart();
       }
-      renderRows(); renderCart();
     }
     function setCartError(msg) { cartErrorMessage = msg; renderCart(); requestAnimationFrame(() => document.getElementById('vp-cart-error-text')?.scrollIntoView({ block: 'nearest' })); }
     function clearCartError() { cartErrorMessage = null; renderCart(); }
@@ -7504,6 +7579,10 @@
 
     document.addEventListener('keydown', e => {
       if (e.key === 'Escape' && !document.getElementById('vp-modal-overlay').classList.contains('hidden')) closeModal();
+      if (e.key === 'Escape' && addDropdownOppId) closeAddDropdown();
+    });
+    document.addEventListener('mousedown', e => {
+      if (addDropdownOppId && !e.target.closest('.vp-add-dropdown-wrap')) closeAddDropdown();
     });
     document.addEventListener('click', e => {
       const deptTile = e.target.closest('.role-tile[data-department]');
