@@ -6757,22 +6757,30 @@
     }
     function cartShiftBreakdownHtml(opp, group = {}, options = {}) {
       const requiredDates = Array.isArray(opp.required_dates) ? opp.required_dates.filter(Boolean) : [];
-      const dateLabel = opp.shift_date ? fmtDate(opp.shift_date, { short:true }) : (requiredDates.length ? `${requiredDates.length} required date${requiredDates.length === 1 ? '' : 's'}` : 'Flexible date');
-      const timeLabel = fmtTimeRange(opp.shift_start_time, opp.shift_end_time) || (opp.shift_date ? 'Time TBD' : 'Flexible time');
+      const requiredTimings = Array.isArray(opp.required_date_timings) ? opp.required_date_timings.filter(t => t.date) : [];
       const location = cartShiftLocation(opp);
       const hours = scheduleHours(opp);
       const noSetHours = opp.is_full_discount && hours <= 0;
       const checkIn = opp.check_in_with || group.checkIn || '';
       const showRemove = options.showRemove !== false;
+      let topHtml;
+      if (requiredTimings.length > 0) {
+        topHtml = `<div class="vp-cart-date-list">${requiredTimings.map(t => {
+          const time = fmtTimeRange(t.shift_start_time || opp.shift_start_time, t.shift_end_time || opp.shift_end_time);
+          return `<div class="vp-cart-date-row"><span class="vp-cart-date-day">${esc(fmtDate(t.date, { short: true }))}</span>${time ? `<span class="vp-cart-date-detail">${esc(time)}</span>` : '<span></span>'}</div>`;
+        }).join('')}</div>`;
+      } else {
+        const dateLabel = opp.shift_date ? fmtDate(opp.shift_date, { short:true }) : (requiredDates.length ? `${requiredDates.length} required date${requiredDates.length === 1 ? '' : 's'}` : 'Flexible date');
+        const timeLabel = fmtTimeRange(opp.shift_start_time, opp.shift_end_time) || (opp.shift_date ? 'Time TBD' : 'Flexible time');
+        topHtml = `<span class="vp-cart-shift-date">${esc(dateLabel)}</span><span class="vp-cart-shift-time">${esc(timeLabel)}</span>`;
+      }
       return `<div class="vp-cart-shift">
         <div>
-          <span class="vp-cart-shift-date">${esc(dateLabel)}</span>
-          <span class="vp-cart-shift-time">${esc(timeLabel)}</span>
+          ${topHtml}
           <div class="vp-cart-shift-facts">
             ${location ? `<span class="vp-cart-shift-fact">Location: <strong>${esc(location)}</strong></span>` : '<span class="vp-cart-shift-fact">Location: <strong>TBD</strong></span>'}
             ${hours > 0 ? `<span class="vp-cart-shift-fact">Hours: <strong>${esc(formatHours(hours))}</strong></span>` : (noSetHours ? '<span class="vp-cart-shift-fact"><strong>No set hour count.</strong></span>' : '')}
             ${checkIn ? `<span class="vp-cart-shift-fact">Check in with: <strong>${esc(checkIn)}</strong></span>` : ''}
-            ${requiredDates.length ? `<span class="vp-cart-shift-fact">Required dates: <strong>${esc(requiredDates.length)}</strong></span>` : ''}
           </div>
         </div>
         ${showRemove ? `<button class="vp-cart-shift-remove" type="button" onclick="removeSchedule('${esc(opp.id)}')" aria-label="Remove ${esc(cartShiftLabel(opp) || opp.volunteer_role || 'shift')}">&times;</button>` : '<span></span>'}
@@ -6784,6 +6792,8 @@
       const totalHours = group.items.reduce((sum, item) => sum + scheduleHours(item), 0);
       const noSetHours = group.items.some(item => item.is_full_discount && scheduleHours(item) <= 0);
       const count = group.items.length;
+      const totalDates = group.items.reduce((sum, item) => sum + ((Array.isArray(item.required_date_timings) ? item.required_date_timings.filter(t => t.date).length : 0) || 1), 0);
+      const countLabel = totalDates > count ? `${totalDates} date${totalDates === 1 ? '' : 's'}` : `${count} ${count === 1 ? 'shift' : 'shifts'}`;
       return `<div class="vp-cart-group">
         <div class="vp-cart-dot" style="background:${color};color:${isGold ? 'var(--ink)' : '#fff'};">${roleIcon(first.volunteer_role, first.department)}</div>
         <div class="vp-cart-main">
@@ -6792,7 +6802,7 @@
               <div class="vp-cart-role">${esc(group.role)}</div>
               <div class="vp-cart-meta">${group.department ? esc(group.department) : ''}${totalHours > 0 ? `<br><span style="font-weight:800;">${esc(formatHours(totalHours))} scheduled hour${Number(totalHours) === 1 ? '' : 's'}</span>` : ''}${noSetHours ? '<br><span style="font-style:italic;opacity:0.72;">No set hour count.</span>' : ''}${group.checkIn ? `<br>Check in with: <strong>${esc(group.checkIn)}</strong>` : ''}</div>
             </div>
-            <span class="vp-cart-group-count">${count} ${count === 1 ? 'shift' : 'shifts'}</span>
+            <span class="vp-cart-group-count">${countLabel}</span>
           </div>
           ${group.outside ? `<div class="vp-cart-note">Includes work outside these dates.</div>` : ''}
           <div class="vp-cart-shift-list">
