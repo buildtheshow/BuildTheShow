@@ -923,6 +923,18 @@
     .vp-add-person-cancel { border: 0; background: transparent; color: var(--muted); border-radius: 6px; padding: 0.3rem 0.4rem; font-size: 0.68rem; font-weight: 800; cursor: pointer; flex-shrink: 0; }
     .vp-add-person-btn { border: 0; background: transparent; color: var(--purple); font-size: 0.7rem; font-weight: 850; cursor: pointer; padding: 0; margin-top: 0.38rem; display: block; opacity: 0.75; text-align: left; }
     .vp-add-person-btn:hover { opacity: 1; text-decoration: underline; }
+    .vp-for-badge { display: inline-flex; align-items: center; gap: 0.28rem; margin-top: 0.38rem; font-size: 0.68rem; font-weight: 850; color: var(--purple); opacity: 0.72; }
+    .vp-for-badge button { border: 0; background: transparent; color: var(--purple); font-size: 0.68rem; font-weight: 900; cursor: pointer; padding: 0; opacity: 0.6; line-height: 1; }
+    .vp-for-badge button:hover { opacity: 1; text-decoration: underline; }
+    .vp-assign-for-row { display: flex; gap: 0.35rem; align-items: center; margin-top: 0.38rem; }
+    .vp-conflict-prompt { background: rgba(239,171,69,0.12); border: 1.5px solid rgba(239,171,69,0.4); border-radius: 10px; padding: 0.75rem 0.85rem; margin-bottom: 0.65rem; }
+    .vp-conflict-prompt-title { font-size: 0.76rem; font-weight: 950; color: var(--ink); margin-bottom: 0.18rem; }
+    .vp-conflict-prompt-sub { font-size: 0.7rem; color: var(--muted); margin-bottom: 0.55rem; line-height: 1.4; }
+    .vp-conflict-prompt-row { display: flex; gap: 0.35rem; align-items: center; }
+    .vp-conflict-prompt-input { flex: 1; border: 1.5px solid rgba(87,46,136,0.28); border-radius: 6px; padding: 0.3rem 0.5rem; font-size: 0.72rem; font-weight: 800; color: var(--ink); background: #fff; outline: none; }
+    .vp-conflict-prompt-input:focus { border-color: var(--purple); }
+    .vp-conflict-prompt-add { border: 0; background: var(--purple); color: #fff; border-radius: 6px; padding: 0.3rem 0.55rem; font-size: 0.68rem; font-weight: 900; cursor: pointer; white-space: nowrap; }
+    .vp-conflict-prompt-cancel { border: 0; background: transparent; color: var(--muted); font-size: 0.68rem; font-weight: 800; cursor: pointer; padding: 0.3rem 0.4rem; white-space: nowrap; }
     .vp-cart-date-list {
       margin-top: 0.55rem;
       border: 1px solid rgba(87,46,136,0.1);
@@ -2822,7 +2834,7 @@
     let prod = null, org = null, opps = [], eventMap = {}, signupCounts = {}, productionContacts = [];
     let activeView = 'day', activeFilter = 'all', searchTerm = '', selectedDate = null, dateOffset = 0, selectedDepartment = null, selectedTimingBucket = null;
     let schedule = [], openCards = new Set(), openTimingGroups = new Set(), timingGroupsTouched = false, discountRequested = false, discountPerformer = '', paymentSettings = {}, currentPortalData = null, activePortalTab = '';
-    let addingPersonToGroup = null;
+    let addingPersonToGroup = null, conflictPendingOpp = null, assigningForGroup = null;
     let _portalOverviewMode = 'calendar', _portalCalOffset = 0, _portalCalView = 'month', _portalCalItems = [], _portalFcCalendar = null, _portalFcFallbackTimer = null;
     function portalOverviewSetMode(mode) {
       _portalOverviewMode = mode === 'breakdown' ? 'breakdown' : 'calendar';
@@ -6687,38 +6699,80 @@
       return false;
     }
     function shiftsOverlap(a, b) { return slotsConflict(getOppSlots(a), getOppSlots(b)); }
+    function personConflictsWithSchedule(name, targetItems, excludeGroupKey = null) {
+      const n = name.toLowerCase();
+      for (const item of schedule) {
+        if (excludeGroupKey && cartGroupKey(item) === excludeGroupKey) continue;
+        const inItem = item.forPerson?.toLowerCase() === n || (item.people || []).some(p => p.name.toLowerCase() === n);
+        if (!inItem) continue;
+        for (const gi of targetItems) {
+          if (slotsConflict(getOppSlots(gi), getOppSlots(item))) return item.volunteer_role || 'another role';
+        }
+      }
+      return null;
+    }
     function toggleSchedule(id) {
       const opp = opps.find(o => o.id === id);
       if (!opp) return;
       if (schedule.some(s => s.id === id)) {
         schedule = schedule.filter(s => s.id !== id);
-        addingPersonToGroup = null;
+        addingPersonToGroup = null; conflictPendingOpp = null;
       } else {
-        const conflict = schedule.find(s => shiftsOverlap(s, opp));
+        const conflict = schedule.find(s => s.forPerson === null && shiftsOverlap(s, opp));
         if (conflict) {
-          showToast(`This shift overlaps with ${conflict.volunteer_role || 'another shift'} you already added.`);
+          conflictPendingOpp = { opp, conflictRole: conflict.volunteer_role || 'another role' };
+          renderCart();
+          requestAnimationFrame(() => document.getElementById('vp-conflict-name-input')?.focus());
           return;
         }
-        schedule.push({ ...opp, people: [] });
+        schedule.push({ ...opp, people: [], forPerson: null });
       }
-      renderRows();
-      renderCart();
+      renderRows(); renderCart();
     }
-    function removeSchedule(id) { schedule = schedule.filter(s => s.id !== id); addingPersonToGroup = null; renderRows(); renderCart(); }
+    function resolveConflictAsOtherPerson() {
+      const input = document.getElementById('vp-conflict-name-input');
+      const name = input?.value?.trim();
+      if (!name) { input?.focus(); return; }
+      const { opp } = conflictPendingOpp;
+      const conflict = personConflictsWithSchedule(name, [opp]);
+      if (conflict) { showToast(`${name} is already signed up for ${conflict} at the same time.`); input?.focus(); return; }
+      schedule.push({ ...opp, people: [], forPerson: name });
+      conflictPendingOpp = null;
+      signupCounts[spotsKey(opp)] = (signupCounts[spotsKey(opp)] || 0) + 1;
+      renderRows(); renderCart();
+    }
+    function cancelConflictAdd() { conflictPendingOpp = null; renderCart(); }
+    function removeSchedule(id) { schedule = schedule.filter(s => s.id !== id); addingPersonToGroup = null; conflictPendingOpp = null; renderRows(); renderCart(); }
+    function setForPersonOnGroup(groupKey, name) {
+      const trimmed = name?.trim() || null;
+      schedule.forEach(s => { if (cartGroupKey(s) === groupKey) s.forPerson = trimmed; });
+      assigningForGroup = null; renderRows(); renderCart();
+    }
+    function openAssignForInput(groupKey) {
+      assigningForGroup = groupKey; renderCart();
+      requestAnimationFrame(() => document.getElementById('vp-assign-for-input')?.focus());
+    }
+    function cancelAssignFor() { assigningForGroup = null; renderCart(); }
+    function confirmAssignFor() {
+      const input = document.getElementById('vp-assign-for-input');
+      const name = input?.value?.trim();
+      const groupKey = assigningForGroup;
+      if (!name) { assigningForGroup = null; renderCart(); return; }
+      const groupItems = schedule.filter(s => cartGroupKey(s) === groupKey);
+      const conflict = personConflictsWithSchedule(name, groupItems, groupKey);
+      if (conflict) { showToast(`${name} is already signed up for ${conflict} at the same time.`); input?.focus(); return; }
+      setForPersonOnGroup(groupKey, name);
+    }
     function addPersonToCartGroup(groupKey, personName) {
       const name = personName.trim();
       if (!name) return 'Please enter a name.';
       const groupItems = schedule.filter(s => cartGroupKey(s) === groupKey);
       if (!groupItems.length) return 'Role not found.';
       const normalizedName = name.toLowerCase();
+      if ((groupItems[0].forPerson || '').toLowerCase() === normalizedName) return `${name} is already the primary person for this role.`;
       if ((groupItems[0].people || []).some(p => p.name.toLowerCase() === normalizedName)) return `${name} is already added to this role.`;
-      for (const item of schedule) {
-        if (cartGroupKey(item) === groupKey) continue;
-        if (!(item.people || []).some(p => p.name.toLowerCase() === normalizedName)) continue;
-        for (const gi of groupItems) {
-          if (slotsConflict(getOppSlots(gi), getOppSlots(item))) return `${name} is already signed up for ${item.volunteer_role || 'another role'} at the same time.`;
-        }
-      }
+      const conflict = personConflictsWithSchedule(name, groupItems, groupKey);
+      if (conflict) return `${name} is already signed up for ${conflict} at the same time.`;
       const personId = `p_${Date.now()}_${Math.random().toString(36).slice(2,6)}`;
       schedule.forEach(s => { if (cartGroupKey(s) === groupKey) { if (!s.people) s.people = []; s.people.push({ id: personId, name }); } });
       groupItems.forEach(item => { const k = spotsKey(item); signupCounts[k] = (signupCounts[k] || 0) + 1; });
@@ -6746,11 +6800,7 @@
       const groupKey = addingPersonToGroup;
       if (!name) { addingPersonToGroup = null; renderCart(); return; }
       const error = addPersonToCartGroup(groupKey, name);
-      if (error) {
-        showToast(error);
-        requestAnimationFrame(() => document.getElementById('vp-new-person-input')?.focus());
-        return;
-      }
+      if (error) { showToast(error); requestAnimationFrame(() => document.getElementById('vp-new-person-input')?.focus()); return; }
       addingPersonToGroup = null;
       renderRows(); renderCart();
     }
@@ -6773,6 +6823,11 @@
         <span class="vp-count-pill">${schedule.length}</span>
       </div>
       <div class="vp-cart-sub">Review your selected shifts before submitting.</div>
+      ${conflictPendingOpp ? `<div class="vp-conflict-prompt">
+        <div class="vp-conflict-prompt-title">${esc(conflictPendingOpp.opp.volunteer_role || 'This role')} overlaps with ${esc(conflictPendingOpp.conflictRole)}.</div>
+        <div class="vp-conflict-prompt-sub">If this is for a different person, enter their name and it'll be added for them instead.</div>
+        <div class="vp-conflict-prompt-row"><input id="vp-conflict-name-input" class="vp-conflict-prompt-input" type="text" placeholder="Their full name" autocomplete="name" onkeydown="if(event.key==='Enter')resolveConflictAsOtherPerson();if(event.key==='Escape')cancelConflictAdd();" /><button class="vp-conflict-prompt-add" type="button" onclick="resolveConflictAsOtherPerson()">Add</button><button class="vp-conflict-prompt-cancel" type="button" onclick="cancelConflictAdd()">Cancel</button></div>
+      </div>` : ''}
       <div class="vp-cart-list">
         ${schedule.length ? cartGroupsHtml() : '<div class="vp-cart-empty">Choose a shift and add it here. You will enter your name and contact info once when you submit.</div>'}
       </div>
@@ -6885,8 +6940,15 @@
       const totalDates = group.items.reduce((sum, item) => sum + ((Array.isArray(item.required_date_timings) ? item.required_date_timings.filter(t => t.date).length : 0) || 1), 0);
       const countLabel = totalDates > count ? `${totalDates} date${totalDates === 1 ? '' : 's'}` : `${count} ${count === 1 ? 'shift' : 'shifts'}`;
       const extraPeople = first.people || [];
+      const forPerson = first.forPerson || null;
       const isAddingHere = addingPersonToGroup === group.key;
+      const isAssigningFor = assigningForGroup === group.key;
       const safeKey = esc(group.key);
+      const forBadgeHtml = isAssigningFor
+        ? `<div class="vp-assign-for-row"><input id="vp-assign-for-input" class="vp-add-person-input" type="text" placeholder="Their full name" autocomplete="name" ${forPerson ? `value="${esc(forPerson)}"` : ''} onkeydown="if(event.key==='Enter')confirmAssignFor();if(event.key==='Escape')cancelAssignFor();" /><button class="vp-add-person-confirm" type="button" onclick="confirmAssignFor()">Save</button><button class="vp-add-person-cancel" type="button" onclick="cancelAssignFor()">Cancel</button></div>`
+        : forPerson
+          ? `<div class="vp-for-badge">For: <strong>${esc(forPerson)}</strong> <button type="button" onclick="openAssignForInput('${safeKey}')" title="Change">✎</button> <button type="button" onclick="setForPersonOnGroup('${safeKey}','')" title="Reset to you">&times;</button></div>`
+          : `<div class="vp-for-badge">For: You <button type="button" onclick="openAssignForInput('${safeKey}')">assign to someone else</button></div>`;
       const peopleHtml = extraPeople.length
         ? `<div class="vp-cart-people">${extraPeople.map(p => `<div class="vp-cart-person-chip"><span class="vp-cart-person-label">${esc(p.name)}</span><button class="vp-cart-person-remove" type="button" onclick="removePersonFromCartGroup('${safeKey}','${esc(p.id)}')" aria-label="Remove ${esc(p.name)}">&times;</button></div>`).join('')}</div>`
         : '';
@@ -6907,6 +6969,7 @@
           <div class="vp-cart-shift-list">
             ${group.items.slice().sort((a, b) => cartShiftSortValue(a).localeCompare(cartShiftSortValue(b))).map(item => cartShiftBreakdownHtml(item, group)).join('')}
           </div>
+          ${forBadgeHtml}
           ${peopleHtml}
           ${addPersonHtml}
         </div>
@@ -7225,7 +7288,9 @@
           discount_performer: discountRequested ? discountPerformer.trim() || null : null,
         });
         const rows = [
-          ...schedule.map(opp => ({ ...baseRow(opp), name, email, phone: phone || null, notes: notes || null })),
+          ...schedule.map(opp => opp.forPerson
+            ? { ...baseRow(opp), name: opp.forPerson, email: '', phone: null, notes: null }
+            : { ...baseRow(opp), name, email, phone: phone || null, notes: notes || null }),
           ...schedule.flatMap(opp => (opp.people || []).map(person => ({ ...baseRow(opp), name: person.name, email: '', phone: null, notes: null }))),
         ];
         let { error } = await sb.from('volunteer_signups').insert(rows);
