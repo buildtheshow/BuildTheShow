@@ -192,8 +192,8 @@
 
   // ── Sidebar HTML loader ──────────────────────────────────────────────────
 
-  window.loadProductionSidebar = function (activeGroup) {
-    const key = 'bts-prod-sidebar-v18';
+  window.loadProductionSidebar = function (activeGroup, activePage) {
+    const key = 'bts-prod-sidebar-v19';
     const cached = sessionStorage.getItem(key);
     const host = document.getElementById('prod-sidebar-host');
     if (!host) return;
@@ -202,12 +202,17 @@
       host.innerHTML = html;
       window.enhanceSidebarNavControls(host);
       if (activeGroup) window.openSidebarGroup(activeGroup);
-      markCurrentPageActive();
+      // double-rAF so the browser has painted before we try to mark active
+      requestAnimationFrame(function () {
+        requestAnimationFrame(function () {
+          markCurrentPageActive(activePage);
+        });
+      });
     }
 
     if (cached) applyAndInit(cached);
 
-    fetch('/SHARED/Navigation/production-sidebar.html?v=sidebar-v42-20260605')
+    fetch('/SHARED/Navigation/production-sidebar.html?v=sidebar-v44-20260605')
       .then(function (res) { return res.text(); })
       .then(function (html) {
         sessionStorage.setItem(key, html);
@@ -224,7 +229,8 @@
     const idParam = prodId();
 
     // Load sidebar HTML first so it shows immediately
-    window.loadProductionSidebar(activeGroup);
+    var currentFile = location.pathname.split('/').pop().split('?')[0];
+    window.loadProductionSidebar(activeGroup, currentFile);
 
     if (!idParam) return;
 
@@ -285,8 +291,8 @@
   };
 
 
-  function markCurrentPageActive() {
-    var currentFile = location.pathname.split('/').pop().split('?')[0];
+  function markCurrentPageActive(explicitFile) {
+    var currentFile = explicitFile || location.pathname.split('/').pop().split('?')[0];
     if (!currentFile) return;
     document.querySelectorAll('.prod-tab, .prod-sub-item').forEach(function (el) {
       var onclick = el.getAttribute('onclick') || '';
