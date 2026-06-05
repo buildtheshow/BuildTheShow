@@ -911,6 +911,18 @@
       cursor: pointer;
     }
     .vp-cart-shift-remove:hover { background: rgba(87,46,136,0.1); }
+    .vp-cart-people { display: flex; flex-direction: column; gap: 0.28rem; margin-top: 0.55rem; }
+    .vp-cart-person-chip { display: flex; align-items: center; gap: 0.35rem; background: rgba(87,46,136,0.08); border-radius: 999px; padding: 0.18rem 0.3rem 0.18rem 0.55rem; width: fit-content; max-width: 100%; }
+    .vp-cart-person-label { font-size: 0.68rem; font-weight: 900; color: var(--purple); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .vp-cart-person-remove { border: 0; background: transparent; color: var(--purple); cursor: pointer; padding: 0 0.15rem; font-size: 0.85rem; line-height: 1; opacity: 0.6; flex-shrink: 0; }
+    .vp-cart-person-remove:hover { opacity: 1; }
+    .vp-add-person-row { display: flex; gap: 0.35rem; align-items: center; margin-top: 0.42rem; }
+    .vp-add-person-input { flex: 1; min-width: 0; border: 1.5px solid rgba(87,46,136,0.28); border-radius: 6px; padding: 0.3rem 0.5rem; font-size: 0.72rem; font-weight: 800; color: var(--ink); background: #fff; outline: none; }
+    .vp-add-person-input:focus { border-color: var(--purple); }
+    .vp-add-person-confirm { border: 0; background: var(--purple); color: #fff; border-radius: 6px; padding: 0.3rem 0.55rem; font-size: 0.68rem; font-weight: 900; cursor: pointer; white-space: nowrap; flex-shrink: 0; }
+    .vp-add-person-cancel { border: 0; background: transparent; color: var(--muted); border-radius: 6px; padding: 0.3rem 0.4rem; font-size: 0.68rem; font-weight: 800; cursor: pointer; flex-shrink: 0; }
+    .vp-add-person-btn { border: 0; background: transparent; color: var(--purple); font-size: 0.7rem; font-weight: 850; cursor: pointer; padding: 0; margin-top: 0.38rem; display: block; opacity: 0.75; text-align: left; }
+    .vp-add-person-btn:hover { opacity: 1; text-decoration: underline; }
     .vp-cart-date-list {
       margin-top: 0.55rem;
       border: 1px solid rgba(87,46,136,0.1);
@@ -2810,6 +2822,7 @@
     let prod = null, org = null, opps = [], eventMap = {}, signupCounts = {}, productionContacts = [];
     let activeView = 'day', activeFilter = 'all', searchTerm = '', selectedDate = null, dateOffset = 0, selectedDepartment = null, selectedTimingBucket = null;
     let schedule = [], openCards = new Set(), openTimingGroups = new Set(), timingGroupsTouched = false, discountRequested = false, discountPerformer = '', paymentSettings = {}, currentPortalData = null, activePortalTab = '';
+    let addingPersonToGroup = null;
     let _portalOverviewMode = 'calendar', _portalCalOffset = 0, _portalCalView = 'month', _portalCalItems = [], _portalFcCalendar = null, _portalFcFallbackTimer = null;
     function portalOverviewSetMode(mode) {
       _portalOverviewMode = mode === 'breakdown' ? 'breakdown' : 'calendar';
@@ -6655,31 +6668,92 @@
       openCards.has(id) ? openCards.delete(id) : openCards.add(id);
       renderRows();
     }
-    function shiftsOverlap(a, b) {
-      if (!a.shift_date || !b.shift_date || a.shift_date !== b.shift_date) return false;
-      if (!a.shift_start_time || !b.shift_start_time) return false;
-      const toMins = t => { const [h,m] = t.slice(0,5).split(':').map(Number); return h*60+m; };
-      const aS = toMins(a.shift_start_time), aE = a.shift_end_time ? toMins(a.shift_end_time) : aS+60;
-      const bS = toMins(b.shift_start_time), bE = b.shift_end_time ? toMins(b.shift_end_time) : bS+60;
-      return aS < bE && bS < aE;
+    function getOppSlots(opp) {
+      const timings = Array.isArray(opp.required_date_timings) ? opp.required_date_timings.filter(t => t.date) : [];
+      if (timings.length > 0) return timings.map(t => ({ date: t.date, start: t.shift_start_time || opp.shift_start_time, end: t.shift_end_time || opp.shift_end_time }));
+      if (opp.shift_date) return [{ date: opp.shift_date, start: opp.shift_start_time, end: opp.shift_end_time }];
+      return [];
     }
+    function slotsConflict(slotsA, slotsB) {
+      const toMins = t => { if (!t) return null; const [h,m] = t.slice(0,5).split(':').map(Number); return h*60+m; };
+      for (const a of slotsA) {
+        for (const b of slotsB) {
+          if (a.date !== b.date) continue;
+          const as = toMins(a.start), ae = toMins(a.end), bs = toMins(b.start), be = toMins(b.end);
+          if (as == null || ae == null || bs == null || be == null) continue;
+          if (as < be && bs < ae) return true;
+        }
+      }
+      return false;
+    }
+    function shiftsOverlap(a, b) { return slotsConflict(getOppSlots(a), getOppSlots(b)); }
     function toggleSchedule(id) {
       const opp = opps.find(o => o.id === id);
       if (!opp) return;
       if (schedule.some(s => s.id === id)) {
         schedule = schedule.filter(s => s.id !== id);
+        addingPersonToGroup = null;
       } else {
         const conflict = schedule.find(s => shiftsOverlap(s, opp));
         if (conflict) {
           showToast(`This shift overlaps with ${conflict.volunteer_role || 'another shift'} you already added.`);
           return;
         }
-        schedule.push(opp);
+        schedule.push({ ...opp, people: [] });
       }
       renderRows();
       renderCart();
     }
-    function removeSchedule(id) { schedule = schedule.filter(s => s.id !== id); renderRows(); renderCart(); }
+    function removeSchedule(id) { schedule = schedule.filter(s => s.id !== id); addingPersonToGroup = null; renderRows(); renderCart(); }
+    function addPersonToCartGroup(groupKey, personName) {
+      const name = personName.trim();
+      if (!name) return 'Please enter a name.';
+      const groupItems = schedule.filter(s => cartGroupKey(s) === groupKey);
+      if (!groupItems.length) return 'Role not found.';
+      const normalizedName = name.toLowerCase();
+      if ((groupItems[0].people || []).some(p => p.name.toLowerCase() === normalizedName)) return `${name} is already added to this role.`;
+      for (const item of schedule) {
+        if (cartGroupKey(item) === groupKey) continue;
+        if (!(item.people || []).some(p => p.name.toLowerCase() === normalizedName)) continue;
+        for (const gi of groupItems) {
+          if (slotsConflict(getOppSlots(gi), getOppSlots(item))) return `${name} is already signed up for ${item.volunteer_role || 'another role'} at the same time.`;
+        }
+      }
+      const personId = `p_${Date.now()}_${Math.random().toString(36).slice(2,6)}`;
+      schedule.forEach(s => { if (cartGroupKey(s) === groupKey) { if (!s.people) s.people = []; s.people.push({ id: personId, name }); } });
+      groupItems.forEach(item => { const k = spotsKey(item); signupCounts[k] = (signupCounts[k] || 0) + 1; });
+      return null;
+    }
+    function removePersonFromCartGroup(groupKey, personId) {
+      schedule.forEach(s => {
+        if (cartGroupKey(s) === groupKey && s.people) {
+          const had = s.people.some(p => p.id === personId);
+          s.people = s.people.filter(p => p.id !== personId);
+          if (had) { const k = spotsKey(s); signupCounts[k] = Math.max(0, (signupCounts[k] || 1) - 1); }
+        }
+      });
+      renderRows(); renderCart();
+    }
+    function openAddPersonInput(groupKey) {
+      addingPersonToGroup = groupKey; renderCart();
+      requestAnimationFrame(() => document.getElementById('vp-new-person-input')?.focus());
+    }
+    function cancelAddPersonInput() { addingPersonToGroup = null; renderCart(); }
+    function confirmAddPersonInput() {
+      const input = document.getElementById('vp-new-person-input');
+      if (!input) return;
+      const name = input.value.trim();
+      const groupKey = addingPersonToGroup;
+      if (!name) { addingPersonToGroup = null; renderCart(); return; }
+      const error = addPersonToCartGroup(groupKey, name);
+      if (error) {
+        showToast(error);
+        requestAnimationFrame(() => document.getElementById('vp-new-person-input')?.focus());
+        return;
+      }
+      addingPersonToGroup = null;
+      renderRows(); renderCart();
+    }
 
     function renderCart() {
       const cart = document.getElementById('vp-cart');
@@ -6689,8 +6763,11 @@
     function cartMarkup(sheet = false) {
       const hasFullDiscount = scheduleHasFullDiscount();
       const totalHours = schedule.reduce((sum, s) => sum + scheduleHours(s), 0);
+      const extraPeopleHours = schedule.reduce((sum, s) => sum + scheduleHours(s) * ((s.people || []).length), 0);
+      const combinedHours = totalHours + extraPeopleHours;
       const required = discountRequiredHours();
-      const progress = hasFullDiscount ? 100 : (required ? Math.min(100, Math.round((totalHours / required) * 100)) : 0);
+      const discountHours = discountRequested ? combinedHours : totalHours;
+      const progress = hasFullDiscount ? 100 : (required ? Math.min(100, Math.round((discountHours / required) * 100)) : 0);
       return `<div class="vp-cart-head">
         <div class="vp-cart-title">My Volunteer Schedule</div>
         <span class="vp-count-pill">${schedule.length}</span>
@@ -6716,9 +6793,9 @@
           <input type="text" id="vp-discount-performer" value="${esc(discountPerformer)}" placeholder="Performer this discount is for" oninput="setDiscountPerformer(this.value)" />
         </div>
         <div class="vp-discount-progress ${discountRequested ? 'visible' : ''}">
-          <div class="vp-progress-top"><span>Volunteer Discount Progress</span><span>${hasFullDiscount ? 'Qualifies in full' : `${formatHours(totalHours)} / ${formatHours(required)}`}</span></div>
+          <div class="vp-progress-top"><span>Volunteer Discount Progress</span><span>${hasFullDiscount ? 'Qualifies in full' : `${formatHours(discountHours)} / ${formatHours(required)}`}</span></div>
           <div class="vp-progress-track"><div class="vp-progress-fill" style="width:${progress}%"></div></div>
-          <div class="vp-progress-note">${hasFullDiscount ? 'This role counts as the full volunteer discount requirement.' : `${Math.max(0, required - totalHours).toFixed(1).replace(/\.0$/,'')} hours to go`}</div>
+          <div class="vp-progress-note">${hasFullDiscount ? 'This role counts as the full volunteer discount requirement.' : `${Math.max(0, required - discountHours).toFixed(1).replace(/\.0$/,'')} hours to go${extraPeopleHours > 0 && discountRequested ? ` (combined across ${1 + Math.round(extraPeopleHours / (totalHours || 1))} volunteers)` : ''}`}</div>
         </div>
       </div>
       <button class="vp-submit-cart" type="button" ${schedule.length ? '' : 'disabled'} onclick="openSubmitModal()">Request Volunteer Hours ${ICONS.arrow}</button>
@@ -6799,6 +6876,15 @@
       const count = group.items.length;
       const totalDates = group.items.reduce((sum, item) => sum + ((Array.isArray(item.required_date_timings) ? item.required_date_timings.filter(t => t.date).length : 0) || 1), 0);
       const countLabel = totalDates > count ? `${totalDates} date${totalDates === 1 ? '' : 's'}` : `${count} ${count === 1 ? 'shift' : 'shifts'}`;
+      const extraPeople = first.people || [];
+      const isAddingHere = addingPersonToGroup === group.key;
+      const safeKey = esc(group.key);
+      const peopleHtml = extraPeople.length
+        ? `<div class="vp-cart-people">${extraPeople.map(p => `<div class="vp-cart-person-chip"><span class="vp-cart-person-label">${esc(p.name)}</span><button class="vp-cart-person-remove" type="button" onclick="removePersonFromCartGroup('${safeKey}','${esc(p.id)}')" aria-label="Remove ${esc(p.name)}">&times;</button></div>`).join('')}</div>`
+        : '';
+      const addPersonHtml = isAddingHere
+        ? `<div class="vp-add-person-row"><input id="vp-new-person-input" class="vp-add-person-input" type="text" placeholder="Volunteer's full name" autocomplete="name" onkeydown="if(event.key==='Enter')confirmAddPersonInput();if(event.key==='Escape')cancelAddPersonInput();" /><button class="vp-add-person-confirm" type="button" onclick="confirmAddPersonInput()">Add</button><button class="vp-add-person-cancel" type="button" onclick="cancelAddPersonInput()">Cancel</button></div>`
+        : `<button class="vp-add-person-btn" type="button" onclick="openAddPersonInput('${safeKey}')">+ Add another volunteer to this role</button>`;
       return `<div class="vp-cart-group">
         <div class="vp-cart-dot" style="background:${color};color:${isGold ? 'var(--ink)' : '#fff'};">${roleIcon(first.volunteer_role, first.department)}</div>
         <div class="vp-cart-main">
@@ -6813,6 +6899,8 @@
           <div class="vp-cart-shift-list">
             ${group.items.slice().sort((a, b) => cartShiftSortValue(a).localeCompare(cartShiftSortValue(b))).map(item => cartShiftBreakdownHtml(item, group)).join('')}
           </div>
+          ${peopleHtml}
+          ${addPersonHtml}
         </div>
       </div>`;
     }
@@ -7112,14 +7200,10 @@
             return showFormError(errEl, 'That email and Production Code do not match. Check your confirmation email and try again.');
           }
         }
-        const rows = schedule.map(opp => ({
+        const baseRow = opp => ({
           production_id: prod.id,
           portal_token: portalToken,
           volunteer_passcode: portalPasscode,
-          name,
-          email,
-          phone: phone || null,
-          notes: notes || null,
           status: 'pending',
           role_name: opp.volunteer_role || null,
           department: opp.department || null,
@@ -7131,7 +7215,11 @@
           approved_hours: scheduleHours(opp) || null,
           discount_requested: discountRequested || false,
           discount_performer: discountRequested ? discountPerformer.trim() || null : null,
-        }));
+        });
+        const rows = [
+          ...schedule.map(opp => ({ ...baseRow(opp), name, email, phone: phone || null, notes: notes || null })),
+          ...schedule.flatMap(opp => (opp.people || []).map(person => ({ ...baseRow(opp), name: person.name, email: '', phone: null, notes: null }))),
+        ];
         let { error } = await sb.from('volunteer_signups').insert(rows);
         if (error && missingVolunteerPasscodeColumn(error)) {
           portalPasscode = legacyVolunteerPasscode(email, prod.id);
@@ -7142,7 +7230,7 @@
         if (error) throw error;
         const requestedShifts = schedule.slice();
         sendVolunteerRequestEmail({ name, email, portalToken, portalPasscode, requestedShifts });
-        schedule.forEach(opp => { signupCounts[spotsKey(opp)] = (signupCounts[spotsKey(opp)] || 0) + 1; });
+        schedule.forEach(opp => { const k = spotsKey(opp); signupCounts[k] = (signupCounts[k] || 0) + 1 + (opp.people?.length || 0); });
         const count = schedule.length;
         schedule = [];
         renderRows();
