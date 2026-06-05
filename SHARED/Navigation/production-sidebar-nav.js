@@ -193,7 +193,7 @@
   // ── Sidebar HTML loader ──────────────────────────────────────────────────
 
   window.loadProductionSidebar = function (activeGroup) {
-    const key = 'bts-prod-sidebar-v17';
+    const key = 'bts-prod-sidebar-v18';
     const cached = sessionStorage.getItem(key);
     const host = document.getElementById('prod-sidebar-host');
     if (!host) return;
