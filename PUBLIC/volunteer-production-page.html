@@ -6752,6 +6752,12 @@
     function addToScheduleFor(forPerson) {
       const opp = opps.find(o => o.id === addDropdownOppId);
       if (!opp || !forPerson) return;
+      const n = forPerson.toLowerCase();
+      const alreadyInSlot = schedule.some(s => s.id === opp.id && (
+        (s.forPerson || '').toLowerCase() === n ||
+        (s.people || []).some(p => (p.name || '').toLowerCase() === n)
+      ));
+      if (alreadyInSlot) { addDropdownError = `${forPerson} is already signed up for this shift.`; renderRows(); return; }
       const conflict = personConflictsWithSchedule(forPerson, [opp]);
       if (conflict) { addDropdownError = `${forPerson} is already in ${conflict} at the same time.`; renderRows(); return; }
       schedule.push({ ...opp, people: [], forPerson });
@@ -6768,15 +6774,20 @@
     function addDropdownHtml(oppId, isAdded, isFull, btnClass, btnAddContent, btnAddedContent) {
       const safeId = esc(oppId);
       if (isFull) return `<button class="${btnClass}" type="button" disabled>Full</button>`;
-      if (isAdded) return `<button class="${btnClass} added" type="button" onclick="toggleSchedule('${safeId}')">${btnAddedContent || 'Added'}</button>`;
       const isOpen = addDropdownOppId === oppId;
+      // Show names already in cart for this specific slot
+      const slotPeople = schedule.filter(s => s.id === oppId).map(s => s.forPerson).filter(Boolean);
+      const addedNamesHtml = slotPeople.length && isOpen
+        ? `<div class="vp-add-dropdown-opts" style="padding-bottom:0;">${slotPeople.map(n => `<div class="vp-add-dropdown-option" style="cursor:default;opacity:0.7;"><span class="vp-dd-avatar" style="background:rgba(118,158,123,0.18);color:var(--green);font-size:0.7rem;">✓</span>${esc(n)}</div>`).join('')}</div><hr class="vp-add-dropdown-divider">` : '';
       const people = cartPeopleNames();
       const errHtml = isOpen && addDropdownError ? `<div class="vp-add-dropdown-error">${esc(addDropdownError)}</div>` : '';
+      const otherPeople = people.filter(n => !slotPeople.includes(n));
       const ddHtml = isOpen ? `<div class="vp-add-dropdown" onclick="event.stopPropagation()">
         <div class="vp-add-dropdown-head">Who's volunteering?</div>
-        ${people.length ? `<div class="vp-add-dropdown-opts">${people.map(n => `<button class="vp-add-dropdown-option" type="button" onclick="addToScheduleFor('${esc(n)}')"><span class="vp-dd-avatar vp-dd-avatar-other">${esc(n.charAt(0).toUpperCase())}</span>${esc(n)}</button>`).join('')}</div><hr class="vp-add-dropdown-divider">` : ''}
+        ${addedNamesHtml}
+        ${otherPeople.length ? `<div class="vp-add-dropdown-opts">${otherPeople.map(n => `<button class="vp-add-dropdown-option" type="button" onclick="addToScheduleFor('${esc(n)}')"><span class="vp-dd-avatar vp-dd-avatar-other">${esc(n.charAt(0).toUpperCase())}</span>${esc(n)}</button>`).join('')}</div><hr class="vp-add-dropdown-divider">` : ''}
         <div class="vp-add-dropdown-new">
-          <div class="vp-add-dropdown-new-label">${people.length ? 'Someone new' : 'Enter their name'}</div>
+          <div class="vp-add-dropdown-new-label">${(otherPeople.length || slotPeople.length) ? 'Someone new' : 'Enter their name'}</div>
           <div class="vp-add-dropdown-new-row">
             <input id="vp-dd-input-open" class="vp-add-dropdown-input" type="text" placeholder="Full name" autocomplete="name" onkeydown="if(event.key==='Enter')confirmDropdownNewPerson();if(event.key==='Escape'){event.stopPropagation();closeAddDropdown();}" onclick="event.stopPropagation()" />
             <button class="vp-add-dropdown-confirm" type="button" onclick="confirmDropdownNewPerson()">Add</button>
@@ -6784,7 +6795,9 @@
           ${errHtml}
         </div>
       </div>` : '';
-      return `<div class="vp-add-dropdown-wrap"><button class="${btnClass}" type="button" onclick="openAddDropdown('${safeId}',event)">${btnAddContent}</button>${ddHtml}</div>`;
+      const btnLabel = isAdded ? (btnAddedContent || 'Added') : btnAddContent;
+      const btnStyle = isAdded ? `${btnClass} added` : btnClass;
+      return `<div class="vp-add-dropdown-wrap"><button class="${btnStyle}" type="button" onclick="openAddDropdown('${safeId}',event)">${btnLabel}</button>${ddHtml}</div>`;
     }
     function personConflictsWithSchedule(name, targetItems, excludeGroupKey = null) {
       const n = name.toLowerCase();
