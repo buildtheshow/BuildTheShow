@@ -193,7 +193,7 @@
   // ── Sidebar HTML loader ──────────────────────────────────────────────────
 
   window.loadProductionSidebar = function (activeGroup) {
-    const key = 'bts-prod-sidebar-v16';
+    const key = 'bts-prod-sidebar-v17';
     const cached = sessionStorage.getItem(key);
     const host = document.getElementById('prod-sidebar-host');
     if (!host) return;
@@ -202,6 +202,7 @@
       host.innerHTML = html;
       window.enhanceSidebarNavControls(host);
       if (activeGroup) window.openSidebarGroup(activeGroup);
+      markCurrentPageActive();
     }
 
     if (cached) applyAndInit(cached);
@@ -282,6 +283,18 @@
       });
     }
   };
+
+
+  function markCurrentPageActive() {
+    var currentFile = location.pathname.split('/').pop().split('?')[0];
+    if (!currentFile) return;
+    document.querySelectorAll('.prod-tab, .prod-sub-item').forEach(function (el) {
+      var onclick = el.getAttribute('onclick') || '';
+      if (onclick.indexOf("'" + currentFile + "'") !== -1 || onclick.indexOf('"' + currentFile + '"') !== -1) {
+        el.classList.add('active');
+      }
+    });
+  }
 
 
 })();
