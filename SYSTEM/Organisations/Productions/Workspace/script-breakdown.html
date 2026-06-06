@@ -3053,16 +3053,18 @@
     }
 
     function prescanFrontMatter(lines, result, profile) {
-      console.log('[BTS prescan] first 80 lines:', lines.slice(0, 80).map((l, i) => `${i}: ${l}`).join('\n'));
+      console.log('[BTS prescan] lines 0-200:', lines.slice(0, 200).map((l, i) => `${i}: ${l}`).join('\n'));
       let mode = null;
-      for (let i = 0; i < Math.min(lines.length, 350); i++) {
+      let foundStructure = false;
+      for (let i = 0; i < Math.min(lines.length, 600); i++) {
         const line = lines[i].trim();
         if (!line) continue;
-        if (parseSceneHeading(line, 0, profile === 'scene_breakdown')) break;
+        // only stop at scene headings once we've already collected songs or characters
+        if (foundStructure && parseSceneHeading(line, 0, profile === 'scene_breakdown')) break;
         // act headings only reset mode when not already collecting songs/characters — MTI groups songs by act
         if (parseActHeading(line)) { if (!mode) { } continue; }
-        if (/^(characters?|cast(?: of characters?)?|cast list|dramatis personae)$/i.test(line)) { mode = 'characters'; continue; }
-        if (/^(musical numbers?(?: list)?|songs?|scenes?\s*&\s*musical numbers?|musical numbers?\s*&\s*scenes?|song list|numbers?|act [ivx1-9]+\s*[-–]\s*musical numbers?)$/i.test(line)) { mode = 'songs'; continue; }
+        if (/^(characters?|cast(?: of characters?)?|cast list|dramatis personae)$/i.test(line)) { mode = 'characters'; foundStructure = true; continue; }
+        if (/^(musical numbers?(?: list)?|songs?|scenes?\s*&\s*musical numbers?|musical numbers?\s*&\s*scenes?|song list|numbers?|act [ivx1-9]+\s*[-–]\s*musical numbers?)$/i.test(line)) { mode = 'songs'; foundStructure = true; continue; }
         if (/^(scene (?:list|breakdown)|scenes? listed?)$/i.test(line)) { mode = null; continue; }
         if (mode === 'characters') {
           const name = extractCharacterPoolEntry(line);
