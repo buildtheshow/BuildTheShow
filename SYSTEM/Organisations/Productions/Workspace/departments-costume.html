@@ -232,6 +232,15 @@
     .perf-card-body { flex: 1; min-width: 0; }
     .perf-card-name { font-size: 0.88rem; font-weight: 700; color: #1a1530; }
     .perf-card-role { font-size: 0.75rem; color: rgba(26,21,48,0.45); margin-top: 0.1rem; }
+    .perf-card-meta {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 0.35rem;
+      margin-top: 0.2rem;
+      font-size: 0.74rem;
+      color: rgba(26,21,48,0.45);
+    }
     .perf-card-groups { display: flex; flex-wrap: wrap; gap: 0.35rem; padding: 0 1.25rem 0.9rem; }
     .perf-costume-data {
       display: grid;
@@ -374,6 +383,17 @@
       font-size: 0.82rem;
       font-weight: 800;
       color: rgba(26,21,48,0.62);
+    }
+    .cp-pronoun-pill {
+      display: inline-flex;
+      align-items: center;
+      border-radius: 999px;
+      background: rgba(87,46,136,0.08);
+      color: #572e88;
+      padding: 0.2rem 0.5rem;
+      font-size: 0.68rem;
+      font-weight: 850;
+      line-height: 1;
     }
     .cp-role-chip {
       background: #572e88;
@@ -912,10 +932,16 @@
       const perfMap = new Map();
       castMembers.forEach(function (m) {
         const key = m.applicant_id;
-        const name = m.preferred_name || m.name || m.email || '';
+        const displayName = preferredDisplayName(m);
+        const legalName = m.name || '';
+        const pronouns = cleanPronouns(m.pronouns);
+        const name = displayName || legalName || m.email || '';
         if (!name) return;
         if (perfMap.has(key)) {
           const existing = perfMap.get(key);
+          if (displayName && displayName !== existing.name) existing.name = displayName;
+          if (legalName && !existing.legal_name) existing.legal_name = legalName;
+          if (pronouns && !existing.pronouns) existing.pronouns = pronouns;
           if (m.character_name && !existing.roles.includes(m.character_name)) {
             existing.roles.push(m.character_name);
           }
@@ -926,10 +952,12 @@
           perfMap.set(key, {
             id: key,
             name,
+            display_name: displayName || name,
+            legal_name: legalName,
             roles: m.character_name ? [m.character_name] : [],
             roleTypes: m.role_type ? [m.role_type] : [],
             headshot_url: m.headshot_url || '',
-            pronouns: m.pronouns || '',
+            pronouns,
             answers: m.registration_answers || {},
           });
         }
@@ -982,6 +1010,28 @@
         try { return JSON.parse(app.custom_answers || '{}') || {}; } catch { return {}; }
       }
       return app.custom_answers && typeof app.custom_answers === 'object' ? app.custom_answers : {};
+    }
+
+    function preferredDisplayName(record) {
+      const preferred = String(record?.preferred_name || '').trim();
+      if (preferred) return preferred;
+      const answers = record?.registration_answers && typeof record.registration_answers === 'object' ? record.registration_answers : {};
+      return String(
+        answers['Preferred name'] ||
+        answers['Performer preferred name'] ||
+        answers['preferred_name'] ||
+        ''
+      ).trim();
+    }
+
+    function cleanPronouns(value) {
+      const text = String(value || '').trim();
+      if (!text || /^prefer not|^n\/a$/i.test(text)) return '';
+      return text;
+    }
+
+    function pronounHtml(p) {
+      return p?.pronouns ? `<span class="cp-pronoun-pill">${esc(p.pronouns)}</span>` : '';
     }
 
     function costumeAnswerValue(answers, keys) {
@@ -1253,7 +1303,10 @@
             <div class="cp-row-avatar" style="background:${color};width:38px;height:38px;font-size:0.82rem;">${initials(p.name)}</div>
             <div class="perf-card-body">
               <div class="perf-card-name">${esc(p.name)}</div>
-              <div class="perf-card-role">${esc(p.role || 'No role set')}</div>
+              <div class="perf-card-meta">
+                ${p.role ? `<span>${esc(p.role)}</span>` : '<span>No role set</span>'}
+                ${pronounHtml(p)}
+              </div>
             </div>
             <button onclick="event.stopPropagation();openPerformerDetail('${esc(p.id)}')" style="border:1.5px solid rgba(87,46,136,0.14);background:#fff;border-radius:8px;cursor:pointer;font-size:0.75rem;font-weight:800;color:#572e88;padding:0.42rem 0.75rem;">View</button>
             <button onclick="event.stopPropagation();openModal('edit-performer','${p.id}')" style="border:none;background:none;cursor:pointer;font-size:0.75rem;color:rgba(26,21,48,0.35);padding:0.25rem 0.5rem;">Edit</button>
@@ -1379,7 +1432,7 @@
           <div>${detailPhotoHtml(p)}</div>
           <div class="cp-detail-identity">
             <div class="cp-detail-name">${prettyPerformerName(p.name)}</div>
-            <div class="cp-detail-role-line"><span class="cp-role-chip">${esc(performerRoleTypeLabel(p))}</span><span>${esc(p.role || 'No role set')}</span></div>
+            <div class="cp-detail-role-line"><span class="cp-role-chip">${esc(performerRoleTypeLabel(p))}</span><span>${esc(p.role || 'No role set')}</span>${pronounHtml(p)}</div>
             <div class="cp-status-stack">
               <div class="cp-status-row"><div class="cp-status-icon">✓</div><div><div class="cp-status-main">Measurements</div><div class="cp-status-sub">${sections.sizes.length ? 'Complete' : 'Missing'}</div></div></div>
               <div class="cp-status-row"><div class="cp-status-icon">✓</div><div><div class="cp-status-main">Hair Information</div><div class="cp-status-sub">${sections.hairMakeup.length ? 'Complete' : 'Missing'}</div></div></div>
@@ -1455,7 +1508,7 @@
           <input type="checkbox" class="assign-cb" id="acb-${p.id}" ${checked ? 'checked' : ''}
             onchange="toggleAssignment('${p.id}', '${selectedGroupId}', this.checked)" />
           <div class="cp-row-avatar" style="background:${color};width:28px;height:28px;font-size:0.68rem;flex-shrink:0;">${initials(p.name)}</div>
-          <label for="acb-${p.id}" class="assign-perf-label">${esc(p.name)}</label>
+          <label for="acb-${p.id}" class="assign-perf-label">${esc(p.name)} ${pronounHtml(p)}</label>
           <span class="assign-perf-role">${esc(p.role || '')}</span>
         </div>`;
       }).join('');
@@ -1475,6 +1528,7 @@
           <div class="track-card-header">
             <div class="cp-row-avatar" style="background:${color};width:34px;height:34px;font-size:0.75rem;flex-shrink:0;">${initials(p.name)}</div>
             <div class="track-card-name">${esc(p.name)}</div>
+            ${pronounHtml(p)}
             <div class="track-card-role">${esc(p.role || '')}</div>
           </div>
           ${gIds.length
