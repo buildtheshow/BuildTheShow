@@ -233,6 +233,52 @@
     .perf-card-name { font-size: 0.88rem; font-weight: 700; color: #1a1530; }
     .perf-card-role { font-size: 0.75rem; color: rgba(26,21,48,0.45); margin-top: 0.1rem; }
     .perf-card-groups { display: flex; flex-wrap: wrap; gap: 0.35rem; padding: 0 1.25rem 0.9rem; }
+    .perf-costume-data {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 0.75rem;
+      padding: 0 1.25rem 1rem;
+    }
+    .perf-costume-section {
+      background: rgba(87,46,136,0.035);
+      border: 1px solid rgba(87,46,136,0.08);
+      border-radius: 10px;
+      padding: 0.75rem;
+      min-width: 0;
+    }
+    .perf-costume-section-title {
+      font-size: 0.68rem;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: rgba(87,46,136,0.72);
+      margin-bottom: 0.45rem;
+    }
+    .perf-costume-items {
+      display: grid;
+      grid-template-columns: minmax(84px, max-content) minmax(0, 1fr);
+      column-gap: 0.55rem;
+      row-gap: 0.3rem;
+      align-items: start;
+    }
+    .perf-costume-label {
+      font-size: 0.72rem;
+      font-weight: 700;
+      color: rgba(26,21,48,0.48);
+    }
+    .perf-costume-value {
+      font-size: 0.74rem;
+      font-weight: 600;
+      line-height: 1.35;
+      color: #1a1530;
+      min-width: 0;
+      overflow-wrap: anywhere;
+    }
+    .perf-costume-empty {
+      padding: 0 1.25rem 1rem;
+      font-size: 0.75rem;
+      color: rgba(26,21,48,0.36);
+    }
 
     /* ── Overview tab ── */
     .overview-stats {
@@ -302,6 +348,7 @@
       .hero-wrap { padding: 4.5rem 1rem 0; }
       .costume-content { padding: 1.25rem 1rem 2rem; }
       .costume-nav { padding: 0 1rem; }
+      .perf-costume-data { grid-template-columns: 1fr; padding: 0 1rem 1rem; }
       .cp-cols, .assign-cols { grid-template-columns: 1fr; }
       .overview-stats { grid-template-columns: 1fr 1fr; }
       .hero-deco { display: none; }
@@ -570,12 +617,10 @@
       const allBks = bkRes.data || [];
       window._dbg_castRows = castingRows.length;
       window._dbg_appRows = allApps.length;
-      // Key by id for direct FK lookup
+      // Key applications by id, bookings by email (for name fallback)
       const appById = new Map(allApps.map(r => [String(r.id), r]));
-      // Key by email as fallback (booking email → app row)
-      const appByEmail = new Map();
-      allApps.forEach(r => { if (r.email) appByEmail.set(String(r.email).toLowerCase().trim(), r); });
-      allBks.forEach(r => { if (r.email && !appByEmail.has(String(r.email).toLowerCase().trim())) appByEmail.set(String(r.email).toLowerCase().trim(), r); });
+      const bkByEmail = new Map();
+      allBks.forEach(r => { if (r.email) bkByEmail.set(String(r.email).toLowerCase().trim(), r); });
 
       // Build performers in memory — no separate table needed
       const seenIds = new Set();
@@ -586,9 +631,20 @@
         seenIds.add(appId);
         const app = appById.get(appId);
         const charName = row.character_id ? (characterMap.get(String(row.character_id))?.name || '') : 'Ensemble';
-        // Use every possible name field — fall back to email so every card has something
-        const name = acceptedApplicantName(app) || (app?.email || '');
-        performers.push({ id: appId, name: name || 'Performer', role: charName, headshot_url: app?.headshot_url || '', pronouns: app?.pronouns || '' });
+        // Get name from application; if null, fall back to the matching booking row by email
+        let name = acceptedApplicantName(app);
+        if (!name && app?.email) {
+          const bk = bkByEmail.get(String(app.email).toLowerCase().trim());
+          name = acceptedApplicantName(bk) || '';
+        }
+        performers.push({
+          id: appId,
+          name: name || app?.email || 'Performer',
+          role: charName,
+          headshot_url: app?.headshot_url || '',
+          pronouns: app?.pronouns || '',
+          answers: applicantCustomAnswers(app),
+        });
       });
       performers.sort((a, b) => a.name.localeCompare(b.name));
 
@@ -616,7 +672,7 @@
     }
 
     function acceptedApplicantName(app) {
-      const ca = app?.custom_answers && typeof app.custom_answers === 'object' ? app.custom_answers : {};
+      const ca = applicantCustomAnswers(app);
       return (
         app?.name ||
         app?.preferred_name ||
@@ -627,6 +683,110 @@
         app?.email ||
         ''
       ).trim();
+    }
+
+    function applicantCustomAnswers(app) {
+      if (!app?.custom_answers) return {};
+      if (typeof app.custom_answers === 'string') {
+        try { return JSON.parse(app.custom_answers || '{}') || {}; } catch { return {}; }
+      }
+      return app.custom_answers && typeof app.custom_answers === 'object' ? app.custom_answers : {};
+    }
+
+    function costumeAnswerValue(answers, keys) {
+      for (const key of keys) {
+        const value = answers?.[key];
+        if (value === null || value === undefined) continue;
+        if (value === false) continue;
+        const text = value === true ? 'Yes' : String(value).trim();
+        if (text) return text;
+      }
+      return '';
+    }
+
+    function costumeKnownAnswerSections(answers = {}) {
+      const sizes = [
+        ['Top', ['cm_top_size', 'Top Size']],
+        ['Bottom', ['cm_bottom_size', 'Bottom Size']],
+        ['Dress', ['cm_dress_size', 'Dress Size']],
+        ['Shoes', ['cm_shoe_size', 'Shoe Size']],
+        ['Height', ['cm_height', 'Height']],
+      ].map(([label, keys]) => ({ label, value: costumeAnswerValue(answers, keys) })).filter(item => item.value);
+
+      const hairMakeup = [
+        ['Hair length', ['cm_hair_length', 'Hair Length']],
+        ['Hair colour', ['cm_hair_colour', 'Hair Colour', 'Hair Color']],
+        ['Skin', ['Skin allergies or sensitivities']],
+        ['Makeup', ['Makeup sensitivities']],
+        ['Wigs', ['Wig considerations']],
+      ].map(([label, keys]) => ({ label, value: costumeAnswerValue(answers, keys) })).filter(item => item.value);
+
+      const notes = [
+        ['Costume', ['cm_costume_notes', 'Costume concerns or special considerations']],
+        ['Allergies', ['cm_allergy_notes', 'Makeup or material allergies']],
+        ['Sensory', ['cm_sensory_notes', 'Sensory notes']],
+        ['Other', ['cm_other_notes', 'Anything else the costume team should know', 'Other notes for hair and makeup']],
+      ].map(([label, keys]) => ({ label, value: costumeAnswerValue(answers, keys) })).filter(item => item.value);
+
+      return { sizes, hairMakeup, notes };
+    }
+
+    function extraCostumeAnswers(answers = {}) {
+      const known = new Set([
+        'cm_top_size', 'Top Size',
+        'cm_bottom_size', 'Bottom Size',
+        'cm_dress_size', 'Dress Size',
+        'cm_shoe_size', 'Shoe Size',
+        'cm_height', 'Height',
+        'cm_hair_length', 'Hair Length',
+        'cm_hair_colour', 'Hair Colour', 'Hair Color',
+        'cm_costume_notes', 'Costume concerns or special considerations',
+        'cm_allergy_notes', 'Makeup or material allergies',
+        'cm_sensory_notes', 'Sensory notes',
+        'cm_other_notes', 'Anything else the costume team should know',
+        'Skin allergies or sensitivities',
+        'Makeup sensitivities',
+        'Wig considerations',
+        'Other notes for hair and makeup',
+      ]);
+      const re = /costume|measurement|size|shoe|height|hair|makeup|wig|allerg|sensitiv|sensory|fabric|latex|quick change|wardrobe/i;
+      return Object.entries(answers)
+        .filter(([key, value]) => {
+          if (known.has(key) || key.startsWith('__bts_')) return false;
+          if (value === false || value === null || value === undefined) return false;
+          const text = value === true ? 'Yes' : String(value).trim();
+          return text && re.test(key);
+        })
+        .map(([label, value]) => ({ label, value: value === true ? 'Yes' : String(value).trim() }));
+    }
+
+    function renderCostumeItems(items) {
+      return `<div class="perf-costume-items">${items.map(item => `
+        <div class="perf-costume-label">${esc(item.label)}</div>
+        <div class="perf-costume-value">${esc(item.value)}</div>
+      `).join('')}</div>`;
+    }
+
+    function renderCostumeSection(title, items) {
+      if (!items.length) return '';
+      return `<section class="perf-costume-section">
+        <div class="perf-costume-section-title">${esc(title)}</div>
+        ${renderCostumeItems(items)}
+      </section>`;
+    }
+
+    function renderPerformerCostumeData(p) {
+      const sections = costumeKnownAnswerSections(p.answers || {});
+      const extra = extraCostumeAnswers(p.answers || {});
+      const html = [
+        renderCostumeSection('Sizes', sections.sizes),
+        renderCostumeSection('Hair & Makeup', sections.hairMakeup),
+        renderCostumeSection('Notes', sections.notes),
+        renderCostumeSection('Other Costume Answers', extra),
+      ].filter(Boolean).join('');
+
+      if (!html) return '<div class="perf-costume-empty">No costume registration answers saved yet.</div>';
+      return `<div class="perf-costume-data">${html}</div>`;
     }
 
     function normalizeName(name) {
@@ -746,6 +906,7 @@
             <button onclick="openModal('edit-performer','${p.id}')" style="border:none;background:none;cursor:pointer;font-size:0.75rem;color:rgba(26,21,48,0.35);padding:0.25rem 0.5rem;">Edit</button>
           </div>
           ${gIds.length ? `<div class="perf-card-groups">${pills}</div>` : '<div style="padding:0 1.25rem 0.75rem;font-size:0.75rem;color:rgba(26,21,48,0.35);">Not assigned to any groups yet.</div>'}
+          ${renderPerformerCostumeData(p)}
         </div>`;
       }).join('');
     }
