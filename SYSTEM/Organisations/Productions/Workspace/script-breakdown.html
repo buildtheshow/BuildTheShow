@@ -1145,6 +1145,91 @@
       font-size: 0.66rem;
       font-weight: 900;
     }
+    .sb-import-steps {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 0.4rem;
+      margin: 0 0 0.85rem;
+    }
+    .sb-import-step {
+      border: 1.5px solid rgba(87,46,136,0.16);
+      border-radius: 8px;
+      background: #fff;
+      color: rgba(26,21,48,0.56);
+      padding: 0.5rem 0.55rem;
+      font: inherit;
+      font-size: 0.72rem;
+      font-weight: 900;
+      cursor: pointer;
+    }
+    .sb-import-step.active {
+      background: #572e88;
+      border-color: #572e88;
+      color: #fff;
+    }
+    .sb-import-panel { display: none; }
+    .sb-import-panel.active { display: grid; gap: 0.65rem; }
+    .sb-import-name-table {
+      display: grid;
+      gap: 0.5rem;
+    }
+    .sb-import-name-row {
+      display: grid;
+      grid-template-columns: minmax(130px, 1fr) minmax(150px, 1fr) 110px auto;
+      gap: 0.45rem;
+      align-items: end;
+      border: 1.5px solid rgba(87,46,136,0.1);
+      border-radius: 10px;
+      padding: 0.65rem;
+      background: #fbfaff;
+    }
+    .sb-import-name-label {
+      font-size: 0.62rem;
+      font-weight: 900;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: rgba(26,21,48,0.42);
+      margin-bottom: 0.2rem;
+    }
+    .sb-import-name-value {
+      font-size: 0.8rem;
+      font-weight: 900;
+      color: #1a1530;
+      line-height: 1.25;
+    }
+    .sb-import-name-row input,
+    .sb-import-name-row select {
+      width: 100%;
+      border: 1.5px solid rgba(87,46,136,0.16);
+      border-radius: 8px;
+      padding: 0.45rem 0.55rem;
+      font: inherit;
+      font-size: 0.76rem;
+      color: #1a1530;
+      background: #fff;
+    }
+    .sb-import-mini-btn {
+      border: none;
+      border-radius: 8px;
+      padding: 0.48rem 0.65rem;
+      background: #572e88;
+      color: #fff;
+      font: inherit;
+      font-size: 0.72rem;
+      font-weight: 900;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .sb-import-note-preview {
+      border: 1.5px solid rgba(87,46,136,0.1);
+      border-radius: 10px;
+      background: #fff;
+      padding: 0.7rem;
+      display: grid;
+      gap: 0.35rem;
+      font-size: 0.74rem;
+      line-height: 1.45;
+    }
 
     @media (max-width: 900px) {
       .prod-main { margin-left: 0; max-width: 100vw; }
@@ -1153,6 +1238,7 @@
       .sb-content::before { inset: 0; }
       .sb-import-edit-grid { grid-template-columns: 1fr; }
       .sb-import-profile-grid { grid-template-columns: 1fr; }
+      .sb-import-name-row { grid-template-columns: 1fr; }
       .sb-workspace-grid { grid-template-columns: 1fr; padding: 1rem; }
       .sb-scene-card { grid-template-columns: 28px minmax(0, 1fr) 24px; }
       .sb-card-metric, .sb-card-state { display: none; }
@@ -1488,6 +1574,7 @@
     let editingSceneId = null;
     let pendingPdfImport = null;
     let selectedImportProfile = 'auto';
+    let importReviewStep = 'characters';
 
     function esc(s) {
       return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -2266,6 +2353,7 @@
 
     function openPdfImportModal(status) {
       pendingPdfImport = null;
+      importReviewStep = 'characters';
       document.getElementById('pdf-import-status').textContent = status || 'Reading file...';
       document.getElementById('pdf-import-review-list').innerHTML = '';
       document.getElementById('pdf-import-save-btn').disabled = true;
@@ -2275,6 +2363,7 @@
     function closePdfImportModal() {
       document.getElementById('modal-pdf-import').style.display = 'none';
       pendingPdfImport = null;
+      importReviewStep = 'characters';
     }
 
     async function uploadBreakdownFile(file) {
@@ -2697,7 +2786,7 @@
       const list = document.getElementById('pdf-import-review-list');
       const scenesToShow = pendingPdfImport?.scenes || [];
       document.getElementById('pdf-import-status').textContent = scenesToShow.length
-        ? `This is a draft from ${pendingPdfImport.fileName}. Fix anything that looks wrong, then save only the scenes you want.`
+        ? `This is a draft from ${pendingPdfImport.fileName}. Review each step, fix anything that looks wrong, then save only the scenes you want.`
         : 'No scenes found. Try a clearer PDF/photo with visible Act and Scene headings.';
       saveBtn.disabled = !scenesToShow.length;
       const summary = pendingPdfImport?.summary || {};
@@ -2710,7 +2799,12 @@
         <span class="sb-import-summary-pill">${summary.productionTips || 0} production tip${summary.productionTips === 1 ? '' : 's'}</span>
         <span class="sb-import-summary-pill">${summary.ignoredLines || 0} ignored line${summary.ignoredLines === 1 ? '' : 's'}</span>
       </div>` : '';
-      list.innerHTML = summaryHtml + scenesToShow.map((scene, index) => {
+      const stepsHtml = scenesToShow.length ? `<div class="sb-import-steps">
+        <button type="button" class="sb-import-step ${importReviewStep === 'characters' ? 'active' : ''}" data-import-step="characters" onclick="switchImportReviewStep('characters')">1. Characters</button>
+        <button type="button" class="sb-import-step ${importReviewStep === 'scenes' ? 'active' : ''}" data-import-step="scenes" onclick="switchImportReviewStep('scenes')">2. Scenes</button>
+        <button type="button" class="sb-import-step ${importReviewStep === 'notes' ? 'active' : ''}" data-import-step="notes" onclick="switchImportReviewStep('notes')">3. Notes & Save</button>
+      </div>` : '';
+      const sceneCardsHtml = scenesToShow.map((scene, index) => {
         const charNames = scene.characterIds.map(id => productionChars.find(c => c.id === id)?.name).filter(Boolean).join(', ');
         const notesText = scene.notes.map(note => note.body).filter(Boolean).join('\n');
         return `<div class="sb-import-scene">
@@ -2763,6 +2857,148 @@
               <div class="sb-import-help">Each line becomes a shared note. BTS will tag Costume, Props, Hair/Makeup, Stage Management, or Rehearsals from the wording.</div>
             </div>
           </div>
+        </div>`;
+      }).join('');
+      list.innerHTML = summaryHtml + stepsHtml + (scenesToShow.length ? `
+        <div class="sb-import-panel ${importReviewStep === 'characters' ? 'active' : ''}" data-import-panel="characters">
+          ${renderImportCharactersPanel(scenesToShow)}
+        </div>
+        <div class="sb-import-panel ${importReviewStep === 'scenes' ? 'active' : ''}" data-import-panel="scenes">
+          ${sceneCardsHtml}
+        </div>
+        <div class="sb-import-panel ${importReviewStep === 'notes' ? 'active' : ''}" data-import-panel="notes">
+          ${renderImportNotesPanel(scenesToShow)}
+        </div>
+      ` : '');
+      refreshImportNotesPanel();
+    }
+
+    function switchImportReviewStep(step) {
+      importReviewStep = step;
+      document.querySelectorAll('.sb-import-step').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.importStep === step);
+      });
+      document.querySelectorAll('.sb-import-panel').forEach(panel => {
+        panel.classList.toggle('active', panel.dataset.importPanel === step);
+      });
+      if (step === 'notes') refreshImportNotesPanel();
+    }
+
+    function renderImportCharactersPanel(scenesToShow) {
+      const rows = collectImportDetectedNames(scenesToShow);
+      const characterOptions = productionChars.map(char => `<option value="${esc(char.name)}"></option>`).join('');
+      if (!rows.length) {
+        return `<div class="sb-empty">No characters or groups were detected. You can add them while reviewing each scene.</div>`;
+      }
+      return `<datalist id="import-character-options">${characterOptions}</datalist>
+        <div class="sb-import-note-preview">
+          <strong>Clean up names first.</strong>
+          <span>Merge typos, choose whether each item is a character or group, or ignore anything BTS should not import.</span>
+        </div>
+        <div class="sb-import-name-table">
+          ${rows.map((row, index) => {
+            const targetType = row.kind === 'group' ? 'group' : 'character';
+            const sourceLabel = row.kind === 'group' ? 'Detected group' : row.kind === 'unmatched' ? 'Needs review' : 'Detected character';
+            return `<div class="sb-import-name-row" data-import-name-row="${index}" data-detected-name="${esc(row.name)}">
+              <div>
+                <div class="sb-import-name-label">${sourceLabel}</div>
+                <div class="sb-import-name-value">${esc(row.name)}</div>
+              </div>
+              <div>
+                <div class="sb-import-name-label">Use this name</div>
+                <input data-import-name-to type="text" list="import-character-options" value="${esc(row.name)}" />
+              </div>
+              <div>
+                <div class="sb-import-name-label">Import as</div>
+                <select data-import-name-type>
+                  <option value="character" ${targetType === 'character' ? 'selected' : ''}>Character</option>
+                  <option value="group" ${targetType === 'group' ? 'selected' : ''}>Group</option>
+                  <option value="ignore">Ignore</option>
+                </select>
+              </div>
+              <button type="button" class="sb-import-mini-btn" onclick="applyImportNameMapping(${index})">Apply</button>
+            </div>`;
+          }).join('')}
+        </div>`;
+    }
+
+    function collectImportDetectedNames(scenesToShow) {
+      const seen = new Set();
+      const rows = [];
+      const addRow = (name, kind) => {
+        const clean = String(name || '').replace(/\s+/g, ' ').trim();
+        const key = `${kind}:${normalizeLoose(clean)}`;
+        if (!clean || seen.has(key)) return;
+        seen.add(key);
+        rows.push({ name: clean, kind });
+      };
+      scenesToShow.forEach(scene => {
+        (scene.characterIds || []).forEach(id => {
+          const char = productionChars.find(c => c.id === id);
+          if (char?.name) addRow(char.name, 'character');
+        });
+        (scene.groups || []).forEach(name => addRow(name, 'group'));
+        (scene.unmatchedNames || []).forEach(name => addRow(name, 'unmatched'));
+      });
+      return rows.sort((a, b) => a.name.localeCompare(b.name));
+    }
+
+    function applyImportNameMapping(rowIndex) {
+      const row = document.querySelector(`[data-import-name-row="${rowIndex}"]`);
+      if (!row) return;
+      const detected = row.dataset.detectedName || '';
+      const replacement = row.querySelector('[data-import-name-to]')?.value?.trim() || detected;
+      const type = row.querySelector('[data-import-name-type]')?.value || 'character';
+      const sameName = (a, b) => normalizeLoose(a) === normalizeLoose(b);
+      const readList = (card, field) => splitImportList(card.querySelector(`[data-field="${field}"]`)?.value || '');
+      const writeList = (card, field, items) => {
+        const input = card.querySelector(`[data-field="${field}"]`);
+        if (input) input.value = [...new Set(items.filter(Boolean))].join(', ');
+      };
+      document.querySelectorAll('.sb-import-scene').forEach(card => {
+        let characters = readList(card, 'characters').filter(name => !sameName(name, detected) && !sameName(name, replacement));
+        let groups = readList(card, 'groups').filter(name => !sameName(name, detected) && !sameName(name, replacement));
+        let unmatched = readList(card, 'unmatched').filter(name => !sameName(name, detected) && !sameName(name, replacement));
+        const hadMatch = readList(card, 'characters').some(name => sameName(name, detected))
+          || readList(card, 'groups').some(name => sameName(name, detected))
+          || readList(card, 'unmatched').some(name => sameName(name, detected));
+        if (hadMatch && type === 'character') characters.push(replacement);
+        if (hadMatch && type === 'group') groups.push(replacement);
+        writeList(card, 'characters', characters);
+        writeList(card, 'groups', groups);
+        writeList(card, 'unmatched', unmatched);
+      });
+      row.querySelector('.sb-import-name-value').textContent = detected === replacement ? detected : `${detected} -> ${replacement}`;
+      row.style.background = 'rgba(118,158,123,0.12)';
+      document.getElementById('pdf-import-status').textContent = `Applied "${replacement}" as ${type === 'ignore' ? 'ignored' : `a ${type}`}.`;
+      refreshImportNotesPanel();
+    }
+
+    function renderImportNotesPanel() {
+      return `<div class="sb-import-note-preview">
+        <strong>Final check before saving.</strong>
+        <span>These notes will become shared scene notes. BTS will tag departments from the wording, and you can edit them later in the Script Breakdown.</span>
+      </div>
+      <div id="sb-import-notes-preview"></div>`;
+    }
+
+    function refreshImportNotesPanel() {
+      const target = document.getElementById('sb-import-notes-preview');
+      if (!target) return;
+      const drafts = collectPdfImportDrafts();
+      if (!drafts.length) {
+        target.innerHTML = `<div class="sb-empty">No scenes selected yet.</div>`;
+        return;
+      }
+      target.innerHTML = drafts.map(draft => {
+        const noteRows = draft.notes.length ? draft.notes.map(note => {
+          const tags = (note.department_tags || []).map(tag => departmentInfo(tag).label).join(', ') || noteTypeInfo(note.note_type).label;
+          return `<div><strong>${esc(tags)}:</strong> ${esc(note.body)}</div>`;
+        }).join('') : '<div>No notes for this scene.</div>';
+        return `<div class="sb-import-note-preview">
+          <strong>Act ${esc(draft.actNumber)}, Scene ${esc(draft.number)}: ${esc(draft.title)}</strong>
+          <span>${draft.characterIds.length} character${draft.characterIds.length === 1 ? '' : 's'}, ${draft.groups.length} group${draft.groups.length === 1 ? '' : 's'}, ${draft.notes.length} note${draft.notes.length === 1 ? '' : 's'}</span>
+          ${noteRows}
         </div>`;
       }).join('');
     }
