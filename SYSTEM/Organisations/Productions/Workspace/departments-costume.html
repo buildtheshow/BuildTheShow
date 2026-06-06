@@ -937,7 +937,7 @@
           <div class="cp-col" style="padding:1rem;">
             <div style="font-size:0.75rem;font-weight:700;color:rgba(26,21,48,0.45);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:0.75rem;">Planning Items</div>
             <div id="assign-groups-list">
-              <div class="cp-empty">No costume groups yet.</div>
+              <div class="cp-empty">No Planning Items yet.</div>
             </div>
           </div>
           <div class="cp-col" style="padding:1rem;">
@@ -1387,7 +1387,6 @@
     function renderAll() {
       renderOverview();
       renderGroupsList();
-      renderPerformersSummary();
       renderPerformersFull();
       renderAssignGroups();
       renderTracks();
@@ -1397,71 +1396,59 @@
 
     function renderGroupsList() {
       const el = document.getElementById('groups-list');
-      if (!groups.length) { el.innerHTML = '<div class="cp-empty">No costume groups yet. Add one to get started.</div>'; return; }
-
-      // Mirror the cast list's 3-bucket system: Named Roles / Groups / Ensemble
-      const buckets = { 'Named Roles': [], 'Groups': [], 'Ensemble': [] };
-
-      groups.forEach(function (g) {
-        const rt = (charRoleMap[normalizeName(g.name)] || '').toLowerCase();
-        const nm = normalizeName(g.name);
-        if (nm === 'ensemble' || rt === 'ensemble') buckets['Ensemble'].push(g);
-        else if (rt === 'group' || rt === 'chorus') buckets['Groups'].push(g);
-        else buckets['Named Roles'].push(g);
-      });
-
-      const allSections = ['Named Roles', 'Groups', 'Ensemble'];
-      let html = '';
-      allSections.forEach(function (section) {
-        const list = buckets[section];
-        if (!list.length) return;
-        html += `<div style="padding:0.55rem 1rem 0.2rem;font-size:0.7rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:rgba(26,21,48,0.38);">${section}</div>`;
-        list.forEach(function (g) {
-          const count = groupPerformerCount(g.id);
-          html += `<div class="cp-row" onclick="openModal('edit-group','${g.id}')">
-            <div class="cp-row-icon"><img src="/ASSETS/Images/chm-costumes.svg?v=20260605" style="width:16px;height:16px;opacity:0.6;" alt="" /></div>
-            <div class="cp-row-body">
-              <div class="cp-row-name">${esc(g.name)}</div>
-              <div class="cp-row-meta">${count} performer${count !== 1 ? 's' : ''}</div>
-            </div>
-            <div class="cp-row-arrow">›</div>
-          </div>`;
-        });
-      });
-      el.innerHTML = html;
+      if (!groups.length) { el.innerHTML = '<div class="cp-empty">No planning items yet. Add one to start building the visual direction.</div>'; return; }
+      el.innerHTML = groups.map(renderPlanningItemCard).join('');
     }
 
-    // Copied verbatim from production-workspace.html renderInTheShowCardFrontTemplate
-    function renderInTheShowCardFrontTemplate({ name = '', role = '', headshot_url = '', pronouns = '' } = {}) {
-      const _parts = String(name || '').trim().split(/\s+/);
-      const _fn = _parts[0] || '';
-      const _ln = _parts.slice(1).join(' ') || '';
-      return renderCastingCard({
-        first_name: _fn,
-        last_name: _ln,
-        character_name: role,
-        headshot_url,
-        pronouns,
-      }, {
-        size: 'compact',
-        hasPadding: true,
-        hasIcons: false,
-        draggable: false,
-        state: null,
-        variant: 'inTheShow',
-      });
+    function approvalClass(status) {
+      const text = String(status || '').toLowerCase();
+      if (text.includes('approved') && !text.includes('pending')) return 'approved';
+      if (text.includes('pending')) return 'pending';
+      if (text.includes('revision')) return 'revision';
+      return 'draft';
     }
 
-    function renderPerformersSummary() {
-      const el = document.getElementById('performers-summary-list');
-      if (!performers.length) {
-        el.innerHTML = '<div class="cp-empty" style="grid-column:1/-1;">No accepted cast yet.</div>';
-        return;
-      }
-      // Exact wrapper from template test: width:min(100%,304px);margin:0 auto
-      el.innerHTML = performers.map(function (p) {
-        return `<div style="width:min(100%,304px);margin:0 auto;">${renderInTheShowCardFrontTemplate({ name: p.name, role: p.role, headshot_url: p.headshot_url, pronouns: p.pronouns })}</div>`;
-      }).join('');
+    function renderImageStrip(urls = [], alt = '') {
+      const clean = urls.filter(Boolean).slice(0, 3);
+      if (!clean.length) return '<div class="look-image-strip"><div class="look-image-empty">Add inspiration</div></div>';
+      return `<div class="look-image-strip">${clean.map(url => `<img src="${esc(url)}" alt="${esc(alt)} inspiration" />`).join('')}</div>`;
+    }
+
+    function renderLookCard(group, look) {
+      const palette = (look.palette || []).slice(0, 5).map(item => `<span class="look-chip palette-chip">${esc(item)}</span>`).join('');
+      const scenes = (look.scenes || []).slice(0, 5).map(item => `<span class="look-chip">${esc(item)}</span>`).join('');
+      return `<article class="look-card" onclick="openModal('edit-look','${esc(look.id)}','${esc(group.id)}')">
+        ${renderImageStrip(look.inspiration_urls, `${group.name} ${look.name}`)}
+        <div class="look-body">
+          <div class="look-topline">
+            <div class="look-name">${esc(look.name)}</div>
+            <div class="look-status ${approvalClass(look.approval_status)}">${esc(look.approval_status || 'Draft')}</div>
+          </div>
+          ${look.description ? `<div class="look-desc">${esc(look.description)}</div>` : ''}
+          ${palette ? `<div class="look-chip-row">${palette}</div>` : ''}
+          ${scenes ? `<div class="look-chip-row">${scenes}</div>` : ''}
+        </div>
+      </article>`;
+    }
+
+    function renderPlanningItemCard(group) {
+      const looks = planningLooks(group);
+      const approvedCount = looks.filter(look => approvalClass(look.approval_status) === 'approved').length;
+      return `<section class="planning-item-card">
+        <div class="planning-item-head">
+          <div>
+            <div class="planning-item-name">${esc(group.name)}</div>
+            <div class="planning-item-meta">${looks.length} look${looks.length === 1 ? '' : 's'} · ${approvedCount} approved</div>
+          </div>
+          <div class="planning-card-actions">
+            <button class="planning-mini-btn" onclick="event.stopPropagation();openModal('look',null,'${esc(group.id)}')">+ Look</button>
+            <button class="planning-mini-btn" onclick="event.stopPropagation();openModal('edit-group','${esc(group.id)}')">Edit</button>
+          </div>
+        </div>
+        ${looks.length
+          ? `<div class="planning-looks">${looks.map(look => renderLookCard(group, look)).join('')}</div>`
+          : `<div class="planning-empty-look" onclick="openModal('look',null,'${esc(group.id)}')">Add the first Look for ${esc(group.name)}</div>`}
+      </section>`;
     }
 
     function renderPerformersFull() {
@@ -1487,7 +1474,7 @@
             <button onclick="event.stopPropagation();openPerformerDetail('${esc(p.id)}')" style="border:1.5px solid rgba(87,46,136,0.14);background:#fff;border-radius:8px;cursor:pointer;font-size:0.75rem;font-weight:800;color:#572e88;padding:0.42rem 0.75rem;">View</button>
             <button onclick="event.stopPropagation();openModal('edit-performer','${p.id}')" style="border:none;background:none;cursor:pointer;font-size:0.75rem;color:rgba(26,21,48,0.35);padding:0.25rem 0.5rem;">Edit</button>
           </div>
-          ${gIds.length ? `<div class="perf-card-groups">${pills}</div>` : '<div style="padding:0 1.25rem 0.75rem;font-size:0.75rem;color:rgba(26,21,48,0.35);">Not assigned to any groups yet.</div>'}
+          ${gIds.length ? `<div class="perf-card-groups">${pills}</div>` : '<div style="padding:0 1.25rem 0.75rem;font-size:0.75rem;color:rgba(26,21,48,0.35);">Not assigned to any Planning Items yet.</div>'}
         </div>`;
       }).join('');
     }
@@ -1612,7 +1599,7 @@
             <div class="cp-status-stack">
               <div class="cp-status-row"><div class="cp-status-icon">✓</div><div><div class="cp-status-main">Measurements</div><div class="cp-status-sub">${sections.sizes.length ? 'Complete' : 'Missing'}</div></div></div>
               <div class="cp-status-row"><div class="cp-status-icon">✓</div><div><div class="cp-status-main">Hair Information</div><div class="cp-status-sub">${sections.hairMakeup.length ? 'Complete' : 'Missing'}</div></div></div>
-              <div class="cp-status-row"><div class="cp-status-icon">✓</div><div><div class="cp-status-main">Groups Assigned</div><div class="cp-status-sub">${assignedGroups.length} Group${assignedGroups.length === 1 ? '' : 's'}</div></div></div>
+              <div class="cp-status-row"><div class="cp-status-icon">✓</div><div><div class="cp-status-main">Planning Items</div><div class="cp-status-sub">${assignedGroups.length} Item${assignedGroups.length === 1 ? '' : 's'}</div></div></div>
               <div class="cp-status-row"><div class="cp-status-icon warn">♡</div><div><div class="cp-status-main">Sensory Note</div><div class="cp-status-sub">${sensory ? 'On File' : 'None'}</div></div></div>
             </div>
           </div>
@@ -1644,17 +1631,17 @@
           </section>
           <section class="cp-info-card groups">
             <div class="cp-info-icon">${costumeDetailIcon('groups')}</div>
-            <div class="cp-info-title">Costume Groups</div>
+            <div class="cp-info-title">Planning Items</div>
             <div class="cp-info-group-count">${assignedGroups.length}</div>
             <div class="cp-info-label">Assigned</div>
             <div class="cp-info-groups-list">${assignedGroups.slice(0, 4).map(g => `<div>${esc(g.name)}</div>`).join('') || '<div>None assigned</div>'}</div>
           </section>
         </div>
         <section class="cp-assigned-section">
-          <div class="cp-assigned-title">Assigned Costume Groups (${assignedGroups.length})</div>
+          <div class="cp-assigned-title">Assigned Planning Items (${assignedGroups.length})</div>
           <div class="cp-group-card-grid">
             ${assignedGroups.map(renderAssignedGroupCard).join('')}
-            <article class="cp-add-group-card" onclick="openModal('group')"><div><span>+</span><div>Add<br>Costume Group</div></div></article>
+            <article class="cp-add-group-card" onclick="openModal('group')"><div><span>+</span><div>Add<br>Planning Item</div></div></article>
           </div>
         </section>
         </div>`;
@@ -1662,7 +1649,7 @@
 
     function renderAssignGroups() {
       const el = document.getElementById('assign-groups-list');
-      if (!groups.length) { el.innerHTML = '<div class="cp-empty">No costume groups yet.</div>'; return; }
+      if (!groups.length) { el.innerHTML = '<div class="cp-empty">No Planning Items yet.</div>'; return; }
       el.innerHTML = groups.map(g => {
         const count = groupPerformerCount(g.id);
         const sel = selectedGroupId === g.id;
@@ -1675,7 +1662,7 @@
 
     function renderAssignPerformers() {
       const el = document.getElementById('assign-performers-list');
-      if (!selectedGroupId) { el.innerHTML = '<div class="assign-placeholder">Select a costume group to assign performers.</div>'; return; }
+      if (!selectedGroupId) { el.innerHTML = '<div class="assign-placeholder">Select a Planning Item to assign performers.</div>'; return; }
       if (!performers.length) { el.innerHTML = '<div class="assign-placeholder">No performers yet.</div>'; return; }
       el.innerHTML = performers.map(p => {
         const checked = isAssigned(p.id, selectedGroupId);
@@ -1709,7 +1696,7 @@
           </div>
           ${gIds.length
             ? `<div class="track-groups">${pills}</div>`
-            : '<div class="track-none">No groups assigned yet.</div>'}
+            : '<div class="track-none">No Planning Items assigned yet.</div>'}
         </div>`;
       }).join('');
     }
@@ -1747,19 +1734,31 @@
 
     // ── Modal ─────────────────────────────────────────────────────────────────
 
-    function openModal(mode, id) {
+    function openModal(mode, id, parentId) {
       modalMode = mode;
       modalEditId = id || null;
+      modalParentId = parentId || null;
 
       const overlay = document.getElementById('c-overlay');
+      const modal = overlay.querySelector('.c-modal');
       const title = document.getElementById('c-modal-title');
       const body = document.getElementById('c-modal-body');
       const saveBtn = document.getElementById('c-btn-save');
+      modal.classList.toggle('wide', mode === 'look' || mode === 'edit-look');
 
       if (mode === 'group') {
-        title.textContent = 'Add Costume Group';
-        body.innerHTML = `<div class="c-field"><label class="c-label">Group Name</label><input class="c-input" id="c-name" placeholder="e.g. Chimney Sweeps" autofocus /></div>`;
-        saveBtn.textContent = 'Add Group';
+        title.textContent = 'Add Planning Item';
+        body.innerHTML = `<div class="c-field"><label class="c-label">Planning Item Name</label><input class="c-input" id="c-name" placeholder="e.g. Chimney Sweeps" autofocus /></div>`;
+        saveBtn.textContent = 'Add Planning Item';
+        saveBtn.style.display = '';
+        document.querySelector('.c-btn-cancel').style.display = '';
+
+      } else if (mode === 'look') {
+        const group = groups.find(x => x.id === parentId);
+        if (!group) return;
+        title.textContent = `Add Look · ${group.name}`;
+        body.innerHTML = renderLookForm();
+        saveBtn.textContent = 'Add Look';
         saveBtn.style.display = '';
         document.querySelector('.c-btn-cancel').style.display = '';
 
@@ -1776,21 +1775,27 @@
         const g = groups.find(x => x.id === id);
         if (!g) return;
         const groupMeta = groupRecordNotes(g);
-        title.textContent = 'Edit Costume Group';
+        title.textContent = 'Edit Planning Item';
         body.innerHTML = `
-          <div class="c-field"><label class="c-label">Group Name</label><input class="c-input" id="c-name" value="${esc(g.name)}" autofocus /></div>
-          <div class="c-field"><label class="c-label">Notes</label><input class="c-input" id="c-notes" value="${esc(groupMeta.notes || '')}" placeholder="Optional notes" /></div>
-          <div class="c-field">
-            <label class="c-label">Inspiration Photos</label>
-            <div id="c-inspiration-list" class="cp-image-url-list">
-              ${groupMeta.inspiration_urls.length ? groupMeta.inspiration_urls.map(url => inspirationUrlRow(url)).join('') : inspirationUrlRow('')}
-            </div>
-            <button type="button" class="cp-detail-action" style="margin-top:0.55rem;" onclick="addInspirationUrlRow()">+ Add photo URL</button>
-          </div>
+          <div class="c-field"><label class="c-label">Planning Item Name</label><input class="c-input" id="c-name" value="${esc(g.name)}" autofocus /></div>
+          <div class="c-field"><label class="c-label">Item Notes</label><input class="c-input" id="c-notes" value="${esc(groupMeta.notes || '')}" placeholder="Optional planning notes" /></div>
           <div style="margin-top:1rem;padding-top:1rem;border-top:1px solid rgba(87,46,136,0.1);">
-            <button class="c-btn-danger" onclick="openModal('delete-group','${id}')">Delete Group</button>
+            <button class="c-btn-danger" onclick="openModal('delete-group','${id}')">Delete Planning Item</button>
           </div>`;
         saveBtn.textContent = 'Save';
+        saveBtn.style.display = '';
+        document.querySelector('.c-btn-cancel').style.display = '';
+
+      } else if (mode === 'edit-look') {
+        const group = groups.find(x => x.id === parentId);
+        const look = planningLooks(group).find(item => item.id === id);
+        if (!group || !look) return;
+        title.textContent = `Edit Look · ${group.name}`;
+        body.innerHTML = renderLookForm(look) + `
+          <div style="margin-top:1rem;padding-top:1rem;border-top:1px solid rgba(87,46,136,0.1);">
+            <button class="c-btn-danger" onclick="openModal('delete-look','${esc(id)}','${esc(parentId)}')">Delete Look</button>
+          </div>`;
+        saveBtn.textContent = 'Save Look';
         saveBtn.style.display = '';
         document.querySelector('.c-btn-cancel').style.display = '';
 
@@ -1811,8 +1816,16 @@
 
       } else if (mode === 'delete-group') {
         const g = groups.find(x => x.id === id);
-        title.textContent = 'Delete Costume Group';
-        body.innerHTML = `<p style="font-size:0.85rem;color:rgba(26,21,48,0.65);line-height:1.55;">Delete <strong>${esc(g ? g.name : '')}</strong>? All assignments to this group will also be removed. This cannot be undone.</p>`;
+        title.textContent = 'Delete Planning Item';
+        body.innerHTML = `<p style="font-size:0.85rem;color:rgba(26,21,48,0.65);line-height:1.55;">Delete <strong>${esc(g ? g.name : '')}</strong>? Its Looks and any assignment links to this Planning Item will also be removed. This cannot be undone.</p>`;
+        saveBtn.textContent = 'Delete';
+        saveBtn.style.background = '#d1523d';
+
+      } else if (mode === 'delete-look') {
+        const group = groups.find(x => x.id === parentId);
+        const look = planningLooks(group).find(item => item.id === id);
+        title.textContent = 'Delete Look';
+        body.innerHTML = `<p style="font-size:0.85rem;color:rgba(26,21,48,0.65);line-height:1.55;">Delete <strong>${esc(look ? look.name : '')}</strong> from <strong>${esc(group ? group.name : '')}</strong>? This cannot be undone.</p>`;
         saveBtn.textContent = 'Delete';
         saveBtn.style.background = '#d1523d';
 
@@ -1831,8 +1844,10 @@
     function closeModal() {
       document.getElementById('c-overlay').classList.remove('open');
       document.getElementById('c-btn-save').style.background = '';
+      document.getElementById('c-overlay').querySelector('.c-modal')?.classList.remove('wide');
       modalMode = null;
       modalEditId = null;
+      modalParentId = null;
     }
 
     function handleOverlayClick(e) {
@@ -1857,6 +1872,47 @@
         .filter(Boolean);
     }
 
+    function renderLookForm(look = {}) {
+      const status = look.approval_status || 'Draft';
+      return `
+        <div class="c-field"><label class="c-label">Look Name</label><input class="c-input" id="c-look-name" value="${esc(look.name || '')}" placeholder="e.g. Arrival, Jolly Holiday, Rooftop" autofocus /></div>
+        <div class="c-field"><label class="c-label">Description</label><textarea class="c-textarea" id="c-look-description" placeholder="Describe the visual direction, fabrics, silhouette, period, mood or director notes.">${esc(look.description || '')}</textarea></div>
+        <div class="c-field">
+          <label class="c-label">Inspiration Images</label>
+          <div id="c-inspiration-list" class="cp-image-url-list">
+            ${(look.inspiration_urls || []).length ? look.inspiration_urls.map(url => inspirationUrlRow(url)).join('') : inspirationUrlRow('')}
+          </div>
+          <button type="button" class="cp-detail-action" style="margin-top:0.55rem;" onclick="addInspirationUrlRow()">+ Add image URL</button>
+        </div>
+        <div class="c-field"><label class="c-label">Colour Palette</label><input class="c-input" id="c-look-palette" value="${esc((look.palette || []).join(', '))}" placeholder="Cream, Pale Blue, Mustard, Forest Green" /></div>
+        <div class="c-field"><label class="c-label">Scene Usage</label><input class="c-input" id="c-look-scenes" value="${esc((look.scenes || []).join(', '))}" placeholder="Scene 2, Scene 3, Scene 7" /></div>
+        <div class="c-field"><label class="c-label">Approval Status</label><select class="c-input" id="c-look-status">
+          ${APPROVAL_STATUSES.map(item => `<option value="${esc(item)}"${item === status ? ' selected' : ''}>${esc(item)}</option>`).join('')}
+        </select></div>`;
+    }
+
+    function collectLookForm(existingId) {
+      const name = (document.getElementById('c-look-name')?.value || '').trim();
+      if (!name) return null;
+      return normalizeLook({
+        id: existingId || uid('look'),
+        name,
+        description: document.getElementById('c-look-description')?.value || '',
+        inspiration_urls: collectInspirationUrls(),
+        palette: splitListValue(document.getElementById('c-look-palette')?.value || ''),
+        scenes: splitListValue(document.getElementById('c-look-scenes')?.value || ''),
+        approval_status: document.getElementById('c-look-status')?.value || 'Draft',
+      });
+    }
+
+    function replaceGroupMeta(groupId, updater) {
+      const group = groups.find(g => g.id === groupId);
+      if (!group) return null;
+      const meta = groupRecordNotes(group);
+      const nextMeta = updater(meta) || meta;
+      return { group, notes: serializeGroupNotes(nextMeta) };
+    }
+
     async function saveModal() {
       if (!modalMode) return;
 
@@ -1867,6 +1923,23 @@
           .insert({ production_id: prodId, name, sort_order: groups.length })
           .select().single();
         if (!error && data) groups.push(data);
+
+      } else if (modalMode === 'look') {
+        const look = collectLookForm();
+        if (!look || !modalParentId) return;
+        const payload = replaceGroupMeta(modalParentId, meta => {
+          meta.looks = [...(meta.looks || []), look];
+          return meta;
+        });
+        if (payload) {
+          const { data, error } = await sb.from('costume_groups')
+            .update({ notes: payload.notes, updated_at: new Date().toISOString() })
+            .eq('id', modalParentId).select().single();
+          if (!error && data) {
+            const idx = groups.findIndex(g => g.id === modalParentId);
+            if (idx !== -1) groups[idx] = data;
+          }
+        }
 
       } else if (modalMode === 'performer') {
         const name = (document.getElementById('c-name').value || '').trim();
@@ -1880,14 +1953,37 @@
       } else if (modalMode === 'edit-group') {
         const name = (document.getElementById('c-name').value || '').trim();
         const notes = (document.getElementById('c-notes').value || '').trim();
-        const inspirationUrls = collectInspirationUrls();
         if (!name) return;
+        const meta = groupRecordNotes(groups.find(g => g.id === modalEditId));
+        meta.notes = notes;
         const { data, error } = await sb.from('costume_groups')
-          .update({ name, notes: serializeGroupNotes(notes, inspirationUrls), updated_at: new Date().toISOString() })
+          .update({ name, notes: serializeGroupNotes(meta), updated_at: new Date().toISOString() })
           .eq('id', modalEditId).select().single();
         if (!error && data) {
           const idx = groups.findIndex(g => g.id === modalEditId);
           if (idx !== -1) groups[idx] = data;
+        }
+
+      } else if (modalMode === 'edit-look') {
+        const look = collectLookForm(modalEditId);
+        if (!look || !modalParentId) return;
+        const payload = replaceGroupMeta(modalParentId, meta => {
+          const currentLooks = (meta.looks && meta.looks.length) ? meta.looks : planningLooks(groups.find(g => g.id === modalParentId));
+          meta.looks = currentLooks.map(item => item.id === modalEditId ? look : item).map(item => {
+            const copy = Object.assign({}, item);
+            delete copy.legacy;
+            return copy;
+          });
+          return meta;
+        });
+        if (payload) {
+          const { data, error } = await sb.from('costume_groups')
+            .update({ notes: payload.notes, updated_at: new Date().toISOString() })
+            .eq('id', modalParentId).select().single();
+          if (!error && data) {
+            const idx = groups.findIndex(g => g.id === modalParentId);
+            if (idx !== -1) groups[idx] = data;
+          }
         }
 
       } else if (modalMode === 'edit-performer') {
@@ -1909,6 +2005,30 @@
         groups = groups.filter(g => g.id !== modalEditId);
         assignments = assignments.filter(a => a.group_id !== modalEditId);
         if (selectedGroupId === modalEditId) { selectedGroupId = null; renderAssignPerformers(); }
+
+      } else if (modalMode === 'delete-look') {
+        const payload = replaceGroupMeta(modalParentId, meta => {
+          const currentLooks = (meta.looks && meta.looks.length) ? meta.looks : planningLooks(groups.find(g => g.id === modalParentId));
+          meta.looks = currentLooks.filter(item => item.id !== modalEditId).map(item => {
+            const copy = Object.assign({}, item);
+            delete copy.legacy;
+            return copy;
+          });
+          if (modalEditId === 'legacy-concept') {
+            meta.notes = '';
+            meta.inspiration_urls = [];
+          }
+          return meta;
+        });
+        if (payload) {
+          const { data, error } = await sb.from('costume_groups')
+            .update({ notes: payload.notes, updated_at: new Date().toISOString() })
+            .eq('id', modalParentId).select().single();
+          if (!error && data) {
+            const idx = groups.findIndex(g => g.id === modalParentId);
+            if (idx !== -1) groups[idx] = data;
+          }
+        }
 
       } else if (modalMode === 'delete-performer') {
         await sb.from('costume_assignments').delete().eq('performer_id', modalEditId);
