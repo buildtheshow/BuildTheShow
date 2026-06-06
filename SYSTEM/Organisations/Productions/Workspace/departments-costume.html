@@ -585,10 +585,47 @@
     }
     .planning-board {
       display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 1.35rem;
       position: relative;
       z-index: 1;
+    }
+    .planning-section {
+      display: grid;
+      gap: 0.8rem;
+    }
+    .planning-section-head {
+      display: flex;
+      align-items: center;
+      gap: 0.65rem;
+      color: #572e88;
+      font-size: 0.78rem;
+      font-weight: 950;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+    .planning-section-head::after {
+      content: '';
+      height: 2px;
+      flex: 1;
+      border-radius: 999px;
+      background: linear-gradient(90deg, rgba(87,46,136,0.32), rgba(239,171,69,0.28), transparent);
+    }
+    .planning-section-count {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 1.55rem;
+      height: 1.35rem;
+      border-radius: 999px;
+      background: rgba(239,171,69,0.22);
+      color: #572e88;
+      font-size: 0.68rem;
+      letter-spacing: 0;
+    }
+    .planning-section-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 1.35rem;
     }
     .planning-wall {
       position: relative;
@@ -914,7 +951,7 @@
       .cp-detail-photo, .cp-detail-photo-placeholder { max-width: 260px; }
       .cp-detail-name { max-width: none; }
       .cp-group-card-grid { grid-template-columns: 1fr; }
-      .planning-board, .planning-looks { grid-template-columns: 1fr; }
+      .planning-section-grid, .planning-looks { grid-template-columns: 1fr; }
       .cp-cols, .assign-cols { grid-template-columns: 1fr; }
       .overview-stats { grid-template-columns: 1fr 1fr; }
       .hero-deco { display: none; }
@@ -1456,7 +1493,43 @@
     function renderGroupsList() {
       const el = document.getElementById('groups-list');
       if (!groups.length) { el.innerHTML = '<div class="cp-empty">No planning items yet. Add one to start building the visual direction.</div>'; return; }
-      el.innerHTML = groups.map(renderPlanningItemCard).join('');
+      const sections = groupedPlanningItems();
+      el.innerHTML = sections.map(section => `
+        <section class="planning-section">
+          <div class="planning-section-head">${esc(section.label)} <span class="planning-section-count">${section.items.length}</span></div>
+          <div class="planning-section-grid">${section.items.map(renderPlanningItemCard).join('')}</div>
+        </section>
+      `).join('');
+    }
+
+    function planningRoleBucket(group) {
+      const name = normalizeName(group?.name || '');
+      const rawType = String(charRoleMap[name] || '').trim().toLowerCase();
+      if (name === 'ensemble' || rawType === 'ensemble') return 'ensemble';
+      if (rawType === 'principal') return 'principal';
+      if (rawType === 'featured') return 'featured';
+      if (rawType === 'supporting') return 'supporting';
+      if (rawType === 'cameo') return 'cameo';
+      if (rawType === 'group' || rawType === 'chorus') return 'group';
+      return 'special';
+    }
+
+    function groupedPlanningItems() {
+      const configs = [
+        { key: 'principal', label: 'Principals', items: [] },
+        { key: 'featured', label: 'Featured', items: [] },
+        { key: 'supporting', label: 'Supporting', items: [] },
+        { key: 'cameo', label: 'Cameos', items: [] },
+        { key: 'group', label: 'Groups', items: [] },
+        { key: 'ensemble', label: 'Ensemble', items: [] },
+        { key: 'special', label: 'Special Looks', items: [] },
+      ];
+      const byKey = new Map(configs.map(section => [section.key, section]));
+      groups.forEach(group => {
+        const bucket = planningRoleBucket(group);
+        (byKey.get(bucket) || byKey.get('special')).items.push(group);
+      });
+      return configs.filter(section => section.items.length);
     }
 
     function approvalClass(status) {
