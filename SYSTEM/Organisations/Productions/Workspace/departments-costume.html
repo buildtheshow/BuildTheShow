@@ -619,6 +619,7 @@
       window._dbg_appRows = allApps.length;
       // Key applications by id, bookings by email (for name fallback)
       const appById = new Map(allApps.map(r => [String(r.id), r]));
+      const bkById = new Map(allBks.map(r => [String(r.id), r]));
       const bkByEmail = new Map();
       allBks.forEach(r => { if (r.email) bkByEmail.set(String(r.email).toLowerCase().trim(), r); });
 
@@ -630,20 +631,22 @@
         if (!appId || seenIds.has(appId)) return;
         seenIds.add(appId);
         const app = appById.get(appId);
+        const booking = bkById.get(appId);
+        const source = app || booking;
         const charName = row.character_id ? (characterMap.get(String(row.character_id))?.name || '') : 'Ensemble';
         // Get name from application; if null, fall back to the matching booking row by email
-        let name = acceptedApplicantName(app);
-        if (!name && app?.email) {
-          const bk = bkByEmail.get(String(app.email).toLowerCase().trim());
+        let name = acceptedApplicantName(source);
+        if (!name && source?.email) {
+          const bk = bkByEmail.get(String(source.email).toLowerCase().trim());
           name = acceptedApplicantName(bk) || '';
         }
         performers.push({
           id: appId,
-          name: name || app?.email || 'Performer',
+          name: name || source?.email || 'Performer',
           role: charName,
-          headshot_url: app?.headshot_url || '',
-          pronouns: app?.pronouns || '',
-          answers: applicantCustomAnswers(app),
+          headshot_url: source?.headshot_url || '',
+          pronouns: source?.pronouns || '',
+          answers: applicantCustomAnswers(source),
         });
       });
       performers.sort((a, b) => a.name.localeCompare(b.name));
