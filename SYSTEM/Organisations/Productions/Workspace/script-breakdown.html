@@ -2743,15 +2743,6 @@
           return;
         }
 
-        if (isLikelyContinuationLine(line) && lastNote) {
-          const names = extractKnownAndLooseNames(line);
-          if (names.length) {
-            applyImportedNamesToScene(currentScene, names);
-            lastNote.body += ` ${names.join(', ')}`;
-          }
-          return;
-        }
-
         const speaker = parseDialogueSpeaker(line);
         if (speaker && (profile === 'script' || profile === 'director_guide')) {
           applyImportedNamesToScene(currentScene, [speaker]);
@@ -2769,14 +2760,15 @@
         const stageDirection = parseStageDirectionLine(line);
         if (stageDirection) {
           currentScene.rawLines.push(stageDirection);
-          applyImportedNamesToScene(currentScene, extractKnownAndLooseNames(stageDirection));
+          // only link characters we already know — no loose name guessing from stage directions
+          applyImportedNamesToScene(currentScene, extractKnownCharactersOnly(stageDirection));
           lastNote = pushImportNote(currentScene, stageDirection, inferNoteType(stageDirection));
           return;
         }
 
         if (profile === 'scene_breakdown' || looksLikeDepartmentClue(line)) {
           currentScene.rawLines.push(line);
-          applyImportedNamesToScene(currentScene, extractKnownAndLooseNames(line));
+          // notes only — no character extraction from prose lines
           lastNote = pushImportNote(currentScene, line, inferNoteType(line));
         } else {
           currentScene.ignoredLines.push(line);
@@ -2933,20 +2925,24 @@
       return note;
     }
 
-    function extractKnownAndLooseNames(line) {
+    function extractKnownCharactersOnly(line) {
       const found = [];
       productionChars.forEach(char => {
         if (!char?.name) return;
         const re = new RegExp(`(^|[^A-Za-z])${regexEscape(char.name)}([^A-Za-z]|$)`, 'i');
         if (re.test(line)) found.push(char.name);
       });
-      if (found.length) return found;
+      return found;
+    }
+
+    function extractKnownAndLooseNames(line) {
+      const known = extractKnownCharactersOnly(line);
+      if (known.length) return known;
       return splitImportList(line).filter(name => {
         if (!/^[A-Z][A-Za-z .'\-]{1,42}$/.test(name)) return false;
         if (looksLikeImportedNoise(name)) return false;
         const words = name.split(/\s+/);
         if (words.length > 5) return false;
-        // reject multi-word strings where majority of content words are lowercase (sentence, not a name)
         if (words.length >= 3) {
           const lower = words.filter((w, i) => i > 0 && w.length > 2 && /^[a-z]/.test(w));
           if (lower.length >= Math.ceil(words.length * 0.5)) return false;
@@ -2989,19 +2985,6 @@
     }
 
     function enrichImportedScene(scene) {
-      const haystack = `${scene.title}\n${scene.rawLines.join('\n')}`;
-      const charMatches = [];
-      const groupMatches = [];
-      productionChars.forEach(char => {
-        if (!char?.name) return;
-        const re = new RegExp(`(^|[^A-Za-z])${regexEscape(char.name)}([^A-Za-z]|$)`, 'i');
-        if (!re.test(haystack)) return;
-        const roleType = String(char.role_type || '').toLowerCase();
-        if (roleType === 'group' || roleType === 'chorus' || roleType === 'ensemble') groupMatches.push(char.name);
-        else charMatches.push(char.id);
-      });
-      scene.characterIds = [...new Set([...(scene.characterIds || []), ...charMatches])];
-      scene.groups = [...new Set([...(scene.groups || []), ...groupMatches])];
       const existingNotes = scene.notes || [];
       const inferredNotes = scene.rawLines
         .filter(line => !productionChars.some(char => normalizeLoose(line) === normalizeLoose(char.name)))
