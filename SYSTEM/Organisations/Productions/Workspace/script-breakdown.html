@@ -101,6 +101,13 @@
     }
     .sb-scene-item:hover { background: rgba(87,46,136,0.05); }
     .sb-scene-item.active { background: rgba(87,46,136,0.09); }
+    .sb-scene-main {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      align-items: flex-start;
+      gap: 0.45rem;
+    }
 
     .sb-scene-num {
       font-size: 0.68rem;
@@ -125,6 +132,30 @@
       color: rgba(26,21,48,0.38);
       margin-top: 0.08rem;
     }
+
+    .sb-scene-delete {
+      width: 20px;
+      height: 20px;
+      border: none;
+      border-radius: 50%;
+      background: rgba(209,82,61,0.08);
+      color: #d1523d;
+      cursor: pointer;
+      font-size: 0.9rem;
+      line-height: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      opacity: 0.36;
+      transition: opacity 0.12s, background 0.12s;
+    }
+    .sb-scene-item:hover .sb-scene-delete,
+    .sb-scene-item.active .sb-scene-delete,
+    .sb-scene-delete:focus-visible {
+      opacity: 1;
+    }
+    .sb-scene-delete:hover { background: rgba(209,82,61,0.16); }
 
     /* ── MAIN CONTENT ── */
     .sb-content {
@@ -1211,11 +1242,14 @@
         actScenes.forEach(function (scene) {
           const active = scene.id === currentSceneId ? ' active' : '';
           html += `<div class="sb-scene-item${active}" onclick="selectScene('${esc(scene.id)}')">
-            <span class="sb-scene-num">${esc(scene.number || '')}</span>
-            <div>
-              <div class="sb-scene-name">${esc(scene.title)}</div>
-              ${scene.location ? `<div class="sb-scene-sub">${esc(scene.location)}</div>` : ''}
+            <div class="sb-scene-main">
+              <span class="sb-scene-num">${esc(scene.number || '')}</span>
+              <div>
+                <div class="sb-scene-name">${esc(scene.title)}</div>
+                ${scene.location ? `<div class="sb-scene-sub">${esc(scene.location)}</div>` : ''}
+              </div>
             </div>
+            <button class="sb-scene-delete" onclick="event.stopPropagation(); deleteSceneById('${esc(scene.id)}')" title="Delete scene" aria-label="Delete ${esc(scene.title)}">&times;</button>
           </div>`;
         });
         html += '</div>';
@@ -1227,8 +1261,11 @@
         orphans.forEach(function (scene) {
           const active = scene.id === currentSceneId ? ' active' : '';
           html += `<div class="sb-scene-item${active}" onclick="selectScene('${esc(scene.id)}')">
-            <span class="sb-scene-num">${esc(scene.number || '')}</span>
-            <div><div class="sb-scene-name">${esc(scene.title)}</div></div>
+            <div class="sb-scene-main">
+              <span class="sb-scene-num">${esc(scene.number || '')}</span>
+              <div><div class="sb-scene-name">${esc(scene.title)}</div></div>
+            </div>
+            <button class="sb-scene-delete" onclick="event.stopPropagation(); deleteSceneById('${esc(scene.id)}')" title="Delete scene" aria-label="Delete ${esc(scene.title)}">&times;</button>
           </div>`;
         });
         html += '</div>';
@@ -1482,23 +1519,31 @@
 
     async function deleteCurrentScene() {
       if (!editingSceneId) return;
-      const scene = scenes.find(s => s.id === editingSceneId);
+      await deleteSceneById(editingSceneId);
+    }
+
+    async function deleteSceneById(sceneId) {
+      const wasCurrent = currentSceneId === sceneId;
+      const scene = scenes.find(s => s.id === sceneId);
       const name = scene?.title || 'this scene';
       if (!confirm(`Delete "${name}" and all its characters, groups, and notes?`)) return;
 
-      await sb.from('production_scenes').delete().eq('id', editingSceneId);
-      scenes = scenes.filter(s => s.id !== editingSceneId);
+      await sb.from('production_scenes').delete().eq('id', sceneId);
+      scenes = scenes.filter(s => s.id !== sceneId);
       closeSceneModal();
-      currentSceneId = null;
-      sceneChars = [];
-      sceneGroups = [];
-      sceneNotes = [];
+      if (wasCurrent || editingSceneId === sceneId) {
+        currentSceneId = null;
+        editingSceneId = null;
+        sceneChars = [];
+        sceneGroups = [];
+        sceneNotes = [];
+      }
       renderLeftPanel();
 
-      const nextScene = scenes[0];
-      if (nextScene) {
+      const nextScene = wasCurrent ? scenes[0] : null;
+      if (wasCurrent && nextScene) {
         await selectScene(nextScene.id);
-      } else {
+      } else if (wasCurrent) {
         document.getElementById('sb-scene-view').style.display = 'none';
         document.getElementById('sb-empty').style.display = '';
       }
