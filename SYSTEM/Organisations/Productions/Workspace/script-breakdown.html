@@ -649,6 +649,18 @@
       transition: background 0.14s;
     }
     .sb-btn-save:hover { background: #4a2575; }
+    .sb-btn-danger {
+      padding: 0.48rem 1rem;
+      background: #d1523d;
+      color: #fff;
+      border: none;
+      border-radius: 7px;
+      font-size: 0.8rem;
+      font-weight: 800;
+      cursor: pointer;
+      margin-right: auto;
+    }
+    .sb-btn-danger:hover { background: #bd4532; }
 
     .sb-char-select-list {
       max-height: 300px;
@@ -691,6 +703,23 @@
       color: rgba(26,21,48,0.38);
       text-transform: capitalize;
     }
+    .sb-chip-remove {
+      width: 18px;
+      height: 18px;
+      border: none;
+      border-radius: 50%;
+      background: rgba(87,46,136,0.12);
+      color: #572e88;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-size: 0.9rem;
+      line-height: 1;
+      padding: 0;
+      margin-left: 0.1rem;
+    }
+    .sb-chip-remove:hover { background: rgba(209,82,61,0.12); color: #d1523d; }
 
     .sb-import-status {
       font-size: 0.78rem;
@@ -882,6 +911,7 @@
         <input class="sb-input" id="scene-desc-input" type="text" placeholder="e.g. Morning." />
       </div>
       <div class="sb-modal-actions">
+        <button class="sb-btn-danger" id="scene-delete-btn" onclick="deleteCurrentScene()" style="display:none;">Delete Scene</button>
         <button class="sb-btn-cancel" onclick="closeSceneModal()">Cancel</button>
         <button class="sb-btn-save" onclick="saveScene()">Save</button>
       </div>
@@ -1253,6 +1283,7 @@
           <span>&#128101;</span>
           <span>${esc(g.group_name)}</span>
           ${g.member_count ? `<span class="sb-group-count">${g.member_count}</span>` : ''}
+          <button class="sb-chip-remove" onclick="deleteGroup('${esc(g.id)}')" title="Remove group" aria-label="Remove ${esc(g.group_name)}">&times;</button>
         </div>`;
       }).join('');
 
@@ -1318,6 +1349,7 @@
       document.getElementById('scene-title-input').value = '';
       document.getElementById('scene-location-input').value = '';
       document.getElementById('scene-desc-input').value = '';
+      document.getElementById('scene-delete-btn').style.display = 'none';
       buildActSelect(null);
       document.getElementById('modal-scene').style.display = 'flex';
       setTimeout(function () { document.getElementById('scene-title-input').focus(); }, 60);
@@ -1332,6 +1364,7 @@
       document.getElementById('scene-title-input').value = scene.title || '';
       document.getElementById('scene-location-input').value = scene.location || '';
       document.getElementById('scene-desc-input').value = scene.description || '';
+      document.getElementById('scene-delete-btn').style.display = '';
       buildActSelect(scene.act_id);
       document.getElementById('modal-scene').style.display = 'flex';
     }
@@ -1385,6 +1418,30 @@
         if (data) { scenes.push(data); }
         closeSceneModal();
         renderLeftPanel();
+      }
+    }
+
+    async function deleteCurrentScene() {
+      if (!editingSceneId) return;
+      const scene = scenes.find(s => s.id === editingSceneId);
+      const name = scene?.title || 'this scene';
+      if (!confirm(`Delete "${name}" and all its characters, groups, and notes?`)) return;
+
+      await sb.from('production_scenes').delete().eq('id', editingSceneId);
+      scenes = scenes.filter(s => s.id !== editingSceneId);
+      closeSceneModal();
+      currentSceneId = null;
+      sceneChars = [];
+      sceneGroups = [];
+      sceneNotes = [];
+      renderLeftPanel();
+
+      const nextScene = scenes[0];
+      if (nextScene) {
+        await selectScene(nextScene.id);
+      } else {
+        document.getElementById('sb-scene-view').style.display = 'none';
+        document.getElementById('sb-empty').style.display = '';
       }
     }
 
@@ -1531,6 +1588,15 @@
       }).select().single();
       if (data) sceneGroups.push(data);
       closeGroupModal();
+      renderGroups();
+    }
+
+    async function deleteGroup(groupId) {
+      const group = sceneGroups.find(g => g.id === groupId);
+      const name = group?.group_name || 'this group';
+      if (!confirm(`Remove "${name}" from this scene?`)) return;
+      await sb.from('scene_groups').delete().eq('id', groupId);
+      sceneGroups = sceneGroups.filter(g => g.id !== groupId);
       renderGroups();
     }
 
