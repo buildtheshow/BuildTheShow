@@ -136,6 +136,7 @@
       budget:    'production-workspace.html',
       settings:  'production-workspace.html',
       emails:    'production-workspace.html',
+      test:      'production-workspace.html',
     };
     if (pageMap[tab]) {
       location.href = workspaceUrl(tab);
