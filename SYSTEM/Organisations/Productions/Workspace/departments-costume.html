@@ -498,6 +498,7 @@
 
     let sb, prodId;
     let performers = [], groups = [], assignments = [];
+    let charRoleMap = {}; // normalized name → role_type string
     let modalMode = null; // 'group' | 'performer' | 'edit-group' | 'edit-performer' | 'delete-group' | 'delete-performer'
     let modalEditId = null;
     let selectedGroupId = null;
@@ -553,11 +554,18 @@
     async function syncCostumeDataFromCastList() {
       try {
         const [charRes, assignRes] = await Promise.all([
-          sb.from('production_characters').select('id,name,sort_order,created_at').eq('production_id', prodId).order('sort_order').order('created_at'),
+          sb.from('production_characters').select('id,name,sort_order,created_at,role_type').eq('production_id', prodId).order('sort_order').order('created_at'),
           sb.from('casting_assignments').select('*').eq('production_id', prodId).eq('state', 'offer_accepted'),
         ]);
         const characters = charRes.data || [];
         const accepted = assignRes.data || [];
+
+        // Build name → role_type lookup for renderGroupsList
+        charRoleMap = {};
+        characters.forEach(function (c) {
+          if (c.name) charRoleMap[normalizeName(c.name)] = (c.role_type || '').trim();
+        });
+        charRoleMap['ensemble'] = 'Ensemble';
 
         await seedCostumeGroupsFromCharacters(characters, accepted);
         await seedCostumePerformersFromAcceptedCast(accepted, characters);
@@ -737,17 +745,37 @@
     function renderGroupsList() {
       const el = document.getElementById('groups-list');
       if (!groups.length) { el.innerHTML = '<div class="cp-empty">No costume groups yet. Add one to get started.</div>'; return; }
-      el.innerHTML = groups.map(g => {
-        const count = groupPerformerCount(g.id);
-        return `<div class="cp-row" onclick="openModal('edit-group','${g.id}')">
-          <div class="cp-row-icon"><img src="/ASSETS/Images/chm-costumes.svg?v=20260605" style="width:16px;height:16px;opacity:0.6;" alt="" /></div>
-          <div class="cp-row-body">
-            <div class="cp-row-name">${esc(g.name)}</div>
-            <div class="cp-row-meta">${count} performer${count !== 1 ? 's' : ''}</div>
-          </div>
-          <div class="cp-row-arrow">›</div>
-        </div>`;
-      }).join('');
+
+      const SECTION_ORDER = ['Principal','Lead','Featured','Supporting','Cameo','Ensemble'];
+      const buckets = {};
+      SECTION_ORDER.forEach(function (s) { buckets[s] = []; });
+      buckets['Other'] = [];
+
+      groups.forEach(function (g) {
+        const rt = charRoleMap[normalizeName(g.name)] || '';
+        const key = SECTION_ORDER.find(function (s) { return s.toLowerCase() === rt.toLowerCase(); }) || 'Other';
+        buckets[key].push(g);
+      });
+
+      const allSections = [...SECTION_ORDER, 'Other'];
+      let html = '';
+      allSections.forEach(function (section) {
+        const list = buckets[section];
+        if (!list.length) return;
+        html += `<div style="padding:0.55rem 1rem 0.2rem;font-size:0.7rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:rgba(26,21,48,0.38);">${section}</div>`;
+        list.forEach(function (g) {
+          const count = groupPerformerCount(g.id);
+          html += `<div class="cp-row" onclick="openModal('edit-group','${g.id}')">
+            <div class="cp-row-icon"><img src="/ASSETS/Images/chm-costumes.svg?v=20260605" style="width:16px;height:16px;opacity:0.6;" alt="" /></div>
+            <div class="cp-row-body">
+              <div class="cp-row-name">${esc(g.name)}</div>
+              <div class="cp-row-meta">${count} performer${count !== 1 ? 's' : ''}</div>
+            </div>
+            <div class="cp-row-arrow">›</div>
+          </div>`;
+        });
+      });
+      el.innerHTML = html;
     }
 
     function renderPerformersSummary() {
