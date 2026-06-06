@@ -712,6 +712,38 @@
       flex-shrink: 0;
       background: #eee9f4;
     }
+    .planning-item-avatar-stack {
+      width: 76px;
+      min-width: 76px;
+      display: grid;
+      grid-template-columns: repeat(2, 34px);
+      grid-auto-rows: 34px;
+      gap: 4px;
+      align-items: center;
+      justify-content: center;
+      padding-top: 1px;
+    }
+    .planning-item-stack-avatar {
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      object-fit: cover;
+      object-position: top;
+      border: 2px solid #fff;
+      box-shadow: 0 0 0 1px rgba(87,46,136,0.18), 0 2px 7px rgba(26,21,48,0.14);
+      background: #eee9f4;
+      color: #fff;
+      display: grid;
+      place-items: center;
+      font-size: 0.65rem;
+      font-weight: 950;
+      line-height: 1;
+      overflow: hidden;
+    }
+    .planning-item-stack-avatar.more {
+      background: #572e88;
+      color: #fff;
+    }
     .planning-item-name {
       min-width: 0;
       font-size: 1.1rem;
@@ -1645,13 +1677,12 @@
       const looks = planningLooks(group);
       const approvedCount = looks.filter(look => approvalClass(look.approval_status) === 'approved').length;
       const assignedPerformers = assignedPerformersForGroup(group.id);
-      const performerNames = assignedPerformers.map(performerCardDisplayName).filter(Boolean).join(', ');
-      const primaryPhoto = assignedPerformers.find(p => p.headshot_url)?.headshot_url || '';
+      const performerNames = planningItemPerformerLabel(assignedPerformers);
       return `<section class="planning-item-card">
         <div class="planning-item-head">
           <div>
             <div class="planning-item-title">
-              ${primaryPhoto ? `<img class="planning-item-avatar" src="${esc(primaryPhoto)}" alt="${esc(performerNames || group.name)}" />` : ''}
+              ${renderPlanningItemAvatar(assignedPerformers, group.name)}
               <div>
                 <div class="planning-item-name">
                   <span class="planning-item-character-name">${esc(group.name)}</span>${performerNames ? ` <span class="planning-item-performer-name">- ${esc(performerNames)}</span>` : ''}
@@ -1672,6 +1703,32 @@
           ? `<div class="planning-looks">${looks.map(look => renderLookCard(group, look)).join('')}</div>`
           : `<div class="planning-empty-look" onclick="openModal('look',null,'${esc(group.id)}')">Add the first Look for ${esc(group.name)}</div>`}
       </section>`;
+    }
+
+    function planningItemPerformerLabel(assignedPerformers) {
+      if (!assignedPerformers.length) return '';
+      if (assignedPerformers.length === 1) return performerCardDisplayName(assignedPerformers[0]);
+      return `${assignedPerformers.length} performers`;
+    }
+
+    function renderPlanningItemAvatar(assignedPerformers, groupName) {
+      if (!assignedPerformers.length) return '';
+      if (assignedPerformers.length === 1) {
+        const performer = assignedPerformers[0];
+        return performer.headshot_url
+          ? `<img class="planning-item-avatar" src="${esc(performer.headshot_url)}" alt="${esc(performerCardDisplayName(performer) || groupName)}" />`
+          : '';
+      }
+      const visible = assignedPerformers.slice(0, 3).map(function (performer) {
+        const name = performerCardDisplayName(performer) || performer.name || 'Performer';
+        return performer.headshot_url
+          ? `<img class="planning-item-stack-avatar" src="${esc(performer.headshot_url)}" alt="${esc(name)}" />`
+          : `<div class="planning-item-stack-avatar" style="background:${avatarColor(name)};">${esc(initials(name))}</div>`;
+      }).join('');
+      const more = assignedPerformers.length > 3
+        ? `<div class="planning-item-stack-avatar more">+${assignedPerformers.length - 3}</div>`
+        : '';
+      return `<div class="planning-item-avatar-stack" aria-label="${esc(`${assignedPerformers.length} assigned performers for ${groupName}`)}">${visible}${more}</div>`;
     }
 
     function renderPerformersFull() {
