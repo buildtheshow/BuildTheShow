@@ -2815,6 +2815,12 @@
           return;
         }
 
+        const standaloneChars = parseStandaloneCharacter(line);
+        if (standaloneChars && standaloneChars.length && (profile === 'script' || profile === 'director_guide')) {
+          applyImportedNamesToScene(currentScene, standaloneChars);
+          return;
+        }
+
         const productionTip = parseProductionTipLine(line, lines[index + 1]);
         if (productionTip && (profile === 'director_guide' || profile === 'script')) {
           result.summary.productionTips++;
@@ -2943,10 +2949,29 @@
     }
 
     function parseDialogueSpeaker(line) {
-      const match = String(line || '').match(/^([A-Z][A-Z .'\-]{1,42})(?:\s*\([^)]*\))?:\s+/);
-      if (!match) return null;
-      const name = titleCaseName(match[1]);
-      return looksLikeImportedNoise(name) ? null : name;
+      const raw = String(line || '').trim();
+      // format: (WINIFRED:) or (WINIFRED)
+      let match = raw.match(/^\(([A-Z][A-Z .'\-]{1,42}):?\)$/);
+      if (match) {
+        const name = titleCaseName(match[1]);
+        return looksLikeImportedNoise(name) ? null : name;
+      }
+      // format: WINIFRED: or WINIFRED: some dialogue (colon, text after optional)
+      match = raw.match(/^([A-Z][A-Z .'\-]{1,42}):(?:\s.*)?$/);
+      if (match) {
+        const name = titleCaseName(match[1]);
+        return looksLikeImportedNoise(name) ? null : name;
+      }
+      return null;
+    }
+
+    function parseStandaloneCharacter(line) {
+      // format: WINIFRED alone — all caps, entire line, nothing else
+      // only matches known production characters to avoid false positives from ALL CAPS headings
+      const raw = String(line || '').trim();
+      if (!/^[A-Z][A-Z .'\-]{1,42}$/.test(raw)) return null;
+      if (looksLikeImportedNoise(raw)) return null;
+      return extractKnownCharactersOnly(raw);
     }
 
     function parseStageDirectionLine(line) {
