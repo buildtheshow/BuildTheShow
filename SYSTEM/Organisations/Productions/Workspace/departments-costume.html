@@ -849,17 +849,31 @@
       // Build character id → character map
       const characterMap = new Map(characters.map(c => [String(c.id), c]));
 
-      // Performers come straight from cast_members — one clean query, no joins needed
-      performers = castMembers.map(function (m) {
-        return {
-          id: m.applicant_id,
-          name: m.preferred_name || m.name || m.email || '',
-          role: m.character_name || '',
-          headshot_url: m.headshot_url || '',
-          pronouns: m.pronouns || '',
-          answers: m.registration_answers || {},
-        };
-      }).filter(p => p.name).sort((a, b) => a.name.localeCompare(b.name));
+      // Performers come straight from cast_members — deduplicate by applicant_id, combine roles
+      const perfMap = new Map();
+      castMembers.forEach(function (m) {
+        const key = m.applicant_id;
+        const name = m.preferred_name || m.name || m.email || '';
+        if (!name) return;
+        if (perfMap.has(key)) {
+          const existing = perfMap.get(key);
+          if (m.character_name && !existing.roles.includes(m.character_name)) {
+            existing.roles.push(m.character_name);
+          }
+        } else {
+          perfMap.set(key, {
+            id: key,
+            name,
+            roles: m.character_name ? [m.character_name] : [],
+            headshot_url: m.headshot_url || '',
+            pronouns: m.pronouns || '',
+            answers: m.registration_answers || {},
+          });
+        }
+      });
+      performers = Array.from(perfMap.values()).map(function (p) {
+        return Object.assign(p, { role: p.roles.join(', ') });
+      }).sort((a, b) => a.name.localeCompare(b.name));
 
       // Seed costume_groups from characters
       await seedCostumeGroupsFromCharacters(characters, castMembers);
