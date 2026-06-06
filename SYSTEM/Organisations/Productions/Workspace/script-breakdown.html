@@ -3055,21 +3055,23 @@
     function prescanFrontMatter(lines, result, profile) {
       console.log('[BTS prescan] lines 0-200:', lines.slice(0, 200).map((l, i) => `${i}: ${l}`).join('\n'));
       let mode = null;
-      let foundStructure = false;
       for (let i = 0; i < Math.min(lines.length, 600); i++) {
         const line = lines[i].trim();
         if (!line) continue;
-        // only stop at scene headings once we've already collected songs or characters
-        if (foundStructure && parseSceneHeading(line, 0, profile === 'scene_breakdown')) break;
-        // act headings only reset mode when not already collecting songs/characters — MTI groups songs by act
-        if (parseActHeading(line)) { if (!mode) { } continue; }
-        if (/^(characters?|cast(?: of characters?)?|cast list|dramatis personae)$/i.test(line)) { mode = 'characters'; foundStructure = true; continue; }
-        if (/^(musical numbers?(?: list)?|songs?|scenes?\s*&\s*musical numbers?|musical numbers?\s*&\s*scenes?|song list|numbers?|act [ivx1-9]+\s*[-–]\s*musical numbers?)$/i.test(line)) { mode = 'songs'; foundStructure = true; continue; }
+        // only break on a scene heading when we are NOT actively collecting songs or characters
+        // (MTI's SCENES & MUSICAL NUMBERS list uses scene headings as grouping dividers within the list)
+        if (!mode && parseSceneHeading(line, 0, profile === 'scene_breakdown')) break;
+        // act headings are just grouping labels inside the list — ignore them, keep mode
+        if (parseActHeading(line)) continue;
+        if (/^(characters?|cast(?: of characters?)?|cast list|dramatis personae)$/i.test(line)) { mode = 'characters'; continue; }
+        if (/^(musical numbers?(?: list)?|songs?|scenes?\s*&\s*musical numbers?|musical numbers?\s*&\s*scenes?|song list|numbers?|act [ivx1-9]+\s*[-–]\s*musical numbers?)$/i.test(line)) { mode = 'songs'; continue; }
         if (/^(scene (?:list|breakdown)|scenes? listed?)$/i.test(line)) { mode = null; continue; }
         if (mode === 'characters') {
           const name = extractCharacterPoolEntry(line);
           if (name && !result.characterPool.find(c => c.name === name)) result.characterPool.push({ name });
         } else if (mode === 'songs') {
+          // skip scene-heading lines used as grouping dividers within the MTI songs list
+          if (parseSceneHeading(line, 0, false)) continue;
           const song = extractSongPoolEntry(line);
           if (song && song.title && !result.songs.find(s => s.title.toLowerCase() === song.title.toLowerCase())) result.songs.push(song);
         }
