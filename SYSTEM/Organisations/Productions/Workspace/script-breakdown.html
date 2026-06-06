@@ -746,12 +746,70 @@
       font-size: 0.65rem;
       font-weight: 800;
     }
+    .sb-import-toggle {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      margin-bottom: 0.7rem;
+    }
+    .sb-import-toggle label {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.45rem;
+      font-size: 0.72rem;
+      font-weight: 900;
+      color: #572e88;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+    .sb-import-toggle input { width: 16px; height: 16px; accent-color: #572e88; }
+    .sb-import-edit-grid {
+      display: grid;
+      grid-template-columns: 0.7fr 0.7fr 1.8fr;
+      gap: 0.55rem;
+      margin-bottom: 0.65rem;
+    }
+    .sb-import-field { display: grid; gap: 0.25rem; }
+    .sb-import-field.wide { grid-column: 1 / -1; }
+    .sb-import-field label {
+      font-size: 0.62rem;
+      font-weight: 900;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: rgba(26,21,48,0.42);
+    }
+    .sb-import-field input,
+    .sb-import-field textarea {
+      width: 100%;
+      border: 1.5px solid rgba(87,46,136,0.16);
+      border-radius: 8px;
+      padding: 0.52rem 0.6rem;
+      font: inherit;
+      font-size: 0.78rem;
+      color: #1a1530;
+      background: #fff;
+    }
+    .sb-import-field textarea { min-height: 88px; resize: vertical; line-height: 1.45; }
+    .sb-import-field input:focus,
+    .sb-import-field textarea:focus {
+      outline: none;
+      border-color: #572e88;
+      box-shadow: 0 0 0 3px rgba(87,46,136,0.08);
+    }
+    .sb-import-help {
+      font-size: 0.68rem;
+      line-height: 1.45;
+      color: rgba(26,21,48,0.46);
+      margin-top: 0.3rem;
+    }
 
     @media (max-width: 900px) {
       .prod-main { margin-left: 0; max-width: 100vw; }
       .sb-left { display: none; }
       .sb-content { padding: 4.5rem 1rem 2rem; }
       .sb-content::before { inset: 0; }
+      .sb-import-edit-grid { grid-template-columns: 1fr; }
     }
   </style>
 </head>
@@ -767,7 +825,7 @@
         <button class="sb-add-scene-btn" onclick="openAddSceneModal()" title="Add scene">+</button>
       </div>
       <div style="padding:0.75rem 1rem 0;border-bottom:1px solid rgba(26,21,48,0.06);">
-        <button class="sb-btn-secondary" style="width:100%;justify-content:center;" onclick="document.getElementById('pdf-import-input').click()">Upload PDF</button>
+        <button class="sb-btn-secondary" style="width:100%;justify-content:center;" onclick="document.getElementById('pdf-import-input').click()">Upload PDF or Photo</button>
       </div>
       <div id="acts-list"></div>
     </div>
@@ -797,7 +855,7 @@
               <div class="sb-scene-subtitle" id="sb-subtitle-text"></div>
             </div>
             <div class="sb-header-actions">
-              <button class="sb-btn-secondary" onclick="document.getElementById('pdf-import-input').click()">Upload PDF</button>
+              <button class="sb-btn-secondary" onclick="document.getElementById('pdf-import-input').click()">Upload PDF or Photo</button>
               <button class="sb-btn-add-note" onclick="openAddNoteModal()">+ Add Note</button>
             </div>
           </div>
@@ -888,7 +946,7 @@
       </div>
     </div>
   </div>
-  <input id="pdf-import-input" type="file" accept="application/pdf,.pdf" style="display:none;" onchange="handlePdfImportFile(event)" />
+  <input id="pdf-import-input" type="file" accept="application/pdf,image/*,.pdf,.png,.jpg,.jpeg,.webp" style="display:none;" onchange="handlePdfImportFile(event)" />
 
   <!-- Modal: Add/Edit Scene -->
   <div class="sb-overlay" id="modal-scene" style="display:none;" onclick="if(event.target===this)closeSceneModal()">
@@ -980,20 +1038,21 @@
     </div>
   </div>
 
-  <!-- Modal: PDF Import Review -->
+  <!-- Modal: Breakdown Import Review -->
   <div class="sb-overlay" id="modal-pdf-import" style="display:none;" onclick="if(event.target===this)closePdfImportModal()">
     <div class="sb-modal wide" onclick="event.stopPropagation()">
-      <div class="sb-modal-title">Review PDF Scene Import</div>
-      <div class="sb-import-status" id="pdf-import-status">Reading PDF...</div>
+      <div class="sb-modal-title">Review What BTS Read</div>
+      <div class="sb-import-status" id="pdf-import-status">Reading file...</div>
       <div class="sb-import-list" id="pdf-import-review-list"></div>
       <div class="sb-modal-actions">
         <button class="sb-btn-cancel" onclick="closePdfImportModal()">Cancel</button>
-        <button class="sb-btn-save" id="pdf-import-save-btn" onclick="savePdfImport()" disabled>Save Scenes</button>
+        <button class="sb-btn-save" id="pdf-import-save-btn" onclick="savePdfImport()" disabled>Save Reviewed Scenes</button>
       </div>
     </div>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="/SHARED/Navigation/production-sidebar-nav.js?v=11"></script>
   <script>
@@ -1600,40 +1659,42 @@
       renderGroups();
     }
 
-    // ── PDF IMPORT ─────────────────────────────────────────────
+    // ── BREAKDOWN IMPORT ───────────────────────────────────────
     async function handlePdfImportFile(event) {
       const file = event.target.files && event.target.files[0];
       event.target.value = '';
       if (!file) return;
-      if (!/pdf/i.test(file.type || file.name)) {
-        alert('Please upload a PDF file.');
+      const typeAndName = `${file.type || ''} ${file.name || ''}`;
+      const isPdf = /pdf/i.test(typeAndName);
+      const isImage = /^image\//i.test(file.type || '') || /\.(png|jpe?g|webp)$/i.test(file.name || '');
+      if (!isPdf && !isImage) {
+        alert('Please upload a PDF or image file.');
         return;
       }
 
-      openPdfImportModal('Reading PDF...');
+      openPdfImportModal(isImage ? 'Reading photo...' : 'Reading PDF...');
       try {
         if (window.pdfjsLib?.GlobalWorkerOptions) {
           window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
         }
-        const buffer = await file.arrayBuffer();
         const [text, uploadedPath] = await Promise.all([
-          extractPdfText(buffer),
-          uploadBreakdownPdf(file),
+          isImage ? extractImageText(file) : file.arrayBuffer().then(extractPdfText),
+          uploadBreakdownFile(file),
         ]);
         const draft = parseBreakdownText(text);
-        pendingPdfImport = { fileName: file.name, text, scenes: draft.scenes, uploadedPath };
+        pendingPdfImport = { fileName: file.name, fileType: isImage ? 'photo' : 'pdf', text, scenes: draft.scenes, uploadedPath };
         renderPdfImportReview();
       } catch (error) {
-        console.error('[BTS] PDF import failed', error);
+        console.error('[BTS] breakdown import failed', error);
         pendingPdfImport = null;
-        document.getElementById('pdf-import-status').textContent = 'Could not read this PDF. If it is scanned/image-only, it may need OCR first.';
+        document.getElementById('pdf-import-status').textContent = 'Could not read this file. For photos, try a clearer image with the text straight-on and well lit.';
         document.getElementById('pdf-import-save-btn').disabled = true;
       }
     }
 
     function openPdfImportModal(status) {
       pendingPdfImport = null;
-      document.getElementById('pdf-import-status').textContent = status || 'Reading PDF...';
+      document.getElementById('pdf-import-status').textContent = status || 'Reading file...';
       document.getElementById('pdf-import-review-list').innerHTML = '';
       document.getElementById('pdf-import-save-btn').disabled = true;
       document.getElementById('modal-pdf-import').style.display = 'flex';
@@ -1644,13 +1705,13 @@
       pendingPdfImport = null;
     }
 
-    async function uploadBreakdownPdf(file) {
+    async function uploadBreakdownFile(file) {
       const path = `${prodId}/script-breakdowns/${Date.now()}-${slugFileName(file.name)}`;
       const { error } = await sb.storage.from('production-files').upload(path, file, {
         upsert: false,
-        contentType: file.type || 'application/pdf',
+        contentType: file.type || 'application/octet-stream',
       });
-      if (error) console.warn('[BTS] PDF storage upload failed', error);
+      if (error) console.warn('[BTS] breakdown storage upload failed', error);
       return path;
     }
 
@@ -1666,6 +1727,20 @@
       }
       const text = pages.join('\n\n').replace(/\u00a0/g, ' ').trim();
       if (!text || text.length < 20) throw new Error('No selectable PDF text found.');
+      return text;
+    }
+
+    async function extractImageText(file) {
+      if (!window.Tesseract?.recognize) throw new Error('OCR reader did not load.');
+      const status = document.getElementById('pdf-import-status');
+      const result = await window.Tesseract.recognize(file, 'eng', {
+        logger: function (message) {
+          if (!message?.status || typeof message.progress !== 'number') return;
+          status.textContent = `Reading photo: ${message.status} (${Math.round(message.progress * 100)}%)...`;
+        },
+      });
+      const text = String(result?.data?.text || '').replace(/\u00a0/g, ' ').trim();
+      if (!text || text.length < 20) throw new Error('No readable image text found.');
       return text;
     }
 
@@ -1814,30 +1889,117 @@
       const list = document.getElementById('pdf-import-review-list');
       const scenesToShow = pendingPdfImport?.scenes || [];
       document.getElementById('pdf-import-status').textContent = scenesToShow.length
-        ? `Found ${scenesToShow.length} scene${scenesToShow.length === 1 ? '' : 's'} in ${pendingPdfImport.fileName}. Review before saving.`
-        : 'No scenes found. Try a PDF with selectable text and clear Scene headings.';
+        ? `This is a draft from ${pendingPdfImport.fileName}. Fix anything that looks wrong, then save only the scenes you want.`
+        : 'No scenes found. Try a clearer PDF/photo with visible Act and Scene headings.';
       saveBtn.disabled = !scenesToShow.length;
-      list.innerHTML = scenesToShow.map(scene => {
-        const charNames = scene.characterIds.map(id => productionChars.find(c => c.id === id)?.name).filter(Boolean);
+      list.innerHTML = scenesToShow.map((scene, index) => {
+        const charNames = scene.characterIds.map(id => productionChars.find(c => c.id === id)?.name).filter(Boolean).join(', ');
+        const notesText = scene.notes.map(note => note.body).filter(Boolean).join('\n');
         return `<div class="sb-import-scene">
-          <div class="sb-import-scene-title">${esc(scene.actTitle)} · Scene ${esc(scene.number)} · ${esc(scene.title)}</div>
-          <div class="sb-import-scene-meta">${scene.notes.length} note${scene.notes.length === 1 ? '' : 's'} proposed</div>
-          <div class="sb-import-chip-row">
-            ${charNames.map(name => `<span class="sb-import-chip">${esc(name)}</span>`).join('')}
-            ${scene.groups.map(name => `<span class="sb-import-chip">${esc(name)}</span>`).join('')}
+          <div class="sb-import-toggle">
+            <label><input type="checkbox" class="sb-import-include" data-import-index="${index}" checked /> Import this scene</label>
+            <span class="sb-import-scene-meta">${scene.notes.length} note${scene.notes.length === 1 ? '' : 's'} proposed</span>
+          </div>
+          <div class="sb-import-edit-grid" data-import-index="${index}">
+            <div class="sb-import-field">
+              <label>Act</label>
+              <input data-field="actNumber" type="number" min="1" value="${esc(scene.actNumber || 1)}" />
+            </div>
+            <div class="sb-import-field">
+              <label>Scene #</label>
+              <input data-field="number" type="number" min="1" value="${esc(scene.number || index + 1)}" />
+            </div>
+            <div class="sb-import-field">
+              <label>Scene Title</label>
+              <input data-field="title" type="text" value="${esc(scene.title || '')}" />
+            </div>
+            <div class="sb-import-field">
+              <label>Act Title</label>
+              <input data-field="actTitle" type="text" value="${esc(scene.actTitle || `Act ${scene.actNumber || 1}`)}" />
+            </div>
+            <div class="sb-import-field">
+              <label>Location</label>
+              <input data-field="location" type="text" value="${esc(scene.location || '')}" placeholder="optional" />
+            </div>
+            <div class="sb-import-field">
+              <label>Time / Description</label>
+              <input data-field="description" type="text" value="${esc(scene.description || '')}" placeholder="optional" />
+            </div>
+            <div class="sb-import-field wide">
+              <label>Characters BTS matched</label>
+              <input data-field="characters" type="text" value="${esc(charNames)}" placeholder="Comma-separated character names" />
+              <div class="sb-import-help">Use names from the cast list when possible. BTS will match them back to the existing characters.</div>
+            </div>
+            <div class="sb-import-field wide">
+              <label>Groups BTS matched</label>
+              <input data-field="groups" type="text" value="${esc(scene.groups.join(', '))}" placeholder="Comma-separated group names" />
+            </div>
+            <div class="sb-import-field wide">
+              <label>Scene Notes</label>
+              <textarea data-field="notes" placeholder="One note per line">${esc(notesText)}</textarea>
+              <div class="sb-import-help">Each line becomes a shared note. BTS will tag Costume, Props, Hair/Makeup, Stage Management, or Rehearsals from the wording.</div>
+            </div>
           </div>
         </div>`;
       }).join('');
     }
 
+    function collectPdfImportDrafts() {
+      const cards = [...document.querySelectorAll('.sb-import-scene')];
+      return cards.map((card, fallbackIndex) => {
+        const include = card.querySelector('.sb-import-include')?.checked;
+        if (!include) return null;
+        const readField = (field) => card.querySelector(`[data-field="${field}"]`)?.value?.trim() || '';
+        const actNumber = parseInt(readField('actNumber'), 10) || 1;
+        const sceneNumber = parseInt(readField('number'), 10) || fallbackIndex + 1;
+        const title = readField('title') || `Scene ${sceneNumber}`;
+        const characterIds = splitImportList(readField('characters'))
+          .map(findProductionCharacterByName)
+          .filter(Boolean)
+          .map(char => char.id);
+        const groups = splitImportList(readField('groups'));
+        const notes = readField('notes').split(/\n+/)
+          .map(line => line.replace(/\s+/g, ' ').trim())
+          .filter(Boolean)
+          .map(line => ({ body: line, note_type: inferNoteType(line), department_tags: inferDepartmentTags(line) }));
+        return {
+          actNumber,
+          actTitle: readField('actTitle') || `Act ${actNumber}`,
+          number: sceneNumber,
+          title,
+          location: readField('location'),
+          description: readField('description'),
+          characterIds: [...new Set(characterIds)],
+          groups: [...new Set(groups)],
+          notes,
+        };
+      }).filter(Boolean);
+    }
+
+    function splitImportList(value) {
+      return String(value || '').split(/[,;\n]+/).map(item => item.trim()).filter(Boolean);
+    }
+
+    function findProductionCharacterByName(name) {
+      const normalized = normalizeLoose(name);
+      return productionChars.find(char => normalizeLoose(char.name) === normalized)
+        || productionChars.find(char => normalizeLoose(char.name).includes(normalized) || normalized.includes(normalizeLoose(char.name)));
+    }
+
     async function savePdfImport() {
       if (!pendingPdfImport?.scenes?.length) return;
+      const drafts = collectPdfImportDrafts();
+      if (!drafts.length) {
+        document.getElementById('pdf-import-status').textContent = 'Nothing selected to save yet.';
+        return;
+      }
       const saveBtn = document.getElementById('pdf-import-save-btn');
       saveBtn.disabled = true;
-      document.getElementById('pdf-import-status').textContent = 'Saving imported scenes...';
+      document.getElementById('pdf-import-status').textContent = 'Saving reviewed scenes...';
 
       const actMap = new Map(acts.map(act => [Number(act.number), act]));
-      for (const draft of pendingPdfImport.scenes) {
+      let lastSceneId = null;
+      for (const draft of drafts) {
         let act = actMap.get(Number(draft.actNumber) || 1);
         if (!act) {
           const { data: newAct } = await sb.from('production_acts').insert({
@@ -1862,6 +2024,7 @@
         }).select().single();
         if (!scene) continue;
         scenes.push(scene);
+        lastSceneId = scene.id;
 
         if (draft.characterIds.length) {
           await sb.from('scene_characters').insert(draft.characterIds.map(id => ({
@@ -1885,14 +2048,14 @@
             body: note.body,
             note_type: note.note_type || 'general',
             department_tags: note.department_tags || [],
-            author_role: 'PDF Import',
+            author_role: 'File Import',
           })));
         }
       }
 
       closePdfImportModal();
       renderLeftPanel();
-      if (scenes.length) await selectScene(scenes[scenes.length - 1].id);
+      if (lastSceneId) await selectScene(lastSceneId);
     }
 
     document.addEventListener('DOMContentLoaded', init);
