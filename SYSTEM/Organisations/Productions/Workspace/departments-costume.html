@@ -561,22 +561,14 @@
       // Build character id → character map
       const characterMap = new Map(characters.map(c => [String(c.id), c]));
 
-      // Fetch applicant names for accepted cast
-      const applicantIds = [...new Set(castingRows.map(r => r.applicant_id).filter(Boolean))];
+      // Load all applicants for this production (same approach as workspace)
       let applicantMap = new Map();
-      if (applicantIds.length) {
-        const { data: appRows } = await sb.from('audition_applications')
-          .select('id, name, email, preferred_name, first_name, last_name, custom_answers, headshot_url, pronouns')
-          .in('id', applicantIds);
-        (appRows || []).forEach(r => applicantMap.set(String(r.id), r));
-        const missing = applicantIds.filter(id => !applicantMap.has(String(id)));
-        if (missing.length) {
-          const { data: bkRows } = await sb.from('audition_bookings')
-            .select('id, name, email, preferred_name, first_name, last_name, custom_answers, headshot_url, pronouns')
-            .in('id', missing);
-          (bkRows || []).forEach(r => applicantMap.set(String(r.id), r));
-        }
-      }
+      const [appRes, bkRes] = await Promise.all([
+        sb.from('audition_applications').select('id, name, email, preferred_name, first_name, last_name, custom_answers, headshot_url, pronouns').eq('production_id', prodId),
+        sb.from('audition_bookings').select('id, name, email, preferred_name, first_name, last_name, custom_answers, headshot_url, pronouns').eq('production_id', prodId),
+      ]);
+      (appRes.data || []).forEach(r => applicantMap.set(String(r.id), r));
+      (bkRes.data || []).forEach(r => { if (!applicantMap.has(String(r.id))) applicantMap.set(String(r.id), r); });
 
       // Build performers in memory — no separate table needed
       const seenNames = new Set();
