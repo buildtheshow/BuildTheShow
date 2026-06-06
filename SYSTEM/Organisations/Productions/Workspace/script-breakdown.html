@@ -2868,7 +2868,7 @@
       const match = raw.match(/^(.{2,80}?)(?:\s*\.{3,}\s*|\s{2,})([^.]{2,160})$/);
       if (!match) return null;
       const title = cleanSceneTitle(match[1]);
-      const names = splitImportList(match[2]).filter(name => name.length > 1);
+      const names = splitImportList(match[2]).filter(name => name.length > 1 && /^[A-Z]/.test(name) && !looksLikeImportedNoise(name));
       if (!title || !names.length || looksLikeImportedNoise(title)) return null;
       return { title, names };
     }
@@ -2906,7 +2906,19 @@
     }
 
     function looksLikeImportedNoise(line) {
-      return /^(track|cue|music|page|part|scene|act|all|company|ensemble)?$/i.test(String(line || '').trim()) || /^[&#b0-9œŒ‰j.\-\s]+$/.test(String(line || ''));
+      const clean = String(line || '').trim();
+      if (/^(track|cue|music|page|part|scene|act|all|company|ensemble)?$/i.test(clean)) return true;
+      if (/^[&#b0-9œŒ‰j.\-\s]+$/.test(clean)) return true;
+      // sheet music lyric: space-hyphen-space = syllabification between notes
+      if (/ - /.test(clean)) return true;
+      // lowercase-hyphen-lowercase mid-word (bring-ing, ex-act-ly, pen-du-lum)
+      if (/[a-z]-[a-z]/.test(clean)) return true;
+      // sentence fragment starting with article/preposition + 4+ words
+      if (/^(A|An|The|But|They|Hap|About|From|With|Whose|Who|What|When|How)\s/i.test(clean) && clean.split(/\s+/).length >= 4) return true;
+      // contains 2+ common function words = lyric phrase, not a name
+      const fnWords = clean.split(/\s+/).filter(w => /^(but|who'?s|it'?s|that|they|them|may|can|will|be|has|have|was|were|know|or|and|now|blow|what|whose|when|how|so|for|not|by|his|her|its|my|me|us|him|we|you|keeps?|pass(ed)?|gone|sad|bad)$/i.test(w));
+      if (fnWords.length >= 2) return true;
+      return false;
     }
 
     function titleCaseName(name) {
@@ -2929,7 +2941,18 @@
         if (re.test(line)) found.push(char.name);
       });
       if (found.length) return found;
-      return splitImportList(line).filter(name => /^[A-Z][A-Za-z .'\-]{1,42}$/.test(name));
+      return splitImportList(line).filter(name => {
+        if (!/^[A-Z][A-Za-z .'\-]{1,42}$/.test(name)) return false;
+        if (looksLikeImportedNoise(name)) return false;
+        const words = name.split(/\s+/);
+        if (words.length > 5) return false;
+        // reject multi-word strings where majority of content words are lowercase (sentence, not a name)
+        if (words.length >= 3) {
+          const lower = words.filter((w, i) => i > 0 && w.length > 2 && /^[a-z]/.test(w));
+          if (lower.length >= Math.ceil(words.length * 0.5)) return false;
+        }
+        return true;
+      });
     }
 
     function applyImportedNamesToScene(scene, names) {
