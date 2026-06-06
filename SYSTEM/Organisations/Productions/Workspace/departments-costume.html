@@ -561,24 +561,32 @@
       // Build character id → character map
       const characterMap = new Map(characters.map(c => [String(c.id), c]));
 
-      // Load all applicants for this production (same approach as workspace)
-      let applicantMap = new Map();
+      // Load all applicants — full row, same as workspace, keyed by id AND email
       const [appRes, bkRes] = await Promise.all([
-        sb.from('audition_applications').select('id, name, email, preferred_name, first_name, last_name, custom_answers, headshot_url, pronouns').eq('production_id', prodId),
-        sb.from('audition_bookings').select('id, name, email, preferred_name, first_name, last_name, custom_answers, headshot_url, pronouns').eq('production_id', prodId),
+        sb.from('audition_applications').select('*').eq('production_id', prodId),
+        sb.from('audition_bookings').select('*').eq('production_id', prodId),
       ]);
-      (appRes.data || []).forEach(r => applicantMap.set(String(r.id), r));
-      (bkRes.data || []).forEach(r => { if (!applicantMap.has(String(r.id))) applicantMap.set(String(r.id), r); });
+      const allApps = appRes.data || [];
+      const allBks = bkRes.data || [];
+      window._dbg_castRows = castingRows.length;
+      window._dbg_appRows = allApps.length;
+      // Key by id for direct FK lookup
+      const appById = new Map(allApps.map(r => [String(r.id), r]));
+      // Key by email as fallback (booking email → app row)
+      const appByEmail = new Map();
+      allApps.forEach(r => { if (r.email) appByEmail.set(String(r.email).toLowerCase().trim(), r); });
+      allBks.forEach(r => { if (r.email && !appByEmail.has(String(r.email).toLowerCase().trim())) appByEmail.set(String(r.email).toLowerCase().trim(), r); });
 
       // Build performers in memory — no separate table needed
       const seenNames = new Set();
       performers = [];
       castingRows.forEach(function (row) {
-        const app = applicantMap.get(String(row.applicant_id || ''));
-        const name = acceptedApplicantName(app);
+        // Try by applicant_id first, fall back to email match
+        let app = appById.get(String(row.applicant_id || ''));
+        const charName = row.character_id ? (characterMap.get(String(row.character_id))?.name || '') : 'Ensemble';
+        const name = acceptedApplicantName(app) || (app ? (app.email || '') : '');
         if (!name || seenNames.has(normalizeName(name))) return;
         seenNames.add(normalizeName(name));
-        const charName = row.character_id ? (characterMap.get(String(row.character_id))?.name || '') : 'Ensemble';
         performers.push({ id: row.applicant_id, name, role: charName, headshot_url: app?.headshot_url || '', pronouns: app?.pronouns || '' });
       });
       performers.sort((a, b) => a.name.localeCompare(b.name));
@@ -695,7 +703,7 @@
     function renderPerformersSummary() {
       const el = document.getElementById('performers-summary-list');
       if (!performers.length) {
-        el.innerHTML = '<div class="cp-empty" style="grid-column:1/-1;">No accepted cast yet.</div>';
+        el.innerHTML = `<div class="cp-empty" style="grid-column:1/-1;">No accepted cast found. (casting rows loaded: ${window._dbg_castRows||0}, applicants loaded: ${window._dbg_appRows||0})</div>`;
         return;
       }
       el.innerHTML = performers.map(function (p) {
