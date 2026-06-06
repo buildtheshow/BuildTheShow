@@ -416,7 +416,7 @@
                 <div class="cp-col-sub">Cast members in your production.</div>
               </div>
             </div>
-            <div id="performers-summary-list" style="display:grid;grid-template-columns:repeat(6,1fr);gap:0.75rem;padding:0.25rem 0;">
+            <div id="performers-summary-list" style="display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:0.75rem;padding:0.25rem 0;align-items:start;">
               <div class="cp-empty" style="grid-column:1/-1;">Loading cast...</div>
             </div>
           </div>
@@ -578,16 +578,17 @@
       allBks.forEach(r => { if (r.email && !appByEmail.has(String(r.email).toLowerCase().trim())) appByEmail.set(String(r.email).toLowerCase().trim(), r); });
 
       // Build performers in memory — no separate table needed
-      const seenNames = new Set();
+      const seenIds = new Set();
       performers = [];
       castingRows.forEach(function (row) {
-        // Try by applicant_id first, fall back to email match
-        let app = appById.get(String(row.applicant_id || ''));
+        const appId = String(row.applicant_id || '');
+        if (!appId || seenIds.has(appId)) return;
+        seenIds.add(appId);
+        const app = appById.get(appId);
         const charName = row.character_id ? (characterMap.get(String(row.character_id))?.name || '') : 'Ensemble';
-        const name = acceptedApplicantName(app) || (app ? (app.email || '') : '');
-        if (!name || seenNames.has(normalizeName(name))) return;
-        seenNames.add(normalizeName(name));
-        performers.push({ id: row.applicant_id, name, role: charName, headshot_url: app?.headshot_url || '', pronouns: app?.pronouns || '' });
+        // Use every possible name field — fall back to email so every card has something
+        const name = acceptedApplicantName(app) || (app?.email || '');
+        performers.push({ id: appId, name: name || 'Performer', role: charName, headshot_url: app?.headshot_url || '', pronouns: app?.pronouns || '' });
       });
       performers.sort((a, b) => a.name.localeCompare(b.name));
 
