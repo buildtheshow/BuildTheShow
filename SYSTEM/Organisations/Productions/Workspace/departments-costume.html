@@ -829,7 +829,7 @@
     async function loadAll() {
       const [charRes, castRes, gRes, aRes] = await Promise.all([
         sb.from('production_characters').select('id,name,role_type').eq('production_id', prodId).order('sort_order').order('name'),
-        sb.from('casting_assignments').select('*').eq('production_id', prodId).in('state', ['chosen', 'offer_accepted']),
+        sb.from('casting_assignments').select('*, audition_applications(id, name, preferred_name, headshot_url, pronouns, email), audition_bookings(id, name, preferred_name, headshot_url, pronouns, email)').eq('production_id', prodId).in('state', ['chosen', 'offer_accepted']),
         sb.from('costume_groups').select('*').eq('production_id', prodId).order('sort_order').order('name'),
         sb.from('costume_assignments').select('*').eq('production_id', prodId),
       ]);
@@ -849,31 +849,22 @@
       // Build character id → character map
       const characterMap = new Map(characters.map(c => [String(c.id), c]));
 
-      // Load both tables — applicant_id may point to either
-      const [appRes, bkRes] = await Promise.all([
-        sb.from('audition_applications').select('id,name,preferred_name,first_name,last_name,headshot_url,pronouns,email,custom_answers').eq('production_id', prodId),
-        sb.from('audition_bookings').select('id,name,preferred_name,first_name,last_name,headshot_url,pronouns,email,custom_answers').eq('production_id', prodId),
-      ]);
-      const personById = new Map();
-      (appRes.data || []).forEach(r => personById.set(String(r.id), r));
-      (bkRes.data || []).forEach(r => { if (!personById.has(String(r.id))) personById.set(String(r.id), r); });
-
-      // Build performers from casting_assignments
+      // Build performers using Supabase-joined data — no manual ID matching needed
       const seenIds = new Set();
       performers = [];
       castingRows.forEach(function (row) {
         const id = String(row.applicant_id || '');
         if (!id || seenIds.has(id)) return;
         seenIds.add(id);
-        const p = personById.get(id);
+        // Use whichever joined table has data
+        const p = row.audition_applications || row.audition_bookings || null;
         const charName = row.character_id ? (characterMap.get(String(row.character_id))?.name || '') : 'Ensemble';
         performers.push({
           id,
-          name: p?.name || p?.preferred_name || p?.email || 'Performer',
+          name: p?.name || p?.preferred_name || p?.email || '',
           role: charName,
           headshot_url: p?.headshot_url || '',
           pronouns: p?.pronouns || '',
-          answers: applicantCustomAnswers(p),
         });
       });
       performers.sort((a, b) => a.name.localeCompare(b.name));
@@ -1076,6 +1067,12 @@
       return groupInspirationUrls(group)[0] || '';
     }
 
+    function performerRoleTypeLabel(p) {
+      const roleType = charRoleMap[normalizeName(p?.role || '')] || '';
+      if (!roleType) return normalizeName(p?.role || '') === 'ensemble' ? 'Ensemble' : 'Role';
+      return roleType;
+    }
+
     function groupPerformerCount(groupId) {
       return assignments.filter(a => a.group_id === groupId).length;
     }
@@ -1180,19 +1177,170 @@
           const g = groups.find(x => x.id === gid);
           return g ? `<span class="track-pill"><img src="/ASSETS/Images/chm-costumes.svg?v=20260605" style="width:16px;height:16px;opacity:0.6;" alt="" /> ${esc(g.name)}</span>` : '';
         }).join('');
-        return `<div class="perf-card">
+        return `<div class="perf-card" onclick="openPerformerDetail('${esc(p.id)}')" style="cursor:pointer;">
           <div class="perf-card-row">
             <div class="cp-row-avatar" style="background:${color};width:38px;height:38px;font-size:0.82rem;">${initials(p.name)}</div>
             <div class="perf-card-body">
               <div class="perf-card-name">${esc(p.name)}</div>
               <div class="perf-card-role">${esc(p.role || 'No role set')}</div>
             </div>
-            <button onclick="openModal('edit-performer','${p.id}')" style="border:none;background:none;cursor:pointer;font-size:0.75rem;color:rgba(26,21,48,0.35);padding:0.25rem 0.5rem;">Edit</button>
+            <button onclick="event.stopPropagation();openModal('edit-performer','${p.id}')" style="border:none;background:none;cursor:pointer;font-size:0.75rem;color:rgba(26,21,48,0.35);padding:0.25rem 0.5rem;">Edit</button>
           </div>
           ${gIds.length ? `<div class="perf-card-groups">${pills}</div>` : '<div style="padding:0 1.25rem 0.75rem;font-size:0.75rem;color:rgba(26,21,48,0.35);">Not assigned to any groups yet.</div>'}
           ${renderPerformerCostumeData(p)}
         </div>`;
       }).join('');
+    }
+
+    function openPerformerDetail(id) {
+      selectedPerformerId = id;
+      document.getElementById('performers-list-view')?.classList.add('is-hidden');
+      document.getElementById('performer-detail-view')?.classList.remove('is-hidden');
+      renderPerformerDetail();
+    }
+
+    function closePerformerDetail() {
+      selectedPerformerId = null;
+      document.getElementById('performer-detail-view')?.classList.add('is-hidden');
+      document.getElementById('performers-list-view')?.classList.remove('is-hidden');
+    }
+
+    function movePerformerDetail(offset) {
+      const index = performers.findIndex(p => p.id === selectedPerformerId);
+      if (index < 0 || !performers.length) return;
+      const nextIndex = (index + offset + performers.length) % performers.length;
+      selectedPerformerId = performers[nextIndex].id;
+      renderPerformerDetail();
+    }
+
+    function performerAssignedGroups(p) {
+      const ids = performerGroupIds(p.id);
+      return ids.map(id => groups.find(g => g.id === id)).filter(Boolean);
+    }
+
+    function firstCostumeAnswer(answers, groupsOfKeys) {
+      for (const keys of groupsOfKeys) {
+        const value = costumeAnswerValue(answers, keys);
+        if (value) return value;
+      }
+      return '';
+    }
+
+    function detailInfoItems(items) {
+      const clean = items.filter(item => item.value);
+      if (!clean.length) return '<div class="cp-info-label">No saved answers</div>';
+      return clean.map(item => `<div class="cp-info-item">
+        <div class="cp-info-value">${esc(item.value)}</div>
+        <div class="cp-info-label">${esc(item.label)}</div>
+      </div>`).join('');
+    }
+
+    function detailPhotoHtml(p) {
+      return p.headshot_url
+        ? `<img class="cp-detail-photo" src="${esc(p.headshot_url)}" alt="${esc(p.name)}" onerror="this.outerHTML='<div class=&quot;cp-detail-photo-placeholder&quot;>${esc(initials(p.name))}</div>'" />`
+        : `<div class="cp-detail-photo-placeholder">${esc(initials(p.name))}</div>`;
+    }
+
+    function renderAssignedGroupCard(group) {
+      const img = primaryGroupImage(group);
+      const count = groupPerformerCount(group.id);
+      return `<article class="cp-group-card" onclick="openModal('edit-group','${esc(group.id)}')">
+        ${img ? `<img class="cp-group-card-img" src="${esc(img)}" alt="${esc(group.name)} inspiration" />` : '<div class="cp-group-card-placeholder">Add inspiration</div>'}
+        <div class="cp-group-card-body">
+          <div>
+            <div class="cp-group-card-name">${esc(group.name)}</div>
+            <div class="cp-group-card-meta">${count} performer${count === 1 ? '' : 's'}</div>
+          </div>
+          <div class="cp-row-arrow">›</div>
+        </div>
+      </article>`;
+    }
+
+    function renderPerformerDetail() {
+      const el = document.getElementById('performer-detail-view');
+      const p = performers.find(x => x.id === selectedPerformerId);
+      if (!el || !p) return;
+
+      const answers = p.answers || {};
+      const sections = costumeKnownAnswerSections(answers);
+      const assignedGroups = performerAssignedGroups(p);
+      const sensory = costumeAnswerValue(answers, ['cm_sensory_notes', 'Sensory notes']) ||
+        costumeAnswerValue(answers, ['cm_costume_notes', 'Costume concerns or special considerations']) ||
+        costumeAnswerValue(answers, ['cm_allergy_notes', 'Makeup or material allergies']);
+      const hairPart = firstCostumeAnswer(answers, [
+        ['Hair part', 'Hair Part', 'Preferred hair part'],
+        ['Wig considerations'],
+      ]);
+
+      el.innerHTML = `
+        <div class="cp-detail-top">
+          <div class="cp-breadcrumb">
+            <button onclick="closePerformerDetail()">Costumes, Hair &amp; Makeup</button>
+            <span>›</span>
+            <button onclick="closePerformerDetail()">Performers</button>
+            <span>›</span>
+            <span>${esc(p.name)}</span>
+          </div>
+          <div class="cp-detail-actions">
+            <button class="cp-detail-action" onclick="movePerformerDetail(-1)">← Previous</button>
+            <button class="cp-detail-action" onclick="movePerformerDetail(1)">Next →</button>
+            <button class="cp-add-btn" onclick="openModal('edit-performer','${esc(p.id)}')">Edit</button>
+          </div>
+        </div>
+        <div class="cp-detail-grid">
+          <div>${detailPhotoHtml(p)}</div>
+          <div class="cp-detail-identity">
+            <div class="cp-detail-name">${esc(p.name)}</div>
+            <div class="cp-detail-role-line"><span class="cp-role-chip">${esc(performerRoleTypeLabel(p))}</span><span>${esc(p.role || 'No role set')}</span></div>
+            <div class="cp-status-stack">
+              <div class="cp-status-row"><div class="cp-status-icon">✓</div><div><div class="cp-status-main">Measurements</div><div class="cp-status-sub">${sections.sizes.length ? 'Complete' : 'Missing'}</div></div></div>
+              <div class="cp-status-row"><div class="cp-status-icon">✓</div><div><div class="cp-status-main">Hair Information</div><div class="cp-status-sub">${sections.hairMakeup.length ? 'Complete' : 'Missing'}</div></div></div>
+              <div class="cp-status-row"><div class="cp-status-icon">✓</div><div><div class="cp-status-main">Groups Assigned</div><div class="cp-status-sub">${assignedGroups.length} Group${assignedGroups.length === 1 ? '' : 's'}</div></div></div>
+              <div class="cp-status-row"><div class="cp-status-icon warn">♡</div><div><div class="cp-status-main">Sensory Note</div><div class="cp-status-sub">${sensory ? 'On File' : 'None'}</div></div></div>
+            </div>
+          </div>
+          <section class="cp-info-card sizes">
+            <div class="cp-info-icon">⌁</div>
+            <div class="cp-info-title">Sizes</div>
+            ${detailInfoItems([
+              { label: 'Top', value: costumeAnswerValue(answers, ['cm_top_size', 'Top Size']) },
+              { label: 'Bottom', value: costumeAnswerValue(answers, ['cm_bottom_size', 'Bottom Size']) },
+              { label: 'Dress', value: costumeAnswerValue(answers, ['cm_dress_size', 'Dress Size']) },
+              { label: 'Shoes', value: costumeAnswerValue(answers, ['cm_shoe_size', 'Shoe Size']) },
+              { label: 'Height', value: costumeAnswerValue(answers, ['cm_height', 'Height']) },
+            ])}
+          </section>
+          <section class="cp-info-card hair">
+            <div class="cp-info-icon">♧</div>
+            <div class="cp-info-title">Hair</div>
+            ${detailInfoItems([
+              { label: 'Length', value: costumeAnswerValue(answers, ['cm_hair_length', 'Hair Length']) },
+              { label: 'Colour', value: costumeAnswerValue(answers, ['cm_hair_colour', 'Hair Colour', 'Hair Color']) },
+              { label: 'Part/Wig', value: hairPart },
+            ])}
+          </section>
+          <section class="cp-info-card notes">
+            <div class="cp-info-icon">♡</div>
+            <div class="cp-info-title">Sensory Notes</div>
+            <div class="cp-info-note">${sensory ? esc(sensory) : 'None on file'}</div>
+          </section>
+          <section class="cp-info-card groups">
+            <div class="cp-info-icon">⌂</div>
+            <div class="cp-info-title">Costume Groups</div>
+            <div class="cp-info-group-count">${assignedGroups.length}</div>
+            <div class="cp-info-label">Assigned</div>
+            <div class="cp-info-groups-list">${assignedGroups.slice(0, 4).map(g => `<div>${esc(g.name)}</div>`).join('') || '<div>None assigned</div>'}</div>
+          </section>
+        </div>
+        <section class="cp-assigned-section">
+          <div class="cp-assigned-title">Assigned Costume Groups (${assignedGroups.length})</div>
+          <div class="cp-group-card-grid">
+            ${assignedGroups.map(renderAssignedGroupCard).join('')}
+            <article class="cp-group-card" style="border-style:dashed;display:flex;align-items:center;justify-content:center;min-height:180px;cursor:pointer;" onclick="openModal('group')">
+              <div style="text-align:center;color:#572e88;font-weight:900;"><div style="font-size:2rem;line-height:1;">+</div><div>Add<br>Costume Group</div></div>
+            </article>
+          </div>
+        </section>`;
     }
 
     function renderAssignGroups() {
@@ -1275,6 +1423,7 @@
       renderAssignGroups();
       renderTracks();
       renderPerformersFull();
+      if (selectedPerformerId) renderPerformerDetail();
       renderOverview();
     }
 
@@ -1308,10 +1457,18 @@
       } else if (mode === 'edit-group') {
         const g = groups.find(x => x.id === id);
         if (!g) return;
+        const groupMeta = groupRecordNotes(g);
         title.textContent = 'Edit Costume Group';
         body.innerHTML = `
           <div class="c-field"><label class="c-label">Group Name</label><input class="c-input" id="c-name" value="${esc(g.name)}" autofocus /></div>
-          <div class="c-field"><label class="c-label">Notes</label><input class="c-input" id="c-notes" value="${esc(g.notes || '')}" placeholder="Optional notes" /></div>
+          <div class="c-field"><label class="c-label">Notes</label><input class="c-input" id="c-notes" value="${esc(groupMeta.notes || '')}" placeholder="Optional notes" /></div>
+          <div class="c-field">
+            <label class="c-label">Inspiration Photos</label>
+            <div id="c-inspiration-list" class="cp-image-url-list">
+              ${groupMeta.inspiration_urls.length ? groupMeta.inspiration_urls.map(url => inspirationUrlRow(url)).join('') : inspirationUrlRow('')}
+            </div>
+            <button type="button" class="cp-detail-action" style="margin-top:0.55rem;" onclick="addInspirationUrlRow()">+ Add photo URL</button>
+          </div>
           <div style="margin-top:1rem;padding-top:1rem;border-top:1px solid rgba(87,46,136,0.1);">
             <button class="c-btn-danger" onclick="openModal('delete-group','${id}')">Delete Group</button>
           </div>`;
@@ -1364,6 +1521,24 @@
       if (e.target === document.getElementById('c-overlay')) closeModal();
     }
 
+    function inspirationUrlRow(value) {
+      return `<div class="cp-image-url-row">
+        <input class="c-input c-inspiration-url" value="${esc(value || '')}" placeholder="https://..." />
+        <button type="button" class="cp-detail-action" onclick="this.closest('.cp-image-url-row')?.remove()">Remove</button>
+      </div>`;
+    }
+
+    function addInspirationUrlRow() {
+      const list = document.getElementById('c-inspiration-list');
+      if (list) list.insertAdjacentHTML('beforeend', inspirationUrlRow(''));
+    }
+
+    function collectInspirationUrls() {
+      return [...document.querySelectorAll('.c-inspiration-url')]
+        .map(input => String(input.value || '').trim())
+        .filter(Boolean);
+    }
+
     async function saveModal() {
       if (!modalMode) return;
 
@@ -1387,9 +1562,10 @@
       } else if (modalMode === 'edit-group') {
         const name = (document.getElementById('c-name').value || '').trim();
         const notes = (document.getElementById('c-notes').value || '').trim();
+        const inspirationUrls = collectInspirationUrls();
         if (!name) return;
         const { data, error } = await sb.from('costume_groups')
-          .update({ name, notes: notes || null, updated_at: new Date().toISOString() })
+          .update({ name, notes: serializeGroupNotes(notes, inspirationUrls), updated_at: new Date().toISOString() })
           .eq('id', modalEditId).select().single();
         if (!error && data) {
           const idx = groups.findIndex(g => g.id === modalEditId);
@@ -1425,6 +1601,7 @@
 
       closeModal();
       renderAll();
+      if (selectedPerformerId) renderPerformerDetail();
     }
 
     // ── Tab navigation ────────────────────────────────────────────────────────
