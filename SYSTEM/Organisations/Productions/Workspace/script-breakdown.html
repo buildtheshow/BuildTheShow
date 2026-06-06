@@ -834,6 +834,53 @@
       color: rgba(26,21,48,0.46);
       margin-top: 0.3rem;
     }
+    .sb-import-profile-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 0.6rem;
+      margin-bottom: 0.9rem;
+    }
+    .sb-import-profile {
+      border: 1.5px solid rgba(87,46,136,0.14);
+      border-radius: 10px;
+      padding: 0.8rem;
+      background: #fff;
+      cursor: pointer;
+      transition: border-color 0.12s, background 0.12s, box-shadow 0.12s;
+    }
+    .sb-import-profile:hover { border-color: rgba(87,46,136,0.34); }
+    .sb-import-profile.selected {
+      border-color: #572e88;
+      background: rgba(87,46,136,0.06);
+      box-shadow: 0 0 0 3px rgba(87,46,136,0.08);
+    }
+    .sb-import-profile-title {
+      font-size: 0.84rem;
+      font-weight: 900;
+      color: #1a1530;
+      margin-bottom: 0.25rem;
+    }
+    .sb-import-profile-copy {
+      font-size: 0.69rem;
+      line-height: 1.45;
+      color: rgba(26,21,48,0.5);
+    }
+    .sb-import-summary {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.35rem;
+      margin-bottom: 0.75rem;
+    }
+    .sb-import-summary-pill {
+      display: inline-flex;
+      align-items: center;
+      border-radius: 999px;
+      padding: 0.22rem 0.55rem;
+      background: rgba(87,46,136,0.08);
+      color: #572e88;
+      font-size: 0.66rem;
+      font-weight: 900;
+    }
 
     @media (max-width: 900px) {
       .prod-main { margin-left: 0; max-width: 100vw; }
@@ -841,6 +888,7 @@
       .sb-content { padding: 4.5rem 1rem 2rem; }
       .sb-content::before { inset: 0; }
       .sb-import-edit-grid { grid-template-columns: 1fr; }
+      .sb-import-profile-grid { grid-template-columns: 1fr; }
     }
   </style>
 </head>
@@ -856,7 +904,7 @@
         <button class="sb-add-scene-btn" onclick="openAddSceneModal()" title="Add scene">+</button>
       </div>
       <div style="padding:0.75rem 1rem 0;border-bottom:1px solid rgba(26,21,48,0.06);">
-        <button class="sb-btn-secondary" style="width:100%;justify-content:center;" onclick="document.getElementById('pdf-import-input').click()">Upload PDF or Photo</button>
+        <button class="sb-btn-secondary" style="width:100%;justify-content:center;" onclick="openBreakdownImportPicker()">Guided Import</button>
       </div>
       <div id="acts-list"></div>
     </div>
@@ -886,7 +934,7 @@
               <div class="sb-scene-subtitle" id="sb-subtitle-text"></div>
             </div>
             <div class="sb-header-actions">
-              <button class="sb-btn-secondary" onclick="document.getElementById('pdf-import-input').click()">Upload PDF or Photo</button>
+              <button class="sb-btn-secondary" onclick="openBreakdownImportPicker()">Guided Import</button>
               <button class="sb-btn-add-note" onclick="openAddNoteModal()">+ Add Note</button>
             </div>
           </div>
@@ -1069,6 +1117,19 @@
     </div>
   </div>
 
+  <!-- Modal: Guided Import Start -->
+  <div class="sb-overlay" id="modal-import-picker" style="display:none;" onclick="if(event.target===this)closeBreakdownImportPicker()">
+    <div class="sb-modal" onclick="event.stopPropagation()">
+      <div class="sb-modal-title">Guided Import</div>
+      <div class="sb-import-status">Choose the closest kind of file. BTS will use rule-based parsing, then show you a draft to fix before saving.</div>
+      <div class="sb-import-profile-grid" id="import-profile-grid"></div>
+      <div class="sb-modal-actions">
+        <button class="sb-btn-cancel" onclick="closeBreakdownImportPicker()">Cancel</button>
+        <button class="sb-btn-save" onclick="startBreakdownImport()">Choose PDF or Photo</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Modal: Breakdown Import Review -->
   <div class="sb-overlay" id="modal-pdf-import" style="display:none;" onclick="if(event.target===this)closePdfImportModal()">
     <div class="sb-modal wide" onclick="event.stopPropagation()">
@@ -1107,6 +1168,16 @@
       { key: 'props',       label: 'Props',            color: '#efab45' },
       { key: 'hair_makeup', label: 'Hair & Makeup',    color: '#ca7ea7' },
       { key: 'rehearsals',  label: 'Rehearsals',       color: '#769e7b' },
+      { key: 'sound',       label: 'Sound',            color: '#476aaa' },
+      { key: 'lighting',    label: 'Lighting',         color: '#8f63b7' },
+      { key: 'scenic',      label: 'Set / Scenic',     color: '#4f7f5f' },
+    ];
+
+    const IMPORT_PROFILES = [
+      { key: 'auto', label: 'Auto Detect', copy: 'Let BTS choose rules based on the text it finds.' },
+      { key: 'scene_breakdown', label: 'Scene Breakdown', copy: 'Scene/song lists, two-column breakdowns, character lists per scene.' },
+      { key: 'script', label: 'Full Script', copy: 'Dialogue pages with scene headings, speakers, and stage directions.' },
+      { key: 'director_guide', label: 'Director Guide', copy: 'Script pages mixed with sound, lighting, blocking, dramaturgy, and set tips.' },
     ];
 
     const AVATAR_COLORS = ['#572e88','#769e7b','#dd8233','#d1523d','#78bbd4','#476aaa','#ca7ea7'];
@@ -1121,6 +1192,7 @@
     let selectedDepartmentTags = new Set();
     let editingSceneId = null;
     let pendingPdfImport = null;
+    let selectedImportProfile = 'auto';
 
     function esc(s) {
       return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -1704,6 +1776,34 @@
       renderGroups();
     }
 
+    // ── MODAL: GUIDED IMPORT ──────────────────────────────────
+    function openBreakdownImportPicker() {
+      selectedImportProfile = 'auto';
+      document.getElementById('import-profile-grid').innerHTML = IMPORT_PROFILES.map(profile => `
+        <div class="sb-import-profile${profile.key === selectedImportProfile ? ' selected' : ''}" data-profile="${esc(profile.key)}" onclick="selectImportProfile('${esc(profile.key)}')">
+          <div class="sb-import-profile-title">${esc(profile.label)}</div>
+          <div class="sb-import-profile-copy">${esc(profile.copy)}</div>
+        </div>
+      `).join('');
+      document.getElementById('modal-import-picker').style.display = 'flex';
+    }
+
+    function closeBreakdownImportPicker() {
+      document.getElementById('modal-import-picker').style.display = 'none';
+    }
+
+    function selectImportProfile(profileKey) {
+      selectedImportProfile = IMPORT_PROFILES.some(profile => profile.key === profileKey) ? profileKey : 'auto';
+      document.querySelectorAll('.sb-import-profile').forEach(card => {
+        card.classList.toggle('selected', card.dataset.profile === selectedImportProfile);
+      });
+    }
+
+    function startBreakdownImport() {
+      closeBreakdownImportPicker();
+      document.getElementById('pdf-import-input').click();
+    }
+
     // ── BREAKDOWN IMPORT ───────────────────────────────────────
     async function handlePdfImportFile(event) {
       const file = event.target.files && event.target.files[0];
@@ -1726,8 +1826,16 @@
           isImage ? extractImageText(file) : file.arrayBuffer().then(extractPdfText),
           uploadBreakdownFile(file),
         ]);
-        const draft = parseBreakdownText(text);
-        pendingPdfImport = { fileName: file.name, fileType: isImage ? 'photo' : 'pdf', text, scenes: draft.scenes, uploadedPath };
+        const draft = parseBreakdownText(text, selectedImportProfile);
+        pendingPdfImport = {
+          fileName: file.name,
+          fileType: isImage ? 'photo' : 'pdf',
+          importProfile: draft.profile,
+          text,
+          scenes: draft.scenes,
+          summary: draft.summary,
+          uploadedPath,
+        };
         renderPdfImportReview();
       } catch (error) {
         console.error('[BTS] breakdown import failed', error);
@@ -1794,8 +1902,39 @@
         .filter(item => String(item.str || '').trim())
         .map(item => ({ text: String(item.str || '').trim(), x: item.transform?.[4] || 0, y: item.transform?.[5] || 0 }))
         .sort((a, b) => Math.abs(b.y - a.y) > 3 ? b.y - a.y : a.x - b.x);
+      const columns = splitTextItemsIntoColumns(placed);
+      if (columns.length > 1) {
+        return columns.flatMap(column => textItemsColumnToLines(column));
+      }
+      return textItemsColumnToLines(placed);
+    }
+
+    function splitTextItemsIntoColumns(items) {
+      if (items.length < 24) return [items];
+      const xs = [...new Set(items.map(item => Math.round(item.x)).filter(x => x > 0))].sort((a, b) => a - b);
+      if (xs.length < 8) return [items];
+      let bestGap = 0;
+      let splitX = null;
+      for (let i = Math.floor(xs.length * 0.18); i < Math.ceil(xs.length * 0.82); i++) {
+        const gap = xs[i + 1] - xs[i];
+        if (gap > bestGap) {
+          bestGap = gap;
+          splitX = xs[i] + gap / 2;
+        }
+      }
+      if (!splitX || bestGap < 80) return [items];
+      const left = items.filter(item => item.x < splitX);
+      const right = items.filter(item => item.x >= splitX);
+      if (left.length < 8 || right.length < 8) return [items];
+      const leftSceneCount = left.filter(item => /\b(scene|prologue|act)\b/i.test(item.text)).length;
+      const rightSceneCount = right.filter(item => /\b(scene|prologue|act)\b/i.test(item.text)).length;
+      if (leftSceneCount + rightSceneCount < 2 && Math.min(left.length, right.length) / Math.max(left.length, right.length) < 0.28) return [items];
+      return [left, right];
+    }
+
+    function textItemsColumnToLines(items) {
       const lines = [];
-      placed.forEach(item => {
+      items.forEach(item => {
         const line = lines.find(row => Math.abs(row.y - item.y) <= 3);
         if (line) line.items.push(item);
         else lines.push({ y: item.y, items: [item] });
@@ -1806,49 +1945,97 @@
         .filter(Boolean);
     }
 
-    function parseBreakdownText(text) {
-      const rawLines = String(text || '').split(/\n+/).map(line => line.replace(/\s+/g, ' ').trim()).filter(Boolean);
-      const result = { scenes: [] };
+    function parseBreakdownText(text, requestedProfile) {
+      const rawLines = normalizeImportedLines(text);
+      const profile = requestedProfile === 'auto' ? detectImportProfile(rawLines) : (requestedProfile || 'scene_breakdown');
+      const lines = filterImportNoise(rawLines, profile);
+      const result = { scenes: [], profile, summary: { matchedCharacters: 0, unmatchedNames: 0, productionTips: 0, ignoredLines: Math.max(rawLines.length - lines.length, 0) } };
       let currentAct = { number: 1, title: 'Act 1' };
       let currentScene = null;
-      const actRe = /^act\s+([ivxlcdm]+|\d+)(?:\s*[-:–—]\s*(.+))?$/i;
-      const sceneRe = /^(?:scene\s+)?(\d+)\s*(?:[-:–—.)]\s*)?(.{0,90})$/i;
+      let lastNote = null;
 
-      rawLines.forEach(line => {
-        const actMatch = line.match(actRe);
+      lines.forEach((line, index) => {
+        const actMatch = parseActHeading(line);
         if (actMatch) {
           currentAct = {
-            number: romanOrNumber(actMatch[1]) || result.scenes.reduce((m, s) => Math.max(m, s.actNumber || 1), 0) + 1,
-            title: actMatch[2] ? `Act ${actMatch[1]} - ${actMatch[2]}` : `Act ${actMatch[1]}`,
+            number: actMatch.number || result.scenes.reduce((m, s) => Math.max(m, s.actNumber || 1), 0) + 1,
+            title: actMatch.title,
           };
           return;
         }
 
-        const sceneMatch = line.match(sceneRe);
-        const looksLikeScene = sceneMatch && /scene\s+\d+|^\d+\s*[-:–—.)]\s*\S+/i.test(line) && !/\b(characters?|groups?|props?|notes?)\b/i.test(line);
-        if (looksLikeScene) {
+        const sceneMatch = parseSceneHeading(line, result.scenes.length);
+        if (sceneMatch) {
           currentScene = {
             actNumber: currentAct.number || 1,
             actTitle: currentAct.title || `Act ${currentAct.number || 1}`,
-            number: Number(sceneMatch[1]) || result.scenes.length + 1,
-            title: cleanSceneTitle(sceneMatch[2]) || `Scene ${sceneMatch[1]}`,
-            location: '',
+            number: sceneMatch.number,
+            title: sceneMatch.title,
+            location: sceneMatch.location || '',
             description: '',
             rawLines: [],
             characterIds: [],
             groups: [],
             notes: [],
+            unmatchedNames: [],
+            ignoredLines: [],
           };
           result.scenes.push(currentScene);
+          lastNote = null;
           return;
         }
 
         if (!currentScene) return;
         if (/^(characters?|groups?|scene notes?|notes?)\s*:?$/i.test(line)) return;
-        currentScene.rawLines.push(line);
+        const songLine = parseSongBreakdownLine(line);
+        if (songLine && (profile === 'scene_breakdown' || profile === 'director_guide')) {
+          currentScene.rawLines.push(`${songLine.title}: ${songLine.names.join(', ')}`);
+          applyImportedNamesToScene(currentScene, songLine.names);
+          lastNote = pushImportNote(currentScene, songLine.title, 'general');
+          return;
+        }
+
+        if (isLikelyContinuationLine(line) && lastNote) {
+          const names = extractKnownAndLooseNames(line);
+          if (names.length) {
+            applyImportedNamesToScene(currentScene, names);
+            lastNote.body += ` ${names.join(', ')}`;
+          }
+          return;
+        }
+
+        const speaker = parseDialogueSpeaker(line);
+        if (speaker && (profile === 'script' || profile === 'director_guide')) {
+          applyImportedNamesToScene(currentScene, [speaker]);
+          return;
+        }
+
+        const productionTip = parseProductionTipLine(line, lines[index + 1]);
+        if (productionTip && (profile === 'director_guide' || profile === 'script')) {
+          result.summary.productionTips++;
+          currentScene.rawLines.push(productionTip.body);
+          lastNote = pushImportNote(currentScene, productionTip.body, productionTip.type);
+          return;
+        }
+
+        const stageDirection = parseStageDirectionLine(line);
+        if (stageDirection) {
+          currentScene.rawLines.push(stageDirection);
+          applyImportedNamesToScene(currentScene, extractKnownAndLooseNames(stageDirection));
+          lastNote = pushImportNote(currentScene, stageDirection, inferNoteType(stageDirection));
+          return;
+        }
+
+        if (profile === 'scene_breakdown' || looksLikeDepartmentClue(line)) {
+          currentScene.rawLines.push(line);
+          applyImportedNamesToScene(currentScene, extractKnownAndLooseNames(line));
+          lastNote = pushImportNote(currentScene, line, inferNoteType(line));
+        } else {
+          currentScene.ignoredLines.push(line);
+        }
       });
 
-      if (!result.scenes.length && rawLines.length) {
+      if (!result.scenes.length && lines.length) {
         result.scenes.push({
           actNumber: 1,
           actTitle: 'Act 1',
@@ -1856,15 +2043,161 @@
           title: 'Imported Breakdown',
           location: '',
           description: '',
-          rawLines: rawLines.slice(0, 60),
+          rawLines: lines.slice(0, 60),
           characterIds: [],
           groups: [],
-          notes: [],
+          notes: lines.slice(0, 12).map(line => ({ body: line, note_type: inferNoteType(line), department_tags: inferDepartmentTags(line) })),
+          unmatchedNames: [],
+          ignoredLines: [],
         });
       }
 
       result.scenes.forEach(scene => enrichImportedScene(scene));
+      result.scenes.sort((a, b) => (Number(a.actNumber) || 1) - (Number(b.actNumber) || 1) || (Number(a.number) || 0) - (Number(b.number) || 0));
+      result.summary.matchedCharacters = result.scenes.reduce((sum, scene) => sum + (scene.characterIds?.length || 0), 0);
+      result.summary.unmatchedNames = result.scenes.reduce((sum, scene) => sum + (scene.unmatchedNames?.length || 0), 0);
       return result;
+    }
+
+    function normalizeImportedLines(text) {
+      return String(text || '')
+        .replace(/\u00a0/g, ' ')
+        .split(/\n+/)
+        .map(line => line.replace(/[ \t]+/g, ' ').trim())
+        .filter(Boolean);
+    }
+
+    function detectImportProfile(lines) {
+      const sample = lines.slice(0, 260).join('\n').toLowerCase();
+      if (/sound cue|lighting tip|blocking tip|directing tip|dramaturgy tip|actor.?s script|director.?s guide/.test(sample)) return 'director_guide';
+      if (/\b[A-Z][A-Z .'-]{2,}:\s+/.test(lines.join('\n')) && /\([^)]*(enter|exit|stage|lights?|sound|carries|with)[^)]*\)/i.test(sample)) return 'script';
+      if (/scenes?\s*&\s*musical numbers|\.{5,}|scene\s+\d+\s*:/.test(sample)) return 'scene_breakdown';
+      return 'scene_breakdown';
+    }
+
+    function filterImportNoise(lines, profile) {
+      const noise = /^(music theatre international|broadway junior|director.?s guide|actor.?s script|table of contents|credits|copyrights?|unauthorized|all rights reserved|page \d+|[a-z]\d+\s*\||\d+\s*\/\d+\s*\/\d+|mp .*\.indd|\f)$/i;
+      const musicNoise = /^[&#b0-9œŒ‰j.\-\s]+$/;
+      return lines.filter(line => {
+        const clean = line.trim();
+        if (!clean) return false;
+        if (noise.test(clean)) return false;
+        if (profile !== 'scene_breakdown' && musicNoise.test(clean)) return false;
+        if (/^(maestoso|allegro|meno mosso|presto|colla voce|poco|steady)$/i.test(clean)) return false;
+        return true;
+      });
+    }
+
+    function parseActHeading(line) {
+      const match = String(line || '').match(/^act\s+([ivxlcdm]+|\d+)(?:\s*[-:–—]\s*(.+))?$/i);
+      if (!match) return null;
+      const number = romanOrNumber(match[1]) || 1;
+      return { number, title: match[2] ? `Act ${match[1]} - ${match[2]}` : `Act ${match[1]}` };
+    }
+
+    function parseSceneHeading(line, fallbackIndex) {
+      const raw = String(line || '').replace(/\s+/g, ' ').trim();
+      let match = raw.match(/^prologue(?:\s*[-:–—]\s*(.+))?$/i);
+      if (match) {
+        const title = cleanSceneTitle(match[1]) || 'Prologue';
+        return { number: 0, title, location: title === 'Prologue' ? '' : title };
+      }
+      match = raw.match(/^scene\s+(\d+)\s*[:\-–—]\s*(.+)$/i);
+      if (match) {
+        const title = cleanSceneTitle(match[2]) || `Scene ${match[1]}`;
+        return { number: Number(match[1]), title, location: title };
+      }
+      match = raw.match(/^(\d+)\s*[-:–—.)]\s*(.{3,90})$/i);
+      if (match && !/\b(track|cue|page|measure|bar)\b/i.test(raw)) {
+        const title = cleanSceneTitle(match[2]);
+        if (title && !looksLikeImportedNoise(title)) return { number: Number(match[1]) || fallbackIndex + 1, title, location: title };
+      }
+      return null;
+    }
+
+    function parseSongBreakdownLine(line) {
+      const raw = String(line || '').replace(/\s+/g, ' ').trim();
+      const match = raw.match(/^(.{2,80}?)(?:\s*\.{3,}\s*|\s{2,})([^.]{2,160})$/);
+      if (!match) return null;
+      const title = cleanSceneTitle(match[1]);
+      const names = splitImportList(match[2]).filter(name => name.length > 1);
+      if (!title || !names.length || looksLikeImportedNoise(title)) return null;
+      return { title, names };
+    }
+
+    function parseDialogueSpeaker(line) {
+      const match = String(line || '').match(/^([A-Z][A-Z .'\-]{1,42})(?:\s*\([^)]*\))?:\s+/);
+      if (!match) return null;
+      const name = titleCaseName(match[1]);
+      return looksLikeImportedNoise(name) ? null : name;
+    }
+
+    function parseStageDirectionLine(line) {
+      const raw = String(line || '').trim();
+      const direction = raw.match(/^\((.+)\)$/)?.[1] || '';
+      if (!direction) return null;
+      if (!/(enter|exit|cross|carry|carries|with|reveals?|lights?|sound|thunder|door|prop|set|shift|split|tableau|stage|bag|kite|letter)/i.test(direction)) return null;
+      return direction.replace(/\s+/g, ' ').trim();
+    }
+
+    function parseProductionTipLine(line, nextLine) {
+      const match = String(line || '').match(/^(sound cue|lighting tip|blocking tip|directing tip|dramaturgy tip|set tip|music tip|choreography tip|costume tip|prop tip)\s*:?\s*(.*)$/i);
+      if (!match) return null;
+      const label = titleCaseName(match[1]);
+      const body = `${label}: ${match[2] || nextLine || ''}`.trim();
+      return { body, type: inferNoteType(body) };
+    }
+
+    function isLikelyContinuationLine(line) {
+      const raw = String(line || '').trim();
+      return raw.length < 140 && !parseSceneHeading(raw, 0) && !parseActHeading(raw) && /^[A-Z][A-Za-z .,'’\-]+(?:,\s*[A-Z][A-Za-z .,'’\-]+)+$/.test(raw);
+    }
+
+    function looksLikeDepartmentClue(line) {
+      return /(prop|cake|letter|bag|umbrella|carry|handoff|preset|costume|dress|coat|hat|quick change|hair|makeup|wig|entrance|enter|exit|transition|stage|shift|safe|hazard|sound cue|lighting|set tip|blocking)/i.test(String(line || ''));
+    }
+
+    function looksLikeImportedNoise(line) {
+      return /^(track|cue|music|page|part|scene|act|all|company|ensemble)?$/i.test(String(line || '').trim()) || /^[&#b0-9œŒ‰j.\-\s]+$/.test(String(line || ''));
+    }
+
+    function titleCaseName(name) {
+      return String(name || '').toLowerCase().replace(/\b[a-z]/g, letter => letter.toUpperCase()).replace(/\s+/g, ' ').trim();
+    }
+
+    function pushImportNote(scene, body, type) {
+      const clean = String(body || '').replace(/\s+/g, ' ').trim();
+      if (!clean || scene.notes.some(note => normalizeLoose(note.body) === normalizeLoose(clean))) return null;
+      const note = { body: clean, note_type: type || inferNoteType(clean), department_tags: inferDepartmentTags(clean) };
+      scene.notes.push(note);
+      return note;
+    }
+
+    function extractKnownAndLooseNames(line) {
+      const found = [];
+      productionChars.forEach(char => {
+        if (!char?.name) return;
+        const re = new RegExp(`(^|[^A-Za-z])${regexEscape(char.name)}([^A-Za-z]|$)`, 'i');
+        if (re.test(line)) found.push(char.name);
+      });
+      if (found.length) return found;
+      return splitImportList(line).filter(name => /^[A-Z][A-Za-z .'\-]{1,42}$/.test(name));
+    }
+
+    function applyImportedNamesToScene(scene, names) {
+      names.forEach(name => {
+        const match = findProductionCharacterByName(name);
+        if (match) {
+          const roleType = String(match.role_type || '').toLowerCase();
+          if (roleType === 'group' || roleType === 'chorus' || roleType === 'ensemble') scene.groups.push(match.name);
+          else scene.characterIds.push(match.id);
+        } else if (!looksLikeImportedNoise(name)) {
+          scene.unmatchedNames.push(name);
+        }
+      });
+      scene.characterIds = [...new Set(scene.characterIds)];
+      scene.groups = [...new Set(scene.groups)];
+      scene.unmatchedNames = [...new Set(scene.unmatchedNames)];
     }
 
     function romanOrNumber(value) {
@@ -1896,12 +2229,20 @@
         if (roleType === 'group' || roleType === 'chorus' || roleType === 'ensemble') groupMatches.push(char.name);
         else charMatches.push(char.id);
       });
-      scene.characterIds = [...new Set(charMatches)];
-      scene.groups = [...new Set(groupMatches)];
-      scene.notes = scene.rawLines
+      scene.characterIds = [...new Set([...(scene.characterIds || []), ...charMatches])];
+      scene.groups = [...new Set([...(scene.groups || []), ...groupMatches])];
+      const existingNotes = scene.notes || [];
+      const inferredNotes = scene.rawLines
         .filter(line => !productionChars.some(char => normalizeLoose(line) === normalizeLoose(char.name)))
-        .slice(0, 8)
+        .slice(0, 14)
         .map(line => ({ body: line, note_type: inferNoteType(line), department_tags: inferDepartmentTags(line) }));
+      const deduped = [];
+      [...existingNotes, ...inferredNotes].forEach(note => {
+        if (!note?.body || deduped.some(existing => normalizeLoose(existing.body) === normalizeLoose(note.body))) return;
+        deduped.push(note);
+      });
+      scene.notes = deduped.slice(0, 18);
+      scene.unmatchedNames = [...new Set(scene.unmatchedNames || [])].filter(name => !findProductionCharacterByName(name));
     }
 
     function normalizeLoose(text) {
@@ -1926,6 +2267,9 @@
       if (/hair|makeup|wig|pinned|face/.test(text)) tags.add('hair_makeup');
       if (/entrance|enter|exit|transition|stage|shift|quick change|preset/.test(text)) tags.add('stage_mgmt');
       if (/rehears|blocking|call/.test(text)) tags.add('rehearsals');
+      if (/sound|track\s*#|audio|thunder|music cue/.test(text)) tags.add('sound');
+      if (/light|lighting|blackout|dim|spot|flash/.test(text)) tags.add('lighting');
+      if (/set|scenic|furniture|rooftop|door|window|unit set|transition/.test(text)) tags.add('scenic');
       return [...tags];
     }
 
@@ -1937,7 +2281,17 @@
         ? `This is a draft from ${pendingPdfImport.fileName}. Fix anything that looks wrong, then save only the scenes you want.`
         : 'No scenes found. Try a clearer PDF/photo with visible Act and Scene headings.';
       saveBtn.disabled = !scenesToShow.length;
-      list.innerHTML = scenesToShow.map((scene, index) => {
+      const summary = pendingPdfImport?.summary || {};
+      const profileLabel = IMPORT_PROFILES.find(profile => profile.key === pendingPdfImport?.importProfile)?.label || 'Guided Import';
+      const summaryHtml = scenesToShow.length ? `<div class="sb-import-summary">
+        <span class="sb-import-summary-pill">${esc(profileLabel)}</span>
+        <span class="sb-import-summary-pill">${scenesToShow.length} scene${scenesToShow.length === 1 ? '' : 's'}</span>
+        <span class="sb-import-summary-pill">${summary.matchedCharacters || 0} matched character${summary.matchedCharacters === 1 ? '' : 's'}</span>
+        <span class="sb-import-summary-pill">${summary.unmatchedNames || 0} unmatched name${summary.unmatchedNames === 1 ? '' : 's'}</span>
+        <span class="sb-import-summary-pill">${summary.productionTips || 0} production tip${summary.productionTips === 1 ? '' : 's'}</span>
+        <span class="sb-import-summary-pill">${summary.ignoredLines || 0} ignored line${summary.ignoredLines === 1 ? '' : 's'}</span>
+      </div>` : '';
+      list.innerHTML = summaryHtml + scenesToShow.map((scene, index) => {
         const charNames = scene.characterIds.map(id => productionChars.find(c => c.id === id)?.name).filter(Boolean).join(', ');
         const notesText = scene.notes.map(note => note.body).filter(Boolean).join('\n');
         return `<div class="sb-import-scene">
@@ -1978,6 +2332,11 @@
             <div class="sb-import-field wide">
               <label>Groups BTS matched</label>
               <input data-field="groups" type="text" value="${esc(scene.groups.join(', '))}" placeholder="Comma-separated group names" />
+            </div>
+            <div class="sb-import-field wide">
+              <label>Unmatched names to review</label>
+              <input data-field="unmatched" type="text" value="${esc((scene.unmatchedNames || []).join(', '))}" placeholder="Nothing unmatched" readonly />
+              <div class="sb-import-help">If one belongs in the scene, copy it into Characters or Groups using the name BTS already knows.</div>
             </div>
             <div class="sb-import-field wide">
               <label>Scene Notes</label>
