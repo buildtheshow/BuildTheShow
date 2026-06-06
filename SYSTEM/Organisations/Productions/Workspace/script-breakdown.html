@@ -2778,8 +2778,8 @@
 
         const sceneMatch = parseSceneHeading(line, result.scenes.length, profile === 'scene_breakdown');
         if (sceneMatch) {
-          // running headers repeat the scene heading on every page — skip if we're already in this scene
-          if (currentScene && currentScene.number === sceneMatch.number && currentScene.actNumber === (currentAct.number || 1)) return;
+          // skip if we've already seen this scene number — handles both running headers and TOC duplicates
+          if (result.scenes.some(s => s.number === sceneMatch.number && s.actNumber === (currentAct.number || 1))) return;
           currentScene = {
             actNumber: currentAct.number || 1,
             actTitle: currentAct.title || `Act ${currentAct.number || 1}`,
@@ -2914,13 +2914,6 @@
         // two-column PDF rows get merged into one line — if the title itself contains another scene heading, this is junk
         if (/\bscene\s+\d+/i.test(title)) return null;
         return { number: Number(match[1]), title, location: title };
-      }
-      // reverse format: "CHERRY TREE LANE SCENE 10: THE BANKS HOUSE" — location first, scene number and optional subtitle after
-      match = raw.match(/^(.{3,60}?)\s+scene\s+(\d+)(?:\s*[:\-–—]\s*(.+))?$/i);
-      if (match) {
-        const location = cleanSceneTitle(match[1]);
-        const title = cleanSceneTitle(match[3]) || location;
-        if (title && !looksLikeImportedNoise(title)) return { number: Number(match[2]), title, location: location || title };
       }
       // bare numbered format only trusted in scene_breakdown documents
       // (Director's Guides number everything — tips, bars, blocking steps)
