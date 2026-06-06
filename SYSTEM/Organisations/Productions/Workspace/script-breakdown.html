@@ -1,0 +1,1468 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" />
+  <link rel="preconnect" href="https://tkmaiktxpwqfbgeojbnf.supabase.co" />
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Script Breakdown - Build The Show</title>
+  <link rel="stylesheet" href="/ASSETS/styles/styles.css?v=typography-safe-20260421-2025" />
+  <link rel="stylesheet" href="/ASSETS/styles/production-sidebar.css?v=sidebar-v45-20260605" />
+  <style>
+    * { box-sizing: border-box; }
+    html { width: 100%; max-width: 100%; overflow-x: hidden; }
+    body { margin: 0; width: 100%; max-width: 100%; overflow-x: hidden; background: #f5f4f8; font-family: var(--bts-font); color: #1a1530; display: flex; flex-direction: column; min-height: 100vh; min-height: 100dvh; }
+    body.mobile-sidebar-open { overflow: hidden; }
+
+    .prod-main {
+      margin-left: 220px;
+      flex: 1;
+      display: flex;
+      align-items: stretch;
+      min-height: 100vh;
+      min-height: 100dvh;
+      max-width: calc(100vw - 220px);
+      overflow-x: clip;
+    }
+
+    /* ── SCENE LIST PANEL ── */
+    .sb-left {
+      width: 220px;
+      min-width: 220px;
+      max-width: 220px;
+      background: #ffffff;
+      border-right: 1px solid rgba(26,21,48,0.09);
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      position: sticky;
+      top: 0;
+      overflow-y: auto;
+      flex-shrink: 0;
+    }
+
+    .sb-left-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 1.2rem 1rem 0.85rem;
+      border-bottom: 1px solid rgba(26,21,48,0.07);
+      position: sticky;
+      top: 0;
+      background: #fff;
+      z-index: 2;
+    }
+
+    .sb-left-title {
+      font-size: 0.67rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.09em;
+      color: rgba(26,21,48,0.4);
+    }
+
+    .sb-add-scene-btn {
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: #572e88;
+      color: #fff;
+      border: none;
+      cursor: pointer;
+      font-size: 1.05rem;
+      line-height: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      flex-shrink: 0;
+      transition: background 0.15s;
+    }
+    .sb-add-scene-btn:hover { background: #4a2575; }
+
+    .sb-act-block { padding: 0.75rem 0 0.25rem; }
+
+    .sb-act-label {
+      font-size: 0.63rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.09em;
+      color: rgba(26,21,48,0.35);
+      padding: 0 1rem 0.3rem;
+    }
+
+    .sb-scene-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.45rem;
+      padding: 0.42rem 1rem;
+      cursor: pointer;
+      transition: background 0.1s;
+    }
+    .sb-scene-item:hover { background: rgba(87,46,136,0.05); }
+    .sb-scene-item.active { background: rgba(87,46,136,0.09); }
+
+    .sb-scene-num {
+      font-size: 0.68rem;
+      font-weight: 700;
+      color: rgba(26,21,48,0.3);
+      min-width: 14px;
+      padding-top: 0.06rem;
+      flex-shrink: 0;
+    }
+    .sb-scene-item.active .sb-scene-num { color: #572e88; }
+
+    .sb-scene-name {
+      font-size: 0.76rem;
+      font-weight: 600;
+      color: #1a1530;
+      line-height: 1.3;
+    }
+    .sb-scene-item.active .sb-scene-name { color: #572e88; font-weight: 700; }
+
+    .sb-scene-sub {
+      font-size: 0.63rem;
+      color: rgba(26,21,48,0.38);
+      margin-top: 0.08rem;
+    }
+
+    /* ── MAIN CONTENT ── */
+    .sb-content {
+      flex: 1;
+      min-width: 0;
+      padding: 2rem 2.25rem;
+      position: relative;
+      overflow-x: hidden;
+    }
+
+    .sb-content::before {
+      content: '';
+      position: fixed;
+      inset: 0 0 0 440px;
+      background-image: url('/ASSETS/Images/Grid-purple.png');
+      background-repeat: repeat;
+      background-size: 720px;
+      opacity: 0.04;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .sb-content-inner {
+      position: relative;
+      z-index: 1;
+      max-width: 820px;
+    }
+
+    /* ── EMPTY STATE ── */
+    .sb-empty {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 5rem 2rem;
+      text-align: center;
+      color: rgba(26,21,48,0.35);
+    }
+    .sb-empty-icon { font-size: 2.8rem; margin-bottom: 1rem; opacity: 0.35; }
+    .sb-empty-title { font-size: 1rem; font-weight: 700; color: rgba(26,21,48,0.45); margin-bottom: 0.4rem; }
+    .sb-empty-copy { font-size: 0.82rem; color: rgba(26,21,48,0.32); max-width: 260px; line-height: 1.55; }
+
+    /* ── BREADCRUMB ── */
+    .sb-breadcrumb {
+      font-size: 0.71rem;
+      color: rgba(26,21,48,0.38);
+      font-weight: 500;
+      margin-bottom: 0.65rem;
+      letter-spacing: 0.01em;
+    }
+
+    /* ── SCENE HEADER ── */
+    .sb-scene-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 1rem;
+      margin-bottom: 1.2rem;
+      flex-wrap: wrap;
+    }
+
+    .sb-scene-title {
+      font-size: 1.85rem;
+      font-weight: 900;
+      color: #1a1530;
+      margin: 0 0 0.18rem;
+      line-height: 1.1;
+      display: flex;
+      align-items: center;
+      gap: 0.45rem;
+    }
+
+    .sb-edit-btn {
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-size: 0.85rem;
+      color: rgba(26,21,48,0.25);
+      padding: 0.15rem 0.3rem;
+      border-radius: 4px;
+      transition: color 0.15s;
+      line-height: 1;
+    }
+    .sb-edit-btn:hover { color: #572e88; }
+
+    .sb-scene-subtitle {
+      font-size: 0.86rem;
+      color: rgba(26,21,48,0.48);
+    }
+
+    .sb-header-actions { display: flex; gap: 0.55rem; align-items: center; flex-shrink: 0; }
+
+    .sb-btn-add-note {
+      padding: 0.45rem 1rem;
+      background: #572e88;
+      color: #fff;
+      border: none;
+      border-radius: 7px;
+      font-size: 0.8rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .sb-btn-add-note:hover { background: #4a2575; }
+
+    /* ── TABS ── */
+    .sb-tabs {
+      display: flex;
+      border-bottom: 2px solid rgba(26,21,48,0.1);
+      margin-bottom: 1.25rem;
+      flex-wrap: wrap;
+      gap: 0;
+    }
+
+    .sb-tab {
+      padding: 0.55rem 0.85rem;
+      background: none;
+      border: none;
+      border-bottom: 2.5px solid transparent;
+      margin-bottom: -2px;
+      font-size: 0.79rem;
+      font-weight: 600;
+      color: rgba(26,21,48,0.42);
+      cursor: pointer;
+      white-space: nowrap;
+      display: flex;
+      align-items: center;
+      gap: 0.35rem;
+      transition: color 0.12s;
+    }
+    .sb-tab:hover { color: #572e88; }
+    .sb-tab.active { color: #572e88; border-bottom-color: #572e88; }
+
+    .sb-tab-badge {
+      background: rgba(87,46,136,0.1);
+      color: #572e88;
+      font-size: 0.65rem;
+      font-weight: 800;
+      border-radius: 20px;
+      padding: 0.05rem 0.42rem;
+      min-width: 18px;
+      text-align: center;
+    }
+    .sb-tab.active .sb-tab-badge { background: #572e88; color: #fff; }
+
+    /* ── SECTIONS ── */
+    .sb-section {
+      background: #ffffff;
+      border-radius: 10px;
+      padding: 1.1rem 1.2rem;
+      margin-bottom: 0.85rem;
+      box-shadow: 0 1px 4px rgba(26,21,48,0.06);
+    }
+
+    .sb-section-header {
+      display: flex;
+      align-items: center;
+      gap: 0.45rem;
+      margin-bottom: 0.8rem;
+    }
+
+    .sb-section-title {
+      font-size: 0.63rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: rgba(26,21,48,0.35);
+    }
+
+    .sb-section-count {
+      font-size: 0.63rem;
+      font-weight: 700;
+      color: rgba(26,21,48,0.35);
+    }
+
+    /* ── CHARACTER CHIPS ── */
+    .sb-chars-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.85rem;
+      align-items: flex-start;
+    }
+
+    .sb-char-chip {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.28rem;
+    }
+
+    .sb-char-avatar {
+      width: 46px;
+      height: 46px;
+      border-radius: 50%;
+      overflow: hidden;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.82rem;
+      font-weight: 800;
+      color: #fff;
+      position: relative;
+    }
+
+    .sb-char-avatar img {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      object-position: center 20%;
+    }
+
+    .sb-char-name {
+      font-size: 0.58rem;
+      font-weight: 700;
+      color: #1a1530;
+      text-align: center;
+      max-width: 58px;
+      line-height: 1.25;
+      word-break: break-word;
+    }
+
+    .sb-add-avatar-btn {
+      width: 46px;
+      height: 46px;
+      border-radius: 50%;
+      border: 2px dashed rgba(87,46,136,0.28);
+      background: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.2rem;
+      color: rgba(87,46,136,0.45);
+      transition: border-color 0.14s, color 0.14s;
+      flex-shrink: 0;
+      align-self: flex-start;
+    }
+    .sb-add-avatar-btn:hover { border-color: #572e88; color: #572e88; }
+
+    /* ── GROUP CHIPS ── */
+    .sb-groups-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.45rem;
+      align-items: center;
+    }
+
+    .sb-group-chip {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      padding: 0.32rem 0.75rem;
+      background: rgba(87,46,136,0.07);
+      border-radius: 20px;
+      font-size: 0.73rem;
+      font-weight: 600;
+      color: #572e88;
+    }
+
+    .sb-group-count {
+      font-size: 0.65rem;
+      font-weight: 800;
+      background: rgba(87,46,136,0.15);
+      border-radius: 20px;
+      padding: 0.04rem 0.4rem;
+    }
+
+    .sb-add-group-btn {
+      padding: 0.32rem 0.75rem;
+      border: 1.5px dashed rgba(87,46,136,0.28);
+      border-radius: 20px;
+      background: none;
+      font-size: 0.73rem;
+      font-weight: 600;
+      color: rgba(87,46,136,0.48);
+      cursor: pointer;
+      transition: border-color 0.14s, color 0.14s;
+    }
+    .sb-add-group-btn:hover { border-color: #572e88; color: #572e88; }
+
+    /* ── NOTES ── */
+    .sbn-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.7rem;
+      padding: 0.65rem 0;
+      border-bottom: 1px solid rgba(26,21,48,0.06);
+    }
+    .sbn-item:last-child { border-bottom: none; }
+
+    .sbn-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      flex-shrink: 0;
+      margin-top: 0.38rem;
+    }
+
+    .sbn-body { flex: 1; min-width: 0; }
+
+    .sbn-text {
+      font-size: 0.82rem;
+      color: #1a1530;
+      line-height: 1.45;
+      margin-bottom: 0.28rem;
+    }
+
+    .sbn-meta {
+      display: flex;
+      align-items: center;
+      gap: 0.45rem;
+      flex-wrap: wrap;
+    }
+
+    .sbn-tag {
+      display: inline-block;
+      font-size: 0.6rem;
+      font-weight: 700;
+      border-radius: 4px;
+      padding: 0.14rem 0.48rem;
+      color: #fff;
+      letter-spacing: 0.02em;
+    }
+
+    .sbn-author {
+      font-size: 0.67rem;
+      color: rgba(26,21,48,0.42);
+      font-weight: 500;
+    }
+
+    .sbn-time {
+      font-size: 0.63rem;
+      color: rgba(26,21,48,0.32);
+    }
+
+    .sbn-menu-btn {
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: rgba(26,21,48,0.25);
+      font-size: 1rem;
+      padding: 0.2rem 0.3rem;
+      border-radius: 4px;
+      flex-shrink: 0;
+      line-height: 1;
+      transition: background 0.12s, color 0.12s;
+    }
+    .sbn-menu-btn:hover { background: rgba(26,21,48,0.06); color: #1a1530; }
+
+    .sb-view-all-btn {
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-size: 0.77rem;
+      color: #572e88;
+      font-weight: 600;
+      padding: 0.55rem 0 0;
+      display: flex;
+      align-items: center;
+      gap: 0.25rem;
+    }
+
+    .sb-empty-tab {
+      padding: 2.5rem;
+      text-align: center;
+      color: rgba(26,21,48,0.32);
+      font-size: 0.8rem;
+    }
+
+    /* ── MODALS ── */
+    .sb-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(26,21,48,0.42);
+      z-index: 1000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1rem;
+    }
+
+    .sb-modal {
+      background: #fff;
+      border-radius: 12px;
+      width: 100%;
+      max-width: 480px;
+      padding: 1.75rem;
+      box-shadow: 0 20px 60px rgba(26,21,48,0.22);
+    }
+
+    .sb-modal-title {
+      font-size: 1.05rem;
+      font-weight: 800;
+      color: #1a1530;
+      margin-bottom: 1.2rem;
+    }
+
+    .sb-field { margin-bottom: 0.9rem; }
+
+    .sb-label {
+      display: block;
+      font-size: 0.68rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      color: rgba(26,21,48,0.48);
+      margin-bottom: 0.32rem;
+    }
+
+    .sb-input, .sb-select, .sb-textarea {
+      width: 100%;
+      padding: 0.52rem 0.75rem;
+      border: 1.5px solid rgba(26,21,48,0.16);
+      border-radius: 7px;
+      font-size: 0.84rem;
+      font-family: var(--bts-font);
+      color: #1a1530;
+      background: #fafafa;
+      outline: none;
+      transition: border-color 0.14s;
+    }
+    .sb-input:focus, .sb-select:focus, .sb-textarea:focus { border-color: #572e88; background: #fff; }
+    .sb-textarea { resize: vertical; min-height: 88px; }
+
+    .sb-type-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 0.38rem;
+    }
+
+    .sb-dept-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.45rem;
+    }
+
+    .sb-type-pill {
+      padding: 0.38rem 0.25rem;
+      border-radius: 6px;
+      font-size: 0.62rem;
+      font-weight: 700;
+      text-align: center;
+      cursor: pointer;
+      border: 2px solid transparent;
+      opacity: 0.45;
+      transition: opacity 0.12s, border-color 0.12s;
+      color: #fff;
+      line-height: 1.2;
+    }
+    .sb-type-pill.selected { opacity: 1; border-color: rgba(0,0,0,0.22); }
+
+    .sb-dept-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      padding: 0.36rem 0.65rem;
+      border-radius: 999px;
+      border: 1.5px solid rgba(87,46,136,0.16);
+      background: #fff;
+      color: rgba(26,21,48,0.58);
+      font-size: 0.68rem;
+      font-weight: 800;
+      cursor: pointer;
+    }
+    .sb-dept-pill.selected {
+      background: rgba(87,46,136,0.08);
+      border-color: rgba(87,46,136,0.38);
+      color: #572e88;
+    }
+    .sb-dept-pill::before {
+      content: '';
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: currentColor;
+      opacity: 0.65;
+    }
+
+    .sb-modal-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 0.55rem;
+      margin-top: 1.2rem;
+    }
+
+    .sb-btn-cancel {
+      padding: 0.48rem 1.1rem;
+      background: none;
+      border: 1.5px solid rgba(26,21,48,0.16);
+      border-radius: 7px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: rgba(26,21,48,0.55);
+      cursor: pointer;
+    }
+
+    .sb-btn-save {
+      padding: 0.48rem 1.25rem;
+      background: #572e88;
+      color: #fff;
+      border: none;
+      border-radius: 7px;
+      font-size: 0.8rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background 0.14s;
+    }
+    .sb-btn-save:hover { background: #4a2575; }
+
+    .sb-char-select-list {
+      max-height: 300px;
+      overflow-y: auto;
+      border: 1.5px solid rgba(26,21,48,0.12);
+      border-radius: 8px;
+    }
+
+    .sb-char-select-item {
+      display: flex;
+      align-items: center;
+      gap: 0.7rem;
+      padding: 0.58rem 0.85rem;
+      cursor: pointer;
+      border-bottom: 1px solid rgba(26,21,48,0.06);
+      transition: background 0.1s;
+    }
+    .sb-char-select-item:last-child { border-bottom: none; }
+    .sb-char-select-item:hover { background: rgba(87,46,136,0.05); }
+    .sb-char-select-item.selected { background: rgba(87,46,136,0.07); }
+
+    .sb-char-check {
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      border: 2px solid rgba(26,21,48,0.18);
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.62rem;
+      transition: all 0.12s;
+    }
+    .sb-char-select-item.selected .sb-char-check { background: #572e88; border-color: #572e88; color: #fff; }
+
+    .sb-char-select-name { font-size: 0.82rem; font-weight: 600; color: #1a1530; flex: 1; }
+
+    .sb-char-select-role {
+      font-size: 0.65rem;
+      color: rgba(26,21,48,0.38);
+      text-transform: capitalize;
+    }
+
+    @media (max-width: 900px) {
+      .prod-main { margin-left: 0; max-width: 100vw; }
+      .sb-left { display: none; }
+      .sb-content { padding: 4.5rem 1rem 2rem; }
+      .sb-content::before { inset: 0; }
+    }
+  </style>
+</head>
+<body>
+  <div id="prod-sidebar-host"></div>
+
+  <div class="prod-main">
+
+    <!-- Left: Acts & Scenes list -->
+    <div class="sb-left">
+      <div class="sb-left-header">
+        <span class="sb-left-title">Acts &amp; Scenes</span>
+        <button class="sb-add-scene-btn" onclick="openAddSceneModal()" title="Add scene">+</button>
+      </div>
+      <div id="acts-list"></div>
+    </div>
+
+    <!-- Main content -->
+    <div class="sb-content">
+      <div class="sb-content-inner">
+
+        <!-- No scene selected -->
+        <div id="sb-empty" class="sb-empty">
+          <div class="sb-empty-icon">&#127917;</div>
+          <div class="sb-empty-title">Select a scene</div>
+          <div class="sb-empty-copy">Choose a scene from the list, or click + to add your first act and scene.</div>
+        </div>
+
+        <!-- Scene detail view -->
+        <div id="sb-scene-view" style="display:none;">
+
+          <div class="sb-breadcrumb" id="sb-breadcrumb"></div>
+
+          <div class="sb-scene-header">
+            <div>
+              <div class="sb-scene-title">
+                <span id="sb-title-text"></span>
+                <button class="sb-edit-btn" onclick="openEditSceneModal()" title="Edit scene">&#9998;</button>
+              </div>
+              <div class="sb-scene-subtitle" id="sb-subtitle-text"></div>
+            </div>
+            <div class="sb-header-actions">
+              <button class="sb-btn-add-note" onclick="openAddNoteModal()">+ Add Note</button>
+            </div>
+          </div>
+
+          <!-- Tabs -->
+          <div class="sb-tabs">
+            <button class="sb-tab active" data-tab="overview" onclick="switchTab('overview')">Overview</button>
+            <button class="sb-tab" data-tab="notes" onclick="switchTab('notes')">
+              Notes <span class="sb-tab-badge" id="badge-notes" style="display:none;"></span>
+            </button>
+            <button class="sb-tab" data-tab="props" onclick="switchTab('props')">
+              Props <span class="sb-tab-badge" id="badge-props" style="display:none;"></span>
+            </button>
+            <button class="sb-tab" data-tab="costume" onclick="switchTab('costume')">
+              Costume <span class="sb-tab-badge" id="badge-costume" style="display:none;"></span>
+            </button>
+            <button class="sb-tab" data-tab="hair" onclick="switchTab('hair')">
+              Hair &amp; Makeup <span class="sb-tab-badge" id="badge-hair" style="display:none;"></span>
+            </button>
+            <button class="sb-tab" data-tab="stage" onclick="switchTab('stage')">
+              Stage Mgmt <span class="sb-tab-badge" id="badge-stage" style="display:none;"></span>
+            </button>
+            <button class="sb-tab" data-tab="rehearsals" onclick="switchTab('rehearsals')">
+              Rehearsals <span class="sb-tab-badge" id="badge-rehearsals" style="display:none;"></span>
+            </button>
+          </div>
+
+          <!-- Overview -->
+          <div id="tab-overview">
+            <div class="sb-section">
+              <div class="sb-section-header">
+                <span class="sb-section-title">Characters</span>
+                <span class="sb-section-count" id="char-count-label"></span>
+              </div>
+              <div class="sb-chars-row" id="scene-chars-row">
+                <span style="font-size:0.75rem;color:rgba(26,21,48,0.32);">Loading...</span>
+              </div>
+            </div>
+
+            <div class="sb-section">
+              <div class="sb-section-header">
+                <span class="sb-section-title">Groups</span>
+                <span class="sb-section-count" id="groups-count-label"></span>
+              </div>
+              <div class="sb-groups-row" id="scene-groups-row"></div>
+            </div>
+
+            <div class="sb-section">
+              <div class="sb-section-header">
+                <span class="sb-section-title">Scene Notes</span>
+              </div>
+              <div id="overview-notes-list"></div>
+              <button class="sb-view-all-btn" id="view-all-btn" onclick="switchTab('notes')" style="display:none;"></button>
+            </div>
+          </div>
+
+          <!-- All Notes -->
+          <div id="tab-notes" style="display:none;">
+            <div class="sb-section"><div id="all-notes-list"></div></div>
+          </div>
+
+          <!-- Props -->
+          <div id="tab-props" style="display:none;">
+            <div class="sb-section"><div id="props-notes-list"></div></div>
+          </div>
+
+          <!-- Costume -->
+          <div id="tab-costume" style="display:none;">
+            <div class="sb-section"><div id="costume-notes-list"></div></div>
+          </div>
+
+          <!-- Hair & Makeup -->
+          <div id="tab-hair" style="display:none;">
+            <div class="sb-section"><div id="hair-notes-list"></div></div>
+          </div>
+
+          <!-- Stage Management -->
+          <div id="tab-stage" style="display:none;">
+            <div class="sb-section"><div id="stage-notes-list"></div></div>
+          </div>
+
+          <!-- Rehearsals -->
+          <div id="tab-rehearsals" style="display:none;">
+            <div class="sb-section"><div id="rehearsals-notes-list"></div></div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Add/Edit Scene -->
+  <div class="sb-overlay" id="modal-scene" style="display:none;" onclick="if(event.target===this)closeSceneModal()">
+    <div class="sb-modal" onclick="event.stopPropagation()">
+      <div class="sb-modal-title" id="scene-modal-title">Add Scene</div>
+      <div class="sb-field">
+        <label class="sb-label">Act</label>
+        <select class="sb-select" id="scene-act-select"></select>
+      </div>
+      <div class="sb-field">
+        <label class="sb-label">Scene Name</label>
+        <input class="sb-input" id="scene-title-input" type="text" placeholder="e.g. The Kitchen" />
+      </div>
+      <div class="sb-field">
+        <label class="sb-label">Location (optional)</label>
+        <input class="sb-input" id="scene-location-input" type="text" placeholder="e.g. The Banks kitchen" />
+      </div>
+      <div class="sb-field">
+        <label class="sb-label">Time of Day (optional)</label>
+        <input class="sb-input" id="scene-desc-input" type="text" placeholder="e.g. Morning." />
+      </div>
+      <div class="sb-modal-actions">
+        <button class="sb-btn-cancel" onclick="closeSceneModal()">Cancel</button>
+        <button class="sb-btn-save" onclick="saveScene()">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Add Note -->
+  <div class="sb-overlay" id="modal-note" style="display:none;" onclick="if(event.target===this)closeNoteModal()">
+    <div class="sb-modal" onclick="event.stopPropagation()">
+      <div class="sb-modal-title">Add Note</div>
+      <div class="sb-field">
+        <label class="sb-label">Note</label>
+        <textarea class="sb-textarea" id="note-body-input" placeholder="Enter a scene note..."></textarea>
+      </div>
+      <div class="sb-field">
+        <label class="sb-label">Note Type</label>
+        <div class="sb-type-grid" id="note-type-grid"></div>
+      </div>
+      <div class="sb-field">
+        <label class="sb-label">Department Tags</label>
+        <div class="sb-dept-grid" id="note-dept-grid"></div>
+      </div>
+      <div class="sb-field">
+        <label class="sb-label">Your Name (optional)</label>
+        <input class="sb-input" id="note-author-input" type="text" placeholder="e.g. Sarah K." />
+      </div>
+      <div class="sb-field">
+        <label class="sb-label">Your Role (optional)</label>
+        <input class="sb-input" id="note-role-input" type="text" placeholder="e.g. Stage Manager" />
+      </div>
+      <div class="sb-modal-actions">
+        <button class="sb-btn-cancel" onclick="closeNoteModal()">Cancel</button>
+        <button class="sb-btn-save" onclick="saveNote()">Add Note</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Characters in Scene -->
+  <div class="sb-overlay" id="modal-chars" style="display:none;" onclick="if(event.target===this)closeCharsModal()">
+    <div class="sb-modal" onclick="event.stopPropagation()">
+      <div class="sb-modal-title">Characters in This Scene</div>
+      <div class="sb-char-select-list" id="char-select-list"></div>
+      <div class="sb-modal-actions">
+        <button class="sb-btn-cancel" onclick="closeCharsModal()">Cancel</button>
+        <button class="sb-btn-save" onclick="saveChars()">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Add Group -->
+  <div class="sb-overlay" id="modal-group" style="display:none;" onclick="if(event.target===this)closeGroupModal()">
+    <div class="sb-modal" onclick="event.stopPropagation()">
+      <div class="sb-modal-title">Add Group to Scene</div>
+      <div class="sb-field">
+        <label class="sb-label">Group Name</label>
+        <input class="sb-input" id="group-name-input" type="text" placeholder="e.g. Servants" />
+      </div>
+      <div class="sb-field">
+        <label class="sb-label">Approximate Count (optional)</label>
+        <input class="sb-input" id="group-count-input" type="number" min="0" placeholder="e.g. 5" />
+      </div>
+      <div class="sb-modal-actions">
+        <button class="sb-btn-cancel" onclick="closeGroupModal()">Cancel</button>
+        <button class="sb-btn-save" onclick="saveGroup()">Add Group</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="/SHARED/Navigation/production-sidebar-nav.js?v=11"></script>
+  <script>
+    'use strict';
+
+    const NOTE_TYPES = [
+      { key: 'general',      label: 'General',        color: '#572e88' },
+      { key: 'costume',      label: 'Costume',        color: '#dd8233' },
+      { key: 'props',        label: 'Props',          color: '#efab45' },
+      { key: 'hair_makeup',  label: 'Hair & Makeup',  color: '#ca7ea7' },
+      { key: 'stage_mgmt',   label: 'Stage Mgmt',     color: '#78bbd4' },
+      { key: 'quick_change', label: 'Quick Change',   color: '#d1523d' },
+      { key: 'preset',       label: 'Preset',         color: '#769e7b' },
+      { key: 'safety',       label: 'Safety',         color: '#476aaa' },
+    ];
+
+    const DEPARTMENT_TAGS = [
+      { key: 'director',    label: 'Director',         color: '#572e88' },
+      { key: 'stage_mgmt',  label: 'Stage Management', color: '#78bbd4' },
+      { key: 'costume',     label: 'Costume',          color: '#dd8233' },
+      { key: 'props',       label: 'Props',            color: '#efab45' },
+      { key: 'hair_makeup', label: 'Hair & Makeup',    color: '#ca7ea7' },
+      { key: 'rehearsals',  label: 'Rehearsals',       color: '#769e7b' },
+    ];
+
+    const AVATAR_COLORS = ['#572e88','#769e7b','#dd8233','#d1523d','#78bbd4','#476aaa','#ca7ea7'];
+
+    let sb, prodId;
+    let acts = [], scenes = [], productionChars = [];
+    let currentSceneId = null;
+    let sceneChars = [], sceneGroups = [], sceneNotes = [];
+    let castByCharId = {};
+    let selectedCharIds = new Set();
+    let selectedNoteType = 'general';
+    let selectedDepartmentTags = new Set();
+    let editingSceneId = null;
+
+    function esc(s) {
+      return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
+    function avatarColor(str) {
+      let n = 0;
+      for (let i = 0; i < (str || '').length; i++) n += str.charCodeAt(i);
+      return AVATAR_COLORS[n % AVATAR_COLORS.length];
+    }
+
+    function noteTypeInfo(key) {
+      return NOTE_TYPES.find(t => t.key === key) || NOTE_TYPES[0];
+    }
+
+    function departmentInfo(key) {
+      return DEPARTMENT_TAGS.find(t => t.key === key) || { key, label: key, color: '#572e88' };
+    }
+
+    function noteDepartmentTags(note) {
+      if (Array.isArray(note?.department_tags)) return note.department_tags.filter(Boolean);
+      if (typeof note?.department_tags === 'string' && note.department_tags.trim()) {
+        return note.department_tags.replace(/[{}"]/g, '').split(',').map(s => s.trim()).filter(Boolean);
+      }
+      const type = note?.note_type;
+      return type && type !== 'general' ? [type] : [];
+    }
+
+    function noteMatchesDepartment(note, departmentKey) {
+      const tags = noteDepartmentTags(note);
+      return tags.includes(departmentKey) || note.note_type === departmentKey;
+    }
+
+    function formatTimestamp(iso) {
+      if (!iso) return '';
+      const d = new Date(iso);
+      const now = new Date();
+      const diffMs = now - d;
+      if (diffMs < 86400000) {
+        return d.toLocaleTimeString('en-CA', { hour: 'numeric', minute: '2-digit', hour12: true });
+      }
+      return d.toLocaleDateString('en-CA', { month: 'short', day: 'numeric' });
+    }
+
+    async function init() {
+      window.initProductionPage('settings');
+
+      const { createClient } = supabase;
+      sb = createClient(
+        'https://tkmaiktxpwqfbgeojbnf.supabase.co',
+        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRrbWFpa3R4cHdxZmJnZW9qYm5mIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM3MzE4MTcsImV4cCI6MjA4OTMwNzgxN30.TkTZBNWUatk3Y6Vmfv1hIRR3DfVjgwauwa76Pf00J_8'
+      );
+
+      prodId = new URLSearchParams(location.search).get('id');
+      if (!prodId) return;
+
+      await loadAll();
+      buildNoteTypeGrid();
+    }
+
+    async function loadAll() {
+      const [actsRes, scenesRes, charsRes, castRes] = await Promise.all([
+        sb.from('production_acts').select('*').eq('production_id', prodId).order('number'),
+        sb.from('production_scenes').select('*').eq('production_id', prodId).order('number'),
+        sb.from('production_characters').select('id,name,role_type').eq('production_id', prodId).order('sort_order').order('name'),
+        sb.from('cast_members').select('character_id,headshot_url').eq('production_id', prodId),
+      ]);
+
+      acts = actsRes.data || [];
+      scenes = scenesRes.data || [];
+      productionChars = charsRes.data || [];
+
+      castByCharId = {};
+      (castRes.data || []).forEach(function (m) {
+        if (m.character_id && m.headshot_url && !castByCharId[m.character_id]) {
+          castByCharId[m.character_id] = m;
+        }
+      });
+
+      renderLeftPanel();
+      if (!currentSceneId && scenes.length) {
+        await selectScene(scenes[0].id);
+      }
+    }
+
+    // ── LEFT PANEL ─────────────────────────────────────────────
+    function renderLeftPanel() {
+      const el = document.getElementById('acts-list');
+      if (!acts.length && !scenes.length) {
+        el.innerHTML = '<div style="padding:1.1rem 1rem;font-size:0.73rem;color:rgba(26,21,48,0.33);text-align:center;line-height:1.6;">No scenes yet.<br>Click + to add one.</div>';
+        return;
+      }
+
+      const scenesByAct = {};
+      scenes.forEach(function (s) {
+        const key = s.act_id || '__none';
+        if (!scenesByAct[key]) scenesByAct[key] = [];
+        scenesByAct[key].push(s);
+      });
+
+      let html = '';
+
+      acts.forEach(function (act) {
+        const actScenes = scenesByAct[act.id] || [];
+        html += `<div class="sb-act-block"><div class="sb-act-label">${esc(act.title || 'Act ' + act.number)}</div>`;
+        actScenes.forEach(function (scene) {
+          const active = scene.id === currentSceneId ? ' active' : '';
+          html += `<div class="sb-scene-item${active}" onclick="selectScene('${esc(scene.id)}')">
+            <span class="sb-scene-num">${esc(scene.number || '')}</span>
+            <div>
+              <div class="sb-scene-name">${esc(scene.title)}</div>
+              ${scene.location ? `<div class="sb-scene-sub">${esc(scene.location)}</div>` : ''}
+            </div>
+          </div>`;
+        });
+        html += '</div>';
+      });
+
+      const orphans = scenesByAct['__none'] || [];
+      if (orphans.length) {
+        html += '<div class="sb-act-block"><div class="sb-act-label">Scenes</div>';
+        orphans.forEach(function (scene) {
+          const active = scene.id === currentSceneId ? ' active' : '';
+          html += `<div class="sb-scene-item${active}" onclick="selectScene('${esc(scene.id)}')">
+            <span class="sb-scene-num">${esc(scene.number || '')}</span>
+            <div><div class="sb-scene-name">${esc(scene.title)}</div></div>
+          </div>`;
+        });
+        html += '</div>';
+      }
+
+      el.innerHTML = html;
+    }
+
+    // ── SELECT SCENE ───────────────────────────────────────────
+    async function selectScene(sceneId) {
+      currentSceneId = sceneId;
+      renderLeftPanel();
+
+      const [charsRes, groupsRes, notesRes] = await Promise.all([
+        sb.from('scene_characters').select('id,character_id').eq('scene_id', sceneId),
+        sb.from('scene_groups').select('*').eq('scene_id', sceneId).order('created_at'),
+        sb.from('scene_notes').select('*').eq('scene_id', sceneId).order('created_at', { ascending: false }),
+      ]);
+
+      sceneChars = charsRes.data || [];
+      sceneGroups = groupsRes.data || [];
+      sceneNotes = notesRes.data || [];
+
+      const scene = scenes.find(s => s.id === sceneId);
+      if (!scene) return;
+      const act = acts.find(a => a.id === scene.act_id);
+
+      const breadParts = [act ? (act.title || 'Act ' + act.number) : null, scene.title].filter(Boolean);
+      document.getElementById('sb-breadcrumb').textContent = breadParts.join(' › ');
+      document.getElementById('sb-title-text').textContent = scene.title;
+      const sub = [scene.location, scene.description].filter(Boolean).join('. ');
+      document.getElementById('sb-subtitle-text').textContent = sub;
+
+      document.getElementById('sb-empty').style.display = 'none';
+      document.getElementById('sb-scene-view').style.display = '';
+
+      switchTab('overview');
+      updateTabBadges();
+    }
+
+    // ── TABS ───────────────────────────────────────────────────
+    function switchTab(tab) {
+      document.querySelectorAll('.sb-tab').forEach(function (btn) {
+        btn.classList.toggle('active', btn.dataset.tab === tab);
+      });
+      ['overview','notes','props','costume','hair','stage','rehearsals'].forEach(function (t) {
+        document.getElementById('tab-' + t).style.display = t === tab ? '' : 'none';
+      });
+
+      if (tab === 'overview')  { renderChars(); renderGroups(); renderOverviewNotes(); }
+      else if (tab === 'notes')    renderFilteredNotes('all-notes-list', null);
+      else if (tab === 'props')    renderFilteredNotes('props-notes-list', 'props');
+      else if (tab === 'costume')  renderFilteredNotes('costume-notes-list', 'costume');
+      else if (tab === 'hair')     renderFilteredNotes('hair-notes-list', 'hair_makeup');
+      else if (tab === 'stage')    renderFilteredNotes('stage-notes-list', 'stage_mgmt');
+      else if (tab === 'rehearsals') renderFilteredNotes('rehearsals-notes-list', 'rehearsals');
+    }
+
+    function updateTabBadges() {
+      const counts = { notes: sceneNotes.length, props: 0, costume: 0, hair: 0, stage: 0, rehearsals: 0 };
+      sceneNotes.forEach(function (n) {
+        if (noteMatchesDepartment(n, 'props'))       counts.props++;
+        if (noteMatchesDepartment(n, 'costume'))     counts.costume++;
+        if (noteMatchesDepartment(n, 'hair_makeup')) counts.hair++;
+        if (noteMatchesDepartment(n, 'stage_mgmt'))  counts.stage++;
+        if (noteMatchesDepartment(n, 'rehearsals'))  counts.rehearsals++;
+      });
+      Object.keys(counts).forEach(function (key) {
+        const badge = document.getElementById('badge-' + key);
+        if (!badge) return;
+        badge.textContent = counts[key];
+        badge.style.display = counts[key] > 0 ? '' : 'none';
+      });
+    }
+
+    // ── CHARACTERS ─────────────────────────────────────────────
+    function renderChars() {
+      const el = document.getElementById('scene-chars-row');
+      const count = sceneChars.length;
+      document.getElementById('char-count-label').textContent = count ? '(' + count + ')' : '';
+
+      const charMap = new Map(productionChars.map(c => [c.id, c]));
+      let html = '';
+
+      sceneChars.forEach(function (sc) {
+        const char = charMap.get(sc.character_id);
+        if (!char) return;
+        const cast = castByCharId[char.id];
+        const initials = (char.name || '?').split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
+        const bg = avatarColor(char.name);
+        html += `<div class="sb-char-chip">
+          <div class="sb-char-avatar" style="background:${bg};">
+            ${cast && cast.headshot_url ? `<img src="${esc(cast.headshot_url)}" alt="${esc(char.name)}" onerror="this.style.display='none'">` : ''}
+            ${initials}
+          </div>
+          <div class="sb-char-name">${esc(char.name)}</div>
+        </div>`;
+      });
+
+      html += `<button class="sb-add-avatar-btn" onclick="openCharsModal()" title="Add character">+</button>`;
+      el.innerHTML = html;
+    }
+
+    // ── GROUPS ─────────────────────────────────────────────────
+    function renderGroups() {
+      const el = document.getElementById('scene-groups-row');
+      document.getElementById('groups-count-label').textContent = sceneGroups.length ? '(' + sceneGroups.length + ')' : '';
+
+      let html = sceneGroups.map(function (g) {
+        return `<div class="sb-group-chip">
+          <span>&#128101;</span>
+          <span>${esc(g.group_name)}</span>
+          ${g.member_count ? `<span class="sb-group-count">${g.member_count}</span>` : ''}
+        </div>`;
+      }).join('');
+
+      html += `<button class="sb-add-group-btn" onclick="openGroupModal()">+ Add</button>`;
+      el.innerHTML = html;
+    }
+
+    // ── NOTES ──────────────────────────────────────────────────
+    function renderNoteItem(note) {
+      const info = noteTypeInfo(note.note_type);
+      const tags = noteDepartmentTags(note);
+      const author = [note.author_name, note.author_role ? '(' + note.author_role + ')' : ''].filter(Boolean).join(' ');
+      return `<div class="sbn-item">
+        <div class="sbn-dot" style="background:${info.color};"></div>
+        <div class="sbn-body">
+          <div class="sbn-text">${esc(note.body)}</div>
+          <div class="sbn-meta">
+            <span class="sbn-tag" style="background:${info.color};">${esc(info.label)}</span>
+            ${tags.map(tag => {
+              const dept = departmentInfo(tag);
+              return `<span class="sbn-tag" style="background:${esc(dept.color)};">${esc(dept.label)}</span>`;
+            }).join('')}
+            ${author ? `<span class="sbn-author">${esc(author)}</span>` : ''}
+            <span class="sbn-time">${formatTimestamp(note.created_at)}</span>
+          </div>
+        </div>
+        <button class="sbn-menu-btn" onclick="deleteNote('${esc(note.id)}')" title="Delete note">&#8942;</button>
+      </div>`;
+    }
+
+    function renderOverviewNotes() {
+      const el = document.getElementById('overview-notes-list');
+      const btn = document.getElementById('view-all-btn');
+      if (!sceneNotes.length) {
+        el.innerHTML = '<div style="font-size:0.78rem;color:rgba(26,21,48,0.32);padding:0.15rem 0;">No notes yet. Click &ldquo;+ Add Note&rdquo; to get started.</div>';
+        btn.style.display = 'none';
+        return;
+      }
+      el.innerHTML = sceneNotes.slice(0, 5).map(renderNoteItem).join('');
+      if (sceneNotes.length > 5) {
+        btn.style.display = '';
+        btn.textContent = 'View all ' + sceneNotes.length + ' notes ›';
+      } else {
+        btn.style.display = 'none';
+      }
+    }
+
+    function renderFilteredNotes(containerId, typeFilter) {
+      const el = document.getElementById(containerId);
+      const filtered = typeFilter ? sceneNotes.filter(n => noteMatchesDepartment(n, typeFilter)) : sceneNotes;
+      if (!filtered.length) {
+        const label = typeFilter ? noteTypeInfo(typeFilter).label : '';
+        el.innerHTML = `<div class="sb-empty-tab">No ${label} notes for this scene yet.</div>`;
+        return;
+      }
+      el.innerHTML = filtered.map(renderNoteItem).join('');
+    }
+
+    // ── MODAL: SCENE ───────────────────────────────────────────
+    function openAddSceneModal() {
+      editingSceneId = null;
+      document.getElementById('scene-modal-title').textContent = 'Add Scene';
+      document.getElementById('scene-title-input').value = '';
+      document.getElementById('scene-location-input').value = '';
+      document.getElementById('scene-desc-input').value = '';
+      buildActSelect(null);
+      document.getElementById('modal-scene').style.display = 'flex';
+      setTimeout(function () { document.getElementById('scene-title-input').focus(); }, 60);
+    }
+
+    function openEditSceneModal() {
+      if (!currentSceneId) return;
+      const scene = scenes.find(s => s.id === currentSceneId);
+      if (!scene) return;
+      editingSceneId = currentSceneId;
+      document.getElementById('scene-modal-title').textContent = 'Edit Scene';
+      document.getElementById('scene-title-input').value = scene.title || '';
+      document.getElementById('scene-location-input').value = scene.location || '';
+      document.getElementById('scene-desc-input').value = scene.description || '';
+      buildActSelect(scene.act_id);
+      document.getElementById('modal-scene').style.display = 'flex';
+    }
+
+    function buildActSelect(selectedActId) {
+      const sel = document.getElementById('scene-act-select');
+      let html = '<option value="">-- No Act --</option>';
+      acts.forEach(function (act) {
+        html += `<option value="${esc(act.id)}"${act.id === selectedActId ? ' selected' : ''}>${esc(act.title || 'Act ' + act.number)}</option>`;
+      });
+      for (let i = 1; i <= 3; i++) {
+        if (!acts.find(a => a.number === i)) {
+          html += `<option value="__new${i}">+ Create Act ${i}</option>`;
+        }
+      }
+      sel.innerHTML = html;
+    }
+
+    function closeSceneModal() { document.getElementById('modal-scene').style.display = 'none'; }
+
+    async function saveScene() {
+      const title = document.getElementById('scene-title-input').value.trim();
+      if (!title) { document.getElementById('scene-title-input').focus(); return; }
+      const location = document.getElementById('scene-location-input').value.trim() || null;
+      const description = document.getElementById('scene-desc-input').value.trim() || null;
+      let actId = document.getElementById('scene-act-select').value || null;
+
+      if (actId && actId.startsWith('__new')) {
+        const num = parseInt(actId.replace('__new', ''), 10);
+        const { data: newAct } = await sb.from('production_acts').insert({
+          production_id: prodId, number: num, title: 'Act ' + num,
+        }).select().single();
+        if (newAct) { acts.push(newAct); actId = newAct.id; }
+        else actId = null;
+      }
+
+      if (editingSceneId) {
+        const { data } = await sb.from('production_scenes').update({
+          title, location, description, act_id: actId, updated_at: new Date().toISOString(),
+        }).eq('id', editingSceneId).select().single();
+        if (data) { const i = scenes.findIndex(s => s.id === editingSceneId); if (i !== -1) scenes[i] = data; }
+        closeSceneModal();
+        document.getElementById('sb-title-text').textContent = title;
+        document.getElementById('sb-subtitle-text').textContent = [location, description].filter(Boolean).join('. ');
+        renderLeftPanel();
+      } else {
+        const num = (scenes.filter(s => s.act_id === actId).length) + 1;
+        const { data } = await sb.from('production_scenes').insert({
+          production_id: prodId, act_id: actId, title, location, description, number: num,
+        }).select().single();
+        if (data) { scenes.push(data); }
+        closeSceneModal();
+        renderLeftPanel();
+      }
+    }
+
+    // ── MODAL: NOTE ────────────────────────────────────────────
+    function buildNoteTypeGrid() {
+      document.getElementById('note-type-grid').innerHTML = NOTE_TYPES.map(function (t) {
+        return `<div class="sb-type-pill${t.key === 'general' ? ' selected' : ''}" style="background:${t.color};" data-key="${t.key}" onclick="selectNoteType('${t.key}')">${t.label}</div>`;
+      }).join('');
+      buildDepartmentTagGrid();
+    }
+
+    function selectNoteType(key) {
+      selectedNoteType = key;
+      document.querySelectorAll('.sb-type-pill').forEach(function (pill) {
+        pill.classList.toggle('selected', pill.dataset.key === key);
+      });
+      const suggested = key === 'quick_change' ? ['costume', 'stage_mgmt']
+        : key === 'preset' ? ['props', 'stage_mgmt']
+        : key === 'safety' ? ['stage_mgmt']
+        : DEPARTMENT_TAGS.some(t => t.key === key) ? [key]
+        : [];
+      suggested.forEach(tag => selectedDepartmentTags.add(tag));
+      renderDepartmentTagSelection();
+    }
+
+    function buildDepartmentTagGrid() {
+      document.getElementById('note-dept-grid').innerHTML = DEPARTMENT_TAGS.map(function (t) {
+        return `<div class="sb-dept-pill" data-key="${esc(t.key)}" onclick="toggleDepartmentTag('${esc(t.key)}')">${esc(t.label)}</div>`;
+      }).join('');
+      renderDepartmentTagSelection();
+    }
+
+    function renderDepartmentTagSelection() {
+      document.querySelectorAll('.sb-dept-pill').forEach(function (pill) {
+        pill.classList.toggle('selected', selectedDepartmentTags.has(pill.dataset.key));
+      });
+    }
+
+    function toggleDepartmentTag(key) {
+      if (selectedDepartmentTags.has(key)) selectedDepartmentTags.delete(key);
+      else selectedDepartmentTags.add(key);
+      renderDepartmentTagSelection();
+    }
+
+    function openAddNoteModal() {
+      document.getElementById('note-body-input').value = '';
+      document.getElementById('note-author-input').value = '';
+      document.getElementById('note-role-input').value = '';
+      selectedNoteType = 'general';
+      selectedDepartmentTags = new Set();
+      document.querySelectorAll('.sb-type-pill').forEach(function (pill) {
+        pill.classList.toggle('selected', pill.dataset.key === 'general');
+      });
+      renderDepartmentTagSelection();
+      document.getElementById('modal-note').style.display = 'flex';
+      setTimeout(function () { document.getElementById('note-body-input').focus(); }, 60);
+    }
+
+    function closeNoteModal() { document.getElementById('modal-note').style.display = 'none'; }
+
+    async function saveNote() {
+      const body = document.getElementById('note-body-input').value.trim();
+      if (!body) { document.getElementById('note-body-input').focus(); return; }
+      const { data } = await sb.from('scene_notes').insert({
+        scene_id: currentSceneId,
+        production_id: prodId,
+        body,
+        note_type: selectedNoteType,
+        department_tags: [...selectedDepartmentTags],
+        author_name: document.getElementById('note-author-input').value.trim() || null,
+        author_role: document.getElementById('note-role-input').value.trim() || null,
+      }).select().single();
+      if (data) sceneNotes.unshift(data);
+      closeNoteModal();
+      updateTabBadges();
+      switchTab(document.querySelector('.sb-tab.active')?.dataset?.tab || 'overview');
+    }
+
+    async function deleteNote(noteId) {
+      if (!confirm('Delete this note?')) return;
+      await sb.from('scene_notes').delete().eq('id', noteId);
+      sceneNotes = sceneNotes.filter(n => n.id !== noteId);
+      updateTabBadges();
+      switchTab(document.querySelector('.sb-tab.active')?.dataset?.tab || 'overview');
+    }
+
+    // ── MODAL: CHARACTERS ──────────────────────────────────────
+    function openCharsModal() {
+      const inScene = new Set(sceneChars.map(sc => sc.character_id));
+      selectedCharIds = new Set(inScene);
+
+      document.getElementById('char-select-list').innerHTML = productionChars.map(function (char) {
+        const sel = inScene.has(char.id);
+        const roleLabel = (char.role_type || '').replace(/_/g, ' ');
+        return `<div class="sb-char-select-item${sel ? ' selected' : ''}" data-id="${esc(char.id)}" onclick="toggleCharSelect(this,'${esc(char.id)}')">
+          <div class="sb-char-check">${sel ? '&#10003;' : ''}</div>
+          <div class="sb-char-select-name">${esc(char.name)}</div>
+          <div class="sb-char-select-role">${esc(roleLabel)}</div>
+        </div>`;
+      }).join('');
+
+      document.getElementById('modal-chars').style.display = 'flex';
+    }
+
+    function toggleCharSelect(el, charId) {
+      el.classList.toggle('selected');
+      const check = el.querySelector('.sb-char-check');
+      if (el.classList.contains('selected')) { selectedCharIds.add(charId); check.innerHTML = '&#10003;'; }
+      else { selectedCharIds.delete(charId); check.innerHTML = ''; }
+    }
+
+    function closeCharsModal() { document.getElementById('modal-chars').style.display = 'none'; }
+
+    async function saveChars() {
+      const current = new Set(sceneChars.map(sc => sc.character_id));
+      const toAdd = [...selectedCharIds].filter(id => !current.has(id));
+      const toRemove = [...current].filter(id => !selectedCharIds.has(id));
+      const ops = [];
+      if (toAdd.length) ops.push(sb.from('scene_characters').insert(toAdd.map(id => ({ production_id: prodId, scene_id: currentSceneId, character_id: id }))));
+      toRemove.forEach(id => ops.push(sb.from('scene_characters').delete().eq('scene_id', currentSceneId).eq('character_id', id)));
+      await Promise.all(ops);
+      const { data } = await sb.from('scene_characters').select('id,character_id').eq('scene_id', currentSceneId);
+      sceneChars = data || [];
+      closeCharsModal();
+      renderChars();
+    }
+
+    // ── MODAL: GROUPS ──────────────────────────────────────────
+    function openGroupModal() {
+      document.getElementById('group-name-input').value = '';
+      document.getElementById('group-count-input').value = '';
+      document.getElementById('modal-group').style.display = 'flex';
+      setTimeout(function () { document.getElementById('group-name-input').focus(); }, 60);
+    }
+
+    function closeGroupModal() { document.getElementById('modal-group').style.display = 'none'; }
+
+    async function saveGroup() {
+      const groupName = document.getElementById('group-name-input').value.trim();
+      if (!groupName) { document.getElementById('group-name-input').focus(); return; }
+      const memberCount = parseInt(document.getElementById('group-count-input').value, 10) || null;
+      const { data } = await sb.from('scene_groups').insert({
+        production_id: prodId, scene_id: currentSceneId, group_name: groupName, member_count: memberCount,
+      }).select().single();
+      if (data) sceneGroups.push(data);
+      closeGroupModal();
+      renderGroups();
+    }
+
+    document.addEventListener('DOMContentLoaded', init);
+  </script>
+</body>
+</html>
