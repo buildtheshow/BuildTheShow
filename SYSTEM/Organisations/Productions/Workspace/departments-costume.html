@@ -583,6 +583,65 @@
       gap: 0.4rem;
       align-items: center;
     }
+    .cp-inspiration-help {
+      color: rgba(26,21,48,0.62);
+      font-size: 0.78rem;
+      font-weight: 650;
+      line-height: 1.4;
+      margin: 0.25rem 0 0.65rem;
+    }
+    .cp-inspiration-drop {
+      border: 1.5px dashed rgba(87,46,136,0.24);
+      border-radius: 10px;
+      background: rgba(87,46,136,0.035);
+      padding: 0.95rem;
+      display: grid;
+      gap: 0.35rem;
+      place-items: center;
+      text-align: center;
+      color: rgba(26,21,48,0.58);
+      cursor: pointer;
+      transition: border-color 0.15s, background 0.15s;
+    }
+    .cp-inspiration-drop:hover,
+    .cp-inspiration-drop.dragging {
+      border-color: rgba(87,46,136,0.55);
+      background: rgba(87,46,136,0.08);
+    }
+    .cp-inspiration-drop.is-full {
+      opacity: 0.55;
+      cursor: not-allowed;
+    }
+    .cp-inspiration-drop strong {
+      color: #572e88;
+      font-size: 0.84rem;
+      font-weight: 900;
+    }
+    .cp-inspiration-drop span {
+      font-size: 0.74rem;
+      font-weight: 650;
+    }
+    .cp-inspiration-actions {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 0.55rem;
+      margin-top: 0.55rem;
+    }
+    .cp-inspiration-count {
+      font-size: 0.74rem;
+      font-weight: 850;
+      color: rgba(87,46,136,0.72);
+    }
+    .cp-upload-status {
+      font-size: 0.74rem;
+      font-weight: 700;
+      color: rgba(26,21,48,0.52);
+    }
+    #c-add-url-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
     .planning-board {
       display: grid;
       gap: 1.35rem;
@@ -928,6 +987,8 @@
     .c-modal {
       background: #fff; border-radius: 18px;
       padding: 1.75rem; width: 100%; max-width: 420px;
+      max-height: calc(100vh - 2rem);
+      overflow-y: auto;
       box-shadow: 0 24px 60px rgba(26,21,48,0.18);
     }
     .c-modal-title { font-size: 1.05rem; font-weight: 800; color: #1a1530; margin-bottom: 1.25rem; }
@@ -1135,6 +1196,7 @@
 
     const AVATAR_COLORS = ['#572e88','#769e7b','#dd8233','#d1523d','#78bbd4','#476aaa','#ca7ea7','#5b9fc0'];
     const APPROVAL_STATUSES = ['Draft', 'Pending Director Approval', 'Approved', 'Needs Revision'];
+    const MAX_INSPIRATION_IMAGES = 5;
 
     function avatarColor(str) {
       let n = 0;
@@ -1166,6 +1228,7 @@
 
       await loadAll();
       renderAll();
+      document.addEventListener('paste', handleInspirationPaste);
     }
 
     // ── Data ─────────────────────────────────────────────────────────────────
@@ -2102,6 +2165,7 @@
       }
 
       overlay.classList.add('open');
+      if (mode === 'look' || mode === 'edit-look') refreshInspirationState();
       setTimeout(() => document.getElementById('c-name') && document.getElementById('c-name').focus(), 60);
     }
 
@@ -2120,20 +2184,142 @@
 
     function inspirationUrlRow(value) {
       return `<div class="cp-image-url-row">
-        <input class="c-input c-inspiration-url" value="${esc(value || '')}" placeholder="https://..." />
-        <button type="button" class="cp-detail-action" onclick="this.closest('.cp-image-url-row')?.remove()">Remove</button>
+        <input class="c-input c-inspiration-url" value="${esc(value || '')}" placeholder="Paste an image URL here" oninput="refreshInspirationState()" />
+        <button type="button" class="cp-detail-action" onclick="removeInspirationRow(this)">Remove</button>
       </div>`;
     }
 
     function addInspirationUrlRow() {
+      if (document.querySelectorAll('.c-inspiration-url').length >= MAX_INSPIRATION_IMAGES) {
+        alert(`You can add up to ${MAX_INSPIRATION_IMAGES} inspiration images for each Look.`);
+        refreshInspirationState();
+        return;
+      }
       const list = document.getElementById('c-inspiration-list');
-      if (list) list.insertAdjacentHTML('beforeend', inspirationUrlRow(''));
+      if (list) {
+        list.insertAdjacentHTML('beforeend', inspirationUrlRow(''));
+        refreshInspirationState();
+      }
+    }
+
+    function addInspirationUrlValue(url) {
+      const clean = String(url || '').trim();
+      if (!clean || !canAddInspirationImage()) return;
+      const emptyInput = [...document.querySelectorAll('.c-inspiration-url')].find(input => !String(input.value || '').trim());
+      if (emptyInput) {
+        emptyInput.value = clean;
+        refreshInspirationState();
+        return;
+      }
+      const list = document.getElementById('c-inspiration-list');
+      if (list) {
+        list.insertAdjacentHTML('beforeend', inspirationUrlRow(clean));
+        refreshInspirationState();
+      }
+    }
+
+    function removeInspirationRow(btn) {
+      btn.closest('.cp-image-url-row')?.remove();
+      if (!document.querySelectorAll('.c-inspiration-url').length) addInspirationUrlRow();
+      refreshInspirationState();
     }
 
     function collectInspirationUrls() {
-      return [...document.querySelectorAll('.c-inspiration-url')]
+      const urls = [...document.querySelectorAll('.c-inspiration-url')]
         .map(input => String(input.value || '').trim())
         .filter(Boolean);
+      if (urls.length > MAX_INSPIRATION_IMAGES) {
+        alert(`Please keep Inspiration Images to ${MAX_INSPIRATION_IMAGES} images or fewer.`);
+        return null;
+      }
+      return urls;
+    }
+
+    function currentInspirationCount() {
+      return [...document.querySelectorAll('.c-inspiration-url')]
+        .map(input => String(input.value || '').trim())
+        .filter(Boolean).length;
+    }
+
+    function canAddInspirationImage() {
+      if (currentInspirationCount() >= MAX_INSPIRATION_IMAGES) {
+        alert(`You can add up to ${MAX_INSPIRATION_IMAGES} inspiration images for each Look.`);
+        refreshInspirationState();
+        return false;
+      }
+      return true;
+    }
+
+    function refreshInspirationState() {
+      const count = currentInspirationCount();
+      const countEl = document.getElementById('c-inspiration-count');
+      const addBtn = document.getElementById('c-add-url-btn');
+      const uploadInput = document.getElementById('c-inspiration-files');
+      const dropZone = document.getElementById('c-inspiration-drop');
+      if (countEl) countEl.textContent = `${count}/${MAX_INSPIRATION_IMAGES} images`;
+      if (addBtn) addBtn.disabled = count >= MAX_INSPIRATION_IMAGES;
+      if (uploadInput) uploadInput.disabled = count >= MAX_INSPIRATION_IMAGES;
+      if (dropZone) dropZone.classList.toggle('is-full', count >= MAX_INSPIRATION_IMAGES);
+    }
+
+    function setUploadStatus(text) {
+      const el = document.getElementById('c-upload-status');
+      if (el) el.textContent = text || '';
+    }
+
+    function safeUploadName(file) {
+      const base = String(file?.name || 'image').toLowerCase().replace(/[^a-z0-9.]+/g, '-').replace(/^-+|-+$/g, '');
+      return base || 'image';
+    }
+
+    async function uploadInspirationFiles(fileList) {
+      const files = [...(fileList || [])].filter(file => file && String(file.type || '').startsWith('image/'));
+      if (!files.length) return;
+      const remaining = MAX_INSPIRATION_IMAGES - currentInspirationCount();
+      if (remaining <= 0) return canAddInspirationImage();
+      const selected = files.slice(0, remaining);
+      if (files.length > remaining) alert(`Only ${remaining} more image${remaining === 1 ? '' : 's'} can be added. The Look can have ${MAX_INSPIRATION_IMAGES} total.`);
+      setUploadStatus(`Uploading ${selected.length} image${selected.length === 1 ? '' : 's'}...`);
+      for (const file of selected) {
+        const path = `${prodId}/costume-inspiration/${Date.now()}-${Math.random().toString(36).slice(2)}-${safeUploadName(file)}`;
+        const { data, error } = await sb.storage.from('production-files').upload(path, file, {
+          upsert: false,
+          contentType: file.type || 'image/jpeg',
+        });
+        if (error) {
+          console.error(error);
+          setUploadStatus('Upload failed. Try again or paste an image URL.');
+          alert('One image could not be uploaded. Try again or paste an image URL.');
+          continue;
+        }
+        const { data: urlData } = sb.storage.from('production-files').getPublicUrl(data.path);
+        addInspirationUrlValue(urlData?.publicUrl || '');
+      }
+      setUploadStatus('Images added.');
+      setTimeout(() => setUploadStatus(''), 1800);
+    }
+
+    function handleInspirationDrop(e) {
+      e.preventDefault();
+      e.currentTarget.classList.remove('dragging');
+      uploadInspirationFiles(e.dataTransfer?.files || []);
+    }
+
+    function handleInspirationPaste(e) {
+      if (!['look', 'edit-look'].includes(modalMode) || !document.getElementById('c-overlay')?.classList.contains('open')) return;
+      const items = [...(e.clipboardData?.items || [])];
+      const files = items.filter(item => item.kind === 'file').map(item => item.getAsFile()).filter(Boolean);
+      if (files.length) {
+        e.preventDefault();
+        uploadInspirationFiles(files);
+        return;
+      }
+      if (document.activeElement?.classList?.contains('c-inspiration-url')) return;
+      const text = String(e.clipboardData?.getData('text') || '').trim();
+      if (/^https?:\/\/\S+/i.test(text) && canAddInspirationImage()) {
+        e.preventDefault();
+        addInspirationUrlValue(text);
+      }
     }
 
     function renderLookForm(look = {}) {
@@ -2143,10 +2329,20 @@
         <div class="c-field"><label class="c-label">Description</label><textarea class="c-textarea" id="c-look-description" placeholder="Describe the visual direction, fabrics, silhouette, period, mood or director notes.">${esc(look.description || '')}</textarea></div>
         <div class="c-field">
           <label class="c-label">Inspiration Images</label>
+          <div class="cp-inspiration-help">Add up to ${MAX_INSPIRATION_IMAGES} images. You can paste an image URL, drag and drop image files, choose files from your computer, or paste a copied image.</div>
+          <div id="c-inspiration-drop" class="cp-inspiration-drop" onclick="document.getElementById('c-inspiration-files')?.click()" ondragover="event.preventDefault();this.classList.add('dragging')" ondragleave="this.classList.remove('dragging')" ondrop="handleInspirationDrop(event)">
+            <strong>Drop images here</strong>
+            <span>or click to upload. Copy/paste also works while this window is open.</span>
+          </div>
+          <input id="c-inspiration-files" type="file" accept="image/*" multiple hidden onchange="uploadInspirationFiles(this.files);this.value='';" />
           <div id="c-inspiration-list" class="cp-image-url-list">
             ${(look.inspiration_urls || []).length ? look.inspiration_urls.map(url => inspirationUrlRow(url)).join('') : inspirationUrlRow('')}
           </div>
-          <button type="button" class="cp-detail-action" style="margin-top:0.55rem;" onclick="addInspirationUrlRow()">+ Add image URL</button>
+          <div class="cp-inspiration-actions">
+            <button type="button" class="cp-detail-action" id="c-add-url-btn" onclick="addInspirationUrlRow()">+ Add image URL</button>
+            <span class="cp-inspiration-count" id="c-inspiration-count">0/${MAX_INSPIRATION_IMAGES} images</span>
+            <span class="cp-upload-status" id="c-upload-status"></span>
+          </div>
         </div>
         <div class="c-field"><label class="c-label">Colour Palette</label><input class="c-input" id="c-look-palette" value="${esc((look.palette || []).join(', '))}" placeholder="Cream, Pale Blue, Mustard, Forest Green" /></div>
         <div class="c-field"><label class="c-label">Scene Usage</label><input class="c-input" id="c-look-scenes" value="${esc((look.scenes || []).join(', '))}" placeholder="Scene 2, Scene 3, Scene 7" /></div>
@@ -2158,11 +2354,13 @@
     function collectLookForm(existingId) {
       const name = (document.getElementById('c-look-name')?.value || '').trim();
       if (!name) return null;
+      const inspirationUrls = collectInspirationUrls();
+      if (!inspirationUrls) return null;
       return normalizeLook({
         id: existingId || uid('look'),
         name,
         description: document.getElementById('c-look-description')?.value || '',
-        inspiration_urls: collectInspirationUrls(),
+        inspiration_urls: inspirationUrls,
         palette: splitListValue(document.getElementById('c-look-palette')?.value || ''),
         scenes: splitListValue(document.getElementById('c-look-scenes')?.value || ''),
         approval_status: document.getElementById('c-look-status')?.value || 'Draft',
