@@ -2768,6 +2768,7 @@
           characterPool: draft.characterPool || [],
           structuredSongs: draft.structuredSongs || false,
           structuredCharacters: draft.structuredCharacters || false,
+          reviewBucket: draft.reviewBucket || { possibleCharacters: [], possibleSongs: [], unknownCaps: [] },
           summary: draft.summary,
           uploadedPath,
         };
@@ -2930,7 +2931,7 @@
       const rawLines = normalizeImportedLines(text);
       const profile = requestedProfile === 'auto' ? detectImportProfile(rawLines) : (requestedProfile || 'scene_breakdown');
       const lines = filterImportNoise(rawLines, profile);
-      const result = { scenes: [], songs: [], characterPool: [], structuredSongs: false, structuredCharacters: false, profile, summary: { matchedCharacters: 0, unmatchedNames: 0, productionTips: 0, ignoredLines: Math.max(rawLines.length - lines.length, 0) } };
+      const result = { scenes: [], songs: [], characterPool: [], structuredSongs: false, structuredCharacters: false, profile, reviewBucket: { possibleCharacters: [], possibleSongs: [], unknownCaps: [] }, summary: { matchedCharacters: 0, unmatchedNames: 0, productionTips: 0, ignoredLines: Math.max(rawLines.length - lines.length, 0) } };
       prescanFrontMatter(lines, result, profile);
       let currentAct = { number: 1, title: 'Act 1' };
       let currentScene = null;
@@ -2989,7 +2990,17 @@
 
         const standaloneChars = parseStandaloneCharacter(line);
         if (standaloneChars && standaloneChars.length && (profile === 'script' || profile === 'director_guide')) {
-          applyImportedNamesToScene(currentScene, standaloneChars);
+          standaloneChars.forEach(name => {
+            const isKnown = findProductionCharacterByName(name);
+            if (isKnown) {
+              applyImportedNamesToScene(currentScene, [name]);
+            } else {
+              // classify into review bucket rather than auto-assigning
+              const bucket = classifyUnknownCapsLine(name, confirmedSongTitles.size ? confirmedSongTitles : new Set(result.songs.map(s => s.title)));
+              if (!result.reviewBucket[bucket].includes(name)) result.reviewBucket[bucket].push(name);
+              if (!currentScene.unmatchedNames.includes(name)) currentScene.unmatchedNames.push(name);
+            }
+          });
           return;
         }
 
@@ -3038,6 +3049,17 @@
 
       result.scenes.forEach(scene => enrichImportedScene(scene));
       result.scenes.sort((a, b) => (Number(a.actNumber) || 1) - (Number(b.actNumber) || 1) || (Number(a.number) || 0) - (Number(b.number) || 0));
+      // post-pass: classify any unmatched names not already in the review bucket
+      const songTitlesForClassify = new Set(result.songs.map(s => (s.title || '').toLowerCase()));
+      result.scenes.forEach(scene => {
+        (scene.unmatchedNames || []).forEach(name => {
+          const alreadyClassified = Object.values(result.reviewBucket).some(arr => arr.includes(name));
+          if (!alreadyClassified) {
+            const bucket = classifyUnknownCapsLine(name, songTitlesForClassify);
+            if (!result.reviewBucket[bucket].includes(name)) result.reviewBucket[bucket].push(name);
+          }
+        });
+      });
       result.summary.matchedCharacters = result.scenes.reduce((sum, scene) => sum + (scene.characterIds?.length || 0), 0);
       result.summary.unmatchedNames = result.scenes.reduce((sum, scene) => sum + (scene.unmatchedNames?.length || 0), 0);
       return result;
@@ -3149,6 +3171,23 @@
       if (known.length) return known;
       // unknown but looks like a name — send to unmatched for review
       return [raw];
+    }
+
+    const LOCATION_WORDS = /\b(lane|park|bank|street|road|house|office|shop|garden|yard|square|hall|room|cathedral|rooftop|steps|stairs|nursery|kitchen|parlour|parlor|attic|cellar|basement|courtyard|alley|market|station|port|pier|dock|field|forest|woods|palace|castle|tower|bridge|church|chapel|school|library|manor|estate|inn|tavern|pub)\b/i;
+
+    function classifyUnknownCapsLine(raw, songTitles) {
+      // starts with article/preposition → location or phrase, not a name
+      if (/^(THE|A|AN)\s/i.test(raw)) return 'unknownCaps';
+      // contains a location word → probably a place
+      if (LOCATION_WORDS.test(raw)) return 'unknownCaps';
+      // matches a known front-matter song title → possible song
+      const norm = raw.toLowerCase();
+      if ([...songTitles].some(t => t.toLowerCase() === norm)) return 'possibleSongs';
+      // 1–3 words, no location words, no articles → possible character name
+      const words = raw.trim().split(/\s+/);
+      if (words.length >= 1 && words.length <= 3) return 'possibleCharacters';
+      // multi-word phrase that doesn't look like a name → possible song or heading
+      return 'unknownCaps';
     }
 
     function parseStageDirectionLine(line) {
@@ -3383,45 +3422,87 @@
 
     function renderImportCharactersApprovalPanel() {
       const pool = pendingPdfImport?.characterPool || [];
-      const detected = [];
+      const bucket = pendingPdfImport?.reviewBucket || { possibleCharacters: [], possibleSongs: [], unknownCaps: [] };
+
+      // Tier 1: detected characters — known production chars found via hard formats
+      const detectedChars = [];
       (pendingPdfImport?.scenes || []).forEach(scene => {
-        (scene.unmatchedNames || []).forEach(n => { if (!detected.includes(n)) detected.push(n); });
         (scene.characterIds || []).forEach(id => {
           const char = productionChars.find(c => c.id === id);
-          if (char?.name && !detected.includes(char.name)) detected.push(char.name);
+          if (char?.name && !detectedChars.find(c => c.name === char.name)) detectedChars.push({ name: char.name, matched: true });
         });
       });
-      const source = pool.length ? pool : detected.map(n => ({ name: n }));
-      const songFilter = confirmedSongTitles;
-      const items = source.filter(c => !songFilter.has((c.name || '').toLowerCase()));
-      if (!items.length) {
+
+      // Tier 2: possible characters — from front matter pool or review bucket
+      const possibleChars = pool.length
+        ? pool.filter(c => !confirmedSongTitles.has((c.name || '').toLowerCase()) && !detectedChars.find(d => normalizeLoose(d.name) === normalizeLoose(c.name)))
+        : bucket.possibleCharacters.filter(n => !confirmedSongTitles.has(n.toLowerCase()) && !detectedChars.find(d => normalizeLoose(d.name) === normalizeLoose(n))).map(n => ({ name: n }));
+
+      // Tier 3: possible songs from review bucket (not already confirmed)
+      const possibleSongs = bucket.possibleSongs.filter(n => !confirmedSongTitles.has(n.toLowerCase()));
+
+      // Tier 4: unmatched ALL CAPS lines
+      const unknownCaps = bucket.unknownCaps;
+
+      const hasAnything = detectedChars.length || possibleChars.length || possibleSongs.length || unknownCaps.length;
+      if (!hasAnything) {
         return `<div class="sb-import-panel-kicker">Step 3 of 5</div>
           <h3 class="sb-import-panel-title">Characters</h3>
           <div class="sb-empty">No character names detected. BTS will place characters into scenes based on confirmed names only. Click Next to continue.</div>`;
       }
-      const sourceNote = pool.length
-        ? 'BTS found a character list in the front matter. Confirm which names are cast characters.'
-        : 'BTS detected these names in the script body. Confirm which are cast characters. Unchecked names are ignored.';
-      return `<div class="sb-import-panel-kicker">Step 3 of 5</div>
+
+      const makeRow = (name, badge, sourceLabel, checked, dataAttr) => `<div class="sb-import-name-row">
+        <div class="sb-import-issue-main">
+          <span class="sb-import-issue-badge">${badge}</span>
+          <div>
+            <div class="sb-import-issue-source">${sourceLabel}</div>
+            <div class="sb-import-name-value">${esc(name)}</div>
+          </div>
+        </div>
+        <div class="sb-import-issue-controls">
+          <label><input type="checkbox" ${dataAttr}="${esc(name)}" ${checked ? 'checked' : ''} /> Approve</label>
+        </div>
+      </div>`;
+
+      let html = `<div class="sb-import-panel-kicker">Step 3 of 5</div>
         <h3 class="sb-import-panel-title">Characters</h3>
-        <div class="sb-import-panel-copy">${sourceNote}</div>
-        <div class="sb-import-name-table">
-          ${items.map((c, i) => {
-            const knownChar = productionChars.find(ch => ch.name && normalizeLoose(ch.name) === normalizeLoose(c.name));
-            return `<div class="sb-import-name-row">
-              <div class="sb-import-issue-main">
-                <span class="sb-import-issue-badge">${knownChar ? '●' : '?'}</span>
-                <div>
-                  <div class="sb-import-issue-source">${knownChar ? 'Matched to cast' : 'Unknown name'}</div>
-                  <div class="sb-import-name-value">${esc(c.name)}</div>
-                </div>
-              </div>
-              <div class="sb-import-issue-controls">
-                <label><input type="checkbox" data-import-char-approved="${esc(c.name)}" ${knownChar ? 'checked' : ''} /> Approve</label>
-              </div>
-            </div>`;
-          }).join('')}
-        </div>`;
+        <div class="sb-import-panel-copy">Check each section below. Approved characters will be placed into scenes. Anything unchecked is ignored during import.</div>`;
+
+      if (detectedChars.length) {
+        html += `<div class="sb-import-section-label" style="margin-top:1.2rem;font-size:0.68rem;font-weight:800;text-transform:uppercase;letter-spacing:0.08em;color:#769e7b;padding:0 0 0.4rem;">Detected Characters</div>
+          <div class="sb-import-name-table">
+            ${detectedChars.map(c => makeRow(c.name, '●', 'Matched to cast', true, 'data-import-char-approved')).join('')}
+          </div>`;
+      }
+
+      if (possibleChars.length) {
+        const poolNote = pool.length ? 'From character list' : 'Possible character';
+        html += `<div class="sb-import-section-label" style="margin-top:1.2rem;font-size:0.68rem;font-weight:800;text-transform:uppercase;letter-spacing:0.08em;color:#efab45;padding:0 0 0.4rem;">Possible Characters</div>
+          <div class="sb-import-name-table">
+            ${possibleChars.map(c => {
+              const knownChar = productionChars.find(ch => ch.name && normalizeLoose(ch.name) === normalizeLoose(c.name));
+              return makeRow(c.name, '?', knownChar ? 'Matched to cast' : poolNote, !!knownChar, 'data-import-char-approved');
+            }).join('')}
+          </div>`;
+      }
+
+      if (possibleSongs.length) {
+        html += `<div class="sb-import-section-label" style="margin-top:1.2rem;font-size:0.68rem;font-weight:800;text-transform:uppercase;letter-spacing:0.08em;color:#476aaa;padding:0 0 0.4rem;">Possible Songs</div>
+          <div class="sb-import-panel-copy" style="font-size:0.72rem;margin-bottom:0.5rem;">These look like song titles. Leave unchecked to treat them as songs, not characters.</div>
+          <div class="sb-import-name-table">
+            ${possibleSongs.map(n => makeRow(n, '♪', 'Possible song title', false, 'data-import-char-approved')).join('')}
+          </div>`;
+      }
+
+      if (unknownCaps.length) {
+        html += `<div class="sb-import-section-label" style="margin-top:1.2rem;font-size:0.68rem;font-weight:800;text-transform:uppercase;letter-spacing:0.08em;color:rgba(26,21,48,0.4);padding:0 0 0.4rem;">Unmatched ALL CAPS Lines</div>
+          <div class="sb-import-panel-copy" style="font-size:0.72rem;margin-bottom:0.5rem;">BTS couldn't classify these. They may be locations, headings, or section labels. Check any that are actually characters.</div>
+          <div class="sb-import-name-table">
+            ${unknownCaps.map(n => makeRow(n, '?', 'Unclassified', false, 'data-import-char-approved')).join('')}
+          </div>`;
+      }
+
+      return html;
     }
 
     function renderImportSavePanel(scenesToShow) {
