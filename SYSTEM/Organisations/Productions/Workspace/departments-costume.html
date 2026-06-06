@@ -8,6 +8,7 @@
   <title>Costumes, Hair &amp; Makeup - Build The Show</title>
   <link rel="stylesheet" href="/ASSETS/styles/styles.css?v=typography-safe-20260421-2025" />
   <link rel="stylesheet" href="/ASSETS/styles/production-sidebar.css?v=sidebar-v45-20260605" />
+  <link rel="stylesheet" href="/ASSETS/styles/casting-card.css?v=role-black-20260512" />
   <style>
     * { box-sizing: border-box; }
     html { width: 100%; max-width: 100%; overflow-x: hidden; }
@@ -414,10 +415,9 @@
                 <div class="cp-col-title">Performers</div>
                 <div class="cp-col-sub">Cast members in your production.</div>
               </div>
-              <button class="cp-add-btn" onclick="openModal('performer')">+ Add Performer</button>
             </div>
-            <div class="cp-list" id="performers-summary-list">
-              <div class="cp-empty">No performers yet.</div>
+            <div id="performers-summary-list" style="display:grid;grid-template-columns:repeat(6,1fr);gap:0.75rem;padding:0.25rem 0;">
+              <div class="cp-empty" style="grid-column:1/-1;">Loading cast...</div>
             </div>
           </div>
         </div>
@@ -490,6 +490,7 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="/ASSETS/scripts/casting-card.js?v=20260605"></script>
   <script src="/SHARED/Navigation/production-sidebar-nav.js?v=10"></script>
   <script>
     'use strict';
@@ -565,13 +566,13 @@
       let applicantMap = new Map();
       if (applicantIds.length) {
         const { data: appRows } = await sb.from('audition_applications')
-          .select('id, name, email, preferred_name, first_name, last_name, custom_answers')
+          .select('id, name, email, preferred_name, first_name, last_name, custom_answers, headshot_url, pronouns')
           .in('id', applicantIds);
         (appRows || []).forEach(r => applicantMap.set(String(r.id), r));
         const missing = applicantIds.filter(id => !applicantMap.has(String(id)));
         if (missing.length) {
           const { data: bkRows } = await sb.from('audition_bookings')
-            .select('id, name, email, preferred_name, first_name, last_name, custom_answers')
+            .select('id, name, email, preferred_name, first_name, last_name, custom_answers, headshot_url, pronouns')
             .in('id', missing);
           (bkRows || []).forEach(r => applicantMap.set(String(r.id), r));
         }
@@ -586,7 +587,7 @@
         if (!name || seenNames.has(normalizeName(name))) return;
         seenNames.add(normalizeName(name));
         const charName = row.character_id ? (characterMap.get(String(row.character_id))?.name || '') : 'Ensemble';
-        performers.push({ id: row.applicant_id, name, role: charName });
+        performers.push({ id: row.applicant_id, name, role: charName, headshot_url: app?.headshot_url || '', pronouns: app?.pronouns || '' });
       });
       performers.sort((a, b) => a.name.localeCompare(b.name));
 
@@ -701,35 +702,27 @@
 
     function renderPerformersSummary() {
       const el = document.getElementById('performers-summary-list');
-      if (!performers.length) { el.innerHTML = '<div class="cp-empty">No performers yet. Add one to get started.</div>'; return; }
-
-      const buckets = { 'Named Roles': [], 'Groups': [], 'Ensemble': [] };
-      performers.forEach(function (p) {
-        const rt = (charRoleMap[normalizeName(p.role || '')] || '').toLowerCase();
-        const nm = normalizeName(p.role || '');
-        if (nm === 'ensemble' || rt === 'ensemble') buckets['Ensemble'].push(p);
-        else if (rt === 'group' || rt === 'chorus') buckets['Groups'].push(p);
-        else buckets['Named Roles'].push(p);
-      });
-
-      let html = '';
-      ['Named Roles', 'Groups', 'Ensemble'].forEach(function (section) {
-        const list = buckets[section];
-        if (!list.length) return;
-        html += `<div style="padding:0.55rem 1rem 0.2rem;font-size:0.7rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:rgba(26,21,48,0.38);">${section}</div>`;
-        list.forEach(function (p) {
-          const color = avatarColor(p.name);
-          html += `<div class="cp-row" onclick="openModal('edit-performer','${p.id}')">
-            <div class="cp-row-avatar" style="background:${color};">${initials(p.name)}</div>
-            <div class="cp-row-body">
-              <div class="cp-row-name">${esc(p.name)}</div>
-              <div class="cp-row-meta">${esc(p.role || 'No role set')}</div>
-            </div>
-            <div class="cp-row-arrow">›</div>
-          </div>`;
+      if (!performers.length) {
+        el.innerHTML = '<div class="cp-empty" style="grid-column:1/-1;">No accepted cast yet.</div>';
+        return;
+      }
+      el.innerHTML = performers.map(function (p) {
+        const nameParts = p.name.trim().split(/\s+/);
+        return renderCastingCard({
+          first_name: nameParts[0] || p.name,
+          last_name: nameParts.slice(1).join(' '),
+          character_name: p.role || '',
+          headshot_url: p.headshot_url || '',
+          pronouns: p.pronouns || '',
+        }, {
+          size: 'compact',
+          hasPadding: true,
+          hasIcons: false,
+          draggable: false,
+          state: null,
+          variant: 'inTheShow',
         });
-      });
-      el.innerHTML = html;
+      }).join('');
     }
 
     function renderPerformersFull() {
