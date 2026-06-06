@@ -2733,7 +2733,7 @@
           return;
         }
 
-        const sceneMatch = parseSceneHeading(line, result.scenes.length);
+        const sceneMatch = parseSceneHeading(line, result.scenes.length, profile === 'scene_breakdown');
         if (sceneMatch) {
           currentScene = {
             actNumber: currentAct.number || 1,
@@ -2856,22 +2856,26 @@
       return { number, title: match[2] ? `Act ${match[1]} - ${match[2]}` : `Act ${match[1]}` };
     }
 
-    function parseSceneHeading(line, fallbackIndex) {
+    function parseSceneHeading(line, fallbackIndex, allowNumbered) {
       const raw = String(line || '').replace(/\s+/g, ' ').trim();
       let match = raw.match(/^prologue(?:\s*[-:–—]\s*(.+))?$/i);
       if (match) {
         const title = cleanSceneTitle(match[1]) || 'Prologue';
         return { number: 0, title, location: title === 'Prologue' ? '' : title };
       }
-      match = raw.match(/^scene\s+(\d+)\s*[:\-–—]\s*(.+)$/i);
+      match = raw.match(/^scene\s+(\d+)(?:\s*[:\-–—]\s*(.+))?$/i);
       if (match) {
         const title = cleanSceneTitle(match[2]) || `Scene ${match[1]}`;
         return { number: Number(match[1]), title, location: title };
       }
-      match = raw.match(/^(\d+)\s*[-:–—.)]\s*(.{3,90})$/i);
-      if (match && !/\b(track|cue|page|measure|bar)\b/i.test(raw)) {
-        const title = cleanSceneTitle(match[2]);
-        if (title && !looksLikeImportedNoise(title)) return { number: Number(match[1]) || fallbackIndex + 1, title, location: title };
+      // bare numbered format only trusted in scene_breakdown documents
+      // (Director's Guides number everything — tips, bars, blocking steps)
+      if (allowNumbered) {
+        match = raw.match(/^(\d+)\s*[-:–—.)]\s*(.{3,90})$/i);
+        if (match && !/\b(track|cue|page|measure|bar)\b/i.test(raw)) {
+          const title = cleanSceneTitle(match[2]);
+          if (title && !looksLikeImportedNoise(title)) return { number: Number(match[1]) || fallbackIndex + 1, title, location: title };
+        }
       }
       return null;
     }
