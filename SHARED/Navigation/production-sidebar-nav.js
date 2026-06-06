@@ -306,9 +306,14 @@
       var onclick = el.getAttribute('onclick') || '';
       if (onclick.indexOf("'" + currentFile + "'") !== -1 || onclick.indexOf('"' + currentFile + '"') !== -1) {
         el.classList.add('active');
-        // Belt-and-suspenders: force position:relative so ::before dot renders
-        // even if Cloudflare is serving a stale CSS file
         el.style.position = 'relative';
+        // Inject a physical dot element — no CSS pseudo-element dependency
+        if (!el.querySelector('.bts-nav-dot')) {
+          var dot = document.createElement('span');
+          dot.className = 'bts-nav-dot';
+          dot.style.cssText = 'position:absolute;left:1.8rem;top:50%;transform:translateY(-50%);width:5px;height:5px;border-radius:50%;background:#efab45;pointer-events:none;flex-shrink:0;';
+          el.appendChild(dot);
+        }
       }
     });
   }
