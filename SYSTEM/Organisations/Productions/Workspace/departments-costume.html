@@ -829,13 +829,13 @@
     async function loadAll() {
       const [charRes, castRes, gRes, aRes] = await Promise.all([
         sb.from('production_characters').select('id,name,role_type').eq('production_id', prodId).order('sort_order').order('name'),
-        sb.from('casting_assignments').select('*, audition_applications(id, name, preferred_name, first_name, last_name, headshot_url, pronouns, email, custom_answers), audition_bookings(id, name, preferred_name, first_name, last_name, headshot_url, pronouns, email, custom_answers)').eq('production_id', prodId).in('state', ['chosen', 'offer_accepted']),
+        sb.from('cast_members').select('*').eq('production_id', prodId).in('state', ['chosen', 'offer_accepted']),
         sb.from('costume_groups').select('*').eq('production_id', prodId).order('sort_order').order('name'),
         sb.from('costume_assignments').select('*').eq('production_id', prodId),
       ]);
 
       const characters = charRes.data || [];
-      const castingRows = castRes.data || [];
+      const castMembers = castRes.data || [];
       groups = gRes.data || [];
       assignments = aRes.data || [];
 
@@ -849,30 +849,21 @@
       // Build character id → character map
       const characterMap = new Map(characters.map(c => [String(c.id), c]));
 
-      // Build performers using Supabase-joined data — no manual ID matching needed
-      const seenIds = new Set();
-      performers = [];
-      castingRows.forEach(function (row) {
-        const id = String(row.applicant_id || '');
-        if (!id || seenIds.has(id)) return;
-        seenIds.add(id);
-        // Use whichever joined table has data
-        const p = row.audition_applications || row.audition_bookings || null;
-        const charName = row.character_id ? (characterMap.get(String(row.character_id))?.name || '') : 'Ensemble';
-        performers.push({
-          id,
-          name: acceptedApplicantName(p) || p?.email || 'Performer',
-          role: charName,
-          headshot_url: p?.headshot_url || '',
-          pronouns: p?.pronouns || '',
-          answers: applicantCustomAnswers(p),
-        });
-      });
-      performers.sort((a, b) => a.name.localeCompare(b.name));
+      // Performers come straight from cast_members — one clean query, no joins needed
+      performers = castMembers.map(function (m) {
+        return {
+          id: m.applicant_id,
+          name: m.preferred_name || m.name || m.email || '',
+          role: m.character_name || '',
+          headshot_url: m.headshot_url || '',
+          pronouns: m.pronouns || '',
+          answers: m.registration_answers || {},
+        };
+      }).filter(p => p.name).sort((a, b) => a.name.localeCompare(b.name));
 
-      // Seed costume_groups from characters (DB only — no performer table)
-      await seedCostumeGroupsFromCharacters(characters, castingRows);
-      buildAssignmentsFromCastingRows(castingRows, characterMap);
+      // Seed costume_groups from characters
+      await seedCostumeGroupsFromCharacters(characters, castMembers);
+      buildAssignmentsFromCastingRows(castMembers, characterMap);
     }
 
     async function seedCostumeGroupsFromCharacters(characters, acceptedAssignments) {

@@ -49195,6 +49195,36 @@ See you soon!
     if (error) throw error;
   }
 
+  async function upsertCastMember(app, characterId, characterName, state) {
+    if (!app || !prodId) return;
+    const ca = (app.custom_answers && typeof app.custom_answers === 'object') ? app.custom_answers : {};
+    const row = {
+      production_id: prodId,
+      applicant_id: String(app.id || ''),
+      character_id: characterId || null,
+      character_name: characterName || null,
+      state: state || 'chosen',
+      name: app.name || app.preferred_name || null,
+      preferred_name: app.preferred_name || null,
+      pronouns: app.pronouns || null,
+      date_of_birth: app.date_of_birth || app.dob || null,
+      email: app.email || null,
+      phone: app.phone || null,
+      guardian_name: app.guardian_name || ca['Guardian name'] || ca['Parent/Guardian Name'] || null,
+      guardian_email: app.guardian_contact || ca['Guardian email'] || ca['Parent/Guardian Email'] || null,
+      guardian_phone: ca['Guardian phone'] || ca['Parent/Guardian Phone'] || app.guardian_phone || null,
+      headshot_url: app.headshot_url || null,
+      registration_answers: app.custom_answers || {},
+      updated_at: new Date().toISOString(),
+    };
+    try {
+      await sb.from('cast_members')
+        .upsert(row, { onConflict: 'production_id,applicant_id,character_id' });
+    } catch (e) {
+      console.warn('[BTS] upsertCastMember failed', e);
+    }
+  }
+
   async function refreshFinalCastingAfterOfferStatusChange() {
     await loadFinalCastingPool();
     finalCastingEnsembleLoaded = false;
@@ -49222,6 +49252,10 @@ See you soon!
         await finalCastingSetOfferAssignmentState(item.app.id, role, nextState);
         const roleKey = role.id === '__ensemble__' ? '' : String(role.id || '');
         finalCastingOfferAcceptanceState.set(`${item.app.id}::${roleKey}`, nextState);
+        if (!isDecline) {
+          const charName = role.id === '__ensemble__' ? 'Ensemble' : (role.name || '');
+          await upsertCastMember(item.app, role.id === '__ensemble__' ? null : role.id, charName, 'offer_accepted');
+        }
       }
       await saveCastOfferState(item.app, {
         [CAST_OFFER_KEYS.status]: statusLabel,
@@ -61270,7 +61304,12 @@ See you soon!
     const isCallbacks = getActiveCastingBoardMode() === 'callbacks';
     if (isCallbacks) cbv2PaintCardState(assignment.applicant_id, assignment.character_id, assignment.state);
     showSaveStatus('saving');
-    try { await sb.from('casting_assignments').update({ state: 'chosen' }).eq('id', assignment.id); } catch {}
+    try {
+      await sb.from('casting_assignments').update({ state: 'chosen' }).eq('id', assignment.id);
+      const app = (allApplicants || []).find(a => String(a.id) === String(assignment.applicant_id));
+      const char = (characters || []).find(c => String(c.id) === String(assignment.character_id));
+      if (app) await upsertCastMember(app, assignment.character_id || null, char?.name || null, 'chosen');
+    } catch {}
     if (!isCallbacks) {
       renderActiveCastingBoard();
       renderCastList();
