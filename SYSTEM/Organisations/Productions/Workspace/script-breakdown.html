@@ -1479,6 +1479,66 @@
     .sb-import-section-label.songs     { color: #476aaa; }
     .sb-import-section-label.unknown   { color: rgba(26,21,48,0.38); }
     .sb-import-step-count[data-zero="1"] { opacity: 0.3; }
+
+    .sb-import-scene-row {
+      display: grid;
+      grid-template-columns: 18px auto minmax(0,1fr) minmax(56px,80px) minmax(80px,120px) minmax(80px,120px);
+      align-items: center;
+      gap: 0.6rem;
+      padding: 0.62rem 0.85rem;
+      border-radius: 8px;
+      border: 1.5px solid rgba(26,21,48,0.08);
+      background: #fff;
+      transition: border-color 0.12s;
+    }
+    .sb-import-scene-row:hover { border-color: rgba(87,46,136,0.22); }
+    .sb-import-scene-row.excluded { opacity: 0.45; }
+    .sb-import-scene-row input[type="checkbox"] { accent-color: #572e88; cursor: pointer; width:15px; height:15px; }
+    .sb-import-scene-type {
+      font-size: 0.62rem;
+      font-weight: 900;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      padding: 0.18rem 0.45rem;
+      border-radius: 999px;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .sb-import-scene-type.scene   { background: rgba(87,46,136,0.1);  color: #572e88; }
+    .sb-import-scene-type.prologue { background: rgba(71,106,170,0.12); color: #476aaa; }
+    .sb-import-scene-type.epilogue { background: rgba(202,126,167,0.15); color: #a0527e; }
+    .sb-import-scene-row input[type="text"],
+    .sb-import-scene-row input[type="number"],
+    .sb-import-scene-row select {
+      width: 100%;
+      min-width: 0;
+      border: 1px solid rgba(26,21,48,0.14);
+      border-radius: 6px;
+      padding: 0.3rem 0.45rem;
+      font: inherit;
+      font-size: 0.76rem;
+      color: #1a1530;
+      background: #faf9fc;
+    }
+    .sb-import-scene-row input:focus,
+    .sb-import-scene-row select:focus { outline: none; border-color: #572e88; background: #fff; }
+    .sb-import-scene-type-select {
+      font-size: 0.65rem;
+      font-weight: 700;
+      padding: 0.25rem 0.35rem;
+      border-radius: 6px;
+      border: 1px solid rgba(26,21,48,0.14);
+      background: #faf9fc;
+      color: #1a1530;
+      font-family: inherit;
+      cursor: pointer;
+    }
+    .sb-import-scene-notes-count {
+      font-size: 0.66rem;
+      color: rgba(26,21,48,0.38);
+      text-align: right;
+      white-space: nowrap;
+    }
     .sb-import-name-label {
       font-size: 0.62rem;
       font-weight: 900;
@@ -1606,6 +1666,9 @@
       .sb-import-footer-center { justify-content: center; }
       .sb-import-completion { justify-self: stretch; min-width: 0; align-items: flex-start; }
       .sb-import-name-row { grid-template-columns: 1fr; }
+      .sb-import-scene-row { grid-template-columns: 18px auto minmax(0,1fr) 56px; }
+      .sb-import-scene-row input[type="text"]:nth-of-type(2),
+      .sb-import-scene-row .sb-import-scene-notes-count { display: none; }
       .sb-workspace-grid { grid-template-columns: 1fr; padding: 1rem; }
       .sb-scene-card { grid-template-columns: 28px minmax(0, 1fr) 24px; }
       .sb-card-metric, .sb-card-state { display: none; }
@@ -2503,6 +2566,21 @@
       } else if (wasCurrent) {
         document.getElementById('sb-scene-view').style.display = 'none';
         document.getElementById('sb-empty').style.display = '';
+      }
+    }
+
+    function updateSceneTypeDisplay(index, type) {
+      const row = document.getElementById(`sb-import-scene-${index}`);
+      if (!row) return;
+      const numInput = row.querySelector('[data-field="number"]');
+      if (type === 'prologue' && numInput) numInput.value = 0;
+      else if (type === 'epilogue' && numInput) numInput.value = 9999;
+      // update the option text to show/hide scene number
+      const sel = row.querySelector('[data-field="sceneType"]');
+      if (sel) {
+        const sceneOpt = sel.querySelector('option[value="scene"]');
+        const num = type === 'scene' ? (numInput?.value || '') : '';
+        if (sceneOpt) sceneOpt.textContent = num ? `Scene ${num}` : 'Scene';
       }
     }
 
@@ -3616,59 +3694,40 @@
         <button type="button" class="sb-import-step ${importReviewStep === 'notes' ? 'active' : ''}" data-import-step="notes" onclick="switchImportReviewStep('notes')"><span class="sb-import-step-icon">!</span><span>Notes</span>${stepCount(totalNotes)}</button>
         <button type="button" class="sb-import-step ${importReviewStep === 'save' ? 'active' : ''}" data-import-step="save" onclick="switchImportReviewStep('save')"><span class="sb-import-step-icon">✓</span><span>Save</span>${stepCount(0)}</button>
       </div>` : '';
-      const sceneCardsHtml = scenesToShow.map((scene, index) => {
-        const charNames = scene.characterIds.map(id => productionChars.find(c => c.id === id)?.name).filter(Boolean).join(', ');
-        const notesText = scene.notes.map(note => note.body).filter(Boolean).join('\n');
-        return `<div class="sb-import-scene">
-          <div class="sb-import-toggle">
-            <label><input type="checkbox" class="sb-import-include" data-import-index="${index}" checked /> Import this scene</label>
-            <span class="sb-import-scene-meta">${scene.notes.length} note${scene.notes.length === 1 ? '' : 's'} proposed</span>
-          </div>
-          <div class="sb-import-edit-grid" data-import-index="${index}">
-            <div class="sb-import-field">
-              <label>Act</label>
-              <input data-field="actNumber" type="number" min="1" value="${esc(scene.actNumber || 1)}" />
-            </div>
-            <div class="sb-import-field">
-              <label>Scene #</label>
-              <input data-field="number" type="number" min="1" value="${esc(scene.number || index + 1)}" />
-            </div>
-            <div class="sb-import-field">
-              <label>Scene Title</label>
-              <input data-field="title" type="text" value="${esc(scene.title || '')}" />
-            </div>
-            <div class="sb-import-field">
-              <label>Act Title</label>
-              <input data-field="actTitle" type="text" value="${esc(scene.actTitle || `Act ${scene.actNumber || 1}`)}" />
-            </div>
-            <div class="sb-import-field">
-              <label>Location</label>
-              <input data-field="location" type="text" value="${esc(scene.location || '')}" placeholder="optional" />
-            </div>
-            <div class="sb-import-field">
-              <label>Time / Description</label>
-              <input data-field="description" type="text" value="${esc(scene.description || '')}" placeholder="optional" />
-            </div>
-            <div class="sb-import-field wide">
-              <label>Characters BTS matched</label>
-              <input data-field="characters" type="text" value="${esc(charNames)}" placeholder="Comma-separated character names" />
-              <div class="sb-import-help">Use names from the cast list when possible. BTS will match them back to the existing characters.</div>
-            </div>
-            <div class="sb-import-field wide">
-              <label>Groups BTS matched</label>
-              <input data-field="groups" type="text" value="${esc(scene.groups.join(', '))}" placeholder="Comma-separated group names" />
-            </div>
-            <div class="sb-import-field wide">
-              <label>Unmatched names to review</label>
-              <input data-field="unmatched" type="text" value="${esc((scene.unmatchedNames || []).join(', '))}" placeholder="Nothing unmatched" readonly />
-              <div class="sb-import-help">If one belongs in the scene, copy it into Characters or Groups using the name BTS already knows.</div>
-            </div>
-            <div class="sb-import-field wide">
-              <label>Scene Notes</label>
-              <textarea data-field="notes" placeholder="One note per line">${esc(notesText)}</textarea>
-              <div class="sb-import-help">Each line becomes a shared note. BTS will tag Costume, Props, Hair/Makeup, Stage Management, or Rehearsals from the wording.</div>
-            </div>
-          </div>
+      const sceneTypeLabel = (t) => {
+        if (t === 'prologue') return `<span class="sb-import-scene-type prologue">Prologue</span>`;
+        if (t === 'epilogue') return `<span class="sb-import-scene-type epilogue">Epilogue</span>`;
+        return `<span class="sb-import-scene-type scene">Scene</span>`;
+      };
+      // header row labels
+      const sceneTableHtml = `<div style="display:grid;grid-template-columns:18px auto minmax(0,1fr) minmax(56px,80px) minmax(80px,120px) minmax(80px,120px);gap:0.6rem;padding:0 0.85rem 0.4rem;align-items:end;">
+        <span></span><span></span>
+        <span style="font-size:0.6rem;font-weight:800;text-transform:uppercase;letter-spacing:0.08em;color:rgba(26,21,48,0.35);">Title</span>
+        <span style="font-size:0.6rem;font-weight:800;text-transform:uppercase;letter-spacing:0.08em;color:rgba(26,21,48,0.35);">Act</span>
+        <span style="font-size:0.6rem;font-weight:800;text-transform:uppercase;letter-spacing:0.08em;color:rgba(26,21,48,0.35);">Location</span>
+        <span style="font-size:0.6rem;font-weight:800;text-transform:uppercase;letter-spacing:0.08em;color:rgba(26,21,48,0.35);">Notes</span>
+      </div>`;
+      const sceneCardsHtml = sceneTableHtml + scenesToShow.map((scene, index) => {
+        const sType = scene.sceneType || 'scene';
+        const displayNum = sType === 'prologue' ? '' : sType === 'epilogue' ? '' : (scene.number || index + 1);
+        return `<div class="sb-import-scene-row" id="sb-import-scene-${index}" data-import-index="${index}">
+          <input type="checkbox" class="sb-import-include" data-import-index="${index}" checked onchange="this.closest('.sb-import-scene-row').classList.toggle('excluded',!this.checked)" />
+          <select class="sb-import-scene-type-select" data-field="sceneType" onchange="updateSceneTypeDisplay(${index},this.value)">
+            <option value="prologue" ${sType==='prologue'?'selected':''}>Prologue</option>
+            <option value="scene" ${sType==='scene'?'selected':''}>Scene ${displayNum}</option>
+            <option value="epilogue" ${sType==='epilogue'?'selected':''}>Epilogue</option>
+          </select>
+          <input data-field="title" type="text" value="${esc(scene.title || '')}" placeholder="Scene title" />
+          <input data-field="actNumber" type="number" min="1" value="${esc(scene.actNumber || 1)}" style="text-align:center;" />
+          <input data-field="location" type="text" value="${esc(scene.location || '')}" placeholder="optional" />
+          <span class="sb-import-scene-notes-count">${scene.notes.length} note${scene.notes.length === 1 ? '' : 's'}</span>
+          <input data-field="number" type="hidden" value="${esc(scene.number || index + 1)}" />
+          <input data-field="actTitle" type="hidden" value="${esc(scene.actTitle || `Act ${scene.actNumber || 1}`)}" />
+          <input data-field="description" type="hidden" value="${esc(scene.description || '')}" />
+          <input data-field="characters" type="hidden" value="" />
+          <input data-field="groups" type="hidden" value="${esc((scene.groups || []).join(', '))}" />
+          <input data-field="unmatched" type="hidden" value="${esc((scene.unmatchedNames || []).join(', '))}" />
+          <textarea data-field="notes" style="display:none;">${esc(scene.notes.map(n => n.body).filter(Boolean).join('\n'))}</textarea>
         </div>`;
       }).join('');
       list.innerHTML = summaryHtml + (scenesToShow.length ? `
@@ -3684,8 +3743,8 @@
             <div class="sb-import-panel ${importReviewStep === 'scenes' ? 'active' : ''}" data-import-panel="scenes">
               <div class="sb-import-panel-kicker">Step 2 of 5</div>
               <h3 class="sb-import-panel-title">Scenes</h3>
-              <div class="sb-import-panel-copy">Fix act numbers, titles, and locations. Characters will be placed into scenes after you confirm them in the next step.</div>
-              ${sceneCardsHtml}
+              <div class="sb-import-panel-copy">Uncheck any scenes to skip them. Fix titles, act numbers, and locations. Characters are placed in the next step.</div>
+              <div style="display:grid;gap:0.3rem;">${sceneCardsHtml}</div>
             </div>
             <div class="sb-import-panel ${importReviewStep === 'characters' ? 'active' : ''}" data-import-panel="characters">
               ${renderImportCharactersApprovalPanel()}
@@ -3892,7 +3951,7 @@
           return `<div><strong>${esc(tags)}:</strong> ${esc(note.body)}</div>`;
         }).join('') : '<div>No notes for this scene.</div>';
         return `<div class="sb-import-note-preview">
-          <strong>Act ${esc(draft.actNumber)}, Scene ${esc(draft.number)}: ${esc(draft.title)}</strong>
+          <strong>${draft.sceneType === 'prologue' ? 'Prologue' : draft.sceneType === 'epilogue' ? 'Epilogue' : `Act ${esc(draft.actNumber)}, Scene ${esc(draft.number)}`}: ${esc(draft.title)}</strong>
           <span>${draft.characterIds.length} character${draft.characterIds.length === 1 ? '' : 's'}, ${draft.groups.length} group${draft.groups.length === 1 ? '' : 's'}, ${draft.notes.length} note${draft.notes.length === 1 ? '' : 's'}</span>
           ${noteRows}
         </div>`;
@@ -3900,14 +3959,18 @@
     }
 
     function collectPdfImportDrafts() {
-      const cards = [...document.querySelectorAll('.sb-import-scene')];
+      const cards = [...document.querySelectorAll('.sb-import-scene-row')];
       return cards.map((card, fallbackIndex) => {
         const include = card.querySelector('.sb-import-include')?.checked;
         if (!include) return null;
         const readField = (field) => card.querySelector(`[data-field="${field}"]`)?.value?.trim() || '';
+        const sType = readField('sceneType') || 'scene';
         const actNumber = parseInt(readField('actNumber'), 10) || 1;
-        const sceneNumber = parseInt(readField('number'), 10) || fallbackIndex + 1;
-        const title = readField('title') || `Scene ${sceneNumber}`;
+        let sceneNumber = parseInt(readField('number'), 10);
+        if (sType === 'prologue') sceneNumber = 0;
+        else if (sType === 'epilogue') sceneNumber = 9999;
+        else if (!sceneNumber) sceneNumber = fallbackIndex + 1;
+        const title = readField('title') || (sType === 'prologue' ? 'Prologue' : sType === 'epilogue' ? 'Epilogue' : `Scene ${sceneNumber}`);
         const characterIds = splitImportList(readField('characters'))
           .map(findProductionCharacterByName)
           .filter(Boolean)
@@ -3921,6 +3984,7 @@
           actNumber,
           actTitle: readField('actTitle') || `Act ${actNumber}`,
           number: sceneNumber,
+          sceneType: sType,
           title,
           location: readField('location'),
           description: readField('description'),
