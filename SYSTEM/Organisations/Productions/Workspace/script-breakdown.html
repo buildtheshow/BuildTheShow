@@ -3033,13 +3033,24 @@
       const rawLines = normalizeImportedLines(text);
       const profile = requestedProfile === 'auto' ? detectImportProfile(rawLines) : (requestedProfile || 'scene_breakdown');
       const lines = filterImportNoise(rawLines, profile);
-      const result = { scenes: [], songs: [], characterPool: [], structuredSongs: false, structuredCharacters: false, profile, reviewBucket: { possibleCharacters: [], possibleSongs: [], unknownCaps: [] }, summary: { matchedCharacters: 0, unmatchedNames: 0, productionTips: 0, ignoredLines: Math.max(rawLines.length - lines.length, 0) } };
+      const result = { scenes: [], songs: [], characterPool: [], structuredSongs: false, structuredCharacters: false, profile, reviewBucket: { possibleCharacters: [], possibleSongs: [], unknownCaps: [], _nameFrequency: new Map() }, summary: { matchedCharacters: 0, unmatchedNames: 0, productionTips: 0, ignoredLines: Math.max(rawLines.length - lines.length, 0) } };
       prescanFrontMatter(lines, result, profile);
       let currentAct = { number: 1, title: 'Act 1' };
       let currentScene = null;
       let lastNote = null;
+      let scriptEnded = false;
+      let inCreditsSection = false;
 
       lines.forEach((line, index) => {
+        // once the script has ended, stop all character detection
+        if (scriptEnded) return;
+        // detect end-of-script section markers (educational content, glossary, credits, etc.)
+        if (currentScene && SCRIPT_EXIT_MARKERS.test(line.trim())) { scriptEnded = true; return; }
+        // detect credits blocks — names here are real people, not roles
+        if (CREDITS_SECTION_MARKERS.test(line.trim())) { inCreditsSection = true; return; }
+        // exit credits section when we hit an act, scene, or clearly non-credits heading
+        if (inCreditsSection && (parseActHeading(line) || parseSceneHeading(line, 0, false))) inCreditsSection = false;
+
         const actMatch = parseActHeading(line);
         if (actMatch) {
           currentAct = {
@@ -3086,20 +3097,25 @@
         }
 
         const speaker = parseDialogueSpeaker(line);
-        if (speaker && (profile === 'script' || profile === 'director_guide')) {
+        if (speaker && !inCreditsSection && (profile === 'script' || profile === 'director_guide')) {
           applyImportedNamesToScene(currentScene, [speaker]);
           return;
         }
 
         const standaloneChars = parseStandaloneCharacter(line);
-        if (standaloneChars && standaloneChars.length && (profile === 'script' || profile === 'director_guide')) {
+        if (standaloneChars && standaloneChars.length && !inCreditsSection && (profile === 'script' || profile === 'director_guide')) {
+          const songTitleSet = confirmedSongTitles.size ? confirmedSongTitles : new Set(result.songs.map(s => s.title.toLowerCase()));
           standaloneChars.forEach(name => {
             const isKnown = findProductionCharacterByName(name);
             if (isKnown) {
               applyImportedNamesToScene(currentScene, [name]);
             } else {
-              // classify into review bucket rather than auto-assigning
-              const bucket = classifyUnknownCapsLine(name, confirmedSongTitles.size ? confirmedSongTitles : new Set(result.songs.map(s => s.title)));
+              // track frequency — standalone unknown names must appear 2+ times to reach Possible Characters
+              const freq = (result.reviewBucket._nameFrequency.get(name) || 0) + 1;
+              result.reviewBucket._nameFrequency.set(name, freq);
+              // classify the name
+              const bucket = classifyUnknownCapsLine(name, songTitleSet);
+              // always tentatively put in the bucket; frequency gate applied in post-pass
               if (!result.reviewBucket[bucket].includes(name)) result.reviewBucket[bucket].push(name);
               if (!currentScene.unmatchedNames.includes(name)) currentScene.unmatchedNames.push(name);
             }
@@ -3156,12 +3172,19 @@
       const songTitlesForClassify = new Set(result.songs.map(s => (s.title || '').toLowerCase()));
       result.scenes.forEach(scene => {
         (scene.unmatchedNames || []).forEach(name => {
-          const alreadyClassified = Object.values(result.reviewBucket).some(arr => arr.includes(name));
+          const alreadyClassified = Object.values(result.reviewBucket).some(v => Array.isArray(v) && v.includes(name));
           if (!alreadyClassified) {
             const bucket = classifyUnknownCapsLine(name, songTitlesForClassify);
             if (!result.reviewBucket[bucket].includes(name)) result.reviewBucket[bucket].push(name);
           }
         });
+      });
+      // frequency gate: Possible Characters must appear 2+ times in the script
+      // (speaker-formatted names from parseDialogueSpeaker are already in characterIds, not possibleCharacters)
+      // unknownCaps and possibleSongs are shown regardless — they are informational, not auto-assigned
+      result.reviewBucket.possibleCharacters = result.reviewBucket.possibleCharacters.filter(name => {
+        const freq = result.reviewBucket._nameFrequency.get(name) || 0;
+        return freq >= 2;
       });
       result.summary.matchedCharacters = result.scenes.reduce((sum, scene) => sum + (scene.characterIds?.length || 0), 0);
       result.summary.unmatchedNames = result.scenes.reduce((sum, scene) => sum + (scene.unmatchedNames?.length || 0), 0);
@@ -3285,11 +3308,14 @@
       if (LOCATION_WORDS.test(raw)) return 'unknownCaps';
       // matches a known front-matter song title → possible song
       const norm = raw.toLowerCase();
-      if ([...songTitles].some(t => t.toLowerCase() === norm)) return 'possibleSongs';
-      // 1–3 words, no location words, no articles → possible character name
+      if (songTitles && [...songTitles].some(t => t.toLowerCase() === norm)) return 'possibleSongs';
       const words = raw.trim().split(/\s+/);
+      // 4+ word ALL CAPS lines are almost never character names — likely song titles or headings
+      if (words.length >= 4) return 'possibleSongs';
+      // SUPERCALIFRAGILISTICEXPIALIDOCIOUS and other very long single words → song title
+      if (words.length === 1 && raw.length > 18) return 'possibleSongs';
+      // 1–3 words, passes all checks → possible character name
       if (words.length >= 1 && words.length <= 3) return 'possibleCharacters';
-      // multi-word phrase that doesn't look like a name → possible song or heading
       return 'unknownCaps';
     }
 
@@ -3318,11 +3344,26 @@
       return /(prop|cake|letter|bag|umbrella|carry|handoff|preset|costume|dress|coat|hat|quick change|hair|makeup|wig|entrance|enter|exit|transition|stage|shift|safe|hazard|sound cue|lighting|set tip|blocking)/i.test(String(line || ''));
     }
 
+    // Educational/lesson-plan headings that should never become characters or notes
+    const EDUCATIONAL_HEADINGS = /^(english language arts|social studies|visual arts|mathematics|materials|objectives|introduction|warm[\-\s]?up|hook|reflection|main activity|discussion questions?|vocabulary|common core|learning standards?|theater arts|drama unit|lesson plan|before the show|after the show|pre[\-\s]show|post[\-\s]show|synopsis|themes?|historical context|curriculum|standards?)$/i;
+
+    // Section headers that mark the end of the script in MTI documents
+    const SCRIPT_EXIT_MARKERS = /^(show glossary|glossary|lesson plans?|educational materials?|study guide|educational guide|appendix|cast recording|cast album|production credits|original cast|creative team|about mti|about this show|about this guide|teacher.?s? guide|resource guide|licensing information|discussion questions?|vocabulary list|production history|plot synopsis|synopsis)$/i;
+
+    // Section headers that indicate a credits block (names here are real people, not roles)
+    const CREDITS_SECTION_MARKERS = /^(credits?|production credits?|original cast|original broadway cast|creative team|production team|cast recording|cast album|book by|music by|lyrics by|original production|orchestrations?|musical direction|choreography by|directed by)$/i;
+
     function looksLikeImportedNoise(line) {
       const clean = String(line || '').trim();
       if (/^(track|cue|music|page|part|scene|act|all|company|ensemble)?$/i.test(clean)) return true;
       if (/^scene\s+\d+$/i.test(clean)) return true;
       if (/^[&#b0-9œŒ‰j.\-\s]+$/.test(clean)) return true;
+      // music notation shorthand (J = quarter/eighth note, R = rest)
+      if (/^[JjRrBb\s]{1,14}$/.test(clean)) return true;
+      // trademark / copyright symbols alone
+      if (/^(TM|®|©|\(TM\)|\(R\)|™|®|™)$/.test(clean)) return true;
+      // educational lesson-plan headings
+      if (EDUCATIONAL_HEADINGS.test(clean)) return true;
       // sheet music lyric: space-hyphen-space = syllabification between notes
       if (/ - /.test(clean)) return true;
       // lowercase-hyphen-lowercase mid-word (bring-ing, ex-act-ly, pen-du-lum)
