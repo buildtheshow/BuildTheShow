@@ -1165,8 +1165,11 @@
       const perfMap = new Map();
       castMembers.forEach(function (m) {
         const key = m.applicant_id;
+        const answers = castRegistrationAnswers(m);
         const displayName = preferredDisplayName(m);
         const legalName = m.name || '';
+        const preferredFirstName = performerPreferredFirstName(m, answers);
+        const lastName = performerLastName(m, answers);
         const pronouns = cleanPronouns(m.pronouns);
         const name = displayName || legalName || m.email || '';
         if (!name) return;
@@ -1174,6 +1177,8 @@
           const existing = perfMap.get(key);
           if (displayName && displayName !== existing.name) existing.name = displayName;
           if (legalName && !existing.legal_name) existing.legal_name = legalName;
+          if (preferredFirstName && !existing.preferred_first_name) existing.preferred_first_name = preferredFirstName;
+          if (lastName && !existing.last_name) existing.last_name = lastName;
           if (pronouns && !existing.pronouns) existing.pronouns = pronouns;
           if (m.character_name && !existing.roles.includes(m.character_name)) {
             existing.roles.push(m.character_name);
@@ -1187,11 +1192,13 @@
             name,
             display_name: displayName || name,
             legal_name: legalName,
+            preferred_first_name: preferredFirstName,
+            last_name: lastName,
             roles: m.character_name ? [m.character_name] : [],
             roleTypes: m.role_type ? [m.role_type] : [],
             headshot_url: m.headshot_url || '',
             pronouns,
-            answers: m.registration_answers || {},
+            answers,
           });
         }
       });
@@ -1245,11 +1252,66 @@
       return app.custom_answers && typeof app.custom_answers === 'object' ? app.custom_answers : {};
     }
 
+    function castRegistrationAnswers(record) {
+      const answers = record?.registration_answers || {};
+      if (typeof answers === 'string') {
+        try { return JSON.parse(answers || '{}') || {}; } catch { return {}; }
+      }
+      return answers && typeof answers === 'object' ? answers : {};
+    }
+
+    function firstFilledValue(values) {
+      for (const value of values) {
+        const text = String(value || '').trim();
+        if (text) return text;
+      }
+      return '';
+    }
+
+    function performerPreferredFirstName(record, answers = castRegistrationAnswers(record)) {
+      return firstFilledValue([
+        record?.preferred_name,
+        record?.preferred_first_name,
+        answers['Preferred Name'],
+        answers['Preferred name'],
+        answers['Performer preferred name'],
+        answers['preferred_name'],
+        answers['Preferred first name'],
+        answers['Preferred First Name'],
+        record?.first_name,
+        answers['Legal first name'],
+        answers['Legal First Name'],
+        answers['First name'],
+        answers['First Name'],
+      ]);
+    }
+
+    function performerLastName(record, answers = castRegistrationAnswers(record)) {
+      const direct = firstFilledValue([
+        record?.last_name,
+        answers['Legal last name'],
+        answers['Legal Last Name'],
+        answers['Last name'],
+        answers['Last Name'],
+      ]);
+      if (direct) return direct;
+      const legalParts = String(record?.name || '').trim().split(/\s+/).filter(Boolean);
+      return legalParts.length > 1 ? legalParts[legalParts.length - 1] : '';
+    }
+
+    function performerCardDisplayName(p) {
+      const preferredFirst = String(p?.preferred_first_name || '').trim();
+      const last = String(p?.last_name || '').trim();
+      if (preferredFirst && last && preferredFirst.split(/\s+/).pop().toLowerCase() === last.toLowerCase()) return preferredFirst;
+      return [preferredFirst, last].filter(Boolean).join(' ') || p?.display_name || p?.name || '';
+    }
+
     function preferredDisplayName(record) {
       const preferred = String(record?.preferred_name || '').trim();
       if (preferred) return preferred;
-      const answers = record?.registration_answers && typeof record.registration_answers === 'object' ? record.registration_answers : {};
+      const answers = castRegistrationAnswers(record);
       return String(
+        answers['Preferred Name'] ||
         answers['Preferred name'] ||
         answers['Performer preferred name'] ||
         answers['preferred_name'] ||
@@ -1577,7 +1639,7 @@
       const looks = planningLooks(group);
       const approvedCount = looks.filter(look => approvalClass(look.approval_status) === 'approved').length;
       const assignedPerformers = assignedPerformersForGroup(group.id);
-      const performerNames = assignedPerformers.map(p => p.name).filter(Boolean).join(', ');
+      const performerNames = assignedPerformers.map(performerCardDisplayName).filter(Boolean).join(', ');
       const primaryPhoto = assignedPerformers.find(p => p.headshot_url)?.headshot_url || '';
       return `<section class="planning-item-card">
         <div class="planning-item-head">
