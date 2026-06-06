@@ -3502,7 +3502,10 @@
     }
 
     function rescanCharactersIntoScenes(approvedCharNames) {
-      const approved = approvedCharNames.map(n => String(n || '').trim()).filter(Boolean);
+      // always include every known production character — they never need manual approval
+      const allKnown = productionChars.map(c => c.name).filter(Boolean);
+      const userApproved = approvedCharNames.map(n => String(n || '').trim()).filter(Boolean);
+      const approved = [...new Set([...allKnown, ...userApproved])];
       if (!approved.length) return;
       const scenes = pendingPdfImport?.scenes || [];
       scenes.forEach(scene => {
@@ -3579,34 +3582,20 @@
       const pool = pendingPdfImport?.characterPool || [];
       const bucket = pendingPdfImport?.reviewBucket || { possibleCharacters: [], possibleSongs: [], unknownCaps: [] };
 
-      // Tier 1: detected characters — known production chars found via hard formats
-      const detectedChars = [];
-      (pendingPdfImport?.scenes || []).forEach(scene => {
-        (scene.characterIds || []).forEach(id => {
-          const char = productionChars.find(c => c.id === id);
-          if (char?.name && !detectedChars.find(c => c.name === char.name)) detectedChars.push({ name: char.name, matched: true });
-        });
-      });
+      // Known production chars are auto-placed — never shown for review here.
+      // Only show names BTS could NOT automatically identify.
 
-      // Tier 2: possible characters — from front matter pool or review bucket
+      // Possible characters: from front matter pool OR frequency-gated body detections
+      // Exclude anything already known to production cast and exclude confirmed song titles
+      const knownNames = new Set(productionChars.map(c => normalizeLoose(c.name)));
       const possibleChars = pool.length
-        ? pool.filter(c => !confirmedSongTitles.has((c.name || '').toLowerCase()) && !detectedChars.find(d => normalizeLoose(d.name) === normalizeLoose(c.name)))
-        : bucket.possibleCharacters.filter(n => !confirmedSongTitles.has(n.toLowerCase()) && !detectedChars.find(d => normalizeLoose(d.name) === normalizeLoose(n))).map(n => ({ name: n }));
+        ? pool.filter(c => !confirmedSongTitles.has((c.name || '').toLowerCase()) && !knownNames.has(normalizeLoose(c.name)))
+        : bucket.possibleCharacters.filter(n => !confirmedSongTitles.has(n.toLowerCase()) && !knownNames.has(normalizeLoose(n))).map(n => ({ name: n }));
 
-      // Tier 3: possible songs from review bucket (not already confirmed)
-      const possibleSongs = bucket.possibleSongs.filter(n => !confirmedSongTitles.has(n.toLowerCase()));
+      // Unmatched ALL CAPS lines — exclude known cast and confirmed songs
+      const unknownCaps = bucket.unknownCaps.filter(n => !knownNames.has(normalizeLoose(n)) && !confirmedSongTitles.has(n.toLowerCase()));
 
-      // Tier 4: unmatched ALL CAPS lines
-      const unknownCaps = bucket.unknownCaps;
-
-      const hasAnything = detectedChars.length || possibleChars.length || possibleSongs.length || unknownCaps.length;
-      if (!hasAnything) {
-        return `<div class="sb-import-panel-kicker">Step 3 of 5</div>
-          <h3 class="sb-import-panel-title">Characters</h3>
-          <div class="sb-empty">No character names detected. BTS will place characters into scenes based on confirmed names only. Click Next to continue.</div>`;
-      }
-
-      const makeRow = (name, badge, sourceLabel, checked, dataAttr) => `<div class="sb-import-name-row">
+      const makeRow = (name, badge, sourceLabel) => `<div class="sb-import-name-row">
         <div class="sb-import-issue-main">
           <span class="sb-import-issue-badge">${badge}</span>
           <div>
@@ -3615,45 +3604,35 @@
           </div>
         </div>
         <div class="sb-import-approve-controls">
-          <label><input type="checkbox" ${dataAttr}="${esc(name)}" ${checked ? 'checked' : ''} /> Approve</label>
+          <label><input type="checkbox" data-import-char-approved="${esc(name)}" /> Approve</label>
         </div>
       </div>`;
 
+      const hasAnything = possibleChars.length || unknownCaps.length;
+      if (!hasAnything) {
+        return `<div class="sb-import-panel-kicker">Step 3 of 5</div>
+          <h3 class="sb-import-panel-title">Characters</h3>
+          <div class="sb-import-panel-copy">All cast characters were automatically matched. Nothing needs review here.</div>
+          <div class="sb-empty" style="margin-top:0.5rem;">Known cast members will be placed into scenes automatically when you click Next.</div>`;
+      }
+
       let html = `<div class="sb-import-panel-kicker">Step 3 of 5</div>
         <h3 class="sb-import-panel-title">Characters</h3>
-        <div class="sb-import-panel-copy">Check each section below. Approved characters will be placed into scenes. Anything unchecked is ignored during import.</div>`;
-
-      if (detectedChars.length) {
-        html += `<div class="sb-import-section-label confirmed">Detected Characters</div>
-          <div class="sb-import-name-table">
-            ${detectedChars.map(c => makeRow(c.name, '●', 'Matched to cast', true, 'data-import-char-approved')).join('')}
-          </div>`;
-      }
+        <div class="sb-import-panel-copy">BTS found these names but could not match them to your cast list. Check any that are actually characters. Known cast members are placed automatically.</div>`;
 
       if (possibleChars.length) {
-        const poolNote = pool.length ? 'From character list' : 'Possible character';
+        const poolNote = pool.length ? 'From character list' : 'Seen multiple times';
         html += `<div class="sb-import-section-label possible">Possible Characters</div>
           <div class="sb-import-name-table">
-            ${possibleChars.map(c => {
-              const knownChar = productionChars.find(ch => ch.name && normalizeLoose(ch.name) === normalizeLoose(c.name));
-              return makeRow(c.name, '?', knownChar ? 'Matched to cast' : poolNote, !!knownChar, 'data-import-char-approved');
-            }).join('')}
-          </div>`;
-      }
-
-      if (possibleSongs.length) {
-        html += `<div class="sb-import-section-label songs">Possible Songs</div>
-          <div class="sb-import-panel-copy">These look like song titles. Leave unchecked unless they are actually character names.</div>
-          <div class="sb-import-name-table">
-            ${possibleSongs.map(n => makeRow(n, '♪', 'Possible song title', false, 'data-import-char-approved')).join('')}
+            ${possibleChars.map(c => makeRow(c.name, '?', poolNote)).join('')}
           </div>`;
       }
 
       if (unknownCaps.length) {
         html += `<div class="sb-import-section-label unknown">Unmatched ALL CAPS Lines</div>
-          <div class="sb-import-panel-copy">BTS could not classify these. They may be locations, headings, or section labels. Check any that are actually characters.</div>
+          <div class="sb-import-panel-copy">These could not be classified. Check any that are actually characters.</div>
           <div class="sb-import-name-table">
-            ${unknownCaps.map(n => makeRow(n, '?', 'Unclassified', false, 'data-import-char-approved')).join('')}
+            ${unknownCaps.map(n => makeRow(n, '?', 'Unclassified')).join('')}
           </div>`;
       }
 
@@ -3738,7 +3717,11 @@
       const songCount = pendingPdfImport?.songs?.length || 0;
       const charPoolCount = pendingPdfImport?.characterPool?.length || 0;
       const stepCount = (n) => `<span class="sb-import-step-count"${!n ? ' data-zero="1"' : ''}>${n || ''}</span>`;
-      const charCount = charPoolCount || (pendingPdfImport?.reviewBucket ? (pendingPdfImport.reviewBucket.possibleCharacters.length + pendingPdfImport.reviewBucket.possibleSongs.length + pendingPdfImport.reviewBucket.unknownCaps.length + summary.matchedCharacters) : (unresolved || summary.matchedCharacters || 0));
+      const knownCastNames = new Set(productionChars.map(c => normalizeLoose(c.name)));
+      const charBucketPossible = pendingPdfImport?.reviewBucket?.possibleCharacters?.filter(n => !knownCastNames.has(normalizeLoose(n))) || [];
+      const charBucketUnknown = pendingPdfImport?.reviewBucket?.unknownCaps?.filter(n => !knownCastNames.has(normalizeLoose(n))) || [];
+      const charPoolFiltered = charPoolCount ? (pendingPdfImport?.characterPool || []).filter(c => !knownCastNames.has(normalizeLoose(c.name))).length : 0;
+      const charCount = charPoolFiltered || (charBucketPossible.length + charBucketUnknown.length);
       const stepsHtml = scenesToShow.length ? `<div class="sb-import-steps">
         <button type="button" class="sb-import-step ${importReviewStep === 'songs' ? 'active' : ''}" data-import-step="songs" onclick="switchImportReviewStep('songs')"><span class="sb-import-step-icon">♪</span><span>Songs</span>${stepCount(songCount)}</button>
         <button type="button" class="sb-import-step ${importReviewStep === 'scenes' ? 'active' : ''}" data-import-step="scenes" onclick="switchImportReviewStep('scenes')"><span class="sb-import-step-icon">▣</span><span>Scenes</span>${stepCount(scenesToShow.length)}</button>
