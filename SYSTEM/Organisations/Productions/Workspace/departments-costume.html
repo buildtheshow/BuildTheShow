@@ -608,25 +608,30 @@
       // Build character id → character map
       const characterMap = new Map(characters.map(c => [String(c.id), c]));
 
-      // Performer data lives in audition_bookings
-      const { data: bkData } = await sb.from('audition_bookings').select('*').eq('production_id', prodId);
-      const bookingById = new Map((bkData || []).map(r => [String(r.id), r]));
+      // Load both tables — applicant_id may point to either
+      const [appRes, bkRes] = await Promise.all([
+        sb.from('audition_applications').select('id,name,preferred_name,headshot_url,pronouns,email').eq('production_id', prodId),
+        sb.from('audition_bookings').select('id,name,preferred_name,headshot_url,pronouns,email').eq('production_id', prodId),
+      ]);
+      const personById = new Map();
+      (appRes.data || []).forEach(r => personById.set(String(r.id), r));
+      (bkRes.data || []).forEach(r => { if (!personById.has(String(r.id))) personById.set(String(r.id), r); });
 
-      // Build performers from casting_assignments → audition_bookings
+      // Build performers from casting_assignments
       const seenIds = new Set();
       performers = [];
       castingRows.forEach(function (row) {
         const id = String(row.applicant_id || '');
         if (!id || seenIds.has(id)) return;
         seenIds.add(id);
-        const bk = bookingById.get(id);
+        const p = personById.get(id);
         const charName = row.character_id ? (characterMap.get(String(row.character_id))?.name || '') : 'Ensemble';
         performers.push({
           id,
-          name: bk?.name || bk?.preferred_name || 'Performer',
+          name: p?.name || p?.preferred_name || p?.email || 'Performer',
           role: charName,
-          headshot_url: bk?.headshot_url || '',
-          pronouns: bk?.pronouns || '',
+          headshot_url: p?.headshot_url || '',
+          pronouns: p?.pronouns || '',
         });
       });
       performers.sort((a, b) => a.name.localeCompare(b.name));
@@ -851,10 +856,9 @@
         return;
       }
       el.innerHTML = performers.map(function (p) {
-        const nameParts = p.name.trim().split(/\s+/);
-        return renderCastingCard({
-          first_name: nameParts[0] || p.name,
-          last_name: nameParts.slice(1).join(' '),
+        const card = renderCastingCard({
+          first_name: p.name,
+          last_name: '',
           character_name: p.role || '',
           headshot_url: p.headshot_url || '',
           pronouns: p.pronouns || '',
@@ -866,6 +870,7 @@
           state: null,
           variant: 'inTheShow',
         });
+        return `<div style="width:100%;">${card}</div>`;
       }).join('');
     }
 
