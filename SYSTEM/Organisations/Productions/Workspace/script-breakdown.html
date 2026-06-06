@@ -229,6 +229,18 @@
       transition: background 0.15s;
     }
     .sb-btn-add-note:hover { background: #4a2575; }
+    .sb-btn-secondary {
+      padding: 0.43rem 0.9rem;
+      background: #fff;
+      color: #572e88;
+      border: 1.5px solid rgba(87,46,136,0.18);
+      border-radius: 7px;
+      font-size: 0.78rem;
+      font-weight: 800;
+      cursor: pointer;
+      transition: border-color 0.15s, background 0.15s;
+    }
+    .sb-btn-secondary:hover { border-color: rgba(87,46,136,0.42); background: rgba(87,46,136,0.04); }
 
     /* ── TABS ── */
     .sb-tabs {
@@ -517,6 +529,7 @@
       padding: 1.75rem;
       box-shadow: 0 20px 60px rgba(26,21,48,0.22);
     }
+    .sb-modal.wide { max-width: 760px; max-height: min(82vh, 760px); overflow-y: auto; }
 
     .sb-modal-title {
       font-size: 1.05rem;
@@ -679,6 +692,32 @@
       text-transform: capitalize;
     }
 
+    .sb-import-status {
+      font-size: 0.78rem;
+      line-height: 1.5;
+      color: rgba(26,21,48,0.55);
+      margin-bottom: 0.9rem;
+    }
+    .sb-import-list { display: grid; gap: 0.65rem; }
+    .sb-import-scene {
+      border: 1.5px solid rgba(87,46,136,0.1);
+      border-radius: 10px;
+      padding: 0.85rem;
+      background: #fbfaff;
+    }
+    .sb-import-scene-title { font-size: 0.88rem; font-weight: 900; color: #1a1530; margin-bottom: 0.28rem; }
+    .sb-import-scene-meta { font-size: 0.72rem; color: rgba(26,21,48,0.45); line-height: 1.45; }
+    .sb-import-chip-row { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.55rem; }
+    .sb-import-chip {
+      display: inline-flex;
+      border-radius: 999px;
+      padding: 0.16rem 0.48rem;
+      background: rgba(87,46,136,0.08);
+      color: #572e88;
+      font-size: 0.65rem;
+      font-weight: 800;
+    }
+
     @media (max-width: 900px) {
       .prod-main { margin-left: 0; max-width: 100vw; }
       .sb-left { display: none; }
@@ -697,6 +736,9 @@
       <div class="sb-left-header">
         <span class="sb-left-title">Acts &amp; Scenes</span>
         <button class="sb-add-scene-btn" onclick="openAddSceneModal()" title="Add scene">+</button>
+      </div>
+      <div style="padding:0.75rem 1rem 0;border-bottom:1px solid rgba(26,21,48,0.06);">
+        <button class="sb-btn-secondary" style="width:100%;justify-content:center;" onclick="document.getElementById('pdf-import-input').click()">Upload PDF</button>
       </div>
       <div id="acts-list"></div>
     </div>
@@ -726,6 +768,7 @@
               <div class="sb-scene-subtitle" id="sb-subtitle-text"></div>
             </div>
             <div class="sb-header-actions">
+              <button class="sb-btn-secondary" onclick="document.getElementById('pdf-import-input').click()">Upload PDF</button>
               <button class="sb-btn-add-note" onclick="openAddNoteModal()">+ Add Note</button>
             </div>
           </div>
@@ -816,6 +859,7 @@
       </div>
     </div>
   </div>
+  <input id="pdf-import-input" type="file" accept="application/pdf,.pdf" style="display:none;" onchange="handlePdfImportFile(event)" />
 
   <!-- Modal: Add/Edit Scene -->
   <div class="sb-overlay" id="modal-scene" style="display:none;" onclick="if(event.target===this)closeSceneModal()">
@@ -906,6 +950,20 @@
     </div>
   </div>
 
+  <!-- Modal: PDF Import Review -->
+  <div class="sb-overlay" id="modal-pdf-import" style="display:none;" onclick="if(event.target===this)closePdfImportModal()">
+    <div class="sb-modal wide" onclick="event.stopPropagation()">
+      <div class="sb-modal-title">Review PDF Scene Import</div>
+      <div class="sb-import-status" id="pdf-import-status">Reading PDF...</div>
+      <div class="sb-import-list" id="pdf-import-review-list"></div>
+      <div class="sb-modal-actions">
+        <button class="sb-btn-cancel" onclick="closePdfImportModal()">Cancel</button>
+        <button class="sb-btn-save" id="pdf-import-save-btn" onclick="savePdfImport()" disabled>Save Scenes</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="/SHARED/Navigation/production-sidebar-nav.js?v=11"></script>
   <script>
@@ -942,6 +1000,7 @@
     let selectedNoteType = 'general';
     let selectedDepartmentTags = new Set();
     let editingSceneId = null;
+    let pendingPdfImport = null;
 
     function esc(s) {
       return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -984,6 +1043,19 @@
         return d.toLocaleTimeString('en-CA', { hour: 'numeric', minute: '2-digit', hour12: true });
       }
       return d.toLocaleDateString('en-CA', { month: 'short', day: 'numeric' });
+    }
+
+    function slugFileName(name) {
+      return String(name || 'script-breakdown.pdf')
+        .toLowerCase()
+        .replace(/[^a-z0-9.]+/g, '-')
+        .replace(/-+/g, '-')
+        .replace(/^-|-$/g, '')
+        .slice(0, 90) || 'script-breakdown.pdf';
+    }
+
+    function regexEscape(text) {
+      return String(text || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     }
 
     async function init() {
@@ -1460,6 +1532,301 @@
       if (data) sceneGroups.push(data);
       closeGroupModal();
       renderGroups();
+    }
+
+    // ── PDF IMPORT ─────────────────────────────────────────────
+    async function handlePdfImportFile(event) {
+      const file = event.target.files && event.target.files[0];
+      event.target.value = '';
+      if (!file) return;
+      if (!/pdf/i.test(file.type || file.name)) {
+        alert('Please upload a PDF file.');
+        return;
+      }
+
+      openPdfImportModal('Reading PDF...');
+      try {
+        if (window.pdfjsLib?.GlobalWorkerOptions) {
+          window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
+        }
+        const buffer = await file.arrayBuffer();
+        const [text, uploadedPath] = await Promise.all([
+          extractPdfText(buffer),
+          uploadBreakdownPdf(file),
+        ]);
+        const draft = parseBreakdownText(text);
+        pendingPdfImport = { fileName: file.name, text, scenes: draft.scenes, uploadedPath };
+        renderPdfImportReview();
+      } catch (error) {
+        console.error('[BTS] PDF import failed', error);
+        pendingPdfImport = null;
+        document.getElementById('pdf-import-status').textContent = 'Could not read this PDF. If it is scanned/image-only, it may need OCR first.';
+        document.getElementById('pdf-import-save-btn').disabled = true;
+      }
+    }
+
+    function openPdfImportModal(status) {
+      pendingPdfImport = null;
+      document.getElementById('pdf-import-status').textContent = status || 'Reading PDF...';
+      document.getElementById('pdf-import-review-list').innerHTML = '';
+      document.getElementById('pdf-import-save-btn').disabled = true;
+      document.getElementById('modal-pdf-import').style.display = 'flex';
+    }
+
+    function closePdfImportModal() {
+      document.getElementById('modal-pdf-import').style.display = 'none';
+      pendingPdfImport = null;
+    }
+
+    async function uploadBreakdownPdf(file) {
+      const path = `${prodId}/script-breakdowns/${Date.now()}-${slugFileName(file.name)}`;
+      const { error } = await sb.storage.from('production-files').upload(path, file, {
+        upsert: false,
+        contentType: file.type || 'application/pdf',
+      });
+      if (error) console.warn('[BTS] PDF storage upload failed', error);
+      return path;
+    }
+
+    async function extractPdfText(buffer) {
+      if (!window.pdfjsLib) throw new Error('PDF reader did not load.');
+      const pdf = await window.pdfjsLib.getDocument({ data: buffer }).promise;
+      const pages = [];
+      for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+        const page = await pdf.getPage(pageNum);
+        const content = await page.getTextContent();
+        const lines = textItemsToLines(content.items || []);
+        pages.push(lines.join('\n'));
+      }
+      const text = pages.join('\n\n').replace(/\u00a0/g, ' ').trim();
+      if (!text || text.length < 20) throw new Error('No selectable PDF text found.');
+      return text;
+    }
+
+    function textItemsToLines(items) {
+      const placed = items
+        .filter(item => String(item.str || '').trim())
+        .map(item => ({ text: String(item.str || '').trim(), x: item.transform?.[4] || 0, y: item.transform?.[5] || 0 }))
+        .sort((a, b) => Math.abs(b.y - a.y) > 3 ? b.y - a.y : a.x - b.x);
+      const lines = [];
+      placed.forEach(item => {
+        const line = lines.find(row => Math.abs(row.y - item.y) <= 3);
+        if (line) line.items.push(item);
+        else lines.push({ y: item.y, items: [item] });
+      });
+      return lines
+        .sort((a, b) => b.y - a.y)
+        .map(line => line.items.sort((a, b) => a.x - b.x).map(item => item.text).join(' ').replace(/\s+/g, ' ').trim())
+        .filter(Boolean);
+    }
+
+    function parseBreakdownText(text) {
+      const rawLines = String(text || '').split(/\n+/).map(line => line.replace(/\s+/g, ' ').trim()).filter(Boolean);
+      const result = { scenes: [] };
+      let currentAct = { number: 1, title: 'Act 1' };
+      let currentScene = null;
+      const actRe = /^act\s+([ivxlcdm]+|\d+)(?:\s*[-:–—]\s*(.+))?$/i;
+      const sceneRe = /^(?:scene\s+)?(\d+)\s*(?:[-:–—.)]\s*)?(.{0,90})$/i;
+
+      rawLines.forEach(line => {
+        const actMatch = line.match(actRe);
+        if (actMatch) {
+          currentAct = {
+            number: romanOrNumber(actMatch[1]) || result.scenes.reduce((m, s) => Math.max(m, s.actNumber || 1), 0) + 1,
+            title: actMatch[2] ? `Act ${actMatch[1]} - ${actMatch[2]}` : `Act ${actMatch[1]}`,
+          };
+          return;
+        }
+
+        const sceneMatch = line.match(sceneRe);
+        const looksLikeScene = sceneMatch && /scene\s+\d+|^\d+\s*[-:–—.)]\s*\S+/i.test(line) && !/\b(characters?|groups?|props?|notes?)\b/i.test(line);
+        if (looksLikeScene) {
+          currentScene = {
+            actNumber: currentAct.number || 1,
+            actTitle: currentAct.title || `Act ${currentAct.number || 1}`,
+            number: Number(sceneMatch[1]) || result.scenes.length + 1,
+            title: cleanSceneTitle(sceneMatch[2]) || `Scene ${sceneMatch[1]}`,
+            location: '',
+            description: '',
+            rawLines: [],
+            characterIds: [],
+            groups: [],
+            notes: [],
+          };
+          result.scenes.push(currentScene);
+          return;
+        }
+
+        if (!currentScene) return;
+        if (/^(characters?|groups?|scene notes?|notes?)\s*:?$/i.test(line)) return;
+        currentScene.rawLines.push(line);
+      });
+
+      if (!result.scenes.length && rawLines.length) {
+        result.scenes.push({
+          actNumber: 1,
+          actTitle: 'Act 1',
+          number: 1,
+          title: 'Imported Breakdown',
+          location: '',
+          description: '',
+          rawLines: rawLines.slice(0, 60),
+          characterIds: [],
+          groups: [],
+          notes: [],
+        });
+      }
+
+      result.scenes.forEach(scene => enrichImportedScene(scene));
+      return result;
+    }
+
+    function romanOrNumber(value) {
+      const raw = String(value || '').toLowerCase();
+      if (/^\d+$/.test(raw)) return Number(raw);
+      const map = { i: 1, v: 5, x: 10, l: 50, c: 100, d: 500, m: 1000 };
+      let total = 0;
+      for (let i = 0; i < raw.length; i++) {
+        const cur = map[raw[i]] || 0;
+        const next = map[raw[i + 1]] || 0;
+        total += cur < next ? -cur : cur;
+      }
+      return total || null;
+    }
+
+    function cleanSceneTitle(title) {
+      return String(title || '').replace(/^[-:–—.)\s]+/, '').replace(/\s+/g, ' ').trim();
+    }
+
+    function enrichImportedScene(scene) {
+      const haystack = `${scene.title}\n${scene.rawLines.join('\n')}`;
+      const charMatches = [];
+      const groupMatches = [];
+      productionChars.forEach(char => {
+        if (!char?.name) return;
+        const re = new RegExp(`(^|[^A-Za-z])${regexEscape(char.name)}([^A-Za-z]|$)`, 'i');
+        if (!re.test(haystack)) return;
+        const roleType = String(char.role_type || '').toLowerCase();
+        if (roleType === 'group' || roleType === 'chorus' || roleType === 'ensemble') groupMatches.push(char.name);
+        else charMatches.push(char.id);
+      });
+      scene.characterIds = [...new Set(charMatches)];
+      scene.groups = [...new Set(groupMatches)];
+      scene.notes = scene.rawLines
+        .filter(line => !productionChars.some(char => normalizeLoose(line) === normalizeLoose(char.name)))
+        .slice(0, 8)
+        .map(line => ({ body: line, note_type: inferNoteType(line), department_tags: inferDepartmentTags(line) }));
+    }
+
+    function normalizeLoose(text) {
+      return String(text || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+    }
+
+    function inferNoteType(line) {
+      const text = String(line || '').toLowerCase();
+      if (/prop|cake|letter|bag|umbrella|item|carry|handoff|preset/.test(text)) return /preset/.test(text) ? 'preset' : 'props';
+      if (/costume|dress|maid|coat|hat|quick change|change/.test(text)) return /quick change/.test(text) ? 'quick_change' : 'costume';
+      if (/hair|makeup|wig|pinned|face/.test(text)) return 'hair_makeup';
+      if (/entrance|enter|exit|transition|stage|shift/.test(text)) return 'stage_mgmt';
+      if (/safe|hazard|fight|fall|risk/.test(text)) return 'safety';
+      return 'general';
+    }
+
+    function inferDepartmentTags(line) {
+      const text = String(line || '').toLowerCase();
+      const tags = new Set();
+      if (/prop|cake|letter|bag|umbrella|item|carry|handoff|preset/.test(text)) tags.add('props');
+      if (/costume|dress|maid|coat|hat|quick change|change/.test(text)) tags.add('costume');
+      if (/hair|makeup|wig|pinned|face/.test(text)) tags.add('hair_makeup');
+      if (/entrance|enter|exit|transition|stage|shift|quick change|preset/.test(text)) tags.add('stage_mgmt');
+      if (/rehears|blocking|call/.test(text)) tags.add('rehearsals');
+      return [...tags];
+    }
+
+    function renderPdfImportReview() {
+      const saveBtn = document.getElementById('pdf-import-save-btn');
+      const list = document.getElementById('pdf-import-review-list');
+      const scenesToShow = pendingPdfImport?.scenes || [];
+      document.getElementById('pdf-import-status').textContent = scenesToShow.length
+        ? `Found ${scenesToShow.length} scene${scenesToShow.length === 1 ? '' : 's'} in ${pendingPdfImport.fileName}. Review before saving.`
+        : 'No scenes found. Try a PDF with selectable text and clear Scene headings.';
+      saveBtn.disabled = !scenesToShow.length;
+      list.innerHTML = scenesToShow.map(scene => {
+        const charNames = scene.characterIds.map(id => productionChars.find(c => c.id === id)?.name).filter(Boolean);
+        return `<div class="sb-import-scene">
+          <div class="sb-import-scene-title">${esc(scene.actTitle)} · Scene ${esc(scene.number)} · ${esc(scene.title)}</div>
+          <div class="sb-import-scene-meta">${scene.notes.length} note${scene.notes.length === 1 ? '' : 's'} proposed</div>
+          <div class="sb-import-chip-row">
+            ${charNames.map(name => `<span class="sb-import-chip">${esc(name)}</span>`).join('')}
+            ${scene.groups.map(name => `<span class="sb-import-chip">${esc(name)}</span>`).join('')}
+          </div>
+        </div>`;
+      }).join('');
+    }
+
+    async function savePdfImport() {
+      if (!pendingPdfImport?.scenes?.length) return;
+      const saveBtn = document.getElementById('pdf-import-save-btn');
+      saveBtn.disabled = true;
+      document.getElementById('pdf-import-status').textContent = 'Saving imported scenes...';
+
+      const actMap = new Map(acts.map(act => [Number(act.number), act]));
+      for (const draft of pendingPdfImport.scenes) {
+        let act = actMap.get(Number(draft.actNumber) || 1);
+        if (!act) {
+          const { data: newAct } = await sb.from('production_acts').insert({
+            production_id: prodId,
+            number: Number(draft.actNumber) || 1,
+            title: draft.actTitle || `Act ${draft.actNumber || 1}`,
+          }).select().single();
+          if (newAct) {
+            acts.push(newAct);
+            actMap.set(Number(newAct.number), newAct);
+            act = newAct;
+          }
+        }
+
+        const { data: scene } = await sb.from('production_scenes').insert({
+          production_id: prodId,
+          act_id: act?.id || null,
+          number: Number(draft.number) || 1,
+          title: draft.title || `Scene ${draft.number || scenes.length + 1}`,
+          location: draft.location || null,
+          description: draft.description || null,
+        }).select().single();
+        if (!scene) continue;
+        scenes.push(scene);
+
+        if (draft.characterIds.length) {
+          await sb.from('scene_characters').insert(draft.characterIds.map(id => ({
+            production_id: prodId,
+            scene_id: scene.id,
+            character_id: id,
+          })));
+        }
+        if (draft.groups.length) {
+          await sb.from('scene_groups').insert(draft.groups.map(name => ({
+            production_id: prodId,
+            scene_id: scene.id,
+            group_name: name,
+            member_count: null,
+          })));
+        }
+        if (draft.notes.length) {
+          await sb.from('scene_notes').insert(draft.notes.map(note => ({
+            production_id: prodId,
+            scene_id: scene.id,
+            body: note.body,
+            note_type: note.note_type || 'general',
+            department_tags: note.department_tags || [],
+            author_role: 'PDF Import',
+          })));
+        }
+      }
+
+      closePdfImportModal();
+      renderLeftPanel();
+      if (scenes.length) await selectScene(scenes[scenes.length - 1].id);
     }
 
     document.addEventListener('DOMContentLoaded', init);
