@@ -1877,7 +1877,8 @@
     let editingSceneId = null;
     let pendingPdfImport = null;
     let selectedImportProfile = 'auto';
-    let importReviewStep = 'characters';
+    let importReviewStep = 'songs';
+    let confirmedSongTitles = new Set();
 
     function esc(s) {
       return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -2642,6 +2643,10 @@
           importProfile: draft.profile,
           text,
           scenes: draft.scenes,
+          songs: draft.songs || [],
+          characterPool: draft.characterPool || [],
+          structuredSongs: draft.structuredSongs || false,
+          structuredCharacters: draft.structuredCharacters || false,
           summary: draft.summary,
           uploadedPath,
         };
@@ -2656,7 +2661,7 @@
 
     function openPdfImportModal(status) {
       pendingPdfImport = null;
-      importReviewStep = 'characters';
+      importReviewStep = 'songs';
       document.getElementById('pdf-import-status').textContent = status || 'Reading file...';
       document.getElementById('pdf-import-review-list').innerHTML = '';
       document.getElementById('pdf-import-save-btn').disabled = true;
@@ -2667,7 +2672,7 @@
     function closePdfImportModal() {
       document.getElementById('modal-pdf-import').style.display = 'none';
       pendingPdfImport = null;
-      importReviewStep = 'characters';
+      importReviewStep = 'songs';
     }
 
     async function uploadBreakdownFile(file) {
@@ -2757,11 +2762,55 @@
         .filter(Boolean);
     }
 
+    function extractCharacterPoolEntry(line) {
+      const raw = String(line || '').trim();
+      const match = raw.match(/^([A-Z][A-Z\s.'\-]{1,40})(?:\s*[-–(\/,].*)?$/);
+      if (!match) return null;
+      const name = match[1].trim();
+      if (name.split(/\s+/).length > 5) return null;
+      if (looksLikeImportedNoise(name)) return null;
+      if (/\b(scene|act|prologue|epilogue|note|tip|sound|light|block|direct|costume|prop|hair|music|choreog|rehearsal|staging)\b/i.test(name)) return null;
+      return titleCaseName(name);
+    }
+
+    function extractSongPoolEntry(line) {
+      const songLine = parseSongBreakdownLine(line);
+      if (songLine) return { title: songLine.title, names: songLine.names };
+      let match = line.match(/^\d+\.\s+"?([^"]{2,60})"?\s*(?:[.\-–].*)?$/);
+      if (match) return { title: cleanSceneTitle(match[1]), names: [] };
+      match = line.match(/^"([^"]{2,60})"$/);
+      if (match) return { title: cleanSceneTitle(match[1]), names: [] };
+      return null;
+    }
+
+    function prescanFrontMatter(lines, result, profile) {
+      let mode = null;
+      for (let i = 0; i < Math.min(lines.length, 350); i++) {
+        const line = lines[i].trim();
+        if (!line) continue;
+        if (parseSceneHeading(line, 0, profile === 'scene_breakdown')) break;
+        if (parseActHeading(line)) { mode = null; continue; }
+        if (/^(characters?|cast(?: of characters?)?|cast list)$/i.test(line)) { mode = 'characters'; continue; }
+        if (/^(musical numbers?|songs?|scenes? &amp; musical numbers?|musical numbers? &amp; scenes?|song list|numbers?)$/i.test(line)) { mode = 'songs'; continue; }
+        if (/^(scene (?:list|breakdown)|scenes? listed?)$/i.test(line)) { mode = null; continue; }
+        if (mode === 'characters') {
+          const name = extractCharacterPoolEntry(line);
+          if (name && !result.characterPool.find(c => c.name === name)) result.characterPool.push({ name });
+        } else if (mode === 'songs') {
+          const song = extractSongPoolEntry(line);
+          if (song && song.title && !result.songs.find(s => s.title.toLowerCase() === song.title.toLowerCase())) result.songs.push(song);
+        }
+      }
+      result.structuredCharacters = result.characterPool.length > 0;
+      result.structuredSongs = result.songs.length > 0;
+    }
+
     function parseBreakdownText(text, requestedProfile) {
       const rawLines = normalizeImportedLines(text);
       const profile = requestedProfile === 'auto' ? detectImportProfile(rawLines) : (requestedProfile || 'scene_breakdown');
       const lines = filterImportNoise(rawLines, profile);
-      const result = { scenes: [], profile, summary: { matchedCharacters: 0, unmatchedNames: 0, productionTips: 0, ignoredLines: Math.max(rawLines.length - lines.length, 0) } };
+      const result = { scenes: [], songs: [], characterPool: [], structuredSongs: false, structuredCharacters: false, profile, summary: { matchedCharacters: 0, unmatchedNames: 0, productionTips: 0, ignoredLines: Math.max(rawLines.length - lines.length, 0) } };
+      prescanFrontMatter(lines, result, profile);
       let currentAct = { number: 1, title: 'Act 1' };
       let currentScene = null;
       let lastNote = null;
@@ -2788,6 +2837,7 @@
             location: sceneMatch.location || '',
             description: '',
             rawLines: [],
+            allBodyLines: [],
             characterIds: [],
             groups: [],
             notes: [],
@@ -2800,6 +2850,7 @@
         }
 
         if (!currentScene) return;
+        currentScene.allBodyLines.push(line);
         if (/^(characters?|groups?|scene notes?|notes?)\s*:?$/i.test(line)) return;
         const songLine = parseSongBreakdownLine(line);
         if (songLine && (profile === 'scene_breakdown' || profile === 'director_guide')) {
@@ -3135,6 +3186,155 @@
       return [...tags];
     }
 
+    function rescanCharactersIntoScenes(approvedCharNames) {
+      const approved = approvedCharNames.map(n => String(n || '').trim()).filter(Boolean);
+      if (!approved.length) return;
+      const scenes = pendingPdfImport?.scenes || [];
+      scenes.forEach(scene => {
+        scene.characterIds = [];
+        scene.unmatchedNames = [];
+        (scene.allBodyLines || []).forEach(line => {
+          approved.forEach(name => {
+            const re = new RegExp(`(^|[^A-Za-z])${regexEscape(name)}([^A-Za-z]|$)`, 'i');
+            if (!re.test(line)) return;
+            const char = productionChars.find(c => c.name && normalizeLoose(c.name) === normalizeLoose(name));
+            if (char && !scene.characterIds.includes(char.id)) scene.characterIds.push(char.id);
+            else if (!char && !scene.unmatchedNames.includes(name)) scene.unmatchedNames.push(name);
+          });
+          const speaker = parseDialogueSpeaker(line);
+          if (speaker) {
+            const matchedApproved = approved.find(n => normalizeLoose(n) === normalizeLoose(speaker));
+            if (matchedApproved) {
+              const char = productionChars.find(c => c.name && normalizeLoose(c.name) === normalizeLoose(matchedApproved));
+              if (char && !scene.characterIds.includes(char.id)) scene.characterIds.push(char.id);
+            }
+          }
+        });
+      });
+    }
+
+    function collectConfirmedSongs() {
+      confirmedSongTitles = new Set();
+      document.querySelectorAll('[data-import-song-include]').forEach(cb => {
+        if (cb.checked) {
+          const title = cb.dataset.importSongInclude;
+          if (title) confirmedSongTitles.add(title.toLowerCase());
+        }
+      });
+    }
+
+    function collectConfirmedCharacters() {
+      const approved = [];
+      document.querySelectorAll('[data-import-char-approved]').forEach(cb => {
+        if (cb.checked) {
+          const name = cb.dataset.importCharApproved;
+          if (name) approved.push(name);
+        }
+      });
+      return approved;
+    }
+
+    function renderImportSongsPanel() {
+      const songs = pendingPdfImport?.songs || [];
+      if (!songs.length) {
+        return `<div class="sb-import-panel-kicker">Step 1 of 5</div>
+          <h3 class="sb-import-panel-title">Songs</h3>
+          <div class="sb-import-panel-copy">No song list was found in the front matter. BTS will still read song cues from the script body. Click Next to continue.</div>`;
+      }
+      return `<div class="sb-import-panel-kicker">Step 1 of 5</div>
+        <h3 class="sb-import-panel-title">Songs</h3>
+        <div class="sb-import-panel-copy">BTS found a musical numbers list. Confirm which songs to import. Unchecked songs won't be treated as character names.</div>
+        <div class="sb-import-name-table">
+          ${songs.map((song, i) => `<div class="sb-import-name-row">
+            <div class="sb-import-issue-main">
+              <span class="sb-import-issue-badge" style="background:#572e88;color:#fff;">♪</span>
+              <div>
+                <div class="sb-import-issue-source">Song title</div>
+                <div class="sb-import-name-value">${esc(song.title)}${song.characters ? `<span style="color:#999;font-size:0.8em;margin-left:0.5em;">${esc(song.characters)}</span>` : ''}</div>
+              </div>
+            </div>
+            <div class="sb-import-issue-controls">
+              <label><input type="checkbox" data-import-song-include="${esc(song.title)}" checked /> Include</label>
+            </div>
+          </div>`).join('')}
+        </div>`;
+    }
+
+    function renderImportCharactersApprovalPanel() {
+      const pool = pendingPdfImport?.characterPool || [];
+      const detected = [];
+      (pendingPdfImport?.scenes || []).forEach(scene => {
+        (scene.unmatchedNames || []).forEach(n => { if (!detected.includes(n)) detected.push(n); });
+        (scene.characterIds || []).forEach(id => {
+          const char = productionChars.find(c => c.id === id);
+          if (char?.name && !detected.includes(char.name)) detected.push(char.name);
+        });
+      });
+      const source = pool.length ? pool : detected.map(n => ({ name: n }));
+      const songFilter = confirmedSongTitles;
+      const items = source.filter(c => !songFilter.has((c.name || '').toLowerCase()));
+      if (!items.length) {
+        return `<div class="sb-import-panel-kicker">Step 3 of 5</div>
+          <h3 class="sb-import-panel-title">Characters</h3>
+          <div class="sb-empty">No character names detected. BTS will place characters into scenes based on confirmed names only. Click Next to continue.</div>`;
+      }
+      const sourceNote = pool.length
+        ? 'BTS found a character list in the front matter. Confirm which names are cast characters.'
+        : 'BTS detected these names in the script body. Confirm which are cast characters. Unchecked names are ignored.';
+      return `<div class="sb-import-panel-kicker">Step 3 of 5</div>
+        <h3 class="sb-import-panel-title">Characters</h3>
+        <div class="sb-import-panel-copy">${sourceNote}</div>
+        <div class="sb-import-name-table">
+          ${items.map((c, i) => {
+            const knownChar = productionChars.find(ch => ch.name && normalizeLoose(ch.name) === normalizeLoose(c.name));
+            return `<div class="sb-import-name-row">
+              <div class="sb-import-issue-main">
+                <span class="sb-import-issue-badge">${knownChar ? '●' : '?'}</span>
+                <div>
+                  <div class="sb-import-issue-source">${knownChar ? 'Matched to cast' : 'Unknown name'}</div>
+                  <div class="sb-import-name-value">${esc(c.name)}</div>
+                </div>
+              </div>
+              <div class="sb-import-issue-controls">
+                <label><input type="checkbox" data-import-char-approved="${esc(c.name)}" ${knownChar ? 'checked' : ''} /> Approve</label>
+              </div>
+            </div>`;
+          }).join('')}
+        </div>`;
+    }
+
+    function renderImportSavePanel(scenesToShow) {
+      const total = scenesToShow.length;
+      const totalNotes = scenesToShow.reduce((s, sc) => s + (sc.notes?.length || 0), 0);
+      const totalChars = scenesToShow.reduce((s, sc) => s + (sc.characterIds?.length || 0), 0);
+      return `<div class="sb-import-panel-kicker">Step 5 of 5</div>
+        <h3 class="sb-import-panel-title">Ready to Save</h3>
+        <div class="sb-import-panel-copy">Everything looks good. Click Save Everything to add these scenes to your Script Breakdown.</div>
+        <div class="sb-import-summary" style="margin-top:1.5rem;">
+          <div class="sb-import-stat">
+            <span class="sb-import-stat-icon scenes">▣</span>
+            <span>
+              <div class="sb-import-stat-number">${total}</div>
+              <div class="sb-import-stat-label">Scenes<br><span class="sb-import-stat-good">Ready</span></div>
+            </span>
+          </div>
+          <div class="sb-import-stat">
+            <span class="sb-import-stat-icon characters">●</span>
+            <span>
+              <div class="sb-import-stat-number">${totalChars}</div>
+              <div class="sb-import-stat-label">Characters<br><span class="sb-import-stat-good">Placed</span></div>
+            </span>
+          </div>
+          <div class="sb-import-stat">
+            <span class="sb-import-stat-icon notes">!</span>
+            <span>
+              <div class="sb-import-stat-number">${totalNotes}</div>
+              <div class="sb-import-stat-label">Notes<br><span class="sb-import-stat-good">Extracted</span></div>
+            </span>
+          </div>
+        </div>`;
+    }
+
     function renderPdfImportReview() {
       const saveBtn = document.getElementById('pdf-import-save-btn');
       const list = document.getElementById('pdf-import-review-list');
@@ -3178,11 +3378,14 @@
           </span>
         </div>
       </div>` : '';
+      const songCount = pendingPdfImport?.songs?.length || 0;
+      const charPoolCount = pendingPdfImport?.characterPool?.length || 0;
       const stepsHtml = scenesToShow.length ? `<div class="sb-import-steps">
-        <button type="button" class="sb-import-step ${importReviewStep === 'characters' ? 'active' : ''}" data-import-step="characters" onclick="switchImportReviewStep('characters')"><span class="sb-import-step-icon">●</span><span>Characters</span><span class="sb-import-step-count">${unresolved || summary.matchedCharacters || 0}</span></button>
-        <button type="button" class="sb-import-step ${importReviewStep === 'groups' ? 'active' : ''}" data-import-step="groups" onclick="switchImportReviewStep('groups')"><span class="sb-import-step-icon">◎</span><span>Groups</span><span class="sb-import-step-count">${groupsDetected}</span></button>
+        <button type="button" class="sb-import-step ${importReviewStep === 'songs' ? 'active' : ''}" data-import-step="songs" onclick="switchImportReviewStep('songs')"><span class="sb-import-step-icon">♪</span><span>Songs</span><span class="sb-import-step-count">${songCount}</span></button>
         <button type="button" class="sb-import-step ${importReviewStep === 'scenes' ? 'active' : ''}" data-import-step="scenes" onclick="switchImportReviewStep('scenes')"><span class="sb-import-step-icon">▣</span><span>Scenes</span><span class="sb-import-step-count">${scenesToShow.length}</span></button>
-        <button type="button" class="sb-import-step ${importReviewStep === 'notes' ? 'active' : ''}" data-import-step="notes" onclick="switchImportReviewStep('notes')"><span class="sb-import-step-icon">!</span><span>Production Notes</span><span class="sb-import-step-count">${totalNotes}</span></button>
+        <button type="button" class="sb-import-step ${importReviewStep === 'characters' ? 'active' : ''}" data-import-step="characters" onclick="switchImportReviewStep('characters')"><span class="sb-import-step-icon">●</span><span>Characters</span><span class="sb-import-step-count">${charPoolCount || unresolved || summary.matchedCharacters || 0}</span></button>
+        <button type="button" class="sb-import-step ${importReviewStep === 'notes' ? 'active' : ''}" data-import-step="notes" onclick="switchImportReviewStep('notes')"><span class="sb-import-step-icon">!</span><span>Notes</span><span class="sb-import-step-count">${totalNotes}</span></button>
+        <button type="button" class="sb-import-step ${importReviewStep === 'save' ? 'active' : ''}" data-import-step="save" onclick="switchImportReviewStep('save')"><span class="sb-import-step-icon">✓</span><span>Save</span><span class="sb-import-step-count"></span></button>
       </div>` : '';
       const sceneCardsHtml = scenesToShow.map((scene, index) => {
         const charNames = scene.characterIds.map(id => productionChars.find(c => c.id === id)?.name).filter(Boolean).join(', ');
@@ -3246,20 +3449,25 @@
             ${stepsHtml}
           </aside>
           <section>
-            <div class="sb-import-panel ${importReviewStep === 'characters' ? 'active' : ''}" data-import-panel="characters">
-              ${renderImportCharactersPanel(scenesToShow, 'character')}
-            </div>
-            <div class="sb-import-panel ${importReviewStep === 'groups' ? 'active' : ''}" data-import-panel="groups">
-              ${renderImportCharactersPanel(scenesToShow, 'group')}
+            <div class="sb-import-panel ${importReviewStep === 'songs' ? 'active' : ''}" data-import-panel="songs">
+              ${renderImportSongsPanel()}
             </div>
             <div class="sb-import-panel ${importReviewStep === 'scenes' ? 'active' : ''}" data-import-panel="scenes">
-              <div class="sb-import-panel-kicker">Reviewing</div>
+              <div class="sb-import-panel-kicker">Step 2 of 5</div>
               <h3 class="sb-import-panel-title">Scenes</h3>
-              <div class="sb-import-panel-copy">Fix act numbers, titles, locations, characters, groups, and any scene notes before saving.</div>
+              <div class="sb-import-panel-copy">Fix act numbers, titles, and locations. Characters will be placed into scenes after you confirm them in the next step.</div>
               ${sceneCardsHtml}
             </div>
+            <div class="sb-import-panel ${importReviewStep === 'characters' ? 'active' : ''}" data-import-panel="characters">
+              ${renderImportCharactersApprovalPanel()}
+            </div>
             <div class="sb-import-panel ${importReviewStep === 'notes' ? 'active' : ''}" data-import-panel="notes">
+              <div class="sb-import-panel-kicker">Step 4 of 5</div>
+              <h3 class="sb-import-panel-title">Production Notes</h3>
               ${renderImportNotesPanel(scenesToShow)}
+            </div>
+            <div class="sb-import-panel ${importReviewStep === 'save' ? 'active' : ''}" data-import-panel="save">
+              ${renderImportSavePanel(scenesToShow)}
             </div>
           </section>
         </div>
@@ -3269,6 +3477,27 @@
     }
 
     function switchImportReviewStep(step) {
+      // when leaving songs step, lock in confirmed song titles
+      if (importReviewStep === 'songs' && step !== 'songs') {
+        collectConfirmedSongs();
+      }
+      // when leaving characters step, run re-scan with only approved names
+      if (importReviewStep === 'characters' && step !== 'characters') {
+        const approved = collectConfirmedCharacters();
+        rescanCharactersIntoScenes(approved);
+        // re-render the scene cards with fresh character data
+        renderPdfImportReview();
+        importReviewStep = step;
+        document.querySelectorAll('.sb-import-step').forEach(btn => {
+          btn.classList.toggle('active', btn.dataset.importStep === step);
+        });
+        document.querySelectorAll('.sb-import-panel').forEach(panel => {
+          panel.classList.toggle('active', panel.dataset.importPanel === step);
+        });
+        if (step === 'notes' || step === 'save') refreshImportNotesPanel();
+        updateImportReviewFooter();
+        return;
+      }
       importReviewStep = step;
       document.querySelectorAll('.sb-import-step').forEach(btn => {
         btn.classList.toggle('active', btn.dataset.importStep === step);
@@ -3276,12 +3505,12 @@
       document.querySelectorAll('.sb-import-panel').forEach(panel => {
         panel.classList.toggle('active', panel.dataset.importPanel === step);
       });
-      if (step === 'notes') refreshImportNotesPanel();
+      if (step === 'notes' || step === 'save') refreshImportNotesPanel();
       updateImportReviewFooter();
     }
 
     function importReviewSteps() {
-      return ['characters', 'groups', 'scenes', 'notes'];
+      return ['songs', 'scenes', 'characters', 'notes', 'save'];
     }
 
     function moveImportReviewStep(direction) {
@@ -3411,10 +3640,7 @@
     }
 
     function renderImportNotesPanel() {
-      return `<div class="sb-import-note-preview">
-        <strong>Final check before saving.</strong>
-        <span>These notes will become shared scene notes. BTS will tag departments from the wording, and you can edit them later in the Script Breakdown.</span>
-      </div>
+      return `<div class="sb-import-panel-copy">These notes will become shared scene notes. BTS will tag departments from the wording, and you can edit them later in the Script Breakdown.</div>
       <div id="sb-import-notes-preview"></div>`;
     }
 
