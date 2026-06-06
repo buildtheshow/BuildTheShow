@@ -608,45 +608,25 @@
       // Build character id → character map
       const characterMap = new Map(characters.map(c => [String(c.id), c]));
 
-      // Load all applicants — full row, same as workspace, keyed by id AND email
-      const [appRes, bkRes] = await Promise.all([
-        sb.from('audition_applications').select('*').eq('production_id', prodId),
-        sb.from('audition_bookings').select('*').eq('production_id', prodId),
-      ]);
-      const allApps = appRes.data || [];
-      const allBks = bkRes.data || [];
-      window._dbg_castRows = castingRows.length;
-      window._dbg_appRows = allApps.length;
-      // Key applications by id, bookings by email (for name fallback)
-      const appById = new Map(allApps.map(r => [String(r.id), r]));
-      const bkById = new Map(allBks.map(r => [String(r.id), r]));
-      const bkByEmail = new Map();
-      allBks.forEach(r => { if (r.email) bkByEmail.set(String(r.email).toLowerCase().trim(), r); });
+      // Performer data lives in audition_bookings
+      const { data: bkData } = await sb.from('audition_bookings').select('*').eq('production_id', prodId);
+      const bookingById = new Map((bkData || []).map(r => [String(r.id), r]));
 
-      // Build performers in memory — no separate table needed
+      // Build performers from casting_assignments → audition_bookings
       const seenIds = new Set();
       performers = [];
       castingRows.forEach(function (row) {
-        const appId = String(row.applicant_id || '');
-        if (!appId || seenIds.has(appId)) return;
-        seenIds.add(appId);
-        const app = appById.get(appId);
-        const booking = bkById.get(appId);
-        const source = app || booking;
+        const id = String(row.applicant_id || '');
+        if (!id || seenIds.has(id)) return;
+        seenIds.add(id);
+        const bk = bookingById.get(id);
         const charName = row.character_id ? (characterMap.get(String(row.character_id))?.name || '') : 'Ensemble';
-        // Get name from application; if null, fall back to the matching booking row by email
-        let name = acceptedApplicantName(source);
-        if (!name && source?.email) {
-          const bk = bkByEmail.get(String(source.email).toLowerCase().trim());
-          name = acceptedApplicantName(bk) || '';
-        }
         performers.push({
-          id: appId,
-          name: name || source?.email || 'Performer',
+          id,
+          name: bk?.name || bk?.preferred_name || 'Performer',
           role: charName,
-          headshot_url: source?.headshot_url || '',
-          pronouns: source?.pronouns || '',
-          answers: applicantCustomAnswers(source),
+          headshot_url: bk?.headshot_url || '',
+          pronouns: bk?.pronouns || '',
         });
       });
       performers.sort((a, b) => a.name.localeCompare(b.name));
