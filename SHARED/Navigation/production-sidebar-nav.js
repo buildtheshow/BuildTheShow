@@ -210,12 +210,10 @@
         });
       });
       if (activeGroup) window.openSidebarGroup(activeGroup);
-      // double-rAF so the browser has painted before we try to mark active
-      requestAnimationFrame(function () {
-        requestAnimationFrame(function () {
-          markCurrentPageActive(activePage);
-        });
-      });
+      // Mark active immediately — we inject a DOM span, not a CSS ::before, so no rAF needed.
+      // Also re-run in rAF as belt-and-suspenders in case the group open is animated.
+      markCurrentPageActive(activePage);
+      requestAnimationFrame(function () { markCurrentPageActive(activePage); });
     }
 
     if (cached) applyAndInit(cached);
@@ -299,22 +297,28 @@
   };
 
 
+  function addActiveDot(el) {
+    el.classList.add('active');
+    el.style.position = 'relative';
+    if (!el.querySelector('.bts-nav-dot')) {
+      var dot = document.createElement('span');
+      dot.className = 'bts-nav-dot';
+      dot.style.cssText = 'position:absolute;left:1.8rem;top:50%;transform:translateY(-50%);width:5px;height:5px;border-radius:50%;background:#efab45;pointer-events:none;flex-shrink:0;z-index:10;';
+      el.appendChild(dot);
+    }
+  }
+
   function markCurrentPageActive(explicitFile) {
     var currentFile = explicitFile || location.pathname.split('/').pop().split('?')[0];
     if (!currentFile) return;
+    // Use attribute selector — most reliable, no quote-matching required
+    var sel = '.prod-tab[onclick*="' + currentFile + '"], .prod-sub-item[onclick*="' + currentFile + '"]';
+    var found = document.querySelector(sel);
+    if (found) { addActiveDot(found); return; }
+    // Fallback: iterate (handles edge cases where attribute selector might not match)
     document.querySelectorAll('.prod-tab, .prod-sub-item').forEach(function (el) {
       var onclick = el.getAttribute('onclick') || '';
-      if (onclick.indexOf("'" + currentFile + "'") !== -1 || onclick.indexOf('"' + currentFile + '"') !== -1) {
-        el.classList.add('active');
-        el.style.position = 'relative';
-        // Inject a physical dot element — no CSS pseudo-element dependency
-        if (!el.querySelector('.bts-nav-dot')) {
-          var dot = document.createElement('span');
-          dot.className = 'bts-nav-dot';
-          dot.style.cssText = 'position:absolute;left:1.8rem;top:50%;transform:translateY(-50%);width:5px;height:5px;border-radius:50%;background:#efab45;pointer-events:none;flex-shrink:0;';
-          el.appendChild(dot);
-        }
-      }
+      if (onclick.indexOf(currentFile) !== -1) addActiveDot(el);
     });
   }
 
