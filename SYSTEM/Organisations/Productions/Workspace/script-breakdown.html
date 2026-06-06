@@ -3052,30 +3052,48 @@
       return null;
     }
 
+    const PRESCAN_SONGS_HEADING = /^(musical numbers?(?: list)?|scenes?\s*&\s*musical numbers?|musical numbers?\s*&\s*scenes?|song list)$/i;
+    const PRESCAN_CHARS_HEADING = /^(characters?|cast(?: of characters?)?|cast list|dramatis personae)$/i;
+
     function prescanFrontMatter(lines, result, profile) {
-      console.log('[BTS prescan] lines 80-180:', lines.slice(80, 180).map((l, i) => `${i+80}: ${l}`).join('\n'));
-      let mode = null;
-      for (let i = 0; i < Math.min(lines.length, 600); i++) {
+      const MAX = Math.min(lines.length, 4000);
+
+      // Pass 1: find where each section heading appears
+      let songsStart = -1, charsStart = -1;
+      for (let i = 0; i < MAX; i++) {
         const line = lines[i].trim();
         if (!line) continue;
-        // only break on a scene heading when we are NOT actively collecting songs or characters
-        // (MTI's SCENES & MUSICAL NUMBERS list uses scene headings as grouping dividers within the list)
-        if (!mode && parseSceneHeading(line, 0, profile === 'scene_breakdown')) break;
-        // act headings are just grouping labels inside the list — ignore them, keep mode
-        if (parseActHeading(line)) continue;
-        if (/^(characters?|cast(?: of characters?)?|cast list|dramatis personae)$/i.test(line)) { console.log(`[BTS prescan] → characters mode at line ${i}: "${line}"`); mode = 'characters'; continue; }
-        if (/^(musical numbers?(?: list)?|songs?|scenes?\s*&\s*musical numbers?|musical numbers?\s*&\s*scenes?|song list|numbers?|act [ivx1-9]+\s*[-–]\s*musical numbers?)$/i.test(line)) { console.log(`[BTS prescan] → songs mode at line ${i}: "${line}"`); mode = 'songs'; continue; }
-        if (/^(scene (?:list|breakdown)|scenes? listed?)$/i.test(line)) { mode = null; continue; }
-        if (mode === 'characters') {
-          const name = extractCharacterPoolEntry(line);
-          if (name && !result.characterPool.find(c => c.name === name)) result.characterPool.push({ name });
-        } else if (mode === 'songs') {
-          // skip scene-heading lines used as grouping dividers within the MTI songs list
+        if (songsStart === -1 && PRESCAN_SONGS_HEADING.test(line)) { songsStart = i; console.log(`[BTS prescan] songs heading at line ${i}: "${line}"`); }
+        if (charsStart === -1 && PRESCAN_CHARS_HEADING.test(line)) { charsStart = i; console.log(`[BTS prescan] chars heading at line ${i}: "${line}"`); }
+        if (songsStart !== -1 && charsStart !== -1) break;
+      }
+
+      // Pass 2: extract from songs section
+      if (songsStart !== -1) {
+        for (let i = songsStart + 1; i < Math.min(lines.length, songsStart + 300); i++) {
+          const line = lines[i].trim();
+          if (!line) continue;
+          if (PRESCAN_CHARS_HEADING.test(line)) break;
+          if (/^(theater tips?|theatre tips?|notes? to (the )?director|production notes?|about (the|this)|copyright|all rights reserved)$/i.test(line)) break;
+          if (parseActHeading(line)) continue;
           if (parseSceneHeading(line, 0, false)) continue;
           const song = extractSongPoolEntry(line);
-          if (song && song.title && !result.songs.find(s => s.title.toLowerCase() === song.title.toLowerCase())) result.songs.push(song);
+          if (song?.title && !result.songs.find(s => s.title.toLowerCase() === song.title.toLowerCase())) result.songs.push(song);
         }
       }
+
+      // Pass 2b: extract from characters section
+      if (charsStart !== -1) {
+        for (let i = charsStart + 1; i < Math.min(lines.length, charsStart + 300); i++) {
+          const line = lines[i].trim();
+          if (!line) continue;
+          if (PRESCAN_SONGS_HEADING.test(line)) break;
+          if (/^(theater tips?|theatre tips?|notes? to (the )?director|production notes?|about (the|this)|copyright|scene \d|prologue|act [ivx1])/i.test(line)) break;
+          const name = extractCharacterPoolEntry(line);
+          if (name && !result.characterPool.find(c => c.name === name)) result.characterPool.push({ name });
+        }
+      }
+
       result.structuredCharacters = result.characterPool.length > 0;
       result.structuredSongs = result.songs.length > 0;
       console.log(`[BTS prescan] done — songs: ${result.songs.length}, characters: ${result.characterPool.length}`);
