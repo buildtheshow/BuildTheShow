@@ -2871,6 +2871,7 @@
           uploadBreakdownFile(file),
         ]);
         const draft = parseBreakdownText(text, selectedImportProfile);
+        stopLoadingMessageCycle();
         pendingPdfImport = {
           fileName: file.name,
           fileType: isImage ? 'photo' : 'pdf',
@@ -2888,23 +2889,56 @@
         renderPdfImportReview();
       } catch (error) {
         console.error('[BTS] breakdown import failed', error);
+        stopLoadingMessageCycle();
         pendingPdfImport = null;
         document.getElementById('pdf-import-status').textContent = 'Could not read this file. For photos, try a clearer image with the text straight-on and well lit.';
         document.getElementById('pdf-import-save-btn').disabled = true;
       }
     }
 
+    const PDF_LOADING_MESSAGES = [
+      'Reading script...',
+      'Flipping pages...',
+      'Finding scenes...',
+      'Spotting characters...',
+      'Checking song titles...',
+      'Counting pages...',
+      'Finding act breaks...',
+      'Almost there...',
+      'Still reading...',
+      'Nearly done...',
+    ];
+    let _pdfLoadingInterval = null;
+
+    function startLoadingMessageCycle(initialMsg) {
+      const el = document.getElementById('pdf-import-status');
+      if (!el) return;
+      el.textContent = initialMsg || PDF_LOADING_MESSAGES[0];
+      let idx = 1;
+      clearInterval(_pdfLoadingInterval);
+      _pdfLoadingInterval = setInterval(() => {
+        el.textContent = PDF_LOADING_MESSAGES[idx % PDF_LOADING_MESSAGES.length];
+        idx++;
+      }, 3000);
+    }
+
+    function stopLoadingMessageCycle() {
+      clearInterval(_pdfLoadingInterval);
+      _pdfLoadingInterval = null;
+    }
+
     function openPdfImportModal(status) {
       pendingPdfImport = null;
       importReviewStep = 'songs';
-      document.getElementById('pdf-import-status').textContent = status || 'Reading file...';
       document.getElementById('pdf-import-review-list').innerHTML = '';
       document.getElementById('pdf-import-save-btn').disabled = true;
       document.getElementById('modal-pdf-import').style.display = 'flex';
+      startLoadingMessageCycle(status);
       updateImportReviewFooter();
     }
 
     function closePdfImportModal() {
+      stopLoadingMessageCycle();
       document.getElementById('modal-pdf-import').style.display = 'none';
       pendingPdfImport = null;
       importReviewStep = 'songs';
