@@ -3069,10 +3069,29 @@
       const { error } = await sb.from('audition_applications').update({ custom_answers: merged }).eq('id', _applicant.id);
       if (error) throw error;
       _applicant.custom_answers = merged;
+      syncCastMemberRegistration(merged);
       showSavedIndicator();
     } catch (e) {
       console.warn('[BTS] autosave failed', e);
     }
+  }
+
+  function syncCastMemberRegistration(answers) {
+    if (!_applicant?.id || !rpfCurrentProductionId()) return;
+    const ca = answers || {};
+    sb.from('cast_members')
+      .update({
+        registration_answers: answers,
+        phone: _applicant.phone || ca['Phone'] || ca['phone'] || null,
+        guardian_name: _applicant.guardian_name || ca['Guardian name'] || ca['Parent/Guardian Name'] || null,
+        guardian_email: ca['Guardian email'] || ca['Parent/Guardian Email'] || null,
+        guardian_phone: ca['Guardian phone'] || ca['Parent/Guardian Phone'] || null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('production_id', rpfCurrentProductionId())
+      .eq('applicant_id', _applicant.id)
+      .then(function () {})
+      .catch(function (e) { console.warn('[BTS] cast_members sync failed', e); });
   }
 
   // ── Final submit ──────────────────────────────────────────────────────────────
@@ -3116,6 +3135,7 @@
       const { error } = await sb.from('audition_applications').update({ custom_answers: merged }).eq('id', _applicant.id);
       if (error) throw error;
       _applicant.custom_answers = merged;
+      syncCastMemberRegistration(merged);
       window._rpfSubmittedAnswerRows = pdfRows;
       showSavedIndicator();
       try {
