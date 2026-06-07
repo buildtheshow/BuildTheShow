@@ -7225,7 +7225,7 @@
       { re: /\bspecialty\s+props?\b/i, category: 'Specialty', extracts: true },
       { re: /\brehearsal\s+props?\b/i, category: 'Rehearsal', extracts: false },
       { re: /\bprops?\s+for\b/i, category: 'Props', extracts: false },
-      { re: /\bprops?\s+list\b/i, category: 'Props', extracts: true },
+      { re: /\bprops?\s+list\b/i, category: 'Props', extracts: false },
     ];
 
     function getPropSectionInfo(line) {
@@ -7236,9 +7236,10 @@
 
     function propListSectionKind(line) {
       const clean = String(line || '').replace(/\s+/g, ' ').trim();
-      if (isIgnoredPropSourceLine(clean)) return 'stop';
       const info = getPropSectionInfo(clean);
-      return info ? (info.extracts ? 'start' : 'prepare') : '';
+      if (info) return info.extracts ? 'start' : 'prepare';
+      if (isIgnoredPropSourceLine(clean)) return 'stop';
+      return '';
     }
 
     function cleanPropImportLine(line) {
@@ -7250,7 +7251,7 @@
         .trim();
     }
 
-    const PROP_SECTION_TAIL_RE = /.*?\b(?:(?:essential|required|optional|suggested|additional|hand|consumable|specialty|rehearsal)\s+props?|set\s+dressing|props?\s+list)\s*:?\s*/i;
+    const PROP_SECTION_TAIL_RE = /.*?\b(?:(?:essential|required|optional|suggested|additional|hand|consumable|specialty|rehearsal)\s+props?|set\s+dressing|props?\s+list|props?\s+for\s+[^:]+)\s*:?\s*/i;
     const PROP_FOOTER_RE = /\s+(?:E\d+\s*\|\s*)?(?:Disney\s+and\s+Cameron\s+Mackintosh.?s\s+Mary\s+Poppins\s+JR\.?|Music\s+Theatre\s+International|Broadway\s+Junior|Director.?s\s+Guide).*$/i;
 
     function getPropSectionTail(line) {
@@ -7290,13 +7291,13 @@
       if (/^(proper props handling|acquiring or creating props|props?\s+(definition|handling|notes?|tips?))$/i.test(clean)) return 'instructional section';
       if (/;\s*[A-Z][A-Za-z .'-]+,\s*[A-Z]{2}\b/.test(clean)) return 'photo credit';
       if (/^(mary poppins.?s signature umbrella|jane and michael banks with kite)\.?$/i.test(clean)) return 'photo caption';
-      if (!inListSection) return 'outside prop section';
+      if (!inListSection) return 'before prop list';
       return '';
     }
 
     function isIgnoredPropSourceLine(line, inListSection = false) {
       const reason = propSkipReason(line, inListSection);
-      return !!reason && reason !== 'outside prop section';
+      return !!reason && !['outside prop section', 'before prop list'].includes(reason);
     }
 
     function parsePropPageRefs(value) {
@@ -7311,6 +7312,7 @@
     function splitPropRow(line, category, inListSection) {
       let raw = cleanPropImportLine(line);
       if (!raw) return null;
+      if (!inListSection && !getPropSectionInfo(raw)?.extracts) return null;
 
       const sectionInfo = getPropSectionInfo(raw);
       if (sectionInfo) {
@@ -7324,7 +7326,7 @@
       const hadPageRef = /\(?(?:pp?\.?|pages?|pg\.?)\s*\d/i.test(raw);
       raw = raw.replace(/^([•*·-]|\d+[\.)])\s+/, '').trim();
 
-      if (!hadListMarker && !hadInlineMarker && !hadPageRef) return null;
+      if ((!hadListMarker && !hadInlineMarker) || !hadPageRef) return null;
 
       const pageResult = parsePropPageRefs(raw);
       raw = pageResult.text;
