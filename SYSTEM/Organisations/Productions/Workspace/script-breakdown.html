@@ -5804,6 +5804,8 @@
 
     function filterImportNoise(lines, profile) {
       const noise = /^(music theatre international|broadway junior|director.?s guide|actor.?s script|table of contents|credits|copyrights?|unauthorized|all rights reserved|page \d+|\d+|[a-zA-Z]\d+\s*\||\d+\s*\/\d+\s*\/\d+|mp .*\.indd|\f)$/i;
+      // standalone roman numeral page numbers (i, ii, iii, iv … xx)
+      if (/^(i{1,3}|iv|vi{0,3}|vii|viii|ix|x{1,3}|xi{0,3}|xi[iv]|xv|xvi{0,3}|xix|xx)$/i.test(line.trim())) return false;
       const musicNoise = /^[&#b0-9œŒ‰j.\-\s]+$/;
       return lines.filter(line => {
         const clean = line.trim();
@@ -7621,17 +7623,59 @@
     }
 
     function parseAsCharacterList(text) {
-      return normalizeImportedLines(text).map(line => {
-        const raw = cleanPropImportLine(line);
-        const parts = raw.split(/\s+[–—-]\s+|\s*:\s+/);
-        const entry = extractCharacterPoolEntry(parts[0] || raw);
-        if (entry) {
-          const description = cleanSceneTitle(parts.slice(1).join(' - '));
-          return { name: entry, description };
+      const chars = [];
+      const seen = new Set();
+      const sourceLines = filterImportNoise(normalizeImportedLines(text), 'characters');
+
+      let currentName = null;
+      let currentDescription = '';
+
+      const flush = () => {
+        if (!currentName) return;
+        const key = normalizeLoose(currentName);
+        if (!seen.has(key)) {
+          seen.add(key);
+          chars.push({ name: currentName, description: cleanSceneTitle(currentDescription.replace(/\s+/g, ' ').trim()) });
         }
-        const match = line.match(/^([A-Z][A-Za-z .'\-]{1,42})(?:\s*[-–—:]\s+.+)?$/);
-        return match && !looksLikeImportedNoise(match[1]) ? { name: titleCaseName(match[1]), description: '' } : null;
-      }).filter(Boolean);
+        currentName = null;
+        currentDescription = '';
+      };
+
+      const STOP = /^(theater tips?|theatre tips?|notes? to (the )?director|production notes?|about (the|this)|rehearsal tips?|staging notes?|have fun!?)$/i;
+      const SKIP = /^(characters?|cast(?: of characters?)?|cast list|dramatis personae|in order of appearance)$/i;
+
+      for (const line of sourceLines) {
+        const clean = cleanPropImportLine(line);
+        if (!clean) continue;
+
+        // Stop the whole parse at non-character sections
+        if (STOP.test(clean)) break;
+
+        // Skip known section headings and standalone parentheticals
+        if (SKIP.test(clean)) continue;
+        if (/^\(.*\)$/.test(clean)) continue;
+
+        // New entry: mostly-uppercase name (1-6 words) followed by em/en dash
+        const dashMatch = clean.match(/^(.+?)\s+[–—]\s+(.*)$/);
+        if (dashMatch) {
+          const candidateName = dashMatch[1].trim();
+          const letters = candidateName.replace(/[^a-zA-Z]/g, '');
+          const upperRatio = letters.length > 0 ? (candidateName.match(/[A-Z]/g) || []).length / letters.length : 0;
+          const wordCount = candidateName.split(/\s+/).length;
+          if (wordCount >= 1 && wordCount <= 6 && upperRatio >= 0.55 && !SKIP.test(candidateName) && !looksLikeImportedNoise(candidateName)) {
+            flush();
+            currentName = titleCaseName(candidateName);
+            currentDescription = dashMatch[2] || '';
+            continue;
+          }
+        }
+
+        // Otherwise: continuation of the current character's description
+        if (currentName) currentDescription += ' ' + clean;
+      }
+
+      flush();
+      return chars;
     }
 
     function parseAsSceneList(text) {
