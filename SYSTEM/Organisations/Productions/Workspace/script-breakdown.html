@@ -2854,6 +2854,29 @@
     .sbs-zone-hint { font-size: 0.72rem; color: rgba(26,21,48,0.4); }
     .sbs-zone-loaded { font-size: 0.78rem; color: #769e7b; font-weight: 700; margin-top: 0.4rem; }
     .sbs-zone-loading { font-size: 0.82rem; color: #572e88; font-style: italic; }
+    .sbs-paste-box {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 0.55rem;
+      align-items: end;
+      margin: 0.75rem 0 0.85rem;
+    }
+    .sbs-paste-input {
+      min-height: 4.75rem;
+      resize: vertical;
+      border: 1px solid rgba(87,46,136,0.18);
+      border-radius: 10px;
+      padding: 0.75rem 0.85rem;
+      font: inherit;
+      font-size: 0.82rem;
+      color: #1a1530;
+      background: #fff;
+      outline: none;
+    }
+    .sbs-paste-input:focus {
+      border-color: rgba(87,46,136,0.42);
+      box-shadow: 0 0 0 3px rgba(87,46,136,0.08);
+    }
 
     /* ── SBS pills ── */
     .sbs-pills-list {
@@ -2887,6 +2910,41 @@
     }
     .sbs-pill-remove:hover { color: #d1523d; }
     .sbs-empty-hint { font-size: 0.78rem; color: rgba(26,21,48,0.35); font-style: italic; }
+    .sbs-skipped-panel {
+      margin: -0.25rem 0 0.85rem;
+      padding: 0.65rem 0.75rem;
+      border: 1px dashed rgba(87,46,136,0.22);
+      border-radius: 10px;
+      background: rgba(87,46,136,0.035);
+      color: rgba(26,21,48,0.62);
+      font-size: 0.76rem;
+    }
+    .sbs-skipped-panel summary {
+      cursor: pointer;
+      font-weight: 900;
+      color: #572e88;
+    }
+    .sbs-skipped-list {
+      display: grid;
+      gap: 0.35rem;
+      max-height: 9rem;
+      overflow: auto;
+      margin-top: 0.55rem;
+      padding-right: 0.2rem;
+    }
+    .sbs-skipped-row {
+      display: grid;
+      grid-template-columns: minmax(8rem, 0.28fr) 1fr;
+      gap: 0.5rem;
+      align-items: start;
+    }
+    .sbs-skipped-reason {
+      color: rgba(87,46,136,0.72);
+      font-weight: 900;
+      text-transform: uppercase;
+      font-size: 0.66rem;
+    }
+    .sbs-skipped-text { color: rgba(26,21,48,0.54); }
 
     /* ── SBS scene rows ── */
     .sbs-scene-row {
@@ -5309,10 +5367,26 @@
       if (!items.length) return '<div class="sbs-empty-hint">Nothing added yet.</div>';
       return items.map((item, index) => {
         const label = item.title || item.name || item.location || `Scene ${index + 1}`;
-        return `<span class="sbs-pill">${esc(label)}
+        const detail = kind === 'props' && item.script_page_refs?.length ? ` · pp. ${item.script_page_refs.join(', ')}` : '';
+        const title = kind === 'props' && item.description ? `${label}: ${item.description}` : label;
+        return `<span class="sbs-pill" title="${esc(title)}">${esc(label)}${esc(detail)}
           <button type="button" class="sbs-pill-remove" onclick="removeStepCatalogueItem('${kind}',${index})" aria-label="Remove ${esc(label)}">×</button>
         </span>`;
       }).join('');
+    }
+
+    function renderPropImportSkippedPanel() {
+      const skipped = (pendingPdfImport?.propSkippedLines || []).filter(line => line.raw_text && line.ignore_reason).slice(0, 80);
+      if (!skipped.length) return '';
+      return `<details class="sbs-skipped-panel">
+        <summary>Skipped text (${pendingPdfImport.propSkippedLines.length})</summary>
+        <div class="sbs-skipped-list">
+          ${skipped.map(line => `<div class="sbs-skipped-row">
+            <span class="sbs-skipped-reason">${esc(line.ignore_reason)}</span>
+            <span class="sbs-skipped-text">${esc(line.raw_text)}</span>
+          </div>`).join('')}
+        </div>
+      </details>`;
     }
 
     function renderStepByStepPanel() {
@@ -5322,7 +5396,12 @@
           <div class="sbi-section-heading"><div class="sbi-section-icon">□</div><span class="sbi-section-title">Props</span></div>
           <div class="sbi-section-copy">Upload the prop list page or add prop names manually. BTS will look for these when it scans the script.</div>
           ${renderStepUploadZone('props', 'Upload prop list PDF or photo', 'Drop a prop list page here, or click to browse.')}
+          <div class="sbs-paste-box">
+            <textarea class="sbs-paste-input" id="sbs-prop-paste-input" placeholder="Or paste a prop list here"></textarea>
+            <button type="button" class="sbs-add-btn" onclick="readStepPropPastedText()">Read Prop List</button>
+          </div>
           <div class="sbs-pills-list">${renderCataloguePills('props', pendingPdfImport.propCatalogue || [])}</div>
+          ${renderPropImportSkippedPanel()}
           <div class="sbs-manual-row">
             <input class="sbs-manual-input" id="sbs-prop-input" type="text" placeholder="Prop name" onkeydown="if(event.key==='Enter'){event.preventDefault();addStepPropManual();}" />
             <button type="button" class="sbs-add-btn" onclick="addStepPropManual()">+ Add Prop</button>
@@ -5503,6 +5582,7 @@
         scenes: [],
         sceneCatalogue: [],
         propCatalogue: [],
+        propSkippedLines: [],
         songs: [],
         characterPool: [],
         structuredSongs: true,
@@ -5625,7 +5705,9 @@
         });
       } else if (kind === 'props') {
         const existing = new Set((pendingPdfImport.propCatalogue || []).map(prop => normalizeLoose(prop.name)));
-        parseAsPropList(text).forEach(prop => {
+        const parsedProps = parseAsPropList(text);
+        pendingPdfImport.propSkippedLines = parseAsPropList.skippedLines || [];
+        parsedProps.forEach(prop => {
           if (!existing.has(normalizeLoose(prop.name))) {
             pendingPdfImport.propCatalogue.push(prop);
             existing.add(normalizeLoose(prop.name));
@@ -5789,10 +5871,40 @@
       const input = document.getElementById('sbs-prop-input');
       const name = cleanSceneTitle(input?.value || '');
       if (!name || !pendingPdfImport) return;
-      mergeStepCatalogue('props', name);
+      if (!pendingPdfImport.propCatalogue) pendingPdfImport.propCatalogue = [];
+      if (!pendingPdfImport.propCatalogue.some(prop => normalizeLoose(prop.name) === normalizeLoose(name))) {
+        pendingPdfImport.propCatalogue.push({
+          name,
+          category: 'Props',
+          description: '',
+          script_page_refs: [],
+          department_name: 'Props',
+          status: 'Needed',
+          source_type: 'manual',
+          confidence_score: 100,
+          confidence: 'manual',
+          review_status: 'Approved',
+          selected_for_import: true,
+        });
+      }
       input.value = '';
       renderStepByStepImport();
       renderUploadDashboardStatus();
+    }
+
+    function readStepPropPastedText() {
+      const input = document.getElementById('sbs-prop-paste-input');
+      const text = input?.value || '';
+      if (!text.trim() || !pendingPdfImport) return;
+      const before = pendingPdfImport.propCatalogue?.length || 0;
+      mergeStepCatalogue('props', text);
+      input.value = '';
+      renderStepByStepImport();
+      renderUploadDashboardStatus();
+      if ((pendingPdfImport.propCatalogue?.length || 0) === before) {
+        const status = document.getElementById('pdf-import-status');
+        if (status) status.textContent = 'We could not find a clear prop list. You can add rows manually or check Skipped Text.';
+      }
     }
 
     function removeStepCatalogueItem(kind, index) {
@@ -5846,15 +5958,35 @@
       return scenes;
     }
 
-    function propListSectionKind(line) {
+    const PROP_CATEGORY_MAP = [
+      { re: /\bessential\s+props?\b/i, category: 'Essential', extracts: true },
+      { re: /\brequired\s+props?\b/i, category: 'Essential', extracts: true },
+      { re: /\boptional\s+props?\b/i, category: 'Optional', extracts: true },
+      { re: /\bsuggested\s+props?\b/i, category: 'Optional', extracts: true },
+      { re: /\badditional\s+props?\b/i, category: 'Optional', extracts: true },
+      { re: /\bhand\s+props?\b/i, category: 'Hand Prop', extracts: true },
+      { re: /\bset\s+dressing\b/i, category: 'Set Dressing', extracts: true },
+      { re: /\bconsumable\s+props?\b/i, category: 'Consumable', extracts: true },
+      { re: /\bspecialty\s+props?\b/i, category: 'Specialty', extracts: true },
+      { re: /\brehearsal\s+props?\b/i, category: 'Rehearsal', extracts: true },
+      { re: /\bprops?\s+for\b/i, category: 'Props', extracts: false },
+      { re: /\bprops?\s+list\b/i, category: 'Props', extracts: true },
+    ];
+
+    function getPropSectionInfo(line) {
       const clean = String(line || '').replace(/\s+/g, ' ').trim();
-      if (/^(proper props handling|acquiring or creating props|props?\s+(definition|handling|notes?|tips?)|set dressing notes?)$/i.test(clean)) return 'stop';
-      if (/\b(essential|rehearsal|show|final|production)\s+props?\b/i.test(clean)) return 'start';
-      if (/\bprops?\s+list\b/i.test(clean)) return 'start';
-      return '';
+      const found = PROP_CATEGORY_MAP.find(item => item.re.test(clean));
+      return found ? { category: found.category, extracts: found.extracts } : null;
     }
 
-    function stripPropLineNoise(line) {
+    function propListSectionKind(line) {
+      const clean = String(line || '').replace(/\s+/g, ' ').trim();
+      if (isIgnoredPropSourceLine(clean)) return 'stop';
+      const info = getPropSectionInfo(clean);
+      return info ? (info.extracts ? 'start' : 'prepare') : '';
+    }
+
+    function cleanPropImportLine(line) {
       return String(line || '')
         .replace(/\u00a0/g, ' ')
         .replace(/[“”]/g, '"')
@@ -5863,35 +5995,84 @@
         .trim();
     }
 
-    function extractPropCandidateName(line, inListSection) {
-      let raw = stripPropLineNoise(line);
+    function propSkipReason(line, inListSection) {
+      const clean = cleanPropImportLine(line);
+      if (!clean) return 'blank';
+      if (/^(music theatre international|broadway junior|director.?s guide|actor.?s script|copyright|all rights reserved)$/i.test(clean)) return 'publisher/header';
+      if (/^(e\d+|\d+|page\s+\d+)$/i.test(clean)) return 'page number';
+      if (/^(production photos?|photo captions?|credits?|creative team|copyrights?)$/i.test(clean)) return 'non-prop section';
+      if (/^(proper props handling|acquiring or creating props|props?\s+(definition|handling|notes?|tips?))$/i.test(clean)) return 'instructional section';
+      if (/;\s*[A-Z][A-Za-z .'-]+,\s*[A-Z]{2}\b/.test(clean)) return 'photo credit';
+      if (/^(mary poppins.?s signature umbrella|jane and michael banks with kite)\.?$/i.test(clean)) return 'photo caption';
+      if (!inListSection) return 'outside prop section';
+      return '';
+    }
+
+    function isIgnoredPropSourceLine(line, inListSection = false) {
+      const reason = propSkipReason(line, inListSection);
+      return !!reason && reason !== 'outside prop section';
+    }
+
+    function parsePropPageRefs(value) {
+      const raw = cleanPropImportLine(value);
+      const match = raw.match(/\(?(?:pp?\.?|pages?|pg\.?)\s*([0-9][0-9,\sand–—-]*)\)?/i);
+      if (!match) return { refs: [], text: raw };
+      const refs = [...match[1].matchAll(/\d+/g)].map(item => Number(item[0])).filter(Boolean);
+      const text = raw.replace(match[0], ' ').replace(/\s+/g, ' ').trim();
+      return { refs: [...new Set(refs)], text };
+    }
+
+    function splitPropRow(line, category, inListSection) {
+      let raw = cleanPropImportLine(line);
       if (!raw) return null;
 
-      const sectionTail = raw.match(/\b(?:essential|rehearsal|show|final|production)\s+props?\s*:\s*(.+)$/i);
-      if (sectionTail) raw = sectionTail[1].trim();
+      const sectionInfo = getPropSectionInfo(raw);
+      if (sectionInfo) {
+        const tail = raw.replace(/.*?\b(?:essential|required|optional|suggested|additional|hand|consumable|specialty|rehearsal|set dressing|props?\s+list)\s+props?\s*:?\s*/i, '').trim();
+        if (!tail || normalizeLoose(tail) === normalizeLoose(raw)) return null;
+        raw = tail;
+      }
 
       const hadListMarker = /^([•*·-]|\d+[\.)])\s+/.test(raw);
       const hadPageRef = /\(?\bpp?\.?\s*\d/i.test(raw);
       raw = raw.replace(/^([•*·-]|\d+[\.)])\s+/, '').trim();
 
-      if (!sectionTail && propListSectionKind(raw) === 'start' && !hadListMarker && !hadPageRef) return null;
       if (!hadListMarker && !hadPageRef && !inListSection) return null;
 
-      raw = raw
-        .replace(/\s*\(?\bpp?\.?\s*[\d,\s–—-]+\)?/ig, '')
-        .replace(/\s*\bpages?\s*[\d,\s–—-]+/ig, '')
-        .trim();
+      const pageResult = parsePropPageRefs(raw);
+      raw = pageResult.text;
 
-      const beforeDash = raw.split(/\s+[–—-]\s+/)[0]?.trim();
-      if (beforeDash && beforeDash.length >= 2) raw = beforeDash;
-      const beforeColon = raw.split(/\s*:\s+/)[0]?.trim();
-      if (beforeColon && beforeColon.length >= 2 && beforeColon.length <= 60) raw = beforeColon;
+      const parts = raw.split(/\s+[–—-]\s+|\s*:\s+/);
+      const name = cleanSceneTitle((parts.shift() || '').replace(/[.;,]+$/g, ''));
+      const description = cleanSceneTitle(parts.join(' - ').replace(/^[.;,]+/, ''));
+      if (!isLikelyPropCandidate(name)) return null;
 
-      return cleanSceneTitle(raw.replace(/[.;,]+$/g, ''));
+      const score = [
+        inListSection ? 25 : 0,
+        hadListMarker ? 25 : 0,
+        pageResult.refs.length ? 25 : 0,
+        description ? 15 : 0,
+        category && category !== 'Props' ? 10 : 0,
+      ].reduce((sum, value) => sum + value, 0);
+      const confidence = score >= 75 ? 'high' : score >= 45 ? 'medium' : 'low';
+
+      return {
+        name,
+        category: category || 'Props',
+        description,
+        script_page_refs: pageResult.refs,
+        department_name: 'Props',
+        status: 'Needed',
+        source_type: 'prop_import',
+        confidence_score: score,
+        confidence,
+        review_status: confidence === 'high' ? 'Approved' : 'Needs Review',
+        selected_for_import: confidence !== 'low',
+      };
     }
 
     function isLikelyPropCandidate(name) {
-      const clean = stripPropLineNoise(name);
+      const clean = cleanPropImportLine(name);
       if (!clean || clean.length < 2 || clean.length > 70) return false;
       if (!/[A-Za-z]{2}/.test(clean)) return false;
       if (looksLikeImportedNoise(clean) || parseActHeading(clean) || parseSceneHeading(clean, 0, false)) return false;
@@ -5899,7 +6080,7 @@
       if (/[.!?]$/.test(clean)) return false;
       const words = clean.split(/\s+/).filter(Boolean);
       if (words.length > 7) return false;
-      const lowerStarters = /^(any|all|below|if|when|where|whether|while|with|without|these|those|this|that|they|their|there|your|you|we|it|its|starting|proper|acquiring|scour|send|set|keep|return|indicate|survive|chosen|organized|budgetary|authenticity|storytelling|professionalism|production)$/i;
+      const lowerStarters = /^(any|all|below|if|when|where|whether|while|with|without|these|those|this|that|they|their|there|your|you|we|it|its|starting|proper|acquiring|scour|send|keep|return|indicate|survive|chosen|organized|budgetary|authenticity|storytelling|professionalism|production)$/i;
       if (lowerStarters.test(words[0])) return false;
       const proseWords = words.filter(word => /^(actor|actors|backstage|basement|budgetary|comprehensive|concept|encourage|exchange|professionalism|production|program|rehearsal|rehearsals|storytelling|thrift|using|visual|wise)$/i.test(word));
       if (proseWords.length >= 2) return false;
@@ -5911,24 +6092,63 @@
     function parseAsPropList(text) {
       const props = [];
       const seen = new Set();
+      const skipped = [];
       let inListSection = false;
+      let category = 'Props';
+      let current = null;
 
-      normalizeImportedLines(text).forEach(line => {
-        const sectionKind = propListSectionKind(line);
+      const pushCurrent = () => {
+        if (!current || !isLikelyPropCandidate(current.name)) return;
+        const key = normalizeLoose(current.name);
+        if (seen.has(key)) return;
+        current.description = cleanSceneTitle(current.description || '');
+        seen.add(key);
+        props.push(current);
+      };
+
+      normalizeImportedLines(text).forEach((line, index) => {
+        const clean = cleanPropImportLine(line);
+        const sectionInfo = getPropSectionInfo(clean);
+        const sectionKind = propListSectionKind(clean);
         if (sectionKind === 'stop') {
+          pushCurrent();
+          current = null;
           inListSection = false;
+          skipped.push({ raw_text: clean, sort_order: index, ignore_reason: propSkipReason(clean, true) || 'section stop' });
           return;
         }
-        if (sectionKind === 'start') inListSection = true;
+        if (sectionInfo) {
+          pushCurrent();
+          current = null;
+          category = sectionInfo.category || category;
+          inListSection = !!sectionInfo.extracts;
+          skipped.push({ raw_text: clean, sort_order: index, ignore_reason: 'section heading only' });
+          return;
+        }
 
-        const name = extractPropCandidateName(line, inListSection);
-        if (!isLikelyPropCandidate(name)) return;
-        const key = normalizeLoose(name);
-        if (seen.has(key)) return;
-        seen.add(key);
-        props.push({ name });
+        const row = splitPropRow(clean, category, inListSection);
+        if (row) {
+          pushCurrent();
+          current = row;
+          return;
+        }
+
+        if (current && inListSection && !isIgnoredPropSourceLine(clean, true) && !/^([•*·-]|\d+[\.)])\s+/.test(clean)) {
+          current.description = cleanSceneTitle(`${current.description || ''} ${clean}`);
+          current.confidence_score = Math.min(100, (current.confidence_score || 0) + 5);
+          if (current.confidence_score >= 75) {
+            current.confidence = 'high';
+            current.review_status = 'Approved';
+            current.selected_for_import = true;
+          }
+          return;
+        }
+
+        skipped.push({ raw_text: clean, sort_order: index, ignore_reason: propSkipReason(clean, inListSection) || 'not a prop row' });
       });
 
+      pushCurrent();
+      parseAsPropList.skippedLines = skipped;
       return props;
     }
 
