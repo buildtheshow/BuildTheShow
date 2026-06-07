@@ -3326,14 +3326,7 @@
       background: #e3177f;
       box-shadow: 0 2px 8px rgba(227,23,127,0.24);
     }
-    .sbi-modal.characters-review-active .sbi-footer-tip {
-      display: flex;
-      justify-content: center;
-      gap: 1rem;
-      background: transparent;
-      color: rgba(26,21,48,0.55);
-      padding: 0;
-    }
+    .sbi-modal.characters-review-active .sbi-footer-tip { display: none; }
     .sbs-character-review .sbs-prop-file-card {
       border-color: rgba(227,23,127,0.14);
       box-shadow: 0 0 0 1px rgba(227,23,127,0.035);
@@ -6072,20 +6065,13 @@
       const meta = pendingPdfImport?.listUploadMeta?.characters || {};
       const pageLabel = meta.pageCount ? `${meta.pageCount} page${meta.pageCount === 1 ? '' : 's'}` : (meta.fileType || 'Uploaded file');
       const scannedAt = meta.scannedAt || new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-      const pageSize = 3;
-      const totalPages = Math.max(1, Math.ceil(characters.length / pageSize));
-      const activePage = Math.min(Math.max(1, pendingPdfImport.characterReviewPage || 1), totalPages);
-      pendingPdfImport.characterReviewPage = activePage;
-      const start = (activePage - 1) * pageSize;
-      const visible = characters.slice(start, start + pageSize);
       const roleOptions = ['Principal', 'Supporting', 'Featured', 'Ensemble', 'Group'];
       const writtenAsOptions = ['Woman', 'Man', 'Any Gender', 'Girl', 'Boy', 'Nonbinary'];
       const ageOptions = ['Child', 'Teen', 'Young Adult', 'Adult', '30s-40s', '40s-50s', '50s+', 'Any Age'];
       const vocalTypeOptions = ['Soprano', 'Mezzo-Soprano', 'Alto', 'Tenor', 'Baritone', 'Bass', 'Any Voice', 'Non-Singing'];
       const vocalUsageOptions = ['Lead Vocals', 'Primary Vocals', 'Featured Vocals', 'Ensemble Vocals', 'Non-Singing'];
       const movementOptions = ['No Movement', 'Light Movement', 'Moderate Movement', 'Strong Movement', 'Dance Required'];
-      const cards = visible.map((char, offset) => {
-        const index = start + offset;
+      const cards = characters.map((char, index) => {
         const name = characterFieldValue(char, ['name'], `Character ${index + 1}`);
         const description = characterFieldValue(char, ['description', 'notes', 'bio'], '');
         const roleType = characterFieldValue(char, ['role_type', 'roleType', 'type'], 'Principal');
@@ -6511,9 +6497,7 @@
           continueBtn.disabled = standaloneReviewActive && !getStepCatalogueCount(pendingPdfImport.standaloneStep);
         }
         if (tipEl) {
-          tipEl.innerHTML = charactersReviewActive
-            ? renderCharacterFooterPager()
-            : standaloneReviewActive ? '' : '<span class="sbi-footer-tip-icon">✦</span><span>This upload stays separate from the other files.</span>';
+          tipEl.innerHTML = standaloneReviewActive ? '' : '<span class="sbi-footer-tip-icon">✦</span><span>This upload stays separate from the other files.</span>';
         }
         return;
       }
@@ -6964,7 +6948,6 @@
         confidence: 'manual',
         review_status: 'Needs Review',
       });
-      pendingPdfImport.characterReviewPage = Math.ceil(pendingPdfImport.characterPool.length / 3);
       renderStepByStepImport();
       renderUploadDashboardStatus();
       window.setTimeout(() => {
@@ -6988,33 +6971,6 @@
     function updateCharacterDescriptionCount(textarea) {
       const count = textarea?.parentElement?.querySelector('.sbs-character-count');
       if (count) count.textContent = `${(textarea.value || '').length} / 2000`;
-    }
-
-    function renderCharacterFooterPager() {
-      const characters = pendingPdfImport?.characterPool || [];
-      const total = characters.length;
-      if (!total) return '<span>No characters yet</span>';
-      const pageSize = 3;
-      const totalPages = Math.max(1, Math.ceil(total / pageSize));
-      const active = Math.min(Math.max(1, pendingPdfImport.characterReviewPage || 1), totalPages);
-      const start = (active - 1) * pageSize + 1;
-      const end = Math.min(total, active * pageSize);
-      const pages = [];
-      for (let page = 1; page <= totalPages; page++) {
-        if (page <= 5 || page === totalPages || Math.abs(page - active) <= 1) {
-          pages.push(`<button type="button" class="sbs-character-page-btn ${page === active ? 'active' : ''}" onclick="setCharacterReviewPage(${page})">${page}</button>`);
-        } else if (!pages[pages.length - 1]?.includes('…')) {
-          pages.push('<span>…</span>');
-        }
-      }
-      return `<span>Showing ${start}-${end} of ${total} characters</span><span class="sbs-character-pager">${pages.join('')}<button type="button" class="sbs-character-page-btn" ${active >= totalPages ? 'disabled' : ''} onclick="setCharacterReviewPage(${active + 1})">›</button></span>`;
-    }
-
-    function setCharacterReviewPage(page) {
-      if (!pendingPdfImport) return;
-      const totalPages = Math.max(1, Math.ceil((pendingPdfImport.characterPool || []).length / 3));
-      pendingPdfImport.characterReviewPage = Math.min(Math.max(1, page), totalPages);
-      renderStepByStepImport();
     }
 
     function addStandaloneSceneRow() {
@@ -7301,9 +7257,40 @@
         .trim();
     }
 
+    const PROP_SECTION_TAIL_RE = /.*?\b(?:(?:essential|required|optional|suggested|additional|hand|consumable|specialty|rehearsal)\s+props?|set\s+dressing|props?\s+list)\s*:?\s*/i;
+    const PROP_FOOTER_RE = /\s+(?:E\d+\s*\|\s*)?(?:Disney\s+and\s+Cameron\s+Mackintosh.?s\s+Mary\s+Poppins\s+JR\.?|Music\s+Theatre\s+International|Broadway\s+Junior|Director.?s\s+Guide).*$/i;
+
+    function getPropSectionTail(line) {
+      const raw = cleanPropImportLine(line);
+      const tail = raw.replace(PROP_SECTION_TAIL_RE, '').trim();
+      return tail && normalizeLoose(tail) !== normalizeLoose(raw) ? tail : '';
+    }
+
+    function cleanPropDescriptionText(value) {
+      return cleanSceneTitle(String(value || '')
+        .replace(PROP_FOOTER_RE, '')
+        .replace(/\s+E\d+\s*\|.*$/i, '')
+        .replace(/\s+/g, ' ')
+        .trim());
+    }
+
+    function splitMergedPropImportLine(line) {
+      let clean = cleanPropImportLine(line);
+      if (!clean) return [];
+      clean = cleanPropDescriptionText(clean);
+      if (!clean) return [];
+      const boundary = ' [[BTS_PROP_ROW]] ';
+      clean = clean
+        .replace(/\s+([•*·]\s+[A-Z][A-Za-z0-9 .,'&/()!-]{1,85}?\s+\(?(?:pp?\.?|pages?|pg\.?)\s*\d)/g, `${boundary}$1`)
+        .replace(/([.!?])\s+([A-Z][A-Za-z0-9 .,'&/()!-]{1,70}?\s+\(?(?:pp?\.?|pages?|pg\.?)\s*\d)/g, `$1${boundary}$2`)
+        .replace(/\s+([A-Z][A-Za-z0-9 .,'&/()!-]{1,70}?\s+[•*·]\s*(?:pp?\.?|pages?|pg\.?)\s*\d)/g, `${boundary}$1`);
+      return clean.split(boundary).map(segment => cleanPropImportLine(segment)).filter(Boolean);
+    }
+
     function propSkipReason(line, inListSection) {
       const clean = cleanPropImportLine(line);
       if (!clean) return 'blank';
+      if (/^E\d+\s*\|/i.test(clean) || PROP_FOOTER_RE.test(` ${clean}`)) return 'publisher/header';
       if (/^(music theatre international|broadway junior|director.?s guide|actor.?s script|copyright|all rights reserved)$/i.test(clean)) return 'publisher/header';
       if (/^(e\d+|\d+|page\s+\d+)$/i.test(clean)) return 'page number';
       if (/^(production photos?|photo captions?|credits?|creative team|copyrights?)$/i.test(clean)) return 'non-prop section';
@@ -7334,8 +7321,8 @@
 
       const sectionInfo = getPropSectionInfo(raw);
       if (sectionInfo) {
-        const tail = raw.replace(/.*?\b(?:essential|required|optional|suggested|additional|hand|consumable|specialty|rehearsal|set dressing|props?\s+list)\s+props?\s*:?\s*/i, '').trim();
-        if (!tail || normalizeLoose(tail) === normalizeLoose(raw)) return null;
+        const tail = getPropSectionTail(raw);
+        if (!tail) return null;
         raw = tail;
       }
 
@@ -7353,7 +7340,7 @@
 
       const parts = raw.split(/\s+[–—-]\s+|\s*:\s+/);
       const name = cleanSceneTitle((parts.shift() || '').replace(/[•*·.;,]+$/g, ''));
-      const description = cleanSceneTitle(parts.join(' - ').replace(/^[.;,]+/, ''));
+      const description = cleanPropDescriptionText(parts.join(' - ').replace(/^[.;,]+/, ''));
       if (!isLikelyPropCandidate(name)) return null;
 
       const score = [
@@ -7410,50 +7397,60 @@
         if (!current || !isLikelyPropCandidate(current.name)) return;
         const key = normalizeLoose(current.name);
         if (seen.has(key)) return;
-        current.description = cleanSceneTitle(current.description || '');
+        current.description = cleanPropDescriptionText(current.description || '');
         seen.add(key);
         props.push(current);
       };
 
-      normalizeImportedLines(text).forEach((line, index) => {
-        const clean = cleanPropImportLine(line);
-        const sectionInfo = getPropSectionInfo(clean);
-        const sectionKind = propListSectionKind(clean);
+      const processPropSegment = (clean, index, sectionInfo = getPropSectionInfo(clean), sectionKind = propListSectionKind(clean)) => {
         if (sectionKind === 'stop') {
           pushCurrent();
           current = null;
           inListSection = false;
           skipped.push({ raw_text: clean, sort_order: index, ignore_reason: propSkipReason(clean, true) || 'section stop' });
-          return;
+          return true;
         }
         if (sectionInfo) {
           pushCurrent();
           current = null;
           category = sectionInfo.category || category;
           inListSection = !!sectionInfo.extracts;
-          skipped.push({ raw_text: clean, sort_order: index, ignore_reason: 'section heading only' });
-          return;
+          const tail = getPropSectionTail(clean);
+          if (!tail) {
+            skipped.push({ raw_text: clean, sort_order: index, ignore_reason: 'section heading only' });
+            return true;
+          }
+          splitMergedPropImportLine(tail).forEach(segment => processPropSegment(segment, index));
+          return true;
         }
 
         const row = splitPropRow(clean, category, inListSection);
         if (row) {
           pushCurrent();
           current = row;
-          return;
+          return true;
         }
 
         if (current && inListSection && !isIgnoredPropSourceLine(clean, true) && !/^([•*·-]|\d+[\.)])\s+/.test(clean)) {
-          current.description = cleanSceneTitle(`${current.description || ''} ${clean}`);
+          current.description = cleanPropDescriptionText(`${current.description || ''} ${clean}`);
           current.confidence_score = Math.min(100, (current.confidence_score || 0) + 5);
           if (current.confidence_score >= 75) {
             current.confidence = 'high';
             current.review_status = 'Approved';
             current.selected_for_import = true;
           }
-          return;
+          return true;
         }
 
         skipped.push({ raw_text: clean, sort_order: index, ignore_reason: propSkipReason(clean, inListSection) || 'not a prop row' });
+        return true;
+      };
+
+      normalizeImportedLines(text).forEach((line, index) => {
+        const clean = cleanPropImportLine(line);
+        const sectionInfo = getPropSectionInfo(clean);
+        const sectionKind = propListSectionKind(clean);
+        splitMergedPropImportLine(clean).forEach(segment => processPropSegment(segment, index, sectionInfo, sectionKind));
       });
 
       pushCurrent();
