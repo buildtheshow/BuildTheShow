@@ -47,6 +47,37 @@
       pointer-events: none; overflow: hidden;
     }
     .hero-deco img { height: 130px; width: auto; object-fit: contain; opacity: 0.15; filter: brightness(0) invert(1); }
+    .page-hierarchy {
+      display: inline-flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 0.4rem;
+      color: rgba(255,255,255,0.88);
+      font-size: 0.78rem;
+      letter-spacing: 0;
+      text-transform: none;
+    }
+    .page-hierarchy-page {
+      color: #efab45;
+      font-weight: 950;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+    .page-hierarchy-sep,
+    .page-hierarchy-sub {
+      color: rgba(255,255,255,0.82);
+      font-weight: 500;
+      letter-spacing: 0;
+      text-transform: none;
+    }
+    .page-subtitle {
+      margin: 0.35rem 0 0;
+      color: #fff;
+      font-size: clamp(2.1rem, 4.6vw, 3.7rem);
+      line-height: 0.98;
+      font-weight: 950;
+      letter-spacing: 0;
+    }
 
     /* ── Tab bar ── */
     .costume-nav {
@@ -842,22 +873,58 @@
     .planning-item-title {
       display: flex;
       align-items: flex-start;
-      gap: 0.8rem;
+      gap: 0.9rem;
       min-width: 0;
     }
     .planning-look-icon {
-      width: 34px;
-      height: 34px;
+      width: 68px;
+      height: 68px;
       border-radius: 50%;
       display: grid;
       place-items: center;
       background: #572e88;
       color: #fff;
       flex-shrink: 0;
-      box-shadow: 0 2px 8px rgba(87,46,136,0.2);
+      overflow: hidden;
+      box-shadow: 0 4px 14px rgba(87,46,136,0.22);
+    }
+    .planning-look-icon img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      object-position: top center;
+      display: block;
     }
     .planning-look-icon.group { background: #7040a4; }
     .planning-look-icon.approved { background: #2f8a41; }
+    .planning-avatar-stack {
+      width: 68px;
+      height: 68px;
+      border-radius: 50%;
+      overflow: hidden;
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      grid-template-rows: repeat(2, 1fr);
+      background: #572e88;
+      color: #fff;
+      flex-shrink: 0;
+      box-shadow: 0 4px 14px rgba(87,46,136,0.22);
+    }
+    .planning-avatar-stack img,
+    .planning-avatar-stack span {
+      width: 100%;
+      height: 100%;
+      min-width: 0;
+      min-height: 0;
+      object-fit: cover;
+      object-position: top center;
+      display: grid;
+      place-items: center;
+      font-size: 0.78rem;
+      font-weight: 950;
+      line-height: 1;
+      border: 1px solid #fff;
+    }
     .planning-item-name {
       min-width: 0;
       font-size: 0.96rem;
@@ -1286,9 +1353,13 @@
           <div>
             <div class="aud-visual-kicker">
               <span class="aud-visual-kicker-dot" aria-hidden="true"></span>
-              PRODUCTION DEPARTMENTS
+              <span class="page-hierarchy">
+                <span class="page-hierarchy-page">Production Departments</span>
+                <span class="page-hierarchy-sep">-</span>
+                <span class="page-hierarchy-sub">Costumes</span>
+              </span>
             </div>
-            <h1 class="aud-visual-title">Costumes.</h1>
+            <h1 class="page-subtitle">Planning</h1>
             <p class="aud-visual-copy">Plan costume concepts, scene looks, performer assignments and approvals.</p>
           </div>
         </div>
@@ -1915,9 +1986,9 @@
       renderPlanningFilters(allCards);
       if (!allCards.length) { el.innerHTML = '<div class="planning-empty-look" onclick="openModal(\'group\')">No looks yet. Add one to start building the visual direction.</div>'; return; }
       const search = normalizeName(document.getElementById('planning-search')?.value || '');
+      const roleFilters = new Set(planningRoleFilterConfigs().map(item => item.key));
       const cards = allCards.filter(card => {
-        if (planningFilter === 'characters' && card.bucket === 'group') return false;
-        if (planningFilter === 'groups' && card.bucket !== 'group') return false;
+        if (roleFilters.has(planningFilter) && card.bucket !== planningFilter) return false;
         if (planningFilter === 'approval' && card.statusClass !== 'pending' && card.statusClass !== 'revision') return false;
         if (planningFilter === 'approved' && card.statusClass !== 'approved') return false;
         if (!search) return true;
@@ -1989,19 +2060,11 @@
     function renderPlanningFilters(cards) {
       const row = document.getElementById('planning-filter-row');
       if (!row) return;
-      const counts = {
-        all: cards.length,
-        characters: cards.filter(card => card.bucket !== 'group').length,
-        groups: cards.filter(card => card.bucket === 'group').length,
-        approval: cards.filter(card => card.statusClass === 'pending' || card.statusClass === 'revision').length,
-        approved: cards.filter(card => card.statusClass === 'approved').length,
-      };
       const filters = [
-        ['all', 'All Looks', counts.all],
-        ['characters', 'Characters', counts.characters],
-        ['groups', 'Groups', counts.groups],
-        ['approval', 'Needs Approval', counts.approval],
-        ['approved', 'Approved', counts.approved],
+        ['all', 'All Looks', cards.length],
+        ...planningRoleFilterConfigs().map(item => [item.key, item.label, cards.filter(card => card.bucket === item.key).length]),
+        ['approval', 'Needs Approval', cards.filter(card => card.statusClass === 'pending' || card.statusClass === 'revision').length],
+        ['approved', 'Approved', cards.filter(card => card.statusClass === 'approved').length],
       ];
       row.innerHTML = filters.map(([key, label, count]) => `
         <button type="button" class="planning-filter ${planningFilter === key ? 'active' : ''}" onclick="setPlanningFilter('${key}')">
@@ -2013,6 +2076,18 @@
     function setPlanningFilter(filter) {
       planningFilter = filter || 'all';
       renderGroupsList();
+    }
+
+    function planningRoleFilterConfigs() {
+      return [
+        { key: 'principal', label: 'Principals' },
+        { key: 'featured', label: 'Featured' },
+        { key: 'supporting', label: 'Supporting' },
+        { key: 'cameo', label: 'Cameos' },
+        { key: 'ensemble', label: 'Ensemble' },
+        { key: 'group', label: 'Groups' },
+        { key: 'special', label: 'Special Looks' },
+      ];
     }
 
     function planningRoleBucket(group) {
@@ -2095,6 +2170,30 @@
       return '<img src="/ASSETS/Images/chm-costumes.svg?v=20260605" style="width:18px;height:18px;filter:brightness(0) invert(1);" alt="" />';
     }
 
+    function renderPlanningAvatar(assignedPerformers, groupName, bucket, statusClass) {
+      const withHeadshots = assignedPerformers.filter(performer => performer.headshot_url);
+      if (withHeadshots.length === 1) {
+        const performer = withHeadshots[0];
+        const name = performerCardDisplayName(performer) || performer.name || groupName;
+        return `<div class="planning-look-icon ${statusClass === 'approved' ? 'approved' : ''}">
+          <img src="${esc(performer.headshot_url)}" alt="${esc(name)}" onerror="this.closest('.planning-look-icon').innerHTML='${esc(initials(name))}'" />
+        </div>`;
+      }
+      if (withHeadshots.length > 1) {
+        const tiles = withHeadshots.slice(0, 4).map(function (performer) {
+          const name = performerCardDisplayName(performer) || performer.name || groupName;
+          return `<img src="${esc(performer.headshot_url)}" alt="${esc(name)}" onerror="this.outerHTML='<span style=&quot;background:${esc(avatarColor(name))};&quot;>${esc(initials(name))}</span>'" />`;
+        }).join('');
+        return `<div class="planning-avatar-stack" aria-label="${esc(`${withHeadshots.length} assigned performers for ${groupName}`)}">${tiles}</div>`;
+      }
+      const firstPerformer = assignedPerformers[0];
+      if (firstPerformer) {
+        const name = performerCardDisplayName(firstPerformer) || firstPerformer.name || groupName;
+        return `<div class="planning-look-icon" style="background:${esc(avatarColor(name))};">${esc(initials(name))}</div>`;
+      }
+      return `<div class="planning-look-icon ${bucket === 'group' ? 'group' : ''} ${statusClass === 'approved' ? 'approved' : ''}">${planningIconSvg(bucket, statusClass)}</div>`;
+    }
+
     function renderLookCard(group, look) {
       const palette = (look.palette || []).slice(0, 5).map(item => `<span class="look-chip palette-chip">${esc(item)}</span>`).join('');
       const scenes = (look.scenes || []).slice(0, 5).map(item => `<span class="look-chip">${esc(item)}</span>`).join('');
@@ -2160,7 +2259,7 @@
         <div class="planning-item-head">
           <div>
             <div class="planning-item-title">
-              <div class="planning-look-icon ${bucket === 'group' ? 'group' : ''} ${statusClass === 'approved' ? 'approved' : ''}">${planningIconSvg(bucket, statusClass)}</div>
+              ${renderPlanningAvatar(assignedPerformers, group.name, bucket, statusClass)}
               <div>
                 <div class="planning-item-name">
                   <span class="planning-item-character-name">${esc(group.name)}</span>
