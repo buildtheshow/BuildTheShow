@@ -3178,6 +3178,53 @@
     .sbs-prop-edit-btn:hover { background: rgba(87,46,136,0.08); }
     .sbs-prop-remove-btn:hover { background: rgba(209,82,61,0.08); color: #d1523d; }
     .sbs-prop-remove-btn:hover img { opacity: 1; }
+    .sbs-scene-review .sbs-prop-table th {
+      background: #3210a4;
+      color: #fff;
+      border-right-color: rgba(255,255,255,0.12);
+    }
+    .sbs-scene-review .sbs-prop-table-wrap { max-height: min(48vh, 560px); }
+    .sbs-scene-review .sbs-prop-cell-input,
+    .sbs-scene-review .sbs-scene-select {
+      min-height: 46px;
+      border: 1.5px solid rgba(26,21,48,0.1);
+      border-radius: 7px;
+      background: #fff;
+      margin: 0.72rem 0.9rem;
+      width: calc(100% - 1.8rem);
+      padding: 0 0.75rem;
+      font: inherit;
+      font-size: 0.9rem;
+      font-weight: 750;
+      color: #1a1530;
+      outline: none;
+    }
+    .sbs-scene-review .sbs-prop-cell-input:focus,
+    .sbs-scene-review .sbs-scene-select:focus {
+      border-color: rgba(87,46,136,0.42);
+      box-shadow: 0 0 0 3px rgba(87,46,136,0.08);
+    }
+    .sbs-scene-review .sbs-prop-actions { gap: 0.25rem; }
+    .sbs-scene-review .sbs-prop-edit-btn {
+      min-width: 30px;
+      color: #1a1530;
+      font-size: 1.15rem;
+    }
+    .sbs-scene-review .sbs-prop-remove-btn img { filter: none; }
+    .sbs-scene-review .sbs-prop-missing-card {
+      background: #fff8ea;
+      border-color: #ffe3aa;
+    }
+    .sbs-scene-review .sbs-prop-missing-icon {
+      background: #fff0bf;
+      color: #ef9f13;
+    }
+    .sbs-review-count {
+      margin-top: -0.65rem;
+      font-size: 0.82rem;
+      font-weight: 750;
+      color: rgba(26,21,48,0.58);
+    }
     .sbs-prop-missing-card {
       display: flex;
       align-items: center;
@@ -5693,6 +5740,10 @@
       return !!(pendingPdfImport?.standaloneStep === 'props' && (pendingPdfImport.propCatalogue || []).length);
     }
 
+    function hasStandaloneScenesReview() {
+      return !!(pendingPdfImport?.standaloneStep === 'scenes' && (pendingPdfImport.sceneCatalogue || []).length);
+    }
+
     function renderStandalonePropsReview() {
       const props = pendingPdfImport?.propCatalogue || [];
       const uploaded = pendingPdfImport?.listUploads?.props || 'Props List';
@@ -5765,6 +5816,99 @@
       </div>`;
     }
 
+    function sceneReviewNumberLabel(scene, index) {
+      if (scene.sceneType === 'prologue') return 'Prologue';
+      if (scene.sceneType === 'epilogue') return 'Epilogue';
+      return scene.number || index + 1;
+    }
+
+    function renderSceneSelect(value, options, onchange) {
+      const normalized = String(value ?? '');
+      return `<select class="sbs-scene-select" onchange="${onchange}">
+        ${options.map(option => `<option value="${esc(option.value)}" ${String(option.value) === normalized ? 'selected' : ''}>${esc(option.label)}</option>`).join('')}
+      </select>`;
+    }
+
+    function renderStandaloneScenesReview() {
+      const scenes = pendingPdfImport?.sceneCatalogue || [];
+      const uploaded = pendingPdfImport?.listUploads?.scenes || 'Scenes List';
+      const meta = pendingPdfImport?.listUploadMeta?.scenes || {};
+      const pageLabel = meta.pageCount ? `${meta.pageCount} page${meta.pageCount === 1 ? '' : 's'}` : (meta.fileType || 'Uploaded file');
+      const scannedAt = meta.scannedAt || new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+      const actOptions = [
+        { value: 'prologue', label: 'Prologue' },
+        { value: '1', label: '1' },
+        { value: '2', label: '2' },
+        { value: '3', label: '3' },
+        { value: 'epilogue', label: 'Epilogue' },
+      ];
+      const rows = scenes.length ? scenes.map((scene, index) => {
+        const actValue = scene.sceneType === 'prologue' ? 'prologue' : scene.sceneType === 'epilogue' ? 'epilogue' : String(scene.actNumber || 1);
+        const number = sceneReviewNumberLabel(scene, index);
+        const title = scene.title || '';
+        const setting = scene.location || scene.setting || '';
+        const pages = (scene.page_refs || scene.script_page_refs || scene.pages || []).join ? (scene.page_refs || scene.script_page_refs || scene.pages || []).join(', ') : (scene.page || '');
+        const search = [actValue, number, title, setting, pages].join(' ').toLowerCase();
+        return `<tr data-scene-review-row data-scene-index="${index}" data-search="${esc(search)}">
+          <td>${renderSceneSelect(actValue, actOptions, `updateStandaloneScene(${index}, 'actNumber', this.value)`)}</td>
+          <td><input class="sbs-prop-cell-input" value="${esc(number)}" oninput="updateStandaloneScene(${index}, 'number', this.value)" placeholder="#" /></td>
+          <td><input class="sbs-prop-cell-input" value="${esc(title)}" oninput="updateStandaloneScene(${index}, 'title', this.value)" placeholder="Scene title" /></td>
+          <td><input class="sbs-prop-cell-input" value="${esc(setting)}" oninput="updateStandaloneScene(${index}, 'location', this.value)" placeholder="Setting" /></td>
+          <td><input class="sbs-prop-cell-input" value="${esc(pages)}" oninput="updateStandaloneScene(${index}, 'page_refs', this.value)" placeholder="-" /></td>
+          <td><div class="sbs-prop-actions">
+            <button type="button" class="sbs-prop-edit-btn" onclick="moveStandaloneScene(${index}, -1)" aria-label="Move scene up">↑</button>
+            <button type="button" class="sbs-prop-edit-btn" onclick="moveStandaloneScene(${index}, 1)" aria-label="Move scene down">↓</button>
+            <button type="button" class="sbs-prop-remove-btn" onclick="removeStepCatalogueItem('scenes', ${index})" aria-label="Remove ${esc(title || 'scene')}"><img src="/ASSETS/Images/Bin.svg" alt="" aria-hidden="true" /></button>
+          </div></td>
+        </tr>`;
+      }).join('') : '';
+
+      return `<div class="sbs-prop-review sbs-scene-review">
+        <div class="sbs-prop-file-card">
+          <div class="sbs-prop-file-icon"><img src="/ASSETS/Images/script-scene.svg?v=20260606-scene-art4" alt="" aria-hidden="true" /></div>
+          <div class="sbs-prop-file-main">
+            <div class="sbs-prop-file-name">${esc(uploaded)}</div>
+            <div class="sbs-prop-file-meta">${esc(pageLabel)} • Scanned today at ${esc(scannedAt)}</div>
+          </div>
+          <button type="button" class="sbs-prop-outline-btn" onclick="chooseStepImportFile('scenes')">Replace File</button>
+        </div>
+
+        <div class="sbs-prop-toolbar">
+          <div class="sbs-prop-section-title">Scenes Found (${scenes.length})</div>
+          <label class="sbs-prop-search-wrap" aria-label="Search scenes">
+            <input class="sbs-prop-search" type="search" placeholder="Search scenes..." oninput="filterStandaloneSceneRows(this.value)" />
+            <img class="sbs-prop-search-icon" src="/ASSETS/Images/Search.svg" alt="" aria-hidden="true" />
+          </label>
+          <button type="button" class="sbs-prop-outline-btn" onclick="addStandaloneSceneRow()">+ Add Scene</button>
+          <button type="button" class="sbs-prop-outline-btn" onclick="exportStandaloneScenesList()">Export List</button>
+        </div>
+
+        <div class="sbs-prop-table-wrap">
+          ${rows ? `<table class="sbs-prop-table">
+            <thead><tr>
+              <th>Act</th>
+              <th>Scene Number</th>
+              <th>Scene Title</th>
+              <th>Setting</th>
+              <th>Pages</th>
+              <th>Actions</th>
+            </tr></thead>
+            <tbody>${rows}</tbody>
+          </table>` : '<div class="sbs-prop-empty">No scenes found yet. Add a scene below to start the list.</div>'}
+        </div>
+
+        <div class="sbs-review-count">Showing 1-${Math.min(10, scenes.length)} of ${scenes.length} scenes</div>
+        <div class="sbs-prop-missing-card">
+          <div class="sbs-prop-missing-icon">?</div>
+          <div>
+            <div class="sbs-prop-missing-title">Did we miss something?</div>
+            <div class="sbs-prop-missing-copy">Add any scenes that were not found in the scan.</div>
+          </div>
+          <button type="button" class="sbs-prop-outline-btn" onclick="addStandaloneSceneRow()">+ Add Missing Scene</button>
+        </div>
+      </div>`;
+    }
+
     function renderStepByStepPanel() {
       const step = importReviewStep;
       if (step === 'props') {
@@ -5807,6 +5951,7 @@
           </div>`;
       }
       if (step === 'scenes') {
+        if (hasStandaloneScenesReview()) return renderStandaloneScenesReview();
         const catalogue = pendingPdfImport.sceneCatalogue || [];
         const rows = catalogue.length ? catalogue.map((scene, index) => `<div class="sbs-scene-row">
           <span class="sbs-scene-act">${esc(scene.actNumber || 1)}</span>
@@ -5855,7 +6000,9 @@
       const steps = stepByStepImportSteps();
       const standaloneStep = pendingPdfImport?.standaloneStep || null;
       const propsReviewActive = hasStandalonePropsReview();
-      if (modal) modal.classList.toggle('props-review-active', propsReviewActive);
+      const scenesReviewActive = hasStandaloneScenesReview();
+      const standaloneReviewActive = propsReviewActive || scenesReviewActive;
+      if (modal) modal.classList.toggle('props-review-active', standaloneReviewActive);
       const labels = {
         props: 'Props',
         characters: 'Characters',
@@ -5885,10 +6032,11 @@
           script: 'Upload Full Script',
         };
         if (titleEl) titleEl.textContent = modalTitles[standaloneStep] || 'Upload File';
-        if (propsReviewActive) {
-          const count = pendingPdfImport.propCatalogue?.length || 0;
-          if (taglineEl) taglineEl.innerHTML = `BTS has scanned your file and found <strong style="color:#4b22b3;">${count} prop${count === 1 ? '' : 's'}</strong>.`;
-          if (status) status.textContent = 'Review the detected props below. You can edit, remove or add any missing items before saving.';
+        if (standaloneReviewActive) {
+          const count = propsReviewActive ? (pendingPdfImport.propCatalogue?.length || 0) : (pendingPdfImport.sceneCatalogue?.length || 0);
+          const noun = propsReviewActive ? 'prop' : 'scene';
+          if (taglineEl) taglineEl.innerHTML = `BTS has scanned your file and found <strong style="color:#4b22b3;">${count} ${noun}${count === 1 ? '' : 's'}</strong>.`;
+          if (status) status.textContent = `Review the detected ${noun}${count === 1 ? '' : 's'} below. You can edit, remove or add any missing items before saving.`;
         } else {
           if (taglineEl) taglineEl.textContent = 'This upload is independent.';
           if (status) status.textContent = standaloneStep === 'script'
@@ -5927,13 +6075,15 @@
       const step = importReviewStep;
       if (pendingPdfImport?.standaloneStep) {
         const propsReviewActive = hasStandalonePropsReview();
-        if (cancelBtn) cancelBtn.textContent = propsReviewActive ? 'Cancel' : 'Cancel Import';
+        const scenesReviewActive = hasStandaloneScenesReview();
+        const standaloneReviewActive = propsReviewActive || scenesReviewActive;
+        if (cancelBtn) cancelBtn.textContent = standaloneReviewActive ? 'Cancel' : 'Cancel Import';
         if (continueBtn) {
-          continueBtn.textContent = propsReviewActive ? 'Save & Continue' : 'Done';
+          continueBtn.textContent = standaloneReviewActive ? 'Save & Continue →' : 'Done';
           continueBtn.onclick = () => closePdfImportModal();
-          continueBtn.disabled = propsReviewActive && !(pendingPdfImport.propCatalogue || []).length;
+          continueBtn.disabled = standaloneReviewActive && !getStepCatalogueCount(pendingPdfImport.standaloneStep);
         }
-        if (tipEl) tipEl.innerHTML = propsReviewActive ? '' : '<span class="sbi-footer-tip-icon">✦</span><span>This upload stays separate from the other files.</span>';
+        if (tipEl) tipEl.innerHTML = standaloneReviewActive ? '' : '<span class="sbi-footer-tip-icon">✦</span><span>This upload stays separate from the other files.</span>';
         return;
       }
       if (cancelBtn) cancelBtn.textContent = 'Cancel Import';
@@ -6361,9 +6511,87 @@
       renderUploadDashboardStatus();
     }
 
+    function addStandaloneSceneRow() {
+      if (!pendingPdfImport) return;
+      if (!pendingPdfImport.sceneCatalogue) pendingPdfImport.sceneCatalogue = [];
+      const nextNumber = pendingPdfImport.sceneCatalogue.filter(scene => scene.sceneType !== 'prologue' && scene.sceneType !== 'epilogue').length + 1;
+      pendingPdfImport.sceneCatalogue.push({
+        actNumber: 1,
+        actTitle: 'Act 1',
+        number: nextNumber,
+        sceneType: 'scene',
+        title: '',
+        location: '',
+        page_refs: [],
+      });
+      renderStepByStepImport();
+      renderUploadDashboardStatus();
+      window.setTimeout(() => {
+        const inputs = document.querySelectorAll('.sbs-scene-review .sbs-prop-table tbody tr:last-child .sbs-prop-cell-input');
+        inputs?.[1]?.focus();
+      }, 0);
+    }
+
+    function updateStandaloneScene(index, field, value) {
+      const scene = pendingPdfImport?.sceneCatalogue?.[index];
+      if (!scene) return;
+      if (field === 'actNumber') {
+        if (value === 'prologue') {
+          scene.sceneType = 'prologue';
+          scene.number = 0;
+          scene.actNumber = 1;
+          scene.actTitle = 'Prologue';
+        } else if (value === 'epilogue') {
+          scene.sceneType = 'epilogue';
+          scene.number = 9999;
+          scene.actNumber = 99;
+          scene.actTitle = 'Epilogue';
+        } else {
+          scene.sceneType = 'scene';
+          scene.actNumber = parseInt(value, 10) || 1;
+          scene.actTitle = `Act ${scene.actNumber}`;
+        }
+      } else if (field === 'number') {
+        if (/prologue/i.test(value)) {
+          scene.sceneType = 'prologue';
+          scene.number = 0;
+        } else if (/epilogue/i.test(value)) {
+          scene.sceneType = 'epilogue';
+          scene.number = 9999;
+        } else {
+          scene.sceneType = 'scene';
+          scene.number = parseInt(value, 10) || value;
+        }
+      } else if (field === 'page_refs') {
+        scene.page_refs = String(value || '').split(/[, ]+/).map(v => parseInt(v, 10)).filter(Boolean);
+      } else {
+        scene[field] = value;
+      }
+      renderUploadDashboardStatus();
+    }
+
+    function moveStandaloneScene(index, direction) {
+      const scenes = pendingPdfImport?.sceneCatalogue;
+      if (!Array.isArray(scenes)) return;
+      const next = index + direction;
+      if (next < 0 || next >= scenes.length) return;
+      const [scene] = scenes.splice(index, 1);
+      scenes.splice(next, 0, scene);
+      renderStepByStepImport();
+      renderUploadDashboardStatus();
+    }
+
     function filterStandalonePropRows(value) {
       const needle = normalizeLoose(value || '');
       document.querySelectorAll('[data-prop-review-row]').forEach(row => {
+        const haystack = normalizeLoose(row.dataset.search || '');
+        row.style.display = !needle || haystack.includes(needle) ? '' : 'none';
+      });
+    }
+
+    function filterStandaloneSceneRows(value) {
+      const needle = normalizeLoose(value || '');
+      document.querySelectorAll('[data-scene-review-row]').forEach(row => {
         const haystack = normalizeLoose(row.dataset.search || '');
         row.style.display = !needle || haystack.includes(needle) ? '' : 'none';
       });
@@ -6387,6 +6615,32 @@
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       const base = (pendingPdfImport?.listUploads?.props || 'props-list').replace(/\.[^.]+$/, '').replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '') || 'props-list';
+      link.href = url;
+      link.download = `${base}-review.csv`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    }
+
+    function exportStandaloneScenesList() {
+      const scenes = pendingPdfImport?.sceneCatalogue || [];
+      if (!scenes.length) return;
+      const csvEscape = value => `"${String(value ?? '').replace(/"/g, '""')}"`;
+      const rows = [
+        ['Act', 'Scene Number', 'Scene Title', 'Setting', 'Pages'],
+        ...scenes.map((scene, index) => [
+          scene.sceneType === 'prologue' ? 'Prologue' : scene.sceneType === 'epilogue' ? 'Epilogue' : (scene.actNumber || 1),
+          sceneReviewNumberLabel(scene, index),
+          scene.title || '',
+          scene.location || scene.setting || '',
+          (scene.page_refs || scene.script_page_refs || scene.pages || []).join ? (scene.page_refs || scene.script_page_refs || scene.pages || []).join(', ') : (scene.page || ''),
+        ]),
+      ];
+      const blob = new Blob([rows.map(row => row.map(csvEscape).join(',')).join('\n')], { type: 'text/csv;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      const base = (pendingPdfImport?.listUploads?.scenes || 'scenes-list').replace(/\.[^.]+$/, '').replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '') || 'scenes-list';
       link.href = url;
       link.download = `${base}-review.csv`;
       document.body.appendChild(link);
