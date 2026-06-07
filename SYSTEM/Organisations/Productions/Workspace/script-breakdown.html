@@ -5997,7 +5997,7 @@
       { re: /\bset\s+dressing\b/i, category: 'Set Dressing', extracts: true },
       { re: /\bconsumable\s+props?\b/i, category: 'Consumable', extracts: true },
       { re: /\bspecialty\s+props?\b/i, category: 'Specialty', extracts: true },
-      { re: /\brehearsal\s+props?\b/i, category: 'Rehearsal', extracts: true },
+      { re: /\brehearsal\s+props?\b/i, category: 'Rehearsal', extracts: false },
       { re: /\bprops?\s+for\b/i, category: 'Props', extracts: false },
       { re: /\bprops?\s+list\b/i, category: 'Props', extracts: true },
     ];
@@ -6063,22 +6063,25 @@
       }
 
       const hadListMarker = /^([•*·-]|\d+[\.)])\s+/.test(raw);
-      const hadPageRef = /\(?\bpp?\.?\s*\d/i.test(raw);
+      const hadInlineMarker = /\s+[•*·]\s+/.test(raw);
+      const hadPageRef = /\(?(?:pp?\.?|pages?|pg\.?)\s*\d/i.test(raw);
       raw = raw.replace(/^([•*·-]|\d+[\.)])\s+/, '').trim();
 
-      if (!hadListMarker && !hadPageRef && !inListSection) return null;
+      if (!hadListMarker && !hadInlineMarker && !hadPageRef) return null;
 
       const pageResult = parsePropPageRefs(raw);
       raw = pageResult.text;
 
+      raw = raw.replace(/\s+[•*·]\s*$/g, '').replace(/\s+[•*·]\s+/g, ' - ').trim();
+
       const parts = raw.split(/\s+[–—-]\s+|\s*:\s+/);
-      const name = cleanSceneTitle((parts.shift() || '').replace(/[.;,]+$/g, ''));
+      const name = cleanSceneTitle((parts.shift() || '').replace(/[•*·.;,]+$/g, ''));
       const description = cleanSceneTitle(parts.join(' - ').replace(/^[.;,]+/, ''));
       if (!isLikelyPropCandidate(name)) return null;
 
       const score = [
         inListSection ? 25 : 0,
-        hadListMarker ? 25 : 0,
+        hadListMarker || hadInlineMarker ? 25 : 0,
         pageResult.refs.length ? 25 : 0,
         description ? 15 : 0,
         category && category !== 'Props' ? 10 : 0,
