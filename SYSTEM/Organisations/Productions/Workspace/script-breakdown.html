@@ -3850,33 +3850,24 @@
       }
 
       // Find the FIRST heading candidate whose following content validates
-      function findSectionStart(headingPattern, contentValidator, label) {
-        const failLog = [];
+      function findSectionStart(headingPattern, contentValidator) {
         for (let i = 0; i < richLines.length - 10; i++) {
           const raw = richLines[i].text.trim().replace(/\s+/g, ' ');
           if (!headingPattern.test(stripHeadingTrail(raw))) continue;
           let validCount = 0;
-          const sampleLog = [];
           for (let j = i + 1; j < Math.min(richLines.length, i + 50); j++) {
             const line = richLines[j].text.trim();
             if (!line) continue;
-            if (CHARS_HDG.test(stripHeadingTrail(line)) || SONGS_HDG.test(stripHeadingTrail(line))) { sampleLog.push(`[BREAK on heading] "${line.slice(0,60)}"`); break; }
-            const ok = contentValidator(line);
-            sampleLog.push(`${ok?'✓':'✗'} "${line.slice(0,60)}"`);
-            if (ok) validCount++;
+            if (CHARS_HDG.test(stripHeadingTrail(line)) || SONGS_HDG.test(stripHeadingTrail(line))) break;
+            if (contentValidator(line)) validCount++;
           }
-          if (validCount >= 2) {
-            console.log(`[BTS prescan] ${label} confirmed at rich line ${i}: "${raw}" (${validCount} valid)`);
-            return i;
-          }
-          failLog.push(`line ${i} "${raw}" → ${validCount}/50\n  ${sampleLog.join('\n  ')}`);
+          if (validCount >= 2) return i;
         }
-        console.log(`[BTS prescan] ${label} NOT found. Candidates:\n`, failLog.join('\n---\n'));
         return -1;
       }
 
-      const songsStart = findSectionStart(SONGS_HDG, looksLikeSongContent, 'songs');
-      const charsStart = findSectionStart(CHARS_HDG, looksLikeCharContent, 'chars');
+      const songsStart = findSectionStart(SONGS_HDG, looksLikeSongContent);
+      const charsStart = findSectionStart(CHARS_HDG, looksLikeCharContent);
 
       // Extract song catalogue
       if (songsStart !== -1) {
@@ -4476,28 +4467,83 @@
 
     function renderImportSongsPanel() {
       const songs = pendingPdfImport?.songs || [];
-      if (!songs.length) {
-        return `<div class="sb-import-panel-kicker">Step 1 of 5</div>
-          <h3 class="sb-import-panel-title">Songs</h3>
-          <div class="sb-import-panel-copy">No song list was found in the front matter. BTS will still read song cues from the script body. Click Next to continue.</div>`;
-      }
-      return `<div class="sb-import-panel-kicker">Step 1 of 5</div>
-        <h3 class="sb-import-panel-title">Songs</h3>
-        <div class="sb-import-panel-copy">BTS found a musical numbers list. Confirm which songs to import. Unchecked songs won't be treated as character names.</div>
-        <div class="sb-import-name-table">
-          ${songs.map((song, i) => `<div class="sb-import-name-row">
-            <div class="sb-import-issue-main">
-              <span class="sb-import-issue-badge" style="background:#572e88;color:#fff;">♪</span>
-              <div>
-                <div class="sb-import-issue-source">Song title</div>
-                <div class="sb-import-name-value">${esc(song.title)}${song.characters ? `<span style="color:#999;font-size:0.8em;margin-left:0.5em;">${esc(song.characters)}</span>` : ''}</div>
-              </div>
+      const intro = songs.length
+        ? `BTS found ${songs.length} musical number${songs.length === 1 ? '' : 's'}. Uncheck any you don't want — unchecked songs won't be treated as character names.`
+        : `No musical numbers were auto-detected in this PDF. Add them below so BTS can tell them apart from character names.`;
+      const rows = songs.map(song => `<div class="sb-import-name-row" id="song-row-${esc(song.title.replace(/\s+/g,'_'))}">
+          <div class="sb-import-issue-main">
+            <span class="sb-import-issue-badge" style="background:#572e88;color:#fff;font-size:1rem;">♪</span>
+            <div>
+              <div class="sb-import-issue-source">SONG TITLE</div>
+              <div class="sb-import-name-value">${esc(song.title)}</div>
             </div>
-            <div class="sb-import-issue-controls">
-              <label><input type="checkbox" data-import-song-include="${esc(song.title)}" checked /> Include</label>
-            </div>
-          </div>`).join('')}
+          </div>
+          <div class="sb-import-issue-controls" style="display:flex;align-items:center;gap:0.75rem;">
+            <label style="display:flex;align-items:center;gap:0.4rem;font-size:0.82rem;font-weight:700;cursor:pointer;">
+              <input type="checkbox" class="sbi-check-v2" data-import-song-include="${esc(song.title)}" checked />
+              Include
+            </label>
+            <button type="button" onclick="removeImportSong('${esc(song.title)}')" style="background:none;border:none;color:rgba(26,21,48,0.3);cursor:pointer;font-size:1rem;padding:0.2rem;" title="Remove">×</button>
+          </div>
+        </div>`).join('');
+      return `<div class="sbi-section-heading" style="margin-bottom:0.3rem;">
+          <div class="sbi-section-icon">♪</div>
+          <span class="sbi-section-title">Musical Numbers</span>
+        </div>
+        <div class="sbi-section-copy">${intro}</div>
+        <div id="import-songs-list" class="sb-import-name-table">${rows}</div>
+        <div style="display:flex;align-items:center;gap:0.6rem;margin-top:0.75rem;padding-top:0.75rem;border-top:1px solid rgba(26,21,48,0.07);">
+          <input id="import-song-input" type="text" placeholder="Type a song title…"
+            style="flex:1;padding:0.5rem 0.75rem;border:1.5px solid rgba(87,46,136,0.25);border-radius:8px;font:inherit;font-size:0.84rem;outline:none;"
+            onkeydown="if(event.key==='Enter'){event.preventDefault();addImportSongManual();}" />
+          <button type="button" onclick="addImportSongManual()"
+            style="padding:0.5rem 1rem;background:#572e88;color:#fff;border:none;border-radius:8px;font:inherit;font-size:0.82rem;font-weight:900;cursor:pointer;white-space:nowrap;">
+            + Add Song
+          </button>
         </div>`;
+    }
+
+    function addImportSongManual() {
+      const input = document.getElementById('import-song-input');
+      const title = (input?.value || '').trim();
+      if (!title) return;
+      if (!pendingPdfImport) return;
+      if (!pendingPdfImport.songs) pendingPdfImport.songs = [];
+      if (pendingPdfImport.songs.find(s => s.title.toLowerCase() === title.toLowerCase())) {
+        input.value = '';
+        return;
+      }
+      pendingPdfImport.songs.push({ title, names: [], manual: true });
+      input.value = '';
+      // Re-render just the songs list and header count
+      const list = document.getElementById('import-songs-list');
+      if (list) {
+        const songs = pendingPdfImport.songs;
+        list.innerHTML = songs.map(song => `<div class="sb-import-name-row">
+          <div class="sb-import-issue-main">
+            <span class="sb-import-issue-badge" style="background:#572e88;color:#fff;font-size:1rem;">♪</span>
+            <div>
+              <div class="sb-import-issue-source">SONG TITLE</div>
+              <div class="sb-import-name-value">${esc(song.title)}</div>
+            </div>
+          </div>
+          <div class="sb-import-issue-controls" style="display:flex;align-items:center;gap:0.75rem;">
+            <label style="display:flex;align-items:center;gap:0.4rem;font-size:0.82rem;font-weight:700;cursor:pointer;">
+              <input type="checkbox" class="sbi-check-v2" data-import-song-include="${esc(song.title)}" checked />
+              Include
+            </label>
+            <button type="button" onclick="removeImportSong('${esc(song.title)}')" style="background:none;border:none;color:rgba(26,21,48,0.3);cursor:pointer;font-size:1rem;padding:0.2rem;" title="Remove">×</button>
+          </div>
+        </div>`).join('');
+      }
+      // Update step count in progress bar
+      renderPdfImportReview();
+    }
+
+    function removeImportSong(title) {
+      if (!pendingPdfImport?.songs) return;
+      pendingPdfImport.songs = pendingPdfImport.songs.filter(s => s.title !== title);
+      renderPdfImportReview();
     }
 
     function renderImportCharactersApprovalPanel() {
