@@ -5353,6 +5353,7 @@
     }
 
     function renderStepUploadZone(kind, label, hint) {
+      const uploaded = pendingPdfImport?.listUploads?.[kind];
       return `<div class="sbs-upload-zone" onclick="chooseStepImportFile('${kind}')"
           ondragover="event.preventDefault();this.classList.add('drag-over')"
           ondragleave="this.classList.remove('drag-over')"
@@ -5360,6 +5361,7 @@
         <div class="sbs-zone-icon">${kind === 'script' ? '📄' : '⬆'}</div>
         <div class="sbs-zone-label">${esc(label)}</div>
         <div class="sbs-zone-hint">${esc(hint)}</div>
+        ${uploaded ? `<div class="sbs-zone-loaded">Loaded: ${esc(uploaded)}</div>` : ''}
       </div>`;
     }
 
@@ -5637,7 +5639,14 @@
       const input = document.createElement('input');
       input.type = 'file';
       input.accept = 'application/pdf,image/*,.pdf,.png,.jpg,.jpeg,.webp';
-      input.onchange = () => handleStepImportFile(kind, input.files?.[0]);
+      input.style.position = 'fixed';
+      input.style.left = '-10000px';
+      input.style.top = '-10000px';
+      input.onchange = () => {
+        handleStepImportFile(kind, input.files?.[0]).finally(() => input.remove());
+      };
+      input.oncancel = () => input.remove();
+      document.body.appendChild(input);
       input.click();
     }
 
@@ -5657,24 +5666,44 @@
         return;
       }
       const status = document.getElementById('pdf-import-status');
-      if (status) status.textContent = kind === 'script' ? 'Scanning script...' : 'Reading list...';
+      if (status) status.textContent = kind === 'script' ? `Scanning ${file.name}...` : `Reading ${file.name}...`;
       try {
         if (window.pdfjsLib?.GlobalWorkerOptions) {
           window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
         }
         const extracted = isImage ? { text: await extractImageText(file), richLines: [] } : await file.arrayBuffer().then(extractPdfText);
+        if (!extracted.text || extracted.text.trim().length < 20) {
+          throw new Error(isImage ? 'No readable image text found.' : 'No selectable PDF text found.');
+        }
         if (kind === 'script') {
           await scanStepByStepScript(file, extracted);
         } else {
+          const before = getStepCatalogueCount(kind);
           mergeStepCatalogue(kind, extracted.text);
           pendingPdfImport.listUploads[kind] = file.name;
+          const added = Math.max(0, getStepCatalogueCount(kind) - before);
           renderStepByStepImport();
           renderUploadDashboardStatus();
+          const nextStatus = document.getElementById('pdf-import-status');
+          if (nextStatus) {
+            nextStatus.textContent = added
+              ? `Read ${file.name}. Added ${added} ${kind === 'props' ? 'prop' : kind.slice(0, -1)}${added === 1 ? '' : 's'}.`
+              : `Read ${file.name}, but did not find clear ${kind === 'props' ? 'prop rows' : `${kind} rows`}. Check Skipped Text or add items manually.`;
+          }
         }
       } catch (error) {
         console.error('[BTS] step import failed', error);
-        if (status) status.textContent = 'Could not read this file. Try a clearer PDF or photo.';
+        if (status) status.textContent = isImage
+          ? 'Could not read text from this photo. Try a clearer straight-on image, or paste the list text.'
+          : 'Could not read this PDF. If it is scanned, paste the list text or try a digital PDF.';
       }
+    }
+
+    function getStepCatalogueCount(kind) {
+      if (!pendingPdfImport) return 0;
+      const map = { songs: 'songs', characters: 'characterPool', scenes: 'sceneCatalogue', props: 'propCatalogue' };
+      const key = map[kind];
+      return Array.isArray(pendingPdfImport[key]) ? pendingPdfImport[key].length : 0;
     }
 
     function mergeStepCatalogue(kind, text) {
