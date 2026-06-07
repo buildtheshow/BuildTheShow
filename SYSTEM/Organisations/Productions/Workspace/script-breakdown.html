@@ -5846,13 +5846,90 @@
       return scenes;
     }
 
+    function propListSectionKind(line) {
+      const clean = String(line || '').replace(/\s+/g, ' ').trim();
+      if (/^(proper props handling|acquiring or creating props|props?\s+(definition|handling|notes?|tips?)|set dressing notes?)$/i.test(clean)) return 'stop';
+      if (/\b(essential|rehearsal|show|final|production)\s+props?\b/i.test(clean)) return 'start';
+      if (/\bprops?\s+list\b/i.test(clean)) return 'start';
+      return '';
+    }
+
+    function stripPropLineNoise(line) {
+      return String(line || '')
+        .replace(/\u00a0/g, ' ')
+        .replace(/[“”]/g, '"')
+        .replace(/[‘’]/g, "'")
+        .replace(/\s+/g, ' ')
+        .trim();
+    }
+
+    function extractPropCandidateName(line, inListSection) {
+      let raw = stripPropLineNoise(line);
+      if (!raw) return null;
+
+      const sectionTail = raw.match(/\b(?:essential|rehearsal|show|final|production)\s+props?\s*:\s*(.+)$/i);
+      if (sectionTail) raw = sectionTail[1].trim();
+
+      const hadListMarker = /^([•*·-]|\d+[\.)])\s+/.test(raw);
+      const hadPageRef = /\(?\bpp?\.?\s*\d/i.test(raw);
+      raw = raw.replace(/^([•*·-]|\d+[\.)])\s+/, '').trim();
+
+      if (!sectionTail && propListSectionKind(raw) === 'start' && !hadListMarker && !hadPageRef) return null;
+      if (!hadListMarker && !hadPageRef && !inListSection) return null;
+
+      raw = raw
+        .replace(/\s*\(?\bpp?\.?\s*[\d,\s–—-]+\)?/ig, '')
+        .replace(/\s*\bpages?\s*[\d,\s–—-]+/ig, '')
+        .trim();
+
+      const beforeDash = raw.split(/\s+[–—-]\s+/)[0]?.trim();
+      if (beforeDash && beforeDash.length >= 2) raw = beforeDash;
+      const beforeColon = raw.split(/\s*:\s+/)[0]?.trim();
+      if (beforeColon && beforeColon.length >= 2 && beforeColon.length <= 60) raw = beforeColon;
+
+      return cleanSceneTitle(raw.replace(/[.;,]+$/g, ''));
+    }
+
+    function isLikelyPropCandidate(name) {
+      const clean = stripPropLineNoise(name);
+      if (!clean || clean.length < 2 || clean.length > 70) return false;
+      if (!/[A-Za-z]{2}/.test(clean)) return false;
+      if (looksLikeImportedNoise(clean) || parseActHeading(clean) || parseSceneHeading(clean, 0, false)) return false;
+      if (/^(props?|proper props handling|acquiring or creating props|essential props?|rehearsal props?|set dressing|notes?):?$/i.test(clean)) return false;
+      if (/[.!?]$/.test(clean)) return false;
+      const words = clean.split(/\s+/).filter(Boolean);
+      if (words.length > 7) return false;
+      const lowerStarters = /^(any|all|below|if|when|where|whether|while|with|without|these|those|this|that|they|their|there|your|you|we|it|its|starting|proper|acquiring|scour|send|set|keep|return|indicate|survive|chosen|organized|budgetary|authenticity|storytelling|professionalism|production)$/i;
+      if (lowerStarters.test(words[0])) return false;
+      const proseWords = words.filter(word => /^(actor|actors|backstage|basement|budgetary|comprehensive|concept|encourage|exchange|professionalism|production|program|rehearsal|rehearsals|storytelling|thrift|using|visual|wise)$/i.test(word));
+      if (proseWords.length >= 2) return false;
+      const functionWords = words.filter(word => /^(a|an|and|are|as|at|be|being|but|by|for|from|if|in|is|it|of|on|or|so|that|the|their|them|these|they|this|to|we|when|where|which|while|will|with|without|you|your)$/i.test(word));
+      if (functionWords.length >= 2) return false;
+      return true;
+    }
+
     function parseAsPropList(text) {
-      return normalizeImportedLines(text).map(line => {
-        const name = cleanSceneTitle(line.replace(/^\d+[\.\)]\s*/, '').replace(/\s*[-–—:]\s*(preset|hand prop|prop|set dressing|note).*/i, ''));
-        return name && name.length >= 2 && name.length <= 80 && !looksLikeImportedNoise(name) && !parseActHeading(name) && !parseSceneHeading(name, 0, false)
-          ? { name }
-          : null;
-      }).filter(Boolean);
+      const props = [];
+      const seen = new Set();
+      let inListSection = false;
+
+      normalizeImportedLines(text).forEach(line => {
+        const sectionKind = propListSectionKind(line);
+        if (sectionKind === 'stop') {
+          inListSection = false;
+          return;
+        }
+        if (sectionKind === 'start') inListSection = true;
+
+        const name = extractPropCandidateName(line, inListSection);
+        if (!isLikelyPropCandidate(name)) return;
+        const key = normalizeLoose(name);
+        if (seen.has(key)) return;
+        seen.add(key);
+        props.push({ name });
+      });
+
+      return props;
     }
 
     function renderImportCharactersApprovalPanel() {
