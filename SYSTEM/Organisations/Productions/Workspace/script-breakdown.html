@@ -3578,11 +3578,12 @@
         if (window.pdfjsLib?.GlobalWorkerOptions) {
           window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
         }
-        const [text, uploadedPath] = await Promise.all([
-          isImage ? extractImageText(file) : file.arrayBuffer().then(extractPdfText),
+        const [extracted, uploadedPath] = await Promise.all([
+          isImage ? extractImageText(file).then(t => ({ text: t, richLines: [] })) : file.arrayBuffer().then(extractPdfText),
           uploadBreakdownFile(file),
         ]);
-        const draft = parseBreakdownText(text, selectedImportProfile);
+        const { text, richLines } = extracted;
+        const draft = parseBreakdownText(text, selectedImportProfile, richLines);
         stopLoadingMessageCycle();
         pendingPdfImport = {
           fileName: file.name,
@@ -3679,16 +3680,18 @@
     async function extractPdfText(buffer) {
       if (!window.pdfjsLib) throw new Error('PDF reader did not load.');
       const pdf = await window.pdfjsLib.getDocument({ data: buffer }).promise;
-      const pages = [];
+      const textPages = [];
+      const allRichLines = [];
       for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
         const page = await pdf.getPage(pageNum);
         const content = await page.getTextContent();
-        const lines = textItemsToLines(content.items || []);
-        pages.push(lines.join('\n'));
+        const items = content.items || [];
+        textPages.push(textItemsToLines(items).join('\n'));
+        allRichLines.push(...textItemsToRichLines(items));
       }
-      const text = pages.join('\n\n').replace(/\u00a0/g, ' ').trim();
+      const text = textPages.join('\n\n').replace(/\u00a0/g, ' ').trim();
       if (!text || text.length < 20) throw new Error('No selectable PDF text found.');
-      return text;
+      return { text, richLines: allRichLines };
     }
 
     async function extractImageText(file) {
@@ -3753,6 +3756,38 @@
         .filter(Boolean);
     }
 
+    // Returns lines with font metadata for section-heading detection (no column splitting — headings are always full-width)
+    function textItemsToRichLines(items) {
+      const placed = items
+        .filter(item => String(item.str || '').trim())
+        .map(item => ({
+          text: String(item.str || '').replace(/ /g, ' ').trim(),
+          x: item.transform?.[4] || 0,
+          y: item.transform?.[5] || 0,
+          fontSize: Math.round(Math.abs(item.transform?.[0] || 12)),
+          bold: /bold|heavy|black|demi/i.test(item.fontName || ''),
+        }));
+      const rows = [];
+      for (const item of placed) {
+        const row = rows.find(r => Math.abs(r.y - item.y) <= 3);
+        if (row) {
+          row.parts.push(item);
+          if (item.fontSize > row.fontSize) row.fontSize = item.fontSize;
+          if (item.bold) row.bold = true;
+        } else {
+          rows.push({ y: item.y, parts: [item], fontSize: item.fontSize, bold: item.bold });
+        }
+      }
+      return rows
+        .sort((a, b) => b.y - a.y)
+        .map(row => ({
+          text: row.parts.sort((a, b) => a.x - b.x).map(i => i.text).join(' ').replace(/\s+/g, ' ').trim(),
+          fontSize: row.fontSize,
+          bold: row.bold,
+        }))
+        .filter(l => l.text);
+    }
+
     function extractCharacterPoolEntry(line) {
       const raw = String(line || '').trim();
       const match = raw.match(/^([A-Z][A-Z\s.'\-]{1,40})(?:\s*[-–(\/,].*)?$/);
@@ -3781,23 +3816,97 @@
     const PRESCAN_SONGS_HEADING = /^(musical numbers?(?: list)?|scenes?\s*(?:&|and)\s*musical numbers?|musical numbers?\s*(?:&|and)\s*scenes?|songs?(?:\s*(?:&|and)\s*(?:scenes?|dances?))?|song list|number list|show songs?)$/i;
     const PRESCAN_CHARS_HEADING = /^(characters?|cast(?: of characters?)?|cast list|dramatis personae)$/i;
 
-    function prescanFrontMatter(lines, result, profile) {
-      const MAX = Math.min(lines.length, 4000);
+    function prescanFrontMatter(lines, result, profile, richLines) {
+      if (richLines && richLines.length > 0) {
+        prescanWithRichLines(richLines, result);
+      } else {
+        prescanTextOnly(lines, result);
+      }
+    }
 
-      // Pass 1: find where each section heading appears
+    // Phase 1-3 of the BTS import spec: use font size to distinguish real section headings
+    // from TOC references (body text with trailing page numbers).
+    // Section headings are large or bold; TOC entries are body-sized with trailing dots/numbers.
+    function prescanWithRichLines(richLines, result) {
+      // Compute median font size so we can identify headings as meaningfully larger
+      const sizes = richLines.map(l => l.fontSize).filter(s => s > 0).sort((a,b) => a-b);
+      const median = sizes[Math.floor(sizes.length / 2)] || 12;
+      const headingMin = median * 1.08; // 8% larger than body = heading
+
       let songsStart = -1, charsStart = -1;
-      console.log('[BTS prescan] lines containing "song" or "musical" (first 1200):',
-        lines.slice(0, 1200).map((l,i) => [i, l.trim()]).filter(([,l]) => /song|musical/i.test(l)).map(([i,l]) => `L${i}: "${l}"`));
-      for (let i = 0; i < MAX; i++) {
-        const rawLine = lines[i].trim().replace(/\s+/g, ' ');
-        if (!rawLine) continue;
-        const line = stripHeadingTrail(rawLine);
-        if (songsStart === -1 && PRESCAN_SONGS_HEADING.test(line)) { songsStart = i; console.log(`[BTS prescan] songs heading at line ${i}: "${rawLine}" (stripped: "${line}")`); }
-        if (charsStart === -1 && PRESCAN_CHARS_HEADING.test(rawLine)) { charsStart = i; console.log(`[BTS prescan] chars heading at line ${i}: "${rawLine}"`); }
+
+      // Debug: show every line mentioning "song" or "musical" with its font info
+      console.log('[BTS prescan] median font size:', median, '| heading min:', headingMin.toFixed(1));
+      console.log('[BTS prescan] song/musical lines:',
+        richLines.slice(0, 2000).filter(l => /song|musical/i.test(l.text))
+          .map(l => `${l.fontSize}pt${l.bold?'B':''}: "${l.text}"`));
+
+      for (let i = 0; i < richLines.length; i++) {
+        const raw = richLines[i].text.trim().replace(/\s+/g, ' ');
+        if (!raw) continue;
+        const stripped = stripHeadingTrail(raw);
+        const isHeading = richLines[i].fontSize >= headingMin || richLines[i].bold;
+        const isCleanLine = stripped === raw; // no trailing TOC filler stripped away
+
+        // Accept: correct heading text AND (large/bold font OR clean standalone line)
+        // Reject: body-sized lines with trailing page numbers (TOC entries)
+        if (songsStart === -1 && PRESCAN_SONGS_HEADING.test(stripped) && (isHeading || isCleanLine)) {
+          songsStart = i;
+          console.log(`[BTS prescan] songs section at rich line ${i}: "${raw}" (${richLines[i].fontSize}pt bold:${richLines[i].bold} clean:${isCleanLine})`);
+        }
+        if (charsStart === -1 && PRESCAN_CHARS_HEADING.test(stripped) && (isHeading || isCleanLine)) {
+          charsStart = i;
+          console.log(`[BTS prescan] chars section at rich line ${i}: "${raw}" (${richLines[i].fontSize}pt bold:${richLines[i].bold} clean:${isCleanLine})`);
+        }
         if (songsStart !== -1 && charsStart !== -1) break;
       }
 
-      // Pass 2: extract from songs section
+      // Extract song catalogue from songs section
+      if (songsStart !== -1) {
+        for (let i = songsStart + 1; i < Math.min(richLines.length, songsStart + 400); i++) {
+          const line = richLines[i].text.trim();
+          if (!line) continue;
+          if (PRESCAN_CHARS_HEADING.test(stripHeadingTrail(line))) break;
+          if (/^(theater tips?|theatre tips?|notes? to (the )?director|production notes?|about (the|this)|copyright|all rights reserved)$/i.test(line)) break;
+          // Stop if we hit another large/bold heading (new section starting)
+          if (i !== songsStart && (richLines[i].fontSize >= headingMin || richLines[i].bold) && PRESCAN_SONGS_HEADING.test(stripHeadingTrail(line)) === false) break;
+          if (parseActHeading(line)) continue;
+          if (parseSceneHeading(line, 0, false)) continue;
+          const song = extractSongPoolEntry(line);
+          if (song?.title && !result.songs.find(s => s.title.toLowerCase() === song.title.toLowerCase())) result.songs.push(song);
+        }
+      }
+
+      // Extract character catalogue from characters section
+      if (charsStart !== -1) {
+        for (let i = charsStart + 1; i < Math.min(richLines.length, charsStart + 400); i++) {
+          const line = richLines[i].text.trim();
+          if (!line) continue;
+          if (PRESCAN_SONGS_HEADING.test(stripHeadingTrail(line))) break;
+          if (/^(theater tips?|theatre tips?|notes? to (the )?director|production notes?|about (the|this)|copyright|scene \d|prologue|act [ivx1])/i.test(line)) break;
+          if (i !== charsStart && (richLines[i].fontSize >= headingMin || richLines[i].bold) && PRESCAN_CHARS_HEADING.test(stripHeadingTrail(line)) === false) break;
+          const name = extractCharacterPoolEntry(line);
+          if (name && !result.characterPool.find(c => c.name === name)) result.characterPool.push({ name });
+        }
+      }
+
+      result.structuredCharacters = result.characterPool.length > 0;
+      result.structuredSongs = result.songs.length > 0;
+      console.log(`[BTS prescan] done — songs: ${result.songs.length}, characters: ${result.characterPool.length}`);
+    }
+
+    // Fallback for image/OCR imports (no font metadata available)
+    function prescanTextOnly(lines, result) {
+      const MAX = Math.min(lines.length, 4000);
+      let songsStart = -1, charsStart = -1;
+      for (let i = 0; i < MAX; i++) {
+        const raw = lines[i].trim().replace(/\s+/g, ' ');
+        if (!raw) continue;
+        const stripped = stripHeadingTrail(raw);
+        if (songsStart === -1 && PRESCAN_SONGS_HEADING.test(stripped) && stripped === raw) { songsStart = i; }
+        if (charsStart === -1 && PRESCAN_CHARS_HEADING.test(stripped) && stripped === raw) { charsStart = i; }
+        if (songsStart !== -1 && charsStart !== -1) break;
+      }
       if (songsStart !== -1) {
         for (let i = songsStart + 1; i < Math.min(lines.length, songsStart + 300); i++) {
           const line = lines[i].trim();
@@ -3810,8 +3919,6 @@
           if (song?.title && !result.songs.find(s => s.title.toLowerCase() === song.title.toLowerCase())) result.songs.push(song);
         }
       }
-
-      // Pass 2b: extract from characters section
       if (charsStart !== -1) {
         for (let i = charsStart + 1; i < Math.min(lines.length, charsStart + 300); i++) {
           const line = lines[i].trim();
@@ -3822,18 +3929,17 @@
           if (name && !result.characterPool.find(c => c.name === name)) result.characterPool.push({ name });
         }
       }
-
       result.structuredCharacters = result.characterPool.length > 0;
       result.structuredSongs = result.songs.length > 0;
-      console.log(`[BTS prescan] done — songs: ${result.songs.length}, characters: ${result.characterPool.length}`);
+      console.log(`[BTS prescan text-only] songs: ${result.songs.length}, characters: ${result.characterPool.length}`);
     }
 
-    function parseBreakdownText(text, requestedProfile) {
+    function parseBreakdownText(text, requestedProfile, richLines) {
       const rawLines = normalizeImportedLines(text);
       const profile = requestedProfile === 'auto' ? detectImportProfile(rawLines) : (requestedProfile || 'scene_breakdown');
       const lines = filterImportNoise(rawLines, profile);
       const result = { scenes: [], songs: [], characterPool: [], structuredSongs: false, structuredCharacters: false, profile, reviewBucket: { possibleCharacters: [], possibleSongs: [], unknownCaps: [], _nameFrequency: new Map() }, summary: { matchedCharacters: 0, unmatchedNames: 0, productionTips: 0, ignoredLines: Math.max(rawLines.length - lines.length, 0) } };
-      prescanFrontMatter(lines, result, profile);
+      prescanFrontMatter(lines, result, profile, richLines || []);
       let currentAct = { number: 1, title: 'Act 1' };
       let currentScene = null;
       let lastNote = null;
