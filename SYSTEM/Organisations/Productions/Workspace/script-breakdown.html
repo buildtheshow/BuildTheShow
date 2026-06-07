@@ -4305,6 +4305,7 @@
     let sceneChars = [], sceneGroups = [], sceneNotes = [];
     let sceneStats = {};
     let castByCharId = {};
+    let savedImportItems = { props: [], characters: [], songs: [], scenes: [], script: [] };
     let selectedCharIds = new Set();
     let selectedNoteType = 'general';
     let selectedDepartmentTags = new Set();
@@ -4374,6 +4375,194 @@
       return String(text || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     }
 
+    function hydrateSavedImportItems(rows) {
+      savedImportItems = { props: [], characters: [], songs: [], scenes: [], script: [] };
+      (rows || []).forEach(row => {
+        const kind = row.item_kind;
+        if (!savedImportItems[kind]) return;
+        savedImportItems[kind].push({
+          ...(row.item_data || {}),
+          _importItemId: row.id,
+          _sourceFilename: row.source_filename || '',
+          _sourceMeta: row.source_meta || {},
+        });
+      });
+    }
+
+    function savedImportCount(kind) {
+      return Array.isArray(savedImportItems?.[kind]) ? savedImportItems[kind].length : 0;
+    }
+
+    function hasSavedImportKind(kind) {
+      return savedImportCount(kind) > 0;
+    }
+
+    function importKindData(kind) {
+      if (!pendingPdfImport) return [];
+      if (kind === 'props') return pendingPdfImport.propCatalogue || [];
+      if (kind === 'characters') return pendingPdfImport.characterPool || [];
+      if (kind === 'songs') return pendingPdfImport.songs || [];
+      if (kind === 'scenes') return (pendingPdfImport.sceneCatalogue && pendingPdfImport.sceneCatalogue.length)
+        ? pendingPdfImport.sceneCatalogue
+        : (pendingPdfImport.scenes || []);
+      if (kind === 'script') {
+        if (!pendingPdfImport.scriptUploaded && !pendingPdfImport.fileName) return [];
+        return [{
+          fileName: pendingPdfImport.fileName || '',
+          fileType: pendingPdfImport.fileType || '',
+          importProfile: pendingPdfImport.importProfile || '',
+          summary: pendingPdfImport.summary || {},
+          scenesFound: (pendingPdfImport.scenes || []).length,
+          songsFound: (pendingPdfImport.songs || []).length,
+          charactersFound: (pendingPdfImport.characterPool || []).length,
+          propsSeeded: (pendingPdfImport.propCatalogue || []).length,
+        }];
+      }
+      return [];
+    }
+
+    function importItemKey(kind, item, index) {
+      if (kind === 'props') return normalizeLoose(item.name || item.title || `prop-${index + 1}`) || `prop-${index + 1}`;
+      if (kind === 'characters') return normalizeLoose(item.name || `character-${index + 1}`) || `character-${index + 1}`;
+      if (kind === 'songs') return normalizeLoose(item.title || item.name || `song-${index + 1}`) || `song-${index + 1}`;
+      if (kind === 'scenes') {
+        const act = item.actNumber || item.act || 1;
+        const number = item.number || item.sceneNumber || index + 1;
+        return normalizeLoose(`${act}-${number}-${item.title || item.name || 'scene'}`) || `scene-${index + 1}`;
+      }
+      if (kind === 'script') return 'actors-script';
+      return `${kind}-${index + 1}`;
+    }
+
+    function serializeImportItem(kind, item, index) {
+      if (kind === 'props') {
+        return {
+          rowNumber: index + 1,
+          name: item.name || '',
+          pages: item.pages || [],
+          pageText: item.pageText || '',
+          description: item.description || '',
+          category: item.category || item.priority || '',
+          quantity: item.quantity || item.qty || 1,
+          priority: item.priority || '',
+          notes: item.notes || '',
+        };
+      }
+      if (kind === 'characters') {
+        return {
+          rowNumber: index + 1,
+          name: item.name || '',
+          roleType: item.role_type || item.roleType || '',
+          description: item.description || item.notes || '',
+        };
+      }
+      if (kind === 'songs') {
+        return {
+          rowNumber: index + 1,
+          title: item.title || item.name || '',
+          names: item.names || [],
+          pageText: item.pageText || '',
+          notes: item.notes || '',
+        };
+      }
+      if (kind === 'scenes') {
+        return {
+          rowNumber: index + 1,
+          actNumber: item.actNumber || item.act || 1,
+          sceneType: item.sceneType || 'scene',
+          number: item.number || item.sceneNumber || index + 1,
+          title: item.title || item.name || '',
+          location: item.location || item.setting || '',
+          pages: item.pages || item.pageText || '',
+          description: item.description || '',
+        };
+      }
+      return {
+        rowNumber: index + 1,
+        fileName: item.fileName || '',
+        fileType: item.fileType || '',
+        importProfile: item.importProfile || '',
+        summary: item.summary || {},
+        scenesFound: item.scenesFound || 0,
+        songsFound: item.songsFound || 0,
+        charactersFound: item.charactersFound || 0,
+        propsSeeded: item.propsSeeded || 0,
+      };
+    }
+
+    function importSourceMeta(kind) {
+      const uploadName = pendingPdfImport?.listUploads?.[kind] || pendingPdfImport?.fileName || null;
+      return {
+        mode: pendingPdfImport?.mode || (pendingPdfImport?.standaloneStep ? 'standalone' : 'single'),
+        uploadKind: kind,
+        sourceWasRetained: false,
+        scannedAt: new Date().toISOString(),
+        fileType: pendingPdfImport?.listUploadMeta?.[kind]?.fileType || pendingPdfImport?.fileType || null,
+        pageCount: pendingPdfImport?.listUploadMeta?.[kind]?.pageCount || null,
+        sourceFilename: uploadName,
+      };
+    }
+
+    async function saveImportCatalogue(kind) {
+      const items = importKindData(kind);
+      if (!items.length) return;
+      const sourceFilename = pendingPdfImport?.listUploads?.[kind] || pendingPdfImport?.fileName || null;
+      const { error: deleteError } = await sb
+        .from('production_script_import_items')
+        .delete()
+        .eq('production_id', prodId)
+        .eq('item_kind', kind);
+      if (deleteError) throw deleteError;
+      const rows = items.map((item, index) => ({
+        production_id: prodId,
+        item_kind: kind,
+        item_key: importItemKey(kind, item, index),
+        sort_order: index + 1,
+        item_data: serializeImportItem(kind, item, index),
+        source_filename: sourceFilename,
+        source_meta: importSourceMeta(kind),
+      }));
+      const { data, error } = await sb
+        .from('production_script_import_items')
+        .insert(rows)
+        .select('*')
+        .order('sort_order');
+      if (error) throw error;
+      savedImportItems[kind] = (data || []).map(row => ({
+        ...(row.item_data || {}),
+        _importItemId: row.id,
+        _sourceFilename: row.source_filename || '',
+        _sourceMeta: row.source_meta || {},
+      }));
+    }
+
+    async function saveAvailableImportCatalogues() {
+      for (const kind of ['props', 'characters', 'songs', 'scenes', 'script']) {
+        if (importKindData(kind).length) await saveImportCatalogue(kind);
+      }
+    }
+
+    function hasStandaloneStepData(kind) {
+      return kind === 'script' ? !!pendingPdfImport?.scriptUploaded : getStepCatalogueCount(kind) > 0;
+    }
+
+    async function saveStandaloneImportData(kind) {
+      const continueBtn = document.getElementById('pdf-import-continue-btn');
+      const status = document.getElementById('pdf-import-status');
+      if (continueBtn) continueBtn.disabled = true;
+      if (status) status.textContent = 'Saving extracted information...';
+      try {
+        await saveImportCatalogue(kind);
+        if (status) status.textContent = 'Saved extracted information.';
+        closePdfImportModal();
+        renderUploadDashboardStatus();
+      } catch (error) {
+        console.error('[BTS] import catalogue save failed', error);
+        if (continueBtn) continueBtn.disabled = false;
+        if (status) status.textContent = 'Could not save this extracted information yet. The Supabase import table may need to be applied.';
+      }
+    }
+
     async function init() {
       window.initProductionPage('plan');
 
@@ -4391,7 +4580,7 @@
     }
 
     async function loadAll() {
-      const [actsRes, scenesRes, charsRes, castRes, allSceneCharsRes, allSceneGroupsRes, allSceneNotesRes] = await Promise.all([
+      const [actsRes, scenesRes, charsRes, castRes, allSceneCharsRes, allSceneGroupsRes, allSceneNotesRes, importItemsRes] = await Promise.all([
         sb.from('production_acts').select('*').eq('production_id', prodId).order('number'),
         sb.from('production_scenes').select('*').eq('production_id', prodId).order('number'),
         sb.from('production_characters').select('id,name,role_type').eq('production_id', prodId).order('sort_order').order('name'),
@@ -4399,11 +4588,13 @@
         sb.from('scene_characters').select('scene_id').eq('production_id', prodId),
         sb.from('scene_groups').select('scene_id').eq('production_id', prodId),
         sb.from('scene_notes').select('scene_id,note_type,department_tags').eq('production_id', prodId),
+        sb.from('production_script_import_items').select('*').eq('production_id', prodId).order('item_kind').order('sort_order'),
       ]);
 
       acts = actsRes.data || [];
       scenes = scenesRes.data || [];
       productionChars = charsRes.data || [];
+      hydrateSavedImportItems(importItemsRes.data || []);
 
       castByCharId = {};
       (castRes.data || []).forEach(function (m) {
@@ -4581,11 +4772,11 @@
     function renderUploadDashboardStatus() {
       const state = pendingPdfImport || {};
       const uploaded = {
-        props: !!(state.propCatalogue && state.propCatalogue.length),
-        characters: !!(state.characterPool && state.characterPool.length),
-        songs: !!(state.songs && state.songs.length),
-        scenes: !!((state.sceneCatalogue && state.sceneCatalogue.length) || scenes.length),
-        script: !!state.scriptUploaded,
+        props: !!((state.propCatalogue && state.propCatalogue.length) || hasSavedImportKind('props')),
+        characters: !!((state.characterPool && state.characterPool.length) || hasSavedImportKind('characters')),
+        songs: !!((state.songs && state.songs.length) || hasSavedImportKind('songs')),
+        scenes: !!((state.sceneCatalogue && state.sceneCatalogue.length) || scenes.length || hasSavedImportKind('scenes')),
+        script: !!(state.scriptUploaded || hasSavedImportKind('script')),
       };
       const uploadedCount = Object.values(uploaded).filter(Boolean).length;
       const setText = (id, value) => { const el = document.getElementById(id); if (el) el.textContent = value; };
@@ -5204,10 +5395,9 @@
         if (window.pdfjsLib?.GlobalWorkerOptions) {
           window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
         }
-        const [extracted, uploadedPath] = await Promise.all([
-          isImage ? extractImageText(file).then(t => ({ text: t, richLines: [] })) : file.arrayBuffer().then(extractPdfText),
-          uploadBreakdownFile(file),
-        ]);
+        const extracted = isImage
+          ? { text: await extractImageText(file), richLines: [] }
+          : await file.arrayBuffer().then(extractPdfText);
         const { text, richLines } = extracted;
         const draft = parseBreakdownText(text, selectedImportProfile, richLines);
         stopLoadingMessageCycle();
@@ -5223,7 +5413,7 @@
           structuredCharacters: draft.structuredCharacters || false,
           reviewBucket: draft.reviewBucket || { possibleCharacters: [], possibleSongs: [], unknownCaps: [] },
           summary: draft.summary,
-          uploadedPath,
+          uploadedPath: null,
         };
         renderPdfImportReview();
       } catch (error) {
@@ -5294,16 +5484,6 @@
         importReviewStep = 'songs';
       }
       renderUploadDashboardStatus();
-    }
-
-    async function uploadBreakdownFile(file) {
-      const path = `${prodId}/script-breakdowns/${Date.now()}-${slugFileName(file.name)}`;
-      const { error } = await sb.storage.from('production-files').upload(path, file, {
-        upsert: false,
-        contentType: file.type || 'application/octet-stream',
-      });
-      if (error) console.warn('[BTS] breakdown storage upload failed', error);
-      return path;
     }
 
     function detectRecurringPageDecorations(textPages) {
@@ -6753,7 +6933,8 @@
       const scenesReviewActive = hasStandaloneScenesReview();
       const charactersReviewActive = hasStandaloneCharactersReview();
       const songsReviewActive = hasStandaloneSongsReview();
-      const standaloneReviewActive = propsReviewActive || scenesReviewActive || charactersReviewActive || songsReviewActive;
+      const scriptReviewActive = standaloneStep === 'script' && pendingPdfImport.scriptUploaded;
+      const standaloneReviewActive = propsReviewActive || scenesReviewActive || charactersReviewActive || songsReviewActive || scriptReviewActive;
       if (modal) {
         modal.classList.toggle('props-review-active', standaloneReviewActive);
         modal.classList.toggle('characters-review-active', charactersReviewActive);
@@ -6795,8 +6976,10 @@
               ? (pendingPdfImport.characterPool?.length || 0)
               : songsReviewActive
                 ? (pendingPdfImport.songs?.length || 0)
-                : (pendingPdfImport.sceneCatalogue?.length || 0);
-          const noun = propsReviewActive ? 'prop' : charactersReviewActive ? 'character' : songsReviewActive ? 'song' : 'scene';
+                : scriptReviewActive
+                  ? ((pendingPdfImport.scenes || []).length || 1)
+                  : (pendingPdfImport.sceneCatalogue?.length || 0);
+          const noun = propsReviewActive ? 'prop' : charactersReviewActive ? 'character' : songsReviewActive ? 'song' : scriptReviewActive ? 'scene' : 'scene';
           const accent = charactersReviewActive ? '#e3177f' : songsReviewActive ? '#dd8233' : '#4b22b3';
           if (taglineEl) taglineEl.innerHTML = `BTS has scanned your file and found <strong style="color:${accent};">${count} ${noun}${count === 1 ? '' : 's'}</strong>.`;
           if (status) status.textContent = `Review the detected ${noun}${count === 1 ? '' : 's'} below. You can edit, remove or add any missing items before saving.`;
@@ -6841,12 +7024,15 @@
         const scenesReviewActive = hasStandaloneScenesReview();
         const charactersReviewActive = hasStandaloneCharactersReview();
         const songsReviewActive = hasStandaloneSongsReview();
-        const standaloneReviewActive = propsReviewActive || scenesReviewActive || charactersReviewActive || songsReviewActive;
+        const scriptReviewActive = pendingPdfImport.standaloneStep === 'script' && pendingPdfImport.scriptUploaded;
+        const standaloneReviewActive = propsReviewActive || scenesReviewActive || charactersReviewActive || songsReviewActive || scriptReviewActive;
         if (cancelBtn) cancelBtn.textContent = standaloneReviewActive ? 'Cancel' : 'Cancel Import';
         if (continueBtn) {
           continueBtn.textContent = standaloneReviewActive ? 'Save & Continue →' : 'Done';
-          continueBtn.onclick = () => closePdfImportModal();
-          continueBtn.disabled = standaloneReviewActive && !getStepCatalogueCount(pendingPdfImport.standaloneStep);
+          continueBtn.onclick = standaloneReviewActive
+            ? () => saveStandaloneImportData(pendingPdfImport.standaloneStep)
+            : () => closePdfImportModal();
+          continueBtn.disabled = standaloneReviewActive && !hasStandaloneStepData(pendingPdfImport.standaloneStep);
         }
         if (tipEl) {
           tipEl.innerHTML = standaloneReviewActive ? '' : '<span class="sbi-footer-tip-icon">✦</span><span>This upload stays separate from the other files.</span>';
@@ -7012,6 +7198,7 @@
 
     function getStepCatalogueCount(kind) {
       if (!pendingPdfImport) return 0;
+      if (kind === 'script') return pendingPdfImport.scriptUploaded ? 1 : 0;
       const map = { songs: 'songs', characters: 'characterPool', scenes: 'sceneCatalogue', props: 'propCatalogue' };
       const key = map[kind];
       return Array.isArray(pendingPdfImport[key]) ? pendingPdfImport[key].length : 0;
@@ -7060,10 +7247,7 @@
       const seededSongs = (pendingPdfImport.songs || []).map(song => ({ title: song.title, names: song.names || [] }));
       const seededCharacters = (pendingPdfImport.characterPool || []).map(char => ({ name: char.name }));
       confirmedSongTitles = new Set(seededSongs.map(song => (song.title || '').toLowerCase()));
-      const [draft, uploadedPath] = await Promise.all([
-        Promise.resolve(parseBreakdownText(extracted.text, 'script', extracted.richLines, { songs: seededSongs, characterPool: seededCharacters })),
-        uploadBreakdownFile(file),
-      ]);
+      const draft = parseBreakdownText(extracted.text, 'script', extracted.richLines, { songs: seededSongs, characterPool: seededCharacters });
       pendingPdfImport.fileName = file.name;
       pendingPdfImport.fileType = /^image\//i.test(file.type || '') ? 'photo' : 'pdf';
       pendingPdfImport.importProfile = draft.profile;
@@ -7078,7 +7262,7 @@
       pendingPdfImport.structuredCharacters = true;
       pendingPdfImport.reviewBucket = draft.reviewBucket || { possibleCharacters: [], possibleSongs: [], unknownCaps: [] };
       pendingPdfImport.summary = draft.summary;
-      pendingPdfImport.uploadedPath = uploadedPath;
+      pendingPdfImport.uploadedPath = null;
       pendingPdfImport.scriptUploaded = true;
       completedImportSteps.add('script');
       importReviewStep = pendingPdfImport.standaloneStep ? 'script' : 'review';
@@ -8324,7 +8508,15 @@
       }
       const continueBtn = document.getElementById('pdf-import-continue-btn');
       if (continueBtn) continueBtn.disabled = true;
-      document.getElementById('pdf-import-status').textContent = 'Saving reviewed scenes...';
+      document.getElementById('pdf-import-status').textContent = 'Saving extracted information and reviewed scenes...';
+      try {
+        await saveAvailableImportCatalogues();
+      } catch (error) {
+        console.error('[BTS] extracted import save failed', error);
+        document.getElementById('pdf-import-status').textContent = 'Could not save the extracted information yet. The Supabase import table may need to be applied.';
+        if (continueBtn) continueBtn.disabled = false;
+        return;
+      }
 
       const actMap = new Map(acts.map(act => [Number(act.number), act]));
       let lastSceneId = null;
