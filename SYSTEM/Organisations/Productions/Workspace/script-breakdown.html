@@ -3850,27 +3850,33 @@
       }
 
       // Find the FIRST heading candidate whose following content validates
-      function findSectionStart(headingPattern, contentValidator) {
+      function findSectionStart(headingPattern, contentValidator, label) {
+        const failLog = [];
         for (let i = 0; i < richLines.length - 10; i++) {
           const raw = richLines[i].text.trim().replace(/\s+/g, ' ');
           if (!headingPattern.test(stripHeadingTrail(raw))) continue;
           let validCount = 0;
+          const sampleLog = [];
           for (let j = i + 1; j < Math.min(richLines.length, i + 50); j++) {
             const line = richLines[j].text.trim();
             if (!line) continue;
-            if (CHARS_HDG.test(stripHeadingTrail(line)) || SONGS_HDG.test(stripHeadingTrail(line))) break;
-            if (contentValidator(line)) validCount++;
+            if (CHARS_HDG.test(stripHeadingTrail(line)) || SONGS_HDG.test(stripHeadingTrail(line))) { sampleLog.push(`[BREAK on heading] "${line.slice(0,60)}"`); break; }
+            const ok = contentValidator(line);
+            sampleLog.push(`${ok?'✓':'✗'} "${line.slice(0,60)}"`);
+            if (ok) validCount++;
           }
           if (validCount >= 2) {
-            console.log(`[BTS prescan] section "${raw}" confirmed at rich line ${i} (${validCount} content lines, ${richLines[i].fontSize}pt bold:${richLines[i].bold})`);
+            console.log(`[BTS prescan] ${label} confirmed at rich line ${i}: "${raw}" (${validCount} valid)`);
             return i;
           }
+          failLog.push(`line ${i} "${raw}" → ${validCount}/50\n  ${sampleLog.join('\n  ')}`);
         }
+        console.log(`[BTS prescan] ${label} NOT found. Candidates:\n`, failLog.join('\n---\n'));
         return -1;
       }
 
-      const songsStart = findSectionStart(SONGS_HDG, looksLikeSongContent);
-      const charsStart = findSectionStart(CHARS_HDG, looksLikeCharContent);
+      const songsStart = findSectionStart(SONGS_HDG, looksLikeSongContent, 'songs');
+      const charsStart = findSectionStart(CHARS_HDG, looksLikeCharContent, 'chars');
 
       // Extract song catalogue
       if (songsStart !== -1) {
