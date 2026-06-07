@@ -3863,28 +3863,40 @@
 
       // Extract song catalogue from songs section
       if (songsStart !== -1) {
-        for (let i = songsStart + 1; i < Math.min(richLines.length, songsStart + 400); i++) {
+        const sectionFontSize = richLines[songsStart].fontSize;
+        for (let i = songsStart + 1; i < Math.min(richLines.length, songsStart + 600); i++) {
           const line = richLines[i].text.trim();
           if (!line) continue;
+          // Hard stops — a different section is beginning
           if (PRESCAN_CHARS_HEADING.test(stripHeadingTrail(line))) break;
           if (/^(theater tips?|theatre tips?|notes? to (the )?director|production notes?|about (the|this)|copyright|all rights reserved)$/i.test(line)) break;
-          // Stop if we hit another large/bold heading (new section starting)
-          if (i !== songsStart && (richLines[i].fontSize >= headingMin || richLines[i].bold) && PRESCAN_SONGS_HEADING.test(stripHeadingTrail(line)) === false) break;
+          // Act and scene headings are structure within the songs section — skip, never break
           if (parseActHeading(line)) continue;
           if (parseSceneHeading(line, 0, false)) continue;
-          const song = extractSongPoolEntry(line);
+          // A heading as large as (or larger than) the section heading itself = new major section → stop
+          if (richLines[i].fontSize >= sectionFontSize * 0.92 && (richLines[i].bold || richLines[i].fontSize >= headingMin) && !PRESCAN_SONGS_HEADING.test(stripHeadingTrail(line))) break;
+          // Extract song — try structured format first, then broad title fallback
+          let song = extractSongPoolEntry(line);
+          if (!song) {
+            // Within a known songs section, any reasonable title line is a song
+            const cleaned = cleanSceneTitle(line.replace(/^["'"]|["'"]$/g, '').replace(/^\d+[\.\)]\s*/, '').trim());
+            if (cleaned && cleaned.length >= 3 && cleaned.length <= 80 && !looksLikeImportedNoise(cleaned) && /[A-Za-z]/.test(cleaned)) {
+              song = { title: cleaned, names: [] };
+            }
+          }
           if (song?.title && !result.songs.find(s => s.title.toLowerCase() === song.title.toLowerCase())) result.songs.push(song);
         }
       }
 
       // Extract character catalogue from characters section
       if (charsStart !== -1) {
-        for (let i = charsStart + 1; i < Math.min(richLines.length, charsStart + 400); i++) {
+        const sectionFontSize = richLines[charsStart].fontSize;
+        for (let i = charsStart + 1; i < Math.min(richLines.length, charsStart + 600); i++) {
           const line = richLines[i].text.trim();
           if (!line) continue;
           if (PRESCAN_SONGS_HEADING.test(stripHeadingTrail(line))) break;
           if (/^(theater tips?|theatre tips?|notes? to (the )?director|production notes?|about (the|this)|copyright|scene \d|prologue|act [ivx1])/i.test(line)) break;
-          if (i !== charsStart && (richLines[i].fontSize >= headingMin || richLines[i].bold) && PRESCAN_CHARS_HEADING.test(stripHeadingTrail(line)) === false) break;
+          if (richLines[i].fontSize >= sectionFontSize * 0.92 && (richLines[i].bold || richLines[i].fontSize >= headingMin) && !PRESCAN_CHARS_HEADING.test(stripHeadingTrail(line))) break;
           const name = extractCharacterPoolEntry(line);
           if (name && !result.characterPool.find(c => c.name === name)) result.characterPool.push({ name });
         }
