@@ -7613,18 +7613,18 @@
 
     const PROP_CATEGORY_MAP = [
       { re: /^props?$/i, category: 'Props', extracts: true },
-      { re: /\bessential\s*props?\b/i, category: 'Essential', extracts: true },
-      { re: /\brequired\s+props?\b/i, category: 'Essential', extracts: true },
-      { re: /\boptional\s*props?\b/i, category: 'Optional', extracts: true },
-      { re: /\bsuggested\s+props?\b/i, category: 'Optional', extracts: true },
-      { re: /\badditional\s+props?\b/i, category: 'Optional', extracts: true },
-      { re: /\bhand\s+props?\b/i, category: 'Hand Prop', extracts: true },
-      { re: /\bset\s+dressing\b/i, category: 'Set Dressing', extracts: true },
-      { re: /\bconsumable\s+props?\b/i, category: 'Consumable', extracts: true },
-      { re: /\bspecialty\s+props?\b/i, category: 'Specialty', extracts: true },
-      { re: /\brehearsal\s+props?\b/i, category: 'Rehearsal', extracts: false },
-      { re: /\bprops?\s+for\b/i, category: 'Props', extracts: false },
-      { re: /\bprops?\s+list\b/i, category: 'Props', extracts: false },
+      { re: /^essential\s*props?\b/i, category: 'Essential', extracts: true },
+      { re: /^required\s+props?\b/i, category: 'Essential', extracts: true },
+      { re: /^optional\s*props?\b/i, category: 'Optional', extracts: true },
+      { re: /^suggested\s+props?\b/i, category: 'Optional', extracts: true },
+      { re: /^additional\s+props?\b/i, category: 'Optional', extracts: true },
+      { re: /^hand\s+props?\b/i, category: 'Hand Prop', extracts: true },
+      { re: /^set\s+dressing\b/i, category: 'Set Dressing', extracts: true },
+      { re: /^consumable\s+props?\b/i, category: 'Consumable', extracts: true },
+      { re: /^specialty\s+props?\b/i, category: 'Specialty', extracts: true },
+      { re: /^rehearsal\s+props?\b/i, category: 'Rehearsal', extracts: false },
+      { re: /^props?\s+for\b/i, category: 'Props', extracts: false },
+      { re: /^props?\s+list\b/i, category: 'Props', extracts: false },
     ];
 
     function getPropSectionInfo(line) {
@@ -7674,9 +7674,10 @@
       if (!clean) return [];
       const boundary = ' [[BTS_PROP_ROW]] ';
       clean = clean
-        .replace(/\s+([•*·]\s+[A-Z][A-Za-z0-9 .,'&/()!-]{1,85}?\s+\(?(?:pp?\.?|pages?|pg\.?)\s*\d)/g, `${boundary}$1`)
-        .replace(/([.!?])\s+([A-Z][A-Za-z0-9 .,'&/()!-]{1,70}?\s+\(?(?:pp?\.?|pages?|pg\.?)\s*\d)/g, `$1${boundary}$2`)
-        .replace(/\s+([A-Z][A-Za-z0-9 .,'&/()!-]{1,70}?\s+[•*·]\s*(?:pp?\.?|pages?|pg\.?)\s*\d)/g, `${boundary}$1`);
+        .replace(/([.!?])\s+((?:essential|optional)\s*props?\b|(?:required|suggested|additional|hand|consumable|specialty|rehearsal)\s+props?\b|set\s+dressing\b)/gi, `$1${boundary}$2`)
+        .replace(/\s+([•*·]\s+[A-Z][A-Za-z0-9 .,'&/()!-]{1,130}?\s+\(?(?:pp?\.?|pages?|pg\.?)\s*\d)/g, `${boundary}$1`)
+        .replace(/([.!?])\s+([A-Z][A-Za-z0-9 .,'&/()!-]{1,120}?\s+\(?(?:pp?\.?|pages?|pg\.?)\s*\d)/g, `$1${boundary}$2`)
+        .replace(/\s+([A-Z][A-Za-z0-9 .,'&/()!-]{1,120}?\s+[•*·]\s*(?:pp?\.?|pages?|pg\.?)\s*\d)/g, `${boundary}$1`);
       return clean.split(boundary).map(segment => cleanPropImportLine(segment)).filter(Boolean);
     }
 
@@ -7708,6 +7709,17 @@
       return { refs: [...new Set(refs)], text };
     }
 
+    function parseFullPropEntry(value) {
+      const raw = cleanPropImportLine(value).replace(/^([•*·-]|\d+[\.)])\s+/, '').trim();
+      const match = raw.match(/^(.{2,130}?)\s+\(?(?:pp?\.?|pages?|pg\.?)\s*([0-9][0-9,\sand–—-]*)\)?\s*[–—-]\s*(.+)$/i);
+      if (!match) return null;
+      const name = cleanSceneTitle(match[1].replace(/[•*·.;,]+$/g, ''));
+      const refs = [...match[2].matchAll(/\d+/g)].map(item => Number(item[0])).filter(Boolean);
+      const description = cleanPropDescriptionText(match[3]);
+      if (!refs.length || !description || !isLikelyPropCandidate(name)) return null;
+      return { name, refs: [...new Set(refs)], description };
+    }
+
     function splitPropRow(line, category, inListSection) {
       let raw = cleanPropImportLine(line);
       if (!raw) return null;
@@ -7726,6 +7738,30 @@
       raw = raw.replace(/^([•*·-]|\d+[\.)])\s+/, '').trim();
 
       if ((!hadListMarker && !hadInlineMarker) || !hadPageRef) return null;
+
+      const fullEntry = parseFullPropEntry(line);
+      if (fullEntry) {
+        const score = [
+          inListSection ? 25 : 0,
+          hadListMarker || hadInlineMarker ? 25 : 0,
+          fullEntry.refs.length ? 25 : 0,
+          fullEntry.description ? 15 : 0,
+          category && category !== 'Props' ? 10 : 0,
+        ].reduce((sum, value) => sum + value, 0);
+        return {
+          name: fullEntry.name,
+          category: category || 'Props',
+          description: fullEntry.description,
+          script_page_refs: fullEntry.refs,
+          department_name: 'Props',
+          status: 'Needed',
+          source_type: 'prop_import',
+          confidence_score: score,
+          confidence: score >= 75 ? 'high' : 'medium',
+          review_status: score >= 75 ? 'Approved' : 'Needs Review',
+          selected_for_import: true,
+        };
+      }
 
       const pageResult = parsePropPageRefs(raw);
       raw = pageResult.text;
@@ -7842,9 +7878,7 @@
 
       normalizeImportedLines(text).forEach((line, index) => {
         const clean = cleanPropImportLine(line);
-        const sectionInfo = getPropSectionInfo(clean);
-        const sectionKind = propListSectionKind(clean);
-        splitMergedPropImportLine(clean).forEach(segment => processPropSegment(segment, index, sectionInfo, sectionKind));
+        splitMergedPropImportLine(clean).forEach(segment => processPropSegment(segment, index));
       });
 
       pushCurrent();
