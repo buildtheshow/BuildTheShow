@@ -5383,6 +5383,7 @@
       const progressBar = document.getElementById('pdf-import-progress-bar');
       const status = document.getElementById('pdf-import-status');
       const steps = stepByStepImportSteps();
+      const standaloneStep = pendingPdfImport?.standaloneStep || null;
       const labels = {
         props: 'Props',
         characters: 'Characters',
@@ -5401,11 +5402,31 @@
         review: `${pendingPdfImport.scenes?.length || 0} found`,
         save: 'Review & Import',
       };
-      if (status) status.textContent = pendingPdfImport.scriptUploaded
-        ? `We've processed ${pendingPdfImport.fileName}.`
-        : 'Upload each list, then upload the full script for placement.';
+      const titleEl = document.querySelector('.sbi-header-title-v2');
+      const taglineEl = document.querySelector('.sbi-header-tagline');
+      if (standaloneStep) {
+        const modalTitles = {
+          props: 'Upload Props List',
+          characters: 'Upload Character List',
+          songs: 'Upload Song List',
+          scenes: 'Upload Scene List',
+          script: 'Upload Full Script',
+        };
+        if (titleEl) titleEl.textContent = modalTitles[standaloneStep] || 'Upload File';
+        if (taglineEl) taglineEl.textContent = 'This upload is independent.';
+        if (status) status.textContent = standaloneStep === 'script'
+          ? 'Upload the full script when you are ready to connect everything.'
+          : 'Upload this list, or add items manually.';
+        if (progressBar) progressBar.innerHTML = '';
+      } else {
+        if (titleEl) titleEl.textContent = 'Review Script Import';
+        if (taglineEl) taglineEl.textContent = "Let's make sure everything looks right!";
+        if (status) status.textContent = pendingPdfImport.scriptUploaded
+          ? `We've processed ${pendingPdfImport.fileName}.`
+          : 'Upload each list, then upload the full script for placement.';
+      }
       if (progressBar) {
-        progressBar.innerHTML = `<div class="sbi-progress">
+        progressBar.innerHTML = standaloneStep ? '' : `<div class="sbi-progress">
           ${steps.map((key, index) => {
             const active = importReviewStep === key;
             const done = completedImportSteps.has(key);
@@ -5425,6 +5446,15 @@
       const continueBtn = document.getElementById('pdf-import-continue-btn');
       const tipEl = document.getElementById('pdf-import-footer-tip');
       const step = importReviewStep;
+      if (pendingPdfImport?.standaloneStep) {
+        if (continueBtn) {
+          continueBtn.textContent = 'Done';
+          continueBtn.onclick = () => closePdfImportModal();
+          continueBtn.disabled = false;
+        }
+        if (tipEl) tipEl.innerHTML = '<span class="sbi-footer-tip-icon">✦</span><span>This upload stays separate from the other files.</span>';
+        return;
+      }
       const nextLabels = { props: 'Characters', characters: 'Musical Numbers', songs: 'Scenes', scenes: 'Full Script', script: 'Review Scenes', review: 'Save', save: null };
       const tips = {
         props: 'Tip: Props found in the script become prop notes on the right scenes.',
@@ -5469,6 +5499,7 @@
         listUploads: {},
         uploadedPath: null,
         scriptUploaded: false,
+        standaloneStep: null,
       };
       importReviewStep = 'props';
       completedImportSteps = new Set();
@@ -5484,6 +5515,7 @@
       } else {
         document.getElementById('modal-pdf-import').style.display = 'flex';
       }
+      pendingPdfImport.standaloneStep = target;
       if (target !== importReviewStep) switchStepByStepImportStep(target);
       else renderStepByStepImport();
     }
@@ -5614,7 +5646,7 @@
       pendingPdfImport.uploadedPath = uploadedPath;
       pendingPdfImport.scriptUploaded = true;
       completedImportSteps.add('script');
-      importReviewStep = 'review';
+      importReviewStep = pendingPdfImport.standaloneStep ? 'script' : 'review';
       renderStepByStepImport();
       renderUploadDashboardStatus();
     }
