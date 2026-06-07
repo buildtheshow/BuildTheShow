@@ -3824,63 +3824,71 @@
       }
     }
 
-    // Phase 1-3 of the BTS import spec: use font size to distinguish real section headings
-    // from TOC references (body text with trailing page numbers).
-    // Section headings are large or bold; TOC entries are body-sized with trailing dots/numbers.
+    // BTS Import Spec Phase 2-3: find section by content validation, not font size.
+    // A real section heading is followed by its content — a TOC entry is followed by more TOC entries.
+    // We scan every heading candidate and count how many valid content lines follow.
+    // The first candidate with ≥ 2 valid content lines wins.
     function prescanWithRichLines(richLines, result) {
-      // Compute median font size so we can identify headings as meaningfully larger
+      const SONGS_HDG = PRESCAN_SONGS_HEADING;
+      const CHARS_HDG = PRESCAN_CHARS_HEADING;
       const sizes = richLines.map(l => l.fontSize).filter(s => s > 0).sort((a,b) => a-b);
       const median = sizes[Math.floor(sizes.length / 2)] || 12;
-      const headingMin = median * 1.08; // 8% larger than body = heading
 
-      let songsStart = -1, charsStart = -1;
-
-      // Debug: show every line mentioning "song" or "musical" with its font info
-      console.log('[BTS prescan] median font size:', median, '| heading min:', headingMin.toFixed(1));
-      console.log('[BTS prescan] song/musical lines:',
-        richLines.slice(0, 2000).filter(l => /song|musical/i.test(l.text))
-          .map(l => `${l.fontSize}pt${l.bold?'B':''}: "${l.text}"`));
-
-      for (let i = 0; i < richLines.length; i++) {
-        const raw = richLines[i].text.trim().replace(/\s+/g, ' ');
-        if (!raw) continue;
-        const stripped = stripHeadingTrail(raw);
-        const isHeading = richLines[i].fontSize >= headingMin || richLines[i].bold;
-        const isCleanLine = stripped === raw; // no trailing TOC filler stripped away
-
-        // Accept: correct heading text AND (large/bold font OR clean standalone line)
-        // Reject: body-sized lines with trailing page numbers (TOC entries)
-        if (songsStart === -1 && PRESCAN_SONGS_HEADING.test(stripped) && (isHeading || isCleanLine)) {
-          songsStart = i;
-          console.log(`[BTS prescan] songs section at rich line ${i}: "${raw}" (${richLines[i].fontSize}pt bold:${richLines[i].bold} clean:${isCleanLine})`);
-        }
-        if (charsStart === -1 && PRESCAN_CHARS_HEADING.test(stripped) && (isHeading || isCleanLine)) {
-          charsStart = i;
-          console.log(`[BTS prescan] chars section at rich line ${i}: "${raw}" (${richLines[i].fontSize}pt bold:${richLines[i].bold} clean:${isCleanLine})`);
-        }
-        if (songsStart !== -1 && charsStart !== -1) break;
+      function looksLikeSongContent(line) {
+        const l = line.trim();
+        if (!l || l.length > 80 || l.length < 3) return false;
+        if (parseActHeading(l) || parseSceneHeading(l, 0, false)) return false;
+        if (looksLikeImportedNoise(l)) return false;
+        if (CHARS_HDG.test(stripHeadingTrail(l)) || SONGS_HDG.test(stripHeadingTrail(l))) return false;
+        // Must have letters, not look like a page number or standalone number
+        return /[A-Za-z]{2}/.test(l) && !/^\d+$/.test(l);
       }
 
-      // Extract song catalogue from songs section
+      function looksLikeCharContent(line) {
+        const l = line.trim();
+        return extractCharacterPoolEntry(l) !== null;
+      }
+
+      // Find the FIRST heading candidate whose following content validates
+      function findSectionStart(headingPattern, contentValidator) {
+        for (let i = 0; i < richLines.length - 10; i++) {
+          const raw = richLines[i].text.trim().replace(/\s+/g, ' ');
+          if (!headingPattern.test(stripHeadingTrail(raw))) continue;
+          let validCount = 0;
+          for (let j = i + 1; j < Math.min(richLines.length, i + 50); j++) {
+            const line = richLines[j].text.trim();
+            if (!line) continue;
+            if (CHARS_HDG.test(stripHeadingTrail(line)) || SONGS_HDG.test(stripHeadingTrail(line))) break;
+            if (contentValidator(line)) validCount++;
+          }
+          if (validCount >= 2) {
+            console.log(`[BTS prescan] section "${raw}" confirmed at rich line ${i} (${validCount} content lines, ${richLines[i].fontSize}pt bold:${richLines[i].bold})`);
+            return i;
+          }
+        }
+        return -1;
+      }
+
+      const songsStart = findSectionStart(SONGS_HDG, looksLikeSongContent);
+      const charsStart = findSectionStart(CHARS_HDG, looksLikeCharContent);
+
+      // Extract song catalogue
       if (songsStart !== -1) {
-        const sectionFontSize = richLines[songsStart].fontSize;
+        const sectionSize = richLines[songsStart].fontSize;
         for (let i = songsStart + 1; i < Math.min(richLines.length, songsStart + 600); i++) {
           const line = richLines[i].text.trim();
           if (!line) continue;
-          // Hard stops — a different section is beginning
-          if (PRESCAN_CHARS_HEADING.test(stripHeadingTrail(line))) break;
+          if (CHARS_HDG.test(stripHeadingTrail(line))) break;
           if (/^(theater tips?|theatre tips?|notes? to (the )?director|production notes?|about (the|this)|copyright|all rights reserved)$/i.test(line)) break;
-          // Act and scene headings are structure within the songs section — skip, never break
+          // Act/scene headings are structure within the section — skip them, never break
           if (parseActHeading(line)) continue;
           if (parseSceneHeading(line, 0, false)) continue;
-          // A heading as large as (or larger than) the section heading itself = new major section → stop
-          if (richLines[i].fontSize >= sectionFontSize * 0.92 && (richLines[i].bold || richLines[i].fontSize >= headingMin) && !PRESCAN_SONGS_HEADING.test(stripHeadingTrail(line))) break;
-          // Extract song — try structured format first, then broad title fallback
+          // A line the same size or larger than the section heading (not act/scene) = new section → stop
+          if (richLines[i].fontSize >= sectionSize * 0.92 && (richLines[i].bold || richLines[i].fontSize > median * 1.05) && !SONGS_HDG.test(stripHeadingTrail(line))) break;
           let song = extractSongPoolEntry(line);
           if (!song) {
-            // Within a known songs section, any reasonable title line is a song
             const cleaned = cleanSceneTitle(line.replace(/^["'"]|["'"]$/g, '').replace(/^\d+[\.\)]\s*/, '').trim());
-            if (cleaned && cleaned.length >= 3 && cleaned.length <= 80 && !looksLikeImportedNoise(cleaned) && /[A-Za-z]/.test(cleaned)) {
+            if (cleaned && cleaned.length >= 3 && cleaned.length <= 80 && !looksLikeImportedNoise(cleaned) && /[A-Za-z]{2}/.test(cleaned)) {
               song = { title: cleaned, names: [] };
             }
           }
@@ -3888,15 +3896,15 @@
         }
       }
 
-      // Extract character catalogue from characters section
+      // Extract character catalogue
       if (charsStart !== -1) {
-        const sectionFontSize = richLines[charsStart].fontSize;
+        const sectionSize = richLines[charsStart].fontSize;
         for (let i = charsStart + 1; i < Math.min(richLines.length, charsStart + 600); i++) {
           const line = richLines[i].text.trim();
           if (!line) continue;
-          if (PRESCAN_SONGS_HEADING.test(stripHeadingTrail(line))) break;
+          if (SONGS_HDG.test(stripHeadingTrail(line))) break;
           if (/^(theater tips?|theatre tips?|notes? to (the )?director|production notes?|about (the|this)|copyright|scene \d|prologue|act [ivx1])/i.test(line)) break;
-          if (richLines[i].fontSize >= sectionFontSize * 0.92 && (richLines[i].bold || richLines[i].fontSize >= headingMin) && !PRESCAN_CHARS_HEADING.test(stripHeadingTrail(line))) break;
+          if (richLines[i].fontSize >= sectionSize * 0.92 && (richLines[i].bold || richLines[i].fontSize > median * 1.05) && !CHARS_HDG.test(stripHeadingTrail(line))) break;
           const name = extractCharacterPoolEntry(line);
           if (name && !result.characterPool.find(c => c.name === name)) result.characterPool.push({ name });
         }
