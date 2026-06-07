@@ -3098,7 +3098,15 @@
       width: 100%;
       border-collapse: collapse;
       min-width: 860px;
+      table-layout: fixed;
     }
+    .sbs-props-review-table { min-width: 1040px; }
+    .sbs-props-review-table col:nth-child(1) { width: 19%; }
+    .sbs-props-review-table col:nth-child(2) { width: 72px; }
+    .sbs-props-review-table col:nth-child(3) { width: 112px; }
+    .sbs-props-review-table col:nth-child(4) { width: auto; }
+    .sbs-props-review-table col:nth-child(5) { width: 108px; }
+    .sbs-props-review-table col:nth-child(6) { width: 120px; }
     .sbs-prop-table th {
       position: sticky;
       top: 0;
@@ -3135,15 +3143,34 @@
       color: #1a1530;
       outline: none;
     }
+    textarea.sbs-prop-cell-input {
+      display: block;
+      resize: none;
+      overflow: hidden;
+      line-height: 1.35;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .sbs-props-review-table .sbs-prop-cell-input {
+      padding: 0.65rem 0.85rem;
+      min-height: 44px;
+    }
+    .sbs-props-review-table .sbs-prop-cell-input.qty,
+    .sbs-props-review-table .sbs-prop-cell-input.pages {
+      text-align: center;
+      padding-left: 0.35rem;
+      padding-right: 0.35rem;
+      font-size: 0.86rem;
+    }
     .sbs-prop-cell-input.description { font-weight: 650; }
     .sbs-prop-cell-input:focus { background: rgba(87,46,136,0.045); box-shadow: inset 0 0 0 2px rgba(87,46,136,0.16); }
     .sbs-prop-priority {
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      min-width: 72px;
-      margin: 0 1.25rem;
-      padding: 0.28rem 0.7rem;
+      min-width: 62px;
+      margin: 0 0.65rem;
+      padding: 0.28rem 0.55rem;
       border-radius: 7px;
       font-size: 0.82rem;
       font-weight: 950;
@@ -5750,6 +5777,7 @@
       const meta = pendingPdfImport?.listUploadMeta?.props || {};
       const pageLabel = meta.pageCount ? `${meta.pageCount} page${meta.pageCount === 1 ? '' : 's'}` : (meta.fileType || 'Uploaded file');
       const scannedAt = meta.scannedAt || new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+      const propRowsFor = (value, charsPerRow, min = 1) => Math.max(min, Math.ceil(String(value || '').length / charsPerRow));
       const rows = props.length ? props.map((prop, index) => {
         const name = prop.name || '';
         const quantity = prop.quantity || prop.count || prop.amount || '1';
@@ -5759,11 +5787,11 @@
         const priorityClass = String(priority || 'Medium').toLowerCase();
         const search = [name, quantity, priority, description, pageFound].join(' ').toLowerCase();
         return `<tr data-prop-review-row data-prop-index="${index}" data-search="${esc(search)}">
-          <td><input class="sbs-prop-cell-input" value="${esc(name)}" oninput="updateStandaloneProp(${index}, 'name', this.value)" placeholder="Prop name" /></td>
-          <td><input class="sbs-prop-cell-input" value="${esc(quantity)}" oninput="updateStandaloneProp(${index}, 'quantity', this.value)" placeholder="1" /></td>
+          <td><textarea class="sbs-prop-cell-input" rows="${propRowsFor(name, 18)}" oninput="updateStandaloneProp(${index}, 'name', this.value);autoGrowImportTextarea(this)" onfocus="autoGrowImportTextarea(this)" placeholder="Prop name">${esc(name)}</textarea></td>
+          <td><input class="sbs-prop-cell-input qty" value="${esc(quantity)}" oninput="updateStandaloneProp(${index}, 'quantity', this.value)" placeholder="1" /></td>
           <td><span class="sbs-prop-priority ${esc(priorityClass)}">${esc(priority)}</span></td>
-          <td><input class="sbs-prop-cell-input description" value="${esc(description)}" oninput="updateStandaloneProp(${index}, 'description', this.value)" placeholder="Notes or description" /></td>
-          <td><input class="sbs-prop-cell-input" value="${esc(pageFound)}" oninput="updateStandaloneProp(${index}, 'script_page_refs', this.value)" placeholder="-" /></td>
+          <td><textarea class="sbs-prop-cell-input description" rows="${propRowsFor(description, 46, 2)}" oninput="updateStandaloneProp(${index}, 'description', this.value);autoGrowImportTextarea(this)" onfocus="autoGrowImportTextarea(this)" placeholder="Notes or description">${esc(description)}</textarea></td>
+          <td><textarea class="sbs-prop-cell-input pages" rows="${propRowsFor(pageFound, 12)}" oninput="updateStandaloneProp(${index}, 'script_page_refs', this.value);autoGrowImportTextarea(this)" onfocus="autoGrowImportTextarea(this)" placeholder="-">${esc(pageFound)}</textarea></td>
           <td><div class="sbs-prop-actions">
             <button type="button" class="sbs-prop-edit-btn" onclick="focusStandalonePropRow(${index})" aria-label="Edit ${esc(name || 'prop')}">Edit</button>
             <button type="button" class="sbs-prop-remove-btn" onclick="removeStepCatalogueItem('props', ${index})" aria-label="Remove ${esc(name || 'prop')}"><img src="/ASSETS/Images/Bin.svg" alt="" aria-hidden="true" /></button>
@@ -5791,7 +5819,8 @@
         </div>
 
         <div class="sbs-prop-table-wrap">
-          ${rows ? `<table class="sbs-prop-table">
+          ${rows ? `<table class="sbs-prop-table sbs-props-review-table">
+            <colgroup><col><col><col><col><col><col></colgroup>
             <thead><tr>
               <th>Prop Name</th>
               <th>Qty</th>
@@ -6495,6 +6524,12 @@
       const input = row?.querySelector('.sbs-prop-cell-input');
       input?.focus();
       input?.select?.();
+    }
+
+    function autoGrowImportTextarea(el) {
+      if (!el || el.tagName !== 'TEXTAREA') return;
+      el.style.height = 'auto';
+      el.style.height = `${el.scrollHeight}px`;
     }
 
     function updateStandaloneProp(index, field, value) {
