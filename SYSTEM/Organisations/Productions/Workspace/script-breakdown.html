@@ -5306,6 +5306,28 @@
       return path;
     }
 
+    function detectRecurringPageDecorations(textPages) {
+      if (textPages.length < 2) return new Set();
+      // Strip trailing pipe + page codes (e.g. "| E9", "| 12") before comparing so
+      // "Director's Guide | E9" and "Director's Guide | E10" are treated as the same line.
+      const normalize = line => line.replace(/\s*[|]\s*[A-Za-z]?\d+\s*$/, '').replace(/\s+/g, ' ').trim().toLowerCase();
+      const counts = new Map();
+      textPages.forEach(page => {
+        const seen = new Set();
+        page.split('\n').forEach(line => {
+          const norm = normalize(line);
+          if (norm.length < 12 || seen.has(norm)) return;
+          seen.add(norm);
+          counts.set(norm, (counts.get(norm) || 0) + 1);
+        });
+      });
+      // A line is a recurring decoration if it appears on at least 2 pages AND on \u226540% of pages
+      const threshold = Math.max(2, Math.floor(textPages.length * 0.4));
+      const decorations = new Set();
+      counts.forEach((count, norm) => { if (count >= threshold) decorations.add(norm); });
+      return decorations;
+    }
+
     async function extractPdfText(buffer) {
       if (!window.pdfjsLib) throw new Error('PDF reader did not load.');
       const pdf = await window.pdfjsLib.getDocument({ data: buffer }).promise;
@@ -5318,7 +5340,13 @@
         textPages.push(textItemsToLines(items).join('\n'));
         allRichLines.push(...textItemsToRichLines(items));
       }
-      const text = textPages.join('\n\n').replace(/\u00a0/g, ' ').trim();
+      const decorations = detectRecurringPageDecorations(textPages);
+      const normalize = line => line.replace(/\s*[|]\s*[A-Za-z]?\d+\s*$/, '').replace(/\s+/g, ' ').trim().toLowerCase();
+      const text = textPages
+        .map(page => page.split('\n').filter(line => !decorations.has(normalize(line))).join('\n'))
+        .join('\n\n')
+        .replace(/\u00a0/g, ' ')
+        .trim();
       if (!text || text.length < 20) throw new Error('No selectable PDF text found.');
       return { text, richLines: allRichLines, pageCount: pdf.numPages };
     }
