@@ -511,10 +511,19 @@
     }
     .sb-upload-card.props { color: #2f8f55; }
     .sb-upload-card.characters { color: #572e88; }
+    .sb-upload-card.songs { color: #dd8233; }
+    .sb-upload-card.scenes { color: #476aaa; }
+    .sb-upload-card.script { color: #ca2f72; }
     .sb-upload-card.props .sb-upload-glyph { --glyph-width: 50px; --glyph-height: 44px; }
     .sb-upload-card.characters .sb-upload-glyph { --glyph-width: 50px; --glyph-height: 44px; }
+    .sb-upload-card.songs .sb-upload-glyph { --glyph-width: 44px; --glyph-height: 50px; }
+    .sb-upload-card.scenes .sb-upload-glyph { --glyph-width: 50px; --glyph-height: 40px; }
+    .sb-upload-card.script .sb-upload-glyph { --glyph-width: 38px; --glyph-height: 50px; }
     .sb-upload-card.props .sb-upload-step { background: #168847; }
     .sb-upload-card.characters .sb-upload-step { background: #572e88; }
+    .sb-upload-card.songs .sb-upload-step { background: #dd8233; }
+    .sb-upload-card.scenes .sb-upload-step { background: #1956ac; }
+    .sb-upload-card.script .sb-upload-step { background: #ca2f72; }
 
     .sb-breakdown-board {
       display: grid;
@@ -3890,7 +3899,7 @@
             </div>
             <section class="sb-progress-binder" aria-label="Import progress">
               <div class="sb-progress-metrics">
-                <div class="sb-progress-metric upload-total"><span class="sb-progress-number" id="sb-upload-count">0/2</span><span class="sb-progress-label">Uploaded</span></div>
+                <div class="sb-progress-metric upload-total"><span class="sb-progress-number" id="sb-upload-count">0/5</span><span class="sb-progress-label">Uploaded</span></div>
               </div>
             </section>
           </header>
@@ -3913,6 +3922,30 @@
                 <p class="sb-upload-copy">All characters, groups and ensembles.</p>
                 <button class="sb-card-upload-btn" type="button" onclick="openListUploadStep('characters')">Upload File<span>PDF or DOCX</span></button>
                 <div class="sb-upload-status" id="sb-upload-status-characters">Not uploaded</div>
+              </article>
+              <article class="sb-upload-card songs" id="sb-upload-card-songs">
+                <span class="sb-upload-step">3</span>
+                <div class="sb-upload-icon"><span class="sb-upload-glyph" style="--icon-url:url('/ASSETS/Images/script-music-songs.svg?v=20260606-art2')" aria-hidden="true"></span></div>
+                <h2 class="sb-upload-title">Upload Song List</h2>
+                <p class="sb-upload-copy">All musical numbers and song cues.</p>
+                <button class="sb-card-upload-btn" type="button" onclick="openListUploadStep('songs')">Upload File<span>PDF or DOCX</span></button>
+                <div class="sb-upload-status" id="sb-upload-status-songs">Not uploaded</div>
+              </article>
+              <article class="sb-upload-card scenes" id="sb-upload-card-scenes">
+                <span class="sb-upload-step">4</span>
+                <div class="sb-upload-icon"><span class="sb-upload-glyph" style="--icon-url:url('/ASSETS/Images/script-scene.svg?v=20260606-scene-art4')" aria-hidden="true"></span></div>
+                <h2 class="sb-upload-title">Upload Scene List</h2>
+                <p class="sb-upload-copy">All acts, scenes and locations.</p>
+                <button class="sb-card-upload-btn" type="button" onclick="openListUploadStep('scenes')">Upload File<span>PDF or DOCX</span></button>
+                <div class="sb-upload-status" id="sb-upload-status-scenes">Not uploaded</div>
+              </article>
+              <article class="sb-upload-card script" id="sb-upload-card-script">
+                <span class="sb-upload-step">5</span>
+                <div class="sb-upload-icon"><span class="sb-upload-glyph" style="--icon-url:url('/ASSETS/Images/script-script.svg?v=20260606-art2')" aria-hidden="true"></span></div>
+                <h2 class="sb-upload-title">Upload Actors Script</h2>
+                <p class="sb-upload-copy">Upload the actors script only. Not the director's guide or piano/vocal score.</p>
+                <button class="sb-card-upload-btn" type="button" onclick="openListUploadStep('script')">Upload File<span>PDF or DOCX</span></button>
+                <div class="sb-upload-status" id="sb-upload-status-script">Not uploaded</div>
               </article>
             </div>
           </section>
@@ -4214,6 +4247,7 @@
     let sceneChars = [], sceneGroups = [], sceneNotes = [];
     let sceneStats = {};
     let castByCharId = {};
+    let savedImportItems = { props: [], characters: [], songs: [], scenes: [], script: [] };
     let selectedCharIds = new Set();
     let selectedNoteType = 'general';
     let selectedDepartmentTags = new Set();
@@ -4280,6 +4314,106 @@
       return String(text || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     }
 
+    function hydrateSavedImportItems(rows) {
+      savedImportItems = { props: [], characters: [], songs: [], scenes: [], script: [] };
+      (rows || []).forEach(row => {
+        if (!savedImportItems[row.item_kind]) return;
+        savedImportItems[row.item_kind].push({
+          ...(row.item_data || {}),
+          _sourceFilename: row.source_filename || '',
+          _sourceMeta: row.source_meta || {},
+        });
+      });
+    }
+
+    function savedImportCount(kind) {
+      return Array.isArray(savedImportItems?.[kind]) ? savedImportItems[kind].length : 0;
+    }
+
+    function importKindHasSessionData(kind) {
+      if (!pendingPdfImport) return false;
+      if (kind === 'props') return !!((pendingPdfImport.propCatalogue || []).length || pendingPdfImport.listUploads?.props);
+      if (kind === 'characters') return !!((pendingPdfImport.characterPool || []).length || pendingPdfImport.listUploads?.characters);
+      return !!pendingPdfImport.listUploads?.[kind];
+    }
+
+    function importKindRows(kind) {
+      if (!pendingPdfImport) return [];
+      if (kind === 'props') return (pendingPdfImport.propCatalogue || []).map((prop, index) => ({
+        item_key: normalizeLoose(prop.name || `prop-${index + 1}`) || `prop-${index + 1}`,
+        sort_order: index + 1,
+        item_data: {
+          rowNumber: index + 1,
+          name: prop.name || '',
+          quantity: prop.quantity || 1,
+          category: prop.category || 'Props',
+          description: prop.description || '',
+          script_page_refs: prop.script_page_refs || [],
+        },
+      }));
+      if (kind === 'characters') return (pendingPdfImport.characterPool || []).map((char, index) => ({
+        item_key: normalizeLoose(char.name || `character-${index + 1}`) || `character-${index + 1}`,
+        sort_order: index + 1,
+        item_data: {
+          rowNumber: index + 1,
+          name: char.name || '',
+          role_type: char.role_type || '',
+          description: char.description || '',
+          written_as: char.written_as || '',
+        },
+      }));
+      if (!pendingPdfImport.listUploads?.[kind]) return [];
+      return [{
+        item_key: `${kind}-upload`,
+        sort_order: 1,
+        item_data: {
+          uploadKind: kind,
+          fileName: pendingPdfImport.listUploads[kind],
+          fileType: pendingPdfImport.listUploadMeta?.[kind]?.fileType || '',
+          pageCount: pendingPdfImport.listUploadMeta?.[kind]?.pageCount || null,
+          parsed: false,
+        },
+      }];
+    }
+
+    async function saveImportMetadata(kind) {
+      const rows = importKindRows(kind);
+      if (!rows.length) return;
+      const sourceFilename = pendingPdfImport?.listUploads?.[kind] || null;
+      const sourceMeta = {
+        uploadKind: kind,
+        sourceWasRetained: false,
+        parsed: kind === 'props' || kind === 'characters',
+        scannedAt: new Date().toISOString(),
+        fileType: pendingPdfImport?.listUploadMeta?.[kind]?.fileType || null,
+        pageCount: pendingPdfImport?.listUploadMeta?.[kind]?.pageCount || null,
+      };
+      const { error: deleteError } = await sb
+        .from('production_script_import_items')
+        .delete()
+        .eq('production_id', prodId)
+        .eq('item_kind', kind);
+      if (deleteError) throw deleteError;
+      const payload = rows.map(row => ({
+        production_id: prodId,
+        item_kind: kind,
+        item_key: row.item_key,
+        sort_order: row.sort_order,
+        item_data: row.item_data,
+        source_filename: sourceFilename,
+        source_meta: sourceMeta,
+      }));
+      const { data, error } = await sb.from('production_script_import_items').insert(payload).select('*').order('sort_order');
+      if (error) throw error;
+      savedImportItems[kind] = (data || []).map(row => ({ ...(row.item_data || {}), _sourceFilename: row.source_filename || '', _sourceMeta: row.source_meta || {} }));
+    }
+
+    async function saveAllImportMetadata() {
+      for (const kind of ['props', 'characters', 'songs', 'scenes', 'script']) {
+        if (importKindRows(kind).length) await saveImportMetadata(kind);
+      }
+    }
+
     async function init() {
       window.initProductionPage('plan');
 
@@ -4297,7 +4431,7 @@
     }
 
     async function loadAll() {
-      const [actsRes, scenesRes, charsRes, castRes, allSceneCharsRes, allSceneGroupsRes, allSceneNotesRes] = await Promise.all([
+      const [actsRes, scenesRes, charsRes, castRes, allSceneCharsRes, allSceneGroupsRes, allSceneNotesRes, importItemsRes] = await Promise.all([
         sb.from('production_acts').select('*').eq('production_id', prodId).order('number'),
         sb.from('production_scenes').select('*').eq('production_id', prodId).order('number'),
         sb.from('production_characters').select('id,name,role_type').eq('production_id', prodId).order('sort_order').order('name'),
@@ -4305,11 +4439,13 @@
         sb.from('scene_characters').select('scene_id').eq('production_id', prodId),
         sb.from('scene_groups').select('scene_id').eq('production_id', prodId),
         sb.from('scene_notes').select('scene_id,note_type,department_tags').eq('production_id', prodId),
+        sb.from('production_script_import_items').select('*').eq('production_id', prodId).order('item_kind').order('sort_order'),
       ]);
 
       acts = actsRes.data || [];
       scenes = scenesRes.data || [];
       productionChars = charsRes.data || [];
+      hydrateSavedImportItems(importItemsRes.data || []);
 
       castByCharId = {};
       (castRes.data || []).forEach(function (m) {
@@ -4487,13 +4623,16 @@
     function renderUploadDashboardStatus() {
       const state = pendingPdfImport || {};
       const uploaded = {
-        props: !!(state.propCatalogue && state.propCatalogue.length),
-        characters: !!(state.characterPool && state.characterPool.length),
+        props: importKindHasSessionData('props') || savedImportCount('props') > 0,
+        characters: importKindHasSessionData('characters') || savedImportCount('characters') > 0,
+        songs: importKindHasSessionData('songs') || savedImportCount('songs') > 0,
+        scenes: importKindHasSessionData('scenes') || savedImportCount('scenes') > 0,
+        script: importKindHasSessionData('script') || savedImportCount('script') > 0,
       };
       const uploadedCount = Object.values(uploaded).filter(Boolean).length;
       const setText = (id, value) => { const el = document.getElementById(id); if (el) el.textContent = value; };
-      setText('sb-upload-count', `${uploadedCount}/2`);
-      ['props','characters'].forEach(key => {
+      setText('sb-upload-count', `${uploadedCount}/5`);
+      ['props','characters','songs','scenes','script'].forEach(key => {
         const card = document.getElementById(`sb-upload-card-${key}`);
         const status = document.getElementById(`sb-upload-status-${key}`);
         if (card) card.classList.toggle('uploaded', uploaded[key]);
@@ -5553,7 +5692,7 @@
       const step = importReviewStep;
       if (step === 'props') {
         if (hasStandalonePropsReview()) return renderStandalonePropsReview();
-        return `<div class="sb-import-panel-kicker">Upload 1 of 2</div>
+        return `<div class="sb-import-panel-kicker">Upload 1 of 5</div>
           <div class="sbi-section-heading"><div class="sbi-section-icon">□</div><span class="sbi-section-title">Props</span></div>
           <div class="sbi-section-copy">Upload the prop list page or add prop names manually.</div>
           ${renderStepUploadZone('props', 'Upload prop list PDF or photo', 'Drop a prop list page here, or click to browse.')}
@@ -5570,7 +5709,7 @@
       }
       if (step === 'characters') {
         if (hasStandaloneCharactersReview()) return renderStandaloneCharactersReview();
-        return `<div class="sb-import-panel-kicker">Upload 2 of 2</div>
+        return `<div class="sb-import-panel-kicker">Upload 2 of 5</div>
           <div class="sbi-section-heading"><div class="sbi-section-icon">◉</div><span class="sbi-section-title">Characters</span></div>
           <div class="sbi-section-copy">Upload the character list page or add character names manually.</div>
           ${renderStepUploadZone('characters', 'Upload character list PDF or photo', 'Drop a cast of characters page here, or click to browse.')}
@@ -5580,12 +5719,48 @@
             <button type="button" class="sbs-add-btn" onclick="addStepCharacterManual()">+ Add Character</button>
           </div>`;
       }
+      if (step === 'songs') {
+        return `<div class="sb-import-panel-kicker">Upload 3 of 5</div>
+          <div class="sbi-section-heading"><div class="sbi-section-icon">♪</div><span class="sbi-section-title">Song List</span></div>
+          <div class="sbi-section-copy">Upload the song list file. BTS will save that this file was provided, but will not run PDF reading rules on it yet.</div>
+          ${renderStepUploadZone('songs', 'Upload song list PDF or photo', 'Drop a musical numbers page here, or click to browse.')}
+          ${renderMetadataUploadReceipt('songs')}`;
+      }
+      if (step === 'scenes') {
+        return `<div class="sb-import-panel-kicker">Upload 4 of 5</div>
+          <div class="sbi-section-heading"><div class="sbi-section-icon">▣</div><span class="sbi-section-title">Scene List</span></div>
+          <div class="sbi-section-copy">Upload the scene list file. BTS will save that this file was provided, but will not run PDF reading rules on it yet.</div>
+          ${renderStepUploadZone('scenes', 'Upload scene list PDF or photo', 'Drop a scene list page here, or click to browse.')}
+          ${renderMetadataUploadReceipt('scenes')}`;
+      }
+      if (step === 'script') {
+        return `<div class="sb-import-panel-kicker">Upload 5 of 5</div>
+          <div class="sbi-section-heading"><div class="sbi-section-icon">▤</div><span class="sbi-section-title">Actors Script</span></div>
+          <div class="sbi-section-copy">Upload the actors script only. BTS will save that the file was provided, but will not parse the script here.</div>
+          ${renderStepUploadZone('script', 'Upload actors script PDF or photo', 'Drop the actors script here, or click to browse.')}
+          ${renderMetadataUploadReceipt('script')}`;
+      }
       if (step === 'save') return renderStepByStepSavePanel();
       return renderStepByStepSavePanel();
     }
 
     function stepByStepImportSteps() {
-      return ['props', 'characters', 'save'];
+      return ['props', 'characters', 'songs', 'scenes', 'script', 'save'];
+    }
+
+    function renderMetadataUploadReceipt(kind) {
+      const fileName = pendingPdfImport?.listUploads?.[kind] || savedImportItems?.[kind]?.[0]?.fileName || savedImportItems?.[kind]?.[0]?._sourceFilename || '';
+      if (!fileName) return '<div class="sbs-empty-hint">No file selected yet.</div>';
+      const meta = pendingPdfImport?.listUploadMeta?.[kind] || savedImportItems?.[kind]?.[0]?._sourceMeta || {};
+      const type = meta.fileType || savedImportItems?.[kind]?.[0]?.fileType || 'File';
+      return `<div class="sbs-prop-file-card" style="margin-top:1rem;">
+        <div class="sbs-prop-file-icon">✓</div>
+        <div class="sbs-prop-file-main">
+          <div class="sbs-prop-file-name">${esc(fileName)}</div>
+          <div class="sbs-prop-file-meta">${esc(type)} saved as upload metadata only. File not retained.</div>
+        </div>
+        <button type="button" class="sbs-prop-outline-btn" onclick="chooseStepImportFile('${kind}')">Replace File</button>
+      </div>`;
     }
 
     function renderStepByStepImport() {
@@ -5605,11 +5780,17 @@
       const labels = {
         props: 'Props',
         characters: 'Characters',
+        songs: 'Songs',
+        scenes: 'Scenes',
+        script: 'Actors Script',
         save: 'Save',
       };
       const counts = {
         props: `${pendingPdfImport.propCatalogue?.length || 0} added`,
         characters: `${pendingPdfImport.characterPool?.length || 0} added`,
+        songs: pendingPdfImport.listUploads?.songs ? 'uploaded' : 'waiting',
+        scenes: pendingPdfImport.listUploads?.scenes ? 'uploaded' : 'waiting',
+        script: pendingPdfImport.listUploads?.script ? 'uploaded' : 'waiting',
         save: 'Review & Save',
       };
       const titleEl = document.querySelector('.sbi-header-title-v2');
@@ -5618,6 +5799,9 @@
         const modalTitles = {
           props: 'Upload Props List',
           characters: 'Upload Character List',
+          songs: 'Upload Song List',
+          scenes: 'Upload Scene List',
+          script: 'Upload Actors Script',
         };
         if (titleEl) titleEl.textContent = modalTitles[standaloneStep] || 'Upload File';
         if (standaloneReviewActive) {
@@ -5635,8 +5819,8 @@
         if (progressBar) progressBar.innerHTML = '';
       } else {
         if (titleEl) titleEl.textContent = 'Script Import';
-        if (taglineEl) taglineEl.textContent = 'Upload your props and character lists.';
-        if (status) status.textContent = 'Upload each list, then save.';
+        if (taglineEl) taglineEl.textContent = 'Upload the five files for your show.';
+        if (status) status.textContent = 'Props and characters will be read now. The other files are saved as provided for later wiring.';
       }
       if (progressBar) {
         progressBar.innerHTML = standaloneStep ? '' : `<div class="sbi-progress">
@@ -5667,7 +5851,13 @@
         if (cancelBtn) cancelBtn.textContent = standaloneReviewActive ? 'Cancel' : 'Cancel Import';
         if (continueBtn) {
           continueBtn.textContent = standaloneReviewActive ? 'Save & Continue →' : 'Done';
-          continueBtn.onclick = () => closePdfImportModal();
+          continueBtn.onclick = standaloneReviewActive
+            ? async () => {
+                continueBtn.disabled = true;
+                await saveImportMetadata(pendingPdfImport.standaloneStep);
+                closePdfImportModal();
+              }
+            : () => closePdfImportModal();
           continueBtn.disabled = standaloneReviewActive && !getStepCatalogueCount(pendingPdfImport.standaloneStep);
         }
         if (tipEl) {
@@ -5676,10 +5866,13 @@
         return;
       }
       if (cancelBtn) cancelBtn.textContent = 'Cancel Import';
-      const nextLabels = { props: 'Characters', characters: 'Save', save: null };
+      const nextLabels = { props: 'Characters', characters: 'Songs', songs: 'Scenes', scenes: 'Actors Script', script: 'Save', save: null };
       const tips = {
         props: 'Tip: Props found in your lists will be saved to your breakdown.',
         characters: 'Tip: Upload your character list so BTS knows who is in your show.',
+        songs: 'Song uploads are recorded, without running PDF parsing rules yet.',
+        scenes: 'Scene uploads are recorded, without running PDF parsing rules yet.',
+        script: 'Actors Script uploads are recorded, without running script parsing rules yet.',
         save: 'Review everything, then click Save.',
       };
       if (continueBtn) {
@@ -5699,6 +5892,9 @@
     function renderStepByStepSavePanel() {
       const propCount = (pendingPdfImport?.propCatalogue || []).filter(p => p.selected_for_import !== false).length;
       const charCount = (pendingPdfImport?.characterPool || []).length;
+      const songCount = pendingPdfImport?.listUploads?.songs ? 1 : 0;
+      const sceneListCount = pendingPdfImport?.listUploads?.scenes ? 1 : 0;
+      const scriptCount = pendingPdfImport?.listUploads?.script ? 1 : 0;
       return `<div class="sb-import-panel-kicker">Final Check</div>
     <h3 class="sb-import-panel-title">Ready to Save</h3>
     <div class="sb-import-panel-copy">Click Save to add these to your production.</div>
@@ -5717,6 +5913,27 @@
           <div class="sb-import-stat-label">Characters<br><span class="sb-import-stat-good">Ready</span></div>
         </span>
       </div>
+      <div class="sb-import-stat">
+        <span class="sb-import-stat-icon songs">♪</span>
+        <span>
+          <div class="sb-import-stat-number">${songCount}</div>
+          <div class="sb-import-stat-label">Song List<br><span class="sb-import-stat-good">${songCount ? 'Uploaded' : 'Waiting'}</span></div>
+        </span>
+      </div>
+      <div class="sb-import-stat">
+        <span class="sb-import-stat-icon scenes">▣</span>
+        <span>
+          <div class="sb-import-stat-number">${sceneListCount}</div>
+          <div class="sb-import-stat-label">Scene List<br><span class="sb-import-stat-good">${sceneListCount ? 'Uploaded' : 'Waiting'}</span></div>
+        </span>
+      </div>
+      <div class="sb-import-stat">
+        <span class="sb-import-stat-icon script">▤</span>
+        <span>
+          <div class="sb-import-stat-number">${scriptCount}</div>
+          <div class="sb-import-stat-label">Actors Script<br><span class="sb-import-stat-good">${scriptCount ? 'Uploaded' : 'Waiting'}</span></div>
+        </span>
+      </div>
     </div>`;
     }
 
@@ -5729,6 +5946,12 @@
 
       const props = (pendingPdfImport.propCatalogue || []).filter(p => p.selected_for_import !== false);
       const chars = pendingPdfImport.characterPool || [];
+
+      try {
+        await saveAllImportMetadata();
+      } catch (error) {
+        console.warn('[BTS] import metadata save failed', error);
+      }
 
       if (props.length) {
         const rows = props.map(prop => ({
@@ -5789,7 +6012,7 @@
     }
 
     function openListUploadStep(step) {
-      const target = ['props', 'characters'].includes(step) ? step : 'props';
+      const target = ['props', 'characters', 'songs', 'scenes', 'script'].includes(step) ? step : 'props';
       if (!pendingPdfImport || pendingPdfImport.mode !== 'step_by_step') {
         openStepByStepImport();
       } else {
@@ -5851,6 +6074,20 @@
       const status = document.getElementById('pdf-import-status');
       if (status) status.textContent = `Reading ${file.name}...`;
       try {
+        if (!['props', 'characters'].includes(kind)) {
+          pendingPdfImport.listUploads[kind] = file.name;
+          pendingPdfImport.listUploadMeta[kind] = {
+            fileType: isPdf ? 'PDF' : 'Image',
+            pageCount: null,
+            scannedAt: new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }),
+          };
+          await saveImportMetadata(kind);
+          renderStepByStepImport();
+          renderUploadDashboardStatus();
+          const nextStatus = document.getElementById('pdf-import-status');
+          if (nextStatus) nextStatus.textContent = `${file.name} added. No PDF parsing rules were run for this upload.`;
+          return;
+        }
         if (window.pdfjsLib?.GlobalWorkerOptions) {
           window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
         }
@@ -5866,6 +6103,7 @@
           pageCount: extracted.pageCount || null,
           scannedAt: new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }),
         };
+        await saveImportMetadata(kind);
         const added = Math.max(0, getStepCatalogueCount(kind) - before);
         renderStepByStepImport();
         renderUploadDashboardStatus();
@@ -5885,6 +6123,7 @@
 
     function getStepCatalogueCount(kind) {
       if (!pendingPdfImport) return 0;
+      if (['songs', 'scenes', 'script'].includes(kind)) return pendingPdfImport.listUploads?.[kind] ? 1 : 0;
       const map = { characters: 'characterPool', props: 'propCatalogue' };
       const key = map[kind];
       return Array.isArray(pendingPdfImport[key]) ? pendingPdfImport[key].length : 0;
