@@ -6974,6 +6974,10 @@
       if (!heading) return null;
       const headingNumber = normalizeLoose(heading.scene_number || heading.number || '');
       const headingLocation = normalizeLoose(heading.location || heading.title || heading.name || '');
+      if (headingNumber === 'prologue' || headingNumber === 'epilogue') {
+        const bookend = scenesList.find(scene => normalizeLoose(scene.scene_number || scene.number || '') === headingNumber);
+        if (bookend) return bookend;
+      }
       return scenesList.find(scene => {
         const sceneNumber = normalizeLoose(scene.scene_number || scene.number || '');
         const sceneLocation = normalizeLoose(scene.location || scene.title || scene.name || '');
@@ -7175,6 +7179,63 @@
       return dottedRows >= 4 && sceneRows >= 2;
     }
 
+    function richLineLooksLikeSceneAnchor(line) {
+      const clean = cleanPropImportLine(line?.text || line);
+      if (!clean || clean.length > 110 || /\.{3,}/.test(clean) || /\(part\s*\d+\)/i.test(clean)) return false;
+      if (/^(prologue|epilogue|scene\s+\d+)/i.test(clean)) return true;
+      const letters = clean.replace(/[^a-zA-Z]/g, '');
+      const upperRatio = letters.length ? (clean.match(/[A-Z]/g) || []).length / letters.length : 0;
+      return upperRatio >= 0.6 || line?.bold || line?.fontSize >= 14;
+    }
+
+    function sceneAnchorCandidatesForRichLine(line) {
+      const clean = cleanPropImportLine(line?.text || line);
+      if (!richLineLooksLikeSceneAnchor(line)) return [];
+      const parsed = parseSceneHeadingForMti(clean);
+      if (parsed) {
+        const scene = approvedScriptSceneForHeading(parsed);
+        return scene ? [{ scene, reason: 'heading' }] : [];
+      }
+      const candidates = scriptSceneCandidates();
+      const explicit = clean.match(/^SCENE\s+([0-9]+[A-Z]?)(?:\s*[:\-–—]?\s*(.*))?$/i);
+      if (explicit) {
+        const number = normalizeLoose(explicit[1]);
+        const detail = normalizeLoose(explicit[2] || '');
+        return candidates
+          .filter(candidate => {
+            if (candidate.number !== number) return false;
+            if (!detail || !candidate.location) return true;
+            return detail.includes(candidate.location) || candidate.location.includes(detail);
+          })
+          .map(candidate => ({ scene: candidate.scene, reason: 'scene-number' }));
+      }
+      const bookend = clean.match(/^(PROLOGUE|EPILOGUE)\b/i);
+      if (bookend) {
+        const key = normalizeLoose(bookend[1]);
+        return candidates
+          .filter(candidate => candidate.number === key)
+          .map(candidate => ({ scene: candidate.scene, reason: 'bookend' }));
+      }
+      const normalized = normalizeLoose(clean);
+      return candidates
+        .filter(candidate => candidate.location && candidate.location.length >= 4)
+        .filter(candidate => normalized === candidate.location || normalized.includes(candidate.location) || candidate.location.includes(normalized))
+        .map(candidate => ({ scene: candidate.scene, reason: 'location-heading' }));
+    }
+
+    function selectSceneAnchorsInApprovedOrder(anchors) {
+      const selected = [];
+      let lastPos = -1;
+      scriptSceneCandidates().forEach(candidate => {
+        const key = scriptSceneKey(candidate.scene);
+        const match = anchors.find(anchor => anchor.pos > lastPos && scriptSceneKey(anchor.scene) === key);
+        if (!match) return;
+        selected.push(match);
+        lastPos = match.pos;
+      });
+      return selected;
+    }
+
     function splitScriptIntoSceneBlocksFromRichLines(richLines) {
       const byPage = new Map();
       (richLines || []).forEach(line => {
@@ -7183,47 +7244,55 @@
         if (!byPage.has(page)) byPage.set(page, []);
         byPage.get(page).push(line);
       });
-      const rawBlocks = [];
       const prefixLines = [];
-      let current = null;
-      const pushCurrent = () => {
-        if (current) rawBlocks.push(current);
-      };
+      const flatLines = [];
       [...byPage.entries()].sort((a, b) => a[0] - b[0]).forEach(([page, lines]) => {
         const sortedLines = lines.slice().sort((a, b) => Math.abs(b.y - a.y) > 3 ? b.y - a.y : a.x - b.x);
         if (pdfPageLooksLikeScriptCatalogue(sortedLines)) {
           prefixLines.push(...sortedLines.map(line => line.text));
           return;
         }
-        sortedLines.forEach((line, index) => {
-          const scene = approvedScriptSceneForRichLine(line, current?.scene || null);
-          if (scene) {
-            if (current && scriptSceneKey(current.scene) === scriptSceneKey(scene)) return;
-            pushCurrent();
-            current = {
-              scene,
-              sceneLabel: scriptSceneDisplayName(scene),
-              startLine: rawBlocks.length * 10000 + index,
-              lines: [],
-              pages: [page],
-            };
-            return;
-          }
-          if (!current) {
-            prefixLines.push(line.text);
-            return;
-          }
-          current.lines.push(line.text);
-          current.pages.push(page);
+        sortedLines.forEach(line => {
+          flatLines.push({ ...line, page, pos: flatLines.length });
         });
       });
-      pushCurrent();
+      const anchors = [];
+      flatLines.forEach(line => {
+        sceneAnchorCandidatesForRichLine(line).forEach(candidate => {
+          anchors.push({
+            scene: candidate.scene,
+            sceneLabel: scriptSceneDisplayName(candidate.scene),
+            page: line.page,
+            pos: line.pos,
+            text: line.text,
+            reason: candidate.reason,
+          });
+        });
+      });
+      const selectedAnchors = selectSceneAnchorsInApprovedOrder(anchors);
+      if (!selectedAnchors.length) {
+        const fallback = splitScriptIntoSceneBlocks(flatLines.map(line => line.text).join('\n'));
+        fallback.ignoredPrefixLines = prefixLines.concat(fallback.ignoredPrefixLines || []);
+        return fallback;
+      }
+      const rawBlocks = selectedAnchors.map((anchor, index) => {
+        const nextAnchor = selectedAnchors[index + 1];
+        const blockLines = flatLines.filter(line => line.pos > anchor.pos && (!nextAnchor || line.pos < nextAnchor.pos));
+        return {
+          scene: anchor.scene,
+          sceneLabel: scriptSceneDisplayName(anchor.scene),
+          startLine: anchor.pos,
+          lines: blockLines.map(line => line.text),
+          pages: [anchor.page, ...blockLines.map(line => line.page)],
+          anchorText: anchor.text,
+          anchorReason: anchor.reason,
+        };
+      });
+      prefixLines.push(...flatLines.filter(line => line.pos < selectedAnchors[0].pos).map(line => line.text));
       const blocksByScene = new Map();
       rawBlocks.forEach(block => {
         if (!block.lines.join(' ').trim()) return;
-        const key = block.scene
-          ? normalizeLoose(`${block.scene.scene_number || block.scene.number || ''}-${block.scene.location || block.scene.title || block.scene.name || ''}`)
-          : `unassigned-${block.startLine}`;
+        const key = block.scene ? scriptSceneKey(block.scene) : `unassigned-${block.startLine}`;
         const existing = blocksByScene.get(key);
         if (existing) {
           existing.lines.push('', ...block.lines);
@@ -7266,12 +7335,33 @@
           confidence: 'medium',
         });
       }
+      const approvedSceneCount = (pendingPdfImport?.sceneCatalogue || []).length;
+      if (approvedSceneCount && blocks.length < approvedSceneCount) {
+        reviewItems.push({
+          type: 'scene_slicing',
+          label: 'Scene cuts need review',
+          reason: `BTS found ${blocks.length} of ${approvedSceneCount} approved scene cut${approvedSceneCount === 1 ? '' : 's'} in the script. Connections from oversized blocks are held back until the scene cuts are cleaner.`,
+          confidence: 'low',
+        });
+      }
       const sceneConnections = blocks.map((block, blockIndex) => {
         const blockText = block.lines.join('\n');
         const speakerNames = new Set();
         const stageNames = new Set();
         const mentionNames = new Set();
-        block.lines.forEach((line, index) => {
+        const pages = block.pages?.length ? block.pages : estimateScriptScenePages(block, meta.pageCount, blockIndex, blocks.length);
+        const pageSpan = pages.length ? Math.max(...pages) - Math.min(...pages) + 1 : 0;
+        const oversizedBlock = pageSpan > 25 || block.lines.length > 500;
+        if (oversizedBlock && block.scene) {
+          reviewItems.push({
+            type: 'scene_slicing',
+            label: block.sceneLabel,
+            reason: `This scene block spans ${pageSpan || 'too many'} page${pageSpan === 1 ? '' : 's'}, so BTS did not trust character, song, or prop placements inside it.`,
+            confidence: 'low',
+            sceneId: scriptSceneKey(block.scene),
+          });
+        }
+        if (!oversizedBlock) block.lines.forEach((line, index) => {
           const parentheticalCue = cleanPropImportLine(line).match(/^\(([^)]+):\)/);
           if (parentheticalCue) {
             lineAsScriptCue(parentheticalCue[1], aliasEntries).forEach(name => speakerNames.add(name));
@@ -7287,14 +7377,15 @@
             });
           }
         });
-        aliasEntries.forEach(entry => {
-          if (phraseExistsInText(blockText, entry.alias)) mentionNames.add(entry.name);
-        });
+        if (!oversizedBlock) {
+          aliasEntries.forEach(entry => {
+            if (phraseExistsInText(blockText, entry.alias)) mentionNames.add(entry.name);
+          });
+        }
         const strongCharacters = uniqueByLooseName([...speakerNames, ...stageNames]);
         const characters = strongCharacters.length ? strongCharacters : uniqueByLooseName([...mentionNames]);
-        const songMatches = uniqueByLooseName(songs.filter(song => phraseExistsInText(blockText, song.title)));
-        const propMatches = uniqueByLooseName(props.filter(prop => phraseExistsInText(blockText, prop.name)));
-        const pages = block.pages?.length ? block.pages : estimateScriptScenePages(block, meta.pageCount, blockIndex, blocks.length);
+        const songMatches = oversizedBlock ? [] : uniqueByLooseName(songs.filter(song => phraseExistsInText(blockText, song.title)));
+        const propMatches = oversizedBlock ? [] : uniqueByLooseName(props.filter(prop => phraseExistsInText(blockText, prop.name)));
         if (!block.scene) {
           reviewItems.push({
             type: 'scene',
