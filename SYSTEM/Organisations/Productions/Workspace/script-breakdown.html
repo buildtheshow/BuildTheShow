@@ -7095,10 +7095,24 @@
     }
 
     function lineAsScriptCue(line, aliasEntries) {
-      const clean = cleanPropImportLine(line)
-        .replace(/^\(|\)$/g, '')
-        .replace(/[.:;–—-]+$/g, '')
-        .trim();
+      const raw = cleanPropImportLine(line);
+      // Inline dialogue format: "CHARACTER: text" or "CHAR A, CHAR B: text"
+      const colonIdx = raw.indexOf(':');
+      if (colonIdx > 0 && colonIdx <= 50 && !/^\(/.test(raw)) {
+        const prefix = raw.slice(0, colonIdx).trim();
+        if (prefix) {
+          const prefixNorm = normalizeLoose(prefix);
+          const single = aliasEntries.find(e => e.key === prefixNorm);
+          if (single) return [single.name];
+          const pieces = prefix.split(/\s*(?:,|\/|&|\band\b)\s*/i).map(p => normalizeLoose(p)).filter(Boolean);
+          if (pieces.length >= 2 && pieces.length <= 8) {
+            const multi = pieces.map(p => aliasEntries.find(e => e.key === p)).filter(Boolean);
+            if (multi.length === pieces.length) return uniqueByLooseName(multi.map(e => e.name));
+          }
+        }
+      }
+      // Standalone cue line: character name alone (or comma-separated) on its own line
+      const clean = raw.replace(/^\(|\)$/g, '').replace(/[.:;–—-]+$/g, '').trim();
       if (!clean || clean.length > 90) return [];
       const normalized = normalizeLoose(clean.replace(/\band\b/gi, ','));
       const exact = aliasEntries.find(entry => normalized === entry.key);
