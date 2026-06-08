@@ -3658,6 +3658,87 @@
     }
     .sbs-song-add-title { font-size: 1rem; font-weight: 950; color: #dd8233; }
     .sbs-song-add-copy { font-size: 0.82rem; font-weight: 700; color: rgba(26,21,48,0.58); }
+    .sbs-song-review-table-wrap {
+      border-top: 1px solid rgba(26,21,48,0.08);
+      border-bottom: 1px solid rgba(26,21,48,0.08);
+      overflow: auto;
+      max-height: min(62vh, 720px);
+      background: #fff;
+    }
+    .sbs-song-review-table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 900px;
+      table-layout: fixed;
+    }
+    .sbs-song-review-table col:nth-child(1) { width: 58px; }
+    .sbs-song-review-table col:nth-child(2) { width: 32%; }
+    .sbs-song-review-table col:nth-child(3) { width: 32%; }
+    .sbs-song-review-table col:nth-child(4) { width: 30%; }
+    .sbs-song-review-table col:nth-child(5) { width: 54px; }
+    .sbs-song-review-table th {
+      background: #faf9fc;
+      color: rgba(26,21,48,0.58);
+      font-size: 0.72rem;
+      font-weight: 950;
+      text-transform: uppercase;
+      text-align: left;
+      letter-spacing: 0.01em;
+      padding: 0.75rem 1rem;
+      border-bottom: 1px solid rgba(26,21,48,0.08);
+    }
+    .sbs-song-review-table td {
+      border-bottom: 1px solid rgba(26,21,48,0.08);
+      padding: 0;
+      vertical-align: middle;
+    }
+    .sbs-song-review-table tr:last-child td { border-bottom: none; }
+    .sbs-song-row-number {
+      display: block;
+      padding: 0.9rem 1rem;
+      font-size: 0.88rem;
+      font-weight: 760;
+      color: rgba(26,21,48,0.72);
+    }
+    .sbs-song-table-input {
+      width: 100%;
+      min-height: 44px;
+      border: none;
+      background: transparent;
+      padding: 0.75rem 1rem;
+      font: inherit;
+      font-size: 0.88rem;
+      font-weight: 720;
+      color: #1a1530;
+      outline: none;
+    }
+    .sbs-song-table-input:focus {
+      background: rgba(221,130,51,0.045);
+      box-shadow: inset 0 0 0 2px rgba(221,130,51,0.14);
+    }
+    .sbs-song-row-menu {
+      width: 28px;
+      height: 24px;
+      border: 1px solid rgba(26,21,48,0.08);
+      border-radius: 7px;
+      background: #fff;
+      color: rgba(26,21,48,0.72);
+      font: inherit;
+      font-size: 0.95rem;
+      font-weight: 950;
+      line-height: 1;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .sbs-song-row-menu:hover { background: rgba(221,130,51,0.08); color: #dd8233; }
+    .sbs-song-showing {
+      font-size: 0.84rem;
+      font-weight: 700;
+      color: rgba(26,21,48,0.56);
+      padding-top: 0.2rem;
+    }
     .sbs-character-review .sbs-prop-file-card {
       border-color: rgba(227,23,127,0.14);
       box-shadow: 0 0 0 1px rgba(227,23,127,0.035);
@@ -5959,6 +6040,59 @@
       return !!(pendingPdfImport?.standaloneStep === 'characters' && (pendingPdfImport.characterPool || []).length);
     }
 
+    function hasStandaloneSongsReview() {
+      return !!(pendingPdfImport?.standaloneStep === 'songs' && (pendingPdfImport.songs || []).length);
+    }
+
+    function songSceneLabel(song) {
+      const number = song?.scene_number ? `Scene ${song.scene_number}` : '';
+      const location = song?.scene_location || '';
+      if (number && location) return `${number} - ${location}`;
+      return number || location || '';
+    }
+
+    function renderStandaloneSongsReview() {
+      const songs = pendingPdfImport?.songs || [];
+      const rows = songs.map((song, index) => {
+        const title = song.title || '';
+        const performers = (song.performers || song.names || []).join(', ');
+        const scene = songSceneLabel(song);
+        const search = [title, performers, scene].join(' ').toLowerCase();
+        return `<tr data-song-review-row data-song-index="${index}" data-search="${esc(search)}">
+          <td><span class="sbs-song-row-number">${index + 1}</span></td>
+          <td><input class="sbs-song-table-input" value="${esc(title)}" oninput="updateStandaloneSong(${index}, 'title', this.value)" aria-label="Song title ${index + 1}" /></td>
+          <td><input class="sbs-song-table-input" value="${esc(performers)}" oninput="updateStandaloneSong(${index}, 'performersText', this.value)" aria-label="Performers for ${esc(title || `song ${index + 1}`)}" /></td>
+          <td><input class="sbs-song-table-input" value="${esc(scene)}" oninput="updateStandaloneSong(${index}, 'sceneLabel', this.value)" aria-label="Scene for ${esc(title || `song ${index + 1}`)}" /></td>
+          <td style="text-align:center;"><button type="button" class="sbs-song-row-menu" onclick="focusStandaloneSongRow(${index})" aria-label="More actions for ${esc(title || `song ${index + 1}`)}">...</button></td>
+        </tr>`;
+      }).join('');
+      return `<div class="sbs-prop-review sbs-song-review">
+        <div class="sbs-prop-toolbar">
+          <button type="button" class="sbs-prop-outline-btn" onclick="reorderStandaloneSongs()">↕ Re-order Songs</button>
+          <label class="sbs-prop-search-wrap" aria-label="Search songs">
+            <input class="sbs-prop-search" type="search" placeholder="Search songs..." oninput="filterStandaloneSongRows(this.value)" />
+            <img class="sbs-prop-search-icon" src="/ASSETS/Images/Search.svg" alt="" aria-hidden="true" />
+          </label>
+          <span></span>
+          <button type="button" class="sbs-add-btn" onclick="addStandaloneSongRow()">+ Add Song</button>
+        </div>
+        <div class="sbs-song-review-table-wrap">
+          ${rows ? `<table class="sbs-song-review-table">
+            <colgroup><col><col><col><col><col></colgroup>
+            <thead><tr>
+              <th>#</th>
+              <th>Song Title</th>
+              <th>Performers / Who Is In It</th>
+              <th>Scene</th>
+              <th></th>
+            </tr></thead>
+            <tbody>${rows}</tbody>
+          </table>` : '<div class="sbs-prop-empty">No songs found yet. Add a song below to start the list.</div>'}
+        </div>
+        <div class="sbs-song-showing">Showing 1-${songs.length} of ${songs.length} song${songs.length === 1 ? '' : 's'}</div>
+      </div>`;
+    }
+
     function characterFieldValue(char, keys, fallback = '') {
       for (const key of keys) {
         if (char && char[key] !== undefined && char[key] !== null && String(char[key]).trim()) return char[key];
@@ -6173,6 +6307,7 @@
           </div>`;
       }
       if (step === 'songs') {
+        if (hasStandaloneSongsReview()) return renderStandaloneSongsReview();
         return `<div class="sb-import-panel-kicker">Upload 3 of 5</div>
           <div class="sbi-section-heading"><div class="sbi-section-icon">♪</div><span class="sbi-section-title">Song List</span></div>
           <div class="sbi-section-copy">Upload the MTI song list. BTS will read dotted song rows and attach each song to the nearest scene number.</div>
@@ -6231,10 +6366,12 @@
       const standaloneStep = pendingPdfImport?.standaloneStep || null;
       const propsReviewActive = hasStandalonePropsReview();
       const charactersReviewActive = hasStandaloneCharactersReview();
-      const standaloneReviewActive = propsReviewActive || charactersReviewActive;
+      const songsReviewActive = hasStandaloneSongsReview();
+      const standaloneReviewActive = propsReviewActive || charactersReviewActive || songsReviewActive;
       if (modal) {
         modal.classList.toggle('props-review-active', standaloneReviewActive);
         modal.classList.toggle('characters-review-active', charactersReviewActive);
+        modal.classList.toggle('songs-review-active', songsReviewActive);
       }
       const labels = {
         props: 'Props',
@@ -6266,9 +6403,11 @@
         if (standaloneReviewActive) {
           const count = propsReviewActive
             ? (pendingPdfImport.propCatalogue?.length || 0)
-            : (pendingPdfImport.characterPool?.length || 0);
-          const noun = propsReviewActive ? 'prop' : 'character';
-          const accent = charactersReviewActive ? '#e3177f' : '#4b22b3';
+            : charactersReviewActive
+              ? (pendingPdfImport.characterPool?.length || 0)
+              : (pendingPdfImport.songs?.length || 0);
+          const noun = propsReviewActive ? 'prop' : charactersReviewActive ? 'character' : 'song';
+          const accent = songsReviewActive ? '#dd8233' : charactersReviewActive ? '#e3177f' : '#4b22b3';
           if (taglineEl) taglineEl.innerHTML = `BTS has scanned your file and found <strong style="color:${accent};">${count} ${noun}${count === 1 ? '' : 's'}</strong>.`;
           if (status) status.textContent = `Review the detected ${noun}${count === 1 ? '' : 's'} below. You can edit, remove or add any missing items before saving.`;
         } else {
@@ -6306,7 +6445,8 @@
       if (pendingPdfImport?.standaloneStep) {
         const propsReviewActive = hasStandalonePropsReview();
         const charactersReviewActive = hasStandaloneCharactersReview();
-        const standaloneReviewActive = propsReviewActive || charactersReviewActive;
+        const songsReviewActive = hasStandaloneSongsReview();
+        const standaloneReviewActive = propsReviewActive || charactersReviewActive || songsReviewActive;
         if (cancelBtn) cancelBtn.textContent = standaloneReviewActive ? 'Cancel' : 'Cancel Import';
         if (continueBtn) {
           continueBtn.textContent = standaloneReviewActive ? 'Save & Continue →' : 'Done';
@@ -6755,6 +6895,68 @@
       }
     }
 
+    function updateStandaloneSong(index, field, value) {
+      const song = pendingPdfImport?.songs?.[index];
+      if (!song) return;
+      if (field === 'performersText') {
+        const performers = String(value || '').split(',').map(item => titleCaseName(item.trim())).filter(Boolean);
+        song.performers = performers;
+        song.names = performers;
+      } else if (field === 'sceneLabel') {
+        const clean = cleanSceneTitle(value || '');
+        const match = clean.match(/^Scene\s+([0-9]+[A-Z]?)\s*(?:[-–—:]\s*)?(.*)$/i);
+        if (match) {
+          song.scene_number = /^\d+$/.test(match[1]) ? Number(match[1]) : match[1];
+          song.scene_location = cleanSceneTitle(match[2] || '');
+        } else {
+          song.scene_location = clean;
+        }
+      } else {
+        song[field] = value;
+      }
+      const row = document.querySelector(`[data-song-review-row][data-song-index="${index}"]`);
+      if (row) row.dataset.search = [song.title, (song.performers || song.names || []).join(', '), songSceneLabel(song)].join(' ').toLowerCase();
+      renderUploadDashboardStatus();
+    }
+
+    function addStandaloneSongRow() {
+      if (!pendingPdfImport) return;
+      if (!pendingPdfImport.songs) pendingPdfImport.songs = [];
+      pendingPdfImport.songs.push({
+        title: '',
+        scene_number: '',
+        scene_location: '',
+        performers: [],
+        names: [],
+        source_type: 'manual',
+      });
+      renderStepByStepImport();
+      renderUploadDashboardStatus();
+      window.setTimeout(() => {
+        const input = document.querySelector('.sbs-song-review-table tbody tr:last-child .sbs-song-table-input');
+        input?.focus();
+      }, 0);
+    }
+
+    function reorderStandaloneSongs() {
+      if (!pendingPdfImport?.songs) return;
+      pendingPdfImport.songs.sort((a, b) => {
+        const aNum = Number(a.scene_number);
+        const bNum = Number(b.scene_number);
+        if (Number.isFinite(aNum) && Number.isFinite(bNum) && aNum !== bNum) return aNum - bNum;
+        return String(a.title || '').localeCompare(String(b.title || ''));
+      });
+      renderStepByStepImport();
+      renderUploadDashboardStatus();
+    }
+
+    function focusStandaloneSongRow(index) {
+      const row = document.querySelector(`[data-song-review-row][data-song-index="${index}"]`);
+      const input = row?.querySelector('.sbs-song-table-input');
+      input?.focus();
+      input?.select?.();
+    }
+
     function updateCharacterDescriptionCount(textarea) {
       const count = textarea?.parentElement?.querySelector('.sbs-character-count');
       if (count) count.textContent = `${(textarea.value || '').length} / 2000`;
@@ -6774,6 +6976,20 @@
         const haystack = normalizeLoose(card.dataset.search || '');
         card.style.display = !needle || haystack.includes(needle) ? '' : 'none';
       });
+    }
+
+    function filterStandaloneSongRows(value) {
+      const needle = normalizeLoose(value || '');
+      let visible = 0;
+      document.querySelectorAll('[data-song-review-row]').forEach(row => {
+        const haystack = normalizeLoose(row.dataset.search || '');
+        const show = !needle || haystack.includes(needle);
+        row.style.display = show ? '' : 'none';
+        if (show) visible++;
+      });
+      const showing = document.querySelector('.sbs-song-showing');
+      const total = pendingPdfImport?.songs?.length || 0;
+      if (showing) showing.textContent = `Showing ${visible ? `1-${visible}` : '0'} of ${total} song${total === 1 ? '' : 's'}`;
     }
 
     function exportStandalonePropsList() {
