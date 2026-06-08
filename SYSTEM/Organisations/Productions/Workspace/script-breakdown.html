@@ -6979,6 +6979,65 @@
       }) || heading;
     }
 
+    function scriptSceneCandidates() {
+      return (pendingPdfImport?.sceneCatalogue || []).map(scene => {
+        const number = scene.scene_number || scene.number || '';
+        const location = scene.location || scene.title || scene.name || '';
+        const label = scriptSceneDisplayName(scene);
+        const tokens = [
+          location,
+          scene.title,
+          scene.name,
+          label,
+          number ? `Scene ${number}` : '',
+          number && location ? `Scene ${number} ${location}` : '',
+        ].filter(Boolean).map(normalizeLoose).filter(Boolean);
+        return { scene, number: normalizeLoose(number), location: normalizeLoose(location), tokens: [...new Set(tokens)] };
+      });
+    }
+
+    function lineLooksLikeScriptSceneHeading(line) {
+      const clean = cleanPropImportLine(line);
+      if (!clean || clean.length > 110) return false;
+      if (/\(part\s*\d+\)/i.test(clean) || /\.{3,}/.test(clean)) return false;
+      if (parseSceneHeadingForMti(clean)) return true;
+      if (/^(prologue|epilogue)\b/i.test(clean)) return true;
+      const letters = clean.replace(/[^a-zA-Z]/g, '');
+      const upperRatio = letters.length ? (clean.match(/[A-Z]/g) || []).length / letters.length : 0;
+      return upperRatio >= 0.55 && clean.split(/\s+/).length <= 10;
+    }
+
+    function approvedScriptSceneForLine(line) {
+      const parsed = parseSceneHeadingForMti(line);
+      if (parsed) return approvedScriptSceneForHeading(parsed);
+      const clean = cleanPropImportLine(line);
+      const norm = normalizeLoose(clean);
+      if (!norm || norm.length < 3) return null;
+      const candidates = scriptSceneCandidates();
+      const explicitScene = clean.match(/\bSCENE\s+([0-9]+[A-Z]?)\b/i);
+      if (explicitScene) {
+        const number = normalizeLoose(explicitScene[1]);
+        const numbered = candidates.find(candidate => candidate.number === number);
+        if (numbered) return numbered.scene;
+      }
+      const bookend = clean.match(/\b(PROLOGUE|EPILOGUE)\b/i);
+      if (bookend) {
+        const key = normalizeLoose(bookend[1]);
+        const matched = candidates.find(candidate => candidate.number === key || candidate.tokens.some(token => token.includes(key)));
+        if (matched) return matched.scene;
+      }
+      if (!lineLooksLikeScriptSceneHeading(clean)) return null;
+      const approvedSongHit = (pendingPdfImport?.songs || []).some(song => {
+        const songKey = normalizeLoose(song.title || '');
+        return songKey && (norm === songKey || norm.startsWith(`${songKey} part`) || songKey.startsWith(norm));
+      });
+      if (approvedSongHit) return null;
+      return candidates.find(candidate => candidate.tokens.some(token => {
+        if (token.length < 7) return false;
+        return norm === token || norm.includes(token) || token.includes(norm);
+      }))?.scene || null;
+    }
+
     function scriptAliasEntriesFromCharacters() {
       const characters = pendingPdfImport?.characterPool || [];
       const firstNameCounts = {};
@@ -7032,6 +7091,7 @@
       const lines = normalizeImportedLines(text);
       const blocks = [];
       let current = null;
+      const prefixLines = [];
       const startBlock = (scene, lineIndex) => {
         if (current) blocks.push(current);
         current = {
@@ -7042,16 +7102,21 @@
         };
       };
       lines.forEach((line, index) => {
-        const heading = parseSceneHeadingForMti(line);
-        if (heading) {
-          startBlock(approvedScriptSceneForHeading(heading), index);
+        const headingScene = approvedScriptSceneForLine(line);
+        if (headingScene) {
+          startBlock(headingScene, index);
           return;
         }
-        if (!current) startBlock(null, index);
+        if (!current) {
+          prefixLines.push(line);
+          return;
+        }
         current.lines.push(line);
       });
       if (current) blocks.push(current);
-      return blocks.filter(block => block.lines.join(' ').trim().length);
+      const filtered = blocks.filter(block => block.lines.join(' ').trim().length);
+      filtered.ignoredPrefixLines = prefixLines.filter(line => cleanPropImportLine(line));
+      return filtered;
     }
 
     function estimateScriptScenePages(block, pageCount, blockIndex, totalBlocks) {
@@ -7069,10 +7134,19 @@
       const blocks = splitScriptIntoSceneBlocks(text);
       const reviewItems = [];
       const songConnections = [];
+      if (blocks.ignoredPrefixLines?.length) {
+        reviewItems.push({
+          type: 'front_matter',
+          label: 'Front matter skipped',
+          reason: `${blocks.ignoredPrefixLines.length} line${blocks.ignoredPrefixLines.length === 1 ? '' : 's'} before the first approved scene heading were ignored so TOC/song-list pages do not become a fake scene.`,
+          confidence: 'medium',
+        });
+      }
       const sceneConnections = blocks.map((block, blockIndex) => {
         const blockText = block.lines.join('\n');
         const speakerNames = new Set();
         const stageNames = new Set();
+        const mentionNames = new Set();
         block.lines.forEach((line, index) => {
           const parentheticalCue = cleanPropImportLine(line).match(/^\(([^)]+):\)/);
           if (parentheticalCue) {
@@ -7089,7 +7163,11 @@
             });
           }
         });
-        const characters = uniqueByLooseName([...speakerNames, ...stageNames]);
+        aliasEntries.forEach(entry => {
+          if (phraseExistsInText(blockText, entry.alias)) mentionNames.add(entry.name);
+        });
+        const strongCharacters = uniqueByLooseName([...speakerNames, ...stageNames]);
+        const characters = strongCharacters.length ? strongCharacters : uniqueByLooseName([...mentionNames]);
         const songMatches = uniqueByLooseName(songs.filter(song => phraseExistsInText(blockText, song.title)));
         const propMatches = uniqueByLooseName(props.filter(prop => phraseExistsInText(blockText, prop.name)));
         const pages = estimateScriptScenePages(block, meta.pageCount, blockIndex, blocks.length);
@@ -7108,6 +7186,13 @@
             reason: 'No approved character speaker cues were found in this scene block.',
             confidence: 'medium',
           });
+        } else if (!strongCharacters.length && characters.length && block.scene) {
+          reviewItems.push({
+            type: 'characters',
+            label: block.sceneLabel,
+            reason: 'Characters were inferred from approved names mentioned in the scene block, not from clean speaker cues.',
+            confidence: 'medium',
+          });
         }
         songMatches.forEach(song => {
           const performerNames = uniqueByLooseName([...(song.performers || []), ...(song.names || [])]);
@@ -7123,6 +7208,9 @@
         return {
           sceneLabel: block.sceneLabel,
           sceneNumber: block.scene?.scene_number || block.scene?.number || '',
+          act: block.scene?.act || block.scene?.act_number || '1',
+          actNumber: block.scene?.act_number || block.scene?.act || '1',
+          location: block.scene?.location || block.scene?.title || block.scene?.name || '',
           pages,
           characters,
           songs: songMatches.map(song => song.title),
