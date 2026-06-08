@@ -7501,6 +7501,20 @@
       const status = document.getElementById('pdf-import-status');
       if (status) status.textContent = `Reading ${file.name}...`;
       try {
+        if (kind === 'script') {
+          pendingPdfImport.listUploads.script = file.name;
+          pendingPdfImport.listUploadMeta.script = {
+            fileType: isPdf ? 'PDF' : isDocx ? 'DOCX' : isText ? 'TXT' : 'Image',
+            pageCount: null,
+            scannedAt: new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }),
+          };
+          renderStepByStepImport();
+          renderUploadDashboardStatus();
+          const nextStatus = document.getElementById('pdf-import-status');
+          if (nextStatus) nextStatus.textContent = `${file.name} marked as provided. The uploaded file was not retained.`;
+          await saveImportMetadata('script');
+          return;
+        }
         if (isDocx) {
           throw new Error('DOCX_REQUIRES_TEXT_PASTE');
         }
@@ -7545,7 +7559,9 @@
         }
       } catch (error) {
         console.error('[BTS] step import failed', error);
-        if (status) status.textContent = isDocx
+        if (status) status.textContent = kind === 'script'
+          ? `${file.name} is marked in this session, but could not be saved yet. Try again in a moment.`
+          : isDocx
           ? 'DOCX reading is not wired yet. Please export as PDF/TXT or paste the list text below.'
           : isImage
             ? 'Could not read text from this photo. Try a clearer straight-on image, or paste the list text.'
