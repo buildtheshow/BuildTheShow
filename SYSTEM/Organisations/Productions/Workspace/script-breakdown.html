@@ -7401,10 +7401,17 @@
           confidence: 'low',
         });
       }
+      console.group('BTS Script Parser — Character Matching');
+      console.log('Alias entries available:', aliasEntries.length, aliasEntries.map(e => e.alias).join(', '));
       const sceneConnections = blocks.map((block, blockIndex) => {
         const blockText = block.lines.join('\n');
         const pages = block.pages?.length ? block.pages : estimateScriptScenePages(block, meta.pageCount, blockIndex, blocks.length);
         const characters = uniqueByLooseName(aliasEntries.filter(entry => phraseExistsInText(blockText, entry.alias)).map(entry => entry.name));
+        if (!characters.length && block.scene) {
+          console.warn(`NO CHARS: ${block.sceneLabel} | lines: ${block.lines.length} | first 300 chars of block: "${blockText.slice(0, 300).replace(/\n/g, '↵')}"`);
+        } else if (block.scene) {
+          console.log(`CHARS OK: ${block.sceneLabel} → ${characters.join(', ')}`);
+        }
         const songCueResults = songMatchesFromCueMarkers(blockText, songs, aliasEntries);
         const songMatches = uniqueByLooseName([
           ...songCueResults.map(r => r.song),
@@ -7460,6 +7467,7 @@
         };
       });
       const linkedScenes = sceneConnections.filter(scene => scene.sceneLabel !== 'Unassigned Scene').length;
+      console.groupEnd();
       const linkedCharacters = new Set(sceneConnections.flatMap(scene => scene.characters).map(normalizeLoose)).size;
       const linkedSongs = new Set(sceneConnections.flatMap(scene => scene.songs).map(normalizeLoose)).size;
       const linkedProps = new Set(sceneConnections.flatMap(scene => scene.props).map(normalizeLoose)).size;
