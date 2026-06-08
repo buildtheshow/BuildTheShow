@@ -7179,9 +7179,34 @@
       return dottedRows >= 4 && sceneRows >= 2;
     }
 
+    function looksLikeSheetMusicLine(line) {
+      const clean = (line || '').trim();
+      if (!clean) return false;
+      if (/^(ff?p?|pp?f?|mp|mf|sf[zp]?|fp|f{1,4}|p{1,4})\s*$/i.test(clean)) return true;
+      if (/^\d+(\s+\d+)*$/.test(clean)) return true;
+      if (clean.length < 50 && /^(allegro|andante|andantino|poco|presto|vivace|adagio|largo|lento|maestoso|grave|rit\b|rall\b|accel\b|dim\b|cresc\b|a tempo|con fuoco|con brio|con moto|con spirito|molto|mosso|subito|sempre|dolce|cantabile|espressivo|animato|moderato|piu|meno|non troppo|senza|leggiero|sostenuto)/i.test(clean)) return true;
+      return false;
+    }
+
+    function songMatchesFromCueMarkers(blockText, songs) {
+      const found = [];
+      const pattern = /\(#\d+\s*[–\-]\s*([^.)]+?)\.?\s*\)/g;
+      let m;
+      while ((m = pattern.exec(blockText)) !== null) {
+        const cueName = normalizeLoose(m[1]);
+        const hit = songs.find(song => {
+          const sn = normalizeLoose(song.title);
+          return sn === cueName || cueName.includes(sn) || sn.includes(cueName);
+        });
+        if (hit && !found.some(s => normalizeLoose(s.title) === normalizeLoose(hit.title))) found.push(hit);
+      }
+      return found;
+    }
+
     function richLineLooksLikeSceneAnchor(line) {
       const clean = cleanPropImportLine(line?.text || line);
       if (!clean || clean.length > 110 || /\.{3,}/.test(clean) || /\(part\s*\d+\)/i.test(clean)) return false;
+      if (looksLikeSheetMusicLine(clean)) return false;
       if (/^(prologue|epilogue|scene\s+\d+)/i.test(clean)) return true;
       const letters = clean.replace(/[^a-zA-Z]/g, '');
       const upperRatio = letters.length ? (clean.match(/[A-Z]/g) || []).length / letters.length : 0;
@@ -7346,12 +7371,13 @@
       }
       const sceneConnections = blocks.map((block, blockIndex) => {
         const blockText = block.lines.join('\n');
+        const nonMusicLines = block.lines.filter(line => !looksLikeSheetMusicLine(line));
         const speakerNames = new Set();
         const stageNames = new Set();
         const mentionNames = new Set();
         const pages = block.pages?.length ? block.pages : estimateScriptScenePages(block, meta.pageCount, blockIndex, blocks.length);
         const pageSpan = pages.length ? Math.max(...pages) - Math.min(...pages) + 1 : 0;
-        const oversizedBlock = pageSpan > 25 || block.lines.length > 500;
+        const oversizedBlock = pageSpan > 30 || nonMusicLines.length > 700;
         if (oversizedBlock && block.scene) {
           reviewItems.push({
             type: 'scene_slicing',
@@ -7361,14 +7387,14 @@
             sceneId: scriptSceneKey(block.scene),
           });
         }
-        if (!oversizedBlock) block.lines.forEach((line, index) => {
+        if (!oversizedBlock) nonMusicLines.forEach((line, index) => {
           const parentheticalCue = cleanPropImportLine(line).match(/^\(([^)]+):\)/);
           if (parentheticalCue) {
             lineAsScriptCue(parentheticalCue[1], aliasEntries).forEach(name => speakerNames.add(name));
           }
           const cueNames = lineAsScriptCue(line, aliasEntries);
           if (cueNames.length) {
-            const nextUseful = block.lines.slice(index + 1).find(nextLine => cleanPropImportLine(nextLine));
+            const nextUseful = nonMusicLines.slice(index + 1).find(nextLine => cleanPropImportLine(nextLine));
             if (nextUseful && !parseSceneHeadingForMti(nextUseful)) cueNames.forEach(name => speakerNames.add(name));
           }
           if (/^\(.+\)$/.test(cleanPropImportLine(line)) || /\b(enter|exit|holds?|takes?|gives?|crosses?|sits?|stands?|helps?)\b/i.test(line)) {
@@ -7384,7 +7410,8 @@
         }
         const strongCharacters = uniqueByLooseName([...speakerNames, ...stageNames]);
         const characters = strongCharacters.length ? strongCharacters : uniqueByLooseName([...mentionNames]);
-        const songMatches = oversizedBlock ? [] : uniqueByLooseName(songs.filter(song => phraseExistsInText(blockText, song.title)));
+        const songCueMatches = songMatchesFromCueMarkers(blockText, songs);
+        const songMatches = uniqueByLooseName([...songCueMatches, ...(oversizedBlock ? [] : songs.filter(song => phraseExistsInText(blockText, song.title)))]);
         const propMatches = oversizedBlock ? [] : uniqueByLooseName(props.filter(prop => phraseExistsInText(blockText, prop.name)));
         if (!block.scene) {
           reviewItems.push({
