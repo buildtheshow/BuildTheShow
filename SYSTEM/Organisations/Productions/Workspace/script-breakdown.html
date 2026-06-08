@@ -4540,6 +4540,7 @@
           rowNumber: index + 1,
           name: char.name || '',
           role_type: char.role_type || '',
+          age_range: char.age_range || 'Any Age',
           description: char.description || '',
           written_as: char.written_as || '',
         },
@@ -4969,6 +4970,7 @@
         pendingPdfImport.characterPool = savedImportItems.characters.map(item => ({
           name: item.name || '',
           role_type: item.role_type || 'Principal',
+          age_range: item.age_range || 'Any Age',
           description: item.description || '',
           written_as: item.written_as || '',
         }));
@@ -5932,7 +5934,7 @@
         const description = characterFieldValue(char, ['description', 'notes', 'bio'], '');
         const roleType = characterFieldValue(char, ['role_type', 'roleType', 'type'], 'Principal');
         const writtenAs = characterFieldValue(char, ['written_as', 'writtenAs', 'gender'], 'Any Gender');
-        const ageRange = characterFieldValue(char, ['age_range', 'ageRange'], 'Adult');
+        const ageRange = characterFieldValue(char, ['age_range', 'ageRange'], 'Any Age');
         const vocalType = characterFieldValue(char, ['vocal_type', 'vocalType'], 'Any Voice');
         const vocalRange = characterFieldValue(char, ['vocal_range', 'vocalRange'], '');
         const vocalUsage = characterFieldValue(char, ['vocal_usage', 'vocalUsage'], 'Primary Vocals');
@@ -6636,7 +6638,7 @@
         description: '',
         role_type: 'Principal',
         written_as: 'Any Gender',
-        age_range: 'Adult',
+        age_range: 'Any Age',
         vocal_type: 'Any Voice',
         vocal_range: '',
         vocal_usage: 'Primary Vocals',
@@ -6779,9 +6781,11 @@
     function looksLikeGroupCharacterName(name) {
       const clean = cleanPropImportLine(name);
       if (!clean) return false;
-      if (/^(ensemble|company|chorus|crowd|townspeople|villagers|children|kids|dancers|singers|workers|clerks|customers|shoppers|strollers|sweeps|servants|staff|guests|students|parents|families|bankers|police|constables|reporters)$/i.test(clean)) return true;
-      if (/\b(ensemble|chorus|company|group|crowd|townspeople|workers|strollers|sweeps|dancers|singers|clerks|customers|shoppers|servants|guests|children|kids)\b/i.test(clean)) return true;
-      return false;
+      const parts = clean
+        .split(/\s*(?:,|\/|&|\band\b)\s*/i)
+        .map(part => part.trim())
+        .filter(Boolean);
+      return parts.length > 1;
     }
 
     function looksLikeCharacterEntryName(name) {
@@ -6792,7 +6796,10 @@
       const letters = clean.replace(/[^a-zA-Z]/g, '');
       const upperRatio = letters.length ? (clean.match(/[A-Z]/g) || []).length / letters.length : 0;
       if (upperRatio >= 0.55) return true;
-      return words.every(word => /^[A-Z][A-Za-z.'-]*$/.test(word) || /^(of|the|and|with)$/i.test(word));
+      return words.every(word => {
+        const cleanWord = word.replace(/^[,;:]+|[,;:]+$/g, '');
+        return /^[A-Z][A-Za-z.'-]*$/.test(cleanWord) || /^(of|the|and|with)$/i.test(cleanWord);
+      });
     }
 
     function parseAsCharacterList(text) {
@@ -6813,6 +6820,7 @@
           chars.push({
             name: currentName,
             role_type: inferredRole,
+            age_range: 'Any Age',
             description: cleanSceneTitle(currentDescription.replace(/\s+/g, ' ').trim()),
           });
         }
