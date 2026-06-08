@@ -5596,16 +5596,6 @@
       renderUploadDashboardStatus();
     }
 
-    async function uploadBreakdownFile(file) {
-      const path = `${prodId}/script-breakdowns/${Date.now()}-${slugFileName(file.name)}`;
-      const { error } = await sb.storage.from('production-files').upload(path, file, {
-        upsert: false,
-        contentType: file.type || 'application/octet-stream',
-      });
-      if (error) console.warn('[BTS] breakdown storage upload failed', error);
-      return path;
-    }
-
     function detectRecurringPageDecorations(textPages) {
       if (textPages.length < 2) return new Set();
       // Strip trailing pipe + page codes (e.g. "| E9", "| 12") before comparing so
@@ -5931,7 +5921,7 @@
       const meta = pendingPdfImport?.listUploadMeta?.characters || {};
       const pageLabel = meta.pageCount ? `${meta.pageCount} page${meta.pageCount === 1 ? '' : 's'}` : (meta.fileType || 'Uploaded file');
       const scannedAt = meta.scannedAt || new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-      const roleOptions = ['Principal', 'Supporting', 'Featured', 'Ensemble', 'Group'];
+      const roleOptions = ['Principal', 'Supporting', 'Cameo', 'Group', 'Featured', 'Ensemble'];
       const writtenAsOptions = ['Woman', 'Man', 'Any Gender', 'Girl', 'Boy', 'Nonbinary'];
       const ageOptions = ['Child', 'Teen', 'Young Adult', 'Adult', '30s-40s', '40s-50s', '50s+', 'Any Age'];
       const vocalTypeOptions = ['Soprano', 'Mezzo-Soprano', 'Alto', 'Tenor', 'Baritone', 'Bass', 'Any Voice', 'Non-Singing'];
@@ -6776,6 +6766,35 @@
       renderUploadDashboardStatus();
     }
 
+    function detectCharacterRoleHeading(line) {
+      const clean = cleanPropImportLine(line).replace(/[:\-–—]+$/g, '').trim();
+      if (!clean) return null;
+      if (/^(principal|principals|lead|leads|leading)(\s+(characters?|roles?|cast))?$/i.test(clean)) return 'Principal';
+      if (/^(supporting|support|featured|secondary)(\s+(characters?|roles?|cast))?$/i.test(clean)) return 'Supporting';
+      if (/^(cameo|cameos|small roles?|minor roles?|bit parts?)(\s+(characters?|roles?|cast))?$/i.test(clean)) return 'Cameo';
+      if (/^(groups?|ensemble|ensembles|chorus|company|dancers?|singers?|townspeople|crowd)(\s+(characters?|roles?|cast))?$/i.test(clean)) return 'Group';
+      return null;
+    }
+
+    function looksLikeGroupCharacterName(name) {
+      const clean = cleanPropImportLine(name);
+      if (!clean) return false;
+      if (/^(ensemble|company|chorus|crowd|townspeople|villagers|children|kids|dancers|singers|workers|clerks|customers|shoppers|strollers|sweeps|servants|staff|guests|students|parents|families|bankers|police|constables|reporters)$/i.test(clean)) return true;
+      if (/\b(ensemble|chorus|company|group|crowd|townspeople|workers|strollers|sweeps|dancers|singers|clerks|customers|shoppers|servants|guests|children|kids)\b/i.test(clean)) return true;
+      return false;
+    }
+
+    function looksLikeCharacterEntryName(name) {
+      const clean = cleanPropImportLine(name);
+      if (!clean || looksLikeImportedNoise(clean)) return false;
+      const words = clean.split(/\s+/).filter(Boolean);
+      if (!words.length || words.length > 8) return false;
+      const letters = clean.replace(/[^a-zA-Z]/g, '');
+      const upperRatio = letters.length ? (clean.match(/[A-Z]/g) || []).length / letters.length : 0;
+      if (upperRatio >= 0.55) return true;
+      return words.every(word => /^[A-Z][A-Za-z.'-]*$/.test(word) || /^(of|the|and|with)$/i.test(word));
+    }
+
     function parseAsCharacterList(text) {
       const chars = [];
       const seen = new Set();
@@ -6783,13 +6802,19 @@
 
       let currentName = null;
       let currentDescription = '';
+      let currentRoleType = 'Supporting';
 
       const flush = () => {
         if (!currentName) return;
         const key = normalizeLoose(currentName);
         if (!seen.has(key)) {
           seen.add(key);
-          chars.push({ name: currentName, description: cleanSceneTitle(currentDescription.replace(/\s+/g, ' ').trim()) });
+          const inferredRole = looksLikeGroupCharacterName(currentName) ? 'Group' : currentRoleType;
+          chars.push({
+            name: currentName,
+            role_type: inferredRole,
+            description: cleanSceneTitle(currentDescription.replace(/\s+/g, ' ').trim()),
+          });
         }
         currentName = null;
         currentDescription = '';
@@ -6805,18 +6830,22 @@
         // Stop the whole parse at non-character sections
         if (STOP.test(clean)) break;
 
+        const roleHeading = detectCharacterRoleHeading(clean);
+        if (roleHeading) {
+          flush();
+          currentRoleType = roleHeading;
+          continue;
+        }
+
         // Skip known section headings and standalone parentheticals
         if (SKIP.test(clean)) continue;
         if (/^\(.*\)$/.test(clean)) continue;
 
-        // New entry: mostly-uppercase name (1-6 words) followed by em/en dash
-        const dashMatch = clean.match(/^(.+?)\s+[–—]\s+(.*)$/);
+        // New entry: character/group name followed by a dash and description.
+        const dashMatch = clean.match(/^(.+?)\s+[–—-]\s+(.*)$/);
         if (dashMatch) {
           const candidateName = dashMatch[1].trim();
-          const letters = candidateName.replace(/[^a-zA-Z]/g, '');
-          const upperRatio = letters.length > 0 ? (candidateName.match(/[A-Z]/g) || []).length / letters.length : 0;
-          const wordCount = candidateName.split(/\s+/).length;
-          if (wordCount >= 1 && wordCount <= 6 && upperRatio >= 0.55 && !SKIP.test(candidateName) && !looksLikeImportedNoise(candidateName)) {
+          if (!SKIP.test(candidateName) && looksLikeCharacterEntryName(candidateName)) {
             flush();
             currentName = titleCaseName(candidateName);
             currentDescription = dashMatch[2] || '';
