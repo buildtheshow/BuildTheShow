@@ -4257,7 +4257,13 @@
       padding: 0.42rem 0.6rem;
       border-right-color: rgba(26,21,48,0.1);
     }
-    .sbs-script-table tr.sbs-needs-review-row td { background: rgba(216,45,120,0.03); }
+    .sbs-script-table tr.sbs-needs-review-row td { background: rgba(209,82,61,0.04); }
+    .sbs-script-table tr.sbs-act-group-row td {
+      background: #f7f5fc; font-size: 0.74rem; font-weight: 950; color: rgba(26,21,48,0.45);
+      text-transform: uppercase; letter-spacing: 0.07em; padding: 0.45rem 0.6rem;
+      border-top: 2px solid rgba(87,46,136,0.1);
+    }
+    .sbs-script-table tr.sbs-act-group-row:first-child td { border-top: none; }
     .sbs-script-td-num { color: rgba(26,21,48,0.4); font-weight: 800; text-align: center; }
     .sbs-script-td-scene { font-weight: 900; color: #07092d; }
     .sbs-script-td-loc { color: rgba(26,21,48,0.6); font-weight: 700; }
@@ -7602,10 +7608,20 @@
         </div>`;
       };
 
+      // Group scenes by act for act-header rows
+      const missingCount = scenes.filter(s => !s.headingFound && !s.manuallySet).length;
+      let lastAct = null;
       const tableRows = scenes.map((scene, i) => {
         const missing = !scene.headingFound && !scene.manuallySet;
-        const rowCls = missing ? 'sbs-needs-review-row' : (scene.confidence === 'low' ? 'sbs-needs-review-row' : '');
-        return `<tr${rowCls ? ` class="${rowCls}"` : ''}>
+        const rowCls = missing ? 'sbs-needs-review-row' : '';
+        const actKey = scene.actNumber || scene.act || '1';
+        const actLabel = `Act ${actKey}`;
+        let actRow = '';
+        if (actKey !== lastAct) {
+          lastAct = actKey;
+          actRow = `<tr class="sbs-act-group-row"><td colspan="8">${esc(actLabel)}</td></tr>`;
+        }
+        const sceneRow = `<tr${rowCls ? ` class="${rowCls}"` : ''}>
           <td class="sbs-script-td-num">${esc(String(scene.sceneNumber || i + 1))}</td>
           <td class="sbs-script-td-scene">${esc(scene.sceneLabel || 'Scene')}</td>
           <td class="sbs-script-td-loc sbs-script-td-list">${scene.location ? esc(scene.location) : '<span class="sbs-script-td-list empty">—</span>'}</td>
@@ -7613,23 +7629,13 @@
           <td class="sbs-script-td-list">${listText(scene.songs)}</td>
           <td class="sbs-script-td-list">${listText(scene.props)}</td>
           <td class="sbs-script-td-pages-cell">${pageInputs(scene)}</td>
-          <td>${missing ? '<span class="sbs-script-flag-badge" title="Page range not found">!</span>' : ''}</td>
+          <td style="vertical-align:middle;text-align:center;">${missing ? '<span class="sbs-script-flag-badge" title="Page range not found — set pages and Re-scan">!</span>' : ''}</td>
         </tr>`;
+        return actRow + sceneRow;
       }).join('');
 
-      const missingCount = reviewItems.filter(r => r.type === 'scene_page').length;
-      const flagsHtml = reviewItems.length
-        ? reviewItems.map(item => `<div class="sbs-script-flag-row">
-            <span class="sbs-script-flag-badge">!</span>
-            <div>
-              <div class="sbs-script-flag-title">${esc(item.label || item.type || 'Review item')}</div>
-              <div class="sbs-script-flag-copy">${esc(item.reason || 'Check this connection.')}</div>
-            </div>
-          </div>`).join('')
-        : '';
-
       const rescanHint = missingCount
-        ? `<div class="sbs-rescan-hint">${missingCount} scene${missingCount === 1 ? '' : 's'} need page ranges. Type start and end page numbers above, then hit Re-scan.</div>`
+        ? `<div class="sbs-rescan-hint">${missingCount} scene${missingCount === 1 ? '' : 's'} need page ranges. Set the start and end pages in the table, then hit Re-scan.</div>`
         : '';
 
       return `<div class="sbs-script-review">
@@ -7667,7 +7673,6 @@
             </tbody>
           </table>
         </div>
-        ${flagsHtml ? `<div class="sbs-script-section-title">Needs Review (${reviewItems.length})</div><div class="sbs-script-review-flags">${flagsHtml}</div>` : ''}
       </div>`;
     }
 
