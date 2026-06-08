@@ -4545,6 +4545,31 @@
           written_as: char.written_as || '',
         },
       }));
+      if (kind === 'songs') return (pendingPdfImport.songs || []).map((song, index) => ({
+        item_key: normalizeLoose(`${song.scene_number || 'scene'}-${song.title || `song-${index + 1}`}`) || `song-${index + 1}`,
+        sort_order: index + 1,
+        item_data: {
+          rowNumber: index + 1,
+          title: song.title || '',
+          scene_number: song.scene_number || '',
+          scene_location: song.scene_location || '',
+          performers: song.performers || [],
+          names: song.names || song.performers || [],
+        },
+      }));
+      if (kind === 'scenes') return (pendingPdfImport.sceneCatalogue || []).map((scene, index) => ({
+        item_key: normalizeLoose(`${scene.scene_number || scene.number || `scene-${index + 1}`}-${scene.location || scene.title || ''}`) || `scene-${index + 1}`,
+        sort_order: index + 1,
+        item_data: {
+          rowNumber: index + 1,
+          scene_number: scene.scene_number || scene.number || '',
+          number: scene.number || scene.scene_number || '',
+          location: scene.location || '',
+          title: scene.title || '',
+          name: scene.name || '',
+          scene_label: scene.scene_label || '',
+        },
+      }));
       if (!pendingPdfImport.listUploads?.[kind]) return [];
       return [{
         item_key: `${kind}-upload`,
@@ -4566,7 +4591,7 @@
       const sourceMeta = {
         uploadKind: kind,
         sourceWasRetained: false,
-        parsed: kind === 'props' || kind === 'characters',
+        parsed: ['props', 'characters', 'songs', 'scenes'].includes(kind),
         scannedAt: new Date().toISOString(),
         fileType: pendingPdfImport?.listUploadMeta?.[kind]?.fileType || null,
         pageCount: pendingPdfImport?.listUploadMeta?.[kind]?.pageCount || null,
@@ -4870,6 +4895,8 @@
     function uploadedListRows(kind) {
       if (kind === 'props' && pendingPdfImport?.propCatalogue?.length) return pendingPdfImport.propCatalogue;
       if (kind === 'characters' && pendingPdfImport?.characterPool?.length) return pendingPdfImport.characterPool;
+      if (kind === 'songs' && pendingPdfImport?.songs?.length) return pendingPdfImport.songs;
+      if (kind === 'scenes' && pendingPdfImport?.sceneCatalogue?.length) return pendingPdfImport.sceneCatalogue;
       if (pendingPdfImport?.listUploads?.[kind]) return [{ fileName: pendingPdfImport.listUploads[kind], ...(pendingPdfImport.listUploadMeta?.[kind] || {}) }];
       return savedImportItems?.[kind] || [];
     }
@@ -4948,6 +4975,8 @@
           propCatalogue: [],
           propSkippedLines: [],
           characterPool: [],
+          songs: [],
+          sceneCatalogue: [],
           listUploads: {},
           listUploadMeta: {},
           standaloneStep: null,
@@ -4973,6 +5002,28 @@
           age_range: item.age_range || 'Any Age',
           description: item.description || '',
           written_as: item.written_as || '',
+        }));
+      }
+      if (!(pendingPdfImport.songs || []).length && savedImportItems.songs?.length) {
+        pendingPdfImport.songs = savedImportItems.songs.map(item => ({
+          title: item.title || '',
+          scene_number: item.scene_number || '',
+          scene_location: item.scene_location || '',
+          performers: item.performers || item.names || [],
+          names: item.names || item.performers || [],
+          source_type: 'song_import',
+        }));
+      }
+      if (!(pendingPdfImport.sceneCatalogue || []).length && savedImportItems.scenes?.length) {
+        pendingPdfImport.sceneCatalogue = savedImportItems.scenes.map(item => ({
+          scene_number: item.scene_number || item.number || '',
+          number: item.number || item.scene_number || '',
+          scene_label: item.scene_label || '',
+          title: item.title || '',
+          name: item.name || '',
+          location: item.location || '',
+          description: '',
+          source_type: 'scene_import',
         }));
       }
       ['props', 'characters', 'songs', 'scenes', 'script'].forEach(kind => {
@@ -5023,6 +5074,16 @@
         tableRows = [
           ['Character', 'Role Type', 'Written As', 'Description'],
           ...rows.map(row => [row.name || '', row.role_type || '', row.written_as || '', row.description || '']),
+        ];
+      } else if (kind === 'songs') {
+        tableRows = [
+          ['Scene Number', 'Scene Location', 'Song Title', 'Performers'],
+          ...rows.map(row => [row.scene_number || '', row.scene_location || '', row.title || '', (row.performers || row.names || []).join(', ')]),
+        ];
+      } else if (kind === 'scenes') {
+        tableRows = [
+          ['Scene Number', 'Location', 'Name'],
+          ...rows.map(row => [row.scene_number || row.number || '', row.location || '', row.name || row.title || '']),
         ];
       } else {
         tableRows = [
@@ -6114,15 +6175,17 @@
       if (step === 'songs') {
         return `<div class="sb-import-panel-kicker">Upload 3 of 5</div>
           <div class="sbi-section-heading"><div class="sbi-section-icon">♪</div><span class="sbi-section-title">Song List</span></div>
-          <div class="sbi-section-copy">Upload the song list file. BTS will save that this file was provided, but will not run PDF reading rules on it yet.</div>
+          <div class="sbi-section-copy">Upload the MTI song list. BTS will read dotted song rows and attach each song to the nearest scene number.</div>
           ${renderStepUploadZone('songs', 'Upload song list PDF or photo', 'Drop a musical numbers page here, or click to browse.')}
+          <div class="sbs-pills-list">${renderCataloguePills('songs', pendingPdfImport.songs || [])}</div>
           ${renderMetadataUploadReceipt('songs')}`;
       }
       if (step === 'scenes') {
         return `<div class="sb-import-panel-kicker">Upload 4 of 5</div>
           <div class="sbi-section-heading"><div class="sbi-section-icon">▣</div><span class="sbi-section-title">Scene List</span></div>
-          <div class="sbi-section-copy">Upload the scene list file. BTS will save that this file was provided, but will not run PDF reading rules on it yet.</div>
+          <div class="sbi-section-copy">Upload the MTI scene list. BTS will only read lines shaped like SCENE 5: INSIDE THE BANK.</div>
           ${renderStepUploadZone('scenes', 'Upload scene list PDF or photo', 'Drop a scene list page here, or click to browse.')}
+          <div class="sbs-pills-list">${renderCataloguePills('scenes', pendingPdfImport.sceneCatalogue || [])}</div>
           ${renderMetadataUploadReceipt('scenes')}`;
       }
       if (step === 'script') {
@@ -6145,11 +6208,15 @@
       if (!fileName) return '<div class="sbs-empty-hint">No file selected yet.</div>';
       const meta = pendingPdfImport?.listUploadMeta?.[kind] || savedImportItems?.[kind]?.[0]?._sourceMeta || {};
       const type = meta.fileType || savedImportItems?.[kind]?.[0]?.fileType || 'File';
+      const parsedCount = getStepCatalogueCount(kind);
+      const parsedCopy = ['songs', 'scenes'].includes(kind) && parsedCount
+        ? `${parsedCount} ${kind === 'songs' ? 'song' : 'scene'}${parsedCount === 1 ? '' : 's'} found. File not retained.`
+        : `${type} saved as upload metadata only. File not retained.`;
       return `<div class="sbs-prop-file-card" style="margin-top:1rem;">
         <div class="sbs-prop-file-icon">✓</div>
         <div class="sbs-prop-file-main">
           <div class="sbs-prop-file-name">${esc(fileName)}</div>
-          <div class="sbs-prop-file-meta">${esc(type)} saved as upload metadata only. File not retained.</div>
+          <div class="sbs-prop-file-meta">${esc(parsedCopy)}</div>
         </div>
         <button type="button" class="sbs-prop-outline-btn" onclick="chooseStepImportFile('${kind}')">Replace File</button>
       </div>`;
@@ -6180,8 +6247,8 @@
       const counts = {
         props: `${pendingPdfImport.propCatalogue?.length || 0} added`,
         characters: `${pendingPdfImport.characterPool?.length || 0} added`,
-        songs: pendingPdfImport.listUploads?.songs ? 'uploaded' : 'waiting',
-        scenes: pendingPdfImport.listUploads?.scenes ? 'uploaded' : 'waiting',
+        songs: `${pendingPdfImport.songs?.length || 0} found`,
+        scenes: `${pendingPdfImport.sceneCatalogue?.length || 0} found`,
         script: pendingPdfImport.listUploads?.script ? 'uploaded' : 'waiting',
         save: 'Review & Save',
       };
@@ -6212,7 +6279,7 @@
       } else {
         if (titleEl) titleEl.textContent = 'Script Import';
         if (taglineEl) taglineEl.textContent = 'Upload the five files for your show.';
-        if (status) status.textContent = 'Props and characters will be read now. The other files are saved as provided for later wiring.';
+        if (status) status.textContent = 'Props, characters, songs and scenes will be read from their list formats. The actors script is saved as provided.';
       }
       if (progressBar) {
         progressBar.innerHTML = standaloneStep ? '' : `<div class="sbi-progress">
@@ -6262,8 +6329,8 @@
       const tips = {
         props: 'Tip: Props found in your lists will be saved to your breakdown.',
         characters: 'Tip: Upload your character list so BTS knows who is in your show.',
-        songs: 'Song uploads are recorded, without running PDF parsing rules yet.',
-        scenes: 'Scene uploads are recorded, without running PDF parsing rules yet.',
+        songs: 'Song rows are read from dotted MTI lines and keep their scene number.',
+        scenes: 'Scene rows are read only from SCENE number and location headings.',
         script: 'Actors Script uploads are recorded, without running script parsing rules yet.',
         save: 'Review everything, then click Save.',
       };
@@ -6284,8 +6351,8 @@
     function renderStepByStepSavePanel() {
       const propCount = (pendingPdfImport?.propCatalogue || []).filter(p => p.selected_for_import !== false).length;
       const charCount = (pendingPdfImport?.characterPool || []).length;
-      const songCount = pendingPdfImport?.listUploads?.songs ? 1 : 0;
-      const sceneListCount = pendingPdfImport?.listUploads?.scenes ? 1 : 0;
+      const songCount = (pendingPdfImport?.songs || []).length || (pendingPdfImport?.listUploads?.songs ? 1 : 0);
+      const sceneListCount = (pendingPdfImport?.sceneCatalogue || []).length || (pendingPdfImport?.listUploads?.scenes ? 1 : 0);
       const scriptCount = pendingPdfImport?.listUploads?.script ? 1 : 0;
       return `<div class="sb-import-panel-kicker">Final Check</div>
     <h3 class="sb-import-panel-title">Ready to Save</h3>
@@ -6392,6 +6459,8 @@
         propCatalogue: [],
         propSkippedLines: [],
         characterPool: [],
+        songs: [],
+        sceneCatalogue: [],
         listUploads: {},
         listUploadMeta: {},
         standaloneStep: null,
@@ -6466,7 +6535,7 @@
       const status = document.getElementById('pdf-import-status');
       if (status) status.textContent = `Reading ${file.name}...`;
       try {
-        if (!['props', 'characters'].includes(kind)) {
+        if (!['props', 'characters', 'songs', 'scenes'].includes(kind)) {
           pendingPdfImport.listUploads[kind] = file.name;
           pendingPdfImport.listUploadMeta[kind] = {
             fileType: isPdf ? 'PDF' : 'Image',
@@ -6502,7 +6571,7 @@
         const nextStatus = document.getElementById('pdf-import-status');
         if (nextStatus) {
           nextStatus.textContent = added
-            ? `Read ${file.name}. Added ${added} ${kind === 'props' ? 'prop' : kind.slice(0, -1)}${added === 1 ? '' : 's'}.`
+            ? `Read ${file.name}. Added ${added} ${kind === 'props' ? 'prop' : kind === 'songs' ? 'song' : kind === 'scenes' ? 'scene' : kind.slice(0, -1)}${added === 1 ? '' : 's'}.`
             : `Read ${file.name}, but did not find clear ${kind === 'props' ? 'prop rows' : `${kind} rows`}. Check Skipped Text or add items manually.`;
         }
       } catch (error) {
@@ -6515,8 +6584,8 @@
 
     function getStepCatalogueCount(kind) {
       if (!pendingPdfImport) return 0;
-      if (['songs', 'scenes', 'script'].includes(kind)) return pendingPdfImport.listUploads?.[kind] ? 1 : 0;
-      const map = { characters: 'characterPool', props: 'propCatalogue' };
+      if (kind === 'script') return pendingPdfImport.listUploads?.[kind] ? 1 : 0;
+      const map = { characters: 'characterPool', props: 'propCatalogue', songs: 'songs', scenes: 'sceneCatalogue' };
       const key = map[kind];
       return Array.isArray(pendingPdfImport[key]) ? pendingPdfImport[key].length : 0;
     }
@@ -6538,6 +6607,26 @@
           if (!existing.has(normalizeLoose(prop.name))) {
             pendingPdfImport.propCatalogue.push(prop);
             existing.add(normalizeLoose(prop.name));
+          }
+        });
+      } else if (kind === 'songs') {
+        if (!pendingPdfImport.songs) pendingPdfImport.songs = [];
+        const existing = new Set(pendingPdfImport.songs.map(song => normalizeLoose(`${song.scene_number || ''}-${song.title || ''}`)));
+        parseAsSongList(text).forEach(song => {
+          const key = normalizeLoose(`${song.scene_number || ''}-${song.title || ''}`);
+          if (!existing.has(key)) {
+            pendingPdfImport.songs.push(song);
+            existing.add(key);
+          }
+        });
+      } else if (kind === 'scenes') {
+        if (!pendingPdfImport.sceneCatalogue) pendingPdfImport.sceneCatalogue = [];
+        const existing = new Set(pendingPdfImport.sceneCatalogue.map(scene => normalizeLoose(`${scene.scene_number || scene.number || ''}-${scene.location || scene.title || ''}`)));
+        parseAsSceneList(text).forEach(scene => {
+          const key = normalizeLoose(`${scene.scene_number || scene.number || ''}-${scene.location || scene.title || ''}`);
+          if (!existing.has(key)) {
+            pendingPdfImport.sceneCatalogue.push(scene);
+            existing.add(key);
           }
         });
       }
@@ -6760,7 +6849,7 @@
 
     function removeStepCatalogueItem(kind, index) {
       if (!pendingPdfImport) return;
-      const map = { characters: 'characterPool', props: 'propCatalogue' };
+      const map = { characters: 'characterPool', props: 'propCatalogue', songs: 'songs', scenes: 'sceneCatalogue' };
       const key = map[kind];
       if (!key || !Array.isArray(pendingPdfImport[key])) return;
       pendingPdfImport[key].splice(index, 1);
@@ -6967,6 +7056,82 @@
 
       parseAsPropList.skippedLines = skipped;
       return props;
+    }
+
+    function parseSceneHeadingForMti(line) {
+      const clean = cleanPropImportLine(line);
+      const match = clean.match(/^SCENE\s+([0-9]+[A-Z]?)\s*:\s*(.+)$/i);
+      if (!match) return null;
+      const sceneNumberRaw = match[1].trim();
+      const location = cleanSceneTitle(match[2].replace(/\s*\.{3,}.*$/g, '').replace(/[.;]+$/g, ''));
+      if (!location) return null;
+      const numericScene = /^\d+$/.test(sceneNumberRaw) ? Number(sceneNumberRaw) : sceneNumberRaw;
+      return {
+        scene_number: numericScene,
+        number: numericScene,
+        scene_label: `Scene ${sceneNumberRaw}`,
+        title: '',
+        name: '',
+        location: titleCaseName(location),
+        description: '',
+        source_type: 'scene_import',
+      };
+    }
+
+    function parseAsSceneList(text) {
+      const scenesFound = [];
+      const seen = new Set();
+      filterImportNoise(normalizeImportedLines(text), 'scene_breakdown').forEach(line => {
+        const scene = parseSceneHeadingForMti(line);
+        if (!scene) return;
+        const key = normalizeLoose(`${scene.scene_number}-${scene.location}`);
+        if (seen.has(key)) return;
+        seen.add(key);
+        scenesFound.push(scene);
+      });
+      return scenesFound;
+    }
+
+    function parseSongRowForMti(line, currentScene) {
+      if (!currentScene) return null;
+      const clean = cleanPropImportLine(line);
+      const match = clean.match(/^(.+?)\.?\s*\.{3,}\s*(.+)$/);
+      if (!match) return null;
+      const title = cleanSceneTitle(match[1].replace(/[.;]+$/g, ''));
+      const performerText = cleanPropImportLine(match[2].replace(/\s+\d+$/g, ''));
+      if (!title || !performerText || /^scene\s+/i.test(title)) return null;
+      const performers = performerText
+        .split(/\s*,\s*/)
+        .map(name => titleCaseName(name.replace(/[.;]+$/g, '')))
+        .filter(Boolean);
+      return {
+        title,
+        scene_number: currentScene.scene_number,
+        scene_location: currentScene.location,
+        performers,
+        names: performers,
+        source_type: 'song_import',
+      };
+    }
+
+    function parseAsSongList(text) {
+      const songsFound = [];
+      const seen = new Set();
+      let currentScene = null;
+      filterImportNoise(normalizeImportedLines(text), 'scene_breakdown').forEach(line => {
+        const scene = parseSceneHeadingForMti(line);
+        if (scene) {
+          currentScene = scene;
+          return;
+        }
+        const song = parseSongRowForMti(line, currentScene);
+        if (!song) return;
+        const key = normalizeLoose(`${song.scene_number}-${song.title}`);
+        if (seen.has(key)) return;
+        seen.add(key);
+        songsFound.push(song);
+      });
+      return songsFound;
     }
 
     function splitImportList(value) {
