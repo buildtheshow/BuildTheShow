@@ -4273,11 +4273,13 @@
       display: inline-block; border-radius: 999px; padding: 0.18rem 0.52rem;
       font-size: 0.68rem; font-weight: 800; line-height: 1.4; white-space: nowrap;
     }
-    .sbs-tag-char  { background: rgba(87,46,136,0.09);  color: #572e88; border: 1px solid rgba(87,46,136,0.18); }
-    .sbs-tag-song  { background: rgba(239,171,69,0.14); color: #7a5500; border: 1px solid rgba(239,171,69,0.35); }
-    .sbs-tag-prop  { background: rgba(118,158,123,0.12); color: #3a6640; border: 1px solid rgba(118,158,123,0.28); }
-    .sbs-tag-loc   { background: rgba(120,187,212,0.13); color: #1c5f7a; border: 1px solid rgba(120,187,212,0.3); }
-    .sbs-tag-empty { background: transparent; color: rgba(26,21,48,0.28); border: 1px dashed rgba(26,21,48,0.18); font-style: italic; font-weight: 700; }
+    .sbs-tag-char     { background: rgba(87,46,136,0.09);  color: #572e88; border: 1px solid rgba(87,46,136,0.18); }
+    .sbs-tag-song     { background: rgba(239,171,69,0.14); color: #7a5500; border: 1px solid rgba(239,171,69,0.35); }
+    .sbs-tag-prop     { background: rgba(118,158,123,0.12); color: #3a6640; border: 1px solid rgba(118,158,123,0.28); }
+    .sbs-tag-empty    { background: transparent; color: rgba(26,21,48,0.28); border: 1px dashed rgba(26,21,48,0.18); font-style: italic; font-weight: 700; }
+    .sbs-tag-overflow { background: transparent; color: rgba(26,21,48,0.38); border: 1px solid rgba(26,21,48,0.14); font-weight: 700; }
+    .sbs-script-scene-name { font-weight: 900; color: #07092d; font-size: 0.82rem; line-height: 1.3; }
+    .sbs-script-scene-loc  { font-size: 0.72rem; font-weight: 700; color: rgba(26,21,48,0.45); margin-top: 0.15rem; }
     .sbs-script-td-pages-cell { vertical-align: middle; padding: 0.3rem 0.5rem; }
     .sbs-page-range { display: flex; align-items: center; gap: 0.25rem; }
     .sbs-page-range-missing .sbs-page-input { border-color: rgba(209,82,61,0.4); background: rgba(209,82,61,0.04); }
@@ -7597,10 +7599,13 @@
       const metric = (num, label, cls = '') =>
         `<div class="sbs-script-metric ${cls}"><strong>${num ?? 0}</strong><span>${esc(label)}</span></div>`;
 
-      const tagList = (items, cls, emptyLabel) => {
+      const tagList = (items, cls, emptyLabel, maxShow = 999) => {
         const vals = uniqueByLooseName(items || []).map(i => typeof i === 'string' ? i : (i?.name || i?.title || '')).filter(Boolean);
         if (!vals.length) return `<div class="sbs-tag-row"><span class="sbs-tag sbs-tag-empty">${esc(emptyLabel)}</span></div>`;
-        return `<div class="sbs-tag-row">${vals.map(v => `<span class="sbs-tag ${cls}">${esc(v)}</span>`).join('')}</div>`;
+        const shown = vals.slice(0, maxShow);
+        const overflow = vals.length - shown.length;
+        const overflowTag = overflow > 0 ? `<span class="sbs-tag sbs-tag-overflow">+${overflow} more</span>` : '';
+        return `<div class="sbs-tag-row">${shown.map(v => `<span class="sbs-tag ${cls}">${esc(v)}</span>`).join('')}${overflowTag}</div>`;
       };
 
       const pageInputs = (scene) => {
@@ -7628,15 +7633,15 @@
         let actRow = '';
         if (actKey !== lastAct) {
           lastAct = actKey;
-          actRow = `<tr class="sbs-act-group-row"><td colspan="8">${esc(actLabel)}</td></tr>`;
+          actRow = `<tr class="sbs-act-group-row"><td colspan="7">${esc(actLabel)}</td></tr>`;
         }
+        const sceneCell = `<div class="sbs-script-scene-name">${esc(scene.sceneLabel || 'Scene')}</div>${scene.location ? `<div class="sbs-script-scene-loc">${esc(scene.location)}</div>` : ''}`;
         const sceneRow = `<tr${rowCls ? ` class="${rowCls}"` : ''}>
           <td class="sbs-script-td-num" style="vertical-align:top;padding-top:0.55rem;">${esc(String(scene.sceneNumber || i + 1))}</td>
-          <td class="sbs-script-td-scene" style="vertical-align:top;padding-top:0.55rem;">${esc(scene.sceneLabel || 'Scene')}</td>
-          <td class="sbs-script-td-list">${tagList([scene.location].filter(Boolean), 'sbs-tag-loc', 'No location')}</td>
-          <td class="sbs-script-td-list">${tagList(scene.characters, 'sbs-tag-char', 'No characters found')}</td>
-          <td class="sbs-script-td-list">${tagList(scene.songs, 'sbs-tag-song', 'No songs found')}</td>
-          <td class="sbs-script-td-list">${tagList(scene.props, 'sbs-tag-prop', 'No props found')}</td>
+          <td style="vertical-align:top;padding:0.45rem 0.5rem;">${sceneCell}</td>
+          <td class="sbs-script-td-list">${tagList(scene.characters, 'sbs-tag-char', 'None found', 5)}</td>
+          <td class="sbs-script-td-list">${tagList(scene.songs, 'sbs-tag-song', 'None found')}</td>
+          <td class="sbs-script-td-list">${tagList(scene.props, 'sbs-tag-prop', 'None found')}</td>
           <td class="sbs-script-td-pages-cell">${pageInputs(scene)}</td>
           <td style="vertical-align:top;padding-top:0.5rem;text-align:center;">${missing ? '<span class="sbs-script-flag-badge" title="Page range not found — set pages and Re-scan">!</span>' : ''}</td>
         </tr>`;
@@ -7670,15 +7675,15 @@
         <div class="sbs-script-table-wrap">
           <table class="sbs-script-table">
             <colgroup>
-              <col style="width:36px"><col style="width:13%"><col style="width:11%"><col><col style="width:18%"><col style="width:15%"><col style="width:108px"><col style="width:30px">
+              <col style="width:36px"><col style="width:18%"><col><col style="width:20%"><col style="width:18%"><col style="width:108px"><col style="width:30px">
             </colgroup>
             <thead>
               <tr>
-                <th>#</th><th>Scene</th><th>Location</th><th>Characters</th><th>Songs</th><th>Props</th><th>Pages</th><th></th>
+                <th>#</th><th>Scene</th><th>Characters</th><th>Songs</th><th>Props</th><th>Pages</th><th></th>
               </tr>
             </thead>
             <tbody>
-              ${tableRows || '<tr><td colspan="8" style="padding:2rem;text-align:center;color:rgba(26,21,48,0.4);font-size:0.88rem;">Upload a readable actors script to build scene connections.</td></tr>'}
+              ${tableRows || '<tr><td colspan="7" style="padding:2rem;text-align:center;color:rgba(26,21,48,0.4);font-size:0.88rem;">Upload a readable actors script to build scene connections.</td></tr>'}
             </tbody>
           </table>
         </div>
