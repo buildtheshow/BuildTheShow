@@ -7202,8 +7202,8 @@
       return false;
     }
 
-    function songMatchesFromCueMarkers(blockText, songs) {
-      const found = [];
+    function songMatchesFromCueMarkers(blockText, songs, aliasEntries) {
+      const cues = [];
       const pattern = /\(#\d+\s*[–\-]\s*([^.)]+?)\.?\s*\)/g;
       let m;
       while ((m = pattern.exec(blockText)) !== null) {
@@ -7212,9 +7212,18 @@
           const sn = normalizeLoose(song.title);
           return sn === cueName || cueName.includes(sn) || sn.includes(cueName);
         });
-        if (hit && !found.some(s => normalizeLoose(s.title) === normalizeLoose(hit.title))) found.push(hit);
+        if (hit && !cues.some(c => normalizeLoose(c.song.title) === normalizeLoose(hit.title))) {
+          cues.push({ song: hit, start: m.index });
+        }
       }
-      return found;
+      return cues.map((cue, i) => {
+        const spanEnd = cues[i + 1]?.start ?? blockText.length;
+        const span = blockText.slice(cue.start, spanEnd);
+        const characters = aliasEntries
+          ? uniqueByLooseName(aliasEntries.filter(e => phraseExistsInText(span, e.alias)).map(e => e.name))
+          : [];
+        return { song: cue.song, characters };
+      });
     }
 
     function richLineLooksLikeSceneAnchor(line) {
@@ -7394,48 +7403,14 @@
       }
       const sceneConnections = blocks.map((block, blockIndex) => {
         const blockText = block.lines.join('\n');
-        const nonMusicLines = block.lines.filter(line => !looksLikeSheetMusicLine(line));
-        const speakerNames = new Set();
-        const stageNames = new Set();
-        const mentionNames = new Set();
         const pages = block.pages?.length ? block.pages : estimateScriptScenePages(block, meta.pageCount, blockIndex, blocks.length);
-        const pageSpan = pages.length ? Math.max(...pages) - Math.min(...pages) + 1 : 0;
-        const oversizedBlock = pageSpan > 30 || nonMusicLines.length > 700;
-        if (oversizedBlock && block.scene) {
-          reviewItems.push({
-            type: 'scene_slicing',
-            label: block.sceneLabel,
-            reason: `This scene block spans ${pageSpan || 'too many'} page${pageSpan === 1 ? '' : 's'}, so BTS did not trust character, song, or prop placements inside it.`,
-            confidence: 'low',
-            sceneId: scriptSceneKey(block.scene),
-          });
-        }
-        if (!oversizedBlock) nonMusicLines.forEach((line, index) => {
-          const parentheticalCue = cleanPropImportLine(line).match(/^\(([^)]+):\)/);
-          if (parentheticalCue) {
-            lineAsScriptCue(parentheticalCue[1], aliasEntries).forEach(name => speakerNames.add(name));
-          }
-          const cueNames = lineAsScriptCue(line, aliasEntries);
-          if (cueNames.length) {
-            const nextUseful = nonMusicLines.slice(index + 1).find(nextLine => cleanPropImportLine(nextLine));
-            if (nextUseful && !parseSceneHeadingForMti(nextUseful)) cueNames.forEach(name => speakerNames.add(name));
-          }
-          if (/^\(.+\)$/.test(cleanPropImportLine(line)) || /\b(enter|exit|holds?|takes?|gives?|crosses?|sits?|stands?|helps?)\b/i.test(line)) {
-            aliasEntries.forEach(entry => {
-              if (phraseExistsInText(line, entry.alias)) stageNames.add(entry.name);
-            });
-          }
-        });
-        if (!oversizedBlock) {
-          aliasEntries.forEach(entry => {
-            if (phraseExistsInText(blockText, entry.alias)) mentionNames.add(entry.name);
-          });
-        }
-        const strongCharacters = uniqueByLooseName([...speakerNames, ...stageNames]);
-        const characters = strongCharacters.length ? strongCharacters : uniqueByLooseName([...mentionNames]);
-        const songCueMatches = songMatchesFromCueMarkers(blockText, songs);
-        const songMatches = uniqueByLooseName([...songCueMatches, ...(oversizedBlock ? [] : songs.filter(song => phraseExistsInText(blockText, song.title)))]);
-        const propMatches = oversizedBlock ? [] : uniqueByLooseName(props.filter(prop => phraseExistsInText(blockText, prop.name)));
+        const characters = uniqueByLooseName(aliasEntries.filter(entry => phraseExistsInText(blockText, entry.alias)).map(entry => entry.name));
+        const songCueResults = songMatchesFromCueMarkers(blockText, songs, aliasEntries);
+        const songMatches = uniqueByLooseName([
+          ...songCueResults.map(r => r.song),
+          ...songs.filter(song => phraseExistsInText(blockText, song.title)),
+        ]);
+        const propMatches = uniqueByLooseName(props.filter(prop => phraseExistsInText(blockText, prop.name)));
         if (!block.scene) {
           reviewItems.push({
             type: 'scene',
@@ -7448,26 +7423,26 @@
           reviewItems.push({
             type: 'characters',
             label: block.sceneLabel,
-            reason: 'No approved character speaker cues were found in this scene block.',
-            confidence: 'medium',
-          });
-        } else if (!strongCharacters.length && characters.length && block.scene) {
-          reviewItems.push({
-            type: 'characters',
-            label: block.sceneLabel,
-            reason: 'Characters were inferred from approved names mentioned in the scene block, not from clean speaker cues.',
+            reason: 'No approved character names were found in this scene block.',
             confidence: 'medium',
           });
         }
-        songMatches.forEach(song => {
-          const performerNames = uniqueByLooseName([...(song.performers || []), ...(song.names || [])]);
-          const singerNames = uniqueByLooseName([...performerNames, ...characters.filter(name => performerNames.some(performer => normalizeLoose(performer) === normalizeLoose(name)))]);
+        songCueResults.forEach(({ song, characters: songChars }) => {
           songConnections.push({
             title: song.title,
             sceneLabel: block.sceneLabel,
-            characters: singerNames,
-            confidence: singerNames.length ? 'high' : 'medium',
-            review: singerNames.length ? [] : ['Song found, but no approved performers were confirmed from the script block.'],
+            characters: songChars,
+            confidence: 'high',
+            review: [],
+          });
+        });
+        songMatches.filter(song => !songCueResults.some(r => normalizeLoose(r.song.title) === normalizeLoose(song.title))).forEach(song => {
+          songConnections.push({
+            title: song.title,
+            sceneLabel: block.sceneLabel,
+            characters,
+            confidence: 'medium',
+            review: [],
           });
         });
         return {
