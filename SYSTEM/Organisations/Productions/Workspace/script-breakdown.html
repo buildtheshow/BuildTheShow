@@ -5071,8 +5071,8 @@
         sort_order: index + 1,
         item_data: {
           rowNumber: index + 1,
-          act: scene.act || scene.act_number || '',
-          act_number: scene.act_number || scene.act || '',
+          act: scene.act || scene.act_number || '1',
+          act_number: scene.act_number || scene.act || '1',
           scene_number: scene.scene_number || scene.number || '',
           number: scene.number || scene.scene_number || '',
           location: scene.location || '',
@@ -5529,8 +5529,8 @@
         pendingPdfImport.sceneCatalogue = savedImportItems.scenes.map(item => ({
           scene_number: item.scene_number || item.number || '',
           number: item.number || item.scene_number || '',
-          act: item.act || item.act_number || '',
-          act_number: item.act_number || item.act || '',
+          act: item.act || item.act_number || '1',
+          act_number: item.act_number || item.act || '1',
           scene_label: item.scene_label || '',
           title: item.title || '',
           name: item.name || '',
@@ -6641,9 +6641,8 @@
       if (scene?.act) return scene.act;
       if (scene?.act_number) return scene.act_number;
       const raw = scene?.scene_number || scene?.number || '';
-      if (/prologue/i.test(String(raw))) return 'Prologue';
-      if (/epilogue/i.test(String(raw))) return 'Epilogue';
-      return '';
+      if (/prologue|epilogue/i.test(String(raw))) return '1';
+      return '1';
     }
 
     function renderStandaloneScenesReview() {
@@ -6652,7 +6651,7 @@
       const meta = pendingPdfImport?.listUploadMeta?.scenes || uploadedListMeta('scenes');
       const pageLabel = meta.pageCount ? `${meta.pageCount} page${meta.pageCount === 1 ? '' : 's'}` : `${scenesFound.length} scenes`;
       const scannedAt = meta.scannedAt || new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-      const actOptions = ['Prologue', '1', '2', '3', 'Epilogue'];
+      const actOptions = ['1', '2', '3'];
       const rows = scenesFound.map((scene, index) => {
         const actValue = sceneActValue(scene);
         const sceneNumber = scene.scene_number || scene.number || '';
@@ -7949,6 +7948,23 @@
 
     function parseSceneHeadingForMti(line) {
       const clean = cleanPropImportLine(line);
+      const bookendMatch = clean.match(/^(PROLOGUE|EPILOGUE)(?:\s*[:\-–—]\s*(.+))?$/i);
+      if (bookendMatch) {
+        const label = titleCaseName(bookendMatch[1]);
+        const detail = cleanSceneTitle(bookendMatch[2] || label);
+        return {
+          act: '1',
+          act_number: '1',
+          scene_number: label,
+          number: label,
+          scene_label: label,
+          title: label,
+          name: label,
+          location: titleCaseName(detail),
+          description: '',
+          source_type: 'scene_import',
+        };
+      }
       const match = clean.match(/^SCENE\s+([0-9]+[A-Z]?)\s*:\s*(.+)$/i);
       if (!match) return null;
       const sceneNumberRaw = match[1].trim();
@@ -7956,6 +7972,8 @@
       if (!location) return null;
       const numericScene = /^\d+$/.test(sceneNumberRaw) ? Number(sceneNumberRaw) : sceneNumberRaw;
       return {
+        act: '1',
+        act_number: '1',
         scene_number: numericScene,
         number: numericScene,
         scene_label: `Scene ${sceneNumberRaw}`,
