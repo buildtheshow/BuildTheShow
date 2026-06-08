@@ -7011,8 +7011,7 @@
       const parsed = parseSceneHeadingForMti(line);
       if (parsed) return approvedScriptSceneForHeading(parsed);
       const clean = cleanPropImportLine(line);
-      const norm = normalizeLoose(clean);
-      if (!norm || norm.length < 3) return null;
+      if (!clean) return null;
       const candidates = scriptSceneCandidates();
       const explicitScene = clean.match(/\bSCENE\s+([0-9]+[A-Z]?)\b/i);
       if (explicitScene) {
@@ -7020,22 +7019,17 @@
         const numbered = candidates.find(candidate => candidate.number === number);
         if (numbered) return numbered.scene;
       }
-      const bookend = clean.match(/\b(PROLOGUE|EPILOGUE)\b/i);
+      const bookend = clean.match(/^(PROLOGUE|EPILOGUE)(?:\s*[:\-–—]\s*(.*))?$/i);
       if (bookend) {
         const key = normalizeLoose(bookend[1]);
-        const matched = candidates.find(candidate => candidate.number === key || candidate.tokens.some(token => token.includes(key)));
+        const detail = normalizeLoose(bookend[2] || '');
+        const matched = candidates.find(candidate => {
+          if (candidate.number === key) return true;
+          return detail && candidate.location && (detail.includes(candidate.location) || candidate.location.includes(detail));
+        });
         if (matched) return matched.scene;
       }
-      if (!lineLooksLikeScriptSceneHeading(clean)) return null;
-      const approvedSongHit = (pendingPdfImport?.songs || []).some(song => {
-        const songKey = normalizeLoose(song.title || '');
-        return songKey && (norm === songKey || norm.startsWith(`${songKey} part`) || songKey.startsWith(norm));
-      });
-      if (approvedSongHit) return null;
-      return candidates.find(candidate => candidate.tokens.some(token => {
-        if (token.length < 7) return false;
-        return norm === token || norm.includes(token) || token.includes(norm);
-      }))?.scene || null;
+      return null;
     }
 
     function scriptAliasEntriesFromCharacters() {
@@ -7089,11 +7083,13 @@
 
     function splitScriptIntoSceneBlocks(text) {
       const lines = normalizeImportedLines(text);
-      const blocks = [];
+      const rawBlocks = [];
       let current = null;
       const prefixLines = [];
+      let sawCatalogueSection = false;
+      let scriptStarted = false;
       const startBlock = (scene, lineIndex) => {
-        if (current) blocks.push(current);
+        if (current) rawBlocks.push(current);
         current = {
           scene,
           sceneLabel: scriptSceneDisplayName(scene),
@@ -7102,8 +7098,24 @@
         };
       };
       lines.forEach((line, index) => {
+        const clean = cleanPropImportLine(line);
+        if (/^(scenes?\s*&\s*musical numbers?|scenes?\s+and\s+musical numbers?|table of contents|musical numbers?)$/i.test(clean)) {
+          sawCatalogueSection = true;
+          prefixLines.push(line);
+          return;
+        }
+        if (/^ACT\s+(ONE|TWO|THREE|I|II|III|1|2|3)\b/i.test(clean)) {
+          scriptStarted = true;
+          if (current) current.lines.push(line);
+          else prefixLines.push(line);
+          return;
+        }
         const headingScene = approvedScriptSceneForLine(line);
         if (headingScene) {
+          if (sawCatalogueSection && !scriptStarted) {
+            prefixLines.push(line);
+            return;
+          }
           startBlock(headingScene, index);
           return;
         }
@@ -7113,8 +7125,22 @@
         }
         current.lines.push(line);
       });
-      if (current) blocks.push(current);
-      const filtered = blocks.filter(block => block.lines.join(' ').trim().length);
+      if (current) rawBlocks.push(current);
+      const blocksByScene = new Map();
+      rawBlocks.forEach(block => {
+        if (!block.lines.join(' ').trim()) return;
+        const key = block.scene
+          ? normalizeLoose(`${block.scene.scene_number || block.scene.number || ''}-${block.scene.location || block.scene.title || block.scene.name || ''}`)
+          : `unassigned-${block.startLine}`;
+        const existing = blocksByScene.get(key);
+        if (existing) {
+          existing.lines.push('', ...block.lines);
+          existing.startLine = Math.min(existing.startLine, block.startLine);
+        } else {
+          blocksByScene.set(key, { ...block, lines: [...block.lines] });
+        }
+      });
+      const filtered = [...blocksByScene.values()].sort((a, b) => a.startLine - b.startLine);
       filtered.ignoredPrefixLines = prefixLines.filter(line => cleanPropImportLine(line));
       return filtered;
     }
@@ -7324,7 +7350,7 @@
             <div class="sbs-script-review-title">Script Connection Review</div>
             <div class="sbs-script-review-sub">${esc(fileName)} · ${esc(meta.fileType || 'Script')} scanned against approved production catalogues. File not retained.</div>
           </div>
-          <button type="button" class="sbs-prop-outline-btn" onclick="chooseStepImportFile('script')">Replace Script</button>
+          <button type="button" class="sbs-prop-outline-btn" onclick="startScriptUploadAgain()">Start Again</button>
         </div>
         <div class="sbs-script-metrics">
           ${metric(stats.charactersLinked, 'Characters Linked')}
@@ -8122,6 +8148,30 @@
       event.preventDefault();
       event.currentTarget.classList.remove('drag-over');
       handleStepImportFile(kind, event.dataTransfer?.files?.[0]);
+    }
+
+    async function startScriptUploadAgain() {
+      ensurePendingImportFromSaved();
+      if (!pendingPdfImport) return;
+      pendingPdfImport.scriptConnections = null;
+      if (pendingPdfImport.listUploads) delete pendingPdfImport.listUploads.script;
+      if (pendingPdfImport.listUploadMeta) delete pendingPdfImport.listUploadMeta.script;
+      if (savedImportItems?.script) savedImportItems.script = [];
+      pendingPdfImport.standaloneStep = 'script';
+      importReviewStep = 'script';
+      renderStepByStepImport();
+      renderUploadDashboardStatus();
+      const status = document.getElementById('pdf-import-status');
+      if (status) status.textContent = 'Upload the actors script again to rebuild connections.';
+      try {
+        await sb
+          .from('production_script_import_items')
+          .delete()
+          .eq('production_id', prodId)
+          .eq('item_kind', 'script');
+      } catch (error) {
+        console.warn('[BTS] script reset metadata delete failed', error);
+      }
     }
 
     async function handleStepImportFile(kind, file) {
