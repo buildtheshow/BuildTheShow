@@ -6986,7 +6986,7 @@
     }
 
     function scriptSceneCandidates() {
-      return (pendingPdfImport?.sceneCatalogue || []).map(scene => {
+      return (pendingPdfImport?.sceneCatalogue || []).map((scene, order) => {
         const number = scene.scene_number || scene.number || '';
         const location = scene.location || scene.title || scene.name || '';
         const label = scriptSceneDisplayName(scene);
@@ -6998,8 +6998,12 @@
           number ? `Scene ${number}` : '',
           number && location ? `Scene ${number} ${location}` : '',
         ].filter(Boolean).map(normalizeLoose).filter(Boolean);
-        return { scene, number: normalizeLoose(number), location: normalizeLoose(location), tokens: [...new Set(tokens)] };
+        return { scene, order, number: normalizeLoose(number), location: normalizeLoose(location), tokens: [...new Set(tokens)] };
       });
+    }
+
+    function scriptSceneKey(scene) {
+      return normalizeLoose(`${scene?.scene_number || scene?.number || ''}-${scene?.location || scene?.title || scene?.name || ''}`);
     }
 
     function lineLooksLikeScriptSceneHeading(line) {
@@ -7036,6 +7040,32 @@
         if (matched) return matched.scene;
       }
       return null;
+    }
+
+    function approvedScriptSceneForRichLine(line, currentScene = null) {
+      const direct = approvedScriptSceneForLine(line?.text || line);
+      if (direct) return direct;
+      const clean = cleanPropImportLine(line?.text || line);
+      if (!clean || clean.length > 90 || /\(part\s*\d+\)/i.test(clean) || /\.{3,}/.test(clean)) return null;
+      const letters = clean.replace(/[^a-zA-Z]/g, '');
+      const upperRatio = letters.length ? (clean.match(/[A-Z]/g) || []).length / letters.length : 0;
+      const looksLikeHeading = upperRatio >= 0.55 || line?.bold || line?.fontSize >= 14;
+      if (!looksLikeHeading) return null;
+      const normalized = normalizeLoose(clean);
+      if (!normalized) return null;
+      const candidates = scriptSceneCandidates();
+      const currentKey = scriptSceneKey(currentScene);
+      const currentIndex = candidates.findIndex(candidate => scriptSceneKey(candidate.scene) === currentKey);
+      const matches = candidates.filter(candidate => {
+        if (!candidate.location || candidate.location.length < 4) return false;
+        return normalized === candidate.location
+          || normalized.includes(candidate.location)
+          || candidate.location.includes(normalized)
+          || candidate.tokens.some(token => token.length >= 4 && (normalized === token || normalized.includes(token)));
+      });
+      if (!matches.length) return null;
+      const afterCurrent = matches.find(candidate => candidate.order > currentIndex && scriptSceneKey(candidate.scene) !== currentKey);
+      return (afterCurrent || matches.find(candidate => scriptSceneKey(candidate.scene) !== currentKey) || matches[0]).scene;
     }
 
     function scriptAliasEntriesFromCharacters() {
@@ -7166,8 +7196,9 @@
           return;
         }
         sortedLines.forEach((line, index) => {
-          const scene = approvedScriptSceneForLine(line.text);
+          const scene = approvedScriptSceneForRichLine(line, current?.scene || null);
           if (scene) {
+            if (current && scriptSceneKey(current.scene) === scriptSceneKey(scene)) return;
             pushCurrent();
             current = {
               scene,
