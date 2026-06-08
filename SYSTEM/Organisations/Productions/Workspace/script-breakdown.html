@@ -6578,7 +6578,7 @@
         const content = await page.getTextContent();
         const items = content.items || [];
         textPages.push(textItemsToLines(items).join('\n'));
-        allRichLines.push(...textItemsToRichLines(items));
+        allRichLines.push(...textItemsToRichLines(items, pageNum));
       }
       const decorations = detectRecurringPageDecorations(textPages);
       const normalize = line => line.replace(/\s*[|]\s*[A-Za-z]?\d+\s*$/, '').replace(/\s+/g, ' ').trim().toLowerCase();
@@ -6656,7 +6656,7 @@
     }
 
     // Returns lines with font metadata for section-heading detection (no column splitting — headings are always full-width)
-    function textItemsToRichLines(items) {
+    function textItemsToRichLines(items, pageNum = 1) {
       const placed = items
         .filter(item => String(item.str || '').trim())
         .map(item => ({
@@ -6681,6 +6681,9 @@
         .sort((a, b) => b.y - a.y)
         .map(row => ({
           text: row.parts.sort((a, b) => a.x - b.x).map(i => i.text).join(' ').replace(/\s+/g, ' ').trim(),
+          page: pageNum,
+          x: Math.min(...row.parts.map(i => i.x)),
+          y: row.y,
           fontSize: row.fontSize,
           bold: row.bold,
         }))
@@ -6974,7 +6977,10 @@
       return scenesList.find(scene => {
         const sceneNumber = normalizeLoose(scene.scene_number || scene.number || '');
         const sceneLocation = normalizeLoose(scene.location || scene.title || scene.name || '');
-        if (headingNumber && sceneNumber && headingNumber === sceneNumber) return true;
+        if (headingNumber && sceneNumber && headingNumber === sceneNumber) {
+          if (headingLocation && sceneLocation) return headingLocation.includes(sceneLocation) || sceneLocation.includes(headingLocation);
+          return true;
+        }
         return headingLocation && sceneLocation && (headingLocation.includes(sceneLocation) || sceneLocation.includes(headingLocation));
       }) || heading;
     }
@@ -7086,8 +7092,6 @@
       const rawBlocks = [];
       let current = null;
       const prefixLines = [];
-      let sawCatalogueSection = false;
-      let scriptStarted = false;
       const startBlock = (scene, lineIndex) => {
         if (current) rawBlocks.push(current);
         current = {
@@ -7095,27 +7099,14 @@
           sceneLabel: scriptSceneDisplayName(scene),
           startLine: lineIndex,
           lines: [],
+          pages: [],
         };
       };
       lines.forEach((line, index) => {
         const clean = cleanPropImportLine(line);
-        if (/^(scenes?\s*&\s*musical numbers?|scenes?\s+and\s+musical numbers?|table of contents|musical numbers?)$/i.test(clean)) {
-          sawCatalogueSection = true;
-          prefixLines.push(line);
-          return;
-        }
-        if (/^ACT\s+(ONE|TWO|THREE|I|II|III|1|2|3)\b/i.test(clean)) {
-          scriptStarted = true;
-          if (current) current.lines.push(line);
-          else prefixLines.push(line);
-          return;
-        }
+        if (/^(scenes?\s*&\s*musical numbers?|scenes?\s+and\s+musical numbers?|table of contents|musical numbers?)$/i.test(clean)) return;
         const headingScene = approvedScriptSceneForLine(line);
         if (headingScene) {
-          if (sawCatalogueSection && !scriptStarted) {
-            prefixLines.push(line);
-            return;
-          }
           startBlock(headingScene, index);
           return;
         }
@@ -7145,6 +7136,80 @@
       return filtered;
     }
 
+    function pdfPageLooksLikeScriptCatalogue(lines) {
+      const pageText = lines.map(line => cleanPropImportLine(line.text)).filter(Boolean);
+      const joined = pageText.join('\n');
+      if (/\b(scenes?\s*&\s*musical numbers?|scenes?\s+and\s+musical numbers?|table of contents|contents)\b/i.test(joined)) return true;
+      const dottedRows = pageText.filter(line => /\.{3,}/.test(line)).length;
+      const sceneRows = pageText.filter(line => /^(prologue|epilogue|scene\s+\d+)/i.test(line)).length;
+      return dottedRows >= 4 && sceneRows >= 2;
+    }
+
+    function splitScriptIntoSceneBlocksFromRichLines(richLines) {
+      const byPage = new Map();
+      (richLines || []).forEach(line => {
+        if (!line?.text) return;
+        const page = line.page || 1;
+        if (!byPage.has(page)) byPage.set(page, []);
+        byPage.get(page).push(line);
+      });
+      const rawBlocks = [];
+      const prefixLines = [];
+      let current = null;
+      const pushCurrent = () => {
+        if (current) rawBlocks.push(current);
+      };
+      [...byPage.entries()].sort((a, b) => a[0] - b[0]).forEach(([page, lines]) => {
+        const sortedLines = lines.slice().sort((a, b) => Math.abs(b.y - a.y) > 3 ? b.y - a.y : a.x - b.x);
+        if (pdfPageLooksLikeScriptCatalogue(sortedLines)) {
+          prefixLines.push(...sortedLines.map(line => line.text));
+          return;
+        }
+        sortedLines.forEach((line, index) => {
+          const scene = approvedScriptSceneForLine(line.text);
+          if (scene) {
+            pushCurrent();
+            current = {
+              scene,
+              sceneLabel: scriptSceneDisplayName(scene),
+              startLine: rawBlocks.length * 10000 + index,
+              lines: [],
+              pages: [page],
+            };
+            return;
+          }
+          if (!current) {
+            prefixLines.push(line.text);
+            return;
+          }
+          current.lines.push(line.text);
+          current.pages.push(page);
+        });
+      });
+      pushCurrent();
+      const blocksByScene = new Map();
+      rawBlocks.forEach(block => {
+        if (!block.lines.join(' ').trim()) return;
+        const key = block.scene
+          ? normalizeLoose(`${block.scene.scene_number || block.scene.number || ''}-${block.scene.location || block.scene.title || block.scene.name || ''}`)
+          : `unassigned-${block.startLine}`;
+        const existing = blocksByScene.get(key);
+        if (existing) {
+          existing.lines.push('', ...block.lines);
+          existing.pages.push(...block.pages);
+          existing.startLine = Math.min(existing.startLine, block.startLine);
+        } else {
+          blocksByScene.set(key, { ...block, lines: [...block.lines], pages: [...block.pages] });
+        }
+      });
+      const filtered = [...blocksByScene.values()].sort((a, b) => a.startLine - b.startLine).map(block => ({
+        ...block,
+        pages: [...new Set((block.pages || []).filter(Boolean))].sort((a, b) => a - b),
+      }));
+      filtered.ignoredPrefixLines = prefixLines.filter(line => cleanPropImportLine(line));
+      return filtered;
+    }
+
     function estimateScriptScenePages(block, pageCount, blockIndex, totalBlocks) {
       if (!pageCount || !totalBlocks) return [];
       const start = Math.max(1, Math.round((blockIndex / totalBlocks) * pageCount) + 1);
@@ -7157,7 +7222,9 @@
       const aliasEntries = scriptAliasEntriesFromCharacters();
       const props = pendingPdfImport?.propCatalogue || [];
       const songs = pendingPdfImport?.songs || [];
-      const blocks = splitScriptIntoSceneBlocks(text);
+      const blocks = Array.isArray(meta.richLines) && meta.richLines.length
+        ? splitScriptIntoSceneBlocksFromRichLines(meta.richLines)
+        : splitScriptIntoSceneBlocks(text);
       const reviewItems = [];
       const songConnections = [];
       if (blocks.ignoredPrefixLines?.length) {
@@ -7196,7 +7263,7 @@
         const characters = strongCharacters.length ? strongCharacters : uniqueByLooseName([...mentionNames]);
         const songMatches = uniqueByLooseName(songs.filter(song => phraseExistsInText(blockText, song.title)));
         const propMatches = uniqueByLooseName(props.filter(prop => phraseExistsInText(blockText, prop.name)));
-        const pages = estimateScriptScenePages(block, meta.pageCount, blockIndex, blocks.length);
+        const pages = block.pages?.length ? block.pages : estimateScriptScenePages(block, meta.pageCount, blockIndex, blocks.length);
         if (!block.scene) {
           reviewItems.push({
             type: 'scene',
@@ -8211,7 +8278,7 @@
             scannedAt: new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }),
           };
           pendingPdfImport.scriptConnections = extracted
-            ? buildScriptConnections(extracted.text, { pageCount: extracted.pageCount || null })
+            ? buildScriptConnections(extracted.text, { pageCount: extracted.pageCount || null, richLines: extracted.richLines || [] })
             : {
                 generatedAt: new Date().toISOString(),
                 sourceWasRetained: false,
