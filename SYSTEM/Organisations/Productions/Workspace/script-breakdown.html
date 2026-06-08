@@ -7467,94 +7467,111 @@
       return printedMap;
     }
 
-    function getLinesForPageRange(pageLines, printedMap, startPage, endPage) {
-      const lines = [];
-      const end = (endPage != null) ? endPage : Infinity;
+    // Flatten all PDF rich lines into reading order, tagged with printed page number.
+    function buildFlatLines(pageLines, printedMap) {
+      const flat = [];
       [...pageLines.entries()]
-        .filter(([pdfPage]) => {
+        .sort((a, b) => (printedMap.get(a[0]) ?? a[0]) - (printedMap.get(b[0]) ?? b[0]))
+        .forEach(([pdfPage, lines]) => {
+          if (pdfPageLooksLikeScriptCatalogue(lines)) return;
           const printed = printedMap.get(pdfPage) ?? pdfPage;
-          return printed >= startPage && printed <= end;
-        })
-        .sort((a, b) => {
-          const pa = printedMap.get(a[0]) ?? a[0];
-          const pb = printedMap.get(b[0]) ?? b[0];
-          return pa - pb;
-        })
-        .forEach(([, pageLinesList]) => {
-          const sorted = pageLinesList.slice().sort((a, b) => Math.abs(b.y - a.y) > 3 ? b.y - a.y : a.x - b.x);
-          sorted.forEach(line => { if (line.text?.trim()) lines.push(line.text); });
+          const sorted = lines.slice().sort((a, b) => Math.abs(b.y - a.y) > 3 ? b.y - a.y : a.x - b.x);
+          sorted.forEach(line => { if (line.text?.trim()) flat.push({ text: line.text, page: printed }); });
         });
-      return lines;
+      return flat;
     }
 
-    function buildScenePageMap(pageLines, printedMap, catalogue) {
-      const result = {};
-      if (!pageLines.size || !catalogue.length) return result;
-      const flatLines = [];
-      [...pageLines.entries()].sort((a, b) => a[0] - b[0]).forEach(([pdfPage, lines]) => {
-        if (pdfPageLooksLikeScriptCatalogue(lines)) return;
-        const sorted = lines.slice().sort((a, b) => Math.abs(b.y - a.y) > 3 ? b.y - a.y : a.x - b.x);
-        const printedPage = printedMap.get(pdfPage) ?? pdfPage;
-        sorted.forEach(line => flatLines.push({ text: line.text, page: printedPage }));
-      });
+    // Find scene headings in flat line order, extract the text block between each pair.
+    // Returns: { [sceneIndex]: { lines: string[], startPage, endPage, headingFound } }
+    function buildSceneTextBlocks(flatLines, catalogue) {
       const headings = [];
       flatLines.forEach((line, pos) => {
-        const parsed = parseSceneHeadingForMti(line.text || '');
+        const parsed = parseSceneHeadingForMti(line.text);
         if (!parsed) return;
         const scene = approvedScriptSceneForHeading(parsed);
         if (!scene) return;
         const sceneIndex = catalogue.findIndex(s => scriptSceneKey(s) === scriptSceneKey(scene));
         if (sceneIndex === -1 || headings.some(h => h.sceneIndex === sceneIndex)) return;
-        headings.push({ sceneIndex, page: line.page, pos });
+        headings.push({ sceneIndex, pos, page: line.page });
       });
       headings.sort((a, b) => a.pos - b.pos);
-      console.group(`BTS Script Parser: found ${headings.length} of ${catalogue.length} scene headings`);
-      headings.forEach(h => console.log(`  ✓ ${scriptSceneDisplayName(catalogue[h.sceneIndex])} → printed page ${h.page}`));
+      console.group(`BTS Script Parser — text block mode: ${headings.length} of ${catalogue.length} scene headings found`);
+      headings.forEach(h => console.log(`  ✓ ${scriptSceneDisplayName(catalogue[h.sceneIndex])} → p${h.page}`));
       catalogue.forEach((s, i) => { if (!headings.some(h => h.sceneIndex === i)) console.warn(`  ✗ MISSING: ${scriptSceneDisplayName(s)}`); });
       console.groupEnd();
+      const blocks = {};
       headings.forEach((h, i) => {
         const nextH = headings[i + 1];
-        result[h.sceneIndex] = {
+        const blockLines = flatLines.slice(h.pos + 1, nextH ? nextH.pos : undefined).map(l => l.text);
+        blocks[h.sceneIndex] = {
+          lines: blockLines,
           startPage: h.page,
           endPage: nextH ? nextH.page - 1 : null,
           headingFound: true,
         };
       });
-      return result;
+      return blocks;
     }
 
-    function buildConnectionsFromPageMap(scenePageMap, overrides, catalogue, pageLines, printedMap, totalPages, songs, aliasEntries, propsCatalogue) {
-      const reviewItems = [];
-      const songConnections = [];
+    // Walk a scene's text block line by line.
+    // Tracks: current song (from cue markers), character cues, stage direction names.
+    // Uses approved catalogues as ground truth — never guesses outside them.
+    function buildConnectionsFromTextBlocks(sceneBlocks, catalogue, songs, aliasEntries, propsCatalogue) {
       const sceneConnections = catalogue.map((catalogueScene, index) => {
         const sceneLabel = scriptSceneDisplayName(catalogueScene);
-        const autoInfo = scenePageMap[index] || {};
-        const override = overrides[index] || {};
-        const startPage = override.startPage ?? autoInfo.startPage ?? null;
-        const endPage = override.endPage !== undefined ? override.endPage : (autoInfo.endPage ?? null);
-        const headingFound = !!autoInfo.headingFound;
-        const manuallySet = !!(override.startPage != null);
-        const blockLines = startPage != null ? getLinesForPageRange(pageLines, printedMap, startPage, endPage) : [];
-        const blockText = blockLines.join('\n');
-        const characters = uniqueByLooseName(aliasEntries.filter(e => phraseExistsInText(blockText, e.alias)).map(e => e.name));
-        const songCueResults = songMatchesFromCueMarkers(blockText, songs, aliasEntries);
-        const songMatches = uniqueByLooseName([
-          ...songCueResults.map(r => r.song),
-          ...songs.filter(song => phraseExistsInText(blockText, song.title)),
-        ]);
-        const propMatches = uniqueByLooseName(propsCatalogue.filter(prop => phraseExistsInText(blockText, prop.name)));
-        if (!headingFound && !manuallySet) {
-          reviewItems.push({ type: 'scene_page', label: sceneLabel, reason: 'Scene heading not found in PDF. Set the page range to scan.', confidence: 'low', sceneIndex: index });
-        }
-        if (startPage != null && !characters.length) {
-          reviewItems.push({ type: 'characters', label: sceneLabel, reason: 'No approved character names found in this scene\'s pages.', confidence: 'medium' });
-        }
-        songCueResults.forEach(({ song, characters: sc }) => {
-          songConnections.push({ title: song.title, sceneLabel, characters: sc, confidence: 'high', review: [] });
+        const block = sceneBlocks[index] || null;
+        const headingFound = !!block;
+        const lines = block?.lines || [];
+
+        const characters = new Set();
+        const sceneSongs = new Set();
+        let currentSong = null;
+        const songCharMap = {}; // song title → Set of character names
+
+        const addChar = (name) => {
+          characters.add(name);
+          if (currentSong) songCharMap[currentSong].add(name);
+        };
+
+        lines.forEach(raw => {
+          const text = (raw || '').trim();
+          if (!text || looksLikeSheetMusicLine(text)) return;
+
+          // Song cue marker: (#N – SONG TITLE.) — most reliable signal
+          const cueMatch = text.match(/\(#\d+\s*[–\-]\s*([^.)]+?)\.?\s*\)/);
+          if (cueMatch) {
+            const cueName = normalizeLoose(cueMatch[1]);
+            const song = songs.find(s => {
+              const sn = normalizeLoose(s.title);
+              return sn === cueName || cueName.includes(sn) || sn.includes(cueName);
+            });
+            if (song) {
+              currentSong = song.title;
+              sceneSongs.add(song.title);
+              if (!songCharMap[song.title]) songCharMap[song.title] = new Set();
+            }
+            return;
+          }
+
+          // Speaker cue: handles both "CHARACTER: text" and standalone "CHARACTER"
+          const cueNames = lineAsScriptCue(text, aliasEntries);
+          if (cueNames.length) { cueNames.forEach(addChar); return; }
+
+          // Stage direction (parenthetical): scan for approved character names in CAPS
+          if (/^\(/.test(text)) {
+            aliasEntries.forEach(e => {
+              if (phraseExistsInText(text, e.alias)) addChar(e.name);
+            });
+          }
         });
-        songMatches.filter(s => !songCueResults.some(r => normalizeLoose(r.song.title) === normalizeLoose(s.title))).forEach(song => {
-          songConnections.push({ title: song.title, sceneLabel, characters, confidence: 'medium', review: [] });
-        });
+
+        // Props: phrase match against full block text (props don't have speaker cues)
+        const blockText = lines.join('\n');
+        const propMatches = uniqueByLooseName(propsCatalogue.filter(p => phraseExistsInText(blockText, p.name)));
+
+        const charList = uniqueByLooseName([...characters]);
+        const songList = [...sceneSongs];
+
         return {
           sceneLabel,
           sceneIndex: index,
@@ -7563,33 +7580,45 @@
           act: catalogueScene.act || catalogueScene.act_number || '1',
           actNumber: catalogueScene.act_number || catalogueScene.act || '1',
           location: catalogueScene.location || '',
-          startPage,
-          endPage,
+          startPage: block?.startPage ?? null,
+          endPage: block?.endPage ?? null,
           headingFound,
-          manuallySet,
-          characters,
-          songs: songMatches.map(s => s.title),
+          characters: charList,
+          songs: songList,
           props: propMatches.map(p => p.name),
-          confidence: startPage != null ? (characters.length || songMatches.length || propMatches.length ? 'high' : 'medium') : 'low',
+          songCharacters: Object.fromEntries(Object.entries(songCharMap).map(([t, s]) => [t, [...s]])),
+          confidence: headingFound ? (charList.length || songList.length ? 'high' : 'medium') : 'low',
         };
       });
-      songs.forEach(song => {
-        if (!songConnections.some(c => normalizeLoose(c.title) === normalizeLoose(song.title))) {
-          reviewItems.push({ type: 'song', label: song.title, reason: 'This approved song was not found in any scene\'s page range.', confidence: 'low' });
-        }
-      });
-      const linkedScenes = sceneConnections.filter(s => s.startPage != null).length;
+
+      const reviewItems = sceneConnections
+        .filter(s => !s.headingFound)
+        .map(s => ({ type: 'scene_heading', label: s.sceneLabel, reason: 'Scene heading not found in PDF.' }));
+
+      const linkedScenes = sceneConnections.filter(s => s.headingFound).length;
       const linkedCharacters = new Set(sceneConnections.flatMap(s => s.characters).map(normalizeLoose)).size;
       const linkedSongs = new Set(sceneConnections.flatMap(s => s.songs).map(normalizeLoose)).size;
       const linkedProps = new Set(sceneConnections.flatMap(s => s.props).map(normalizeLoose)).size;
+
       return {
         generatedAt: new Date().toISOString(),
         sourceWasRetained: false,
         stats: { charactersLinked: linkedCharacters, songsLinked: linkedSongs, propsLinked: linkedProps, scenesLinked: linkedScenes, needsReview: reviewItems.length },
         sceneConnections,
-        songConnections,
         reviewItems,
       };
+    }
+
+    function runScriptParse(richLines) {
+      const catalogue = pendingPdfImport?.sceneCatalogue || [];
+      const songs = pendingPdfImport?.songs || [];
+      const propsCatalogue = pendingPdfImport?.propCatalogue || [];
+      const aliasEntries = scriptAliasEntriesFromCharacters();
+      const pageLines = buildPageLinesMap(richLines);
+      const printedMap = buildPrintedPageMap(pageLines);
+      const flatLines = buildFlatLines(pageLines, printedMap);
+      const sceneBlocks = buildSceneTextBlocks(flatLines, catalogue);
+      return buildConnectionsFromTextBlocks(sceneBlocks, catalogue, songs, aliasEntries, propsCatalogue);
     }
 
     function buildScriptConnections(text, meta = {}) {
@@ -7599,44 +7628,14 @@
       }
       if (meta.pageCount) pendingPdfImport._scriptPageCount = meta.pageCount;
       const richLines = pendingPdfImport._scriptRichLines || [];
-      const totalPages = meta.pageCount || pendingPdfImport._scriptPageCount || Math.max(0, ...richLines.map(l => l.page || 0));
-      const catalogue = pendingPdfImport?.sceneCatalogue || [];
-      const songs = pendingPdfImport?.songs || [];
-      const propsCatalogue = pendingPdfImport?.propCatalogue || [];
-      const aliasEntries = scriptAliasEntriesFromCharacters();
-      const pageLines = buildPageLinesMap(richLines);
-      const printedMap = buildPrintedPageMap(pageLines);
-      console.log(`BTS printed page map: ${printedMap.size} pages detected. Sample:`, [...printedMap.entries()].slice(0, 5).map(([pdf, p]) => `PDF${pdf}→p${p}`).join(', '));
-      const scenePageMap = buildScenePageMap(pageLines, printedMap, catalogue);
-      const overrides = pendingPdfImport._scriptPageOverrides || {};
-      return buildConnectionsFromPageMap(scenePageMap, overrides, catalogue, pageLines, printedMap, totalPages, songs, aliasEntries, propsCatalogue);
-    }
-
-    function setScriptScenePageRange(sceneIndex, startVal, endVal) {
-      if (!pendingPdfImport) return;
-      if (!pendingPdfImport._scriptPageOverrides) pendingPdfImport._scriptPageOverrides = {};
-      const start = parseInt(startVal, 10);
-      const end = parseInt(endVal, 10);
-      pendingPdfImport._scriptPageOverrides[sceneIndex] = {
-        startPage: isNaN(start) ? null : start,
-        endPage: isNaN(end) ? null : end,
-      };
+      return runScriptParse(richLines);
     }
 
     function rescanScriptConnections() {
       const richLines = pendingPdfImport?._scriptRichLines;
       if (!richLines?.length) { showToast('Re-upload the script PDF to rescan.'); return; }
       ensurePendingImportFromSaved();
-      const totalPages = pendingPdfImport._scriptPageCount || Math.max(0, ...richLines.map(l => l.page || 0));
-      const catalogue = pendingPdfImport?.sceneCatalogue || [];
-      const songs = pendingPdfImport?.songs || [];
-      const propsCatalogue = pendingPdfImport?.propCatalogue || [];
-      const aliasEntries = scriptAliasEntriesFromCharacters();
-      const pageLines = buildPageLinesMap(richLines);
-      const printedMap = buildPrintedPageMap(pageLines);
-      const scenePageMap = buildScenePageMap(pageLines, printedMap, catalogue);
-      const overrides = pendingPdfImport._scriptPageOverrides || {};
-      pendingPdfImport.scriptConnections = buildConnectionsFromPageMap(scenePageMap, overrides, catalogue, pageLines, printedMap, totalPages, songs, aliasEntries, propsCatalogue);
+      pendingPdfImport.scriptConnections = runScriptParse(richLines);
       openScriptBreakdownStep('script');
     }
 
@@ -7665,21 +7664,14 @@
         return `<div class="sbs-tag-row">${vals.map(v => `<span class="sbs-tag ${cls}">${esc(v)}</span>`).join('')}</div>`;
       };
 
-      const pageInputs = (scene) => {
-        const idx = scene.sceneIndex;
-        const s = scene.startPage != null ? scene.startPage : '';
-        const e = scene.endPage != null ? scene.endPage : '';
-        const missing = !scene.headingFound && !scene.manuallySet;
-        return `<div class="sbs-page-range${missing ? ' sbs-page-range-missing' : ''}">
-          <input type="number" class="sbs-page-input" value="${s}" placeholder="p1" min="1"
-            onchange="setScriptScenePageRange(${idx},this.value,this.closest('.sbs-page-range').querySelector('.sbs-page-end').value)">
-          <span class="sbs-page-sep">–</span>
-          <input type="number" class="sbs-page-input sbs-page-end" value="${e}" placeholder="p2" min="1"
-            onchange="setScriptScenePageRange(${idx},this.closest('.sbs-page-range').querySelector('.sbs-page-input:first-child').value,this.value)">
-        </div>`;
+      const pageDisplay = (scene) => {
+        if (!scene.headingFound) return `<span class="sbs-script-td-pages" style="color:rgba(209,82,61,0.6);font-style:italic;font-size:0.72rem;">Not found</span>`;
+        const s = scene.startPage ?? '?';
+        const e = scene.endPage ?? '?';
+        return `<span class="sbs-script-td-pages">${esc(String(s))}${s !== e ? ` – ${esc(String(e))}` : ''}</span>`;
       };
 
-      // Sort by start page; scenes with no page float to the end
+      // Sort by start page; scenes with no heading float to the end
       const sortedScenes = scenes.slice().sort((a, b) => {
         if (a.startPage == null && b.startPage == null) return 0;
         if (a.startPage == null) return 1;
@@ -7687,18 +7679,17 @@
         return a.startPage - b.startPage;
       });
 
-      // Group scenes by act for act-header rows
-      const missingCount = scenes.filter(s => !s.headingFound && !s.manuallySet).length;
+      const missingCount = scenes.filter(s => !s.headingFound).length;
       let lastAct = null;
       const tableRows = sortedScenes.map((scene, i) => {
-        const missing = !scene.headingFound && !scene.manuallySet;
+        const missing = !scene.headingFound;
         const rowCls = missing ? 'sbs-needs-review-row' : '';
         const actKey = scene.actNumber || scene.act || '1';
         const actLabel = `Act ${actKey}`;
         let actRow = '';
         if (actKey !== lastAct) {
           lastAct = actKey;
-          actRow = `<tr class="sbs-act-group-row"><td colspan="8">${esc(actLabel)}</td></tr>`;
+          actRow = `<tr class="sbs-act-group-row"><td colspan="7">${esc(actLabel)}</td></tr>`;
         }
         const sceneNum = scene.sceneNumber || (i + 1);
         const sceneRow = `<tr${rowCls ? ` class="${rowCls}"` : ''}>
@@ -7708,14 +7699,13 @@
           <td class="sbs-script-td-list">${tagList(scene.characters, 'sbs-tag-char', 'None found')}</td>
           <td class="sbs-script-td-list">${tagList(scene.songs, 'sbs-tag-song', 'None found')}</td>
           <td class="sbs-script-td-list">${tagList(scene.props, 'sbs-tag-prop', 'None found')}</td>
-          <td class="sbs-script-td-pages-cell">${pageInputs(scene)}</td>
-          <td style="vertical-align:top;padding-top:0.5rem;text-align:center;">${missing ? '<span class="sbs-script-flag-badge" title="Page range not found — set pages and Re-scan">!</span>' : ''}</td>
+          <td class="sbs-script-td-pages-cell" style="white-space:nowrap;">${pageDisplay(scene)}</td>
         </tr>`;
         return actRow + sceneRow;
       }).join('');
 
       const rescanHint = missingCount
-        ? `<div class="sbs-rescan-hint">${missingCount} scene${missingCount === 1 ? '' : 's'} need page ranges. Set the start and end pages in the table, then hit Re-scan.</div>`
+        ? `<div class="sbs-rescan-hint">${missingCount} scene heading${missingCount === 1 ? '' : 's'} not found in PDF. Check the script has those scene headings.</div>`
         : '';
 
       return `<div class="sbs-script-review">
@@ -7726,7 +7716,7 @@
             <div class="sbs-script-review-sub">${esc(fileName)} · PDF scanned against approved production catalogues. File not retained.</div>
           </div>
           <div class="sbs-script-review-actions">
-            ${hasRichLines ? `<button type="button" class="sbs-rescan-btn" onclick="rescanScriptConnections()">Re-scan</button>` : ''}
+            ${hasRichLines ? `<button type="button" class="sbs-rescan-btn" onclick="rescanScriptConnections()">Re-parse</button>` : ''}
             <button type="button" class="sbs-prop-outline-btn" onclick="startScriptUploadAgain()">Start Again</button>
           </div>
         </div>
@@ -7741,15 +7731,15 @@
         <div class="sbs-script-table-wrap">
           <table class="sbs-script-table">
             <colgroup>
-              <col style="width:52px"><col style="width:13%"><col style="width:13%"><col><col style="width:18%"><col style="width:13%"><col style="width:108px"><col style="width:30px">
+              <col style="width:48px"><col style="width:13%"><col style="width:13%"><col><col style="width:18%"><col style="width:13%"><col style="width:80px">
             </colgroup>
             <thead>
               <tr>
-                <th>#</th><th>Scene Name</th><th>Location</th><th>Characters</th><th>Songs</th><th>Props</th><th>Pages</th><th></th>
+                <th>#</th><th>Scene Name</th><th>Location</th><th>Characters</th><th>Songs</th><th>Props</th><th>Pages</th>
               </tr>
             </thead>
             <tbody>
-              ${tableRows || '<tr><td colspan="8" style="padding:2rem;text-align:center;color:rgba(26,21,48,0.4);font-size:0.88rem;">Upload a readable actors script to build scene connections.</td></tr>'}
+              ${tableRows || '<tr><td colspan="7" style="padding:2rem;text-align:center;color:rgba(26,21,48,0.4);font-size:0.88rem;">Upload a readable actors script to build scene connections.</td></tr>'}
             </tbody>
           </table>
         </div>
