@@ -7659,6 +7659,9 @@
     }
 
     function runScriptParse(richLines) {
+      // Always refresh catalogues from saved data before parsing — catches cases where
+      // scenes/songs were uploaded after the script, or the page was refreshed.
+      ensurePendingImportFromSaved();
       const catalogue = pendingPdfImport?.sceneCatalogue || [];
       const songs = pendingPdfImport?.songs || [];
       const propsCatalogue = pendingPdfImport?.propCatalogue || [];
@@ -7695,6 +7698,17 @@
     }
 
     function renderScriptConnectionReview() {
+      // If saved connections have no scenes but we have rich lines in memory, re-parse now.
+      // This fixes the case where the script was uploaded before the scene list, or
+      // the page was refreshed and stale empty connections were loaded from the database.
+      const richLines = pendingPdfImport?._scriptRichLines;
+      const stale = pendingPdfImport?.scriptConnections &&
+        !(pendingPdfImport.scriptConnections.sceneConnections || []).length &&
+        richLines?.length;
+      if (stale) {
+        pendingPdfImport.scriptConnections = runScriptParse(richLines);
+        saveImportMetadata('script').catch(() => {});
+      }
       const connections = pendingPdfImport?.scriptConnections;
       if (!connections) return renderInitialUploadPanel('script');
       const fileName = pendingPdfImport?.listUploads?.script || 'Actors Script';
