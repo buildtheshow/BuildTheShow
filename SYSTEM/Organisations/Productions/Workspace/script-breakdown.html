@@ -7548,19 +7548,38 @@
 
     // Find scene headings in flat line order, extract the text block between each pair.
     // Returns: { [sceneIndex]: { lines: string[], startPage, endPage, headingFound } }
+    //
+    // Heading selection strategy: process catalogue scenes in catalogue order.
+    // For each scene, pick the first heading occurrence that appears AFTER the previous
+    // accepted heading. This means early false positives (bar numbers, interlude headings,
+    // repeated headings from a previous act) are automatically skipped in favour of the
+    // correct later occurrence that sits in the right document position.
     function buildSceneTextBlocks(flatLines, catalogue) {
-      const headings = [];
+      // Step 1: collect every candidate heading match across the whole document.
+      const allCandidates = []; // { sceneIndex, pos, page }
       flatLines.forEach((line, pos) => {
         const parsed = parseSceneHeadingForMti(line.text);
         if (!parsed) return;
         const scene = approvedScriptSceneForHeading(parsed);
         if (!scene) return;
         const sceneIndex = catalogue.findIndex(s => scriptSceneKey(s) === scriptSceneKey(scene));
-        if (sceneIndex === -1 || headings.some(h => h.sceneIndex === sceneIndex)) return;
-        headings.push({ sceneIndex, pos, page: line.page });
+        if (sceneIndex === -1) return;
+        allCandidates.push({ sceneIndex, pos, page: line.page });
       });
-      headings.sort((a, b) => a.pos - b.pos);
-      console.group(`BTS Script Parser — text block mode: ${headings.length} of ${catalogue.length} scene headings found`);
+
+      // Step 2: walk catalogue scenes in order. For each scene, accept the first candidate
+      // occurrence that comes after the last accepted heading's position. This ensures
+      // scenes are matched in document order and early false positives are skipped.
+      const headings = [];
+      let lastAcceptedPos = -1;
+      catalogue.forEach((_, sceneIndex) => {
+        const match = allCandidates.find(c => c.sceneIndex === sceneIndex && c.pos > lastAcceptedPos);
+        if (!match) return;
+        headings.push(match);
+        lastAcceptedPos = match.pos;
+      });
+
+      console.group(`BTS Script Parser — text blocks: ${headings.length}/${catalogue.length} scenes found`);
       headings.forEach(h => console.log(`  ✓ ${scriptSceneDisplayName(catalogue[h.sceneIndex])} → p${h.page}`));
       catalogue.forEach((s, i) => { if (!headings.some(h => h.sceneIndex === i)) console.warn(`  ✗ MISSING: ${scriptSceneDisplayName(s)}`); });
       console.groupEnd();
