@@ -7500,11 +7500,14 @@
         const yRange = maxY - minY || 1;
 
         // Check footer strip (bottom 12%) and header strip (top 12%)
-        for (const strip of [
+        const strips = [
           lines.filter(l => (l.y ?? 0) <= minY + yRange * 0.12),
           lines.filter(l => (l.y ?? 0) >= maxY - yRange * 0.12),
-        ]) {
+        ];
+        let hadPublisher = false;
+        for (const strip of strips) {
           if (!strip.some(l => publisherRe.test(l.text || ''))) continue;
+          hadPublisher = true;
 
           // Pass 1: number embedded in the publisher line itself (start or end)
           for (const line of strip) {
@@ -7535,6 +7538,12 @@
             if (!isSectionCode) { printedMap.set(pdfPage, n); return; }
           }
         }
+        // DIAG 5: publisher strip found but no page number extracted — log strip contents
+        if (hadPublisher) {
+          const allStrip = strips.flat();
+          console.warn(`BTS DIAG5 — PDF${pdfPage} has publisher strip but no page# found:`,
+            allStrip.map(l => `"${(l.text||'').trim()}"(x${Math.round(l.x??0)},y${Math.round(l.y??0)})`).join(' | '));
+        }
       });
 
       console.log(`BTS page map: ${printedMap.size} pages.`,
@@ -7549,12 +7558,26 @@
       [...pageLines.entries()]
         .sort((a, b) => (printedMap.get(a[0]) ?? a[0]) - (printedMap.get(b[0]) ?? b[0]))
         .forEach(([pdfPage, lines]) => {
-          if (pdfPageLooksLikeScriptCatalogue(lines)) { filtered.push(`PDF${pdfPage}→p${printedMap.get(pdfPage) ?? pdfPage}`); return; }
+          if (pdfPageLooksLikeScriptCatalogue(lines)) {
+            const label = `PDF${pdfPage}→p${printedMap.get(pdfPage) ?? pdfPage}`;
+            filtered.push(label);
+            // DIAG 6: show what text triggered the catalogue filter
+            const preview = lines.slice(0, 6).map(l => `"${(l.text||'').trim()}"`).join(', ');
+            console.warn(`BTS DIAG6 — filtered as catalogue: ${label} — first lines: ${preview}`);
+            return;
+          }
           const printed = printedMap.get(pdfPage) ?? pdfPage;
           const sorted = lines.slice().sort((a, b) => Math.abs(b.y - a.y) > 3 ? b.y - a.y : a.x - b.x);
           sorted.forEach(line => { if (line.text?.trim()) flat.push({ text: line.text, page: printed }); });
         });
       if (filtered.length) console.log('BTS filtered (catalogue-like) pages:', filtered.join(', '));
+      // DIAG 2: dump every line in the p95–p120 window (where scenes 15+19 should appear)
+      const diagRange = flat.filter(l => l.page >= 95 && l.page <= 120);
+      if (diagRange.length) {
+        console.group('BTS DIAG2 — flatLines p95–p120');
+        diagRange.forEach(l => console.log(`  p${l.page}: ${JSON.stringify(l.text)}`));
+        console.groupEnd();
+      }
       return flat;
     }
 
