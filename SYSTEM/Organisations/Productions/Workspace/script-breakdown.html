@@ -4305,25 +4305,36 @@
     .sbs-td-pending { opacity: 0.28; pointer-events: none; }
     .sbs-td-locked { color: rgba(26,21,48,0.5); }
 
-    /* Step confirm bar at the bottom of the table */
-    .sbs-step-confirm-bar {
-      display: flex; align-items: center; justify-content: flex-end; gap: 0.6rem;
-      padding: 0.7rem 1rem; border-top: 1px solid rgba(26,21,48,0.08);
-      background: rgba(87,46,136,0.025); border-radius: 0 0 10px 10px;
+    /* Step progress track */
+    .sbs-step-track {
+      display: flex; align-items: center; gap: 0; margin: 0.6rem 0 0.2rem;
+      padding: 0.55rem 1rem; background: rgba(87,46,136,0.04);
+      border: 1px solid rgba(87,46,136,0.1); border-radius: 10px;
     }
-    .sbs-step-hint { font-size: 0.76rem; font-weight: 700; color: rgba(26,21,48,0.45); flex: 1; }
-    .sbs-step-back-btn {
-      padding: 0.38rem 0.9rem; border-radius: 8px; border: 1px solid rgba(26,21,48,0.15);
-      background: white; color: rgba(26,21,48,0.6); font-size: 0.8rem; font-weight: 800;
-      font-family: inherit; cursor: pointer;
+    .sbs-step-node { display: flex; align-items: center; gap: 0.42rem; flex-shrink: 0; }
+    .sbs-step-circle {
+      width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center;
+      justify-content: center; font-size: 0.72rem; font-weight: 900; flex-shrink: 0;
+      border: 2px solid rgba(26,21,48,0.12); background: white; color: rgba(26,21,48,0.35);
     }
-    .sbs-step-back-btn:hover { background: #f5f5f5; }
-    .sbs-step-confirm-btn {
-      padding: 0.42rem 1.2rem; border-radius: 8px; border: none; cursor: pointer;
-      background: #572e88; color: white; font-size: 0.82rem; font-weight: 900;
-      font-family: inherit; white-space: nowrap;
+    .sbs-step-node-label { font-size: 0.72rem; font-weight: 800; color: rgba(26,21,48,0.35); }
+    .sbs-step-connector { flex: 1; height: 2px; background: rgba(26,21,48,0.1); margin: 0 0.5rem; min-width: 18px; }
+    .sbs-step-node.active .sbs-step-circle { background: #572e88; border-color: #572e88; color: white; }
+    .sbs-step-node.active .sbs-step-node-label { color: #572e88; font-weight: 900; }
+    .sbs-step-node.done .sbs-step-circle { background: #769e7b; border-color: #769e7b; color: white; }
+    .sbs-step-node.done .sbs-step-node-label { color: #769e7b; }
+    .sbs-step-connector.done { background: #769e7b; }
+    /* Scanning overlay */
+    .sbs-scanning-overlay {
+      display: flex; align-items: center; justify-content: center; gap: 0.7rem;
+      padding: 1.6rem; color: #572e88; font-weight: 800; font-size: 0.9rem;
     }
-    .sbs-step-confirm-btn:hover { background: #6b3aaa; }
+    .sbs-scanning-spinner {
+      width: 20px; height: 20px; border: 3px solid rgba(87,46,136,0.15);
+      border-top-color: #572e88; border-radius: 50%;
+      animation: sbs-spin 0.7s linear infinite;
+    }
+    @keyframes sbs-spin { to { transform: rotate(360deg); } }
 
     .sbs-script-review-actions { display: flex; align-items: center; gap: 0.5rem; margin-left: auto; flex-shrink: 0; }
     .sbs-rescan-btn {
@@ -7761,8 +7772,20 @@
       };
     }
 
+    // Show a scanning spinner in the table area, then run the scan after the browser paints.
+    function showScriptScanningState(message, callback) {
+      const wrap = document.getElementById('sbs-script-table-wrap');
+      if (wrap) wrap.innerHTML = `<div class="sbs-scanning-overlay"><div class="sbs-scanning-spinner"></div>${esc(message)}</div>`;
+      const btn = document.getElementById('pdf-import-continue-btn');
+      if (btn) { btn.disabled = true; btn.textContent = 'Scanning...'; }
+      setTimeout(callback, 60);
+    }
+
     // Step 1 → 2: run song scan using confirmed page ranges.
     function confirmScriptPages() {
+      showScriptScanningState('Scanning for songs…', _doConfirmScriptPages);
+    }
+    function _doConfirmScriptPages() {
       const catalogue = pendingPdfImport?.sceneCatalogue || [];
       const songs = pendingPdfImport?.songs || [];
       const pageLines = pendingPdfImport._pageLines;
@@ -7803,10 +7826,14 @@
       });
       pendingPdfImport._reviewStep = 1;
       renderStepByStepImport();
+      updateStepByStepFooter();
     }
 
     // Step 2 → 3: run character + props scan using text blocks.
     function confirmScriptSongs() {
+      showScriptScanningState('Scanning for characters…', _doConfirmScriptSongs);
+    }
+    function _doConfirmScriptSongs() {
       const connections = pendingPdfImport?.scriptConnections;
       const sceneBlocks = pendingPdfImport._sceneBlocks || {};
       const aliasEntries = scriptAliasEntriesFromCharacters();
@@ -7855,6 +7882,7 @@
       };
       pendingPdfImport._reviewStep = 2;
       renderStepByStepImport();
+      updateStepByStepFooter();
       saveImportMetadata('script').catch(() => {});
     }
 
@@ -7862,6 +7890,7 @@
       if (!pendingPdfImport) return;
       pendingPdfImport._reviewStep = step;
       renderStepByStepImport();
+      updateStepByStepFooter();
     }
 
     function rescanScriptConnections() {
@@ -7935,6 +7964,24 @@
         return `<th class="sbs-th-pending"><div class="sbs-th-step"><span class="sbs-th-step-label">Step ${stepNum}</span><span class="sbs-th-step-name">${label}</span></div></th>`;
       };
 
+      const nodeState = (n) => step > n ? 'done' : step === n ? 'active' : '';
+      const stepTrack = `<div class="sbs-step-track">
+        <div class="sbs-step-node ${nodeState(0)}">
+          <div class="sbs-step-circle">${step > 0 ? '✓' : '1'}</div>
+          <div class="sbs-step-node-label">Pages</div>
+        </div>
+        <div class="sbs-step-connector ${step > 0 ? 'done' : ''}"></div>
+        <div class="sbs-step-node ${nodeState(1)}">
+          <div class="sbs-step-circle">${step > 1 ? '✓' : '2'}</div>
+          <div class="sbs-step-node-label">Songs</div>
+        </div>
+        <div class="sbs-step-connector ${step > 1 ? 'done' : ''}"></div>
+        <div class="sbs-step-node ${nodeState(2)}">
+          <div class="sbs-step-circle">${step > 2 ? '✓' : '3'}</div>
+          <div class="sbs-step-node-label">Characters</div>
+        </div>
+      </div>`;
+
       // Sort by start page; scenes with no heading float to the end.
       const sortedScenes = scenes.slice().sort((a, b) => {
         if (a.startPage == null && b.startPage == null) return 0;
@@ -7967,22 +8014,6 @@
         </tr>`;
       }).join('');
 
-      const confirmBar = step === 0
-        ? `<div class="sbs-step-confirm-bar">
-            <span class="sbs-step-hint">Check the page ranges above are correct, then confirm to scan for songs.</span>
-            <button type="button" class="sbs-step-confirm-btn" onclick="confirmScriptPages()">Confirm Pages →</button>
-           </div>`
-        : step === 1
-        ? `<div class="sbs-step-confirm-bar">
-            <button type="button" class="sbs-step-back-btn" onclick="goBackScriptStep(0)">← Edit Pages</button>
-            <span class="sbs-step-hint">Check songs found per scene, then confirm to scan for characters.</span>
-            <button type="button" class="sbs-step-confirm-btn" onclick="confirmScriptSongs()">Confirm Songs →</button>
-           </div>`
-        : `<div class="sbs-step-confirm-bar">
-            <button type="button" class="sbs-step-back-btn" onclick="goBackScriptStep(1)">← Edit Songs</button>
-            <span class="sbs-step-hint">Review complete. Save connections when ready.</span>
-           </div>`;
-
       const rescanHint = missingCount && step === 0
         ? `<div class="sbs-rescan-hint">${missingCount} scene heading${missingCount === 1 ? '' : 's'} not found — enter page ranges manually.</div>`
         : '';
@@ -7999,6 +8030,7 @@
             <button type="button" class="sbs-prop-outline-btn" onclick="startScriptUploadAgain()">Start Again</button>
           </div>
         </div>
+        ${stepTrack}
         <div class="sbs-script-metrics">
           ${metric(stats.scenesLinked, 'Scenes Located')}
           ${metric(step >= 1 ? stats.songsLinked : '–', 'Songs Linked')}
@@ -8007,7 +8039,7 @@
           ${metric(stats.needsReview, 'Need Review', stats.needsReview ? 'review' : '')}
         </div>
         ${rescanHint}
-        <div class="sbs-script-table-wrap">
+        <div class="sbs-script-table-wrap" id="sbs-script-table-wrap">
           <table class="sbs-script-table">
             <colgroup>
               <col style="width:42px"><col style="width:14%"><col style="width:13%"><col style="width:78px"><col style="width:18%"><col><col style="width:14%">
@@ -8025,7 +8057,6 @@
               ${tableRows || `<tr><td colspan="7" style="padding:2rem;text-align:center;color:rgba(26,21,48,0.4);font-size:0.88rem;">Upload a readable actors script to build scene connections.</td></tr>`}
             </tbody>
           </table>
-          ${confirmBar}
         </div>
       </div>`;
     }
@@ -8577,19 +8608,46 @@
         const standaloneReviewActive = propsReviewActive || charactersReviewActive || songsReviewActive || scenesReviewActive || scriptReviewActive;
         if (cancelBtn) cancelBtn.textContent = standaloneReviewActive ? 'Cancel' : 'Cancel Import';
         if (continueBtn) {
-          continueBtn.textContent = scriptReviewActive ? 'Save Connections →' : standaloneReviewActive ? 'Save & Continue →' : 'Done';
-          continueBtn.onclick = standaloneReviewActive
-            ? async () => {
+          if (scriptReviewActive) {
+            const reviewStep = pendingPdfImport._reviewStep ?? 2;
+            if (reviewStep === 0) {
+              continueBtn.textContent = 'Confirm Pages →';
+              continueBtn.onclick = () => confirmScriptPages();
+              continueBtn.disabled = false;
+            } else if (reviewStep === 1) {
+              continueBtn.textContent = 'Confirm Songs →';
+              continueBtn.onclick = () => confirmScriptSongs();
+              continueBtn.disabled = false;
+            } else {
+              continueBtn.textContent = 'Save Connections →';
+              continueBtn.onclick = async () => {
                 continueBtn.disabled = true;
-                await saveImportMetadata(pendingPdfImport.standaloneStep);
+                await saveImportMetadata('script');
                 closePdfImportModal();
-              }
-            : () => closePdfImportModal();
-          continueBtn.disabled = standaloneReviewActive && !getStepCatalogueCount(pendingPdfImport.standaloneStep);
+              };
+              continueBtn.disabled = false;
+            }
+          } else {
+            continueBtn.textContent = standaloneReviewActive ? 'Save & Continue →' : 'Done';
+            continueBtn.onclick = standaloneReviewActive
+              ? async () => {
+                  continueBtn.disabled = true;
+                  await saveImportMetadata(pendingPdfImport.standaloneStep);
+                  closePdfImportModal();
+                }
+              : () => closePdfImportModal();
+            continueBtn.disabled = standaloneReviewActive && !getStepCatalogueCount(pendingPdfImport.standaloneStep);
+          }
         }
         if (tipEl) {
+          const reviewStep = pendingPdfImport._reviewStep ?? 2;
+          const tipsByStep = [
+            'Check the page ranges — correct any that look off, then confirm.',
+            'Check what songs were found in each scene, then confirm.',
+            'Review complete. All connections ready to save.',
+          ];
           tipEl.innerHTML = scriptReviewActive
-            ? '<span class="sbi-footer-tip-icon">✦</span><span>The script review saves relationships between approved items, not new catalog records.</span>'
+            ? `<span class="sbi-footer-tip-icon">✦</span><span>${tipsByStep[reviewStep] || tipsByStep[2]}</span>`
             : standaloneReviewActive ? '' : '<span class="sbi-footer-tip-icon">✦</span><span>This upload stays separate from the other files.</span>';
         }
         return;
