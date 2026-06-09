@@ -249,6 +249,30 @@
     .bg-rr-amount { border:1px solid rgba(87,46,136,0.15); border-radius:6px; padding:0.25rem 0.46rem; font-family:inherit; font-size:0.79rem; width:100%; color:#1a1530; text-align:right; }
     .bg-rr-as     { border:1px solid rgba(87,46,136,0.15); border-radius:6px; padding:0.25rem 0.36rem; font-family:inherit; font-size:0.72rem; width:100%; color:#1a1530; background:#fff; cursor:pointer; }
 
+    /* ── Driver preview (screen 2) ── */
+    .bg-prev-hdr { display:flex; align-items:center; gap:0.9rem; margin-bottom:1.25rem; }
+    .bg-prev-hdr .bg-drv-icon { width:40px; height:40px; border-radius:10px; }
+    .bg-prev-sect { font-size:0.62rem; font-weight:900; letter-spacing:0.09em; text-transform:uppercase; color:#572e88; margin-bottom:0.55rem; }
+    .bg-prev-frow { display:flex; align-items:center; justify-content:space-between; gap:0.5rem; padding:0.48rem 0.75rem; border:1px solid rgba(87,46,136,0.1); border-radius:8px; margin-bottom:0.32rem; background:#fafaf9; }
+    .bg-prev-frow-info { display:flex; align-items:center; gap:0.55rem; min-width:0; flex:1; }
+    .bg-prev-frow-lbl { font-size:0.85rem; font-weight:700; color:#1a1530; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .bg-prev-frow-kind { display:inline-flex; align-items:center; padding:0.12rem 0.42rem; border-radius:999px; font-size:0.62rem; font-weight:800; white-space:nowrap; flex-shrink:0; }
+    .bg-prev-frow-kind--number { background:rgba(71,106,170,0.12); color:#2a4a80; }
+    .bg-prev-frow-kind--money  { background:rgba(118,158,123,0.15); color:#2e6038; }
+    .bg-prev-frow-kind--text   { background:rgba(87,46,136,0.1);   color:#4a2575; }
+    .bg-prev-frow-kind--calc   { background:rgba(239,171,69,0.15); color:#885500; }
+    .bg-prev-frow-kind--select { background:rgba(120,187,212,0.15);color:#1a5f7a; }
+    .bg-prev-frow-remove { background:none; border:none; cursor:pointer; color:#c4bcd8; font-size:1.05rem; line-height:1; padding:0.1rem 0.2rem; border-radius:4px; flex-shrink:0; }
+    .bg-prev-frow-remove:hover { color:#d1523d; background:rgba(209,82,61,0.08); }
+    .bg-prev-frow-auto { font-size:0.61rem; font-weight:800; color:#b0a8c8; flex-shrink:0; }
+    .bg-prev-tiers-note { font-size:0.83rem; color:#7a6e9a; background:rgba(87,46,136,0.04); border-radius:9px; padding:0.75rem; margin-bottom:0.8rem; line-height:1.5; }
+    .bg-prev-add-field { width:100%; margin-top:0.5rem; background:none; border:1.5px dashed rgba(87,46,136,0.2); border-radius:8px; padding:0.42rem 0.5rem; font-family:inherit; font-size:0.78rem; font-weight:700; color:#7a6e9a; cursor:pointer; }
+    .bg-prev-add-field:hover { background:rgba(87,46,136,0.04); border-color:#572e88; color:#572e88; }
+    .bg-prev-cf { display:flex; align-items:center; gap:0.4rem; margin-top:0.5rem; flex-wrap:wrap; padding:0.65rem 0.75rem; border:1.5px dashed rgba(87,46,136,0.2); border-radius:8px; background:#fafaf9; }
+    .bg-prev-cf-inp { flex:1; min-width:130px; padding:0.4rem 0.6rem; border:1.5px solid rgba(87,46,136,0.2); border-radius:7px; font-family:inherit; font-size:0.82rem; color:#1a1530; }
+    .bg-prev-cf-inp:focus { outline:none; border-color:#572e88; }
+    .bg-prev-cf-sel { padding:0.4rem 0.5rem; border:1.5px solid rgba(87,46,136,0.2); border-radius:7px; font-family:inherit; font-size:0.8rem; color:#1a1530; background:#fff; cursor:pointer; }
+
     /* Responsive */
     @media (max-width:1300px) { .bg-drv-card,.bg-drv-add-card { flex:0 0 200px; } }
     @media (max-width:1100px) { .bg-layout { grid-template-columns:1fr; } .bg-sum-card { position:static; } }
@@ -312,12 +336,17 @@
 <!-- Driver type picker -->
 <div class="bg-modal-over" id="bg-type-modal">
   <div class="bg-modal bg-modal--type">
-    <div class="bg-modal-title">Add a Revenue Driver</div>
-    <div class="bg-modal-sub">Choose the type of revenue this driver tracks.</div>
-    <div class="bg-type-grid" id="bg-type-grid"></div>
-    <div class="bg-modal-footer">
-      <button class="bg-btn bg-btn--ghost" onclick="BP.closeTypeModal()">Cancel</button>
+    <!-- Screen 1: pick a type -->
+    <div id="bg-type-screen-1">
+      <div class="bg-modal-title">Add a Revenue Driver</div>
+      <div class="bg-modal-sub">Choose the type of revenue this driver tracks.</div>
+      <div class="bg-type-grid" id="bg-type-grid"></div>
+      <div class="bg-modal-footer">
+        <button class="bg-btn bg-btn--ghost" onclick="BP.closeTypeModal()">Cancel</button>
+      </div>
     </div>
+    <!-- Screen 2: configure fields -->
+    <div id="bg-type-screen-2" style="display:none"></div>
   </div>
 </div>
 
@@ -584,6 +613,7 @@ const BP = {
 
   prodId:'', cats:[], items:[], drivers:[], _reviewItems:null,
   expandedCats:new Set(), search:'', editCatId:null, selectedColor:'#572e88', pickerSelected:new Set(),
+  _draftType:null, _draftFields:[],
 
   // ── Init ─────────────────────────────────────────────────────────────
   init() {
@@ -704,7 +734,13 @@ const BP = {
     if (cfg.special === 'tiers') {
       bodyHtml = this._sponBodyHtml(drv);
     } else {
-      bodyHtml = (cfg.fields||[]).map(f => {
+      const cfgFields = cfg.fields||[];
+      const rawFields = drv.fields && drv.fields.length>=0 ? drv.fields : cfgFields;
+      const fields = rawFields.map(f=>{
+        if(f.kind==='calc'){const cf=cfgFields.find(c=>c.key===f.key); return cf?Object.assign({},f,{calc:cf.calc}):f;}
+        return f;
+      });
+      bodyHtml = fields.map(f => {
         const val = drv.data[f.key] !== undefined ? drv.data[f.key] : (f.default||0);
         let ctrl = '';
         if (f.kind === 'number') {
@@ -762,7 +798,7 @@ const BP = {
   _buildTypeGrid() {
     const grid = document.getElementById('bg-type-grid'); if (!grid) return;
     grid.innerHTML = this.DRIVER_TYPES.map(cfg=>
-      '<button class="bg-type-card" onclick="BP.addDriver(\''+cfg.type+'\')">' +
+      '<button class="bg-type-card" onclick="BP.previewDriver(\''+cfg.type+'\')">' +
         '<span class="bg-type-icon">'+this._iconHtml(cfg.iconSvg,28)+'</span>' +
         '<span class="bg-type-lbl">'+cfg.label+'</span>' +
         '<span class="bg-type-desc">'+cfg.desc+'</span>' +
@@ -770,7 +806,108 @@ const BP = {
     ).join('');
   },
   openTypeModal()  { document.getElementById('bg-type-modal').classList.add('open'); },
-  closeTypeModal() { document.getElementById('bg-type-modal').classList.remove('open'); },
+  closeTypeModal() {
+    document.getElementById('bg-type-modal').classList.remove('open');
+    const s1=document.getElementById('bg-type-screen-1'); if(s1) s1.style.display='';
+    const s2=document.getElementById('bg-type-screen-2'); if(s2) s2.style.display='none';
+    this._draftType=null; this._draftFields=[];
+  },
+
+  // ── Driver preview (screen 2) ─────────────────────────────────────────
+  previewDriver(type) {
+    this._draftType = type;
+    const cfg = this._drvTypeCfg(type);
+    this._draftFields = cfg.special === 'tiers' ? [] : (cfg.fields||[]).map(f=>Object.assign({},f));
+    const s2 = document.getElementById('bg-type-screen-2'); if(!s2) return;
+    s2.innerHTML = this._previewScreenHtml(cfg);
+    document.getElementById('bg-type-screen-1').style.display = 'none';
+    s2.style.display = '';
+  },
+  _previewBack() {
+    const s1=document.getElementById('bg-type-screen-1'); if(s1) s1.style.display='';
+    const s2=document.getElementById('bg-type-screen-2'); if(s2) s2.style.display='none';
+  },
+  _previewScreenHtml(cfg) {
+    const isTiers = cfg.special === 'tiers';
+    return (
+      '<div class="bg-prev-hdr">' +
+        '<span class="bg-drv-icon" style="background:'+cfg.iconBg+'">'+this._iconHtml(cfg.iconSvg,22)+'</span>' +
+        '<div><div style="font-size:1rem;font-weight:900;color:#1a1530;margin:0">'+cfg.label+'</div>' +
+        '<div style="font-size:0.8rem;color:#9a90b0;margin-top:0.15rem">'+cfg.desc+'</div></div>' +
+      '</div>' +
+      '<div class="bg-prev-sect">Included Fields</div>' +
+      (isTiers
+        ? '<div class="bg-prev-tiers-note">This driver uses a tier-based structure. You\'ll add sponsorship levels directly on the card after it\'s created.</div>'
+        : '<div id="bg-prev-field-list">'+this._renderFieldList()+'</div>' +
+          '<div id="bg-prev-custom-form" style="display:none">'+this._customFieldFormHtml()+'</div>' +
+          '<button class="bg-prev-add-field" id="bg-prev-add-btn" onclick="BP._showCustomFieldForm()">+ Add Custom Field</button>'
+      ) +
+      '<div class="bg-modal-footer" style="padding-top:1.25rem">' +
+        '<button class="bg-btn bg-btn--ghost" onclick="BP._previewBack()">Back</button>' +
+        '<button class="bg-btn bg-btn--primary" onclick="BP.confirmAddDriver()">Add Revenue Driver</button>' +
+      '</div>'
+    );
+  },
+  _renderFieldList() {
+    if (!this._draftFields.length) return '<div style="font-size:0.8rem;color:#b0a8c8;font-style:italic;padding:0.3rem 0.1rem">No fields — the driver will just show a projected total.</div>';
+    return this._draftFields.map(f=>
+      '<div class="bg-prev-frow" id="bg-pfrow-'+f.key+'">' +
+        '<div class="bg-prev-frow-info">' +
+          '<span class="bg-prev-frow-lbl">'+this.esc(f.label)+'</span>' +
+          '<span class="bg-prev-frow-kind bg-prev-frow-kind--'+f.kind+'">'+this._kindLabel(f.kind)+'</span>' +
+        '</div>' +
+        (f.kind==='calc'
+          ? '<span class="bg-prev-frow-auto">auto-calculated</span>'
+          : '<button class="bg-prev-frow-remove" onclick="BP._removePreviewField(\''+f.key+'\')" title="Remove">&times;</button>'
+        ) +
+      '</div>'
+    ).join('');
+  },
+  _kindLabel(k){ return {number:'Number',money:'Dollar Amount',text:'Text',calc:'Calculated',select:'Dropdown'}[k]||k; },
+  _removePreviewField(key) {
+    this._draftFields = this._draftFields.filter(f=>f.key!==key);
+    const list=document.getElementById('bg-prev-field-list'); if(list) list.innerHTML=this._renderFieldList();
+  },
+  _showCustomFieldForm() {
+    const form=document.getElementById('bg-prev-custom-form'); if(form) form.style.display='';
+    const btn=document.getElementById('bg-prev-add-btn'); if(btn) btn.style.display='none';
+    const inp=document.getElementById('bg-cf-name'); if(inp) inp.focus();
+  },
+  _customFieldFormHtml() {
+    return '<div class="bg-prev-cf">' +
+      '<input class="bg-prev-cf-inp" id="bg-cf-name" type="text" placeholder="Field name (e.g. Matching Donations)" onkeydown="if(event.key===\'Enter\')BP._submitCustomField()" />' +
+      '<select class="bg-prev-cf-sel" id="bg-cf-kind"><option value="number">Number</option><option value="money">Dollar Amount</option><option value="text">Text</option></select>' +
+      '<button class="bg-btn bg-btn--primary bg-btn--sm" onclick="BP._submitCustomField()">Add</button>' +
+      '<button class="bg-btn bg-btn--ghost bg-btn--sm" onclick="BP._cancelCustomField()">Cancel</button>' +
+    '</div>';
+  },
+  _submitCustomField() {
+    const nameEl=document.getElementById('bg-cf-name'); const kindEl=document.getElementById('bg-cf-kind');
+    const name=(nameEl?nameEl.value:'').trim(); if(!name){if(nameEl)nameEl.focus();return;}
+    const kind=kindEl?kindEl.value:'number';
+    const key='custom_'+name.toLowerCase().replace(/[^a-z0-9]+/g,'_')+'_'+Date.now();
+    this._draftFields.push({key,label:name,kind});
+    const list=document.getElementById('bg-prev-field-list'); if(list) list.innerHTML=this._renderFieldList();
+    const form=document.getElementById('bg-prev-custom-form'); if(form) form.style.display='none';
+    const btn=document.getElementById('bg-prev-add-btn'); if(btn) btn.style.display='';
+    if(nameEl) nameEl.value='';
+  },
+  _cancelCustomField() {
+    const form=document.getElementById('bg-prev-custom-form'); if(form) form.style.display='none';
+    const btn=document.getElementById('bg-prev-add-btn'); if(btn) btn.style.display='';
+  },
+  confirmAddDriver() {
+    const cfg = this._drvTypeCfg(this._draftType);
+    const drv = {id:'drv_'+Date.now(), type:this._draftType, data:Object.assign({},cfg.defaults||{}), tiers:[]};
+    if (cfg.special !== 'tiers' && this._draftFields.length) {
+      drv.fields = this._draftFields.map(f=>{ const o=Object.assign({},f); delete o.calc; return o; });
+    }
+    this.drivers.push(drv);
+    this._saveDrivers();
+    this.closeTypeModal();
+    this.renderDrivers();
+    this.renderSummary();
+  },
 
   // ── Production summary ────────────────────────────────────────────────
   renderSummary() {
