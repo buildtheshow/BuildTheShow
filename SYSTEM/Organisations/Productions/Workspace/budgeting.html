@@ -1060,7 +1060,10 @@
           const ph   = page.view[3];
           tc.items.forEach(item => {
             if (!item.str || !item.str.trim()) return;
-            const y = Math.round((ph - item.transform[5]) * 10 + p * 100000);
+            // Group within ~4 PDF points — Excel/Sheets exports often place same-row
+            // columns at slightly different Y positions (1–3 pts), so tight grouping
+            // splits "Venue rental" and "$7,000" into separate "lines" and both get lost.
+            const y = Math.round((ph - item.transform[5]) / 4) * 4 + p * 100000;
             const x = Math.round(item.transform[4]);
             if (!lineMap[y]) lineMap[y] = [];
             lineMap[y].push({ text: item.str, x });
@@ -1084,6 +1087,8 @@
       for (const line of lines) {
         const trimmed = line.trim();
         if (!trimmed || trimmed.length < 3) continue;
+        // Skip annotation/note lines that start with * or **
+        if (/^\*/.test(trimmed)) continue;
         amountRe.lastIndex = 0;
         const amounts = [];
         let m;
@@ -1091,16 +1096,22 @@
           const raw = m[1].replace(/,/g, '');
           if (raw.length > 8) continue;
           const val = parseFloat(raw);
+          // Skip numbers followed by % (percentages like "60%")
+          const charAfter = trimmed[m.index + m[0].length];
+          if (charAfter === '%') continue;
           if (!isNaN(val) && val >= 5 && val < 5000000) amounts.push({ val, start: m.index });
         }
         if (!amounts.length) continue;
         const amt = amounts[0];
-        const rawLabel = trimmed.substring(0, amt.start).replace(/[\$:|]/g, ' ').replace(/\s+/g, ' ').trim();
+        const rawLabel = trimmed.substring(0, amt.start).replace(/[\$:|*]/g, ' ').replace(/\s+/g, ' ').trim();
         if (!rawLabel || rawLabel.length < 2) continue;
         if (/^[\d\s.,]+$/.test(rawLabel)) continue;
         if (skipWords.test(rawLabel)) continue;
-        const isIncome = /ticket|grant|sponsor|fundrais|concession|revenue|income|donation/i.test(rawLabel);
-        results.push({ label: rawLabel, cents: Math.round(amt.val * 100), checked: true, as: isIncome ? 'cat-income' : 'cat-expense' });
+        // Truncate label at first note-style content (asterisks, parenthetical, "based on")
+        const cleanLabel = rawLabel.replace(/\s*[\(\[].*/, '').replace(/\s*based on.*/i, '').trim();
+        if (!cleanLabel || cleanLabel.length < 2) continue;
+        const isIncome = /ticket|grant|sponsor|fundrais|concession|revenue|income|donation|fees?/i.test(cleanLabel);
+        results.push({ label: cleanLabel, cents: Math.round(amt.val * 100), checked: true, as: isIncome ? 'cat-income' : 'cat-expense' });
       }
       return results;
     },
