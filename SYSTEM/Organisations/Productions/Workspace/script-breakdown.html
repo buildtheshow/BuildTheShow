@@ -7605,16 +7605,25 @@
           const nextClean = flatLines[pos + 1].text.trim();
           if (splitHeadingRe.test(trimmed)) {
             // Pattern 1: "SCENE 15:" + "CHERRY TREE LANE, PARLOR"
-            // Join if next line looks like a location (uppercase letters, no speaker colon, short).
-            if (nextClean.length > 0 && nextClean.length < 80 && !/:/.test(nextClean) && /[A-Z]{2,}/.test(nextClean)) {
-              const sep = trimmed.endsWith(':') ? ' ' : ': ';
-              parsed = parseSceneHeadingForMti(trimmed + sep + nextClean);
+            //         or "SCENE 19"  + ": CHERRY TREE LANE, PARLOR" (leading separator)
+            const hasSepPrefix = /^[:\-–—]\s*/.test(nextClean);
+            const loc1 = hasSepPrefix ? nextClean.replace(/^[:\-–—]\s*/, '') : nextClean;
+            if (loc1.length > 0 && loc1.length < 80 && /[A-Z]{2,}/.test(loc1) && (hasSepPrefix || !/:/.test(loc1))) {
+              const num1 = trimmed.endsWith(':') ? trimmed.slice(0, -1).trim() : trimmed;
+              parsed = parseSceneHeadingForMti(num1 + ': ' + loc1);
             }
           } else if (/^SCENE\s*$/i.test(trimmed)) {
-            // Pattern 2: "SCENE" alone + "15: CHERRY TREE LANE, PARLOR"
-            // Join if next line starts with a number+separator+uppercase (colon or dash).
+            // Pattern 2: "SCENE" alone + "19: CHERRY TREE LANE, PARLOR"
             if (/^\d+[A-Z]?\s*[:\-–—]\s*[A-Z]/.test(nextClean)) {
               parsed = parseSceneHeadingForMti('SCENE ' + nextClean);
+            } else if (/^\d+[A-Z]?:?\s*$/.test(nextClean) && pos + 2 < flatLines.length) {
+              // Pattern 3: "SCENE" + "19" (or "19:") + "CHERRY TREE LANE, PARLOR"
+              const nn = flatLines[pos + 2].text.trim();
+              const loc3 = /^[:\-–—]\s*/.test(nn) ? nn.replace(/^[:\-–—]\s*/, '') : nn;
+              if (loc3.length > 4 && loc3.length < 80 && /[A-Z]{2,}/.test(loc3) && !/^\d+$/.test(loc3)) {
+                const numPart = nextClean.replace(/:?\s*$/, '');
+                parsed = parseSceneHeadingForMti('SCENE ' + numPart + ': ' + loc3);
+              }
             }
           }
         }
