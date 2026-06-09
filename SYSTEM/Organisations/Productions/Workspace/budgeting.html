@@ -456,12 +456,10 @@
       { name: 'Contingency',              color: '#d1523d', items: ['Emergency Purchases', 'Last-Minute Rentals', 'Unexpected Repairs', 'Unplanned Production Costs'] },
     ],
 
-    BUCKET: 'budget-documents',
-
     prodId: '',
     cats: [],
     items: [],
-    docs: [],
+    localDoc: null,
     selectedCatId: null,
     expandedCats: new Set(),
     search: '',
@@ -488,17 +486,14 @@
     // Data ─────────────────────────────────────────────────────────────────
     async load() {
       try {
-        const [catsRes, itemsRes, docsRes] = await Promise.all([
+        const [catsRes, itemsRes] = await Promise.all([
           fetch(this.URL + '/rest/v1/budget_categories?production_id=eq.' + this.prodId + '&order=sort_order.asc,created_at.asc', { headers: this._h() }),
           fetch(this.URL + '/rest/v1/budget_items?production_id=eq.' + this.prodId + '&order=sort_order.asc,created_at.asc', { headers: this._h() }),
-          fetch(this.URL + '/rest/v1/budget_documents?production_id=eq.' + this.prodId + '&order=created_at.desc&limit=1', { headers: this._h() }),
         ]);
         this.cats  = catsRes.ok  ? await catsRes.json()  : [];
         this.items = itemsRes.ok ? await itemsRes.json() : [];
-        this.docs  = docsRes.ok  ? await docsRes.json()  : [];
-      } catch(_) { this.cats = []; this.items = []; this.docs = []; }
+      } catch(_) { this.cats = []; this.items = []; }
       this.render();
-      this.renderRefBar();
     },
 
     _h()  { return { apikey: this.KEY, Authorization: 'Bearer ' + this.KEY }; },
@@ -991,7 +986,7 @@
       } catch(e) { alert('Could not delete item: ' + e.message); }
     },
 
-    // Upload & viewer ──────────────────────────────────────────────────────
+    // Reference document (local browser only — no upload needed) ──────────
     openUploadModal() {
       document.getElementById('bg-upload-status').textContent = '';
       document.getElementById('bg-file-input').value = '';
@@ -1010,57 +1005,39 @@
     },
     onFileChosen(e) { const file = e.target.files[0]; if (file) this._handleFile(file); },
 
-    async _handleFile(file) {
+    _handleFile(file) {
       const allowed = ['application/pdf','image/jpeg','image/jpg','image/png','image/webp'];
-      if (!allowed.includes(file.type)) { this._uploadStatus('Only PDF, JPG, or PNG files are supported.', 'red'); return; }
-      if (file.size > 20 * 1024 * 1024) { this._uploadStatus('File must be under 20 MB.', 'red'); return; }
-      this._uploadStatus('Uploading...', '#9a90b0');
-      try {
-        const path = this.prodId + '/' + Date.now() + '_' + file.name.replace(/[^a-zA-Z0-9.\-_]/g, '_');
-        const r = await fetch(this.URL + '/storage/v1/object/' + this.BUCKET + '/' + path, {
-          method: 'POST',
-          headers: { apikey: this.KEY, Authorization: 'Bearer ' + this.KEY, 'Content-Type': file.type, 'x-upsert': 'true' },
-          body: file,
-        });
-        if (!r.ok) throw new Error(await r.text());
-        const fileUrl = this.URL + '/storage/v1/object/public/' + this.BUCKET + '/' + path;
-        await this._post('budget_documents', { name: file.name, file_url: fileUrl, file_type: file.type });
-        this._uploadStatus('Uploaded!', '#769e7b');
-        await this.load();
-        setTimeout(() => this.closeUploadModal(), 900);
-      } catch(e) { this._uploadStatus('Upload failed: ' + e.message, '#d1523d'); }
+      if (!allowed.includes(file.type)) {
+        const el = document.getElementById('bg-upload-status');
+        if (el) { el.textContent = 'Only PDF, JPG, or PNG files are supported.'; el.style.color = '#d1523d'; }
+        return;
+      }
+      if (this.localDoc) URL.revokeObjectURL(this.localDoc.url);
+      this.localDoc = { name: file.name, url: URL.createObjectURL(file), type: file.type };
+      this._renderRefBar();
+      this.closeUploadModal();
     },
 
-    _uploadStatus(msg, color) {
-      const el = document.getElementById('bg-upload-status');
-      if (el) { el.textContent = msg; el.style.color = color || '#9a90b0'; }
-    },
-
-    renderRefBar() {
-      const bar = document.getElementById('bg-ref-bar');
+    _renderRefBar() {
+      const bar  = document.getElementById('bg-ref-bar');
       if (!bar) return;
-      const doc = this.docs[0];
-      if (!doc) { bar.classList.remove('visible'); return; }
+      if (!this.localDoc) { bar.classList.remove('visible'); return; }
       bar.classList.add('visible');
-      const icon = doc.file_type && doc.file_type.startsWith('image') ? '&#128247;' : '&#128196;';
       const nameEl = document.getElementById('bg-ref-name');
       const iconEl = document.getElementById('bg-ref-icon');
-      if (nameEl) nameEl.textContent = doc.name || 'Reference budget';
-      if (iconEl) iconEl.innerHTML = icon;
+      if (nameEl) nameEl.textContent = this.localDoc.name;
+      if (iconEl) iconEl.innerHTML = this.localDoc.type.startsWith('image') ? '&#128247;' : '&#128196;';
     },
 
     openViewer() {
-      const doc = this.docs[0];
-      if (!doc) return;
+      if (!this.localDoc) return;
       const titleEl = document.getElementById('bg-viewer-title');
       const bodyEl  = document.getElementById('bg-viewer-body');
-      if (titleEl) titleEl.textContent = doc.name || 'Reference Budget';
+      if (titleEl) titleEl.textContent = this.localDoc.name;
       if (bodyEl) {
-        if (doc.file_type && doc.file_type.startsWith('image')) {
-          bodyEl.innerHTML = '<img src="' + this.esc(doc.file_url) + '" alt="Reference budget" style="width:100%;height:auto;display:block" />';
-        } else {
-          bodyEl.innerHTML = '<iframe src="' + this.esc(doc.file_url) + '" style="width:100%;height:80vh;border:none;display:block"></iframe>';
-        }
+        bodyEl.innerHTML = this.localDoc.type.startsWith('image')
+          ? '<img src="' + this.localDoc.url + '" alt="Reference budget" style="width:100%;height:auto;display:block" />'
+          : '<iframe src="' + this.localDoc.url + '" style="width:100%;height:80vh;border:none;display:block"></iframe>';
       }
       document.getElementById('bg-viewer-modal').classList.add('open');
     },
@@ -1071,15 +1048,11 @@
       if (bodyEl) bodyEl.innerHTML = '';
     },
 
-    async removeDoc() {
-      const doc = this.docs[0];
-      if (!doc) return;
-      if (!confirm('Remove the reference document "' + (doc.name || 'this file') + '"?')) return;
-      try {
-        await this._del('budget_documents', doc.id);
-        this.docs = [];
-        this.renderRefBar();
-      } catch(e) { alert('Could not remove document: ' + e.message); }
+    removeDoc() {
+      if (!this.localDoc) return;
+      URL.revokeObjectURL(this.localDoc.url);
+      this.localDoc = null;
+      this._renderRefBar();
     },
 
     // Helpers ──────────────────────────────────────────────────────────────
