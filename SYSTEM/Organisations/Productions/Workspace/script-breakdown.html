@@ -7527,22 +7527,24 @@
         }
       });
 
-      console.log(`BTS page map: ${printedMap.size} script pages. Sample:`,
-        [...printedMap.entries()].slice(0, 8).map(([pdf, p]) => `PDF${pdf}→p${p}`).join(', '));
+      console.log(`BTS page map: ${printedMap.size} pages.`,
+        [...printedMap.entries()].sort((a, b) => a[0] - b[0]).map(([pdf, p]) => `PDF${pdf}→p${p}`).join(', '));
       return printedMap;
     }
 
     // Flatten all PDF rich lines into reading order, tagged with printed page number.
     function buildFlatLines(pageLines, printedMap) {
       const flat = [];
+      const filtered = [];
       [...pageLines.entries()]
         .sort((a, b) => (printedMap.get(a[0]) ?? a[0]) - (printedMap.get(b[0]) ?? b[0]))
         .forEach(([pdfPage, lines]) => {
-          if (pdfPageLooksLikeScriptCatalogue(lines)) return;
+          if (pdfPageLooksLikeScriptCatalogue(lines)) { filtered.push(`PDF${pdfPage}→p${printedMap.get(pdfPage) ?? pdfPage}`); return; }
           const printed = printedMap.get(pdfPage) ?? pdfPage;
           const sorted = lines.slice().sort((a, b) => Math.abs(b.y - a.y) > 3 ? b.y - a.y : a.x - b.x);
           sorted.forEach(line => { if (line.text?.trim()) flat.push({ text: line.text, page: printed }); });
         });
+      if (filtered.length) console.log('BTS filtered (catalogue-like) pages:', filtered.join(', '));
       return flat;
     }
 
@@ -7616,7 +7618,12 @@
 
       console.group(`BTS Script Parser — text blocks: ${headings.length}/${catalogue.length} scenes found`);
       headings.forEach(h => console.log(`  ✓ ${scriptSceneDisplayName(catalogue[h.sceneIndex])} → p${h.page}`));
-      catalogue.forEach((s, i) => { if (!headings.some(h => h.sceneIndex === i)) console.warn(`  ✗ MISSING: ${scriptSceneDisplayName(s)}`); });
+      catalogue.forEach((s, i) => {
+        if (!headings.some(h => h.sceneIndex === i)) {
+          const cs = allCandidates.filter(c => c.sceneIndex === i);
+          console.warn(`  ✗ MISSING: ${scriptSceneDisplayName(s)} — candidates: ${cs.length ? cs.map(c => `pos${c.pos}/p${c.page}`).join(', ') : 'none'}`);
+        }
+      });
       console.groupEnd();
       const blocks = {};
       headings.forEach((h, i) => {
