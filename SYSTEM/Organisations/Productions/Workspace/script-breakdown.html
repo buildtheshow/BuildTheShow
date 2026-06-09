@@ -4294,6 +4294,37 @@
     .sbs-page-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
     .sbs-page-input:focus { outline: none; border-color: #572e88; }
     .sbs-page-sep { color: rgba(26,21,48,0.35); font-size: 0.75rem; }
+
+    /* Step-by-step column states */
+    .sbs-th-step { display: flex; flex-direction: column; align-items: flex-start; gap: 0.05rem; }
+    .sbs-th-step-label { font-size: 0.6rem; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; opacity: 0.55; }
+    .sbs-th-step-name { font-size: 0.72rem; font-weight: 900; }
+    .sbs-th-confirmed .sbs-th-step-label { color: #769e7b; opacity: 1; }
+    .sbs-th-confirmed .sbs-th-step-name::after { content: ' \2713'; color: #769e7b; font-weight: 900; }
+    .sbs-th-pending { opacity: 0.45; }
+    .sbs-td-pending { opacity: 0.28; pointer-events: none; }
+    .sbs-td-locked { color: rgba(26,21,48,0.5); }
+
+    /* Step confirm bar at the bottom of the table */
+    .sbs-step-confirm-bar {
+      display: flex; align-items: center; justify-content: flex-end; gap: 0.6rem;
+      padding: 0.7rem 1rem; border-top: 1px solid rgba(26,21,48,0.08);
+      background: rgba(87,46,136,0.025); border-radius: 0 0 10px 10px;
+    }
+    .sbs-step-hint { font-size: 0.76rem; font-weight: 700; color: rgba(26,21,48,0.45); flex: 1; }
+    .sbs-step-back-btn {
+      padding: 0.38rem 0.9rem; border-radius: 8px; border: 1px solid rgba(26,21,48,0.15);
+      background: white; color: rgba(26,21,48,0.6); font-size: 0.8rem; font-weight: 800;
+      font-family: inherit; cursor: pointer;
+    }
+    .sbs-step-back-btn:hover { background: #f5f5f5; }
+    .sbs-step-confirm-btn {
+      padding: 0.42rem 1.2rem; border-radius: 8px; border: none; cursor: pointer;
+      background: #572e88; color: white; font-size: 0.82rem; font-weight: 900;
+      font-family: inherit; white-space: nowrap;
+    }
+    .sbs-step-confirm-btn:hover { background: #6b3aaa; }
+
     .sbs-script-review-actions { display: flex; align-items: center; gap: 0.5rem; margin-left: auto; flex-shrink: 0; }
     .sbs-rescan-btn {
       padding: 0.42rem 1rem; border-radius: 8px; border: none; cursor: pointer;
@@ -7658,9 +7689,8 @@
       };
     }
 
+    // Full one-shot parse — used by Re-parse button and as a fallback.
     function runScriptParse(richLines) {
-      // Always refresh catalogues from saved data before parsing — catches cases where
-      // scenes/songs were uploaded after the script, or the page was refreshed.
       ensurePendingImportFromSaved();
       const catalogue = pendingPdfImport?.sceneCatalogue || [];
       const songs = pendingPdfImport?.songs || [];
@@ -7670,9 +7700,16 @@
       const printedMap = buildPrintedPageMap(pageLines);
       const flatLines = buildFlatLines(pageLines, printedMap);
       const sceneBlocks = buildSceneTextBlocks(flatLines, catalogue);
-      return buildConnectionsFromTextBlocks(sceneBlocks, catalogue, songs, aliasEntries, propsCatalogue, pageLines, printedMap);
+      const result = buildConnectionsFromTextBlocks(sceneBlocks, catalogue, songs, aliasEntries, propsCatalogue, pageLines, printedMap);
+      // Cache in-memory state so staged confirm steps can use it.
+      pendingPdfImport._pageLines = pageLines;
+      pendingPdfImport._printedMap = printedMap;
+      pendingPdfImport._sceneBlocks = sceneBlocks;
+      return result;
     }
 
+    // Stage 1 only: detect page ranges per scene, initialise confirmed-pages state.
+    // Does NOT run song or character scans — those happen after user confirms pages.
     function buildScriptConnections(text, meta = {}) {
       ensurePendingImportFromSaved();
       if (Array.isArray(meta.richLines) && meta.richLines.length) {
@@ -7680,15 +7717,159 @@
       }
       if (meta.pageCount) pendingPdfImport._scriptPageCount = meta.pageCount;
       const richLines = pendingPdfImport._scriptRichLines || [];
-      return runScriptParse(richLines);
+      const catalogue = pendingPdfImport?.sceneCatalogue || [];
+      const pageLines = buildPageLinesMap(richLines);
+      const printedMap = buildPrintedPageMap(pageLines);
+      const flatLines = buildFlatLines(pageLines, printedMap);
+      const sceneBlocks = buildSceneTextBlocks(flatLines, catalogue);
+      pendingPdfImport._pageLines = pageLines;
+      pendingPdfImport._printedMap = printedMap;
+      pendingPdfImport._sceneBlocks = sceneBlocks;
+      // Seed confirmed pages from the auto-detected ranges (user can adjust before confirming).
+      pendingPdfImport._confirmedPages = {};
+      catalogue.forEach((_, i) => {
+        const b = sceneBlocks[i];
+        pendingPdfImport._confirmedPages[i] = { startPage: b?.startPage ?? null, endPage: b?.endPage ?? null, headingFound: !!b };
+      });
+      pendingPdfImport._reviewStep = 0;
+      // Build a stub sceneConnections — pages only, songs/chars filled in later.
+      const sceneConnections = catalogue.map((scene, index) => {
+        const b = sceneBlocks[index];
+        return {
+          sceneLabel: scriptSceneDisplayName(scene),
+          sceneIndex: index,
+          sceneNumber: scene.scene_number || scene.number || '',
+          sceneName: scene.name || scene.title || '',
+          act: scene.act || scene.act_number || '1',
+          actNumber: scene.act_number || scene.act || '1',
+          location: scene.location || '',
+          startPage: b?.startPage ?? null,
+          endPage: b?.endPage ?? null,
+          headingFound: !!b,
+          characters: [], songs: [], props: [], songCharacters: {},
+          confidence: b ? 'medium' : 'low',
+        };
+      });
+      const linkedScenes = sceneConnections.filter(s => s.headingFound).length;
+      return {
+        generatedAt: new Date().toISOString(),
+        staged: true,
+        sourceWasRetained: false,
+        stats: { charactersLinked: 0, songsLinked: 0, propsLinked: 0, scenesLinked: linkedScenes, needsReview: catalogue.length - linkedScenes },
+        sceneConnections,
+        reviewItems: sceneConnections.filter(s => !s.headingFound).map(s => ({ type: 'scene_heading', label: s.sceneLabel, reason: 'Scene heading not found in PDF.' })),
+      };
+    }
+
+    // Step 1 → 2: run song scan using confirmed page ranges.
+    function confirmScriptPages() {
+      const catalogue = pendingPdfImport?.sceneCatalogue || [];
+      const songs = pendingPdfImport?.songs || [];
+      const pageLines = pendingPdfImport._pageLines;
+      const printedMap = pendingPdfImport._printedMap;
+      const connections = pendingPdfImport?.scriptConnections;
+      if (!connections) return;
+      // Read confirmed page inputs from the DOM before scanning.
+      catalogue.forEach((_, i) => {
+        const startEl = document.getElementById(`sbs-page-start-${i}`);
+        const endEl = document.getElementById(`sbs-page-end-${i}`);
+        if (!pendingPdfImport._confirmedPages[i]) pendingPdfImport._confirmedPages[i] = {};
+        if (startEl) pendingPdfImport._confirmedPages[i].startPage = parseInt(startEl.value, 10) || null;
+        if (endEl) pendingPdfImport._confirmedPages[i].endPage = parseInt(endEl.value, 10) || null;
+      });
+      // Update sceneConnections page ranges from confirmed values.
+      connections.sceneConnections.forEach((scene, i) => {
+        const r = pendingPdfImport._confirmedPages[i] || {};
+        scene.startPage = r.startPage ?? scene.startPage;
+        scene.endPage = r.endPage ?? scene.endPage;
+      });
+      // Run song scan within confirmed page ranges.
+      connections.sceneConnections.forEach((scene, i) => {
+        const r = pendingPdfImport._confirmedPages[i] || {};
+        const sp = r.startPage ?? null;
+        const ep = r.endPage ?? null;
+        if (sp == null || !pageLines || !printedMap) { scene.songs = []; return; }
+        const lines = getLinesForPrintedPageRange(pageLines, printedMap, sp, ep ?? sp);
+        const found = new Set();
+        lines.forEach(text => {
+          if (!text || looksLikeSheetMusicLine(text)) return;
+          const m = text.match(/\(#\d+\s*[–\-—]\s*([^.)]+?)\.?\s*\)/);
+          if (!m) return;
+          const cueName = normalizeLoose(m[1]);
+          const song = songs.find(s => { const sn = normalizeLoose(s.title); return sn === cueName || cueName.includes(sn) || sn.includes(cueName); });
+          if (song) found.add(song.title);
+        });
+        scene.songs = [...found];
+      });
+      pendingPdfImport._reviewStep = 1;
+      renderStepByStepImport();
+    }
+
+    // Step 2 → 3: run character + props scan using text blocks.
+    function confirmScriptSongs() {
+      const connections = pendingPdfImport?.scriptConnections;
+      const sceneBlocks = pendingPdfImport._sceneBlocks || {};
+      const aliasEntries = scriptAliasEntriesFromCharacters();
+      const propsCatalogue = pendingPdfImport?.propCatalogue || [];
+      if (!connections) return;
+      connections.sceneConnections.forEach((scene, i) => {
+        const block = sceneBlocks[i];
+        if (!block) { scene.characters = []; scene.props = []; return; }
+        const lines = block.lines || [];
+        const characters = new Set();
+        const currentSongs = new Set(scene.songs || []);
+        let currentSong = null;
+        const songCharMap = {};
+        const addChar = (name) => {
+          characters.add(name);
+          if (currentSong) { if (!songCharMap[currentSong]) songCharMap[currentSong] = new Set(); songCharMap[currentSong].add(name); }
+        };
+        lines.forEach(raw => {
+          const text = (raw || '').trim();
+          if (!text || looksLikeSheetMusicLine(text)) return;
+          const m = text.match(/\(#\d+\s*[–\-—]\s*([^.)]+?)\.?\s*\)/);
+          if (m) {
+            const cueName = normalizeLoose(m[1]);
+            const s = (pendingPdfImport?.songs || []).find(s => { const sn = normalizeLoose(s.title); return sn === cueName || cueName.includes(sn) || sn.includes(cueName); });
+            if (s && currentSongs.has(s.title)) currentSong = s.title;
+            return;
+          }
+          const cueNames = lineAsScriptCue(text, aliasEntries);
+          if (cueNames.length) { cueNames.forEach(addChar); return; }
+          if (/^\(/.test(text)) aliasEntries.forEach(e => { if (phraseExistsInText(text, e.alias)) addChar(e.name); });
+        });
+        const blockText = lines.join('\n');
+        scene.characters = uniqueByLooseName([...characters]);
+        scene.props = uniqueByLooseName(propsCatalogue.filter(p => phraseExistsInText(blockText, p.name))).map(p => p.name);
+        scene.songCharacters = Object.fromEntries(Object.entries(songCharMap).map(([t, s]) => [t, [...s]]));
+        scene.confidence = scene.characters.length || scene.songs.length ? 'high' : 'medium';
+      });
+      // Rebuild stats.
+      const sc = connections.sceneConnections;
+      connections.stats = {
+        scenesLinked: sc.filter(s => s.headingFound).length,
+        songsLinked: new Set(sc.flatMap(s => s.songs).map(normalizeLoose)).size,
+        charactersLinked: new Set(sc.flatMap(s => s.characters).map(normalizeLoose)).size,
+        propsLinked: new Set(sc.flatMap(s => s.props).map(normalizeLoose)).size,
+        needsReview: sc.filter(s => !s.headingFound).length,
+      };
+      pendingPdfImport._reviewStep = 2;
+      renderStepByStepImport();
+      saveImportMetadata('script').catch(() => {});
+    }
+
+    function goBackScriptStep(step) {
+      if (!pendingPdfImport) return;
+      pendingPdfImport._reviewStep = step;
+      renderStepByStepImport();
     }
 
     function rescanScriptConnections() {
       const richLines = pendingPdfImport?._scriptRichLines;
       if (!richLines?.length) { showToast('Re-upload the script PDF to rescan.'); return; }
       ensurePendingImportFromSaved();
-      pendingPdfImport.scriptConnections = runScriptParse(richLines);
-      openScriptBreakdownStep('script');
+      pendingPdfImport.scriptConnections = buildScriptConnections('', { richLines });
+      renderStepByStepImport();
     }
 
     function renderConnectionPills(items) {
@@ -7698,43 +7879,63 @@
     }
 
     function renderScriptConnectionReview() {
-      // If saved connections have no scenes but we have rich lines in memory, re-parse now.
-      // This fixes the case where the script was uploaded before the scene list, or
-      // the page was refreshed and stale empty connections were loaded from the database.
+      // Stale-check: if saved connections have no scenes but richLines are in memory, restart stage 1.
       const richLines = pendingPdfImport?._scriptRichLines;
       const stale = pendingPdfImport?.scriptConnections &&
         !(pendingPdfImport.scriptConnections.sceneConnections || []).length &&
         richLines?.length;
       if (stale) {
-        pendingPdfImport.scriptConnections = runScriptParse(richLines);
-        saveImportMetadata('script').catch(() => {});
+        pendingPdfImport.scriptConnections = buildScriptConnections('', { richLines });
       }
       const connections = pendingPdfImport?.scriptConnections;
       if (!connections) return renderInitialUploadPanel('script');
+
+      // Determine which step we're on.
+      // Connections loaded from DB (not staged) jump straight to step 2 (all done).
+      const step = pendingPdfImport._reviewStep ?? (connections.staged ? 0 : 2);
+
       const fileName = pendingPdfImport?.listUploads?.script || 'Actors Script';
-      const meta = pendingPdfImport?.listUploadMeta?.script || {};
       const stats = connections.stats || {};
       const scenes = connections.sceneConnections || [];
-      const reviewItems = connections.reviewItems || [];
-      const hasRichLines = !!(pendingPdfImport?._scriptRichLines?.length);
+      const hasRichLines = !!(richLines?.length);
+      const missingCount = scenes.filter(s => !s.headingFound).length;
 
       const metric = (num, label, cls = '') =>
         `<div class="sbs-script-metric ${cls}"><strong>${num ?? 0}</strong><span>${esc(label)}</span></div>`;
 
-      const tagList = (items, cls, emptyLabel) => {
+      const tagList = (items, cls, emptyLabel, pending = false) => {
+        if (pending) return `<div class="sbs-tag-row sbs-td-pending"><span class="sbs-tag sbs-tag-empty" style="opacity:0.5;">–</span></div>`;
         const vals = uniqueByLooseName(items || []).map(i => typeof i === 'string' ? i : (i?.name || i?.title || '')).filter(Boolean);
         if (!vals.length) return `<div class="sbs-tag-row"><span class="sbs-tag sbs-tag-empty">${esc(emptyLabel)}</span></div>`;
         return `<div class="sbs-tag-row">${vals.map(v => `<span class="sbs-tag ${cls}">${esc(v)}</span>`).join('')}</div>`;
       };
 
-      const pageDisplay = (scene) => {
-        if (!scene.headingFound) return `<span class="sbs-script-td-pages" style="color:rgba(209,82,61,0.6);font-style:italic;font-size:0.72rem;">Not found</span>`;
-        const s = scene.startPage ?? '?';
-        const e = scene.endPage ?? '?';
-        return `<span class="sbs-script-td-pages">${esc(String(s))}${s !== e ? ` – ${esc(String(e))}` : ''}</span>`;
+      const pageCell = (scene, i) => {
+        const locked = step > 0;
+        const confirmedRange = pendingPdfImport._confirmedPages?.[i] || {};
+        const sp = locked ? (scene.startPage ?? null) : (confirmedRange.startPage ?? scene.startPage ?? null);
+        const ep = locked ? (scene.endPage ?? null) : (confirmedRange.endPage ?? scene.endPage ?? null);
+        if (locked) {
+          if (sp == null) return `<span class="sbs-script-td-pages" style="color:rgba(209,82,61,0.6);font-style:italic;font-size:0.72rem;">Not found</span>`;
+          return `<span class="sbs-script-td-pages">${esc(String(sp))}${sp !== ep && ep != null ? ` – ${esc(String(ep))}` : ''}</span>`;
+        }
+        // Editable inputs at step 0.
+        const missing = sp == null;
+        const rangeCls = missing ? 'sbs-page-range sbs-page-range-missing' : 'sbs-page-range';
+        return `<div class="${rangeCls}">
+          <input type="number" id="sbs-page-start-${i}" class="sbs-page-input" value="${sp ?? ''}" min="1" max="999" placeholder="–">
+          <span class="sbs-page-sep">–</span>
+          <input type="number" id="sbs-page-end-${i}" class="sbs-page-input" value="${ep ?? ''}" min="1" max="999" placeholder="–">
+        </div>`;
       };
 
-      // Sort by start page; scenes with no heading float to the end
+      const thStep = (stepNum, label, currentStep) => {
+        if (currentStep > stepNum) return `<th class="sbs-th-confirmed"><div class="sbs-th-step"><span class="sbs-th-step-label">Step ${stepNum} ✓</span><span class="sbs-th-step-name">${label}</span></div></th>`;
+        if (currentStep === stepNum) return `<th><div class="sbs-th-step"><span class="sbs-th-step-label">Step ${stepNum} — active</span><span class="sbs-th-step-name">${label}</span></div></th>`;
+        return `<th class="sbs-th-pending"><div class="sbs-th-step"><span class="sbs-th-step-label">Step ${stepNum}</span><span class="sbs-th-step-name">${label}</span></div></th>`;
+      };
+
+      // Sort by start page; scenes with no heading float to the end.
       const sortedScenes = scenes.slice().sort((a, b) => {
         if (a.startPage == null && b.startPage == null) return 0;
         if (a.startPage == null) return 1;
@@ -7742,34 +7943,48 @@
         return a.startPage - b.startPage;
       });
 
-      const missingCount = scenes.filter(s => !s.headingFound).length;
       let lastAct = null;
       const tableRows = sortedScenes.map((scene, i) => {
+        const idx = scene.sceneIndex ?? i;
         const missing = !scene.headingFound;
         const rowCls = missing ? 'sbs-needs-review-row' : '';
         const actKey = scene.actNumber || scene.act || '1';
-        const actLabel = `Act ${actKey}`;
         let actRow = '';
         if (actKey !== lastAct) {
           lastAct = actKey;
-          actRow = `<tr class="sbs-act-group-row"><td colspan="7">${esc(actLabel)}</td></tr>`;
+          actRow = `<tr class="sbs-act-group-row"><td colspan="7">${esc(`Act ${actKey}`)}</td></tr>`;
         }
         const rawNum = String(scene.sceneNumber || '');
         const sceneNum = /^prologue$/i.test(rawNum) ? '0' : (rawNum || (i + 1));
-        const sceneRow = `<tr${rowCls ? ` class="${rowCls}"` : ''}>
+        return actRow + `<tr${rowCls ? ` class="${rowCls}"` : ''}>
           <td class="sbs-script-td-scenenum" style="vertical-align:top;padding:0.45rem 0.5rem;white-space:nowrap;">${esc(String(sceneNum))}</td>
           <td class="sbs-script-td-scenename" style="vertical-align:top;padding:0.45rem 0.5rem;">${esc(scene.sceneName || '')}</td>
           <td class="sbs-script-td-sceneloc" style="vertical-align:top;padding:0.45rem 0.5rem;">${esc(scene.location || '')}</td>
-          <td class="sbs-script-td-list">${tagList(scene.characters, 'sbs-tag-char', 'None found')}</td>
-          <td class="sbs-script-td-list">${tagList(scene.songs, 'sbs-tag-song', 'None found')}</td>
+          <td class="sbs-script-td-pages-cell" style="white-space:nowrap;vertical-align:middle;padding:0.3rem 0.5rem;">${pageCell(scene, idx)}</td>
+          <td class="sbs-script-td-list">${tagList(scene.songs, 'sbs-tag-song', 'None found', step < 1)}</td>
+          <td class="sbs-script-td-list">${tagList(scene.characters, 'sbs-tag-char', 'None found', step < 2)}</td>
           <td class="sbs-script-td-list">${tagList(scene.props, 'sbs-tag-prop', 'None found')}</td>
-          <td class="sbs-script-td-pages-cell" style="white-space:nowrap;">${pageDisplay(scene)}</td>
         </tr>`;
-        return actRow + sceneRow;
       }).join('');
 
-      const rescanHint = missingCount
-        ? `<div class="sbs-rescan-hint">${missingCount} scene heading${missingCount === 1 ? '' : 's'} not found in PDF. Check the script has those scene headings.</div>`
+      const confirmBar = step === 0
+        ? `<div class="sbs-step-confirm-bar">
+            <span class="sbs-step-hint">Check the page ranges above are correct, then confirm to scan for songs.</span>
+            <button type="button" class="sbs-step-confirm-btn" onclick="confirmScriptPages()">Confirm Pages →</button>
+           </div>`
+        : step === 1
+        ? `<div class="sbs-step-confirm-bar">
+            <button type="button" class="sbs-step-back-btn" onclick="goBackScriptStep(0)">← Edit Pages</button>
+            <span class="sbs-step-hint">Check songs found per scene, then confirm to scan for characters.</span>
+            <button type="button" class="sbs-step-confirm-btn" onclick="confirmScriptSongs()">Confirm Songs →</button>
+           </div>`
+        : `<div class="sbs-step-confirm-bar">
+            <button type="button" class="sbs-step-back-btn" onclick="goBackScriptStep(1)">← Edit Songs</button>
+            <span class="sbs-step-hint">Review complete. Save connections when ready.</span>
+           </div>`;
+
+      const rescanHint = missingCount && step === 0
+        ? `<div class="sbs-rescan-hint">${missingCount} scene heading${missingCount === 1 ? '' : 's'} not found — enter page ranges manually.</div>`
         : '';
 
       return `<div class="sbs-script-review">
@@ -7785,27 +8000,32 @@
           </div>
         </div>
         <div class="sbs-script-metrics">
-          ${metric(stats.charactersLinked, 'Characters Linked')}
-          ${metric(stats.songsLinked, 'Songs Linked')}
-          ${metric(stats.propsLinked, 'Props Linked')}
           ${metric(stats.scenesLinked, 'Scenes Located')}
+          ${metric(step >= 1 ? stats.songsLinked : '–', 'Songs Linked')}
+          ${metric(step >= 2 ? stats.charactersLinked : '–', 'Characters Linked')}
+          ${metric(step >= 2 ? stats.propsLinked : '–', 'Props Linked')}
           ${metric(stats.needsReview, 'Need Review', stats.needsReview ? 'review' : '')}
         </div>
         ${rescanHint}
         <div class="sbs-script-table-wrap">
           <table class="sbs-script-table">
             <colgroup>
-              <col style="width:48px"><col style="width:13%"><col style="width:13%"><col><col style="width:18%"><col style="width:13%"><col style="width:80px">
+              <col style="width:42px"><col style="width:14%"><col style="width:13%"><col style="width:78px"><col style="width:18%"><col><col style="width:14%">
             </colgroup>
             <thead>
               <tr>
-                <th>#</th><th>Scene Name</th><th>Location</th><th>Characters</th><th>Songs</th><th>Props</th><th>Pages</th>
+                <th>#</th><th>Scene Name</th><th>Location</th>
+                ${thStep(1, 'Pages', step)}
+                ${thStep(2, 'Songs', step)}
+                ${thStep(3, 'Characters', step)}
+                <th>Props</th>
               </tr>
             </thead>
             <tbody>
-              ${tableRows || '<tr><td colspan="7" style="padding:2rem;text-align:center;color:rgba(26,21,48,0.4);font-size:0.88rem;">Upload a readable actors script to build scene connections.</td></tr>'}
+              ${tableRows || `<tr><td colspan="7" style="padding:2rem;text-align:center;color:rgba(26,21,48,0.4);font-size:0.88rem;">Upload a readable actors script to build scene connections.</td></tr>`}
             </tbody>
           </table>
+          ${confirmBar}
         </div>
       </div>`;
     }
