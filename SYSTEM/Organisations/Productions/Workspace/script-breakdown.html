@@ -7557,20 +7557,26 @@
     function buildSceneTextBlocks(flatLines, catalogue) {
       // Step 1: collect every candidate heading match across the whole document.
       const allCandidates = []; // { sceneIndex, pos, page }
-      // Partial heading pattern — matches lines like "SCENE 15:" or "PROLOGUE" with nothing after.
+      // Pattern 1: line is a complete-but-no-location heading, e.g. "SCENE 15:" or "PROLOGUE".
       const splitHeadingRe = /^(?:PROLOGUE|EPILOGUE|SCENE\s+\d+[A-Z]?)\s*:?\s*$/i;
       flatLines.forEach((line, pos) => {
         let parsed = parseSceneHeadingForMti(line.text);
-        // Some PDFs split the scene heading across two consecutive lines,
-        // e.g. "SCENE 15:" on one line and "CHERRY TREE LANE, PARLOR" on the next.
-        // Detect this by checking whether the line alone looks like an incomplete heading.
-        if (!parsed && splitHeadingRe.test(line.text.trim()) && pos + 1 < flatLines.length) {
+        if (!parsed && pos + 1 < flatLines.length) {
+          const trimmed = line.text.trim();
           const nextClean = flatLines[pos + 1].text.trim();
-          // Only join if the next line looks like a location: has uppercase letters,
-          // no speaker-cue colon, and is short enough to be a heading.
-          if (nextClean.length > 0 && nextClean.length < 80 && !/:/.test(nextClean) && /[A-Z]{2,}/.test(nextClean)) {
-            const sep = line.text.trim().endsWith(':') ? ' ' : ': ';
-            parsed = parseSceneHeadingForMti(line.text.trim() + sep + nextClean);
+          if (splitHeadingRe.test(trimmed)) {
+            // Pattern 1: "SCENE 15:" + "CHERRY TREE LANE, PARLOR"
+            // Join if next line looks like a location (uppercase letters, no speaker colon, short).
+            if (nextClean.length > 0 && nextClean.length < 80 && !/:/.test(nextClean) && /[A-Z]{2,}/.test(nextClean)) {
+              const sep = trimmed.endsWith(':') ? ' ' : ': ';
+              parsed = parseSceneHeadingForMti(trimmed + sep + nextClean);
+            }
+          } else if (/^SCENE\s*$/i.test(trimmed)) {
+            // Pattern 2: "SCENE" alone + "15: CHERRY TREE LANE, PARLOR"
+            // Join if next line starts with a number+colon+uppercase (strong heading signal).
+            if (/^\d+[A-Z]?\s*:\s*[A-Z]/.test(nextClean)) {
+              parsed = parseSceneHeadingForMti('SCENE ' + nextClean);
+            }
           }
         }
         if (!parsed) return;
@@ -7599,44 +7605,18 @@
         return sceneNumForEntry(sA) - sceneNumForEntry(sB);
       });
 
-      // Debug: log all candidates for each catalogue entry, and trace the step-2 walk.
-      console.group('BTS allCandidates per scene');
-      catalogue.forEach((s, i) => {
-        const cs = allCandidates.filter(c => c.sceneIndex === i);
-        if (cs.length) console.log(`  [${i}] ${scriptSceneDisplayName(s)} → ${cs.map(c => `pos${c.pos}/p${c.page}`).join(', ')}`);
-        else console.warn(`  [${i}] ${scriptSceneDisplayName(s)} → NO CANDIDATES`);
-      });
-      console.groupEnd();
-
       const headings = [];
       let lastAcceptedPos = -1;
-      console.group('BTS step-2 walk (sorted catalogue order)');
       sortedCatalogueIndices.forEach(sceneIndex => {
-        const cs = allCandidates.filter(c => c.sceneIndex === sceneIndex);
-        const match = cs.find(c => c.pos > lastAcceptedPos);
-        if (!match) {
-          console.warn(`  ✗ [cat${sceneIndex}] ${scriptSceneDisplayName(catalogue[sceneIndex])} — no candidate after pos${lastAcceptedPos}. All candidates: ${cs.map(c=>`pos${c.pos}/p${c.page}`).join(', ') || 'none'}`);
-          return;
-        }
-        console.log(`  ✓ [cat${sceneIndex}] ${scriptSceneDisplayName(catalogue[sceneIndex])} → pos${match.pos}/p${match.page} (lastAccepted was ${lastAcceptedPos})`);
+        const match = allCandidates.find(c => c.sceneIndex === sceneIndex && c.pos > lastAcceptedPos);
+        if (!match) return;
         headings.push(match);
         lastAcceptedPos = match.pos;
       });
-      console.groupEnd();
 
       console.group(`BTS Script Parser — text blocks: ${headings.length}/${catalogue.length} scenes found`);
       headings.forEach(h => console.log(`  ✓ ${scriptSceneDisplayName(catalogue[h.sceneIndex])} → p${h.page}`));
       catalogue.forEach((s, i) => { if (!headings.some(h => h.sceneIndex === i)) console.warn(`  ✗ MISSING: ${scriptSceneDisplayName(s)}`); });
-      // Near-miss log: lines that mention a scene/prologue/epilogue keyword but didn't parse.
-      console.group('BTS near-misses (lines with scene keywords that did NOT parse)');
-      flatLines.forEach((line, pos) => {
-        if (/\b(scene\s*\d+|prologue|epilogue)\b/i.test(line.text) && !parseSceneHeadingForMti(line.text)) {
-          const prev = pos > 0 ? flatLines[pos - 1].text : '';
-          const next = pos + 1 < flatLines.length ? flatLines[pos + 1].text : '';
-          console.log(`  p${line.page} pos${pos}: ${JSON.stringify(line.text)}  [prev: ${JSON.stringify(prev)}] [next: ${JSON.stringify(next)}]`);
-        }
-      });
-      console.groupEnd();
       console.groupEnd();
       const blocks = {};
       headings.forEach((h, i) => {
