@@ -7581,12 +7581,27 @@
         allCandidates.push({ sceneIndex, pos, page: line.page });
       });
 
-      // Step 2: walk catalogue scenes in order. For each scene, accept the first candidate
-      // occurrence that comes after the last accepted heading's position. This ensures
-      // scenes are matched in document order and early false positives are skipped.
+      // Step 2: walk catalogue scenes in DOCUMENT ORDER (act/scene number),
+      // regardless of how they happen to be stored in the catalogue array.
+      // For each scene, accept the first candidate occurrence after the last accepted position.
+      const sceneNumForEntry = (s) => {
+        const raw = String(s.scene_number || s.number || '');
+        if (/^prologue$/i.test(raw)) return -1;  // Prologue always first
+        if (/^epilogue$/i.test(raw)) return 10000; // Epilogue always last
+        const n = parseInt(raw, 10);
+        return isNaN(n) ? 9999 : n;
+      };
+      const sortedCatalogueIndices = catalogue.map((_, i) => i).sort((a, b) => {
+        const sA = catalogue[a], sB = catalogue[b];
+        const actA = parseInt(sA.act_number || sA.act || '1', 10) || 1;
+        const actB = parseInt(sB.act_number || sB.act || '1', 10) || 1;
+        if (actA !== actB) return actA - actB;
+        return sceneNumForEntry(sA) - sceneNumForEntry(sB);
+      });
+
       const headings = [];
       let lastAcceptedPos = -1;
-      catalogue.forEach((_, sceneIndex) => {
+      sortedCatalogueIndices.forEach(sceneIndex => {
         const match = allCandidates.find(c => c.sceneIndex === sceneIndex && c.pos > lastAcceptedPos);
         if (!match) return;
         headings.push(match);
