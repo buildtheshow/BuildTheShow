@@ -7599,14 +7599,30 @@
         return sceneNumForEntry(sA) - sceneNumForEntry(sB);
       });
 
+      // Debug: log all candidates for each catalogue entry, and trace the step-2 walk.
+      console.group('BTS allCandidates per scene');
+      catalogue.forEach((s, i) => {
+        const cs = allCandidates.filter(c => c.sceneIndex === i);
+        if (cs.length) console.log(`  [${i}] ${scriptSceneDisplayName(s)} → ${cs.map(c => `pos${c.pos}/p${c.page}`).join(', ')}`);
+        else console.warn(`  [${i}] ${scriptSceneDisplayName(s)} → NO CANDIDATES`);
+      });
+      console.groupEnd();
+
       const headings = [];
       let lastAcceptedPos = -1;
+      console.group('BTS step-2 walk (sorted catalogue order)');
       sortedCatalogueIndices.forEach(sceneIndex => {
-        const match = allCandidates.find(c => c.sceneIndex === sceneIndex && c.pos > lastAcceptedPos);
-        if (!match) return;
+        const cs = allCandidates.filter(c => c.sceneIndex === sceneIndex);
+        const match = cs.find(c => c.pos > lastAcceptedPos);
+        if (!match) {
+          console.warn(`  ✗ [cat${sceneIndex}] ${scriptSceneDisplayName(catalogue[sceneIndex])} — no candidate after pos${lastAcceptedPos}. All candidates: ${cs.map(c=>`pos${c.pos}/p${c.page}`).join(', ') || 'none'}`);
+          return;
+        }
+        console.log(`  ✓ [cat${sceneIndex}] ${scriptSceneDisplayName(catalogue[sceneIndex])} → pos${match.pos}/p${match.page} (lastAccepted was ${lastAcceptedPos})`);
         headings.push(match);
         lastAcceptedPos = match.pos;
       });
+      console.groupEnd();
 
       console.group(`BTS Script Parser — text blocks: ${headings.length}/${catalogue.length} scenes found`);
       headings.forEach(h => console.log(`  ✓ ${scriptSceneDisplayName(catalogue[h.sceneIndex])} → p${h.page}`));
