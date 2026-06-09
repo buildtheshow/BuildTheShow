@@ -182,6 +182,39 @@
     .bg-color-swatch { width: 30px; height: 30px; border-radius: 50%; cursor: pointer; border: 3px solid transparent; transition: transform 0.1s, border-color 0.1s; }
     .bg-color-swatch.active { border-color: #1a1530; transform: scale(1.2); }
 
+    /* Reference document bar */
+    .bg-ref-bar { display: none; background: rgba(71,106,170,0.08); border: 1px solid rgba(71,106,170,0.2); border-radius: 10px; padding: 0.55rem 0.85rem; margin-bottom: 0.85rem; align-items: center; gap: 0.55rem; flex-wrap: wrap; }
+    .bg-ref-bar.visible { display: flex; }
+    .bg-ref-icon { font-size: 1rem; flex-shrink: 0; }
+    .bg-ref-name { font-size: 0.82rem; font-weight: 800; color: #2a4a80; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .bg-ref-actions { display: flex; gap: 0.4rem; flex-shrink: 0; }
+    .bg-ref-btn { background: none; border: 1px solid rgba(71,106,170,0.3); border-radius: 6px; padding: 0.22rem 0.55rem; font-family: inherit; font-size: 0.74rem; font-weight: 800; color: #476aaa; cursor: pointer; }
+    .bg-ref-btn:hover { background: rgba(71,106,170,0.1); }
+    .bg-ref-btn--del { color: #d1523d; border-color: rgba(209,82,61,0.25); }
+    .bg-ref-btn--del:hover { background: rgba(209,82,61,0.08); }
+
+    /* Upload drop zone */
+    .bg-drop-zone { border: 2px dashed rgba(87,46,136,0.25); border-radius: 12px; padding: 2rem 1.5rem; text-align: center; cursor: pointer; transition: border-color 0.14s, background 0.14s; }
+    .bg-drop-zone:hover, .bg-drop-zone.dragging { border-color: #572e88; background: rgba(87,46,136,0.04); }
+    .bg-drop-zone-icon { font-size: 2rem; margin-bottom: 0.5rem; }
+    .bg-drop-zone-label { font-size: 0.88rem; font-weight: 800; color: #4a3d6b; margin-bottom: 0.25rem; }
+    .bg-drop-zone-hint { font-size: 0.76rem; color: #9a90b0; }
+    .bg-drop-zone input[type=file] { display: none; }
+
+    /* Doc viewer */
+    .bg-viewer-modal { display: none; position: fixed; inset: 0; background: rgba(15,14,28,0.7); z-index: 9100; align-items: center; justify-content: center; padding: 1rem; }
+    .bg-viewer-modal.open { display: flex; }
+    .bg-viewer-inner { background: #fff; border-radius: 16px; width: 100%; max-width: 860px; max-height: 92vh; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 24px 60px rgba(15,14,28,0.35); }
+    .bg-viewer-head { padding: 1rem 1.25rem; border-bottom: 1px solid rgba(87,46,136,0.1); display: flex; align-items: center; gap: 0.7rem; }
+    .bg-viewer-title { font-size: 0.9rem; font-weight: 900; color: #1a1530; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .bg-viewer-close { background: rgba(87,46,136,0.08); border: none; border-radius: 7px; width: 30px; height: 30px; font-size: 1rem; cursor: pointer; color: #572e88; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .bg-viewer-body { flex: 1; overflow: auto; padding: 0; }
+    .bg-viewer-body iframe { width: 100%; height: 100%; min-height: 600px; border: none; display: block; }
+    .bg-viewer-body img { width: 100%; height: auto; display: block; }
+
+    /* Onboarding — 2x2 when 4 options */
+    .bg-onboard-options { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.85rem; }
+
     /* Responsive */
     @media (max-width: 1200px) { .bg-workspace { grid-template-columns: 1fr 300px; } }
     @media (max-width: 1050px) { .bg-workspace { grid-template-columns: 1fr; } .bg-right { position: static; } }
@@ -242,6 +275,15 @@
       <!-- Workspace -->
       <div class="bg-workspace">
         <div class="bg-left">
+          <!-- Reference document bar -->
+          <div class="bg-ref-bar" id="bg-ref-bar">
+            <span class="bg-ref-icon" id="bg-ref-icon">&#128196;</span>
+            <span class="bg-ref-name" id="bg-ref-name">Reference budget</span>
+            <div class="bg-ref-actions">
+              <button class="bg-ref-btn" onclick="BP.openViewer()">View</button>
+              <button class="bg-ref-btn bg-ref-btn--del" onclick="BP.removeDoc()">Remove</button>
+            </div>
+          </div>
           <div class="bg-toolbar" id="bg-toolbar" style="display:none">
             <input type="search" class="bg-search" id="bg-search" placeholder="Search items or vendors..." oninput="BP.onSearch(this.value)" />
             <select class="bg-filter-sel" id="bg-filter" onchange="BP.onFilter(this.value)">
@@ -254,6 +296,7 @@
               <option value="committed">Has Committed</option>
             </select>
             <button class="bg-btn bg-btn--primary" onclick="BP.openItemModal(null, null)">+ Add Item</button>
+            <button class="bg-btn bg-btn--ghost" onclick="BP.openUploadModal()" title="Upload a reference budget document">&#128206; Upload</button>
           </div>
           <div class="bg-table" id="bg-table">
             <div style="padding:2.5rem;text-align:center;color:#9a90b0;font-size:0.9rem">Loading...</div>
@@ -346,6 +389,35 @@
     </div>
   </div>
 
+  <!-- Upload modal -->
+  <div class="bg-modal-over" id="bg-upload-modal">
+    <div class="bg-modal">
+      <div class="bg-modal-title">Upload Reference Budget</div>
+      <p style="font-size:0.86rem;color:#7a6e9a;margin:0 0 1.1rem">Upload a PDF or photo of a past budget to reference while you build this one. It won't be imported automatically.</p>
+      <div class="bg-drop-zone" id="bg-drop-zone" onclick="document.getElementById('bg-file-input').click()" ondragover="BP.onDragOver(event)" ondragleave="BP.onDragLeave(event)" ondrop="BP.onDrop(event)">
+        <div class="bg-drop-zone-icon">&#128196;</div>
+        <div class="bg-drop-zone-label">Drop a file here, or click to choose</div>
+        <div class="bg-drop-zone-hint">PDF, JPG, PNG up to 20 MB</div>
+        <input type="file" id="bg-file-input" accept=".pdf,.jpg,.jpeg,.png,.webp" onchange="BP.onFileChosen(event)" />
+      </div>
+      <div id="bg-upload-status" style="margin-top:0.75rem;font-size:0.83rem;font-weight:700;color:#9a90b0;min-height:1.2rem"></div>
+      <div class="bg-modal-footer">
+        <button class="bg-btn bg-btn--ghost" onclick="BP.closeUploadModal()">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Document viewer modal -->
+  <div class="bg-viewer-modal" id="bg-viewer-modal">
+    <div class="bg-viewer-inner">
+      <div class="bg-viewer-head">
+        <span class="bg-viewer-title" id="bg-viewer-title">Reference Budget</span>
+        <button class="bg-viewer-close" onclick="BP.closeViewer()" title="Close">&#10005;</button>
+      </div>
+      <div class="bg-viewer-body" id="bg-viewer-body"></div>
+    </div>
+  </div>
+
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="/SHARED/Navigation/production-sidebar-nav.js?v=13"></script>
   <script>
@@ -384,9 +456,12 @@
       { name: 'Contingency',              color: '#d1523d', items: ['Emergency Purchases', 'Last-Minute Rentals', 'Unexpected Repairs', 'Unplanned Production Costs'] },
     ],
 
+    BUCKET: 'budget-documents',
+
     prodId: '',
     cats: [],
     items: [],
+    docs: [],
     selectedCatId: null,
     expandedCats: new Set(),
     search: '',
@@ -413,14 +488,17 @@
     // Data ─────────────────────────────────────────────────────────────────
     async load() {
       try {
-        const [catsRes, itemsRes] = await Promise.all([
+        const [catsRes, itemsRes, docsRes] = await Promise.all([
           fetch(this.URL + '/rest/v1/budget_categories?production_id=eq.' + this.prodId + '&order=sort_order.asc,created_at.asc', { headers: this._h() }),
           fetch(this.URL + '/rest/v1/budget_items?production_id=eq.' + this.prodId + '&order=sort_order.asc,created_at.asc', { headers: this._h() }),
+          fetch(this.URL + '/rest/v1/budget_documents?production_id=eq.' + this.prodId + '&order=created_at.desc&limit=1', { headers: this._h() }),
         ]);
         this.cats  = catsRes.ok  ? await catsRes.json()  : [];
         this.items = itemsRes.ok ? await itemsRes.json() : [];
-      } catch(_) { this.cats = []; this.items = []; }
+        this.docs  = docsRes.ok  ? await docsRes.json()  : [];
+      } catch(_) { this.cats = []; this.items = []; this.docs = []; }
       this.render();
+      this.renderRefBar();
     },
 
     _h()  { return { apikey: this.KEY, Authorization: 'Bearer ' + this.KEY }; },
@@ -641,7 +719,7 @@
             '<div class="bg-onboard-card" onclick="BP.onboardTemplate()">' +
               '<div class="bg-onboard-card-icon">&#128203;</div>' +
               '<div class="bg-onboard-card-title">Use a Template</div>' +
-              '<div class="bg-onboard-card-desc">Load a standard set of production budget categories in one click.</div>' +
+              '<div class="bg-onboard-card-desc">Load the full community theatre budget in one click, categories and line items included.</div>' +
             '</div>' +
             '<div class="bg-onboard-card" onclick="BP.onboardBrowse()">' +
               '<div class="bg-onboard-card-icon">&#10133;</div>' +
@@ -652,6 +730,11 @@
               '<div class="bg-onboard-card-icon">&#9998;</div>' +
               '<div class="bg-onboard-card-title">Start from Scratch</div>' +
               '<div class="bg-onboard-card-desc">Build your own categories from the ground up.</div>' +
+            '</div>' +
+            '<div class="bg-onboard-card" onclick="BP.openUploadModal()">' +
+              '<div class="bg-onboard-card-icon">&#128229;</div>' +
+              '<div class="bg-onboard-card-title">Upload a Budget</div>' +
+              '<div class="bg-onboard-card-desc">Upload a PDF or photo of a past budget to reference while you build this one.</div>' +
             '</div>' +
           '</div>' +
         '</div>'
@@ -908,6 +991,97 @@
       } catch(e) { alert('Could not delete item: ' + e.message); }
     },
 
+    // Upload & viewer ──────────────────────────────────────────────────────
+    openUploadModal() {
+      document.getElementById('bg-upload-status').textContent = '';
+      document.getElementById('bg-file-input').value = '';
+      document.getElementById('bg-upload-modal').classList.add('open');
+    },
+
+    closeUploadModal() { document.getElementById('bg-upload-modal').classList.remove('open'); },
+
+    onDragOver(e) { e.preventDefault(); document.getElementById('bg-drop-zone').classList.add('dragging'); },
+    onDragLeave()  { document.getElementById('bg-drop-zone').classList.remove('dragging'); },
+    onDrop(e) {
+      e.preventDefault();
+      document.getElementById('bg-drop-zone').classList.remove('dragging');
+      const file = e.dataTransfer.files[0];
+      if (file) this._handleFile(file);
+    },
+    onFileChosen(e) { const file = e.target.files[0]; if (file) this._handleFile(file); },
+
+    async _handleFile(file) {
+      const allowed = ['application/pdf','image/jpeg','image/jpg','image/png','image/webp'];
+      if (!allowed.includes(file.type)) { this._uploadStatus('Only PDF, JPG, or PNG files are supported.', 'red'); return; }
+      if (file.size > 20 * 1024 * 1024) { this._uploadStatus('File must be under 20 MB.', 'red'); return; }
+      this._uploadStatus('Uploading...', '#9a90b0');
+      try {
+        const path = this.prodId + '/' + Date.now() + '_' + file.name.replace(/[^a-zA-Z0-9.\-_]/g, '_');
+        const r = await fetch(this.URL + '/storage/v1/object/' + this.BUCKET + '/' + path, {
+          method: 'POST',
+          headers: { apikey: this.KEY, Authorization: 'Bearer ' + this.KEY, 'Content-Type': file.type, 'x-upsert': 'true' },
+          body: file,
+        });
+        if (!r.ok) throw new Error(await r.text());
+        const fileUrl = this.URL + '/storage/v1/object/public/' + this.BUCKET + '/' + path;
+        await this._post('budget_documents', { name: file.name, file_url: fileUrl, file_type: file.type });
+        this._uploadStatus('Uploaded!', '#769e7b');
+        await this.load();
+        setTimeout(() => this.closeUploadModal(), 900);
+      } catch(e) { this._uploadStatus('Upload failed: ' + e.message, '#d1523d'); }
+    },
+
+    _uploadStatus(msg, color) {
+      const el = document.getElementById('bg-upload-status');
+      if (el) { el.textContent = msg; el.style.color = color || '#9a90b0'; }
+    },
+
+    renderRefBar() {
+      const bar = document.getElementById('bg-ref-bar');
+      if (!bar) return;
+      const doc = this.docs[0];
+      if (!doc) { bar.classList.remove('visible'); return; }
+      bar.classList.add('visible');
+      const icon = doc.file_type && doc.file_type.startsWith('image') ? '&#128247;' : '&#128196;';
+      const nameEl = document.getElementById('bg-ref-name');
+      const iconEl = document.getElementById('bg-ref-icon');
+      if (nameEl) nameEl.textContent = doc.name || 'Reference budget';
+      if (iconEl) iconEl.innerHTML = icon;
+    },
+
+    openViewer() {
+      const doc = this.docs[0];
+      if (!doc) return;
+      const titleEl = document.getElementById('bg-viewer-title');
+      const bodyEl  = document.getElementById('bg-viewer-body');
+      if (titleEl) titleEl.textContent = doc.name || 'Reference Budget';
+      if (bodyEl) {
+        if (doc.file_type && doc.file_type.startsWith('image')) {
+          bodyEl.innerHTML = '<img src="' + this.esc(doc.file_url) + '" alt="Reference budget" style="width:100%;height:auto;display:block" />';
+        } else {
+          bodyEl.innerHTML = '<iframe src="' + this.esc(doc.file_url) + '" style="width:100%;height:80vh;border:none;display:block"></iframe>';
+        }
+      }
+      document.getElementById('bg-viewer-modal').classList.add('open');
+    },
+
+    closeViewer() {
+      document.getElementById('bg-viewer-modal').classList.remove('open');
+      const bodyEl = document.getElementById('bg-viewer-body');
+      if (bodyEl) bodyEl.innerHTML = '';
+    },
+
+    async removeDoc() {
+      const doc = this.docs[0];
+      if (!doc) return;
+      if (!confirm('Remove the reference document "' + (doc.name || 'this file') + '"?')) return;
+      try {
+        await this._del('budget_documents', doc.id);
+        this.docs = [];
+        this.renderRefBar();
+      } catch(e) { alert('Could not remove document: ' + e.message); }
+    },
+
     // Helpers ──────────────────────────────────────────────────────────────
     _catItems(catId) { return this.items.filter(i => i.category_id === catId); },
 
@@ -964,6 +1138,8 @@
   document.getElementById('bg-onboard-modal').addEventListener('click', function(e) { if (e.target === this) BP.closeOnboardModal(); });
   document.getElementById('bg-cat-modal').addEventListener('click', function(e)    { if (e.target === this) BP.closeCatModal(); });
   document.getElementById('bg-item-modal').addEventListener('click', function(e)   { if (e.target === this) BP.closeItemModal(); });
+  document.getElementById('bg-upload-modal').addEventListener('click', function(e) { if (e.target === this) BP.closeUploadModal(); });
+  document.getElementById('bg-viewer-modal').addEventListener('click', function(e) { if (e.target === this) BP.closeViewer(); });
   </script>
 </body>
 </html>
