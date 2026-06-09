@@ -180,6 +180,22 @@
     .bg-wk-footer-right { display:flex; gap:0.45rem; margin-left:auto; }
     .bg-wk-delete-btn { background:none; border:1.5px solid rgba(209,82,61,0.22); color:#d1523d; border-radius:8px; padding:0.34rem 0.75rem; font-family:inherit; font-size:0.76rem; font-weight:800; cursor:pointer; display:flex; align-items:center; gap:0.3rem; }
     .bg-wk-delete-btn:hover { background:rgba(209,82,61,0.07); border-color:#d1523d; }
+    /* ── Registration config modal ── */
+    .bg-modal--reg-config { max-width:480px; }
+    .bg-rc-q { margin-bottom:1.1rem; }
+    .bg-rc-q-label { font-size:0.88rem; font-weight:800; color:#1a1530; margin-bottom:0.5rem; }
+    .bg-rc-toggle { display:flex; gap:0.4rem; }
+    .bg-rc-toggle-btn { font-family:inherit; font-size:0.82rem; font-weight:800; padding:0.35rem 1rem; border-radius:8px; border:2px solid rgba(87,46,136,0.18); background:#fff; color:#9a90b0; cursor:pointer; transition:all 0.12s; }
+    .bg-rc-toggle-btn.active { background:#572e88; color:#fff; border-color:#572e88; }
+    .bg-rc-custom-list { display:flex; flex-direction:column; gap:0.45rem; margin-top:0.55rem; }
+    .bg-rc-custom-row { display:flex; align-items:center; gap:0.45rem; }
+    .bg-rc-custom-inp { font-family:inherit; font-size:0.84rem; font-weight:600; color:#1a1530; border:1.5px solid rgba(87,46,136,0.18); border-radius:8px; padding:0.35rem 0.6rem; flex:1; }
+    .bg-rc-custom-inp:focus { outline:none; border-color:#572e88; }
+    .bg-rc-custom-inp::placeholder { color:#c4bcd8; font-weight:400; }
+    .bg-rc-custom-del { background:none; border:none; cursor:pointer; color:#c4bcd8; font-size:1rem; padding:0.1rem 0.3rem; border-radius:5px; }
+    .bg-rc-custom-del:hover { color:#d1523d; background:rgba(209,82,61,0.08); }
+    .bg-rc-add-btn { font-family:inherit; font-size:0.8rem; font-weight:800; color:#572e88; background:rgba(87,46,136,0.07); border:1.5px dashed rgba(87,46,136,0.22); border-radius:8px; padding:0.35rem 0.85rem; cursor:pointer; margin-top:0.5rem; width:100%; }
+    .bg-rc-add-btn:hover { background:rgba(87,46,136,0.12); }
 
     /* ── Type picker modal ── */
     .bg-type-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:0.9rem; }
@@ -431,6 +447,19 @@
     <div class="bg-type-grid" id="bg-type-grid"></div>
     <div class="bg-modal-footer">
       <button class="bg-btn bg-btn--ghost" onclick="BP.closeTypeModal()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- Registration Fees config modal -->
+<div class="bg-modal-over" id="bg-reg-config-modal">
+  <div class="bg-modal bg-modal--reg-config">
+    <div class="bg-modal-title">Set Up Registration Fees</div>
+    <div class="bg-modal-sub">Answer a few questions and we'll build the formula for you.</div>
+    <div id="bg-rc-body"></div>
+    <div class="bg-modal-footer">
+      <button class="bg-btn bg-btn--ghost" onclick="BP._rcBack()">Back</button>
+      <button class="bg-btn bg-btn--primary" onclick="BP._rcBuild()">Build My Formula</button>
     </div>
   </div>
 </div>
@@ -817,13 +846,99 @@ const BP = {
 
   // ── Driver workspace — new driver OR edit existing ────────────────────
   previewDriver(type) {
-    const cfg = this._drvTypeCfg(type);
+    document.getElementById('bg-type-modal').classList.remove('open');
     this._prevType  = type;
     this._prevDrvId = null;
-    // Preserve template IDs so computed element exprs ({id}) resolve correctly
+    if (type === 'registration') { this._openRegConfig(); return; }
+    const cfg = this._drvTypeCfg(type);
     this._prevEls = cfg.defaultElements.map(e => Object.assign({}, e, {value: e.value !== undefined ? e.value : (e.default||0)}));
-    // Close the type modal WITHOUT resetting state (closeTypeModal() clears _prevEls)
-    document.getElementById('bg-type-modal').classList.remove('open');
+    this._openWorkspace();
+  },
+
+  // ── Registration Fees config wizard ──────────────────────────────────
+  _rcState: {fam:false, vol:false, custom:[]},
+  _openRegConfig() {
+    this._rcState = {fam:false, vol:false, custom:[]};
+    this._rcRender();
+    document.getElementById('bg-reg-config-modal').classList.add('open');
+  },
+  _rcRender() {
+    const s = this._rcState;
+    const customRows = s.custom.map((name, i) =>
+      '<div class="bg-rc-custom-row">' +
+        '<input class="bg-rc-custom-inp" type="text" value="' + this.esc(name) + '" placeholder="e.g. Early bird discount" oninput="BP._rcCustomName(' + i + ',this.value)">' +
+        '<button class="bg-rc-custom-del" onclick="BP._rcRemoveCustom(' + i + ')" title="Remove">&times;</button>' +
+      '</div>'
+    ).join('');
+    document.getElementById('bg-rc-body').innerHTML =
+      '<div class="bg-rc-q">' +
+        '<div class="bg-rc-q-label">Will you offer a family discount?</div>' +
+        '<div class="bg-rc-toggle">' +
+          '<button class="bg-rc-toggle-btn' + (s.fam ? ' active' : '') + '" onclick="BP._rcToggle(\'fam\',true)">Yes</button>' +
+          '<button class="bg-rc-toggle-btn' + (!s.fam ? ' active' : '') + '" onclick="BP._rcToggle(\'fam\',false)">No</button>' +
+        '</div>' +
+      '</div>' +
+      '<div class="bg-rc-q">' +
+        '<div class="bg-rc-q-label">Will you offer a volunteer discount?</div>' +
+        '<div class="bg-rc-toggle">' +
+          '<button class="bg-rc-toggle-btn' + (s.vol ? ' active' : '') + '" onclick="BP._rcToggle(\'vol\',true)">Yes</button>' +
+          '<button class="bg-rc-toggle-btn' + (!s.vol ? ' active' : '') + '" onclick="BP._rcToggle(\'vol\',false)">No</button>' +
+        '</div>' +
+      '</div>' +
+      '<div class="bg-rc-q">' +
+        '<div class="bg-rc-q-label">Any other discounts?</div>' +
+        '<div class="bg-rc-custom-list">' + customRows + '</div>' +
+        '<button class="bg-rc-add-btn" onclick="BP._rcAddCustom()">+ Add a discount</button>' +
+      '</div>';
+  },
+  _rcToggle(key, val) { this._rcState[key] = val; this._rcRender(); },
+  _rcAddCustom() { this._rcState.custom.push(''); this._rcRender(); requestAnimationFrame(()=>{ const inps=document.querySelectorAll('.bg-rc-custom-inp'); if(inps.length) inps[inps.length-1].focus(); }); },
+  _rcRemoveCustom(i) { this._rcState.custom.splice(i,1); this._rcRender(); },
+  _rcCustomName(i, val) { this._rcState.custom[i] = val; },
+  _rcBack() {
+    document.getElementById('bg-reg-config-modal').classList.remove('open');
+    this.openTypeModal();
+  },
+  _rcBuild() {
+    const s = this._rcState;
+    const discounts = [];
+    if (s.fam) discounts.push({prefix:'fam', label:'Family discount',    color:'rgba(118,158,123,0.08)'});
+    if (s.vol) discounts.push({prefix:'vol', label:'Volunteer discount',  color:'rgba(239,171,69,0.08)'});
+    s.custom.forEach((name, i) => {
+      const lbl = (name||'').trim() || 'Discount '+(i+1);
+      discounts.push({prefix:'cst'+i, label:lbl, color:'rgba(120,187,212,0.08)'});
+    });
+
+    const els = [
+      {id:'sec_reg',  label:'Registrations',                    kind:'section',  color:'rgba(87,46,136,0.06)', op:null},
+      {id:'capacity', label:'Capacity (max participants)',        kind:'number',   default:0, unit:'people', note:'Maximum spots available', ref:true, op:null},
+      {id:'expected', label:'Expected registrations',            kind:'number',   default:0, unit:'people', note:'What we expect to fill',    op:null},
+      {id:'fee',      label:'Registration fee per participant',  kind:'dollar',   default:0, note:'Price per person',                          op:'×'},
+      {id:'gross',    label:'A. Gross registration revenue',     kind:'subtotal', expr:'{expected}*{fee}', op:null},
+    ];
+
+    discounts.forEach(d => {
+      els.push(
+        {id:'sec_'+d.prefix,   label:d.label,                                   kind:'section',  color:d.color, op:null},
+        {id:d.prefix+'_pct',   label:'% of registrants receiving this discount', kind:'percent',  default:0, note:'Percent of registrants',    ref:true, op:null},
+        {id:d.prefix+'_amt',   label:'Discount amount per person',               kind:'dollar',   default:0, note:'Per person',                 ref:true, op:null},
+        {id:d.prefix+'_total', label:'Estimated '+d.label.toLowerCase()+' total', kind:'computed', expr:'{'+d.prefix+'_pct}*{'+d.prefix+'_amt}*{expected}', note:'Auto calculated', op:'−'}
+      );
+    });
+
+    if (discounts.length > 0) {
+      const discExpr = '-(' + discounts.map(d=>'{'+d.prefix+'_total}').join('+') + ')';
+      const netExpr  = '{expected}*{fee}' + discounts.map(d=>'-{'+d.prefix+'_total}').join('');
+      els.push(
+        {id:'total_disc', label:'B. Total discounts',                             kind:'subtotal', expr:discExpr, op:null},
+        {id:'net',        label:'C. Projected registration revenue (A − B)', kind:'subtotal', expr:netExpr,  final:true, op:null}
+      );
+    } else {
+      els.push({id:'net', label:'B. Projected registration revenue', kind:'subtotal', expr:'{expected}*{fee}', final:true, op:null});
+    }
+
+    this._prevEls = els.map(e => Object.assign({}, e, {value: e.value !== undefined ? e.value : (e.default||0)}));
+    document.getElementById('bg-reg-config-modal').classList.remove('open');
     this._openWorkspace();
   },
   openDrvEditor(id) {
