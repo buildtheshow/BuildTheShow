@@ -7557,8 +7557,22 @@
     function buildSceneTextBlocks(flatLines, catalogue) {
       // Step 1: collect every candidate heading match across the whole document.
       const allCandidates = []; // { sceneIndex, pos, page }
+      // Partial heading pattern — matches lines like "SCENE 15:" or "PROLOGUE" with nothing after.
+      const splitHeadingRe = /^(?:PROLOGUE|EPILOGUE|SCENE\s+\d+[A-Z]?)\s*:?\s*$/i;
       flatLines.forEach((line, pos) => {
-        const parsed = parseSceneHeadingForMti(line.text);
+        let parsed = parseSceneHeadingForMti(line.text);
+        // Some PDFs split the scene heading across two consecutive lines,
+        // e.g. "SCENE 15:" on one line and "CHERRY TREE LANE, PARLOR" on the next.
+        // Detect this by checking whether the line alone looks like an incomplete heading.
+        if (!parsed && splitHeadingRe.test(line.text.trim()) && pos + 1 < flatLines.length) {
+          const nextClean = flatLines[pos + 1].text.trim();
+          // Only join if the next line looks like a location: has uppercase letters,
+          // no speaker-cue colon, and is short enough to be a heading.
+          if (nextClean.length > 0 && nextClean.length < 80 && !/:/.test(nextClean) && /[A-Z]{2,}/.test(nextClean)) {
+            const sep = line.text.trim().endsWith(':') ? ' ' : ': ';
+            parsed = parseSceneHeadingForMti(line.text.trim() + sep + nextClean);
+          }
+        }
         if (!parsed) return;
         const scene = approvedScriptSceneForHeading(parsed);
         if (!scene) return;
