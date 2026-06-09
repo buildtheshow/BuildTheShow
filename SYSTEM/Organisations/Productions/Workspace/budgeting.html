@@ -136,6 +136,12 @@
     .bg-wk-text-inp:focus { outline:none; border-color:#572e88; }
     .bg-wk-card-kind { font-family:inherit; font-size:0.58rem; font-weight:700; color:#c4bcd8; background:none; border:none; cursor:pointer; padding:0; text-align:left; }
     .bg-wk-card-kind:hover { color:#572e88; }
+    .bg-wk-card--computed { background:rgba(87,46,136,0.04); border-style:dashed; border-color:rgba(87,46,136,0.2); }
+    .bg-wk-card--ref { background:#fdfcff; border-color:rgba(87,46,136,0.09); }
+    .bg-wk-computed-val { font-size:1.1rem; font-weight:900; color:#572e88; padding:0.2rem 0; }
+    .bg-wk-card-badge { font-size:0.52rem; font-weight:900; text-transform:uppercase; letter-spacing:0.08em; padding:0.1rem 0.35rem; border-radius:999px; flex-shrink:0; }
+    .bg-wk-card-badge--computed { background:rgba(87,46,136,0.1); color:#572e88; }
+    .bg-wk-card-badge--ref { background:rgba(71,106,170,0.1); color:#2a4a80; }
     /* Empty grid placeholder */
     .bg-wk-empty { grid-column:1/-1; text-align:center; padding:2rem 1rem; color:#c4bcd8; font-size:0.83rem; border:2px dashed rgba(87,46,136,0.14); border-radius:10px; pointer-events:none; }
     .bg-wk-grid--over .bg-wk-empty { border-color:#572e88; color:#572e88; background:rgba(87,46,136,0.04); }
@@ -517,10 +523,17 @@ const BP = {
     {
       type:'registration', label:'Registration Fees', iconSvg:'Budgeting-Registration.svg', iconBg:'rgba(87,46,136,0.12)', tileColor:'#572e88', projColor:'#572e88',
       desc:'Money collected from participants joining the production.',
-      detail:'This includes production fees, registration fees, workshop fees, and participation fees.',
+      detail:'Registration fees, production fees, camp fees',
       defaultElements:[
-        {id:'participants', label:'How many participants?', kind:'number',  default:0,  unit:'people', op:null},
-        {id:'fee',          label:'Fee per participant',    kind:'dollar',  default:0,  op:'×'},
+        {id:'capacity',   label:'Capacity (max participants)',     kind:'number',  default:0,  unit:'people', ref:true,  op:null},
+        {id:'expected',   label:'Expected registrations',         kind:'number',  default:0,  unit:'people', op:null},
+        {id:'fee',        label:'Fee per participant',            kind:'dollar',  default:0,  op:'×'},
+        {id:'fam_amt',    label:'Family: discount per person',    kind:'dollar',  default:0,  ref:true, op:null},
+        {id:'fam_pct',    label:'Family: % of registrants',      kind:'percent', default:0,  ref:true, op:null},
+        {id:'fam_total',  label:'Family discount total',         kind:'computed', expr:'{fam_amt}*{fam_pct}*{expected}', op:'−'},
+        {id:'vol_amt',    label:'Volunteer: discount per person', kind:'dollar',  default:0,  ref:true, op:null},
+        {id:'vol_pct',    label:'Volunteer: % of registrants',   kind:'percent', default:0,  ref:true, op:null},
+        {id:'vol_total',  label:'Volunteer discount total',      kind:'computed', expr:'{vol_amt}*{vol_pct}*{expected}', op:'−'},
       ],
     },
     {
@@ -672,16 +685,28 @@ const BP = {
 
   // ── Formula engine ─────────────────────────────────────────────────────
   // Elements chain left-to-right with their op. Percentages are /100 for ×.
-  _elNumVal(el) {
+  _evalExpr(expr, elements) {
+    if (!expr) return 0;
+    const resolved = expr.replace(/\{(\w+)\}/g, (_, id) => {
+      const ref = (elements||[]).find(e => e.id === id);
+      return ref ? this._elNumVal(ref, elements) : 0;
+    });
+    try { return +Function('"use strict";return('+resolved+')')(); } catch { return 0; }
+  },
+  _elNumVal(el, elements) {
     const v = el.value !== undefined ? +el.value : +(el.default||0);
-    return el.kind === 'percent' ? v / 100 : v;
+    if (el.kind === 'percent')  return v / 100;
+    if (el.kind === 'computed') return this._evalExpr(el.expr||'0', elements);
+    return v;
   },
   _calcElements(elements) {
     if (!elements || !elements.length) return 0;
-    let acc = this._elNumVal(elements[0]);
-    for (let i = 1; i < elements.length; i++) {
-      const v = this._elNumVal(elements[i]);
-      const op = elements[i].op || '×';
+    const active = elements.filter(e => !e.ref);
+    if (!active.length) return 0;
+    let acc = this._elNumVal(active[0], elements);
+    for (let i = 1; i < active.length; i++) {
+      const v   = this._elNumVal(active[i], elements);
+      const op  = active[i].op || '×';
       if      (op === '×') acc *= v;
       else if (op === '+') acc += v;
       else if (op === '−') acc -= v;
@@ -690,13 +715,14 @@ const BP = {
   },
   _formulaStr(elements) {
     if (!elements || !elements.length) return '';
-    return elements.map((el, i) => {
-      const v = el.value !== undefined ? +el.value : +(el.default||0);
+    const active = elements.filter(e => !e.ref && e.kind !== 'text');
+    return active.map((el, i) => {
       let vStr;
-      if      (el.kind === 'dollar')  vStr = '$' + v.toLocaleString('en-CA', {minimumFractionDigits:2, maximumFractionDigits:2});
-      else if (el.kind === 'percent') vStr = v + '%';
-      else                            vStr = v.toLocaleString('en-CA');
-      const opStr = i === 0 ? '' : ' ' + (el.op || '×') + ' ';
+      if (el.kind === 'dollar')   { const v = el.value !== undefined ? +el.value : +(el.default||0); vStr = '$'+v.toLocaleString('en-CA',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+      else if (el.kind === 'percent')  { const v = el.value !== undefined ? +el.value : +(el.default||0); vStr = v+'%'; }
+      else if (el.kind === 'computed') { const v = this._evalExpr(el.expr||'0', elements); vStr = '$'+v.toLocaleString('en-CA',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+      else                            { const v = el.value !== undefined ? +el.value : +(el.default||0); vStr = v.toLocaleString('en-CA'); }
+      const opStr = i === 0 ? '' : ' '+(el.op||'×')+' ';
       return opStr + vStr;
     }).join('');
   },
@@ -776,7 +802,8 @@ const BP = {
     const cfg = this._drvTypeCfg(type);
     this._prevType  = type;
     this._prevDrvId = null;
-    this._prevEls   = cfg.defaultElements.map(e=>Object.assign({},e,{id:this._mkElId(),value:e.default||0}));
+    // Preserve template IDs so computed element exprs ({id}) resolve correctly
+    this._prevEls = cfg.defaultElements.map(e => Object.assign({}, e, {value: e.value !== undefined ? e.value : (e.default||0)}));
     this.closeTypeModal();
     this._openWorkspace();
   },
@@ -794,17 +821,20 @@ const BP = {
 
   // ── Workspace render ──────────────────────────────────────────────────
   _dnd: {src:null, chip:null},
-  _elDisplayVal(el) {
+  _elDisplayVal(el, elements) {
     const v = el.value !== undefined ? +el.value : +(el.default||0);
     if (el.kind === 'dollar')   return '$'+v.toLocaleString('en-CA',{minimumFractionDigits:2,maximumFractionDigits:2});
     if (el.kind === 'percent')  return v+'%';
+    if (el.kind === 'computed') { const cv=this._evalExpr(el.expr||'0', elements||this._prevEls); return '$'+cv.toLocaleString('en-CA',{minimumFractionDigits:2,maximumFractionDigits:2}); }
     if (el.kind === 'dropdown') { const o=(el.options||[]).find(x=>x.value===v); return o?o.label:v+''; }
     return v.toLocaleString('en-CA')+(el.unit?' '+el.unit:'');
   },
   _fbarStr() {
-    return this._prevEls.filter(e=>e.kind!=='text').map((el,i)=>{
+    const els = this._prevEls;
+    const active = els.filter(e => e.kind!=='text' && !e.ref);
+    return active.map((el,i)=>{
       const opStr = i===0 ? '' : ' '+(el.op||'×')+' ';
-      return opStr+this._elDisplayVal(el);
+      return opStr+this._elDisplayVal(el, els);
     }).join('');
   },
   _nextKind(k) {
@@ -812,12 +842,21 @@ const BP = {
     return order[(order.indexOf(k)+1)%order.length];
   },
   _fixOps() {
-    this._prevEls.forEach((el,i)=>{ if(i===0) el.op=null; else if(!el.op) el.op='×'; });
+    const active = this._prevEls.filter(e=>!e.ref);
+    active.forEach((el,i)=>{ if(i===0) el.op=null; else if(!el.op) el.op='×'; });
   },
   _wkCardHtml(el, i) {
     const val = el.value!==undefined ? el.value : (el.default||0);
+    const isComputed = el.kind==='computed';
+    const isRef      = !!el.ref;
+    const activeEls  = this._prevEls.filter(e=>!e.ref);
+    const activeIdx  = activeEls.indexOf(el);
+
     let valHtml = '';
-    if (el.kind==='dollar') {
+    if (isComputed) {
+      const cv = this._evalExpr(el.expr||'0', this._prevEls);
+      valHtml = '<div class="bg-wk-computed-val" id="bg-wk-cv-'+el.id+'">$'+cv.toLocaleString('en-CA',{minimumFractionDigits:2,maximumFractionDigits:2})+'</div>';
+    } else if (el.kind==='dollar') {
       valHtml='<div class="bg-wk-val-wrap"><span class="bg-wk-val-pfx">$</span><input class="bg-wk-val-inp" type="number" value="'+(val||'')+'" min="0" step="0.01" placeholder="0.00" onclick="event.stopPropagation()" oninput="BP._prevElVal(\''+el.id+'\',+this.value)"></div>';
     } else if (el.kind==='percent') {
       valHtml='<div class="bg-wk-val-wrap"><input class="bg-wk-val-inp" type="number" value="'+(val||'')+'" min="0" max="100" placeholder="0" onclick="event.stopPropagation()" oninput="BP._prevElVal(\''+el.id+'\',+this.value)"><span class="bg-wk-val-sfx">%</span></div>';
@@ -829,22 +868,34 @@ const BP = {
     } else {
       valHtml='<div class="bg-wk-val-wrap"><input class="bg-wk-val-inp" type="number" value="'+(val||'')+'" min="0" placeholder="0" onclick="event.stopPropagation()" oninput="BP._prevElVal(\''+el.id+'\',+this.value)"><input class="bg-wk-unit-inp" type="text" value="'+this.esc(el.unit||'')+'" placeholder="unit" onclick="event.stopPropagation()" oninput="BP._prevElUnit(\''+el.id+'\',this.value)"></div>';
     }
+
     const kindNames={number:'Number',percent:'Percentage',dollar:'Currency',dropdown:'Dropdown',text:'Text note'};
-    const opPill = i===0 ? '' : '<button class="bg-wk-card-op" id="bg-wkop-'+el.id+'" onclick="event.stopPropagation();BP._prevCycleOp(\''+el.id+'\')" title="Click to change operator">'+(el.op||'×')+'</button>';
-    return '<div class="bg-wk-card" id="bg-wkc-'+el.id+'" draggable="true"' +
+    const opPill = (!isRef && activeIdx > 0)
+      ? '<button class="bg-wk-card-op" id="bg-wkop-'+el.id+'" onclick="event.stopPropagation();BP._prevCycleOp(\''+el.id+'\')" title="Click to change operator">'+(el.op||'×')+'</button>'
+      : '';
+    const badge = isComputed
+      ? '<span class="bg-wk-card-badge bg-wk-card-badge--computed">Auto</span>'
+      : isRef
+        ? '<span class="bg-wk-card-badge bg-wk-card-badge--ref">Ref</span>'
+        : '';
+    const kindBtn = (!isComputed && !isRef)
+      ? '<button class="bg-wk-card-kind" onclick="event.stopPropagation();BP._prevElKind(\''+el.id+'\',BP._nextKind(\''+el.kind+'\'))" title="Click to change type">Type: '+kindNames[el.kind]+'</button>'
+      : '';
+
+    const cardClass = 'bg-wk-card'+(isComputed?' bg-wk-card--computed':isRef?' bg-wk-card--ref':'');
+    return '<div class="'+cardClass+'" id="bg-wkc-'+el.id+'" draggable="true"' +
       ' ondragstart="BP._dndCardStart(event,\''+el.id+'\')"' +
       ' ondragover="event.preventDefault();BP._dndCardOver(event,\''+el.id+'\')"' +
       ' ondrop="BP._dndCardDrop(event,\''+el.id+'\')"' +
       ' ondragleave="BP._dndCardLeave(event)">' +
       '<div class="bg-wk-card-top">' +
         '<div class="bg-wk-card-grip" title="Drag to reorder"></div>' +
-        opPill +
+        opPill + badge +
         '<button class="bg-wk-card-del" onclick="event.stopPropagation();BP._prevRemoveEl(\''+el.id+'\')" title="Remove">&times;</button>' +
       '</div>' +
       '<div class="bg-wk-card-body">' +
         '<input class="bg-wk-card-lbl" type="text" value="'+this.esc(el.label||'')+'" placeholder="Variable name…" onclick="event.stopPropagation()" oninput="BP._prevElLabel(\''+el.id+'\',this.value)">' +
-        valHtml +
-        '<button class="bg-wk-card-kind" onclick="event.stopPropagation();BP._prevElKind(\''+el.id+'\',BP._nextKind(\''+el.kind+'\'))" title="Click to change type">Type: '+kindNames[el.kind]+'</button>' +
+        valHtml + kindBtn +
       '</div>' +
     '</div>';
   },
@@ -926,7 +977,7 @@ const BP = {
   _prevChangeType(type) {
     const cfg=this._drvTypeCfg(type); if(!cfg) return;
     this._prevType=type;
-    this._prevEls=cfg.defaultElements.map(e=>Object.assign({},e,{id:this._mkElId(),value:e.default||0}));
+    this._prevEls=cfg.defaultElements.map(e=>Object.assign({},e,{value: e.value!==undefined?e.value:(e.default||0)}));
     this._renderWorkspace();
   },
   _prevRefresh() {
@@ -936,6 +987,11 @@ const BP = {
     const fStr=this._fbarStr();
     const tEl=document.getElementById('bg-prev-total'); if(tEl){tEl.textContent=this.fmt$(total);tEl.style.color=total>0?c:'#c4bcd8';}
     const fEl=document.getElementById('bg-wk-fbar-eq'); if(fEl) fEl.textContent=fStr||'—';
+    // Update computed card displays live
+    this._prevEls.filter(e=>e.kind==='computed').forEach(el=>{
+      const cv=document.getElementById('bg-wk-cv-'+el.id);
+      if(cv){const v=this._evalExpr(el.expr||'0',this._prevEls);cv.textContent='$'+v.toLocaleString('en-CA',{minimumFractionDigits:2,maximumFractionDigits:2});}
+    });
   },
   _confirmDeleteDriver(id) {
     if(!confirm('Remove this revenue driver?')) return;
