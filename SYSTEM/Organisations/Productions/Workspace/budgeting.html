@@ -346,20 +346,21 @@
 </div>
 
 <!-- Driver type picker -->
+<!-- Type picker modal -->
 <div class="bg-modal-over" id="bg-type-modal">
   <div class="bg-modal bg-modal--type">
-    <!-- Screen 1: pick a type -->
-    <div id="bg-type-screen-1">
-      <div class="bg-modal-title">Add a Revenue Driver</div>
-      <div class="bg-modal-sub">Choose the type of revenue this driver tracks.</div>
-      <div class="bg-type-grid" id="bg-type-grid"></div>
-      <div class="bg-modal-footer">
-        <button class="bg-btn bg-btn--ghost" onclick="BP.closeTypeModal()">Cancel</button>
-      </div>
+    <div class="bg-modal-title">Add a Revenue Driver</div>
+    <div class="bg-modal-sub">Choose the type of revenue this driver tracks.</div>
+    <div class="bg-type-grid" id="bg-type-grid"></div>
+    <div class="bg-modal-footer">
+      <button class="bg-btn bg-btn--ghost" onclick="BP.closeTypeModal()">Cancel</button>
     </div>
-    <!-- Screen 2: configure fields -->
-    <div id="bg-type-screen-2" style="display:none"></div>
   </div>
+</div>
+
+<!-- Driver workspace modal -->
+<div class="bg-modal-over" id="bg-workspace-modal">
+  <div class="bg-modal bg-modal--type" id="bg-workspace-inner"></div>
 </div>
 
 <!-- Category modal -->
@@ -710,17 +711,25 @@ const BP = {
   openTypeModal()  { document.getElementById('bg-type-modal').classList.add('open'); },
   closeTypeModal() {
     document.getElementById('bg-type-modal').classList.remove('open');
-    const s1=document.getElementById('bg-type-screen-1'); if(s1) s1.style.display='';
-    const s2=document.getElementById('bg-type-screen-2'); if(s2){s2.style.display='none';s2.innerHTML='';}
+    this._prevType=null; this._prevDrvId=null; this._prevEls=[];
+  },
+  _openWorkspace() {
+    document.getElementById('bg-workspace-modal').classList.add('open');
+    this._renderWorkspace();
+  },
+  closeWorkspaceModal() {
+    document.getElementById('bg-workspace-modal').classList.remove('open');
+    const inner=document.getElementById('bg-workspace-inner'); if(inner) inner.innerHTML='';
     this._prevType=null; this._prevDrvId=null; this._prevEls=[];
   },
 
-  // ── Driver workspace (screen 2 — new driver OR edit existing) ─────────
+  // ── Driver workspace — new driver OR edit existing ────────────────────
   previewDriver(type) {
     const cfg = this._drvTypeCfg(type);
     this._prevType  = type;
     this._prevDrvId = null;
     this._prevEls   = cfg.defaultElements.map(e=>Object.assign({},e,{id:this._mkElId(),value:e.default||0}));
+    this.closeTypeModal();
     this._openWorkspace();
   },
   openDrvEditor(id) {
@@ -728,24 +737,16 @@ const BP = {
     this._prevType  = drv.type;
     this._prevDrvId = id;
     this._prevEls   = JSON.parse(JSON.stringify(drv.elements||[]));
-    document.getElementById('bg-type-modal').classList.add('open');
-    const s1=document.getElementById('bg-type-screen-1'); if(s1) s1.style.display='none';
     this._openWorkspace();
   },
-  _openWorkspace() {
-    const s2 = document.getElementById('bg-type-screen-2'); if(!s2) return;
-    s2.style.display = '';
-    this._renderWorkspace();
-  },
   _previewBack() {
-    const s1=document.getElementById('bg-type-screen-1'); if(s1) s1.style.display='';
-    const s2=document.getElementById('bg-type-screen-2'); if(s2){s2.style.display='none';s2.innerHTML='';}
-    this._prevDrvId=null;
+    this.closeWorkspaceModal();
+    this.openTypeModal();
   },
 
   // ── Workspace render ──────────────────────────────────────────────────
   _renderWorkspace() {
-    const s2 = document.getElementById('bg-type-screen-2'); if(!s2) return;
+    const s2 = document.getElementById('bg-workspace-inner'); if(!s2) return;
     const cfg = this._drvTypeCfg(this._prevType);
     const c   = cfg.projColor||'#572e88';
     const isEdit = !!this._prevDrvId;
@@ -782,7 +783,7 @@ const BP = {
       '</div>' +
       '<div class="bg-modal-footer">' +
         (isEdit ? '' : '<button class="bg-btn bg-btn--ghost" onclick="BP._previewBack()">Back</button>') +
-        (isEdit ? '<button class="bg-btn bg-btn--danger" onclick="BP.removeDriver(\''+this._prevDrvId+'\');BP.closeTypeModal()">Remove Driver</button>' : '') +
+        (isEdit ? '<button class="bg-btn bg-btn--danger" onclick="BP.removeDriver(\''+this._prevDrvId+'\');BP.closeWorkspaceModal()">Remove Driver</button>' : '') +
         '<button class="bg-btn bg-btn--primary" onclick="BP._prevSave()">'+( isEdit ? 'Save Changes' : 'Add Revenue Driver')+'</button>' +
       '</div>';
   },
@@ -863,7 +864,7 @@ const BP = {
       const cfg = this._drvTypeCfg(this._prevType);
       this.drivers.push({id:'drv_'+Date.now(), type:this._prevType, label:cfg.label, elements});
     }
-    this._saveDrvs(); this.closeTypeModal(); this.renderDrivers(); this.renderSummary();
+    this._saveDrvs(); this.closeWorkspaceModal(); this.renderDrivers(); this.renderSummary();
   },
 
   // ── Production summary ────────────────────────────────────────────────
@@ -1348,10 +1349,11 @@ const BP = {
 window.initProductionPage('financials');
 BP.init();
 
-['bg-type-modal','bg-onboard-modal','bg-cat-modal','bg-item-modal','bg-upload-modal','bg-review-modal'].forEach(id=>{
+['bg-type-modal','bg-workspace-modal','bg-onboard-modal','bg-cat-modal','bg-item-modal','bg-upload-modal','bg-review-modal'].forEach(id=>{
   const el=document.getElementById(id); if(!el)return;
   el.addEventListener('click',function(e){if(e.target===this){
     if(id==='bg-type-modal')BP.closeTypeModal();
+    else if(id==='bg-workspace-modal')BP.closeWorkspaceModal();
     else if(id==='bg-onboard-modal')BP.closeOnboardModal();
     else if(id==='bg-cat-modal')BP.closeCatModal();
     else if(id==='bg-item-modal')BP.closeItemModal();
