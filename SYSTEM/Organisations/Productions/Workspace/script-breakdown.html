@@ -7520,10 +7520,25 @@
       return blocks;
     }
 
+    // Returns all text lines within a printed page range, in reading order.
+    function getLinesForPrintedPageRange(pageLines, printedMap, startPage, endPage) {
+      const end = endPage != null ? endPage : Infinity;
+      const result = [];
+      [...pageLines.entries()]
+        .filter(([pdfPage]) => { const p = printedMap.get(pdfPage) ?? null; return p != null && p >= startPage && p <= end; })
+        .sort((a, b) => (printedMap.get(a[0]) ?? 0) - (printedMap.get(b[0]) ?? 0))
+        .forEach(([, lines]) => {
+          lines.slice().sort((a, b) => Math.abs(b.y - a.y) > 3 ? b.y - a.y : a.x - b.x)
+            .forEach(l => { if (l.text?.trim()) result.push(l.text); });
+        });
+      return result;
+    }
+
     // Walk a scene's text block line by line.
-    // Tracks: current song (from cue markers), character cues, stage direction names.
+    // Songs: detected from cue markers in the page range (most reliable).
+    // Characters: detected from speaker cues and stage directions in the text block.
     // Uses approved catalogues as ground truth — never guesses outside them.
-    function buildConnectionsFromTextBlocks(sceneBlocks, catalogue, songs, aliasEntries, propsCatalogue) {
+    function buildConnectionsFromTextBlocks(sceneBlocks, catalogue, songs, aliasEntries, propsCatalogue, pageLines, printedMap) {
       const sceneConnections = catalogue.map((catalogueScene, index) => {
         const sceneLabel = scriptSceneDisplayName(catalogueScene);
         const block = sceneBlocks[index] || null;
@@ -7571,6 +7586,33 @@
             });
           }
         });
+
+        // Page-range song scan: if we know the printed page range for this scene,
+        // gather ALL lines from those pages and search for cue markers.
+        // This catches songs whose cue marker falls outside the text block boundaries
+        // (e.g. cue marker on same page as the heading of the NEXT scene).
+        if (pageLines && printedMap) {
+          const sp = block?.startPage ?? null;
+          const ep = block?.endPage ?? null;
+          if (sp != null) {
+            const pageRangeLines = getLinesForPrintedPageRange(pageLines, printedMap, sp, ep ?? sp);
+            pageRangeLines.forEach(raw => {
+              const text = (raw || '').trim();
+              if (!text || looksLikeSheetMusicLine(text)) return;
+              const cueMatch = text.match(/\(#\d+\s*[–\-]\s*([^.)]+?)\.?\s*\)/);
+              if (!cueMatch) return;
+              const cueName = normalizeLoose(cueMatch[1]);
+              const song = songs.find(s => {
+                const sn = normalizeLoose(s.title);
+                return sn === cueName || cueName.includes(sn) || sn.includes(cueName);
+              });
+              if (song && !sceneSongs.has(song.title)) {
+                sceneSongs.add(song.title);
+                if (!songCharMap[song.title]) songCharMap[song.title] = new Set();
+              }
+            });
+          }
+        }
 
         // Props: phrase match against full block text (props don't have speaker cues)
         const blockText = lines.join('\n');
@@ -7625,7 +7667,7 @@
       const printedMap = buildPrintedPageMap(pageLines);
       const flatLines = buildFlatLines(pageLines, printedMap);
       const sceneBlocks = buildSceneTextBlocks(flatLines, catalogue);
-      return buildConnectionsFromTextBlocks(sceneBlocks, catalogue, songs, aliasEntries, propsCatalogue);
+      return buildConnectionsFromTextBlocks(sceneBlocks, catalogue, songs, aliasEntries, propsCatalogue, pageLines, printedMap);
     }
 
     function buildScriptConnections(text, meta = {}) {
