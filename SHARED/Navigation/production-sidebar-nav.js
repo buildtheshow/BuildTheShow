@@ -68,8 +68,24 @@
 
   // ── Submenu toggles ──────────────────────────────────────────────────────
 
+  const SUBMENU_SECTIONS = [
+    'auditions',
+    'registration',
+    'casting',
+    'marketing',
+    'budget',
+    'dept-front-of-house',
+    'dept-backstage',
+    'dept-technical',
+    'dept-design',
+    'dept-costume',
+    'dept-hair',
+    'dept-marketing-publicity',
+    'dept-stage-management',
+  ];
+
   function syncSidebarMenuA11y() {
-    ['auditions', 'registration', 'casting', 'marketing', 'budget'].forEach(function (section) {
+    SUBMENU_SECTIONS.forEach(function (section) {
       const wrap = document.getElementById(section + '-wrap');
       const parent = document.getElementById(section + '-parent-tab');
       const chevron = parent ? parent.querySelector('.tab-chevron') : null;
@@ -80,7 +96,7 @@
   }
 
   function openSubmenu(section) {
-    ['auditions-wrap', 'registration-wrap', 'casting-wrap', 'marketing-wrap', 'budget-wrap'].forEach(function (id) {
+    SUBMENU_SECTIONS.map(function (item) { return item + '-wrap'; }).forEach(function (id) {
       const wrap = document.getElementById(id);
       if (wrap) wrap.classList.toggle('open', id === section + '-wrap');
     });
@@ -103,10 +119,17 @@
   window.toggleCastingMenu      = makeToggle('casting');
   window.toggleMarketingMenu    = makeToggle('marketing');
   window.toggleBudgetMenu       = makeToggle('budget');
+  window.toggleDepartmentSubmenu = function (e, section) {
+    makeToggle(section)(e);
+  };
 
   window.handleSidebarChevronKey = function (e, section) {
     if (e.key !== 'Enter' && e.key !== ' ') return;
     const fn = { auditions: window.toggleAuditionsMenu, registration: window.toggleRegistrationMenu, casting: window.toggleCastingMenu, marketing: window.toggleMarketingMenu, budget: window.toggleBudgetMenu }[section];
+    if (!fn && section.indexOf('dept-') === 0) {
+      window.toggleDepartmentSubmenu(e, section);
+      return;
+    }
     if (fn) fn(e);
   };
 
@@ -194,7 +217,7 @@
   // ── Sidebar HTML loader ──────────────────────────────────────────────────
 
   window.loadProductionSidebar = function (activeGroup, activePage) {
-    const key = 'bts-prod-sidebar-v22';
+    const key = 'bts-prod-sidebar-v23';
     const cached = sessionStorage.getItem(key);
     const host = document.getElementById('prod-sidebar-host');
     if (!host) return;
@@ -219,7 +242,7 @@
 
     if (cached) applyAndInit(cached);
 
-    fetch('/SHARED/Navigation/production-sidebar.html?v=sidebar-v49-20260608')
+    fetch('/SHARED/Navigation/production-sidebar.html?v=sidebar-v50-20260608')
       .then(function (res) { return res.text(); })
       .then(function (html) {
         sessionStorage.setItem(key, html);
@@ -315,7 +338,15 @@
     // Use attribute selector — most reliable, no quote-matching required
     var sel = '.prod-tab[onclick*="' + currentFile + '"], .prod-sub-item[onclick*="' + currentFile + '"]';
     var found = document.querySelector(sel);
-    if (found) { addActiveDot(found); return; }
+    if (found) {
+      var wrap = found.closest('.prod-tab-submenu-wrap');
+      if (wrap) {
+        wrap.classList.add('open');
+        syncSidebarMenuA11y();
+      }
+      addActiveDot(found);
+      return;
+    }
     // Fallback: iterate (handles edge cases where attribute selector might not match)
     document.querySelectorAll('.prod-tab, .prod-sub-item').forEach(function (el) {
       var onclick = el.getAttribute('onclick') || '';
