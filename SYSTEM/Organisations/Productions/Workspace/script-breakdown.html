@@ -4301,9 +4301,25 @@
     .sbs-th-step-name { font-size: 0.72rem; font-weight: 900; }
     .sbs-th-confirmed .sbs-th-step-label { color: #769e7b; opacity: 1; }
     .sbs-th-confirmed .sbs-th-step-name::after { content: ' \2713'; color: #769e7b; font-weight: 900; }
-    .sbs-th-pending { opacity: 0.45; }
-    .sbs-td-pending { opacity: 0.28; pointer-events: none; }
+    .sbs-th-pending { background: rgba(26,21,48,0.03) !important; color: rgba(26,21,48,0.3) !important; }
+    .sbs-th-pending .sbs-th-step-label, .sbs-th-pending .sbs-th-step-name { color: rgba(26,21,48,0.3); }
+    .sbs-td-pending { background: rgba(26,21,48,0.03); pointer-events: none; }
+    .sbs-td-pending::after { content: ''; display: block; }
     .sbs-td-locked { color: rgba(26,21,48,0.5); }
+    /* Step instruction banner */
+    .sbs-step-banner {
+      display: flex; align-items: center; gap: 0.55rem;
+      padding: 0.5rem 0.8rem; margin-bottom: 0.3rem;
+      background: rgba(87,46,136,0.07); border: 1px solid rgba(87,46,136,0.15);
+      border-radius: 8px; font-size: 0.78rem; font-weight: 800; color: #572e88;
+    }
+    .sbs-step-banner-num {
+      width: 22px; height: 22px; border-radius: 50%; background: #572e88; color: white;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.68rem; font-weight: 900; flex-shrink: 0;
+    }
+    .sbs-step-banner-done { background: rgba(118,158,123,0.1); border-color: rgba(118,158,123,0.25); color: #3a6640; }
+    .sbs-step-banner-done .sbs-step-banner-num { background: #769e7b; }
 
     /* Step progress track */
     .sbs-step-track {
@@ -7932,8 +7948,7 @@
       const metric = (num, label, cls = '') =>
         `<div class="sbs-script-metric ${cls}"><strong>${num ?? 0}</strong><span>${esc(label)}</span></div>`;
 
-      const tagList = (items, cls, emptyLabel, pending = false) => {
-        if (pending) return `<div class="sbs-tag-row sbs-td-pending"><span class="sbs-tag sbs-tag-empty" style="opacity:0.5;">–</span></div>`;
+      const tagList = (items, cls, emptyLabel) => {
         const vals = uniqueByLooseName(items || []).map(i => typeof i === 'string' ? i : (i?.name || i?.title || '')).filter(Boolean);
         if (!vals.length) return `<div class="sbs-tag-row"><span class="sbs-tag sbs-tag-empty">${esc(emptyLabel)}</span></div>`;
         return `<div class="sbs-tag-row">${vals.map(v => `<span class="sbs-tag ${cls}">${esc(v)}</span>`).join('')}</div>`;
@@ -7982,12 +7997,18 @@
         </div>
       </div>`;
 
-      // Sort by start page; scenes with no heading float to the end.
+      // Sort by act number, then scene number (Prologue = 0).
+      const sceneNumFor = (s) => {
+        const raw = String(s.sceneNumber || s.number || '');
+        if (/^prologue$/i.test(raw)) return 0;
+        const n = parseInt(raw, 10);
+        return isNaN(n) ? 999 : n;
+      };
       const sortedScenes = scenes.slice().sort((a, b) => {
-        if (a.startPage == null && b.startPage == null) return 0;
-        if (a.startPage == null) return 1;
-        if (b.startPage == null) return -1;
-        return a.startPage - b.startPage;
+        const actA = parseInt(a.actNumber || a.act || '1', 10) || 1;
+        const actB = parseInt(b.actNumber || b.act || '1', 10) || 1;
+        if (actA !== actB) return actA - actB;
+        return sceneNumFor(a) - sceneNumFor(b);
       });
 
       let lastAct = null;
@@ -8008,11 +8029,21 @@
           <td class="sbs-script-td-scenename" style="vertical-align:top;padding:0.45rem 0.5rem;">${esc(scene.sceneName || '')}</td>
           <td class="sbs-script-td-sceneloc" style="vertical-align:top;padding:0.45rem 0.5rem;">${esc(scene.location || '')}</td>
           <td class="sbs-script-td-pages-cell" style="white-space:nowrap;vertical-align:middle;padding:0.3rem 0.5rem;">${pageCell(scene, idx)}</td>
-          <td class="sbs-script-td-list">${tagList(scene.songs, 'sbs-tag-song', 'None found', step < 1)}</td>
-          <td class="sbs-script-td-list">${tagList(scene.characters, 'sbs-tag-char', 'None found', step < 2)}</td>
-          <td class="sbs-script-td-list">${tagList(scene.props, 'sbs-tag-prop', 'None found')}</td>
+          <td class="sbs-script-td-list${step < 1 ? ' sbs-td-pending' : ''}">${step < 1 ? '' : tagList(scene.songs, 'sbs-tag-song', 'None found')}</td>
+          <td class="sbs-script-td-list${step < 2 ? ' sbs-td-pending' : ''}">${step < 2 ? '' : tagList(scene.characters, 'sbs-tag-char', 'None found')}</td>
+          <td class="sbs-script-td-list${step < 2 ? ' sbs-td-pending' : ''}">${step < 2 ? '' : tagList(scene.props, 'sbs-tag-prop', 'None found')}</td>
         </tr>`;
       }).join('');
+
+      const stepMessages = [
+        'Check each page range below. Correct any that look off, then click Confirm Pages in the footer.',
+        'Songs found in each scene are shown below. Fix any misses, then click Confirm Songs.',
+        'All steps complete. Review the results below and click Save Connections when ready.',
+      ];
+      const stepBanner = `<div class="sbs-step-banner${step === 2 ? ' sbs-step-banner-done' : ''}">
+        <div class="sbs-step-banner-num">${step === 2 ? '✓' : step + 1}</div>
+        <span>${stepMessages[step] || stepMessages[2]}</span>
+      </div>`;
 
       const rescanHint = missingCount && step === 0
         ? `<div class="sbs-rescan-hint">${missingCount} scene heading${missingCount === 1 ? '' : 's'} not found — enter page ranges manually.</div>`
@@ -8039,6 +8070,7 @@
           ${metric(stats.needsReview, 'Need Review', stats.needsReview ? 'review' : '')}
         </div>
         ${rescanHint}
+        ${stepBanner}
         <div class="sbs-script-table-wrap" id="sbs-script-table-wrap">
           <table class="sbs-script-table">
             <colgroup>
