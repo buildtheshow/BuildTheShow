@@ -215,6 +215,16 @@
     /* Onboarding — 2x2 when 4 options */
     .bg-onboard-options { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.85rem; }
 
+    /* PDF import review */
+    .bg-import-modal { max-width: 740px; }
+    .bg-review-table { border: 1px solid rgba(87,46,136,0.1); border-radius: 10px; overflow: hidden; margin-top: 0.5rem; }
+    .bg-review-head { display: grid; grid-template-columns: 28px 1fr 110px 195px; gap: 0.5rem; padding: 0.5rem 0.75rem; background: rgba(87,46,136,0.04); font-size: 0.62rem; font-weight: 900; letter-spacing: 0.08em; text-transform: uppercase; color: #9a90b0; }
+    .bg-review-row { display: grid; grid-template-columns: 28px 1fr 110px 195px; gap: 0.5rem; padding: 0.4rem 0.75rem; border-top: 1px solid rgba(87,46,136,0.07); align-items: center; transition: opacity 0.12s; }
+    .bg-review-scroll { max-height: 360px; overflow-y: auto; }
+    .bg-rr-label  { border: 1px solid rgba(87,46,136,0.15); border-radius: 6px; padding: 0.27rem 0.5rem; font-family: inherit; font-size: 0.81rem; width: 100%; color: #1a1530; }
+    .bg-rr-amount { border: 1px solid rgba(87,46,136,0.15); border-radius: 6px; padding: 0.27rem 0.5rem; font-family: inherit; font-size: 0.81rem; width: 100%; color: #1a1530; text-align: right; }
+    .bg-rr-as     { border: 1px solid rgba(87,46,136,0.15); border-radius: 6px; padding: 0.27rem 0.4rem; font-family: inherit; font-size: 0.74rem; width: 100%; color: #1a1530; background: #fff; cursor: pointer; }
+
     /* Responsive */
     @media (max-width: 1200px) { .bg-workspace { grid-template-columns: 1fr 300px; } }
     @media (max-width: 1050px) { .bg-workspace { grid-template-columns: 1fr; } .bg-right { position: static; } }
@@ -392,13 +402,13 @@
   <!-- Upload modal -->
   <div class="bg-modal-over" id="bg-upload-modal">
     <div class="bg-modal">
-      <div class="bg-modal-title">Upload Reference Budget</div>
-      <p style="font-size:0.86rem;color:#7a6e9a;margin:0 0 1.1rem">Upload a PDF or photo of a past budget to reference while you build this one. It won't be imported automatically.</p>
+      <div class="bg-modal-title">Upload a Budget PDF</div>
+      <p style="font-size:0.86rem;color:#7a6e9a;margin:0 0 1.1rem">Drop a PDF of a past budget. We'll read the text, pull out the dollar amounts, and let you place them into your categories.</p>
       <div class="bg-drop-zone" id="bg-drop-zone" onclick="document.getElementById('bg-file-input').click()" ondragover="BP.onDragOver(event)" ondragleave="BP.onDragLeave(event)" ondrop="BP.onDrop(event)">
         <div class="bg-drop-zone-icon">&#128196;</div>
-        <div class="bg-drop-zone-label">Drop a file here, or click to choose</div>
-        <div class="bg-drop-zone-hint">PDF, JPG, PNG up to 20 MB</div>
-        <input type="file" id="bg-file-input" accept=".pdf,.jpg,.jpeg,.png,.webp" onchange="BP.onFileChosen(event)" />
+        <div class="bg-drop-zone-label">Drop a PDF here, or click to choose</div>
+        <div class="bg-drop-zone-hint">PDF only — must be text-based (not a scanned image)</div>
+        <input type="file" id="bg-file-input" accept=".pdf" onchange="BP.onFileChosen(event)" />
       </div>
       <div id="bg-upload-status" style="margin-top:0.75rem;font-size:0.83rem;font-weight:700;color:#9a90b0;min-height:1.2rem"></div>
       <div class="bg-modal-footer">
@@ -418,6 +428,19 @@
     </div>
   </div>
 
+  <!-- PDF import review modal -->
+  <div class="bg-modal-over" id="bg-review-modal">
+    <div class="bg-modal bg-modal--wide bg-import-modal">
+      <div class="bg-modal-title">Review Extracted Budget</div>
+      <div id="bg-review-body"></div>
+      <div class="bg-modal-footer">
+        <button class="bg-btn bg-btn--ghost" onclick="BP.closeReviewModal()">Cancel</button>
+        <button class="bg-btn bg-btn--primary" id="bg-review-import-btn" onclick="BP.importReview()">Import Selected</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="/SHARED/Navigation/production-sidebar-nav.js?v=13"></script>
   <script>
@@ -460,6 +483,7 @@
     cats: [],
     items: [],
     localDoc: null,
+    _reviewItems: null,
     selectedCatId: null,
     expandedCats: new Set(),
     search: '',
@@ -729,7 +753,7 @@
             '<div class="bg-onboard-card" onclick="BP.openUploadModal()">' +
               '<div class="bg-onboard-card-icon">&#128229;</div>' +
               '<div class="bg-onboard-card-title">Upload a Budget</div>' +
-              '<div class="bg-onboard-card-desc">Upload a PDF or photo of a past budget to reference while you build this one.</div>' +
+              '<div class="bg-onboard-card-desc">Upload a PDF of a past budget. We\'ll read it and help you place the numbers into your categories.</div>' +
             '</div>' +
           '</div>' +
         '</div>'
@@ -1005,17 +1029,165 @@
     },
     onFileChosen(e) { const file = e.target.files[0]; if (file) this._handleFile(file); },
 
+    _uploadStatus(msg, color) {
+      const el = document.getElementById('bg-upload-status');
+      if (el) { el.textContent = msg; el.style.color = color || '#9a90b0'; }
+    },
+
     _handleFile(file) {
-      const allowed = ['application/pdf','image/jpeg','image/jpg','image/png','image/webp'];
-      if (!allowed.includes(file.type)) {
-        const el = document.getElementById('bg-upload-status');
-        if (el) { el.textContent = 'Only PDF, JPG, or PNG files are supported.'; el.style.color = '#d1523d'; }
+      if (file.type !== 'application/pdf') {
+        this._uploadStatus('Please choose a PDF file.', '#d1523d');
         return;
       }
-      if (this.localDoc) URL.revokeObjectURL(this.localDoc.url);
-      this.localDoc = { name: file.name, url: URL.createObjectURL(file), type: file.type };
-      this._renderRefBar();
+      this._parsePDF(file);
+    },
+
+    async _parsePDF(file) {
+      this._uploadStatus('Reading PDF...', '#9a90b0');
+      const pdfjsLib = window.pdfjsLib;
+      if (!pdfjsLib) {
+        this._uploadStatus('PDF reader not ready — please try again in a moment.', '#d1523d');
+        return;
+      }
+      pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+      try {
+        const arrayBuffer = await file.arrayBuffer();
+        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        const lineMap = {};
+        for (let p = 1; p <= pdf.numPages; p++) {
+          const page = await pdf.getPage(p);
+          const tc   = await page.getTextContent();
+          const ph   = page.view[3];
+          tc.items.forEach(item => {
+            if (!item.str || !item.str.trim()) return;
+            const y = Math.round((ph - item.transform[5]) * 10 + p * 100000);
+            const x = Math.round(item.transform[4]);
+            if (!lineMap[y]) lineMap[y] = [];
+            lineMap[y].push({ text: item.str, x });
+          });
+        }
+        const lines = Object.keys(lineMap)
+          .map(Number).sort((a, b) => a - b)
+          .map(y => lineMap[y].sort((a, b) => a.x - b.x).map(i => i.text).join(' ').trim())
+          .filter(l => l.length > 0);
+        const extracted = this._parseLines(lines);
+        this._showReview(extracted);
+      } catch(e) {
+        this._uploadStatus('Could not read this PDF: ' + e.message, '#d1523d');
+      }
+    },
+
+    _parseLines(lines) {
+      const amountRe = /\$?\s*([\d,]+(?:\.\d{1,2})?)/g;
+      const skipWords = /^(total|subtotal|grand|page|date|budget|production|season|notes?|description|category|amount|planned|actual|committed|paid|remaining|income|expense|expenses|revenue|item|qty|unit|tax|hst|gst|net|ref|#)$/i;
+      const results = [];
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed || trimmed.length < 3) continue;
+        amountRe.lastIndex = 0;
+        const amounts = [];
+        let m;
+        while ((m = amountRe.exec(trimmed)) !== null) {
+          const raw = m[1].replace(/,/g, '');
+          if (raw.length > 8) continue;
+          const val = parseFloat(raw);
+          if (!isNaN(val) && val >= 5 && val < 5000000) amounts.push({ val, start: m.index });
+        }
+        if (!amounts.length) continue;
+        const amt = amounts[0];
+        const rawLabel = trimmed.substring(0, amt.start).replace(/[\$:|]/g, ' ').replace(/\s+/g, ' ').trim();
+        if (!rawLabel || rawLabel.length < 2) continue;
+        if (/^[\d\s.,]+$/.test(rawLabel)) continue;
+        if (skipWords.test(rawLabel)) continue;
+        const isIncome = /ticket|grant|sponsor|fundrais|concession|revenue|income|donation/i.test(rawLabel);
+        results.push({ label: rawLabel, cents: Math.round(amt.val * 100), checked: true, as: isIncome ? 'cat-income' : 'cat-expense' });
+      }
+      return results;
+    },
+
+    _showReview(items) {
+      this._reviewItems = items;
       this.closeUploadModal();
+      if (!items.length) {
+        document.getElementById('bg-upload-modal').classList.add('open');
+        this._uploadStatus('No dollar amounts found. Make sure this is a text-based PDF, not a scanned image.', '#d1523d');
+        return;
+      }
+      const catOptions = this.cats.map(c =>
+        '<option value="item-' + c.id + '">Item in: ' + this.esc(c.name) + '</option>'
+      ).join('');
+      const body = document.getElementById('bg-review-body');
+      if (body) {
+        body.innerHTML =
+          '<p style="font-size:0.84rem;color:#7a6e9a;margin:0 0 1rem">Found ' + items.length + ' line item' + (items.length !== 1 ? 's' : '') + '. Check what to import, adjust as needed, then pick where each one goes.</p>' +
+          '<div class="bg-review-table">' +
+            '<div class="bg-review-head"><span></span><span>Label</span><span>Amount</span><span>Add as</span></div>' +
+            '<div class="bg-review-scroll">' +
+              items.map(function(item, i) {
+                return '<div class="bg-review-row" id="bg-rr-' + i + '">' +
+                  '<input type="checkbox"' + (item.checked ? ' checked' : '') + ' onchange="BP._reviewToggle(' + i + ',this.checked)">' +
+                  '<input type="text" class="bg-rr-label" value="' + BP.esc(item.label) + '" oninput="BP._reviewItems[' + i + '].label=this.value">' +
+                  '<input type="number" class="bg-rr-amount" value="' + (item.cents / 100).toFixed(2) + '" min="0" step="0.01" oninput="BP._reviewItems[' + i + '].cents=Math.round((parseFloat(this.value)||0)*100)">' +
+                  '<select class="bg-rr-as" onchange="BP._reviewItems[' + i + '].as=this.value">' +
+                    '<option value="cat-expense"' + (item.as === 'cat-expense' ? ' selected' : '') + '>New Category (Expense)</option>' +
+                    '<option value="cat-income"'  + (item.as === 'cat-income'  ? ' selected' : '') + '>New Category (Income)</option>' +
+                    catOptions +
+                  '</select>' +
+                '</div>';
+              }).join('') +
+            '</div>' +
+          '</div>';
+      }
+      document.getElementById('bg-review-modal').classList.add('open');
+    },
+
+    _reviewToggle(i, checked) {
+      if (this._reviewItems) this._reviewItems[i].checked = checked;
+      const row = document.getElementById('bg-rr-' + i);
+      if (row) row.style.opacity = checked ? '1' : '0.4';
+    },
+
+    closeReviewModal() {
+      document.getElementById('bg-review-modal').classList.remove('open');
+    },
+
+    async importReview() {
+      const toImport = (this._reviewItems || []).filter(function(item) { return item.checked && item.label && item.cents >= 0; });
+      if (!toImport.length) { alert('Nothing selected to import.'); return; }
+      const btn = document.getElementById('bg-review-import-btn');
+      if (btn) { btn.disabled = true; btn.textContent = 'Importing...'; }
+      try {
+        const newExpenses = toImport.filter(function(i) { return i.as === 'cat-expense'; });
+        const newIncomes  = toImport.filter(function(i) { return i.as === 'cat-income';  });
+        const nameToId = {};
+        if (newExpenses.length) {
+          const rows = newExpenses.map(function(item, idx) { return { name: item.label, type: 'expense', color: BP.COLORS[idx % BP.COLORS.length], planned_cents: item.cents, sort_order: BP.cats.length + idx, production_id: BP.prodId }; });
+          const r = await fetch(this.URL + '/rest/v1/budget_categories', { method: 'POST', headers: this._hj(), body: JSON.stringify(rows) });
+          if (!r.ok) throw new Error(await r.text());
+          const created = await r.json();
+          (Array.isArray(created) ? created : []).forEach(function(c) { nameToId[c.name] = c.id; });
+        }
+        if (newIncomes.length) {
+          const rows = newIncomes.map(function(item, idx) { return { name: item.label, type: 'income', color: BP.COLORS[(newExpenses.length + idx) % BP.COLORS.length], planned_cents: item.cents, sort_order: BP.cats.length + newExpenses.length + idx, production_id: BP.prodId }; });
+          const r = await fetch(this.URL + '/rest/v1/budget_categories', { method: 'POST', headers: this._hj(), body: JSON.stringify(rows) });
+          if (!r.ok) throw new Error(await r.text());
+          const created = await r.json();
+          (Array.isArray(created) ? created : []).forEach(function(c) { nameToId[c.name] = c.id; });
+        }
+        const itemRows = toImport
+          .filter(function(item) { return item.as.startsWith('item-'); })
+          .map(function(item, idx) { return { name: item.label, category_id: item.as.replace('item-', ''), production_id: BP.prodId, budgeted_cents: item.cents, committed_cents: 0, paid_cents: 0, status: 'planned', sort_order: idx }; });
+        if (itemRows.length) {
+          const r = await fetch(this.URL + '/rest/v1/budget_items', { method: 'POST', headers: this._hj(), body: JSON.stringify(itemRows) });
+          if (!r.ok) throw new Error(await r.text());
+        }
+        this.closeReviewModal();
+        await this.load();
+      } catch(e) {
+        alert('Import failed: ' + e.message);
+      } finally {
+        if (btn) { btn.disabled = false; btn.textContent = 'Import Selected'; }
+      }
     },
 
     _renderRefBar() {
@@ -1113,6 +1285,7 @@
   document.getElementById('bg-item-modal').addEventListener('click', function(e)   { if (e.target === this) BP.closeItemModal(); });
   document.getElementById('bg-upload-modal').addEventListener('click', function(e) { if (e.target === this) BP.closeUploadModal(); });
   document.getElementById('bg-viewer-modal').addEventListener('click', function(e) { if (e.target === this) BP.closeViewer(); });
+  document.getElementById('bg-review-modal').addEventListener('click', function(e) { if (e.target === this) BP.closeReviewModal(); });
   </script>
 </body>
 </html>
