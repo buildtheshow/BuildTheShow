@@ -194,7 +194,7 @@
   // ── Sidebar HTML loader ──────────────────────────────────────────────────
 
   window.loadProductionSidebar = function (activeGroup, activePage) {
-    const key = 'bts-prod-sidebar-v21';
+    const key = 'bts-prod-sidebar-v22';
     const cached = sessionStorage.getItem(key);
     const host = document.getElementById('prod-sidebar-host');
     if (!host) return;
@@ -219,7 +219,7 @@
 
     if (cached) applyAndInit(cached);
 
-    fetch('/SHARED/Navigation/production-sidebar.html?v=sidebar-v48-20260605')
+    fetch('/SHARED/Navigation/production-sidebar.html?v=sidebar-v49-20260608')
       .then(function (res) { return res.text(); })
       .then(function (html) {
         sessionStorage.setItem(key, html);
