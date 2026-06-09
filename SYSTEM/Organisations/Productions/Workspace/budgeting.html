@@ -453,6 +453,19 @@
   </div>
 </div>
 
+<!-- Generic driver config modal -->
+<div class="bg-modal-over" id="bg-drv-config-modal">
+  <div class="bg-modal bg-modal--reg-config">
+    <div class="bg-modal-title" id="bg-dc-title">Set Up Revenue Driver</div>
+    <div class="bg-modal-sub">Answer a few questions and we'll build the formula for you.</div>
+    <div id="bg-dc-body"></div>
+    <div class="bg-modal-footer">
+      <button class="bg-btn bg-btn--ghost" onclick="BP._dcBack()">Back</button>
+      <button class="bg-btn bg-btn--primary" onclick="BP._dcBuild()">Build My Formula</button>
+    </div>
+  </div>
+</div>
+
 <!-- Registration Fees config modal -->
 <div class="bg-modal-over" id="bg-reg-config-modal">
   <div class="bg-modal bg-modal--reg-config">
@@ -852,9 +865,290 @@ const BP = {
     this._prevType  = type;
     this._prevDrvId = null;
     if (type === 'registration') { this._openRegConfig(); return; }
+    const configuredTypes = ['ticket','sponsorship_ads','grants','donations_fundraising','concessions_merch'];
+    if (configuredTypes.indexOf(type) >= 0) { this._openDrvConfig(type); return; }
     const cfg = this._drvTypeCfg(type);
     this._prevEls = cfg.defaultElements.map(e => Object.assign({}, e, {value: e.value !== undefined ? e.value : (e.default||0)}));
     this._openWorkspace();
+  },
+
+  // ── Generic driver config wizard ──────────────────────────────────────
+  _dcState: null,
+  _openDrvConfig(type) {
+    const defaults = {
+      ticket:               {multiTier:false, tiers:{adult:true, student:false, senior:false, child:false}, customTiers:[], groupDiscount:false},
+      sponsorship_ads:      {sponsors:true, ads:false},
+      grants:               {named:false, grantList:['']},
+      donations_fundraising:{donations:true, fifty50:false, auction:false, custom:[]},
+      concessions_merch:    {concessions:true, merch:false},
+    };
+    this._dcState = Object.assign({type}, JSON.parse(JSON.stringify(defaults[type]||{})));
+    const titles = {
+      ticket:'Set Up Ticket Sales', sponsorship_ads:'Set Up Sponsorship & Advertising',
+      grants:'Set Up Grants', donations_fundraising:'Set Up Donations & Fundraising',
+      concessions_merch:'Set Up Concessions & Merchandise',
+    };
+    const el = document.getElementById('bg-dc-title');
+    if (el) el.textContent = titles[type] || 'Set Up Revenue Driver';
+    this._dcRenderModal();
+    document.getElementById('bg-drv-config-modal').classList.add('open');
+  },
+  _dcRenderModal() {
+    const el = document.getElementById('bg-dc-body');
+    if (!el) return;
+    const s = this._dcState;
+    let html = '';
+    if (s.type === 'ticket') {
+      html =
+        this._dcYNHtml('Will all tickets be the same price?', 'multiTier', false, 'Yes, one price', true, 'No, multiple price tiers') +
+        (s.multiTier ? this._dcTierPickerHtml(s) : '') +
+        this._dcYNHtml('Will you offer group discounts?', 'groupDiscount', true, 'Yes', false, 'No');
+    } else if (s.type === 'sponsorship_ads') {
+      html =
+        this._dcCheckHtml('Will you have sponsors?', 'sponsors', s.sponsors) +
+        this._dcCheckHtml('Will you sell advertising placements? (programme, website, etc.)', 'ads', s.ads);
+      if (!s.sponsors && !s.ads) html += '<p style="font-size:0.8rem;color:#d1523d;margin-top:0.4rem">Select at least one option to continue.</p>';
+    } else if (s.type === 'grants') {
+      html = this._dcYNHtml('Are you applying for multiple grants?', 'named', false, 'No, one main amount', true, 'Yes, I can name each one');
+      if (s.named) {
+        html += '<div class="bg-rc-q"><div class="bg-rc-q-label" style="margin-bottom:0.45rem">Name your grants</div>' +
+          '<div class="bg-rc-custom-list">' +
+          s.grantList.map((name,i)=>'<div class="bg-rc-custom-row"><input class="bg-rc-custom-inp" type="text" value="'+this.esc(name)+'" placeholder="e.g. Arts Council Grant" oninput="BP._dcGrantName('+i+',this.value)"><button class="bg-rc-custom-del" onclick="BP._dcRemoveGrant('+i+')" title="Remove">&times;</button></div>').join('') +
+          '</div><button class="bg-rc-add-btn" onclick="BP._dcAddGrant()">+ Add a grant</button></div>';
+      }
+    } else if (s.type === 'donations_fundraising') {
+      html =
+        this._dcCheckHtml('Will you accept general donations?', 'donations', s.donations) +
+        this._dcCheckHtml('Will you run a 50/50 draw?', 'fifty50', s.fifty50) +
+        this._dcCheckHtml('Will you run a silent auction?', 'auction', s.auction);
+      const customRows = s.custom.map((name,i)=>'<div class="bg-rc-custom-row"><input class="bg-rc-custom-inp" type="text" value="'+this.esc(name)+'" placeholder="e.g. Bottle drive" oninput="BP._dcCustomName('+i+',this.value)"><button class="bg-rc-custom-del" onclick="BP._dcRemoveCustom('+i+')" title="Remove">&times;</button></div>').join('');
+      html += '<div class="bg-rc-q"><div class="bg-rc-q-label" style="margin-bottom:0.45rem">Any other fundraising events?</div><div class="bg-rc-custom-list">'+customRows+'</div><button class="bg-rc-add-btn" onclick="BP._dcAddCustom()">+ Add a fundraiser</button></div>';
+    } else if (s.type === 'concessions_merch') {
+      html =
+        this._dcCheckHtml('Will you sell food and drinks at your shows?', 'concessions', s.concessions) +
+        this._dcCheckHtml('Will you sell merchandise? (apparel, souvenirs, etc.)', 'merch', s.merch);
+      if (!s.concessions && !s.merch) html += '<p style="font-size:0.8rem;color:#d1523d;margin-top:0.4rem">Select at least one option to continue.</p>';
+    }
+    el.innerHTML = html;
+  },
+  _dcYNHtml(question, key, falseVal, falseLabel, trueVal, trueLabel) {
+    const s = this._dcState;
+    const aFalse = s[key] === falseVal ? ' active' : '';
+    const aTrue  = s[key] === trueVal  ? ' active' : '';
+    return '<div class="bg-rc-q"><div class="bg-rc-q-label">'+question+'</div>'+
+      '<div class="bg-rc-toggle">'+
+        '<button class="bg-rc-toggle-btn'+aFalse+'" onclick="BP._dcSet(\''+key+'\','+JSON.stringify(falseVal)+')">'+falseLabel+'</button>'+
+        '<button class="bg-rc-toggle-btn'+aTrue+'"  onclick="BP._dcSet(\''+key+'\','+JSON.stringify(trueVal)+')">'+trueLabel+'</button>'+
+      '</div></div>';
+  },
+  _dcCheckHtml(question, key, checked) {
+    return '<div class="bg-rc-q" style="display:flex;align-items:center;gap:0.75rem;justify-content:space-between;flex-wrap:wrap">'+
+      '<div class="bg-rc-q-label" style="margin-bottom:0;flex:1;min-width:0">'+question+'</div>'+
+      '<div class="bg-rc-toggle" style="flex-shrink:0">'+
+        '<button class="bg-rc-toggle-btn'+(checked?' active':'')+'" onclick="BP._dcSet(\''+key+'\',true)">Yes</button>'+
+        '<button class="bg-rc-toggle-btn'+(!checked?' active':'')+'" onclick="BP._dcSet(\''+key+'\',false)">No</button>'+
+      '</div></div>';
+  },
+  _dcTierPickerHtml(s) {
+    const std = [{key:'adult',label:'Adult'},{key:'student',label:'Student'},{key:'senior',label:'Senior'},{key:'child',label:'Child'}];
+    return '<div class="bg-rc-q"><div class="bg-rc-q-label" style="margin-bottom:0.45rem">Which ticket types?</div>'+
+      '<div style="display:flex;flex-wrap:wrap;gap:0.4rem">'+
+        std.map(t=>'<button class="bg-rc-toggle-btn'+(s.tiers[t.key]?' active':'')+'" onclick="BP._dcToggleTier(\''+t.key+'\')">'+t.label+'</button>').join('')+
+      '</div>'+
+      '<div class="bg-rc-custom-list" style="margin-top:0.55rem">'+
+        s.customTiers.map((name,i)=>'<div class="bg-rc-custom-row"><input class="bg-rc-custom-inp" type="text" value="'+this.esc(name)+'" placeholder="Custom tier name" oninput="BP._dcCustomTier('+i+',this.value)"><button class="bg-rc-custom-del" onclick="BP._dcRemoveCustomTier('+i+')" title="Remove">&times;</button></div>').join('')+
+      '</div>'+
+      '<button class="bg-rc-add-btn" onclick="BP._dcAddCustomTier()">+ Add a custom tier</button>'+
+    '</div>';
+  },
+  _dcSet(key, val) { this._dcState[key] = val; this._dcRenderModal(); },
+  _dcToggleTier(key) { this._dcState.tiers[key] = !this._dcState.tiers[key]; this._dcRenderModal(); },
+  _dcAddCustomTier()    { this._dcState.customTiers.push(''); this._dcRenderModal(); requestAnimationFrame(()=>{ const inps=document.querySelectorAll('.bg-rc-custom-inp'); if(inps.length) inps[inps.length-1].focus(); }); },
+  _dcRemoveCustomTier(i){ this._dcState.customTiers.splice(i,1); this._dcRenderModal(); },
+  _dcCustomTier(i, val) { this._dcState.customTiers[i] = val; },
+  _dcAddGrant()         { this._dcState.grantList.push(''); this._dcRenderModal(); requestAnimationFrame(()=>{ const inps=document.querySelectorAll('.bg-rc-custom-inp'); if(inps.length) inps[inps.length-1].focus(); }); },
+  _dcRemoveGrant(i)     { this._dcState.grantList.splice(i,1); this._dcRenderModal(); },
+  _dcGrantName(i, val)  { this._dcState.grantList[i] = val; },
+  _dcAddCustom()        { this._dcState.custom.push(''); this._dcRenderModal(); requestAnimationFrame(()=>{ const inps=document.querySelectorAll('.bg-rc-custom-inp'); if(inps.length) inps[inps.length-1].focus(); }); },
+  _dcRemoveCustom(i)    { this._dcState.custom.splice(i,1); this._dcRenderModal(); },
+  _dcCustomName(i, val) { this._dcState.custom[i] = val; },
+  _dcBack() {
+    document.getElementById('bg-drv-config-modal').classList.remove('open');
+    this.openTypeModal();
+  },
+  _dcBuild() {
+    const s = this._dcState;
+    if ((s.type==='sponsorship_ads' || s.type==='concessions_merch') && !s.sponsors && !s.ads && !s.concessions && !s.merch) return;
+    this._prevEls = this._dcBuildElements(s);
+    document.getElementById('bg-drv-config-modal').classList.remove('open');
+    this._openWorkspace();
+  },
+  _dcBuildElements(s) {
+    const init = e => Object.assign({}, e, {value: e.value !== undefined ? e.value : (e.default || 0)});
+    if (s.type === 'ticket')               return this._dcBuildTicket(s, init);
+    if (s.type === 'sponsorship_ads')      return this._dcBuildSponsorship(s, init);
+    if (s.type === 'grants')               return this._dcBuildGrants(s, init);
+    if (s.type === 'donations_fundraising')return this._dcBuildDonations(s, init);
+    if (s.type === 'concessions_merch')    return this._dcBuildConcessions(s, init);
+    const cfg = this._drvTypeCfg(s.type);
+    return (cfg.defaultElements||[]).map(e => Object.assign({}, e, {value: e.value !== undefined ? e.value : (e.default||0)}));
+  },
+  _dcBuildTicket(s, init) {
+    const els = [];
+    if (!s.multiTier) {
+      els.push(
+        {id:'sec_tix',    label:'Ticket Revenue',         kind:'section',  color:'#769e7b', op:null},
+        {id:'capacity',   label:'Seats per show',          kind:'number',   default:0, unit:'seats',  note:'Venue capacity',       op:null},
+        {id:'shows',      label:'Number of shows',         kind:'number',   default:1, unit:'shows',  note:'',                      op:'×'},
+        {id:'attendance', label:'Expected attendance',     kind:'percent',  default:80,                note:'% of seats filled',    op:'×'},
+        {id:'price',      label:'Ticket price',            kind:'dollar',   default:0,                 note:'Per ticket',           op:'×'},
+        {id:'gross',      label:'A. Gross ticket revenue', kind:'subtotal', expr:'{capacity}*{shows}*{attendance}*{price}', op:null},
+      );
+      if (s.groupDiscount) {
+        els.push(
+          {id:'sec_grp',   label:'Group Discounts',       kind:'section',  color:'#476aaa', op:null},
+          {id:'grp_pct',   label:'% receiving group discount', kind:'percent', default:0, note:'Percent of total tickets', ref:true, op:null},
+          {id:'grp_amt',   label:'Discount per ticket',   kind:'dollar',   default:0,  note:'Per ticket', ref:true, op:null},
+          {id:'grp_total', label:'Group discount total',  kind:'computed', expr:'{grp_pct}*{grp_amt}*{capacity}*{shows}*{attendance}', note:'Auto calculated', op:'−'},
+          {id:'net',       label:'B. Net ticket revenue', kind:'subtotal', expr:'{capacity}*{shows}*{attendance}*{price}-{grp_total}', final:true, op:null},
+        );
+      } else {
+        els.push({id:'net', label:'B. Net ticket revenue', kind:'subtotal', expr:'{capacity}*{shows}*{attendance}*{price}', final:true, op:null});
+      }
+      return els.map(init);
+    }
+    // Multi-tier
+    const tierColors = ['#769e7b','#476aaa','#ca7ea7','#78bbd4','#dd8233','#d1523d'];
+    const tiers = [];
+    [{key:'adult',label:'Adult'},{key:'student',label:'Student'},{key:'senior',label:'Senior'},{key:'child',label:'Child'}]
+      .filter(t => s.tiers[t.key]).forEach(t => tiers.push(t));
+    (s.customTiers||[]).forEach((name,i) => tiers.push({key:'cst'+i, label:(name||'').trim()||'Custom '+(i+1)}));
+    if (tiers.length === 0) tiers.push({key:'adult', label:'Adult'});
+    els.push({id:'shows', label:'Number of shows', kind:'number', default:1, unit:'shows', note:'How many performances', ref:true, op:null});
+    tiers.forEach((t,i) => {
+      els.push(
+        {id:'sec_'+t.key,    label:t.label+' Tickets',           kind:'section',  color:tierColors[i%tierColors.length], op:null},
+        {id:t.key+'_cnt',    label:t.label+' tickets per show',  kind:'number',   default:0, unit:'tickets', note:'', ref:true, op:null},
+        {id:t.key+'_price',  label:t.label+' ticket price',      kind:'dollar',   default:0, note:'Per ticket', ref:true, op:null},
+        {id:t.key+'_rev',    label:t.label+' ticket revenue',    kind:'computed', expr:'{shows}*{'+t.key+'_cnt}*{'+t.key+'_price}', note:'Auto calculated', op: i===0 ? null : '+'},
+      );
+    });
+    const grossExpr = tiers.map(t=>'{'+t.key+'_rev}').join('+');
+    els.push({id:'gross', label:'A. Gross ticket revenue', kind:'subtotal', expr:grossExpr, op:null});
+    if (s.groupDiscount) {
+      const grpTotalExpr = '{grp_pct}*{grp_amt}*{shows}*('+tiers.map(t=>'{'+t.key+'_cnt}').join('+')+')';
+      els.push(
+        {id:'sec_grp',   label:'Group Discounts',       kind:'section',  color:'#572e88', op:null},
+        {id:'grp_pct',   label:'% receiving group discount', kind:'percent', default:0, note:'Percent of total tickets', ref:true, op:null},
+        {id:'grp_amt',   label:'Discount per ticket',   kind:'dollar',   default:0, note:'Per ticket', ref:true, op:null},
+        {id:'grp_total', label:'Group discount total',  kind:'computed', expr:grpTotalExpr, note:'Auto calculated', op:'−'},
+        {id:'net',       label:'B. Net ticket revenue', kind:'subtotal', expr:grossExpr+'-{grp_total}', final:true, op:null},
+      );
+    } else {
+      els.push({id:'net', label:'B. Net ticket revenue', kind:'subtotal', expr:grossExpr, final:true, op:null});
+    }
+    return els.map(init);
+  },
+  _dcBuildSponsorship(s, init) {
+    const els = [];
+    if (s.sponsors) {
+      els.push(
+        {id:'sec_spon',  label:'Sponsorships',          kind:'section',  color:'#d1523d', op:null},
+        {id:'spon_cnt',  label:'Number of sponsors',    kind:'number',   default:0, unit:'sponsors', note:'', op:null},
+        {id:'spon_val',  label:'Average sponsor value', kind:'dollar',   default:0, note:'Per sponsor', op:'×'},
+      );
+    }
+    if (s.ads) {
+      els.push({id:'sec_ads', label:'Advertising Placements', kind:'section', color:'#476aaa', op:null});
+      if (s.sponsors) {
+        els.push(
+          {id:'ad_cnt',   label:'Number of ad placements', kind:'number',   default:0, unit:'ads', note:'Programme, website, etc.', ref:true, op:null},
+          {id:'ad_rate',  label:'Rate per placement',      kind:'dollar',   default:0, note:'Per ad', ref:true, op:null},
+          {id:'ad_total', label:'Advertising revenue',     kind:'computed', expr:'{ad_cnt}*{ad_rate}', note:'Auto calculated', op:'+'},
+        );
+      } else {
+        els.push(
+          {id:'ad_cnt',  label:'Number of ad placements', kind:'number', default:0, unit:'ads', note:'Programme, website, etc.', op:null},
+          {id:'ad_rate', label:'Rate per placement',      kind:'dollar', default:0, note:'Per ad', op:'×'},
+        );
+      }
+    }
+    if (!s.sponsors && !s.ads) els.push({id:'amount', label:'Estimated total', kind:'dollar', default:0, op:null});
+    let netExpr = '';
+    if (s.sponsors && s.ads) netExpr = '{spon_cnt}*{spon_val}+{ad_total}';
+    else if (s.sponsors)     netExpr = '{spon_cnt}*{spon_val}';
+    else if (s.ads)          netExpr = '{ad_cnt}*{ad_rate}';
+    else                     netExpr = '{amount}';
+    els.push({id:'net', label:'Total sponsorship & advertising revenue', kind:'subtotal', expr:netExpr, final:true, op:null});
+    return els.map(init);
+  },
+  _dcBuildGrants(s, init) {
+    const els = [{id:'sec_grants', label:'Grants', kind:'section', color:'#476aaa', op:null}];
+    if (!s.named || (s.grantList||[]).length === 0) {
+      els.push(
+        {id:'amount', label:'Total grant amount', kind:'dollar', default:0, note:'', op:null},
+        {id:'net',    label:'Total grant revenue', kind:'subtotal', expr:'{amount}', final:true, op:null},
+      );
+    } else {
+      s.grantList.forEach((name, i) => {
+        els.push({id:'grant'+i, label:(name||'').trim()||'Grant '+(i+1), kind:'dollar', default:0, op: i===0 ? null : '+'});
+      });
+      const netExpr = s.grantList.map((_,i)=>'{grant'+i+'}').join('+');
+      els.push({id:'net', label:'Total grant revenue', kind:'subtotal', expr:netExpr, final:true, op:null});
+    }
+    return els.map(init);
+  },
+  _dcBuildDonations(s, init) {
+    const secColors = ['#ca7ea7','#769e7b','#dd8233','#78bbd4','#d1523d','#476aaa'];
+    const sections = [];
+    if (s.donations) sections.push({id:'donations', label:'Donations',    note:'Estimated total donations'});
+    if (s.fifty50)   sections.push({id:'fifty50',   label:'50/50 Draw',  note:'Estimated net proceeds'});
+    if (s.auction)   sections.push({id:'auction',   label:'Silent Auction', note:'Estimated total bids'});
+    (s.custom||[]).forEach((name,i) => sections.push({id:'cst'+i, label:(name||'').trim()||'Fundraiser '+(i+1), note:''}));
+    if (sections.length === 0) sections.push({id:'donations', label:'Donations', note:''});
+    const els = [];
+    sections.forEach((sec, i) => {
+      els.push(
+        {id:'sec_'+sec.id,  label:sec.label,                             kind:'section',  color:secColors[i%secColors.length], op:null},
+        {id:sec.id+'_amt',  label:'Estimated '+sec.label.toLowerCase()+' revenue', kind:'dollar', default:0, note:sec.note, op: i===0 ? null : '+'},
+      );
+    });
+    els.push({id:'net', label:'Total donations & fundraising revenue', kind:'subtotal', expr:sections.map(sec=>'{'+sec.id+'_amt}').join('+'), final:true, op:null});
+    return els.map(init);
+  },
+  _dcBuildConcessions(s, init) {
+    const els = [];
+    if (s.concessions) {
+      els.push(
+        {id:'sec_con',  label:'Concessions',                   kind:'section',  color:'#dd8233', op:null},
+        {id:'audience', label:'Total audience across all shows', kind:'number',  default:0, unit:'people', note:'', op:null},
+        {id:'con_pct',  label:'% who buy concessions',         kind:'percent',  default:25, note:'Industry avg ~25%', op:'×'},
+        {id:'con_avg',  label:'Average spend per person',      kind:'dollar',   default:0, note:'', op:'×'},
+      );
+    }
+    if (s.merch) {
+      els.push({id:'sec_merch', label:'Merchandise', kind:'section', color:'#769e7b', op:null});
+      if (s.concessions) {
+        els.push(
+          {id:'merch_units', label:'Merchandise units expected to sell', kind:'number',   default:0, unit:'units', ref:true, op:null},
+          {id:'merch_price', label:'Average price per item',             kind:'dollar',   default:0, ref:true, op:null},
+          {id:'merch_total', label:'Merchandise revenue',               kind:'computed', expr:'{merch_units}*{merch_price}', note:'Auto calculated', op:'+'},
+        );
+      } else {
+        els.push(
+          {id:'merch_units', label:'Merchandise units expected to sell', kind:'number', default:0, unit:'units', op:null},
+          {id:'merch_price', label:'Average price per item',             kind:'dollar', default:0, op:'×'},
+        );
+      }
+    }
+    if (!s.concessions && !s.merch) els.push({id:'amount', label:'Estimated total', kind:'dollar', default:0, op:null});
+    let netExpr = '';
+    if (s.concessions && s.merch) netExpr = '{audience}*{con_pct}*{con_avg}+{merch_total}';
+    else if (s.concessions)       netExpr = '{audience}*{con_pct}*{con_avg}';
+    else if (s.merch)             netExpr = '{merch_units}*{merch_price}';
+    else                          netExpr = '{amount}';
+    els.push({id:'net', label:'Total concessions & merchandise revenue', kind:'subtotal', expr:netExpr, final:true, op:null});
+    return els.map(init);
   },
 
   // ── Registration Fees config wizard ──────────────────────────────────
