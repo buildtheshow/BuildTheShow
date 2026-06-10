@@ -947,7 +947,7 @@ const BP = {
     { name:'Contingency',              color:'#d1523d', items:['Emergency Purchases','Last-Minute Rentals','Unexpected Repairs'] },
   ],
 
-  prodId:'', cats:[], items:[], drivers:[], _reviewItems:null, _expView:'table', _catCollapsed:{},
+  prodId:'', cats:[], items:[], drivers:[], _reviewItems:null, _expView:'table', _catCollapsed:{}, _inlineEditId:null, _inlineAddCatId:null,
   expandedCats:new Set(), search:'', editCatId:null, selectedColor:'#572e88', pickerSelected:new Set(),
   _draftType:null, _draftFields:[],
 
@@ -2241,7 +2241,7 @@ const BP = {
             '<div class="bg-tbl-cat-icon'+(isEmpty?' bg-tbl-cat-icon--empty':'')+'">'+(icon||'')+'</div>' +
             '<span class="bg-tbl-cat-name" style="color:'+(isEmpty?'#9a90b0':'#fff')+';">'+this.esc(c.name)+'</span>' +
           '</div>' +
-          '<button onclick="event.stopPropagation();BP.openItemModal(\''+c.id+'\',null)" style="font-family:inherit;font-size:0.72rem;font-weight:800;color:'+(isEmpty?'#572e88':'#fff')+';background:'+(isEmpty?'rgba(87,46,136,0.12)':'rgba(255,255,255,0.18)')+';border:none;border-radius:6px;padding:0.18rem 0.6rem;cursor:pointer;white-space:nowrap;flex-shrink:0;">+ Add item</button>' +
+          '<button onclick="event.stopPropagation();BP.inlineAddItem(\''+c.id+'\')" style="font-family:inherit;font-size:0.72rem;font-weight:800;color:'+(isEmpty?'#572e88':'#fff')+';background:'+(isEmpty?'rgba(87,46,136,0.12)':'rgba(255,255,255,0.18)')+';border:none;border-radius:6px;padding:0.18rem 0.6rem;cursor:pointer;white-space:nowrap;flex-shrink:0;">+ Add item</button>' +
         '</div>' +
         '<div></div>' +
         '<div></div>' +
@@ -2258,6 +2258,10 @@ const BP = {
 
       if (!collapsed) {
         items.forEach(item => {
+          if (this._inlineEditId === item.id) {
+            html += this._inlineRowHtml(c.id, color, item);
+            return;
+          }
           const qty = item.qty || 1;
           const unitCost = item.unit_cost_cents || 0;
           const budgeted = item.budgeted_cents || 0;
@@ -2277,11 +2281,12 @@ const BP = {
             '<div class="bg-tbl-td bg-tbl-td--num'+(budgeted===0?' bg-tbl-td--zero':'')+'">'+budStr+'</div>' +
             '<div class="bg-tbl-td bg-tbl-td--spent'+(paid===0?' bg-tbl-td--zero':'')+'">'+paidStr+'</div>' +
             '<div class="bg-tbl-td bg-tbl-td--acts">' +
-              '<button class="bg-tbl-acts-btn" onclick="BP.openItemModal(\''+item.category_id+'\',\''+item.id+'\')" title="Edit">&#9998;</button>' +
+              '<button class="bg-tbl-acts-btn" onclick="BP.inlineEditItem(\''+item.id+'\')" title="Edit">&#9998;</button>' +
               '<button class="bg-tbl-acts-btn" onclick="BP.deleteItem(\''+item.id+'\')" title="Delete">&#10005;</button>' +
             '</div>' +
           '</div>';
         });
+        if (this._inlineAddCatId === c.id) html += this._inlineRowHtml(c.id, color, null);
       }
       html += '</div>'; // end bg-tbl-cat-group
     }; // end renderCat
@@ -2312,6 +2317,68 @@ const BP = {
   _tblToggleCat(catId) {
     this._catCollapsed[catId] = this._catCollapsed[catId] === false;
     this.renderExpenses();
+  },
+  inlineAddItem(catId) {
+    this._inlineAddCatId = catId;
+    this._inlineEditId = null;
+    this._catCollapsed[catId] = false;
+    this.renderExpenses();
+    requestAnimationFrame(() => { const el = document.getElementById('bg-inline-name-new'); if (el) { el.focus(); el.closest('.bg-tbl-cat-group').scrollIntoView({behavior:'smooth',block:'nearest'}); } });
+  },
+  inlineEditItem(itemId) {
+    this._inlineEditId = itemId;
+    this._inlineAddCatId = null;
+    this.renderExpenses();
+    requestAnimationFrame(() => { const el = document.getElementById('bg-inline-name-'+itemId); if (el) el.focus(); });
+  },
+  _cancelInline() {
+    this._inlineEditId = null;
+    this._inlineAddCatId = null;
+    this.renderExpenses();
+  },
+  async _saveInlineItem(catId, itemId) {
+    const pfx = itemId || 'new';
+    const name  = (document.getElementById('bg-inline-name-'+pfx)||{}).value||'';
+    const notes = (document.getElementById('bg-inline-notes-'+pfx)||{}).value||'';
+    const qty   = parseFloat((document.getElementById('bg-inline-qty-'+pfx)||{}).value)||1;
+    const ucRaw = (document.getElementById('bg-inline-uc-'+pfx)||{}).value||'0';
+    const taxRaw= (document.getElementById('bg-inline-tax-'+pfx)||{}).value||'0';
+    const uc    = this._evalMath(ucRaw);
+    const tax   = this._evalMath(taxRaw);
+    if (!name.trim()) { this._cancelInline(); return; }
+    const budgeted = Math.round(qty * uc * 100);
+    const data = {name:name.trim(), notes, qty, unit_cost_cents:Math.round(uc*100), budgeted_cents:budgeted, tax_cents:Math.round(tax*100), category_id:catId, status:'planned'};
+    try {
+      if (itemId) await this._patch('budget_items', itemId, data);
+      else        await this._post('budget_items', data);
+    } catch(e) { this._toast('Could not save: '+e.message); }
+    this._inlineEditId = null;
+    this._inlineAddCatId = null;
+    await this.load();
+  },
+  _inlineRowHtml(catId, color, item) {
+    const pfx = item ? item.id : 'new';
+    const saveCall = 'BP._saveInlineItem(\''+catId+'\','+(item?'\''+item.id+'\'':'null')+')';
+    const onkey   = 'onkeydown="if(event.key===\'Enter\'){'+saveCall+';}if(event.key===\'Escape\')BP._cancelInline();"';
+    const inpS = 'font-family:inherit;font-size:0.82rem;font-weight:600;color:#1a1530;border:none;border-bottom:2px solid '+color+';background:transparent;padding:0.15rem 0.3rem;width:100%;box-sizing:border-box;outline:none;';
+    const numS = inpS+'text-align:right;';
+    const v = (field, fallback='') => this.esc(String(item ? (item[field]||fallback) : fallback));
+    const ucVal = item && item.unit_cost_cents ? (item.unit_cost_cents/100).toFixed(2) : '';
+    const taxVal= item && item.tax_cents       ? (item.tax_cents/100).toFixed(2)       : '';
+    return '<div class="bg-tbl-item-row" style="background:'+color+'30;">' +
+      '<div class="bg-tbl-drag"></div>' +
+      '<div class="bg-tbl-td"><input id="bg-inline-name-'+pfx+'" value="'+v('name')+'" placeholder="Item name" style="'+inpS+'" '+onkey+'></div>' +
+      '<div class="bg-tbl-td"><input id="bg-inline-notes-'+pfx+'" value="'+v('notes')+'" placeholder="Notes" style="'+inpS+'font-size:0.76rem;" '+onkey+'></div>' +
+      '<div class="bg-tbl-td bg-tbl-td--num"><input id="bg-inline-qty-'+pfx+'" value="'+(item?item.qty||1:1)+'" type="number" min="1" style="'+numS+'width:52px;" '+onkey+'></div>' +
+      '<div class="bg-tbl-td bg-tbl-td--num"><input id="bg-inline-uc-'+pfx+'" value="'+ucVal+'" placeholder="0.00" style="'+numS+'" '+onkey+'></div>' +
+      '<div class="bg-tbl-td bg-tbl-td--num"><input id="bg-inline-tax-'+pfx+'" value="'+taxVal+'" placeholder="0.00" style="'+numS+'" '+onkey+'></div>' +
+      '<div class="bg-tbl-td bg-tbl-td--num" style="color:#1a1530;opacity:0.3;">—</div>' +
+      '<div class="bg-tbl-td" style="color:#1a1530;opacity:0.3;">—</div>' +
+      '<div class="bg-tbl-td bg-tbl-td--acts">' +
+        '<button class="bg-tbl-acts-btn" onclick="'+saveCall+'" title="Save" style="color:#769e7b;font-size:1.1rem;font-weight:900;">✓</button>' +
+        '<button class="bg-tbl-acts-btn" onclick="BP._cancelInline()" title="Cancel">✕</button>' +
+      '</div>' +
+    '</div>';
   },
 
   _expCatCardHtml(c, num) {
