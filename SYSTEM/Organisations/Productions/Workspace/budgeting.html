@@ -2266,9 +2266,52 @@ const BP = {
   _bwSaveDraft() { try { localStorage.setItem(this._bwDraftKey(), JSON.stringify(this._bwState)); } catch(_) {} },
   _bwLoadDraft() { try { const r = localStorage.getItem(this._bwDraftKey()); return r ? JSON.parse(r) : null; } catch(_) { return null; } },
   _bwClearDraft() { try { localStorage.removeItem(this._bwDraftKey()); } catch(_) {} },
+  _bwDraftHasData(draft) {
+    if (!draft) return false;
+    if (draft.step > 0) return true;
+    if (Object.values(draft.who||{}).some(v => Array.isArray(v) && v.length > 0)) return true;
+    if (Object.values(draft.events||{}).some(e => e && e.on)) return true;
+    if (Object.values(draft.estimates||{}).some(v => v > 0)) return true;
+    return false;
+  },
+  _bwPopulateFromDB() {
+    const a = this._bwState.answers;
+    const catByName = {};
+    (this.cats||[]).forEach(c => { catByName[c.name.trim()] = c; });
+    // Set yes/no answers based on which categories exist
+    Object.keys(this.BW_QUESTIONS).forEach(k => {
+      const catName = this._bwKeyToCatName(k, a);
+      if (catName) a[k] = !!catByName[catName];
+    });
+    // Reconstruct who entries from budget line items
+    const whoKeyMap = { contractors:'Contractor Fees', volunteers:'Volunteer Appreciation', cast:'Cast Appreciation' };
+    Object.entries(whoKeyMap).forEach(([key, catName]) => {
+      const cat = catByName[catName];
+      if (!cat) return;
+      const its = (this.items||[]).filter(i => i.category_id === cat.id);
+      if (!its.length) return;
+      a[key] = true;
+      this._bwState.who[key] = its.map(i => ({name:i.name, fee:(i.unit_cost_cents||0)/100}));
+    });
+    // Reconstruct event items
+    this.BW_EVENTS.forEach(ev => {
+      const cat = catByName[ev.label];
+      if (!cat) return;
+      const its = (this.items||[]).filter(i => i.category_id === cat.id);
+      if (!its.length) return;
+      this._bwState.events[ev.key] = {on:true, name:ev.hasName ? cat.name : '', items:its.map(i => ({name:i.name, fee:(i.unit_cost_cents||0)/100}))};
+    });
+    // Reconstruct estimates from planned_cents
+    let hasEst = false;
+    (this.cats||[]).forEach(c => {
+      if (c.planned_cents > 0) { this._bwState.estimates[c.name] = c.planned_cents/100; hasEst = true; }
+    });
+    if (hasEst) this._bwState.enterNow = true;
+    this._bwSaveDraft();
+  },
   openBwModal() {
     const draft = this._bwLoadDraft();
-    if (draft && draft.step > 0) {
+    if (this._bwDraftHasData(draft)) {
       // Merge draft answers with any newly added questions so missing keys default to true
       const allAnswers = {};
       Object.keys(this.BW_QUESTIONS).forEach(k => { allAnswers[k] = true; });
@@ -2279,15 +2322,14 @@ const BP = {
       // Normalise old draft format: events may be missing the items array
       this.BW_EVENTS.forEach(ev => {
         const e = draft.events[ev.key];
-        if (e && !Array.isArray(e.items)) {
-          e.items = e.on ? this._bwEvtDefaultItems() : [];
-        }
+        if (e && !Array.isArray(e.items)) e.items = e.on ? this._bwEvtDefaultItems() : [];
       });
       this._bwState = draft;
     } else {
       const answers = {};
       Object.keys(this.BW_QUESTIONS).forEach(k => { answers[k] = true; });
       this._bwState = {step:0, prodType:'Musical', answers, estimates:{}, enterNow:false, who:{}, events:this._bwBlankEvents()};
+      this._bwPopulateFromDB();
     }
     this._bwRender();
     document.getElementById('bg-bw-modal').classList.add('open');
