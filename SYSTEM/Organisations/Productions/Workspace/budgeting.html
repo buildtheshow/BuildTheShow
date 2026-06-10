@@ -2260,7 +2260,7 @@ const BP = {
     return evts;
   },
   _bwEvtDefaultItems() {
-    return this.BW_EVENT_DEFAULTS.map(label => ({name:label, fee:''}));
+    return this.BW_EVENT_DEFAULTS.map(label => ({name:label, qty:1, unitCost:''}));
   },
   _bwState: {step:0, prodType:'Musical', answers:{}},
   _bwDraftKey() { return 'bts-bw-draft-' + this.prodId; },
@@ -2290,10 +2290,11 @@ const BP = {
       const key = c.name.trim().toLowerCase();
       // Compute planned amount for this category
       const whoKey = Object.keys(this.BW_QUESTIONS).find(k => this._bwKeyToCatName(k, a) === c.name && who[k] && who[k].length);
-      const feeTotal = whoKey ? Math.round(who[whoKey].reduce((s,e)=>s+(parseFloat(typeof e==='string'?0:e.fee)||0),0)*100) : 0;
+      const _whoTotal = (e) => typeof e==='string' ? 0 : (parseFloat(e.qty)||1)*(parseFloat(e.unitCost!=null?e.unitCost:e.fee)||0);
+      const feeTotal = whoKey ? Math.round(who[whoKey].reduce((s,e)=>s+_whoTotal(e),0)*100) : 0;
       const evDef = c.isEvent ? (this.BW_EVENTS||[]).find(e=>e.key===c.eventKey) : null;
       const evState = evDef ? ((this._bwState.events||{})[evDef.key]||{}) : null;
-      const evFeeTotal = evState ? Math.round((evState.items||[]).reduce((s,it)=>s+(parseFloat(it.fee)||0),0)*100) : 0;
+      const evFeeTotal = evState ? Math.round((evState.items||[]).reduce((s,it)=>s+(parseFloat(it.qty)||1)*(parseFloat(it.unitCost!=null?it.unitCost:it.fee)||0),0)*100) : 0;
       const planned = evFeeTotal || feeTotal || Math.round((est[c.name]||0)*100);
       let catId;
       if (catMap[key]) {
@@ -2312,7 +2313,7 @@ const BP = {
         await fetch(this.URL+'/rest/v1/budget_items?category_id=eq.'+catId+'&production_id=eq.'+this.prodId, {method:'DELETE', headers:this._h()}).catch(()=>{});
         const entries = (who[whoKey]||[]).filter(e => (typeof e==='string'?e:(e.name||'')).trim());
         if (entries.length) {
-          const rows = entries.map((e,idx) => { const nm=typeof e==='string'?e.trim():(e.name||'').trim(); const fee=typeof e==='string'?0:Math.round((parseFloat(e.fee)||0)*100); return {name:nm,category_id:catId,production_id:this.prodId,qty:1,unit_cost_cents:fee,budgeted_cents:fee,committed_cents:0,paid_cents:0,status:'planned',sort_order:idx}; });
+          const rows = entries.map((e,idx) => { const nm=typeof e==='string'?e.trim():(e.name||'').trim(); const q=typeof e==='string'?1:(parseFloat(e.qty)||1); const uc=typeof e==='string'?0:Math.round((parseFloat(e.unitCost!=null?e.unitCost:e.fee)||0)*100); const tot=q*uc; return {name:nm,category_id:catId,production_id:this.prodId,qty:q,unit_cost_cents:uc,budgeted_cents:tot,committed_cents:0,paid_cents:0,status:'planned',sort_order:idx}; });
           await fetch(this.URL+'/rest/v1/budget_items', {method:'POST', headers:this._hj(), body:JSON.stringify(rows)}).catch(()=>{});
         }
       } else if (evState) {
@@ -2320,7 +2321,7 @@ const BP = {
         await fetch(this.URL+'/rest/v1/budget_items?category_id=eq.'+catId+'&production_id=eq.'+this.prodId, {method:'DELETE', headers:this._h()}).catch(()=>{});
         const evItems = (evState.items||[]).filter(it => it.name && it.name.trim());
         if (evItems.length) {
-          const rows = evItems.map((it,idx) => { const fee=Math.round((parseFloat(it.fee)||0)*100); return {name:it.name.trim(),category_id:catId,production_id:this.prodId,qty:1,unit_cost_cents:fee,budgeted_cents:fee,committed_cents:0,paid_cents:0,status:'planned',sort_order:idx}; });
+          const rows = evItems.map((it,idx) => { const q=parseFloat(it.qty)||1; const uc=Math.round((parseFloat(it.unitCost!=null?it.unitCost:it.fee)||0)*100); return {name:it.name.trim(),category_id:catId,production_id:this.prodId,qty:q,unit_cost_cents:uc,budgeted_cents:q*uc,committed_cents:0,paid_cents:0,status:'planned',sort_order:idx}; });
           await fetch(this.URL+'/rest/v1/budget_items', {method:'POST', headers:this._hj(), body:JSON.stringify(rows)}).catch(()=>{});
         }
       } else if (planned) {
@@ -2363,7 +2364,7 @@ const BP = {
       const its = (this.items||[]).filter(i => i.category_id === cat.id);
       if (!its.length) return;
       a[key] = true;
-      this._bwState.who[key] = its.map(i => ({name:i.name, fee:(i.unit_cost_cents||0)/100}));
+      this._bwState.who[key] = its.map(i => ({name:i.name, qty:i.qty||1, unitCost:(i.unit_cost_cents||0)/100}));
     });
     // Reconstruct event items
     this.BW_EVENTS.forEach(ev => {
@@ -2371,7 +2372,7 @@ const BP = {
       if (!cat) return;
       const its = (this.items||[]).filter(i => i.category_id === cat.id);
       if (!its.length) return;
-      this._bwState.events[ev.key] = {on:true, name:ev.hasName ? cat.name : '', items:its.map(i => ({name:i.name, fee:(i.unit_cost_cents||0)/100}))};
+      this._bwState.events[ev.key] = {on:true, name:ev.hasName ? cat.name : '', items:its.map(i => ({name:i.name, qty:i.qty||1, unitCost:(i.unit_cost_cents||0)/100}))};
     });
     // Reconstruct estimates from planned_cents
     let hasEst = false;
@@ -2395,7 +2396,10 @@ const BP = {
       this.BW_EVENTS.forEach(ev => {
         const e = draft.events[ev.key];
         if (e && !Array.isArray(e.items)) e.items = e.on ? this._bwEvtDefaultItems() : [];
+        if (e && Array.isArray(e.items)) e.items.forEach(it => { if (it.unitCost == null) { it.unitCost = it.fee||0; it.qty = it.qty||1; delete it.fee; } });
       });
+      // Migrate old who entries from {fee} to {qty, unitCost}
+      Object.values(draft.who||{}).forEach(arr => { if (Array.isArray(arr)) arr.forEach(e => { if (e && e.unitCost == null) { e.unitCost = e.fee||0; e.qty = e.qty||1; delete e.fee; } }); });
       this._bwState = draft;
     } else {
       const answers = {};
@@ -2505,24 +2509,31 @@ const BP = {
           if (step.hasWho) {
             const fields = who.length ? who : [{name:'',fee:''}];
             extraHtml += '<div style="width:100%;padding-left:0.25rem;margin-top:0.1rem;">';
-            extraHtml += '<div style="display:grid;grid-template-columns:1fr 130px;gap:0.4rem;margin-bottom:0.25rem;padding-right:0.1rem;">' +
+            const inpStyle = 'font-family:inherit;font-size:0.83rem;font-weight:600;color:#1a1530;border:1.5px solid rgba(87,46,136,0.18);border-radius:8px;padding:0.35rem 0.5rem;min-width:0;box-sizing:border-box;';
+            extraHtml += '<div style="display:grid;grid-template-columns:1fr 52px 90px;gap:0.4rem;margin-bottom:0.25rem;padding-right:0.1rem;">' +
               '<span style="font-size:0.68rem;font-weight:800;text-transform:uppercase;letter-spacing:0.08em;color:#9a90b0;">Who?</span>' +
-              '<span style="font-size:0.68rem;font-weight:800;text-transform:uppercase;letter-spacing:0.08em;color:#9a90b0;text-align:right;">Fee</span>' +
+              '<span style="font-size:0.68rem;font-weight:800;text-transform:uppercase;letter-spacing:0.08em;color:#9a90b0;text-align:center;">Qty</span>' +
+              '<span style="font-size:0.68rem;font-weight:800;text-transform:uppercase;letter-spacing:0.08em;color:#9a90b0;text-align:right;">Rate</span>' +
             '</div>';
             extraHtml += fields.map((entry, idx) => {
-              const nm = typeof entry === 'string' ? entry : (entry.name||'');
-              const fee = typeof entry === 'string' ? '' : (entry.fee||'');
-              return '<div style="display:grid;grid-template-columns:1fr 130px;gap:0.4rem;margin-bottom:0.3rem;">'+
+              const nm  = typeof entry === 'string' ? entry : (entry.name||'');
+              const qty = typeof entry === 'string' ? 1 : (entry.qty != null ? entry.qty : 1);
+              const uc  = typeof entry === 'string' ? '' : (entry.unitCost != null ? entry.unitCost : (entry.fee||''));
+              const rowTotal = (parseFloat(qty)||1) * (parseFloat(uc)||0);
+              return '<div style="display:grid;grid-template-columns:1fr 52px 90px;gap:0.4rem;margin-bottom:0.3rem;align-items:center;">'+
                 '<input type="text" placeholder="e.g. Music Director" value="'+this.esc(nm)+'" '+
                 'oninput="BP._bwSetWhoName(\''+key+'\','+idx+',this.value)" '+
-                'style="font-family:inherit;font-size:0.83rem;font-weight:600;color:#1a1530;border:1.5px solid rgba(87,46,136,0.18);border-radius:8px;padding:0.35rem 0.65rem;min-width:0;" />'+
+                'style="'+inpStyle+'" />'+
+                '<input type="number" min="1" step="1" placeholder="1" value="'+this.esc(String(qty))+'" '+
+                'oninput="BP._bwSetWhoQty(\''+key+'\','+idx+',this.value)" onblur="BP._bwRefreshFeeTotal(\''+key+'\')" '+
+                'style="'+inpStyle+'text-align:center;font-weight:700;" />'+
                 '<div style="position:relative;">'+
                   '<span style="position:absolute;left:0.5rem;top:50%;transform:translateY(-50%);font-size:0.8rem;font-weight:700;color:#9a90b0;pointer-events:none;">$</span>'+
-                  '<input type="number" min="0" step="1" placeholder="0" value="'+this.esc(String(fee))+'" '+
-                  'oninput="BP._bwSetWhoFee(\''+key+'\','+idx+',this.value)" onblur="BP._bwRefreshFeeTotal(\''+key+'\')" '+
-                  'style="font-family:inherit;font-size:0.83rem;font-weight:700;color:#1a1530;border:1.5px solid rgba(87,46,136,0.18);border-radius:8px;padding:0.35rem 0.5rem 0.35rem 1.4rem;width:100%;text-align:right;box-sizing:border-box;" />'+
+                  '<input type="text" inputmode="decimal" placeholder="0" value="'+this.esc(String(uc))+'" '+
+                  'oninput="BP._bwSetWhoUnit(\''+key+'\','+idx+',this.value)" onblur="BP._bwRefreshFeeTotal(\''+key+'\')" '+
+                  'style="'+inpStyle+'font-weight:700;padding-left:1.4rem;text-align:right;" />'+
                 '</div>'+
-              '</div>';
+              '</div>'+(rowTotal>0?'<div style="text-align:right;font-size:0.75rem;font-weight:700;color:#9a90b0;margin-top:-0.1rem;margin-bottom:0.15rem;padding-right:0.1rem;">= $'+rowTotal.toLocaleString('en-CA',{minimumFractionDigits:2,maximumFractionDigits:2})+'</div>':'');
             }).join('');
             extraHtml += '<button onclick="event.stopPropagation();BP._bwAddWho(\''+key+'\')" style="font-family:inherit;font-size:0.75rem;font-weight:700;color:#572e88;background:none;border:none;cursor:pointer;padding:0.1rem 0;opacity:0.75;">+ Add another</button>';
             extraHtml += '</div>';
@@ -2530,7 +2541,7 @@ const BP = {
           if (s.enterNow && catName) {
             if (step.hasWho && who.length) {
               // Auto-sum fees from who entries — show a read-only total
-              const feeTotal = who.reduce((sum, e) => sum + (parseFloat(typeof e==='string'?0:e.fee)||0), 0);
+              const feeTotal = who.reduce((sum, e) => sum + (typeof e==='string' ? 0 : (parseFloat(e.qty)||1)*(parseFloat(e.unitCost != null ? e.unitCost : e.fee)||0)), 0);
               if (feeTotal > 0) {
                 extraHtml +=
                   '<div style="width:100%;padding-left:0.25rem;display:flex;align-items:center;gap:0.5rem;margin-top:0.15rem;">'+
@@ -2627,14 +2638,15 @@ const BP = {
       '</div>';
       if (evState.on) {
         const items = evState.items || [];
-        const feeTotal = items.reduce((sum,it)=>sum+(parseFloat(it.fee)||0),0);
+        const feeTotal = items.reduce((sum,it)=>sum+(parseFloat(it.qty)||1)*(parseFloat(it.unitCost!=null?it.unitCost:it.fee)||0),0);
         h += '<div style="padding:0.55rem 0.85rem 0.7rem;border-top:1px solid '+color+'22;">';
         if (ev.hasName) {
           h += '<input type="text" placeholder="What is this event?" value="'+this.esc(evState.name||'')+'" oninput="BP._bwEvtName(\''+ev.key+'\',this.value)" style="font-family:inherit;font-size:0.84rem;font-weight:600;color:#1a1530;border:1.5px solid rgba(87,46,136,0.18);border-radius:8px;padding:0.38rem 0.65rem;width:100%;box-sizing:border-box;margin-bottom:0.6rem;" />';
         }
-        h += '<div style="display:grid;grid-template-columns:1fr 130px;gap:0.4rem;margin-bottom:0.25rem;">' +
+        h += '<div style="display:grid;grid-template-columns:1fr 52px 90px;gap:0.4rem;margin-bottom:0.25rem;">' +
           '<span style="font-size:0.68rem;font-weight:800;text-transform:uppercase;letter-spacing:0.08em;color:#9a90b0;">Expense</span>' +
-          '<span style="font-size:0.68rem;font-weight:800;text-transform:uppercase;letter-spacing:0.08em;color:#9a90b0;text-align:right;">Amount</span>' +
+          '<span style="font-size:0.68rem;font-weight:800;text-transform:uppercase;letter-spacing:0.08em;color:#9a90b0;text-align:center;">Qty</span>' +
+          '<span style="font-size:0.68rem;font-weight:800;text-transform:uppercase;letter-spacing:0.08em;color:#9a90b0;text-align:right;">Rate</span>' +
         '</div>';
         h += '<div id="bg-bw-evt-items-'+ev.key+'">';
         items.forEach((item, idx) => {
@@ -2654,18 +2666,26 @@ const BP = {
     return h;
   },
   _bwEvtItemRowHtml(key, idx, item) {
-    return '<div style="display:grid;grid-template-columns:1fr 130px;gap:0.4rem;margin-bottom:0.3rem;">' +
+    const inpS = 'font-family:inherit;font-size:0.83rem;font-weight:600;color:#1a1530;border:1.5px solid rgba(87,46,136,0.18);border-radius:8px;padding:0.35rem 0.5rem;min-width:0;box-sizing:border-box;';
+    const qty = item.qty != null ? item.qty : 1;
+    const uc  = item.unitCost != null ? item.unitCost : (item.fee||'');
+    const rowTotal = (parseFloat(qty)||1) * (parseFloat(uc)||0);
+    return '<div style="display:grid;grid-template-columns:1fr 52px 90px;gap:0.4rem;margin-bottom:0.3rem;align-items:center;">' +
       '<input type="text" placeholder="e.g. Venue Rental" value="'+this.esc(item.name||'')+'" ' +
       'oninput="BP._bwEvtItemName(\''+key+'\','+idx+',this.value)" ' +
-      'style="font-family:inherit;font-size:0.83rem;font-weight:600;color:#1a1530;border:1.5px solid rgba(87,46,136,0.18);border-radius:8px;padding:0.35rem 0.65rem;min-width:0;" />' +
+      'style="'+inpS+'" />' +
+      '<input type="number" min="1" step="1" placeholder="1" value="'+this.esc(String(qty))+'" ' +
+      'oninput="BP._bwEvtItemQty(\''+key+'\','+idx+',this.value)" ' +
+      'onblur="BP._bwEvtUpdateTotal(\''+key+'\')" ' +
+      'style="'+inpS+'text-align:center;font-weight:700;" />' +
       '<div style="position:relative;">' +
         '<span style="position:absolute;left:0.5rem;top:50%;transform:translateY(-50%);font-size:0.8rem;font-weight:700;color:#9a90b0;pointer-events:none;">$</span>' +
-        '<input type="number" min="0" step="1" placeholder="0" value="'+this.esc(String(item.fee||''))+'" ' +
-        'oninput="BP._bwEvtItemFee(\''+key+'\','+idx+',this.value)" ' +
+        '<input type="text" inputmode="decimal" placeholder="0" value="'+this.esc(String(uc))+'" ' +
+        'oninput="BP._bwEvtItemUnit(\''+key+'\','+idx+',this.value)" ' +
         'onblur="BP._bwEvtUpdateTotal(\''+key+'\')" ' +
-        'style="font-family:inherit;font-size:0.83rem;font-weight:700;color:#1a1530;border:1.5px solid rgba(87,46,136,0.18);border-radius:8px;padding:0.35rem 0.5rem 0.35rem 1.4rem;width:100%;text-align:right;box-sizing:border-box;" />' +
+        'style="'+inpS+'font-weight:700;padding-left:1.4rem;text-align:right;" />' +
       '</div>' +
-    '</div>';
+    '</div>'+(rowTotal>0?'<div style="text-align:right;font-size:0.75rem;font-weight:700;color:#9a90b0;margin-top:-0.1rem;margin-bottom:0.15rem;">= $'+rowTotal.toLocaleString('en-CA',{minimumFractionDigits:2,maximumFractionDigits:2})+'</div>':'');
   },
   _bwRenderEventsList() {
     const el = document.getElementById('bg-bw-events-list');
@@ -2676,7 +2696,7 @@ const BP = {
     const totalEl = document.getElementById('bg-bw-evt-total-'+key);
     if (!totalEl) return;
     const items = (this._bwState.events[key]||{}).items || [];
-    const total = items.reduce((s,it)=>s+(parseFloat(it.fee)||0),0);
+    const total = items.reduce((s,it)=>s+(parseFloat(it.qty)||1)*(parseFloat(it.unitCost!=null?it.unitCost:it.fee)||0),0);
     const ev = (this.BW_EVENTS||[]).find(e=>e.key===key);
     const color = ev ? ev.color : '#572e88';
     totalEl.style.display = total > 0 ? 'flex' : 'none';
@@ -2695,16 +2715,17 @@ const BP = {
   },
   _bwEvtName(key, val) { if (!this._bwState.events[key]) this._bwState.events[key]={on:true,name:'',items:[]}; this._bwState.events[key].name=val; this._bwSaveDraft(); },
   _bwEvtItemName(key, idx, val) { this._bwState.events[key].items[idx].name=val; this._bwSaveDraft(); },
-  _bwEvtItemFee(key, idx, val) { this._bwState.events[key].items[idx].fee=parseFloat(val)||0; this._bwSaveDraft(); },
+  _bwEvtItemQty(key, idx, val)  { this._bwState.events[key].items[idx].qty=parseFloat(val)||1; this._bwSaveDraft(); },
+  _bwEvtItemUnit(key, idx, val) { this._bwState.events[key].items[idx].unitCost=this._evalMath(val); this._bwSaveDraft(); },
   _bwEvtAddItem(key) {
     if (!this._bwState.events[key]) return;
-    this._bwState.events[key].items.push({name:'',fee:''});
+    this._bwState.events[key].items.push({name:'',qty:1,unitCost:''});
     this._bwSaveDraft();
     const idx = this._bwState.events[key].items.length - 1;
     const container = document.getElementById('bg-bw-evt-items-'+key);
     if (container) {
       const div = document.createElement('div');
-      div.innerHTML = this._bwEvtItemRowHtml(key, idx, {name:'',fee:''});
+      div.innerHTML = this._bwEvtItemRowHtml(key, idx, {name:'',qty:1,unitCost:''});
       container.appendChild(div.firstChild);
       const newInput = container.lastElementChild.querySelector('input[type="text"]');
       if (newInput) newInput.focus();
@@ -2713,11 +2734,12 @@ const BP = {
     }
   },
   _bwSetEst(name, val) { this._bwState.estimates[name] = parseFloat(val) || 0; },
-  _bwWhoEntry(key, idx) { if (!this._bwState.who[key]) this._bwState.who[key]=[]; if (!this._bwState.who[key][idx]) this._bwState.who[key][idx]={name:'',fee:''}; return this._bwState.who[key][idx]; },
+  _bwWhoEntry(key, idx) { if (!this._bwState.who[key]) this._bwState.who[key]=[]; if (!this._bwState.who[key][idx]) this._bwState.who[key][idx]={name:'',qty:1,unitCost:''}; return this._bwState.who[key][idx]; },
   _bwSetWhoName(key, idx, val) { this._bwWhoEntry(key,idx).name = val; this._bwSaveDraft(); },
-  _bwSetWhoFee(key, idx, val) { this._bwWhoEntry(key,idx).fee = parseFloat(val)||0; this._bwSaveDraft(); },
+  _bwSetWhoQty(key, idx, val)  { this._bwWhoEntry(key,idx).qty = parseFloat(val)||1; this._bwSaveDraft(); },
+  _bwSetWhoUnit(key, idx, val) { this._bwWhoEntry(key,idx).unitCost = this._evalMath(val); this._bwSaveDraft(); },
   _bwRefreshFeeTotal(key) { this._bwSaveDraft(); this._bwRender(); },
-  _bwAddWho(key) { if (!this._bwState.who[key]) this._bwState.who[key]=[]; this._bwState.who[key].push({name:'',fee:''}); this._bwRender(); },
+  _bwAddWho(key) { if (!this._bwState.who[key]) this._bwState.who[key]=[]; this._bwState.who[key].push({name:'',qty:1,unitCost:''}); this._bwRender(); },
   _bwKeyToCatName(key, a) {
     if (key==='royalties')   return 'Rights & Licensing';
     if (key==='venue')       return (a.rehearsal) ? 'Venue & Rehearsal Space' : 'Venue Rental';
@@ -2815,22 +2837,22 @@ const BP = {
     for (const c of updateCats) {
       const existing = existingByName[c.name.trim().toLowerCase()];
       const whoKey = Object.keys(this.BW_QUESTIONS).find(k => this._bwKeyToCatName(k, a) === c.name && who[k] && who[k].length);
-      const feeTotal = whoKey ? Math.round(who[whoKey].reduce((s,e)=>s+(parseFloat(typeof e==='string'?0:e.fee)||0),0)*100) : 0;
+      const _wt = (e) => typeof e==='string' ? 0 : (parseFloat(e.qty)||1)*(parseFloat(e.unitCost!=null?e.unitCost:e.fee)||0);
+      const feeTotal = whoKey ? Math.round(who[whoKey].reduce((s,e)=>s+_wt(e),0)*100) : 0;
       const evDef = c.isEvent ? (this.BW_EVENTS||[]).find(e=>e.key===c.eventKey) : null;
       const evState = evDef ? ((this._bwState.events||{})[evDef.key]||{}) : null;
-      const evFeeTotal = evState ? Math.round((evState.items||[]).reduce((s,it)=>s+(parseFloat(it.fee)||0),0)*100) : 0;
+      const evFeeTotal = evState ? Math.round((evState.items||[]).reduce((s,it)=>s+(parseFloat(it.qty)||1)*(parseFloat(it.unitCost!=null?it.unitCost:it.fee)||0),0)*100) : 0;
       const planned = evFeeTotal || feeTotal || Math.round((est[c.name]||0)*100);
       if (planned) await this._patch('budget_categories', existing.id, {planned_cents: planned}).catch(()=>{});
     }
     if (!newCats.length && !updateCats.length) { this.closeBwModal(); await this.load(); return; }
+    const _bwItemTotal = (e) => typeof e==='string' ? 0 : (parseFloat(e.qty)||1)*(parseFloat(e.unitCost!=null?e.unitCost:e.fee)||0);
     const catRows = newCats.map((c,i) => {
-      // For who-based categories, sum fees as the planned amount
       const whoKey = Object.keys(this.BW_QUESTIONS).find(k => this._bwKeyToCatName(k, a) === c.name && who[k] && who[k].length);
-      const feeTotal = whoKey ? Math.round(who[whoKey].reduce((s,e)=>s+(parseFloat(typeof e==='string'?0:e.fee)||0),0)*100) : 0;
-      // For event categories, sum item fees
+      const feeTotal = whoKey ? Math.round(who[whoKey].reduce((s,e)=>s+_bwItemTotal(e),0)*100) : 0;
       const evDef = c.isEvent ? (this.BW_EVENTS||[]).find(e=>e.key===c.eventKey) : null;
       const evState = evDef ? ((this._bwState.events||{})[evDef.key]||{}) : null;
-      const evFeeTotal = evState ? Math.round((evState.items||[]).reduce((s,it)=>s+(parseFloat(it.fee)||0),0)*100) : 0;
+      const evFeeTotal = evState ? Math.round((evState.items||[]).reduce((s,it)=>s+(parseFloat(it.qty)||1)*(parseFloat(it.unitCost!=null?it.unitCost:it.fee)||0),0)*100) : 0;
       const planned = evFeeTotal || feeTotal || Math.round((est[c.name]||0)*100);
       return {name:c.name, type:'expense', color:c.color, planned_cents:planned, sort_order:i, production_id:this.prodId};
     });
@@ -2847,8 +2869,9 @@ const BP = {
         (entries||[]).forEach((entry, idx) => {
           const name = typeof entry==='string' ? entry.trim() : (entry.name||'').trim();
           if (!name) return;
-          const fee = typeof entry==='string' ? 0 : Math.round((parseFloat(entry.fee)||0)*100);
-          itemRows.push({name, category_id:cat.id, production_id:this.prodId, qty:1, unit_cost_cents:fee, budgeted_cents:fee, committed_cents:0, paid_cents:0, status:'planned', sort_order:idx});
+          const q  = typeof entry==='string' ? 1 : (parseFloat(entry.qty)||1);
+          const uc = typeof entry==='string' ? 0 : Math.round((parseFloat(entry.unitCost!=null?entry.unitCost:entry.fee)||0)*100);
+          itemRows.push({name, category_id:cat.id, production_id:this.prodId, qty:q, unit_cost_cents:uc, budgeted_cents:q*uc, committed_cents:0, paid_cents:0, status:'planned', sort_order:idx});
         });
       });
       // Build line items from event items
@@ -2860,8 +2883,9 @@ const BP = {
         const cat = (created||[]).find(c => c.name === catName);
         if (!cat) return;
         (evState.items||[]).filter(it => it.name && it.name.trim()).forEach((it, idx) => {
-          const fee = Math.round((parseFloat(it.fee)||0)*100);
-          itemRows.push({name:it.name.trim(), category_id:cat.id, production_id:this.prodId, qty:1, unit_cost_cents:fee, budgeted_cents:fee, committed_cents:0, paid_cents:0, status:'planned', sort_order:idx});
+          const q  = parseFloat(it.qty)||1;
+          const uc = Math.round((parseFloat(it.unitCost!=null?it.unitCost:it.fee)||0)*100);
+          itemRows.push({name:it.name.trim(), category_id:cat.id, production_id:this.prodId, qty:q, unit_cost_cents:uc, budgeted_cents:q*uc, committed_cents:0, paid_cents:0, status:'planned', sort_order:idx});
         });
       });
       // For plain estimates (yes/no step with a number but no line items yet), create a starter line item
