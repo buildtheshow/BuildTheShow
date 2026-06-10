@@ -2151,11 +2151,11 @@ const BP = {
       heading:'People and payments',
       desc:'Will your production involve paid contractors or team appreciation costs?',
       why:'Knowing who you need to pay helps us account for contractor fees and appreciation costs.' },
-    { label:'Events',              sub:'Auditions, callbacks, and celebrations',              type:'yn', keys:['auditions','castparty'], hasWho:false,
-      heading:'Events',
-      desc:'Tell us about any events tied to your production.',
-      why:'Audition costs and end-of-run celebrations are easy to overlook and often come out of pocket if not planned for.' },
-    { label:'Promotion & Audience',sub:'How will you reach your audience?',                   type:'yn', keys:['printing','marketing','lobbydecor','meetgreet','concessions','merch'],
+    { label:'Events',              sub:'Auditions, parties, and gatherings',                  type:'events',
+      heading:'Which events are part of your production?',
+      desc:'Select each event you will be running, then choose what types of expenses each one will involve.',
+      why:'Events like auditions and cast parties have multiple expense types that are easy to overlook.' },
+    { label:'Promotion & Audience',sub:'How will you reach your audience?',                   type:'yn', keys:['printing','marketing','lobbydecor','concessions','merch'],
       heading:'Promotion and audience',
       desc:'How will you promote your show and what will you offer your audience?',
       why:'Promotion and front-of-house costs are easy to overlook but add up quickly.' },
@@ -2190,11 +2190,8 @@ const BP = {
     concessions:'Will you be selling concessions?',
     merch:      'Will you be selling merchandise?',
     contractors:'Will you be paying directors, choreographers, designers, technicians, or other contractors?',
-    auditions:  'Will you have audition or callback expenses? (space rental, printing, refreshments, etc.)',
     volunteers: 'Will you have volunteer appreciation expenses?',
     cast:       'Will you have cast appreciation expenses?',
-    castparty:  'Will you be hosting a cast party or end-of-run celebration?',
-    meetgreet:  'Will you be hosting a meet and greet?',
     insurance:  'Will you need insurance, permits, or licences?',
     admin:      'Will you need office, administration, banking, or software expenses?',
     contingency:'Would you like a contingency category for unexpected expenses?',
@@ -2207,6 +2204,24 @@ const BP = {
     { key:'Dance Production', desc:'A dance recital or dance performance.',     iconSvg:'Rehearsals.svg',         iconBg:'rgba(209,82,61,0.12)', iconColor:'#d1523d' },
     { key:'Other',            desc:'Something else (tell us more later).',     iconSvg:'Dashboard.svg',          iconBg:'rgba(154,144,176,0.12)',iconColor:'#9a90b0' },
   ],
+  BW_EVENTS: [
+    { key:'auditions', label:'Auditions',   color:'#78bbd4' },
+    { key:'callbacks', label:'Callbacks',   color:'#476aaa' },
+    { key:'meetgreet', label:'Meet & Greet',color:'#769e7b' },
+    { key:'castparty', label:'Cast Party',  color:'#ca7ea7' },
+    { key:'other',     label:'Other',       color:'#9a90b0', hasName:true },
+  ],
+  BW_EVENT_TYPES: [
+    { key:'rental',   label:'Venue / Space Rental' },
+    { key:'food',     label:'Food & Catering' },
+    { key:'printing', label:'Printing' },
+    { key:'other',    label:'Other' },
+  ],
+  _bwBlankEvents() {
+    const evts = {};
+    this.BW_EVENTS.forEach(e => { evts[e.key] = {on:false, name:'', types:{rental:false,food:false,printing:false,other:false}}; });
+    return evts;
+  },
   _bwState: {step:0, prodType:'Musical', answers:{}},
   _bwDraftKey() { return 'bts-bw-draft-' + this.prodId; },
   _bwSaveDraft() { try { localStorage.setItem(this._bwDraftKey(), JSON.stringify(this._bwState)); } catch(_) {} },
@@ -2221,17 +2236,18 @@ const BP = {
       draft.answers = Object.assign(allAnswers, draft.answers);
       draft.who = draft.who || {};
       draft.estimates = draft.estimates || {};
+      draft.events = Object.assign(this._bwBlankEvents(), draft.events || {});
       this._bwState = draft;
     } else {
       const answers = {};
       Object.keys(this.BW_QUESTIONS).forEach(k => { answers[k] = true; });
-      this._bwState = {step:0, prodType:'Musical', answers, estimates:{}, enterNow:false, who:{}};
+      this._bwState = {step:0, prodType:'Musical', answers, estimates:{}, enterNow:false, who:{}, events:this._bwBlankEvents()};
     }
     this._bwRender();
     document.getElementById('bg-bw-modal').classList.add('open');
   },
   closeBwModal() { document.getElementById('bg-bw-modal').classList.remove('open'); },
-  _bwStartOver() { this._bwClearDraft(); const answers={}; Object.keys(this.BW_QUESTIONS).forEach(k=>{answers[k]=true;}); this._bwState={step:0,prodType:'Musical',answers,estimates:{},enterNow:false,who:{}}; this._bwRender(); },
+  _bwStartOver() { this._bwClearDraft(); const answers={}; Object.keys(this.BW_QUESTIONS).forEach(k=>{answers[k]=true;}); this._bwState={step:0,prodType:'Musical',answers,estimates:{},enterNow:false,who:{},events:this._bwBlankEvents()}; this._bwRender(); },
   _bwBack() {
     if (this._bwState.step > 0) { this._bwState.step--; this._bwRender(); }
     else this.closeBwModal();
@@ -2392,6 +2408,50 @@ const BP = {
       if (!s.enterNow) {
         html += '<p style="margin-top:1rem;font-size:0.82rem;color:#9a90b0;">No problem. You can enter amounts any time from the expense table.</p>';
       }
+    } else if (step.type === 'events') {
+      const evts = s.events || {};
+      html += '<div style="display:flex;flex-direction:column;gap:0.6rem;">';
+      this.BW_EVENTS.forEach(ev => {
+        const evState = evts[ev.key] || {on:false, name:'', types:{}};
+        const color = ev.color;
+        html += '<div style="border:1.5px solid '+(evState.on ? color : 'rgba(87,46,136,0.12)')+';border-radius:12px;overflow:hidden;transition:border-color 0.15s;">';
+        // Header row
+        html += '<div style="display:flex;align-items:center;gap:0.75rem;padding:0.65rem 0.85rem;background:'+(evState.on ? color+'12' : '#faf9fd')+';cursor:pointer;" onclick="BP._bwEvtToggle(\''+ev.key+'\')">' +
+          '<div style="width:12px;height:12px;border-radius:50%;background:'+color+';flex-shrink:0;"></div>' +
+          '<span style="font-size:0.9rem;font-weight:800;color:#1a1530;flex:1;">'+ev.label+'</span>' +
+          '<div style="display:flex;gap:0.3rem;">' +
+            '<button class="bg-bw-yn-btn yes'+(evState.on?' active':'')+'" onclick="event.stopPropagation();BP._bwEvtSet(\''+ev.key+'\',true)" style="font-size:0.72rem;padding:0.25rem 0.55rem;">Yes</button>' +
+            '<button class="bg-bw-yn-btn no'+(!evState.on?' active':'')+'" onclick="event.stopPropagation();BP._bwEvtSet(\''+ev.key+'\',false)" style="font-size:0.72rem;padding:0.25rem 0.55rem;">No</button>' +
+          '</div>' +
+        '</div>';
+        if (evState.on) {
+          html += '<div style="padding:0.55rem 0.85rem 0.7rem;border-top:1px solid '+color+'22;">';
+          if (ev.hasName) {
+            html += '<input type="text" placeholder="What is the event?" value="'+this.esc(evState.name||'')+'" oninput="BP._bwEvtName(\''+ev.key+'\',this.value)" style="font-family:inherit;font-size:0.84rem;font-weight:600;color:#1a1530;border:1.5px solid rgba(87,46,136,0.18);border-radius:8px;padding:0.38rem 0.65rem;width:100%;box-sizing:border-box;margin-bottom:0.55rem;" />';
+          }
+          html += '<div style="font-size:0.68rem;font-weight:800;text-transform:uppercase;letter-spacing:0.09em;color:#9a90b0;margin-bottom:0.4rem;">What expenses will this involve?</div>';
+          html += '<div style="display:flex;flex-wrap:wrap;gap:0.4rem;">';
+          this.BW_EVENT_TYPES.forEach(et => {
+            const on = !!(evState.types && evState.types[et.key]);
+            html += '<button onclick="BP._bwEvtType(\''+ev.key+'\',\''+et.key+'\','+!on+')" style="font-family:inherit;font-size:0.78rem;font-weight:700;padding:0.3rem 0.7rem;border-radius:99px;cursor:pointer;transition:all 0.13s;border:1.5px solid '+(on ? color : 'rgba(87,46,136,0.18)')+';background:'+(on ? color : '#fff')+';color:'+(on ? '#fff' : '#6b5f8a')+';">'+et.label+'</button>';
+          });
+          html += '</div>';
+          if (s.enterNow) {
+            const evtName = ev.hasName ? (evState.name || 'Other Event') : ev.label;
+            const estVal = s.estimates[evtName] || '';
+            html += '<div style="display:flex;align-items:center;gap:0.5rem;margin-top:0.55rem;">'+
+              '<span style="font-size:0.78rem;font-weight:700;color:#9a90b0;flex:1;">Estimated total for '+this.esc(evtName)+'</span>'+
+              '<div style="position:relative;flex-shrink:0;">'+
+                '<span style="position:absolute;left:0.55rem;top:50%;transform:translateY(-50%);font-size:0.82rem;font-weight:700;color:#9a90b0;pointer-events:none;">$</span>'+
+                '<input type="number" min="0" step="1" placeholder="0" value="'+this.esc(String(estVal))+'" oninput="BP._bwSetEst(\''+this.esc(evtName)+'\',this.value)" style="font-family:inherit;font-size:0.85rem;font-weight:700;color:#1a1530;border:1.5px solid rgba(87,46,136,0.22);border-radius:8px;padding:0.35rem 0.5rem 0.35rem 1.5rem;width:130px;text-align:right;" />'+
+              '</div>'+
+            '</div>';
+          }
+          html += '</div>';
+        }
+        html += '</div>';
+      });
+      html += '</div>';
     } else if (step.type === 'review') {
       const cats = this._bwComputeCats();
       if (cats.length) {
@@ -2422,6 +2482,10 @@ const BP = {
   _bwSetProd(t) { this._bwState.prodType = t; this._bwRender(); },
   _bwSet(key, val) { this._bwState.answers[key] = val; this._bwRender(); },
   _bwSetEnterNow(val) { this._bwState.enterNow = val; this._bwRender(); },
+  _bwEvtToggle(key) { this._bwEvtSet(key, !this._bwState.events[key].on); },
+  _bwEvtSet(key, on) { if (!this._bwState.events[key]) this._bwState.events[key]={on:false,name:'',types:{}}; this._bwState.events[key].on=on; this._bwRender(); },
+  _bwEvtName(key, val) { if (!this._bwState.events[key]) this._bwState.events[key]={on:true,name:'',types:{}}; this._bwState.events[key].name=val; this._bwSaveDraft(); },
+  _bwEvtType(key, type, val) { if (!this._bwState.events[key]) this._bwState.events[key]={on:true,name:'',types:{}}; if (!this._bwState.events[key].types) this._bwState.events[key].types={}; this._bwState.events[key].types[type]=val; this._bwRender(); },
   _bwSetEst(name, val) { this._bwState.estimates[name] = parseFloat(val) || 0; },
   _bwWhoEntry(key, idx) { if (!this._bwState.who[key]) this._bwState.who[key]=[]; if (!this._bwState.who[key][idx]) this._bwState.who[key][idx]={name:'',fee:''}; return this._bwState.who[key][idx]; },
   _bwSetWhoName(key, idx, val) { this._bwWhoEntry(key,idx).name = val; this._bwSaveDraft(); },
@@ -2450,11 +2514,8 @@ const BP = {
     if (key==='concessions') return (a.merch) ? 'Concessions & Merchandise' : 'Concessions';
     if (key==='merch')       return (a.concessions) ? 'Concessions & Merchandise' : 'Merchandise';
     if (key==='contractors') return 'Contractor Fees';
-    if (key==='auditions')   return 'Auditions & Callbacks';
     if (key==='volunteers')  return 'Volunteer Appreciation';
     if (key==='cast')        return 'Cast Appreciation';
-    if (key==='castparty')   return 'Cast Party';
-    if (key==='meetgreet')   return 'Meet & Greet';
     if (key==='insurance')   return 'Insurance & Permits';
     if (key==='admin')       return 'Administration';
     if (key==='contingency') return 'Contingency';
@@ -2466,7 +2527,7 @@ const BP = {
       set:'#769e7b', props:'#dd8233', costumes:'#ca7ea7', hair:'#d1523d',
       lighting:'#efab45', sound:'#78bbd4', photo:'#769e7b', musicians:'#572e88', tracks:'#572e88',
       printing:'#476aaa', marketing:'#d1523d', concessions:'#769e7b', merch:'#dd8233',
-      contractors:'#dd8233', auditions:'#78bbd4', volunteers:'#efab45', cast:'#efab45', castparty:'#ca7ea7', meetgreet:'#769e7b',
+      contractors:'#dd8233', volunteers:'#efab45', cast:'#efab45',
       instruments:'#572e88', stagemgmt:'#9a90b0', lobbydecor:'#769e7b',
       insurance:'#476aaa', admin:'#9a90b0', contingency:'#9a90b0',
     };
@@ -2497,11 +2558,15 @@ const BP = {
     else if (a.concessions)            cats.push({name:'Concessions',              color:'#769e7b'});
     else if (a.merch)                  cats.push({name:'Merchandise',              color:'#dd8233'});
     if (a.contractors)  cats.push({name:'Contractor Fees',           color:'#dd8233'});
-    if (a.auditions)    cats.push({name:'Auditions & Callbacks',     color:'#78bbd4'});
     if (a.volunteers)   cats.push({name:'Volunteer Appreciation',    color:'#efab45'});
     if (a.cast)         cats.push({name:'Cast Appreciation',         color:'#efab45'});
-    if (a.castparty)    cats.push({name:'Cast Party',                color:'#ca7ea7'});
-    if (a.meetgreet)    cats.push({name:'Meet & Greet',              color:'#769e7b'});
+    // Events
+    (this.BW_EVENTS||[]).forEach(ev => {
+      const evState = (this._bwState.events||{})[ev.key];
+      if (!evState || !evState.on) return;
+      const name = ev.hasName ? (evState.name||'Other Event') : ev.label;
+      cats.push({name, color:ev.color, isEvent:true, eventKey:ev.key});
+    });
     if (a.insurance)    cats.push({name:'Insurance & Permits',       color:'#476aaa'});
     if (a.admin)        cats.push({name:'Administration',            color:'#9a90b0'});
     if (a.contingency)  cats.push({name:'Contingency',              color:'#9a90b0'});
@@ -2535,6 +2600,19 @@ const BP = {
           if (!name) return;
           const fee = typeof entry==='string' ? 0 : Math.round((parseFloat(entry.fee)||0)*100);
           itemRows.push({name, category_id:cat.id, production_id:this.prodId, qty:1, unit_cost_cents:fee, budgeted_cents:fee, committed_cents:0, paid_cents:0, status:'planned', sort_order:idx});
+        });
+      });
+      // Build line items from event sub-types
+      const evts = this._bwState.events || {};
+      const typeLabels = {rental:'Venue / Space Rental', food:'Food & Catering', printing:'Printing', other:'Other'};
+      this.BW_EVENTS.forEach(ev => {
+        const evState = evts[ev.key];
+        if (!evState || !evState.on) return;
+        const catName = ev.hasName ? (evState.name||'Other Event') : ev.label;
+        const cat = (created||[]).find(c => c.name === catName);
+        if (!cat) return;
+        Object.entries(evState.types||{}).filter(([,v])=>v).forEach(([type], idx) => {
+          itemRows.push({name:typeLabels[type]||type, category_id:cat.id, production_id:this.prodId, qty:1, unit_cost_cents:0, budgeted_cents:0, committed_cents:0, paid_cents:0, status:'planned', sort_order:idx});
         });
       });
       if (itemRows.length) {
