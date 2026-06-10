@@ -415,6 +415,11 @@
     .bg-tbl-view-btns { display:flex; border:1.5px solid rgba(87,46,136,0.18); border-radius:8px; overflow:hidden; }
     .bg-tbl-view-btn { font-family:inherit; font-size:0.75rem; font-weight:700; border:none; padding:0.34rem 0.65rem; cursor:pointer; background:#fff; color:#9a90b0; display:flex; align-items:center; gap:0.28rem; }
     .bg-tbl-view-btn.active { background:#572e88; color:#fff; }
+    .bg-tab-bar { display:flex; align-items:center; gap:0; margin-bottom:1.5rem; border-bottom:2px solid rgba(87,46,136,0.12); flex-wrap:wrap; }
+    .bg-tab { font-family:inherit; font-size:0.9rem; font-weight:800; color:#9a90b0; background:none; border:none; cursor:pointer; padding:0.6rem 1.4rem; position:relative; bottom:-2px; border-bottom:2px solid transparent; transition:color 0.13s,border-color 0.13s,background 0.13s; white-space:nowrap; }
+    .bg-tab:hover { color:#572e88; }
+    .bg-tab.active { color:#572e88; border-bottom:2px solid #572e88; background:rgba(87,46,136,0.05); border-radius:8px 8px 0 0; }
+    .bg-tab-extra { margin-left:auto; display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap; padding-bottom:0.35rem; }
     .bg-tbl-wrap { display:flex; flex-direction:column; gap:0.6rem; }
     .bg-tbl-cat-group { border-radius:12px; overflow:hidden; background:#fff; }
     .bg-tbl-head { display:grid; grid-template-columns:36px minmax(160px,1.6fr) minmax(120px,1fr) 64px 104px 80px 104px 96px 88px; align-items:center; background:rgba(87,46,136,0.03); border-bottom:1px solid rgba(87,46,136,0.09); }
@@ -564,19 +569,16 @@
   <div class="fin-content">
     <div class="bg-layout">
       <div>
-        <!-- Revenue Drivers -->
-        <div class="bg-sec-hdr">
-          <span class="bg-sec-ttl">Revenue Drivers</span>
-          <div class="bg-sec-right">
+        <!-- Tab bar -->
+        <div class="bg-tab-bar">
+          <button class="bg-tab active" id="bg-tab-revenue" onclick="BP.switchTab('revenue')">Revenue</button>
+          <button class="bg-tab" id="bg-tab-expenses" onclick="BP.switchTab('expenses')">Expenses</button>
+          <!-- Revenue tab actions -->
+          <div class="bg-tab-extra" id="bg-tab-extra-revenue">
             <button class="bg-btn bg-btn--outline bg-btn--sm" onclick="BP.openUploadModal()"><img src="/ASSETS/Images/Upload - Document.svg" style="width:13px;height:13px;object-fit:contain;vertical-align:middle;" alt=""> Import PDF</button>
           </div>
-        </div>
-        <div class="bg-drv-grid" id="bg-drv-grid"></div>
-
-        <!-- Expense Categories -->
-        <div class="bg-sec-hdr" style="margin-top:2rem">
-          <span class="bg-sec-ttl">Expense Categories</span>
-          <div class="bg-sec-right" id="bg-exp-acts" style="display:none">
+          <!-- Expenses tab actions -->
+          <div class="bg-tab-extra" id="bg-tab-extra-expenses" style="display:none">
             <input type="search" class="bg-search" id="bg-search" placeholder="Search..." oninput="BP.onSearch(this.value)" style="width:160px" />
             <button class="bg-btn bg-btn--pp" onclick="BP.openPpModal()">
               <img src="/ASSETS/Images/Past shows.svg" style="width:15px;height:15px;object-fit:contain;filter:brightness(0) invert(1);" alt=""> Use Past Production
@@ -585,7 +587,7 @@
               <img src="/ASSETS/Images/Finance - Schedule.svg" style="width:15px;height:15px;object-fit:contain;filter:brightness(0) invert(1);" alt=""> Budget Wizard
             </button>
             <button class="bg-btn bg-btn--outline bg-btn--sm" onclick="BP.openCatModal(null)">+ Add Category</button>
-            <div style="margin-left:auto;display:flex;align-items:center;gap:0.4rem;">
+            <div style="display:flex;align-items:center;gap:0.4rem;">
               <span class="bg-tbl-view-lbl">View</span>
               <div class="bg-tbl-view-btns">
                 <button class="bg-tbl-view-btn" id="bg-view-btn-table" onclick="BP.setExpView('table')">
@@ -598,7 +600,17 @@
             </div>
           </div>
         </div>
-        <div id="bg-expense-area"><div style="padding:2rem;text-align:center;color:#9a90b0">Loading...</div></div>
+
+        <!-- Revenue pane -->
+        <div id="bg-pane-revenue">
+          <div class="bg-drv-grid" id="bg-drv-grid"></div>
+        </div>
+
+        <!-- Expenses pane -->
+        <div id="bg-pane-expenses" style="display:none">
+          <div id="bg-exp-acts" style="display:none"></div>
+          <div id="bg-expense-area"><div style="padding:2rem;text-align:center;color:#9a90b0">Loading...</div></div>
+        </div>
       </div>
 
       <!-- Summary sidebar -->
@@ -951,7 +963,7 @@ const BP = {
     { name:'Contingency',              color:'#d1523d', items:['Emergency Purchases','Last-Minute Rentals','Unexpected Repairs'] },
   ],
 
-  prodId:'', cats:[], items:[], drivers:[], _reviewItems:null, _expView:'table', _catCollapsed:{}, _inlineEditId:null, _inlineAddCatId:null,
+  prodId:'', cats:[], items:[], drivers:[], _reviewItems:null, _expView:'table', _activeTab:'revenue', _catCollapsed:{}, _inlineEditId:null, _inlineAddCatId:null,
   expandedCats:new Set(), search:'', editCatId:null, selectedColor:'#572e88', pickerSelected:new Set(),
   _draftType:null, _draftFields:[],
 
@@ -2140,6 +2152,18 @@ const BP = {
   },
 
   // ── Expense categories (table + card view) ────────────────────────────
+  switchTab(tab) {
+    this._activeTab = tab;
+    ['revenue','expenses'].forEach(t => {
+      const pane = document.getElementById('bg-pane-'+t);
+      const tabBtn = document.getElementById('bg-tab-'+t);
+      const extra = document.getElementById('bg-tab-extra-'+t);
+      if (pane) pane.style.display = t===tab ? '' : 'none';
+      if (tabBtn) tabBtn.classList.toggle('active', t===tab);
+      if (extra) extra.style.display = t===tab ? 'flex' : 'none';
+    });
+    if (tab==='expenses') this.renderExpenses();
+  },
   setExpView(v) {
     this._expView = v;
     ['table','cards'].forEach(k=>{
