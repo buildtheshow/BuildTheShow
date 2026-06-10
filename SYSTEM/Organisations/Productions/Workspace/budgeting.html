@@ -2253,19 +2253,6 @@ const BP = {
     const otherCats = cats.filter(c => !usedIds.has(c.id));
     if (otherCats.length) grouped.push({sec:{label:'Other',color:'#572e88'}, cats: otherCats});
 
-    // Detect merged-name conflicts: e.g. both "Concessions" and "Concessions & Merchandise" exist
-    const MERGE_CONFLICTS = [
-      { merged:'concessions & merchandise', parts:['concessions','merchandise'] },
-      { merged:'venue & rehearsal space',   parts:['venue rental','rehearsal space'] },
-    ];
-    const catNamesInDB = new Set(cats.map(c => _normName(c.name)));
-    const conflicts = MERGE_CONFLICTS.filter(m => catNamesInDB.has(m.merged) && m.parts.some(p => catNamesInDB.has(p)));
-    if (conflicts.length) {
-      html += '<div style="background:#efab4520;border:1.5px solid #efab45;border-radius:10px;padding:0.7rem 1rem;margin-bottom:0.85rem;display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap;">' +
-        '<span style="font-size:0.85rem;font-weight:700;color:#dd8233;flex:1;">Some categories were split then merged and now have duplicates. Click to consolidate them.</span>' +
-        '<button onclick="BP._resolveMergeConflicts()" style="font-family:inherit;font-size:0.8rem;font-weight:800;color:#fff;background:#dd8233;border:none;border-radius:8px;padding:0.38rem 0.9rem;cursor:pointer;flex-shrink:0;">Fix duplicates</button>' +
-        '</div>';
-    }
 
     html += '<div class="bg-tbl-col-head">' +
       '<div class="bg-tbl-th"></div>' +
@@ -2645,80 +2632,9 @@ const BP = {
   },
   _bwState: {step:0, prodType:'Musical', answers:{}},
   _bwDraftKey() { return 'bts-bw-draft-' + this.prodId; },
-  _bwAutoSyncTimer: null,
-  _bwAutoSyncing: false,
   _bwBuilding: false,
   _bwSaveDraft() {
     try { localStorage.setItem(this._bwDraftKey(), JSON.stringify(this._bwState)); } catch(_) {}
-    clearTimeout(this._bwAutoSyncTimer);
-    this._bwAutoSyncTimer = setTimeout(() => { if (!this._bwBuilding) this._bwAutoSync(); }, 800);
-  },
-  async _bwAutoSync() {
-    if (this._bwAutoSyncing) return;
-    this._bwAutoSyncing = true;
-    try { await this._bwDoSync(); } catch(_) {} finally { this._bwAutoSyncing = false; }
-  },
-  async _bwDoSync() {
-    const cats = this._bwComputeCats();
-    if (!cats.length) return;
-    const est = this._bwState.estimates || {};
-    const who = this._bwState.who || {};
-    const a   = this._bwState.answers;
-    // Live map of DB categories — updated as we create new ones so the loop doesn't duplicate
-    const catMap = {};
-    (this.cats||[]).forEach(c => { catMap[c.name.trim().toLowerCase()] = c; });
-    for (const c of cats) {
-      const key = c.name.trim().toLowerCase();
-      // Compute planned amount for this category
-      const whoKey = Object.keys(this.BW_QUESTIONS).find(k => this._bwKeyToCatName(k, a) === c.name && who[k] && who[k].length);
-      const _whoTotal = (e) => typeof e==='string' ? 0 : (parseFloat(e.qty)||1)*(parseFloat(e.unitCost!=null?e.unitCost:e.fee)||0);
-      const feeTotal = whoKey ? Math.round(who[whoKey].reduce((s,e)=>s+_whoTotal(e),0)*100) : 0;
-      const evDef = c.isEvent ? (this.BW_EVENTS||[]).find(e=>e.key===c.eventKey) : null;
-      const evState = evDef ? ((this._bwState.events||{})[evDef.key]||{}) : null;
-      const evFeeTotal = evState ? Math.round((evState.items||[]).reduce((s,it)=>s+(parseFloat(it.qty)||1)*(parseFloat(it.unitCost!=null?it.unitCost:it.fee)||0),0)*100) : 0;
-      const planned = evFeeTotal || feeTotal || Math.round((est[c.name]||0)*100);
-      let catId;
-      const hasData = planned > 0 || (whoKey && (who[whoKey]||[]).some(e=>(typeof e==='string'?e:(e.name||'')).trim())) || (evState && (evState.items||[]).some(it=>it.name&&it.name.trim()));
-      if (catMap[key]) {
-        catId = catMap[key].id;
-        if (planned) await this._patch('budget_categories', catId, {planned_cents: planned}).catch(()=>{});
-      } else if (hasData) {
-        // Only create if there is actual data — don't create empty categories from bare Yes answers
-        try {
-          const r = await fetch(this.URL+'/rest/v1/budget_categories', {method:'POST', headers:this._hj(),
-            body:JSON.stringify([{name:c.name, type:'expense', color:c.color, planned_cents:planned||0, sort_order:99, production_id:this.prodId}])});
-          if (r.ok) { const cr = await r.json(); if (cr && cr[0]) { catId = cr[0].id; catMap[key] = cr[0]; } }
-        } catch(_) {}
-      }
-      if (!catId) continue;
-      if (whoKey) {
-        // Who-based category: replace items from wizard state
-        await fetch(this.URL+'/rest/v1/budget_items?category_id=eq.'+catId+'&production_id=eq.'+this.prodId, {method:'DELETE', headers:this._h()}).catch(()=>{});
-        const entries = (who[whoKey]||[]).filter(e => (typeof e==='string'?e:(e.name||'')).trim());
-        if (entries.length) {
-          const rows = entries.map((e,idx) => { const nm=typeof e==='string'?e.trim():(e.name||'').trim(); const q=typeof e==='string'?1:(parseFloat(e.qty)||1); const uc=typeof e==='string'?0:Math.round((parseFloat(e.unitCost!=null?e.unitCost:e.fee)||0)*100); const tot=q*uc; return {name:nm,category_id:catId,production_id:this.prodId,qty:q,unit_cost_cents:uc,budgeted_cents:tot,committed_cents:0,paid_cents:0,status:'planned',sort_order:idx}; });
-          await fetch(this.URL+'/rest/v1/budget_items', {method:'POST', headers:this._hj(), body:JSON.stringify(rows)}).catch(()=>{});
-        }
-      } else if (evState) {
-        // Event category: replace items from wizard state
-        await fetch(this.URL+'/rest/v1/budget_items?category_id=eq.'+catId+'&production_id=eq.'+this.prodId, {method:'DELETE', headers:this._h()}).catch(()=>{});
-        const evItems = (evState.items||[]).filter(it => it.name && it.name.trim());
-        if (evItems.length) {
-          const rows = evItems.map((it,idx) => { const q=parseFloat(it.qty)||1; const uc=Math.round((parseFloat(it.unitCost!=null?it.unitCost:it.fee)||0)*100); return {name:it.name.trim(),category_id:catId,production_id:this.prodId,qty:q,unit_cost_cents:uc,budgeted_cents:q*uc,committed_cents:0,paid_cents:0,status:'planned',sort_order:idx}; });
-          await fetch(this.URL+'/rest/v1/budget_items', {method:'POST', headers:this._hj(), body:JSON.stringify(rows)}).catch(()=>{});
-        }
-      } else if (planned) {
-        // Plain estimate: upsert single starter item
-        const existing = (this.items||[]).filter(i => i.category_id === catId);
-        const starter  = existing.find(i => i.name === c.name);
-        if (starter) {
-          await this._patch('budget_items', starter.id, {unit_cost_cents:planned, budgeted_cents:planned}).catch(()=>{});
-        } else if (!existing.length) {
-          await fetch(this.URL+'/rest/v1/budget_items', {method:'POST', headers:this._hj(), body:JSON.stringify([{name:c.name,category_id:catId,production_id:this.prodId,qty:1,unit_cost_cents:planned,budgeted_cents:planned,committed_cents:0,paid_cents:0,status:'planned',sort_order:0}])}).catch(()=>{});
-        }
-      }
-    }
-    await this.load();
   },
   _bwLoadDraft() { try { const r = localStorage.getItem(this._bwDraftKey()); return r ? JSON.parse(r) : null; } catch(_) { return null; } },
   _bwClearDraft() { try { localStorage.removeItem(this._bwDraftKey()); } catch(_) {} },
@@ -3227,20 +3143,39 @@ const BP = {
   },
   async bwBuild() {
     this._bwBuilding = true;
-    clearTimeout(this._bwAutoSyncTimer);
     const cats = this._bwComputeCats();
     if (!cats.length) { this._bwBuilding = false; alert('Select at least one category.'); return; }
     const est = this._bwState.estimates || {};
     const who = this._bwState.who || {};
     const a = this._bwState.answers;
-    // Separate into truly new categories vs ones that already exist (update planned_cents on existing)
+    // Build lookup of existing categories by name
     const existingByName = {};
     (this.cats||[]).forEach(c => { existingByName[c.name.trim().toLowerCase()] = c; });
+    // Auto-resolve merge conflicts: if wizard computes a merged name (e.g. "Concessions & Merchandise")
+    // but the DB has one of the parts ("Concessions"), rename the part category to the merged name
+    const MERGE_PAIRS = [
+      { merged:'Concessions & Merchandise', parts:['Concessions','Merchandise'] },
+      { merged:'Venue & Rehearsal Space',   parts:['Venue Rental','Rehearsal Space'] },
+    ];
+    for (const mp of MERGE_PAIRS) {
+      const wantsMerged = cats.some(c => c.name.trim().toLowerCase() === mp.merged.toLowerCase());
+      if (!wantsMerged) continue;
+      if (existingByName[mp.merged.toLowerCase()]) continue; // merged already exists, no action needed
+      const partCat = mp.parts.map(p => existingByName[p.toLowerCase()]).find(Boolean);
+      if (partCat) {
+        // Rename the first found part category to the merged name — items stay attached
+        await this._patch('budget_categories', partCat.id, {name: mp.merged}).catch(()=>{});
+        existingByName[mp.merged.toLowerCase()] = {...partCat, name: mp.merged};
+        delete existingByName[partCat.name.trim().toLowerCase()];
+      }
+    }
     const newCats = cats.filter(c => !existingByName[c.name.trim().toLowerCase()]);
     const updateCats = cats.filter(c => existingByName[c.name.trim().toLowerCase()]);
-    // Update planned_cents on existing categories if the wizard has amounts
+    // Update planned_cents on existing categories ONLY if they have no items yet (don't overwrite locked-in values)
     for (const c of updateCats) {
       const existing = existingByName[c.name.trim().toLowerCase()];
+      const hasItems = (this.items||[]).some(i => i.category_id === existing.id);
+      if (hasItems) continue; // already has items — don't touch it
       const whoKey = Object.keys(this.BW_QUESTIONS).find(k => this._bwKeyToCatName(k, a) === c.name && who[k] && who[k].length);
       const _wt = (e) => typeof e==='string' ? 0 : (parseFloat(e.qty)||1)*(parseFloat(e.unitCost!=null?e.unitCost:e.fee)||0);
       const feeTotal = whoKey ? Math.round(who[whoKey].reduce((s,e)=>s+_wt(e),0)*100) : 0;
