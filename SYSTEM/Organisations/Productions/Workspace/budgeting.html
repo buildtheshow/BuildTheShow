@@ -2686,6 +2686,18 @@ const BP = {
           itemRows.push({name:it.name.trim(), category_id:cat.id, production_id:this.prodId, qty:1, unit_cost_cents:fee, budgeted_cents:fee, committed_cents:0, paid_cents:0, status:'planned', sort_order:idx});
         });
       });
+      // For plain estimates (yes/no step with a number but no line items yet), create a starter line item
+      if (this._bwState.enterNow) {
+        cats.forEach((c, i) => {
+          const cat = (created||[]).find(cr => cr.name === c.name);
+          if (!cat) return;
+          const alreadyHasItems = itemRows.some(r => r.category_id === cat.id);
+          if (alreadyHasItems) return;
+          const estCents = Math.round((est[c.name]||0)*100);
+          if (!estCents) return;
+          itemRows.push({name:c.name, category_id:cat.id, production_id:this.prodId, qty:1, unit_cost_cents:estCents, budgeted_cents:estCents, committed_cents:0, paid_cents:0, status:'planned', sort_order:0});
+        });
+      }
       if (itemRows.length) {
         const ri = await fetch(this.URL+'/rest/v1/budget_items',{method:'POST',headers:this._hj(),body:JSON.stringify(itemRows)});
         if (!ri.ok) throw new Error(await ri.text());
