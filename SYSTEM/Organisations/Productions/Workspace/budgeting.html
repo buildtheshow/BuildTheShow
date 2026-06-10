@@ -2034,8 +2034,9 @@ const BP = {
     const dupNames = Object.keys(nameCounts).filter(n => nameCounts[n] > 1);
     let html = '';
     if (dupNames.length) {
-      html += '<div style="background:#efab4520;border:1.5px solid #efab45;border-radius:10px;padding:0.7rem 1rem;margin-bottom:0.85rem;display:flex;align-items:center;gap:0.75rem;">' +
-        '<span style="font-size:0.85rem;font-weight:700;color:#dd8233;flex:1;">Duplicate categories detected: '+dupNames.map(n=>'<strong>'+this.esc(n)+'</strong>').join(', ')+'. Delete the extras using the edit (pencil) button on each row.</span>' +
+      html += '<div style="background:#efab4520;border:1.5px solid #efab45;border-radius:10px;padding:0.7rem 1rem;margin-bottom:0.85rem;display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap;">' +
+        '<span style="font-size:0.85rem;font-weight:700;color:#dd8233;flex:1;">Duplicate categories found: '+dupNames.map(n=>'<strong>'+this.esc(n)+'</strong>').join(', ')+'.</span>' +
+        '<button onclick="BP._removeDuplicateCats()" style="font-family:inherit;font-size:0.8rem;font-weight:800;color:#fff;background:#dd8233;border:none;border-radius:8px;padding:0.38rem 0.9rem;cursor:pointer;flex-shrink:0;">Remove duplicates</button>' +
         '</div>';
     }
     html += '<div class="bg-tbl-wrap">';
@@ -2073,7 +2074,9 @@ const BP = {
         '<div></div>' +
         '<div></div>' +
         '<div></div>' +
-        '<div class="bg-tbl-cat-total" style="color:'+color+'">'+(totalBudget?this.fmt$(totalBudget):'—')+'</div>' +
+        '<div class="bg-tbl-cat-total" id="bg-cat-budget-cell-'+c.id+'" style="color:'+color+';cursor:text;" onclick="event.stopPropagation();BP._inlineBudgetEdit(\''+c.id+'\')">' +
+          (totalBudget ? this.fmt$(totalBudget) : c.planned_cents ? this.fmt$(c.planned_cents) : '<span style="font-size:0.72rem;font-weight:600;color:#c4bcd8;">Set budget</span>') +
+        '</div>' +
         '<div class="bg-tbl-cat-spent">'+(totalSpent?this.fmt$(totalSpent):'—')+'</div>' +
         '<div class="bg-tbl-td--acts" style="padding-right:0.75rem;text-align:right;">' +
           '<button class="bg-tbl-acts-btn" onclick="event.stopPropagation();BP.openCatModal(\''+c.id+'\')" title="Edit category">&#9998;</button>' +
@@ -2677,10 +2680,23 @@ const BP = {
     const est = this._bwState.estimates || {};
     const who = this._bwState.who || {};
     const a = this._bwState.answers;
-    // Skip any categories that already exist by name to prevent duplicates
-    const existingNames = new Set((this.cats||[]).map(c => c.name.trim().toLowerCase()));
-    const newCats = cats.filter(c => !existingNames.has(c.name.trim().toLowerCase()));
-    if (!newCats.length) { alert('All of these categories already exist in your budget.'); this.closeBwModal(); return; }
+    // Separate into truly new categories vs ones that already exist (update planned_cents on existing)
+    const existingByName = {};
+    (this.cats||[]).forEach(c => { existingByName[c.name.trim().toLowerCase()] = c; });
+    const newCats = cats.filter(c => !existingByName[c.name.trim().toLowerCase()]);
+    const updateCats = cats.filter(c => existingByName[c.name.trim().toLowerCase()]);
+    // Update planned_cents on existing categories if the wizard has amounts
+    for (const c of updateCats) {
+      const existing = existingByName[c.name.trim().toLowerCase()];
+      const whoKey = Object.keys(this.BW_QUESTIONS).find(k => this._bwKeyToCatName(k, a) === c.name && who[k] && who[k].length);
+      const feeTotal = whoKey ? Math.round(who[whoKey].reduce((s,e)=>s+(parseFloat(typeof e==='string'?0:e.fee)||0),0)*100) : 0;
+      const evDef = c.isEvent ? (this.BW_EVENTS||[]).find(e=>e.key===c.eventKey) : null;
+      const evState = evDef ? ((this._bwState.events||{})[evDef.key]||{}) : null;
+      const evFeeTotal = evState ? Math.round((evState.items||[]).reduce((s,it)=>s+(parseFloat(it.fee)||0),0)*100) : 0;
+      const planned = evFeeTotal || feeTotal || Math.round((est[c.name]||0)*100);
+      if (planned) await this._patch('budget_categories', existing.id, {planned_cents: planned}).catch(()=>{});
+    }
+    if (!newCats.length && !updateCats.length) { this.closeBwModal(); await this.load(); return; }
     const catRows = newCats.map((c,i) => {
       // For who-based categories, sum fees as the planned amount
       const whoKey = Object.keys(this.BW_QUESTIONS).find(k => this._bwKeyToCatName(k, a) === c.name && who[k] && who[k].length);
@@ -2990,6 +3006,48 @@ const BP = {
     if(w) w.classList.toggle('is-open',!ex); if(r) r.classList.toggle('is-open',!ex);
   },
   onSearch(val){this.search=val;this.renderExpenses();},
+
+  // ── Inline budget editing & duplicate removal ────────────────────────────
+  _inlineBudgetEdit(catId) {
+    const el = document.getElementById('bg-cat-budget-cell-'+catId);
+    if (!el) return;
+    const cat = this.cats.find(c => c.id === catId);
+    const current = cat && cat.planned_cents ? (cat.planned_cents/100).toFixed(2) : '';
+    el.innerHTML = '<input type="text" value="'+this.esc(current)+'" placeholder="0.00 or 3*500" '+
+      'style="font-family:inherit;font-size:0.82rem;font-weight:700;color:#1a1530;border:1.5px solid rgba(87,46,136,0.3);border-radius:6px;padding:0.15rem 0.4rem;width:88px;text-align:right;background:#fff;outline:none;" '+
+      'onblur="BP._saveCatBudgetInline(\''+catId+'\',this)" '+
+      'onkeydown="if(event.key===\'Enter\'){this.blur();}if(event.key===\'Escape\'){BP.renderExpenses();}" />';
+    const inp = el.querySelector('input');
+    inp.focus(); inp.select();
+  },
+  async _saveCatBudgetInline(catId, input) {
+    const cents = Math.round(this._evalMath(input.value) * 100);
+    try { await this._patch('budget_categories', catId, {planned_cents: cents}); await this.load(); }
+    catch(e) { this.renderExpenses(); }
+  },
+  async _removeDuplicateCats() {
+    const expCats = this.cats.filter(c => c.type === 'expense');
+    const seen = {};
+    const toDelete = [];
+    expCats.forEach(c => {
+      const key = c.name.trim().toLowerCase();
+      if (seen[key]) {
+        const prevItems = this.items.filter(i => i.category_id === seen[key].id).length;
+        const curItems  = this.items.filter(i => i.category_id === c.id).length;
+        if (curItems > prevItems) { toDelete.push(seen[key].id); seen[key] = c; }
+        else toDelete.push(c.id);
+      } else { seen[key] = c; }
+    });
+    if (!toDelete.length) return;
+    if (!confirm('Remove '+toDelete.length+' duplicate '+(toDelete.length===1?'category':'categories')+'? Any items attached to them will also be deleted.')) return;
+    try {
+      for (const id of toDelete) {
+        for (const i of this.items.filter(x => x.category_id === id)) await this._del('budget_items', i.id);
+        await this._del('budget_categories', id);
+      }
+      await this.load();
+    } catch(e) { alert('Could not remove: '+e.message); }
+  },
 
   // ── Math eval & quick-add ────────────────────────────────────────────────
   _evalMath(str) {
