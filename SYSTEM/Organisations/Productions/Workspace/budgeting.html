@@ -2264,7 +2264,78 @@ const BP = {
   },
   _bwState: {step:0, prodType:'Musical', answers:{}},
   _bwDraftKey() { return 'bts-bw-draft-' + this.prodId; },
-  _bwSaveDraft() { try { localStorage.setItem(this._bwDraftKey(), JSON.stringify(this._bwState)); } catch(_) {} },
+  _bwAutoSyncTimer: null,
+  _bwAutoSyncing: false,
+  _bwBuilding: false,
+  _bwSaveDraft() {
+    try { localStorage.setItem(this._bwDraftKey(), JSON.stringify(this._bwState)); } catch(_) {}
+    clearTimeout(this._bwAutoSyncTimer);
+    this._bwAutoSyncTimer = setTimeout(() => { if (!this._bwBuilding) this._bwAutoSync(); }, 800);
+  },
+  async _bwAutoSync() {
+    if (this._bwAutoSyncing) return;
+    this._bwAutoSyncing = true;
+    try { await this._bwDoSync(); } catch(_) {} finally { this._bwAutoSyncing = false; }
+  },
+  async _bwDoSync() {
+    const cats = this._bwComputeCats();
+    if (!cats.length) return;
+    const est = this._bwState.estimates || {};
+    const who = this._bwState.who || {};
+    const a   = this._bwState.answers;
+    // Live map of DB categories — updated as we create new ones so the loop doesn't duplicate
+    const catMap = {};
+    (this.cats||[]).forEach(c => { catMap[c.name.trim().toLowerCase()] = c; });
+    for (const c of cats) {
+      const key = c.name.trim().toLowerCase();
+      // Compute planned amount for this category
+      const whoKey = Object.keys(this.BW_QUESTIONS).find(k => this._bwKeyToCatName(k, a) === c.name && who[k] && who[k].length);
+      const feeTotal = whoKey ? Math.round(who[whoKey].reduce((s,e)=>s+(parseFloat(typeof e==='string'?0:e.fee)||0),0)*100) : 0;
+      const evDef = c.isEvent ? (this.BW_EVENTS||[]).find(e=>e.key===c.eventKey) : null;
+      const evState = evDef ? ((this._bwState.events||{})[evDef.key]||{}) : null;
+      const evFeeTotal = evState ? Math.round((evState.items||[]).reduce((s,it)=>s+(parseFloat(it.fee)||0),0)*100) : 0;
+      const planned = evFeeTotal || feeTotal || Math.round((est[c.name]||0)*100);
+      let catId;
+      if (catMap[key]) {
+        catId = catMap[key].id;
+        if (planned) await this._patch('budget_categories', catId, {planned_cents: planned}).catch(()=>{});
+      } else {
+        try {
+          const r = await fetch(this.URL+'/rest/v1/budget_categories', {method:'POST', headers:this._hj(),
+            body:JSON.stringify([{name:c.name, type:'expense', color:c.color, planned_cents:planned||0, sort_order:99, production_id:this.prodId}])});
+          if (r.ok) { const cr = await r.json(); if (cr && cr[0]) { catId = cr[0].id; catMap[key] = cr[0]; } }
+        } catch(_) {}
+      }
+      if (!catId) continue;
+      if (whoKey) {
+        // Who-based category: replace items from wizard state
+        await fetch(this.URL+'/rest/v1/budget_items?category_id=eq.'+catId+'&production_id=eq.'+this.prodId, {method:'DELETE', headers:this._h()}).catch(()=>{});
+        const entries = (who[whoKey]||[]).filter(e => (typeof e==='string'?e:(e.name||'')).trim());
+        if (entries.length) {
+          const rows = entries.map((e,idx) => { const nm=typeof e==='string'?e.trim():(e.name||'').trim(); const fee=typeof e==='string'?0:Math.round((parseFloat(e.fee)||0)*100); return {name:nm,category_id:catId,production_id:this.prodId,qty:1,unit_cost_cents:fee,budgeted_cents:fee,committed_cents:0,paid_cents:0,status:'planned',sort_order:idx}; });
+          await fetch(this.URL+'/rest/v1/budget_items', {method:'POST', headers:this._hj(), body:JSON.stringify(rows)}).catch(()=>{});
+        }
+      } else if (evState) {
+        // Event category: replace items from wizard state
+        await fetch(this.URL+'/rest/v1/budget_items?category_id=eq.'+catId+'&production_id=eq.'+this.prodId, {method:'DELETE', headers:this._h()}).catch(()=>{});
+        const evItems = (evState.items||[]).filter(it => it.name && it.name.trim());
+        if (evItems.length) {
+          const rows = evItems.map((it,idx) => { const fee=Math.round((parseFloat(it.fee)||0)*100); return {name:it.name.trim(),category_id:catId,production_id:this.prodId,qty:1,unit_cost_cents:fee,budgeted_cents:fee,committed_cents:0,paid_cents:0,status:'planned',sort_order:idx}; });
+          await fetch(this.URL+'/rest/v1/budget_items', {method:'POST', headers:this._hj(), body:JSON.stringify(rows)}).catch(()=>{});
+        }
+      } else if (planned) {
+        // Plain estimate: upsert single starter item
+        const existing = (this.items||[]).filter(i => i.category_id === catId);
+        const starter  = existing.find(i => i.name === c.name);
+        if (starter) {
+          await this._patch('budget_items', starter.id, {unit_cost_cents:planned, budgeted_cents:planned}).catch(()=>{});
+        } else if (!existing.length) {
+          await fetch(this.URL+'/rest/v1/budget_items', {method:'POST', headers:this._hj(), body:JSON.stringify([{name:c.name,category_id:catId,production_id:this.prodId,qty:1,unit_cost_cents:planned,budgeted_cents:planned,committed_cents:0,paid_cents:0,status:'planned',sort_order:0}])}).catch(()=>{});
+        }
+      }
+    }
+    await this.load();
+  },
   _bwLoadDraft() { try { const r = localStorage.getItem(this._bwDraftKey()); return r ? JSON.parse(r) : null; } catch(_) { return null; } },
   _bwClearDraft() { try { localStorage.removeItem(this._bwDraftKey()); } catch(_) {} },
   _bwDraftHasData(draft) {
@@ -2728,8 +2799,10 @@ const BP = {
     return cats;
   },
   async bwBuild() {
+    this._bwBuilding = true;
+    clearTimeout(this._bwAutoSyncTimer);
     const cats = this._bwComputeCats();
-    if (!cats.length) { alert('Select at least one category.'); return; }
+    if (!cats.length) { this._bwBuilding = false; alert('Select at least one category.'); return; }
     const est = this._bwState.estimates || {};
     const who = this._bwState.who || {};
     const a = this._bwState.answers;
@@ -2809,10 +2882,11 @@ const BP = {
       }
       // Keep the draft so values are still there next time wizard opens; just reset to step 0
       this._bwState.step = 0;
+      this._bwBuilding = false;
       this._bwSaveDraft();
       this.closeBwModal();
       await this.load();
-    } catch(e) { alert('Could not create categories: '+e.message); }
+    } catch(e) { this._bwBuilding = false; alert('Could not create categories: '+e.message); }
   },
 
   // ── Past Production ───────────────────────────────────────────────────
