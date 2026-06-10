@@ -435,6 +435,10 @@
     .bg-tbl-add-row { display:flex; align-items:center; padding:0.45rem 0.75rem 0.45rem 2.75rem; border-top:1px solid rgba(87,46,136,0.05); background:rgba(87,46,136,0.01); }
     .bg-tbl-add-btn { font-family:inherit; font-size:0.78rem; font-weight:700; color:#572e88; background:none; border:none; cursor:pointer; padding:0.18rem 0.35rem; border-radius:6px; opacity:0.7; }
     .bg-tbl-add-btn:hover { opacity:1; background:rgba(87,46,136,0.07); }
+    .bg-tbl-qa-row { display:grid; grid-template-columns:36px minmax(160px,1.6fr) minmax(120px,1fr) 64px 104px 80px 104px 96px 72px; align-items:center; border-top:1px solid rgba(87,46,136,0.05); background:rgba(87,46,136,0.012); }
+    .bg-tbl-qa-inp { font-family:inherit; font-size:0.82rem; font-weight:600; color:#1a1530; border:1.5px solid transparent; border-radius:7px; padding:0.28rem 0.45rem; width:100%; box-sizing:border-box; background:transparent; }
+    .bg-tbl-qa-inp:focus { border-color:rgba(87,46,136,0.28); background:#fff; outline:none; }
+    .bg-tbl-qa-inp::placeholder { color:#c4bcd8; font-weight:500; }
     .bg-tbl-acts-btn { font-family:inherit; font-size:0.9rem; font-weight:900; color:#b0a8c8; background:none; border:none; cursor:pointer; padding:0.2rem 0.45rem; border-radius:6px; line-height:1; }
     .bg-tbl-acts-btn:hover { background:rgba(87,46,136,0.08); color:#572e88; }
 
@@ -726,7 +730,7 @@
     </div>
     <div class="bg-row-3">
       <div class="bg-field"><label>Qty</label><input type="number" id="bg-item-qty" min="0" step="1" placeholder="1" /></div>
-      <div class="bg-field"><label>Unit Cost ($)</label><input type="number" id="bg-item-unit-cost" min="0" step="0.01" placeholder="0.00" /></div>
+      <div class="bg-field"><label>Unit Cost ($) <span style="font-weight:500;color:#9a90b0;font-size:0.78rem;">or math e.g. 3*500</span></label><input type="text" id="bg-item-unit-cost" placeholder="0.00 or 3*500" onblur="BP._evalMathInput(this)" /></div>
       <div class="bg-field"><label>Tax ($) <span style="font-weight:500;color:#9a90b0;font-size:0.78rem;">if applicable</span></label><input type="number" id="bg-item-tax" min="0" step="0.01" placeholder="0.00" /></div>
     </div>
     <div class="bg-row-2">
@@ -2086,9 +2090,21 @@ const BP = {
             '</div>' +
           '</div>';
         });
-        html += '<div class="bg-tbl-add-row">' +
-          '<button class="bg-tbl-add-btn" onclick="BP.openItemModal(\''+c.id+'\',null)">+ Add line item</button>' +
-        '</div>';
+        html +=
+          '<div class="bg-tbl-qa-row">' +
+            '<div style="padding-left:0.9rem;color:#c4bcd8;font-size:0.88rem;font-weight:900;">+</div>' +
+            '<div style="padding:0.28rem 0.4rem 0.28rem 0;"><input id="bg-qa-name-'+c.id+'" class="bg-tbl-qa-inp" type="text" placeholder="New item name..." onkeydown="BP._qaKey(event,\''+c.id+'\')" /></div>' +
+            '<div></div>' +
+            '<div style="padding:0.28rem 0.2rem;"><input id="bg-qa-qty-'+c.id+'" class="bg-tbl-qa-inp" type="text" value="1" style="text-align:right;" onblur="BP._qaRecalc(\''+c.id+'\')" onkeydown="BP._qaKey(event,\''+c.id+'\')" /></div>' +
+            '<div style="padding:0.28rem 0.2rem;"><input id="bg-qa-cost-'+c.id+'" class="bg-tbl-qa-inp" type="text" placeholder="3*500" style="text-align:right;" onblur="BP._qaRecalc(\''+c.id+'\')" onkeydown="BP._qaKey(event,\''+c.id+'\')" /></div>' +
+            '<div></div>' +
+            '<div id="bg-qa-total-'+c.id+'" style="font-size:0.82rem;font-weight:700;color:#572e88;text-align:right;padding:0 0.4rem;font-variant-numeric:tabular-nums;"></div>' +
+            '<div></div>' +
+            '<div style="display:flex;align-items:center;justify-content:flex-end;gap:0.25rem;padding-right:0.6rem;">' +
+              '<button type="button" onclick="BP.quickAddItem(\''+c.id+'\')" style="font-family:inherit;font-size:0.73rem;font-weight:900;color:#fff;background:#572e88;border:none;border-radius:6px;padding:0.22rem 0.6rem;cursor:pointer;">Save</button>' +
+              '<button type="button" onclick="BP.openItemModal(\''+c.id+'\',null)" title="Full edit" style="font-family:inherit;font-size:0.72rem;font-weight:700;color:#9a90b0;background:none;border:none;cursor:pointer;padding:0.22rem 0.35rem;border-radius:6px;">More</button>' +
+            '</div>' +
+          '</div>';
       }
     });
 
@@ -2954,6 +2970,43 @@ const BP = {
     if(w) w.classList.toggle('is-open',!ex); if(r) r.classList.toggle('is-open',!ex);
   },
   onSearch(val){this.search=val;this.renderExpenses();},
+
+  // ── Math eval & quick-add ────────────────────────────────────────────────
+  _evalMath(str) {
+    str = String(str).replace(/[$,\s]/g,'').replace(/×/g,'*').replace(/÷/g,'/');
+    if (!str) return 0;
+    if (!/^[\d\+\-\*\/\.\(\)]+$/.test(str)) return parseFloat(str)||0;
+    try { const v = Function('"use strict";return('+str+')')(); return Math.max(0, isFinite(v)?parseFloat(v):0); }
+    catch(_) { return parseFloat(str)||0; }
+  },
+  _evalMathInput(el) {
+    const v = this._evalMath(el.value);
+    el.value = v > 0 ? v.toFixed(2) : '';
+  },
+  _qaRecalc(catId) {
+    const qty = Math.max(1, this._evalMath(document.getElementById('bg-qa-qty-'+catId)?.value)||1);
+    const cost = this._evalMath(document.getElementById('bg-qa-cost-'+catId)?.value||'');
+    const total = qty * cost;
+    const el = document.getElementById('bg-qa-total-'+catId);
+    if (el) el.textContent = total > 0 ? this.fmt$(Math.round(total*100)) : '';
+  },
+  _qaKey(e, catId) { if (e.key==='Enter') { e.preventDefault(); this.quickAddItem(catId); } },
+  async quickAddItem(catId) {
+    const nameEl = document.getElementById('bg-qa-name-'+catId);
+    const qtyEl  = document.getElementById('bg-qa-qty-'+catId);
+    const costEl = document.getElementById('bg-qa-cost-'+catId);
+    const name = nameEl ? nameEl.value.trim() : '';
+    if (!name) { if (nameEl) nameEl.focus(); return; }
+    const qty  = Math.max(1, this._evalMath(qtyEl?.value)||1);
+    const cost = this._evalMath(costEl?.value||'0');
+    const unitCents = Math.round(cost * 100);
+    const budgeted  = Math.round(qty * cost * 100);
+    try {
+      await this._post('budget_items', {name, category_id:catId, production_id:this.prodId, qty, unit_cost_cents:unitCents, budgeted_cents:budgeted, committed_cents:0, paid_cents:0, status:'planned'});
+      await this.load();
+      if (this._catDetailId===catId) this._renderCatDetail();
+    } catch(e) { alert('Could not add: '+e.message); }
+  },
   toggleActionMenu(id){
     const m=document.getElementById('bg-am-'+id); if(!m) return;
     const was=m.classList.contains('open');
@@ -3018,7 +3071,7 @@ const BP = {
     const catId=document.getElementById('bg-item-cat').value;
     const vendor=document.getElementById('bg-item-vendor').value.trim();
     const qty=parseFloat(document.getElementById('bg-item-qty').value)||1;
-    const unitCost=Math.round((parseFloat(document.getElementById('bg-item-unit-cost').value)||0)*100);
+    const unitCost=Math.round(this._evalMath(document.getElementById('bg-item-unit-cost').value)*100);
     const taxCents=Math.round((parseFloat(document.getElementById('bg-item-tax').value)||0)*100);
     const budget=Math.round(qty*unitCost)+taxCents;
     const committed=Math.round((parseFloat(document.getElementById('bg-item-committed').value)||0)*100);
