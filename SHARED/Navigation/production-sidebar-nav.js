@@ -323,13 +323,6 @@
 
   function addActiveDot(el) {
     el.classList.add('active');
-    el.style.position = 'relative';
-    if (!el.querySelector('.bts-nav-dot')) {
-      var dot = document.createElement('span');
-      dot.className = 'bts-nav-dot';
-      dot.style.cssText = 'position:absolute;left:1.8rem;top:50%;transform:translateY(-50%);width:5px;height:5px;border-radius:50%;background:#efab45;pointer-events:none;flex-shrink:0;z-index:10;';
-      el.appendChild(dot);
-    }
   }
 
   function markCurrentPageActive(explicitFile) {
