@@ -862,9 +862,17 @@ const BP = {
   _draftType:null, _draftFields:[],
 
   // ── Init ─────────────────────────────────────────────────────────────
-  init() {
+  _token: null,
+  async init() {
     this.prodId = new URLSearchParams(location.search).get('id')||'';
     if (!this.prodId) { document.getElementById('bg-expense-area').innerHTML='<div style="padding:2rem;text-align:center;color:#d1523d">No production ID found in URL.</div>'; return; }
+    // Grab the user's session JWT so RLS policies allow writes
+    try {
+      const { createClient } = supabase;
+      const sb = createClient(this.URL, this.KEY);
+      const { data:{ session } } = await sb.auth.getSession();
+      if (session?.access_token) this._token = session.access_token;
+    } catch(_) {}
     this.buildColorGrid();
     this.drivers = this._loadDrivers();
     this._buildTypeGrid();
@@ -1891,7 +1899,7 @@ const BP = {
     this.renderExpenses();
     this.renderSummary();
   },
-  _h()  { return {apikey:this.KEY,Authorization:'Bearer '+this.KEY}; },
+  _h()  { return {apikey:this.KEY,Authorization:'Bearer '+(this._token||this.KEY)}; },
   _hj() { return Object.assign({},this._h(),{'Content-Type':'application/json',Prefer:'return=representation'}); },
   async _post(table,data) {
     const r=await fetch(this.URL+'/rest/v1/'+table,{method:'POST',headers:this._hj(),body:JSON.stringify(Object.assign({},data,{production_id:this.prodId}))});
