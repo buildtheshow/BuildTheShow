@@ -415,6 +415,9 @@
     .bg-tbl-th--r { text-align:right; }
     .bg-tbl-cat-row { display:grid; grid-template-columns:36px minmax(160px,1.6fr) minmax(120px,1fr) 64px 104px 80px 104px 96px 88px; align-items:center; border-top:1px solid rgba(87,46,136,0.07); background:rgba(87,46,136,0.025); cursor:pointer; user-select:none; }
     .bg-tbl-cat-row:first-child { border-top:none; }
+    .bg-tbl-section-head { padding:1.1rem 0.9rem 0.35rem; font-size:0.62rem; font-weight:900; text-transform:uppercase; letter-spacing:0.12em; color:#9a90b0; display:flex; align-items:center; gap:0.5rem; }
+    .bg-tbl-section-head::after { content:''; flex:1; height:1px; background:rgba(87,46,136,0.08); }
+    .bg-tbl-section-head:first-child { padding-top:0.6rem; }
     .bg-tbl-cat-chev { font-size:0.65rem; color:#9a90b0; padding-left:0.75rem; transition:transform 0.15s; display:flex; align-items:center; }
     .bg-tbl-cat-row.collapsed .bg-tbl-cat-chev { transform:rotate(-90deg); }
     .bg-tbl-cat-name-cell { display:flex; align-items:center; gap:0.5rem; padding:0.65rem 0.4rem; }
@@ -2040,6 +2043,22 @@ const BP = {
         '<button onclick="BP._removeDuplicateCats()" style="font-family:inherit;font-size:0.8rem;font-weight:800;color:#fff;background:#dd8233;border:none;border-radius:8px;padding:0.38rem 0.9rem;cursor:pointer;flex-shrink:0;">Remove duplicates</button>' +
         '</div>';
     }
+    // Build section grouping from BW_SECTION_CATS
+    const _normName = n => (n||'').trim().toLowerCase();
+    const nameToSection = {};
+    this.BW_SECTION_CATS.forEach(sec => {
+      sec.names.forEach(n => { nameToSection[_normName(n)] = sec; });
+      if (sec.label === 'Events') this.BW_EVENTS.forEach(ev => { nameToSection[_normName(ev.label)] = sec; });
+    });
+    const usedIds = new Set();
+    const grouped = this.BW_SECTION_CATS.map(sec => {
+      const secCats = cats.filter(c => { const s = nameToSection[_normName(c.name)]; return s && s.label === sec.label; });
+      secCats.forEach(c => usedIds.add(c.id));
+      return {sec, cats: secCats};
+    }).filter(g => g.cats.length);
+    const otherCats = cats.filter(c => !usedIds.has(c.id));
+    if (otherCats.length) grouped.push({sec:{label:'Other',color:'#9a90b0'}, cats: otherCats});
+
     html += '<div class="bg-tbl-wrap">';
     html += '<div class="bg-tbl-head">' +
       '<div class="bg-tbl-th"></div>' +
@@ -2053,7 +2072,7 @@ const BP = {
       '<div class="bg-tbl-th bg-tbl-th--r">Actions</div>' +
     '</div>';
 
-    cats.forEach(c => {
+    const renderCat = c => {
       const color = c.color || '#572e88';
       const t = this._catTotals(c.id);
       const items = this._catItems(c.id);
@@ -2126,6 +2145,11 @@ const BP = {
             '</div>' +
           '</div>';
       }
+    }; // end renderCat
+
+    grouped.forEach((g, gi) => {
+      html += '<div class="bg-tbl-section-head" style="color:'+g.sec.color+'">'+this.esc(g.sec.label)+'</div>';
+      g.cats.forEach(c => renderCat(c));
     });
 
     html += '</div>';
@@ -2254,6 +2278,15 @@ const BP = {
     { key:'other',    label:'Other' },
   ],
   BW_EVENT_DEFAULTS: ['Venue / Space Rental','Food & Catering','Printing','Other'],
+  BW_SECTION_CATS: [
+    { label:'Rights & Venue',       color:'#476aaa', names:['Rights & Licensing','Venue Rental','Venue & Rehearsal Space','Rehearsal Space'] },
+    { label:'Production Elements',  color:'#769e7b', names:['Scripts','Set Construction','Props','Costumes','Hair & Makeup'] },
+    { label:'Technical',            color:'#78bbd4', names:['Lighting','Sound','Photography & Videography','Music','Instrument Rental','Stage Management Supplies'] },
+    { label:'People',               color:'#dd8233', names:['Contractor Fees','Volunteer Appreciation','Cast Appreciation'] },
+    { label:'Events',               color:'#ca7ea7', names:['Auditions','Callbacks','Meet & Greet','Cast Party'] },
+    { label:'Promotion & Audience', color:'#d1523d', names:['Printing & Programmes','Marketing & Advertising','Lobby Decorations','Concessions','Merchandise','Concessions & Merchandise'] },
+    { label:'Safety Net',           color:'#9a90b0', names:['Insurance & Permits','Administration','Contingency'] },
+  ],
   _bwBlankEvents() {
     const evts = {};
     this.BW_EVENTS.forEach(e => { evts[e.key] = {on:false, name:'', items:[]}; });
@@ -3427,25 +3460,40 @@ const BP = {
   },
   _catEmoji(name){
     const n=(name||'').toLowerCase();
-    if(/costum|wardrob/.test(n))              return this._svg('chm-costumes.svg',16);
-    if(/\bset\b|scenic|lumber/.test(n))       return this._svg('ProductionTeam-SetBuilder.svg',16);
-    if(/prop/.test(n))                        return this._svg('script-props.svg',16);
-    if(/market|advertis/.test(n))             return '<span style="font-size:0.7rem;color:#9a90b0">?</span>';
-    if(/royal|licens|right|script/.test(n))   return this._svg('script-script.svg',16);
-    if(/hair/.test(n))                        return this._svg('chm-hair.svg',16);
-    if(/makeup|wig/.test(n))                  return this._svg('chm-Makeup.svg',16);
-    if(/light/.test(n))                       return this._svg('volunteer-lighting-designer-technician.svg',16);
-    if(/sound|audio/.test(n))                 return this._svg('ProductionTeam-sound.svg',16);
-    if(/music/.test(n))                       return this._svg('script-music-songs.svg',16);
-    if(/venue|rent|space/.test(n))            return this._svg('Location1.svg',16);
-    if(/honor|staff|crew|team/.test(n))       return this._svg('Creative Team.svg',16);
-    if(/front.of.house|foh|programme/.test(n))return this._svg('Department-front-of-house-ticket.svg',16);
-    if(/admin|office/.test(n))                return this._svg('Files.svg',16);
-    if(/contingen|emergen/.test(n))           return this._svg('Danger Zone.svg',16);
-    if(/cast|volunteer|party/.test(n))        return this._svg('Volunteers.svg',16);
-    if(/insur/.test(n))                       return this._svg('Files.svg',16);
-    if(/ticket|box.office/.test(n))           return this._svg('Department-front-of-house-ticket.svg',16);
-    return this._svg('Files.svg',16);
+    if(/costum|wardrob/.test(n))                    return this._svg('chm-costumes.svg',16);
+    if(/\bset\b|scenic|lumber|construct/.test(n))   return this._svg('ProductionTeam-SetBuilder.svg',16);
+    if(/prop/.test(n))                              return this._svg('script-props.svg',16);
+    if(/royal|licens|right/.test(n))                return this._svg('script-script.svg',16);
+    if(/\bscript/.test(n))                          return this._svg('script-script.svg',16);
+    if(/hair/.test(n))                              return this._svg('chm-hair.svg',16);
+    if(/makeup|wig/.test(n))                        return this._svg('chm-Makeup.svg',16);
+    if(/light/.test(n))                             return this._svg('volunteer-lighting-designer-technician.svg',16);
+    if(/sound|audio|microphon/.test(n))             return this._svg('ProductionTeam-sound.svg',16);
+    if(/photo|video|film|record/.test(n))           return this._svg('Auditions2.svg',16);
+    if(/instrument|piano/.test(n))                  return this._svg('RehearsalPianist.svg',16);
+    if(/music/.test(n))                             return this._svg('script-music-songs.svg',16);
+    if(/stage.manag|headset|glow/.test(n))          return this._svg('Checklist.svg',16);
+    if(/venue|rent|space|rehearsal/.test(n))        return this._svg('Location1.svg',16);
+    if(/contractor|director|choreograph|designer/.test(n)) return this._svg('Creative Team.svg',16);
+    if(/volunteer.appreci/.test(n))                 return this._svg('Volunteers.svg',16);
+    if(/cast.appreci|cast.party/.test(n))           return this._svg('Casting Board.svg',16);
+    if(/audition/.test(n))                          return this._svg('Auditions.svg',16);
+    if(/callback/.test(n))                          return this._svg('Auditions2.svg',16);
+    if(/meet.*greet|meet.and.greet/.test(n))        return this._svg('Profiles.svg',16);
+    if(/print|programme|program/.test(n))           return this._svg('Files.svg',16);
+    if(/market|advertis/.test(n))                   return this._svg('Star.svg',16);
+    if(/lobby|decor/.test(n))                       return this._svg('Location2.svg',16);
+    if(/concession|canteen/.test(n))                return this._svg('ProductionTeam-ConcessionWorker.svg',16);
+    if(/merch|merchandise/.test(n))                 return this._svg('Star.svg',16);
+    if(/admin|office/.test(n))                      return this._svg('Files.svg',16);
+    if(/contingen|emergen/.test(n))                 return this._svg('Danger Zone.svg',16);
+    if(/insur|permit|licen/.test(n))                return this._svg('Checklist.svg',16);
+    if(/volunteer/.test(n))                         return this._svg('Volunteers.svg',16);
+    if(/cast/.test(n))                              return this._svg('Characters.svg',16);
+    if(/honor|staff|crew|team/.test(n))             return this._svg('Creative Team.svg',16);
+    if(/front.of.house|foh/.test(n))                return this._svg('Department-front-of-house-ticket.svg',16);
+    if(/ticket|box.office/.test(n))                 return this._svg('Department-front-of-house-ticket.svg',16);
+    return this._svg('Finance - Schedule.svg',16);
   },
   fmt$(cents){if(cents==null)return '$0.00';const abs=Math.abs(cents)/100;return(cents<0?'-':'')+'$'+abs.toLocaleString('en-CA',{minimumFractionDigits:2,maximumFractionDigits:2});},
   esc(s){return s?String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'):'';},
