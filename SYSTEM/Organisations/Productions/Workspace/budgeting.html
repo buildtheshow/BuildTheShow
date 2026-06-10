@@ -2217,10 +2217,14 @@ const BP = {
     { key:'printing', label:'Printing' },
     { key:'other',    label:'Other' },
   ],
+  BW_EVENT_DEFAULTS: ['Venue / Space Rental','Food & Catering','Printing','Other'],
   _bwBlankEvents() {
     const evts = {};
-    this.BW_EVENTS.forEach(e => { evts[e.key] = {on:false, name:'', types:{rental:false,food:false,printing:false,other:false}}; });
+    this.BW_EVENTS.forEach(e => { evts[e.key] = {on:false, name:'', items:[]}; });
     return evts;
+  },
+  _bwEvtDefaultItems() {
+    return this.BW_EVENT_DEFAULTS.map(label => ({name:label, fee:''}));
   },
   _bwState: {step:0, prodType:'Musical', answers:{}},
   _bwDraftKey() { return 'bts-bw-draft-' + this.prodId; },
@@ -2425,26 +2429,38 @@ const BP = {
           '</div>' +
         '</div>';
         if (evState.on) {
+          const items = evState.items || [];
+          const feeTotal = items.reduce((sum,it)=>sum+(parseFloat(it.fee)||0),0);
           html += '<div style="padding:0.55rem 0.85rem 0.7rem;border-top:1px solid '+color+'22;">';
           if (ev.hasName) {
-            html += '<input type="text" placeholder="What is the event?" value="'+this.esc(evState.name||'')+'" oninput="BP._bwEvtName(\''+ev.key+'\',this.value)" style="font-family:inherit;font-size:0.84rem;font-weight:600;color:#1a1530;border:1.5px solid rgba(87,46,136,0.18);border-radius:8px;padding:0.38rem 0.65rem;width:100%;box-sizing:border-box;margin-bottom:0.55rem;" />';
+            html += '<input type="text" placeholder="What is this event?" value="'+this.esc(evState.name||'')+'" oninput="BP._bwEvtName(\''+ev.key+'\',this.value)" style="font-family:inherit;font-size:0.84rem;font-weight:600;color:#1a1530;border:1.5px solid rgba(87,46,136,0.18);border-radius:8px;padding:0.38rem 0.65rem;width:100%;box-sizing:border-box;margin-bottom:0.6rem;" />';
           }
-          html += '<div style="font-size:0.68rem;font-weight:800;text-transform:uppercase;letter-spacing:0.09em;color:#9a90b0;margin-bottom:0.4rem;">What expenses will this involve?</div>';
-          html += '<div style="display:flex;flex-wrap:wrap;gap:0.4rem;">';
-          this.BW_EVENT_TYPES.forEach(et => {
-            const on = !!(evState.types && evState.types[et.key]);
-            html += '<button onclick="BP._bwEvtType(\''+ev.key+'\',\''+et.key+'\','+!on+')" style="font-family:inherit;font-size:0.78rem;font-weight:700;padding:0.3rem 0.7rem;border-radius:99px;cursor:pointer;transition:all 0.13s;border:1.5px solid '+(on ? color : 'rgba(87,46,136,0.18)')+';background:'+(on ? color : '#fff')+';color:'+(on ? '#fff' : '#6b5f8a')+';">'+et.label+'</button>';
+          // Column headers
+          html += '<div style="display:grid;grid-template-columns:1fr 130px;gap:0.4rem;margin-bottom:0.25rem;">' +
+            '<span style="font-size:0.68rem;font-weight:800;text-transform:uppercase;letter-spacing:0.08em;color:#9a90b0;">Expense</span>' +
+            '<span style="font-size:0.68rem;font-weight:800;text-transform:uppercase;letter-spacing:0.08em;color:#9a90b0;text-align:right;">Amount</span>' +
+          '</div>';
+          // Item rows
+          items.forEach((item, idx) => {
+            html += '<div style="display:grid;grid-template-columns:1fr 130px;gap:0.4rem;margin-bottom:0.3rem;">' +
+              '<input type="text" placeholder="e.g. Venue Rental" value="'+this.esc(item.name||'')+'" ' +
+              'oninput="BP._bwEvtItemName(\''+ev.key+'\','+idx+',this.value)" ' +
+              'style="font-family:inherit;font-size:0.83rem;font-weight:600;color:#1a1530;border:1.5px solid rgba(87,46,136,0.18);border-radius:8px;padding:0.35rem 0.65rem;min-width:0;" />' +
+              '<div style="position:relative;">' +
+                '<span style="position:absolute;left:0.5rem;top:50%;transform:translateY(-50%);font-size:0.8rem;font-weight:700;color:#9a90b0;pointer-events:none;">$</span>' +
+                '<input type="number" min="0" step="1" placeholder="0" value="'+this.esc(String(item.fee||''))+'" ' +
+                'oninput="BP._bwEvtItemFee(\''+ev.key+'\','+idx+',this.value)" ' +
+                'onblur="BP._bwEvtItemFeeBlur(\''+ev.key+'\')" ' +
+                'style="font-family:inherit;font-size:0.83rem;font-weight:700;color:#1a1530;border:1.5px solid rgba(87,46,136,0.18);border-radius:8px;padding:0.35rem 0.5rem 0.35rem 1.4rem;width:100%;text-align:right;box-sizing:border-box;" />' +
+              '</div>' +
+            '</div>';
           });
-          html += '</div>';
-          if (s.enterNow) {
-            const evtName = ev.hasName ? (evState.name || 'Other Event') : ev.label;
-            const estVal = s.estimates[evtName] || '';
-            html += '<div style="display:flex;align-items:center;gap:0.5rem;margin-top:0.55rem;">'+
-              '<span style="font-size:0.78rem;font-weight:700;color:#9a90b0;flex:1;">Estimated total for '+this.esc(evtName)+'</span>'+
-              '<div style="position:relative;flex-shrink:0;">'+
-                '<span style="position:absolute;left:0.55rem;top:50%;transform:translateY(-50%);font-size:0.82rem;font-weight:700;color:#9a90b0;pointer-events:none;">$</span>'+
-                '<input type="number" min="0" step="1" placeholder="0" value="'+this.esc(String(estVal))+'" oninput="BP._bwSetEst(\''+this.esc(evtName)+'\',this.value)" style="font-family:inherit;font-size:0.85rem;font-weight:700;color:#1a1530;border:1.5px solid rgba(87,46,136,0.22);border-radius:8px;padding:0.35rem 0.5rem 0.35rem 1.5rem;width:130px;text-align:right;" />'+
-              '</div>'+
+          html += '<button onclick="event.stopPropagation();BP._bwEvtAddItem(\''+ev.key+'\')" style="font-family:inherit;font-size:0.75rem;font-weight:700;color:'+color+';background:none;border:none;cursor:pointer;padding:0.1rem 0;opacity:0.8;">+ Add another</button>';
+          // Fee total
+          if (feeTotal > 0) {
+            html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-top:0.5rem;padding-top:0.4rem;border-top:1px solid '+color+'22;">' +
+              '<span style="font-size:0.78rem;font-weight:700;color:#9a90b0;">Total</span>' +
+              '<span style="font-size:0.88rem;font-weight:900;color:'+color+';">$'+feeTotal.toLocaleString('en-CA',{minimumFractionDigits:2,maximumFractionDigits:2})+'</span>' +
             '</div>';
           }
           html += '</div>';
@@ -2482,10 +2498,18 @@ const BP = {
   _bwSetProd(t) { this._bwState.prodType = t; this._bwRender(); },
   _bwSet(key, val) { this._bwState.answers[key] = val; this._bwRender(); },
   _bwSetEnterNow(val) { this._bwState.enterNow = val; this._bwRender(); },
-  _bwEvtToggle(key) { this._bwEvtSet(key, !this._bwState.events[key].on); },
-  _bwEvtSet(key, on) { if (!this._bwState.events[key]) this._bwState.events[key]={on:false,name:'',types:{}}; this._bwState.events[key].on=on; this._bwRender(); },
-  _bwEvtName(key, val) { if (!this._bwState.events[key]) this._bwState.events[key]={on:true,name:'',types:{}}; this._bwState.events[key].name=val; this._bwSaveDraft(); },
-  _bwEvtType(key, type, val) { if (!this._bwState.events[key]) this._bwState.events[key]={on:true,name:'',types:{}}; if (!this._bwState.events[key].types) this._bwState.events[key].types={}; this._bwState.events[key].types[type]=val; this._bwRender(); },
+  _bwEvtToggle(key) { this._bwEvtSet(key, !(this._bwState.events[key]||{}).on); },
+  _bwEvtSet(key, on) {
+    if (!this._bwState.events[key]) this._bwState.events[key]={on:false,name:'',items:[]};
+    this._bwState.events[key].on=on;
+    if (on && !this._bwState.events[key].items.length) this._bwState.events[key].items = this._bwEvtDefaultItems();
+    this._bwRender();
+  },
+  _bwEvtName(key, val) { if (!this._bwState.events[key]) this._bwState.events[key]={on:true,name:'',items:[]}; this._bwState.events[key].name=val; this._bwSaveDraft(); },
+  _bwEvtItemName(key, idx, val) { this._bwState.events[key].items[idx].name=val; this._bwSaveDraft(); },
+  _bwEvtItemFee(key, idx, val) { this._bwState.events[key].items[idx].fee=parseFloat(val)||0; this._bwSaveDraft(); },
+  _bwEvtItemFeeBlur(key) { this._bwSaveDraft(); this._bwRender(); },
+  _bwEvtAddItem(key) { this._bwState.events[key].items.push({name:'',fee:''}); this._bwRender(); },
   _bwSetEst(name, val) { this._bwState.estimates[name] = parseFloat(val) || 0; },
   _bwWhoEntry(key, idx) { if (!this._bwState.who[key]) this._bwState.who[key]=[]; if (!this._bwState.who[key][idx]) this._bwState.who[key][idx]={name:'',fee:''}; return this._bwState.who[key][idx]; },
   _bwSetWhoName(key, idx, val) { this._bwWhoEntry(key,idx).name = val; this._bwSaveDraft(); },
@@ -2582,7 +2606,11 @@ const BP = {
       // For who-based categories, sum fees as the planned amount
       const whoKey = Object.keys(this.BW_QUESTIONS).find(k => this._bwKeyToCatName(k, a) === c.name && who[k] && who[k].length);
       const feeTotal = whoKey ? Math.round(who[whoKey].reduce((s,e)=>s+(parseFloat(typeof e==='string'?0:e.fee)||0),0)*100) : 0;
-      const planned = feeTotal || Math.round((est[c.name]||0)*100);
+      // For event categories, sum item fees
+      const evDef = c.isEvent ? (this.BW_EVENTS||[]).find(e=>e.key===c.eventKey) : null;
+      const evState = evDef ? ((this._bwState.events||{})[evDef.key]||{}) : null;
+      const evFeeTotal = evState ? Math.round((evState.items||[]).reduce((s,it)=>s+(parseFloat(it.fee)||0),0)*100) : 0;
+      const planned = evFeeTotal || feeTotal || Math.round((est[c.name]||0)*100);
       return {name:c.name, type:'expense', color:c.color, planned_cents:planned, sort_order:i, production_id:this.prodId};
     });
     try {
@@ -2602,17 +2630,17 @@ const BP = {
           itemRows.push({name, category_id:cat.id, production_id:this.prodId, qty:1, unit_cost_cents:fee, budgeted_cents:fee, committed_cents:0, paid_cents:0, status:'planned', sort_order:idx});
         });
       });
-      // Build line items from event sub-types
+      // Build line items from event items
       const evts = this._bwState.events || {};
-      const typeLabels = {rental:'Venue / Space Rental', food:'Food & Catering', printing:'Printing', other:'Other'};
       this.BW_EVENTS.forEach(ev => {
         const evState = evts[ev.key];
         if (!evState || !evState.on) return;
         const catName = ev.hasName ? (evState.name||'Other Event') : ev.label;
         const cat = (created||[]).find(c => c.name === catName);
         if (!cat) return;
-        Object.entries(evState.types||{}).filter(([,v])=>v).forEach(([type], idx) => {
-          itemRows.push({name:typeLabels[type]||type, category_id:cat.id, production_id:this.prodId, qty:1, unit_cost_cents:0, budgeted_cents:0, committed_cents:0, paid_cents:0, status:'planned', sort_order:idx});
+        (evState.items||[]).filter(it => it.name && it.name.trim()).forEach((it, idx) => {
+          const fee = Math.round((parseFloat(it.fee)||0)*100);
+          itemRows.push({name:it.name.trim(), category_id:cat.id, production_id:this.prodId, qty:1, unit_cost_cents:fee, budgeted_cents:fee, committed_cents:0, paid_cents:0, status:'planned', sort_order:idx});
         });
       });
       if (itemRows.length) {
