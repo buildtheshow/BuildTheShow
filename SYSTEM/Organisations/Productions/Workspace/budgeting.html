@@ -2140,6 +2140,20 @@ const BP = {
     const otherCats = cats.filter(c => !usedIds.has(c.id));
     if (otherCats.length) grouped.push({sec:{label:'Other',color:'#9a90b0'}, cats: otherCats});
 
+    // Detect merged-name conflicts: e.g. both "Concessions" and "Concessions & Merchandise" exist
+    const MERGE_CONFLICTS = [
+      { merged:'concessions & merchandise', parts:['concessions','merchandise'] },
+      { merged:'venue & rehearsal space',   parts:['venue rental','rehearsal space'] },
+    ];
+    const catNamesInDB = new Set(cats.map(c => _normName(c.name)));
+    const conflicts = MERGE_CONFLICTS.filter(m => catNamesInDB.has(m.merged) && m.parts.some(p => catNamesInDB.has(p)));
+    if (conflicts.length) {
+      html += '<div style="background:#efab4520;border:1.5px solid #efab45;border-radius:10px;padding:0.7rem 1rem;margin-bottom:0.85rem;display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap;">' +
+        '<span style="font-size:0.85rem;font-weight:700;color:#dd8233;flex:1;">Some categories were split then merged and now have duplicates. Click to consolidate them.</span>' +
+        '<button onclick="BP._resolveMergeConflicts()" style="font-family:inherit;font-size:0.8rem;font-weight:800;color:#fff;background:#dd8233;border:none;border-radius:8px;padding:0.38rem 0.9rem;cursor:pointer;flex-shrink:0;">Fix duplicates</button>' +
+        '</div>';
+    }
+
     html += '<div class="bg-tbl-wrap">';
     html += '<div class="bg-tbl-head">' +
       '<div class="bg-tbl-th"></div>' +
@@ -2397,10 +2411,12 @@ const BP = {
       const evFeeTotal = evState ? Math.round((evState.items||[]).reduce((s,it)=>s+(parseFloat(it.qty)||1)*(parseFloat(it.unitCost!=null?it.unitCost:it.fee)||0),0)*100) : 0;
       const planned = evFeeTotal || feeTotal || Math.round((est[c.name]||0)*100);
       let catId;
+      const hasData = planned > 0 || (whoKey && (who[whoKey]||[]).some(e=>(typeof e==='string'?e:(e.name||'')).trim())) || (evState && (evState.items||[]).some(it=>it.name&&it.name.trim()));
       if (catMap[key]) {
         catId = catMap[key].id;
         if (planned) await this._patch('budget_categories', catId, {planned_cents: planned}).catch(()=>{});
-      } else {
+      } else if (hasData) {
+        // Only create if there is actual data — don't create empty categories from bare Yes answers
         try {
           const r = await fetch(this.URL+'/rest/v1/budget_categories', {method:'POST', headers:this._hj(),
             body:JSON.stringify([{name:c.name, type:'expense', color:c.color, planned_cents:planned||0, sort_order:99, production_id:this.prodId}])});
@@ -3322,6 +3338,34 @@ const BP = {
       }
       await this.load();
     } catch(e) { alert('Could not remove: '+e.message); }
+  },
+
+  async _resolveMergeConflicts() {
+    const MERGE_CONFLICTS = [
+      { merged:'concessions & merchandise', parts:['concessions','merchandise'] },
+      { merged:'venue & rehearsal space',   parts:['venue rental','rehearsal space'] },
+    ];
+    const catByName = {};
+    this.cats.forEach(c => { catByName[c.name.trim().toLowerCase()] = c; });
+    let fixed = 0;
+    for (const m of MERGE_CONFLICTS) {
+      const mergedCat = catByName[m.merged];
+      if (!mergedCat) continue;
+      for (const partName of m.parts) {
+        const partCat = catByName[partName];
+        if (!partCat) continue;
+        // Move any items from the part category into the merged category
+        const partItems = this.items.filter(i => i.category_id === partCat.id);
+        for (const item of partItems) {
+          await this._patch('budget_items', item.id, {category_id: mergedCat.id}).catch(()=>{});
+        }
+        // Delete the part category
+        await this._del('budget_categories', partCat.id).catch(()=>{});
+        fixed++;
+      }
+    }
+    await this.load();
+    if (fixed) this._toast(fixed+' duplicate '+(fixed===1?'category':'categories')+' removed.');
   },
 
   // ── Math eval & quick-add ────────────────────────────────────────────────
