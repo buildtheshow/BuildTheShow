@@ -2147,10 +2147,14 @@ const BP = {
       heading:'Technical requirements',
       desc:'Tell us about the technical and musical side of your production.',
       why:'Technical and music costs can add up quickly, so it helps to plan for them early.' },
-    { label:'People',              sub:'Will you be paying anyone or supporting volunteers?', type:'yn', keys:['contractors','auditions','volunteers','cast','castparty'],
+    { label:'People',              sub:'Will you be paying anyone or supporting volunteers?', type:'yn', keys:['contractors','volunteers','cast'], hasWho:true,
       heading:'People and payments',
       desc:'Will your production involve paid contractors or team appreciation costs?',
       why:'Knowing who you need to pay helps us account for contractor fees and appreciation costs.' },
+    { label:'Events',              sub:'Auditions, callbacks, and celebrations',              type:'yn', keys:['auditions','castparty'], hasWho:false,
+      heading:'Events',
+      desc:'Tell us about any events tied to your production.',
+      why:'Audition costs and end-of-run celebrations are easy to overlook and often come out of pocket if not planned for.' },
     { label:'Promotion & Audience',sub:'How will you reach your audience?',                   type:'yn', keys:['printing','marketing','lobbydecor','meetgreet','concessions','merch'],
       heading:'Promotion and audience',
       desc:'How will you promote your show and what will you offer your audience?',
@@ -2207,7 +2211,7 @@ const BP = {
   openBwModal() {
     const answers = {};
     Object.keys(this.BW_QUESTIONS).forEach(k => { answers[k] = true; });
-    this._bwState = {step:0, prodType:'Musical', answers, estimates:{}, enterNow:false};
+    this._bwState = {step:0, prodType:'Musical', answers, estimates:{}, enterNow:false, who:{}};
     this._bwRender();
     document.getElementById('bg-bw-modal').classList.add('open');
   },
@@ -2286,7 +2290,36 @@ const BP = {
         const hint = this._bwHint(key);
         const catName = this._bwKeyToCatName(key, s.answers);
         const estVal = s.enterNow && a[key] && catName ? (s.estimates[catName] || '') : '';
-        return '<div class="bg-bw-yn-q" style="flex-wrap:wrap;row-gap:0.5rem;">'+
+        const who = s.who[key] || [];
+        let extraHtml = '';
+        if (a[key]) {
+          if (step.hasWho) {
+            const fields = who.length ? who : [''];
+            extraHtml += '<div style="width:100%;padding-left:0.25rem;margin-top:0.1rem;">';
+            extraHtml += '<div style="font-size:0.72rem;font-weight:800;text-transform:uppercase;letter-spacing:0.08em;color:#9a90b0;margin-bottom:0.3rem;">Who?</div>';
+            extraHtml += fields.map((name, idx) =>
+              '<div style="display:flex;align-items:center;gap:0.4rem;margin-bottom:0.3rem;">'+
+                '<input type="text" placeholder="e.g. Music Director" value="'+this.esc(name)+'" '+
+                'oninput="BP._bwSetWho(\''+key+'\','+idx+',this.value)" '+
+                'style="font-family:inherit;font-size:0.83rem;font-weight:600;color:#1a1530;border:1.5px solid rgba(87,46,136,0.18);border-radius:8px;padding:0.35rem 0.65rem;flex:1;min-width:0;" />'+
+              '</div>'
+            ).join('');
+            extraHtml += '<button onclick="event.stopPropagation();BP._bwAddWho(\''+key+'\')" style="font-family:inherit;font-size:0.75rem;font-weight:700;color:#572e88;background:none;border:none;cursor:pointer;padding:0.1rem 0;opacity:0.75;">+ Add another</button>';
+            extraHtml += '</div>';
+          }
+          if (s.enterNow && catName) {
+            extraHtml +=
+              '<div class="bg-bw-est-row" style="width:100%;padding-left:0.25rem;display:flex;align-items:center;gap:0.5rem;margin-top:0.35rem;">'+
+                '<div style="width:8px;height:8px;border-radius:50%;background:'+this._bwKeyColor(key,s.answers)+';flex-shrink:0;"></div>'+
+                '<span style="font-size:0.78rem;font-weight:700;color:#9a90b0;flex:1;">Estimated budget for '+this.esc(catName)+'</span>'+
+                '<div style="position:relative;flex-shrink:0;">'+
+                  '<span style="position:absolute;left:0.55rem;top:50%;transform:translateY(-50%);font-size:0.82rem;font-weight:700;color:#9a90b0;pointer-events:none;">$</span>'+
+                  '<input type="number" min="0" step="1" placeholder="0" value="'+this.esc(String(estVal))+'" oninput="BP._bwSetEst(\''+this.esc(catName)+'\',this.value)" style="font-family:inherit;font-size:0.85rem;font-weight:700;color:#1a1530;border:1.5px solid rgba(87,46,136,0.22);border-radius:8px;padding:0.35rem 0.5rem 0.35rem 1.5rem;width:130px;text-align:right;" />'+
+                '</div>'+
+              '</div>';
+          }
+        }
+        return '<div class="bg-bw-yn-q" style="flex-wrap:wrap;row-gap:0.4rem;">'+
           '<div class="bg-bw-yn-left">'+
             '<div class="bg-bw-yn-lbl">'+this.BW_QUESTIONS[key]+'</div>'+
             (hint ? '<div class="bg-bw-yn-hint">'+hint+'</div>' : '')+
@@ -2295,16 +2328,7 @@ const BP = {
             '<button class="bg-bw-yn-btn yes'+(a[key]?' active':'')+'" onclick="BP._bwSet(\''+key+'\',true)">Yes</button>'+
             '<button class="bg-bw-yn-btn no'+(!a[key]?' active':'')+'" onclick="BP._bwSet(\''+key+'\',false)">No</button>'+
           '</div>'+
-          (s.enterNow && a[key] && catName ?
-            '<div class="bg-bw-est-row" style="width:100%;padding-left:0.25rem;display:flex;align-items:center;gap:0.5rem;">'+
-              '<div style="width:8px;height:8px;border-radius:50%;background:'+this._bwKeyColor(key,s.answers)+';flex-shrink:0;"></div>'+
-              '<span style="font-size:0.78rem;font-weight:700;color:#9a90b0;flex:1;">Estimated budget for '+this.esc(catName)+'</span>'+
-              '<div style="position:relative;flex-shrink:0;">'+
-                '<span style="position:absolute;left:0.55rem;top:50%;transform:translateY(-50%);font-size:0.82rem;font-weight:700;color:#9a90b0;pointer-events:none;">$</span>'+
-                '<input type="number" min="0" step="1" placeholder="0" value="'+this.esc(String(estVal))+'" oninput="BP._bwSetEst(\''+this.esc(catName)+'\',this.value)" style="font-family:inherit;font-size:0.85rem;font-weight:700;color:#1a1530;border:1.5px solid rgba(87,46,136,0.22);border-radius:8px;padding:0.35rem 0.5rem 0.35rem 1.5rem;width:130px;text-align:right;" />'+
-              '</div>'+
-            '</div>'
-          : '')+
+          extraHtml+
         '</div>';
       }).join('');
       html += '</div>';
@@ -2352,6 +2376,8 @@ const BP = {
   _bwSet(key, val) { this._bwState.answers[key] = val; this._bwRender(); },
   _bwSetEnterNow(val) { this._bwState.enterNow = val; this._bwRender(); },
   _bwSetEst(name, val) { this._bwState.estimates[name] = parseFloat(val) || 0; },
+  _bwSetWho(key, idx, val) { if (!this._bwState.who[key]) this._bwState.who[key] = []; this._bwState.who[key][idx] = val; },
+  _bwAddWho(key) { if (!this._bwState.who[key]) this._bwState.who[key] = ['']; this._bwState.who[key].push(''); this._bwRender(); },
   _bwKeyToCatName(key, a) {
     if (key==='royalties')   return 'Rights & Licensing';
     if (key==='venue')       return (a.rehearsal) ? 'Venue & Rehearsal Space' : 'Venue Rental';
@@ -2435,10 +2461,27 @@ const BP = {
     const cats = this._bwComputeCats();
     if (!cats.length) { alert('Select at least one category.'); return; }
     const est = this._bwState.estimates || {};
+    const who = this._bwState.who || {};
+    const a = this._bwState.answers;
     const catRows = cats.map((c,i) => ({name:c.name, type:'expense', color:c.color, planned_cents:Math.round((est[c.name]||0)*100), sort_order:i, production_id:this.prodId}));
     try {
       const r = await fetch(this.URL+'/rest/v1/budget_categories',{method:'POST',headers:this._hj(),body:JSON.stringify(catRows)});
       if (!r.ok) throw new Error(await r.text());
+      const created = await r.json();
+      // Build line items from who entries
+      const itemRows = [];
+      Object.entries(who).forEach(([key, names]) => {
+        const catName = this._bwKeyToCatName(key, a);
+        const cat = (created||[]).find(c => c.name === catName);
+        if (!cat) return;
+        (names||[]).filter(n => n && n.trim()).forEach((name, idx) => {
+          itemRows.push({name:name.trim(), category_id:cat.id, production_id:this.prodId, qty:1, unit_cost_cents:0, budgeted_cents:0, committed_cents:0, paid_cents:0, status:'planned', sort_order:idx});
+        });
+      });
+      if (itemRows.length) {
+        const ri = await fetch(this.URL+'/rest/v1/budget_items',{method:'POST',headers:this._hj(),body:JSON.stringify(itemRows)});
+        if (!ri.ok) throw new Error(await ri.text());
+      }
       this.closeBwModal();
       await this.load();
     } catch(e) { alert('Could not create categories: '+e.message); }
