@@ -294,10 +294,12 @@
     .bg-rcpt-row { display:flex; justify-content:space-between; align-items:baseline; gap:0.35rem; padding:0.1rem 0; }
     .bg-rcpt-lbl { font-size:0.78rem; font-weight:600; color:#4a3d6b; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     .bg-rcpt-val { font-size:0.78rem; font-weight:800; font-variant-numeric:tabular-nums; white-space:nowrap; flex-shrink:0; }
-    .bg-rcpt-sec-row { display:flex; justify-content:space-between; align-items:baseline; gap:0.35rem; padding:0.22rem 0 0.06rem; margin-top:0.25rem; }
+    .bg-rcpt-sec-row { display:flex; justify-content:space-between; align-items:baseline; gap:0.35rem; padding:0.22rem 0.3rem 0.06rem; margin-top:0.25rem; border-radius:5px; transition:background 0.1s; }
+    .bg-rcpt-sec-row:hover { background:rgba(87,46,136,0.07); }
     .bg-rcpt-sec-lbl { font-size:0.72rem; font-weight:900; text-transform:uppercase; letter-spacing:0.06em; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     .bg-rcpt-sec-val { font-size:0.72rem; font-weight:900; font-variant-numeric:tabular-nums; white-space:nowrap; flex-shrink:0; }
-    .bg-rcpt-cat { display:flex; justify-content:space-between; align-items:baseline; gap:0.35rem; padding:0.06rem 0 0.06rem 0.65rem; }
+    .bg-rcpt-cat { display:flex; justify-content:space-between; align-items:baseline; gap:0.35rem; padding:0.06rem 0.3rem 0.06rem 0.95rem; border-radius:4px; transition:background 0.1s; }
+    .bg-rcpt-cat:hover { background:rgba(87,46,136,0.05); }
     .bg-rcpt-cat-lbl { font-size:0.71rem; color:#6b5f8a; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     .bg-rcpt-cat-val { font-size:0.71rem; color:#4a3d6b; font-variant-numeric:tabular-nums; white-space:nowrap; flex-shrink:0; }
     .bg-rcpt-tot { display:flex; justify-content:space-between; align-items:baseline; gap:0.35rem; padding:0.22rem 0; }
@@ -963,7 +965,7 @@ const BP = {
     { name:'Contingency',              color:'#d1523d', items:['Emergency Purchases','Last-Minute Rentals','Unexpected Repairs'] },
   ],
 
-  prodId:'', cats:[], items:[], drivers:[], _reviewItems:null, _expView:'table', _activeTab:'revenue', _catCollapsed:{}, _inlineEditId:null, _inlineAddCatId:null,
+  prodId:'', cats:[], items:[], drivers:[], _reviewItems:null, _expView:'table', _activeTab:'revenue', _secCollapsed:{}, _catCollapsed:{}, _inlineEditId:null, _inlineAddCatId:null,
   expandedCats:new Set(), search:'', editCatId:null, selectedColor:'#572e88', pickerSelected:new Set(),
   _draftType:null, _draftFields:[],
 
@@ -1997,10 +1999,11 @@ const BP = {
       const g = secMap[key];
       const secTotal = g.cats.reduce((a,c)=>a+catAmt(c),0);
       const hasBudget = g.cats.some(c=>catAmt(c)>0);
-      h += '<div class="bg-rcpt-sec-row"><span class="bg-rcpt-sec-lbl" style="color:'+g.sec.color+'">'+this.esc(g.sec.label)+'</span><span class="bg-rcpt-sec-val" style="color:'+g.sec.color+'">'+this.fmt$(secTotal)+'</span></div>';
+      const secLabelEsc = this.esc(g.sec.label).replace(/'/g,"\\'");
+      h += '<div class="bg-rcpt-sec-row" onclick="BP.focusSection(\''+secLabelEsc+'\')" style="cursor:pointer;" title="Go to '+this.esc(g.sec.label)+'"><span class="bg-rcpt-sec-lbl" style="color:'+g.sec.color+'">'+this.esc(g.sec.label)+'</span><span class="bg-rcpt-sec-val" style="color:'+g.sec.color+'">'+this.fmt$(secTotal)+'</span></div>';
       g.cats.forEach(c => {
         const amt = catAmt(c);
-        h += '<div class="bg-rcpt-cat"><span class="bg-rcpt-cat-lbl">'+this.esc(c.name)+'</span><span class="bg-rcpt-cat-val">'+(amt?this.fmt$(amt):'—')+'</span></div>';
+        h += '<div class="bg-rcpt-cat" onclick="BP.focusCat(\''+c.id+'\')" style="cursor:pointer;" title="Go to '+this.esc(c.name)+'"><span class="bg-rcpt-cat-lbl">'+this.esc(c.name)+'</span><span class="bg-rcpt-cat-val">'+(amt?this.fmt$(amt):'—')+'</span></div>';
       });
     });
 
@@ -2293,7 +2296,7 @@ const BP = {
         ? 'background:#e8e4f0;'
         : 'background:'+color+';';
 
-      html += '<div class="bg-tbl-cat-group"'+(isFirst?' style="border-radius:0 0 12px 12px;"':'')+'>';
+      html += '<div class="bg-tbl-cat-group" id="bg-cat-group-'+c.id+'"'+(isFirst?' style="border-radius:0 0 12px 12px;"':'')+'>';
       html += '<div class="bg-tbl-cat-row'+(collapsed?' collapsed':'')+'" onclick="BP._tblToggleCat(\''+c.id+'\')" style="'+rowStyle+'">' +
         '<div class="bg-tbl-cat-chev" style="color:'+(isEmpty?'rgba(154,144,176,0.6)':'rgba(255,255,255,0.65)')+';">'+(collapsed?'&#9654;':'&#9660;')+'</div>' +
         '<div class="bg-tbl-cat-name-cell" style="justify-content:space-between;">' +
@@ -2381,20 +2384,60 @@ const BP = {
         }
         return '<div style="position:absolute;inset:0;pointer-events:none;overflow:hidden;opacity:0.14;">'+imgs.join('')+'</div>';
       })() : '';
+      const secCollapsed = this._secCollapsed[g.sec.label] !== false;
+      const secSlug = 'bg-sec-'+g.sec.label.replace(/[^a-z0-9]/gi,'-').toLowerCase();
       const halo = Array(8).fill('0 0 24px '+g.sec.color).join(',');
-      html += '<div class="bg-tbl-section-head" style="background:'+g.sec.color+';border-bottom:1px solid rgba(255,255,255,0.15);'+(gi>0?'margin-top:1.25rem;':'margin-top:0.25rem;')+'">'+
+      html += '<div class="bg-tbl-section-head" id="'+secSlug+'" onclick="BP._toggleSection(\''+g.sec.label+'\')" style="cursor:pointer;background:'+g.sec.color+';border-bottom:1px solid rgba(255,255,255,0.15);'+(gi>0?'margin-top:1.25rem;':'margin-top:0.25rem;')+'">'+
         patternHtml+
         '<span style="position:relative;z-index:1;text-shadow:'+halo+';">'+this.esc(g.sec.label)+'</span>'+
         (secTotal > 0 ? '<span style="position:relative;z-index:1;font-size:0.76rem;font-weight:700;color:#fff;letter-spacing:0;text-shadow:'+halo+';">'+this.fmt$(secTotal)+'</span>' : '')+
+        '<span style="position:absolute;right:1.1rem;z-index:1;font-size:0.7rem;color:rgba(255,255,255,0.7);">'+(secCollapsed?'&#9654;':'&#9660;')+'</span>'+
       '</div>';
-      html += '<div class="bg-tbl-wrap">';
-      _sortCats(g.cats).forEach((c, ci) => renderCat(c, ci === 0));
-      html += '</div>';
+      if (!secCollapsed) {
+        html += '<div class="bg-tbl-wrap">';
+        _sortCats(g.cats).forEach((c, ci) => renderCat(c, ci === 0));
+        html += '</div>';
+      }
     });
 
     area.innerHTML = html;
   },
 
+  _toggleSection(label) {
+    const collapsed = this._secCollapsed[label] !== false;
+    this._secCollapsed[label] = !collapsed;
+    this.renderExpenses();
+  },
+  _catSectionLabel(name) {
+    const key = (name||'').trim().toLowerCase();
+    for (const sec of this.BW_SECTION_CATS) {
+      if (sec.names.some(n => n.trim().toLowerCase() === key)) return sec.label;
+      if (sec.label === 'Events' && this.BW_EVENTS.some(e => e.label.trim().toLowerCase() === key)) return sec.label;
+    }
+    return null;
+  },
+  focusSection(label) {
+    this.switchTab('expenses');
+    this._secCollapsed[label] = false;
+    this.renderExpenses();
+    requestAnimationFrame(() => {
+      const el = document.getElementById('bg-sec-'+label.replace(/[^a-z0-9]/gi,'-').toLowerCase());
+      if (el) el.scrollIntoView({behavior:'smooth', block:'start'});
+    });
+  },
+  focusCat(catId) {
+    const cat = this.cats.find(c=>c.id===catId);
+    if (!cat) return;
+    const secLabel = this._catSectionLabel(cat.name);
+    this.switchTab('expenses');
+    if (secLabel) this._secCollapsed[secLabel] = false;
+    this._catCollapsed[catId] = false;
+    this.renderExpenses();
+    requestAnimationFrame(() => {
+      const el = document.getElementById('bg-cat-group-'+catId);
+      if (el) el.scrollIntoView({behavior:'smooth', block:'center'});
+    });
+  },
   _catSectionColor(name) {
     const key = (name||'').trim().toLowerCase();
     for (const sec of this.BW_SECTION_CATS) {
