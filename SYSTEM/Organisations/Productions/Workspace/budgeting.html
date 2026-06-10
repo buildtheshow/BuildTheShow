@@ -2052,6 +2052,7 @@ const BP = {
       this.cats  = cr.ok ? await cr.json() : [];
       this.items = ir.ok ? await ir.json() : [];
     } catch(_) { this.cats=[]; this.items=[]; }
+    this._fixCatColors(); // silently patch any off-brand colours in DB
     // Auto-expand categories that have items; collapse empty ones
     this.cats.forEach(c => {
       if (this._catCollapsed[c.id] === undefined) {
@@ -2060,6 +2061,30 @@ const BP = {
     });
     this.renderExpenses();
     this.renderSummary();
+  },
+  _fixCatColors() {
+    const BRAND = new Set(['#000000','#572e88','#efab45','#efefef','#769e7b','#dd8233','#d1523d','#78bbd4','#476aaa','#ca7ea7']);
+    const MAP = {
+      'rights & licensing':'#572e88',
+      'venue & rehearsal space':'#476aaa','venue rental':'#476aaa','rehearsal space':'#476aaa',
+      'scripts':'#476aaa','set construction':'#769e7b','props':'#dd8233',
+      'costumes':'#ca7ea7','hair & makeup':'#d1523d',
+      'lighting':'#efab45','sound':'#78bbd4','photography & videography':'#769e7b',
+      'music':'#572e88','instrument rental':'#572e88','stage management supplies':'#78bbd4',
+      'printing & programmes':'#476aaa','marketing & advertising':'#d1523d',
+      'lobby decorations':'#769e7b','concessions & merchandise':'#769e7b',
+      'concessions':'#769e7b','merchandise':'#dd8233',
+      'contractor fees':'#dd8233','volunteer appreciation':'#efab45','cast appreciation':'#efab45',
+      'auditions':'#78bbd4','callbacks':'#476aaa','meet & greet':'#769e7b','cast party':'#ca7ea7',
+      'insurance & permits':'#476aaa','administration':'#572e88','contingency':'#476aaa',
+    };
+    (this.cats||[]).forEach(c => {
+      const stored = (c.color||'').toLowerCase();
+      if (BRAND.has(stored)) return; // already a brand colour, leave it
+      const correct = MAP[(c.name||'').trim().toLowerCase()] || '#572e88';
+      c.color = correct; // fix in memory immediately
+      this._patch('budget_categories', c.id, {color: correct}).catch(()=>{});
+    });
   },
   _h()  { return {apikey:this.KEY,Authorization:'Bearer '+(this._token||this.KEY)}; },
   _hj() { return Object.assign({},this._h(),{'Content-Type':'application/json',Prefer:'return=representation'}); },
