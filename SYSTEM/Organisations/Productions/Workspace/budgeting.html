@@ -114,9 +114,12 @@
     .bg-wk-thead th.r { text-align:right; }
     /* Section header rows */
     .bg-wk-row-section td { padding:0.5rem 1rem; }
-    .bg-wk-section-lbl-inp { border:none; background:none; font-family:inherit; font-size:0.82rem; font-weight:900; color:#fff; width:auto; min-width:60px; padding:0; letter-spacing:0.01em; }
+    .bg-wk-section-lbl-inp { border:none; background:none; font-family:inherit; font-size:0.82rem; font-weight:900; color:#fff; width:auto; min-width:60px; padding:0; letter-spacing:0.01em; flex:1; }
     .bg-wk-section-lbl-inp:focus { outline:none; text-decoration:underline; text-underline-offset:3px; text-decoration-color:rgba(255,255,255,0.5); }
     .bg-wk-section-lbl-inp::placeholder { color:rgba(255,255,255,0.5); }
+    .bg-wk-row-addrow td { padding:0.55rem 1rem; border-bottom:1px solid #e8e4f0; }
+    .bg-wk-addrow-btn { background:none; border:1.5px solid #572e88; color:#572e88; font-family:inherit; font-size:0.78rem; font-weight:700; padding:0.3rem 0.85rem; border-radius:6px; cursor:pointer; letter-spacing:0.01em; }
+    .bg-wk-addrow-btn:hover { background:#f4f0fa; }
     /* Subtotal rows */
     .bg-wk-row-subtot td { padding:0.55rem 0.6rem; }
     .bg-wk-row-subtot { border-top:1.5px solid rgba(87,46,136,0.13); }
@@ -1051,34 +1054,29 @@ const BP = {
   },
   _dcBuildSponsorship(s, init) {
     const els = [];
+    let firstRow = true;
     if (s.sponsors) {
       els.push(
-        {id:'sec_spon',  label:'Sponsorships',          kind:'section',  color:'#d1523d', op:null},
-        {id:'spon_cnt',  label:'Number of sponsors',    kind:'number',   default:0, unit:'sponsors', note:'', op:null},
-        {id:'spon_val',  label:'Average sponsor value', kind:'dollar',   default:0, note:'Per sponsor', op:'×'},
+        {id:'sec_spon', label:'Projected Sponsorship Revenue',           kind:'section', color:'#572e88', addable:true, addRowLabel:'Add Sponsorship Row', op:null},
+        {id:'spon_0',   label:'Projected sponsorship revenue',           kind:'dollar',  default:0, sectionId:'sec_spon', note:'Local businesses, community partners, etc.', op:null},
       );
+      firstRow = false;
     }
     if (s.ads) {
-      els.push({id:'sec_ads', label:'Advertising Placements', kind:'section', color:'#476aaa', op:null});
-      if (s.sponsors) {
-        els.push(
-          {id:'ad_cnt',   label:'Number of ad placements', kind:'number',   default:0, unit:'ads', note:'Programme, website, etc.', ref:true, op:null},
-          {id:'ad_rate',  label:'Rate per placement',      kind:'dollar',   default:0, note:'Per ad', ref:true, op:null},
-          {id:'ad_total', label:'Advertising revenue',     kind:'computed', expr:'{ad_cnt}*{ad_rate}', note:'Auto calculated', op:'+'},
-        );
-      } else {
-        els.push(
-          {id:'ad_cnt',  label:'Number of ad placements', kind:'number', default:0, unit:'ads', note:'Programme, website, etc.', op:null},
-          {id:'ad_rate', label:'Rate per placement',      kind:'dollar', default:0, note:'Per ad', op:'×'},
-        );
-      }
+      els.push(
+        {id:'sec_ads', label:'Projected Programme Advertising Revenue', kind:'section', color:'#476aaa', addable:true, addRowLabel:'Add Advertising Row', op:null},
+        {id:'ads_0',   label:'Projected programme advertising revenue', kind:'dollar',  default:0, sectionId:'sec_ads', note:'Based on previous programme ad sales', op: firstRow ? null : '+'},
+      );
+      firstRow = false;
     }
-    if (!s.sponsors && !s.ads) els.push({id:'amount', label:'Estimated total', kind:'dollar', default:0, op:null});
-    let netExpr = '';
-    if (s.sponsors && s.ads) netExpr = '{spon_cnt}*{spon_val}+{ad_total}';
-    else if (s.sponsors)     netExpr = '{spon_cnt}*{spon_val}';
-    else if (s.ads)          netExpr = '{ad_cnt}*{ad_rate}';
-    else                     netExpr = '{amount}';
+    if (!s.sponsors && !s.ads) {
+      els.push(
+        {id:'sec_rev', label:'Revenue',           kind:'section', color:'#d1523d', addable:true, addRowLabel:'Add Revenue Row', op:null},
+        {id:'rev_0',   label:'Estimated revenue', kind:'dollar',  default:0, sectionId:'sec_rev', note:'', op:null},
+      );
+    }
+    const rows = els.filter(e => e.sectionId && e.kind === 'dollar');
+    const netExpr = rows.map(e=>'{'+e.id+'}').join('+') || '0';
     els.push({id:'net', label:'Total sponsorship & advertising revenue', kind:'subtotal', expr:netExpr, final:true, op:null});
     return els.map(init);
   },
@@ -1287,11 +1285,19 @@ const BP = {
     // ── Section header row ───────────────────────────────────────────────
     if (isSec) {
       const bg = el.color || '#572e88';
+      let secTotalHtml = '';
+      if (el.addable) {
+        const secCents = this._prevEls
+          .filter(e => e.sectionId === el.id && e.kind === 'dollar')
+          .reduce((sum, e) => sum + Math.round((+(e.value !== undefined ? e.value : e.default) || 0) * 100), 0);
+        secTotalHtml = '<span style="font-size:0.9rem;font-weight:900;color:#fff;margin-left:auto;white-space:nowrap;padding-left:1.5rem" id="bg-wk-sec-tot-' + el.id + '">' + this.fmt$(secCents) + '</span>';
+      }
       return '<tr class="bg-wk-row-section" style="background:' + bg + '">' +
         '<td colspan="7" style="background:inherit">' +
           '<div style="display:flex;align-items:center;gap:0.35rem">' +
             '<span style="font-size:0.82rem;font-weight:900;color:rgba(255,255,255,0.75);flex-shrink:0">' + secNum + '.</span>' +
             '<input class="bg-wk-section-lbl-inp" type="text" value="' + this.esc(el.label) + '" placeholder="Section name…" oninput="BP._prevElLabel(\'' + el.id + '\',this.value)">' +
+            secTotalHtml +
           '</div>' +
         '</td>' +
       '</tr>';
@@ -1323,10 +1329,16 @@ const BP = {
       const cents = Math.round(disp * 100);
       amtHtml = '<span class="bg-wk-td-amt-val' + (cents < 0 ? ' neg' : '') + '" id="bg-wk-cv-' + el.id + '">' + (cents < 0 ? '−' : '') + this.fmt$(Math.abs(cents)) + '</span>';
     } else if (el.kind === 'dollar') {
-      const amt = this._elChainAmt(el, this._prevEls);
-      amtHtml = amt !== null
-        ? '<span class="bg-wk-td-amt-val' + (amt < 0 ? ' neg' : '') + '" id="bg-wk-cv-' + el.id + '">' + (amt < 0 ? '−' : '') + this.fmt$(Math.abs(amt)) + '</span>'
-        : '<span class="bg-wk-amt-dash" id="bg-wk-cv-' + el.id + '">—</span>';
+      if (el.sectionId) {
+        // Addable section row — show own value, not chain running total
+        const cents = Math.round((+(val)||0) * 100);
+        amtHtml = '<span class="bg-wk-td-amt-val" id="bg-wk-cv-' + el.id + '">' + this.fmt$(cents) + '</span>';
+      } else {
+        const amt = this._elChainAmt(el, this._prevEls);
+        amtHtml = amt !== null
+          ? '<span class="bg-wk-td-amt-val' + (amt < 0 ? ' neg' : '') + '" id="bg-wk-cv-' + el.id + '">' + (amt < 0 ? '−' : '') + this.fmt$(Math.abs(amt)) + '</span>'
+          : '<span class="bg-wk-amt-dash" id="bg-wk-cv-' + el.id + '">—</span>';
+      }
     } else {
       amtHtml = '<span class="bg-wk-amt-dash">—</span>';
     }
@@ -1378,6 +1390,31 @@ const BP = {
       '<td class="bg-wk-td-actions">' + actHtml + '</td>' +
     '</tr>';
   },
+  _wkAddRowBtnHtml(sec) {
+    return '<tr class="bg-wk-row-addrow"><td colspan="7">' +
+      '<button class="bg-wk-addrow-btn" onclick="BP._addSectionRow(\'' + this.esc(sec.id) + '\')">+ ' + this.esc(sec.addRowLabel || 'Add Row') + '</button>' +
+    '</td></tr>';
+  },
+  _addSectionRow(sectionId) {
+    const rows = this._prevEls.filter(e => e.sectionId === sectionId && e.kind === 'dollar');
+    const prefix = sectionId.replace(/^sec_/, '');
+    const newId  = prefix + '_' + rows.length;
+    const lastIdx = this._prevEls.reduce((max, e, i) => e.sectionId === sectionId ? i : max, -1);
+    const insertAt = lastIdx >= 0 ? lastIdx + 1 : this._prevEls.findIndex(e => e.id === sectionId) + 1;
+    this._prevEls.splice(insertAt, 0, {id:newId, label:'', kind:'dollar', default:0, value:0, sectionId, note:'', op:'+'});
+    this._rebuildNetExpr();
+    this._renderWorkspace();
+    requestAnimationFrame(() => {
+      const inp = document.querySelector('#bg-wkr-' + newId + ' .bg-wk-lbl-inp');
+      if (inp) inp.focus();
+    });
+  },
+  _rebuildNetExpr() {
+    const netEl = this._prevEls.find(e => e.id === 'net');
+    if (!netEl || !netEl.final) return;
+    const rows = this._prevEls.filter(e => e.sectionId && e.kind === 'dollar');
+    netEl.expr = rows.length ? rows.map(e=>'{'+e.id+'}').join('+') : '0';
+  },
   _renderWorkspace() {
     const inner = document.getElementById('bg-workspace-inner'); if(!inner) return;
     const cfg   = this._drvTypeCfg(this._prevType);
@@ -1387,9 +1424,29 @@ const BP = {
     const fStr  = this._fbarStr();
     const typeOpts = this.DRIVER_TYPES.map(t=>'<option value="'+t.type+'"'+(t.type===this._prevType?' selected':'')+'>'+t.label+'</option>').join('');
     let secCount = 0;
-    const rowsHtml = this._prevEls.length
-      ? this._prevEls.map(el => { if (el.kind === 'section') secCount++; return this._wkRowHtml(el, secCount); }).join('')
-      : '<tr><td colspan="7" class="bg-wk-empty-td">Click a chip below to add your first variable</td></tr>';
+    let rowsHtml = '';
+    if (this._prevEls.length) {
+      let currentSec = null;
+      this._prevEls.forEach((el, i) => {
+        const nextEl = this._prevEls[i+1];
+        if (el.kind === 'section') {
+          secCount++;
+          currentSec = el;
+          rowsHtml += this._wkRowHtml(el, secCount);
+          if (el.addable && !this._prevEls.some(e => e.sectionId === el.id)) {
+            rowsHtml += this._wkAddRowBtnHtml(el);
+          }
+        } else {
+          rowsHtml += this._wkRowHtml(el, secCount);
+          if (currentSec && currentSec.addable && el.sectionId === currentSec.id) {
+            const nextInSec = nextEl && nextEl.sectionId === currentSec.id && nextEl.kind !== 'section' && nextEl.kind !== 'subtotal';
+            if (!nextInSec) rowsHtml += this._wkAddRowBtnHtml(currentSec);
+          }
+        }
+      });
+    } else {
+      rowsHtml = '<tr><td colspan="7" class="bg-wk-empty-td">Click a chip below to add your first variable</td></tr>';
+    }
     const chipKinds = [{k:'number',l:'123 Number'},{k:'percent',l:'% Percent'},{k:'dollar',l:'$ Currency'},{k:'text',l:'Text note'}];
 
     inner.innerHTML =
@@ -1456,7 +1513,7 @@ const BP = {
     const nonStructural = this._prevEls.filter(e=>e.kind!=='section'&&e.kind!=='subtotal');
     if(nonStructural.length<=1&&this._prevEls.find(e=>e.id===id&&e.kind!=='section'&&e.kind!=='subtotal')){alert('A driver needs at least one variable.');return;}
     this._prevEls=this._prevEls.filter(e=>e.id!==id);
-    this._fixOps(); this._renderWorkspace();
+    this._rebuildNetExpr(); this._fixOps(); this._renderWorkspace();
   },
   _prevAddEl(kind) {
     const defs={number:{label:'',kind:'number',value:0,unit:'',op:'×'},percent:{label:'',kind:'percent',value:0,op:'×'},dollar:{label:'',kind:'dollar',value:0,op:'×'},text:{label:'',kind:'text',value:'',op:null}};
@@ -1497,8 +1554,19 @@ const BP = {
     // Update dollar chain amount cells
     this._prevEls.filter(e=>!e.ref&&e.kind==='dollar').forEach(el=>{
       const sp=document.getElementById('bg-wk-cv-'+el.id); if(!sp) return;
-      const amt=this._elChainAmt(el,this._prevEls);
-      if(amt!==null){sp.textContent=(amt<0?'−':'')+this.fmt$(Math.abs(amt));sp.className='bg-wk-td-amt-val'+(amt<0?' neg':'');}
+      if (el.sectionId) {
+        sp.textContent=this.fmt$(Math.round((+(el.value!==undefined?el.value:el.default)||0)*100));
+      } else {
+        const amt=this._elChainAmt(el,this._prevEls);
+        if(amt!==null){sp.textContent=(amt<0?'−':'')+this.fmt$(Math.abs(amt));sp.className='bg-wk-td-amt-val'+(amt<0?' neg':'');}
+      }
+    });
+    // Update addable section totals in section headers
+    this._prevEls.filter(e=>e.kind==='section'&&e.addable).forEach(sec=>{
+      const sp=document.getElementById('bg-wk-sec-tot-'+sec.id); if(!sp) return;
+      const cents=this._prevEls.filter(e=>e.sectionId===sec.id&&e.kind==='dollar')
+        .reduce((s,e)=>s+Math.round((+(e.value!==undefined?e.value:e.default)||0)*100),0);
+      sp.textContent=this.fmt$(cents);
     });
   },
   _confirmDeleteDriver(id) {
