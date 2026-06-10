@@ -2208,14 +2208,30 @@ const BP = {
     { key:'Other',            desc:'Something else (tell us more later).',     iconSvg:'Dashboard.svg',          iconBg:'rgba(154,144,176,0.12)',iconColor:'#9a90b0' },
   ],
   _bwState: {step:0, prodType:'Musical', answers:{}},
+  _bwDraftKey() { return 'bts-bw-draft-' + this.prodId; },
+  _bwSaveDraft() { try { localStorage.setItem(this._bwDraftKey(), JSON.stringify(this._bwState)); } catch(_) {} },
+  _bwLoadDraft() { try { const r = localStorage.getItem(this._bwDraftKey()); return r ? JSON.parse(r) : null; } catch(_) { return null; } },
+  _bwClearDraft() { try { localStorage.removeItem(this._bwDraftKey()); } catch(_) {} },
   openBwModal() {
-    const answers = {};
-    Object.keys(this.BW_QUESTIONS).forEach(k => { answers[k] = true; });
-    this._bwState = {step:0, prodType:'Musical', answers, estimates:{}, enterNow:false, who:{}};
+    const draft = this._bwLoadDraft();
+    if (draft && draft.step > 0) {
+      // Merge draft answers with any newly added questions so missing keys default to true
+      const allAnswers = {};
+      Object.keys(this.BW_QUESTIONS).forEach(k => { allAnswers[k] = true; });
+      draft.answers = Object.assign(allAnswers, draft.answers);
+      draft.who = draft.who || {};
+      draft.estimates = draft.estimates || {};
+      this._bwState = draft;
+    } else {
+      const answers = {};
+      Object.keys(this.BW_QUESTIONS).forEach(k => { answers[k] = true; });
+      this._bwState = {step:0, prodType:'Musical', answers, estimates:{}, enterNow:false, who:{}};
+    }
     this._bwRender();
     document.getElementById('bg-bw-modal').classList.add('open');
   },
   closeBwModal() { document.getElementById('bg-bw-modal').classList.remove('open'); },
+  _bwStartOver() { this._bwClearDraft(); const answers={}; Object.keys(this.BW_QUESTIONS).forEach(k=>{answers[k]=true;}); this._bwState={step:0,prodType:'Musical',answers,estimates:{},enterNow:false,who:{}}; this._bwRender(); },
   _bwBack() {
     if (this._bwState.step > 0) { this._bwState.step--; this._bwRender(); }
     else this.closeBwModal();
@@ -2231,6 +2247,9 @@ const BP = {
     const step = this.BW_STEPS[s.step];
     const totalSteps = this.BW_STEPS.length;
 
+    // Auto-save draft
+    this._bwSaveDraft();
+
     // Sidebar step list
     document.getElementById('bg-bw-step-list').innerHTML = this.BW_STEPS.map((st, i) =>
       '<div class="bg-bw-step-item'+(i===s.step?' active':'')+'" onclick="BP._bwGoStep('+i+')" style="cursor:pointer">' +
@@ -2240,7 +2259,11 @@ const BP = {
           '<div class="bg-bw-step-sub">'+st.sub+'</div>' +
         '</div>' +
       '</div>'
-    ).join('');
+    ).join('') +
+    '<div style="margin-top:0.75rem;padding-top:0.65rem;border-top:1px solid rgba(255,255,255,0.12);display:flex;align-items:center;gap:0.4rem;">' +
+      '<span style="font-size:0.68rem;font-weight:700;color:rgba(255,255,255,0.5);">Draft saved</span>' +
+      '<button onclick="BP._bwStartOver()" style="font-family:inherit;font-size:0.68rem;font-weight:700;color:rgba(255,255,255,0.45);background:none;border:none;cursor:pointer;padding:0;text-decoration:underline;">Start over</button>' +
+    '</div>';
 
     // Why we ask box
     const whyEl = document.getElementById('bg-bw-why-box');
@@ -2482,6 +2505,7 @@ const BP = {
         const ri = await fetch(this.URL+'/rest/v1/budget_items',{method:'POST',headers:this._hj(),body:JSON.stringify(itemRows)});
         if (!ri.ok) throw new Error(await ri.text());
       }
+      this._bwClearDraft();
       this.closeBwModal();
       await this.load();
     } catch(e) { alert('Could not create categories: '+e.message); }
