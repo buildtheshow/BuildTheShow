@@ -2127,6 +2127,10 @@ const BP = {
 
   // ── Budget Wizard ─────────────────────────────────────────────────────
   BW_STEPS: [
+    { label:'Estimates',           sub:'Enter amounts as you go?',                            type:'estimates-choice',
+      heading:'Would you like to enter estimated amounts as you go?',
+      desc:'If yes, each time you say yes to a category, we\'ll ask for a rough budget amount right there.',
+      why:'Having even rough estimates helps you spot budget problems before you start spending.' },
     { label:'Production Type',     sub:'What are you producing?',                             type:'prod',
       heading:'What type of production are you producing?',
       desc:'This helps us understand the scope of your show and suggest the most relevant expense categories.',
@@ -2155,10 +2159,6 @@ const BP = {
       heading:'Operations and safety net',
       desc:'A few final questions about administrative and contingency costs.',
       why:'A contingency category helps you absorb unexpected costs without going over budget.' },
-    { label:'Estimates',           sub:'Set amounts now or later?',                           type:'estimates',
-      heading:'Would you like to enter estimated amounts?',
-      desc:'You can set a rough budget for each category now, or leave them blank and fill them in later.',
-      why:'Having even rough estimates helps you see whether your overall budget is on track before you start spending.' },
     { label:'Review',              sub:'Confirm your categories',                             type:'review',
       heading:'Here are your expense categories.',
       desc:"Based on your answers, we'll create these categories. You can always add, rename, or remove them later.",
@@ -2278,7 +2278,9 @@ const BP = {
       html += '<div class="bg-bw-yn-list">';
       html += step.keys.map(key => {
         const hint = this._bwHint(key);
-        return '<div class="bg-bw-yn-q">'+
+        const catName = this._bwKeyToCatName(key, s.answers);
+        const estVal = s.enterNow && a[key] && catName ? (s.estimates[catName] || '') : '';
+        return '<div class="bg-bw-yn-q" style="flex-wrap:wrap;row-gap:0.5rem;">'+
           '<div class="bg-bw-yn-left">'+
             '<div class="bg-bw-yn-lbl">'+this.BW_QUESTIONS[key]+'</div>'+
             (hint ? '<div class="bg-bw-yn-hint">'+hint+'</div>' : '')+
@@ -2287,36 +2289,31 @@ const BP = {
             '<button class="bg-bw-yn-btn yes'+(a[key]?' active':'')+'" onclick="BP._bwSet(\''+key+'\',true)">Yes</button>'+
             '<button class="bg-bw-yn-btn no'+(!a[key]?' active':'')+'" onclick="BP._bwSet(\''+key+'\',false)">No</button>'+
           '</div>'+
+          (s.enterNow && a[key] && catName ?
+            '<div class="bg-bw-est-row" style="width:100%;padding-left:0.25rem;display:flex;align-items:center;gap:0.5rem;">'+
+              '<div style="width:8px;height:8px;border-radius:50%;background:'+this._bwKeyColor(key,s.answers)+';flex-shrink:0;"></div>'+
+              '<span style="font-size:0.78rem;font-weight:700;color:#9a90b0;flex:1;">Estimated budget for '+this.esc(catName)+'</span>'+
+              '<div style="position:relative;flex-shrink:0;">'+
+                '<span style="position:absolute;left:0.55rem;top:50%;transform:translateY(-50%);font-size:0.82rem;font-weight:700;color:#9a90b0;pointer-events:none;">$</span>'+
+                '<input type="number" min="0" step="1" placeholder="0" value="'+this.esc(String(estVal))+'" oninput="BP._bwSetEst(\''+this.esc(catName)+'\',this.value)" style="font-family:inherit;font-size:0.85rem;font-weight:700;color:#1a1530;border:1.5px solid rgba(87,46,136,0.22);border-radius:8px;padding:0.35rem 0.5rem 0.35rem 1.5rem;width:130px;text-align:right;" />'+
+              '</div>'+
+            '</div>'
+          : '')+
         '</div>';
       }).join('');
       html += '</div>';
-    } else if (step.type === 'estimates') {
-      const cats = this._bwComputeCats();
+    } else if (step.type === 'estimates-choice') {
       html += '<div class="bg-bw-yn-list">' +
         '<div class="bg-bw-yn-q">' +
-          '<div class="bg-bw-yn-left"><div class="bg-bw-yn-lbl">Enter estimated amounts now</div><div class="bg-bw-yn-hint">Set a rough budget for each category below</div></div>' +
+          '<div class="bg-bw-yn-left"><div class="bg-bw-yn-lbl">Yes — ask me for an estimate each time I say yes</div><div class="bg-bw-yn-hint">A rough number is fine, you can adjust it later</div></div>' +
           '<div class="bg-bw-yn-toggle">' +
             '<button class="bg-bw-yn-btn yes'+(s.enterNow?' active':'')+'" onclick="BP._bwSetEnterNow(true)">Yes</button>' +
             '<button class="bg-bw-yn-btn no'+(!s.enterNow?' active':'')+'" onclick="BP._bwSetEnterNow(false)">Skip for now</button>' +
           '</div>' +
         '</div>' +
       '</div>';
-      if (s.enterNow && cats.length) {
-        html += '<div style="margin-top:1.1rem;display:flex;flex-direction:column;gap:0.55rem;">';
-        cats.forEach(c => {
-          const val = s.estimates[c.name] || '';
-          html += '<div style="display:flex;align-items:center;gap:0.75rem;">' +
-            '<div style="display:flex;align-items:center;gap:0.4rem;flex:1;min-width:0;">' +
-              '<div style="width:10px;height:10px;border-radius:50%;background:'+c.color+';flex-shrink:0;"></div>' +
-              '<span style="font-size:0.84rem;font-weight:700;color:#1a1530;">'+this.esc(c.name)+'</span>' +
-            '</div>' +
-            '<div style="position:relative;flex-shrink:0;">' +
-              '<span style="position:absolute;left:0.5rem;top:50%;transform:translateY(-50%);font-size:0.82rem;font-weight:700;color:#9a90b0;pointer-events:none;">$</span>' +
-              '<input type="number" min="0" step="1" placeholder="0" value="'+this.esc(String(val))+'" oninput="BP._bwSetEst(\''+this.esc(c.name)+'\',this.value)" style="font-family:inherit;font-size:0.85rem;font-weight:700;color:#1a1530;border:1.5px solid rgba(87,46,136,0.18);border-radius:8px;padding:0.38rem 0.5rem 0.38rem 1.4rem;width:120px;text-align:right;" />' +
-            '</div>' +
-          '</div>';
-        });
-        html += '</div>';
+      if (!s.enterNow) {
+        html += '<p style="margin-top:1rem;font-size:0.82rem;color:#9a90b0;">No problem — you can enter amounts any time from the expense table.</p>';
       }
     } else if (step.type === 'review') {
       const cats = this._bwComputeCats();
@@ -2349,6 +2346,43 @@ const BP = {
   _bwSet(key, val) { this._bwState.answers[key] = val; this._bwRender(); },
   _bwSetEnterNow(val) { this._bwState.enterNow = val; this._bwRender(); },
   _bwSetEst(name, val) { this._bwState.estimates[name] = parseFloat(val) || 0; },
+  _bwKeyToCatName(key, a) {
+    if (key==='royalties')   return 'Rights & Licensing';
+    if (key==='venue')       return (a.rehearsal) ? 'Venue & Rehearsal Space' : 'Venue Rental';
+    if (key==='rehearsal')   return (a.venue)     ? 'Venue & Rehearsal Space' : 'Rehearsal Space';
+    if (key==='scripts')     return 'Scripts';
+    if (key==='set')         return 'Set Construction';
+    if (key==='props')       return 'Props';
+    if (key==='costumes')    return 'Costumes';
+    if (key==='hair')        return 'Hair & Makeup';
+    if (key==='lighting')    return 'Lighting';
+    if (key==='sound')       return 'Sound';
+    if (key==='photo')       return 'Photography & Videography';
+    if (key==='musicians')   return 'Music';
+    if (key==='tracks')      return 'Music';
+    if (key==='printing')    return 'Printing & Programmes';
+    if (key==='marketing')   return 'Marketing & Advertising';
+    if (key==='concessions') return (a.merch) ? 'Concessions & Merchandise' : 'Concessions';
+    if (key==='merch')       return (a.concessions) ? 'Concessions & Merchandise' : 'Merchandise';
+    if (key==='contractors') return 'Contractor Fees';
+    if (key==='volunteers')  return 'Volunteer Support';
+    if (key==='cast')        return 'Cast Support';
+    if (key==='insurance')   return 'Insurance & Permits';
+    if (key==='admin')       return 'Administration';
+    if (key==='contingency') return 'Contingency';
+    return null;
+  },
+  _bwKeyColor(key, a) {
+    const map = {
+      royalties:'#572e88', venue:'#476aaa', rehearsal:'#476aaa', scripts:'#476aaa',
+      set:'#769e7b', props:'#dd8233', costumes:'#ca7ea7', hair:'#d1523d',
+      lighting:'#efab45', sound:'#78bbd4', photo:'#769e7b', musicians:'#572e88', tracks:'#572e88',
+      printing:'#476aaa', marketing:'#d1523d', concessions:'#769e7b', merch:'#dd8233',
+      contractors:'#dd8233', volunteers:'#efab45', cast:'#efab45',
+      insurance:'#476aaa', admin:'#9a90b0', contingency:'#9a90b0',
+    };
+    return map[key] || '#572e88';
+  },
   _bwComputeCats() {
     const a = this._bwState.answers;
     const cats = [];
