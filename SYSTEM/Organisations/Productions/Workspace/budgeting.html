@@ -625,6 +625,18 @@
   </div>
 </div>
 
+<!-- Budget History modal -->
+<div class="bg-modal-over" id="bg-hist-modal" onclick="if(event.target.id==='bg-hist-modal')document.getElementById('bg-hist-modal').classList.remove('open')">
+  <div class="bg-modal bg-modal--wide">
+    <div class="bg-modal-title">Budget History</div>
+    <div class="bg-modal-sub">Line items added to this production's budget, newest first.</div>
+    <div id="bg-hist-list" style="max-height:420px;overflow-y:auto;padding:0 0.25rem;"></div>
+    <div style="margin-top:1.2rem;text-align:right;">
+      <button class="bg-btn bg-btn--ghost" onclick="document.getElementById('bg-hist-modal').classList.remove('open')">Close</button>
+    </div>
+  </div>
+</div>
+
 <!-- Past Production modal -->
 <div class="bg-modal-over" id="bg-pp-modal">
   <div class="bg-modal bg-modal--wide">
@@ -1947,14 +1959,83 @@ const BP = {
       '<div class="bg-sum-note"><span class="bg-sum-note-icon">'+this._svg('Information.svg',16)+'</span>These are forecasts based on your current assumptions. Final numbers may vary.</div>' +
       '<div class="bg-qa-title">Quick Actions</div>' +
       '<div class="bg-qa-list">' +
-        this._qaBtn('Financial - Reports.svg','Download Budget Report') +
-        this._qaBtn('Messages.svg','Share Budget') +
-        this._qaBtn('Files.svg','Duplicate Budget') +
-        this._qaBtn('History.svg','View Budget History') +
+        this._qaBtn('Financial - Reports.svg','Download Budget Report','BP.downloadBudgetCsv()') +
+        this._qaBtn('Messages.svg','Share Budget','BP.shareBudget()') +
+        this._qaBtn('Files.svg','Duplicate Budget','BP.openPpModal()') +
+        this._qaBtn('History.svg','View Budget History','BP.viewBudgetHistory()') +
       '</div>';
   },
-  _qaBtn(iconSvg,label) {
-    return '<button class="bg-qa-btn"><span class="bg-qa-icon">'+this._svg(iconSvg,14)+'</span>'+label+'</button>';
+  _qaBtn(iconSvg,label,onclick) {
+    return '<button class="bg-qa-btn" onclick="'+onclick+'"><span class="bg-qa-icon">'+this._svg(iconSvg,14)+'</span>'+label+'</button>';
+  },
+  downloadBudgetCsv() {
+    const sectionFor = c => {
+      const n = (c.name||'').trim().toLowerCase();
+      for (const sec of this.BW_SECTION_CATS) {
+        if (sec.names.some(s => s.trim().toLowerCase() === n)) return sec.label;
+        if (sec.label === 'Events' && this.BW_EVENTS.some(e => e.label.trim().toLowerCase() === n)) return sec.label;
+      }
+      return 'Other';
+    };
+    const rows = [['Section','Category','Line Item','Qty','Unit Cost','Total','Spent','Status']];
+    const expCats = (this.cats||[]).filter(c => c.type === 'expense');
+    expCats.forEach(c => {
+      const sec = sectionFor(c);
+      const items = this._catItems(c.id);
+      if (!items.length) {
+        rows.push([sec, c.name, '', '', '', this.fmt$(c.planned_cents||0), '', '']);
+      } else {
+        items.forEach(i => {
+          rows.push([sec, c.name, i.name, i.qty||1, this.fmt$(i.unit_cost_cents||0), this.fmt$(i.budgeted_cents||0), this.fmt$(i.paid_cents||0), i.status||'planned']);
+        });
+      }
+    });
+    const csv = rows.map(r => r.map(v => '"'+String(v).replace(/"/g,'""')+'"').join(',')).join('\n');
+    const a = document.createElement('a');
+    a.href = 'data:text/csv;charset=utf-8,﻿'+encodeURIComponent(csv);
+    a.download = 'budget-report.csv';
+    a.click();
+  },
+  shareBudget() {
+    const url = window.location.href;
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(url).then(() => {
+        this._toast('Budget link copied to clipboard.');
+      }).catch(() => prompt('Copy this link:', url));
+    } else {
+      prompt('Copy this link:', url);
+    }
+  },
+  async viewBudgetHistory() {
+    const modal = document.getElementById('bg-hist-modal');
+    if (!modal) { alert('History viewer not available.'); return; }
+    document.getElementById('bg-hist-modal').classList.add('open');
+    const list = document.getElementById('bg-hist-list');
+    list.innerHTML = '<div style="padding:1rem;color:#9a90b0;font-size:0.88rem;">Loading...</div>';
+    try {
+      const r = await fetch(this.URL+'/rest/v1/budget_items?production_id=eq.'+this.prodId+'&order=created_at.desc&limit=50', {headers:this._h()});
+      const items = r.ok ? await r.json() : [];
+      if (!items.length) { list.innerHTML = '<div style="padding:1rem;color:#9a90b0;font-size:0.88rem;">No items found.</div>'; return; }
+      const catMap = {};
+      (this.cats||[]).forEach(c => { catMap[c.id] = c.name; });
+      list.innerHTML = items.map(i => {
+        const cat = catMap[i.category_id] || 'Unknown';
+        const d = new Date(i.created_at).toLocaleDateString('en-CA',{month:'short',day:'numeric',year:'numeric'});
+        return '<div style="display:flex;align-items:center;justify-content:space-between;padding:0.6rem 0;border-bottom:1px solid rgba(87,46,136,0.07);">'+
+          '<div>'+
+            '<div style="font-size:0.85rem;font-weight:700;color:#1a1530;">'+this.esc(i.name)+'</div>'+
+            '<div style="font-size:0.75rem;color:#9a90b0;">'+this.esc(cat)+' · Added '+d+'</div>'+
+          '</div>'+
+          '<div style="font-size:0.85rem;font-weight:800;color:#572e88;">'+this.fmt$(i.budgeted_cents||0)+'</div>'+
+        '</div>';
+      }).join('');
+    } catch(e) { list.innerHTML = '<div style="padding:1rem;color:#d1523d;font-size:0.88rem;">Could not load history.</div>'; }
+  },
+  _toast(msg) {
+    let t = document.getElementById('bg-toast');
+    if (!t) { t = document.createElement('div'); t.id='bg-toast'; t.style.cssText='position:fixed;bottom:1.5rem;left:50%;transform:translateX(-50%);background:#1a1530;color:#fff;font-size:0.82rem;font-weight:700;padding:0.6rem 1.2rem;border-radius:10px;z-index:9999;opacity:0;transition:opacity 0.2s;pointer-events:none;'; document.body.appendChild(t); }
+    t.textContent = msg; t.style.opacity = '1';
+    clearTimeout(t._to); t._to = setTimeout(() => { t.style.opacity='0'; }, 2500);
   },
 
   // ── Data (Supabase) ───────────────────────────────────────────────────
