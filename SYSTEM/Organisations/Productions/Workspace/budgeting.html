@@ -2396,7 +2396,9 @@ const BP = {
       if (!cat) return;
       const its = (this.items||[]).filter(i => i.category_id === cat.id);
       if (!its.length) return;
-      this._bwState.events[ev.key] = {on:true, name:ev.hasName ? cat.name : '', items:its.map(i => ({name:i.name, qty:i.qty||1, unitCost:(i.unit_cost_cents||0)/100}))};
+      const evItems = its.map(i => ({name:i.name, qty:i.qty||1, unitCost:(i.unit_cost_cents||0)/100}))
+        .filter(it => !['food & catering','printing','other'].includes((it.name||'').trim().toLowerCase()) || (parseFloat(it.unitCost)||0) > 0);
+      this._bwState.events[ev.key] = {on:true, name:ev.hasName ? cat.name : '', items:evItems};
     });
     // Reconstruct estimates from planned_cents
     let hasEst = false;
@@ -2420,7 +2422,11 @@ const BP = {
       this.BW_EVENTS.forEach(ev => {
         const e = draft.events[ev.key];
         if (e && !Array.isArray(e.items)) e.items = e.on ? this._bwEvtDefaultItems() : [];
-        if (e && Array.isArray(e.items)) e.items.forEach(it => { if (it.unitCost == null) { it.unitCost = it.fee||0; it.qty = it.qty||1; delete it.fee; } });
+        if (e && Array.isArray(e.items)) {
+          e.items.forEach(it => { if (it.unitCost == null) { it.unitCost = it.fee||0; it.qty = it.qty||1; delete it.fee; } });
+          // Strip old stale defaults that were never filled in
+          e.items = e.items.filter(it => !['food & catering','printing','other'].includes((it.name||'').trim().toLowerCase()) || (parseFloat(it.unitCost)||0) > 0);
+        }
       });
       // Migrate old who entries from {fee} to {qty, unitCost}
       Object.values(draft.who||{}).forEach(arr => { if (Array.isArray(arr)) arr.forEach(e => { if (e && e.unitCost == null) { e.unitCost = e.fee||0; e.qty = e.qty||1; delete e.fee; } }); });
