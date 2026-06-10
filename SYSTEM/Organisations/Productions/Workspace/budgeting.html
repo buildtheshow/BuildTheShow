@@ -2470,27 +2470,16 @@ const BP = {
           '<span style="font-size:0.68rem;font-weight:800;text-transform:uppercase;letter-spacing:0.08em;color:#9a90b0;">Expense</span>' +
           '<span style="font-size:0.68rem;font-weight:800;text-transform:uppercase;letter-spacing:0.08em;color:#9a90b0;text-align:right;">Amount</span>' +
         '</div>';
+        h += '<div id="bg-bw-evt-items-'+ev.key+'">';
         items.forEach((item, idx) => {
-          h += '<div style="display:grid;grid-template-columns:1fr 130px;gap:0.4rem;margin-bottom:0.3rem;">' +
-            '<input type="text" placeholder="e.g. Venue Rental" value="'+this.esc(item.name||'')+'" ' +
-            'oninput="BP._bwEvtItemName(\''+ev.key+'\','+idx+',this.value)" ' +
-            'style="font-family:inherit;font-size:0.83rem;font-weight:600;color:#1a1530;border:1.5px solid rgba(87,46,136,0.18);border-radius:8px;padding:0.35rem 0.65rem;min-width:0;" />' +
-            '<div style="position:relative;">' +
-              '<span style="position:absolute;left:0.5rem;top:50%;transform:translateY(-50%);font-size:0.8rem;font-weight:700;color:#9a90b0;pointer-events:none;">$</span>' +
-              '<input type="number" min="0" step="1" placeholder="0" value="'+this.esc(String(item.fee||''))+'" ' +
-              'oninput="BP._bwEvtItemFee(\''+ev.key+'\','+idx+',this.value)" ' +
-              'onblur="BP._bwEvtItemFeeBlur(\''+ev.key+'\')" ' +
-              'style="font-family:inherit;font-size:0.83rem;font-weight:700;color:#1a1530;border:1.5px solid rgba(87,46,136,0.18);border-radius:8px;padding:0.35rem 0.5rem 0.35rem 1.4rem;width:100%;text-align:right;box-sizing:border-box;" />' +
-            '</div>' +
-          '</div>';
+          h += this._bwEvtItemRowHtml(ev.key, idx, item);
         });
-        h += '<button onclick="BP._bwEvtAddItem(\''+ev.key+'\')" style="font-family:inherit;font-size:0.75rem;font-weight:700;color:'+color+';background:none;border:none;cursor:pointer;padding:0.1rem 0;opacity:0.8;">+ Add another</button>';
-        if (feeTotal > 0) {
-          h += '<div style="display:flex;align-items:center;justify-content:space-between;margin-top:0.5rem;padding-top:0.4rem;border-top:1px solid '+color+'22;">' +
-            '<span style="font-size:0.78rem;font-weight:700;color:#9a90b0;">Total</span>' +
-            '<span style="font-size:0.88rem;font-weight:900;color:'+color+';">$'+feeTotal.toLocaleString('en-CA',{minimumFractionDigits:2,maximumFractionDigits:2})+'</span>' +
-          '</div>';
-        }
+        h += '</div>';
+        h += '<button type="button" onclick="BP._bwEvtAddItem(\''+ev.key+'\')" style="font-family:inherit;font-size:0.75rem;font-weight:700;color:'+color+';background:none;border:none;cursor:pointer;padding:0.1rem 0;opacity:0.8;">+ Add another</button>';
+        h += '<div id="bg-bw-evt-total-'+ev.key+'" style="display:'+(feeTotal>0?'flex':'none')+';align-items:center;justify-content:space-between;margin-top:0.5rem;padding-top:0.4rem;border-top:1px solid '+color+'22;">' +
+          '<span style="font-size:0.78rem;font-weight:700;color:#9a90b0;">Total</span>' +
+          '<span class="bw-evt-total-val" style="font-size:0.88rem;font-weight:900;color:'+color+';">$'+feeTotal.toLocaleString('en-CA',{minimumFractionDigits:2,maximumFractionDigits:2})+'</span>' +
+        '</div>';
         h += '</div>';
       }
       h += '</div>';
@@ -2498,9 +2487,36 @@ const BP = {
     h += '</div>';
     return h;
   },
+  _bwEvtItemRowHtml(key, idx, item) {
+    return '<div style="display:grid;grid-template-columns:1fr 130px;gap:0.4rem;margin-bottom:0.3rem;">' +
+      '<input type="text" placeholder="e.g. Venue Rental" value="'+this.esc(item.name||'')+'" ' +
+      'oninput="BP._bwEvtItemName(\''+key+'\','+idx+',this.value)" ' +
+      'style="font-family:inherit;font-size:0.83rem;font-weight:600;color:#1a1530;border:1.5px solid rgba(87,46,136,0.18);border-radius:8px;padding:0.35rem 0.65rem;min-width:0;" />' +
+      '<div style="position:relative;">' +
+        '<span style="position:absolute;left:0.5rem;top:50%;transform:translateY(-50%);font-size:0.8rem;font-weight:700;color:#9a90b0;pointer-events:none;">$</span>' +
+        '<input type="number" min="0" step="1" placeholder="0" value="'+this.esc(String(item.fee||''))+'" ' +
+        'oninput="BP._bwEvtItemFee(\''+key+'\','+idx+',this.value)" ' +
+        'onblur="BP._bwEvtUpdateTotal(\''+key+'\')" ' +
+        'style="font-family:inherit;font-size:0.83rem;font-weight:700;color:#1a1530;border:1.5px solid rgba(87,46,136,0.18);border-radius:8px;padding:0.35rem 0.5rem 0.35rem 1.4rem;width:100%;text-align:right;box-sizing:border-box;" />' +
+      '</div>' +
+    '</div>';
+  },
   _bwRenderEventsList() {
     const el = document.getElementById('bg-bw-events-list');
     if (el) el.innerHTML = this._bwEventsListHtml();
+  },
+  _bwEvtUpdateTotal(key) {
+    this._bwSaveDraft();
+    const totalEl = document.getElementById('bg-bw-evt-total-'+key);
+    if (!totalEl) return;
+    const items = (this._bwState.events[key]||{}).items || [];
+    const total = items.reduce((s,it)=>s+(parseFloat(it.fee)||0),0);
+    const ev = (this.BW_EVENTS||[]).find(e=>e.key===key);
+    const color = ev ? ev.color : '#572e88';
+    totalEl.style.display = total > 0 ? 'flex' : 'none';
+    const valEl = totalEl.querySelector('.bw-evt-total-val');
+    if (valEl) valEl.textContent = '$'+total.toLocaleString('en-CA',{minimumFractionDigits:2,maximumFractionDigits:2});
+    totalEl.style.borderTop = '1px solid '+color+'22';
   },
   _bwEvtToggle(key) { this._bwEvtSet(key, !(this._bwState.events[key]||{}).on); },
   _bwEvtSet(key, on) {
@@ -2513,8 +2529,22 @@ const BP = {
   _bwEvtName(key, val) { if (!this._bwState.events[key]) this._bwState.events[key]={on:true,name:'',items:[]}; this._bwState.events[key].name=val; this._bwSaveDraft(); },
   _bwEvtItemName(key, idx, val) { this._bwState.events[key].items[idx].name=val; this._bwSaveDraft(); },
   _bwEvtItemFee(key, idx, val) { this._bwState.events[key].items[idx].fee=parseFloat(val)||0; this._bwSaveDraft(); },
-  _bwEvtItemFeeBlur(key) { this._bwSaveDraft(); this._bwRenderEventsList(); },
-  _bwEvtAddItem(key) { this._bwState.events[key].items.push({name:'',fee:''}); this._bwRenderEventsList(); },
+  _bwEvtAddItem(key) {
+    if (!this._bwState.events[key]) return;
+    this._bwState.events[key].items.push({name:'',fee:''});
+    this._bwSaveDraft();
+    const idx = this._bwState.events[key].items.length - 1;
+    const container = document.getElementById('bg-bw-evt-items-'+key);
+    if (container) {
+      const div = document.createElement('div');
+      div.innerHTML = this._bwEvtItemRowHtml(key, idx, {name:'',fee:''});
+      container.appendChild(div.firstChild);
+      const newInput = container.lastElementChild.querySelector('input[type="text"]');
+      if (newInput) newInput.focus();
+    } else {
+      this._bwRenderEventsList();
+    }
+  },
   _bwSetEst(name, val) { this._bwState.estimates[name] = parseFloat(val) || 0; },
   _bwWhoEntry(key, idx) { if (!this._bwState.who[key]) this._bwState.who[key]=[]; if (!this._bwState.who[key][idx]) this._bwState.who[key][idx]={name:'',fee:''}; return this._bwState.who[key][idx]; },
   _bwSetWhoName(key, idx, val) { this._bwWhoEntry(key,idx).name = val; this._bwSaveDraft(); },
