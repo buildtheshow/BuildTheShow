@@ -614,11 +614,11 @@
     return state.group && state.group.key === 'costumes' && state.tab && state.tab.indexOf('costume-') === 0;
   }
 
-  function isCostumeReceiptsTab() {
-    if (!(state.group && state.group.key === 'costumes' && state.tab === 'receipts')) return false;
+  function isReceiptFormTab() {
+    if (!state.tab || state.tab !== 'receipts') return false;
     var tabs = activeTabs();
     var t = tabs.find(function (tab) { return tab.key === 'receipts'; });
-    return !!(t && t.costumeReceiptsPage);
+    return !!(t && t.receiptForm);
   }
 
   function activeCostumeTabKey() {
@@ -984,7 +984,7 @@
 
   function renderContent() {
     if (isCostumeTab()) return renderCostumePlanningMount();
-    if (isCostumeReceiptsTab()) return '<div class="dept-costume-planning-native" id="dept-costume-receipts-native"><div class="dept-empty">Loading receipts...</div></div>';
+    if (isReceiptFormTab()) return '<div class="dept-costume-planning-native" id="dept-receipt-form-native"><div class="dept-empty">Loading receipts...</div></div>';
     if (state.tab === 'planning') return renderPlanning();
     if (state.tab === 'receipts') return renderReceipts();
     return renderDashboard();
@@ -1004,23 +1004,28 @@
     }
     root.innerHTML = renderHero() + renderTabs() + renderContent() + renderReceiptModal();
     if (isCostumeTab()) mountCostumePlanningNative();
-    if (isCostumeReceiptsTab()) mountCostumeReceiptsNative();
+    if (isReceiptFormTab()) mountReceiptFormNative();
   }
 
-  async function mountCostumeReceiptsNative() {
-    var mount = document.getElementById('dept-costume-receipts-native');
+  async function mountReceiptFormNative() {
+    var mount = document.getElementById('dept-receipt-form-native');
     if (!mount) return;
     try {
-      var response = await fetch('/SYSTEM/Organisations/Productions/Workspace/departments-costume-receipts.html?id=' + encodeURIComponent(state.prodId) + '&embed=1', { cache: 'no-store' });
-      if (!response.ok) throw new Error('Could not load receipts page');
+      var deptLabel = encodeURIComponent(state.group ? state.group.label : 'Department');
+      var deptColor = encodeURIComponent((state.group && state.group.color || '#572e88').replace(/^#/, ''));
+      var url = '/SYSTEM/Organisations/Productions/Workspace/department-receipt-form.html?id=' +
+        encodeURIComponent(state.prodId) + '&embed=1&dept=' + deptLabel + '&color=' + deptColor;
+      var response = await fetch(url, { cache: 'no-store' });
+      if (!response.ok) throw new Error('Could not load receipts form');
       var html = await response.text();
       var doc = new DOMParser().parseFromString(html, 'text/html');
       var styleText = Array.from(doc.querySelectorAll('style')).map(function (s) { return s.textContent || ''; }).join('\n');
       var body = doc.querySelector('.department-receipts-content');
-      if (!body) throw new Error('Receipts page markup was incomplete');
-      if (!document.getElementById('dept-costume-receipts-style')) {
+      if (!body) throw new Error('Receipt form markup was incomplete');
+      var styleId = 'dept-receipt-form-style';
+      if (!document.getElementById(styleId)) {
         var styleEl = document.createElement('style');
-        styleEl.id = 'dept-costume-receipts-style';
+        styleEl.id = styleId;
         styleEl.textContent = styleText;
         document.head.appendChild(styleEl);
       }
@@ -1030,9 +1035,14 @@
       mount.appendChild(scope);
       var scripts = Array.from(doc.querySelectorAll('script')).map(function (s) { return s.textContent || ''; }).filter(Boolean);
       var rcptScript = scripts[scripts.length - 1] || '';
+      var deptNameLit = (state.group ? state.group.label : 'Department').replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+      var deptColorLit = ((state.group && state.group.color || '#572e88').replace(/^#/, '')).replace(/\\/g, '\\\\').replace(/"/g, '\\"');
       rcptScript = rcptScript
-        .replace("const isEmbed = new URLSearchParams(location.search).get('embed') === '1';", 'const isEmbed = true;')
-        .replace("prodId = new URLSearchParams(location.search).get('id');", 'prodId = "' + state.prodId.replace(/"/g, '\\"') + '";')
+        .replace("const _qp = new URLSearchParams(location.search);", 'const _qp = new URLSearchParams("");')
+        .replace("const isEmbed = _qp.get('embed') === '1';", 'const isEmbed = true;')
+        .replace("const deptName = _qp.get('dept') || 'Department';", 'const deptName = "' + deptNameLit + '";')
+        .replace("const deptColor = (_qp.get('color') || '572e88').replace(/^#/, '');", 'const deptColor = "' + deptColorLit + '";')
+        .replace("prodId = _qp.get('id');", 'prodId = "' + state.prodId.replace(/"/g, '\\"') + '";')
         .replace("window.addEventListener('DOMContentLoaded', init);", 'init();');
       var scriptEl = document.createElement('script');
       scriptEl.textContent = rcptScript;

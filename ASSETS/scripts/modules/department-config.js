@@ -5,7 +5,7 @@
   const TAB_LIST = [
     { key: 'dashboard', label: 'Dashboard' },
     { key: 'planning', label: 'Planning' },
-    { key: 'receipts', label: 'Receipts' },
+    { key: 'receipts', label: 'Receipts', receiptForm: true },
   ];
 
   const GROUPS = [
@@ -67,7 +67,7 @@
         { key: 'costume-people',      label: 'People',      costumeTab: 'performers' },
         { key: 'costume-assignments', label: 'Assignments', costumeTab: 'assignments' },
         { key: 'costume-tracks',      label: 'Tracks',      costumeTab: 'tracks' },
-        { key: 'receipts',            label: 'Receipts',    costumeReceiptsPage: true },
+        { key: 'receipts',            label: 'Receipts',    receiptForm: true },
       ],
       sections: [
         section('costumes', 'Costumes', 'Costume plots, fittings, sourcing, repairs, approvals, and performer notes.', ['Costumes', 'Costume Designer', 'Costume Helper']),

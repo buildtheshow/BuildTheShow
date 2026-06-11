@@ -1,0 +1,849 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" />
+  <link rel="preconnect" href="https://tkmaiktxpwqfbgeojbnf.supabase.co" />
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Department Receipts - Build The Show</title>
+  <link rel="stylesheet" href="/ASSETS/styles/styles.css?v=typography-safe-20260421-2025" />
+  <link rel="stylesheet" href="/ASSETS/styles/production-sidebar.css?v=sidebar-v47-20260610" />
+  <link rel="stylesheet" href="/ASSETS/styles/department-receipts.css?v=20260608" />
+  <style>
+    .rcpt-layout {
+      display: grid;
+      grid-template-columns: 1fr 320px;
+      gap: 2rem;
+      align-items: start;
+    }
+    @media (max-width: 900px) {
+      .rcpt-layout { grid-template-columns: 1fr; }
+    }
+
+    /* ── Form ── */
+    .rcpt-form-card {
+      background: #fff;
+      border-radius: 14px;
+      border: 1.5px solid rgba(87,46,136,0.1);
+      overflow: hidden;
+    }
+    .rcpt-section {
+      padding: 1.5rem 1.75rem;
+      border-bottom: 1.5px solid #f0eef8;
+    }
+    .rcpt-section:last-child { border-bottom: none; }
+    .rcpt-section-num {
+      font-size: 0.68rem;
+      font-weight: 900;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: #9a90b0;
+      margin-bottom: 0.15rem;
+    }
+    .rcpt-section-title {
+      font-size: 1.1rem;
+      font-weight: 900;
+      color: #1a1530;
+      margin: 0 0 1.1rem;
+    }
+    .rcpt-drop-zone {
+      border: 2px dashed rgba(87,46,136,0.28);
+      border-radius: 10px;
+      padding: 2.5rem 1.5rem;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.5rem;
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s;
+      background: rgba(87,46,136,0.025);
+    }
+    .rcpt-drop-zone:hover, .rcpt-drop-zone.drag-over {
+      background: rgba(87,46,136,0.06);
+      border-color: #572e88;
+    }
+    .rcpt-drop-icon {
+      width: 44px;
+      height: 44px;
+      background: rgba(87,46,136,0.08);
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #572e88;
+    }
+    .rcpt-drop-label {
+      font-size: 0.9rem;
+      font-weight: 700;
+      color: #1a1530;
+    }
+    .rcpt-drop-or { font-size: 0.78rem; color: #9a90b0; }
+    .rcpt-choose-btn {
+      font-family: inherit;
+      font-size: 0.82rem;
+      font-weight: 700;
+      color: #572e88;
+      background: rgba(87,46,136,0.08);
+      border: 1.5px solid rgba(87,46,136,0.2);
+      border-radius: 7px;
+      padding: 0.4rem 1rem;
+      cursor: pointer;
+    }
+    .rcpt-choose-btn:hover { background: rgba(87,46,136,0.14); }
+    .rcpt-drop-hint { font-size: 0.72rem; color: #b0a8c8; text-align: center; }
+    .rcpt-file-preview {
+      display: none;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.65rem 0.85rem;
+      background: rgba(87,46,136,0.06);
+      border-radius: 8px;
+      margin-top: 0.75rem;
+    }
+    .rcpt-file-preview.visible { display: flex; }
+    .rcpt-file-name {
+      font-size: 0.82rem;
+      font-weight: 700;
+      color: #1a1530;
+      flex: 1;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .rcpt-file-remove {
+      font-family: inherit;
+      font-size: 0.72rem;
+      font-weight: 700;
+      color: #d1523d;
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 0;
+    }
+
+    /* ── Form fields ── */
+    .rcpt-fields { display: flex; flex-direction: column; gap: 1rem; }
+    .rcpt-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem; }
+    .rcpt-row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+    @media (max-width: 700px) {
+      .rcpt-row, .rcpt-row-2 { grid-template-columns: 1fr; }
+    }
+    .rcpt-field { display: flex; flex-direction: column; gap: 0.3rem; }
+    .rcpt-field.full { grid-column: 1 / -1; }
+    .rcpt-label {
+      font-size: 0.72rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      color: #7a6e9a;
+    }
+    .rcpt-label .rcpt-req { color: #d1523d; }
+    .rcpt-label .rcpt-opt { font-weight: 500; text-transform: none; letter-spacing: 0; color: #b0a8c8; }
+    .rcpt-input {
+      font-family: inherit;
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: #1a1530;
+      background: #fff;
+      border: 1.5px solid rgba(87,46,136,0.18);
+      border-radius: 8px;
+      padding: 0.55rem 0.75rem;
+      transition: border-color 0.15s;
+      width: 100%;
+      box-sizing: border-box;
+    }
+    .rcpt-input:focus { outline: none; border-color: #572e88; }
+    .rcpt-input[readonly] { background: #f8f7fc; color: #7a6e9a; cursor: default; }
+    .rcpt-input-icon {
+      position: relative;
+    }
+    .rcpt-input-icon .rcpt-input { padding-right: 2rem; }
+    .rcpt-input-icon svg {
+      position: absolute;
+      right: 0.6rem;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 14px;
+      height: 14px;
+      color: #b0a8c8;
+      pointer-events: none;
+    }
+    .rcpt-input-prefix {
+      position: relative;
+    }
+    .rcpt-input-prefix .rcpt-input { padding-left: 1.6rem; }
+    .rcpt-input-prefix::before {
+      content: '$';
+      position: absolute;
+      left: 0.7rem;
+      top: 50%;
+      transform: translateY(-50%);
+      font-size: 0.9rem;
+      font-weight: 700;
+      color: #9a90b0;
+    }
+    .rcpt-total-display {
+      font-family: inherit;
+      font-size: 0.9rem;
+      font-weight: 800;
+      color: #572e88;
+      background: rgba(87,46,136,0.05);
+      border: 1.5px solid rgba(87,46,136,0.12);
+      border-radius: 8px;
+      padding: 0.55rem 0.75rem;
+      width: 100%;
+      box-sizing: border-box;
+    }
+    .rcpt-total-hint { font-size: 0.7rem; color: #b0a8c8; margin-top: 0.2rem; }
+
+    /* Paid By toggle */
+    .rcpt-paid-toggle { display: flex; gap: 0.5rem; }
+    .rcpt-paid-btn {
+      font-family: inherit;
+      font-size: 0.82rem;
+      font-weight: 700;
+      color: #7a6e9a;
+      background: #f5f3fb;
+      border: 1.5px solid rgba(87,46,136,0.15);
+      border-radius: 8px;
+      padding: 0.5rem 0.9rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      transition: all 0.15s;
+    }
+    .rcpt-paid-btn.active {
+      background: #572e88;
+      border-color: #572e88;
+      color: #fff;
+    }
+    .rcpt-paid-btn svg { width: 14px; height: 14px; }
+
+    /* Save button */
+    .rcpt-save-btn {
+      font-family: inherit;
+      font-size: 1rem;
+      font-weight: 900;
+      color: #fff;
+      background: #572e88;
+      border: none;
+      border-radius: 10px;
+      padding: 0.85rem 1.5rem;
+      width: 100%;
+      cursor: pointer;
+      letter-spacing: 0.02em;
+      transition: opacity 0.15s;
+    }
+    .rcpt-save-btn:hover { opacity: 0.88; }
+    .rcpt-save-btn:disabled { opacity: 0.45; cursor: default; }
+    .rcpt-footer-note {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.75rem;
+      color: #9a90b0;
+      padding: 0.85rem 1.75rem;
+      background: #f8f7fc;
+      border-top: 1px solid #f0eef8;
+    }
+    .rcpt-footer-note svg { width: 14px; height: 14px; flex-shrink: 0; color: #9a90b0; }
+
+    /* ── Budget Summary panel ── */
+    .rcpt-summary-panel {
+      background: #fff;
+      border-radius: 14px;
+      border: 1.5px solid rgba(87,46,136,0.1);
+      overflow: hidden;
+      position: sticky;
+      top: 1.5rem;
+    }
+    .rcpt-summary-section {
+      padding: 1.1rem 1.25rem;
+      border-bottom: 1px solid #f0eef8;
+    }
+    .rcpt-summary-section:last-child { border-bottom: none; }
+    .rcpt-summary-heading {
+      font-size: 0.72rem;
+      font-weight: 900;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: #572e88;
+      margin-bottom: 0.15rem;
+    }
+    .rcpt-summary-sub {
+      font-size: 0.72rem;
+      color: #9a90b0;
+      margin-bottom: 0.75rem;
+    }
+    .rcpt-summary-date {
+      font-size: 0.72rem;
+      color: #9a90b0;
+      margin-bottom: 0.6rem;
+      display: flex;
+      align-items: center;
+      gap: 0.3rem;
+    }
+    .rcpt-summary-date svg { width: 12px; height: 12px; }
+    .rcpt-summary-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 0.5rem;
+      margin-bottom: 0.35rem;
+      font-size: 0.82rem;
+    }
+    .rcpt-summary-row-label { color: #4a3f6a; font-weight: 600; }
+    .rcpt-summary-row-val { font-weight: 800; color: #1a1530; }
+    .rcpt-summary-row-val.positive { color: #769e7b; }
+    .rcpt-summary-row-val.accent { color: #572e88; }
+    .rcpt-summary-heading-green {
+      font-size: 0.72rem;
+      font-weight: 900;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: #769e7b;
+      margin-bottom: 0.6rem;
+    }
+    .rcpt-summary-total-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      font-size: 0.95rem;
+      font-weight: 900;
+      color: #1a1530;
+      margin-top: 0.25rem;
+      padding-top: 0.35rem;
+      border-top: 1.5px solid #f0eef8;
+    }
+    .rcpt-summary-total-row .rcpt-summary-row-val { font-size: 1rem; color: #572e88; }
+    .rcpt-summary-updated {
+      font-size: 0.68rem;
+      color: #b0a8c8;
+      display: flex;
+      align-items: center;
+      gap: 0.3rem;
+      margin-top: 0.5rem;
+    }
+    .rcpt-summary-updated svg { width: 11px; height: 11px; }
+
+    /* Success state */
+    .rcpt-success {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      gap: 1rem;
+      padding: 3rem 2rem;
+      text-align: center;
+    }
+    .rcpt-success.visible { display: flex; }
+    .rcpt-success-icon {
+      width: 56px;
+      height: 56px;
+      background: rgba(118,158,123,0.12);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #769e7b;
+    }
+    .rcpt-success-title { font-size: 1.2rem; font-weight: 900; color: #1a1530; }
+    .rcpt-success-sub { font-size: 0.85rem; color: #7a6e9a; }
+    .rcpt-another-btn {
+      font-family: inherit;
+      font-size: 0.85rem;
+      font-weight: 800;
+      color: #572e88;
+      background: rgba(87,46,136,0.08);
+      border: none;
+      border-radius: 8px;
+      padding: 0.5rem 1.1rem;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <div id="prod-sidebar-host"></div>
+  <div class="prod-main">
+    <div class="hero-wrap" id="rcpt-hero">
+      <div class="aud-visual-hero" id="rcpt-hero-inner" style="background:#572e88;border-radius:14px;padding:1.75rem 2rem;margin-bottom:0;position:relative;overflow:hidden;">
+        <div class="aud-visual-hero-content">
+          <div class="page-heading-lockup">
+            <div>
+              <div class="aud-visual-kicker">
+                <span class="aud-visual-kicker-dot" aria-hidden="true"></span>
+                <span class="page-hierarchy">
+                  <span class="page-hierarchy-page">Production Departments</span>
+                  <span class="page-hierarchy-sep">-</span>
+                  <span class="page-hierarchy-sub" id="rcpt-hero-dept">Department</span>
+                </span>
+              </div>
+              <h1 class="page-subtitle" id="rcpt-hero-title">Receipts</h1>
+              <p class="aud-visual-copy" style="color:rgba(255,255,255,0.82);font-size:0.9rem;margin:0.4rem 0 0;">Upload your receipt and enter the details. We'll calculate the totals for you.</p>
+            </div>
+          </div>
+        </div>
+        <div class="hero-deco">
+          <img src="/ASSETS/Images/chm-costumes.svg?v=20260605" alt="" />
+        </div>
+      </div>
+    </div>
+
+    <div class="department-receipts-content">
+      <div class="rcpt-layout">
+
+        <!-- ── Form ── -->
+        <div>
+          <div class="rcpt-form-card" id="rcpt-form-card">
+
+            <!-- Upload -->
+            <div class="rcpt-section">
+              <div class="rcpt-section-num">Step 1</div>
+              <div class="rcpt-section-title">Upload Receipt</div>
+              <div class="rcpt-drop-zone" id="rcpt-drop-zone" onclick="document.getElementById('rcpt-file-input').click()" ondragover="rcptDragOver(event)" ondragleave="rcptDragLeave(event)" ondrop="rcptDrop(event)">
+                <div class="rcpt-drop-icon">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="22" height="22"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                </div>
+                <div class="rcpt-drop-label">Drag &amp; drop your receipt here</div>
+                <div class="rcpt-drop-or">or</div>
+                <button type="button" class="rcpt-choose-btn" onclick="event.stopPropagation();document.getElementById('rcpt-file-input').click()">Choose File</button>
+                <div class="rcpt-drop-hint">Accepted formats: JPG, PNG, PDF &nbsp;&middot;&nbsp; Max file size: 10MB</div>
+              </div>
+              <div class="rcpt-file-preview" id="rcpt-file-preview">
+                <svg viewBox="0 0 24 24" fill="none" stroke="#572e88" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                <span class="rcpt-file-name" id="rcpt-file-name">filename.pdf</span>
+                <button type="button" class="rcpt-file-remove" onclick="rcptRemoveFile()">Remove</button>
+              </div>
+              <input type="file" id="rcpt-file-input" accept=".jpg,.jpeg,.png,.pdf" style="display:none" onchange="rcptFileSelected(this.files[0])">
+            </div>
+
+            <!-- Details -->
+            <div class="rcpt-section">
+              <div class="rcpt-section-num">Step 2</div>
+              <div class="rcpt-section-title">Receipt Details</div>
+              <div class="rcpt-fields">
+
+                <div class="rcpt-row">
+                  <div class="rcpt-field">
+                    <label class="rcpt-label">Department <span style="color:#b0a8c8;font-weight:500;text-transform:none;letter-spacing:0;">(locked)</span></label>
+                    <div class="rcpt-input-icon">
+                      <input class="rcpt-input" type="text" value="" readonly id="rcpt-dept">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                    </div>
+                  </div>
+                  <div class="rcpt-field">
+                    <label class="rcpt-label">Paid By <span class="rcpt-req">*</span></label>
+                    <div class="rcpt-paid-toggle">
+                      <button type="button" class="rcpt-paid-btn active" id="rcpt-paid-company" onclick="rcptSetPaidBy('company')">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
+                        Company Paid
+                      </button>
+                      <button type="button" class="rcpt-paid-btn" id="rcpt-paid-personal" onclick="rcptSetPaidBy('personal')">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                        I Paid (Reimburse Me)
+                      </button>
+                    </div>
+                  </div>
+                  <div class="rcpt-field">
+                    <label class="rcpt-label">Receipt Date <span class="rcpt-req">*</span></label>
+                    <input class="rcpt-input" type="date" id="rcpt-date" onchange="rcptUpdateSummary()">
+                  </div>
+                </div>
+
+                <div class="rcpt-row-2">
+                  <div class="rcpt-field">
+                    <label class="rcpt-label">Supplier / Store Name <span class="rcpt-req">*</span></label>
+                    <input class="rcpt-input" type="text" id="rcpt-vendor" placeholder="e.g. Spotlight, Lincraft, Amazon">
+                  </div>
+                  <div class="rcpt-field">
+                    <label class="rcpt-label">What was this purchase for? <span class="rcpt-req">*</span></label>
+                    <input class="rcpt-input" type="text" id="rcpt-desc" placeholder="e.g. Chorus costumes, hats, fabric, etc." oninput="rcptUpdateSummary()">
+                  </div>
+                </div>
+
+                <div class="rcpt-field full">
+                  <label class="rcpt-label">Additional Notes <span class="rcpt-opt">(optional)</span></label>
+                  <textarea class="rcpt-input" id="rcpt-notes" rows="2" placeholder="Add any extra details that may be helpful..." style="resize:vertical;"></textarea>
+                </div>
+
+                <div class="rcpt-row">
+                  <div class="rcpt-field">
+                    <label class="rcpt-label">Total Before Tax <span class="rcpt-req">*</span></label>
+                    <div class="rcpt-input-prefix">
+                      <input class="rcpt-input" type="number" id="rcpt-subtotal" min="0" step="0.01" placeholder="0.00" oninput="rcptCalcTotal()">
+                    </div>
+                  </div>
+                  <div class="rcpt-field">
+                    <label class="rcpt-label">Total Tax <span class="rcpt-req">*</span></label>
+                    <div class="rcpt-input-prefix">
+                      <input class="rcpt-input" type="number" id="rcpt-tax" min="0" step="0.01" placeholder="0.00" oninput="rcptCalcTotal()">
+                    </div>
+                    <div class="rcpt-total-hint">Enter the tax amount shown on your receipt.</div>
+                  </div>
+                  <div class="rcpt-field">
+                    <label class="rcpt-label">Total <span style="color:#b0a8c8;font-weight:500;text-transform:none;letter-spacing:0;">(Auto-Calculated)</span></label>
+                    <div class="rcpt-total-display" id="rcpt-total-display">$0.00</div>
+                    <div class="rcpt-total-hint">This total is calculated automatically.</div>
+                  </div>
+                </div>
+
+              </div>
+            </div>
+
+            <!-- Save -->
+            <div class="rcpt-section">
+              <button type="button" class="rcpt-save-btn" id="rcpt-save-btn" onclick="rcptSubmit()">Save Receipt</button>
+            </div>
+
+            <!-- Success -->
+            <div class="rcpt-success" id="rcpt-success">
+              <div class="rcpt-success-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="26" height="26"><polyline points="20 6 9 17 4 12"/></svg>
+              </div>
+              <div class="rcpt-success-title">Receipt saved!</div>
+              <div class="rcpt-success-sub">Your receipt has been recorded and is now pending review.</div>
+              <button type="button" class="rcpt-another-btn" onclick="rcptReset()">Submit another receipt</button>
+            </div>
+
+            <div class="rcpt-footer-note">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+              All receipts are securely stored and can be used for reporting and reimbursements.
+            </div>
+          </div>
+        </div>
+
+        <!-- ── Budget Summary ── -->
+        <div class="rcpt-summary-panel" id="rcpt-summary-panel">
+          <div class="rcpt-summary-section">
+            <div class="rcpt-summary-heading">Budget Summary (All Departments)</div>
+            <div class="rcpt-summary-sub">This shows all spending across the production.</div>
+            <div class="rcpt-summary-date" id="rcpt-summary-date">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+              Loading...
+            </div>
+            <div class="rcpt-summary-row">
+              <span class="rcpt-summary-row-label">Allocated Budget</span>
+              <span class="rcpt-summary-row-val" id="rcpt-s-allocated">--</span>
+            </div>
+            <div class="rcpt-summary-row">
+              <span class="rcpt-summary-row-label">Total Spent (before this)</span>
+              <span class="rcpt-summary-row-val" id="rcpt-s-spent">--</span>
+            </div>
+            <div class="rcpt-summary-row">
+              <span class="rcpt-summary-row-label">Remaining Before This Receipt</span>
+              <span class="rcpt-summary-row-val positive" id="rcpt-s-remaining">--</span>
+            </div>
+          </div>
+
+          <div class="rcpt-summary-section" id="rcpt-breakdown-section">
+            <div class="rcpt-summary-heading">Spending Breakdown</div>
+            <div id="rcpt-breakdown-rows">
+              <div class="rcpt-summary-row"><span class="rcpt-summary-row-label" style="color:#b0a8c8;">Loading...</span></div>
+            </div>
+          </div>
+
+          <div class="rcpt-summary-section" id="rcpt-this-section">
+            <div class="rcpt-summary-heading">This Receipt</div>
+            <div class="rcpt-summary-row">
+              <span class="rcpt-summary-row-label">Subtotal (before tax)</span>
+              <span class="rcpt-summary-row-val" id="rcpt-s-subtotal">--</span>
+            </div>
+            <div class="rcpt-summary-row">
+              <span class="rcpt-summary-row-label">Tax</span>
+              <span class="rcpt-summary-row-val" id="rcpt-s-tax">--</span>
+            </div>
+            <div class="rcpt-summary-total-row">
+              <span>Total</span>
+              <span class="rcpt-summary-row-val" id="rcpt-s-total">$0.00</span>
+            </div>
+          </div>
+
+          <div class="rcpt-summary-section">
+            <div class="rcpt-summary-heading-green">After This Receipt</div>
+            <div class="rcpt-summary-row">
+              <span class="rcpt-summary-row-label">Total Spent (new)</span>
+              <span class="rcpt-summary-row-val" id="rcpt-s-new-spent">--</span>
+            </div>
+            <div class="rcpt-summary-row">
+              <span class="rcpt-summary-row-label">Remaining Budget</span>
+              <span class="rcpt-summary-row-val positive" id="rcpt-s-new-remaining">--</span>
+            </div>
+            <div class="rcpt-summary-updated" id="rcpt-summary-updated">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+              Loading...
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="/SYSTEM/config.js?v=20260610"></script>
+  <script src="/SHARED/Navigation/production-sidebar-nav.js?v=15"></script>
+  <script>
+    'use strict';
+
+    const SUPA_URL = 'https://tkmaiktxpwqfbgeojbnf.supabase.co';
+    const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRrbWFpa3R4cHdxZmJnZW9qYm5mIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM3MzE4MTcsImV4cCI6MjA4OTMwNzgxN30.TkTZBNWUatk3Y6Vmfv1hIRR3DfVjgwauwa76Pf00J_8';
+
+    let sb, prodId, paidBy = 'company', uploadedFile = null;
+    let allocatedCents = 0, spentCents = 0, breakdownItems = [];
+
+    const _qp = new URLSearchParams(location.search);
+    const isEmbed = _qp.get('embed') === '1';
+    const deptName = _qp.get('dept') || 'Department';
+    const deptColor = (_qp.get('color') || '572e88').replace(/^#/, '');
+
+    async function init() {
+      if (!isEmbed) window.initProductionPage('departments');
+      const { createClient } = supabase;
+      sb = createClient(SUPA_URL, SUPA_KEY);
+      prodId = _qp.get('id');
+
+      // Apply dept branding
+      document.getElementById('rcpt-hero-inner').style.background = '#' + deptColor;
+      document.getElementById('rcpt-hero-dept').textContent = deptName;
+      document.getElementById('rcpt-hero-title').textContent = deptName + ' Receipts';
+      document.getElementById('rcpt-dept').value = deptName;
+      document.title = deptName + ' Receipts - Build The Show';
+
+      if (!prodId) return;
+      if (isEmbed) {
+        document.getElementById('rcpt-hero').style.display = 'none';
+        document.getElementById('prod-sidebar-host').style.display = 'none';
+      }
+      await loadSummary();
+      setTodayDate();
+    }
+
+    function setTodayDate() {
+      const today = new Date().toISOString().split('T')[0];
+      document.getElementById('rcpt-date').value = today;
+    }
+
+    function normStr(s) { return String(s || '').trim().toLowerCase().replace(/\s+/g, ' '); }
+
+    function catMatchesDept(catName) {
+      const nd = normStr(deptName);
+      const nc = normStr(catName);
+      return nc.includes(nd) || nd.includes(nc);
+    }
+
+    async function loadSummary() {
+      try {
+        const [catsRes, rcptRes] = await Promise.all([
+          sb.from('budget_categories').select('id,name,planned_cents').eq('production_id', prodId).eq('type', 'expense'),
+          sb.from('budget_receipts').select('id,amount_cents,description,status,category_id,created_at,department').eq('production_id', prodId)
+        ]);
+        const allCats = catsRes.data || [];
+        const allReceipts = rcptRes.data || [];
+
+        // Filter to this department's categories (best-effort name match)
+        const cats = allCats.filter(c => catMatchesDept(c.name));
+        const catIds = new Set(cats.map(c => c.id));
+
+        // Filter receipts: match by department field or by category belonging to this dept
+        const receipts = allReceipts.filter(r =>
+          (r.department && normStr(r.department) === normStr(deptName)) ||
+          catIds.has(r.category_id)
+        );
+
+        allocatedCents = cats.reduce((s, c) => s + (c.planned_cents || 0), 0);
+        const approvedReceipts = receipts.filter(r => r.status === 'approved' || r.status === 'paid');
+        spentCents = approvedReceipts.reduce((s, r) => s + (r.amount_cents || 0), 0);
+
+        // Spending breakdown by description
+        const byDesc = {};
+        approvedReceipts.forEach(r => {
+          const key = (r.description || 'Other').trim();
+          byDesc[key] = (byDesc[key] || 0) + (r.amount_cents || 0);
+        });
+        breakdownItems = Object.entries(byDesc).sort((a, b) => b[1] - a[1]).slice(0, 6);
+
+        // Latest timestamp
+        const times = receipts.map(r => r.created_at).filter(Boolean).sort().reverse();
+        const lastUpdated = times[0] ? new Date(times[0]).toLocaleString('en-CA', { dateStyle: 'medium', timeStyle: 'short' }) : null;
+
+        document.getElementById('rcpt-s-allocated').textContent = fmt(allocatedCents);
+        document.getElementById('rcpt-s-spent').textContent = fmt(spentCents);
+        document.getElementById('rcpt-s-remaining').textContent = fmt(Math.max(0, allocatedCents - spentCents));
+
+        const now = new Date().toLocaleString('en-CA', { dateStyle: 'medium', timeStyle: 'short' });
+        document.getElementById('rcpt-summary-date').innerHTML =
+          '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="12" height="12"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> As of: ' + now;
+
+        const breakdownEl = document.getElementById('rcpt-breakdown-rows');
+        if (breakdownItems.length) {
+          breakdownEl.innerHTML = breakdownItems.map(([label, cents]) =>
+            '<div class="rcpt-summary-row"><span class="rcpt-summary-row-label">' + esc(label) + '</span><span class="rcpt-summary-row-val">' + fmt(cents) + '</span></div>'
+          ).join('');
+        } else {
+          breakdownEl.innerHTML = '<div class="rcpt-summary-row"><span class="rcpt-summary-row-label" style="color:#b0a8c8;">No receipts yet</span></div>';
+        }
+
+        if (lastUpdated) {
+          document.getElementById('rcpt-summary-updated').innerHTML =
+            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="11" height="11"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> Last updated: ' + lastUpdated;
+        }
+
+        rcptUpdateSummary();
+      } catch (e) {
+        console.error('Receipt summary load failed', e);
+      }
+    }
+
+    function fmt(cents) {
+      return '$' + (cents / 100).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    }
+
+    function esc(str) {
+      return String(str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    function rcptSetPaidBy(val) {
+      paidBy = val;
+      document.getElementById('rcpt-paid-company').classList.toggle('active', val === 'company');
+      document.getElementById('rcpt-paid-personal').classList.toggle('active', val === 'personal');
+    }
+
+    function rcptCalcTotal() {
+      const sub = parseFloat(document.getElementById('rcpt-subtotal').value) || 0;
+      const tax = parseFloat(document.getElementById('rcpt-tax').value) || 0;
+      const total = sub + tax;
+      document.getElementById('rcpt-total-display').textContent = '$' + total.toFixed(2);
+      rcptUpdateSummary();
+    }
+
+    function rcptUpdateSummary() {
+      const sub = parseFloat(document.getElementById('rcpt-subtotal').value) || 0;
+      const tax = parseFloat(document.getElementById('rcpt-tax').value) || 0;
+      const total = sub + tax;
+      const totalCents = Math.round(total * 100);
+
+      document.getElementById('rcpt-s-subtotal').textContent = sub > 0 ? fmt(Math.round(sub * 100)) : '--';
+      document.getElementById('rcpt-s-tax').textContent = tax > 0 ? fmt(Math.round(tax * 100)) : '--';
+      document.getElementById('rcpt-s-total').textContent = fmt(totalCents);
+
+      const newSpent = spentCents + totalCents;
+      const newRemaining = Math.max(0, allocatedCents - newSpent);
+      document.getElementById('rcpt-s-new-spent').textContent = fmt(newSpent);
+      document.getElementById('rcpt-s-new-remaining').textContent = fmt(newRemaining);
+    }
+
+    function rcptDragOver(e) {
+      e.preventDefault();
+      document.getElementById('rcpt-drop-zone').classList.add('drag-over');
+    }
+    function rcptDragLeave(e) {
+      document.getElementById('rcpt-drop-zone').classList.remove('drag-over');
+    }
+    function rcptDrop(e) {
+      e.preventDefault();
+      document.getElementById('rcpt-drop-zone').classList.remove('drag-over');
+      const file = e.dataTransfer.files[0];
+      if (file) rcptFileSelected(file);
+    }
+    function rcptFileSelected(file) {
+      if (!file) return;
+      const maxBytes = 10 * 1024 * 1024;
+      if (file.size > maxBytes) { alert('File is too large. Max size is 10MB.'); return; }
+      uploadedFile = file;
+      document.getElementById('rcpt-file-name').textContent = file.name;
+      document.getElementById('rcpt-file-preview').classList.add('visible');
+    }
+    function rcptRemoveFile() {
+      uploadedFile = null;
+      document.getElementById('rcpt-file-input').value = '';
+      document.getElementById('rcpt-file-preview').classList.remove('visible');
+    }
+
+    async function rcptSubmit() {
+      const vendor = document.getElementById('rcpt-vendor').value.trim();
+      const desc   = document.getElementById('rcpt-desc').value.trim();
+      const date   = document.getElementById('rcpt-date').value;
+      const sub    = parseFloat(document.getElementById('rcpt-subtotal').value) || 0;
+
+      if (!vendor) { alert('Please enter a supplier or store name.'); document.getElementById('rcpt-vendor').focus(); return; }
+      if (!desc)   { alert('Please describe what this purchase was for.'); document.getElementById('rcpt-desc').focus(); return; }
+      if (!date)   { alert('Please select a receipt date.'); document.getElementById('rcpt-date').focus(); return; }
+      if (!sub)    { alert('Please enter the total before tax.'); document.getElementById('rcpt-subtotal').focus(); return; }
+
+      const btn = document.getElementById('rcpt-save-btn');
+      btn.disabled = true;
+      btn.textContent = 'Saving...';
+
+      try {
+        const tax   = parseFloat(document.getElementById('rcpt-tax').value) || 0;
+        const total = sub + tax;
+        const notes = document.getElementById('rcpt-notes').value.trim();
+
+        let receiptUrl = null;
+        if (uploadedFile) {
+          const deptSlug = deptName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+          const path = prodId + '/' + deptSlug + '-receipts/' + Date.now() + '-' + uploadedFile.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+          const { data: upData, error: upErr } = await sb.storage.from('receipts').upload(path, uploadedFile);
+          if (!upErr) {
+            const { data: urlData } = sb.storage.from('receipts').getPublicUrl(path);
+            receiptUrl = urlData?.publicUrl || null;
+          }
+        }
+
+        const row = {
+          production_id: prodId,
+          department: deptName,
+          vendor,
+          description: desc,
+          receipt_date: date,
+          amount_cents: Math.round(total * 100),
+          notes: notes || null,
+          status: 'pending',
+          paid_by: paidBy,
+          subtotal_cents: Math.round(sub * 100),
+          tax_cents: Math.round(tax * 100),
+          receipt_url: receiptUrl,
+        };
+
+        const { error } = await sb.from('budget_receipts').insert(row);
+        if (error) throw error;
+
+        document.getElementById('rcpt-form-card').querySelector('.rcpt-section:nth-child(1)').style.display = 'none';
+        document.getElementById('rcpt-form-card').querySelector('.rcpt-section:nth-child(2)').style.display = 'none';
+        document.getElementById('rcpt-form-card').querySelector('.rcpt-section:nth-child(3)').style.display = 'none';
+        document.getElementById('rcpt-success').classList.add('visible');
+        await loadSummary();
+      } catch (e) {
+        alert('Could not save receipt: ' + e.message);
+        btn.disabled = false;
+        btn.textContent = 'Save Receipt';
+      }
+    }
+
+    function rcptReset() {
+      document.getElementById('rcpt-vendor').value = '';
+      document.getElementById('rcpt-desc').value = '';
+      document.getElementById('rcpt-notes').value = '';
+      document.getElementById('rcpt-subtotal').value = '';
+      document.getElementById('rcpt-tax').value = '';
+      document.getElementById('rcpt-total-display').textContent = '$0.00';
+      rcptRemoveFile();
+      setTodayDate();
+      rcptSetPaidBy('company');
+      const btn = document.getElementById('rcpt-save-btn');
+      btn.disabled = false;
+      btn.textContent = 'Save Receipt';
+      document.getElementById('rcpt-success').classList.remove('visible');
+      ['rcpt-section:nth-child(1)', 'rcpt-section:nth-child(2)', 'rcpt-section:nth-child(3)'].forEach(sel => {
+        const el = document.getElementById('rcpt-form-card').querySelector('.' + sel.replace(':', ':'));
+        if (el) el.style.display = '';
+      });
+      document.querySelectorAll('.rcpt-form-card .rcpt-section').forEach(el => el.style.display = '');
+      rcptUpdateSummary();
+    }
+
+    window.addEventListener('DOMContentLoaded', init);
+  </script>
+</body>
+</html>
