@@ -237,6 +237,76 @@
       white-space: nowrap;
     }
 
+    /* Receipt image preview panel */
+    .rcpt-preview-panel {
+      display: none;
+      flex-direction: column;
+      gap: 0.75rem;
+      margin-top: 0.85rem;
+      background: #f4f2fa;
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    .rcpt-preview-panel.visible { display: flex; }
+    .rcpt-preview-images {
+      max-height: 420px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      padding: 0.75rem;
+    }
+    .rcpt-preview-images img {
+      width: 100%;
+      border-radius: 8px;
+      display: block;
+      cursor: zoom-in;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.12);
+    }
+    .rcpt-preview-pdf-note {
+      padding: 1rem;
+      text-align: center;
+      font-size: 0.82rem;
+      color: #9a90b0;
+    }
+    .rcpt-ocr-banner {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      padding: 0.7rem 0.9rem;
+      font-size: 0.82rem;
+      font-weight: 500;
+    }
+    .rcpt-ocr-banner--loading { background: rgba(87,46,136,0.07); color: #572e88; }
+    .rcpt-ocr-banner--done    { background: rgba(118,158,123,0.12); color: #2e6639; }
+    .rcpt-ocr-banner--error   { background: rgba(209,82,61,0.08); color: #a03020; }
+    .rcpt-ocr-spinner {
+      width: 14px; height: 14px; border-radius: 50%;
+      border: 2px solid rgba(87,46,136,0.25);
+      border-top-color: #572e88;
+      animation: rcpt-spin 0.7s linear infinite;
+      flex-shrink: 0;
+    }
+    @keyframes rcpt-spin { to { transform: rotate(360deg); } }
+    .rcpt-ocr-banner img { width: 15px; height: 15px; flex-shrink: 0; }
+    .rcpt-input.autofilled {
+      border-color: rgba(118,158,123,0.5);
+      background: rgba(118,158,123,0.05);
+    }
+    /* Fullscreen image overlay */
+    .rcpt-img-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.88);
+      z-index: 9999;
+      align-items: center;
+      justify-content: center;
+      padding: 1rem;
+    }
+    .rcpt-img-overlay.open { display: flex; }
+    .rcpt-img-overlay img { max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 6px; cursor: zoom-out; }
+
     /* Dept searchable dropdown (producer mode) */
     .rcpt-dept-combo {
       position: relative;
@@ -648,6 +718,18 @@
                 </div>
               </div>
               <input type="file" id="rcpt-file-input" accept=".jpg,.jpeg,.png,.pdf" multiple style="display:none" onchange="rcptFilesSelected(this.files)">
+              <!-- Large preview panel -->
+              <div class="rcpt-preview-panel" id="rcpt-preview-panel">
+                <div class="rcpt-ocr-banner rcpt-ocr-banner--loading" id="rcpt-ocr-banner" style="display:none">
+                  <div class="rcpt-ocr-spinner" id="rcpt-ocr-spinner"></div>
+                  <span id="rcpt-ocr-msg">Uploading...</span>
+                </div>
+                <div class="rcpt-preview-images" id="rcpt-preview-images"></div>
+              </div>
+            </div>
+            <!-- Fullscreen overlay -->
+            <div class="rcpt-img-overlay" id="rcpt-img-overlay" onclick="document.getElementById('rcpt-img-overlay').classList.remove('open')">
+              <img id="rcpt-img-overlay-img" src="" alt="Receipt">
             </div>
 
             <!-- Details -->
@@ -1231,6 +1313,7 @@
     }
 
     let uploadedFiles = [];
+    let uploadedUrls  = [];   // set after auto-upload; reused on submit
     let _multiConfirmed = false;
 
     function rcptDragOver(e) {
@@ -1245,6 +1328,7 @@
       document.getElementById('rcpt-drop-zone').classList.remove('drag-over');
       if (e.dataTransfer.files.length) rcptFilesSelected(e.dataTransfer.files);
     }
+
     function rcptFilesSelected(fileList) {
       if (!fileList || !fileList.length) return;
       const maxBytes = 10 * 1024 * 1024;
@@ -1256,12 +1340,15 @@
       }
       if (!valid.length) return;
       uploadedFiles = valid;
+      uploadedUrls  = [];
       _multiConfirmed = valid.length === 1;
       renderFileThumbs();
+      renderPreviewImages(valid);
       document.getElementById('rcpt-file-preview').classList.add('visible');
-      const confirmEl = document.getElementById('rcpt-multi-confirm');
-      confirmEl.classList.toggle('visible', valid.length > 1);
+      document.getElementById('rcpt-multi-confirm').classList.toggle('visible', valid.length > 1);
+      rcptAutoUploadAndOCR(valid);
     }
+
     function renderFileThumbs() {
       const wrap = document.getElementById('rcpt-file-thumbs');
       wrap.innerHTML = '';
@@ -1271,8 +1358,8 @@
         const isImage = file.type.startsWith('image/');
         if (isImage) {
           const img = document.createElement('img');
-          img.src = URL.createObjectURL(file);
-          img.onload = function() { URL.revokeObjectURL(img.src); };
+          const objUrl = URL.createObjectURL(file);
+          img.src = objUrl;
           thumb.appendChild(img);
         } else {
           const iconWrap = document.createElement('div');
@@ -1294,16 +1381,137 @@
         wrap.appendChild(thumb);
       });
     }
+
+    function renderPreviewImages(files) {
+      const panel = document.getElementById('rcpt-preview-panel');
+      const imgWrap = document.getElementById('rcpt-preview-images');
+      imgWrap.innerHTML = '';
+      let hasImage = false;
+      files.forEach(function(file) {
+        if (file.type.startsWith('image/')) {
+          hasImage = true;
+          const img = document.createElement('img');
+          img.src = URL.createObjectURL(file);
+          img.alt = file.name;
+          img.title = 'Click to enlarge';
+          img.addEventListener('click', function() {
+            document.getElementById('rcpt-img-overlay-img').src = img.src;
+            document.getElementById('rcpt-img-overlay').classList.add('open');
+          });
+          imgWrap.appendChild(img);
+        } else {
+          const note = document.createElement('div');
+          note.className = 'rcpt-preview-pdf-note';
+          note.textContent = file.name + ' — PDF preview not available. Fields will be filled from the document.';
+          imgWrap.appendChild(note);
+          hasImage = true;
+        }
+      });
+      panel.classList.toggle('visible', hasImage);
+    }
+
+    async function rcptAutoUploadAndOCR(files) {
+      if (!prodId || !sb) return;
+      rcptOcrBanner('loading', 'Uploading your receipt...');
+      try {
+        const deptSlug = (_activeDeptName || deptName).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+        const ts = Date.now();
+        const urls = [];
+        for (let i = 0; i < files.length; i++) {
+          const f = files[i];
+          const path = prodId + '/' + deptSlug + '-receipts/' + ts + '-' + i + '-' + f.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+          const { error: upErr } = await sb.storage.from('receipts').upload(path, f);
+          if (!upErr) {
+            const { data: urlData } = sb.storage.from('receipts').getPublicUrl(path);
+            if (urlData?.publicUrl) urls.push(urlData.publicUrl);
+          }
+        }
+        uploadedUrls = urls;
+        if (!urls.length) { rcptOcrBanner('error', 'Upload failed — you can still fill in fields manually.'); return; }
+        rcptOcrBanner('loading', 'Reading your receipt...');
+        await rcptRunOCR(urls);
+      } catch(e) {
+        rcptOcrBanner('error', 'Could not read receipt automatically. Please fill in the fields below.');
+      }
+    }
+
+    async function rcptRunOCR(urls) {
+      const PROXY = 'https://tkmaiktxpwqfbgeojbnf.supabase.co/functions/v1/anthropic-proxy';
+      const PROXY_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRrbWFpa3R4cHdxZmJnZW9qYm5mIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM3MzE4MTcsImV4cCI6MjA4OTMwNzgxN30.TkTZBNWUatk3Y6Vmfv1hIRR3DfVjgwauwa76Pf00J_8';
+      const imageContent = urls.map(url => ({
+        type: 'image',
+        source: { type: 'url', url }
+      }));
+      imageContent.push({
+        type: 'text',
+        text: 'Look carefully at this receipt. Extract the following and return ONLY valid JSON, no other text:\n{"vendor":"store or business name","date":"YYYY-MM-DD or null","subtotal":number or null,"tax":number or null,"total":number or null,"description":"5-10 words describing what was purchased"}\nUse null for any field you cannot clearly read. Amounts should be numbers in dollars (e.g. 12.50).'
+      });
+      const res = await fetch(PROXY, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'apikey': PROXY_KEY, 'Authorization': 'Bearer ' + PROXY_KEY },
+        body: JSON.stringify({
+          model: 'claude-haiku-4-5-20251001',
+          max_tokens: 512,
+          messages: [{ role: 'user', content: imageContent }]
+        })
+      });
+      if (!res.ok) throw new Error('OCR request failed');
+      const data = await res.json();
+      const text = data?.content?.[0]?.text || '';
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) throw new Error('No JSON in response');
+      const parsed = JSON.parse(jsonMatch[0]);
+      rcptFillFields(parsed);
+    }
+
+    function rcptFillFields(d) {
+      let filled = [];
+      if (d.vendor)      { rcptAutoFill('rcpt-vendor', d.vendor); filled.push('store'); }
+      if (d.date)        { rcptAutoFill('rcpt-date', d.date); filled.push('date'); }
+      if (d.subtotal != null) {
+        rcptAutoFill('rcpt-subtotal', d.subtotal.toFixed(2));
+        filled.push('subtotal');
+      }
+      if (d.tax != null && d.tax > 0) {
+        rcptAutoFill('rcpt-tax', d.tax.toFixed(2));
+        filled.push('tax');
+      }
+      if (d.description) { rcptAutoFill('rcpt-desc', d.description); filled.push('description'); }
+      rcptCalcTotal();
+      rcptUpdateSummary();
+      if (filled.length) {
+        rcptOcrBanner('done', 'Fields filled from receipt (' + filled.join(', ') + ') — please review and correct if needed.');
+      } else {
+        rcptOcrBanner('error', 'Could not read receipt clearly. Please fill in the fields below.');
+      }
+    }
+
+    function rcptAutoFill(id, value) {
+      const el = document.getElementById(id);
+      if (!el || el.value) return; // don't overwrite if user already typed something
+      el.value = value;
+      el.classList.add('autofilled');
+      el.addEventListener('input', function() { el.classList.remove('autofilled'); }, { once: true });
+    }
+
+    function rcptOcrBanner(type, msg) {
+      const banner = document.getElementById('rcpt-ocr-banner');
+      const spinner = document.getElementById('rcpt-ocr-spinner');
+      const msgEl = document.getElementById('rcpt-ocr-msg');
+      banner.style.display = 'flex';
+      banner.className = 'rcpt-ocr-banner rcpt-ocr-banner--' + type;
+      spinner.style.display = type === 'loading' ? 'block' : 'none';
+      msgEl.textContent = msg;
+    }
+
     function rcptRemoveFileAt(idx) {
       uploadedFiles.splice(idx, 1);
-      if (!uploadedFiles.length) {
-        rcptClearFiles();
-        return;
-      }
+      uploadedUrls = [];
+      if (!uploadedFiles.length) { rcptClearFiles(); return; }
       _multiConfirmed = uploadedFiles.length === 1;
       renderFileThumbs();
-      const confirmEl = document.getElementById('rcpt-multi-confirm');
-      confirmEl.classList.toggle('visible', uploadedFiles.length > 1 && !_multiConfirmed);
+      renderPreviewImages(uploadedFiles);
+      document.getElementById('rcpt-multi-confirm').classList.toggle('visible', uploadedFiles.length > 1 && !_multiConfirmed);
     }
     function rcptConfirmMulti() {
       _multiConfirmed = true;
@@ -1311,11 +1519,15 @@
     }
     function rcptClearFiles() {
       uploadedFiles = [];
+      uploadedUrls  = [];
       _multiConfirmed = false;
       document.getElementById('rcpt-file-input').value = '';
       document.getElementById('rcpt-file-thumbs').innerHTML = '';
+      document.getElementById('rcpt-preview-images').innerHTML = '';
       document.getElementById('rcpt-file-preview').classList.remove('visible');
       document.getElementById('rcpt-multi-confirm').classList.remove('visible');
+      document.getElementById('rcpt-preview-panel').classList.remove('visible');
+      document.getElementById('rcpt-ocr-banner').style.display = 'none';
     }
     function rcptRemoveFile() { rcptClearFiles(); }
 
@@ -1347,7 +1559,10 @@
           btn.disabled = false; btn.textContent = 'Save Receipt'; return;
         }
         let receiptUrl = null;
-        if (uploadedFiles.length) {
+        if (uploadedUrls.length) {
+          // files already uploaded during auto-upload — reuse the URLs
+          receiptUrl = uploadedUrls.length === 1 ? uploadedUrls[0] : JSON.stringify(uploadedUrls);
+        } else if (uploadedFiles.length) {
           const deptSlug = (_activeDeptName || deptName).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
           const ts = Date.now();
           const urls = [];
