@@ -268,6 +268,19 @@
     return scope.ids.map(String).indexOf(String(eventId || '')) !== -1;
   }
 
+  function planEntryAllowedEventTypes(key, entry) {
+    const baseType = planEntryBaseType(key);
+    const scopedIds = [];
+    const scopes = entry.eventScope || entry.event_scope || {};
+    Object.keys(scopes).forEach(function (scopeKey) {
+      const scope = scopes[scopeKey];
+      if (scope && scope.mode === 'specific' && Array.isArray(scope.ids)) {
+        scopedIds.push.apply(scopedIds, scope.ids.map(String));
+      }
+    });
+    return { baseType, scopedIds };
+  }
+
   function entryField(entry, camelName, snakeName, fallback) {
     if (entry && entry[camelName] !== undefined && entry[camelName] !== null && entry[camelName] !== '') return entry[camelName];
     if (entry && entry[snakeName] !== undefined && entry[snakeName] !== null && entry[snakeName] !== '') return entry[snakeName];
@@ -435,12 +448,13 @@
       const role = defaultPlanRole(key, entry);
       if (!role.name || (!matches(role.name) && !(groupHasSingleSection() && matches(role.dept)))) return;
       if (planEntryCountMode(key, entry) === 'per_production') return;
-      const eventTypes = [planEntryBaseType(key)];
+      const allowed = planEntryAllowedEventTypes(key, entry);
       state.events.forEach(function (event) {
-        const matchedType = eventTypes.find(function (type) {
-          return planEventMatchesType(event, type) && planEntryAllowsEvent(entry, type, event.id);
-        });
-        if (!matchedType) return;
+        if (allowed.scopedIds.length) {
+          if (allowed.scopedIds.indexOf(String(event.id || '')) === -1) return;
+        } else if (eventPlanType(event) !== allowed.baseType) {
+          return;
+        }
         const timing = roleShiftTiming(event, entry);
         if (!timing.shift_date) return;
         rows.push({
