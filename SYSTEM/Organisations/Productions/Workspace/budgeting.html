@@ -292,15 +292,15 @@
     .bg-rcpt-dash { border:none; border-top:1.5px dashed rgba(87,46,136,0.2); margin:0.55rem 0; }
     .bg-rcpt-sec { font-size:0.58rem; font-weight:900; letter-spacing:0.14em; text-transform:uppercase; color:#572e88; margin:0.6rem 0 0.18rem; }
     .bg-rcpt-row { display:flex; justify-content:space-between; align-items:baseline; gap:0.35rem; padding:0.1rem 0; }
-    .bg-rcpt-lbl { font-size:0.78rem; font-weight:600; color:#4a3d6b; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .bg-rcpt-lbl { font-size:0.78rem; font-weight:600; color:#4a3d6b; flex:1; min-width:0; word-break:break-word; }
     .bg-rcpt-val { font-size:0.78rem; font-weight:800; font-variant-numeric:tabular-nums; white-space:nowrap; flex-shrink:0; }
     .bg-rcpt-sec-row { display:flex; justify-content:space-between; align-items:baseline; gap:0.35rem; padding:0.22rem 0.3rem 0.06rem; margin-top:0.25rem; border-radius:5px; transition:background 0.1s; }
     .bg-rcpt-sec-row:hover { background:rgba(87,46,136,0.07); }
-    .bg-rcpt-sec-lbl { font-size:0.72rem; font-weight:900; text-transform:uppercase; letter-spacing:0.06em; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .bg-rcpt-sec-lbl { font-size:0.72rem; font-weight:900; text-transform:uppercase; letter-spacing:0.06em; flex:1; min-width:0; word-break:break-word; }
     .bg-rcpt-sec-val { font-size:0.72rem; font-weight:900; font-variant-numeric:tabular-nums; white-space:nowrap; flex-shrink:0; }
     .bg-rcpt-cat { display:flex; justify-content:space-between; align-items:baseline; gap:0.35rem; padding:0.06rem 0.3rem 0.06rem 0.95rem; border-radius:4px; transition:background 0.1s; }
     .bg-rcpt-cat:hover { background:rgba(87,46,136,0.05); }
-    .bg-rcpt-cat-lbl { font-size:0.71rem; color:#6b5f8a; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .bg-rcpt-cat-lbl { font-size:0.71rem; color:#6b5f8a; flex:1; min-width:0; word-break:break-word; }
     .bg-rcpt-cat-val { font-size:0.71rem; color:#4a3d6b; font-variant-numeric:tabular-nums; white-space:nowrap; flex-shrink:0; }
     .bg-rcpt-tot { display:flex; justify-content:space-between; align-items:baseline; gap:0.35rem; padding:0.22rem 0; }
     .bg-rcpt-tot-lbl { font-size:0.68rem; font-weight:900; letter-spacing:0.09em; text-transform:uppercase; color:#1a1530; }
@@ -1975,7 +1975,17 @@ const BP = {
     const panel = document.getElementById('bg-sum-panel'); if (!panel) return;
     const expCats = this.cats.filter(c=>c.type==='expense');
     const catAmt = c => { const its=this._catItems(c.id); const s=its.reduce((a,i)=>a+(i.budgeted_cents||0),0); return s||c.planned_cents||0; };
-    const totExp  = expCats.reduce((a,c)=>a+catAmt(c),0);
+    // Deduplicate by name for accurate totals (same-named categories are merged)
+    const expCatsDeduped = (() => {
+      const seen = {}, result = [];
+      expCats.forEach(c => {
+        const k = (c.name||'').trim().toLowerCase();
+        if (seen[k] !== undefined) { result[seen[k]]._extraAmt = (result[seen[k]]._extraAmt||0) + catAmt(c); }
+        else { seen[k] = result.length; result.push(c); }
+      });
+      return result;
+    })();
+    const totExp  = expCatsDeduped.reduce((a,c)=>a+catAmt(c)+(c._extraAmt||0),0);
     const totRev  = this._totalRevCents();
     const surplus = totRev - totExp;
     const pct     = totRev>0 ? Math.round(Math.abs(surplus)/totRev*100) : 0;
@@ -1998,6 +2008,12 @@ const BP = {
 
     let h = '<div class="bg-rcpt-hdr"><div class="bg-rcpt-hdr-title">Budget Receipt</div></div>';
 
+    // Build set of revenue driver labels so we can flag expense categories with the same name
+    const driverLabelSet = new Set(this.drivers.map(d => {
+      const cfg = this._drvTypeCfg(d.type);
+      return (d.label || cfg.label || '').trim().toLowerCase();
+    }));
+
     // Income
     h += '<div class="bg-rcpt-sec">Income</div>';
     if (this.drivers.length) {
@@ -2011,17 +2027,31 @@ const BP = {
 
     h += '<hr class="bg-rcpt-dash">';
 
-    // Expenses by section
+    // Expenses by section — merge same-named categories to remove duplicates
     h += '<div class="bg-rcpt-sec">Expenses</div>';
     secOrder.forEach(key => {
       const g = secMap[key];
-      const secTotal = g.cats.reduce((a,c)=>a+catAmt(c),0);
-      const hasBudget = g.cats.some(c=>catAmt(c)>0);
+      // Deduplicate: merge categories with the same name into one entry
+      const mergedCats = [];
+      const seenNames = {};
+      g.cats.forEach(c => {
+        const normName = (c.name||'').trim().toLowerCase();
+        if (seenNames[normName] !== undefined) {
+          mergedCats[seenNames[normName]]._mergedAmt = (mergedCats[seenNames[normName]]._mergedAmt || catAmt(mergedCats[seenNames[normName]])) + catAmt(c);
+        } else {
+          seenNames[normName] = mergedCats.length;
+          mergedCats.push(c);
+        }
+      });
+      const secTotal = mergedCats.reduce((a,c) => a + (c._mergedAmt !== undefined ? c._mergedAmt : catAmt(c)), 0);
       const secLabelEsc = this.esc(g.sec.label).replace(/'/g,"\\'");
       h += '<div class="bg-rcpt-sec-row" onclick="BP.focusSection(\''+secLabelEsc+'\')" style="cursor:pointer;" title="Go to '+this.esc(g.sec.label)+'"><span class="bg-rcpt-sec-lbl" style="color:'+g.sec.color+'">'+this.esc(g.sec.label)+'</span><span class="bg-rcpt-sec-val" style="color:'+g.sec.color+'">'+this.fmt$(secTotal)+'</span></div>';
-      g.cats.forEach(c => {
-        const amt = catAmt(c);
-        h += '<div class="bg-rcpt-cat" onclick="BP.focusCat(\''+c.id+'\')" style="cursor:pointer;" title="Go to '+this.esc(c.name)+'"><span class="bg-rcpt-cat-lbl">'+this.esc(c.name)+'</span><span class="bg-rcpt-cat-val">'+(amt?this.fmt$(amt):'—')+'</span></div>';
+      mergedCats.forEach(c => {
+        const amt = c._mergedAmt !== undefined ? c._mergedAmt : catAmt(c);
+        // If this expense category shares a name with a revenue driver, label it as operating cost to avoid confusion
+        const isAlsoRevenue = driverLabelSet.has((c.name||'').trim().toLowerCase());
+        const displayName = this.esc(c.name) + (isAlsoRevenue ? ' <span style="font-size:0.62rem;color:#9a90b0;font-weight:600;">(operating cost)</span>' : '');
+        h += '<div class="bg-rcpt-cat" onclick="BP.focusCat(\''+c.id+'\')" style="cursor:pointer;" title="Go to '+this.esc(c.name)+'"><span class="bg-rcpt-cat-lbl">'+displayName+'</span><span class="bg-rcpt-cat-val">'+(amt?this.fmt$(amt):'—')+'</span></div>';
       });
     });
 
