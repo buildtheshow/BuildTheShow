@@ -116,46 +116,6 @@
     return window.BTSDepartmentConfig;
   }
 
-  function colorLuminance(hex) {
-    var value = String(hex || '').trim().replace('#', '');
-    if (value.length === 3) value = value.split('').map(function (ch) { return ch + ch; }).join('');
-    if (!/^[0-9a-f]{6}$/i.test(value)) return 0;
-    var rgb = [0, 2, 4].map(function (index) {
-      var channel = parseInt(value.slice(index, index + 2), 16) / 255;
-      return channel <= 0.03928 ? channel / 12.92 : Math.pow((channel + 0.055) / 1.055, 2.4);
-    });
-    return 0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2];
-  }
-
-  function contrastRatio(colorA, colorB) {
-    var a = colorLuminance(colorA);
-    var b = colorLuminance(colorB);
-    var high = Math.max(a, b);
-    var low = Math.min(a, b);
-    return (high + 0.05) / (low + 0.05);
-  }
-
-  function departmentInk(color) {
-    var whiteRatio = contrastRatio(color, '#ffffff');
-    var softInk = '#1a1530';
-    var ink = whiteRatio >= 4.5 ? '#ffffff' : (contrastRatio(color, softInk) >= 4.5 ? softInk : '#000000');
-    return ink !== '#ffffff' ? {
-      ink: ink,
-      muted: 'rgba(26,21,48,0.68)',
-      line: 'rgba(26,21,48,0.18)',
-      fill: 'rgba(26,21,48,0.08)',
-      buttonFill: 'rgba(26,21,48,0.12)',
-      buttonBorder: 'rgba(26,21,48,0.2)'
-    } : {
-      ink: '#ffffff',
-      muted: 'rgba(255,255,255,0.78)',
-      line: 'rgba(255,255,255,0.26)',
-      fill: 'rgba(255,255,255,0.13)',
-      buttonFill: 'rgba(255,255,255,0.18)',
-      buttonBorder: 'rgba(255,255,255,0.24)'
-    };
-  }
-
   function setRoute(tab) {
     state.tab = tab || 'dashboard';
     const next = new URL(window.location.href);
@@ -795,7 +755,7 @@
     signups.slice(0, 5).forEach(function (signup) {
       rows.push({
         initials: initials(signup.name || signup.volunteer_name || signup.email || 'Volunteer'),
-        color: '#62a7bf',
+        color: '#3c7c90',
         title: (signup.name || signup.volunteer_name || signup.email || 'Volunteer') + ' joined this section',
         time: signup.updated_at || signup.created_at || '',
       });
@@ -926,15 +886,7 @@
     const root = document.getElementById('department-section-root');
     if (!root) return;
     document.title = state.section.label + ' - Build The Show';
-    var deptColor = state.group.color || '#572e88';
-    var ink = departmentInk(deptColor);
-    root.style.setProperty('--dept-color', deptColor);
-    root.style.setProperty('--dept-ink', ink.ink);
-    root.style.setProperty('--dept-muted', ink.muted);
-    root.style.setProperty('--dept-line', ink.line);
-    root.style.setProperty('--dept-fill', ink.fill);
-    root.style.setProperty('--dept-button-fill', ink.buttonFill);
-    root.style.setProperty('--dept-button-border', ink.buttonBorder);
+    root.style.setProperty('--dept-color', state.group.color || '#572e88');
     root.innerHTML = renderHero() + renderTabs() + renderContent() + renderReceiptModal();
   }
 
