@@ -15,8 +15,47 @@
     opportunities: [],
     signups: [],
     events: [],
+    staffingPlan: {},
     editingReceiptId: '',
   };
+
+  const STAFFING_ROLE_MAP = {
+    dept_leads: [
+      { dept: 'Backstage & Rehearsal Support', name: 'Stage Manager' }, { dept: 'Front of House', name: 'Front of House Manager' }, { dept: 'Front of House', name: 'Concession Manager' }, { dept: 'Technical Crew', name: 'Lighting Designer / Technician' }, { dept: 'Design & Construction', name: 'Lead Builder' }, { dept: 'Design & Construction', name: 'Lead Set Painter' }, { dept: 'Design & Construction', name: 'Lead Prop Person' }, { dept: 'Costume & Makeup', name: 'Costume Designer' }, { dept: 'Marketing & Publicity', name: 'Marketing Director' }, { dept: 'Backstage & Rehearsal Support', name: 'Cast Party Coordinator' }, { dept: 'Technical Crew', name: 'Sound / Audio Technician' },
+    ],
+    performance: [
+      { dept: 'Front of House', name: 'Ushers' }, { dept: 'Front of House', name: 'Concession Workers' }, { dept: 'Front of House', name: 'Ticket Sales' }, { dept: 'Backstage & Rehearsal Support', name: 'Backstage Crew' }, { dept: 'Backstage & Rehearsal Support', name: 'Quick-Change Assistant' }, { dept: 'Backstage & Rehearsal Support', name: 'Child Wrangler' }, { dept: 'Technical Crew', name: 'Mic Wrangler' }, { dept: 'Technical Crew', name: 'Spotlight Operators' },
+    ],
+    tech: [
+      { dept: 'Technical Crew', name: 'Mic Wrangler' }, { dept: 'Backstage & Rehearsal Support', name: 'Quick-Change Assistant' }, { dept: 'Backstage & Rehearsal Support', name: 'Backstage Crew' },
+    ],
+    dress: [
+      { dept: 'Technical Crew', name: 'Mic Wrangler' }, { dept: 'Backstage & Rehearsal Support', name: 'Quick-Change Assistant' }, { dept: 'Backstage & Rehearsal Support', name: 'Backstage Crew' }, { dept: 'Backstage & Rehearsal Support', name: 'Child Wrangler' },
+    ],
+    rehearsal: [
+      { dept: 'Backstage & Rehearsal Support', name: 'Rehearsal Assistant' }, { dept: 'Backstage & Rehearsal Support', name: 'Child Wrangler' },
+    ],
+    music_rehearsal: [{ dept: 'Backstage & Rehearsal Support', name: 'Rehearsal Assistant' }],
+    choreography: [{ dept: 'Backstage & Rehearsal Support', name: 'Rehearsal Assistant' }],
+    strike: [{ dept: 'Design & Construction', name: 'Set Strike Crew' }],
+    costume_moveout: [{ dept: 'Costume & Makeup', name: 'Costume Move-Out Crew' }],
+    cast_party: [{ dept: 'Backstage & Rehearsal Support', name: 'Cast Party Helper' }],
+    crew: [{ dept: 'Design & Construction', name: 'Build Crew Helper' }],
+    crew_set: [{ dept: 'Design & Construction', name: 'Set Builder' }],
+    crew_set_painting: [{ dept: 'Design & Construction', name: 'Set Painter' }],
+    crew_set_dressing: [{ dept: 'Design & Construction', name: 'Set Dresser' }],
+    crew_costumes: [{ dept: 'Costume & Makeup', name: 'Costume Work Helper' }],
+    crew_props: [{ dept: 'Design & Construction', name: 'Props Helper' }],
+    crew_hair_makeup: [{ dept: 'Costume & Makeup', name: 'Hair & Makeup Crew' }],
+    crew_wigs: [{ dept: 'Costume & Makeup', name: 'Wig Crew' }],
+    crew_lighting: [{ dept: 'Technical Crew', name: 'Lighting Crew' }],
+    crew_sound: [{ dept: 'Technical Crew', name: 'Sound Crew' }],
+    other: [
+      { dept: 'Costume & Makeup', name: 'Costume Washer' }, { dept: 'Front of House', name: 'Bakers / Treat Contributors' }, { dept: 'Marketing & Publicity', name: 'Promotion Distribution' },
+    ],
+  };
+
+  const PER_PRODUCTION_TYPES = new Set(['dept_leads', 'other']);
 
   function esc(value) {
     return value == null ? '' : String(value)
@@ -88,6 +127,21 @@
     return String(value || '').trim().toLowerCase().replace(/&/g, 'and').replace(/\s+/g, ' ');
   }
 
+  function canonicalVolunteerRoleName(name) {
+    const raw = String(name || '').trim();
+    const key = norm(raw);
+    const renames = {
+      'build crew helper': 'Set Builders',
+      'set builder': 'Set Builders',
+      'costume work helper': 'Costume Helper',
+    };
+    return renames[key] || raw;
+  }
+
+  function volunteerRoleKey(name) {
+    return norm(canonicalVolunteerRoleName(name));
+  }
+
   function sectionCategories() {
     const aliases = categoryAliases().map(norm);
     return state.categories.filter(function (cat) {
@@ -149,6 +203,155 @@
     });
   }
 
+  function planEntryBaseType(key) {
+    return Object.keys(STAFFING_ROLE_MAP)
+      .sort(function (a, b) { return b.length - a.length; })
+      .find(function (type) { return key === type || String(key || '').indexOf(type + '-') === 0; }) || '';
+  }
+
+  function planEntryRoleIndex(key, baseType) {
+    const raw = String(key || '').slice(String(baseType || '').length + 1);
+    const match = raw.match(/^(\d+)/);
+    return match ? parseInt(match[1], 10) : -1;
+  }
+
+  function planCanonicalType(type) {
+    if (type === 'dance_call' || type === 'callback' || type === 'other_audition') return 'audition';
+    if (type === 'music_rehearsal' || type === 'choreography') return 'rehearsal';
+    if (String(type || '').indexOf('crew_') === 0) return 'crew';
+    if (type === 'cast_party' || type === 'deadline') return 'event';
+    return type;
+  }
+
+  function planTypeAliases(type) {
+    if (type === 'audition') return ['audition', 'dance_call', 'callback', 'other_audition'];
+    if (type === 'rehearsal') return ['rehearsal', 'music_rehearsal', 'choreography'];
+    if (type === 'crew') return ['crew', 'crew_set', 'crew_set_painting', 'crew_set_dressing', 'crew_costumes', 'crew_props', 'crew_hair_makeup', 'crew_wigs', 'crew_lighting', 'crew_sound'];
+    if (type === 'event') return ['event', 'cast_party', 'deadline'];
+    return [type];
+  }
+
+  function eventPlanType(event) {
+    const raw = event.event_type || '';
+    if (event.is_deadline || raw === 'deadline' || /deadline/i.test(event.title || '')) return 'deadline';
+    if (/cast\s*party/i.test(event.title || '')) return 'cast_party';
+    return raw;
+  }
+
+  function planEventMatchesType(event, type) {
+    return planTypeAliases(type).indexOf(eventPlanType(event)) !== -1;
+  }
+
+  function planEntryCountMode(key, entry) {
+    const mode = entry.countMode || entry.count_mode;
+    if (mode === 'per_production' || mode === 'per_event') return mode;
+    const label = norm(entry.perLabel || entry.per_label || '');
+    if (label.indexOf('production') !== -1 || label.indexOf('total') !== -1) return 'per_production';
+    return PER_PRODUCTION_TYPES.has(planEntryBaseType(key)) ? 'per_production' : 'per_event';
+  }
+
+  function planEntryAppliesTo(key, entry) {
+    const raw = Array.isArray(entry.appliesTo) ? entry.appliesTo : (Array.isArray(entry.applies_to) ? entry.applies_to : [planEntryBaseType(key)]);
+    return raw.map(planCanonicalType).filter(Boolean);
+  }
+
+  function planEntryAllowsEvent(entry, eventType, eventId) {
+    const scope = (entry.eventScope && entry.eventScope[eventType]) || (entry.event_scope && entry.event_scope[eventType]);
+    if (!scope || scope.mode !== 'specific' || !Array.isArray(scope.ids)) return true;
+    return scope.ids.map(String).indexOf(String(eventId || '')) !== -1;
+  }
+
+  function defaultPlanRole(key, entry) {
+    const baseType = planEntryBaseType(key);
+    const roles = STAFFING_ROLE_MAP[baseType] || [];
+    const idx = planEntryRoleIndex(key, baseType);
+    const fallback = idx >= 0 ? roles[idx] : null;
+    return {
+      name: canonicalVolunteerRoleName(entry.roleName || entry.role_name || (fallback && fallback.name) || ''),
+      dept: entry.department || entry.dept || (fallback && fallback.dept) || '',
+    };
+  }
+
+  function staffingPlanDemandRows() {
+    const matches = sectionMatchesText();
+    const rows = [];
+    Object.keys(state.staffingPlan || {}).forEach(function (key) {
+      const entry = state.staffingPlan[key] || {};
+      if (entry.hidden) return;
+      const count = parseInt(entry.count ?? entry.qty ?? entry.volunteers_needed, 10) || 0;
+      if (count <= 0) return;
+      const role = defaultPlanRole(key, entry);
+      if (!role.name || (!matches(role.name) && !(groupHasSingleSection() && matches(role.dept)))) return;
+      let multiplier = 1;
+      if (planEntryCountMode(key, entry) !== 'per_production') {
+        const types = planEntryAppliesTo(key, entry);
+        multiplier = state.events.filter(function (event) {
+          return types.some(function (type) {
+            return planEventMatchesType(event, type) && planEntryAllowsEvent(entry, type, event.id);
+          });
+        }).length;
+      }
+      if (multiplier <= 0) return;
+      rows.push({ role: role.name, needed: count * multiplier, source: 'plan' });
+    });
+    return rows;
+  }
+
+  function opportunityDemandRows(opportunities) {
+    return (opportunities || sectionOpportunities())
+      .filter(function (opp) { return norm(opp.status) !== 'cancelled'; })
+      .map(function (opp) {
+        return {
+          role: canonicalVolunteerRoleName(opp.production_title || opp.volunteer_role || opp.summary || ''),
+          needed: parseInt(opp.volunteers_needed, 10) || 0,
+          source: 'opportunity',
+        };
+      })
+      .filter(function (row) { return row.role && row.needed > 0; });
+  }
+
+  function addDemand(map, row) {
+    const key = volunteerRoleKey(row.role);
+    if (!key) return;
+    map[key] = (map[key] || 0) + row.needed;
+  }
+
+  function volunteerStats(opportunities, signups) {
+    const acceptedStatuses = new Set(['approved', 'checked_in', 'completed']);
+    const activeStatuses = new Set(['pending', 'approved', 'partially_filled', 'checked_in', 'completed']);
+    const acceptedSignups = signups.filter(function (s) { return acceptedStatuses.has(norm(s.status)); });
+    const activeSignups = signups.filter(function (s) { return activeStatuses.has(norm(s.status)); });
+    const planDemand = {};
+    const opportunityDemand = {};
+    staffingPlanDemandRows().forEach(function (row) { addDemand(planDemand, row); });
+    opportunityDemandRows(opportunities).forEach(function (row) { addDemand(opportunityDemand, row); });
+
+    const demand = {};
+    Object.keys(planDemand).forEach(function (key) { demand[key] = planDemand[key]; });
+    Object.keys(opportunityDemand).forEach(function (key) {
+      if (!planDemand[key]) demand[key] = opportunityDemand[key];
+    });
+
+    const occupied = {};
+    activeSignups.forEach(function (signup) {
+      const key = volunteerRoleKey(signupRole(signup));
+      if (key) occupied[key] = (occupied[key] || 0) + 1;
+    });
+
+    let rawNeeded = Object.keys(demand).reduce(function (sum, key) { return sum + demand[key]; }, 0);
+    let open = Object.keys(demand).reduce(function (sum, key) {
+      return sum + Math.max(0, demand[key] - (occupied[key] || 0));
+    }, 0);
+    if (!rawNeeded) {
+      rawNeeded = opportunities.reduce(function (sum, opp) { return sum + (parseInt(opp.volunteers_needed, 10) || 0); }, 0);
+      open = Math.max(0, rawNeeded - activeSignups.length);
+    }
+
+    const assigned = acceptedSignups.length;
+    const needed = Math.max(rawNeeded, assigned);
+    return { assigned, open: Math.max(0, open), needed, acceptedSignups };
+  }
+
   function sectionEvents() {
     const matches = sectionMatchesText();
     const now = new Date().toISOString();
@@ -188,6 +391,14 @@
     return response.json();
   }
 
+  async function fetchProduction() {
+    if (!KEY || !state.prodId) return null;
+    const response = await fetch(SUPABASE_URL + '/rest/v1/productions?id=eq.' + encodeURIComponent(state.prodId) + '&select=volunteer_staffing_plan', { headers: headers() });
+    if (!response.ok) throw new Error(await response.text());
+    const rows = await response.json();
+    return rows && rows[0] ? rows[0] : null;
+  }
+
   async function loadData() {
     const safe = function (promise) { return promise.catch(function () { return []; }); };
     const results = await Promise.all([
@@ -195,13 +406,15 @@
       safe(fetchTable('budget_receipts', '&order=created_at.desc')),
       safe(fetchTable('opportunities', '&select=id,production_title,volunteer_role,volunteers_needed,status,summary,description,event_date,time_commitment,created_at,updated_at&opportunity_type=in.(volunteer,creative_team)&order=created_at.desc')),
       safe(fetchTable('volunteer_signups', '&order=created_at.desc')),
-      safe(fetchTable('production_events', '&select=id,title,event_type,start_time,end_time,venue,notes&order=start_time.asc')),
+      safe(fetchTable('production_events', '&select=id,title,event_type,start_time,end_time,venue,notes,is_deadline&order=start_time.asc')),
+      safe(fetchProduction()),
     ]);
     state.categories = results[0] || [];
     state.receipts = results[1] || [];
     state.opportunities = results[2] || [];
     state.signups = results[3] || [];
     state.events = results[4] || [];
+    state.staffingPlan = (results[5] && results[5].volunteer_staffing_plan) || {};
   }
 
   function tabTitle() {
@@ -242,18 +455,11 @@
     const remaining = Math.max(0, allocated - spent);
     const opportunities = sectionOpportunities();
     const signups = sectionSignups(opportunities);
-    const acceptedSignups = signups.filter(function (s) {
-      const st = norm(s.status);
-      return st === 'approved' || st === 'checked_in' || st === 'completed';
-    });
-    const rawNeeded = opportunities.reduce(function (sum, opp) { return sum + (parseInt(opp.volunteers_needed, 10) || 0); }, 0);
-    const assigned = acceptedSignups.length;
-    const needed = Math.max(rawNeeded, assigned);
-    const open = Math.max(0, needed - assigned);
+    const vol = volunteerStats(opportunities, signups);
     return '<div class="dept-dashboard">' +
       '<div class="dept-overview-row">' +
         renderBudgetCard(allocated, spent, remaining) +
-        renderVolunteersCard(assigned, open, needed, acceptedSignups) +
+        renderVolunteersCard(vol.assigned, vol.open, vol.needed, vol.acceptedSignups) +
         renderNextUpCard() +
       '</div>' +
       '<div class="dept-detail-row">' +
