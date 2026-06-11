@@ -434,9 +434,8 @@
       if (count <= 0) return;
       const role = defaultPlanRole(key, entry);
       if (!role.name || (!matches(role.name) && !(groupHasSingleSection() && matches(role.dept)))) return;
-      const eventTypes = planEntryCountMode(key, entry) === 'per_production'
-        ? planEntryAppliesTo(key, entry)
-        : [planEntryBaseType(key)];
+      if (planEntryCountMode(key, entry) === 'per_production') return;
+      const eventTypes = [planEntryBaseType(key)];
       state.events.forEach(function (event) {
         const matchedType = eventTypes.find(function (type) {
           return planEventMatchesType(event, type) && planEntryAllowsEvent(entry, type, event.id);
