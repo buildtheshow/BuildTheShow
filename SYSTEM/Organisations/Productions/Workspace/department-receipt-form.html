@@ -128,8 +128,12 @@
       padding: 0;
     }
 
-    /* Dept select (producer mode) */
-    .rcpt-dept-select {
+    /* Dept searchable dropdown (producer mode) */
+    .rcpt-dept-combo {
+      position: relative;
+      margin-bottom: 1.1rem;
+    }
+    .rcpt-dept-combo-input {
       font-family: inherit;
       font-size: 0.84rem;
       font-weight: 400;
@@ -137,13 +141,51 @@
       background: #fff;
       border: 1.5px solid rgba(87,46,136,0.18);
       border-radius: 8px;
-      padding: 0.5rem 0.75rem;
+      padding: 0.5rem 2rem 0.5rem 0.75rem;
       width: 100%;
-      cursor: pointer;
-      margin-bottom: 1.1rem;
-      appearance: auto;
+      box-sizing: border-box;
+      cursor: text;
+      transition: border-color 0.15s;
     }
-    .rcpt-dept-select:focus { outline: none; border-color: #572e88; }
+    .rcpt-dept-combo-input:focus { outline: none; border-color: #572e88; }
+    .rcpt-dept-combo-arrow {
+      position: absolute;
+      right: 0.6rem;
+      top: 50%;
+      transform: translateY(-50%);
+      pointer-events: none;
+      color: #b0a8c8;
+    }
+    .rcpt-dept-combo-list {
+      position: absolute;
+      top: calc(100% + 4px);
+      left: 0;
+      right: 0;
+      background: #fff;
+      border: 1.5px solid rgba(87,46,136,0.18);
+      border-radius: 8px;
+      box-shadow: 0 4px 16px rgba(87,46,136,0.1);
+      max-height: 220px;
+      overflow-y: auto;
+      z-index: 200;
+      display: none;
+    }
+    .rcpt-dept-combo-list.open { display: block; }
+    .rcpt-dept-combo-option {
+      font-family: inherit;
+      font-size: 0.84rem;
+      color: #1a1530;
+      padding: 0.5rem 0.75rem;
+      cursor: pointer;
+      transition: background 0.1s;
+    }
+    .rcpt-dept-combo-option:hover, .rcpt-dept-combo-option.focused { background: rgba(87,46,136,0.06); }
+    .rcpt-dept-combo-option.selected { font-weight: 600; color: #572e88; }
+    .rcpt-dept-combo-empty {
+      font-size: 0.8rem;
+      color: #b0a8c8;
+      padding: 0.6rem 0.75rem;
+    }
 
     /* Dept chip */
     .rcpt-dept-chip {
@@ -685,32 +727,107 @@
       const _deptHidden = document.getElementById('rcpt-dept-hidden');
       if (_deptHidden) _deptHidden.value = deptName;
 
-      // Producer mode: replace chip with a department selector
+      // Producer mode: replace chip with a searchable department combo
       if (_embed && _embed.editableDept && _embed.deptOptions && _embed.deptOptions.length) {
         const _chipWrap = document.getElementById('rcpt-dept-chip-wrap');
         if (_chipWrap) {
-          const sel = document.createElement('select');
-          sel.className = 'rcpt-dept-select';
-          sel.id = 'rcpt-dept-select';
-          _embed.deptOptions.forEach(function(opt) {
-            const o = document.createElement('option');
-            o.value = opt;
-            o.textContent = opt;
-            if (opt === deptName) o.selected = true;
-            sel.appendChild(o);
-          });
-          sel.addEventListener('change', function() {
-            _activeDeptName = sel.value;
-            _activeCatIds = (_embed.deptCatMap && _embed.deptCatMap[sel.value]) || [];
-            if (_deptHidden) _deptHidden.value = sel.value;
+          const opts = _embed.deptOptions;
+          let _comboOpen = false;
+          let _focusedIdx = -1;
+
+          const wrap = document.createElement('div');
+          wrap.className = 'rcpt-dept-combo';
+
+          const inp = document.createElement('input');
+          inp.type = 'text';
+          inp.className = 'rcpt-dept-combo-input';
+          inp.id = 'rcpt-dept-combo-input';
+          inp.autocomplete = 'off';
+          inp.placeholder = 'Search department...';
+
+          const arrow = document.createElement('span');
+          arrow.className = 'rcpt-dept-combo-arrow';
+          arrow.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14"><polyline points="6 9 12 15 18 9"/></svg>';
+
+          const list = document.createElement('div');
+          list.className = 'rcpt-dept-combo-list';
+          list.id = 'rcpt-dept-combo-list';
+
+          function selectDept(name) {
+            inp.value = name;
+            _activeDeptName = name;
+            _activeCatIds = (_embed.deptCatMap && _embed.deptCatMap[name]) || [];
+            if (_deptHidden) _deptHidden.value = name;
             const _sh = document.getElementById('rcpt-summary-heading');
-            if (_sh) _sh.textContent = sel.value + ' Budget';
+            if (_sh) _sh.textContent = name + ' Budget';
             const _ss = document.getElementById('rcpt-summary-sub');
-            if (_ss) _ss.textContent = sel.value + ' allocated budget and spending.';
+            if (_ss) _ss.textContent = name + ' allocated budget and spending.';
+            closeList();
             loadSummary();
+          }
+
+          function buildList(filter) {
+            const q = (filter || '').trim().toLowerCase();
+            const matches = q ? opts.filter(o => o.toLowerCase().includes(q)) : opts;
+            list.innerHTML = '';
+            _focusedIdx = -1;
+            if (!matches.length) {
+              list.innerHTML = '<div class="rcpt-dept-combo-empty">No departments match</div>';
+            } else {
+              matches.forEach(function(name, i) {
+                const item = document.createElement('div');
+                item.className = 'rcpt-dept-combo-option' + (name === _activeDeptName ? ' selected' : '');
+                item.textContent = name;
+                item.addEventListener('mousedown', function(e) { e.preventDefault(); selectDept(name); });
+                list.appendChild(item);
+              });
+            }
+          }
+
+          function openList() {
+            buildList(inp.value);
+            list.classList.add('open');
+            _comboOpen = true;
+          }
+
+          function closeList() {
+            list.classList.remove('open');
+            _comboOpen = false;
+          }
+
+          inp.addEventListener('focus', function() { inp.select(); openList(); });
+          inp.addEventListener('input', function() { openList(); });
+          inp.addEventListener('blur', function() {
+            setTimeout(function() {
+              closeList();
+              // Restore the last confirmed selection if input was cleared
+              if (!inp.value.trim() || !opts.includes(inp.value)) inp.value = _activeDeptName;
+            }, 150);
           });
+          inp.addEventListener('keydown', function(e) {
+            const items = list.querySelectorAll('.rcpt-dept-combo-option');
+            if (e.key === 'ArrowDown') {
+              e.preventDefault();
+              _focusedIdx = Math.min(_focusedIdx + 1, items.length - 1);
+              items.forEach((el, i) => el.classList.toggle('focused', i === _focusedIdx));
+            } else if (e.key === 'ArrowUp') {
+              e.preventDefault();
+              _focusedIdx = Math.max(_focusedIdx - 1, 0);
+              items.forEach((el, i) => el.classList.toggle('focused', i === _focusedIdx));
+            } else if (e.key === 'Enter') {
+              e.preventDefault();
+              if (_focusedIdx >= 0 && items[_focusedIdx]) items[_focusedIdx].dispatchEvent(new MouseEvent('mousedown'));
+            } else if (e.key === 'Escape') {
+              closeList();
+              inp.blur();
+            }
+          });
+
+          wrap.appendChild(inp);
+          wrap.appendChild(arrow);
+          wrap.appendChild(list);
           _chipWrap.innerHTML = '';
-          _chipWrap.appendChild(sel);
+          _chipWrap.appendChild(wrap);
         }
       }
       document.title = deptName + ' Receipts - Build The Show';
