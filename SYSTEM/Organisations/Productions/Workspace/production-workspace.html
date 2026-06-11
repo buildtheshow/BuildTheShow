@@ -67964,7 +67964,7 @@ See you soon!
 	      volunteerPlanEvents = eventResult || [];
 	      try {
 	        const { data: signupData, error: signupError } = await sb.from('volunteer_signups')
-	          .select('opportunity_id,status')
+	          .select('id,opportunity_id,status,name,email,volunteer_role,department,approved_hours')
 	          .eq('production_id', prodId);
 	        if (signupError) throw signupError;
 	        volunteerSignups = signupData || [];
@@ -71435,6 +71435,11 @@ See you soon!
 	    const partialPct = totalNeeded ? Math.round(partialCount/totalNeeded*100) : 0;
 	    const emptyPct = totalNeeded ? Math.round(emptyCount/totalNeeded*100) : 0;
 	    const topGaps = Object.entries(gapsByRole).sort((a,b)=>b[1]-a[1]).slice(0,3);
+	    const publishedRoles = opportunities.filter(o => o.status === 'published').length;
+	    const acceptedSignups = (volunteerSignups || [])
+	      .filter(s => s.status === 'approved')
+	      .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+	    const confirmedCount = acceptedSignups.length;
 
 	    // ── Event type colour map ───────────────────────────────
 	    const EVENT_COLORS = { audition:'#572e88', performance:'#446aa4', rehearsal:'#78bbd4', music_rehearsal:'#78bbd4', choreography:'#78bbd4', tech:'#5b9fc0', dress:'#4f78a8', strike:'#d45239', costume_moveout:'#d17431', cast_party:'#aa2943', event:'#6c956f', deadline:'#c976a5', meeting:'#efab45', crew:'#986fc8', other:'#986fc8' };
@@ -71582,6 +71587,26 @@ See you soon!
 	            <div class="vd-stat-sub">${emptyPct}% of needed</div>
 	          </div>
 	        </div>
+	        <div class="vd-stat-card">
+	          <div class="vd-stat-icon" style="background:#476aaa;">
+	            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+	          </div>
+	          <div>
+	            <div class="vd-stat-num" style="color:#476aaa;">${publishedRoles}</div>
+	            <div class="vd-stat-label">Roles Published</div>
+	            <div class="vd-stat-sub">Open for sign-up</div>
+	          </div>
+	        </div>
+	        <div class="vd-stat-card">
+	          <div class="vd-stat-icon" style="background:#769e7b;">
+	            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+	          </div>
+	          <div>
+	            <div class="vd-stat-num" style="color:#769e7b;">${confirmedCount}</div>
+	            <div class="vd-stat-label">Confirmed</div>
+	            <div class="vd-stat-sub">Volunteers accepted</div>
+	          </div>
+	        </div>
 	        <div class="vd-needs-panel">
 	          <div class="vd-needs-head">
 	            <span>&#x1F514; Needs Attention</span>
@@ -71591,6 +71616,26 @@ See you soon!
 	          ${topGaps.length > 0 ? `<button class="vd-view-gaps-btn" onclick="navigateToVolunteers('plan')">Edit in Plan →</button>` : ''}
 	        </div>
 	      </div>
+	      ${acceptedSignups.length > 0 ? `
+	      <div style="margin:0.85rem 0 0.5rem;padding:1rem;background:#fff;border:1.5px solid rgba(118,158,123,0.2);border-radius:8px;box-shadow:0 2px 8px rgba(26,21,48,0.04);">
+	        <div style="display:flex;align-items:center;justify-content:space-between;gap:1rem;margin-bottom:0.75rem;flex-wrap:wrap;">
+	          <div>
+	            <div style="font-size:0.9rem;font-weight:900;color:#1a1530;">Confirmed Volunteers</div>
+	            <div style="font-size:0.75rem;color:rgba(26,21,48,0.5);margin-top:0.1rem;">${confirmedCount} accepted</div>
+	          </div>
+	          <button style="font-size:0.76rem;padding:0.3rem 0.7rem;border-radius:6px;border:1.5px solid rgba(87,46,136,0.18);background:rgba(87,46,136,0.05);color:#572e88;font-family:inherit;font-weight:700;cursor:pointer;" onclick="navigateToVolunteers('requests')">View all requests →</button>
+	        </div>
+	        <div style="display:flex;flex-wrap:wrap;gap:0.5rem;">
+	          ${acceptedSignups.map(s => {
+	            const linked = opportunities.find(o => o.id === s.opportunity_id);
+	            const roleName = linked ? (linked.production_title || linked.volunteer_role || linked.summary || 'Volunteer') : (s.volunteer_role || s.department || 'Volunteer');
+	            return \`<div style="display:flex;flex-direction:column;gap:0.1rem;padding:0.42rem 0.72rem;background:rgba(118,158,123,0.1);border:1px solid rgba(118,158,123,0.22);border-radius:6px;min-width:0;">
+	              <div style="font-size:0.8rem;font-weight:800;color:#1a1530;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:160px;">\${esc(s.name || 'Unknown')}</div>
+	              <div style="font-size:0.7rem;color:rgba(26,21,48,0.55);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:160px;">\${esc(roleName)}</div>
+	            </div>\`;
+	          }).join('')}
+	        </div>
+	      </div>` : ''}
 	      <div class="vd-url-banner">
 	        <span class="vd-url-label">Volunteer page link to share:</span>
 	        <code class="vd-url-code">${esc(fullVolUrl)}</code>
