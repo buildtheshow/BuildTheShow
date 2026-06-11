@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const URL = window.SUPABASE_URL || 'https://tkmaiktxpwqfbgeojbnf.supabase.co';
+  const SUPABASE_URL = window.SUPABASE_URL || 'https://tkmaiktxpwqfbgeojbnf.supabase.co';
   const KEY = window.SUPABASE_ANON_KEY || '';
 
   const state = {
@@ -160,7 +160,7 @@
 
   async function fetchTable(table, extra) {
     if (!KEY || !state.prodId) return [];
-    const response = await fetch(URL + '/rest/v1/' + table + '?production_id=eq.' + encodeURIComponent(state.prodId) + (extra || ''), { headers: headers() });
+    const response = await fetch(SUPABASE_URL + '/rest/v1/' + table + '?production_id=eq.' + encodeURIComponent(state.prodId) + (extra || ''), { headers: headers() });
     if (!response.ok) throw new Error(await response.text());
     return response.json();
   }
@@ -486,7 +486,7 @@
       sort_order: 900 + config().allSections().findIndex(function (item) { return item.key === state.section.key && item.group.key === state.group.key; }),
     };
     try {
-      const response = await fetch(URL + '/rest/v1/budget_categories', {
+      const response = await fetch(SUPABASE_URL + '/rest/v1/budget_categories', {
         method: 'POST',
         headers: headers(true),
         body: JSON.stringify(payload),
@@ -575,7 +575,7 @@
     }
     try {
       const id = state.editingReceiptId;
-      const response = await fetch(URL + '/rest/v1/budget_receipts' + (id ? '?id=eq.' + encodeURIComponent(id) : ''), {
+      const response = await fetch(SUPABASE_URL + '/rest/v1/budget_receipts' + (id ? '?id=eq.' + encodeURIComponent(id) : ''), {
         method: id ? 'PATCH' : 'POST',
         headers: headers(true),
         body: JSON.stringify(payload),
