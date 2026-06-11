@@ -63,7 +63,6 @@
       icon: '/ASSETS/Images/Department-costume-and-makeup.svg',
       tabs: [
         { key: 'dashboard', label: 'Dashboard' },
-        { key: 'costume-plan', label: 'Costume Plan' },
         { key: 'planning', label: 'Planning' },
         { key: 'receipts', label: 'Receipts' },
       ],
