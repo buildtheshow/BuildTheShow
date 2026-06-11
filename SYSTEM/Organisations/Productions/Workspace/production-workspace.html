@@ -69146,6 +69146,10 @@ See you soon!
       // selectedEmail is actually a portalKey (portal_token, signup id, or email fallback)
       const personShifts = volReqRowsForPortalKey(selectedEmail);
       if (!personShifts.length) return '<div class="vol-req-detail-empty"><div style="font-size:0.8rem;font-weight:700;">No shifts found</div></div>';
+      const _groupUniqueNames = [...new Set(personShifts.map(s => (s.name || '').trim()).filter(Boolean))];
+      const _isGroupSignup = _groupUniqueNames.length > 1;
+      window._volReqSplitKey = selectedEmail;
+      window._volReqSplitNames = _groupUniqueNames;
       const p = { name: personShifts[0].name, email: personShifts[0].email, phone: personShifts[0].phone, notes: personShifts[0].notes || personShifts[0].message, avatar_url: personShifts[0].avatar_url, created_at: personShifts[0].created_at, volunteer_passcode: volReqSignupPasscode(personShifts[0]) };
       const overallStatus = personShifts.some(s => (s.status||'pending') === 'pending') ? 'pending'
         : personShifts.every(s => s.status === 'approved') ? 'approved'
@@ -69284,6 +69288,7 @@ See you soon!
         +   esc(p.name || 'Unknown')
         +   '<button type="button" onclick="volReqEditContact(window._volReqEditKey)" style="background:none;border:1px solid rgba(87,46,136,0.25);border-radius:5px;padding:0.1rem 0.4rem;font-size:0.6rem;font-weight:800;color:#572e88;cursor:pointer;font-family:inherit;white-space:nowrap;line-height:1.6;">Edit contact</button>'
         +   (combineCandidates.length ? '<button type="button" onclick="volReqOpenCombine(window._volReqCombineKey)" style="background:none;border:1px solid rgba(87,46,136,0.25);border-radius:5px;padding:0.1rem 0.4rem;font-size:0.6rem;font-weight:800;color:#572e88;cursor:pointer;font-family:inherit;white-space:nowrap;line-height:1.6;">Combine requests</button>' : '')
+        +   (_isGroupSignup ? '<button type="button" onclick="volReqOpenSplit(window._volReqSplitKey,window._volReqSplitNames)" style="background:none;border:1px solid rgba(71,106,170,0.35);border-radius:5px;padding:0.1rem 0.4rem;font-size:0.6rem;font-weight:800;color:#476aaa;cursor:pointer;font-family:inherit;white-space:nowrap;line-height:1.6;">Split group</button>' : '')
         +   '<button type="button" onclick="volReqConfirmDelete(window._volReqEditKey)" style="background:none;border:1px solid rgba(180,50,30,0.3);border-radius:5px;padding:0.1rem 0.4rem;font-size:0.6rem;font-weight:800;color:#b33a25;cursor:pointer;font-family:inherit;white-space:nowrap;line-height:1.6;">Remove request</button>'
         + '</div>'
         +     '<div class="vol-req-detail-role" style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap;">'
@@ -69864,6 +69869,102 @@ See you soon!
     } catch (e) {
       if (errEl) { errEl.textContent = 'Could not save: ' + (e.message || 'Unknown error'); errEl.style.display = 'block'; }
       if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Save Changes'; }
+    }
+  }
+
+
+  function volReqOpenSplit(portalKey, uniqueNames) {
+    if (!portalKey || !uniqueNames || uniqueNames.length < 2) return;
+    const allRows = volReqRowsForPortalKey(portalKey);
+    const submitterName = (allRows[0]?.name || '').trim();
+
+    // Build person rows: submitter keeps their info, others need an email
+    const people = uniqueNames.map(name => {
+      const isSubmitter = name === submitterName;
+      const rows = allRows.filter(r => (r.name || '').trim() === name);
+      const existingEmail = isSubmitter ? (allRows[0]?.email || '') : '';
+      const hrs = rows.reduce((sum, r) => sum + shiftHrs(r), 0);
+      return { name, isSubmitter, rows, existingEmail, hrs };
+    });
+
+    window._volReqSplitData = { portalKey, people };
+
+    const peopleHtml = people.map((person, i) => {
+      const shiftCount = person.rows.length;
+      const hrsLabel = person.hrs > 0 ? fmtHrs(person.hrs) : shiftCount + ' shift' + (shiftCount !== 1 ? 's' : '');
+      return '<div style="background:#f7f5fc;border:1px solid rgba(87,46,136,0.12);border-radius:8px;padding:0.75rem 1rem;display:flex;flex-direction:column;gap:0.35rem;">'
+        + '<div style="font-size:0.82rem;font-weight:900;color:#1a1530;">' + esc(person.name) + '</div>'
+        + '<div style="font-size:0.72rem;color:rgba(87,46,136,0.55);">' + esc(hrsLabel) + '</div>'
+        + (person.isSubmitter
+          ? '<div style="font-size:0.68rem;font-weight:800;color:#476aaa;">Keeps original portal &amp; email: ' + esc(person.existingEmail) + '</div>'
+          : '<div><input id="vol-split-email-' + i + '" type="email" placeholder="Enter ' + esc(person.name.split(' ')[0]) + ''s email address" style="width:100%;box-sizing:border-box;border:1px solid rgba(87,46,136,0.25);border-radius:6px;padding:0.4rem 0.6rem;font-size:0.78rem;font-family:inherit;color:#1a1530;" /></div>')
+        + '</div>';
+    }).join('');
+
+    const modal = document.createElement('div');
+    modal.id = 'vol-split-modal';
+    modal.style.cssText = 'position:fixed;inset:0;background:rgba(10,8,20,0.55);z-index:9999;display:flex;align-items:center;justify-content:center;padding:1rem;';
+    modal.innerHTML = '<div style="background:#fff;border-radius:14px;width:100%;max-width:440px;max-height:90vh;overflow-y:auto;box-shadow:0 8px 40px rgba(0,0,0,0.22);">'
+      + '<div style="background:#572e88;padding:1.1rem 1.4rem;border-radius:14px 14px 0 0;">'
+      +   '<div style="font-size:0.6rem;font-weight:900;text-transform:uppercase;letter-spacing:0.08em;color:rgba(255,255,255,0.6);margin-bottom:0.2rem;">Volunteers</div>'
+      +   '<div style="font-size:1.1rem;font-weight:900;color:#fff;">Split Group Signup</div>'
+      +   '<div style="font-size:0.74rem;color:rgba(255,255,255,0.7);margin-top:0.2rem;">Each person gets their own portal and request.</div>'
+      + '</div>'
+      + '<div style="padding:1.1rem 1.4rem;display:flex;flex-direction:column;gap:0.65rem;">'
+      +   peopleHtml
+      +   '<div id="vol-split-error" style="display:none;font-size:0.74rem;font-weight:800;color:#b33a25;"></div>'
+      + '</div>'
+      + '<div style="padding:0.85rem 1.4rem 1.1rem;display:flex;gap:0.6rem;border-top:1px solid rgba(87,46,136,0.1);">'
+      +   '<button onclick="document.getElementById('vol-split-modal').remove()" style="flex:1;padding:0.6rem;border:1px solid rgba(87,46,136,0.2);background:#fff;border-radius:8px;font-size:0.82rem;font-weight:800;color:#572e88;cursor:pointer;font-family:inherit;">Cancel</button>'
+      +   '<button onclick="volReqDoSplit()" style="flex:2;padding:0.6rem;border:none;background:#476aaa;border-radius:8px;font-size:0.82rem;font-weight:900;color:#fff;cursor:pointer;font-family:inherit;">Split into ' + people.length + ' Requests</button>'
+      + '</div>'
+      + '</div>';
+    document.body.appendChild(modal);
+  }
+
+  async function volReqDoSplit() {
+    const { portalKey, people } = window._volReqSplitData || {};
+    if (!portalKey || !people) return;
+    const errEl = document.getElementById('vol-split-error');
+    if (errEl) errEl.style.display = 'none';
+
+    // Validate emails for non-submitters
+    const nonSubmitters = people.filter(p => !p.isSubmitter);
+    const emailMap = {};
+    for (let i = 0; i < people.length; i++) {
+      const person = people[i];
+      if (person.isSubmitter) continue;
+      const input = document.getElementById('vol-split-email-' + i);
+      const val = (input?.value || '').trim();
+      if (!val || !val.includes('@')) {
+        if (errEl) { errEl.textContent = 'Please enter a valid email for ' + person.name + '.'; errEl.style.display = 'block'; }
+        return;
+      }
+      emailMap[person.name] = val;
+    }
+
+    const saveBtn = document.querySelector('#vol-split-modal button[onclick="volReqDoSplit()"]');
+    if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'Splitting...'; }
+
+    try {
+      for (const person of nonSubmitters) {
+        const newToken = crypto.randomUUID();
+        const newEmail = emailMap[person.name];
+        const ids = person.rows.map(r => r.id).filter(Boolean);
+        if (!ids.length) continue;
+        const { error } = await sb.from('volunteer_signups')
+          .update({ portal_token: newToken, email: newEmail })
+          .in('id', ids);
+        if (error) throw error;
+      }
+
+      document.getElementById('vol-split-modal')?.remove();
+      showToast('Group split into ' + people.length + ' separate requests.');
+      _volReqSelected = null;
+      await loadVolunteerRequests();
+    } catch (e) {
+      if (errEl) { errEl.textContent = 'Could not split: ' + (e.message || 'Unknown error'); errEl.style.display = 'block'; }
+      if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Split into ' + people.length + ' Requests'; }
     }
   }
 
