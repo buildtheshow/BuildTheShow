@@ -963,6 +963,17 @@ const BP = {
     { name:'Contingency',              color:'#d1523d', items:['Emergency Purchases','Last-Minute Rentals','Unexpected Repairs'] },
   ],
 
+  CAT_DEFAULT_ITEMS: {
+    'set construction': ['Set Dec', 'Painting'],
+  },
+
+  async _seedDefaultItems(catId, catName) {
+    const defaults = this.CAT_DEFAULT_ITEMS[(catName||'').trim().toLowerCase()];
+    if (!defaults || !defaults.length) return;
+    const rows = defaults.map((name, i) => ({name, category_id:catId, production_id:this.prodId, qty:1, unit_cost_cents:0, budgeted_cents:0, committed_cents:0, paid_cents:0, status:'planned', sort_order:i}));
+    await fetch(this.URL+'/rest/v1/budget_items', {method:'POST', headers:this._hj(), body:JSON.stringify(rows)}).catch(()=>{});
+  },
+
   prodId:'', cats:[], items:[], drivers:[], _reviewItems:null, _expView:'table', _activeTab:'revenue', _secCollapsed:{}, _catCollapsed:{}, _inlineEditId:null, _inlineAddCatId:null,
   expandedCats:new Set(), search:'', editCatId:null, selectedColor:'#572e88', pickerSelected:new Set(),
   _draftType:null, _draftFields:[],
@@ -3275,6 +3286,11 @@ const BP = {
         const ri = await fetch(this.URL+'/rest/v1/budget_items',{method:'POST',headers:this._hj(),body:JSON.stringify(itemRows)});
         if (!ri.ok) throw new Error(await ri.text());
       }
+      // Seed default line items for categories that have known defaults (e.g. Set Dec/Painting for Set Construction)
+      for (const cat of (created||[])) {
+        const alreadyHasItems = itemRows.some(r => r.category_id === cat.id);
+        if (!alreadyHasItems) await this._seedDefaultItems(cat.id, cat.name);
+      }
       // Keep the draft so values are still there next time wizard opens; just reset to step 0
       this._bwState.step = 0;
       this._bwBuilding = false;
@@ -3664,8 +3680,13 @@ const BP = {
     if(!name){alert('Category name is required.');return;}
     const payload={name,planned_cents:budget,type,color:this.selectedColor};
     try{
-      if(this.editCatId) await this._patch('budget_categories',this.editCatId,payload);
-      else               await this._post('budget_categories',payload);
+      if(this.editCatId) {
+        await this._patch('budget_categories',this.editCatId,payload);
+      } else {
+        const res = await this._post('budget_categories',payload);
+        const created = Array.isArray(res) ? res[0] : res;
+        if (created?.id) await this._seedDefaultItems(created.id, name);
+      }
       this.closeCatModal(); await this.load();
     }catch(e){alert('Could not save: '+e.message);}
   },
