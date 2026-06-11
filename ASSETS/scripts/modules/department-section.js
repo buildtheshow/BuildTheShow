@@ -661,8 +661,9 @@
       await sheet.replace(rawCss);
       return Array.from(sheet.cssRules).map(serializeCostumeCssRule).join('\n') +
         '\n.dept-costume-inline{display:block;min-height:auto;width:100%;max-width:100%;overflow:visible;background:transparent;}' +
-        '\n.dept-costume-inline .costume-nav{padding:0 1.5rem;border:1px solid rgba(87,46,136,0.1);border-radius:8px 8px 0 0;background:#fff;}' +
-        '\n.dept-costume-inline .costume-content{padding:1.5rem;border:1px solid rgba(87,46,136,0.1);border-top:0;border-radius:0 0 8px 8px;background:rgba(255,255,255,0.72);}';
+        '\n.dept-costume-inline .costume-content{padding:0;border:none;background:transparent;}' +
+        '\n.dept-costume-inline .costume-panel{padding:1.5rem 0;}' +
+        '\n.dept-costume-inline #prod-sidebar-host,.dept-costume-inline .hero-wrap,.dept-costume-inline .costume-nav{display:none!important;}';
     } catch (error) {
       throw new Error('Could not prepare costume planner styles');
     }
