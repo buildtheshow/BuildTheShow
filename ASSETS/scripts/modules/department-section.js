@@ -182,9 +182,10 @@
   }
 
   function tabTitle() {
+    if (state.tab === 'dashboard') return 'Dashboard';
     if (state.tab === 'planning') return 'Planning';
     if (state.tab === 'receipts') return 'Receipts';
-    return 'Overview';
+    return 'Dashboard';
   }
 
   function renderHero() {
@@ -192,8 +193,6 @@
       '<span class="page-hierarchy-page">Production Departments</span>',
       '<span class="page-hierarchy-sep">-</span>',
       '<span class="page-hierarchy-sub">' + esc(state.group.label) + '</span>',
-      '<span class="page-hierarchy-sep">-</span>',
-      '<span class="page-hierarchy-sub">' + esc(state.section.label) + '</span>',
     ].join('');
     return '<div class="aud-visual-hero dept-hero" style="--dept-color:' + esc(state.group.color) + ';">' +
       '<div class="aud-visual-hero-content"><div>' +
