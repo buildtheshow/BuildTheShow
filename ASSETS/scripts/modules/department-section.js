@@ -600,10 +600,19 @@
     '</div>';
   }
 
+  function activeTabs() {
+    return (state.group && state.group.tabs) || config().tabs;
+  }
+
   function renderTabs() {
-    return '<div class="dept-tabs" role="tablist">' + config().tabs.map(function (tab) {
+    return '<div class="dept-tabs" role="tablist">' + activeTabs().map(function (tab) {
       return '<button type="button" class="dept-tab' + (tab.key === state.tab ? ' active' : '') + '" onclick="BTSDepartmentSection.openTab(\'' + esc(tab.key) + '\')" role="tab" aria-selected="' + (tab.key === state.tab ? 'true' : 'false') + '">' + esc(tab.label) + '</button>';
     }).join('') + '</div>';
+  }
+
+  function renderCostumePlan() {
+    var src = '/SYSTEM/Organisations/Productions/Workspace/departments-costume.html?id=' + encodeURIComponent(state.prodId);
+    return '<iframe src="' + src + '" style="width:100%;height:calc(100vh - 140px);border:none;display:block;" allowfullscreen></iframe>';
   }
 
   function renderDashboard() {
@@ -867,6 +876,7 @@
   }
 
   function renderContent() {
+    if (state.tab === 'costume-plan') return renderCostumePlan();
     if (state.tab === 'planning') return renderPlanning();
     if (state.tab === 'receipts') return renderReceipts();
     return renderDashboard();
@@ -1034,7 +1044,7 @@
     const groupKey = p.get('group') || 'front-of-house';
     state.group = config().findGroup(groupKey);
     state.section = config().findSection(state.group.key, p.get('section') || '');
-    state.tab = (config().tabs.some(function (tab) { return tab.key === p.get('tab'); }) ? p.get('tab') : 'dashboard');
+    state.tab = (activeTabs().some(function (tab) { return tab.key === p.get('tab'); }) ? p.get('tab') : 'dashboard');
     await loadData();
     render();
     setRoute(state.tab);

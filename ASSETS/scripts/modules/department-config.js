@@ -61,6 +61,12 @@
       label: 'Costumes',
       color: '#78bbd4',
       icon: '/ASSETS/Images/Department-costume-and-makeup.svg',
+      tabs: [
+        { key: 'dashboard', label: 'Dashboard' },
+        { key: 'costume-plan', label: 'Costume Plan' },
+        { key: 'planning', label: 'Planning' },
+        { key: 'receipts', label: 'Receipts' },
+      ],
       sections: [
         section('costumes', 'Costumes', 'Costume plots, fittings, sourcing, repairs, approvals, and performer notes.', ['Costumes', 'Costume Designer', 'Costume Helper']),
         section('costume-laundry', 'Costume Laundry', 'Laundry schedule, care notes, garment bags, and wash volunteers.', ['Costume Laundry', 'Costume Washer', 'Laundry']),
