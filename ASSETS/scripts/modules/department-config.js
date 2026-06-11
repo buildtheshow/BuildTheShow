@@ -107,6 +107,18 @@
         section('stage-management', 'Stage Management', 'Calling, reports, rehearsal coordination, schedules, and show communication.', ['Stage Management', 'Stage Manager']),
       ],
     },
+    {
+      key: 'producer',
+      label: 'Producer',
+      color: '#78bbd4',
+      icon: '/ASSETS/Images/volunteer-stage-manager.svg',
+      tabs: [
+        { key: 'receipts', label: 'Receipts', receiptForm: true },
+      ],
+      sections: [
+        section('producer', 'Producer', 'Production budget, producer expenses, and administrative purchasing.', ['Producer', 'Production', 'Administration', 'Admin']),
+      ],
+    },
   ];
 
   function section(key, label, description, categoryAliases) {
