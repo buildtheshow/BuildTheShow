@@ -534,6 +534,7 @@
                 </div>
               </div>
               <input type="hidden" id="rcpt-dept-hidden">
+              <input type="hidden" id="rcpt-category-id-hidden">
               <div class="rcpt-fields">
 
                 <!-- Who purchased this — always visible -->
@@ -712,6 +713,8 @@
     const deptColor = _embed ? (_embed.deptColor || '572e88') : ((_qp.get('color') || '572e88').replace(/^#/, ''));
     let _activeCatIds = _embed ? (_embed.catIds || []) : [];
     let _activeDeptName = deptName;
+    let _activeCategoryId = _activeCatIds[0] || '';
+    let _activeBudgetLabel = deptName;
 
     async function init() {
       if (!isEmbed) window.initProductionPage('departments');
@@ -731,11 +734,14 @@
       const _deptHidden = document.getElementById('rcpt-dept-hidden');
       if (_deptHidden) _deptHidden.value = deptName;
 
-      // Producer mode: replace chip with a searchable department combo
-      if (_embed && _embed.editableDept && _embed.deptOptions && _embed.deptOptions.length) {
+      // Producer mode: replace chip with a searchable budget category/item combo
+      if (_embed && _embed.editableDept && ((_embed.budgetOptions && _embed.budgetOptions.length) || (_embed.deptOptions && _embed.deptOptions.length))) {
         const _chipWrap = document.getElementById('rcpt-dept-chip-wrap');
         if (_chipWrap) {
-          const opts = _embed.deptOptions;
+          const budgetOptions = (_embed.budgetOptions && _embed.budgetOptions.length)
+            ? _embed.budgetOptions
+            : (_embed.deptOptions || []).map(name => ({ label: name, categoryId: ((_embed.deptCatMap && _embed.deptCatMap[name]) || [])[0] || '', categoryName: name, itemName: '' }));
+          const opts = budgetOptions.map(option => option.label);
           let _comboOpen = false;
           let _focusedIdx = -1;
 
@@ -747,7 +753,7 @@
           inp.className = 'rcpt-dept-combo-input';
           inp.id = 'rcpt-dept-combo-input';
           inp.autocomplete = 'off';
-          inp.placeholder = 'Search department...';
+          inp.placeholder = 'Search budget category or item...';
 
           const arrow = document.createElement('span');
           arrow.className = 'rcpt-dept-combo-arrow';
@@ -757,15 +763,25 @@
           list.className = 'rcpt-dept-combo-list';
           list.id = 'rcpt-dept-combo-list';
 
+          function optionForLabel(label) {
+            return budgetOptions.find(option => option.label === label) || null;
+          }
+
           function selectDept(name) {
+            const selected = optionForLabel(name);
+            const categoryName = (selected && selected.categoryName) || name;
             inp.value = name;
-            _activeDeptName = name;
-            _activeCatIds = (_embed.deptCatMap && _embed.deptCatMap[name]) || [];
+            _activeDeptName = categoryName;
+            _activeBudgetLabel = name;
+            _activeCategoryId = (selected && selected.categoryId) || (((_embed.deptCatMap && _embed.deptCatMap[name]) || [])[0] || '');
+            _activeCatIds = _activeCategoryId ? [_activeCategoryId] : ((_embed.deptCatMap && _embed.deptCatMap[name]) || []);
             if (_deptHidden) _deptHidden.value = name;
+            const _catHidden = document.getElementById('rcpt-category-id-hidden');
+            if (_catHidden) _catHidden.value = _activeCategoryId || '';
             const _sh = document.getElementById('rcpt-summary-heading');
             if (_sh) _sh.textContent = name + ' Budget';
             const _ss = document.getElementById('rcpt-summary-sub');
-            if (_ss) _ss.textContent = name + ' allocated budget and spending.';
+            if (_ss) _ss.textContent = 'Receipts will be filed under ' + categoryName + '.';
             closeList();
             loadSummary();
           }
@@ -776,11 +792,11 @@
             list.innerHTML = '';
             _focusedIdx = -1;
             if (!matches.length) {
-              list.innerHTML = '<div class="rcpt-dept-combo-empty">No departments match</div>';
+              list.innerHTML = '<div class="rcpt-dept-combo-empty">No budget lines match</div>';
             } else {
               matches.forEach(function(name, i) {
                 const item = document.createElement('div');
-                item.className = 'rcpt-dept-combo-option' + (name === _activeDeptName ? ' selected' : '');
+                item.className = 'rcpt-dept-combo-option' + (name === _activeBudgetLabel ? ' selected' : '');
                 item.textContent = name;
                 item.addEventListener('mousedown', function(e) { e.preventDefault(); selectDept(name); });
                 list.appendChild(item);
@@ -805,7 +821,7 @@
             setTimeout(function() {
               closeList();
               // Restore the last confirmed selection if input was cleared
-              if (!inp.value.trim() || !opts.includes(inp.value)) inp.value = _activeDeptName;
+              if (!inp.value.trim() || !opts.includes(inp.value)) inp.value = _activeBudgetLabel;
             }, 150);
           });
           inp.addEventListener('keydown', function(e) {
@@ -832,15 +848,18 @@
           wrap.appendChild(list);
           _chipWrap.innerHTML = '';
           _chipWrap.appendChild(wrap);
+          selectDept(opts[0]);
         }
       }
       document.title = deptName + ' Receipts - Build The Show';
 
       // Update summary heading to reflect this department
       const _heading = document.getElementById('rcpt-summary-heading');
-      if (_heading) _heading.textContent = deptName + ' Budget';
+      if (_heading && !(_embed && _embed.editableDept)) _heading.textContent = deptName + ' Budget';
       const _sub = document.getElementById('rcpt-summary-sub');
-      if (_sub) _sub.textContent = deptName + ' allocated budget and spending.';
+      if (_sub && !(_embed && _embed.editableDept)) _sub.textContent = deptName + ' allocated budget and spending.';
+      const _catHidden = document.getElementById('rcpt-category-id-hidden');
+      if (_catHidden && !_catHidden.value) _catHidden.value = _activeCategoryId || '';
 
       if (!prodId) return;
       // When embedded via _RCPT_EMBED_DATA, the parent page manages layout — don't touch it
@@ -1033,9 +1052,15 @@
 
         const _dh = document.getElementById('rcpt-dept-hidden');
         const activeDept = (_dh && _dh.value) ? _dh.value : deptName;
+        const _catHidden = document.getElementById('rcpt-category-id-hidden');
+        const activeCategoryId = (_catHidden && _catHidden.value) || _activeCategoryId || _activeCatIds[0] || null;
+        if (!activeCategoryId) {
+          throw new Error('Please choose the budget category this receipt belongs to.');
+        }
         const row = {
           production_id: prodId,
           department: activeDept,
+          category_id: activeCategoryId,
           vendor,
           description: desc,
           receipt_date: date,

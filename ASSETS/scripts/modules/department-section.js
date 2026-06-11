@@ -11,6 +11,7 @@
     section: null,
     tab: 'dashboard',
     categories: [],
+    items: [],
     receipts: [],
     opportunities: [],
     signups: [],
@@ -563,6 +564,7 @@
     const safe = function (promise) { return promise.catch(function () { return []; }); };
     const results = await Promise.all([
       safe(fetchTable('budget_categories', '&type=eq.expense&order=sort_order.asc,created_at.asc')),
+      safe(fetchTable('budget_items', '&order=sort_order.asc,created_at.asc')),
       safe(fetchTable('budget_receipts', '&order=created_at.desc')),
       safe(fetchTable('opportunities', '&select=id,production_title,volunteer_role,volunteers_needed,status,summary,description,event_date,time_commitment,created_at,updated_at&opportunity_type=in.(volunteer,creative_team)&order=created_at.desc')),
       safe(fetchTable('volunteer_signups', '&order=created_at.desc')),
@@ -570,11 +572,12 @@
       safe(fetchProduction()),
     ]);
     state.categories = results[0] || [];
-    state.receipts = results[1] || [];
-    state.opportunities = results[2] || [];
-    state.signups = results[3] || [];
-    state.events = results[4] || [];
-    state.staffingPlan = (results[5] && results[5].volunteer_staffing_plan) || {};
+    state.items = results[1] || [];
+    state.receipts = results[2] || [];
+    state.opportunities = results[3] || [];
+    state.signups = results[4] || [];
+    state.events = results[5] || [];
+    state.staffingPlan = (results[6] && results[6].volunteer_staffing_plan) || {};
   }
 
   function tabTitle() {
@@ -1047,26 +1050,34 @@
       // Pass all data via a global — no fragile string replacements needed
       var isProducer = state.group && state.group.key === 'producer';
 
-      // Build a map of dept label → category IDs from actual budget_categories
+      // Build producer choices from the actual budget breakdown categories/items.
       var deptCatMap = {};
-      if (window.BTSDepartmentConfig) {
-        window.BTSDepartmentConfig.groups.forEach(function(g) {
-          var gAliases = [];
-          (g.sections || []).forEach(function(s) {
-            [s.label].concat(s.categoryAliases || []).forEach(function(a) {
-              gAliases.push(String(a).trim().toLowerCase().replace(/&/g, 'and').replace(/\s+/g, ' '));
+      var budgetOptions = [];
+      if (isProducer) {
+        (state.categories || []).forEach(function (cat) {
+          var catItems = (state.items || []).filter(function (item) { return item.category_id === cat.id; });
+          if (catItems.length) {
+            catItems.forEach(function (item) {
+              var label = cat.name + ' - ' + item.name;
+              deptCatMap[label] = [cat.id];
+              budgetOptions.push({
+                label: label,
+                categoryId: cat.id,
+                categoryName: cat.name,
+                itemName: item.name,
+              });
             });
-          });
-          var gIds = (state.categories || []).filter(function(c) {
-            var n = String(c.name || '').trim().toLowerCase().replace(/&/g, 'and').replace(/\s+/g, ' ');
-            return gAliases.some(function(a) { return n === a || n.includes(a) || a.includes(n); });
-          }).map(function(c) { return c.id; });
-          if (gIds.length) deptCatMap[g.label] = gIds;
+          } else {
+            deptCatMap[cat.name] = [cat.id];
+            budgetOptions.push({
+              label: cat.name,
+              categoryId: cat.id,
+              categoryName: cat.name,
+              itemName: '',
+            });
+          }
         });
       }
-
-      // Only show departments that have real budget categories
-      var deptOptions = isProducer ? Object.keys(deptCatMap) : [];
 
       window._RCPT_EMBED_DATA = {
         prodId: state.prodId,
@@ -1074,8 +1085,9 @@
         deptColor: (state.group && state.group.color || '#572e88').replace(/^#/, ''),
         catIds: catIds,
         editableDept: isProducer,
-        deptOptions: deptOptions,
+        deptOptions: budgetOptions.map(function (option) { return option.label; }),
         deptCatMap: deptCatMap,
+        budgetOptions: budgetOptions,
       };
 
       var scripts = Array.from(doc.querySelectorAll('script')).map(function (s) { return s.textContent || ''; }).filter(Boolean);
