@@ -293,7 +293,8 @@
     fmtDate(d) {
       if (!d) return '';
       const dt = new Date(d + (d.length === 10 ? 'T12:00:00' : ''));
-      return dt.toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' });
+      const y = dt.getFullYear(), m = String(dt.getMonth()+1).padStart(2,'0'), day = String(dt.getDate()).padStart(2,'0');
+      return y + '/' + m + '/' + day;
     },
 
     initials(name) {
@@ -568,27 +569,29 @@
                 '</tr></thead><tbody>' +
                 (pageItems.length ? pageItems.map(r => {
                   const b = this.badgeFor(r);
-                  let dlHtml;
-                  if (!r.receipt_url) {
-                    dlHtml = '<span class="fin-download-btn" style="opacity:0.25;cursor:default">' + dlIcon + '</span>';
-                  } else {
-                    let urls = [];
-                    try { urls = JSON.parse(r.receipt_url); if (!Array.isArray(urls)) urls = [r.receipt_url]; } catch(e) { urls = [r.receipt_url]; }
-                    if (urls.length === 1) {
-                      dlHtml = '<a href="' + this.esc(urls[0]) + '" target="_blank" class="fin-download-btn" title="View receipt">' + dlIcon + '</a>';
-                    } else {
-                      dlHtml = urls.map((u, i) => '<a href="' + this.esc(u) + '" target="_blank" class="fin-download-btn" title="File ' + (i+1) + ' of ' + urls.length + '">' + dlIcon + '</a>').join('');
-                    }
+                  // dept colour pill
+                  const dName = this.deptName(r);
+                  const dIdx  = deptRows.findIndex(d => d.name === dName);
+                  const dColor = DEPT_COLORS[(dIdx >= 0 ? dIdx : 0) % DEPT_COLORS.length];
+                  // file count
+                  let fileCount = 0, fileUrls = [];
+                  if (r.receipt_url) {
+                    try { fileUrls = JSON.parse(r.receipt_url); if (!Array.isArray(fileUrls)) fileUrls = [r.receipt_url]; } catch(e) { fileUrls = [r.receipt_url]; }
+                    fileCount = fileUrls.length;
                   }
+                  const fileHtml = fileCount === 0
+                    ? '<span style="color:#c8c2de;font-size:0.8rem">None</span>'
+                    : fileUrls.map((u, i) => '<a href="' + this.esc(u) + '" target="_blank" class="fin-download-btn" title="File ' + (i+1) + ' of ' + fileCount + '">' + dlIcon + '</a>').join('') +
+                      (fileCount > 1 ? '<span style="font-size:0.72rem;color:#9a90b0;margin-left:2px">' + fileCount + '</span>' : '');
                   return '<tr>' +
                     '<td style="white-space:nowrap;color:#7a6e9a;font-size:0.75rem">' + this.esc(this.fmtDate(r.receipt_date || r.created_at)) + '</td>' +
-                    '<td style="color:#3d3260;font-weight:500;word-break:break-word">' + this.esc(this.deptName(r)) + '</td>' +
+                    '<td><span style="display:inline-block;background:' + dColor + '20;color:' + dColor + ';border:1px solid ' + dColor + '40;border-radius:999px;padding:0.18rem 0.55rem;font-size:0.75rem;font-weight:600;line-height:1.4;word-break:break-word">' + this.esc(dName) + '</span></td>' +
                     '<td style="font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + this.esc(r.vendor || '') + '</td>' +
                     '<td style="color:#7a6e9a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + this.esc(r.description || '') + '</td>' +
                     '<td style="font-weight:700;white-space:nowrap">' + this.fmt$(r.amount_cents) + '</td>' +
                     '<td style="color:#3d3260;font-size:0.8rem;word-break:break-word">' + this.esc(this.paidByLabel(r)) + '</td>' +
                     '<td><span class="fin-badge ' + b.cls + '" style="white-space:normal;text-align:center;display:inline-block;line-height:1.3">' + b.label + '</span></td>' +
-                    '<td style="white-space:nowrap">' + dlHtml + '</td>' +
+                    '<td style="white-space:nowrap">' + fileHtml + '</td>' +
                   '</tr>';
                 }).join('') : '<tr><td colspan="8" style="text-align:center;color:#b0a8c8;padding:1.5rem">No receipts match your search.</td></tr>') +
                 '</tbody></table></div>' +
