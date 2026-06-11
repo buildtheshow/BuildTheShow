@@ -69288,7 +69288,6 @@ See you soon!
         +   esc(p.name || 'Unknown')
         +   '<button type="button" onclick="volReqEditContact(window._volReqEditKey)" style="background:none;border:1px solid rgba(87,46,136,0.25);border-radius:5px;padding:0.1rem 0.4rem;font-size:0.6rem;font-weight:800;color:#572e88;cursor:pointer;font-family:inherit;white-space:nowrap;line-height:1.6;">Edit contact</button>'
         +   (combineCandidates.length ? '<button type="button" onclick="volReqOpenCombine(window._volReqCombineKey)" style="background:none;border:1px solid rgba(87,46,136,0.25);border-radius:5px;padding:0.1rem 0.4rem;font-size:0.6rem;font-weight:800;color:#572e88;cursor:pointer;font-family:inherit;white-space:nowrap;line-height:1.6;">Combine requests</button>' : '')
-        +   (_isGroupSignup ? '<button type="button" onclick="volReqOpenSplit(window._volReqSplitKey,window._volReqSplitNames)" style="background:none;border:1px solid rgba(71,106,170,0.35);border-radius:5px;padding:0.1rem 0.4rem;font-size:0.6rem;font-weight:800;color:#476aaa;cursor:pointer;font-family:inherit;white-space:nowrap;line-height:1.6;">Split group</button>' : '')
         +   '<button type="button" onclick="volReqConfirmDelete(window._volReqEditKey)" style="background:none;border:1px solid rgba(180,50,30,0.3);border-radius:5px;padding:0.1rem 0.4rem;font-size:0.6rem;font-weight:800;color:#b33a25;cursor:pointer;font-family:inherit;white-space:nowrap;line-height:1.6;">Remove request</button>'
         + '</div>'
         +     '<div class="vol-req-detail-role" style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap;">'
@@ -69316,6 +69315,14 @@ See you soon!
             +   '<div style="font-size:0.85rem;font-weight:800;color:#572e88;">' + esc(discountPerformer || 'Not specified') + '</div>'
             + '</div>' : '')
         + '</div>'
+        + (_isGroupSignup ? '<div style="margin:0.75rem 1.5rem 0;background:rgba(71,106,170,0.08);border:1.5px solid rgba(71,106,170,0.25);border-radius:10px;padding:0.75rem 1rem;display:flex;align-items:center;justify-content:space-between;gap:0.75rem;flex-wrap:wrap;">'
+          + '<div>'
+          +   '<div style="font-size:0.62rem;font-weight:900;text-transform:uppercase;letter-spacing:0.06em;color:#476aaa;margin-bottom:0.18rem;">Group Signup</div>'
+          +   '<div style="font-size:0.82rem;font-weight:800;color:#1a1530;">' + esc(_groupUniqueNames.join(' & ')) + '</div>'
+          +   '<div style="font-size:0.7rem;color:rgba(71,106,170,0.7);margin-top:0.1rem;">These people share one request. Split to manage them separately.</div>'
+          + '</div>'
+          + '<button type="button" onclick="volReqOpenSplit(window._volReqSplitKey,window._volReqSplitNames)" style="white-space:nowrap;padding:0.45rem 1rem;border:none;border-radius:8px;background:#476aaa;color:#fff;font-size:0.78rem;font-weight:900;cursor:pointer;font-family:inherit;">Split Group</button>'
+          + '</div>' : '')
         + (p.notes ? '<div class="vol-req-detail-section"><div class="vol-req-detail-section-title">From the Volunteer</div><div class="vol-req-quote">' + esc(p.notes) + '</div></div>' : '')
         + '<div class="vol-req-detail-section"><div class="vol-req-detail-section-title">Requested Shifts</div>' + shiftRows + '</div>'
         + (pendingShifts.length
@@ -69873,6 +69880,17 @@ See you soon!
   }
 
 
+  function volReqShiftHrs(s) {
+    if (!s.shift_start_time || !s.shift_end_time) return 0;
+    const [sh,sm] = s.shift_start_time.slice(0,5).split(':').map(Number);
+    const [eh,em] = s.shift_end_time.slice(0,5).split(':').map(Number);
+    return Math.max(0, (eh*60+em - sh*60-sm) / 60);
+  }
+  function volReqFmtHrs(h) {
+    if (h === 0) return '0 hrs';
+    return (Number.isInteger(h) ? String(h) : h.toFixed(2).replace(/\.?0+$/,'')) + ' hr' + (h === 1 ? '' : 's');
+  }
+
   function volReqCloseSplitModal() {
     var m = document.getElementById("vol-split-modal");
     if (m) m.remove();
@@ -69888,7 +69906,7 @@ See you soon!
       const isSubmitter = name === submitterName;
       const rows = allRows.filter(r => (r.name || '').trim() === name);
       const existingEmail = isSubmitter ? (allRows[0]?.email || '') : '';
-      const hrs = rows.reduce((sum, r) => sum + shiftHrs(r), 0);
+      const hrs = rows.reduce((sum, r) => sum + volReqShiftHrs(r), 0);
       return { name, isSubmitter, rows, existingEmail, hrs };
     });
 
@@ -69896,7 +69914,7 @@ See you soon!
 
     const peopleHtml = people.map((person, i) => {
       const shiftCount = person.rows.length;
-      const hrsLabel = person.hrs > 0 ? fmtHrs(person.hrs) : shiftCount + ' shift' + (shiftCount !== 1 ? 's' : '');
+      const hrsLabel = person.hrs > 0 ? volReqFmtHrs(person.hrs) : shiftCount + ' shift' + (shiftCount !== 1 ? 's' : '');
       return '<div style="background:#f7f5fc;border:1px solid rgba(87,46,136,0.12);border-radius:8px;padding:0.75rem 1rem;display:flex;flex-direction:column;gap:0.35rem;">'
         + '<div style="font-size:0.82rem;font-weight:900;color:#1a1530;">' + esc(person.name) + '</div>'
         + '<div style="font-size:0.72rem;color:rgba(87,46,136,0.55);">' + esc(hrsLabel) + '</div>'
