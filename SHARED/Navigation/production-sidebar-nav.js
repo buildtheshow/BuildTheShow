@@ -26,6 +26,14 @@
     location.href = pageUrl(file);
   };
 
+  window.btsDeptSectionNav = function (group, section, tab) {
+    var url = pageUrl('department-section.html') +
+      '&group=' + encodeURIComponent(group || '') +
+      '&section=' + encodeURIComponent(section || '') +
+      '&tab=' + encodeURIComponent(tab || 'dashboard');
+    location.href = url;
+  };
+
   // ── Group state ──────────────────────────────────────────────────────────
 
   const ALL_GROUPS = ['overview', 'plan', 'cast', 'departments', 'promote', 'ticketing', 'volunteers', 'financials', 'wrapup', 'settings', 'build'];
@@ -217,7 +225,7 @@
   // ── Sidebar HTML loader ──────────────────────────────────────────────────
 
   window.loadProductionSidebar = function (activeGroup, activePage) {
-    const key = 'bts-prod-sidebar-v23';
+    const key = 'bts-prod-sidebar-v24';
     const cached = sessionStorage.getItem(key);
     const host = document.getElementById('prod-sidebar-host');
     if (!host) return;
@@ -242,7 +250,7 @@
 
     if (cached) applyAndInit(cached);
 
-    fetch('/SHARED/Navigation/production-sidebar.html?v=sidebar-v50-20260608')
+    fetch('/SHARED/Navigation/production-sidebar.html?v=sidebar-v51-20260610')
       .then(function (res) { return res.text(); })
       .then(function (html) {
         sessionStorage.setItem(key, html);
@@ -328,6 +336,21 @@
   function markCurrentPageActive(explicitFile) {
     var currentFile = explicitFile || location.pathname.split('/').pop().split('?')[0];
     if (!currentFile) return;
+    if (currentFile === 'department-section.html') {
+      var params = new URLSearchParams(location.search);
+      var group = params.get('group') || '';
+      var section = params.get('section') || '';
+      var exact = document.querySelector('.prod-sub-item[data-dept-group="' + group + '"][data-dept-section="' + section + '"]');
+      if (exact) {
+        var exactWrap = exact.closest('.prod-tab-submenu-wrap');
+        if (exactWrap) {
+          exactWrap.classList.add('open');
+          syncSidebarMenuA11y();
+        }
+        addActiveDot(exact);
+        return;
+      }
+    }
     // Use attribute selector — most reliable, no quote-matching required
     var sel = '.prod-tab[onclick*="' + currentFile + '"], .prod-sub-item[onclick*="' + currentFile + '"]';
     var found = document.querySelector(sel);
