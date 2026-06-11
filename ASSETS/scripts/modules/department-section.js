@@ -1046,9 +1046,27 @@
 
       // Pass all data via a global — no fragile string replacements needed
       var isProducer = state.group && state.group.key === 'producer';
-      var deptOptions = isProducer
-        ? (window.BTSDepartmentConfig ? window.BTSDepartmentConfig.groups.map(function(g) { return g.label; }) : [])
-        : [];
+
+      // Build a map of dept label → category IDs from actual budget_categories
+      var deptCatMap = {};
+      if (window.BTSDepartmentConfig) {
+        window.BTSDepartmentConfig.groups.forEach(function(g) {
+          var gAliases = [];
+          (g.sections || []).forEach(function(s) {
+            [s.label].concat(s.categoryAliases || []).forEach(function(a) {
+              gAliases.push(String(a).trim().toLowerCase().replace(/&/g, 'and').replace(/\s+/g, ' '));
+            });
+          });
+          var gIds = (state.categories || []).filter(function(c) {
+            var n = String(c.name || '').trim().toLowerCase().replace(/&/g, 'and').replace(/\s+/g, ' ');
+            return gAliases.some(function(a) { return n === a || n.includes(a) || a.includes(n); });
+          }).map(function(c) { return c.id; });
+          if (gIds.length) deptCatMap[g.label] = gIds;
+        });
+      }
+
+      // Only show departments that have real budget categories
+      var deptOptions = isProducer ? Object.keys(deptCatMap) : [];
 
       window._RCPT_EMBED_DATA = {
         prodId: state.prodId,
@@ -1057,6 +1075,7 @@
         catIds: catIds,
         editableDept: isProducer,
         deptOptions: deptOptions,
+        deptCatMap: deptCatMap,
       };
 
       var scripts = Array.from(doc.querySelectorAll('script')).map(function (s) { return s.textContent || ''; }).filter(Boolean);

@@ -664,7 +664,8 @@
     const isEmbed = _embed ? true : (_qp.get('embed') === '1');
     const deptName = _embed ? (_embed.deptName || 'Department') : (_qp.get('dept') || 'Department');
     const deptColor = _embed ? (_embed.deptColor || '572e88') : ((_qp.get('color') || '572e88').replace(/^#/, ''));
-    const _injectedCatIds = _embed ? (_embed.catIds || []) : [];
+    let _activeCatIds = _embed ? (_embed.catIds || []) : [];
+    let _activeDeptName = deptName;
 
     async function init() {
       if (!isEmbed) window.initProductionPage('departments');
@@ -699,7 +700,14 @@
             sel.appendChild(o);
           });
           sel.addEventListener('change', function() {
+            _activeDeptName = sel.value;
+            _activeCatIds = (_embed.deptCatMap && _embed.deptCatMap[sel.value]) || [];
             if (_deptHidden) _deptHidden.value = sel.value;
+            const _sh = document.getElementById('rcpt-summary-heading');
+            if (_sh) _sh.textContent = sel.value + ' Budget';
+            const _ss = document.getElementById('rcpt-summary-sub');
+            if (_ss) _ss.textContent = sel.value + ' allocated budget and spending.';
+            loadSummary();
           });
           _chipWrap.innerHTML = '';
           _chipWrap.appendChild(sel);
@@ -733,7 +741,7 @@
     function normStr(s) { return String(s || '').trim().toLowerCase().replace(/\s+/g, ' '); }
 
     function catMatchesDept(catName) {
-      const nd = normStr(deptName);
+      const nd = normStr(_activeDeptName);
       const nc = normStr(catName);
       return nc.includes(nd) || nd.includes(nc);
     }
@@ -747,15 +755,15 @@
         const allCats = catsRes.data || [];
         const allReceipts = rcptRes.data || [];
 
-        // Use injected category IDs when embedded, otherwise fall back to name matching
-        const cats = _injectedCatIds.length
-          ? allCats.filter(c => _injectedCatIds.includes(c.id))
+        // Use active category IDs (updated when dept dropdown changes), fallback to name match
+        const cats = _activeCatIds.length
+          ? allCats.filter(c => _activeCatIds.includes(c.id))
           : allCats.filter(c => catMatchesDept(c.name));
         const catIds = new Set(cats.map(c => c.id));
 
         // Filter receipts: match by department field or by category belonging to this dept
         const receipts = allReceipts.filter(r =>
-          (r.department && normStr(r.department) === normStr(deptName)) ||
+          (r.department && normStr(r.department) === normStr(_activeDeptName)) ||
           catIds.has(r.category_id)
         );
 
