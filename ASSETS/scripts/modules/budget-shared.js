@@ -34,45 +34,65 @@
 
   /* --- Supabase helpers -------------------------------------------------- */
 
-  function headers() {
-    return { apikey: SUPABASE_ANON, Authorization: 'Bearer ' + SUPABASE_ANON };
+  async function authToken() {
+    // Use workspace authenticated session if available, fall back to anon key
+    if (window.sb && window.sb.auth) {
+      try {
+        const { data } = await window.sb.auth.getSession();
+        if (data?.session?.access_token) return data.session.access_token;
+      } catch (_) {}
+    }
+    return SUPABASE_ANON;
+  }
+
+  async function headers() {
+    const token = await authToken();
+    return { apikey: SUPABASE_ANON, Authorization: 'Bearer ' + token };
+  }
+
+  function parseError(raw) {
+    try {
+      const obj = JSON.parse(raw);
+      if (obj.message === 'JWT expired') return 'Your session has expired. Please refresh the page.';
+      return obj.message || raw;
+    } catch (_) { return raw; }
   }
 
   async function dbFetch(table, extra) {
     const r = await fetch(
       SUPABASE_URL + '/rest/v1/' + table + '?production_id=eq.' + BgtState.prodId + (extra || '') + '&order=created_at.asc',
-      { headers: headers() }
+      { headers: await headers() }
     );
-    if (!r.ok) throw new Error(await r.text());
+    if (!r.ok) throw new Error(parseError(await r.text()));
     return r.json();
   }
 
   async function dbInsert(table, data) {
     const r = await fetch(SUPABASE_URL + '/rest/v1/' + table, {
       method: 'POST',
-      headers: Object.assign({}, headers(), { 'Content-Type': 'application/json', Prefer: 'return=representation' }),
+      headers: Object.assign({}, await headers(), { 'Content-Type': 'application/json', Prefer: 'return=representation' }),
       body: JSON.stringify(Object.assign({}, data, { production_id: BgtState.prodId })),
     });
-    if (!r.ok) throw new Error(await r.text());
+    if (!r.ok) throw new Error(parseError(await r.text()));
     return r.json();
   }
 
   async function dbUpdate(table, id, data) {
     const r = await fetch(SUPABASE_URL + '/rest/v1/' + table + '?id=eq.' + id, {
       method: 'PATCH',
-      headers: Object.assign({}, headers(), { 'Content-Type': 'application/json', Prefer: 'return=representation' }),
+      headers: Object.assign({}, await headers(), { 'Content-Type': 'application/json', Prefer: 'return=representation' }),
       body: JSON.stringify(data),
     });
-    if (!r.ok) throw new Error(await r.text());
+    if (!r.ok) throw new Error(parseError(await r.text()));
     return r.json();
   }
 
   async function dbDelete(table, id) {
     const r = await fetch(SUPABASE_URL + '/rest/v1/' + table + '?id=eq.' + id, {
       method: 'DELETE',
-      headers: headers(),
+      headers: await headers(),
     });
-    if (!r.ok) throw new Error(await r.text());
+    if (!r.ok) throw new Error(parseError(await r.text()));
   }
 
   /* --- Formatters -------------------------------------------------------- */
