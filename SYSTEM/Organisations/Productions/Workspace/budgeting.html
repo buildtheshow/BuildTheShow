@@ -2853,15 +2853,17 @@ const BP = {
         const who = s.who[key] || [];
         let extraHtml = '';
         if (a[key]) {
-          if (step.hasWho) {
-            const fields = who.length ? who : [{name:'',fee:''}];
+          const hasKeyItems = !!this.BW_KEY_DEFAULTS[key];
+          if (step.hasWho || hasKeyItems) {
+            const fields = who.length ? who : (hasKeyItems ? this.BW_KEY_DEFAULTS[key].map(d => Object.assign({}, d)) : [{name:'',fee:''}]);
             extraHtml += '<div style="width:100%;padding-left:0.25rem;margin-top:0.1rem;">';
             const inpStyle = 'font-family:inherit;font-size:0.83rem;font-weight:600;color:#1a1530;border:1.5px solid rgba(87,46,136,0.18);border-radius:8px;padding:0.35rem 0.5rem;min-width:0;box-sizing:border-box;width:100%;';
             const whoLbl = 'font-size:0.68rem;font-weight:800;text-transform:uppercase;letter-spacing:0.08em;color:#9a90b0;';
+            const colHdr = hasKeyItems && !step.hasWho ? 'Item' : 'Who?';
             extraHtml += '<div style="display:grid;grid-template-columns:1fr 50px 90px 68px;gap:0.35rem;margin-bottom:0.25rem;">' +
-              '<span style="'+whoLbl+'">Who?</span>' +
+              '<span style="'+whoLbl+'">'+colHdr+'</span>' +
               '<span style="'+whoLbl+'text-align:center;">Qty</span>' +
-              '<span style="'+whoLbl+'text-align:right;">Rate</span>' +
+              '<span style="'+whoLbl+'text-align:right;">Cost</span>' +
               '<span style="'+whoLbl+'text-align:right;">Total</span>' +
             '</div>';
             extraHtml += fields.map((entry, idx) => {
@@ -2890,18 +2892,18 @@ const BP = {
             extraHtml += '</div>';
           }
           if (s.enterNow && catName) {
-            if (step.hasWho && who.length) {
-              // Auto-sum fees from who entries — show a read-only total
+            if ((step.hasWho || hasKeyItems) && who.length) {
+              // Auto-sum from item entries — show a read-only total
               const feeTotal = who.reduce((sum, e) => sum + (typeof e==='string' ? 0 : (parseFloat(e.qty)||1)*(parseFloat(e.unitCost != null ? e.unitCost : e.fee)||0)), 0);
               if (feeTotal > 0) {
                 extraHtml +=
                   '<div style="width:100%;padding-left:0.25rem;display:flex;align-items:center;gap:0.5rem;margin-top:0.15rem;">'+
                     '<div style="width:8px;height:8px;border-radius:50%;background:'+this._bwKeyColor(key,s.answers)+';flex-shrink:0;"></div>'+
-                    '<span style="font-size:0.78rem;font-weight:700;color:#9a90b0;flex:1;">Total fees for '+this.esc(catName)+'</span>'+
+                    '<span style="font-size:0.78rem;font-weight:700;color:#9a90b0;flex:1;">Total for '+this.esc(catName)+'</span>'+
                     '<span style="font-size:0.88rem;font-weight:900;color:#1a1530;">$'+feeTotal.toLocaleString('en-CA',{minimumFractionDigits:2,maximumFractionDigits:2})+'</span>'+
                   '</div>';
               }
-            } else {
+            } else if (!step.hasWho && !hasKeyItems) {
               extraHtml +=
                 '<div class="bg-bw-est-row" style="width:100%;padding-left:0.25rem;display:flex;align-items:center;gap:0.5rem;margin-top:0.35rem;">'+
                   '<div style="width:8px;height:8px;border-radius:50%;background:'+this._bwKeyColor(key,s.answers)+';flex-shrink:0;"></div>'+
@@ -2970,7 +2972,16 @@ const BP = {
     return '';
   },
   _bwSetProd(t) { this._bwState.prodType = t; this._bwRender(); },
-  _bwSet(key, val) { this._bwState.answers[key] = val; this._bwRender(); },
+  BW_KEY_DEFAULTS: {
+    set: [{name:'Set Dec', qty:1, unitCost:''}, {name:'Painting', qty:1, unitCost:''}],
+  },
+  _bwSet(key, val) {
+    this._bwState.answers[key] = val;
+    if (val && this.BW_KEY_DEFAULTS[key] && !(this._bwState.who[key]||[]).length) {
+      this._bwState.who[key] = this.BW_KEY_DEFAULTS[key].map(d => Object.assign({}, d));
+    }
+    this._bwRender();
+  },
   _bwSetEnterNow(val) { this._bwState.enterNow = val; this._bwRender(); },
   _bwEventsListHtml() {
     const evts = (this._bwState || {}).events || {};
