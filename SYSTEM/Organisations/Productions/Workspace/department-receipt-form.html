@@ -1287,7 +1287,6 @@
     }
 
     let uploadedFiles = [];
-    let uploadedUrls  = [];   // set after auto-upload; reused on submit
     let _multiConfirmed = false;
 
     function rcptDragOver(e) {
@@ -1314,13 +1313,11 @@
       }
       if (!valid.length) return;
       uploadedFiles = valid;
-      uploadedUrls  = [];
       _multiConfirmed = valid.length === 1;
       renderFileThumbs();
       renderPreviewImages(valid);
       document.getElementById('rcpt-file-preview').classList.add('visible');
       document.getElementById('rcpt-multi-confirm').classList.toggle('visible', valid.length > 1);
-      rcptAutoUpload(valid);
     }
 
     function renderFileThumbs() {
@@ -1382,30 +1379,8 @@
       panel.classList.toggle('visible', files.length > 0);
     }
 
-    async function rcptAutoUpload(files) {
-      if (!prodId || !sb) return;
-      try {
-        const deptSlug = (_activeDeptName || deptName).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-        const ts = Date.now();
-        const urls = [];
-        for (let i = 0; i < files.length; i++) {
-          const f = files[i];
-          const path = prodId + '/' + deptSlug + '-receipts/' + ts + '-' + i + '-' + f.name.replace(/[^a-zA-Z0-9._-]/g, '_');
-          const { error: upErr } = await sb.storage.from('receipts').upload(path, f);
-          if (!upErr) {
-            const { data: urlData } = sb.storage.from('receipts').getPublicUrl(path);
-            if (urlData?.publicUrl) urls.push(urlData.publicUrl);
-          }
-        }
-        uploadedUrls = urls;
-      } catch(e) {
-        // silent — files will be re-uploaded on submit if needed
-      }
-    }
-
     function rcptRemoveFileAt(idx) {
       uploadedFiles.splice(idx, 1);
-      uploadedUrls = [];
       if (!uploadedFiles.length) { rcptClearFiles(); return; }
       _multiConfirmed = uploadedFiles.length === 1;
       renderFileThumbs();
@@ -1418,7 +1393,6 @@
     }
     function rcptClearFiles() {
       uploadedFiles = [];
-      uploadedUrls  = [];
       _multiConfirmed = false;
       document.getElementById('rcpt-file-input').value = '';
       document.getElementById('rcpt-file-thumbs').innerHTML = '';
@@ -1457,10 +1431,7 @@
           btn.disabled = false; btn.textContent = 'Save Receipt'; return;
         }
         let receiptUrl = null;
-        if (uploadedUrls.length) {
-          // files already uploaded during auto-upload — reuse the URLs
-          receiptUrl = uploadedUrls.length === 1 ? uploadedUrls[0] : JSON.stringify(uploadedUrls);
-        } else if (uploadedFiles.length) {
+        if (uploadedFiles.length) {
           const deptSlug = (_activeDeptName || deptName).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
           const ts = Date.now();
           const urls = [];
