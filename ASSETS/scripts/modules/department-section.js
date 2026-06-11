@@ -415,7 +415,7 @@
     });
     rows.sort(function (a, b) { return String(b.time || '').localeCompare(String(a.time || '')); });
     return '<section class="dept-dash-card dept-activity-card">' +
-      '<div class="dept-section-head"><div class="dept-dash-card-head"><span class="dept-line-icon">~</span><span>Recent Activity</span></div><button type="button" class="dept-card-link inline" onclick="BTSDepartmentSection.openTab(\'receipts\')">View All</button></div>' +
+      '<div class="dept-section-head"><div class="dept-dash-card-head"><span class="dept-line-icon activity" aria-hidden="true"></span><span>Recent Activity</span></div><button type="button" class="dept-card-link inline" onclick="BTSDepartmentSection.openTab(\'receipts\')">View All</button></div>' +
       (rows.length ? '<div class="dept-activity-list">' + rows.slice(0, 5).map(activityRow).join('') + '</div>' : '<div class="dept-next-empty">No recent section activity yet.</div>') +
     '</section>';
   }
@@ -423,14 +423,14 @@
   function renderNotesCard() {
     const notes = state.section.notes || [];
     return '<section class="dept-dash-card dept-notes-card">' +
-      '<div class="dept-section-head"><div class="dept-dash-card-head"><span class="dept-line-icon">[]</span><span>Department Notes</span></div><button type="button" class="dept-card-link inline" onclick="BTSDepartmentSection.openTab(\'planning\')">Edit Notes</button></div>' +
+      '<div class="dept-section-head"><div class="dept-dash-card-head"><span class="dept-line-icon notes" aria-hidden="true"></span><span>Department Notes</span></div><button type="button" class="dept-card-link inline" onclick="BTSDepartmentSection.openTab(\'planning\')">Edit Notes</button></div>' +
       '<ul class="dept-note-list">' + notes.map(function (note) { return '<li>' + esc(note) + '</li>'; }).join('') + '</ul>' +
     '</section>';
   }
 
   function renderQuickActions() {
     return '<section class="dept-dash-card dept-actions-card">' +
-      '<div class="dept-dash-card-head"><span class="dept-line-icon">!</span><span>Quick Actions</span></div>' +
+      '<div class="dept-dash-card-head"><span class="dept-line-icon" aria-hidden="true">!</span><span>Quick Actions</span></div>' +
       '<div class="dept-action-grid">' +
         quickAction('Manage Volunteers', 'Add, remove, or assign volunteers', state.group.color, 'BTSDepartmentSection.goVolunteers()', 'Volunteers') +
         quickAction('View Budget', 'See budget details and spending', '#769e7b', 'BTSDepartmentSection.goBudget()', 'Budget') +
