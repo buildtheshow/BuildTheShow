@@ -118,11 +118,24 @@
     });
   }
 
+  function signupMatchesSection(signup) {
+    const matches = sectionMatchesText();
+    return matches(signup.role_name) ||
+      matches(signup.volunteer_role) ||
+      matches(signup.production_title) ||
+      matches(signup.department) ||
+      matches(signup.dept_category) ||
+      matches(signup.volunteer_department);
+  }
+
   function sectionSignups(opportunities) {
     const ids = new Set((opportunities || sectionOpportunities()).map(function (opp) { return opp.id; }));
     return state.signups.filter(function (signup) {
       const status = norm(signup.status);
-      return ids.has(signup.opportunity_id) && status !== 'declined' && status !== 'rejected' && status !== 'cancelled';
+      return (ids.has(signup.opportunity_id) || signupMatchesSection(signup)) &&
+        status !== 'declined' &&
+        status !== 'rejected' &&
+        status !== 'cancelled';
     });
   }
 
@@ -171,7 +184,7 @@
       safe(fetchTable('budget_categories', '&type=eq.expense&order=sort_order.asc,created_at.asc')),
       safe(fetchTable('budget_receipts', '&order=created_at.desc')),
       safe(fetchTable('opportunities', '&select=id,production_title,volunteer_role,volunteers_needed,status,summary,description,event_date,time_commitment,created_at,updated_at&opportunity_type=in.(volunteer,creative_team)&order=created_at.desc')),
-      safe(fetchTable('volunteer_signups', '&select=id,opportunity_id,status,volunteer_name,email,created_at,updated_at&order=created_at.desc')),
+      safe(fetchTable('volunteer_signups', '&order=created_at.desc')),
       safe(fetchTable('production_events', '&select=id,title,event_type,start_time,end_time,venue,notes&order=start_time.asc')),
     ]);
     state.categories = results[0] || [];
@@ -223,8 +236,9 @@
       const st = norm(s.status);
       return st === 'approved' || st === 'checked_in' || st === 'completed';
     });
-    const needed = opportunities.reduce(function (sum, opp) { return sum + (parseInt(opp.volunteers_needed, 10) || 0); }, 0);
+    const rawNeeded = opportunities.reduce(function (sum, opp) { return sum + (parseInt(opp.volunteers_needed, 10) || 0); }, 0);
     const assigned = acceptedSignups.length;
+    const needed = Math.max(rawNeeded, assigned);
     const open = Math.max(0, needed - assigned);
     return '<div class="dept-dashboard">' +
       '<div class="dept-overview-row">' +
@@ -258,7 +272,7 @@
 
   function signupRole(s) {
     var linked = state.opportunities.find(function (o) { return o.id === s.opportunity_id; });
-    return linked ? (linked.production_title || linked.volunteer_role || linked.summary || '') : (s.volunteer_role || s.department || '');
+    return linked ? (linked.production_title || linked.volunteer_role || linked.summary || '') : (s.role_name || s.volunteer_role || s.department || '');
   }
 
   function renderVolunteersCard(assigned, open, needed, acceptedSignups) {

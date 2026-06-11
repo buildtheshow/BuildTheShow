@@ -50,10 +50,10 @@
       color: '#769e7b',
       icon: '/ASSETS/Images/Department-set.svg',
       sections: [
-        section('set-building', 'Set Building', 'Build plans, materials, tools, safety notes, and construction progress.', ['Set Building', 'Set Builder', 'Sets & Scenery', 'Set Construction']),
-        section('set-painting', 'Set Painting', 'Paint elevations, colour notes, finish samples, and scenic paint calls.', ['Set Painting', 'Set Painter', 'Paint']),
+        section('set-building', 'Set Building', 'Build plans, materials, tools, safety notes, and construction progress.', ['Set Building', 'Set Builder', 'Set Builders', 'Lead Builder', 'Sets & Scenery', 'Set Construction', 'Set Strike Crew']),
+        section('set-painting', 'Set Painting', 'Paint elevations, colour notes, finish samples, and scenic paint calls.', ['Set Painting', 'Set Painter', 'Set Painters', 'Lead Set Painter', 'Paint']),
         section('set-dressing', 'Set Dressing', 'Furniture, practicals, dressing lists, scene changes, and storage notes.', ['Set Dressing', 'Set Dresser']),
-        section('props', 'Props', 'Prop lists, source status, hand props, consumables, and backstage placement.', ['Props', 'Props Helper']),
+        section('props', 'Props', 'Prop lists, source status, hand props, consumables, and backstage placement.', ['Props', 'Props Helper', 'Lead Prop Person']),
       ],
     },
     {
