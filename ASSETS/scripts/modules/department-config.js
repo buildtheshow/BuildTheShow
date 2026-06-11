@@ -15,7 +15,7 @@
       color: '#476aaa',
       icon: '/ASSETS/Images/Department-front-of-house.svg',
       sections: [
-        section('ushers', 'Ushers', 'Audience welcome, seating, latecomers, accessibility support, and house flow.', ['Ushers', 'Front of House']),
+        section('ushers', 'Ushers', 'Audience welcome, seating, latecomers, accessibility support, and house flow.', ['Ushers', 'Usher']),
         section('concessions', 'Concessions', 'Snack table, sales float, food safety, stock, and end-of-night closeout.', ['Concessions', 'Concession Workers', 'Bakers']),
         section('box-office', 'Box Office', 'Ticket pickup, door sales, comp lists, payment questions, and check-in.', ['Box Office', 'Ticket Sales', 'Tickets']),
       ],
@@ -26,7 +26,7 @@
       color: '#dd8233',
       icon: '/ASSETS/Images/volunteer-backstage.svg',
       sections: [
-        section('backstage-crew', 'Backstage Crew', 'Deck traffic, backstage readiness, entrances, exits, and show traffic.', ['Backstage Crew', 'Backstage & Rehearsal Support']),
+        section('backstage-crew', 'Backstage Crew', 'Deck traffic, backstage readiness, entrances, exits, and show traffic.', ['Backstage Crew']),
         section('quick-changes', 'Quick Changes', 'Quick-change plots, dressing locations, change assistants, and timing notes.', ['Quick-Change Assistant', 'Quick Changes']),
         section('child-wrangling', 'Child Wrangling', 'Youth performer supervision, sign-in, waiting areas, and handoff notes.', ['Child Wrangler', 'Child Wrangling']),
         section('rehearsal-support', 'Rehearsal Support', 'Room setup, rehearsal helpers, attendance support, and director needs.', ['Rehearsal Assistant', 'Rehearsal Support']),
@@ -50,7 +50,7 @@
       color: '#769e7b',
       icon: '/ASSETS/Images/Department-set.svg',
       sections: [
-        section('set-building', 'Set Building', 'Build plans, materials, tools, safety notes, and construction progress.', ['Set Building', 'Set Builder', 'Set Builders', 'Lead Builder', 'Sets & Scenery', 'Set Construction', 'Set Strike Crew']),
+        section('set-building', 'Set Building', 'Build plans, materials, tools, safety notes, and construction progress.', ['Set Building', 'Set Builder', 'Set Builders', 'Lead Builder', 'Set Designer', 'Sets & Scenery', 'Set Construction', 'Set Strike Crew']),
         section('set-painting', 'Set Painting', 'Paint elevations, colour notes, finish samples, and scenic paint calls.', ['Set Painting', 'Set Painter', 'Set Painters', 'Lead Set Painter', 'Paint']),
         section('set-dressing', 'Set Dressing', 'Furniture, practicals, dressing lists, scene changes, and storage notes.', ['Set Dressing', 'Set Dresser']),
         section('props', 'Props', 'Prop lists, source status, hand props, consumables, and backstage placement.', ['Props', 'Props Helper', 'Lead Prop Person']),
@@ -73,8 +73,8 @@
       color: '#ca7ea7',
       icon: '/ASSETS/Images/Department-costume-and-makeup.svg',
       sections: [
-        section('hair', 'Hair', 'Hair looks, performer hair notes, styling products, quick fixes, and call timing.', ['Hair', 'Hair Supplies', 'Styling Products', 'Makeup & Hair', 'Hair & Makeup']),
-        section('makeup', 'Makeup', 'Makeup looks, allergies, sensitivities, product notes, and touch-up tracking.', ['Makeup', 'Makeup & Hair', 'Hair & Makeup']),
+        section('hair', 'Hair', 'Hair looks, performer hair notes, styling products, quick fixes, and call timing.', ['Hair', 'Hair Supplies', 'Styling Products']),
+        section('makeup', 'Makeup', 'Makeup looks, allergies, sensitivities, product notes, and touch-up tracking.', ['Makeup']),
       ],
     },
     {
@@ -83,11 +83,11 @@
       color: '#efab45',
       icon: '/ASSETS/Images/Department-marketing.svg',
       sections: [
-        section('branding', 'Branding', 'Show identity, key art, copy direction, and approved messaging.', ['Branding', 'Advertising & Marketing']),
+        section('branding', 'Branding', 'Show identity, key art, copy direction, and approved messaging.', ['Branding']),
         section('programme', 'Programme', 'Programme content, ads, credits, bios, proofing, and print readiness.', ['Programme', 'Programme Ads']),
         section('media', 'Media', 'Photos, video, social content, press assets, and release planning.', ['Media', 'Marketing Media']),
         section('sponsors', 'Sponsors', 'Sponsor commitments, ad packages, benefits, and recognition assets.', ['Sponsors', 'Sponsorship']),
-        section('promotion-distribution', 'Promotion Distribution', 'Poster routes, flyer drops, community outreach, and promo tracking.', ['Promotion Distribution', 'Advertising & Marketing']),
+        section('promotion-distribution', 'Promotion Distribution', 'Poster routes, flyer drops, community outreach, and promo tracking.', ['Promotion Distribution', 'Promo Distribution', 'Poster Distribution']),
       ],
     },
     {

@@ -92,6 +92,7 @@
     const aliases = categoryAliases().map(norm);
     return state.categories.filter(function (cat) {
       const name = norm(cat.name);
+      if (!name) return false;
       return aliases.some(function (alias) {
         return name === alias || name.includes(alias) || alias.includes(name);
       });
@@ -107,8 +108,15 @@
     const aliases = categoryAliases().map(norm);
     return function (value) {
       const text = norm(value);
+      if (!text) return false;
       return aliases.some(function (alias) { return text === alias || text.includes(alias) || alias.includes(text); });
     };
+  }
+
+  function groupHasSingleSection() {
+    return state.group &&
+      Array.isArray(state.group.sections) &&
+      state.group.sections.length === 1;
   }
 
   function sectionOpportunities() {
@@ -120,10 +128,12 @@
 
   function signupMatchesSection(signup) {
     const matches = sectionMatchesText();
-    return matches(signup.role_name) ||
+    const roleMatches = matches(signup.role_name) ||
       matches(signup.volunteer_role) ||
-      matches(signup.production_title) ||
-      matches(signup.department) ||
+      matches(signup.production_title);
+    if (roleMatches) return true;
+    if (!groupHasSingleSection()) return false;
+    return matches(signup.department) ||
       matches(signup.dept_category) ||
       matches(signup.volunteer_department);
   }
