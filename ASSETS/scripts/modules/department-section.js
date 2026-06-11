@@ -614,11 +614,92 @@
     return state.group && state.group.key === 'costumes' && state.section && state.section.key === 'costumes';
   }
 
-  function renderCostumePlanningEmbed() {
-    var src = '/SYSTEM/Organisations/Productions/Workspace/departments-costume.html?id=' + encodeURIComponent(state.prodId) + '&embed=1';
-    return '<div class="dept-embedded-planning">' +
-      '<iframe title="Costume planning" src="' + src + '" loading="lazy"></iframe>' +
+  function renderCostumePlanningMount() {
+    return '<div class="dept-costume-planning-native" id="dept-costume-planning-native">' +
+      '<div class="dept-empty">Loading costume planning...</div>' +
     '</div>';
+  }
+
+  function prefixCostumeSelector(selector) {
+    var trimmed = selector.trim();
+    if (!trimmed || trimmed.indexOf('.dept-costume-inline') === 0) return trimmed;
+    if (trimmed === '.costume-embed') return '.dept-costume-inline';
+    if (trimmed.indexOf('.costume-embed ') === 0) trimmed = trimmed.slice(15);
+    if (trimmed.indexOf('.costume-embed.') === 0) return '.dept-costume-inline' + trimmed.slice(14);
+    if (trimmed === 'html' || trimmed === 'body') return '.dept-costume-inline';
+    if (trimmed.indexOf('html ') === 0) trimmed = trimmed.slice(5);
+    if (trimmed.indexOf('body ') === 0) trimmed = trimmed.slice(5);
+    if (trimmed.indexOf('body.') === 0) return '.dept-costume-inline' + trimmed.slice(4);
+    return '.dept-costume-inline ' + trimmed;
+  }
+
+  function serializeCostumeCssRule(rule) {
+    if (rule.type === CSSRule.STYLE_RULE) {
+      var selectors = rule.selectorText.split(',').map(prefixCostumeSelector).join(', ');
+      return selectors + '{' + rule.style.cssText + '}';
+    }
+    if (rule.type === CSSRule.MEDIA_RULE) {
+      return '@media ' + rule.conditionText + '{' + Array.from(rule.cssRules).map(serializeCostumeCssRule).join('') + '}';
+    }
+    if (rule.type === CSSRule.KEYFRAMES_RULE || rule.type === CSSRule.FONT_FACE_RULE) return rule.cssText;
+    return rule.cssText || '';
+  }
+
+  async function prefixedCostumeCss(rawCss) {
+    try {
+      var sheet = new CSSStyleSheet();
+      await sheet.replace(rawCss);
+      return Array.from(sheet.cssRules).map(serializeCostumeCssRule).join('\n') +
+        '\n.dept-costume-inline{display:block;min-height:auto;width:100%;max-width:100%;overflow:visible;background:transparent;}' +
+        '\n.dept-costume-inline .costume-nav{padding:0 1.5rem;border:1px solid rgba(87,46,136,0.1);border-radius:8px 8px 0 0;background:#fff;}' +
+        '\n.dept-costume-inline .costume-content{padding:1.5rem;border:1px solid rgba(87,46,136,0.1);border-top:0;border-radius:0 0 8px 8px;background:rgba(255,255,255,0.72);}';
+    } catch (error) {
+      throw new Error('Could not prepare costume planner styles');
+    }
+  }
+
+  async function mountCostumePlanningNative() {
+    var mount = document.getElementById('dept-costume-planning-native');
+    if (!mount) return;
+    try {
+      var response = await fetch('/SYSTEM/Organisations/Productions/Workspace/departments-costume.html?id=' + encodeURIComponent(state.prodId) + '&embed=1', { cache: 'no-store' });
+      if (!response.ok) throw new Error('Could not load costume planner');
+      var html = await response.text();
+      var doc = new DOMParser().parseFromString(html, 'text/html');
+      var styleText = Array.from(doc.querySelectorAll('style')).map(function (style) { return style.textContent || ''; }).join('\n');
+      var nav = doc.getElementById('costume-nav');
+      var content = doc.querySelector('.costume-content');
+      var overlay = doc.getElementById('c-overlay');
+      if (!nav || !content || !overlay) throw new Error('Costume planner markup was incomplete');
+      if (!document.getElementById('dept-costume-inline-style')) {
+        var styleEl = document.createElement('style');
+        styleEl.id = 'dept-costume-inline-style';
+        styleEl.textContent = await prefixedCostumeCss(styleText);
+        document.head.appendChild(styleEl);
+      }
+      mount.innerHTML = '';
+      var scope = document.createElement('div');
+      scope.className = 'dept-costume-inline';
+      scope.appendChild(nav.cloneNode(true));
+      scope.appendChild(content.cloneNode(true));
+      scope.appendChild(overlay.cloneNode(true));
+      mount.appendChild(scope);
+      if (!window.BTSCostumePlannerInlineLoaded) {
+        var scripts = Array.from(doc.querySelectorAll('script')).map(function (script) { return script.textContent || ''; }).filter(Boolean);
+        var plannerScript = scripts[scripts.length - 1] || '';
+        plannerScript = plannerScript
+          .replace("const isEmbed = new URLSearchParams(location.search).get('embed') === '1';", 'const isEmbed = true;')
+          .replace("window.addEventListener('DOMContentLoaded', init);", 'window.BTSCostumePlannerInit = init; init();');
+        var scriptEl = document.createElement('script');
+        scriptEl.textContent = plannerScript;
+        document.body.appendChild(scriptEl);
+        window.BTSCostumePlannerInlineLoaded = true;
+      } else if (typeof window.BTSCostumePlannerInit === 'function') {
+        window.BTSCostumePlannerInit();
+      }
+    } catch (error) {
+      mount.innerHTML = '<div class="dept-empty">Costume planning could not load: ' + esc(error.message) + '</div>';
+    }
   }
 
   function renderDashboard() {
@@ -882,7 +963,7 @@
   }
 
   function renderContent() {
-    if (state.tab === 'planning' && isCostumePlanningSection()) return renderCostumePlanningEmbed();
+    if (state.tab === 'planning' && isCostumePlanningSection()) return renderCostumePlanningMount();
     if (state.tab === 'planning') return renderPlanning();
     if (state.tab === 'receipts') return renderReceipts();
     return renderDashboard();
@@ -894,6 +975,7 @@
     document.title = state.section.label + ' - Build The Show';
     root.style.setProperty('--dept-color', state.group.color || '#572e88');
     root.innerHTML = renderHero() + renderTabs() + renderContent() + renderReceiptModal();
+    if (state.tab === 'planning' && isCostumePlanningSection()) mountCostumePlanningNative();
   }
 
   function currentCategoryId() {
