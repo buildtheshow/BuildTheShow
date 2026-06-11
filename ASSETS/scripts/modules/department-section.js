@@ -240,13 +240,13 @@
   function renderBudgetCard(allocated, spent, remaining) {
     const used = percent(spent, allocated);
     return '<section class="dept-dash-card">' +
-      '<div class="dept-dash-card-head"><span class="dept-dash-icon green">$</span><span>Budget</span></div>' +
+      '<div class="dept-dash-card-head"><span class="dept-dash-icon">$</span><span>Budget</span></div>' +
       '<div class="dept-budget-stats">' +
         statBlock('Allocated', fmtMoney(allocated)) +
         statBlock('Spent', fmtMoney(spent)) +
-        statBlock('Remaining', fmtMoney(remaining), 'green') +
+        statBlock('Remaining', fmtMoney(remaining), 'accent') +
       '</div>' +
-      progressBar(used, '#769e7b') +
+      progressBar(used, state.group.color) +
       '<div class="dept-progress-note">' + used + '% of budget used</div>' +
       '<button type="button" class="dept-card-link" onclick="BTSDepartmentSection.goBudget()">View Budget</button>' +
     '</section>';
@@ -255,13 +255,13 @@
   function renderVolunteersCard(assigned, open, needed) {
     const filled = percent(assigned, needed);
     return '<section class="dept-dash-card">' +
-      '<div class="dept-dash-card-head"><span class="dept-dash-icon blue">+</span><span>Volunteers</span></div>' +
+      '<div class="dept-dash-card-head"><span class="dept-dash-icon">+</span><span>Volunteers</span></div>' +
       '<div class="dept-budget-stats">' +
-        statBlock('Assigned', String(assigned), 'blue') +
-        statBlock('Open Positions', String(open), 'blue') +
-        statBlock('Total Needed', String(needed), 'blue') +
+        statBlock('Assigned', String(assigned), 'accent') +
+        statBlock('Open Positions', String(open), 'accent') +
+        statBlock('Total Needed', String(needed), 'accent') +
       '</div>' +
-      progressBar(filled, '#476aaa') +
+      progressBar(filled, state.group.color) +
       '<div class="dept-progress-note">' + filled + '% of volunteer needs filled</div>' +
       '<button type="button" class="dept-card-link" onclick="BTSDepartmentSection.goVolunteers()">Manage Volunteers</button>' +
     '</section>';
@@ -271,7 +271,7 @@
     const next = sectionEvents()[0];
     if (!next) {
       return '<section class="dept-dash-card">' +
-        '<div class="dept-dash-card-head orange"><span class="dept-dash-icon orange">#</span><span>Next Up</span></div>' +
+        '<div class="dept-dash-card-head"><span class="dept-dash-icon">#</span><span>Next Up</span></div>' +
         '<div class="dept-next-empty">No upcoming ' + esc(state.section.label) + ' date is on the production calendar yet.</div>' +
         '<button type="button" class="dept-card-link" onclick="BTSDepartmentSection.goCalendar()">View Calendar</button>' +
       '</section>';
@@ -282,7 +282,7 @@
     const dayNum = day ? String(day.getDate()) : '-';
     const weekday = day ? day.toLocaleDateString('en-CA', { weekday: 'short' }).toUpperCase() : '';
     return '<section class="dept-dash-card dept-next-card">' +
-      '<div class="dept-dash-card-head orange"><span class="dept-dash-icon orange">#</span><span>Next Up</span></div>' +
+      '<div class="dept-dash-card-head"><span class="dept-dash-icon">#</span><span>Next Up</span></div>' +
       '<div class="dept-next-layout">' +
         '<div><div class="dept-next-title">' + esc(next.title || 'Upcoming Date') + '</div>' +
           '<div class="dept-next-line">Date: ' + esc(fmtEventDate(next.start_time)) + '</div>' +
@@ -315,7 +315,7 @@
     opportunities.slice(0, 5).forEach(function (opp) {
       rows.push({
         initials: initials(opp.production_title || 'Role'),
-        color: '#efab45',
+        color: state.group.color,
         title: (opp.production_title || 'Volunteer role') + ' role updated',
         time: opp.updated_at || opp.created_at || '',
       });
@@ -339,10 +339,10 @@
     return '<section class="dept-dash-card dept-actions-card">' +
       '<div class="dept-dash-card-head"><span class="dept-line-icon">!</span><span>Quick Actions</span></div>' +
       '<div class="dept-action-grid">' +
-        quickAction('Manage Volunteers', 'Add, remove, or assign volunteers', '#769e7b', 'BTSDepartmentSection.goVolunteers()') +
-        quickAction('View Budget', 'See budget details and spending', '#769e7b', 'BTSDepartmentSection.goBudget()') +
-        quickAction('Upload Receipt', 'Add a new receipt or expense', '#572e88', 'BTSDepartmentSection.openReceiptFromDashboard()') +
-        quickAction('Department Files', 'View and manage files and documents', '#476aaa', 'BTSDepartmentSection.goFiles()') +
+        quickAction('Manage Volunteers', 'Add, remove, or assign volunteers', state.group.color, 'BTSDepartmentSection.goVolunteers()') +
+        quickAction('View Budget', 'See budget details and spending', state.group.color, 'BTSDepartmentSection.goBudget()') +
+        quickAction('Upload Receipt', 'Add a new receipt or expense', state.group.color, 'BTSDepartmentSection.openReceiptFromDashboard()') +
+        quickAction('Department Files', 'View and manage files and documents', state.group.color, 'BTSDepartmentSection.goFiles()') +
       '</div>' +
     '</section>';
   }
@@ -437,6 +437,7 @@
     const root = document.getElementById('department-section-root');
     if (!root) return;
     document.title = state.section.label + ' - Build The Show';
+    root.style.setProperty('--dept-color', state.group.color || '#572e88');
     root.innerHTML = renderHero() + renderTabs() + renderContent() + renderReceiptModal();
   }
 
