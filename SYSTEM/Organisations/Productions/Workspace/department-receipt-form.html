@@ -635,11 +635,19 @@
                 <div class="rcpt-drop-hint">JPG, PNG or PDF &nbsp;&middot;&nbsp; Max size 10MB</div>
               </div>
               <div class="rcpt-file-preview" id="rcpt-file-preview">
-                <svg viewBox="0 0 24 24" fill="none" stroke="#572e88" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-                <span class="rcpt-file-name" id="rcpt-file-name">filename.pdf</span>
-                <button type="button" class="rcpt-file-remove" onclick="rcptRemoveFile()">Remove</button>
+                <div class="rcpt-file-thumbs" id="rcpt-file-thumbs"></div>
+                <div class="rcpt-multi-confirm" id="rcpt-multi-confirm">
+                  <div class="rcpt-multi-confirm-text">
+                    <strong>Are all these photos from the same receipt?</strong>
+                    If each photo is a different purchase, submit them as separate receipts.
+                  </div>
+                  <div class="rcpt-multi-confirm-actions">
+                    <button type="button" class="rcpt-confirm-yes-btn" onclick="rcptConfirmMulti()">Yes, one receipt</button>
+                    <button type="button" class="rcpt-confirm-clear-btn" onclick="rcptClearFiles()">Start over</button>
+                  </div>
+                </div>
               </div>
-              <input type="file" id="rcpt-file-input" accept=".jpg,.jpeg,.png,.pdf" style="display:none" onchange="rcptFileSelected(this.files[0])">
+              <input type="file" id="rcpt-file-input" accept=".jpg,.jpeg,.png,.pdf" multiple style="display:none" onchange="rcptFilesSelected(this.files)">
             </div>
 
             <!-- Details -->
@@ -823,7 +831,7 @@
     const SUPA_URL = 'https://tkmaiktxpwqfbgeojbnf.supabase.co';
     const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRrbWFpa3R4cHdxZmJnZW9qYm5mIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM3MzE4MTcsImV4cCI6MjA4OTMwNzgxN30.TkTZBNWUatk3Y6Vmfv1hIRR3DfVjgwauwa76Pf00J_8';
 
-    let sb, prodId, paidBy = 'company', uploadedFile = null;
+    let sb, prodId, paidBy = 'company';
     let allocatedCents = 0, spentCents = 0, breakdownItems = [];
 
     // When embedded, department-section.js sets window._RCPT_EMBED_DATA before calling init()
@@ -1222,6 +1230,9 @@
       document.getElementById('rcpt-s-new-remaining').textContent = fmt(newRemaining);
     }
 
+    let uploadedFiles = [];
+    let _multiConfirmed = false;
+
     function rcptDragOver(e) {
       e.preventDefault();
       document.getElementById('rcpt-drop-zone').classList.add('drag-over');
@@ -1232,22 +1243,81 @@
     function rcptDrop(e) {
       e.preventDefault();
       document.getElementById('rcpt-drop-zone').classList.remove('drag-over');
-      const file = e.dataTransfer.files[0];
-      if (file) rcptFileSelected(file);
+      if (e.dataTransfer.files.length) rcptFilesSelected(e.dataTransfer.files);
     }
-    function rcptFileSelected(file) {
-      if (!file) return;
+    function rcptFilesSelected(fileList) {
+      if (!fileList || !fileList.length) return;
       const maxBytes = 10 * 1024 * 1024;
-      if (file.size > maxBytes) { alert('File is too large. Max size is 10MB.'); return; }
-      uploadedFile = file;
-      document.getElementById('rcpt-file-name').textContent = file.name;
+      const valid = [];
+      for (let i = 0; i < fileList.length; i++) {
+        const f = fileList[i];
+        if (f.size > maxBytes) { alert(f.name + ' is too large. Max size is 10MB per file.'); continue; }
+        valid.push(f);
+      }
+      if (!valid.length) return;
+      uploadedFiles = valid;
+      _multiConfirmed = valid.length === 1;
+      renderFileThumbs();
       document.getElementById('rcpt-file-preview').classList.add('visible');
+      const confirmEl = document.getElementById('rcpt-multi-confirm');
+      confirmEl.classList.toggle('visible', valid.length > 1);
     }
-    function rcptRemoveFile() {
-      uploadedFile = null;
+    function renderFileThumbs() {
+      const wrap = document.getElementById('rcpt-file-thumbs');
+      wrap.innerHTML = '';
+      uploadedFiles.forEach(function(file, idx) {
+        const thumb = document.createElement('div');
+        thumb.className = 'rcpt-file-thumb';
+        const isImage = file.type.startsWith('image/');
+        if (isImage) {
+          const img = document.createElement('img');
+          img.src = URL.createObjectURL(file);
+          img.onload = function() { URL.revokeObjectURL(img.src); };
+          thumb.appendChild(img);
+        } else {
+          const iconWrap = document.createElement('div');
+          iconWrap.className = 'rcpt-file-thumb-icon';
+          iconWrap.innerHTML = '<img src="/ASSETS/Images/Files.svg" alt="">';
+          thumb.appendChild(iconWrap);
+        }
+        const name = document.createElement('span');
+        name.className = 'rcpt-file-thumb-name';
+        name.textContent = file.name;
+        const remove = document.createElement('button');
+        remove.type = 'button';
+        remove.className = 'rcpt-file-thumb-remove';
+        remove.innerHTML = '&times;';
+        remove.title = 'Remove this photo';
+        remove.addEventListener('click', function() { rcptRemoveFileAt(idx); });
+        thumb.appendChild(name);
+        thumb.appendChild(remove);
+        wrap.appendChild(thumb);
+      });
+    }
+    function rcptRemoveFileAt(idx) {
+      uploadedFiles.splice(idx, 1);
+      if (!uploadedFiles.length) {
+        rcptClearFiles();
+        return;
+      }
+      _multiConfirmed = uploadedFiles.length === 1;
+      renderFileThumbs();
+      const confirmEl = document.getElementById('rcpt-multi-confirm');
+      confirmEl.classList.toggle('visible', uploadedFiles.length > 1 && !_multiConfirmed);
+    }
+    function rcptConfirmMulti() {
+      _multiConfirmed = true;
+      document.getElementById('rcpt-multi-confirm').classList.remove('visible');
+    }
+    function rcptClearFiles() {
+      uploadedFiles = [];
+      _multiConfirmed = false;
       document.getElementById('rcpt-file-input').value = '';
+      document.getElementById('rcpt-file-thumbs').innerHTML = '';
       document.getElementById('rcpt-file-preview').classList.remove('visible');
+      document.getElementById('rcpt-multi-confirm').classList.remove('visible');
     }
+    function rcptRemoveFile() { rcptClearFiles(); }
 
     async function rcptSubmit() {
       const vendor = document.getElementById('rcpt-vendor').value.trim();
@@ -1272,15 +1342,25 @@
         const total = sub + tax;
         const notes = document.getElementById('rcpt-notes').value.trim();
 
+        if (uploadedFiles.length > 1 && !_multiConfirmed) {
+          alert('Please confirm that all photos are from the same receipt before saving.');
+          btn.disabled = false; btn.textContent = 'Save Receipt'; return;
+        }
         let receiptUrl = null;
-        if (uploadedFile) {
-          const deptSlug = deptName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-          const path = prodId + '/' + deptSlug + '-receipts/' + Date.now() + '-' + uploadedFile.name.replace(/[^a-zA-Z0-9._-]/g, '_');
-          const { data: upData, error: upErr } = await sb.storage.from('receipts').upload(path, uploadedFile);
-          if (!upErr) {
-            const { data: urlData } = sb.storage.from('receipts').getPublicUrl(path);
-            receiptUrl = urlData?.publicUrl || null;
+        if (uploadedFiles.length) {
+          const deptSlug = (_activeDeptName || deptName).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+          const ts = Date.now();
+          const urls = [];
+          for (let i = 0; i < uploadedFiles.length; i++) {
+            const f = uploadedFiles[i];
+            const path = prodId + '/' + deptSlug + '-receipts/' + ts + '-' + i + '-' + f.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+            const { error: upErr } = await sb.storage.from('receipts').upload(path, f);
+            if (!upErr) {
+              const { data: urlData } = sb.storage.from('receipts').getPublicUrl(path);
+              if (urlData?.publicUrl) urls.push(urlData.publicUrl);
+            }
           }
+          receiptUrl = urls.length === 1 ? urls[0] : (urls.length > 1 ? JSON.stringify(urls) : null);
         }
 
         const _dh = document.getElementById('rcpt-dept-hidden');
