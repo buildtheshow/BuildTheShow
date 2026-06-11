@@ -2860,9 +2860,18 @@ const BP = {
         let extraHtml = '';
         if (a[key]) {
           const hasKeyItems = !!this.BW_KEY_DEFAULTS[key];
-          // Seed defaults if missing or all entries are unnamed (blank row left over from before defaults existed)
-          if (hasKeyItems && (!who.length || who.every(e => !(e.name||'').trim()))) {
-            s.who[key] = this.BW_KEY_DEFAULTS[key].map(d => Object.assign({}, d));
+          // Always guarantee named default items exist; merge in any user-entered costs
+          if (hasKeyItems) {
+            const defs = this.BW_KEY_DEFAULTS[key];
+            const prev = s.who[key] || [];
+            const merged = defs.map((def, i) => {
+              const byName = prev.find(e => (e.name||'').trim().toLowerCase() === def.name.toLowerCase());
+              const byPos  = prev[i];
+              const src    = byName || ((byPos && !(byPos.name||'').trim()) ? byPos : null);
+              return { name: def.name, qty: (src && src.qty) || 1, unitCost: (src && src.unitCost != null ? src.unitCost : '') };
+            });
+            const extras = prev.filter(e => (e.name||'').trim() && !defs.some(d => d.name.toLowerCase() === (e.name||'').trim().toLowerCase()));
+            s.who[key] = [...merged, ...extras];
             who = s.who[key];
           }
           if (step.hasWho || hasKeyItems) {

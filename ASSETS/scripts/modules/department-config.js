@@ -59,7 +59,7 @@
     {
       key: 'costumes',
       label: 'Costumes',
-      color: '#78bbd4',
+      color: '#62a7bf',
       icon: '/ASSETS/Images/Department-costume-and-makeup.svg',
       tabs: [
         { key: 'dashboard', label: 'Dashboard' },
