@@ -236,6 +236,7 @@
   const FIN = {
     URL: window.SUPABASE_URL || 'https://tkmaiktxpwqfbgeojbnf.supabase.co',
     KEY: window.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRrbWFpa3R4cHdxZmJnZW9qYm5mIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM3MzE4MTcsImV4cCI6MjA4OTMwNzgxN30.TkTZBNWUatk3Y6Vmfv1hIRR3DfVjgwauwa76Pf00J_8',
+    sb: null,
     prodId: '',
     receipts: [],
     categories: [],
@@ -253,19 +254,19 @@
         document.getElementById('fin-content').innerHTML = '<div style="padding:2rem;color:#d1523d">No production ID in URL.</div>';
         return;
       }
+      const { createClient } = supabase;
+      this.sb = createClient(this.URL, this.KEY);
       this.load();
     },
-
-    _h() { return { apikey: this.KEY, Authorization: 'Bearer ' + this.KEY }; },
 
     async load() {
       try {
         const [rRes, cRes] = await Promise.all([
-          fetch(this.URL + '/rest/v1/budget_receipts?production_id=eq.' + this.prodId + '&order=receipt_date.desc,created_at.desc', { headers: this._h() }),
-          fetch(this.URL + '/rest/v1/budget_categories?production_id=eq.' + this.prodId + '&type=eq.expense', { headers: this._h() }),
+          this.sb.from('budget_receipts').select('*').eq('production_id', this.prodId).order('receipt_date', { ascending: false }),
+          this.sb.from('budget_categories').select('*').eq('production_id', this.prodId).eq('type', 'expense'),
         ]);
-        this.receipts   = rRes.ok ? await rRes.json() : [];
-        this.categories = cRes.ok ? await cRes.json() : [];
+        this.receipts   = rRes.data || [];
+        this.categories = cRes.data || [];
       } catch(e) {
         this.receipts = []; this.categories = [];
       }
@@ -337,12 +338,8 @@
       if (!toMark.length) return;
       const ids = toMark.map(r => r.id);
       try {
-        const res = await fetch(this.URL + '/rest/v1/budget_receipts?id=in.(' + ids.join(',') + ')', {
-          method: 'PATCH',
-          headers: Object.assign({}, this._h(), { 'Content-Type': 'application/json', Prefer: 'return=minimal' }),
-          body: JSON.stringify({ status: 'paid' }),
-        });
-        if (!res.ok) throw new Error(await res.text());
+        const { error } = await this.sb.from('budget_receipts').update({ status: 'paid' }).in('id', ids);
+        if (error) throw error;
         await this.load();
       } catch(e) { alert('Could not mark as paid: ' + e.message); }
     },
