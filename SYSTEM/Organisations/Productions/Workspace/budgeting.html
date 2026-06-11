@@ -3322,6 +3322,36 @@ const BP = {
         const alreadyHasItems = itemRows.some(r => r.category_id === cat.id);
         if (!alreadyHasItems) await this._seedDefaultItems(cat.id, cat.name);
       }
+      // For existing categories that now have named wizard items, replace generic placeholder items
+      for (const c of updateCats) {
+        const existing = existingByName[c.name.trim().toLowerCase()];
+        const whoKey = Object.keys(this.BW_QUESTIONS).find(k => this._bwKeyToCatName(k, a) === c.name && who[k] && who[k].length);
+        if (!whoKey) continue;
+        const existingItems = (this.items||[]).filter(i => i.category_id === existing.id);
+        // Only replace if every existing item is generic: no money committed/paid, and name matches category or is a known default
+        const knownDefaults = (this.CAT_DEFAULT_ITEMS[c.name.trim().toLowerCase()]||[]).map(d=>d.toLowerCase());
+        const isGeneric = existingItems.every(i =>
+          !(parseFloat(i.committed_cents)||0) && !(parseFloat(i.paid_cents)||0) &&
+          (i.name.trim().toLowerCase() === c.name.trim().toLowerCase() || knownDefaults.includes(i.name.trim().toLowerCase()))
+        );
+        if (!isGeneric) continue;
+        if (existingItems.length) {
+          await fetch(this.URL+'/rest/v1/budget_items?id=in.('+existingItems.map(i=>i.id).join(',')+')', {method:'DELETE', headers:this._hj()}).catch(()=>{});
+        }
+        const newItems = [];
+        (who[whoKey]||[]).forEach((entry, idx) => {
+          const name = (entry.name||'').trim();
+          if (!name) return;
+          const q  = parseFloat(entry.qty)||1;
+          const uc = Math.round((parseFloat(entry.unitCost!=null?entry.unitCost:entry.fee)||0)*100);
+          newItems.push({name, category_id:existing.id, production_id:this.prodId, qty:q, unit_cost_cents:uc, budgeted_cents:q*uc, committed_cents:0, paid_cents:0, status:'planned', sort_order:idx});
+        });
+        if (newItems.length) {
+          await fetch(this.URL+'/rest/v1/budget_items', {method:'POST', headers:this._hj(), body:JSON.stringify(newItems)}).catch(()=>{});
+        }
+        const feeTotal = Math.round((who[whoKey]||[]).reduce((s,e)=>{const q=parseFloat(e.qty)||1; const u=parseFloat(e.unitCost!=null?e.unitCost:e.fee)||0; return s+q*u;},0)*100);
+        if (feeTotal) await this._patch('budget_categories', existing.id, {planned_cents: feeTotal}).catch(()=>{});
+      }
       // Keep the draft so values are still there next time wizard opens; just reset to step 0
       this._bwState.step = 0;
       this._bwBuilding = false;
