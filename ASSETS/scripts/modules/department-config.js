@@ -107,6 +107,7 @@
       label,
       description,
       categoryAliases: categoryAliases || [label],
+      notes: defaultNotes(label),
       planning: [
         'Confirm lead and point person',
         'Collect notes, files, and references',
@@ -114,6 +115,15 @@
         'Review deadlines against the production calendar',
       ],
     };
+  }
+
+  function defaultNotes(label) {
+    return [
+      label + ' lead should confirm current priorities before the next call',
+      'Keep purchases and receipts attached to this section',
+      'Update files, references, and handoff notes as work changes',
+      'Flag anything blocked before it affects rehearsal or performance',
+    ];
   }
 
   function allSections() {

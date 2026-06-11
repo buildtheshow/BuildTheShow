@@ -12,6 +12,9 @@
     tab: 'dashboard',
     categories: [],
     receipts: [],
+    opportunities: [],
+    signups: [],
+    events: [],
     editingReceiptId: '',
   };
 
@@ -46,6 +49,21 @@
     const parsed = new Date(date + 'T12:00:00');
     if (Number.isNaN(parsed.getTime())) return date;
     return parsed.toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' });
+  }
+
+  function fmtTime(value) {
+    if (!value) return '';
+    const raw = String(value).includes('T') ? String(value).split('T')[1] : String(value);
+    const parts = raw.split(':');
+    const hour = parseInt(parts[0], 10);
+    const minute = parts[1] || '00';
+    if (!Number.isFinite(hour)) return '';
+    return (hour % 12 || 12) + ':' + minute + ' ' + (hour < 12 ? 'AM' : 'PM');
+  }
+
+  function fmtEventDate(value) {
+    if (!value) return 'Date TBC';
+    return fmtDate(String(value).slice(0, 10));
   }
 
   function config() {
@@ -85,6 +103,43 @@
     return state.receipts.filter(function (receipt) { return ids.has(receipt.category_id); });
   }
 
+  function sectionMatchesText() {
+    const aliases = categoryAliases().map(norm);
+    return function (value) {
+      const text = norm(value);
+      return aliases.some(function (alias) { return text === alias || text.includes(alias) || alias.includes(text); });
+    };
+  }
+
+  function sectionOpportunities() {
+    const matches = sectionMatchesText();
+    return state.opportunities.filter(function (opp) {
+      return matches(opp.volunteer_role) || matches(opp.production_title) || matches(opp.summary) || matches(opp.description);
+    });
+  }
+
+  function sectionSignups(opportunities) {
+    const ids = new Set((opportunities || sectionOpportunities()).map(function (opp) { return opp.id; }));
+    return state.signups.filter(function (signup) {
+      const status = norm(signup.status);
+      return ids.has(signup.opportunity_id) && status !== 'declined' && status !== 'rejected' && status !== 'cancelled';
+    });
+  }
+
+  function sectionEvents() {
+    const matches = sectionMatchesText();
+    const now = new Date().toISOString();
+    return state.events
+      .filter(function (event) {
+        return String(event.start_time || '') >= now && (
+          matches(event.title) ||
+          matches(event.notes) ||
+          matches(event.event_type)
+        );
+      })
+      .sort(function (a, b) { return String(a.start_time || '').localeCompare(String(b.start_time || '')); });
+  }
+
   function receiptSubmitter(receipt) {
     return receipt.submitted_by_name || receipt.submitted_by || receipt.submitted_by_email || 'No submitter';
   }
@@ -98,20 +153,9 @@
     return labels[status] || status || 'Pending';
   }
 
-  function metricTile(kicker, value, label, color) {
-    const renderer = window.BTSAuditionTemplates && window.BTSAuditionTemplates.renderBrandTileTemplate;
-    if (renderer) {
-      return renderer({
-        variant: 'square',
-        mode: 'metric',
-        kicker,
-        metricValue: value,
-        metricLabel: label,
-        progressPercent: '100%',
-        style: '--brand-tile-bg:' + color + ';--brand-tile-ink:#ffffff;',
-      });
-    }
-    return '<div class="dept-panel"><div class="dept-panel-sub">' + esc(kicker) + '</div><div class="dept-panel-title">' + esc(value) + '</div><div class="dept-panel-sub">' + esc(label) + '</div></div>';
+  function percent(value, total) {
+    if (!total || total <= 0) return 0;
+    return Math.max(0, Math.min(100, Math.round((value / total) * 100)));
   }
 
   async function fetchTable(table, extra) {
@@ -122,18 +166,25 @@
   }
 
   async function loadData() {
-    try {
-      const results = await Promise.all([
-        fetchTable('budget_categories', '&type=eq.expense&order=sort_order.asc,created_at.asc'),
-        fetchTable('budget_receipts', '&order=created_at.desc'),
-      ]);
-      state.categories = results[0] || [];
-      state.receipts = results[1] || [];
-    } catch (error) {
-      console.warn('[BTS] Department section data failed:', error);
-      state.categories = [];
-      state.receipts = [];
-    }
+    const safe = function (promise) { return promise.catch(function () { return []; }); };
+    const results = await Promise.all([
+      safe(fetchTable('budget_categories', '&type=eq.expense&order=sort_order.asc,created_at.asc')),
+      safe(fetchTable('budget_receipts', '&order=created_at.desc')),
+      safe(fetchTable('opportunities', '&select=id,production_title,volunteer_role,volunteers_needed,status,summary,description,event_date,time_commitment,created_at,updated_at&opportunity_type=in.(volunteer,creative_team)&order=created_at.desc')),
+      safe(fetchTable('volunteer_signups', '&select=id,opportunity_id,status,volunteer_name,email,created_at,updated_at&order=created_at.desc')),
+      safe(fetchTable('production_events', '&select=id,title,event_type,start_time,end_time,venue,notes&order=start_time.asc')),
+    ]);
+    state.categories = results[0] || [];
+    state.receipts = results[1] || [];
+    state.opportunities = results[2] || [];
+    state.signups = results[3] || [];
+    state.events = results[4] || [];
+  }
+
+  function tabTitle() {
+    if (state.tab === 'planning') return 'Planning';
+    if (state.tab === 'receipts') return 'Receipts';
+    return 'Overview';
   }
 
   function renderHero() {
@@ -147,7 +198,7 @@
     return '<div class="aud-visual-hero dept-hero" style="--dept-color:' + esc(state.group.color) + ';">' +
       '<div class="aud-visual-hero-content"><div>' +
         '<div class="aud-visual-kicker"><span class="aud-visual-kicker-dot" aria-hidden="true"></span><span class="page-hierarchy">' + hierarchy + '</span></div>' +
-        '<h1 class="aud-visual-title">' + esc(state.section.label) + '</h1>' +
+        '<h1 class="aud-visual-title">' + esc(state.section.label + ' ' + tabTitle()) + '</h1>' +
         '<p class="aud-visual-copy">' + esc(state.section.description) + '</p>' +
       '</div></div>' +
       '<div class="dept-hero-deco"><img src="' + esc(state.group.icon) + '" alt="" /></div>' +
@@ -162,26 +213,174 @@
 
   function renderDashboard() {
     const receipts = sectionReceipts();
-    const pending = receipts.filter(function (receipt) { return receipt.status === 'pending'; });
     const approved = receipts.filter(function (receipt) { return receipt.status === 'approved' || receipt.status === 'paid'; });
-    const spend = approved.reduce(function (sum, receipt) { return sum + (receipt.amount_cents || 0); }, 0);
     const cats = sectionCategories();
-    return '<div class="dept-page-grid">' +
-      '<div class="dept-tile-grid">' +
-        metricTile('Section', String(cats.length), cats.length === 1 ? 'Budget category linked' : 'Budget categories linked', state.group.color) +
-        metricTile('Receipts', String(receipts.length), 'Section receipts', '#476aaa') +
-        metricTile('Pending', String(pending.length), 'Awaiting review', '#efab45') +
-        metricTile('Approved', fmtMoney(spend), 'Approved or paid spend', '#769e7b') +
+    const allocated = cats.reduce(function (sum, cat) { return sum + (cat.planned_cents || 0); }, 0);
+    const spent = approved.reduce(function (sum, receipt) { return sum + (receipt.amount_cents || 0); }, 0);
+    const remaining = Math.max(0, allocated - spent);
+    const opportunities = sectionOpportunities();
+    const signups = sectionSignups(opportunities);
+    const needed = opportunities.reduce(function (sum, opp) { return sum + (parseInt(opp.volunteers_needed, 10) || 0); }, 0);
+    const assigned = signups.length;
+    const open = Math.max(0, needed - assigned);
+    return '<div class="dept-dashboard">' +
+      '<div class="dept-overview-row">' +
+        renderBudgetCard(allocated, spent, remaining) +
+        renderVolunteersCard(assigned, open, needed) +
+        renderNextUpCard() +
       '</div>' +
-      '<section class="dept-panel">' +
-        '<div class="dept-panel-head"><div><div class="dept-panel-title">Current Focus</div><div class="dept-panel-sub">' + esc(state.section.description) + '</div></div><button class="dept-action secondary" onclick="BTSDepartmentSection.openTab(\'planning\')">Open Planning</button></div>' +
-        renderPlanningList(false) +
-      '</section>' +
-      '<section class="dept-panel">' +
-        '<div class="dept-panel-head"><div><div class="dept-panel-title">Recent Receipts</div><div class="dept-panel-sub">Only receipts attached to this section category appear here.</div></div><button class="dept-action secondary" onclick="BTSDepartmentSection.openTab(\'receipts\')">Open Receipts</button></div>' +
-        renderReceiptList(receipts.slice(0, 4), false) +
-      '</section>' +
+      '<div class="dept-detail-row">' +
+        renderActivityCard(receipts, signups, opportunities) +
+        renderNotesCard() +
+      '</div>' +
+      renderQuickActions() +
     '</div>';
+  }
+
+  function renderBudgetCard(allocated, spent, remaining) {
+    const used = percent(spent, allocated);
+    return '<section class="dept-dash-card">' +
+      '<div class="dept-dash-card-head"><span class="dept-dash-icon green">$</span><span>Budget</span></div>' +
+      '<div class="dept-budget-stats">' +
+        statBlock('Allocated', fmtMoney(allocated)) +
+        statBlock('Spent', fmtMoney(spent)) +
+        statBlock('Remaining', fmtMoney(remaining), 'green') +
+      '</div>' +
+      progressBar(used, '#769e7b') +
+      '<div class="dept-progress-note">' + used + '% of budget used</div>' +
+      '<button type="button" class="dept-card-link" onclick="BTSDepartmentSection.goBudget()">View Budget</button>' +
+    '</section>';
+  }
+
+  function renderVolunteersCard(assigned, open, needed) {
+    const filled = percent(assigned, needed);
+    return '<section class="dept-dash-card">' +
+      '<div class="dept-dash-card-head"><span class="dept-dash-icon blue">+</span><span>Volunteers</span></div>' +
+      '<div class="dept-budget-stats">' +
+        statBlock('Assigned', String(assigned), 'blue') +
+        statBlock('Open Positions', String(open), 'blue') +
+        statBlock('Total Needed', String(needed), 'blue') +
+      '</div>' +
+      progressBar(filled, '#476aaa') +
+      '<div class="dept-progress-note">' + filled + '% of volunteer needs filled</div>' +
+      '<button type="button" class="dept-card-link" onclick="BTSDepartmentSection.goVolunteers()">Manage Volunteers</button>' +
+    '</section>';
+  }
+
+  function renderNextUpCard() {
+    const next = sectionEvents()[0];
+    if (!next) {
+      return '<section class="dept-dash-card">' +
+        '<div class="dept-dash-card-head orange"><span class="dept-dash-icon orange">#</span><span>Next Up</span></div>' +
+        '<div class="dept-next-empty">No upcoming ' + esc(state.section.label) + ' date is on the production calendar yet.</div>' +
+        '<button type="button" class="dept-card-link" onclick="BTSDepartmentSection.goCalendar()">View Calendar</button>' +
+      '</section>';
+    }
+    const date = String(next.start_time || '').slice(0, 10);
+    const day = date ? new Date(date + 'T12:00:00') : null;
+    const month = day ? day.toLocaleDateString('en-CA', { month: 'short' }).toUpperCase() : 'TBC';
+    const dayNum = day ? String(day.getDate()) : '-';
+    const weekday = day ? day.toLocaleDateString('en-CA', { weekday: 'short' }).toUpperCase() : '';
+    return '<section class="dept-dash-card dept-next-card">' +
+      '<div class="dept-dash-card-head orange"><span class="dept-dash-icon orange">#</span><span>Next Up</span></div>' +
+      '<div class="dept-next-layout">' +
+        '<div><div class="dept-next-title">' + esc(next.title || 'Upcoming Date') + '</div>' +
+          '<div class="dept-next-line">Date: ' + esc(fmtEventDate(next.start_time)) + '</div>' +
+          '<div class="dept-next-line">Time: ' + esc(fmtTime(next.start_time) || 'Time TBC') + '</div>' +
+          '<div class="dept-next-line">Location: ' + esc(next.venue || 'Location TBC') + '</div></div>' +
+        '<div class="dept-date-badge"><div>' + esc(month) + '</div><strong>' + esc(dayNum) + '</strong><span>' + esc(weekday) + '</span></div>' +
+      '</div>' +
+      '<button type="button" class="dept-card-link" onclick="BTSDepartmentSection.goCalendar()">View Calendar</button>' +
+    '</section>';
+  }
+
+  function renderActivityCard(receipts, signups, opportunities) {
+    const rows = [];
+    receipts.slice(0, 5).forEach(function (receipt) {
+      rows.push({
+        initials: initials(receiptSubmitter(receipt)),
+        color: '#ca7ea7',
+        title: receiptSubmitter(receipt) + ' uploaded a receipt' + (receipt.vendor ? ' from ' + receipt.vendor : ''),
+        time: receipt.created_at || receipt.receipt_date || '',
+      });
+    });
+    signups.slice(0, 5).forEach(function (signup) {
+      rows.push({
+        initials: initials(signup.volunteer_name || signup.email || 'Volunteer'),
+        color: '#78bbd4',
+        title: (signup.volunteer_name || signup.email || 'Volunteer') + ' joined this section',
+        time: signup.updated_at || signup.created_at || '',
+      });
+    });
+    opportunities.slice(0, 5).forEach(function (opp) {
+      rows.push({
+        initials: initials(opp.production_title || 'Role'),
+        color: '#efab45',
+        title: (opp.production_title || 'Volunteer role') + ' role updated',
+        time: opp.updated_at || opp.created_at || '',
+      });
+    });
+    rows.sort(function (a, b) { return String(b.time || '').localeCompare(String(a.time || '')); });
+    return '<section class="dept-dash-card dept-activity-card">' +
+      '<div class="dept-section-head"><div class="dept-dash-card-head"><span class="dept-line-icon">~</span><span>Recent Activity</span></div><button type="button" class="dept-card-link inline" onclick="BTSDepartmentSection.openTab(\'receipts\')">View All</button></div>' +
+      (rows.length ? '<div class="dept-activity-list">' + rows.slice(0, 5).map(activityRow).join('') + '</div>' : '<div class="dept-next-empty">No recent section activity yet.</div>') +
+    '</section>';
+  }
+
+  function renderNotesCard() {
+    const notes = state.section.notes || [];
+    return '<section class="dept-dash-card dept-notes-card">' +
+      '<div class="dept-section-head"><div class="dept-dash-card-head"><span class="dept-line-icon">[]</span><span>Department Notes</span></div><button type="button" class="dept-card-link inline" onclick="BTSDepartmentSection.openTab(\'planning\')">Edit Notes</button></div>' +
+      '<ul class="dept-note-list">' + notes.map(function (note) { return '<li>' + esc(note) + '</li>'; }).join('') + '</ul>' +
+    '</section>';
+  }
+
+  function renderQuickActions() {
+    return '<section class="dept-dash-card dept-actions-card">' +
+      '<div class="dept-dash-card-head"><span class="dept-line-icon">!</span><span>Quick Actions</span></div>' +
+      '<div class="dept-action-grid">' +
+        quickAction('Manage Volunteers', 'Add, remove, or assign volunteers', '#769e7b', 'BTSDepartmentSection.goVolunteers()') +
+        quickAction('View Budget', 'See budget details and spending', '#769e7b', 'BTSDepartmentSection.goBudget()') +
+        quickAction('Upload Receipt', 'Add a new receipt or expense', '#572e88', 'BTSDepartmentSection.openReceiptFromDashboard()') +
+        quickAction('Department Files', 'View and manage files and documents', '#476aaa', 'BTSDepartmentSection.goFiles()') +
+      '</div>' +
+    '</section>';
+  }
+
+  function statBlock(label, value, tone) {
+    return '<div><div class="dept-stat-label">' + esc(label) + '</div><div class="dept-stat-value ' + esc(tone || '') + '">' + esc(value) + '</div></div>';
+  }
+
+  function progressBar(value, color) {
+    return '<div class="dept-progress"><span style="width:' + esc(value) + '%;background:' + esc(color) + ';"></span></div>';
+  }
+
+  function initials(value) {
+    const parts = String(value || 'BTS').trim().split(/\s+/).filter(Boolean);
+    return (parts[0]?.[0] || 'B') + (parts[1]?.[0] || parts[0]?.[1] || 'T');
+  }
+
+  function activityRow(row) {
+    return '<div class="dept-activity-row"><div class="dept-avatar" style="background:' + esc(row.color) + ';">' + esc(initials(row.initials)) + '</div><div><div class="dept-list-title">' + esc(row.title) + '</div><div class="dept-list-meta">' + esc(relativeTime(row.time)) + '</div></div></div>';
+  }
+
+  function relativeTime(value) {
+    if (!value) return 'Recently';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return fmtDate(String(value).slice(0, 10));
+    const diff = Date.now() - date.getTime();
+    const day = 24 * 60 * 60 * 1000;
+    if (diff < day) return 'Today';
+    if (diff < day * 2) return 'Yesterday';
+    return date.toLocaleDateString('en-CA', { month: 'short', day: 'numeric' });
+  }
+
+  function quickAction(title, copy, color, action) {
+    return '<button type="button" class="dept-quick-action" onclick="' + esc(action) + '">' +
+      '<span class="dept-quick-icon" style="background:' + esc(color) + ';"></span>' +
+      '<span><strong>' + esc(title) + '</strong><small>' + esc(copy) + '</small></span>' +
+      '<span class="dept-quick-arrow">&gt;</span>' +
+    '</button>';
   }
 
   function renderPlanningList(showTitle) {
@@ -318,6 +517,40 @@
     if (event.target && event.target.id === 'dept-receipt-modal') closeReceiptModal();
   }
 
+  function workspaceHref(tab, sub) {
+    let url = 'production-workspace.html?id=' + encodeURIComponent(state.prodId || '');
+    if (tab) url += '&tab=' + encodeURIComponent(tab);
+    if (sub) url += '&sub=' + encodeURIComponent(sub);
+    return url;
+  }
+
+  function pageHref(file) {
+    return file + '?id=' + encodeURIComponent(state.prodId || '');
+  }
+
+  function goVolunteers() {
+    location.href = workspaceHref('volunteers', 'roles');
+  }
+
+  function goBudget() {
+    location.href = pageHref('budget-breakdown.html');
+  }
+
+  function goCalendar() {
+    location.href = workspaceHref('calendar');
+  }
+
+  function goFiles() {
+    location.href = pageHref('plan-files.html');
+  }
+
+  async function openReceiptFromDashboard() {
+    if (!currentCategoryId()) {
+      await createCategory();
+    }
+    openReceiptModal();
+  }
+
   async function saveReceipt() {
     const categoryId = currentCategoryId();
     if (!categoryId) return;
@@ -375,5 +608,10 @@
     closeReceiptModal,
     closeModalOnBackdrop,
     saveReceipt,
+    openReceiptFromDashboard,
+    goVolunteers,
+    goBudget,
+    goCalendar,
+    goFiles,
   };
 })();
