@@ -219,13 +219,17 @@
     const remaining = Math.max(0, allocated - spent);
     const opportunities = sectionOpportunities();
     const signups = sectionSignups(opportunities);
+    const acceptedSignups = signups.filter(function (s) {
+      const st = norm(s.status);
+      return st === 'approved' || st === 'checked_in' || st === 'completed';
+    });
     const needed = opportunities.reduce(function (sum, opp) { return sum + (parseInt(opp.volunteers_needed, 10) || 0); }, 0);
-    const assigned = signups.length;
+    const assigned = acceptedSignups.length;
     const open = Math.max(0, needed - assigned);
     return '<div class="dept-dashboard">' +
       '<div class="dept-overview-row">' +
         renderBudgetCard(allocated, spent, remaining) +
-        renderVolunteersCard(assigned, open, needed) +
+        renderVolunteersCard(assigned, open, needed, acceptedSignups) +
         renderNextUpCard() +
       '</div>' +
       '<div class="dept-detail-row">' +
@@ -251,8 +255,17 @@
     '</section>';
   }
 
-  function renderVolunteersCard(assigned, open, needed) {
+  function renderVolunteersCard(assigned, open, needed, acceptedSignups) {
     const filled = percent(assigned, needed);
+    const nameList = (acceptedSignups || []).map(function (s) {
+      const name = s.name || s.volunteer_name || s.email || 'Volunteer';
+      const linked = state.opportunities.find(function (o) { return o.id === s.opportunity_id; });
+      const role = linked ? (linked.production_title || linked.volunteer_role || linked.summary || '') : (s.volunteer_role || s.department || '');
+      return '<div class="dept-vol-chip">' +
+        '<span class="dept-vol-name">' + esc(name) + '</span>' +
+        (role ? '<span class="dept-vol-role">' + esc(role) + '</span>' : '') +
+      '</div>';
+    }).join('');
     return '<section class="dept-dash-card">' +
       '<div class="dept-dash-card-head"><span class="dept-dash-icon">+</span><span>Volunteers</span></div>' +
       '<div class="dept-budget-stats">' +
@@ -262,6 +275,7 @@
       '</div>' +
       progressBar(filled, state.group.color) +
       '<div class="dept-progress-note">' + filled + '% of volunteer needs filled</div>' +
+      (nameList ? '<div class="dept-vol-roster">' + nameList + '</div>' : '') +
       '<button type="button" class="dept-card-link" onclick="BTSDepartmentSection.goVolunteers()">Manage Volunteers</button>' +
     '</section>';
   }
@@ -305,9 +319,9 @@
     });
     signups.slice(0, 5).forEach(function (signup) {
       rows.push({
-        initials: initials(signup.volunteer_name || signup.email || 'Volunteer'),
+        initials: initials(signup.name || signup.volunteer_name || signup.email || 'Volunteer'),
         color: '#78bbd4',
-        title: (signup.volunteer_name || signup.email || 'Volunteer') + ' joined this section',
+        title: (signup.name || signup.volunteer_name || signup.email || 'Volunteer') + ' joined this section',
         time: signup.updated_at || signup.created_at || '',
       });
     });
