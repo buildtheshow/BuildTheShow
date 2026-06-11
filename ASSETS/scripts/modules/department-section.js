@@ -1011,7 +1011,7 @@
     var mount = document.getElementById('dept-receipt-form-native');
     if (!mount) return;
     try {
-      var response = await fetch('/SYSTEM/Organisations/Productions/Workspace/department-receipt-form.html', { cache: 'no-store' });
+      var response = await fetch('/SYSTEM/Organisations/Productions/Workspace/department-receipt-form.html?_t=' + Date.now(), { cache: 'no-store' });
       if (!response.ok) throw new Error('Could not load receipts form');
       var html = await response.text();
       var doc = new DOMParser().parseFromString(html, 'text/html');
@@ -1080,10 +1080,15 @@
 
       var scripts = Array.from(doc.querySelectorAll('script')).map(function (s) { return s.textContent || ''; }).filter(Boolean);
       var rcptScript = scripts[scripts.length - 1] || '';
-      rcptScript = rcptScript.replace('window.addEventListener(\'DOMContentLoaded\', init);', 'init();');
-      var scriptEl = document.createElement('script');
-      scriptEl.textContent = rcptScript;
-      document.body.appendChild(scriptEl);
+      rcptScript = rcptScript.replace('window.addEventListener(\'DOMContentLoaded\', init);', 'window._rcptFormInit = init; init();');
+      if (!window._rcptFormInit) {
+        var scriptEl = document.createElement('script');
+        scriptEl.textContent = rcptScript;
+        document.body.appendChild(scriptEl);
+      } else {
+        // Script already in DOM — just re-run init with the fresh embed data
+        window._rcptFormInit();
+      }
     } catch (error) {
       mount.innerHTML = '<div class="dept-empty">Receipts could not load: ' + esc(error.message) + '</div>';
     }
