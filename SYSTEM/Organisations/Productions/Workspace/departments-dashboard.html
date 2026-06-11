@@ -81,6 +81,38 @@
       font-size: 0.75rem;
       color: rgba(26,21,48,0.58);
     }
+    .dept-dashboard-budget {
+      display: flex;
+      gap: 1rem;
+      margin: 0.55rem 0 0.7rem;
+      padding: 0.5rem 0.65rem;
+      background: rgba(87,46,136,0.04);
+      border-radius: 6px;
+      border: 1px solid rgba(87,46,136,0.08);
+    }
+    .dept-budget-item {
+      display: flex;
+      flex-direction: column;
+      gap: 0.1rem;
+    }
+    .dept-budget-label {
+      font-size: 0.67rem;
+      font-weight: 800;
+      color: rgba(26,21,48,0.45);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .dept-budget-value {
+      font-size: 0.88rem;
+      font-weight: 900;
+      color: #1a1530;
+    }
+    .dept-budget-value.is-zero {
+      color: rgba(26,21,48,0.3);
+    }
+    .dept-budget-value.is-over {
+      color: #d1523d;
+    }
     .dept-dashboard-links {
       display: flex;
       flex-wrap: wrap;
@@ -138,24 +170,111 @@
   <script>
     window.initProductionPage('departments');
     (function () {
+      'use strict';
       const cfg = window.BTSDepartmentConfig;
       const root = document.getElementById('dept-dashboard-root');
       if (!cfg || !root) return;
+
       function esc(value) {
         return value == null ? '' : String(value).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
       }
-      root.innerHTML = cfg.groups.map(function (group) {
-        const links = group.sections.map(function (section) {
-          return '<button type="button" class="dept-dashboard-link" onclick="btsDeptSectionNav(\'' + esc(group.key) + '\',\'' + esc(section.key) + '\')">' + esc(section.label) + '</button>';
+
+      function fmtDollars(cents) {
+        if (!cents) return '$0';
+        const n = Math.abs(Math.round(cents));
+        const str = '$' + Math.floor(n / 100).toLocaleString('en-CA');
+        return cents < 0 ? '-' + str : str;
+      }
+
+      // Build alias → group-key lookup from department config
+      const aliasToGroupKey = {};
+      cfg.groups.forEach(function (group) {
+        group.sections.forEach(function (sec) {
+          (sec.categoryAliases || []).forEach(function (alias) {
+            const key = alias.trim().toLowerCase();
+            if (!aliasToGroupKey[key]) aliasToGroupKey[key] = group.key;
+          });
+        });
+      });
+
+      function groupKeyForCategory(catName) {
+        return aliasToGroupKey[(catName || '').trim().toLowerCase()] || null;
+      }
+
+      // Render cards immediately with placeholder budget slots
+      function renderCards(budgetByGroup) {
+        root.innerHTML = cfg.groups.map(function (group) {
+          const links = group.sections.map(function (section) {
+            return '<button type="button" class="dept-dashboard-link" onclick="btsDeptSectionNav(\'' + esc(group.key) + '\',\'' + esc(section.key) + '\')">' + esc(section.label) + '</button>';
+          }).join('');
+
+          let budgetHtml = '';
+          if (budgetByGroup) {
+            const b = budgetByGroup[group.key] || { planned: 0, spent: 0 };
+            const overBudget = b.spent > 0 && b.planned > 0 && b.spent > b.planned;
+            const spentClass = overBudget ? 'is-over' : (b.spent === 0 ? 'is-zero' : '');
+            const plannedClass = b.planned === 0 ? 'is-zero' : '';
+            budgetHtml = '<div class="dept-dashboard-budget">' +
+              '<div class="dept-budget-item"><div class="dept-budget-label">Planned</div><div class="dept-budget-value ' + plannedClass + '">' + fmtDollars(b.planned) + '</div></div>' +
+              '<div class="dept-budget-item"><div class="dept-budget-label">Spent</div><div class="dept-budget-value ' + spentClass + '">' + fmtDollars(b.spent) + '</div></div>' +
+            '</div>';
+          } else {
+            budgetHtml = '<div class="dept-dashboard-budget" id="dept-budget-' + esc(group.key) + '">' +
+              '<div class="dept-budget-item"><div class="dept-budget-label">Planned</div><div class="dept-budget-value is-zero">--</div></div>' +
+              '<div class="dept-budget-item"><div class="dept-budget-label">Spent</div><div class="dept-budget-value is-zero">--</div></div>' +
+            '</div>';
+          }
+
+          return '<section class="dept-dashboard-card" style="--dept-color:' + esc(group.color) + ';">' +
+            '<div class="dept-dashboard-head">' +
+              '<div class="dept-dashboard-icon"><img src="' + esc(group.icon) + '" alt="" /></div>' +
+              '<div><div class="dept-dashboard-title">' + esc(group.label) + '</div><div class="dept-dashboard-sub">' + group.sections.length + ' section' + (group.sections.length === 1 ? '' : 's') + '</div></div>' +
+            '</div>' +
+            budgetHtml +
+            '<div class="dept-dashboard-links">' + links + '</div>' +
+          '</section>';
         }).join('');
-        return '<section class="dept-dashboard-card" style="--dept-color:' + esc(group.color) + ';">' +
-          '<div class="dept-dashboard-head">' +
-            '<div class="dept-dashboard-icon"><img src="' + esc(group.icon) + '" alt="" /></div>' +
-            '<div><div class="dept-dashboard-title">' + esc(group.label) + '</div><div class="dept-dashboard-sub">' + group.sections.length + ' section' + (group.sections.length === 1 ? '' : 's') + '</div></div>' +
-          '</div>' +
-          '<div class="dept-dashboard-links">' + links + '</div>' +
-        '</section>';
-      }).join('');
+      }
+
+      // Render immediately with placeholders
+      renderCards(null);
+
+      // Fetch budget data from Supabase
+      const prodId = new URLSearchParams(location.search).get('id');
+      if (!prodId || typeof supabase === 'undefined') return;
+
+      const sb = supabase.createClient(
+        'https://tkmaiktxpwqfbgeojbnf.supabase.co',
+        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRrbWFpa3R4cHdxZmJnZW9qYm5mIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM3MzE4MTcsImV4cCI6MjA4OTMwNzgxN30.TkTZBNWUatk3Y6Vmfv1hIRR3DfVjgwauwa76Pf00J_8'
+      );
+
+      Promise.all([
+        sb.from('budget_categories').select('id, name, planned_cents').eq('production_id', prodId),
+        sb.from('budget_items').select('category_id, paid_cents').eq('production_id', prodId),
+      ]).then(function (results) {
+        const cats = (results[0].data || []);
+        const items = (results[1].data || []);
+
+        // Sum paid_cents per category_id
+        const paidByCat = {};
+        items.forEach(function (item) {
+          paidByCat[item.category_id] = (paidByCat[item.category_id] || 0) + (item.paid_cents || 0);
+        });
+
+        // Aggregate by group
+        const byGroup = {};
+        cats.forEach(function (cat) {
+          const gk = groupKeyForCategory(cat.name);
+          if (!gk) return;
+          if (!byGroup[gk]) byGroup[gk] = { planned: 0, spent: 0 };
+          byGroup[gk].planned += (cat.planned_cents || 0);
+          byGroup[gk].spent += (paidByCat[cat.id] || 0);
+        });
+
+        renderCards(byGroup);
+      }).catch(function () {
+        // Budget fetch failed — placeholders stay
+      });
     })();
   </script>
 </body>
