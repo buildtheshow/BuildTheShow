@@ -100,6 +100,13 @@
     return (hour % 12 || 12) + ':' + minute + ' ' + (hour < 12 ? 'AM' : 'PM');
   }
 
+  function fmtTimeRange(start, end) {
+    const a = fmtTime(start);
+    const b = fmtTime(end);
+    if (a && b) return a + ' - ' + b;
+    return a || b || '';
+  }
+
   function fmtEventDate(value) {
     if (!value) return 'Date TBC';
     return fmtDate(String(value).slice(0, 10));
@@ -261,6 +268,71 @@
     return scope.ids.map(String).indexOf(String(eventId || '')) !== -1;
   }
 
+  function entryField(entry, camelName, snakeName, fallback) {
+    if (entry && entry[camelName] !== undefined && entry[camelName] !== null && entry[camelName] !== '') return entry[camelName];
+    if (entry && entry[snakeName] !== undefined && entry[snakeName] !== null && entry[snakeName] !== '') return entry[snakeName];
+    return fallback;
+  }
+
+  function parseEventDateTime(value) {
+    if (!value) return null;
+    const raw = String(value);
+    const date = raw.slice(0, 10);
+    const match = raw.match(/T(\d{2}):(\d{2})/);
+    if (!date || !match) return null;
+    return { date, mins: Number(match[1]) * 60 + Number(match[2]) };
+  }
+
+  function addDays(dateStr, days) {
+    const d = new Date(dateStr + 'T12:00:00');
+    d.setDate(d.getDate() + days);
+    return d.toISOString().slice(0, 10);
+  }
+
+  function normalizeDateMinutes(date, mins) {
+    let nextDate = date;
+    let nextMins = mins;
+    while (nextMins < 0) {
+      nextMins += 1440;
+      nextDate = addDays(nextDate, -1);
+    }
+    while (nextMins >= 1440) {
+      nextMins -= 1440;
+      nextDate = addDays(nextDate, 1);
+    }
+    return { date: nextDate, time: String(Math.floor(nextMins / 60)).padStart(2, '0') + ':' + String(nextMins % 60).padStart(2, '0') };
+  }
+
+  function applyAnchor(base, mins, anchor) {
+    const start = parseEventDateTime(base.start_time);
+    const end = parseEventDateTime(base.end_time);
+    if (!start && !end) return null;
+    if (anchor === 'own_time') return null;
+    if (anchor === 'after_start') return normalizeDateMinutes(start.date, start.mins + mins);
+    if (anchor === 'before_end') return normalizeDateMinutes((end || start).date, (end || start).mins - mins);
+    if (anchor === 'before_event_start') return normalizeDateMinutes((start || end).date, -mins);
+    if (anchor === 'after_event_end') return normalizeDateMinutes((end || start).date, 1440 + mins);
+    if (anchor === 'after_end') return normalizeDateMinutes((end || start).date, (end || start).mins + mins);
+    return normalizeDateMinutes((start || end).date, (start || end).mins - mins);
+  }
+
+  function roleShiftTiming(event, entry) {
+    const shiftStartAnchor = entryField(entry, 'shiftStartAnchor', 'shift_start_anchor', 'before_start');
+    const shiftEndAnchor = entryField(entry, 'shiftEndAnchor', 'shift_end_anchor', 'after_end');
+    if (shiftStartAnchor === 'own_time' || shiftEndAnchor === 'own_time') {
+      return { shift_date: null, shift_start_time: null, shift_end_time: null };
+    }
+    const startMins = parseInt(entryField(entry, 'shiftStartMins', 'shift_start_mins', 0), 10) || 0;
+    const endMins = parseInt(entryField(entry, 'shiftEndMins', 'shift_end_mins', 0), 10) || 0;
+    const start = applyAnchor(event, startMins, shiftStartAnchor);
+    const end = applyAnchor(event, endMins, shiftEndAnchor);
+    return {
+      shift_date: (start && start.date) || String(event.start_time || '').slice(0, 10) || null,
+      shift_start_time: start && start.time,
+      shift_end_time: end && end.time,
+    };
+  }
+
   function defaultPlanRole(key, entry) {
     const baseType = planEntryBaseType(key);
     const roles = STAFFING_ROLE_MAP[baseType] || [];
@@ -350,6 +422,81 @@
     const assigned = acceptedSignups.length;
     const needed = Math.max(rawNeeded, assigned);
     return { assigned, open: Math.max(0, open), needed, acceptedSignups };
+  }
+
+  function planShiftRows() {
+    const matches = sectionMatchesText();
+    const rows = [];
+    Object.keys(state.staffingPlan || {}).forEach(function (key) {
+      const entry = state.staffingPlan[key] || {};
+      if (entry.hidden) return;
+      const count = parseInt(entry.count ?? entry.qty ?? entry.volunteers_needed, 10) || 0;
+      if (count <= 0) return;
+      const role = defaultPlanRole(key, entry);
+      if (!role.name || (!matches(role.name) && !(groupHasSingleSection() && matches(role.dept)))) return;
+      const eventTypes = planEntryCountMode(key, entry) === 'per_production'
+        ? planEntryAppliesTo(key, entry)
+        : [planEntryBaseType(key)];
+      state.events.forEach(function (event) {
+        const matchedType = eventTypes.find(function (type) {
+          return planEventMatchesType(event, type) && planEntryAllowsEvent(entry, type, event.id);
+        });
+        if (!matchedType) return;
+        const timing = roleShiftTiming(event, entry);
+        if (!timing.shift_date) return;
+        rows.push({
+          role: role.name,
+          title: role.name,
+          eventTitle: event.title || '',
+          date: timing.shift_date,
+          start: timing.shift_start_time,
+          end: timing.shift_end_time,
+          venue: event.venue || '',
+          needed: count,
+          source: 'plan',
+        });
+      });
+    });
+    return rows;
+  }
+
+  function opportunityShiftRows(opportunities) {
+    return (opportunities || sectionOpportunities())
+      .filter(function (opp) { return norm(opp.status) !== 'cancelled'; })
+      .map(function (opp) {
+        const date = opp.event_date || opp.shift_date || '';
+        return {
+          role: canonicalVolunteerRoleName(opp.production_title || opp.volunteer_role || opp.summary || ''),
+          title: canonicalVolunteerRoleName(opp.production_title || opp.volunteer_role || 'Volunteer Shift'),
+          eventTitle: opp.summary || '',
+          date: String(date || '').slice(0, 10),
+          start: opp.shift_start_time || '',
+          end: opp.shift_end_time || '',
+          venue: opp.location_text || '',
+          needed: parseInt(opp.volunteers_needed, 10) || 0,
+          source: 'opportunity',
+        };
+      })
+      .filter(function (row) { return row.role && row.date; });
+  }
+
+  function sectionShiftRows(opportunities) {
+    const today = new Date().toISOString().slice(0, 10);
+    const seen = new Set();
+    return planShiftRows()
+      .concat(opportunityShiftRows(opportunities))
+      .filter(function (row) { return row.date >= today; })
+      .sort(function (a, b) {
+        return String(a.date || '').localeCompare(String(b.date || '')) ||
+          String(a.start || '').localeCompare(String(b.start || '')) ||
+          String(a.title || '').localeCompare(String(b.title || ''));
+      })
+      .filter(function (row) {
+        const key = [volunteerRoleKey(row.role), row.date, row.start || '', row.end || ''].join('::');
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
   }
 
   function sectionEvents() {
@@ -460,7 +607,7 @@
       '<div class="dept-overview-row">' +
         renderBudgetCard(allocated, spent, remaining) +
         renderVolunteersCard(vol.assigned, vol.open, vol.needed, vol.acceptedSignups) +
-        renderNextUpCard() +
+        renderNextUpCard(opportunities) +
       '</div>' +
       '<div class="dept-detail-row">' +
         renderActivityCard(receipts, signups, opportunities) +
@@ -536,30 +683,41 @@
     '</section>';
   }
 
-  function renderNextUpCard() {
-    const next = sectionEvents()[0];
-    if (!next) {
+  function renderNextUpCard(opportunities) {
+    const shifts = sectionShiftRows(opportunities);
+    if (!shifts.length) {
       return '<section class="dept-summary-card dept-summary-card--next">' +
         '<div class="dept-summary-head"><div><div class="dept-summary-kicker">Next Up</div><div class="dept-summary-title">Nothing Scheduled</div></div><button type="button" class="dept-card-action dark" onclick="BTSDepartmentSection.goCalendar()">Calendar</button></div>' +
-        '<p class="dept-next-empty">No upcoming ' + esc(state.section.label) + ' date is on the production calendar yet.</p>' +
+        '<p class="dept-next-empty">No upcoming ' + esc(state.section.label) + ' volunteer shifts are on the schedule yet.</p>' +
       '</section>';
     }
-    const date = String(next.start_time || '').slice(0, 10);
-    const day = date ? new Date(date + 'T12:00:00') : null;
+    const firstDate = fmtDate(shifts[0].date);
+    const list = shifts.map(renderNextShiftRow).join('');
+    return '<section class="dept-summary-card dept-summary-card--next">' +
+      '<div class="dept-summary-head"><div><div class="dept-summary-kicker">Next Up</div><div class="dept-summary-title">' + esc(shifts.length + ' Shift' + (shifts.length === 1 ? '' : 's')) + '</div><div class="dept-next-line">Starting ' + esc(firstDate) + '</div></div><button type="button" class="dept-card-action dark" onclick="BTSDepartmentSection.goCalendar()">Calendar</button></div>' +
+      '<div class="dept-next-list">' + list + '</div>' +
+    '</section>';
+  }
+
+  function renderNextShiftRow(shift) {
+    const day = shift.date ? new Date(shift.date + 'T12:00:00') : null;
     const month = day ? day.toLocaleDateString('en-CA', { month: 'short' }).toUpperCase() : 'TBC';
     const dayNum = day ? String(day.getDate()) : '-';
     const weekday = day ? day.toLocaleDateString('en-CA', { weekday: 'short' }).toUpperCase() : '';
-    return '<section class="dept-summary-card dept-summary-card--next">' +
-      '<div class="dept-summary-head"><div><div class="dept-summary-kicker">Next Up</div><div class="dept-summary-title">' + esc(next.title || 'Upcoming Date') + '</div></div><button type="button" class="dept-card-action dark" onclick="BTSDepartmentSection.goCalendar()">Calendar</button></div>' +
-      '<div class="dept-next-layout">' +
-          '<div>' +
-            '<div class="dept-next-line">Date: ' + esc(fmtEventDate(next.start_time)) + '</div>' +
-            '<div class="dept-next-line">Time: ' + esc(fmtTime(next.start_time) || 'Time TBC') + '</div>' +
-            '<div class="dept-next-line">Location: ' + esc(next.venue || 'Location TBC') + '</div>' +
-          '</div>' +
-          '<div class="dept-date-badge"><div>' + esc(month) + '</div><strong>' + esc(dayNum) + '</strong><span>' + esc(weekday) + '</span></div>' +
-        '</div>' +
-    '</section>';
+    const time = fmtTimeRange(shift.start, shift.end) || 'Time TBC';
+    const meta = [
+      time,
+      shift.venue || '',
+      shift.needed ? shift.needed + ' needed' : '',
+    ].filter(Boolean).join(' - ');
+    return '<div class="dept-next-shift">' +
+      '<div class="dept-date-badge compact"><div>' + esc(month) + '</div><strong>' + esc(dayNum) + '</strong><span>' + esc(weekday) + '</span></div>' +
+      '<div class="dept-next-shift-copy">' +
+        '<div class="dept-next-shift-title">' + esc(shift.title || 'Volunteer Shift') + '</div>' +
+        '<div class="dept-next-shift-meta">' + esc(meta) + '</div>' +
+        (shift.eventTitle && shift.eventTitle !== shift.title ? '<div class="dept-next-shift-event">' + esc(shift.eventTitle) + '</div>' : '') +
+      '</div>' +
+    '</div>';
   }
 
   function renderActivityCard(receipts, signups, opportunities) {
