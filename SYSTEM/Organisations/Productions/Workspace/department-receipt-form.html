@@ -271,30 +271,6 @@
       border: none;
       display: block;
     }
-    .rcpt-ocr-banner {
-      display: flex;
-      align-items: center;
-      gap: 0.6rem;
-      padding: 0.7rem 0.9rem;
-      font-size: 0.82rem;
-      font-weight: 500;
-    }
-    .rcpt-ocr-banner--loading { background: rgba(87,46,136,0.07); color: #572e88; }
-    .rcpt-ocr-banner--done    { background: rgba(118,158,123,0.12); color: #2e6639; }
-    .rcpt-ocr-banner--error   { background: rgba(209,82,61,0.08); color: #a03020; }
-    .rcpt-ocr-spinner {
-      width: 14px; height: 14px; border-radius: 50%;
-      border: 2px solid rgba(87,46,136,0.25);
-      border-top-color: #572e88;
-      animation: rcpt-spin 0.7s linear infinite;
-      flex-shrink: 0;
-    }
-    @keyframes rcpt-spin { to { transform: rotate(360deg); } }
-    .rcpt-ocr-banner img { width: 15px; height: 15px; flex-shrink: 0; }
-    .rcpt-input.autofilled {
-      border-color: rgba(118,158,123,0.5);
-      background: rgba(118,158,123,0.05);
-    }
     /* Fullscreen image overlay */
     .rcpt-img-overlay {
       display: none;
@@ -722,10 +698,6 @@
               <input type="file" id="rcpt-file-input" accept=".jpg,.jpeg,.png,.pdf" multiple style="display:none" onchange="rcptFilesSelected(this.files)">
               <!-- Large preview panel -->
               <div class="rcpt-preview-panel" id="rcpt-preview-panel">
-                <div class="rcpt-ocr-banner rcpt-ocr-banner--loading" id="rcpt-ocr-banner" style="display:none">
-                  <div class="rcpt-ocr-spinner" id="rcpt-ocr-spinner"></div>
-                  <span id="rcpt-ocr-msg">Uploading...</span>
-                </div>
                 <div class="rcpt-preview-images" id="rcpt-preview-images"></div>
               </div>
             </div>
@@ -1348,7 +1320,7 @@
       renderPreviewImages(valid);
       document.getElementById('rcpt-file-preview').classList.add('visible');
       document.getElementById('rcpt-multi-confirm').classList.toggle('visible', valid.length > 1);
-      rcptAutoUploadAndOCR(valid);
+      rcptAutoUpload(valid);
     }
 
     function renderFileThumbs() {
@@ -1410,9 +1382,8 @@
       panel.classList.toggle('visible', files.length > 0);
     }
 
-    async function rcptAutoUploadAndOCR(files) {
+    async function rcptAutoUpload(files) {
       if (!prodId || !sb) return;
-      rcptOcrBanner('loading', 'Uploading your receipt...');
       try {
         const deptSlug = (_activeDeptName || deptName).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
         const ts = Date.now();
@@ -1427,81 +1398,9 @@
           }
         }
         uploadedUrls = urls;
-        if (!urls.length) { rcptOcrBanner('error', 'Upload failed — you can still fill in fields manually.'); return; }
-        rcptOcrBanner('loading', 'Reading your receipt...');
-        await rcptRunOCR(urls);
       } catch(e) {
-        rcptOcrBanner('error', 'Could not read receipt automatically. Please fill in the fields below.');
+        // silent — files will be re-uploaded on submit if needed
       }
-    }
-
-    async function rcptRunOCR(urls) {
-      const PROXY = 'https://tkmaiktxpwqfbgeojbnf.supabase.co/functions/v1/anthropic-proxy';
-      const PROXY_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRrbWFpa3R4cHdxZmJnZW9qYm5mIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM3MzE4MTcsImV4cCI6MjA4OTMwNzgxN30.TkTZBNWUatk3Y6Vmfv1hIRR3DfVjgwauwa76Pf00J_8';
-      const imageContent = urls.map(url => ({
-        type: 'image',
-        source: { type: 'url', url }
-      }));
-      imageContent.push({
-        type: 'text',
-        text: 'Look carefully at this receipt. Extract the following and return ONLY valid JSON, no other text:\n{"vendor":"store or business name","date":"YYYY-MM-DD or null","subtotal":number or null,"tax":number or null,"total":number or null,"description":"5-10 words describing what was purchased"}\nUse null for any field you cannot clearly read. Amounts should be numbers in dollars (e.g. 12.50).'
-      });
-      const res = await fetch(PROXY, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'apikey': PROXY_KEY, 'Authorization': 'Bearer ' + PROXY_KEY },
-        body: JSON.stringify({
-          model: 'claude-haiku-4-5-20251001',
-          max_tokens: 512,
-          messages: [{ role: 'user', content: imageContent }]
-        })
-      });
-      if (!res.ok) throw new Error('OCR request failed');
-      const data = await res.json();
-      const text = data?.content?.[0]?.text || '';
-      const jsonMatch = text.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) throw new Error('No JSON in response');
-      const parsed = JSON.parse(jsonMatch[0]);
-      rcptFillFields(parsed);
-    }
-
-    function rcptFillFields(d) {
-      let filled = [];
-      if (d.vendor)      { rcptAutoFill('rcpt-vendor', d.vendor); filled.push('store'); }
-      if (d.date)        { rcptAutoFill('rcpt-date', d.date); filled.push('date'); }
-      if (d.subtotal != null) {
-        rcptAutoFill('rcpt-subtotal', d.subtotal.toFixed(2));
-        filled.push('subtotal');
-      }
-      if (d.tax != null && d.tax > 0) {
-        rcptAutoFill('rcpt-tax', d.tax.toFixed(2));
-        filled.push('tax');
-      }
-      if (d.description) { rcptAutoFill('rcpt-desc', d.description); filled.push('description'); }
-      rcptCalcTotal();
-      rcptUpdateSummary();
-      if (filled.length) {
-        rcptOcrBanner('done', 'Fields filled from receipt (' + filled.join(', ') + ') — please review and correct if needed.');
-      } else {
-        rcptOcrBanner('error', 'Could not read receipt clearly. Please fill in the fields below.');
-      }
-    }
-
-    function rcptAutoFill(id, value) {
-      const el = document.getElementById(id);
-      if (!el || el.value) return; // don't overwrite if user already typed something
-      el.value = value;
-      el.classList.add('autofilled');
-      el.addEventListener('input', function() { el.classList.remove('autofilled'); }, { once: true });
-    }
-
-    function rcptOcrBanner(type, msg) {
-      const banner = document.getElementById('rcpt-ocr-banner');
-      const spinner = document.getElementById('rcpt-ocr-spinner');
-      const msgEl = document.getElementById('rcpt-ocr-msg');
-      banner.style.display = 'flex';
-      banner.className = 'rcpt-ocr-banner rcpt-ocr-banner--' + type;
-      spinner.style.display = type === 'loading' ? 'block' : 'none';
-      msgEl.textContent = msg;
     }
 
     function rcptRemoveFileAt(idx) {
@@ -1527,7 +1426,6 @@
       document.getElementById('rcpt-file-preview').classList.remove('visible');
       document.getElementById('rcpt-multi-confirm').classList.remove('visible');
       document.getElementById('rcpt-preview-panel').classList.remove('visible');
-      document.getElementById('rcpt-ocr-banner').style.display = 'none';
     }
     function rcptRemoveFile() { rcptClearFiles(); }
 
