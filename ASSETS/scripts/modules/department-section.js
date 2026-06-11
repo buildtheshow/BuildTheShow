@@ -610,8 +610,18 @@
     }).join('') + '</div>';
   }
 
+  function isCostumeTab() {
+    return state.group && state.group.key === 'costumes' && state.tab && state.tab.indexOf('costume-') === 0;
+  }
+
+  function activeCostumeTabKey() {
+    var tabs = activeTabs();
+    var t = tabs.find(function (tab) { return tab.key === state.tab; });
+    return (t && t.costumeTab) || 'groups';
+  }
+
   function isCostumePlanningSection() {
-    return state.group && state.group.key === 'costumes' && state.section && state.section.key === 'costumes';
+    return isCostumeTab();
   }
 
   function renderCostumePlanningMount() {
@@ -680,22 +690,24 @@
       mount.innerHTML = '';
       var scope = document.createElement('div');
       scope.className = 'dept-costume-inline';
-      scope.appendChild(nav.cloneNode(true));
+      // Omit the costume nav — department section tabs take its place
       scope.appendChild(content.cloneNode(true));
       scope.appendChild(overlay.cloneNode(true));
       mount.appendChild(scope);
+      var targetCostumeTab = activeCostumeTabKey();
       if (!window.BTSCostumePlannerInlineLoaded) {
         var scripts = Array.from(doc.querySelectorAll('script')).map(function (script) { return script.textContent || ''; }).filter(Boolean);
         var plannerScript = scripts[scripts.length - 1] || '';
         plannerScript = plannerScript
           .replace("const isEmbed = new URLSearchParams(location.search).get('embed') === '1';", 'const isEmbed = true;')
-          .replace("window.addEventListener('DOMContentLoaded', init);", 'window.BTSCostumePlannerInit = init; init();');
+          .replace("prodId = new URLSearchParams(location.search).get('id');", 'prodId = "' + state.prodId.replace(/"/g, '\\"') + '";')
+          .replace("window.addEventListener('DOMContentLoaded', init);", 'window.BTSCostumePlannerInit = init; init().then(function(){ if(typeof window.showTab==="function") window.showTab("' + targetCostumeTab + '"); });');
         var scriptEl = document.createElement('script');
         scriptEl.textContent = plannerScript;
         document.body.appendChild(scriptEl);
         window.BTSCostumePlannerInlineLoaded = true;
       } else if (typeof window.BTSCostumePlannerInit === 'function') {
-        window.BTSCostumePlannerInit();
+        window.BTSCostumePlannerInit().then(function () { if (typeof window.showTab === 'function') window.showTab(targetCostumeTab); });
       }
     } catch (error) {
       mount.innerHTML = '<div class="dept-empty">Costume planning could not load: ' + esc(error.message) + '</div>';
@@ -963,7 +975,7 @@
   }
 
   function renderContent() {
-    if (state.tab === 'planning' && isCostumePlanningSection()) return renderCostumePlanningMount();
+    if (isCostumeTab()) return renderCostumePlanningMount();
     if (state.tab === 'planning') return renderPlanning();
     if (state.tab === 'receipts') return renderReceipts();
     return renderDashboard();
@@ -974,8 +986,16 @@
     if (!root) return;
     document.title = state.section.label + ' - Build The Show';
     root.style.setProperty('--dept-color', state.group.color || '#572e88');
+    // When switching between costume tabs, reuse the mounted planner without a full re-render
+    if (isCostumeTab() && window.BTSCostumePlannerInlineLoaded && document.getElementById('dept-costume-planning-native')) {
+      if (typeof window.showTab === 'function') window.showTab(activeCostumeTabKey());
+      // Re-render just the tab bar so the active tab highlights correctly
+      var tabsEl = document.querySelector('.dept-tabs');
+      if (tabsEl) tabsEl.outerHTML = renderTabs();
+      return;
+    }
     root.innerHTML = renderHero() + renderTabs() + renderContent() + renderReceiptModal();
-    if (state.tab === 'planning' && isCostumePlanningSection()) mountCostumePlanningNative();
+    if (isCostumeTab()) mountCostumePlanningNative();
   }
 
   function currentCategoryId() {
@@ -1132,7 +1152,7 @@
     const groupKey = p.get('group') || 'front-of-house';
     state.group = config().findGroup(groupKey);
     state.section = config().findSection(state.group.key, p.get('section') || '');
-    var requestedTab = p.get('tab') === 'costume-plan' ? 'planning' : p.get('tab');
+    var requestedTab = p.get('tab') === 'costume-plan' ? 'costume-planning' : p.get('tab');
     state.tab = (activeTabs().some(function (tab) { return tab.key === requestedTab; }) ? requestedTab : 'dashboard');
     await loadData();
     render();

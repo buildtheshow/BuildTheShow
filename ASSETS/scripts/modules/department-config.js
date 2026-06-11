@@ -62,9 +62,12 @@
       color: '#3f7899',
       icon: '/ASSETS/Images/Department-costume-and-makeup.svg',
       tabs: [
-        { key: 'dashboard', label: 'Dashboard' },
-        { key: 'planning', label: 'Planning' },
-        { key: 'receipts', label: 'Receipts' },
+        { key: 'dashboard',           label: 'Dashboard' },
+        { key: 'costume-planning',    label: 'Planning',    costumeTab: 'groups' },
+        { key: 'costume-people',      label: 'People',      costumeTab: 'performers' },
+        { key: 'costume-assignments', label: 'Assignments', costumeTab: 'assignments' },
+        { key: 'costume-tracks',      label: 'Tracks',      costumeTab: 'tracks' },
+        { key: 'receipts',            label: 'Receipts' },
       ],
       sections: [
         section('costumes', 'Costumes', 'Costume plots, fittings, sourcing, repairs, approvals, and performer notes.', ['Costumes', 'Costume Designer', 'Costume Helper']),
