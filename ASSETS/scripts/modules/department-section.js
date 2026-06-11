@@ -153,6 +153,33 @@
     return labels[status] || status || 'Pending';
   }
 
+  function renderBrandTile(options) {
+    const templates = window.BTSAuditionTemplates || {};
+    const cfg = Object.assign({ esc }, options || {});
+    if (typeof templates.renderBrandTileTemplate === 'function') {
+      return templates.renderBrandTileTemplate(cfg);
+    }
+    const color = cfg.color || '#572e88';
+    const ink = cfg.ink || '#ffffff';
+    const tag = ['button', 'div', 'label', 'span'].includes(cfg.tagName) ? cfg.tagName : 'div';
+    const typeAttr = tag === 'button' ? ' type="' + esc(cfg.type || 'button') + '"' : '';
+    const attrs = cfg.attrs ? ' ' + String(cfg.attrs || '').replace(/"/g, '&quot;') : '';
+    const classes = [
+      'template-brand-card',
+      'template-brand-card--' + (cfg.variant || 'horizontal'),
+      'template-brand-card--' + (cfg.mode || 'content'),
+      cfg.className || '',
+    ].filter(Boolean).join(' ');
+    return '<' + tag + ' class="' + esc(classes) + '" style="--brand-tile-bg:' + esc(color) + ';--brand-tile-ink:' + esc(ink) + ';"' + typeAttr + attrs + '>' +
+      '<div class="template-brand-card-inner"><div class="template-brand-tile-content">' +
+        '<div class="template-brand-tile-container template-brand-tile-container--header">' + (cfg.kicker ? '<div class="template-brand-tile-kicker">' + esc(cfg.kicker) + '</div>' : '') + '</div>' +
+        '<div class="template-brand-tile-container template-brand-tile-container--title">' + (cfg.title ? '<div class="template-brand-tile-title">' + esc(cfg.title) + '</div>' : '') + '</div>' +
+        '<div class="template-brand-tile-container template-brand-tile-container--body">' + (cfg.bodyHtml || (cfg.body ? '<div class="template-brand-tile-body">' + esc(cfg.body) + '</div>' : '')) + '</div>' +
+        '<div class="template-brand-tile-container template-brand-tile-container--footer">' + (cfg.buttonHtml || (cfg.buttonLabel ? '<div class="template-brand-tile-button">' + esc(cfg.buttonLabel) + '</div>' : '')) + '</div>' +
+      '</div></div>' +
+    '</' + tag + '>';
+  }
+
   function percent(value, total) {
     if (!total || total <= 0) return 0;
     return Math.max(0, Math.min(100, Math.round((value / total) * 100)));
@@ -242,17 +269,23 @@
 
   function renderBudgetCard(allocated, spent, remaining) {
     const used = percent(spent, allocated);
-    return '<section class="dept-dash-card">' +
-      '<div class="dept-dash-card-head"><span class="dept-dash-icon">$</span><span>Budget</span></div>' +
-      '<div class="dept-budget-stats">' +
+    return renderBrandTile({
+      variant: 'horizontal',
+      mode: 'content',
+      color: state.group.color,
+      ink: '#ffffff',
+      className: 'dept-brand-card dept-brand-card--budget',
+      kicker: 'Budget',
+      title: fmtMoney(remaining),
+      bodyHtml: '<div class="dept-brand-stats">' +
         statBlock('Allocated', fmtMoney(allocated)) +
         statBlock('Spent', fmtMoney(spent)) +
         statBlock('Remaining', fmtMoney(remaining), 'accent') +
-      '</div>' +
-      progressBar(used, state.group.color) +
-      '<div class="dept-progress-note">' + used + '% of budget used</div>' +
-      '<button type="button" class="dept-card-link" onclick="BTSDepartmentSection.goBudget()">View Budget</button>' +
-    '</section>';
+        '</div>' +
+        progressBar(used, '#ffffff') +
+        '<div class="dept-brand-note">' + used + '% of budget used</div>',
+      buttonHtml: '<button type="button" class="template-brand-tile-button" onclick="BTSDepartmentSection.goBudget()">View Budget</button>',
+    });
   }
 
   var LEAD_KEYWORDS = /\b(lead|manager|director|designer|coordinator|head|supervisor|technician|captain)\b/i;
@@ -294,46 +327,64 @@
       ? '<div class="dept-vol-section"><div class="dept-vol-section-label">Volunteers</div><div class="dept-vol-roster">' + crew.map(chip).join('') + '</div></div>'
       : '';
 
-    return '<section class="dept-dash-card">' +
-      '<div class="dept-dash-card-head"><span class="dept-dash-icon">+</span><span>Volunteers</span></div>' +
-      '<div class="dept-budget-stats">' +
+    return renderBrandTile({
+      variant: 'horizontal',
+      mode: 'content',
+      color: state.group.color,
+      ink: '#ffffff',
+      className: 'dept-brand-card dept-brand-card--volunteers',
+      kicker: 'Volunteers',
+      title: assigned + '/' + needed,
+      bodyHtml: '<div class="dept-brand-stats">' +
         statBlock('Assigned', String(assigned), 'accent') +
         statBlock('Open Positions', String(open), 'accent') +
         statBlock('Total Needed', String(needed), 'accent') +
-      '</div>' +
-      progressBar(filled, state.group.color) +
-      '<div class="dept-progress-note">' + filled + '% of volunteer needs filled</div>' +
-      headHtml +
-      crewHtml +
-      '<button type="button" class="dept-card-link" onclick="BTSDepartmentSection.goVolunteers()">Manage Volunteers</button>' +
-    '</section>';
+        '</div>' +
+        progressBar(filled, '#ffffff') +
+        '<div class="dept-brand-note">' + filled + '% of volunteer needs filled</div>' +
+        '<div class="dept-brand-volunteers">' + headHtml + crewHtml + '</div>',
+      buttonHtml: '<button type="button" class="template-brand-tile-button" onclick="BTSDepartmentSection.goVolunteers()">Manage Volunteers</button>',
+    });
   }
 
   function renderNextUpCard() {
     const next = sectionEvents()[0];
     if (!next) {
-      return '<section class="dept-dash-card">' +
-        '<div class="dept-dash-card-head"><span class="dept-dash-icon">#</span><span>Next Up</span></div>' +
-        '<div class="dept-next-empty">No upcoming ' + esc(state.section.label) + ' date is on the production calendar yet.</div>' +
-        '<button type="button" class="dept-card-link" onclick="BTSDepartmentSection.goCalendar()">View Calendar</button>' +
-      '</section>';
+      return renderBrandTile({
+        variant: 'horizontal',
+        mode: 'content',
+        color: '#efab45',
+        ink: '#1a1530',
+        className: 'dept-brand-card dept-brand-card--next',
+        kicker: 'Next Up',
+        title: 'Nothing Scheduled',
+        bodyHtml: '<div class="template-brand-tile-body">No upcoming ' + esc(state.section.label) + ' date is on the production calendar yet.</div>',
+        buttonHtml: '<button type="button" class="template-brand-tile-button" onclick="BTSDepartmentSection.goCalendar()">View Calendar</button>',
+      });
     }
     const date = String(next.start_time || '').slice(0, 10);
     const day = date ? new Date(date + 'T12:00:00') : null;
     const month = day ? day.toLocaleDateString('en-CA', { month: 'short' }).toUpperCase() : 'TBC';
     const dayNum = day ? String(day.getDate()) : '-';
     const weekday = day ? day.toLocaleDateString('en-CA', { weekday: 'short' }).toUpperCase() : '';
-    return '<section class="dept-dash-card dept-next-card">' +
-      '<div class="dept-dash-card-head"><span class="dept-dash-icon">#</span><span>Next Up</span></div>' +
-      '<div class="dept-next-layout">' +
-        '<div><div class="dept-next-title">' + esc(next.title || 'Upcoming Date') + '</div>' +
-          '<div class="dept-next-line">Date: ' + esc(fmtEventDate(next.start_time)) + '</div>' +
-          '<div class="dept-next-line">Time: ' + esc(fmtTime(next.start_time) || 'Time TBC') + '</div>' +
-          '<div class="dept-next-line">Location: ' + esc(next.venue || 'Location TBC') + '</div></div>' +
-        '<div class="dept-date-badge"><div>' + esc(month) + '</div><strong>' + esc(dayNum) + '</strong><span>' + esc(weekday) + '</span></div>' +
-      '</div>' +
-      '<button type="button" class="dept-card-link" onclick="BTSDepartmentSection.goCalendar()">View Calendar</button>' +
-    '</section>';
+    return renderBrandTile({
+      variant: 'horizontal',
+      mode: 'content',
+      color: '#efab45',
+      ink: '#1a1530',
+      className: 'dept-brand-card dept-brand-card--next',
+      kicker: 'Next Up',
+      title: next.title || 'Upcoming Date',
+      bodyHtml: '<div class="dept-next-layout">' +
+          '<div>' +
+            '<div class="dept-next-line">Date: ' + esc(fmtEventDate(next.start_time)) + '</div>' +
+            '<div class="dept-next-line">Time: ' + esc(fmtTime(next.start_time) || 'Time TBC') + '</div>' +
+            '<div class="dept-next-line">Location: ' + esc(next.venue || 'Location TBC') + '</div>' +
+          '</div>' +
+          '<div class="dept-date-badge"><div>' + esc(month) + '</div><strong>' + esc(dayNum) + '</strong><span>' + esc(weekday) + '</span></div>' +
+        '</div>',
+      buttonHtml: '<button type="button" class="template-brand-tile-button" onclick="BTSDepartmentSection.goCalendar()">View Calendar</button>',
+    });
   }
 
   function renderActivityCard(receipts, signups, opportunities) {
@@ -381,10 +432,10 @@
     return '<section class="dept-dash-card dept-actions-card">' +
       '<div class="dept-dash-card-head"><span class="dept-line-icon">!</span><span>Quick Actions</span></div>' +
       '<div class="dept-action-grid">' +
-        quickAction('Manage Volunteers', 'Add, remove, or assign volunteers', state.group.color, 'BTSDepartmentSection.goVolunteers()') +
-        quickAction('View Budget', 'See budget details and spending', state.group.color, 'BTSDepartmentSection.goBudget()') +
-        quickAction('Upload Receipt', 'Add a new receipt or expense', state.group.color, 'BTSDepartmentSection.openReceiptFromDashboard()') +
-        quickAction('Department Files', 'View and manage files and documents', state.group.color, 'BTSDepartmentSection.goFiles()') +
+        quickAction('Manage Volunteers', 'Add, remove, or assign volunteers', state.group.color, 'BTSDepartmentSection.goVolunteers()', 'Volunteers') +
+        quickAction('View Budget', 'See budget details and spending', '#769e7b', 'BTSDepartmentSection.goBudget()', 'Budget') +
+        quickAction('Upload Receipt', 'Add a new receipt or expense', '#efab45', 'BTSDepartmentSection.openReceiptFromDashboard()', 'Receipts') +
+        quickAction('Department Files', 'View and manage files and documents', '#476aaa', 'BTSDepartmentSection.goFiles()', 'Files') +
       '</div>' +
     '</section>';
   }
@@ -417,12 +468,20 @@
     return date.toLocaleDateString('en-CA', { month: 'short', day: 'numeric' });
   }
 
-  function quickAction(title, copy, color, action) {
-    return '<button type="button" class="dept-quick-action" onclick="' + esc(action) + '">' +
-      '<span class="dept-quick-icon" style="background:' + esc(color) + ';"></span>' +
-      '<span><strong>' + esc(title) + '</strong><small>' + esc(copy) + '</small></span>' +
-      '<span class="dept-quick-arrow">&gt;</span>' +
-    '</button>';
+  function quickAction(title, copy, color, action, kicker) {
+    return renderBrandTile({
+      tagName: 'button',
+      variant: 'horizontal',
+      mode: 'content',
+      color,
+      ink: '#ffffff',
+      className: 'dept-brand-action',
+      attrs: "onclick='" + esc(action) + "'",
+      kicker: kicker || 'Action',
+      title,
+      body: copy,
+      buttonLabel: 'Open',
+    });
   }
 
   function renderPlanningList(showTitle) {
