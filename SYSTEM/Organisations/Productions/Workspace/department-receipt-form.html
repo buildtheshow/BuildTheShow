@@ -241,7 +241,7 @@
     .rcpt-preview-panel {
       display: none;
       flex-direction: column;
-      gap: 0.75rem;
+      gap: 0;
       margin-top: 0.85rem;
       background: #f4f2fa;
       border-radius: 12px;
@@ -249,25 +249,49 @@
     }
     .rcpt-preview-panel.visible { display: flex; }
     .rcpt-preview-images {
-      max-height: 420px;
-      overflow-y: auto;
       display: flex;
-      flex-direction: column;
+      flex-wrap: wrap;
       gap: 0.5rem;
       padding: 0.75rem;
     }
-    .rcpt-preview-images img {
-      width: 100%;
+    .rcpt-preview-thumb {
+      width: 110px;
+      height: 110px;
       border-radius: 8px;
-      display: block;
+      overflow: hidden;
       cursor: zoom-in;
-      box-shadow: 0 1px 4px rgba(0,0,0,0.12);
+      box-shadow: 0 1px 4px rgba(0,0,0,0.14);
+      background: #e8e4f3;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
     }
-    .rcpt-preview-pdf-note {
-      padding: 1rem;
+    .rcpt-preview-thumb img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+    .rcpt-preview-thumb .rcpt-preview-pdf-badge {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.35rem;
+    }
+    .rcpt-preview-thumb .rcpt-preview-pdf-badge img {
+      width: 36px;
+      height: 36px;
+      object-fit: contain;
+    }
+    .rcpt-preview-thumb .rcpt-preview-pdf-badge span {
+      font-size: 0.68rem;
+      color: #572e88;
+      font-weight: 600;
       text-align: center;
-      font-size: 0.82rem;
-      color: #9a90b0;
+      padding: 0 6px;
+      word-break: break-all;
     }
     .rcpt-ocr-banner {
       display: flex;
@@ -1386,28 +1410,31 @@
       const panel = document.getElementById('rcpt-preview-panel');
       const imgWrap = document.getElementById('rcpt-preview-images');
       imgWrap.innerHTML = '';
-      let hasImage = false;
       files.forEach(function(file) {
+        const objUrl = URL.createObjectURL(file);
+        const tile = document.createElement('div');
+        tile.className = 'rcpt-preview-thumb';
+        tile.title = 'Click to enlarge';
         if (file.type.startsWith('image/')) {
-          hasImage = true;
           const img = document.createElement('img');
-          img.src = URL.createObjectURL(file);
+          img.src = objUrl;
           img.alt = file.name;
-          img.title = 'Click to enlarge';
-          img.addEventListener('click', function() {
-            document.getElementById('rcpt-img-overlay-img').src = img.src;
+          tile.appendChild(img);
+          tile.addEventListener('click', function() {
+            document.getElementById('rcpt-img-overlay-img').src = objUrl;
             document.getElementById('rcpt-img-overlay').classList.add('open');
           });
-          imgWrap.appendChild(img);
         } else {
-          const note = document.createElement('div');
-          note.className = 'rcpt-preview-pdf-note';
-          note.textContent = file.name + ' — PDF preview not available. Fields will be filled from the document.';
-          imgWrap.appendChild(note);
-          hasImage = true;
+          const badge = document.createElement('div');
+          badge.className = 'rcpt-preview-pdf-badge';
+          badge.innerHTML = '<img src="/ASSETS/Images/Files.svg" style="filter:brightness(0);opacity:0.5" alt="PDF"><span>' + file.name + '</span>';
+          tile.appendChild(badge);
+          tile.style.cursor = 'pointer';
+          tile.addEventListener('click', function() { window.open(objUrl, '_blank'); });
         }
+        imgWrap.appendChild(tile);
       });
-      panel.classList.toggle('visible', hasImage);
+      panel.classList.toggle('visible', files.length > 0);
     }
 
     async function rcptAutoUploadAndOCR(files) {
