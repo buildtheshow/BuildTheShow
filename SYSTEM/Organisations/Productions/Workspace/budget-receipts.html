@@ -226,6 +226,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="/SYSTEM/config.js?v=20260610"></script>
   <script src="/SHARED/Navigation/production-sidebar-nav.js?v=15"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
   <script>
   'use strict';
 
@@ -415,6 +416,43 @@
       document.body.style.overflow = '';
     },
 
+    async downloadAll() {
+      const btn = document.getElementById('fin-dl-all-btn');
+      if (btn) { btn.disabled = true; btn.textContent = 'Packaging...'; }
+      try {
+        const zip = new JSZip();
+        let fileIndex = 0;
+        for (const r of this.receipts) {
+          if (!r.receipt_url) continue;
+          let urls = [];
+          try { urls = JSON.parse(r.receipt_url); if (!Array.isArray(urls)) urls = [r.receipt_url]; } catch(e) { urls = [r.receipt_url]; }
+          const dateStr = (r.receipt_date || r.created_at || '').slice(0, 10).replace(/-/g, '');
+          const vendor  = (r.vendor || 'receipt').replace(/[^a-zA-Z0-9]/g, '_').slice(0, 20);
+          for (let i = 0; i < urls.length; i++) {
+            const url = urls[i];
+            const ext = url.split('?')[0].split('.').pop().toLowerCase() || 'jpg';
+            const fname = dateStr + '_' + vendor + (urls.length > 1 ? '_' + (i+1) : '') + '.' + ext;
+            try {
+              const res = await fetch(url);
+              if (res.ok) zip.file(fname, await res.blob());
+            } catch(e) { /* skip unreachable file */ }
+            fileIndex++;
+          }
+        }
+        if (fileIndex === 0) { alert('No receipt files to download.'); return; }
+        const blob = await zip.generateAsync({ type: 'blob' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'receipts-' + new Date().toISOString().slice(0,10) + '.zip';
+        a.click();
+        URL.revokeObjectURL(a.href);
+      } catch(e) {
+        alert('Could not create ZIP: ' + e.message);
+      } finally {
+        if (btn) { btn.disabled = false; btn.innerHTML = '<img src="/ASSETS/Images/Budgeting-Receipts.svg?v=20260611b" style="width:14px;height:14px;filter:brightness(0);opacity:0.7" alt=""> Download All'; }
+      }
+    },
+
     setSearch(val) { this.search = val; this.page = 1; this.render(); },
     setSort(col) {
       if (this.sortCol === col) this.sortDir = this.sortDir === 'asc' ? 'desc' : 'asc';
@@ -546,6 +584,10 @@
               '<div class="fin-section-head">' +
                 '<div><div class="fin-section-title">All Receipts</div><div class="fin-section-sub">' + all.length + ' ' + (all.length===1?'receipt':'receipts') + '</div></div>' +
                 '<div class="fin-section-actions">' +
+                  (all.length ? '<button class="fin-filter-btn" id="fin-dl-all-btn" onclick="FIN.downloadAll()">' +
+                    '<img src="/ASSETS/Images/Budgeting-Receipts.svg?v=20260611b" style="width:14px;height:14px;filter:brightness(0);opacity:0.7" alt="">' +
+                    'Download All' +
+                  '</button>' : '') +
                   '<button class="fin-filter-btn' + (this.showPendingOnly ? ' active' : '') + '" onclick="FIN.toggleFilter()">' +
                     '<img src="/ASSETS/Images/icon-filter.svg" style="width:14px;height:14px;filter:brightness(0);opacity:0.7" alt="">' +
                     (this.showPendingOnly ? 'Pending Only' : 'Filters') +
