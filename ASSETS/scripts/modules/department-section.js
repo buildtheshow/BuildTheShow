@@ -633,7 +633,7 @@
   function renderBudgetCard(allocated, spent, remaining) {
     const used = percent(spent, allocated);
     return '<section class="dept-summary-card dept-summary-card--budget">' +
-      '<div class="dept-summary-head"><div><div class="dept-summary-kicker">Budget</div><div class="dept-summary-title">' + esc(fmtMoney(remaining)) + '</div></div><button type="button" class="dept-card-action" onclick="BTSDepartmentSection.goBudget()">View Budget</button></div>' +
+      '<div class="dept-summary-head"><div><div class="dept-summary-kicker">Budget</div><div class="dept-summary-title">' + esc(fmtMoney(remaining)) + '</div></div><button type="button" class="dept-card-action dark" onclick="BTSDepartmentSection.openReceiptFromDashboard()">Submit Receipt</button></div>' +
       '<div class="dept-summary-stats">' +
         statBlock('Allocated', fmtMoney(allocated)) +
         statBlock('Spent', fmtMoney(spent)) +
@@ -684,7 +684,7 @@
       : '';
 
     return '<section class="dept-summary-card dept-summary-card--volunteers">' +
-      '<div class="dept-summary-head"><div><div class="dept-summary-kicker">Volunteers</div><div class="dept-summary-title">' + esc(assigned + '/' + needed) + '</div></div><button type="button" class="dept-card-action" onclick="BTSDepartmentSection.goVolunteers()">Manage</button></div>' +
+      '<div class="dept-summary-head"><div><div class="dept-summary-kicker">Volunteers</div><div class="dept-summary-title">' + esc(assigned + '/' + needed) + '</div></div><button type="button" class="dept-card-action" onclick="BTSDepartmentSection.goVolunteers()">Manage Volunteers</button></div>' +
       '<div class="dept-summary-stats">' +
         statBlock('Assigned', String(assigned), 'accent') +
         statBlock('Open Positions', String(open), 'accent') +
