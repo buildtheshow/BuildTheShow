@@ -1011,11 +1011,7 @@
     var mount = document.getElementById('dept-receipt-form-native');
     if (!mount) return;
     try {
-      var deptLabel = encodeURIComponent(state.group ? state.group.label : 'Department');
-      var deptColor = encodeURIComponent((state.group && state.group.color || '#572e88').replace(/^#/, ''));
-      var url = '/SYSTEM/Organisations/Productions/Workspace/department-receipt-form.html?id=' +
-        encodeURIComponent(state.prodId) + '&embed=1&dept=' + deptLabel + '&color=' + deptColor;
-      var response = await fetch(url, { cache: 'no-store' });
+      var response = await fetch('/SYSTEM/Organisations/Productions/Workspace/department-receipt-form.html', { cache: 'no-store' });
       if (!response.ok) throw new Error('Could not load receipts form');
       var html = await response.text();
       var doc = new DOMParser().parseFromString(html, 'text/html');
@@ -1033,17 +1029,32 @@
       var scope = document.createElement('div');
       scope.innerHTML = body.innerHTML;
       mount.appendChild(scope);
+
+      // Build category IDs for this group using section aliases
+      var groupAliases = [];
+      if (state.group && state.group.sections) {
+        state.group.sections.forEach(function (s) {
+          [s.label].concat(s.categoryAliases || []).forEach(function (a) {
+            groupAliases.push(String(a).trim().toLowerCase().replace(/&/g, 'and').replace(/\s+/g, ' '));
+          });
+        });
+      }
+      var catIds = (state.categories || []).filter(function (c) {
+        var n = String(c.name || '').trim().toLowerCase().replace(/&/g, 'and').replace(/\s+/g, ' ');
+        return groupAliases.some(function (a) { return n === a || n.includes(a) || a.includes(n); });
+      }).map(function (c) { return c.id; });
+
+      // Pass all data via a global — no fragile string replacements needed
+      window._RCPT_EMBED_DATA = {
+        prodId: state.prodId,
+        deptName: state.group ? state.group.label : 'Department',
+        deptColor: (state.group && state.group.color || '#572e88').replace(/^#/, ''),
+        catIds: catIds,
+      };
+
       var scripts = Array.from(doc.querySelectorAll('script')).map(function (s) { return s.textContent || ''; }).filter(Boolean);
       var rcptScript = scripts[scripts.length - 1] || '';
-      var deptNameLit = (state.group ? state.group.label : 'Department').replace(/\\/g, '\\\\').replace(/"/g, '\\"');
-      var deptColorLit = ((state.group && state.group.color || '#572e88').replace(/^#/, '')).replace(/\\/g, '\\\\').replace(/"/g, '\\"');
-      rcptScript = rcptScript
-        .replace("const _qp = new URLSearchParams(location.search);", 'const _qp = new URLSearchParams("");')
-        .replace("const isEmbed = _qp.get('embed') === '1';", 'const isEmbed = true;')
-        .replace("const deptName = _qp.get('dept') || 'Department';", 'const deptName = "' + deptNameLit + '";')
-        .replace("const deptColor = (_qp.get('color') || '572e88').replace(/^#/, '');", 'const deptColor = "' + deptColorLit + '";')
-        .replace("prodId = _qp.get('id');", 'prodId = "' + state.prodId.replace(/"/g, '\\"') + '";')
-        .replace("window.addEventListener('DOMContentLoaded', init);", 'init();');
+      rcptScript = rcptScript.replace('window.addEventListener(\'DOMContentLoaded\', init);', 'init();');
       var scriptEl = document.createElement('script');
       scriptEl.textContent = rcptScript;
       document.body.appendChild(scriptEl);

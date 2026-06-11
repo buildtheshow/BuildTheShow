@@ -516,8 +516,8 @@
         <!-- ── Budget Summary ── -->
         <div class="rcpt-summary-panel" id="rcpt-summary-panel">
           <div class="rcpt-summary-section">
-            <div class="rcpt-summary-heading">Budget Summary (All Departments)</div>
-            <div class="rcpt-summary-sub">This shows all spending across the production.</div>
+            <div class="rcpt-summary-heading" id="rcpt-summary-heading">Budget Summary</div>
+            <div class="rcpt-summary-sub" id="rcpt-summary-sub">This department's allocated budget and spending.</div>
             <div class="rcpt-summary-date" id="rcpt-summary-date">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
               Loading...
@@ -592,16 +592,19 @@
     let sb, prodId, paidBy = 'company', uploadedFile = null;
     let allocatedCents = 0, spentCents = 0, breakdownItems = [];
 
+    // When embedded, department-section.js sets window._RCPT_EMBED_DATA before calling init()
+    const _embed = window._RCPT_EMBED_DATA || null;
     const _qp = new URLSearchParams(location.search);
-    const isEmbed = _qp.get('embed') === '1';
-    const deptName = _qp.get('dept') || 'Department';
-    const deptColor = (_qp.get('color') || '572e88').replace(/^#/, '');
+    const isEmbed = _embed ? true : (_qp.get('embed') === '1');
+    const deptName = _embed ? (_embed.deptName || 'Department') : (_qp.get('dept') || 'Department');
+    const deptColor = _embed ? (_embed.deptColor || '572e88') : ((_qp.get('color') || '572e88').replace(/^#/, ''));
+    const _injectedCatIds = _embed ? (_embed.catIds || []) : [];
 
     async function init() {
       if (!isEmbed) window.initProductionPage('departments');
       const { createClient } = supabase;
       sb = createClient(SUPA_URL, SUPA_KEY);
-      prodId = _qp.get('id');
+      prodId = _embed ? _embed.prodId : _qp.get('id');
 
       // Apply dept branding (hero elements only exist when not embedded)
       const _heroInner = document.getElementById('rcpt-hero-inner');
@@ -613,6 +616,12 @@
       const _deptInput = document.getElementById('rcpt-dept');
       if (_deptInput) _deptInput.value = deptName;
       document.title = deptName + ' Receipts - Build The Show';
+
+      // Update summary heading to reflect this department
+      const _heading = document.getElementById('rcpt-summary-heading');
+      if (_heading) _heading.textContent = deptName + ' Budget';
+      const _sub = document.getElementById('rcpt-summary-sub');
+      if (_sub) _sub.textContent = deptName + ' allocated budget and spending.';
 
       if (!prodId) return;
       if (isEmbed) {
@@ -647,8 +656,10 @@
         const allCats = catsRes.data || [];
         const allReceipts = rcptRes.data || [];
 
-        // Filter to this department's categories (best-effort name match)
-        const cats = allCats.filter(c => catMatchesDept(c.name));
+        // Use injected category IDs when embedded, otherwise fall back to name matching
+        const cats = _injectedCatIds.length
+          ? allCats.filter(c => _injectedCatIds.includes(c.id))
+          : allCats.filter(c => catMatchesDept(c.name));
         const catIds = new Set(cats.map(c => c.id));
 
         // Filter receipts: match by department field or by category belonging to this dept
