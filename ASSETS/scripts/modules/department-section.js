@@ -614,6 +614,13 @@
     return state.group && state.group.key === 'costumes' && state.tab && state.tab.indexOf('costume-') === 0;
   }
 
+  function isCostumeReceiptsTab() {
+    if (!(state.group && state.group.key === 'costumes' && state.tab === 'receipts')) return false;
+    var tabs = activeTabs();
+    var t = tabs.find(function (tab) { return tab.key === 'receipts'; });
+    return !!(t && t.costumeReceiptsPage);
+  }
+
   function activeCostumeTabKey() {
     var tabs = activeTabs();
     var t = tabs.find(function (tab) { return tab.key === state.tab; });
@@ -977,6 +984,7 @@
 
   function renderContent() {
     if (isCostumeTab()) return renderCostumePlanningMount();
+    if (isCostumeReceiptsTab()) return '<div class="dept-costume-planning-native" id="dept-costume-receipts-native"><div class="dept-empty">Loading receipts...</div></div>';
     if (state.tab === 'planning') return renderPlanning();
     if (state.tab === 'receipts') return renderReceipts();
     return renderDashboard();
@@ -990,13 +998,48 @@
     // When switching between costume tabs, reuse the mounted planner without a full re-render
     if (isCostumeTab() && window.BTSCostumePlannerInlineLoaded && document.getElementById('dept-costume-planning-native')) {
       if (typeof window.showTab === 'function') window.showTab(activeCostumeTabKey());
-      // Re-render just the tab bar so the active tab highlights correctly
       var tabsEl = document.querySelector('.dept-tabs');
       if (tabsEl) tabsEl.outerHTML = renderTabs();
       return;
     }
     root.innerHTML = renderHero() + renderTabs() + renderContent() + renderReceiptModal();
     if (isCostumeTab()) mountCostumePlanningNative();
+    if (isCostumeReceiptsTab()) mountCostumeReceiptsNative();
+  }
+
+  async function mountCostumeReceiptsNative() {
+    var mount = document.getElementById('dept-costume-receipts-native');
+    if (!mount) return;
+    try {
+      var response = await fetch('/SYSTEM/Organisations/Productions/Workspace/departments-costume-receipts.html?id=' + encodeURIComponent(state.prodId) + '&embed=1', { cache: 'no-store' });
+      if (!response.ok) throw new Error('Could not load receipts page');
+      var html = await response.text();
+      var doc = new DOMParser().parseFromString(html, 'text/html');
+      var styleText = Array.from(doc.querySelectorAll('style')).map(function (s) { return s.textContent || ''; }).join('\n');
+      var body = doc.querySelector('.department-receipts-content');
+      if (!body) throw new Error('Receipts page markup was incomplete');
+      if (!document.getElementById('dept-costume-receipts-style')) {
+        var styleEl = document.createElement('style');
+        styleEl.id = 'dept-costume-receipts-style';
+        styleEl.textContent = styleText;
+        document.head.appendChild(styleEl);
+      }
+      mount.innerHTML = '';
+      var scope = document.createElement('div');
+      scope.innerHTML = body.innerHTML;
+      mount.appendChild(scope);
+      var scripts = Array.from(doc.querySelectorAll('script')).map(function (s) { return s.textContent || ''; }).filter(Boolean);
+      var rcptScript = scripts[scripts.length - 1] || '';
+      rcptScript = rcptScript
+        .replace("const isEmbed = new URLSearchParams(location.search).get('embed') === '1';", 'const isEmbed = true;')
+        .replace("prodId = new URLSearchParams(location.search).get('id');", 'prodId = "' + state.prodId.replace(/"/g, '\\"') + '";')
+        .replace("window.addEventListener('DOMContentLoaded', init);", 'init();');
+      var scriptEl = document.createElement('script');
+      scriptEl.textContent = rcptScript;
+      document.body.appendChild(scriptEl);
+    } catch (error) {
+      mount.innerHTML = '<div class="dept-empty">Receipts could not load: ' + esc(error.message) + '</div>';
+    }
   }
 
   function currentCategoryId() {

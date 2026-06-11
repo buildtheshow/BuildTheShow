@@ -67,7 +67,7 @@
         { key: 'costume-people',      label: 'People',      costumeTab: 'performers' },
         { key: 'costume-assignments', label: 'Assignments', costumeTab: 'assignments' },
         { key: 'costume-tracks',      label: 'Tracks',      costumeTab: 'tracks' },
-        { key: 'receipts',            label: 'Receipts' },
+        { key: 'receipts',            label: 'Receipts',    costumeReceiptsPage: true },
       ],
       sections: [
         section('costumes', 'Costumes', 'Costume plots, fittings, sourcing, repairs, approvals, and performer notes.', ['Costumes', 'Costume Designer', 'Costume Helper']),
