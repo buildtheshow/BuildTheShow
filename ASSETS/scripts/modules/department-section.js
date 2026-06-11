@@ -755,7 +755,7 @@
     signups.slice(0, 5).forEach(function (signup) {
       rows.push({
         initials: initials(signup.name || signup.volunteer_name || signup.email || 'Volunteer'),
-        color: '#3c7c90',
+        color: '#3f7899',
         title: (signup.name || signup.volunteer_name || signup.email || 'Volunteer') + ' joined this section',
         time: signup.updated_at || signup.created_at || '',
       });
