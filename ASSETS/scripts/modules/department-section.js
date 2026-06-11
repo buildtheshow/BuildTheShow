@@ -255,17 +255,45 @@
     '</section>';
   }
 
+  var LEAD_KEYWORDS = /\b(lead|manager|director|designer|coordinator|head|supervisor|technician|captain)\b/i;
+
+  function signupRole(s) {
+    var linked = state.opportunities.find(function (o) { return o.id === s.opportunity_id; });
+    return linked ? (linked.production_title || linked.volunteer_role || linked.summary || '') : (s.volunteer_role || s.department || '');
+  }
+
   function renderVolunteersCard(assigned, open, needed, acceptedSignups) {
-    const filled = percent(assigned, needed);
-    const nameList = (acceptedSignups || []).map(function (s) {
-      const name = s.name || s.volunteer_name || s.email || 'Volunteer';
-      const linked = state.opportunities.find(function (o) { return o.id === s.opportunity_id; });
-      const role = linked ? (linked.production_title || linked.volunteer_role || linked.summary || '') : (s.volunteer_role || s.department || '');
+    var filled = percent(assigned, needed);
+    var all = acceptedSignups || [];
+    var leads = all.filter(function (s) { return LEAD_KEYWORDS.test(signupRole(s)); });
+    var crew = all.filter(function (s) { return !LEAD_KEYWORDS.test(signupRole(s)); });
+
+    function chip(s) {
+      var name = s.name || s.volunteer_name || s.email || 'Volunteer';
+      var role = signupRole(s);
       return '<div class="dept-vol-chip">' +
         '<span class="dept-vol-name">' + esc(name) + '</span>' +
         (role ? '<span class="dept-vol-role">' + esc(role) + '</span>' : '') +
       '</div>';
-    }).join('');
+    }
+
+    var headHtml = '';
+    if (leads.length) {
+      headHtml = '<div class="dept-vol-section">' +
+        '<div class="dept-vol-section-label">Department Head</div>' +
+        '<div class="dept-vol-roster">' + leads.map(chip).join('') + '</div>' +
+      '</div>';
+    } else {
+      headHtml = '<div class="dept-vol-section">' +
+        '<div class="dept-vol-section-label">Department Head</div>' +
+        '<div class="dept-vol-empty">No lead assigned yet</div>' +
+      '</div>';
+    }
+
+    var crewHtml = crew.length
+      ? '<div class="dept-vol-section"><div class="dept-vol-section-label">Volunteers</div><div class="dept-vol-roster">' + crew.map(chip).join('') + '</div></div>'
+      : '';
+
     return '<section class="dept-dash-card">' +
       '<div class="dept-dash-card-head"><span class="dept-dash-icon">+</span><span>Volunteers</span></div>' +
       '<div class="dept-budget-stats">' +
@@ -275,7 +303,8 @@
       '</div>' +
       progressBar(filled, state.group.color) +
       '<div class="dept-progress-note">' + filled + '% of volunteer needs filled</div>' +
-      (nameList ? '<div class="dept-vol-roster">' + nameList + '</div>' : '') +
+      headHtml +
+      crewHtml +
       '<button type="button" class="dept-card-link" onclick="BTSDepartmentSection.goVolunteers()">Manage Volunteers</button>' +
     '</section>';
   }
