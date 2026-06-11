@@ -171,58 +171,6 @@
       position: relative;
       margin-bottom: 1.1rem;
     }
-    .rcpt-budget-or-divider {
-      display: flex;
-      align-items: center;
-      gap: 0.75rem;
-      margin: 0.15rem 0 0.85rem;
-    }
-    .rcpt-budget-or-divider::before,
-    .rcpt-budget-or-divider::after {
-      content: '';
-      flex: 1;
-      height: 1px;
-      background: rgba(87,46,136,0.1);
-    }
-    .rcpt-budget-or-divider span {
-      font-size: 0.68rem;
-      font-weight: 700;
-      letter-spacing: 0.1em;
-      text-transform: uppercase;
-      color: #b0a8c8;
-      flex-shrink: 0;
-    }
-    .rcpt-budget-search-label {
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-      margin: 0 0 0.4rem;
-    }
-    .rcpt-budget-search-label span {
-      font-size: 0.74rem;
-      font-weight: 600;
-      color: #9a90b0;
-    }
-    .rcpt-budget-search-optional {
-      font-size: 0.65rem;
-      font-weight: 600;
-      letter-spacing: 0.07em;
-      text-transform: uppercase;
-      color: #b0a8c8;
-      background: #f4f2fa;
-      border-radius: 4px;
-      padding: 0.1rem 0.4rem;
-    }
-    .rcpt-dept-combo-input--search {
-      background: #faf9fd;
-      border-color: rgba(87,46,136,0.12);
-      color: #4d416f;
-    }
-    .rcpt-dept-combo-input--search:focus {
-      background: #fff;
-      border-color: #572e88;
-    }
-    .rcpt-budget-map-select,
     .rcpt-dept-combo-input {
       font-family: inherit;
       font-size: 0.84rem;
@@ -237,8 +185,6 @@
       cursor: text;
       transition: border-color 0.15s;
     }
-    .rcpt-budget-map-select { cursor: pointer; }
-    .rcpt-budget-map-select:focus,
     .rcpt-dept-combo-input:focus { outline: none; border-color: #572e88; }
     .rcpt-dept-combo-arrow {
       position: absolute;
@@ -824,85 +770,23 @@
           let _comboOpen = false;
           let _focusedIdx = -1;
 
-          const label = document.createElement('label');
-          label.className = 'rcpt-budget-map-label';
-          label.textContent = 'Budget category for this receipt';
-
-          const grid = document.createElement('div');
-          grid.className = 'rcpt-budget-map-grid';
-
-          const groupField = document.createElement('div');
-          const groupLabel = document.createElement('label');
-          groupLabel.className = 'rcpt-budget-map-label';
-          groupLabel.setAttribute('for', 'rcpt-budget-group-select');
-          groupLabel.textContent = 'Department group';
-          const groupSelect = document.createElement('select');
-          groupSelect.className = 'rcpt-budget-map-select';
-          groupSelect.id = 'rcpt-budget-group-select';
-
-          const lineField = document.createElement('div');
-          const lineLabel = document.createElement('label');
-          lineLabel.className = 'rcpt-budget-map-label';
-          lineLabel.setAttribute('for', 'rcpt-budget-line-select');
-          lineLabel.textContent = 'Budget subcategory';
-          const lineSelect = document.createElement('select');
-          lineSelect.className = 'rcpt-budget-map-select';
-          lineSelect.id = 'rcpt-budget-line-select';
-
-          const orDivider = document.createElement('div');
-          orDivider.className = 'rcpt-budget-or-divider';
-          orDivider.innerHTML = '<span>Or search by name</span>';
-
-          const searchWrap = document.createElement('div');
-          searchWrap.className = 'rcpt-budget-map-search';
-          const searchLabelWrap = document.createElement('div');
-          searchLabelWrap.className = 'rcpt-budget-search-label';
-          const searchLabelText = document.createElement('label');
-          searchLabelText.setAttribute('for', 'rcpt-dept-combo-input');
-          searchLabelText.innerHTML = '<span>Search budget line</span>';
-          const optionalBadge = document.createElement('span');
-          optionalBadge.className = 'rcpt-budget-search-optional';
-          optionalBadge.textContent = 'Optional';
-          searchLabelWrap.appendChild(searchLabelText);
-          searchLabelWrap.appendChild(optionalBadge);
-
-          const inp = document.createElement('input');
-          inp.type = 'text';
-          inp.className = 'rcpt-dept-combo-input rcpt-dept-combo-input--search';
-          inp.id = 'rcpt-dept-combo-input';
-          inp.autocomplete = 'off';
-          inp.placeholder = 'Already know the exact line? Search here...';
-
-          const arrow = document.createElement('span');
-          arrow.className = 'rcpt-dept-combo-arrow';
-          arrow.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14"><polyline points="6 9 12 15 18 9"/></svg>';
-
-          const list = document.createElement('div');
-          list.className = 'rcpt-dept-combo-list';
-          list.id = 'rcpt-dept-combo-list';
-
           function optionLabel(option) {
             return option.label || (option.categoryName + (option.itemName ? ' - ' + option.itemName : ''));
           }
-
           function optionGroup(option) {
             return option.groupName || option.categoryName || option.label || 'Other';
           }
 
-          function optionForLabel(label) {
-            return budgetOptions.find(option => optionLabel(option) === label) || null;
-          }
+          const groupNames = Array.from(new Set(budgetOptions.map(optionGroup)));
+          let _selectedGroup = groupNames[0] || null;
 
-          function selectOption(selected) {
-            if (!selected) return;
-            const name = optionLabel(selected);
-            const categoryName = selected.categoryName || name;
-            inp.value = '';
-            groupSelect.value = optionGroup(selected);
-            renderLineOptions(optionGroup(selected), selected);
+          function commitOption(option) {
+            if (!option) return;
+            const name = optionLabel(option);
+            const categoryName = option.categoryName || name;
             _activeDeptName = categoryName;
             _activeBudgetLabel = name;
-            _activeCategoryId = selected.categoryId || (((_embed.deptCatMap && _embed.deptCatMap[name]) || [])[0] || '');
+            _activeCategoryId = option.categoryId || (((_embed.deptCatMap && _embed.deptCatMap[name]) || [])[0] || '');
             _activeCatIds = _activeCategoryId ? [_activeCategoryId] : ((_embed.deptCatMap && _embed.deptCatMap[name]) || []);
             if (_deptHidden) _deptHidden.value = name;
             const _catHidden = document.getElementById('rcpt-category-id-hidden');
@@ -911,118 +795,197 @@
             if (_sh) _sh.textContent = name + ' Budget';
             const _ss = document.getElementById('rcpt-summary-sub');
             if (_ss) _ss.textContent = 'Receipts will be filed under ' + categoryName + '.';
-            closeList();
             loadSummary();
           }
 
-          function selectDept(name) {
-            selectOption(optionForLabel(name));
-          }
+          // ── Group combo ──
+          const groupWrap = document.createElement('div');
+          groupWrap.style.cssText = 'position:relative';
+          const groupLabel = document.createElement('label');
+          groupLabel.className = 'rcpt-budget-map-label';
+          groupLabel.textContent = 'Department group';
+          const groupInp = document.createElement('input');
+          groupInp.type = 'text';
+          groupInp.className = 'rcpt-dept-combo-input';
+          groupInp.id = 'rcpt-budget-group-input';
+          groupInp.autocomplete = 'off';
+          groupInp.placeholder = 'Choose a department...';
+          const groupArrow = document.createElement('span');
+          groupArrow.className = 'rcpt-dept-combo-arrow';
+          groupArrow.innerHTML = '&#8964;';
+          const groupList = document.createElement('div');
+          groupList.className = 'rcpt-dept-combo-list';
+          groupWrap.appendChild(groupLabel);
+          groupWrap.appendChild(groupInp);
+          groupWrap.appendChild(groupArrow);
+          groupWrap.appendChild(groupList);
 
-          function renderLineOptions(groupName, selectedOption) {
-            const groupOptions = budgetOptions.filter(option => optionGroup(option) === groupName);
-            lineSelect.innerHTML = '';
-            groupOptions.forEach(function(option) {
-              const optionEl = document.createElement('option');
-              optionEl.value = optionLabel(option);
-              optionEl.textContent = option.itemName || option.categoryName || option.label;
-              lineSelect.appendChild(optionEl);
-            });
-            if (selectedOption) lineSelect.value = optionLabel(selectedOption);
-          }
+          // ── Line combo ──
+          const lineWrap = document.createElement('div');
+          lineWrap.style.cssText = 'position:relative';
+          const lineLabel = document.createElement('label');
+          lineLabel.className = 'rcpt-budget-map-label';
+          lineLabel.textContent = 'Budget subcategory';
+          const lineInp = document.createElement('input');
+          lineInp.type = 'text';
+          lineInp.className = 'rcpt-dept-combo-input';
+          lineInp.id = 'rcpt-budget-line-input';
+          lineInp.autocomplete = 'off';
+          lineInp.placeholder = 'Choose a subcategory...';
+          const lineArrow = document.createElement('span');
+          lineArrow.className = 'rcpt-dept-combo-arrow';
+          lineArrow.innerHTML = '&#8964;';
+          const lineList = document.createElement('div');
+          lineList.className = 'rcpt-dept-combo-list';
+          lineWrap.appendChild(lineLabel);
+          lineWrap.appendChild(lineInp);
+          lineWrap.appendChild(lineArrow);
+          lineWrap.appendChild(lineList);
 
-          const groupNames = Array.from(new Set(budgetOptions.map(optionGroup)));
-          groupNames.forEach(function(groupName) {
-            const optionEl = document.createElement('option');
-            optionEl.value = groupName;
-            optionEl.textContent = groupName;
-            groupSelect.appendChild(optionEl);
-          });
-
-          function buildList(filter) {
+          // ── Group list builder ──
+          let _gIdx = -1;
+          function buildGroupList(filter) {
             const q = (filter || '').trim().toLowerCase();
-            const matches = q ? opts.filter(o => o.toLowerCase().includes(q)) : [];
-            list.innerHTML = '';
-            _focusedIdx = -1;
+            const matches = q ? groupNames.filter(n => n.toLowerCase().includes(q)) : groupNames;
+            groupList.innerHTML = '';
+            _gIdx = -1;
             if (!matches.length) {
-              list.innerHTML = '<div class="rcpt-dept-combo-empty">No budget lines match</div>';
+              groupList.innerHTML = '<div class="rcpt-dept-combo-empty">No match</div>';
             } else {
-              matches.forEach(function(name, i) {
+              matches.forEach(function(name) {
                 const item = document.createElement('div');
-                item.className = 'rcpt-dept-combo-option' + (name === _activeBudgetLabel ? ' selected' : '');
+                item.className = 'rcpt-dept-combo-option' + (name === _selectedGroup ? ' selected' : '');
                 item.textContent = name;
-                item.addEventListener('mousedown', function(e) { e.preventDefault(); selectDept(name); });
-                list.appendChild(item);
+                item.addEventListener('mousedown', function(e) {
+                  e.preventDefault();
+                  _selectedGroup = name;
+                  groupInp.value = name;
+                  groupList.classList.remove('open');
+                  // auto-select first line for new group
+                  const firstOpt = budgetOptions.find(o => optionGroup(o) === name);
+                  if (firstOpt) {
+                    lineInp.value = firstOpt.itemName || firstOpt.categoryName || firstOpt.label;
+                    commitOption(firstOpt);
+                  }
+                  buildLineList('');
+                });
+                groupList.appendChild(item);
               });
             }
           }
 
-          function openList() {
-            buildList(inp.value);
-            list.classList.add('open');
-            _comboOpen = true;
+          // ── Line list builder ──
+          let _lIdx = -1;
+          function buildLineList(filter) {
+            const q = (filter || '').trim().toLowerCase();
+            const groupOpts = budgetOptions.filter(o => optionGroup(o) === _selectedGroup);
+            const matches = q ? groupOpts.filter(o => optionLabel(o).toLowerCase().includes(q)) : groupOpts;
+            lineList.innerHTML = '';
+            _lIdx = -1;
+            if (!matches.length) {
+              lineList.innerHTML = '<div class="rcpt-dept-combo-empty">No match</div>';
+            } else {
+              matches.forEach(function(option) {
+                const item = document.createElement('div');
+                const displayName = option.itemName || option.categoryName || option.label;
+                item.className = 'rcpt-dept-combo-option' + (optionLabel(option) === _activeBudgetLabel ? ' selected' : '');
+                item.textContent = displayName;
+                item.addEventListener('mousedown', function(e) {
+                  e.preventDefault();
+                  lineInp.value = displayName;
+                  lineList.classList.remove('open');
+                  commitOption(option);
+                });
+                lineList.appendChild(item);
+              });
+            }
           }
 
-          function closeList() {
-            list.classList.remove('open');
-            _comboOpen = false;
-          }
-
-          groupSelect.addEventListener('change', function() {
-            const groupOptions = budgetOptions.filter(option => optionGroup(option) === groupSelect.value);
-            selectOption(groupOptions[0]);
-          });
-          lineSelect.addEventListener('change', function() {
-            selectDept(lineSelect.value);
-          });
-
-          inp.addEventListener('focus', function() { inp.select(); openList(); });
-          inp.addEventListener('input', function() { openList(); });
-          inp.addEventListener('blur', function() {
-            setTimeout(function() {
-              closeList();
-              inp.value = '';
-            }, 150);
-          });
-          inp.addEventListener('keydown', function(e) {
+          // ── Combo keyboard helper ──
+          function comboKeydown(e, list, inp, getIdx, setIdx, onEnter) {
             const items = list.querySelectorAll('.rcpt-dept-combo-option');
             if (e.key === 'ArrowDown') {
               e.preventDefault();
-              _focusedIdx = Math.min(_focusedIdx + 1, items.length - 1);
-              items.forEach((el, i) => el.classList.toggle('focused', i === _focusedIdx));
+              setIdx(Math.min(getIdx() + 1, items.length - 1));
+              items.forEach((el, i) => el.classList.toggle('focused', i === getIdx()));
             } else if (e.key === 'ArrowUp') {
               e.preventDefault();
-              _focusedIdx = Math.max(_focusedIdx - 1, 0);
-              items.forEach((el, i) => el.classList.toggle('focused', i === _focusedIdx));
+              setIdx(Math.max(getIdx() - 1, 0));
+              items.forEach((el, i) => el.classList.toggle('focused', i === getIdx()));
             } else if (e.key === 'Enter') {
               e.preventDefault();
-              if (_focusedIdx >= 0 && items[_focusedIdx]) items[_focusedIdx].dispatchEvent(new MouseEvent('mousedown'));
+              if (getIdx() >= 0 && items[getIdx()]) items[getIdx()].dispatchEvent(new MouseEvent('mousedown'));
             } else if (e.key === 'Escape') {
-              closeList();
+              list.classList.remove('open');
               inp.blur();
             }
+          }
+
+          // ── Group events ──
+          groupInp.addEventListener('focus', function() {
+            buildGroupList(groupInp.value);
+            groupList.classList.add('open');
+          });
+          groupInp.addEventListener('input', function() {
+            buildGroupList(groupInp.value);
+            groupList.classList.add('open');
+          });
+          groupInp.addEventListener('blur', function() {
+            setTimeout(function() {
+              groupList.classList.remove('open');
+              if (!groupNames.includes(groupInp.value)) groupInp.value = _selectedGroup || '';
+            }, 150);
+          });
+          groupInp.addEventListener('keydown', function(e) {
+            comboKeydown(e, groupList, groupInp, () => _gIdx, v => { _gIdx = v; }, null);
           });
 
-          groupField.appendChild(groupLabel);
-          groupField.appendChild(groupSelect);
-          lineField.appendChild(lineLabel);
-          lineField.appendChild(lineSelect);
-          grid.appendChild(groupField);
-          grid.appendChild(lineField);
-          searchWrap.appendChild(searchLabelWrap);
-          searchWrap.appendChild(inp);
-          searchWrap.appendChild(arrow);
-          searchWrap.appendChild(list);
+          // ── Line events ──
+          lineInp.addEventListener('focus', function() {
+            buildLineList(lineInp.value);
+            lineList.classList.add('open');
+          });
+          lineInp.addEventListener('input', function() {
+            buildLineList(lineInp.value);
+            lineList.classList.add('open');
+          });
+          lineInp.addEventListener('blur', function() {
+            setTimeout(function() {
+              lineList.classList.remove('open');
+              const groupOpts = budgetOptions.filter(o => optionGroup(o) === _selectedGroup);
+              const stillValid = groupOpts.find(o => (o.itemName || o.categoryName || o.label) === lineInp.value);
+              if (!stillValid && groupOpts.length) {
+                const cur = groupOpts.find(o => optionLabel(o) === _activeBudgetLabel);
+                lineInp.value = cur ? (cur.itemName || cur.categoryName || cur.label) : (groupOpts[0].itemName || groupOpts[0].categoryName || groupOpts[0].label);
+              }
+            }, 150);
+          });
+          lineInp.addEventListener('keydown', function(e) {
+            comboKeydown(e, lineList, lineInp, () => _lIdx, v => { _lIdx = v; }, null);
+          });
+
+          // ── Assemble ──
+          const grid = document.createElement('div');
+          grid.className = 'rcpt-budget-map-grid';
+          grid.appendChild(groupWrap);
+          grid.appendChild(lineWrap);
+
+          const topLabel = document.createElement('label');
+          topLabel.className = 'rcpt-budget-map-label';
+          topLabel.textContent = 'Budget category for this receipt';
+
           _chipWrap.innerHTML = '';
-          _chipWrap.appendChild(label);
+          _chipWrap.appendChild(topLabel);
           _chipWrap.appendChild(grid);
-          _chipWrap.appendChild(orDivider);
-          _chipWrap.appendChild(searchWrap);
-          const hint = document.createElement('div');
-          hint.className = 'rcpt-budget-map-hint';
-          hint.textContent = 'Pick the department group first, then the budget subcategory. The search above is a shortcut if you already know the exact line.';
-          _chipWrap.appendChild(hint);
-          selectOption(budgetOptions[0]);
+
+          // ── Initial selection ──
+          const firstOption = budgetOptions[0];
+          if (firstOption) {
+            _selectedGroup = optionGroup(firstOption);
+            groupInp.value = _selectedGroup;
+            lineInp.value = firstOption.itemName || firstOption.categoryName || firstOption.label;
+            commitOption(firstOption);
+          }
         }
       }
       document.title = deptName + ' Receipts - Build The Show';
