@@ -135,6 +135,23 @@
     return String(value || '').trim().toLowerCase().replace(/&/g, 'and').replace(/\s+/g, ' ');
   }
 
+  function receiptBudgetGroupName(name) {
+    const n = norm(name);
+    const groups = [
+      { label: 'Rights & Venue', terms: ['rights', 'licensing', 'licence', 'license', 'royalties', 'venue', 'rental', 'script rental', 'performance rights', 'orchestra'] },
+      { label: 'Promotion & Audience', terms: ['promotion', 'audience', 'concession', 'printing', 'programme', 'program', 'marketing', 'advertising', 'lobby', 'ticketing', 'box office', 'credit card'] },
+      { label: 'Production Elements', terms: ['production elements', 'set', 'construction', 'props', 'costume', 'hair', 'makeup', 'script', 'paint', 'hardware', 'scenic', 'furniture', 'fabric', 'alterations', 'wigs'] },
+      { label: 'Technical', terms: ['technical', 'sound', 'music', 'instrument', 'stage management supplies', 'lighting', 'photo', 'video', 'microphone', 'battery', 'gels', 'cables'] },
+      { label: 'Safety Net', terms: ['safety', 'insurance', 'permit', 'contingency', 'administration', 'emergency', 'unexpected', 'banking', 'office', 'software'] },
+      { label: 'People', terms: ['people', 'contractor', 'volunteer appreciation', 'cast appreciation', 'director', 'choreographer', 'music director', 'stage manager', 'honorarium', 'honoraria'] },
+      { label: 'Events', terms: ['event', 'audition', 'callback', 'meet and greet', 'meet & greet', 'cast party', 'water', 'snacks', 'cast gifts'] },
+    ];
+    const matched = groups.find(function (group) {
+      return group.terms.some(function (term) { return n.indexOf(term) !== -1; });
+    });
+    return matched ? matched.label : 'Other';
+  }
+
   function canonicalVolunteerRoleName(name) {
     const raw = String(name || '').trim();
     const key = norm(raw);
@@ -1063,17 +1080,21 @@
               budgetOptions.push({
                 label: label,
                 categoryId: cat.id,
+                groupName: cat.name,
                 categoryName: cat.name,
                 itemName: item.name,
               });
             });
           } else {
-            deptCatMap[cat.name] = [cat.id];
+            var groupName = receiptBudgetGroupName(cat.name);
+            var label = groupName + ' - ' + cat.name;
+            deptCatMap[label] = [cat.id];
             budgetOptions.push({
-              label: cat.name,
+              label: label,
               categoryId: cat.id,
+              groupName: groupName,
               categoryName: cat.name,
-              itemName: '',
+              itemName: cat.name,
             });
           }
         });

@@ -158,6 +158,20 @@
       color: #9a90b0;
       margin: -0.65rem 0 1.05rem;
     }
+    .rcpt-budget-map-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 0.85rem;
+      margin-bottom: 0.85rem;
+    }
+    @media (max-width: 640px) {
+      .rcpt-budget-map-grid { grid-template-columns: 1fr; }
+    }
+    .rcpt-budget-map-search {
+      position: relative;
+      margin-bottom: 1.1rem;
+    }
+    .rcpt-budget-map-select,
     .rcpt-dept-combo-input {
       font-family: inherit;
       font-size: 0.84rem;
@@ -172,6 +186,8 @@
       cursor: text;
       transition: border-color 0.15s;
     }
+    .rcpt-budget-map-select { cursor: pointer; }
+    .rcpt-budget-map-select:focus,
     .rcpt-dept-combo-input:focus { outline: none; border-color: #572e88; }
     .rcpt-dept-combo-arrow {
       position: absolute;
@@ -757,13 +773,37 @@
           let _comboOpen = false;
           let _focusedIdx = -1;
 
-          const wrap = document.createElement('div');
-          wrap.className = 'rcpt-dept-combo';
-
           const label = document.createElement('label');
           label.className = 'rcpt-budget-map-label';
-          label.setAttribute('for', 'rcpt-dept-combo-input');
           label.textContent = 'Budget category for this receipt';
+
+          const grid = document.createElement('div');
+          grid.className = 'rcpt-budget-map-grid';
+
+          const groupField = document.createElement('div');
+          const groupLabel = document.createElement('label');
+          groupLabel.className = 'rcpt-budget-map-label';
+          groupLabel.setAttribute('for', 'rcpt-budget-group-select');
+          groupLabel.textContent = 'Department group';
+          const groupSelect = document.createElement('select');
+          groupSelect.className = 'rcpt-budget-map-select';
+          groupSelect.id = 'rcpt-budget-group-select';
+
+          const lineField = document.createElement('div');
+          const lineLabel = document.createElement('label');
+          lineLabel.className = 'rcpt-budget-map-label';
+          lineLabel.setAttribute('for', 'rcpt-budget-line-select');
+          lineLabel.textContent = 'Budget subcategory';
+          const lineSelect = document.createElement('select');
+          lineSelect.className = 'rcpt-budget-map-select';
+          lineSelect.id = 'rcpt-budget-line-select';
+
+          const searchWrap = document.createElement('div');
+          searchWrap.className = 'rcpt-budget-map-search';
+          const searchLabel = document.createElement('label');
+          searchLabel.className = 'rcpt-budget-map-label';
+          searchLabel.setAttribute('for', 'rcpt-dept-combo-input');
+          searchLabel.textContent = 'Search budget line';
 
           const inp = document.createElement('input');
           inp.type = 'text';
@@ -780,17 +820,28 @@
           list.className = 'rcpt-dept-combo-list';
           list.id = 'rcpt-dept-combo-list';
 
-          function optionForLabel(label) {
-            return budgetOptions.find(option => option.label === label) || null;
+          function optionLabel(option) {
+            return option.label || (option.categoryName + (option.itemName ? ' - ' + option.itemName : ''));
           }
 
-          function selectDept(name) {
-            const selected = optionForLabel(name);
-            const categoryName = (selected && selected.categoryName) || name;
-            inp.value = name;
+          function optionGroup(option) {
+            return option.groupName || option.categoryName || option.label || 'Other';
+          }
+
+          function optionForLabel(label) {
+            return budgetOptions.find(option => optionLabel(option) === label) || null;
+          }
+
+          function selectOption(selected) {
+            if (!selected) return;
+            const name = optionLabel(selected);
+            const categoryName = selected.categoryName || name;
+            inp.value = '';
+            groupSelect.value = optionGroup(selected);
+            renderLineOptions(optionGroup(selected), selected);
             _activeDeptName = categoryName;
             _activeBudgetLabel = name;
-            _activeCategoryId = (selected && selected.categoryId) || (((_embed.deptCatMap && _embed.deptCatMap[name]) || [])[0] || '');
+            _activeCategoryId = selected.categoryId || (((_embed.deptCatMap && _embed.deptCatMap[name]) || [])[0] || '');
             _activeCatIds = _activeCategoryId ? [_activeCategoryId] : ((_embed.deptCatMap && _embed.deptCatMap[name]) || []);
             if (_deptHidden) _deptHidden.value = name;
             const _catHidden = document.getElementById('rcpt-category-id-hidden');
@@ -803,9 +854,33 @@
             loadSummary();
           }
 
+          function selectDept(name) {
+            selectOption(optionForLabel(name));
+          }
+
+          function renderLineOptions(groupName, selectedOption) {
+            const groupOptions = budgetOptions.filter(option => optionGroup(option) === groupName);
+            lineSelect.innerHTML = '';
+            groupOptions.forEach(function(option) {
+              const optionEl = document.createElement('option');
+              optionEl.value = optionLabel(option);
+              optionEl.textContent = option.itemName || option.categoryName || option.label;
+              lineSelect.appendChild(optionEl);
+            });
+            if (selectedOption) lineSelect.value = optionLabel(selectedOption);
+          }
+
+          const groupNames = Array.from(new Set(budgetOptions.map(optionGroup)));
+          groupNames.forEach(function(groupName) {
+            const optionEl = document.createElement('option');
+            optionEl.value = groupName;
+            optionEl.textContent = groupName;
+            groupSelect.appendChild(optionEl);
+          });
+
           function buildList(filter) {
             const q = (filter || '').trim().toLowerCase();
-            const matches = q ? opts.filter(o => o.toLowerCase().includes(q)) : opts;
+            const matches = q ? opts.filter(o => o.toLowerCase().includes(q)) : [];
             list.innerHTML = '';
             _focusedIdx = -1;
             if (!matches.length) {
@@ -832,13 +907,20 @@
             _comboOpen = false;
           }
 
+          groupSelect.addEventListener('change', function() {
+            const groupOptions = budgetOptions.filter(option => optionGroup(option) === groupSelect.value);
+            selectOption(groupOptions[0]);
+          });
+          lineSelect.addEventListener('change', function() {
+            selectDept(lineSelect.value);
+          });
+
           inp.addEventListener('focus', function() { inp.select(); openList(); });
           inp.addEventListener('input', function() { openList(); });
           inp.addEventListener('blur', function() {
             setTimeout(function() {
               closeList();
-              // Restore the last confirmed selection if input was cleared
-              if (!inp.value.trim() || !opts.includes(inp.value)) inp.value = _activeBudgetLabel;
+              inp.value = '';
             }, 150);
           });
           inp.addEventListener('keydown', function(e) {
@@ -860,17 +942,25 @@
             }
           });
 
-          wrap.appendChild(inp);
-          wrap.appendChild(arrow);
-          wrap.appendChild(list);
+          groupField.appendChild(groupLabel);
+          groupField.appendChild(groupSelect);
+          lineField.appendChild(lineLabel);
+          lineField.appendChild(lineSelect);
+          grid.appendChild(groupField);
+          grid.appendChild(lineField);
+          searchWrap.appendChild(searchLabel);
+          searchWrap.appendChild(inp);
+          searchWrap.appendChild(arrow);
+          searchWrap.appendChild(list);
           _chipWrap.innerHTML = '';
           _chipWrap.appendChild(label);
-          _chipWrap.appendChild(wrap);
+          _chipWrap.appendChild(grid);
+          _chipWrap.appendChild(searchWrap);
           const hint = document.createElement('div');
           hint.className = 'rcpt-budget-map-hint';
-          hint.textContent = 'Choose the budget line this purchase should be filed under.';
+          hint.textContent = 'Pick the department group first, then the budget subcategory. Search if you already know the exact line.';
           _chipWrap.appendChild(hint);
-          selectDept(opts[0]);
+          selectOption(budgetOptions[0]);
         }
       }
       document.title = deptName + ' Receipts - Build The Show';
