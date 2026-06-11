@@ -1045,11 +1045,18 @@
       }).map(function (c) { return c.id; });
 
       // Pass all data via a global — no fragile string replacements needed
+      var isProducer = state.group && state.group.key === 'producer';
+      var deptOptions = isProducer
+        ? (window.BTSDepartmentConfig ? window.BTSDepartmentConfig.groups.map(function(g) { return g.label; }) : [])
+        : [];
+
       window._RCPT_EMBED_DATA = {
         prodId: state.prodId,
         deptName: state.group ? state.group.label : 'Department',
         deptColor: (state.group && state.group.color || '#572e88').replace(/^#/, ''),
         catIds: catIds,
+        editableDept: isProducer,
+        deptOptions: deptOptions,
       };
 
       var scripts = Array.from(doc.querySelectorAll('script')).map(function (s) { return s.textContent || ''; }).filter(Boolean);
