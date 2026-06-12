@@ -1774,6 +1774,7 @@
     let selectedGroupId = null;
     let selectedPerformerId = null;
     let planningFilter = 'all';
+    let _perfSummaryView = 'by-performer';
 
     const AVATAR_COLORS = ['#572e88','#769e7b','#dd8233','#d1523d','#74a2b4','#476aaa','#ca7ea7','#5b9fc0'];
     const APPROVAL_STATUSES = ['Draft', 'Pending Director Approval', 'Approved', 'Needs Revision'];
@@ -2284,15 +2285,64 @@
       ];
 
       const perf = performers.slice().sort((a, b) => a.name.localeCompare(b.name));
+
+      const toggleHTML = `
+        <div style="display:flex;gap:0.35rem;background:#f4f2fb;border-radius:10px;padding:0.25rem">
+          <button onclick="_perfSummaryView='by-performer';renderPerformerSummary()" style="border:none;cursor:pointer;padding:0.3rem 0.9rem;border-radius:8px;font-size:0.78rem;font-weight:600;transition:all 0.15s;${_perfSummaryView==='by-performer'?'background:#fff;color:#572e88;box-shadow:0 1px 4px rgba(87,46,136,0.13)':'background:transparent;color:#9a90b0'}">By Performer</button>
+          <button onclick="_perfSummaryView='size-summary';renderPerformerSummary()" style="border:none;cursor:pointer;padding:0.3rem 0.9rem;border-radius:8px;font-size:0.78rem;font-weight:600;transition:all 0.15s;${_perfSummaryView==='size-summary'?'background:#fff;color:#572e88;box-shadow:0 1px 4px rgba(87,46,136,0.13)':'background:transparent;color:#9a90b0'}">Size Summary</button>
+        </div>`;
+
       if (!perf.length) {
-        el.innerHTML = '<div style="margin-bottom:1.25rem"><div style="font-size:1rem;font-weight:800;color:#1a1530">Performer Summary</div><div style="font-size:0.78rem;color:rgba(26,21,48,0.45);margin-top:0.15rem">Size and costume notes from registration, one row per performer.</div></div><div class="cp-empty">No performers yet.</div>';
+        el.innerHTML = `<div style="margin-bottom:1.25rem;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:0.75rem">
+          <div><div style="font-size:1rem;font-weight:800;color:#1a1530">Performer Summary</div></div>
+          ${toggleHTML}
+        </div><div class="cp-empty">No performers yet.</div>`;
         return;
       }
 
-      const hasAnySize = perf.some(p => SIZE_FIELDS.some(f => costumeAnswerValue(p.answers, f.keys)));
-      const hasAnyNote = perf.some(p => NOTE_FIELDS.some(f => costumeAnswerValue(p.answers, f.keys)));
+      if (_perfSummaryView === 'size-summary') {
+        // Aggregate: for each SIZE_FIELD, count occurrences of each value
+        const categoryCounts = SIZE_FIELDS.map(f => {
+          const counts = {};
+          perf.forEach(p => {
+            const v = costumeAnswerValue(p.answers, f.keys);
+            if (v) counts[v] = (counts[v] || 0) + 1;
+          });
+          return { label: f.label, counts };
+        }).filter(c => Object.keys(c.counts).length > 0);
 
-      // Build table header
+        const totalWithSizes = perf.filter(p => SIZE_FIELDS.some(f => costumeAnswerValue(p.answers, f.keys))).length;
+        const missingCount = perf.length - totalWithSizes;
+
+        const categoryCards = categoryCounts.map(cat => {
+          const entries = Object.entries(cat.counts).sort((a, b) => b[1] - a[1]);
+          const pills = entries.map(([size, count]) =>
+            `<div style="display:flex;align-items:center;justify-content:space-between;padding:0.45rem 0;border-bottom:1px solid #f4f2fb">
+              <span style="font-size:0.84rem;color:#2a2040;font-weight:500">${esc(size)}</span>
+              <span style="font-size:0.84rem;font-weight:700;color:#572e88;background:#f4f2fb;border-radius:20px;padding:0.1rem 0.65rem">x${count}</span>
+            </div>`
+          ).join('');
+          return `<div style="background:#fff;border:1.5px solid #ede9f8;border-radius:14px;padding:1rem 1.15rem;flex:1;min-width:160px;max-width:260px">
+            <div style="font-size:0.65rem;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#b0a8c8;margin-bottom:0.65rem">${esc(cat.label)}</div>
+            ${pills}
+          </div>`;
+        }).join('');
+
+        el.innerHTML = `
+          <div style="margin-bottom:1.25rem;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:0.75rem">
+            <div>
+              <div style="font-size:1rem;font-weight:800;color:#1a1530">Size Summary</div>
+              <div style="font-size:0.78rem;color:rgba(26,21,48,0.45);margin-top:0.15rem">Aggregate size counts across all performers.</div>
+            </div>
+            ${toggleHTML}
+          </div>
+          ${missingCount ? `<div style="font-size:0.78rem;color:#dd8233;font-weight:600;background:rgba(221,130,51,0.1);border-radius:8px;padding:0.3rem 0.75rem;margin-bottom:1rem;display:inline-block">${missingCount} performer${missingCount===1?'':'s'} missing size info</div>` : ''}
+          ${categoryCounts.length ? `<div style="display:flex;flex-wrap:wrap;gap:1rem">${categoryCards}</div>` : '<div class="cp-empty">No size data collected yet.</div>'}`;
+        return;
+      }
+
+      // By Performer view
+      const hasAnyNote = perf.some(p => NOTE_FIELDS.some(f => costumeAnswerValue(p.answers, f.keys)));
       const sizeHeaders = SIZE_FIELDS.map(f => `<th>${esc(f.label)}</th>`).join('');
       const noteHeaders = hasAnyNote ? NOTE_FIELDS.map(f => `<th>${esc(f.label)}</th>`).join('') : '';
 
@@ -2320,12 +2370,15 @@
       const missingCount = perf.filter(p => !SIZE_FIELDS.some(f => costumeAnswerValue(p.answers, f.keys))).length;
 
       el.innerHTML = `
-        <div style="margin-bottom:1.25rem;display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:0.75rem">
+        <div style="margin-bottom:1.25rem;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:0.75rem">
           <div>
             <div style="font-size:1rem;font-weight:800;color:#1a1530">Performer Summary</div>
             <div style="font-size:0.78rem;color:rgba(26,21,48,0.45);margin-top:0.15rem">Size and costume notes from registration, one row per performer.</div>
           </div>
-          ${missingCount ? `<div style="font-size:0.78rem;color:#dd8233;font-weight:600;background:rgba(221,130,51,0.1);border-radius:8px;padding:0.3rem 0.75rem">${missingCount} performer${missingCount===1?'':'s'} missing size info</div>` : ''}
+          <div style="display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap">
+            ${missingCount ? `<div style="font-size:0.78rem;color:#dd8233;font-weight:600;background:rgba(221,130,51,0.1);border-radius:8px;padding:0.3rem 0.75rem">${missingCount} performer${missingCount===1?'':'s'} missing size info</div>` : ''}
+            ${toggleHTML}
+          </div>
         </div>
         <div style="overflow-x:auto">
           <table style="width:100%;border-collapse:collapse;font-size:0.84rem">
@@ -2342,7 +2395,6 @@
           </table>
         </div>`;
 
-      // Style all th/td after render
       el.querySelectorAll('thead th:not(:first-child)').forEach(th => {
         th.style.cssText = 'text-align:left;padding:0 0.85rem 0.65rem;font-size:0.65rem;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#b0a8c8;white-space:nowrap';
       });
