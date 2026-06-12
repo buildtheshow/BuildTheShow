@@ -2263,6 +2263,96 @@
       renderPerformersFull();
       renderAssignGroups();
       renderTracks();
+      renderPerformerSummary();
+    }
+
+    function renderPerformerSummary() {
+      const el = document.getElementById('cp-performer-summary');
+      if (!el) return;
+      const SIZE_FIELDS = [
+        { label: 'Top',    keys: ['cm_top_size',    'Top Size']    },
+        { label: 'Bottom', keys: ['cm_bottom_size', 'Bottom Size'] },
+        { label: 'Dress',  keys: ['cm_dress_size',  'Dress Size']  },
+        { label: 'Shoes',  keys: ['cm_shoe_size',   'Shoe Size']   },
+        { label: 'Height', keys: ['cm_height',      'Height']      },
+      ];
+      const NOTE_FIELDS = [
+        { label: 'Costume Notes',      keys: ['cm_costume_notes', 'Costume concerns or special considerations'] },
+        { label: 'Material Allergies', keys: ['cm_allergy_notes', 'Makeup or material allergies'] },
+        { label: 'Sensory Notes',      keys: ['cm_sensory_notes', 'Sensory notes'] },
+        { label: 'Other',              keys: ['cm_other_notes',   'Anything else the costume team should know'] },
+      ];
+
+      const perf = performers.slice().sort((a, b) => a.name.localeCompare(b.name));
+      if (!perf.length) {
+        el.innerHTML = '<div style="margin-bottom:1.25rem"><div style="font-size:1rem;font-weight:800;color:#1a1530">Performer Summary</div><div style="font-size:0.78rem;color:rgba(26,21,48,0.45);margin-top:0.15rem">Size and costume notes from registration, one row per performer.</div></div><div class="cp-empty">No performers yet.</div>';
+        return;
+      }
+
+      const hasAnySize = perf.some(p => SIZE_FIELDS.some(f => costumeAnswerValue(p.answers, f.keys)));
+      const hasAnyNote = perf.some(p => NOTE_FIELDS.some(f => costumeAnswerValue(p.answers, f.keys)));
+
+      // Build table header
+      const sizeHeaders = SIZE_FIELDS.map(f => `<th>${esc(f.label)}</th>`).join('');
+      const noteHeaders = hasAnyNote ? NOTE_FIELDS.map(f => `<th>${esc(f.label)}</th>`).join('') : '';
+
+      const rows = perf.map(p => {
+        const sizeCells = SIZE_FIELDS.map(f => {
+          const v = costumeAnswerValue(p.answers, f.keys);
+          return `<td>${v ? esc(v) : '<span style="color:#ccc">—</span>'}</td>`;
+        }).join('');
+        const noteCells = hasAnyNote ? NOTE_FIELDS.map(f => {
+          const v = costumeAnswerValue(p.answers, f.keys);
+          return `<td style="font-size:0.78rem;color:#5a4f7a;max-width:180px;word-break:break-word">${v ? esc(v) : '<span style="color:#ccc">—</span>'}</td>`;
+        }).join('') : '';
+        const initStr = p.name.trim().split(/\s+/).slice(0,2).map(w => w[0]?.toUpperCase() || '').join('');
+        const colors = ['#e8e4f8','#fce9e5','#e5f0e7','#e8f0f9','#fef4e2','#f4e6f0'];
+        const textColors = ['#572e88','#d1523d','#2e6639','#2a4a80','#a06b00','#8a2a6e'];
+        let h = 0; for (let i = 0; i < p.name.length; i++) h = (h*31+p.name.charCodeAt(i))&0xffffffff;
+        const ci = Math.abs(h) % colors.length;
+        const avatar = `<div style="width:30px;height:30px;border-radius:50%;background:${colors[ci]};color:${textColors[ci]};display:flex;align-items:center;justify-content:center;font-size:0.62rem;font-weight:700;flex-shrink:0">${initStr}</div>`;
+        return `<tr>
+          <td><div style="display:flex;align-items:center;gap:0.55rem">${avatar}<div><div style="font-weight:600;font-size:0.86rem">${esc(p.name)}</div>${p.role ? `<div style="font-size:0.72rem;color:#9a90b0">${esc(p.role)}</div>` : ''}</div></div></td>
+          ${sizeCells}${noteCells}
+        </tr>`;
+      }).join('');
+
+      const missingCount = perf.filter(p => !SIZE_FIELDS.some(f => costumeAnswerValue(p.answers, f.keys))).length;
+
+      el.innerHTML = `
+        <div style="margin-bottom:1.25rem;display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:0.75rem">
+          <div>
+            <div style="font-size:1rem;font-weight:800;color:#1a1530">Performer Summary</div>
+            <div style="font-size:0.78rem;color:rgba(26,21,48,0.45);margin-top:0.15rem">Size and costume notes from registration, one row per performer.</div>
+          </div>
+          ${missingCount ? `<div style="font-size:0.78rem;color:#dd8233;font-weight:600;background:rgba(221,130,51,0.1);border-radius:8px;padding:0.3rem 0.75rem">${missingCount} performer${missingCount===1?'':'s'} missing size info</div>` : ''}
+        </div>
+        <div style="overflow-x:auto">
+          <table style="width:100%;border-collapse:collapse;font-size:0.84rem">
+            <thead>
+              <tr style="border-bottom:2px solid #f0eef8">
+                <th style="text-align:left;padding:0 0.85rem 0.65rem 0;font-size:0.65rem;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#b0a8c8;white-space:nowrap">Performer</th>
+                ${sizeHeaders}
+                ${noteHeaders}
+              </tr>
+            </thead>
+            <tbody>
+              ${rows}
+            </tbody>
+          </table>
+        </div>`;
+
+      // Style all th/td after render
+      el.querySelectorAll('thead th:not(:first-child)').forEach(th => {
+        th.style.cssText = 'text-align:left;padding:0 0.85rem 0.65rem;font-size:0.65rem;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#b0a8c8;white-space:nowrap';
+      });
+      el.querySelectorAll('tbody td').forEach(td => {
+        if (!td.style.maxWidth) td.style.cssText += ';padding:0.75rem 0.85rem 0.75rem 0;border-bottom:1px solid #f8f7fc;vertical-align:middle';
+      });
+      el.querySelectorAll('tbody td:not(:first-child)').forEach(td => {
+        td.style.padding = '0.75rem 0.85rem';
+      });
+      el.querySelectorAll('tbody tr:last-child td').forEach(td => { td.style.borderBottom = 'none'; });
     }
 
     function renderGroupsList() {
@@ -3550,6 +3640,7 @@
       if (tab === 'assignments' && !selectedGroupId && groups.length) {
         selectGroup(groups[0].id);
       }
+      if (tab === 'performer-summary') renderPerformerSummary();
     }
 
     // ── Escape helper ─────────────────────────────────────────────────────────
