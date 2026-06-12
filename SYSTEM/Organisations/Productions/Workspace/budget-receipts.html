@@ -182,14 +182,24 @@
     .fin-sidebar-updated { display: flex; align-items: center; gap: 0.35rem; font-size: 0.7rem; color: #b0a8c8; margin-top: 0.9rem; }
     .fin-sidebar-updated svg { width: 12px; height: 12px; flex-shrink: 0; }
     /* Person link in table */
-    .fin-person-link { background: none; border: none; cursor: pointer; color: #572e88; font-size: 0.8rem; font-weight: 600; padding: 0; text-align: left; font-family: inherit; text-decoration: underline; text-decoration-color: rgba(87,46,136,0.3); line-height: 1.4; }
+    .fin-person-link { background: none; border: none; cursor: pointer; color: #572e88; font-size: 0.8rem; font-weight: 600; padding: 0; text-align: left; font-family: inherit; text-decoration: underline; text-decoration-color: rgba(87,46,136,0.3); line-height: 1.4; display: block; }
     .fin-person-link:hover { text-decoration-color: #572e88; }
+    .fin-link-person-btn { background: none; border: 1px dashed #c8c0e4; cursor: pointer; color: #b0a8c8; font-size: 0.72rem; font-family: inherit; padding: 0.18rem 0.5rem; border-radius: 6px; white-space: nowrap; display: inline-flex; align-items: center; gap: 0.3rem; transition: border-color 0.12s, color 0.12s; }
+    .fin-link-person-btn:hover { border-color: #572e88; color: #572e88; }
+    /* Person picker in link modal */
+    .fin-person-search { font-family: inherit; font-size: 0.9rem; color: #1a1530; background: #fff; border: 1.5px solid #d4cde8; border-radius: 10px; padding: 0.65rem 0.9rem; width: 100%; box-sizing: border-box; transition: border-color 0.15s; }
+    .fin-person-search:focus { outline: none; border-color: #572e88; }
+    .fin-person-results { margin-top: 0.65rem; display: flex; flex-direction: column; gap: 0.35rem; max-height: 280px; overflow-y: auto; }
+    .fin-person-result-btn { background: #faf9fd; border: 1.5px solid #e8e4f4; border-radius: 10px; padding: 0.65rem 0.9rem; cursor: pointer; text-align: left; font-family: inherit; display: flex; align-items: center; gap: 0.75rem; transition: border-color 0.12s, background 0.12s; width: 100%; }
+    .fin-person-result-btn:hover { border-color: #572e88; background: rgba(87,46,136,0.04); }
+    .fin-person-result-name { font-size: 0.88rem; font-weight: 600; color: #1a1530; }
+    .fin-person-result-sub { font-size: 0.74rem; color: #9a90b0; margin-top: 0.05rem; }
   </style>
 </head>
 <body>
   <div id="prod-sidebar-host"></div>
 
-  <!-- Person contact modal -->
+  <!-- Person contact modal (view) -->
   <div class="fin-modal-overlay" id="fin-person-modal" onclick="if(event.target===this)FIN.closePersonModal()">
     <div class="fin-modal" style="max-width:380px">
       <div class="fin-modal-header">
@@ -202,6 +212,25 @@
         </button>
       </div>
       <div class="fin-modal-body" id="fin-person-modal-body"></div>
+    </div>
+  </div>
+
+  <!-- Link person modal (picker) -->
+  <div class="fin-modal-overlay" id="fin-link-modal" onclick="if(event.target===this)FIN.closeLinkModal()">
+    <div class="fin-modal" style="max-width:420px">
+      <div class="fin-modal-header">
+        <div>
+          <div class="fin-modal-title">Link a Person</div>
+          <div class="fin-modal-sub" id="fin-link-modal-sub">Connect a volunteer or board member to this receipt</div>
+        </div>
+        <button class="fin-modal-close" onclick="FIN.closeLinkModal()" aria-label="Close">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div class="fin-modal-body">
+        <input class="fin-person-search" type="text" id="fin-link-search" placeholder="Search by name..." oninput="FIN.filterLinkResults(this.value)" autocomplete="off">
+        <div class="fin-person-results" id="fin-link-results"></div>
+      </div>
     </div>
   </div>
 
@@ -478,6 +507,60 @@
       document.body.style.overflow = '';
     },
 
+    _linkReceiptId: null,
+
+    openLinkModal(receiptId, submittedBy) {
+      this._linkReceiptId = receiptId;
+      const sub = document.getElementById('fin-link-modal-sub');
+      if (sub) sub.textContent = 'Linking receipt from: ' + (submittedBy || 'Unknown');
+      document.getElementById('fin-link-search').value = '';
+      this.filterLinkResults('');
+      document.getElementById('fin-link-modal').classList.add('open');
+      document.body.style.overflow = 'hidden';
+      setTimeout(function() { document.getElementById('fin-link-search').focus(); }, 80);
+    },
+
+    closeLinkModal() {
+      document.getElementById('fin-link-modal').classList.remove('open');
+      document.body.style.overflow = '';
+      this._linkReceiptId = null;
+    },
+
+    filterLinkResults(q) {
+      const term = (q || '').trim().toLowerCase();
+      const matches = term
+        ? this.orgMembers.filter(m => m.name.toLowerCase().includes(term) || m.email.toLowerCase().includes(term))
+        : this.orgMembers;
+      const el = document.getElementById('fin-link-results');
+      if (!matches.length) {
+        el.innerHTML = '<div style="font-size:0.82rem;color:#b0a8c8;padding:0.5rem 0.25rem">No matching team members found.</div>';
+        return;
+      }
+      el.innerHTML = matches.slice(0, 10).map(m =>
+        '<button class="fin-person-result-btn" onclick="FIN.linkPerson(\'' + m.id + '\')">' +
+          '<div class="fin-avatar" style="' + this.avatarColor(m.name) + ';width:36px;height:36px;font-size:0.7rem;flex-shrink:0">' + this.initials(m.name) + '</div>' +
+          '<div>' +
+            '<div class="fin-person-result-name">' + this.esc(m.name) + '</div>' +
+            '<div class="fin-person-result-sub">' + (m.title ? this.esc(m.title) + (m.email ? ' · ' : '') : '') + this.esc(m.email) + '</div>' +
+          '</div>' +
+        '</button>'
+      ).join('');
+    },
+
+    async linkPerson(memberId) {
+      if (!this._linkReceiptId) return;
+      try {
+        const { error } = await this.sb.from('budget_receipts')
+          .update({ submitted_by_id: memberId })
+          .eq('id', this._linkReceiptId);
+        if (error) throw error;
+        this.closeLinkModal();
+        await this.load();
+      } catch(e) {
+        alert('Could not link person: ' + e.message);
+      }
+    },
+
     async downloadAll() {
       const btn = document.getElementById('fin-dl-all-btn');
       if (btn) { btn.disabled = true; btn.textContent = 'Packaging...'; }
@@ -740,7 +823,17 @@
                     '<td style="font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + this.esc(r.vendor || '') + '</td>' +
                     '<td style="color:#7a6e9a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + this.esc(r.description || '') + '</td>' +
                     '<td style="font-weight:700;white-space:nowrap">' + this.fmt$(r.amount_cents) + '</td>' +
-                    '<td style="color:#3d3260;font-size:0.8rem;word-break:break-word">' + (r.submitted_by_id && this.orgMembersMap[r.submitted_by_id] ? '<button class="fin-person-link" onclick="FIN.openPersonModal(\'' + this.esc(r.submitted_by_id) + '\')">' + this.esc(this.paidByLabel(r)) + '</button>' : this.esc(this.paidByLabel(r))) + '</td>' +
+                    '<td style="color:#3d3260;font-size:0.8rem;word-break:break-word">' + (() => {
+                      const linkedMember = r.submitted_by_id ? this.orgMembersMap[r.submitted_by_id] : null;
+                      const safeId = this.esc(r.id);
+                      const safeSub = this.esc(r.submitted_by || '');
+                      if (linkedMember) {
+                        return '<button class="fin-person-link" onclick="FIN.openPersonModal(\'' + this.esc(r.submitted_by_id) + '\')" title="View contact info">' + this.esc(this.paidByLabel(r)) + '</button>' +
+                          '<button class="fin-link-person-btn" style="margin-top:0.25rem;font-size:0.68rem" onclick="FIN.openLinkModal(\'' + safeId + '\',\'' + safeSub + '\')" title="Change link">change</button>';
+                      }
+                      return '<div>' + this.esc(this.paidByLabel(r)) + '</div>' +
+                        (this.orgMembers.length ? '<button class="fin-link-person-btn" onclick="FIN.openLinkModal(\'' + safeId + '\',\'' + safeSub + '\')" title="Link to org member"><img src="/ASSETS/Images/Profiles.svg" style="width:10px;height:10px;filter:brightness(0);opacity:0.5" alt=""> link person</button>' : '');
+                    })() + '</td>' +
                     '<td><span class="fin-badge ' + b.cls + '" style="white-space:normal;text-align:center;display:inline-block;line-height:1.3">' + b.label + '</span></td>' +
                     '<td style="white-space:nowrap">' + fileHtml + '</td>' +
                   '</tr>';
