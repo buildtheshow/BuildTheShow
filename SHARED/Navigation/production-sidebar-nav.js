@@ -224,8 +224,20 @@
 
   // ── Sidebar HTML loader ──────────────────────────────────────────────────
 
+  // Currency for the financials nav icon — set by initProductionPage, read by applyAndInit
+  var _finCurrency = null;
+
+  function applyFinancialsIcon() {
+    var icon = document.getElementById('sidebar-financials-icon');
+    if (!icon) return;
+    var file = _finCurrency === 'GBP'
+      ? 'Budgeting-total-spent-gbp.svg'
+      : 'Budgeting-total-spent-cad-usd.svg';
+    icon.src = '/ASSETS/Images/' + file + '?v=20260611';
+  }
+
   window.loadProductionSidebar = function (activeGroup, activePage) {
-    const key = 'bts-prod-sidebar-v24';
+    const key = 'bts-prod-sidebar-v25';
     const cached = sessionStorage.getItem(key);
     const host = document.getElementById('prod-sidebar-host');
     if (!host) return;
@@ -246,11 +258,13 @@
       // Also re-run in rAF as belt-and-suspenders in case the group open is animated.
       markCurrentPageActive(activePage);
       requestAnimationFrame(function () { markCurrentPageActive(activePage); });
+      // Apply currency-specific financials icon if currency is already known
+      applyFinancialsIcon();
     }
 
     if (cached) applyAndInit(cached);
 
-    fetch('/SHARED/Navigation/production-sidebar.html?v=sidebar-v51-20260610')
+    fetch('/SHARED/Navigation/production-sidebar.html?v=sidebar-v52-20260611')
       .then(function (res) { return res.text(); })
       .then(function (html) {
         sessionStorage.setItem(key, html);
@@ -282,11 +296,15 @@
 
     const { data: prod } = await sb
       .from('productions')
-      .select('id, title, subtitle, season_year, status, venue, poster_url, organization_id, organizations(slug)')
+      .select('id, title, subtitle, season_year, status, venue, poster_url, organization_id, registration_settings, organizations(slug)')
       .eq('id', idParam)
       .single();
 
     if (!prod) return;
+
+    // Set currency-specific financials nav icon
+    _finCurrency = prod.registration_settings?.payment_settings?.currency || 'CAD';
+    applyFinancialsIcon();
 
     document.title = prod.title + ' - Build The Show';
 
