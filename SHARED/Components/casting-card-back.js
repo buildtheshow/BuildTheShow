@@ -536,7 +536,7 @@ function buildCastingCardBack(app, opts = {}) {
     })
     .filter(([, display]) => display && display.trim() && display !== '—');
   const customRows = providedAuditionTimeRows.length ? providedAuditionTimeRows : customAuditionTimeRows;
-  const customSection = customRows.length ? section('Audition Times', customRows, '#78bbd4', '#eef7fb', '#000000') : '';
+  const customSection = customRows.length ? section('Audition Times', customRows, '#74a2b4', '#eef7fb', '#000000') : '';
 
   // ── Notes ─────────────────────────────────────────────────────
   const notesValue = ca['Additional Notes'] || app.notes;

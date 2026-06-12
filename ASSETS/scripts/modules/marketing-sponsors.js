@@ -27,7 +27,7 @@
     { id: 'friend',     label: 'Friend',             amount: 50   },
   ];
 
-  var ADTILE_COLORS = ['#78bbd4', '#476aaa', '#769e7b', '#dd8233', '#d1523d', '#ca7ea7'];
+  var ADTILE_COLORS = ['#74a2b4', '#476aaa', '#769e7b', '#dd8233', '#d1523d', '#ca7ea7'];
 
   var SpnsState = {
     prodId: null,

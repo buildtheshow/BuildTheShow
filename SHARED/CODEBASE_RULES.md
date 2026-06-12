@@ -260,14 +260,14 @@ Do not casually reintroduce `Applicants` in user-facing audition flows when we m
 
 - These are the canonical Build The Show website colours. Do not invent nearby substitutes.
 - Main website colours: `#000000`, `#572e88`, `#efab45`, `#efefef`.
-- Secondary website colours: `#769e7b`, `#dd8233`, `#d1523d`, `#78bbd4`, `#476aaa`, `#ca7ea7`.
+- Secondary website colours: `#769e7b`, `#dd8233`, `#d1523d`, `#74a2b4`, `#476aaa`, `#ca7ea7`.
 - Faded main website colours: `#000000`, `#c8bad7`, `#fae3c2`, `#efefef`.
-- Faded secondary website colours: `#d0dfd3`, `#f4d5bb`, `#f0c5bf`, `#d2e9f1`, `#c2cde3`, `#edd4e2`.
+- Faded secondary website colours: `#d0dfd3`, `#f4d5bb`, `#f0c5bf`, `#c2cde3`, `#edd4e2`.
 - Use faded colours only in very rare occasions, such as subtle disabled states, quiet backgrounds, or gentle supporting surfaces.
 - For brand tiles and filled information boxes, use main or secondary colours, not faded colours.
 - Text on filled brand colour surfaces must be `#ffffff`, `#000000`, or another explicitly chosen locked palette colour with strong contrast.
 - Do not reintroduce older ad hoc colours such as soft mauves, random teals, slate blues, or near-brand purples when a locked colour should be used.
-- Registration accepted-cast board colours are locked: `Role Accepted` uses gold `#efab45`, `Forms Signed` uses sky `#78bbd4`, and `Paid` uses green `#769e7b`.
+- Registration accepted-cast board colours are locked: `Role Accepted` uses gold `#efab45`, `Forms Signed` uses sky `#74a2b4`, and `Paid` uses green `#769e7b`.
 
 ### Production Visual Language
 

@@ -110,7 +110,7 @@
     {
       key: 'producer',
       label: 'Producer',
-      color: '#78bbd4',
+      color: '#74a2b4',
       icon: '/ASSETS/Images/volunteer-stage-manager.svg',
       tabs: [
         { key: 'receipts', label: 'Receipts', receiptForm: true },
