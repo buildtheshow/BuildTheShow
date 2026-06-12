@@ -181,10 +181,29 @@
     .fin-sidebar-status-count { font-size: 0.84rem; font-weight: 700; color: #1a1530; }
     .fin-sidebar-updated { display: flex; align-items: center; gap: 0.35rem; font-size: 0.7rem; color: #b0a8c8; margin-top: 0.9rem; }
     .fin-sidebar-updated svg { width: 12px; height: 12px; flex-shrink: 0; }
+    /* Person link in table */
+    .fin-person-link { background: none; border: none; cursor: pointer; color: #572e88; font-size: 0.8rem; font-weight: 600; padding: 0; text-align: left; font-family: inherit; text-decoration: underline; text-decoration-color: rgba(87,46,136,0.3); line-height: 1.4; }
+    .fin-person-link:hover { text-decoration-color: #572e88; }
   </style>
 </head>
 <body>
   <div id="prod-sidebar-host"></div>
+
+  <!-- Person contact modal -->
+  <div class="fin-modal-overlay" id="fin-person-modal" onclick="if(event.target===this)FIN.closePersonModal()">
+    <div class="fin-modal" style="max-width:380px">
+      <div class="fin-modal-header">
+        <div>
+          <div class="fin-modal-title">Contact Info</div>
+          <div class="fin-modal-sub">Org member linked to this receipt</div>
+        </div>
+        <button class="fin-modal-close" onclick="FIN.closePersonModal()" aria-label="Close">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div class="fin-modal-body" id="fin-person-modal-body"></div>
+    </div>
+  </div>
 
   <!-- Department budget modal -->
   <div class="fin-modal-overlay" id="fin-dept-modal" onclick="if(event.target===this)FIN.closeDeptModal()">
@@ -237,6 +256,8 @@
     prodId: '',
     receipts: [],
     categories: [],
+    orgMembers: [],
+    orgMembersMap: {},
     page: 1,
     pageSize: 5,
     search: '',
@@ -258,12 +279,27 @@
 
     async load() {
       try {
-        const [rRes, cRes] = await Promise.all([
+        const [rRes, cRes, prodRes] = await Promise.all([
           this.sb.from('budget_receipts').select('*').eq('production_id', this.prodId).order('receipt_date', { ascending: false }),
           this.sb.from('budget_categories').select('*').eq('production_id', this.prodId).eq('type', 'expense'),
+          this.sb.from('productions').select('organization_id').eq('id', this.prodId).single(),
         ]);
         this.receipts   = rRes.data || [];
         this.categories = cRes.data || [];
+        if (prodRes.data?.organization_id) {
+          const { data: members } = await this.sb.from('org_members')
+            .select('id, display_name, email, phone, phone_number, title')
+            .eq('org_id', prodRes.data.organization_id);
+          this.orgMembers = (members || []).map(m => ({
+            id: m.id,
+            name: m.display_name || m.email || 'Member',
+            email: m.email || '',
+            phone: m.phone || m.phone_number || '',
+            title: m.title || '',
+          }));
+          this.orgMembersMap = {};
+          this.orgMembers.forEach(m => { this.orgMembersMap[m.id] = m; });
+        }
       } catch(e) {
         this.receipts = []; this.categories = [];
       }
@@ -413,6 +449,32 @@
 
     closeDeptModal() {
       document.getElementById('fin-dept-modal').classList.remove('open');
+      document.body.style.overflow = '';
+    },
+
+    openPersonModal(memberId) {
+      const m = this.orgMembersMap[memberId];
+      if (!m) return;
+      const rows = [];
+      if (m.email) rows.push('<div style="display:flex;align-items:center;gap:0.6rem;font-size:0.88rem"><img src="/ASSETS/Images/Messages.svg" style="width:15px;height:15px;filter:brightness(0);opacity:0.4;flex-shrink:0" alt=""><a href="mailto:' + this.esc(m.email) + '" style="color:#572e88;text-decoration:none">' + this.esc(m.email) + '</a></div>');
+      if (m.phone) rows.push('<div style="display:flex;align-items:center;gap:0.6rem;font-size:0.88rem"><img src="/ASSETS/Images/Notifications.svg" style="width:15px;height:15px;filter:brightness(0);opacity:0.4;flex-shrink:0" alt=""><span style="color:#4d416f">' + this.esc(m.phone) + '</span></div>');
+      document.getElementById('fin-person-modal-body').innerHTML =
+        '<div style="display:flex;flex-direction:column;gap:0.9rem;padding:0.25rem 0">' +
+          '<div style="display:flex;align-items:center;gap:1rem">' +
+            '<div class="fin-avatar" style="' + this.avatarColor(m.name) + ';width:50px;height:50px;font-size:0.95rem;flex-shrink:0">' + this.initials(m.name) + '</div>' +
+            '<div>' +
+              '<div style="font-size:1.05rem;font-weight:700;color:#1a1530;line-height:1.2">' + this.esc(m.name) + '</div>' +
+              (m.title ? '<div style="font-size:0.8rem;color:#9a90b0;margin-top:0.15rem">' + this.esc(m.title) + '</div>' : '') +
+            '</div>' +
+          '</div>' +
+          (rows.length ? rows.join('') : '<div style="font-size:0.82rem;color:#b0a8c8">No contact info on file.</div>') +
+        '</div>';
+      document.getElementById('fin-person-modal').classList.add('open');
+      document.body.style.overflow = 'hidden';
+    },
+
+    closePersonModal() {
+      document.getElementById('fin-person-modal').classList.remove('open');
       document.body.style.overflow = '';
     },
 
@@ -678,7 +740,7 @@
                     '<td style="font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + this.esc(r.vendor || '') + '</td>' +
                     '<td style="color:#7a6e9a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + this.esc(r.description || '') + '</td>' +
                     '<td style="font-weight:700;white-space:nowrap">' + this.fmt$(r.amount_cents) + '</td>' +
-                    '<td style="color:#3d3260;font-size:0.8rem;word-break:break-word">' + this.esc(this.paidByLabel(r)) + '</td>' +
+                    '<td style="color:#3d3260;font-size:0.8rem;word-break:break-word">' + (r.submitted_by_id && this.orgMembersMap[r.submitted_by_id] ? '<button class="fin-person-link" onclick="FIN.openPersonModal(\'' + this.esc(r.submitted_by_id) + '\')">' + this.esc(this.paidByLabel(r)) + '</button>' : this.esc(this.paidByLabel(r))) + '</td>' +
                     '<td><span class="fin-badge ' + b.cls + '" style="white-space:normal;text-align:center;display:inline-block;line-height:1.3">' + b.label + '</span></td>' +
                     '<td style="white-space:nowrap">' + fileHtml + '</td>' +
                   '</tr>';

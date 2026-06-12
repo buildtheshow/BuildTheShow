@@ -722,10 +722,15 @@
               <input type="hidden" id="rcpt-category-id-hidden">
               <div class="rcpt-fields">
 
-                <!-- Who purchased this — always visible -->
+                <!-- Who purchased this — searchable picker -->
                 <div class="rcpt-field">
-                  <label class="rcpt-label" for="rcpt-purchaser">Who purchased this? <span class="rcpt-req">*</span></label>
-                  <input class="rcpt-input" type="text" id="rcpt-purchaser" placeholder="Enter the name of the person who made this purchase">
+                  <label class="rcpt-label" for="rcpt-person-input">Who purchased this? <span class="rcpt-req">*</span></label>
+                  <div style="position:relative">
+                    <input class="rcpt-input" type="text" id="rcpt-person-input" autocomplete="off" placeholder="Search by name or type a name...">
+                    <div class="rcpt-dept-combo-list" id="rcpt-person-list"></div>
+                  </div>
+                  <input type="hidden" id="rcpt-purchaser-id" value="">
+                  <div id="rcpt-person-tag" style="display:none;margin-top:0.4rem;padding:0.35rem 0.7rem;background:#f5f3fb;border:1px solid #e8e4f4;border-radius:8px;font-size:0.78rem;color:#4d416f;align-items:center;gap:0.5rem"></div>
                 </div>
 
                 <div class="rcpt-row-2">
@@ -889,6 +894,7 @@
 
     let sb, prodId, paidBy = 'company';
     let allocatedCents = 0, spentCents = 0, breakdownItems = [];
+    let _orgMembers = [], _selectedPersonId = '';
 
     // When embedded, department-section.js sets window._RCPT_EMBED_DATA before calling init()
     const _embed = window._RCPT_EMBED_DATA || null;
@@ -1168,6 +1174,86 @@
       }
       await loadSummary();
       setTodayDate();
+      loadOrgMembers();
+    }
+
+    async function loadOrgMembers() {
+      if (!prodId) return;
+      try {
+        const { data: prod } = await sb.from('productions').select('organization_id').eq('id', prodId).single();
+        if (!prod?.organization_id) return;
+        const { data: members } = await sb.from('org_members')
+          .select('id, user_id, display_name, email, phone, phone_number, title')
+          .eq('org_id', prod.organization_id);
+        _orgMembers = (members || []).map(m => ({
+          id: m.id,
+          name: m.display_name || m.email || 'Member',
+          email: m.email || '',
+          phone: m.phone || m.phone_number || '',
+          title: m.title || '',
+        }));
+        initPersonPicker();
+      } catch(e) { /* org members optional — form still works without */ }
+    }
+
+    function initPersonPicker() {
+      const inp = document.getElementById('rcpt-person-input');
+      if (!inp) return;
+      const list = document.getElementById('rcpt-person-list');
+
+      function showMatches(q) {
+        const term = q.trim().toLowerCase();
+        if (!term || !_orgMembers.length) { list.classList.remove('open'); return; }
+        const matches = _orgMembers.filter(m =>
+          m.name.toLowerCase().includes(term) || m.email.toLowerCase().includes(term)
+        ).slice(0, 8);
+        if (!matches.length) { list.classList.remove('open'); return; }
+        list.innerHTML = matches.map((m, i) =>
+          '<div class="rcpt-dept-combo-option" data-mi="' + i + '">' +
+            '<strong style="font-size:0.84rem">' + esc(m.name) + '</strong>' +
+            (m.title ? '<span style="color:#9a90b0;font-size:0.76rem;margin-left:0.35rem">' + esc(m.title) + '</span>' : '') +
+          '</div>'
+        ).join('');
+        list.classList.add('open');
+        list.querySelectorAll('.rcpt-dept-combo-option').forEach(function(el, i) {
+          el.addEventListener('mousedown', function(e) {
+            e.preventDefault();
+            rcptSelectPerson(matches[i]);
+          });
+        });
+      }
+
+      inp.addEventListener('input', function() {
+        _selectedPersonId = '';
+        document.getElementById('rcpt-purchaser-id').value = '';
+        document.getElementById('rcpt-person-tag').style.display = 'none';
+        showMatches(inp.value);
+      });
+      inp.addEventListener('focus', function() { if (!_selectedPersonId) showMatches(inp.value); });
+      inp.addEventListener('blur', function() { setTimeout(function() { list.classList.remove('open'); }, 150); });
+    }
+
+    function rcptSelectPerson(m) {
+      _selectedPersonId = m.id;
+      document.getElementById('rcpt-person-input').value = m.name;
+      document.getElementById('rcpt-purchaser-id').value = m.id;
+      document.getElementById('rcpt-person-list').classList.remove('open');
+      const tag = document.getElementById('rcpt-person-tag');
+      const parts = [];
+      if (m.email) parts.push(m.email);
+      if (m.phone) parts.push(m.phone);
+      tag.innerHTML =
+        '<img src="/ASSETS/Images/Profiles.svg" style="width:13px;height:13px;filter:brightness(0);opacity:0.45;flex-shrink:0" alt="">' +
+        '<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><strong>' + esc(m.name) + '</strong>' +
+        (parts.length ? ' <span style="color:#b0a8c8">· ' + esc(parts.join(' · ')) + '</span>' : '') + '</span>' +
+        '<button type="button" onclick="rcptClearPerson()" style="background:none;border:none;cursor:pointer;color:#b0a8c8;font-size:1rem;padding:0;line-height:1;flex-shrink:0" title="Remove link">&times;</button>';
+      tag.style.display = 'flex';
+    }
+
+    function rcptClearPerson() {
+      _selectedPersonId = '';
+      document.getElementById('rcpt-purchaser-id').value = '';
+      document.getElementById('rcpt-person-tag').style.display = 'none';
     }
 
     function setTodayDate() {
@@ -1409,9 +1495,10 @@
       const date   = document.getElementById('rcpt-date').value;
       const sub    = parseFloat(document.getElementById('rcpt-subtotal').value) || 0;
 
-      const purchaser = (document.getElementById('rcpt-purchaser') || {}).value?.trim() || '';
+      const purchaser = (document.getElementById('rcpt-person-input') || {}).value?.trim() || '';
+      const purchaserId = document.getElementById('rcpt-purchaser-id')?.value || null;
 
-      if (!purchaser) { alert('Please enter the name of the person who made this purchase.'); document.getElementById('rcpt-purchaser').focus(); return; }
+      if (!purchaser) { alert('Please enter the name of the person who made this purchase.'); document.getElementById('rcpt-person-input').focus(); return; }
       if (!vendor) { alert('Please enter the store or supplier name.'); document.getElementById('rcpt-vendor').focus(); return; }
       if (!desc)   { alert('Please describe what this purchase was for.'); document.getElementById('rcpt-desc').focus(); return; }
       if (!date)   { alert('Please select a receipt date.'); document.getElementById('rcpt-date').focus(); return; }
@@ -1466,6 +1553,7 @@
           status: 'pending',
           paid_by: paidBy,
           submitted_by: purchaser || null,
+          submitted_by_id: purchaserId || null,
           subtotal_cents: Math.round(sub * 100),
           tax_cents: Math.round(tax * 100),
           receipt_url: receiptUrl,
@@ -1493,8 +1581,13 @@
       document.getElementById('rcpt-total-display').textContent = '$0.00';
       rcptRemoveFile();
       setTodayDate();
-      const _pn = document.getElementById('rcpt-purchaser');
+      const _pn = document.getElementById('rcpt-person-input');
       if (_pn) _pn.value = '';
+      const _pid = document.getElementById('rcpt-purchaser-id');
+      if (_pid) _pid.value = '';
+      const _ptag = document.getElementById('rcpt-person-tag');
+      if (_ptag) _ptag.style.display = 'none';
+      _selectedPersonId = '';
       rcptSetPaidBy('company');
       const btn = document.getElementById('rcpt-save-btn');
       btn.disabled = false;
