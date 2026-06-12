@@ -421,27 +421,17 @@
       if (btn) { btn.disabled = true; btn.textContent = 'Packaging...'; }
       try {
         const zip = new JSZip();
-        let fileIndex = 0;
-        for (const r of this.receipts) {
-          if (!r.receipt_url) continue;
-          let urls = [];
-          try { urls = JSON.parse(r.receipt_url); if (!Array.isArray(urls)) urls = [r.receipt_url]; } catch(e) { urls = [r.receipt_url]; }
-          const dateStr = (r.receipt_date || r.created_at || '').slice(0, 10).replace(/-/g, '');
-          const vendor  = (r.vendor || 'receipt').replace(/[^a-zA-Z0-9]/g, '_').slice(0, 20);
-          for (let i = 0; i < urls.length; i++) {
-            const url = urls[i];
-            const ext = url.split('?')[0].split('.').pop().toLowerCase() || 'jpg';
-            const fname = dateStr + '_' + vendor + (urls.length > 1 ? '_' + (i+1) : '') + '.' + ext;
-            try {
-              const session = await this.sb.auth.getSession();
-              const token = session?.data?.session?.access_token || this.KEY;
-              const res = await fetch(url, { headers: { 'apikey': this.KEY, 'Authorization': 'Bearer ' + token } });
-              if (res.ok) zip.file(fname, await res.blob());
-            } catch(e) { /* skip unreachable file */ }
-            fileIndex++;
+        // List all files stored under this production's folder in the receipts bucket
+        const allFiles = await this._listStorageFolder('receipts', this.prodId);
+        if (!allFiles.length) { alert('No receipt files found in storage for this production.'); return; }
+        for (const path of allFiles) {
+          const { data, error } = await this.sb.storage.from('receipts').download(path);
+          if (!error && data) {
+            const fname = path.split('/').pop();
+            zip.file(fname, data);
           }
         }
-        if (fileIndex === 0) { alert('No receipt files to download.'); return; }
+        if (Object.keys(zip.files).length === 0) { alert('Could not download any files.'); return; }
         const blob = await zip.generateAsync({ type: 'blob' });
         const a = document.createElement('a');
         a.href = URL.createObjectURL(blob);
@@ -453,6 +443,23 @@
       } finally {
         if (btn) { btn.disabled = false; btn.innerHTML = '<img src="/ASSETS/Images/Budgeting-Receipts.svg?v=20260611b" style="width:14px;height:14px;filter:brightness(0);opacity:0.7" alt=""> Download All'; }
       }
+    },
+
+    async _listStorageFolder(bucket, prefix) {
+      const paths = [];
+      const { data, error } = await this.sb.storage.from(bucket).list(prefix, { limit: 1000 });
+      if (error || !data) return paths;
+      for (const item of data) {
+        if (item.id) {
+          // it's a file
+          paths.push(prefix + '/' + item.name);
+        } else {
+          // it's a folder — recurse
+          const sub = await this._listStorageFolder(bucket, prefix + '/' + item.name);
+          paths.push(...sub);
+        }
+      }
+      return paths;
     },
 
     setSearch(val) { this.search = val; this.page = 1; this.render(); },
