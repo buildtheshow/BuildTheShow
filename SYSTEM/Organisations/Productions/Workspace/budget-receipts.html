@@ -422,8 +422,9 @@
       try {
         const zip = new JSZip();
 
-        // Build a map: storage path → receipt record
+        // Build maps: storage path → receipt, and subfolder → receipt
         const pathToReceipt = {};
+        const folderToReceipt = {};
         const STORAGE_BASE = this.URL + '/storage/v1/object/public/receipts/';
         for (const r of this.receipts) {
           if (!r.receipt_url) continue;
@@ -432,6 +433,8 @@
           for (const u of urls) {
             const path = u.replace(STORAGE_BASE, '');
             pathToReceipt[path] = r;
+            const folder = path.split('/').slice(0, -1).join('/');
+            folderToReceipt[folder] = r;
           }
         }
 
@@ -444,7 +447,8 @@
           const { data, error } = await this.sb.storage.from('receipts').download(path);
           if (error || !data) continue;
           const ext = path.split('.').pop().toLowerCase() || 'jpg';
-          const r = pathToReceipt[path];
+          const folder = path.split('/').slice(0, -1).join('/');
+          const r = pathToReceipt[path] || folderToReceipt[folder];
           let baseName;
           if (r) {
             const dept   = (r.department || this.deptName(r) || 'Unknown').replace(/[^a-zA-Z0-9 &]/g, '').trim();
