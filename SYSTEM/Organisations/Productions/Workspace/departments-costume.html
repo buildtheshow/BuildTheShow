@@ -2287,94 +2287,123 @@
 
       const perf = performers.slice().sort((a, b) => a.name.localeCompare(b.name));
 
-      const toggleHTML = `
-        <div style="display:flex;gap:0.35rem;background:#f4f2fb;border-radius:10px;padding:0.25rem">
+      // Shared size rank function (used by both views)
+      function sizeRank(s) {
+        s = (s || '').trim();
+        const cm = s.match(/\((\d+)\s*cm\)/);
+        if (cm) return parseFloat(cm[1]);
+        const LETTER_RANK = { xs: 1, s: 2, m: 3, l: 4, xl: 5, xxl: 6, '2xl': 6, '3xl': 7 };
+        const PREFIX_WEIGHT = { youth: 0, kids: 10, child: 10, '': 20, adult: 20, "women's": 30, womens: 30, "men's": 35, mens: 35 };
+        const lower = s.toLowerCase();
+        const lm = lower.match(/^(youth|kids|child|adult|women'?s?|men'?s?)?\s*(xs|s|m|l|xl|xxl|2xl|3xl)$/);
+        if (lm) { const pw = PREFIX_WEIGHT[lm[1] || ''] ?? 20; return pw * 10 + (LETTER_RANK[lm[2]] || 0); }
+        const nm = lower.match(/^([a-z']+)?\s*(\d+\.?\d*)/);
+        if (nm) { const pw = PREFIX_WEIGHT[nm[1] || ''] ?? 20; return pw * 100 + parseFloat(nm[2]); }
+        return 9999;
+      }
+
+      const viewToggleHTML = `
+        <div style="display:flex;gap:0;background:#f4f2fb;border-radius:10px;padding:0.25rem">
           <button onclick="_perfSummaryView='by-performer';renderPerformerSummary()" style="border:none;cursor:pointer;padding:0.3rem 0.9rem;border-radius:8px;font-size:0.78rem;font-weight:600;transition:all 0.15s;${_perfSummaryView==='by-performer'?'background:#fff;color:#572e88;box-shadow:0 1px 4px rgba(87,46,136,0.13)':'background:transparent;color:#9a90b0'}">By Performer</button>
-          <button onclick="_perfSummaryView='size-summary';renderPerformerSummary()" style="border:none;cursor:pointer;padding:0.3rem 0.9rem;border-radius:8px;font-size:0.78rem;font-weight:600;transition:all 0.15s;${_perfSummaryView==='size-summary'?'background:#fff;color:#572e88;box-shadow:0 1px 4px rgba(87,46,136,0.13)':'background:transparent;color:#9a90b0'}">Size Summary</button>
+          <button onclick="_perfSummaryView='size-summary';renderPerformerSummary()" style="border:none;cursor:pointer;padding:0.3rem 0.9rem;border-radius:8px;font-size:0.78rem;font-weight:600;transition:all 0.15s;display:flex;align-items:center;gap:0.35rem;${_perfSummaryView==='size-summary'?'background:#572e88;color:#fff;box-shadow:0 1px 4px rgba(87,46,136,0.2)':'background:transparent;color:#9a90b0'}"><svg width="12" height="12" viewBox="0 0 12 12" fill="none"><rect x="0" y="7" width="2.5" height="5" rx="1" fill="currentColor"/><rect x="3.5" y="4" width="2.5" height="8" rx="1" fill="currentColor"/><rect x="7" y="1" width="2.5" height="11" rx="1" fill="currentColor"/></svg>Size Summary</button>
         </div>`;
 
       if (!perf.length) {
         el.innerHTML = `<div style="margin-bottom:1.25rem;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:0.75rem">
           <div><div style="font-size:1rem;font-weight:800;color:#1a1530">Performer Summary</div></div>
-          ${toggleHTML}
+          ${viewToggleHTML}
         </div><div class="cp-empty">No performers yet.</div>`;
         return;
       }
 
       if (_perfSummaryView === 'size-summary') {
-        // Rank a size string smallest→largest for clothing-aware sort
-        function sizeRank(s) {
-          s = (s || '').trim();
-          // Heights: sort by cm value
-          const cm = s.match(/\((\d+)\s*cm\)/);
-          if (cm) return parseFloat(cm[1]);
-          const LETTER_RANK = { xs: 1, s: 2, m: 3, l: 4, xl: 5, xxl: 6, '2xl': 6, '3xl': 7 };
-          // Prefix weight: youth/kids smallest, then adult/women's/men's
-          const PREFIX_WEIGHT = { youth: 0, kids: 10, child: 10, '': 20, adult: 20, "women's": 30, womens: 30, "men's": 35, mens: 35 };
-          const lower = s.toLowerCase();
-          // Letter size: "Youth XL", "Adult M", "XL"
-          const lm = lower.match(/^(youth|kids|child|adult|women'?s?|men'?s?)?\s*(xs|s|m|l|xl|xxl|2xl|3xl)$/);
-          if (lm) {
-            const pw = PREFIX_WEIGHT[lm[1] || ''] ?? 20;
-            return pw * 10 + (LETTER_RANK[lm[2]] || 0);
-          }
-          // Numeric size: "Youth 16", "Kids 4", "Women's 8.5", "26W"
-          const nm = lower.match(/^([a-z']+)?\s*(\d+\.?\d*)/);
-          if (nm) {
-            const pw = PREFIX_WEIGHT[nm[1] || ''] ?? 20;
-            return pw * 100 + parseFloat(nm[2]);
-          }
-          return 9999;
-        }
+        const CATEGORY_META = {
+          'Top':    { icon: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20.38 3.46L16 2a4 4 0 01-8 0L3.62 3.46a2 2 0 00-1.34 2.23l.58 3.57a1 1 0 00.99.84H6v10c0 1.1.9 2 2 2h8a2 2 0 002-2V10h2.15a1 1 0 00.99-.84l.58-3.57a2 2 0 00-1.34-2.23z"/></svg>', bg: '#f0ecfc', color: '#572e88' },
+          'Bottom': { icon: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4h18v4l-4 12H7L3 8V4z"/><line x1="12" y1="8" x2="12" y2="20"/></svg>', bg: '#f0ecfc', color: '#572e88' },
+          'Dress':  { icon: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2c-1 0-2 .5-2 1.5V7L7 10l-4 12h18L17 10l-3-3V3.5C14 2.5 13 2 12 2z"/></svg>', bg: '#fce9e5', color: '#d1523d' },
+          'Shoes':  { icon: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 18h20v2a1 1 0 01-1 1H3a1 1 0 01-1-1v-2z"/><path d="M2 18l3-9h4l2 4h5a3 3 0 013 3v2H2z"/></svg>', bg: '#e8f0f9', color: '#476aaa' },
+          'Height': { icon: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="2" x2="12" y2="22"/><polyline points="17 7 12 2 7 7"/><polyline points="7 17 12 22 17 17"/></svg>', bg: '#e5f0e7', color: '#769e7b' },
+        };
 
-        // Aggregate: for each SIZE_FIELD, count occurrences of each value
+        // Aggregate counts per category
         const categoryCounts = SIZE_FIELDS.map(f => {
           const counts = {};
-          perf.forEach(p => {
-            const v = costumeAnswerValue(p.answers, f.keys);
-            if (v) counts[v] = (counts[v] || 0) + 1;
-          });
-          return { label: f.label, counts };
-        }).filter(c => Object.keys(c.counts).length > 0);
+          perf.forEach(p => { const v = costumeAnswerValue(p.answers, f.keys); if (v) counts[v] = (counts[v] || 0) + 1; });
+          return { label: f.label, counts, meta: CATEGORY_META[f.label] || { icon: '', bg: '#f4f2fb', color: '#572e88' } };
+        });
 
-        const totalWithSizes = perf.filter(p => SIZE_FIELDS.some(f => costumeAnswerValue(p.answers, f.keys))).length;
-        const missingCount = perf.length - totalWithSizes;
-
-        const categoryCards = categoryCounts.map(cat => {
-          const entries = Object.entries(cat.counts).sort((a, b) =>
-            _perfSummarySortDir === 'asc' ? sizeRank(a[0]) - sizeRank(b[0]) : sizeRank(b[0]) - sizeRank(a[0])
-          );
-          const pills = entries.map(([size, count]) =>
-            `<div style="display:flex;align-items:center;justify-content:space-between;padding:0.45rem 0;border-bottom:1px solid #f4f2fb">
-              <span style="font-size:0.84rem;color:#2a2040;font-weight:500">${esc(size)}</span>
-              <span style="font-size:0.84rem;font-weight:700;color:#572e88;background:#f4f2fb;border-radius:20px;padding:0.1rem 0.65rem">x${count}</span>
-            </div>`
-          ).join('');
-          return `<div style="background:#fff;border:1.5px solid #ede9f8;border-radius:14px;padding:1rem 1.15rem;flex:1;min-width:160px;max-width:260px">
-            <div style="font-size:0.65rem;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#b0a8c8;margin-bottom:0.65rem">${esc(cat.label)}</div>
-            ${pills}
-          </div>`;
-        }).join('');
+        const missingPerfs = perf.filter(p => !SIZE_FIELDS.some(f => costumeAnswerValue(p.answers, f.keys)));
+        const missingCount = missingPerfs.length;
+        const SHOW_LIMIT = 8;
 
         const sortToggleHTML = `
-          <div style="display:flex;gap:0.35rem;background:#f4f2fb;border-radius:10px;padding:0.25rem">
+          <div style="display:flex;gap:0;background:#f4f2fb;border-radius:10px;padding:0.25rem">
             <button onclick="_perfSummarySortDir='asc';renderPerformerSummary()" style="border:none;cursor:pointer;padding:0.3rem 0.9rem;border-radius:8px;font-size:0.78rem;font-weight:600;transition:all 0.15s;${_perfSummarySortDir==='asc'?'background:#fff;color:#572e88;box-shadow:0 1px 4px rgba(87,46,136,0.13)':'background:transparent;color:#9a90b0'}">Smallest first</button>
             <button onclick="_perfSummarySortDir='desc';renderPerformerSummary()" style="border:none;cursor:pointer;padding:0.3rem 0.9rem;border-radius:8px;font-size:0.78rem;font-weight:600;transition:all 0.15s;${_perfSummarySortDir==='desc'?'background:#fff;color:#572e88;box-shadow:0 1px 4px rgba(87,46,136,0.13)':'background:transparent;color:#9a90b0'}">Largest first</button>
           </div>`;
 
+        function buildCategoryCard(label, counts, meta, cardId, footerHTML) {
+          const entries = Object.entries(counts).sort((a, b) =>
+            _perfSummarySortDir === 'asc' ? sizeRank(a[0]) - sizeRank(b[0]) : sizeRank(b[0]) - sizeRank(a[0])
+          );
+          const visible = entries.slice(0, SHOW_LIMIT);
+          const hidden = entries.slice(SHOW_LIMIT);
+          const sizeCount = entries.length;
+          const rows = (arr) => arr.map(([size, count]) =>
+            `<div style="display:flex;align-items:center;justify-content:space-between;padding:0.42rem 0;border-bottom:1px solid #f4f2fb">
+              <span style="font-size:0.84rem;color:#2a2040;font-weight:500">${esc(size)}</span>
+              <span style="min-width:24px;height:24px;border-radius:50%;background:#f0ecfc;color:#572e88;font-size:0.75rem;font-weight:700;display:flex;align-items:center;justify-content:center">${count}</span>
+            </div>`
+          ).join('');
+          const expandBtn = hidden.length ? `<button id="${cardId}-more-btn" onclick="(function(){var h=document.getElementById('${cardId}-hidden');var b=document.getElementById('${cardId}-more-btn');if(h.style.display==='none'){h.style.display='block';b.innerHTML='Show less &and;'}else{h.style.display='none';b.innerHTML='+ ${hidden.length} more &or;'}})()" style="border:none;background:none;cursor:pointer;font-size:0.78rem;color:#572e88;font-weight:600;padding:0.35rem 0;display:flex;align-items:center;gap:0.3rem">+ ${hidden.length} more &#8964;</button>` : '';
+          const hiddenRows = hidden.length ? `<div id="${cardId}-hidden" style="display:none">${rows(hidden)}</div>` : '';
+          return `<div style="background:#fff;border:1.5px solid #ede9f8;border-radius:16px;padding:1.15rem 1.2rem 0 1.2rem;flex:1;min-width:180px;display:flex;flex-direction:column">
+            <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:0.85rem">
+              <div style="width:44px;height:44px;border-radius:50%;background:${meta.bg};color:${meta.color};display:flex;align-items:center;justify-content:center;flex-shrink:0">${meta.icon}</div>
+              <div>
+                <div style="font-size:0.78rem;font-weight:800;letter-spacing:0.06em;text-transform:uppercase;color:#1a1530">${esc(label)}</div>
+                <div style="font-size:0.72rem;color:#b0a8c8;margin-top:0.05rem">${sizeCount} size${sizeCount===1?'':'s'}</div>
+              </div>
+            </div>
+            <div style="flex:1">${rows(visible)}${hiddenRows}${expandBtn}</div>
+            <div style="border-top:1px solid #f4f2fb;margin-top:0.65rem;padding:0.65rem 0">${footerHTML}</div>
+          </div>`;
+        }
+
+        const categoryCards = categoryCounts
+          .filter(c => Object.keys(c.counts).length > 0)
+          .map((cat, i) => buildCategoryCard(
+            cat.label, cat.counts, cat.meta, `psm-cat-${i}`,
+            `<button onclick="_perfSummaryView='by-performer';renderPerformerSummary()" style="border:none;background:none;cursor:pointer;font-size:0.8rem;color:#572e88;font-weight:600;padding:0;display:flex;align-items:center;gap:0.35rem">View details <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3 8h10M9 4l4 4-4 4" stroke="#572e88" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>`
+          )).join('');
+
+        const unknownCard = missingCount ? buildCategoryCard(
+          'Unknown', { 'No size info': missingCount },
+          { icon: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>', bg: '#fef4e2', color: '#dd8233' },
+          'psm-cat-unknown',
+          `<button onclick="_perfSummaryView='by-performer';renderPerformerSummary()" style="border:none;background:none;cursor:pointer;font-size:0.8rem;color:#572e88;font-weight:600;padding:0;display:flex;align-items:center;gap:0.35rem">View performer${missingCount===1?'':'s'} <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3 8h10M9 4l4 4-4 4" stroke="#572e88" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>`
+        ) : '';
+
         el.innerHTML = `
-          <div style="margin-bottom:1.25rem;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:0.75rem">
+          <div style="margin-bottom:1rem;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:0.75rem">
             <div>
-              <div style="font-size:1rem;font-weight:800;color:#1a1530">Size Summary</div>
+              <div style="display:flex;align-items:center;gap:0.5rem"><div style="font-size:1rem;font-weight:800;color:#1a1530">Size Summary</div><svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7.25" stroke="#b0a8c8" stroke-width="1.5"/><rect x="7.25" y="6.5" width="1.5" height="5" rx="0.75" fill="#b0a8c8"/><rect x="7.25" y="4" width="1.5" height="1.5" rx="0.75" fill="#b0a8c8"/></svg></div>
               <div style="font-size:0.78rem;color:rgba(26,21,48,0.45);margin-top:0.15rem">Aggregate size counts across all performers.</div>
             </div>
             <div style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap">
               ${sortToggleHTML}
-              ${toggleHTML}
+              ${viewToggleHTML}
             </div>
           </div>
-          ${missingCount ? `<div style="font-size:0.78rem;color:#dd8233;font-weight:600;background:rgba(221,130,51,0.1);border-radius:8px;padding:0.3rem 0.75rem;margin-bottom:1rem;display:inline-block">${missingCount} performer${missingCount===1?'':'s'} missing size info</div>` : ''}
-          ${categoryCounts.length ? `<div style="display:flex;flex-wrap:wrap;gap:1rem">${categoryCards}</div>` : '<div class="cp-empty">No size data collected yet.</div>'}`;
+          ${missingCount ? `<div style="display:inline-flex;align-items:center;gap:0.4rem;font-size:0.78rem;color:#dd8233;font-weight:600;background:rgba(221,130,51,0.1);border-radius:8px;padding:0.3rem 0.75rem;margin-bottom:1rem">${missingCount} performer${missingCount===1?'':'s'} missing size info</div>` : ''}
+          <div style="display:flex;flex-wrap:wrap;gap:1rem;align-items:flex-start">${categoryCards}${unknownCard}</div>
+          <div style="margin-top:1.25rem;background:#f8f7fc;border:1.5px solid #ede9f8;border-radius:12px;padding:0.85rem 1.1rem;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:0.75rem">
+            <div style="display:flex;align-items:center;gap:0.6rem">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#572e88" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+              <div><div style="font-size:0.84rem;font-weight:700;color:#1a1530">Keep it up to date!</div><div style="font-size:0.75rem;color:#9a90b0">Accurate size info helps with fittings, costume planning, and ordering.</div></div>
+            </div>
+            ${missingCount ? `<button onclick="_perfSummaryView='by-performer';renderPerformerSummary()" style="border:1.5px solid #ede9f8;background:#fff;cursor:pointer;font-size:0.78rem;font-weight:600;color:#572e88;border-radius:8px;padding:0.35rem 0.9rem;white-space:nowrap">View missing info</button>` : '<div style="font-size:0.78rem;color:#769e7b;font-weight:600">All sizes collected</div>'}
+          </div>`;
         return;
       }
 
