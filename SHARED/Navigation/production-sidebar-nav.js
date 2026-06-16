@@ -36,7 +36,7 @@
 
   // ── Group state ──────────────────────────────────────────────────────────
 
-  const ALL_GROUPS = ['overview', 'plan', 'cast', 'departments', 'promote', 'ticketing', 'volunteers', 'financials', 'wrapup', 'settings', 'build'];
+  const ALL_GROUPS = ['overview', 'plan', 'cast', 'departments', 'promote', 'ticketing', 'volunteers', 'financials', 'wrapup', 'portals', 'settings', 'build'];
 
   window.openSidebarGroup = function (groupId) {
     ALL_GROUPS.forEach(function (id) {
