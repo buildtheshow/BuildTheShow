@@ -378,13 +378,21 @@
       _orgSlug = prodRes.data?.organizations?.slug || '';
       _showSlug = prodRes.data?.slug || '';
 
-      // Debug — remove after diagnosis
-      console.log('[Portals] cast:', castRes.data?.length, castRes.error?.message);
-      console.log('[Portals] vol:', volRes.data?.length, volRes.error?.message, volRes.data?.[0]);
-      console.log('[Portals] team:', teamRes.data?.length, teamRes.error?.message, teamRes.data?.[0]);
-
       const cast = castRes.data || [];
-      const volunteers = volRes.data || [];
+
+      // Deduplicate volunteers by portal_token (or email fallback) — one row per person
+      const volSeen = new Map();
+      for (const row of (volRes.data || [])) {
+        const key = row.portal_token || (row.email || '').toLowerCase();
+        if (!key) continue;
+        if (!volSeen.has(key)) {
+          volSeen.set(key, { ...row, _roles: [row.role_name].filter(Boolean) });
+        } else {
+          const existing = volSeen.get(key);
+          if (row.role_name && !existing._roles.includes(row.role_name)) existing._roles.push(row.role_name);
+        }
+      }
+      const volunteers = Array.from(volSeen.values());
 
       // Filter team members to only the creative portal roles, normalising both role and access_level
       const PORTAL_TEAM_ROLES = new Set(['director','vocal_director','choreographer']);
@@ -453,7 +461,7 @@
 
       // Volunteers (non-dept-lead)
       volunteers.filter(v => !deptLeadEmails.has((v.email||'').toLowerCase())).forEach(v => {
-        const role = v.role_name || 'Volunteer';
+        const role = (v._roles && v._roles.length ? v._roles.join(', ') : v.role_name) || 'Volunteer';
         people.push({
           name: v.name || 'Unknown',
           email: v.email || '',
@@ -469,7 +477,7 @@
 
       // Dept leads
       deptLeads.forEach(v => {
-        const role = v.role_name || 'Dept Lead';
+        const role = (v._roles && v._roles.length ? v._roles.join(', ') : v.role_name) || 'Dept Lead';
         people.push({
           name: v.name || 'Unknown',
           email: v.email || '',
