@@ -370,8 +370,8 @@
 
       const [castRes, volRes, teamRes, prodRes] = await Promise.all([
         sb.from('cast_members').select('id,name,email,headshot_url,state,character_name').eq('production_id', prodId).in('state', ['chosen','offer_accepted']),
-        sb.from('volunteer_signups').select('id,name,email,role_name,volunteer_role,status,portal_token').eq('production_id', prodId).in('status', ['approved','checked_in','completed','partially_filled']),
-        sb.from('production_team_members').select('id,name,email,role,access_level,is_active').eq('production_id', prodId).eq('is_active', true).in('access_level', ['director','vocal_director','choreographer']),
+        sb.from('volunteer_signups').select('id,name,email,role_name,volunteer_role,status,portal_token').eq('production_id', prodId).neq('status', 'cancelled'),
+        sb.from('production_team_members').select('id,name,email,role,access_level,is_active').eq('production_id', prodId).eq('is_active', true),
         sb.from('productions').select('organizations(slug),slug').eq('id', prodId).maybeSingle(),
       ]);
 
@@ -380,7 +380,10 @@
 
       const cast = castRes.data || [];
       const volunteers = volRes.data || [];
-      const teamMembers = teamRes.data || [];
+
+      // Filter team members to only the creative portal roles, normalising both role and access_level
+      const PORTAL_TEAM_ROLES = new Set(['director','vocal_director','choreographer']);
+      const teamMembers = (teamRes.data || []).filter(m => PORTAL_TEAM_ROLES.has(normaliseLevel(m)));
 
       const deptLeads = volunteers.filter(v => DEPT_LEAD_ROLE_KEYS.includes(v.role_name || v.volunteer_role || ''));
 
@@ -415,8 +418,10 @@
     }
 
     function normaliseLevel(m) {
-      const raw = String(m.access_level || m.role || '').toLowerCase().replace(/[^a-z0-9]+/g,'_');
-      if (raw === 'musical_director' || raw === 'music_director') return 'vocal_director';
+      const raw = String(m.access_level || m.role || '').trim().toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_+|_+$/g,'');
+      if (raw === 'musical_director' || raw === 'music_director' || raw === 'vocal_director' || raw === 'vocal director') return 'vocal_director';
+      if (raw === 'director') return 'director';
+      if (raw === 'choreographer') return 'choreographer';
       return raw;
     }
 
