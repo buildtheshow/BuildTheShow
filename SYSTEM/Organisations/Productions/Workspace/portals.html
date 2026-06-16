@@ -364,9 +364,8 @@
     }
 
     // ── Data load ──────────────────────────────────────────────────────────────
-    async function loadPortalsData(prodId) {
+    async function loadPortalsData(prodId, sb) {
       _prodId = prodId;
-      const sb = window._btsSupabase;
       if (!sb || !prodId) return;
 
       const [castRes, volRes, teamRes, prodRes] = await Promise.all([
@@ -625,16 +624,22 @@
       document.getElementById('inv-email').value = '';
       document.getElementById('inv-portal').value = '';
     }
+    // ── Supabase client ────────────────────────────────────────────────────────
+    const { createClient } = supabase;
+    const _sb = createClient(
+      'https://tkmaiktxpwqfbgeojbnf.supabase.co',
+      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRrbWFpa3R4cHdxZmJnZW9qYm5mIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM3MzE4MTcsImV4cCI6MjA4OTMwNzgxN30.TkTZBNWUatk3Y6Vmfv1hIRR3DfVjgwauwa76Pf00J_8'
+    );
+
     async function sendInvite() {
       const name   = document.getElementById('inv-name').value.trim();
       const email  = document.getElementById('inv-email').value.trim();
       const portal = document.getElementById('inv-portal').value;
       if (!name || !email || !portal) { alert('Please fill in all fields.'); return; }
-      const sb = window._btsSupabase;
-      if (!sb || !_prodId) return;
+      if (!_prodId) return;
       const btn = document.querySelector('#pt-invite-overlay .pt-btn-primary');
       btn.disabled = true; btn.textContent = 'Adding...';
-      const { error } = await sb.from('production_team_members').insert({
+      const { error } = await _sb.from('production_team_members').insert({
         production_id: _prodId,
         name, email,
         access_level: portal,
@@ -647,24 +652,11 @@
       window.location.reload();
     }
 
-    // ── Hook into page load ────────────────────────────────────────────────────
-    const _origInit = window.initProductionPage;
-    window.initProductionPage = function(section) {
-      if (_origInit) _origInit(section);
-    };
-
-    document.addEventListener('bts:prodready', function(e) {
-      const prodId = e.detail?.prodId || window._btsProdId;
-      if (prodId) loadPortalsData(prodId);
-    });
-
-    // Fallback: poll for prodId
-    let _pollCount = 0;
-    const _poll = setInterval(function() {
-      const prodId = window._btsProdId;
-      if (prodId) { clearInterval(_poll); loadPortalsData(prodId); }
-      if (++_pollCount > 40) clearInterval(_poll);
-    }, 150);
+    // ── Boot ────────────────────────────────────────────────────────────────────
+    (function () {
+      const pid = new URLSearchParams(location.search).get('id');
+      if (pid) loadPortalsData(pid, _sb);
+    })();
   </script>
 </body>
 </html>
