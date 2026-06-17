@@ -368,7 +368,7 @@
 
       const [castRes, volRes, teamRes, prodRes, bookingsRes] = await Promise.all([
         sb.from('cast_members').select('id,name,email,headshot_url,state,character_name,registration_answers').eq('production_id', prodId).in('state', ['chosen','offer_accepted']),
-        sb.from('volunteer_signups').select('id,name,email,role_name,status,portal_token').eq('production_id', prodId).in('status', ['approved','checked_in','completed']),
+        sb.from('volunteer_signups').select('id,name,email,role_name,status,portal_token,volunteer_passcode').eq('production_id', prodId).in('status', ['approved','checked_in','completed']),
         sb.from('production_team_members').select('id,name,email,role,access_level,is_active').eq('production_id', prodId).eq('is_active', true),
         sb.from('productions').select('organizations(slug),slug').eq('id', prodId).maybeSingle(),
         sb.from('audition_bookings').select('email,portal_code').eq('production_id', prodId).not('portal_code', 'is', null),
@@ -395,6 +395,7 @@
         } else {
           const existing = volSeen.get(key);
           if (row.role_name && !existing._roles.includes(row.role_name)) existing._roles.push(row.role_name);
+          if (!existing.volunteer_passcode && row.volunteer_passcode) existing.volunteer_passcode = row.volunteer_passcode;
         }
       }
       const volunteers = Array.from(volSeen.values());
@@ -635,9 +636,13 @@
     }
 
     function portalIframeSrc(person) {
-      // Volunteer / dept lead: use the routed URL so the page can resolve org+show from the path
-      if ((person.source === 'volunteer' || person.source === 'dept_lead') && person.data?.portal_token) {
-        return `${window.location.origin}/${encodeURIComponent(_orgSlug)}/${encodeURIComponent(_showSlug)}/volunteers?token=${encodeURIComponent(person.data.portal_token)}`;
+      // Volunteer / dept lead: load their full portal at /{org}/{show}/portal with preview auto-login
+      if (person.source === 'volunteer' || person.source === 'dept_lead') {
+        const email    = person.data?.email || person.email;
+        const passcode = person.data?.volunteer_passcode;
+        if (email && passcode && _orgSlug && _showSlug) {
+          return `${window.location.origin}/${encodeURIComponent(_orgSlug)}/${encodeURIComponent(_showSlug)}/portal?pvw_email=${encodeURIComponent(email)}&pvw_code=${encodeURIComponent(passcode)}`;
+        }
       }
       // Cast: load the actual cast portal at /{org}/{show}/portal with preview auto-login params
       if (person.source === 'cast') {
