@@ -46189,37 +46189,35 @@ See you soon!
       const stateClass = allPaid ? 'full' : totalPaid > 0 ? 'partial' : 'unpaid';
       const statusLabel = allPaid ? 'Paid in Full' : totalPaid > 0 ? 'Partially Paid' : 'Unpaid';
       const hhEf = { baseTotal: totalFee, total: totalFee, adjustments: [] };
-      const feeBreakdownHtml = data.map((d, di) => {
+      const feeLines = data.map(d => {
         const firstName = (d.item.app?.name || '').trim().split(/\s+/)[0].toUpperCase() || 'MEMBER';
-        const hasAdj = (d.ef.adjustments || []).length > 0;
-        let html = di > 0 ? `<div class="rsc-stmt-member-gap"></div>` : '';
-        html += `<div class="rsc-stmt-row">
+        return `<div class="rsc-stmt-row">
           <span>Production Fee &ndash; ${esc(firstName)}</span><span>${esc(fmt(d.ef.baseTotal))}</span>
         </div>`;
-        (d.ef.adjustments || []).forEach(adj => {
-          if (adj.type === 'sibling') {
-            const saving = d.ef.baseTotal - adj.value;
-            html += `<div class="rsc-stmt-row rsc-stmt-deduct rsc-stmt-member-line">
-              <span>Sibling Rate (${esc(fmt(saving))} off)</span><span>-${esc(fmt(saving))}</span>
-            </div>`;
-          } else if (adj.type === 'volunteer') {
-            const hrsLabel = adj.hours ? ` (${adj.hours} hrs)` : '';
-            html += `<div class="rsc-stmt-row rsc-stmt-deduct rsc-stmt-member-line">
-              <span>Volunteer Discount${esc(hrsLabel)}</span><span>-${esc(fmt(adj.deduct))}</span>
-            </div>`;
-          } else if (adj.type === 'scholarship') {
-            html += `<div class="rsc-stmt-row rsc-stmt-deduct rsc-stmt-member-line">
-              <span>Scholarship</span><span>-${esc(fmt(adj.deduct))}</span>
-            </div>`;
-          }
-        });
-        if (hasAdj) {
-          html += `<div class="rsc-stmt-row rsc-stmt-subtotal rsc-stmt-member-line">
-            <span>Total Due &ndash; ${esc(firstName)}</span><span>${esc(fmt(d.ef.total))}</span>
+      }).join('');
+      const allAdj = [];
+      data.forEach(d => (d.ef.adjustments || []).forEach(adj => {
+        if (!allAdj.find(a => a.type === adj.type)) allAdj.push({ ...adj, baseTotal: d.ef.baseTotal });
+      }));
+      const discountLines = allAdj.map(adj => {
+        if (adj.type === 'sibling') {
+          const saving = adj.baseTotal - adj.value;
+          return `<div class="rsc-stmt-row rsc-stmt-deduct">
+            <span>Sibling Discount (${esc(fmt(saving))} off)</span><span>-${esc(fmt(saving))}</span>
+          </div>`;
+        } else if (adj.type === 'volunteer') {
+          const hrsLabel = adj.hours ? ` (${adj.hours} hrs)` : '';
+          return `<div class="rsc-stmt-row rsc-stmt-deduct">
+            <span>Volunteer Discount${esc(hrsLabel)}</span><span>-${esc(fmt(adj.deduct))}</span>
+          </div>`;
+        } else if (adj.type === 'scholarship') {
+          return `<div class="rsc-stmt-row rsc-stmt-deduct">
+            <span>Scholarship</span><span>-${esc(fmt(adj.deduct))}</span>
           </div>`;
         }
-        return html;
-      }).join('') + `<div class="rsc-stmt-row rsc-stmt-total rsc-stmt-hh-total">
+        return '';
+      }).join('');
+      const feeBreakdownHtml = feeLines + discountLines + `<div class="rsc-stmt-row rsc-stmt-total rsc-stmt-hh-total">
         <span>Total Due</span><span>${esc(fmt(totalFee))}</span>
       </div>`;
       const allRecords = data.flatMap(d => d.records.filter(r => r.paid).map(r => ({
