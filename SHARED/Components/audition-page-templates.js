@@ -239,7 +239,7 @@
         #team-access-login-overlay { position:fixed; inset:0; z-index:9999; background:linear-gradient(160deg,#1f1138 0%,#3d1d6e 50%,#572e88 100%); display:flex; align-items:center; justify-content:center; padding:1.5rem; }
         .team-access-login-card { width:min(420px,100%); background:#fff; border-radius:20px; overflow:hidden; box-shadow:0 28px 70px rgba(15,6,35,0.45); }
         .team-access-login-head { background:#572e88; padding:1.25rem 1.5rem; position:relative; overflow:hidden; }
-        .team-access-login-head::before { content:''; position:absolute; inset:0; background-image:url('/ASSETS/Images/Grid-Glow-Purple.png'); background-size:cover; opacity:0.07; pointer-events:none; }
+        .team-access-login-head::before { content:''; position:absolute; inset:0; background-image:url('/ASSETS/Images/Decrotive/Grid-Glow-Purple.png'); background-size:cover; opacity:0.07; pointer-events:none; }
         .team-access-login-logo { height:22px; display:block; position:relative; z-index:1; margin-bottom:0.7rem; }
         .team-access-login-label { font-size:0.68rem; font-weight:900; letter-spacing: var(--bts-tracking-label); text-transform:uppercase; color:rgba(255,255,255,0.55); position:relative; z-index:1; }
         .team-access-login-body { padding:1.5rem; }
@@ -249,7 +249,7 @@
       </style>
       <div class="team-access-login-card">
         <div class="team-access-login-head">
-          <img src="/ASSETS/Images/logo-long-white.png" alt="Build The Show" class="team-access-login-logo" />
+          <img src="/ASSETS/Images/LogoBrand/logo-long-white.png" alt="Build The Show" class="team-access-login-logo" />
           <div class="team-access-login-label">Audition Team Access</div>
         </div>
         <div class="team-access-login-body">

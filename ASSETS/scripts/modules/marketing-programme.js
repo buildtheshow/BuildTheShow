@@ -44,7 +44,7 @@
       detail: '(folded in half from 8.5 x 11 in paper)',
       note: 'Standard booklet programme',
       pageLabel: '8.5 x 5.5 in folded pages',
-      image: '/ASSETS/Images/programme-%205.5x11-folded-8.5x11.svg',
+      image: '/ASSETS/Images/Icons/programme-%205.5x11-folded-8.5x11.svg',
     },
     {
       id: 'letter-flat',
@@ -52,7 +52,7 @@
       detail: '(not folded; print front/back from 8.5 x 11 in paper)',
       note: 'Loose full-letter sheets',
       pageLabel: '11 x 8.5 in loose sheets',
-      image: '/ASSETS/Images/programme-8.5x11.svg',
+      image: '/ASSETS/Images/Icons/programme-8.5x11.svg',
     },
     {
       id: 'tabloid-folded',
@@ -60,7 +60,7 @@
       detail: '(folded in half from 11 x 17 in paper)',
       note: 'Large booklet programme',
       pageLabel: '11 x 8.5 in folded pages',
-      image: '/ASSETS/Images/programme-8.5x11Folded-11x17.svg',
+      image: '/ASSETS/Images/Icons/programme-8.5x11Folded-11x17.svg',
     },
   ];
 

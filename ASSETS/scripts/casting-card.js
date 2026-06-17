@@ -85,12 +85,12 @@ function getCastingCardVideoCallIconUrl() {
       String(script?.src || '').endsWith('casting-card.js')
     );
     if (scriptTag?.src) {
-      const url = new URL('../Images/VideoCall.svg', scriptTag.src);
+      const url = new URL('../Images/Icons/VideoCall.svg', scriptTag.src);
       url.searchParams.set('v', version);
       return url.href;
     }
   } catch {}
-  return `/ASSETS/Images/VideoCall.svg?v=${version}`;
+  return `/ASSETS/Images/Icons/VideoCall.svg?v=${version}`;
 }
 
 // ── Determine Category Badge (gender) ────────────────────────

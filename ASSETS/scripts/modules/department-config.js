@@ -13,7 +13,7 @@
       key: 'front-of-house',
       label: 'Front of House',
       color: '#476aaa',
-      icon: '/ASSETS/Images/Department-front-of-house.svg',
+      icon: '/ASSETS/Images/Icons/Department-front-of-house-ticket.svg',
       sections: [
         section('ushers', 'Ushers', 'Audience welcome, seating, latecomers, accessibility support, and house flow.', ['Ushers', 'Usher']),
         section('concessions', 'Concessions', 'Snack table, sales float, food safety, stock, and end-of-night closeout.', ['Concessions', 'Concession Workers', 'Bakers']),
@@ -24,7 +24,7 @@
       key: 'backstage',
       label: 'Backstage & Rehearsal Support',
       color: '#dd8233',
-      icon: '/ASSETS/Images/volunteer-backstage.svg',
+      icon: '/ASSETS/Images/Icons/Department-production-and-rehearsal-support.svg',
       sections: [
         section('backstage-crew', 'Backstage Crew', 'Deck traffic, backstage readiness, entrances, exits, and show traffic.', ['Backstage Crew']),
         section('quick-changes', 'Quick Changes', 'Quick-change plots, dressing locations, change assistants, and timing notes.', ['Quick-Change Assistant', 'Quick Changes']),
@@ -36,7 +36,7 @@
       key: 'technical',
       label: 'Technical Crew',
       color: '#d1523d',
-      icon: '/ASSETS/Images/Department-technical.svg',
+      icon: '/ASSETS/Images/Icons/Department-technical-crew.svg',
       sections: [
         section('lighting', 'Lighting', 'Lighting plan, focus notes, cues, spot needs, and equipment tracking.', ['Lighting', 'Lighting Crew', 'Lighting Designer / Technician']),
         section('sound', 'Sound', 'Playback, sound effects, board notes, monitors, and audio setup.', ['Sound', 'Sound Crew', 'Sound & Technical']),
@@ -48,7 +48,7 @@
       key: 'design-construction',
       label: 'Design & Construction',
       color: '#769e7b',
-      icon: '/ASSETS/Images/Department-set.svg',
+      icon: '/ASSETS/Images/Icons/Department-design-and-construction.svg',
       sections: [
         section('set-building', 'Set Building', 'Build plans, materials, tools, safety notes, and construction progress.', ['Set Building', 'Set Builder', 'Set Builders', 'Lead Builder', 'Set Designer', 'Sets & Scenery', 'Set Construction', 'Set Strike Crew']),
         section('set-painting', 'Set Painting', 'Paint elevations, colour notes, finish samples, and scenic paint calls.', ['Set Painting', 'Set Painter', 'Set Painters', 'Lead Set Painter', 'Paint']),
@@ -60,7 +60,7 @@
       key: 'costumes',
       label: 'Costumes',
       color: '#74a2b4',
-      icon: '/ASSETS/Images/Department-costume-and-makeup.svg',
+      icon: '/ASSETS/Images/Icons/Department-costume-and-makeup.svg',
       tabs: [
         { key: 'dashboard',           label: 'Dashboard' },
         { key: 'costume-planning',    label: 'Planning',    costumeTab: 'groups' },
@@ -80,7 +80,7 @@
       key: 'hair-makeup',
       label: 'Hair & Makeup',
       color: '#ca7ea7',
-      icon: '/ASSETS/Images/Department-costume-and-makeup.svg',
+      icon: '/ASSETS/Images/Icons/Department-costume-and-makeup.svg',
       sections: [
         section('hair', 'Hair', 'Hair looks, performer hair notes, styling products, quick fixes, and call timing.', ['Hair', 'Hair Supplies', 'Styling Products']),
         section('makeup', 'Makeup', 'Makeup looks, allergies, sensitivities, product notes, and touch-up tracking.', ['Makeup']),
@@ -90,7 +90,7 @@
       key: 'marketing-publicity',
       label: 'Marketing & Publicity',
       color: '#efab45',
-      icon: '/ASSETS/Images/Department-marketing.svg',
+      icon: '/ASSETS/Images/Icons/Star.svg',
       sections: [
         section('branding', 'Branding', 'Show identity, key art, copy direction, and approved messaging.', ['Branding']),
         section('programme', 'Programme', 'Programme content, ads, credits, bios, proofing, and print readiness.', ['Programme', 'Programme Ads']),
@@ -103,7 +103,7 @@
       key: 'stage-management',
       label: 'Stage Management',
       color: '#572e88',
-      icon: '/ASSETS/Images/volunteer-stage-manager.svg',
+      icon: '/ASSETS/Images/Icons/volunteer-stage-manager.svg',
       sections: [
         section('stage-management', 'Stage Management', 'Calling, reports, rehearsal coordination, schedules, and show communication.', ['Stage Management', 'Stage Manager']),
       ],
@@ -112,7 +112,7 @@
       key: 'producer',
       label: 'Producer',
       color: '#74a2b4',
-      icon: '/ASSETS/Images/volunteer-stage-manager.svg',
+      icon: '/ASSETS/Images/Icons/volunteer-stage-manager.svg',
       tabs: [
         { key: 'receipts', label: 'Receipts', receiptForm: true },
       ],
