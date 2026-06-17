@@ -36,6 +36,8 @@
     .pt-card-count span { font-size: 0.72rem; font-weight: 600; color: #769e7b; margin-left: 0.3rem; }
     .pt-card-status { font-size: 0.72rem; color: rgba(26,21,48,0.45); margin-top: 0.2rem; }
     .pt-card-status.warn { color: #dd8233; font-weight: 600; }
+    .pt-card-waiting { border-style: dashed; opacity: 0.75; }
+    .pt-card-waiting-label { font-size: 0.72rem; font-style: italic; color: rgba(26,21,48,0.4); margin-top: 0.25rem; }
     .pt-card-arrow { position: absolute; right: 0.75rem; top: 50%; transform: translateY(-50%); color: #b0a8c8; font-size: 0.9rem; }
 
     /* ── Two column layout ── */
@@ -171,6 +173,7 @@
             <button class="pt-filter-pill" data-filter="cast" onclick="setPeopleFilter('cast',this)">Cast</button>
             <button class="pt-filter-pill" data-filter="volunteer" onclick="setPeopleFilter('volunteer',this)">Volunteer</button>
             <button class="pt-filter-pill" data-filter="dept_lead" onclick="setPeopleFilter('dept_lead',this)">Dept Lead</button>
+            <button class="pt-filter-pill" data-filter="treasurer" onclick="setPeopleFilter('treasurer',this)">Treasurer</button>
             <button class="pt-filter-pill" data-filter="team" onclick="setPeopleFilter('team',this)">Creative Team</button>
           </div>
           <div class="pt-table-wrap">
@@ -304,15 +307,17 @@
     const DEPT_LEAD_ROLE_KEYS = [
       'Stage Manager','Front of House Manager','Concession Manager','Costume Designer',
       'Hair & Makeup Lead','Lead Builder','Lead Set Painter','Lead Prop Person',
-      'Marketing Director','Lighting Designer/Technician','Sound / Audio Technician','Cast Party Coordinator',
-      'Treasurer'
+      'Marketing Director','Lighting Designer/Technician','Sound / Audio Technician','Cast Party Coordinator'
     ];
 
+    const TREASURER_ROLE_KEY = 'Treasurer';
+
     const PORTAL_DEFS = [
-      { key: 'cast',      label: 'Cast Portal',     color: '#572e88', bg: '#f0ecfc', icon: castIcon() },
-      { key: 'volunteer', label: 'Volunteer Portal', color: '#769e7b', bg: '#e5f0e7', icon: volunteerIcon() },
-      { key: 'dept_lead', label: 'Department Lead',  color: '#dd8233', bg: '#fef4e2', icon: deptLeadIcon() },
-      { key: 'team',      label: 'Creative Team',    color: '#476aaa', bg: '#e8f0f9', icon: teamIcon() },
+      { key: 'cast',       label: 'Cast Portal',     color: '#572e88', bg: '#f0ecfc', icon: castIcon() },
+      { key: 'volunteer',  label: 'Volunteer Portal', color: '#769e7b', bg: '#e5f0e7', icon: volunteerIcon() },
+      { key: 'dept_lead',  label: 'Department Lead',  color: '#dd8233', bg: '#fef4e2', icon: deptLeadIcon() },
+      { key: 'treasurer',  label: 'Treasurer',        color: '#ca7ea7', bg: '#fdf0f8', icon: treasurerIcon() },
+      { key: 'team',       label: 'Creative Team',    color: '#476aaa', bg: '#e8f0f9', icon: teamIcon() },
     ];
 
     const PORTAL_TEAM_ROLE_KEYS = new Set(['director','vocal_director','choreographer','producer','admin','musical_director','music_director']);
@@ -345,6 +350,7 @@
     function volunteerIcon() { return `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/></svg>`; }
     function deptLeadIcon() { return `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>`; }
     function teamIcon() { return `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="15" rx="2"/><path d="M16 7V5a2 2 0 0 0-4 0v2"/><line x1="12" y1="12" x2="12" y2="16"/><line x1="10" y1="14" x2="14" y2="14"/></svg>`; }
+    function treasurerIcon() { return `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>`; }
 
     function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
@@ -404,29 +410,36 @@
       const teamMembers = (teamRes.data || []).filter(m => PORTAL_TEAM_ROLE_KEYS.has(normaliseLevel(m)));
 
       const deptLeads = volunteers.filter(v => DEPT_LEAD_ROLE_KEYS.includes(v.role_name || ''));
+      const treasurers = volunteers.filter(v => v.role_name === TREASURER_ROLE_KEY);
 
-      renderPortalCards(cast, volunteers, deptLeads, teamMembers);
-      buildPeopleList(cast, volunteers, deptLeads, teamMembers, bookingCodes);
+      renderPortalCards(cast, volunteers, deptLeads, treasurers, teamMembers);
+      buildPeopleList(cast, volunteers, deptLeads, treasurers, teamMembers, bookingCodes);
     }
 
     // ── Portal cards ───────────────────────────────────────────────────────────
-    function renderPortalCards(cast, volunteers, deptLeads, teamMembers) {
+    function renderPortalCards(cast, volunteers, deptLeads, treasurers, teamMembers) {
       const counts = {
-        cast:      cast.length,
-        volunteer: volunteers.length,
-        dept_lead: deptLeads.length,
-        team:      teamMembers.length,
+        cast:       cast.length,
+        volunteer:  volunteers.length,
+        dept_lead:  deptLeads.length,
+        treasurer:  treasurers.length,
+        team:       teamMembers.length,
       };
 
       const el = document.getElementById('pt-cards-row');
       el.innerHTML = PORTAL_DEFS.map(def => {
         const count = counts[def.key] || 0;
-        return `<div class="pt-card" onclick="setPeopleFilter('${def.key}', document.querySelector('[data-filter=${def.key}]'))" id="pt-card-${def.key}">
+        const isTreasurer = def.key === 'treasurer';
+        const emptyLabel = isTreasurer ? 'Waiting to be added' : 'No active users';
+        return `<div class="pt-card${isTreasurer && count === 0 ? ' pt-card-waiting' : ''}" onclick="setPeopleFilter('${def.key}', document.querySelector('[data-filter=${def.key}]'))" id="pt-card-${def.key}">
           <div class="pt-card-icon" style="background:${def.bg};color:${def.color}">${def.icon}</div>
           <div class="pt-card-body">
             <div class="pt-card-name">${esc(def.label)}</div>
-            <div class="pt-card-count">${count}<span>Active</span></div>
-            <div class="pt-card-status">${count === 0 ? 'No active users' : `View all ${count}`}</div>
+            ${isTreasurer && count === 0
+              ? `<div class="pt-card-waiting-label">Waiting to be added</div>`
+              : `<div class="pt-card-count">${count}<span>Active</span></div>
+                 <div class="pt-card-status">${count === 0 ? emptyLabel : `View all ${count}`}</div>`
+            }
           </div>
           <span class="pt-card-arrow">›</span>
         </div>`;
@@ -443,8 +456,9 @@
     }
 
     // ── Build unified people list ──────────────────────────────────────────────
-    function buildPeopleList(cast, volunteers, deptLeads, teamMembers, bookingCodes = new Map()) {
+    function buildPeopleList(cast, volunteers, deptLeads, treasurers, teamMembers, bookingCodes = new Map()) {
       const deptLeadEmails = new Set(deptLeads.map(d => (d.email||'').toLowerCase()));
+      const treasurerEmails = new Set(treasurers.map(t => (t.email||'').toLowerCase()));
       const people = [];
 
       // Cast
@@ -463,8 +477,8 @@
         });
       });
 
-      // Volunteers (non-dept-lead)
-      volunteers.filter(v => !deptLeadEmails.has((v.email||'').toLowerCase())).forEach(v => {
+      // Volunteers (non-dept-lead, non-treasurer)
+      volunteers.filter(v => !deptLeadEmails.has((v.email||'').toLowerCase()) && !treasurerEmails.has((v.email||'').toLowerCase())).forEach(v => {
         const role = (v._roles && v._roles.length ? v._roles.join(', ') : v.role_name) || 'Volunteer';
         people.push({
           name: v.name || 'Unknown',
@@ -491,6 +505,21 @@
           portals: ['volunteer','dept_lead'],
           filterKeys: ['dept_lead'],
           source: 'dept_lead',
+          data: v,
+        });
+      });
+
+      // Treasurer
+      treasurers.forEach(v => {
+        people.push({
+          name: v.name || 'Unknown',
+          email: v.email || '',
+          headshot: '',
+          roleLabel: 'Treasurer',
+          roleColor: '#ca7ea7', roleBg: '#fdf0f8',
+          portals: ['treasurer'],
+          filterKeys: ['treasurer'],
+          source: 'treasurer',
           data: v,
         });
       });
@@ -637,6 +666,14 @@
     }
 
     function portalIframeSrc(person) {
+      // Treasurer: load restricted financial portal
+      if (person.source === 'treasurer') {
+        const email    = person.data?.email || person.email;
+        const passcode = person.data?.volunteer_passcode;
+        if (email && passcode && _orgSlug && _showSlug) {
+          return `${window.location.origin}/${encodeURIComponent(_orgSlug)}/${encodeURIComponent(_showSlug)}/treasurer?pvw_email=${encodeURIComponent(email)}&pvw_code=${encodeURIComponent(passcode)}`;
+        }
+      }
       // Volunteer / dept lead: load their full portal at /{org}/{show}/portal with preview auto-login
       if (person.source === 'volunteer' || person.source === 'dept_lead') {
         const email    = person.data?.email || person.email;
