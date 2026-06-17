@@ -45813,17 +45813,43 @@ See you soon!
     const assignment = item.assignment || {};
     const assignId = String(assignment.id || '');
     const regDone = !!registrationFormsComplete(app);
-    const modelReleaseDone = registrationAnswerTruthy(app, ['media_release_signed', '__bts_registration_media_release_signed']) || regDone;
     const accessText = registrationAnswerValue(app, ['Accessibility and accommodation needs', 'Accessibility', '__bts_registration_accessibility']).trim();
+    const modelRelease = rscModelReleaseStatus(app);
     const row = (ok, label, cls = ok ? 'ok' : 'muted') => `<div class="rsc-check-item"><span class="rsc-check-icon ${cls}">${ok ? '✓' : cls === 'warn' ? '!' : '+'}</span><span>${esc(label)}</span></div>`;
     const accessRow = accessText
-      ? `<button type="button" class="rsc-check-item" style="background:none;border:none;padding:0;text-align:left;font-family:inherit;cursor:pointer;" onclick="rscShowAccessibilityNote('${esc(assignId)}')"><span class="rsc-check-icon warn">!</span><span>Accessibility Needs</span></button>`
+      ? `<button type="button" class="rsc-check-item" style="background:none;border:none;padding:0;text-align:left;font-family:inherit;cursor:pointer;" onclick="rscShowAccessibilityNote('${esc(assignId)}')"><span class="rsc-check-icon ok">✓</span><span>Accessibility Needs</span></button>`
       : row(true, 'Accessibility Needs', 'ok');
+    const modelText = modelRelease.missing.length
+      ? `Model Release - No to: ${modelRelease.missing.join(', ')}`
+      : 'Model Release';
     return `<div class="rsc-check-list">
       ${row(regDone, 'Registered', regDone ? 'ok' : 'warn')}
       ${accessRow}
-      ${row(modelReleaseDone, 'Model Release Status', modelReleaseDone ? 'ok' : 'warn')}
+      ${row(modelRelease.complete, modelText, modelRelease.complete ? 'ok' : 'warn')}
     </div>`;
+  }
+
+  function rscModelReleaseStatus(app = {}) {
+    const ca = applicantCustomAnswers(app) || {};
+    const template = (typeof getRegistrationFormTemplate === 'function') ? getRegistrationFormTemplate('media_release') : null;
+    const permissions = (template?.permissions || MEDIA_RELEASE_DEFAULT_PERMISSIONS || []).filter(p => p.mode !== 'hidden');
+    const missing = permissions
+      .filter(p => String(ca[`mr_perm_${p.id}`] || 'agree').toLowerCase() === 'disagree')
+      .map(p => rscModelReleaseShortLabel(p.label || p.id));
+    const signed = registrationAnswerTruthy(app, ['media_release_signed', '__bts_registration_media_release_signed']);
+    return {
+      complete: signed && missing.length === 0,
+      missing,
+    };
+  }
+
+  function rscModelReleaseShortLabel(label = '') {
+    const clean = String(label || '').trim();
+    const lower = clean.toLowerCase();
+    if (lower.includes('marketing')) return 'Marketing use';
+    if (lower.includes('identified') || lower.includes('caption') || lower.includes('name')) return 'Name/captions';
+    if (lower.includes('archival')) return 'Archival use';
+    return clean.length > 42 ? `${clean.slice(0, 39).trim()}...` : clean;
   }
 
   function rscStatusChecksForItemsHtml(items = []) {
