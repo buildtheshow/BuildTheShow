@@ -1414,23 +1414,34 @@
     return String(ev.title || ST_EVENT_TYPE_LABELS[ev.event_type] || ev.event_type || 'Event').trim();
   }
 
+  function stTimeLabel(raw) {
+    if (!raw || !raw.includes('T')) return '';
+    const timePart = String(raw).slice(11, 16);
+    const parts = timePart.split(':');
+    const h = parseInt(parts[0], 10);
+    const m = parts[1] || '00';
+    if (isNaN(h)) return '';
+    const period = h >= 12 ? 'PM' : 'AM';
+    const h12 = h % 12 || 12;
+    return m === '00' ? `${h12} ${period}` : `${h12}:${m} ${period}`;
+  }
+
   function stRenderScheduleSection() {
     const el = document.getElementById('st-p0-schedule');
     const body = document.getElementById('st-p0-schedule-body');
     if (!el || !body) return;
-    const rehearsalTypes = new Set(['rehearsal','music_rehearsal','choreography','tech','dress']);
-    const performanceTypes = new Set(['performance']);
-    const rehearsals = (_prodEvents || []).filter(ev => rehearsalTypes.has(ev.event_type));
-    const performances = (_prodEvents || []).filter(ev => performanceTypes.has(ev.event_type));
-    if (!rehearsals.length && !performances.length) { el.style.display = 'none'; return; }
+    const shownTypes = new Set(['rehearsal','music_rehearsal','choreography','tech','dress','performance','event','cast_party']);
+    const events = (_prodEvents || []).filter(ev => shownTypes.has(ev.event_type));
+    if (!events.length) { el.style.display = 'none'; return; }
     const evRow = ev => {
       const typeLabel = ST_EVENT_TYPE_LABELS[ev.event_type] || ev.event_type;
       const customTitle = ev.title && ev.title !== typeLabel ? ` — ${esc(ev.title)}` : '';
-      return `<li><strong>${stDateLabel(ev.start_time)}</strong> ${esc(typeLabel)}${customTitle}</li>`;
+      const time = stTimeLabel(ev.start_time);
+      const timeStr = time ? ` <span style="color:#572e88;font-weight:400;">${time}</span>` : '';
+      return `<li><strong>${stDateLabel(ev.start_time)}</strong>${timeStr} ${esc(typeLabel)}${customTitle}</li>`;
     };
     let html = '<ul>';
-    rehearsals.forEach(ev => { html += evRow(ev); });
-    performances.forEach(ev => { html += evRow(ev); });
+    events.forEach(ev => { html += evRow(ev); });
     html += '</ul>';
     body.innerHTML = html;
     el.style.display = '';
