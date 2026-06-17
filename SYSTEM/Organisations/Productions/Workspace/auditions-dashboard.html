@@ -40,6 +40,21 @@
     .aud-session-btn { font-size: 0.72rem; font-weight: 800; border: 1.5px solid currentColor; border-radius: 100px; padding: 0.28rem 0.7rem; cursor: pointer; background: rgba(255,255,255,0.55); transition: background 0.12s; font-family: var(--bts-font); }
     .aud-session-btn:hover { background: rgba(255,255,255,0.85); }
 
+    .aud-link-panel { background: #fff; border: 1.5px solid rgba(202,126,167,0.24); border-radius: 12px; padding: 1.2rem 1.35rem; box-shadow: 0 6px 20px rgba(26,21,48,0.05); margin-bottom: 1.4rem; display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 1rem; align-items: center; }
+    .aud-link-title { font-size: 0.95rem; font-weight: 950; color: #1a1530; margin-bottom: 0.18rem; }
+    .aud-link-copy { font-size: 0.78rem; color: rgba(26,21,48,0.52); line-height: 1.45; margin-bottom: 0.65rem; }
+    .aud-link-url { border: 1px solid rgba(87,46,136,0.12); background: rgba(87,46,136,0.035); border-radius: 8px; padding: 0.55rem 0.7rem; color: #1a1530; font-size: 0.76rem; font-weight: 750; overflow-wrap: anywhere; }
+    .aud-link-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; justify-content: flex-end; }
+    .aud-link-btn { border: 1.5px solid #ca7ea7; background: #ca7ea7; color: #fff; border-radius: 8px; padding: 0.55rem 0.8rem; font-family: var(--bts-font); font-size: 0.74rem; font-weight: 900; cursor: pointer; text-decoration: none; white-space: nowrap; }
+    .aud-link-btn.secondary { background: #fff; color: #9a4f78; }
+    .aud-link-status { display: inline-flex; align-items: center; gap: 0.35rem; border-radius: 100px; padding: 0.18rem 0.52rem; font-size: 0.66rem; font-weight: 900; margin-left: 0.45rem; vertical-align: middle; }
+    .aud-link-status.on { background: #e5f0e7; color: #2e6639; }
+    .aud-link-status.off { background: #fce9e5; color: #d1523d; }
+    @media (max-width: 760px) {
+      .aud-link-panel { grid-template-columns: 1fr; }
+      .aud-link-actions { justify-content: flex-start; }
+    }
+
     .aud-section-head { font-size: 0.7rem; font-weight: 900; letter-spacing: 0.1em; text-transform: uppercase; color: rgba(26,21,48,0.4); margin-bottom: 0.75rem; }
     .aud-performer-row { display: flex; align-items: center; gap: 0.85rem; padding: 0.75rem 0; border-bottom: 1px solid rgba(87,46,136,0.07); }
     .aud-performer-row:last-child { border-bottom: none; }
@@ -106,14 +121,36 @@
       }
       function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
-      const [sessRes, appRes] = await Promise.all([
+      const [prodRes, sessRes, appRes] = await Promise.all([
+        sb.from('productions').select('slug,wizard_data,organizations(slug)').eq('id', prodId).single(),
         sb.from('audition_sessions').select('id,name,type,date,start_time').eq('production_id', prodId).order('sort_order').order('created_at'),
         sb.from('audition_applications').select('id,name,email,headshot_url,status,callback_status,session_id,created_at', { count: 'exact' }).eq('production_id', prodId).order('created_at', { ascending: false }),
       ]);
 
+      const prod     = prodRes.data || {};
       const sessions = sessRes.data || [];
       const apps     = appRes.data || [];
       const total    = appRes.count || apps.length;
+      const orgSlug  = Array.isArray(prod.organizations) ? prod.organizations[0]?.slug : prod.organizations?.slug;
+      const selfTapeUrl = (orgSlug && prod.slug)
+        ? `${window.location.origin}/${encodeURIComponent(orgSlug)}/${encodeURIComponent(prod.slug)}/self-tape`
+        : '';
+      const selfTapeEnabled = prod?.wizard_data?.self_tape_enabled !== false;
+      const selfTapeDeadline = prod?.wizard_data?.self_tape_deadline
+        ? new Date(prod.wizard_data.self_tape_deadline).toLocaleString('en-CA', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+        : '';
+
+      window.copyAuditionSelfTapeLink = function () {
+        if (!selfTapeUrl) return;
+        const btn = document.getElementById('aud-copy-self-tape-link');
+        navigator.clipboard.writeText(selfTapeUrl).then(() => {
+          if (btn) {
+            const original = btn.textContent;
+            btn.textContent = 'Copied';
+            setTimeout(() => { btn.textContent = original; }, 1800);
+          }
+        }).catch(() => prompt('Copy this self-tape link:', selfTapeUrl));
+      };
 
       let slotCounts = {};
       if (sessions.length) {
@@ -174,6 +211,22 @@
         ? `<div class="aud-sessions-grid">${sessions.map(sessionCardHtml).join('')}</div>`
         : `<div class="aud-empty">No sessions set up yet. <a href="#" onclick="btsProdNav('auditions-settings.html');return false;">Set up auditions</a></div>`;
 
+      const selfTapePanelHtml = `<div class="aud-link-panel">
+        <div>
+          <div class="aud-link-title">
+            Self-tape audition link
+            <span class="aud-link-status ${selfTapeEnabled ? 'on' : 'off'}">${selfTapeEnabled ? 'Enabled' : 'Disabled'}</span>
+          </div>
+          <div class="aud-link-copy">Send this public link to performers who should register for a general self-tape audition.${selfTapeDeadline ? ` Deadline: ${esc(selfTapeDeadline)}.` : ''}</div>
+          <div class="aud-link-url">${selfTapeUrl ? esc(selfTapeUrl) : 'Save your audition settings to create the self-tape link.'}</div>
+        </div>
+        <div class="aud-link-actions">
+          ${selfTapeUrl ? `<button type="button" class="aud-link-btn" id="aud-copy-self-tape-link" onclick="copyAuditionSelfTapeLink()">Copy Link</button>` : ''}
+          ${selfTapeUrl ? `<a class="aud-link-btn secondary" href="${esc(selfTapeUrl)}" target="_blank" rel="noopener">Open</a>` : ''}
+          <button type="button" class="aud-link-btn secondary" onclick="btsProdNav('auditions-settings.html')">Settings</button>
+        </div>
+      </div>`;
+
       document.getElementById('page-root').innerHTML = `
         <div class="aud-hero">
           <div>
@@ -186,6 +239,7 @@
             <div class="aud-hero-metric-label">Performers</div>
           </div>
         </div>
+        ${selfTapePanelHtml}
         ${sessionsHtml}
         <div class="aud-section-head">Recent Performers</div>
         ${recentHtml}
