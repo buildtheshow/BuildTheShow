@@ -175,6 +175,7 @@
             <button class="pt-filter-pill" data-filter="volunteer" onclick="setPeopleFilter('volunteer',this)">Volunteer</button>
             <button class="pt-filter-pill" data-filter="dept_lead" onclick="setPeopleFilter('dept_lead',this)">Dept Lead</button>
             <button class="pt-filter-pill" data-filter="team" onclick="setPeopleFilter('team',this)">Creative Team</button>
+            <button class="pt-filter-pill" data-filter="board" onclick="setPeopleFilter('board',this)">Organisation Members</button>
           </div>
           <div class="pt-table-wrap">
             <table class="pt-table">
@@ -321,6 +322,17 @@
       { dept: 'Backstage & Rehearsal Support', name: 'Cast Party Coordinator', default: 1 },
       { dept: 'Technical Crew', name: 'Sound / Audio Technician', default: 1 },
     ];
+    const ORG_MEMBER_ROLE_HOLDERS = [
+      'President',
+      'Vice President',
+      'Treasurer',
+      'Recording Secretary',
+      'Marketing & Communications Director',
+      'Fundraising Chair',
+      'Volunteer Coordinator',
+      'Youth Member(s)',
+      'Member at Large',
+    ];
     const DEPT_ROLE_PALETTES = {
       'Front of House': { color: '#476aaa', bg: '#e8f0f9', border: '#c8d8ef' },
       'Backstage & Rehearsal Support': { color: '#dd8233', bg: '#fef4e2', border: '#f4d6aa' },
@@ -336,6 +348,7 @@
       { key: 'volunteer',  label: 'Volunteer Portal', color: '#769e7b', bg: '#769e7b', icon: volunteerIcon() },
       { key: 'dept_lead',  label: 'Department Lead',  color: '#dd8233', bg: '#dd8233', icon: deptLeadIcon() },
       { key: 'team',       label: 'Creative Team',    color: '#476aaa', bg: '#476aaa', icon: teamIcon() },
+      { key: 'board',      label: 'Organisation Members', color: '#111111', bg: '#111111', icon: boardIcon() },
     ];
 
     const PORTAL_TEAM_ROLE_KEYS = new Set(['director','vocal_director','choreographer','producer','admin','musical_director','music_director']);
@@ -369,6 +382,7 @@
     function volunteerIcon() { return portalIconImg('volunteer-HEART.svg'); }
     function deptLeadIcon() { return portalIconImg('Production Checklist.svg'); }
     function teamIcon() { return portalIconImg('Creative Team.svg'); }
+    function boardIcon() { return portalIconImg('Organisation.svg'); }
 
     function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
@@ -432,12 +446,19 @@
         sb.from('cast_members').select('id,name,email,headshot_url,state,character_name,registration_answers').eq('production_id', prodId).in('state', ['chosen','offer_accepted']),
         sb.from('volunteer_signups').select('id,name,email,role_name,department,status,portal_token,volunteer_passcode').eq('production_id', prodId).in('status', ['approved','checked_in','completed']),
         sb.from('production_team_members').select('id,name,email,role,access_level,is_active,passcode').eq('production_id', prodId).eq('is_active', true),
-        sb.from('productions').select('organizations(slug),slug,volunteer_staffing_plan').eq('id', prodId).maybeSingle(),
+        sb.from('productions').select('organization_id,organizations(slug),slug,volunteer_staffing_plan').eq('id', prodId).maybeSingle(),
         sb.from('audition_bookings').select('email,portal_code').eq('production_id', prodId).not('portal_code', 'is', null),
       ]);
 
       _orgSlug = prodRes.data?.organizations?.slug || '';
       _showSlug = prodRes.data?.slug || '';
+      let boardMembers = [];
+      if (prodRes.data?.organization_id) {
+        const { data: orgMembers } = await sb.from('org_members')
+          .select('id,display_name,email,phone,phone_number,title,headshot_url,profiles:user_id(display_name,custom_id)')
+          .eq('org_id', prodRes.data.organization_id);
+        boardMembers = orgMembers || [];
+      }
 
       // email → portal_code map for cast preview
       const bookingCodes = new Map();
@@ -469,8 +490,8 @@
       const treasurers = volunteers.filter(v => v.role_name === TREASURER_ROLE_KEY);
       const plannedDeptLeadRoles = buildPlannedDeptLeadRoles(prodRes.data?.volunteer_staffing_plan || {});
 
-      renderPortalCards(cast, volunteers, deptLeads, treasurers, teamMembers, plannedDeptLeadRoles);
-      buildPeopleList(cast, volunteers, deptLeads, treasurers, teamMembers, bookingCodes, plannedDeptLeadRoles);
+      renderPortalCards(cast, volunteers, deptLeads, treasurers, teamMembers, boardMembers, plannedDeptLeadRoles);
+      buildPeopleList(cast, volunteers, deptLeads, treasurers, teamMembers, boardMembers, bookingCodes, plannedDeptLeadRoles);
     }
 
     function buildPlannedDeptLeadRoles(staffingPlan = {}) {
@@ -506,25 +527,28 @@
     }
 
     // ── Portal cards ───────────────────────────────────────────────────────────
-    function renderPortalCards(cast, volunteers, deptLeads, treasurers, teamMembers, plannedDeptLeadRoles = []) {
+    function renderPortalCards(cast, volunteers, deptLeads, treasurers, teamMembers, boardMembers = [], plannedDeptLeadRoles = []) {
       const assignedDeptLeadRoleNames = new Set([...deptLeads, ...treasurers].flatMap(v => {
         const roles = Array.isArray(v._roles) && v._roles.length ? v._roles : [v.role_name];
         return roles.map(normaliseRoleName).filter(Boolean);
       }));
+      const assignedOrgMemberRoleNames = new Set(boardMembers.map(m => normaliseRoleName(m.title)).filter(Boolean));
       const unassignedPlannedCount = plannedDeptLeadRoles.filter(role => !assignedDeptLeadRoleNames.has(normaliseRoleName(role.roleName))).length;
+      const unassignedOrgMemberCount = ORG_MEMBER_ROLE_HOLDERS.filter(role => !assignedOrgMemberRoleNames.has(normaliseRoleName(role))).length;
       const deptLeadPortalCount = deptLeads.length + treasurers.length + unassignedPlannedCount;
       const counts = {
         cast:       cast.length,
         volunteer:  volunteers.length,
         dept_lead:  deptLeadPortalCount,
         team:       teamMembers.length,
+        board:      boardMembers.length + unassignedOrgMemberCount,
       };
 
       const el = document.getElementById('pt-cards-row');
       el.innerHTML = PORTAL_DEFS.map(def => {
         const count = counts[def.key] || 0;
         const emptyLabel = 'No active users';
-        const countLabel = def.key === 'dept_lead' ? 'Roles' : 'Active';
+        const countLabel = (def.key === 'dept_lead' || def.key === 'board') ? 'Roles' : 'Active';
         return `<div class="pt-card" style="--pt-card-color:${def.color}" onclick="setPeopleFilter('${def.key}', document.querySelector('[data-filter=${def.key}]'))" id="pt-card-${def.key}">
           <div class="pt-card-icon" style="background:rgba(255,255,255,0.18);color:#fff">${def.icon}</div>
           <div class="pt-card-body">
@@ -547,13 +571,19 @@
     }
 
     // ── Build unified people list ──────────────────────────────────────────────
-    function buildPeopleList(cast, volunteers, deptLeads, treasurers, teamMembers, bookingCodes = new Map(), plannedDeptLeadRoles = []) {
+    function orgMemberDisplayName(member = {}) {
+      const profile = member.profiles || {};
+      return member.display_name || profile.display_name || profile.custom_id || member.email || 'Organisation Member';
+    }
+
+    function buildPeopleList(cast, volunteers, deptLeads, treasurers, teamMembers, boardMembers = [], bookingCodes = new Map(), plannedDeptLeadRoles = []) {
       const deptLeadEmails = new Set(deptLeads.map(d => (d.email||'').toLowerCase()));
       const treasurerEmails = new Set(treasurers.map(t => (t.email||'').toLowerCase()));
       const assignedDeptLeadRoles = new Set([...deptLeads, ...treasurers].flatMap(v => {
         const roles = Array.isArray(v._roles) && v._roles.length ? v._roles : [v.role_name];
         return roles.map(normaliseRoleName).filter(Boolean);
       }));
+      const assignedOrgMemberRoles = new Set(boardMembers.map(m => normaliseRoleName(m.title)).filter(Boolean));
       const people = [];
 
       // Cast
@@ -657,6 +687,39 @@
         });
       });
 
+      // Organisation members
+      const boardDef = PORTAL_DEFS.find(d => d.key === 'board');
+      boardMembers.forEach(m => {
+        people.push({
+          name: orgMemberDisplayName(m),
+          email: m.email || '',
+          headshot: m.headshot_url || '',
+          roleLabel: m.title || 'Organisation Member',
+          roleColor: boardDef.color, roleBg: '#ecebea', roleBorder: '#d7d3d0',
+          portals: ['board'],
+          filterKeys: ['board'],
+          source: 'board',
+          data: m,
+        });
+      });
+
+      ORG_MEMBER_ROLE_HOLDERS
+        .filter(role => !assignedOrgMemberRoles.has(normaliseRoleName(role)))
+        .forEach(role => {
+          people.push({
+            name: '',
+            email: '',
+            headshot: '',
+            roleLabel: role,
+            roleColor: boardDef.color, roleBg: '#ecebea', roleBorder: '#d7d3d0',
+            portals: ['board'],
+            filterKeys: ['board'],
+            source: 'board_planned',
+            statusLabel: 'Not assigned',
+            data: { roleName: role },
+          });
+        });
+
       _allPeople = people;
       renderPeopleTable();
     }
@@ -756,6 +819,12 @@
           portalUrl = src === 'treasurer'
             ? `${window.location.origin}/${encodeURIComponent(_orgSlug)}/${encodeURIComponent(_showSlug)}/treasurer`
             : `${window.location.origin}/${encodeURIComponent(_orgSlug)}/${encodeURIComponent(_showSlug)}/volunteers`;
+        } else if (src === 'board' || src === 'board_planned') {
+          const def = PORTAL_DEFS.find(d => d.key === 'board');
+          portalLabel = 'Organisation Members'; portalColor = def.color; portalBg = def.bg; portalIcon = def.icon;
+          portalUrl = _orgSlug
+            ? `${window.location.origin}/${encodeURIComponent(_orgSlug)}/ORG`
+            : `${window.location.origin}/org/dashboard`;
         } else {
           const def = PORTAL_DEFS.find(d => d.key === 'team');
           portalLabel = 'Team Portal'; portalColor = def.color; portalBg = def.bg; portalIcon = def.icon;
