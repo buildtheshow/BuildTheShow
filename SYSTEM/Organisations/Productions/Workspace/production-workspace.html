@@ -898,6 +898,48 @@
     .rsc-cast-role { color:rgba(87,46,136,0.66); font-size:0.78rem; font-weight:800; line-height:1.25; margin-top:0.22rem; overflow-wrap:anywhere; }
     .rsc-cast-meta { display:flex; align-items:center; gap:0.62rem; flex-wrap:wrap; margin-top:0.5rem; }
     .rsc-age { color:rgba(87,46,136,0.58); font-size:0.72rem; font-weight:850; }
+    .rsc-cast-cell--household { display:block; }
+    .rsc-household-cast-block { display:flex; flex-direction:column; gap:0.72rem; }
+    .rsc-household-title {
+      color:#000000;
+      font-size:1.16rem;
+      font-weight:950;
+      letter-spacing:0.02em;
+      line-height:1;
+      text-transform:uppercase;
+      padding-left:calc(76px + 1rem);
+      padding-bottom:0.56rem;
+      position:relative;
+    }
+    .rsc-household-title::after {
+      content:'';
+      position:absolute;
+      left:calc(76px + 1rem);
+      right:0;
+      bottom:0;
+      height:1px;
+      background:rgba(87,46,136,0.12);
+    }
+    .rsc-household-member {
+      display:grid;
+      grid-template-columns:76px minmax(0,1fr);
+      gap:1rem;
+      align-items:start;
+      position:relative;
+      padding-top:0.66rem;
+    }
+    .rsc-household-member + .rsc-household-member::before {
+      content:'';
+      position:absolute;
+      left:calc(76px + 1rem);
+      right:0;
+      top:0;
+      height:1px;
+      background:rgba(87,46,136,0.12);
+    }
+    .rsc-household-member-line { display:flex; align-items:baseline; flex-wrap:wrap; gap:0.48rem; line-height:1.12; margin-bottom:0.52rem; }
+    .rsc-household-member-name { color:#000000; font-size:0.95rem; font-weight:950; text-transform:uppercase; letter-spacing:0.01em; }
+    .rsc-household-member-role { color:rgba(87,46,136,0.62); font-size:0.95rem; font-weight:800; }
     .rsc-check-list { display:flex; flex-direction:column; gap:0.34rem; }
     .rsc-check-item { display:flex; align-items:center; gap:0.5rem; color:#1a1530; font-size:0.72rem; font-weight:850; line-height:1.25; }
     .rsc-check-icon { width:0.92rem; height:0.92rem; border-radius:999px; display:inline-flex; align-items:center; justify-content:center; flex:0 0 auto; font-size:0.66rem; font-weight:950; }
@@ -983,6 +1025,10 @@
     @media (max-width: 640px) {
       .rsc-cast-cell { grid-template-columns:64px minmax(0,1fr); gap:0.8rem; }
       .rsc-cast-photo { width:64px; }
+      .rsc-household-title { padding-left:calc(64px + 0.8rem); }
+      .rsc-household-title::after,
+      .rsc-household-member + .rsc-household-member::before { left:calc(64px + 0.8rem); }
+      .rsc-household-member { grid-template-columns:64px minmax(0,1fr); gap:0.8rem; }
       .rsc-inst-row { grid-template-columns:1fr; }
       .rsc-actions-stack { grid-template-columns:1fr; }
     }
@@ -46023,6 +46069,33 @@ See you soon!
     }).join('');
   }
 
+  function rscHouseholdCastCellHtml(items = [], household = null) {
+    const familyName = String(household?.name || '')
+      .replace(/\b(family|household)\b/ig, '')
+      .trim() || 'Household';
+    const memberHtml = items.map(item => {
+      const app = item.app || {};
+      const name = String(app.name || 'Cast Member').trim();
+      const age = rscPerformerAge(app);
+      const roleName = registrationAssignmentRoleName(item.assignment || {});
+      const title = `${name}${age ? ` (${age})` : ''}`;
+      return `<div class="rsc-household-member">
+        <div class="rsc-cast-photos">${rscPhotoHtml(app, name)}</div>
+        <div class="rsc-household-member-body">
+          <div class="rsc-household-member-line">
+            <span class="rsc-household-member-name">${esc(title)}</span>
+            ${roleName ? `<span class="rsc-household-member-role">${esc(roleName)}</span>` : ''}
+          </div>
+          ${rscStatusCheckHtml(item)}
+        </div>
+      </div>`;
+    }).join('');
+    return `<div class="rsc-household-cast-block">
+      <div class="rsc-household-title">${esc(familyName)}</div>
+      ${memberHtml}
+    </div>`;
+  }
+
   function rscPaymentCellHtml(primaryItem, settings, items = [primaryItem], household = null) {
     const activeItems = (Array.isArray(items) ? items : [primaryItem]).filter(Boolean);
     if (household && activeItems.length > 1) {
@@ -46208,17 +46281,20 @@ See you soon!
       ? items.map(item => `${String(item.app?.name || '').split(/\s+/)[0]} "${registrationAssignmentRoleName(item.assignment)}"`).join(', ')
       : registrationAssignmentRoleName(assignment);
     const roleMeta = household && items.length > 1 ? `${items.length} performers${roleName ? ` . ${roleName}` : ''}` : roleName;
+    const isHouseholdRow = !!household && items.length > 1;
     const photos = items.slice(0, 3).map(item => rscPhotoHtml(item.app || {}, String(item.app?.name || 'Cast Member').trim())).join('');
     return `<div class="rsc-status-row" id="rpt-row-${esc(assignId)}">
-      <div class="rsc-status-cell rsc-cast-cell">
-        <div class="rsc-cast-photos">${photos}</div>
-        <div class="rsc-cast-stack">
-          <div>
-            <div class="rsc-cast-title">${esc(title)}</div>
-            ${roleMeta ? `<div class="rsc-cast-role">${esc(roleMeta)}</div>` : ''}
+      <div class="rsc-status-cell rsc-cast-cell${isHouseholdRow ? ' rsc-cast-cell--household' : ''}">
+        ${isHouseholdRow ? rscHouseholdCastCellHtml(items, household) : `
+          <div class="rsc-cast-photos">${photos}</div>
+          <div class="rsc-cast-stack">
+            <div>
+              <div class="rsc-cast-title">${esc(title)}</div>
+              ${roleMeta ? `<div class="rsc-cast-role">${esc(roleMeta)}</div>` : ''}
+            </div>
+            ${rscStatusChecksForItemsHtml(items)}
           </div>
-          ${rscStatusChecksForItemsHtml(items)}
-        </div>
+        `}
       </div>
       <div class="rsc-status-cell">${rscPaymentCellHtml(primary, settings, items, household)}</div>
       <div class="rsc-status-cell">${rscConnectionsCellHtml(primary, settings, household || rptHouseholdFor(assignId))}</div>
