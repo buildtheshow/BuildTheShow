@@ -576,6 +576,54 @@
       return member.display_name || profile.display_name || profile.custom_id || member.email || 'Organisation Member';
     }
 
+    function mergeUniqueValues(a = [], b = []) {
+      const out = [];
+      [...a, ...b].forEach(value => {
+        if (value && !out.includes(value)) out.push(value);
+      });
+      return out;
+    }
+
+    function mergeRoleLabels(a = '', b = '') {
+      const labels = [];
+      [a, b].join(' · ').split(' · ').forEach(label => {
+        const clean = String(label || '').trim();
+        if (clean && !labels.some(existing => normaliseRoleName(existing) === normaliseRoleName(clean))) labels.push(clean);
+      });
+      return labels.join(' · ');
+    }
+
+    function peopleMergeKey(person = {}) {
+      if (person.statusLabel === 'Not assigned') return '';
+      const email = String(person.email || '').trim().toLowerCase();
+      if (email) return `email:${email}`;
+      const name = normaliseRoleName(person.name || '');
+      return name ? `name:${name}` : '';
+    }
+
+    function mergeDuplicatePeople(people = []) {
+      const merged = [];
+      const byKey = new Map();
+      people.forEach(person => {
+        const key = peopleMergeKey(person);
+        if (!key || !byKey.has(key)) {
+          merged.push(person);
+          if (key) byKey.set(key, person);
+          return;
+        }
+        const existing = byKey.get(key);
+        existing.portals = mergeUniqueValues(existing.portals, person.portals);
+        existing.filterKeys = mergeUniqueValues(existing.filterKeys, person.filterKeys);
+        existing.roleLabel = mergeRoleLabels(existing.roleLabel, person.roleLabel);
+        if (!existing.headshot && person.headshot) existing.headshot = person.headshot;
+        if (!existing.email && person.email) existing.email = person.email;
+        if (!existing.name && person.name) existing.name = person.name;
+        existing.sources = mergeUniqueValues(existing.sources || [existing.source], person.sources || [person.source]);
+        existing.dataBySource = { ...(existing.dataBySource || { [existing.source]: existing.data }), [person.source]: person.data };
+      });
+      return merged;
+    }
+
     function buildPeopleList(cast, volunteers, deptLeads, treasurers, teamMembers, boardMembers = [], bookingCodes = new Map(), plannedDeptLeadRoles = []) {
       const deptLeadEmails = new Set(deptLeads.map(d => (d.email||'').toLowerCase()));
       const treasurerEmails = new Set(treasurers.map(t => (t.email||'').toLowerCase()));
@@ -720,7 +768,7 @@
           });
         });
 
-      _allPeople = people;
+      _allPeople = mergeDuplicatePeople(people);
       renderPeopleTable();
     }
 
@@ -791,9 +839,31 @@
     }
 
     // ── Portal preview modal ───────────────────────────────────────────────────
+    function previewSourceForPerson(person = {}) {
+      const sources = person.sources || [person.source];
+      if (_currentFilter === 'board' && sources.includes('board')) return 'board';
+      if (_currentFilter === 'team') {
+        const teamSource = sources.find(src => ['director','vocal_director','choreographer','producer','admin','musical_director','music_director'].includes(src));
+        if (teamSource) return teamSource;
+      }
+      if (_currentFilter === 'dept_lead') {
+        if (sources.includes('treasurer')) return 'treasurer';
+        if (sources.includes('dept_lead')) return 'dept_lead';
+      }
+      if (_currentFilter === 'volunteer' && sources.includes('volunteer')) return 'volunteer';
+      if (_currentFilter === 'cast' && sources.includes('cast')) return 'cast';
+      return person.source;
+    }
+
+    function personForPreview(person = {}) {
+      const source = previewSourceForPerson(person);
+      return { ...person, source, data: person.dataBySource?.[source] || person.data };
+    }
+
     function openPreviewModal(idx) {
-      const person = _visiblePeople[idx];
-      if (!person) return;
+      const rawPerson = _visiblePeople[idx];
+      if (!rawPerson) return;
+      const person = personForPreview(rawPerson);
 
       const previewTitle = person.name || person.roleLabel || 'Portal';
       document.getElementById('pt-modal-title').textContent = previewTitle + ' — Portal Preview';
