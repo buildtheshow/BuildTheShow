@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" />
+  <link rel="preconnect" href="https://tkmaiktxpwqfbgeojbnf.supabase.co" />
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Check-In - Build The Show</title>
+  <link rel="stylesheet" href="/ASSETS/styles/styles.css?v=typography-safe-20260421-2025" />
+  <link rel="stylesheet" href="/ASSETS/styles/production-sidebar.css?v=sidebar-v47-20260610" />
+  <style>
+    * { box-sizing: border-box; }
+    html { width: 100%; max-width: 100%; overflow-x: hidden; }
+    body { margin: 0; width: 100%; max-width: 100%; overflow-x: hidden; background: #fff; font-family: var(--bts-font); color: #1a1530; display: flex; flex-direction: column; min-height: 100vh; }
+    body.mobile-sidebar-open { overflow: hidden; }
+    .prod-main { margin-left: 220px; flex: 1; min-height: 100vh; padding: 2rem 2.25rem; max-width: calc(100vw - 220px); overflow-x: clip; position: relative; }
+    .prod-main::before { content: ''; position: fixed; inset: 0 0 0 220px; background-image: url('/ASSETS/Images/Grid-purple.png'); background-repeat: repeat; background-size: 720px; opacity: 0.04; pointer-events: none; z-index: 0; }
+    .prod-main-inner { position: relative; z-index: 1; max-width: 1360px; }
+    @media (max-width: 900px) {
+      .prod-main { margin-left: 0; max-width: 100vw; width: 100%; padding: 4.5rem 1rem 2rem; }
+      .prod-main::before { inset: 0; }
+    }
+
+    .page-kicker { font-size: 0.72rem; font-weight: 900; letter-spacing: 0.1em; text-transform: uppercase; color: rgba(26,21,48,0.38); display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.4rem; }
+    .page-kicker-dot { width: 6px; height: 6px; border-radius: 50%; background: #572e88; flex-shrink: 0; }
+    .page-title { font-size: 2rem; font-weight: 950; color: #1a1530; margin: 0 0 1.25rem; }
+
+    .ci-session-bar { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1.5rem; }
+    .ci-session-pill { font-size: 0.78rem; font-weight: 800; border-radius: 100px; padding: 0.38rem 0.9rem; border: 1.5px solid rgba(87,46,136,0.18); background: #fff; color: rgba(26,21,48,0.55); cursor: pointer; font-family: var(--bts-font); transition: all 0.12s; display: flex; align-items: center; gap: 0.4rem; }
+    .ci-session-pill:hover { border-color: #572e88; color: #572e88; }
+    .ci-session-pill.active { color: #fff; border-color: transparent; }
+    .ci-session-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+
+    .ci-toolbar { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; margin-bottom: 1rem; }
+    .ci-search-wrap { position: relative; flex: 1; min-width: 180px; max-width: 320px; }
+    .ci-search-wrap input { width: 100%; border: 1.5px solid rgba(87,46,136,0.18); border-radius: 8px; padding: 0.45rem 0.85rem 0.45rem 2rem; font-size: 0.85rem; font-family: var(--bts-font); background: #fff; outline: none; transition: border-color 0.12s; }
+    .ci-search-wrap input:focus { border-color: #572e88; }
+    .ci-search-icon { position: absolute; left: 0.65rem; top: 50%; transform: translateY(-50%); opacity: 0.32; pointer-events: none; }
+    .ci-filter-pills { display: flex; gap: 0.35rem; }
+    .ci-filter-pill { font-size: 0.7rem; font-weight: 800; border-radius: 100px; padding: 0.25rem 0.65rem; border: 1.5px solid rgba(87,46,136,0.18); background: #fff; color: rgba(26,21,48,0.55); cursor: pointer; font-family: var(--bts-font); transition: all 0.12s; }
+    .ci-filter-pill.active { background: #572e88; color: #fff; border-color: #572e88; }
+    .ci-stats { margin-left: auto; font-size: 0.78rem; font-weight: 700; color: rgba(26,21,48,0.45); white-space: nowrap; }
+
+    .ci-list { display: flex; flex-direction: column; gap: 0.3rem; }
+    .ci-row { display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 1rem; padding: 0.75rem 1rem; border-radius: 8px; border: 1px solid rgba(87,46,136,0.08); background: #fff; transition: background 0.1s; }
+    .ci-row.checked { background: rgba(32,131,72,0.04); border-color: rgba(32,131,72,0.15); }
+    .ci-row-info {}
+    .ci-row-name { font-size: 0.9rem; font-weight: 800; }
+    .ci-row-meta { font-size: 0.74rem; color: rgba(26,21,48,0.45); margin-top: 0.1rem; }
+    .ci-row-time { font-size: 0.75rem; font-weight: 700; color: rgba(26,21,48,0.45); white-space: nowrap; }
+    .ci-check-btn { font-size: 0.74rem; font-weight: 850; border-radius: 7px; padding: 0.35rem 0.8rem; cursor: pointer; font-family: var(--bts-font); border: 1.5px solid; transition: all 0.12s; white-space: nowrap; }
+    .ci-check-btn.in { background: #208348; color: #fff; border-color: #208348; }
+    .ci-check-btn.in:hover { background: #176639; }
+    .ci-check-btn.out { background: #fff; color: rgba(26,21,48,0.5); border-color: rgba(87,46,136,0.2); }
+    .ci-check-btn.out:hover { border-color: #572e88; color: #572e88; }
+
+    .ci-checked-badge { display: inline-flex; align-items: center; gap: 0.3rem; font-size: 0.72rem; font-weight: 850; color: #208348; }
+
+    .ci-empty { text-align: center; padding: 3rem 1rem; color: rgba(26,21,48,0.38); font-size: 0.88rem; }
+    .ci-loading { color: rgba(26,21,48,0.38); font-size: 0.88rem; padding: 1rem 0; }
+
+    .ci-toast { position: fixed; bottom: 1.5rem; left: 50%; transform: translateX(-50%); background: #1a1530; color: #fff; font-size: 0.82rem; font-weight: 800; border-radius: 8px; padding: 0.6rem 1.2rem; z-index: 9999; opacity: 0; transition: opacity 0.2s; pointer-events: none; }
+    .ci-toast.show { opacity: 1; }
+  </style>
+</head>
+<body>
+  <div id="prod-sidebar-host"></div>
+  <div class="prod-main">
+    <div class="prod-main-inner">
+      <div class="page-kicker"><span class="page-kicker-dot"></span>AUDITIONS</div>
+      <h1 class="page-title">Check-In</h1>
+      <div id="ci-root"><div class="ci-loading">Loading...</div></div>
+    </div>
+  </div>
+  <div class="ci-toast" id="ci-toast"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="/SHARED/Navigation/production-sidebar-nav.js?v=17"></script>
+  <script>
+    window.initProductionPage('cast');
+
+    const SESSION_COLORS = {
+      audition: '#572e88', general: '#572e88',
+      dance_call: '#78bbd4', dance: '#78bbd4',
+      callback: '#efab45', selftape: '#ca7ea7', self_tape: '#ca7ea7',
+    };
+    const SESSION_LABELS = {
+      audition: 'General Auditions', general: 'General Auditions',
+      dance_call: 'Dance Call', dance: 'Dance Call',
+      callback: 'Callback', selftape: 'Self Tape', self_tape: 'Self Tape',
+    };
+    function sessionColor(type) { return SESSION_COLORS[String(type||'').toLowerCase()] || '#572e88'; }
+    function sessionLabel(s) { return s.name || SESSION_LABELS[String(s.type||'').toLowerCase()] || 'Audition'; }
+
+    function fmtTime(t) {
+      if (!t) return '';
+      const [h, m] = t.split(':').map(Number);
+      return `${h % 12 || 12}:${String(m).padStart(2, '0')} ${h >= 12 ? 'PM' : 'AM'}`;
+    }
+    function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+    let _sb       = null;
+    let _sessions = [];
+    let _apps     = [];
+    let _slots    = {};
+    let _activeId = null;
+    let _filter   = 'all';
+    let _query    = '';
+
+    function isCheckedIn(app) {
+      const checkins = Array.isArray(app.session_checkins) ? app.session_checkins : [];
+      return checkins.some(c => c.session_id === _activeId && c.checked_in);
+    }
+
+    function checkedInTime(app) {
+      const checkins = Array.isArray(app.session_checkins) ? app.session_checkins : [];
+      const entry = checkins.find(c => c.session_id === _activeId && c.checked_in);
+      if (!entry?.checked_in_at) return '';
+      return new Date(entry.checked_in_at).toLocaleTimeString('en-CA', { hour: 'numeric', minute: '2-digit', hour12: true });
+    }
+
+    function sessionApps() {
+      return _apps.filter(a => {
+        const inSession = a.session_id === _activeId
+          || (Array.isArray(a.slot_assignments) && a.slot_assignments.some(sa => sa.session_id === _activeId));
+        return inSession;
+      });
+    }
+
+    function filteredApps() {
+      const base = sessionApps();
+      return base.filter(a => {
+        const checked = isCheckedIn(a);
+        if (_filter === 'checkedin' && !checked) return false;
+        if (_filter === 'nothere'   &&  checked) return false;
+        if (!_query) return true;
+        const q = _query.toLowerCase();
+        return (a.name || '').toLowerCase().includes(q) || (a.email || '').toLowerCase().includes(q);
+      });
+    }
+
+    function slotTime(app) {
+      if (app.slot_id && _slots[app.slot_id]) return fmtTime(_slots[app.slot_id].slot_time);
+      if (Array.isArray(app.slot_assignments)) {
+        const sa = app.slot_assignments.find(s => s.session_id === _activeId);
+        if (sa?.slot_id && _slots[sa.slot_id]) return fmtTime(_slots[sa.slot_id].slot_time);
+      }
+      return '';
+    }
+
+    function render() {
+      const visible  = filteredApps();
+      const allForSess = sessionApps();
+      const checkedCount = allForSess.filter(a => isCheckedIn(a)).length;
+
+      const sessionBar = _sessions.map(s => {
+        const color  = sessionColor(s.type);
+        const active = s.id === _activeId;
+        return `<button class="ci-session-pill${active ? ' active' : ''}" style="${active ? `background:${esc(color)};` : ''}" onclick="setSession('${esc(s.id)}')">
+          <span class="ci-session-dot" style="background:${active ? '#fff' : esc(color)};"></span>
+          ${esc(sessionLabel(s))}
+        </button>`;
+      }).join('');
+
+      const rows = visible.map(a => {
+        const checked  = isCheckedIn(a);
+        const timeSlot = slotTime(a);
+        const ciTime   = checked ? checkedInTime(a) : '';
+        return `<div class="ci-row${checked ? ' checked' : ''}" id="ci-row-${esc(a.id)}">
+          <div class="ci-row-info">
+            <div class="ci-row-name">${esc(a.name || 'Unknown')}${a.pronouns ? ` <span style="font-size:0.72rem;font-weight:600;color:rgba(26,21,48,0.45);">(${esc(a.pronouns)})</span>` : ''}</div>
+            <div class="ci-row-meta">${timeSlot ? esc(timeSlot) + ' slot' : esc(a.email || '')}${ciTime ? ` · checked in ${esc(ciTime)}` : ''}</div>
+          </div>
+          <div class="ci-row-time">${timeSlot && checked ? `<span class="ci-checked-badge"><svg width="12" height="12" viewBox="0 0 12 12"><path d="M2 6l3 3 5-5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" fill="none"/></svg> Here</span>` : ''}</div>
+          <button class="ci-check-btn ${checked ? 'in' : 'out'}" onclick="toggleCheckIn('${esc(a.id)}')">
+            ${checked ? 'Checked In' : 'Check In'}
+          </button>
+        </div>`;
+      }).join('') || `<div class="ci-empty">${_query ? 'No performers match.' : 'No performers registered for this session.'}</div>`;
+
+      document.getElementById('ci-root').innerHTML = `
+        <div class="ci-session-bar">${sessionBar}</div>
+        <div class="ci-toolbar">
+          <div class="ci-search-wrap">
+            <svg class="ci-search-icon" width="13" height="13" viewBox="0 0 16 16" fill="none"><circle cx="6.5" cy="6.5" r="5" stroke="#1a1530" stroke-width="1.6"/><path d="M10 10l3.5 3.5" stroke="#1a1530" stroke-width="1.6" stroke-linecap="round"/></svg>
+            <input type="search" id="ci-search" placeholder="Search..." value="${esc(_query)}" oninput="onSearch(this.value)" />
+          </div>
+          <div class="ci-filter-pills">
+            <button class="ci-filter-pill${_filter==='all'?' active':''}" onclick="setFilter('all')">All (${allForSess.length})</button>
+            <button class="ci-filter-pill${_filter==='nothere'?' active':''}" onclick="setFilter('nothere')">Not Here</button>
+            <button class="ci-filter-pill${_filter==='checkedin'?' active':''}" onclick="setFilter('checkedin')">Checked In (${checkedCount})</button>
+          </div>
+        </div>
+        <div class="ci-list">${rows}</div>`;
+    }
+
+    function setSession(id) { _activeId = id; _query = ''; _filter = 'all'; render(); }
+    function setFilter(f)   { _filter = f; render(); }
+    function onSearch(q)    { _query = q; render(); }
+
+    function showToast(msg) {
+      const t = document.getElementById('ci-toast');
+      t.textContent = msg;
+      t.classList.add('show');
+      setTimeout(() => t.classList.remove('show'), 2000);
+    }
+
+    async function toggleCheckIn(appId) {
+      const app = _apps.find(a => a.id === appId);
+      if (!app) return;
+      const wasChecked = isCheckedIn(app);
+      let checkins = Array.isArray(app.session_checkins) ? [...app.session_checkins] : [];
+      const idx = checkins.findIndex(c => c.session_id === _activeId);
+      if (idx >= 0) {
+        checkins[idx] = { ...checkins[idx], checked_in: !wasChecked, checked_in_at: wasChecked ? null : new Date().toISOString() };
+      } else {
+        checkins.push({ session_id: _activeId, checked_in: true, checked_in_at: new Date().toISOString() });
+      }
+      app.session_checkins = checkins;
+      render();
+      const { error } = await _sb.from('audition_applications').update({ session_checkins: checkins }).eq('id', appId);
+      if (error) {
+        app.session_checkins = app.session_checkins;
+        showToast('Could not save. Try again.');
+        render();
+      } else {
+        showToast(wasChecked ? 'Check-in removed.' : `${app.name || 'Performer'} checked in.`);
+      }
+    }
+
+    (async function () {
+      const SB_URL  = 'https://tkmaiktxpwqfbgeojbnf.supabase.co';
+      const SB_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRrbWFpa3R4cHdxZmJnZW9qYm5mIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM3MzE4MTcsImV4cCI6MjA4OTMwNzgxN30.TkTZBNWUatk3Y6Vmfv1hIRR3DfVjgwauwa76Pf00J_8';
+      const params  = new URLSearchParams(location.search);
+      const prodId  = params.get('id') || '';
+      const urlSess = params.get('session') || '';
+      if (!prodId) return;
+      _sb = supabase.createClient(SB_URL, SB_ANON);
+
+      const [sessRes, appRes] = await Promise.all([
+        _sb.from('audition_sessions').select('id,name,type,date').eq('production_id', prodId).order('sort_order').order('date'),
+        _sb.from('audition_applications').select('id,name,email,pronouns,headshot_url,slot_id,slot_assignments,session_id,session_checkins').eq('production_id', prodId).order('name'),
+      ]);
+
+      _sessions = sessRes.data || [];
+      _apps     = appRes.data || [];
+
+      if (_sessions.length) {
+        _activeId = (urlSess && _sessions.find(s => s.id === urlSess)) ? urlSess : _sessions[0].id;
+        const sids = _sessions.map(s => s.id);
+        const { data: slots } = await _sb.from('audition_time_slots').select('id,session_id,slot_time').in('session_id', sids);
+        (slots || []).forEach(sl => { _slots[sl.id] = sl; });
+      }
+
+      if (!_sessions.length) {
+        document.getElementById('ci-root').innerHTML = '<div class="ci-empty">No sessions set up. <a href="#" onclick="btsProdNav(\'auditions-settings.html\');return false;" style="color:#572e88;">Go to Settings</a></div>';
+        return;
+      }
+
+      render();
+    })();
+  </script>
+</body>
+</html>
