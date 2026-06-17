@@ -900,20 +900,23 @@
     .rsc-check-group:first-child { padding-top:0; border-top:none; }
     .rsc-check-group-name { color:rgba(87,46,136,0.58); font-size:0.67rem; font-weight:950; letter-spacing:0.05em; text-transform:uppercase; line-height:1.1; }
     .rsc-pay-top { display:flex; align-items:flex-start; justify-content:space-between; gap:0.85rem; }
-    .rsc-pay-amount { color:#1a1530; font-size:1.05rem; font-weight:950; letter-spacing:0.01em; line-height:1.1; }
-    .rsc-pay-state { color:#476aaa; font-size:0.7rem; font-weight:950; line-height:1.2; white-space:nowrap; }
-    .rsc-pay-state.full { color:#16823b; }
-    .rsc-pay-track { height:0.34rem; background:rgba(87,46,136,0.1); border-radius:999px; overflow:hidden; margin-top:0.62rem; }
+    .rsc-pay-amount { color:#000000; font-size:1.05rem; font-weight:950; letter-spacing:0.01em; line-height:1.1; }
+    .rsc-pay-state { color:#d1523d; font-size:0.7rem; font-weight:950; line-height:1.2; white-space:nowrap; }
+    .rsc-pay-state.full { color:#769e7b; }
+    .rsc-pay-state.partial { color:#dd8233; }
+    .rsc-pay-track { height:0.34rem; background:#efefef; border-radius:999px; overflow:hidden; margin-top:0.62rem; }
     .rsc-pay-fill { height:100%; border-radius:999px; background:#769e7b; }
-    .rsc-pay-detail { margin-top:0.5rem; color:#1a1530; font-size:0.72rem; font-weight:850; line-height:1.34; }
+    .rsc-pay-detail { margin-top:0.5rem; color:#000000; font-size:0.72rem; font-weight:850; line-height:1.34; }
     .rsc-pay-detail.due { color:#d1523d; }
     .rsc-inst-row { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:0.55rem; margin-top:0.7rem; }
-    .rsc-inst-card { border:1px solid #f1d9c2; background:#fffaf5; border-radius:6px; padding:0.55rem 0.65rem; min-width:0; }
-    .rsc-inst-card.paid { border-color:#cfe7d5; background:#f2fbf4; }
-    .rsc-inst-label { color:#d1523d; font-size:0.7rem; font-weight:950; line-height:1.2; }
-    .rsc-inst-card.paid .rsc-inst-label { color:#258345; }
-    .rsc-inst-sub { color:#d1523d; font-size:0.66rem; font-weight:800; line-height:1.25; margin-top:0.16rem; }
-    .rsc-inst-card.paid .rsc-inst-sub { color:#258345; }
+    .rsc-inst-card { border:0; background:#efab45; color:#ffffff; border-radius:6px; padding:0.55rem 0.65rem; min-width:0; box-shadow:0 8px 16px rgba(26,21,48,0.12); }
+    .rsc-inst-card.paid { background:#769e7b; }
+    .rsc-inst-card.overdue { background:#d1523d; }
+    .rsc-inst-card:hover { filter:brightness(0.94); }
+    .rsc-inst-label { color:#ffffff; font-size:0.7rem; font-weight:950; line-height:1.2; }
+    .rsc-inst-card.paid .rsc-inst-label { color:#ffffff; }
+    .rsc-inst-sub { color:#ffffff; font-size:0.66rem; font-weight:800; line-height:1.25; margin-top:0.16rem; }
+    .rsc-inst-card.paid .rsc-inst-sub { color:#ffffff; }
     .rsc-log-btn,
     .rsc-action-btn {
       width:100%;
@@ -933,8 +936,8 @@
       text-decoration:none;
       transition:background 0.12s, border-color 0.12s;
     }
-    .rsc-log-btn { margin-top:0.65rem; border-color:rgba(71,106,170,0.28); }
-    .rsc-log-btn:hover,
+    .rsc-log-btn { margin-top:0.65rem; border-color:#476aaa; background:#476aaa; color:#ffffff; }
+    .rsc-log-btn:hover { background:#476aaa; border-color:#476aaa; color:#ffffff; filter:brightness(0.94); }
     .rsc-action-btn:hover { background:#f8f7ff; border-color:#476aaa; }
     .rsc-connect-list { display:flex; flex-direction:column; gap:0.86rem; }
     .rsc-connect-item { display:grid; grid-template-columns:1.35rem minmax(0,1fr) auto; gap:0.62rem; align-items:start; color:#1a1530; }
@@ -46032,9 +46035,10 @@ See you soon!
         if (!parts.length) return '';
         const isPaid = parts.every(p => p.isPaid);
         const firstDue = parts.find(p => p.inst.dueDate)?.inst.dueDate || '';
+        const isOverdue = !isPaid && firstDue && new Date(firstDue) < new Date(new Date().toDateString());
         const label = (parts[0].inst.label || '').replace(/\s*\(.*\)$/, '') || `Payment ${idx + 1}`;
         const sub = isPaid ? 'Paid' : firstDue ? `Due ${rptFormatDate(firstDue)}` : 'Due date not set';
-        return `<button type="button" class="rsc-inst-card ${isPaid ? 'paid' : ''}" id="rsc-hh-inst-${esc(household.id)}-${idx}" onclick="${isPaid ? '' : `rscLogHouseholdInstallmentPaid('${esc(household.id)}',${idx})`}">
+        return `<button type="button" class="rsc-inst-card ${isPaid ? 'paid' : isOverdue ? 'overdue' : ''}" id="rsc-hh-inst-${esc(household.id)}-${idx}" onclick="${isPaid ? '' : `rscLogHouseholdInstallmentPaid('${esc(household.id)}',${idx})`}">
           <div class="rsc-inst-label">${esc(label)}</div>
           <div class="rsc-inst-sub">${esc(sub)}</div>
         </button>`;
@@ -46045,9 +46049,10 @@ See you soon!
         }
         return 0;
       })();
+      const householdStateClass = allPaid ? 'full' : totalPaid > 0 ? 'partial' : 'unpaid';
       return `<div class="rsc-pay-top">
         <div class="rsc-pay-amount">${esc(rscMoneyShort(totalPaid, settings))} / ${esc(rscMoneyShort(totalFee, settings))}</div>
-        <div class="rsc-pay-state ${allPaid ? 'full' : ''}">${allPaid ? 'Paid in Full' : totalPaid > 0 ? 'Paid' : 'Unpaid'}</div>
+        <div class="rsc-pay-state ${householdStateClass}">${allPaid ? 'Paid in Full' : totalPaid > 0 ? 'Paid' : 'Unpaid'}</div>
       </div>
       <div class="rsc-pay-track"><div class="rsc-pay-fill" style="width:${paidPct}%;"></div></div>
       <div class="rsc-pay-detail ${balance > 0 ? 'due' : ''}">Balance: ${esc(rscMoneyShort(balance, settings))}</div>
@@ -46073,15 +46078,17 @@ See you soon!
       const sub = isPaid
         ? `Paid ${rptFormatDate(rec.paid_at) || ''}`.trim()
         : (inst.dueDate ? `Due ${rptFormatDate(inst.dueDate)}` : 'Due date not set');
-      return `<button type="button" class="rsc-inst-card ${isPaid ? 'paid' : ''}" id="rsc-inst-${esc(assignId)}-${idx}" onclick="${isPaid ? `rscOpenPaymentDetailModal('${esc(assignId)}',${idx})` : `rscOpenMarkPaidModal('${esc(assignId)}',${idx})`}">
+      const isOverdue = !isPaid && inst.dueDate && new Date(inst.dueDate) < new Date(new Date().toDateString());
+      return `<button type="button" class="rsc-inst-card ${isPaid ? 'paid' : isOverdue ? 'overdue' : ''}" id="rsc-inst-${esc(assignId)}-${idx}" onclick="${isPaid ? `rscOpenPaymentDetailModal('${esc(assignId)}',${idx})` : `rscOpenMarkPaidModal('${esc(assignId)}',${idx})`}">
         <div class="rsc-inst-label">${esc(label)}</div>
         <div class="rsc-inst-sub">${esc(sub)}</div>
       </button>`;
     }).join('');
     const logIdx = Math.max(0, ef.installments.findIndex((inst, idx) => !records.find(r => r.installment_index === idx && r.paid)));
+    const paymentStateClass = allPaid ? 'full' : paidAmt > 0 ? 'partial' : 'unpaid';
     return `<div class="rsc-pay-top">
       <div class="rsc-pay-amount">${esc(rscMoneyShort(paidAmt, settings))} / ${esc(rscMoneyShort(ef.total, settings))}</div>
-      <div class="rsc-pay-state ${allPaid ? 'full' : ''}">${allPaid ? 'Paid in Full' : paidAmt > 0 ? 'Paid' : 'Unpaid'}</div>
+      <div class="rsc-pay-state ${paymentStateClass}">${allPaid ? 'Paid in Full' : paidAmt > 0 ? 'Paid' : 'Unpaid'}</div>
     </div>
     <div class="rsc-pay-track"><div class="rsc-pay-fill" style="width:${paidPct}%;"></div></div>
     <div class="rsc-pay-detail ${balance > 0 ? 'due' : ''}">
