@@ -6363,34 +6363,34 @@
         const viewParam = new URLSearchParams(window.location.search).get('view');
         const isPortalPath = /\/portal\/?$/i.test(window.location.pathname);
         if (viewParam === 'portal' || isPortalPath) {
-          // Check for existing session
-          const remembered = loadRememberedPortal();
-          const savedEmail = sessionStorage.getItem('vp_portal_email');
-          const savedCode = sessionStorage.getItem('vp_portal_code');
-          const savedProd  = sessionStorage.getItem('vp_portal_prod');
-          const savedCreds = remembered || (savedEmail && savedCode && savedProd === prod.id ? { email: savedEmail, code: savedCode } : null);
-          if (savedCreds) {
+          // Admin preview params take priority over any saved session
+          const pvwEmail = new URLSearchParams(window.location.search).get('pvw_email');
+          const pvwCode  = new URLSearchParams(window.location.search).get('pvw_code');
+          if (pvwEmail && pvwCode) {
             try {
-              const portal = await resolveProductionPortal(savedCreds.email, savedCreds.code);
+              const portal = await resolveProductionPortal(pvwEmail, pvwCode);
               if (portal.volunteer.rows.length || portal.performers.length) {
                 showPortalHome(portal);
               } else {
-                clearRememberedPortal();
                 showPortalLogin();
               }
             } catch (_) {
               showPortalLogin();
             }
           } else {
-            // Admin preview: auto-login with credentials passed via URL params (portals.html preview)
-            const pvwEmail = new URLSearchParams(window.location.search).get('pvw_email');
-            const pvwCode  = new URLSearchParams(window.location.search).get('pvw_code');
-            if (pvwEmail && pvwCode) {
+            // Normal flow: check for existing session
+            const remembered = loadRememberedPortal();
+            const savedEmail = sessionStorage.getItem('vp_portal_email');
+            const savedCode = sessionStorage.getItem('vp_portal_code');
+            const savedProd  = sessionStorage.getItem('vp_portal_prod');
+            const savedCreds = remembered || (savedEmail && savedCode && savedProd === prod.id ? { email: savedEmail, code: savedCode } : null);
+            if (savedCreds) {
               try {
-                const portal = await resolveProductionPortal(pvwEmail, pvwCode);
+                const portal = await resolveProductionPortal(savedCreds.email, savedCreds.code);
                 if (portal.volunteer.rows.length || portal.performers.length) {
                   showPortalHome(portal);
                 } else {
+                  clearRememberedPortal();
                   showPortalLogin();
                 }
               } catch (_) {
