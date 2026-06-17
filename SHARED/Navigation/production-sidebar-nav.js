@@ -387,7 +387,7 @@
 
     const { data: prod } = await sb
       .from('productions')
-      .select('id, title, subtitle, season_year, status, venue, poster_url, organization_id, registration_settings, organizations(slug)')
+      .select('id, title, subtitle, season_year, status, venue, poster_url, organization_id, registration_settings, enabled_modules, organizations(slug)')
       .eq('id', idParam)
       .single();
 
@@ -435,7 +435,29 @@
         el.classList.remove('hidden');
       });
     }
+
+    applyModuleVisibility(prod.enabled_modules);
   };
+
+  // Maps module keys to sidebar group element IDs
+  var MODULE_GROUPS = {
+    cast:        'group-cast',
+    departments: 'group-departments',
+    promote:     'group-promote',
+    ticketing:   'group-ticketing',
+    volunteers:  'group-volunteers',
+    financials:  'group-financials',
+    wrapup:      'group-wrapup',
+  };
+
+  function applyModuleVisibility(enabledModules) {
+    if (!enabledModules || typeof enabledModules !== 'object') return;
+    Object.keys(MODULE_GROUPS).forEach(function (key) {
+      var groupEl = document.getElementById(MODULE_GROUPS[key]);
+      if (!groupEl) return;
+      groupEl.style.display = enabledModules[key] === false ? 'none' : '';
+    });
+  }
 
 
   function addActiveDot(el) {
