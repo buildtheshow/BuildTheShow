@@ -951,16 +951,33 @@
     .rsc-check-group { display:flex; flex-direction:column; gap:0.3rem; padding-top:0.44rem; border-top:1px solid rgba(87,46,136,0.08); }
     .rsc-check-group:first-child { padding-top:0; border-top:none; }
     .rsc-check-group-name { color:rgba(87,46,136,0.58); font-size:0.67rem; font-weight:950; letter-spacing:0.05em; text-transform:uppercase; line-height:1.1; }
-    .rsc-pay-top { display:flex; align-items:flex-start; justify-content:space-between; gap:0.85rem; }
-    .rsc-pay-amount { color:#000000; font-size:1.05rem; font-weight:950; letter-spacing:0.01em; line-height:1.1; }
-    .rsc-fee-math { font-size:0.64rem; font-weight:700; color:rgba(87,46,136,0.5); margin-top:0.28rem; }
-    .rsc-pay-state { color:#d1523d; font-size:0.7rem; font-weight:950; line-height:1.2; white-space:nowrap; }
-    .rsc-pay-state.full { color:#769e7b; }
-    .rsc-pay-state.partial { color:#dd8233; }
-    .rsc-pay-track { height:0.34rem; background:#efefef; border-radius:999px; overflow:hidden; margin-top:0.62rem; }
-    .rsc-pay-fill { height:100%; border-radius:999px; background:#769e7b; }
-    .rsc-pay-detail { margin-top:0.5rem; color:#000000; font-size:0.72rem; font-weight:850; line-height:1.34; }
-    .rsc-pay-detail.due { color:#d1523d; }
+    .rsc-stmt-empty { font-size:0.72rem; color:rgba(87,46,136,0.45); font-weight:700; }
+    .rsc-stmt-header { display:flex; align-items:center; justify-content:space-between; gap:0.5rem; margin-bottom:0.75rem; }
+    .rsc-stmt-status { font-size:0.7rem; font-weight:950; line-height:1.2; }
+    .rsc-stmt-status.full, .rsc-stmt-bal-hdr.full { color:#769e7b; }
+    .rsc-stmt-status.partial, .rsc-stmt-bal-hdr.partial { color:#dd8233; }
+    .rsc-stmt-status.unpaid, .rsc-stmt-bal-hdr.unpaid { color:#d1523d; }
+    .rsc-stmt-bal-hdr { font-size:1.05rem; font-weight:950; line-height:1.1; }
+    .rsc-stmt-fees { display:flex; flex-direction:column; gap:0.22rem; margin-bottom:0.78rem; }
+    .rsc-stmt-fee-line { display:flex; justify-content:space-between; align-items:baseline; gap:0.5rem; font-size:0.7rem; font-weight:800; color:#1a1530; line-height:1.3; }
+    .rsc-stmt-fee-line span:first-child { color:#1a1530; }
+    .rsc-stmt-fee-line span:last-child { font-weight:950; white-space:nowrap; }
+    .rsc-stmt-fee-line.discount span:first-child { color:#769e7b; }
+    .rsc-stmt-fee-line.discount span:last-child { color:#769e7b; }
+    .rsc-stmt-fee-line.discount.scholarship span:first-child { color:#769e7b; }
+    .rsc-stmt-fee-line.adjusted { border-top:1.5px solid rgba(87,46,136,0.12); padding-top:0.3rem; margin-top:0.1rem; }
+    .rsc-stmt-fee-line.adjusted span { font-size:0.74rem; font-weight:950; color:#572e88; }
+    .rsc-stmt-pay-section { background:rgba(87,46,136,0.04); border-radius:7px; padding:0.55rem 0.65rem; margin-bottom:0.7rem; }
+    .rsc-stmt-pay-title { font-size:0.65rem; font-weight:950; color:#476aaa; text-transform:uppercase; letter-spacing:0.07em; margin-bottom:0.4rem; }
+    .rsc-stmt-ledger { display:flex; flex-direction:column; gap:0.22rem; margin-bottom:0.45rem; }
+    .rsc-stmt-ledger-row { display:flex; justify-content:space-between; align-items:baseline; gap:0.5rem; font-size:0.69rem; font-weight:800; color:#1a1530; line-height:1.3; }
+    .rsc-stmt-ledger-date { color:rgba(87,46,136,0.6); font-weight:700; }
+    .rsc-stmt-ledger-amt { font-weight:950; white-space:nowrap; }
+    .rsc-stmt-no-payments { font-size:0.68rem; font-weight:700; color:rgba(87,46,136,0.38); margin-bottom:0.45rem; }
+    .rsc-stmt-balance-row { display:flex; justify-content:space-between; align-items:baseline; gap:0.5rem; font-size:0.72rem; font-weight:950; text-transform:uppercase; letter-spacing:0.04em; border-top:1.5px solid rgba(87,46,136,0.12); padding-top:0.35rem; }
+    .rsc-stmt-balance-row.full { color:#769e7b; }
+    .rsc-stmt-balance-row.partial { color:#dd8233; }
+    .rsc-stmt-balance-row.unpaid { color:#d1523d; }
     .rsc-inst-row { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:0.55rem; margin-top:0.7rem; }
     .rsc-inst-card { border:0; background:#769e7b; color:#ffffff; border-radius:6px; padding:0.55rem 0.65rem; min-width:0; box-shadow:0 8px 16px rgba(26,21,48,0.12); }
     .rsc-inst-card.paid { background:#769e7b; }
@@ -45803,9 +45820,12 @@ See you soon!
     if (volAdj) parts.push(`Vol. discount: -${registrationFormatPaymentAmount(volAdj, settings)}`);
     if (schAdj) parts.push(`Scholarship: -${registrationFormatPaymentAmount(schAdj, settings)}`);
     const adjustments = [];
-    if (effectiveBase !== baseTotal) adjustments.push({ label: 'Sibling rate', value: effectiveBase, isRate: true });
-    if (volAdj) adjustments.push({ label: 'Vol. discount', deduct: volAdj });
-    if (schAdj) adjustments.push({ label: 'Scholarship', deduct: schAdj });
+    if (effectiveBase !== baseTotal) {
+      const pct = baseTotal > 0 ? Math.round((1 - effectiveBase / baseTotal) * 100) : 0;
+      adjustments.push({ type: 'sibling', label: 'Sibling Rate', value: effectiveBase, isRate: true, pct });
+    }
+    if (volAdj) adjustments.push({ type: 'volunteer', label: 'Volunteer Discount', deduct: volAdj, hours: String(settings.volunteer_hours || '') });
+    if (schAdj) adjustments.push({ type: 'scholarship', label: 'Scholarship', deduct: schAdj });
     return { installments: rptScaleInstallments(base, total, parts.includes('Sibling rate') ? 'sibling rate' : ''), total, baseTotal, adjustments, discountLabel: parts.length ? parts.join(' · ') : null };
   }
 
@@ -46105,7 +46125,64 @@ See you soon!
   }
 
   function rscPaymentCellHtml(primaryItem, settings, items = [primaryItem], household = null) {
+    const sym = { CAD: '$', USD: '$', GBP: '£' }[registrationPaymentCurrency(settings)] || '$';
+    const fmt = n => `${sym}${Number.isFinite(Number(n)) ? Math.round(Number(n)) : 0}`;
+
+    function buildStmtHtml({ ef, totalFee, totalPaid, balance, allPaid, stateClass, statusLabel, feeBreakdownHtml, ledgerHtml, cardsHtml, logBtnHtml }) {
+      return `<div class="rsc-stmt-header">
+        <span class="rsc-stmt-status ${stateClass}">${esc(statusLabel)}</span>
+        <span class="rsc-stmt-bal-hdr ${stateClass}">${esc(fmt(balance))}</span>
+      </div>
+      <div class="rsc-stmt-fees">${feeBreakdownHtml}</div>
+      <div class="rsc-stmt-pay-section">
+        <div class="rsc-stmt-pay-title">Payments</div>
+        <div class="rsc-stmt-ledger">${ledgerHtml}</div>
+        <div class="rsc-stmt-balance-row ${stateClass}">
+          <span>BALANCE</span>
+          <span>${esc(fmt(balance))}</span>
+        </div>
+      </div>
+      ${cardsHtml ? `<div class="rsc-inst-row">${cardsHtml}</div>` : ''}
+      ${logBtnHtml}`;
+    }
+
+    function feeBreakdown(ef) {
+      let html = `<div class="rsc-stmt-fee-line">
+        <span>Production Fee</span>
+        <span>${esc(fmt(ef.baseTotal))}</span>
+      </div>`;
+      (ef.adjustments || []).forEach(adj => {
+        if (adj.type === 'sibling') {
+          const pctLabel = adj.pct > 0 ? ` (${adj.pct}% off)` : '';
+          const saving = ef.baseTotal - adj.value;
+          html += `<div class="rsc-stmt-fee-line discount">
+            <span>Sibling Rate${esc(pctLabel)}</span>
+            <span>${esc(fmt(adj.value))}</span>
+          </div>`;
+        } else if (adj.type === 'volunteer') {
+          const hrsLabel = adj.hours ? ` (${adj.hours} hrs)` : '';
+          html += `<div class="rsc-stmt-fee-line discount">
+            <span>Volunteer Discount${esc(hrsLabel)}</span>
+            <span>-${esc(fmt(adj.deduct))}</span>
+          </div>`;
+        } else if (adj.type === 'scholarship') {
+          html += `<div class="rsc-stmt-fee-line discount scholarship">
+            <span>Scholarship</span>
+            <span>-${esc(fmt(adj.deduct))}</span>
+          </div>`;
+        }
+      });
+      if ((ef.adjustments || []).length > 0) {
+        html += `<div class="rsc-stmt-fee-line adjusted">
+          <span>Adjusted Fee</span>
+          <span>${esc(fmt(ef.total))}</span>
+        </div>`;
+      }
+      return html;
+    }
+
     const activeItems = (Array.isArray(items) ? items : [primaryItem]).filter(Boolean);
+
     if (household && activeItems.length > 1) {
       const data = activeItems.map(item => {
         const id = String(item.assignment?.id || '');
@@ -46115,14 +46192,37 @@ See you soon!
         return { item, id, ef, records, paid };
       });
       const hasFee = (settings.mode === 'flat' || settings.mode === 'split') && data.some(d => d.ef.total > 0);
-      if (!hasFee) return `<div class="rsc-pay-detail">No fee configured for this household.</div>`;
+      if (!hasFee) return `<div class="rsc-stmt-empty">No fee configured for this household.</div>`;
       const totalFee = data.reduce((sum, d) => sum + d.ef.total, 0);
       const totalPaid = data.reduce((sum, d) => sum + d.paid, 0);
       const balance = Math.max(0, totalFee - totalPaid);
-      const paidPct = totalFee > 0 ? Math.min(100, Math.round((totalPaid / totalFee) * 100)) : 0;
-      const maxInst = Math.max(0, ...data.map(d => d.ef.installments.length));
       const allPaid = balance === 0 && totalPaid > 0;
-      const cards = Array.from({ length: maxInst }, (_, idx) => {
+      const stateClass = allPaid ? 'full' : totalPaid > 0 ? 'partial' : 'unpaid';
+      const statusLabel = allPaid ? 'Paid in Full' : totalPaid > 0 ? 'Partially Paid' : 'Unpaid';
+      const hhEf = { baseTotal: totalFee, total: totalFee, adjustments: [] };
+      const feeBreakdownHtml = `<div class="rsc-stmt-fee-line">
+        <span>Total Production Fee</span>
+        <span>${esc(fmt(totalFee))}</span>
+      </div>`;
+      const allRecords = data.flatMap(d => d.records.filter(r => r.paid).map(r => ({
+        paid_at: r.paid_at,
+        amount: d.ef.installments[r.installment_index]?.amount || 0
+      })));
+      allRecords.sort((a, b) => new Date(a.paid_at || 0) - new Date(b.paid_at || 0));
+      const ledgerHtml = allRecords.length
+        ? allRecords.map(r => `<div class="rsc-stmt-ledger-row">
+            <span class="rsc-stmt-ledger-date">${esc(rptFormatDate(r.paid_at) || '')}</span>
+            <span class="rsc-stmt-ledger-amt">${esc(fmt(r.amount))}</span>
+          </div>`).join('')
+        : `<div class="rsc-stmt-no-payments">No payments yet</div>`;
+      const maxInst = Math.max(0, ...data.map(d => d.ef.installments.length));
+      const firstUnpaid = (() => {
+        for (let idx = 0; idx < maxInst; idx++) {
+          if (data.some(d => d.ef.installments[idx] && !d.records.find(r => r.installment_index === idx && r.paid))) return idx;
+        }
+        return 0;
+      })();
+      const cardsHtml = allPaid ? '' : Array.from({ length: maxInst }, (_, idx) => {
         const parts = data.map(d => {
           const inst = d.ef.installments[idx];
           if (!inst || inst.amount <= 0) return null;
@@ -46131,80 +46231,59 @@ See you soon!
         }).filter(Boolean);
         if (!parts.length) return '';
         const isPaid = parts.every(p => p.isPaid);
+        if (isPaid) return '';
         const firstDue = parts.find(p => p.inst.dueDate)?.inst.dueDate || '';
-        const isOverdue = !isPaid && firstDue && new Date(firstDue) < new Date(new Date().toDateString());
+        const isOverdue = firstDue && new Date(firstDue) < new Date(new Date().toDateString());
         const label = (parts[0].inst.label || '').replace(/\s*\(.*\)$/, '') || `Payment ${idx + 1}`;
-        const sub = isPaid ? 'Paid' : firstDue ? `Due ${rptFormatDate(firstDue)}` : 'Due date not set';
-        return `<button type="button" class="rsc-inst-card ${isPaid ? 'paid' : isOverdue ? 'overdue' : ''}" id="rsc-hh-inst-${esc(household.id)}-${idx}" onclick="${isPaid ? '' : `rscLogHouseholdInstallmentPaid('${esc(household.id)}',${idx})`}">
+        const sub = firstDue ? `Due ${rptFormatDate(firstDue)}` : 'Due date not set';
+        return `<button type="button" class="rsc-inst-card ${isOverdue ? 'overdue' : ''}" id="rsc-hh-inst-${esc(household.id)}-${idx}" onclick="rscLogHouseholdInstallmentPaid('${esc(household.id)}',${idx})">
           <div class="rsc-inst-label">${esc(label)}</div>
           <div class="rsc-inst-sub">${esc(sub)}</div>
         </button>`;
       }).join('');
-      const firstUnpaid = (() => {
-        for (let idx = 0; idx < maxInst; idx++) {
-          if (data.some(d => d.ef.installments[idx] && !d.records.find(r => r.installment_index === idx && r.paid))) return idx;
-        }
-        return 0;
-      })();
-      const householdStateClass = allPaid ? 'full' : totalPaid > 0 ? 'partial' : 'unpaid';
-      return `<div class="rsc-pay-top">
-        <div class="rsc-pay-amount">${esc(rscMoneyShort(totalPaid, settings))} / ${esc(rscMoneyShort(totalFee, settings))}</div>
-        <div class="rsc-pay-state ${householdStateClass}">${allPaid ? 'Paid in Full' : totalPaid > 0 ? 'Paid' : 'Unpaid'}</div>
-      </div>
-      <div class="rsc-pay-track"><div class="rsc-pay-fill" style="width:${paidPct}%;"></div></div>
-      <div class="rsc-pay-detail ${balance > 0 ? 'due' : ''}">Balance: ${esc(rscMoneyShort(balance, settings))}</div>
-      <div class="rsc-inst-row">${cards}</div>
-      <button type="button" class="rsc-log-btn" onclick="rscLogHouseholdInstallmentPaid('${esc(household.id)}',${firstUnpaid})">Log Payment</button>`;
+      const logBtnHtml = allPaid ? '' : `<button type="button" class="rsc-log-btn" onclick="rscLogHouseholdInstallmentPaid('${esc(household.id)}',${firstUnpaid})">Log Payment</button>`;
+      return buildStmtHtml({ ef: hhEf, totalFee, totalPaid, balance, allPaid, stateClass, statusLabel, feeBreakdownHtml, ledgerHtml, cardsHtml, logBtnHtml });
     }
+
     const item = primaryItem || {};
     const assignment = item.assignment || {};
     const assignId = String(assignment.id || '');
     const ef = rptEffectiveFee(item, settings);
     const records = _rptPaymentRecords[assignId] || [];
     const hasFee = (settings.mode === 'flat' || settings.mode === 'split') && ef.total > 0;
-    if (!hasFee) return `<div class="rsc-pay-detail">No fee configured for this production.</div>`;
+    if (!hasFee) return `<div class="rsc-stmt-empty">No fee configured for this production.</div>`;
     const paidAmt = records.filter(r => r.paid).reduce((s, r) => s + (ef.installments[r.installment_index]?.amount || 0), 0);
     const balance = Math.max(0, ef.total - paidAmt);
-    const paidPct = ef.total > 0 ? Math.min(100, Math.round((paidAmt / ef.total) * 100)) : 0;
-    const firstUnpaid = ef.installments.find((inst, idx) => !records.find(r => r.installment_index === idx && r.paid));
     const allPaid = balance === 0 && paidAmt > 0;
-    const installments = ef.installments.map((inst, idx) => {
+    const stateClass = allPaid ? 'full' : paidAmt > 0 ? 'partial' : 'unpaid';
+    const statusLabel = allPaid ? 'Paid in Full' : paidAmt > 0 ? 'Partially Paid' : 'Unpaid';
+    const feeBreakdownHtml = feeBreakdown(ef);
+    const paidRecords = ef.installments.map((inst, idx) => {
+      const rec = records.find(r => r.installment_index === idx && r.paid);
+      return rec ? { paid_at: rec.paid_at, amount: inst.amount } : null;
+    }).filter(Boolean);
+    paidRecords.sort((a, b) => new Date(a.paid_at || 0) - new Date(b.paid_at || 0));
+    const ledgerHtml = paidRecords.length
+      ? paidRecords.map(r => `<div class="rsc-stmt-ledger-row">
+          <span class="rsc-stmt-ledger-date">${esc(rptFormatDate(r.paid_at) || '')}</span>
+          <span class="rsc-stmt-ledger-amt">${esc(fmt(r.amount))}</span>
+        </div>`).join('')
+      : `<div class="rsc-stmt-no-payments">No payments yet</div>`;
+    const logIdx = Math.max(0, ef.installments.findIndex((inst, idx) => !records.find(r => r.installment_index === idx && r.paid)));
+    const cardsHtml = allPaid ? '' : ef.installments.map((inst, idx) => {
       const rec = records.find(r => r.installment_index === idx);
       const isPaid = !!rec?.paid;
+      if (isPaid) return '';
       const label = (inst.label || '').replace(/\s*\(.*\)$/, '') || (ef.installments.length === 1 ? 'Payment' : `Payment ${idx + 1}`);
-      const sub = isPaid
-        ? `Paid ${rptFormatDate(rec.paid_at) || ''}`.trim()
-        : (inst.dueDate ? `Due ${rptFormatDate(inst.dueDate)}` : 'Due date not set');
-      const isOverdue = !isPaid && inst.dueDate && new Date(inst.dueDate) < new Date(new Date().toDateString());
-      return `<button type="button" class="rsc-inst-card ${isPaid ? 'paid' : isOverdue ? 'overdue' : ''}" id="rsc-inst-${esc(assignId)}-${idx}" onclick="${isPaid ? `rscOpenPaymentDetailModal('${esc(assignId)}',${idx})` : `rscOpenMarkPaidModal('${esc(assignId)}',${idx})`}">
+      const sub = inst.dueDate ? `Due ${rptFormatDate(inst.dueDate)}` : 'Due date not set';
+      const isOverdue = inst.dueDate && new Date(inst.dueDate) < new Date(new Date().toDateString());
+      return `<button type="button" class="rsc-inst-card ${isOverdue ? 'overdue' : ''}" id="rsc-inst-${esc(assignId)}-${idx}" onclick="rscOpenMarkPaidModal('${esc(assignId)}',${idx})">
         <div class="rsc-inst-label">${esc(label)}</div>
         <div class="rsc-inst-sub">${esc(sub)}</div>
       </button>`;
     }).join('');
-    const logIdx = Math.max(0, ef.installments.findIndex((inst, idx) => !records.find(r => r.installment_index === idx && r.paid)));
-    const paymentStateClass = allPaid ? 'full' : paidAmt > 0 ? 'partial' : 'unpaid';
-    const feeMathHtml = (() => {
-      if (!ef.adjustments?.length) return '';
-      const sym = ({ CAD: '$', USD: '$', GBP: '£' })[registrationPaymentCurrency(settings)] || '$';
-      const fmt = n => `${sym}${Math.round(n)}`;
-      const parts = [`${fmt(ef.baseTotal)} base`];
-      (ef.adjustments || []).forEach(adj => {
-        if (adj.isRate) parts.push(`Sibling rate ${fmt(adj.value)}`);
-        else parts.push(`${adj.label} −${fmt(adj.deduct)}`);
-      });
-      return `<div class="rsc-fee-math">${parts.join(' · ')} = ${fmt(ef.total)}</div>`;
-    })();
-    return `<div class="rsc-pay-top">
-      <div class="rsc-pay-amount">${esc(rscMoneyShort(paidAmt, settings))} / ${esc(rscMoneyShort(ef.total, settings))}</div>
-      <div class="rsc-pay-state ${paymentStateClass}">${allPaid ? 'Paid in Full' : paidAmt > 0 ? 'Paid' : 'Unpaid'}</div>
-    </div>
-    ${feeMathHtml}
-    <div class="rsc-pay-track"><div class="rsc-pay-fill" style="width:${paidPct}%;"></div></div>
-    <div class="rsc-pay-detail ${balance > 0 ? 'due' : ''}">
-      Balance: ${esc(rscMoneyShort(balance, settings))}${balance > 0 && firstUnpaid?.dueDate ? `<br>Due ${esc(rptFormatDate(firstUnpaid.dueDate))}` : ''}
-    </div>
-    <div class="rsc-inst-row">${installments}</div>
-    <button type="button" class="rsc-log-btn" onclick="rscOpenMarkPaidModal('${esc(assignId)}',${logIdx < 0 ? 0 : logIdx})">Log Payment</button>`;
+    const logBtnHtml = allPaid ? '' : `<button type="button" class="rsc-log-btn" onclick="rscOpenMarkPaidModal('${esc(assignId)}',${logIdx < 0 ? 0 : logIdx})">Log Payment</button>`;
+    return buildStmtHtml({ ef, totalFee: ef.total, totalPaid: paidAmt, balance, allPaid, stateClass, statusLabel, feeBreakdownHtml, ledgerHtml, cardsHtml, logBtnHtml });
   }
 
   function rscConnectionsCellHtml(item, settings, household = null) {
