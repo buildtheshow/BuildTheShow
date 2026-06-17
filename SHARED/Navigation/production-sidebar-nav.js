@@ -236,8 +236,97 @@
     icon.src = '/ASSETS/Images/Icons/' + file + '?v=20260611';
   }
 
+  // ── Team portal sidebar restriction ─────────────────────────────────────
+
+  window.applyTeamSidebarRestriction = function () {
+    var raw = sessionStorage.getItem('bts-team-portal-v1');
+    if (!raw) return;
+    var data;
+    try { data = JSON.parse(raw); } catch (e) { return; }
+    var keys = new Set(data.menuKeys || []);
+
+    function hasKeyOrChild(prefix) {
+      if (keys.has(prefix)) return true;
+      for (var k of keys) { if (k.indexOf(prefix + ':') === 0) return true; }
+      return false;
+    }
+
+    // Hide every top-level group
+    document.querySelectorAll('.sidebar-group').forEach(function (g) { g.style.display = 'none'; });
+
+    // Show group-cast if any auditions or casting keys present
+    var needsCast = hasKeyOrChild('auditions') || hasKeyOrChild('casting');
+    if (needsCast) {
+      var grpCast = document.getElementById('group-cast');
+      if (grpCast) { grpCast.style.display = ''; grpCast.classList.add('open'); }
+
+      // Cast Dashboard tab — hide unless explicitly allowed
+      var castDash = document.getElementById('cast-group-dashboard-nav');
+      if (castDash) castDash.style.display = 'none';
+
+      // Auditions wrap
+      var audWrap = document.getElementById('auditions-wrap');
+      var showAud = hasKeyOrChild('auditions');
+      if (audWrap) audWrap.style.display = showAud ? '' : 'none';
+      if (showAud) {
+        [
+          ['asub-dashboard',    'auditions:dashboard'],
+          ['asub-audschedule',  'auditions:schedule'],
+          ['asub-allperformers','auditions:allperformers'],
+          ['asub-setup',        'auditions:settings'],
+        ].forEach(function (pair) {
+          var el = document.getElementById(pair[0]);
+          if (el) el.style.display = keys.has(pair[1]) ? '' : 'none';
+        });
+      }
+
+      // Casting wrap
+      var castWrap = document.getElementById('casting-wrap');
+      var showCasting = hasKeyOrChild('casting');
+      if (castWrap) castWrap.style.display = showCasting ? '' : 'none';
+      if (showCasting) {
+        [
+          ['csub-dashboard',   'casting:dashboard'],
+          ['csub-castingboard','casting:castingboard'],
+          ['csub-castlist',    'casting:castlist'],
+          ['csub-offers',      'casting:offers'],
+        ].forEach(function (pair) {
+          var el = document.getElementById(pair[0]);
+          if (el) el.style.display = keys.has(pair[1]) ? '' : 'none';
+        });
+      }
+
+      // Registration wrap — not exposed to team members
+      var regWrap = document.getElementById('registration-wrap');
+      if (regWrap) regWrap.style.display = 'none';
+    }
+
+    // Inject team member banner if not already present
+    var host = document.getElementById('prod-sidebar-host');
+    if (host && data.name && !host.querySelector('.tp-sidebar-banner')) {
+      var banner = document.createElement('div');
+      banner.className = 'tp-sidebar-banner';
+      banner.innerHTML =
+        '<div class="tp-sb-name">' + _esc(data.name) + '</div>' +
+        '<div class="tp-sb-role">' + _esc(data.roleLabel || data.role || '') + '</div>' +
+        '<button class="tp-sb-exit" onclick="btsTeamPortalExit()">Exit Team View</button>';
+      host.insertBefore(banner, host.firstChild);
+    }
+  };
+
+  function _esc(s) {
+    return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  window.btsTeamPortalExit = function () {
+    sessionStorage.removeItem('bts-team-portal-v1');
+    var pid = prodId();
+    try { localStorage.removeItem('bts-team-access:' + pid); } catch {}
+    location.href = '/SYSTEM/Organisations/Productions/Workspace/team-portal.html?id=' + encodeURIComponent(pid);
+  };
+
   window.loadProductionSidebar = function (activeGroup, activePage) {
-    const key = 'bts-prod-sidebar-v29';
+    const key = 'bts-prod-sidebar-v30';
     const cached = sessionStorage.getItem(key);
     const host = document.getElementById('prod-sidebar-host');
     if (!host) return;
@@ -260,11 +349,13 @@
       requestAnimationFrame(function () { markCurrentPageActive(activePage); });
       // Apply currency-specific financials icon if currency is already known
       applyFinancialsIcon();
+      // Apply team portal sidebar restriction if a team session is active
+      window.applyTeamSidebarRestriction();
     }
 
     if (cached) applyAndInit(cached);
 
-    fetch('/SHARED/Navigation/production-sidebar.html?v=sidebar-v56-20260617')
+    fetch('/SHARED/Navigation/production-sidebar.html?v=sidebar-v57-20260617')
       .then(function (res) { return res.text(); })
       .then(function (html) {
         sessionStorage.setItem(key, html);
