@@ -682,7 +682,53 @@
       padding: 1rem;
     }
     /* ── Status (rpt-) — extends existing registration design system ── */
-    .rpt-summary-3 { grid-template-columns:repeat(3,minmax(0,1fr)); margin-top:0.75rem; margin-bottom:1.5rem; }
+    .rpt-summary-3 {
+      grid-template-columns:repeat(4,minmax(0,1fr));
+      gap:0;
+      margin-top:0.75rem;
+      margin-bottom:1.5rem;
+      border:1px solid rgba(87,46,136,0.1);
+      border-radius:8px;
+      background:rgba(255,255,255,0.96);
+      box-shadow:0 10px 28px rgba(26,21,48,0.06);
+      overflow:hidden;
+    }
+    .rpt-summary-3 .registration-payment-summary-card {
+      display:grid;
+      grid-template-columns:4.2rem minmax(0,1fr);
+      gap:1rem;
+      align-items:center;
+      min-height:7.2rem;
+      border-top:none;
+      border-left:1px solid rgba(87,46,136,0.08);
+      padding:1.1rem 1.2rem;
+    }
+    .rpt-summary-3 .registration-payment-summary-card:first-child { border-left:none; }
+    .rpt-summary-icon {
+      width:4.2rem;
+      height:4.2rem;
+      border-radius:999px;
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      font-size:1.65rem;
+      font-weight:950;
+      line-height:1;
+    }
+    .rpt-summary-icon.green { background:rgba(118,158,123,0.16); color:#2f7c45; }
+    .rpt-summary-icon.blue { background:rgba(71,106,170,0.14); color:#476aaa; }
+    .rpt-summary-icon.gold { background:rgba(239,171,69,0.18); color:#dd8233; }
+    .rpt-summary-icon.purple { background:rgba(87,46,136,0.12); color:#572e88; }
+    @media (max-width: 1180px) {
+      .rpt-summary-3 { grid-template-columns:repeat(2,minmax(0,1fr)); }
+      .rpt-summary-3 .registration-payment-summary-card:nth-child(odd) { border-left:none; }
+      .rpt-summary-3 .registration-payment-summary-card:nth-child(n+3) { border-top:1px solid rgba(87,46,136,0.08); }
+    }
+    @media (max-width: 640px) {
+      .rpt-summary-3 { grid-template-columns:1fr; }
+      .rpt-summary-3 .registration-payment-summary-card { border-left:none; border-top:1px solid rgba(87,46,136,0.08); }
+      .rpt-summary-3 .registration-payment-summary-card:first-child { border-top:none; }
+    }
     .rpt-list { display:flex; flex-direction:column; }
     .rpt-person { padding:0.95rem 0; border-bottom:1px solid rgba(87,46,136,0.12); }
     .rpt-person:last-child { border-bottom:none; }
@@ -45638,30 +45684,63 @@ See you soon!
   function rptRenderSummaryBar(items, settings) {
     const currency = registrationPaymentCurrency(settings);
     const symbol = { CAD: '$', USD: '$', GBP: '£' }[currency] || '$';
+    const castCount = items.length;
     let totalDue = 0, totalPaid = 0, countBalance = 0;
+    const dueDates = [];
     items.forEach(item => {
       const ef = rptEffectiveFee(item, settings);
-      const paid = rptPaidTotal(item.assignment?.id, ef.installments);
+      const assignmentId = item.assignment?.id;
+      const records = _rptPaymentRecords[String(assignmentId)] || [];
+      const paid = rptPaidTotal(assignmentId, ef.installments);
       totalDue += ef.total;
       totalPaid += paid;
       if (ef.total - paid > 0) countBalance++;
+      ef.installments.forEach((inst, idx) => {
+        const paidRecord = records.find(r => r.installment_index === idx && r.paid);
+        if (!paidRecord && inst.dueDate) dueDates.push(inst.dueDate);
+      });
     });
+    const registeredCount = items.filter(item => registrationFormsComplete(item.app)).length;
+    const registeredPct = castCount ? Math.round((registeredCount / castCount) * 100) : 0;
     const outstanding = Math.max(0, totalDue - totalPaid);
+    const nextDueRaw = dueDates
+      .map(date => ({ raw: date, time: new Date(`${date}T00:00:00`).getTime() }))
+      .filter(entry => Number.isFinite(entry.time))
+      .sort((a, b) => a.time - b.time)[0]?.raw || '';
+    const nextDueLabel = nextDueRaw ? rptFormatDate(nextDueRaw) : 'No due date';
+    const money = amount => `${symbol}${Number(amount || 0).toFixed(0)}`;
     return `<div class="registration-payment-summary rpt-summary-3">
       <div class="registration-payment-summary-card">
-        <div class="registration-payment-summary-label">Collected</div>
-        <div class="registration-payment-summary-value">${symbol}${totalPaid.toFixed(0)}</div>
-        <div class="registration-payment-summary-note">${currency}</div>
+        <div class="rpt-summary-icon green">✓</div>
+        <div>
+          <div class="registration-payment-summary-label">Registered</div>
+          <div class="registration-payment-summary-value">${registeredCount}</div>
+          <div class="registration-payment-summary-note">${registeredPct}% of cast</div>
+        </div>
       </div>
       <div class="registration-payment-summary-card">
-        <div class="registration-payment-summary-label">Outstanding</div>
-        <div class="registration-payment-summary-value">${symbol}${outstanding.toFixed(0)}</div>
-        <div class="registration-payment-summary-note">${countBalance} with a balance</div>
+        <div class="rpt-summary-icon blue">$</div>
+        <div>
+          <div class="registration-payment-summary-label">Collected</div>
+          <div class="registration-payment-summary-value">${money(totalPaid)}</div>
+          <div class="registration-payment-summary-note">${currency}</div>
+        </div>
       </div>
       <div class="registration-payment-summary-card">
-        <div class="registration-payment-summary-label">Total Expected</div>
-        <div class="registration-payment-summary-value">${symbol}${totalDue.toFixed(0)}</div>
-        <div class="registration-payment-summary-note">${items.length} cast member${items.length === 1 ? '' : 's'}</div>
+        <div class="rpt-summary-icon gold">$</div>
+        <div>
+          <div class="registration-payment-summary-label">Owing</div>
+          <div class="registration-payment-summary-value">${money(outstanding)}</div>
+          <div class="registration-payment-summary-note">${countBalance} with a balance</div>
+        </div>
+      </div>
+      <div class="registration-payment-summary-card">
+        <div class="rpt-summary-icon purple">↗</div>
+        <div>
+          <div class="registration-payment-summary-label">Next Due Date</div>
+          <div class="registration-payment-summary-value" style="font-size:1.15rem;line-height:1.08;">${esc(nextDueLabel)}</div>
+          <div class="registration-payment-summary-note">${dueDates.length} unpaid instalment${dueDates.length === 1 ? '' : 's'}</div>
+        </div>
       </div>
     </div>`;
   }
