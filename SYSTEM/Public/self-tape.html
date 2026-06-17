@@ -400,6 +400,24 @@
                 </div>
             </div>
 
+            <!-- Rehearsal & Performance Schedule (populated by JS if events exist) -->
+            <div class="st-p0-section" id="st-p0-schedule" style="--sec-bg:#ecf3ee;--sec-border:#769e7b;--sec-title:#769e7b;display:none;">
+              <div class="st-p0-section-header">
+                <div class="st-p0-section-icon"><img src="/ASSETS/Images/Icons/navproductioncalendar.svg" alt="" /></div>
+                <div class="st-p0-section-title">Rehearsal &amp; Performance Schedule</div>
+              </div>
+              <div id="st-p0-schedule-body" class="st-brief-copy"></div>
+            </div>
+
+            <!-- Registration Fees (populated by JS if payment mode is set) -->
+            <div class="st-p0-section" id="st-p0-payment" style="--sec-bg:#ebe6f1;--sec-border:#572e88;--sec-title:#572e88;display:none;">
+              <div class="st-p0-section-header">
+                <div class="st-p0-section-icon"><img src="/ASSETS/Images/Icons/Budgeting-Registration.svg" alt="" /></div>
+                <div class="st-p0-section-title">Registration Fees</div>
+              </div>
+              <div id="st-p0-payment-body" class="st-brief-copy"></div>
+            </div>
+
             <div class="st-error" id="st-error-0"></div>
           </div>
 
@@ -1396,6 +1414,80 @@
     return String(ev.title || ST_EVENT_TYPE_LABELS[ev.event_type] || ev.event_type || 'Event').trim();
   }
 
+  function stRenderScheduleSection() {
+    const el = document.getElementById('st-p0-schedule');
+    const body = document.getElementById('st-p0-schedule-body');
+    if (!el || !body) return;
+    const rehearsalTypes = new Set(['rehearsal','music_rehearsal','choreography','tech','dress']);
+    const performanceTypes = new Set(['performance']);
+    const rehearsals = (_prodEvents || []).filter(ev => rehearsalTypes.has(ev.event_type));
+    const performances = (_prodEvents || []).filter(ev => performanceTypes.has(ev.event_type));
+    if (!rehearsals.length && !performances.length) { el.style.display = 'none'; return; }
+    const evRow = ev => {
+      const typeLabel = ST_EVENT_TYPE_LABELS[ev.event_type] || ev.event_type;
+      const customTitle = ev.title && ev.title !== typeLabel ? ` — ${esc(ev.title)}` : '';
+      return `<li><strong>${stDateLabel(ev.start_time)}</strong> ${esc(typeLabel)}${customTitle}</li>`;
+    };
+    let html = '<ul>';
+    rehearsals.forEach(ev => { html += evRow(ev); });
+    performances.forEach(ev => { html += evRow(ev); });
+    html += '</ul>';
+    body.innerHTML = html;
+    el.style.display = '';
+  }
+
+  function stRenderPaymentSection() {
+    const el = document.getElementById('st-p0-payment');
+    const body = document.getElementById('st-p0-payment-body');
+    if (!el || !body) return;
+    const ps = _prod && _prod.registration_settings && _prod.registration_settings.payment_settings;
+    if (!ps || !ps.mode || ps.mode === 'none') { el.style.display = 'none'; return; }
+    const curr = ps.currency || 'CAD';
+    let html = '';
+    if (ps.mode === 'flat' && ps.fee) {
+      html += `<p><strong>Registration fee:</strong> $${esc(String(ps.fee))} ${curr}`;
+      if (ps.fee_due_date) html += ` — due ${stDateLabel(ps.fee_due_date)}`;
+      html += '</p>';
+      if (ps.late_fee_date) html += `<p>A late fee applies after ${stDateLabel(ps.late_fee_date)}.</p>`;
+    } else if (ps.mode === 'split' && ps.fee) {
+      html += `<p><strong>Total registration fee:</strong> $${esc(String(ps.fee))} ${curr}</p>`;
+      if (ps.split_installments && ps.split_installments.length) {
+        html += '<p><strong>Payment schedule:</strong></p><ul>';
+        ps.split_installments.forEach(function(inst, i) {
+          html += `<li>Instalment ${i + 1}: $${esc(String(inst.amount || ''))} ${curr}${inst.due_date ? ` — due ${stDateLabel(inst.due_date)}` : ''}</li>`;
+        });
+        html += '</ul>';
+      }
+      if (ps.split_allow_upfront) html += '<p>You may pay the full amount upfront if you prefer.</p>';
+    }
+    const discounts = [];
+    if (ps.sibling_discount_enabled && (ps.sibling_first_child || ps.sibling_additional)) {
+      let d = 'Sibling discount available';
+      if (ps.sibling_first_child) d += ` (first child: $${esc(String(ps.sibling_first_child))} ${curr}`;
+      if (ps.sibling_additional) d += `, each additional: $${esc(String(ps.sibling_additional))} ${curr})`;
+      else if (ps.sibling_first_child) d += ')';
+      discounts.push(d);
+    }
+    if (ps.volunteer_discount_enabled && ps.volunteer_discount) {
+      let d = `Volunteer discount: $${esc(String(ps.volunteer_discount))} ${curr} off`;
+      if (ps.volunteer_hours) d += ` (${esc(String(ps.volunteer_hours))} volunteer hours required)`;
+      discounts.push(d);
+    }
+    if (ps.scholarship_enabled) {
+      let d = 'Scholarship opportunities available';
+      if (ps.scholarship_note) d += ` — ${esc(String(ps.scholarship_note))}`;
+      discounts.push(d);
+    }
+    if (discounts.length) {
+      html += '<p><strong>Discounts &amp; opportunities:</strong></p><ul>';
+      discounts.forEach(function(d) { html += `<li>${d}</li>`; });
+      html += '</ul>';
+    }
+    if (!html) { el.style.display = 'none'; return; }
+    body.innerHTML = html;
+    el.style.display = '';
+  }
+
   function stStartDotsAnim(btn, base) {
     let d = 0;
     btn.textContent = base;
@@ -1663,6 +1755,8 @@
       stRenderSteps();
       stRenderShowHead();
       stPopulateRoleFilter();
+      stRenderScheduleSection();
+      stRenderPaymentSection();
       stGoTo(0);
     } catch (err) {
       console.error('[Self Tape] init error:', err);
