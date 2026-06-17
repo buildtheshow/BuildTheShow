@@ -365,15 +365,22 @@
       _prodId = prodId;
       if (!sb || !prodId) return;
 
-      const [castRes, volRes, teamRes, prodRes] = await Promise.all([
+      const [castRes, volRes, teamRes, prodRes, bookingsRes] = await Promise.all([
         sb.from('cast_members').select('id,name,email,headshot_url,state,character_name,registration_answers').eq('production_id', prodId).in('state', ['chosen','offer_accepted']),
         sb.from('volunteer_signups').select('id,name,email,role_name,status,portal_token').eq('production_id', prodId).in('status', ['approved','checked_in','completed']),
         sb.from('production_team_members').select('id,name,email,role,access_level,is_active').eq('production_id', prodId).eq('is_active', true),
         sb.from('productions').select('organizations(slug),slug').eq('id', prodId).maybeSingle(),
+        sb.from('audition_bookings').select('email,portal_code').eq('production_id', prodId).not('portal_code', 'is', null),
       ]);
 
       _orgSlug = prodRes.data?.organizations?.slug || '';
       _showSlug = prodRes.data?.slug || '';
+
+      // email → portal_code map for cast preview
+      const bookingCodes = new Map();
+      for (const b of (bookingsRes.data || [])) {
+        if (b.email && b.portal_code) bookingCodes.set(b.email.toLowerCase(), String(b.portal_code));
+      }
 
       const cast = castRes.data || [];
 
@@ -396,7 +403,7 @@
       const deptLeads = volunteers.filter(v => DEPT_LEAD_ROLE_KEYS.includes(v.role_name || ''));
 
       renderPortalCards(cast, volunteers, deptLeads, teamMembers);
-      buildPeopleList(cast, volunteers, deptLeads, teamMembers);
+      buildPeopleList(cast, volunteers, deptLeads, teamMembers, bookingCodes);
     }
 
     // ── Portal cards ───────────────────────────────────────────────────────────
@@ -433,12 +440,13 @@
     }
 
     // ── Build unified people list ──────────────────────────────────────────────
-    function buildPeopleList(cast, volunteers, deptLeads, teamMembers) {
+    function buildPeopleList(cast, volunteers, deptLeads, teamMembers, bookingCodes = new Map()) {
       const deptLeadEmails = new Set(deptLeads.map(d => (d.email||'').toLowerCase()));
       const people = [];
 
       // Cast
       cast.forEach(m => {
+        const pc = bookingCodes.get((m.email || '').toLowerCase());
         people.push({
           name: m.name || 'Unknown',
           email: m.email || '',
@@ -448,7 +456,7 @@
           portals: ['cast'],
           filterKeys: ['cast'],
           source: 'cast',
-          data: m,
+          data: { ...m, _portal_code: pc || null },
         });
       });
 
@@ -617,12 +625,12 @@
       if ((person.source === 'volunteer' || person.source === 'dept_lead') && person.data?.portal_token) {
         return `${window.location.origin}/${encodeURIComponent(_orgSlug)}/${encodeURIComponent(_showSlug)}/volunteers?token=${encodeURIComponent(person.data.portal_token)}`;
       }
-      // Cast: iframe registration.html directly with ?id + ?code — no routing dependency
+      // Cast: load the actual cast portal at /{org}/{show}/portal with preview auto-login params
       if (person.source === 'cast') {
-        const answers = person.data?.registration_answers || {};
-        const code = answers['__bts_cast_offer_code'];
-        if (code && _prodId) {
-          return `/SYSTEM/Public/registration.html?id=${encodeURIComponent(_prodId)}&code=${encodeURIComponent(code)}`;
+        const email = person.data?.email || person.email;
+        const code  = person.data?._portal_code;
+        if (email && code && _orgSlug && _showSlug) {
+          return `${window.location.origin}/${encodeURIComponent(_orgSlug)}/${encodeURIComponent(_showSlug)}/portal?pvw_email=${encodeURIComponent(email)}&pvw_code=${encodeURIComponent(code)}`;
         }
       }
       return null;
