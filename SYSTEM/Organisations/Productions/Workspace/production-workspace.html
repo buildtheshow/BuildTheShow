@@ -46142,7 +46142,7 @@ See you soon!
           <span>${esc(fmt(balance))}</span>
         </div>
       </div>
-      ${cardsHtml ? `<div class="rsc-inst-row">${cardsHtml}</div>` : ''}
+      ${cardsHtml?.trim() ? `<div class="rsc-inst-row">${cardsHtml}</div>` : ''}
       ${logBtnHtml}`;
     }
 
@@ -46222,7 +46222,7 @@ See you soon!
         }
         return 0;
       })();
-      const cardsHtml = allPaid ? '' : Array.from({ length: maxInst }, (_, idx) => {
+      const cardsHtml = Array.from({ length: maxInst }, (_, idx) => {
         const parts = data.map(d => {
           const inst = d.ef.installments[idx];
           if (!inst || inst.amount <= 0) return null;
@@ -46231,12 +46231,11 @@ See you soon!
         }).filter(Boolean);
         if (!parts.length) return '';
         const isPaid = parts.every(p => p.isPaid);
-        if (isPaid) return '';
         const firstDue = parts.find(p => p.inst.dueDate)?.inst.dueDate || '';
-        const isOverdue = firstDue && new Date(firstDue) < new Date(new Date().toDateString());
+        const isOverdue = !isPaid && firstDue && new Date(firstDue) < new Date(new Date().toDateString());
         const label = (parts[0].inst.label || '').replace(/\s*\(.*\)$/, '') || `Payment ${idx + 1}`;
-        const sub = firstDue ? `Due ${rptFormatDate(firstDue)}` : 'Due date not set';
-        return `<button type="button" class="rsc-inst-card ${isOverdue ? 'overdue' : ''}" id="rsc-hh-inst-${esc(household.id)}-${idx}" onclick="rscLogHouseholdInstallmentPaid('${esc(household.id)}',${idx})">
+        const sub = isPaid ? 'Paid' : (firstDue ? `Due ${rptFormatDate(firstDue)}` : 'Due date not set');
+        return `<button type="button" class="rsc-inst-card ${isPaid ? 'paid' : isOverdue ? 'overdue' : ''}" id="rsc-hh-inst-${esc(household.id)}-${idx}" onclick="${isPaid ? '' : `rscLogHouseholdInstallmentPaid('${esc(household.id)}',${idx})`}">
           <div class="rsc-inst-label">${esc(label)}</div>
           <div class="rsc-inst-sub">${esc(sub)}</div>
         </button>`;
@@ -46270,14 +46269,15 @@ See you soon!
         </div>`).join('')
       : `<div class="rsc-stmt-no-payments">No payments yet</div>`;
     const logIdx = Math.max(0, ef.installments.findIndex((inst, idx) => !records.find(r => r.installment_index === idx && r.paid)));
-    const cardsHtml = allPaid ? '' : ef.installments.map((inst, idx) => {
+    const cardsHtml = ef.installments.map((inst, idx) => {
       const rec = records.find(r => r.installment_index === idx);
       const isPaid = !!rec?.paid;
-      if (isPaid) return '';
       const label = (inst.label || '').replace(/\s*\(.*\)$/, '') || (ef.installments.length === 1 ? 'Payment' : `Payment ${idx + 1}`);
-      const sub = inst.dueDate ? `Due ${rptFormatDate(inst.dueDate)}` : 'Due date not set';
-      const isOverdue = inst.dueDate && new Date(inst.dueDate) < new Date(new Date().toDateString());
-      return `<button type="button" class="rsc-inst-card ${isOverdue ? 'overdue' : ''}" id="rsc-inst-${esc(assignId)}-${idx}" onclick="rscOpenMarkPaidModal('${esc(assignId)}',${idx})">
+      const sub = isPaid
+        ? `Paid ${rptFormatDate(rec.paid_at) || ''}`.trim()
+        : (inst.dueDate ? `Due ${rptFormatDate(inst.dueDate)}` : 'Due date not set');
+      const isOverdue = !isPaid && inst.dueDate && new Date(inst.dueDate) < new Date(new Date().toDateString());
+      return `<button type="button" class="rsc-inst-card ${isPaid ? 'paid' : isOverdue ? 'overdue' : ''}" id="rsc-inst-${esc(assignId)}-${idx}" onclick="${isPaid ? `rscOpenPaymentDetailModal('${esc(assignId)}',${idx})` : `rscOpenMarkPaidModal('${esc(assignId)}',${idx})`}">
         <div class="rsc-inst-label">${esc(label)}</div>
         <div class="rsc-inst-sub">${esc(sub)}</div>
       </button>`;
