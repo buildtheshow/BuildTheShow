@@ -50,6 +50,7 @@
     .aud-link-status { display: inline-flex; align-items: center; gap: 0.35rem; border-radius: 100px; padding: 0.18rem 0.52rem; font-size: 0.66rem; font-weight: 900; margin-left: 0.45rem; vertical-align: middle; }
     .aud-link-status.on { background: #e5f0e7; color: #2e6639; }
     .aud-link-status.off { background: #fce9e5; color: #d1523d; }
+    .aud-link-warning { margin-top: 0.55rem; color: #b45309; font-size: 0.74rem; font-weight: 800; }
     @media (max-width: 760px) {
       .aud-link-panel { grid-template-columns: 1fr; }
       .aud-link-actions { justify-content: flex-start; }
@@ -136,8 +137,12 @@
         ? `${window.location.origin}/${encodeURIComponent(orgSlug)}/${encodeURIComponent(prod.slug)}/self-tape`
         : '';
       const selfTapeEnabled = prod?.wizard_data?.self_tape_enabled !== false;
-      const selfTapeDeadline = prod?.wizard_data?.self_tape_deadline
-        ? new Date(prod.wizard_data.self_tape_deadline).toLocaleString('en-CA', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+      const selfTapeDeadlineRaw = prod?.wizard_data?.self_tape_deadline || '';
+      const selfTapeDeadlineDate = selfTapeDeadlineRaw ? new Date(selfTapeDeadlineRaw) : null;
+      const selfTapeDeadlineExpired = selfTapeDeadlineDate && !Number.isNaN(selfTapeDeadlineDate.getTime()) && selfTapeDeadlineDate < new Date();
+      const selfTapeOpen = selfTapeEnabled && !selfTapeDeadlineExpired;
+      const selfTapeDeadline = selfTapeDeadlineDate && !Number.isNaN(selfTapeDeadlineDate.getTime())
+        ? selfTapeDeadlineDate.toLocaleString('en-CA', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
         : '';
 
       window.copyAuditionSelfTapeLink = function () {
@@ -150,6 +155,20 @@
             setTimeout(() => { btn.textContent = original; }, 1800);
           }
         }).catch(() => prompt('Copy this self-tape link:', selfTapeUrl));
+      };
+
+      window.openAuditionSelfTapeSubmissions = async function () {
+        const btn = document.getElementById('aud-open-self-tape-submissions');
+        if (btn) { btn.disabled = true; btn.textContent = 'Opening...'; }
+        const wizardData = { ...(prod.wizard_data || {}), self_tape_enabled: true };
+        if (selfTapeDeadlineExpired) wizardData.self_tape_deadline = null;
+        const { error } = await sb.from('productions').update({ wizard_data: wizardData }).eq('id', prodId);
+        if (error) {
+          if (btn) { btn.disabled = false; btn.textContent = 'Open Submissions'; }
+          alert('Could not open self-tape submissions. Try again from Audition Settings.');
+          return;
+        }
+        location.reload();
       };
 
       let slotCounts = {};
@@ -215,12 +234,15 @@
         <div>
           <div class="aud-link-title">
             Self-tape audition link
-            <span class="aud-link-status ${selfTapeEnabled ? 'on' : 'off'}">${selfTapeEnabled ? 'Enabled' : 'Disabled'}</span>
+            <span class="aud-link-status ${selfTapeOpen ? 'on' : 'off'}">${selfTapeOpen ? 'Open' : 'Closed'}</span>
           </div>
           <div class="aud-link-copy">Send this public link to performers who should register for a general self-tape audition.${selfTapeDeadline ? ` Deadline: ${esc(selfTapeDeadline)}.` : ''}</div>
           <div class="aud-link-url">${selfTapeUrl ? esc(selfTapeUrl) : 'Save your audition settings to create the self-tape link.'}</div>
+          ${!selfTapeEnabled ? `<div class="aud-link-warning">Self-tape is hidden from performers.</div>` : ''}
+          ${selfTapeDeadlineExpired ? `<div class="aud-link-warning">The self-tape deadline has passed, so submissions are closed.</div>` : ''}
         </div>
         <div class="aud-link-actions">
+          ${selfTapeUrl && !selfTapeOpen ? `<button type="button" class="aud-link-btn" id="aud-open-self-tape-submissions" onclick="openAuditionSelfTapeSubmissions()">Open Submissions</button>` : ''}
           ${selfTapeUrl ? `<button type="button" class="aud-link-btn" id="aud-copy-self-tape-link" onclick="copyAuditionSelfTapeLink()">Copy Link</button>` : ''}
           ${selfTapeUrl ? `<a class="aud-link-btn secondary" href="${esc(selfTapeUrl)}" target="_blank" rel="noopener">Open</a>` : ''}
           <button type="button" class="aud-link-btn secondary" onclick="btsProdNav('auditions-settings.html')">Settings</button>
