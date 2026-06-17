@@ -233,11 +233,11 @@
     var file = _finCurrency === 'GBP'
       ? 'Budgeting-total-spent-gbp.svg'
       : 'Budgeting-total-spent-cad-usd.svg';
-    icon.src = '/ASSETS/Images/' + file + '?v=20260611';
+    icon.src = '/ASSETS/Images/Icons/' + file + '?v=20260611';
   }
 
   window.loadProductionSidebar = function (activeGroup, activePage) {
-    const key = 'bts-prod-sidebar-v26';
+    const key = 'bts-prod-sidebar-v27';
     const cached = sessionStorage.getItem(key);
     const host = document.getElementById('prod-sidebar-host');
     if (!host) return;
@@ -264,7 +264,7 @@
 
     if (cached) applyAndInit(cached);
 
-    fetch('/SHARED/Navigation/production-sidebar.html?v=sidebar-v53-20260617')
+    fetch('/SHARED/Navigation/production-sidebar.html?v=sidebar-v54-20260617')
       .then(function (res) { return res.text(); })
       .then(function (html) {
         sessionStorage.setItem(key, html);
