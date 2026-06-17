@@ -50,6 +50,7 @@
     .off-role-tag { font-size: 0.72rem; font-weight: 850; border-radius: 100px; padding: 0.18rem 0.5rem; background: rgba(87,46,136,0.1); color: #572e88; white-space: nowrap; }
     .off-state-pill { font-size: 0.68rem; font-weight: 850; border-radius: 100px; padding: 0.2rem 0.55rem; white-space: nowrap; }
     .off-chosen { background: #fef4e2; color: #a06b00; }
+    .off-offer_sent { background: rgba(71,106,170,0.12); color: #476aaa; }
     .off-offer_accepted { background: #e5f0e7; color: #2e6639; }
     .off-not_cast { background: rgba(209,82,61,0.1); color: #d1523d; }
     .off-send-btn { font-size: 0.74rem; font-weight: 850; border-radius: 7px; padding: 0.32rem 0.7rem; border: 1.5px solid rgba(87,46,136,0.2); background: #fff; color: #572e88; cursor: pointer; font-family: var(--bts-font); transition: all 0.12s; white-space: nowrap; }
@@ -103,10 +104,24 @@
     }
 
     function offerStateClass(state) {
-      return { chosen: 'off-chosen', offer_accepted: 'off-offer_accepted', not_cast: 'off-not_cast' }[state] || 'off-chosen';
+      return { chosen: 'off-chosen', offer_sent: 'off-offer_sent', offer_accepted: 'off-offer_accepted', not_cast: 'off-not_cast' }[state] || 'off-chosen';
     }
     function offerStateLabel(state) {
-      return { chosen: 'Chosen', offer_accepted: 'Offer Accepted', not_cast: 'Not Cast' }[state] || state;
+      return { chosen: 'Chosen', offer_sent: 'Offer Sent', offer_accepted: 'Offer Accepted', not_cast: 'Not Cast' }[state] || state;
+    }
+
+    async function bulkSendOffers() {
+      const pending = _rows.filter(r => r.assignment.state === 'chosen' && r.perf?.email);
+      if (!pending.length) return;
+      if (!confirm(`Mark ${pending.length} offer${pending.length === 1 ? '' : 's'} as sent?`)) return;
+      const ids = pending.map(r => r.assignment.id);
+      const { error } = await _sb.from('casting_assignments')
+        .update({ state: 'offer_sent' })
+        .in('id', ids);
+      if (error) { showToast('Could not update. Try again.', true); return; }
+      pending.forEach(r => { r.assignment.state = 'offer_sent'; });
+      renderTable();
+      showToast(`${pending.length} offer${pending.length === 1 ? '' : 's'} marked as sent.`);
     }
 
     async function sendOffer(assignmentId, perfName, charName, perfEmail) {
@@ -270,7 +285,7 @@
           </div>
         </div>
         <div class="bulk-bar">
-          <button class="bulk-btn" id="bulk-offer-btn" disabled>Send All Offers (0)</button>
+          <button class="bulk-btn" id="bulk-offer-btn" disabled onclick="bulkSendOffers()">Send All Offers (0)</button>
           <span class="bulk-note">Offers are tracked here. Email via Communications.</span>
         </div>
         <table class="offers-table">
