@@ -887,6 +887,8 @@
     .rsc-head-cell { padding:0.78rem 1.12rem; border-left:1px solid rgba(87,46,136,0.1); min-width:0; }
     .rsc-head-cell:first-child { border-left:none; }
     .rsc-head-title { font-size:0.72rem; font-weight:950; letter-spacing:0.07em; text-transform:uppercase; color:#1a1530; line-height:1.1; }
+    .rsc-sort-btn { font-size:0.65rem; font-weight:800; padding:0.2em 0.6em; border-radius:5px; border:1.5px solid rgba(87,46,136,0.22); background:transparent; color:rgba(87,46,136,0.65); cursor:pointer; font-family:var(--bts-font); white-space:nowrap; transition:background 0.15s,border-color 0.15s; }
+    .rsc-sort-btn:hover { background:rgba(87,46,136,0.07); border-color:rgba(87,46,136,0.4); color:#572e88; }
     .rsc-head-sub { margin-top:0.28rem; font-size:0.66rem; font-weight:800; letter-spacing:0.02em; color:rgba(87,46,136,0.54); line-height:1.2; }
     .rsc-cast-cell { display:grid; grid-template-columns:76px minmax(0,1fr); gap:1rem; align-items:start; }
     .rsc-cast-stack { display:flex; flex-direction:column; gap:0.62rem; }
@@ -40396,6 +40398,7 @@ See you soon!
   let _rptCastItems = [];      // cached accepted cast for re-renders
   let _rptNotesTimers = {};    // debounce per assignment
   let _rptVolunteerSignups = []; // cached volunteer rows for registration discount linking
+  let _rptSortOrder = 'az';     // 'az' | 'za' | 'original'
 
   const PAYMENT_DEFAULT_STATE = {
     mode: 'none',           // 'none' | 'flat' | 'split'
@@ -48071,6 +48074,49 @@ See you soon!
     rptRerenderSummary();
   }
 
+  function rptLastName(name) {
+    const parts = String(name || '').trim().split(/\s+/);
+    return (parts.length > 1 ? parts[parts.length - 1] : parts[0] || '').toLowerCase();
+  }
+
+  function rptSortKey(item) {
+    const assignId = String(item.assignment?.id || '');
+    const hh = rptHouseholdFor(assignId);
+    return hh ? rptLastName(hh.name) : rptLastName(item.app?.name || '');
+  }
+
+  function rptBuildGridHtml(items, settings) {
+    let sorted = [...items];
+    if (_rptSortOrder === 'az') sorted.sort((a, b) => rptSortKey(a).localeCompare(rptSortKey(b)));
+    else if (_rptSortOrder === 'za') sorted.sort((a, b) => rptSortKey(b).localeCompare(rptSortKey(a)));
+    const renderedHouseholdIds = new Set();
+    return sorted.map(item => {
+      const assignId = String(item.assignment?.id || '');
+      const hh = rptHouseholdFor(assignId);
+      if (hh) {
+        if (renderedHouseholdIds.has(hh.id)) return '';
+        renderedHouseholdIds.add(hh.id);
+        const hhItems = (hh.member_ids || []).map(mid => items.find(i => String(i.assignment?.id) === String(mid))).filter(Boolean);
+        return renderHouseholdGroupCard(hh, hhItems, settings);
+      }
+      return renderRegistrationStatusCard(item, settings);
+    }).join('');
+  }
+
+  function rptToggleSort() {
+    _rptSortOrder = _rptSortOrder === 'az' ? 'za' : 'az';
+    const btn = document.getElementById('rpt-sort-btn');
+    if (btn) btn.textContent = _rptSortOrder === 'az' ? 'A → Z' : 'Z → A';
+    const list = document.getElementById('rpt-list');
+    if (!list || !_rptCastItems.length) return;
+    const settings = registrationCurrentPaymentSettings();
+    const head = list.querySelector('.rsc-status-head');
+    list.innerHTML = '';
+    if (head) list.appendChild(head);
+    list.insertAdjacentHTML('beforeend', rptBuildGridHtml(_rptCastItems, settings));
+    requestAnimationFrame(() => requestAnimationFrame(() => { try { fitBrandTileTitles(list); } catch (_) {} }));
+  }
+
   async function loadRegistrationPayments() {
     const root = document.getElementById('reg-payment-tracker-root');
     if (!root) return;
@@ -48084,20 +48130,9 @@ See you soon!
         root.innerHTML = `<div class="registration-empty" style="text-align:center;padding:2rem 0;">No accepted cast members yet. Accept cast offers to start tracking payments.</div>`;
         return;
       }
-      const renderedHouseholdIds = new Set();
-      const gridHtml = items.map(item => {
-        const assignId = String(item.assignment?.id || '');
-        const hh = rptHouseholdFor(assignId);
-        if (hh) {
-          if (renderedHouseholdIds.has(hh.id)) return '';
-          renderedHouseholdIds.add(hh.id);
-          const hhItems = (hh.member_ids || []).map(mid => items.find(i => String(i.assignment?.id) === String(mid))).filter(Boolean);
-          return renderHouseholdGroupCard(hh, hhItems, settings);
-        }
-        return renderRegistrationStatusCard(item, settings);
-      }).join('');
+      const gridHtml = rptBuildGridHtml(items, settings);
       root.innerHTML = `<div id="rpt-summary-wrap">${rptRenderSummaryBar(items, settings)}</div><div class="rsc-status-table" id="rpt-list"><div class="rsc-status-head">
-        <div class="rsc-head-cell"><div class="rsc-head-title">Cast Member</div></div>
+        <div class="rsc-head-cell" style="display:flex;align-items:center;gap:0.6rem;"><div class="rsc-head-title">Cast Member</div><button id="rpt-sort-btn" class="rsc-sort-btn" onclick="rptToggleSort()">${_rptSortOrder === 'az' ? 'A → Z' : 'Z → A'}</button></div>
         <div class="rsc-head-cell"><div class="rsc-head-title">Fee Status</div></div>
         <div class="rsc-head-cell"><div class="rsc-head-title">Connections</div></div>
         <div class="rsc-head-cell"><div class="rsc-head-title">Notes &amp; Actions</div></div>
