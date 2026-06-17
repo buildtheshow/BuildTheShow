@@ -713,6 +713,14 @@
     /* ── Registration Status Card (rsc-) ── */
     .rsc-grid { display:grid; grid-template-columns:repeat(auto-fill,min(700px,100%)); gap:1.25rem; margin-top:0.75rem; }
     .rsc-card { background:#fff; border-radius:12px; box-shadow:0 6px 28px rgba(26,21,48,0.16), 0 1px 4px rgba(26,21,48,0.07); overflow:hidden; display:flex; flex-direction:column; position:relative; }
+    /* ── Household grouping ── */
+    .rsc-hh-group { margin-bottom:2rem; }
+    .rsc-hh-group-header { display:flex; align-items:center; gap:0.85rem; padding:0.6rem 0 0.75rem; margin-bottom:1rem; border-bottom:2px solid rgba(87,46,136,0.12); }
+    .rsc-hh-group-icon { width:2.6rem; height:2.6rem; flex-shrink:0; opacity:0.82; }
+    .rsc-hh-group-name { font-size:1.15rem; font-weight:950; color:#1a1530; text-transform:uppercase; letter-spacing:0.06em; }
+    .rsc-hh-group-membercount { font-size:0.72rem; font-weight:700; color:rgba(87,46,136,0.45); margin-left:auto; }
+    .rsc-hh-group-members { display:grid; grid-template-columns:repeat(auto-fill,min(700px,100%)); gap:1.25rem; }
+    .rsc-hh-ungrouped-divider { font-size:0.68rem; font-weight:800; color:rgba(87,46,136,0.4); text-transform:uppercase; letter-spacing:0.08em; padding:0.5rem 0 0.65rem; border-bottom:1px solid rgba(87,46,136,0.1); margin-bottom:1rem; }
     .rsc-household-ribbon { position:absolute; top:35px; right:-115px; width:300px; min-height:3.35rem; background:#efab45; color:#1a1530; font-size:0.78rem; font-weight:900; text-transform:uppercase; letter-spacing:0.06em; text-align:center; line-height:1.35; padding:0.55em 0; transform:rotate(35deg); box-shadow:0 3px 10px rgba(239,171,69,0.45); pointer-events:none; z-index:10; display:flex; align-items:center; justify-content:center; box-sizing:border-box; }
     .rsc-card-photo { overflow:hidden; flex-shrink:0; }
     .rsc-card-photo .casting-card { border-radius:0; box-shadow:none; cursor:default; display:block; }
@@ -41620,6 +41628,40 @@ See you soon!
     if (newCard) card.replaceWith(newCard);
   }
 
+  function rptGroupedListHtml(items, settings) {
+    if (!_rptHouseholds.length) {
+      return items.map(item => renderRegistrationStatusCard(item, settings)).join('');
+    }
+    const grouped = {};
+    _rptHouseholds.forEach(hh => { grouped[hh.id] = { hh, members: [] }; });
+    const ungrouped = [];
+    items.forEach(item => {
+      const assignId = String(item.assignment?.id || '');
+      const hh = rptHouseholdFor(assignId);
+      if (hh && grouped[hh.id]) grouped[hh.id].members.push(item);
+      else ungrouped.push(item);
+    });
+    let html = '';
+    Object.values(grouped).forEach(({ hh, members }) => {
+      if (!members.length) return;
+      html += `<div class="rsc-hh-group" data-household-id="${esc(hh.id)}">
+        <div class="rsc-hh-group-header">
+          <img src="/ASSETS/Images/household-yes.svg" class="rsc-hh-group-icon" alt="" aria-hidden="true" />
+          <span class="rsc-hh-group-name">${esc(hh.name || 'Household')}</span>
+          <span class="rsc-hh-group-membercount">${members.length} member${members.length === 1 ? '' : 's'}</span>
+        </div>
+        <div class="rsc-hh-group-members">
+          ${members.map(item => renderRegistrationStatusCard(item, settings)).join('')}
+        </div>
+      </div>`;
+    });
+    if (ungrouped.length) {
+      if (html) html += `<div class="rsc-hh-ungrouped-divider">Individual Members</div>`;
+      html += ungrouped.map(item => renderRegistrationStatusCard(item, settings)).join('');
+    }
+    return html;
+  }
+
   function rscFmtTileAmt(amount, settings) {
     const n = Number(amount || 0);
     if (!Number.isFinite(n) || n <= 0) return '—';
@@ -42307,7 +42349,7 @@ See you soon!
         return;
       }
       const showHouseholds = settings.sibling_discount_enabled;
-      root.innerHTML = `<div id="rpt-summary-wrap">${rptRenderSummaryBar(items, settings)}</div>${showHouseholds ? rptRenderHouseholdsSection() : ''}<div class="rsc-grid" id="rpt-list">${items.map(item => renderRegistrationStatusCard(item, settings)).join('')}</div>`;
+      root.innerHTML = `<div id="rpt-summary-wrap">${rptRenderSummaryBar(items, settings)}</div>${showHouseholds ? rptRenderHouseholdsSection() : ''}<div class="rsc-grid" id="rpt-list">${rptGroupedListHtml(items, settings)}</div>`;
     } catch (err) {
       console.error('[BTS] loadRegistrationPayments failed', err);
       root.innerHTML = `<div style="padding:2rem;color:#c0392b;font-size:0.82rem;text-align:center;">Could not load payment tracker.</div>`;
