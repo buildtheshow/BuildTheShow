@@ -601,17 +601,30 @@
       if (iframeSrc) {
         body.innerHTML = `<iframe class="pt-modal-iframe" src="${esc(iframeSrc)}" sandbox="allow-scripts allow-same-origin allow-forms allow-top-navigation-by-user-activation"></iframe>`;
       } else {
-        // Team portal requires login — show the URL and a link to open it
-        const teamUrl = `${window.location.origin}/${encodeURIComponent(_orgSlug)}/${encodeURIComponent(_showSlug)}/Team/`;
-        const def = PORTAL_DEFS.find(d => d.key === 'team');
+        // Can't auto-login: show context-aware fallback with a link to open the portal manually
+        const src = person.source;
+        let portalLabel, portalUrl, portalColor, portalBg, portalIcon;
+        if (src === 'cast') {
+          const def = PORTAL_DEFS.find(d => d.key === 'cast');
+          portalLabel = 'Cast Portal'; portalColor = def.color; portalBg = def.bg; portalIcon = def.icon;
+          portalUrl = `${window.location.origin}/${encodeURIComponent(_orgSlug)}/${encodeURIComponent(_showSlug)}/portal`;
+        } else if (src === 'volunteer' || src === 'dept_lead') {
+          const def = PORTAL_DEFS.find(d => d.key === 'volunteer');
+          portalLabel = 'Volunteer Portal'; portalColor = def.color; portalBg = def.bg; portalIcon = def.icon;
+          portalUrl = `${window.location.origin}/${encodeURIComponent(_orgSlug)}/${encodeURIComponent(_showSlug)}/volunteers`;
+        } else {
+          const def = PORTAL_DEFS.find(d => d.key === 'team');
+          portalLabel = 'Team Portal'; portalColor = def.color; portalBg = def.bg; portalIcon = def.icon;
+          portalUrl = `${window.location.origin}/${encodeURIComponent(_orgSlug)}/${encodeURIComponent(_showSlug)}/Team/`;
+        }
         body.innerHTML = `<div class="pt-modal-perms" style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;text-align:center;gap:1rem;padding:2rem">
-          <div style="width:56px;height:56px;border-radius:50%;background:${def?.bg};color:${def?.color};display:flex;align-items:center;justify-content:center;margin:0 auto">${def?.icon||''}</div>
+          <div style="width:56px;height:56px;border-radius:50%;background:${portalBg};color:${portalColor};display:flex;align-items:center;justify-content:center;margin:0 auto">${portalIcon}</div>
           <div>
-            <div style="font-size:1rem;font-weight:800;color:#1a1530;margin-bottom:0.35rem">Team Portal</div>
-            <div style="font-size:0.82rem;color:rgba(26,21,48,0.5);max-width:320px">The team portal requires ${esc(person.name)} to sign in with their email and access code. Open it in a new tab to see what they see.</div>
+            <div style="font-size:1rem;font-weight:800;color:#1a1530;margin-bottom:0.35rem">${esc(portalLabel)}</div>
+            <div style="font-size:0.82rem;color:rgba(26,21,48,0.5);max-width:320px">Preview not available — ${esc(person.name)} will need to sign in with their email and access code. Open it in a new tab to see what they see.</div>
           </div>
-          <a href="${esc(teamUrl)}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:0.4rem;background:#476aaa;color:#fff;border-radius:8px;padding:0.55rem 1.1rem;font-size:0.82rem;font-weight:700;text-decoration:none">
-            Open Team Portal
+          <a href="${esc(portalUrl)}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:0.4rem;background:${portalColor};color:#fff;border-radius:8px;padding:0.55rem 1.1rem;font-size:0.82rem;font-weight:700;text-decoration:none">
+            Open ${esc(portalLabel)}
             <svg width="12" height="12" viewBox="0 0 14 14" fill="none"><path d="M5 1h8M13 1v8M13 1L5 9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </a>
         </div>`;
@@ -628,7 +641,8 @@
       // Cast: load the actual cast portal at /{org}/{show}/portal with preview auto-login params
       if (person.source === 'cast') {
         const email = person.data?.email || person.email;
-        const code  = person.data?._portal_code;
+        const answers = person.data?.registration_answers || {};
+        const code = answers['__bts_portal_code'] || person.data?._portal_code;
         if (email && code && _orgSlug && _showSlug) {
           return `${window.location.origin}/${encodeURIComponent(_orgSlug)}/${encodeURIComponent(_showSlug)}/portal?pvw_email=${encodeURIComponent(email)}&pvw_code=${encodeURIComponent(code)}`;
         }
