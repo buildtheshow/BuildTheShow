@@ -171,7 +171,7 @@
             <button class="pt-filter-pill" data-filter="cast" onclick="setPeopleFilter('cast',this)">Cast</button>
             <button class="pt-filter-pill" data-filter="volunteer" onclick="setPeopleFilter('volunteer',this)">Volunteer</button>
             <button class="pt-filter-pill" data-filter="dept_lead" onclick="setPeopleFilter('dept_lead',this)">Dept Lead</button>
-            <button class="pt-filter-pill" data-filter="team" onclick="setPeopleFilter('team',this)">Team</button>
+            <button class="pt-filter-pill" data-filter="team" onclick="setPeopleFilter('team',this)">Creative Team</button>
           </div>
           <div class="pt-table-wrap">
             <table class="pt-table">
@@ -311,7 +311,7 @@
       { key: 'cast',      label: 'Cast Portal',     color: '#572e88', bg: '#f0ecfc', icon: castIcon() },
       { key: 'volunteer', label: 'Volunteer Portal', color: '#769e7b', bg: '#e5f0e7', icon: volunteerIcon() },
       { key: 'dept_lead', label: 'Department Lead',  color: '#dd8233', bg: '#fef4e2', icon: deptLeadIcon() },
-      { key: 'team',      label: 'Team Portal',      color: '#476aaa', bg: '#e8f0f9', icon: teamIcon() },
+      { key: 'team',      label: 'Creative Team',    color: '#476aaa', bg: '#e8f0f9', icon: teamIcon() },
     ];
 
     const PORTAL_TEAM_ROLE_KEYS = new Set(['director','vocal_director','choreographer','producer','admin','musical_director','music_director']);
@@ -369,7 +369,7 @@
       const [castRes, volRes, teamRes, prodRes, bookingsRes] = await Promise.all([
         sb.from('cast_members').select('id,name,email,headshot_url,state,character_name,registration_answers').eq('production_id', prodId).in('state', ['chosen','offer_accepted']),
         sb.from('volunteer_signups').select('id,name,email,role_name,status,portal_token,volunteer_passcode').eq('production_id', prodId).in('status', ['approved','checked_in','completed']),
-        sb.from('production_team_members').select('id,name,email,role,access_level,is_active').eq('production_id', prodId).eq('is_active', true),
+        sb.from('production_team_members').select('id,name,email,role,access_level,is_active,passcode').eq('production_id', prodId).eq('is_active', true),
         sb.from('productions').select('organizations(slug),slug').eq('id', prodId).maybeSingle(),
         sb.from('audition_bookings').select('email,portal_code').eq('production_id', prodId).not('portal_code', 'is', null),
       ]);
@@ -651,6 +651,14 @@
         const code = answers['__bts_portal_code'] || person.data?._portal_code;
         if (email && code && _orgSlug && _showSlug) {
           return `${window.location.origin}/${encodeURIComponent(_orgSlug)}/${encodeURIComponent(_showSlug)}/portal?pvw_email=${encodeURIComponent(email)}&pvw_code=${encodeURIComponent(code)}`;
+        }
+      }
+      // Team / creative team: load /{org}/{show}/Team with preview auto-login params
+      if (['director','vocal_director','choreographer','producer','admin','musical_director','music_director'].includes(person.source)) {
+        const email    = person.data?.email || person.email;
+        const passcode = person.data?.passcode;
+        if (email && passcode && _orgSlug && _showSlug) {
+          return `${window.location.origin}/${encodeURIComponent(_orgSlug)}/${encodeURIComponent(_showSlug)}/Team?pvw_email=${encodeURIComponent(email)}&pvw_passcode=${encodeURIComponent(passcode)}`;
         }
       }
       return null;
