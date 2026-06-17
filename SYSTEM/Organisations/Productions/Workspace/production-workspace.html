@@ -45802,7 +45802,56 @@ See you soon!
     </div>`;
   }
 
-  function rscPaymentCellHtml(primaryItem, settings, items = [primaryItem]) {
+  function rscPaymentCellHtml(primaryItem, settings, items = [primaryItem], household = null) {
+    const activeItems = (Array.isArray(items) ? items : [primaryItem]).filter(Boolean);
+    if (household && activeItems.length > 1) {
+      const data = activeItems.map(item => {
+        const id = String(item.assignment?.id || '');
+        const ef = rptEffectiveFee(item, settings);
+        const records = _rptPaymentRecords[id] || [];
+        const paid = records.filter(r => r.paid).reduce((sum, r) => sum + (ef.installments[r.installment_index]?.amount || 0), 0);
+        return { item, id, ef, records, paid };
+      });
+      const hasFee = (settings.mode === 'flat' || settings.mode === 'split') && data.some(d => d.ef.total > 0);
+      if (!hasFee) return `<div class="rsc-pay-detail">No fee configured for this household.</div>`;
+      const totalFee = data.reduce((sum, d) => sum + d.ef.total, 0);
+      const totalPaid = data.reduce((sum, d) => sum + d.paid, 0);
+      const balance = Math.max(0, totalFee - totalPaid);
+      const paidPct = totalFee > 0 ? Math.min(100, Math.round((totalPaid / totalFee) * 100)) : 0;
+      const maxInst = Math.max(0, ...data.map(d => d.ef.installments.length));
+      const allPaid = balance === 0 && totalPaid > 0;
+      const cards = Array.from({ length: maxInst }, (_, idx) => {
+        const parts = data.map(d => {
+          const inst = d.ef.installments[idx];
+          if (!inst || inst.amount <= 0) return null;
+          const rec = d.records.find(r => r.installment_index === idx);
+          return { inst, rec, isPaid: !!rec?.paid };
+        }).filter(Boolean);
+        if (!parts.length) return '';
+        const isPaid = parts.every(p => p.isPaid);
+        const firstDue = parts.find(p => p.inst.dueDate)?.inst.dueDate || '';
+        const label = (parts[0].inst.label || '').replace(/\s*\(.*\)$/, '') || `Payment ${idx + 1}`;
+        const sub = isPaid ? 'Paid' : firstDue ? `Due ${rptFormatDate(firstDue)}` : 'Due date not set';
+        return `<button type="button" class="rsc-inst-card ${isPaid ? 'paid' : ''}" id="rsc-hh-inst-${esc(household.id)}-${idx}" onclick="${isPaid ? '' : `rscLogHouseholdInstallmentPaid('${esc(household.id)}',${idx})`}">
+          <div class="rsc-inst-label">${esc(label)}</div>
+          <div class="rsc-inst-sub">${esc(sub)}</div>
+        </button>`;
+      }).join('');
+      const firstUnpaid = (() => {
+        for (let idx = 0; idx < maxInst; idx++) {
+          if (data.some(d => d.ef.installments[idx] && !d.records.find(r => r.installment_index === idx && r.paid))) return idx;
+        }
+        return 0;
+      })();
+      return `<div class="rsc-pay-top">
+        <div class="rsc-pay-amount">${esc(rscMoneyShort(totalPaid, settings))} / ${esc(rscMoneyShort(totalFee, settings))}</div>
+        <div class="rsc-pay-state ${allPaid ? 'full' : ''}">${allPaid ? 'Paid in Full' : totalPaid > 0 ? 'Paid' : 'Unpaid'}</div>
+      </div>
+      <div class="rsc-pay-track"><div class="rsc-pay-fill" style="width:${paidPct}%;"></div></div>
+      <div class="rsc-pay-detail ${balance > 0 ? 'due' : ''}">Balance: ${esc(rscMoneyShort(balance, settings))}</div>
+      <div class="rsc-inst-row">${cards}</div>
+      <button type="button" class="rsc-log-btn" onclick="rscLogHouseholdInstallmentPaid('${esc(household.id)}',${firstUnpaid})">Log Payment</button>`;
+    }
     const item = primaryItem || {};
     const assignment = item.assignment || {};
     const assignId = String(assignment.id || '');
@@ -45937,7 +45986,7 @@ See you soon!
           ${items.length === 1 ? rscStatusCheckHtml(primary) : items.map(item => `<div class="rsc-check-item"><span class="rsc-check-icon ${registrationFormsComplete(item.app) ? 'ok' : 'warn'}">${registrationFormsComplete(item.app) ? '✓' : '!'}</span><span>${esc(String(item.app?.name || 'Cast Member').trim())} ${registrationFormsComplete(item.app) ? 'registered' : 'pending'}</span></div>`).join('')}
         </div>
       </div>
-      <div class="rsc-status-cell">${rscPaymentCellHtml(primary, settings, items)}</div>
+      <div class="rsc-status-cell">${rscPaymentCellHtml(primary, settings, items, household)}</div>
       <div class="rsc-status-cell">${rscConnectionsCellHtml(primary, settings, household || rptHouseholdFor(assignId))}</div>
       <div class="rsc-status-cell" style="display:flex;flex-direction:column;">${rscNotesActionsCellHtml(items, household)}</div>
     </div>`;
@@ -46285,6 +46334,15 @@ See you soon!
   }
 
   function renderRegistrationStatusCard(item, settings, _overrideRecords = null) {
+    if (_overrideRecords !== null) {
+      const assignId = String(item?.assignment?.id || '');
+      const prev = _rptPaymentRecords[assignId];
+      _rptPaymentRecords[assignId] = _overrideRecords;
+      const html = renderRegistrationStatusTableRow(item, settings, null);
+      if (prev === undefined) delete _rptPaymentRecords[assignId];
+      else _rptPaymentRecords[assignId] = prev;
+      return html;
+    }
     return renderRegistrationStatusTableRow(item, settings, null);
     const app = item.app || {};
     const assignment = item.assignment || {};
