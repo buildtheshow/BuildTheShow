@@ -951,6 +951,7 @@
     .rsc-check-group-name { color:rgba(87,46,136,0.58); font-size:0.67rem; font-weight:950; letter-spacing:0.05em; text-transform:uppercase; line-height:1.1; }
     .rsc-pay-top { display:flex; align-items:flex-start; justify-content:space-between; gap:0.85rem; }
     .rsc-pay-amount { color:#000000; font-size:1.05rem; font-weight:950; letter-spacing:0.01em; line-height:1.1; }
+    .rsc-fee-math { font-size:0.64rem; font-weight:700; color:rgba(87,46,136,0.5); margin-top:0.28rem; }
     .rsc-pay-state { color:#d1523d; font-size:0.7rem; font-weight:950; line-height:1.2; white-space:nowrap; }
     .rsc-pay-state.full { color:#769e7b; }
     .rsc-pay-state.partial { color:#dd8233; }
@@ -45798,7 +45799,11 @@ See you soon!
     const total = Math.max(0, effectiveBase - volAdj - schAdj);
     if (volAdj) parts.push(`Vol. discount: -${registrationFormatPaymentAmount(volAdj, settings)}`);
     if (schAdj) parts.push(`Scholarship: -${registrationFormatPaymentAmount(schAdj, settings)}`);
-    return { installments: rptScaleInstallments(base, total, parts.includes('Sibling rate') ? 'sibling rate' : ''), total, discountLabel: parts.length ? parts.join(' · ') : null };
+    const adjustments = [];
+    if (effectiveBase !== baseTotal) adjustments.push({ label: 'Sibling rate', value: effectiveBase, isRate: true });
+    if (volAdj) adjustments.push({ label: 'Vol. discount', deduct: volAdj });
+    if (schAdj) adjustments.push({ label: 'Scholarship', deduct: schAdj });
+    return { installments: rptScaleInstallments(base, total, parts.includes('Sibling rate') ? 'sibling rate' : ''), total, baseTotal, adjustments, discountLabel: parts.length ? parts.join(' · ') : null };
   }
 
   function rptPaidTotal(assignmentId, installments) {
@@ -46175,10 +46180,22 @@ See you soon!
     }).join('');
     const logIdx = Math.max(0, ef.installments.findIndex((inst, idx) => !records.find(r => r.installment_index === idx && r.paid)));
     const paymentStateClass = allPaid ? 'full' : paidAmt > 0 ? 'partial' : 'unpaid';
+    const feeMathHtml = (() => {
+      if (!ef.adjustments?.length) return '';
+      const sym = ({ CAD: '$', USD: '$', GBP: '£' })[registrationPaymentCurrency(settings)] || '$';
+      const fmt = n => `${sym}${Math.round(n)}`;
+      const parts = [`${fmt(ef.baseTotal)} base`];
+      (ef.adjustments || []).forEach(adj => {
+        if (adj.isRate) parts.push(`Sibling rate ${fmt(adj.value)}`);
+        else parts.push(`${adj.label} −${fmt(adj.deduct)}`);
+      });
+      return `<div class="rsc-fee-math">${parts.join(' · ')} = ${fmt(ef.total)}</div>`;
+    })();
     return `<div class="rsc-pay-top">
       <div class="rsc-pay-amount">${esc(rscMoneyShort(paidAmt, settings))} / ${esc(rscMoneyShort(ef.total, settings))}</div>
       <div class="rsc-pay-state ${paymentStateClass}">${allPaid ? 'Paid in Full' : paidAmt > 0 ? 'Paid' : 'Unpaid'}</div>
     </div>
+    ${feeMathHtml}
     <div class="rsc-pay-track"><div class="rsc-pay-fill" style="width:${paidPct}%;"></div></div>
     <div class="rsc-pay-detail ${balance > 0 ? 'due' : ''}">
       Balance: ${esc(rscMoneyShort(balance, settings))}${balance > 0 && firstUnpaid?.dueDate ? `<br>Due ${esc(rptFormatDate(firstUnpaid.dueDate))}` : ''}
