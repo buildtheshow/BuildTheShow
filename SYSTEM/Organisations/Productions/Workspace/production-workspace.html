@@ -786,6 +786,9 @@
     .rsc-check-icon.ok { color:#208348; background:#dff1e5; }
     .rsc-check-icon.warn { color:#dd8233; background:#fff0df; }
     .rsc-check-icon.muted { color:rgba(87,46,136,0.42); background:rgba(87,46,136,0.08); }
+    .rsc-check-group { display:flex; flex-direction:column; gap:0.3rem; padding-top:0.44rem; border-top:1px solid rgba(87,46,136,0.08); }
+    .rsc-check-group:first-child { padding-top:0; border-top:none; }
+    .rsc-check-group-name { color:rgba(87,46,136,0.58); font-size:0.67rem; font-weight:950; letter-spacing:0.05em; text-transform:uppercase; line-height:1.1; }
     .rsc-pay-top { display:flex; align-items:flex-start; justify-content:space-between; gap:0.85rem; }
     .rsc-pay-amount { color:#1a1530; font-size:1.05rem; font-weight:950; letter-spacing:0.01em; line-height:1.1; }
     .rsc-pay-state { color:#476aaa; font-size:0.7rem; font-weight:950; line-height:1.2; white-space:nowrap; }
@@ -45810,15 +45813,29 @@ See you soon!
     const assignment = item.assignment || {};
     const assignId = String(assignment.id || '');
     const regDone = !!registrationFormsComplete(app);
+    const modelReleaseDone = registrationAnswerTruthy(app, ['media_release_signed', '__bts_registration_media_release_signed']) || regDone;
     const accessText = registrationAnswerValue(app, ['Accessibility and accommodation needs', 'Accessibility', '__bts_registration_accessibility']).trim();
     const row = (ok, label, cls = ok ? 'ok' : 'muted') => `<div class="rsc-check-item"><span class="rsc-check-icon ${cls}">${ok ? '✓' : cls === 'warn' ? '!' : '+'}</span><span>${esc(label)}</span></div>`;
     const accessRow = accessText
       ? `<button type="button" class="rsc-check-item" style="background:none;border:none;padding:0;text-align:left;font-family:inherit;cursor:pointer;" onclick="rscShowAccessibilityNote('${esc(assignId)}')"><span class="rsc-check-icon warn">!</span><span>Accessibility Needs</span></button>`
-      : row(true, 'No Accessibility Needs', 'ok');
+      : row(true, 'Accessibility Needs', 'ok');
     return `<div class="rsc-check-list">
-      ${row(regDone, regDone ? 'Registration Complete' : 'Registration Pending', regDone ? 'ok' : 'warn')}
+      ${row(regDone, 'Registered', regDone ? 'ok' : 'warn')}
       ${accessRow}
+      ${row(modelReleaseDone, 'Model Release Status', modelReleaseDone ? 'ok' : 'warn')}
     </div>`;
+  }
+
+  function rscStatusChecksForItemsHtml(items = []) {
+    const activeItems = items.filter(Boolean);
+    if (activeItems.length <= 1) return rscStatusCheckHtml(activeItems[0] || {});
+    return activeItems.map(item => {
+      const name = String(item.app?.name || 'Cast Member').trim();
+      return `<div class="rsc-check-group">
+        <div class="rsc-check-group-name">${esc(name)}</div>
+        ${rscStatusCheckHtml(item)}
+      </div>`;
+    }).join('');
   }
 
   function rscPaymentCellHtml(primaryItem, settings, items = [primaryItem], household = null) {
@@ -46001,7 +46018,7 @@ See you soon!
             ${roleName ? `<div class="rsc-cast-role">${esc(roleName)}</div>` : ''}
             ${age ? `<div class="rsc-cast-meta"><span class="rsc-age">${esc(age)}</span></div>` : ''}
           </div>
-          ${items.length === 1 ? rscStatusCheckHtml(primary) : items.map(item => `<div class="rsc-check-item"><span class="rsc-check-icon ${registrationFormsComplete(item.app) ? 'ok' : 'warn'}">${registrationFormsComplete(item.app) ? '✓' : '!'}</span><span>${esc(String(item.app?.name || 'Cast Member').trim())} ${registrationFormsComplete(item.app) ? 'registered' : 'pending'}</span></div>`).join('')}
+          ${rscStatusChecksForItemsHtml(items)}
         </div>
       </div>
       <div class="rsc-status-cell">${rscPaymentCellHtml(primary, settings, items, household)}</div>
