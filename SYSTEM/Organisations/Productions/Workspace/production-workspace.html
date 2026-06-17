@@ -6973,6 +6973,13 @@
     .fc-legend-item:hover { opacity: 1; transform: scale(1.05); }
     .fc-legend-item:active { cursor: grabbing; }
     .fc-legend-item.fc-dragging { opacity: 0.4; }
+    #panel-calendar.calendar-readonly .fc-legend-item,
+    #panel-calendar.calendar-readonly .fc-legend-hint {
+      display: none;
+    }
+    #panel-calendar.calendar-readonly .fc-event {
+      cursor: pointer;
+    }
     .fc-legend-hint {
       font-size: 0.68rem; color: #b0a0cc;
       align-self: center;
@@ -23923,7 +23930,7 @@
         </div>
         <div style="display:flex;gap:0.6rem;align-items:center;">
           <a href="/org/dashboard" onclick="sessionStorage.setItem('openTab','cronus')" class="btn-secondary" style="text-decoration:none;font-size:0.8rem;">View in Organisation Calendar</a>
-          <button class="btn-primary" onclick="openEventModal()">+ Add Event</button>
+          <button class="btn-primary" id="calendar-add-event-btn" onclick="openEventModal()">+ Add Event</button>
         </div>
       </div>
 
@@ -35560,13 +35567,15 @@ See you soon!
       return;
     }
     const isMobileCalendar = window.matchMedia('(max-width: 700px)').matches;
+    const canEditCalendar = canEditProductionCalendar();
+    applyProductionCalendarAccessState();
     fcCalendar = new FullCalendar.Calendar(document.getElementById('fc-calendar'), {
       initialView: isMobileCalendar ? 'listMonth' : 'dayGridMonth',
       headerToolbar: isMobileCalendar
         ? { left: 'prev,next', center: 'title', right: 'listMonth' }
         : { left: 'prev,next today', center: 'title', right: 'dayGridMonth,timeGridWeek,timeGridDay,listMonth' },
-      editable: true,
-      selectable: true,
+      editable: canEditCalendar,
+      selectable: canEditCalendar,
       selectMirror: true,
       dayMaxEvents: true,
       nowIndicator: true,
@@ -35574,8 +35583,9 @@ See you soon!
       fixedWeekCount: false,
       timeZone: false,
       eventDisplay: 'block',
-      droppable: true,
+      droppable: canEditCalendar,
       drop(info) {
+        if (!canEditProductionCalendar()) { info.revert(); return; }
         const el = info.draggedEl;
         const eventType = el.dataset.eventType || 'rehearsal';
         const label     = el.dataset.label     || 'Event';
@@ -35585,6 +35595,7 @@ See you soon!
         info.revert();
       },
       select(info) {
+        if (!canEditProductionCalendar()) return;
         if (window._pendingDeadlineFCEvent) {
           const ev = window._pendingDeadlineFCEvent;
           window._pendingDeadlineFCEvent = null;
@@ -35597,6 +35608,7 @@ See you soon!
         openEventModal({ fcEvent: info.event });
       },
       eventChange(info) {
+        if (!canEditProductionCalendar()) { info.revert(); return; }
         // Revert the drag immediately — show Move/Duplicate prompt instead
         info.revert();
         showMoveDupModal(info.oldEvent, info.event);
@@ -35717,9 +35729,11 @@ See you soon!
     }
     loadVenueSuggestions();
     // Wire drag-and-drop from legend items onto calendar dates
-    new FullCalendar.Draggable(document.getElementById('fc-legend'), {
-      itemSelector: '.fc-legend-item',
-    });
+    if (canEditCalendar) {
+      new FullCalendar.Draggable(document.getElementById('fc-legend'), {
+        itemSelector: '.fc-legend-item',
+      });
+    }
     const legend = document.getElementById('fc-legend');
     if (legend && !legend.dataset.tapBound) {
       legend.dataset.tapBound = '1';
@@ -35729,6 +35743,7 @@ See you soon!
 
   function handleCalendarLegendTap(event) {
     const item = event.target?.closest?.('.fc-legend-item');
+    if (!canEditProductionCalendar()) return;
     if (!item || !window.matchMedia('(max-width: 700px)').matches) return;
     event.preventDefault();
     const eventType = item.dataset.eventType || 'rehearsal';
@@ -35811,6 +35826,23 @@ See you soon!
     document.getElementById('ov-event-count').textContent = data ? data.length : 0;
   }
 
+  function canEditProductionCalendar() {
+    return !teamAccessMode || canEditPage(teamAccessMember?.id, prodId, 'production_calendar');
+  }
+
+  function applyProductionCalendarAccessState() {
+    const canEditCalendar = canEditProductionCalendar();
+    const panel = document.getElementById('panel-calendar');
+    if (panel) panel.classList.toggle('calendar-readonly', !canEditCalendar);
+    const addBtn = document.getElementById('calendar-add-event-btn');
+    if (addBtn) addBtn.style.display = canEditCalendar ? '' : 'none';
+    if (fcCalendar) {
+      fcCalendar.setOption('editable', canEditCalendar);
+      fcCalendar.setOption('selectable', canEditCalendar);
+      fcCalendar.setOption('droppable', canEditCalendar);
+    }
+  }
+
   // ── Event modal ────────────────────────────────────────
   // Convert a Date object or ISO string to datetime-local input format (YYYY-MM-DDTHH:MM)
   function toDateTimeLocal(val) {
@@ -35845,6 +35877,7 @@ See you soon!
   }
 
   function openEventModal(opts = {}) {
+    const isReadOnly = !canEditProductionCalendar();
     editingEventId = null;
     const modal = document.getElementById('event-modal');
     const saveBtn = document.getElementById('save-event-btn');
@@ -35858,6 +35891,7 @@ See you soon!
     document.getElementById('event-error').classList.remove('visible');
     saveBtn.textContent = 'Add to Calendar';
     delBtn.style.display = 'none';
+    saveBtn.style.display = isReadOnly ? 'none' : '';
 
     // Pre-fill from selection or existing event
     document.getElementById('ev-start').readOnly = false;
@@ -35872,7 +35906,7 @@ See you soon!
       editingEventId = ev.id;
       titleEl.textContent = isExistingDeadline ? 'Edit Deadline' : 'Edit Event';
       saveBtn.textContent = 'Save Changes';
-      delBtn.style.display = '';
+      delBtn.style.display = isReadOnly ? 'none' : '';
       document.getElementById('ev-title').value = ev.title || '';
       if (titleLabelEl) titleLabelEl.textContent = isExistingDeadline ? 'Deadline Title' : 'Event Title';
       if (typeLabelEl) typeLabelEl.textContent = isExistingDeadline ? 'Deadline department / area' : 'Event Type';
@@ -35895,6 +35929,7 @@ See you soon!
         document.getElementById('ev-venue').value = name;
       });
     } else {
+      if (isReadOnly) return;
       // New event, pre-fill dates if from a selection or drag
       const isDeadline = !!opts.isDeadline;
       const evType = isDeadline ? (opts.deadlineArea || 'event') : (opts.eventType || 'rehearsal');
@@ -35919,7 +35954,21 @@ See you soon!
     }
 
     modal.classList.add('open');
-    document.getElementById('ev-title').focus();
+    setEventModalReadOnly(isReadOnly);
+    if (!isReadOnly) document.getElementById('ev-title').focus();
+  }
+
+  function setEventModalReadOnly(isReadOnly) {
+    ['ev-title','ev-type','ev-start','ev-end','ev-deadline','ev-notes','ev-is-public','ev-cast-schedule'].forEach(id => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.disabled = !!isReadOnly;
+      if ('readOnly' in el) el.readOnly = !!isReadOnly;
+    });
+    const picker = document.getElementById('ev-venue-picker');
+    if (picker) picker.style.pointerEvents = isReadOnly ? 'none' : '';
+    const modeRow = document.getElementById('ev-mode-toggle-row');
+    if (modeRow && isReadOnly) modeRow.style.display = 'none';
   }
 
   function _defaultVenueForType(type) {
@@ -35998,6 +36047,7 @@ See you soon!
   });
 
   async function submitEventModal() {
+    if (!canEditProductionCalendar()) return;
     const title      = document.getElementById('ev-title').value.trim();
     const type       = document.getElementById('ev-type').value;
     const isDeadline = document.getElementById('ev-is-deadline').value === '1';
@@ -36067,6 +36117,7 @@ See you soon!
   }
 
   async function deleteCalEvent() {
+    if (!canEditProductionCalendar()) return;
     if (!editingEventId) return;
     if (!confirm('Delete this event?')) return;
     await sb.from('production_events').delete().eq('id', editingEventId);
@@ -36079,6 +36130,7 @@ See you soon!
   let _moveDupNew = null;  // new position data from drag
 
   function showMoveDupModal(oldEvent, newEvent) {
+    if (!canEditProductionCalendar()) return;
     _moveDupOld = oldEvent;
     _moveDupNew = newEvent;
     document.getElementById('move-dup-title').textContent = oldEvent.title;
@@ -36092,6 +36144,7 @@ See you soon!
   }
 
   async function confirmMoveDup(action) {
+    if (!canEditProductionCalendar()) return;
     document.getElementById('move-dup-modal').style.display = 'none';
     if (!_moveDupOld || !_moveDupNew) return;
 
@@ -36137,6 +36190,7 @@ See you soon!
   }
 
   async function saveEventChange(fcEvent) {
+    if (!canEditProductionCalendar()) return;
     const localISO = d => {
       if (!d) return null;
       const p = n => String(n).padStart(2, '0');
@@ -37683,6 +37737,7 @@ See you soon!
   ];
   const CREATIVE_TEAM_DEFAULT_PERMISSION_KEYS = [
     'overview',
+    'production_calendar',
     'auditions.schedule',
     'auditions.general',
     'auditions.dance_call',
@@ -37691,9 +37746,10 @@ See you soon!
     'auditions.final_casting',
     'cast_list',
   ];
-  const CREATIVE_AUDITION_LEADERSHIP_ROLES = new Set(['director', 'choreographer', 'vocal director']);
+  const CREATIVE_AUDITION_LEADERSHIP_ROLES = new Set(['director', 'choreographer', 'vocal_director']);
   const CREATIVE_AUDITION_LEADERSHIP_MENU_KEYS = [
     'overview',
+    'calendar',
     'auditions',
     'auditions:schedule',
     'auditions:sessions',
@@ -37703,6 +37759,7 @@ See you soon!
   ];
   const CREATIVE_AUDITION_LEADERSHIP_PERMISSION_KEYS = new Set([
     'overview',
+    'production_calendar',
     'auditions.schedule',
     'auditions.general',
     'auditions.dance_call',
@@ -37714,7 +37771,7 @@ See you soon!
 
   const TEAM_ACCESS_LEVELS = [
     { key: 'producer', label: 'Producer / full production access', menu: ['overview', 'team', 'volunteers', 'calendar', 'auditions', 'castlist', 'registration'] },
-    { key: 'creative', label: 'Artistic team notes', menu: ['overview', 'auditions', 'castlist'] },
+    { key: 'creative', label: 'Artistic team notes', menu: ['overview', 'calendar', 'auditions', 'castlist'] },
     { key: 'room', label: 'Audition room only', menu: ['auditions'] },
     { key: 'check_in', label: 'Check-in / front desk', menu: ['auditions'] },
     { key: 'schedule', label: 'Schedule support', menu: ['calendar', 'auditions'] },
@@ -37729,7 +37786,7 @@ See you soon!
   }
 
   function isCreativeAuditionLeadershipRole(role = '') {
-    return CREATIVE_AUDITION_LEADERSHIP_ROLES.has(String(role || '').trim().toLowerCase());
+    return CREATIVE_AUDITION_LEADERSHIP_ROLES.has(normalizeTeamRole(role));
   }
 
   function creativeAuditionLeadershipMenuSet() {
@@ -37742,6 +37799,7 @@ See you soon!
   }
 
   function creativeAuditionLeadershipPageAccessLevel(pageKey = '') {
+    if (String(pageKey || '') === 'production_calendar') return 'view';
     return CREATIVE_AUDITION_LEADERSHIP_PERMISSION_KEYS.has(String(pageKey || '')) ? 'manage' : 'none';
   }
 
@@ -38126,7 +38184,7 @@ See you soon!
             production_id: prodId,
             team_member_id: memberId,
             page_key: pageKey,
-            access_level: 'manage',
+            access_level: pageKey === 'production_calendar' ? 'view' : 'manage',
             granted_by: null,
             updated_at: now,
           });

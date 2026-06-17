@@ -59,6 +59,7 @@
     .pt-portal-icons { display: flex; gap: 0.3rem; flex-wrap: wrap; }
     .pt-portal-icon { width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
     .pt-status-active { display: inline-flex; align-items: center; gap: 0.3rem; font-size: 0.75rem; font-weight: 600; color: #3a8f5a; background: rgba(58,143,90,0.1); border-radius: 20px; padding: 0.2rem 0.65rem; }
+    .pt-status-pending { display: inline-flex; align-items: center; gap: 0.3rem; font-size: 0.75rem; font-weight: 600; color: #8a7aa4; background: #f4f2fb; border-radius: 20px; padding: 0.2rem 0.65rem; }
 
     /* ── Invitations panel ── */
     .pt-inv-card { display: flex; align-items: center; gap: 0.85rem; padding: 0.9rem 0; border-bottom: 1px solid #edeaf6; }
@@ -173,7 +174,6 @@
             <button class="pt-filter-pill" data-filter="cast" onclick="setPeopleFilter('cast',this)">Cast</button>
             <button class="pt-filter-pill" data-filter="volunteer" onclick="setPeopleFilter('volunteer',this)">Volunteer</button>
             <button class="pt-filter-pill" data-filter="dept_lead" onclick="setPeopleFilter('dept_lead',this)">Dept Lead</button>
-            <button class="pt-filter-pill" data-filter="treasurer" onclick="setPeopleFilter('treasurer',this)">Treasurer</button>
             <button class="pt-filter-pill" data-filter="team" onclick="setPeopleFilter('team',this)">Creative Team</button>
           </div>
           <div class="pt-table-wrap">
@@ -311,12 +311,24 @@
     ];
 
     const TREASURER_ROLE_KEY = 'Treasurer';
+    const PLANNED_DEPT_LEAD_ROLES = [
+      { dept: 'Backstage & Rehearsal Support', name: 'Stage Manager', default: 1 },
+      { dept: 'Front of House', name: 'Front of House Manager', default: 1 },
+      { dept: 'Front of House', name: 'Concession Manager', default: 1 },
+      { dept: 'Technical Crew', name: 'Lighting Designer / Technician', default: 1 },
+      { dept: 'Design & Construction', name: 'Lead Builder', default: 1 },
+      { dept: 'Design & Construction', name: 'Lead Set Painter', default: 1 },
+      { dept: 'Design & Construction', name: 'Lead Prop Person', default: 1 },
+      { dept: 'Costume & Makeup', name: 'Costume Designer', default: 1 },
+      { dept: 'Marketing & Publicity', name: 'Marketing Director', default: 1 },
+      { dept: 'Backstage & Rehearsal Support', name: 'Cast Party Coordinator', default: 1 },
+      { dept: 'Technical Crew', name: 'Sound / Audio Technician', default: 1 },
+    ];
 
     const PORTAL_DEFS = [
       { key: 'cast',       label: 'Cast Portal',     color: '#572e88', bg: '#f0ecfc', icon: castIcon() },
       { key: 'volunteer',  label: 'Volunteer Portal', color: '#769e7b', bg: '#e5f0e7', icon: volunteerIcon() },
       { key: 'dept_lead',  label: 'Department Lead',  color: '#dd8233', bg: '#fef4e2', icon: deptLeadIcon() },
-      { key: 'treasurer',  label: 'Treasurer',        color: '#ca7ea7', bg: '#fdf0f8', icon: treasurerIcon() },
       { key: 'team',       label: 'Creative Team',    color: '#476aaa', bg: '#e8f0f9', icon: teamIcon() },
     ];
 
@@ -350,7 +362,6 @@
     function volunteerIcon() { return `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/></svg>`; }
     function deptLeadIcon() { return `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>`; }
     function teamIcon() { return `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="15" rx="2"/><path d="M16 7V5a2 2 0 0 0-4 0v2"/><line x1="12" y1="12" x2="12" y2="16"/><line x1="10" y1="14" x2="14" y2="14"/></svg>`; }
-    function treasurerIcon() { return `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>`; }
 
     function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
@@ -368,6 +379,10 @@
       return `<div class="pt-portal-icon" style="width:${size}px;height:${size}px;background:${def.bg};color:${def.color}" title="${esc(def.label)}">${def.icon.replace('width="20" height="20"',`width="14" height="14"`)}</div>`;
     }
 
+    function normaliseRoleName(role = '') {
+      return String(role || '').trim().toLowerCase().replace(/&/g, 'and').replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim();
+    }
+
     // ── Data load ──────────────────────────────────────────────────────────────
     async function loadPortalsData(prodId, sb) {
       _prodId = prodId;
@@ -377,7 +392,7 @@
         sb.from('cast_members').select('id,name,email,headshot_url,state,character_name,registration_answers').eq('production_id', prodId).in('state', ['chosen','offer_accepted']),
         sb.from('volunteer_signups').select('id,name,email,role_name,status,portal_token,volunteer_passcode').eq('production_id', prodId).in('status', ['approved','checked_in','completed']),
         sb.from('production_team_members').select('id,name,email,role,access_level,is_active,passcode').eq('production_id', prodId).eq('is_active', true),
-        sb.from('productions').select('organizations(slug),slug').eq('id', prodId).maybeSingle(),
+        sb.from('productions').select('organizations(slug),slug,volunteer_staffing_plan').eq('id', prodId).maybeSingle(),
         sb.from('audition_bookings').select('email,portal_code').eq('production_id', prodId).not('portal_code', 'is', null),
       ]);
 
@@ -409,37 +424,73 @@
 
       const teamMembers = (teamRes.data || []).filter(m => PORTAL_TEAM_ROLE_KEYS.has(normaliseLevel(m)));
 
-      const deptLeads = volunteers.filter(v => DEPT_LEAD_ROLE_KEYS.includes(v.role_name || ''));
+      const deptLeadRoleSet = new Set(DEPT_LEAD_ROLE_KEYS.map(normaliseRoleName));
+      const deptLeads = volunteers.filter(v => deptLeadRoleSet.has(normaliseRoleName(v.role_name || '')));
       const treasurers = volunteers.filter(v => v.role_name === TREASURER_ROLE_KEY);
+      const plannedDeptLeadRoles = buildPlannedDeptLeadRoles(prodRes.data?.volunteer_staffing_plan || {});
 
-      renderPortalCards(cast, volunteers, deptLeads, treasurers, teamMembers);
-      buildPeopleList(cast, volunteers, deptLeads, treasurers, teamMembers, bookingCodes);
+      renderPortalCards(cast, volunteers, deptLeads, treasurers, teamMembers, plannedDeptLeadRoles);
+      buildPeopleList(cast, volunteers, deptLeads, treasurers, teamMembers, bookingCodes, plannedDeptLeadRoles);
+    }
+
+    function buildPlannedDeptLeadRoles(staffingPlan = {}) {
+      const planned = [];
+      PLANNED_DEPT_LEAD_ROLES.forEach((role, index) => {
+        const saved = staffingPlan[`dept_leads-${index}`] || {};
+        if (saved.hidden) return;
+        const count = Number(saved.count ?? role.default ?? 0);
+        if (count <= 0) return;
+        planned.push({
+          key: `dept_leads-${index}`,
+          roleName: saved.roleName || role.name,
+          department: saved.department || role.dept,
+        });
+      });
+      Object.entries(staffingPlan || {}).forEach(([key, saved]) => {
+        if (!key.startsWith('dept_leads-custom-') || !saved || saved.hidden) return;
+        const count = Number(saved.count ?? 0);
+        if (count <= 0 || !saved.roleName) return;
+        planned.push({
+          key,
+          roleName: saved.roleName,
+          department: saved.department || 'Other',
+        });
+      });
+      const seen = new Set();
+      return planned.filter(role => {
+        const key = normaliseRoleName(role.roleName);
+        if (!key || seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
     }
 
     // ── Portal cards ───────────────────────────────────────────────────────────
-    function renderPortalCards(cast, volunteers, deptLeads, treasurers, teamMembers) {
+    function renderPortalCards(cast, volunteers, deptLeads, treasurers, teamMembers, plannedDeptLeadRoles = []) {
+      const assignedDeptLeadRoleNames = new Set([...deptLeads, ...treasurers].flatMap(v => {
+        const roles = Array.isArray(v._roles) && v._roles.length ? v._roles : [v.role_name];
+        return roles.map(normaliseRoleName).filter(Boolean);
+      }));
+      const unassignedPlannedCount = plannedDeptLeadRoles.filter(role => !assignedDeptLeadRoleNames.has(normaliseRoleName(role.roleName))).length;
+      const deptLeadPortalCount = deptLeads.length + treasurers.length + unassignedPlannedCount;
       const counts = {
         cast:       cast.length,
         volunteer:  volunteers.length,
-        dept_lead:  deptLeads.length,
-        treasurer:  treasurers.length,
+        dept_lead:  deptLeadPortalCount,
         team:       teamMembers.length,
       };
 
       const el = document.getElementById('pt-cards-row');
       el.innerHTML = PORTAL_DEFS.map(def => {
         const count = counts[def.key] || 0;
-        const isTreasurer = def.key === 'treasurer';
-        const emptyLabel = isTreasurer ? 'Waiting to be added' : 'No active users';
-        return `<div class="pt-card${isTreasurer && count === 0 ? ' pt-card-waiting' : ''}" onclick="setPeopleFilter('${def.key}', document.querySelector('[data-filter=${def.key}]'))" id="pt-card-${def.key}">
+        const emptyLabel = 'No active users';
+        const countLabel = def.key === 'dept_lead' ? 'Roles' : 'Active';
+        return `<div class="pt-card" onclick="setPeopleFilter('${def.key}', document.querySelector('[data-filter=${def.key}]'))" id="pt-card-${def.key}">
           <div class="pt-card-icon" style="background:${def.bg};color:${def.color}">${def.icon}</div>
           <div class="pt-card-body">
             <div class="pt-card-name">${esc(def.label)}</div>
-            ${isTreasurer && count === 0
-              ? `<div class="pt-card-waiting-label">Waiting to be added</div>`
-              : `<div class="pt-card-count">${count}<span>Active</span></div>
-                 <div class="pt-card-status">${count === 0 ? emptyLabel : `View all ${count}`}</div>`
-            }
+            <div class="pt-card-count">${count}<span>${countLabel}</span></div>
+            <div class="pt-card-status">${count === 0 ? emptyLabel : `View all ${count}`}</div>
           </div>
           <span class="pt-card-arrow">›</span>
         </div>`;
@@ -456,9 +507,13 @@
     }
 
     // ── Build unified people list ──────────────────────────────────────────────
-    function buildPeopleList(cast, volunteers, deptLeads, treasurers, teamMembers, bookingCodes = new Map()) {
+    function buildPeopleList(cast, volunteers, deptLeads, treasurers, teamMembers, bookingCodes = new Map(), plannedDeptLeadRoles = []) {
       const deptLeadEmails = new Set(deptLeads.map(d => (d.email||'').toLowerCase()));
       const treasurerEmails = new Set(treasurers.map(t => (t.email||'').toLowerCase()));
+      const assignedDeptLeadRoles = new Set([...deptLeads, ...treasurers].flatMap(v => {
+        const roles = Array.isArray(v._roles) && v._roles.length ? v._roles : [v.role_name];
+        return roles.map(normaliseRoleName).filter(Boolean);
+      }));
       const people = [];
 
       // Cast
@@ -517,12 +572,29 @@
           headshot: '',
           roleLabel: 'Treasurer',
           roleColor: '#ca7ea7', roleBg: '#fdf0f8',
-          portals: ['treasurer'],
-          filterKeys: ['treasurer'],
+          portals: ['volunteer','dept_lead'],
+          filterKeys: ['dept_lead'],
           source: 'treasurer',
           data: v,
         });
       });
+
+      plannedDeptLeadRoles
+        .filter(role => !assignedDeptLeadRoles.has(normaliseRoleName(role.roleName)))
+        .forEach(role => {
+          people.push({
+            name: '',
+            email: '',
+            headshot: '',
+            roleLabel: role.roleName,
+            roleColor: '#dd8233', roleBg: '#fef4e2',
+            portals: ['dept_lead'],
+            filterKeys: ['dept_lead'],
+            source: 'dept_lead_planned',
+            statusLabel: 'Not assigned',
+            data: role,
+          });
+        });
 
       // Team members (producer, director, vocal director, choreographer)
       const teamDef = PORTAL_DEFS.find(d => d.key === 'team');
@@ -586,20 +658,24 @@
           const def = PORTAL_DEFS.find(d => d.key === pk);
           return def ? portalIconHTML(def) : '';
         }).join('');
+        const hasPerson = !!String(p.name || p.email || '').trim();
+        const statusLabel = p.statusLabel || 'Active';
+        const statusClass = statusLabel === 'Active' ? 'pt-status-active' : 'pt-status-pending';
+        const statusDot = statusLabel === 'Active' ? '#3a8f5a' : '#8a7aa4';
 
         return `<tr>
           <td>
             <div style="display:flex;align-items:center;gap:0.65rem">
-              ${avatarHTML(p.name, p.headshot)}
+              ${hasPerson ? avatarHTML(p.name, p.headshot) : '<div class="pt-avatar" style="background:#f4f2fb;color:#b0a8c8">--</div>'}
               <div>
-                <div style="font-weight:700;font-size:0.86rem;color:#1a1530">${esc(p.name)}</div>
-                <div style="font-size:0.72rem;color:#a89ec0">${esc(p.email)}</div>
+                <div style="font-weight:700;font-size:0.86rem;color:${hasPerson ? '#1a1530' : '#8a7aa4'}">${hasPerson ? esc(p.name) : 'Unassigned'}</div>
+                <div style="font-size:0.72rem;color:#a89ec0">${hasPerson ? esc(p.email) : 'No portal user attached yet'}</div>
               </div>
             </div>
           </td>
           <td><span class="pt-role-badge" style="background:${p.roleBg};color:${p.roleColor}">${esc(p.roleLabel)}</span></td>
           <td><div class="pt-portal-icons">${portalIcons}</div></td>
-          <td><span class="pt-status-active"><svg width="7" height="7" viewBox="0 0 8 8"><circle cx="4" cy="4" r="4" fill="#3a8f5a"/></svg>Active</span></td>
+          <td><span class="${statusClass}"><svg width="7" height="7" viewBox="0 0 8 8"><circle cx="4" cy="4" r="4" fill="${statusDot}"/></svg>${esc(statusLabel)}</span></td>
           <td>
             <div style="position:relative">
               <button onclick="event.stopPropagation();openPreviewModal(${idx})" style="border:1.5px solid #edeaf6;background:#fff;cursor:pointer;border-radius:8px;color:#572e88;font-size:0.75rem;font-weight:700;padding:0.25rem 0.65rem;white-space:nowrap" onmouseover="this.style.background='#f0ecfc'" onmouseout="this.style.background='#fff'">View Portal</button>
@@ -624,8 +700,9 @@
       const person = _visiblePeople[idx];
       if (!person) return;
 
-      document.getElementById('pt-modal-title').textContent = person.name + ' — Portal Preview';
-      document.getElementById('pt-modal-sub').textContent = person.email;
+      const previewTitle = person.name || person.roleLabel || 'Portal';
+      document.getElementById('pt-modal-title').textContent = previewTitle + ' — Portal Preview';
+      document.getElementById('pt-modal-sub').textContent = person.email || (person.statusLabel || '');
 
       const body = document.getElementById('pt-modal-body');
       const iframeSrc = portalIframeSrc(person);
@@ -640,10 +717,13 @@
           const def = PORTAL_DEFS.find(d => d.key === 'cast');
           portalLabel = 'Cast Portal'; portalColor = def.color; portalBg = def.bg; portalIcon = def.icon;
           portalUrl = `${window.location.origin}/${encodeURIComponent(_orgSlug)}/${encodeURIComponent(_showSlug)}/portal`;
-        } else if (src === 'volunteer' || src === 'dept_lead') {
-          const def = PORTAL_DEFS.find(d => d.key === 'volunteer');
-          portalLabel = 'Volunteer Portal'; portalColor = def.color; portalBg = def.bg; portalIcon = def.icon;
-          portalUrl = `${window.location.origin}/${encodeURIComponent(_orgSlug)}/${encodeURIComponent(_showSlug)}/volunteers`;
+        } else if (src === 'volunteer' || src === 'dept_lead' || src === 'dept_lead_planned' || src === 'treasurer') {
+          const def = PORTAL_DEFS.find(d => d.key === (src === 'volunteer' ? 'volunteer' : 'dept_lead'));
+          portalLabel = src === 'volunteer' ? 'Volunteer Portal' : 'Department Lead Portal';
+          portalColor = def.color; portalBg = def.bg; portalIcon = def.icon;
+          portalUrl = src === 'treasurer'
+            ? `${window.location.origin}/${encodeURIComponent(_orgSlug)}/${encodeURIComponent(_showSlug)}/treasurer`
+            : `${window.location.origin}/${encodeURIComponent(_orgSlug)}/${encodeURIComponent(_showSlug)}/volunteers`;
         } else {
           const def = PORTAL_DEFS.find(d => d.key === 'team');
           portalLabel = 'Team Portal'; portalColor = def.color; portalBg = def.bg; portalIcon = def.icon;
