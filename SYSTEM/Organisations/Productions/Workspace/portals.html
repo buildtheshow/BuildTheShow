@@ -55,7 +55,8 @@
     .pt-table tbody tr { transition: background 0.1s; }
     .pt-table tbody tr:hover { background: #faf9fd; }
     .pt-avatar { width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.65rem; font-weight: 700; flex-shrink: 0; }
-    .pt-role-badge { display: inline-flex; align-items: center; padding: 0.22rem 0.65rem; border-radius: 20px; font-size: 0.72rem; font-weight: 600; white-space: nowrap; }
+    .pt-role-badge { display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.22rem 0.65rem; border-radius: 20px; border: 1.5px solid var(--pt-role-border, transparent); font-size: 0.72rem; font-weight: 700; white-space: nowrap; }
+    .pt-role-dot { width: 0.45rem; height: 0.45rem; border-radius: 50%; background: currentColor; flex-shrink: 0; }
     .pt-portal-icons { display: flex; gap: 0.3rem; flex-wrap: wrap; }
     .pt-portal-icon { width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
     .pt-status-active { display: inline-flex; align-items: center; gap: 0.3rem; font-size: 0.75rem; font-weight: 600; color: #3a8f5a; background: rgba(58,143,90,0.1); border-radius: 20px; padding: 0.2rem 0.65rem; }
@@ -324,6 +325,15 @@
       { dept: 'Backstage & Rehearsal Support', name: 'Cast Party Coordinator', default: 1 },
       { dept: 'Technical Crew', name: 'Sound / Audio Technician', default: 1 },
     ];
+    const DEPT_ROLE_PALETTES = {
+      'Front of House': { color: '#476aaa', bg: '#e8f0f9', border: '#c8d8ef' },
+      'Backstage & Rehearsal Support': { color: '#dd8233', bg: '#fef4e2', border: '#f4d6aa' },
+      'Technical Crew': { color: '#d1523d', bg: '#fce9e5', border: '#efc1ba' },
+      'Design & Construction': { color: '#769e7b', bg: '#e5f0e7', border: '#c8dbc9' },
+      'Costume & Makeup': { color: '#3f7899', bg: '#e4f4f7', border: '#bfe2e9' },
+      'Marketing & Publicity': { color: '#9a6200', bg: '#fff1bf', border: '#f4d46d' },
+      'Finance': { color: '#9a4f78', bg: '#fdf0f8', border: '#efc8dd' },
+    };
 
     const PORTAL_DEFS = [
       { key: 'cast',       label: 'Cast Portal',     color: '#572e88', bg: '#f0ecfc', icon: castIcon() },
@@ -383,6 +393,39 @@
       return String(role || '').trim().toLowerCase().replace(/&/g, 'and').replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim();
     }
 
+    function normaliseDepartmentName(dept = '') {
+      const raw = String(dept || '').trim();
+      const key = normaliseRoleName(raw);
+      if (!key) return '';
+      if (key === 'design construction crew') return 'Design & Construction';
+      if (key === 'costume makeup department') return 'Costume & Makeup';
+      if (key === 'production rehearsal support') return 'Backstage & Rehearsal Support';
+      return Object.keys(DEPT_ROLE_PALETTES).find(name => normaliseRoleName(name) === key) || raw;
+    }
+
+    function departmentForRole(roleName = '', explicitDept = '') {
+      const dept = normaliseDepartmentName(explicitDept);
+      if (dept && DEPT_ROLE_PALETTES[dept]) return dept;
+      const roleKey = normaliseRoleName(roleName);
+      const planned = PLANNED_DEPT_LEAD_ROLES.find(role => normaliseRoleName(role.name) === roleKey);
+      if (planned) return planned.dept;
+      if (/front|house|usher|concession|ticket|baker|treat|lobby/.test(roleKey)) return 'Front of House';
+      if (/stage manager|backstage|rehearsal|wrangler|quick change|cast party/.test(roleKey)) return 'Backstage & Rehearsal Support';
+      if (/tech|lighting|sound|audio|spot|mic/.test(roleKey)) return 'Technical Crew';
+      if (/set|build|paint|prop|strike|construction/.test(roleKey)) return 'Design & Construction';
+      if (/costume|makeup|hair|wig|wardrobe|laundry|wash/.test(roleKey)) return 'Costume & Makeup';
+      if (/market|photo|video|social|program|programme|poster|promo|publicity|graphic/.test(roleKey)) return 'Marketing & Publicity';
+      if (/treasurer|finance|financial/.test(roleKey)) return 'Finance';
+      return '';
+    }
+
+    function roleStyleFor(roleName, explicitDept, fallbackColor = '#572e88', fallbackBg = '#f0ecfc') {
+      const dept = departmentForRole(roleName, explicitDept);
+      const palette = DEPT_ROLE_PALETTES[dept];
+      if (palette) return { ...palette, department: dept };
+      return { color: fallbackColor, bg: fallbackBg, border: fallbackBg, department: '' };
+    }
+
     // ── Data load ──────────────────────────────────────────────────────────────
     async function loadPortalsData(prodId, sb) {
       _prodId = prodId;
@@ -390,7 +433,7 @@
 
       const [castRes, volRes, teamRes, prodRes, bookingsRes] = await Promise.all([
         sb.from('cast_members').select('id,name,email,headshot_url,state,character_name,registration_answers').eq('production_id', prodId).in('state', ['chosen','offer_accepted']),
-        sb.from('volunteer_signups').select('id,name,email,role_name,status,portal_token,volunteer_passcode').eq('production_id', prodId).in('status', ['approved','checked_in','completed']),
+        sb.from('volunteer_signups').select('id,name,email,role_name,department,status,portal_token,volunteer_passcode').eq('production_id', prodId).in('status', ['approved','checked_in','completed']),
         sb.from('production_team_members').select('id,name,email,role,access_level,is_active,passcode').eq('production_id', prodId).eq('is_active', true),
         sb.from('productions').select('organizations(slug),slug,volunteer_staffing_plan').eq('id', prodId).maybeSingle(),
         sb.from('audition_bookings').select('email,portal_code').eq('production_id', prodId).not('portal_code', 'is', null),
@@ -551,12 +594,13 @@
       // Dept leads
       deptLeads.forEach(v => {
         const role = (v._roles && v._roles.length ? v._roles.join(', ') : v.role_name) || 'Dept Lead';
+        const style = roleStyleFor(role, v.department, '#dd8233', '#fef4e2');
         people.push({
           name: v.name || 'Unknown',
           email: v.email || '',
           headshot: '',
           roleLabel: role,
-          roleColor: '#dd8233', roleBg: '#fef4e2',
+          roleColor: style.color, roleBg: style.bg, roleBorder: style.border, roleDepartment: style.department,
           portals: ['volunteer','dept_lead'],
           filterKeys: ['dept_lead'],
           source: 'dept_lead',
@@ -566,12 +610,13 @@
 
       // Treasurer
       treasurers.forEach(v => {
+        const style = roleStyleFor('Treasurer', 'Finance', '#ca7ea7', '#fdf0f8');
         people.push({
           name: v.name || 'Unknown',
           email: v.email || '',
           headshot: '',
           roleLabel: 'Treasurer',
-          roleColor: '#ca7ea7', roleBg: '#fdf0f8',
+          roleColor: style.color, roleBg: style.bg, roleBorder: style.border, roleDepartment: style.department,
           portals: ['volunteer','dept_lead'],
           filterKeys: ['dept_lead'],
           source: 'treasurer',
@@ -582,12 +627,13 @@
       plannedDeptLeadRoles
         .filter(role => !assignedDeptLeadRoles.has(normaliseRoleName(role.roleName)))
         .forEach(role => {
+          const style = roleStyleFor(role.roleName, role.department, '#dd8233', '#fef4e2');
           people.push({
             name: '',
             email: '',
             headshot: '',
             roleLabel: role.roleName,
-            roleColor: '#dd8233', roleBg: '#fef4e2',
+            roleColor: style.color, roleBg: style.bg, roleBorder: style.border, roleDepartment: style.department,
             portals: ['dept_lead'],
             filterKeys: ['dept_lead'],
             source: 'dept_lead_planned',
@@ -673,7 +719,7 @@
               </div>
             </div>
           </td>
-          <td><span class="pt-role-badge" style="background:${p.roleBg};color:${p.roleColor}">${esc(p.roleLabel)}</span></td>
+          <td><span class="pt-role-badge" style="background:${p.roleBg};color:${p.roleColor};--pt-role-border:${p.roleBorder || 'transparent'}"><span class="pt-role-dot" aria-hidden="true"></span>${esc(p.roleLabel)}</span></td>
           <td><div class="pt-portal-icons">${portalIcons}</div></td>
           <td><span class="${statusClass}"><svg width="7" height="7" viewBox="0 0 8 8"><circle cx="4" cy="4" r="4" fill="${statusDot}"/></svg>${esc(statusLabel)}</span></td>
           <td>
