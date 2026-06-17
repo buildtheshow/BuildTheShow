@@ -108,9 +108,12 @@
     .st-section-block:first-child { padding-top: 0; border-top: 0; }
     .st-avail-group { margin-bottom: 1rem; }
     .st-avail-group-label { font-size: 0.76rem; font-weight: 800; color: #000000; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 0.45rem; }
-    .st-avail-chips { display: flex; flex-wrap: wrap; gap: 0.45rem; }
-    .st-avail-chip { border: 1.5px solid #ebe6f1; border-radius: 999px; background: #fff; color: #000000; padding: 0.42rem 0.7rem; font-size: 0.76rem; font-weight: 700; font-family: var(--bts-font); cursor: pointer; }
+    .st-avail-chips { display: flex; flex-wrap: wrap; gap: 0.55rem; }
+    .st-avail-chip { border: 1.5px solid #ebe6f1; border-radius: 14px; background: #fff; color: #000000; padding: 0.5rem 0.72rem; font-size: 0.76rem; font-weight: 700; font-family: var(--bts-font); cursor: pointer; text-align: left; display: flex; flex-direction: column; gap: 0.12rem; line-height: 1.12; min-width: 9.5rem; }
     .st-avail-chip.conflict { background: #f9e9e7; border-color: #d1523d; color: #d1523d; }
+    .st-avail-chip-date { font-size: 0.76rem; font-weight: 950; }
+    .st-avail-chip-title { font-size: 0.62rem; font-weight: 850; color: #572e88; text-transform: uppercase; letter-spacing: 0.04em; overflow-wrap: anywhere; }
+    .st-avail-chip.conflict .st-avail-chip-title { color: #d1523d; }
     .st-empty-note { text-align: center; padding: 1.5rem; color: #572e88; font-size: 0.85rem; }
     .st-review-top { display: flex; flex-direction: row; gap: 0.75rem; align-items: flex-start; margin-bottom: 0.6rem; }
     .st-review-top-right { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.6rem; }
@@ -838,7 +841,7 @@
         const rowId = stSafeId(ev.id);
         const btn = document.getElementById('stdc-' + rowId);
         if (btn?.getAttribute('aria-pressed') === 'true') {
-          nextConflicts[ev.id] = { conflict: true, title: ev.title || '', date: ev.start_time ? ev.start_time.slice(0, 10) : '' };
+          nextConflicts[ev.id] = { conflict: true, title: stEventPurposeLabel(ev), date: ev.start_time ? ev.start_time.slice(0, 10) : '' };
         }
       });
       _stState.date_conflicts = nextConflicts;
@@ -1158,7 +1161,11 @@
       events.forEach(ev => {
         const rowId = stSafeId(ev.id);
         const isConflict = !!_stState.date_conflicts?.[ev.id]?.conflict;
-        html += `<button type="button" class="st-avail-chip${isConflict ? ' conflict' : ''}" id="stdc-${rowId}" aria-pressed="${isConflict ? 'true' : 'false'}" onclick="stToggleConflictMark('${rowId}')">${esc(stDateLabel(ev.start_time))}</button>`;
+        const purpose = stEventPurposeLabel(ev);
+        html += `<button type="button" class="st-avail-chip${isConflict ? ' conflict' : ''}" id="stdc-${rowId}" aria-pressed="${isConflict ? 'true' : 'false'}" onclick="stToggleConflictMark('${rowId}')">
+          <span class="st-avail-chip-date">${esc(stDateLabel(ev.start_time))}</span>
+          <span class="st-avail-chip-title">${esc(purpose)}</span>
+        </button>`;
       });
       html += '</div></div></div>';
     });
@@ -1365,6 +1372,28 @@
     const dt = new Date(String(raw).slice(0, 10) + 'T12:00:00');
     if (Number.isNaN(dt.getTime())) return String(raw).slice(0, 10);
     return dt.toLocaleDateString('en-CA', { weekday: 'short', month: 'short', day: 'numeric' });
+  }
+
+  const ST_EVENT_TYPE_LABELS = {
+    audition: 'Audition',
+    dance_call: 'Dance Call',
+    callback: 'Callback',
+    other_audition: 'Audition',
+    rehearsal: 'Rehearsal',
+    music_rehearsal: 'Music Rehearsal',
+    choreography: 'Choreography',
+    tech: 'Tech',
+    dress: 'Dress Rehearsal',
+    performance: 'Performance',
+    event: 'Event',
+    meeting: 'Meeting',
+    strike: 'Strike',
+    costume_moveout: 'Costume Move-Out',
+    cast_party: 'Cast Party',
+  };
+
+  function stEventPurposeLabel(ev = {}) {
+    return String(ev.title || ST_EVENT_TYPE_LABELS[ev.event_type] || ev.event_type || 'Event').trim();
   }
 
   function stStartDotsAnim(btn, base) {
