@@ -237,7 +237,7 @@
   }
 
   window.loadProductionSidebar = function (activeGroup, activePage) {
-    const key = 'bts-prod-sidebar-v28';
+    const key = 'bts-prod-sidebar-v29';
     const cached = sessionStorage.getItem(key);
     const host = document.getElementById('prod-sidebar-host');
     if (!host) return;
@@ -264,7 +264,7 @@
 
     if (cached) applyAndInit(cached);
 
-    fetch('/SHARED/Navigation/production-sidebar.html?v=sidebar-v55-20260617')
+    fetch('/SHARED/Navigation/production-sidebar.html?v=sidebar-v56-20260617')
       .then(function (res) { return res.text(); })
       .then(function (html) {
         sessionStorage.setItem(key, html);
