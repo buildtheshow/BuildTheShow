@@ -1168,7 +1168,7 @@
             '</div>' +
           '</div>' +
           '<div class="spn-dashboard-metrics">' +
-            '<section class="spn-dashboard-metric spn-dashboard-metric--purple">' +
+            '<section class="spn-dashboard-metric spn-dashboard-metric--light-blue">' +
               '<img class="spn-dashboard-metric-icon" src="/ASSETS/Images/Icons/Budgeting-Fundraising.svg" alt="" />' +
               '<div class="spn-dashboard-metric-label">Revenue</div>' +
               '<div class="spn-dashboard-metric-value" id="spn-dashboard-revenue">--</div>' +
