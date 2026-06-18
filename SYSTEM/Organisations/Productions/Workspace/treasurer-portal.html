@@ -247,6 +247,13 @@
 
   function esc(s) { const d = document.createElement('div'); d.textContent = String(s ?? ''); return d.innerHTML; }
 
+  function trVolunteerPasscode(email, productionId) {
+    const str = (email || '').toLowerCase().trim() + (productionId || '');
+    let h = 0;
+    for (let i = 0; i < str.length; i++) h = Math.imul(31, h) + str.charCodeAt(i) | 0;
+    return String(Math.abs(h) % 900000 + 100000);
+  }
+
   // ── Auth ───────────────────────────────────────────────────────────────────
 
   async function trLogin() {
@@ -270,15 +277,15 @@
 
       const { data: vol, error: volErr } = await sb
         .from('volunteer_signups')
-        .select('id,name,email,role_name,production_id')
+        .select('id,name,email,role_name,production_id,volunteer_passcode')
         .eq('production_id', _prodId)
         .eq('email', email)
-        .eq('volunteer_passcode', code)
         .eq('role_name', 'Treasurer')
         .in('status', ['approved','checked_in','completed'])
         .maybeSingle();
 
-      if (volErr || !vol) { errEl.textContent = 'That email and code did not match. Contact your production team.'; return; }
+      const expectedCode = String(vol?.volunteer_passcode || '').trim() || trVolunteerPasscode(email, _prodId);
+      if (volErr || !vol || expectedCode !== code) { errEl.textContent = 'That email and code did not match. Contact your production team.'; return; }
 
       sessionStorage.setItem('bts_treasurer_session', JSON.stringify({ email, code, prodId: _prodId }));
       bootPortal();

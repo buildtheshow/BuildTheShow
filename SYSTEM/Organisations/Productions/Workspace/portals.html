@@ -583,6 +583,28 @@
       return labels.join(' · ');
     }
 
+    function mergePersonData(existingData = {}, nextData = {}) {
+      const merged = { ...(nextData || {}), ...(existingData || {}) };
+      ['volunteer_passcode', 'passcode', 'portal_token', '_portal_code'].forEach(key => {
+        if (!merged[key] && nextData?.[key]) merged[key] = nextData[key];
+        if (!merged[key] && existingData?.[key]) merged[key] = existingData[key];
+      });
+      return merged;
+    }
+
+    function volunteerPasscodeForPortal(email, productionId) {
+      const str = (email || '').toLowerCase().trim() + (productionId || '');
+      let h = 0;
+      for (let i = 0; i < str.length; i++) h = Math.imul(31, h) + str.charCodeAt(i) | 0;
+      return String(Math.abs(h) % 900000 + 100000);
+    }
+
+    function personVolunteerPasscode(person = {}) {
+      const stored = String(person.data?.volunteer_passcode || '').trim();
+      const email = person.data?.email || person.email;
+      return stored || (email && _prodId ? volunteerPasscodeForPortal(email, _prodId) : '');
+    }
+
     function peopleMergeKey(person = {}) {
       if (person.statusLabel === 'Not assigned') return '';
       const email = String(person.email || '').trim().toLowerCase();
@@ -609,7 +631,12 @@
         if (!existing.email && person.email) existing.email = person.email;
         if (!existing.name && person.name) existing.name = person.name;
         existing.sources = mergeUniqueValues(existing.sources || [existing.source], person.sources || [person.source]);
-        existing.dataBySource = { ...(existing.dataBySource || { [existing.source]: existing.data }), [person.source]: person.data };
+        const dataBySource = { ...(existing.dataBySource || { [existing.source]: existing.data }) };
+        dataBySource[person.source] = dataBySource[person.source]
+          ? mergePersonData(dataBySource[person.source], person.data)
+          : person.data;
+        existing.dataBySource = dataBySource;
+        if (existing.source === person.source) existing.data = mergePersonData(existing.data, person.data);
       });
       return merged;
     }
@@ -621,6 +648,9 @@
         const roles = Array.isArray(v._roles) && v._roles.length ? v._roles : [v.role_name];
         return roles.map(normaliseRoleName).filter(Boolean);
       }));
+      if (boardMembers.some(m => normaliseRoleName(m.title) === normaliseRoleName(TREASURER_ROLE_KEY))) {
+        assignedDeptLeadRoles.add(normaliseRoleName(TREASURER_ROLE_KEY));
+      }
       const assignedOrgMemberRoles = new Set(boardMembers.map(m => normaliseRoleName(m.title)).filter(Boolean));
       const people = [];
 
@@ -738,7 +768,7 @@
           roleLabel: m.title || 'Organisation Member',
           roleColor: def.color, roleBg: isTreasurerMember ? DEPT_ROLE_PALETTES.Finance.bg : '#ecebea', roleBorder: isTreasurerMember ? DEPT_ROLE_PALETTES.Finance.border : '#d7d3d0',
           portals: [isTreasurerMember ? 'treasurer' : 'board'],
-          filterKeys: ['board'],
+          filterKeys: isTreasurerMember ? ['board', 'dept_lead'] : ['board'],
           source: isTreasurerMember ? 'treasurer' : 'board',
           data: m,
         });
@@ -916,7 +946,7 @@
       // Treasurer: load restricted financial portal
       if (person.source === 'treasurer') {
         const email    = person.data?.email || person.email;
-        const passcode = person.data?.volunteer_passcode;
+        const passcode = personVolunteerPasscode(person);
         if (email && passcode && _orgSlug && _showSlug) {
           return `${window.location.origin}/${encodeURIComponent(_orgSlug)}/${encodeURIComponent(_showSlug)}/treasurer?pvw_email=${encodeURIComponent(email)}&pvw_code=${encodeURIComponent(passcode)}`;
         }
@@ -924,7 +954,7 @@
       // Volunteer / dept lead: load their full portal at /{org}/{show}/portal with preview auto-login
       if (person.source === 'volunteer' || person.source === 'dept_lead') {
         const email    = person.data?.email || person.email;
-        const passcode = person.data?.volunteer_passcode;
+        const passcode = personVolunteerPasscode(person);
         if (email && passcode && _orgSlug && _showSlug) {
           return `${window.location.origin}/${encodeURIComponent(_orgSlug)}/${encodeURIComponent(_showSlug)}/portal?pvw_email=${encodeURIComponent(email)}&pvw_code=${encodeURIComponent(passcode)}`;
         }
