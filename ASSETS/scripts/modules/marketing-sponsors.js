@@ -187,13 +187,16 @@
     return '<div class="spn-adpkg-list">' + sizes.map(function (s, i) {
       var color       = colors[i % colors.length];
       var dimsDisplay = String(s.dims || '').replace(/['"]/g, '').replace(/[xX]/, '″ x ') + '″';
+      var priceParts  = [];
+      if (s.colour_enabled !== false) priceParts.push('<div class="spn-tile-info-row"><span class="spn-tile-info-label">Colour</span> $' + s.colour + '</div>');
+      if (s.bw_enabled !== false) priceParts.push('<div class="spn-tile-info-row"><span class="spn-tile-info-label">B&amp;W</span> $' + s.bw + '</div>');
       return renderer('brand.tile.lane', {
         esc:             esc,
         color:           color,
         ink:             '#ffffff',
         kicker:          'Ad Size',
         title:           s.label,
-        anchorBodyHtml:  '<div class="template-brand-tile-body"><div class="spn-tile-info-row"><span class="spn-tile-info-label">Size</span> ' + esc(dimsDisplay) + '</div><div class="spn-tile-info-row"><span class="spn-tile-info-label">Colour</span> $' + s.colour + '</div><div class="spn-tile-info-row"><span class="spn-tile-info-label">B&amp;W</span> $' + s.bw + '</div></div>',
+        anchorBodyHtml:  '<div class="template-brand-tile-body"><div class="spn-tile-info-row"><span class="spn-tile-info-label">Size</span> ' + esc(dimsDisplay) + '</div>' + priceParts.join('') + '</div>',
         anchorFooterHtml:'<button class="template-brand-tile-button" onclick="MarketingSponsorsModule.editAdSize(' + i + ')">Edit</button>',
         cardsHtml:       renderAdSlotCards(s.id, s.dims),
       });
@@ -473,21 +476,28 @@
     }).join('');
     if (!a && defaultSizeId) sizeSel.value = defaultSizeId;
 
-    document.getElementById('spn-ad-type').value     = (a && a.ad_type)        || 'colour';
+    var typeSel = document.getElementById('spn-ad-type');
     document.getElementById('spn-ad-price').value    = a ? ((a.price_cents || 0) / 100).toFixed(2) : '';
     document.getElementById('spn-ad-payment').value  = (a && a.payment_status)  || 'unpaid';
     document.getElementById('spn-ad-artwork').value  = (a && a.artwork_status)  || 'missing';
     document.getElementById('spn-ad-approval').value = (a && a.approval_status) || 'pending';
     document.getElementById('spn-ad-notes').value    = (a && a.notes)           || '';
 
-    function autofillPrice() {
-      if (document.getElementById('spn-ad-price').value) return;
-      var sz   = SpnsState.settings.adSizes.find(function (x) { return x.id === sizeSel.value; });
-      var type = document.getElementById('spn-ad-type').value;
-      if (sz) document.getElementById('spn-ad-price').value = (type === 'bw' ? sz.bw : sz.colour).toFixed(2);
+    function syncTypeOptions(preferredType) {
+      var sz = SpnsState.settings.adSizes.find(function (x) { return x.id === sizeSel.value; });
+      var choices = [];
+      if (!sz || sz.colour_enabled !== false) choices.push({ value: 'colour', label: 'Colour' });
+      if (!sz || sz.bw_enabled !== false) choices.push({ value: 'bw', label: 'Black & White' });
+      typeSel.innerHTML = choices.map(function (choice) { return '<option value="' + choice.value + '">' + choice.label + '</option>'; }).join('');
+      if (choices.some(function (choice) { return choice.value === preferredType; })) typeSel.value = preferredType;
     }
-    sizeSel.onchange = autofillPrice;
-    document.getElementById('spn-ad-type').onchange = autofillPrice;
+    function autofillPrice() {
+      var sz = SpnsState.settings.adSizes.find(function (x) { return x.id === sizeSel.value; });
+      if (sz) document.getElementById('spn-ad-price').value = (typeSel.value === 'bw' ? sz.bw : sz.colour).toFixed(2);
+    }
+    syncTypeOptions((a && a.ad_type) || 'colour');
+    sizeSel.onchange = function () { syncTypeOptions(typeSel.value); autofillPrice(); };
+    typeSel.onchange = autofillPrice;
     if (!a && defaultSizeId) autofillPrice();
     document.getElementById('spn-ad-modal').classList.add('open');
   }
@@ -495,6 +505,12 @@
 
   function saveAd() {
     if (!document.getElementById('spn-ad-size').value) { alert('Please select an ad size.'); return; }
+    var selectedSize = SpnsState.settings.adSizes.find(function (size) { return size.id === document.getElementById('spn-ad-size').value; });
+    var selectedType = document.getElementById('spn-ad-type').value;
+    if (selectedSize && ((selectedType === 'colour' && selectedSize.colour_enabled === false) || (selectedType === 'bw' && selectedSize.bw_enabled === false))) {
+      alert('That format is not offered for this ad size.');
+      return;
+    }
     var id = document.getElementById('spn-ad-id').value;
     var payload = {
       business_id:     document.getElementById('spn-ad-biz').value     || null,
@@ -730,10 +746,13 @@
     if (aszEl) aszEl.innerHTML = '<div class="spn-settings-tile-grid">' +
       SpnsState.settings.adSizes.map(function (s, i) {
         var dimsDisplay = String(s.dims).replace(/[xX]/, '" x ') + '"';
+        var priceParts = [];
+        if (s.colour_enabled !== false) priceParts.push('Colour: $' + s.colour);
+        if (s.bw_enabled !== false) priceParts.push('B&amp;W: $' + s.bw);
         return settingsTile(
           'Ad Size',
           esc(s.label),
-          esc(dimsDisplay) + '<br>Colour: $' + s.colour + ' &nbsp;&middot;&nbsp; B&amp;W: $' + s.bw,
+          esc(dimsDisplay) + '<br>' + priceParts.join(' &nbsp;&middot;&nbsp; '),
           '<button class="template-brand-tile-button" onclick="MarketingSponsorsModule.editAdSize(' + i + ')">Edit</button>',
           ADTILE_COLORS[i % ADTILE_COLORS.length]
         );
@@ -775,6 +794,13 @@
     return String(value || fallback || 'item').trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || fallback || 'item';
   }
 
+  function syncAdSizeFormatControls() {
+    var colourOn = document.getElementById('spn-adsize-colour-enabled').checked;
+    var bwOn = document.getElementById('spn-adsize-bw-enabled').checked;
+    document.getElementById('spn-adsize-colour').disabled = !colourOn;
+    document.getElementById('spn-adsize-bw').disabled = !bwOn;
+  }
+
   function editAdSize(i) {
     var item = Number.isInteger(i) ? SpnsState.settings.adSizes[i] : null;
     document.getElementById('spn-adsize-modal-title').textContent = item ? 'Edit Programme Ad Size' : 'Add Programme Ad Size';
@@ -783,6 +809,9 @@
     document.getElementById('spn-adsize-dims').value = item ? item.dims : '';
     document.getElementById('spn-adsize-colour').value = item ? item.colour : '';
     document.getElementById('spn-adsize-bw').value = item ? item.bw : '';
+    document.getElementById('spn-adsize-colour-enabled').checked = !item || item.colour_enabled !== false;
+    document.getElementById('spn-adsize-bw-enabled').checked = !item || item.bw_enabled !== false;
+    syncAdSizeFormatControls();
     document.getElementById('spn-adsize-delete').hidden = !item;
     document.getElementById('spn-adsize-modal').classList.add('open');
   }
@@ -799,15 +828,20 @@
     var dims = document.getElementById('spn-adsize-dims').value.trim().replace(/\s+/g, '');
     var colour = Number(document.getElementById('spn-adsize-colour').value);
     var bw = Number(document.getElementById('spn-adsize-bw').value);
+    var colourEnabled = document.getElementById('spn-adsize-colour-enabled').checked;
+    var bwEnabled = document.getElementById('spn-adsize-bw-enabled').checked;
     if (!label) { alert('Enter a name for this ad size.'); return; }
     if (!/^\d+(?:\.\d+)?[xX]\d+(?:\.\d+)?$/.test(dims)) { alert('Enter dimensions as height x width, for example 4x5.'); return; }
-    if (!Number.isFinite(colour) || colour < 0 || !Number.isFinite(bw) || bw < 0) { alert('Enter valid Colour and Black & White prices.'); return; }
+    if (!colourEnabled && !bwEnabled) { alert('Offer Colour, Black & White, or both.'); return; }
+    if ((colourEnabled && (!Number.isFinite(colour) || colour < 0)) || (bwEnabled && (!Number.isFinite(bw) || bw < 0))) { alert('Enter a valid price for each offered format.'); return; }
     var item = Object.assign({}, existing || {}, {
       id: existing && existing.id || settingsSlug(label, 'ad-size') + '-' + Date.now(),
       label: label,
       dims: dims.toLowerCase(),
       colour: colour,
       bw: bw,
+      colour_enabled: colourEnabled,
+      bw_enabled: bwEnabled,
     });
     if (index >= 0) SpnsState.settings.adSizes[index] = item;
     else SpnsState.settings.adSizes.push(item);
@@ -1048,8 +1082,8 @@
               '<div class="spn-field"><label>Size (height x width) *</label><input type="text" id="spn-adsize-dims" placeholder="4x2.5" inputmode="decimal" /></div>' +
             '</div>' +
             '<div class="spn-row-2">' +
-              '<div class="spn-field"><label>Colour Price ($) *</label><input type="number" id="spn-adsize-colour" min="0" step="0.01" placeholder="80.00" /></div>' +
-              '<div class="spn-field"><label>Black &amp; White Price ($) *</label><input type="number" id="spn-adsize-bw" min="0" step="0.01" placeholder="60.00" /></div>' +
+              '<div class="spn-format-option"><label class="spn-format-toggle"><input type="checkbox" id="spn-adsize-colour-enabled" onchange="MarketingSponsorsModule.syncAdSizeFormatControls()" /><span><strong>Offer Colour</strong><small>Allow this size to be booked in colour.</small></span></label><div class="spn-field"><label>Colour Price ($)</label><input type="number" id="spn-adsize-colour" min="0" step="0.01" placeholder="80.00" /></div></div>' +
+              '<div class="spn-format-option"><label class="spn-format-toggle"><input type="checkbox" id="spn-adsize-bw-enabled" onchange="MarketingSponsorsModule.syncAdSizeFormatControls()" /><span><strong>Offer Black &amp; White</strong><small>Allow this size to be booked in black and white.</small></span></label><div class="spn-field"><label>Black &amp; White Price ($)</label><input type="number" id="spn-adsize-bw" min="0" step="0.01" placeholder="60.00" /></div></div>' +
             '</div>' +
             '<div class="spn-modal-footer spn-modal-footer--split">' +
               '<button type="button" class="spn-btn spn-btn--danger" id="spn-adsize-delete" onclick="MarketingSponsorsModule.deleteAdSize()">Remove Size</button>' +
@@ -1214,6 +1248,7 @@
     deleteDeliv:     deleteDeliv,
     toggleDeliv:     toggleDeliv,
     editAdSize:      editAdSize,
+    syncAdSizeFormatControls: syncAdSizeFormatControls,
     closeAdSizeModal: closeAdSizeModal,
     saveAdSize:      saveAdSize,
     deleteAdSize:    deleteAdSize,
