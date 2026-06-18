@@ -213,6 +213,8 @@
     .tr-sidebar-standard-link img { width:20px; height:20px; object-fit:contain; filter:brightness(0) invert(1); opacity:0.78; flex-shrink:0; }
     .tr-sidebar-standard-link:hover img,
     .tr-sidebar-standard-link.active img { opacity:1; }
+    .tr-sidebar-nested-label { min-height:34px; padding:0.48rem 1rem 0.32rem 2.75rem; color:rgba(255,255,255,0.78); font-size:0.74rem; font-weight:850; line-height:1.15; }
+    .tr-sidebar-nested-item { padding-left:3.45rem !important; }
     .tr-sidebar-footer { padding:1rem 1rem 1.05rem; }
     .tr-sidebar-org-logo { min-height:34px; display:flex; align-items:center; justify-content:center; color:#fff; font-size:0.76rem; font-weight:950; letter-spacing:0.08em; line-height:1.15; text-align:center; text-transform:uppercase; }
     .tr-sidebar-org-logo img { display:block; max-width:150px; max-height:54px; object-fit:contain; }
@@ -269,8 +271,10 @@
         <span class="sidebar-group-chevron">▼</span>
       </div>
       <div class="sidebar-group-items" id="group-financials-items" style="display:flex;flex-direction:column">
+        <div class="prod-tab prod-sub-item" id="tnav-fin-dashboard" onclick="trNav('fin-dashboard')">Dashboard</div>
+        <div class="prod-tab prod-sub-item" id="tnav-fin-budgeting" onclick="trNav('fin-budgeting')">Budgeting</div>
+        <div class="prod-tab prod-sub-item" id="tnav-fin-receipts" onclick="trNav('fin-receipts')">Receipts</div>
         <div class="prod-tab prod-sub-item" id="tnav-fin-reports" onclick="trNav('fin-reports')">Reports</div>
-        <div class="prod-tab prod-sub-item" id="tnav-fin-settlements" onclick="trNav('fin-settlements')">Settlements</div>
       </div>
     </div>
 
@@ -284,7 +288,8 @@
         <span class="tab-chevron" aria-hidden="true">▼</span>
       </div>
       <div class="prod-submenu" id="cast-submenu" style="display:none">
-        <div class="prod-sub-item" id="tnav-reg-status" onclick="trNav('reg-status')">Registration Payments</div>
+        <div class="tr-sidebar-nested-label">Registration</div>
+        <div class="prod-sub-item tr-sidebar-nested-item" id="tnav-reg-status" onclick="trNav('reg-status')">Status</div>
       </div>
     </div>
   </nav>
@@ -331,7 +336,7 @@
   let _prodId = '';
   let _prod = null;
   let _org = null;
-  let _currentNav = 'fin-reports';
+  let _currentNav = 'fin-dashboard';
   let _previewPerson = null;
   let _rptPaymentRecords = {};
   let _rptHouseholds = [];
@@ -449,7 +454,7 @@
     document.getElementById('hdr-sub').textContent = `Welcome back, ${trPortalFirstName()}.`;
     document.getElementById('tr-login-overlay').style.display = 'none';
     document.getElementById('tr-main').style.display = '';
-    trNav('fin-reports');
+    trNav('fin-dashboard');
   }
 
   function renderTreasurerBranding() {
@@ -544,9 +549,11 @@
     }
 
     const sectionMap = {
+      'fin-dashboard':   ['Financials', 'Dashboard'],
+      'fin-budgeting':   ['Financials', 'Budgeting'],
+      'fin-receipts':    ['Financials', 'Receipts'],
       'fin-reports':     ['Financials', 'Reports'],
-      'fin-settlements': ['Financials', 'Settlements'],
-      'reg-status':      ['Cast', 'Registration Payments'],
+      'reg-status':      ['Cast › Registration', 'Status'],
       'contact':         ['Portal', 'Production Contact'],
     };
     const [section, page] = sectionMap[key] || ['', key];
@@ -554,10 +561,12 @@
     document.getElementById('tr-hero-title').textContent   = page;
     document.getElementById('tr-hero-prod').textContent    = _prod?.title || 'Production';
 
-    if (key === 'fin-reports')     loadFinReports();
-    if (key === 'fin-settlements') loadFinSettlements();
-    if (key === 'reg-status')      loadRegStatus();
-    if (key === 'contact')         loadProductionContact();
+    if (key === 'fin-dashboard') loadFinDashboard();
+    if (key === 'fin-budgeting') loadFinBudgeting();
+    if (key === 'fin-receipts')  loadFinReceipts();
+    if (key === 'fin-reports')   loadFinReports();
+    if (key === 'reg-status')    loadRegStatus();
+    if (key === 'contact')       loadProductionContact();
   }
 
   // ── Portal: Production Contact ─────────────────────────────────────────────
@@ -578,17 +587,105 @@
     setContent(html);
   }
 
-  // ── Financials: Reports ────────────────────────────────────────────────────
+  // ── Financials ─────────────────────────────────────────────────────────────
+
+  function trMoney(cents) {
+    return '$' + ((Number(cents) || 0) / 100).toLocaleString('en-CA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+
+  async function trLoadBudgetData() {
+    const [cRes, iRes, rRes] = await Promise.all([
+      sb.from('budget_categories').select('*').eq('production_id', _prodId).order('sort_order'),
+      sb.from('budget_items').select('*').eq('production_id', _prodId).order('created_at', { ascending: false }),
+      sb.from('budget_receipts').select('*').eq('production_id', _prodId).order('receipt_date', { ascending: false }),
+    ]);
+    return {
+      cats: cRes.data || [],
+      items: iRes.data || [],
+      receipts: rRes.data || [],
+    };
+  }
+
+  async function loadFinDashboard() {
+    setContent('<p style="color:rgba(87,46,136,0.45);font-size:0.85rem;">Loading...</p>');
+    const { cats, items, receipts } = await trLoadBudgetData();
+    const planned = cats.reduce((sum, cat) => sum + (Number(cat.planned_cents) || 0), 0);
+    const committed = items.reduce((sum, item) => sum + (Number(item.committed_cents) || 0), 0);
+    const approvedReceipts = receipts.filter(r => r.status === 'approved' || r.status === 'paid');
+    const spent = approvedReceipts.reduce((sum, r) => sum + (Number(r.amount_cents) || 0), 0);
+    const remaining = Math.max(0, planned - Math.max(committed, spent));
+    const pendingReceipts = receipts.filter(r => !['approved', 'paid', 'rejected'].includes(String(r.status || '').toLowerCase()));
+
+    setContent(`
+      <div class="tr-summary-grid">
+        <div class="tr-tile green"><div class="tr-tile-label">Budget Remaining</div><div class="tr-tile-value">${trMoney(remaining)}</div><div class="tr-tile-sub">${planned ? 'Against planned budget' : 'No budget created yet'}</div></div>
+        <div class="tr-tile"><div class="tr-tile-label">Committed</div><div class="tr-tile-value">${trMoney(committed)}</div><div class="tr-tile-sub">${items.length} budget ${items.length === 1 ? 'item' : 'items'}</div></div>
+        <div class="tr-tile orange"><div class="tr-tile-label">Receipts</div><div class="tr-tile-value">${receipts.length}</div><div class="tr-tile-sub">${pendingReceipts.length} pending review</div></div>
+      </div>
+      <div class="tr-section-header">Needs Attention</div>
+      <table class="tr-budget-table"><tbody>
+        ${pendingReceipts.length ? pendingReceipts.slice(0, 8).map(r => `<tr><td>${esc(r.description || r.vendor || 'Receipt')}</td><td>${esc(r.submitted_by || 'Unknown')}</td><td class="num">${trMoney(r.amount_cents)}</td><td>${esc(r.status || 'Pending')}</td></tr>`).join('') : '<tr><td style="color:rgba(87,46,136,0.45);font-style:italic;text-align:center">Everything looks good right now.</td></tr>'}
+      </tbody></table>
+    `);
+  }
+
+  async function loadFinBudgeting() {
+    setContent('<p style="color:rgba(87,46,136,0.45);font-size:0.85rem;">Loading...</p>');
+    const { cats, items, receipts } = await trLoadBudgetData();
+    const spentByCat = receipts
+      .filter(r => r.status === 'approved' || r.status === 'paid')
+      .reduce((map, r) => {
+        const key = String(r.category_id || '');
+        map[key] = (map[key] || 0) + (Number(r.amount_cents) || 0);
+        return map;
+      }, {});
+    const committedByCat = items.reduce((map, item) => {
+      const key = String(item.category_id || '');
+      map[key] = (map[key] || 0) + (Number(item.committed_cents) || 0);
+      return map;
+    }, {});
+
+    let html = `<table class="tr-budget-table"><thead><tr><th>Category</th><th class="num">Planned</th><th class="num">Committed</th><th class="num">Spent</th><th class="num">Remaining</th></tr></thead><tbody>`;
+    cats.forEach(cat => {
+      const planned = Number(cat.planned_cents) || 0;
+      const committed = committedByCat[String(cat.id)] || 0;
+      const spent = spentByCat[String(cat.id)] || 0;
+      const remaining = planned - Math.max(committed, spent);
+      html += `<tr>
+        <td>${esc(cat.name || '—')}</td>
+        <td class="num">${trMoney(planned)}</td>
+        <td class="num">${trMoney(committed)}</td>
+        <td class="num">${trMoney(spent)}</td>
+        <td class="num ${remaining < 0 ? 'over' : 'ok'}">${trMoney(remaining)}</td>
+      </tr>`;
+    });
+    if (!cats.length) html += `<tr><td colspan="5" style="color:rgba(87,46,136,0.4);font-style:italic;text-align:center">No budget categories yet</td></tr>`;
+    html += `</tbody></table>`;
+    setContent(html);
+  }
+
+  async function loadFinReceipts() {
+    setContent('<p style="color:rgba(87,46,136,0.45);font-size:0.85rem;">Loading...</p>');
+    const { cats, receipts } = await trLoadBudgetData();
+    let html = `<table class="tr-budget-table"><thead><tr><th>Receipt</th><th>Category</th><th>Submitted By</th><th>Status</th><th class="num">Amount</th></tr></thead><tbody>`;
+    receipts.forEach(r => {
+      const cat = cats.find(c => String(c.id) === String(r.category_id));
+      html += `<tr>
+        <td>${esc(r.description || r.vendor || '—')}</td>
+        <td>${esc(cat?.name || '—')}</td>
+        <td>${esc(r.submitted_by || '—')}</td>
+        <td>${esc(r.status || 'Pending')}</td>
+        <td class="num">${trMoney(r.amount_cents)}</td>
+      </tr>`;
+    });
+    if (!receipts.length) html += `<tr><td colspan="5" style="color:rgba(87,46,136,0.4);font-style:italic;text-align:center">No receipts yet</td></tr>`;
+    html += `</tbody></table>`;
+    setContent(html);
+  }
 
   async function loadFinReports() {
     setContent('<p style="color:rgba(87,46,136,0.45);font-size:0.85rem;">Loading...</p>');
-    const [cRes, iRes] = await Promise.all([
-      sb.from('budget_categories').select('*').eq('production_id', _prodId).order('sort_order'),
-      sb.from('budget_items').select('*').eq('production_id', _prodId),
-    ]);
-    const cats  = cRes.data || [];
-    const items = iRes.data || [];
-    const fmt = cents => '$' + ((cents || 0) / 100).toLocaleString('en-CA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const { cats, items } = await trLoadBudgetData();
 
     let html = `<table class="tr-budget-table"><thead><tr><th>Item</th><th>Category</th><th class="num">Committed</th><th>Notes</th></tr></thead><tbody>`;
     items.forEach(item => {
@@ -596,33 +693,11 @@
       html += `<tr>
         <td>${esc(item.description || '—')}</td>
         <td>${esc(cat?.name || '—')}</td>
-        <td class="num">${esc(fmt(item.committed_cents || 0))}</td>
+        <td class="num">${esc(trMoney(item.committed_cents || 0))}</td>
         <td style="font-size:0.72rem;color:rgba(26,21,48,0.5)">${esc(item.notes || '')}</td>
       </tr>`;
     });
     if (!items.length) html += `<tr><td colspan="4" style="color:rgba(87,46,136,0.4);font-style:italic;text-align:center">No budget items yet</td></tr>`;
-    html += `</tbody></table>`;
-    setContent(html);
-  }
-
-  // ── Financials: Settlements ────────────────────────────────────────────────
-
-  async function loadFinSettlements() {
-    setContent('<p style="color:rgba(87,46,136,0.45);font-size:0.85rem;">Loading...</p>');
-    const { data: settlements } = await sb.from('settlements').select('*').eq('production_id', _prodId).order('created_at', { ascending: false });
-    if (!settlements?.length) {
-      setContent('<p style="color:rgba(87,46,136,0.45);font-size:0.85rem;font-style:italic">No settlements recorded yet.</p>');
-      return;
-    }
-    let html = `<table class="tr-budget-table"><thead><tr><th>Description</th><th class="num">Amount</th><th>Status</th><th>Date</th></tr></thead><tbody>`;
-    settlements.forEach(s => {
-      html += `<tr>
-        <td>${esc(s.description || '—')}</td>
-        <td class="num">$${Math.round((s.amount_cents || 0) / 100).toLocaleString('en-CA')}</td>
-        <td>${esc(s.status || '—')}</td>
-        <td>${esc(s.settlement_date ? new Date(s.settlement_date).toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' }) : '—')}</td>
-      </tr>`;
-    });
     html += `</tbody></table>`;
     setContent(html);
   }
