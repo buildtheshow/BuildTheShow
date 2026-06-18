@@ -1183,7 +1183,7 @@
               '<div class="spn-dashboard-progress"><span id="spn-dashboard-sponsors-bar"></span></div><div class="spn-dashboard-progress-value" id="spn-dashboard-sponsors-percent">--</div>' +
             '</section>' +
             '<section class="spn-dashboard-metric spn-dashboard-metric--blue">' +
-              '<img class="spn-dashboard-metric-icon" src="/ASSETS/Images/Icons/Placeholder - Poster or document.svg" alt="" />' +
+              '<img class="spn-dashboard-metric-icon" src="/ASSETS/Images/Icons/Budgeting-Ads.svg" alt="" />' +
               '<div class="spn-dashboard-metric-label">Programme Ads Sold</div>' +
               '<div class="spn-dashboard-metric-value" id="spn-dashboard-ads">--</div>' +
               '<div class="spn-dashboard-metric-sub" id="spn-dashboard-ads-sub">Loading...</div>' +
