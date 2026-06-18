@@ -747,8 +747,7 @@
           'Sponsor Tier',
           esc(t.label),
           '$' + t.amount,
-          '<button class="template-brand-tile-button" onclick="MarketingSponsorsModule.editTier(' + i + ')">Edit</button>' +
-          '<button class="template-brand-tile-button" onclick="MarketingSponsorsModule.deleteTier(' + i + ')">Remove</button>',
+          '<button class="template-brand-tile-button" onclick="MarketingSponsorsModule.editTier(' + i + ')">Edit</button>',
           ADTILE_COLORS[(i + 2) % ADTILE_COLORS.length]
         );
       }).join('') +
@@ -772,35 +771,105 @@
     });
   }
 
+  function settingsSlug(value, fallback) {
+    return String(value || fallback || 'item').trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || fallback || 'item';
+  }
+
   function editAdSize(i) {
-    var s      = SpnsState.settings.adSizes[i];
-    var label  = prompt('Size name:', s.label);                   if (label  == null) return;
-    var dims   = prompt('Dimensions H x W (e.g. 4x5):', s.dims); if (dims   == null) return;
-    var colour = parseFloat(prompt('Colour price ($):', s.colour)); if (isNaN(colour)) return;
-    var bw     = parseFloat(prompt('B&W price ($):', s.bw));        if (isNaN(bw))     return;
-    SpnsState.settings.adSizes[i] = Object.assign({}, s, { label: label.trim(), dims: dims.trim(), colour: colour, bw: bw });
+    var item = Number.isInteger(i) ? SpnsState.settings.adSizes[i] : null;
+    document.getElementById('spn-adsize-modal-title').textContent = item ? 'Edit Programme Ad Size' : 'Add Programme Ad Size';
+    document.getElementById('spn-adsize-index').value = item ? String(i) : '';
+    document.getElementById('spn-adsize-name').value = item ? item.label : '';
+    document.getElementById('spn-adsize-dims').value = item ? item.dims : '';
+    document.getElementById('spn-adsize-colour').value = item ? item.colour : '';
+    document.getElementById('spn-adsize-bw').value = item ? item.bw : '';
+    document.getElementById('spn-adsize-delete').hidden = !item;
+    document.getElementById('spn-adsize-modal').classList.add('open');
+  }
+
+  function closeAdSizeModal() {
+    document.getElementById('spn-adsize-modal').classList.remove('open');
+  }
+
+  function saveAdSize() {
+    var indexValue = document.getElementById('spn-adsize-index').value;
+    var index = indexValue === '' ? -1 : Number(indexValue);
+    var existing = index >= 0 ? SpnsState.settings.adSizes[index] : null;
+    var label = document.getElementById('spn-adsize-name').value.trim();
+    var dims = document.getElementById('spn-adsize-dims').value.trim().replace(/\s+/g, '');
+    var colour = Number(document.getElementById('spn-adsize-colour').value);
+    var bw = Number(document.getElementById('spn-adsize-bw').value);
+    if (!label) { alert('Enter a name for this ad size.'); return; }
+    if (!/^\d+(?:\.\d+)?[xX]\d+(?:\.\d+)?$/.test(dims)) { alert('Enter dimensions as height x width, for example 4x5.'); return; }
+    if (!Number.isFinite(colour) || colour < 0 || !Number.isFinite(bw) || bw < 0) { alert('Enter valid Colour and Black & White prices.'); return; }
+    var item = Object.assign({}, existing || {}, {
+      id: existing && existing.id || settingsSlug(label, 'ad-size') + '-' + Date.now(),
+      label: label,
+      dims: dims.toLowerCase(),
+      colour: colour,
+      bw: bw,
+    });
+    if (index >= 0) SpnsState.settings.adSizes[index] = item;
+    else SpnsState.settings.adSizes.push(item);
+    closeAdSizeModal();
     renderSettings();
     refreshAdsGrouped();
   }
 
-  function addTier() {
-    var label  = prompt('Tier name:');                      if (!label)        return;
-    var amount = parseFloat(prompt('Default amount ($):')); if (isNaN(amount)) return;
-    SpnsState.settings.tiers.push({ id: label.toLowerCase().replace(/\s+/g, '-'), label: label.trim(), amount: amount });
+  function deleteAdSize() {
+    var index = Number(document.getElementById('spn-adsize-index').value);
+    if (!Number.isInteger(index) || index < 0 || !SpnsState.settings.adSizes[index]) return;
+    var sizeId = SpnsState.settings.adSizes[index].id;
+    var inUse = SpnsState.ads.filter(function (ad) { return ad.ad_size === sizeId; }).length;
+    if (inUse) { alert('This size is used by ' + inUse + ' programme ad' + (inUse === 1 ? '' : 's') + '. Move those ads to another size before removing it.'); return; }
+    if (!confirm('Remove this programme ad size?')) return;
+    SpnsState.settings.adSizes.splice(index, 1);
+    closeAdSizeModal();
     renderSettings();
+    refreshAdsGrouped();
   }
+
+  function addTier() { editTier(); }
 
   function editTier(i) {
-    var t      = SpnsState.settings.tiers[i];
-    var label  = prompt('Tier name:', t.label);                        if (label  == null) return;
-    var amount = parseFloat(prompt('Default amount ($):', t.amount));  if (isNaN(amount))  return;
-    SpnsState.settings.tiers[i] = Object.assign({}, t, { label: label.trim(), amount: amount });
+    var item = Number.isInteger(i) ? SpnsState.settings.tiers[i] : null;
+    document.getElementById('spn-tier-modal-title').textContent = item ? 'Edit Sponsor Tier' : 'Add Sponsor Tier';
+    document.getElementById('spn-tier-index').value = item ? String(i) : '';
+    document.getElementById('spn-tier-name').value = item ? item.label : '';
+    document.getElementById('spn-tier-amount').value = item ? item.amount : '';
+    document.getElementById('spn-tier-delete').hidden = !item;
+    document.getElementById('spn-tier-modal').classList.add('open');
+  }
+
+  function closeTierModal() {
+    document.getElementById('spn-tier-modal').classList.remove('open');
+  }
+
+  function saveTier() {
+    var indexValue = document.getElementById('spn-tier-index').value;
+    var index = indexValue === '' ? -1 : Number(indexValue);
+    var existing = index >= 0 ? SpnsState.settings.tiers[index] : null;
+    var label = document.getElementById('spn-tier-name').value.trim();
+    var amount = Number(document.getElementById('spn-tier-amount').value);
+    if (!label) { alert('Enter a sponsor tier name.'); return; }
+    if (!Number.isFinite(amount) || amount < 0) { alert('Enter a valid default amount.'); return; }
+    var item = Object.assign({}, existing || {}, {
+      id: existing && existing.id || settingsSlug(label, 'sponsor-tier') + '-' + Date.now(),
+      label: label,
+      amount: amount,
+    });
+    if (index >= 0) SpnsState.settings.tiers[index] = item;
+    else SpnsState.settings.tiers.push(item);
+    closeTierModal();
     renderSettings();
   }
 
-  function deleteTier(i) {
-    if (!confirm('Remove this tier?')) return;
-    SpnsState.settings.tiers.splice(i, 1);
+  function deleteTier() {
+    var index = Number(document.getElementById('spn-tier-index').value);
+    if (!Number.isInteger(index) || index < 0 || !SpnsState.settings.tiers[index]) return;
+    if (!confirm('Remove this sponsor tier?')) return;
+    SpnsState.settings.tiers.splice(index, 1);
+    closeTierModal();
     renderSettings();
   }
 
@@ -951,7 +1020,7 @@
             settingsTabsHtml +
           '</div>' +
           '<div class="spn-settings-panel active" id="spn-settings-sizes">' +
-            '<div class="spn-settings-panel-head"><div><div class="spn-settings-section-title">Programme Ad Sizes</div><div class="spn-settings-section-desc">Set the dimensions and colour or black-and-white price shown on your ad booking sheet.</div></div></div>' +
+            '<div class="spn-settings-panel-head"><div><div class="spn-settings-section-title">Programme Ad Sizes</div><div class="spn-settings-section-desc">Set the name, dimensions, colour price, and black-and-white price shown on your ad booking sheet.</div></div><button type="button" class="spn-btn spn-btn--primary" onclick="MarketingSponsorsModule.editAdSize()">+ Add Size</button></div>' +
             '<div id="spn-adsize-list"></div>' +
           '</div>' +
           '<div class="spn-settings-panel" id="spn-settings-tiers">' +
@@ -967,6 +1036,40 @@
           '<div class="spn-settings-savebar">' +
             '<div><strong>' + settingsHeading + '</strong><span>Save changes to this campaign setup.</span></div>' +
             '<button class="spn-btn spn-btn--primary" onclick="MarketingSponsorsModule.saveSettings()">Save Settings</button>' +
+          '</div>' +
+        '</div>' +
+
+        '<div class="spn-modal-overlay" id="spn-adsize-modal">' +
+          '<div class="spn-modal">' +
+            '<div class="spn-modal-title" id="spn-adsize-modal-title">Edit Programme Ad Size</div>' +
+            '<input type="hidden" id="spn-adsize-index" />' +
+            '<div class="spn-row-2">' +
+              '<div class="spn-field"><label>Name *</label><input type="text" id="spn-adsize-name" placeholder="Quarter Page" /></div>' +
+              '<div class="spn-field"><label>Size (height x width) *</label><input type="text" id="spn-adsize-dims" placeholder="4x2.5" inputmode="decimal" /></div>' +
+            '</div>' +
+            '<div class="spn-row-2">' +
+              '<div class="spn-field"><label>Colour Price ($) *</label><input type="number" id="spn-adsize-colour" min="0" step="0.01" placeholder="80.00" /></div>' +
+              '<div class="spn-field"><label>Black &amp; White Price ($) *</label><input type="number" id="spn-adsize-bw" min="0" step="0.01" placeholder="60.00" /></div>' +
+            '</div>' +
+            '<div class="spn-modal-footer spn-modal-footer--split">' +
+              '<button type="button" class="spn-btn spn-btn--danger" id="spn-adsize-delete" onclick="MarketingSponsorsModule.deleteAdSize()">Remove Size</button>' +
+              '<div class="spn-modal-footer-group"><button type="button" class="spn-btn spn-btn--ghost" onclick="MarketingSponsorsModule.closeAdSizeModal()">Cancel</button><button type="button" class="spn-btn spn-btn--primary" onclick="MarketingSponsorsModule.saveAdSize()">Save Size</button></div>' +
+            '</div>' +
+          '</div>' +
+        '</div>' +
+
+        '<div class="spn-modal-overlay" id="spn-tier-modal">' +
+          '<div class="spn-modal">' +
+            '<div class="spn-modal-title" id="spn-tier-modal-title">Edit Sponsor Tier</div>' +
+            '<input type="hidden" id="spn-tier-index" />' +
+            '<div class="spn-row-2">' +
+              '<div class="spn-field"><label>Tier Name *</label><input type="text" id="spn-tier-name" placeholder="Gold Sponsor" /></div>' +
+              '<div class="spn-field"><label>Default Amount ($) *</label><input type="number" id="spn-tier-amount" min="0" step="0.01" placeholder="500.00" /></div>' +
+            '</div>' +
+            '<div class="spn-modal-footer spn-modal-footer--split">' +
+              '<button type="button" class="spn-btn spn-btn--danger" id="spn-tier-delete" onclick="MarketingSponsorsModule.deleteTier()">Remove Tier</button>' +
+              '<div class="spn-modal-footer-group"><button type="button" class="spn-btn spn-btn--ghost" onclick="MarketingSponsorsModule.closeTierModal()">Cancel</button><button type="button" class="spn-btn spn-btn--primary" onclick="MarketingSponsorsModule.saveTier()">Save Tier</button></div>' +
+            '</div>' +
           '</div>' +
         '</div>' +
 
@@ -1111,8 +1214,13 @@
     deleteDeliv:     deleteDeliv,
     toggleDeliv:     toggleDeliv,
     editAdSize:      editAdSize,
+    closeAdSizeModal: closeAdSizeModal,
+    saveAdSize:      saveAdSize,
+    deleteAdSize:    deleteAdSize,
     addTier:         addTier,
     editTier:        editTier,
+    closeTierModal:  closeTierModal,
+    saveTier:        saveTier,
     deleteTier:      deleteTier,
     saveSettings:    saveSettings,
     switchSettingsTab: switchSettingsTab,
