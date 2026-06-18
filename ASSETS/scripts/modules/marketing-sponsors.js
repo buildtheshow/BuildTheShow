@@ -3,7 +3,7 @@
   'use strict';
 
   var SUPABASE_URL  = 'https://tkmaiktxpwqfbgeojbnf.supabase.co';
-  var SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRrbWFpa3R4cHdxZmJnZW9qYm5mIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MDc4NTI4NTYsImV4cCI6MjAyMzQyODg1Nn0.tVxOMkaMdBnuqQbLdHl00h4WA7DV8LHuVxCt6z5LFCY';
+  var SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRrbWFpa3R4cHdxZmJnZW9qYm5mIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM3MzE4MTcsImV4cCI6MjA4OTMwNzgxN30.TkTZBNWUatk3Y6Vmfv1hIRR3DfVjgwauwa76Pf00J_8';
   var STORAGE_BUCKET = 'programme-ads';
 
   /* Dims stored as "HeightxWidth" (printing convention).
@@ -296,7 +296,6 @@
     if (name === 'ads')          return loadAds();
     if (name === 'sponsors')     return loadPackages();
     if (name === 'deliverables') return loadDeliverables();
-    if (name === 'public')       return loadPublicPage();
     if (name === 'settings')     return loadSettings();
   }
 
@@ -321,50 +320,11 @@
     return window.location.origin + '/SYSTEM/Public/sponsors.html?prod=' + encodeURIComponent(SpnsState.prodId);
   }
 
-  function publicOptionCard(kicker, title, detail, price, color) {
-    return '<div class="spn-public-option" style="--spn-public-color:' + color + '">' +
-      '<div class="spn-public-option-kicker">' + esc(kicker) + '</div>' +
-      '<div class="spn-public-option-title">' + esc(title) + '</div>' +
-      '<div class="spn-public-option-detail">' + detail + '</div>' +
-      '<div class="spn-public-option-price">' + esc(price) + '</div>' +
-    '</div>';
-  }
-
-  function renderPublicPagePreview(meta) {
-    var host = document.getElementById('spn-public-preview');
-    if (!host) return;
-    var heroCount = document.getElementById('spn-hero-page-count');
-    if (heroCount && heroCount.dataset.kind === 'public') heroCount.textContent = SpnsState.settings.adSizes.length + SpnsState.settings.tiers.length;
-    var publicUrl = sponsorPublicUrl(meta);
-    var adCards = SpnsState.settings.adSizes.map(function (size, index) {
-      var formats = [];
-      if (size.colour_enabled !== false) formats.push('Colour $' + size.colour);
-      if (size.bw_enabled !== false) formats.push('B&amp;W $' + size.bw);
-      return publicOptionCard('Programme Advertising', size.label, esc(String(size.dims).replace(/[xX]/, '" x ') + '"'), formats.join(' · '), ADTILE_COLORS[index % ADTILE_COLORS.length]);
-    }).join('');
-    var tierCards = SpnsState.settings.tiers.map(function (tier, index) {
-      return publicOptionCard('Show Sponsorship', tier.label, 'Support this production as a show sponsor.', '$' + tier.amount, ADTILE_COLORS[(index + 2) % ADTILE_COLORS.length]);
-    }).join('');
-    host.innerHTML = '<div class="spn-public-sharebar"><div><div class="spn-public-share-label">Public sponsor page</div><div class="spn-public-share-url" id="spn-public-url">' + esc(publicUrl) + '</div></div><div class="spn-public-share-actions"><button class="spn-btn spn-btn--ghost" onclick="MarketingSponsorsModule.copyPublicPageLink()">Copy Link</button><a class="spn-btn spn-btn--primary" href="' + esc(publicUrl) + '" target="_blank" rel="noopener">Open Public Page</a></div></div>' +
-      '<div class="spn-public-preview-shell"><div class="spn-public-preview-kicker">Sponsor Opportunities</div><h2>' + esc((meta.production && meta.production.title) || 'This Production') + '</h2><p>Support the show through a sponsorship package or programme advertisement.</p>' +
-      '<section><h3>Show Sponsorships</h3><div class="spn-public-options">' + (tierCards || '<div class="spn-public-empty">Add sponsor tiers in Settings to publish options here.</div>') + '</div></section>' +
-      '<section><h3>Programme Advertising</h3><div class="spn-public-options">' + (adCards || '<div class="spn-public-empty">Add programme ad sizes in Settings to publish options here.</div>') + '</div></section></div>';
-  }
-
-  function loadPublicPage() {
-    var settingsPromise = dbFetch('sponsor_settings', '&select=settings&limit=1').then(function (rows) {
-      var settings = rows && rows[0] && rows[0].settings;
-      if (settings && settings.adSizes && settings.adSizes.length) SpnsState.settings.adSizes = settings.adSizes;
-      if (settings && settings.tiers && settings.tiers.length) SpnsState.settings.tiers = settings.tiers;
-    }).catch(function () {});
-    return Promise.all([settingsPromise, publicPageMeta()]).then(function (results) { renderPublicPagePreview(results[1]); });
-  }
-
-  function copyPublicPageLink() {
-    var text = (document.getElementById('spn-public-url') || {}).textContent || '';
-    if (!text) return;
-    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).catch(function () { prompt('Copy this sponsor page link:', text); });
-    else prompt('Copy this sponsor page link:', text);
+  function hydratePublicPageAction() {
+    var action = document.getElementById('spn-public-page-action');
+    if (!action) return;
+    action.href = window.location.origin + '/SYSTEM/Public/sponsors.html?prod=' + encodeURIComponent(SpnsState.prodId);
+    publicPageMeta().then(function (meta) { action.href = sponsorPublicUrl(meta); }).catch(function () {});
   }
 
   // -- OVERVIEW -----------------------------------------------------------------
@@ -1056,20 +1016,17 @@
       var page = options && options.page || 'sponsors';
       var isAdsPage = page === 'programmeads';
       var isShowSponsorsPage = page === 'showsponsors';
-      var isPublicPage = page === 'sponsorspublic';
       var isSettingsPage = page === 'sponsorssettings';
-      var pageTitle = isAdsPage ? 'Programme Ad Placements' : (isShowSponsorsPage ? 'Show Sponsors' : (isPublicPage ? 'Sponsor Public Page' : (isSettingsPage ? 'Sponsor Settings' : 'Sponsors')));
+      var pageTitle = isAdsPage ? 'Programme Ad Placements' : (isShowSponsorsPage ? 'Show Sponsors' : (isSettingsPage ? 'Sponsor Settings' : 'Sponsors'));
       var pageCopy = isAdsPage
         ? 'Set your programme ad sizes and pricing, then track every booking, payment, and piece of artwork through to print.'
         : (isShowSponsorsPage
           ? 'Track show sponsors, package levels, payments, promised benefits, and acknowledgements.'
-          : (isPublicPage
-            ? 'Preview and share the public page where businesses can choose sponsorship and programme advertising options.'
-            : (isSettingsPage
+          : (isSettingsPage
             ? 'Set programme ad sizes, sponsor tiers, pricing, and campaign deadlines in one place.'
-            : 'Track your programme ads, sponsor packages, and business partnerships all in one place.')));
-      var heroLabel = isAdsPage ? 'Placements' : (isShowSponsorsPage ? 'Sponsors' : (isPublicPage ? 'Options' : (isSettingsPage ? 'Groups' : 'Businesses')));
-      var heroKind = isAdsPage ? 'ads' : (isShowSponsorsPage ? 'sponsors' : (isPublicPage ? 'public' : (isSettingsPage ? 'settings' : 'businesses')));
+            : 'Track your programme ads, sponsor packages, and business partnerships all in one place.'));
+      var heroLabel = isAdsPage ? 'Placements' : (isShowSponsorsPage ? 'Sponsors' : (isSettingsPage ? 'Groups' : 'Businesses'));
+      var heroKind = isAdsPage ? 'ads' : (isShowSponsorsPage ? 'sponsors' : (isSettingsPage ? 'settings' : 'businesses'));
       var settingsHeading = isSettingsPage ? pageTitle : pageTitle + ' Settings';
       var deadlineCopy = isAdsPage
         ? 'Set the booking and artwork dates used by your programme ad team.'
@@ -1090,9 +1047,12 @@
               '<h1 class="aud-visual-title">' + pageTitle + '</h1>' +
               '<p class="aud-visual-copy">' + pageCopy + '</p>' +
             '</div>' +
-            '<div class="aud-visual-total">' +
-              '<div class="aud-visual-total-kicker">' + heroLabel + '</div>' +
-              '<div class="aud-visual-total-value" id="spn-hero-page-count" data-kind="' + heroKind + '">' + (isSettingsPage ? '3' : (isPublicPage ? String(SpnsState.settings.adSizes.length + SpnsState.settings.tiers.length) : '--')) + '</div>' +
+            '<div class="spn-hero-side">' +
+              '<div class="aud-visual-total">' +
+                '<div class="aud-visual-total-kicker">' + heroLabel + '</div>' +
+                '<div class="aud-visual-total-value" id="spn-hero-page-count" data-kind="' + heroKind + '">' + (isSettingsPage ? '3' : '--') + '</div>' +
+              '</div>' +
+              '<a class="spn-public-page-action" id="spn-public-page-action" href="#" target="_blank" rel="noopener">View Public Page</a>' +
             '</div>' +
           '</div>' +
         '</div>' +
@@ -1105,7 +1065,6 @@
           '<button class="spn-tab"        data-panel="deliverables" onclick="MarketingSponsorsModule.switchTab(\'deliverables\')">Deliverables</button>' +
           '<button class="spn-tab"        data-panel="files"        onclick="MarketingSponsorsModule.switchTab(\'files\')">Files</button>' +
           '<button class="spn-tab"        data-panel="settings"     onclick="MarketingSponsorsModule.switchTab(\'settings\')">Settings</button>' +
-          '<button class="spn-tab"        data-panel="public"       onclick="MarketingSponsorsModule.switchTab(\'public\')">Public Page</button>' +
         '</div>' +
 
         '<div id="spn-panel-overview" class="spn-panel active">' +
@@ -1167,8 +1126,6 @@
           '<div class="spn-toolbar"><span class="spn-toolbar-title">Files</span><button class="spn-btn spn-btn--ghost" disabled>Upload File</button></div>' +
           '<div class="spn-card"><div class="spn-empty"><div class="spn-empty-icon">&#x1F4C1;</div><h3>File library coming soon</h3><p>Logos, ad artwork, contracts, and invoices will all live here, connected back to their business or package.</p></div></div>' +
         '</div>' +
-
-        '<div id="spn-panel-public" class="spn-panel"><div id="spn-public-preview"><div class="spn-loading-row">Loading public sponsor page...</div></div></div>' +
 
         '<div id="spn-panel-settings" class="spn-panel">' +
           '<div class="spn-settings-tabs" role="tablist" aria-label="Sponsor settings">' +
@@ -1333,14 +1290,15 @@
         container.querySelectorAll('.spn-tab').forEach(function (tab) {
           tab.hidden = !['sponsors', 'businesses', 'deliverables'].includes(tab.dataset.panel);
         });
-      } else if (isPublicPage || isSettingsPage) {
+      } else if (isSettingsPage) {
         var pageTabs = container.querySelector('.spn-tabs');
         if (pageTabs) pageTabs.hidden = true;
       }
 
       refreshAdsGrouped();
+      hydratePublicPageAction();
       switchSettingsTab('sizes');
-      switchTab(isAdsPage ? 'ads' : (isShowSponsorsPage ? 'sponsors' : (isPublicPage ? 'public' : (isSettingsPage ? 'settings' : 'overview'))));
+      switchTab(isAdsPage ? 'ads' : (isShowSponsorsPage ? 'sponsors' : (isSettingsPage ? 'settings' : 'overview')));
     },
 
     destroy: function () {
@@ -1384,6 +1342,5 @@
     deleteTier:      deleteTier,
     saveSettings:    saveSettings,
     switchSettingsTab: switchSettingsTab,
-    copyPublicPageLink: copyPublicPageLink,
   };
 })();
