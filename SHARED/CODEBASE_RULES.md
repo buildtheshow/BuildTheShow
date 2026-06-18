@@ -80,6 +80,26 @@ Build The Show operates on a connected platform architecture using Supabase, Git
 3. Cloudflare caches may improve performance, but cached content must always be replaceable by canonical Supabase data.
 4. Edge routing should deliver the application and route requests cleanly. It should not become a hidden business logic layer.
 
+### Cloudflare Pages Functions — Public HTML File Location (CRITICAL)
+
+Any HTML file served by a `functions/[org]/[show]/*.js` Pages Function **must live in `/PUBLIC/`**, not `/SYSTEM/Public/`.
+
+**Why:** `functions/SYSTEM/[[path]].js` intercepts every request to any `/SYSTEM/...` path. When a Pages Function calls `context.env.ASSETS.fetch(assetUrl)` with a `/SYSTEM/...` URL, it triggers `[[path]].js`, which calls `context.env.ASSETS.fetch` again on the same URL, which triggers `[[path]].js` again — infinite loop → Cloudflare Error 1101 or "too many redirects."
+
+**The working pattern** (matches `volunteers.js`, `portal.js`, `cast-offer.js`):
+```javascript
+export async function onRequest(context) {
+  const url = new URL(context.request.url);
+  const assetUrl = new URL('/PUBLIC/your-page.html', url);
+  return context.env.ASSETS.fetch(assetUrl);
+}
+```
+
+- File goes in `/PUBLIC/your-page.html`
+- Worker fetches from `/PUBLIC/` — no intercepting function exists there
+- Do NOT pass `new Request(assetUrl.toString(), context.request)` — copying the original request causes its own redirect loop
+- Do NOT use the pretty path (no `.html`) — `env.ASSETS.fetch` runs redirect rules and loops on pretty paths through `[[path]].js`
+
 ### Platform Responsibility Boundaries
 
 1. Supabase stores and validates truth.
