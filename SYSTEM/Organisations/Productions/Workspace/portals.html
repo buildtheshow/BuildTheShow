@@ -129,6 +129,24 @@
 
     /* ── Empty state ── */
     .pt-empty { text-align: center; padding: 2.5rem 1rem; color: rgba(26,21,48,0.4); font-size: 0.84rem; }
+
+    /* ── Edit Access Drawer ── */
+    .pt-drawer-overlay { display: none; position: fixed; inset: 0; z-index: 1100; background: rgba(26,21,48,0.35); }
+    .pt-drawer-overlay.open { display: block; }
+    .pt-drawer { position: fixed; top: 0; right: 0; bottom: 0; width: min(420px, 100vw); background: #fff; z-index: 1101; transform: translateX(100%); transition: transform 0.22s cubic-bezier(0.22,1,0.36,1); display: flex; flex-direction: column; box-shadow: -4px 0 40px rgba(26,21,48,0.16); }
+    .pt-drawer.open { transform: translateX(0); }
+    .pt-drawer-header { padding: 1.1rem 1.5rem; border-bottom: 1.5px solid #edeaf6; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
+    .pt-drawer-title { font-size: 0.95rem; font-weight: 800; color: #1a1530; }
+    .pt-drawer-body { flex: 1; overflow-y: auto; padding: 1.5rem; }
+    .pt-drawer-footer { padding: 1rem 1.5rem; border-top: 1.5px solid #edeaf6; display: flex; gap: 0.65rem; justify-content: flex-end; flex-shrink: 0; }
+    .pt-drawer-section { margin-bottom: 1.5rem; }
+    .pt-drawer-section-label { font-size: 0.68rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em; color: rgba(87,46,136,0.5); margin-bottom: 0.65rem; }
+    .pt-module-list { display: flex; flex-direction: column; gap: 0.35rem; }
+    .pt-module-row { display: flex; align-items: center; justify-content: space-between; padding: 0.5rem 0.75rem; background: #f8f7fc; border-radius: 8px; }
+    .pt-module-name { font-size: 0.84rem; font-weight: 600; color: #1a1530; }
+    .pt-module-access { font-size: 0.7rem; font-weight: 800; padding: 0.18rem 0.55rem; border-radius: 20px; }
+    .pt-module-access--edit { background: #dff1e5; color: #2e6639; }
+    .pt-module-access--view { background: #f0ecfc; color: #572e88; }
   </style>
 </head>
 <body>
@@ -302,6 +320,20 @@
         <button class="pt-btn pt-btn-ghost" onclick="closeInviteModal()">Cancel</button>
         <button class="pt-btn pt-btn-primary" onclick="sendInvite()">Send Invite</button>
       </div>
+    </div>
+  </div>
+
+  <!-- Edit Access Drawer -->
+  <div class="pt-drawer-overlay" id="pt-drawer-overlay" onclick="closeEditAccessDrawer()"></div>
+  <div class="pt-drawer" id="pt-drawer">
+    <div class="pt-drawer-header">
+      <div class="pt-drawer-title">Manage Access</div>
+      <button class="pt-modal-close" onclick="closeEditAccessDrawer()">✕</button>
+    </div>
+    <div class="pt-drawer-body" id="pt-drawer-body"></div>
+    <div class="pt-drawer-footer">
+      <button class="pt-btn pt-btn-ghost" onclick="closeEditAccessDrawer()">Cancel</button>
+      <button class="pt-btn pt-btn-primary" id="pt-drawer-save-btn" onclick="saveEditAccess()">Save</button>
     </div>
   </div>
 
@@ -944,8 +976,9 @@
           <td><div class="pt-portal-icons">${portalIcons}</div></td>
           <td><span class="${statusClass}"><svg width="7" height="7" viewBox="0 0 8 8"><circle cx="4" cy="4" r="4" fill="${statusDot}"/></svg>${esc(statusLabel)}</span></td>
           <td>
-            <div style="position:relative">
+            <div style="display:flex;align-items:center;gap:0.4rem">
               <button onclick="event.stopPropagation();openPreviewModal(${idx})" style="border:1.5px solid #edeaf6;background:#fff;cursor:pointer;border-radius:8px;color:#572e88;font-size:0.75rem;font-weight:700;padding:0.25rem 0.65rem;white-space:nowrap" onmouseover="this.style.background='#f0ecfc'" onmouseout="this.style.background='#fff'">View Portal</button>
+              <button onclick="event.stopPropagation();openEditAccessDrawer(${idx})" style="border:1.5px solid #edeaf6;background:#fff;cursor:pointer;border-radius:8px;color:#572e88;font-size:0.75rem;font-weight:700;padding:0.25rem 0.65rem;white-space:nowrap" title="Manage access" onmouseover="this.style.background='#f0ecfc'" onmouseout="this.style.background='#fff'">Edit Access</button>
             </div>
           </td>
         </tr>`;
@@ -1116,6 +1149,145 @@
       btn.disabled = false; btn.textContent = 'Send Invite';
       if (error) { alert('Could not add user: ' + error.message); return; }
       closeInviteModal();
+      window.location.reload();
+    }
+
+    // ── Module list per portal type ────────────────────────────────────────────
+    const PORTAL_MODULE_LIST = {
+      cast:       [{ label: 'Production Schedule',   access: 'view' }, { label: 'Cast Registration', access: 'edit' }],
+      volunteer:  [{ label: 'My Shifts',             access: 'view' }, { label: 'Hours Log',          access: 'view' }],
+      dept_lead:  [{ label: 'Shifts',                access: 'edit' }, { label: 'Hours',              access: 'view' }, { label: 'Department Budget', access: 'view' }, { label: 'Team Contacts', access: 'view' }],
+      treasurer:  [{ label: 'Financial Dashboard',   access: 'view' }, { label: 'Reports',            access: 'view' }, { label: 'Settlements',       access: 'view' }, { label: 'Budget',         access: 'edit' }, { label: 'Registration Payments', access: 'view' }],
+      team:       [{ label: 'Cast',                  access: 'view' }, { label: 'Schedule',           access: 'edit' }, { label: 'Team Contacts',     access: 'view' }],
+      producer:   [{ label: 'All Modules',           access: 'edit' }, { label: 'Settings',           access: 'edit' }],
+      board:      [{ label: 'Organisation Dashboard', access: 'view' }],
+    };
+
+    // ── Edit Access Drawer ─────────────────────────────────────────────────────
+    let _editPersonIdx = null;
+
+    function openEditAccessDrawer(idx) {
+      _editPersonIdx = idx;
+      const rawPerson = _visiblePeople[idx];
+      if (!rawPerson) return;
+      const person = personForPreview(rawPerson);
+      renderEditDrawer(person);
+      document.getElementById('pt-drawer-overlay').classList.add('open');
+      document.getElementById('pt-drawer').classList.add('open');
+    }
+
+    function closeEditAccessDrawer() {
+      _editPersonIdx = null;
+      document.getElementById('pt-drawer-overlay').classList.remove('open');
+      document.getElementById('pt-drawer').classList.remove('open');
+    }
+
+    function renderEditDrawer(person) {
+      const hasPerson = !!(String(person.name || person.email || '').trim());
+
+      // Portal icons + names
+      const portalIconsHtml = person.portals.map(pk => {
+        const def = portalDefForKey(pk);
+        return def ? portalIconHTML(def, 30) : '';
+      }).join('');
+      const portalNames = person.portals.map(pk => {
+        const def = portalDefForKey(pk);
+        return def ? def.label : '';
+      }).filter(Boolean).join(', ');
+
+      // Module list — use first portal key as primary
+      const primaryKey = person.portals[0];
+      // Producers get full access
+      const src = person.source;
+      const modulesKey = (src === 'producer' || src === 'admin') ? 'producer' : primaryKey;
+      const modules = PORTAL_MODULE_LIST[modulesKey] || [];
+      const moduleListHtml = modules.length
+        ? modules.map(m => `<div class="pt-module-row"><span class="pt-module-name">${esc(m.label)}</span><span class="pt-module-access pt-module-access--${m.access}">${m.access === 'edit' ? 'Can Edit' : 'View Only'}</span></div>`).join('')
+        : '<div style="font-size:0.82rem;color:#b0a8c8;font-style:italic">No modules configured for this role yet.</div>';
+
+      // Role editor — only for editable sources
+      let roleEditorHtml = '';
+      if (src === 'volunteer' || src === 'dept_lead' || src === 'treasurer') {
+        const current = person.data?.role_name || person.roleLabel || '';
+        roleEditorHtml = `<div class="pt-drawer-section">
+          <div class="pt-drawer-section-label">Volunteer Role</div>
+          <div class="pt-field" style="margin-bottom:0.4rem"><input type="text" id="pt-drawer-role-input" value="${esc(current)}" placeholder="Role name..." /></div>
+          <div style="font-size:0.72rem;color:#b0a8c8">Changing the role updates which portal and modules this person has access to.</div>
+        </div>`;
+      } else if (['director','vocal_director','choreographer','producer','admin','musical_director','music_director'].includes(src)) {
+        const current = normaliseLevel(person.data || {});
+        roleEditorHtml = `<div class="pt-drawer-section">
+          <div class="pt-drawer-section-label">Access Level</div>
+          <div class="pt-field" style="margin-bottom:0.4rem">
+            <select id="pt-drawer-role-input">
+              <option value="producer"       ${current === 'producer'       ? 'selected' : ''}>Producer — Full access</option>
+              <option value="director"       ${current === 'director'       ? 'selected' : ''}>Director — View only</option>
+              <option value="vocal_director" ${current === 'vocal_director' ? 'selected' : ''}>Vocal Director — View only</option>
+              <option value="choreographer"  ${current === 'choreographer'  ? 'selected' : ''}>Choreographer — View only</option>
+            </select>
+          </div>
+        </div>`;
+      } else if (src === 'cast') {
+        roleEditorHtml = `<div class="pt-drawer-section">
+          <div class="pt-drawer-section-label">Role</div>
+          <div style="font-size:0.84rem;color:#b0a8c8;font-style:italic">Cast roles are managed through the Casting board.</div>
+        </div>`;
+      } else {
+        roleEditorHtml = `<div class="pt-drawer-section">
+          <div class="pt-drawer-section-label">Role</div>
+          <div style="font-size:0.84rem;color:#b0a8c8;font-style:italic">Organisation roles are managed in Organisation settings.</div>
+        </div>`;
+      }
+
+      document.getElementById('pt-drawer-body').innerHTML = `
+        <div style="display:flex;align-items:center;gap:0.85rem;margin-bottom:1.5rem;padding-bottom:1.25rem;border-bottom:1.5px solid #edeaf6">
+          ${hasPerson ? avatarHTML(person.name, person.headshot) : '<div class="pt-avatar" style="background:#f4f2fb;color:#b0a8c8;width:40px;height:40px">--</div>'}
+          <div>
+            <div style="font-size:0.96rem;font-weight:800;color:#1a1530">${hasPerson ? esc(person.name) : 'Unassigned'}</div>
+            <div style="font-size:0.75rem;color:#a89ec0;margin-top:0.1rem">${esc(person.email || 'No email on file')}</div>
+          </div>
+        </div>
+        <div class="pt-drawer-section">
+          <div class="pt-drawer-section-label">Portals</div>
+          <div style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap">
+            ${portalIconsHtml}
+            <span style="font-size:0.78rem;color:#7a6fa0">${esc(portalNames)}</span>
+          </div>
+        </div>
+        <div class="pt-drawer-section">
+          <div class="pt-drawer-section-label">Module Access</div>
+          <div class="pt-module-list">${moduleListHtml}</div>
+          <div style="font-size:0.7rem;color:#b0a8c8;margin-top:0.6rem">Access level is set by role. Per-module overrides are coming.</div>
+        </div>
+        ${roleEditorHtml}`;
+
+      // Show/hide save button depending on whether role is editable
+      const saveBtn = document.getElementById('pt-drawer-save-btn');
+      if (saveBtn) saveBtn.style.display = document.getElementById('pt-drawer-role-input') ? '' : 'none';
+    }
+
+    async function saveEditAccess() {
+      const rawPerson = _visiblePeople[_editPersonIdx];
+      if (!rawPerson) return;
+      const person = personForPreview(rawPerson);
+      const roleInput = document.getElementById('pt-drawer-role-input');
+      if (!roleInput) { closeEditAccessDrawer(); return; }
+      const newRole = roleInput.value.trim();
+      if (!newRole) { alert('Role cannot be empty.'); return; }
+      const btn = document.getElementById('pt-drawer-save-btn');
+      if (btn) { btn.disabled = true; btn.textContent = 'Saving...'; }
+      const src = person.source;
+      let error = null;
+      if (src === 'volunteer' || src === 'dept_lead' || src === 'treasurer') {
+        const id = person.data?.id;
+        if (id) error = (await _sb.from('volunteer_signups').update({ role_name: newRole }).eq('id', id)).error;
+      } else if (['director','vocal_director','choreographer','producer','admin','musical_director','music_director'].includes(src)) {
+        const id = person.data?.id;
+        if (id) error = (await _sb.from('production_team_members').update({ access_level: newRole, role: newRole }).eq('id', id)).error;
+      }
+      if (btn) { btn.disabled = false; btn.textContent = 'Save'; }
+      if (error) { alert('Could not save: ' + error.message); return; }
+      closeEditAccessDrawer();
       window.location.reload();
     }
 
