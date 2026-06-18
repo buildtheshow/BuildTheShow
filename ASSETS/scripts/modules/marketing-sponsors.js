@@ -327,6 +327,119 @@
     publicPageMeta().then(function (meta) { action.href = sponsorPublicUrl(meta); }).catch(function () {});
   }
 
+  // -- DASHBOARD ---------------------------------------------------------------
+
+  function dashboardSet(id, value) {
+    var el = document.getElementById(id);
+    if (el) el.textContent = value;
+  }
+
+  function dashboardPercent(value, total) {
+    return total > 0 ? Math.min(100, Math.round((value / total) * 100)) : 0;
+  }
+
+  function dashboardSetProgress(id, value) {
+    var el = document.getElementById(id);
+    if (el) el.style.width = value + '%';
+  }
+
+  function dashboardBusinessName(businesses, id) {
+    var business = businesses.find(function (item) { return item.id === id; });
+    return business ? business.name : 'Unassigned business';
+  }
+
+  function dashboardInitials(name) {
+    return String(name || '?').split(/\s+/).filter(Boolean).slice(0, 2).map(function (part) { return part.charAt(0); }).join('').toUpperCase();
+  }
+
+  function dashboardAttentionRow(item, index) {
+    var colors = ['#572e88', '#769e7b', '#476aaa', '#dd8233', '#ca7ea7'];
+    return '<button type="button" class="spn-dashboard-attention-row" onclick="navigateToMarketing(\'' + item.page + '\')">' +
+      '<span class="spn-dashboard-business-mark" style="background:' + colors[index % colors.length] + '">' + esc(dashboardInitials(item.business)) + '</span>' +
+      '<span class="spn-dashboard-attention-copy"><strong>' + esc(item.business) + '</strong><span>' + esc(item.detail) + '</span></span>' +
+      '<span class="spn-dashboard-status spn-dashboard-status--' + item.tone + '">' + esc(item.status) + '</span>' +
+      '<span class="spn-dashboard-chevron" aria-hidden="true">›</span>' +
+    '</button>';
+  }
+
+  function loadDashboard() {
+    return Promise.all([
+      dbFetch('sponsor_businesses', '&select=id,name').catch(function () { return []; }),
+      dbFetch('programme_ads', '&select=id,business_id,price_cents,payment_status,artwork_status,approval_status').catch(function () { return []; }),
+      dbFetch('sponsor_packages', '&select=id,business_id,amount_cents,payment_status').catch(function () { return []; }),
+      dbFetch('sponsor_deliverables', '&select=id,business_id,title,status,due_date').catch(function () { return []; }),
+      dbFetch('sponsor_settings', '&select=settings&limit=1').catch(function () { return []; }),
+    ]).then(function (results) {
+      var businesses = results[0];
+      var ads = results[1];
+      var packages = results[2];
+      var deliverables = results[3];
+      var savedSettings = results[4] && results[4][0] && results[4][0].settings || {};
+      var deadlines = savedSettings.deadlines || {};
+
+      var bookedRevenue = packages.reduce(function (sum, item) { return sum + (item.amount_cents || 0); }, 0);
+      var paidPackages = packages.filter(function (item) { return item.payment_status === 'paid'; });
+      var paidRevenue = paidPackages.reduce(function (sum, item) { return sum + (item.amount_cents || 0); }, 0);
+      var paidAds = ads.filter(function (item) { return item.payment_status === 'paid'; }).length;
+      var revenuePercent = dashboardPercent(paidRevenue, bookedRevenue);
+      var sponsorPercent = dashboardPercent(paidPackages.length, packages.length);
+      var adsPercent = dashboardPercent(paidAds, ads.length);
+
+      dashboardSet('spn-dashboard-revenue', fmtDollars(paidRevenue));
+      dashboardSet('spn-dashboard-revenue-sub', bookedRevenue ? 'of ' + fmtDollars(bookedRevenue) + ' booked' : 'No sponsorships booked yet');
+      dashboardSet('spn-dashboard-revenue-percent', revenuePercent + '%');
+      dashboardSetProgress('spn-dashboard-revenue-bar', revenuePercent);
+      dashboardSet('spn-dashboard-sponsors', paidPackages.length);
+      dashboardSet('spn-dashboard-sponsors-sub', packages.length ? 'of ' + packages.length + ' sponsor booking' + (packages.length === 1 ? '' : 's') : 'No sponsor bookings yet');
+      dashboardSet('spn-dashboard-sponsors-percent', sponsorPercent + '%');
+      dashboardSetProgress('spn-dashboard-sponsors-bar', sponsorPercent);
+      dashboardSet('spn-dashboard-ads', ads.length);
+      dashboardSet('spn-dashboard-ads-sub', ads.length ? paidAds + ' paid placement' + (paidAds === 1 ? '' : 's') : 'No programme ads sold yet');
+      dashboardSet('spn-dashboard-ads-percent', adsPercent + '%');
+      dashboardSetProgress('spn-dashboard-ads-bar', adsPercent);
+
+      var today = new Date(); today.setHours(0, 0, 0, 0);
+      var deadlineLabels = { artwork: 'Artwork Due', booking: 'Ad Booking', sponsor: 'Sponsor Confirmation' };
+      var deadlineList = Object.keys(deadlineLabels).map(function (key) {
+        if (!deadlines[key]) return null;
+        var date = new Date(deadlines[key] + 'T12:00:00');
+        return isNaN(date.getTime()) ? null : { key: key, label: deadlineLabels[key], date: date };
+      }).filter(Boolean).sort(function (a, b) { return a.date - b.date; });
+      var nextDeadline = deadlineList.find(function (item) { return item.date >= today; }) || deadlineList[deadlineList.length - 1];
+      if (nextDeadline) {
+        var days = Math.ceil((nextDeadline.date - today) / 86400000);
+        dashboardSet('spn-dashboard-deadline-label', nextDeadline.label);
+        dashboardSet('spn-dashboard-deadline-date', nextDeadline.date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }));
+        dashboardSet('spn-dashboard-deadline-days', days < 0 ? Math.abs(days) + ' days overdue' : (days === 0 ? 'Due today' : days + ' days left'));
+      } else {
+        dashboardSet('spn-dashboard-deadline-label', 'No deadline set');
+        dashboardSet('spn-dashboard-deadline-date', '—');
+        dashboardSet('spn-dashboard-deadline-days', 'Add dates in Settings');
+      }
+
+      var attention = [];
+      ads.forEach(function (ad) {
+        var business = dashboardBusinessName(businesses, ad.business_id);
+        if (ad.artwork_status === 'missing') attention.push({ business: business, detail: 'Programme ad artwork is missing', status: 'Artwork', tone: 'orange', page: 'programmeads' });
+        if (ad.approval_status === 'pending') attention.push({ business: business, detail: 'Programme ad is awaiting approval', status: 'Review', tone: 'blue', page: 'programmeads' });
+        if (ad.payment_status !== 'paid') attention.push({ business: business, detail: 'Programme ad payment is outstanding', status: 'Unpaid', tone: 'red', page: 'programmeads' });
+      });
+      packages.forEach(function (item) {
+        if (item.payment_status !== 'paid') attention.push({ business: dashboardBusinessName(businesses, item.business_id), detail: 'Sponsor payment is outstanding', status: 'Unpaid', tone: 'red', page: 'showsponsors' });
+      });
+      deliverables.forEach(function (item) {
+        var due = item.due_date ? new Date(item.due_date + 'T12:00:00') : null;
+        if (item.status !== 'done' && due && due < today) attention.push({ business: dashboardBusinessName(businesses, item.business_id), detail: (item.title || 'Sponsor deliverable') + ' is overdue', status: 'Overdue', tone: 'red', page: 'showsponsors' });
+      });
+
+      var attentionEl = document.getElementById('spn-dashboard-attention-list');
+      dashboardSet('spn-dashboard-attention-count', attention.length + ' item' + (attention.length === 1 ? '' : 's'));
+      if (attentionEl) attentionEl.innerHTML = attention.length
+        ? attention.slice(0, 8).map(dashboardAttentionRow).join('')
+        : '<div class="spn-dashboard-all-clear"><strong>Everything is on track</strong><span>There are no sponsor or programme ad items needing attention.</span></div>';
+    });
+  }
+
   // -- OVERVIEW -----------------------------------------------------------------
 
   function loadOverview() {
@@ -1053,8 +1166,43 @@
                 '<a class="spn-public-page-action" id="spn-public-page-action" href="#" target="_blank" rel="noopener">View Public Page</a>' +
               '</div>' +
             '</div>' +
-          '</div>';
+          '</div>' +
+          '<div class="spn-dashboard-metrics">' +
+            '<section class="spn-dashboard-metric spn-dashboard-metric--purple">' +
+              '<img class="spn-dashboard-metric-icon" src="/ASSETS/Images/Icons/Budgeting-Sponsorship.svg" alt="" />' +
+              '<div class="spn-dashboard-metric-label">Sponsorship Revenue</div>' +
+              '<div class="spn-dashboard-metric-value" id="spn-dashboard-revenue">--</div>' +
+              '<div class="spn-dashboard-metric-sub" id="spn-dashboard-revenue-sub">Loading...</div>' +
+              '<div class="spn-dashboard-progress"><span id="spn-dashboard-revenue-bar"></span></div><div class="spn-dashboard-progress-value" id="spn-dashboard-revenue-percent">--</div>' +
+            '</section>' +
+            '<section class="spn-dashboard-metric spn-dashboard-metric--green">' +
+              '<img class="spn-dashboard-metric-icon" src="/ASSETS/Images/Icons/organisation-members.svg" alt="" />' +
+              '<div class="spn-dashboard-metric-label">Sponsors Confirmed</div>' +
+              '<div class="spn-dashboard-metric-value" id="spn-dashboard-sponsors">--</div>' +
+              '<div class="spn-dashboard-metric-sub" id="spn-dashboard-sponsors-sub">Loading...</div>' +
+              '<div class="spn-dashboard-progress"><span id="spn-dashboard-sponsors-bar"></span></div><div class="spn-dashboard-progress-value" id="spn-dashboard-sponsors-percent">--</div>' +
+            '</section>' +
+            '<section class="spn-dashboard-metric spn-dashboard-metric--blue">' +
+              '<img class="spn-dashboard-metric-icon" src="/ASSETS/Images/Icons/Placeholder - Poster or document.svg" alt="" />' +
+              '<div class="spn-dashboard-metric-label">Programme Ads Sold</div>' +
+              '<div class="spn-dashboard-metric-value" id="spn-dashboard-ads">--</div>' +
+              '<div class="spn-dashboard-metric-sub" id="spn-dashboard-ads-sub">Loading...</div>' +
+              '<div class="spn-dashboard-progress"><span id="spn-dashboard-ads-bar"></span></div><div class="spn-dashboard-progress-value" id="spn-dashboard-ads-percent">--</div>' +
+            '</section>' +
+            '<section class="spn-dashboard-metric spn-dashboard-metric--orange spn-dashboard-metric--deadline">' +
+              '<img class="spn-dashboard-metric-icon" src="/ASSETS/Images/Icons/navproductioncalendar.svg" alt="" />' +
+              '<div class="spn-dashboard-metric-label">Next Deadline</div>' +
+              '<div class="spn-dashboard-deadline-label" id="spn-dashboard-deadline-label">Loading...</div>' +
+              '<div class="spn-dashboard-deadline-date" id="spn-dashboard-deadline-date">--</div>' +
+              '<div class="spn-dashboard-deadline-days" id="spn-dashboard-deadline-days">--</div>' +
+            '</section>' +
+          '</div>' +
+          '<section class="spn-dashboard-attention">' +
+            '<div class="spn-dashboard-attention-head"><div><span class="spn-dashboard-alert-icon">!</span><h2>Needs Your Attention</h2></div><span class="spn-dashboard-attention-count" id="spn-dashboard-attention-count">Loading...</span></div>' +
+            '<div id="spn-dashboard-attention-list"><div class="spn-loading-row">Loading sponsor activity...</div></div>' +
+          '</section>';
         hydratePublicPageAction();
+        loadDashboard();
         return;
       }
 
