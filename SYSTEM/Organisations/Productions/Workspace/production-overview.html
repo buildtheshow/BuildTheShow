@@ -224,12 +224,8 @@
     function ovRenderHero(prod) {
       const setEl = (id, val) => { const e = document.getElementById(id); if (e) e.textContent = val; };
       const sub = [prod.subtitle, prod.season_year].filter(Boolean).join(' · ');
-      const dates = prod.start_date && prod.end_date
-        ? ovFmtDate(prod.start_date) + ' – ' + ovFmtDate(prod.end_date)
-        : prod.start_date ? 'From ' + ovFmtDate(prod.start_date) : '';
       setEl('ov-title', prod.title || 'Production');
       setEl('ov-sub', sub);
-      setEl('ov-dates', dates);
 
       const posterWrap = document.getElementById('hero-poster-wrap');
       if (posterWrap) {
@@ -368,13 +364,35 @@
 
     async function ovInit() {
       if (!prodId) return;
-      const { data: prod } = await sb
-        .from('productions')
-        .select('id, title, subtitle, season_year, status, venue, poster_url, custom_id, start_date, end_date')
-        .eq('id', prodId)
-        .single();
-      if (!prod) return;
-      ovRenderHero(prod);
+      const [prodRes, spanRes] = await Promise.all([
+        sb.from('productions')
+          .select('id, title, subtitle, season_year, status, venue, poster_url, custom_id')
+          .eq('id', prodId)
+          .single(),
+        sb.from('production_events')
+          .select('event_type, start_time, end_time')
+          .eq('production_id', prodId)
+          .in('event_type', ['rehearsal','music_rehearsal','choreography','tech','dress','performance']),
+      ]);
+      if (!prodRes.data) return;
+
+      // First rehearsal → last performance
+      const rehearsalTypes = new Set(['rehearsal','music_rehearsal','choreography','tech','dress']);
+      const evs = spanRes.data || [];
+      const rehearsals = evs.filter(e => rehearsalTypes.has(e.event_type)).map(e => e.start_time).filter(Boolean).sort();
+      const performances = evs.filter(e => e.event_type === 'performance').map(e => e.end_time || e.start_time).filter(Boolean).sort();
+      const firstReh = rehearsals[0];
+      const lastPerf = performances[performances.length - 1];
+      const spanLabel = firstReh && lastPerf
+        ? ovFmtDate(firstReh) + ' – ' + ovFmtDate(lastPerf)
+        : firstReh ? 'Rehearsals from ' + ovFmtDate(firstReh)
+        : lastPerf ? 'Performances to ' + ovFmtDate(lastPerf)
+        : '';
+
+      const datesEl = document.getElementById('ov-dates');
+      if (datesEl) datesEl.textContent = spanLabel ? 'Rehearsals to closing: ' + spanLabel : '';
+
+      ovRenderHero(prodRes.data);
       await Promise.all([ovLoadStats(), ovLoadUpNext(), ovLoadChecklist()]);
     }
 
