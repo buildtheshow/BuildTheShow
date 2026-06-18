@@ -234,15 +234,15 @@
   </div>
   <nav class="prod-tabs">
     <!-- Financials group -->
-    <div class="sidebar-group" id="group-financials" style="--group-color:#ca7ea7">
-      <div class="sidebar-group-header" onclick="trToggleGroup('financials')" role="button" tabindex="0">
+    <div class="sidebar-group open" id="group-financials" style="--group-color:#ca7ea7">
+      <div class="sidebar-group-header" onclick="trToggleGroup('financials')" onkeydown="trGroupKey(event,'financials')" role="button" tabindex="0" aria-expanded="true">
         <span class="sidebar-group-label">
           <span class="tab-icon-slot"><img src="/ASSETS/Images/Icons/Budgeting-total-spent-cad-usd.svg?v=20260611" class="tab-icon" alt="" aria-hidden="true" /></span>
           Financials
         </span>
         <span class="sidebar-group-chevron">▼</span>
       </div>
-      <div class="sidebar-group-items" id="group-financials-items" style="display:none">
+      <div class="sidebar-group-items" id="group-financials-items" style="display:flex;flex-direction:column">
         <div class="prod-tab prod-sub-item" id="tnav-fin-dashboard" onclick="trNav('fin-dashboard')">Dashboard</div>
         <div class="prod-tab prod-sub-item" id="tnav-fin-reports" onclick="trNav('fin-reports')">Reports</div>
         <div class="prod-tab prod-sub-item" id="tnav-fin-settlements" onclick="trNav('fin-settlements')">Settlements</div>
@@ -251,12 +251,12 @@
 
     <!-- Cast > Registration > Status -->
     <div class="prod-tab-submenu-wrap" id="cast-wrap">
-      <div class="prod-tab" id="cast-parent-tab" onclick="trToggleGroup('cast')">
+      <div class="prod-tab" id="cast-parent-tab" onclick="trToggleGroup('cast')" onkeydown="trGroupKey(event,'cast')" role="button" tabindex="0" aria-expanded="false">
         <span class="prod-tab-label">
           <span class="tab-icon-slot"><img src="/ASSETS/Images/Icons/navauditions.svg" class="tab-icon" alt="" aria-hidden="true" /></span>
           Cast
         </span>
-        <span class="tab-chevron" role="button" tabindex="0" aria-label="Toggle Cast menu">▼</span>
+        <span class="tab-chevron" aria-hidden="true">▼</span>
       </div>
       <div class="prod-submenu" id="cast-submenu" style="display:none">
         <div class="prod-sub-item" id="tnav-reg-status" onclick="trNav('reg-status')">Registration Payments</div>
@@ -438,17 +438,47 @@
   // ── Navigation ─────────────────────────────────────────────────────────────
 
   function trToggleGroup(group) {
-    const items = document.getElementById(`group-${group}-items`) || document.getElementById(`${group}-submenu`);
-    if (!items) return;
-    const open = items.style.display !== 'none';
-    items.style.display = open ? 'none' : '';
+    const isFinancials = group === 'financials';
+    const wrap = isFinancials ? document.getElementById('group-financials') : document.getElementById(`${group}-wrap`);
+    const items = isFinancials ? document.getElementById('group-financials-items') : document.getElementById(`${group}-submenu`);
+    if (!wrap || !items) return;
+    const open = wrap.classList.toggle('open');
+    items.style.display = open ? 'flex' : 'none';
+    items.style.flexDirection = 'column';
+    const trigger = isFinancials ? wrap.querySelector('.sidebar-group-header') : document.getElementById(`${group}-parent-tab`);
+    if (trigger) trigger.setAttribute('aria-expanded', open ? 'true' : 'false');
+  }
+
+  function trGroupKey(event, group) {
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    event.preventDefault();
+    trToggleGroup(group);
   }
 
   function trNav(key) {
     _currentNav = key;
-    document.querySelectorAll('.prod-tab.prod-sub-item, .prod-sub-item').forEach(el => el.classList.remove('active'));
+    document.querySelectorAll('.prod-tab, .prod-sub-item').forEach(el => el.classList.remove('active'));
     const active = document.getElementById('tnav-' + key.replace('-', '-'));
     if (active) active.classList.add('active');
+    const inFinancials = key.startsWith('fin-');
+    const financialsGroup = document.getElementById('group-financials');
+    const financialsItems = document.getElementById('group-financials-items');
+    const financialsTrigger = financialsGroup?.querySelector('.sidebar-group-header');
+    if (financialsGroup && financialsItems && inFinancials) {
+      financialsGroup.classList.add('open');
+      financialsItems.style.display = 'flex';
+      financialsItems.style.flexDirection = 'column';
+      financialsTrigger?.setAttribute('aria-expanded', 'true');
+    }
+    const castWrap = document.getElementById('cast-wrap');
+    const castSubmenu = document.getElementById('cast-submenu');
+    const castParent = document.getElementById('cast-parent-tab');
+    if (castWrap && castSubmenu && key === 'reg-status') {
+      castWrap.classList.add('open');
+      castSubmenu.style.display = 'flex';
+      castParent?.classList.add('active');
+      castParent?.setAttribute('aria-expanded', 'true');
+    }
 
     const sectionMap = {
       'fin-dashboard':   ['Financials', 'Dashboard'],
