@@ -27,6 +27,61 @@
     { id: 'friend',     label: 'Friend',             amount: 50   },
   ];
 
+  var PUBLIC_PAGE_COLORS = [
+    { name: 'Purple', value: '#572e88' }, { name: 'Light blue', value: '#74a2b4' },
+    { name: 'Blue', value: '#476aaa' }, { name: 'Green', value: '#769e7b' },
+    { name: 'Orange', value: '#dd8233' }, { name: 'Red', value: '#d1523d' },
+    { name: 'Pink', value: '#ca7ea7' }, { name: 'Black', value: '#1a1530' },
+    { name: 'White', value: '#ffffff' },
+  ];
+
+  function defaultPublicPage() {
+    return {
+      published: true,
+      posterUrl: '', contactEmail: '',
+      content: {
+        navOverview: 'Overview', navSponsors: 'Sponsorships', navAds: 'Programme Ads', navBook: 'Book Now',
+        heroKicker: 'Sponsor & Advertise', heroTitle: 'Promote Your Business While Supporting', heroAccent: 'Local Youth Theatre.',
+        heroBody: 'Your support helps create incredible theatre experiences for young performers and connects your business with hundreds of local families.',
+        heroSponsorButton: 'Become a Sponsor', heroSponsorSub: 'Support the production', heroAdButton: 'Advertise in the Programme', heroAdSub: 'Promote your business',
+        statsTitle: 'Your Business Seen by Local Families',
+        sponsorWayTitle: 'Sponsor the Production', sponsorWayBody: 'Support the show and receive recognition throughout the season across the programme, website, social media, and live performances.',
+        sponsorWayBullets: 'Recognition in the printed programme\nWebsite and social media mentions\nAcknowledgement at performances\nShow your commitment to local youth', sponsorWayCta: 'View Sponsorship Options',
+        adWayTitle: 'Advertise in the Programme', adWayBody: 'Place your business in the printed booklet handed to every audience member at the door. A keepsake they take home after the show.',
+        adWayBullets: 'Full colour and black & white options\nAffordable advertising for local businesses\nReach hundreds of local families\nMultiple ad sizes to suit any budget', adWayCta: 'View Ad Sizes & Pricing',
+        programmeLabel: 'What is a Programme?', programmeTitle: 'A printed booklet for every audience member.',
+        programmeBody: 'A programme is handed to every person who walks through the door. It includes show information, cast bios, and advertisements from local businesses like yours. Families take it home as a keepsake, so your ad lasts long after the curtain falls.',
+        compareLabel: 'Not Sure Which Option is Right for You?', compareTitle: 'Here is how they compare.',
+        compareRows: 'What it is | Support the production | Promote your business\nMain benefit | Season-wide recognition | Printed advertisement\nGreat if you want to | Show community support | Market your business\nWhere you will be seen | Programme, website, social media, announcements | In the printed programme',
+        compareBoth: 'Yes! Many businesses sponsor and advertise.',
+        stepsLabel: 'Getting started', stepsTitle: 'It’s Easy to Get Involved',
+        stepsRows: 'Choose an option | Sponsor, advertise, or both!\nComplete the form | Quick and easy online booking.\nUpload your artwork | We’ll tell you exactly what we need.\nWe handle the rest! | We take care of all the details.',
+        impactTitle: 'Your support makes a big impact.', impactBody: 'Thank you for helping young performers shine!',
+        sponsorsKicker: 'Show Sponsorships', sponsorsTitle: 'Support the Production', sponsorsBody: 'Choose a sponsorship level and support the full production. You’ll be recognised throughout the season.',
+        adsKicker: 'Programme Advertising', adsTitle: 'Advertise in the Programme', adsBody: 'Reach the show audience with an advertisement in the printed programme. Choose the size and format that works for your budget.',
+        footerTitle: 'Have questions?', footerBody: 'We’re happy to help you find the right option.', footerButton: 'Contact Us',
+      },
+      colors: { hero: '#572e88', stats: '#74a2b4', sponsor: '#572e88', ads: '#769e7b', info: '#ffffff', steps: '#1a1530', sponsorships: '#572e88', programmeAds: '#476aaa', footer: '#1a1530' },
+      sections: [
+        { id: 'hero', visible: true }, { id: 'stats', visible: true }, { id: 'ways', visible: true },
+        { id: 'info', visible: true }, { id: 'steps', visible: true }, { id: 'sponsorships', visible: true },
+        { id: 'programmeAds', visible: true }, { id: 'footer', visible: true },
+      ],
+    };
+  }
+
+  function mergePublicPage(value) {
+    var base = defaultPublicPage();
+    value = value && typeof value === 'object' ? value : {};
+    base.published = value.published !== false;
+    base.posterUrl = value.posterUrl || '';
+    base.contactEmail = value.contactEmail || '';
+    base.content = Object.assign(base.content, value.content || {});
+    base.colors = Object.assign(base.colors, value.colors || {});
+    if (Array.isArray(value.sections) && value.sections.length) base.sections = value.sections;
+    return base;
+  }
+
   var ADTILE_COLORS = ['#74a2b4', '#476aaa', '#769e7b', '#dd8233', '#d1523d', '#ca7ea7'];
 
   var SpnsState = {
@@ -49,6 +104,8 @@
       adSizes:     DEFAULT_AD_SIZES.map(function (s) { return Object.assign({}, s); }),
       tiers:       DEFAULT_TIERS.map(function (t) { return Object.assign({}, t); }),
       publicStats: [],
+      publicPage: defaultPublicPage(),
+      publicPageDraft: defaultPublicPage(),
     };
     SpnsState.posterUrl = null;
     SpnsState.loaded = {};
@@ -869,6 +926,9 @@
         var s = data[0].settings;
         if (s.adSizes && s.adSizes.length) SpnsState.settings.adSizes = s.adSizes;
         if (s.tiers   && s.tiers.length)   SpnsState.settings.tiers   = s.tiers;
+        SpnsState.settings.publicStats = Array.isArray(s.publicStats) ? s.publicStats : [];
+        SpnsState.settings.publicPage = mergePublicPage(s.publicPage);
+        SpnsState.settings.publicPageDraft = mergePublicPage(s.publicPageDraft || s.publicPage);
         if (s.deadlines) {
           var artEl = document.getElementById('spn-deadline-artwork');
           var bkEl  = document.getElementById('spn-deadline-booking');
@@ -922,7 +982,7 @@
   function switchSettingsTab(name) {
     var valid = ['sizes', 'tiers', 'deadlines', 'publicpage'];
     var next = valid.indexOf(name) >= 0 ? name : 'sizes';
-    if (next === 'publicpage') renderPublicStatsAdmin();
+    if (next === 'publicpage') renderPublicPageEditor();
     document.querySelectorAll('.spn-settings-tab').forEach(function (button) {
       var active = button.dataset.settingsPanel === next;
       button.classList.toggle('active', active);
@@ -932,6 +992,8 @@
     document.querySelectorAll('.spn-settings-panel').forEach(function (panel) {
       panel.classList.toggle('active', panel.id === 'spn-settings-' + next);
     });
+    var savebar = document.getElementById('spn-settings-savebar');
+    if (savebar) savebar.hidden = next === 'publicpage';
   }
 
   function settingsSlug(value, fallback) {
@@ -1091,32 +1153,192 @@
     }).filter(Boolean);
   }
 
-  function escHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+  var PUBLIC_SECTION_LABELS = {
+    hero: 'Hero & Navigation', stats: 'Audience Stats', ways: 'Two Ways to Participate', info: 'Programme & Comparison',
+    steps: 'How It Works', sponsorships: 'Sponsorship Options', programmeAds: 'Programme Ads', footer: 'Footer & Contact',
+  };
 
-  function saveSettings() {
-    var settings = {
-      adSizes:     SpnsState.settings.adSizes,
-      tiers:       SpnsState.settings.tiers,
+  var PUBLIC_SECTION_FIELDS = {
+    hero: [
+      ['navOverview','Navigation: Overview'], ['navSponsors','Navigation: Sponsorships'], ['navAds','Navigation: Programme Ads'], ['navBook','Navigation: Book Now'],
+      ['heroTitle','Headline'], ['heroAccent','Headline Accent'], ['heroBody','Supporting Copy','textarea'],
+      ['heroSponsorButton','Sponsor Button'], ['heroSponsorSub','Sponsor Button Subtext'], ['heroAdButton','Programme Ad Button'], ['heroAdSub','Programme Ad Button Subtext'],
+    ],
+    stats: [['statsTitle','Section Heading']],
+    ways: [
+      ['sponsorWayTitle','Sponsor Heading'], ['sponsorWayBody','Sponsor Copy','textarea'], ['sponsorWayBullets','Sponsor Benefits, one per line','textarea'], ['sponsorWayCta','Sponsor Button'],
+      ['adWayTitle','Programme Ad Heading'], ['adWayBody','Programme Ad Copy','textarea'], ['adWayBullets','Programme Ad Benefits, one per line','textarea'], ['adWayCta','Programme Ad Button'],
+    ],
+    info: [
+      ['programmeLabel','Programme Eyebrow'], ['programmeTitle','Programme Heading'], ['programmeBody','Programme Copy','textarea'],
+      ['compareLabel','Comparison Eyebrow'], ['compareTitle','Comparison Heading'], ['compareRows','Comparison rows: Label | Sponsorship | Programme Ad','textarea'], ['compareBoth','Final Comparison Message'],
+    ],
+    steps: [['stepsLabel','Eyebrow'], ['stepsTitle','Heading'], ['stepsRows','Steps: Title | Description','textarea'], ['impactTitle','Impact Heading'], ['impactBody','Impact Copy']],
+    sponsorships: [['sponsorsKicker','Eyebrow'], ['sponsorsTitle','Heading'], ['sponsorsBody','Supporting Copy','textarea']],
+    programmeAds: [['adsKicker','Eyebrow'], ['adsTitle','Heading'], ['adsBody','Supporting Copy','textarea']],
+    footer: [['footerTitle','Heading'], ['footerBody','Supporting Copy'], ['footerButton','Contact Button']],
+  };
+
+  function publicEditorField(field, page) {
+    var key = field[0], label = field[1], type = field[2] || 'input';
+    var value = page.content[key] || '';
+    return '<div class="spn-public-editor-field"><label>' + escHtml(label) + '</label>' +
+      (type === 'textarea'
+        ? '<textarea data-public-key="' + key + '" rows="3">' + escHtml(value) + '</textarea>'
+        : '<input type="text" data-public-key="' + key + '" value="' + escHtml(value) + '" />') +
+    '</div>';
+  }
+
+  function publicColorSwatches(sectionId, selected) {
+    return '<div class="spn-public-color-row" role="radiogroup" aria-label="' + escHtml(PUBLIC_SECTION_LABELS[sectionId] || sectionId) + ' colour">' + PUBLIC_PAGE_COLORS.map(function (color) {
+      return '<label class="spn-public-color-swatch" title="' + color.name + '"><input type="radio" name="public-color-' + sectionId + '" data-public-color="' + sectionId + '" value="' + color.value + '"' + (selected === color.value ? ' checked' : '') + ' /><span style="background:' + color.value + '"></span></label>';
+    }).join('') + '</div>';
+  }
+
+  function renderPublicPageEditor() {
+    renderPublicStatsAdmin();
+    var host = document.getElementById('spn-public-editor');
+    if (!host) return;
+    var page = mergePublicPage(SpnsState.settings.publicPageDraft || SpnsState.settings.publicPage);
+    SpnsState.settings.publicPageDraft = page;
+    var sections = page.sections.map(function (section, index) {
+      var fields = (PUBLIC_SECTION_FIELDS[section.id] || []).map(function (field) { return publicEditorField(field, page); }).join('');
+      var orderOptions = page.sections.map(function (_, optionIndex) { return '<option value="' + optionIndex + '"' + (optionIndex === index ? ' selected' : '') + '>' + (optionIndex + 1) + '</option>'; }).join('');
+      var colorControls = section.id === 'ways'
+        ? '<div class="spn-public-editor-subtitle">Sponsor Colour</div>' + publicColorSwatches('sponsor', page.colors.sponsor) + '<div class="spn-public-editor-subtitle spn-public-editor-subtitle--spaced">Programme Ad Colour</div>' + publicColorSwatches('ads', page.colors.ads)
+        : '<div class="spn-public-editor-subtitle">Solid Section Colour</div>' + publicColorSwatches(section.id, page.colors[section.id] || '#572e88');
+      return '<details class="spn-public-editor-section" data-public-section-editor="' + section.id + '"' + (index === 0 ? ' open' : '') + '>' +
+        '<summary><span>' + escHtml(PUBLIC_SECTION_LABELS[section.id] || section.id) + '</span><span class="spn-public-section-controls" onclick="event.stopPropagation()">' +
+          '<label>Show <input type="checkbox" data-public-visible="' + section.id + '"' + (section.visible !== false ? ' checked' : '') + ' /></label>' +
+          '<label>Order <select data-public-order="' + section.id + '">' + orderOptions + '</select></label>' +
+        '</span></summary>' +
+        '<div class="spn-public-editor-section-body"><div>' + colorControls + '</div>' +
+        '<div class="spn-public-editor-fields">' + fields + '</div>' + (section.id === 'stats' ? '<div><div class="spn-public-editor-subtitle">Audience Stats</div><div class="spn-public-stats-grid" id="spn-public-stats-grid-inner"></div></div>' : '') + '</div>' +
+      '</details>';
+    }).join('');
+    host.innerHTML = '<div class="spn-public-editor-general">' +
+      '<div class="spn-public-editor-field"><label>Poster Override URL</label><div class="spn-public-poster-control"><input type="url" id="spn-public-poster-url" value="' + escHtml(page.posterUrl) + '" placeholder="Leave blank to use the production poster" /><button type="button" class="spn-btn spn-btn--ghost" onclick="MarketingSponsorsModule.uploadPublicPoster()">Upload</button></div></div>' +
+      '<div class="spn-public-editor-field"><label>Contact Email Override</label><input type="email" id="spn-public-contact-email" value="' + escHtml(page.contactEmail) + '" placeholder="Leave blank to use the organisation email" /></div>' +
+    '</div>' + sections;
+    var originalStats = document.getElementById('spn-public-stats-grid');
+    var innerStats = document.getElementById('spn-public-stats-grid-inner');
+    if (originalStats && innerStats) { innerStats.innerHTML = originalStats.innerHTML; originalStats.innerHTML = ''; }
+    host.oninput = schedulePublicPagePreview;
+    host.onchange = function (event) { if (event.target.matches('[data-public-order]')) reorderPublicSection(event.target); schedulePublicPagePreview(); };
+    updatePublicPageStatus();
+    schedulePublicPagePreview();
+  }
+
+  function collectPublicPageEditor() {
+    var page = mergePublicPage(SpnsState.settings.publicPageDraft || SpnsState.settings.publicPage);
+    document.querySelectorAll('[data-public-key]').forEach(function (input) { page.content[input.dataset.publicKey] = input.value; });
+    document.querySelectorAll('[data-public-color]:checked').forEach(function (input) { page.colors[input.dataset.publicColor] = input.value; });
+    page.posterUrl = (document.getElementById('spn-public-poster-url') || {}).value || '';
+    page.contactEmail = (document.getElementById('spn-public-contact-email') || {}).value || '';
+    page.sections.forEach(function (section) {
+      var toggle = document.querySelector('[data-public-visible="' + section.id + '"]');
+      section.visible = !toggle || toggle.checked;
+    });
+    return page;
+  }
+
+  function reorderPublicSection(select) {
+    var id = select.dataset.publicOrder;
+    var page = collectPublicPageEditor();
+    var from = page.sections.findIndex(function (section) { return section.id === id; });
+    var to = Number(select.value);
+    if (from < 0 || to < 0 || from === to) return;
+    var moved = page.sections.splice(from, 1)[0];
+    page.sections.splice(to, 0, moved);
+    SpnsState.settings.publicPageDraft = page;
+    renderPublicPageEditor();
+  }
+
+  var publicPreviewTimer = null;
+  function schedulePublicPagePreview() {
+    clearTimeout(publicPreviewTimer);
+    publicPreviewTimer = setTimeout(function () {
+      SpnsState.settings.publicPageDraft = collectPublicPageEditor();
+      var frame = document.getElementById('spn-public-preview-frame');
+      if (frame && frame.contentWindow) frame.contentWindow.postMessage({ type: 'bts-sponsor-preview', publicPage: SpnsState.settings.publicPageDraft, publicStats: collectPublicStats() }, window.location.origin);
+    }, 120);
+  }
+
+  function setPublicPreviewDevice(device) {
+    var shell = document.getElementById('spn-public-preview-shell');
+    if (shell) shell.dataset.device = device === 'mobile' ? 'mobile' : 'desktop';
+    document.querySelectorAll('[data-public-device]').forEach(function (button) { button.classList.toggle('active', button.dataset.publicDevice === device); });
+  }
+
+  function updatePublicPageStatus() {
+    var status = document.getElementById('spn-public-publish-status');
+    if (!status) return;
+    var published = SpnsState.settings.publicPage && SpnsState.settings.publicPage.published !== false;
+    status.textContent = published ? 'Published' : 'Not Published';
+    status.className = 'spn-public-publish-status ' + (published ? 'is-published' : 'is-draft');
+  }
+
+  function publicPageSettingsPayload() {
+    return {
+      adSizes: SpnsState.settings.adSizes,
+      tiers: SpnsState.settings.tiers,
       deadlines: {
         artwork: (document.getElementById('spn-deadline-artwork') || {}).value || null,
         booking: (document.getElementById('spn-deadline-booking') || {}).value || null,
         sponsor: (document.getElementById('spn-deadline-sponsor') || {}).value || null,
       },
-      publicStats: collectPublicStats(),
+      publicStats: document.querySelector('.spn-public-stat-value') ? collectPublicStats() : (SpnsState.settings.publicStats || []),
+      publicPage: SpnsState.settings.publicPage,
+      publicPageDraft: SpnsState.settings.publicPageDraft,
     };
-    fetch(SUPABASE_URL + '/rest/v1/sponsor_settings', {
+  }
+
+  function persistSponsorSettings(settings, message) {
+    return fetch(SUPABASE_URL + '/rest/v1/sponsor_settings', {
       method: 'POST',
-      headers: {
-        apikey: SUPABASE_ANON, Authorization: 'Bearer ' + SUPABASE_ANON,
-        'Content-Type': 'application/json',
-        Prefer: 'resolution=merge-duplicates,return=representation',
-      },
+      headers: { apikey: SUPABASE_ANON, Authorization: 'Bearer ' + SUPABASE_ANON, 'Content-Type': 'application/json', Prefer: 'resolution=merge-duplicates,return=representation' },
       body: JSON.stringify({ production_id: SpnsState.prodId, settings: settings, updated_at: new Date().toISOString() }),
-    }).then(function (r) {
-      if (!r.ok) return r.text().then(function (t) { throw new Error(t); });
-      alert('Settings saved.');
-      refreshAdsGrouped();
-    }).catch(function (e) { alert('Could not save settings: ' + e.message); });
+    }).then(function (r) { if (!r.ok) return r.text().then(function (t) { throw new Error(t); }); return r.json(); }).then(function () { if (message) alert(message); });
+  }
+
+  function savePublicPage(publish) {
+    SpnsState.settings.publicStats = collectPublicStats();
+    SpnsState.settings.publicPageDraft = collectPublicPageEditor();
+    if (publish) {
+      SpnsState.settings.publicPage = mergePublicPage(SpnsState.settings.publicPageDraft);
+      SpnsState.settings.publicPage.published = true;
+    }
+    persistSponsorSettings(publicPageSettingsPayload(), publish ? 'Public sponsor page published.' : 'Public sponsor page draft saved.')
+      .then(function () { updatePublicPageStatus(); })
+      .catch(function (e) { alert('Could not save public page: ' + e.message); });
+  }
+
+  function unpublishPublicPage() {
+    if (!confirm('Unpublish the public sponsor page? Visitors will see that sponsor opportunities are not currently available.')) return;
+    SpnsState.settings.publicPage = mergePublicPage(SpnsState.settings.publicPage);
+    SpnsState.settings.publicPage.published = false;
+    persistSponsorSettings(publicPageSettingsPayload(), 'Public sponsor page unpublished.').then(updatePublicPageStatus).catch(function (e) { alert('Could not unpublish: ' + e.message); });
+  }
+
+  function uploadPublicPoster() {
+    var input = document.createElement('input');
+    input.type = 'file'; input.accept = 'image/jpeg,image/png,image/webp';
+    input.onchange = function () {
+      var file = input.files[0]; if (!file) return;
+      var path = SpnsState.prodId + '/public-page/' + Date.now() + '_' + file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+      fetch(SUPABASE_URL + '/storage/v1/object/' + STORAGE_BUCKET + '/' + path, { method: 'POST', headers: { apikey: SUPABASE_ANON, Authorization: 'Bearer ' + SUPABASE_ANON, 'Content-Type': file.type }, body: file })
+        .then(function (r) { if (!r.ok) return r.text().then(function (t) { throw new Error(t); }); return SUPABASE_URL + '/storage/v1/object/public/' + STORAGE_BUCKET + '/' + path; })
+        .then(function (url) { document.getElementById('spn-public-poster-url').value = url; schedulePublicPagePreview(); })
+        .catch(function (e) { alert('Poster upload failed: ' + e.message); });
+    };
+    input.click();
+  }
+
+  function escHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+  function saveSettings() {
+    SpnsState.settings.publicStats = document.querySelector('.spn-public-stat-value') ? collectPublicStats() : (SpnsState.settings.publicStats || []);
+    persistSponsorSettings(publicPageSettingsPayload(), 'Settings saved.').then(refreshAdsGrouped).catch(function (e) { alert('Could not save settings: ' + e.message); });
   }
 
   // -- Module API ---------------------------------------------------------------
@@ -1313,10 +1535,17 @@
             '</div>' +
           '</div>' +
           '<div class="spn-settings-panel" id="spn-settings-publicpage">' +
-            '<div class="spn-settings-panel-head"><div><div class="spn-settings-section-title">Public Page Stats</div><div class="spn-settings-section-desc">Up to 4 stats shown on your public sponsor page (e.g. "600+ Audience Members"). Leave a value blank to hide that stat.</div></div></div>' +
-            '<div class="spn-public-stats-grid" id="spn-public-stats-grid"></div>' +
+            '<div class="spn-public-builder-toolbar"><div><div class="spn-settings-section-title">Public Sponsor Page</div><div class="spn-settings-section-desc">Edit the public page within the Build The Show brand system. Prices and options remain connected to Programme Ad Sizes and Sponsor Tiers.</div></div>' +
+              '<div class="spn-public-builder-actions"><span class="spn-public-publish-status" id="spn-public-publish-status">Loading</span><button type="button" class="spn-btn spn-btn--ghost" onclick="MarketingSponsorsModule.unpublishPublicPage()">Unpublish</button><button type="button" class="spn-btn spn-btn--ghost" onclick="MarketingSponsorsModule.savePublicPage(false)">Save Draft</button><button type="button" class="spn-btn spn-btn--primary" onclick="MarketingSponsorsModule.savePublicPage(true)">Publish</button></div>' +
+            '</div>' +
+            '<div class="spn-public-builder">' +
+              '<div class="spn-public-builder-editor"><div id="spn-public-editor"></div><div class="spn-public-stats-grid" id="spn-public-stats-grid" hidden></div></div>' +
+              '<aside class="spn-public-builder-preview"><div class="spn-public-preview-toolbar"><strong>Live Preview</strong><div><button type="button" class="spn-public-device active" data-public-device="desktop" onclick="MarketingSponsorsModule.setPublicPreviewDevice(\'desktop\')">Desktop</button><button type="button" class="spn-public-device" data-public-device="mobile" onclick="MarketingSponsorsModule.setPublicPreviewDevice(\'mobile\')">Mobile</button></div></div>' +
+                '<div class="spn-public-preview-frame-shell" id="spn-public-preview-shell" data-device="desktop"><iframe id="spn-public-preview-frame" title="Public sponsor page preview" src="/PUBLIC/sponsors.html?prod=' + encodeURIComponent(SpnsState.prodId) + '&preview=1" onload="MarketingSponsorsModule.refreshPublicPreview()"></iframe></div>' +
+              '</aside>' +
+            '</div>' +
           '</div>' +
-          '<div class="spn-settings-savebar">' +
+          '<div class="spn-settings-savebar" id="spn-settings-savebar">' +
             '<div><strong>' + settingsHeading + '</strong><span>Save changes to this campaign setup.</span></div>' +
             '<button class="spn-btn spn-btn--primary" onclick="MarketingSponsorsModule.saveSettings()">Save Settings</button>' +
           '</div>' +
@@ -1509,5 +1738,10 @@
     deleteTier:      deleteTier,
     saveSettings:    saveSettings,
     switchSettingsTab: switchSettingsTab,
+    savePublicPage: savePublicPage,
+    unpublishPublicPage: unpublishPublicPage,
+    uploadPublicPoster: uploadPublicPoster,
+    setPublicPreviewDevice: setPublicPreviewDevice,
+    refreshPublicPreview: schedulePublicPagePreview,
   };
 })();
