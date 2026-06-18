@@ -1,10 +1,17 @@
 // Cloudflare Pages Function
 // Routes /:org/:show/sponsors to the shared public sponsor opportunities page.
-// Must use the pretty path (no .html) — CF Pages ASSETS.fetch runs redirect rules
-// so requesting the .html path triggers a strip-extension redirect and loops.
 
 export async function onRequest(context) {
-  const url = new URL(context.request.url);
-  const assetUrl = new URL('/SYSTEM/Public/sponsors', url);
-  return context.env.ASSETS.fetch(assetUrl);
+  try {
+    const url = new URL(context.request.url);
+    // Use the pretty path (no .html) — ASSETS.fetch runs redirect rules,
+    // so .html triggers a strip-extension redirect that loops.
+    const assetUrl = new URL('/SYSTEM/Public/sponsors', url);
+    return await context.env.ASSETS.fetch(assetUrl.toString());
+  } catch (err) {
+    return new Response(
+      '<!DOCTYPE html><html><body><h2>Could not load sponsors page</h2><pre>' + err.message + '</pre></body></html>',
+      { status: 500, headers: { 'Content-Type': 'text/html' } }
+    );
+  }
 }
