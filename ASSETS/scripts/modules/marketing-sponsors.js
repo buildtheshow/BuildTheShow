@@ -1169,14 +1169,14 @@
           '</div>' +
           '<div class="spn-dashboard-metrics">' +
             '<section class="spn-dashboard-metric spn-dashboard-metric--purple">' +
-              '<img class="spn-dashboard-metric-icon" src="/ASSETS/Images/Icons/Budgeting-Sponsorship.svg" alt="" />' +
-              '<div class="spn-dashboard-metric-label">Sponsorship Revenue</div>' +
+              '<img class="spn-dashboard-metric-icon" src="/ASSETS/Images/Icons/Budgeting-Fundraising.svg" alt="" />' +
+              '<div class="spn-dashboard-metric-label">Revenue</div>' +
               '<div class="spn-dashboard-metric-value" id="spn-dashboard-revenue">--</div>' +
               '<div class="spn-dashboard-metric-sub" id="spn-dashboard-revenue-sub">Loading...</div>' +
               '<div class="spn-dashboard-progress"><span id="spn-dashboard-revenue-bar"></span></div><div class="spn-dashboard-progress-value" id="spn-dashboard-revenue-percent">--</div>' +
             '</section>' +
             '<section class="spn-dashboard-metric spn-dashboard-metric--green">' +
-              '<img class="spn-dashboard-metric-icon" src="/ASSETS/Images/Icons/organisation-members.svg" alt="" />' +
+              '<img class="spn-dashboard-metric-icon" src="/ASSETS/Images/Icons/Budgeting-Sponsorship.svg" alt="" />' +
               '<div class="spn-dashboard-metric-label">Sponsors Confirmed</div>' +
               '<div class="spn-dashboard-metric-value" id="spn-dashboard-sponsors">--</div>' +
               '<div class="spn-dashboard-metric-sub" id="spn-dashboard-sponsors-sub">Loading...</div>' +
