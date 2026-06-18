@@ -81,6 +81,7 @@
     'registration',
     'casting',
     'marketing',
+    'sponsors',
     'budget',
     'dept-front-of-house',
     'dept-backstage',
@@ -126,6 +127,7 @@
   window.toggleRegistrationMenu = makeToggle('registration');
   window.toggleCastingMenu      = makeToggle('casting');
   window.toggleMarketingMenu    = makeToggle('marketing');
+  window.toggleSponsorsMenu     = makeToggle('sponsors');
   window.toggleBudgetMenu       = makeToggle('budget');
   window.toggleDepartmentSubmenu = function (e, section) {
     makeToggle(section)(e);
@@ -133,7 +135,7 @@
 
   window.handleSidebarChevronKey = function (e, section) {
     if (e.key !== 'Enter' && e.key !== ' ') return;
-    const fn = { auditions: window.toggleAuditionsMenu, registration: window.toggleRegistrationMenu, casting: window.toggleCastingMenu, marketing: window.toggleMarketingMenu, budget: window.toggleBudgetMenu }[section];
+    const fn = { auditions: window.toggleAuditionsMenu, registration: window.toggleRegistrationMenu, casting: window.toggleCastingMenu, marketing: window.toggleMarketingMenu, sponsors: window.toggleSponsorsMenu, budget: window.toggleBudgetMenu }[section];
     if (!fn && section.indexOf('dept-') === 0) {
       window.toggleDepartmentSubmenu(e, section);
       return;
@@ -369,6 +371,14 @@
   // header on standalone production pages.
 
   window.initProductionPage = async function (activeGroup) {
+    // Portal mode: page is inside the portal iframe — strip the sidebar and its margin
+    if (new URLSearchParams(location.search).get('portal')) {
+      const s = document.createElement('style');
+      s.textContent = '#prod-sidebar-host,#prod-sidebar,.prod-sidebar{display:none!important}.prod-main{margin-left:0!important;max-width:100vw!important}.prod-main::before{inset:0!important}';
+      document.head.appendChild(s);
+      return;
+    }
+
     const idParam = prodId();
 
     // Load sidebar HTML first so it shows immediately
