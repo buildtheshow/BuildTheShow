@@ -93,40 +93,36 @@
 
   // -- Settings tile builder ---------------------------------------------------
 
-  function settingsTile(kicker, label, body, footer) {
-    return '<div class="template-brand-card template-brand-card--settings">' +
-      '<div class="template-brand-card-inner"><div class="template-brand-tile-content">' +
-        '<div class="template-brand-tile-container template-brand-tile-container--header">' +
-          '<div class="template-brand-tile-kicker">' + kicker + '</div>' +
-        '</div>' +
-        '<div class="template-brand-tile-container template-brand-tile-container--title">' +
-          '<div class="template-brand-tile-settings-label">' + label + '</div>' +
-        '</div>' +
-        '<div class="template-brand-tile-container template-brand-tile-container--body">' +
-          '<div class="spn-settings-tile-body">' + body + '</div>' +
-        '</div>' +
-        '<div class="template-brand-tile-container template-brand-tile-container--footer">' +
-          '<div class="spn-settings-tile-actions">' + footer + '</div>' +
-        '</div>' +
-      '</div></div>' +
-    '</div>';
+  function settingsTile(kicker, label, body, footer, color) {
+    var renderer = window.BTSAuditionTemplates && window.BTSAuditionTemplates.renderTemplateById;
+    if (!renderer) return '';
+    return renderer('brand.tile.square', {
+      esc: esc,
+      mode: 'settings',
+      color: color || '#572e88',
+      ink: '#ffffff',
+      kicker: kicker,
+      title: label,
+      bodyHtml: '<div class="spn-settings-tile-body">' + body + '</div>',
+      buttonHtml: '<div class="spn-settings-tile-actions">' + footer + '</div>',
+      ariaLabel: label,
+    });
   }
 
-  function deadlineTile(kicker, label, inputId) {
-    return '<div class="template-brand-card template-brand-card--settings">' +
-      '<div class="template-brand-card-inner"><div class="template-brand-tile-content">' +
-        '<div class="template-brand-tile-container template-brand-tile-container--header">' +
-          '<div class="template-brand-tile-kicker">' + kicker + '</div>' +
-        '</div>' +
-        '<div class="template-brand-tile-container template-brand-tile-container--title">' +
-          '<div class="template-brand-tile-settings-label">' + label + '</div>' +
-        '</div>' +
-        '<div class="template-brand-tile-container template-brand-tile-container--body">' +
-          '<input type="date" id="' + inputId + '" class="spn-field input" style="width:100%;padding:0.45rem 0.6rem;border:1.5px solid rgba(87,46,136,0.18);border-radius:7px;font-family:inherit;font-size:0.84rem;color:#1a1530;background:#fff;" />' +
-        '</div>' +
-        '<div class="template-brand-tile-container template-brand-tile-container--footer"></div>' +
-      '</div></div>' +
-    '</div>';
+  function deadlineTile(kicker, label, inputId, color) {
+    var renderer = window.BTSAuditionTemplates && window.BTSAuditionTemplates.renderTemplateById;
+    if (!renderer) return '';
+    return renderer('brand.tile.square', {
+      esc: esc,
+      mode: 'settings',
+      color: color || '#476aaa',
+      ink: '#ffffff',
+      kicker: kicker,
+      title: label,
+      inputHtml: '<div class="template-brand-tile-form-fields"><input type="date" id="' + inputId + '" class="template-brand-tile-form-input form-input" aria-label="' + esc(label) + '" /></div>',
+      helper: 'Used for production planning and follow-up.',
+      ariaLabel: label,
+    });
   }
 
   function fetchPosterUrl() {
