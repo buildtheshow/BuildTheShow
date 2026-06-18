@@ -734,7 +734,8 @@
           'Ad Size',
           esc(s.label),
           esc(dimsDisplay) + '<br>Colour: $' + s.colour + ' &nbsp;&middot;&nbsp; B&amp;W: $' + s.bw,
-          '<button class="spn-btn spn-btn--ghost spn-btn--sm" onclick="MarketingSponsorsModule.editAdSize(' + i + ')">Edit</button>'
+          '<button class="template-brand-tile-button" onclick="MarketingSponsorsModule.editAdSize(' + i + ')">Edit</button>',
+          ADTILE_COLORS[i % ADTILE_COLORS.length]
         );
       }).join('') +
     '</div>';
@@ -746,14 +747,29 @@
           'Sponsor Tier',
           esc(t.label),
           '$' + t.amount,
-          '<button class="spn-btn spn-btn--ghost spn-btn--sm" onclick="MarketingSponsorsModule.editTier(' + i + ')">Edit</button>' +
-          '<button class="spn-btn spn-btn--danger spn-btn--sm" onclick="MarketingSponsorsModule.deleteTier(' + i + ')">Remove</button>'
+          '<button class="template-brand-tile-button" onclick="MarketingSponsorsModule.editTier(' + i + ')">Edit</button>' +
+          '<button class="template-brand-tile-button" onclick="MarketingSponsorsModule.deleteTier(' + i + ')">Remove</button>',
+          ADTILE_COLORS[(i + 2) % ADTILE_COLORS.length]
         );
       }).join('') +
       '<div style="grid-column:1/-1;padding-top:0.25rem">' +
         '<button class="spn-btn spn-btn--ghost" onclick="MarketingSponsorsModule.addTier()">+ Add Tier</button>' +
       '</div>' +
     '</div>';
+  }
+
+  function switchSettingsTab(name) {
+    var valid = ['sizes', 'tiers', 'deadlines'];
+    var next = valid.indexOf(name) >= 0 ? name : 'sizes';
+    document.querySelectorAll('.spn-settings-tab').forEach(function (button) {
+      var active = button.dataset.settingsPanel === next;
+      button.classList.toggle('active', active);
+      if (active) button.setAttribute('aria-current', 'page');
+      else button.removeAttribute('aria-current');
+    });
+    document.querySelectorAll('.spn-settings-panel').forEach(function (panel) {
+      panel.classList.toggle('active', panel.id === 'spn-settings-' + next);
+    });
   }
 
   function editAdSize(i) {
@@ -831,6 +847,26 @@
           : 'Track your programme ads, sponsor packages, and business partnerships all in one place.');
       var heroLabel = isAdsPage ? 'Placements' : (isShowSponsorsPage ? 'Sponsors' : 'Businesses');
       var heroKind = isAdsPage ? 'ads' : (isShowSponsorsPage ? 'sponsors' : 'businesses');
+      var deadlineCopy = isAdsPage
+        ? 'Set the booking and artwork dates used by your programme ad team.'
+        : (isShowSponsorsPage ? 'Set the confirmation date used by your sponsor team.' : 'Set the booking, artwork, and sponsor confirmation dates used by your team.');
+      var settingsTabsHtml = isAdsPage
+        ? '<button type="button" class="spn-settings-tab active" data-settings-panel="sizes" onclick="MarketingSponsorsModule.switchSettingsTab(\'sizes\')">Ad Sizes</button>' +
+          '<button type="button" class="spn-settings-tab" data-settings-panel="deadlines" onclick="MarketingSponsorsModule.switchSettingsTab(\'deadlines\')">Deadlines</button>'
+        : (isShowSponsorsPage
+          ? '<button type="button" class="spn-settings-tab active" data-settings-panel="tiers" onclick="MarketingSponsorsModule.switchSettingsTab(\'tiers\')">Sponsor Tiers</button>' +
+            '<button type="button" class="spn-settings-tab" data-settings-panel="deadlines" onclick="MarketingSponsorsModule.switchSettingsTab(\'deadlines\')">Deadlines</button>'
+          : '<button type="button" class="spn-settings-tab active" data-settings-panel="sizes" onclick="MarketingSponsorsModule.switchSettingsTab(\'sizes\')">Ad Sizes</button>' +
+            '<button type="button" class="spn-settings-tab" data-settings-panel="tiers" onclick="MarketingSponsorsModule.switchSettingsTab(\'tiers\')">Sponsor Tiers</button>' +
+            '<button type="button" class="spn-settings-tab" data-settings-panel="deadlines" onclick="MarketingSponsorsModule.switchSettingsTab(\'deadlines\')">Deadlines</button>');
+      var deadlineTilesHtml = isAdsPage
+        ? deadlineTile('Programme Ads', 'Artwork Submission', 'spn-deadline-artwork', '#476aaa') +
+          deadlineTile('Programme Ads', 'Ad Booking', 'spn-deadline-booking', '#dd8233')
+        : (isShowSponsorsPage
+          ? deadlineTile('Show Sponsors', 'Sponsor Confirmation', 'spn-deadline-sponsor', '#769e7b')
+          : deadlineTile('Programme Ads', 'Artwork Submission', 'spn-deadline-artwork', '#476aaa') +
+            deadlineTile('Programme Ads', 'Ad Booking', 'spn-deadline-booking', '#dd8233') +
+            deadlineTile('Show Sponsors', 'Sponsor Confirmation', 'spn-deadline-sponsor', '#769e7b'));
 
       container.innerHTML =
         '<div class="aud-visual-hero">' +
@@ -918,24 +954,25 @@
         '</div>' +
 
         '<div id="spn-panel-settings" class="spn-panel">' +
-          '<div class="spn-settings-section">' +
-            '<div class="spn-settings-section-title">Programme Ad Sizes</div>' +
-            '<div class="spn-settings-section-desc">These sizes appear on your ad booking sheet. Dims are height x width (printing convention), on an 8.5x11 sheet folded in half.</div>' +
+          '<div class="spn-settings-tabs" role="tablist" aria-label="Programme ad settings">' +
+            settingsTabsHtml +
+          '</div>' +
+          '<div class="spn-settings-panel active" id="spn-settings-sizes">' +
+            '<div class="spn-settings-panel-head"><div><div class="spn-settings-section-title">Programme Ad Sizes</div><div class="spn-settings-section-desc">Set the dimensions and colour or black-and-white price shown on your ad booking sheet.</div></div></div>' +
             '<div id="spn-adsize-list"></div>' +
           '</div>' +
-          '<div class="spn-settings-section">' +
-            '<div class="spn-settings-section-title">Sponsor Tiers</div>' +
-            '<div class="spn-settings-section-desc">Tiers are used when adding sponsor packages. Add any tiers your production offers.</div>' +
+          '<div class="spn-settings-panel" id="spn-settings-tiers">' +
+            '<div class="spn-settings-panel-head"><div><div class="spn-settings-section-title">Sponsor Tiers</div><div class="spn-settings-section-desc">Create the package levels available to show sponsors.</div></div></div>' +
             '<div id="spn-tier-list"></div>' +
           '</div>' +
-          '<div class="spn-settings-section">' +
-            '<div class="spn-settings-section-title">Deadlines</div>' +
-            '<div class="spn-settings-section-desc">Set the key dates for your ad and sponsorship campaign. These are for your reference only.</div>' +
+          '<div class="spn-settings-panel" id="spn-settings-deadlines">' +
+            '<div class="spn-settings-panel-head"><div><div class="spn-settings-section-title">Deadlines</div><div class="spn-settings-section-desc">' + deadlineCopy + '</div></div></div>' +
             '<div class="spn-settings-tile-grid">' +
-              deadlineTile('Sponsors', 'Artwork Submission Deadline', 'spn-deadline-artwork') +
-              deadlineTile('Sponsors', 'Ad Booking Deadline', 'spn-deadline-booking') +
-              deadlineTile('Sponsors', 'Sponsor Confirmation Deadline', 'spn-deadline-sponsor') +
+              deadlineTilesHtml +
             '</div>' +
+          '</div>' +
+          '<div class="spn-settings-savebar">' +
+            '<div><strong>' + pageTitle + ' Settings</strong><span>Save changes to this campaign setup.</span></div>' +
             '<button class="spn-btn spn-btn--primary" onclick="MarketingSponsorsModule.saveSettings()">Save Settings</button>' +
           '</div>' +
         '</div>' +
@@ -1044,6 +1081,7 @@
       }
 
       refreshAdsGrouped();
+      switchSettingsTab(isShowSponsorsPage ? 'tiers' : 'sizes');
       switchTab(isAdsPage ? 'ads' : (isShowSponsorsPage ? 'sponsors' : 'overview'));
     },
 
@@ -1081,5 +1119,6 @@
     editTier:        editTier,
     deleteTier:      deleteTier,
     saveSettings:    saveSettings,
+    switchSettingsTab: switchSettingsTab,
   };
 })();
