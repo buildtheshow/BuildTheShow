@@ -605,22 +605,29 @@
       return stored || (email && _prodId ? volunteerPasscodeForPortal(email, _prodId) : '');
     }
 
-    function treasurerPortalPreviewUrl(token) {
-      return `${window.location.origin}/SYSTEM/Organisations/Productions/Workspace/treasurer-portal.html?pvw_token=${encodeURIComponent(token)}`;
-    }
-
-    function createTreasurerPreviewToken() {
+    function createPortalPreviewToken(kind = 'portal') {
       if (!_prodId || !_orgSlug || !_showSlug) return '';
-      const token = (crypto?.randomUUID?.() || `tr-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+      const safeKind = String(kind || 'portal').replace(/[^a-z0-9_-]+/gi, '_').toLowerCase();
+      const token = (crypto?.randomUUID?.() || `${safeKind}-${Date.now()}-${Math.random().toString(36).slice(2)}`);
       const payload = JSON.stringify({
         prodId: _prodId,
         orgSlug: _orgSlug,
         showSlug: _showSlug,
+        kind: safeKind,
         createdAt: Date.now(),
       });
-      try { sessionStorage.setItem(`bts_treasurer_preview:${token}`, payload); } catch (_) {}
-      try { localStorage.setItem(`bts_treasurer_preview:${token}`, payload); } catch (_) {}
+      try { sessionStorage.setItem(`bts_portal_preview:${token}`, payload); } catch (_) {}
+      try { localStorage.setItem(`bts_portal_preview:${token}`, payload); } catch (_) {}
       return token;
+    }
+
+    function publicPortalPreviewUrl(token, kind = 'portal') {
+      const params = new URLSearchParams({ id: _prodId, view: 'portal', pvw_token: token, pvw_kind: kind });
+      return `${window.location.origin}/PUBLIC/volunteer-production-page.html?${params.toString()}`;
+    }
+
+    function treasurerPortalPreviewUrl(token) {
+      return `${window.location.origin}/SYSTEM/Organisations/Productions/Workspace/treasurer-portal.html?pvw_token=${encodeURIComponent(token)}`;
     }
 
     function peopleMergeKey(person = {}) {
@@ -963,7 +970,7 @@
     function portalIframeSrc(person) {
       // Treasurer: load restricted financial portal
       if (person.source === 'treasurer') {
-        const previewToken = createTreasurerPreviewToken();
+        const previewToken = createPortalPreviewToken('treasurer');
         if (previewToken) {
           return treasurerPortalPreviewUrl(previewToken);
         }
@@ -975,6 +982,12 @@
         if (email && passcode && _orgSlug && _showSlug) {
           return `${window.location.origin}/${encodeURIComponent(_orgSlug)}/${encodeURIComponent(_showSlug)}/portal?pvw_email=${encodeURIComponent(email)}&pvw_code=${encodeURIComponent(passcode)}`;
         }
+        const previewToken = createPortalPreviewToken(person.source);
+        if (previewToken) return publicPortalPreviewUrl(previewToken, person.source);
+      }
+      if (person.source === 'dept_lead_planned') {
+        const previewToken = createPortalPreviewToken('dept_lead');
+        if (previewToken) return publicPortalPreviewUrl(previewToken, 'dept_lead');
       }
       // Cast: load the actual cast portal at /{org}/{show}/portal with preview auto-login params
       if (person.source === 'cast') {
@@ -984,6 +997,8 @@
         if (email && code && _orgSlug && _showSlug) {
           return `${window.location.origin}/${encodeURIComponent(_orgSlug)}/${encodeURIComponent(_showSlug)}/portal?pvw_email=${encodeURIComponent(email)}&pvw_code=${encodeURIComponent(code)}`;
         }
+        const previewToken = createPortalPreviewToken('cast');
+        if (previewToken) return publicPortalPreviewUrl(previewToken, 'cast');
       }
       // Team / creative team: load /{org}/{show}/Team with preview auto-login params
       if (['director','vocal_director','choreographer','producer','admin','musical_director','music_director'].includes(person.source)) {

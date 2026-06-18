@@ -3440,6 +3440,29 @@
     function clearRememberedPortal() {
       try { localStorage.removeItem(rememberedPortalKey()); } catch (_) {}
     }
+    function readProducerPreviewToken(token) {
+      if (!token) return null;
+      const key = `bts_portal_preview:${token}`;
+      let preview = null;
+      try { preview = JSON.parse(sessionStorage.getItem(key) || localStorage.getItem(key) || 'null'); } catch (_) {}
+      if (!preview?.prodId || Date.now() - Number(preview.createdAt || 0) >= 10 * 60 * 1000) return null;
+      return preview;
+    }
+    function clearProducerPreviewToken(token) {
+      if (!token) return;
+      const key = `bts_portal_preview:${token}`;
+      try { sessionStorage.removeItem(key); } catch (_) {}
+      try { localStorage.removeItem(key); } catch (_) {}
+    }
+    function producerPreviewPortalData(preview = {}) {
+      return {
+        email: 'producer-preview',
+        code: '',
+        preview,
+        volunteer: { rows: [], token: null, linkedPerformers: [] },
+        performers: [],
+      };
+    }
     function forgetRememberedPortal() {
       clearRememberedPortal();
       sessionStorage.removeItem('vp_portal_email');
@@ -5771,9 +5794,12 @@
     }
     function renderProductionPortal(portalData) {
       currentPortalData = portalData;
+      const isProducerPreview = portalData?.preview?.prodId === prod?.id;
       const firstPerformer = portalData.performers[0];
       const firstVolunteer = portalData.volunteer.rows[0];
-      const firstName = firstPerformer ? performerDisplayName(firstPerformer).split(/\s+/)[0] : volunteerFirstName(firstVolunteer || {}, portalData.email);
+      const firstName = isProducerPreview
+        ? 'Producer'
+        : firstPerformer ? performerDisplayName(firstPerformer).split(/\s+/)[0] : volunteerFirstName(firstVolunteer || {}, portalData.email);
       const volunteerStats = portalVolunteerStats(portalData.volunteer.rows, portalData.email, portalData.volunteer.linkedPerformers || []);
 
       // Populate sidebar
@@ -5786,6 +5812,7 @@
         const bits = [];
         if (portalData.performers.length) bits.push(`${portalData.performers.length} performer record${portalData.performers.length === 1 ? '' : 's'}`);
         if (portalData.volunteer.rows.length) bits.push(`${volunteerStats.upcomingApproved.length} upcoming shift${volunteerStats.upcomingApproved.length === 1 ? '' : 's'}`);
+        if (isProducerPreview && !bits.length) bits.push('Producer preview');
         subEl.textContent = bits.join(' · ') || '';
       }
 
@@ -6292,10 +6319,19 @@
       showOnly('vp-loading');
       try {
         let prodData = null;
-        const slugResult = await sb.from('productions').select('id,title,slug,poster_url,organization_id,registration_settings,registration_households').eq('slug', showSlug).maybeSingle();
-        if (slugResult.error) throw slugResult.error;
-        prodData = slugResult.data;
-        if (!prodData) {
+        const params = new URLSearchParams(window.location.search);
+        const directProdId = params.get('id') || params.get('prod') || '';
+        if (directProdId) {
+          const directResult = await sb.from('productions').select('id,title,slug,poster_url,organization_id,registration_settings,registration_households').eq('id', directProdId).maybeSingle();
+          if (directResult.error) throw directResult.error;
+          prodData = directResult.data;
+        }
+        if (!prodData && showSlug) {
+          const slugResult = await sb.from('productions').select('id,title,slug,poster_url,organization_id,registration_settings,registration_households').eq('slug', showSlug).maybeSingle();
+          if (slugResult.error) throw slugResult.error;
+          prodData = slugResult.data;
+        }
+        if (!prodData && showSlug) {
           const titleResult = await sb.from('productions').select('id,title,slug,poster_url,organization_id,registration_settings,registration_households').ilike('title', showSlug.replace(/-/g,' ')).maybeSingle();
           if (!titleResult.error) prodData = titleResult.data;
         }
@@ -6326,13 +6362,18 @@
 
         renderPage();
         showOnly('vp-page');
-        const viewParam = new URLSearchParams(window.location.search).get('view');
+        const viewParam = params.get('view');
         const isPortalPath = /\/portal\/?$/i.test(window.location.pathname);
         if (viewParam === 'portal' || isPortalPath) {
           // Admin preview params take priority over any saved session
-          const pvwEmail = new URLSearchParams(window.location.search).get('pvw_email');
-          const pvwCode  = new URLSearchParams(window.location.search).get('pvw_code');
-          if (pvwEmail && pvwCode) {
+          const pvwEmail = params.get('pvw_email');
+          const pvwCode  = params.get('pvw_code');
+          const pvwToken = params.get('pvw_token');
+          const pvwPreview = readProducerPreviewToken(pvwToken);
+          if (pvwPreview?.prodId === prod.id) {
+            clearProducerPreviewToken(pvwToken);
+            showPortalHome(producerPreviewPortalData(pvwPreview));
+          } else if (pvwEmail && pvwCode) {
             try {
               const portal = await resolveProductionPortal(pvwEmail, pvwCode);
               if (portal.volunteer.rows.length || portal.performers.length) {
