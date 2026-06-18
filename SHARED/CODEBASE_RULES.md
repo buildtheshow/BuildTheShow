@@ -375,6 +375,21 @@ These are non-negotiable platform rules for how the system should be shaped and 
 13. Active navigation state must be router-driven, not set independently by each page.
 14. Pages must never fetch, inject, or own the sidebar, topbar, auth state, notification system, global overlays, or global layout.
 
+### Portal Architecture
+
+1. There is ONE shared portal shell. Do not build separate portals per role.
+2. Do not create role-named portal files such as `treasurer-portal.html`, `volunteer-portal.html`, `stage-manager-portal.html`, or `costume-portal.html`. These create duplicate pages and duplicate logic.
+3. A "portal" is the collection of modules a user can access based on their role. It is assembled dynamically, not copied.
+4. Modules are built once and shared across all roles. There is no `producer-budget`, `stage-manager-budget`, or `costume-budget`. There is one Budget module that shows different data and actions based on permissions.
+5. The shared shell owns: header, sidebar, production/org context, account/user context, permissions check, and loading/error states.
+6. The available reusable modules are: Dashboard, Shifts, Hours, Team, Planning, Budget, Costumes, Cast, Rehearsals, Volunteers, Financials, and Settings.
+7. Navigation is generated from permissions. The system asks: who is the user, what organisation and production are they viewing, what role(s) do they have, what modules are allowed for those roles, then builds the sidebar from that list.
+8. Hiding a sidebar link is not enough. Each page/module must also check its own permission directly.
+9. The long-term identity model is: User → Memberships/Assignments → Organisation → Production → Role → Permissions → Allowed modules.
+10. This gives one login, one identity, many possible roles, no duplicate portals, and no copied dashboards.
+11. `production-sidebar-nav.js` is the target shared shell/nav system. Individual HTML pages act as modules inside that shell.
+12. A role points to allowed modules. A role does not point to a copied portal.
+
 ### Pages
 
 1. One routed page should do one job.
