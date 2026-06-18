@@ -1014,6 +1014,7 @@
       resetState(prodId);
 
       var page = options && options.page || 'sponsors';
+      var isDashboardPage = page === 'sponsors';
       var isAdsPage = page === 'programmeads';
       var isShowSponsorsPage = page === 'showsponsors';
       var isSettingsPage = page === 'sponsorssettings';
@@ -1038,6 +1039,24 @@
       var deadlineTilesHtml = deadlineTile('Programme Ads', 'Artwork Submission', 'spn-deadline-artwork', '#476aaa') +
         deadlineTile('Programme Ads', 'Ad Booking', 'spn-deadline-booking', '#dd8233') +
         deadlineTile('Show Sponsors', 'Sponsor Confirmation', 'spn-deadline-sponsor', '#769e7b');
+
+      if (isDashboardPage) {
+        container.innerHTML =
+          '<div class="aud-visual-hero">' +
+            '<div class="aud-visual-hero-content">' +
+              '<div>' +
+                '<div class="aud-visual-kicker"><span class="aud-visual-kicker-dot" aria-hidden="true"></span>Promote &nbsp;-&nbsp; Sponsors</div>' +
+                '<h1 class="aud-visual-title">Dashboard</h1>' +
+                '<p class="aud-visual-copy">Manage programme advertising and show sponsorships for this production.</p>' +
+              '</div>' +
+              '<div class="spn-hero-side">' +
+                '<a class="spn-public-page-action" id="spn-public-page-action" href="#" target="_blank" rel="noopener">View Public Page</a>' +
+              '</div>' +
+            '</div>' +
+          '</div>';
+        hydratePublicPageAction();
+        return;
+      }
 
       container.innerHTML =
         '<div class="aud-visual-hero">' +
