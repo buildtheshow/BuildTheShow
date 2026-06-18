@@ -212,6 +212,8 @@
     el.innerHTML = renderAdsGrouped();
     var count = document.getElementById('spn-ads-count');
     if (count) count.textContent = SpnsState.ads.length + ' Programme Ad' + (SpnsState.ads.length !== 1 ? 's' : '');
+    var heroCount = document.getElementById('spn-hero-page-count');
+    if (heroCount && heroCount.dataset.kind === 'ads') heroCount.textContent = SpnsState.ads.length;
   }
 
   // -- Artwork upload -----------------------------------------------------------
@@ -323,7 +325,7 @@
       var openDeliv = delivList.filter(function (d) { return d.status !== 'done'; }).length;
 
       function setTile(id, val) { var el = document.getElementById(id); if (el) el.textContent = val; }
-      setTile('spn-hero-biz-count', bizList.length);
+      setTile('spn-hero-page-count', bizList.length);
       setTile('spn-tile-ad-rev',    fmtDollars(adRev));
       setTile('spn-tile-spn-rev',   fmtDollars(spnRev));
       setTile('spn-tile-biz',       bizList.length);
@@ -523,17 +525,23 @@
   // -- SPONSOR PACKAGES ---------------------------------------------------------
 
   function loadPackages() {
-    return dbFetch('sponsor_packages').then(function (data) {
+    var businessesPromise = SpnsState.businesses.length
+      ? Promise.resolve()
+      : dbFetch('sponsor_businesses').then(function (data) { SpnsState.businesses = data; }).catch(function () { SpnsState.businesses = []; });
+    var packagesPromise = dbFetch('sponsor_packages').then(function (data) {
       SpnsState.packages = data;
     }).catch(function () {
       SpnsState.packages = [];
-    }).then(renderPackages);
+    });
+    return Promise.all([businessesPromise, packagesPromise]).then(renderPackages);
   }
 
   function renderPackages() {
     var pkgs  = SpnsState.packages;
     var count = document.getElementById('spn-pkgs-count');
     if (count) count.textContent = pkgs.length + ' Sponsor' + (pkgs.length !== 1 ? 's' : '');
+    var heroCount = document.getElementById('spn-hero-page-count');
+    if (heroCount && heroCount.dataset.kind === 'sponsors') heroCount.textContent = pkgs.length;
     var head  = '<div class="spn-list-head spn-pkg-cols"><span>Business</span><span>Tier</span><span>Amount</span><span>Payment</span><span></span></div>';
     var listEl = document.getElementById('spn-pkgs-list');
     if (!listEl) return;
@@ -813,20 +821,32 @@
 
   window.MarketingSponsorsModule = {
 
-    init: function (prodId, container) {
+    init: function (prodId, container, options) {
       resetState(prodId);
+
+      var page = options && options.page || 'sponsors';
+      var isAdsPage = page === 'programmeads';
+      var isShowSponsorsPage = page === 'showsponsors';
+      var pageTitle = isAdsPage ? 'Programme Ad Placements' : (isShowSponsorsPage ? 'Show Sponsors' : 'Sponsors');
+      var pageCopy = isAdsPage
+        ? 'Set your programme ad sizes and pricing, then track every booking, payment, and piece of artwork through to print.'
+        : (isShowSponsorsPage
+          ? 'Track show sponsors, package levels, payments, promised benefits, and acknowledgements.'
+          : 'Track your programme ads, sponsor packages, and business partnerships all in one place.');
+      var heroLabel = isAdsPage ? 'Placements' : (isShowSponsorsPage ? 'Sponsors' : 'Businesses');
+      var heroKind = isAdsPage ? 'ads' : (isShowSponsorsPage ? 'sponsors' : 'businesses');
 
       container.innerHTML =
         '<div class="aud-visual-hero">' +
           '<div class="aud-visual-hero-content">' +
             '<div>' +
-              '<div class="aud-visual-kicker"><span class="aud-visual-kicker-dot" aria-hidden="true"></span>Marketing</div>' +
-              '<h1 class="aud-visual-title">Sponsors.</h1>' +
-              '<p class="aud-visual-copy">Track your programme ads, sponsor packages, and business partnerships all in one place.</p>' +
+              '<div class="aud-visual-kicker"><span class="aud-visual-kicker-dot" aria-hidden="true"></span>Promote &nbsp;-&nbsp; Sponsors</div>' +
+              '<h1 class="aud-visual-title">' + pageTitle + '</h1>' +
+              '<p class="aud-visual-copy">' + pageCopy + '</p>' +
             '</div>' +
             '<div class="aud-visual-total">' +
-              '<div class="aud-visual-total-kicker">Businesses</div>' +
-              '<div class="aud-visual-total-value" id="spn-hero-biz-count">--</div>' +
+              '<div class="aud-visual-total-kicker">' + heroLabel + '</div>' +
+              '<div class="aud-visual-total-value" id="spn-hero-page-count" data-kind="' + heroKind + '">--</div>' +
             '</div>' +
           '</div>' +
         '</div>' +
@@ -1017,8 +1037,18 @@
         el.addEventListener('click', function (e) { if (e.target === el) el.classList.remove('open'); });
       });
 
+      if (isAdsPage) {
+        container.querySelectorAll('.spn-tab').forEach(function (tab) {
+          tab.hidden = !['ads', 'businesses', 'deliverables', 'settings'].includes(tab.dataset.panel);
+        });
+      } else if (isShowSponsorsPage) {
+        container.querySelectorAll('.spn-tab').forEach(function (tab) {
+          tab.hidden = !['sponsors', 'businesses', 'deliverables', 'settings'].includes(tab.dataset.panel);
+        });
+      }
+
       refreshAdsGrouped();
-      switchTab('overview');
+      switchTab(isAdsPage ? 'ads' : (isShowSponsorsPage ? 'sponsors' : 'overview'));
     },
 
     destroy: function () {

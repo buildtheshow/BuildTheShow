@@ -37821,7 +37821,7 @@ See you soon!
     if (productionAccessLoaded || productionPagePermissions.length) {
       const memberId = String(member.id || teamAccessMember?.id || '');
       if (isProducerLikeTeamMember(member)) {
-        return new Set(['overview', 'team', 'volunteers', 'calendar', 'auditions', 'castlist', 'registration', 'marketing', 'budget', 'emails', 'test', 'settings', 'auditions:dashboard', 'auditions:settings', 'auditions:schedule', 'auditions:allperformers', 'auditions:sessions', 'auditions:casting', 'auditions:finalcasting', 'registration:dashboard', 'registration:publicview', 'registration:payments', 'registration:settings', 'marketing:dashboard', 'marketing:sponsors', 'marketing:assets', 'marketing:programme', 'marketing:media', 'marketing:calendar', 'marketing:tasks', 'budget:dashboard', 'budget:breakdown', 'budget:receipts', 'budget:collect']);
+        return new Set(['overview', 'team', 'volunteers', 'calendar', 'auditions', 'castlist', 'registration', 'marketing', 'budget', 'emails', 'test', 'settings', 'auditions:dashboard', 'auditions:settings', 'auditions:schedule', 'auditions:allperformers', 'auditions:sessions', 'auditions:casting', 'auditions:finalcasting', 'registration:dashboard', 'registration:publicview', 'registration:payments', 'registration:settings', 'marketing:dashboard', 'marketing:programmeads', 'marketing:showsponsors', 'marketing:assets', 'marketing:programme', 'marketing:media', 'marketing:calendar', 'marketing:tasks', 'budget:dashboard', 'budget:breakdown', 'budget:receipts', 'budget:collect']);
       }
       if (isCreativeAuditionLeadershipRole(member.role)) {
         return creativeAuditionLeadershipMenuSet();
@@ -40091,12 +40091,12 @@ See you soon!
   function setSidebarSubmenuState(section, activeSubId) {
     _sidebarSection = section;
     _sidebarSubId   = activeSubId || null;
-    ['auditions-wrap', 'registration-wrap', 'casting-wrap', 'marketing-wrap', 'budget-wrap'].forEach(id => {
+    ['auditions-wrap', 'registration-wrap', 'casting-wrap', 'marketing-wrap', 'sponsors-wrap', 'budget-wrap'].forEach(id => {
       const wrap = document.getElementById(id);
       if (wrap) wrap.classList.toggle('open', !!section && id === `${section}-wrap`);
     });
     document.querySelectorAll('.prod-sub-item, .prod-sub-group-link, .sidebar-direct-item').forEach(el => el.classList.remove('active'));
-    document.querySelectorAll('#auditions-parent-tab, #registration-parent-tab, #casting-parent-tab, #marketing-parent-tab, #budget-parent-tab').forEach(el => {
+    document.querySelectorAll('#auditions-parent-tab, #registration-parent-tab, #casting-parent-tab, #marketing-parent-tab, #sponsors-parent-tab, #budget-parent-tab').forEach(el => {
       el.classList.remove('active', 'is-open-parent');
     });
     const activeSubEl = activeSubId ? document.getElementById(activeSubId) : null;
@@ -40111,7 +40111,7 @@ See you soon!
   }
 
   function syncSidebarMenuA11y() {
-    ['auditions', 'registration', 'casting', 'marketing', 'budget'].forEach(section => {
+    ['auditions', 'registration', 'casting', 'marketing', 'sponsors', 'budget'].forEach(section => {
       const wrap = document.getElementById(`${section}-wrap`);
       const parent = document.getElementById(`${section}-parent-tab`);
       const chevron = parent?.querySelector('.tab-chevron');
@@ -40275,6 +40275,8 @@ See you soon!
     const moduleNames = {
       dashboard:  'MarketingDashboardModule',
       sponsors:   'MarketingSponsorsModule',
+      programmeads: 'MarketingSponsorsModule',
+      showsponsors: 'MarketingSponsorsModule',
       assets:     'MarketingAssetsModule',
       calendar:   'MarketingCalendarModule',
       media:      'MarketingMediaModule',
@@ -40284,13 +40286,14 @@ See you soon!
     const subSafe = moduleNames[sub] ? sub : 'dashboard';
     const panel = document.getElementById('panel-marketing');
     if (!panel) return;
-    const moduleVersions = { programme: '?v=programme-real-flipbook-20260521', sponsors: '?v=sponsors-poster-blur-fix-20260521' };
+    const moduleFiles = { programmeads: 'sponsors', showsponsors: 'sponsors' };
+    const moduleVersions = { programme: '?v=programme-real-flipbook-20260521', sponsors: '?v=sponsors-pages-20260617', programmeads: '?v=sponsors-pages-20260617', showsponsors: '?v=sponsors-pages-20260617' };
     const moduleVersion = moduleVersions[subSafe] || '';
-    loadScriptOnce('/ASSETS/scripts/modules/marketing-' + subSafe + '.js' + moduleVersion)
+    loadScriptOnce('/ASSETS/scripts/modules/marketing-' + (moduleFiles[subSafe] || subSafe) + '.js' + moduleVersion)
       .then(() => {
         if (!isWorkspaceRouteCurrent(routeToken)) return;
         const mod = window[moduleNames[subSafe]];
-        if (mod && mod.init) mod.init(pid, panel);
+        if (mod && mod.init) mod.init(pid, panel, { page: subSafe });
       })
       .catch(() => { if (panel && isWorkspaceRouteCurrent(routeToken)) panel.innerHTML = '<div style="padding:2rem;color:#d1523d">Could not load marketing content.</div>'; });
   }
@@ -40353,6 +40356,19 @@ See you soon!
     setSidebarSubmenuState('marketing', _sidebarSection === 'marketing' ? _sidebarSubId : null);
   }
 
+  function toggleSponsorsMenu(e) {
+    e?.preventDefault?.();
+    e?.stopPropagation?.();
+    const wrap = document.getElementById('sponsors-wrap');
+    const isOpen = !!wrap?.classList.contains('open');
+    if (isOpen) {
+      wrap.classList.remove('open');
+      syncSidebarMenuA11y();
+      return;
+    }
+    setSidebarSubmenuState('sponsors', _sidebarSection === 'sponsors' ? _sidebarSubId : null);
+  }
+
   function toggleCastingMenu(e) {
     e?.preventDefault?.();
     e?.stopPropagation?.();
@@ -40374,7 +40390,7 @@ See you soon!
   const _SECTION_TO_GROUP = {
     overview: 'overview', team: 'plan', calendar: 'plan',
     auditions: 'cast', registration: 'cast', casting: 'cast', castlist: 'cast',
-    marketing: 'promote',
+    marketing: 'promote', sponsors: 'promote',
     ticketing: 'ticketing',
     volunteers: 'volunteers',
     budget: 'financials',
@@ -48521,6 +48537,7 @@ See you soon!
     else if (section === 'registration') toggleRegistrationMenu(e);
     else if (section === 'casting') toggleCastingMenu(e);
     else if (section === 'marketing') toggleMarketingMenu(e);
+    else if (section === 'sponsors') toggleSponsorsMenu(e);
     else if (section === 'ticketing') toggleTicketingMenu(e);
     else if (section === 'budget') toggleBudgetMenu(e);
   }
@@ -50572,7 +50589,7 @@ See you soon!
       if (!isWorkspaceRouteCurrent(routeToken)) return;
       const sub = (options && options.sub) || loadWorkspaceNavState().marketingSubTab || 'dashboard';
       saveWorkspaceNavState({ prodTab: 'marketing', marketingSubTab: sub });
-      setSidebarSubmenuState('marketing', 'msub-' + sub);
+      setSidebarSubmenuState(sub === 'programmeads' || sub === 'showsponsors' ? 'sponsors' : 'marketing', 'msub-' + sub);
       loadMarketingModule(sub, prodId, routeToken);
     }
     requestAnimationFrame(() => {
