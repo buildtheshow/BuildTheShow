@@ -55,6 +55,7 @@
     .pt-table tbody tr { transition: background 0.1s; }
     .pt-table tbody tr:hover { background: #faf9fd; }
     .pt-avatar { width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.65rem; font-weight: 700; flex-shrink: 0; }
+    .pt-role-list { display: flex; align-items: center; gap: 0.35rem; flex-wrap: wrap; }
     .pt-role-badge { display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.22rem 0.65rem; border-radius: 20px; border: 1.5px solid var(--pt-role-border, transparent); font-size: 0.72rem; font-weight: 800; white-space: nowrap; color: #fff; }
     .pt-role-dot { width: 0.45rem; height: 0.45rem; border-radius: 50%; background: currentColor; flex-shrink: 0; }
     .pt-portal-icons { display: flex; gap: 0.3rem; flex-wrap: wrap; }
@@ -590,6 +591,36 @@
       return labels.join(' · ');
     }
 
+    function splitRoleLabels(label = '') {
+      return String(label || '')
+        .split(/\s*(?:·|,)\s*/g)
+        .map(part => part.trim())
+        .filter(Boolean);
+    }
+
+    function roleBadgesForPerson(person = {}) {
+      const labels = splitRoleLabels(person.roleLabel);
+      return labels.map(label => ({
+        label,
+        color: person.roleColor || '#572e88',
+        bg: person.roleBg || person.roleColor || '#572e88',
+        border: person.roleBorder || person.roleBg || person.roleColor || 'transparent',
+      }));
+    }
+
+    function mergeRoleBadges(a = [], b = []) {
+      const out = [];
+      [...a, ...b].forEach(badge => {
+        const label = String(badge?.label || '').trim();
+        if (!label) return;
+        const key = normaliseRoleName(label);
+        if (!out.some(existing => normaliseRoleName(existing.label) === key)) {
+          out.push({ ...badge, label });
+        }
+      });
+      return out;
+    }
+
     function mergePersonData(existingData = {}, nextData = {}) {
       const merged = { ...(nextData || {}), ...(existingData || {}) };
       ['volunteer_passcode', 'passcode', 'portal_token', '_portal_code'].forEach(key => {
@@ -655,6 +686,7 @@
       const byKey = new Map();
       people.forEach(person => {
         const key = peopleMergeKey(person);
+        person.roleBadges = mergeRoleBadges(person.roleBadges, roleBadgesForPerson(person));
         if (!key || !byKey.has(key)) {
           merged.push(person);
           if (key) byKey.set(key, person);
@@ -664,6 +696,7 @@
         existing.portals = mergeUniqueValues(existing.portals, person.portals);
         existing.filterKeys = mergeUniqueValues(existing.filterKeys, person.filterKeys);
         existing.roleLabel = mergeRoleLabels(existing.roleLabel, person.roleLabel);
+        existing.roleBadges = mergeRoleBadges(existing.roleBadges || roleBadgesForPerson(existing), person.roleBadges || roleBadgesForPerson(person));
         if (!existing.headshot && person.headshot) existing.headshot = person.headshot;
         if (!existing.email && person.email) existing.email = person.email;
         if (!existing.name && person.name) existing.name = person.name;
@@ -852,6 +885,15 @@
 
     let _visiblePeople = [];
 
+    function roleBadgesHTML(person = {}) {
+      const badges = mergeRoleBadges(person.roleBadges || [], roleBadgesForPerson(person));
+      return `<div class="pt-role-list">${badges.map(badge => {
+        const bg = badge.bg || badge.color || '#572e88';
+        const border = badge.border || bg;
+        return `<span class="pt-role-badge" style="background:${bg};color:#fff;--pt-role-border:${border}"><span class="pt-role-dot" aria-hidden="true"></span>${esc(badge.label)}</span>`;
+      }).join('')}</div>`;
+    }
+
     function renderPeopleTable() {
       const tbody = document.getElementById('pt-people-tbody');
       let filtered = _currentFilter === 'all'
@@ -887,7 +929,7 @@
               </div>
             </div>
           </td>
-          <td><span class="pt-role-badge" style="background:${p.roleBg || p.roleColor || '#572e88'};color:#fff;--pt-role-border:${p.roleBorder || p.roleBg || p.roleColor || 'transparent'}"><span class="pt-role-dot" aria-hidden="true"></span>${esc(p.roleLabel)}</span></td>
+          <td>${roleBadgesHTML(p)}</td>
           <td><div class="pt-portal-icons">${portalIcons}</div></td>
           <td><span class="${statusClass}"><svg width="7" height="7" viewBox="0 0 8 8"><circle cx="4" cy="4" r="4" fill="${statusDot}"/></svg>${esc(statusLabel)}</span></td>
           <td>
