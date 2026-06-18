@@ -46,8 +46,9 @@
     SpnsState.packages = [];
     SpnsState.deliverables = [];
     SpnsState.settings = {
-      adSizes: DEFAULT_AD_SIZES.map(function (s) { return Object.assign({}, s); }),
-      tiers:   DEFAULT_TIERS.map(function (t) { return Object.assign({}, t); }),
+      adSizes:     DEFAULT_AD_SIZES.map(function (s) { return Object.assign({}, s); }),
+      tiers:       DEFAULT_TIERS.map(function (t) { return Object.assign({}, t); }),
+      publicStats: [],
     };
     SpnsState.posterUrl = null;
     SpnsState.loaded = {};
@@ -507,8 +508,9 @@
           SpnsState.loaded.settings = true;
           if (data && data[0] && data[0].settings) {
             var s = data[0].settings;
-            if (s.adSizes && s.adSizes.length) SpnsState.settings.adSizes = s.adSizes;
-            if (s.tiers   && s.tiers.length)   SpnsState.settings.tiers   = s.tiers;
+            if (s.adSizes     && s.adSizes.length)     SpnsState.settings.adSizes     = s.adSizes;
+            if (s.tiers       && s.tiers.length)       SpnsState.settings.tiers       = s.tiers;
+            if (s.publicStats && s.publicStats.length) SpnsState.settings.publicStats = s.publicStats;
           }
         }).catch(function () { SpnsState.loaded.settings = true; });
     var bizPromise = SpnsState.businesses.length === 0
@@ -845,8 +847,9 @@
   }
 
   function switchSettingsTab(name) {
-    var valid = ['sizes', 'tiers', 'deadlines'];
+    var valid = ['sizes', 'tiers', 'deadlines', 'publicpage'];
     var next = valid.indexOf(name) >= 0 ? name : 'sizes';
+    if (next === 'publicpage') renderPublicStatsAdmin();
     document.querySelectorAll('.spn-settings-tab').forEach(function (button) {
       var active = button.dataset.settingsPanel === next;
       button.classList.toggle('active', active);
@@ -975,15 +978,58 @@
     renderSettings();
   }
 
+  var STAT_SLOT_DEFAULTS = [
+    { label: 'Audience Members',  subtext: 'Expected across all performances', color: '#572e88' },
+    { label: 'Local Families',    subtext: 'From across the community',         color: '#769e7b' },
+    { label: 'Young Performers',  subtext: 'Talented local youth on stage',     color: '#efab45' },
+    { label: 'Live Performances', subtext: 'At our performance venue',          color: '#d1523d' },
+  ];
+
+  function renderPublicStatsAdmin() {
+    var grid = document.getElementById('spn-public-stats-grid');
+    if (!grid) return;
+    var existing = SpnsState.settings.publicStats || [];
+    var html = STAT_SLOT_DEFAULTS.map(function (def, i) {
+      var stat = existing[i] || {};
+      return '<div class="spn-public-stat-row">' +
+        '<div class="spn-public-stat-swatch" style="background:' + def.color + '"></div>' +
+        '<div class="spn-public-stat-fields">' +
+          '<div class="spn-field"><label>Value</label><input type="text" class="spn-public-stat-value" data-i="' + i + '" placeholder="600+" value="' + escHtml(stat.value || '') + '" /></div>' +
+          '<div class="spn-field"><label>Label</label><input type="text" class="spn-public-stat-label" data-i="' + i + '" placeholder="' + escHtml(def.label) + '" value="' + escHtml(stat.label || '') + '" /></div>' +
+          '<div class="spn-field spn-public-stat-sub-field"><label>Subtext</label><input type="text" class="spn-public-stat-subtext" data-i="' + i + '" placeholder="' + escHtml(def.subtext) + '" value="' + escHtml(stat.subtext || '') + '" /></div>' +
+        '</div>' +
+      '</div>';
+    }).join('');
+    grid.innerHTML = html;
+  }
+
+  function collectPublicStats() {
+    return STAT_SLOT_DEFAULTS.map(function (def, i) {
+      var value   = (document.querySelector('.spn-public-stat-value[data-i="'  + i + '"]')   || {}).value || '';
+      var label   = (document.querySelector('.spn-public-stat-label[data-i="'  + i + '"]')   || {}).value || '';
+      var subtext = (document.querySelector('.spn-public-stat-subtext[data-i="' + i + '"]')  || {}).value || '';
+      if (!value.trim()) return null;
+      return {
+        value:   value.trim(),
+        label:   label.trim()   || def.label,
+        subtext: subtext.trim() || def.subtext,
+        color:   def.color,
+      };
+    }).filter(Boolean);
+  }
+
+  function escHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
   function saveSettings() {
     var settings = {
-      adSizes: SpnsState.settings.adSizes,
-      tiers:   SpnsState.settings.tiers,
+      adSizes:     SpnsState.settings.adSizes,
+      tiers:       SpnsState.settings.tiers,
       deadlines: {
         artwork: (document.getElementById('spn-deadline-artwork') || {}).value || null,
         booking: (document.getElementById('spn-deadline-booking') || {}).value || null,
         sponsor: (document.getElementById('spn-deadline-sponsor') || {}).value || null,
       },
+      publicStats: collectPublicStats(),
     };
     fetch(SUPABASE_URL + '/rest/v1/sponsor_settings', {
       method: 'POST',
@@ -1030,7 +1076,8 @@
         : (isShowSponsorsPage ? 'Set the confirmation date used by your sponsor team.' : 'Set the booking, artwork, and sponsor confirmation dates used by your team.');
       var settingsTabsHtml = '<button type="button" class="spn-settings-tab active" data-settings-panel="sizes" onclick="MarketingSponsorsModule.switchSettingsTab(\'sizes\')">Programme Ad Sizes</button>' +
         '<button type="button" class="spn-settings-tab" data-settings-panel="tiers" onclick="MarketingSponsorsModule.switchSettingsTab(\'tiers\')">Sponsor Tiers</button>' +
-        '<button type="button" class="spn-settings-tab" data-settings-panel="deadlines" onclick="MarketingSponsorsModule.switchSettingsTab(\'deadlines\')">Deadlines</button>';
+        '<button type="button" class="spn-settings-tab" data-settings-panel="deadlines" onclick="MarketingSponsorsModule.switchSettingsTab(\'deadlines\')">Deadlines</button>' +
+        '<button type="button" class="spn-settings-tab" data-settings-panel="publicpage" onclick="MarketingSponsorsModule.switchSettingsTab(\'publicpage\')">Public Page</button>';
       var deadlineTilesHtml = deadlineTile('Programme Ads', 'Artwork Submission', 'spn-deadline-artwork', '#476aaa') +
         deadlineTile('Programme Ads', 'Ad Booking', 'spn-deadline-booking', '#dd8233') +
         deadlineTile('Show Sponsors', 'Sponsor Confirmation', 'spn-deadline-sponsor', '#769e7b');
@@ -1140,6 +1187,10 @@
             '<div class="spn-settings-tile-grid">' +
               deadlineTilesHtml +
             '</div>' +
+          '</div>' +
+          '<div class="spn-settings-panel" id="spn-settings-publicpage">' +
+            '<div class="spn-settings-panel-head"><div><div class="spn-settings-section-title">Public Page Stats</div><div class="spn-settings-section-desc">Up to 4 stats shown on your public sponsor page (e.g. "600+ Audience Members"). Leave a value blank to hide that stat.</div></div></div>' +
+            '<div class="spn-public-stats-grid" id="spn-public-stats-grid"></div>' +
           '</div>' +
           '<div class="spn-settings-savebar">' +
             '<div><strong>' + settingsHeading + '</strong><span>Save changes to this campaign setup.</span></div>' +
