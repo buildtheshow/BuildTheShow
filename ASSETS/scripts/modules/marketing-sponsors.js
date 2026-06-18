@@ -839,34 +839,27 @@
       var page = options && options.page || 'sponsors';
       var isAdsPage = page === 'programmeads';
       var isShowSponsorsPage = page === 'showsponsors';
-      var pageTitle = isAdsPage ? 'Programme Ad Placements' : (isShowSponsorsPage ? 'Show Sponsors' : 'Sponsors');
+      var isSettingsPage = page === 'sponsorssettings';
+      var pageTitle = isAdsPage ? 'Programme Ad Placements' : (isShowSponsorsPage ? 'Show Sponsors' : (isSettingsPage ? 'Sponsor Settings' : 'Sponsors'));
       var pageCopy = isAdsPage
         ? 'Set your programme ad sizes and pricing, then track every booking, payment, and piece of artwork through to print.'
         : (isShowSponsorsPage
           ? 'Track show sponsors, package levels, payments, promised benefits, and acknowledgements.'
-          : 'Track your programme ads, sponsor packages, and business partnerships all in one place.');
-      var heroLabel = isAdsPage ? 'Placements' : (isShowSponsorsPage ? 'Sponsors' : 'Businesses');
-      var heroKind = isAdsPage ? 'ads' : (isShowSponsorsPage ? 'sponsors' : 'businesses');
+          : (isSettingsPage
+            ? 'Set programme ad sizes, sponsor tiers, pricing, and campaign deadlines in one place.'
+            : 'Track your programme ads, sponsor packages, and business partnerships all in one place.'));
+      var heroLabel = isAdsPage ? 'Placements' : (isShowSponsorsPage ? 'Sponsors' : (isSettingsPage ? 'Groups' : 'Businesses'));
+      var heroKind = isAdsPage ? 'ads' : (isShowSponsorsPage ? 'sponsors' : (isSettingsPage ? 'settings' : 'businesses'));
+      var settingsHeading = isSettingsPage ? pageTitle : pageTitle + ' Settings';
       var deadlineCopy = isAdsPage
         ? 'Set the booking and artwork dates used by your programme ad team.'
         : (isShowSponsorsPage ? 'Set the confirmation date used by your sponsor team.' : 'Set the booking, artwork, and sponsor confirmation dates used by your team.');
-      var settingsTabsHtml = isAdsPage
-        ? '<button type="button" class="spn-settings-tab active" data-settings-panel="sizes" onclick="MarketingSponsorsModule.switchSettingsTab(\'sizes\')">Ad Sizes</button>' +
-          '<button type="button" class="spn-settings-tab" data-settings-panel="deadlines" onclick="MarketingSponsorsModule.switchSettingsTab(\'deadlines\')">Deadlines</button>'
-        : (isShowSponsorsPage
-          ? '<button type="button" class="spn-settings-tab active" data-settings-panel="tiers" onclick="MarketingSponsorsModule.switchSettingsTab(\'tiers\')">Sponsor Tiers</button>' +
-            '<button type="button" class="spn-settings-tab" data-settings-panel="deadlines" onclick="MarketingSponsorsModule.switchSettingsTab(\'deadlines\')">Deadlines</button>'
-          : '<button type="button" class="spn-settings-tab active" data-settings-panel="sizes" onclick="MarketingSponsorsModule.switchSettingsTab(\'sizes\')">Ad Sizes</button>' +
-            '<button type="button" class="spn-settings-tab" data-settings-panel="tiers" onclick="MarketingSponsorsModule.switchSettingsTab(\'tiers\')">Sponsor Tiers</button>' +
-            '<button type="button" class="spn-settings-tab" data-settings-panel="deadlines" onclick="MarketingSponsorsModule.switchSettingsTab(\'deadlines\')">Deadlines</button>');
-      var deadlineTilesHtml = isAdsPage
-        ? deadlineTile('Programme Ads', 'Artwork Submission', 'spn-deadline-artwork', '#476aaa') +
-          deadlineTile('Programme Ads', 'Ad Booking', 'spn-deadline-booking', '#dd8233')
-        : (isShowSponsorsPage
-          ? deadlineTile('Show Sponsors', 'Sponsor Confirmation', 'spn-deadline-sponsor', '#769e7b')
-          : deadlineTile('Programme Ads', 'Artwork Submission', 'spn-deadline-artwork', '#476aaa') +
-            deadlineTile('Programme Ads', 'Ad Booking', 'spn-deadline-booking', '#dd8233') +
-            deadlineTile('Show Sponsors', 'Sponsor Confirmation', 'spn-deadline-sponsor', '#769e7b'));
+      var settingsTabsHtml = '<button type="button" class="spn-settings-tab active" data-settings-panel="sizes" onclick="MarketingSponsorsModule.switchSettingsTab(\'sizes\')">Programme Ad Sizes</button>' +
+        '<button type="button" class="spn-settings-tab" data-settings-panel="tiers" onclick="MarketingSponsorsModule.switchSettingsTab(\'tiers\')">Sponsor Tiers</button>' +
+        '<button type="button" class="spn-settings-tab" data-settings-panel="deadlines" onclick="MarketingSponsorsModule.switchSettingsTab(\'deadlines\')">Deadlines</button>';
+      var deadlineTilesHtml = deadlineTile('Programme Ads', 'Artwork Submission', 'spn-deadline-artwork', '#476aaa') +
+        deadlineTile('Programme Ads', 'Ad Booking', 'spn-deadline-booking', '#dd8233') +
+        deadlineTile('Show Sponsors', 'Sponsor Confirmation', 'spn-deadline-sponsor', '#769e7b');
 
       container.innerHTML =
         '<div class="aud-visual-hero">' +
@@ -878,7 +871,7 @@
             '</div>' +
             '<div class="aud-visual-total">' +
               '<div class="aud-visual-total-kicker">' + heroLabel + '</div>' +
-              '<div class="aud-visual-total-value" id="spn-hero-page-count" data-kind="' + heroKind + '">--</div>' +
+              '<div class="aud-visual-total-value" id="spn-hero-page-count" data-kind="' + heroKind + '">' + (isSettingsPage ? '3' : '--') + '</div>' +
             '</div>' +
           '</div>' +
         '</div>' +
@@ -954,7 +947,7 @@
         '</div>' +
 
         '<div id="spn-panel-settings" class="spn-panel">' +
-          '<div class="spn-settings-tabs" role="tablist" aria-label="Programme ad settings">' +
+          '<div class="spn-settings-tabs" role="tablist" aria-label="Sponsor settings">' +
             settingsTabsHtml +
           '</div>' +
           '<div class="spn-settings-panel active" id="spn-settings-sizes">' +
@@ -972,7 +965,7 @@
             '</div>' +
           '</div>' +
           '<div class="spn-settings-savebar">' +
-            '<div><strong>' + pageTitle + ' Settings</strong><span>Save changes to this campaign setup.</span></div>' +
+            '<div><strong>' + settingsHeading + '</strong><span>Save changes to this campaign setup.</span></div>' +
             '<button class="spn-btn spn-btn--primary" onclick="MarketingSponsorsModule.saveSettings()">Save Settings</button>' +
           '</div>' +
         '</div>' +
@@ -1072,17 +1065,20 @@
 
       if (isAdsPage) {
         container.querySelectorAll('.spn-tab').forEach(function (tab) {
-          tab.hidden = !['ads', 'businesses', 'deliverables', 'settings'].includes(tab.dataset.panel);
+          tab.hidden = !['ads', 'businesses', 'deliverables'].includes(tab.dataset.panel);
         });
       } else if (isShowSponsorsPage) {
         container.querySelectorAll('.spn-tab').forEach(function (tab) {
-          tab.hidden = !['sponsors', 'businesses', 'deliverables', 'settings'].includes(tab.dataset.panel);
+          tab.hidden = !['sponsors', 'businesses', 'deliverables'].includes(tab.dataset.panel);
         });
+      } else if (isSettingsPage) {
+        var pageTabs = container.querySelector('.spn-tabs');
+        if (pageTabs) pageTabs.hidden = true;
       }
 
       refreshAdsGrouped();
-      switchSettingsTab(isShowSponsorsPage ? 'tiers' : 'sizes');
-      switchTab(isAdsPage ? 'ads' : (isShowSponsorsPage ? 'sponsors' : 'overview'));
+      switchSettingsTab('sizes');
+      switchTab(isAdsPage ? 'ads' : (isShowSponsorsPage ? 'sponsors' : (isSettingsPage ? 'settings' : 'overview')));
     },
 
     destroy: function () {
