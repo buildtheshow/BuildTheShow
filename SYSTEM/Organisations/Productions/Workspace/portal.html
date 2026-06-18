@@ -120,31 +120,40 @@ const ROLE_MODULES = {
   ],
 };
 
-// ── Module key → page file + label + group ─────────────────────────
+// ── Module key → page + label + group (+ optional subgroup) ────────
+// group    = top-level sidebar section (matches internal nav group names)
+// subgroup = second-level collapsible menu inside that group (optional)
 const MODULE_CONFIG = {
-  'fin-dashboard':   { label: 'Dashboard',             group: 'Financials', icon: 'Finance - Schedule.svg',                    page: 'financials-dashboard.html' },
-  'budgeting':       { label: 'Budgeting',             group: 'Financials', icon: 'Budgeting-.svg',                            page: 'budgeting.html' },
-  'budget-receipts': { label: 'Receipts',              group: 'Financials', icon: 'Budgeting-Receipts.svg',                    page: 'budget-receipts.html' },
-  'fin-reports':     { label: 'Reports',               group: 'Financials', icon: 'Budgeting-total-spent-cad-usd.svg',         page: 'financials-reports.html' },
-  'fin-settlements': { label: 'Settlements',           group: 'Financials', icon: 'Budgeting-Reimbursed.svg',                  page: 'financials-settlements.html' },
-  'reg-dashboard':   { label: 'Dashboard',               group: 'Registration', icon: 'Cast.svg',                              page: 'registration-dashboard.html' },
-  'reg-status':      { label: 'Status',                 group: 'Registration', icon: 'Cast.svg',                              page: 'registration-status.html' },
-  // Future roles — add entries here as portals grow
-  'shifts':          { label: 'My Shifts',             group: 'Volunteers', icon: 'Volunteers.svg',                            page: 'volunteers.html' },
-  'hours':           { label: 'Hours Log',             group: 'Volunteers', icon: 'Volunteers.svg',                            page: 'volunteers.html' },
-  'schedule':        { label: 'Production Schedule',   group: 'Production', icon: 'Plan.svg',                                  page: 'plan-calendar.html' },
-  'cast':            { label: 'Cast List',             group: 'Production', icon: 'Cast.svg',                                  page: 'cast-dashboard.html' },
-  'team':            { label: 'Team Contacts',         group: 'Production', icon: 'Plan.svg',                                  page: 'plan-team.html' },
-  'org-dashboard':   { label: 'Organisation Dashboard','group': 'Overview', icon: 'Overview.svg',                              page: 'production-overview.html' },
+  // Financials
+  'fin-dashboard':   { label: 'Dashboard',              group: 'Financials',  page: 'financials-dashboard.html' },
+  'budgeting':       { label: 'Budgeting',              group: 'Financials',  page: 'budgeting.html' },
+  'budget-receipts': { label: 'Receipts',               group: 'Financials',  page: 'budget-receipts.html' },
+  'fin-reports':     { label: 'Reports',                group: 'Financials',  page: 'financials-reports.html' },
+  'fin-settlements': { label: 'Settlements',            group: 'Financials',  page: 'financials-settlements.html' },
+  // Cast > Registration
+  'reg-dashboard':   { label: 'Dashboard',              group: 'Cast', subgroup: 'Registration', page: 'registration-dashboard.html' },
+  'reg-status':      { label: 'Status',                 group: 'Cast', subgroup: 'Registration', page: 'registration-status.html' },
+  // Future: Cast > Casting
+  'cast-board':      { label: 'Casting Board',          group: 'Cast', subgroup: 'Casting',      page: 'casting-board.html' },
+  'cast-list':       { label: 'Cast List',              group: 'Cast', subgroup: 'Casting',      page: 'casting-castlist.html' },
+  // Plan
+  'schedule':        { label: 'Production Schedule',    group: 'Plan',        page: 'plan-calendar.html' },
+  'team':            { label: 'Team Contacts',          group: 'Plan',        page: 'plan-team.html' },
+  // Volunteers
+  'shifts':          { label: 'My Shifts',              group: 'Volunteers',  page: 'volunteers.html' },
+  'hours':           { label: 'Hours Log',              group: 'Volunteers',  page: 'volunteers.html' },
+  // Overview
+  'org-dashboard':   { label: 'Organisation Dashboard', group: 'Overview',    page: 'production-overview.html' },
 };
 
-const GROUP_ORDER = ['Financials', 'Registration', 'Production', 'Volunteers', 'Overview'];
+// Top-level group order and icons — names match internal nav groups
+const GROUP_ORDER = ['Overview', 'Plan', 'Cast', 'Financials', 'Volunteers'];
 const GROUP_ICONS = {
-  'Financials':   'Budgeting-total-spent-cad-usd.svg',
-  'Registration': 'Cast.svg',
-  'Production':   'Plan.svg',
-  'Volunteers':   'Volunteers.svg',
-  'Overview':     'Overview.svg',
+  'Overview':   'Overview.svg',
+  'Plan':       'Plan.svg',
+  'Cast':       'Cast.svg',
+  'Financials': 'Budgeting-total-spent-cad-usd.svg',
+  'Volunteers': 'Volunteers.svg',
 };
 
 // ── State ──────────────────────────────────────────────────────────
@@ -332,25 +341,56 @@ function prForgetDevice() {
 }
 
 // ── Sidebar builder ────────────────────────────────────────────────
+// Builds a 3-level nav: group > subgroup (optional) > item
 function buildSidebar(modules) {
-  const grouped = {};
+  // Build structure: { groupName: { _direct: [keys], subgroupName: [keys] } }
+  const tree = {};
   modules.forEach(function(key) {
     const cfg = MODULE_CONFIG[key];
     if (!cfg) return;
-    if (!grouped[cfg.group]) grouped[cfg.group] = [];
-    grouped[cfg.group].push(key);
+    if (!tree[cfg.group]) tree[cfg.group] = { _direct: [] };
+    if (cfg.subgroup) {
+      if (!tree[cfg.group][cfg.subgroup]) tree[cfg.group][cfg.subgroup] = [];
+      tree[cfg.group][cfg.subgroup].push(key);
+    } else {
+      tree[cfg.group]._direct.push(key);
+    }
   });
 
   const nav = document.getElementById('pr-nav');
   if (!nav) return;
 
-  const groups = GROUP_ORDER.filter(function(g) { return grouped[g]; });
+  const groups = GROUP_ORDER.filter(function(g) { return tree[g]; });
   nav.innerHTML = groups.map(function(groupName) {
-    const items   = grouped[groupName];
-    const groupId = 'pr-group-' + groupName.replace(/[^a-z0-9]/gi, '-').toLowerCase();
-    const iconFile = GROUP_ICONS[groupName] || 'portal.svg';
+    const groupData = tree[groupName];
+    const groupId   = 'pr-group-' + groupName.replace(/[^a-z0-9]/gi, '-').toLowerCase();
+    const iconFile  = GROUP_ICONS[groupName] || 'Overview.svg';
+
+    // Direct items (no subgroup)
+    const directHtml = groupData._direct.map(function(key) {
+      const cfg = MODULE_CONFIG[key];
+      return '<div class="prod-tab prod-sub-item" id="prnav-' + key + '" onclick="prNav(\'' + key + '\')">' + esc(cfg.label) + '</div>';
+    }).join('');
+
+    // Subgroups
+    const subgroupNames = Object.keys(groupData).filter(function(k) { return k !== '_direct'; });
+    const subgroupHtml = subgroupNames.map(function(sgName) {
+      const sgId = groupId + '-sg-' + sgName.replace(/[^a-z0-9]/gi, '-').toLowerCase();
+      const itemsHtml = groupData[sgName].map(function(key) {
+        const cfg = MODULE_CONFIG[key];
+        return '<div class="prod-sub-item" id="prnav-' + key + '" onclick="prNav(\'' + key + '\')">' + esc(cfg.label) + '</div>';
+      }).join('');
+      return '<div class="prod-tab-submenu-wrap" id="' + sgId + '">' +
+        '<div class="prod-tab" onclick="prToggleSubgroup(\'' + sgId + '\')" style="cursor:pointer">' +
+          esc(sgName) +
+          '<span class="tab-chevron" aria-hidden="true">&#9660;</span>' +
+        '</div>' +
+        '<div class="prod-submenu" id="' + sgId + '-items">' + itemsHtml + '</div>' +
+      '</div>';
+    }).join('');
+
     return '<div class="sidebar-group open" id="' + groupId + '" style="--group-color:#572e88">' +
-      '<div class="sidebar-group-header" onclick="prToggleGroup(\'' + groupId + '\')" role="button" tabindex="0" aria-expanded="true" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();prToggleGroup(\'' + groupId + '\')}">' +
+      '<div class="sidebar-group-header" onclick="prToggleGroup(\'' + groupId + '\')" role="button" tabindex="0" aria-expanded="true">' +
         '<span class="sidebar-group-label">' +
           '<span class="tab-icon-slot"><img src="/ASSETS/Images/Icons/' + iconFile + '?v=20260617" class="tab-icon" alt="" aria-hidden="true" /></span>' +
           esc(groupName) +
@@ -358,13 +398,20 @@ function buildSidebar(modules) {
         '<span class="sidebar-group-chevron">&#9660;</span>' +
       '</div>' +
       '<div class="sidebar-group-items" id="' + groupId + '-items" style="display:flex;flex-direction:column">' +
-        items.map(function(key) {
-          const cfg = MODULE_CONFIG[key];
-          return '<div class="prod-tab prod-sub-item" id="prnav-' + key + '" onclick="prNav(\'' + key + '\')">' + esc(cfg.label) + '</div>';
-        }).join('') +
+        directHtml + subgroupHtml +
       '</div>' +
     '</div>';
   }).join('');
+
+  // Open any subgroup that has an active item
+  subgroupsOpenByDefault();
+}
+
+function subgroupsOpenByDefault() {
+  document.querySelectorAll('.prod-submenu').forEach(function(el) {
+    el.style.display = 'flex';
+    el.style.flexDirection = 'column';
+  });
 }
 
 function prToggleGroup(groupId) {
@@ -376,6 +423,17 @@ function prToggleGroup(groupId) {
   items.style.flexDirection = 'column';
   const trigger = wrap.querySelector('.sidebar-group-header');
   if (trigger) trigger.setAttribute('aria-expanded', open ? 'true' : 'false');
+}
+
+function prToggleSubgroup(sgId) {
+  const items = document.getElementById(sgId + '-items');
+  const wrap  = document.getElementById(sgId);
+  if (!items) return;
+  const open = items.style.display === 'none';
+  items.style.display = open ? 'flex' : 'none';
+  if (open) items.style.flexDirection = 'column';
+  const chevron = wrap?.querySelector('.tab-chevron');
+  if (chevron) chevron.style.transform = open ? '' : 'rotate(-90deg)';
 }
 
 // ── Navigation: load the real page in the iframe ───────────────────
