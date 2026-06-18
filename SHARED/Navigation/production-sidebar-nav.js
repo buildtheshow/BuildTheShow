@@ -4,6 +4,20 @@
 (function () {
   'use strict';
 
+  // Portal mode: page is running inside the portal iframe.
+  // Kill the sidebar immediately so every workspace page works read-only in the portal
+  // without each page needing its own guard.
+  if (new URLSearchParams(location.search).get('portal')) {
+    var _ps = document.createElement('style');
+    _ps.textContent = '#prod-sidebar-host,#prod-sidebar,.prod-sidebar{display:none!important}'
+      + '.prod-main{margin-left:0!important;max-width:100vw!important;width:100%!important}'
+      + '.prod-main::before{inset:0!important}';
+    document.head.appendChild(_ps);
+    window.initProductionPage   = function () {};
+    window.loadProductionSidebar = function () {};
+    return;
+  }
+
   // ── Helpers ──────────────────────────────────────────────────────────────
 
   function prodId() {
