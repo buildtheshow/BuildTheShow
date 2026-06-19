@@ -1243,29 +1243,9 @@
         '<span class="spn-public-move-actions"><button type="button" title="Move up" aria-label="Move up"' + (index === 0 ? ' disabled' : '') + ' onclick="MarketingSponsorsModule.movePublicSection(\'' + section.id + '\',-1)">Up</button><button type="button" title="Move down" aria-label="Move down"' + (index === page.sections.length - 1 ? ' disabled' : '') + ' onclick="MarketingSponsorsModule.movePublicSection(\'' + section.id + '\',1)">Down</button></span>' +
       '</article>';
     }).join('');
-    var activeFields = PUBLIC_SECTION_FIELDS[activeId] || [];
-    var editorPanel =
-      '<section class="spn-public-active-editor" id="spn-public-active-editor" aria-label="Section editor">' +
-        '<div class="spn-public-edit-heading"><div><strong>Editing: ' + escHtml(PUBLIC_SECTION_LABELS[activeId] || activeId) + '</strong><span>Changes appear in the preview as you type.</span></div></div>' +
-        (activeId === 'hero' ? '<div class="spn-public-editor-general">' +
-          '<div class="spn-public-editor-field"><label>Poster Override URL</label><div class="spn-public-poster-control"><input type="text" id="spn-public-poster-url" placeholder="Use the production poster" value="' + escHtml(page.posterUrl || '') + '" /><button type="button" class="spn-btn spn-btn--ghost" onclick="MarketingSponsorsModule.uploadPublicPoster()">Upload</button></div></div>' +
-          '<div class="spn-public-editor-field"><label>Contact Email Override</label><input type="email" id="spn-public-contact-email" placeholder="Use the organisation email" value="' + escHtml(page.contactEmail || '') + '" /></div>' +
-        '</div>' : '') +
-        '<div class="spn-public-editor-section-body">' +
-          '<div><div class="spn-public-editor-subtitle">Section colour</div>' + publicColorSwatches(activeId, page.colors[activeId] || '#572e88') + '</div>' +
-          '<div><div class="spn-public-editor-subtitle spn-public-editor-subtitle--spaced">Copy</div><div class="spn-public-editor-fields">' + activeFields.map(function (field) { return publicEditorField(field, page); }).join('') + '</div></div>' +
-          (activeId === 'stats' ? '<div><div class="spn-public-editor-subtitle spn-public-editor-subtitle--spaced">Audience numbers</div><div id="spn-public-stats-inline"></div></div>' : '') +
-        '</div>' +
-      '</section>';
     host.innerHTML =
       '<div class="spn-public-builder-intro"><h2>Let\'s build your sponsor page</h2><p>Choose the sections you need, put them in the right order, and make the copy and colours yours.</p></div>' +
-      editorPanel +
       '<section class="spn-public-section-manager"><div class="spn-public-section-manager-head"><div><h3>Your Page Sections</h3><p>Drag to reorder sections. Use Edit and Hide to manage each section.</p></div><button type="button" class="spn-public-reset-order" onclick="MarketingSponsorsModule.resetPublicSectionOrder()">Reset order</button></div><div class="spn-public-section-list">' + sectionRows + '</div><div class="spn-public-footer-note">The footer is always shown at the bottom of the page.</div></section>';
-    if (activeId === 'stats') {
-      var inlineStats = document.getElementById('spn-public-stats-inline');
-      var statsGrid = document.getElementById('spn-public-stats-grid');
-      if (inlineStats && statsGrid) inlineStats.innerHTML = statsGrid.innerHTML;
-    }
     host.oninput = function () { schedulePublicPagePreview(true); };
     host.onchange = function () { schedulePublicPagePreview(true); };
     host.ondragstart = function (event) { var row = event.target.closest('[data-public-arrange]'); if (!row) return; event.dataTransfer.setData('text/plain', row.dataset.publicArrange); row.classList.add('is-dragging'); };
@@ -1323,10 +1303,6 @@
     SpnsState.settings.publicPageDraft = collectPublicPageEditor();
     SpnsState.publicEditorSection = id;
     renderPublicPageEditor();
-    setTimeout(function () {
-      var editor = document.getElementById('spn-public-active-editor');
-      if (editor && typeof editor.scrollIntoView === 'function') editor.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    }, 0);
   }
 
   function movePublicSection(id, direction) {
