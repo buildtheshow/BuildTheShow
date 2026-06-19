@@ -1239,18 +1239,38 @@
         '<div class="spn-public-section-copy"><strong>' + escHtml(label) + '</strong><p>' + escHtml(meta.description || '') + '</p></div>' +
         '<button type="button" class="spn-public-section-text-btn" title="Edit section" aria-label="Edit ' + escHtml(label) + '" onclick="event.stopPropagation();MarketingSponsorsModule.editPublicSection(\'' + section.id + '\')">Edit</button>' +
         '<button type="button" class="spn-public-section-text-btn" title="' + (isFooter ? 'Footer is always shown' : (enabled ? 'Hide section' : 'Show section')) + '" aria-label="' + (isFooter ? 'Footer is always shown' : (enabled ? 'Hide ' : 'Show ') + escHtml(label)) + '"' + (isFooter ? ' disabled' : ' onclick="event.stopPropagation();MarketingSponsorsModule.setPublicSectionVisible(\'' + section.id + '\',' + (enabled ? 'false' : 'true') + ')"') + '>' + (isFooter ? 'Locked' : (enabled ? 'Hide' : 'Show')) + '</button>' +
+        '<span class="spn-public-drag" title="Drag to reorder" aria-hidden="true"></span>' +
         '<span class="spn-public-move-actions"><button type="button" title="Move up" aria-label="Move up"' + (index === 0 ? ' disabled' : '') + ' onclick="MarketingSponsorsModule.movePublicSection(\'' + section.id + '\',-1)">Up</button><button type="button" title="Move down" aria-label="Move down"' + (index === page.sections.length - 1 ? ' disabled' : '') + ' onclick="MarketingSponsorsModule.movePublicSection(\'' + section.id + '\',1)">Down</button></span>' +
       '</article>';
     }).join('');
     host.innerHTML =
       '<div class="spn-public-builder-intro"><h2>Let\'s build your sponsor page</h2><p>Choose the sections you need, put them in the right order, and make the copy and colours yours.</p></div>' +
-      '<section class="spn-public-section-manager"><div class="spn-public-section-manager-head"><div><h3>Your Page Sections</h3><p>Drag to reorder sections. Use Edit and Hide to manage each section.</p></div></div><div class="spn-public-section-list">' + sectionRows + '</div><div class="spn-public-footer-note">The footer is always shown at the bottom of the page.</div></section>';
+      '<section class="spn-public-section-manager"><div class="spn-public-section-manager-head"><div><h3>Your Page Sections</h3><p>Drag to reorder sections. Use Edit and Hide to manage each section.</p></div><button type="button" class="spn-public-reset-order" onclick="MarketingSponsorsModule.resetPublicSectionOrder()">Reset order</button></div><div class="spn-public-section-list">' + sectionRows + '</div><div class="spn-public-footer-note">The footer is always shown at the bottom of the page.</div></section>';
     host.oninput = function () { schedulePublicPagePreview(true); };
     host.onchange = function () { schedulePublicPagePreview(true); };
     host.ondragstart = function (event) { var row = event.target.closest('[data-public-arrange]'); if (!row) return; event.dataTransfer.setData('text/plain', row.dataset.publicArrange); row.classList.add('is-dragging'); };
-    host.ondragend = function (event) { var row = event.target.closest('[data-public-arrange]'); if (row) row.classList.remove('is-dragging'); };
-    host.ondragover = function (event) { if (event.target.closest('[data-public-arrange]')) event.preventDefault(); };
-    host.ondrop = function (event) { var row = event.target.closest('[data-public-arrange]'); if (!row) return; event.preventDefault(); reorderPublicSections(event.dataTransfer.getData('text/plain'), row.dataset.publicArrange); };
+    host.ondragend = function (event) { var row = event.target.closest('[data-public-arrange]'); if (row) row.classList.remove('is-dragging'); clearPublicDropMarkers(); };
+    host.ondragover = function (event) {
+      var row = event.target.closest('[data-public-arrange]');
+      if (!row) return;
+      event.preventDefault();
+      var rect = row.getBoundingClientRect();
+      var position = event.clientY < rect.top + rect.height / 2 ? 'before' : 'after';
+      clearPublicDropMarkers();
+      row.classList.add(position === 'before' ? 'is-drop-before' : 'is-drop-after');
+      row.dataset.dropPosition = position;
+    };
+    host.ondragleave = function (event) {
+      if (!host.contains(event.relatedTarget)) clearPublicDropMarkers();
+    };
+    host.ondrop = function (event) {
+      var row = event.target.closest('[data-public-arrange]');
+      if (!row) return;
+      event.preventDefault();
+      var position = row.dataset.dropPosition || 'before';
+      clearPublicDropMarkers();
+      reorderPublicSections(event.dataTransfer.getData('text/plain'), row.dataset.publicArrange, null, position);
+    };
     updatePublicPageStatus();
     schedulePublicPagePreview(false);
   }
@@ -1293,13 +1313,39 @@
     reorderPublicSections(id, page.sections[target].id, page);
   }
 
-  function reorderPublicSections(sourceId, targetId, existingPage) {
+  function resetPublicSectionOrder() {
+    var page = collectPublicPageEditor();
+    var currentById = {};
+    page.sections.forEach(function (section) { currentById[section.id] = section; });
+    var ordered = defaultPublicPage().sections.map(function (section) {
+      return currentById[section.id] || section;
+    });
+    page.sections.forEach(function (section) {
+      if (!ordered.some(function (item) { return item.id === section.id; })) ordered.push(section);
+    });
+    page.sections = ordered;
+    SpnsState.settings.publicPageDraft = page;
+    renderPublicPageEditor();
+    setPublicPageStatus('Unsaved Changes', 'is-draft');
+  }
+
+  function clearPublicDropMarkers() {
+    document.querySelectorAll('.spn-public-section-row.is-drop-before, .spn-public-section-row.is-drop-after').forEach(function (row) {
+      row.classList.remove('is-drop-before', 'is-drop-after');
+      delete row.dataset.dropPosition;
+    });
+  }
+
+  function reorderPublicSections(sourceId, targetId, existingPage, position) {
     if (!sourceId || !targetId || sourceId === targetId) return;
     var page = existingPage || collectPublicPageEditor();
     var from = page.sections.findIndex(function (section) { return section.id === sourceId; });
     var to = page.sections.findIndex(function (section) { return section.id === targetId; });
     if (from < 0 || to < 0) return;
     var moved = page.sections.splice(from, 1)[0];
+    if (from < to) to -= 1;
+    if (position === 'after') to += 1;
+    to = Math.max(0, Math.min(page.sections.length, to));
     page.sections.splice(to, 0, moved);
     SpnsState.settings.publicPageDraft = page;
     renderPublicPageEditor();
@@ -1317,7 +1363,7 @@
       var doc = frame.contentDocument || frame.contentWindow.document;
       if (!doc) return;
       var height = Math.max(
-        1200,
+        360,
         doc.documentElement ? doc.documentElement.scrollHeight : 0,
         doc.body ? doc.body.scrollHeight : 0
       );
@@ -1881,6 +1927,7 @@
     setPublicSectionVisible: setPublicSectionVisible,
     editPublicSection: editPublicSection,
     movePublicSection: movePublicSection,
+    resetPublicSectionOrder: resetPublicSectionOrder,
     setPublicPreviewDevice: setPublicPreviewDevice,
     refreshPublicPreview: schedulePublicPagePreview,
   };
