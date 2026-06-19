@@ -54,12 +54,12 @@
         compareLabel: 'Not Sure Which Option is Right for You?', compareTitle: 'Here is how they compare.',
         compareRows: 'What it is | Support the production | Promote your business\nMain benefit | Season-wide recognition | Printed advertisement\nGreat if you want to | Show community support | Market your business\nWhere you will be seen | Programme, website, social media, announcements | In the printed programme',
         compareBoth: 'Yes! Many businesses sponsor and advertise.',
-        stepsLabel: 'Getting started', stepsTitle: 'It's Easy to Get Involved',
-        stepsRows: 'Choose an option | Sponsor, advertise, or both!\nComplete the form | Quick and easy online booking.\nUpload your artwork | We'll tell you exactly what we need.\nWe handle the rest! | We take care of all the details.',
+        stepsLabel: 'Getting started', stepsTitle: 'It’s Easy to Get Involved',
+        stepsRows: 'Choose an option | Sponsor, advertise, or both!\nComplete the form | Quick and easy online booking.\nUpload your artwork | We’ll tell you exactly what we need.\nWe handle the rest! | We take care of all the details.',
         impactTitle: 'Your support makes a big impact.', impactBody: 'Thank you for helping young performers shine!',
-        sponsorsKicker: 'Show Sponsorships', sponsorsTitle: 'Support the Production', sponsorsBody: 'Choose a sponsorship level and support the full production. You'll be recognised throughout the season.',
+        sponsorsKicker: 'Show Sponsorships', sponsorsTitle: 'Support the Production', sponsorsBody: 'Choose a sponsorship level and support the full production. You’ll be recognised throughout the season.',
         adsKicker: 'Programme Advertising', adsTitle: 'Advertise in the Programme', adsBody: 'Reach the show audience with an advertisement in the printed programme. Choose the size and format that works for your budget.',
-        footerTitle: 'Have questions?', footerBody: 'We're happy to help you find the right option.', footerButton: 'Contact Us',
+        footerTitle: 'Have questions?', footerBody: 'We’re happy to help you find the right option.', footerButton: 'Contact Us',
       },
       colors: { hero: '#572e88', stats: '#74a2b4', sponsor: '#572e88', ads: '#769e7b', info: '#ffffff', steps: '#1a1530', sponsorships: '#572e88', programmeAds: '#476aaa', footer: '#1a1530' },
       sections: [
@@ -1032,60 +1032,45 @@
     '</div>';
   }
 
-  var _editorScrollHandler = null;
   var _editorFixedResizeHandler = null;
 
   function applyEditorFixed() {
-    if (_editorScrollHandler) return;
     var editor = document.querySelector('.spn-public-builder-editor');
     var builder = document.querySelector('.spn-public-builder');
-    var frameShell = document.getElementById('spn-public-preview-shell');
     if (!editor || !builder) return;
+    if (editor.dataset.fixedApplied === '1') return;
     requestAnimationFrame(function () {
       var rect = editor.getBoundingClientRect();
-      var naturalTop = rect.top + window.scrollY;
-      var editorLeft = rect.left;
-      var editorWidth = rect.width;
-      if (frameShell) {
-        var shellTop = frameShell.getBoundingClientRect().top;
-        frameShell.style.height = Math.max(300, window.innerHeight - shellTop - 16) + 'px';
-      }
-      function updateEditorPosition() {
-        if (window.scrollY + 16 >= naturalTop) {
-          editor.style.position = 'fixed';
-          editor.style.top = '1rem';
-          editor.style.left = editorLeft + 'px';
-          editor.style.width = editorWidth + 'px';
-          editor.style.maxHeight = 'calc(100vh - 2rem)';
-          editor.style.overflowY = 'auto';
-          editor.style.zIndex = '200';
-          builder.style.paddingLeft = (editorWidth + 20) + 'px';
-        } else {
-          editor.style.position = '';
-          editor.style.top = '';
-          editor.style.left = '';
-          editor.style.width = '';
-          editor.style.maxHeight = '';
-          editor.style.overflowY = '';
-          editor.style.zIndex = '';
-          builder.style.paddingLeft = '';
-        }
-      }
-      _editorScrollHandler = updateEditorPosition;
-      window.addEventListener('scroll', _editorScrollHandler, { passive: true });
-      updateEditorPosition();
+      editor.style.position = 'fixed';
+      editor.style.top = '1rem';
+      editor.style.left = rect.left + 'px';
+      editor.style.width = rect.width + 'px';
+      editor.style.maxHeight = 'calc(100vh - 2rem)';
+      editor.style.overflowY = 'auto';
+      editor.style.zIndex = '200';
+      builder.style.paddingLeft = (rect.width + 20) + 'px';
+      editor.dataset.fixedApplied = '1';
     });
   }
 
   function removeEditorFixed() {
     var editor = document.querySelector('.spn-public-builder-editor');
     var builder = document.querySelector('.spn-public-builder');
-    var frameShell = document.getElementById('spn-public-preview-shell');
-    if (_editorScrollHandler) { window.removeEventListener('scroll', _editorScrollHandler); _editorScrollHandler = null; }
-    if (_editorFixedResizeHandler) { window.removeEventListener('resize', _editorFixedResizeHandler); _editorFixedResizeHandler = null; }
-    if (editor) { editor.style.position = ''; editor.style.top = ''; editor.style.left = ''; editor.style.width = ''; editor.style.maxHeight = ''; editor.style.overflowY = ''; editor.style.zIndex = ''; }
+    if (editor) {
+      editor.style.position = '';
+      editor.style.top = '';
+      editor.style.left = '';
+      editor.style.width = '';
+      editor.style.maxHeight = '';
+      editor.style.overflowY = '';
+      editor.style.zIndex = '';
+      delete editor.dataset.fixedApplied;
+    }
     if (builder) builder.style.paddingLeft = '';
-    if (frameShell) frameShell.style.height = '';
+    if (_editorFixedResizeHandler) {
+      window.removeEventListener('resize', _editorFixedResizeHandler);
+      _editorFixedResizeHandler = null;
+    }
   }
 
   function switchSettingsTab(name) {
@@ -1107,7 +1092,7 @@
     if (next === 'publicpage') {
       applyEditorFixed();
       if (!_editorFixedResizeHandler) {
-        _editorFixedResizeHandler = function () { removeEditorFixed(); requestAnimationFrame(applyEditorFixed); };
+        _editorFixedResizeHandler = function () { removeEditorFixed(); applyEditorFixed(); };
         window.addEventListener('resize', _editorFixedResizeHandler);
       }
     }
