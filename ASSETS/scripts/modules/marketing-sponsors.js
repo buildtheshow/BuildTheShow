@@ -1242,7 +1242,7 @@
       return '<article class="spn-public-section-row' + (enabled ? ' is-visible' : ' is-hidden') + (active ? ' is-active' : '') + '" draggable="true" data-public-arrange="' + section.id + '">' +
         '<div class="spn-public-section-icon" style="--section-color:' + escHtml(meta.color || '#572e88') + '"><img src="/ASSETS/Images/Icons/' + encodeURIComponent(meta.icon || 'Square.svg') + '" alt="" /></div>' +
         '<div class="spn-public-section-copy"><strong>' + escHtml(label) + '</strong><p>' + escHtml(meta.description || '') + '</p></div>' +
-        '<button type="button" class="spn-public-section-text-btn" title="Edit section" aria-label="Edit ' + escHtml(label) + '" onclick="event.stopPropagation();MarketingSponsorsModule.editPublicSection(\'' + section.id + '\')">Edit</button>' +
+        '<button type="button" class="spn-public-section-icon-btn" title="Edit section" aria-label="Edit ' + escHtml(label) + '" onclick="event.stopPropagation();MarketingSponsorsModule.editPublicSection(\'' + section.id + '\')"><img src="/ASSETS/Images/Icons/edit-pencil.svg" alt="" /></button>' +
         '<button type="button" class="spn-public-section-icon-btn" title="' + (isFooter ? 'Footer is always shown' : (enabled ? 'Hide section' : 'Show section')) + '" aria-label="' + (isFooter ? 'Footer is always shown' : (enabled ? 'Hide ' : 'Show ') + escHtml(label)) + '"' + (isFooter ? ' disabled' : ' onclick="event.stopPropagation();MarketingSponsorsModule.setPublicSectionVisible(\'' + section.id + '\',' + (enabled ? 'false' : 'true') + ')"') + '><img src="/ASSETS/Images/Icons/' + visibilityIcon + '" alt="" /></button>' +
         '<span class="spn-public-drag" title="Drag to reorder" aria-hidden="true"></span>' +
         '<span class="spn-public-move-actions"><button type="button" title="Move up" aria-label="Move up"' + (index === 0 ? ' disabled' : '') + ' onclick="MarketingSponsorsModule.movePublicSection(\'' + section.id + '\',-1)">Up</button><button type="button" title="Move down" aria-label="Move down"' + (index === page.sections.length - 1 ? ' disabled' : '') + ' onclick="MarketingSponsorsModule.movePublicSection(\'' + section.id + '\',1)">Down</button></span>' +
@@ -1385,24 +1385,6 @@
   var publicPreviewTimer = null;
   var publicStatusEventsBound = false;
 
-  function resizePublicPreviewFrame() {
-    var frame = document.getElementById('spn-public-preview-frame');
-    var shell = document.getElementById('spn-public-preview-shell');
-    if (!frame || !shell) return;
-    try {
-      var doc = frame.contentDocument || frame.contentWindow.document;
-      if (!doc) return;
-      var height = Math.max(
-        360,
-        doc.documentElement ? doc.documentElement.scrollHeight : 0,
-        doc.body ? doc.body.scrollHeight : 0
-      );
-      shell.style.height = height + 'px';
-    } catch (error) {
-      shell.style.height = '';
-    }
-  }
-
   function schedulePublicPagePreview(markDirty) {
     if (markDirty) setPublicPageStatus('Unsaved Changes', 'is-draft');
     clearTimeout(publicPreviewTimer);
@@ -1411,8 +1393,6 @@
       var frame = document.getElementById('spn-public-preview-frame');
       if (frame && frame.contentWindow) {
         frame.contentWindow.postMessage({ type: 'bts-sponsor-preview', publicPage: SpnsState.settings.publicPageDraft, publicStats: collectPublicStats() }, window.location.origin);
-        setTimeout(resizePublicPreviewFrame, 160);
-        setTimeout(resizePublicPreviewFrame, 500);
       }
     }, 120);
   }
@@ -1421,7 +1401,6 @@
     var shell = document.getElementById('spn-public-preview-shell');
     if (shell) shell.dataset.device = device === 'mobile' ? 'mobile' : 'desktop';
     document.querySelectorAll('[data-public-device]').forEach(function (button) { button.classList.toggle('active', button.dataset.publicDevice === device); });
-    setTimeout(resizePublicPreviewFrame, 160);
   }
 
   function updatePublicPageStatus() {
