@@ -1236,9 +1236,10 @@
       var meta = PUBLIC_SECTION_META[section.id] || {};
       var enabled = section.visible !== false;
       var active = section.id === activeId;
-      return '<article class="spn-public-choice' + (enabled ? ' is-added' : '') + (active ? ' is-active' : '') + '" role="button" tabindex="0" onclick="MarketingSponsorsModule.editPublicSection(\'' + section.id + '\')" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();MarketingSponsorsModule.editPublicSection(\'' + section.id + '\');}">' +
+      return '<article class="spn-public-choice' + (enabled ? ' is-added' : '') + (active ? ' is-active' : '') + '">' +
         '<div class="spn-public-choice-icon" style="--choice-color:' + escHtml(meta.color || '#572e88') + '"><img src="/ASSETS/Images/Icons/' + encodeURIComponent(meta.icon || 'Square.svg') + '" alt="" /></div>' +
-        '<div><strong>' + escHtml(PUBLIC_SECTION_LABELS[section.id] || section.id) + '</strong><p>' + escHtml(meta.description || '') + '</p><span class="spn-public-choice-edit">' + (active ? 'Editing now' : 'Click to edit text, colour, and content') + '</span></div>' +
+        '<div><strong>' + escHtml(PUBLIC_SECTION_LABELS[section.id] || section.id) + '</strong><p>' + escHtml(meta.description || '') + '</p>' + (active ? '<span class="spn-public-choice-edit">Editing now</span>' : '') + '</div>' +
+        '<button type="button" class="spn-public-choice-edit-btn" title="Edit section" aria-label="Edit ' + escHtml(PUBLIC_SECTION_LABELS[section.id] || section.id) + '" onclick="event.stopPropagation();MarketingSponsorsModule.editPublicSection(\'' + section.id + '\')"><span aria-hidden="true">&#9998;</span></button>' +
         '<button type="button" class="spn-public-choice-action" title="' + (enabled ? 'Remove section' : 'Add section') + '" aria-label="' + (enabled ? 'Remove ' : 'Add ') + escHtml(PUBLIC_SECTION_LABELS[section.id] || section.id) + '" onclick="event.stopPropagation();MarketingSponsorsModule.setPublicSectionVisible(\'' + section.id + '\',' + (enabled ? 'false' : 'true') + ')">' + (enabled ? '&#10003;' : '+') + '</button>' +
       '</article>';
     }).join('');
@@ -1564,7 +1565,7 @@
         '<div class="aud-visual-hero">' +
           '<div class="aud-visual-hero-content">' +
             '<div>' +
-              '<div class="aud-visual-kicker"><span class="aud-visual-kicker-dot" aria-hidden="true"></span>Promote &nbsp;-&nbsp; Sponsors</div>' +
+              '<div class="aud-visual-kicker"><span class="aud-visual-kicker-dot" aria-hidden="true"></span><span class="page-hierarchy"><span class="page-hierarchy-page">Promote</span><span class="page-hierarchy-sep"> - </span><span class="page-hierarchy-sub">Sponsors</span></span></div>' +
               '<h1 class="aud-visual-title">' + pageTitle + '</h1>' +
               '<p class="aud-visual-copy">' + pageCopy + '</p>' +
             '</div>' +
