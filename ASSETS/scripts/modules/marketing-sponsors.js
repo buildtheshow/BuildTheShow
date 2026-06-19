@@ -1403,7 +1403,11 @@
     try {
       var doc = frame.contentDocument || frame.contentWindow.document;
       if (!doc || !doc.body) return;
-      var h = Math.max(400, doc.body.scrollHeight, doc.documentElement ? doc.documentElement.scrollHeight : 0);
+      var nav     = doc.getElementById('spp-nav');
+      var content = doc.getElementById('spp-content');
+      var navH    = nav     ? nav.offsetHeight     : 0;
+      var contentH = content ? content.offsetHeight : 0;
+      var h = Math.max(400, navH + contentH);
       shell.style.height = h + 'px';
       frame.style.height = h + 'px';
     } catch (e) { /* cross-origin guard */ }
