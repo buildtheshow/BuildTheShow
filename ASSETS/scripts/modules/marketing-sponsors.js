@@ -1748,7 +1748,7 @@
           '</div>' +
           '<div class="spn-settings-panel" id="spn-settings-publicpage">' +
             '<div class="spn-public-builder-toolbar">' +
-              '<div class="spn-public-builder-actions"><bts-audition-status-strip id="spn-public-status-strip" class="spn-public-status-strip"></bts-audition-status-strip><button type="button" class="spn-btn spn-btn--ghost spn-public-draft-btn" onclick="MarketingSponsorsModule.savePublicPage(false)">Save Draft</button></div>' +
+              '<bts-audition-status-strip id="spn-public-status-strip" class="aud-floating-status-layer spn-public-status-strip"></bts-audition-status-strip><div class="spn-public-builder-actions"><button type="button" class="spn-btn spn-btn--ghost spn-public-draft-btn" onclick="MarketingSponsorsModule.savePublicPage(false)">Save Draft</button></div>' +
             '</div>' +
             '<div class="spn-public-builder">' +
               '<div class="spn-public-builder-editor"><div id="spn-public-editor"></div><div class="spn-public-stats-grid" id="spn-public-stats-grid" hidden></div></div>' +
