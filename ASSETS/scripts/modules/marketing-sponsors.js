@@ -73,7 +73,7 @@
   function mergePublicPage(value) {
     var base = defaultPublicPage();
     value = value && typeof value === 'object' ? value : {};
-    base.published = value.published !== false;
+    base.published = value.published === true;
     base.posterUrl = value.posterUrl || '';
     base.contactEmail = value.contactEmail || '';
     base.content = Object.assign(base.content, value.content || {});
@@ -1166,8 +1166,19 @@
   }
 
   var PUBLIC_SECTION_LABELS = {
-    hero: 'Hero & Navigation', stats: 'Audience Stats', ways: 'Two Ways to Participate', info: 'Programme & Comparison',
-    steps: 'How It Works', sponsorships: 'Sponsorship Options', programmeAds: 'Programme Ads', footer: 'Footer & Contact',
+    hero: 'Hero', stats: 'Audience Reach', ways: 'Ways to Participate', info: 'What is a Programme?',
+    steps: 'How It Works', sponsorships: 'Sponsorship Packages', programmeAds: 'Programme Ad Sizes', footer: 'Footer & Contact',
+  };
+
+  var PUBLIC_SECTION_META = {
+    hero: { description: 'Big headline, poster, and calls to action.', icon: 'Upload - Poster.svg', color: '#572e88' },
+    info: { description: 'Explain the programme and compare options.', icon: 'Information.svg', color: '#74a2b4' },
+    stats: { description: 'Show audience impact and local reach.', icon: 'Budgeting-Sponsorship.svg', color: '#769e7b' },
+    sponsorships: { description: 'Show the sponsor packages and pricing.', icon: 'Budgeting-Fundraising.svg', color: '#dd8233' },
+    programmeAds: { description: 'Show programme ad sizes and pricing.', icon: 'Budgeting-Ads.svg', color: '#476aaa' },
+    ways: { description: 'Help visitors choose sponsorship or advertising.', icon: 'Checklist.svg', color: '#ca7ea7' },
+    steps: { description: 'Explain how booking and artwork work.', icon: 'navproductioncalendar.svg', color: '#d1523d' },
+    footer: { description: 'Add contact details and a final call to action.', icon: 'Messages.svg', color: '#1a1530' },
   };
 
   var PUBLIC_SECTION_FIELDS = {
@@ -1213,30 +1224,52 @@
     if (!host) return;
     var page = mergePublicPage(SpnsState.settings.publicPageDraft || SpnsState.settings.publicPage);
     SpnsState.settings.publicPageDraft = page;
-    var sections = page.sections.map(function (section, index) {
-      var fields = (PUBLIC_SECTION_FIELDS[section.id] || []).map(function (field) { return publicEditorField(field, page); }).join('');
-      var orderOptions = page.sections.map(function (_, optionIndex) { return '<option value="' + optionIndex + '"' + (optionIndex === index ? ' selected' : '') + '>' + (optionIndex + 1) + '</option>'; }).join('');
-      var colorControls = section.id === 'ways'
-        ? '<div class="spn-public-editor-subtitle">Sponsor Colour</div>' + publicColorSwatches('sponsor', page.colors.sponsor) + '<div class="spn-public-editor-subtitle spn-public-editor-subtitle--spaced">Programme Ad Colour</div>' + publicColorSwatches('ads', page.colors.ads)
-        : '<div class="spn-public-editor-subtitle">Solid Section Colour</div>' + publicColorSwatches(section.id, page.colors[section.id] || '#572e88');
-      return '<details class="spn-public-editor-section" data-public-section-editor="' + section.id + '"' + (index === 0 ? ' open' : '') + '>' +
-        '<summary><span class="spn-public-section-title"><span>' + String(index + 1).padStart(2, '0') + '</span>' + escHtml(PUBLIC_SECTION_LABELS[section.id] || section.id) + '</span><span class="spn-public-section-controls" onclick="event.stopPropagation()">' +
-          '<label>Show <input type="checkbox" data-public-visible="' + section.id + '"' + (section.visible !== false ? ' checked' : '') + ' /></label>' +
-          '<label>Order <select data-public-order="' + section.id + '">' + orderOptions + '</select></label>' +
-        '</span></summary>' +
-        '<div class="spn-public-editor-section-body"><div>' + colorControls + '</div>' +
-        '<div class="spn-public-editor-fields">' + fields + '</div>' + (section.id === 'stats' ? '<div><div class="spn-public-editor-subtitle">Audience Stats</div><div class="spn-public-stats-grid" id="spn-public-stats-grid-inner"></div></div>' : '') + '</div>' +
-      '</details>';
+    var visibleSections = page.sections.filter(function (section) { return section.visible !== false; });
+    if (!SpnsState.publicEditorSection || !PUBLIC_SECTION_FIELDS[SpnsState.publicEditorSection]) SpnsState.publicEditorSection = (visibleSections[0] || page.sections[0]).id;
+    var activeId = SpnsState.publicEditorSection;
+    var activeSection = page.sections.find(function (section) { return section.id === activeId; }) || page.sections[0];
+    var activeFields = (PUBLIC_SECTION_FIELDS[activeId] || []).map(function (field) { return publicEditorField(field, page); }).join('');
+    var activeColors = activeId === 'ways'
+      ? '<div class="spn-public-editor-subtitle">Sponsor Colour</div>' + publicColorSwatches('sponsor', page.colors.sponsor) + '<div class="spn-public-editor-subtitle spn-public-editor-subtitle--spaced">Programme Ad Colour</div>' + publicColorSwatches('ads', page.colors.ads)
+      : '<div class="spn-public-editor-subtitle">Section Colour</div>' + publicColorSwatches(activeId, page.colors[activeId] || '#572e88');
+    var chooser = page.sections.map(function (section) {
+      var meta = PUBLIC_SECTION_META[section.id] || {};
+      var enabled = section.visible !== false;
+      return '<article class="spn-public-choice' + (enabled ? ' is-added' : '') + '">' +
+        '<div class="spn-public-choice-icon" style="--choice-color:' + escHtml(meta.color || '#572e88') + '"><img src="/ASSETS/Images/Icons/' + encodeURIComponent(meta.icon || 'Square.svg') + '" alt="" /></div>' +
+        '<div><strong>' + escHtml(PUBLIC_SECTION_LABELS[section.id] || section.id) + '</strong><p>' + escHtml(meta.description || '') + '</p></div>' +
+        '<button type="button" class="spn-public-choice-action" title="' + (enabled ? 'Remove section' : 'Add section') + '" aria-label="' + (enabled ? 'Remove ' : 'Add ') + escHtml(PUBLIC_SECTION_LABELS[section.id] || section.id) + '" onclick="MarketingSponsorsModule.setPublicSectionVisible(\'' + section.id + '\',' + (enabled ? 'false' : 'true') + ')">' + (enabled ? '&#10003;' : '+') + '</button>' +
+      '</article>';
     }).join('');
-    host.innerHTML = '<div class="spn-public-editor-general">' +
-      '<div class="spn-public-editor-field"><label>Poster Override URL</label><div class="spn-public-poster-control"><input type="url" id="spn-public-poster-url" value="' + escHtml(page.posterUrl) + '" placeholder="Leave blank to use the production poster" /><button type="button" class="spn-btn spn-btn--ghost" onclick="MarketingSponsorsModule.uploadPublicPoster()">Upload</button></div></div>' +
-      '<div class="spn-public-editor-field"><label>Contact Email Override</label><input type="email" id="spn-public-contact-email" value="' + escHtml(page.contactEmail) + '" placeholder="Leave blank to use the organisation email" /></div>' +
-    '</div>' + sections;
+    var arranged = visibleSections.length ? visibleSections.map(function (section, index) {
+      var meta = PUBLIC_SECTION_META[section.id] || {};
+      return '<div class="spn-public-arrange-row" draggable="true" data-public-arrange="' + section.id + '">' +
+        '<span class="spn-public-drag" title="Drag to reorder">&#8942;&#8942;</span><span class="spn-public-arrange-number">' + (index + 1) + '</span>' +
+        '<img src="/ASSETS/Images/Icons/' + encodeURIComponent(meta.icon || 'Square.svg') + '" alt="" /><strong>' + escHtml(PUBLIC_SECTION_LABELS[section.id] || section.id) + '</strong>' +
+        '<span class="spn-public-arrange-actions"><button type="button" title="Edit section" onclick="MarketingSponsorsModule.editPublicSection(\'' + section.id + '\')">Edit</button>' +
+        '<button type="button" title="Move up" aria-label="Move up"' + (index === 0 ? ' disabled' : '') + ' onclick="MarketingSponsorsModule.movePublicSection(\'' + section.id + '\',-1)">&#8593;</button>' +
+        '<button type="button" title="Move down" aria-label="Move down"' + (index === visibleSections.length - 1 ? ' disabled' : '') + ' onclick="MarketingSponsorsModule.movePublicSection(\'' + section.id + '\',1)">&#8595;</button>' +
+        '<button type="button" class="is-remove" title="Remove section" aria-label="Remove section" onclick="MarketingSponsorsModule.setPublicSectionVisible(\'' + section.id + '\',false)">&times;</button></span>' +
+      '</div>';
+    }).join('') : '<div class="spn-public-arrange-empty">Add at least one section to build the public page.</div>';
+    host.innerHTML =
+      '<div class="spn-public-builder-intro"><h2>Let\'s build your sponsor page</h2><p>Choose the sections you need, put them in the right order, and make the copy and colours yours.</p></div>' +
+      '<section class="spn-public-step"><div class="spn-public-step-head"><span>1</span><div><h3>Choose Your Sections</h3><p>Add or remove the building blocks of your page.</p></div></div><div class="spn-public-choice-grid">' + chooser + '</div></section>' +
+      '<section class="spn-public-step"><div class="spn-public-step-head"><span>2</span><div><h3>Arrange Your Sections</h3><p>Drag sections or use the arrow controls to reorder them.</p></div></div><div class="spn-public-arrange-list">' + arranged + '</div></section>' +
+      '<section class="spn-public-step spn-public-step--customize"><div class="spn-public-step-head"><span>3</span><div><h3>Make It Yours</h3><p>Edit copy, colours, poster, and contact details.</p></div></div>' +
+        '<div class="spn-public-edit-heading"><div><strong>Editing: ' + escHtml(PUBLIC_SECTION_LABELS[activeId] || activeId) + '</strong><span>' + (activeSection.visible === false ? 'This section is currently removed.' : 'Changes appear in the preview as you type.') + '</span></div></div>' +
+        '<div class="spn-public-editor-general"><div class="spn-public-editor-field"><label>Poster Override URL</label><div class="spn-public-poster-control"><input type="url" id="spn-public-poster-url" value="' + escHtml(page.posterUrl) + '" placeholder="Use the production poster" /><button type="button" class="spn-btn spn-btn--ghost" onclick="MarketingSponsorsModule.uploadPublicPoster()">Upload</button></div></div><div class="spn-public-editor-field"><label>Contact Email Override</label><input type="email" id="spn-public-contact-email" value="' + escHtml(page.contactEmail) + '" placeholder="Use the organisation email" /></div></div>' +
+        '<div class="spn-public-editor-section-body"><div>' + activeColors + '</div><div class="spn-public-editor-fields">' + activeFields + '</div>' + (activeId === 'stats' ? '<div><div class="spn-public-editor-subtitle">Audience Stats</div><div class="spn-public-stats-grid" id="spn-public-stats-grid-inner"></div></div>' : '') + '</div>' +
+      '</section>';
     var originalStats = document.getElementById('spn-public-stats-grid');
     var innerStats = document.getElementById('spn-public-stats-grid-inner');
     if (originalStats && innerStats) { innerStats.innerHTML = originalStats.innerHTML; originalStats.innerHTML = ''; }
     host.oninput = function () { schedulePublicPagePreview(true); };
-    host.onchange = function (event) { if (event.target.matches('[data-public-order]')) reorderPublicSection(event.target); schedulePublicPagePreview(true); };
+    host.onchange = function () { schedulePublicPagePreview(true); };
+    host.ondragstart = function (event) { var row = event.target.closest('[data-public-arrange]'); if (!row) return; event.dataTransfer.setData('text/plain', row.dataset.publicArrange); row.classList.add('is-dragging'); };
+    host.ondragend = function (event) { var row = event.target.closest('[data-public-arrange]'); if (row) row.classList.remove('is-dragging'); };
+    host.ondragover = function (event) { if (event.target.closest('[data-public-arrange]')) event.preventDefault(); };
+    host.ondrop = function (event) { var row = event.target.closest('[data-public-arrange]'); if (!row) return; event.preventDefault(); reorderPublicSections(event.dataTransfer.getData('text/plain'), row.dataset.publicArrange); };
     updatePublicPageStatus();
     schedulePublicPagePreview(false);
   }
@@ -1245,25 +1278,51 @@
     var page = mergePublicPage(SpnsState.settings.publicPageDraft || SpnsState.settings.publicPage);
     document.querySelectorAll('[data-public-key]').forEach(function (input) { page.content[input.dataset.publicKey] = input.value; });
     document.querySelectorAll('[data-public-color]:checked').forEach(function (input) { page.colors[input.dataset.publicColor] = input.value; });
+    SpnsState.settings.publicStats = collectPublicStats();
     page.posterUrl = (document.getElementById('spn-public-poster-url') || {}).value || '';
     page.contactEmail = (document.getElementById('spn-public-contact-email') || {}).value || '';
-    page.sections.forEach(function (section) {
-      var toggle = document.querySelector('[data-public-visible="' + section.id + '"]');
-      section.visible = !toggle || toggle.checked;
-    });
     return page;
   }
 
-  function reorderPublicSection(select) {
-    var id = select.dataset.publicOrder;
+  function setPublicSectionVisible(id, visible) {
     var page = collectPublicPageEditor();
-    var from = page.sections.findIndex(function (section) { return section.id === id; });
-    var to = Number(select.value);
-    if (from < 0 || to < 0 || from === to) return;
+    var section = page.sections.find(function (item) { return item.id === id; });
+    if (!section) return;
+    section.visible = !!visible;
+    if (visible) SpnsState.publicEditorSection = id;
+    SpnsState.settings.publicPageDraft = page;
+    renderPublicPageEditor();
+    setPublicPageStatus('Unsaved Changes', 'is-draft');
+  }
+
+  function editPublicSection(id) {
+    SpnsState.settings.publicPageDraft = collectPublicPageEditor();
+    SpnsState.publicEditorSection = id;
+    renderPublicPageEditor();
+    var customize = document.querySelector('.spn-public-step--customize');
+    if (customize) customize.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  function movePublicSection(id, direction) {
+    var page = collectPublicPageEditor();
+    var visible = page.sections.filter(function (section) { return section.visible !== false; });
+    var current = visible.findIndex(function (section) { return section.id === id; });
+    var target = current + Number(direction);
+    if (current < 0 || target < 0 || target >= visible.length) return;
+    reorderPublicSections(id, visible[target].id, page);
+  }
+
+  function reorderPublicSections(sourceId, targetId, existingPage) {
+    if (!sourceId || !targetId || sourceId === targetId) return;
+    var page = existingPage || collectPublicPageEditor();
+    var from = page.sections.findIndex(function (section) { return section.id === sourceId; });
+    var to = page.sections.findIndex(function (section) { return section.id === targetId; });
+    if (from < 0 || to < 0) return;
     var moved = page.sections.splice(from, 1)[0];
     page.sections.splice(to, 0, moved);
     SpnsState.settings.publicPageDraft = page;
     renderPublicPageEditor();
+    setPublicPageStatus('Unsaved Changes', 'is-draft');
   }
 
   var publicPreviewTimer = null;
@@ -1559,12 +1618,12 @@
             '</div>' +
           '</div>' +
           '<div class="spn-settings-panel" id="spn-settings-publicpage">' +
-            '<div class="spn-public-builder-toolbar"><div><div class="spn-settings-section-title">Public Sponsor Page</div><div class="spn-settings-section-desc">Edit the public page within the Build The Show brand system. Prices and options remain connected to Programme Ad Sizes and Sponsor Tiers.</div></div>' +
+            '<div class="spn-public-builder-toolbar">' +
               '<div class="spn-public-builder-actions"><span class="spn-public-publish-status" id="spn-public-publish-status">Loading</span><button type="button" class="spn-btn spn-btn--ghost" onclick="MarketingSponsorsModule.unpublishPublicPage()">Unpublish</button><button type="button" class="spn-btn spn-btn--ghost" onclick="MarketingSponsorsModule.savePublicPage(false)">Save Draft</button><button type="button" class="spn-btn spn-btn--primary" onclick="MarketingSponsorsModule.savePublicPage(true)">Publish</button></div>' +
             '</div>' +
             '<div class="spn-public-builder">' +
               '<div class="spn-public-builder-editor"><div id="spn-public-editor"></div><div class="spn-public-stats-grid" id="spn-public-stats-grid" hidden></div></div>' +
-              '<aside class="spn-public-builder-preview"><div class="spn-public-preview-toolbar"><strong>Live Preview</strong><div><button type="button" class="spn-public-device active" data-public-device="desktop" onclick="MarketingSponsorsModule.setPublicPreviewDevice(\'desktop\')">Desktop</button><button type="button" class="spn-public-device" data-public-device="mobile" onclick="MarketingSponsorsModule.setPublicPreviewDevice(\'mobile\')">Mobile</button></div></div>' +
+              '<aside class="spn-public-builder-preview"><div class="spn-public-preview-toolbar"><span><strong>Here\'s how your page looks</strong><small>This is a preview. Publish when you are happy with it.</small></span><div><button type="button" class="spn-public-device active" data-public-device="desktop" onclick="MarketingSponsorsModule.setPublicPreviewDevice(\'desktop\')">Desktop</button><button type="button" class="spn-public-device" data-public-device="mobile" onclick="MarketingSponsorsModule.setPublicPreviewDevice(\'mobile\')">Mobile</button></div></div>' +
                 '<div class="spn-public-preview-frame-shell" id="spn-public-preview-shell" data-device="desktop"><iframe id="spn-public-preview-frame" title="Public sponsor page preview" src="/PUBLIC/sponsors.html?prod=' + encodeURIComponent(SpnsState.prodId) + '&preview=1" onload="MarketingSponsorsModule.refreshPublicPreview()"></iframe></div>' +
               '</aside>' +
             '</div>' +
@@ -1765,6 +1824,9 @@
     savePublicPage: savePublicPage,
     unpublishPublicPage: unpublishPublicPage,
     uploadPublicPoster: uploadPublicPoster,
+    setPublicSectionVisible: setPublicSectionVisible,
+    editPublicSection: editPublicSection,
+    movePublicSection: movePublicSection,
     setPublicPreviewDevice: setPublicPreviewDevice,
     refreshPublicPreview: schedulePublicPagePreview,
   };
