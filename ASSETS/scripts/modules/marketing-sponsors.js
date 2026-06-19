@@ -1377,7 +1377,7 @@
       var isAdsPage = page === 'programmeads';
       var isShowSponsorsPage = page === 'showsponsors';
       var isSettingsPage = page === 'sponsorssettings';
-      var pageTitle = isAdsPage ? 'Programme Ad Placements' : (isShowSponsorsPage ? 'Show Sponsors' : (isSettingsPage ? 'Sponsor Settings' : 'Sponsors'));
+      var pageTitle = isAdsPage ? 'Programme Ads' : (isShowSponsorsPage ? 'Show Sponsors' : (isSettingsPage ? 'Sponsor Settings' : 'Sponsors'));
       var pageCopy = isAdsPage
         ? 'Set your programme ad sizes and pricing, then track every booking, payment, and piece of artwork through to print.'
         : (isShowSponsorsPage
