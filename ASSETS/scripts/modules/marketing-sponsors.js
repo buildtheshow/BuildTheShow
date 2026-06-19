@@ -1135,8 +1135,12 @@
   function renderPublicStatsAdmin() {
     var grid = document.getElementById('spn-public-stats-grid');
     if (!grid) return;
+    grid.innerHTML = '';
+  }
+
+  function publicStatsEditorRows() {
     var existing = SpnsState.settings.publicStats || [];
-    var html = STAT_SLOT_DEFAULTS.map(function (def, i) {
+    return STAT_SLOT_DEFAULTS.map(function (def, i) {
       var stat = existing[i] || {};
       return '<div class="spn-public-stat-row">' +
         '<div class="spn-public-stat-swatch" style="background:' + def.color + '"></div>' +
@@ -1147,10 +1151,10 @@
         '</div>' +
       '</div>';
     }).join('');
-    grid.innerHTML = html;
   }
 
   function collectPublicStats() {
+    if (!document.querySelector('.spn-public-stat-value')) return SpnsState.settings.publicStats || [];
     return STAT_SLOT_DEFAULTS.map(function (def, i) {
       var value   = (document.querySelector('.spn-public-stat-value[data-i="'  + i + '"]')   || {}).value || '';
       var label   = (document.querySelector('.spn-public-stat-label[data-i="'  + i + '"]')   || {}).value || '';
@@ -1227,6 +1231,7 @@
     var visibleSections = page.sections.filter(function (section) { return section.visible !== false; });
     if (!SpnsState.publicEditorSection || !PUBLIC_SECTION_FIELDS[SpnsState.publicEditorSection]) SpnsState.publicEditorSection = (visibleSections[0] || page.sections[0]).id;
     var activeId = SpnsState.publicEditorSection;
+    var mode = SpnsState.publicEditorMode === 'edit' ? 'edit' : 'sections';
     var sectionRows = page.sections.map(function (section, index) {
       var meta = PUBLIC_SECTION_META[section.id] || {};
       var isFooter = section.id === 'footer';
@@ -1243,9 +1248,26 @@
         '<span class="spn-public-move-actions"><button type="button" title="Move up" aria-label="Move up"' + (index === 0 ? ' disabled' : '') + ' onclick="MarketingSponsorsModule.movePublicSection(\'' + section.id + '\',-1)">Up</button><button type="button" title="Move down" aria-label="Move down"' + (index === page.sections.length - 1 ? ' disabled' : '') + ' onclick="MarketingSponsorsModule.movePublicSection(\'' + section.id + '\',1)">Down</button></span>' +
       '</article>';
     }).join('');
+    var activeFields = PUBLIC_SECTION_FIELDS[activeId] || [];
+    var editPanel =
+      '<section class="spn-public-section-manager spn-public-edit-panel">' +
+        '<div class="spn-public-edit-topline"><button type="button" class="spn-public-back-btn" onclick="MarketingSponsorsModule.backToPublicSections()">Back to sections</button></div>' +
+        '<div class="spn-public-edit-hero"><span>Edit section</span><h3>' + escHtml(PUBLIC_SECTION_LABELS[activeId] || activeId) + '</h3><p>' + escHtml((PUBLIC_SECTION_META[activeId] || {}).description || 'Update the words and styling for this page section.') + '</p></div>' +
+        (activeId === 'hero' ? '<div class="spn-public-editor-general">' +
+          '<div class="spn-public-editor-field"><label>Poster Override URL</label><div class="spn-public-poster-control"><input type="text" id="spn-public-poster-url" placeholder="Use the production poster" value="' + escHtml(page.posterUrl || '') + '" /><button type="button" class="spn-btn spn-btn--ghost" onclick="MarketingSponsorsModule.uploadPublicPoster()">Upload</button></div></div>' +
+          '<div class="spn-public-editor-field"><label>Contact Email Override</label><input type="email" id="spn-public-contact-email" placeholder="Use the organisation email" value="' + escHtml(page.contactEmail || '') + '" /></div>' +
+        '</div>' : '') +
+        '<div class="spn-public-editor-section-body">' +
+          '<div><div class="spn-public-editor-subtitle">Section colour</div>' + publicColorSwatches(activeId, page.colors[activeId] || '#572e88') + '</div>' +
+          '<div><div class="spn-public-editor-subtitle spn-public-editor-subtitle--spaced">Copy</div><div class="spn-public-editor-fields">' + activeFields.map(function (field) { return publicEditorField(field, page); }).join('') + '</div></div>' +
+          (activeId === 'stats' ? '<div><div class="spn-public-editor-subtitle spn-public-editor-subtitle--spaced">Audience numbers</div><div class="spn-public-stats-grid">' + publicStatsEditorRows() + '</div></div>' : '') +
+        '</div>' +
+      '</section>';
+    var sectionPanel =
+      '<section class="spn-public-section-manager"><div class="spn-public-section-manager-head"><div><h3>Your Page Sections</h3><p>Drag to reorder sections. Use Edit and Hide to manage each section.</p></div><button type="button" class="spn-public-reset-order" onclick="MarketingSponsorsModule.resetPublicSectionOrder()">Reset order</button></div><div class="spn-public-section-list">' + sectionRows + '</div><div class="spn-public-footer-note">The footer is always shown at the bottom of the page.</div></section>';
     host.innerHTML =
       '<div class="spn-public-builder-intro"><h2>Let\'s build your sponsor page</h2><p>Choose the sections you need, put them in the right order, and make the copy and colours yours.</p></div>' +
-      '<section class="spn-public-section-manager"><div class="spn-public-section-manager-head"><div><h3>Your Page Sections</h3><p>Drag to reorder sections. Use Edit and Hide to manage each section.</p></div><button type="button" class="spn-public-reset-order" onclick="MarketingSponsorsModule.resetPublicSectionOrder()">Reset order</button></div><div class="spn-public-section-list">' + sectionRows + '</div><div class="spn-public-footer-note">The footer is always shown at the bottom of the page.</div></section>';
+      (mode === 'edit' ? editPanel : sectionPanel);
     host.oninput = function () { schedulePublicPagePreview(true); };
     host.onchange = function () { schedulePublicPagePreview(true); };
     host.ondragstart = function (event) { var row = event.target.closest('[data-public-arrange]'); if (!row) return; event.dataTransfer.setData('text/plain', row.dataset.publicArrange); row.classList.add('is-dragging'); };
@@ -1302,6 +1324,13 @@
   function editPublicSection(id) {
     SpnsState.settings.publicPageDraft = collectPublicPageEditor();
     SpnsState.publicEditorSection = id;
+    SpnsState.publicEditorMode = 'edit';
+    renderPublicPageEditor();
+  }
+
+  function backToPublicSections() {
+    SpnsState.settings.publicPageDraft = collectPublicPageEditor();
+    SpnsState.publicEditorMode = 'sections';
     renderPublicPageEditor();
   }
 
@@ -1325,6 +1354,7 @@
     });
     page.sections = ordered;
     SpnsState.settings.publicPageDraft = page;
+    SpnsState.publicEditorMode = 'sections';
     renderPublicPageEditor();
     setPublicPageStatus('Unsaved Changes', 'is-draft');
   }
@@ -1926,6 +1956,7 @@
     uploadPublicPoster: uploadPublicPoster,
     setPublicSectionVisible: setPublicSectionVisible,
     editPublicSection: editPublicSection,
+    backToPublicSections: backToPublicSections,
     movePublicSection: movePublicSection,
     resetPublicSectionOrder: resetPublicSectionOrder,
     setPublicPreviewDevice: setPublicPreviewDevice,
