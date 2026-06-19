@@ -1892,10 +1892,8 @@
       var deadlineTilesHtml = deadlineTile('Programme Ads', 'Artwork Submission', 'spn-deadline-artwork', '#476aaa') +
         deadlineTile('Programme Ads', 'Ad Booking', 'spn-deadline-booking', '#dd8233') +
         deadlineTile('Show Sponsors', 'Sponsor Confirmation', 'spn-deadline-sponsor', '#769e7b');
-      var publicStatusStripHtml = '<bts-audition-status-strip id="spn-public-status-strip" class="aud-floating-status-layer spn-public-status-strip" style="display:none"></bts-audition-status-strip>';
-
       if (isDashboardPage) {
-        container.innerHTML = publicStatusStripHtml +
+        container.innerHTML =
           '<div class="aud-visual-hero">' +
             '<div class="aud-visual-hero-content">' +
               '<div>' +
@@ -1948,7 +1946,7 @@
         return;
       }
 
-      container.innerHTML = publicStatusStripHtml +
+      container.innerHTML =
         '<div class="aud-visual-hero">' +
           '<div class="aud-visual-hero-content">' +
             '<div>' +
