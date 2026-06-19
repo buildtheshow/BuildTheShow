@@ -1178,7 +1178,7 @@
     hero: { description: 'Big headline, poster, and calls to action.', icon: 'Placeholder - Poster.svg', color: '#572e88' },
     info: { description: 'Explain the programme and compare options.', icon: 'programme-8.5x11.svg', color: '#74a2b4' },
     stats: { description: 'Show audience impact and local reach.', icon: 'organisation-members.svg', color: '#769e7b' },
-    sponsorships: { description: 'Show the sponsor packages and pricing.', icon: 'organisation-members.svg', color: '#dd8233' },
+    sponsorships: { description: 'Show the sponsor packages and pricing.', icon: 'sponsorship-packages.svg', color: '#dd8233' },
     programmeAds: { description: 'Show programme ad sizes and pricing.', icon: 'programme-8.5x11Folded-11x17.svg', color: '#476aaa' },
     ways: { description: 'Help visitors choose sponsorship or advertising.', icon: 'Volunteers.svg', color: '#ca7ea7' },
     steps: { description: 'Explain how booking and artwork work.', icon: 'Production Checklist.svg', color: '#d1523d' },
