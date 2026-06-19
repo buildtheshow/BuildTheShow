@@ -78,7 +78,11 @@
     base.contactEmail = value.contactEmail || '';
     base.content = Object.assign(base.content, value.content || {});
     base.colors = Object.assign(base.colors, value.colors || {});
-    if (Array.isArray(value.sections) && value.sections.length) base.sections = value.sections;
+    if (Array.isArray(value.sections) && value.sections.length) {
+      base.sections = value.sections.map(function (section) { return Object.assign({}, section); });
+      var footerIndex = base.sections.findIndex(function (section) { return section.id === 'footer'; });
+      if (footerIndex >= 0) base.sections.push(base.sections.splice(footerIndex, 1)[0]);
+    }
     return base;
   }
 
@@ -1239,13 +1243,14 @@
       var active = section.id === activeId;
       var label = PUBLIC_SECTION_LABELS[section.id] || section.id;
       var visibilityIcon = isFooter ? 'locked.svg' : (enabled ? 'visible.svg' : 'visible-off.svg');
-      return '<article class="spn-public-section-row' + (enabled ? ' is-visible' : ' is-hidden') + (active ? ' is-active' : '') + '" draggable="true" data-public-arrange="' + section.id + '">' +
+      return '<article class="spn-public-section-row' + (enabled ? ' is-visible' : ' is-hidden') + (active ? ' is-active' : '') + '"' + (isFooter ? '' : ' draggable="true" data-public-arrange="' + section.id + '"') + '>' +
         '<div class="spn-public-section-icon" style="--section-color:' + escHtml(meta.color || '#572e88') + '"><img src="/ASSETS/Images/Icons/' + encodeURIComponent(meta.icon || 'Square.svg') + '" alt="" /></div>' +
         '<div class="spn-public-section-copy"><strong>' + escHtml(label) + '</strong><p>' + escHtml(meta.description || '') + '</p></div>' +
         '<button type="button" class="spn-public-section-icon-btn" title="Edit section" aria-label="Edit ' + escHtml(label) + '" onclick="event.stopPropagation();MarketingSponsorsModule.editPublicSection(\'' + section.id + '\')"><img src="/ASSETS/Images/Icons/edit-pencil.svg" alt="" /></button>' +
         '<button type="button" class="spn-public-section-icon-btn" title="' + (isFooter ? 'Footer is always shown' : (enabled ? 'Hide section' : 'Show section')) + '" aria-label="' + (isFooter ? 'Footer is always shown' : (enabled ? 'Hide ' : 'Show ') + escHtml(label)) + '"' + (isFooter ? ' disabled' : ' onclick="event.stopPropagation();MarketingSponsorsModule.setPublicSectionVisible(\'' + section.id + '\',' + (enabled ? 'false' : 'true') + ')"') + '><img src="/ASSETS/Images/Icons/' + visibilityIcon + '" alt="" /></button>' +
-        '<span class="spn-public-drag" title="Drag to reorder" aria-hidden="true"></span>' +
-        '<span class="spn-public-move-actions"><button type="button" title="Move up" aria-label="Move up"' + (index === 0 ? ' disabled' : '') + ' onclick="MarketingSponsorsModule.movePublicSection(\'' + section.id + '\',-1)">Up</button><button type="button" title="Move down" aria-label="Move down"' + (index === page.sections.length - 1 ? ' disabled' : '') + ' onclick="MarketingSponsorsModule.movePublicSection(\'' + section.id + '\',1)">Down</button></span>' +
+        (isFooter ? '<span class="spn-public-drag" aria-hidden="true"></span><span class="spn-public-move-actions" aria-hidden="true"></span>' :
+          '<span class="spn-public-drag" title="Drag to reorder" aria-hidden="true"></span>' +
+          '<span class="spn-public-move-actions"><button type="button" title="Move up" aria-label="Move up"' + (index === 0 ? ' disabled' : '') + ' onclick="MarketingSponsorsModule.movePublicSection(\'' + section.id + '\',-1)">Up</button><button type="button" title="Move down" aria-label="Move down"' + (index === page.sections.length - 2 ? ' disabled' : '') + ' onclick="MarketingSponsorsModule.movePublicSection(\'' + section.id + '\',1)">Down</button></span>') +
       '</article>';
     }).join('');
     var activeFields = PUBLIC_SECTION_FIELDS[activeId] || [];
@@ -1338,8 +1343,12 @@
     var page = collectPublicPageEditor();
     var current = page.sections.findIndex(function (section) { return section.id === id; });
     var target = current + Number(direction);
-    if (current < 0 || target < 0 || target >= page.sections.length) return;
-    reorderPublicSections(id, page.sections[target].id, page);
+    if (id === 'footer' || current < 0 || target < 0 || target >= page.sections.length - 1) return;
+    var moved = page.sections.splice(current, 1)[0];
+    page.sections.splice(target, 0, moved);
+    SpnsState.settings.publicPageDraft = page;
+    renderPublicPageEditor();
+    setPublicPageStatus('Unsaved Changes', 'is-draft');
   }
 
   function resetPublicSectionOrder() {
@@ -1367,7 +1376,7 @@
   }
 
   function reorderPublicSections(sourceId, targetId, existingPage, position) {
-    if (!sourceId || !targetId || sourceId === targetId) return;
+    if (!sourceId || !targetId || sourceId === targetId || sourceId === 'footer') return;
     var page = existingPage || collectPublicPageEditor();
     var from = page.sections.findIndex(function (section) { return section.id === sourceId; });
     var to = page.sections.findIndex(function (section) { return section.id === targetId; });
@@ -1377,6 +1386,8 @@
     if (position === 'after') to += 1;
     to = Math.max(0, Math.min(page.sections.length, to));
     page.sections.splice(to, 0, moved);
+    var footerIndex = page.sections.findIndex(function (section) { return section.id === 'footer'; });
+    if (footerIndex >= 0) page.sections.push(page.sections.splice(footerIndex, 1)[0]);
     SpnsState.settings.publicPageDraft = page;
     renderPublicPageEditor();
     setPublicPageStatus('Unsaved Changes', 'is-draft');
