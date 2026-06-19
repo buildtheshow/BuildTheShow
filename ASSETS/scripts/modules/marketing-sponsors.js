@@ -1032,9 +1032,51 @@
     '</div>';
   }
 
+  var _editorFixedResizeHandler = null;
+
+  function applyEditorFixed() {
+    var editor = document.querySelector('.spn-public-builder-editor');
+    var builder = document.querySelector('.spn-public-builder');
+    if (!editor || !builder) return;
+    if (editor.dataset.fixedApplied === '1') return;
+    requestAnimationFrame(function () {
+      var rect = editor.getBoundingClientRect();
+      editor.style.position = 'fixed';
+      editor.style.top = '1rem';
+      editor.style.left = rect.left + 'px';
+      editor.style.width = rect.width + 'px';
+      editor.style.maxHeight = 'calc(100vh - 2rem)';
+      editor.style.overflowY = 'auto';
+      editor.style.zIndex = '200';
+      builder.style.paddingLeft = (rect.width + 20) + 'px';
+      editor.dataset.fixedApplied = '1';
+    });
+  }
+
+  function removeEditorFixed() {
+    var editor = document.querySelector('.spn-public-builder-editor');
+    var builder = document.querySelector('.spn-public-builder');
+    if (editor) {
+      editor.style.position = '';
+      editor.style.top = '';
+      editor.style.left = '';
+      editor.style.width = '';
+      editor.style.maxHeight = '';
+      editor.style.overflowY = '';
+      editor.style.zIndex = '';
+      delete editor.dataset.fixedApplied;
+    }
+    if (builder) builder.style.paddingLeft = '';
+    if (_editorFixedResizeHandler) {
+      window.removeEventListener('resize', _editorFixedResizeHandler);
+      _editorFixedResizeHandler = null;
+    }
+  }
+
   function switchSettingsTab(name) {
     var valid = ['sizes', 'tiers', 'deadlines', 'publicpage'];
     var next = valid.indexOf(name) >= 0 ? name : 'sizes';
+    if (next !== 'publicpage') removeEditorFixed();
     if (next === 'publicpage') renderPublicPageEditor();
     document.querySelectorAll('.spn-settings-tab').forEach(function (button) {
       var active = button.dataset.settingsPanel === next;
@@ -1047,6 +1089,13 @@
     });
     var savebar = document.getElementById('spn-settings-savebar');
     if (savebar) savebar.hidden = next === 'publicpage';
+    if (next === 'publicpage') {
+      applyEditorFixed();
+      if (!_editorFixedResizeHandler) {
+        _editorFixedResizeHandler = function () { removeEditorFixed(); applyEditorFixed(); };
+        window.addEventListener('resize', _editorFixedResizeHandler);
+      }
+    }
   }
 
   function settingsSlug(value, fallback) {
@@ -1503,6 +1552,7 @@
     };
     updatePublicPageStatus();
     schedulePublicPagePreview(false);
+    applyEditorFixed();
   }
 
   function collectPublicPageEditor() {
