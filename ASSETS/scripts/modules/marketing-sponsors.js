@@ -54,12 +54,12 @@
         compareLabel: 'Not Sure Which Option is Right for You?', compareTitle: 'Here is how they compare.',
         compareRows: 'What it is | Support the production | Promote your business\nMain benefit | Season-wide recognition | Printed advertisement\nGreat if you want to | Show community support | Market your business\nWhere you will be seen | Programme, website, social media, announcements | In the printed programme',
         compareBoth: 'Yes! Many businesses sponsor and advertise.',
-        stepsLabel: 'Getting started', stepsTitle: 'It's Easy to Get Involved',
-        stepsRows: 'Choose an option | Sponsor, advertise, or both!\nComplete the form | Quick and easy online booking.\nUpload your artwork | We'll tell you exactly what we need.\nWe handle the rest! | We take care of all the details.',
+        stepsLabel: 'Getting started', stepsTitle: 'It\u2019s Easy to Get Involved',
+        stepsRows: 'Choose an option | Sponsor, advertise, or both!\nComplete the form | Quick and easy online booking.\nUpload your artwork | We\u2019ll tell you exactly what we need.\nWe handle the rest! | We take care of all the details.',
         impactTitle: 'Your support makes a big impact.', impactBody: 'Thank you for helping young performers shine!',
-        sponsorsKicker: 'Show Sponsorships', sponsorsTitle: 'Support the Production', sponsorsBody: 'Choose a sponsorship level and support the full production. You'll be recognised throughout the season.',
+        sponsorsKicker: 'Show Sponsorships', sponsorsTitle: 'Support the Production', sponsorsBody: 'Choose a sponsorship level and support the full production. You\u2019ll be recognised throughout the season.',
         adsKicker: 'Programme Advertising', adsTitle: 'Advertise in the Programme', adsBody: 'Reach the show audience with an advertisement in the printed programme. Choose the size and format that works for your budget.',
-        footerTitle: 'Have questions?', footerBody: 'We're happy to help you find the right option.', footerButton: 'Contact Us',
+        footerTitle: 'Have questions?', footerBody: 'We\u2019re happy to help you find the right option.', footerButton: 'Contact Us',
       },
       colors: { hero: '#572e88', stats: '#74a2b4', sponsor: '#572e88', ads: '#769e7b', info: '#ffffff', steps: '#1a1530', sponsorships: '#572e88', programmeAds: '#476aaa', footer: '#1a1530' },
       sections: [
@@ -2084,7 +2084,7 @@
             '<div class="spn-public-builder">' +
               '<div class="spn-public-builder-editor"><div id="spn-public-editor"></div><div class="spn-public-stats-grid" id="spn-public-stats-grid" hidden></div></div>' +
               '<aside class="spn-public-builder-preview"><div class="spn-public-preview-toolbar"><span><strong>Here\'s how your page looks</strong><small>This is a preview. Publish when you are happy with it.</small></span><div class="spn-public-preview-controls"><div class="spn-public-builder-actions"><span class="spn-public-draft-status" id="spn-public-draft-status" role="status" aria-live="polite" hidden></span><button type="button" class="spn-btn spn-btn--ghost spn-public-draft-btn" id="spn-public-save-draft" onclick="MarketingSponsorsModule.savePublicPage(false)" disabled>Save Draft</button><button type="button" class="spn-btn spn-btn--primary" id="spn-public-publish-changes" onclick="MarketingSponsorsModule.savePublicPage(true)" hidden>Publish Changes</button></div><div class="spn-public-device-controls"><button type="button" class="spn-public-device active" data-public-device="desktop" onclick="MarketingSponsorsModule.setPublicPreviewDevice(\'desktop\')">Desktop</button><button type="button" class="spn-public-device" data-public-device="mobile" onclick="MarketingSponsorsModule.setPublicPreviewDevice(\'mobile\')">Mobile</button></div></div></div>' +
-                '<div class="spn-public-preview-frame-shell" id="spn-public-preview-shell" data-device="desktop"><iframe id="spn-public-preview-frame" title="Public sponsor page preview" src="/PUBLIC/sponsors.html?prod=' + encodeURIComponent(SpnsState.prodId) + '&preview=1&v=sponsor-section-order-20260619" onload="MarketingSponsorsModule.refreshPublicPreview()"></iframe></div>' +
+                '<div class="spn-public-preview-frame-shell" id="spn-public-preview-shell" data-device="desktop"><iframe id="spn-public-preview-frame" title="Public sponsor page preview" src="/PUBLIC/sponsors.html?prod=' + encodeURIComponent(SpnsState.prodId) + '&preview=1&v=sponsor-public-nav-steps-20260619" onload="MarketingSponsorsModule.refreshPublicPreview()"></iframe></div>' +
               '</aside>' +
             '</div>' +
           '</div>' +
