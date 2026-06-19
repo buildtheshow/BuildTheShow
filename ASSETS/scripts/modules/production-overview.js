@@ -15,8 +15,8 @@
         '<div class="aud-visual-hero">' +
           '<div class="aud-visual-hero-content">' +
             '<div>' +
-              '<div class="aud-visual-kicker"><span class="aud-visual-kicker-dot" aria-hidden="true"></span>Production</div>' +
-              '<h1 class="aud-visual-title">Overview.</h1>' +
+              '<div class="aud-visual-kicker"><span class="aud-visual-kicker-dot" aria-hidden="true"></span><span class="page-hierarchy"><span class="page-hierarchy-page">Overview</span></span></div>' +
+              '<h1 class="aud-visual-title">Overview</h1>' +
               '<p class="aud-visual-copy">The heartbeat of your show. See your budget health, upcoming tasks, and production status at a glance.</p>' +
             '</div>' +
           '</div>' +

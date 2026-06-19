@@ -15,8 +15,8 @@
         '<div class="aud-visual-hero">' +
           '<div class="aud-visual-hero-content">' +
             '<div>' +
-              '<div class="aud-visual-kicker"><span class="aud-visual-kicker-dot" aria-hidden="true"></span>Budgeting</div>' +
-              '<h1 class="aud-visual-title">Breakdown.</h1>' +
+              '<div class="aud-visual-kicker"><span class="aud-visual-kicker-dot" aria-hidden="true"></span><span class="page-hierarchy"><span class="page-hierarchy-page">Financials</span></span></div>' +
+              '<h1 class="aud-visual-title">Breakdown</h1>' +
               '<p class="aud-visual-copy">Plan your income and expense categories. Set amounts, track actuals, and keep the budget on course.</p>' +
             '</div>' +
           '</div>' +

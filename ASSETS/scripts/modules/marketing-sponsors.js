@@ -1232,33 +1232,26 @@
     var activeColors = activeId === 'ways'
       ? '<div class="spn-public-editor-subtitle">Sponsor Colour</div>' + publicColorSwatches('sponsor', page.colors.sponsor) + '<div class="spn-public-editor-subtitle spn-public-editor-subtitle--spaced">Programme Ad Colour</div>' + publicColorSwatches('ads', page.colors.ads)
       : '<div class="spn-public-editor-subtitle">Section Colour</div>' + publicColorSwatches(activeId, page.colors[activeId] || '#572e88');
-    var chooser = page.sections.map(function (section) {
+    var sectionRows = page.sections.map(function (section, index) {
       var meta = PUBLIC_SECTION_META[section.id] || {};
+      var isFooter = section.id === 'footer';
       var enabled = section.visible !== false;
       var active = section.id === activeId;
-      return '<article class="spn-public-choice' + (enabled ? ' is-added' : '') + (active ? ' is-active' : '') + '">' +
-        '<div class="spn-public-choice-icon" style="--choice-color:' + escHtml(meta.color || '#572e88') + '"><img src="/ASSETS/Images/Icons/' + encodeURIComponent(meta.icon || 'Square.svg') + '" alt="" /></div>' +
-        '<div><strong>' + escHtml(PUBLIC_SECTION_LABELS[section.id] || section.id) + '</strong><p>' + escHtml(meta.description || '') + '</p>' + (active ? '<span class="spn-public-choice-edit">Editing now</span>' : '') + '</div>' +
-        '<button type="button" class="spn-public-choice-edit-btn" title="Edit section" aria-label="Edit ' + escHtml(PUBLIC_SECTION_LABELS[section.id] || section.id) + '" onclick="event.stopPropagation();MarketingSponsorsModule.editPublicSection(\'' + section.id + '\')"><span aria-hidden="true">&#9998;</span></button>' +
-        '<button type="button" class="spn-public-choice-action" title="' + (enabled ? 'Remove section' : 'Add section') + '" aria-label="' + (enabled ? 'Remove ' : 'Add ') + escHtml(PUBLIC_SECTION_LABELS[section.id] || section.id) + '" onclick="event.stopPropagation();MarketingSponsorsModule.setPublicSectionVisible(\'' + section.id + '\',' + (enabled ? 'false' : 'true') + ')">' + (enabled ? '&#10003;' : '+') + '</button>' +
+      var label = PUBLIC_SECTION_LABELS[section.id] || section.id;
+      return '<article class="spn-public-section-row' + (enabled ? ' is-visible' : ' is-hidden') + (active ? ' is-active' : '') + '" draggable="true" data-public-arrange="' + section.id + '">' +
+        '<button type="button" class="spn-public-section-check" title="' + (isFooter ? 'Footer is always shown' : (enabled ? 'Hide section' : 'Show section')) + '" aria-label="' + (isFooter ? 'Footer is always shown' : (enabled ? 'Hide ' : 'Show ') + escHtml(label)) + '"' + (isFooter ? ' disabled' : ' onclick="event.stopPropagation();MarketingSponsorsModule.setPublicSectionVisible(\'' + section.id + '\',' + (enabled ? 'false' : 'true') + ')"') + '>' + (enabled ? '&#10003;' : '+') + '</button>' +
+        '<div class="spn-public-section-icon" style="--section-color:' + escHtml(meta.color || '#572e88') + '"><img src="/ASSETS/Images/Icons/' + encodeURIComponent(meta.icon || 'Square.svg') + '" alt="" /></div>' +
+        '<div class="spn-public-section-copy"><strong>' + escHtml(label) + '</strong><p>' + escHtml(meta.description || '') + '</p>' + (active ? '<span>Editing now</span>' : '') + '</div>' +
+        '<button type="button" class="spn-public-section-btn" title="Edit section" onclick="event.stopPropagation();MarketingSponsorsModule.editPublicSection(\'' + section.id + '\')"><span aria-hidden="true">&#9998;</span>Edit</button>' +
+        '<button type="button" class="spn-public-section-btn" title="' + (isFooter ? 'Footer is always shown' : (enabled ? 'Hide section' : 'Show section')) + '"' + (isFooter ? ' disabled' : ' onclick="event.stopPropagation();MarketingSponsorsModule.setPublicSectionVisible(\'' + section.id + '\',' + (enabled ? 'false' : 'true') + ')"') + '><span aria-hidden="true">' + (enabled ? '&#128065;&#65038;' : '+') + '</span>' + (isFooter ? 'Locked' : (enabled ? 'Hide' : 'Show')) + '</button>' +
+        '<span class="spn-public-drag" title="Drag to reorder" aria-hidden="true"></span>' +
+        '<span class="spn-public-move-actions"><button type="button" title="Move up" aria-label="Move up"' + (index === 0 ? ' disabled' : '') + ' onclick="MarketingSponsorsModule.movePublicSection(\'' + section.id + '\',-1)">&#8593;</button><button type="button" title="Move down" aria-label="Move down"' + (index === page.sections.length - 1 ? ' disabled' : '') + ' onclick="MarketingSponsorsModule.movePublicSection(\'' + section.id + '\',1)">&#8595;</button></span>' +
       '</article>';
     }).join('');
-    var arranged = visibleSections.length ? visibleSections.map(function (section, index) {
-      var meta = PUBLIC_SECTION_META[section.id] || {};
-      return '<div class="spn-public-arrange-row" draggable="true" data-public-arrange="' + section.id + '">' +
-        '<span class="spn-public-drag" title="Drag to reorder">&#8942;&#8942;</span><span class="spn-public-arrange-number">' + (index + 1) + '</span>' +
-        '<img src="/ASSETS/Images/Icons/' + encodeURIComponent(meta.icon || 'Square.svg') + '" alt="" /><strong>' + escHtml(PUBLIC_SECTION_LABELS[section.id] || section.id) + '</strong>' +
-        '<span class="spn-public-arrange-actions"><button type="button" title="Edit section" onclick="MarketingSponsorsModule.editPublicSection(\'' + section.id + '\')">Edit</button>' +
-        '<button type="button" title="Move up" aria-label="Move up"' + (index === 0 ? ' disabled' : '') + ' onclick="MarketingSponsorsModule.movePublicSection(\'' + section.id + '\',-1)">&#8593;</button>' +
-        '<button type="button" title="Move down" aria-label="Move down"' + (index === visibleSections.length - 1 ? ' disabled' : '') + ' onclick="MarketingSponsorsModule.movePublicSection(\'' + section.id + '\',1)">&#8595;</button>' +
-        '<button type="button" class="is-remove" title="Remove section" aria-label="Remove section" onclick="MarketingSponsorsModule.setPublicSectionVisible(\'' + section.id + '\',false)">&times;</button></span>' +
-      '</div>';
-    }).join('') : '<div class="spn-public-arrange-empty">Add at least one section to build the public page.</div>';
     host.innerHTML =
       '<div class="spn-public-builder-intro"><h2>Let\'s build your sponsor page</h2><p>Choose the sections you need, put them in the right order, and make the copy and colours yours.</p></div>' +
-      '<section class="spn-public-step"><div class="spn-public-step-head"><span>1</span><div><h3>Choose Your Sections</h3><p>Add or remove the building blocks of your page.</p></div></div><div class="spn-public-choice-grid">' + chooser + '</div></section>' +
-      '<section class="spn-public-step"><div class="spn-public-step-head"><span>2</span><div><h3>Arrange Your Sections</h3><p>Drag sections or use the arrow controls to reorder them.</p></div></div><div class="spn-public-arrange-list">' + arranged + '</div></section>' +
-      '<section class="spn-public-step spn-public-step--customize"><div class="spn-public-step-head"><span>3</span><div><h3>Make It Yours</h3><p>Edit copy, colours, poster, and contact details.</p></div></div>' +
+      '<section class="spn-public-section-manager"><div class="spn-public-section-manager-head"><div><h3>Your Page Sections</h3><p>Drag to reorder sections. Click edit to customize.</p></div></div><div class="spn-public-section-list">' + sectionRows + '</div><div class="spn-public-footer-note"><span aria-hidden="true">&#128274;</span>The footer is always shown at the bottom of the page.</div></section>' +
+      '<section class="spn-public-editor-panel">' +
         '<div class="spn-public-edit-heading"><div><strong>Editing: ' + escHtml(PUBLIC_SECTION_LABELS[activeId] || activeId) + '</strong><span>' + (activeSection.visible === false ? 'This section is currently removed.' : 'Changes appear in the preview as you type.') + '</span></div></div>' +
         '<div class="spn-public-editor-general"><div class="spn-public-editor-field"><label>Poster Override URL</label><div class="spn-public-poster-control"><input type="url" id="spn-public-poster-url" value="' + escHtml(page.posterUrl) + '" placeholder="Use the production poster" /><button type="button" class="spn-btn spn-btn--ghost" onclick="MarketingSponsorsModule.uploadPublicPoster()">Upload</button></div></div><div class="spn-public-editor-field"><label>Contact Email Override</label><input type="email" id="spn-public-contact-email" value="' + escHtml(page.contactEmail) + '" placeholder="Use the organisation email" /></div></div>' +
         '<div class="spn-public-editor-section-body"><div>' + activeColors + '</div><div class="spn-public-editor-fields">' + activeFields + '</div>' + (activeId === 'stats' ? '<div><div class="spn-public-editor-subtitle">Audience Stats</div><div class="spn-public-stats-grid" id="spn-public-stats-grid-inner"></div></div>' : '') + '</div>' +
@@ -1290,6 +1283,7 @@
     var page = collectPublicPageEditor();
     var section = page.sections.find(function (item) { return item.id === id; });
     if (!section) return;
+    if (id === 'footer') visible = true;
     section.visible = !!visible;
     if (visible) SpnsState.publicEditorSection = id;
     SpnsState.settings.publicPageDraft = page;
@@ -1301,17 +1295,16 @@
     SpnsState.settings.publicPageDraft = collectPublicPageEditor();
     SpnsState.publicEditorSection = id;
     renderPublicPageEditor();
-    var customize = document.querySelector('.spn-public-step--customize');
+    var customize = document.querySelector('.spn-public-editor-panel');
     if (customize) customize.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
   function movePublicSection(id, direction) {
     var page = collectPublicPageEditor();
-    var visible = page.sections.filter(function (section) { return section.visible !== false; });
-    var current = visible.findIndex(function (section) { return section.id === id; });
+    var current = page.sections.findIndex(function (section) { return section.id === id; });
     var target = current + Number(direction);
-    if (current < 0 || target < 0 || target >= visible.length) return;
-    reorderPublicSections(id, visible[target].id, page);
+    if (current < 0 || target < 0 || target >= page.sections.length) return;
+    reorderPublicSections(id, page.sections[target].id, page);
   }
 
   function reorderPublicSections(sourceId, targetId, existingPage) {

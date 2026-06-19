@@ -15,8 +15,8 @@
         '<div class="aud-visual-hero">' +
           '<div class="aud-visual-hero-content">' +
             '<div>' +
-              '<div class="aud-visual-kicker"><span class="aud-visual-kicker-dot" aria-hidden="true"></span>Budgeting</div>' +
-              '<h1 class="aud-visual-title">Receipts.</h1>' +
+              '<div class="aud-visual-kicker"><span class="aud-visual-kicker-dot" aria-hidden="true"></span><span class="page-hierarchy"><span class="page-hierarchy-page">Financials</span></span></div>' +
+              '<h1 class="aud-visual-title">Receipts</h1>' +
               '<p class="aud-visual-copy">Track every purchase. Add receipts manually or share the Collect link so your team can submit their own.</p>' +
             '</div>' +
             '<div class="aud-visual-total">' +
