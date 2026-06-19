@@ -968,7 +968,11 @@
   }
 
   function loadPublicPageStatus() {
-    return dbFetch('sponsor_settings', '&select=settings&limit=1').then(function (data) {
+    var url = SUPABASE_URL + '/rest/v1/sponsor_settings?production_id=eq.' + encodeURIComponent(SpnsState.prodId) + '&select=settings&limit=1';
+    return fetch(url, { headers: sponsorHeaders() }).then(function (response) {
+      if (!response.ok) return response.text().then(function (text) { throw new Error(text); });
+      return response.json();
+    }).then(function (data) {
       var settings = data && data[0] && data[0].settings;
       if (settings) {
         SpnsState.settings.publicStats = Array.isArray(settings.publicStats) ? settings.publicStats : SpnsState.settings.publicStats;
@@ -978,11 +982,14 @@
           SpnsState.publicPageHasDraftChanges = publicPagesDiffer(SpnsState.settings.publicPage, SpnsState.settings.publicPageDraft);
         }
       }
-      return true;
-    }).catch(function () { return false; }).then(function (loaded) {
-      if (!loaded) return;
       updatePublicPageStatus();
       updatePublicPageDraftActions();
+    }).catch(function () {
+      var strip = ensurePublicPageStatusStrip();
+      if (strip && typeof strip.update === 'function') {
+        strip.update({ state: 'setup', title: 'Sponsor page status unavailable', subtitle: '', showView: false, showCopy: false, showToggle: false, toggleLabel: '' });
+        if (typeof strip.setVisible === 'function') strip.setVisible(true);
+      }
     });
   }
 
@@ -1500,6 +1507,8 @@
       published ? 'Sponsor page is live' : 'Sponsor page not published',
       published ? 'is-published' : 'is-draft'
     );
+    var strip = ensurePublicPageStatusStrip();
+    if (strip && typeof strip.setVisible === 'function') strip.setVisible(true);
   }
 
   function setPublicPageStatus(label, stateClass) {
@@ -1717,7 +1726,7 @@
       var deadlineTilesHtml = deadlineTile('Programme Ads', 'Artwork Submission', 'spn-deadline-artwork', '#476aaa') +
         deadlineTile('Programme Ads', 'Ad Booking', 'spn-deadline-booking', '#dd8233') +
         deadlineTile('Show Sponsors', 'Sponsor Confirmation', 'spn-deadline-sponsor', '#769e7b');
-      var publicStatusStripHtml = '<bts-audition-status-strip id="spn-public-status-strip" class="aud-floating-status-layer spn-public-status-strip"></bts-audition-status-strip>';
+      var publicStatusStripHtml = '<bts-audition-status-strip id="spn-public-status-strip" class="aud-floating-status-layer spn-public-status-strip" style="display:none"></bts-audition-status-strip>';
 
       if (isDashboardPage) {
         container.innerHTML = publicStatusStripHtml +
