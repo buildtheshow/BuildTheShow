@@ -54,12 +54,12 @@
         compareLabel: 'Not Sure Which Option is Right for You?', compareTitle: 'Here is how they compare.',
         compareRows: 'What it is | Support the production | Promote your business\nMain benefit | Season-wide recognition | Printed advertisement\nGreat if you want to | Show community support | Market your business\nWhere you will be seen | Programme, website, social media, announcements | In the printed programme',
         compareBoth: 'Yes! Many businesses sponsor and advertise.',
-        stepsLabel: 'Getting started', stepsTitle: 'It’s Easy to Get Involved',
-        stepsRows: 'Choose an option | Sponsor, advertise, or both!\nComplete the form | Quick and easy online booking.\nUpload your artwork | We’ll tell you exactly what we need.\nWe handle the rest! | We take care of all the details.',
+        stepsLabel: 'Getting started', stepsTitle: 'It's Easy to Get Involved',
+        stepsRows: 'Choose an option | Sponsor, advertise, or both!\nComplete the form | Quick and easy online booking.\nUpload your artwork | We'll tell you exactly what we need.\nWe handle the rest! | We take care of all the details.',
         impactTitle: 'Your support makes a big impact.', impactBody: 'Thank you for helping young performers shine!',
-        sponsorsKicker: 'Show Sponsorships', sponsorsTitle: 'Support the Production', sponsorsBody: 'Choose a sponsorship level and support the full production. You’ll be recognised throughout the season.',
+        sponsorsKicker: 'Show Sponsorships', sponsorsTitle: 'Support the Production', sponsorsBody: 'Choose a sponsorship level and support the full production. You'll be recognised throughout the season.',
         adsKicker: 'Programme Advertising', adsTitle: 'Advertise in the Programme', adsBody: 'Reach the show audience with an advertisement in the printed programme. Choose the size and format that works for your budget.',
-        footerTitle: 'Have questions?', footerBody: 'We’re happy to help you find the right option.', footerButton: 'Contact Us',
+        footerTitle: 'Have questions?', footerBody: 'We're happy to help you find the right option.', footerButton: 'Contact Us',
       },
       colors: { hero: '#572e88', stats: '#74a2b4', sponsor: '#572e88', ads: '#769e7b', info: '#ffffff', steps: '#1a1530', sponsorships: '#572e88', programmeAds: '#476aaa', footer: '#1a1530' },
       sections: [
@@ -1032,6 +1032,16 @@
     '</div>';
   }
 
+  var _builderResizeHandler = null;
+
+  function fitPublicBuilder() {
+    var builder = document.querySelector('.spn-public-builder');
+    if (!builder) return;
+    var top = builder.getBoundingClientRect().top;
+    var h = Math.max(320, window.innerHeight - top - 16);
+    builder.style.height = h + 'px';
+  }
+
   function switchSettingsTab(name) {
     var valid = ['sizes', 'tiers', 'deadlines', 'publicpage'];
     var next = valid.indexOf(name) >= 0 ? name : 'sizes';
@@ -1047,6 +1057,20 @@
     });
     var savebar = document.getElementById('spn-settings-savebar');
     if (savebar) savebar.hidden = next === 'publicpage';
+    if (next === 'publicpage') {
+      requestAnimationFrame(fitPublicBuilder);
+      if (!_builderResizeHandler) {
+        _builderResizeHandler = fitPublicBuilder;
+        window.addEventListener('resize', _builderResizeHandler);
+      }
+    } else {
+      if (_builderResizeHandler) {
+        window.removeEventListener('resize', _builderResizeHandler);
+        _builderResizeHandler = null;
+      }
+      var b = document.querySelector('.spn-public-builder');
+      if (b) b.style.height = '';
+    }
   }
 
   function settingsSlug(value, fallback) {
