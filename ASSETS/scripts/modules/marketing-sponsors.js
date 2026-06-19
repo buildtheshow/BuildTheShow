@@ -1383,7 +1383,20 @@
   }
 
   var publicPreviewTimer = null;
-  var publicStatusEventsBound = false;
+  var publicSaveInFlight = false;
+
+  function resizePublicPreviewFrame() {
+    var frame = document.getElementById('spn-public-preview-frame');
+    var shell = document.getElementById('spn-public-preview-shell');
+    if (!frame || !shell) return;
+    try {
+      var doc = frame.contentDocument || frame.contentWindow.document;
+      if (!doc || !doc.body) return;
+      var h = Math.max(400, doc.body.scrollHeight, doc.documentElement ? doc.documentElement.scrollHeight : 0);
+      shell.style.height = h + 'px';
+      frame.style.height = h + 'px';
+    } catch (e) { /* cross-origin guard */ }
+  }
 
   function schedulePublicPagePreview(markDirty) {
     if (markDirty) setPublicPageStatus('Unsaved Changes', 'is-draft');
@@ -1393,6 +1406,8 @@
       var frame = document.getElementById('spn-public-preview-frame');
       if (frame && frame.contentWindow) {
         frame.contentWindow.postMessage({ type: 'bts-sponsor-preview', publicPage: SpnsState.settings.publicPageDraft, publicStats: collectPublicStats() }, window.location.origin);
+        setTimeout(resizePublicPreviewFrame, 300);
+        setTimeout(resizePublicPreviewFrame, 800);
       }
     }, 120);
   }
@@ -1401,6 +1416,7 @@
     var shell = document.getElementById('spn-public-preview-shell');
     if (shell) shell.dataset.device = device === 'mobile' ? 'mobile' : 'desktop';
     document.querySelectorAll('[data-public-device]').forEach(function (button) { button.classList.toggle('active', button.dataset.publicDevice === device); });
+    setTimeout(resizePublicPreviewFrame, 100);
   }
 
   function updatePublicPageStatus() {
@@ -1430,13 +1446,25 @@
   function ensurePublicPageStatusStrip() {
     var strip = document.getElementById('spn-public-status-strip');
     if (!strip) return null;
-    if (!publicStatusEventsBound) {
+    if (strip.dataset.sponsorEventsBound !== 'true') {
       strip.addEventListener('audition-status-view', viewPublicPage);
       strip.addEventListener('audition-status-copy', copyPublicPageLink);
       strip.addEventListener('audition-status-toggle', togglePublicPagePublished);
-      publicStatusEventsBound = true;
+      strip.dataset.sponsorEventsBound = 'true';
     }
     return strip;
+  }
+
+  function setPublicPageBusy(isBusy, label) {
+    var strip = ensurePublicPageStatusStrip();
+    if (!strip) return;
+    strip.style.pointerEvents = isBusy ? 'none' : '';
+    strip.style.opacity = isBusy ? '0.72' : '';
+    if (isBusy) strip.setAttribute('aria-busy', 'true');
+    else strip.removeAttribute('aria-busy');
+    if (isBusy && typeof strip.update === 'function') {
+      strip.update({ showView: false, showCopy: false, showToggle: true, toggleLabel: label });
+    }
   }
 
   function viewPublicPage() {
@@ -1450,15 +1478,21 @@
       .then(function (meta) { return sponsorPublicUrl(meta); })
       .catch(function () { return sponsorPublicUrl(); })
       .then(function (url) {
-        return navigator.clipboard.writeText(url).then(function () {
+        var copy = navigator.clipboard && navigator.clipboard.writeText
+          ? navigator.clipboard.writeText(url)
+          : Promise.reject(new Error('Clipboard unavailable'));
+        return copy.then(function () {
           var strip = ensurePublicPageStatusStrip();
           if (strip && typeof strip.showCopyConfirmation === 'function') strip.showCopyConfirmation('Copied!', 2000);
+        }).catch(function () {
+          window.prompt('Copy this sponsor page link:', url);
         });
       })
-      .catch(function () { sponsorNotify('Could not copy the public page link.', true); });
+      .catch(function () { sponsorNotify('Could not create the public page link.', true); });
   }
 
   function togglePublicPagePublished() {
+    if (publicSaveInFlight) return;
     var published = SpnsState.settings.publicPage && SpnsState.settings.publicPage.published === true;
     if (published) unpublishPublicPage();
     else savePublicPage(true);
@@ -1493,22 +1527,48 @@
   }
 
   function savePublicPage(publish) {
+    if (publicSaveInFlight) return Promise.resolve();
+    var previousPublicPage = mergePublicPage(SpnsState.settings.publicPage);
     SpnsState.settings.publicStats = collectPublicStats();
     SpnsState.settings.publicPageDraft = collectPublicPageEditor();
     if (publish) {
       SpnsState.settings.publicPage = mergePublicPage(SpnsState.settings.publicPageDraft);
       SpnsState.settings.publicPage.published = true;
     }
-    persistSponsorSettings(publicPageSettingsPayload(), publish ? 'Public sponsor page published.' : 'Public sponsor page draft saved.')
-      .then(function () { setPublicPageStatus(publish ? 'Sponsor page is live' : 'Draft saved', publish ? 'is-published' : 'is-draft'); })
-      .catch(function (e) { sponsorNotify('Could not save public page: ' + e.message, true); });
+    publicSaveInFlight = true;
+    setPublicPageBusy(true, publish ? 'Publishing...' : 'Saving...');
+    return persistSponsorSettings(publicPageSettingsPayload(), publish ? 'Public sponsor page published.' : 'Public sponsor page draft saved.')
+      .then(function () { updatePublicPageStatus(); })
+      .catch(function (e) {
+        SpnsState.settings.publicPage = previousPublicPage;
+        updatePublicPageStatus();
+        sponsorNotify('Could not save public page: ' + e.message, true);
+      })
+      .finally(function () {
+        publicSaveInFlight = false;
+        setPublicPageBusy(false);
+      });
   }
 
   function unpublishPublicPage() {
     if (!confirm('Unpublish the public sponsor page? Visitors will see that sponsor opportunities are not currently available.')) return;
+    if (publicSaveInFlight) return Promise.resolve();
+    var previousPublicPage = mergePublicPage(SpnsState.settings.publicPage);
     SpnsState.settings.publicPage = mergePublicPage(SpnsState.settings.publicPage);
     SpnsState.settings.publicPage.published = false;
-    persistSponsorSettings(publicPageSettingsPayload(), 'Public sponsor page unpublished.').then(function () { setPublicPageStatus('Sponsor page not published', 'is-draft'); }).catch(function (e) { sponsorNotify('Could not unpublish: ' + e.message, true); });
+    publicSaveInFlight = true;
+    setPublicPageBusy(true, 'Unpublishing...');
+    return persistSponsorSettings(publicPageSettingsPayload(), 'Public sponsor page unpublished.')
+      .then(function () { updatePublicPageStatus(); })
+      .catch(function (e) {
+        SpnsState.settings.publicPage = previousPublicPage;
+        updatePublicPageStatus();
+        sponsorNotify('Could not unpublish: ' + e.message, true);
+      })
+      .finally(function () {
+        publicSaveInFlight = false;
+        setPublicPageBusy(false);
+      });
   }
 
   function uploadPublicPoster() {
@@ -1732,7 +1792,7 @@
             '<div class="spn-public-builder">' +
               '<div class="spn-public-builder-editor"><div id="spn-public-editor"></div><div class="spn-public-stats-grid" id="spn-public-stats-grid" hidden></div></div>' +
               '<aside class="spn-public-builder-preview"><div class="spn-public-preview-toolbar"><span><strong>Here\'s how your page looks</strong><small>This is a preview. Publish when you are happy with it.</small></span><div><button type="button" class="spn-public-device active" data-public-device="desktop" onclick="MarketingSponsorsModule.setPublicPreviewDevice(\'desktop\')">Desktop</button><button type="button" class="spn-public-device" data-public-device="mobile" onclick="MarketingSponsorsModule.setPublicPreviewDevice(\'mobile\')">Mobile</button></div></div>' +
-                '<div class="spn-public-preview-frame-shell" id="spn-public-preview-shell" data-device="desktop"><iframe id="spn-public-preview-frame" title="Public sponsor page preview" src="/PUBLIC/sponsors.html?prod=' + encodeURIComponent(SpnsState.prodId) + '&preview=1&v=sponsor-public-order-20260619" onload="MarketingSponsorsModule.refreshPublicPreview()"></iframe></div>' +
+                '<div class="spn-public-preview-frame-shell" id="spn-public-preview-shell" data-device="desktop"><iframe id="spn-public-preview-frame" title="Public sponsor page preview" src="/PUBLIC/sponsors.html?prod=' + encodeURIComponent(SpnsState.prodId) + '&preview=1&v=sponsor-full-height-20260619" onload="MarketingSponsorsModule.refreshPublicPreview()"></iframe></div>' +
               '</aside>' +
             '</div>' +
           '</div>' +
@@ -1895,7 +1955,7 @@
       SpnsState.packages     = [];
       SpnsState.deliverables = [];
       SpnsState.loaded       = {};
-      publicStatusEventsBound = false;
+      publicSaveInFlight = false;
     },
 
     switchTab:       switchTab,
