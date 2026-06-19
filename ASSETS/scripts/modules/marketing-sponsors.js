@@ -386,13 +386,13 @@
     var organization = meta && meta.organization || {};
     var orgKey = organization.slug || organization.abbreviation || '';
     if (orgKey && production.slug) return window.location.origin + '/' + encodeURIComponent(orgKey) + '/' + encodeURIComponent(production.slug) + '/sponsors';
-    return window.location.origin + '/SYSTEM/Public/sponsors.html?prod=' + encodeURIComponent(SpnsState.prodId);
+    return window.location.origin + '/PUBLIC/sponsors.html?prod=' + encodeURIComponent(SpnsState.prodId);
   }
 
   function hydratePublicPageAction() {
     var action = document.getElementById('spn-public-page-action');
     if (!action) return;
-    action.href = window.location.origin + '/SYSTEM/Public/sponsors.html?prod=' + encodeURIComponent(SpnsState.prodId);
+    action.href = window.location.origin + '/PUBLIC/sponsors.html?prod=' + encodeURIComponent(SpnsState.prodId);
     publicPageMeta().then(function (meta) { action.href = sponsorPublicUrl(meta); }).catch(function () {});
   }
 
@@ -1326,6 +1326,7 @@
   }
 
   var publicPreviewTimer = null;
+  var publicStatusEventsBound = false;
   function schedulePublicPagePreview(markDirty) {
     if (markDirty) setPublicPageStatus('Unsaved Changes', 'is-draft');
     clearTimeout(publicPreviewTimer);
@@ -1343,17 +1344,64 @@
   }
 
   function updatePublicPageStatus() {
-    var status = document.getElementById('spn-public-publish-status');
-    if (!status) return;
     var published = SpnsState.settings.publicPage && SpnsState.settings.publicPage.published === true;
-    setPublicPageStatus(published ? 'Published' : 'Not Published', published ? 'is-published' : 'is-draft');
+    setPublicPageStatus(
+      published ? 'Sponsor page is live' : 'Sponsor page not published',
+      published ? 'is-published' : 'is-draft'
+    );
   }
 
   function setPublicPageStatus(label, stateClass) {
-    var status = document.getElementById('spn-public-publish-status');
-    if (!status) return;
-    status.textContent = label;
-    status.className = 'spn-public-publish-status ' + stateClass;
+    var strip = ensurePublicPageStatusStrip();
+    if (!strip || typeof strip.update !== 'function') return;
+    var isPublished = stateClass === 'is-published';
+    var isUnsaved = /unsaved/i.test(label || '');
+    strip.update({
+      state: isPublished ? 'live' : 'hidden',
+      title: label || (isPublished ? 'Sponsor page is live' : 'Sponsor page not published'),
+      subtitle: isUnsaved ? 'Save your draft or publish when you are happy with the preview.' : '',
+      showView: isPublished,
+      showCopy: isPublished,
+      showToggle: true,
+      toggleLabel: isPublished ? 'Unpublish' : 'Publish',
+    });
+  }
+
+  function ensurePublicPageStatusStrip() {
+    var strip = document.getElementById('spn-public-status-strip');
+    if (!strip) return null;
+    if (!publicStatusEventsBound) {
+      strip.addEventListener('audition-status-view', viewPublicPage);
+      strip.addEventListener('audition-status-copy', copyPublicPageLink);
+      strip.addEventListener('audition-status-toggle', togglePublicPagePublished);
+      publicStatusEventsBound = true;
+    }
+    return strip;
+  }
+
+  function viewPublicPage() {
+    publicPageMeta()
+      .then(function (meta) { window.open(sponsorPublicUrl(meta), '_blank', 'noopener'); })
+      .catch(function () { window.open(sponsorPublicUrl(), '_blank', 'noopener'); });
+  }
+
+  function copyPublicPageLink() {
+    publicPageMeta()
+      .then(function (meta) { return sponsorPublicUrl(meta); })
+      .catch(function () { return sponsorPublicUrl(); })
+      .then(function (url) {
+        return navigator.clipboard.writeText(url).then(function () {
+          var strip = ensurePublicPageStatusStrip();
+          if (strip && typeof strip.showCopyConfirmation === 'function') strip.showCopyConfirmation('Copied!', 2000);
+        });
+      })
+      .catch(function () { sponsorNotify('Could not copy the public page link.', true); });
+  }
+
+  function togglePublicPagePublished() {
+    var published = SpnsState.settings.publicPage && SpnsState.settings.publicPage.published === true;
+    if (published) unpublishPublicPage();
+    else savePublicPage(true);
   }
 
   function sponsorNotify(message, isError) {
@@ -1392,7 +1440,7 @@
       SpnsState.settings.publicPage.published = true;
     }
     persistSponsorSettings(publicPageSettingsPayload(), publish ? 'Public sponsor page published.' : 'Public sponsor page draft saved.')
-      .then(function () { setPublicPageStatus(publish ? 'Published' : 'Draft Saved', publish ? 'is-published' : 'is-draft'); })
+      .then(function () { setPublicPageStatus(publish ? 'Sponsor page is live' : 'Draft saved', publish ? 'is-published' : 'is-draft'); })
       .catch(function (e) { sponsorNotify('Could not save public page: ' + e.message, true); });
   }
 
@@ -1400,7 +1448,7 @@
     if (!confirm('Unpublish the public sponsor page? Visitors will see that sponsor opportunities are not currently available.')) return;
     SpnsState.settings.publicPage = mergePublicPage(SpnsState.settings.publicPage);
     SpnsState.settings.publicPage.published = false;
-    persistSponsorSettings(publicPageSettingsPayload(), 'Public sponsor page unpublished.').then(function () { setPublicPageStatus('Not Published', 'is-draft'); }).catch(function (e) { sponsorNotify('Could not unpublish: ' + e.message, true); });
+    persistSponsorSettings(publicPageSettingsPayload(), 'Public sponsor page unpublished.').then(function () { setPublicPageStatus('Sponsor page not published', 'is-draft'); }).catch(function (e) { sponsorNotify('Could not unpublish: ' + e.message, true); });
   }
 
   function uploadPublicPoster() {
@@ -1619,7 +1667,7 @@
           '</div>' +
           '<div class="spn-settings-panel" id="spn-settings-publicpage">' +
             '<div class="spn-public-builder-toolbar">' +
-              '<div class="spn-public-builder-actions"><span class="spn-public-publish-status" id="spn-public-publish-status">Loading</span><button type="button" class="spn-btn spn-btn--ghost" onclick="MarketingSponsorsModule.unpublishPublicPage()">Unpublish</button><button type="button" class="spn-btn spn-btn--ghost" onclick="MarketingSponsorsModule.savePublicPage(false)">Save Draft</button><button type="button" class="spn-btn spn-btn--primary" onclick="MarketingSponsorsModule.savePublicPage(true)">Publish</button></div>' +
+              '<div class="spn-public-builder-actions"><bts-audition-status-strip id="spn-public-status-strip" class="spn-public-status-strip"></bts-audition-status-strip><button type="button" class="spn-btn spn-btn--ghost spn-public-draft-btn" onclick="MarketingSponsorsModule.savePublicPage(false)">Save Draft</button></div>' +
             '</div>' +
             '<div class="spn-public-builder">' +
               '<div class="spn-public-builder-editor"><div id="spn-public-editor"></div><div class="spn-public-stats-grid" id="spn-public-stats-grid" hidden></div></div>' +
@@ -1787,6 +1835,7 @@
       SpnsState.packages     = [];
       SpnsState.deliverables = [];
       SpnsState.loaded       = {};
+      publicStatusEventsBound = false;
     },
 
     switchTab:       switchTab,
