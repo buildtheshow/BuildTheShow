@@ -41,7 +41,7 @@
       posterUrl: '', contactEmail: '',
       content: {
         navOverview: 'Overview', navSponsors: 'Sponsorships', navAds: 'Programme Ads', navBook: 'Book Now',
-        heroKicker: 'Sponsor & Advertise', heroTitle: 'Promote Your Business While Supporting', heroAccent: 'Local Youth Theatre.',
+        heroTitle: 'Promote Your Business While Supporting', heroAccent: 'Local Youth Theatre.',
         heroBody: 'Your support helps create incredible theatre experiences for young performers and connects your business with hundreds of local families.',
         heroSponsorButton: 'Become a Sponsor', heroSponsorSub: 'Support the production', heroAdButton: 'Advertise in the Programme', heroAdSub: 'Promote your business',
         statsTitle: 'Your Business Seen by Local Families',
@@ -2060,7 +2060,7 @@
             '<div class="spn-public-builder">' +
               '<div class="spn-public-builder-editor"><div id="spn-public-editor"></div><div class="spn-public-stats-grid" id="spn-public-stats-grid" hidden></div></div>' +
               '<aside class="spn-public-builder-preview"><div class="spn-public-preview-toolbar"><span><strong>Here\'s how your page looks</strong><small>This is a preview. Publish when you are happy with it.</small></span><div class="spn-public-preview-controls"><div class="spn-public-builder-actions"><span class="spn-public-draft-status" id="spn-public-draft-status" role="status" aria-live="polite" hidden></span><button type="button" class="spn-btn spn-btn--ghost spn-public-draft-btn" id="spn-public-save-draft" onclick="MarketingSponsorsModule.savePublicPage(false)" disabled>Save Draft</button><button type="button" class="spn-btn spn-btn--primary" id="spn-public-publish-changes" onclick="MarketingSponsorsModule.savePublicPage(true)" hidden>Publish Changes</button></div><div class="spn-public-device-controls"><button type="button" class="spn-public-device active" data-public-device="desktop" onclick="MarketingSponsorsModule.setPublicPreviewDevice(\'desktop\')">Desktop</button><button type="button" class="spn-public-device" data-public-device="mobile" onclick="MarketingSponsorsModule.setPublicPreviewDevice(\'mobile\')">Mobile</button></div></div></div>' +
-                '<div class="spn-public-preview-frame-shell" id="spn-public-preview-shell" data-device="desktop"><iframe id="spn-public-preview-frame" title="Public sponsor page preview" src="/PUBLIC/sponsors.html?prod=' + encodeURIComponent(SpnsState.prodId) + '&preview=1&v=sponsor-section-order-20260619" onload="MarketingSponsorsModule.refreshPublicPreview()"></iframe></div>' +
+                '<div class="spn-public-preview-frame-shell" id="spn-public-preview-shell" data-device="desktop"><iframe id="spn-public-preview-frame" title="Public sponsor page preview" src="/PUBLIC/sponsors.html?prod=' + encodeURIComponent(SpnsState.prodId) + '&preview=1&v=sponsor-no-hero-kicker-20260619" onload="MarketingSponsorsModule.refreshPublicPreview()"></iframe></div>' +
               '</aside>' +
             '</div>' +
           '</div>' +
