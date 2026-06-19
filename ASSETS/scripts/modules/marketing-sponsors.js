@@ -1227,11 +1227,6 @@
     var visibleSections = page.sections.filter(function (section) { return section.visible !== false; });
     if (!SpnsState.publicEditorSection || !PUBLIC_SECTION_FIELDS[SpnsState.publicEditorSection]) SpnsState.publicEditorSection = (visibleSections[0] || page.sections[0]).id;
     var activeId = SpnsState.publicEditorSection;
-    var activeSection = page.sections.find(function (section) { return section.id === activeId; }) || page.sections[0];
-    var activeFields = (PUBLIC_SECTION_FIELDS[activeId] || []).map(function (field) { return publicEditorField(field, page); }).join('');
-    var activeColors = activeId === 'ways'
-      ? '<div class="spn-public-editor-subtitle">Sponsor Colour</div>' + publicColorSwatches('sponsor', page.colors.sponsor) + '<div class="spn-public-editor-subtitle spn-public-editor-subtitle--spaced">Programme Ad Colour</div>' + publicColorSwatches('ads', page.colors.ads)
-      : '<div class="spn-public-editor-subtitle">Section Colour</div>' + publicColorSwatches(activeId, page.colors[activeId] || '#572e88');
     var sectionRows = page.sections.map(function (section, index) {
       var meta = PUBLIC_SECTION_META[section.id] || {};
       var isFooter = section.id === 'footer';
@@ -1241,24 +1236,16 @@
       return '<article class="spn-public-section-row' + (enabled ? ' is-visible' : ' is-hidden') + (active ? ' is-active' : '') + '" draggable="true" data-public-arrange="' + section.id + '">' +
         '<button type="button" class="spn-public-section-check" title="' + (isFooter ? 'Footer is always shown' : (enabled ? 'Hide section' : 'Show section')) + '" aria-label="' + (isFooter ? 'Footer is always shown' : (enabled ? 'Hide ' : 'Show ') + escHtml(label)) + '"' + (isFooter ? ' disabled' : ' onclick="event.stopPropagation();MarketingSponsorsModule.setPublicSectionVisible(\'' + section.id + '\',' + (enabled ? 'false' : 'true') + ')"') + '>' + (enabled ? '&#10003;' : '+') + '</button>' +
         '<div class="spn-public-section-icon" style="--section-color:' + escHtml(meta.color || '#572e88') + '"><img src="/ASSETS/Images/Icons/' + encodeURIComponent(meta.icon || 'Square.svg') + '" alt="" /></div>' +
-        '<div class="spn-public-section-copy"><strong>' + escHtml(label) + '</strong><p>' + escHtml(meta.description || '') + '</p>' + (active ? '<span>Editing now</span>' : '') + '</div>' +
-        '<button type="button" class="spn-public-section-btn" title="Edit section" onclick="event.stopPropagation();MarketingSponsorsModule.editPublicSection(\'' + section.id + '\')"><span aria-hidden="true">&#9998;</span>Edit</button>' +
-        '<button type="button" class="spn-public-section-btn" title="' + (isFooter ? 'Footer is always shown' : (enabled ? 'Hide section' : 'Show section')) + '"' + (isFooter ? ' disabled' : ' onclick="event.stopPropagation();MarketingSponsorsModule.setPublicSectionVisible(\'' + section.id + '\',' + (enabled ? 'false' : 'true') + ')"') + '><span aria-hidden="true">' + (enabled ? '&#128065;&#65038;' : '+') + '</span>' + (isFooter ? 'Locked' : (enabled ? 'Hide' : 'Show')) + '</button>' +
+        '<div class="spn-public-section-copy"><strong>' + escHtml(label) + '</strong><p>' + escHtml(meta.description || '') + '</p></div>' +
+        '<button type="button" class="spn-public-section-icon-btn" title="Edit section" aria-label="Edit ' + escHtml(label) + '" onclick="event.stopPropagation();MarketingSponsorsModule.editPublicSection(\'' + section.id + '\')">&#9998;</button>' +
+        '<button type="button" class="spn-public-section-icon-btn" title="' + (isFooter ? 'Footer is always shown' : (enabled ? 'Hide section' : 'Show section')) + '" aria-label="' + (isFooter ? 'Footer is always shown' : (enabled ? 'Hide ' : 'Show ') + escHtml(label)) + '"' + (isFooter ? ' disabled' : ' onclick="event.stopPropagation();MarketingSponsorsModule.setPublicSectionVisible(\'' + section.id + '\',' + (enabled ? 'false' : 'true') + ')"') + '>' + (isFooter ? '&#128274;' : (enabled ? '&#128065;&#65038;' : '+')) + '</button>' +
         '<span class="spn-public-drag" title="Drag to reorder" aria-hidden="true"></span>' +
         '<span class="spn-public-move-actions"><button type="button" title="Move up" aria-label="Move up"' + (index === 0 ? ' disabled' : '') + ' onclick="MarketingSponsorsModule.movePublicSection(\'' + section.id + '\',-1)">&#8593;</button><button type="button" title="Move down" aria-label="Move down"' + (index === page.sections.length - 1 ? ' disabled' : '') + ' onclick="MarketingSponsorsModule.movePublicSection(\'' + section.id + '\',1)">&#8595;</button></span>' +
       '</article>';
     }).join('');
     host.innerHTML =
       '<div class="spn-public-builder-intro"><h2>Let\'s build your sponsor page</h2><p>Choose the sections you need, put them in the right order, and make the copy and colours yours.</p></div>' +
-      '<section class="spn-public-section-manager"><div class="spn-public-section-manager-head"><div><h3>Your Page Sections</h3><p>Drag to reorder sections. Click edit to customize.</p></div></div><div class="spn-public-section-list">' + sectionRows + '</div><div class="spn-public-footer-note"><span aria-hidden="true">&#128274;</span>The footer is always shown at the bottom of the page.</div></section>' +
-      '<section class="spn-public-editor-panel">' +
-        '<div class="spn-public-edit-heading"><div><strong>Editing: ' + escHtml(PUBLIC_SECTION_LABELS[activeId] || activeId) + '</strong><span>' + (activeSection.visible === false ? 'This section is currently removed.' : 'Changes appear in the preview as you type.') + '</span></div></div>' +
-        '<div class="spn-public-editor-general"><div class="spn-public-editor-field"><label>Poster Override URL</label><div class="spn-public-poster-control"><input type="url" id="spn-public-poster-url" value="' + escHtml(page.posterUrl) + '" placeholder="Use the production poster" /><button type="button" class="spn-btn spn-btn--ghost" onclick="MarketingSponsorsModule.uploadPublicPoster()">Upload</button></div></div><div class="spn-public-editor-field"><label>Contact Email Override</label><input type="email" id="spn-public-contact-email" value="' + escHtml(page.contactEmail) + '" placeholder="Use the organisation email" /></div></div>' +
-        '<div class="spn-public-editor-section-body"><div>' + activeColors + '</div><div class="spn-public-editor-fields">' + activeFields + '</div>' + (activeId === 'stats' ? '<div><div class="spn-public-editor-subtitle">Audience Stats</div><div class="spn-public-stats-grid" id="spn-public-stats-grid-inner"></div></div>' : '') + '</div>' +
-      '</section>';
-    var originalStats = document.getElementById('spn-public-stats-grid');
-    var innerStats = document.getElementById('spn-public-stats-grid-inner');
-    if (originalStats && innerStats) { innerStats.innerHTML = originalStats.innerHTML; originalStats.innerHTML = ''; }
+      '<section class="spn-public-section-manager"><div class="spn-public-section-manager-head"><div><h3>Your Page Sections</h3><p>Drag to reorder sections. Use the icons to edit or hide.</p></div></div><div class="spn-public-section-list">' + sectionRows + '</div><div class="spn-public-footer-note"><span aria-hidden="true">&#128274;</span>The footer is always shown at the bottom of the page.</div></section>';
     host.oninput = function () { schedulePublicPagePreview(true); };
     host.onchange = function () { schedulePublicPagePreview(true); };
     host.ondragstart = function (event) { var row = event.target.closest('[data-public-arrange]'); if (!row) return; event.dataTransfer.setData('text/plain', row.dataset.publicArrange); row.classList.add('is-dragging'); };
@@ -1274,8 +1261,10 @@
     document.querySelectorAll('[data-public-key]').forEach(function (input) { page.content[input.dataset.publicKey] = input.value; });
     document.querySelectorAll('[data-public-color]:checked').forEach(function (input) { page.colors[input.dataset.publicColor] = input.value; });
     SpnsState.settings.publicStats = collectPublicStats();
-    page.posterUrl = (document.getElementById('spn-public-poster-url') || {}).value || '';
-    page.contactEmail = (document.getElementById('spn-public-contact-email') || {}).value || '';
+    var posterInput = document.getElementById('spn-public-poster-url');
+    var emailInput = document.getElementById('spn-public-contact-email');
+    if (posterInput) page.posterUrl = posterInput.value || '';
+    if (emailInput) page.contactEmail = emailInput.value || '';
     return page;
   }
 
@@ -1295,8 +1284,6 @@
     SpnsState.settings.publicPageDraft = collectPublicPageEditor();
     SpnsState.publicEditorSection = id;
     renderPublicPageEditor();
-    var customize = document.querySelector('.spn-public-editor-panel');
-    if (customize) customize.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
   function movePublicSection(id, direction) {
@@ -1322,13 +1309,36 @@
 
   var publicPreviewTimer = null;
   var publicStatusEventsBound = false;
+
+  function resizePublicPreviewFrame() {
+    var frame = document.getElementById('spn-public-preview-frame');
+    var shell = document.getElementById('spn-public-preview-shell');
+    if (!frame || !shell) return;
+    try {
+      var doc = frame.contentDocument || frame.contentWindow.document;
+      if (!doc) return;
+      var height = Math.max(
+        1200,
+        doc.documentElement ? doc.documentElement.scrollHeight : 0,
+        doc.body ? doc.body.scrollHeight : 0
+      );
+      shell.style.height = height + 'px';
+    } catch (error) {
+      shell.style.height = '';
+    }
+  }
+
   function schedulePublicPagePreview(markDirty) {
     if (markDirty) setPublicPageStatus('Unsaved Changes', 'is-draft');
     clearTimeout(publicPreviewTimer);
     publicPreviewTimer = setTimeout(function () {
       SpnsState.settings.publicPageDraft = collectPublicPageEditor();
       var frame = document.getElementById('spn-public-preview-frame');
-      if (frame && frame.contentWindow) frame.contentWindow.postMessage({ type: 'bts-sponsor-preview', publicPage: SpnsState.settings.publicPageDraft, publicStats: collectPublicStats() }, window.location.origin);
+      if (frame && frame.contentWindow) {
+        frame.contentWindow.postMessage({ type: 'bts-sponsor-preview', publicPage: SpnsState.settings.publicPageDraft, publicStats: collectPublicStats() }, window.location.origin);
+        setTimeout(resizePublicPreviewFrame, 160);
+        setTimeout(resizePublicPreviewFrame, 500);
+      }
     }, 120);
   }
 
@@ -1336,6 +1346,7 @@
     var shell = document.getElementById('spn-public-preview-shell');
     if (shell) shell.dataset.device = device === 'mobile' ? 'mobile' : 'desktop';
     document.querySelectorAll('[data-public-device]').forEach(function (button) { button.classList.toggle('active', button.dataset.publicDevice === device); });
+    setTimeout(resizePublicPreviewFrame, 160);
   }
 
   function updatePublicPageStatus() {
