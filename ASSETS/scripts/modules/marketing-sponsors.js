@@ -1243,6 +1243,186 @@
     footer: [['footerTitle','Heading'], ['footerBody','Supporting Copy'], ['footerButton','Contact Button']],
   };
 
+  // ── Card-based edit panel system ─────────────────────────────────────────
+  var ESVG = {
+    T:     '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#572e88" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/></svg>',
+    lines: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#572e88" stroke-width="2.5" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="17" y2="12"/><line x1="3" y1="18" x2="13" y2="18"/></svg>',
+    btn:   '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#572e88" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/></svg>',
+    drop:  '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#572e88" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5C9 7.7 7.5 10.5 7.5 13a4.5 4.5 0 0 0 9 0c0-2.5-1.5-5.3-4.5-9.5z"/></svg>',
+    chart: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#572e88" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="12" width="4" height="9"/><rect x="10" y="7" width="4" height="14"/><rect x="17" y="3" width="4" height="18"/></svg>',
+    cols:  '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#572e88" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="18" rx="1"/><rect x="14" y="3" width="7" height="18" rx="1"/></svg>',
+  };
+  var FCARD_CHEV = '<svg class="spn-fcard-chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="6 9 12 15 18 9"/></svg>';
+
+  var PUBLIC_FIELD_GROUPS = {
+    hero: [
+      { id:'poster',   img:'Placeholder - Poster.svg', title:'Poster',          subtitle:'Upload or change the poster image.',             type:'poster' },
+      { id:'headline', svg:ESVG.T,                      title:'Headline',         subtitle:'Edit the main headline for this section.',       fields:[
+        { key:'heroTitle',  label:'Line 1' },
+        { key:'heroAccent', label:'Highlighted Text', accentColor:true },
+      ]},
+      { id:'body',     svg:ESVG.lines,                  title:'Supporting Text',  subtitle:'Edit the supporting paragraph.',                 fields:[
+        { key:'heroBody', type:'textarea' },
+      ]},
+      { id:'buttons',  svg:ESVG.btn,                    title:'Buttons',          subtitle:'Customise the call-to-action buttons.',          type:'buttons', cols:[
+        { label:'Primary Button',   colorKey:'hero', fields:[{ key:'heroSponsorButton', label:'Button Text' }, { key:'heroSponsorSub', label:'Description' }] },
+        { label:'Secondary Button', colorKey:'ads',  fields:[{ key:'heroAdButton',      label:'Button Text' }, { key:'heroAdSub',      label:'Description' }] },
+      ]},
+      { id:'bgColor',  svg:ESVG.drop,                   title:'Background Style', subtitle:'Choose the background colour for this section.', type:'color', colorKey:'hero' },
+    ],
+    stats: [
+      { id:'text',     svg:ESVG.T,     title:'Section Heading',  subtitle:'Edit the section heading.',                        fields:[{ key:'statsTitle', label:'Heading' }] },
+      { id:'audience', svg:ESVG.chart, title:'Audience Numbers', subtitle:'Add your reach and audience stats.',               type:'statsRows' },
+      { id:'bgColor',  svg:ESVG.drop,  title:'Background Style', subtitle:'Choose the background colour for this section.',   type:'color', colorKey:'stats' },
+    ],
+    ways: [
+      { id:'sponsor',        svg:ESVG.T,    title:'Sponsor Column',      subtitle:'Edit the sponsorship side.',                       fields:[
+        { key:'sponsorWayTitle', label:'Heading' }, { key:'sponsorWayBody', label:'Body', type:'textarea' },
+        { key:'sponsorWayBullets', label:'Benefits, one per line', type:'textarea' }, { key:'sponsorWayCta', label:'Button' },
+      ]},
+      { id:'ads',            svg:ESVG.cols, title:'Programme Ad Column', subtitle:'Edit the advertising side.',                       fields:[
+        { key:'adWayTitle', label:'Heading' }, { key:'adWayBody', label:'Body', type:'textarea' },
+        { key:'adWayBullets', label:'Benefits, one per line', type:'textarea' }, { key:'adWayCta', label:'Button' },
+      ]},
+      { id:'bgColorSponsor', svg:ESVG.drop, title:'Sponsor Background',  subtitle:'Background colour for the sponsor side.',          type:'color', colorKey:'sponsor' },
+      { id:'bgColorAds',     svg:ESVG.drop, title:'Ad Background',       subtitle:'Background colour for the ad side.',               type:'color', colorKey:'ads' },
+    ],
+    info: [
+      { id:'programme', svg:ESVG.T,     title:'Programme Description', subtitle:'Explain what a programme is.',                      fields:[
+        { key:'programmeLabel', label:'Eyebrow' }, { key:'programmeTitle', label:'Heading' }, { key:'programmeBody', label:'Body', type:'textarea' },
+      ]},
+      { id:'compare',   svg:ESVG.lines, title:'Comparison Table',      subtitle:'Help visitors compare the options.',                fields:[
+        { key:'compareLabel', label:'Eyebrow' }, { key:'compareTitle', label:'Heading' },
+        { key:'compareRows', label:'Rows: Label | Sponsorship | Ad, one per line', type:'textarea' }, { key:'compareBoth', label:'Footer Message' },
+      ]},
+      { id:'bgColor',   svg:ESVG.drop,  title:'Background Style',      subtitle:'Choose the background colour for this section.',    type:'color', colorKey:'info' },
+    ],
+    steps: [
+      { id:'text',    svg:ESVG.T,    title:'Section Text',       subtitle:'Edit the heading and steps.',                            fields:[
+        { key:'stepsLabel', label:'Eyebrow' }, { key:'stepsTitle', label:'Heading' },
+        { key:'stepsRows', label:'Steps: Title | Description, one per line', type:'textarea' },
+        { key:'impactTitle', label:'Impact Heading' }, { key:'impactBody', label:'Impact Copy' },
+      ]},
+      { id:'bgColor', svg:ESVG.drop, title:'Background Style',   subtitle:'Choose the background colour for this section.',         type:'color', colorKey:'steps' },
+    ],
+    sponsorships: [
+      { id:'text',    svg:ESVG.T,    title:'Section Text',       subtitle:'Edit the heading and description.',                      fields:[
+        { key:'sponsorsKicker', label:'Eyebrow' }, { key:'sponsorsTitle', label:'Heading' }, { key:'sponsorsBody', label:'Body', type:'textarea' },
+      ]},
+      { id:'bgColor', svg:ESVG.drop, title:'Background Style',   subtitle:'Choose the background colour for this section.',         type:'color', colorKey:'sponsorships' },
+    ],
+    programmeAds: [
+      { id:'text',    svg:ESVG.T,    title:'Section Text',       subtitle:'Edit the heading and description.',                      fields:[
+        { key:'adsKicker', label:'Eyebrow' }, { key:'adsTitle', label:'Heading' }, { key:'adsBody', label:'Body', type:'textarea' },
+      ]},
+      { id:'bgColor', svg:ESVG.drop, title:'Background Style',   subtitle:'Choose the background colour for this section.',         type:'color', colorKey:'programmeAds' },
+    ],
+    footer: [
+      { id:'text',    svg:ESVG.T,    title:'Footer Text',        subtitle:'Edit the footer message and button.',                    fields:[
+        { key:'footerTitle', label:'Heading' }, { key:'footerBody', label:'Body' }, { key:'footerButton', label:'Contact Button' },
+      ]},
+      { id:'bgColor', svg:ESVG.drop, title:'Background Style',   subtitle:'Choose the background colour for this section.',         type:'color', colorKey:'footer' },
+    ],
+  };
+
+  function renderFieldCard(group, page, isOpen) {
+    var iconHtml = group.img
+      ? '<img src="/ASSETS/Images/Icons/' + encodeURIComponent(group.img) + '" alt="" style="width:18px;height:18px;" />'
+      : (group.svg || '');
+    var aside = (group.type === 'poster' && page.posterUrl)
+      ? '<div class="spn-fcard-aside"><img class="spn-fcard-thumb" src="' + escHtml(page.posterUrl) + '" alt="" /></div>'
+      : '';
+    var body = '';
+    if (group.type === 'poster') {
+      body = '<input type="text" id="spn-public-poster-url" value="' + escHtml(page.posterUrl || '') + '" style="display:none" />' +
+             '<button type="button" class="spn-change-img-btn" onclick="MarketingSponsorsModule.uploadPublicPoster()">Change Image</button>';
+    } else if (group.type === 'color') {
+      var currentColor = (page.colors && page.colors[group.colorKey]) || '#572e88';
+      body = '<div class="spn-fcard-swatches" role="radiogroup">' +
+        PUBLIC_PAGE_COLORS.map(function (c) {
+          return '<label class="spn-fcard-swatch" title="' + escHtml(c.name) + '"><input type="radio" name="public-color-' + escHtml(group.colorKey) + '" data-public-color="' + escHtml(group.colorKey) + '" value="' + escHtml(c.value) + '"' + (currentColor === c.value ? ' checked' : '') + ' /><span style="background:' + escHtml(c.value) + '"></span></label>';
+        }).join('') + '</div>';
+    } else if (group.type === 'buttons') {
+      body = '<div class="spn-fcard-btn-cols">' + group.cols.map(function (col) {
+        var dotColor = (page.colors && page.colors[col.colorKey]) || '#572e88';
+        return '<div class="spn-fcard-btn-col">' +
+          '<div class="spn-fcard-btn-col-hd"><span class="spn-fcard-btn-dot" style="background:' + escHtml(dotColor) + '"></span>' +
+          '<span class="spn-fcard-btn-col-lbl">' + escHtml(col.label.toUpperCase()) + '</span></div>' +
+          col.fields.map(function (f) {
+            return '<label class="spn-edit-lbl">' + escHtml(f.label) + '</label>' +
+                   '<input type="text" class="spn-edit-inp" data-public-key="' + escHtml(f.key) + '" value="' + escHtml((page.content && page.content[f.key]) || '') + '" />';
+          }).join('') + '</div>';
+      }).join('') + '</div>';
+    } else if (group.type === 'statsRows') {
+      body = '<div class="spn-public-stats-grid">' + publicStatsEditorRows() + '</div>';
+    } else if (group.fields) {
+      body = group.fields.map(function (f) {
+        var val = escHtml((page.content && page.content[f.key]) || '');
+        var inputHtml;
+        if (f.type === 'textarea') {
+          inputHtml = '<textarea class="spn-edit-ta" data-public-key="' + escHtml(f.key) + '" rows="3">' + val + '</textarea>';
+        } else if (f.accentColor) {
+          var accentCol = escHtml((page.colors && page.colors.hero) || '#572e88');
+          inputHtml = '<div class="spn-edit-inp-row"><input type="text" class="spn-edit-inp" data-public-key="' + escHtml(f.key) + '" value="' + val + '" /><span class="spn-fcard-accent-dot" style="background:' + accentCol + '"></span></div>';
+        } else {
+          inputHtml = '<input type="text" class="spn-edit-inp" data-public-key="' + escHtml(f.key) + '" value="' + val + '" />';
+        }
+        return (f.label ? '<label class="spn-edit-lbl">' + escHtml(f.label) + '</label>' : '') + inputHtml;
+      }).join('');
+    }
+    return '<div class="spn-fcard' + (isOpen ? ' is-open' : '') + '" data-fcard-id="' + escHtml(group.id) + '">' +
+      '<div class="spn-fcard-hd" onclick="MarketingSponsorsModule.toggleFieldCard(\'' + escHtml(group.id) + '\')">' +
+        '<div class="spn-fcard-icon">' + iconHtml + '</div>' +
+        '<div class="spn-fcard-meta"><strong>' + escHtml(group.title) + '</strong><span>' + escHtml(group.subtitle) + '</span></div>' +
+        aside + FCARD_CHEV +
+      '</div>' +
+      '<div class="spn-fcard-bd"><div class="spn-fcard-bd-inner">' + body + '</div></div>' +
+    '</div>';
+  }
+
+  function buildEditPanel(page, activeId) {
+    var label = PUBLIC_SECTION_LABELS[activeId] || activeId;
+    var groups = PUBLIC_FIELD_GROUPS[activeId] || [];
+    if (!SpnsState.openFieldCards) SpnsState.openFieldCards = {};
+    if (!SpnsState.openFieldCards[activeId]) {
+      SpnsState.openFieldCards[activeId] = {};
+      groups.forEach(function (g) { SpnsState.openFieldCards[activeId][g.id] = true; });
+    }
+    var openMap = SpnsState.openFieldCards[activeId];
+    var allOpen = groups.every(function (g) { return !!openMap[g.id]; });
+    return '<section class="spn-public-section-manager spn-public-edit-panel">' +
+      '<div class="spn-public-edit-topline"><button type="button" class="spn-public-back-btn" onclick="MarketingSponsorsModule.backToPublicSections()">Back to sections</button></div>' +
+      '<div class="spn-epanel-hd">' +
+        '<div><h2 class="spn-epanel-title">Edit ' + escHtml(label) + ' Section</h2>' +
+        '<p class="spn-epanel-sub">Change the content below and see it update in real time.</p></div>' +
+        '<button type="button" class="spn-epanel-collapse-all" onclick="MarketingSponsorsModule.toggleAllFieldCards(' + (allOpen ? 'false' : 'true') + ')">' +
+          (allOpen ? 'Collapse All &#x2038;' : 'Expand All &#x2038;') + '</button>' +
+      '</div>' +
+      '<div class="spn-fcards">' +
+        groups.map(function (g) { return renderFieldCard(g, page, !!openMap[g.id]); }).join('') +
+      '</div>' +
+    '</section>';
+  }
+
+  function toggleFieldCard(cardId) {
+    SpnsState.settings.publicPageDraft = collectPublicPageEditor();
+    var sectionId = SpnsState.publicEditorSection;
+    if (!SpnsState.openFieldCards) SpnsState.openFieldCards = {};
+    if (!SpnsState.openFieldCards[sectionId]) SpnsState.openFieldCards[sectionId] = {};
+    SpnsState.openFieldCards[sectionId][cardId] = !SpnsState.openFieldCards[sectionId][cardId];
+    renderPublicPageEditor();
+  }
+
+  function toggleAllFieldCards(open) {
+    SpnsState.settings.publicPageDraft = collectPublicPageEditor();
+    var sectionId = SpnsState.publicEditorSection;
+    var groups = PUBLIC_FIELD_GROUPS[sectionId] || [];
+    if (!SpnsState.openFieldCards) SpnsState.openFieldCards = {};
+    SpnsState.openFieldCards[sectionId] = {};
+    groups.forEach(function (g) { SpnsState.openFieldCards[sectionId][g.id] = !!open; });
+    renderPublicPageEditor();
+  }
+
   function publicEditorField(field, page) {
     var key = field[0], label = field[1], type = field[2] || 'input';
     var value = page.content[key] || '';
@@ -1266,7 +1446,7 @@
     var page = mergePublicPage(SpnsState.settings.publicPageDraft || SpnsState.settings.publicPage);
     SpnsState.settings.publicPageDraft = page;
     var visibleSections = page.sections.filter(function (section) { return section.visible !== false; });
-    if (!SpnsState.publicEditorSection || !PUBLIC_SECTION_FIELDS[SpnsState.publicEditorSection]) SpnsState.publicEditorSection = (visibleSections[0] || page.sections[0]).id;
+    if (!SpnsState.publicEditorSection || !PUBLIC_FIELD_GROUPS[SpnsState.publicEditorSection]) SpnsState.publicEditorSection = (visibleSections[0] || page.sections[0]).id;
     var activeId = SpnsState.publicEditorSection;
     var mode = SpnsState.publicEditorMode === 'edit' ? 'edit' : 'sections';
     var sectionRows = page.sections.map(function (section, index) {
@@ -1286,21 +1466,7 @@
           '<span class="spn-public-move-actions"><button type="button" title="Move up" aria-label="Move up"' + (index === 0 ? ' disabled' : '') + ' onclick="MarketingSponsorsModule.movePublicSection(\'' + section.id + '\',-1)">Up</button><button type="button" title="Move down" aria-label="Move down"' + (index === page.sections.length - 2 ? ' disabled' : '') + ' onclick="MarketingSponsorsModule.movePublicSection(\'' + section.id + '\',1)">Down</button></span>') +
       '</article>';
     }).join('');
-    var activeFields = PUBLIC_SECTION_FIELDS[activeId] || [];
-    var editPanel =
-      '<section class="spn-public-section-manager spn-public-edit-panel">' +
-        '<div class="spn-public-edit-topline"><button type="button" class="spn-public-back-btn" onclick="MarketingSponsorsModule.backToPublicSections()">Back to sections</button></div>' +
-        '<div class="spn-public-edit-hero"><span>Edit section</span><h3>' + escHtml(PUBLIC_SECTION_LABELS[activeId] || activeId) + '</h3><p>' + escHtml((PUBLIC_SECTION_META[activeId] || {}).description || 'Update the words and styling for this page section.') + '</p></div>' +
-        (activeId === 'hero' ? '<div class="spn-public-editor-general">' +
-          '<div class="spn-public-editor-field"><label>Poster Override URL</label><div class="spn-public-poster-control"><input type="text" id="spn-public-poster-url" placeholder="Use the production poster" value="' + escHtml(page.posterUrl || '') + '" /><button type="button" class="spn-btn spn-btn--ghost" onclick="MarketingSponsorsModule.uploadPublicPoster()">Upload</button></div></div>' +
-          '<div class="spn-public-editor-field"><label>Contact Email Override</label><input type="email" id="spn-public-contact-email" placeholder="Use the organisation email" value="' + escHtml(page.contactEmail || '') + '" /></div>' +
-        '</div>' : '') +
-        '<div class="spn-public-editor-section-body">' +
-          '<div><div class="spn-public-editor-subtitle">Section colour</div>' + publicColorSwatches(activeId, page.colors[activeId] || '#572e88') + '</div>' +
-          '<div><div class="spn-public-editor-subtitle spn-public-editor-subtitle--spaced">Copy</div><div class="spn-public-editor-fields">' + activeFields.map(function (field) { return publicEditorField(field, page); }).join('') + '</div></div>' +
-          (activeId === 'stats' ? '<div><div class="spn-public-editor-subtitle spn-public-editor-subtitle--spaced">Audience numbers</div><div class="spn-public-stats-grid">' + publicStatsEditorRows() + '</div></div>' : '') +
-        '</div>' +
-      '</section>';
+    var editPanel = buildEditPanel(page, activeId);
     var sectionPanel =
       '<section class="spn-public-section-manager"><div class="spn-public-section-manager-head"><div><h3>Your Page Sections</h3><p>Drag to reorder sections. Use Edit and Hide to manage each section.</p></div><button type="button" class="spn-public-reset-order" onclick="MarketingSponsorsModule.resetPublicSectionOrder()">Reset order</button></div><div class="spn-public-section-list">' + sectionRows + '</div><div class="spn-public-footer-note">The footer is always shown at the bottom of the page.</div></section>';
     host.innerHTML =
@@ -2097,6 +2263,8 @@
     setPublicSectionVisible: setPublicSectionVisible,
     editPublicSection: editPublicSection,
     backToPublicSections: backToPublicSections,
+    toggleFieldCard: toggleFieldCard,
+    toggleAllFieldCards: toggleAllFieldCards,
     movePublicSection: movePublicSection,
     resetPublicSectionOrder: resetPublicSectionOrder,
     setPublicPreviewDevice: setPublicPreviewDevice,
