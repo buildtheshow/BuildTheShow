@@ -524,7 +524,15 @@
 
     function mergedPublicPage(value) {
       value = value && typeof value === 'object' ? value : {};
-      return { published:value.published === true, posterUrl:value.posterUrl || '', contactEmail:value.contactEmail || '', content:{...PUBLIC_PAGE_DEFAULT.content,...(value.content||{})}, colors:{...PUBLIC_PAGE_DEFAULT.colors,...(value.colors||{})}, sections:Array.isArray(value.sections)&&value.sections.length?value.sections:PUBLIC_PAGE_DEFAULT.sections.map(s=>({...s})) };
+      const sections = Array.isArray(value.sections) && value.sections.length
+        ? value.sections.map(s=>({...s}))
+        : PUBLIC_PAGE_DEFAULT.sections.map(s=>({...s}));
+      PUBLIC_PAGE_DEFAULT.sections.forEach(section => {
+        if (!sections.some(item => item.id === section.id)) sections.push({...section});
+      });
+      const footerIndex = sections.findIndex(section => section.id === 'footer');
+      if (footerIndex >= 0) sections.push(sections.splice(footerIndex, 1)[0]);
+      return { published:value.published === true, posterUrl:value.posterUrl || '', contactEmail:value.contactEmail || '', content:{...PUBLIC_PAGE_DEFAULT.content,...(value.content||{})}, colors:{...PUBLIC_PAGE_DEFAULT.colors,...(value.colors||{})}, sections };
     }
 
     function inkFor(color) {
@@ -568,11 +576,10 @@
       });
       sectionNodes.forEach(el=>{ if(!knownIds.has(el.dataset.publicSection)) el.hidden=true; });
       if(contentRoot){
-        orderedSections.forEach(section=>{
-          if(section.id==='footer') return;
-          const el=byId[section.id];
-          if(el) contentRoot.appendChild(el);
-        });
+        const orderedNodes=orderedSections.map(section=>byId[section.id]).filter(Boolean);
+        const sectionSet=new Set(orderedNodes);
+        sectionNodes.forEach(el=>{ if(!sectionSet.has(el)) sectionSet.add(el); });
+        sectionSet.forEach(el=>{ if(el.dataset.publicSection !== 'footer') contentRoot.appendChild(el); });
         if(byId.footer) contentRoot.appendChild(byId.footer);
       }
       const poster=document.getElementById('spp-poster'); if(poster) poster.src=publicPage.posterUrl || (production&&production.poster_url) || '/ASSETS/Images/Icons/Placeholder - Poster.svg';
