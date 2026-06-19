@@ -1398,6 +1398,12 @@
     } catch (e) { /* cross-origin guard */ }
   }
 
+  window.addEventListener('message', function (e) {
+    if (e.origin === window.location.origin && e.data && e.data.type === 'bts-sponsor-page-ready') {
+      resizePublicPreviewFrame();
+    }
+  });
+
   function schedulePublicPagePreview(markDirty) {
     if (markDirty) setPublicPageStatus('Unsaved Changes', 'is-draft');
     clearTimeout(publicPreviewTimer);
@@ -1406,8 +1412,6 @@
       var frame = document.getElementById('spn-public-preview-frame');
       if (frame && frame.contentWindow) {
         frame.contentWindow.postMessage({ type: 'bts-sponsor-preview', publicPage: SpnsState.settings.publicPageDraft, publicStats: collectPublicStats() }, window.location.origin);
-        setTimeout(resizePublicPreviewFrame, 300);
-        setTimeout(resizePublicPreviewFrame, 800);
       }
     }, 120);
   }
