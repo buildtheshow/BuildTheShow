@@ -37,7 +37,7 @@
 
   function defaultPublicPage() {
     return {
-      published: true,
+      published: false,
       posterUrl: '', contactEmail: '',
       content: {
         navOverview: 'Overview', navSponsors: 'Sponsorships', navAds: 'Programme Ads', navBook: 'Book Now',
@@ -113,16 +113,28 @@
 
   // -- DB helpers ---------------------------------------------------------------
 
+  function sponsorAccessToken() {
+    try {
+      var raw = localStorage.getItem('sb-tkmaiktxpwqfbgeojbnf-auth-token');
+      var stored = raw ? JSON.parse(raw) : null;
+      return stored && (stored.access_token || (stored.currentSession && stored.currentSession.access_token)) || '';
+    } catch (_) { return ''; }
+  }
+
+  function sponsorHeaders(extra) {
+    return Object.assign({ apikey: SUPABASE_ANON, Authorization: 'Bearer ' + (sponsorAccessToken() || SUPABASE_ANON) }, extra || {});
+  }
+
   function dbFetch(table, extra) {
     var url = SUPABASE_URL + '/rest/v1/' + table + '?production_id=eq.' + SpnsState.prodId + (extra || '') + '&order=created_at.asc';
-    return fetch(url, { headers: { apikey: SUPABASE_ANON, Authorization: 'Bearer ' + SUPABASE_ANON } })
+    return fetch(url, { headers: sponsorHeaders() })
       .then(function (r) { if (!r.ok) return r.text().then(function (t) { throw new Error(t); }); return r.json(); });
   }
 
   function dbInsert(table, data) {
     return fetch(SUPABASE_URL + '/rest/v1/' + table, {
       method: 'POST',
-      headers: { apikey: SUPABASE_ANON, Authorization: 'Bearer ' + SUPABASE_ANON, 'Content-Type': 'application/json', Prefer: 'return=representation' },
+      headers: sponsorHeaders({ 'Content-Type': 'application/json', Prefer: 'return=representation' }),
       body: JSON.stringify(Object.assign({}, data, { production_id: SpnsState.prodId })),
     }).then(function (r) { if (!r.ok) return r.text().then(function (t) { throw new Error(t); }); return r.json(); });
   }
@@ -130,7 +142,7 @@
   function dbUpdate(table, id, data) {
     return fetch(SUPABASE_URL + '/rest/v1/' + table + '?id=eq.' + id, {
       method: 'PATCH',
-      headers: { apikey: SUPABASE_ANON, Authorization: 'Bearer ' + SUPABASE_ANON, 'Content-Type': 'application/json', Prefer: 'return=representation' },
+      headers: sponsorHeaders({ 'Content-Type': 'application/json', Prefer: 'return=representation' }),
       body: JSON.stringify(data),
     }).then(function (r) { if (!r.ok) return r.text().then(function (t) { throw new Error(t); }); return r.json(); });
   }
@@ -138,7 +150,7 @@
   function dbDelete(table, id) {
     return fetch(SUPABASE_URL + '/rest/v1/' + table + '?id=eq.' + id, {
       method: 'DELETE',
-      headers: { apikey: SUPABASE_ANON, Authorization: 'Bearer ' + SUPABASE_ANON },
+      headers: sponsorHeaders(),
     }).then(function (r) { if (!r.ok) return r.text().then(function (t) { throw new Error(t); }); });
   }
 
@@ -185,7 +197,7 @@
 
   function fetchPosterUrl() {
     var url = SUPABASE_URL + '/rest/v1/productions?id=eq.' + SpnsState.prodId + '&select=poster_url&limit=1';
-    return fetch(url, { headers: { apikey: SUPABASE_ANON, Authorization: 'Bearer ' + SUPABASE_ANON } })
+    return fetch(url, { headers: sponsorHeaders() })
       .then(function (r) { return r.json(); })
       .then(function (d) { return d && d[0] && d[0].poster_url || ''; })
       .catch(function () { return ''; });
@@ -288,7 +300,7 @@
       if (btn) { btn.textContent = 'Uploading...'; btn.disabled = true; }
       fetch(SUPABASE_URL + '/storage/v1/object/' + STORAGE_BUCKET + '/' + path, {
         method: 'POST',
-        headers: { apikey: SUPABASE_ANON, Authorization: 'Bearer ' + SUPABASE_ANON, 'Content-Type': file.type },
+        headers: sponsorHeaders({ 'Content-Type': file.type }),
         body: file,
       }).then(function (r) {
         if (!r.ok) return r.text().then(function (t) { throw new Error(t); });
@@ -357,7 +369,7 @@
   }
 
   function publicPageMeta() {
-    var headers = { apikey: SUPABASE_ANON, Authorization: 'Bearer ' + SUPABASE_ANON };
+    var headers = sponsorHeaders();
     return fetch(SUPABASE_URL + '/rest/v1/productions?id=eq.' + encodeURIComponent(SpnsState.prodId) + '&select=id,title,slug,poster_url,organization_id&limit=1', { headers: headers })
       .then(function (response) { return response.ok ? response.json() : []; })
       .then(function (rows) {
@@ -1208,7 +1220,7 @@
         ? '<div class="spn-public-editor-subtitle">Sponsor Colour</div>' + publicColorSwatches('sponsor', page.colors.sponsor) + '<div class="spn-public-editor-subtitle spn-public-editor-subtitle--spaced">Programme Ad Colour</div>' + publicColorSwatches('ads', page.colors.ads)
         : '<div class="spn-public-editor-subtitle">Solid Section Colour</div>' + publicColorSwatches(section.id, page.colors[section.id] || '#572e88');
       return '<details class="spn-public-editor-section" data-public-section-editor="' + section.id + '"' + (index === 0 ? ' open' : '') + '>' +
-        '<summary><span>' + escHtml(PUBLIC_SECTION_LABELS[section.id] || section.id) + '</span><span class="spn-public-section-controls" onclick="event.stopPropagation()">' +
+        '<summary><span class="spn-public-section-title"><span>' + String(index + 1).padStart(2, '0') + '</span>' + escHtml(PUBLIC_SECTION_LABELS[section.id] || section.id) + '</span><span class="spn-public-section-controls" onclick="event.stopPropagation()">' +
           '<label>Show <input type="checkbox" data-public-visible="' + section.id + '"' + (section.visible !== false ? ' checked' : '') + ' /></label>' +
           '<label>Order <select data-public-order="' + section.id + '">' + orderOptions + '</select></label>' +
         '</span></summary>' +
@@ -1223,10 +1235,10 @@
     var originalStats = document.getElementById('spn-public-stats-grid');
     var innerStats = document.getElementById('spn-public-stats-grid-inner');
     if (originalStats && innerStats) { innerStats.innerHTML = originalStats.innerHTML; originalStats.innerHTML = ''; }
-    host.oninput = schedulePublicPagePreview;
-    host.onchange = function (event) { if (event.target.matches('[data-public-order]')) reorderPublicSection(event.target); schedulePublicPagePreview(); };
+    host.oninput = function () { schedulePublicPagePreview(true); };
+    host.onchange = function (event) { if (event.target.matches('[data-public-order]')) reorderPublicSection(event.target); schedulePublicPagePreview(true); };
     updatePublicPageStatus();
-    schedulePublicPagePreview();
+    schedulePublicPagePreview(false);
   }
 
   function collectPublicPageEditor() {
@@ -1255,7 +1267,8 @@
   }
 
   var publicPreviewTimer = null;
-  function schedulePublicPagePreview() {
+  function schedulePublicPagePreview(markDirty) {
+    if (markDirty) setPublicPageStatus('Unsaved Changes', 'is-draft');
     clearTimeout(publicPreviewTimer);
     publicPreviewTimer = setTimeout(function () {
       SpnsState.settings.publicPageDraft = collectPublicPageEditor();
@@ -1273,9 +1286,20 @@
   function updatePublicPageStatus() {
     var status = document.getElementById('spn-public-publish-status');
     if (!status) return;
-    var published = SpnsState.settings.publicPage && SpnsState.settings.publicPage.published !== false;
-    status.textContent = published ? 'Published' : 'Not Published';
-    status.className = 'spn-public-publish-status ' + (published ? 'is-published' : 'is-draft');
+    var published = SpnsState.settings.publicPage && SpnsState.settings.publicPage.published === true;
+    setPublicPageStatus(published ? 'Published' : 'Not Published', published ? 'is-published' : 'is-draft');
+  }
+
+  function setPublicPageStatus(label, stateClass) {
+    var status = document.getElementById('spn-public-publish-status');
+    if (!status) return;
+    status.textContent = label;
+    status.className = 'spn-public-publish-status ' + stateClass;
+  }
+
+  function sponsorNotify(message, isError) {
+    if (typeof showToast === 'function') showToast(message, !!isError);
+    else if (isError) alert(message);
   }
 
   function publicPageSettingsPayload() {
@@ -1296,9 +1320,9 @@
   function persistSponsorSettings(settings, message) {
     return fetch(SUPABASE_URL + '/rest/v1/sponsor_settings', {
       method: 'POST',
-      headers: { apikey: SUPABASE_ANON, Authorization: 'Bearer ' + SUPABASE_ANON, 'Content-Type': 'application/json', Prefer: 'resolution=merge-duplicates,return=representation' },
+      headers: sponsorHeaders({ 'Content-Type': 'application/json', Prefer: 'resolution=merge-duplicates,return=representation' }),
       body: JSON.stringify({ production_id: SpnsState.prodId, settings: settings, updated_at: new Date().toISOString() }),
-    }).then(function (r) { if (!r.ok) return r.text().then(function (t) { throw new Error(t); }); return r.json(); }).then(function () { if (message) alert(message); });
+    }).then(function (r) { if (!r.ok) return r.text().then(function (t) { throw new Error(t); }); return r.json(); }).then(function () { if (message) sponsorNotify(message); });
   }
 
   function savePublicPage(publish) {
@@ -1309,15 +1333,15 @@
       SpnsState.settings.publicPage.published = true;
     }
     persistSponsorSettings(publicPageSettingsPayload(), publish ? 'Public sponsor page published.' : 'Public sponsor page draft saved.')
-      .then(function () { updatePublicPageStatus(); })
-      .catch(function (e) { alert('Could not save public page: ' + e.message); });
+      .then(function () { setPublicPageStatus(publish ? 'Published' : 'Draft Saved', publish ? 'is-published' : 'is-draft'); })
+      .catch(function (e) { sponsorNotify('Could not save public page: ' + e.message, true); });
   }
 
   function unpublishPublicPage() {
     if (!confirm('Unpublish the public sponsor page? Visitors will see that sponsor opportunities are not currently available.')) return;
     SpnsState.settings.publicPage = mergePublicPage(SpnsState.settings.publicPage);
     SpnsState.settings.publicPage.published = false;
-    persistSponsorSettings(publicPageSettingsPayload(), 'Public sponsor page unpublished.').then(updatePublicPageStatus).catch(function (e) { alert('Could not unpublish: ' + e.message); });
+    persistSponsorSettings(publicPageSettingsPayload(), 'Public sponsor page unpublished.').then(function () { setPublicPageStatus('Not Published', 'is-draft'); }).catch(function (e) { sponsorNotify('Could not unpublish: ' + e.message, true); });
   }
 
   function uploadPublicPoster() {
@@ -1326,10 +1350,10 @@
     input.onchange = function () {
       var file = input.files[0]; if (!file) return;
       var path = SpnsState.prodId + '/public-page/' + Date.now() + '_' + file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
-      fetch(SUPABASE_URL + '/storage/v1/object/' + STORAGE_BUCKET + '/' + path, { method: 'POST', headers: { apikey: SUPABASE_ANON, Authorization: 'Bearer ' + SUPABASE_ANON, 'Content-Type': file.type }, body: file })
+      fetch(SUPABASE_URL + '/storage/v1/object/' + STORAGE_BUCKET + '/' + path, { method: 'POST', headers: sponsorHeaders({ 'Content-Type': file.type }), body: file })
         .then(function (r) { if (!r.ok) return r.text().then(function (t) { throw new Error(t); }); return SUPABASE_URL + '/storage/v1/object/public/' + STORAGE_BUCKET + '/' + path; })
         .then(function (url) { document.getElementById('spn-public-poster-url').value = url; schedulePublicPagePreview(); })
-        .catch(function (e) { alert('Poster upload failed: ' + e.message); });
+        .catch(function (e) { sponsorNotify('Poster upload failed: ' + e.message, true); });
     };
     input.click();
   }
