@@ -1235,10 +1235,11 @@
     var chooser = page.sections.map(function (section) {
       var meta = PUBLIC_SECTION_META[section.id] || {};
       var enabled = section.visible !== false;
-      return '<article class="spn-public-choice' + (enabled ? ' is-added' : '') + '">' +
+      var active = section.id === activeId;
+      return '<article class="spn-public-choice' + (enabled ? ' is-added' : '') + (active ? ' is-active' : '') + '" role="button" tabindex="0" onclick="MarketingSponsorsModule.editPublicSection(\'' + section.id + '\')" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();MarketingSponsorsModule.editPublicSection(\'' + section.id + '\');}">' +
         '<div class="spn-public-choice-icon" style="--choice-color:' + escHtml(meta.color || '#572e88') + '"><img src="/ASSETS/Images/Icons/' + encodeURIComponent(meta.icon || 'Square.svg') + '" alt="" /></div>' +
-        '<div><strong>' + escHtml(PUBLIC_SECTION_LABELS[section.id] || section.id) + '</strong><p>' + escHtml(meta.description || '') + '</p></div>' +
-        '<button type="button" class="spn-public-choice-action" title="' + (enabled ? 'Remove section' : 'Add section') + '" aria-label="' + (enabled ? 'Remove ' : 'Add ') + escHtml(PUBLIC_SECTION_LABELS[section.id] || section.id) + '" onclick="MarketingSponsorsModule.setPublicSectionVisible(\'' + section.id + '\',' + (enabled ? 'false' : 'true') + ')">' + (enabled ? '&#10003;' : '+') + '</button>' +
+        '<div><strong>' + escHtml(PUBLIC_SECTION_LABELS[section.id] || section.id) + '</strong><p>' + escHtml(meta.description || '') + '</p><span class="spn-public-choice-edit">' + (active ? 'Editing now' : 'Click to edit text, colour, and content') + '</span></div>' +
+        '<button type="button" class="spn-public-choice-action" title="' + (enabled ? 'Remove section' : 'Add section') + '" aria-label="' + (enabled ? 'Remove ' : 'Add ') + escHtml(PUBLIC_SECTION_LABELS[section.id] || section.id) + '" onclick="event.stopPropagation();MarketingSponsorsModule.setPublicSectionVisible(\'' + section.id + '\',' + (enabled ? 'false' : 'true') + ')">' + (enabled ? '&#10003;' : '+') + '</button>' +
       '</article>';
     }).join('');
     var arranged = visibleSections.length ? visibleSections.map(function (section, index) {
