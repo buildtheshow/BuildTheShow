@@ -41,9 +41,9 @@
       posterUrl: '', contactEmail: '',
       content: {
         navOverview: 'Overview', navSponsors: 'Sponsorships', navAds: 'Programme Ads', navBook: 'Book Now',
-        heroTitle: 'Promote Your Business While Supporting', heroAccent: 'Local Youth Theatre.',
-        heroBody: 'Your support helps create incredible theatre experiences for young performers and connects your business with hundreds of local families.',
-        heroSponsorButton: 'Become a Sponsor', heroSponsorSub: 'Support the production', heroAdButton: 'Advertise in the Programme', heroAdSub: 'Promote your business',
+        heroTitle: 'Support Community Theatre', heroAccent: '',
+        heroBody: 'Help local young performers bring this magical production to life.',
+        heroSponsorButton: 'View Sponsorship Options', heroSponsorSub: 'Support the production', heroAdButton: 'View Programme Ads', heroAdSub: 'Promote your business',
         statsTitle: 'Your Business Seen by Local Families',
         sponsorWayTitle: 'Sponsor the Production', sponsorWayBody: 'Support the show and receive recognition throughout the season across the programme, website, social media, and live performances.',
         sponsorWayBullets: 'Recognition in the printed programme\nWebsite and social media mentions\nAcknowledgement at performances\nShow your commitment to local youth', sponsorWayCta: 'View Sponsorship Options',
@@ -51,7 +51,7 @@
         adWayBullets: 'Full colour and black & white options\nAffordable advertising for local businesses\nReach hundreds of local families\nMultiple ad sizes to suit any budget', adWayCta: 'View Ad Sizes & Pricing',
         programmeLabel: 'What is a Programme?', programmeTitle: 'A printed booklet for every audience member.',
         programmeBody: 'A programme is handed to every person who walks through the door. It includes show information, cast bios, and advertisements from local businesses like yours. Families take it home as a keepsake, so your ad lasts long after the curtain falls.',
-        compareLabel: 'Not Sure Which Option is Right for You?', compareTitle: 'Here is how they compare.',
+        compareLabel: 'Who will see your business?', compareTitle: 'Your support reaches our entire theatre community.',
         compareRows: 'What it is | Support the production | Promote your business\nMain benefit | Season-wide recognition | Printed advertisement\nGreat if you want to | Show community support | Market your business\nWhere you will be seen | Programme, website, social media, announcements | In the printed programme',
         compareBoth: 'Yes! Many businesses sponsor and advertise.',
         stepsLabel: 'Getting started', stepsTitle: 'It’s Easy to Get Involved',
@@ -77,6 +77,13 @@
     base.posterUrl = value.posterUrl || '';
     base.contactEmail = value.contactEmail || '';
     base.content = Object.assign(base.content, value.content || {});
+    if (base.content.heroTitle === 'Promote Your Business While Supporting' && base.content.heroAccent === 'Local Youth Theatre.') {
+      base.content.heroTitle = 'Support Community Theatre';
+      base.content.heroAccent = '';
+      base.content.heroBody = 'Help local young performers bring this magical production to life.';
+      base.content.heroSponsorButton = 'View Sponsorship Options';
+      base.content.heroAdButton = 'View Programme Ads';
+    }
     base.colors = Object.assign(base.colors, value.colors || {});
     if (Array.isArray(value.sections) && value.sections.length) {
       var defaultSections = base.sections.map(function (section) { return Object.assign({}, section); });
@@ -1032,51 +1039,57 @@
     '</div>';
   }
 
+  var _editorScrollHandler = null;
   var _editorFixedResizeHandler = null;
 
-  function applyEditorFixed() {
+  function setupEditorFloat() {
+    if (_editorScrollHandler) return;
     var editor = document.querySelector('.spn-public-builder-editor');
     var builder = document.querySelector('.spn-public-builder');
     if (!editor || !builder) return;
-    if (editor.dataset.fixedApplied === '1') return;
-    requestAnimationFrame(function () {
-      var rect = editor.getBoundingClientRect();
-      editor.style.position = 'fixed';
-      editor.style.top = '1rem';
-      editor.style.left = rect.left + 'px';
-      editor.style.width = rect.width + 'px';
-      editor.style.maxHeight = 'calc(100vh - 2rem)';
-      editor.style.overflowY = 'auto';
-      editor.style.zIndex = '200';
-      builder.style.paddingLeft = (rect.width + 20) + 'px';
-      editor.dataset.fixedApplied = '1';
-    });
+    var rect = editor.getBoundingClientRect();
+    var naturalTop = rect.top + window.scrollY;
+    var editorLeft = rect.left;
+    var editorWidth = rect.width;
+    function updatePos() {
+      if (window.scrollY + 16 >= naturalTop) {
+        editor.style.position = 'fixed';
+        editor.style.top = '1rem';
+        editor.style.left = editorLeft + 'px';
+        editor.style.width = editorWidth + 'px';
+        editor.style.maxHeight = 'calc(100vh - 2rem)';
+        editor.style.overflowY = 'auto';
+        editor.style.zIndex = '200';
+        builder.style.paddingLeft = (editorWidth + 20) + 'px';
+      } else {
+        editor.style.position = '';
+        editor.style.top = '';
+        editor.style.left = '';
+        editor.style.width = '';
+        editor.style.maxHeight = '';
+        editor.style.overflowY = '';
+        editor.style.zIndex = '';
+        builder.style.paddingLeft = '';
+      }
+    }
+    _editorScrollHandler = updatePos;
+    window.addEventListener('scroll', _editorScrollHandler, { passive: true });
+    updatePos();
   }
 
-  function removeEditorFixed() {
+  function teardownEditorFloat() {
     var editor = document.querySelector('.spn-public-builder-editor');
     var builder = document.querySelector('.spn-public-builder');
-    if (editor) {
-      editor.style.position = '';
-      editor.style.top = '';
-      editor.style.left = '';
-      editor.style.width = '';
-      editor.style.maxHeight = '';
-      editor.style.overflowY = '';
-      editor.style.zIndex = '';
-      delete editor.dataset.fixedApplied;
-    }
+    if (_editorScrollHandler) { window.removeEventListener('scroll', _editorScrollHandler); _editorScrollHandler = null; }
+    if (_editorFixedResizeHandler) { window.removeEventListener('resize', _editorFixedResizeHandler); _editorFixedResizeHandler = null; }
+    if (editor) { editor.style.position = ''; editor.style.top = ''; editor.style.left = ''; editor.style.width = ''; editor.style.maxHeight = ''; editor.style.overflowY = ''; editor.style.zIndex = ''; }
     if (builder) builder.style.paddingLeft = '';
-    if (_editorFixedResizeHandler) {
-      window.removeEventListener('resize', _editorFixedResizeHandler);
-      _editorFixedResizeHandler = null;
-    }
   }
 
   function switchSettingsTab(name) {
     var valid = ['sizes', 'tiers', 'deadlines', 'publicpage'];
     var next = valid.indexOf(name) >= 0 ? name : 'sizes';
-    if (next !== 'publicpage') removeEditorFixed();
+    teardownEditorFloat();
     if (next === 'publicpage') renderPublicPageEditor();
     document.querySelectorAll('.spn-settings-tab').forEach(function (button) {
       var active = button.dataset.settingsPanel === next;
@@ -1090,11 +1103,13 @@
     var savebar = document.getElementById('spn-settings-savebar');
     if (savebar) savebar.hidden = next === 'publicpage';
     if (next === 'publicpage') {
-      applyEditorFixed();
-      if (!_editorFixedResizeHandler) {
-        _editorFixedResizeHandler = function () { removeEditorFixed(); applyEditorFixed(); };
-        window.addEventListener('resize', _editorFixedResizeHandler);
-      }
+      requestAnimationFrame(function () {
+        setupEditorFloat();
+        if (!_editorFixedResizeHandler) {
+          _editorFixedResizeHandler = function () { teardownEditorFloat(); requestAnimationFrame(setupEditorFloat); };
+          window.addEventListener('resize', _editorFixedResizeHandler);
+        }
+      });
     }
   }
 
@@ -1552,7 +1567,6 @@
     };
     updatePublicPageStatus();
     schedulePublicPagePreview(false);
-    applyEditorFixed();
   }
 
   function collectPublicPageEditor() {
@@ -2110,7 +2124,7 @@
             '<div class="spn-public-builder">' +
               '<div class="spn-public-builder-editor"><div id="spn-public-editor"></div><div class="spn-public-stats-grid" id="spn-public-stats-grid" hidden></div></div>' +
               '<aside class="spn-public-builder-preview"><div class="spn-public-preview-toolbar"><span><strong>Here\'s how your page looks</strong><small>This is a preview. Publish when you are happy with it.</small></span><div class="spn-public-preview-controls"><div class="spn-public-builder-actions"><span class="spn-public-draft-status" id="spn-public-draft-status" role="status" aria-live="polite" hidden></span><button type="button" class="spn-btn spn-btn--ghost spn-public-draft-btn" id="spn-public-save-draft" onclick="MarketingSponsorsModule.savePublicPage(false)" disabled>Save Draft</button><button type="button" class="spn-btn spn-btn--primary" id="spn-public-publish-changes" onclick="MarketingSponsorsModule.savePublicPage(true)" hidden>Publish Changes</button></div><div class="spn-public-device-controls"><button type="button" class="spn-public-device active" data-public-device="desktop" onclick="MarketingSponsorsModule.setPublicPreviewDevice(\'desktop\')">Desktop</button><button type="button" class="spn-public-device" data-public-device="mobile" onclick="MarketingSponsorsModule.setPublicPreviewDevice(\'mobile\')">Mobile</button></div></div></div>' +
-                '<div class="spn-public-preview-frame-shell" id="spn-public-preview-shell" data-device="desktop"><iframe id="spn-public-preview-frame" title="Public sponsor page preview" src="/PUBLIC/sponsors.html?prod=' + encodeURIComponent(SpnsState.prodId) + '&preview=1&v=sponsor-public-branding-restored-20260619" onload="MarketingSponsorsModule.refreshPublicPreview()"></iframe></div>' +
+                '<div class="spn-public-preview-frame-shell" id="spn-public-preview-shell" data-device="desktop"><iframe id="spn-public-preview-frame" title="Public sponsor page preview" src="/PUBLIC/sponsors.html?prod=' + encodeURIComponent(SpnsState.prodId) + '&preview=1&v=sponsor-public-mockup-20260619" onload="MarketingSponsorsModule.refreshPublicPreview()"></iframe></div>' +
               '</aside>' +
             '</div>' +
           '</div>' +
