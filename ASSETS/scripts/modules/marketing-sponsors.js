@@ -2282,6 +2282,7 @@
     },
 
     destroy: function () {
+      teardownEditorFloat();
       SpnsState.prodId       = null;
       SpnsState.businesses   = [];
       SpnsState.ads          = [];
