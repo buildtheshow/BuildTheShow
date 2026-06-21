@@ -545,41 +545,7 @@
             <p class="spp-info-h">Plan your sponsorship around these important dates.</p>
             <div class="spp-info-accent-line"></div>
             <div id="spp-perf-dates-wrap" class="spp-perf-dates-wrap" hidden></div>
-            <div class="spp-timeline">
-              <div class="spp-timeline-item">
-                <div class="spp-timeline-dot-col">
-                  <div class="spp-timeline-dot"><img src="/ASSETS/Images/Icons/navproductioncalendar.svg" alt="" /></div>
-                  <div class="spp-timeline-connector"></div>
-                </div>
-                <div class="spp-timeline-content">
-                  <div class="spp-timeline-title">Artwork deadline</div>
-                  <div class="spp-timeline-desc">Final date for ad submission and artwork approval.</div>
-                </div>
-                <div class="spp-timeline-val" id="spp-keydate-artwork">TBC</div>
-              </div>
-              <div class="spp-timeline-item">
-                <div class="spp-timeline-dot-col">
-                  <div class="spp-timeline-dot"><img src="/ASSETS/Images/Icons/navproductioncalendar.svg" alt="" /></div>
-                  <div class="spp-timeline-connector"></div>
-                </div>
-                <div class="spp-timeline-content">
-                  <div class="spp-timeline-title">Programme ad booking</div>
-                  <div class="spp-timeline-desc">Secure your space in the printed programme.</div>
-                </div>
-                <div class="spp-timeline-val" id="spp-keydate-booking">TBC</div>
-              </div>
-              <div class="spp-timeline-item">
-                <div class="spp-timeline-dot-col">
-                  <div class="spp-timeline-dot"><img src="/ASSETS/Images/Icons/navproductioncalendar.svg" alt="" /></div>
-                  <div class="spp-timeline-connector"></div>
-                </div>
-                <div class="spp-timeline-content">
-                  <div class="spp-timeline-title">Sponsor confirmation</div>
-                  <div class="spp-timeline-desc">We'll confirm your details and placement.</div>
-                </div>
-                <div class="spp-timeline-val" id="spp-keydate-sponsor">TBC</div>
-              </div>
-            </div>
+            <div id="spp-deadlines-list" class="spp-timeline" hidden></div>
           </div>
 
         </div>
@@ -1024,6 +990,10 @@
 
     async function loadCalendarDeadlines(prodId) {
       if (!prodId) return;
+      const MARKETING_AREAS = new Set([
+        'programme_ads','programme_ads_booking','programme_ads_artwork',
+        'sponsors','sponsors_confirmation','sponsors_assets',
+      ]);
       try {
         const { data } = await sb.from('production_events')
           .select('title,start_time,notes')
@@ -1036,23 +1006,25 @@
           const d = new Date((s || '').slice(0, 19));
           return new Intl.DateTimeFormat('en-CA', { month: 'short', day: 'numeric', year: 'numeric' }).format(d);
         };
-        const MAP = {
-          programme_ads_artwork:    'spp-keydate-artwork',
-          programme_ads_booking:    'spp-keydate-booking',
-          sponsors_confirmation:    'spp-keydate-sponsor',
-          programme_ads:            'spp-keydate-booking',
-          sponsors:                 'spp-keydate-sponsor',
-          sponsors_assets:          'spp-keydate-sponsor',
-        };
-        const filled = new Set();
-        data.forEach(ev => {
-          const match = areaRe.exec(ev.notes || '');
-          const area = match ? match[1] : '';
-          const elId = MAP[area];
-          if (!elId || filled.has(elId)) return;
-          const el = document.getElementById(elId);
-          if (el) { el.textContent = fmtDate(ev.start_time); filled.add(elId); }
-        });
+        const items = data
+          .map(ev => ({ title: ev.title || 'Deadline', date: fmtDate(ev.start_time), area: (areaRe.exec(ev.notes || '') || [])[1] || '' }))
+          .filter(ev => MARKETING_AREAS.has(ev.area));
+        if (!items.length) return;
+        const list = document.getElementById('spp-deadlines-list');
+        if (!list) return;
+        list.innerHTML = items.map((item, i) =>
+          `<div class="spp-timeline-item">
+            <div class="spp-timeline-dot-col">
+              <div class="spp-timeline-dot"><img src="/ASSETS/Images/Icons/navproductioncalendar.svg" alt="" /></div>
+              ${i < items.length - 1 ? '<div class="spp-timeline-connector"></div>' : ''}
+            </div>
+            <div class="spp-timeline-content">
+              <div class="spp-timeline-title">${esc(item.title)}</div>
+            </div>
+            <div class="spp-timeline-val">${esc(item.date)}</div>
+          </div>`
+        ).join('');
+        list.hidden = false;
       } catch(err) { console.warn('[sponsors] Could not load calendar deadlines:', err); }
     }
 
@@ -1184,12 +1156,6 @@
         el.textContent = adClosed ? 'Ad booking deadline has passed.' : `Deadline: ${formatDate(settings.deadlines.booking)}`;
         el.hidden = false;
       }
-      const keydateArtwork = document.getElementById('spp-keydate-artwork');
-      const keydateBooking = document.getElementById('spp-keydate-booking');
-      const keydateSponsor = document.getElementById('spp-keydate-sponsor');
-      if (keydateArtwork) keydateArtwork.textContent = settings.deadlines && settings.deadlines.artwork ? formatDate(settings.deadlines.artwork) : 'TBC';
-      if (keydateBooking) keydateBooking.textContent = settings.deadlines && settings.deadlines.booking ? formatDate(settings.deadlines.booking) : 'TBC';
-      if (keydateSponsor) keydateSponsor.textContent = settings.deadlines && settings.deadlines.sponsor ? formatDate(settings.deadlines.sponsor) : 'TBC';
 
       document.getElementById('sp-tier-grid').innerHTML = settings.tiers.length
         ? settings.tiers.map((tier, i) => {
