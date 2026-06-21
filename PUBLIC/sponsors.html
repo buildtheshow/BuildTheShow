@@ -935,7 +935,7 @@
           sb.from('budget_categories').select('id,name,type').eq('production_id', prodId),
           sb.from('budget_items').select('name,category_id,qty').eq('production_id', prodId),
         ]);
-        const performanceCount = (eventsRes.data || []).length;
+        let performanceCount = (eventsRes.data || []).length;
         const categories = catsRes.data || [];
         const items = itemsRes.data || [];
         const ticketCategoryIds = new Set(categories
@@ -946,6 +946,12 @@
         // Prefer the explicit "Seats per show" capacity item (single-tier budget)
         const seatsPerShowItem = ticketItems.find(item => /seats per show/i.test(item.name || ''));
         let audiencePerShow = seatsPerShowItem ? (Number(seatsPerShowItem.qty) || 0) : 0;
+
+        // Fall back to budget "Number of shows" if calendar has no performance events yet
+        if (!performanceCount) {
+          const showsItem = ticketItems.find(item => /number of shows/i.test(item.name || ''));
+          performanceCount = showsItem ? (Number(showsItem.qty) || 0) : 0;
+        }
 
         // Multi-tier fallback: sum "X tickets per show" items
         if (!audiencePerShow) {
