@@ -1268,45 +1268,53 @@
     ]).then(function(results) {
       var events = results[0] || [];
       var ticketItems = results[1] || [];
+      console.log('[BTS Sponsors] deriveSponsorStats — budget_items returned:', ticketItems.length, 'items', ticketItems.map(function(i){ return i.name + '(' + i.qty + ')'; }));
       var performanceCount = events.length;
-      // Budget wizard saves items with labels like "How many shows?" (kind:number)
       if (!performanceCount) {
         var showsItem = ticketItems.find ? ticketItems.find(function(it){ return /how many shows|number of shows/i.test(it.name || ''); }) : null;
         performanceCount = showsItem ? (Number(showsItem.qty) || 0) : 0;
       }
-      // "How many seats?" is the wizard label; fall back to legacy "seats per show"
       var seatsItem = ticketItems.find ? ticketItems.find(function(it){ return /how many seats|seats per show/i.test(it.name || ''); }) : null;
-      // "Expected attendance" is stored as a percent (e.g. qty=80 means 80%)
       var attendItem = ticketItems.find ? ticketItems.find(function(it){ return /expected attendance/i.test(it.name || ''); }) : null;
-      // "Total audience expected" (from concessions wizard) is already the full audience number
       var totalAudienceItem = ticketItems.find ? ticketItems.find(function(it){ return /total audience/i.test(it.name || ''); }) : null;
       var capacity = seatsItem ? (Number(seatsItem.qty) || 0) : 0;
       var pct = attendItem ? Math.min(100, Math.max(0, Number(attendItem.qty) || 0)) / 100 : 1;
       var audiencePerShow = capacity > 0 ? Math.round(capacity * pct) : 0;
-      // Fallback: "Total audience expected" ÷ show count
       if (!audiencePerShow && totalAudienceItem && performanceCount > 0) {
         audiencePerShow = Math.round((Number(totalAudienceItem.qty) || 0) / performanceCount);
       }
-      // Fallback: sum ticket line items (Adult Tickets, Student Tickets, etc.) ÷ show count
       if (!audiencePerShow && performanceCount > 0) {
         var genericItems = ticketItems.filter(function(it){ return /ticket|admission|adult|student|senior|child|season pass/i.test(it.name||'') && !/how many|number of|seats per|expected|total audience/i.test(it.name||''); });
         var totalQty = genericItems.reduce(function(s,it){ return s+(Number(it.qty)||0); }, 0);
-        audiencePerShow = totalQty > 0 ? Math.round(totalQty / performanceCount) : 0;
+        if (totalQty > 0) audiencePerShow = Math.round(totalQty / performanceCount);
+        console.log('[BTS Sponsors] genericItems fallback:', genericItems.map(function(i){ return i.name+'('+i.qty+')'; }), '→ audiencePerShow:', audiencePerShow);
       }
       var totalAudience = audiencePerShow > 0 && performanceCount > 0 ? audiencePerShow * performanceCount : 0;
+      console.log('[BTS Sponsors] derived → performances:', performanceCount, 'audiencePerShow:', audiencePerShow, 'totalAudience:', totalAudience);
       function fmt(n) { return n > 0 ? String(n) : 'TBC'; }
       var derived = [
         { value: fmt(performanceCount), label: 'Performances',      subtext: 'Pulled from the production schedule', color: '#572e88', icon: 'navproductioncalendar.svg' },
         { value: fmt(audiencePerShow),  label: 'Audience per show', subtext: 'Expected from the ticket budget',     color: '#769e7b', icon: 'Budgeting-tickets.svg' },
         { value: fmt(totalAudience),    label: 'Total audience',    subtext: 'Estimated across all performances',   color: '#efab45', icon: 'organisation-members.svg' },
       ];
-      // Always persist derived stats — manual editor overrides are handled separately.
-      var hasRealValue = [performanceCount, audiencePerShow, totalAudience].some(function(n){ return n > 0; });
-      if (hasRealValue) {
-        SpnsState.settings.publicStats = derived;
+      // Only update a slot if we have a real computed value — never overwrite a real value with TBC.
+      var existing = Array.isArray(SpnsState.settings.publicStats) ? SpnsState.settings.publicStats.slice() : [];
+      var changed = false;
+      derived.forEach(function(d, i) {
+        var curVal = existing[i] && String(existing[i].value || '').trim();
+        if (d.value !== 'TBC') {
+          existing[i] = d;
+          changed = true;
+        } else if (!curVal) {
+          existing[i] = d;
+          changed = true;
+        }
+      });
+      if (changed) {
+        SpnsState.settings.publicStats = existing;
         schedulePublicPagePreview(false);
         var payload = publicPageSettingsPayload();
-        payload.publicStats = derived;
+        payload.publicStats = existing;
         persistSponsorSettings(payload, '').catch(function(){});
       }
     }).catch(function(){});
