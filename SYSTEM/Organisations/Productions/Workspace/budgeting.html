@@ -1898,13 +1898,36 @@ const BP = {
   },
   _prevSave() {
     const elements=JSON.parse(JSON.stringify(this._prevEls));
+    let drv;
     if(this._prevDrvId){
-      const drv=this.drivers.find(d=>d.id===this._prevDrvId); if(drv) drv.elements=elements;
+      drv=this.drivers.find(d=>d.id===this._prevDrvId); if(drv) drv.elements=elements;
     } else {
       const cfg=this._drvTypeCfg(this._prevType);
-      this.drivers.push({id:'drv_'+Date.now(),type:this._prevType,label:cfg.label,elements});
+      drv={id:'drv_'+Date.now(),type:this._prevType,label:cfg.label,elements};
+      this.drivers.push(drv);
     }
     this._saveDrvs(); this.closeWorkspaceModal(); this.renderDrivers(); this.renderSummary();
+    if(drv) this._syncDrvItemsToDb(drv).catch(function(){});
+  },
+
+  async _syncDrvItemsToDb(drv) {
+    if(!drv||!drv.elements) return;
+    const cfg=this._drvTypeCfg(drv.type);
+    const catName=(drv.label||cfg.label||'').trim().toLowerCase();
+    const cat=this.cats.find(function(c){ return c.type==='income'&&(c.name||'').trim().toLowerCase()===catName; });
+    if(!cat) return;
+    const els=(drv.elements||[]).filter(function(el){ return el.label&&el.kind!=='section'&&el.kind!=='subtotal'&&el.kind!=='computed'; });
+    for(var i=0;i<els.length;i++){
+      const el=els[i];
+      const qty=el.kind==='number'||el.kind==='percent'?Number(el.value||0):0;
+      const uc=el.kind==='dollar'?Math.round(Number(el.value||0)*100):0;
+      const existing=this._catItems(cat.id).find(function(it){ return(it.name||'').trim().toLowerCase()===(el.label||'').trim().toLowerCase(); });
+      if(existing){
+        await this._patch('budget_items',existing.id,{qty:qty,unit_cost_cents:uc}).catch(function(){});
+      } else {
+        await this._post('budget_items',{name:el.label,category_id:cat.id,production_id:this.prodId,qty:qty,unit_cost_cents:uc,budgeted_cents:0,committed_cents:0,paid_cents:0,status:'planned'}).catch(function(){});
+      }
+    }
   },
 
   // ── Drag and drop ─────────────────────────────────────────────────────

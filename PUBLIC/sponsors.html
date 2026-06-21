@@ -943,15 +943,18 @@
           .map(cat => cat.id));
         const ticketItems = items.filter(item => ticketCategoryIds.has(item.category_id));
 
-        // Prefer the explicit "Seats per show" capacity item (single-tier budget)
-        const seatsPerShowItem = ticketItems.find(item => /seats per show/i.test(item.name || ''));
-        let audiencePerShow = seatsPerShowItem ? (Number(seatsPerShowItem.qty) || 0) : 0;
-
         // Fall back to budget "Number of shows" if calendar has no performance events yet
         if (!performanceCount) {
           const showsItem = ticketItems.find(item => /number of shows/i.test(item.name || ''));
           performanceCount = showsItem ? (Number(showsItem.qty) || 0) : 0;
         }
+
+        // Single-tier: seats per show × expected attendance %
+        const seatsPerShowItem = ticketItems.find(item => /seats per show/i.test(item.name || ''));
+        const attendanceItem   = ticketItems.find(item => /expected attendance/i.test(item.name || ''));
+        const capacityPerShow  = seatsPerShowItem ? (Number(seatsPerShowItem.qty) || 0) : 0;
+        const attendancePct    = attendanceItem ? Math.min(100, Math.max(0, Number(attendanceItem.qty) || 0)) / 100 : 1;
+        let audiencePerShow    = capacityPerShow > 0 ? Math.round(capacityPerShow * attendancePct) : 0;
 
         // Multi-tier fallback: sum "X tickets per show" items
         if (!audiencePerShow) {
@@ -961,7 +964,7 @@
 
         // Last-resort fallback: sum generic ticket qtys / performance count
         if (!audiencePerShow && performanceCount > 0) {
-          const genericItems = ticketItems.filter(item => /ticket|admission|adult|student|senior|child/i.test(item.name || '') && !/per show|number of shows|seats per show/i.test(item.name || ''));
+          const genericItems = ticketItems.filter(item => /ticket|admission|adult|student|senior|child/i.test(item.name || '') && !/per show|number of shows|seats per show|expected/i.test(item.name || ''));
           const totalQty = genericItems.reduce((sum, item) => sum + (Number(item.qty) || 0), 0);
           audiencePerShow = totalQty > 0 ? Math.round(totalQty / performanceCount) : 0;
         }
@@ -969,7 +972,7 @@
         const totalAudience = audiencePerShow > 0 && performanceCount > 0 ? audiencePerShow * performanceCount : 0;
         return [
           { value: formatStatNumber(performanceCount), label: 'Performances',      subtext: 'Pulled from the production schedule', color: '#572e88', icon: 'navproductioncalendar.svg' },
-          { value: formatStatNumber(audiencePerShow),  label: 'Audience per show', subtext: 'Max seats from the ticket budget',    color: '#769e7b', icon: 'Budgeting-tickets.svg' },
+          { value: formatStatNumber(audiencePerShow),  label: 'Audience per show', subtext: 'Expected from the ticket budget',     color: '#769e7b', icon: 'Budgeting-tickets.svg' },
           { value: formatStatNumber(totalAudience),    label: 'Total audience',    subtext: 'Estimated across all performances',   color: '#efab45', icon: 'organisation-members.svg' },
         ];
       } catch (err) {
