@@ -1001,6 +1001,7 @@
       refreshAdsGrouped();
       updatePublicPageStatus();
       updatePublicPageDraftActions();
+      deriveSponsorStats();
     });
   }
 
@@ -1254,6 +1255,55 @@
         color:   def.color,
       };
     }).filter(Boolean);
+  }
+
+  function deriveSponsorStats() {
+    var prodId = SpnsState.prodId;
+    if (!prodId) return Promise.resolve();
+    var base = SUPABASE_URL + '/rest/v1/';
+    var h = sponsorHeaders();
+    return Promise.all([
+      fetch(base + 'production_events?production_id=eq.' + encodeURIComponent(prodId) + '&event_type=eq.performance&select=id', { headers: h }).then(function(r){ return r.ok ? r.json() : []; }).catch(function(){ return []; }),
+      fetch(base + 'budget_categories?production_id=eq.' + encodeURIComponent(prodId) + '&select=id,name,type', { headers: h }).then(function(r){ return r.ok ? r.json() : []; }).catch(function(){ return []; }),
+      fetch(base + 'budget_items?production_id=eq.' + encodeURIComponent(prodId) + '&select=name,category_id,qty', { headers: h }).then(function(r){ return r.ok ? r.json() : []; }).catch(function(){ return []; }),
+    ]).then(function(results) {
+      var events = results[0] || [];
+      var cats = results[1] || [];
+      var items = results[2] || [];
+      var ticketCatIds = {};
+      cats.filter(function(c){ return c.type === 'income' && /ticket|admission|box office/i.test(c.name || ''); }).forEach(function(c){ ticketCatIds[c.id] = true; });
+      var ticketItems = items.filter(function(it){ return ticketCatIds[it.category_id]; });
+      var performanceCount = events.length;
+      if (!performanceCount) {
+        var showsItem = ticketItems.find ? ticketItems.find(function(it){ return /number of shows/i.test(it.name || ''); }) : null;
+        performanceCount = showsItem ? (Number(showsItem.qty) || 0) : 0;
+      }
+      var seatsItem = ticketItems.find ? ticketItems.find(function(it){ return /seats per show/i.test(it.name || ''); }) : null;
+      var attendItem = ticketItems.find ? ticketItems.find(function(it){ return /expected attendance/i.test(it.name || ''); }) : null;
+      var capacity = seatsItem ? (Number(seatsItem.qty) || 0) : 0;
+      var pct = attendItem ? Math.min(100, Math.max(0, Number(attendItem.qty) || 0)) / 100 : 1;
+      var audiencePerShow = capacity > 0 ? Math.round(capacity * pct) : 0;
+      if (!audiencePerShow) {
+        var perShowItems = ticketItems.filter(function(it){ return /tickets per show/i.test(it.name || ''); });
+        audiencePerShow = perShowItems.reduce(function(s,it){ return s + (Number(it.qty)||0); }, 0);
+      }
+      if (!audiencePerShow && performanceCount > 0) {
+        var genericItems = ticketItems.filter(function(it){ return /ticket|admission|adult|student|senior|child/i.test(it.name||'') && !/per show|number of shows|seats per show|expected/i.test(it.name||''); });
+        var totalQty = genericItems.reduce(function(s,it){ return s+(Number(it.qty)||0); }, 0);
+        audiencePerShow = totalQty > 0 ? Math.round(totalQty / performanceCount) : 0;
+      }
+      var totalAudience = audiencePerShow > 0 && performanceCount > 0 ? audiencePerShow * performanceCount : 0;
+      function fmt(n) { return n > 0 ? String(n) : 'TBC'; }
+      var derived = [
+        { value: fmt(performanceCount), label: 'Performances',      subtext: 'Pulled from the production schedule', color: '#572e88', icon: 'navproductioncalendar.svg' },
+        { value: fmt(audiencePerShow),  label: 'Audience per show', subtext: 'Expected from the ticket budget',     color: '#769e7b', icon: 'Budgeting-tickets.svg' },
+        { value: fmt(totalAudience),    label: 'Total audience',    subtext: 'Estimated across all performances',   color: '#efab45', icon: 'organisation-members.svg' },
+      ];
+      if (!SpnsState.settings.publicStats || !SpnsState.settings.publicStats.length) {
+        SpnsState.settings.publicStats = derived;
+        schedulePublicPagePreview(false);
+      }
+    }).catch(function(){});
   }
 
   var PUBLIC_SECTION_LABELS = {
