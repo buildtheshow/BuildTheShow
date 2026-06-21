@@ -38,7 +38,7 @@
   function defaultPublicPage() {
     return {
       published: false,
-      posterUrl: '', contactEmail: '',
+      posterUrl: '', pastPostersUrl: '/ASSETS/Images/Decrotive/past-posters-template.png?v=20260620', contactEmail: '',
       content: {
         navOverview: 'Overview', navSponsors: 'Sponsorships', navAds: 'Programme Ads', navBook: 'Book Now',
         heroTitle: 'Support Community Theatre', heroAccent: '',
@@ -59,13 +59,15 @@
         impactTitle: 'Your support makes a big impact.', impactBody: 'Thank you for helping young performers shine!',
         sponsorsKicker: 'Show Sponsorships', sponsorsTitle: 'Support the Production', sponsorsBody: 'Choose a sponsorship level and support the full production. You’ll be recognised throughout the season.',
         adsKicker: 'Programme Advertising', adsTitle: 'Advertise in the Programme', adsBody: 'Reach the show audience with an advertisement in the printed programme. Choose the size and format that works for your budget.',
+        pastPostersKicker: 'Past Posters', pastPostersTitle: 'A look back at the shows sponsors helped bring to life',
+        pastPostersBody: 'Share a visual snapshot of previous productions and the community your supporters are joining.',
         footerTitle: 'Have questions?', footerBody: 'We’re happy to help you find the right option.', footerButton: 'Contact Us',
       },
-      colors: { hero: '#572e88', stats: '#74a2b4', sponsor: '#572e88', ads: '#769e7b', info: '#ffffff', steps: '#1a1530', sponsorships: '#572e88', programmeAds: '#476aaa', footer: '#1a1530' },
+      colors: { hero: '#572e88', stats: '#74a2b4', sponsor: '#572e88', ads: '#769e7b', info: '#ffffff', steps: '#1a1530', sponsorships: '#572e88', programmeAds: '#476aaa', pastPosters: '#ffffff', footer: '#1a1530' },
       sections: [
         { id: 'hero', visible: true }, { id: 'stats', visible: true }, { id: 'ways', visible: true },
         { id: 'info', visible: true }, { id: 'steps', visible: true }, { id: 'sponsorships', visible: true },
-        { id: 'programmeAds', visible: true }, { id: 'footer', visible: true },
+        { id: 'programmeAds', visible: true }, { id: 'pastPosters', visible: true }, { id: 'footer', visible: true },
       ],
     };
   }
@@ -75,6 +77,7 @@
     value = value && typeof value === 'object' ? value : {};
     base.published = value.published === true;
     base.posterUrl = value.posterUrl || '';
+    base.pastPostersUrl = value.pastPostersUrl || base.pastPostersUrl;
     base.contactEmail = value.contactEmail || '';
     base.content = Object.assign(base.content, value.content || {});
     if (base.content.heroTitle === 'Promote Your Business While Supporting' && base.content.heroAccent === 'Local Youth Theatre.') {
@@ -1276,7 +1279,7 @@
 
   var PUBLIC_SECTION_LABELS = {
     hero: 'Hero', stats: 'Audience Reach', ways: 'Ways to Participate', info: 'What is a Programme?',
-    steps: 'How It Works', sponsorships: 'Sponsorship Packages', programmeAds: 'Programme Ad Sizes', footer: 'Footer & Contact',
+    steps: 'How It Works', sponsorships: 'Sponsorship Packages', programmeAds: 'Programme Ad Sizes', pastPosters: 'Past Posters', footer: 'Footer & Contact',
   };
 
   var PUBLIC_SECTION_META = {
@@ -1285,6 +1288,7 @@
     stats: { description: 'Show audience impact and local reach.', icon: 'organisation-members.svg', color: '#769e7b' },
     sponsorships: { description: 'Show the sponsor packages and pricing.', icon: 'sponsorship-packages.svg', color: '#dd8233' },
     programmeAds: { description: 'Show programme ad sizes and pricing.', icon: 'programme-8.5x11Folded-11x17.svg', color: '#476aaa' },
+    pastPosters: { description: 'Show a strip or collage of previous production posters.', icon: 'Placeholder - Poster.svg', color: '#572e88' },
     ways: { description: 'Help visitors choose sponsorship or advertising.', icon: 'Volunteers.svg', color: '#ca7ea7' },
     steps: { description: 'Explain how booking and artwork work.', icon: 'Production Checklist.svg', color: '#d1523d' },
     footer: { description: 'Add contact details and a final call to action.', icon: 'Profiles.svg', color: '#1a1530' },
@@ -1308,6 +1312,7 @@
     steps: [['stepsLabel','Eyebrow'], ['stepsTitle','Heading'], ['stepsRows','Steps: Title | Description','textarea'], ['impactTitle','Impact Heading'], ['impactBody','Impact Copy']],
     sponsorships: [['sponsorsKicker','Eyebrow'], ['sponsorsTitle','Heading'], ['sponsorsBody','Supporting Copy','textarea']],
     programmeAds: [['adsKicker','Eyebrow'], ['adsTitle','Heading'], ['adsBody','Supporting Copy','textarea']],
+    pastPosters: [['pastPostersKicker','Eyebrow'], ['pastPostersTitle','Heading'], ['pastPostersBody','Supporting Copy','textarea']],
     footer: [['footerTitle','Heading'], ['footerBody','Supporting Copy'], ['footerButton','Contact Button']],
   };
 
@@ -1385,6 +1390,13 @@
       ]},
       { id:'bgColor', svg:ESVG.drop, title:'Background Style',   subtitle:'Choose the background colour for this section.',         type:'color', colorKey:'programmeAds' },
     ],
+    pastPosters: [
+      { id:'image',   img:'Placeholder - Poster.svg', title:'Poster Strip Image', subtitle:'Upload or change the past posters image.', type:'pastPosters' },
+      { id:'text',    svg:ESVG.T,    title:'Section Text',       subtitle:'Edit the heading and description.',                      fields:[
+        { key:'pastPostersKicker', label:'Eyebrow' }, { key:'pastPostersTitle', label:'Heading' }, { key:'pastPostersBody', label:'Body', type:'textarea' },
+      ]},
+      { id:'bgColor', svg:ESVG.drop, title:'Background Style',   subtitle:'Choose the background colour for this section.',         type:'color', colorKey:'pastPosters' },
+    ],
     footer: [
       { id:'text',    svg:ESVG.T,    title:'Footer Text',        subtitle:'Edit the footer message and button.',                    fields:[
         { key:'footerTitle', label:'Heading' }, { key:'footerBody', label:'Body' }, { key:'footerButton', label:'Contact Button' },
@@ -1397,13 +1409,19 @@
     var iconHtml = group.img
       ? '<img src="/ASSETS/Images/Icons/' + encodeURIComponent(group.img) + '" alt="" style="width:18px;height:18px;" />'
       : (group.svg || '');
-    var aside = (group.type === 'poster' && page.posterUrl)
-      ? '<div class="spn-fcard-aside"><img class="spn-fcard-thumb" src="' + escHtml(page.posterUrl) + '" alt="" /></div>'
-      : '';
+    var aside = '';
+    if (group.type === 'poster' && page.posterUrl) {
+      aside = '<div class="spn-fcard-aside"><img class="spn-fcard-thumb" src="' + escHtml(page.posterUrl) + '" alt="" /></div>';
+    } else if (group.type === 'pastPosters' && page.pastPostersUrl) {
+      aside = '<div class="spn-fcard-aside"><img class="spn-fcard-thumb" src="' + escHtml(page.pastPostersUrl) + '" alt="" /></div>';
+    }
     var body = '';
     if (group.type === 'poster') {
       body = '<input type="text" id="spn-public-poster-url" value="' + escHtml(page.posterUrl || '') + '" style="display:none" />' +
              '<button type="button" class="spn-change-img-btn" onclick="MarketingSponsorsModule.uploadPublicPoster()">Change Image</button>';
+    } else if (group.type === 'pastPosters') {
+      body = '<input type="text" id="spn-public-past-posters-url" value="' + escHtml(page.pastPostersUrl || '') + '" style="display:none" />' +
+             '<button type="button" class="spn-change-img-btn" onclick="MarketingSponsorsModule.uploadPublicPastPosters()">Change Image</button>';
     } else if (group.type === 'color') {
       var currentColor = (page.colors && page.colors[group.colorKey]) || '#572e88';
       body = '<div class="spn-fcard-swatches" role="radiogroup">' +
@@ -1575,8 +1593,10 @@
     document.querySelectorAll('[data-public-color]:checked').forEach(function (input) { page.colors[input.dataset.publicColor] = input.value; });
     SpnsState.settings.publicStats = collectPublicStats();
     var posterInput = document.getElementById('spn-public-poster-url');
+    var pastPostersInput = document.getElementById('spn-public-past-posters-url');
     var emailInput = document.getElementById('spn-public-contact-email');
     if (posterInput) page.posterUrl = posterInput.value || '';
+    if (pastPostersInput) page.pastPostersUrl = pastPostersInput.value || '';
     if (emailInput) page.contactEmail = emailInput.value || '';
     return page;
   }
@@ -1906,7 +1926,7 @@
       });
   }
 
-  function uploadPublicPoster() {
+  function uploadPublicPageImage(inputId, failureLabel) {
     var input = document.createElement('input');
     input.type = 'file'; input.accept = 'image/jpeg,image/png,image/webp';
     input.onchange = function () {
@@ -1914,10 +1934,22 @@
       var path = SpnsState.prodId + '/public-page/' + Date.now() + '_' + file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
       fetch(SUPABASE_URL + '/storage/v1/object/' + STORAGE_BUCKET + '/' + path, { method: 'POST', headers: sponsorHeaders({ 'Content-Type': file.type }), body: file })
         .then(function (r) { if (!r.ok) return r.text().then(function (t) { throw new Error(t); }); return SUPABASE_URL + '/storage/v1/object/public/' + STORAGE_BUCKET + '/' + path; })
-        .then(function (url) { document.getElementById('spn-public-poster-url').value = url; schedulePublicPagePreview(true); })
-        .catch(function (e) { sponsorNotify('Poster upload failed: ' + e.message, true); });
+        .then(function (url) {
+          var target = document.getElementById(inputId);
+          if (target) target.value = url;
+          schedulePublicPagePreview(true);
+        })
+        .catch(function (e) { sponsorNotify(failureLabel + ' upload failed: ' + e.message, true); });
     };
     input.click();
+  }
+
+  function uploadPublicPoster() {
+    uploadPublicPageImage('spn-public-poster-url', 'Poster');
+  }
+
+  function uploadPublicPastPosters() {
+    uploadPublicPageImage('spn-public-past-posters-url', 'Past posters image');
   }
 
   function escHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
@@ -2327,6 +2359,7 @@
     savePublicPage: savePublicPage,
     unpublishPublicPage: unpublishPublicPage,
     uploadPublicPoster: uploadPublicPoster,
+    uploadPublicPastPosters: uploadPublicPastPosters,
     setPublicSectionVisible: setPublicSectionVisible,
     editPublicSection: editPublicSection,
     backToPublicSections: backToPublicSections,
