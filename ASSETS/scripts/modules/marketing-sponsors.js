@@ -555,6 +555,7 @@
   // -- OVERVIEW -----------------------------------------------------------------
 
   function loadOverview() {
+    deriveSponsorStats();
     return Promise.all([
       dbFetch('sponsor_businesses', '&select=id,name,created_at').catch(function () { return []; }),
       dbFetch('programme_ads', '&select=id,price_cents,payment_status,artwork_status,approval_status').catch(function () { return []; }),
@@ -1275,21 +1276,28 @@
         var showsItem = ticketItems.find ? ticketItems.find(function(it){ return /how many shows|number of shows/i.test(it.name || ''); }) : null;
         performanceCount = showsItem ? (Number(showsItem.qty) || 0) : 0;
       }
-      var seatsItem = ticketItems.find ? ticketItems.find(function(it){ return /how many seats|seats per show/i.test(it.name || ''); }) : null;
-      var attendItem = ticketItems.find ? ticketItems.find(function(it){ return /expected attendance/i.test(it.name || ''); }) : null;
+      function itemVal(it) { return Number(it.qty) || Math.round((Number(it.unit_cost_cents) || 0) / 100) || 0; }
+      var seatsItem = ticketItems.find ? ticketItems.find(function(it){ return /seat|capacity|venue.*cap/i.test(it.name || ''); }) : null;
+      var attendItem = ticketItems.find ? ticketItems.find(function(it){ return /attendance|occupancy|fill/i.test(it.name || ''); }) : null;
+      var showsItem2 = ticketItems.find ? ticketItems.find(function(it){ return /number of shows|how many shows/i.test(it.name || ''); }) : null;
       var totalAudienceItem = ticketItems.find ? ticketItems.find(function(it){ return /total audience/i.test(it.name || ''); }) : null;
-      console.log('[BTS Sponsors] seatsItem:', seatsItem ? '"'+seatsItem.name+'"='+seatsItem.qty : 'NOT FOUND', '| attendItem:', attendItem ? '"'+attendItem.name+'"='+attendItem.qty : 'NOT FOUND');
-      var capacity = seatsItem ? (Number(seatsItem.qty) || 0) : 0;
-      var pct = attendItem ? Math.min(100, Math.max(0, Number(attendItem.qty) || 0)) / 100 : 1;
+      console.log('[BTS Sponsors] seatsItem:', seatsItem ? '"'+seatsItem.name+'"='+itemVal(seatsItem) : 'NOT FOUND', '| attendItem:', attendItem ? '"'+attendItem.name+'"='+itemVal(attendItem) : 'NOT FOUND');
+      var capacity = seatsItem ? itemVal(seatsItem) : 0;
+      var attendRaw = attendItem ? itemVal(attendItem) : 0;
+      var pct = attendRaw > 0 ? Math.min(100, attendRaw) / 100 : 1;
       var audiencePerShow = capacity > 0 ? Math.round(capacity * pct) : 0;
+      if (!audiencePerShow && showsItem2 && performanceCount > 0) {
+        var showCount2 = itemVal(showsItem2);
+        if (showCount2 > 0 && totalAudienceItem) audiencePerShow = Math.round(itemVal(totalAudienceItem) / showCount2);
+      }
       if (!audiencePerShow && totalAudienceItem && performanceCount > 0) {
-        audiencePerShow = Math.round((Number(totalAudienceItem.qty) || 0) / performanceCount);
+        audiencePerShow = Math.round(itemVal(totalAudienceItem) / performanceCount);
       }
       if (!audiencePerShow && performanceCount > 0) {
-        var genericItems = ticketItems.filter(function(it){ return /ticket|admission|adult|student|senior|child|season pass/i.test(it.name||'') && !/how many|number of|seats per|expected|total audience/i.test(it.name||''); });
-        var totalQty = genericItems.reduce(function(s,it){ return s+(Number(it.qty)||0); }, 0);
+        var genericItems = ticketItems.filter(function(it){ return /ticket|admission|adult|student|senior|child|season pass/i.test(it.name||''); });
+        var totalQty = genericItems.reduce(function(s,it){ return s + itemVal(it); }, 0);
         if (totalQty > 0) audiencePerShow = Math.round(totalQty / performanceCount);
-        console.log('[BTS Sponsors] genericItems fallback:', genericItems.map(function(i){ return i.name+'('+i.qty+')'; }), '→ audiencePerShow:', audiencePerShow);
+        console.log('[BTS Sponsors] genericItems fallback:', genericItems.map(function(i){ return i.name+'('+itemVal(i)+')'; }), '→ audiencePerShow:', audiencePerShow);
       }
       var totalAudience = audiencePerShow > 0 && performanceCount > 0 ? audiencePerShow * performanceCount : 0;
       console.log('[BTS Sponsors] derived → performances:', performanceCount, 'audiencePerShow:', audiencePerShow, 'totalAudience:', totalAudience);
