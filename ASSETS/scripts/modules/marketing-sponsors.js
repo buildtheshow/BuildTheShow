@@ -1268,7 +1268,8 @@
     ]).then(function(results) {
       var events = results[0] || [];
       var ticketItems = results[1] || [];
-      console.log('[BTS Sponsors] deriveSponsorStats — budget_items returned:', ticketItems.length, 'items', ticketItems.map(function(i){ return i.name + '(' + i.qty + ')'; }));
+      console.log('[BTS Sponsors] deriveSponsorStats — budget_items returned:', ticketItems.length, 'items');
+      console.log('[BTS Sponsors] item names+qty:', ticketItems.map(function(i){ return '"' + i.name + '"=' + i.qty; }).join(', '));
       var performanceCount = events.length;
       if (!performanceCount) {
         var showsItem = ticketItems.find ? ticketItems.find(function(it){ return /how many shows|number of shows/i.test(it.name || ''); }) : null;
@@ -1277,6 +1278,7 @@
       var seatsItem = ticketItems.find ? ticketItems.find(function(it){ return /how many seats|seats per show/i.test(it.name || ''); }) : null;
       var attendItem = ticketItems.find ? ticketItems.find(function(it){ return /expected attendance/i.test(it.name || ''); }) : null;
       var totalAudienceItem = ticketItems.find ? ticketItems.find(function(it){ return /total audience/i.test(it.name || ''); }) : null;
+      console.log('[BTS Sponsors] seatsItem:', seatsItem ? '"'+seatsItem.name+'"='+seatsItem.qty : 'NOT FOUND', '| attendItem:', attendItem ? '"'+attendItem.name+'"='+attendItem.qty : 'NOT FOUND');
       var capacity = seatsItem ? (Number(seatsItem.qty) || 0) : 0;
       var pct = attendItem ? Math.min(100, Math.max(0, Number(attendItem.qty) || 0)) / 100 : 1;
       var audiencePerShow = capacity > 0 ? Math.round(capacity * pct) : 0;
