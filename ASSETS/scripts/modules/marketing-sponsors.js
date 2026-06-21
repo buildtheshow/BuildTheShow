@@ -1066,6 +1066,7 @@
 
   var _editorScrollHandler = null;
   var _editorFixedResizeHandler = null;
+  var _previewScaleObs = null;
 
   function setupEditorFloat() {
     if (_editorScrollHandler) return;
@@ -1130,8 +1131,9 @@
     if (next === 'publicpage') {
       requestAnimationFrame(function () {
         setupEditorFloat();
+        initPreviewScaling();
         if (!_editorFixedResizeHandler) {
-          _editorFixedResizeHandler = function () { teardownEditorFloat(); requestAnimationFrame(setupEditorFloat); };
+          _editorFixedResizeHandler = function () { teardownEditorFloat(); requestAnimationFrame(function () { setupEditorFloat(); initPreviewScaling(); }); };
           window.addEventListener('resize', _editorFixedResizeHandler);
         }
       });
@@ -1766,26 +1768,37 @@
     if (publishButton) publishButton.hidden = !(published && SpnsState.publicPageHasDraftChanges);
   }
 
-  function resizePublicPreviewFrame() {
-    var frame = document.getElementById('spn-public-preview-frame');
+  function scalePreviewFrame() {
     var shell = document.getElementById('spn-public-preview-shell');
-    if (!frame || !shell) return;
-    try {
-      var doc = frame.contentDocument || frame.contentWindow.document;
-      if (!doc || !doc.body) return;
-      var nav     = doc.getElementById('spp-nav');
-      var content = doc.getElementById('spp-content');
-      var navH    = nav     ? nav.offsetHeight     : 0;
-      var contentH = content ? content.offsetHeight : 0;
-      var h = Math.max(400, navH + contentH);
-      shell.style.height = h + 'px';
-      frame.style.height = h + 'px';
-    } catch (e) { /* cross-origin guard */ }
+    var frame = document.getElementById('spn-public-preview-frame');
+    if (!shell || !frame) return;
+    var isMobile = shell.dataset.device === 'mobile';
+    var targetW = isMobile ? 390 : 1280;
+    var containerW = shell.offsetWidth;
+    var containerH = shell.offsetHeight;
+    if (!containerW || !containerH) return;
+    var scale = containerW / targetW;
+    frame.style.width = targetW + 'px';
+    frame.style.height = (containerH / scale) + 'px';
+    frame.style.transform = 'scale(' + scale + ')';
+    frame.style.transformOrigin = 'top left';
+    frame.style.left = isMobile ? Math.round((containerW - targetW * scale) / 2) + 'px' : '0';
+  }
+
+  function initPreviewScaling() {
+    if (_previewScaleObs) { _previewScaleObs.disconnect(); _previewScaleObs = null; }
+    var shell = document.getElementById('spn-public-preview-shell');
+    if (!shell) return;
+    scalePreviewFrame();
+    if (typeof ResizeObserver !== 'undefined') {
+      _previewScaleObs = new ResizeObserver(function () { scalePreviewFrame(); });
+      _previewScaleObs.observe(shell);
+    }
   }
 
   window.addEventListener('message', function (e) {
     if (e.origin === window.location.origin && e.data && e.data.type === 'bts-sponsor-page-ready') {
-      resizePublicPreviewFrame();
+      scalePreviewFrame();
     }
   });
 
@@ -1805,7 +1818,7 @@
     var shell = document.getElementById('spn-public-preview-shell');
     if (shell) shell.dataset.device = device === 'mobile' ? 'mobile' : 'desktop';
     document.querySelectorAll('[data-public-device]').forEach(function (button) { button.classList.toggle('active', button.dataset.publicDevice === device); });
-    setTimeout(resizePublicPreviewFrame, 100);
+    setTimeout(scalePreviewFrame, 100);
   }
 
   function updatePublicPageStatus() {
@@ -2252,7 +2265,7 @@
             '<div class="spn-public-builder">' +
               '<div class="spn-public-builder-editor"><div id="spn-public-editor"></div><div class="spn-public-stats-grid" id="spn-public-stats-grid" hidden></div></div>' +
               '<aside class="spn-public-builder-preview"><div class="spn-public-preview-toolbar"><span><strong>Here\'s how your page looks</strong><small>This is a preview. Publish when you are happy with it.</small></span><div class="spn-public-preview-controls"><div class="spn-public-builder-actions"><span class="spn-public-draft-status" id="spn-public-draft-status" role="status" aria-live="polite" hidden></span><button type="button" class="spn-btn spn-btn--ghost spn-public-draft-btn" id="spn-public-save-draft" onclick="MarketingSponsorsModule.savePublicPage(false)" disabled>Save Draft</button><button type="button" class="spn-btn spn-btn--primary" id="spn-public-publish-changes" onclick="MarketingSponsorsModule.savePublicPage(true)" hidden>Publish Changes</button></div><div class="spn-public-device-controls"><button type="button" class="spn-public-device active" data-public-device="desktop" onclick="MarketingSponsorsModule.setPublicPreviewDevice(\'desktop\')">Desktop</button><button type="button" class="spn-public-device" data-public-device="mobile" onclick="MarketingSponsorsModule.setPublicPreviewDevice(\'mobile\')">Mobile</button></div></div></div>' +
-                '<div class="spn-public-preview-frame-shell" id="spn-public-preview-shell" data-device="desktop"><iframe id="spn-public-preview-frame" title="Public sponsor page preview" src="/PUBLIC/sponsors.html?prod=' + encodeURIComponent(SpnsState.prodId) + '&preview=1&v=sponsor-labelled-ad-shadow-20260620" onload="MarketingSponsorsModule.refreshPublicPreview()"></iframe></div>' +
+                '<div class="spn-public-preview-frame-shell" id="spn-public-preview-shell" data-device="desktop"><iframe id="spn-public-preview-frame" title="Public sponsor page preview" src="/PUBLIC/sponsors.html?prod=' + encodeURIComponent(SpnsState.prodId) + '&preview=1&v=sponsor-labelled-ad-shadow-20260620" onload="MarketingSponsorsModule.refreshPublicPreview();MarketingSponsorsModule.scalePreviewFrame()"></iframe></div>' +
               '</aside>' +
             '</div>' +
           '</div>' +
@@ -2415,6 +2428,7 @@
 
     destroy: function () {
       teardownEditorFloat();
+      if (_previewScaleObs) { _previewScaleObs.disconnect(); _previewScaleObs = null; }
       SpnsState.prodId       = null;
       SpnsState.businesses   = [];
       SpnsState.ads          = [];
@@ -2472,6 +2486,7 @@
     movePublicSection: movePublicSection,
     resetPublicSectionOrder: resetPublicSectionOrder,
     setPublicPreviewDevice: setPublicPreviewDevice,
+    scalePreviewFrame: scalePreviewFrame,
     refreshPublicPreview: schedulePublicPagePreview,
   };
 })();
