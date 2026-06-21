@@ -1269,21 +1269,27 @@
       var events = results[0] || [];
       var ticketItems = results[1] || [];
       var performanceCount = events.length;
+      // Budget wizard saves items with labels like "How many shows?" (kind:number)
       if (!performanceCount) {
-        var showsItem = ticketItems.find ? ticketItems.find(function(it){ return /number of shows/i.test(it.name || ''); }) : null;
+        var showsItem = ticketItems.find ? ticketItems.find(function(it){ return /how many shows|number of shows/i.test(it.name || ''); }) : null;
         performanceCount = showsItem ? (Number(showsItem.qty) || 0) : 0;
       }
-      var seatsItem = ticketItems.find ? ticketItems.find(function(it){ return /seats per show/i.test(it.name || ''); }) : null;
+      // "How many seats?" is the wizard label; fall back to legacy "seats per show"
+      var seatsItem = ticketItems.find ? ticketItems.find(function(it){ return /how many seats|seats per show/i.test(it.name || ''); }) : null;
+      // "Expected attendance" is stored as a percent (e.g. qty=80 means 80%)
       var attendItem = ticketItems.find ? ticketItems.find(function(it){ return /expected attendance/i.test(it.name || ''); }) : null;
+      // "Total audience expected" (from concessions wizard) is already the full audience number
+      var totalAudienceItem = ticketItems.find ? ticketItems.find(function(it){ return /total audience/i.test(it.name || ''); }) : null;
       var capacity = seatsItem ? (Number(seatsItem.qty) || 0) : 0;
       var pct = attendItem ? Math.min(100, Math.max(0, Number(attendItem.qty) || 0)) / 100 : 1;
       var audiencePerShow = capacity > 0 ? Math.round(capacity * pct) : 0;
-      if (!audiencePerShow) {
-        var perShowItems = ticketItems.filter(function(it){ return /tickets per show/i.test(it.name || ''); });
-        audiencePerShow = perShowItems.reduce(function(s,it){ return s + (Number(it.qty)||0); }, 0);
+      // Fallback: "Total audience expected" ÷ show count
+      if (!audiencePerShow && totalAudienceItem && performanceCount > 0) {
+        audiencePerShow = Math.round((Number(totalAudienceItem.qty) || 0) / performanceCount);
       }
+      // Fallback: sum ticket line items (Adult Tickets, Student Tickets, etc.) ÷ show count
       if (!audiencePerShow && performanceCount > 0) {
-        var genericItems = ticketItems.filter(function(it){ return /ticket|admission|adult|student|senior|child/i.test(it.name||'') && !/per show|number of shows|seats per show|expected/i.test(it.name||''); });
+        var genericItems = ticketItems.filter(function(it){ return /ticket|admission|adult|student|senior|child|season pass/i.test(it.name||'') && !/how many|number of|seats per|expected|total audience/i.test(it.name||''); });
         var totalQty = genericItems.reduce(function(s,it){ return s+(Number(it.qty)||0); }, 0);
         audiencePerShow = totalQty > 0 ? Math.round(totalQty / performanceCount) : 0;
       }
