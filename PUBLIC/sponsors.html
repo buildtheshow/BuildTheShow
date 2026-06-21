@@ -102,10 +102,15 @@
     .spp-info-h { font-size: 0.82rem; font-weight: 700; color: #6b5f8a; line-height: 1.4; margin: 0 0 0.65rem; }
     .spp-info-card--programme .spp-info-h { max-width: 58%; }
     .spp-info-accent-line { width: 26px; height: 3px; background: #769e7b; border-radius: 2px; margin-bottom: 1rem; }
-    .spp-perf-dates-title { font-size: 0.6rem; font-weight: 950; letter-spacing: 0.12em; text-transform: uppercase; color: #572e88; margin: 0 0 0.6rem; }
-    .spp-perf-date-row { display: flex; align-items: center; justify-content: space-between; padding: 0.5rem 0; border-bottom: 1px solid rgba(87,46,136,0.08); font-size: 0.82rem; font-weight: 700; color: #1a1530; gap: 1rem; }
-    .spp-perf-date-row:last-child { border-bottom: none; }
+    .spp-perf-dates-title { font-size: 0.58rem; font-weight: 950; letter-spacing: 0.13em; text-transform: uppercase; color: #572e88; margin: 0 0 0.55rem; }
     .spp-perf-dates-wrap { margin-bottom: 1rem; }
+    .spp-perf-pill { display: flex; align-items: center; gap: 0.75rem; padding: 0.6rem 0.85rem; background: rgba(87,46,136,0.06); border-radius: 10px; margin-bottom: 0.38rem; border: 1px solid rgba(87,46,136,0.1); }
+    .spp-perf-pill:last-child { margin-bottom: 0; }
+    .spp-perf-pill-dot { width: 7px; height: 7px; border-radius: 50%; background: #572e88; flex-shrink: 0; }
+    .spp-perf-pill-info { flex: 1; min-width: 0; }
+    .spp-perf-pill-dow { font-size: 0.56rem; font-weight: 950; letter-spacing: 0.11em; text-transform: uppercase; color: #572e88; display: block; line-height: 1.2; }
+    .spp-perf-pill-date { font-size: 0.8rem; font-weight: 700; color: #1a1530; }
+    .spp-perf-pill-time { font-size: 0.8rem; font-weight: 950; color: #572e88; white-space: nowrap; }
     .spp-info-body { color: #3d3560; font-size: 0.88rem; line-height: 1.6; margin: 0 0 1rem; }
     .spp-info-illus { position: absolute; right: 1.25rem; top: 1.25rem; width: 148px; pointer-events: none; opacity: 0.92; }
     .spp-info-illus img { width: 100%; display: block; }
@@ -575,7 +580,6 @@
                 <div class="spp-timeline-val" id="spp-keydate-sponsor">TBC</div>
               </div>
             </div>
-            <a href="#spp-steps-section" class="spp-timeline-cta">View Full Sponsor Timeline <span>&rarr;</span></a>
           </div>
 
         </div>
@@ -1002,16 +1006,54 @@
           .eq('event_type', 'performance')
           .order('start_time', { ascending: true });
         if (!data || !data.length) return;
-        const fmtDT = s => {
+        const fmtParts = s => {
           const d = new Date((s || '').slice(0, 19));
-          const date = new Intl.DateTimeFormat('en-CA', { weekday:'short', month:'short', day:'numeric' }).format(d);
-          const time = new Intl.DateTimeFormat('en-CA', { hour:'numeric', minute:'2-digit', hour12:true }).format(d);
-          return date + ' · ' + time;
+          const dow  = new Intl.DateTimeFormat('en-CA', { weekday: 'long' }).format(d);
+          const date = new Intl.DateTimeFormat('en-CA', { month: 'short', day: 'numeric', year: 'numeric' }).format(d);
+          const time = new Intl.DateTimeFormat('en-CA', { hour: 'numeric', minute: '2-digit', hour12: true }).format(d);
+          return { dow, date, time };
         };
-        wrap.innerHTML = '<div class="spp-perf-dates-title">Show performances</div>' +
-          data.map(e => `<div class="spp-perf-date-row"><span>${esc(e.title || 'Performance')}</span><span>${fmtDT(e.start_time)}</span></div>`).join('');
+        wrap.innerHTML = '<div class="spp-perf-dates-title">Show Performances</div>' +
+          data.map(e => {
+            const { dow, date, time } = fmtParts(e.start_time);
+            return `<div class="spp-perf-pill"><div class="spp-perf-pill-dot"></div><div class="spp-perf-pill-info"><span class="spp-perf-pill-dow">${esc(dow)}</span><span class="spp-perf-pill-date">${esc(date)}</span></div><span class="spp-perf-pill-time">${esc(time)}</span></div>`;
+          }).join('');
         wrap.hidden = false;
       } catch(err) { console.warn('[sponsors] Could not load performance dates:', err); }
+    }
+
+    async function loadCalendarDeadlines(prodId) {
+      if (!prodId) return;
+      try {
+        const { data } = await sb.from('production_events')
+          .select('title,start_time,notes')
+          .eq('production_id', prodId)
+          .eq('event_type', 'deadline')
+          .order('start_time', { ascending: true });
+        if (!data || !data.length) return;
+        const areaRe = /\[bts:deadline_area:([^\]]+)\]/;
+        const fmtDate = s => {
+          const d = new Date((s || '').slice(0, 19));
+          return new Intl.DateTimeFormat('en-CA', { month: 'short', day: 'numeric', year: 'numeric' }).format(d);
+        };
+        const MAP = {
+          programme_ads_artwork:    'spp-keydate-artwork',
+          programme_ads_booking:    'spp-keydate-booking',
+          sponsors_confirmation:    'spp-keydate-sponsor',
+          programme_ads:            'spp-keydate-booking',
+          sponsors:                 'spp-keydate-sponsor',
+          sponsors_assets:          'spp-keydate-sponsor',
+        };
+        const filled = new Set();
+        data.forEach(ev => {
+          const match = areaRe.exec(ev.notes || '');
+          const area = match ? match[1] : '';
+          const elId = MAP[area];
+          if (!elId || filled.has(elId)) return;
+          const el = document.getElementById(elId);
+          if (el) { el.textContent = fmtDate(ev.start_time); filled.add(elId); }
+        });
+      } catch(err) { console.warn('[sponsors] Could not load calendar deadlines:', err); }
     }
 
     function mergePublicStats(manualStats, derivedStats) {
@@ -1254,6 +1296,7 @@
           loadDerivedPublicStats(production.id),
         ]);
         loadPerformanceDates(production.id);
+        loadCalendarDeadlines(production.id);
         organization = orgRes.data || {};
         const s = settingsRes.data || {};
         if (!settingsRes.data && new URLSearchParams(location.search).get('preview') !== '1') {
