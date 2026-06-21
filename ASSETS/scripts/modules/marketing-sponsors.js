@@ -20,11 +20,19 @@
   ];
 
   var DEFAULT_TIERS = [
-    { id: 'presenting', label: 'Presenting Sponsor', amount: 1000 },
-    { id: 'gold',       label: 'Gold Sponsor',       amount: 500  },
-    { id: 'silver',     label: 'Silver Sponsor',     amount: 250  },
-    { id: 'bronze',     label: 'Bronze Sponsor',     amount: 100  },
-    { id: 'friend',     label: 'Friend',             amount: 50   },
+    {
+      id: 'cherry-tree-lane',
+      label: 'Cherry Tree Lane Sponsor',
+      amount: 1000,
+      bullets: 'Full-page colour programme advertisement\nSponsor recognition in the programme\nRecognized on Rainbow Youth Theatre social media throughout the Mary Poppins Jr. season\nLogo on the Rainbow Youth Theatre website for the duration of the production\nAcknowledgement during opening remarks before each performance',
+    },
+    {
+      id: 'spoonful-of-sugar',
+      label: 'A Spoonful of Sugar Sponsor',
+      amount: 2000,
+      slots: 1,
+      bullets: 'Everything included in the Cherry Tree Lane Sponsor package, plus:\nLogo featured on the front cover of the official programme\nLogo on the Mary Poppins Jr. poster\nAcknowledgement on printed promotional materials\nTwo complimentary tickets to a performance',
+    },
   ];
 
   var PUBLIC_PAGE_COLORS = [
@@ -1197,6 +1205,8 @@
     document.getElementById('spn-tier-index').value = item ? String(i) : '';
     document.getElementById('spn-tier-name').value = item ? item.label : '';
     document.getElementById('spn-tier-amount').value = item ? item.amount : '';
+    document.getElementById('spn-tier-slots').value = item && item.slots != null ? item.slots : '';
+    document.getElementById('spn-tier-bullets').value = item ? (item.bullets || '') : '';
     document.getElementById('spn-tier-delete').hidden = !item;
     document.getElementById('spn-tier-modal').classList.add('open');
   }
@@ -1211,12 +1221,17 @@
     var existing = index >= 0 ? SpnsState.settings.tiers[index] : null;
     var label = document.getElementById('spn-tier-name').value.trim();
     var amount = Number(document.getElementById('spn-tier-amount').value);
+    var slotsRaw = document.getElementById('spn-tier-slots').value.trim();
+    var slots = slotsRaw !== '' ? Number(slotsRaw) : null;
+    var bullets = document.getElementById('spn-tier-bullets').value.trim();
     if (!label) { alert('Enter a sponsor tier name.'); return; }
     if (!Number.isFinite(amount) || amount < 0) { alert('Enter a valid default amount.'); return; }
     var item = Object.assign({}, existing || {}, {
       id: existing && existing.id || settingsSlug(label, 'sponsor-tier') + '-' + Date.now(),
       label: label,
       amount: amount,
+      bullets: bullets || '',
+      slots: slots,
     });
     if (index >= 0) SpnsState.settings.tiers[index] = item;
     else SpnsState.settings.tiers.push(item);
@@ -2193,6 +2208,10 @@
               '<div class="spn-field"><label>Tier Name *</label><input type="text" id="spn-tier-name" placeholder="Gold Sponsor" /></div>' +
               '<div class="spn-field"><label>Default Amount ($) *</label><input type="number" id="spn-tier-amount" min="0" step="0.01" placeholder="500.00" /></div>' +
             '</div>' +
+            '<div class="spn-row-2">' +
+              '<div class="spn-field"><label>Slots Available <span style="font-weight:400;opacity:.7">(leave blank for unlimited)</span></label><input type="number" id="spn-tier-slots" min="1" step="1" placeholder="e.g. 1" /></div>' +
+            '</div>' +
+            '<div class="spn-field"><label>Benefits <span style="font-weight:400;opacity:.7">(one per line)</span></label><textarea id="spn-tier-bullets" placeholder="Recognition in the programme&#10;Logo on website&#10;Two complimentary tickets" style="min-height:130px"></textarea></div>' +
             '<div class="spn-modal-footer spn-modal-footer--split">' +
               '<button type="button" class="spn-btn spn-btn--danger" id="spn-tier-delete" onclick="MarketingSponsorsModule.deleteTier()">Remove Tier</button>' +
               '<div class="spn-modal-footer-group"><button type="button" class="spn-btn spn-btn--ghost" onclick="MarketingSponsorsModule.closeTierModal()">Cancel</button><button type="button" class="spn-btn spn-btn--primary" onclick="MarketingSponsorsModule.saveTier()">Save Tier</button></div>' +
