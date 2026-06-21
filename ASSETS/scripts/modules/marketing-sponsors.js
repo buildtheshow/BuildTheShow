@@ -148,6 +148,7 @@
       publicPageDraft: defaultPublicPage(),
     };
     SpnsState.posterUrl = null;
+    SpnsState.previewContentH = 4000;
     SpnsState.loaded = {};
     SpnsState.publicPageDirty = false;
     SpnsState.publicPageHasDraftChanges = false;
@@ -1064,59 +1065,11 @@
     '</div>';
   }
 
-  var _editorScrollHandler = null;
-  var _editorFixedResizeHandler = null;
   var _previewScaleObs = null;
-
-  function setupEditorFloat() {
-    if (_editorScrollHandler) return;
-    var editor = document.querySelector('.spn-public-builder-editor');
-    var builder = document.querySelector('.spn-public-builder');
-    if (!editor || !builder) return;
-    var rect = editor.getBoundingClientRect();
-    var naturalTop = rect.top + window.scrollY;
-    var editorLeft = rect.left;
-    var editorWidth = rect.width;
-    function updatePos() {
-      if (window.scrollY + 16 >= naturalTop) {
-        editor.style.position = 'fixed';
-        editor.style.top = '1rem';
-        editor.style.left = editorLeft + 'px';
-        editor.style.width = editorWidth + 'px';
-        editor.style.maxHeight = 'calc(100vh - 2rem)';
-        editor.style.overflowY = 'auto';
-        editor.style.zIndex = '200';
-        builder.style.paddingLeft = (editorWidth + 20) + 'px';
-      } else {
-        editor.style.position = '';
-        editor.style.top = '';
-        editor.style.left = '';
-        editor.style.width = '';
-        editor.style.maxHeight = '';
-        editor.style.overflowY = '';
-        editor.style.zIndex = '';
-        builder.style.paddingLeft = '';
-      }
-      requestAnimationFrame(scalePreviewFrame);
-    }
-    _editorScrollHandler = updatePos;
-    window.addEventListener('scroll', _editorScrollHandler, { passive: true });
-    updatePos();
-  }
-
-  function teardownEditorFloat() {
-    var editor = document.querySelector('.spn-public-builder-editor');
-    var builder = document.querySelector('.spn-public-builder');
-    if (_editorScrollHandler) { window.removeEventListener('scroll', _editorScrollHandler); _editorScrollHandler = null; }
-    if (_editorFixedResizeHandler) { window.removeEventListener('resize', _editorFixedResizeHandler); _editorFixedResizeHandler = null; }
-    if (editor) { editor.style.position = ''; editor.style.top = ''; editor.style.left = ''; editor.style.width = ''; editor.style.maxHeight = ''; editor.style.overflowY = ''; editor.style.zIndex = ''; }
-    if (builder) builder.style.paddingLeft = '';
-  }
 
   function switchSettingsTab(name) {
     var valid = ['sizes', 'tiers', 'deadlines', 'publicpage'];
     var next = valid.indexOf(name) >= 0 ? name : 'sizes';
-    teardownEditorFloat();
     if (next === 'publicpage') renderPublicPageEditor();
     document.querySelectorAll('.spn-settings-tab').forEach(function (button) {
       var active = button.dataset.settingsPanel === next;
@@ -1130,14 +1083,7 @@
     var savebar = document.getElementById('spn-settings-savebar');
     if (savebar) savebar.hidden = next === 'publicpage';
     if (next === 'publicpage') {
-      requestAnimationFrame(function () {
-        setupEditorFloat();
-        initPreviewScaling();
-        if (!_editorFixedResizeHandler) {
-          _editorFixedResizeHandler = function () { teardownEditorFloat(); requestAnimationFrame(function () { setupEditorFloat(); initPreviewScaling(); }); };
-          window.addEventListener('resize', _editorFixedResizeHandler);
-        }
-      });
+      requestAnimationFrame(function () { initPreviewScaling(); });
     }
   }
 
@@ -1771,18 +1717,25 @@
 
   function scalePreviewFrame() {
     var shell = document.getElementById('spn-public-preview-shell');
+    var scaler = document.getElementById('spn-preview-scaler');
     var frame = document.getElementById('spn-public-preview-frame');
-    if (!shell || !frame) return;
+    if (!shell || !scaler || !frame) return;
     var isMobile = shell.dataset.device === 'mobile';
     var targetW = isMobile ? 390 : 1280;
     var containerW = shell.offsetWidth;
-    var containerH = shell.offsetHeight;
-    if (!containerW || !containerH) return;
+    if (!containerW) return;
     var scale = containerW / targetW;
+    var contentH = SpnsState.previewContentH || 4000;
+    var scaledH = Math.round(contentH * scale);
+    scaler.style.width = containerW + 'px';
+    scaler.style.height = scaledH + 'px';
+    scaler.style.position = 'relative';
     frame.style.width = targetW + 'px';
-    frame.style.height = (containerH / scale) + 'px';
+    frame.style.height = contentH + 'px';
     frame.style.transform = 'scale(' + scale + ')';
     frame.style.transformOrigin = 'top left';
+    frame.style.position = 'absolute';
+    frame.style.top = '0';
     frame.style.left = isMobile ? Math.round((containerW - targetW * scale) / 2) + 'px' : '0';
   }
 
@@ -1799,6 +1752,7 @@
 
   window.addEventListener('message', function (e) {
     if (e.origin === window.location.origin && e.data && e.data.type === 'bts-sponsor-page-ready') {
+      if (e.data.height) SpnsState.previewContentH = e.data.height;
       scalePreviewFrame();
     }
   });
@@ -2266,7 +2220,7 @@
             '<div class="spn-public-builder">' +
               '<div class="spn-public-builder-editor"><div id="spn-public-editor"></div><div class="spn-public-stats-grid" id="spn-public-stats-grid" hidden></div></div>' +
               '<aside class="spn-public-builder-preview"><div class="spn-public-preview-toolbar"><span><strong>Here\'s how your page looks</strong><small>This is a preview. Publish when you are happy with it.</small></span><div class="spn-public-preview-controls"><div class="spn-public-builder-actions"><span class="spn-public-draft-status" id="spn-public-draft-status" role="status" aria-live="polite" hidden></span><button type="button" class="spn-btn spn-btn--ghost spn-public-draft-btn" id="spn-public-save-draft" onclick="MarketingSponsorsModule.savePublicPage(false)" disabled>Save Draft</button><button type="button" class="spn-btn spn-btn--primary" id="spn-public-publish-changes" onclick="MarketingSponsorsModule.savePublicPage(true)" hidden>Publish Changes</button></div><div class="spn-public-device-controls"><button type="button" class="spn-public-device active" data-public-device="desktop" onclick="MarketingSponsorsModule.setPublicPreviewDevice(\'desktop\')">Desktop</button><button type="button" class="spn-public-device" data-public-device="mobile" onclick="MarketingSponsorsModule.setPublicPreviewDevice(\'mobile\')">Mobile</button></div></div></div>' +
-                '<div class="spn-public-preview-frame-shell" id="spn-public-preview-shell" data-device="desktop"><iframe id="spn-public-preview-frame" title="Public sponsor page preview" src="/PUBLIC/sponsors.html?prod=' + encodeURIComponent(SpnsState.prodId) + '&preview=1&v=sponsor-labelled-ad-shadow-20260620" onload="MarketingSponsorsModule.refreshPublicPreview();MarketingSponsorsModule.scalePreviewFrame()"></iframe></div>' +
+                '<div class="spn-public-preview-frame-shell" id="spn-public-preview-shell" data-device="desktop"><div id="spn-preview-scaler"><iframe id="spn-public-preview-frame" title="Public sponsor page preview" src="/PUBLIC/sponsors.html?prod=' + encodeURIComponent(SpnsState.prodId) + '&preview=1&v=two-panel-20260620" onload="MarketingSponsorsModule.refreshPublicPreview();MarketingSponsorsModule.scalePreviewFrame()"></iframe></div></div>' +
               '</aside>' +
             '</div>' +
           '</div>' +
@@ -2428,7 +2382,6 @@
     },
 
     destroy: function () {
-      teardownEditorFloat();
       if (_previewScaleObs) { _previewScaleObs.disconnect(); _previewScaleObs = null; }
       SpnsState.prodId       = null;
       SpnsState.businesses   = [];
