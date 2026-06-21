@@ -1097,6 +1097,7 @@
         editor.style.zIndex = '';
         builder.style.paddingLeft = '';
       }
+      requestAnimationFrame(scalePreviewFrame);
     }
     _editorScrollHandler = updatePos;
     window.addEventListener('scroll', _editorScrollHandler, { passive: true });
