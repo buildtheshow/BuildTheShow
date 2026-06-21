@@ -1299,9 +1299,17 @@
         { value: fmt(audiencePerShow),  label: 'Audience per show', subtext: 'Expected from the ticket budget',     color: '#769e7b', icon: 'Budgeting-tickets.svg' },
         { value: fmt(totalAudience),    label: 'Total audience',    subtext: 'Estimated across all performances',   color: '#efab45', icon: 'organisation-members.svg' },
       ];
+      var hasRealValue = [performanceCount, audiencePerShow, totalAudience].some(function(n){ return n > 0; });
       if (!SpnsState.settings.publicStats || !SpnsState.settings.publicStats.length) {
         SpnsState.settings.publicStats = derived;
         schedulePublicPagePreview(false);
+        // Persist so the public page (unauthenticated) can read them via get_public_sponsor_page
+        // Budget tables are RLS-protected and can't be queried without auth on the public page.
+        if (hasRealValue) {
+          var payload = publicPageSettingsPayload();
+          payload.publicStats = derived;
+          persistSponsorSettings(payload, '').catch(function(){});
+        }
       }
     }).catch(function(){});
   }
