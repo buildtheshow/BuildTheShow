@@ -1264,15 +1264,10 @@
     var h = sponsorHeaders();
     return Promise.all([
       fetch(base + 'production_events?production_id=eq.' + encodeURIComponent(prodId) + '&event_type=eq.performance&select=id', { headers: h }).then(function(r){ return r.ok ? r.json() : []; }).catch(function(){ return []; }),
-      fetch(base + 'budget_categories?production_id=eq.' + encodeURIComponent(prodId) + '&select=id,name,type', { headers: h }).then(function(r){ return r.ok ? r.json() : []; }).catch(function(){ return []; }),
-      fetch(base + 'budget_items?production_id=eq.' + encodeURIComponent(prodId) + '&select=name,category_id,qty', { headers: h }).then(function(r){ return r.ok ? r.json() : []; }).catch(function(){ return []; }),
+      fetch(base + 'budget_items?production_id=eq.' + encodeURIComponent(prodId) + '&select=name,qty', { headers: h }).then(function(r){ return r.ok ? r.json() : []; }).catch(function(){ return []; }),
     ]).then(function(results) {
       var events = results[0] || [];
-      var cats = results[1] || [];
-      var items = results[2] || [];
-      var ticketCatIds = {};
-      cats.filter(function(c){ return c.type === 'income' && /ticket|admission|box office/i.test(c.name || ''); }).forEach(function(c){ ticketCatIds[c.id] = true; });
-      var ticketItems = items.filter(function(it){ return ticketCatIds[it.category_id]; });
+      var ticketItems = results[1] || [];
       var performanceCount = events.length;
       if (!performanceCount) {
         var showsItem = ticketItems.find ? ticketItems.find(function(it){ return /number of shows/i.test(it.name || ''); }) : null;
