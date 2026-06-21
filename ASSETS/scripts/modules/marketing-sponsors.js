@@ -2016,21 +2016,26 @@
 
   function addPastPoster() {
     var input = document.createElement('input');
-    input.type = 'file'; input.accept = 'image/jpeg,image/png,image/webp';
+    input.type = 'file'; input.accept = 'image/jpeg,image/png,image/webp'; input.multiple = true;
     input.onchange = function () {
-      var file = input.files[0]; if (!file) return;
-      var path = SpnsState.prodId + '/past-posters/' + Date.now() + '_' + file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
-      fetch(SUPABASE_URL + '/storage/v1/object/' + STORAGE_BUCKET + '/' + path, { method: 'POST', headers: sponsorHeaders({ 'Content-Type': file.type }), body: file })
-        .then(function (r) { if (!r.ok) return r.text().then(function (t) { throw new Error(t); }); return SUPABASE_URL + '/storage/v1/object/public/' + STORAGE_BUCKET + '/' + path; })
-        .then(function (url) {
-          var page = collectPublicPageEditor();
-          page.pastPosters.push(url);
-          SpnsState.settings.publicPageDraft = page;
-          schedulePublicPagePreview(true);
-          renderPublicPageEditor();
-          markPublicPageDirty();
-        })
-        .catch(function (e) { sponsorNotify('Poster upload failed: ' + e.message, true); });
+      var files = Array.from(input.files); if (!files.length) return;
+      var page = collectPublicPageEditor();
+      var MAX = 10;
+      var slots = MAX - page.pastPosters.length;
+      if (slots <= 0) { sponsorNotify('You already have 10 posters — remove one first.', true); return; }
+      files = files.slice(0, slots);
+      Promise.all(files.map(function (file) {
+        var path = SpnsState.prodId + '/past-posters/' + Date.now() + '_' + file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+        return fetch(SUPABASE_URL + '/storage/v1/object/' + STORAGE_BUCKET + '/' + path, { method: 'POST', headers: sponsorHeaders({ 'Content-Type': file.type }), body: file })
+          .then(function (r) { if (!r.ok) return r.text().then(function (t) { throw new Error(t); }); return SUPABASE_URL + '/storage/v1/object/public/' + STORAGE_BUCKET + '/' + path; });
+      })).then(function (urls) {
+        var page2 = collectPublicPageEditor();
+        urls.forEach(function (url) { page2.pastPosters.push(url); });
+        SpnsState.settings.publicPageDraft = page2;
+        schedulePublicPagePreview(true);
+        renderPublicPageEditor();
+        markPublicPageDirty();
+      }).catch(function (e) { sponsorNotify('Poster upload failed: ' + e.message, true); });
     };
     input.click();
   }
