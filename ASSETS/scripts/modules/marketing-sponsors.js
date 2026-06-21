@@ -35,6 +35,18 @@
     },
   ];
 
+  function cloneDefaultTiers() {
+    return DEFAULT_TIERS.map(function (tier) { return Object.assign({}, tier); });
+  }
+
+  function normalizeSponsorTiers(tiers) {
+    if (!Array.isArray(tiers) || !tiers.length) return cloneDefaultTiers();
+    var labels = tiers.map(function (tier) { return String(tier && tier.label || '').trim().toLowerCase(); });
+    var legacyLabels = ['presenting sponsor', 'gold sponsor', 'silver sponsor', 'bronze sponsor', 'friend'];
+    var isLegacyDefault = legacyLabels.every(function (label) { return labels.indexOf(label) >= 0; });
+    return isLegacyDefault ? cloneDefaultTiers() : tiers;
+  }
+
   var PUBLIC_PAGE_COLORS = [
     { name: 'Purple', value: '#572e88' }, { name: 'Light blue', value: '#74a2b4' },
     { name: 'Blue', value: '#476aaa' }, { name: 'Green', value: '#769e7b' },
@@ -128,7 +140,7 @@
     SpnsState.deliverables = [];
     SpnsState.settings = {
       adSizes:     DEFAULT_AD_SIZES.map(function (s) { return Object.assign({}, s); }),
-      tiers:       DEFAULT_TIERS.map(function (t) { return Object.assign({}, t); }),
+      tiers:       cloneDefaultTiers(),
       publicStats: [],
       publicPage: defaultPublicPage(),
       publicPageDraft: defaultPublicPage(),
@@ -679,7 +691,7 @@
           if (data && data[0] && data[0].settings) {
             var s = data[0].settings;
             if (s.adSizes     && s.adSizes.length)     SpnsState.settings.adSizes     = s.adSizes;
-            if (s.tiers       && s.tiers.length)       SpnsState.settings.tiers       = s.tiers;
+            if (s.tiers       && s.tiers.length)       SpnsState.settings.tiers       = normalizeSponsorTiers(s.tiers);
             if (s.publicStats && s.publicStats.length) SpnsState.settings.publicStats = s.publicStats;
           }
         }).catch(function () { SpnsState.loaded.settings = true; });
@@ -965,7 +977,7 @@
       if (data && data[0] && data[0].settings) {
         var s = data[0].settings;
         if (s.adSizes && s.adSizes.length) SpnsState.settings.adSizes = s.adSizes;
-        if (s.tiers   && s.tiers.length)   SpnsState.settings.tiers   = s.tiers;
+        if (s.tiers   && s.tiers.length)   SpnsState.settings.tiers   = normalizeSponsorTiers(s.tiers);
         SpnsState.settings.publicStats = Array.isArray(s.publicStats) ? s.publicStats : [];
         SpnsState.settings.publicPage = mergePublicPage(s.publicPage);
         if (!SpnsState.publicPageDirty) {
