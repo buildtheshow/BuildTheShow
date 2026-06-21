@@ -666,10 +666,10 @@
     const esc = v => String(v == null ? '' : v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 
     const STAT_DEFAULTS = [
-      { icon: 'Budgeting-tickets.svg',    color: '#572e88', valueKey: 'audience',     label: 'Audience Members',  subtext: 'Expected across all performances' },
-      { icon: 'Home.svg',                 color: '#769e7b', valueKey: 'families',      label: 'Local Families',    subtext: 'From across the community' },
-      { icon: 'Performer.svg',            color: '#efab45', valueKey: 'performers',    label: 'Young Performers',  subtext: 'Talented local youth on stage' },
-      { icon: 'navproductioncalendar.svg',color: '#d1523d', valueKey: 'performances',  label: 'Live Performances', subtext: 'At our performance venue' },
+      { icon: 'navproductioncalendar.svg',color: '#572e88', valueKey: 'performances',    label: 'Performances',      subtext: 'Pulled from the production schedule' },
+      { icon: 'Budgeting-tickets.svg',    color: '#769e7b', valueKey: 'audiencePerShow', label: 'Audience per show', subtext: 'Estimated from the ticket budget' },
+      { icon: 'organisation-members.svg', color: '#efab45', valueKey: 'totalAudience',   label: 'Total audience',    subtext: 'Estimated across all performances' },
+      { icon: 'Performer.svg',            color: '#d1523d', valueKey: 'castCrew',        label: 'Cast & crew',       subtext: 'People bringing the show to life' },
     ];
 
     const PUBLIC_PAGE_DEFAULT = {
@@ -765,6 +765,14 @@
     }
     function datePassed(v) { if (!v) return false; return Date.now() > new Date(v + 'T23:59:59').getTime(); }
     function formatDate(v) { if (!v) return ''; return new Intl.DateTimeFormat(undefined,{year:'numeric',month:'long',day:'numeric'}).format(new Date(v + 'T12:00:00')); }
+    function formatStatNumber(value) {
+      const n = Math.round(Number(value) || 0);
+      return n > 0 ? n.toLocaleString() : 'TBC';
+    }
+    function hasStatValue(stat) {
+      const value = String(stat && stat.value || '').trim();
+      return value && !/^tbc$/i.test(value);
+    }
 
     async function resolveProduction() {
       const route = routeInfo();
@@ -797,6 +805,55 @@
         if (data) { prod = data; break; }
       }
       return prod;
+    }
+
+    async function loadDerivedPublicStats(prodId) {
+      const emptyStats = STAT_DEFAULTS.map(def => ({ value: 'TBC', label: def.label, subtext: def.subtext, color: def.color, icon: def.icon }));
+      if (!prodId) return emptyStats;
+      try {
+        const [eventsRes, catsRes, itemsRes, castRes, teamRes] = await Promise.all([
+          sb.from('production_events').select('id').eq('production_id', prodId).eq('event_type', 'performance'),
+          sb.from('budget_categories').select('id,name,type,planned_cents').eq('production_id', prodId),
+          sb.from('budget_items').select('name,category_id,qty,unit_cost_cents,budgeted_cents').eq('production_id', prodId),
+          sb.from('cast_members').select('id', { count: 'exact', head: true }).eq('production_id', prodId),
+          sb.from('production_team_members').select('id', { count: 'exact', head: true }).eq('production_id', prodId),
+        ]);
+        const performanceCount = (eventsRes.data || []).length;
+        const categories = catsRes.data || [];
+        const items = itemsRes.data || [];
+        const ticketCategoryIds = new Set(categories
+          .filter(cat => cat.type === 'income' && /ticket|admission|box office/i.test(cat.name || ''))
+          .map(cat => cat.id));
+        const ticketItems = items.filter(item => ticketCategoryIds.has(item.category_id) || /ticket|admission|adult|student|senior|child|group/i.test(item.name || ''));
+        const ticketQty = ticketItems.reduce((sum, item) => sum + (Number(item.qty) || 0), 0);
+        const totalAudience = ticketQty > 0 ? ticketQty : 0;
+        const audiencePerShow = totalAudience > 0 && performanceCount > 0 ? Math.round(totalAudience / performanceCount) : 0;
+        const castCrew = (castRes.count || 0) + (teamRes.count || 0);
+        return [
+          { value: formatStatNumber(performanceCount), label: 'Performances', subtext: 'Pulled from the production schedule', color: '#572e88', icon: 'navproductioncalendar.svg' },
+          { value: formatStatNumber(audiencePerShow), label: 'Audience per show', subtext: 'Estimated from the ticket budget', color: '#769e7b', icon: 'Budgeting-tickets.svg' },
+          { value: formatStatNumber(totalAudience), label: 'Total audience', subtext: 'Estimated across all performances', color: '#efab45', icon: 'organisation-members.svg' },
+          { value: formatStatNumber(castCrew), label: 'Cast & crew', subtext: 'People bringing the show to life', color: '#d1523d', icon: 'Performer.svg' },
+        ];
+      } catch (err) {
+        console.warn('[sponsors] Could not derive audience stats:', err);
+        return emptyStats;
+      }
+    }
+
+    function mergePublicStats(manualStats, derivedStats) {
+      const manual = Array.isArray(manualStats) ? manualStats : [];
+      return STAT_DEFAULTS.map((def, i) => {
+        const derived = derivedStats[i] || {};
+        const custom = manual[i] || {};
+        return {
+          value: hasStatValue(custom) ? custom.value : (derived.value || 'TBC'),
+          label: custom.label || derived.label || def.label,
+          subtext: custom.subtext || derived.subtext || def.subtext,
+          color: custom.color || derived.color || def.color,
+          icon: custom.icon || derived.icon || def.icon,
+        };
+      });
     }
 
     function optionButton(label, price, payload, closed, showPrice = true) {
@@ -867,9 +924,9 @@
       if (!target) return;
       const stats = Array.isArray(settings.publicStats) && settings.publicStats.length ? settings.publicStats : [
         { value: 'TBC', label: 'Performances' },
-        { value: 'TBC', label: 'Seats per show' },
-        { value: 'TBC', label: 'Audience members' },
-        { value: 'TBC', label: 'Family members' },
+        { value: 'TBC', label: 'Audience per show' },
+        { value: 'TBC', label: 'Total audience' },
+        { value: 'TBC', label: 'Cast & crew' },
       ];
       target.innerHTML = stats.slice(0, 4).map(stat => `<div class="spp-reach-stat"><div class="spp-reach-value">${esc(stat.value || 'TBC')}</div><div class="spp-reach-label">${esc(stat.label || '')}</div></div>`).join('');
     }
@@ -999,9 +1056,10 @@
       try {
         production = await resolveProduction();
         if (!production) throw new Error('Production not found');
-        const [orgRes, settingsRes] = await Promise.all([
+        const [orgRes, settingsRes, derivedStats] = await Promise.all([
           sb.from('organizations').select('id,name,logo_url,email').eq('id', production.organization_id).maybeSingle(),
-          sb.rpc('get_public_sponsor_page', { p_production_id: production.id })
+          sb.rpc('get_public_sponsor_page', { p_production_id: production.id }),
+          loadDerivedPublicStats(production.id),
         ]);
         organization = orgRes.data || {};
         const s = settingsRes.data || {};
@@ -1013,7 +1071,7 @@
         settings.adSizes     = Array.isArray(s.adSizes)     ? s.adSizes     : [];
         settings.tiers       = Array.isArray(s.tiers)       ? s.tiers       : [];
         settings.deadlines   = s.deadlines   || {};
-        settings.publicStats = Array.isArray(s.publicStats) ? s.publicStats : [];
+        settings.publicStats = mergePublicStats(s.publicStats, derivedStats);
         publicPage = mergedPublicPage(s.publicPage);
         if (publicPage.published === false && new URLSearchParams(location.search).get('preview') !== '1') {
           const unavailable = document.getElementById('spp-loading');

@@ -1234,10 +1234,10 @@
   }
 
   var STAT_SLOT_DEFAULTS = [
-    { label: 'Audience Members',  subtext: 'Expected across all performances', color: '#572e88' },
-    { label: 'Local Families',    subtext: 'From across the community',         color: '#769e7b' },
-    { label: 'Young Performers',  subtext: 'Talented local youth on stage',     color: '#efab45' },
-    { label: 'Live Performances', subtext: 'At our performance venue',          color: '#d1523d' },
+    { label: 'Performances',      subtext: 'Pulled from the production schedule', color: '#572e88' },
+    { label: 'Audience per show', subtext: 'Estimated from the ticket budget',    color: '#769e7b' },
+    { label: 'Total audience',    subtext: 'Estimated across all performances',   color: '#efab45' },
+    { label: 'Cast & crew',       subtext: 'People bringing the show to life',    color: '#d1523d' },
   ];
 
   function renderPublicStatsAdmin() {
