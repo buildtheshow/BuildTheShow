@@ -1892,11 +1892,11 @@
   }
 
   function persistSponsorSettings(settings, message) {
-    return fetch(SUPABASE_URL + '/rest/v1/sponsor_settings', {
+    return fetch(SUPABASE_URL + '/rest/v1/sponsor_settings?on_conflict=production_id', {
       method: 'POST',
-      headers: sponsorHeaders({ 'Content-Type': 'application/json', Prefer: 'resolution=merge-duplicates,return=representation' }),
+      headers: sponsorHeaders({ 'Content-Type': 'application/json', Prefer: 'resolution=merge-duplicates,return=minimal' }),
       body: JSON.stringify({ production_id: SpnsState.prodId, settings: settings, updated_at: new Date().toISOString() }),
-    }).then(function (r) { if (!r.ok) return r.text().then(function (t) { throw new Error(t); }); return r.json(); }).then(function () { if (message) sponsorNotify(message); });
+    }).then(function (r) { if (!r.ok) return r.text().then(function (t) { throw new Error(t); }); }).then(function () { if (message) sponsorNotify(message); });
   }
 
   function savePublicPage(publish) {
