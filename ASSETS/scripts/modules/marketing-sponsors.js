@@ -1415,9 +1415,10 @@
     } else if (group.type === 'pastPostersList') {
       var posters = page.pastPosters || [];
       var listHtml = posters.length
-        ? '<div class="spn-past-poster-list">' + posters.map(function (url, idx) {
-            return '<div class="spn-past-poster-item">' +
-              '<img src="' + escHtml(url) + '" alt="Past poster ' + (idx + 1) + '" />' +
+        ? '<div class="spn-past-poster-list" id="spn-past-poster-list">' + posters.map(function (url, idx) {
+            return '<div class="spn-past-poster-item" draggable="true" data-poster-idx="' + idx + '">' +
+              '<img src="' + escHtml(url) + '" alt="Past poster ' + (idx + 1) + '" draggable="false" />' +
+              '<div class="spn-past-poster-drag-handle" title="Drag to reorder"><img src="/ASSETS/Images/Icons/drag-handle.svg" alt="" /></div>' +
               '<button type="button" class="spn-past-poster-remove" onclick="MarketingSponsorsModule.removePastPoster(' + idx + ')" title="Remove">&times;</button>' +
               '</div>';
           }).join('') + '</div>'
@@ -1586,6 +1587,59 @@
     };
     updatePublicPageStatus();
     schedulePublicPagePreview(false);
+    initPosterDrag();
+  }
+
+  function initPosterDrag() {
+    var list = document.getElementById('spn-past-poster-list');
+    if (!list) return;
+    var dragSrcIdx = null;
+    list.addEventListener('dragstart', function (e) {
+      var item = e.target.closest('[data-poster-idx]');
+      if (!item) return;
+      dragSrcIdx = Number(item.dataset.posterIdx);
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', String(dragSrcIdx));
+      item.classList.add('spn-poster-dragging');
+    });
+    list.addEventListener('dragend', function (e) {
+      var item = e.target.closest('[data-poster-idx]');
+      if (item) item.classList.remove('spn-poster-dragging');
+      list.querySelectorAll('.spn-poster-drag-over').forEach(function (el) { el.classList.remove('spn-poster-drag-over'); });
+    });
+    list.addEventListener('dragover', function (e) {
+      var item = e.target.closest('[data-poster-idx]');
+      if (!item || Number(item.dataset.posterIdx) === dragSrcIdx) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      list.querySelectorAll('.spn-poster-drag-over').forEach(function (el) { el.classList.remove('spn-poster-drag-over'); });
+      item.classList.add('spn-poster-drag-over');
+    });
+    list.addEventListener('dragleave', function (e) {
+      var item = e.target.closest('[data-poster-idx]');
+      if (item) item.classList.remove('spn-poster-drag-over');
+    });
+    list.addEventListener('drop', function (e) {
+      e.preventDefault();
+      var item = e.target.closest('[data-poster-idx]');
+      if (!item) return;
+      var destIdx = Number(item.dataset.posterIdx);
+      if (dragSrcIdx === null || dragSrcIdx === destIdx) return;
+      item.classList.remove('spn-poster-drag-over');
+      MarketingSponsorsModule.reorderPastPosters(dragSrcIdx, destIdx);
+    });
+  }
+
+  function reorderPastPosters(fromIdx, toIdx) {
+    var page = collectPublicPageEditor();
+    var posters = page.pastPosters;
+    if (fromIdx < 0 || fromIdx >= posters.length || toIdx < 0 || toIdx >= posters.length) return;
+    var moved = posters.splice(fromIdx, 1)[0];
+    posters.splice(toIdx, 0, moved);
+    SpnsState.settings.publicPageDraft = page;
+    schedulePublicPagePreview(true);
+    renderPublicPageEditor();
+    markPublicPageDirty();
   }
 
   function collectPublicPageEditor() {
@@ -2475,6 +2529,7 @@
     clearCurrentPosterOverride: clearCurrentPosterOverride,
     addPastPoster: addPastPoster,
     removePastPoster: removePastPoster,
+    reorderPastPosters: reorderPastPosters,
     setPublicSectionVisible: setPublicSectionVisible,
     editPublicSection: editPublicSection,
     backToPublicSections: backToPublicSections,
