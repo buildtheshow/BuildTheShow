@@ -1066,6 +1066,7 @@
   }
 
   var _previewScaleObs = null;
+  var autoSaveDraftTimer = null;
 
   function switchSettingsTab(name) {
     var valid = ['sizes', 'tiers', 'deadlines', 'publicpage'];
@@ -1698,21 +1699,34 @@
     SpnsState.publicPageHasDraftChanges = true;
     updatePublicPageDraftActions();
     updatePublicPageStatus();
+    clearTimeout(autoSaveDraftTimer);
+    autoSaveDraftTimer = setTimeout(function () { savePublicPage(false); }, 2000);
   }
 
   function updatePublicPageDraftActions() {
     var status = document.getElementById('spn-public-draft-status');
-    var saveButton = document.getElementById('spn-public-save-draft');
     var publishButton = document.getElementById('spn-public-publish-changes');
-    var published = SpnsState.settings.publicPage && SpnsState.settings.publicPage.published === true;
+    var hasDraft = SpnsState.publicPageHasDraftChanges;
     if (status) {
-      status.textContent = SpnsState.publicPageDirty
-        ? 'Unsaved changes'
-        : (SpnsState.publicPageHasDraftChanges ? (published ? 'Draft saved, not published' : 'Draft saved') : '');
-      status.hidden = !status.textContent;
+      if (publicSaveInFlight) {
+        status.textContent = 'Saving...';
+        status.hidden = false;
+      } else if (SpnsState.publicPageDirty) {
+        status.textContent = 'Saving...';
+        status.hidden = false;
+      } else if (hasDraft) {
+        status.textContent = 'Draft saved';
+        status.hidden = false;
+      } else {
+        status.textContent = '';
+        status.hidden = true;
+      }
     }
-    if (saveButton) saveButton.disabled = !SpnsState.publicPageDirty || publicSaveInFlight;
-    if (publishButton) publishButton.hidden = !(published && SpnsState.publicPageHasDraftChanges);
+    if (publishButton) {
+      publishButton.disabled = !hasDraft || publicSaveInFlight;
+      publishButton.hidden = false;
+      publishButton.classList.toggle('spn-btn--publish-ready', hasDraft && !publicSaveInFlight);
+    }
   }
 
   function scalePreviewFrame() {
@@ -2219,7 +2233,7 @@
           '<div class="spn-settings-panel" id="spn-settings-publicpage">' +
             '<div class="spn-public-builder">' +
               '<div class="spn-public-builder-editor"><div id="spn-public-editor"></div><div class="spn-public-stats-grid" id="spn-public-stats-grid" hidden></div></div>' +
-              '<aside class="spn-public-builder-preview"><div class="spn-public-preview-toolbar"><span><strong>Here\'s how your page looks</strong><small>This is a preview. Publish when you are happy with it.</small></span><div class="spn-public-preview-controls"><div class="spn-public-builder-actions"><span class="spn-public-draft-status" id="spn-public-draft-status" role="status" aria-live="polite" hidden></span><button type="button" class="spn-btn spn-btn--ghost spn-public-draft-btn" id="spn-public-save-draft" onclick="MarketingSponsorsModule.savePublicPage(false)" disabled>Save Draft</button><button type="button" class="spn-btn spn-btn--primary" id="spn-public-publish-changes" onclick="MarketingSponsorsModule.savePublicPage(true)" hidden>Publish Changes</button></div><div class="spn-public-device-controls"><button type="button" class="spn-public-device active" data-public-device="desktop" onclick="MarketingSponsorsModule.setPublicPreviewDevice(\'desktop\')">Desktop</button><button type="button" class="spn-public-device" data-public-device="mobile" onclick="MarketingSponsorsModule.setPublicPreviewDevice(\'mobile\')">Mobile</button></div></div></div>' +
+              '<aside class="spn-public-builder-preview"><div class="spn-public-preview-toolbar"><span><strong>Here\'s how your page looks</strong><small>This is a preview. Publish when you are happy with it.</small></span><div class="spn-public-preview-controls"><div class="spn-public-builder-actions"><span class="spn-public-draft-status" id="spn-public-draft-status" role="status" aria-live="polite" hidden></span><button type="button" class="spn-btn spn-btn--primary" id="spn-public-publish-changes" onclick="MarketingSponsorsModule.savePublicPage(true)" disabled>Publish Changes</button></div><div class="spn-public-device-controls"><button type="button" class="spn-public-device active" data-public-device="desktop" onclick="MarketingSponsorsModule.setPublicPreviewDevice(\'desktop\')">Desktop</button><button type="button" class="spn-public-device" data-public-device="mobile" onclick="MarketingSponsorsModule.setPublicPreviewDevice(\'mobile\')">Mobile</button></div></div></div>' +
                 '<div class="spn-public-preview-frame-shell" id="spn-public-preview-shell" data-device="desktop"><div id="spn-preview-scaler"><iframe id="spn-public-preview-frame" title="Public sponsor page preview" src="/PUBLIC/sponsors.html?prod=' + encodeURIComponent(SpnsState.prodId) + '&preview=1&v=two-panel-20260620" onload="MarketingSponsorsModule.refreshPublicPreview();MarketingSponsorsModule.scalePreviewFrame()"></iframe></div></div>' +
               '</aside>' +
             '</div>' +
@@ -2382,6 +2396,7 @@
     },
 
     destroy: function () {
+      clearTimeout(autoSaveDraftTimer); autoSaveDraftTimer = null;
       if (_previewScaleObs) { _previewScaleObs.disconnect(); _previewScaleObs = null; }
       SpnsState.prodId       = null;
       SpnsState.businesses   = [];
