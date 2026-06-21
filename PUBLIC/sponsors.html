@@ -212,8 +212,13 @@
     .spp-past-posters-kicker { color: inherit; opacity: 0.72; font-size: 0.65rem; font-weight: 950; letter-spacing: 0.14em; text-transform: uppercase; margin-bottom: 0.45rem; }
     .spp-past-posters h2 { margin: 0 0 0.45rem; color: inherit; font-size: 2rem; line-height: 1.1; letter-spacing: 0; }
     .spp-past-posters-copy { margin: 0; color: inherit; opacity: 0.78; font-size: 0.9rem; line-height: 1.55; }
-    .spp-past-posters-frame { width: 100%; border: 1.5px solid rgba(26,21,48,0.12); border-radius: 10px; overflow: hidden; background: #fff; box-shadow: 0 14px 34px rgba(26,21,48,0.12); }
-    .spp-past-posters-frame img { display: block; width: 100%; max-height: 330px; object-fit: cover; object-position: center; }
+    .spp-poster-fan-shell { width: 100%; overflow: hidden; padding: 2.5rem 0 0.5rem; }
+    .spp-poster-fan { position: relative; width: 100%; height: 240px; }
+    .spp-poster-item { position: absolute; bottom: 0; left: 50%; border-radius: 5px; overflow: hidden; box-shadow: 0 8px 22px rgba(26,21,48,0.3), 0 2px 6px rgba(26,21,48,0.15); }
+    .spp-poster-item img { display: block; width: 100%; height: 100%; object-fit: cover; }
+    .spp-poster-center { width: 152px; height: 220px; z-index: 20; transform: translateX(-50%) !important; box-shadow: 0 18px 48px rgba(26,21,48,0.45), 0 4px 14px rgba(26,21,48,0.25); }
+    .spp-poster-placeholder { display: flex; align-items: center; justify-content: center; background: rgba(26,21,48,0.08); }
+    .spp-poster-placeholder span { color: rgba(26,21,48,0.4); font-size: 0.7rem; font-weight: 800; text-align: center; text-transform: uppercase; letter-spacing: 0.06em; }
 
     /* ---- FOOTER ---- */
     .spp-footer { background: var(--spp-footer-color,#1a1530); padding: 2.5rem 0 0; }
@@ -323,7 +328,8 @@
       .spp-section-head h2 { font-size: 1.65rem; }
       .spp-past-posters { padding: 2rem 0; }
       .spp-past-posters h2 { font-size: 1.65rem; }
-      .spp-past-posters-frame img { max-height: 220px; }
+      .spp-poster-fan { height: 180px; transform: scale(0.75); transform-origin: center bottom; }
+      .spp-poster-fan-shell { padding: 1.5rem 0 0; height: calc(180px * 0.75 + 1.5rem); overflow: hidden; }
       .spp-grid { justify-items: stretch; }
       .sp-card { width: 100%; }
       .sp-card-visual img { height: clamp(230px,66vw,290px); }
@@ -343,6 +349,8 @@
       .sp-modal-actions .sp-btn { min-height: 44px; }
     }
     @media (max-width: 540px) {
+      .spp-poster-fan { transform: scale(0.52); transform-origin: center bottom; }
+      .spp-poster-fan-shell { height: calc(180px * 0.52 + 1rem); padding: 0.5rem 0 0; }
       .spp-hero-btns { flex-direction: column; }
       .spp-hero-btn { justify-content: center; }
       .spp-grid, #sp-ad-grid, .sp-fields { grid-template-columns: 1fr; }
@@ -606,8 +614,8 @@
             <h2 id="spp-past-posters-title">A look back at the shows sponsors helped bring to life</h2>
             <p class="spp-past-posters-copy" id="spp-past-posters-body">Share a visual snapshot of previous productions and the community your supporters are joining.</p>
           </div>
-          <div class="spp-past-posters-frame">
-            <img id="spp-past-posters-image" src="/ASSETS/Images/Decrotive/past-posters-template.png?v=20260620" alt="Past production posters" />
+          <div class="spp-poster-fan-shell">
+            <div class="spp-poster-fan" id="spp-poster-fan"></div>
           </div>
         </div>
       </section>
@@ -723,7 +731,7 @@
         content.heroSponsorButton = PUBLIC_PAGE_DEFAULT.content.heroSponsorButton;
         content.heroAdButton = PUBLIC_PAGE_DEFAULT.content.heroAdButton;
       }
-      return { published:value.published === true, posterUrl:value.posterUrl || '', pastPostersUrl:value.pastPostersUrl || PUBLIC_PAGE_DEFAULT.pastPostersUrl, contactEmail:value.contactEmail || '', content, colors:{...PUBLIC_PAGE_DEFAULT.colors,...(value.colors||{})}, sections };
+      return { published:value.published === true, posterUrl:value.posterUrl || '', currentPosterOverride:value.currentPosterOverride || '', pastPosters:Array.isArray(value.pastPosters)?value.pastPosters.slice():[], pastPostersUrl:value.pastPostersUrl || PUBLIC_PAGE_DEFAULT.pastPostersUrl, contactEmail:value.contactEmail || '', content, colors:{...PUBLIC_PAGE_DEFAULT.colors,...(value.colors||{})}, sections };
     }
 
     function inkFor(color) {
@@ -774,8 +782,56 @@
         if(byId.footer) contentRoot.appendChild(byId.footer);
       }
       const poster=document.getElementById('spp-poster'); if(poster) poster.src=publicPage.posterUrl || (production&&production.poster_url) || '/ASSETS/Images/Icons/Placeholder - Poster.svg';
-      const pastPosters=document.getElementById('spp-past-posters-image'); if(pastPosters) pastPosters.src=publicPage.pastPostersUrl || PUBLIC_PAGE_DEFAULT.pastPostersUrl;
+      buildPosterFan(publicPage);
       const contact=(publicPage.contactEmail || (organization&&organization.email) || ''); if(contact) document.getElementById('spp-contact-link').href='mailto:'+contact;
+    }
+
+    const FAN_LEFT = [
+      { dx:-140, dy:4,  rot:-8  },
+      { dx:-262, dy:14, rot:-16 },
+      { dx:-368, dy:27, rot:-23 },
+      { dx:-452, dy:43, rot:-29 },
+      { dx:-516, dy:62, rot:-33 },
+    ];
+    const FAN_RIGHT = [
+      { dx: 140, dy:4,  rot: 9  },
+      { dx: 262, dy:14, rot:17  },
+      { dx: 368, dy:27, rot:24  },
+      { dx: 452, dy:43, rot:28  },
+      { dx: 516, dy:62, rot:34  },
+    ];
+    const FAN_WIDTHS = [115, 105, 95, 87, 80];
+
+    function buildPosterFan(page) {
+      const shell = document.getElementById('spp-poster-fan');
+      if (!shell) return;
+      const currentSrc = page.currentPosterOverride || (production && production.poster_url) || '';
+      const posters = Array.isArray(page.pastPosters) ? page.pastPosters.slice(0, 10) : [];
+      const half = Math.ceil(posters.length / 2);
+      const leftPosters  = posters.slice(0, half).reverse();
+      const rightPosters = posters.slice(half);
+
+      let html = '';
+
+      leftPosters.forEach(function(url, i) {
+        const slot = FAN_LEFT[i]; if (!slot) return;
+        const w = FAN_WIDTHS[i]; const h = Math.round(w * 1.45);
+        html += `<div class="spp-poster-item" style="width:${w}px;height:${h}px;transform:translate(calc(-50% + ${slot.dx}px),${slot.dy}px) rotate(${slot.rot}deg);z-index:${15-i};"><img src="${esc(url)}" alt="" /></div>`;
+      });
+
+      if (currentSrc) {
+        html += `<div class="spp-poster-item spp-poster-center"><img src="${esc(currentSrc)}" alt="Current production poster" /></div>`;
+      } else {
+        html += `<div class="spp-poster-item spp-poster-center spp-poster-placeholder"><span>Current<br>Poster</span></div>`;
+      }
+
+      rightPosters.forEach(function(url, i) {
+        const slot = FAN_RIGHT[i]; if (!slot) return;
+        const w = FAN_WIDTHS[i]; const h = Math.round(w * 1.45);
+        html += `<div class="spp-poster-item" style="width:${w}px;height:${h}px;transform:translate(calc(-50% + ${slot.dx}px),${slot.dy}px) rotate(${slot.rot}deg);z-index:${15-i};"><img src="${esc(url)}" alt="" /></div>`;
+      });
+
+      shell.innerHTML = html;
     }
 
     function routeInfo() {

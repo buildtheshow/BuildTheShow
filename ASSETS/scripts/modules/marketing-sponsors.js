@@ -1444,6 +1444,9 @@
       aside = '<div class="spn-fcard-aside"><img class="spn-fcard-thumb" src="' + escHtml(page.posterUrl) + '" alt="" /></div>';
     } else if (group.type === 'pastPosters' && page.pastPostersUrl) {
       aside = '<div class="spn-fcard-aside"><img class="spn-fcard-thumb" src="' + escHtml(page.pastPostersUrl) + '" alt="" /></div>';
+    } else if (group.type === 'currentPosterFan') {
+      var effectivePoster = page.currentPosterOverride || SpnsState.posterUrl || '';
+      if (effectivePoster) aside = '<div class="spn-fcard-aside"><img class="spn-fcard-thumb" src="' + escHtml(effectivePoster) + '" alt="" /></div>';
     }
     var body = '';
     if (group.type === 'poster') {
@@ -1452,6 +1455,24 @@
     } else if (group.type === 'pastPosters') {
       body = '<input type="text" id="spn-public-past-posters-url" value="' + escHtml(page.pastPostersUrl || '') + '" style="display:none" />' +
              '<button type="button" class="spn-change-img-btn" onclick="MarketingSponsorsModule.uploadPublicPastPosters()">Change Image</button>';
+    } else if (group.type === 'currentPosterFan') {
+      var eff = page.currentPosterOverride || SpnsState.posterUrl || '';
+      var isOverride = !!page.currentPosterOverride;
+      body = '<input type="text" id="spn-public-current-poster-override" value="' + escHtml(page.currentPosterOverride || '') + '" style="display:none" />' +
+             (eff && !isOverride ? '<p class="spn-fcard-note" style="margin:0 0 0.6rem">Using the production poster. Upload a different image to use a custom centre poster.</p>' : '') +
+             (isOverride ? '<p class="spn-fcard-note" style="margin:0 0 0.6rem">Using a custom image. <button type="button" class="spn-link-btn" onclick="MarketingSponsorsModule.clearCurrentPosterOverride()">Remove override</button></p>' : '') +
+             '<button type="button" class="spn-change-img-btn" onclick="MarketingSponsorsModule.uploadCurrentPosterOverride()">' + (isOverride ? 'Change Custom Image' : 'Override Poster') + '</button>';
+    } else if (group.type === 'pastPostersList') {
+      var posters = page.pastPosters || [];
+      var listHtml = posters.length
+        ? '<div class="spn-past-poster-list">' + posters.map(function (url, idx) {
+            return '<div class="spn-past-poster-item">' +
+              '<img src="' + escHtml(url) + '" alt="Past poster ' + (idx + 1) + '" />' +
+              '<button type="button" class="spn-past-poster-remove" onclick="MarketingSponsorsModule.removePastPoster(' + idx + ')" title="Remove">&times;</button>' +
+              '</div>';
+          }).join('') + '</div>'
+        : '<p class="spn-fcard-note" style="margin:0 0 0.6rem">No past posters added yet.</p>';
+      body = listHtml + '<button type="button" class="spn-change-img-btn" onclick="MarketingSponsorsModule.addPastPoster()">Add Poster</button>';
     } else if (group.type === 'color') {
       var currentColor = (page.colors && page.colors[group.colorKey]) || '#572e88';
       body = '<div class="spn-fcard-swatches" role="radiogroup">' +
@@ -1624,9 +1645,11 @@
     SpnsState.settings.publicStats = collectPublicStats();
     var posterInput = document.getElementById('spn-public-poster-url');
     var pastPostersInput = document.getElementById('spn-public-past-posters-url');
+    var currentPosterOverrideInput = document.getElementById('spn-public-current-poster-override');
     var emailInput = document.getElementById('spn-public-contact-email');
     if (posterInput) page.posterUrl = posterInput.value || '';
     if (pastPostersInput) page.pastPostersUrl = pastPostersInput.value || '';
+    if (currentPosterOverrideInput) page.currentPosterOverride = currentPosterOverrideInput.value || '';
     if (emailInput) page.contactEmail = emailInput.value || '';
     return page;
   }
@@ -1980,6 +2003,49 @@
 
   function uploadPublicPastPosters() {
     uploadPublicPageImage('spn-public-past-posters-url', 'Past posters image');
+  }
+
+  function uploadCurrentPosterOverride() {
+    uploadPublicPageImage('spn-public-current-poster-override', 'Current poster');
+  }
+
+  function clearCurrentPosterOverride() {
+    var page = collectPublicPageEditor();
+    page.currentPosterOverride = '';
+    SpnsState.settings.publicPageDraft = page;
+    schedulePublicPagePreview(true);
+    renderPublicPageEditor();
+    markPublicPageDirty();
+  }
+
+  function addPastPoster() {
+    var input = document.createElement('input');
+    input.type = 'file'; input.accept = 'image/jpeg,image/png,image/webp';
+    input.onchange = function () {
+      var file = input.files[0]; if (!file) return;
+      var path = SpnsState.prodId + '/past-posters/' + Date.now() + '_' + file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+      fetch(SUPABASE_URL + '/storage/v1/object/' + STORAGE_BUCKET + '/' + path, { method: 'POST', headers: sponsorHeaders({ 'Content-Type': file.type }), body: file })
+        .then(function (r) { if (!r.ok) return r.text().then(function (t) { throw new Error(t); }); return SUPABASE_URL + '/storage/v1/object/public/' + STORAGE_BUCKET + '/' + path; })
+        .then(function (url) {
+          var page = collectPublicPageEditor();
+          page.pastPosters.push(url);
+          SpnsState.settings.publicPageDraft = page;
+          schedulePublicPagePreview(true);
+          renderPublicPageEditor();
+          markPublicPageDirty();
+        })
+        .catch(function (e) { sponsorNotify('Poster upload failed: ' + e.message, true); });
+    };
+    input.click();
+  }
+
+  function removePastPoster(index) {
+    var page = collectPublicPageEditor();
+    page.pastPosters.splice(index, 1);
+    SpnsState.settings.publicPageDraft = page;
+    schedulePublicPagePreview(true);
+    renderPublicPageEditor();
+    markPublicPageDirty();
   }
 
   function escHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
@@ -2394,6 +2460,10 @@
     unpublishPublicPage: unpublishPublicPage,
     uploadPublicPoster: uploadPublicPoster,
     uploadPublicPastPosters: uploadPublicPastPosters,
+    uploadCurrentPosterOverride: uploadCurrentPosterOverride,
+    clearCurrentPosterOverride: clearCurrentPosterOverride,
+    addPastPoster: addPastPoster,
+    removePastPoster: removePastPoster,
     setPublicSectionVisible: setPublicSectionVisible,
     editPublicSection: editPublicSection,
     backToPublicSections: backToPublicSections,
