@@ -1892,11 +1892,25 @@
   }
 
   function persistSponsorSettings(settings, message) {
-    return fetch(SUPABASE_URL + '/rest/v1/sponsor_settings?on_conflict=production_id', {
-      method: 'POST',
-      headers: sponsorHeaders({ 'Content-Type': 'application/json', Prefer: 'resolution=merge-duplicates,return=minimal' }),
-      body: JSON.stringify({ production_id: SpnsState.prodId, settings: settings, updated_at: new Date().toISOString() }),
-    }).then(function (r) { if (!r.ok) return r.text().then(function (t) { throw new Error(t); }); }).then(function () { if (message) sponsorNotify(message); });
+    var prodId = SpnsState.prodId;
+    var ts = new Date().toISOString();
+    // PATCH the existing row; only INSERT if no row matched (avoids unique-key conflicts entirely)
+    return fetch(SUPABASE_URL + '/rest/v1/sponsor_settings?production_id=eq.' + encodeURIComponent(prodId), {
+      method: 'PATCH',
+      headers: sponsorHeaders({ 'Content-Type': 'application/json', Prefer: 'return=minimal,count=exact' }),
+      body: JSON.stringify({ settings: settings, updated_at: ts }),
+    }).then(function (r) {
+      if (!r.ok) return r.text().then(function (t) { throw new Error(t); });
+      var range = r.headers.get('content-range') || '';
+      if (/\/0$/.test(range)) {
+        // No existing row — INSERT fresh
+        return fetch(SUPABASE_URL + '/rest/v1/sponsor_settings', {
+          method: 'POST',
+          headers: sponsorHeaders({ 'Content-Type': 'application/json', Prefer: 'return=minimal' }),
+          body: JSON.stringify({ production_id: prodId, settings: settings, updated_at: ts }),
+        }).then(function (r2) { if (!r2.ok) return r2.text().then(function (t) { throw new Error(t); }); });
+      }
+    }).then(function () { if (message) sponsorNotify(message); });
   }
 
   function savePublicPage(publish) {
