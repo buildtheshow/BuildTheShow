@@ -58,7 +58,7 @@
   function defaultPublicPage() {
     return {
       published: false,
-      posterUrl: '', pastPostersUrl: '/ASSETS/Images/Decrotive/past-posters-template.png?v=20260620', contactEmail: '',
+      posterUrl: '', currentPosterOverride: '', pastPosters: [], pastPostersUrl: '/ASSETS/Images/Decrotive/past-posters-template.png?v=20260620', contactEmail: '',
       content: {
         navOverview: 'Overview', navSponsors: 'Sponsorships', navAds: 'Programme Ads', navBook: 'Book Now',
         heroTitle: 'Support Community Theatre', heroAccent: '',
@@ -97,6 +97,8 @@
     value = value && typeof value === 'object' ? value : {};
     base.published = value.published === true;
     base.posterUrl = value.posterUrl || '';
+    base.currentPosterOverride = value.currentPosterOverride || '';
+    base.pastPosters = Array.isArray(value.pastPosters) ? value.pastPosters.slice() : [];
     base.pastPostersUrl = value.pastPostersUrl || base.pastPostersUrl;
     base.contactEmail = value.contactEmail || '';
     base.content = Object.assign(base.content, value.content || {});
@@ -1418,11 +1420,12 @@
       { id:'bgColor', svg:ESVG.drop, title:'Background Style',   subtitle:'Choose the background colour for this section.',         type:'color', colorKey:'programmeAds' },
     ],
     pastPosters: [
-      { id:'image',   img:'Placeholder - Poster.svg', title:'Poster Strip Image', subtitle:'Upload or change the past posters image.', type:'pastPosters' },
-      { id:'text',    svg:ESVG.T,    title:'Section Text',       subtitle:'Edit the heading and description.',                      fields:[
+      { id:'currentPoster',   img:'Placeholder - Poster.svg', title:'Current Poster',    subtitle:'The production poster shown in the centre of the fan. Uses the production poster by default.',  type:'currentPosterFan' },
+      { id:'pastPostersList', img:'Placeholder - Poster.svg', title:'Past Posters',       subtitle:'Upload individual past show posters. Up to 10 fanned out around the current poster.',           type:'pastPostersList' },
+      { id:'text',            svg:ESVG.T,                     title:'Section Text',       subtitle:'Edit the heading and description.',                                                               fields:[
         { key:'pastPostersKicker', label:'Eyebrow' }, { key:'pastPostersTitle', label:'Heading' }, { key:'pastPostersBody', label:'Body', type:'textarea' },
       ]},
-      { id:'bgColor', svg:ESVG.drop, title:'Background Style',   subtitle:'Choose the background colour for this section.',         type:'color', colorKey:'pastPosters' },
+      { id:'bgColor',         svg:ESVG.drop,                  title:'Background Style',   subtitle:'Choose the background colour for this section.',                                                 type:'color', colorKey:'pastPosters' },
     ],
     footer: [
       { id:'text',    svg:ESVG.T,    title:'Footer Text',        subtitle:'Edit the footer message and button.',                    fields:[
