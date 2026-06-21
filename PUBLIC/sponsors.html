@@ -134,7 +134,7 @@
     .spp-perf-card-date { font-size: 0.78rem; font-weight: 700; color: #1a1530; }
     .spp-perf-card-time { font-size: 0.78rem; font-weight: 950; color: #1a1530; white-space: nowrap; }
     /* Key Dates body */
-    .spp-kd-body { display: grid; grid-template-columns: 1fr 1fr; gap: 1.1rem; margin-bottom: 1.25rem; }
+    .spp-kd-body { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1.1rem; margin-bottom: 1.25rem; }
     .spp-kd-col { min-width: 0; }
     /* Deadline timeline */
     .spp-kd-dl-item { display: flex; align-items: flex-start; gap: 0.6rem; }
@@ -352,7 +352,7 @@
       .spp-prog-top { flex-direction: column; }
       .spp-prog-top-right { display: none; }
       .spp-info-illus-inline { width: 110px; }
-      .spp-kd-body { grid-template-columns: 1fr; }
+      .spp-kd-body { grid-template-columns: 1fr; gap: 1.5rem; }
       .spp-programme-illus { grid-template-columns: repeat(2,minmax(0,1fr)); gap: 0.85rem; }
       .spp-programme-illus-item:nth-child(2) { border-right: none; }
       .spp-programme-illus-item:nth-child(3) { border-right: 1px solid rgba(26,21,48,0.1); }
@@ -536,7 +536,10 @@
                 <div id="spp-perf-dates-wrap" class="spp-perf-dates-wrap" hidden></div>
               </div>
               <div class="spp-kd-col">
-                <div id="spp-deadlines-list" hidden></div>
+                <div id="spp-deadlines-sponsors" hidden></div>
+              </div>
+              <div class="spp-kd-col">
+                <div id="spp-deadlines-ads" hidden></div>
               </div>
             </div>
           </div>
@@ -971,10 +974,8 @@
 
     async function loadCalendarDeadlines(prodId) {
       if (!prodId) return;
-      const MARKETING_AREAS = new Set([
-        'programme_ads','programme_ads_booking','programme_ads_artwork',
-        'sponsors','sponsors_confirmation','sponsors_assets',
-      ]);
+      const SPONSOR_AREAS = new Set(['sponsors','sponsors_confirmation','sponsors_assets']);
+      const ADS_AREAS = new Set(['programme_ads','programme_ads_booking','programme_ads_artwork']);
       try {
         const { data } = await sb.from('production_events')
           .select('title,start_time,notes')
@@ -987,30 +988,33 @@
           const d = new Date((s || '').slice(0, 19));
           return new Intl.DateTimeFormat('en-CA', { month: 'short', day: 'numeric', year: 'numeric' }).format(d);
         };
-        const items = data
-          .map(ev => ({ title: ev.title || 'Deadline', date: fmtDate(ev.start_time), area: (areaRe.exec(ev.notes || '') || [])[1] || '' }))
-          .filter(ev => MARKETING_AREAS.has(ev.area));
-        const artworkDeadline = items.find(ev => ev.area === 'programme_ads_artwork');
+        const allItems = data.map(ev => ({ title: ev.title || 'Deadline', date: fmtDate(ev.start_time), area: (areaRe.exec(ev.notes || '') || [])[1] || '' }));
+        const artworkDeadline = allItems.find(ev => ev.area === 'programme_ads_artwork');
         if (artworkDeadline) {
           const el = document.getElementById('spp-step-deadline');
           if (el) el.textContent = artworkDeadline.date;
         }
-        if (!items.length) return;
-        const list = document.getElementById('spp-deadlines-list');
-        if (!list) return;
-        list.innerHTML = items.map(item =>
-          `<div class="spp-kd-dl-item">
-            <div class="spp-kd-dl-col">
-              <div class="spp-kd-dl-dot"><img src="/ASSETS/Images/Icons/navproductioncalendar.svg" alt="" /></div>
-              <div class="spp-kd-dl-line"></div>
-            </div>
-            <div class="spp-kd-dl-info">
-              <div class="spp-kd-dl-name">${esc(item.title)}</div>
-              <div class="spp-kd-dl-date">${esc(item.date)}</div>
-            </div>
-          </div>`
-        ).join('');
-        list.hidden = false;
+        const buildHtml = (items, label) => {
+          if (!items.length) return;
+          return `<div class="spp-perf-dates-title">${label}</div>` + items.map(item =>
+            `<div class="spp-kd-dl-item">
+              <div class="spp-kd-dl-col">
+                <div class="spp-kd-dl-dot"><img src="/ASSETS/Images/Icons/navproductioncalendar.svg" alt="" /></div>
+                <div class="spp-kd-dl-line"></div>
+              </div>
+              <div class="spp-kd-dl-info">
+                <div class="spp-kd-dl-name">${esc(item.title)}</div>
+                <div class="spp-kd-dl-date">${esc(item.date)}</div>
+              </div>
+            </div>`
+          ).join('');
+        };
+        const sponsorItems = allItems.filter(ev => SPONSOR_AREAS.has(ev.area));
+        const adsItems = allItems.filter(ev => ADS_AREAS.has(ev.area));
+        const sponsorEl = document.getElementById('spp-deadlines-sponsors');
+        const adsEl = document.getElementById('spp-deadlines-ads');
+        if (sponsorEl && sponsorItems.length) { sponsorEl.innerHTML = buildHtml(sponsorItems, 'Sponsorship'); sponsorEl.hidden = false; }
+        if (adsEl && adsItems.length) { adsEl.innerHTML = buildHtml(adsItems, 'Programme Ads'); adsEl.hidden = false; }
       } catch(err) { console.warn('[sponsors] Could not load calendar deadlines:', err); }
     }
 
