@@ -204,6 +204,12 @@
     .sm-tool.sm-tool--active { border-color: #572e88; background: #572e88; color: #fff; }
     .sm-tool-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
     .sm-tool.sm-tool--active .sm-tool-dot { box-shadow: 0 0 0 2px rgba(255,255,255,0.6); }
+    .sm-adj { display: flex; align-items: center; gap: 0.4rem; padding: 0.4rem 0.65rem; border: 1.5px solid #eceaf3; border-radius: 8px; background: #faf9fd; font-size: 0.72rem; }
+    .sm-adj-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+    .sm-adj-name { font-weight: 800; color: #1a1530; }
+    .sm-adj input { width: 44px; padding: 0.2rem 0.3rem; border: 1px solid #e0dce8; border-radius: 4px; font: inherit; font-size: 0.72rem; text-align: center; }
+    .sm-adj input:focus { border-color: #572e88; outline: none; }
+    .sm-adj-lbl { color: #8e82a7; font-size: 0.6rem; font-weight: 700; }
 
     /* ── Wizard ── */
     .sm-stage-btns { display: flex; gap: 0.4rem; flex-wrap: wrap; }
@@ -500,6 +506,9 @@
               <button class="sm-tool" data-tool="blocked" onclick="smSetTool(this)"><span class="sm-tool-dot" style="background:#d1523d"></span>Blocked</button>
               <button class="sm-tool" data-tool="obstructed" onclick="smSetTool(this)"><span class="sm-tool-dot" style="background:#efab45"></span>Obstructed</button>
             </div>
+
+            <!-- Quick adjust -->
+            <div id="sm-adjust" style="display:flex;gap:1rem;flex-wrap:wrap;margin-bottom:0.75rem"></div>
 
             <!-- Preview -->
             <div class="sm-preview">
@@ -907,6 +916,7 @@
       document.getElementById('sm-wizard').style.display = 'none';
       document.getElementById('sm-result').style.display = '';
       document.getElementById('sm-result-name').textContent = smLayout.venue_name;
+      smRenderAdjust();
 
       var totalSeats = 0;
       smLayout.sections.forEach(function(sec) {
@@ -1016,6 +1026,44 @@
       el.title = sec.name + ' ' + sec.rows[rowIdx].label + seat.number + (seat.type !== 'standard' ? ' (' + seat.type + ')' : '');
       smUpdateCapacityBar();
       smDebounceSave();
+    }
+
+    function smRenderAdjust() {
+      if (!smLayout) return;
+      var el = document.getElementById('sm-adjust');
+      el.innerHTML = smLayout.sections.map(function(sec, si) {
+        var rowCount = sec.rows.length;
+        var seatsPerRow = sec.rows.length ? sec.rows[0].seats.length : 0;
+        return '<div class="sm-adj">' +
+          '<span class="sm-adj-dot" style="background:' + sec.color + '"></span>' +
+          '<span class="sm-adj-name">' + esc(sec.name) + '</span>' +
+          '<span class="sm-adj-lbl">Rows</span><input type="number" min="1" max="30" value="' + rowCount + '" onchange="smAdjustSection(' + si + ',parseInt(this.value)||1,null)" />' +
+          '<span class="sm-adj-lbl">Seats/Row</span><input type="number" min="1" max="50" value="' + seatsPerRow + '" onchange="smAdjustSection(' + si + ',null,parseInt(this.value)||1)" />' +
+          '</div>';
+      }).join('');
+    }
+
+    function smAdjustSection(secIdx, newRows, newSeatsPerRow) {
+      var sec = smLayout.sections[secIdx];
+      if (!sec) return;
+      var currentRows = sec.rows.length;
+      var currentSeats = sec.rows.length ? sec.rows[0].seats.length : 0;
+      var rows = newRows !== null ? newRows : currentRows;
+      var spr = newSeatsPerRow !== null ? newSeatsPerRow : currentSeats;
+
+      while (sec.rows.length > rows) sec.rows.pop();
+      while (sec.rows.length < rows) {
+        var seats = [];
+        for (var s = 0; s < spr; s++) seats.push({ id: crypto.randomUUID(), number: s + 1, type: 'standard' });
+        sec.rows.push({ id: crypto.randomUUID(), label: String.fromCharCode(65 + sec.rows.length), seats: seats });
+      }
+      sec.rows.forEach(function(row) {
+        while (row.seats.length > spr) row.seats.pop();
+        while (row.seats.length < spr) row.seats.push({ id: crypto.randomUUID(), number: row.seats.length + 1, type: 'standard' });
+      });
+
+      smRenderResult();
+      smSaveLayout();
     }
 
     function smDebounceSave() {
