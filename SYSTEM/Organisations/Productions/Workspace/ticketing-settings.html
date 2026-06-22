@@ -850,10 +850,11 @@
 
     function smAutoGenerate() {
       var venueName = document.getElementById('sm-venue-name').value.trim();
-      var venueCap = parseInt(document.getElementById('tks-capacity').value) || 0;
+      var totalSeatsTarget = parseInt(document.getElementById('tks-total-seats').value) || parseInt(document.getElementById('tks-capacity').value) || 0;
+      var venueCap = parseInt(document.getElementById('tks-capacity').value) || totalSeatsTarget;
       var venueType = document.getElementById('sm-venue-type').value;
       if (!venueName) { alert('Please enter a venue name.'); return; }
-      if (!venueCap) { alert('Please set the Max Capacity in the Show Details tab first.'); return; }
+      if (!totalSeatsTarget) { alert('Please set Total Seats or Max Capacity in the Show Details tab first.'); return; }
       if (!document.getElementById('sm-sec-name-0')) { alert('Please set up your sections first.'); return; }
 
       var sectionDefs = [];
@@ -870,7 +871,7 @@
       for (var i = 0; i < sectionDefs.length; i++) {
         var def = sectionDefs[i];
         var sectionShare = def.rows / totalRows;
-        var sectionSeats = Math.round(venueCap * sectionShare);
+        var sectionSeats = Math.round(totalSeatsTarget * sectionShare);
         var seatsPerRow = Math.max(1, Math.round(sectionSeats / def.rows));
 
         sections.push({
@@ -956,7 +957,7 @@
             var color = SEAT_COLORS[seat.type] || sec.color;
             var title = esc(sec.name) + ' ' + row.label + seat.number;
             if (seat.type !== 'standard') title += ' (' + seat.type.charAt(0).toUpperCase() + seat.type.slice(1) + ')';
-            html += '<div class="sm-seat" style="background:' + color + '" title="' + title + '" onmousedown="smClickSeat(' + si + ',' + ri + ',' + sei + ',this)" onmouseover="if(smDrawing)smClickSeat(' + si + ',' + ri + ',' + sei + ',this)"></div>';
+            html += '<div class="sm-seat" style="background:' + color + '" title="' + title + '" onclick="smClickSeat(' + si + ',' + ri + ',' + sei + ',this);event.preventDefault()" onmousedown="smStartDraw()" onmouseover="if(smDrawing)smClickSeat(' + si + ',' + ri + ',' + sei + ',this)"></div>';
           });
           html += '</div>';
           html += '<span class="sm-row-label">' + esc(row.label) + '</span>';
@@ -991,8 +992,12 @@
     };
     var smActiveTool = 'standard';
     var smDrawing = false;
-    document.addEventListener('mousedown', function() { smDrawing = true; });
-    document.addEventListener('mouseup', function() { smDrawing = false; });
+    var smSaveTimer = null;
+
+    function smStartDraw() { smDrawing = true; }
+    document.addEventListener('mouseup', function() {
+      if (smDrawing) { smDrawing = false; smDebounceSave(); }
+    });
 
     function smSetTool(btn) {
       smActiveTool = btn.dataset.tool;
@@ -1003,15 +1008,19 @@
     function smClickSeat(secIdx, rowIdx, seatIdx, el) {
       if (!smLayout) return;
       var sec = smLayout.sections[secIdx];
+      if (!sec || !sec.rows[rowIdx] || !sec.rows[rowIdx].seats[seatIdx]) return;
       var seat = sec.rows[rowIdx].seats[seatIdx];
       seat.type = smActiveTool;
       var color = SEAT_COLORS[seat.type] || sec.color;
-      el.style.background = color;
-      var title = sec.name + ' ' + sec.rows[rowIdx].label + seat.number;
-      if (seat.type !== 'standard') title += ' (' + seat.type.charAt(0).toUpperCase() + seat.type.slice(1) + ')';
-      el.title = title;
+      el.style.backgroundColor = color;
+      el.title = sec.name + ' ' + sec.rows[rowIdx].label + seat.number + (seat.type !== 'standard' ? ' (' + seat.type + ')' : '');
       smUpdateCapacityBar();
-      smSaveLayout();
+      smDebounceSave();
+    }
+
+    function smDebounceSave() {
+      clearTimeout(smSaveTimer);
+      smSaveTimer = setTimeout(function() { smSaveLayout(); }, 500);
     }
 
     function smUpdateCapacityBar() {
