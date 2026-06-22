@@ -46372,12 +46372,12 @@ See you soon!
         const isOverdue = !isPaid && firstDue && new Date(firstDue) < new Date(new Date().toDateString());
         const label = (parts[0].inst.label || '').replace(/\s*\(.*\)$/, '') || `Payment ${idx + 1}`;
         const sub = isPaid ? 'Paid' : (firstDue ? `Due ${rptFormatDate(firstDue)}` : 'Due date not set');
-        return `<button type="button" class="rsc-inst-card ${isPaid ? 'paid' : isOverdue ? 'overdue' : ''}" id="rsc-hh-inst-${esc(household.id)}-${idx}" onclick="${isPaid ? '' : `rscLogHouseholdInstallmentPaid('${esc(household.id)}',${idx})`}">
+        return `<button type="button" class="rsc-inst-card ${isPaid ? 'paid' : isOverdue ? 'overdue' : ''}" id="rsc-hh-inst-${esc(household.id)}-${idx}" onclick="${isPaid ? '' : `rscOpenHouseholdPayModal('${esc(household.id)}',${idx})`}">
           <div class="rsc-inst-label">${esc(label)}</div>
           <div class="rsc-inst-sub">${esc(sub)}</div>
         </button>`;
       }).join('');
-      const logBtnHtml = allPaid ? '' : `<button type="button" class="rsc-log-btn" onclick="rscLogHouseholdInstallmentPaid('${esc(household.id)}',${firstUnpaid})">Log Payment</button>`;
+      const logBtnHtml = allPaid ? '' : `<button type="button" class="rsc-log-btn" onclick="rscOpenHouseholdPayModal('${esc(household.id)}',${firstUnpaid})">Log Payment</button>`;
       return buildStmtHtml({ totalFee, totalPaid, balance, allPaid, stateClass, statusLabel, feeBreakdownHtml, ledgerHtml, cardsHtml, logBtnHtml });
     }
 
@@ -47605,6 +47605,106 @@ See you soon!
     } catch (e) {
       if (buttonEl) { buttonEl.disabled = false; buttonEl.textContent = 'Send Registration Email'; }
       showToast('Could not send email: ' + e.message, true);
+    }
+  }
+
+  function rscOpenHouseholdPayModal(householdId, idx) {
+    const hh = _rptHouseholds.find(h => String(h.id) === String(householdId));
+    if (!hh) return;
+    const names = (hh.member_ids || []).map(mid => {
+      const item = _rptCastItems.find(i => String(i.assignment?.id) === String(mid));
+      return item?.name || mid;
+    }).filter(Boolean).join(', ');
+    const count = hh.installments?.length || 1;
+    const label = hh.installments?.[idx]?.label || (count === 1 ? 'Full Payment' : idx === 0 ? 'First Payment' : idx === count - 1 ? 'Final Payment' : `Payment ${idx + 1}`);
+    const today = new Date().toISOString().split('T')[0];
+    document.getElementById('rsc-mark-paid-modal')?.remove();
+    const modal = document.createElement('div');
+    modal.id = 'rsc-mark-paid-modal';
+    modal.className = 'rpt-household-modal';
+    modal.innerHTML = `<div class="rpt-household-modal-box" style="max-width:400px;">
+      <div class="rpt-household-modal-title">Log Payment — ${esc(label)}</div>
+      <div style="font-size:0.8rem;color:rgba(87,46,136,0.5);margin-bottom:0.1rem;">${esc(names)}</div>
+      <div class="rsc-modal-row">
+        <div class="rsc-modal-label">How was it paid?</div>
+        <select class="rpt-household-modal-input" id="rsc-mp-method">
+          <option value="">— Select —</option>
+          <option value="e_transfer">E-Transfer</option>
+          <option value="cheque">Cheque</option>
+          <option value="cash">Cash</option>
+          <option value="square">Square / Card</option>
+          <option value="other">Other</option>
+        </select>
+      </div>
+      <div class="rsc-modal-row">
+        <div class="rsc-modal-label">Amount Paid</div>
+        <input class="rpt-household-modal-input" type="number" min="0" step="0.01" id="rsc-mp-amount" placeholder="e.g. 250.00" />
+      </div>
+      <div class="rsc-modal-row">
+        <div class="rsc-modal-label">Reference / Confirmation #</div>
+        <input class="rpt-household-modal-input" type="text" id="rsc-mp-ref" placeholder="Confirmation number, cheque #, etc." />
+      </div>
+      <div class="rsc-modal-row">
+        <div class="rsc-modal-label">Date Paid</div>
+        <input class="rpt-household-modal-input" type="date" id="rsc-mp-date" value="${today}" />
+      </div>
+      <div class="rsc-modal-row">
+        <div class="rsc-modal-label">Who Paid</div>
+        <input class="rpt-household-modal-input" type="text" id="rsc-mp-paidby" placeholder="Name of the person who made the payment" />
+      </div>
+      <div class="rsc-modal-row">
+        <div class="rsc-modal-label">Notes</div>
+        <textarea class="rsc-modal-textarea" id="rsc-mp-notes" placeholder="Any notes about this payment…"></textarea>
+      </div>
+      <div class="rpt-household-modal-actions">
+        <button class="rpt-modal-cancel-btn" onclick="document.getElementById('rsc-mark-paid-modal')?.remove()">Cancel</button>
+        <button class="rpt-modal-save-btn" id="rsc-mp-save-btn" onclick="rscSaveHouseholdPaid('${esc(householdId)}',${idx})">Log Payment</button>
+      </div>
+    </div>`;
+    modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+    document.body.appendChild(modal);
+  }
+
+  async function rscSaveHouseholdPaid(householdId, idx) {
+    const hh = _rptHouseholds.find(h => String(h.id) === String(householdId));
+    if (!hh) return;
+    const method = document.getElementById('rsc-mp-method')?.value || '';
+    const amountRaw = document.getElementById('rsc-mp-amount')?.value || '';
+    const amountCents = amountRaw ? Math.round(parseFloat(amountRaw) * 100) : null;
+    const ref = document.getElementById('rsc-mp-ref')?.value?.trim() || '';
+    const dateVal = document.getElementById('rsc-mp-date')?.value || '';
+    const paidBy = document.getElementById('rsc-mp-paidby')?.value?.trim() || '';
+    const notes = document.getElementById('rsc-mp-notes')?.value?.trim() || '';
+    const paidAt = dateVal ? new Date(dateVal + 'T12:00:00').toISOString() : new Date().toISOString();
+    const btn = document.getElementById('rsc-mp-save-btn');
+    if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+    try {
+      await Promise.all((hh.member_ids || []).map(async mid => {
+        const existing = (_rptPaymentRecords[mid] || []).find(r => r.installment_index === idx);
+        if (existing?.paid) return;
+        const { data, error } = await sb.from('registration_payment_records')
+          .upsert({ production_id: prodId, casting_assignment_id: mid, installment_index: idx, paid: true, paid_at: paidAt, payment_method: method || null, amount_cents: amountCents, transaction_ref: ref || null, paid_by: paidBy || null, payment_notes: notes || null, updated_at: new Date().toISOString() }, { onConflict: 'casting_assignment_id,installment_index' })
+          .select().single();
+        if (error) throw error;
+        if (!_rptPaymentRecords[mid]) _rptPaymentRecords[mid] = [];
+        const recIdx = _rptPaymentRecords[mid].findIndex(r => r.installment_index === idx);
+        if (recIdx >= 0) _rptPaymentRecords[mid][recIdx] = data;
+        else _rptPaymentRecords[mid].push(data);
+      }));
+      document.getElementById('rsc-mark-paid-modal')?.remove();
+      const groupEl = document.getElementById(`rsc-hh-group-${householdId}`);
+      if (groupEl) {
+        const hhItems = (hh.member_ids || []).map(mid => _rptCastItems.find(i => String(i.assignment?.id) === String(mid))).filter(Boolean);
+        const temp = document.createElement('div');
+        temp.innerHTML = renderHouseholdGroupCard(hh, hhItems, registrationCurrentPaymentSettings());
+        const newEl = temp.firstElementChild;
+        if (newEl) groupEl.replaceWith(newEl);
+      }
+      rptRerenderSummary();
+      window.AutoSave?.showSaved?.();
+    } catch (err) {
+      console.error('[BTS] rscSaveHouseholdPaid failed', err);
+      if (btn) { btn.disabled = false; btn.textContent = 'Log Payment'; }
     }
   }
 
