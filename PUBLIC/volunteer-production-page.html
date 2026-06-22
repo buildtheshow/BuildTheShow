@@ -7384,10 +7384,15 @@
       group.items.forEach(item => {
         const timings = Array.isArray(item.required_date_timings) ? item.required_date_timings.filter(t => t.date) : [];
         if (timings.length > 1) {
-          var totalHrs = scheduleHours(item);
-          var perShiftHrs = timings.length > 0 ? totalHrs / timings.length : totalHrs;
           timings.forEach(t => {
-            const perDateItem = Object.assign({}, item, { shift_date: t.date, shift_start_time: t.shift_start_time || item.shift_start_time, shift_end_time: t.shift_end_time || item.shift_end_time, _singleTiming: true, required_date_hours: perShiftHrs, credit_hours: perShiftHrs });
+            var startT = t.shift_start_time || item.shift_start_time || '';
+            var endT = t.shift_end_time || item.shift_end_time || '';
+            var shiftHrs = 0;
+            if (startT && endT) {
+              var sp = startT.split(':').map(Number), ep = endT.split(':').map(Number);
+              shiftHrs = Math.max(0, ((ep[0] || 0) * 60 + (ep[1] || 0)) - ((sp[0] || 0) * 60 + (sp[1] || 0))) / 60;
+            }
+            const perDateItem = Object.assign({}, item, { shift_date: t.date, shift_start_time: startT, shift_end_time: endT, _singleTiming: true, required_date_hours: shiftHrs, credit_hours: shiftHrs });
             pairs.push({ item: perDateItem, name: item.forPerson || null, removeHtml: `removeSchedule('${esc(item.id)}')` });
             (item.people || []).forEach(p => {
               pairs.push({ item: perDateItem, name: p.name, removeHtml: `removePersonFromCartGroup('${safeKey}','${esc(p.id)}')` });
