@@ -969,6 +969,8 @@
     .rsc-stmt-subtotal { font-weight:800; border-top:1px solid rgba(0,0,0,0.1); padding-top:0.25rem; margin-top:0.1rem; }
     .rsc-stmt-total { font-size:0.88rem; font-weight:800; border-top:1px solid rgba(0,0,0,0.1); padding-top:0.3rem; margin-top:0.15rem; }
     .rsc-stmt-paid-row { color:rgba(0,0,0,0.55); }
+    .rsc-remove-pay { border:none; background:none; color:#d1523d; font-size:0.85rem; cursor:pointer; padding:0 0 0 0.4rem; opacity:0.5; font-weight:900; }
+    .rsc-remove-pay:hover { opacity:1; }
     .rsc-stmt-none { color:rgba(0,0,0,0.3); font-style:italic; }
     .rsc-stmt-balance { font-size:0.88rem; font-weight:800; border-top:1px solid rgba(0,0,0,0.12); padding-top:0.3rem; margin-top:0.15rem; }
     .rsc-stmt-balance.full { color:#769e7b; }
@@ -46396,12 +46398,12 @@ See you soon!
     const feeBreakdownHtml = feeBreakdown(ef);
     const paidRecords = ef.installments.map((inst, idx) => {
       const rec = records.find(r => r.installment_index === idx && r.paid);
-      return rec ? { paid_at: rec.paid_at, amount: inst.amount } : null;
+      return rec ? { paid_at: rec.paid_at, amount: inst.amount, installment_index: idx } : null;
     }).filter(Boolean);
     paidRecords.sort((a, b) => new Date(a.paid_at || 0) - new Date(b.paid_at || 0));
     const ledgerHtml = paidRecords.length
       ? paidRecords.map(r => `<div class="rsc-stmt-row rsc-stmt-paid-row">
-          <span>${esc(rptFormatDate(r.paid_at) || '')}</span><span>${esc(fmt(r.amount))}</span>
+          <span>${esc(rptFormatDate(r.paid_at) || '')}</span><span>${esc(fmt(r.amount))}<button class="rsc-remove-pay" onclick="rscRemovePayment('${esc(assignId)}',${r.installment_index})" title="Remove payment">&times;</button></span>
         </div>`).join('')
       : `<div class="rsc-stmt-row rsc-stmt-none">No payments yet</div>`;
     const logIdx = Math.max(0, ef.installments.findIndex((inst, idx) => !records.find(r => r.installment_index === idx && r.paid)));
@@ -47705,6 +47707,26 @@ See you soon!
     } catch (err) {
       console.error('[BTS] rscSaveHouseholdPaid failed', err);
       if (btn) { btn.disabled = false; btn.textContent = 'Log Payment'; }
+    }
+  }
+
+  async function rscRemovePayment(assignId, idx) {
+    if (!confirm('Are you sure you want to remove this payment? This cannot be undone.')) return;
+    try {
+      const { error } = await sb.from('registration_payment_records')
+        .update({ paid: false, paid_at: null, payment_method: null, amount_cents: null, transaction_ref: null, paid_by: null, payment_notes: null, updated_at: new Date().toISOString() })
+        .eq('casting_assignment_id', assignId)
+        .eq('installment_index', idx);
+      if (error) throw error;
+      const recs = _rptPaymentRecords[assignId] || [];
+      const rec = recs.find(r => r.installment_index === idx);
+      if (rec) { rec.paid = false; rec.paid_at = null; }
+      rptRerenderRow(assignId);
+      rptRerenderSummary();
+      window.AutoSave?.showSaved?.();
+    } catch (err) {
+      console.error('[BTS] rscRemovePayment failed', err);
+      alert('Could not remove payment. Please try again.');
     }
   }
 
