@@ -187,6 +187,21 @@
     .sm-legend-item { display: flex; align-items: center; gap: 0.3rem; font-size: 0.62rem; font-weight: 800; color: #3a3050; }
     .sm-legend-dot { width: 12px; height: 12px; border-radius: 50%; }
     .sm-empty-preview { flex: 1; display: flex; align-items: center; justify-content: center; color: #b0a8c8; font-size: 0.85rem; text-align: center; padding: 2rem; }
+    .sm-seat { cursor: pointer; transition: opacity 0.1s; }
+    .sm-seat:hover { opacity: 0.7; }
+
+    /* ── Edit toolbar ── */
+    .sm-toolbar { display: flex; align-items: center; gap: 0.35rem; margin-bottom: 0.75rem; flex-wrap: wrap; }
+    .sm-tool {
+      display: inline-flex; align-items: center; gap: 0.3rem;
+      padding: 0.35rem 0.65rem; border: 1.5px solid #e0dce8; border-radius: 7px;
+      background: #fff; color: #3a3050; font: inherit; font-size: 0.68rem; font-weight: 800;
+      cursor: pointer; transition: border-color 0.15s, background 0.15s;
+    }
+    .sm-tool:hover { border-color: #b5a8d8; }
+    .sm-tool.sm-tool--active { border-color: #572e88; background: #572e88; color: #fff; }
+    .sm-tool-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+    .sm-tool.sm-tool--active .sm-tool-dot { box-shadow: 0 0 0 2px rgba(255,255,255,0.6); }
 
     /* ── Wizard ── */
     .sm-stage-btns { display: flex; gap: 0.4rem; flex-wrap: wrap; }
@@ -506,6 +521,16 @@
           <div id="sm-result" style="display:none">
             <!-- Capacity validation -->
             <div class="sm-capacity-bar" id="sm-capacity-bar"></div>
+
+            <!-- Edit toolbar -->
+            <div class="sm-toolbar">
+              <button class="sm-tool sm-tool--active" data-tool="standard" onclick="smSetTool(this)"><span class="sm-tool-dot" style="background:#572e88"></span>Seat</button>
+              <button class="sm-tool" data-tool="aisle" onclick="smSetTool(this)"><span class="sm-tool-dot" style="background:#e8e4f0"></span>Aisle</button>
+              <button class="sm-tool" data-tool="wheelchair" onclick="smSetTool(this)"><span class="sm-tool-dot" style="background:#78bbd4"></span>Wheelchair</button>
+              <button class="sm-tool" data-tool="companion" onclick="smSetTool(this)"><span class="sm-tool-dot" style="background:#476aaa"></span>Companion</button>
+              <button class="sm-tool" data-tool="blocked" onclick="smSetTool(this)"><span class="sm-tool-dot" style="background:#d1523d"></span>Blocked</button>
+              <button class="sm-tool" data-tool="obstructed" onclick="smSetTool(this)"><span class="sm-tool-dot" style="background:#efab45"></span>Obstructed</button>
+            </div>
 
             <!-- Preview -->
             <div class="sm-preview">
@@ -918,7 +943,7 @@
       var totalSeats = 0;
       smLayout.sections.forEach(function(sec) {
         sec.rows.forEach(function(row) {
-          row.seats.forEach(function(seat) { if (seat.type !== 'aisle') totalSeats++; });
+          row.seats.forEach(function(seat) { if (seat.type !== 'aisle' && seat.type !== 'blocked') totalSeats++; });
         });
       });
 
@@ -935,18 +960,18 @@
       var map = document.getElementById('sm-map');
       var html = '<div class="sm-stage">STAGE</div>';
 
-      smLayout.sections.forEach(function(sec) {
+      smLayout.sections.forEach(function(sec, si) {
         html += '<div class="sm-section-block">';
         html += '<div class="sm-section-label">' + esc(sec.name).toUpperCase() + '</div>';
-        sec.rows.forEach(function(row) {
+        sec.rows.forEach(function(row, ri) {
           html += '<div class="sm-row-line">';
           html += '<span class="sm-row-label">' + esc(row.label) + '</span>';
           html += '<div class="sm-seats">';
-          row.seats.forEach(function(seat) {
-            var color = seat.type === 'wheelchair' ? '#78bbd4' : seat.type === 'aisle' ? '#e8e4f0' : sec.color;
+          row.seats.forEach(function(seat, sei) {
+            var color = SEAT_COLORS[seat.type] || sec.color;
             var title = esc(sec.name) + ' ' + row.label + seat.number;
-            if (seat.type === 'wheelchair') title += ' (Wheelchair)';
-            html += '<div class="sm-seat" style="background:' + color + '" title="' + title + '"></div>';
+            if (seat.type !== 'standard') title += ' (' + seat.type.charAt(0).toUpperCase() + seat.type.slice(1) + ')';
+            html += '<div class="sm-seat" style="background:' + color + '" title="' + title + '" onclick="smClickSeat(' + si + ',' + ri + ',' + sei + ')"></div>';
           });
           html += '</div>';
           html += '<span class="sm-row-label">' + esc(row.label) + '</span>';
@@ -963,7 +988,34 @@
         return '<div class="sm-legend-item"><span class="sm-legend-dot" style="background:' + sec.color + '"></span>' + esc(sec.name) + '</div>';
       }).join('') +
         '<div class="sm-legend-item"><span class="sm-legend-dot" style="background:#78bbd4"></span>Wheelchair</div>' +
+        '<div class="sm-legend-item"><span class="sm-legend-dot" style="background:#476aaa"></span>Companion</div>' +
+        '<div class="sm-legend-item"><span class="sm-legend-dot" style="background:#d1523d"></span>Blocked</div>' +
+        '<div class="sm-legend-item"><span class="sm-legend-dot" style="background:#efab45"></span>Obstructed</div>' +
         '<div class="sm-legend-item"><span class="sm-legend-dot" style="background:#e8e4f0"></span>Aisle</div>';
+    }
+
+    var SEAT_COLORS = {
+      standard: null,
+      aisle: '#e8e4f0',
+      wheelchair: '#78bbd4',
+      companion: '#476aaa',
+      blocked: '#d1523d',
+      obstructed: '#efab45',
+    };
+    var smActiveTool = 'standard';
+
+    function smSetTool(btn) {
+      smActiveTool = btn.dataset.tool;
+      document.querySelectorAll('.sm-tool').forEach(function(t) { t.classList.remove('sm-tool--active'); });
+      btn.classList.add('sm-tool--active');
+    }
+
+    function smClickSeat(secIdx, rowIdx, seatIdx) {
+      if (!smLayout) return;
+      var seat = smLayout.sections[secIdx].rows[rowIdx].seats[seatIdx];
+      seat.type = smActiveTool;
+      smRenderResult();
+      smSaveLayout();
     }
 
     function smShowWizard() {
