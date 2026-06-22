@@ -47595,9 +47595,15 @@ See you soon!
       pdfContent = `<iframe src="${esc(storedUrl)}" style="width:100%;height:60vh;border:none;border-radius:6px;background:#f5f5f5;" title="Registration PDF"></iframe>`;
     } else {
       const ca = applicantCustomAnswers(d?.app);
-      const visibleKeys = Object.keys(ca).filter(k => !k.startsWith('__bts_') && ca[k] !== null && ca[k] !== '' && ca[k] !== undefined);
-      if (visibleKeys.length) {
-        const rows = visibleKeys.map(k => {
+      const hasRegSubmit = ca.__bts_registration_complete || ca.__bts_registration_submitted_at;
+      const regKeys = Object.keys(ca).filter(k => {
+        if (k.startsWith('__bts_')) return false;
+        if (ca[k] === null || ca[k] === '' || ca[k] === undefined) return false;
+        const auditionFields = new Set(['name','email','phone','pronouns','date_of_birth','age','headshot_url','attendance_mode','preferred_name','guardian_name','guardian_email','guardian_phone','guardian_contact','slot_id','session_id','audition_date','audition_time']);
+        return !auditionFields.has(k.toLowerCase().replace(/\s+/g, '_'));
+      });
+      if (hasRegSubmit && regKeys.length) {
+        const rows = regKeys.map(k => {
           let val = ca[k];
           if (typeof val === 'boolean') val = val ? 'Yes' : 'No';
           if (Array.isArray(val)) val = val.join(', ');
@@ -47609,11 +47615,19 @@ See you soon!
         </div>
         <div style="margin-top:0.5rem;font-size:0.72rem;color:rgba(87,46,136,0.4);">No PDF on file. Showing saved registration answers.</div>`;
       } else {
-        pdfContent = `<div style="padding:2rem;text-align:center;color:rgba(87,46,136,0.5);font-size:0.85rem;background:#f9f7ff;border-radius:6px;">No registration data found.<br>Use Resend Link to ask them to re-submit.</div>`;
+        pdfContent = `<div style="padding:2rem;text-align:center;color:rgba(87,46,136,0.5);font-size:0.85rem;background:#f9f7ff;border-radius:6px;">
+          <div style="font-weight:800;font-size:1rem;color:#d1523d;margin-bottom:0.5rem;">Registration not submitted</div>
+          This performer's registration form was never completed.<br>Use <strong>Resend Link</strong> to send them a fresh registration link, or <strong>Mark Complete</strong> to manually confirm it.
+        </div>`;
       }
     }
     const downloadBtn = storedUrl
       ? `<a href="${esc(storedUrl)}" download target="_blank" class="rpt-modal-save-btn" style="text-decoration:none;">Download PDF</a>`
+      : '';
+    const ca = applicantCustomAnswers(d?.app);
+    const hasRegSubmit = ca.__bts_registration_complete || ca.__bts_registration_submitted_at;
+    const markCompleteBtn = (!storedUrl && !hasRegSubmit)
+      ? `<button class="rpt-modal-save-btn" style="background:#769e7b;color:#fff;border:none;" onclick="rscMarkRegistrationComplete('${esc(assignId)}', this)">Mark Complete</button>`
       : '';
     const modal = document.createElement('div');
     modal.id = 'rsc-reg-pdf-modal';
@@ -47625,12 +47639,33 @@ See you soon!
         <div style="display:flex;gap:0.5rem;">
           ${downloadBtn}
           <button class="rpt-modal-save-btn" style="background:transparent;color:#572e88;border:1.5px solid #572e88;" onclick="rscResendRegistrationLink('${esc(assignId)}', this);document.getElementById('rsc-reg-pdf-modal')?.remove();">Resend Link</button>
+          ${markCompleteBtn}
         </div>
         <button class="rpt-modal-save-btn" onclick="document.getElementById('rsc-reg-pdf-modal')?.remove()">Close</button>
       </div>
     </div>`;
     modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
     document.body.appendChild(modal);
+  }
+
+  async function rscMarkRegistrationComplete(assignId, buttonEl = null) {
+    const d = window._rscModalData?.[assignId];
+    if (!d?.app?.id) { showToast('Could not find performer record.', true); return; }
+    if (!confirm(`Mark ${d.name || 'this performer'}'s registration as complete? This sets the registration status without them filling out the form.`)) return;
+    if (buttonEl) { buttonEl.disabled = true; buttonEl.textContent = 'Saving...'; }
+    try {
+      const ca = applicantCustomAnswers(d.app);
+      const merged = { ...ca, __bts_registration_complete: true, __bts_registration_submitted_at: new Date().toISOString(), __bts_registration_marked_complete_by: 'admin' };
+      const { error } = await sb.from('audition_applications').update({ custom_answers: merged }).eq('id', d.app.id);
+      if (error) throw error;
+      d.app.custom_answers = merged;
+      showToast(`${d.name || 'Performer'} registration marked as complete.`);
+      document.getElementById('rsc-reg-pdf-modal')?.remove();
+      await loadRegistrationPayments().catch(() => {});
+    } catch (e) {
+      if (buttonEl) { buttonEl.disabled = false; buttonEl.textContent = 'Mark Complete'; }
+      showToast('Could not update: ' + e.message, true);
+    }
   }
 
   async function rscResendRegistrationLink(assignId, buttonEl = null) {
