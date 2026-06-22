@@ -281,10 +281,39 @@
 
         <!-- Pricing panel -->
         <div class="tks-panel" id="tks-panel-pricing">
+          <h3 class="tks-section-head">Capacity <span class="tks-save" id="tks-save-cap">Saved</span></h3>
+          <p class="tks-section-desc">Maximum tickets available per performance. You can override this on individual events.</p>
+          <div class="tks-fields">
+            <div class="tks-field"><label>Default Capacity</label><input id="tks-capacity" type="number" min="1" placeholder="e.g. 250" style="max-width:200px" /></div>
+          </div>
+
           <h3 class="tks-section-head">Ticket Types <span class="tks-save" id="tks-save-types">Saved</span></h3>
           <p class="tks-section-desc">Set the ticket categories and prices your audience can choose from.</p>
           <div id="tks-types-list"></div>
           <button class="tks-add-btn" onclick="tksAddType()">+ Add Ticket Type</button>
+
+          <h3 class="tks-section-head">Fees and Tax <span class="tks-save" id="tks-save-fees">Saved</span></h3>
+          <p class="tks-section-desc">Additional charges applied at checkout.</p>
+          <div class="tks-fields">
+            <div class="tks-field">
+              <label>Booking Fee</label>
+              <input id="tks-booking-fee" type="number" min="0" step="0.01" placeholder="e.g. 3.00" style="max-width:160px" />
+              <span style="font-size:0.65rem;color:#b0a8c8;margin-top:0.2rem;display:block">Flat fee per order. Leave blank for none.</span>
+            </div>
+            <div></div>
+          </div>
+          <input type="hidden" id="tks-currency" value="CAD" />
+          <div class="tks-fields">
+            <div class="tks-field">
+              <label>Tax Name</label>
+              <input id="tks-tax-name" placeholder="e.g. GST, HST, Sales Tax" style="max-width:200px" />
+            </div>
+            <div class="tks-field">
+              <label>Tax Rate (%)</label>
+              <input id="tks-tax-rate" type="number" min="0" max="100" step="0.01" placeholder="e.g. 5" style="max-width:120px" />
+              <span style="font-size:0.65rem;color:#b0a8c8;margin-top:0.2rem;display:block">Applied to the ticket subtotal. Leave blank for none.</span>
+            </div>
+          </div>
         </div>
 
         <!-- Seating panel -->
@@ -302,13 +331,6 @@
               <div class="tks-mode-name">Reserved Seating</div>
               <div class="tks-mode-desc">Assigned seats. You set up sections, rows, and seat categories.</div>
             </div>
-          </div>
-
-          <!-- Festival: capacity -->
-          <div id="tks-capacity-section">
-            <h3 class="tks-section-head">Default Capacity <span class="tks-save" id="tks-save-cap">Saved</span></h3>
-            <p class="tks-section-desc">Maximum tickets available per performance. Override on individual events if needed.</p>
-            <div class="tks-field"><input class="tks-capacity-input" id="tks-capacity" type="number" min="1" placeholder="e.g. 250" /></div>
           </div>
 
           <!-- Reserved: seat map builder -->
@@ -466,6 +488,11 @@
       document.getElementById('tks-venue-notes').value = info.venue_notes || '';
       document.getElementById('tks-selling-points').value = (info.selling_points || []).join('\n');
       document.getElementById('tks-capacity').value = tkt.default_capacity || '';
+      var pricing = tkt.pricing || {};
+      document.getElementById('tks-currency').value = pricing.currency || 'CAD';
+      document.getElementById('tks-booking-fee').value = pricing.booking_fee_cents ? (pricing.booking_fee_cents / 100).toFixed(2) : '';
+      document.getElementById('tks-tax-name').value = pricing.tax_name || '';
+      document.getElementById('tks-tax-rate').value = pricing.tax_rate || '';
       renderModeCards();
       renderModeVisibility();
       smLoadLayout();
@@ -520,8 +547,20 @@
     }
 
     function renderModeVisibility() {
-      document.getElementById('tks-capacity-section').style.display = seatingMode === 'festival' ? '' : 'none';
       document.getElementById('tks-seatmap-section').style.display = seatingMode === 'reserved' ? '' : 'none';
+    }
+
+    async function savePricingSettings() {
+      var tkt = prodSettings.ticketing || {};
+      tkt.pricing = {
+        currency: document.getElementById('tks-currency').value,
+        booking_fee_cents: Math.round(parseFloat(document.getElementById('tks-booking-fee').value || 0) * 100) || null,
+        tax_name: document.getElementById('tks-tax-name').value.trim(),
+        tax_rate: parseFloat(document.getElementById('tks-tax-rate').value) || null,
+      };
+      prodSettings.ticketing = tkt;
+      await sb.from('productions').update({ registration_settings: prodSettings }).eq('id', prodId);
+      flashSave('tks-save-fees');
     }
 
     /* ── Ticket types ── */
@@ -755,6 +794,9 @@
     });
     document.getElementById('tks-intermission').addEventListener('change', saveShowInfo);
     document.getElementById('tks-capacity').addEventListener('blur', saveCapacity);
+    document.querySelectorAll('#tks-booking-fee, #tks-tax-name, #tks-tax-rate').forEach(function(el) {
+      el.addEventListener('blur', savePricingSettings);
+    });
 
     /* ── Init ── */
 
