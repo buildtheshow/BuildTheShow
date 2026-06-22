@@ -495,17 +495,24 @@
 
               <div id="sm-section-config"></div>
 
-              <div class="tks-fields" style="margin-top:1rem">
+              <div class="tks-fields tks-fields--three" style="margin-top:1rem">
                 <div class="tks-field">
-                  <label>Aisles</label>
-                  <div class="tks-check-row"><input type="checkbox" id="sm-has-aisles" checked /><label for="sm-has-aisles">Add centre aisles between sections</label></div>
+                  <label>How many rows?</label>
+                  <input type="number" id="sm-default-rows" min="1" max="30" value="10" placeholder="e.g. 10" />
+                  <span style="font-size:0.62rem;color:#b0a8c8;margin-top:0.15rem;display:block">Applied to all sections above</span>
                 </div>
                 <div class="tks-field">
-                  <label>Wheelchair Spaces</label>
-                  <div class="tks-check-row"><input type="checkbox" id="sm-has-wheelchair" /><label for="sm-has-wheelchair">Include wheelchair accessible spaces</label></div>
-                  <div id="sm-wheelchair-count" style="display:none;margin-top:0.35rem">
-                    <input type="number" id="sm-wheelchair-num" min="1" max="20" value="4" placeholder="How many?" style="max-width:80px" />
-                  </div>
+                  <label>How many aisles?</label>
+                  <select id="sm-aisle-count" class="sm-preset-select">
+                    <option value="0">None</option>
+                    <option value="1" selected>1 (centre)</option>
+                    <option value="2">2 (left and right)</option>
+                  </select>
+                </div>
+                <div class="tks-field">
+                  <label>Wheelchair spaces</label>
+                  <input type="number" id="sm-wheelchair-num" min="0" max="20" value="0" placeholder="e.g. 4" />
+                  <span style="font-size:0.62rem;color:#b0a8c8;margin-top:0.15rem;display:block">0 for none</span>
                 </div>
               </div>
             </div>
@@ -880,8 +887,12 @@
       document.getElementById('sm-section-config').innerHTML = html;
     }
 
-    document.getElementById('sm-has-wheelchair').addEventListener('change', function() {
-      document.getElementById('sm-wheelchair-count').style.display = this.checked ? '' : 'none';
+    document.getElementById('sm-default-rows').addEventListener('input', function() {
+      var rows = parseInt(this.value) || 10;
+      for (var i = 0; i < smSectionCount; i++) {
+        var el = document.getElementById('sm-sec-rows-' + i);
+        if (el) el.value = rows;
+      }
     });
 
     function smAutoGenerate() {
@@ -890,6 +901,7 @@
       var venueType = document.getElementById('sm-venue-type').value;
       if (!venueName) { alert('Please enter a venue name.'); return; }
       if (!venueCap) { alert('Please enter the maximum capacity.'); return; }
+      if (!document.getElementById('sm-sec-name-0')) { alert('Please set up your sections first.'); return; }
 
       var sections = [];
       for (var i = 0; i < smSectionCount; i++) {
@@ -911,13 +923,30 @@
         }
       }
 
-      var hasWheelchair = document.getElementById('sm-has-wheelchair').checked;
-      var wheelchairCount = parseInt(document.getElementById('sm-wheelchair-num').value) || 4;
-      if (hasWheelchair && sections.length) {
+      var aisleCount = parseInt(document.getElementById('sm-aisle-count').value) || 0;
+      if (aisleCount > 0) {
+        sections.forEach(function(sec) {
+          sec.rows.forEach(function(row) {
+            var len = row.seats.length;
+            if (aisleCount === 1 && len >= 4) {
+              var mid = Math.floor(len / 2);
+              row.seats.splice(mid, 0, { id: crypto.randomUUID(), number: 0, type: 'aisle' });
+            } else if (aisleCount === 2 && len >= 6) {
+              var third = Math.floor(len / 3);
+              row.seats.splice(third * 2, 0, { id: crypto.randomUUID(), number: 0, type: 'aisle' });
+              row.seats.splice(third, 0, { id: crypto.randomUUID(), number: 0, type: 'aisle' });
+            }
+          });
+        });
+      }
+
+      var wheelchairCount = parseInt(document.getElementById('sm-wheelchair-num').value) || 0;
+      if (wheelchairCount > 0 && sections.length) {
         var lastSection = sections[sections.length - 1];
         var lastRow = lastSection.rows[lastSection.rows.length - 1];
-        for (var w = 0; w < Math.min(wheelchairCount, lastRow.seats.length); w++) {
-          lastRow.seats[w].type = 'wheelchair';
+        var placed = 0;
+        for (var w = 0; w < lastRow.seats.length && placed < wheelchairCount; w++) {
+          if (lastRow.seats[w].type === 'standard') { lastRow.seats[w].type = 'wheelchair'; placed++; }
         }
       }
 
@@ -926,7 +955,7 @@
         venue_capacity: venueCap,
         venue_type: venueType,
         stage_position: smStagePos,
-        has_aisles: document.getElementById('sm-has-aisles').checked,
+        aisle_count: aisleCount,
         sections: sections,
       };
 
@@ -1021,6 +1050,7 @@
     function smShowWizard() {
       document.getElementById('sm-wizard').style.display = '';
       document.getElementById('sm-result').style.display = 'none';
+      smRenderSectionConfig();
     }
 
     function smZoom(delta) {
