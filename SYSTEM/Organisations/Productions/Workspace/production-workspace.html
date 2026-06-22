@@ -47595,12 +47595,18 @@ See you soon!
       pdfContent = `<iframe src="${esc(storedUrl)}" style="width:100%;height:60vh;border:none;border-radius:6px;background:#f5f5f5;" title="Registration PDF"></iframe>`;
     } else {
       const ca = applicantCustomAnswers(d?.app);
-      const hasRegSubmit = ca.__bts_registration_complete || ca.__bts_registration_submitted_at;
+      const hasRegSubmit = !!ca.__bts_registration_submitted_at;
+      const regFieldNames = new Set();
+      (typeof REGISTRATION_FORM_SECTIONS !== 'undefined' ? REGISTRATION_FORM_SECTIONS : []).forEach(sec => {
+        (sec.defaultFields || []).forEach(f => {
+          const clean = f.replace(/^\{[^}]*\}/, '').replace(/\s*\*\s*$/, '').trim();
+          if (clean) regFieldNames.add(clean.toLowerCase());
+        });
+      });
       const regKeys = Object.keys(ca).filter(k => {
         if (k.startsWith('__bts_')) return false;
         if (ca[k] === null || ca[k] === '' || ca[k] === undefined) return false;
-        const auditionFields = new Set(['name','email','phone','pronouns','date_of_birth','age','headshot_url','attendance_mode','preferred_name','guardian_name','guardian_email','guardian_phone','guardian_contact','slot_id','session_id','audition_date','audition_time']);
-        return !auditionFields.has(k.toLowerCase().replace(/\s+/g, '_'));
+        return regFieldNames.has(k.toLowerCase()) || regFieldNames.has(k.toLowerCase().replace(/_/g, ' '));
       });
       if (hasRegSubmit && regKeys.length) {
         const rows = regKeys.map(k => {
@@ -47624,9 +47630,9 @@ See you soon!
     const downloadBtn = storedUrl
       ? `<a href="${esc(storedUrl)}" download target="_blank" class="rpt-modal-save-btn" style="text-decoration:none;">Download PDF</a>`
       : '';
-    const ca = applicantCustomAnswers(d?.app);
-    const hasRegSubmit = ca.__bts_registration_complete || ca.__bts_registration_submitted_at;
-    const markCompleteBtn = (!storedUrl && !hasRegSubmit)
+    const caForBtn = applicantCustomAnswers(d?.app);
+    const hasRegSubmitBtn = !!caForBtn.__bts_registration_submitted_at;
+    const markCompleteBtn = (!storedUrl && !hasRegSubmitBtn)
       ? `<button class="rpt-modal-save-btn" style="background:#769e7b;color:#fff;border:none;" onclick="rscMarkRegistrationComplete('${esc(assignId)}', this)">Mark Complete</button>`
       : '';
     const modal = document.createElement('div');
