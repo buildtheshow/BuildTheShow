@@ -1679,32 +1679,55 @@
       const business = document.getElementById('sp-business').value.trim();
       const contact  = document.getElementById('sp-contact').value.trim();
       const email    = document.getElementById('sp-email').value.trim();
+      const phone    = document.getElementById('sp-phone').value.trim() || null;
       const website  = document.getElementById('sp-website') ? document.getElementById('sp-website').value.trim() : '';
+      const notes    = document.getElementById('sp-notes').value.trim() || null;
       if (!selected || !business || !contact || !email) { alert('Enter the business name, contact name, and email.'); return; }
       const btn = document.getElementById('sp-submit');
       btn.disabled = true; btn.textContent = 'Sending...';
       try {
-        var noteParts = [];
-        if (document.getElementById('sp-notes').value.trim()) noteParts.push(document.getElementById('sp-notes').value.trim());
-        if (website) noteParts.push('Website: ' + website);
-        const { error } = await sb.rpc('submit_sponsor_interest', {
-          p_production_id: production.id,
-          p_kind: selected.kind,
-          p_business_name: business,
-          p_contact_name: contact,
-          p_contact_email: email,
-          p_contact_phone: document.getElementById('sp-phone').value.trim() || null,
-          p_option_id: selected.sizeId || null,
-          p_option_label: selected.tier || selected.size || null,
-          p_format: selected.format || null,
-          p_amount_cents: Math.round(Number(selected.amount) * 100),
-          p_notes: noteParts.length ? noteParts.join(' | ') : null,
-        });
-        if (error) throw error;
+        var bizId = null;
+        var existRes = await sb.from('sponsor_businesses').select('id').eq('production_id', production.id).ilike('name', business).limit(1).maybeSingle();
+        if (existRes.data) {
+          bizId = existRes.data.id;
+        } else {
+          var bizPayload = { production_id: production.id, name: business, contact_name: contact, contact_email: email, contact_phone: phone, notes: notes };
+          if (website) bizPayload.contact_website = website;
+          var insRes = await sb.from('sponsor_businesses').insert(bizPayload).select('id').single();
+          if (insRes.error) throw insRes.error;
+          bizId = insRes.data.id;
+        }
+
+        if (selected.kind === 'ad') {
+          var adRes = await sb.from('programme_ads').insert({
+            production_id: production.id,
+            business_id: bizId,
+            size_id: selected.sizeId || null,
+            price_cents: Math.round(Number(selected.amount) * 100),
+            format: selected.format || 'colour',
+            payment_status: 'unpaid',
+            artwork_status: 'missing',
+            notes: notes,
+          });
+          if (adRes.error) throw adRes.error;
+        } else {
+          var optLabel = selected.tier || selected.size || null;
+          var pkgNotes = notes && optLabel ? notes + ' [' + optLabel + ']' : optLabel ? '[' + optLabel + ']' : notes;
+          var pkgRes = await sb.from('sponsor_packages').insert({
+            production_id: production.id,
+            business_id: bizId,
+            tier_id: selected.tierId || null,
+            amount_cents: Math.round(Number(selected.amount) * 100),
+            payment_status: 'unpaid',
+            notes: pkgNotes,
+          });
+          if (pkgRes.error) throw pkgRes.error;
+        }
+
         document.getElementById('sp-request-modal').innerHTML = '<div class="sp-modal" style="text-align:center;padding:3rem 2rem;"><h2 style="margin:0 0 0.75rem;color:#1a1530;">Request sent!</h2><p style="color:#6b6080;margin:0 0 1.5rem;">The production team will review your submission and be in touch within 1-3 business days.</p><button class="sp-btn sp-btn-primary" onclick="closeRequest()">Done</button></div>';
       } catch (err) {
         alert('Your request could not be sent. Please contact the production directly.');
-        btn.disabled = false; btn.textContent = 'Send Request';
+        btn.disabled = false; btn.textContent = 'Send for Review →';
         console.error(err);
       }
     }
