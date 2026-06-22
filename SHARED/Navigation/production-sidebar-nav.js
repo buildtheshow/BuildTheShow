@@ -302,6 +302,7 @@
           ['asub-dashboard',    'auditions:dashboard'],
           ['asub-audschedule',  'auditions:schedule'],
           ['asub-allperformers','auditions:allperformers'],
+          ['asub-selftapes',   'auditions:selftapes'],
           ['asub-setup',        'auditions:settings'],
         ].forEach(function (pair) {
           var el = document.getElementById(pair[0]);
