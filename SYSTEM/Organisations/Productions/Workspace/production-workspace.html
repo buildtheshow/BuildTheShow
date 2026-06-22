@@ -46390,7 +46390,7 @@ See you soon!
     const records = _rptPaymentRecords[assignId] || [];
     const hasFee = (settings.mode === 'flat' || settings.mode === 'split') && ef.total > 0;
     if (!hasFee) return `<div class="rsc-stmt-empty">No fee configured for this production.</div>`;
-    const paidAmt = records.filter(r => r.paid).reduce((s, r) => s + (ef.installments[r.installment_index]?.amount || 0), 0);
+    const paidAmt = records.filter(r => r.paid).reduce((s, r) => s + (r.amount_cents ? r.amount_cents / 100 : (ef.installments[r.installment_index]?.amount || 0)), 0);
     const balance = Math.max(0, ef.total - paidAmt);
     const allPaid = balance === 0 && paidAmt > 0;
     const stateClass = allPaid ? 'full' : paidAmt > 0 ? 'partial' : 'unpaid';
@@ -46398,7 +46398,7 @@ See you soon!
     const feeBreakdownHtml = feeBreakdown(ef);
     const paidRecords = ef.installments.map((inst, idx) => {
       const rec = records.find(r => r.installment_index === idx && r.paid);
-      return rec ? { paid_at: rec.paid_at, amount: inst.amount, installment_index: idx } : null;
+      return rec ? { paid_at: rec.paid_at, amount: rec.amount_cents ? rec.amount_cents / 100 : inst.amount, installment_index: idx } : null;
     }).filter(Boolean);
     paidRecords.sort((a, b) => new Date(a.paid_at || 0) - new Date(b.paid_at || 0));
     const ledgerHtml = paidRecords.length
@@ -46643,13 +46643,13 @@ See you soon!
       }
       // Combined balance tile
       const totalFee = allEfData.reduce((s, d) => s + (feeMode && d.ef.total > 0 ? d.ef.total : 0), 0);
-      const totalPaid = allEfData.reduce((s, d) => s + (feeMode && d.ef.total > 0 ? d.records.filter(r => r.paid).reduce((ss, r) => ss + (d.ef.installments[r.installment_index]?.amount || 0), 0) : 0), 0);
+      const totalPaid = allEfData.reduce((s, d) => s + (feeMode && d.ef.total > 0 ? d.records.filter(r => r.paid).reduce((ss, r) => ss + (r.amount_cents ? r.amount_cents / 100 : (d.ef.installments[r.installment_index]?.amount || 0)), 0) : 0), 0);
       const totalBalance = Math.max(0, totalFee - totalPaid);
       const isPaidFullHh = totalBalance === 0 && totalPaid > 0;
       const balanceTitleText = isPaidFullHh ? 'Paid' : totalBalance > 0 ? rscFmtTileAmt(totalBalance, settings) : '—';
       const balBreakdownHtml = allEfData.map(d => {
         if (!(feeMode && d.ef.total > 0)) return '';
-        const paidM = d.records.filter(r => r.paid).reduce((ss, r) => ss + (d.ef.installments[r.installment_index]?.amount || 0), 0);
+        const paidM = d.records.filter(r => r.paid).reduce((ss, r) => ss + (r.amount_cents ? r.amount_cents / 100 : (d.ef.installments[r.installment_index]?.amount || 0)), 0);
         const balM = Math.max(0, d.ef.total - paidM);
         return `<div class="rsc-hh-breakdown-row">${esc(d.firstName)}: ${balM === 0 && paidM > 0 ? 'Paid ✓' : rscFmtTileAmt(balM, settings)}</div>`;
       }).filter(Boolean).join('');
@@ -46675,7 +46675,7 @@ See you soon!
       const ef = rptEffectiveFee(item, settings);
       const records = _rptPaymentRecords[assignId] || [];
       const hasFee = feeMode && ef.total > 0;
-      const paidAmt = hasFee ? records.filter(r => r.paid).reduce((s, r) => s + (ef.installments[r.installment_index]?.amount || 0), 0) : 0;
+      const paidAmt = hasFee ? records.filter(r => r.paid).reduce((s, r) => s + (r.amount_cents ? r.amount_cents / 100 : (ef.installments[r.installment_index]?.amount || 0)), 0) : 0;
       const regDone = !!registrationFormsComplete(app);
 
       // Progress
@@ -46921,7 +46921,7 @@ See you soon!
     const ef = rptEffectiveFee(item, settings);
     const records = _overrideRecords !== null ? _overrideRecords : (_rptPaymentRecords[assignId] || []);
     const hasFee = (settings.mode === 'flat' || settings.mode === 'split') && ef.total > 0;
-    const paidAmt = hasFee ? records.filter(r => r.paid).reduce((s, r) => s + (ef.installments[r.installment_index]?.amount || 0), 0) : 0;
+    const paidAmt = hasFee ? records.filter(r => r.paid).reduce((s, r) => s + (r.amount_cents ? r.amount_cents / 100 : (ef.installments[r.installment_index]?.amount || 0)), 0) : 0;
     const regDone = !!registrationFormsComplete(app);
 
     // Progress — dynamic equal-weight steps (spec: project_registration_progress_bar_spec.md)
