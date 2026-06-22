@@ -1035,7 +1035,32 @@
       var sec = smLayout.sections[secIdx];
       if (!sec || !sec.rows[rowIdx] || !sec.rows[rowIdx].seats[seatIdx]) return;
       var seat = sec.rows[rowIdx].seats[seatIdx];
+      var wasSellable = seat.type !== 'aisle';
+      var willBeAisle = smActiveTool === 'aisle';
+
       seat.type = smActiveTool;
+
+      if (wasSellable && willBeAisle) {
+        var row = sec.rows[rowIdx];
+        var nextNum = row.seats.length + 1;
+        row.seats.push({ id: crypto.randomUUID(), number: nextNum, type: 'standard' });
+        smRenderResult();
+        smDebounceSave();
+        return;
+      }
+
+      var wasAisle = !wasSellable;
+      var willBeSellable = smActiveTool !== 'aisle';
+      if (wasAisle && willBeSellable) {
+        var row = sec.rows[rowIdx];
+        for (var i = row.seats.length - 1; i >= 0; i--) {
+          if (row.seats[i].type === 'standard' && i !== seatIdx) { row.seats.splice(i, 1); break; }
+        }
+        smRenderResult();
+        smDebounceSave();
+        return;
+      }
+
       var color = SEAT_COLORS[seat.type] || sec.color;
       el.style.backgroundColor = color;
       el.title = sec.name + ' ' + sec.rows[rowIdx].label + seat.number + (seat.type !== 'standard' ? ' (' + seat.type + ')' : '');
