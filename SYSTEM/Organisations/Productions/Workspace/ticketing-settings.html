@@ -39,7 +39,7 @@
 
     /* ── Tabs ── */
     .tks-tabs {
-      display: flex; gap: 0; margin-bottom: 1.5rem;
+      display: flex; align-items: center; gap: 0; margin-bottom: 1.5rem;
       border-bottom: 1.5px solid rgba(87,46,136,0.1); padding: 0;
     }
     .tks-tab {
@@ -184,10 +184,10 @@
     .sm-section-block { flex: 0 1 auto; }
     .sm-section-label { font-size: 0.58rem; font-weight: 900; color: #572e88; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 0.3rem; text-align: center; white-space: nowrap; }
     .sm-row-line { display: flex; align-items: center; gap: 0; margin-bottom: 2px; }
-    .sm-row-label { font-size: 0.52rem; font-weight: 900; color: #8e82a7; width: 14px; text-align: center; flex-shrink: 0; }
-    .sm-seats { display: flex; gap: 2px; justify-content: center; }
-    .sm-seat-num { width: 16px; font-size: 0.42rem; font-weight: 800; color: #b0a8c8; text-align: center; flex-shrink: 0; line-height: 16px; }
-    .sm-seat { width: 16px; height: 16px; border-radius: 50%; flex-shrink: 0; }
+    .sm-row-label { font-size: 0.62rem; font-weight: 900; color: #8e82a7; width: 20px; text-align: center; flex-shrink: 0; }
+    .sm-seats { display: flex; gap: 3px; justify-content: center; }
+    .sm-seat-num { width: 24px; font-size: 0.52rem; font-weight: 800; color: #b0a8c8; text-align: center; flex-shrink: 0; line-height: 20px; }
+    .sm-seat { width: 24px; height: 24px; border-radius: 50%; flex-shrink: 0; }
     .sm-legend { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; padding-top: 0.75rem; border-top: 1px solid #eceaf3; margin-top: auto; }
     .sm-legend-item { display: flex; align-items: center; gap: 0.3rem; font-size: 0.62rem; font-weight: 800; color: #3a3050; }
     .sm-legend-dot { width: 12px; height: 12px; border-radius: 50%; }
@@ -245,13 +245,13 @@
     .sm-section-cfg-row input:focus { border-color: #572e88; outline: none; }
     .sm-section-cfg-head { display: grid; grid-template-columns: 1fr 80px; gap: 0.65rem; font-size: 0.58rem; font-weight: 900; color: #8e82a7; text-transform: uppercase; letter-spacing: 0.08em; padding-bottom: 0.3rem; border-bottom: 1.5px solid #eceaf3; margin-bottom: 0.15rem; }
 
-    /* ── Capacity bar ── */
+    /* ── Capacity bar (inline with tabs) ── */
     .sm-capacity-bar {
-      display: flex; align-items: center; gap: 1.25rem; padding: 0.85rem 1.15rem;
-      border-radius: 10px; margin-bottom: 1rem; font-size: 0.78rem; font-weight: 800;
+      display: flex; align-items: center; gap: 1.25rem; font-size: 0.72rem; font-weight: 800;
+      margin-left: auto;
     }
-    .sm-capacity-bar--ok { background: rgba(118,158,123,0.1); color: #3a7a42; border: 1.5px solid rgba(118,158,123,0.25); }
-    .sm-capacity-bar--over { background: rgba(209,82,61,0.08); color: #a93a25; border: 1.5px solid rgba(209,82,61,0.2); }
+    .sm-capacity-bar--ok { color: #3a7a42; }
+    .sm-capacity-bar--over { color: #a93a25; }
     .sm-cap-item { display: flex; flex-direction: column; gap: 0.1rem; }
     .sm-cap-label { font-size: 0.6rem; font-weight: 900; text-transform: uppercase; letter-spacing: 0.06em; opacity: 0.7; }
     .sm-cap-val { font-size: 1.1rem; font-weight: 950; }
@@ -337,6 +337,7 @@
         <button class="tks-tab" data-panel="tks-panel-pricing" onclick="tksTab(this)">
           <img src="/ASSETS/Images/Icons/Budgeting-Sponsorship.svg" alt="" class="tks-tab-icon" />Pricing
         </button>
+        <div class="sm-capacity-bar" id="sm-capacity-bar" style="display:none"></div>
       </div>
 
         <!-- Show Details panel -->
@@ -509,9 +510,6 @@
 
           <!-- Result (shown after generation) -->
           <div id="sm-result" style="display:none">
-            <!-- Capacity validation -->
-            <div class="sm-capacity-bar" id="sm-capacity-bar"></div>
-
             <!-- Quick adjust -->
             <div id="sm-adjust" style="display:flex;gap:1rem;flex-wrap:wrap;margin-bottom:0.75rem"></div>
 
@@ -670,6 +668,8 @@
       document.querySelectorAll('.tks-panel').forEach(function(p) { p.classList.remove('active'); });
       el.classList.add('active');
       document.getElementById(el.dataset.panel).classList.add('active');
+      var capBar = document.getElementById('sm-capacity-bar');
+      if (capBar) capBar.style.display = el.dataset.panel === 'tks-panel-reserved' ? '' : 'none';
     }
 
     /* ── Helpers ── */
@@ -976,8 +976,17 @@
         var maxCols = 0;
         sec.rows.forEach(function(row) { maxCols = Math.max(maxCols, row.seats.length); });
 
+        var firstRow = sec.rows[0];
         var numRow = '<div class="sm-row-line"><span class="sm-row-label"></span><div class="sm-seats">';
-        for (var n = 1; n <= maxCols; n++) numRow += '<span class="sm-seat-num">' + n + '</span>';
+        if (firstRow) {
+          var seatNum = 0;
+          firstRow.seats.forEach(function(seat) {
+            if (seat.type === 'aisle') { numRow += '<span class="sm-seat-num"></span>'; }
+            else { seatNum++; numRow += '<span class="sm-seat-num">' + seatNum + '</span>'; }
+          });
+        } else {
+          for (var n = 1; n <= maxCols; n++) numRow += '<span class="sm-seat-num">' + n + '</span>';
+        }
         numRow += '</div><span class="sm-row-label"></span></div>';
 
         html += '<div class="sm-section-block">';
