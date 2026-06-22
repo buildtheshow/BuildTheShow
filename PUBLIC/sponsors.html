@@ -347,6 +347,13 @@
     .spb-fmt-btn { padding: 0.45rem 0.85rem; border: 1.5px solid #d0cbe2; border-radius: 7px; background: #fff; color: #3a3050; font: inherit; font-size: 0.76rem; font-weight: 800; cursor: pointer; transition: border-color 0.15s, background 0.15s; }
     .spb-fmt-btn:hover { border-color: #572e88; color: #572e88; }
     .spb-fmt-btn--sel { border-color: #572e88; background: #572e88; color: #fff; }
+    .spb-ad-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 0.85rem; }
+    .spb-ad-grid .sp-card--ad { border-top: 1.5px solid rgba(26,21,48,0.1); box-shadow: 0 8px 28px rgba(26,21,48,0.14), 0 2px 8px rgba(26,21,48,0.07); cursor: pointer; }
+    .spb-ad-grid .sp-card--ad:hover { box-shadow: 0 16px 40px rgba(26,21,48,0.20), 0 4px 12px rgba(26,21,48,0.10); transform: translateY(-3px); }
+    .spb-ad-grid .sp-card--ad.spb-ad-card--sel { outline: 3px solid #572e88; outline-offset: -3px; }
+    .spb-ad-grid .sp-card-visual img { height: 160px; }
+    .spb-ad-grid .sp-option-btn.spb-opt--sel { background: #572e88 !important; border-color: #572e88 !important; color: #fff !important; }
+    @media (max-width: 700px) { .spb-ad-grid { grid-template-columns: 1fr; } }
     /* sidebar */
     .spb-status-box, .spb-summary-box, .spb-next-box { background: #fff; border: 1px solid #eceaf3; border-radius: 10px; padding: 1rem; }
     .spb-status-head { display: flex; align-items: center; gap: 0.5rem; font-size: 0.82rem; font-weight: 900; color: #1a1530; margin-bottom: 0.6rem; }
@@ -1529,23 +1536,28 @@
       if (kind === 'ad') {
         var sizes = settings.adSizes || [];
         if (!sizes.length) { wrap.innerHTML = '<p style="font-size:0.8rem;color:#9288a8;margin:0">Ad sizes are being set up by the production team.</p>'; return; }
-        wrap.innerHTML = sizes.map(function(sz, i) {
+        wrap.innerHTML = '<div class="spb-ad-grid">' + sizes.map(function(sz, i) {
           var colour = sz.colour != null ? sz.colour : (sz.colourPrice || 0);
           var bw = sz.bw != null ? sz.bw : (sz.bwPrice || 0);
-          var dims = sz.dims ? (' <span style="color:#9288a8;font-weight:600;font-size:0.7rem;">(' + esc(sz.dims) + ')</span>' ) : '';
           var selColour = selected.sizeId === sz.id && selected.format === 'colour';
           var selBw     = selected.sizeId === sz.id && selected.format === 'bw';
-          var fmtBtns = '';
-          if (sz.colour_enabled !== false && colour > 0)
-            fmtBtns += '<button class="spb-fmt-btn' + (selColour ? ' spb-fmt-btn--sel' : '') + '" onclick="spbPickAd(\'' + esc(sz.id) + '\',\'' + esc(sz.label) + '\',\'colour\',' + colour + ')">Colour — $' + Number(colour).toLocaleString() + '</button>';
-          if (sz.bw_enabled !== false && bw > 0)
-            fmtBtns += '<button class="spb-fmt-btn' + (selBw ? ' spb-fmt-btn--sel' : '') + '" onclick="spbPickAd(\'' + esc(sz.id) + '\',\'' + esc(sz.label) + '\',\'bw\',' + bw + ')">Black & White — $' + Number(bw).toLocaleString() + '</button>';
           var isCardSel = selected.sizeId === sz.id;
-          return '<div class="spb-full-card' + (isCardSel ? ' spb-full-card--sel' : '') + '">' +
-            '<div class="spb-full-card-head"><span class="spb-full-card-name">' + esc(sz.label) + dims + '</span></div>' +
-            '<div class="spb-fmt-row">' + (fmtBtns || '<span style="font-size:0.75rem;color:#9288a8">Pricing coming soon</span>') + '</div>' +
-            '</div>';
-        }).join('');
+          var accent = COLORS[i % COLORS.length];
+          var btns = '';
+          if (sz.colour_enabled !== false && colour > 0)
+            btns += '<button class="sp-option-btn' + (selColour ? ' spb-opt--sel' : '') + '" style="--accent:' + accent + '" onclick="spbPickAd(\'' + esc(sz.id) + '\',\'' + esc(sz.label) + '\',\'colour\',' + colour + ')"><span>Colour</span><span>$' + Number(colour).toLocaleString() + '</span></button>';
+          if (sz.bw_enabled !== false && bw > 0)
+            btns += '<button class="sp-option-btn' + (selBw ? ' spb-opt--sel' : '') + '" style="--accent:' + accent + '" onclick="spbPickAd(\'' + esc(sz.id) + '\',\'' + esc(sz.label) + '\',\'bw\',' + bw + ')"><span>Black & White</span><span>$' + Number(bw).toLocaleString() + '</span></button>';
+          return '<article class="sp-card sp-card--ad' + (isCardSel ? ' spb-ad-card--sel' : '') + '" style="--accent:' + accent + '">' +
+            '<div class="sp-card-header"><div class="sp-card-kicker">Programme ad size</div><h3>' + esc(sz.label) + '</h3></div>' +
+            '<div class="sp-card-visual"><img src="' + adSizeIllustration(sz) + '" alt="' + esc(sz.label) + '" /></div>' +
+            '<div class="sp-card-body">' +
+              '<div class="sp-card-size"><span>Finished dimensions</span><strong>' + esc(formatDimensionsWithRatio(sz.dims)) + '</strong></div>' +
+              '<div class="sp-card-actions-label">Choose your print format:</div>' +
+              '<div class="sp-card-actions">' + (btns || '<span style="font-size:0.75rem;color:#9288a8">Pricing coming soon</span>') + '</div>' +
+            '</div>' +
+            '</article>';
+        }).join('') + '</div>';
       } else {
         var tiers = settings.tiers || [];
         if (!tiers.length) { wrap.innerHTML = '<p style="font-size:0.8rem;color:#9288a8;margin:0">Sponsorship tiers are being set up by the production team.</p>'; return; }
