@@ -329,7 +329,13 @@
     .spb-radios { display: flex; gap: 1.25rem; margin-bottom: 0.5rem; }
     .spb-radio { display: flex; align-items: center; gap: 0.45rem; font-size: 0.8rem; color: #3a3050; cursor: pointer; }
     .spb-radio input { accent-color: #572e88; }
-    .spb-notes-field { margin-top: 1rem; }
+    .spb-pick-list { display: flex; flex-direction: column; gap: 0.55rem; margin-bottom: 0.5rem; }
+    .spb-pick-item { display: flex; align-items: center; gap: 0.85rem; padding: 0.85rem 1rem; border: 2px solid #e4e0ef; border-radius: 10px; background: #fff; cursor: pointer; text-align: left; transition: border-color 0.15s; width: 100%; font: inherit; }
+    .spb-pick-item--selected { border-color: #572e88; background: rgba(87,46,136,0.04); }
+    .spb-pick-item .spb-option-radio { flex-shrink: 0; }
+    .spb-pick-item-name { flex: 1; font-size: 0.88rem; font-weight: 800; color: #1a1530; }
+    .spb-pick-item-price { font-size: 0.88rem; font-weight: 900; color: #572e88; flex-shrink: 0; }
+    .spb-pick-item-desc { font-size: 0.72rem; color: #6b6080; font-weight: 400; display: block; margin-top: 0.1rem; }
     /* sidebar */
     .spb-status-box, .spb-summary-box, .spb-next-box { background: #fff; border: 1px solid #eceaf3; border-radius: 10px; padding: 1rem; }
     .spb-status-head { display: flex; align-items: center; gap: 0.5rem; font-size: 0.82rem; font-weight: 900; color: #1a1530; margin-bottom: 0.6rem; }
@@ -872,60 +878,9 @@
             <span class="spb-field-note">This will be displayed in the programme (if approved).</span>
           </div>
 
-          <h3 class="spb-section-head">What would you like to book?</h3>
-          <div class="spb-option-cards">
-            <button class="spb-option-card spb-option-card--selected" id="spb-opt-sponsor" onclick="spbSelectKind('sponsor')">
-              <div class="spb-option-radio"></div>
-              <img src="/ASSETS/Images/Icons/sponsorship-packages.svg" alt="" class="spb-option-icon" />
-              <div>
-                <div class="spb-option-title">Sponsorship</div>
-                <div class="spb-option-body">Support our production and get your business seen by local families.</div>
-              </div>
-            </button>
-            <button class="spb-option-card" id="spb-opt-ad" onclick="spbSelectKind('ad')">
-              <div class="spb-option-radio"></div>
-              <img src="/ASSETS/Images/Icons/Budgeting-Ads.svg" alt="" class="spb-option-icon" />
-              <div>
-                <div class="spb-option-title">Programme Ad</div>
-                <div class="spb-option-body">Place an advertisement in our digital or printed programme.</div>
-              </div>
-            </button>
-          </div>
-
-          <h3 class="spb-section-head">Artwork &amp; Assets</h3>
-          <div class="sp-fields spb-upload-row">
-            <div class="spb-upload-zone">
-              <label class="spb-upload-label">Upload Your Logo <span class="spb-opt-tag">(optional)</span></label>
-              <div class="spb-drop" onclick="document.getElementById('spb-logo-inp').click()">
-                <img src="/ASSETS/Images/Icons/Upload - Document.svg" alt="" class="spb-drop-icon" />
-                <span>Click to upload <span class="spb-drop-link">or drag and drop</span></span>
-                <span class="spb-drop-hint">PNG, JPG or SVG (Max 5MB)</span>
-                <input type="file" id="spb-logo-inp" accept=".png,.jpg,.jpeg,.svg" hidden onchange="spbFileChosen(this,'spb-logo-name')" />
-              </div>
-              <span class="spb-file-name" id="spb-logo-name" hidden></span>
-            </div>
-            <div class="spb-upload-zone">
-              <label class="spb-upload-label">Upload Advert Artwork <span class="spb-opt-tag">(optional)</span></label>
-              <div class="spb-drop" onclick="document.getElementById('spb-art-inp').click()">
-                <img src="/ASSETS/Images/Icons/Upload - Document.svg" alt="" class="spb-drop-icon" />
-                <span>Click to upload <span class="spb-drop-link">or drag and drop</span></span>
-                <span class="spb-drop-hint">PDF, PNG, JPG (Max 10MB)</span>
-                <input type="file" id="spb-art-inp" accept=".pdf,.png,.jpg,.jpeg" hidden onchange="spbFileChosen(this,'spb-art-name')" />
-              </div>
-              <span class="spb-file-name" id="spb-art-name" hidden></span>
-            </div>
-          </div>
-
-          <h3 class="spb-section-head">Do you already have an advert?</h3>
-          <div class="spb-radios">
-            <label class="spb-radio"><input type="radio" name="spb-has-art" value="yes" checked /> Yes, I already have an advert</label>
-            <label class="spb-radio"><input type="radio" name="spb-has-art" value="no" /> No, I need help creating one</label>
-          </div>
-
-          <div class="sp-field spb-notes-field">
-            <label>Notes <span class="spb-opt-tag">(optional)</span></label>
-            <textarea id="sp-notes" placeholder="Questions, artwork details, or anything the production should know." rows="3"></textarea>
-          </div>
+          <h3 class="spb-section-head" id="spb-options-head">Which sponsorship?</h3>
+          <div class="spb-pick-list" id="spb-options-wrap"></div>
+          <input type="hidden" id="sp-notes" value="" />
         </div>
 
         <!-- Right: sidebar -->
@@ -1551,12 +1506,52 @@
       document.body.style.overflow = 'hidden';
     }
     function spbSelectKind(kind) {
-      selected = Object.assign({}, selected || {}, { kind: kind });
-      document.getElementById('spb-opt-sponsor').classList.toggle('spb-option-card--selected', kind === 'sponsor');
-      document.getElementById('spb-opt-ad').classList.toggle('spb-option-card--selected', kind === 'ad');
-      var label = kind === 'sponsor' ? 'Show Sponsorship' : 'Programme Ad';
+      selected = Object.assign({}, selected || {}, { kind: kind, tier: null, size: null, amount: null });
+      spbRenderOptions();
+    }
+    function spbRenderOptions() {
+      var kind = selected && selected.kind;
+      var headEl = document.getElementById('spb-options-head');
+      var wrap = document.getElementById('spb-options-wrap');
+      if (!wrap) return;
+      if (headEl) headEl.textContent = kind === 'ad' ? 'Which ad size?' : 'Which sponsorship?';
+      var items = [];
+      if (kind === 'ad') {
+        (settings.adSizes || []).forEach(function(sz) {
+          ['colour','bw'].forEach(function(fmt) {
+            var price = fmt === 'colour' ? (sz.colourPrice || sz.price || 0) : (sz.bwPrice || sz.price || 0);
+            var fmtLabel = fmt === 'colour' ? 'Colour' : 'Black & White';
+            items.push({ id: sz.id + '_' + fmt, name: sz.label + ' – ' + fmtLabel, price: price, sizeId: sz.id, format: fmt });
+          });
+        });
+      } else {
+        (settings.tiers || []).forEach(function(t) {
+          items.push({ id: t.id, name: t.label, price: t.amount });
+        });
+      }
+      if (!items.length) { wrap.innerHTML = '<p style="font-size:0.8rem;color:#9288a8;">Options will appear once the production team has set them up.</p>'; return; }
+      var selectedId = selected && (selected.sizeId ? selected.sizeId + '_' + selected.format : selected.tierId);
+      wrap.innerHTML = items.map(function(it) {
+        var isSel = it.id === selectedId;
+        return '<button class="spb-pick-item' + (isSel ? ' spb-pick-item--selected' : '') + '" onclick="spbPickOption(' + encodeURIComponent(JSON.stringify(it)) + ')">' +
+          '<div class="spb-option-radio"></div>' +
+          '<span class="spb-pick-item-name">' + esc(it.name) + '</span>' +
+          '<span class="spb-pick-item-price">$' + Number(it.price || 0).toLocaleString() + '</span>' +
+          '</button>';
+      }).join('');
+    }
+    function spbPickOption(encoded) {
+      var it = JSON.parse(decodeURIComponent(encoded));
+      selected = Object.assign({}, selected || {}, { tierId: it.id, tier: it.name, sizeId: it.sizeId, format: it.format, amount: it.price });
+      spbRenderOptions();
+      spbUpdateSummary();
+    }
+    function spbUpdateSummary() {
       var typeEl = document.getElementById('spb-sum-type');
-      if (typeEl) typeEl.textContent = selected.tier || selected.size || label;
+      if (typeEl) typeEl.textContent = selected.tier || (selected.kind === 'ad' ? 'Programme Ad' : 'Show Sponsorship');
+      var total = selected.amount ? 'CAD $' + Number(selected.amount).toLocaleString('en-CA', {minimumFractionDigits:2}) : '';
+      var totalEl = document.getElementById('spb-sum-total');
+      if (totalEl) totalEl.textContent = total;
     }
     function spbPopulateSidebar() {
       var poster = document.getElementById('spp-poster');
@@ -1566,15 +1561,8 @@
       if (titleEl && production) titleEl.textContent = production.title || '';
       var orgEl = document.getElementById('spb-sum-org');
       if (orgEl && organization) orgEl.textContent = organization.name || '';
-      var total = selected && selected.amount ? 'CAD $' + Number(selected.amount).toLocaleString('en-CA', {minimumFractionDigits:2}) : '';
-      var totalEl = document.getElementById('spb-sum-total');
-      if (totalEl) totalEl.textContent = total;
-    }
-    function spbFileChosen(input, nameId) {
-      var el = document.getElementById(nameId);
-      if (!el) return;
-      if (input.files && input.files[0]) { el.textContent = input.files[0].name; el.hidden = false; }
-      else { el.hidden = true; }
+      spbUpdateSummary();
+      spbRenderOptions();
     }
     function spbBack() { closeRequest(); openBookModal(); }
     function bookModalContact() {
