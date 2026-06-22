@@ -287,8 +287,13 @@
               <div class="tks-field"><label>Tagline <span class="tks-opt">(optional)</span></label><input id="tks-tagline" placeholder="e.g. Practically perfect in every way" /></div>
               <div class="tks-field">
                 <label>Runtime (minutes)</label>
-                <input id="tks-runtime" type="number" min="0" placeholder="e.g. 150" />
-                <div class="tks-check-row"><input type="checkbox" id="tks-intermission" /><label for="tks-intermission">Includes intermission</label></div>
+                <input id="tks-runtime" type="number" min="0" placeholder="e.g. 120" oninput="tksCalcTotal()" />
+                <div class="tks-check-row" style="margin-bottom:0.5rem"><input type="checkbox" id="tks-intermission" onchange="tksToggleIntermission()" /><label for="tks-intermission">Intermission</label></div>
+                <div id="tks-intermission-fields" style="display:none">
+                  <label>Intermission (minutes)</label>
+                  <input id="tks-intermission-mins" type="number" min="0" placeholder="e.g. 15" oninput="tksCalcTotal()" />
+                </div>
+                <div id="tks-total-time" style="font-size:0.72rem;font-weight:800;color:#572e88;margin-top:0.4rem"></div>
               </div>
             </div>
             <div class="tks-fields">
@@ -522,6 +527,30 @@
 
     function tksPublicUrl() { return window.location.origin + '/PUBLIC/tickets.html?prod=' + encodeURIComponent(prodId); }
 
+    function tksToggleIntermission() {
+      var checked = document.getElementById('tks-intermission').checked;
+      document.getElementById('tks-intermission-fields').style.display = checked ? '' : 'none';
+      if (!checked) document.getElementById('tks-intermission-mins').value = '';
+      tksCalcTotal();
+      saveShowInfo();
+    }
+
+    function tksCalcTotal() {
+      var runtime = parseInt(document.getElementById('tks-runtime').value) || 0;
+      var intermission = parseInt(document.getElementById('tks-intermission-mins').value) || 0;
+      var total = runtime + intermission;
+      var el = document.getElementById('tks-total-time');
+      if (!runtime) { el.textContent = ''; return; }
+      var hrs = Math.floor(total / 60);
+      var mins = total % 60;
+      var parts = [];
+      if (hrs) parts.push(hrs + 'h');
+      if (mins) parts.push(mins + 'min');
+      var label = 'Total: ' + parts.join(' ');
+      if (intermission) label += ' (including ' + intermission + ' min intermission)';
+      el.textContent = label;
+    }
+
     /* ── Tab switching ── */
 
     function tksTab(el) {
@@ -552,6 +581,10 @@
       document.getElementById('tks-tagline').value = info.tagline || '';
       document.getElementById('tks-runtime').value = info.runtime_minutes || '';
       document.getElementById('tks-intermission').checked = info.intermission === true;
+      if (info.intermission) {
+        document.getElementById('tks-intermission-fields').style.display = '';
+        document.getElementById('tks-intermission-mins').value = info.intermission_minutes || '';
+      }
       document.getElementById('tks-age-rec').value = info.age_recommendation || '';
       document.getElementById('tks-accessibility').value = info.accessibility_notes || '';
       document.getElementById('tks-about').value = info.about || '';
@@ -567,6 +600,7 @@
       document.getElementById('tks-tax-rate').value = pricing.tax_rate || '';
       renderModeCards();
       renderModeVisibility();
+      tksCalcTotal();
       smLoadLayout();
       await loadTicketTypes();
     }
@@ -579,6 +613,7 @@
         tagline: document.getElementById('tks-tagline').value.trim(),
         runtime_minutes: parseInt(document.getElementById('tks-runtime').value) || null,
         intermission: document.getElementById('tks-intermission').checked,
+        intermission_minutes: parseInt(document.getElementById('tks-intermission-mins').value) || null,
         age_recommendation: document.getElementById('tks-age-rec').value.trim(),
         accessibility_notes: document.getElementById('tks-accessibility').value.trim(),
         about: document.getElementById('tks-about').value.trim(),
@@ -862,10 +897,9 @@
 
     /* ── Auto-save on blur ── */
 
-    document.querySelectorAll('#tks-tagline, #tks-runtime, #tks-age-rec, #tks-accessibility, #tks-about, #tks-doors-open, #tks-parking, #tks-venue-notes, #tks-selling-points').forEach(function(el) {
+    document.querySelectorAll('#tks-tagline, #tks-runtime, #tks-intermission-mins, #tks-age-rec, #tks-accessibility, #tks-about, #tks-doors-open, #tks-parking, #tks-venue-notes, #tks-selling-points').forEach(function(el) {
       el.addEventListener('blur', saveShowInfo);
     });
-    document.getElementById('tks-intermission').addEventListener('change', saveShowInfo);
     document.getElementById('tks-capacity').addEventListener('blur', saveCapacity);
     document.querySelectorAll('#tks-booking-fee, #tks-tax-name, #tks-tax-rate').forEach(function(el) {
       el.addEventListener('blur', savePricingSettings);
