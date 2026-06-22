@@ -47590,9 +47590,28 @@ See you soon!
     const d = window._rscModalData?.[assignId];
     const name = d?.name || 'Performer';
     const storedUrl = pdfUrl || registrationAnswerValue(d?.app, ['__bts_registration_pdf_url']) || '';
-    const pdfContent = storedUrl
-      ? `<iframe src="${esc(storedUrl)}" style="width:100%;height:60vh;border:none;border-radius:6px;background:#f5f5f5;" title="Registration PDF"></iframe>`
-      : `<div style="padding:2rem;text-align:center;color:rgba(87,46,136,0.5);font-size:0.85rem;background:#f9f7ff;border-radius:6px;">No PDF on file — submitted before PDF storage was enabled.<br>Use Resend Link to ask them to re-submit.</div>`;
+    let pdfContent;
+    if (storedUrl) {
+      pdfContent = `<iframe src="${esc(storedUrl)}" style="width:100%;height:60vh;border:none;border-radius:6px;background:#f5f5f5;" title="Registration PDF"></iframe>`;
+    } else {
+      const ca = applicantCustomAnswers(d?.app);
+      const visibleKeys = Object.keys(ca).filter(k => !k.startsWith('__bts_') && ca[k] !== null && ca[k] !== '' && ca[k] !== undefined);
+      if (visibleKeys.length) {
+        const rows = visibleKeys.map(k => {
+          let val = ca[k];
+          if (typeof val === 'boolean') val = val ? 'Yes' : 'No';
+          if (Array.isArray(val)) val = val.join(', ');
+          if (typeof val === 'object' && val !== null) val = JSON.stringify(val);
+          return `<tr><td style="padding:0.5rem 0.75rem;font-weight:700;font-size:0.78rem;color:rgba(26,21,48,0.55);vertical-align:top;white-space:nowrap;border-bottom:1px solid rgba(87,46,136,0.06);">${esc(k)}</td><td style="padding:0.5rem 0.75rem;font-size:0.85rem;color:#1a1530;border-bottom:1px solid rgba(87,46,136,0.06);">${esc(String(val))}</td></tr>`;
+        }).join('');
+        pdfContent = `<div style="max-height:60vh;overflow-y:auto;border:1px solid rgba(87,46,136,0.1);border-radius:6px;">
+          <table style="width:100%;border-collapse:collapse;">${rows}</table>
+        </div>
+        <div style="margin-top:0.5rem;font-size:0.72rem;color:rgba(87,46,136,0.4);">No PDF on file. Showing saved registration answers.</div>`;
+      } else {
+        pdfContent = `<div style="padding:2rem;text-align:center;color:rgba(87,46,136,0.5);font-size:0.85rem;background:#f9f7ff;border-radius:6px;">No registration data found.<br>Use Resend Link to ask them to re-submit.</div>`;
+      }
+    }
     const downloadBtn = storedUrl
       ? `<a href="${esc(storedUrl)}" download target="_blank" class="rpt-modal-save-btn" style="text-decoration:none;">Download PDF</a>`
       : '';
