@@ -3716,12 +3716,16 @@
 
       const assignmentIds = assignments.map(row => row.id).filter(Boolean);
       let paymentMap = new Map();
+      console.log('[BTS PAYMENT DEBUG] promotedIds:', promotedIds);
+      console.log('[BTS PAYMENT DEBUG] assignments found:', assignments.length, assignments.map(a => ({ id: a.id, applicant_id: a.applicant_id, state: a.state })));
+      console.log('[BTS PAYMENT DEBUG] assignmentIds:', assignmentIds);
       if (assignmentIds.length) {
         try {
-          const { data } = await sb.from('registration_payment_records')
+          const { data, error: payErr } = await sb.from('registration_payment_records')
             .select('*')
             .in('casting_assignment_id', assignmentIds)
             .order('installment_index', { ascending: true });
+          console.log('[BTS PAYMENT DEBUG] payment records query result:', { data, error: payErr });
           (data || []).forEach(row => {
             const key = String(row.casting_assignment_id || '');
             if (!paymentMap.has(key)) paymentMap.set(key, []);
@@ -3730,6 +3734,8 @@
         } catch (error) {
           console.warn('[BTS production portal] payment records lookup failed', error);
         }
+      } else {
+        console.warn('[BTS PAYMENT DEBUG] No assignment IDs found - cannot look up payment records');
       }
       return apps.map(app => {
         const ca = applicantCustomAnswers(app);
