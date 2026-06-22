@@ -329,13 +329,24 @@
     .spb-radios { display: flex; gap: 1.25rem; margin-bottom: 0.5rem; }
     .spb-radio { display: flex; align-items: center; gap: 0.45rem; font-size: 0.8rem; color: #3a3050; cursor: pointer; }
     .spb-radio input { accent-color: #572e88; }
-    .spb-pick-list { display: flex; flex-direction: column; gap: 0.55rem; margin-bottom: 0.5rem; }
-    .spb-pick-item { display: flex; align-items: center; gap: 0.85rem; padding: 0.85rem 1rem; border: 2px solid #e4e0ef; border-radius: 10px; background: #fff; cursor: pointer; text-align: left; transition: border-color 0.15s; width: 100%; font: inherit; }
-    .spb-pick-item--selected { border-color: #572e88; background: rgba(87,46,136,0.04); }
-    .spb-pick-item .spb-option-radio { flex-shrink: 0; }
-    .spb-pick-item-name { flex: 1; font-size: 0.88rem; font-weight: 800; color: #1a1530; }
-    .spb-pick-item-price { font-size: 0.88rem; font-weight: 900; color: #572e88; flex-shrink: 0; }
-    .spb-pick-item-desc { font-size: 0.72rem; color: #6b6080; font-weight: 400; display: block; margin-top: 0.1rem; }
+    .spb-pick-list { display: flex; flex-direction: column; gap: 0.75rem; margin-bottom: 0.5rem; }
+    .spb-full-card { display: block; width: 100%; text-align: left; padding: 1rem 1.1rem; border: 2px solid #e4e0ef; border-radius: 12px; background: #fff; cursor: pointer; font: inherit; transition: border-color 0.15s, box-shadow 0.15s; }
+    .spb-full-card--tier { }
+    .spb-full-card--sel { border-color: #572e88; background: rgba(87,46,136,0.03); box-shadow: 0 0 0 3px rgba(87,46,136,0.1); }
+    .spb-full-card:hover:not(.spb-full-card--sel) { border-color: #b5a8d8; }
+    .spb-full-card-head { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.5rem; flex-wrap: wrap; }
+    .spb-full-card-name { font-size: 0.95rem; font-weight: 900; color: #1a1530; flex: 1; }
+    .spb-full-card-price { font-size: 1rem; font-weight: 900; color: #572e88; flex-shrink: 0; }
+    .spb-full-card-desc { font-size: 0.78rem; color: #6b6080; margin: 0 0 0.65rem; line-height: 1.45; }
+    .spb-full-card-bullets { margin: 0 0 0.5rem; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 0.28rem; }
+    .spb-full-card-bullets li { font-size: 0.78rem; color: #3a3050; display: flex; align-items: flex-start; gap: 0.4rem; line-height: 1.35; }
+    .spb-full-card-bullets li::before { content: ''; flex-shrink: 0; width: 12px; height: 12px; margin-top: 0.1rem; background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Ccircle cx='6' cy='6' r='6' fill='%23572e88' opacity='.15'/%3E%3Cpath d='M3.5 6l1.8 1.8 3.2-3.2' stroke='%23572e88' stroke-width='1.4' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/contain no-repeat; }
+    .spb-full-card-check { margin-top: 0.6rem; font-size: 0.72rem; font-weight: 900; color: #572e88; letter-spacing: 0.04em; }
+    .spb-exclusive-badge { font-size: 0.62rem; font-weight: 900; letter-spacing: 0.08em; text-transform: uppercase; background: #efab45; color: #1a1530; padding: 0.18rem 0.55rem; border-radius: 20px; flex-shrink: 0; }
+    .spb-fmt-row { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+    .spb-fmt-btn { padding: 0.45rem 0.85rem; border: 1.5px solid #d0cbe2; border-radius: 7px; background: #fff; color: #3a3050; font: inherit; font-size: 0.76rem; font-weight: 800; cursor: pointer; transition: border-color 0.15s, background 0.15s; }
+    .spb-fmt-btn:hover { border-color: #572e88; color: #572e88; }
+    .spb-fmt-btn--sel { border-color: #572e88; background: #572e88; color: #fff; }
     /* sidebar */
     .spb-status-box, .spb-summary-box, .spb-next-box { background: #fff; border: 1px solid #eceaf3; border-radius: 10px; padding: 1rem; }
     .spb-status-head { display: flex; align-items: center; gap: 0.5rem; font-size: 0.82rem; font-weight: 900; color: #1a1530; margin-bottom: 0.6rem; }
@@ -1506,7 +1517,7 @@
       document.body.style.overflow = 'hidden';
     }
     function spbSelectKind(kind) {
-      selected = Object.assign({}, selected || {}, { kind: kind, tier: null, size: null, amount: null });
+      selected = Object.assign({}, selected || {}, { kind: kind, tier: null, size: null, tierId: null, sizeId: null, format: null, amount: null });
       spbRenderOptions();
     }
     function spbRenderOptions() {
@@ -1515,34 +1526,54 @@
       var wrap = document.getElementById('spb-options-wrap');
       if (!wrap) return;
       if (headEl) headEl.textContent = kind === 'ad' ? 'Which ad size?' : 'Which sponsorship?';
-      var items = [];
       if (kind === 'ad') {
-        (settings.adSizes || []).forEach(function(sz) {
-          ['colour','bw'].forEach(function(fmt) {
-            var price = fmt === 'colour' ? (sz.colourPrice || sz.price || 0) : (sz.bwPrice || sz.price || 0);
-            var fmtLabel = fmt === 'colour' ? 'Colour' : 'Black & White';
-            items.push({ id: sz.id + '_' + fmt, name: sz.label + ' – ' + fmtLabel, price: price, sizeId: sz.id, format: fmt });
-          });
-        });
+        var sizes = settings.adSizes || [];
+        if (!sizes.length) { wrap.innerHTML = '<p style="font-size:0.8rem;color:#9288a8;margin:0">Ad sizes are being set up by the production team.</p>'; return; }
+        wrap.innerHTML = sizes.map(function(sz, i) {
+          var colour = sz.colour != null ? sz.colour : (sz.colourPrice || 0);
+          var bw = sz.bw != null ? sz.bw : (sz.bwPrice || 0);
+          var dims = sz.dims ? (' <span style="color:#9288a8;font-weight:600;font-size:0.7rem;">(' + esc(sz.dims) + ')</span>' ) : '';
+          var selColour = selected.sizeId === sz.id && selected.format === 'colour';
+          var selBw     = selected.sizeId === sz.id && selected.format === 'bw';
+          var fmtBtns = '';
+          if (sz.colour_enabled !== false && colour > 0)
+            fmtBtns += '<button class="spb-fmt-btn' + (selColour ? ' spb-fmt-btn--sel' : '') + '" onclick="spbPickAd(\'' + esc(sz.id) + '\',\'' + esc(sz.label) + '\',\'colour\',' + colour + ')">Colour — $' + Number(colour).toLocaleString() + '</button>';
+          if (sz.bw_enabled !== false && bw > 0)
+            fmtBtns += '<button class="spb-fmt-btn' + (selBw ? ' spb-fmt-btn--sel' : '') + '" onclick="spbPickAd(\'' + esc(sz.id) + '\',\'' + esc(sz.label) + '\',\'bw\',' + bw + ')">Black & White — $' + Number(bw).toLocaleString() + '</button>';
+          var isCardSel = selected.sizeId === sz.id;
+          return '<div class="spb-full-card' + (isCardSel ? ' spb-full-card--sel' : '') + '">' +
+            '<div class="spb-full-card-head"><span class="spb-full-card-name">' + esc(sz.label) + dims + '</span></div>' +
+            '<div class="spb-fmt-row">' + (fmtBtns || '<span style="font-size:0.75rem;color:#9288a8">Pricing coming soon</span>') + '</div>' +
+            '</div>';
+        }).join('');
       } else {
-        (settings.tiers || []).forEach(function(t) {
-          items.push({ id: t.id, name: t.label, price: t.amount });
-        });
+        var tiers = settings.tiers || [];
+        if (!tiers.length) { wrap.innerHTML = '<p style="font-size:0.8rem;color:#9288a8;margin:0">Sponsorship tiers are being set up by the production team.</p>'; return; }
+        wrap.innerHTML = tiers.map(function(tier) {
+          var isSel = selected.tierId === tier.id;
+          var bullets = tier.bullets ? tier.bullets.split('\n').map(function(b){ return b.trim(); }).filter(Boolean) : [];
+          var bulletsHtml = bullets.map(function(b){ return '<li>' + esc(b) + '</li>'; }).join('');
+          var exclusiveBadge = tier.slots === 1 ? '<span class="spb-exclusive-badge">1 Exclusive Spot</span>' : '';
+          return '<button class="spb-full-card spb-full-card--tier' + (isSel ? ' spb-full-card--sel' : '') + '" onclick="spbPickTier(\'' + esc(tier.id) + '\',\'' + esc(tier.label) + '\',' + Number(tier.amount||0) + ')">' +
+            '<div class="spb-full-card-head">' +
+              exclusiveBadge +
+              '<span class="spb-full-card-name">' + esc(tier.label) + '</span>' +
+              '<span class="spb-full-card-price">$' + Number(tier.amount||0).toLocaleString() + '</span>' +
+            '</div>' +
+            (tier.description ? '<p class="spb-full-card-desc">' + esc(tier.description) + '</p>' : '') +
+            (bulletsHtml ? '<ul class="spb-full-card-bullets">' + bulletsHtml + '</ul>' : '') +
+            (isSel ? '<div class="spb-full-card-check">Selected ✓</div>' : '') +
+            '</button>';
+        }).join('');
       }
-      if (!items.length) { wrap.innerHTML = '<p style="font-size:0.8rem;color:#9288a8;">Options will appear once the production team has set them up.</p>'; return; }
-      var selectedId = selected && (selected.sizeId ? selected.sizeId + '_' + selected.format : selected.tierId);
-      wrap.innerHTML = items.map(function(it) {
-        var isSel = it.id === selectedId;
-        return '<button class="spb-pick-item' + (isSel ? ' spb-pick-item--selected' : '') + '" onclick="spbPickOption(' + encodeURIComponent(JSON.stringify(it)) + ')">' +
-          '<div class="spb-option-radio"></div>' +
-          '<span class="spb-pick-item-name">' + esc(it.name) + '</span>' +
-          '<span class="spb-pick-item-price">$' + Number(it.price || 0).toLocaleString() + '</span>' +
-          '</button>';
-      }).join('');
     }
-    function spbPickOption(encoded) {
-      var it = JSON.parse(decodeURIComponent(encoded));
-      selected = Object.assign({}, selected || {}, { tierId: it.id, tier: it.name, sizeId: it.sizeId, format: it.format, amount: it.price });
+    function spbPickTier(id, label, amount) {
+      selected = Object.assign({}, selected || {}, { tierId: id, tier: label, amount: amount, sizeId: null, format: null });
+      spbRenderOptions();
+      spbUpdateSummary();
+    }
+    function spbPickAd(sizeId, sizeLabel, format, amount) {
+      selected = Object.assign({}, selected || {}, { sizeId: sizeId, tier: sizeLabel + (format === 'bw' ? ' – B&W' : ' – Colour'), format: format, amount: amount, tierId: null });
       spbRenderOptions();
       spbUpdateSummary();
     }
