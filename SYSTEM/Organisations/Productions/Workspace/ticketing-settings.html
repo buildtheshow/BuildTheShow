@@ -950,37 +950,38 @@
         '<div class="sm-cap-item"><span class="sm-cap-label">' + (isOver ? 'Over Capacity' : 'Remaining') + '</span><span class="sm-cap-val">' + Math.abs(diff) + '</span></div>';
 
       var map = document.getElementById('sm-map');
-      var SEAT_PX = 14;
-      var SEAT_GAP = 2;
-      var SEAT_UNIT = SEAT_PX + SEAT_GAP;
-      var SECTION_GAP = 24;
+      var wrap = document.querySelector('.sm-map-wrap');
+      var availW = (wrap ? wrap.clientWidth : 800) - 60;
 
-      var maxSeatsInRow = 0;
       var totalSeatsWide = 0;
       smLayout.sections.forEach(function(sec) {
         var secMax = 0;
         sec.rows.forEach(function(row) { secMax = Math.max(secMax, row.seats.length); });
         totalSeatsWide += secMax;
-        maxSeatsInRow = Math.max(maxSeatsInRow, secMax);
       });
 
-      var seatingWidthPx = (totalSeatsWide * SEAT_UNIT) + ((smLayout.sections.length - 1) * SECTION_GAP) + (smLayout.sections.length * 28);
-      var stageWidthPx = seatingWidthPx;
+      var SECTION_GAP = Math.max(8, Math.round(availW * 0.02));
+      var gapsW = ((smLayout.sections.length - 1) * SECTION_GAP);
+      var seatSize = Math.floor((availW - gapsW) / totalSeatsWide);
+      seatSize = Math.max(10, Math.min(32, seatSize));
+      var seatGap = Math.max(2, Math.round(seatSize * 0.15));
+
+      var stageWidthPx = (totalSeatsWide * (seatSize + seatGap)) + gapsW;
 
       var html = '<div class="sm-stage" style="width:' + stageWidthPx + 'px">STAGE</div>';
-      html += '<div class="sm-floor">';
+      html += '<div class="sm-floor" style="gap:' + SECTION_GAP + 'px">';
 
       smLayout.sections.forEach(function(sec, si) {
         var maxCols = 0;
         sec.rows.forEach(function(row) { maxCols = Math.max(maxCols, row.seats.length); });
 
         var firstRow = sec.rows[0];
-        var numRow = '<div class="sm-row-line"><span class="sm-row-label"></span><div class="sm-seats">';
+        var numRow = '<div class="sm-row-line"><span class="sm-row-label"></span><div class="sm-seats" style="gap:' + seatGap + 'px">';
         if (firstRow) {
           var seatNum = 0;
           firstRow.seats.forEach(function(seat) {
-            if (seat.type === 'aisle') { numRow += '<span class="sm-seat-num"></span>'; }
-            else { seatNum++; numRow += '<span class="sm-seat-num">' + seatNum + '</span>'; }
+            if (seat.type === 'aisle') { numRow += '<span class="sm-seat-num" style="width:' + seatSize + 'px"></span>'; }
+            else { seatNum++; numRow += '<span class="sm-seat-num" style="width:' + seatSize + 'px">' + seatNum + '</span>'; }
           });
         } else {
           for (var n = 1; n <= maxCols; n++) numRow += '<span class="sm-seat-num">' + n + '</span>';
@@ -993,12 +994,12 @@
         sec.rows.forEach(function(row, ri) {
           html += '<div class="sm-row-line">';
           html += '<span class="sm-row-label">' + esc(row.label) + '</span>';
-          html += '<div class="sm-seats">';
+          html += '<div class="sm-seats" style="gap:' + seatGap + 'px">';
           row.seats.forEach(function(seat, sei) {
             var color = SEAT_COLORS[seat.type] || sec.color;
             var title = esc(sec.name) + ' ' + row.label + seat.number;
             if (seat.type !== 'standard') title += ' (' + seat.type.charAt(0).toUpperCase() + seat.type.slice(1) + ')';
-            html += '<div class="sm-seat" style="background:' + color + '" title="' + title + '" onclick="smClickSeat(' + si + ',' + ri + ',' + sei + ',this);event.preventDefault()" onmousedown="smStartDraw()" onmouseover="if(smDrawing)smClickSeat(' + si + ',' + ri + ',' + sei + ',this)"></div>';
+            html += '<div class="sm-seat" style="background:' + color + ';width:' + seatSize + 'px;height:' + seatSize + 'px" title="' + title + '" onclick="smClickSeat(' + si + ',' + ri + ',' + sei + ',this);event.preventDefault()" onmousedown="smStartDraw()" onmouseover="if(smDrawing)smClickSeat(' + si + ',' + ri + ',' + sei + ',this)"></div>';
           });
           html += '</div>';
           html += '<span class="sm-row-label">' + esc(row.label) + '</span>';
@@ -1153,7 +1154,9 @@
       smRenderSectionConfig();
     }
 
-    function smAutoFit() {}
+    function smAutoFit() {
+      if (smLayout) smRenderResult();
+    }
 
     async function smSaveLayout() {
       var tkt = prodSettings.ticketing || {};
