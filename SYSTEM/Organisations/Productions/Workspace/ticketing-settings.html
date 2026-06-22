@@ -168,7 +168,8 @@
 
     /* ── Live seat map preview ── */
     .sm-preview { background: #fff; border: 1.5px solid rgba(87,46,136,0.08); border-radius: 14px; padding: 1.25rem; display: flex; flex-direction: column; }
-    .sm-map-wrap { overflow: visible; }
+    .sm-map-wrap { width: 100%; }
+    #sm-map { width: fit-content; margin: 0 auto; }
     .sm-preview-head { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; margin-bottom: 1rem; flex-wrap: wrap; }
     .sm-preview-title { font-size: 0.95rem; font-weight: 900; color: #1a1530; }
     .sm-preview-subtitle { font-size: 0.72rem; color: #8e82a7; }
@@ -535,10 +536,7 @@
                   <div class="sm-preview-subtitle">This is how your venue will look to your audience.</div>
                 </div>
                 <div class="sm-preview-controls">
-                  <button class="sm-zoom-btn" onclick="smZoom(-20)">-</button>
-                  <span class="sm-zoom-val" id="sm-zoom-val">100%</span>
-                  <button class="sm-zoom-btn" onclick="smZoom(20)">+</button>
-                  <button class="tks-btn-outline" onclick="smShowWizard()" style="margin-left:0.5rem">Rebuild</button>
+                  <button class="tks-btn-outline" onclick="smShowWizard()">Rebuild</button>
                 </div>
               </div>
               <div class="sm-map-wrap" id="sm-map-wrap">
@@ -1006,7 +1004,7 @@
       html += '</div>';
 
       map.innerHTML = html;
-      smApplyZoom();
+      smAutoFit();
 
       var legend = document.getElementById('sm-legend');
       legend.innerHTML = smLayout.sections.map(function(sec) {
@@ -1148,17 +1146,24 @@
       smRenderSectionConfig();
     }
 
-    function smZoom(delta) {
-      smZoomLevel = Math.max(50, Math.min(200, smZoomLevel + delta));
-      document.getElementById('sm-zoom-val').textContent = smZoomLevel + '%';
-      smApplyZoom();
-    }
-
-    function smApplyZoom() {
+    function smAutoFit() {
       var map = document.getElementById('sm-map');
-      if (!map) return;
-      map.style.transform = 'scale(' + (smZoomLevel / 100) + ')';
-      map.style.transformOrigin = 'top center';
+      var wrap = document.querySelector('.sm-map-wrap');
+      if (!map || !wrap) return;
+      map.style.transform = '';
+      requestAnimationFrame(function() {
+        var mapW = map.scrollWidth;
+        var wrapW = wrap.clientWidth;
+        if (mapW > wrapW && mapW > 0) {
+          var scale = wrapW / mapW;
+          map.style.transform = 'scale(' + scale + ')';
+          map.style.transformOrigin = 'top center';
+          map.style.marginBottom = '-' + Math.round(map.scrollHeight * (1 - scale)) + 'px';
+        } else {
+          map.style.transform = '';
+          map.style.marginBottom = '';
+        }
+      });
     }
 
     async function smSaveLayout() {
@@ -1188,6 +1193,8 @@
     document.querySelectorAll('#tks-booking-fee, #tks-tax-name, #tks-tax-rate').forEach(function(el) {
       el.addEventListener('blur', savePricingSettings);
     });
+
+    window.addEventListener('resize', function() { smAutoFit(); }, { passive: true });
 
     /* ── Init ── */
 
