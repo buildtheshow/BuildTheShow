@@ -1499,6 +1499,8 @@
       document.getElementById('spp-content').hidden = false;
     }
 
+    /* ── Step 1: Choose Option modal ── */
+
     function openBookModal() {
       var orgName = document.getElementById('spp-nav-name') ? document.getElementById('spp-nav-name').textContent : '';
       var orgEl = document.getElementById('spp-bm-org');
@@ -1506,15 +1508,29 @@
       document.getElementById('spp-book-modal').classList.add('open');
       document.body.style.overflow = 'hidden';
     }
+
     function closeBookModal() {
       document.getElementById('spp-book-modal').classList.remove('open');
       document.body.style.overflow = '';
     }
+
     function bookModalGo(kind) {
       closeBookModal();
       selected = { kind: kind };
       openRequestModal(kind);
     }
+
+    function chooseOption(button) {
+      selected = JSON.parse(decodeURIComponent(button.dataset.option));
+      openRequestModal(selected.kind);
+    }
+
+    document.getElementById('spp-book-modal').addEventListener('click', function(e) {
+      if (e.target.id === 'spp-book-modal') closeBookModal();
+    });
+
+    /* ── Booking modal: open / close / navigation ── */
+
     var spbCurrentStep = 2;
     var SPB_STEPS = [
       { num: 1, label: 'Choose Option' },
@@ -1526,16 +1542,17 @@
       { num: 7, label: 'Confirmation' },
     ];
 
-    function spbRenderStepsBar(activeStep) {
-      var bar = document.getElementById('spb-steps-bar');
-      if (!bar) return;
-      bar.innerHTML = SPB_STEPS.map(function(s, i) {
-        var cls = '';
-        if (s.num < activeStep) cls = ' spb-step--done';
-        else if (s.num === activeStep) cls = ' spb-step--active';
-        var line = i > 0 ? '<div class="spb-step-line' + (s.num <= activeStep ? ' spb-step-line--done' : '') + '"></div>' : '';
-        return line + '<div class="spb-step' + cls + '"><div class="spb-step-dot">' + s.num + '</div><div class="spb-step-lbl">' + s.label + '</div></div>';
-      }).join('');
+    function openRequestModal(kind) {
+      selected = Object.assign(selected || {}, { kind: kind, tier: null, size: null, tierId: null, sizeId: null, format: null, amount: null });
+      spbPopulateSidebar();
+      spbShowStep(2);
+      document.getElementById('sp-request-modal').classList.add('open');
+      document.body.style.overflow = 'hidden';
+    }
+
+    function closeRequest() {
+      document.getElementById('sp-request-modal').classList.remove('open');
+      document.body.style.overflow = '';
     }
 
     function spbShowStep(step) {
@@ -1547,6 +1564,16 @@
       document.getElementById('sp-submit').style.display = step === 3 ? '' : 'none';
     }
 
+    function spbRenderStepsBar(activeStep) {
+      var bar = document.getElementById('spb-steps-bar');
+      if (!bar) return;
+      bar.innerHTML = SPB_STEPS.map(function(s, i) {
+        var cls = s.num < activeStep ? ' spb-step--done' : s.num === activeStep ? ' spb-step--active' : '';
+        var line = i > 0 ? '<div class="spb-step-line' + (s.num <= activeStep ? ' spb-step-line--done' : '') + '"></div>' : '';
+        return line + '<div class="spb-step' + cls + '"><div class="spb-step-dot">' + s.num + '</div><div class="spb-step-lbl">' + s.label + '</div></div>';
+      }).join('');
+    }
+
     function spbNext() {
       var contact = document.getElementById('sp-contact').value.trim();
       var business = document.getElementById('sp-business').value.trim();
@@ -1556,87 +1583,83 @@
       spbRenderOptions();
     }
 
-    function openRequestModal(kind) {
-      spbSelectKind(kind || (selected && selected.kind) || 'sponsor');
-      spbPopulateSidebar();
-      spbShowStep(2);
-      document.getElementById('sp-request-modal').classList.add('open');
-      document.body.style.overflow = 'hidden';
+    function spbBack() {
+      if (spbCurrentStep === 3) { spbShowStep(2); return; }
+      closeRequest();
+      openBookModal();
     }
-    function spbSelectKind(kind) {
-      selected = Object.assign({}, selected || {}, { kind: kind, tier: null, size: null, tierId: null, sizeId: null, format: null, amount: null });
-      spbRenderOptions();
-    }
+
+    /* ── Step 3: Package / size picker ── */
+
     function spbRenderOptions() {
       var kind = selected && selected.kind;
       var headEl = document.getElementById('spb-options-head');
       var wrap = document.getElementById('spb-options-wrap');
       if (!wrap) return;
       if (headEl) headEl.textContent = kind === 'ad' ? 'Which ad size?' : 'Which sponsorship?';
-      if (kind === 'ad') {
-        var sizes = settings.adSizes || [];
-        if (!sizes.length) { wrap.innerHTML = '<p style="font-size:0.8rem;color:#9288a8;margin:0">Ad sizes are being set up by the production team.</p>'; return; }
-        wrap.innerHTML = '<div class="spb-ad-grid">' + sizes.map(function(sz, i) {
-          var colour = sz.colour != null ? sz.colour : (sz.colourPrice || 0);
-          var bw = sz.bw != null ? sz.bw : (sz.bwPrice || 0);
-          var selColour = selected.sizeId === sz.id && selected.format === 'colour';
-          var selBw     = selected.sizeId === sz.id && selected.format === 'bw';
-          var isCardSel = selected.sizeId === sz.id;
-          var accent = COLORS[i % COLORS.length];
-          var btns = '';
-          var defaultFormat = (sz.colour_enabled !== false && colour > 0) ? 'colour' : 'bw';
-          var defaultAmount = defaultFormat === 'colour' ? colour : bw;
-          if (sz.colour_enabled !== false && colour > 0)
-            btns += '<button class="sp-option-btn' + (selColour ? ' spb-opt--sel' : '') + '" style="--accent:' + accent + '" onclick="event.stopPropagation();spbPickAd(\'' + esc(sz.id) + '\',\'' + esc(sz.label) + '\',\'colour\',' + colour + ')"><span>Colour</span><span>$' + Number(colour).toLocaleString() + '</span></button>';
-          if (sz.bw_enabled !== false && bw > 0)
-            btns += '<button class="sp-option-btn' + (selBw ? ' spb-opt--sel' : '') + '" style="--accent:' + accent + '" onclick="event.stopPropagation();spbPickAd(\'' + esc(sz.id) + '\',\'' + esc(sz.label) + '\',\'bw\',' + bw + ')"><span>Black & White</span><span>$' + Number(bw).toLocaleString() + '</span></button>';
-          var dimsText = sz.dims ? '<div class="spb-ad-dims">' + esc(formatDimensionsWithRatio(sz.dims)) + '</div>' : '';
-          return '<article class="sp-card sp-card--ad' + (isCardSel ? ' spb-ad-card--sel' : '') + '" style="--accent:' + accent + '" onclick="spbPickAd(\'' + esc(sz.id) + '\',\'' + esc(sz.label) + '\',\'' + defaultFormat + '\',' + defaultAmount + ')">' +
-            '<div class="sp-card-header"><h3>' + esc(sz.label) + '</h3>' + dimsText + '</div>' +
-            '<div class="sp-card-visual"><img src="' + adSizeIllustration(sz) + '" alt="' + esc(sz.label) + '" /></div>' +
-            '<div class="sp-card-body">' +
-              '<div class="sp-card-actions spb-ad-actions">' + (btns || '<span style="font-size:0.75rem;color:#9288a8">Pricing coming soon</span>') + '</div>' +
-            '</div>' +
-            '</article>';
-        }).join('') + '</div>';
-      } else {
-        var tiers = settings.tiers || [];
-        if (!tiers.length) { wrap.innerHTML = '<p style="font-size:0.8rem;color:#9288a8;margin:0">Sponsorship tiers are being set up by the production team.</p>'; return; }
-        wrap.innerHTML = tiers.map(function(tier) {
-          var isSel = selected.tierId === tier.id;
-          var bullets = tier.bullets ? tier.bullets.split('\n').map(function(b){ return b.trim(); }).filter(Boolean) : [];
-          var bulletsHtml = bullets.map(function(b){ return '<li>' + esc(b) + '</li>'; }).join('');
-          var exclusiveBadge = tier.slots === 1 ? '<span class="spb-exclusive-badge">1 Exclusive Spot</span>' : '';
-          return '<button class="spb-full-card spb-full-card--tier' + (isSel ? ' spb-full-card--sel' : '') + '" onclick="spbPickTier(\'' + esc(tier.id) + '\',\'' + esc(tier.label) + '\',' + Number(tier.amount||0) + ')">' +
-            '<div class="spb-full-card-head">' +
-              exclusiveBadge +
-              '<span class="spb-full-card-name">' + esc(tier.label) + '</span>' +
-              '<span class="spb-full-card-price">$' + Number(tier.amount||0).toLocaleString() + '</span>' +
-            '</div>' +
-            (tier.description ? '<p class="spb-full-card-desc">' + esc(tier.description) + '</p>' : '') +
-            (bulletsHtml ? '<ul class="spb-full-card-bullets">' + bulletsHtml + '</ul>' : '') +
-            (isSel ? '<div class="spb-full-card-check">Selected ✓</div>' : '') +
-            '</button>';
-        }).join('');
-      }
+      kind === 'ad' ? renderAdSizeCards(wrap) : renderTierCards(wrap);
     }
+
+    function renderAdSizeCards(wrap) {
+      var sizes = settings.adSizes || [];
+      if (!sizes.length) { wrap.innerHTML = '<p style="font-size:0.8rem;color:#9288a8;margin:0">Ad sizes are being set up by the production team.</p>'; return; }
+      wrap.innerHTML = '<div class="spb-ad-grid">' + sizes.map(function(sz, i) {
+        var colour = sz.colour != null ? sz.colour : (sz.colourPrice || 0);
+        var bw = sz.bw != null ? sz.bw : (sz.bwPrice || 0);
+        var accent = COLORS[i % COLORS.length];
+        var isCardSel = selected.sizeId === sz.id;
+        var defaultFmt = (sz.colour_enabled !== false && colour > 0) ? 'colour' : 'bw';
+        var defaultAmt = defaultFmt === 'colour' ? colour : bw;
+        var btns = '';
+        if (sz.colour_enabled !== false && colour > 0)
+          btns += fmtBtn(sz, 'colour', colour, accent, selected.sizeId === sz.id && selected.format === 'colour');
+        if (sz.bw_enabled !== false && bw > 0)
+          btns += fmtBtn(sz, 'bw', bw, accent, selected.sizeId === sz.id && selected.format === 'bw');
+        var dims = sz.dims ? '<div class="spb-ad-dims">' + esc(formatDimensionsWithRatio(sz.dims)) + '</div>' : '';
+        return '<article class="sp-card sp-card--ad' + (isCardSel ? ' spb-ad-card--sel' : '') + '" style="--accent:' + accent + '" onclick="spbPickAd(\'' + esc(sz.id) + '\',\'' + esc(sz.label) + '\',\'' + defaultFmt + '\',' + defaultAmt + ')">' +
+          '<div class="sp-card-header"><h3>' + esc(sz.label) + '</h3>' + dims + '</div>' +
+          '<div class="sp-card-visual"><img src="' + adSizeIllustration(sz) + '" alt="' + esc(sz.label) + '" /></div>' +
+          '<div class="sp-card-body"><div class="sp-card-actions spb-ad-actions">' + (btns || '<span style="font-size:0.75rem;color:#9288a8">Pricing coming soon</span>') + '</div></div>' +
+          '</article>';
+      }).join('') + '</div>';
+    }
+
+    function fmtBtn(sz, format, price, accent, isSel) {
+      var label = format === 'bw' ? 'Black & White' : 'Colour';
+      return '<button class="sp-option-btn' + (isSel ? ' spb-opt--sel' : '') + '" style="--accent:' + accent + '" onclick="event.stopPropagation();spbPickAd(\'' + esc(sz.id) + '\',\'' + esc(sz.label) + '\',\'' + format + '\',' + price + ')"><span>' + label + '</span><span>$' + Number(price).toLocaleString() + '</span></button>';
+    }
+
+    function renderTierCards(wrap) {
+      var tiers = settings.tiers || [];
+      if (!tiers.length) { wrap.innerHTML = '<p style="font-size:0.8rem;color:#9288a8;margin:0">Sponsorship tiers are being set up by the production team.</p>'; return; }
+      wrap.innerHTML = tiers.map(function(tier) {
+        var isSel = selected.tierId === tier.id;
+        var bullets = tier.bullets ? tier.bullets.split('\n').map(function(b){ return b.trim(); }).filter(Boolean) : [];
+        var bulletsHtml = bullets.length ? '<ul class="spb-full-card-bullets">' + bullets.map(function(b){ return '<li>' + esc(b) + '</li>'; }).join('') + '</ul>' : '';
+        var badge = tier.slots === 1 ? '<span class="spb-exclusive-badge">1 Exclusive Spot</span>' : '';
+        return '<button class="spb-full-card spb-full-card--tier' + (isSel ? ' spb-full-card--sel' : '') + '" onclick="spbPickTier(\'' + esc(tier.id) + '\',\'' + esc(tier.label) + '\',' + Number(tier.amount||0) + ')">' +
+          '<div class="spb-full-card-head">' + badge + '<span class="spb-full-card-name">' + esc(tier.label) + '</span><span class="spb-full-card-price">$' + Number(tier.amount||0).toLocaleString() + '</span></div>' +
+          (tier.description ? '<p class="spb-full-card-desc">' + esc(tier.description) + '</p>' : '') +
+          bulletsHtml +
+          (isSel ? '<div class="spb-full-card-check">Selected</div>' : '') +
+          '</button>';
+      }).join('');
+    }
+
     function spbPickTier(id, label, amount) {
-      selected = Object.assign({}, selected || {}, { tierId: id, tier: label, amount: amount, sizeId: null, format: null });
+      selected = Object.assign(selected || {}, { tierId: id, tier: label, amount: amount, sizeId: null, format: null });
       spbRenderOptions();
       spbUpdateSummary();
     }
+
     function spbPickAd(sizeId, sizeLabel, format, amount) {
-      selected = Object.assign({}, selected || {}, { sizeId: sizeId, tier: sizeLabel + (format === 'bw' ? ' – B&W' : ' – Colour'), format: format, amount: amount, tierId: null });
+      selected = Object.assign(selected || {}, { sizeId: sizeId, tier: sizeLabel + (format === 'bw' ? ' - B&W' : ' - Colour'), format: format, amount: amount, tierId: null });
       spbRenderOptions();
       spbUpdateSummary();
     }
-    function spbUpdateSummary() {
-      var typeEl = document.getElementById('spb-sum-type');
-      if (typeEl) typeEl.textContent = selected.tier || (selected.kind === 'ad' ? 'Programme Ad' : 'Show Sponsorship');
-      var total = selected.amount ? 'CAD $' + Number(selected.amount).toLocaleString('en-CA', {minimumFractionDigits:2}) : '';
-      var totalEl = document.getElementById('spb-sum-total');
-      if (totalEl) totalEl.textContent = total;
-    }
+
+    /* ── Sidebar summary ── */
+
     function spbPopulateSidebar() {
       var poster = document.getElementById('spp-poster');
       var sumPoster = document.getElementById('spb-sum-poster');
@@ -1646,90 +1669,101 @@
       var orgEl = document.getElementById('spb-sum-org');
       if (orgEl && organization) orgEl.textContent = organization.name || '';
       spbUpdateSummary();
-      spbRenderOptions();
     }
+
+    function spbUpdateSummary() {
+      var typeEl = document.getElementById('spb-sum-type');
+      if (typeEl) typeEl.textContent = selected.tier || (selected.kind === 'ad' ? 'Programme Ad' : 'Show Sponsorship');
+      var totalEl = document.getElementById('spb-sum-total');
+      if (totalEl) totalEl.textContent = selected.amount ? 'CAD $' + Number(selected.amount).toLocaleString('en-CA', {minimumFractionDigits:2}) : '';
+    }
+
+    /* ── Phone formatter ── */
+
     function spbFmtPhone(input) {
-      var digits = input.value.replace(/\D/g, '').slice(0, 10);
+      var d = input.value.replace(/\D/g, '').slice(0, 10);
       var out = '';
-      if (digits.length > 0) out = '(' + digits.slice(0, 3);
-      if (digits.length >= 4) out += ') ' + digits.slice(3, 6);
-      if (digits.length >= 7) out += '-' + digits.slice(6, 10);
+      if (d.length > 0) out = '(' + d.slice(0, 3);
+      if (d.length >= 4) out += ') ' + d.slice(3, 6);
+      if (d.length >= 7) out += '-' + d.slice(6, 10);
       input.value = out;
     }
-    function spbBack() {
-      if (spbCurrentStep === 3) { spbShowStep(2); return; }
-      closeRequest(); openBookModal();
-    }
-    function bookModalContact() {
-      closeBookModal();
-      var link = document.getElementById('spp-contact-link');
-      if (link) link.click();
-    }
-    document.getElementById('spp-book-modal').addEventListener('click', function(e) {
-      if (e.target.id === 'spp-book-modal') closeBookModal();
-    });
 
-    function chooseOption(button) {
-      selected = JSON.parse(decodeURIComponent(button.dataset.option));
-      openRequestModal(selected.kind);
-    }
-    function closeRequest() { document.getElementById('sp-request-modal').classList.remove('open'); document.body.style.overflow = ''; }
+    /* ── Submit ── */
 
     async function submitRequest() {
-      const business = document.getElementById('sp-business').value.trim();
-      const contact  = document.getElementById('sp-contact').value.trim();
-      const email    = document.getElementById('sp-email').value.trim();
-      const phone    = document.getElementById('sp-phone').value.trim() || null;
-      const website  = document.getElementById('sp-website') ? document.getElementById('sp-website').value.trim() : '';
-      const notes    = document.getElementById('sp-notes').value.trim() || null;
-      if (!selected || !business || !contact || !email) { alert('Enter the business name, contact name, and email.'); return; }
-      const btn = document.getElementById('sp-submit');
-      btn.disabled = true; btn.textContent = 'Sending...';
+      var business = document.getElementById('sp-business').value.trim();
+      var contact  = document.getElementById('sp-contact').value.trim();
+      var email    = document.getElementById('sp-email').value.trim();
+      var phone    = document.getElementById('sp-phone').value.trim() || null;
+      var website  = document.getElementById('sp-website') ? document.getElementById('sp-website').value.trim() : '';
+      var notes    = document.getElementById('sp-notes').value.trim() || null;
+      if (!selected || !business || !contact || !email) { alert('Please fill in the business name, contact name, and email.'); return; }
+
+      var btn = document.getElementById('sp-submit');
+      btn.disabled = true;
+      btn.textContent = 'Sending...';
+
       try {
-        var bizId = null;
-        var existRes = await sb.from('sponsor_businesses').select('id').eq('production_id', production.id).ilike('name', business).limit(1).maybeSingle();
-        if (existRes.data) {
-          bizId = existRes.data.id;
-        } else {
-          var bizPayload = { production_id: production.id, name: business, contact_name: contact, contact_email: email, contact_phone: phone, notes: notes };
-          if (website) bizPayload.contact_website = website;
-          var insRes = await sb.from('sponsor_businesses').insert(bizPayload).select('id').single();
-          if (insRes.error) throw insRes.error;
-          bizId = insRes.data.id;
-        }
+        var bizId = await findOrCreateBusiness(business, contact, email, phone, website, notes);
 
         if (selected.kind === 'ad') {
-          var adRes = await sb.from('programme_ads').insert({
-            production_id: production.id,
-            business_id: bizId,
-            size_id: selected.sizeId || null,
-            price_cents: Math.round(Number(selected.amount) * 100),
-            format: selected.format || 'colour',
-            payment_status: 'unpaid',
-            artwork_status: 'missing',
-            notes: notes,
-          });
-          if (adRes.error) throw adRes.error;
+          await insertAd(bizId, notes);
         } else {
-          var optLabel = selected.tier || selected.size || null;
-          var pkgNotes = notes && optLabel ? notes + ' [' + optLabel + ']' : optLabel ? '[' + optLabel + ']' : notes;
-          var pkgRes = await sb.from('sponsor_packages').insert({
-            production_id: production.id,
-            business_id: bizId,
-            tier_id: selected.tierId || null,
-            amount_cents: Math.round(Number(selected.amount) * 100),
-            payment_status: 'unpaid',
-            notes: pkgNotes,
-          });
-          if (pkgRes.error) throw pkgRes.error;
+          await insertPackage(bizId, notes);
         }
 
-        document.getElementById('sp-request-modal').innerHTML = '<div class="sp-modal" style="text-align:center;padding:3rem 2rem;"><h2 style="margin:0 0 0.75rem;color:#1a1530;">Request sent!</h2><p style="color:#6b6080;margin:0 0 1.5rem;">The production team will review your submission and be in touch within 1-3 business days.</p><button class="sp-btn sp-btn-primary" onclick="closeRequest()">Done</button></div>';
+        document.getElementById('sp-request-modal').innerHTML =
+          '<div class="sp-modal" style="text-align:center;padding:3rem 2rem;">' +
+            '<h2 style="margin:0 0 0.75rem;color:#1a1530;">Request sent!</h2>' +
+            '<p style="color:#6b6080;margin:0 0 1.5rem;">The production team will review your submission and be in touch within 1-3 business days.</p>' +
+            '<button class="sp-btn sp-btn-primary" onclick="closeRequest()">Done</button>' +
+          '</div>';
       } catch (err) {
-        alert('Your request could not be sent. Please contact the production directly.');
-        btn.disabled = false; btn.textContent = 'Send for Review →';
         console.error(err);
+        alert('Your request could not be sent. Please contact the production directly.');
+        btn.disabled = false;
+        btn.textContent = 'Send for Review →';
       }
+    }
+
+    async function findOrCreateBusiness(name, contact, email, phone, website, notes) {
+      var existing = await sb.from('sponsor_businesses').select('id').eq('production_id', production.id).ilike('name', name).limit(1).maybeSingle();
+      if (existing.data) return existing.data.id;
+
+      var payload = { production_id: production.id, name: name, contact_name: contact, contact_email: email, contact_phone: phone, notes: notes };
+      if (website) payload.contact_website = website;
+      var res = await sb.from('sponsor_businesses').insert(payload).select('id').single();
+      if (res.error) throw res.error;
+      return res.data.id;
+    }
+
+    async function insertAd(bizId, notes) {
+      var res = await sb.from('programme_ads').insert({
+        production_id: production.id,
+        business_id: bizId,
+        size_id: selected.sizeId || null,
+        price_cents: Math.round(Number(selected.amount) * 100),
+        format: selected.format || 'colour',
+        payment_status: 'unpaid',
+        artwork_status: 'missing',
+        notes: notes,
+      });
+      if (res.error) throw res.error;
+    }
+
+    async function insertPackage(bizId, notes) {
+      var label = selected.tier || selected.size || null;
+      var pkgNotes = notes && label ? notes + ' [' + label + ']' : label ? '[' + label + ']' : notes;
+      var res = await sb.from('sponsor_packages').insert({
+        production_id: production.id,
+        business_id: bizId,
+        tier_id: selected.tierId || null,
+        amount_cents: Math.round(Number(selected.amount) * 100),
+        payment_status: 'unpaid',
+        notes: pkgNotes,
+      });
+      if (res.error) throw res.error;
     }
 
     async function load() {
