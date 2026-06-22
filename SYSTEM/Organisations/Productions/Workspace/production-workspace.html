@@ -34493,6 +34493,20 @@ See you soon!
     await sb.from('email_templates').update({ subject: desired.subject, body: desired.body }).eq('id', t.id);
   }
 
+  async function etEnsurePaymentReminderTemplateBody() {
+    const t = (_etTemplates || []).find(t => t.category === 'payment_reminder');
+    if (!t) return;
+    const body = String(t.body || '');
+    const isOldDefault = body.includes('you have an outstanding balance for {{show_name}}')
+      && body.includes('If you have already arranged payment, please disregard this message')
+      && !body.includes('{{payment_schedule}}');
+    if (!isOldDefault) return;
+    const starter = ET_STARTER_TEMPLATES.find(s => s.category === 'payment_reminder');
+    if (!starter) return;
+    _etTemplates = (_etTemplates || []).map(x => x.id === t.id ? { ...x, subject: starter.subject, body: starter.body } : x);
+    await sb.from('email_templates').update({ subject: starter.subject, body: starter.body }).eq('id', t.id);
+  }
+
   async function etEnsureVolunteerRequestTemplateBody() {
     const t = (_etTemplates || []).find(t => t.category === 'volunteer_submitted');
     if (!t) return;
@@ -34646,6 +34660,7 @@ See you soon!
     await etEnsureCallbackConfirmedTemplateBody();
     await etEnsureCastAcceptedTemplateBody();
     await etEnsureRegistrationCompletedTemplateBody();
+    await etEnsurePaymentReminderTemplateBody();
     await etEnsureVolunteerRequestTemplateBody();
     await etEnsureVolunteerApprovedTemplateBody();
     await etEnsureVolunteerDeclinedTemplateBody();
