@@ -7379,13 +7379,24 @@
       const addPersonHtml = isAddingHere
         ? `<div class="vp-add-person-row"><input id="vp-new-person-input" class="vp-add-person-input" type="text" placeholder="Volunteer's full name" autocomplete="name" onkeydown="if(event.key==='Enter')confirmAddPersonInput();if(event.key==='Escape')cancelAddPersonInput();" /><button class="vp-add-person-confirm" type="button" onclick="confirmAddPersonInput()">Add</button><button class="vp-add-person-cancel" type="button" onclick="cancelAddPersonInput()">Cancel</button></div>`
         : `<button class="vp-add-person-btn" type="button" onclick="openAddPersonInput('${safeKey}')">+ Add another volunteer to this role</button>`;
-      // Build one ticket per person per shift — everyone equal
+      // Build one ticket per person per shift date — everyone equal
       const pairs = [];
       group.items.forEach(item => {
-        pairs.push({ item, name: item.forPerson || null, removeHtml: `removeSchedule('${esc(item.id)}')` });
-        (item.people || []).forEach(p => {
-          pairs.push({ item, name: p.name, removeHtml: `removePersonFromCartGroup('${safeKey}','${esc(p.id)}')` });
-        });
+        const timings = Array.isArray(item.required_date_timings) ? item.required_date_timings.filter(t => t.date) : [];
+        if (timings.length > 1) {
+          timings.forEach(t => {
+            const perDateItem = Object.assign({}, item, { shift_date: t.date, shift_start_time: t.shift_start_time || item.shift_start_time, shift_end_time: t.shift_end_time || item.shift_end_time, _singleTiming: true });
+            pairs.push({ item: perDateItem, name: item.forPerson || null, removeHtml: `removeSchedule('${esc(item.id)}')` });
+            (item.people || []).forEach(p => {
+              pairs.push({ item: perDateItem, name: p.name, removeHtml: `removePersonFromCartGroup('${safeKey}','${esc(p.id)}')` });
+            });
+          });
+        } else {
+          pairs.push({ item, name: item.forPerson || null, removeHtml: `removeSchedule('${esc(item.id)}')` });
+          (item.people || []).forEach(p => {
+            pairs.push({ item, name: p.name, removeHtml: `removePersonFromCartGroup('${safeKey}','${esc(p.id)}')` });
+          });
+        }
       });
       pairs.sort((a, b) => cartShiftSortValue(a.item).localeCompare(cartShiftSortValue(b.item)));
       const tickets = pairs.map(({ item, name, removeHtml }) => cartTicketCardHtml(item, group, name, removeHtml)).join('');
