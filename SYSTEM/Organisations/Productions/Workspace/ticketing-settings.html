@@ -184,13 +184,13 @@
     .sm-row-line { display: flex; align-items: center; gap: 0; margin-bottom: 2px; }
     .sm-row-label { font-size: 0.52rem; font-weight: 900; color: #8e82a7; width: 14px; text-align: center; flex-shrink: 0; }
     .sm-seats { display: flex; gap: 2px; justify-content: center; }
-    .sm-seat { width: 14px; height: 14px; border-radius: 50%; flex-shrink: 0; }
+    .sm-seat { width: 16px; height: 16px; border-radius: 50%; flex-shrink: 0; }
     .sm-legend { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; padding-top: 0.75rem; border-top: 1px solid #eceaf3; margin-top: auto; }
     .sm-legend-item { display: flex; align-items: center; gap: 0.3rem; font-size: 0.62rem; font-weight: 800; color: #3a3050; }
     .sm-legend-dot { width: 12px; height: 12px; border-radius: 50%; }
     .sm-empty-preview { flex: 1; display: flex; align-items: center; justify-content: center; color: #b0a8c8; font-size: 0.85rem; text-align: center; padding: 2rem; }
-    .sm-seat { cursor: pointer; transition: opacity 0.1s; }
-    .sm-seat:hover { opacity: 0.7; }
+    .sm-seat { cursor: crosshair; transition: opacity 0.1s, transform 0.1s; user-select: none; -webkit-user-select: none; }
+    .sm-seat:hover { opacity: 0.7; transform: scale(1.3); }
 
     /* ── Edit toolbar ── */
     .sm-toolbar { display: flex; align-items: center; gap: 0.35rem; margin-bottom: 0.75rem; flex-wrap: wrap; }
@@ -956,7 +956,7 @@
             var color = SEAT_COLORS[seat.type] || sec.color;
             var title = esc(sec.name) + ' ' + row.label + seat.number;
             if (seat.type !== 'standard') title += ' (' + seat.type.charAt(0).toUpperCase() + seat.type.slice(1) + ')';
-            html += '<div class="sm-seat" style="background:' + color + '" title="' + title + '" onclick="smClickSeat(' + si + ',' + ri + ',' + sei + ')"></div>';
+            html += '<div class="sm-seat" style="background:' + color + '" title="' + title + '" onmousedown="smClickSeat(' + si + ',' + ri + ',' + sei + ',this)" onmouseover="if(smDrawing)smClickSeat(' + si + ',' + ri + ',' + sei + ',this)"></div>';
           });
           html += '</div>';
           html += '<span class="sm-row-label">' + esc(row.label) + '</span>';
@@ -990,6 +990,9 @@
       obstructed: '#efab45',
     };
     var smActiveTool = 'standard';
+    var smDrawing = false;
+    document.addEventListener('mousedown', function() { smDrawing = true; });
+    document.addEventListener('mouseup', function() { smDrawing = false; });
 
     function smSetTool(btn) {
       smActiveTool = btn.dataset.tool;
@@ -997,12 +1000,37 @@
       btn.classList.add('sm-tool--active');
     }
 
-    function smClickSeat(secIdx, rowIdx, seatIdx) {
+    function smClickSeat(secIdx, rowIdx, seatIdx, el) {
       if (!smLayout) return;
-      var seat = smLayout.sections[secIdx].rows[rowIdx].seats[seatIdx];
+      var sec = smLayout.sections[secIdx];
+      var seat = sec.rows[rowIdx].seats[seatIdx];
       seat.type = smActiveTool;
-      smRenderResult();
+      var color = SEAT_COLORS[seat.type] || sec.color;
+      el.style.background = color;
+      var title = sec.name + ' ' + sec.rows[rowIdx].label + seat.number;
+      if (seat.type !== 'standard') title += ' (' + seat.type.charAt(0).toUpperCase() + seat.type.slice(1) + ')';
+      el.title = title;
+      smUpdateCapacityBar();
       smSaveLayout();
+    }
+
+    function smUpdateCapacityBar() {
+      if (!smLayout) return;
+      var totalSeats = 0;
+      smLayout.sections.forEach(function(sec) {
+        sec.rows.forEach(function(row) {
+          row.seats.forEach(function(seat) { if (seat.type !== 'aisle' && seat.type !== 'blocked') totalSeats++; });
+        });
+      });
+      var cap = parseInt(document.getElementById('tks-capacity').value) || smLayout.venue_capacity || 0;
+      var diff = cap - totalSeats;
+      var isOver = totalSeats > cap;
+      var bar = document.getElementById('sm-capacity-bar');
+      bar.className = 'sm-capacity-bar ' + (isOver ? 'sm-capacity-bar--over' : 'sm-capacity-bar--ok');
+      bar.innerHTML =
+        '<div class="sm-cap-item"><span class="sm-cap-label">Maximum Capacity</span><span class="sm-cap-val">' + cap + '</span></div>' +
+        '<div class="sm-cap-item"><span class="sm-cap-label">Mapped Seats</span><span class="sm-cap-val">' + totalSeats + '</span></div>' +
+        '<div class="sm-cap-item"><span class="sm-cap-label">' + (isOver ? 'Over Capacity' : 'Remaining') + '</span><span class="sm-cap-val">' + Math.abs(diff) + '</span></div>';
     }
 
     function smShowWizard() {
