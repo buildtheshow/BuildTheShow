@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" />
+  <link rel="preconnect" href="https://tkmaiktxpwqfbgeojbnf.supabase.co" />
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Tickets - Build The Show</title>
+  <link rel="stylesheet" href="/ASSETS/styles/styles.css?v=typography-safe-20260421-2025" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    body { margin: 0; overflow-x: clip; background: #fff; color: #1a1530; font-family: var(--bts-font); }
+    #tkt-content { display: flex; flex-direction: column; min-height: 100vh; min-height: 100dvh; }
+    #tkt-content[hidden] { display: none; }
+    #tkt-loading { display: flex; align-items: center; justify-content: center; min-height: 100vh; font-size: 1rem; color: #8e82a7; }
+
+    .tkt-nav { background: rgba(255,255,255,0.94); position: sticky; top: 0; z-index: 100; border-bottom: 1.5px solid rgba(87,46,136,0.1); backdrop-filter: blur(14px); }
+    .tkt-nav-inner { display: flex; align-items: center; justify-content: space-between; gap: 1rem; width: min(1180px, calc(100% - 3rem)); margin: 0 auto; padding: 0.78rem 0; }
+    .tkt-nav-brand { display: flex; align-items: center; gap: 0.9rem; text-decoration: none; min-width: 0; }
+    .tkt-nav-org-logo { width: 58px; height: 44px; object-fit: contain; flex-shrink: 0; border-radius: 0; }
+    .tkt-nav-name { color: #1a1530; font-size: 0.88rem; font-weight: 900; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 200px; }
+
+    .tkt-hero { background: radial-gradient(circle at 70% 10%, rgba(116,162,180,0.18), transparent 34%), linear-gradient(180deg,#fff 0%,#fbfaff 100%); padding: 4rem 0 3rem; }
+    .tkt-hero-inner { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,340px); gap: 2.25rem; align-items: center; width: min(1180px, calc(100% - 3rem)); margin: 0 auto; }
+    .tkt-hero-copy h1 { margin: 0 0 1rem; font-size: clamp(2.4rem,5vw,4.6rem); line-height: 0.98; letter-spacing: 0; color: #091a44; }
+    .tkt-hero-copy p { margin: 0 0 1.5rem; color: #251b52; font-size: 1.05rem; line-height: 1.55; max-width: 530px; }
+    .tkt-hero-poster { display: block; width: 220px; height: calc(220px * 11 / 8.5); border-radius: 3px; object-fit: cover; object-position: center top; box-shadow: 0 16px 38px rgba(26,21,48,0.18), 0 3px 8px rgba(0,0,0,0.12); transform: rotate(-2deg); }
+    .tkt-hero-poster-wrap { display: flex; align-items: center; justify-content: flex-end; }
+
+    .tkt-body { flex: 1; width: min(1180px, calc(100% - 3rem)); margin: 0 auto; padding: 3rem 0; }
+    .tkt-coming-soon { text-align: center; padding: 3rem 1.5rem; background: #faf9fd; border-radius: 14px; border: 1.5px solid rgba(87,46,136,0.08); }
+    .tkt-coming-soon h2 { margin: 0 0 0.6rem; font-size: 1.6rem; color: #1a1530; }
+    .tkt-coming-soon p { margin: 0; color: #6b5f8a; font-size: 1rem; line-height: 1.5; }
+
+    @media (max-width: 700px) {
+      .tkt-hero-inner { grid-template-columns: 1fr; text-align: center; }
+      .tkt-hero-poster-wrap { justify-content: center; }
+      .tkt-hero-poster { width: 180px; height: calc(180px * 11 / 8.5); }
+      .tkt-hero-copy p { max-width: none; }
+    }
+  </style>
+</head>
+<body>
+
+  <div id="tkt-loading">Loading...</div>
+
+  <div id="tkt-content" hidden>
+    <nav class="tkt-nav">
+      <div class="tkt-nav-inner">
+        <a class="tkt-nav-brand" href="/">
+          <img id="tkt-org-logo" class="tkt-nav-org-logo" src="" alt="" />
+          <span id="tkt-org-name" class="tkt-nav-name"></span>
+        </a>
+      </div>
+    </nav>
+
+    <section class="tkt-hero">
+      <div class="tkt-hero-inner">
+        <div class="tkt-hero-copy">
+          <h1 id="tkt-title">Get Your Tickets</h1>
+          <p id="tkt-subtitle">Tickets for this production will be available here soon. Check back for details on show dates, pricing, and how to reserve your seats.</p>
+        </div>
+        <div class="tkt-hero-poster-wrap">
+          <img id="tkt-poster" class="tkt-hero-poster" src="" alt="Production poster" style="display:none" />
+        </div>
+      </div>
+    </section>
+
+    <div class="tkt-body">
+      <div class="tkt-coming-soon">
+        <h2>On Sale Soon</h2>
+        <p>Ticket sales have not opened yet. When they do, you will be able to purchase tickets right here.</p>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script>
+    (async function () {
+      var SB_URL = 'https://tkmaiktxpwqfbgeojbnf.supabase.co';
+      var SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRrbWFpa3R4cHdxZmJnZW9qYm5mIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM3MzE4MTcsImV4cCI6MjA4OTMwNzgxN30.TkTZBNWUatk3Y6Vmfv1hIRR3DfVjgwauwa76Pf00J_8';
+      var sb = supabase.createClient(SB_URL, SB_KEY);
+
+      function routeInfo() {
+        var params = new URLSearchParams(location.search);
+        if (params.get('prod')) return { prodId: params.get('prod') };
+        var parts = location.pathname.replace(/^\/+|\/+$/g, '').split('/');
+        if (parts.length >= 3 && parts[parts.length - 1] === 'tickets') {
+          return { orgKey: decodeURIComponent(parts[parts.length - 3] || parts[0]), showSlug: decodeURIComponent(parts[parts.length - 2] || parts[1]) };
+        }
+        if (parts.length >= 2) return { orgKey: decodeURIComponent(parts[0]), showSlug: decodeURIComponent(parts[1]) };
+        return {};
+      }
+
+      async function resolveProduction() {
+        var route = routeInfo();
+        if (route.prodId) {
+          var res = await sb.from('productions').select('id,title,slug,poster_url,organization_id,registration_settings').eq('id', route.prodId).maybeSingle();
+          return res.data;
+        }
+        var orgId = null;
+        if (route.orgKey) {
+          var orgRes = await sb.from('organizations').select('id').or('slug.eq.' + route.orgKey + ',abbreviation.eq.' + route.orgKey + ',abbreviation.ilike.' + route.orgKey).maybeSingle();
+          orgId = orgRes.data && orgRes.data.id;
+        }
+        if (!route.showSlug) return null;
+        var base = sb.from('productions').select('id,title,slug,poster_url,organization_id,registration_settings');
+        var filters = [
+          function (q) { return q.eq('slug', route.showSlug); },
+          function (q) { return q.ilike('slug', route.showSlug); },
+          function (q) { return q.ilike('slug', '%' + route.showSlug + '%'); },
+        ];
+        for (var i = 0; i < filters.length; i++) {
+          var q = filters[i](base);
+          if (orgId) q = q.eq('organization_id', orgId);
+          var r = await q.limit(1).maybeSingle();
+          if (r.data) return r.data;
+        }
+        return null;
+      }
+
+      try {
+        var prod = await resolveProduction();
+        if (!prod) { document.getElementById('tkt-loading').textContent = 'Production not found.'; return; }
+
+        var settings = prod.registration_settings || {};
+        if (settings.ticketing_published !== true) {
+          document.getElementById('tkt-loading').textContent = 'This page is not available yet.';
+          return;
+        }
+
+        var orgRes = await sb.from('organizations').select('id,name,logo_url').eq('id', prod.organization_id).maybeSingle();
+        var org = orgRes.data || {};
+
+        document.title = prod.title + ' - Tickets - Build The Show';
+        if (org.logo_url) document.getElementById('tkt-org-logo').src = org.logo_url;
+        document.getElementById('tkt-org-name').textContent = org.name || '';
+        document.getElementById('tkt-title').textContent = prod.title;
+        if (prod.poster_url) {
+          var poster = document.getElementById('tkt-poster');
+          poster.src = prod.poster_url;
+          poster.style.display = '';
+        }
+
+        document.getElementById('tkt-loading').style.display = 'none';
+        document.getElementById('tkt-content').hidden = false;
+      } catch (err) {
+        console.error(err);
+        document.getElementById('tkt-loading').textContent = 'Something went wrong loading this page.';
+      }
+    })();
+  </script>
+</body>
+</html>
