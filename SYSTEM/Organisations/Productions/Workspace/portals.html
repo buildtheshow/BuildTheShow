@@ -1176,29 +1176,47 @@
       window.location.reload();
     }
 
-    async function sendPortalInvite(idx, btn) {
+    function sendPortalInvite(idx, btn) {
       const p = _visiblePeople[idx];
-      if (!p || !p.email) { alert('No email address for this person.'); return; }
+      if (!p) return;
+      const portalKey = (p.portals || [])[0] || p.source || '';
+      if (!p.email) {
+        openInviteModalForRole(portalKey, p.roleLabel || '');
+        return;
+      }
       if (!confirm(`Send portal invite to ${p.name || p.email}?`)) return;
       const original = btn.textContent;
       btn.disabled = true; btn.textContent = 'Sending...';
-      try {
-        const { data, error } = await _sb.functions.invoke('send-email', {
-          body: {
-            production_id: _prodId,
-            category: 'team_invite',
-            trigger: 'team_invite',
-            email: p.email,
-            name: p.name || '',
-            team_access_code: p.passcode || '',
-          },
-        });
+      _sb.functions.invoke('send-email', {
+        body: {
+          production_id: _prodId,
+          category: 'team_invite',
+          trigger: 'team_invite',
+          email: p.email,
+          name: p.name || '',
+          team_access_code: p.data?.passcode || p.data?.portal_code || '',
+        },
+      }).then(({ data, error }) => {
         if (error || data?.error) throw error || new Error(data.error);
         btn.textContent = 'Sent';
-      } catch (e) {
+      }).catch(e => {
         btn.disabled = false; btn.textContent = original;
         alert('Could not send invite: ' + (e.message || e));
+      });
+    }
+
+    function openInviteModalForRole(portalKey, roleLabel) {
+      document.getElementById('inv-name').value = '';
+      document.getElementById('inv-email').value = '';
+      const sel = document.getElementById('inv-portal');
+      const matchKey = portalKey === 'board_planned' ? 'board' : portalKey === 'dept_lead_planned' ? 'dept_lead' : portalKey;
+      if (sel.querySelector(`option[value="${matchKey}"]`)) {
+        sel.value = matchKey;
+      } else {
+        sel.value = '';
       }
+      document.getElementById('pt-invite-overlay').classList.add('open');
+      document.getElementById('inv-name').focus();
     }
 
     // ── Module list per portal type ────────────────────────────────────────────
