@@ -71755,7 +71755,12 @@ See you soon!
 	    const endSelect = document.getElementById(`vsq-sched-eanchor-${key}`);
 	    const startMins = document.getElementById(`vsq-sched-smins-${key}`);
 	    const endMins = document.getElementById(`vsq-sched-emins-${key}`);
-	    if (changedSide === 'start' && startSelect?.value !== 'own_time' && endSelect?.value === 'own_time') {
+	    const deadlineSelected = startSelect?.value === 'deadline' || endSelect?.value === 'deadline';
+	    if (deadlineSelected) {
+	      if (startSelect) startSelect.value = 'deadline';
+	      if (endSelect) endSelect.value = 'deadline';
+	      if (endMins) endMins.value = 0;
+	    } else if (changedSide === 'start' && startSelect?.value !== 'own_time' && endSelect?.value === 'own_time') {
 	      endSelect.value = 'after_end';
 	    } else if (changedSide === 'end' && endSelect?.value !== 'own_time' && startSelect?.value === 'own_time') {
 	      startSelect.value = 'before_start';
@@ -71767,11 +71772,11 @@ See you soon!
 	      if (startMins) startMins.value = 0;
 	      if (endMins) endMins.value = 0;
 	    }
-	    [startMins, endMins].forEach(input => {
-	      if (input) input.disabled = ownTimeSelected;
-	    });
+	    const hideInputs = ownTimeSelected || deadlineSelected;
+	    if (startMins) startMins.disabled = ownTimeSelected;
+	    if (endMins) endMins.disabled = hideInputs;
 	    document.getElementById(`vsq-sched-start-line-${key}`)?.classList.toggle('is-own-time', ownTimeSelected);
-	    document.getElementById(`vsq-sched-end-line-${key}`)?.classList.toggle('is-own-time', ownTimeSelected);
+	    document.getElementById(`vsq-sched-end-line-${key}`)?.classList.toggle('is-own-time', hideInputs);
 	  }
 
 	  const VOL_SHIFT_TYPE_OPTIONS = [
@@ -71931,6 +71936,7 @@ See you soon!
 	    const rawAppliesTo = Array.isArray(saved.appliesTo) && saved.appliesTo.length ? saved.appliesTo : [type];
 	    const appliesTo = volNormalizeAttendanceTypes(rawAppliesTo);
 	    const savedOwnTime = saved.shiftStartAnchor === 'own_time' || saved.shiftEndAnchor === 'own_time';
+	    const savedDeadline = saved.shiftStartAnchor === 'deadline' || saved.shiftEndAnchor === 'deadline';
 	    const editorColor = DEPT_COLOURS_LOCAL[department] || meta.color || '#572e88';
 	    const pop = document.createElement('div');
 	    pop.className = 'vol-schedule-modal';
@@ -71971,6 +71977,7 @@ See you soon!
 	    }).join('')}</div>`;
 	    const anchorOpts = (sel) => [
 	      ['own_time',           `works on their own time`],
+	      ['deadline',           `deadline`],
 	      ['before_start',       `before event starts`],
 	      ['after_start',        `after event starts`],
 	      ['before_end',         `before event ends`],
@@ -72058,12 +72065,12 @@ See you soon!
 	                <div class="vol-schedule-line${savedOwnTime ? ' is-own-time' : ''}" id="vsq-sched-start-line-${key}">
 	                  <input type="number" min="0" max="480" id="vsq-sched-smins-${key}" value="${savedOwnTime ? 0 : (saved.shiftStartMins ?? '')}" placeholder="0" aria-label="Start offset in minutes" ${savedOwnTime ? 'disabled' : ''} />
 	                  <span class="vol-schedule-unit">minutes</span>
-	                  <select id="vsq-sched-sanchor-${key}" class="vol-schedule-select" aria-label="Start anchor" onchange="volScheduleAnchorChange('${key}','start')">${anchorOpts(savedOwnTime ? 'own_time' : (saved.shiftStartAnchor||'before_start'))}</select>
+	                  <select id="vsq-sched-sanchor-${key}" class="vol-schedule-select" aria-label="Start anchor" onchange="volScheduleAnchorChange('${key}','start')">${anchorOpts(savedOwnTime ? 'own_time' : savedDeadline ? 'deadline' : (saved.shiftStartAnchor||'before_start'))}</select>
 	                </div>
 	              </div>
 	              <div class="vol-schedule-field">
 	                <label>Ends</label>
-	                <div class="vol-schedule-line${savedOwnTime ? ' is-own-time' : ''}" id="vsq-sched-end-line-${key}">
+	                <div class="vol-schedule-line${savedOwnTime || savedDeadline ? ' is-own-time' : ''}" id="vsq-sched-end-line-${key}">
 	                  <input type="number" min="0" max="480" id="vsq-sched-emins-${key}" value="${savedOwnTime ? 0 : (saved.shiftEndMins ?? '')}" placeholder="0" aria-label="End offset in minutes" ${savedOwnTime ? 'disabled' : ''} />
 	                  <span class="vol-schedule-unit">minutes</span>
 	                  <select id="vsq-sched-eanchor-${key}" class="vol-schedule-select" aria-label="End anchor" onchange="volScheduleAnchorChange('${key}','end')">${anchorOpts(savedOwnTime ? 'own_time' : (saved.shiftEndAnchor||'after_end'))}</select>
@@ -72221,6 +72228,11 @@ See you soon!
 	      shiftEndMins = 0;
 	      shiftStartAnchor = 'own_time';
 	      shiftEndAnchor = 'own_time';
+	    }
+	    if (shiftStartAnchor === 'deadline' || shiftEndAnchor === 'deadline') {
+	      shiftEndMins = 0;
+	      shiftStartAnchor = 'deadline';
+	      shiftEndAnchor = 'deadline';
 	    }
 	    const hoursMode = document.querySelector(`input[name="vsq-hours-mode-${key}"]:checked`)?.value || 'auto';
 	    const countsFor = hoursMode === 'fixed' ? (parseFloat(document.getElementById(`vsq-sched-counts-${key}`)?.value) || 0) : 0;

@@ -3920,6 +3920,7 @@
     }
     function dashboardShiftTimeText(row = {}) {
       if (row.display_time) return row.display_time;
+      if (row.isDeadline && row.shift_end_time) return `By ${fmtTime(row.shift_end_time)}`;
       return fmtTimeRange(row.shift_start_time, row.shift_end_time) || 'Flexible';
     }
     function dashboardShiftStartText(row = {}) {
@@ -6017,6 +6018,12 @@
       const shiftEndAnchor = entryField(entry, 'shiftEndAnchor', 'shift_end_anchor', 'after_end');
       const ownTime = shiftStartAnchor === 'own_time' || shiftEndAnchor === 'own_time';
       if (ownTime) return { shift_date: null, shift_start_time: null, shift_end_time: null, hours: null };
+      const isDeadline = shiftStartAnchor === 'deadline' || shiftEndAnchor === 'deadline';
+      if (isDeadline) {
+        const startMins = parseInt(entryField(entry, 'shiftStartMins', 'shift_start_mins', 0), 10) || 0;
+        const deadlineRef = applyAnchor(ev, startMins, 'before_start');
+        return { shift_date: deadlineRef?.date || ev.start_time?.slice(0, 10) || null, shift_start_time: null, shift_end_time: deadlineRef?.time || null, hours: null, isDeadline: true };
+      }
       const startMins = parseInt(entryField(entry, 'shiftStartMins', 'shift_start_mins', 0), 10) || 0;
       const endMins = parseInt(entryField(entry, 'shiftEndMins', 'shift_end_mins', 0), 10) || 0;
       const start = applyAnchor(ev, startMins, shiftStartAnchor);
@@ -7350,7 +7357,7 @@
         }).join('')}</div>`;
       } else {
         const dateLabel = opp.shift_date ? fmtDate(opp.shift_date, { short:true }) : (requiredDates.length ? `${requiredDates.length} required date${requiredDates.length === 1 ? '' : 's'}` : 'Flexible date');
-        const timeLabel = fmtTimeRange(opp.shift_start_time, opp.shift_end_time) || (opp.shift_date ? 'Time TBD' : 'Flexible time');
+        const timeLabel = opp.isDeadline && opp.shift_end_time ? `By ${fmtTime(opp.shift_end_time)}` : (fmtTimeRange(opp.shift_start_time, opp.shift_end_time) || (opp.shift_date ? 'Time TBD' : 'Flexible time'));
         datesHtml = `<div class="vp-cart-date-list"><div class="vp-cart-date-row"><span class="vp-cart-date-day">${esc(dateLabel)}</span>${timeLabel ? `<span class="vp-cart-date-detail">${esc(timeLabel)}</span>` : '<span></span>'}</div></div>`;
       }
       const groupSafeKey = group.key ? esc(group.key) : '';
