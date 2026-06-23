@@ -1813,15 +1813,17 @@
       if (!selected || !business || !contact || !email) { alert('Please fill in the business name, contact name, and email.'); return; }
       if (!spbArtworkStatus) { alert('Please select an artwork option.'); return; }
 
-      var artworkNotes = 'Artwork: ' + spbArtworkStatus;
+      var artworkData = { status: spbArtworkStatus };
       if (spbArtworkStatus === 'help') {
-        var adType = (document.getElementById('spb-ad-type')?.value || '').trim();
-        var adAbout = (document.getElementById('spb-ad-about')?.value || '').trim();
-        var includes = Array.from(document.querySelectorAll('.spb-include-check:checked')).map(function(c) { return c.value; }).join(', ');
-        var adExtra = (document.getElementById('spb-ad-extra')?.value || '').trim();
-        artworkNotes = ['Artwork: needs help', adType ? 'Advertising: ' + adType : '', adAbout ? 'About: ' + adAbout : '', includes ? 'Include: ' + includes : '', adExtra ? 'Extra: ' + adExtra : ''].filter(Boolean).join(' | ');
+        artworkData.ad_type = (document.getElementById('spb-ad-type')?.value || '').trim();
+        artworkData.about = (document.getElementById('spb-ad-about')?.value || '').trim();
+        artworkData.include = Array.from(document.querySelectorAll('.spb-include-check:checked')).map(function(c) { return c.value; });
+        artworkData.extra_notes = (document.getElementById('spb-ad-extra')?.value || '').trim();
+        artworkData.has_files = !!(document.getElementById('spb-help-file')?.files?.length);
+      } else if (spbArtworkStatus === 'ready') {
+        artworkData.has_files = !!(document.getElementById('spb-artwork-file')?.files?.length);
       }
-      notes = [notes, artworkNotes].filter(Boolean).join(' | ');
+      selected.artworkData = artworkData;
 
       var btn = document.getElementById('sp-submit');
       btn.disabled = true;
@@ -1867,6 +1869,7 @@
     }
 
     async function insertAd(bizId, notes) {
+      var artStatus = spbArtworkStatus === 'ready' ? 'submitted' : spbArtworkStatus === 'later' ? 'pending' : spbArtworkStatus === 'help' ? 'needs_design' : 'missing';
       var res = await sb.from('programme_ads').insert({
         production_id: production.id,
         business_id: bizId,
@@ -1874,7 +1877,8 @@
         price_cents: Math.round(Number(selected.amount) * 100),
         format: selected.format || 'colour',
         payment_status: 'unpaid',
-        artwork_status: 'missing',
+        artwork_status: artStatus,
+        artwork_data: selected.artworkData || null,
         notes: notes,
       });
       if (res.error) throw res.error;
@@ -1889,6 +1893,7 @@
         tier_id: selected.tierId || null,
         amount_cents: Math.round(Number(selected.amount) * 100),
         payment_status: 'unpaid',
+        artwork_data: selected.artworkData || null,
         notes: pkgNotes,
       });
       if (res.error) throw res.error;
