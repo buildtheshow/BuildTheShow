@@ -1535,7 +1535,8 @@
         var val = escHtml((page.content && page.content[f.key]) || '');
         var inputHtml;
         if (f.type === 'textarea') {
-          inputHtml = '<textarea class="spn-edit-ta" data-public-key="' + escHtml(f.key) + '" rows="3">' + val + '</textarea>';
+          var taRows = /body|description|copy|bullets|rows/i.test(f.key || f.label || '') ? 8 : 3;
+          inputHtml = '<textarea class="spn-edit-ta" data-public-key="' + escHtml(f.key) + '" rows="' + taRows + '">' + val + '</textarea>';
         } else if (f.accentColor) {
           var accentCol = escHtml((page.colors && page.colors.hero) || '#572e88');
           inputHtml = '<div class="spn-edit-inp-row"><input type="text" class="spn-edit-inp" data-public-key="' + escHtml(f.key) + '" value="' + val + '" /><span class="spn-fcard-accent-dot" style="background:' + accentCol + '"></span></div>';
