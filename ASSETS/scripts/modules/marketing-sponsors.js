@@ -1089,7 +1089,7 @@
       panel.classList.toggle('active', panel.id === 'spn-settings-' + next);
     });
     var savebar = document.getElementById('spn-settings-savebar');
-    if (savebar) savebar.hidden = next === 'publicpage';
+    if (savebar) savebar.hidden = next === 'publicpage' || next === 'notifications';
     if (next === 'publicpage') {
       requestAnimationFrame(function () { initPreviewScaling(); });
     }
