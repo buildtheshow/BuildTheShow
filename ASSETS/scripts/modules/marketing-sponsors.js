@@ -80,6 +80,7 @@
         sponsorsKicker: 'Show Sponsorships', sponsorsTitle: 'Support the Production', sponsorsBody: 'Choose a sponsorship level and support the full production. You’ll be recognised throughout the season.',
         adsKicker: 'Programme Advertising', adsTitle: 'Advertise in the Programme', adsBody: 'Reach the show audience with an advertisement in the printed programme. Choose the size and format that works for your budget.',
         orgAboutBody: 'A local community theatre organisation dedicated to giving young performers a chance to shine on stage.',
+        showAboutBody: 'Share a brief description of this production for potential sponsors who may not be familiar with the show.',
         keyDatesTitle: 'Key Dates to Know', keyDatesBody: 'Plan your sponsorship around these important dates.',
         pastPostersKicker: 'Past Posters', pastPostersTitle: 'A look back at the shows sponsors helped bring to life',
         pastPostersBody: 'Share a visual snapshot of previous productions and the community your supporters are joining.',
@@ -1446,6 +1447,9 @@
       ]},
       { id:'orgAbout',  svg:ESVG.lines, title:'About Your Organisation', subtitle:'Tell sponsors who you are.',                     fields:[
         { key:'orgAboutBody', label:'Description', type:'textarea' },
+      ]},
+      { id:'showAbout', svg:ESVG.lines, title:'About the Show',        subtitle:'Describe this production for sponsors.',              fields:[
+        { key:'showAboutBody', label:'Description', type:'textarea' },
       ]},
       { id:'bgColor',   svg:ESVG.drop,  title:'Background Style',      subtitle:'Choose the background colour for this section.',    type:'color', colorKey:'info' },
     ],
