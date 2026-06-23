@@ -2189,8 +2189,9 @@
         if (i >= files.length) return;
         var file = files[i];
         var path = SpnsState.prodId + '/past-posters/' + (Date.now() + i) + '_' + file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
-        fetch(SUPABASE_URL + '/storage/v1/object/' + STORAGE_BUCKET + '/' + path, { method: 'POST', headers: sponsorHeaders({ 'Content-Type': file.type }), body: file })
-          .then(function (r) { if (!r.ok) return r.text().then(function (t) { throw new Error(t); }); return SUPABASE_URL + '/storage/v1/object/public/' + STORAGE_BUCKET + '/' + path; })
+        var posterBucket = 'past-posters';
+        fetch(SUPABASE_URL + '/storage/v1/object/' + posterBucket + '/' + path, { method: 'POST', headers: sponsorHeaders({ 'Content-Type': file.type }), body: file })
+          .then(function (r) { if (!r.ok) return r.text().then(function (t) { throw new Error(t); }); return SUPABASE_URL + '/storage/v1/object/public/' + posterBucket + '/' + path; })
           .then(function (url) {
             var p = collectPublicPageEditor();
             p.pastPosters.push(url);
