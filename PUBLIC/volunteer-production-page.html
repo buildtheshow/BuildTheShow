@@ -5731,7 +5731,36 @@
       const bodyHtml = _portalOverviewMode === 'breakdown'
         ? portalOverviewBreakdownHtml(portalData, calendarItems)
         : calendarHtml;
-      return `${portalOverviewModeBarHtml()}${bodyHtml}`;
+      const payInfoHtml = portalOverviewPaymentInfoHtml(portalPerformers);
+      return `${portalOverviewModeBarHtml()}${bodyHtml}${payInfoHtml}`;
+    }
+    function portalOverviewPaymentInfoHtml(performers = []) {
+      const etransferEmail = paymentSettings?.etransfer_email || paymentSettings?.e_transfer_email || org?.etransfer_email || org?.email || '';
+      if (!etransferEmail) return '';
+      const hasBalance = performers.some(p => {
+        const fee = p._effectiveFee || {};
+        const paid = p._paidTotal || 0;
+        return (fee.total || 0) - paid > 0;
+      });
+      if (!hasBalance) return '';
+      const performerNames = performers.map(performerDisplayName).filter(Boolean).join(', ');
+      const showName = prod?.title || prod?.name || 'this production';
+      const memoText = `${performerNames || 'Performer name'} - ${showName}`;
+      return `<div style="margin-top:1.25rem;padding:1rem 1.15rem;background:#f9f7ff;border:1.5px solid rgba(87,46,136,0.1);border-radius:10px;">
+        <div style="font-size:0.68rem;font-weight:900;letter-spacing:0.1em;text-transform:uppercase;color:rgba(87,46,136,0.45);margin-bottom:0.5rem;">How to Pay</div>
+        <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.4rem;">
+          <div style="width:22px;height:22px;border-radius:50%;background:#572e88;color:#fff;font-size:0.7rem;font-weight:900;display:flex;align-items:center;justify-content:center;flex-shrink:0;">1</div>
+          <div><span style="font-size:0.78rem;font-weight:700;color:rgba(26,21,48,0.5);">Send e-transfer to </span><span style="font-size:0.88rem;font-weight:900;color:#1a1530;">${esc(etransferEmail)}</span></div>
+        </div>
+        <div style="display:flex;align-items:center;gap:0.5rem;">
+          <div style="width:22px;height:22px;border-radius:50%;background:#572e88;color:#fff;font-size:0.7rem;font-weight:900;display:flex;align-items:center;justify-content:center;flex-shrink:0;">2</div>
+          <div style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap;">
+            <span style="font-size:0.78rem;font-weight:700;color:rgba(26,21,48,0.5);">Memo:</span>
+            <span style="font-size:0.82rem;font-weight:800;color:#572e88;background:rgba(87,46,136,0.08);padding:0.2rem 0.5rem;border-radius:5px;">${esc(memoText)}</span>
+            <button type="button" style="font-size:0.68rem;font-weight:800;padding:0.2rem 0.5rem;border-radius:5px;border:1.5px solid #572e88;background:#572e88;color:#fff;cursor:pointer;font-family:var(--bts-font);" onclick="copyPortalText(this,'${encodeURIComponent(memoText)}')">Copy</button>
+          </div>
+        </div>
+      </div>`;
     }
     function portalContactHtml(portalData = currentPortalData) {
       const producer = [...productionContacts].sort((a, b) => {
