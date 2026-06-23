@@ -1190,7 +1190,22 @@
         const rs = production?.registration_settings || {};
         const tkt = rs.ticketing || {};
         const venueLayout = tkt.venue_layout || {};
-        const capacity = parseInt(tkt.default_capacity || tkt.total_seats || venueLayout.venue_capacity || 0, 10) || 0;
+        let capacity = parseInt(tkt.default_capacity || tkt.total_seats || venueLayout.venue_capacity || 0, 10) || 0;
+        if (!capacity && production?.organization_id) {
+          try {
+            const venueName = (venueLayout.venue_name || '').toLowerCase().trim();
+            const { data: orgVenues } = await sb.from('venues').select('name,nickname,capacity').eq('org_id', production.organization_id);
+            const match = (orgVenues || []).find(v => v.capacity && (
+              (v.name || '').toLowerCase().trim() === venueName ||
+              (v.nickname || '').toLowerCase().trim() === venueName
+            ));
+            if (match) capacity = match.capacity;
+            if (!capacity) {
+              const withCap = (orgVenues || []).filter(v => v.capacity);
+              if (withCap.length === 1) capacity = withCap[0].capacity;
+            }
+          } catch (e) {}
+        }
         let audiencePerShow = capacity;
 
         const totalAudience = audiencePerShow > 0 && performanceCount > 0 ? audiencePerShow * performanceCount : 0;

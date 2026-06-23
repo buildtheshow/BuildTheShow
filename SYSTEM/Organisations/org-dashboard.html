@@ -2849,7 +2849,7 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
   async function loadVenues() {
     if (!currentOrg) return;
     const { data } = await sb.from('venues')
-      .select('id, name, nickname, address, lat, lng')
+      .select('*')
       .eq('org_id', currentOrg.id)
       .order('name', { ascending: true });
     orgVenues = data || [];
@@ -2889,6 +2889,12 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
               placeholder="e.g. The Rec Centre, Main Stage..."
               onblur="saveVenueNickname('${v.id}')"
               onkeydown="if(event.key==='Enter'){this.blur();}" />
+            <div class="venue-vcard-nickname-label" style="margin-top:0.5rem;">Seating capacity</div>
+            <input class="venue-nickname-input" id="vc-${v.id}" type="number" min="0"
+              value="${v.capacity || ''}"
+              placeholder="e.g. 275"
+              onblur="saveVenueCapacity('${v.id}')"
+              onkeydown="if(event.key==='Enter'){this.blur();}" style="max-width:140px;" />
             <span class="venue-vcard-saved" id="vn-saved-${v.id}">✓ Saved</span>
           </div>
           <div class="venue-vcard-footer">
@@ -2923,6 +2929,22 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
     }
     const nameEl = document.getElementById(`vn-name-${id}`);
     if (nameEl) nameEl.textContent = nickname || (v?.name || '');
+  }
+
+  async function saveVenueCapacity(id) {
+    const input = document.getElementById(`vc-${id}`);
+    if (!input) return;
+    const capacity = parseInt(input.value, 10) || null;
+    const v = orgVenues.find(x => x.id === id);
+    if ((v?.capacity || null) === capacity) return;
+    const { error } = await sb.from('venues').update({ capacity }).eq('id', id);
+    if (error) { console.error('Venue capacity error', error); return; }
+    if (v) v.capacity = capacity;
+    const savedEl = document.getElementById(`vn-saved-${id}`);
+    if (savedEl) {
+      savedEl.classList.add('show');
+      setTimeout(() => savedEl.classList.remove('show'), 2000);
+    }
   }
 
   // ── Save org settings ─────────────────────────────────
