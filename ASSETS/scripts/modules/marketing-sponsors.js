@@ -2228,7 +2228,7 @@
       if (!document.getElementById('spn-tile-fix-style')) {
         var s = document.createElement('style');
         s.id = 'spn-tile-fix-style';
-        s.textContent = '.spn-settings-tile-grid .template-brand-tile-title { font-size: clamp(0.9rem, 7cqw, 1.3rem) !important; line-height: 1.1 !important; } .spn-settings-tile-grid .template-brand-tile-container--title { overflow: visible !important; }';
+        s.textContent = '.spn-settings-tile-grid .template-brand-tile { aspect-ratio: auto !important; } .spn-settings-tile-grid .template-brand-tile-title { font-size: clamp(0.85rem, 6cqw, 1.2rem) !important; line-height: 1.1 !important; } .spn-settings-tile-grid .template-brand-tile-container--title { overflow: visible !important; } .spn-settings-tile-grid .template-brand-tile-container--body { flex: 0 !important; }';
         document.head.appendChild(s);
       }
       var page = options && options.page || 'sponsors';
