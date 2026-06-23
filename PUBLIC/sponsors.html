@@ -1258,7 +1258,7 @@
       const route = routeInfo();
       console.log('[sponsors] route:', route);
       if (route.prodId) {
-        const { data } = await sb.from('productions').select('id,title,slug,poster_url,organization_id,registration_settings').eq('id', route.prodId).maybeSingle();
+        const { data } = await sb.from('productions').select('id,title,slug,poster_url,organization_id').eq('id', route.prodId).maybeSingle();
         console.log('[sponsors] prod by id:', data);
         return data;
       }
@@ -1271,7 +1271,7 @@
         orgId = orgData && orgData.id;
       }
       // Try exact slug first, then ilike, then contains
-      const base = sb.from('productions').select('id,title,slug,poster_url,organization_id,registration_settings');
+      const base = sb.from('productions').select('id,title,slug,poster_url,organization_id');
       let prod = null;
       for (const filter of [
         (q) => q.eq('slug', route.showSlug),
@@ -1304,11 +1304,8 @@
         const eventsRes = await sb.from('production_events').select('id').eq('production_id', prodId).eq('event_type', 'performance');
         let performanceCount = (eventsRes.data || []).length;
 
-        const rs = production?.registration_settings || {};
-        const tkt = rs.ticketing || {};
-        const venueLayout = tkt.venue_layout || {};
-        let capacity = parseInt(tkt.default_capacity || tkt.total_seats || venueLayout.venue_capacity || 0, 10) || 0;
-        if (!capacity && production?.organization_id) {
+        let capacity = 0;
+        if (production?.organization_id) {
           try {
             const venueName = (venueLayout.venue_name || '').toLowerCase().trim();
             const { data: orgVenues } = await sb.from('venues').select('name,nickname,capacity').eq('org_id', production.organization_id);
