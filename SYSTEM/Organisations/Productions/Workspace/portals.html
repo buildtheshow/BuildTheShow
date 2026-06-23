@@ -992,6 +992,7 @@
             <div style="display:flex;align-items:center;gap:0.4rem">
               <button onclick="event.stopPropagation();openPreviewModal(${idx})" style="border:1.5px solid #edeaf6;background:#fff;cursor:pointer;border-radius:8px;color:#572e88;font-size:0.75rem;font-weight:700;padding:0.25rem 0.65rem;white-space:nowrap" onmouseover="this.style.background='#f0ecfc'" onmouseout="this.style.background='#fff'">View Portal</button>
               <button onclick="event.stopPropagation();openEditAccessDrawer(${idx})" style="border:1.5px solid #edeaf6;background:#fff;cursor:pointer;border-radius:8px;color:#572e88;font-size:0.75rem;font-weight:700;padding:0.25rem 0.65rem;white-space:nowrap" title="Manage access" onmouseover="this.style.background='#f0ecfc'" onmouseout="this.style.background='#fff'">Edit Access</button>
+              <button onclick="event.stopPropagation();sendPortalInvite(${idx},this)" style="border:1.5px solid #edeaf6;background:#fff;cursor:pointer;border-radius:8px;color:#572e88;font-size:0.75rem;font-weight:700;padding:0.25rem 0.65rem;white-space:nowrap" onmouseover="this.style.background='#f0ecfc'" onmouseout="this.style.background='#fff'">Invite User</button>
             </div>
           </td>
         </tr>`;
@@ -1173,6 +1174,31 @@
       if (error) { alert('Could not add user: ' + error.message); return; }
       closeInviteModal();
       window.location.reload();
+    }
+
+    async function sendPortalInvite(idx, btn) {
+      const p = _visiblePeople[idx];
+      if (!p || !p.email) { alert('No email address for this person.'); return; }
+      if (!confirm(`Send portal invite to ${p.name || p.email}?`)) return;
+      const original = btn.textContent;
+      btn.disabled = true; btn.textContent = 'Sending...';
+      try {
+        const { data, error } = await _sb.functions.invoke('send-email', {
+          body: {
+            production_id: _prodId,
+            category: 'team_invite',
+            trigger: 'team_invite',
+            email: p.email,
+            name: p.name || '',
+            team_access_code: p.passcode || '',
+          },
+        });
+        if (error || data?.error) throw error || new Error(data.error);
+        btn.textContent = 'Sent';
+      } catch (e) {
+        btn.disabled = false; btn.textContent = original;
+        alert('Could not send invite: ' + (e.message || e));
+      }
     }
 
     // ── Module list per portal type ────────────────────────────────────────────
