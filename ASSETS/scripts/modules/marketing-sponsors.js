@@ -1364,7 +1364,6 @@
     info: [
       ['programmeLabel','Programme Eyebrow'], ['programmeTitle','Programme Heading'], ['programmeBody','Programme Copy','textarea'],
       ['orgAboutBody','About Your Organisation','textarea'],
-      ['compareLabel','Comparison Eyebrow'], ['compareTitle','Comparison Heading'], ['compareRows','Comparison rows: Label | Sponsorship | Programme Ad','textarea'], ['compareBoth','Final Comparison Message'],
     ],
     keyDates: [['keyDatesTitle','Heading'], ['keyDatesBody','Supporting Copy']],
     steps: [['stepsLabel','Eyebrow'], ['stepsTitle','Heading'], ['stepsRows','Steps: Title | Description','textarea'], ['impactTitle','Impact Heading'], ['impactBody','Impact Copy']],
@@ -1424,10 +1423,6 @@
       ]},
       { id:'orgAbout',  svg:ESVG.lines, title:'About Your Organisation', subtitle:'Tell sponsors who you are.',                     fields:[
         { key:'orgAboutBody', label:'Description', type:'textarea' },
-      ]},
-      { id:'compare',   svg:ESVG.lines, title:'Comparison Table',      subtitle:'Help visitors compare the options.',                fields:[
-        { key:'compareLabel', label:'Eyebrow' }, { key:'compareTitle', label:'Heading' },
-        { key:'compareRows', label:'Rows: Label | Sponsorship | Ad, one per line', type:'textarea' }, { key:'compareBoth', label:'Footer Message' },
       ]},
       { id:'bgColor',   svg:ESVG.drop,  title:'Background Style',      subtitle:'Choose the background colour for this section.',    type:'color', colorKey:'info' },
     ],
