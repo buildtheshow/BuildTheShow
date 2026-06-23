@@ -47675,6 +47675,9 @@ See you soon!
     const markCompleteBtn = (!storedUrl && !hasRegSubmitBtn)
       ? `<button class="rpt-modal-save-btn" style="background:#769e7b;color:#fff;border:none;" onclick="rscMarkRegistrationComplete('${esc(assignId)}', this)">Mark Complete</button>`
       : '';
+    const resetBtn = (hasRegSubmitBtn || caForBtn.__bts_registration_complete)
+      ? `<button class="rpt-modal-save-btn" style="background:transparent;color:#d1523d;border:1.5px solid #d1523d;" onclick="rscResetRegistration('${esc(assignId)}', this)">Reset Registration</button>`
+      : '';
     const modal = document.createElement('div');
     modal.id = 'rsc-reg-pdf-modal';
     modal.className = 'rpt-household-modal';
@@ -47686,12 +47689,39 @@ See you soon!
           ${downloadBtn}
           <button class="rpt-modal-save-btn" style="background:transparent;color:#572e88;border:1.5px solid #572e88;" onclick="rscResendRegistrationLink('${esc(assignId)}', this);document.getElementById('rsc-reg-pdf-modal')?.remove();">Resend Link</button>
           ${markCompleteBtn}
+          ${resetBtn}
         </div>
         <button class="rpt-modal-save-btn" onclick="document.getElementById('rsc-reg-pdf-modal')?.remove()">Close</button>
       </div>
     </div>`;
     modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
     document.body.appendChild(modal);
+  }
+
+  async function rscResetRegistration(assignId, buttonEl = null) {
+    const d = window._rscModalData?.[assignId];
+    if (!d?.app?.id) { showToast('Could not find performer record.', true); return; }
+    if (!confirm(`Reset ${d.name || 'this performer'}'s registration? This lets them fill out the form again from scratch.`)) return;
+    if (buttonEl) { buttonEl.disabled = true; buttonEl.textContent = 'Resetting...'; }
+    try {
+      const ca = { ...applicantCustomAnswers(d.app) };
+      delete ca.__bts_registration_complete;
+      delete ca.__bts_registration_completed;
+      delete ca.__bts_registration_submitted_at;
+      delete ca.__bts_registration_completed_at;
+      delete ca.__bts_registration_marked_complete_by;
+      delete ca.__bts_registration_pdf_url;
+      delete ca.__bts_registration_confirmation_sent_at;
+      const { error } = await sb.from('audition_applications').update({ custom_answers: ca }).eq('id', d.app.id);
+      if (error) throw error;
+      d.app.custom_answers = ca;
+      showToast(`${d.name || 'Performer'} registration has been reset. Resend the link so they can fill it out again.`);
+      document.getElementById('rsc-reg-pdf-modal')?.remove();
+      await loadRegistrationPayments().catch(() => {});
+    } catch (e) {
+      if (buttonEl) { buttonEl.disabled = false; buttonEl.textContent = 'Reset Registration'; }
+      showToast('Could not reset: ' + e.message, true);
+    }
   }
 
   async function rscMarkRegistrationComplete(assignId, buttonEl = null) {
