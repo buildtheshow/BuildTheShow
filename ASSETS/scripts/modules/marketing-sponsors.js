@@ -1177,10 +1177,27 @@
     document.getElementById('spn-tier-bullets').value = item ? (item.bullets || '') : '';
     document.getElementById('spn-tier-delete').hidden = !item;
     document.getElementById('spn-tier-modal').classList.add('open');
+    previewBullets();
   }
 
   function closeTierModal() {
     document.getElementById('spn-tier-modal').classList.remove('open');
+  }
+
+  function previewBullets() {
+    var ta = document.getElementById('spn-tier-bullets');
+    var preview = document.getElementById('spn-tier-bullets-preview');
+    if (!ta || !preview) return;
+    var lines = ta.value.split('\n').map(function(l) { return l.trim(); }).filter(Boolean);
+    if (!lines.length) { preview.style.display = 'none'; return; }
+    preview.style.display = '';
+    preview.innerHTML = '<div style="font-size:0.62rem;font-weight:900;letter-spacing:0.08em;text-transform:uppercase;color:rgba(87,46,136,0.45);margin-bottom:0.5rem;">Preview</div>' +
+      '<ul style="margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:0.4rem;">' +
+      lines.map(function(l) {
+        return '<li style="display:flex;align-items:flex-start;gap:0.5rem;font-size:0.82rem;font-weight:700;color:#1a1530;line-height:1.35;">' +
+          '<span style="flex-shrink:0;width:7px;height:7px;border-radius:50%;background:#572e88;margin-top:0.35em;opacity:0.4;"></span>' +
+          escHtml(l) + '</li>';
+      }).join('') + '</ul>';
   }
 
   function saveTier() {
@@ -2444,7 +2461,7 @@
             '<div class="spn-row-2">' +
               '<div class="spn-field"><label>Slots Available <span style="font-weight:400;opacity:.7">(leave blank for unlimited)</span></label><input type="number" id="spn-tier-slots" min="1" step="1" placeholder="e.g. 1" /></div>' +
             '</div>' +
-            '<div class="spn-field"><label>Benefits <span style="font-weight:400;opacity:.7">(one per line)</span></label><textarea id="spn-tier-bullets" placeholder="Recognition in the programme&#10;Logo on website&#10;Two complimentary tickets" style="min-height:130px"></textarea></div>' +
+            '<div class="spn-field"><label>Benefits <span style="font-weight:400;opacity:.7">(one per line)</span></label><textarea id="spn-tier-bullets" placeholder="Recognition in the programme&#10;Logo on website&#10;Two complimentary tickets" style="min-height:130px" oninput="MarketingSponsorsModule.previewBullets()"></textarea><div id="spn-tier-bullets-preview" style="margin-top:0.75rem;padding:0.75rem 1rem;background:#f9f7ff;border-radius:8px;display:none;"></div></div>' +
             '<div class="spn-modal-footer spn-modal-footer--split">' +
               '<button type="button" class="spn-btn spn-btn--danger" id="spn-tier-delete" onclick="MarketingSponsorsModule.deleteTier()">Remove Tier</button>' +
               '<div class="spn-modal-footer-group"><button type="button" class="spn-btn spn-btn--ghost" onclick="MarketingSponsorsModule.closeTierModal()">Cancel</button><button type="button" class="spn-btn spn-btn--primary" onclick="MarketingSponsorsModule.saveTier()">Save Tier</button></div>' +
@@ -2607,6 +2624,7 @@
     closeTierModal:  closeTierModal,
     saveTier:        saveTier,
     deleteTier:      deleteTier,
+    previewBullets:  previewBullets,
     saveSettings:    saveSettings,
     switchSettingsTab: switchSettingsTab,
     savePublicPage: savePublicPage,
