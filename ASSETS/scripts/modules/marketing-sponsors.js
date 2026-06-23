@@ -1333,13 +1333,14 @@
   }
 
   var PUBLIC_SECTION_LABELS = {
-    hero: 'Hero', stats: 'Audience Reach', ways: 'Ways to Participate', info: 'What is a Programme?',
-    steps: 'How It Works', sponsorships: 'Sponsorship Packages', programmeAds: 'Programme Ad Sizes', pastPosters: 'Past Posters', footer: 'Footer & Contact',
+    hero: 'Hero', stats: 'Audience Reach', ways: 'Ways to Participate', info: 'Programme & Organisation',
+    steps: 'How It Works', sponsorships: 'Sponsorship Packages', programmeAds: 'Programme Ad Sizes', keyDates: 'Key Dates', pastPosters: 'Past Posters', footer: 'Footer & Contact',
   };
 
   var PUBLIC_SECTION_META = {
     hero: { description: 'Big headline, poster, and calls to action.', icon: 'Placeholder - Poster.svg', color: '#572e88' },
-    info: { description: 'Explain the programme and compare options.', icon: 'programme-8.5x11.svg', color: '#74a2b4' },
+    info: { description: 'Explain the programme, introduce your organisation, and compare options.', icon: 'programme-8.5x11.svg', color: '#74a2b4' },
+    keyDates: { description: 'Show important dates for sponsors and performances.', icon: 'navproductioncalendar.svg', color: '#476aaa' },
     stats: { description: 'Show audience impact and local reach.', icon: 'organisation-members.svg', color: '#769e7b' },
     sponsorships: { description: 'Show the sponsor packages and pricing.', icon: 'sponsorship-packages.svg', color: '#dd8233' },
     programmeAds: { description: 'Show programme ad sizes and pricing.', icon: 'programme-8.5x11Folded-11x17.svg', color: '#476aaa' },
