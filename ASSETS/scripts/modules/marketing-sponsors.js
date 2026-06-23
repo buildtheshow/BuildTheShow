@@ -1079,7 +1079,7 @@
   var autoSaveDraftTimer = null;
 
   function switchSettingsTab(name) {
-    var valid = ['sizes', 'tiers', 'deadlines', 'publicpage'];
+    var valid = ['sizes', 'tiers', 'deadlines', 'notifications', 'publicpage'];
     var next = valid.indexOf(name) >= 0 ? name : 'sizes';
     if (next === 'publicpage') renderPublicPageEditor();
     document.querySelectorAll('.spn-settings-tab').forEach(function (button) {
