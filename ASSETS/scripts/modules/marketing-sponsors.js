@@ -79,15 +79,17 @@
         impactTitle: 'Your support makes a big impact.', impactBody: 'Thank you for helping young performers shine!',
         sponsorsKicker: 'Show Sponsorships', sponsorsTitle: 'Support the Production', sponsorsBody: 'Choose a sponsorship level and support the full production. You’ll be recognised throughout the season.',
         adsKicker: 'Programme Advertising', adsTitle: 'Advertise in the Programme', adsBody: 'Reach the show audience with an advertisement in the printed programme. Choose the size and format that works for your budget.',
-        pastPostersKicker: 'Past Posters', pastPostersTitle: 'A look back at the shows sponsors helped bring to life',
-        pastPostersBody: 'Share a visual snapshot of previous productions and the community your supporters are joining.',
-        footerTitle: 'Have questions?', footerBody: 'We’re happy to help you find the right option.', footerButton: 'Contact Us',
+        orgAboutBody: ‘A local community theatre organisation dedicated to giving young performers a chance to shine on stage.’,
+        keyDatesTitle: ‘Key Dates to Know’, keyDatesBody: ‘Plan your sponsorship around these important dates.’,
+        pastPostersKicker: ‘Past Posters’, pastPostersTitle: ‘A look back at the shows sponsors helped bring to life’,
+        pastPostersBody: ‘Share a visual snapshot of previous productions and the community your supporters are joining.’,
+        footerTitle: ‘Have questions?’, footerBody: ‘We’re happy to help you find the right option.’, footerButton: ‘Contact Us’,
       },
       colors: { hero: '#572e88', stats: '#74a2b4', sponsor: '#572e88', ads: '#769e7b', info: '#ffffff', steps: '#1a1530', sponsorships: '#572e88', programmeAds: '#476aaa', pastPosters: '#ffffff', footer: '#1a1530' },
       sections: [
         { id: 'hero', visible: true }, { id: 'stats', visible: true }, { id: 'ways', visible: true },
         { id: 'info', visible: true }, { id: 'steps', visible: true }, { id: 'sponsorships', visible: true },
-        { id: 'programmeAds', visible: true }, { id: 'pastPosters', visible: true }, { id: 'footer', visible: true },
+        { id: 'programmeAds', visible: true }, { id: 'keyDates', visible: true }, { id: 'pastPosters', visible: true }, { id: 'footer', visible: true },
       ],
     };
   }
@@ -1360,8 +1362,10 @@
     ],
     info: [
       ['programmeLabel','Programme Eyebrow'], ['programmeTitle','Programme Heading'], ['programmeBody','Programme Copy','textarea'],
+      ['orgAboutBody','About Your Organisation','textarea'],
       ['compareLabel','Comparison Eyebrow'], ['compareTitle','Comparison Heading'], ['compareRows','Comparison rows: Label | Sponsorship | Programme Ad','textarea'], ['compareBoth','Final Comparison Message'],
     ],
+    keyDates: [['keyDatesTitle','Heading'], ['keyDatesBody','Supporting Copy']],
     steps: [['stepsLabel','Eyebrow'], ['stepsTitle','Heading'], ['stepsRows','Steps: Title | Description','textarea'], ['impactTitle','Impact Heading'], ['impactBody','Impact Copy']],
     sponsorships: [['sponsorsKicker','Eyebrow'], ['sponsorsTitle','Heading'], ['sponsorsBody','Supporting Copy','textarea']],
     programmeAds: [['adsKicker','Eyebrow'], ['adsTitle','Heading'], ['adsBody','Supporting Copy','textarea']],
@@ -1417,11 +1421,19 @@
       { id:'programme', svg:ESVG.T,     title:'Programme Description', subtitle:'Explain what a programme is.',                      fields:[
         { key:'programmeLabel', label:'Eyebrow' }, { key:'programmeTitle', label:'Heading' }, { key:'programmeBody', label:'Body', type:'textarea' },
       ]},
-      { id:'compare',   svg:ESVG.lines, title:'Comparison Table',      subtitle:'Help visitors compare the options.',                fields:[
+      { id:'orgAbout',  svg:ESVG.lines, title:'About Your Organisation', subtitle:'Tell sponsors who you are.',                     fields:[
+        { key:'orgAboutBody', label:'Description', type:'textarea' },
+      ]},
+      { id:'compare',   svg:ESVG.cols,  title:'Comparison Table',      subtitle:'Help visitors compare the options.',                fields:[
         { key:'compareLabel', label:'Eyebrow' }, { key:'compareTitle', label:'Heading' },
         { key:'compareRows', label:'Rows: Label | Sponsorship | Ad, one per line', type:'textarea' }, { key:'compareBoth', label:'Footer Message' },
       ]},
       { id:'bgColor',   svg:ESVG.drop,  title:'Background Style',      subtitle:'Choose the background colour for this section.',    type:'color', colorKey:'info' },
+    ],
+    keyDates: [
+      { id:'text',    svg:ESVG.T,    title:'Section Text',       subtitle:'Edit the heading and description.',                      fields:[
+        { key:'keyDatesTitle', label:'Heading' }, { key:'keyDatesBody', label:'Supporting Copy' },
+      ]},
     ],
     steps: [
       { id:'text',    svg:ESVG.T,    title:'Section Text',       subtitle:'Edit the heading and steps.',                            fields:[
