@@ -172,7 +172,7 @@
   }
 
   function dbFetch(table, extra) {
-    var url = SUPABASE_URL + '/rest/v1/' + table + '?production_id=eq.' + SpnsState.prodId + (extra || '') + '&order=created_at.asc';
+    var url = SUPABASE_URL + '/rest/v1/' + table + '?production_id=eq.' + SpnsState.prodId + (extra || '') + (table === 'sponsor_settings' ? '' : '&order=created_at.asc');
     return fetch(url, { headers: sponsorHeaders() })
       .then(function (r) { if (!r.ok) return r.text().then(function (t) { throw new Error(t); }); return r.json(); });
   }
