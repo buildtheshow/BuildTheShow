@@ -2247,12 +2247,14 @@
     SpnsState.notifyEmails.push(email);
     input.value = '';
     renderNotifyList();
+    saveSettings();
   }
 
   function removeNotifyEmail(index) {
     if (!SpnsState.notifyEmails) return;
     SpnsState.notifyEmails.splice(index, 1);
     renderNotifyList();
+    saveSettings();
   }
 
   function saveSettings() {
