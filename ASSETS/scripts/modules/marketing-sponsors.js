@@ -79,11 +79,11 @@
         impactTitle: 'Your support makes a big impact.', impactBody: 'Thank you for helping young performers shine!',
         sponsorsKicker: 'Show Sponsorships', sponsorsTitle: 'Support the Production', sponsorsBody: 'Choose a sponsorship level and support the full production. You’ll be recognised throughout the season.',
         adsKicker: 'Programme Advertising', adsTitle: 'Advertise in the Programme', adsBody: 'Reach the show audience with an advertisement in the printed programme. Choose the size and format that works for your budget.',
-        orgAboutBody: ‘A local community theatre organisation dedicated to giving young performers a chance to shine on stage.’,
-        keyDatesTitle: ‘Key Dates to Know’, keyDatesBody: ‘Plan your sponsorship around these important dates.’,
-        pastPostersKicker: ‘Past Posters’, pastPostersTitle: ‘A look back at the shows sponsors helped bring to life’,
-        pastPostersBody: ‘Share a visual snapshot of previous productions and the community your supporters are joining.’,
-        footerTitle: ‘Have questions?’, footerBody: ‘We’re happy to help you find the right option.’, footerButton: ‘Contact Us’,
+        orgAboutBody: 'A local community theatre organisation dedicated to giving young performers a chance to shine on stage.',
+        keyDatesTitle: 'Key Dates to Know', keyDatesBody: 'Plan your sponsorship around these important dates.',
+        pastPostersKicker: 'Past Posters', pastPostersTitle: 'A look back at the shows sponsors helped bring to life',
+        pastPostersBody: 'Share a visual snapshot of previous productions and the community your supporters are joining.',
+        footerTitle: 'Have questions?', footerBody: 'We’re happy to help you find the right option.', footerButton: 'Contact Us',
       },
       colors: { hero: '#572e88', stats: '#74a2b4', sponsor: '#572e88', ads: '#769e7b', info: '#ffffff', steps: '#1a1530', sponsorships: '#572e88', programmeAds: '#476aaa', pastPosters: '#ffffff', footer: '#1a1530' },
       sections: [
@@ -1424,16 +1424,11 @@
       { id:'orgAbout',  svg:ESVG.lines, title:'About Your Organisation', subtitle:'Tell sponsors who you are.',                     fields:[
         { key:'orgAboutBody', label:'Description', type:'textarea' },
       ]},
-      { id:'compare',   svg:ESVG.cols,  title:'Comparison Table',      subtitle:'Help visitors compare the options.',                fields:[
+      { id:'compare',   svg:ESVG.lines, title:'Comparison Table',      subtitle:'Help visitors compare the options.',                fields:[
         { key:'compareLabel', label:'Eyebrow' }, { key:'compareTitle', label:'Heading' },
         { key:'compareRows', label:'Rows: Label | Sponsorship | Ad, one per line', type:'textarea' }, { key:'compareBoth', label:'Footer Message' },
       ]},
       { id:'bgColor',   svg:ESVG.drop,  title:'Background Style',      subtitle:'Choose the background colour for this section.',    type:'color', colorKey:'info' },
-    ],
-    keyDates: [
-      { id:'text',    svg:ESVG.T,    title:'Section Text',       subtitle:'Edit the heading and description.',                      fields:[
-        { key:'keyDatesTitle', label:'Heading' }, { key:'keyDatesBody', label:'Supporting Copy' },
-      ]},
     ],
     steps: [
       { id:'text',    svg:ESVG.T,    title:'Section Text',       subtitle:'Edit the heading and steps.',                            fields:[
@@ -1454,6 +1449,11 @@
         { key:'adsKicker', label:'Eyebrow' }, { key:'adsTitle', label:'Heading' }, { key:'adsBody', label:'Body', type:'textarea' },
       ]},
       { id:'bgColor', svg:ESVG.drop, title:'Background Style',   subtitle:'Choose the background colour for this section.',         type:'color', colorKey:'programmeAds' },
+    ],
+    keyDates: [
+      { id:'text',    svg:ESVG.T,    title:'Section Text',       subtitle:'Edit the heading and description.',                      fields:[
+        { key:'keyDatesTitle', label:'Heading' }, { key:'keyDatesBody', label:'Supporting Copy' },
+      ]},
     ],
     pastPosters: [
       { id:'currentPoster',   img:'Placeholder - Poster.svg', title:'Current Poster',    subtitle:'The production poster shown in the centre of the fan. Uses the production poster by default.',  type:'currentPosterFan' },
