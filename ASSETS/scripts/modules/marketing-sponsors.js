@@ -998,6 +998,12 @@
           if (bkEl)  bkEl.value  = s.deadlines.booking || '';
           if (spEl)  spEl.value  = s.deadlines.sponsor  || '';
         }
+        var notifyModeEl = document.getElementById('spn-notify-mode');
+        var notifyEmailEl = document.getElementById('spn-notify-custom-email');
+        var notifyWrap = document.getElementById('spn-notify-custom-wrap');
+        if (notifyModeEl) notifyModeEl.value = s.notifyMode || 'org';
+        if (notifyEmailEl) notifyEmailEl.value = s.notifyEmail || '';
+        if (notifyWrap) notifyWrap.style.display = (s.notifyMode === 'custom') ? '' : 'none';
       }
     }).catch(function () {}).then(function () {
       renderSettings();
@@ -2042,6 +2048,8 @@
       publicStats: document.querySelector('.spn-public-stat-value') ? collectPublicStats() : (SpnsState.settings.publicStats || []),
       publicPage: SpnsState.settings.publicPage,
       publicPageDraft: SpnsState.settings.publicPageDraft,
+      notifyMode: (document.getElementById('spn-notify-mode') || {}).value || 'org',
+      notifyEmail: (document.getElementById('spn-notify-custom-email') || {}).value || '',
     };
   }
 
@@ -2253,6 +2261,7 @@
       var settingsTabsHtml = '<button type="button" class="spn-settings-tab active" data-settings-panel="sizes" onclick="MarketingSponsorsModule.switchSettingsTab(\'sizes\')">Programme Ad Sizes</button>' +
         '<button type="button" class="spn-settings-tab" data-settings-panel="tiers" onclick="MarketingSponsorsModule.switchSettingsTab(\'tiers\')">Sponsor Tiers</button>' +
         '<button type="button" class="spn-settings-tab" data-settings-panel="deadlines" onclick="MarketingSponsorsModule.switchSettingsTab(\'deadlines\')">Deadlines</button>' +
+        '<button type="button" class="spn-settings-tab" data-settings-panel="notifications" onclick="MarketingSponsorsModule.switchSettingsTab(\'notifications\')">Notifications</button>' +
         '<button type="button" class="spn-settings-tab" data-settings-panel="publicpage" onclick="MarketingSponsorsModule.switchSettingsTab(\'publicpage\')">Public Page</button>';
       var deadlineTilesHtml = deadlineTile('Programme Ads', 'Artwork Submission', 'spn-deadline-artwork', '#476aaa') +
         deadlineTile('Programme Ads', 'Ad Booking', 'spn-deadline-booking', '#dd8233') +
@@ -2415,6 +2424,20 @@
             '<div class="spn-settings-panel-head"><div><div class="spn-settings-section-title">Deadlines</div><div class="spn-settings-section-desc">' + deadlineCopy + '</div></div></div>' +
             '<div class="spn-settings-tile-grid">' +
               deadlineTilesHtml +
+            '</div>' +
+          '</div>' +
+          '<div class="spn-settings-panel" id="spn-settings-notifications">' +
+            '<div class="spn-settings-panel-head"><div><div class="spn-settings-section-title">Notifications</div><div class="spn-settings-section-desc">Choose who gets notified when a new sponsor or ad request comes in.</div></div></div>' +
+            '<div style="max-width:500px;margin-top:0.75rem;">' +
+              '<div class="spn-field"><label>Send request notifications to</label>' +
+                '<select id="spn-notify-mode" style="width:100%;padding:0.68rem 0.78rem;border:1.5px solid rgba(87,46,136,0.2);border-radius:8px;font:inherit;font-size:0.86rem;color:#1a1530;background:#fff;" onchange="document.getElementById(\'spn-notify-custom-wrap\').style.display=this.value===\'custom\'?\'\':\'none\'">' +
+                  '<option value="org">Organisation email</option>' +
+                  '<option value="producer">Producer email</option>' +
+                  '<option value="custom">Custom email address</option>' +
+                  '<option value="none">No notifications</option>' +
+                '</select>' +
+              '</div>' +
+              '<div class="spn-field" id="spn-notify-custom-wrap" style="display:none;"><label>Custom email address</label><input type="email" id="spn-notify-custom-email" placeholder="sponsorcoordinator@example.com" /></div>' +
             '</div>' +
           '</div>' +
           '<div class="spn-settings-panel" id="spn-settings-publicpage">' +
