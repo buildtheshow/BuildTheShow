@@ -1141,7 +1141,7 @@
       const route = routeInfo();
       console.log('[sponsors] route:', route);
       if (route.prodId) {
-        const { data } = await sb.from('productions').select('id,title,slug,poster_url,organization_id').eq('id', route.prodId).maybeSingle();
+        const { data } = await sb.from('productions').select('id,title,slug,poster_url,organization_id,registration_settings').eq('id', route.prodId).maybeSingle();
         console.log('[sponsors] prod by id:', data);
         return data;
       }
@@ -1154,7 +1154,7 @@
         orgId = orgData && orgData.id;
       }
       // Try exact slug first, then ilike, then contains
-      const base = sb.from('productions').select('id,title,slug,poster_url,organization_id');
+      const base = sb.from('productions').select('id,title,slug,poster_url,organization_id,registration_settings');
       let prod = null;
       for (const filter of [
         (q) => q.eq('slug', route.showSlug),
@@ -1184,44 +1184,14 @@
       const emptyStats = STAT_DEFAULTS.map(def => ({ value: 'TBC', label: def.label, subtext: def.subtext, color: def.color, icon: def.icon }));
       if (!prodId) return emptyStats;
       try {
-        const [eventsRes, catsRes, itemsRes] = await Promise.all([
-          sb.from('production_events').select('id').eq('production_id', prodId).eq('event_type', 'performance'),
-          sb.from('budget_categories').select('id,name,type').eq('production_id', prodId),
-          sb.from('budget_items').select('name,category_id,qty').eq('production_id', prodId),
-        ]);
+        const eventsRes = await sb.from('production_events').select('id').eq('production_id', prodId).eq('event_type', 'performance');
         let performanceCount = (eventsRes.data || []).length;
-        const categories = catsRes.data || [];
-        const items = itemsRes.data || [];
-        const ticketCategoryIds = new Set(categories
-          .filter(cat => cat.type === 'income' && /ticket|admission|box office/i.test(cat.name || ''))
-          .map(cat => cat.id));
-        const ticketItems = items.filter(item => ticketCategoryIds.has(item.category_id));
 
-        // Fall back to budget "Number of shows" if calendar has no performance events yet
-        if (!performanceCount) {
-          const showsItem = ticketItems.find(item => /number of shows/i.test(item.name || ''));
-          performanceCount = showsItem ? (Number(showsItem.qty) || 0) : 0;
-        }
-
-        // Single-tier: seats per show × expected attendance %
-        const seatsPerShowItem = ticketItems.find(item => /seats per show/i.test(item.name || ''));
-        const attendanceItem   = ticketItems.find(item => /expected attendance/i.test(item.name || ''));
-        const capacityPerShow  = seatsPerShowItem ? (Number(seatsPerShowItem.qty) || 0) : 0;
-        const attendancePct    = attendanceItem ? Math.min(100, Math.max(0, Number(attendanceItem.qty) || 0)) / 100 : 1;
-        let audiencePerShow    = capacityPerShow > 0 ? Math.round(capacityPerShow * attendancePct) : 0;
-
-        // Multi-tier fallback: sum "X tickets per show" items
-        if (!audiencePerShow) {
-          const perShowItems = ticketItems.filter(item => /tickets per show/i.test(item.name || ''));
-          audiencePerShow = perShowItems.reduce((sum, item) => sum + (Number(item.qty) || 0), 0);
-        }
-
-        // Last-resort fallback: sum generic ticket qtys / performance count
-        if (!audiencePerShow && performanceCount > 0) {
-          const genericItems = ticketItems.filter(item => /ticket|admission|adult|student|senior|child/i.test(item.name || '') && !/per show|number of shows|seats per show|expected/i.test(item.name || ''));
-          const totalQty = genericItems.reduce((sum, item) => sum + (Number(item.qty) || 0), 0);
-          audiencePerShow = totalQty > 0 ? Math.round(totalQty / performanceCount) : 0;
-        }
+        const rs = production?.registration_settings || {};
+        const tkt = rs.ticketing || {};
+        const showInfo = rs.show_info || {};
+        const capacity = parseInt(tkt.total_seats || tkt.venue_capacity || showInfo.max_capacity || 0, 10) || 0;
+        let audiencePerShow = capacity;
 
         const totalAudience = audiencePerShow > 0 && performanceCount > 0 ? audiencePerShow * performanceCount : 0;
         return [
