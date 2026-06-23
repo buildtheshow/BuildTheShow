@@ -999,12 +999,8 @@
           if (bkEl)  bkEl.value  = s.deadlines.booking || '';
           if (spEl)  spEl.value  = s.deadlines.sponsor  || '';
         }
-        var notifyModeEl = document.getElementById('spn-notify-mode');
-        var notifyEmailEl = document.getElementById('spn-notify-custom-email');
-        var notifyWrap = document.getElementById('spn-notify-custom-wrap');
-        if (notifyModeEl) notifyModeEl.value = s.notifyMode || 'org';
-        if (notifyEmailEl) notifyEmailEl.value = s.notifyEmail || '';
-        if (notifyWrap) notifyWrap.style.display = (s.notifyMode === 'custom') ? '' : 'none';
+        SpnsState.notifyEmails = Array.isArray(s.notifyEmails) ? s.notifyEmails : [];
+        renderNotifyList();
       }
     }).catch(function () {}).then(function () {
       renderSettings();
@@ -2052,8 +2048,7 @@
       publicStats: document.querySelector('.spn-public-stat-value') ? collectPublicStats() : (SpnsState.settings.publicStats || []),
       publicPage: SpnsState.settings.publicPage,
       publicPageDraft: SpnsState.settings.publicPageDraft,
-      notifyMode: (document.getElementById('spn-notify-mode') || {}).value || 'org',
-      notifyEmail: (document.getElementById('spn-notify-custom-email') || {}).value || '',
+      notifyEmails: SpnsState.notifyEmails || [],
     };
   }
 
@@ -2225,6 +2220,40 @@
   }
 
   function escHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+  function renderNotifyList() {
+    var list = document.getElementById('spn-notify-list');
+    if (!list) return;
+    var emails = SpnsState.notifyEmails || [];
+    if (!emails.length) {
+      list.innerHTML = '<div style="padding:0.75rem 1rem;background:#f9f7ff;border-radius:8px;font-size:0.82rem;color:rgba(87,46,136,0.5);font-style:italic;">No notification recipients added yet. Add an email below.</div>';
+      return;
+    }
+    list.innerHTML = emails.map(function(email, i) {
+      return '<div style="display:flex;align-items:center;justify-content:space-between;gap:0.75rem;padding:0.65rem 1rem;border:1.5px solid rgba(87,46,136,0.12);border-radius:8px;margin-bottom:0.4rem;">' +
+        '<span style="font-size:0.88rem;font-weight:700;color:#1a1530;">' + escHtml(email) + '</span>' +
+        '<button type="button" style="border:none;background:none;color:#d1523d;font-size:0.78rem;font-weight:800;cursor:pointer;padding:0.2rem 0.5rem;" onclick="MarketingSponsorsModule.removeNotifyEmail(' + i + ')">Remove</button>' +
+      '</div>';
+    }).join('');
+  }
+
+  function addNotifyEmail() {
+    var input = document.getElementById('spn-notify-add-email');
+    if (!input) return;
+    var email = input.value.trim();
+    if (!email || !/\S+@\S+\.\S+/.test(email)) { alert('Please enter a valid email address.'); return; }
+    if (!SpnsState.notifyEmails) SpnsState.notifyEmails = [];
+    if (SpnsState.notifyEmails.some(function(e) { return e.toLowerCase() === email.toLowerCase(); })) { alert('This email is already in the list.'); return; }
+    SpnsState.notifyEmails.push(email);
+    input.value = '';
+    renderNotifyList();
+  }
+
+  function removeNotifyEmail(index) {
+    if (!SpnsState.notifyEmails) return;
+    SpnsState.notifyEmails.splice(index, 1);
+    renderNotifyList();
+  }
 
   function saveSettings() {
     SpnsState.settings.publicStats = document.querySelector('.spn-public-stat-value') ? collectPublicStats() : (SpnsState.settings.publicStats || []);
@@ -2431,17 +2460,14 @@
             '</div>' +
           '</div>' +
           '<div class="spn-settings-panel" id="spn-settings-notifications">' +
-            '<div class="spn-settings-panel-head"><div><div class="spn-settings-section-title">Notifications</div><div class="spn-settings-section-desc">Choose who gets notified when a new sponsor or ad request comes in.</div></div></div>' +
-            '<div style="max-width:500px;margin-top:0.75rem;">' +
-              '<div class="spn-field"><label>Send request notifications to</label>' +
-                '<select id="spn-notify-mode" style="width:100%;padding:0.68rem 0.78rem;border:1.5px solid rgba(87,46,136,0.2);border-radius:8px;font:inherit;font-size:0.86rem;color:#1a1530;background:#fff;" onchange="document.getElementById(\'spn-notify-custom-wrap\').style.display=this.value===\'custom\'?\'\':\'none\'">' +
-                  '<option value="org">Organisation email</option>' +
-                  '<option value="producer">Producer email</option>' +
-                  '<option value="custom">Custom email address</option>' +
-                  '<option value="none">No notifications</option>' +
-                '</select>' +
+            '<div class="spn-settings-panel-head"><div><div class="spn-settings-section-title">Notifications</div><div class="spn-settings-section-desc">Choose who gets notified when a new sponsor or ad request comes in. Select as many as you need.</div></div></div>' +
+            '<div style="max-width:560px;margin-top:0.75rem;" id="spn-notify-list"></div>' +
+            '<div style="max-width:560px;margin-top:0.75rem;">' +
+              '<div style="font-size:0.72rem;font-weight:900;letter-spacing:0.08em;text-transform:uppercase;color:rgba(87,46,136,0.45);margin-bottom:0.5rem;">Add a custom email</div>' +
+              '<div style="display:flex;gap:0.5rem;">' +
+                '<input type="email" id="spn-notify-add-email" placeholder="someone@example.com" style="flex:1;padding:0.6rem 0.78rem;border:1.5px solid rgba(87,46,136,0.2);border-radius:8px;font:inherit;font-size:0.86rem;" />' +
+                '<button type="button" class="spn-btn spn-btn--primary" onclick="MarketingSponsorsModule.addNotifyEmail()" style="white-space:nowrap;">+ Add</button>' +
               '</div>' +
-              '<div class="spn-field" id="spn-notify-custom-wrap" style="display:none;"><label>Custom email address</label><input type="email" id="spn-notify-custom-email" placeholder="sponsorcoordinator@example.com" /></div>' +
             '</div>' +
           '</div>' +
           '<div class="spn-settings-panel" id="spn-settings-publicpage">' +
@@ -2652,6 +2678,8 @@
     saveTier:        saveTier,
     deleteTier:      deleteTier,
     previewBullets:  previewBullets,
+    addNotifyEmail:  addNotifyEmail,
+    removeNotifyEmail: removeNotifyEmail,
     saveSettings:    saveSettings,
     switchSettingsTab: switchSettingsTab,
     savePublicPage: savePublicPage,

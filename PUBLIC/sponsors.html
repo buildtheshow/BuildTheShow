@@ -718,7 +718,6 @@
               <h2 class="spp-info-kicker" id="spp-show-about-title" style="margin-bottom:0.3rem;">About the Show</h2>
               <div class="spp-info-accent-line" style="background:#efab45;"></div>
               <div class="spp-info-body" id="spp-show-about-body"><p>Tell sponsors about this production.</p></div>
-              <div id="spp-show-about-meta" style="margin-top:0.85rem;display:flex;flex-wrap:wrap;gap:0.5rem 1.25rem;font-size:0.78rem;font-weight:700;color:rgba(26,21,48,0.55);"></div>
             </div>
           </div>
         </div>
@@ -1081,7 +1080,7 @@
     const sb = supabase.createClient(SB_URL, SB_KEY);
     const COLORS = ['#476aaa','#78bbd4','#769e7b','#572e88','#d1523d','#ca7ea7'];
     let production = null, organization = null;
-    let settings = { adSizes: [], tiers: [], deadlines: {}, publicStats: [], notifyMode: 'org', notifyEmail: '' };
+    let settings = { adSizes: [], tiers: [], deadlines: {}, publicStats: [], notifyEmails: [] };
     let publicPage = null;
     let selected = null;
     const esc = v => String(v == null ? '' : v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -1380,19 +1379,6 @@
           `</div>`;
         wrap.hidden = false;
 
-        const showMeta = document.getElementById('spp-show-about-meta');
-        if (showMeta && data.length) {
-          const first = new Date((data[0].start_time || '').slice(0, 19));
-          const last = data.length > 1 ? new Date((data[data.length - 1].start_time || '').slice(0, 19)) : null;
-          const dateFmt = d => new Intl.DateTimeFormat('en-CA', { month: 'long', day: 'numeric', year: 'numeric' }).format(d);
-          const dateRange = last && last.getTime() !== first.getTime()
-            ? dateFmt(first) + ' – ' + dateFmt(last)
-            : dateFmt(first);
-          let metaHtml = '<span>' + esc(data.length) + ' performance' + (data.length !== 1 ? 's' : '') + '</span>';
-          metaHtml += '<span>' + esc(dateRange) + '</span>';
-          if (organization?.name) metaHtml += '<span>' + esc(organization.name) + '</span>';
-          showMeta.innerHTML = metaHtml;
-        }
       } catch(err) { console.warn('[sponsors] Could not load performance dates:', err); }
     }
 
@@ -1927,25 +1913,23 @@
     }
 
     async function sendSponsorNotification(bizName, contactName, contactEmail, kind, option) {
-      var mode = settings.notifyMode || 'org';
-      if (mode === 'none') return;
-      var notifyTo = '';
-      if (mode === 'org') notifyTo = organization?.email || '';
-      else if (mode === 'producer') notifyTo = ''; // edge function will use producer email
-      else if (mode === 'custom') notifyTo = settings.notifyEmail || '';
-      if (!notifyTo && mode !== 'producer') return;
+      var emails = settings.notifyEmails || [];
+      if (!emails.length) return;
       var typeLabel = kind === 'ad' ? 'Programme Ad' : 'Sponsorship';
-      try {
-        await sb.functions.invoke('send-email', { body: {
-          production_id: production.id,
-          category: 'general',
-          trigger: 'general',
-          email: notifyTo || undefined,
-          name: 'Production Team',
-          reviewed_subject: 'New ' + typeLabel + ' request: ' + bizName,
-          reviewed_body: 'A new ' + typeLabel.toLowerCase() + ' request has been submitted.\n\nBusiness: ' + bizName + '\nContact: ' + contactName + '\nEmail: ' + contactEmail + '\nOption: ' + (option || 'Not specified') + '\n\nLog in to your Build The Show workspace to review this submission.',
-        }});
-      } catch (e) { console.warn('Notification send failed:', e); }
+      var bodyText = 'A new ' + typeLabel.toLowerCase() + ' request has been submitted.\n\nBusiness: ' + bizName + '\nContact: ' + contactName + '\nEmail: ' + contactEmail + '\nOption: ' + (option || 'Not specified') + '\n\nLog in to your Build The Show workspace to review this submission.';
+      for (var i = 0; i < emails.length; i++) {
+        try {
+          await sb.functions.invoke('send-email', { body: {
+            production_id: production.id,
+            category: 'general',
+            trigger: 'general',
+            email: emails[i],
+            name: 'Production Team',
+            reviewed_subject: 'New ' + typeLabel + ' request: ' + bizName,
+            reviewed_body: bodyText,
+          }});
+        } catch (e) { console.warn('Notification send failed for ' + emails[i] + ':', e); }
+      }
     }
 
     async function findOrCreateBusiness(name, contact, email, phone, website, notes) {
@@ -2017,8 +2001,7 @@
         settings.tiers       = normalizeSponsorTiers(s.tiers);
         settings.deadlines   = s.deadlines   || {};
         settings.publicStats = mergePublicStats(s.publicStats, derivedStats);
-        settings.notifyMode  = s.notifyMode || 'org';
-        settings.notifyEmail = s.notifyEmail || '';
+        settings.notifyEmails = Array.isArray(s.notifyEmails) ? s.notifyEmails : [];
         publicPage = mergedPublicPage(s.publicPage);
         if (publicPage.published === false && new URLSearchParams(location.search).get('preview') !== '1') {
           const unavailable = document.getElementById('spp-loading');
