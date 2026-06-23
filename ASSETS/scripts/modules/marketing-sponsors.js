@@ -1008,6 +1008,7 @@
       updatePublicPageStatus();
       updatePublicPageDraftActions();
       deriveSponsorStats();
+      renderNotifyList();
     });
   }
 
