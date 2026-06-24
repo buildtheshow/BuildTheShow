@@ -631,6 +631,24 @@
       padding: 0.5rem 1.1rem;
       cursor: pointer;
     }
+    /* Line Items */
+    .rcpt-itemize-toggle { font-family: inherit; font-size: 0.78rem; font-weight: 700; color: #572e88; background: none; border: none; cursor: pointer; padding: 0; text-decoration: underline; text-underline-offset: 2px; }
+    .rcpt-itemize-toggle:hover { opacity: 0.7; }
+    .rcpt-line-items-wrap { margin-bottom: 0.5rem; }
+    .rcpt-line-row { display: grid; grid-template-columns: 1fr 60px 90px 80px 28px; gap: 0.5rem; align-items: end; margin-bottom: 0.45rem; padding: 0.6rem 0.7rem; background: rgba(87,46,136,0.025); border-radius: 8px; }
+    .rcpt-line-row .rcpt-line-field { display: flex; flex-direction: column; gap: 0.15rem; }
+    .rcpt-line-row .rcpt-line-label { font-size: 0.58rem; font-weight: 700; color: #9a90b0; text-transform: uppercase; letter-spacing: 0.06em; }
+    .rcpt-line-row input, .rcpt-line-row select { font-family: inherit; font-size: 0.8rem; color: #1a1530; border: 1.5px solid rgba(87,46,136,0.15); border-radius: 6px; padding: 0.4rem 0.5rem; background: #fff; width: 100%; }
+    .rcpt-line-row input:focus, .rcpt-line-row select:focus { outline: none; border-color: #572e88; }
+    .rcpt-line-total { font-size: 0.82rem; font-weight: 800; color: #1a1530; padding: 0.4rem 0; text-align: right; }
+    .rcpt-line-remove { background: none; border: none; color: #c4bdd4; cursor: pointer; font-size: 1rem; padding: 0.3rem; border-radius: 6px; display: flex; align-items: center; justify-content: center; }
+    .rcpt-line-remove:hover { color: #d1523d; background: rgba(209,82,61,0.06); }
+    .rcpt-add-line-btn { font-family: inherit; font-size: 0.75rem; font-weight: 700; color: #572e88; background: rgba(87,46,136,0.04); border: 1.5px dashed rgba(87,46,136,0.15); border-radius: 8px; padding: 0.45rem 0.85rem; cursor: pointer; width: 100%; margin-top: 0.25rem; }
+    .rcpt-add-line-btn:hover { border-color: #572e88; background: rgba(87,46,136,0.06); }
+    @media (max-width: 600px) {
+      .rcpt-line-row { grid-template-columns: 1fr 1fr; }
+      .rcpt-line-row .rcpt-line-field:first-child { grid-column: 1 / -1; }
+    }
   </style>
 </head>
 <body>
@@ -756,6 +774,16 @@
                 <div class="rcpt-field">
                   <label class="rcpt-label" for="rcpt-notes">Additional notes <span class="rcpt-opt">(optional)</span></label>
                   <textarea class="rcpt-input" id="rcpt-notes" rows="2" placeholder="Any extra details that may be helpful..." style="resize:vertical;"></textarea>
+                </div>
+
+                <!-- Line Items (optional itemization) -->
+                <div class="rcpt-line-items-wrap" id="rcpt-line-items-wrap" style="display:none">
+                  <div class="rcpt-label" style="margin-bottom:0.4rem">Line Items</div>
+                  <div id="rcpt-line-items-list"></div>
+                  <button type="button" class="rcpt-add-line-btn" onclick="rcptAddLineItem()">+ Add line item</button>
+                </div>
+                <div class="rcpt-field" style="margin-top:0.35rem">
+                  <button type="button" class="rcpt-itemize-toggle" id="rcpt-itemize-toggle" onclick="rcptToggleItemize()">Itemize this receipt</button>
                 </div>
 
                 <div class="rcpt-row-money">
@@ -1256,6 +1284,110 @@
       return String(str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     }
 
+    // ── Line Items ──
+    let _lineItemized = false;
+    let _lineItemCount = 0;
+
+    function rcptToggleItemize() {
+      _lineItemized = !_lineItemized;
+      document.getElementById('rcpt-line-items-wrap').style.display = _lineItemized ? '' : 'none';
+      document.getElementById('rcpt-itemize-toggle').textContent = _lineItemized ? 'Use single amount instead' : 'Itemize this receipt';
+      if (_lineItemized && _lineItemCount === 0) rcptAddLineItem();
+    }
+
+    function rcptGetBudgetItemsForCategory() {
+      if (!_embed || !_embed.budgetOptions) return [];
+      var catId = (document.getElementById('rcpt-category-id-hidden') || {}).value || _activeCategoryId || '';
+      if (!catId) return _embed.budgetOptions;
+      return _embed.budgetOptions.filter(function (o) { return o.categoryId === catId; });
+    }
+
+    function rcptAddLineItem() {
+      _lineItemCount++;
+      var idx = _lineItemCount;
+      var items = rcptGetBudgetItemsForCategory();
+      var optionsHtml = '<option value="">Select item...</option>' + items.map(function (o) {
+        return '<option value="' + (o.itemId || '') + '" data-name="' + (o.itemName || o.label || '').replace(/"/g, '&quot;') + '" data-unit="' + (o.unitCostCents || 0) + '">' + (o.itemName || o.label || '') + '</option>';
+      }).join('');
+      var row = document.createElement('div');
+      row.className = 'rcpt-line-row';
+      row.id = 'rcpt-line-' + idx;
+      row.innerHTML =
+        '<div class="rcpt-line-field"><span class="rcpt-line-label">Item</span><select onchange="rcptLineItemChanged(' + idx + ')">' + optionsHtml + '</select></div>' +
+        '<div class="rcpt-line-field"><span class="rcpt-line-label">Qty</span><input type="number" min="1" step="1" value="1" oninput="rcptLineCalc(' + idx + ')" /></div>' +
+        '<div class="rcpt-line-field"><span class="rcpt-line-label">Unit Price</span><input type="number" min="0" step="0.01" placeholder="0.00" oninput="rcptLineCalc(' + idx + ')" /></div>' +
+        '<div class="rcpt-line-total" id="rcpt-line-total-' + idx + '">$0.00</div>' +
+        '<button type="button" class="rcpt-line-remove" onclick="rcptRemoveLineItem(' + idx + ')" title="Remove">&times;</button>';
+      document.getElementById('rcpt-line-items-list').appendChild(row);
+    }
+
+    function rcptLineItemChanged(idx) {
+      var row = document.getElementById('rcpt-line-' + idx);
+      if (!row) return;
+      var sel = row.querySelector('select');
+      var opt = sel.options[sel.selectedIndex];
+      var unitCents = parseInt(opt.dataset.unit || '0');
+      if (unitCents > 0) {
+        var inputs = row.querySelectorAll('input[type="number"]');
+        inputs[1].value = (unitCents / 100).toFixed(2);
+        rcptLineCalc(idx);
+      }
+    }
+
+    function rcptLineCalc(idx) {
+      var row = document.getElementById('rcpt-line-' + idx);
+      if (!row) return;
+      var inputs = row.querySelectorAll('input[type="number"]');
+      var qty = parseFloat(inputs[0].value) || 0;
+      var unit = parseFloat(inputs[1].value) || 0;
+      var total = qty * unit;
+      document.getElementById('rcpt-line-total-' + idx).textContent = '$' + total.toFixed(2);
+      rcptLineRecalcSubtotal();
+    }
+
+    function rcptRemoveLineItem(idx) {
+      var row = document.getElementById('rcpt-line-' + idx);
+      if (row) row.remove();
+      rcptLineRecalcSubtotal();
+    }
+
+    function rcptLineRecalcSubtotal() {
+      if (!_lineItemized) return;
+      var rows = document.querySelectorAll('#rcpt-line-items-list .rcpt-line-row');
+      var sum = 0;
+      rows.forEach(function (row) {
+        var inputs = row.querySelectorAll('input[type="number"]');
+        var qty = parseFloat(inputs[0].value) || 0;
+        var unit = parseFloat(inputs[1].value) || 0;
+        sum += qty * unit;
+      });
+      document.getElementById('rcpt-subtotal').value = sum.toFixed(2);
+      rcptCalcTotal();
+    }
+
+    function rcptCollectLineItems() {
+      if (!_lineItemized) return null;
+      var rows = document.querySelectorAll('#rcpt-line-items-list .rcpt-line-row');
+      if (!rows.length) return null;
+      var items = [];
+      rows.forEach(function (row) {
+        var sel = row.querySelector('select');
+        var opt = sel.options[sel.selectedIndex];
+        var inputs = row.querySelectorAll('input[type="number"]');
+        var qty = parseFloat(inputs[0].value) || 0;
+        var unitCents = Math.round((parseFloat(inputs[1].value) || 0) * 100);
+        var amountCents = Math.round(qty * unitCents);
+        items.push({
+          budget_item_id: sel.value || null,
+          name: opt.dataset.name || opt.textContent || '',
+          qty: qty,
+          unit_price_cents: unitCents,
+          amount_cents: amountCents,
+        });
+      });
+      return items.length ? items : null;
+    }
+
     function rcptSetPaidBy(val) {
       paidBy = val;
       document.getElementById('rcpt-paid-company').classList.toggle('active', val === 'company');
@@ -1454,6 +1586,7 @@
         if (!activeCategoryId) {
           throw new Error('Please choose the budget category this receipt belongs to.');
         }
+        const lineItems = rcptCollectLineItems();
         const row = {
           production_id: prodId,
           department: activeDept,
@@ -1469,6 +1602,7 @@
           subtotal_cents: Math.round(sub * 100),
           tax_cents: Math.round(tax * 100),
           receipt_url: receiptUrl,
+          line_items: lineItems,
         };
 
         const { error } = await sb.from('budget_receipts').insert(row);

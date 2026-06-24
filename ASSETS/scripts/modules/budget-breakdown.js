@@ -78,7 +78,13 @@
       }
 
       var approvedByCategory = {};
+      var approvedByItem = {};
       s.BgtState.receipts.filter(function (r) { return r.status === 'approved'; }).forEach(function (r) {
+        if (r.line_items && Array.isArray(r.line_items) && r.line_items.length) {
+          r.line_items.forEach(function (li) {
+            if (li.budget_item_id) approvedByItem[li.budget_item_id] = (approvedByItem[li.budget_item_id] || 0) + (li.amount_cents || 0);
+          });
+        }
         if (r.category_id) approvedByCategory[r.category_id] = (approvedByCategory[r.category_id] || 0) + (r.amount_cents || 0);
       });
 

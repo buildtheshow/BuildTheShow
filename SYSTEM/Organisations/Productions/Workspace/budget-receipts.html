@@ -124,6 +124,10 @@
     .fin-detail-thumb { display: block; width: 48px; height: 48px; border-radius: 6px; overflow: hidden; }
     .fin-detail-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
     .fin-detail-file-badge { display: flex; align-items: center; justify-content: center; width: 38px; height: 38px; border-radius: 6px; background: rgba(87,46,136,0.05); color: #572e88; font-size: 0.5rem; font-weight: 900; text-decoration: none; }
+    .fin-detail-line-items { padding: 0.5rem 0.75rem 0.25rem; }
+    .fin-li-table { width: 100%; border-collapse: collapse; margin-bottom: 0.5rem; }
+    .fin-li-table th { font-size: 0.58rem; font-weight: 800; color: #9a90b0; text-transform: uppercase; letter-spacing: 0.06em; padding: 0.3rem 0.5rem; text-align: left; border-bottom: 1px solid rgba(87,46,136,0.06); }
+    .fin-li-table td { font-size: 0.75rem; color: #1a1530; padding: 0.35rem 0.5rem; border-bottom: 1px solid rgba(87,46,136,0.03); }
 
     /* Empty state */
     .fin-empty { padding: 2rem 1.5rem; text-align: center; color: #b0a8c8; font-size: 0.88rem; }
@@ -838,6 +842,14 @@
                     ? '<span style="color:#c8c2de;font-size:0.8rem">None</span>'
                     : fileUrls.map((u, i) => '<a href="' + this.esc(u) + '" target="_blank" class="fin-download-btn" title="File ' + (i+1) + ' of ' + fileCount + '">' + dlIcon + '</a>').join('') +
                       (fileCount > 1 ? '<span style="font-size:0.72rem;color:#9a90b0;margin-left:2px">' + fileCount + '</span>' : '');
+                  // Line items table
+                  let lineItemsHtml = '';
+                  const li = r.line_items;
+                  if (Array.isArray(li) && li.length) {
+                    lineItemsHtml = '<div class="fin-detail-line-items"><table class="fin-li-table"><thead><tr><th>Item</th><th>Qty</th><th>Unit Price</th><th>Amount</th></tr></thead><tbody>' +
+                      li.map(item => '<tr><td>' + this.esc(item.name || '') + '</td><td style="text-align:right">' + (item.qty || 1) + '</td><td style="text-align:right">' + this.fmt$(item.unit_price_cents || 0) + '</td><td style="text-align:right;font-weight:700">' + this.fmt$(item.amount_cents || 0) + '</td></tr>').join('') +
+                      '</tbody></table></div>';
+                  }
                   const detailPairs = [];
                   if (r.subtotal_cents) detailPairs.push(['Subtotal', this.fmt$(r.subtotal_cents)]);
                   if (r.tax_cents) detailPairs.push(['Tax', this.fmt$(r.tax_cents)]);
@@ -846,12 +858,12 @@
                   if (r.notes) detailPairs.push(['Notes', this.esc(r.notes)]);
                   if (r.paid_by) detailPairs.push(['Payment method', r.paid_by === 'personal' ? 'Personal (needs reimbursement)' : 'Company paid']);
                   if (r.created_at && r.created_at !== r.receipt_date) detailPairs.push(['Submitted', this.esc(this.fmtDate(r.created_at))]);
-                  const hasDetails = detailPairs.length > 0;
+                  const hasDetails = detailPairs.length > 0 || lineItemsHtml;
                   const rowId = 'fin-row-' + r.id;
                   const toggleAttr = hasDetails ? ' onclick="FIN.toggleRow(\'' + this.esc(r.id) + '\')" style="cursor:pointer"' : '';
                   const chevron = hasDetails ? '<span class="fin-row-chevron" id="fin-chev-' + this.esc(r.id) + '">&#9654;</span>' : '';
                   const detailRow = hasDetails
-                    ? '<tr class="fin-detail-row" id="' + rowId + '" style="display:none"><td colspan="8"><div class="fin-detail-grid">' +
+                    ? '<tr class="fin-detail-row" id="' + rowId + '" style="display:none"><td colspan="8">' + lineItemsHtml + '<div class="fin-detail-grid">' +
                         detailPairs.map(p => '<div class="fin-detail-item"><span class="fin-detail-label">' + p[0] + '</span><span>' + p[1] + '</span></div>').join('') +
                         (fileUrls.length ? '<div class="fin-detail-item"><span class="fin-detail-label">Files</span><div class="fin-detail-files">' + fileUrls.map((u, i) => {
                           const ext = (u.split('.').pop() || '').split('?')[0].toLowerCase();

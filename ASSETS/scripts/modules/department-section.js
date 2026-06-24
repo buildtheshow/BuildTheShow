@@ -1080,9 +1080,12 @@
               budgetOptions.push({
                 label: label,
                 categoryId: cat.id,
+                itemId: item.id,
                 groupName: cat.name,
                 categoryName: cat.name,
                 itemName: item.name,
+                unitCostCents: item.unit_cost_cents || 0,
+                qty: item.qty || 1,
               });
             });
           } else {
