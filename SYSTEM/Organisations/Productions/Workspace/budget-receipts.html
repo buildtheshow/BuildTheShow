@@ -29,9 +29,10 @@
     /* ── Stat cards ── */
     .fin-stat-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
     @media (max-width: 900px) { .fin-stat-row { grid-template-columns: 1fr 1fr; } }
-    @media (max-width: 520px) { .fin-stat-row { grid-template-columns: 1fr 1fr; gap: 0.6rem; } }
+    @media (max-width: 520px) { .fin-stat-row { grid-template-columns: 1fr 1fr; gap: 0.5rem; } }
     .fin-stat-card { border-radius: 14px; padding: 1.4rem 1.5rem; display: flex; align-items: center; gap: 1.1rem; box-shadow: 0 2px 10px rgba(0,0,0,0.12); }
-    @media (max-width: 520px) { .fin-stat-card { padding: 0.75rem 0.8rem; gap: 0.55rem; border-radius: 10px; } .fin-stat-val { font-size: 1.15rem; } .fin-stat-label { font-size: 0.52rem; } .fin-stat-sub { font-size: 0.6rem; } .fin-stat-icon svg { width: 20px; height: 20px; } }
+    .fin-stat-card-icon { width: 52px; height: 52px; filter: brightness(0) invert(1); opacity: 0.9; object-fit: contain; flex-shrink: 0; }
+    @media (max-width: 520px) { .fin-stat-card { padding: 0.6rem 0.7rem; gap: 0.4rem; border-radius: 10px; flex-direction: column; align-items: flex-start; } .fin-stat-card-icon { width: 22px; height: 22px; } .fin-stat-val { font-size: 1.05rem; } .fin-stat-label { font-size: 0.48rem; letter-spacing: 0.05em; margin-bottom: 0.05rem; } .fin-stat-sub { font-size: 0.52rem; } }
     .fin-stat-card--purple { background: #efab45; }
     .fin-stat-card--red    { background: #d1523d; }
     .fin-stat-card--green  { background: #769e7b; }
@@ -269,6 +270,7 @@
     .fin-edit-files { display: flex; flex-wrap: wrap; gap: 0.45rem; }
     .fin-edit-file-link { display: inline-flex; align-items: center; gap: 0.35rem; border: 1px solid #e0dcea; border-radius: 8px; color: #572e88; font-size: 0.78rem; font-weight: 850; padding: 0.45rem 0.6rem; text-decoration: none; }
     .fin-edit-file-link:hover { border-color: #572e88; background: #faf9fd; }
+    .fin-edit-file-url-box { margin-top: 0.7rem; }
     .fin-edit-line-items { display: flex; flex-direction: column; gap: 0.5rem; }
     .fin-edit-line-row { display: grid; grid-template-columns: 1fr 70px 105px 105px 34px; gap: 0.5rem; align-items: end; }
     .fin-edit-line-row .fin-form-field { gap: 0.25rem; }
@@ -280,6 +282,7 @@
     .toast.visible { opacity: 1; transform: translateY(0); }
     .toast--success { background: #efab45; color: #1a1530; }
     .toast--error { background: rgba(220,60,60,0.12); border: 1px solid rgba(220,60,60,0.35); color: #f08080; }
+    @media (max-width: 900px) { .fin-modal--receipt { max-width: calc(100vw - 2rem) !important; } }
     @media (max-width: 760px) { .fin-edit-line-row { grid-template-columns: 1fr 1fr; } }
     @media (max-width: 620px) { .fin-form-grid { grid-template-columns: 1fr; } .fin-modal-footer { flex-direction: column-reverse; } .fin-primary-btn, .fin-secondary-btn { width: 100%; } }
   </style>
@@ -341,7 +344,7 @@
 
   <!-- Edit receipt modal -->
   <div class="fin-modal-overlay" id="fin-receipt-edit-modal" onclick="if(event.target===this)FIN.closeReceiptEditModal()">
-    <div class="fin-modal" style="max-width:760px">
+    <div class="fin-modal fin-modal--receipt" style="max-width:980px">
       <div class="fin-modal-header">
         <div>
           <div class="fin-modal-title">Edit Receipt</div>
@@ -362,8 +365,16 @@
                 <input class="fin-form-input" id="fin-edit-date" type="date">
               </label>
               <label class="fin-form-field">
-                <span class="fin-form-label">Budget Category</span>
-                <select class="fin-form-select" id="fin-edit-category"></select>
+                <span class="fin-form-label">Department Group</span>
+                <select class="fin-form-select" id="fin-edit-budget-group" onchange="FIN.onBudgetGroupChange()"></select>
+              </label>
+              <label class="fin-form-field">
+                <span class="fin-form-label">Budget Subcategory</span>
+                <select class="fin-form-select" id="fin-edit-category" onchange="FIN.onBudgetCategoryChange()"></select>
+              </label>
+              <label class="fin-form-field">
+                <span class="fin-form-label">Budget Item</span>
+                <select class="fin-form-select" id="fin-edit-budget-item" onchange="FIN.applySelectedBudgetItemToFirstLine()"></select>
               </label>
               <label class="fin-form-field">
                 <span class="fin-form-label">Store / Vendor</span>
@@ -437,7 +448,11 @@
           <div class="fin-form-section">
             <div class="fin-form-section-title">Files</div>
             <div class="fin-edit-files" id="fin-edit-files"></div>
-            <span class="fin-form-help">Receipt files stay attached here. Open a file to check it against the edited record.</span>
+            <label class="fin-form-field fin-edit-file-url-box">
+              <span class="fin-form-label">Receipt File URLs</span>
+              <textarea class="fin-form-textarea" id="fin-edit-file-urls" placeholder="One file URL per line"></textarea>
+            </label>
+            <span class="fin-form-help">Add, remove, or correct attached receipt links here. Use one URL per line.</span>
           </div>
         </form>
       </div>
@@ -483,6 +498,7 @@
     prodId: '',
     receipts: [],
     categories: [],
+    budgetItems: [],
     orgMembers: [],
     orgMembersMap: {},
     page: 1,
@@ -507,13 +523,15 @@
 
     async load() {
       try {
-        const [rRes, cRes, prodRes] = await Promise.all([
+        const [rRes, cRes, iRes, prodRes] = await Promise.all([
           this.sb.from('budget_receipts').select('*').eq('production_id', this.prodId).order('receipt_date', { ascending: false }),
           this.sb.from('budget_categories').select('*').eq('production_id', this.prodId).eq('type', 'expense'),
+          this.sb.from('budget_items').select('*').eq('production_id', this.prodId).order('sort_order', { ascending: true }).order('created_at', { ascending: true }),
           this.sb.from('productions').select('organization_id').eq('id', this.prodId).single(),
         ]);
         this.receipts   = rRes.data || [];
         this.categories = cRes.data || [];
+        this.budgetItems = iRes.data || [];
         if (prodRes.data?.organization_id) {
           const { data: members } = await this.sb.from('org_members')
             .select('id, display_name, email, phone, phone_number, title')
@@ -529,7 +547,7 @@
           this.orgMembers.forEach(m => { this.orgMembersMap[m.id] = m; });
         }
       } catch(e) {
-        this.receipts = []; this.categories = [];
+        this.receipts = []; this.categories = []; this.budgetItems = [];
       }
       this.render();
     },
@@ -1341,7 +1359,7 @@
 
     _statCard(type, imgFile, label, val, sub, subType) {
       return '<div class="fin-stat-card fin-stat-card--' + type + '">' +
-        '<img src="/ASSETS/Images/Icons/' + imgFile + '?v=20260611" style="width:52px;height:52px;filter:brightness(0) invert(1);opacity:0.9;object-fit:contain;flex-shrink:0" alt="">' +
+        '<img class="fin-stat-card-icon" src="/ASSETS/Images/Icons/' + imgFile + '?v=20260611" alt="">' +
         '<div class="fin-stat-body">' +
           '<div class="fin-stat-label">' + label + '</div>' +
           '<div class="fin-stat-val">' + this.esc(val) + '</div>' +
