@@ -879,7 +879,7 @@
 
     renderBudgetMappingControls(receipt) {
       const currentDept = this.deptName(receipt);
-      const selectedCategory = this.categories.find(cat => cat.id === receipt.category_id) || this.categories.find(cat => cat.name === currentDept) || this.categories[0];
+      const selectedCategory = this.categories.find(cat => String(cat.id) === String(receipt.category_id || '')) || this.categories.find(cat => cat.name === currentDept) || this.categories[0];
       const selectedGroup = selectedCategory ? this.receiptBudgetGroupName(selectedCategory.name) : (this.budgetGroupNames()[0] || '');
       const selectedItemId = this.selectedBudgetItemIdForReceipt(receipt);
       const groupEl = document.getElementById('fin-edit-budget-group');
@@ -1012,6 +1012,24 @@
       }).filter(item => item.name || item.amount_cents || item.unit_price_cents);
     },
 
+    lineItemsWithSelectedBudgetItem(lineItems, amountCents) {
+      const itemId = document.getElementById('fin-edit-budget-item')?.value || '';
+      if (!itemId) return lineItems;
+      const budgetItem = this.budgetItems.find(item => String(item.id) === String(itemId));
+      if (!budgetItem) return lineItems;
+      const next = Array.isArray(lineItems) && lineItems.length ? lineItems.slice() : [{
+        name: budgetItem.name || '',
+        qty: 1,
+        unit_price_cents: budgetItem.unit_cost_cents || amountCents || 0,
+        amount_cents: amountCents || budgetItem.unit_cost_cents || 0,
+      }];
+      next[0] = Object.assign({}, next[0], {
+        budget_item_id: budgetItem.id,
+        name: next[0].name || budgetItem.name || '',
+      });
+      return next;
+    },
+
     openReceiptEditModal(receiptId) {
       const r = this.receipts.find(item => String(item.id) === String(receiptId));
       if (!r) return;
@@ -1049,7 +1067,9 @@
       if (btn) btn.disabled = true;
       try {
         const categoryId = document.getElementById('fin-edit-category').value || null;
-        const category = this.categories.find(c => c.id === categoryId);
+        const category = this.categories.find(c => String(c.id) === String(categoryId || ''));
+        const amountCents = this.centsFromInput('fin-edit-amount');
+        const lineItems = this.lineItemsWithSelectedBudgetItem(this.collectReceiptLineItems(), amountCents);
         const payload = {
           category_id: categoryId,
           department: category ? category.name : null,
@@ -1058,14 +1078,15 @@
           description: document.getElementById('fin-edit-description').value.trim() || null,
           subtotal_cents: this.centsFromInput('fin-edit-subtotal'),
           tax_cents: this.centsFromInput('fin-edit-tax'),
-          amount_cents: this.centsFromInput('fin-edit-amount'),
+          amount_cents: amountCents,
           paid_by: document.getElementById('fin-edit-paid-by').value || 'personal',
           submitted_by: document.getElementById('fin-edit-submitted-by').value.trim() || null,
           status: document.getElementById('fin-edit-status').value || 'pending',
           submitted_by_name: document.getElementById('fin-edit-submitted-by').value.trim() || null,
           submitted_by_email: document.getElementById('fin-edit-submitted-email').value.trim() || null,
           notes: document.getElementById('fin-edit-notes').value.trim() || null,
-          line_items: this.collectReceiptLineItems(),
+          line_items: lineItems,
+          receipt_url: this.collectReceiptUrlValue(),
         };
         const { error } = await this.sb.from('budget_receipts').update(payload).eq('id', id);
         if (error) throw error;
