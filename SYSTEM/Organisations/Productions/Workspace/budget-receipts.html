@@ -1025,6 +1025,10 @@
     },
 
     setSearch(val) { this.search = val; this.page = 1; this.render(); },
+    toggleSection(id) {
+      var el = document.getElementById(id);
+      if (el) el.classList.toggle('fin-section--collapsed');
+    },
     toggleRow(id) {
       const row = document.getElementById('fin-row-' + id);
       const chev = document.getElementById('fin-chev-' + id);
@@ -1127,13 +1131,14 @@
           '<div>' +
 
             // ── Reimbursements owing ──
-            '<div class="fin-section">' +
-              '<div class="fin-section-head"><div>' +
-                '<div class="fin-section-title">Reimbursements Owing</div>' +
-                '<div class="fin-section-sub">Each receipt stays separate for reimbursement</div>' +
+            '<div class="fin-section" id="fin-sec-reimb">' +
+              '<div class="fin-section-head" onclick="FIN.toggleSection(\'fin-sec-reimb\')"><div>' +
+                '<div class="fin-section-title"><span class="fin-collapse-chevron">&#9660;</span>Reimbursements Owing</div>' +
+                '<div class="fin-section-sub">' + (owing.length ? owing.length + ' receipt' + (owing.length !== 1 ? 's' : '') + ' · ' + this.fmt$(owingCents) : 'None outstanding') + '</div>' +
               '</div></div>' +
+              '<div class="fin-section-body">' +
               (owing.length ? (
-                '<div class="fin-table-wrap"><table class="fin-table">' +
+                '<div class="fin-table-wrap fin-reimb-desktop"><table class="fin-table">' +
                 '<thead><tr>' +
                   '<th>Person</th><th>Email</th><th>Department</th><th>Purchase</th><th>Amount</th><th>Action</th>' +
                 '</tr></thead><tbody>' +
@@ -1142,7 +1147,7 @@
                   const email = this.purchaserEmail(r);
                   return '<tr>' +
                     '<td><div class="fin-person-cell"><div class="fin-avatar" style="' + this.avatarColor(name) + '">' + this.initials(name) + '</div><span class="fin-person-name">' + this.esc(name) + '</span></div></td>' +
-                    '<td style="color:#7a6e9a">' + (email ? '<a href="mailto:' + this.esc(email) + '" style="color:#572e88;text-decoration:none;font-weight:700">' + this.esc(email) + '</a>' : '<span style="color:#b0a8c8">No email on receipt</span>') + '</td>' +
+                    '<td style="color:#7a6e9a">' + (email ? '<a href="mailto:' + this.esc(email) + '" style="color:#572e88;text-decoration:none;font-weight:700">' + this.esc(email) + '</a>' : '<span style="color:#b0a8c8">No email</span>') + '</td>' +
                     '<td style="color:#7a6e9a">' + this.esc(this.deptName(r)) + '</td>' +
                     '<td><div style="font-weight:800">' + this.esc(r.vendor || 'Receipt') + '</div><div style="color:#7a6e9a;font-size:0.76rem">' + this.esc(r.description || this.fmtDate(r.receipt_date || r.created_at)) + '</div></td>' +
                     '<td style="font-weight:700">' + this.fmt$(r.amount_cents) + '</td>' +
@@ -1154,14 +1159,26 @@
                   '<td colspan="4">Total Owing</td>' +
                   '<td class="fin-total-amount" colspan="2">' + this.fmt$(owingCents) + '</td>' +
                 '</tr></tfoot>' +
-                '</table></div>'
+                '</table></div>' +
+                '<div class="fin-reimb-mobile">' +
+                owing.map(r => {
+                  const name = r.submitted_by || r.submitted_by_name || 'Unknown';
+                  return '<div class="fin-reimb-card">' +
+                    '<div class="fin-reimb-card-row"><span class="fin-reimb-card-name">' + this.esc(name) + '</span><span class="fin-reimb-card-amount">' + this.fmt$(r.amount_cents) + '</span></div>' +
+                    '<div class="fin-reimb-card-detail">' + this.esc(r.vendor || '') + ' · ' + this.esc(r.description || '') + '<br />' + this.esc(this.deptName(r)) + '</div>' +
+                    '<button class="fin-reimb-card-btn" onclick="FIN.markReceiptPaid(\'' + this.esc(r.id) + '\')">Mark as Paid</button>' +
+                  '</div>';
+                }).join('') +
+                '<div style="display:flex;justify-content:space-between;padding:0.5rem 0;font-weight:900;font-size:0.85rem;border-top:2px solid #f0eef8;margin-top:0.25rem;"><span>Total Owing</span><span style="color:#d1523d">' + this.fmt$(owingCents) + '</span></div>' +
+                '</div>'
               ) : '<div class="fin-empty">No reimbursements outstanding.</div>') +
+              '</div>' +
             '</div>' +
 
             // ── All receipts ──
-            '<div class="fin-section">' +
-              '<div class="fin-section-head">' +
-                '<div><div class="fin-section-title">All Receipts</div><div class="fin-section-sub">' + all.length + ' ' + (all.length===1?'receipt':'receipts') + '</div></div>' +
+            '<div class="fin-section" id="fin-sec-all">' +
+              '<div class="fin-section-head" onclick="FIN.toggleSection(\'fin-sec-all\')">' +
+                '<div><div class="fin-section-title"><span class="fin-collapse-chevron">&#9660;</span>All Receipts</div><div class="fin-section-sub">' + all.length + ' ' + (all.length===1?'receipt':'receipts') + '</div></div>' +
                 '<div class="fin-section-actions">' +
                   (all.length ? '<button class="fin-filter-btn" id="fin-dl-all-btn" onclick="FIN.downloadAll()">' +
                     '<img src="/ASSETS/Images/Icons/Budgeting-Receipts.svg?v=20260611b" style="width:14px;height:14px;filter:brightness(0);opacity:0.7" alt="">' +
@@ -1177,6 +1194,7 @@
                   '</div>' +
                 '</div>' +
               '</div>' +
+              '<div class="fin-section-body">' +
               (all.length ? (
                 '<div class="fin-table-wrap"><table class="fin-table fin-receipts-table">' +
                 '<colgroup><col style="width:88px"><col style="width:17%"><col style="width:13%"><col><col style="width:92px"><col style="width:12%"><col style="width:118px"><col style="width:70px"><col style="width:76px"></colgroup>' +
@@ -1264,6 +1282,7 @@
                 '</tbody></table></div>' +
                 paginationHtml
               ) : '<div class="fin-empty">No receipts yet.</div>') +
+              '</div>' +
             '</div>' +
 
           '</div>' + // end left col
