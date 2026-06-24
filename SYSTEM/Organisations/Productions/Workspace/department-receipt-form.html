@@ -741,23 +741,17 @@
               <input type="hidden" id="rcpt-category-id-hidden">
               <div class="rcpt-fields">
 
-                <!-- Who purchased this — always visible -->
-                <div class="rcpt-field">
-                  <label class="rcpt-label" for="rcpt-purchaser">Who purchased this? <span class="rcpt-req">*</span></label>
-                  <input class="rcpt-input" type="text" id="rcpt-purchaser" placeholder="Enter the name of the person who made this purchase">
-                </div>
-
                 <div class="rcpt-row-2">
+                  <div class="rcpt-field">
+                    <label class="rcpt-label" for="rcpt-purchaser">Purchased by <span class="rcpt-req">*</span></label>
+                    <input class="rcpt-input" type="text" id="rcpt-purchaser" placeholder="Name of the person who made this purchase">
+                  </div>
                   <div class="rcpt-field">
                     <label class="rcpt-label" for="rcpt-paid-toggle-wrap">How was it paid? <span class="rcpt-req">*</span></label>
                     <div class="rcpt-paid-toggle" id="rcpt-paid-toggle-wrap">
                       <button type="button" class="rcpt-paid-btn active" id="rcpt-paid-company" onclick="rcptSetPaidBy('company')">Company Paid</button>
                       <button type="button" class="rcpt-paid-btn" id="rcpt-paid-personal" onclick="rcptSetPaidBy('personal')">Reimburse Me</button>
                     </div>
-                  </div>
-                  <div class="rcpt-field">
-                    <label class="rcpt-label" for="rcpt-date">Receipt Date <span class="rcpt-req">*</span></label>
-                    <input class="rcpt-input" type="date" id="rcpt-date" onchange="rcptUpdateSummary()">
                   </div>
                 </div>
 
@@ -766,6 +760,13 @@
                     <label class="rcpt-label" for="rcpt-vendor">Where was this purchase made? <span class="rcpt-req">*</span></label>
                     <input class="rcpt-input" type="text" id="rcpt-vendor" placeholder="Store or supplier name">
                   </div>
+                  <div class="rcpt-field">
+                    <label class="rcpt-label" for="rcpt-date">Receipt Date <span class="rcpt-req">*</span></label>
+                    <input class="rcpt-input" type="date" id="rcpt-date" onchange="rcptUpdateSummary()">
+                  </div>
+                </div>
+
+                <div class="rcpt-row-2">
                   <div class="rcpt-field">
                     <label class="rcpt-label" for="rcpt-desc">What did you buy this for? <span class="rcpt-req">*</span></label>
                     <input class="rcpt-input" type="text" id="rcpt-desc" placeholder="e.g. costumes, fabric, props" oninput="rcptUpdateSummary()">
@@ -917,6 +918,7 @@
     const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRrbWFpa3R4cHdxZmJnZW9qYm5mIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM3MzE4MTcsImV4cCI6MjA4OTMwNzgxN30.TkTZBNWUatk3Y6Vmfv1hIRR3DfVjgwauwa76Pf00J_8';
 
     let sb, prodId, paidBy = 'company';
+    let currentUserEmail = '';
     let allocatedCents = 0, spentCents = 0, breakdownItems = [];
 
     // When embedded, department-section.js sets window._RCPT_EMBED_DATA before calling init()
@@ -935,6 +937,12 @@
       const { createClient } = supabase;
       sb = createClient(SUPA_URL, SUPA_KEY);
       prodId = _embed ? _embed.prodId : _qp.get('id');
+      try {
+        const { data: authData } = await sb.auth.getUser();
+        currentUserEmail = authData?.user?.email || '';
+      } catch (_) {
+        currentUserEmail = '';
+      }
 
       // Apply dept branding (hero elements only exist when not embedded)
       const _heroInner = document.getElementById('rcpt-hero-inner');
@@ -1689,6 +1697,8 @@
           status: 'pending',
           paid_by: paidBy,
           submitted_by: purchaser || null,
+          submitted_by_name: purchaser || null,
+          submitted_by_email: currentUserEmail || null,
           subtotal_cents: Math.round(sub * 100),
           tax_cents: Math.round(tax * 100),
           receipt_url: receiptUrl,
