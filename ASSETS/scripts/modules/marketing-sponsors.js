@@ -678,14 +678,14 @@
       notes:         document.getElementById('spn-biz-notes').value.trim()    || null,
     };
     var p = id ? dbUpdate('sponsor_businesses', id, payload) : dbInsert('sponsor_businesses', payload);
-    p.then(function () { closeBizModal(); SpnsState.loaded.businesses = false; loadBusinesses(); })
+    p.then(function () { closeBizModal(); SpnsState.loaded.businesses = false; loadBusinesses(); if (document.getElementById('spn-crm-biz-list')) loadShowSponsorsCRM(); })
      .catch(function (e) { alert('Could not save: ' + e.message); });
   }
 
   function deleteBiz(id, name) {
     if (!confirm('Delete "' + name + '"? This cannot be undone.')) return;
     dbDelete('sponsor_businesses', id)
-      .then(function () { SpnsState.loaded.businesses = false; loadBusinesses(); })
+      .then(function () { SpnsState.loaded.businesses = false; loadBusinesses(); if (document.getElementById('spn-crm-biz-list')) loadShowSponsorsCRM(); })
       .catch(function (e) { alert('Could not delete: ' + e.message); });
   }
 
@@ -977,6 +977,252 @@
     dbDelete('sponsor_deliverables', id)
       .then(function () { SpnsState.loaded.deliverables = false; loadDeliverables(); })
       .catch(function (e) { alert('Could not delete: ' + e.message); });
+  }
+
+  // -- SHOW SPONSORS CRM --------------------------------------------------------
+
+  var CRM_TAG_COLORS = ['#572e88', '#476aaa', '#769e7b', '#dd8233', '#d1523d', '#ca7ea7', '#74a2b4'];
+
+  function loadShowSponsorsCRM() {
+    Promise.all([
+      dbFetch('sponsor_businesses'),
+      dbFetch('programme_ads'),
+      dbFetch('sponsor_packages'),
+      dbFetch('sponsor_deliverables'),
+    ]).then(function (results) {
+      SpnsState.businesses = results[0] || [];
+      SpnsState.ads = results[1] || [];
+      SpnsState.packages = results[2] || [];
+      SpnsState.deliverables = results[3] || [];
+      hydrateShowSponsorsCRM();
+    }).catch(function (e) {
+      console.error('[BTS CRM] load failed', e);
+      var el = document.getElementById('spn-crm-biz-list');
+      if (el) el.innerHTML = '<div class="spn-crm-empty"><h3>Could not load sponsor data</h3><p>' + esc(e.message) + '</p></div>';
+    });
+  }
+
+  function hydrateShowSponsorsCRM() {
+    var businesses = SpnsState.businesses;
+    var ads = SpnsState.ads;
+    var packages = SpnsState.packages;
+    var deliverables = SpnsState.deliverables;
+
+    var totalBooked = 0, totalReceived = 0, artworkMissing = 0, deadlinesApproaching = 0;
+    var today = new Date(); today.setHours(0,0,0,0);
+    var weekFromNow = new Date(today); weekFromNow.setDate(weekFromNow.getDate() + 7);
+
+    ads.forEach(function (a) {
+      totalBooked += (a.price_cents || 0);
+      if (a.payment_status === 'paid') totalReceived += (a.price_cents || 0);
+      if (a.artwork_status === 'missing') artworkMissing++;
+    });
+    packages.forEach(function (p) {
+      totalBooked += (p.amount_cents || 0);
+      if (p.payment_status === 'paid') totalReceived += (p.amount_cents || 0);
+    });
+    deliverables.forEach(function (d) {
+      if (d.status !== 'done' && d.due_date) {
+        var due = new Date(d.due_date); due.setHours(0,0,0,0);
+        if (due <= weekFromNow) deadlinesApproaching++;
+      }
+    });
+
+    var outstanding = totalBooked - totalReceived;
+    var setMetric = function (id, val) { var el = document.getElementById(id); if (el) el.textContent = val; };
+    setMetric('spn-crm-m-businesses', businesses.length);
+    setMetric('spn-crm-m-booked', '$' + (totalBooked / 100).toLocaleString('en-CA', { minimumFractionDigits: 2 }));
+    setMetric('spn-crm-m-received', '$' + (totalReceived / 100).toLocaleString('en-CA', { minimumFractionDigits: 2 }));
+    setMetric('spn-crm-m-outstanding', '$' + (outstanding / 100).toLocaleString('en-CA', { minimumFractionDigits: 2 }));
+    setMetric('spn-crm-m-artwork', artworkMissing);
+    setMetric('spn-crm-m-deadlines', deadlinesApproaching);
+    var outEl = document.getElementById('spn-crm-m-outstanding');
+    if (outEl && outstanding > 0) outEl.closest('.spn-crm-metric').classList.add('spn-crm-metric--alert');
+
+    var adsMap = {}, pkgsMap = {}, delivMap = {};
+    ads.forEach(function (a) { var k = a.business_id || '__none'; if (!adsMap[k]) adsMap[k] = []; adsMap[k].push(a); });
+    packages.forEach(function (p) { var k = p.business_id || '__none'; if (!pkgsMap[k]) pkgsMap[k] = []; pkgsMap[k].push(p); });
+    deliverables.forEach(function (d) { var k = d.business_id || '__none'; if (!delivMap[k]) delivMap[k] = []; delivMap[k].push(d); });
+
+    var listEl = document.getElementById('spn-crm-biz-list');
+    if (!listEl) return;
+
+    if (!businesses.length) {
+      listEl.innerHTML = '<div class="spn-crm-empty"><h3>No businesses yet</h3><p>Add a business or wait for sponsors to submit through the public page.</p></div>';
+      return;
+    }
+
+    var heroCount = document.getElementById('spn-hero-page-count');
+    if (heroCount) heroCount.textContent = businesses.length;
+
+    listEl.innerHTML = '<div class="spn-crm-cols-head"><span></span><span>Business</span><span>Booking(s)</span><span>Booked</span><span>Payment</span><span>Artwork</span><span>Attention</span><span></span></div>' +
+      businesses.map(function (biz) {
+        return renderCrmBusinessRow(biz, adsMap[biz.id] || [], pkgsMap[biz.id] || [], delivMap[biz.id] || []);
+      }).join('');
+  }
+
+  function renderCrmBusinessRow(biz, bizAds, bizPkgs, bizDelivs) {
+    var totalCents = 0, receivedCents = 0;
+    var allArtApproved = true, anyArtMissing = false, anyArtReceived = false;
+
+    bizPkgs.forEach(function (p) {
+      totalCents += (p.amount_cents || 0);
+      if (p.payment_status === 'paid') receivedCents += (p.amount_cents || 0);
+    });
+    bizAds.forEach(function (a) {
+      totalCents += (a.price_cents || 0);
+      if (a.payment_status === 'paid') receivedCents += (a.price_cents || 0);
+      if (a.artwork_status === 'missing') anyArtMissing = true;
+      else if (a.artwork_status === 'received') anyArtReceived = true;
+      if (a.artwork_status !== 'approved' && a.artwork_status !== 'print_ready') allArtApproved = false;
+    });
+
+    var artLabel = 'N/A', artClass = '';
+    if (bizAds.length) {
+      if (allArtApproved) { artLabel = 'Approved'; artClass = 'spn-crm-art-status--approved'; }
+      else if (anyArtMissing) { artLabel = 'Not Received'; artClass = 'spn-crm-art-status--missing'; }
+      else if (anyArtReceived) { artLabel = 'Received'; artClass = 'spn-crm-art-status--received'; }
+    }
+
+    var payLabel, payClass, payFraction;
+    if (totalCents === 0) { payLabel = '--'; payClass = ''; payFraction = ''; }
+    else if (receivedCents >= totalCents) { payLabel = 'Paid in Full'; payClass = 'spn-crm-pay-badge--paid'; payFraction = '$' + (receivedCents/100).toLocaleString() + ' / $' + (totalCents/100).toLocaleString(); }
+    else if (receivedCents > 0) { payLabel = 'Partial'; payClass = 'spn-crm-pay-badge--partial'; payFraction = '$' + (receivedCents/100).toLocaleString() + ' / $' + (totalCents/100).toLocaleString(); }
+    else { payLabel = 'Unpaid'; payClass = 'spn-crm-pay-badge--unpaid'; payFraction = '$0 / $' + (totalCents/100).toLocaleString(); }
+
+    var flags = computeAttentionFlags(bizAds, bizPkgs, bizDelivs);
+    var flagHtml;
+    if (!flags.length) {
+      flagHtml = '<div class="spn-crm-flag spn-crm-flag--good">&#10003; All Good</div>';
+    } else {
+      flagHtml = '<div class="spn-crm-flag spn-crm-flag--bad">&#9873; Needs Follow Up<ul class="spn-crm-flag-reasons">' + flags.map(function (f) { return '<li>' + esc(f) + '</li>'; }).join('') + '</ul></div>';
+    }
+
+    var tags = '';
+    var ci = 0;
+    bizPkgs.forEach(function (p) {
+      var col = CRM_TAG_COLORS[ci++ % CRM_TAG_COLORS.length];
+      var sub = p.benefits ? '<span class="spn-crm-tag-sub">Includes ' + esc(p.benefits.split(',')[0].trim()) + '</span>' : '';
+      tags += '<span class="spn-crm-tag" style="background:' + col + '">' + esc(p.tier_name || 'Sponsor') + sub + '</span>';
+    });
+    bizAds.forEach(function (a) {
+      var col = CRM_TAG_COLORS[ci++ % CRM_TAG_COLORS.length];
+      var sizeLabel = a.ad_size || 'Ad';
+      var typeLabel = a.ad_type === 'bw' ? 'B&W' : 'Colour';
+      tags += '<span class="spn-crm-tag" style="background:' + col + '">' + esc(sizeLabel) + ' ' + typeLabel + '</span>';
+    });
+
+    var contactLine = [biz.contact_name, biz.contact_email, biz.contact_phone].filter(Boolean).join(' &middot; ');
+
+    // Expanded detail
+    var bookingsHtml = '';
+    bizPkgs.forEach(function (p) {
+      bookingsHtml += '<div class="spn-crm-booking-row"><div><span class="spn-crm-tag" style="background:#572e88;font-size:0.6rem;">' + esc(p.tier_name || 'Sponsor') + '</span>' +
+        (p.benefits ? '<div class="spn-crm-booking-benefits">' + esc(p.benefits) + '</div>' : '') +
+        '</div><div class="spn-crm-booking-amount">$' + ((p.amount_cents||0)/100).toLocaleString('en-CA', {minimumFractionDigits:2}) + '</div></div>';
+    });
+    bizAds.forEach(function (a) {
+      var typeLabel = a.ad_type === 'bw' ? 'B&W' : 'Colour';
+      bookingsHtml += '<div class="spn-crm-booking-row"><div><span class="spn-crm-tag" style="background:#476aaa;font-size:0.6rem;">' + esc((a.ad_size||'Ad') + ' ' + typeLabel) + '</span></div>' +
+        '<div class="spn-crm-booking-amount">$' + ((a.price_cents||0)/100).toLocaleString('en-CA', {minimumFractionDigits:2}) + '</div></div>';
+    });
+    if (!bookingsHtml) bookingsHtml = '<div style="font-size:0.75rem;color:#9a90b0;">No bookings yet</div>';
+
+    var outstandingCents = totalCents - receivedCents;
+    var payHtml = '<div class="spn-crm-pay-row"><span>Total Booked</span><span>$' + (totalCents/100).toLocaleString('en-CA',{minimumFractionDigits:2}) + '</span></div>' +
+      '<div class="spn-crm-pay-row"><span>Total Received</span><span>$' + (receivedCents/100).toLocaleString('en-CA',{minimumFractionDigits:2}) + '</span></div>' +
+      '<div class="spn-crm-pay-row spn-crm-pay-row--total"><span>Outstanding</span><span>$' + (outstandingCents/100).toLocaleString('en-CA',{minimumFractionDigits:2}) + '</span></div>';
+
+    var artHtml = '';
+    bizAds.forEach(function (a) {
+      var st = a.artwork_status || 'missing';
+      var dotClass = st === 'approved' || st === 'print_ready' ? 'spn-crm-art-dot--approved' : (st === 'received' ? 'spn-crm-art-dot--received' : 'spn-crm-art-dot--missing');
+      var stLabel = st === 'approved' ? 'Approved' : (st === 'print_ready' ? 'Print Ready' : (st === 'received' ? 'Received' : 'Not Received'));
+      artHtml += '<div class="spn-crm-art-row"><span class="spn-crm-art-dot ' + dotClass + '"></span><span>' + esc((a.ad_size||'Ad') + ' — ' + stLabel) + '</span></div>';
+    });
+    if (!artHtml) artHtml = '<div style="font-size:0.75rem;color:#9a90b0;">No artwork required</div>';
+
+    var delivHtml = '';
+    bizDelivs.forEach(function (d) {
+      var isDone = d.status === 'done';
+      delivHtml += '<div class="spn-crm-check-row' + (isDone ? ' done' : '') + '"><input type="checkbox"' + (isDone ? ' checked' : '') + ' onchange="MarketingSponsorsModule.toggleCrmDeliv(\'' + d.id + '\',this.checked)" /><span>' + esc(d.title) + '</span></div>';
+    });
+    if (!delivHtml) delivHtml = '<div style="font-size:0.75rem;color:#9a90b0;">No deliverables</div>';
+
+    var notesVal = (biz.notes || '').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+
+    var timelineHtml = '';
+    var events = [];
+    events.push({ label: 'Added', date: biz.created_at });
+    bizPkgs.forEach(function (p) { events.push({ label: p.tier_name || 'Sponsor', date: p.created_at }); });
+    bizAds.forEach(function (a) { events.push({ label: (a.ad_size || 'Ad') + ' booked', date: a.created_at }); });
+    events.sort(function (a, b) { return new Date(a.date) - new Date(b.date); });
+    events.forEach(function (ev) {
+      var d = ev.date ? new Date(ev.date).toLocaleDateString('en-CA') : '';
+      timelineHtml += '<div class="spn-crm-timeline-item"><span class="spn-crm-timeline-dot"></span><span class="spn-crm-timeline-label">' + esc(ev.label) + '</span><span class="spn-crm-timeline-date">' + esc(d) + '</span></div>';
+    });
+
+    return '<div class="spn-crm-row" id="spn-crm-row-' + biz.id + '">' +
+      '<div class="spn-crm-row-header" onclick="MarketingSponsorsModule.toggleCrmRow(\'' + biz.id + '\')">' +
+        '<span class="spn-crm-chevron">&#9654;</span>' +
+        '<div><div class="spn-crm-biz-name">' + esc(biz.name) + '</div><div class="spn-crm-biz-contact">' + contactLine + '</div></div>' +
+        '<div class="spn-crm-tags">' + (tags || '<span style="font-size:0.68rem;color:#9a90b0;">No bookings</span>') + '</div>' +
+        '<div class="spn-crm-amount">' + (totalCents ? '$' + (totalCents/100).toLocaleString('en-CA',{minimumFractionDigits:2}) : '--') + '</div>' +
+        '<div>' + (payClass ? '<div class="spn-crm-pay-badge ' + payClass + '">' + payLabel + '</div><div class="spn-crm-pay-fraction">' + payFraction + '</div>' : '<span style="color:#9a90b0;">--</span>') + '</div>' +
+        '<div class="spn-crm-art-status ' + artClass + '">' + artLabel + '</div>' +
+        flagHtml +
+        '<span></span>' +
+      '</div>' +
+      '<div class="spn-crm-row-detail">' +
+        '<div class="spn-crm-detail-grid">' +
+          '<div><div class="spn-crm-section-title">Bookings</div>' + bookingsHtml +
+            '<button class="spn-btn spn-btn--ghost spn-btn--sm" style="margin-top:0.5rem;" onclick="MarketingSponsorsModule.openPkgModal(null,\'' + biz.id + '\')">+ Add Booking</button></div>' +
+          '<div><div class="spn-crm-section-title">Payment Summary</div>' + payHtml + '</div>' +
+          '<div><div class="spn-crm-section-title">Artwork</div>' + artHtml + '</div>' +
+          '<div><div class="spn-crm-section-title">Deliverables</div>' + delivHtml + '</div>' +
+          '<div class="spn-crm-notes"><div class="spn-crm-section-title">Notes</div><textarea onblur="MarketingSponsorsModule.saveCrmNotes(\'' + biz.id + '\')">' + notesVal + '</textarea></div>' +
+        '</div>' +
+        '<div class="spn-crm-timeline">' + timelineHtml + '</div>' +
+      '</div>' +
+    '</div>';
+  }
+
+  function computeAttentionFlags(bizAds, bizPkgs, bizDelivs) {
+    var flags = [];
+    var today = new Date(); today.setHours(0,0,0,0);
+    var hasUnpaid = false;
+    bizPkgs.forEach(function (p) { if (p.payment_status !== 'paid' && (p.amount_cents||0) > 0) hasUnpaid = true; });
+    bizAds.forEach(function (a) { if (a.payment_status !== 'paid' && (a.price_cents||0) > 0) hasUnpaid = true; });
+    if (hasUnpaid) flags.push('Payment outstanding');
+    var hasMissing = false;
+    bizAds.forEach(function (a) { if (a.artwork_status === 'missing') hasMissing = true; });
+    if (hasMissing) flags.push('Artwork missing');
+    bizDelivs.forEach(function (d) {
+      if (d.status !== 'done' && d.due_date) {
+        var due = new Date(d.due_date); due.setHours(0,0,0,0);
+        if (due < today) { flags.push('Deliverable overdue'); return; }
+      }
+    });
+    return flags;
+  }
+
+  function toggleCrmRow(bizId) {
+    var el = document.getElementById('spn-crm-row-' + bizId);
+    if (el) el.classList.toggle('spn-crm-row--expanded');
+  }
+
+  function saveCrmNotes(bizId) {
+    var el = document.querySelector('#spn-crm-row-' + bizId + ' .spn-crm-notes textarea');
+    if (!el) return;
+    var val = el.value;
+    dbUpdate('sponsor_businesses', bizId, { notes: val }).catch(function (e) { console.error('Could not save notes', e); });
+  }
+
+  function toggleCrmDeliv(delivId, checked) {
+    var newStatus = checked ? 'done' : 'open';
+    dbUpdate('sponsor_deliverables', delivId, { status: newStatus }).then(function () {
+      loadShowSponsorsCRM();
+    }).catch(function (e) { alert('Could not update: ' + e.message); });
   }
 
   // -- SETTINGS -----------------------------------------------------------------
@@ -2407,6 +2653,105 @@
         hydratePublicPageAction();
         loadPublicPageStatus();
         loadDashboard();
+        return;
+      }
+
+      if (isShowSponsorsPage) {
+        container.innerHTML =
+          '<div class="aud-visual-hero">' +
+            '<div class="aud-visual-hero-content">' +
+              '<div>' +
+                '<div class="aud-visual-kicker"><span class="aud-visual-kicker-dot" aria-hidden="true"></span><span class="page-hierarchy"><span class="page-hierarchy-page">Promote</span><span class="page-hierarchy-sep"> - </span><span class="page-hierarchy-sub">Sponsors</span></span></div>' +
+                '<h1 class="aud-visual-title">Show Sponsors</h1>' +
+                '<p class="aud-visual-copy">Track every sponsor and ad buyer in one place.</p>' +
+              '</div>' +
+              '<div class="spn-hero-side">' +
+                '<div class="aud-visual-total">' +
+                  '<div class="aud-visual-total-kicker">Sponsors</div>' +
+                  '<div class="aud-visual-total-value" id="spn-hero-page-count">--</div>' +
+                '</div>' +
+                '<a class="spn-public-page-action" id="spn-public-page-action" href="#" target="_blank" rel="noopener">View Public Page</a>' +
+              '</div>' +
+            '</div>' +
+          '</div>' +
+          '<div class="spn-crm-summary">' +
+            '<div class="spn-crm-metric"><img class="spn-crm-metric-icon" src="/ASSETS/Images/Icons/organisation-members.svg" alt="" /><div class="spn-crm-metric-value" id="spn-crm-m-businesses">--</div><div class="spn-crm-metric-label">Total Businesses</div></div>' +
+            '<div class="spn-crm-metric"><img class="spn-crm-metric-icon" src="/ASSETS/Images/Icons/Budgeting-Fundraising.svg" alt="" /><div class="spn-crm-metric-value" id="spn-crm-m-booked">--</div><div class="spn-crm-metric-label">Total Booked</div></div>' +
+            '<div class="spn-crm-metric"><img class="spn-crm-metric-icon" src="/ASSETS/Images/Icons/Budgeting-tickets.svg" alt="" /><div class="spn-crm-metric-value" id="spn-crm-m-received">--</div><div class="spn-crm-metric-label">Total Received</div></div>' +
+            '<div class="spn-crm-metric"><img class="spn-crm-metric-icon" src="/ASSETS/Images/Icons/Budgeting-Ads.svg" alt="" /><div class="spn-crm-metric-value" id="spn-crm-m-outstanding">--</div><div class="spn-crm-metric-label">Outstanding</div></div>' +
+            '<div class="spn-crm-metric"><img class="spn-crm-metric-icon" src="/ASSETS/Images/Icons/Placeholder - Poster.svg" alt="" /><div class="spn-crm-metric-value" id="spn-crm-m-artwork">--</div><div class="spn-crm-metric-label">Artwork Missing</div></div>' +
+            '<div class="spn-crm-metric"><img class="spn-crm-metric-icon" src="/ASSETS/Images/Icons/navproductioncalendar.svg" alt="" /><div class="spn-crm-metric-value" id="spn-crm-m-deadlines">--</div><div class="spn-crm-metric-label">Deadlines</div></div>' +
+          '</div>' +
+          '<div class="spn-toolbar">' +
+            '<span class="spn-toolbar-title" id="spn-crm-count">Businesses</span>' +
+            '<div style="display:flex;gap:0.5rem;">' +
+              '<button class="spn-btn spn-btn--primary" onclick="MarketingSponsorsModule.openBizModal()">+ Add Business</button>' +
+              '<div class="spn-crm-add-menu">' +
+                '<button class="spn-btn spn-btn--ghost" onclick="this.nextElementSibling.classList.toggle(\'open\')">+ Add Booking</button>' +
+                '<div class="spn-crm-add-dropdown">' +
+                  '<button class="spn-crm-add-dropdown-item" onclick="this.parentElement.classList.remove(\'open\');MarketingSponsorsModule.openPkgModal()">Sponsor Package</button>' +
+                  '<button class="spn-crm-add-dropdown-item" onclick="this.parentElement.classList.remove(\'open\');MarketingSponsorsModule.openAdModal()">Programme Ad</button>' +
+                  '<button class="spn-crm-add-dropdown-item" onclick="this.parentElement.classList.remove(\'open\');MarketingSponsorsModule.openDelivModal()">Deliverable</button>' +
+                '</div>' +
+              '</div>' +
+            '</div>' +
+          '</div>' +
+          '<div id="spn-crm-biz-list"><div class="spn-loading-row">Loading sponsor data...</div></div>' +
+
+          '<div class="spn-modal-overlay" id="spn-biz-modal">' +
+            '<div class="spn-modal">' +
+              '<div class="spn-modal-title" id="spn-biz-modal-title">Add Business</div>' +
+              '<input type="hidden" id="spn-biz-id" />' +
+              '<div class="spn-row-2"><div class="spn-field"><label>Business Name *</label><input type="text" id="spn-biz-name" placeholder="Rainbow Youth Theatre" /></div><div class="spn-field"><label>Contact Person</label><input type="text" id="spn-biz-contact" placeholder="Jane Smith" /></div></div>' +
+              '<div class="spn-row-2"><div class="spn-field"><label>Email</label><input type="email" id="spn-biz-email" placeholder="jane@example.com" /></div><div class="spn-field"><label>Phone</label><input type="tel" id="spn-biz-phone" placeholder="250-555-0100" /></div></div>' +
+              '<div class="spn-row-2"><div class="spn-field"><label>Website</label><input type="url" id="spn-biz-website" placeholder="https://example.com" /></div><div class="spn-field"><label>Instagram</label><input type="text" id="spn-biz-instagram" placeholder="@handle" /></div></div>' +
+              '<div class="spn-field"><label>Notes</label><textarea id="spn-biz-notes" placeholder="Any notes about this business..."></textarea></div>' +
+              '<div class="spn-modal-footer"><button class="spn-btn spn-btn--ghost" onclick="MarketingSponsorsModule.closeBizModal()">Cancel</button><button class="spn-btn spn-btn--primary" onclick="MarketingSponsorsModule.saveBiz()">Save Business</button></div>' +
+            '</div>' +
+          '</div>' +
+          '<div class="spn-modal-overlay" id="spn-ad-modal">' +
+            '<div class="spn-modal">' +
+              '<div class="spn-modal-title" id="spn-ad-modal-title">Add Programme Ad</div>' +
+              '<input type="hidden" id="spn-ad-id" />' +
+              '<div class="spn-field"><label>Business</label><select id="spn-ad-biz"></select></div>' +
+              '<div class="spn-row-2"><div class="spn-field"><label>Ad Size *</label><select id="spn-ad-size"><option value="">Select size...</option></select></div><div class="spn-field"><label>Colour or Black &amp; White</label><select id="spn-ad-type"><option value="colour">Colour</option><option value="bw">Black &amp; White</option></select></div></div>' +
+              '<div class="spn-row-2"><div class="spn-field"><label>Price ($)</label><input type="number" id="spn-ad-price" min="0" step="0.01" placeholder="0.00" /></div><div class="spn-field"><label>Payment Status</label><select id="spn-ad-payment"><option value="unpaid">Unpaid</option><option value="paid">Paid</option><option value="invoice_sent">Invoice Sent</option><option value="overdue">Overdue</option></select></div></div>' +
+              '<div class="spn-row-2"><div class="spn-field"><label>Artwork Status</label><select id="spn-ad-artwork"><option value="missing">Not Received</option><option value="received">Received</option><option value="approved">Approved</option><option value="print_ready">Print Ready</option></select></div><div class="spn-field"><label>Approval Status</label><select id="spn-ad-approval"><option value="pending">Pending Review</option><option value="approved">Approved</option><option value="changes_needed">Changes Needed</option></select></div></div>' +
+              '<div class="spn-field"><label>Notes</label><textarea id="spn-ad-notes" placeholder="Placement notes, special instructions..."></textarea></div>' +
+              '<div class="spn-modal-footer"><button class="spn-btn spn-btn--ghost" onclick="MarketingSponsorsModule.closeAdModal()">Cancel</button><button class="spn-btn spn-btn--primary" onclick="MarketingSponsorsModule.saveAd()">Save Ad</button></div>' +
+            '</div>' +
+          '</div>' +
+          '<div class="spn-modal-overlay" id="spn-pkg-modal">' +
+            '<div class="spn-modal">' +
+              '<div class="spn-modal-title" id="spn-pkg-modal-title">Add Sponsor</div>' +
+              '<input type="hidden" id="spn-pkg-id" />' +
+              '<div class="spn-field"><label>Business</label><select id="spn-pkg-biz"></select></div>' +
+              '<div class="spn-row-2"><div class="spn-field"><label>Tier / Package</label><select id="spn-pkg-tier"><option value="">Custom / no tier</option></select></div><div class="spn-field"><label>Amount ($)</label><input type="number" id="spn-pkg-amount" min="0" step="0.01" placeholder="0.00" /></div></div>' +
+              '<div class="spn-field"><label>Payment Status</label><select id="spn-pkg-payment"><option value="unpaid">Unpaid</option><option value="paid">Paid</option><option value="invoice_sent">Invoice Sent</option><option value="overdue">Overdue</option></select></div>' +
+              '<div class="spn-field"><label>Included Benefits</label><textarea id="spn-pkg-benefits" placeholder="Logo on poster, website mention, social post..."></textarea></div>' +
+              '<div class="spn-field"><label>Notes</label><textarea id="spn-pkg-notes"></textarea></div>' +
+              '<div class="spn-modal-footer"><button class="spn-btn spn-btn--ghost" onclick="MarketingSponsorsModule.closePkgModal()">Cancel</button><button class="spn-btn spn-btn--primary" onclick="MarketingSponsorsModule.savePkg()">Save Sponsor</button></div>' +
+            '</div>' +
+          '</div>' +
+          '<div class="spn-modal-overlay" id="spn-deliv-modal">' +
+            '<div class="spn-modal">' +
+              '<div class="spn-modal-title" id="spn-deliv-modal-title">Add Deliverable</div>' +
+              '<input type="hidden" id="spn-deliv-id" />' +
+              '<div class="spn-field"><label>Title *</label><input type="text" id="spn-deliv-title" placeholder="Add logo to poster" /></div>' +
+              '<div class="spn-row-2"><div class="spn-field"><label>Business</label><select id="spn-deliv-biz"><option value="">No business linked</option></select></div><div class="spn-field"><label>Due Date</label><input type="date" id="spn-deliv-due" /></div></div>' +
+              '<div class="spn-row-2"><div class="spn-field"><label>Assigned To</label><input type="text" id="spn-deliv-assigned" placeholder="Name or role" /></div><div class="spn-field"><label>Status</label><select id="spn-deliv-status"><option value="open">Open</option><option value="in_progress">In Progress</option><option value="done">Done</option></select></div></div>' +
+              '<div class="spn-field"><label>Notes</label><textarea id="spn-deliv-notes" placeholder="Additional context..."></textarea></div>' +
+              '<div class="spn-modal-footer"><button class="spn-btn spn-btn--ghost" onclick="MarketingSponsorsModule.closeDelivModal()">Cancel</button><button class="spn-btn spn-btn--primary" onclick="MarketingSponsorsModule.saveDeliv()">Save Deliverable</button></div>' +
+            '</div>' +
+          '</div>';
+
+        container.querySelectorAll('.spn-modal-overlay').forEach(function (el) {
+          el.addEventListener('click', function (e) { if (e.target === el) el.classList.remove('open'); });
+        });
+
+        hydratePublicPageAction();
+        loadPublicPageStatus();
+        loadShowSponsorsCRM();
         return;
       }
 
