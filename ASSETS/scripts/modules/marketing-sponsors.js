@@ -2675,12 +2675,12 @@
             '</div>' +
           '</div>' +
           '<div class="spn-crm-summary">' +
-            '<div class="spn-crm-metric"><img class="spn-crm-metric-icon" src="/ASSETS/Images/Icons/organisation-members.svg" alt="" /><div class="spn-crm-metric-value" id="spn-crm-m-businesses">--</div><div class="spn-crm-metric-label">Total Businesses</div></div>' +
-            '<div class="spn-crm-metric"><img class="spn-crm-metric-icon" src="/ASSETS/Images/Icons/Budgeting-Fundraising.svg" alt="" /><div class="spn-crm-metric-value" id="spn-crm-m-booked">--</div><div class="spn-crm-metric-label">Total Booked</div></div>' +
-            '<div class="spn-crm-metric"><img class="spn-crm-metric-icon" src="/ASSETS/Images/Icons/Budgeting-tickets.svg" alt="" /><div class="spn-crm-metric-value" id="spn-crm-m-received">--</div><div class="spn-crm-metric-label">Total Received</div></div>' +
-            '<div class="spn-crm-metric"><img class="spn-crm-metric-icon" src="/ASSETS/Images/Icons/Budgeting-Ads.svg" alt="" /><div class="spn-crm-metric-value" id="spn-crm-m-outstanding">--</div><div class="spn-crm-metric-label">Outstanding</div></div>' +
-            '<div class="spn-crm-metric"><img class="spn-crm-metric-icon" src="/ASSETS/Images/Icons/Placeholder - Poster.svg" alt="" /><div class="spn-crm-metric-value" id="spn-crm-m-artwork">--</div><div class="spn-crm-metric-label">Artwork Missing</div></div>' +
-            '<div class="spn-crm-metric"><img class="spn-crm-metric-icon" src="/ASSETS/Images/Icons/navproductioncalendar.svg" alt="" /><div class="spn-crm-metric-value" id="spn-crm-m-deadlines">--</div><div class="spn-crm-metric-label">Deadlines</div></div>' +
+            '<div class="spn-crm-metric"><img class="spn-crm-metric-icon" style="width:22px;height:22px;" src="/ASSETS/Images/Icons/organisation-members.svg" alt="" /><div class="spn-crm-metric-value" id="spn-crm-m-businesses">--</div><div class="spn-crm-metric-label">Total Businesses</div></div>' +
+            '<div class="spn-crm-metric"><img class="spn-crm-metric-icon" style="width:22px;height:22px;" src="/ASSETS/Images/Icons/Budgeting-Fundraising.svg" alt="" /><div class="spn-crm-metric-value" id="spn-crm-m-booked">--</div><div class="spn-crm-metric-label">Total Booked</div></div>' +
+            '<div class="spn-crm-metric"><img class="spn-crm-metric-icon" style="width:22px;height:22px;" src="/ASSETS/Images/Icons/Budgeting-tickets.svg" alt="" /><div class="spn-crm-metric-value" id="spn-crm-m-received">--</div><div class="spn-crm-metric-label">Total Received</div></div>' +
+            '<div class="spn-crm-metric"><img class="spn-crm-metric-icon" style="width:22px;height:22px;" src="/ASSETS/Images/Icons/Budgeting-Ads.svg" alt="" /><div class="spn-crm-metric-value" id="spn-crm-m-outstanding">--</div><div class="spn-crm-metric-label">Outstanding</div></div>' +
+            '<div class="spn-crm-metric"><img class="spn-crm-metric-icon" style="width:22px;height:22px;" src="/ASSETS/Images/Icons/Placeholder - Poster.svg" alt="" /><div class="spn-crm-metric-value" id="spn-crm-m-artwork">--</div><div class="spn-crm-metric-label">Artwork Missing</div></div>' +
+            '<div class="spn-crm-metric"><img class="spn-crm-metric-icon" style="width:22px;height:22px;" src="/ASSETS/Images/Icons/navproductioncalendar.svg" alt="" /><div class="spn-crm-metric-value" id="spn-crm-m-deadlines">--</div><div class="spn-crm-metric-label">Deadlines</div></div>' +
           '</div>' +
           '<div class="spn-toolbar">' +
             '<span class="spn-toolbar-title" id="spn-crm-count">Businesses</span>' +
