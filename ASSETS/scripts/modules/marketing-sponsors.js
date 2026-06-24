@@ -1077,10 +1077,12 @@
     bizPkgs.forEach(function (p) {
       totalCents += (p.amount_cents || 0);
       if (p.payment_status === 'paid') receivedCents += (p.amount_cents || 0);
+      else if (p.payment_amount_cents) receivedCents += p.payment_amount_cents;
     });
     bizAds.forEach(function (a) {
       totalCents += (a.price_cents || 0);
       if (a.payment_status === 'paid') receivedCents += (a.price_cents || 0);
+      else if (a.payment_amount_cents) receivedCents += a.payment_amount_cents;
       if (a.artwork_status === 'missing') anyArtMissing = true;
       else if (a.artwork_status === 'received') anyArtReceived = true;
       if (a.artwork_status !== 'approved' && a.artwork_status !== 'print_ready') allArtApproved = false;
@@ -1125,115 +1127,97 @@
 
     var contactLine = [biz.contact_name, biz.contact_email, biz.contact_phone].filter(Boolean).join(' &middot; ');
 
-    // Expanded detail
+    // === EXPANDED DETAIL — EVERYTHING ===
+    var fmtDollars = function (cents) { return '$' + ((cents||0)/100).toLocaleString('en-CA', {minimumFractionDigits:2}); };
+    var statusDot = function (ok) { return '<span class="spn-crm-status-dot ' + (ok ? 'spn-crm-status-dot--good' : 'spn-crm-status-dot--bad') + '"></span>'; };
+    var statusRow = function (label, ok, detail) { return '<div class="spn-crm-status-row">' + statusDot(ok) + '<span>' + label + (detail ? ' <span class="spn-crm-file-meta">' + esc(detail) + '</span>' : '') + '</span></div>'; };
+
+    // BOOKINGS — sponsor packages
     var bookingsHtml = '';
     bizPkgs.forEach(function (p) {
       var tierObj = (SpnsState.settings.tiers || []).find(function (t) { return t.label === p.tier_name || t.id === p.tier_id; });
-      var payStatus = p.payment_status || 'unpaid';
-      var payBadge = payStatus === 'paid' ? '<span class="spn-crm-pay-badge spn-crm-pay-badge--paid" style="font-size:0.58rem;margin-left:0.4rem;">Paid</span>'
-        : '<span class="spn-crm-pay-badge spn-crm-pay-badge--unpaid" style="font-size:0.58rem;margin-left:0.4rem;">' + esc(payStatus.replace(/_/g,' ')) + '</span>';
       var bullets = tierObj && tierObj.bullets ? tierObj.bullets : (p.benefits || '');
-      var bulletsList = bullets ? bullets.split('\n').filter(Boolean).map(function (b) { return '<li>' + esc(b.trim()) + '</li>'; }).join('') : '';
-      var slotsInfo = tierObj && tierObj.slots ? '<div style="font-size:0.62rem;color:#9a90b0;margin-top:0.2rem;">Availability: ' + tierObj.slots + ' sponsor' + (tierObj.slots > 1 ? 's' : '') + '</div>' : '';
-      bookingsHtml += '<div class="spn-crm-booking-row" style="flex-direction:column;gap:0.3rem;">' +
-        '<div style="display:flex;justify-content:space-between;align-items:center;">' +
-          '<div><span class="spn-crm-tag" style="background:#572e88;font-size:0.65rem;">' + esc(p.tier_name || 'Sponsor') + '</span>' + payBadge + '</div>' +
-          '<div class="spn-crm-booking-amount">$' + ((p.amount_cents||0)/100).toLocaleString('en-CA', {minimumFractionDigits:2}) + '</div>' +
+      var bulletsList = bullets ? '<ul class="spn-crm-pkg-includes">' + bullets.split('\n').filter(Boolean).map(function (b) { return '<li>' + esc(b.trim()) + '</li>'; }).join('') + '</ul>' : '';
+
+      bookingsHtml += '<div class="spn-crm-booking-row">' +
+        '<div class="spn-crm-booking-row-head"><span class="spn-crm-tag" style="background:#572e88;">' + esc(p.tier_name || 'Sponsor') + '</span><span class="spn-crm-booking-amount">' + fmtDollars(p.amount_cents) + '</span></div>' +
+        bulletsList +
+        '<div class="spn-crm-checklist">' +
+          statusRow('Booking ' + (p.booking_status === 'approved' ? 'approved' : 'received'), p.booking_status === 'approved') +
+          statusRow('Invoice sent', !!p.invoice_sent_date, p.invoice_sent_date || '') +
+          (p.invoice_number ? statusRow('Invoice #' + p.invoice_number, true) : '') +
+          statusRow('Payment ' + (p.payment_status === 'paid' ? 'received' : 'outstanding'), p.payment_status === 'paid', p.payment_received_date || '') +
+          (p.payment_amount_cents ? '<div class="spn-crm-status-row"><span class="spn-crm-status-dot spn-crm-status-dot--info"></span><span>Received: ' + fmtDollars(p.payment_amount_cents) + '</span></div>' : '') +
         '</div>' +
-        (bulletsList ? '<div style="font-size:0.7rem;color:#4a3570;"><strong style="font-size:0.62rem;color:#9a90b0;text-transform:uppercase;letter-spacing:0.04em;">Includes:</strong><ul style="margin:0.2rem 0 0;padding-left:1.1rem;list-style:disc;">' + bulletsList + '</ul></div>' : '') +
-        slotsInfo +
-        (p.notes ? '<div style="font-size:0.68rem;color:#9a90b0;font-style:italic;">' + esc(p.notes) + '</div>' : '') +
+        (p.notes ? '<div class="spn-crm-pkg-meta" style="font-style:italic;">' + esc(p.notes) + '</div>' : '') +
       '</div>';
     });
+
+    // BOOKINGS — programme ads
     bizAds.forEach(function (a) {
       var sizeObj = (SpnsState.settings.adSizes || []).find(function (s) { return s.id === a.ad_size; });
       var sizeLabel = sizeObj ? sizeObj.label : (a.ad_size || 'Ad');
-      var typeLabel = a.ad_type === 'bw' ? 'Black & White' : 'Colour';
-      var dimsLabel = sizeObj && sizeObj.dims ? sizeObj.dims.replace(/x/i, '" x ') + '"' : '';
-      var priceLookup = '';
-      if (sizeObj) {
-        var colourPrice = sizeObj.colour != null ? sizeObj.colour : (sizeObj.colourPrice || 0);
-        var bwPrice = sizeObj.bw != null ? sizeObj.bw : (sizeObj.bwPrice || 0);
-        priceLookup = 'Colour: $' + colourPrice + ' / B&W: $' + bwPrice;
-      }
+      var typeLabel = a.ad_type === 'bw' ? 'B&W' : 'Colour';
+      var dimsLabel = sizeObj && sizeObj.dims ? ' (' + sizeObj.dims.replace(/x/i, '" x ') + '")' : '';
       var artSt = a.artwork_status || 'missing';
-      var artIcon = artSt === 'approved' || artSt === 'print_ready' ? '/ASSETS/Images/Icons/visible.svg' : '/ASSETS/Images/Icons/Upload - Poster.svg';
-      var artLabel2 = artSt === 'approved' ? 'Approved' : (artSt === 'print_ready' ? 'Print Ready' : (artSt === 'received' ? 'Received' : 'Not Received'));
-      var artColor = artSt === 'approved' || artSt === 'print_ready' ? '#769e7b' : (artSt === 'received' ? '#476aaa' : '#d1523d');
+      var artOk = artSt === 'approved' || artSt === 'print_ready';
+      var artLabel2 = artOk ? 'Approved' : (artSt === 'received' ? 'Received' : 'Not Received');
       var approvalSt = a.approval_status || 'pending';
-      var approvalLabel = approvalSt === 'approved' ? 'Approved' : (approvalSt === 'changes_needed' ? 'Changes Needed' : 'Pending Review');
-      var approvalColor = approvalSt === 'approved' ? '#769e7b' : (approvalSt === 'changes_needed' ? '#d1523d' : '#9a90b0');
-      var payStatus = a.payment_status || 'unpaid';
-      var payBadge = payStatus === 'paid' ? '<span class="spn-crm-pay-badge spn-crm-pay-badge--paid" style="font-size:0.58rem;margin-left:0.4rem;">Paid</span>'
-        : '<span class="spn-crm-pay-badge spn-crm-pay-badge--unpaid" style="font-size:0.58rem;margin-left:0.4rem;">' + esc(payStatus.replace(/_/g,' ')) + '</span>';
-      bookingsHtml += '<div class="spn-crm-booking-row" style="flex-direction:column;gap:0.3rem;">' +
-        '<div style="display:flex;justify-content:space-between;align-items:center;">' +
-          '<div><span class="spn-crm-tag" style="background:#476aaa;font-size:0.65rem;">' + esc(sizeLabel + ' ' + typeLabel) + '</span>' + payBadge + '</div>' +
-          '<div class="spn-crm-booking-amount">$' + ((a.price_cents||0)/100).toLocaleString('en-CA', {minimumFractionDigits:2}) + '</div>' +
+
+      bookingsHtml += '<div class="spn-crm-booking-row">' +
+        '<div class="spn-crm-booking-row-head"><span class="spn-crm-tag" style="background:#476aaa;">' + esc(sizeLabel + ' ' + typeLabel) + dimsLabel + '</span><span class="spn-crm-booking-amount">' + fmtDollars(a.price_cents) + '</span></div>' +
+        '<div class="spn-crm-checklist">' +
+          statusRow('Booking ' + (a.booking_status === 'approved' ? 'approved' : 'received'), a.booking_status === 'approved') +
+          statusRow('Invoice sent', !!a.invoice_sent_date, a.invoice_sent_date || '') +
+          (a.invoice_number ? statusRow('Invoice #' + a.invoice_number, true) : '') +
+          statusRow('Payment ' + (a.payment_status === 'paid' ? 'received' : 'outstanding'), a.payment_status === 'paid', a.payment_received_date || '') +
+          (a.payment_amount_cents ? '<div class="spn-crm-status-row"><span class="spn-crm-status-dot spn-crm-status-dot--info"></span><span>Received: ' + fmtDollars(a.payment_amount_cents) + '</span></div>' : '') +
+          statusRow('Artwork ' + artLabel2, artOk || artSt === 'received') +
+          statusRow('Approval: ' + (approvalSt === 'approved' ? 'Approved' : (approvalSt === 'changes_needed' ? 'Changes needed' : 'Pending')), approvalSt === 'approved') +
         '</div>' +
-        '<div style="font-size:0.7rem;color:#4a3570;">' +
-          (dimsLabel ? '<div>Size: ' + esc(dimsLabel) + '</div>' : '') +
-          '<div>Format: ' + esc(typeLabel) + '</div>' +
-          (priceLookup ? '<div style="font-size:0.62rem;color:#9a90b0;">' + esc(priceLookup) + '</div>' : '') +
-          '<div style="display:flex;align-items:center;gap:0.3rem;margin-top:0.15rem;">' +
-            '<img src="' + artIcon + '" style="width:12px;height:12px;opacity:0.7;" alt="" />' +
-            '<span style="font-weight:700;color:' + artColor + ';">Artwork: ' + artLabel2 + '</span>' +
-          '</div>' +
-          '<div style="font-size:0.62rem;color:' + approvalColor + ';font-weight:700;">Approval: ' + approvalLabel + '</div>' +
-          (a.artwork_url ? '<div style="margin-top:0.2rem;"><a href="' + esc(a.artwork_url) + '" target="_blank" style="font-size:0.62rem;color:#476aaa;font-weight:700;">View Artwork File</a></div>' : '') +
-        '</div>' +
-        (a.notes ? '<div style="font-size:0.68rem;color:#9a90b0;font-style:italic;">' + esc(a.notes) + '</div>' : '') +
+        (a.artwork_url ? '<div class="spn-crm-art-preview"><img src="' + esc(a.artwork_url) + '" alt="' + esc(sizeLabel) + '" /></div>' : '') +
+        (a.notes ? '<div class="spn-crm-pkg-meta" style="font-style:italic;">' + esc(a.notes) + '</div>' : '') +
       '</div>';
     });
     if (!bookingsHtml) bookingsHtml = '<div class="spn-crm-pkg-meta">No bookings yet</div>';
 
-    // Artwork preview section
-    var artworkHtml = '';
-    bizAds.forEach(function (a) {
-      var st = a.artwork_status || 'missing';
-      var sizeObj3 = (SpnsState.settings.adSizes || []).find(function (s) { return s.id === a.ad_size; });
-      var artSizeLabel = sizeObj3 ? sizeObj3.label : (a.ad_size || 'Ad');
-      var typeLabel3 = a.ad_type === 'bw' ? 'B&W' : 'Colour';
-      var dotClass = st === 'approved' || st === 'print_ready' ? 'spn-crm-status-dot--good' : (st === 'received' ? 'spn-crm-status-dot--info' : 'spn-crm-status-dot--bad');
-      var stLabel = st === 'approved' ? 'Approved' : (st === 'print_ready' ? 'Print Ready' : (st === 'received' ? 'Received' : 'Not Received'));
-      var approvalSt2 = a.approval_status || 'pending';
-      var approvalLabel2 = approvalSt2 === 'approved' ? 'Approved' : (approvalSt2 === 'changes_needed' ? 'Changes Needed' : 'Pending');
-      var approvalDot = approvalSt2 === 'approved' ? 'spn-crm-status-dot--good' : (approvalSt2 === 'changes_needed' ? 'spn-crm-status-dot--bad' : 'spn-crm-status-dot--warn');
-      artworkHtml += '<div class="spn-crm-ad-card">' +
-        '<div class="spn-crm-ad-header"><span class="spn-crm-tag" style="background:#476aaa;font-size:0.6rem;">' + esc(artSizeLabel + ' ' + typeLabel3) + '</span></div>' +
-        '<div class="spn-crm-status-row"><span class="spn-crm-status-dot ' + dotClass + '"></span><span>Artwork: ' + stLabel + '</span></div>' +
-        '<div class="spn-crm-status-row"><span class="spn-crm-status-dot ' + approvalDot + '"></span><span>Approval: ' + approvalLabel2 + '</span></div>' +
-        '<div class="spn-crm-art-preview">' +
-          (a.artwork_url ? '<img src="' + esc(a.artwork_url) + '" alt="' + esc(artSizeLabel) + ' artwork" />' : '<div class="spn-crm-art-preview-empty"><img src="/ASSETS/Images/Icons/Upload - Poster.svg" alt="" />No artwork submitted</div>') +
-        '</div>' +
-      '</div>';
-    });
-    if (!artworkHtml) artworkHtml = '<div class="spn-crm-pkg-meta">No artwork required</div>';
-
-    // Payment summary
+    // PAYMENT SUMMARY
     var outstandingCents = totalCents - receivedCents;
-    var payHtml = '<div class="spn-crm-pay-row"><span>Total Booked</span><span>$' + (totalCents/100).toLocaleString('en-CA',{minimumFractionDigits:2}) + '</span></div>' +
-      '<div class="spn-crm-pay-row"><span>Total Received</span><span>$' + (receivedCents/100).toLocaleString('en-CA',{minimumFractionDigits:2}) + '</span></div>' +
-      '<div class="spn-crm-pay-row spn-crm-pay-row--total"><span>Outstanding</span><span>$' + (outstandingCents/100).toLocaleString('en-CA',{minimumFractionDigits:2}) + '</span></div>';
+    var payHtml = '<div class="spn-crm-pay-row"><span>Total Booked</span><span>' + fmtDollars(totalCents) + '</span></div>' +
+      '<div class="spn-crm-pay-row"><span>Total Received</span><span>' + fmtDollars(receivedCents) + '</span></div>' +
+      '<div class="spn-crm-pay-row spn-crm-pay-row--total"><span>Outstanding</span><span>' + fmtDollars(outstandingCents) + '</span></div>';
 
-    // Deliverables
+    // DELIVERABLES — auto-generate from tier benefits if none exist
     var delivHtml = '';
-    bizDelivs.forEach(function (d) {
-      var isDone = d.status === 'done';
-      var dueStr = d.due_date ? '<span class="spn-crm-check-due">' + new Date(d.due_date).toLocaleDateString('en-CA') + '</span>' : '';
-      delivHtml += '<div class="spn-crm-check-row' + (isDone ? ' done' : '') + '"><input type="checkbox"' + (isDone ? ' checked' : '') + ' onchange="MarketingSponsorsModule.toggleCrmDeliv(\'' + d.id + '\',this.checked)" /><span>' + esc(d.title) + '</span>' + dueStr + '</div>';
-    });
-    if (!delivHtml) delivHtml = '<div class="spn-crm-pkg-meta">No deliverables</div>';
+    var hasAutoDelivs = bizDelivs.some(function (d) { return d.auto_generated; });
+    if (!hasAutoDelivs && bizPkgs.length && !bizDelivs.length) {
+      bizPkgs.forEach(function (p) {
+        var tierObj = (SpnsState.settings.tiers || []).find(function (t) { return t.label === p.tier_name; });
+        if (tierObj && tierObj.bullets) {
+          tierObj.bullets.split('\n').filter(Boolean).forEach(function (b) {
+            dbInsert('sponsor_deliverables', { business_id: biz.id, title: b.trim(), status: 'open', auto_generated: true, linked_package_id: p.id });
+          });
+        }
+      });
+      delivHtml = '<div class="spn-crm-pkg-meta">Generating deliverables... refresh to see them.</div>';
+    } else {
+      bizDelivs.forEach(function (d) {
+        var isDone = d.status === 'done';
+        var dueStr = d.due_date ? '<span class="spn-crm-check-due">' + new Date(d.due_date).toLocaleDateString('en-CA') + '</span>' : '';
+        delivHtml += '<div class="spn-crm-check-row' + (isDone ? ' done' : '') + '"><input type="checkbox"' + (isDone ? ' checked' : '') + ' onchange="MarketingSponsorsModule.toggleCrmDeliv(\'' + d.id + '\',this.checked)" /><span>' + esc(d.title) + '</span>' + dueStr + '</div>';
+      });
+      if (!delivHtml) delivHtml = '<div class="spn-crm-pkg-meta">No deliverables</div>';
+    }
 
-    // Notes
+    // NOTES
     var notesVal = (biz.notes || '').replace(/"/g, '&quot;').replace(/</g, '&lt;');
 
-    // Contact details for expanded view
+    // CONTACT
     var contactHtml = '';
     if (biz.contact_name) contactHtml += '<div class="spn-crm-status-row"><img src="/ASSETS/Images/Icons/organisation-members.svg" style="width:12px;height:12px;opacity:0.5;" alt="" /><span>' + esc(biz.contact_name) + '</span></div>';
-    if (biz.contact_email) contactHtml += '<div class="spn-crm-status-row"><img src="/ASSETS/Images/Icons/Mail.svg" style="width:12px;height:12px;opacity:0.5;" alt="" /><a href="mailto:' + esc(biz.contact_email) + '" style="color:#476aaa;font-weight:700;text-decoration:none;">' + esc(biz.contact_email) + '</a></div>';
+    if (biz.contact_email) contactHtml += '<div class="spn-crm-status-row"><img src="/ASSETS/Images/Icons/Mail.svg" style="width:12px;height:12px;opacity:0.5;" alt="" /><a href="mailto:' + esc(biz.contact_email) + '">' + esc(biz.contact_email) + '</a></div>';
     if (biz.contact_phone) contactHtml += '<div class="spn-crm-status-row"><img src="/ASSETS/Images/Icons/Phone.svg" style="width:12px;height:12px;opacity:0.5;" alt="" /><span>' + esc(biz.contact_phone) + '</span></div>';
-    if (biz.website) contactHtml += '<div class="spn-crm-status-row"><img src="/ASSETS/Images/Icons/Link.svg" style="width:12px;height:12px;opacity:0.5;" alt="" /><a href="' + esc(biz.website) + '" target="_blank" style="color:#476aaa;font-weight:700;text-decoration:none;">' + esc(biz.website) + '</a></div>';
+    if (biz.website) contactHtml += '<div class="spn-crm-status-row"><img src="/ASSETS/Images/Icons/Link.svg" style="width:12px;height:12px;opacity:0.5;" alt="" /><a href="' + esc(biz.website) + '" target="_blank">' + esc(biz.website) + '</a></div>';
 
     // Timeline
     var timelineHtml = '';
