@@ -1574,42 +1574,59 @@
     }
     var amountStr = '$' + (amount / 100).toLocaleString('en-CA', { minimumFractionDigits: 2 });
 
-    var logoHtml = org.logo_url ? '<img src="' + esc(org.logo_url) + '" style="max-height:50px;max-width:160px;" alt="" />' : '';
+    var logoHtml = org.logo_url ? '<img src="' + esc(org.logo_url) + '" style="max-height:56px;max-width:180px;display:block;" alt="" />' : '';
+    var orgEmail = org.email || '';
 
     var invoiceHtml =
       '<div id="spn-crm-invoice-body">' +
-        '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:24px;">' +
-          '<div>' + logoHtml + '<div style="font-weight:900;font-size:1rem;color:#1a1530;margin-top:6px;">' + esc(orgName) + '</div>' +
-            (showName ? '<div style="font-size:0.75rem;color:#9a90b0;">' + esc(showName) + '</div>' : '') +
+        '<div style="background:#572e88;height:6px;border-radius:3px 3px 0 0;margin:-1rem -1.4rem 0;"></div>' +
+        '<div style="padding-top:1.25rem;">' +
+          '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;">' +
+            '<div><div style="font-size:1.5rem;font-weight:950;color:#1a1530;letter-spacing:-0.01em;">INVOICE ' + esc(invNum) + '</div>' +
+              '<div style="font-size:0.78rem;color:#9a90b0;margin-top:4px;"><strong>Date of issue:</strong> ' + esc(new Date(today).toLocaleDateString('en-CA', { month: 'long', day: 'numeric', year: 'numeric' })) + '</div>' +
+            '</div>' +
+            (logoHtml ? '<div>' + logoHtml + '</div>' : '') +
           '</div>' +
-          '<div style="text-align:right;">' +
-            '<div style="font-size:1.3rem;font-weight:950;color:#572e88;letter-spacing:0.02em;">INVOICE</div>' +
-            '<div style="font-size:0.72rem;color:#9a90b0;margin-top:4px;">#' + esc(invNum) + '</div>' +
-            '<div style="font-size:0.72rem;color:#9a90b0;">Date: ' + esc(today) + '</div>' +
+          '<div style="display:flex;gap:24px;margin-bottom:24px;">' +
+            '<div style="flex:1;background:rgba(87,46,136,0.03);border-radius:8px;padding:14px 16px;">' +
+              '<div style="font-size:0.58rem;font-weight:800;color:#9a90b0;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px;">Billed to</div>' +
+              '<div style="font-weight:800;font-size:0.88rem;color:#1a1530;">' + esc(biz.name) + '</div>' +
+              (biz.contact_name ? '<div style="font-size:0.78rem;color:#4a3570;">' + esc(biz.contact_name) + '</div>' : '') +
+              (biz.contact_email ? '<div style="font-size:0.78rem;color:#4a3570;">' + esc(biz.contact_email) + '</div>' : '') +
+              (biz.contact_phone ? '<div style="font-size:0.78rem;color:#4a3570;">' + esc(biz.contact_phone) + '</div>' : '') +
+            '</div>' +
+            '<div style="flex:1;background:rgba(87,46,136,0.03);border-radius:8px;padding:14px 16px;">' +
+              '<div style="font-size:0.58rem;font-weight:800;color:#9a90b0;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px;">From</div>' +
+              '<div style="font-weight:800;font-size:0.88rem;color:#1a1530;">' + esc(orgName) + '</div>' +
+              (showName ? '<div style="font-size:0.78rem;color:#4a3570;">' + esc(showName) + '</div>' : '') +
+              (orgEmail ? '<div style="font-size:0.78rem;color:#4a3570;">' + esc(orgEmail) + '</div>' : '') +
+            '</div>' +
+          '</div>' +
+          '<table style="width:100%;border-collapse:collapse;margin-bottom:20px;">' +
+            '<thead><tr style="background:rgba(87,46,136,0.04);">' +
+              '<th style="text-align:left;padding:10px 12px;font-size:0.62rem;font-weight:800;color:#9a90b0;text-transform:uppercase;letter-spacing:0.06em;">Description</th>' +
+              '<th style="text-align:right;padding:10px 12px;font-size:0.62rem;font-weight:800;color:#9a90b0;text-transform:uppercase;letter-spacing:0.06em;width:80px;">Qty</th>' +
+              '<th style="text-align:right;padding:10px 12px;font-size:0.62rem;font-weight:800;color:#9a90b0;text-transform:uppercase;letter-spacing:0.06em;width:100px;">Unit Price</th>' +
+              '<th style="text-align:right;padding:10px 12px;font-size:0.62rem;font-weight:800;color:#9a90b0;text-transform:uppercase;letter-spacing:0.06em;width:100px;">Amount</th>' +
+            '</tr></thead>' +
+            '<tbody><tr style="border-bottom:1px solid rgba(87,46,136,0.06);">' +
+              '<td style="padding:12px;font-size:0.82rem;color:#1a1530;font-weight:600;">' + esc(itemDesc) + '</td>' +
+              '<td style="padding:12px;text-align:right;font-size:0.82rem;color:#4a3570;">1</td>' +
+              '<td style="padding:12px;text-align:right;font-size:0.82rem;color:#4a3570;">' + amountStr + '</td>' +
+              '<td style="padding:12px;text-align:right;font-size:0.82rem;color:#1a1530;font-weight:700;">' + amountStr + '</td>' +
+            '</tr></tbody>' +
+          '</table>' +
+          '<div style="display:flex;justify-content:flex-end;margin-bottom:24px;">' +
+            '<div style="width:220px;">' +
+              '<div style="display:flex;justify-content:space-between;padding:6px 0;font-size:0.78rem;color:#4a3570;"><span>Subtotal</span><span>' + amountStr + '</span></div>' +
+              '<div style="display:flex;justify-content:space-between;padding:6px 0;font-size:0.78rem;color:#4a3570;"><span>Tax</span><span>$0.00</span></div>' +
+              '<div style="display:flex;justify-content:space-between;padding:10px 0 6px;font-size:1rem;font-weight:950;color:#1a1530;border-top:2px solid #572e88;margin-top:4px;"><span>TOTAL</span><span style="color:#572e88;">' + amountStr + '</span></div>' +
+            '</div>' +
+          '</div>' +
+          '<div style="background:rgba(87,46,136,0.03);border-radius:8px;padding:12px 16px;font-size:0.72rem;color:#4a3570;line-height:1.6;">' +
+            '<strong style="color:#1a1530;">Terms</strong> Payment is due upon receipt. Please make cheques payable to <strong>' + esc(orgName) + '</strong> or contact us for e-transfer details.' +
           '</div>' +
         '</div>' +
-        '<div style="background:rgba(87,46,136,0.03);border-radius:8px;padding:12px 14px;margin-bottom:16px;">' +
-          '<div style="font-size:0.58rem;font-weight:800;color:#9a90b0;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:4px;">Bill to</div>' +
-          '<div style="font-weight:800;color:#1a1530;">' + esc(biz.name) + '</div>' +
-          (biz.contact_name ? '<div style="font-size:0.78rem;color:#4a3570;">' + esc(biz.contact_name) + '</div>' : '') +
-          (biz.contact_email ? '<div style="font-size:0.78rem;color:#4a3570;">' + esc(biz.contact_email) + '</div>' : '') +
-          (biz.contact_phone ? '<div style="font-size:0.78rem;color:#4a3570;">' + esc(biz.contact_phone) + '</div>' : '') +
-        '</div>' +
-        '<table style="width:100%;border-collapse:collapse;margin-bottom:16px;">' +
-          '<thead><tr style="border-bottom:2px solid rgba(87,46,136,0.08);">' +
-            '<th style="text-align:left;padding:8px 0;font-size:0.62rem;font-weight:800;color:#9a90b0;text-transform:uppercase;letter-spacing:0.06em;">Description</th>' +
-            '<th style="text-align:right;padding:8px 0;font-size:0.62rem;font-weight:800;color:#9a90b0;text-transform:uppercase;letter-spacing:0.06em;">Amount</th>' +
-          '</tr></thead>' +
-          '<tbody><tr style="border-bottom:1px solid rgba(87,46,136,0.04);">' +
-            '<td style="padding:10px 0;font-size:0.82rem;color:#1a1530;font-weight:600;">' + esc(itemDesc) + '</td>' +
-            '<td style="padding:10px 0;text-align:right;font-size:0.82rem;color:#1a1530;font-weight:700;">' + amountStr + '</td>' +
-          '</tr></tbody>' +
-          '<tfoot><tr>' +
-            '<td style="padding:12px 0;text-align:right;font-size:0.72rem;font-weight:800;color:#9a90b0;text-transform:uppercase;">Total Due</td>' +
-            '<td style="padding:12px 0;text-align:right;font-size:1.1rem;font-weight:950;color:#572e88;">' + amountStr + '</td>' +
-          '</tr></tfoot>' +
-        '</table>' +
-        '<div style="font-size:0.72rem;color:#9a90b0;line-height:1.5;">Payment is due upon receipt. Please make cheques payable to <strong>' + esc(orgName) + '</strong> or contact us for e-transfer details.</div>' +
       '</div>';
 
     crmModal(
