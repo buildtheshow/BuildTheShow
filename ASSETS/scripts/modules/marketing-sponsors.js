@@ -1104,93 +1104,122 @@
     var flags = computeAttentionFlags(bizAds, bizPkgs, bizDelivs);
     var flagHtml;
     if (!flags.length) {
-      flagHtml = '<div class="spn-crm-flag spn-crm-flag--good">&#10003; All Good</div>';
+      flagHtml = '<div class="spn-crm-flag spn-crm-flag--good"><img src="/ASSETS/Images/Icons/Checklist.svg" class="spn-crm-flag-icon" alt="" /> All Good</div>';
     } else {
-      flagHtml = '<div class="spn-crm-flag spn-crm-flag--bad">&#9873; Needs Follow Up<ul class="spn-crm-flag-reasons">' + flags.map(function (f) { return '<li>' + esc(f) + '</li>'; }).join('') + '</ul></div>';
+      flagHtml = '<div class="spn-crm-flag spn-crm-flag--bad"><img src="/ASSETS/Images/Icons/Notifications.svg" class="spn-crm-flag-icon" alt="" /> Needs Follow Up<ul class="spn-crm-flag-reasons">' + flags.map(function (f) { return '<li>' + esc(f) + '</li>'; }).join('') + '</ul></div>';
     }
 
     var tags = '';
     var ci = 0;
     bizPkgs.forEach(function (p) {
       var col = CRM_TAG_COLORS[ci++ % CRM_TAG_COLORS.length];
-      var sub = p.benefits ? '<span class="spn-crm-tag-sub">Includes ' + esc(p.benefits.split(',')[0].trim()) + '</span>' : '';
-      tags += '<span class="spn-crm-tag" style="background:' + col + '">' + esc(p.tier_name || 'Sponsor') + sub + '</span>';
+      tags += '<span class="spn-crm-tag" style="background:' + col + '">' + esc(p.tier_name || 'Sponsor') + '</span>';
     });
     bizAds.forEach(function (a) {
       var col = CRM_TAG_COLORS[ci++ % CRM_TAG_COLORS.length];
       var sizeObj = (SpnsState.settings.adSizes || []).find(function (s) { return s.id === a.ad_size; });
-      var sizeLabel = sizeObj ? sizeObj.label : (a.ad_size || 'Ad');
+      var sizeLabel = sizeObj ? sizeObj.label : (a.ad_size || a.size_id || a.format || 'Ad');
       var typeLabel = a.ad_type === 'bw' ? 'B&W' : 'Colour';
-      var dimsLabel = sizeObj && sizeObj.dims ? ' (' + sizeObj.dims.replace(/x/i, '" x ') + '")' : '';
       tags += '<span class="spn-crm-tag" style="background:' + col + '">' + esc(sizeLabel + ' ' + typeLabel + ' Ad') + '</span>';
     });
 
-    var contactLine = [biz.contact_name, biz.contact_email, biz.contact_phone].filter(Boolean).join(' &middot; ');
+    var contactLine = [biz.contact_name, biz.contact_email, biz.contact_phone].filter(Boolean).join(' · ');
 
-    // === EXPANDED DETAIL — EVERYTHING ===
-    var fmtDollars = function (cents) { return '$' + ((cents||0)/100).toLocaleString('en-CA', {minimumFractionDigits:2}); };
-    var statusDot = function (ok) { return '<span class="spn-crm-status-dot ' + (ok ? 'spn-crm-status-dot--good' : 'spn-crm-status-dot--bad') + '"></span>'; };
-    var statusRow = function (label, ok, detail) { return '<div class="spn-crm-status-row">' + statusDot(ok) + '<span>' + label + (detail ? ' <span class="spn-crm-file-meta">' + esc(detail) + '</span>' : '') + '</span></div>'; };
+    var fmtD = function (cents) { return '$' + ((cents||0)/100).toLocaleString('en-CA', {minimumFractionDigits:2}); };
 
-    // BOOKINGS — sponsor packages
+    // === NEXT ACTION ===
+    var nextAction = computeNextAction(bizAds, bizPkgs);
+
+    // === BOOKING CARDS ===
     var bookingsHtml = '';
+
     bizPkgs.forEach(function (p) {
       var tierObj = (SpnsState.settings.tiers || []).find(function (t) { return t.label === p.tier_name || t.id === p.tier_id; });
       var bullets = tierObj && tierObj.bullets ? tierObj.bullets : (p.benefits || '');
-      var bulletsList = bullets ? '<ul class="spn-crm-pkg-includes">' + bullets.split('\n').filter(Boolean).map(function (b) { return '<li>' + esc(b.trim()) + '</li>'; }).join('') + '</ul>' : '';
+      var bulletsList = '';
+      if (bullets) {
+        var lines = bullets.split('\n').filter(Boolean);
+        bulletsList = '<div class="spn-crm-card-benefits"><div class="spn-crm-card-benefits-title">What\'s included</div><ul>' +
+          lines.map(function (b) { return '<li>' + esc(b.trim()) + '</li>'; }).join('') + '</ul></div>';
+      }
 
-      bookingsHtml += '<div class="spn-crm-booking-row">' +
-        '<div class="spn-crm-booking-product">' + esc(p.tier_name || 'Sponsor Package') + '</div>' +
-        '<div class="spn-crm-booking-row-head"><span class="spn-crm-booking-amount">' + fmtDollars(p.amount_cents) + '</span></div>' +
-        bulletsList +
-        '<div class="spn-crm-checklist">' +
-          statusRow('Booking ' + (p.booking_status === 'approved' ? 'approved' : 'received'), p.booking_status === 'approved') +
-          statusRow('Invoice sent', !!p.invoice_sent_date, p.invoice_sent_date || '') +
-          (p.invoice_number ? statusRow('Invoice #' + p.invoice_number, true) : '') +
-          statusRow('Payment ' + (p.payment_status === 'paid' ? 'received' : 'outstanding'), p.payment_status === 'paid', p.payment_received_date || '') +
-          (p.payment_amount_cents ? '<div class="spn-crm-status-row"><span class="spn-crm-status-dot spn-crm-status-dot--info"></span><span>Received: ' + fmtDollars(p.payment_amount_cents) + '</span></div>' : '') +
+      var isApproved = p.booking_status === 'approved';
+      var invoiceSent = !!p.invoice_sent_date;
+      var isPaid = p.payment_status === 'paid';
+
+      bookingsHtml += '<div class="spn-crm-card">' +
+        '<div class="spn-crm-card-head">' +
+          '<div class="spn-crm-card-product">' + esc(p.tier_name || 'Sponsor Package') + '</div>' +
+          '<div class="spn-crm-card-price">' + fmtD(p.amount_cents) + '</div>' +
         '</div>' +
-        (p.notes ? '<div class="spn-crm-pkg-meta" style="font-style:italic;">' + esc(p.notes) + '</div>' : '') +
+        bulletsList +
+        '<div class="spn-crm-card-pipeline">' +
+          crmPipelineStep('Booking ' + (isApproved ? 'approved' : 'received'), isApproved, 'MarketingSponsorsModule.crmToggleField(\'sponsor_packages\',\'' + p.id + '\',\'booking_status\',\'' + (isApproved ? 'pending' : 'approved') + '\')') +
+          crmPipelineStep('Invoice sent', invoiceSent, 'MarketingSponsorsModule.crmToggleField(\'sponsor_packages\',\'' + p.id + '\',\'invoice_sent_date\',\'' + (invoiceSent ? '' : new Date().toISOString().slice(0,10)) + '\')', p.invoice_sent_date || '') +
+          (p.invoice_number ? crmPipelineInfo('Invoice #' + p.invoice_number) : '') +
+          crmPipelineStep('Payment ' + (isPaid ? 'received' : 'outstanding'), isPaid, 'MarketingSponsorsModule.crmToggleField(\'sponsor_packages\',\'' + p.id + '\',\'payment_status\',\'' + (isPaid ? 'unpaid' : 'paid') + '\')', p.payment_received_date || '') +
+          (p.payment_amount_cents && !isPaid ? crmPipelineInfo('Received so far: ' + fmtD(p.payment_amount_cents)) : '') +
+        '</div>' +
       '</div>';
     });
 
-    // BOOKINGS — programme ads
     bizAds.forEach(function (a) {
       var sizeObj = (SpnsState.settings.adSizes || []).find(function (s) { return s.id === a.ad_size; });
-      var sizeLabel = sizeObj ? sizeObj.label : (a.ad_size || 'Ad');
+      var sizeLabel = sizeObj ? sizeObj.label : (a.ad_size || a.size_id || a.format || 'Ad');
       var typeLabel = a.ad_type === 'bw' ? 'Black & White' : 'Colour';
       var dimsLabel = sizeObj && sizeObj.dims ? sizeObj.dims.replace(/x/i, '" x ') + '"' : '';
       var artSt = a.artwork_status || 'missing';
       var artOk = artSt === 'approved' || artSt === 'print_ready';
-      var artLabel2 = artOk ? 'Approved' : (artSt === 'received' ? 'Received' : 'Not Received');
+      var artReceived = artSt === 'received' || artOk;
       var approvalSt = a.approval_status || 'pending';
 
-      bookingsHtml += '<div class="spn-crm-booking-row">' +
-        '<div class="spn-crm-booking-product">' + esc(sizeLabel) + ' ' + esc(typeLabel) + ' Ad</div>' +
-        (dimsLabel ? '<div class="spn-crm-booking-dims">' + esc(dimsLabel) + '</div>' : '') +
-        '<div class="spn-crm-booking-row-head"><span class="spn-crm-booking-amount">' + fmtDollars(a.price_cents) + '</span></div>' +
-        '<div class="spn-crm-checklist">' +
-          statusRow('Booking ' + (a.booking_status === 'approved' ? 'approved' : 'received'), a.booking_status === 'approved') +
-          statusRow('Invoice sent', !!a.invoice_sent_date, a.invoice_sent_date || '') +
-          (a.invoice_number ? statusRow('Invoice #' + a.invoice_number, true) : '') +
-          statusRow('Payment ' + (a.payment_status === 'paid' ? 'received' : 'outstanding'), a.payment_status === 'paid', a.payment_received_date || '') +
-          (a.payment_amount_cents ? '<div class="spn-crm-status-row"><span class="spn-crm-status-dot spn-crm-status-dot--info"></span><span>Received: ' + fmtDollars(a.payment_amount_cents) + '</span></div>' : '') +
-          statusRow('Artwork ' + artLabel2, artOk || artSt === 'received') +
-          statusRow('Approval: ' + (approvalSt === 'approved' ? 'Approved' : (approvalSt === 'changes_needed' ? 'Changes needed' : 'Pending')), approvalSt === 'approved') +
+      var isApproved = a.booking_status === 'approved';
+      var invoiceSent = !!a.invoice_sent_date;
+      var isPaid = a.payment_status === 'paid';
+
+      var artworkPreview = '';
+      if (a.artwork_url) {
+        artworkPreview = '<div class="spn-crm-card-artwork"><a href="' + esc(a.artwork_url) + '" target="_blank"><img src="' + esc(a.artwork_url) + '" alt="Artwork" /></a></div>';
+      } else {
+        artworkPreview = '<div class="spn-crm-card-artwork spn-crm-card-artwork--empty"><img src="/ASSETS/Images/Icons/Upload - Poster.svg" alt="" /><span>No artwork uploaded</span></div>';
+      }
+
+      bookingsHtml += '<div class="spn-crm-card">' +
+        '<div class="spn-crm-card-head">' +
+          '<div>' +
+            '<div class="spn-crm-card-product">' + esc(sizeLabel) + ' ' + esc(typeLabel) + ' Ad</div>' +
+            (dimsLabel ? '<div class="spn-crm-card-dims">' + esc(dimsLabel) + '</div>' : '') +
+          '</div>' +
+          '<div class="spn-crm-card-price">' + fmtD(a.price_cents) + '</div>' +
         '</div>' +
-        (a.artwork_url ? '<div class="spn-crm-art-preview"><img src="' + esc(a.artwork_url) + '" alt="' + esc(sizeLabel) + '" /></div>' : '') +
-        (a.notes ? '<div class="spn-crm-pkg-meta" style="font-style:italic;">' + esc(a.notes) + '</div>' : '') +
+        '<div class="spn-crm-card-pipeline">' +
+          crmPipelineStep('Booking ' + (isApproved ? 'approved' : 'received'), isApproved, 'MarketingSponsorsModule.crmToggleField(\'programme_ads\',\'' + a.id + '\',\'booking_status\',\'' + (isApproved ? 'pending' : 'approved') + '\')') +
+          crmPipelineStep('Invoice sent', invoiceSent, 'MarketingSponsorsModule.crmToggleField(\'programme_ads\',\'' + a.id + '\',\'invoice_sent_date\',\'' + (invoiceSent ? '' : new Date().toISOString().slice(0,10)) + '\')', a.invoice_sent_date || '') +
+          (a.invoice_number ? crmPipelineInfo('Invoice #' + a.invoice_number) : '') +
+          crmPipelineStep('Payment ' + (isPaid ? 'received' : 'outstanding'), isPaid, 'MarketingSponsorsModule.crmToggleField(\'programme_ads\',\'' + a.id + '\',\'payment_status\',\'' + (isPaid ? 'unpaid' : 'paid') + '\')', a.payment_received_date || '') +
+          (a.payment_amount_cents && !isPaid ? crmPipelineInfo('Received so far: ' + fmtD(a.payment_amount_cents)) : '') +
+          crmPipelineStep('Artwork ' + (artOk ? 'approved' : artReceived ? 'received' : 'not received'), artReceived, artReceived && !artOk ? 'MarketingSponsorsModule.crmToggleField(\'programme_ads\',\'' + a.id + '\',\'artwork_status\',\'approved\')' : (!artReceived ? 'MarketingSponsorsModule.crmToggleField(\'programme_ads\',\'' + a.id + '\',\'artwork_status\',\'received\')' : null)) +
+          crmPipelineStep('Approval: ' + (approvalSt === 'approved' ? 'approved' : approvalSt === 'changes_needed' ? 'changes needed' : 'pending'), approvalSt === 'approved', 'MarketingSponsorsModule.crmToggleField(\'programme_ads\',\'' + a.id + '\',\'approval_status\',\'' + (approvalSt === 'approved' ? 'pending' : 'approved') + '\')') +
+        '</div>' +
+        artworkPreview +
       '</div>';
     });
-    if (!bookingsHtml) bookingsHtml = '<div class="spn-crm-pkg-meta">No bookings yet</div>';
+    if (!bookingsHtml) bookingsHtml = '<div class="spn-crm-empty-section">No bookings yet</div>';
 
-    // PAYMENT SUMMARY
+    // === PAYMENT SUMMARY ===
     var outstandingCents = totalCents - receivedCents;
-    var payHtml = '<div class="spn-crm-pay-row"><span>Total Booked</span><span>' + fmtDollars(totalCents) + '</span></div>' +
-      '<div class="spn-crm-pay-row"><span>Total Received</span><span>' + fmtDollars(receivedCents) + '</span></div>' +
-      '<div class="spn-crm-pay-row spn-crm-pay-row--total"><span>Outstanding</span><span>' + fmtDollars(outstandingCents) + '</span></div>';
+    var invoiceDetails = '';
+    var allBookings = [].concat(bizPkgs, bizAds);
+    allBookings.forEach(function (b) {
+      if (b.invoice_number) invoiceDetails += '<div class="spn-crm-pay-row spn-crm-pay-row--detail"><span>Invoice #' + esc(b.invoice_number) + '</span><span>' + (b.invoice_sent_date ? new Date(b.invoice_sent_date).toLocaleDateString('en-CA') : '') + '</span></div>';
+      if (b.payment_received_date) invoiceDetails += '<div class="spn-crm-pay-row spn-crm-pay-row--detail"><span>Payment received</span><span>' + new Date(b.payment_received_date).toLocaleDateString('en-CA') + '</span></div>';
+    });
+    var payHtml = '<div class="spn-crm-pay-row"><span>Total Booked</span><span>' + fmtD(totalCents) + '</span></div>' +
+      '<div class="spn-crm-pay-row"><span>Total Received</span><span class="spn-crm-pay-received">' + fmtD(receivedCents) + '</span></div>' +
+      '<div class="spn-crm-pay-row spn-crm-pay-row--total"><span>Outstanding</span><span>' + fmtD(outstandingCents) + '</span></div>' +
+      invoiceDetails;
 
-    // DELIVERABLES — auto-generate from tier benefits if none exist
+    // === DELIVERABLES ===
     var delivHtml = '';
     var hasAutoDelivs = bizDelivs.some(function (d) { return d.auto_generated; });
     if (!hasAutoDelivs && bizPkgs.length && !bizDelivs.length) {
@@ -1202,47 +1231,55 @@
           });
         }
       });
-      delivHtml = '<div class="spn-crm-pkg-meta">Generating deliverables... refresh to see them.</div>';
+      delivHtml = '<div class="spn-crm-empty-section">Generating deliverables... refresh to see them.</div>';
     } else {
       bizDelivs.forEach(function (d) {
         var isDone = d.status === 'done';
         var dueStr = d.due_date ? '<span class="spn-crm-check-due">' + new Date(d.due_date).toLocaleDateString('en-CA') + '</span>' : '';
         delivHtml += '<div class="spn-crm-check-row' + (isDone ? ' done' : '') + '"><input type="checkbox"' + (isDone ? ' checked' : '') + ' onchange="MarketingSponsorsModule.toggleCrmDeliv(\'' + d.id + '\',this.checked)" /><span>' + esc(d.title) + '</span>' + dueStr + '</div>';
       });
-      if (!delivHtml) delivHtml = '<div class="spn-crm-pkg-meta">No deliverables</div>';
+      if (!delivHtml) delivHtml = '<div class="spn-crm-empty-section">No deliverables</div>';
     }
 
-    // NOTES
+    // === CONTACT ===
+    var contactHtml = '';
+    if (biz.contact_name) contactHtml += '<div class="spn-crm-contact-row"><img src="/ASSETS/Images/Icons/organisation-members.svg" class="spn-crm-contact-icon" alt="" /><span>' + esc(biz.contact_name) + '</span></div>';
+    if (biz.contact_email) contactHtml += '<div class="spn-crm-contact-row"><img src="/ASSETS/Images/Icons/navemailtemplate.svg" class="spn-crm-contact-icon" alt="" /><a href="mailto:' + esc(biz.contact_email) + '">' + esc(biz.contact_email) + '</a></div>';
+    if (biz.contact_phone) contactHtml += '<div class="spn-crm-contact-row"><img src="/ASSETS/Images/Icons/Information.svg" class="spn-crm-contact-icon" alt="" /><span>' + esc(biz.contact_phone) + '</span></div>';
+    if (biz.website) contactHtml += '<div class="spn-crm-contact-row"><img src="/ASSETS/Images/Icons/portal.svg" class="spn-crm-contact-icon" alt="" /><a href="' + esc(biz.website) + '" target="_blank">' + esc(biz.website) + '</a></div>';
+
+    // === NOTES ===
     var notesVal = (biz.notes || '').replace(/"/g, '&quot;').replace(/</g, '&lt;');
 
-    // CONTACT
-    var contactHtml = '';
-    if (biz.contact_name) contactHtml += '<div class="spn-crm-status-row"><img src="/ASSETS/Images/Icons/organisation-members.svg" style="width:12px;height:12px;opacity:0.5;" alt="" /><span>' + esc(biz.contact_name) + '</span></div>';
-    if (biz.contact_email) contactHtml += '<div class="spn-crm-status-row"><img src="/ASSETS/Images/Icons/Mail.svg" style="width:12px;height:12px;opacity:0.5;" alt="" /><a href="mailto:' + esc(biz.contact_email) + '">' + esc(biz.contact_email) + '</a></div>';
-    if (biz.contact_phone) contactHtml += '<div class="spn-crm-status-row"><img src="/ASSETS/Images/Icons/Phone.svg" style="width:12px;height:12px;opacity:0.5;" alt="" /><span>' + esc(biz.contact_phone) + '</span></div>';
-    if (biz.website) contactHtml += '<div class="spn-crm-status-row"><img src="/ASSETS/Images/Icons/Link.svg" style="width:12px;height:12px;opacity:0.5;" alt="" /><a href="' + esc(biz.website) + '" target="_blank">' + esc(biz.website) + '</a></div>';
-
-    // Timeline
-    var timelineHtml = '';
+    // === TIMELINE ===
     var events = [];
     events.push({ label: 'Added', date: biz.created_at });
     bizPkgs.forEach(function (p) {
       events.push({ label: (p.tier_name || 'Sponsor') + ' booked', date: p.created_at });
-      if (p.payment_status === 'paid') events.push({ label: 'Sponsor paid', date: p.updated_at || p.created_at });
+      if (p.invoice_sent_date) events.push({ label: 'Invoice sent', date: p.invoice_sent_date });
+      if (p.payment_status === 'paid') events.push({ label: 'Payment received', date: p.payment_received_date || p.updated_at || p.created_at });
     });
     bizAds.forEach(function (a) {
       var sl = (SpnsState.settings.adSizes || []).find(function (s) { return s.id === a.ad_size; });
-      events.push({ label: (sl ? sl.label : a.ad_size || 'Ad') + ' booked', date: a.created_at });
+      var adName = sl ? sl.label : (a.ad_size || a.size_id || a.format || 'Ad');
+      events.push({ label: adName + ' ad booked', date: a.created_at });
+      if (a.invoice_sent_date) events.push({ label: 'Invoice sent', date: a.invoice_sent_date });
+      if (a.payment_status === 'paid') events.push({ label: 'Payment received', date: a.payment_received_date || a.updated_at || a.created_at });
       if (a.artwork_status === 'received' || a.artwork_status === 'approved') events.push({ label: 'Artwork received', date: a.updated_at || a.created_at });
       if (a.artwork_status === 'approved') events.push({ label: 'Artwork approved', date: a.updated_at || a.created_at });
     });
     events.sort(function (a, b) { return new Date(a.date) - new Date(b.date); });
-    events.forEach(function (ev) {
+    var timelineHtml = '';
+    events.forEach(function (ev, idx) {
       var d = ev.date ? new Date(ev.date).toLocaleDateString('en-CA') : '';
-      timelineHtml += '<div class="spn-crm-timeline-item"><span class="spn-crm-timeline-dot"></span><span class="spn-crm-timeline-label">' + esc(ev.label) + '</span><span class="spn-crm-timeline-date">' + esc(d) + '</span></div>';
+      var isLast = idx === events.length - 1;
+      timelineHtml += '<div class="spn-crm-tl-step' + (isLast ? ' spn-crm-tl-step--last' : '') + '">' +
+        '<div class="spn-crm-tl-dot"></div>' +
+        '<div class="spn-crm-tl-content"><span class="spn-crm-tl-label">' + esc(ev.label) + '</span><span class="spn-crm-tl-date">' + esc(d) + '</span></div>' +
+      '</div>';
     });
 
-    // Files section
+    // === FILES ===
     var filesHtml = '';
     var imgExts = ['jpg','jpeg','png','gif','webp','svg'];
     (bizFiles || []).forEach(function (f) {
@@ -1258,7 +1295,7 @@
           '<div class="spn-crm-file-info">' +
             '<span class="spn-crm-file-badge" style="background:' + typeBadgeColor + ';">' + esc(typeLabel) + '</span>' +
             '<div class="spn-crm-file-name">' + esc(f.file_name) + '</div>' +
-            '<div class="spn-crm-file-meta">' + dateStr + (uploadedBy ? ' &middot; ' + uploadedBy : '') + '</div>' +
+            '<div class="spn-crm-file-meta">' + dateStr + (uploadedBy ? ' · ' + uploadedBy : '') + '</div>' +
           '</div>' +
         '</div>';
       } else {
@@ -1267,15 +1304,16 @@
           '<div class="spn-crm-file-info">' +
             '<span class="spn-crm-file-badge" style="background:' + typeBadgeColor + ';">' + esc(typeLabel) + '</span>' +
             '<div class="spn-crm-file-name">' + esc(f.file_name) + '</div>' +
-            '<div class="spn-crm-file-meta">' + dateStr + (uploadedBy ? ' &middot; ' + uploadedBy : '') + '</div>' +
+            '<div class="spn-crm-file-meta">' + dateStr + (uploadedBy ? ' · ' + uploadedBy : '') + '</div>' +
           '</div>' +
         '</div>';
       }
     });
 
+    // === ASSEMBLE ===
     return '<div class="spn-crm-row" id="spn-crm-row-' + biz.id + '">' +
       '<div class="spn-crm-row-header" onclick="MarketingSponsorsModule.toggleCrmRow(\'' + biz.id + '\')">' +
-        '<span class="spn-crm-chevron">&#9654;</span>' +
+        '<span class="spn-crm-chevron"><img src="/ASSETS/Images/Icons/Triangle.svg" alt="" /></span>' +
         '<div><div class="spn-crm-biz-name">' + esc(biz.name) + '</div><div class="spn-crm-biz-contact">' + contactLine + '</div></div>' +
         '<div class="spn-crm-tags">' + (tags || '<span style="font-size:0.68rem;color:#9a90b0;">No bookings</span>') + '</div>' +
         '<div class="spn-crm-amount">' + (totalCents ? '$' + (totalCents/100).toLocaleString('en-CA',{minimumFractionDigits:2}) : '--') + '</div>' +
@@ -1285,42 +1323,114 @@
         '<span></span>' +
       '</div>' +
       '<div class="spn-crm-row-detail">' +
-        '<div class="spn-crm-detail-top">' +
-          '<div class="spn-crm-section">' +
-            '<div class="spn-crm-section-title"><img src="/ASSETS/Images/Icons/Budgeting-Sponsorship.svg" alt="" /> Bookings</div>' +
-            bookingsHtml +
+        (nextAction.html ? '<div class="spn-crm-next-action">' + nextAction.html + '</div>' : '') +
+        '<div class="spn-crm-detail-grid">' +
+          '<div class="spn-crm-detail-primary">' +
+            '<div class="spn-crm-section">' +
+              '<div class="spn-crm-section-head"><img src="/ASSETS/Images/Icons/Budgeting-Sponsorship.svg" alt="" /><span>Bookings</span></div>' +
+              '<div class="spn-crm-cards-stack">' + bookingsHtml + '</div>' +
+            '</div>' +
           '</div>' +
-          '<div class="spn-crm-section">' +
-            '<div class="spn-crm-section-title"><img src="/ASSETS/Images/Icons/organisation-members.svg" alt="" /> Contact</div>' +
-            (contactHtml || '<div class="spn-crm-pkg-meta">No contact details</div>') +
-          '</div>' +
-        '</div>' +
-        '<div class="spn-crm-detail-bottom">' +
-          '<div class="spn-crm-section">' +
-            '<div class="spn-crm-section-title"><img src="/ASSETS/Images/Icons/Budgeting-Fundraising.svg" alt="" /> Payment</div>' +
-            payHtml +
-          '</div>' +
-          '<div class="spn-crm-section">' +
-            '<div class="spn-crm-section-title"><img src="/ASSETS/Images/Icons/Checklist.svg" alt="" /> Deliverables</div>' +
-            delivHtml +
-          '</div>' +
-          '<div class="spn-crm-section spn-crm-notes">' +
-            '<div class="spn-crm-section-title">Notes</div>' +
-            '<textarea onblur="MarketingSponsorsModule.saveCrmNotes(\'' + biz.id + '\')">' + notesVal + '</textarea>' +
-          '</div>' +
-        '</div>' +
-        '<div class="spn-crm-files-section">' +
-          '<div class="spn-crm-section-title"><img src="/ASSETS/Images/Icons/Files.svg" alt="" /> Files' +
-            '<span class="spn-crm-file-count">' + (bizFiles || []).length + ' file' + ((bizFiles || []).length !== 1 ? 's' : '') + '</span>' +
-          '</div>' +
-          (filesHtml || '<div class="spn-crm-pkg-meta">No files uploaded yet</div>') +
-          '<div class="spn-crm-file-grid">' +
-            '<button class="spn-btn spn-btn--ghost spn-btn--sm" onclick="MarketingSponsorsModule.uploadCrmFile(\'' + biz.id + '\')">+ Upload File</button>' +
+          '<div class="spn-crm-detail-sidebar">' +
+            '<div class="spn-crm-section">' +
+              '<div class="spn-crm-section-head"><img src="/ASSETS/Images/Icons/organisation-members.svg" alt="" /><span>Contact</span></div>' +
+              (contactHtml || '<div class="spn-crm-empty-section">No contact details</div>') +
+            '</div>' +
+            '<div class="spn-crm-section">' +
+              '<div class="spn-crm-section-head"><img src="/ASSETS/Images/Icons/Budgeting-Fundraising.svg" alt="" /><span>Payment</span></div>' +
+              '<div class="spn-crm-pay-block">' + payHtml + '</div>' +
+            '</div>' +
+            '<div class="spn-crm-section spn-crm-notes">' +
+              '<div class="spn-crm-section-head"><img src="/ASSETS/Images/Icons/edit-pencil.svg" alt="" /><span>Notes</span></div>' +
+              '<textarea onblur="MarketingSponsorsModule.saveCrmNotes(\'' + biz.id + '\')">' + notesVal + '</textarea>' +
+            '</div>' +
           '</div>' +
         '</div>' +
-        '<div class="spn-crm-timeline">' + timelineHtml + '</div>' +
+        '<div class="spn-crm-detail-full">' +
+          '<div class="spn-crm-section">' +
+            '<div class="spn-crm-section-head"><img src="/ASSETS/Images/Icons/Checklist.svg" alt="" /><span>Deliverables</span></div>' +
+            '<div class="spn-crm-deliverables-grid">' + delivHtml + '</div>' +
+          '</div>' +
+        '</div>' +
+        '<div class="spn-crm-detail-full">' +
+          '<div class="spn-crm-section">' +
+            '<div class="spn-crm-section-head"><img src="/ASSETS/Images/Icons/Files.svg" alt="" /><span>Files</span><span class="spn-crm-file-count">' + (bizFiles || []).length + ' file' + ((bizFiles || []).length !== 1 ? 's' : '') + '</span></div>' +
+            '<div class="spn-crm-file-grid">' +
+              (filesHtml || '<div class="spn-crm-empty-section">No files uploaded yet</div>') +
+              '<button class="spn-crm-upload-btn" onclick="MarketingSponsorsModule.uploadCrmFile(\'' + biz.id + '\')"><img src="/ASSETS/Images/Icons/Upload - Document.svg" alt="" /> Upload File</button>' +
+            '</div>' +
+          '</div>' +
+        '</div>' +
+        '<div class="spn-crm-detail-full spn-crm-timeline-wrap">' +
+          '<div class="spn-crm-section">' +
+            '<div class="spn-crm-section-head"><img src="/ASSETS/Images/Icons/History.svg" alt="" /><span>Activity</span></div>' +
+            '<div class="spn-crm-timeline">' + timelineHtml + '</div>' +
+          '</div>' +
+        '</div>' +
       '</div>' +
     '</div>';
+  }
+
+  function crmPipelineStep(label, done, onclick, detail) {
+    var cls = 'spn-crm-pipe-step' + (done ? ' spn-crm-pipe-step--done' : '');
+    var clickAttr = onclick ? ' onclick="' + onclick + '" style="cursor:pointer;" title="Click to toggle"' : '';
+    var detailHtml = detail ? '<span class="spn-crm-pipe-detail">' + esc(detail) + '</span>' : '';
+    return '<div class="' + cls + '"' + clickAttr + '>' +
+      '<span class="spn-crm-pipe-dot"></span>' +
+      '<span class="spn-crm-pipe-label">' + label + detailHtml + '</span>' +
+    '</div>';
+  }
+
+  function crmPipelineInfo(text) {
+    return '<div class="spn-crm-pipe-step spn-crm-pipe-step--info"><span class="spn-crm-pipe-dot"></span><span class="spn-crm-pipe-label">' + esc(text) + '</span></div>';
+  }
+
+  function computeNextAction(bizAds, bizPkgs) {
+    var allBookings = [].concat(bizPkgs, bizAds);
+    for (var i = 0; i < allBookings.length; i++) {
+      var b = allBookings[i];
+      if (b.booking_status !== 'approved') {
+        var tbl = b.price_cents !== undefined ? 'programme_ads' : 'sponsor_packages';
+        return { html: '<button class="spn-crm-action-btn spn-crm-action-btn--approve" onclick="MarketingSponsorsModule.crmToggleField(\'' + tbl + '\',\'' + b.id + '\',\'booking_status\',\'approved\')"><img src="/ASSETS/Images/Icons/Checklist.svg" alt="" /> Approve Booking</button>' };
+      }
+    }
+    for (var j = 0; j < allBookings.length; j++) {
+      var b2 = allBookings[j];
+      if (!b2.invoice_sent_date) {
+        var tbl2 = b2.price_cents !== undefined ? 'programme_ads' : 'sponsor_packages';
+        return { html: '<button class="spn-crm-action-btn spn-crm-action-btn--invoice" onclick="MarketingSponsorsModule.crmToggleField(\'' + tbl2 + '\',\'' + b2.id + '\',\'invoice_sent_date\',\'' + new Date().toISOString().slice(0,10) + '\')"><img src="/ASSETS/Images/Icons/Financial - Reports.svg" alt="" /> Mark Invoice Sent</button>' };
+      }
+    }
+    for (var k = 0; k < allBookings.length; k++) {
+      var b3 = allBookings[k];
+      if (b3.payment_status !== 'paid') {
+        var tbl3 = b3.price_cents !== undefined ? 'programme_ads' : 'sponsor_packages';
+        return { html: '<button class="spn-crm-action-btn spn-crm-action-btn--payment" onclick="MarketingSponsorsModule.crmToggleField(\'' + tbl3 + '\',\'' + b3.id + '\',\'payment_status\',\'paid\')"><img src="/ASSETS/Images/Icons/Budgeting-Fundraising.svg" alt="" /> Record Payment</button>' };
+      }
+    }
+    for (var m = 0; m < bizAds.length; m++) {
+      var a = bizAds[m];
+      if (a.artwork_status === 'missing') {
+        return { html: '<button class="spn-crm-action-btn spn-crm-action-btn--artwork" onclick="MarketingSponsorsModule.crmToggleField(\'programme_ads\',\'' + a.id + '\',\'artwork_status\',\'received\')"><img src="/ASSETS/Images/Icons/Upload - Poster.svg" alt="" /> Request Artwork</button>' };
+      }
+    }
+    for (var n = 0; n < bizAds.length; n++) {
+      var a2 = bizAds[n];
+      if (a2.artwork_status === 'received' && a2.approval_status !== 'approved') {
+        return { html: '<button class="spn-crm-action-btn spn-crm-action-btn--approve" onclick="MarketingSponsorsModule.crmToggleField(\'programme_ads\',\'' + a2.id + '\',\'approval_status\',\'approved\')"><img src="/ASSETS/Images/Icons/Checklist.svg" alt="" /> Approve Artwork</button>' };
+      }
+    }
+    return { html: '<div class="spn-crm-action-complete"><img src="/ASSETS/Images/Icons/Checklist.svg" alt="" /> All Complete</div>' };
+  }
+
+  function crmToggleField(table, id, field, value) {
+    var data = {};
+    if (field === 'invoice_sent_date' && !value) data[field] = null;
+    else data[field] = value || null;
+    if (field === 'payment_status' && value === 'paid') data.payment_received_date = new Date().toISOString().slice(0,10);
+    dbUpdate(table, id, data).then(function () {
+      loadShowSponsorsCRM();
+    }).catch(function (e) { alert('Could not update: ' + e.message); });
   }
 
   function computeAttentionFlags(bizAds, bizPkgs, bizDelivs) {
@@ -3282,5 +3392,6 @@
     saveCrmNotes: saveCrmNotes,
     toggleCrmDeliv: toggleCrmDeliv,
     uploadCrmFile: uploadCrmFile,
+    crmToggleField: crmToggleField,
   };
 })();
