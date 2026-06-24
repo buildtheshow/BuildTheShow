@@ -1003,6 +1003,12 @@
         if (s.tiers && s.tiers.length) SpnsState.settings.tiers = s.tiers;
       }
       SpnsState.files = results[5] || [];
+      if (!SpnsState.prodMeta) {
+        publicPageMeta().then(function (meta) {
+          SpnsState.prodMeta = meta && meta.production || {};
+          SpnsState.orgData = meta && meta.organization || {};
+        }).catch(function () {});
+      }
       hydrateShowSponsorsCRM();
     }).catch(function (e) {
       console.error('[BTS CRM] load failed', e);
@@ -1201,10 +1207,11 @@
         bulletsList +
         '<div class="spn-crm-card-pipeline">' +
           crmPipelineStep('Booking ' + (isApproved ? 'approved' : 'received'), isApproved, 'MarketingSponsorsModule.crmToggleField(\'sponsor_packages\',\'' + p.id + '\',\'booking_status\',\'' + (isApproved ? 'pending' : 'approved') + '\')') +
-          crmPipelineStep('Invoice sent', invoiceSent, 'MarketingSponsorsModule.crmToggleField(\'sponsor_packages\',\'' + p.id + '\',\'invoice_sent_date\',\'' + (invoiceSent ? '' : new Date().toISOString().slice(0,10)) + '\')', p.invoice_sent_date || '') +
+          crmPipelineStep('Invoice sent', invoiceSent, invoiceSent ? null : 'MarketingSponsorsModule.crmInvoicePopup(\'sponsor_packages\',\'' + p.id + '\')', p.invoice_sent_date || '') +
           (p.invoice_number ? crmPipelineInfo('Invoice #' + p.invoice_number) : '') +
-          crmPipelineStep('Payment ' + (isPaid ? 'received' : 'outstanding'), isPaid, 'MarketingSponsorsModule.crmToggleField(\'sponsor_packages\',\'' + p.id + '\',\'payment_status\',\'' + (isPaid ? 'unpaid' : 'paid') + '\')', p.payment_received_date || '') +
+          crmPipelineStep('Payment ' + (isPaid ? 'received' : 'outstanding'), isPaid, isPaid ? null : 'MarketingSponsorsModule.crmPaymentPopup(\'sponsor_packages\',\'' + p.id + '\')', p.payment_received_date || '') +
           (p.payment_amount_cents && !isPaid ? crmPipelineInfo('Received so far: ' + fmtD(p.payment_amount_cents)) : '') +
+          (p.payment_method ? crmPipelineInfo('Method: ' + p.payment_method) : '') +
         '</div>' +
         crmBookingDetails(p) +
       '</div>';
@@ -1242,11 +1249,12 @@
         '</div>' +
         '<div class="spn-crm-card-pipeline">' +
           crmPipelineStep('Booking ' + (isApproved ? 'approved' : 'received'), isApproved, 'MarketingSponsorsModule.crmToggleField(\'programme_ads\',\'' + a.id + '\',\'booking_status\',\'' + (isApproved ? 'pending' : 'approved') + '\')') +
-          crmPipelineStep('Invoice sent', invoiceSent, 'MarketingSponsorsModule.crmToggleField(\'programme_ads\',\'' + a.id + '\',\'invoice_sent_date\',\'' + (invoiceSent ? '' : new Date().toISOString().slice(0,10)) + '\')', a.invoice_sent_date || '') +
+          crmPipelineStep('Invoice sent', invoiceSent, invoiceSent ? null : 'MarketingSponsorsModule.crmInvoicePopup(\'programme_ads\',\'' + a.id + '\')', a.invoice_sent_date || '') +
           (a.invoice_number ? crmPipelineInfo('Invoice #' + a.invoice_number) : '') +
-          crmPipelineStep('Payment ' + (isPaid ? 'received' : 'outstanding'), isPaid, 'MarketingSponsorsModule.crmToggleField(\'programme_ads\',\'' + a.id + '\',\'payment_status\',\'' + (isPaid ? 'unpaid' : 'paid') + '\')', a.payment_received_date || '') +
+          crmPipelineStep('Payment ' + (isPaid ? 'received' : 'outstanding'), isPaid, isPaid ? null : 'MarketingSponsorsModule.crmPaymentPopup(\'programme_ads\',\'' + a.id + '\')', a.payment_received_date || '') +
           (a.payment_amount_cents && !isPaid ? crmPipelineInfo('Received so far: ' + fmtD(a.payment_amount_cents)) : '') +
-          crmPipelineStep('Artwork ' + (artOk ? 'approved' : artReceived ? 'received' : 'not received'), artReceived, artReceived && !artOk ? 'MarketingSponsorsModule.crmToggleField(\'programme_ads\',\'' + a.id + '\',\'artwork_status\',\'approved\')' : (!artReceived ? 'MarketingSponsorsModule.crmToggleField(\'programme_ads\',\'' + a.id + '\',\'artwork_status\',\'received\')' : null)) +
+          (a.payment_method ? crmPipelineInfo('Method: ' + a.payment_method) : '') +
+          crmPipelineStep('Artwork ' + (artOk ? 'approved' : artReceived ? 'received' : 'not received'), artReceived, !artReceived ? 'MarketingSponsorsModule.crmArtworkRequestPopup(\'' + a.id + '\')' : (artReceived && !artOk ? 'MarketingSponsorsModule.crmToggleField(\'programme_ads\',\'' + a.id + '\',\'artwork_status\',\'approved\')' : null)) +
           crmPipelineStep('Approval: ' + (approvalSt === 'approved' ? 'approved' : approvalSt === 'changes_needed' ? 'changes needed' : 'pending'), approvalSt === 'approved', 'MarketingSponsorsModule.crmToggleField(\'programme_ads\',\'' + a.id + '\',\'approval_status\',\'' + (approvalSt === 'approved' ? 'pending' : 'approved') + '\')') +
         '</div>' +
         crmBookingDetails(a) +
@@ -1466,20 +1474,20 @@
       var b2 = allBookings[j];
       if (!b2.invoice_sent_date) {
         var tbl2 = b2.price_cents !== undefined ? 'programme_ads' : 'sponsor_packages';
-        return { html: '<button class="spn-crm-action-btn spn-crm-action-btn--invoice" onclick="MarketingSponsorsModule.crmToggleField(\'' + tbl2 + '\',\'' + b2.id + '\',\'invoice_sent_date\',\'' + new Date().toISOString().slice(0,10) + '\')"><img src="/ASSETS/Images/Icons/Financial - Reports.svg" alt="" /> Mark Invoice Sent</button>' };
+        return { html: '<button class="spn-crm-action-btn spn-crm-action-btn--invoice" onclick="MarketingSponsorsModule.crmInvoicePopup(\'' + tbl2 + '\',\'' + b2.id + '\')"><img src="/ASSETS/Images/Icons/Financial - Reports.svg" alt="" /> Send Invoice</button>' };
       }
     }
     for (var k = 0; k < allBookings.length; k++) {
       var b3 = allBookings[k];
       if (b3.payment_status !== 'paid') {
         var tbl3 = b3.price_cents !== undefined ? 'programme_ads' : 'sponsor_packages';
-        return { html: '<button class="spn-crm-action-btn spn-crm-action-btn--payment" onclick="MarketingSponsorsModule.crmToggleField(\'' + tbl3 + '\',\'' + b3.id + '\',\'payment_status\',\'paid\')"><img src="/ASSETS/Images/Icons/Budgeting-Fundraising.svg" alt="" /> Record Payment</button>' };
+        return { html: '<button class="spn-crm-action-btn spn-crm-action-btn--payment" onclick="MarketingSponsorsModule.crmPaymentPopup(\'' + tbl3 + '\',\'' + b3.id + '\')"><img src="/ASSETS/Images/Icons/Budgeting-Fundraising.svg" alt="" /> Record Payment</button>' };
       }
     }
     for (var m = 0; m < bizAds.length; m++) {
       var a = bizAds[m];
       if (a.artwork_status === 'missing') {
-        return { html: '<button class="spn-crm-action-btn spn-crm-action-btn--artwork" onclick="MarketingSponsorsModule.crmToggleField(\'programme_ads\',\'' + a.id + '\',\'artwork_status\',\'received\')"><img src="/ASSETS/Images/Icons/Upload - Poster.svg" alt="" /> Request Artwork</button>' };
+        return { html: '<button class="spn-crm-action-btn spn-crm-action-btn--artwork" onclick="MarketingSponsorsModule.crmArtworkRequestPopup(\'' + a.id + '\')"><img src="/ASSETS/Images/Icons/Upload - Poster.svg" alt="" /> Request Artwork</button>' };
       }
     }
     for (var n = 0; n < bizAds.length; n++) {
@@ -1499,6 +1507,275 @@
     dbUpdate(table, id, data).then(function () {
       loadShowSponsorsCRM();
     }).catch(function (e) { alert('Could not update: ' + e.message); });
+  }
+
+  // ── CRM MODALS ────────────────────────────────────────────────────────────
+
+  function crmModal(html) {
+    var existing = document.getElementById('spn-crm-modal');
+    if (existing) existing.remove();
+    var overlay = document.createElement('div');
+    overlay.id = 'spn-crm-modal';
+    overlay.className = 'spn-crm-modal-overlay';
+    overlay.innerHTML = '<div class="spn-crm-modal-box">' + html + '</div>';
+    overlay.addEventListener('click', function (e) { if (e.target === overlay) crmCloseModal(); });
+    document.body.appendChild(overlay);
+  }
+
+  function crmCloseModal() {
+    var el = document.getElementById('spn-crm-modal');
+    if (el) el.remove();
+  }
+
+  function crmSendEmail(to, toName, subject, bodyHtml) {
+    return fetch(SUPABASE_URL + '/functions/v1/send-email', {
+      method: 'POST',
+      headers: sponsorHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({
+        production_id: SpnsState.prodId,
+        category: 'general',
+        trigger: 'general',
+        email: to,
+        name: toName,
+        reviewed_subject: subject,
+        reviewed_body: bodyHtml,
+      }),
+    });
+  }
+
+  // ── INVOICE MODAL ─────────────────────────────────────────────────────────
+
+  function crmInvoicePopup(table, id) {
+    var booking = (table === 'programme_ads' ? SpnsState.ads : SpnsState.packages).find(function (b) { return b.id === id; });
+    if (!booking) return;
+    var biz = SpnsState.businesses.find(function (b) { return b.id === booking.business_id; });
+    if (!biz) return;
+
+    var prod = SpnsState.prodMeta || {};
+    var org = SpnsState.orgData || {};
+    var orgName = org.name || 'Production';
+    var showName = prod.title || '';
+    var today = new Date().toISOString().slice(0, 10);
+    var invNum = booking.invoice_number || ('INV-' + today.replace(/-/g, '') + '-' + id.slice(0, 4).toUpperCase());
+
+    var itemDesc = '';
+    var amount = 0;
+    if (table === 'programme_ads') {
+      var sz = crmAdSizeLabel(booking);
+      var tp = crmAdTypeLabel(booking, sz);
+      itemDesc = sz.label + ' ' + tp + ' Programme Ad' + (sz.dims ? ' (' + sz.dims + ')' : '');
+      amount = booking.price_cents || 0;
+    } else {
+      itemDesc = (booking.tier_name || 'Sponsor Package');
+      amount = booking.amount_cents || 0;
+    }
+    var amountStr = '$' + (amount / 100).toLocaleString('en-CA', { minimumFractionDigits: 2 });
+
+    var logoHtml = org.logo_url ? '<img src="' + esc(org.logo_url) + '" style="max-height:50px;max-width:160px;" alt="" />' : '';
+
+    var invoiceHtml =
+      '<div id="spn-crm-invoice-body">' +
+        '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:24px;">' +
+          '<div>' + logoHtml + '<div style="font-weight:900;font-size:1rem;color:#1a1530;margin-top:6px;">' + esc(orgName) + '</div>' +
+            (showName ? '<div style="font-size:0.75rem;color:#9a90b0;">' + esc(showName) + '</div>' : '') +
+          '</div>' +
+          '<div style="text-align:right;">' +
+            '<div style="font-size:1.3rem;font-weight:950;color:#572e88;letter-spacing:0.02em;">INVOICE</div>' +
+            '<div style="font-size:0.72rem;color:#9a90b0;margin-top:4px;">#' + esc(invNum) + '</div>' +
+            '<div style="font-size:0.72rem;color:#9a90b0;">Date: ' + esc(today) + '</div>' +
+          '</div>' +
+        '</div>' +
+        '<div style="background:rgba(87,46,136,0.03);border-radius:8px;padding:12px 14px;margin-bottom:16px;">' +
+          '<div style="font-size:0.58rem;font-weight:800;color:#9a90b0;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:4px;">Bill to</div>' +
+          '<div style="font-weight:800;color:#1a1530;">' + esc(biz.name) + '</div>' +
+          (biz.contact_name ? '<div style="font-size:0.78rem;color:#4a3570;">' + esc(biz.contact_name) + '</div>' : '') +
+          (biz.contact_email ? '<div style="font-size:0.78rem;color:#4a3570;">' + esc(biz.contact_email) + '</div>' : '') +
+          (biz.contact_phone ? '<div style="font-size:0.78rem;color:#4a3570;">' + esc(biz.contact_phone) + '</div>' : '') +
+        '</div>' +
+        '<table style="width:100%;border-collapse:collapse;margin-bottom:16px;">' +
+          '<thead><tr style="border-bottom:2px solid rgba(87,46,136,0.08);">' +
+            '<th style="text-align:left;padding:8px 0;font-size:0.62rem;font-weight:800;color:#9a90b0;text-transform:uppercase;letter-spacing:0.06em;">Description</th>' +
+            '<th style="text-align:right;padding:8px 0;font-size:0.62rem;font-weight:800;color:#9a90b0;text-transform:uppercase;letter-spacing:0.06em;">Amount</th>' +
+          '</tr></thead>' +
+          '<tbody><tr style="border-bottom:1px solid rgba(87,46,136,0.04);">' +
+            '<td style="padding:10px 0;font-size:0.82rem;color:#1a1530;font-weight:600;">' + esc(itemDesc) + '</td>' +
+            '<td style="padding:10px 0;text-align:right;font-size:0.82rem;color:#1a1530;font-weight:700;">' + amountStr + '</td>' +
+          '</tr></tbody>' +
+          '<tfoot><tr>' +
+            '<td style="padding:12px 0;text-align:right;font-size:0.72rem;font-weight:800;color:#9a90b0;text-transform:uppercase;">Total Due</td>' +
+            '<td style="padding:12px 0;text-align:right;font-size:1.1rem;font-weight:950;color:#572e88;">' + amountStr + '</td>' +
+          '</tr></tfoot>' +
+        '</table>' +
+        '<div style="font-size:0.72rem;color:#9a90b0;line-height:1.5;">Payment is due upon receipt. Please make cheques payable to <strong>' + esc(orgName) + '</strong> or contact us for e-transfer details.</div>' +
+      '</div>';
+
+    crmModal(
+      '<div class="spn-crm-modal-header">Invoice Preview</div>' +
+      '<div class="spn-crm-modal-body">' + invoiceHtml + '</div>' +
+      '<div class="spn-crm-modal-footer">' +
+        '<button class="spn-crm-modal-btn spn-crm-modal-btn--ghost" onclick="MarketingSponsorsModule.crmCloseModal()">Cancel</button>' +
+        '<button class="spn-crm-modal-btn spn-crm-modal-btn--primary" id="spn-crm-send-invoice" onclick="MarketingSponsorsModule.crmSendInvoice(\'' + esc(table) + '\',\'' + esc(id) + '\',\'' + esc(invNum) + '\')">Send Invoice to ' + esc(biz.contact_name || biz.name) + '</button>' +
+      '</div>'
+    );
+  }
+
+  function crmSendInvoice(table, id, invNum) {
+    var booking = (table === 'programme_ads' ? SpnsState.ads : SpnsState.packages).find(function (b) { return b.id === id; });
+    if (!booking) return;
+    var biz = SpnsState.businesses.find(function (b) { return b.id === booking.business_id; });
+    if (!biz || !biz.contact_email) { alert('No email address on file for this business.'); return; }
+
+    var btn = document.getElementById('spn-crm-send-invoice');
+    if (btn) { btn.disabled = true; btn.textContent = 'Sending...'; }
+
+    var invoiceBody = document.getElementById('spn-crm-invoice-body');
+    var html = invoiceBody ? invoiceBody.innerHTML : '';
+
+    var prod = SpnsState.prodMeta || {};
+    var org = SpnsState.orgData || {};
+    var showName = prod.title || 'the production';
+    var subject = 'Invoice #' + invNum + ' from ' + (org.name || 'Build The Show') + ' - ' + showName;
+
+    var today = new Date().toISOString().slice(0, 10);
+    crmSendEmail(biz.contact_email, biz.contact_name || biz.name, subject, html).then(function () {
+      return dbUpdate(table, id, { invoice_number: invNum, invoice_sent_date: today });
+    }).then(function () {
+      crmCloseModal();
+      loadShowSponsorsCRM();
+      sponsorNotify('Invoice sent to ' + biz.contact_email);
+    }).catch(function (e) {
+      alert('Failed to send invoice: ' + e.message);
+      if (btn) { btn.disabled = false; btn.textContent = 'Retry'; }
+    });
+  }
+
+  // ── PAYMENT MODAL ─────────────────────────────────────────────────────────
+
+  function crmPaymentPopup(table, id) {
+    var booking = (table === 'programme_ads' ? SpnsState.ads : SpnsState.packages).find(function (b) { return b.id === id; });
+    if (!booking) return;
+    var biz = SpnsState.businesses.find(function (b) { return b.id === booking.business_id; });
+    var totalCents = table === 'programme_ads' ? (booking.price_cents || 0) : (booking.amount_cents || 0);
+    var alreadyPaid = booking.payment_amount_cents || 0;
+    var owing = totalCents - alreadyPaid;
+    var today = new Date().toISOString().slice(0, 10);
+
+    crmModal(
+      '<div class="spn-crm-modal-header">Record Payment</div>' +
+      '<div class="spn-crm-modal-body">' +
+        '<div style="margin-bottom:12px;font-size:0.82rem;color:#4a3570;">Recording payment for <strong>' + esc(biz ? biz.name : '') + '</strong></div>' +
+        '<div style="display:flex;gap:12px;margin-bottom:12px;">' +
+          '<div style="flex:1;background:rgba(87,46,136,0.03);border-radius:8px;padding:10px 12px;text-align:center;">' +
+            '<div style="font-size:0.55rem;font-weight:800;color:#9a90b0;text-transform:uppercase;">Total</div>' +
+            '<div style="font-size:1rem;font-weight:950;color:#1a1530;">$' + (totalCents/100).toFixed(2) + '</div>' +
+          '</div>' +
+          '<div style="flex:1;background:rgba(118,158,123,0.08);border-radius:8px;padding:10px 12px;text-align:center;">' +
+            '<div style="font-size:0.55rem;font-weight:800;color:#9a90b0;text-transform:uppercase;">Already Paid</div>' +
+            '<div style="font-size:1rem;font-weight:950;color:#769e7b;">$' + (alreadyPaid/100).toFixed(2) + '</div>' +
+          '</div>' +
+          '<div style="flex:1;background:rgba(209,82,61,0.06);border-radius:8px;padding:10px 12px;text-align:center;">' +
+            '<div style="font-size:0.55rem;font-weight:800;color:#9a90b0;text-transform:uppercase;">Owing</div>' +
+            '<div style="font-size:1rem;font-weight:950;color:#d1523d;">$' + (owing/100).toFixed(2) + '</div>' +
+          '</div>' +
+        '</div>' +
+        '<div class="spn-crm-modal-field"><label>Amount received</label><input type="number" id="spn-crm-pay-amount" step="0.01" min="0" value="' + (owing/100).toFixed(2) + '" /></div>' +
+        '<div class="spn-crm-modal-field"><label>Date received</label><input type="date" id="spn-crm-pay-date" value="' + today + '" /></div>' +
+        '<div class="spn-crm-modal-field"><label>Method</label><select id="spn-crm-pay-method"><option value="etransfer">E-transfer</option><option value="cheque">Cheque</option><option value="cash">Cash</option><option value="card">Credit/debit card</option><option value="other">Other</option></select></div>' +
+      '</div>' +
+      '<div class="spn-crm-modal-footer">' +
+        '<button class="spn-crm-modal-btn spn-crm-modal-btn--ghost" onclick="MarketingSponsorsModule.crmCloseModal()">Cancel</button>' +
+        '<button class="spn-crm-modal-btn spn-crm-modal-btn--primary" onclick="MarketingSponsorsModule.crmSavePayment(\'' + esc(table) + '\',\'' + esc(id) + '\')">Record Payment</button>' +
+      '</div>'
+    );
+  }
+
+  function crmSavePayment(table, id) {
+    var amountEl = document.getElementById('spn-crm-pay-amount');
+    var dateEl = document.getElementById('spn-crm-pay-date');
+    var methodEl = document.getElementById('spn-crm-pay-method');
+    var amountCents = Math.round(Number(amountEl.value) * 100);
+    if (!amountCents || amountCents <= 0) { alert('Please enter an amount.'); return; }
+
+    var booking = (table === 'programme_ads' ? SpnsState.ads : SpnsState.packages).find(function (b) { return b.id === id; });
+    var totalCents = table === 'programme_ads' ? (booking.price_cents || 0) : (booking.amount_cents || 0);
+    var already = booking.payment_amount_cents || 0;
+    var newTotal = already + amountCents;
+    var isPaidInFull = newTotal >= totalCents;
+
+    var data = {
+      payment_amount_cents: newTotal,
+      payment_received_date: dateEl.value,
+      payment_method: methodEl.value,
+    };
+    if (isPaidInFull) data.payment_status = 'paid';
+
+    dbUpdate(table, id, data).then(function () {
+      crmCloseModal();
+      loadShowSponsorsCRM();
+      sponsorNotify(isPaidInFull ? 'Paid in full.' : 'Partial payment recorded.');
+    }).catch(function (e) { alert('Could not save: ' + e.message); });
+  }
+
+  // ── ARTWORK REQUEST MODAL ─────────────────────────────────────────────────
+
+  function crmArtworkRequestPopup(adId) {
+    var ad = SpnsState.ads.find(function (a) { return a.id === adId; });
+    if (!ad) return;
+    var biz = SpnsState.businesses.find(function (b) { return b.id === ad.business_id; });
+    if (!biz) return;
+
+    var sz = crmAdSizeLabel(ad);
+    var tp = crmAdTypeLabel(ad, sz);
+    var prod = SpnsState.prodMeta || {};
+    var org = SpnsState.orgData || {};
+    var showName = prod.title || 'the production';
+    var deadlines = SpnsState.settings.deadlines || {};
+    var artDeadline = deadlines.artwork || '';
+
+    var defaultMsg = 'Hi ' + esc(biz.contact_name || '') + ',\n\n' +
+      'Thank you for booking a ' + sz.label + ' ' + tp + ' ad in the ' + showName + ' programme.\n\n' +
+      'We need your artwork to be print-ready at ' + (sz.dims || 'the specified dimensions') + '.\n' +
+      'Accepted formats: PDF, PNG, JPG, or AI.\n' +
+      (artDeadline ? 'Deadline: ' + artDeadline + '\n' : '') +
+      '\nPlease reply to this email with your artwork attached, or upload it through our sponsor page.\n\n' +
+      'Thank you,\n' + (org.name || '');
+
+    crmModal(
+      '<div class="spn-crm-modal-header">Request Artwork</div>' +
+      '<div class="spn-crm-modal-body">' +
+        '<div style="margin-bottom:8px;font-size:0.78rem;color:#4a3570;">Sending to <strong>' + esc(biz.contact_email || 'no email on file') + '</strong></div>' +
+        '<div class="spn-crm-modal-field"><label>Subject</label><input type="text" id="spn-crm-art-subject" value="Artwork needed for your ' + esc(sz.label) + ' ad - ' + esc(showName) + '" /></div>' +
+        '<div class="spn-crm-modal-field"><label>Message</label><textarea id="spn-crm-art-message" rows="10">' + defaultMsg.replace(/</g, '&lt;') + '</textarea></div>' +
+      '</div>' +
+      '<div class="spn-crm-modal-footer">' +
+        '<button class="spn-crm-modal-btn spn-crm-modal-btn--ghost" onclick="MarketingSponsorsModule.crmCloseModal()">Cancel</button>' +
+        '<button class="spn-crm-modal-btn spn-crm-modal-btn--primary" id="spn-crm-send-art" onclick="MarketingSponsorsModule.crmSendArtworkRequest(\'' + esc(adId) + '\')">Send Request</button>' +
+      '</div>'
+    );
+  }
+
+  function crmSendArtworkRequest(adId) {
+    var ad = SpnsState.ads.find(function (a) { return a.id === adId; });
+    if (!ad) return;
+    var biz = SpnsState.businesses.find(function (b) { return b.id === ad.business_id; });
+    if (!biz || !biz.contact_email) { alert('No email address on file.'); return; }
+
+    var btn = document.getElementById('spn-crm-send-art');
+    if (btn) { btn.disabled = true; btn.textContent = 'Sending...'; }
+
+    var subject = document.getElementById('spn-crm-art-subject').value;
+    var message = document.getElementById('spn-crm-art-message').value;
+    var htmlBody = '<div style="font-family:sans-serif;font-size:14px;color:#1a1530;line-height:1.6;white-space:pre-wrap;">' + esc(message) + '</div>';
+
+    crmSendEmail(biz.contact_email, biz.contact_name || biz.name, subject, htmlBody).then(function () {
+      dbUpdate('programme_ads', adId, { artwork_status: 'missing' });
+      crmCloseModal();
+      loadShowSponsorsCRM();
+      sponsorNotify('Artwork request sent to ' + biz.contact_email);
+    }).catch(function (e) {
+      alert('Failed to send: ' + e.message);
+      if (btn) { btn.disabled = false; btn.textContent = 'Retry'; }
+    });
   }
 
   function computeAttentionFlags(bizAds, bizPkgs, bizDelivs) {
@@ -3461,5 +3738,12 @@
     toggleCrmDeliv: toggleCrmDeliv,
     uploadCrmFile: uploadCrmFile,
     crmToggleField: crmToggleField,
+    crmCloseModal: crmCloseModal,
+    crmInvoicePopup: crmInvoicePopup,
+    crmSendInvoice: crmSendInvoice,
+    crmPaymentPopup: crmPaymentPopup,
+    crmSavePayment: crmSavePayment,
+    crmArtworkRequestPopup: crmArtworkRequestPopup,
+    crmSendArtworkRequest: crmSendArtworkRequest,
   };
 })();
