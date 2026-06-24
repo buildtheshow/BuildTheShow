@@ -1089,6 +1089,22 @@
     return { label: label, dims: '', obj: null };
   }
 
+  function crmBookingDetails(booking) {
+    var html = '';
+    var ad = booking.artwork_data;
+    if (ad && typeof ad === 'object') {
+      var artStatus = ad.status === 'ready' ? 'Artwork provided' : (ad.status === 'help' ? 'Needs artwork designed' : (ad.status === 'later' ? 'Will send later' : ''));
+      if (artStatus) html += '<div class="spn-crm-detail-row"><span class="spn-crm-detail-label">Artwork</span><span>' + esc(artStatus) + '</span></div>';
+      if (ad.ad_type) html += '<div class="spn-crm-detail-row"><span class="spn-crm-detail-label">Business type</span><span>' + esc(ad.ad_type) + '</span></div>';
+      if (ad.about) html += '<div class="spn-crm-detail-row"><span class="spn-crm-detail-label">About</span><span>' + esc(ad.about) + '</span></div>';
+      if (ad.include && ad.include.length) html += '<div class="spn-crm-detail-row"><span class="spn-crm-detail-label">Include</span><span>' + ad.include.map(esc).join(', ') + '</span></div>';
+      if (ad.extra_notes) html += '<div class="spn-crm-detail-row"><span class="spn-crm-detail-label">Design notes</span><span>' + esc(ad.extra_notes) + '</span></div>';
+    }
+    if (booking.notes) html += '<div class="spn-crm-detail-row"><span class="spn-crm-detail-label">Notes</span><span>' + esc(booking.notes) + '</span></div>';
+    if (booking.created_at) html += '<div class="spn-crm-detail-row"><span class="spn-crm-detail-label">Submitted</span><span>' + new Date(booking.created_at).toLocaleDateString('en-CA') + '</span></div>';
+    return html ? '<div class="spn-crm-card-details-block">' + html + '</div>' : '';
+  }
+
   function crmAdTypeLabel(a, sz) {
     if (a.ad_type === 'bw') return 'Black & White';
     if (a.ad_type === 'colour') return 'Colour';
@@ -1190,6 +1206,7 @@
           crmPipelineStep('Payment ' + (isPaid ? 'received' : 'outstanding'), isPaid, 'MarketingSponsorsModule.crmToggleField(\'sponsor_packages\',\'' + p.id + '\',\'payment_status\',\'' + (isPaid ? 'unpaid' : 'paid') + '\')', p.payment_received_date || '') +
           (p.payment_amount_cents && !isPaid ? crmPipelineInfo('Received so far: ' + fmtD(p.payment_amount_cents)) : '') +
         '</div>' +
+        crmBookingDetails(p) +
       '</div>';
     });
 
@@ -1232,6 +1249,7 @@
           crmPipelineStep('Artwork ' + (artOk ? 'approved' : artReceived ? 'received' : 'not received'), artReceived, artReceived && !artOk ? 'MarketingSponsorsModule.crmToggleField(\'programme_ads\',\'' + a.id + '\',\'artwork_status\',\'approved\')' : (!artReceived ? 'MarketingSponsorsModule.crmToggleField(\'programme_ads\',\'' + a.id + '\',\'artwork_status\',\'received\')' : null)) +
           crmPipelineStep('Approval: ' + (approvalSt === 'approved' ? 'approved' : approvalSt === 'changes_needed' ? 'changes needed' : 'pending'), approvalSt === 'approved', 'MarketingSponsorsModule.crmToggleField(\'programme_ads\',\'' + a.id + '\',\'approval_status\',\'' + (approvalSt === 'approved' ? 'pending' : 'approved') + '\')') +
         '</div>' +
+        crmBookingDetails(a) +
         artworkPreview +
       '</div>';
     });
