@@ -1070,6 +1070,15 @@
       }).join('');
   }
 
+  var AD_SIZE_LABELS = { full: 'Full Page', half: 'Half Page', quarter: 'Quarter Page', card: 'Card', full_page: 'Full Page', half_page: 'Half Page', quarter_page: 'Quarter Page', eighth: 'Eighth Page' };
+  function crmAdSizeLabel(a) {
+    var sizeObj = (SpnsState.settings.adSizes || []).find(function (s) { return s.id === a.ad_size; });
+    if (sizeObj) return { label: sizeObj.label, dims: sizeObj.dims ? sizeObj.dims.replace(/x/i, '" x ') + '"' : '' };
+    var raw = a.ad_size || a.size_id || a.format || '';
+    var mapped = AD_SIZE_LABELS[raw.toLowerCase()] || (raw.charAt(0).toUpperCase() + raw.slice(1));
+    return { label: mapped || 'Ad', dims: '' };
+  }
+
   function renderCrmBusinessRow(biz, bizAds, bizPkgs, bizDelivs, bizFiles) {
     var totalCents = 0, receivedCents = 0;
     var allArtApproved = true, anyArtMissing = false, anyArtReceived = false;
@@ -1117,10 +1126,9 @@
     });
     bizAds.forEach(function (a) {
       var col = CRM_TAG_COLORS[ci++ % CRM_TAG_COLORS.length];
-      var sizeObj = (SpnsState.settings.adSizes || []).find(function (s) { return s.id === a.ad_size; });
-      var sizeLabel = sizeObj ? sizeObj.label : (a.ad_size || a.size_id || a.format || 'Ad');
+      var sz = crmAdSizeLabel(a);
       var typeLabel = a.ad_type === 'bw' ? 'B&W' : 'Colour';
-      tags += '<span class="spn-crm-tag" style="background:' + col + '">' + esc(sizeLabel + ' ' + typeLabel + ' Ad') + '</span>';
+      tags += '<span class="spn-crm-tag" style="background:' + col + '">' + esc(sz.label + ' ' + typeLabel + ' Ad') + '</span>';
     });
 
     var contactLine = [biz.contact_name, biz.contact_email, biz.contact_phone].filter(Boolean).join(' · ');
@@ -1164,10 +1172,10 @@
     });
 
     bizAds.forEach(function (a) {
-      var sizeObj = (SpnsState.settings.adSizes || []).find(function (s) { return s.id === a.ad_size; });
-      var sizeLabel = sizeObj ? sizeObj.label : (a.ad_size || a.size_id || a.format || 'Ad');
+      var sz = crmAdSizeLabel(a);
+      var sizeLabel = sz.label;
       var typeLabel = a.ad_type === 'bw' ? 'Black & White' : 'Colour';
-      var dimsLabel = sizeObj && sizeObj.dims ? sizeObj.dims.replace(/x/i, '" x ') + '"' : '';
+      var dimsLabel = sz.dims;
       var artSt = a.artwork_status || 'missing';
       var artOk = artSt === 'approved' || artSt === 'print_ready';
       var artReceived = artSt === 'received' || artOk;
@@ -1260,8 +1268,7 @@
       if (p.payment_status === 'paid') events.push({ label: 'Payment received', date: p.payment_received_date || p.updated_at || p.created_at });
     });
     bizAds.forEach(function (a) {
-      var sl = (SpnsState.settings.adSizes || []).find(function (s) { return s.id === a.ad_size; });
-      var adName = sl ? sl.label : (a.ad_size || a.size_id || a.format || 'Ad');
+      var adName = crmAdSizeLabel(a).label;
       events.push({ label: adName + ' ad booked', date: a.created_at });
       if (a.invoice_sent_date) events.push({ label: 'Invoice sent', date: a.invoice_sent_date });
       if (a.payment_status === 'paid') events.push({ label: 'Payment received', date: a.payment_received_date || a.updated_at || a.created_at });
@@ -1279,10 +1286,20 @@
       '</div>';
     });
 
-    // === FILES ===
+    // === FILES (sponsor_files + artwork_url fallback from programme_ads) ===
+    var allFiles = (bizFiles || []).slice();
+    var existingUrls = {};
+    allFiles.forEach(function (f) { existingUrls[f.file_url] = true; });
+    bizAds.forEach(function (a) {
+      if (a.artwork_url && !existingUrls[a.artwork_url]) {
+        var sz2 = crmAdSizeLabel(a);
+        allFiles.push({ file_url: a.artwork_url, file_name: sz2.label + ' artwork', file_type: 'artwork', uploaded_by: 'business', created_at: a.updated_at || a.created_at });
+        existingUrls[a.artwork_url] = true;
+      }
+    });
     var filesHtml = '';
     var imgExts = ['jpg','jpeg','png','gif','webp','svg'];
-    (bizFiles || []).forEach(function (f) {
+    allFiles.forEach(function (f) {
       var ext = (f.file_name || '').split('.').pop().toLowerCase();
       var isImage = imgExts.indexOf(ext) >= 0;
       var typeLabel = f.file_type || 'asset';
@@ -1313,7 +1330,7 @@
     // === ASSEMBLE ===
     return '<div class="spn-crm-row" id="spn-crm-row-' + biz.id + '">' +
       '<div class="spn-crm-row-header" onclick="MarketingSponsorsModule.toggleCrmRow(\'' + biz.id + '\')">' +
-        '<span class="spn-crm-chevron"><img src="/ASSETS/Images/Icons/Triangle.svg" alt="" /></span>' +
+        '<span class="spn-crm-chevron">&#9654;</span>' +
         '<div><div class="spn-crm-biz-name">' + esc(biz.name) + '</div><div class="spn-crm-biz-contact">' + contactLine + '</div></div>' +
         '<div class="spn-crm-tags">' + (tags || '<span style="font-size:0.68rem;color:#9a90b0;">No bookings</span>') + '</div>' +
         '<div class="spn-crm-amount">' + (totalCents ? '$' + (totalCents/100).toLocaleString('en-CA',{minimumFractionDigits:2}) : '--') + '</div>' +
@@ -1354,7 +1371,7 @@
         '</div>' +
         '<div class="spn-crm-detail-full">' +
           '<div class="spn-crm-section">' +
-            '<div class="spn-crm-section-head"><img src="/ASSETS/Images/Icons/Files.svg" alt="" /><span>Files</span><span class="spn-crm-file-count">' + (bizFiles || []).length + ' file' + ((bizFiles || []).length !== 1 ? 's' : '') + '</span></div>' +
+            '<div class="spn-crm-section-head"><img src="/ASSETS/Images/Icons/Files.svg" alt="" /><span>Files</span><span class="spn-crm-file-count">' + allFiles.length + ' file' + (allFiles.length !== 1 ? 's' : '') + '</span></div>' +
             '<div class="spn-crm-file-grid">' +
               (filesHtml || '<div class="spn-crm-empty-section">No files uploaded yet</div>') +
               '<button class="spn-crm-upload-btn" onclick="MarketingSponsorsModule.uploadCrmFile(\'' + biz.id + '\')"><img src="/ASSETS/Images/Icons/Upload - Document.svg" alt="" /> Upload File</button>' +
