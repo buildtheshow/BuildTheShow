@@ -1533,7 +1533,7 @@
         body = '<div class="spn-logo-picker">' + logos.map(function(l, i) {
           var isSelected = l.url === currentLogo;
           return '<label class="spn-logo-option' + (isSelected ? ' spn-logo-option--sel' : '') + '" onclick="MarketingSponsorsModule.pickHeroLogo(this, ' + "'" + escHtml(l.url) + "'" + ')">' +
-            '<img src="' + escHtml(l.url) + '" alt="' + escHtml(l.label) + '" />' +
+            '<img src="' + escHtml(l.url) + '" alt="" />' +
             '<input type="radio" name="spn-hero-logo" value="' + escHtml(l.url) + '"' + (isSelected ? ' checked' : '') + ' style="accent-color:#572e88;width:16px;height:16px;" />' +
           '</label>';
         }).join('') + '</div>';
