@@ -1253,17 +1253,27 @@
     // === DELIVERABLES ===
     var delivHtml = '';
     var hasAutoDelivs = bizDelivs.some(function (d) { return d.auto_generated; });
-    if (!hasAutoDelivs && bizPkgs.length && !bizDelivs.length) {
+    var needsGenerate = false;
+    if (!hasAutoDelivs && !bizDelivs.length && (bizPkgs.length || bizAds.length)) {
       bizPkgs.forEach(function (p) {
         var tierObj = (SpnsState.settings.tiers || []).find(function (t) { return t.label === p.tier_name; });
         if (tierObj && tierObj.bullets) {
+          needsGenerate = true;
           tierObj.bullets.split('\n').filter(Boolean).forEach(function (b) {
             dbInsert('sponsor_deliverables', { business_id: biz.id, title: b.trim(), status: 'open', auto_generated: true, linked_package_id: p.id });
           });
         }
       });
-      delivHtml = '<div class="spn-crm-empty-section">Generating deliverables... refresh to see them.</div>';
-    } else {
+      bizAds.forEach(function (a) {
+        var adSz = crmAdSizeLabel(a);
+        var adType = crmAdTypeLabel(a, adSz);
+        var adTitle = adSz.label + ' ' + adType + ' programme ad' + (adSz.dims ? ' (' + adSz.dims + ')' : '');
+        needsGenerate = true;
+        dbInsert('sponsor_deliverables', { business_id: biz.id, title: adTitle, status: 'open', auto_generated: true, linked_ad_id: a.id });
+      });
+      if (needsGenerate) delivHtml = '<div class="spn-crm-empty-section">Generating deliverables... refresh to see them.</div>';
+    }
+    if (!needsGenerate) {
       bizDelivs.forEach(function (d) {
         var isDone = d.status === 'done';
         var dueStr = d.due_date ? '<span class="spn-crm-check-due">' + new Date(d.due_date).toLocaleDateString('en-CA') + '</span>' : '';
