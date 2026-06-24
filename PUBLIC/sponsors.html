@@ -1957,7 +1957,33 @@
 
         var optionLabel = selected.tier || selected.size || '';
         var amountLabel = selected.amount ? '$' + Number(selected.amount).toLocaleString() : '';
-        sendSponsorConfirmation(contact, email, business, selected.kind, optionLabel, amountLabel).catch(function(e) { console.warn('Confirmation failed:', e); });
+        var detailHtml = '';
+        if (selected.kind === 'sponsor' && selected.tierId) {
+          var tier = (settings.tiers || []).find(function(t) { return t.id === selected.tierId; });
+          if (tier && tier.bullets) {
+            var bullets = tier.bullets.split('\n').filter(Boolean);
+            detailHtml = '<div style="margin:12px 0 0;padding:12px;background:#fff;border-radius:8px;border:1px solid rgba(87,46,136,0.08);">' +
+              '<div style="font-size:11px;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;color:rgba(87,46,136,0.5);margin-bottom:6px;">What\'s Included</div>' +
+              bullets.map(function(b) { return '<div style="display:flex;align-items:flex-start;gap:8px;font-size:13px;color:#1a1530;padding:3px 0;"><span style="color:#572e88;font-weight:900;flex-shrink:0;">&#x2022;</span>' + esc(b.trim()) + '</div>'; }).join('') +
+            '</div>';
+          }
+        } else if (selected.kind === 'ad' && selected.sizeId) {
+          var adSize = (settings.adSizes || []).find(function(s) { return s.id === selected.sizeId; });
+          if (adSize) {
+            var dims = adSize.dims ? formatDimensionsWithRatio(adSize.dims) : '';
+            var fmt = selected.format === 'bw' ? 'Black & White' : 'Colour';
+            detailHtml = '<div style="margin:12px 0 0;padding:12px;background:#fff;border-radius:8px;border:1px solid rgba(87,46,136,0.08);">' +
+              '<div style="font-size:11px;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;color:rgba(87,46,136,0.5);margin-bottom:6px;">Ad Specifications</div>' +
+              '<table style="font-size:13px;border-collapse:collapse;">' +
+              (dims ? '<tr><td style="padding:3px 10px 3px 0;font-weight:700;color:#572e88;">Dimensions</td><td style="padding:3px 0;color:#1a1530;">' + esc(dims) + '</td></tr>' : '') +
+              '<tr><td style="padding:3px 10px 3px 0;font-weight:700;color:#572e88;">Format</td><td style="padding:3px 0;color:#1a1530;">' + esc(fmt) + '</td></tr>' +
+              '<tr><td style="padding:3px 10px 3px 0;font-weight:700;color:#572e88;">Bleed</td><td style="padding:3px 0;color:#1a1530;">0.125" on all sides</td></tr>' +
+              '<tr><td style="padding:3px 10px 3px 0;font-weight:700;color:#572e88;">Resolution</td><td style="padding:3px 0;color:#1a1530;">300 DPI minimum</td></tr>' +
+              '<tr><td style="padding:3px 10px 3px 0;font-weight:700;color:#572e88;">File types</td><td style="padding:3px 0;color:#1a1530;">PDF, PNG, JPG, AI, or SVG</td></tr>' +
+              '</table></div>';
+          }
+        }
+        sendSponsorConfirmation(contact, email, business, selected.kind, optionLabel, amountLabel, detailHtml).catch(function(e) { console.warn('Confirmation failed:', e); });
         sendSponsorNotification(business, contact, email, selected.kind, optionLabel).catch(function(e) { console.warn('Notification failed:', e); });
 
         document.getElementById('sp-request-modal').innerHTML =
@@ -1974,7 +2000,7 @@
       }
     }
 
-    async function sendSponsorConfirmation(contactName, contactEmail, bizName, kind, option, amount) {
+    async function sendSponsorConfirmation(contactName, contactEmail, bizName, kind, option, amount, detailHtml) {
       if (!contactEmail) return;
       var e = function(v) { return String(v||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); };
       var showName = production?.title || 'the production';
@@ -1997,6 +2023,7 @@
         '<div style="background:#f9f7ff;border:1.5px solid rgba(87,46,136,0.12);border-radius:12px;padding:16px 4px;margin:0 0 20px;">' +
           '<div style="font-size:11px;font-weight:800;letter-spacing:0.1em;text-transform:uppercase;color:#572e88;padding:0 12px 8px;">Your Request</div>' +
           '<table style="width:100%;border-collapse:collapse;font-size:14px;">' + rows + '</table>' +
+          (detailHtml || '') +
         '</div>' +
         '<div style="margin:0 0 20px;">' +
           '<p style="margin:0 0 8px;font-weight:700;color:#1a1530;">What happens next:</p>' +
