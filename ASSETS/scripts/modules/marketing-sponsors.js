@@ -1206,7 +1206,8 @@
         '</div>' +
         bulletsList +
         '<div class="spn-crm-card-pipeline">' +
-          crmPipelineStep('Booking ' + (isApproved ? 'approved' : 'received'), isApproved, 'MarketingSponsorsModule.crmToggleField(\'sponsor_packages\',\'' + p.id + '\',\'booking_status\',\'' + (isApproved ? 'pending' : 'approved') + '\')') +
+          crmPipelineStep('Booking received', true, null) +
+          crmPipelineStep('Booking approved', isApproved, isApproved ? null : 'MarketingSponsorsModule.crmToggleField(\'sponsor_packages\',\'' + p.id + '\',\'booking_status\',\'approved\')') +
           crmPipelineStep('Invoice sent', invoiceSent, invoiceSent ? null : 'MarketingSponsorsModule.crmInvoicePopup(\'sponsor_packages\',\'' + p.id + '\')', p.invoice_sent_date || '') +
           (p.invoice_number ? crmPipelineInfo('Invoice #' + p.invoice_number) : '') +
           crmPipelineStep('Payment ' + (isPaid ? 'received' : 'outstanding'), isPaid, isPaid ? null : 'MarketingSponsorsModule.crmPaymentPopup(\'sponsor_packages\',\'' + p.id + '\')', p.payment_received_date || '') +
@@ -1248,7 +1249,8 @@
           '<div class="spn-crm-card-price">' + fmtD(a.price_cents) + '</div>' +
         '</div>' +
         '<div class="spn-crm-card-pipeline">' +
-          crmPipelineStep('Booking ' + (isApproved ? 'approved' : 'received'), isApproved, 'MarketingSponsorsModule.crmToggleField(\'programme_ads\',\'' + a.id + '\',\'booking_status\',\'' + (isApproved ? 'pending' : 'approved') + '\')') +
+          crmPipelineStep('Booking received', true, null) +
+          crmPipelineStep('Booking approved', isApproved, isApproved ? null : 'MarketingSponsorsModule.crmToggleField(\'programme_ads\',\'' + a.id + '\',\'booking_status\',\'approved\')') +
           crmPipelineStep('Invoice sent', invoiceSent, invoiceSent ? null : 'MarketingSponsorsModule.crmInvoicePopup(\'programme_ads\',\'' + a.id + '\')', a.invoice_sent_date || '') +
           (a.invoice_number ? crmPipelineInfo('Invoice #' + a.invoice_number) : '') +
           crmPipelineStep('Payment ' + (isPaid ? 'received' : 'outstanding'), isPaid, isPaid ? null : 'MarketingSponsorsModule.crmPaymentPopup(\'programme_ads\',\'' + a.id + '\')', a.payment_received_date || '') +
