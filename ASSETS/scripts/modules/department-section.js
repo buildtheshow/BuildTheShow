@@ -1072,6 +1072,7 @@
       var budgetOptions = [];
       if (isProducer) {
         (state.categories || []).forEach(function (cat) {
+          var groupName = receiptBudgetGroupName(cat.name);
           var catItems = (state.items || []).filter(function (item) { return item.category_id === cat.id; });
           if (catItems.length) {
             catItems.forEach(function (item) {
@@ -1081,7 +1082,7 @@
                 label: label,
                 categoryId: cat.id,
                 itemId: item.id,
-                groupName: cat.name,
+                groupName: groupName,
                 categoryName: cat.name,
                 itemName: item.name,
                 unitCostCents: item.unit_cost_cents || 0,
@@ -1089,7 +1090,6 @@
               });
             });
           } else {
-            var groupName = receiptBudgetGroupName(cat.name);
             var label = groupName + ' - ' + cat.name;
             deptCatMap[label] = [cat.id];
             budgetOptions.push({
