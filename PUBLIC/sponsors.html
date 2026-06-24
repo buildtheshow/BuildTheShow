@@ -2129,14 +2129,19 @@
       try {
         var bizId = await findOrCreateBusiness(business, contact, email, phone, website, notes);
 
+        var adId = null;
         if (selected.kind === 'ad') {
-          await insertAd(bizId, notes);
+          adId = await insertAd(bizId, notes);
         } else {
           await insertPackage(bizId, notes);
         }
 
         var zone = spbArtworkStatus === 'ready' ? 'artwork' : 'help';
         var uploadedUrls = await uploadSponsorFiles(bizId, spbUploadedFiles[zone] || []);
+
+        if (adId && uploadedUrls.length) {
+          await sb.from('programme_ads').update({ artwork_url: uploadedUrls[0].url, artwork_status: 'received' }).eq('id', adId);
+        }
 
         var optionLabel = selected.tier || selected.size || '';
         var amountLabel = selected.amount ? '$' + Number(selected.amount).toLocaleString() : '';
@@ -2336,19 +2341,20 @@
     }
 
     async function insertAd(bizId, notes) {
-      var artStatus = spbArtworkStatus === 'ready' ? 'submitted' : spbArtworkStatus === 'later' ? 'pending' : spbArtworkStatus === 'help' ? 'needs_design' : 'missing';
+      var artStatus = spbArtworkStatus === 'ready' ? 'received' : (spbArtworkStatus === 'later' ? 'missing' : 'missing');
       var res = await sb.from('programme_ads').insert({
         production_id: production.id,
         business_id: bizId,
-        size_id: selected.sizeId || null,
+        ad_size: selected.sizeId || null,
+        ad_type: selected.format || 'colour',
         price_cents: Math.round(Number(selected.amount) * 100),
-        format: selected.format || 'colour',
         payment_status: 'unpaid',
         artwork_status: artStatus,
         artwork_data: selected.artworkData || null,
         notes: notes,
-      });
+      }).select('id').single();
       if (res.error) throw res.error;
+      return res.data?.id || null;
     }
 
     async function insertPackage(bizId, notes) {
