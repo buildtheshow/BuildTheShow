@@ -2252,11 +2252,13 @@
     var page = collectPublicPageEditor();
     page.heroLogoUrl = url;
     SpnsState.settings.publicPageDraft = page;
-    schedulePublicPagePreview(true);
     markPublicPageDirty();
     var frame = document.getElementById('spn-public-preview-frame');
-    if (frame && frame.contentWindow) {
-      try { frame.contentWindow.postMessage({ type: 'bts-sponsor-preview', publicPage: page }, window.location.origin); } catch(e) {}
+    if (frame) {
+      try {
+        var wm = frame.contentDocument.getElementById('spp-hero-watermark');
+        if (wm) { wm.src = url; wm.hidden = false; }
+      } catch(e) {}
     }
   }
 
