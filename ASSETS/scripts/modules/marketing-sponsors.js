@@ -1646,23 +1646,57 @@
     if (!biz || !biz.contact_email) { alert('No email address on file for this business.'); return; }
 
     var btn = document.getElementById('spn-crm-send-invoice');
-    if (btn) { btn.disabled = true; btn.textContent = 'Sending...'; }
+    if (btn) { btn.disabled = true; btn.textContent = 'Generating PDF...'; }
 
     var invoiceBody = document.getElementById('spn-crm-invoice-body');
-    var html = invoiceBody ? invoiceBody.innerHTML : '';
+    if (!invoiceBody) { alert('Invoice body not found.'); return; }
 
     var prod = SpnsState.prodMeta || {};
     var org = SpnsState.orgData || {};
     var showName = prod.title || 'the production';
     var subject = 'Invoice #' + invNum + ' from ' + (org.name || 'Build The Show') + ' - ' + showName;
-
     var today = new Date().toISOString().slice(0, 10);
-    crmSendEmail(biz.contact_email, biz.contact_name || biz.name, subject, html).then(function () {
+    var pdfFileName = invNum + '.pdf';
+    var storagePath = SpnsState.prodId + '/invoices/' + pdfFileName;
+
+    if (typeof html2pdf === 'undefined') {
+      alert('PDF library is still loading. Please try again in a moment.');
+      if (btn) { btn.disabled = false; btn.textContent = 'Retry'; }
+      return;
+    }
+
+    html2pdf().set({
+      margin: [12, 16, 12, 16],
+      filename: pdfFileName,
+      image: { type: 'jpeg', quality: 0.95 },
+      html2canvas: { scale: 2, useCORS: true, letterRendering: true },
+      jsPDF: { unit: 'mm', format: 'letter', orientation: 'portrait' },
+    }).from(invoiceBody).outputPdf('blob').then(function (pdfBlob) {
+      if (btn) btn.textContent = 'Uploading PDF...';
+      return fetch(SUPABASE_URL + '/storage/v1/object/' + STORAGE_BUCKET + '/' + storagePath, {
+        method: 'POST',
+        headers: sponsorHeaders({ 'Content-Type': 'application/pdf' }),
+        body: pdfBlob,
+      }).then(function (r) {
+        if (!r.ok) return r.text().then(function (t) { throw new Error(t); });
+        return SUPABASE_URL + '/storage/v1/object/public/' + STORAGE_BUCKET + '/' + storagePath;
+      });
+    }).then(function (pdfUrl) {
+      if (btn) btn.textContent = 'Sending email...';
+      var emailHtml = '<div style="font-family:sans-serif;color:#1a1530;line-height:1.6;">' +
+        '<p>Hi ' + esc(biz.contact_name || '') + ',</p>' +
+        '<p>Please find attached your invoice for <strong>' + esc(showName) + '</strong>.</p>' +
+        '<p style="margin:20px 0;"><a href="' + esc(pdfUrl) + '" style="display:inline-block;padding:12px 24px;background:#572e88;color:#fff;text-decoration:none;border-radius:8px;font-weight:800;font-size:14px;">Download Invoice PDF</a></p>' +
+        '<p style="font-size:13px;color:#9a90b0;">Invoice #' + esc(invNum) + ' | ' + esc(today) + '</p>' +
+        '<p>Thank you,<br /><strong>' + esc(org.name || '') + '</strong></p>' +
+        '</div>';
+      return crmSendEmail(biz.contact_email, biz.contact_name || biz.name, subject, emailHtml);
+    }).then(function () {
       return dbUpdate(table, id, { invoice_number: invNum, invoice_sent_date: today });
     }).then(function () {
       crmCloseModal();
       loadShowSponsorsCRM();
-      sponsorNotify('Invoice sent to ' + biz.contact_email);
+      sponsorNotify('Invoice PDF sent to ' + biz.contact_email);
     }).catch(function (e) {
       alert('Failed to send invoice: ' + e.message);
       if (btn) { btn.disabled = false; btn.textContent = 'Retry'; }
