@@ -1371,21 +1371,17 @@
 
     async function resolveProduction() {
       const route = routeInfo();
-      console.log('[sponsors] route:', route);
       if (route.prodId) {
         const { data } = await sb.from('productions').select('id,title,slug,poster_url,organization_id').eq('id', route.prodId).maybeSingle();
-        console.log('[sponsors] prod by id:', data);
         return data;
       }
       let orgId = null;
       if (route.orgKey) {
-        const { data: orgData, error: orgErr } = await sb.from('organizations').select('id,name,slug,abbreviation')
+        const { data: orgData } = await sb.from('organizations').select('id,name,slug,abbreviation')
           .or(`slug.eq.${route.orgKey},abbreviation.eq.${route.orgKey},abbreviation.eq.${route.orgKey.toUpperCase()},abbreviation.ilike.${route.orgKey}`)
           .maybeSingle();
-        console.log('[sponsors] org lookup:', orgData, orgErr);
         orgId = orgData && orgData.id;
       }
-      // Try exact slug first, then ilike, then contains
       const base = sb.from('productions').select('id,title,slug,poster_url,organization_id');
       let prod = null;
       for (const filter of [
@@ -1396,7 +1392,6 @@
         let q = filter(base);
         if (orgId) q = q.eq('organization_id', orgId);
         const { data } = await q.limit(1).maybeSingle();
-        console.log('[sponsors] prod slug try:', route.showSlug, data);
         if (data) { prod = data; break; }
       }
       return prod;
