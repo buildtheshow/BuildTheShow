@@ -1182,39 +1182,70 @@
         (a.notes ? '<div style="font-size:0.68rem;color:#9a90b0;font-style:italic;">' + esc(a.notes) + '</div>' : '') +
       '</div>';
     });
-    if (!bookingsHtml) bookingsHtml = '<div style="font-size:0.75rem;color:#9a90b0;">No bookings yet</div>';
+    if (!bookingsHtml) bookingsHtml = '<div class="spn-crm-pkg-meta">No bookings yet</div>';
 
+    // Artwork preview section
+    var artworkHtml = '';
+    bizAds.forEach(function (a) {
+      var st = a.artwork_status || 'missing';
+      var sizeObj3 = (SpnsState.settings.adSizes || []).find(function (s) { return s.id === a.ad_size; });
+      var artSizeLabel = sizeObj3 ? sizeObj3.label : (a.ad_size || 'Ad');
+      var typeLabel3 = a.ad_type === 'bw' ? 'B&W' : 'Colour';
+      var dotClass = st === 'approved' || st === 'print_ready' ? 'spn-crm-status-dot--good' : (st === 'received' ? 'spn-crm-status-dot--info' : 'spn-crm-status-dot--bad');
+      var stLabel = st === 'approved' ? 'Approved' : (st === 'print_ready' ? 'Print Ready' : (st === 'received' ? 'Received' : 'Not Received'));
+      var approvalSt2 = a.approval_status || 'pending';
+      var approvalLabel2 = approvalSt2 === 'approved' ? 'Approved' : (approvalSt2 === 'changes_needed' ? 'Changes Needed' : 'Pending');
+      var approvalDot = approvalSt2 === 'approved' ? 'spn-crm-status-dot--good' : (approvalSt2 === 'changes_needed' ? 'spn-crm-status-dot--bad' : 'spn-crm-status-dot--warn');
+      artworkHtml += '<div class="spn-crm-ad-card">' +
+        '<div class="spn-crm-ad-header"><span class="spn-crm-tag" style="background:#476aaa;font-size:0.6rem;">' + esc(artSizeLabel + ' ' + typeLabel3) + '</span></div>' +
+        '<div class="spn-crm-status-row"><span class="spn-crm-status-dot ' + dotClass + '"></span><span>Artwork: ' + stLabel + '</span></div>' +
+        '<div class="spn-crm-status-row"><span class="spn-crm-status-dot ' + approvalDot + '"></span><span>Approval: ' + approvalLabel2 + '</span></div>' +
+        '<div class="spn-crm-art-preview">' +
+          (a.artwork_url ? '<img src="' + esc(a.artwork_url) + '" alt="' + esc(artSizeLabel) + ' artwork" />' : '<div class="spn-crm-art-preview-empty">No artwork submitted</div>') +
+        '</div>' +
+      '</div>';
+    });
+    if (!artworkHtml) artworkHtml = '<div class="spn-crm-pkg-meta">No artwork required</div>';
+
+    // Payment summary
     var outstandingCents = totalCents - receivedCents;
     var payHtml = '<div class="spn-crm-pay-row"><span>Total Booked</span><span>$' + (totalCents/100).toLocaleString('en-CA',{minimumFractionDigits:2}) + '</span></div>' +
       '<div class="spn-crm-pay-row"><span>Total Received</span><span>$' + (receivedCents/100).toLocaleString('en-CA',{minimumFractionDigits:2}) + '</span></div>' +
       '<div class="spn-crm-pay-row spn-crm-pay-row--total"><span>Outstanding</span><span>$' + (outstandingCents/100).toLocaleString('en-CA',{minimumFractionDigits:2}) + '</span></div>';
 
-    var artHtml = '';
-    bizAds.forEach(function (a) {
-      var st = a.artwork_status || 'missing';
-      var artIcon = st === 'approved' || st === 'print_ready' ? '/ASSETS/Images/Icons/visible.svg' : '/ASSETS/Images/Icons/Upload - Poster.svg';
-      var dotClass = st === 'approved' || st === 'print_ready' ? 'spn-crm-art-dot--approved' : (st === 'received' ? 'spn-crm-art-dot--received' : 'spn-crm-art-dot--missing');
-      var stLabel = st === 'approved' ? 'Approved' : (st === 'print_ready' ? 'Print Ready' : (st === 'received' ? 'Received' : 'Not Received'));
-      var sizeObj2 = (SpnsState.settings.adSizes || []).find(function (s) { return s.id === a.ad_size; });
-      var artSizeLabel = sizeObj2 ? sizeObj2.label : (a.ad_size || 'Ad');
-      artHtml += '<div class="spn-crm-art-row"><img src="' + artIcon + '" style="width:14px;height:14px;opacity:0.7;" alt="" /><span class="spn-crm-art-dot ' + dotClass + '"></span><span>' + esc(artSizeLabel + ' — ' + stLabel) + '</span></div>';
-    });
-    if (!artHtml) artHtml = '<div style="font-size:0.75rem;color:#9a90b0;">No artwork required</div>';
-
+    // Deliverables
     var delivHtml = '';
     bizDelivs.forEach(function (d) {
       var isDone = d.status === 'done';
-      delivHtml += '<div class="spn-crm-check-row' + (isDone ? ' done' : '') + '"><input type="checkbox"' + (isDone ? ' checked' : '') + ' onchange="MarketingSponsorsModule.toggleCrmDeliv(\'' + d.id + '\',this.checked)" /><span>' + esc(d.title) + '</span></div>';
+      var dueStr = d.due_date ? '<span class="spn-crm-check-due">' + new Date(d.due_date).toLocaleDateString('en-CA') + '</span>' : '';
+      delivHtml += '<div class="spn-crm-check-row' + (isDone ? ' done' : '') + '"><input type="checkbox"' + (isDone ? ' checked' : '') + ' onchange="MarketingSponsorsModule.toggleCrmDeliv(\'' + d.id + '\',this.checked)" /><span>' + esc(d.title) + '</span>' + dueStr + '</div>';
     });
-    if (!delivHtml) delivHtml = '<div style="font-size:0.75rem;color:#9a90b0;">No deliverables</div>';
+    if (!delivHtml) delivHtml = '<div class="spn-crm-pkg-meta">No deliverables</div>';
 
+    // Notes
     var notesVal = (biz.notes || '').replace(/"/g, '&quot;').replace(/</g, '&lt;');
 
+    // Contact details for expanded view
+    var contactHtml = '';
+    if (biz.contact_name) contactHtml += '<div class="spn-crm-status-row"><img src="/ASSETS/Images/Icons/organisation-members.svg" style="width:12px;height:12px;opacity:0.5;" alt="" /><span>' + esc(biz.contact_name) + '</span></div>';
+    if (biz.contact_email) contactHtml += '<div class="spn-crm-status-row"><img src="/ASSETS/Images/Icons/Mail.svg" style="width:12px;height:12px;opacity:0.5;" alt="" /><a href="mailto:' + esc(biz.contact_email) + '" style="color:#476aaa;font-weight:700;text-decoration:none;">' + esc(biz.contact_email) + '</a></div>';
+    if (biz.contact_phone) contactHtml += '<div class="spn-crm-status-row"><img src="/ASSETS/Images/Icons/Phone.svg" style="width:12px;height:12px;opacity:0.5;" alt="" /><span>' + esc(biz.contact_phone) + '</span></div>';
+    if (biz.website) contactHtml += '<div class="spn-crm-status-row"><img src="/ASSETS/Images/Icons/Link.svg" style="width:12px;height:12px;opacity:0.5;" alt="" /><a href="' + esc(biz.website) + '" target="_blank" style="color:#476aaa;font-weight:700;text-decoration:none;">' + esc(biz.website) + '</a></div>';
+
+    // Timeline
     var timelineHtml = '';
     var events = [];
     events.push({ label: 'Added', date: biz.created_at });
-    bizPkgs.forEach(function (p) { events.push({ label: p.tier_name || 'Sponsor', date: p.created_at }); });
-    bizAds.forEach(function (a) { events.push({ label: (a.ad_size || 'Ad') + ' booked', date: a.created_at }); });
+    bizPkgs.forEach(function (p) {
+      events.push({ label: (p.tier_name || 'Sponsor') + ' booked', date: p.created_at });
+      if (p.payment_status === 'paid') events.push({ label: 'Sponsor paid', date: p.updated_at || p.created_at });
+    });
+    bizAds.forEach(function (a) {
+      var sl = (SpnsState.settings.adSizes || []).find(function (s) { return s.id === a.ad_size; });
+      events.push({ label: (sl ? sl.label : a.ad_size || 'Ad') + ' booked', date: a.created_at });
+      if (a.artwork_status === 'received' || a.artwork_status === 'approved') events.push({ label: 'Artwork received', date: a.updated_at || a.created_at });
+      if (a.artwork_status === 'approved') events.push({ label: 'Artwork approved', date: a.updated_at || a.created_at });
+    });
     events.sort(function (a, b) { return new Date(a.date) - new Date(b.date); });
     events.forEach(function (ev) {
       var d = ev.date ? new Date(ev.date).toLocaleDateString('en-CA') : '';
@@ -1233,13 +1264,30 @@
         '<span></span>' +
       '</div>' +
       '<div class="spn-crm-row-detail">' +
-        '<div class="spn-crm-detail-grid">' +
-          '<div><div class="spn-crm-section-title">Bookings</div>' + bookingsHtml +
-            '<button class="spn-btn spn-btn--ghost spn-btn--sm" style="margin-top:0.5rem;" onclick="MarketingSponsorsModule.openPkgModal(null,\'' + biz.id + '\')">+ Add Booking</button></div>' +
-          '<div><div class="spn-crm-section-title">Payment Summary</div>' + payHtml + '</div>' +
-          '<div><div class="spn-crm-section-title">Artwork</div>' + artHtml + '</div>' +
-          '<div><div class="spn-crm-section-title">Deliverables</div>' + delivHtml + '</div>' +
-          '<div class="spn-crm-notes"><div class="spn-crm-section-title">Notes</div><textarea onblur="MarketingSponsorsModule.saveCrmNotes(\'' + biz.id + '\')">' + notesVal + '</textarea></div>' +
+        '<div class="spn-crm-detail-top">' +
+          '<div class="spn-crm-section">' +
+            '<div class="spn-crm-section-title"><img src="/ASSETS/Images/Icons/Budgeting-Sponsorship.svg" alt="" /> Bookings</div>' +
+            bookingsHtml +
+          '</div>' +
+          '<div class="spn-crm-section">' +
+            '<div class="spn-crm-section-title"><img src="/ASSETS/Images/Icons/Files.svg" alt="" /> Artwork</div>' +
+            artworkHtml +
+          '</div>' +
+        '</div>' +
+        '<div class="spn-crm-detail-bottom">' +
+          '<div class="spn-crm-section">' +
+            '<div class="spn-crm-section-title"><img src="/ASSETS/Images/Icons/Budgeting-Fundraising.svg" alt="" /> Payment</div>' +
+            payHtml +
+            (contactHtml ? '<div style="margin-top:0.75rem;"><div class="spn-crm-section-title"><img src="/ASSETS/Images/Icons/organisation-members.svg" alt="" /> Contact</div>' + contactHtml + '</div>' : '') +
+          '</div>' +
+          '<div class="spn-crm-section">' +
+            '<div class="spn-crm-section-title"><img src="/ASSETS/Images/Icons/Checklist.svg" alt="" /> Deliverables</div>' +
+            delivHtml +
+          '</div>' +
+          '<div class="spn-crm-section spn-crm-notes">' +
+            '<div class="spn-crm-section-title">Notes</div>' +
+            '<textarea onblur="MarketingSponsorsModule.saveCrmNotes(\'' + biz.id + '\')">' + notesVal + '</textarea>' +
+          '</div>' +
         '</div>' +
         '<div class="spn-crm-timeline">' + timelineHtml + '</div>' +
       '</div>' +
