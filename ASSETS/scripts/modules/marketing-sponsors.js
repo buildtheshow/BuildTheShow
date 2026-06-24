@@ -2254,6 +2254,10 @@
     SpnsState.settings.publicPageDraft = page;
     schedulePublicPagePreview(true);
     markPublicPageDirty();
+    var frame = document.getElementById('spn-public-preview-frame');
+    if (frame && frame.contentWindow) {
+      try { frame.contentWindow.postMessage({ type: 'bts-sponsor-preview', publicPage: page }, window.location.origin); } catch(e) {}
+    }
   }
 
   function uploadHeroLogo() {
