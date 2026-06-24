@@ -2253,22 +2253,7 @@
     page.heroLogoUrl = url;
     SpnsState.settings.publicPageDraft = page;
     markPublicPageDirty();
-    var frame = document.getElementById('spn-public-preview-frame');
-    if (frame) {
-      try {
-        var doc = frame.contentDocument;
-        var ids = ['spp-hero-watermark', 'spp-nav-logo', 'spp-org-about-logo'];
-        for (var i = 0; i < ids.length; i++) {
-          var el = doc.getElementById(ids[i]);
-          if (el) {
-            el.style.backgroundImage = url ? 'url(' + url + ')' : 'none';
-            el.style.backgroundSize = 'contain';
-            el.style.backgroundRepeat = 'no-repeat';
-            el.style.backgroundPosition = 'center';
-          }
-        }
-      } catch(e) {}
-    }
+    schedulePublicPagePreview(true);
   }
 
   function uploadHeroLogo() {
