@@ -1448,11 +1448,12 @@
   }
 
   function crmPipelineStep(label, done, onclick, detail) {
-    var cls = 'spn-crm-pipe-step' + (done ? ' spn-crm-pipe-step--done' : '');
-    var clickAttr = onclick ? ' onclick="' + onclick + '" style="cursor:pointer;" title="Click to toggle"' : '';
+    var cls = 'spn-crm-pipe-step' + (done ? ' spn-crm-pipe-step--done' : '') + (onclick ? ' spn-crm-pipe-step--clickable' : '');
+    var clickAttr = onclick ? ' onclick="' + onclick + '"' : '';
     var detailHtml = detail ? '<span class="spn-crm-pipe-detail">' + esc(detail) + '</span>' : '';
+    var checkbox = '<span class="spn-crm-pipe-check">' + (done ? '<svg width="10" height="8" viewBox="0 0 10 8"><path d="M1 4l2.5 2.5L9 1" stroke="#fff" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>' : '') + '</span>';
     return '<div class="' + cls + '"' + clickAttr + '>' +
-      '<span class="spn-crm-pipe-dot"></span>' +
+      checkbox +
       '<span class="spn-crm-pipe-label">' + label + detailHtml + '</span>' +
     '</div>';
   }
