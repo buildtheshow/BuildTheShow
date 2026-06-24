@@ -58,7 +58,7 @@
   function defaultPublicPage() {
     return {
       published: false,
-      posterUrl: '', currentPosterOverride: '', pastPosters: [], pastPostersUrl: '/ASSETS/Images/Decrotive/past-posters-template.png?v=20260620', contactEmail: '',
+      posterUrl: '', currentPosterOverride: '', heroLogoUrl: '', pastPosters: [], pastPostersUrl: '/ASSETS/Images/Decrotive/past-posters-template.png?v=20260620', contactEmail: '',
       content: {
         navOverview: 'Overview', navSponsors: 'Sponsorships', navAds: 'Programme Ads', navBook: 'Book Now',
         heroTitle: 'Support Community Theatre', heroAccent: '',
@@ -101,6 +101,7 @@
     base.published = value.published === true;
     base.posterUrl = value.posterUrl || '';
     base.currentPosterOverride = value.currentPosterOverride || '';
+    base.heroLogoUrl = value.heroLogoUrl || '';
     base.pastPosters = Array.isArray(value.pastPosters) ? value.pastPosters.slice() : [];
     base.pastPostersUrl = value.pastPostersUrl || base.pastPostersUrl;
     base.contactEmail = value.contactEmail || '';
@@ -421,7 +422,7 @@
       .then(function (rows) {
         var production = rows && rows[0] || {};
         if (!production.organization_id) return { production: production, organization: {} };
-        return fetch(SUPABASE_URL + '/rest/v1/organizations?id=eq.' + encodeURIComponent(production.organization_id) + '&select=id,name,slug,abbreviation,logo_url&limit=1', { headers: headers })
+        return fetch(SUPABASE_URL + '/rest/v1/organizations?id=eq.' + encodeURIComponent(production.organization_id) + '&select=id,name,slug,abbreviation,logo_url,logo_white_url,logo_black_url,logo_alternative_url&limit=1', { headers: headers })
           .then(function (response) { return response.ok ? response.json() : []; })
           .then(function (orgRows) { return { production: production, organization: orgRows && orgRows[0] || {} }; });
       });
@@ -430,6 +431,7 @@
   function sponsorPublicUrl(meta) {
     var production = meta && meta.production || {};
     var organization = meta && meta.organization || {};
+    SpnsState.orgData = organization || {};
     var orgKey = organization.slug || organization.abbreviation || '';
     if (orgKey && production.slug) return window.location.origin + '/' + encodeURIComponent(orgKey) + '/' + encodeURIComponent(production.slug) + '/sponsors';
     return window.location.origin + '/PUBLIC/sponsors.html?prod=' + encodeURIComponent(SpnsState.prodId);
@@ -1408,6 +1410,7 @@
   var PUBLIC_FIELD_GROUPS = {
     hero: [
       { id:'poster',   img:'Placeholder - Poster.svg', title:'Poster',          subtitle:'Upload or change the poster image.',             type:'poster' },
+      { id:'logo', img:'organisation-members.svg', title:'Organisation Logo', subtitle:'Choose which logo to display on the hero.', type:'logoPicker' },
       { id:'headline', svg:ESVG.T,                      title:'Headline',         subtitle:'Edit the main headline for this section.',       fields:[
         { key:'heroTitle',  label:'Line 1' },
         { key:'heroAccent', label:'Highlighted Text', accentColor:true },
@@ -1518,6 +1521,28 @@
              (eff && !isOverride ? '<p class="spn-fcard-note" style="margin:0 0 0.6rem">Using the production poster. Upload a different image to use a custom centre poster.</p>' : '') +
              (isOverride ? '<p class="spn-fcard-note" style="margin:0 0 0.6rem">Using a custom image. <button type="button" class="spn-link-btn" onclick="MarketingSponsorsModule.clearCurrentPosterOverride()">Remove override</button></p>' : '') +
              '<button type="button" class="spn-change-img-btn" onclick="MarketingSponsorsModule.uploadCurrentPosterOverride()">' + (isOverride ? 'Change Custom Image' : 'Override Poster') + '</button>';
+} else if (group.type === 'logoPicker') {
+      var org = SpnsState.orgData || {};
+      var logos = [];
+      if (org.logo_url) logos.push({ label: 'Primary Logo', url: org.logo_url });
+      if (org.logo_white_url) logos.push({ label: 'White Logo', url: org.logo_white_url });
+      if (org.logo_black_url) logos.push({ label: 'Black Logo', url: org.logo_black_url });
+      if (org.logo_alternative_url) logos.push({ label: 'Alternative Logo', url: org.logo_alternative_url });
+      var currentLogo = page.heroLogoUrl || org.logo_url || '';
+      if (logos.length) {
+        body = '<div class="spn-logo-picker">' + logos.map(function(l, i) {
+          var isSelected = l.url === currentLogo;
+          return '<label class="spn-logo-option' + (isSelected ? ' spn-logo-option--sel' : '') + '" onclick="MarketingSponsorsModule.pickHeroLogo(this, ' + "'" + escHtml(l.url) + "'" + ')">' +
+            '<input type="radio" name="spn-hero-logo" value="' + escHtml(l.url) + '"' + (isSelected ? ' checked' : '') + ' style="accent-color:#572e88;width:16px;height:16px;flex-shrink:0;" />' +
+            '<img src="' + escHtml(l.url) + '" alt="' + escHtml(l.label) + '" style="height:48px;max-width:120px;object-fit:contain;" />' +
+            '<span style="font-size:0.72rem;color:#6b6080;">' + escHtml(l.label) + '</span>' +
+          '</label>';
+        }).join('') + '</div>';
+      } else {
+        body = '<p class="spn-fcard-note" style="margin:0 0 0.6rem">No logos uploaded yet. Add logos in Organisation Settings.</p>';
+      }
+      body += '<button type="button" class="spn-change-img-btn" style="margin-top:0.75rem;" onclick="MarketingSponsorsModule.uploadHeroLogo()">Upload New Logo</button>';
+      aside = currentLogo ? '<div class="spn-fcard-aside"><img class="spn-fcard-thumb" src="' + escHtml(currentLogo) + '" alt="" /></div>' : '';
     } else if (group.type === 'pastPostersList') {
       var posters = page.pastPosters || [];
       var listHtml = posters.length
@@ -2221,6 +2246,35 @@
     markPublicPageDirty();
   }
 
+
+  function pickHeroLogo(label, url) {
+    document.querySelectorAll('.spn-logo-option').forEach(function(el) { el.classList.remove('spn-logo-option--sel'); });
+    if (label) label.classList.add('spn-logo-option--sel');
+    var page = collectPublicPageEditor();
+    page.heroLogoUrl = url;
+    SpnsState.settings.publicPageDraft = page;
+    schedulePublicPagePreview(true);
+    markPublicPageDirty();
+  }
+
+  function uploadHeroLogo() {
+    var input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/jpeg,image/png,image/webp,image/svg+xml';
+    input.onchange = function () {
+      var file = input.files[0]; if (!file) return;
+      var path = SpnsState.prodId + '/public-page/' + Date.now() + '_hero-logo_' + file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+      fetch(SUPABASE_URL + '/storage/v1/object/' + STORAGE_BUCKET + '/' + path, { method: 'POST', headers: sponsorHeaders({ 'Content-Type': file.type }), body: file })
+        .then(function (r) { if (!r.ok) return r.text().then(function (t) { throw new Error(t); }); return SUPABASE_URL + '/storage/v1/object/public/' + STORAGE_BUCKET + '/' + path; })
+        .then(function (url) {
+          pickHeroLogo(null, url);
+          renderPublicPageEditor();
+        })
+        .catch(function (e) { sponsorNotify('Logo upload failed: ' + e.message, true); });
+    };
+    input.click();
+  }
+
   function escHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
   function renderNotifyList() {
@@ -2693,7 +2747,7 @@
     uploadCurrentPosterOverride: uploadCurrentPosterOverride,
     clearCurrentPosterOverride: clearCurrentPosterOverride,
     addPastPoster: addPastPoster,
-    removePastPoster: removePastPoster,
+    removePastPoster: removePastPoster, pickHeroLogo: pickHeroLogo, uploadHeroLogo: uploadHeroLogo,
     reorderPastPosters: reorderPastPosters,
     setPublicSectionVisible: setPublicSectionVisible,
     editPublicSection: editPublicSection,
