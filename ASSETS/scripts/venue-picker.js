@@ -283,6 +283,8 @@
     return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
 
-  window.VenuePicker = { init, reload, render, _toggleTbd, _setTbd, _saveNew, _cancelNew, _selectSuggestion };
+  function getVenues() { return _venues; }
+
+  window.VenuePicker = { init, reload, render, getVenues, _toggleTbd, _setTbd, _saveNew, _cancelNew, _selectSuggestion };
 
 })();
