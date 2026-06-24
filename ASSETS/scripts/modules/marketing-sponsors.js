@@ -1126,29 +1126,61 @@
     var bookingsHtml = '';
     bizPkgs.forEach(function (p) {
       var tierObj = (SpnsState.settings.tiers || []).find(function (t) { return t.label === p.tier_name || t.id === p.tier_id; });
-      var payBadge = p.payment_status === 'paid' ? '<span class="spn-crm-pay-badge spn-crm-pay-badge--paid" style="font-size:0.58rem;margin-left:0.4rem;">Paid</span>'
-        : '<span class="spn-crm-pay-badge spn-crm-pay-badge--unpaid" style="font-size:0.58rem;margin-left:0.4rem;">' + esc(p.payment_status || 'Unpaid') + '</span>';
-      bookingsHtml += '<div class="spn-crm-booking-row"><div>' +
-        '<span class="spn-crm-tag" style="background:#572e88;font-size:0.6rem;">' + esc(p.tier_name || 'Sponsor') + '</span>' + payBadge +
-        (p.benefits ? '<div class="spn-crm-booking-benefits">Includes: ' + esc(p.benefits) + '</div>' : '') +
-        (p.notes ? '<div class="spn-crm-booking-benefits" style="color:#9a90b0;font-style:italic;">' + esc(p.notes) + '</div>' : '') +
-        '</div><div class="spn-crm-booking-amount">$' + ((p.amount_cents||0)/100).toLocaleString('en-CA', {minimumFractionDigits:2}) + '</div></div>';
+      var payStatus = p.payment_status || 'unpaid';
+      var payBadge = payStatus === 'paid' ? '<span class="spn-crm-pay-badge spn-crm-pay-badge--paid" style="font-size:0.58rem;margin-left:0.4rem;">Paid</span>'
+        : '<span class="spn-crm-pay-badge spn-crm-pay-badge--unpaid" style="font-size:0.58rem;margin-left:0.4rem;">' + esc(payStatus.replace(/_/g,' ')) + '</span>';
+      var bullets = tierObj && tierObj.bullets ? tierObj.bullets : (p.benefits || '');
+      var bulletsList = bullets ? bullets.split('\n').filter(Boolean).map(function (b) { return '<li>' + esc(b.trim()) + '</li>'; }).join('') : '';
+      var slotsInfo = tierObj && tierObj.slots ? '<div style="font-size:0.62rem;color:#9a90b0;margin-top:0.2rem;">Availability: ' + tierObj.slots + ' sponsor' + (tierObj.slots > 1 ? 's' : '') + '</div>' : '';
+      bookingsHtml += '<div class="spn-crm-booking-row" style="flex-direction:column;gap:0.3rem;">' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;">' +
+          '<div><span class="spn-crm-tag" style="background:#572e88;font-size:0.65rem;">' + esc(p.tier_name || 'Sponsor') + '</span>' + payBadge + '</div>' +
+          '<div class="spn-crm-booking-amount">$' + ((p.amount_cents||0)/100).toLocaleString('en-CA', {minimumFractionDigits:2}) + '</div>' +
+        '</div>' +
+        (bulletsList ? '<div style="font-size:0.7rem;color:#4a3570;"><strong style="font-size:0.62rem;color:#9a90b0;text-transform:uppercase;letter-spacing:0.04em;">Includes:</strong><ul style="margin:0.2rem 0 0;padding-left:1.1rem;list-style:disc;">' + bulletsList + '</ul></div>' : '') +
+        slotsInfo +
+        (p.notes ? '<div style="font-size:0.68rem;color:#9a90b0;font-style:italic;">' + esc(p.notes) + '</div>' : '') +
+      '</div>';
     });
     bizAds.forEach(function (a) {
       var sizeObj = (SpnsState.settings.adSizes || []).find(function (s) { return s.id === a.ad_size; });
       var sizeLabel = sizeObj ? sizeObj.label : (a.ad_size || 'Ad');
-      var typeLabel = a.ad_type === 'bw' ? 'B&W' : 'Colour';
-      var dimsLabel = sizeObj && sizeObj.dims ? ' (' + sizeObj.dims.replace(/x/i, '" x ') + '")' : '';
-      var artBadge = a.artwork_status === 'approved' || a.artwork_status === 'print_ready'
-        ? '<span style="color:#769e7b;font-size:0.6rem;font-weight:700;margin-left:0.4rem;">Artwork Approved</span>'
-        : (a.artwork_status === 'received' ? '<span style="color:#476aaa;font-size:0.6rem;font-weight:700;margin-left:0.4rem;">Artwork Received</span>'
-        : '<span style="color:#d1523d;font-size:0.6rem;font-weight:700;margin-left:0.4rem;">Artwork Needed</span>');
-      var payBadge = a.payment_status === 'paid' ? '<span class="spn-crm-pay-badge spn-crm-pay-badge--paid" style="font-size:0.58rem;margin-left:0.4rem;">Paid</span>'
-        : '<span class="spn-crm-pay-badge spn-crm-pay-badge--unpaid" style="font-size:0.58rem;margin-left:0.4rem;">' + esc(a.payment_status || 'Unpaid') + '</span>';
-      bookingsHtml += '<div class="spn-crm-booking-row"><div>' +
-        '<span class="spn-crm-tag" style="background:#476aaa;font-size:0.6rem;">' + esc(sizeLabel + ' ' + typeLabel) + dimsLabel + '</span>' + payBadge + artBadge +
-        (a.notes ? '<div class="spn-crm-booking-benefits" style="color:#9a90b0;font-style:italic;">' + esc(a.notes) + '</div>' : '') +
-        '</div><div class="spn-crm-booking-amount">$' + ((a.price_cents||0)/100).toLocaleString('en-CA', {minimumFractionDigits:2}) + '</div></div>';
+      var typeLabel = a.ad_type === 'bw' ? 'Black & White' : 'Colour';
+      var dimsLabel = sizeObj && sizeObj.dims ? sizeObj.dims.replace(/x/i, '" x ') + '"' : '';
+      var priceLookup = '';
+      if (sizeObj) {
+        var colourPrice = sizeObj.colour != null ? sizeObj.colour : (sizeObj.colourPrice || 0);
+        var bwPrice = sizeObj.bw != null ? sizeObj.bw : (sizeObj.bwPrice || 0);
+        priceLookup = 'Colour: $' + colourPrice + ' / B&W: $' + bwPrice;
+      }
+      var artSt = a.artwork_status || 'missing';
+      var artIcon = artSt === 'approved' || artSt === 'print_ready' ? '/ASSETS/Images/Icons/visible.svg' : '/ASSETS/Images/Icons/Upload - Poster.svg';
+      var artLabel2 = artSt === 'approved' ? 'Approved' : (artSt === 'print_ready' ? 'Print Ready' : (artSt === 'received' ? 'Received' : 'Not Received'));
+      var artColor = artSt === 'approved' || artSt === 'print_ready' ? '#769e7b' : (artSt === 'received' ? '#476aaa' : '#d1523d');
+      var approvalSt = a.approval_status || 'pending';
+      var approvalLabel = approvalSt === 'approved' ? 'Approved' : (approvalSt === 'changes_needed' ? 'Changes Needed' : 'Pending Review');
+      var approvalColor = approvalSt === 'approved' ? '#769e7b' : (approvalSt === 'changes_needed' ? '#d1523d' : '#9a90b0');
+      var payStatus = a.payment_status || 'unpaid';
+      var payBadge = payStatus === 'paid' ? '<span class="spn-crm-pay-badge spn-crm-pay-badge--paid" style="font-size:0.58rem;margin-left:0.4rem;">Paid</span>'
+        : '<span class="spn-crm-pay-badge spn-crm-pay-badge--unpaid" style="font-size:0.58rem;margin-left:0.4rem;">' + esc(payStatus.replace(/_/g,' ')) + '</span>';
+      bookingsHtml += '<div class="spn-crm-booking-row" style="flex-direction:column;gap:0.3rem;">' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;">' +
+          '<div><span class="spn-crm-tag" style="background:#476aaa;font-size:0.65rem;">' + esc(sizeLabel + ' ' + typeLabel) + '</span>' + payBadge + '</div>' +
+          '<div class="spn-crm-booking-amount">$' + ((a.price_cents||0)/100).toLocaleString('en-CA', {minimumFractionDigits:2}) + '</div>' +
+        '</div>' +
+        '<div style="font-size:0.7rem;color:#4a3570;">' +
+          (dimsLabel ? '<div>Size: ' + esc(dimsLabel) + '</div>' : '') +
+          '<div>Format: ' + esc(typeLabel) + '</div>' +
+          (priceLookup ? '<div style="font-size:0.62rem;color:#9a90b0;">' + esc(priceLookup) + '</div>' : '') +
+          '<div style="display:flex;align-items:center;gap:0.3rem;margin-top:0.15rem;">' +
+            '<img src="' + artIcon + '" style="width:12px;height:12px;opacity:0.7;" alt="" />' +
+            '<span style="font-weight:700;color:' + artColor + ';">Artwork: ' + artLabel2 + '</span>' +
+          '</div>' +
+          '<div style="font-size:0.62rem;color:' + approvalColor + ';font-weight:700;">Approval: ' + approvalLabel + '</div>' +
+          (a.artwork_url ? '<div style="margin-top:0.2rem;"><a href="' + esc(a.artwork_url) + '" target="_blank" style="font-size:0.62rem;color:#476aaa;font-weight:700;">View Artwork File</a></div>' : '') +
+        '</div>' +
+        (a.notes ? '<div style="font-size:0.68rem;color:#9a90b0;font-style:italic;">' + esc(a.notes) + '</div>' : '') +
+      '</div>';
     });
     if (!bookingsHtml) bookingsHtml = '<div style="font-size:0.75rem;color:#9a90b0;">No bookings yet</div>';
 
