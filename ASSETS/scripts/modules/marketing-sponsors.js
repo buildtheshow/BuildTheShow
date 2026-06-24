@@ -784,14 +784,14 @@
       notes:           document.getElementById('spn-ad-notes').value.trim() || null,
     };
     var p = id ? dbUpdate('programme_ads', id, payload) : dbInsert('programme_ads', payload);
-    p.then(function () { closeAdModal(); SpnsState.loaded.ads = false; loadAds(); })
+    p.then(function () { closeAdModal(); SpnsState.loaded.ads = false; loadAds(); if (document.getElementById('spn-crm-biz-list')) loadShowSponsorsCRM(); })
      .catch(function (e) { alert('Could not save: ' + e.message); });
   }
 
   function deleteAd(id) {
     if (!confirm('Delete this ad? This cannot be undone.')) return;
     dbDelete('programme_ads', id)
-      .then(function () { SpnsState.loaded.ads = false; loadAds(); })
+      .then(function () { SpnsState.loaded.ads = false; loadAds(); if (document.getElementById('spn-crm-biz-list')) loadShowSponsorsCRM(); })
       .catch(function (e) { alert('Could not delete: ' + e.message); });
   }
 
@@ -874,14 +874,14 @@
       notes:          document.getElementById('spn-pkg-notes').value.trim()    || null,
     };
     var p2 = id ? dbUpdate('sponsor_packages', id, payload) : dbInsert('sponsor_packages', payload);
-    p2.then(function () { closePkgModal(); SpnsState.loaded.sponsors = false; loadPackages(); })
+    p2.then(function () { closePkgModal(); SpnsState.loaded.sponsors = false; loadPackages(); if (document.getElementById('spn-crm-biz-list')) loadShowSponsorsCRM(); })
       .catch(function (e) { alert('Could not save: ' + e.message); });
   }
 
   function deletePkg(id) {
     if (!confirm('Delete this sponsor package? This cannot be undone.')) return;
     dbDelete('sponsor_packages', id)
-      .then(function () { SpnsState.loaded.sponsors = false; loadPackages(); })
+      .then(function () { SpnsState.loaded.sponsors = false; loadPackages(); if (document.getElementById('spn-crm-biz-list')) loadShowSponsorsCRM(); })
       .catch(function (e) { alert('Could not delete: ' + e.message); });
   }
 
@@ -968,14 +968,14 @@
       notes:       document.getElementById('spn-deliv-notes').value.trim()    || null,
     };
     var p = id ? dbUpdate('sponsor_deliverables', id, payload) : dbInsert('sponsor_deliverables', payload);
-    p.then(function () { closeDelivModal(); SpnsState.loaded.deliverables = false; loadDeliverables(); })
+    p.then(function () { closeDelivModal(); SpnsState.loaded.deliverables = false; loadDeliverables(); if (document.getElementById('spn-crm-biz-list')) loadShowSponsorsCRM(); })
      .catch(function (e) { alert('Could not save: ' + e.message); });
   }
 
   function deleteDeliv(id) {
     if (!confirm('Delete this deliverable? This cannot be undone.')) return;
     dbDelete('sponsor_deliverables', id)
-      .then(function () { SpnsState.loaded.deliverables = false; loadDeliverables(); })
+      .then(function () { SpnsState.loaded.deliverables = false; loadDeliverables(); if (document.getElementById('spn-crm-biz-list')) loadShowSponsorsCRM(); })
       .catch(function (e) { alert('Could not delete: ' + e.message); });
   }
 
@@ -3103,5 +3103,8 @@
     setPublicPreviewDevice: setPublicPreviewDevice,
     scalePreviewFrame: scalePreviewFrame,
     refreshPublicPreview: schedulePublicPagePreview,
+    toggleCrmRow: toggleCrmRow,
+    saveCrmNotes: saveCrmNotes,
+    toggleCrmDeliv: toggleCrmDeliv,
   };
 })();
