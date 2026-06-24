@@ -1398,7 +1398,7 @@
     async function resolveProduction() {
       const route = routeInfo();
       if (route.prodId) {
-        const { data } = await sb.from('productions').select('id,title,slug,poster_url,organization_id').eq('id', route.prodId).maybeSingle();
+        const { data } = await sb.from('productions').select('id,title,slug,poster_url,organization_id,performance_locations').eq('id', route.prodId).maybeSingle();
         return data;
       }
       let orgId = null;
@@ -1408,7 +1408,7 @@
           .maybeSingle();
         orgId = orgData && orgData.id;
       }
-      const base = sb.from('productions').select('id,title,slug,poster_url,organization_id');
+      const base = sb.from('productions').select('id,title,slug,poster_url,organization_id,performance_locations');
       let prod = null;
       for (const filter of [
         (q) => q.eq('slug', route.showSlug),
@@ -1444,10 +1444,18 @@
         if (production?.organization_id) {
           try {
             const { data: orgVenues } = await sb.from('venues').select('name,nickname,capacity').eq('org_id', production.organization_id);
-            const firstVenue = (orgVenues || [])[0] || null;
-            if (firstVenue) {
-              if (firstVenue.capacity) capacity = firstVenue.capacity;
-              var venuDisplayName = firstVenue.nickname || firstVenue.name || '';
+            const perfLocs = production.performance_locations || [];
+            const perfName = perfLocs[0] || '';
+            let venue = null;
+            if (perfName && orgVenues) {
+              venue = orgVenues.find(v => v.name === perfName || v.nickname === perfName) || null;
+            }
+            if (!venue && orgVenues && orgVenues.length) {
+              venue = orgVenues[0];
+            }
+            if (venue) {
+              if (venue.capacity) capacity = venue.capacity;
+              var venuDisplayName = venue.nickname || venue.name || '';
               if (venuDisplayName) {
                 var titleEl = document.getElementById('spp-stats-title');
                 if (titleEl) titleEl.textContent = 'Your Business Seen by Local Families at ' + venuDisplayName;
