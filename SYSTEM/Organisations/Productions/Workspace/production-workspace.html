@@ -45952,8 +45952,12 @@ See you soon!
       if (rate > 0) parts.push('Sibling rate');
     }
     let volAdj = 0;
+    const perChildEnabled = household && (household.member_ids || []).some(mid => {
+      const mi = _rptCastItems.find(i => String(i.assignment?.id) === String(mid));
+      return mi?.assignment?.volunteer_discount_per_child;
+    });
     const volunteerApplies = household
-      ? householdPos === 0 && rptHouseholdVolunteerDiscountEarned(household, settings)
+      ? (perChildEnabled || householdPos === 0) && rptHouseholdVolunteerDiscountEarned(household, settings)
       : rscVolunteerDiscountEarned(item.assignment, settings);
     if (settings.volunteer_discount_enabled && volunteerApplies) {
       volAdj = parseFloat(String(settings.volunteer_discount || '').replace(/[^0-9.]/g, '')) || 0;
@@ -48124,6 +48128,7 @@ See you soon!
     const summaryEl = document.getElementById('rsc-vol-linked-summary');
     if (!group) {
       if (summaryEl) summaryEl.innerHTML = '<div style="font-size:0.74rem;color:rgba(87,46,136,0.45);">No volunteer connected yet.</div>';
+      rscUpdatePerChildPrompt(null);
       return;
     }
     if (roleEl) roleEl.value = group.roles || '';
@@ -48138,6 +48143,35 @@ See you soon!
         <div style="font-size:0.72rem;color:rgba(87,46,136,0.55);line-height:1.45;">${esc(group.roles || 'Volunteer')}${group.hours ? ` · ${esc(String(group.hours))} approved hr${group.hours === 1 ? '' : 's'}` : ''}</div>
         ${meta ? `<div style="font-size:0.68rem;color:rgba(87,46,136,0.42);margin-top:0.1rem;">${esc(meta)}</div>` : ''}`;
     }
+    rscUpdatePerChildPrompt(group);
+  }
+
+  function rscUpdatePerChildPrompt(group) {
+    const wrap = document.getElementById('rsc-vol-per-child-wrap');
+    if (!wrap) return;
+    const scope = window._rscVolunteerActiveScope;
+    if (!scope || scope.type !== 'household' || scope.assignmentIds.length < 2) { wrap.style.display = 'none'; return; }
+    const settings = registrationCurrentPaymentSettings();
+    const required = parseFloat(String(settings.volunteer_hours || '').replace(/[^0-9.]/g, '')) || 0;
+    const discount = parseFloat(String(settings.volunteer_discount || '').replace(/[^0-9.]/g, '')) || 0;
+    const numKids = scope.assignmentIds.length;
+    const totalNeeded = required * numKids;
+    if (!group || !required || !discount || group.hours < totalNeeded) { wrap.style.display = 'none'; return; }
+    const symbol = { CAD: '$', USD: '$', GBP: '£' }[settings.currency] || '$';
+    const existingPerChild = scope.assignmentIds.some(aid => {
+      const item = _rptCastItems.find(i => String(i.assignment?.id) === String(aid));
+      return item?.assignment?.volunteer_discount_per_child;
+    });
+    wrap.style.display = '';
+    wrap.innerHTML = `<div style="margin-top:0.75rem;padding:0.75rem 1rem;background:rgba(118,158,123,0.08);border:1.5px solid rgba(118,158,123,0.25);border-radius:10px;">
+      <label style="display:flex;align-items:flex-start;gap:0.6rem;cursor:pointer;">
+        <input type="checkbox" id="rsc-vol-per-child" style="accent-color:#769e7b;width:18px;height:18px;margin-top:0.1rem;flex-shrink:0;" ${existingPerChild ? 'checked' : ''} />
+        <div>
+          <div style="font-weight:900;font-size:0.82rem;color:#1a1530;">${esc(group.name)} has ${group.hours} hours, enough for ${numKids} registrations</div>
+          <div style="font-size:0.74rem;color:#4a7a50;margin-top:0.15rem;">Apply ${symbol}${discount.toLocaleString()} discount to each child (${required} hours each, ${symbol}${(discount * numKids).toLocaleString()} total savings)</div>
+        </div>
+      </label>
+    </div>`;
   }
 
   function rscOpenVolunteerModal(assignId) {
@@ -48198,6 +48232,7 @@ See you soon!
         ${suggestionNote}
         <div id="rsc-vol-linked-summary" style="background:#f8f7fc;border:1px solid rgba(87,46,136,0.1);border-radius:8px;padding:0.62rem 0.72rem;">${linkedSummary}</div>
       </div>
+      <div id="rsc-vol-per-child-wrap" style="display:none;"></div>
       <div class="rpt-household-modal-actions">
         <button class="rpt-modal-cancel-btn" onclick="document.getElementById('rsc-volunteer-modal')?.remove()">Cancel</button>
         <button class="rpt-modal-save-btn" style="background:#476aaa;" onclick="rscSendVolunteerPortalInfo('${esc(assignId)}', this)">Send Portal Info</button>
@@ -48206,6 +48241,7 @@ See you soon!
     </div>`;
     modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
     document.body.appendChild(modal);
+    rscUpdatePerChildPrompt(selectedGroup);
   }
 
   function rscSelectedVolunteerGroup() {
@@ -48345,6 +48381,7 @@ See you soon!
     const settings = registrationCurrentPaymentSettings();
     const required = parseFloat(String(settings.volunteer_hours || '').replace(/[^0-9.]/g, '')) || 0;
     const earned = !!selectedGroup && (required > 0 ? selectedGroup.hours >= required : (selectedGroup.hours > 0 || selectedGroup.status === 'approved'));
+    const perChild = document.getElementById('rsc-vol-per-child')?.checked || false;
     const original = btn?.textContent || 'Save Connection';
     if (btn) { btn.disabled = true; btn.textContent = 'Saving...'; }
     try {
@@ -48354,8 +48391,9 @@ See you soon!
         volunteer_role_notes: selectedGroup?.roles || null,
         volunteer_signup_ids: selectedGroup ? selectedGroup.ids : [],
         volunteer_signup_name: selectedGroup ? selectedGroup.name : null,
+        volunteer_discount_per_child: perChild,
       }).in('id', targetIds)
-        .select('id,volunteer_discount_approved,volunteer_hours_completed,volunteer_role_notes,volunteer_signup_ids,volunteer_signup_name');
+        .select('id,volunteer_discount_approved,volunteer_hours_completed,volunteer_role_notes,volunteer_signup_ids,volunteer_signup_name,volunteer_discount_per_child');
       if (error) throw error;
       document.getElementById('rsc-volunteer-modal')?.remove();
       const rowsById = new Map((data || []).map(row => [String(row.id), row]));
@@ -48368,6 +48406,7 @@ See you soon!
           item.assignment.volunteer_role_notes = row?.volunteer_role_notes ?? selectedGroup?.roles ?? null;
           item.assignment.volunteer_signup_ids = Array.isArray(row?.volunteer_signup_ids) ? row.volunteer_signup_ids : (selectedGroup ? selectedGroup.ids : []);
           item.assignment.volunteer_signup_name = row?.volunteer_signup_name ?? (selectedGroup ? selectedGroup.name : null);
+          item.assignment.volunteer_discount_per_child = row?.volunteer_discount_per_child ?? perChild;
         }
       });
       [...new Set(targetIds)].forEach(targetId => rptRerenderRow(targetId));
