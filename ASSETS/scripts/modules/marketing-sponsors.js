@@ -1095,7 +1095,7 @@
     if (ad && typeof ad === 'object') {
       var artStatus = ad.status === 'ready' ? 'Artwork provided' : (ad.status === 'help' ? 'Needs artwork designed' : (ad.status === 'later' ? 'Will send later' : ''));
       if (artStatus) html += '<div class="spn-crm-detail-row"><span class="spn-crm-detail-label">Artwork</span><span>' + esc(artStatus) + '</span></div>';
-      if (ad.ad_type) html += '<div class="spn-crm-detail-row"><span class="spn-crm-detail-label">Business type</span><span>' + esc(ad.ad_type) + '</span></div>';
+      if (ad.ad_type) html += '<div class="spn-crm-detail-row"><span class="spn-crm-detail-label">Advertising</span><span>' + esc(ad.ad_type) + '</span></div>';
       if (ad.about) html += '<div class="spn-crm-detail-row"><span class="spn-crm-detail-label">About</span><span>' + esc(ad.about) + '</span></div>';
       if (ad.include && ad.include.length) html += '<div class="spn-crm-detail-row"><span class="spn-crm-detail-label">Include</span><span>' + ad.include.map(esc).join(', ') + '</span></div>';
       if (ad.extra_notes) html += '<div class="spn-crm-detail-row"><span class="spn-crm-detail-label">Design notes</span><span>' + esc(ad.extra_notes) + '</span></div>';
