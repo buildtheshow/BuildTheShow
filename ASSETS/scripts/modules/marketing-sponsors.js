@@ -1160,9 +1160,12 @@
     var artHtml = '';
     bizAds.forEach(function (a) {
       var st = a.artwork_status || 'missing';
+      var artIcon = st === 'approved' || st === 'print_ready' ? '/ASSETS/Images/Icons/visible.svg' : '/ASSETS/Images/Icons/Upload - Poster.svg';
       var dotClass = st === 'approved' || st === 'print_ready' ? 'spn-crm-art-dot--approved' : (st === 'received' ? 'spn-crm-art-dot--received' : 'spn-crm-art-dot--missing');
       var stLabel = st === 'approved' ? 'Approved' : (st === 'print_ready' ? 'Print Ready' : (st === 'received' ? 'Received' : 'Not Received'));
-      artHtml += '<div class="spn-crm-art-row"><span class="spn-crm-art-dot ' + dotClass + '"></span><span>' + esc((a.ad_size||'Ad') + ' — ' + stLabel) + '</span></div>';
+      var sizeObj2 = (SpnsState.settings.adSizes || []).find(function (s) { return s.id === a.ad_size; });
+      var artSizeLabel = sizeObj2 ? sizeObj2.label : (a.ad_size || 'Ad');
+      artHtml += '<div class="spn-crm-art-row"><img src="' + artIcon + '" style="width:14px;height:14px;opacity:0.7;" alt="" /><span class="spn-crm-art-dot ' + dotClass + '"></span><span>' + esc(artSizeLabel + ' — ' + stLabel) + '</span></div>';
     });
     if (!artHtml) artHtml = '<div style="font-size:0.75rem;color:#9a90b0;">No artwork required</div>';
 
@@ -2702,8 +2705,8 @@
             '<div class="spn-crm-metric"><img class="spn-crm-metric-icon" style="width:22px;height:22px;" src="/ASSETS/Images/Icons/organisation-members.svg" alt="" /><div class="spn-crm-metric-value" id="spn-crm-m-businesses">--</div><div class="spn-crm-metric-label">Total Businesses</div></div>' +
             '<div class="spn-crm-metric"><img class="spn-crm-metric-icon" style="width:22px;height:22px;" src="/ASSETS/Images/Icons/Budgeting-Fundraising.svg" alt="" /><div class="spn-crm-metric-value" id="spn-crm-m-booked">--</div><div class="spn-crm-metric-label">Total Booked</div></div>' +
             '<div class="spn-crm-metric"><img class="spn-crm-metric-icon" style="width:22px;height:22px;" src="/ASSETS/Images/Icons/Budgeting-tickets.svg" alt="" /><div class="spn-crm-metric-value" id="spn-crm-m-received">--</div><div class="spn-crm-metric-label">Total Received</div></div>' +
-            '<div class="spn-crm-metric"><img class="spn-crm-metric-icon" style="width:22px;height:22px;" src="/ASSETS/Images/Icons/Budgeting-Ads.svg" alt="" /><div class="spn-crm-metric-value" id="spn-crm-m-outstanding">--</div><div class="spn-crm-metric-label">Outstanding</div></div>' +
-            '<div class="spn-crm-metric"><img class="spn-crm-metric-icon" style="width:22px;height:22px;" src="/ASSETS/Images/Icons/Placeholder - Poster.svg" alt="" /><div class="spn-crm-metric-value" id="spn-crm-m-artwork">--</div><div class="spn-crm-metric-label">Artwork Missing</div></div>' +
+            '<div class="spn-crm-metric"><img class="spn-crm-metric-icon" style="width:22px;height:22px;" src="/ASSETS/Images/Icons/Budgeting-Needs-reimbursement-cad.svg" alt="" /><div class="spn-crm-metric-value" id="spn-crm-m-outstanding">--</div><div class="spn-crm-metric-label">Outstanding</div></div>' +
+            '<div class="spn-crm-metric"><img class="spn-crm-metric-icon" style="width:22px;height:22px;" src="/ASSETS/Images/Icons/Upload - Poster.svg" alt="" /><div class="spn-crm-metric-value" id="spn-crm-m-artwork">--</div><div class="spn-crm-metric-label">Artwork Missing</div></div>' +
             '<div class="spn-crm-metric"><img class="spn-crm-metric-icon" style="width:22px;height:22px;" src="/ASSETS/Images/Icons/navproductioncalendar.svg" alt="" /><div class="spn-crm-metric-value" id="spn-crm-m-deadlines">--</div><div class="spn-crm-metric-label">Deadlines</div></div>' +
           '</div>' +
           '<div class="spn-toolbar">' +
