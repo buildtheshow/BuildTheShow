@@ -2253,13 +2253,6 @@
     page.heroLogoUrl = url;
     SpnsState.settings.publicPageDraft = page;
     markPublicPageDirty();
-    var frame = document.getElementById('spn-public-preview-frame');
-    if (frame) {
-      try {
-        var wm = frame.contentDocument.getElementById('spp-hero-watermark');
-        if (wm) { wm.src = url; wm.hidden = false; }
-      } catch(e) {}
-    }
   }
 
   function uploadHeroLogo() {
