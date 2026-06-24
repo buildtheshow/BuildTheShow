@@ -1201,7 +1201,7 @@
         '<div class="spn-crm-status-row"><span class="spn-crm-status-dot ' + dotClass + '"></span><span>Artwork: ' + stLabel + '</span></div>' +
         '<div class="spn-crm-status-row"><span class="spn-crm-status-dot ' + approvalDot + '"></span><span>Approval: ' + approvalLabel2 + '</span></div>' +
         '<div class="spn-crm-art-preview">' +
-          (a.artwork_url ? '<img src="' + esc(a.artwork_url) + '" alt="' + esc(artSizeLabel) + ' artwork" />' : '<div class="spn-crm-art-preview-empty">No artwork submitted</div>') +
+          (a.artwork_url ? '<img src="' + esc(a.artwork_url) + '" alt="' + esc(artSizeLabel) + ' artwork" />' : '<div class="spn-crm-art-preview-empty"><img src="/ASSETS/Images/Icons/Upload - Poster.svg" alt="" />No artwork submitted</div>') +
         '</div>' +
       '</div>';
     });
