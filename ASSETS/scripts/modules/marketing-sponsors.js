@@ -1071,11 +1071,31 @@
   }
 
   function crmAdSizeLabel(a) {
-    var sizeObj = (SpnsState.settings.adSizes || []).find(function (s) { return s.id === a.ad_size; });
-    if (sizeObj) return { label: sizeObj.label, dims: sizeObj.dims ? sizeObj.dims.replace(/x/i, '" x ') + '"' : '' };
+    var sizes = SpnsState.settings.adSizes || [];
     var raw = a.ad_size || a.size_id || a.format || '';
+    var sizeObj = sizes.find(function (s) { return s.id === raw; });
+    if (!sizeObj) sizeObj = sizes.find(function (s) { return s.label && s.label.toLowerCase() === raw.toLowerCase(); });
+    if (!sizeObj && raw) sizeObj = sizes.find(function (s) { return s.id && s.id.toLowerCase().indexOf(raw.toLowerCase()) >= 0; });
+    if (!sizeObj && a.price_cents) {
+      sizeObj = sizes.find(function (s) {
+        var c = s.colour != null ? s.colour : (s.colourPrice || 0);
+        var b = s.bw != null ? s.bw : (s.bwPrice || 0);
+        return Math.round(c * 100) === a.price_cents || Math.round(b * 100) === a.price_cents;
+      });
+    }
+    if (sizeObj) return { label: sizeObj.label, dims: sizeObj.dims ? sizeObj.dims.replace(/x/i, '" x ') + '"' : '', obj: sizeObj };
     var label = raw ? raw.replace(/_/g, ' ').replace(/\b\w/g, function (c) { return c.toUpperCase(); }) : 'Ad';
-    return { label: label, dims: '' };
+    return { label: label, dims: '', obj: null };
+  }
+
+  function crmAdTypeLabel(a, sz) {
+    if (a.ad_type === 'bw') return 'Black & White';
+    if (a.ad_type === 'colour') return 'Colour';
+    if (sz.obj && a.price_cents) {
+      var bwPrice = sz.obj.bw != null ? sz.obj.bw : (sz.obj.bwPrice || 0);
+      if (Math.round(bwPrice * 100) === a.price_cents) return 'Black & White';
+    }
+    return 'Colour';
   }
 
   function renderCrmBusinessRow(biz, bizAds, bizPkgs, bizDelivs, bizFiles) {
@@ -1126,8 +1146,9 @@
     bizAds.forEach(function (a) {
       var col = CRM_TAG_COLORS[ci++ % CRM_TAG_COLORS.length];
       var sz = crmAdSizeLabel(a);
-      var typeLabel = a.ad_type === 'bw' ? 'B&W' : 'Colour';
-      tags += '<span class="spn-crm-tag" style="background:' + col + '">' + esc(sz.label + ' ' + typeLabel + ' Ad') + '</span>';
+      var tl = crmAdTypeLabel(a, sz);
+      var shortType = tl === 'Black & White' ? 'B&W' : 'Colour';
+      tags += '<span class="spn-crm-tag" style="background:' + col + '">' + esc(sz.label + ' ' + shortType) + '</span>';
     });
 
     var contactLine = [biz.contact_name, biz.contact_email, biz.contact_phone].filter(Boolean).join(' · ');
@@ -1155,6 +1176,7 @@
       var isPaid = p.payment_status === 'paid';
 
       bookingsHtml += '<div class="spn-crm-card">' +
+        '<div class="spn-crm-card-type">Sponsor</div>' +
         '<div class="spn-crm-card-head">' +
           '<div class="spn-crm-card-product">' + esc(p.tier_name || 'Sponsor Package') + '</div>' +
           '<div class="spn-crm-card-price">' + fmtD(p.amount_cents) + '</div>' +
@@ -1173,7 +1195,7 @@
     bizAds.forEach(function (a) {
       var sz = crmAdSizeLabel(a);
       var sizeLabel = sz.label;
-      var typeLabel = a.ad_type === 'bw' ? 'Black & White' : 'Colour';
+      var typeLabel = crmAdTypeLabel(a, sz);
       var dimsLabel = sz.dims;
       var artSt = a.artwork_status || 'missing';
       var artOk = artSt === 'approved' || artSt === 'print_ready';
@@ -1192,10 +1214,11 @@
       }
 
       bookingsHtml += '<div class="spn-crm-card">' +
+        '<div class="spn-crm-card-type">Ad Placement</div>' +
         '<div class="spn-crm-card-head">' +
           '<div>' +
-            '<div class="spn-crm-card-product">' + esc(sizeLabel) + ' ' + esc(typeLabel) + ' Ad</div>' +
-            (dimsLabel ? '<div class="spn-crm-card-dims">' + esc(dimsLabel) + '</div>' : '') +
+            '<div class="spn-crm-card-product">' + esc(sizeLabel) + '</div>' +
+            '<div class="spn-crm-card-details">' + esc(typeLabel) + (dimsLabel ? ' · ' + esc(dimsLabel) : '') + '</div>' +
           '</div>' +
           '<div class="spn-crm-card-price">' + fmtD(a.price_cents) + '</div>' +
         '</div>' +
