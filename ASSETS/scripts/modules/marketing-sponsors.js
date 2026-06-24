@@ -998,8 +998,9 @@
       SpnsState.deliverables = results[3] || [];
       var settingsRow = (results[4] || [])[0];
       if (settingsRow && settingsRow.settings) {
-        SpnsState.settings.adSizes = settingsRow.settings.adSizes || [];
-        SpnsState.settings.tiers = settingsRow.settings.tiers || [];
+        var s = settingsRow.settings;
+        if (s.adSizes && s.adSizes.length) SpnsState.settings.adSizes = s.adSizes;
+        if (s.tiers && s.tiers.length) SpnsState.settings.tiers = s.tiers;
       }
       SpnsState.files = results[5] || [];
       hydrateShowSponsorsCRM();
