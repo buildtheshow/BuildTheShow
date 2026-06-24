@@ -1533,9 +1533,8 @@
         body = '<div class="spn-logo-picker">' + logos.map(function(l, i) {
           var isSelected = l.url === currentLogo;
           return '<label class="spn-logo-option' + (isSelected ? ' spn-logo-option--sel' : '') + '" onclick="MarketingSponsorsModule.pickHeroLogo(this, ' + "'" + escHtml(l.url) + "'" + ')">' +
-            '<input type="radio" name="spn-hero-logo" value="' + escHtml(l.url) + '"' + (isSelected ? ' checked' : '') + ' style="accent-color:#572e88;width:16px;height:16px;flex-shrink:0;" />' +
-            '<img src="' + escHtml(l.url) + '" alt="' + escHtml(l.label) + '" style="height:48px;max-width:120px;object-fit:contain;" />' +
-            '<span style="font-size:0.72rem;color:#6b6080;">' + escHtml(l.label) + '</span>' +
+            '<img src="' + escHtml(l.url) + '" alt="' + escHtml(l.label) + '" />' +
+            '<input type="radio" name="spn-hero-logo" value="' + escHtml(l.url) + '"' + (isSelected ? ' checked' : '') + ' style="accent-color:#572e88;width:16px;height:16px;" />' +
           '</label>';
         }).join('') + '</div>';
       } else {
