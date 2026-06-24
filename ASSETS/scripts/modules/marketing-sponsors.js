@@ -1207,10 +1207,10 @@
         bulletsList +
         '<div class="spn-crm-card-pipeline">' +
           crmPipelineStep('Booking received', true, null) +
-          crmPipelineStep('Booking approved', isApproved, isApproved ? null : 'MarketingSponsorsModule.crmToggleField(\'sponsor_packages\',\'' + p.id + '\',\'booking_status\',\'approved\')') +
-          crmPipelineStep('Invoice sent', invoiceSent, invoiceSent ? null : 'MarketingSponsorsModule.crmInvoicePopup(\'sponsor_packages\',\'' + p.id + '\')', p.invoice_sent_date || '') +
+          crmPipelineStep(isApproved ? 'Booking approved' : 'Approve booking', isApproved, isApproved ? null : 'MarketingSponsorsModule.crmToggleField(\'sponsor_packages\',\'' + p.id + '\',\'booking_status\',\'approved\')') +
+          crmPipelineStep(invoiceSent ? 'Invoice sent' : 'Send invoice', invoiceSent, invoiceSent ? null : 'MarketingSponsorsModule.crmInvoicePopup(\'sponsor_packages\',\'' + p.id + '\')', p.invoice_sent_date || '') +
           (p.invoice_number ? crmPipelineInfo('Invoice #' + p.invoice_number) : '') +
-          crmPipelineStep('Payment ' + (isPaid ? 'received' : 'outstanding'), isPaid, isPaid ? null : 'MarketingSponsorsModule.crmPaymentPopup(\'sponsor_packages\',\'' + p.id + '\')', p.payment_received_date || '') +
+          crmPipelineStep(isPaid ? 'Payment received' : 'Record payment', isPaid, isPaid ? null : 'MarketingSponsorsModule.crmPaymentPopup(\'sponsor_packages\',\'' + p.id + '\')', p.payment_received_date || '') +
           (p.payment_amount_cents && !isPaid ? crmPipelineInfo('Received so far: ' + fmtD(p.payment_amount_cents)) : '') +
           (p.payment_method ? crmPipelineInfo('Method: ' + p.payment_method) : '') +
         '</div>' +
@@ -1250,14 +1250,14 @@
         '</div>' +
         '<div class="spn-crm-card-pipeline">' +
           crmPipelineStep('Booking received', true, null) +
-          crmPipelineStep('Booking approved', isApproved, isApproved ? null : 'MarketingSponsorsModule.crmToggleField(\'programme_ads\',\'' + a.id + '\',\'booking_status\',\'approved\')') +
-          crmPipelineStep('Invoice sent', invoiceSent, invoiceSent ? null : 'MarketingSponsorsModule.crmInvoicePopup(\'programme_ads\',\'' + a.id + '\')', a.invoice_sent_date || '') +
+          crmPipelineStep(isApproved ? 'Booking approved' : 'Approve booking', isApproved, isApproved ? null : 'MarketingSponsorsModule.crmToggleField(\'programme_ads\',\'' + a.id + '\',\'booking_status\',\'approved\')') +
+          crmPipelineStep(invoiceSent ? 'Invoice sent' : 'Send invoice', invoiceSent, invoiceSent ? null : 'MarketingSponsorsModule.crmInvoicePopup(\'programme_ads\',\'' + a.id + '\')', a.invoice_sent_date || '') +
           (a.invoice_number ? crmPipelineInfo('Invoice #' + a.invoice_number) : '') +
-          crmPipelineStep('Payment ' + (isPaid ? 'received' : 'outstanding'), isPaid, isPaid ? null : 'MarketingSponsorsModule.crmPaymentPopup(\'programme_ads\',\'' + a.id + '\')', a.payment_received_date || '') +
+          crmPipelineStep(isPaid ? 'Payment received' : 'Record payment', isPaid, isPaid ? null : 'MarketingSponsorsModule.crmPaymentPopup(\'programme_ads\',\'' + a.id + '\')', a.payment_received_date || '') +
           (a.payment_amount_cents && !isPaid ? crmPipelineInfo('Received so far: ' + fmtD(a.payment_amount_cents)) : '') +
           (a.payment_method ? crmPipelineInfo('Method: ' + a.payment_method) : '') +
-          crmPipelineStep('Artwork ' + (artOk ? 'approved' : artReceived ? 'received' : 'not received'), artReceived, !artReceived ? 'MarketingSponsorsModule.crmArtworkRequestPopup(\'' + a.id + '\')' : (artReceived && !artOk ? 'MarketingSponsorsModule.crmToggleField(\'programme_ads\',\'' + a.id + '\',\'artwork_status\',\'approved\')' : null)) +
-          crmPipelineStep('Approval: ' + (approvalSt === 'approved' ? 'approved' : approvalSt === 'changes_needed' ? 'changes needed' : 'pending'), approvalSt === 'approved', 'MarketingSponsorsModule.crmToggleField(\'programme_ads\',\'' + a.id + '\',\'approval_status\',\'' + (approvalSt === 'approved' ? 'pending' : 'approved') + '\')') +
+          crmPipelineStep(artReceived ? 'Artwork received' : 'Request artwork', artReceived, !artReceived ? 'MarketingSponsorsModule.crmArtworkRequestPopup(\'' + a.id + '\')' : null) +
+          crmPipelineStep(approvalSt === 'approved' ? 'Artwork approved' : 'Approve artwork', approvalSt === 'approved', approvalSt === 'approved' ? null : (artReceived ? 'MarketingSponsorsModule.crmToggleField(\'programme_ads\',\'' + a.id + '\',\'approval_status\',\'approved\')' : null)) +
         '</div>' +
         crmBookingDetails(a) +
         artworkPreview +
