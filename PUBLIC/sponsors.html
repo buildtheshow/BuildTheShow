@@ -1955,6 +1955,9 @@
           await insertPackage(bizId, notes);
         }
 
+        var zone = spbArtworkStatus === 'ready' ? 'artwork' : 'help';
+        var uploadedUrls = await uploadSponsorFiles(bizId, spbUploadedFiles[zone] || []);
+
         var optionLabel = selected.tier || selected.size || '';
         var amountLabel = selected.amount ? '$' + Number(selected.amount).toLocaleString() : '';
         var detailHtml = '';
@@ -1983,8 +1986,8 @@
               '</table></div>';
           }
         }
-        sendSponsorConfirmation(contact, email, business, selected.kind, optionLabel, amountLabel, detailHtml).catch(function(e) { console.warn('Confirmation failed:', e); });
-        sendSponsorNotification(business, contact, email, selected.kind, optionLabel).catch(function(e) { console.warn('Notification failed:', e); });
+        sendSponsorConfirmation(contact, email, business, selected.kind, optionLabel, amountLabel, detailHtml, uploadedUrls).catch(function(e) { console.warn('Confirmation failed:', e); });
+        sendSponsorNotification(business, contact, email, selected.kind, optionLabel, uploadedUrls).catch(function(e) { console.warn('Notification failed:', e); });
 
         document.getElementById('sp-request-modal').innerHTML =
           '<div class="sp-modal" style="text-align:center;padding:3rem 2rem;">' +
@@ -2000,16 +2003,43 @@
       }
     }
 
-    async function sendSponsorConfirmation(contactName, contactEmail, bizName, kind, option, amount, detailHtml) {
+    async function uploadSponsorFiles(bizId, files) {
+      if (!files || !files.length) return [];
+      var urls = [];
+      for (var i = 0; i < files.length; i++) {
+        try {
+          var f = files[i];
+          var safeName = f.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+          var path = production.id + '/' + bizId + '/' + Date.now() + '_' + safeName;
+          var res = await sb.storage.from('programme-ads').upload(path, f, { contentType: f.type, upsert: false });
+          if (res.error) { console.warn('Upload failed:', res.error); continue; }
+          var publicUrl = sb.storage.from('programme-ads').getPublicUrl(path);
+          if (publicUrl?.data?.publicUrl) urls.push({ name: f.name, url: publicUrl.data.publicUrl });
+        } catch (e) { console.warn('Upload error:', e); }
+      }
+      return urls;
+    }
+
+    async function sendSponsorConfirmation(contactName, contactEmail, bizName, kind, option, amount, detailHtml, uploadedUrls) {
       if (!contactEmail) return;
       var e = function(v) { return String(v||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); };
       var showName = production?.title || 'the production';
       var orgName = organization?.name || '';
       var typeLabel = kind === 'ad' ? 'Programme Ad' : 'Sponsorship';
       var artworkLabel = spbArtworkStatus === 'ready' ? 'Uploaded with submission' : spbArtworkStatus === 'later' ? 'Will be submitted before the deadline' : spbArtworkStatus === 'help' ? 'Design assistance requested' : '';
-      var zone = spbArtworkStatus === 'ready' ? 'artwork' : 'help';
-      var fileNames = (spbUploadedFiles[zone] || []).map(function(f) { return e(f.name); });
-      var filesHtml = fileNames.length ? '<tr><td style="padding:6px 12px;font-weight:700;color:#572e88;vertical-align:top;">Files</td><td style="padding:6px 12px;color:#1a1530;">' + fileNames.join('<br>') + '</td></tr>' : '';
+      var filesHtml = '';
+      if (uploadedUrls && uploadedUrls.length) {
+        var imgExts = ['png','jpg','jpeg','svg'];
+        var previewsHtml = uploadedUrls.map(function(f) {
+          var ext = (f.name || '').split('.').pop().toLowerCase();
+          var isImg = imgExts.includes(ext);
+          if (isImg) {
+            return '<div style="margin:4px 0;"><img src="' + f.url + '" alt="' + e(f.name) + '" style="max-width:200px;max-height:150px;border-radius:6px;border:1px solid rgba(87,46,136,0.1);" /><div style="font-size:11px;color:#8a7aa0;margin-top:2px;">' + e(f.name) + '</div></div>';
+          }
+          return '<div style="margin:4px 0;display:flex;align-items:center;gap:6px;"><span style="display:inline-block;padding:4px 8px;background:#f0ecfc;border-radius:4px;font-size:11px;font-weight:800;color:#572e88;">' + ext.toUpperCase() + '</span><span style="font-size:13px;color:#1a1530;">' + e(f.name) + '</span></div>';
+        }).join('');
+        filesHtml = '<tr><td style="padding:6px 12px;font-weight:700;color:#572e88;vertical-align:top;">Files</td><td style="padding:6px 12px;color:#1a1530;">' + previewsHtml + '</td></tr>';
+      }
 
       var rows = '<tr><td style="padding:6px 12px;font-weight:700;color:#572e88;">Business</td><td style="padding:6px 12px;color:#1a1530;">' + e(bizName) + '</td></tr>' +
         '<tr><td style="padding:6px 12px;font-weight:700;color:#572e88;">Type</td><td style="padding:6px 12px;color:#1a1530;">' + e(typeLabel) + '</td></tr>' +
@@ -2049,11 +2079,12 @@
       } catch (e) { console.warn('Confirmation send failed:', e); }
     }
 
-    async function sendSponsorNotification(bizName, contactName, contactEmail, kind, option) {
+    async function sendSponsorNotification(bizName, contactName, contactEmail, kind, option, uploadedUrls) {
       var emails = settings.notifyEmails || [];
       if (!emails.length) return;
       var typeLabel = kind === 'ad' ? 'Programme Ad' : 'Sponsorship';
-      var bodyText = 'A new ' + typeLabel.toLowerCase() + ' request has been submitted.\n\nBusiness: ' + bizName + '\nContact: ' + contactName + '\nEmail: ' + contactEmail + '\nOption: ' + (option || 'Not specified') + '\n\nLog in to your Build The Show workspace to review this submission.';
+      var fileLinks = (uploadedUrls || []).map(function(f) { return f.name + ': ' + f.url; }).join('\n');
+      var bodyText = 'A new ' + typeLabel.toLowerCase() + ' request has been submitted.\n\nBusiness: ' + bizName + '\nContact: ' + contactName + '\nEmail: ' + contactEmail + '\nOption: ' + (option || 'Not specified') + (fileLinks ? '\n\nUploaded files:\n' + fileLinks : '') + '\n\nLog in to your Build The Show workspace to review this submission.';
       for (var i = 0; i < emails.length; i++) {
         try {
           await sb.functions.invoke('send-email', { body: {
