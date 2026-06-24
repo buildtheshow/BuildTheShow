@@ -486,8 +486,14 @@
     },
 
     paidByLabel(r) {
-      if (r.paid_by === 'personal') return r.submitted_by || 'Personal';
+      if (r.paid_by === 'personal') return r.submitted_by || r.submitted_by_name || 'Personal';
       return 'Production';
+    },
+
+    purchaserEmail(r) {
+      if (r.submitted_by_email) return r.submitted_by_email;
+      const linkedMember = r.submitted_by_id ? this.orgMembersMap[r.submitted_by_id] : null;
+      return linkedMember?.email || '';
     },
 
     badgeFor(r) {
@@ -551,29 +557,20 @@
     },
 
     reimbursementsOwing() {
-      const pending = this.receipts.filter(r => r.paid_by === 'personal' && r.status !== 'paid');
-      const byPerson = {};
-      pending.forEach(r => {
-        const key = r.submitted_by || '__unknown__';
-        if (!byPerson[key]) byPerson[key] = { name: r.submitted_by || 'Unknown', receipts: [], depts: new Set() };
-        byPerson[key].receipts.push(r);
-        byPerson[key].depts.add(this.deptName(r));
-      });
-      return Object.values(byPerson);
+      return this.receipts
+        .filter(r => r.paid_by === 'personal' && r.status !== 'paid')
+        .sort((a, b) => (b.receipt_date || b.created_at || '').localeCompare(a.receipt_date || a.created_at || ''));
     },
 
-    async markPersonPaid(name) {
-      const toMark = this.receipts.filter(r =>
-        r.paid_by === 'personal' && r.status !== 'paid' &&
-        (r.submitted_by || '__unknown__') === (name || '__unknown__')
-      );
-      if (!toMark.length) return;
-      const ids = toMark.map(r => r.id);
+    async markReceiptPaid(receiptId) {
+      const receipt = this.receipts.find(r => String(r.id) === String(receiptId));
+      if (!receipt) return;
       try {
-        const { error } = await this.sb.from('budget_receipts').update({ status: 'paid' }).in('id', ids);
+        const { error } = await this.sb.from('budget_receipts').update({ status: 'paid' }).eq('id', receipt.id);
         if (error) throw error;
         await this.load();
-      } catch(e) { alert('Could not mark as paid: ' + e.message); }
+        this.showToast('Saved!', false);
+      } catch(e) { this.showToast("Couldn't save. Try again.", true); }
     },
 
     filteredReceipts() {
@@ -917,7 +914,7 @@
       const totalCents  = all.reduce((s, r) => s + (r.amount_cents || 0), 0);
       const owingList   = all.filter(r => r.paid_by === 'personal' && r.status !== 'paid');
       const owingCents  = owingList.reduce((s, r) => s + (r.amount_cents || 0), 0);
-      const owingPeople = new Set(owingList.map(r => r.submitted_by || 'unknown')).size;
+      const owingPeople = new Set(owingList.map(r => this.purchaserEmail(r) || r.submitted_by || 'unknown')).size;
       const paidList    = all.filter(r => r.paid_by === 'personal' && r.status === 'paid');
       const paidCents   = paidList.reduce((s, r) => s + (r.amount_cents || 0), 0);
       const companyList = all.filter(r => r.paid_by !== 'personal');
@@ -993,28 +990,28 @@
             '<div class="fin-section">' +
               '<div class="fin-section-head"><div>' +
                 '<div class="fin-section-title">Reimbursements Owing</div>' +
-                '<div class="fin-section-sub">People waiting to be paid</div>' +
+                '<div class="fin-section-sub">Each receipt stays separate for reimbursement</div>' +
               '</div></div>' +
               (owing.length ? (
                 '<div class="fin-table-wrap"><table class="fin-table">' +
                 '<thead><tr>' +
-                  '<th>Person</th><th>Department</th><th>Receipts</th><th>Amount</th><th>Action</th>' +
+                  '<th>Person</th><th>Email</th><th>Department</th><th>Purchase</th><th>Amount</th><th>Action</th>' +
                 '</tr></thead><tbody>' +
-                owing.map(p => {
-                  const total = p.receipts.reduce((s, r) => s + (r.amount_cents || 0), 0);
-                  const depts = Array.from(p.depts).join(', ');
-                  const safeName = (p.name || '').replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+                owing.map(r => {
+                  const name = r.submitted_by || r.submitted_by_name || 'Unknown';
+                  const email = this.purchaserEmail(r);
                   return '<tr>' +
-                    '<td><div class="fin-person-cell"><div class="fin-avatar" style="' + this.avatarColor(p.name) + '">' + this.initials(p.name) + '</div><span class="fin-person-name">' + this.esc(p.name) + '</span></div></td>' +
-                    '<td style="color:#7a6e9a">' + this.esc(depts) + '</td>' +
-                    '<td style="color:#7a6e9a;text-align:center">' + p.receipts.length + '</td>' +
-                    '<td style="font-weight:700">' + this.fmt$(total) + '</td>' +
-                    '<td><button class="fin-mark-paid-btn" onclick="FIN.markPersonPaid(\'' + safeName + '\')">' + markIcon + ' Mark as Paid</button></td>' +
+                    '<td><div class="fin-person-cell"><div class="fin-avatar" style="' + this.avatarColor(name) + '">' + this.initials(name) + '</div><span class="fin-person-name">' + this.esc(name) + '</span></div></td>' +
+                    '<td style="color:#7a6e9a">' + (email ? '<a href="mailto:' + this.esc(email) + '" style="color:#572e88;text-decoration:none;font-weight:700">' + this.esc(email) + '</a>' : '<span style="color:#b0a8c8">No email on receipt</span>') + '</td>' +
+                    '<td style="color:#7a6e9a">' + this.esc(this.deptName(r)) + '</td>' +
+                    '<td><div style="font-weight:800">' + this.esc(r.vendor || 'Receipt') + '</div><div style="color:#7a6e9a;font-size:0.76rem">' + this.esc(r.description || this.fmtDate(r.receipt_date || r.created_at)) + '</div></td>' +
+                    '<td style="font-weight:700">' + this.fmt$(r.amount_cents) + '</td>' +
+                    '<td><button class="fin-mark-paid-btn" onclick="FIN.markReceiptPaid(\'' + this.esc(r.id) + '\')">' + markIcon + ' Mark as Paid</button></td>' +
                   '</tr>';
                 }).join('') +
                 '</tbody>' +
                 '<tfoot><tr class="fin-total-row">' +
-                  '<td colspan="3">Total Owing</td>' +
+                  '<td colspan="4">Total Owing</td>' +
                   '<td class="fin-total-amount" colspan="2">' + this.fmt$(owingCents) + '</td>' +
                 '</tr></tfoot>' +
                 '</table></div>'
@@ -1109,11 +1106,14 @@
                       const linkedMember = r.submitted_by_id ? this.orgMembersMap[r.submitted_by_id] : null;
                       const safeId = this.esc(r.id);
                       const safeSub = this.esc(r.submitted_by || '');
+                      const email = this.purchaserEmail(r);
                       if (linkedMember) {
                         return '<button class="fin-person-link" onclick="event.stopPropagation();FIN.openPersonModal(\'' + this.esc(r.submitted_by_id) + '\')" title="View contact info">' + this.esc(this.paidByLabel(r)) + '</button>' +
+                          (email ? '<div style="font-size:0.7rem;color:#7a6e9a;line-height:1.25">' + this.esc(email) + '</div>' : '') +
                           '<button class="fin-link-person-btn" style="margin-top:0.25rem;font-size:0.68rem" onclick="event.stopPropagation();FIN.openLinkModal(\'' + safeId + '\',\'' + safeSub + '\')" title="Change link">change</button>';
                       }
                       return '<div>' + this.esc(this.paidByLabel(r)) + '</div>' +
+                        (email ? '<div style="font-size:0.7rem;color:#7a6e9a;line-height:1.25">' + this.esc(email) + '</div>' : '') +
                         (this.orgMembers.length ? '<button class="fin-link-person-btn" onclick="event.stopPropagation();FIN.openLinkModal(\'' + safeId + '\',\'' + safeSub + '\')" title="Link to org member"><img src="/ASSETS/Images/Icons/Profiles.svg" style="width:10px;height:10px;filter:brightness(0);opacity:0.5" alt=""> link person</button>' : '');
                     })() + '</td>' +
                     '<td><span class="fin-badge ' + b.cls + '" style="white-space:normal;text-align:center;display:inline-block;line-height:1.3">' + b.label + '</span></td>' +
