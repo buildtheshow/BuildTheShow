@@ -1288,15 +1288,14 @@
             bookingsHtml +
           '</div>' +
           '<div class="spn-crm-section">' +
-            '<div class="spn-crm-section-title"><img src="/ASSETS/Images/Icons/Files.svg" alt="" /> Artwork</div>' +
-            artworkHtml +
+            '<div class="spn-crm-section-title"><img src="/ASSETS/Images/Icons/organisation-members.svg" alt="" /> Contact</div>' +
+            (contactHtml || '<div class="spn-crm-pkg-meta">No contact details</div>') +
           '</div>' +
         '</div>' +
         '<div class="spn-crm-detail-bottom">' +
           '<div class="spn-crm-section">' +
             '<div class="spn-crm-section-title"><img src="/ASSETS/Images/Icons/Budgeting-Fundraising.svg" alt="" /> Payment</div>' +
             payHtml +
-            (contactHtml ? '<div style="margin-top:0.75rem;"><div class="spn-crm-section-title"><img src="/ASSETS/Images/Icons/organisation-members.svg" alt="" /> Contact</div>' + contactHtml + '</div>' : '') +
           '</div>' +
           '<div class="spn-crm-section">' +
             '<div class="spn-crm-section-title"><img src="/ASSETS/Images/Icons/Checklist.svg" alt="" /> Deliverables</div>' +
