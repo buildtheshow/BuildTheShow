@@ -809,6 +809,104 @@
       }
     },
 
+    norm(value) {
+      return String(value || '').trim().toLowerCase().replace(/&/g, 'and').replace(/\s+/g, ' ');
+    },
+
+    receiptBudgetGroupName(name) {
+      const n = this.norm(name);
+      const groups = [
+        { label: 'Rights & Venue', terms: ['rights', 'licensing', 'licence', 'license', 'royalties', 'venue', 'rental', 'script rental', 'performance rights', 'orchestra'] },
+        { label: 'Promotion & Audience', terms: ['promotion', 'audience', 'concession', 'printing', 'programme', 'program', 'marketing', 'advertising', 'lobby', 'ticketing', 'box office', 'credit card'] },
+        { label: 'Production Elements', terms: ['production elements', 'set', 'construction', 'props', 'costume', 'hair', 'makeup', 'script', 'paint', 'hardware', 'scenic', 'furniture', 'fabric', 'alterations', 'wigs'] },
+        { label: 'Technical', terms: ['technical', 'sound', 'music', 'instrument', 'stage management supplies', 'lighting', 'photo', 'video', 'microphone', 'battery', 'gels', 'cables'] },
+        { label: 'Safety Net', terms: ['safety', 'insurance', 'permit', 'contingency', 'administration', 'emergency', 'unexpected', 'banking', 'office', 'software'] },
+        { label: 'People', terms: ['people', 'contractor', 'volunteer appreciation', 'cast appreciation', 'director', 'choreographer', 'music director', 'stage manager', 'honorarium', 'honoraria'] },
+        { label: 'Events', terms: ['event', 'audition', 'callback', 'meet and greet', 'meet & greet', 'cast party', 'water', 'snacks', 'cast gifts'] },
+      ];
+      const matched = groups.find(group => group.terms.some(term => n.indexOf(term) !== -1));
+      return matched ? matched.label : 'Other';
+    },
+
+    budgetGroupNames() {
+      const names = [];
+      this.categories.forEach(cat => {
+        const groupName = this.receiptBudgetGroupName(cat.name);
+        if (!names.includes(groupName)) names.push(groupName);
+      });
+      return names.sort((a, b) => a.localeCompare(b));
+    },
+
+    categoriesForGroup(groupName) {
+      return this.categories.filter(cat => this.receiptBudgetGroupName(cat.name) === groupName);
+    },
+
+    itemsForCategory(categoryId) {
+      return this.budgetItems.filter(item => String(item.category_id || '') === String(categoryId || ''));
+    },
+
+    selectedBudgetItemIdForReceipt(receipt) {
+      const items = Array.isArray(receipt?.line_items) ? receipt.line_items : [];
+      const direct = items.find(item => item && item.budget_item_id);
+      if (direct) return direct.budget_item_id;
+      const firstName = this.norm(items.find(item => item?.name)?.name);
+      if (!firstName) return '';
+      const categoryItems = this.itemsForCategory(receipt?.category_id);
+      const matched = categoryItems.find(item => this.norm(item.name) === firstName);
+      return matched ? matched.id : '';
+    },
+
+    renderBudgetGroupOptions(selectedGroup) {
+      const groups = this.budgetGroupNames();
+      if (!groups.length) return '<option value="">No department groups found</option>';
+      return groups.map(group => '<option value="' + this.escAttr(group) + '"' + (group === selectedGroup ? ' selected' : '') + '>' + this.esc(group) + '</option>').join('');
+    },
+
+    renderBudgetCategoryOptions(groupName, selectedCategoryId) {
+      const cats = this.categoriesForGroup(groupName);
+      if (!cats.length) return '<option value="">No subcategories in this group</option>';
+      return cats.map(cat => '<option value="' + this.escAttr(cat.id) + '"' + (String(cat.id) === String(selectedCategoryId || '') ? ' selected' : '') + '>' + this.esc(cat.name) + '</option>').join('');
+    },
+
+    renderBudgetItemOptions(categoryId, selectedItemId) {
+      const items = this.itemsForCategory(categoryId);
+      const options = ['<option value="">No specific budget item</option>'];
+      items.forEach(item => {
+        options.push('<option value="' + this.escAttr(item.id) + '"' + (String(item.id) === String(selectedItemId || '') ? ' selected' : '') + '>' + this.esc(item.name) + '</option>');
+      });
+      return options.join('');
+    },
+
+    renderBudgetMappingControls(receipt) {
+      const currentDept = this.deptName(receipt);
+      const selectedCategory = this.categories.find(cat => cat.id === receipt.category_id) || this.categories.find(cat => cat.name === currentDept) || this.categories[0];
+      const selectedGroup = selectedCategory ? this.receiptBudgetGroupName(selectedCategory.name) : (this.budgetGroupNames()[0] || '');
+      const selectedItemId = this.selectedBudgetItemIdForReceipt(receipt);
+      const groupEl = document.getElementById('fin-edit-budget-group');
+      const catEl = document.getElementById('fin-edit-category');
+      const itemEl = document.getElementById('fin-edit-budget-item');
+      if (groupEl) groupEl.innerHTML = this.renderBudgetGroupOptions(selectedGroup);
+      if (catEl) catEl.innerHTML = this.renderBudgetCategoryOptions(selectedGroup, selectedCategory?.id || '');
+      if (itemEl) itemEl.innerHTML = this.renderBudgetItemOptions(selectedCategory?.id || '', selectedItemId);
+    },
+
+    onBudgetGroupChange() {
+      const groupEl = document.getElementById('fin-edit-budget-group');
+      const catEl = document.getElementById('fin-edit-category');
+      const itemEl = document.getElementById('fin-edit-budget-item');
+      const groupName = groupEl?.value || '';
+      const cats = this.categoriesForGroup(groupName);
+      const nextCatId = cats[0]?.id || '';
+      if (catEl) catEl.innerHTML = this.renderBudgetCategoryOptions(groupName, nextCatId);
+      if (itemEl) itemEl.innerHTML = this.renderBudgetItemOptions(nextCatId, '');
+    },
+
+    onBudgetCategoryChange() {
+      const catId = document.getElementById('fin-edit-category')?.value || '';
+      const itemEl = document.getElementById('fin-edit-budget-item');
+      if (itemEl) itemEl.innerHTML = this.renderBudgetItemOptions(catId, '');
+    },
+
     receiptFileUrls(receipt) {
       if (!receipt || !receipt.receipt_url) return [];
       try {
@@ -823,12 +921,21 @@
       const el = document.getElementById('fin-edit-files');
       if (!el) return;
       const urls = this.receiptFileUrls(receipt);
+      const urlEl = document.getElementById('fin-edit-file-urls');
+      if (urlEl) urlEl.value = urls.join('\n');
       el.innerHTML = urls.length
         ? urls.map((url, index) => {
           const ext = (url.split('.').pop() || '').split('?')[0].toUpperCase();
           return '<a class="fin-edit-file-link" href="' + this.escAttr(url) + '" target="_blank" rel="noopener">File ' + (index + 1) + (ext ? ' - ' + this.esc(ext) : '') + '</a>';
         }).join('')
         : '<span class="fin-form-help">No file is attached to this receipt.</span>';
+    },
+
+    collectReceiptUrlValue() {
+      const el = document.getElementById('fin-edit-file-urls');
+      const urls = (el?.value || '').split(/\n+/).map(url => url.trim()).filter(Boolean);
+      if (!urls.length) return null;
+      return urls.length === 1 ? urls[0] : JSON.stringify(urls);
     },
 
     renderReceiptLineItems(items) {
@@ -842,7 +949,7 @@
       const qty = item?.qty || 1;
       const unit = this.moneyInput(item?.unit_price_cents || 0);
       const amount = this.moneyInput(item?.amount_cents || 0);
-      return '<div class="fin-edit-line-row" data-line-index="' + index + '">' +
+      return '<div class="fin-edit-line-row" data-line-index="' + index + '" data-budget-item-id="' + this.escAttr(item?.budget_item_id || '') + '">' +
         '<label class="fin-form-field"><span class="fin-form-label">Item</span><input class="fin-form-input" data-line-field="name" type="text" value="' + this.escAttr(item?.name || '') + '"></label>' +
         '<label class="fin-form-field"><span class="fin-form-label">Qty</span><input class="fin-form-input" data-line-field="qty" type="number" min="0" step="0.01" value="' + this.escAttr(qty) + '"></label>' +
         '<label class="fin-form-field"><span class="fin-form-label">Unit Price</span><input class="fin-form-input" data-line-field="unit" type="number" min="0" step="0.01" value="' + this.escAttr(unit) + '"></label>' +
@@ -866,6 +973,27 @@
       if (el && !el.querySelector('.fin-edit-line-row')) el.innerHTML = '<span class="fin-form-help">No line items yet.</span>';
     },
 
+    applySelectedBudgetItemToFirstLine() {
+      const itemId = document.getElementById('fin-edit-budget-item')?.value || '';
+      const item = this.budgetItems.find(budgetItem => String(budgetItem.id) === String(itemId));
+      if (!item) return;
+      const wrap = document.getElementById('fin-edit-line-items');
+      if (!wrap) return;
+      if (!wrap.querySelector('.fin-edit-line-row')) this.addReceiptLineItem();
+      const row = wrap.querySelector('.fin-edit-line-row');
+      if (!row) return;
+      row.dataset.budgetItemId = item.id;
+      const nameEl = row.querySelector('[data-line-field="name"]');
+      const qtyEl = row.querySelector('[data-line-field="qty"]');
+      const unitEl = row.querySelector('[data-line-field="unit"]');
+      const amountEl = row.querySelector('[data-line-field="amount"]');
+      if (nameEl && !nameEl.value.trim()) nameEl.value = item.name || '';
+      if (unitEl && item.unit_cost_cents && !parseFloat(unitEl.value || '0')) unitEl.value = this.moneyInput(item.unit_cost_cents);
+      const qty = parseFloat(qtyEl?.value || '1') || 1;
+      const unit = parseFloat(unitEl?.value || '0') || 0;
+      if (amountEl && unit && !parseFloat(amountEl.value || '0')) amountEl.value = (qty * unit).toFixed(2);
+    },
+
     collectReceiptLineItems() {
       const rows = Array.from(document.querySelectorAll('#fin-edit-line-items .fin-edit-line-row'));
       if (!rows.length) return null;
@@ -875,6 +1003,7 @@
         const unitCents = this.dollarsFromInputValue(row.querySelector('[data-line-field="unit"]')?.value);
         const amountCents = this.dollarsFromInputValue(row.querySelector('[data-line-field="amount"]')?.value);
         return {
+          budget_item_id: row.dataset.budgetItemId || null,
           name,
           qty,
           unit_price_cents: unitCents,
@@ -887,16 +1016,8 @@
       const r = this.receipts.find(item => String(item.id) === String(receiptId));
       if (!r) return;
 
-      const catEl = document.getElementById('fin-edit-category');
-      if (catEl) {
-        const currentDept = this.deptName(r);
-        catEl.innerHTML = this.categories.map(c => {
-          const selected = (c.id === r.category_id || (!r.category_id && c.name === currentDept)) ? ' selected' : '';
-          return '<option value="' + this.esc(c.id) + '"' + selected + '>' + this.esc(c.name) + '</option>';
-        }).join('') + (this.categories.length ? '' : '<option value="">No budget categories found</option>');
-      }
-
       document.getElementById('fin-edit-id').value = r.id || '';
+      this.renderBudgetMappingControls(r);
       document.getElementById('fin-edit-date').value = (r.receipt_date || '').slice(0, 10);
       document.getElementById('fin-edit-vendor').value = r.vendor || '';
       document.getElementById('fin-edit-description').value = r.description || '';
@@ -1149,7 +1270,7 @@
           '<div>' +
 
             // ── Reimbursements owing ──
-            '<div class="fin-section" id="fin-sec-reimb">' +
+            '<div class="fin-section fin-section--collapsed" id="fin-sec-reimb">' +
               '<div class="fin-section-head" onclick="FIN.toggleSection(\'fin-sec-reimb\')"><div>' +
                 '<div class="fin-section-title"><span class="fin-collapse-chevron">&#9660;</span>Reimbursements Owing</div>' +
                 '<div class="fin-section-sub">' + (owing.length ? owing.length + ' receipt' + (owing.length !== 1 ? 's' : '') + ' · ' + this.fmt$(owingCents) : 'None outstanding') + '</div>' +
@@ -1194,7 +1315,7 @@
             '</div>' +
 
             // ── All receipts ──
-            '<div class="fin-section" id="fin-sec-all">' +
+            '<div class="fin-section fin-section--collapsed" id="fin-sec-all">' +
               '<div class="fin-section-head" onclick="FIN.toggleSection(\'fin-sec-all\')">' +
                 '<div><div class="fin-section-title"><span class="fin-collapse-chevron">&#9660;</span>All Receipts</div><div class="fin-section-sub">' + all.length + ' ' + (all.length===1?'receipt':'receipts') + '</div></div>' +
                 '<div class="fin-section-actions">' +
