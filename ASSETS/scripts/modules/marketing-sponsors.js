@@ -1070,13 +1070,12 @@
       }).join('');
   }
 
-  var AD_SIZE_LABELS = { full: 'Full Page', half: 'Half Page', quarter: 'Quarter Page', card: 'Card', full_page: 'Full Page', half_page: 'Half Page', quarter_page: 'Quarter Page', eighth: 'Eighth Page' };
   function crmAdSizeLabel(a) {
     var sizeObj = (SpnsState.settings.adSizes || []).find(function (s) { return s.id === a.ad_size; });
     if (sizeObj) return { label: sizeObj.label, dims: sizeObj.dims ? sizeObj.dims.replace(/x/i, '" x ') + '"' : '' };
     var raw = a.ad_size || a.size_id || a.format || '';
-    var mapped = AD_SIZE_LABELS[raw.toLowerCase()] || (raw.charAt(0).toUpperCase() + raw.slice(1));
-    return { label: mapped || 'Ad', dims: '' };
+    var label = raw ? raw.replace(/_/g, ' ').replace(/\b\w/g, function (c) { return c.toUpperCase(); }) : 'Ad';
+    return { label: label, dims: '' };
   }
 
   function renderCrmBusinessRow(biz, bizAds, bizPkgs, bizDelivs, bizFiles) {
