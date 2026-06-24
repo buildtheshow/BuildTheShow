@@ -1122,7 +1122,7 @@
       var sizeLabel = sizeObj ? sizeObj.label : (a.ad_size || 'Ad');
       var typeLabel = a.ad_type === 'bw' ? 'B&W' : 'Colour';
       var dimsLabel = sizeObj && sizeObj.dims ? ' (' + sizeObj.dims.replace(/x/i, '" x ') + '")' : '';
-      tags += '<span class="spn-crm-tag" style="background:' + col + '">' + esc(sizeLabel + ' ' + typeLabel) + dimsLabel + '</span>';
+      tags += '<span class="spn-crm-tag" style="background:' + col + '">' + esc(sizeLabel + ' ' + typeLabel + ' Ad') + '</span>';
     });
 
     var contactLine = [biz.contact_name, biz.contact_email, biz.contact_phone].filter(Boolean).join(' &middot; ');
@@ -1140,7 +1140,8 @@
       var bulletsList = bullets ? '<ul class="spn-crm-pkg-includes">' + bullets.split('\n').filter(Boolean).map(function (b) { return '<li>' + esc(b.trim()) + '</li>'; }).join('') + '</ul>' : '';
 
       bookingsHtml += '<div class="spn-crm-booking-row">' +
-        '<div class="spn-crm-booking-row-head"><span class="spn-crm-tag" style="background:#572e88;">' + esc(p.tier_name || 'Sponsor') + '</span><span class="spn-crm-booking-amount">' + fmtDollars(p.amount_cents) + '</span></div>' +
+        '<div class="spn-crm-booking-product">' + esc(p.tier_name || 'Sponsor Package') + '</div>' +
+        '<div class="spn-crm-booking-row-head"><span class="spn-crm-booking-amount">' + fmtDollars(p.amount_cents) + '</span></div>' +
         bulletsList +
         '<div class="spn-crm-checklist">' +
           statusRow('Booking ' + (p.booking_status === 'approved' ? 'approved' : 'received'), p.booking_status === 'approved') +
@@ -1157,15 +1158,17 @@
     bizAds.forEach(function (a) {
       var sizeObj = (SpnsState.settings.adSizes || []).find(function (s) { return s.id === a.ad_size; });
       var sizeLabel = sizeObj ? sizeObj.label : (a.ad_size || 'Ad');
-      var typeLabel = a.ad_type === 'bw' ? 'B&W' : 'Colour';
-      var dimsLabel = sizeObj && sizeObj.dims ? ' (' + sizeObj.dims.replace(/x/i, '" x ') + '")' : '';
+      var typeLabel = a.ad_type === 'bw' ? 'Black & White' : 'Colour';
+      var dimsLabel = sizeObj && sizeObj.dims ? sizeObj.dims.replace(/x/i, '" x ') + '"' : '';
       var artSt = a.artwork_status || 'missing';
       var artOk = artSt === 'approved' || artSt === 'print_ready';
       var artLabel2 = artOk ? 'Approved' : (artSt === 'received' ? 'Received' : 'Not Received');
       var approvalSt = a.approval_status || 'pending';
 
       bookingsHtml += '<div class="spn-crm-booking-row">' +
-        '<div class="spn-crm-booking-row-head"><span class="spn-crm-tag" style="background:#476aaa;">' + esc(sizeLabel + ' ' + typeLabel) + dimsLabel + '</span><span class="spn-crm-booking-amount">' + fmtDollars(a.price_cents) + '</span></div>' +
+        '<div class="spn-crm-booking-product">' + esc(sizeLabel) + ' ' + esc(typeLabel) + ' Ad</div>' +
+        (dimsLabel ? '<div class="spn-crm-booking-dims">' + esc(dimsLabel) + '</div>' : '') +
+        '<div class="spn-crm-booking-row-head"><span class="spn-crm-booking-amount">' + fmtDollars(a.price_cents) + '</span></div>' +
         '<div class="spn-crm-checklist">' +
           statusRow('Booking ' + (a.booking_status === 'approved' ? 'approved' : 'received'), a.booking_status === 'approved') +
           statusRow('Invoice sent', !!a.invoice_sent_date, a.invoice_sent_date || '') +
