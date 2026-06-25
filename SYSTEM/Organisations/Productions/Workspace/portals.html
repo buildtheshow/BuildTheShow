@@ -2007,30 +2007,48 @@
     // ── Module list per portal type ────────────────────────────────────────────
     // key = stored in portal_permissions.module_key
     // defaultAccess = what the role gives by default; overridden per-person in portal_permissions
-    const PORTAL_MODULE_LIST = {
-      cast:      [{ key: 'schedule',      label: 'Production Schedule',    defaultAccess: 'view' },
-                  { key: 'registration',  label: 'Registration',           defaultAccess: 'edit' }],
-      volunteer: [{ key: 'shifts',        label: 'Shifts',                 defaultAccess: 'view' },
-                  { key: 'hours',         label: 'Hours Log',              defaultAccess: 'view' }],
-      dept_lead: [{ key: 'shifts',        label: 'Shifts',                 defaultAccess: 'edit' },
-                  { key: 'hours',         label: 'Hours',                  defaultAccess: 'view' },
-                  { key: 'budget',        label: 'Department Budget',      defaultAccess: 'view' },
-                  { key: 'team',          label: 'Team Contacts',          defaultAccess: 'view' }],
-      treasurer: [{ key: 'fin-dashboard', label: 'Financial Dashboard',    defaultAccess: 'view' },
-                  { key: 'fin-reports',   label: 'Reports',                defaultAccess: 'view' },
-                  { key: 'settlements',   label: 'Settlements',            defaultAccess: 'view' },
-                  { key: 'budget',        label: 'Budget',                 defaultAccess: 'edit' },
-                  { key: 'reg-status',    label: 'Registration Payments',  defaultAccess: 'view' }],
-      team:      [{ key: 'cast',          label: 'Cast',                   defaultAccess: 'view' },
-                  { key: 'schedule',      label: 'Schedule',               defaultAccess: 'edit' },
-                  { key: 'team',          label: 'Team Contacts',          defaultAccess: 'view' }],
-      producer:  [{ key: 'cast',          label: 'Cast',                   defaultAccess: 'edit' },
-                  { key: 'schedule',      label: 'Schedule',               defaultAccess: 'edit' },
-                  { key: 'team',          label: 'Team',                   defaultAccess: 'edit' },
-                  { key: 'budget',        label: 'Budget',                 defaultAccess: 'edit' },
-                  { key: 'settings',      label: 'Settings',               defaultAccess: 'edit' }],
-      board:     [{ key: 'org-dashboard', label: 'Organisation Dashboard', defaultAccess: 'view' }],
+    // Master list of every grantable page/section, in main sidebar order.
+    // defaultAccess per role type is resolved by ROLE_DEFAULT_ACCESS below.
+    const ALL_PORTAL_MODULES = [
+      { key: 'overview',        label: 'Overview',                group: 'Overview' },
+      { key: 'schedule',        label: 'Production Calendar',     group: 'Plan' },
+      { key: 'cast-dashboard',  label: 'Cast Dashboard',          group: 'Cast' },
+      { key: 'auditions',       label: 'Auditions',               group: 'Cast' },
+      { key: 'casting',         label: 'Casting',                 group: 'Cast' },
+      { key: 'registration',    label: 'Registration',            group: 'Cast' },
+      { key: 'departments',     label: 'Production Departments',  group: 'Production Departments' },
+      { key: 'marketing',       label: 'Marketing',               group: 'Promote' },
+      { key: 'sponsors',        label: 'Sponsors',                group: 'Promote' },
+      { key: 'programme',       label: 'Programme',               group: 'Promote' },
+      { key: 'ticketing',       label: 'Ticketing',               group: 'Ticketing' },
+      { key: 'shifts',          label: 'Volunteer Shifts',        group: 'Volunteers' },
+      { key: 'hours',           label: 'Volunteer Hours',         group: 'Volunteers' },
+      { key: 'fin-dashboard',   label: 'Financial Dashboard',     group: 'Financials' },
+      { key: 'budget',          label: 'Budgeting',               group: 'Financials' },
+      { key: 'fin-receipts',    label: 'Receipts',                group: 'Financials' },
+      { key: 'fin-reports',     label: 'Financial Reports',       group: 'Financials' },
+      { key: 'wrapup',          label: 'Wrap Up',                 group: 'Wrap Up' },
+      { key: 'settings',        label: 'Settings',                group: 'Settings' },
+    ];
+
+    // Per-role defaults: keys not listed default to 'none'
+    const ROLE_DEFAULT_ACCESS = {
+      cast:      { schedule: 'view', registration: 'edit' },
+      volunteer: { shifts: 'view', hours: 'view' },
+      dept_lead: { shifts: 'edit', hours: 'view', budget: 'view', departments: 'view' },
+      treasurer: { 'fin-dashboard': 'view', 'fin-reports': 'view', 'fin-receipts': 'view', budget: 'edit', registration: 'view' },
+      team:      { 'cast-dashboard': 'view', schedule: 'edit' },
+      producer:  { overview: 'edit', schedule: 'edit', 'cast-dashboard': 'edit', auditions: 'edit', casting: 'edit', registration: 'edit', departments: 'edit', marketing: 'edit', sponsors: 'edit', programme: 'edit', ticketing: 'edit', shifts: 'edit', hours: 'edit', 'fin-dashboard': 'edit', budget: 'edit', 'fin-receipts': 'edit', 'fin-reports': 'edit', wrapup: 'edit', settings: 'edit' },
+      board:     { overview: 'view' },
     };
+
+    function portalModulesForRole(roleKey) {
+      const defaults = ROLE_DEFAULT_ACCESS[roleKey] || {};
+      return ALL_PORTAL_MODULES.map(m => ({
+        ...m,
+        defaultAccess: defaults[m.key] || 'none',
+      }));
+    }
 
     // ── Edit Access Drawer ─────────────────────────────────────────────────────
     let _editPersonIdx = null;
@@ -2088,24 +2106,28 @@
         return def ? def.label : '';
       }).filter(Boolean).join(', ');
 
-      const modulesKey = (src === 'producer' || src === 'admin') ? 'producer' : person.portals[0];
-      const modules = PORTAL_MODULE_LIST[modulesKey] || [];
+      const roleKey = (src === 'producer' || src === 'admin') ? 'producer' : (person.portals[0] || src);
+      const modules = portalModulesForRole(roleKey);
 
       const tog = (level, current) => `<button class="pt-perm-toggle${current === level ? ' selected' : ''}" data-level="${level}" onclick="setPermToggle(this)">${level === 'none' ? 'No Access' : level === 'view' ? 'View' : 'Edit'}</button>`;
 
-      const moduleListHtml = modules.length
-        ? modules.map(m => {
+      let lastGroup = '';
+      const moduleListHtml = modules.map(m => {
             const current  = perms[m.key] !== undefined ? perms[m.key] : m.defaultAccess;
             const isCustom = perms[m.key] !== undefined && perms[m.key] !== m.defaultAccess;
-            return `<div class="pt-module-row" data-module-key="${esc(m.key)}" data-default-access="${esc(m.defaultAccess)}">
+            let groupHeader = '';
+            if (m.group && m.group !== lastGroup) {
+              lastGroup = m.group;
+              groupHeader = `<div style="font-size:0.62rem;font-weight:800;text-transform:uppercase;letter-spacing:0.08em;color:rgba(87,46,136,0.45);margin-top:${lastGroup === modules[0].group ? '0' : '0.75rem'};margin-bottom:0.25rem">${esc(m.group)}</div>`;
+            }
+            return `${groupHeader}<div class="pt-module-row" data-module-key="${esc(m.key)}" data-default-access="${esc(m.defaultAccess)}">
               <div style="display:flex;align-items:center;gap:0.4rem;min-width:0;flex:1">
                 <span class="pt-module-name">${esc(m.label)}</span>
                 <span class="pt-custom-label" style="font-size:0.64rem;font-weight:700;color:#ca7ea7;flex-shrink:0${isCustom ? '' : ';display:none'}">custom</span>
               </div>
               <div class="pt-perm-toggle-group">${tog('none',current)}${tog('view',current)}${tog('edit',current)}</div>
             </div>`;
-          }).join('')
-        : '<div style="font-size:0.82rem;color:#b0a8c8;font-style:italic">No modules configured for this role yet.</div>';
+          }).join('');
 
       let roleEditorHtml = '';
       if (src === 'volunteer' || src === 'dept_lead' || src === 'treasurer') {
