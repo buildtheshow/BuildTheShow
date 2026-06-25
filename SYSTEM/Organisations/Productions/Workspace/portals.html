@@ -93,6 +93,16 @@
     .pt-inv-sub { font-size: 0.72rem; color: rgba(26,21,48,0.45); margin-top: 0.1rem; }
     .pt-inv-btn { border: 1.5px solid #572e88; background: #572e88; color: #fff; font-size: 0.75rem; font-weight: 800; border-radius: 8px; padding: 0.3rem 0.75rem; cursor: pointer; white-space: nowrap; }
     .pt-inv-btn:hover { filter: brightness(0.94); }
+    .pt-invite-list { display:flex; flex-direction:column; gap:0.7rem; margin-top:1rem; }
+    .pt-invite-item { display:flex; align-items:center; justify-content:space-between; gap:0.9rem; padding:0.9rem 1rem; border:1px solid #edeaf6; border-radius:12px; background:#fff; }
+    .pt-invite-item-main { min-width:0; flex:1; }
+    .pt-invite-item-name { font-size:0.85rem; font-weight:800; color:#1a1530; }
+    .pt-invite-item-meta { font-size:0.73rem; color:rgba(26,21,48,0.52); margin-top:0.12rem; display:flex; gap:0.45rem; flex-wrap:wrap; }
+    .pt-invite-item-actions { display:flex; align-items:center; gap:0.55rem; flex-shrink:0; }
+    .pt-invite-pill { display:inline-flex; align-items:center; gap:0.3rem; font-size:0.68rem; font-weight:800; border-radius:20px; padding:0.18rem 0.55rem; background:#f4f2fb; color:#572e88; }
+    .pt-invite-empty { font-size:0.78rem; color:rgba(26,21,48,0.45); padding:0.4rem 0; }
+    .pt-inv-btn-delete { border-color:#e8c8c8; background:#fff; color:#b33a25; }
+    .pt-inv-btn-delete:hover { filter:none; background:#fff5f4; }
 
     /* ── About banner ── */
     .pt-about { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem; background: #fff; border: 1.5px solid #edeaf6; border-radius: 14px; padding: 1rem 1.25rem; }
@@ -131,6 +141,12 @@
     .pt-btn-primary:hover { background: #3e2066; }
     .pt-btn-ghost { background: #f4f2fb; color: #572e88; }
     .pt-btn-ghost:hover { background: #e8e4f8; }
+
+    /* ── Toast ── */
+    .toast { position:fixed; bottom:1.5rem; right:1.5rem; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.14); color:#e8e0ff; padding:0.7rem 1.2rem; border-radius:0.5rem; font-size:0.87rem; opacity:0; transform:translateY(6px); transition:opacity 0.2s,transform 0.2s; pointer-events:none; z-index:9999; }
+    .toast.visible { opacity:1; transform:translateY(0); }
+    .toast.toast--success { background:#efab45; border-color:#efab45; color:#1a1530; font-weight:900; box-shadow:0 14px 34px rgba(87,46,136,0.22); }
+    .toast.toast--error { background:rgba(220,60,60,0.12); border-color:rgba(220,60,60,0.35); color:#f08080; }
 
     /* ── Filter pills ── */
     .pt-filter-row { display: flex; gap: 0.4rem; flex-wrap: wrap; margin-bottom: 1rem; }
@@ -278,6 +294,9 @@
               <button class="pt-inv-btn">View</button>
             </div>
           </div>
+          <div class="pt-invite-list" id="pt-invite-list">
+            <div class="pt-invite-empty">Loading invitations...</div>
+          </div>
         </div>
 
       </div><!-- end two-col -->
@@ -370,6 +389,7 @@
       <button class="pt-btn pt-btn-primary" id="pt-drawer-save-btn" onclick="saveEditAccess()">Save</button>
     </div>
   </div>
+  <div class="toast" id="toast"></div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="/SHARED/Navigation/production-sidebar-nav.js?v=26"></script>
@@ -467,6 +487,7 @@
     let _orgId = null;
     let _currentUserId = null;
     let auditionTeamMembers = [];
+    let _pendingInvites = [];
 
     // ── Icons ──────────────────────────────────────────────────────────────────
     function portalIconImg(file) {
@@ -532,18 +553,119 @@
       return { color: fallbackColor, bg: fallbackColor, border: fallbackColor, department: '' };
     }
 
+    function isSchemaColumnError(error) {
+      const text = String(error?.message || error?.details || error?.hint || '').toLowerCase();
+      return text.includes('schema cache') || text.includes('column') || text.includes('does not exist');
+    }
+
+    async function loadVolunteerSignupRows(supabaseClient, productionId) {
+      let query = supabaseClient.from('volunteer_signups')
+        .select('id,name,email,role_name,department,status,portal_token,volunteer_passcode,portal_invite_sent_at')
+        .eq('production_id', productionId)
+        .in('status', ['approved','checked_in','completed']);
+      let result = await query;
+      if (isSchemaColumnError(result.error)) {
+        result = await supabaseClient.from('volunteer_signups')
+          .select('id,name,email,role_name,department,status,portal_token,volunteer_passcode')
+          .eq('production_id', productionId)
+          .in('status', ['approved','checked_in','completed']);
+      }
+      return result;
+    }
+
+    async function markVolunteerInviteSent(signupId) {
+      if (!signupId) return;
+      const { error } = await _sb.from('volunteer_signups')
+        .update({ portal_invite_sent_at: new Date().toISOString() })
+        .eq('id', signupId);
+      if (error && !isSchemaColumnError(error)) throw error;
+    }
+
+    function buildPendingInvites(teamMembers = [], teamSessions = [], volunteers = [], boardInvites = []) {
+      const teamSessionIds = new Set((teamSessions || []).map(row => String(row.team_member_id || '')).filter(Boolean));
+      const pendingTeam = (teamMembers || [])
+        .filter(member => member.invite_sent_at && !teamSessionIds.has(String(member.id || '')))
+        .map(member => ({
+          kind: 'team',
+          id: `team:${member.id}`,
+          name: member.name || member.email || 'Team member',
+          email: member.email || '',
+          roleLabel: TEAM_ROLE_LABELS[normaliseLevel(member)] || member.role || 'Creative Team',
+          portalLabel: 'Creative Team',
+          invitedAt: member.invite_sent_at,
+          data: member,
+        }));
+      const pendingVolunteers = (volunteers || [])
+        .filter(member => member.portal_invite_sent_at)
+        .map(member => {
+          const roleLabel = member.role_name || 'Volunteer';
+          const portalLabel = normaliseRoleName(roleLabel) === normaliseRoleName(TREASURER_ROLE_KEY) ? 'Treasurer Portal' : 'Department Lead';
+          return {
+            kind: 'volunteer',
+            id: `volunteer:${member.id}`,
+            name: member.name || member.email || 'Volunteer',
+            email: member.email || '',
+            roleLabel,
+            portalLabel,
+            invitedAt: member.portal_invite_sent_at,
+            data: member,
+          };
+        });
+      const pendingBoard = (boardInvites || [])
+        .filter(inv => !inv.used_at)
+        .map(inv => ({
+          kind: 'board',
+          id: `board:${inv.id}`,
+          name: inv.invitee_name || inv.email || 'Organisation Member',
+          email: inv.email || '',
+          roleLabel: inv.title || 'Organisation Member',
+          portalLabel: 'Organisation Members',
+          invitedAt: inv.created_at || null,
+          data: inv,
+        }));
+      return [...pendingTeam, ...pendingVolunteers, ...pendingBoard]
+        .sort((a, b) => new Date(b.invitedAt || 0).getTime() - new Date(a.invitedAt || 0).getTime());
+    }
+
+    function renderInvitationsSection() {
+      const wrap = document.getElementById('pt-invite-list');
+      if (!wrap) return;
+      if (!_pendingInvites.length) {
+        wrap.innerHTML = '<div class="pt-invite-empty">No pending invites right now.</div>';
+        return;
+      }
+      wrap.innerHTML = _pendingInvites.map(inv => `
+        <div class="pt-invite-item">
+          <div class="pt-invite-item-main">
+            <div class="pt-invite-item-name">${esc(inv.name)}</div>
+            <div class="pt-invite-item-meta">
+              <span>${esc(inv.email || 'No email')}</span>
+              <span>•</span>
+              <span>${esc(inv.roleLabel || inv.portalLabel)}</span>
+              <span class="pt-invite-pill">${esc(inv.portalLabel)}</span>
+            </div>
+          </div>
+          <div class="pt-invite-item-actions">
+            <button class="pt-inv-btn" onclick="resendPendingInvite('${esc(inv.id)}', this)">Resend Invite</button>
+            <button class="pt-inv-btn pt-inv-btn-delete" onclick="deletePendingInvite('${esc(inv.id)}', this)">Delete</button>
+          </div>
+        </div>
+      `).join('');
+    }
+
     // ── Data load ──────────────────────────────────────────────────────────────
     async function loadPortalsData(productionId, supabaseClient) {
       _prodId = productionId;
       prodId = productionId;
       if (!supabaseClient || !productionId) return;
 
-      const [castRes, volRes, teamRes, prodRes, bookingsRes] = await Promise.all([
+      const [castRes, volRes, teamRes, prodRes, bookingsRes, teamSessionRes] = await Promise.all([
         supabaseClient.from('cast_members').select('id,name,email,headshot_url,state,character_name,registration_answers').eq('production_id', productionId).in('state', ['chosen','offer_accepted']),
-        supabaseClient.from('volunteer_signups').select('id,name,email,role_name,department,status,portal_token,volunteer_passcode').eq('production_id', productionId).in('status', ['approved','checked_in','completed']),
-        supabaseClient.from('production_team_members').select('id,name,email,role,access_level,is_active,passcode,note_color').eq('production_id', productionId).eq('is_active', true),
+        loadVolunteerSignupRows(supabaseClient, productionId),
+        supabaseClient.from('production_team_members').select('id,name,email,role,access_level,is_active,passcode,note_color,invite_sent_at').eq('production_id', productionId).eq('is_active', true),
         supabaseClient.from('productions').select('organization_id,organizations(name,slug),slug,volunteer_staffing_plan').eq('id', productionId).maybeSingle(),
         supabaseClient.from('audition_bookings').select('email,portal_code').eq('production_id', productionId).not('portal_code', 'is', null),
+        supabaseClient.from('production_team_member_sessions').select('team_member_id,last_used_at').eq('production_id', productionId),
       ]);
 
       _orgId = prodRes.data?.organization_id || null;
@@ -552,11 +674,18 @@
       _showSlug = prodRes.data?.slug || '';
       auditionTeamMembers = teamRes.data || [];
       let boardMembers = [];
+      let boardInvites = [];
       if (prodRes.data?.organization_id) {
-        const { data: orgMembers } = await supabaseClient.from('org_members')
-          .select('id,display_name,email,phone,phone_number,title,headshot_url,profiles:user_id(display_name,custom_id)')
-          .eq('org_id', prodRes.data.organization_id);
+        const [{ data: orgMembers }, { data: orgPendingInvites }] = await Promise.all([
+          supabaseClient.from('org_members')
+          .select('id,display_name,email,phone,phone_number,title,headshot_url')
+          .eq('org_id', prodRes.data.organization_id),
+          supabaseClient.from('org_invitations')
+            .select('id,email,title,invitee_name,access_level,created_at,expires_at,used_at')
+            .eq('org_id', prodRes.data.organization_id),
+        ]);
         boardMembers = orgMembers || [];
+        boardInvites = orgPendingInvites || [];
       }
       try {
         const { data: authData } = await supabaseClient.auth.getUser();
@@ -594,9 +723,11 @@
       const deptLeads = volunteers.filter(v => deptLeadRoleSet.has(normaliseRoleName(v.role_name || '')));
       const treasurers = volunteers.filter(v => v.role_name === TREASURER_ROLE_KEY);
       const plannedDeptLeadRoles = buildPlannedDeptLeadRoles(prodRes.data?.volunteer_staffing_plan || {});
+      _pendingInvites = buildPendingInvites(teamRes.data || [], teamSessionRes.data || [], volunteers, boardInvites);
 
       buildPeopleList(cast, volunteers, deptLeads, treasurers, teamMembers, boardMembers, bookingCodes, plannedDeptLeadRoles);
       renderPortalCards();
+      renderInvitationsSection();
     }
 
     function buildPlannedDeptLeadRoles(staffingPlan = {}) {
@@ -1313,6 +1444,52 @@
       if (!response.ok) throw new Error('Could not send board invitation email.');
     }
 
+    let _toastTimer = null;
+    function showToast(msg, isError = false, duration = 3000) {
+      const t = document.getElementById('toast');
+      if (!t) return;
+      if (_toastTimer) clearTimeout(_toastTimer);
+      t.textContent = msg;
+      t.classList.remove('toast--success', 'toast--error', 'visible');
+      void t.offsetWidth;
+      t.classList.toggle('toast--success', !isError);
+      t.classList.toggle('toast--error', !!isError);
+      t.classList.add('visible');
+      _toastTimer = setTimeout(() => t.classList.remove('visible', 'toast--success', 'toast--error'), duration);
+    }
+
+    async function sendCreativePortalInviteEmail(member) {
+      const { data, error } = await _sb.functions.invoke('send-email', {
+        body: {
+          production_id: _prodId,
+          category: 'team_invite',
+          trigger: 'team_invite',
+          email: member.email,
+          name: member.name || member.email,
+          team_member_id: member.id,
+          team_access_code: member.passcode || '',
+        },
+      });
+      if (error || data?.error) throw error || new Error(data?.error || 'Could not send team invite email.');
+      await _sb.from('production_team_members').update({ invite_sent_at: new Date().toISOString() }).eq('id', member.id);
+    }
+
+    async function sendVolunteerPortalInviteEmail(record, roleLabel) {
+      const context = volunteerInviteContext(record, roleLabel);
+      const { data, error } = await _sb.functions.invoke('send-email', {
+        body: {
+          production_id: _prodId,
+          category: 'volunteer_portal_info',
+          trigger: 'volunteer_portal_info',
+          email: record.email,
+          name: record.name || record.email || '',
+          ...context,
+        },
+      });
+      if (error || data?.error) throw error || new Error(data?.error || 'Could not send volunteer portal email.');
+      await markVolunteerInviteSent(record.id);
+    }
+
     async function sendInvite() {
       const name   = document.getElementById('inv-name').value.trim();
       const email  = document.getElementById('inv-email').value.trim();
@@ -1324,6 +1501,7 @@
       const normalizedEmail = email.toLowerCase();
       const roleLabel = inviteRoleLabel(portal);
       let error = null;
+      let createdRecord = null;
       try {
         if (isCreativePortalKey(portal)) {
           const { data: existing } = await _sb.from('production_team_members')
@@ -1341,6 +1519,7 @@
               is_active: true,
             });
             error = result.error || null;
+            createdRecord = result.data || null;
           } else {
             const result = await insertTeamMemberWithAvailableColor({
               production_id: _prodId,
@@ -1354,29 +1533,35 @@
               fullMessage: 'All team colours are already taken. Reassign a team colour before inviting another creative team member.',
             });
             error = result.error || null;
+            createdRecord = result.data || null;
+          }
+          if (!error && createdRecord) {
+            btn.textContent = 'Sending...';
+            await sendCreativePortalInviteEmail(createdRecord);
           }
         } else if (portal === 'dept_lead' || portal === 'treasurer') {
           const department = inviteVolunteerDepartment(portal, roleLabel);
           const passcode = volunteerPasscodeForPortal(normalizedEmail, _prodId);
           const { data: existingRows, error: existingError } = await _sb.from('volunteer_signups')
-            .select('id,portal_token,volunteer_passcode')
+            .select('id,portal_token,volunteer_passcode,name,email,role_name,department,status')
             .eq('production_id', _prodId)
             .ilike('email', normalizedEmail)
             .limit(1);
           if (existingError) throw existingError;
           const existing = (existingRows || [])[0];
           if (existing?.id) {
-            const { error: updateError } = await _sb.from('volunteer_signups').update({
+            const { data: updatedRecord, error: updateError } = await _sb.from('volunteer_signups').update({
               name,
               email: normalizedEmail,
               status: 'approved',
               role_name: roleLabel,
               department: department || null,
               volunteer_passcode: existing.volunteer_passcode || passcode,
-            }).eq('id', existing.id);
+            }).eq('id', existing.id).select('id,portal_token,volunteer_passcode,name,email,role_name,department,status').single();
             error = updateError || null;
+            createdRecord = updatedRecord || null;
           } else {
-            const { error: insertError } = await _sb.from('volunteer_signups').insert({
+            const { data: insertedRecord, error: insertError } = await _sb.from('volunteer_signups').insert({
               production_id: _prodId,
               portal_token: crypto.randomUUID(),
               name,
@@ -1385,8 +1570,13 @@
               role_name: roleLabel,
               department: department || null,
               volunteer_passcode: passcode,
-            });
+            }).select('id,portal_token,volunteer_passcode,name,email,role_name,department,status').single();
             error = insertError || null;
+            createdRecord = insertedRecord || null;
+          }
+          if (!error && createdRecord) {
+            btn.textContent = 'Sending...';
+            await sendVolunteerPortalInviteEmail(createdRecord, roleLabel);
           }
         } else if (portal === 'board') {
           btn.textContent = 'Sending...';
@@ -1398,9 +1588,10 @@
         error = err;
       }
       btn.disabled = false; btn.textContent = 'Send Invite';
-      if (error) { alert('Could not add user: ' + (error.message || error)); return; }
+      if (error) { showToast('Could not add user: ' + (error.message || error), true, 4500); return; }
       closeInviteModal();
-      window.location.reload();
+      await loadPortalsData(_prodId, _sb);
+      showToast(`Invite emailed to ${name || normalizedEmail}.`);
     }
 
     function sendPortalInvite(idx, btn) {
@@ -1419,41 +1610,84 @@
       const sendPromise = (source === 'board' || source === 'board_planned')
         ? sendBoardInviteEmail(p.email, roleLabel, p.name || '')
         : (source === 'volunteer' || source === 'dept_lead' || source === 'dept_lead_planned' || source === 'treasurer')
-          ? _sb.functions.invoke('send-email', {
-              body: {
-                production_id: _prodId,
-                category: 'volunteer_portal_info',
-                trigger: 'volunteer_portal_info',
-                email: p.email,
-                name: p.name || '',
-                ...volunteerInviteContext({
-                  email: p.email,
-                  name: p.name || '',
-                  role_name: roleLabel,
-                  volunteer_passcode: p.data?.volunteer_passcode || personVolunteerPasscode(p),
-                }, roleLabel),
-              },
-            }).then(({ data, error }) => {
-              if (error || data?.error) throw error || new Error(data.error);
-            })
-          : _sb.functions.invoke('send-email', {
-              body: {
-                production_id: _prodId,
-                category: 'team_invite',
-                trigger: 'team_invite',
-                email: p.email,
-                name: p.name || '',
-                team_access_code: p.data?.passcode || p.data?.portal_code || '',
-              },
-            }).then(({ data, error }) => {
-              if (error || data?.error) throw error || new Error(data.error);
+          ? sendVolunteerPortalInviteEmail({
+              id: p.data?.id,
+              email: p.email,
+              name: p.name || '',
+              role_name: roleLabel,
+              volunteer_passcode: p.data?.volunteer_passcode || personVolunteerPasscode(p),
+            }, roleLabel)
+          : sendCreativePortalInviteEmail({
+              id: p.data?.id,
+              email: p.email,
+              name: p.name || '',
+              passcode: p.data?.passcode || p.data?.portal_code || '',
             });
       sendPromise.then(() => {
         btn.textContent = 'Sent';
+        showToast(`Invite emailed to ${p.name || p.email}.`);
       }).catch(e => {
         btn.disabled = false; btn.textContent = original;
-        alert('Could not send invite: ' + (e.message || e));
+        showToast('Could not send invite: ' + (e.message || e), true, 4500);
       });
+    }
+
+    async function resendPendingInvite(inviteId, btn) {
+      const invite = (_pendingInvites || []).find(item => item.id === inviteId);
+      if (!invite) {
+        showToast('Could not find that invite. Refresh and try again.', true, 4500);
+        return;
+      }
+      const original = btn?.textContent || 'Resend Invite';
+      if (btn) { btn.disabled = true; btn.textContent = 'Sending...'; }
+      try {
+        if (invite.kind === 'team') {
+          await sendCreativePortalInviteEmail(invite.data);
+        } else if (invite.kind === 'volunteer') {
+          await sendVolunteerPortalInviteEmail(invite.data, invite.roleLabel);
+        } else if (invite.kind === 'board') {
+          await sendBoardInviteEmail(invite.email, invite.roleLabel, invite.name);
+        } else {
+          throw new Error('Unsupported invite type.');
+        }
+        await loadPortalsData(_prodId, _sb);
+        showToast(`Invite emailed to ${invite.name || invite.email}.`);
+        if (btn) btn.textContent = 'Sent';
+      } catch (err) {
+        if (btn) { btn.disabled = false; btn.textContent = original; }
+        showToast('Could not resend invite: ' + (err.message || err), true, 4500);
+      }
+    }
+
+    async function deletePendingInvite(inviteId, btn) {
+      const invite = (_pendingInvites || []).find(item => item.id === inviteId);
+      if (!invite) {
+        showToast('Could not find that invite. Refresh and try again.', true, 4500);
+        return;
+      }
+      const label = invite.name || invite.email || 'this invite';
+      if (!confirm(`Delete pending invite for ${label}?`)) return;
+      const original = btn?.textContent || 'Delete';
+      if (btn) { btn.disabled = true; btn.textContent = 'Deleting...'; }
+      try {
+        if (invite.kind === 'team') {
+          const { error } = await _sb.from('production_team_members').delete().eq('id', invite.data?.id).eq('production_id', _prodId);
+          if (error) throw error;
+        } else if (invite.kind === 'volunteer') {
+          const { error } = await _sb.from('volunteer_signups').delete().eq('id', invite.data?.id).eq('production_id', _prodId);
+          if (error) throw error;
+        } else if (invite.kind === 'board') {
+          const { error } = await _sb.from('org_invitations').delete().eq('id', invite.data?.id).eq('org_id', _orgId);
+          if (error) throw error;
+        } else {
+          throw new Error('Unsupported invite type.');
+        }
+        await loadPortalsData(_prodId, _sb);
+        showToast(`Deleted pending invite for ${label}.`);
+      } catch (err) {
+        if (btn) { btn.disabled = false; btn.textContent = original; }
+        showToast('Could not delete pending invite: ' + (err.message || err), true, 4500);
+      }
     }
 
     function openInviteModalForRole(portalKey, roleLabel) {
