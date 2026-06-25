@@ -913,7 +913,7 @@
     }
 
     function treasurerPortalPreviewUrl(token) {
-      return `${window.location.origin}/SYSTEM/Organisations/Productions/Workspace/portal.html?pvw_token=${encodeURIComponent(token)}`;
+      return `${window.location.origin}/SYSTEM/Organisations/Productions/Workspace/treasurer-portal.html?pvw_token=${encodeURIComponent(token)}`;
     }
 
     function peopleMergeKey(person = {}) {
@@ -1549,16 +1549,25 @@
       return departmentForRole(roleLabel, '') || '';
     }
 
-    function volunteerPortalUrl() {
-      if (!_orgSlug || !_showSlug) return `${window.location.origin}/volunteers?view=portal`;
-      return `${window.location.origin}/${encodeURIComponent(_orgSlug)}/${encodeURIComponent(_showSlug)}/portal`;
+    function volunteerPortalUrl(roleLabel = '') {
+      const isTreasurer = normaliseRoleName(roleLabel) === normaliseRoleName(TREASURER_ROLE_KEY);
+      if (!_orgSlug || !_showSlug) {
+        return isTreasurer
+          ? `${window.location.origin}/treasurer?view=portal`
+          : `${window.location.origin}/volunteers?view=portal`;
+      }
+      return isTreasurer
+        ? `${window.location.origin}/${encodeURIComponent(_orgSlug)}/${encodeURIComponent(_showSlug)}/treasurer`
+        : `${window.location.origin}/${encodeURIComponent(_orgSlug)}/${encodeURIComponent(_showSlug)}/portal`;
     }
 
     function volunteerInviteContext(record, roleLabel) {
       const email = record?.email || '';
       const name = record?.name || email;
       const firstName = String(name || '').trim().split(/\s+/)[0] || 'Volunteer';
-      const portalUrl = volunteerPortalUrl();
+      const portalUrl = volunteerPortalUrl(roleLabel || record?.role_name || '');
+      const isTreasurer = normaliseRoleName(roleLabel || record?.role_name || '') === normaliseRoleName(TREASURER_ROLE_KEY);
+      const portalLabel = isTreasurer ? 'Treasurer Portal' : 'Production Portal';
       const passcode = record?.volunteer_passcode || volunteerPasscodeForPortal(email, _prodId);
       return {
         name,
@@ -1569,6 +1578,8 @@
         volunteer_passcode: passcode,
         volunteer_portal_url: portalUrl,
         volunteer_link: portalUrl,
+        volunteer_portal_label: portalLabel,
+        volunteer_portal_button: `<a href="${portalUrl}" style="display:inline-block;background:#572e88;color:#fff;font-weight:900;font-size:15px;padding:13px 26px;border-radius:8px;text-decoration:none;">Open ${portalLabel}</a>`,
         volunteer_role: roleLabel || record?.role_name || 'Volunteer',
         volunteer_shift_dates: 'Check your production portal for your current access details.',
         volunteer_approved_hours: 'Tracked in the volunteer portal',
