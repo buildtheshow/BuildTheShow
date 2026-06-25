@@ -3532,6 +3532,20 @@
       if (error) throw error;
       return data || [];
     }
+    function isTreasurerPortalUser(portalData) {
+      const rows = portalData?.volunteer?.rows || [];
+      return rows.some(r => String(r.role_name || '').trim() === 'Treasurer');
+    }
+    function redirectToTreasurerPortal(email, code) {
+      const url = new URL('/SYSTEM/Organisations/Productions/Workspace/treasurer-portal.html', window.location.origin);
+      if (prod?.id) url.searchParams.set('id', prod.id);
+      if (email && code) {
+        url.searchParams.set('pvw_email', email);
+        url.searchParams.set('pvw_code', code);
+      }
+      window.location.replace(url.toString());
+    }
+
     async function resolveVolunteerPortal(email, code, options = {}) {
       const matches = await findVolunteerSignupsByCode(email, code, options);
       if (!matches.length) return { rows: [], token: null };
@@ -3883,6 +3897,7 @@
       try {
         const portal = await resolveProductionPortal(email, code);
         if (!portal.volunteer.rows.length && !portal.performers.length) throw new Error('not_found');
+        if (isTreasurerPortalUser(portal)) { redirectToTreasurerPortal(email, code); return; }
         // Store session
         sessionStorage.setItem('vp_portal_email', email);
         sessionStorage.setItem('vp_portal_code', code);
@@ -6426,6 +6441,7 @@
           } else if (pvwEmail && pvwCode) {
             try {
               const portal = await resolveProductionPortal(pvwEmail, pvwCode);
+              if (isTreasurerPortalUser(portal)) { redirectToTreasurerPortal(pvwEmail, pvwCode); return; }
               if (portal.volunteer.rows.length || portal.performers.length) {
                 showPortalHome(portal);
               } else {
@@ -6444,6 +6460,7 @@
             if (savedCreds) {
               try {
                 const portal = await resolveProductionPortal(savedCreds.email, savedCreds.code);
+                if (isTreasurerPortalUser(portal)) { redirectToTreasurerPortal(savedCreds.email, savedCreds.code); return; }
                 if (portal.volunteer.rows.length || portal.performers.length) {
                   showPortalHome(portal);
                 } else {
