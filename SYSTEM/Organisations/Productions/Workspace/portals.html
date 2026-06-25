@@ -141,6 +141,12 @@
     .pt-btn-primary:hover { background: #3e2066; }
     .pt-btn-ghost { background: #f4f2fb; color: #572e88; }
     .pt-btn-ghost:hover { background: #e8e4f8; }
+    .pt-invite-status { margin-top: 1rem; padding: 0.95rem 1rem; border-radius: 12px; border: 1.5px solid #edeaf6; background: #faf9fd; }
+    .pt-invite-status.hidden { display: none; }
+    .pt-invite-status-title { font-size: 0.82rem; font-weight: 800; color: #1a1530; }
+    .pt-invite-status-copy { font-size: 0.76rem; color: rgba(26,21,48,0.58); margin-top: 0.2rem; }
+    .pt-invite-status-copy strong { color: #1a1530; }
+    .pt-invite-status-actions { display: flex; gap: 0.55rem; flex-wrap: wrap; margin-top: 0.85rem; }
 
     /* ── Toast ── */
     .toast { position:fixed; bottom:1.5rem; right:1.5rem; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.14); color:#e8e0ff; padding:0.7rem 1.2rem; border-radius:0.5rem; font-size:0.87rem; opacity:0; transform:translateY(6px); transition:opacity 0.2s,transform 0.2s; pointer-events:none; z-index:9999; }
@@ -338,7 +344,7 @@
   </div>
 
   <!-- Invite user modal -->
-  <div class="pt-modal-overlay" id="pt-invite-overlay" onclick="if(event.target===this)closeInviteModal()">
+  <div class="pt-modal-overlay" id="pt-invite-overlay">
     <div class="pt-invite-modal">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.25rem">
         <div style="font-size:0.95rem;font-weight:800;color:#1a1530">Invite User</div>
@@ -368,6 +374,11 @@
             <option value="board">Organisation Member</option>
           </optgroup>
         </select>
+      </div>
+      <div class="pt-invite-status hidden" id="pt-invite-status">
+        <div class="pt-invite-status-title" id="pt-invite-status-title"></div>
+        <div class="pt-invite-status-copy" id="pt-invite-status-copy"></div>
+        <div class="pt-invite-status-actions" id="pt-invite-status-actions"></div>
       </div>
       <div class="pt-btn-row">
         <button class="pt-btn pt-btn-ghost" onclick="closeInviteModal()">Cancel</button>
@@ -1319,6 +1330,114 @@
     // ── Invite modal ───────────────────────────────────────────────────────────
     let _invitePortalKey = '';
     let _inviteRoleLabel = '';
+    let _invitePendingId = '';
+    let _invitePendingEmail = '';
+    let _invitePendingName = '';
+    let _inviteResultMessage = '';
+
+    function invitePortalMatchKey(portalKey = '') {
+      const raw = String(portalKey || '').trim().toLowerCase();
+      if (raw === 'board_planned') return 'board';
+      if (raw === 'dept_lead_planned') return 'dept_lead';
+      if (raw === 'director' || raw === 'producer' || raw === 'vocal_director' || raw === 'choreographer' || raw === 'musical_director' || raw === 'music_director') return 'team';
+      return raw;
+    }
+
+    function pendingInvitePortalMatchKey(invite = {}) {
+      if (invite.kind === 'board') return 'board';
+      if (invite.kind === 'team') return 'team';
+      if (invite.kind === 'volunteer') {
+        return normaliseRoleName(invite.roleLabel) === normaliseRoleName(TREASURER_ROLE_KEY) ? 'treasurer' : 'dept_lead';
+      }
+      return '';
+    }
+
+    function pendingInviteMatchesModal(invite = {}, portalKey = _invitePortalKey, roleLabel = _inviteRoleLabel, email = '') {
+      const invitePortal = pendingInvitePortalMatchKey(invite);
+      const matchPortal = invitePortalMatchKey(portalKey);
+      if (invitePortal && matchPortal && invitePortal !== matchPortal) return false;
+      const cleanEmail = String(email || '').trim().toLowerCase();
+      const inviteEmail = String(invite.email || '').trim().toLowerCase();
+      if (cleanEmail) return cleanEmail === inviteEmail;
+      const cleanRole = normaliseRoleName(roleLabel || '');
+      const inviteRole = normaliseRoleName(invite.roleLabel || '');
+      return !!cleanRole && cleanRole === inviteRole;
+    }
+
+    function findPendingInviteForModal(portalKey = _invitePortalKey, roleLabel = _inviteRoleLabel, email = '') {
+      return (_pendingInvites || []).find(invite => pendingInviteMatchesModal(invite, portalKey, roleLabel, email)) || null;
+    }
+
+    function resetInviteModalStatus() {
+      _invitePendingId = '';
+      _invitePendingEmail = '';
+      _invitePendingName = '';
+      _inviteResultMessage = '';
+      const wrap = document.getElementById('pt-invite-status');
+      const title = document.getElementById('pt-invite-status-title');
+      const copy = document.getElementById('pt-invite-status-copy');
+      const actions = document.getElementById('pt-invite-status-actions');
+      if (title) title.textContent = '';
+      if (copy) copy.innerHTML = '';
+      if (actions) actions.innerHTML = '';
+      if (wrap) wrap.classList.add('hidden');
+    }
+
+    function renderInviteModalStatus() {
+      const wrap = document.getElementById('pt-invite-status');
+      const title = document.getElementById('pt-invite-status-title');
+      const copy = document.getElementById('pt-invite-status-copy');
+      const actions = document.getElementById('pt-invite-status-actions');
+      if (!wrap || !title || !copy || !actions) return;
+      const pending = _invitePendingId ? (_pendingInvites || []).find(item => item.id === _invitePendingId) : findPendingInviteForModal(_invitePortalKey, _inviteRoleLabel, document.getElementById('inv-email')?.value || _invitePendingEmail);
+      if (pending) {
+        _invitePendingId = pending.id;
+        _invitePendingEmail = pending.email || '';
+        _invitePendingName = pending.name || '';
+        title.textContent = _inviteResultMessage ? 'Invite Sent' : 'Pending Invite';
+        copy.innerHTML = `${_inviteResultMessage ? esc(_inviteResultMessage) + '<br>' : ''}<strong>${esc(pending.name || pending.email || 'Pending invite')}</strong> is invited for <strong>${esc(pending.roleLabel || pending.portalLabel)}</strong>.`;
+        actions.innerHTML = `
+          <button class="pt-btn pt-btn-primary" type="button" onclick="resendPendingInviteFromModal()">Resend Invite</button>
+          <button class="pt-btn pt-btn-ghost" type="button" onclick="deletePendingInviteFromModal()">Delete Invite</button>
+        `;
+        wrap.classList.remove('hidden');
+        return;
+      }
+      if (_inviteResultMessage) {
+        title.textContent = 'Invite Sent';
+        copy.innerHTML = esc(_inviteResultMessage);
+        actions.innerHTML = '';
+        wrap.classList.remove('hidden');
+        return;
+      }
+      resetInviteModalStatus();
+    }
+
+    async function refreshInviteModalStatus(email = '') {
+      await loadPortalsData(_prodId, _sb);
+      const pending = findPendingInviteForModal(_invitePortalKey, _inviteRoleLabel, email || document.getElementById('inv-email')?.value || _invitePendingEmail);
+      _invitePendingId = pending?.id || '';
+      _invitePendingEmail = pending?.email || '';
+      _invitePendingName = pending?.name || '';
+      renderInviteModalStatus();
+    }
+
+    async function resendPendingInviteFromModal() {
+      if (!_invitePendingId) return;
+      const btn = document.querySelector('#pt-invite-status-actions .pt-btn-primary');
+      await resendPendingInvite(_invitePendingId, btn);
+      await refreshInviteModalStatus(_invitePendingEmail);
+    }
+
+    async function deletePendingInviteFromModal() {
+      if (!_invitePendingId) return;
+      const btn = document.querySelector('#pt-invite-status-actions .pt-btn-ghost');
+      await deletePendingInvite(_invitePendingId, btn);
+      _invitePendingId = '';
+      _inviteResultMessage = '';
+      await refreshInviteModalStatus(_invitePendingEmail);
+    }
+
     function onInvPortalChange() {
       const sel = document.getElementById('inv-portal');
       if (!sel.value) return;
@@ -1328,11 +1447,15 @@
       document.getElementById('inv-portal-label-text').textContent = label;
       document.getElementById('inv-portal-label-wrap').style.display = '';
       document.getElementById('inv-portal-select-wrap').style.display = 'none';
+      _invitePendingId = '';
+      _inviteResultMessage = '';
+      renderInviteModalStatus();
       document.getElementById('inv-name').focus();
     }
     function openInviteModal() {
       _invitePortalKey = '';
       _inviteRoleLabel = '';
+      resetInviteModalStatus();
       document.getElementById('inv-portal-label-wrap').style.display = 'none';
       document.getElementById('inv-portal-select-wrap').style.display = '';
       document.getElementById('inv-portal').value = '';
@@ -1346,6 +1469,7 @@
       document.getElementById('inv-portal').value = '';
       _invitePortalKey = '';
       _inviteRoleLabel = '';
+      resetInviteModalStatus();
     }
     // ── Supabase client ────────────────────────────────────────────────────────
     const { createClient } = supabase;
@@ -1589,8 +1713,10 @@
       }
       btn.disabled = false; btn.textContent = 'Send Invite';
       if (error) { showToast('Could not add user: ' + (error.message || error), true, 4500); return; }
-      closeInviteModal();
-      await loadPortalsData(_prodId, _sb);
+      _inviteResultMessage = `Invite emailed to ${name || normalizedEmail}.`;
+      _invitePendingEmail = normalizedEmail;
+      _invitePendingName = name || normalizedEmail;
+      await refreshInviteModalStatus(normalizedEmail);
       showToast(`Invite emailed to ${name || normalizedEmail}.`);
     }
 
@@ -1625,6 +1751,7 @@
             });
       sendPromise.then(() => {
         btn.textContent = 'Sent';
+        loadPortalsData(_prodId, _sb).catch(() => {});
         showToast(`Invite emailed to ${p.name || p.email}.`);
       }).catch(e => {
         btn.disabled = false; btn.textContent = original;
@@ -1691,8 +1818,6 @@
     }
 
     function openInviteModalForRole(portalKey, roleLabel) {
-      document.getElementById('inv-name').value = '';
-      document.getElementById('inv-email').value = '';
       const matchKey = portalKey === 'board_planned' ? 'board' : portalKey === 'dept_lead_planned' ? 'dept_lead' : portalKey;
       _invitePortalKey = matchKey;
       _inviteRoleLabel = roleLabel || '';
@@ -1703,6 +1828,14 @@
       document.getElementById('inv-portal-label-text').textContent = labelText;
       document.getElementById('inv-portal-label-wrap').style.display = '';
       document.getElementById('pt-invite-overlay').classList.add('open');
+      const pending = findPendingInviteForModal(matchKey, _inviteRoleLabel);
+      document.getElementById('inv-name').value = pending?.name || '';
+      document.getElementById('inv-email').value = pending?.email || '';
+      _invitePendingId = pending?.id || '';
+      _invitePendingEmail = pending?.email || '';
+      _invitePendingName = pending?.name || '';
+      _inviteResultMessage = '';
+      renderInviteModalStatus();
       document.getElementById('inv-name').focus();
     }
 

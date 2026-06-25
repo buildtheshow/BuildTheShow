@@ -138,6 +138,15 @@
     }
     .tp-btn:hover { filter: brightness(1.12); }
     .tp-btn:disabled { opacity: 0.6; cursor: not-allowed; filter: none; }
+    .tp-btn-secondary {
+      background: transparent;
+      color: #572e88;
+      border: 1.5px solid rgba(87,46,136,0.22);
+    }
+    .tp-btn-secondary:hover {
+      background: rgba(87,46,136,0.04);
+      filter: none;
+    }
 
     .tp-error {
       font-size: 0.78rem;
@@ -235,10 +244,10 @@
         return;
       }
 
-      // ── Resume saved session ──
+      // ── Offer saved session explicitly ──
       const saved = loadSavedSession();
       if (saved && saved.sessionToken) {
-        await attemptResume(saved.sessionToken, saved.email);
+        showSavedSessionChoice(saved);
         return;
       }
 
@@ -254,9 +263,21 @@
         } catch { return null; }
       }
 
+      function clearSavedSession() {
+        try { localStorage.removeItem(STORAGE_KEY_PREFIX + prodId); } catch {}
+      }
+
+      function clearPortalSession() {
+        try { sessionStorage.removeItem(SESSION_KEY); } catch {}
+      }
+
       function saveSession(email, token) {
         try {
-          localStorage.setItem(STORAGE_KEY_PREFIX + prodId, JSON.stringify({ email, sessionToken: token }));
+          localStorage.setItem(STORAGE_KEY_PREFIX + prodId, JSON.stringify({
+            email,
+            sessionToken: token,
+            savedAt: new Date().toISOString(),
+          }));
         } catch {}
       }
 
@@ -288,6 +309,7 @@
 
         const member = data.team_member;
         const token  = data.session_token || '';
+        clearPortalSession();
         saveSession(cleanEmail, token);
         storePortalSession(member, token);
         redirect();
@@ -300,12 +322,14 @@
         });
 
         if (error || !data || !data[0]) {
-          // Session expired — show login form with notice
+          clearSavedSession();
+          clearPortalSession();
           showLoginForm('Your session has expired. Please sign in again.');
           return;
         }
 
         const member = data[0];
+        clearPortalSession();
         storePortalSession(member, token);
         redirect();
       }
@@ -396,7 +420,38 @@
 
       // ── UI helpers ──
 
-      function showLoginForm(notice) {
+      function showSavedSessionChoice(saved) {
+        const savedEmail = String(saved?.email || '').trim();
+        document.getElementById('tp-body').innerHTML = `
+          <div class="tp-kicker">Creative Team</div>
+          <h1 class="tp-title">Welcome Back</h1>
+          <p class="tp-subtitle">This device still has saved portal access for this production.</p>
+          <div style="border:1.5px solid rgba(87,46,136,0.14);border-radius:12px;padding:1rem 1rem 0.9rem;margin-bottom:1rem;background:rgba(87,46,136,0.03);">
+            <div style="font-size:0.72rem;font-weight:800;letter-spacing:0.05em;text-transform:uppercase;color:rgba(26,21,48,0.45);margin-bottom:0.3rem;">Saved access</div>
+            <div style="font-size:1rem;font-weight:900;color:#1a1530;">${esc(savedEmail || 'Saved team member')}</div>
+          </div>
+          <button class="tp-btn" id="tp-continue-btn">Continue as ${esc(savedEmail || 'saved user')}</button>
+          <button class="tp-btn tp-btn-secondary" id="tp-switch-btn" style="margin-top:0.75rem;">Use different email</button>
+          <div class="tp-error" id="tp-err"></div>
+        `;
+        document.getElementById('tp-continue-btn')?.addEventListener('click', async () => {
+          const errEl = document.getElementById('tp-err');
+          const btn = document.getElementById('tp-continue-btn');
+          const switchBtn = document.getElementById('tp-switch-btn');
+          if (btn) btn.disabled = true;
+          if (switchBtn) switchBtn.disabled = true;
+          if (errEl) errEl.textContent = 'Opening saved access...';
+          await attemptResume(saved.sessionToken, saved.email);
+        });
+        document.getElementById('tp-switch-btn')?.addEventListener('click', () => {
+          clearSavedSession();
+          clearPortalSession();
+          showLoginForm('', '');
+        });
+      }
+
+      function showLoginForm(notice, initialEmail = '') {
+        clearPortalSession();
         document.getElementById('tp-body').innerHTML = `
           <div class="tp-kicker">Creative Team</div>
           <h1 class="tp-title">Sign In</h1>
@@ -404,7 +459,7 @@
           ${notice ? `<div style="font-size:0.8rem;color:#d1523d;font-weight:700;margin-bottom:1rem;">${esc(notice)}</div>` : ''}
           <div class="tp-field">
             <label for="tp-email">Email</label>
-            <input type="email" id="tp-email" name="email" autocomplete="email" placeholder="your@email.com" />
+            <input type="email" id="tp-email" name="email" autocomplete="email" placeholder="your@email.com" value="${esc(initialEmail)}" />
           </div>
           <div class="tp-field">
             <label for="tp-code">Access Code</label>

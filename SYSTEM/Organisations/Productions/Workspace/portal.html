@@ -24,6 +24,8 @@
     .pr-login-field input:focus { border-color: #572e88; }
     .pr-login-btn { width: 100%; background: #572e88; color: #fff; border: none; border-radius: 8px; padding: 0.8rem; font-size: 0.9rem; font-weight: 950; cursor: pointer; margin-top: 0.5rem; font-family: var(--bts-font, 'Inter', sans-serif); }
     .pr-login-btn:hover { filter: brightness(1.1); }
+    .pr-login-btn-secondary { background: #fff; color: #572e88; border: 1.5px solid rgba(87,46,136,0.22); }
+    .pr-login-btn-secondary:hover { background: rgba(87,46,136,0.04); filter: none; }
     .pr-login-error { font-size: 0.78rem; color: #d1523d; font-weight: 700; margin-top: 0.75rem; min-height: 1em; }
 
     /* ── Shell layout: sidebar + iframe ────────────────────────────── */
@@ -162,6 +164,7 @@ let _org = null;
 let _role = '';
 let _modules = [];
 let _previewPerson = null;
+let _pendingSavedPortalSession = null;
 
 function esc(s) { const d = document.createElement('div'); d.textContent = String(s ?? ''); return d.innerHTML; }
 
@@ -224,6 +227,52 @@ async function prLogin() {
   }
 }
 
+async function prResumeSavedSession(saved) {
+  if (!saved?.email || !saved?.code) return;
+  document.getElementById('pr-login-email').value = saved.email;
+  document.getElementById('pr-login-code').value = saved.code;
+  const continueBtn = document.getElementById('pr-continue-btn');
+  const switchBtn = document.getElementById('pr-switch-btn');
+  const errEl = document.getElementById('pr-login-error');
+  if (continueBtn) continueBtn.disabled = true;
+  if (switchBtn) switchBtn.disabled = true;
+  if (errEl) errEl.textContent = 'Opening saved access...';
+  await prLogin();
+}
+
+function prForgetSavedSession(reload = false) {
+  try { sessionStorage.removeItem('bts_portal_session'); } catch (_) {}
+  _pendingSavedPortalSession = null;
+  if (reload) {
+    window.location.reload();
+    return;
+  }
+}
+
+function prShowSavedSessionChoice(saved) {
+  const cleanEmail = String(saved?.email || '').trim();
+  _pendingSavedPortalSession = saved || null;
+  const box = document.querySelector('.pr-login-box');
+  if (!box) return;
+  box.innerHTML = `
+    <img src="/ASSETS/Images/LogoBrand/logo-long-black.png" alt="Build The Show" class="pr-login-logo" />
+    <div class="pr-login-title">Welcome Back</div>
+    <div class="pr-login-sub">This browser still has saved portal access for this production.</div>
+    <div style="border:1.5px solid rgba(87,46,136,0.14);border-radius:12px;padding:1rem 1rem 0.9rem;margin-bottom:1rem;background:rgba(87,46,136,0.03);">
+      <div style="font-size:0.72rem;font-weight:800;letter-spacing:0.05em;text-transform:uppercase;color:rgba(26,21,48,0.45);margin-bottom:0.3rem;">Saved access</div>
+      <div style="font-size:1rem;font-weight:900;color:#1a1530;">${esc(cleanEmail || 'Saved portal user')}</div>
+    </div>
+    <button class="pr-login-btn" id="pr-continue-btn" type="button">Continue as ${esc(cleanEmail || 'saved user')}</button>
+    <button class="pr-login-btn pr-login-btn-secondary" id="pr-switch-btn" type="button" style="margin-top:0.75rem;">Use different email</button>
+    <div class="pr-login-error" id="pr-login-error"></div>
+  `;
+  document.getElementById('pr-continue-btn')?.addEventListener('click', () => prResumeSavedSession(saved));
+  document.getElementById('pr-switch-btn')?.addEventListener('click', () => {
+    prForgetSavedSession(false);
+    window.location.reload();
+  });
+}
+
 async function prInit() {
   const params   = new URLSearchParams(window.location.search);
   const pvwToken = params.get('pvw_token');
@@ -260,12 +309,7 @@ async function prInit() {
     try {
       const s = JSON.parse(saved);
       if (s.email && s.code && s.prodId) {
-        _prodId  = s.prodId;
-        _role    = s.role || '';
-        _modules = ROLE_MODULES[_role] || [];
-        document.getElementById('pr-login-email').value = s.email;
-        document.getElementById('pr-login-code').value  = s.code;
-        await prLogin();
+        prShowSavedSessionChoice(s);
         return;
       }
     } catch (_) {}
@@ -335,8 +379,7 @@ function prVolunteerUrl() {
 }
 
 function prForgetDevice() {
-  try { sessionStorage.removeItem('bts_portal_session'); } catch (_) {}
-  window.location.reload();
+  prForgetSavedSession(true);
 }
 
 // ── Sidebar builder ────────────────────────────────────────────────
