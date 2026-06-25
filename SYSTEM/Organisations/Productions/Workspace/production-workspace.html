@@ -847,7 +847,7 @@
     }
     .rpt-list { display:flex; flex-direction:column; }
     .rpt-person { padding:0.95rem 0; border-bottom:1px solid rgba(87,46,136,0.12); }
-    @media (min-width: 641px) { .rpt-mob-bar { display:none !important; } .rpt-person--mob-collapsed .rpt-person-body { display:block !important; } .rpt-person--mob-collapsed .rsc-card-photo { display:block !important; } }
+    @media (min-width: 641px) { .rpt-mob-bar { display:none !important; } .rpt-person--mob-collapsed .rpt-person-body { display:contents !important; } }
     .rpt-person:last-child { border-bottom:none; }
     .rpt-progress-wrap { margin-bottom:0.65rem; }
     .rpt-progress-track { height:6px; background:rgba(87,46,136,0.1); border-radius:10px; overflow:hidden; }
@@ -46893,8 +46893,31 @@ See you soon!
     const roleMeta = household && items.length > 1 ? `${items.length} performers${roleName ? ` . ${roleName}` : ''}` : roleName;
     const isHouseholdRow = !!household && items.length > 1;
     const photos = items.slice(0, 3).map(item => rscPhotoHtml(item.app || {}, String(item.app?.name || 'Cast Member').trim())).join('');
-    return `<div class="rsc-status-row" id="rpt-row-${esc(assignId)}">
-      <div class="rsc-status-cell rsc-cast-cell${isHouseholdRow ? ' rsc-cast-cell--household' : ''}">
+    const _mobHs2 = app.headshot_url || app.headshot || app.photo_url || '';
+    const _mobAge2 = age || '';
+    const _mobEf = rptEffectiveFee(primary, settings);
+    const _mobRec = _rptPaymentRecords[assignId] || [];
+    const _mobHasFee = (settings.mode === 'flat' || settings.mode === 'split') && _mobEf.total > 0;
+    const _mobPaid = _mobHasFee ? _mobRec.filter(r => r.paid).reduce((s, r) => s + (_mobEf.installments[r.installment_index]?.amount || 0), 0) : 0;
+    const _mobBal = _mobHasFee ? Math.max(0, _mobEf.total - _mobPaid) : 0;
+    const _mobBalStr = !_mobHasFee ? '' : (_mobBal === 0 && _mobPaid > 0) ? 'Paid' : registrationFormatPaymentAmount(_mobBal, settings);
+    const _mobBalCls = (_mobBal === 0 && _mobPaid > 0) ? 'rpt-mob-paid' : (_mobBal > 0 ? 'rpt-mob-owing' : '');
+    const _mobPh2 = _mobHs2
+      ? `<img class="rpt-mob-photo" src="${esc(_mobHs2)}" alt="" />`
+      : `<div class="rpt-mob-initials">${esc((names[0]||'').split(' ').map(w=>(w[0]||'')).join('').slice(0,2).toUpperCase())}</div>`;
+
+    return `<div class="rsc-status-row rpt-person--mob-collapsed" id="rpt-row-${esc(assignId)}">
+      <div class="rpt-mob-bar" onclick="rptToggleMobPerson(this)">
+        ${_mobPh2}
+        <div class="rpt-mob-bar-info">
+          <div class="rpt-mob-bar-name">${esc(title)}</div>
+          <div class="rpt-mob-bar-role">${esc(roleMeta || '')}</div>
+        </div>
+        <div class="rpt-mob-bar-balance ${_mobBalCls}">${_mobBalStr}</div>
+        <span class="rpt-mob-bar-chevron">&#9660;</span>
+      </div>
+      <div class="rpt-person-body">
+      <div class="rsc-status-cell rsc-cast-cell${isHouseholdRow ? ' rsc-cast-cell--household' : ''}">`
         ${isHouseholdRow ? rscHouseholdCastCellHtml(items, household) : `
           <div class="rsc-cast-cell-top">
             <div class="rsc-cast-photos">${photos}</div>
@@ -46937,6 +46960,7 @@ See you soon!
       <div class="rsc-status-cell">${rscPaymentCellHtml(primary, settings, items, household)}</div>
       <div class="rsc-status-cell">${rscConnectionsCellHtml(primary, settings, household || rptHouseholdFor(assignId))}</div>
       <div class="rsc-status-cell" style="display:flex;flex-direction:column;">${rscNotesActionsCellHtml(items, household)}</div>
+      </div>
     </div>`;
   }
 
