@@ -736,7 +736,7 @@
       const plannedDeptLeadRoles = buildPlannedDeptLeadRoles(prodRes.data?.volunteer_staffing_plan || {});
       _pendingInvites = buildPendingInvites(teamRes.data || [], teamSessionRes.data || [], volunteers, boardInvites);
 
-      buildPeopleList(cast, volunteers, deptLeads, treasurers, teamMembers, boardMembers, bookingCodes, plannedDeptLeadRoles);
+      buildPeopleList(cast, volunteers, deptLeads, treasurers, teamMembers, boardMembers, bookingCodes, plannedDeptLeadRoles, boardInvites);
       renderPortalCards();
       renderInvitationsSection();
     }
@@ -955,14 +955,30 @@
       return merged;
     }
 
-    function buildPeopleList(cast, volunteers, deptLeads, treasurers, teamMembers, boardMembers = [], bookingCodes = new Map(), plannedDeptLeadRoles = []) {
+    function buildPeopleList(cast, volunteers, deptLeads, treasurers, teamMembers, boardMembers = [], bookingCodes = new Map(), plannedDeptLeadRoles = [], boardInvites = []) {
       const deptLeadEmails = new Set(deptLeads.map(d => (d.email||'').toLowerCase()));
       const treasurerEmails = new Set(treasurers.map(t => (t.email||'').toLowerCase()));
+      const pendingVolunteerByRole = new Map();
+      (volunteers || []).forEach(v => {
+        if (!v?.portal_invite_sent_at) return;
+        const roles = Array.isArray(v._roles) && v._roles.length ? v._roles : [v.role_name];
+        roles.map(normaliseRoleName).filter(Boolean).forEach(key => {
+          if (!pendingVolunteerByRole.has(key)) pendingVolunteerByRole.set(key, v);
+        });
+      });
+      const pendingBoardInviteByRole = new Map();
+      (boardInvites || []).filter(inv => !inv?.used_at).forEach(inv => {
+        const key = normaliseRoleName(inv.title || '');
+        if (key && !pendingBoardInviteByRole.has(key)) pendingBoardInviteByRole.set(key, inv);
+      });
       const assignedDeptLeadRoles = new Set([...deptLeads, ...treasurers].flatMap(v => {
         const roles = Array.isArray(v._roles) && v._roles.length ? v._roles : [v.role_name];
         return roles.map(normaliseRoleName).filter(Boolean);
       }));
       if (boardMembers.some(m => normaliseRoleName(m.title) === normaliseRoleName(TREASURER_ROLE_KEY))) {
+        assignedDeptLeadRoles.add(normaliseRoleName(TREASURER_ROLE_KEY));
+      }
+      if (pendingVolunteerByRole.has(normaliseRoleName(TREASURER_ROLE_KEY))) {
         assignedDeptLeadRoles.add(normaliseRoleName(TREASURER_ROLE_KEY));
       }
       const assignedOrgMemberRoles = new Set(boardMembers.map(m => normaliseRoleName(m.title)).filter(Boolean));
@@ -997,6 +1013,7 @@
           portals: ['volunteer'],
           filterKeys: ['volunteer'],
           source: 'volunteer',
+          statusLabel: v.portal_invite_sent_at ? 'Invited' : 'Active',
           data: v,
         });
       });
@@ -1014,6 +1031,7 @@
           portals: ['volunteer','dept_lead'],
           filterKeys: ['dept_lead'],
           source: 'dept_lead',
+          statusLabel: v.portal_invite_sent_at ? 'Invited' : 'Active',
           data: v,
         });
       });
@@ -1030,6 +1048,7 @@
           portals: ['treasurer'],
           filterKeys: ['dept_lead'],
           source: 'treasurer',
+          statusLabel: v.portal_invite_sent_at ? 'Invited' : 'Active',
           data: v,
         });
       });
@@ -1039,17 +1058,18 @@
         .forEach(role => {
           const style = roleStyleFor(role.roleName, role.department, '#dd8233', '#fef4e2');
           const isTreasurerRole = normaliseRoleName(role.roleName) === normaliseRoleName(TREASURER_ROLE_KEY);
+          const pending = pendingVolunteerByRole.get(normaliseRoleName(role.roleName));
           people.push({
-            name: '',
-            email: '',
+            name: pending?.name || '',
+            email: pending?.email || '',
             headshot: '',
             roleLabel: role.roleName,
             roleColor: style.color, roleBg: style.bg, roleBorder: style.border, roleDepartment: style.department,
             portals: [isTreasurerRole ? 'treasurer' : 'dept_lead'],
             filterKeys: ['dept_lead'],
             source: isTreasurerRole ? 'treasurer' : 'dept_lead_planned',
-            statusLabel: 'Not assigned',
-            data: role,
+            statusLabel: pending ? 'Invited' : 'Not assigned',
+            data: pending || role,
           });
         });
 
@@ -1067,6 +1087,7 @@
           portals: ['team'],
           filterKeys: ['team'],
           source: lvl,
+          statusLabel: m.invite_sent_at ? 'Invited' : 'Active',
           data: m,
         });
       });
@@ -1094,17 +1115,19 @@
         .forEach(role => {
           const isTreasurerHolder = normaliseRoleName(role) === normaliseRoleName(TREASURER_ROLE_KEY);
           const def = isTreasurerHolder ? TREASURER_PORTAL_DEF : boardDef;
+          const pending = pendingBoardInviteByRole.get(normaliseRoleName(role))
+            || (isTreasurerHolder ? pendingVolunteerByRole.get(normaliseRoleName(TREASURER_ROLE_KEY)) : null);
           people.push({
-            name: '',
-            email: '',
+            name: pending?.invitee_name || pending?.name || '',
+            email: pending?.email || '',
             headshot: '',
             roleLabel: role,
             roleColor: def.color, roleBg: def.bg, roleBorder: def.bg,
             portals: [isTreasurerHolder ? 'treasurer' : 'board'],
             filterKeys: ['board'],
             source: isTreasurerHolder ? 'treasurer' : 'board_planned',
-            statusLabel: 'Not assigned',
-            data: { roleName: role },
+            statusLabel: pending ? 'Invited' : 'Not assigned',
+            data: pending || { roleName: role },
           });
         });
 
