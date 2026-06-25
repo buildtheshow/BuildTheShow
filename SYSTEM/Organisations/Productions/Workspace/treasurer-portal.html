@@ -501,28 +501,29 @@
     }
   }
 
-  // Module key → sidebar element mapping
+  // Module key → sidebar element mapping (uses SIDEBAR_TREE keys from portals.html)
   const MODULE_SIDEBAR_MAP = {
-    'registration':   { els: ['cast-wrap'] },
-    'fin-dashboard':  { els: ['tnav-fin-dashboard'] },
-    'budget':         { els: ['tnav-fin-budgeting'] },
-    'fin-receipts':   { els: ['tnav-fin-receipts'] },
-    'fin-reports':    { els: ['tnav-fin-reports'] },
+    'cast:registration':        { els: ['cast-wrap'] },
+    'cast:registration:status': { els: ['cast-wrap'] },
+    'financials:dashboard':     { els: ['tnav-fin-dashboard'] },
+    'financials:budgeting':     { els: ['tnav-fin-budgeting'] },
+    'financials:receipts':      { els: ['tnav-fin-receipts'] },
+    'financials:reports':       { els: ['tnav-fin-reports'] },
   };
   // Nav keys in sidebar order for finding first visible page
   const NAV_KEY_ORDER = ['reg-status', 'fin-dashboard', 'fin-budgeting', 'fin-receipts', 'fin-reports'];
   const NAV_KEY_TO_MODULE = {
-    'reg-status': 'registration',
-    'fin-dashboard': 'fin-dashboard',
-    'fin-budgeting': 'budget',
-    'fin-receipts': 'fin-receipts',
-    'fin-reports': 'fin-reports',
+    'reg-status':    'cast:registration',
+    'fin-dashboard': 'financials:dashboard',
+    'fin-budgeting': 'financials:budgeting',
+    'fin-receipts':  'financials:receipts',
+    'fin-reports':   'financials:reports',
   };
 
   // Treasurer role defaults (matches ROLE_DEFAULT_ACCESS in portals.html)
   const TREASURER_DEFAULTS = {
-    'fin-dashboard': 'view', 'fin-reports': 'view', 'fin-receipts': 'view',
-    'budget': 'edit', 'registration': 'view',
+    'financials:dashboard': 'view', 'financials:reports': 'view', 'financials:receipts': 'view',
+    'financials:budgeting': 'edit', 'cast:registration': 'view', 'cast:registration:status': 'view',
   };
 
   async function loadPortalPermissions() {
@@ -538,17 +539,32 @@
     return perms;
   }
 
+  function resolveAccess(key, perms) {
+    if (perms && perms[key] !== undefined) return perms[key];
+    // Check parent keys: 'financials:dashboard' inherits from 'financials'
+    const parts = key.split(':');
+    for (let i = parts.length - 1; i > 0; i--) {
+      const parent = parts.slice(0, i).join(':');
+      if (perms && perms[parent] !== undefined) return perms[parent];
+    }
+    if (TREASURER_DEFAULTS[key] !== undefined) return TREASURER_DEFAULTS[key];
+    const defParts = key.split(':');
+    for (let i = defParts.length - 1; i > 0; i--) {
+      const parent = defParts.slice(0, i).join(':');
+      if (TREASURER_DEFAULTS[parent] !== undefined) return TREASURER_DEFAULTS[parent];
+    }
+    return 'none';
+  }
+
   function applyPortalPermissions(perms) {
+    const allKeys = new Set([...Object.keys(TREASURER_DEFAULTS), ...Object.keys(MODULE_SIDEBAR_MAP), ...Object.keys(perms || {})]);
     const effective = {};
-    const allKeys = new Set([...Object.keys(TREASURER_DEFAULTS), ...Object.keys(perms || {})]);
-    allKeys.forEach(key => {
-      effective[key] = (perms && perms[key] !== undefined) ? perms[key] : (TREASURER_DEFAULTS[key] || 'none');
-    });
+    allKeys.forEach(key => { effective[key] = resolveAccess(key, perms); });
     _grantedModules = effective;
 
     // Hide sidebar items for modules with 'none' access
     Object.entries(MODULE_SIDEBAR_MAP).forEach(([moduleKey, cfg]) => {
-      const level = effective[moduleKey] || 'none';
+      const level = resolveAccess(moduleKey, perms);
       const hidden = level === 'none';
       cfg.els.forEach(elId => {
         const el = document.getElementById(elId);
@@ -556,15 +572,15 @@
       });
     });
 
-    // Hide entire Financials group if all financial modules are 'none'
-    const finKeys = ['fin-dashboard', 'budget', 'fin-receipts', 'fin-reports'];
-    const allFinHidden = finKeys.every(k => (effective[k] || 'none') === 'none');
+    // Hide entire Financials group if all financial sub-modules are 'none'
+    const finKeys = ['financials:dashboard', 'financials:budgeting', 'financials:receipts', 'financials:reports'];
+    const allFinHidden = finKeys.every(k => resolveAccess(k, perms) === 'none');
     const finGroup = document.getElementById('group-financials');
     if (finGroup) finGroup.style.display = allFinHidden ? 'none' : '';
 
     // Hide Cast group if registration is 'none'
     const castWrap = document.getElementById('cast-wrap');
-    if (castWrap) castWrap.style.display = (effective['registration'] || 'none') === 'none' ? 'none' : '';
+    if (castWrap) castWrap.style.display = resolveAccess('cast:registration', perms) === 'none' ? 'none' : '';
   }
 
   function firstVisibleNavKey() {

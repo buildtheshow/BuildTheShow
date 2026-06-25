@@ -178,9 +178,22 @@
     .pt-drawer-footer { padding: 1rem 1.5rem; border-top: 1.5px solid #edeaf6; display: flex; gap: 0.65rem; justify-content: flex-end; flex-shrink: 0; }
     .pt-drawer-section { margin-bottom: 1.5rem; }
     .pt-drawer-section-label { font-size: 0.68rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em; color: rgba(87,46,136,0.5); margin-bottom: 0.65rem; }
-    .pt-module-list { display: flex; flex-direction: column; gap: 0.35rem; }
-    .pt-module-row { display: flex; align-items: center; justify-content: space-between; padding: 0.5rem 0.75rem; background: #f8f7fc; border-radius: 8px; }
-    .pt-module-name { font-size: 0.84rem; font-weight: 600; color: #1a1530; }
+    .pt-module-list { display: flex; flex-direction: column; gap: 0; }
+    .pt-module-section { margin-bottom: 0.15rem; }
+    .pt-module-section-header { display: flex; align-items: center; gap: 0.5rem; padding: 0.55rem 0.65rem; background: #572e88; color: #fff; border-radius: 8px 8px 0 0; font-size: 0.76rem; font-weight: 800; letter-spacing: 0.03em; cursor: pointer; user-select: none; }
+    .pt-module-section-header img { width: 18px; height: 18px; object-fit: contain; filter: brightness(0) invert(1); opacity: 0.85; flex-shrink: 0; }
+    .pt-module-section-header .pt-section-chevron { margin-left: auto; font-size: 0.6rem; opacity: 0.7; transition: transform 0.15s; }
+    .pt-module-section-header.collapsed .pt-section-chevron { transform: rotate(-90deg); }
+    .pt-module-section-items { display: flex; flex-direction: column; background: #f8f7fc; border-radius: 0 0 8px 8px; overflow: hidden; margin-bottom: 0.35rem; }
+    .pt-module-section-items.collapsed { display: none; }
+    .pt-module-row { display: flex; align-items: center; justify-content: space-between; padding: 0.42rem 0.75rem; border-bottom: 1px solid rgba(87,46,136,0.06); min-height: 36px; }
+    .pt-module-row:last-child { border-bottom: none; }
+    .pt-module-row[data-depth="1"] { padding-left: 0.75rem; }
+    .pt-module-row[data-depth="2"] { padding-left: 1.65rem; }
+    .pt-module-row[data-depth="3"] { padding-left: 2.55rem; }
+    .pt-module-sublabel { font-size: 0.66rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.06em; color: rgba(87,46,136,0.4); padding: 0.45rem 0.75rem 0.2rem; }
+    .pt-module-sublabel[data-depth="2"] { padding-left: 1.65rem; }
+    .pt-module-name { font-size: 0.78rem; font-weight: 600; color: #1a1530; }
     .pt-perm-toggle-group { display: flex; border: 1.5px solid #edeaf6; border-radius: 8px; overflow: hidden; flex-shrink: 0; }
     .pt-perm-toggle { border: none; border-right: 1px solid #edeaf6; background: #fff; color: #9a90b0; font-size: 0.69rem; font-weight: 700; padding: 0.28rem 0.6rem; cursor: pointer; font-family: inherit; white-space: nowrap; transition: background 0.1s, color 0.1s; }
     .pt-perm-toggle:last-child { border-right: none; }
@@ -2007,47 +2020,181 @@
     // ── Module list per portal type ────────────────────────────────────────────
     // key = stored in portal_permissions.module_key
     // defaultAccess = what the role gives by default; overridden per-person in portal_permissions
-    // Master list of every grantable page/section, in main sidebar order.
-    // defaultAccess per role type is resolved by ROLE_DEFAULT_ACCESS below.
-    const ALL_PORTAL_MODULES = [
-      { key: 'overview',        label: 'Overview',                group: 'Overview' },
-      { key: 'schedule',        label: 'Production Calendar',     group: 'Plan' },
-      { key: 'cast-dashboard',  label: 'Cast Dashboard',          group: 'Cast' },
-      { key: 'auditions',       label: 'Auditions',               group: 'Cast' },
-      { key: 'casting',         label: 'Casting',                 group: 'Cast' },
-      { key: 'registration',    label: 'Registration',            group: 'Cast' },
-      { key: 'departments',     label: 'Production Departments',  group: 'Production Departments' },
-      { key: 'marketing',       label: 'Marketing',               group: 'Promote' },
-      { key: 'sponsors',        label: 'Sponsors',                group: 'Promote' },
-      { key: 'programme',       label: 'Programme',               group: 'Promote' },
-      { key: 'ticketing',       label: 'Ticketing',               group: 'Ticketing' },
-      { key: 'shifts',          label: 'Volunteer Shifts',        group: 'Volunteers' },
-      { key: 'hours',           label: 'Volunteer Hours',         group: 'Volunteers' },
-      { key: 'fin-dashboard',   label: 'Financial Dashboard',     group: 'Financials' },
-      { key: 'budget',          label: 'Budgeting',               group: 'Financials' },
-      { key: 'fin-receipts',    label: 'Receipts',                group: 'Financials' },
-      { key: 'fin-reports',     label: 'Financial Reports',       group: 'Financials' },
-      { key: 'wrapup',          label: 'Wrap Up',                 group: 'Wrap Up' },
-      { key: 'settings',        label: 'Settings',                group: 'Settings' },
+    // Sidebar-mirrored tree of every grantable page. Structure:
+    // { key, label, icon?, children?: [...] }
+    // depth 0 = section header (Overview, Plan, Cast...)
+    // depth 1 = page or sub-menu parent (Dashboard, Auditions, Casting...)
+    // depth 2 = sub-page (Audition Schedule, Casting Board...)
+    const SIDEBAR_TREE = [
+      { key: 'overview', label: 'Overview', icon: 'navoverview.svg', children: [
+        { key: 'overview:dashboard', label: 'Dashboard' },
+      ]},
+      { key: 'plan', label: 'Plan', icon: 'navproductioncalendar.svg', children: [
+        { key: 'plan:dashboard',    label: 'Dashboard' },
+        { key: 'plan:timeline',     label: 'Producer Timeline' },
+        { key: 'plan:team',         label: 'Team' },
+        { key: 'plan:calendar',     label: 'Calendar' },
+        { key: 'plan:script',       label: 'Script Breakdown' },
+        { key: 'plan:files',        label: 'Files' },
+        { key: 'plan:setup',        label: 'Production Setup' },
+      ]},
+      { key: 'cast', label: 'Cast', icon: 'Star.svg', children: [
+        { key: 'cast:dashboard', label: 'Dashboard' },
+        { key: 'cast:auditions', label: 'Auditions', children: [
+          { key: 'cast:auditions:dashboard',  label: 'Dashboard' },
+          { key: 'cast:auditions:schedule',   label: 'Audition Schedule' },
+          { key: 'cast:auditions:performers', label: 'All Performers' },
+          { key: 'cast:auditions:selftapes',  label: 'Self Tapes' },
+          { key: 'cast:auditions:settings',   label: 'Settings' },
+        ]},
+        { key: 'cast:casting', label: 'Casting', children: [
+          { key: 'cast:casting:dashboard',    label: 'Dashboard' },
+          { key: 'cast:casting:board',        label: 'Casting Board' },
+          { key: 'cast:casting:list',         label: 'Cast List' },
+          { key: 'cast:casting:offers',       label: 'Offers' },
+        ]},
+        { key: 'cast:registration', label: 'Registration', children: [
+          { key: 'cast:registration:dashboard', label: 'Dashboard' },
+          { key: 'cast:registration:form',      label: 'Registration Form' },
+          { key: 'cast:registration:status',    label: 'Status' },
+          { key: 'cast:registration:settings',  label: 'Settings' },
+        ]},
+      ]},
+      { key: 'departments', label: 'Production Departments', icon: 'page-production-department.svg', children: [
+        { key: 'departments:dashboard',  label: 'Dashboard' },
+        { key: 'departments:foh',        label: 'Front of House', children: [
+          { key: 'departments:foh:ushers',      label: 'Ushers' },
+          { key: 'departments:foh:concessions', label: 'Concessions' },
+          { key: 'departments:foh:boxoffice',   label: 'Box Office' },
+        ]},
+        { key: 'departments:backstage',  label: 'Backstage & Rehearsal Support', children: [
+          { key: 'departments:backstage:crew',      label: 'Backstage Crew' },
+          { key: 'departments:backstage:changes',   label: 'Quick Changes' },
+          { key: 'departments:backstage:wrangling', label: 'Child Wrangling' },
+          { key: 'departments:backstage:rehearsal', label: 'Rehearsal Support' },
+        ]},
+        { key: 'departments:technical',  label: 'Technical Crew', children: [
+          { key: 'departments:technical:lighting',  label: 'Lighting' },
+          { key: 'departments:technical:sound',     label: 'Sound' },
+          { key: 'departments:technical:mics',      label: 'Mics' },
+          { key: 'departments:technical:spotlight', label: 'Spotlight' },
+        ]},
+        { key: 'departments:design',     label: 'Design & Construction', children: [
+          { key: 'departments:design:building', label: 'Set Building' },
+          { key: 'departments:design:painting', label: 'Set Painting' },
+          { key: 'departments:design:dressing', label: 'Set Dressing' },
+          { key: 'departments:design:props',    label: 'Props' },
+        ]},
+        { key: 'departments:costumes',   label: 'Costumes', children: [
+          { key: 'departments:costumes:costumes', label: 'Costumes' },
+          { key: 'departments:costumes:laundry',  label: 'Costume Laundry' },
+          { key: 'departments:costumes:moveout',  label: 'Costume Move-Out' },
+        ]},
+        { key: 'departments:hair',       label: 'Hair & Makeup', children: [
+          { key: 'departments:hair:hair',   label: 'Hair' },
+          { key: 'departments:hair:makeup', label: 'Makeup' },
+        ]},
+        { key: 'departments:marketing',  label: 'Marketing & Publicity', children: [
+          { key: 'departments:marketing:branding',    label: 'Branding' },
+          { key: 'departments:marketing:programme',   label: 'Programme' },
+          { key: 'departments:marketing:media',       label: 'Media' },
+          { key: 'departments:marketing:sponsors',    label: 'Sponsors' },
+          { key: 'departments:marketing:promo',       label: 'Promotion Distribution' },
+        ]},
+        { key: 'departments:stage',      label: 'Stage Management', children: [
+          { key: 'departments:stage:management', label: 'Stage Management' },
+        ]},
+        { key: 'departments:producer',   label: 'Producer' },
+      ]},
+      { key: 'promote', label: 'Promote', icon: 'Notifications.svg', children: [
+        { key: 'promote:dashboard', label: 'Dashboard' },
+        { key: 'promote:marketing', label: 'Marketing', children: [
+          { key: 'promote:marketing:dashboard', label: 'Dashboard' },
+          { key: 'promote:marketing:assets',    label: 'Assets' },
+          { key: 'promote:marketing:media',     label: 'Media' },
+          { key: 'promote:marketing:calendar',  label: 'Calendar' },
+          { key: 'promote:marketing:tasks',     label: 'Tasks' },
+        ]},
+        { key: 'promote:sponsors', label: 'Sponsors', children: [
+          { key: 'promote:sponsors:dashboard',  label: 'Dashboard' },
+          { key: 'promote:sponsors:ads',        label: 'Programme Ads' },
+          { key: 'promote:sponsors:show',       label: 'Show Sponsors' },
+          { key: 'promote:sponsors:settings',   label: 'Settings' },
+        ]},
+        { key: 'promote:programme', label: 'Programme' },
+      ]},
+      { key: 'ticketing', label: 'Ticketing', icon: 'page-tickets.svg', children: [
+        { key: 'ticketing:dashboard',  label: 'Dashboard' },
+        { key: 'ticketing:events',     label: 'Events' },
+        { key: 'ticketing:sales',      label: 'Sales' },
+        { key: 'ticketing:discounts',  label: 'Discounts' },
+        { key: 'ticketing:reports',    label: 'Reports' },
+        { key: 'ticketing:settings',   label: 'Settings' },
+      ]},
+      { key: 'volunteers', label: 'Volunteers', icon: 'page-volunteers.svg', children: [
+        { key: 'volunteers:calendar',    label: 'Calendar' },
+        { key: 'volunteers:plan',        label: 'Plan' },
+        { key: 'volunteers:suggestions', label: 'Suggestions' },
+        { key: 'volunteers:roles',       label: 'Roles' },
+        { key: 'volunteers:publish',     label: 'Publish' },
+        { key: 'volunteers:share',       label: 'Share' },
+        { key: 'volunteers:requests',    label: 'Requests' },
+      ]},
+      { key: 'financials', label: 'Financials', icon: 'Budgeting-total-spent-cad-usd.svg', children: [
+        { key: 'financials:dashboard', label: 'Dashboard' },
+        { key: 'financials:budgeting', label: 'Budgeting' },
+        { key: 'financials:receipts',  label: 'Receipts' },
+        { key: 'financials:reports',   label: 'Reports' },
+      ]},
+      { key: 'wrapup', label: 'Wrap Up', icon: 'page-wrap-up.svg', children: [
+        { key: 'wrapup:dashboard', label: 'Dashboard' },
+        { key: 'wrapup:surveys',   label: 'Surveys' },
+        { key: 'wrapup:archive',   label: 'Archive' },
+      ]},
+      { key: 'settings', label: 'Settings', icon: 'navsettings.svg', children: [
+        { key: 'settings:production',     label: 'Production Settings' },
+        { key: 'settings:team',           label: 'Team & Permissions' },
+        { key: 'settings:communications', label: 'Communications' },
+        { key: 'settings:emails',         label: 'Email Templates' },
+        { key: 'settings:forms',          label: 'Forms' },
+        { key: 'settings:payments',       label: 'Payments' },
+        { key: 'settings:integrations',   label: 'Integrations' },
+      ]},
     ];
 
-    // Per-role defaults: keys not listed default to 'none'
+    // Flatten tree into a list of all leaf keys for iteration
+    function flattenTree(nodes) {
+      const out = [];
+      (nodes || []).forEach(n => {
+        out.push(n.key);
+        if (n.children) out.push(...flattenTree(n.children));
+      });
+      return out;
+    }
+    const ALL_MODULE_KEYS = flattenTree(SIDEBAR_TREE);
+
+    // Per-role defaults: keys not listed default to 'none'.
+    // A section key (e.g. 'cast') grants all children by default.
     const ROLE_DEFAULT_ACCESS = {
-      cast:      { schedule: 'view', registration: 'edit' },
-      volunteer: { shifts: 'view', hours: 'view' },
-      dept_lead: { shifts: 'edit', hours: 'view', budget: 'view', departments: 'view' },
-      treasurer: { 'fin-dashboard': 'view', 'fin-reports': 'view', 'fin-receipts': 'view', budget: 'edit', registration: 'view' },
-      team:      { 'cast-dashboard': 'view', schedule: 'edit' },
-      producer:  { overview: 'edit', schedule: 'edit', 'cast-dashboard': 'edit', auditions: 'edit', casting: 'edit', registration: 'edit', departments: 'edit', marketing: 'edit', sponsors: 'edit', programme: 'edit', ticketing: 'edit', shifts: 'edit', hours: 'edit', 'fin-dashboard': 'edit', budget: 'edit', 'fin-receipts': 'edit', 'fin-reports': 'edit', wrapup: 'edit', settings: 'edit' },
-      board:     { overview: 'view' },
+      cast:      { 'plan:calendar': 'view', 'cast:registration': 'view', 'cast:registration:dashboard': 'view', 'cast:registration:status': 'view' },
+      volunteer: { 'volunteers:calendar': 'view', 'volunteers:requests': 'view' },
+      dept_lead: { 'volunteers': 'edit', 'departments': 'view', 'financials:budgeting': 'view' },
+      treasurer: { 'financials': 'view', 'financials:dashboard': 'view', 'financials:budgeting': 'edit', 'financials:receipts': 'view', 'financials:reports': 'view', 'cast:registration': 'view', 'cast:registration:status': 'view' },
+      team:      { 'cast:dashboard': 'view', 'cast:auditions': 'view', 'cast:casting': 'view', 'plan:calendar': 'edit' },
+      producer:  Object.fromEntries(flattenTree(SIDEBAR_TREE).map(k => [k, 'edit'])),
+      board:     { 'overview': 'view', 'overview:dashboard': 'view' },
     };
 
-    function portalModulesForRole(roleKey) {
-      const defaults = ROLE_DEFAULT_ACCESS[roleKey] || {};
-      return ALL_PORTAL_MODULES.map(m => ({
-        ...m,
-        defaultAccess: defaults[m.key] || 'none',
-      }));
+    function resolveDefaultAccess(key, roleKey) {
+      const defs = ROLE_DEFAULT_ACCESS[roleKey] || {};
+      if (defs[key] !== undefined) return defs[key];
+      // Check parent keys: 'cast:auditions:dashboard' inherits from 'cast:auditions' or 'cast'
+      const parts = key.split(':');
+      for (let i = parts.length - 1; i > 0; i--) {
+        const parent = parts.slice(0, i).join(':');
+        if (defs[parent] !== undefined) return defs[parent];
+      }
+      return 'none';
     }
 
     // ── Edit Access Drawer ─────────────────────────────────────────────────────
@@ -2107,27 +2254,46 @@
       }).filter(Boolean).join(', ');
 
       const roleKey = (src === 'producer' || src === 'admin') ? 'producer' : (person.portals[0] || src);
-      const modules = portalModulesForRole(roleKey);
 
       const tog = (level, current) => `<button class="pt-perm-toggle${current === level ? ' selected' : ''}" data-level="${level}" onclick="setPermToggle(this)">${level === 'none' ? 'No Access' : level === 'view' ? 'View' : 'Edit'}</button>`;
 
-      let lastGroup = '';
-      const moduleListHtml = modules.map(m => {
-            const current  = perms[m.key] !== undefined ? perms[m.key] : m.defaultAccess;
-            const isCustom = perms[m.key] !== undefined && perms[m.key] !== m.defaultAccess;
-            let groupHeader = '';
-            if (m.group && m.group !== lastGroup) {
-              lastGroup = m.group;
-              groupHeader = `<div style="font-size:0.62rem;font-weight:800;text-transform:uppercase;letter-spacing:0.08em;color:rgba(87,46,136,0.45);margin-top:${lastGroup === modules[0].group ? '0' : '0.75rem'};margin-bottom:0.25rem">${esc(m.group)}</div>`;
-            }
-            return `${groupHeader}<div class="pt-module-row" data-module-key="${esc(m.key)}" data-default-access="${esc(m.defaultAccess)}">
-              <div style="display:flex;align-items:center;gap:0.4rem;min-width:0;flex:1">
-                <span class="pt-module-name">${esc(m.label)}</span>
-                <span class="pt-custom-label" style="font-size:0.64rem;font-weight:700;color:#ca7ea7;flex-shrink:0${isCustom ? '' : ';display:none'}">custom</span>
-              </div>
-              <div class="pt-perm-toggle-group">${tog('none',current)}${tog('view',current)}${tog('edit',current)}</div>
-            </div>`;
-          }).join('');
+      function renderModuleRow(node, depth, roleKey) {
+        const defAccess = resolveDefaultAccess(node.key, roleKey);
+        const current = perms[node.key] !== undefined ? perms[node.key] : defAccess;
+        const isCustom = perms[node.key] !== undefined && perms[node.key] !== defAccess;
+        return `<div class="pt-module-row" data-module-key="${esc(node.key)}" data-default-access="${esc(defAccess)}" data-depth="${depth}">
+          <div style="display:flex;align-items:center;gap:0.4rem;min-width:0;flex:1">
+            <span class="pt-module-name">${esc(node.label)}</span>
+            <span class="pt-custom-label" style="font-size:0.64rem;font-weight:700;color:#ca7ea7;flex-shrink:0${isCustom ? '' : ';display:none'}">custom</span>
+          </div>
+          <div class="pt-perm-toggle-group">${tog('none',current)}${tog('view',current)}${tog('edit',current)}</div>
+        </div>`;
+      }
+
+      function renderChildren(children, depth, roleKey) {
+        return (children || []).map(child => {
+          if (child.children && child.children.length) {
+            return `<div class="pt-module-sublabel" data-depth="${depth}">${esc(child.label)}</div>` +
+              child.children.map(sub => renderModuleRow(sub, depth + 1, roleKey)).join('');
+          }
+          return renderModuleRow(child, depth, roleKey);
+        }).join('');
+      }
+
+      const moduleListHtml = SIDEBAR_TREE.map(section => {
+        const iconSrc = section.icon ? `/ASSETS/Images/Icons/${section.icon}` : '';
+        const iconHtml = iconSrc ? `<img src="${esc(iconSrc)}" alt="" />` : '';
+        const sectionId = 'pt-section-' + section.key;
+        const itemsHtml = section.children ? renderChildren(section.children, 1, roleKey) : '';
+        return `<div class="pt-module-section">
+          <div class="pt-module-section-header" onclick="this.classList.toggle('collapsed');document.getElementById('${sectionId}').classList.toggle('collapsed')">
+            ${iconHtml}
+            ${esc(section.label)}
+            <span class="pt-section-chevron">&#9660;</span>
+          </div>
+          <div class="pt-module-section-items" id="${sectionId}">${itemsHtml}</div>
+        </div>`;
+      }).join('');
 
       let roleEditorHtml = '';
       if (src === 'volunteer' || src === 'dept_lead' || src === 'treasurer') {
