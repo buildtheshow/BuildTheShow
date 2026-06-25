@@ -26,6 +26,8 @@
     .tr-login-field input:focus { border-color: #572e88; }
     .tr-login-btn { width: 100%; background: #572e88; color: #fff; border: none; border-radius: 8px; padding: 0.8rem; font-size: 0.9rem; font-weight: 950; cursor: pointer; margin-top: 0.5rem; font-family: var(--bts-font, 'Inter', sans-serif); }
     .tr-login-btn:hover { filter: brightness(1.1); }
+    .tr-login-btn-secondary { background: #fff; color: #572e88; border: 1.5px solid rgba(87,46,136,0.22); }
+    .tr-login-btn-secondary:hover { background: rgba(87,46,136,0.04); filter: none; }
     .tr-login-error { font-size: 0.78rem; color: #d1523d; font-weight: 700; margin-top: 0.75rem; min-height: 1em; }
 
     /* ── Main layout ────────────────────────────────────────── */
@@ -342,6 +344,7 @@
   let _org = null;
   let _currentNav = 'fin-dashboard';
   let _previewPerson = null;
+  let _pendingSavedTreasurerSession = null;
   let _rptPaymentRecords = {};
   let _rptHouseholds = [];
   let _rptCastItems = [];
@@ -358,10 +361,10 @@
 
   // ── Auth ───────────────────────────────────────────────────────────────────
 
-  async function trLogin() {
-    const email = document.getElementById('tr-login-email')?.value?.trim().toLowerCase() || '';
-    const code  = document.getElementById('tr-login-code')?.value?.trim() || '';
-    const errEl = document.getElementById('tr-login-error');
+  async function trLogin(emailOverride = '', codeOverride = '', errOverride = null) {
+    const email = String(emailOverride || document.getElementById('tr-login-email')?.value || '').trim().toLowerCase();
+    const code  = String(codeOverride || document.getElementById('tr-login-code')?.value || '').trim();
+    const errEl = errOverride || document.getElementById('tr-login-error');
     if (!email || !code) { errEl.textContent = 'Enter your email and access code.'; return; }
     errEl.textContent = 'Checking...';
 
@@ -397,6 +400,50 @@
     }
   }
 
+  async function trResumeSavedSession(saved) {
+    if (!saved?.email || !saved?.code) return;
+    const continueBtn = document.getElementById('tr-continue-btn');
+    const switchBtn = document.getElementById('tr-switch-btn');
+    const errEl = document.getElementById('tr-login-error');
+    if (continueBtn) continueBtn.disabled = true;
+    if (switchBtn) switchBtn.disabled = true;
+    if (errEl) errEl.textContent = 'Opening saved access...';
+    await trLogin(saved.email, saved.code, errEl);
+  }
+
+  function trForgetSavedSession(reload = false) {
+    try { sessionStorage.removeItem('bts_treasurer_session'); } catch (_) {}
+    _pendingSavedTreasurerSession = null;
+    if (reload) {
+      window.location.reload();
+      return;
+    }
+  }
+
+  function trShowSavedSessionChoice(saved) {
+    const cleanEmail = String(saved?.email || '').trim();
+    _pendingSavedTreasurerSession = saved || null;
+    const box = document.querySelector('.tr-login-box');
+    if (!box) return;
+    box.innerHTML = `
+      <img src="/ASSETS/Images/LogoBrand/logo-long-black.png" alt="Build The Show" class="tr-login-logo" />
+      <div class="tr-login-title">Welcome Back</div>
+      <div class="tr-login-sub">This browser still has saved treasurer access for this production.</div>
+      <div style="border:1.5px solid rgba(87,46,136,0.14);border-radius:12px;padding:1rem 1rem 0.9rem;margin-bottom:1rem;background:rgba(87,46,136,0.03);">
+        <div style="font-size:0.72rem;font-weight:800;letter-spacing:0.05em;text-transform:uppercase;color:rgba(26,21,48,0.45);margin-bottom:0.3rem;">Saved access</div>
+        <div style="font-size:1rem;font-weight:900;color:#1a1530;">${esc(cleanEmail || 'Saved treasurer user')}</div>
+      </div>
+      <button class="tr-login-btn" id="tr-continue-btn" type="button">Continue as ${esc(cleanEmail || 'saved user')}</button>
+      <button class="tr-login-btn tr-login-btn-secondary" id="tr-switch-btn" type="button" style="margin-top:0.75rem;">Use different email</button>
+      <div class="tr-login-error" id="tr-login-error"></div>
+    `;
+    document.getElementById('tr-continue-btn')?.addEventListener('click', () => trResumeSavedSession(saved));
+    document.getElementById('tr-switch-btn')?.addEventListener('click', () => {
+      trForgetSavedSession(false);
+      window.location.reload();
+    });
+  }
+
   async function trInit() {
     const params = new URLSearchParams(window.location.search);
     const pvwEmail = params.get('pvw_email');
@@ -427,9 +474,7 @@
     }
 
     if (pvwEmail && pvwCode) {
-      document.getElementById('tr-login-email').value = pvwEmail;
-      document.getElementById('tr-login-code').value  = pvwCode;
-      await trLogin();
+      await trLogin(pvwEmail, pvwCode, document.getElementById('tr-login-error'));
       return;
     }
 
@@ -438,10 +483,7 @@
       try {
         const s = JSON.parse(saved);
         if (s.email && s.code && s.prodId) {
-          _prodId = s.prodId;
-          document.getElementById('tr-login-email').value = s.email;
-          document.getElementById('tr-login-code').value  = s.code;
-          await trLogin();
+          trShowSavedSessionChoice(s);
           return;
         }
       } catch (_) {}
@@ -503,8 +545,7 @@
   }
 
   function trForgetDevice() {
-    try { sessionStorage.removeItem('bts_treasurer_session'); } catch (_) {}
-    window.location.reload();
+    trForgetSavedSession(true);
   }
 
   // ── Navigation ─────────────────────────────────────────────────────────────
