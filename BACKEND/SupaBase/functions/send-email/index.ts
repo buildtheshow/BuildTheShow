@@ -973,6 +973,8 @@ serve(async (req) => {
     '{{production_schedule}}',
     '{{payment_schedule}}',
     '{{payment_information}}',
+    '{{sponsor_booking_summary}}',
+    '{{booking_deadlines}}',
   ]);
 
   function decodeHtmlEntities(s: string): string {
