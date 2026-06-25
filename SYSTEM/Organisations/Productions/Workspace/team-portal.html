@@ -311,7 +311,7 @@
         const token  = data.session_token || '';
         clearPortalSession();
         saveSession(cleanEmail, token);
-        storePortalSession(member, token);
+        await storePortalSession(member, token);
         redirect();
       }
 
@@ -330,16 +330,31 @@
 
         const member = data[0];
         clearPortalSession();
-        storePortalSession(member, token);
+        await storePortalSession(member, token);
         redirect();
       }
 
-      function storePortalSession(member, token) {
+      async function storePortalSession(member, token) {
         const role = String(member.role || member.access_level || '').trim().toLowerCase();
-        const menuKeys = buildMenuKeys(member);
+        let menuKeys = buildMenuKeys(member);
         const roleLabel = getRoleLabel(normalizeRole(role));
+
+        // Check portal_permissions for per-person overrides
+        const memberId = String(member.id || '');
+        if (memberId && prodId) {
+          try {
+            const { data: permRows } = await sb.from('portal_permissions')
+              .select('module_key,access_level')
+              .eq('production_id', prodId)
+              .eq('person_id', memberId);
+            if (permRows && permRows.length) {
+              menuKeys = permissionsToMenuKeys(permRows);
+            }
+          } catch (_) {}
+        }
+
         const context = {
-          memberId: member.id || '',
+          memberId,
           name: member.name || '',
           role,
           roleLabel,
@@ -358,6 +373,39 @@
         try { ctx = JSON.parse(raw); } catch { ctx = {}; }
         const firstPage = getFirstPage(ctx.menuKeys || []);
         location.href = pageUrl(firstPage);
+      }
+
+      // Convert portal_permissions rows into creative team menu keys
+      const MODULE_TO_MENU_KEYS = {
+        'overview':       ['overview'],
+        'schedule':       ['schedule'],
+        'cast-dashboard': ['cast-dashboard'],
+        'auditions':      ['auditions', 'auditions:dashboard', 'auditions:schedule', 'auditions:allperformers', 'auditions:settings'],
+        'casting':        ['casting', 'casting:castingboard', 'casting:castlist', 'casting:offers'],
+        'registration':   ['registration', 'registration:dashboard', 'registration:payments', 'registration:settings'],
+        'departments':    ['departments'],
+        'marketing':      ['marketing'],
+        'sponsors':       ['sponsors'],
+        'programme':      ['programme'],
+        'ticketing':      ['ticketing'],
+        'shifts':         ['shifts'],
+        'hours':          ['hours'],
+        'fin-dashboard':  ['financials', 'financials:dashboard'],
+        'budget':         ['financials:budgeting'],
+        'fin-receipts':   ['financials:receipts'],
+        'fin-reports':    ['financials:reports'],
+        'wrapup':         ['wrapup'],
+        'settings':       ['settings'],
+      };
+
+      function permissionsToMenuKeys(permRows) {
+        const keys = [];
+        permRows.forEach(p => {
+          if (p.access_level === 'none') return;
+          const mapped = MODULE_TO_MENU_KEYS[p.module_key];
+          if (mapped) keys.push(...mapped);
+        });
+        return keys;
       }
 
       // ── Role / menu logic ──
@@ -408,9 +456,20 @@
 
       function getFirstPage(menuKeys) {
         const keys = new Set(menuKeys);
+        if (keys.has('overview')) return 'production-overview.html';
+        if (keys.has('schedule')) return 'plan-calendar.html';
+        if (keys.has('cast-dashboard')) return 'cast-dashboard.html';
         if (keys.has('auditions:dashboard') || keys.has('auditions')) return 'auditions-dashboard.html';
-        if (keys.has('casting:castingboard')) return 'casting-board.html';
+        if (keys.has('casting:castingboard') || keys.has('casting')) return 'casting-board.html';
         if (keys.has('casting:castlist')) return 'casting-castlist.html';
+        if (keys.has('registration') || keys.has('registration:dashboard')) return 'registration-dashboard.html';
+        if (keys.has('departments')) return 'departments-dashboard.html';
+        if (keys.has('marketing')) return 'marketing-dashboard.html';
+        if (keys.has('ticketing')) return 'ticketing-dashboard.html';
+        if (keys.has('financials') || keys.has('financials:dashboard')) return 'financials-dashboard.html';
+        if (keys.has('financials:budgeting')) return 'budgeting.html';
+        if (keys.has('wrapup')) return 'wrapup-dashboard.html';
+        if (keys.has('settings')) return 'production-settings.html';
         return 'auditions-dashboard.html';
       }
 

@@ -342,9 +342,11 @@
   let _prodId = '';
   let _prod = null;
   let _org = null;
+  let _volId = '';
   let _currentNav = 'fin-dashboard';
   let _previewPerson = null;
   let _pendingSavedTreasurerSession = null;
+  let _grantedModules = null;
   let _rptPaymentRecords = {};
   let _rptHouseholds = [];
   let _rptCastItems = [];
@@ -403,7 +405,8 @@
       const expectedCode = String(vol?.volunteer_passcode || '').trim() || trVolunteerPasscode(email, _prodId);
       if (volErr || !vol || expectedCode !== code) { errEl.textContent = 'That email and code did not match. Contact your production team.'; return; }
 
-      sessionStorage.setItem('bts_treasurer_session', JSON.stringify({ email, code, prodId: _prodId }));
+      _volId = vol.id;
+      sessionStorage.setItem('bts_treasurer_session', JSON.stringify({ email, code, prodId: _prodId, volId: vol.id }));
       bootPortal();
     } catch (e) {
       errEl.textContent = 'Something went wrong. Try again.';
@@ -498,6 +501,80 @@
     }
   }
 
+  // Module key → sidebar element mapping
+  const MODULE_SIDEBAR_MAP = {
+    'registration':   { els: ['cast-wrap'] },
+    'fin-dashboard':  { els: ['tnav-fin-dashboard'] },
+    'budget':         { els: ['tnav-fin-budgeting'] },
+    'fin-receipts':   { els: ['tnav-fin-receipts'] },
+    'fin-reports':    { els: ['tnav-fin-reports'] },
+  };
+  // Nav keys in sidebar order for finding first visible page
+  const NAV_KEY_ORDER = ['reg-status', 'fin-dashboard', 'fin-budgeting', 'fin-receipts', 'fin-reports'];
+  const NAV_KEY_TO_MODULE = {
+    'reg-status': 'registration',
+    'fin-dashboard': 'fin-dashboard',
+    'fin-budgeting': 'budget',
+    'fin-receipts': 'fin-receipts',
+    'fin-reports': 'fin-reports',
+  };
+
+  // Treasurer role defaults (matches ROLE_DEFAULT_ACCESS in portals.html)
+  const TREASURER_DEFAULTS = {
+    'fin-dashboard': 'view', 'fin-reports': 'view', 'fin-receipts': 'view',
+    'budget': 'edit', 'registration': 'view',
+  };
+
+  async function loadPortalPermissions() {
+    const personId = String(_volId || '');
+    if (!personId || !_prodId) return null;
+    const { data } = await sb.from('portal_permissions')
+      .select('module_key,access_level')
+      .eq('production_id', _prodId)
+      .eq('person_id', personId);
+    if (!data || !data.length) return null;
+    const perms = {};
+    data.forEach(p => { perms[p.module_key] = p.access_level; });
+    return perms;
+  }
+
+  function applyPortalPermissions(perms) {
+    const effective = {};
+    const allKeys = new Set([...Object.keys(TREASURER_DEFAULTS), ...Object.keys(perms || {})]);
+    allKeys.forEach(key => {
+      effective[key] = (perms && perms[key] !== undefined) ? perms[key] : (TREASURER_DEFAULTS[key] || 'none');
+    });
+    _grantedModules = effective;
+
+    // Hide sidebar items for modules with 'none' access
+    Object.entries(MODULE_SIDEBAR_MAP).forEach(([moduleKey, cfg]) => {
+      const level = effective[moduleKey] || 'none';
+      const hidden = level === 'none';
+      cfg.els.forEach(elId => {
+        const el = document.getElementById(elId);
+        if (el) el.style.display = hidden ? 'none' : '';
+      });
+    });
+
+    // Hide entire Financials group if all financial modules are 'none'
+    const finKeys = ['fin-dashboard', 'budget', 'fin-receipts', 'fin-reports'];
+    const allFinHidden = finKeys.every(k => (effective[k] || 'none') === 'none');
+    const finGroup = document.getElementById('group-financials');
+    if (finGroup) finGroup.style.display = allFinHidden ? 'none' : '';
+
+    // Hide Cast group if registration is 'none'
+    const castWrap = document.getElementById('cast-wrap');
+    if (castWrap) castWrap.style.display = (effective['registration'] || 'none') === 'none' ? 'none' : '';
+  }
+
+  function firstVisibleNavKey() {
+    for (const key of NAV_KEY_ORDER) {
+      const moduleKey = NAV_KEY_TO_MODULE[key];
+      if (!_grantedModules || (_grantedModules[moduleKey] || 'none') !== 'none') return key;
+    }
+    return 'fin-dashboard';
+  }
+
   async function bootPortal() {
     const { data, error } = await sb.from('productions').select('*,organizations(id,name,email,logo_url,logo_white_url,slug)').eq('id', _prodId).single();
     if (error || !data) { document.getElementById('tr-login-error').textContent = 'Could not load production.'; return; }
@@ -506,9 +583,14 @@
     renderTreasurerBranding();
     document.getElementById('hdr-title').textContent = _prod.title || 'Production';
     document.getElementById('hdr-sub').textContent = `Welcome back, ${trPortalFirstName()}.`;
+
+    // Apply permissions before showing the portal
+    const perms = await loadPortalPermissions();
+    applyPortalPermissions(perms);
+
     document.getElementById('tr-login-overlay').style.display = 'none';
     document.getElementById('tr-main').style.display = '';
-    trNav('fin-dashboard');
+    trNav(firstVisibleNavKey());
   }
 
   function renderTreasurerBranding() {
