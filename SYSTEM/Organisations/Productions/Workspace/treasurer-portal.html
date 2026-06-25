@@ -359,6 +359,24 @@
     return String(Math.abs(h) % 900000 + 100000);
   }
 
+  async function trResolveProductionId() {
+    const params = new URLSearchParams(window.location.search);
+    const explicitProdId = String(params.get('id') || params.get('prod') || '').trim();
+    if (explicitProdId) return explicitProdId;
+
+    const parts = window.location.pathname.replace(/\/+$/, '').split('/').filter(Boolean);
+    const orgAbbrev = parts[0] || '';
+    const showSlug  = parts[1] || '';
+    if (!orgAbbrev || !showSlug) return '';
+
+    const { data: prodData, error: prodErr } = await sb.rpc('resolve_team_portal', {
+      p_org_abbrev: orgAbbrev,
+      p_show_slug: showSlug,
+    });
+    if (prodErr || !prodData) return '';
+    return prodData;
+  }
+
   // ── Auth ───────────────────────────────────────────────────────────────────
 
   async function trLogin(emailOverride = '', codeOverride = '', errOverride = null) {
@@ -368,17 +386,10 @@
     if (!email || !code) { errEl.textContent = 'Enter your email and access code.'; return; }
     errEl.textContent = 'Checking...';
 
-    const parts = window.location.pathname.replace(/\/+$/, '').split('/').filter(Boolean);
-    const orgAbbrev = parts[0] || '';
-    const showSlug  = parts[1] || '';
-
     try {
-      const { data: prodData, error: prodErr } = await sb.rpc('resolve_team_portal', {
-        p_org_abbrev: orgAbbrev,
-        p_show_slug: showSlug,
-      });
-      if (prodErr || !prodData) { errEl.textContent = 'Production not found. Check your link.'; return; }
-      _prodId = prodData;
+      const resolvedProdId = await trResolveProductionId();
+      if (!resolvedProdId) { errEl.textContent = 'Production not found. Check your link.'; return; }
+      _prodId = resolvedProdId;
 
       const { data: vol, error: volErr } = await sb
         .from('volunteer_signups')
@@ -452,10 +463,6 @@
     const pvwEmbed = params.get('pvw_embed') === '1';
     if (pvwEmbed || pvwToken) document.body.classList.add('tr-preview-mode');
 
-    const parts = window.location.pathname.replace(/\/+$/, '').split('/').filter(Boolean);
-    const orgAbbrev = parts[0] || '';
-    const showSlug  = parts[1] || '';
-
     if (pvwToken) {
       const key = `bts_portal_preview:${pvwToken}`;
       const legacyKey = `bts_treasurer_preview:${pvwToken}`;
@@ -482,7 +489,8 @@
     if (saved) {
       try {
         const s = JSON.parse(saved);
-        if (s.email && s.code && s.prodId) {
+        const resolvedProdId = await trResolveProductionId();
+        if (s.email && s.code && s.prodId && (!resolvedProdId || s.prodId === resolvedProdId)) {
           trShowSavedSessionChoice(s);
           return;
         }
