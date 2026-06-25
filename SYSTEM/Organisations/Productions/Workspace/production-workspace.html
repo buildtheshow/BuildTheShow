@@ -825,6 +825,20 @@
       .rpt-discount-row .rpt-approve-btn,
       .rpt-discount-row .rpt-scholarship-sel { font-size:0.65rem; padding:0.2em 0.5em; }
       .rpt-hh-link-btn { font-size:0.62rem; padding:0.25em 0.6em; }
+      .rpt-mob-bar { display:flex; align-items:center; gap:0.55rem; padding:0.1rem 0; cursor:pointer; }
+      .rpt-mob-photo { width:36px; height:36px; border-radius:50%; object-fit:cover; flex-shrink:0; }
+      .rpt-mob-initials { width:36px; height:36px; border-radius:50%; background:#572e88; color:#fff; display:flex; align-items:center; justify-content:center; font-size:0.65rem; font-weight:900; flex-shrink:0; }
+      .rpt-mob-bar-info { flex:1; min-width:0; }
+      .rpt-mob-bar-name { font-size:0.82rem; font-weight:900; color:#1a1530; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+      .rpt-mob-bar-age { font-weight:600; color:#9a90b0; }
+      .rpt-mob-bar-role { font-size:0.65rem; color:#572e88; font-weight:600; }
+      .rpt-mob-bar-balance { font-size:0.78rem; font-weight:900; white-space:nowrap; flex-shrink:0; }
+      .rpt-mob-owing { color:#d1523d; }
+      .rpt-mob-paid { color:#769e7b; }
+      .rpt-mob-bar-chevron { font-size:0.45rem; color:#b0a8c8; transition:transform 0.2s; flex-shrink:0; }
+      .rpt-person--mob-collapsed .rpt-mob-bar-chevron { transform:rotate(-90deg); }
+      .rpt-person--mob-collapsed .rpt-person-body { display:none; }
+      .rpt-person-body { padding-top:0.5rem; }
       .rsc-cast-contact { flex-direction:row; flex-wrap:wrap; gap:0.35rem 1.5rem; }
       .rsc-cast-contact > div { flex:1; min-width:120px; }
       .rpt-insts { flex-direction:row; flex-wrap:wrap; gap:0.35rem; }
@@ -833,6 +847,8 @@
     }
     .rpt-list { display:flex; flex-direction:column; }
     .rpt-person { padding:0.95rem 0; border-bottom:1px solid rgba(87,46,136,0.12); }
+    .rpt-mob-bar { display:none; }
+    .rpt-person--mob-collapsed .rpt-person-body { display:block; }
     .rpt-person:last-child { border-bottom:none; }
     .rpt-progress-wrap { margin-bottom:0.65rem; }
     .rpt-progress-track { height:6px; background:rgba(87,46,136,0.1); border-radius:10px; overflow:hidden; }
@@ -47637,16 +47653,37 @@ See you soon!
       </div>`;
     }
 
-    return `<div class="rpt-person" id="rpt-row-${esc(assignId)}">
-      <div class="rpt-person-head">
-        <div>
-          <div class="rpt-person-name">${esc(name)}</div>
-          ${roleName ? `<div class="rpt-person-role">${esc(roleName)}</div>` : ''}
+    const _headshotUrl = app.headshot_url || app.headshot || app.photo_url || '';
+    const _age = rscPerformerAge(app);
+    const _balanceFmt = ef.installments.length > 0
+      ? (balance === 0 && paidAmt > 0 ? 'Paid' : registrationFormatPaymentAmount(balance, settings))
+      : '';
+    const _balanceCls = balance === 0 && paidAmt > 0 ? 'rpt-mob-paid' : (balance > 0 ? 'rpt-mob-owing' : '');
+    const _mobPhoto = _headshotUrl
+      ? `<img class="rpt-mob-photo" src="${esc(_headshotUrl)}" alt="" />`
+      : `<div class="rpt-mob-initials">${esc(name.split(' ').map(w => w[0] || '').join('').slice(0,2).toUpperCase())}</div>`;
+
+    return `<div class="rpt-person rpt-person--mob-collapsed" id="rpt-row-${esc(assignId)}">
+      <div class="rpt-mob-bar" onclick="rptToggleMobPerson(this)">
+        ${_mobPhoto}
+        <div class="rpt-mob-bar-info">
+          <div class="rpt-mob-bar-name">${esc(name)}${_age ? ` <span class="rpt-mob-bar-age">(${esc(_age)})</span>` : ''}</div>
+          <div class="rpt-mob-bar-role">${esc(roleName || '')}</div>
         </div>
-        ${pills.length ? `<div class="rpt-person-pills">${pills.join('')}</div>` : ''}
+        <div class="rpt-mob-bar-balance ${_balanceCls}">${_balanceFmt}</div>
+        <span class="rpt-mob-bar-chevron">&#9660;</span>
       </div>
-      ${rptProgressBar(item, settings)}
-      ${instHtml}${footHtml}${volHtml}${schHtml}
+      <div class="rpt-person-body">
+        <div class="rpt-person-head">
+          <div>
+            <div class="rpt-person-name">${esc(name)}</div>
+            ${roleName ? `<div class="rpt-person-role">${esc(roleName)}</div>` : ''}
+          </div>
+          ${pills.length ? `<div class="rpt-person-pills">${pills.join('')}</div>` : ''}
+        </div>
+        ${rptProgressBar(item, settings)}
+        ${instHtml}${footHtml}${volHtml}${schHtml}
+      </div>
     </div>`;
   }
 
@@ -47672,6 +47709,11 @@ See you soon!
     const { error } = await sb.from('productions').update({ registration_households: households }).eq('id', prodId);
     if (error) throw error;
     if (prod) prod.registration_households = households;
+  }
+
+  function rptToggleMobPerson(bar) {
+    const person = bar.closest('.rpt-person');
+    if (person) person.classList.toggle('rpt-person--mob-collapsed');
   }
 
   async function rptTogglePaid(assignmentId, installmentIndex, currentlyPaid) {
