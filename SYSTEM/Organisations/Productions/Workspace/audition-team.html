@@ -713,6 +713,23 @@
     /* ── Registration Status Card (rsc-) ── */
     .rsc-grid { display:grid; grid-template-columns:repeat(auto-fill,min(700px,100%)); gap:1.25rem; margin-top:0.75rem; }
     .rsc-card { background:#fff; border-radius:12px; box-shadow:0 6px 28px rgba(26,21,48,0.16), 0 1px 4px rgba(26,21,48,0.07); overflow:hidden; display:flex; flex-direction:column; position:relative; }
+    @media (max-width: 640px) {
+      .rpt-mob-bar { display:flex; align-items:center; gap:0.55rem; padding:0.6rem 0.75rem; cursor:pointer; }
+      .rpt-mob-photo { width:36px; height:36px; border-radius:50%; object-fit:cover; flex-shrink:0; }
+      .rpt-mob-initials { width:36px; height:36px; border-radius:50%; background:#572e88; color:#fff; display:flex; align-items:center; justify-content:center; font-size:0.65rem; font-weight:900; flex-shrink:0; }
+      .rpt-mob-bar-info { flex:1; min-width:0; }
+      .rpt-mob-bar-name { font-size:0.82rem; font-weight:900; color:#1a1530; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+      .rpt-mob-bar-age { font-weight:600; color:#9a90b0; }
+      .rpt-mob-bar-role { font-size:0.65rem; color:#572e88; font-weight:600; }
+      .rpt-mob-bar-balance { font-size:0.78rem; font-weight:900; white-space:nowrap; flex-shrink:0; }
+      .rpt-mob-owing { color:#d1523d; }
+      .rpt-mob-paid { color:#769e7b; }
+      .rpt-mob-bar-chevron { font-size:0.45rem; color:#b0a8c8; transition:transform 0.2s; flex-shrink:0; }
+      .rpt-person--mob-collapsed .rpt-mob-bar-chevron { transform:rotate(-90deg); }
+      .rpt-person--mob-collapsed .rpt-person-body { display:none; }
+      .rpt-person-body { border-top:1px solid rgba(87,46,136,0.08); }
+    }
+    @media (min-width: 641px) { .rpt-mob-bar { display:none !important; } .rpt-person--mob-collapsed .rpt-person-body { display:block !important; } }
     /* ── Household grouping ── */
     .rsc-hh-group { margin-bottom:2rem; }
     .rsc-hh-group-header { display:flex; align-items:center; gap:0.85rem; padding:0.6rem 0 0.75rem; margin-bottom:1rem; border-bottom:2px solid rgba(87,46,136,0.12); }
@@ -41390,7 +41407,25 @@ See you soon!
       ? `${esc(_hnParts.slice(0, -1).join(' '))}<br>${esc(_hnParts[_hnParts.length - 1])}`
       : esc(household?.name || '');
     const householdRibbon = household ? `<div class="rsc-household-ribbon">${_hnText}</div>` : '';
-    return `<div class="rsc-card" id="rpt-row-${esc(assignId)}">
+    const _mobHs = app.headshot_url || app.headshot || app.photo_url || '';
+    const _mobAge = (() => { try { const a = cbv2ApplicantAge(app); return a != null && a !== '' ? String(a).replace(/^Age\s+/i,'').trim() : ''; } catch(_){return '';} })();
+    const _mobBal = !hasFee ? '' : (balance === 0 && paidAmt > 0) ? 'Paid' : registrationFormatPaymentAmount(balance, settings);
+    const _mobBalCls = (balance === 0 && paidAmt > 0) ? 'rpt-mob-paid' : (balance > 0 ? 'rpt-mob-owing' : '');
+    const _mobPh = _mobHs
+      ? `<img class="rpt-mob-photo" src="${esc(_mobHs)}" alt="" />`
+      : `<div class="rpt-mob-initials">${esc(name.split(' ').map(w=>(w[0]||'')).join('').slice(0,2).toUpperCase())}</div>`;
+
+    return `<div class="rsc-card rpt-person--mob-collapsed" id="rpt-row-${esc(assignId)}">
+      <div class="rpt-mob-bar" onclick="rptToggleMobPerson(this)">
+        ${_mobPh}
+        <div class="rpt-mob-bar-info">
+          <div class="rpt-mob-bar-name">${esc(name)}${_mobAge ? ` <span class="rpt-mob-bar-age">(${esc(_mobAge)})</span>` : ''}</div>
+          <div class="rpt-mob-bar-role">${esc(roleName || '')}</div>
+        </div>
+        <div class="rpt-mob-bar-balance ${_mobBalCls}">${_mobBal}</div>
+        <span class="rpt-mob-bar-chevron">&#9660;</span>
+      </div>
+      <div class="rpt-person-body">
       ${householdRibbon}<div class="rsc-card-photo">${flipCard}</div>
       <div class="rsc-body">
         <div class="rsc-progress">
@@ -41409,6 +41444,7 @@ See you soon!
           ${discountNote}
           <input class="rsc-notes" placeholder="Notes…" value="${esc(String(assignment.reg_payment_notes || ''))}" onchange="rptSaveNotes('${esc(assignId)}',this.value)" />
         </div>
+      </div>
       </div>
     </div>`;
   }
@@ -41546,6 +41582,11 @@ See you soon!
       await sb.from('productions').update({ registration_households: households }).eq('id', prodId);
       if (prod) prod.registration_households = households;
     } catch (err) { console.error('[BTS] rptSaveHouseholdsToDb failed', err); }
+  }
+
+  function rptToggleMobPerson(bar) {
+    const person = bar.closest('.rsc-card, .rpt-person');
+    if (person) person.classList.toggle('rpt-person--mob-collapsed');
   }
 
   async function rptTogglePaid(assignmentId, installmentIndex, currentlyPaid) {
