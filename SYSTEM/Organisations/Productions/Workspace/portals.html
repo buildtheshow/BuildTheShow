@@ -1357,6 +1357,7 @@
     let _invitePendingEmail = '';
     let _invitePendingName = '';
     let _inviteResultMessage = '';
+    let _inviteSeedPerson = null;
 
     function invitePortalMatchKey(portalKey = '') {
       const raw = String(portalKey || '').trim().toLowerCase();
@@ -1396,6 +1397,7 @@
       _invitePendingEmail = '';
       _invitePendingName = '';
       _inviteResultMessage = '';
+      _inviteSeedPerson = null;
       const wrap = document.getElementById('pt-invite-status');
       const title = document.getElementById('pt-invite-status-title');
       const copy = document.getElementById('pt-invite-status-copy');
@@ -1442,6 +1444,33 @@
       _invitePendingId = pending?.id || '';
       _invitePendingEmail = pending?.email || '';
       _invitePendingName = pending?.name || '';
+      if (pending) {
+        document.getElementById('inv-name').value = pending.name || document.getElementById('inv-name').value || '';
+        document.getElementById('inv-email').value = pending.email || document.getElementById('inv-email').value || '';
+      }
+      renderInviteModalStatus();
+    }
+
+    function fillInviteFieldsFromSeed(seed = null) {
+      const nameEl = document.getElementById('inv-name');
+      const emailEl = document.getElementById('inv-email');
+      if (nameEl) nameEl.value = seed?.name || '';
+      if (emailEl) emailEl.value = seed?.email || '';
+    }
+
+    function syncInviteModalWithCurrentRole() {
+      const pending = findPendingInviteForModal(_invitePortalKey, _inviteRoleLabel, _inviteSeedPerson?.email || '');
+      if (pending) {
+        _invitePendingId = pending.id;
+        _invitePendingEmail = pending.email || '';
+        _invitePendingName = pending.name || '';
+        fillInviteFieldsFromSeed({ name: pending.name || '', email: pending.email || '' });
+      } else {
+        _invitePendingId = '';
+        _invitePendingEmail = '';
+        _invitePendingName = '';
+        fillInviteFieldsFromSeed(_inviteSeedPerson);
+      }
       renderInviteModalStatus();
     }
 
@@ -1472,7 +1501,8 @@
       document.getElementById('inv-portal-select-wrap').style.display = 'none';
       _invitePendingId = '';
       _inviteResultMessage = '';
-      renderInviteModalStatus();
+      _inviteSeedPerson = null;
+      syncInviteModalWithCurrentRole();
       document.getElementById('inv-name').focus();
     }
     function openInviteModal() {
@@ -1482,6 +1512,7 @@
       document.getElementById('inv-portal-label-wrap').style.display = 'none';
       document.getElementById('inv-portal-select-wrap').style.display = '';
       document.getElementById('inv-portal').value = '';
+      fillInviteFieldsFromSeed(null);
       document.getElementById('pt-invite-overlay').classList.add('open');
       document.getElementById('inv-name').focus();
     }
@@ -1747,8 +1778,8 @@
       const p = _visiblePeople[idx];
       if (!p) return;
       const portalKey = (p.portals || [])[0] || p.source || '';
-      if (!p.email) {
-        openInviteModalForRole(portalKey, p.roleLabel || '');
+      if (!p.email || p.statusLabel === 'Invited') {
+        openInviteModalForRole(portalKey, p.roleLabel || '', { name: p.name || '', email: p.email || '' });
         return;
       }
       if (!confirm(`Send portal invite to ${p.name || p.email}?`)) return;
@@ -1840,10 +1871,14 @@
       }
     }
 
-    function openInviteModalForRole(portalKey, roleLabel) {
+    function openInviteModalForRole(portalKey, roleLabel, seedPerson = null) {
       const matchKey = portalKey === 'board_planned' ? 'board' : portalKey === 'dept_lead_planned' ? 'dept_lead' : portalKey;
       _invitePortalKey = matchKey;
       _inviteRoleLabel = roleLabel || '';
+      _inviteSeedPerson = seedPerson && (seedPerson.name || seedPerson.email) ? {
+        name: seedPerson.name || '',
+        email: seedPerson.email || '',
+      } : null;
       const sel = document.getElementById('inv-portal');
       sel.value = matchKey;
       document.getElementById('inv-portal-select-wrap').style.display = 'none';
@@ -1851,14 +1886,8 @@
       document.getElementById('inv-portal-label-text').textContent = labelText;
       document.getElementById('inv-portal-label-wrap').style.display = '';
       document.getElementById('pt-invite-overlay').classList.add('open');
-      const pending = findPendingInviteForModal(matchKey, _inviteRoleLabel);
-      document.getElementById('inv-name').value = pending?.name || '';
-      document.getElementById('inv-email').value = pending?.email || '';
-      _invitePendingId = pending?.id || '';
-      _invitePendingEmail = pending?.email || '';
-      _invitePendingName = pending?.name || '';
       _inviteResultMessage = '';
-      renderInviteModalStatus();
+      syncInviteModalWithCurrentRole();
       document.getElementById('inv-name').focus();
     }
 
