@@ -252,11 +252,12 @@
                   <th>Role</th>
                   <th>Portal Access</th>
                   <th>Status</th>
+                  <th>Portal Login</th>
                   <th></th>
                 </tr>
               </thead>
               <tbody id="pt-people-tbody">
-                <tr><td colspan="5" class="pt-empty">Loading...</td></tr>
+                <tr><td colspan="6" class="pt-empty">Loading...</td></tr>
               </tbody>
             </table>
           </div>
@@ -927,6 +928,90 @@
       return name ? `name:${name}` : '';
     }
 
+    function productionPortalUrl() {
+      if (_orgSlug && _showSlug) {
+        return `${window.location.origin}/${encodeURIComponent(_orgSlug)}/${encodeURIComponent(_showSlug)}/portal`;
+      }
+      const url = new URL('/PUBLIC/volunteer-production-page.html', window.location.origin);
+      if (_prodId) url.searchParams.set('id', _prodId);
+      url.searchParams.set('view', 'portal');
+      return url.toString();
+    }
+
+    function creativeTeamPortalUrl() {
+      const url = new URL('/SYSTEM/Organisations/Productions/Workspace/team-portal.html', window.location.origin);
+      if (_prodId) url.searchParams.set('id', _prodId);
+      return url.toString();
+    }
+
+    function boardPortalUrl(person = {}) {
+      const inviteToken = String(person.data?.token || '').trim();
+      if (inviteToken) return new URL(`/invite?token=${encodeURIComponent(inviteToken)}`, window.location.origin).toString();
+      if (_orgSlug) return `${window.location.origin}/${encodeURIComponent(_orgSlug)}/ORG`;
+      return `${window.location.origin}/org/dashboard`;
+    }
+
+    function personPortalLoginDetails(person = {}) {
+      const email = String(person.data?.email || person.email || '').trim();
+      if (person.source === 'cast') {
+        const answers = person.data?.registration_answers || {};
+        return {
+          portalUrl: productionPortalUrl(),
+          loginEmail: email,
+          codeLabel: 'Production Code',
+          codeValue: String(answers.__bts_portal_code || person.data?._portal_code || '').trim(),
+        };
+      }
+      if (person.source === 'volunteer' || person.source === 'dept_lead' || person.source === 'dept_lead_planned' || person.source === 'treasurer') {
+        return {
+          portalUrl: volunteerPortalUrl(person.roleLabel || person.data?.role_name || ''),
+          loginEmail: email,
+          codeLabel: 'Production Code',
+          codeValue: personVolunteerPasscode(person),
+        };
+      }
+      if (['director','vocal_director','choreographer','producer','admin','musical_director','music_director'].includes(person.source)) {
+        return {
+          portalUrl: creativeTeamPortalUrl(),
+          loginEmail: email,
+          codeLabel: 'Access Code',
+          codeValue: String(person.data?.passcode || '').trim(),
+        };
+      }
+      if (person.source === 'board' || person.source === 'board_planned') {
+        return {
+          portalUrl: boardPortalUrl(person),
+          loginEmail: email,
+          codeLabel: 'Passcode',
+          codeValue: '',
+        };
+      }
+      return {
+        portalUrl: '',
+        loginEmail: email,
+        codeLabel: 'Passcode',
+        codeValue: '',
+      };
+    }
+
+    function portalLoginCellHTML(person = {}) {
+      const details = personPortalLoginDetails(person);
+      const linkHtml = details.portalUrl
+        ? `<a href="${esc(details.portalUrl)}" target="_blank" rel="noopener" style="color:#572e88;font-weight:800;text-decoration:none;word-break:break-all">Open portal link</a>`
+        : '<span style="color:#b0a8c8">No portal link</span>';
+      const emailHtml = details.loginEmail
+        ? esc(details.loginEmail)
+        : '<span style="color:#b0a8c8">No email on file</span>';
+      const codeHtml = details.codeValue
+        ? `<span style="font-weight:900;letter-spacing:0.08em;color:#1a1530">${esc(details.codeValue)}</span>`
+        : '<span style="color:#b0a8c8">No passcode for this portal</span>';
+      return `<div style="display:grid;gap:0.22rem;min-width:220px">
+        <div style="font-size:0.72rem;color:#7a6fa0"><span style="font-weight:800;color:#1a1530">Portal Link:</span> ${linkHtml}</div>
+        <div style="font-size:0.72rem;color:#7a6fa0"><span style="font-weight:800;color:#1a1530">Email:</span> ${emailHtml}</div>
+        <div style="font-size:0.72rem;color:#7a6fa0"><span style="font-weight:800;color:#1a1530">${esc(details.codeLabel)}:</span> ${codeHtml}</div>
+      </div>`;
+    }
+
     function mergeDuplicatePeople(people = []) {
       const merged = [];
       const byKey = new Map();
@@ -1176,11 +1261,12 @@
       _visiblePeople = show;
 
       if (!show.length) {
-        tbody.innerHTML = `<tr><td colspan="5" class="pt-empty">No people in this portal yet.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="6" class="pt-empty">No people in this portal yet.</td></tr>`;
         return;
       }
 
       tbody.innerHTML = show.map((p, idx) => {
+        const accessPerson = personForPreview(p);
         const portalIcons = p.portals.map(pk => {
           const def = portalDefForKey(pk);
           return def ? portalIconHTML(def) : '';
@@ -1203,6 +1289,7 @@
           <td>${roleBadgesHTML(p)}</td>
           <td><div class="pt-portal-icons">${portalIcons}</div></td>
           <td><span class="${statusClass}"><svg width="7" height="7" viewBox="0 0 8 8"><circle cx="4" cy="4" r="4" fill="${statusDot}"/></svg>${esc(statusLabel)}</span></td>
+          <td>${portalLoginCellHTML(accessPerson)}</td>
           <td>
             <div style="display:flex;align-items:center;gap:0.4rem;flex-wrap:wrap">
               <button onclick="event.stopPropagation();openPreviewModal(${idx})" style="border:1.5px solid #edeaf6;background:#fff;cursor:pointer;border-radius:8px;color:#572e88;font-size:0.75rem;font-weight:700;padding:0.25rem 0.65rem;white-space:nowrap" onmouseover="this.style.background='#f0ecfc'" onmouseout="this.style.background='#fff'">View Portal</button>
