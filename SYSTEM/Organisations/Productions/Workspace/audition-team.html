@@ -25303,6 +25303,7 @@
         return;
       }
       teamAccessEmail = teamAccessMember.email || options.email || '';
+      await loadPortalPermissionsForMember(teamAccessMember);
       rememberTeamAccess();
       document.getElementById('team-access-login-overlay')?.remove();
       document.body.classList.remove('team-access-login-visible');
@@ -25343,6 +25344,7 @@
       rejectMismatchedTeamAccess();
       return;
     }
+    await loadPortalPermissionsForMember(teamAccessMember);
     rememberTeamAccess();
     document.getElementById('team-access-login-overlay')?.remove();
     document.body.classList.remove('team-access-login-visible');
@@ -34194,7 +34196,67 @@ See you soon!
     teamMenuDefaultsForRole,
   };
 
+  const PORTAL_PERM_TO_MENU = {
+    'overview':                     ['overview'],
+    'overview:dashboard':           ['overview'],
+    'plan':                         ['schedule'],
+    'plan:calendar':                ['schedule'],
+    'cast':                         ['auditions','auditions:dashboard','auditions:schedule','auditions:allperformers','auditions:settings','casting','casting:castingboard','casting:castlist','casting:offers','registration'],
+    'cast:dashboard':               ['cast-dashboard'],
+    'cast:auditions':               ['auditions','auditions:dashboard','auditions:schedule','auditions:allperformers','auditions:settings'],
+    'cast:auditions:dashboard':     ['auditions','auditions:dashboard'],
+    'cast:auditions:schedule':      ['auditions','auditions:schedule'],
+    'cast:auditions:performers':    ['auditions','auditions:allperformers'],
+    'cast:auditions:selftapes':     ['auditions'],
+    'cast:auditions:settings':      ['auditions','auditions:settings'],
+    'cast:casting':                 ['casting','casting:castingboard','casting:castlist','casting:offers'],
+    'cast:casting:dashboard':       ['casting'],
+    'cast:casting:board':           ['casting','casting:castingboard'],
+    'cast:casting:list':            ['casting','casting:castlist'],
+    'cast:casting:offers':          ['casting','casting:offers'],
+    'cast:registration':            ['registration'],
+    'departments':                  ['departments'],
+    'promote':                      ['marketing','sponsors','programme'],
+    'promote:marketing':            ['marketing'],
+    'promote:sponsors':             ['sponsors'],
+    'promote:programme':            ['programme'],
+    'ticketing':                    ['ticketing'],
+    'volunteers':                   ['shifts','hours'],
+    'financials':                   ['financials','financials:dashboard','financials:budgeting','financials:receipts','financials:reports'],
+    'financials:dashboard':         ['financials','financials:dashboard'],
+    'financials:budgeting':         ['financials:budgeting'],
+    'financials:receipts':          ['financials:receipts'],
+    'financials:reports':           ['financials:reports'],
+    'wrapup':                       ['wrapup'],
+    'settings':                     ['settings'],
+  };
+
+  async function loadPortalPermissionsForMember(member) {
+    if (!member?.id || !prodId || !sb) return;
+    try {
+      const { data } = await sb.from('portal_permissions')
+        .select('module_key,access_level')
+        .eq('production_id', prodId)
+        .eq('person_id', String(member.id));
+      if (!data || !data.length) return;
+      const keys = [];
+      data.forEach(p => {
+        if (p.access_level === 'none') return;
+        const mapped = PORTAL_PERM_TO_MENU[p.module_key];
+        if (mapped) keys.push(...mapped);
+      });
+      if (keys.length) member._portalMenuKeys = [...new Set(keys)];
+    } catch (_) {}
+  }
+
   function teamMemberMenuAccess(member = {}) {
+    if (Array.isArray(member._portalMenuKeys) && member._portalMenuKeys.length) {
+      const set = new Set(member._portalMenuKeys);
+      TEAM_PORTAL_MENU_ITEMS.forEach(item => {
+        if ((item.children || []).some(child => set.has(child.key))) set.add(item.key);
+      });
+      return set;
+    }
     if (isCreativeAuditionLeadershipRole(member.role)) {
       return creativeAuditionLeadershipMenuSet();
     }
