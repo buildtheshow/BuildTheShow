@@ -72770,7 +72770,8 @@ See you soon!
           <button type="button" style="background:rgba(255,255,255,0.15);border:1.5px solid rgba(255,255,255,0.35);color:#fff;border-radius:6px;padding:0.22rem 0.6rem;font-size:0.68rem;font-weight:800;cursor:pointer;font-family:inherit;" onclick="this.closest('.vol-schedule-modal').remove()">✕ Close</button>
         </div>
         <div style="padding:1.1rem 1.25rem;display:flex;flex-direction:column;gap:0.75rem;">
-          <div style="font-size:0.78rem;font-weight:700;color:#4a3d6b;">Who is filling this role? Enter their info and the spot will be marked as filled.</div>
+          <button type="button" style="width:100%;padding:0.6rem;background:rgba(87,46,136,0.06);border:1.5px dashed rgba(87,46,136,0.25);border-radius:8px;cursor:pointer;font-family:inherit;font-size:0.78rem;font-weight:700;color:#572e88;text-align:center;" onclick="volMarkFilled('${esc(type)}','${esc(String(ri))}')">Just mark as filled (no contact info)</button>
+          <div style="display:flex;align-items:center;gap:0.5rem;"><div style="flex:1;height:1px;background:rgba(87,46,136,0.12);"></div><span style="font-size:0.68rem;font-weight:700;color:rgba(87,46,136,0.4);text-transform:uppercase;letter-spacing:0.06em;">or add details</span><div style="flex:1;height:1px;background:rgba(87,46,136,0.12);"></div></div>
           <div id="vol-fill-error" style="display:none;font-size:0.75rem;font-weight:700;color:#b33a25;padding:0.4rem 0.6rem;background:rgba(179,58,37,0.08);border-radius:6px;"></div>
           <div style="display:flex;flex-direction:column;gap:0.3rem;">
             <label style="font-size:0.72rem;font-weight:800;color:#352756;">Full Name *</label>
@@ -72831,6 +72832,34 @@ See you soon!
     }
     document.querySelector('.vol-schedule-modal')?.remove();
     showToast(`${name} added as ${entry.roleName || meta.roleName || 'volunteer'}.`);
+    if (typeof loadVolunteerRequests === 'function') loadVolunteerRequests();
+  }
+
+  async function volMarkFilled(type, ri) {
+    const key = `${type}-${ri}`;
+    const meta = _volStaffingRoleMeta[key] || {};
+    const entry = _staffingPlan[key] || {};
+    const requiredDates = volRequiredDatesForRoleSetup(type, entry);
+    const roleName = entry.roleName || meta.roleName || 'Volunteer';
+    const { error } = await sb.from('volunteer_signups').insert({
+      production_id: prodId,
+      name: '(Filled)',
+      email: '',
+      phone: null,
+      notes: null,
+      status: 'approved',
+      role_name: roleName,
+      department: entry.department || meta.department || '',
+      check_in_with: entry.checkInWith || entry.check_in_with || meta.checkInWith || null,
+      shift_date: null,
+      required_dates: requiredDates,
+    });
+    if (error) {
+      showToast('Could not save: ' + (error.message || 'Unknown error'));
+      return;
+    }
+    document.querySelector('.vol-schedule-modal')?.remove();
+    showToast(`${roleName} marked as filled.`);
     if (typeof loadVolunteerRequests === 'function') loadVolunteerRequests();
   }
 
