@@ -82,7 +82,7 @@
         orgAboutBody: 'A local community theatre organisation dedicated to giving young performers a chance to shine on stage.',
         showAboutBody: 'Share a brief description of this production for potential sponsors who may not be familiar with the show.',
         keyDatesTitle: 'Key Dates to Know', keyDatesBody: 'Plan your sponsorship around these important dates.',
-        pastPostersKicker: 'Past Posters', pastPostersTitle: 'A look back at the shows sponsors helped bring to life',
+        pastPostersKicker: 'Past Posters', pastPostersTitle: 'A look back at past shows that sponsors have helped bring to life',
         pastPostersBody: 'Share a visual snapshot of previous productions and the community your supporters are joining.',
         footerTitle: 'Have questions?', footerBody: 'We’re happy to help you find the right option.', footerButton: 'Contact Us',
       },
