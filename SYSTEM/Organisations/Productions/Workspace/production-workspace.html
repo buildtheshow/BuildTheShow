@@ -72114,6 +72114,20 @@ See you soon!
 	      const att = volAttendanceSummary(val);
 	      if (timingEl) timingEl.textContent = att.typesText;
 	      if (creditEl) creditEl.textContent = att.scopeText;
+	      const _meta = _volStaffingRoleMeta[key] || {};
+	      const _rn = val.roleName || _meta.roleName || '';
+	      const _needed = val.count ?? 0;
+	      const _filled = volFilledCount(_rn);
+	      const _badgeId = `vsq-filled-${key}`;
+	      let _badge = document.getElementById(_badgeId);
+	      if (!_badge && tile) {
+	        const _hdr = tile.querySelector('.template-brand-tile-container--header');
+	        if (_hdr) { _hdr.style.cssText += 'display:flex;justify-content:space-between;align-items:center;'; _badge = document.createElement('div'); _badge.id = _badgeId; _badge.style.cssText = 'font-size:0.52cqw;font-weight:900;letter-spacing:0.06em;text-transform:uppercase;color:#fff;padding:0.15cqw 0.45cqw;border-radius:3px;line-height:1.3;'; _hdr.appendChild(_badge); }
+	      }
+	      if (_badge) {
+	        if (_filled > 0) { const _full = _needed > 0 && _filled >= _needed; _badge.textContent = _full ? 'Filled' : `${_filled}/${_needed} filled`; _badge.style.display = ''; _badge.style.background = _full ? 'rgba(118,158,123,0.85)' : 'rgba(255,255,255,0.25)'; }
+	        else { _badge.style.display = 'none'; }
+	      }
 	    });
 	  }
 
@@ -72592,7 +72606,12 @@ See you soon!
 	    }
 	  }
 
-	  function volCanonicalSignupRoleName(name = '') {
+	  function volFilledCount(roleName) {
+    const canon = volCanonicalSignupRoleName(roleName);
+    return (volunteerSignups || []).filter(s => s.status !== 'cancelled' && s.status !== 'declined' && volCanonicalSignupRoleName(s.role_name) === canon).length;
+  }
+
+  function volCanonicalSignupRoleName(name = '') {
 	    const raw = String(name || '').trim();
 	    const key = raw.toLowerCase().replace(/\s+/g, ' ');
 	    const renames = {
@@ -72830,8 +72849,10 @@ See you soon!
       errEl.style.display = '';
       return;
     }
+    volunteerSignups.push({ role_name: entry.roleName || meta.roleName || '', status: 'approved', name });
     document.querySelector('.vol-schedule-modal')?.remove();
     showToast(`${name} added as ${entry.roleName || meta.roleName || 'volunteer'}.`);
+    try { applyStaffingPlanToTiles(); } catch (_) {}
     if (typeof loadVolunteerRequests === 'function') loadVolunteerRequests();
   }
 
@@ -72858,8 +72879,10 @@ See you soon!
       showToast('Could not save: ' + (error.message || 'Unknown error'));
       return;
     }
+    volunteerSignups.push({ role_name: roleName, status: 'approved', name: '(Filled)' });
     document.querySelector('.vol-schedule-modal')?.remove();
     showToast(`${roleName} marked as filled.`);
+    try { applyStaffingPlanToTiles(); } catch (_) {}
     if (typeof loadVolunteerRequests === 'function') loadVolunteerRequests();
   }
 
