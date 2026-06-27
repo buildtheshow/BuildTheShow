@@ -6152,7 +6152,16 @@
       return renames[key] || normalized;
     }
     function spotsKey(opp) { return `${canonicalVolunteerRoleName(opp.volunteer_role) || ''}::${opp.shift_date || ''}`; }
-    function spotsLeft(opp) { return Math.max(0, (opp.volunteers_needed || 0) - (signupCounts[spotsKey(opp)] || 0)); }
+    function spotsFilled(opp) {
+      if (opp.count_mode === 'per_production' || opp.event_type === 'dept_leads') {
+        const prefix = (canonicalVolunteerRoleName(opp.volunteer_role) || '') + '::';
+        let total = 0;
+        for (const k in signupCounts) { if (k.startsWith(prefix)) total += signupCounts[k]; }
+        return total;
+      }
+      return signupCounts[spotsKey(opp)] || 0;
+    }
+    function spotsLeft(opp) { return Math.max(0, (opp.volunteers_needed || 0) - spotsFilled(opp)); }
     function spotsHtml(opp) {
       if (!opp.volunteers_needed) return '';
       const left = spotsLeft(opp);
@@ -6420,16 +6429,12 @@
         if (planResult.error) throw planResult.error;
         productionContacts = contactResult.error ? [] : (contactResult.data || []);
         (eventResult.data || []).forEach(ev => { eventMap[ev.id] = ev; });
-        if (signupResult.error) console.warn('[BTS] volunteer_signups query error:', signupResult.error.message);
-        const _signupRows = signupResult.data || [];
-        console.log('[BTS] volunteer signup rows loaded:', _signupRows.length, _signupRows.map(s => s.role_name));
-        _signupRows.forEach(s => {
+        (signupResult.data || []).forEach(s => {
           const role = canonicalVolunteerRoleName(s.role_name || '');
           const dates = new Set([s.shift_date || '']);
           (Array.isArray(s.required_dates) ? s.required_dates : []).filter(Boolean).forEach(d => dates.add(d));
           dates.forEach(d => { const k = `${role}::${d}`; signupCounts[k] = (signupCounts[k] || 0) + 1; });
         });
-        console.log('[BTS] signupCounts:', JSON.stringify(signupCounts));
         opps = buildOppsFromPlan(planResult.data?.volunteer_staffing_plan || {}, eventResult.data || []);
 
         renderPage();
@@ -7067,7 +7072,7 @@
           <strong>Time</strong><span>${esc(fmtTimeRange(opp.shift_start_time, opp.shift_end_time) || 'Flexible')}</span>
           <strong>Shift Type</strong><span>${esc(categoryLabel(opp))}</span>
           <strong>Spots Needed</strong><span>${esc(opp.volunteers_needed || '')}</span>
-          <strong>Spots Filled</strong><span>${esc(signupCounts[spotsKey(opp)] || 0)}</span>
+          <strong>Spots Filled</strong><span>${esc(spotsFilled(opp))}</span>
         </div>
         ${showLessHtml(targetId)}
       </div>`;
