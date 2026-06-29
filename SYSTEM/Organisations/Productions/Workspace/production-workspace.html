@@ -74136,6 +74136,9 @@ See you soon!
     }
 
     container.innerHTML = `<div class="vol-plan">${stepBarHtml}<div style="margin-top:1.25rem;">${bodyHtml}</div></div>`;
+    if (subTab === 'seating' && _tixSetup.seating_style === 'reserved') {
+      requestAnimationFrame(() => tixLoadSeatMapBuilder());
+    }
   }
 
   function renderTixManagement(message) {
@@ -74145,10 +74148,14 @@ See you soon!
   // ── Step 1: Seating Style ──
   function renderTixStepSeating() {
     const current = _tixSetup.seating_style || '';
+    const builderHtml = current === 'reserved' ? `
+      <div style="margin-top:1.5rem;border-top:1.5px solid rgba(87,46,136,0.1);padding-top:1.25rem;">
+        <div id="tix-seatmap-builder"><div class="loading">Loading seat map builder...</div></div>
+      </div>` : '';
     return `
-      <div style="max-width:560px;">
+      <div>
         <div style="font-size:0.92rem;font-weight:700;color:#1a1530;margin-bottom:1rem;">How will your audience be seated?</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;max-width:560px;">
           <button type="button" class="tix-card-choice ${current === 'festival' ? 'selected' : ''}" onclick="tixSetSeatingStyle('festival')">
             <div class="tix-check">&#10003;</div>
             <div class="tix-card-choice-title">Festival Seating</div>
@@ -74157,10 +74164,19 @@ See you soon!
           <button type="button" class="tix-card-choice ${current === 'reserved' ? 'selected' : ''}" onclick="tixSetSeatingStyle('reserved')">
             <div class="tix-check">&#10003;</div>
             <div class="tix-card-choice-title">Reserved Seating</div>
-            <div class="tix-card-choice-sub">Assigned seats. You will set up your seat map in a later step.</div>
+            <div class="tix-card-choice-sub">Assigned seats with sections and rows.</div>
           </button>
         </div>
+        ${builderHtml}
       </div>`;
+  }
+
+  function tixLoadSeatMapBuilder() {
+    const container = document.getElementById('tix-seatmap-builder');
+    if (!container) return;
+    loadScriptOnce('/ASSETS/scripts/modules/ticketing-seatmap.js?v=seatmap-20260626')
+      .then(() => { if (window.SeatMapBuilder) window.SeatMapBuilder.init(prodId, sb, container); })
+      .catch(e => { container.innerHTML = '<div style="color:#b33a25;font-size:0.82rem;">Could not load seat map builder.</div>'; });
   }
 
   async function tixSetSeatingStyle(style) {
@@ -74220,7 +74236,10 @@ See you soon!
         <div style="font-size:0.92rem;font-weight:700;color:#1a1530;margin-bottom:0.75rem;">${perfEvents.length} performance${perfEvents.length === 1 ? '' : 's'} from your calendar</div>
         ${perfRows}
         ${dressSection}
-        <button type="button" class="btn-secondary" style="font-size:0.75rem;margin-top:0.75rem;" onclick="tixRefreshPerformances()">Refresh from Calendar</button>
+        <div style="display:flex;gap:0.5rem;margin-top:0.75rem;flex-wrap:wrap;">
+          <button type="button" class="btn-secondary" style="font-size:0.75rem;" onclick="tixRefreshPerformances()">Refresh from Calendar</button>
+          ${_tixSetup._layout_id && _tixSetup.seating_style === 'reserved' ? `<button type="button" class="btn-primary" style="font-size:0.75rem;" onclick="tixGenerateInventory()">Generate Seat Inventory</button>` : ''}
+        </div>
       </div>`;
   }
 
@@ -74241,6 +74260,28 @@ See you soon!
     if (!_tixSetup.completed_steps.includes('performances')) _tixSetup.completed_steps.push('performances');
     await saveTicketingSetup();
     renderTicketingPanel('performances');
+  }
+
+  async function tixGenerateInventory() {
+    const setup = _tixSetup;
+    if (!setup._layout_id) { showToast('Build a seat map first.'); return; }
+    const perfEvents = _tixEvents.filter(e => e.event_type === 'performance' || (e.event_type === 'dress' && setup.dress_ticketed));
+    if (!perfEvents.length) { showToast('No ticketed performances found.'); return; }
+    const { data: seats } = await sb.from('venue_seats').select('id,seat_type').eq('layout_id', setup._layout_id);
+    if (!seats || !seats.length) { showToast('No seats found in the seat map.'); return; }
+    const visibleSeats = seats.filter(s => s.seat_type !== 'aisle');
+    let inserted = 0;
+    for (const ev of perfEvents) {
+      const rows = visibleSeats.map(seat => ({
+        performance_id: ev.id,
+        seat_id: seat.id,
+        status: seat.seat_type === 'blocked' ? 'blocked' : 'available',
+        blocked_reason: seat.seat_type === 'blocked' ? 'Blocked in venue layout' : null,
+      }));
+      const { error } = await sb.from('performance_seat_inventory').upsert(rows, { onConflict: 'performance_id,seat_id', ignoreDuplicates: true });
+      if (!error) inserted += rows.length;
+    }
+    showToast(`Inventory generated: ${inserted} seats across ${perfEvents.length} performances.`);
   }
 
   // ── Step 3: Ticket Types ──
