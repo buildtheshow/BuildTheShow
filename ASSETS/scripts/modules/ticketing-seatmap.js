@@ -419,7 +419,7 @@ window.SeatMapBuilder = (function() {
     .sm-generate-btn { width: 100%; padding: 0.85rem; border: none; border-radius: 10px; background: #572e88; color: #fff; font: inherit; font-size: 0.88rem; font-weight: 950; cursor: pointer; }
     .sm-generate-btn:hover { background: #6b3ba6; }
     .sm-capacity-bar { display: flex; align-items: center; gap: 1.25rem; font-size: 0.72rem; font-weight: 800; margin-bottom: 1rem; }
-    .sm-capacity-bar--ok { color: #3a7a42; } .sm-capacity-bar--over { color: #a93a25; }
+    .sm-capacity-bar--ok { color: #769e7b; } .sm-capacity-bar--over { color: #d1523d; }
     .sm-cap-item { display: flex; flex-direction: column; gap: 0.1rem; }
     .sm-cap-label { font-size: 0.6rem; font-weight: 900; text-transform: uppercase; letter-spacing: 0.06em; opacity: 0.7; }
     .sm-edit-area { display: flex; gap: 0; }
