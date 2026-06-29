@@ -26143,6 +26143,9 @@
   <!-- Sponsor page status strip (position:fixed — lives outside tab panels) -->
   <bts-audition-status-strip id="spn-public-status-strip" class="aud-floating-status-layer" style="display:none"></bts-audition-status-strip>
 
+  <!-- Ticketing status strip -->
+  <bts-audition-status-strip id="tkt-status-strip" class="aud-floating-status-layer" style="display:none"></bts-audition-status-strip>
+
   <!-- ── Add Role Modal ── -->
   <div class="modal-overlay" id="add-role-modal">
     <div class="modal">
@@ -51357,6 +51360,8 @@ See you soon!
     if (audStatusBar && id !== 'auditions' && id !== 'casting' && id !== 'castlist') audStatusBar.setVisible(false);
     const sponsorStatusStrip = document.getElementById('spn-public-status-strip');
     if (sponsorStatusStrip && id !== 'marketing') sponsorStatusStrip.style.display = 'none';
+    const tktStatusStrip = document.getElementById('tkt-status-strip');
+    if (tktStatusStrip && id !== 'ticketing') tktStatusStrip.style.display = 'none';
     document.querySelectorAll('.prod-tab[data-tab]').forEach(el => {
       el.classList.toggle('active', el.dataset.tab === id);
     });
@@ -74096,18 +74101,46 @@ See you soon!
   }
 
   function updateTicketingHero(sub) {
-    const h = TICKETING_HEROES[sub] || TICKETING_HEROES.seating;
+    const h = TICKETING_HEROES[sub] || TICKETING_HEROES.dashboard;
     const title = document.getElementById('tix-hero-title');
     const copy = document.getElementById('tix-hero-copy');
     const actions = document.getElementById('tix-hero-actions');
     if (title) title.textContent = h[0];
     if (copy) copy.textContent = h[1];
-    if (actions) {
-      const isLive = _tixSetup.status === 'live';
-      actions.innerHTML = isLive
-        ? '<span class="tix-live-badge">Live</span>'
-        : '<span class="tix-draft-badge">Draft</span>';
+    if (actions) actions.innerHTML = '';
+    updateTicketingStatusStrip();
+  }
+
+  function updateTicketingStatusStrip() {
+    const strip = document.getElementById('tkt-status-strip');
+    if (!strip || typeof strip.update !== 'function') return;
+    strip.style.display = '';
+    if (!strip.dataset.tktEventsBound) {
+      strip.addEventListener('audition-status-toggle', async () => {
+        const isLive = _tixSetup.status === 'live';
+        _tixSetup.status = isLive ? 'draft' : 'live';
+        await saveTicketingSetup();
+        try {
+          const { data: prodRow } = await sb.from('productions').select('registration_settings').eq('id', prodId).single();
+          const settings = prodRow?.registration_settings || {};
+          settings.ticketing_published = _tixSetup.status === 'live';
+          await sb.from('productions').update({ registration_settings: settings }).eq('id', prodId);
+        } catch (_) {}
+        updateTicketingStatusStrip();
+        showToast(_tixSetup.status === 'live' ? 'Ticket sales are now live.' : 'Ticket sales paused.');
+      });
+      strip.dataset.tktEventsBound = 'true';
     }
+    const isLive = _tixSetup.status === 'live';
+    strip.update({
+      state: isLive ? 'live' : 'hidden',
+      title: isLive ? 'Ticket sales are live' : 'Ticket sales not published',
+      subtitle: '',
+      showView: false,
+      showCopy: false,
+      showToggle: true,
+      toggleLabel: isLive ? 'Pause Sales' : 'Go Live',
+    });
   }
 
   function tixSwitchBuildStep(step) {
