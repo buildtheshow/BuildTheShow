@@ -74128,7 +74128,7 @@ See you soon!
       case 'types':        bodyHtml = renderTixStepTypes(); break;
       case 'discounts':    bodyHtml = renderTixStepDiscounts(); break;
       case 'blocks':       bodyHtml = renderTixStepBlocks(); break;
-      case 'dashboard':    bodyHtml = renderTixManagement('Dashboard is coming soon. Complete the setup steps first, then go live to start selling.'); break;
+      case 'dashboard':    bodyHtml = '<div id="tix-dashboard-root"><div class="loading">Loading dashboard...</div></div>'; break;
       case 'orders':       bodyHtml = renderTixManagement('Orders will appear here once tickets are on sale.'); break;
       case 'checkin':      bodyHtml = renderTixManagement('Check-in tools will be available on performance days.'); break;
       case 'reports':      bodyHtml = renderTixManagement('Reports will generate once you have ticket sales data.'); break;
@@ -74139,10 +74139,163 @@ See you soon!
     if (subTab === 'seating' && _tixSetup.seating_style === 'reserved') {
       requestAnimationFrame(() => tixLoadSeatMapBuilder());
     }
+    if (subTab === 'dashboard') {
+      renderTixDashboard().then(html => {
+        const root = document.getElementById('tix-dashboard-root');
+        if (root) root.innerHTML = html;
+      });
+    }
   }
 
   function renderTixManagement(message) {
     return `<div style="text-align:center;padding:3rem 1.5rem;color:rgba(26,21,48,0.45);font-size:0.88rem;font-weight:600;">${esc(message)}</div>`;
+  }
+
+  async function renderTixDashboard() {
+    const setup = _tixSetup;
+    const isLive = setup.status === 'live';
+    const completedSteps = setup.completed_steps || [];
+    const totalSteps = TICKETING_STEPS.length;
+    const doneCount = completedSteps.length;
+    const seatingLabel = setup.seating_style === 'reserved' ? 'Reserved Seating' : setup.seating_style === 'festival' ? 'Festival Seating' : 'Not set';
+    const perfEvents = _tixEvents.filter(e => e.event_type === 'performance' || (e.event_type === 'dress' && setup.dress_ticketed));
+    const ticketTypes = setup.ticket_types || [];
+    const fmtDate = iso => { if (!iso) return ''; const d = new Date(iso); return d.toLocaleDateString('en-CA', { weekday: 'short', month: 'short', day: 'numeric' }); };
+    const fmtTime = iso => { if (!iso) return ''; const d = new Date(iso); return d.toLocaleTimeString('en-CA', { hour: 'numeric', minute: '2-digit' }); };
+
+    let inventoryStats = { total: 0, available: 0, sold: 0, held: 0, blocked: 0 };
+    let perfInventory = [];
+    if (setup._layout_id && setup.seating_style === 'reserved') {
+      try {
+        const { data } = await sb.from('performance_seat_inventory').select('performance_id,status').in('performance_id', perfEvents.map(e => e.id));
+        if (data) {
+          data.forEach(r => {
+            inventoryStats.total++;
+            if (r.status === 'available') inventoryStats.available++;
+            else if (r.status === 'sold') inventoryStats.sold++;
+            else if (r.status === 'held') inventoryStats.held++;
+            else if (r.status === 'blocked') inventoryStats.blocked++;
+          });
+          const byPerf = {};
+          data.forEach(r => { if (!byPerf[r.performance_id]) byPerf[r.performance_id] = { total: 0, sold: 0, available: 0 }; byPerf[r.performance_id].total++; if (r.status === 'sold') byPerf[r.performance_id].sold++; if (r.status === 'available') byPerf[r.performance_id].available++; });
+          perfInventory = perfEvents.map(ev => ({ event: ev, stats: byPerf[ev.id] || { total: 0, sold: 0, available: 0 } }));
+        }
+      } catch (_) {}
+    }
+
+    let ticketCount = 0, orderCount = 0, revenueCents = 0;
+    try {
+      const { data: tickets } = await sb.from('tickets').select('id,price_cents,order_id').eq('production_id', prodId).eq('status', 'active');
+      if (tickets) { ticketCount = tickets.length; revenueCents = tickets.reduce((sum, t) => sum + (t.price_cents || 0), 0); orderCount = new Set(tickets.map(t => t.order_id).filter(Boolean)).size; }
+    } catch (_) {}
+
+    const setupProgressHtml = `
+      <div style="border:1.5px solid rgba(87,46,136,0.1);border-radius:12px;padding:1.1rem;background:#fff;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem;">
+          <div style="font-size:0.82rem;font-weight:900;color:#1a1530;">Setup Progress</div>
+          <span class="${isLive ? 'tix-live-badge' : 'tix-draft-badge'}">${isLive ? 'Live' : 'Draft'}</span>
+        </div>
+        <div style="display:flex;gap:0.4rem;margin-bottom:0.75rem;">
+          ${TICKETING_STEPS.map(s => {
+            const done = completedSteps.includes(s.key);
+            return `<div style="flex:1;height:6px;border-radius:3px;background:${done ? '#769e7b' : 'rgba(87,46,136,0.08)'};"></div>`;
+          }).join('')}
+        </div>
+        <div style="font-size:0.72rem;color:rgba(26,21,48,0.5);">${doneCount}/${totalSteps} steps complete</div>
+        ${!isLive && doneCount >= totalSteps ? `<button type="button" class="btn-primary" style="width:100%;margin-top:0.75rem;justify-content:center;font-size:0.82rem;" onclick="tixGoLive()">Go Live</button>` : ''}
+      </div>`;
+
+    const statsHtml = `
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0.75rem;">
+        <div style="border:1.5px solid rgba(87,46,136,0.1);border-radius:12px;padding:1rem;background:#fff;text-align:center;">
+          <div style="font-size:1.5rem;font-weight:950;color:#572e88;">${ticketCount}</div>
+          <div style="font-size:0.68rem;font-weight:800;color:rgba(26,21,48,0.45);text-transform:uppercase;letter-spacing:0.06em;">Tickets Sold</div>
+        </div>
+        <div style="border:1.5px solid rgba(87,46,136,0.1);border-radius:12px;padding:1rem;background:#fff;text-align:center;">
+          <div style="font-size:1.5rem;font-weight:950;color:#572e88;">${orderCount}</div>
+          <div style="font-size:0.68rem;font-weight:800;color:rgba(26,21,48,0.45);text-transform:uppercase;letter-spacing:0.06em;">Orders</div>
+        </div>
+        <div style="border:1.5px solid rgba(87,46,136,0.1);border-radius:12px;padding:1rem;background:#fff;text-align:center;">
+          <div style="font-size:1.5rem;font-weight:950;color:#572e88;">$${(revenueCents / 100).toFixed(2)}</div>
+          <div style="font-size:0.68rem;font-weight:800;color:rgba(26,21,48,0.45);text-transform:uppercase;letter-spacing:0.06em;">Revenue</div>
+        </div>
+        <div style="border:1.5px solid rgba(87,46,136,0.1);border-radius:12px;padding:1rem;background:#fff;text-align:center;">
+          <div style="font-size:1.5rem;font-weight:950;color:#572e88;">${perfEvents.length}</div>
+          <div style="font-size:0.68rem;font-weight:800;color:rgba(26,21,48,0.45);text-transform:uppercase;letter-spacing:0.06em;">Performances</div>
+        </div>
+      </div>`;
+
+    const quickInfoHtml = `
+      <div style="border:1.5px solid rgba(87,46,136,0.1);border-radius:12px;padding:1.1rem;background:#fff;">
+        <div style="font-size:0.82rem;font-weight:900;color:#1a1530;margin-bottom:0.75rem;">Quick Info</div>
+        <div style="display:grid;gap:0.4rem;">
+          <div style="display:flex;justify-content:space-between;font-size:0.78rem;padding:0.35rem 0;border-bottom:1px solid rgba(87,46,136,0.06);">
+            <span style="font-weight:700;color:rgba(26,21,48,0.5);">Seating</span><span style="font-weight:800;color:#1a1530;">${esc(seatingLabel)}</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;font-size:0.78rem;padding:0.35rem 0;border-bottom:1px solid rgba(87,46,136,0.06);">
+            <span style="font-weight:700;color:rgba(26,21,48,0.5);">Ticket Types</span><span style="font-weight:800;color:#1a1530;">${ticketTypes.length}</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;font-size:0.78rem;padding:0.35rem 0;border-bottom:1px solid rgba(87,46,136,0.06);">
+            <span style="font-weight:700;color:rgba(26,21,48,0.5);">Discounts</span><span style="font-weight:800;color:#1a1530;">${setup.discounts_enabled ? (setup.discounts || []).length + ' codes' : 'None'}</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;font-size:0.78rem;padding:0.35rem 0;">
+            <span style="font-weight:700;color:rgba(26,21,48,0.5);">Reserved Blocks</span><span style="font-weight:800;color:#1a1530;">${setup.reserved_blocks_enabled ? (setup.reserved_blocks || []).length + ' groups' : 'None'}</span>
+          </div>
+        </div>
+      </div>`;
+
+    const perfTableHtml = perfEvents.length ? `
+      <div style="border:1.5px solid rgba(87,46,136,0.1);border-radius:12px;padding:1.1rem;background:#fff;">
+        <div style="font-size:0.82rem;font-weight:900;color:#1a1530;margin-bottom:0.75rem;">Performances</div>
+        <div style="display:flex;flex-direction:column;gap:0.35rem;">
+          ${perfInventory.length ? perfInventory.map(p => {
+            const pct = p.stats.total ? Math.round(p.stats.sold / p.stats.total * 100) : 0;
+            return `<div style="display:flex;align-items:center;gap:0.75rem;padding:0.5rem 0.65rem;border:1px solid rgba(87,46,136,0.06);border-radius:8px;">
+              <div style="flex:1;">
+                <div style="font-size:0.78rem;font-weight:800;color:#1a1530;">${esc(p.event.title || 'Performance')}</div>
+                <div style="font-size:0.68rem;color:rgba(26,21,48,0.45);">${fmtDate(p.event.start_time)} ${fmtTime(p.event.start_time)}</div>
+              </div>
+              <div style="text-align:right;">
+                <div style="font-size:0.78rem;font-weight:900;color:#572e88;">${p.stats.sold}/${p.stats.total}</div>
+                <div style="font-size:0.62rem;color:rgba(26,21,48,0.4);">${pct}% sold</div>
+              </div>
+              <div style="width:60px;height:6px;border-radius:3px;background:rgba(87,46,136,0.08);">
+                <div style="width:${pct}%;height:100%;border-radius:3px;background:${pct >= 90 ? '#769e7b' : pct >= 50 ? '#efab45' : '#572e88'};"></div>
+              </div>
+            </div>`;
+          }).join('') : perfEvents.map(ev => `<div style="display:flex;align-items:center;gap:0.75rem;padding:0.5rem 0.65rem;border:1px solid rgba(87,46,136,0.06);border-radius:8px;">
+              <div style="flex:1;">
+                <div style="font-size:0.78rem;font-weight:800;color:#1a1530;">${esc(ev.title || 'Performance')}</div>
+                <div style="font-size:0.68rem;color:rgba(26,21,48,0.45);">${fmtDate(ev.start_time)} ${fmtTime(ev.start_time)}</div>
+              </div>
+            </div>`).join('')}
+        </div>
+      </div>` : '';
+
+    return `
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;align-items:start;">
+        <div style="display:flex;flex-direction:column;gap:1rem;">
+          ${setupProgressHtml}
+          ${quickInfoHtml}
+        </div>
+        <div style="display:flex;flex-direction:column;gap:1rem;">
+          ${statsHtml}
+          ${perfTableHtml}
+        </div>
+      </div>`;
+  }
+
+  async function tixGoLive() {
+    _tixSetup.status = 'live';
+    await saveTicketingSetup();
+    try {
+      const { data: prodRow } = await sb.from('productions').select('registration_settings').eq('id', prodId).single();
+      const settings = prodRow?.registration_settings || {};
+      settings.ticketing_published = true;
+      await sb.from('productions').update({ registration_settings: settings }).eq('id', prodId);
+    } catch (_) {}
+    showToast('Ticketing is now live.');
+    renderTicketingPanel('dashboard');
   }
 
   // ── Step 1: Seating Style ──
