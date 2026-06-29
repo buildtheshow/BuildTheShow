@@ -26127,7 +26127,7 @@
         <div class="aud-visual-hero-content" style="align-items:flex-start;">
           <div>
             <div class="aud-visual-kicker"><span class="aud-visual-kicker-dot" aria-hidden="true"></span><span class="page-hierarchy"><span class="page-hierarchy-page">Ticketing</span></span></div>
-            <h2 class="aud-visual-title" id="tix-hero-title" style="font-size:clamp(1.8rem,4vw,3rem);">Dashboard</h2>
+            <h1 class="aud-visual-title" id="tix-hero-title">Dashboard</h1>
             <p class="aud-visual-copy" id="tix-hero-copy">How are your ticket sales going? Sales, revenue, and occupancy at a glance.</p>
           </div>
           <div class="vol-plan-actions" id="tix-hero-actions" style="flex-direction:row;align-items:center;gap:0.4rem;flex-wrap:wrap;justify-content:flex-end;"></div>
@@ -74245,10 +74245,19 @@ See you soon!
       if (tickets) { ticketCount = tickets.length; revenueCents = tickets.reduce((sum, t) => sum + (t.price_cents || 0), 0); orderCount = new Set(tickets.map(t => t.order_id).filter(Boolean)).size; }
     } catch (_) {}
 
+    const tileRender = window.BTSAuditionTemplates?.renderBrandTileTemplate || function() { return ''; };
+    const statsHtml = `
+      <div class="vol-status-grid" style="display:grid;grid-template-columns:repeat(4,1fr);gap:0.75rem;margin-bottom:1.25rem;">
+        ${tileRender({ mode: 'metric', variant: 'square', color: '#572e88', ink: '#fff', kicker: 'Ticketing', metricValue: String(ticketCount), metricLabel: 'Tickets Sold' })}
+        ${tileRender({ mode: 'metric', variant: 'square', color: '#476aaa', ink: '#fff', kicker: 'Ticketing', metricValue: String(orderCount), metricLabel: 'Orders' })}
+        ${tileRender({ mode: 'metric', variant: 'square', color: '#769e7b', ink: '#fff', kicker: 'Ticketing', metricValue: '$' + (revenueCents / 100).toFixed(2), metricLabel: 'Revenue' })}
+        ${tileRender({ mode: 'metric', variant: 'square', color: '#dd8233', ink: '#fff', kicker: 'Ticketing', metricValue: String(perfEvents.length), metricLabel: 'Performances' })}
+      </div>`;
+
     const setupProgressHtml = `
-      <div style="border:1.5px solid rgba(87,46,136,0.1);border-radius:12px;padding:1.1rem;background:#fff;">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem;">
-          <div style="font-size:0.82rem;font-weight:900;color:#1a1530;">Setup Progress</div>
+      <div class="aud-dashboard-cards">
+        <div class="aud-dashboard-cards-head">
+          <div class="aud-dashboard-cards-title">Setup Progress</div>
           <span class="${isLive ? 'tix-live-badge' : 'tix-draft-badge'}">${isLive ? 'Live' : 'Draft'}</span>
         </div>
         <div style="display:flex;gap:0.4rem;margin-bottom:0.75rem;">
@@ -74257,22 +74266,43 @@ See you soon!
             return `<div style="flex:1;height:6px;border-radius:3px;background:${done ? '#769e7b' : 'rgba(87,46,136,0.08)'};"></div>`;
           }).join('')}
         </div>
-        <div style="font-size:0.72rem;color:rgba(26,21,48,0.5);">${doneCount}/${totalSteps} steps complete</div>
-        ${!isLive && doneCount >= totalSteps ? `<button type="button" class="btn-primary" style="width:100%;margin-top:0.75rem;justify-content:center;font-size:0.82rem;" onclick="tixGoLive()">Go Live</button>` : ''}
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <div style="font-size:0.72rem;color:rgba(26,21,48,0.5);">${doneCount}/${totalSteps} steps complete</div>
+          <button type="button" class="aud-dashboard-cards-link" onclick="navigateToTicketing('build')">Edit Setup</button>
+        </div>
       </div>`;
 
-    const tileRender = window.BTSAuditionTemplates?.renderBrandTileTemplate || function() { return ''; };
-    const statsHtml = `
-      <div class="vol-status-grid" style="display:grid;grid-template-columns:repeat(4,1fr);gap:0.75rem;">
-        ${tileRender({ mode: 'metric', variant: 'square', color: '#572e88', ink: '#fff', kicker: 'Ticketing', metricValue: String(ticketCount), metricLabel: 'Tickets Sold' })}
-        ${tileRender({ mode: 'metric', variant: 'square', color: '#476aaa', ink: '#fff', kicker: 'Ticketing', metricValue: String(orderCount), metricLabel: 'Orders' })}
-        ${tileRender({ mode: 'metric', variant: 'square', color: '#769e7b', ink: '#fff', kicker: 'Ticketing', metricValue: '$' + (revenueCents / 100).toFixed(2), metricLabel: 'Revenue' })}
-        ${tileRender({ mode: 'metric', variant: 'square', color: '#dd8233', ink: '#fff', kicker: 'Ticketing', metricValue: String(perfEvents.length), metricLabel: 'Performances' })}
-      </div>`;
+    const perfTableHtml = perfEvents.length ? `
+      <div class="aud-dashboard-cards">
+        <div class="aud-dashboard-cards-head">
+          <div class="aud-dashboard-cards-title">Upcoming Performances</div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:0.35rem;">
+          ${(perfInventory.length ? perfInventory : perfEvents.map(ev => ({ event: ev, stats: null }))).map(p => {
+            const pct = p.stats?.total ? Math.round(p.stats.sold / p.stats.total * 100) : 0;
+            return `<div style="display:flex;align-items:center;gap:0.75rem;padding:0.5rem 0.65rem;border:1px solid rgba(87,46,136,0.06);border-radius:8px;">
+              <div style="flex:1;">
+                <div style="font-size:0.78rem;font-weight:800;color:#1a1530;">${esc(p.event.title || 'Performance')}</div>
+                <div style="font-size:0.68rem;color:rgba(26,21,48,0.45);">${fmtDate(p.event.start_time)} ${fmtTime(p.event.start_time)}</div>
+              </div>
+              ${p.stats ? `<div style="text-align:right;">
+                <div style="font-size:0.78rem;font-weight:900;color:#572e88;">${p.stats.sold}/${p.stats.total}</div>
+                <div style="font-size:0.62rem;color:rgba(26,21,48,0.4);">${pct}% sold</div>
+              </div>
+              <div style="width:60px;height:6px;border-radius:3px;background:rgba(87,46,136,0.08);">
+                <div style="width:${pct}%;height:100%;border-radius:3px;background:${pct >= 90 ? '#769e7b' : pct >= 50 ? '#efab45' : '#572e88'};"></div>
+              </div>` : ''}
+            </div>`;
+          }).join('')}
+        </div>
+      </div>` : '';
 
     const quickInfoHtml = `
-      <div style="border:1.5px solid rgba(87,46,136,0.1);border-radius:12px;padding:1.1rem;background:#fff;">
-        <div style="font-size:0.82rem;font-weight:900;color:#1a1530;margin-bottom:0.75rem;">Quick Info</div>
+      <div class="aud-dashboard-cards">
+        <div class="aud-dashboard-cards-head">
+          <div class="aud-dashboard-cards-title">Quick Info</div>
+          <button type="button" class="aud-dashboard-cards-link" onclick="navigateToTicketing('build')">Edit</button>
+        </div>
         <div style="display:grid;gap:0.4rem;">
           <div style="display:flex;justify-content:space-between;font-size:0.78rem;padding:0.35rem 0;border-bottom:1px solid rgba(87,46,136,0.06);">
             <span style="font-weight:700;color:rgba(26,21,48,0.5);">Seating</span><span style="font-weight:800;color:#1a1530;">${esc(seatingLabel)}</span>
@@ -74289,42 +74319,14 @@ See you soon!
         </div>
       </div>`;
 
-    const perfTableHtml = perfEvents.length ? `
-      <div style="border:1.5px solid rgba(87,46,136,0.1);border-radius:12px;padding:1.1rem;background:#fff;">
-        <div style="font-size:0.82rem;font-weight:900;color:#1a1530;margin-bottom:0.75rem;">Performances</div>
-        <div style="display:flex;flex-direction:column;gap:0.35rem;">
-          ${perfInventory.length ? perfInventory.map(p => {
-            const pct = p.stats.total ? Math.round(p.stats.sold / p.stats.total * 100) : 0;
-            return `<div style="display:flex;align-items:center;gap:0.75rem;padding:0.5rem 0.65rem;border:1px solid rgba(87,46,136,0.06);border-radius:8px;">
-              <div style="flex:1;">
-                <div style="font-size:0.78rem;font-weight:800;color:#1a1530;">${esc(p.event.title || 'Performance')}</div>
-                <div style="font-size:0.68rem;color:rgba(26,21,48,0.45);">${fmtDate(p.event.start_time)} ${fmtTime(p.event.start_time)}</div>
-              </div>
-              <div style="text-align:right;">
-                <div style="font-size:0.78rem;font-weight:900;color:#572e88;">${p.stats.sold}/${p.stats.total}</div>
-                <div style="font-size:0.62rem;color:rgba(26,21,48,0.4);">${pct}% sold</div>
-              </div>
-              <div style="width:60px;height:6px;border-radius:3px;background:rgba(87,46,136,0.08);">
-                <div style="width:${pct}%;height:100%;border-radius:3px;background:${pct >= 90 ? '#769e7b' : pct >= 50 ? '#efab45' : '#572e88'};"></div>
-              </div>
-            </div>`;
-          }).join('') : perfEvents.map(ev => `<div style="display:flex;align-items:center;gap:0.75rem;padding:0.5rem 0.65rem;border:1px solid rgba(87,46,136,0.06);border-radius:8px;">
-              <div style="flex:1;">
-                <div style="font-size:0.78rem;font-weight:800;color:#1a1530;">${esc(ev.title || 'Performance')}</div>
-                <div style="font-size:0.68rem;color:rgba(26,21,48,0.45);">${fmtDate(ev.start_time)} ${fmtTime(ev.start_time)}</div>
-              </div>
-            </div>`).join('')}
-        </div>
-      </div>` : '';
-
     return `
+      ${statsHtml}
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;align-items:start;">
         <div style="display:flex;flex-direction:column;gap:1rem;">
           ${setupProgressHtml}
           ${quickInfoHtml}
         </div>
         <div style="display:flex;flex-direction:column;gap:1rem;">
-          ${statsHtml}
           ${perfTableHtml}
         </div>
       </div>`;
