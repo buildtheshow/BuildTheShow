@@ -27128,14 +27128,14 @@
 
   // ── Load shared sidebar ───────────────────────────────
   (function () {
-    const _key = 'bts-prod-sidebar-v31';
+    const _key = 'bts-prod-sidebar-v32';
     const _cached = sessionStorage.getItem(_key);
     if (_cached) {
       document.getElementById('prod-sidebar-host').innerHTML = _cached;
       initProdSidebarEvents();
       try { console.info('[BTS lifecycle]', { timestamp: new Date().toISOString(), functionName: 'production-sidebar-shell', route: window.location.pathname + window.location.search + window.location.hash, reason: 'mounted-from-cache' }); } catch {}
     }
-    fetch('/SHARED/Navigation/production-sidebar.html?v=sidebar-v58-20260626')
+    fetch('/SHARED/Navigation/production-sidebar.html?v=sidebar-v59-20260626')
       .then(res => res.text())
       .then(html => {
         sessionStorage.setItem(_key, html);
@@ -30141,7 +30141,7 @@
       marketingSubTab: 'dashboard',
       budgetSubTab: 'dashboard',
       volunteerSubTab: 'calendar',
-      ticketingSubTab: 'seating',
+      ticketingSubTab: 'dashboard',
       auditionsDayTab: 'overview',
       auditionsSessionId: '',
       auditionsSessionTool: '',
@@ -30168,8 +30168,8 @@
     if (next.budgetSubTab && !budgetTabs.has(next.budgetSubTab)) next.budgetSubTab = 'dashboard';
     const volunteerTabs = new Set(['plan', 'calendar', 'requests', 'checkin']);
     if (next.volunteerSubTab && !volunteerTabs.has(next.volunteerSubTab)) next.volunteerSubTab = 'calendar';
-    const ticketingTabs = new Set(['seating', 'performances', 'types', 'discounts', 'blocks', 'dashboard', 'orders', 'checkin', 'reports']);
-    if (next.ticketingSubTab && !ticketingTabs.has(next.ticketingSubTab)) next.ticketingSubTab = 'seating';
+    const ticketingTabs = new Set(['dashboard', 'build', 'orders', 'checkin', 'reports', 'settings']);
+    if (next.ticketingSubTab && !ticketingTabs.has(next.ticketingSubTab)) next.ticketingSubTab = 'dashboard';
     return next;
   }
 
@@ -30385,11 +30385,10 @@
     }
     if (section === 'ticketing') {
       const ticketingMap = {
-        '': 'seating', seating: 'seating', performances: 'performances',
-        types: 'types', discounts: 'discounts', blocks: 'blocks',
-        dashboard: 'dashboard', orders: 'orders', checkin: 'checkin', reports: 'reports',
+        '': 'dashboard', dashboard: 'dashboard', build: 'build',
+        orders: 'orders', checkin: 'checkin', reports: 'reports', settings: 'settings',
       };
-      return { ...nav, prodTab: 'ticketing', ticketingSubTab: ticketingMap[child || ''] || 'seating' };
+      return { ...nav, prodTab: 'ticketing', ticketingSubTab: ticketingMap[child || ''] || 'dashboard' };
     }
     if (topLevel[section]) return { ...nav, prodTab: topLevel[section] };
     if (section !== 'auditions') return null;
@@ -30487,15 +30486,12 @@
     } else if (prodTab === 'ticketing') {
       const ticketingSubTab = state?.ticketingSubTab || 'seating';
       const ticketingRoutes = {
-        seating: 'ticketing',
-        performances: 'ticketing/performances',
-        types: 'ticketing/types',
-        discounts: 'ticketing/discounts',
-        blocks: 'ticketing/blocks',
-        dashboard: 'ticketing/dashboard',
+        dashboard: 'ticketing',
+        build: 'ticketing/build',
         orders: 'ticketing/orders',
         checkin: 'ticketing/checkin',
         reports: 'ticketing/reports',
+        settings: 'ticketing/settings',
       };
       route = ticketingRoutes[ticketingSubTab] || 'ticketing';
     } else {
@@ -51400,7 +51396,7 @@ See you soon!
     }
     if (id === 'ticketing') {
       if (!isWorkspaceRouteCurrent(routeToken)) return;
-      const sub = (options && options.sub) || loadWorkspaceNavState().ticketingSubTab || 'seating';
+      const sub = (options && options.sub) || loadWorkspaceNavState().ticketingSubTab || 'dashboard';
       saveWorkspaceNavState({ prodTab: 'ticketing', ticketingSubTab: sub });
       setSidebarSubmenuState('ticketing', 'tsub-' + sub);
       loadTicketingData(sub);
@@ -74055,6 +74051,7 @@ See you soon!
 
   let _tixSetup = {};
   let _tixEvents = [];
+  let _tixBuildStep = 'seating';
 
   const TICKETING_STEPS = [
     { key: 'seating',      label: 'Seating',      sub: 'Festival or reserved' },
@@ -74065,15 +74062,12 @@ See you soon!
   ];
 
   const TICKETING_HEROES = {
-    seating:      ['Seating Style', 'How will your audience be seated? This sets the foundation for your ticket setup.'],
-    performances: ['Performances', 'These are pulled from your production calendar. Confirm which shows will sell tickets.'],
-    types:        ['Ticket Types', 'Set up the ticket categories your audience can buy, like Adults, Kids, or Front Row.'],
-    discounts:    ['Discounts & Comps', 'Offer promo codes, cast & crew discounts, or complimentary tickets.'],
-    blocks:       ['Reserved Blocks', 'Hold tickets for groups like schools, sponsors, or cast families before public sale.'],
-    dashboard:    ['Dashboard', 'Sales overview, revenue, and occupancy at a glance.'],
+    dashboard:    ['Dashboard', 'How are your ticket sales going? Sales, revenue, and occupancy at a glance.'],
+    build:        ['Build Ticket Sales', 'Configure how your tickets work, step by step. Nothing goes live until you say so.'],
     orders:       ['Orders', 'Manage purchases, transfers, and refunds.'],
     checkin:      ['Check-In', 'Scan tickets and track attendance at the door.'],
     reports:      ['Reports', 'Sales, occupancy, revenue, and export data.'],
+    settings:     ['Settings', 'Global ticketing preferences for this production.'],
   };
 
   async function loadTicketingData(subTab) {
@@ -74112,41 +74106,53 @@ See you soon!
     }
   }
 
+  function tixSwitchBuildStep(step) {
+    _tixBuildStep = step || 'seating';
+    renderTicketingPanel('build');
+  }
+
   function renderTicketingPanel(subTab) {
     updateTicketingHero(subTab);
     const container = document.getElementById('ticketing-content');
     if (!container) return;
 
-    const isSetupStep = TICKETING_STEPS.some(s => s.key === subTab);
-    const stepBarHtml = isSetupStep ? `
-      <div class="tix-map" aria-label="Ticketing setup steps">
-        ${TICKETING_STEPS.map((step, i) => {
-          const done = (_tixSetup.completed_steps || []).includes(step.key);
-          const active = subTab === step.key;
-          return `<button type="button" class="vol-map-step ${active ? 'active' : ''}" onclick="navigateToTicketing('${esc(step.key)}')">
-            <span class="vol-map-num">${done && !active ? '&#10003;' : i + 1}</span>
-            <span class="vol-map-label">${esc(step.label)}</span>
-            <span class="vol-map-sub">${esc(step.sub)}</span>
-          </button>`;
-        }).join('')}
-      </div>` : '';
-
     let bodyHtml = '';
     switch (subTab) {
-      case 'seating':      bodyHtml = renderTixStepSeating(); break;
-      case 'performances': bodyHtml = renderTixStepPerformances(); break;
-      case 'types':        bodyHtml = renderTixStepTypes(); break;
-      case 'discounts':    bodyHtml = renderTixStepDiscounts(); break;
-      case 'blocks':       bodyHtml = renderTixStepBlocks(); break;
-      case 'dashboard':    bodyHtml = '<div id="tix-dashboard-root"><div class="loading">Loading dashboard...</div></div>'; break;
-      case 'orders':       bodyHtml = renderTixManagement('Orders will appear here once tickets are on sale.'); break;
-      case 'checkin':      bodyHtml = renderTixManagement('Check-in tools will be available on performance days.'); break;
-      case 'reports':      bodyHtml = renderTixManagement('Reports will generate once you have ticket sales data.'); break;
-      default:             bodyHtml = renderTixStepSeating(); break;
+      case 'build': {
+        const step = _tixBuildStep || 'seating';
+        const stepBarHtml = `
+          <div class="tix-map" aria-label="Ticketing setup steps">
+            ${TICKETING_STEPS.map((s, i) => {
+              const done = (_tixSetup.completed_steps || []).includes(s.key);
+              const active = step === s.key;
+              return `<button type="button" class="vol-map-step ${active ? 'active' : ''}" onclick="tixSwitchBuildStep('${esc(s.key)}')">
+                <span class="vol-map-num">${done && !active ? '&#10003;' : i + 1}</span>
+                <span class="vol-map-label">${esc(s.label)}</span>
+                <span class="vol-map-sub">${esc(s.sub)}</span>
+              </button>`;
+            }).join('')}
+          </div>`;
+        let stepBody = '';
+        switch (step) {
+          case 'seating':      stepBody = renderTixStepSeating(); break;
+          case 'performances': stepBody = renderTixStepPerformances(); break;
+          case 'types':        stepBody = renderTixStepTypes(); break;
+          case 'discounts':    stepBody = renderTixStepDiscounts(); break;
+          case 'blocks':       stepBody = renderTixStepBlocks(); break;
+        }
+        bodyHtml = `${stepBarHtml}<div style="margin-top:1.25rem;">${stepBody}</div>`;
+        break;
+      }
+      case 'dashboard': bodyHtml = '<div id="tix-dashboard-root"><div class="loading">Loading dashboard...</div></div>'; break;
+      case 'orders':    bodyHtml = renderTixManagement('Orders will appear here once tickets are on sale.'); break;
+      case 'checkin':   bodyHtml = renderTixManagement('Check-in tools will be available on performance days.'); break;
+      case 'reports':   bodyHtml = renderTixManagement('Reports will generate once you have ticket sales data.'); break;
+      case 'settings':  bodyHtml = renderTixManagement('Global ticketing preferences will be available here.'); break;
+      default:          bodyHtml = '<div id="tix-dashboard-root"><div class="loading">Loading dashboard...</div></div>'; subTab = 'dashboard'; break;
     }
 
-    container.innerHTML = `<div class="vol-plan">${stepBarHtml}<div style="margin-top:1.25rem;">${bodyHtml}</div></div>`;
-    if (subTab === 'seating' && _tixSetup.seating_style === 'reserved') {
+    container.innerHTML = `<div class="vol-plan">${bodyHtml}</div>`;
+    if (subTab === 'build' && _tixBuildStep === 'seating' && _tixSetup.seating_style === 'reserved') {
       requestAnimationFrame(() => tixLoadSeatMapBuilder());
     }
     if (subTab === 'dashboard') {
@@ -74339,7 +74345,7 @@ See you soon!
     if (!_tixSetup.completed_steps) _tixSetup.completed_steps = [];
     if (!_tixSetup.completed_steps.includes('seating')) _tixSetup.completed_steps.push('seating');
     await saveTicketingSetup();
-    renderTicketingPanel('seating');
+    renderTicketingPanel('build');
   }
 
   // ── Step 2: Performances ──
@@ -74403,7 +74409,7 @@ See you soon!
     if (!_tixSetup.completed_steps) _tixSetup.completed_steps = [];
     if (!_tixSetup.completed_steps.includes('performances')) _tixSetup.completed_steps.push('performances');
     await saveTicketingSetup();
-    renderTicketingPanel('performances');
+    renderTicketingPanel('build');
   }
 
   async function tixRefreshPerformances() {
@@ -74414,7 +74420,7 @@ See you soon!
     if (!_tixSetup.completed_steps) _tixSetup.completed_steps = [];
     if (!_tixSetup.completed_steps.includes('performances')) _tixSetup.completed_steps.push('performances');
     await saveTicketingSetup();
-    renderTicketingPanel('performances');
+    renderTicketingPanel('build');
   }
 
   async function tixGenerateInventory() {
@@ -74464,7 +74470,7 @@ See you soon!
   function tixAddTicketType() {
     if (!_tixSetup.ticket_types) _tixSetup.ticket_types = [];
     _tixSetup.ticket_types.push({ id: crypto.randomUUID(), name: '', price_cents: 0, sort_order: _tixSetup.ticket_types.length });
-    renderTicketingPanel('types');
+    renderTicketingPanel('build');
   }
 
   async function tixRemoveTicketType(idx) {
@@ -74472,7 +74478,7 @@ See you soon!
     if (!_tixSetup.completed_steps) _tixSetup.completed_steps = [];
     if (_tixSetup.ticket_types.length > 0 && !_tixSetup.completed_steps.includes('types')) _tixSetup.completed_steps.push('types');
     await saveTicketingSetup();
-    renderTicketingPanel('types');
+    renderTicketingPanel('build');
   }
 
   async function tixSaveTicketType(idx, field, value) {
@@ -74544,14 +74550,14 @@ See you soon!
     if (!_tixSetup.completed_steps) _tixSetup.completed_steps = [];
     if (!_tixSetup.completed_steps.includes('discounts')) _tixSetup.completed_steps.push('discounts');
     await saveTicketingSetup();
-    renderTicketingPanel('discounts');
+    renderTicketingPanel('build');
   }
 
   function tixAddDiscount() {
     _tixSetup.discounts.push({ id: crypto.randomUUID(), name: '', type: 'percent', value: 0, code: '' });
-    renderTicketingPanel('discounts');
+    renderTicketingPanel('build');
   }
-  async function tixRemoveDiscount(idx) { _tixSetup.discounts.splice(idx, 1); await saveTicketingSetup(); renderTicketingPanel('discounts'); }
+  async function tixRemoveDiscount(idx) { _tixSetup.discounts.splice(idx, 1); await saveTicketingSetup(); renderTicketingPanel('build'); }
   async function tixSaveDiscount(idx, field, value) {
     const d = _tixSetup.discounts[idx]; if (!d) return;
     if (field === 'name') d.name = value.trim();
@@ -74563,9 +74569,9 @@ See you soon!
 
   function tixAddComp() {
     _tixSetup.comps.push({ id: crypto.randomUUID(), name: '', qty: 2 });
-    renderTicketingPanel('discounts');
+    renderTicketingPanel('build');
   }
-  async function tixRemoveComp(idx) { _tixSetup.comps.splice(idx, 1); await saveTicketingSetup(); renderTicketingPanel('discounts'); }
+  async function tixRemoveComp(idx) { _tixSetup.comps.splice(idx, 1); await saveTicketingSetup(); renderTicketingPanel('build'); }
   async function tixSaveComp(idx, field, value) {
     const c = _tixSetup.comps[idx]; if (!c) return;
     if (field === 'name') c.name = value.trim();
@@ -74613,14 +74619,14 @@ See you soon!
     if (!_tixSetup.completed_steps) _tixSetup.completed_steps = [];
     if (!_tixSetup.completed_steps.includes('blocks')) _tixSetup.completed_steps.push('blocks');
     await saveTicketingSetup();
-    renderTicketingPanel('blocks');
+    renderTicketingPanel('build');
   }
 
   function tixAddBlock() {
     _tixSetup.reserved_blocks.push({ id: crypto.randomUUID(), group_name: '', qty: 0, contact: '', notes: '' });
-    renderTicketingPanel('blocks');
+    renderTicketingPanel('build');
   }
-  async function tixRemoveBlock(idx) { _tixSetup.reserved_blocks.splice(idx, 1); await saveTicketingSetup(); renderTicketingPanel('blocks'); }
+  async function tixRemoveBlock(idx) { _tixSetup.reserved_blocks.splice(idx, 1); await saveTicketingSetup(); renderTicketingPanel('build'); }
   async function tixSaveBlock(idx, field, value) {
     const b = _tixSetup.reserved_blocks[idx]; if (!b) return;
     if (field === 'group_name') b.group_name = value.trim();
