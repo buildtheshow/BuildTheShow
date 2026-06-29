@@ -197,6 +197,7 @@
       settings:  'production-workspace.html',
       emails:    'production-workspace.html',
       test:      'production-workspace.html',
+      ticketing: 'production-workspace.html',
     };
     if (pageMap[tab]) {
       location.href = workspaceUrl(tab);
@@ -229,6 +230,10 @@
 
   window.navigateToBudget = function (sub) {
     location.href = workspaceUrl('budget', sub);
+  };
+
+  window.navigateToTicketing = function (sub) {
+    location.href = workspaceUrl('ticketing', sub);
   };
 
   window.setSidebarSubmenuState = function () {};
