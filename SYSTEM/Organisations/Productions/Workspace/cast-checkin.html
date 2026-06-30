@@ -1,0 +1,684 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" />
+  <link rel="preconnect" href="https://tkmaiktxpwqfbgeojbnf.supabase.co" />
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Cast Check-In - Build The Show</title>
+  <link rel="stylesheet" href="/ASSETS/styles/styles.css?v=typography-safe-20260421-2025" />
+  <link rel="stylesheet" href="/ASSETS/styles/production-sidebar.css?v=sidebar-v49-20260618" />
+  <style>
+    * { box-sizing: border-box; }
+    html { width: 100%; max-width: 100%; overflow-x: hidden; }
+    body { margin: 0; width: 100%; max-width: 100%; overflow-x: hidden; background: #ffffff; font-family: var(--bts-font); color: #1a1530; display: flex; flex-direction: column; min-height: 100vh; min-height: 100dvh; }
+    body.mobile-sidebar-open { overflow: hidden; }
+    .prod-main { margin-left: 220px; flex: 1; min-height: 100vh; min-height: 100dvh; padding: 2rem 2.25rem; max-width: calc(100vw - 220px); overflow-x: clip; position: relative; z-index: 0; }
+    .prod-main::before { content: ''; position: fixed; inset: 0 0 0 220px; background-image: url('/ASSETS/Images/Decrotive/Grid-purple.png'); background-repeat: repeat; background-size: 720px; opacity: 0.04; pointer-events: none; z-index: -1; }
+    .prod-main-inner { position: relative; z-index: 1; max-width: 1360px; }
+    @media (max-width: 900px) {
+      .prod-main { margin-left: 0; max-width: 100vw; width: 100%; padding: 4.5rem 1rem 2rem; }
+      .prod-main::before { inset: 0; }
+    }
+
+    /* ── Page hero ─────────────────────────────────────────────────── */
+    .ci-hero { margin-bottom: 1.75rem; }
+    .ci-hero-kicker { display: flex; align-items: center; gap: 0.5rem; font-size: 0.72rem; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: rgba(26,21,48,0.45); margin-bottom: 0.4rem; }
+    .ci-hero-kicker-dot { width: 7px; height: 7px; border-radius: 50%; background: #572e88; display: inline-block; flex-shrink: 0; }
+    .ci-hero-title { font-size: 1.7rem; font-weight: 950; color: #1a1530; margin: 0 0 0.3rem; }
+    .ci-hero-copy { font-size: 0.88rem; color: rgba(26,21,48,0.55); margin: 0; }
+
+    /* ── Two-panel layout ──────────────────────────────────────────── */
+    .ci-layout { display: flex; gap: 1.25rem; align-items: flex-start; }
+
+    /* ── Left events panel ─────────────────────────────────────────── */
+    .ci-events-panel { width: 280px; flex-shrink: 0; background: #f9f8fc; border: 1px solid rgba(87,46,136,0.12); border-radius: 14px; overflow: hidden; position: sticky; top: 1.5rem; max-height: calc(100vh - 130px); display: flex; flex-direction: column; }
+    .ci-panel-head { padding: 1rem 1rem 0.75rem; border-bottom: 1px solid rgba(87,46,136,0.1); flex-shrink: 0; }
+    .ci-panel-title { font-size: 0.72rem; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: rgba(26,21,48,0.45); margin-bottom: 0.65rem; }
+    .ci-filter-chips { display: flex; gap: 0.35rem; flex-wrap: wrap; }
+    .ci-chip { padding: 0.28rem 0.65rem; border-radius: 20px; font-size: 0.72rem; font-weight: 800; border: 1.5px solid rgba(87,46,136,0.18); background: #fff; color: rgba(26,21,48,0.55); cursor: pointer; font-family: var(--bts-font); }
+    .ci-chip.active { background: #572e88; color: #fff; border-color: #572e88; }
+    .ci-events-list { overflow-y: auto; flex: 1; padding: 0.5rem 0; }
+    .ci-date-label { padding: 0.55rem 1rem 0.2rem; font-size: 0.65rem; font-weight: 900; letter-spacing: 0.07em; text-transform: uppercase; color: rgba(26,21,48,0.38); }
+    .ci-event-row { display: flex; align-items: center; gap: 0.65rem; padding: 0.65rem 1rem; cursor: pointer; }
+    .ci-event-row:hover { background: rgba(87,46,136,0.06); }
+    .ci-event-row.selected { background: rgba(87,46,136,0.1); }
+    .ci-event-row.past .ci-event-name,
+    .ci-event-row.past .ci-event-time { opacity: 0.5; }
+    .ci-event-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+    .ci-event-row.past .ci-event-dot { opacity: 0.4; }
+    .ci-event-info { flex: 1; min-width: 0; }
+    .ci-event-name { font-size: 0.82rem; font-weight: 800; color: #1a1530; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .ci-event-time { font-size: 0.72rem; color: rgba(26,21,48,0.5); margin-top: 0.1rem; }
+    .ci-event-count { font-size: 0.7rem; font-weight: 900; color: #572e88; flex-shrink: 0; }
+
+    /* ── Right detail ──────────────────────────────────────────────── */
+    .ci-detail { flex: 1; min-width: 0; }
+    .ci-detail-empty { padding: 5rem 2rem; text-align: center; color: rgba(26,21,48,0.38); font-size: 0.88rem; line-height: 1.6; }
+    .ci-detail-empty img { display: block; margin: 0 auto 1rem; width: 44px; opacity: 0.18; }
+
+    /* ── Event header ──────────────────────────────────────────────── */
+    .ci-event-header { margin-bottom: 1.25rem; padding-bottom: 1.25rem; border-bottom: 1px solid rgba(87,46,136,0.1); }
+    .ci-event-type-pill { display: inline-flex; align-items: center; padding: 0.25rem 0.75rem; border-radius: 20px; font-size: 0.7rem; font-weight: 900; letter-spacing: 0.04em; color: #fff; margin-bottom: 0.55rem; }
+    .ci-detail-title { font-size: 1.2rem; font-weight: 950; color: #1a1530; margin: 0 0 0.4rem; }
+    .ci-detail-meta { font-size: 0.82rem; color: rgba(26,21,48,0.5); display: flex; flex-wrap: wrap; gap: 0.4rem 1.25rem; align-items: center; }
+
+    /* ── Tabs ──────────────────────────────────────────────────────── */
+    .ci-tabs { display: flex; border-bottom: 2px solid rgba(87,46,136,0.1); margin-bottom: 1.25rem; }
+    .ci-tab-btn { padding: 0.6rem 1.25rem; font-size: 0.82rem; font-weight: 800; color: rgba(26,21,48,0.45); border: none; background: none; cursor: pointer; border-bottom: 2.5px solid transparent; margin-bottom: -2px; font-family: var(--bts-font); }
+    .ci-tab-btn.active { color: #572e88; border-bottom-color: #572e88; }
+
+    /* ── Call list ─────────────────────────────────────────────────── */
+    .ci-calllist-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; flex-wrap: wrap; margin-bottom: 1rem; }
+    .ci-calllist-hint { font-size: 0.8rem; color: rgba(26,21,48,0.5); max-width: 480px; line-height: 1.5; }
+    .ci-calllist-actions { display: flex; gap: 0.6rem; align-items: center; flex-shrink: 0; }
+    .ci-btn-secondary { padding: 0.5rem 1rem; border-radius: 8px; font-size: 0.78rem; font-weight: 850; border: 1.5px solid rgba(87,46,136,0.2); background: #fff; color: #572e88; cursor: pointer; font-family: var(--bts-font); }
+    .ci-btn-primary { padding: 0.5rem 1.1rem; border-radius: 8px; font-size: 0.78rem; font-weight: 850; border: none; background: #572e88; color: #fff; cursor: pointer; font-family: var(--bts-font); }
+    .ci-btn-primary:disabled { opacity: 0.45; cursor: default; }
+    .ci-char-grid { display: flex; flex-direction: column; gap: 0.4rem; }
+    .ci-char-row { display: flex; align-items: center; gap: 0.75rem; padding: 0.65rem 0.85rem; border-radius: 10px; border: 1.5px solid rgba(87,46,136,0.12); background: #fff; cursor: pointer; user-select: none; }
+    .ci-char-row:hover { border-color: rgba(87,46,136,0.28); }
+    .ci-char-row.called { border-color: #572e88; background: rgba(87,46,136,0.04); }
+    .ci-char-checkbox { width: 18px; height: 18px; border: 2px solid rgba(87,46,136,0.3); border-radius: 4px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; transition: all 0.1s; }
+    .ci-char-row.called .ci-char-checkbox { background: #572e88; border-color: #572e88; }
+    .ci-check-icon { color: #fff; font-size: 11px; line-height: 1; }
+    .ci-char-name { font-size: 0.85rem; font-weight: 800; color: #1a1530; }
+    .ci-char-cast { font-size: 0.75rem; color: rgba(26,21,48,0.5); margin-top: 0.1rem; }
+    .ci-char-uncasted { font-size: 0.75rem; color: rgba(26,21,48,0.35); margin-top: 0.1rem; font-style: italic; }
+    .ci-empty-state { padding: 2.5rem; text-align: center; color: rgba(26,21,48,0.38); font-size: 0.85rem; }
+
+    /* ── Check-in stats ────────────────────────────────────────────── */
+    .ci-stats-bar { display: flex; gap: 0.75rem; flex-wrap: wrap; margin-bottom: 1.25rem; }
+    .ci-stat { padding: 0.6rem 1rem; background: #f9f8fc; border-radius: 10px; border: 1px solid rgba(87,46,136,0.1); text-align: center; min-width: 72px; }
+    .ci-stat-num { font-size: 1.3rem; font-weight: 950; color: #1a1530; line-height: 1; }
+    .ci-stat-label { font-size: 0.65rem; font-weight: 800; letter-spacing: 0.05em; text-transform: uppercase; color: rgba(26,21,48,0.38); margin-top: 0.2rem; }
+    .ci-stat.s-present .ci-stat-num { color: #469b42; }
+    .ci-stat.s-conflict .ci-stat-num { color: #b87b0e; }
+
+    /* ── Search ────────────────────────────────────────────────────── */
+    .ci-search-wrap { margin-bottom: 1rem; position: relative; }
+    .ci-search-wrap img { position: absolute; left: 0.72rem; top: 50%; transform: translateY(-50%); width: 15px; height: 15px; opacity: 0.32; pointer-events: none; }
+    .ci-search { width: 100%; padding: 0.6rem 0.75rem 0.6rem 2.2rem; border: 1.5px solid rgba(87,46,136,0.18); border-radius: 8px; font-size: 0.85rem; font-family: var(--bts-font); color: #1a1530; outline: none; }
+    .ci-search:focus { border-color: #572e88; }
+
+    /* ── Person list ───────────────────────────────────────────────── */
+    .ci-group-label { font-size: 0.65rem; font-weight: 900; letter-spacing: 0.07em; text-transform: uppercase; color: rgba(26,21,48,0.35); padding: 0.85rem 0 0.4rem; }
+    .ci-person-list { display: flex; flex-direction: column; gap: 0.45rem; }
+    .ci-person-card { display: flex; align-items: center; gap: 0.85rem; padding: 0.85rem 1rem; border-radius: 12px; border: 1.5px solid rgba(87,46,136,0.1); background: #fff; }
+    .ci-person-card.is-present { border-color: rgba(70,155,66,0.3); background: rgba(70,155,66,0.04); }
+    .ci-person-card.has-conflict { border-color: rgba(239,171,69,0.4); }
+    .ci-avatar { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; flex-shrink: 0; background: #efefef; }
+    .ci-avatar-init { width: 40px; height: 40px; border-radius: 50%; background: #572e88; color: #fff; font-size: 0.78rem; font-weight: 900; display: flex; align-items: center; justify-content: center; flex-shrink: 0; letter-spacing: 0.02em; }
+    .ci-person-info { flex: 1; min-width: 0; }
+    .ci-person-name { font-size: 0.88rem; font-weight: 850; color: #1a1530; }
+    .ci-person-sub { font-size: 0.75rem; color: rgba(26,21,48,0.5); margin-top: 0.1rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .ci-person-badges { display: flex; gap: 0.35rem; flex-wrap: wrap; margin-top: 0.3rem; }
+    .ci-badge { padding: 0.16rem 0.5rem; border-radius: 20px; font-size: 0.63rem; font-weight: 900; letter-spacing: 0.04em; }
+    .ci-badge-cast { background: rgba(87,46,136,0.1); color: #572e88; }
+    .ci-badge-vol { background: rgba(118,158,123,0.15); color: #4a7e50; }
+    .ci-badge-conflict { background: rgba(239,171,69,0.2); color: #8a5e0a; }
+    .ci-badge-reg { background: rgba(116,162,180,0.15); color: #2c6f84; }
+    .ci-checkin-col { display: flex; flex-direction: column; align-items: flex-end; gap: 0.25rem; flex-shrink: 0; }
+    .ci-checkin-btn { padding: 0.45rem 0.9rem; border-radius: 8px; border: 1.5px solid rgba(87,46,136,0.22); background: #fff; color: #572e88; font-size: 0.75rem; font-weight: 850; cursor: pointer; font-family: var(--bts-font); white-space: nowrap; }
+    .ci-checkin-btn:hover { background: rgba(87,46,136,0.06); }
+    .ci-person-card.is-present .ci-checkin-btn { background: #469b42; color: #fff; border-color: #469b42; }
+    .ci-checkin-time { font-size: 0.65rem; color: rgba(26,21,48,0.4); white-space: nowrap; }
+
+    @media (max-width: 900px) {
+      .ci-layout { flex-direction: column; }
+      .ci-events-panel { width: 100%; position: static; max-height: 260px; }
+    }
+  </style>
+</head>
+<body>
+  <div id="prod-sidebar-host"></div>
+  <div class="prod-main">
+    <div class="prod-main-inner">
+
+      <div class="ci-hero">
+        <div class="ci-hero-kicker">
+          <span class="ci-hero-kicker-dot" aria-hidden="true"></span>
+          Cast
+        </div>
+        <h1 class="ci-hero-title">Check-In</h1>
+        <p class="ci-hero-copy">Set call lists for each event and track who shows up to rehearsals, tech, and performances.</p>
+      </div>
+
+      <div class="ci-layout">
+
+        <!-- Left: events list -->
+        <div class="ci-events-panel">
+          <div class="ci-panel-head">
+            <div class="ci-panel-title">Events</div>
+            <div class="ci-filter-chips">
+              <button class="ci-chip" id="chip-today"    onclick="setFilter('today')">Today</button>
+              <button class="ci-chip" id="chip-upcoming" onclick="setFilter('upcoming')">Upcoming</button>
+              <button class="ci-chip" id="chip-all"      onclick="setFilter('all')">All</button>
+              <button class="ci-chip" id="chip-past"     onclick="setFilter('past')">Past</button>
+            </div>
+          </div>
+          <div class="ci-events-list" id="ci-events-list">
+            <div style="padding:1.5rem;text-align:center;color:rgba(26,21,48,0.4);font-size:0.82rem;">Loading...</div>
+          </div>
+        </div>
+
+        <!-- Right: event detail -->
+        <div class="ci-detail" id="ci-detail">
+          <div class="ci-detail-empty" id="ci-detail-empty">
+            <img src="/ASSETS/Images/Icons/Zeus-Calendar.svg?v=20260617" alt="" />
+            Select an event to set the call list and check people in.
+          </div>
+          <div id="ci-detail-inner" style="display:none">
+            <div class="ci-event-header" id="ci-event-header"></div>
+            <div class="ci-tabs">
+              <button class="ci-tab-btn active" id="tab-calllist" onclick="switchTab('calllist')">Call List</button>
+              <button class="ci-tab-btn"         id="tab-checkin"  onclick="switchTab('checkin')">Check-In</button>
+            </div>
+            <div id="ci-calllist-panel"></div>
+            <div id="ci-checkin-panel" style="display:none"></div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="/SHARED/Navigation/production-sidebar-nav.js?v=28"></script>
+  <script>
+  'use strict';
+
+  const SUPA_URL = 'https://tkmaiktxpwqfbgeojbnf.supabase.co';
+  const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRrbWFpa3R4cHdxZmJnZW9qYm5mIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM3MzE4MTcsImV4cCI6MjA4OTMwNzgxN30.TkTZBNWUatk3Y6Vmfv1hIRR3DfVjgwauwa76Pf00J_8';
+
+  const CHECKIN_TYPES = ['rehearsal','music_rehearsal','choreography','tech','dress','performance','meeting','event','cast_party','strike'];
+
+  const EVENT_COLOURS = {
+    rehearsal:'#7fcae3', music_rehearsal:'#7fcae3', choreography:'#7fcae3',
+    tech:'#7ac177', dress:'#469b42', performance:'#2b6529',
+    strike:'#7497e7', cast_party:'#aa2943', event:'#aa2943', meeting:'#7b7b7b',
+  };
+
+  const EVENT_LABELS = {
+    rehearsal:'Rehearsal', music_rehearsal:'Music Rehearsal', choreography:'Choreography',
+    tech:'Tech', dress:'Dress Rehearsal', performance:'Performance',
+    strike:'Strike', cast_party:'Cast Party', event:'Event', meeting:'Meeting',
+  };
+
+  let _sb, _prodId;
+  let _events = [], _chars = [], _assignments = [], _volunteers = [];
+  let _people = {};
+  let _selectedEvent = null;
+  let _activeTab = 'calllist';
+  let _filter = 'today';
+  let _searchQuery = '';
+  let _pendingCallIds = new Set();
+  let _callListDirty = false;
+
+  window.initProductionPage('cast');
+
+  document.addEventListener('DOMContentLoaded', async function () {
+    _sb = supabase.createClient(SUPA_URL, SUPA_KEY);
+    const params = new URLSearchParams(window.location.search);
+    _prodId = params.get('id') || '';
+    if (!_prodId) {
+      document.getElementById('ci-events-list').innerHTML = '<div style="padding:1.5rem;color:#d1523d;font-size:0.82rem;">No production ID in URL.</div>';
+      return;
+    }
+    await loadData();
+    // Default to today; fall back to upcoming if nothing today
+    const today = todayDate();
+    const hasToday = _events.some(e => e.start_time?.slice(0, 10) === today);
+    setFilter(hasToday ? 'today' : 'upcoming');
+    // Auto-select first today event
+    const firstToday = _events.find(e => e.start_time?.slice(0, 10) === today);
+    if (firstToday) selectEvent(firstToday.id);
+  });
+
+  // ── Data loading ───────────────────────────────────────────────────
+  async function loadData() {
+    const [evRes, chRes, asRes] = await Promise.all([
+      _sb.from('production_events')
+        .select('id,title,event_type,start_time,end_time,venue,called_character_ids,event_checkins')
+        .eq('production_id', _prodId)
+        .in('event_type', CHECKIN_TYPES)
+        .order('start_time'),
+      _sb.from('production_characters')
+        .select('id,name,sort_order')
+        .eq('production_id', _prodId)
+        .order('sort_order'),
+      _sb.from('casting_assignments')
+        .select('id,character_id,applicant_id,state')
+        .eq('production_id', _prodId)
+        .eq('state', 'chosen'),
+    ]);
+    _events      = evRes.data || [];
+    _chars       = chRes.data || [];
+    _assignments = asRes.data || [];
+
+    const appIds = [...new Set(_assignments.map(a => a.applicant_id).filter(Boolean))];
+    const volsQuery = _sb.from('volunteer_signups')
+      .select('id,name,email,role_name,shift_date,required_dates,status')
+      .eq('production_id', _prodId)
+      .in('status', ['approved', 'checked_in', 'completed']);
+
+    if (appIds.length) {
+      const [appsRes, booksRes, volsRes] = await Promise.all([
+        _sb.from('audition_applications').select('id,name,headshot_url,date_conflicts').in('id', appIds),
+        _sb.from('audition_bookings').select('id,name,headshot_url').in('id', appIds),
+        volsQuery,
+      ]);
+      (appsRes.data || []).forEach(a => {
+        _people[a.id] = { name: a.name, headshot_url: a.headshot_url, date_conflicts: a.date_conflicts };
+      });
+      (booksRes.data || []).forEach(b => {
+        if (!_people[b.id]) _people[b.id] = { name: b.name, headshot_url: b.headshot_url, date_conflicts: null };
+      });
+      _volunteers = volsRes.data || [];
+    } else {
+      const volsRes = await volsQuery;
+      _volunteers = volsRes.data || [];
+    }
+  }
+
+  // ── Date helpers ───────────────────────────────────────────────────
+  function todayDate() { return new Date().toISOString().slice(0, 10); }
+
+  function fmtEventDate(ts) {
+    if (!ts) return '';
+    return new Date(ts).toLocaleDateString('en-CA', { weekday: 'long', month: 'long', day: 'numeric' });
+  }
+
+  function fmtTime(ts) {
+    if (!ts) return '';
+    return new Date(ts).toLocaleTimeString('en-CA', { hour: 'numeric', minute: '2-digit', hour12: true });
+  }
+
+  function fmtDateGroupLabel(dateStr) {
+    const today = todayDate();
+    const diff = Math.round((new Date(dateStr) - new Date(today)) / 86400000);
+    if (diff === 0) return 'Today';
+    if (diff === 1) return 'Tomorrow';
+    if (diff === -1) return 'Yesterday';
+    return new Date(dateStr + 'T12:00:00').toLocaleDateString('en-CA', { weekday: 'long', month: 'long', day: 'numeric' });
+  }
+
+  function isPast(ev) {
+    const end = ev.end_time || ev.start_time;
+    return end ? new Date(end) < new Date() : false;
+  }
+
+  // ── Event list ─────────────────────────────────────────────────────
+  function setFilter(f) {
+    _filter = f;
+    document.querySelectorAll('.ci-chip').forEach(c => c.classList.remove('active'));
+    const chip = document.getElementById('chip-' + f);
+    if (chip) chip.classList.add('active');
+    renderEventList();
+  }
+
+  function filteredEvents() {
+    const today = todayDate();
+    if (_filter === 'today')    return _events.filter(e => e.start_time?.slice(0, 10) === today);
+    if (_filter === 'upcoming') return _events.filter(e => (e.start_time?.slice(0, 10) || '') >= today);
+    if (_filter === 'past')     return _events.filter(e => (e.start_time?.slice(0, 10) || '') < today).reverse();
+    return _events;
+  }
+
+  function renderEventList() {
+    const el = document.getElementById('ci-events-list');
+    const evs = filteredEvents();
+    if (!evs.length) {
+      el.innerHTML = '<div style="padding:1.5rem;text-align:center;color:rgba(26,21,48,0.4);font-size:0.82rem;">No events found.</div>';
+      return;
+    }
+    const groups = {};
+    evs.forEach(e => {
+      const d = e.start_time?.slice(0, 10) || 'unknown';
+      (groups[d] = groups[d] || []).push(e);
+    });
+    let html = '';
+    Object.keys(groups).sort().forEach(function (dateStr) {
+      html += '<div class="ci-date-label">' + esc(fmtDateGroupLabel(dateStr)) + '</div>';
+      groups[dateStr].forEach(function (e) {
+        const colour  = EVENT_COLOURS[e.event_type] || '#572e88';
+        const past    = isPast(e) ? ' past' : '';
+        const sel     = _selectedEvent?.id === e.id ? ' selected' : '';
+        const checkins = e.event_checkins || [];
+        const attendees = resolveAttendees(e);
+        const total = attendees.length;
+        const present = checkins.filter(c => c.checked_in).length;
+        const count = total > 0 ? '<div class="ci-event-count">' + present + '/' + total + '</div>' : '';
+        html +=
+          '<div class="ci-event-row' + past + sel + '" onclick="selectEvent(\'' + e.id + '\')">' +
+            '<div class="ci-event-dot" style="background:' + colour + '"></div>' +
+            '<div class="ci-event-info">' +
+              '<div class="ci-event-name">' + esc(e.title || EVENT_LABELS[e.event_type] || 'Event') + '</div>' +
+              '<div class="ci-event-time">' + esc(fmtTime(e.start_time)) + (e.end_time ? ' – ' + fmtTime(e.end_time) : '') + '</div>' +
+            '</div>' +
+            count +
+          '</div>';
+      });
+    });
+    el.innerHTML = html;
+  }
+
+  // ── Event selection ────────────────────────────────────────────────
+  function selectEvent(id) {
+    _selectedEvent = _events.find(e => e.id === id) || null;
+    if (!_selectedEvent) return;
+    _pendingCallIds = new Set(_selectedEvent.called_character_ids || []);
+    _callListDirty = false;
+    _searchQuery = '';
+    document.getElementById('ci-detail-empty').style.display = 'none';
+    document.getElementById('ci-detail-inner').style.display = '';
+    renderEventList();
+    renderEventHeader();
+    switchTab(_activeTab, true);
+  }
+
+  function renderEventHeader() {
+    const e = _selectedEvent;
+    const colour = EVENT_COLOURS[e.event_type] || '#572e88';
+    const label  = EVENT_LABELS[e.event_type]  || 'Event';
+    const timeStr = e.start_time
+      ? fmtTime(e.start_time) + (e.end_time ? ' – ' + fmtTime(e.end_time) : '')
+      : '';
+    document.getElementById('ci-event-header').innerHTML =
+      '<div class="ci-event-type-pill" style="background:' + colour + '">' + esc(label) + '</div>' +
+      '<div class="ci-detail-title">' + esc(e.title || label) + '</div>' +
+      '<div class="ci-detail-meta">' +
+        '<span>' + esc(fmtEventDate(e.start_time)) + '</span>' +
+        (timeStr ? '<span>' + esc(timeStr) + '</span>' : '') +
+        (e.venue ? '<span>' + esc(e.venue) + '</span>' : '') +
+      '</div>';
+  }
+
+  function switchTab(tab, force) {
+    if (!force && tab === _activeTab) return;
+    _activeTab = tab;
+    document.querySelectorAll('.ci-tab-btn').forEach(b => b.classList.remove('active'));
+    const btn = document.getElementById('tab-' + tab);
+    if (btn) btn.classList.add('active');
+    document.getElementById('ci-calllist-panel').style.display = tab === 'calllist' ? '' : 'none';
+    document.getElementById('ci-checkin-panel').style.display  = tab === 'checkin'  ? '' : 'none';
+    if (tab === 'calllist') renderCallList();
+    else renderCheckinPanel();
+  }
+
+  // ── Call list ──────────────────────────────────────────────────────
+  function renderCallList() {
+    const panel = document.getElementById('ci-calllist-panel');
+    if (!_chars.length) {
+      panel.innerHTML = '<div class="ci-empty-state">No characters set up for this production yet.</div>';
+      return;
+    }
+    // Map character_id → cast person names
+    const castMap = {};
+    _assignments.forEach(function (a) {
+      const person = _people[a.applicant_id];
+      if (!castMap[a.character_id]) castMap[a.character_id] = [];
+      if (person?.name) castMap[a.character_id].push(person.name);
+    });
+
+    const rows = _chars.map(function (c) {
+      const called = _pendingCallIds.has(c.id);
+      const names  = (castMap[c.id] || []);
+      const castLine = names.length
+        ? '<div class="ci-char-cast">Cast: ' + esc(names.join(', ')) + '</div>'
+        : '<div class="ci-char-uncasted">Not yet cast</div>';
+      return '<div class="ci-char-row' + (called ? ' called' : '') + '" onclick="toggleCharCall(\'' + c.id + '\')">' +
+        '<div class="ci-char-checkbox">' + (called ? '<span class="ci-check-icon">&#10003;</span>' : '') + '</div>' +
+        '<div>' +
+          '<div class="ci-char-name">' + esc(c.name) + '</div>' +
+          castLine +
+        '</div>' +
+      '</div>';
+    }).join('');
+
+    const calledCount = _pendingCallIds.size;
+    panel.innerHTML =
+      '<div class="ci-calllist-top">' +
+        '<div class="ci-calllist-hint">Tick which characters are called to this event. The Check-In tab will show the matching cast members plus any volunteers scheduled for this date.</div>' +
+        '<div class="ci-calllist-actions">' +
+          '<button class="ci-btn-secondary" onclick="selectAllChars()">Select All</button>' +
+          '<button class="ci-btn-primary" id="ci-save-btn" onclick="saveCallList()" ' + (_callListDirty ? '' : 'disabled') + '>' +
+            'Save' + (calledCount ? ' (' + calledCount + ')' : '') +
+          '</button>' +
+        '</div>' +
+      '</div>' +
+      '<div class="ci-char-grid">' + rows + '</div>';
+  }
+
+  function toggleCharCall(charId) {
+    if (_pendingCallIds.has(charId)) _pendingCallIds.delete(charId);
+    else _pendingCallIds.add(charId);
+    _callListDirty = true;
+    renderCallList();
+  }
+
+  function selectAllChars() {
+    const allIds = _chars.map(c => c.id);
+    const allSelected = allIds.every(id => _pendingCallIds.has(id));
+    if (allSelected) {
+      _pendingCallIds.clear();
+    } else {
+      allIds.forEach(id => _pendingCallIds.add(id));
+    }
+    _callListDirty = true;
+    renderCallList();
+  }
+
+  async function saveCallList() {
+    const btn = document.getElementById('ci-save-btn');
+    if (btn) { btn.disabled = true; btn.textContent = 'Saving...'; }
+
+    const calledIds = [..._pendingCallIds];
+    const tmpEv = { ..._selectedEvent, called_character_ids: calledIds };
+    const attendees = resolveAttendees(tmpEv);
+    const merged = mergeCheckins(_selectedEvent.event_checkins || [], attendees);
+
+    const { error } = await _sb.from('production_events')
+      .update({ called_character_ids: calledIds, event_checkins: merged })
+      .eq('id', _selectedEvent.id);
+
+    if (error) {
+      if (btn) { btn.disabled = false; btn.textContent = 'Save'; }
+      alert('Could not save. Try again.');
+      return;
+    }
+    _selectedEvent.called_character_ids = calledIds;
+    _selectedEvent.event_checkins = merged;
+    _events = _events.map(e => e.id === _selectedEvent.id ? _selectedEvent : e);
+    _callListDirty = false;
+    renderCallList();
+    renderEventList();
+  }
+
+  function mergeCheckins(existing, attendees) {
+    const existingMap = {};
+    (existing || []).forEach(c => { existingMap[c.id] = c; });
+    return attendees.map(a => existingMap[a.id]
+      ? { ...existingMap[a.id], name: a.name }
+      : { id: a.id, type: a.type, name: a.name, checked_in: false, checked_in_at: null }
+    );
+  }
+
+  // ── Check-in panel ─────────────────────────────────────────────────
+  function renderCheckinPanel() {
+    const panel = document.getElementById('ci-checkin-panel');
+    const attendees = resolveAttendees(_selectedEvent);
+    const checkins  = _selectedEvent.event_checkins || [];
+
+    if (!attendees.length) {
+      panel.innerHTML = '<div class="ci-empty-state">No one is called to this event yet. Set up the call list first.</div>';
+      return;
+    }
+
+    const present       = attendees.filter(a => getCheckinState(checkins, a.id).checked_in).length;
+    const conflictCount = attendees.filter(a => a.has_conflict).length;
+
+    let html =
+      '<div class="ci-stats-bar">' +
+        '<div class="ci-stat"><div class="ci-stat-num">' + attendees.length + '</div><div class="ci-stat-label">Expected</div></div>' +
+        '<div class="ci-stat s-present"><div class="ci-stat-num">' + present + '</div><div class="ci-stat-label">Here</div></div>' +
+        '<div class="ci-stat"><div class="ci-stat-num">' + (attendees.length - present) + '</div><div class="ci-stat-label">Not Yet</div></div>' +
+        (conflictCount ? '<div class="ci-stat s-conflict"><div class="ci-stat-num">' + conflictCount + '</div><div class="ci-stat-label">Conflicts</div></div>' : '') +
+      '</div>' +
+      '<div class="ci-search-wrap">' +
+        '<img src="/ASSETS/Images/Icons/Search.svg?v=20260617" alt="" />' +
+        '<input class="ci-search" type="text" placeholder="Search by name..." value="' + esc(_searchQuery) + '" oninput="onSearch(this.value)" />' +
+      '</div>';
+
+    const q = _searchQuery.toLowerCase();
+    const filtered = q ? attendees.filter(a => (a.name || '').toLowerCase().includes(q)) : attendees;
+
+    const castList = filtered.filter(a => a.type === 'cast');
+    const volList  = filtered.filter(a => a.type === 'volunteer');
+
+    html += '<div class="ci-person-list">';
+    if (castList.length) {
+      html += '<div class="ci-group-label">Cast</div>';
+      castList.forEach(a => { html += personCardHtml(a, getCheckinState(checkins, a.id)); });
+    }
+    if (volList.length) {
+      html += '<div class="ci-group-label">Volunteers</div>';
+      volList.forEach(a => { html += personCardHtml(a, getCheckinState(checkins, a.id)); });
+    }
+    if (!filtered.length) html += '<div class="ci-empty-state">No results.</div>';
+    html += '</div>';
+
+    panel.innerHTML = html;
+  }
+
+  function personCardHtml(a, state) {
+    const present  = state.checked_in;
+    const initials = (a.name || '?').split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase();
+    const avatar   = a.headshot_url
+      ? '<img class="ci-avatar" src="' + esc(a.headshot_url) + '" alt="" />'
+      : '<div class="ci-avatar-init">' + esc(initials) + '</div>';
+    const sub = a.type === 'cast'
+      ? (a.characters || []).join(', ')
+      : (a.role_name || 'Volunteer');
+    const badges =
+      (a.type === 'cast'      ? '<span class="ci-badge ci-badge-cast">Cast</span>' : '') +
+      (a.type === 'volunteer' ? '<span class="ci-badge ci-badge-vol">Volunteer</span>' : '') +
+      (a.has_conflict         ? '<span class="ci-badge ci-badge-conflict">Conflict Submitted</span>' : '') +
+      (a.is_registered        ? '<span class="ci-badge ci-badge-reg">Registered</span>' : '');
+    const btnText = present ? '&#10003; Here' : 'Check In';
+    const timeStr = present && state.checked_in_at ? fmtTime(state.checked_in_at) : '';
+
+    return '<div class="ci-person-card' + (present ? ' is-present' : '') + (a.has_conflict ? ' has-conflict' : '') + '">' +
+      avatar +
+      '<div class="ci-person-info">' +
+        '<div class="ci-person-name">' + esc(a.name || 'Unknown') + '</div>' +
+        (sub ? '<div class="ci-person-sub">' + esc(sub) + '</div>' : '') +
+        (badges ? '<div class="ci-person-badges">' + badges + '</div>' : '') +
+      '</div>' +
+      '<div class="ci-checkin-col">' +
+        '<button class="ci-checkin-btn" onclick="toggleCheckin(\'' + esc(a.id) + '\',\'' + esc(a.name || '') + '\')">' + btnText + '</button>' +
+        (timeStr ? '<div class="ci-checkin-time">' + esc(timeStr) + '</div>' : '') +
+      '</div>' +
+    '</div>';
+  }
+
+  function onSearch(val) {
+    _searchQuery = val;
+    renderCheckinPanel();
+  }
+
+  // ── Attendee resolution ────────────────────────────────────────────
+  function resolveAttendees(ev) {
+    const calledIds = new Set(ev.called_character_ids || []);
+    // Deduplicate cast by applicant_id (one person may play multiple called characters)
+    const personMap = {};
+    _assignments
+      .filter(a => calledIds.has(a.character_id))
+      .forEach(function (a) {
+        const person = _people[a.applicant_id] || { name: 'Unknown' };
+        const char   = _chars.find(c => c.id === a.character_id);
+        if (!personMap[a.applicant_id]) {
+          personMap[a.applicant_id] = {
+            id:           a.applicant_id,
+            type:         'cast',
+            name:         person.name || 'Unknown',
+            headshot_url: person.headshot_url || null,
+            characters:   [],
+            has_conflict: checkConflict(person.date_conflicts, ev),
+          };
+        }
+        if (char) personMap[a.applicant_id].characters.push(char.name);
+      });
+    const castList = Object.values(personMap);
+
+    // Volunteers scheduled for this event's date
+    const evDate = ev.start_time?.slice(0, 10) || '';
+    const volList = _volunteers
+      .filter(function (v) {
+        const extra = Array.isArray(v.required_dates) ? v.required_dates : [];
+        return v.shift_date === evDate || extra.includes(evDate);
+      })
+      .map(function (v) {
+        return {
+          id:           v.id,
+          type:         'volunteer',
+          name:         v.name || v.email || 'Volunteer',
+          headshot_url: null,
+          characters:   [],
+          role_name:    v.role_name || '',
+          has_conflict: false,
+        };
+      });
+
+    return [...castList, ...volList].sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+  }
+
+  function checkConflict(dateConflicts, ev) {
+    if (!dateConflicts) return false;
+    const raw = typeof dateConflicts === 'string'
+      ? (() => { try { return JSON.parse(dateConflicts) || {}; } catch { return {}; } })()
+      : (dateConflicts || {});
+    // Match by event ID (set when the performer filled out the booking wizard)
+    const byId = raw[ev.id];
+    if (byId === true || byId?.conflict === true) return true;
+    // Fallback: match by date
+    const evDate = ev.start_time?.slice(0, 10);
+    if (!evDate) return false;
+    return Object.values(raw).some(v => typeof v === 'object' && v?.date === evDate && v?.conflict === true);
+  }
+
+  function getCheckinState(checkins, id) {
+    return (checkins || []).find(c => c.id === id) || { checked_in: false, checked_in_at: null };
+  }
+
+  // ── Check-in toggle ────────────────────────────────────────────────
+  async function toggleCheckin(attendeeId, attendeeName) {
+    if (!_selectedEvent) return;
+    const checkins = [...(_selectedEvent.event_checkins || [])];
+    const idx = checkins.findIndex(c => c.id === attendeeId);
+    const now = new Date().toISOString();
+    if (idx >= 0) {
+      const wasIn = checkins[idx].checked_in;
+      checkins[idx] = { ...checkins[idx], checked_in: !wasIn, checked_in_at: !wasIn ? now : null };
+    } else {
+      checkins.push({ id: attendeeId, name: attendeeName, checked_in: true, checked_in_at: now });
+    }
+    const { error } = await _sb.from('production_events')
+      .update({ event_checkins: checkins })
+      .eq('id', _selectedEvent.id);
+    if (!error) {
+      _selectedEvent.event_checkins = checkins;
+      _events = _events.map(e => e.id === _selectedEvent.id ? _selectedEvent : e);
+      renderCheckinPanel();
+      renderEventList();
+    }
+  }
+
+  function esc(s) {
+    const d = document.createElement('div');
+    d.textContent = String(s ?? '');
+    return d.innerHTML;
+  }
+  </script>
+</body>
+</html>
