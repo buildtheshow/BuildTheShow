@@ -30,12 +30,14 @@
 
     /* ── Shell layout: sidebar + iframe ────────────────────────────── */
     .pr-shell { display: flex; height: 100vh; overflow: hidden; }
-    /* Override production-sidebar.css which sets position:fixed — must stay in flex flow */
-    .pr-sidebar-wrap { position: relative !important; width: 220px; flex-shrink: 0; height: 100vh; overflow-y: auto; display: flex; flex-direction: column; }
+    /* The real production-sidebar.html partial gets injected here verbatim.
+       Override production-sidebar.css which sets position:fixed — must stay in flex flow. */
+    #prod-sidebar-host { width: 220px; flex-shrink: 0; height: 100vh; overflow-y: auto; }
+    #prod-sidebar-host .prod-sidebar { position: relative !important; height: 100vh; }
     .pr-frame-wrap { flex: 1; height: 100vh; overflow: hidden; position: relative; }
     #portal-frame { width: 100%; height: 100%; border: none; display: block; background: #f5f4f8; }
 
-    /* ── Sidebar footer links ──────────────────────────────────────── */
+    /* ── Sidebar footer links (appended into the injected sidebar) ──── */
     .pr-sidebar-standard-links { border-top: 1px solid rgba(255,255,255,0.1); }
     .pr-sidebar-standard-link { min-height: 52px; width: 100%; display: flex; align-items: center; gap: 0.72rem; padding: 0.85rem 1.25rem; border: 0; border-bottom: 1px solid rgba(255,255,255,0.1); background: transparent; color: rgba(255,255,255,0.78); text-decoration: none; font-family: var(--bts-font,'Inter',sans-serif); font-size: 0.84rem; font-weight: 850; line-height: 1.15; text-align: left; cursor: pointer; }
     .pr-sidebar-standard-link:hover { background: rgba(255,255,255,0.08); color: #fff; }
@@ -45,18 +47,6 @@
     .pr-sidebar-org-logo img { display: block; max-width: 150px; max-height: 54px; object-fit: contain; }
     .pr-sidebar-forget { display: block; width: 100%; margin-top: 1.05rem; padding: 0; border: 0; background: transparent; color: rgba(255,255,255,0.48); font: inherit; font-size: 0.72rem; font-weight: 800; line-height: 1.3; text-align: left; text-decoration: underline; cursor: pointer; }
     .pr-sidebar-forget:hover { color: rgba(255,255,255,0.75); }
-
-    /* ── Force portal nav to match production sidebar exactly ──────── */
-    /* Higher specificity via #pr-nav ID ensures these win over any class-only rule */
-    #pr-nav .sidebar-group-items .prod-tab {
-      padding-left: 2.5rem;
-      font-weight: 400;
-      font-size: 0.81rem;
-    }
-    #pr-nav .prod-sub-item {
-      padding-left: 3.25rem;
-      font-weight: 300;
-    }
   </style>
 </head>
 <body>
@@ -83,28 +73,8 @@
 <!-- Portal shell: sidebar + iframe -->
 <div class="pr-shell" id="pr-shell" style="display:none">
 
-  <!-- Sidebar -->
-  <div class="pr-sidebar-wrap prod-sidebar" id="prod-sidebar">
-    <div class="sidebar-top">
-      <img src="/ASSETS/Images/LogoBrand/logo-long-white.png" alt="Build The Show" class="sidebar-logo-img" />
-    </div>
-    <div class="sidebar-poster hidden" id="pr-sidebar-poster"></div>
-    <div class="sidebar-prod">
-      <div class="sidebar-prod-title" id="pr-sidebar-title">Loading...</div>
-      <div class="sidebar-prod-sub" id="pr-sidebar-sub"></div>
-    </div>
-    <nav class="prod-tabs" id="pr-nav"></nav>
-    <div class="pr-sidebar-standard-links">
-      <a class="pr-sidebar-standard-link" id="pr-volunteer-link" href="#" target="_blank" rel="noopener">
-        <img src="/ASSETS/Images/Icons/Volunteers.svg?v=20260617" alt="" aria-hidden="true" />
-        <span>Volunteer Opportunities</span>
-      </a>
-    </div>
-    <div class="pr-sidebar-footer">
-      <div class="pr-sidebar-org-logo" id="pr-sidebar-org-logo">Build The Show</div>
-      <button class="pr-sidebar-forget" type="button" onclick="prForgetDevice()">Not you? Forget this device.</button>
-    </div>
-  </div>
+  <!-- Sidebar: the real shared partial is fetched and injected here verbatim -->
+  <div id="prod-sidebar-host"></div>
 
   <!-- Content iframe -->
   <div class="pr-frame-wrap">
@@ -114,6 +84,7 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="/SHARED/Navigation/production-sidebar-nav.js?v=27"></script>
 <script>
 'use strict';
 
@@ -172,68 +143,42 @@ const MODULE_CONFIG = {
   'hours':               { page: 'volunteers.html' },
 };
 
-// ── Full nav structure — mirrors the regular production sidebar exactly ─
-// Only groups where the role has at least one accessible key are shown.
-// All items within those groups render; inaccessible ones are dimmed.
-const FULL_NAV = [
-  {
-    name: 'Overview', icon: 'navoverview.svg',
-    items: [
-      { key: 'org-dashboard', label: 'Dashboard' },
-    ]
-  },
-  {
-    name: 'Plan', icon: 'navproductioncalendar.svg',
-    items: [
-      { key: 'plan-dashboard', label: 'Dashboard' },
-      { key: 'plan-timeline',  label: 'Producer Timeline' },
-      { key: 'plan-team',      label: 'Team' },
-      { key: 'plan-calendar',  label: 'Calendar' },
-      { key: 'plan-script',    label: 'Script Breakdown' },
-      { key: 'plan-files',     label: 'Files' },
-      { key: 'plan-setup',     label: 'Production Setup' },
-    ]
-  },
-  {
-    name: 'Cast', icon: 'Star.svg',
-    items: [
-      { key: 'cast-dashboard', label: 'Dashboard' },
-      { subgroup: 'Auditions', items: [
-        { key: 'aud-dashboard',  label: 'Dashboard' },
-        { key: 'aud-schedule',   label: 'Audition Schedule' },
-        { key: 'aud-performers', label: 'All Performers' },
-        { key: 'aud-selftapes',  label: 'Self Tapes' },
-        { key: 'aud-setup',      label: 'Settings' },
-      ]},
-      { subgroup: 'Casting', items: [
-        { key: 'cast-board-dash', label: 'Dashboard' },
-        { key: 'cast-board',      label: 'Casting Board' },
-      ]},
-      { subgroup: 'Registration', items: [
-        { key: 'reg-dashboard', label: 'Dashboard' },
-        { key: 'reg-form',      label: 'Registration Form' },
-        { key: 'reg-status',    label: 'Status' },
-        { key: 'reg-settings',  label: 'Settings' },
-      ]},
-    ]
-  },
-  {
-    name: 'Financials', icon: 'Budgeting-total-spent-cad-usd.svg',
-    items: [
-      { key: 'fin-dashboard',   label: 'Dashboard' },
-      { key: 'budgeting',       label: 'Budgeting' },
-      { key: 'budget-receipts', label: 'Receipts' },
-      { key: 'fin-reports',     label: 'Reports' },
-    ]
-  },
-  {
-    name: 'Volunteers', icon: 'page-volunteers.svg',
-    items: [
-      { key: 'shifts', label: 'My Shifts' },
-      { key: 'hours',  label: 'Hours Log' },
-    ]
-  },
-];
+// ── Maps from the REAL shared sidebar partial's elements to module keys ──
+// The portal injects SHARED/Navigation/production-sidebar.html verbatim, then
+// uses these maps to show/hide the actual elements — same elements, same
+// CSS, same behaviour as the regular production sidebar. No parallel markup.
+//
+// Items with a stable id in the partial are matched by id. Plain direct
+// items (Overview/Plan/Financials) are matched by the page filename in
+// their onclick="btsProdNav('...')" attribute.
+const ID_TO_KEY = {
+  'cast-group-dashboard-nav': 'cast-dashboard',
+  'asub-dashboard':    'aud-dashboard',
+  'asub-audschedule':  'aud-schedule',
+  'asub-allperformers':'aud-performers',
+  'asub-selftapes':    'aud-selftapes',
+  'asub-setup':        'aud-setup',
+  'csub-dashboard':    'cast-board-dash',
+  'csub-castingboard': 'cast-board',
+  'rsub-dashboard':    'reg-dashboard',
+  'rsub-publicview':   'reg-form',
+  'rsub-payments':     'reg-status',
+  'rsub-settings':     'reg-settings',
+};
+
+// Inverted from MODULE_CONFIG: page filename → module key
+const FILE_TO_KEY = {};
+Object.keys(MODULE_CONFIG).forEach(function(key) {
+  const page = MODULE_CONFIG[key].page;
+  if (page && !FILE_TO_KEY[page]) FILE_TO_KEY[page] = key;
+});
+
+function resolveModuleKey(el) {
+  if (ID_TO_KEY[el.id]) return ID_TO_KEY[el.id];
+  const oc = el.getAttribute('onclick') || '';
+  const m = oc.match(/'([a-z0-9_-]+\.html)'/i);
+  return m ? FILE_TO_KEY[m[1]] : undefined;
+}
 
 // ── State ──────────────────────────────────────────────────────────
 let _prodId = '';
@@ -399,29 +344,47 @@ async function bootPortal() {
   if (error || !data) { document.getElementById('pr-login-error').textContent = 'Could not load production.'; return; }
   _prod = data;
   _org  = data.organizations || null;
+  await setupPortalSidebar();
   renderPortalBranding();
-  buildSidebar(_modules);
   document.getElementById('pr-login-overlay').style.display = 'none';
   document.getElementById('pr-shell').style.display = '';
-  if (_modules.length) prNav(_modules[0]);
+  if (_modules.length) prAutoOpenAndLoad();
 }
 
-// ── Branding ───────────────────────────────────────────────────────
+// ── Branding (writes into the real injected partial's own elements) ──
+const STATUS_LABELS = { setup: 'In Planning', auditions: 'Auditions Launched', casting: 'Show Cast', rehearsals: 'Rehearsing', performances: 'Performing', wrapped: 'Wrapped' };
+
 function renderPortalBranding() {
-  const posterEl = document.getElementById('pr-sidebar-poster');
-  if (posterEl) {
+  ['sidebar-poster-wrap', 'sidebar-mobile-poster-wrap'].forEach(function(id) {
+    const el = document.getElementById(id);
+    if (!el) return;
     if (_prod?.poster_url) {
-      posterEl.innerHTML = '<img src="' + esc(_prod.poster_url) + '" alt="' + esc(_prod.title || 'Production') + ' poster" />';
-      posterEl.classList.remove('hidden');
+      el.innerHTML = '<img src="' + esc(_prod.poster_url) + '" alt="' + esc(_prod.title || 'Production') + ' poster" />';
+      el.classList.remove('hidden');
     } else {
-      posterEl.innerHTML = '';
-      posterEl.classList.add('hidden');
+      el.innerHTML = '';
+      el.classList.add('hidden');
     }
-  }
-  const titleEl = document.getElementById('pr-sidebar-title');
-  if (titleEl) titleEl.textContent = _prod?.title || 'Production';
-  const subEl = document.getElementById('pr-sidebar-sub');
-  if (subEl) subEl.textContent = 'Welcome back, ' + prFirstName() + '.';
+  });
+  ['hdr-title', 'hdr-mobile-title'].forEach(function(id) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = _prod?.title || 'Production';
+  });
+  ['hdr-sub', 'hdr-mobile-sub'].forEach(function(id) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = 'Welcome back, ' + prFirstName() + '.';
+  });
+  const statusLabel = STATUS_LABELS[_prod?.status] || 'Setup';
+  ['hdr-status', 'hdr-mobile-status'].forEach(function(id) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = statusLabel;
+  });
+  // Org-level links don't apply inside the portal — this user has no org session
+  ['sidebar-org-back', 'sidebar-mobile-org-back', 'sidebar-public-link'].forEach(function(id) {
+    const el = document.getElementById(id);
+    if (el) el.style.display = 'none';
+  });
+
   const orgLogoEl = document.getElementById('pr-sidebar-org-logo');
   if (orgLogoEl) {
     const logoUrl = _org?.logo_white_url || _org?.logo_url || '';
@@ -456,102 +419,110 @@ function prForgetDevice() {
   prForgetSavedSession(true);
 }
 
-// ── Sidebar builder ────────────────────────────────────────────────
-// Renders the full nav structure; items not in _modules get pr-nav-locked.
-// Only groups where the role has at least one accessible item are shown.
-function buildSidebar(modules) {
-  const moduleSet = new Set(modules);
+// ── Sidebar: fetch the real shared partial, inject it verbatim, then ─
+// restrict visible items to this role's modules (same pattern as the
+// existing window.applyTeamSidebarRestriction in production-sidebar-nav.js).
+async function setupPortalSidebar() {
+  const host = document.getElementById('prod-sidebar-host');
+  if (!host) return;
+  const res = await fetch('/SHARED/Navigation/production-sidebar.html?v=sidebar-v61-20260617');
+  host.innerHTML = await res.text();
 
-  function allKeysInItems(items) {
-    return items.flatMap(function(i) { return i.subgroup ? allKeysInItems(i.items) : [i.key]; });
-  }
-  function groupHasAccess(group) {
-    return allKeysInItems(group.items).some(function(k) { return moduleSet.has(k); });
-  }
+  if (window.enhanceSidebarNavControls) window.enhanceSidebarNavControls(host);
+  applyPortalModuleRestriction();
+  injectPortalSidebarExtras();
+  installPortalNavIntercept();
+}
 
-  function renderDirectItem(item) {
-    if (!moduleSet.has(item.key)) return '';
-    return '<div class="prod-tab" id="prnav-' + item.key + '" onclick="prNav(\'' + item.key + '\')">' +
-      esc(item.label) + '</div>';
-  }
+function applyPortalModuleRestriction() {
+  const host = document.getElementById('prod-sidebar-host');
+  if (!host) return;
+  const moduleSet = new Set(_modules);
 
-  function renderSubItem(item) {
-    if (!moduleSet.has(item.key)) return '';
-    return '<div class="prod-sub-item" id="prnav-' + item.key + '" onclick="prNav(\'' + item.key + '\')">' +
-      esc(item.label) + '</div>';
-  }
+  // Direct leaf items (not subgroup toggle headers) and sub-items
+  host.querySelectorAll('.sidebar-group-items > .prod-tab, .prod-sub-item').forEach(function(el) {
+    const key = resolveModuleKey(el);
+    el.style.display = (key && moduleSet.has(key)) ? '' : 'none';
+  });
 
-  function renderSubgroup(sg, groupId) {
-    const itemsHtml = sg.items.map(renderSubItem).join('');
-    if (!itemsHtml) return '';
-    const sgId = groupId + '-sg-' + sg.subgroup.replace(/[^a-z0-9]/gi, '-').toLowerCase();
-    return '<div class="prod-tab-submenu-wrap open" id="' + sgId + '">' +
-      '<div class="prod-tab" onclick="prToggleSubgroup(\'' + sgId + '\')" style="cursor:pointer">' +
-        '<span class="prod-tab-label">' + esc(sg.subgroup) + '</span>' +
-        '<span class="tab-chevron" aria-hidden="true">&#9660;</span>' +
-      '</div>' +
-      '<div class="prod-submenu" id="' + sgId + '-items">' + itemsHtml + '</div>' +
+  // Subgroup wraps: only show if at least one sub-item inside is visible
+  host.querySelectorAll('.prod-tab-submenu-wrap').forEach(function(wrap) {
+    const anyVisible = Array.from(wrap.querySelectorAll('.prod-sub-item')).some(function(si) { return si.style.display !== 'none'; });
+    wrap.style.display = anyVisible ? '' : 'none';
+  });
+
+  // Top-level groups: only show if anything inside survived
+  host.querySelectorAll('.sidebar-group').forEach(function(grp) {
+    const items = grp.querySelector('.sidebar-group-items');
+    const anyVisible = items && Array.from(items.children).some(function(child) { return child.style.display !== 'none'; });
+    grp.style.display = anyVisible ? '' : 'none';
+    if (anyVisible) grp.classList.add('open');
+  });
+}
+
+// Appends the portal-only footer (volunteer link, org logo, forget-device)
+// onto the real injected .prod-sidebar element.
+function injectPortalSidebarExtras() {
+  const sidebarEl = document.querySelector('#prod-sidebar-host .prod-sidebar');
+  if (!sidebarEl || sidebarEl.querySelector('.pr-sidebar-footer')) return;
+  const extra = document.createElement('div');
+  extra.innerHTML =
+    '<div class="pr-sidebar-standard-links">' +
+      '<a class="pr-sidebar-standard-link" id="pr-volunteer-link" href="#" target="_blank" rel="noopener">' +
+        '<img src="/ASSETS/Images/Icons/Volunteers.svg?v=20260617" alt="" aria-hidden="true" />' +
+        '<span>Volunteer Opportunities</span>' +
+      '</a>' +
+    '</div>' +
+    '<div class="pr-sidebar-footer">' +
+      '<div class="pr-sidebar-org-logo" id="pr-sidebar-org-logo">Build The Show</div>' +
+      '<button class="pr-sidebar-forget" type="button" onclick="prForgetDevice()">Not you? Forget this device.</button>' +
     '</div>';
-  }
-
-  const nav = document.getElementById('pr-nav');
-  if (!nav) return;
-
-  nav.innerHTML = FULL_NAV.filter(groupHasAccess).map(function(group) {
-    const groupId = 'pr-group-' + group.name.replace(/[^a-z0-9]/gi, '-').toLowerCase();
-    const itemsHtml = group.items.map(function(item) {
-      return item.subgroup ? renderSubgroup(item, groupId) : renderDirectItem(item);
-    }).join('');
-    return '<div class="sidebar-group open" id="' + groupId + '" style="--group-color:#572e88">' +
-      '<div class="sidebar-group-header" onclick="prToggleGroup(\'' + groupId + '\')" role="button" tabindex="0" aria-expanded="true">' +
-        '<span class="sidebar-group-label">' +
-          '<span class="tab-icon-slot"><img src="/ASSETS/Images/Icons/' + group.icon + '?v=20260617" class="tab-icon" alt="" aria-hidden="true" /></span>' +
-          esc(group.name) +
-        '</span>' +
-        '<span class="sidebar-group-chevron">&#9660;</span>' +
-      '</div>' +
-      '<div class="sidebar-group-items" id="' + groupId + '-items">' +
-        itemsHtml +
-      '</div>' +
-    '</div>';
-  }).join('');
+  while (extra.firstChild) sidebarEl.appendChild(extra.firstChild);
 }
 
-function prToggleGroup(groupId) {
-  const wrap  = document.getElementById(groupId);
-  const items = document.getElementById(groupId + '-items');
-  if (!wrap || !items) return;
-  const open = wrap.classList.toggle('open');
-  items.style.display = open ? 'flex' : 'none';
-  items.style.flexDirection = 'column';
-  const trigger = wrap.querySelector('.sidebar-group-header');
-  if (trigger) trigger.setAttribute('aria-expanded', open ? 'true' : 'false');
+// ── Navigation: intercept clicks on the real sidebar's nav items ────
+// Group/subgroup toggle headers resolve to no key and fall through to
+// their native onclick (toggleSidebarGroup / toggleRegistrationMenu etc).
+function installPortalNavIntercept() {
+  const host = document.getElementById('prod-sidebar-host');
+  if (!host || host.dataset.prIntercepted) return;
+  host.dataset.prIntercepted = 'true';
+  host.addEventListener('click', function(e) {
+    const el = e.target.closest('.prod-tab, .prod-sub-item');
+    if (!el) return;
+    const key = resolveModuleKey(el);
+    if (!key || !_modules.includes(key)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    prNavToModule(key, el);
+  }, true);
 }
 
-function prToggleSubgroup(sgId) {
-  const items = document.getElementById(sgId + '-items');
-  const wrap  = document.getElementById(sgId);
-  if (!items) return;
-  const open = items.style.display === 'none';
-  items.style.display = open ? 'flex' : 'none';
-  if (open) items.style.flexDirection = 'column';
-  const chevron = wrap?.querySelector('.tab-chevron');
-  if (chevron) chevron.style.transform = open ? '' : 'rotate(-90deg)';
-}
-
-// ── Navigation: load the real page in the iframe ───────────────────
-function prNav(key) {
-  document.querySelectorAll('.prod-tab, .prod-sub-item, .pr-sidebar-standard-link').forEach(function(el) { el.classList.remove('active'); });
-  const active = document.getElementById('prnav-' + key);
-  if (active) active.classList.add('active');
-
-  if (!_modules.includes(key)) return;
+function prNavToModule(key, el) {
+  document.querySelectorAll('#prod-sidebar-host .prod-tab.active, #prod-sidebar-host .prod-sub-item.active').forEach(function(a) { a.classList.remove('active'); });
+  if (el) el.classList.add('active');
 
   const cfg = MODULE_CONFIG[key];
   if (!cfg?.page) return;
-
   const frame = document.getElementById('portal-frame');
   if (frame) frame.src = cfg.page + '?id=' + encodeURIComponent(_prodId) + '&portal=1';
+}
+
+// Opens the group/subgroup containing the first accessible module and loads it.
+function prAutoOpenAndLoad() {
+  const firstKey = _modules[0];
+  if (!firstKey) return;
+  const host = document.getElementById('prod-sidebar-host');
+  if (!host) return;
+  let target = null;
+  host.querySelectorAll('.sidebar-group-items > .prod-tab, .prod-sub-item').forEach(function(el) {
+    if (!target && resolveModuleKey(el) === firstKey) target = el;
+  });
+  if (target) {
+    const wrap = target.closest('.prod-tab-submenu-wrap');
+    if (wrap) wrap.classList.add('open');
+  }
+  prNavToModule(firstKey, target);
 }
 
 // ── Boot ───────────────────────────────────────────────────────────
