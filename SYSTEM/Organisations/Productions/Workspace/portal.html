@@ -45,6 +45,8 @@
     .pr-sidebar-org-logo img { display: block; max-width: 150px; max-height: 54px; object-fit: contain; }
     .pr-sidebar-forget { display: block; width: 100%; margin-top: 1.05rem; padding: 0; border: 0; background: transparent; color: rgba(255,255,255,0.48); font: inherit; font-size: 0.72rem; font-weight: 800; line-height: 1.3; text-align: left; text-decoration: underline; cursor: pointer; }
     .pr-sidebar-forget:hover { color: rgba(255,255,255,0.75); }
+    /* Locked nav items: visible but not clickable */
+    .pr-nav-locked { opacity: 0.32 !important; pointer-events: none !important; cursor: default !important; }
   </style>
 </head>
 <body>
@@ -121,41 +123,107 @@ const ROLE_MODULES = {
   ],
 };
 
-// ── Module key → page + label + group (+ optional subgroup) ────────
-// group    = top-level sidebar section (matches internal nav group names)
-// subgroup = second-level collapsible menu inside that group (optional)
+// ── Module key → page (all possible portal destinations) ───────────
 const MODULE_CONFIG = {
-  // Financials
-  'fin-dashboard':   { label: 'Dashboard',              group: 'Financials',  page: 'financials-dashboard.html' },
-  'budgeting':       { label: 'Budgeting',              group: 'Financials',  page: 'budgeting.html' },
-  'budget-receipts': { label: 'Receipts',               group: 'Financials',  page: 'budget-receipts.html' },
-  'fin-reports':     { label: 'Reports',                group: 'Financials',  page: 'financials-reports.html' },
-  'fin-settlements': { label: 'Settlements',            group: 'Financials',  page: 'financials-settlements.html' },
-  // Cast > Registration
-  'reg-dashboard':   { label: 'Dashboard',              group: 'Cast', subgroup: 'Registration', page: 'registration-dashboard.html' },
-  'reg-status':      { label: 'Status',                 group: 'Cast', subgroup: 'Registration', page: 'registration-status.html' },
-  // Future: Cast > Casting
-  'cast-board':      { label: 'Casting Board',          group: 'Cast', subgroup: 'Casting',      page: 'casting-board.html' },
-  'cast-list':       { label: 'Cast List',              group: 'Cast', subgroup: 'Casting',      page: 'casting-castlist.html' },
-  // Plan
-  'schedule':        { label: 'Production Schedule',    group: 'Plan',        page: 'plan-calendar.html' },
-  'team':            { label: 'Team Contacts',          group: 'Plan',        page: 'plan-team.html' },
-  // Volunteers
-  'shifts':          { label: 'My Shifts',              group: 'Volunteers',  page: 'volunteers.html' },
-  'hours':           { label: 'Hours Log',              group: 'Volunteers',  page: 'volunteers.html' },
   // Overview
-  'org-dashboard':   { label: 'Organisation Dashboard', group: 'Overview',    page: 'production-overview.html' },
+  'org-dashboard':       { page: 'production-overview.html' },
+  // Plan
+  'plan-dashboard':      { page: 'plan-dashboard.html' },
+  'plan-timeline':       { page: 'plan-timeline.html' },
+  'plan-team':           { page: 'plan-team.html' },
+  'plan-calendar':       { page: 'plan-calendar.html' },
+  'plan-script':         { page: 'script-breakdown.html' },
+  'plan-files':          { page: 'plan-files.html' },
+  'plan-setup':          { page: 'plan-setup.html' },
+  // Cast – direct
+  'cast-dashboard':      { page: 'cast-dashboard.html' },
+  // Cast > Auditions
+  'aud-dashboard':       { page: 'audition-team.html' },
+  'aud-schedule':        { page: 'audition-team.html' },
+  'aud-performers':      { page: 'audition-team.html' },
+  'aud-selftapes':       { page: 'audition-team.html' },
+  'aud-setup':           { page: 'audition-team.html' },
+  // Cast > Casting
+  'cast-board-dash':     { page: 'cast-dashboard.html' },
+  'cast-board':          { page: 'casting-board.html' },
+  // Cast > Registration
+  'reg-dashboard':       { page: 'registration-dashboard.html' },
+  'reg-form':            { page: 'registration-form.html' },
+  'reg-status':          { page: 'registration-status.html' },
+  'reg-settings':        { page: 'registration-settings.html' },
+  // Financials
+  'fin-dashboard':       { page: 'financials-dashboard.html' },
+  'budgeting':           { page: 'budgeting.html' },
+  'budget-receipts':     { page: 'budget-receipts.html' },
+  'fin-reports':         { page: 'financials-reports.html' },
+  'fin-settlements':     { page: 'financials-settlements.html' },
+  // Volunteers
+  'shifts':              { page: 'volunteers.html' },
+  'hours':               { page: 'volunteers.html' },
 };
 
-// Top-level group order and icons — names match internal nav groups
-const GROUP_ORDER = ['Overview', 'Plan', 'Cast', 'Financials', 'Volunteers'];
-const GROUP_ICONS = {
-  'Overview':   'navoverview.svg',
-  'Plan':       'navproductioncalendar.svg',
-  'Cast':       'Star.svg',
-  'Financials': 'Budgeting-total-spent-cad-usd.svg',
-  'Volunteers': 'page-volunteers.svg',
-};
+// ── Full nav structure — mirrors the regular production sidebar exactly ─
+// Only groups where the role has at least one accessible key are shown.
+// All items within those groups render; inaccessible ones are dimmed.
+const FULL_NAV = [
+  {
+    name: 'Overview', icon: 'navoverview.svg',
+    items: [
+      { key: 'org-dashboard', label: 'Dashboard' },
+    ]
+  },
+  {
+    name: 'Plan', icon: 'navproductioncalendar.svg',
+    items: [
+      { key: 'plan-dashboard', label: 'Dashboard' },
+      { key: 'plan-timeline',  label: 'Producer Timeline' },
+      { key: 'plan-team',      label: 'Team' },
+      { key: 'plan-calendar',  label: 'Calendar' },
+      { key: 'plan-script',    label: 'Script Breakdown' },
+      { key: 'plan-files',     label: 'Files' },
+      { key: 'plan-setup',     label: 'Production Setup' },
+    ]
+  },
+  {
+    name: 'Cast', icon: 'Star.svg',
+    items: [
+      { key: 'cast-dashboard', label: 'Dashboard' },
+      { subgroup: 'Auditions', items: [
+        { key: 'aud-dashboard',  label: 'Dashboard' },
+        { key: 'aud-schedule',   label: 'Audition Schedule' },
+        { key: 'aud-performers', label: 'All Performers' },
+        { key: 'aud-selftapes',  label: 'Self Tapes' },
+        { key: 'aud-setup',      label: 'Settings' },
+      ]},
+      { subgroup: 'Casting', items: [
+        { key: 'cast-board-dash', label: 'Dashboard' },
+        { key: 'cast-board',      label: 'Casting Board' },
+      ]},
+      { subgroup: 'Registration', items: [
+        { key: 'reg-dashboard', label: 'Dashboard' },
+        { key: 'reg-form',      label: 'Registration Form' },
+        { key: 'reg-status',    label: 'Status' },
+        { key: 'reg-settings',  label: 'Settings' },
+      ]},
+    ]
+  },
+  {
+    name: 'Financials', icon: 'Budgeting-total-spent-cad-usd.svg',
+    items: [
+      { key: 'fin-dashboard',   label: 'Dashboard' },
+      { key: 'budgeting',       label: 'Budgeting' },
+      { key: 'budget-receipts', label: 'Receipts' },
+      { key: 'fin-reports',     label: 'Reports' },
+    ]
+  },
+  {
+    name: 'Volunteers', icon: 'page-volunteers.svg',
+    items: [
+      { key: 'shifts', label: 'My Shifts' },
+      { key: 'hours',  label: 'Hours Log' },
+    ]
+  },
+];
 
 // ── State ──────────────────────────────────────────────────────────
 let _prodId = '';
@@ -379,69 +447,59 @@ function prForgetDevice() {
 }
 
 // ── Sidebar builder ────────────────────────────────────────────────
-// Builds a 3-level nav: group > subgroup (optional) > item
+// Renders the full nav structure; items not in _modules get pr-nav-locked.
+// Only groups where the role has at least one accessible item are shown.
 function buildSidebar(modules) {
-  // Build structure: { groupName: { _direct: [keys], subgroupName: [keys] } }
-  const tree = {};
-  modules.forEach(function(key) {
-    const cfg = MODULE_CONFIG[key];
-    if (!cfg) return;
-    if (!tree[cfg.group]) tree[cfg.group] = { _direct: [] };
-    if (cfg.subgroup) {
-      if (!tree[cfg.group][cfg.subgroup]) tree[cfg.group][cfg.subgroup] = [];
-      tree[cfg.group][cfg.subgroup].push(key);
-    } else {
-      tree[cfg.group]._direct.push(key);
-    }
-  });
+  const moduleSet = new Set(modules);
+
+  function allKeysInItems(items) {
+    return items.flatMap(function(i) { return i.subgroup ? allKeysInItems(i.items) : [i.key]; });
+  }
+  function groupHasAccess(group) {
+    return allKeysInItems(group.items).some(function(k) { return moduleSet.has(k); });
+  }
+
+  function renderLeaf(item, groupId) {
+    const locked = !moduleSet.has(item.key);
+    return '<div class="prod-tab prod-sub-item' + (locked ? ' pr-nav-locked' : '') + '" id="prnav-' + item.key + '"' +
+      (locked ? '' : ' onclick="prNav(\'' + item.key + '\')"') + '>' +
+      esc(item.label) + '</div>';
+  }
+
+  function renderSubgroup(sg, groupId) {
+    const sgId = groupId + '-sg-' + sg.subgroup.replace(/[^a-z0-9]/gi, '-').toLowerCase();
+    const itemsHtml = sg.items.map(function(i) { return renderLeaf(i, groupId); }).join('');
+    return '<div class="prod-tab-submenu-wrap" id="' + sgId + '">' +
+      '<div class="prod-tab" onclick="prToggleSubgroup(\'' + sgId + '\')" style="cursor:pointer">' +
+        '<span class="prod-tab-label">' + esc(sg.subgroup) + '</span>' +
+        '<span class="tab-chevron" aria-hidden="true">&#9660;</span>' +
+      '</div>' +
+      '<div class="prod-submenu" id="' + sgId + '-items">' + itemsHtml + '</div>' +
+    '</div>';
+  }
 
   const nav = document.getElementById('pr-nav');
   if (!nav) return;
 
-  const groups = GROUP_ORDER.filter(function(g) { return tree[g]; });
-  nav.innerHTML = groups.map(function(groupName) {
-    const groupData = tree[groupName];
-    const groupId   = 'pr-group-' + groupName.replace(/[^a-z0-9]/gi, '-').toLowerCase();
-    const iconFile  = GROUP_ICONS[groupName] || 'Overview.svg';
-
-    // Direct items (no subgroup)
-    const directHtml = groupData._direct.map(function(key) {
-      const cfg = MODULE_CONFIG[key];
-      return '<div class="prod-tab prod-sub-item" id="prnav-' + key + '" onclick="prNav(\'' + key + '\')">' + esc(cfg.label) + '</div>';
+  nav.innerHTML = FULL_NAV.filter(groupHasAccess).map(function(group) {
+    const groupId = 'pr-group-' + group.name.replace(/[^a-z0-9]/gi, '-').toLowerCase();
+    const itemsHtml = group.items.map(function(item) {
+      return item.subgroup ? renderSubgroup(item, groupId) : renderLeaf(item, groupId);
     }).join('');
-
-    // Subgroups
-    const subgroupNames = Object.keys(groupData).filter(function(k) { return k !== '_direct'; });
-    const subgroupHtml = subgroupNames.map(function(sgName) {
-      const sgId = groupId + '-sg-' + sgName.replace(/[^a-z0-9]/gi, '-').toLowerCase();
-      const itemsHtml = groupData[sgName].map(function(key) {
-        const cfg = MODULE_CONFIG[key];
-        return '<div class="prod-sub-item" id="prnav-' + key + '" onclick="prNav(\'' + key + '\')">' + esc(cfg.label) + '</div>';
-      }).join('');
-      return '<div class="prod-tab-submenu-wrap" id="' + sgId + '">' +
-        '<div class="prod-tab" onclick="prToggleSubgroup(\'' + sgId + '\')" style="cursor:pointer">' +
-          esc(sgName) +
-          '<span class="tab-chevron" aria-hidden="true">&#9660;</span>' +
-        '</div>' +
-        '<div class="prod-submenu" id="' + sgId + '-items">' + itemsHtml + '</div>' +
-      '</div>';
-    }).join('');
-
     return '<div class="sidebar-group open" id="' + groupId + '" style="--group-color:#572e88">' +
       '<div class="sidebar-group-header" onclick="prToggleGroup(\'' + groupId + '\')" role="button" tabindex="0" aria-expanded="true">' +
         '<span class="sidebar-group-label">' +
-          '<span class="tab-icon-slot"><img src="/ASSETS/Images/Icons/' + iconFile + '?v=20260617" class="tab-icon" alt="" aria-hidden="true" /></span>' +
-          esc(groupName) +
+          '<span class="tab-icon-slot"><img src="/ASSETS/Images/Icons/' + group.icon + '?v=20260617" class="tab-icon" alt="" aria-hidden="true" /></span>' +
+          esc(group.name) +
         '</span>' +
         '<span class="sidebar-group-chevron">&#9660;</span>' +
       '</div>' +
       '<div class="sidebar-group-items" id="' + groupId + '-items" style="display:flex;flex-direction:column">' +
-        directHtml + subgroupHtml +
+        itemsHtml +
       '</div>' +
     '</div>';
   }).join('');
 
-  // Open any subgroup that has an active item
   subgroupsOpenByDefault();
 }
 
