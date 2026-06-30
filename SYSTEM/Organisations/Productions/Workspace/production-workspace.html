@@ -74608,6 +74608,26 @@ See you soon!
     }
   }
 
+  function renderTixInlineStepPanel() {
+    const current = _tixBuildStep || 'seating';
+    const meta = TICKETING_STEP_META[current] || TICKETING_STEP_META.seating;
+    return `
+      <div style="margin-top:1rem;background:#fff;border:1.5px solid rgba(87,46,136,0.12);border-radius:18px;padding:1.1rem;box-shadow:0 10px 30px rgba(87,46,136,0.05);">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;flex-wrap:wrap;margin-bottom:1rem;">
+          <div style="display:flex;gap:0.85rem;align-items:flex-start;">
+            <img src="${esc(meta.icon)}" alt="" style="width:38px;height:38px;padding:0.45rem;border-radius:12px;background:rgba(87,46,136,0.08);flex-shrink:0;" />
+            <div>
+              <div style="font-size:0.7rem;font-weight:900;color:#572e88;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:0.15rem;">Build it yourself</div>
+              <div style="font-size:1rem;font-weight:900;color:#1a1530;margin-bottom:0.18rem;">${esc(meta.title)}</div>
+              <div style="font-size:0.77rem;line-height:1.45;color:rgba(26,21,48,0.56);">${esc(meta.copy)}</div>
+            </div>
+          </div>
+          <button type="button" class="btn-secondary" style="font-size:0.75rem;" onclick="openTixWizard('${esc(current)}')">Use Wizard For This Instead</button>
+        </div>
+        ${tixWizardStepContent(current)}
+      </div>`;
+  }
+
   function tixSummarizeStep(stepKey) {
     const setup = _tixSetup || {};
     switch (stepKey) {
@@ -74649,10 +74669,9 @@ See you soon!
       { icon: '/ASSETS/Images/Icons/page-tickets.svg', title: 'Prices', copy: 'Set the ticket types and prices your audience will see.' },
       { icon: '/ASSETS/Images/Icons/locked.svg', title: 'Holds', copy: 'Keep sponsor, school, or invited tickets aside before you go live.' },
     ];
-    const needItems = [
-      { icon: '/ASSETS/Images/Icons/Rehearsals.svg', title: 'Performance dates', copy: 'Your shows should already be in the production calendar.' },
-      { icon: '/ASSETS/Images/Icons/page-tickets.svg', title: 'Ticket prices', copy: 'Think in plain English: Adult, Child, Senior, Student, VIP.' },
-      { icon: '/ASSETS/Images/Icons/locked.svg', title: 'Special cases', copy: 'Know if you need comps, promo codes, or tickets held for a group.' },
+    const choiceItems = [
+      { icon: '/ASSETS/Images/Icons/page-tickets.svg', title: 'Use the wizard', copy: 'Answer the questions in a popup and we will guide you through it.' },
+      { icon: '/ASSETS/Images/Icons/edit-pencil.svg', title: 'Build it yourself', copy: 'Open each card below and set things up one section at a time.' },
     ];
     return `
       <div class="tix-build-home">
@@ -74660,11 +74679,11 @@ See you soon!
           <div class="tix-build-intro">
             <div class="tix-build-kicker">
               <img src="/ASSETS/Images/Icons/page-tickets.svg" alt="" class="tix-build-pill-icon" />
-              Ticket Wizard
+              Ticket Sales
             </div>
-            <div class="tix-build-title">Tell us how your ticket sales should work.</div>
+            <div class="tix-build-title">Build it yourself, or use the wizard.</div>
             <div class="tix-build-copy">
-              This wizard asks the ticketing questions for you, in order, one at a time. Nothing goes live. Nothing is published. We are just collecting the setup choices your team needs.
+              If you want the easiest path, use the wizard. If you already know what you need, build it yourself from the cards below.
             </div>
             <div class="tix-build-list">
               ${heroPills.map(item => `
@@ -74674,13 +74693,13 @@ See you soon!
                     <strong>${esc(item.title)}</strong>
                     <span>${esc(item.copy)}</span>
                   </div>
-                </div>`).join('')}
+              </div>`).join('')}
             </div>
           </div>
           <div class="tix-build-sidecard">
-            <div class="tix-build-sidecard-title">What we will ask</div>
+            <div class="tix-build-sidecard-title">Choose a path</div>
             <div class="tix-build-sidecard-list">
-              ${needItems.map(item => `
+              ${choiceItems.map(item => `
                 <div class="tix-build-sidecard-item">
                   <img src="${esc(item.icon)}" alt="" />
                   <div>
@@ -74690,13 +74709,13 @@ See you soon!
                 </div>`).join('')}
             </div>
             <div class="tix-build-actions">
-              <button type="button" class="btn-primary" onclick="openTixWizard()">${hasStarted ? 'Continue Ticket Wizard' : 'Start Ticket Wizard'}</button>
-              <button type="button" class="btn-secondary" onclick="openTixWizard('types')">Jump to Prices</button>
+              <button type="button" class="btn-primary" onclick="openTixWizard()">${hasStarted ? 'Continue Wizard' : 'Use Ticket Wizard'}</button>
+              <button type="button" class="btn-secondary" onclick="tixChooseManualBuild()">Build It Myself</button>
             </div>
-            <div class="tix-build-note">You can close the popup any time. Your answers save as you go.</div>
+            <div class="tix-build-note">Wizard answers save as you go. Manual build uses the cards right below.</div>
           </div>
         </div>
-        <div class="tix-wizard-grid">
+        <div class="tix-wizard-grid" id="tix-build-yourself-grid">
           ${TICKETING_STEPS.map((step, idx) => {
             const meta = TICKETING_STEP_META[step.key] || {};
             const done = completed.includes(step.key);
@@ -74710,10 +74729,11 @@ See you soon!
                 <h3>${esc(step.label)}</h3>
                 <p>${esc(meta.copy || step.sub)}</p>
                 <div class="tix-wizard-answer">${esc(tixSummarizeStep(step.key))}</div>
-                <button type="button" class="tix-wizard-edit" onclick="openTixWizard('${esc(step.key)}')">${done ? 'Review' : 'Answer this'}</button>
+                <button type="button" class="tix-wizard-edit" onclick="tixSwitchBuildStep('${esc(step.key)}')">${done ? 'Open' : 'Set this up'}</button>
               </div>`;
           }).join('')}
         </div>
+        ${!_tixWizardOpen ? renderTixInlineStepPanel() : ''}
       </div>`;
   }
 
@@ -74728,6 +74748,15 @@ See you soon!
     const modal = document.getElementById('tix-wizard-modal');
     if (modal) modal.remove();
     if (!silent) showToast('Ticket wizard closed.');
+  }
+
+  function tixChooseManualBuild() {
+    _tixWizardOpen = false;
+    const grid = document.getElementById('tix-build-yourself-grid');
+    if (grid && typeof grid.scrollIntoView === 'function') {
+      grid.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+    showToast('Build it yourself below, one section at a time.');
   }
 
   function tixWizardPrev() {
