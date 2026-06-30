@@ -118,10 +118,16 @@
     .ci-badge-vol { background: rgba(118,158,123,0.15); color: #4a7e50; }
     .ci-badge-conflict { background: rgba(239,171,69,0.2); color: #8a5e0a; }
     .ci-badge-reg { background: rgba(116,162,180,0.15); color: #2c6f84; }
-    .ci-checkin-col { display: flex; flex-direction: column; align-items: flex-end; gap: 0.25rem; flex-shrink: 0; }
-    .ci-checkin-btn { padding: 0.45rem 0.9rem; border-radius: 8px; border: 1.5px solid rgba(87,46,136,0.22); background: #fff; color: #572e88; font-size: 0.75rem; font-weight: 850; cursor: pointer; font-family: var(--bts-font); white-space: nowrap; }
-    .ci-checkin-btn:hover { background: rgba(87,46,136,0.06); }
-    .ci-person-card.is-present .ci-checkin-btn { background: #469b42; color: #fff; border-color: #469b42; }
+    .ci-person-card.is-here   { border-color: rgba(70,155,66,0.35);  background: rgba(70,155,66,0.04); }
+    .ci-person-card.is-late   { border-color: rgba(239,171,69,0.45); background: rgba(239,171,69,0.04); }
+    .ci-person-card.is-absent { border-color: rgba(209,82,61,0.35);  background: rgba(209,82,61,0.04); }
+    .ci-checkin-col { display: flex; flex-direction: column; align-items: flex-end; gap: 0.3rem; flex-shrink: 0; }
+    .ci-status-btns { display: flex; gap: 0.3rem; }
+    .ci-status-btn { padding: 0.38rem 0.7rem; border-radius: 7px; border: 1.5px solid rgba(87,46,136,0.18); background: #fff; font-size: 0.72rem; font-weight: 850; cursor: pointer; font-family: var(--bts-font); white-space: nowrap; color: rgba(26,21,48,0.55); }
+    .ci-status-btn:hover { background: rgba(87,46,136,0.05); }
+    .ci-status-btn.s-here   { background: #469b42; color: #fff; border-color: #469b42; }
+    .ci-status-btn.s-late   { background: #efab45; color: #fff; border-color: #efab45; }
+    .ci-status-btn.s-absent { background: #d1523d; color: #fff; border-color: #d1523d; }
     .ci-checkin-time { font-size: 0.65rem; color: rgba(26,21,48,0.4); white-space: nowrap; }
 
     @media (max-width: 900px) {
@@ -347,7 +353,7 @@
         const checkins = e.event_checkins || [];
         const attendees = resolveAttendees(e);
         const total = attendees.length;
-        const present = checkins.filter(c => c.checked_in).length;
+        const present = checkins.filter(c => c.status === 'here' || c.status === 'late').length;
         const count = total > 0 ? '<div class="ci-event-count">' + present + '/' + total + '</div>' : '';
         html +=
           '<div class="ci-event-row' + past + sel + '" onclick="selectEvent(\'' + e.id + '\')">' +
@@ -500,7 +506,7 @@
     (existing || []).forEach(c => { existingMap[c.id] = c; });
     return attendees.map(a => existingMap[a.id]
       ? { ...existingMap[a.id], name: a.name }
-      : { id: a.id, type: a.type, name: a.name, checked_in: false, checked_in_at: null }
+      : { id: a.id, type: a.type, name: a.name, status: null, checked_in_at: null }
     );
   }
 
@@ -515,14 +521,19 @@
       return;
     }
 
-    const present       = attendees.filter(a => getCheckinState(checkins, a.id).checked_in).length;
+    const hereCount     = checkins.filter(c => c.status === 'here').length;
+    const lateCount     = checkins.filter(c => c.status === 'late').length;
+    const absentCount   = checkins.filter(c => c.status === 'absent').length;
+    const unmarked      = attendees.length - hereCount - lateCount - absentCount;
     const conflictCount = attendees.filter(a => a.has_conflict).length;
 
     let html =
       '<div class="ci-stats-bar">' +
         '<div class="ci-stat"><div class="ci-stat-num">' + attendees.length + '</div><div class="ci-stat-label">Expected</div></div>' +
-        '<div class="ci-stat s-present"><div class="ci-stat-num">' + present + '</div><div class="ci-stat-label">Here</div></div>' +
-        '<div class="ci-stat"><div class="ci-stat-num">' + (attendees.length - present) + '</div><div class="ci-stat-label">Not Yet</div></div>' +
+        '<div class="ci-stat s-present"><div class="ci-stat-num">' + hereCount + '</div><div class="ci-stat-label">Here</div></div>' +
+        '<div class="ci-stat" style="--n-col:#efab45"><div class="ci-stat-num" style="color:#b87b0e">' + lateCount + '</div><div class="ci-stat-label">Late</div></div>' +
+        '<div class="ci-stat"><div class="ci-stat-num" style="color:#d1523d">' + absentCount + '</div><div class="ci-stat-label">Absent</div></div>' +
+        '<div class="ci-stat"><div class="ci-stat-num">' + unmarked + '</div><div class="ci-stat-label">Not Marked</div></div>' +
         (conflictCount ? '<div class="ci-stat s-conflict"><div class="ci-stat-num">' + conflictCount + '</div><div class="ci-stat-label">Conflicts</div></div>' : '') +
       '</div>' +
       '<div class="ci-search-wrap">' +
@@ -552,7 +563,8 @@
   }
 
   function personCardHtml(a, state) {
-    const present  = state.checked_in;
+    const status   = state.status || null;
+    const cardClass = status ? ' is-' + status : (a.has_conflict ? ' has-conflict' : '');
     const initials = (a.name || '?').split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase();
     const avatar   = a.headshot_url
       ? '<img class="ci-avatar" src="' + esc(a.headshot_url) + '" alt="" />'
@@ -563,12 +575,15 @@
     const badges =
       (a.type === 'cast'      ? '<span class="ci-badge ci-badge-cast">Cast</span>' : '') +
       (a.type === 'volunteer' ? '<span class="ci-badge ci-badge-vol">Volunteer</span>' : '') +
-      (a.has_conflict         ? '<span class="ci-badge ci-badge-conflict">Conflict Submitted</span>' : '') +
-      (a.is_registered        ? '<span class="ci-badge ci-badge-reg">Registered</span>' : '');
-    const btnText = present ? '&#10003; Here' : 'Check In';
-    const timeStr = present && state.checked_in_at ? fmtTime(state.checked_in_at) : '';
+      (a.has_conflict         ? '<span class="ci-badge ci-badge-conflict">Conflict Submitted</span>' : '');
+    const id = esc(a.id), name = esc(a.name || '');
+    // Clicking the active status button a second time clears it back to null
+    const absentActive = status === 'absent' ? ' s-absent' : '';
+    const lateActive   = status === 'late'   ? ' s-late'   : '';
+    const hereActive   = status === 'here'   ? ' s-here'   : '';
+    const timeStr = status && state.checked_in_at ? fmtTime(state.checked_in_at) : '';
 
-    return '<div class="ci-person-card' + (present ? ' is-present' : '') + (a.has_conflict ? ' has-conflict' : '') + '">' +
+    return '<div class="ci-person-card' + cardClass + '">' +
       avatar +
       '<div class="ci-person-info">' +
         '<div class="ci-person-name">' + esc(a.name || 'Unknown') + '</div>' +
@@ -576,7 +591,11 @@
         (badges ? '<div class="ci-person-badges">' + badges + '</div>' : '') +
       '</div>' +
       '<div class="ci-checkin-col">' +
-        '<button class="ci-checkin-btn" onclick="toggleCheckin(\'' + esc(a.id) + '\',\'' + esc(a.name || '') + '\')">' + btnText + '</button>' +
+        '<div class="ci-status-btns">' +
+          '<button class="ci-status-btn' + absentActive + '" onclick="setStatus(\'' + id + '\',\'' + name + '\',\'absent\')" title="Mark absent">Absent</button>' +
+          '<button class="ci-status-btn' + lateActive   + '" onclick="setStatus(\'' + id + '\',\'' + name + '\',\'late\')"   title="Mark late">Late</button>' +
+          '<button class="ci-status-btn' + hereActive   + '" onclick="setStatus(\'' + id + '\',\'' + name + '\',\'here\')"   title="Mark here">Here</button>' +
+        '</div>' +
         (timeStr ? '<div class="ci-checkin-time">' + esc(timeStr) + '</div>' : '') +
       '</div>' +
     '</div>';
@@ -648,20 +667,25 @@
   }
 
   function getCheckinState(checkins, id) {
-    return (checkins || []).find(c => c.id === id) || { checked_in: false, checked_in_at: null };
+    const entry = (checkins || []).find(c => c.id === id);
+    if (!entry) return { status: null, checked_in_at: null };
+    // Handle legacy boolean checked_in from old data
+    if (entry.status === undefined && entry.checked_in) return { status: 'here', checked_in_at: entry.checked_in_at };
+    return entry;
   }
 
-  // ── Check-in toggle ────────────────────────────────────────────────
-  async function toggleCheckin(attendeeId, attendeeName) {
+  // ── Attendance status setter ───────────────────────────────────────
+  async function setStatus(attendeeId, attendeeName, newStatus) {
     if (!_selectedEvent) return;
     const checkins = [...(_selectedEvent.event_checkins || [])];
     const idx = checkins.findIndex(c => c.id === attendeeId);
     const now = new Date().toISOString();
+    // Clicking the active status again clears it (unmark)
+    const resolvedStatus = (idx >= 0 && checkins[idx].status === newStatus) ? null : newStatus;
     if (idx >= 0) {
-      const wasIn = checkins[idx].checked_in;
-      checkins[idx] = { ...checkins[idx], checked_in: !wasIn, checked_in_at: !wasIn ? now : null };
+      checkins[idx] = { ...checkins[idx], status: resolvedStatus, checked_in_at: resolvedStatus ? now : null };
     } else {
-      checkins.push({ id: attendeeId, name: attendeeName, checked_in: true, checked_in_at: now });
+      checkins.push({ id: attendeeId, name: attendeeName, status: resolvedStatus, checked_in_at: resolvedStatus ? now : null });
     }
     const { error } = await _sb.from('production_events')
       .update({ event_checkins: checkins })
