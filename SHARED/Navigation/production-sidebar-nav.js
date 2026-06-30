@@ -197,7 +197,6 @@
       settings:  'production-workspace.html',
       emails:    'production-workspace.html',
       test:      'production-workspace.html',
-      ticketing: 'production-workspace.html',
     };
     if (pageMap[tab]) {
       location.href = workspaceUrl(tab);
@@ -233,7 +232,16 @@
   };
 
   window.navigateToTicketing = function (sub) {
-    location.href = workspaceUrl('ticketing', sub);
+    const fileMap = {
+      dashboard: 'ticketing-dashboard.html',
+      build:     'ticketing-build.html',
+      orders:    'ticketing-orders.html',
+      checkin:   'ticketing-checkin.html',
+      reports:   'ticketing-reports.html',
+      settings:  'ticketing-settings.html',
+    };
+    const file = fileMap[sub] || fileMap.dashboard;
+    location.href = pageUrl(file);
   };
 
   window.setSidebarSubmenuState = function () {};
