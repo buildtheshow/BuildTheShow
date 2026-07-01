@@ -396,57 +396,70 @@
 
   // ── Data ──────────────────────────────────────────────────────────
   async function loadData() {
-    const [evRes, chRes, asRes, sessRes] = await Promise.all([
+    const [evRes, chRes, asRes] = await Promise.all([
       _sb.from('production_events')
         .select('id,title,event_type,start_time,end_time,venue,called_character_ids,event_checkins,is_locked,locked_at')
         .eq('production_id', _prodId).in('event_type', CHECKIN_TYPES).order('start_time'),
       _sb.from('production_characters').select('id,name,sort_order').eq('production_id', _prodId).order('sort_order'),
       _sb.from('casting_assignments').select('id,character_id,applicant_id,state').eq('production_id', _prodId).in('state', ['chosen','confirmed','offered']),
-      _sb.from('audition_sessions').select('id').eq('production_id', _prodId),
     ]);
     _events = evRes.data || [];
     _chars  = chRes.data || [];
     _assignments = asRes.data || [];
 
-    const sessIds = (sessRes.data || []).map(s => s.id);
-    console.log('[BTS Check-In] production_id:', _prodId);
-    console.log('[BTS Check-In] audition_sessions found:', sessIds.length, sessIds);
-
-    const volQ = _sb.from('volunteer_signups').select('id,name,email,role_name,shift_date,required_dates,status').eq('production_id', _prodId).in('status', ['approved','checked_in','completed']);
-
     const seen = new Set();
-    const addApplicant = (id, personData, dateConflicts, source) => {
+    const addPerson = (id, data) => {
       if (seen.has(id)) return; seen.add(id);
-      _people[id] = personData;
-      _allApplicants.push({ id, source, date_conflicts: dateConflicts });
+      _people[id] = data;
+      _allApplicants.push({ id });
     };
 
+    // Try every path that might have performers for this production, in parallel
+    const [
+      cardSessRes,  // audition_sessions via audition_cards
+      directSessRes,// audition_sessions with direct production_id (if that column exists)
+      castMembRes,  // cast_members table
+      volsRes,
+    ] = await Promise.all([
+      _sb.from('audition_cards').select('id').eq('production_id', _prodId),
+      _sb.from('audition_sessions').select('id').eq('production_id', _prodId),
+      _sb.from('cast_members').select('id,name,email,phone,headshot_url,pronouns,guardian_name,guardian_phone,guardian_email,is_minor').eq('production_id', _prodId),
+      _sb.from('volunteer_signups').select('id,name,email,role_name,shift_date,required_dates,status').eq('production_id', _prodId).in('status', ['approved','checked_in','completed']),
+    ]);
+
+    _volunteers = volsRes.data || [];
+
+    // Cast members (registration-based — most complete source)
+    (castMembRes.data || []).forEach(m => addPerson(m.id, { name:m.name, email:m.email, phone:m.phone, headshot_url:m.headshot_url, pronouns:m.pronouns, guardian_name:m.guardian_name, guardian_contact:m.guardian_email, guardian_phone:m.guardian_phone, is_minor:m.is_minor }));
+
+    // Collect session IDs from both paths
+    const sessIdSet = new Set((directSessRes.data||[]).map(s => s.id));
+    const cardIds   = (cardSessRes.data||[]).map(c => c.id);
+    if (cardIds.length) {
+      const cardSess = await _sb.from('audition_sessions').select('id').in('card_id', cardIds);
+      (cardSess.data||[]).forEach(s => sessIdSet.add(s.id));
+    }
+    const sessIds = [...sessIdSet];
+
     if (sessIds.length) {
-      const [appsRes, booksRes, volsRes] = await Promise.all([
-        _sb.from('audition_applications')
-          .select('id,name,email,phone,pronouns,guardian_name,guardian_contact,guardian_phone,is_minor,headshot_url,date_conflicts')
-          .in('session_id', sessIds),
-        _sb.from('audition_bookings')
-          .select('id,name,email,headshot_url,guardian_name,guardian_email,guardian_phone,phone,date_conflicts')
-          .in('session_id', sessIds),
-        volQ,
+      const [appsRes, booksRes] = await Promise.all([
+        _sb.from('audition_applications').select('id,name,email,phone,pronouns,guardian_name,guardian_contact,guardian_phone,is_minor,headshot_url').in('session_id', sessIds),
+        _sb.from('audition_bookings').select('id,name,email,headshot_url,guardian_name,guardian_email,guardian_phone,phone').in('session_id', sessIds),
       ]);
-      console.log('[BTS Check-In] audition_applications:', (appsRes.data||[]).length, appsRes.error);
-      console.log('[BTS Check-In] audition_bookings:', (booksRes.data||[]).length, booksRes.error);
-      (appsRes.data||[]).forEach(a => addApplicant(a.id, { name:a.name, email:a.email, phone:a.phone, pronouns:a.pronouns, guardian_name:a.guardian_name, guardian_contact:a.guardian_contact, guardian_phone:a.guardian_phone, is_minor:a.is_minor, headshot_url:a.headshot_url, date_conflicts:a.date_conflicts }, a.date_conflicts, 'application'));
-      (booksRes.data||[]).forEach(b => addApplicant(b.id, { name:b.name, email:b.email, phone:b.phone, headshot_url:b.headshot_url, guardian_name:b.guardian_name, guardian_contact:b.guardian_email, guardian_phone:b.guardian_phone, date_conflicts:b.date_conflicts }, b.date_conflicts, 'booking'));
-      _volunteers = volsRes.data || [];
-    } else {
-      // No sessions found via production_id — try fetching a sample to diagnose
-      const [sampleSessRes, volsRes] = await Promise.all([
-        _sb.from('audition_sessions').select('id,production_id').limit(5),
-        volQ,
-      ]);
-      console.log('[BTS Check-In] Sample sessions in DB (any production):', sampleSessRes.data, sampleSessRes.error);
-      _volunteers = volsRes.data || [];
+      (appsRes.data||[]).forEach(a => addPerson(a.id, { name:a.name, email:a.email, phone:a.phone, pronouns:a.pronouns, guardian_name:a.guardian_name, guardian_contact:a.guardian_contact, guardian_phone:a.guardian_phone, is_minor:a.is_minor, headshot_url:a.headshot_url }));
+      (booksRes.data||[]).forEach(b => addPerson(b.id, { name:b.name, email:b.email, phone:b.phone, headshot_url:b.headshot_url, guardian_name:b.guardian_name, guardian_contact:b.guardian_email, guardian_phone:b.guardian_phone }));
     }
 
-    console.log('[BTS Check-In] Total applicants loaded:', _allApplicants.length);
+    // Last resort: pull from casting_assignments applicant IDs we already have
+    const assignmentIds = [...new Set(_assignments.map(a => a.applicant_id).filter(Boolean))].filter(id => !seen.has(id));
+    if (assignmentIds.length) {
+      const [appsRes, booksRes] = await Promise.all([
+        _sb.from('audition_applications').select('id,name,email,phone,pronouns,guardian_name,guardian_contact,guardian_phone,is_minor,headshot_url').in('id', assignmentIds),
+        _sb.from('audition_bookings').select('id,name,email,headshot_url,guardian_name,guardian_email,guardian_phone,phone').in('id', assignmentIds),
+      ]);
+      (appsRes.data||[]).forEach(a => addPerson(a.id, { name:a.name, email:a.email, phone:a.phone, pronouns:a.pronouns, guardian_name:a.guardian_name, guardian_contact:a.guardian_contact, guardian_phone:a.guardian_phone, is_minor:a.is_minor, headshot_url:a.headshot_url }));
+      (booksRes.data||[]).forEach(b => addPerson(b.id, { name:b.name, email:b.email, phone:b.phone, headshot_url:b.headshot_url, guardian_name:b.guardian_name, guardian_contact:b.guardian_email, guardian_phone:b.guardian_phone }));
+    }
   }
 
   // ── Page routing ──────────────────────────────────────────────────
@@ -897,16 +910,14 @@
   }
 
   function resolveAttendees(ev) {
-    const evDate  = ev.start_time?.slice(0,10) || '';
+    const evDate = ev.start_time?.slice(0,10) || '';
     const charMap = buildCharMap();
 
-    // All applicants who haven't declared a conflict for this date
-    const cast = _allApplicants
-      .filter(a => !hasConflict(a.date_conflicts, evDate))
-      .map(a => {
-        const p = _people[a.id] || {};
-        return { id:a.id, type:'cast', name:p.name||'Unknown', headshot_url:p.headshot_url||null, characters: charMap[a.id] || [] };
-      });
+    // All registered performers, always — no date filtering
+    const cast = _allApplicants.map(a => {
+      const p = _people[a.id] || {};
+      return { id:a.id, type:'cast', name:p.name||'Unknown', headshot_url:p.headshot_url||null, characters: charMap[a.id] || [] };
+    });
 
     // Volunteers scheduled for this date
     const vols = _volunteers
