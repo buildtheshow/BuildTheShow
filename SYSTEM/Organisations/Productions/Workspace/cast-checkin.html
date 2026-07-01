@@ -155,7 +155,9 @@
     .ci-spill.s-late    { background: rgba(239,171,69,0.14); color: #9b6b00;  border-color: rgba(239,171,69,0.22); }
     .ci-spill.s-absent  { background: rgba(209,82,61,0.1);   color: #bf3a24;  border-color: rgba(209,82,61,0.18); }
     .ci-spill.s-excused { background: rgba(71,106,170,0.1);  color: #3b5a9b;  border-color: rgba(71,106,170,0.18); }
-    .ci-spill.s-none    { background: rgba(26,21,48,0.05);   color: rgba(26,21,48,0.35); border-color: rgba(26,21,48,0.1); }
+    .ci-spill.s-none       { background: rgba(26,21,48,0.05);   color: rgba(26,21,48,0.35); border-color: rgba(26,21,48,0.1); }
+    .ci-spill.s-expected   { background: rgba(118,158,123,0.1); color: #4a7a50;             border-color: rgba(118,158,123,0.2); }
+    .ci-spill.s-conflict   { background: rgba(221,130,51,0.1);  color: #a85c00;             border-color: rgba(221,130,51,0.22); }
     .ci-picker-row { display: flex; gap: 0.28rem; align-items: center; }
     .ci-picker-opt { padding: 0.28rem 0.6rem; border-radius: 20px; font-size: 0.68rem; font-weight: 900; border: 1.5px solid transparent; cursor: pointer; font-family: var(--bts-font); }
     .ci-picker-opt.s-here    { border-color: rgba(70,155,66,0.28);   color: #3a8036;  background: rgba(70,155,66,0.08); }
@@ -659,16 +661,20 @@
       : '<div class="ci-avatar-init">' + esc(initials) + '</div>';
     const evDate   = _selectedEvent?.start_time?.slice(0,10) || '';
     const conflict = evDate && hasConflict((_people[id]||{}).date_conflicts, evDate);
-    const subLine  = conflict
-      ? '<div class="ci-conflict-badge">Cannot attend this date</div>'
-      : (a.type === 'volunteer' ? '<div class="ci-perf-sub">Volunteer</div>' : '');
+    const subLine  = a.type === 'volunteer' ? '<div class="ci-perf-sub">Volunteer</div>' : '';
     const charCell = a.type === 'cast' ? esc((a.characters||[]).join(', ')||'—') : esc(a.role_name||'—');
 
-    // Status
+    // Status — when unmarked, show Expected or Cannot Attend based on audition conflict
+    const defaultSpillCls   = conflict ? 's-conflict'  : 's-expected';
+    const defaultSpillLabel = conflict ? 'Cannot Attend' : 'Expected';
+    const defaultSpillIcon  = conflict ? '&#9888;'      : '&#10003;';
+
     let statusHtml;
     if (isLocked) {
-      const sc = STATUS_CONF[status] || STATUS_CONF._none;
-      statusHtml = '<span class="ci-spill s-' + (status||'none') + '">' + sc.icon + ' ' + sc.label + '</span>';
+      const sc = STATUS_CONF[status];
+      statusHtml = status
+        ? '<span class="ci-spill s-' + status + '">' + sc.icon + ' ' + sc.label + '</span>'
+        : '<span class="ci-spill ' + defaultSpillCls + '">' + defaultSpillIcon + ' ' + defaultSpillLabel + '</span>';
     } else if (_pickerOpenId === id) {
       const opts = ['here','late','absent','excused'].map(s => {
         const sc = STATUS_CONF[s];
@@ -676,8 +682,10 @@
       }).join('') + (status ? '<button class="ci-picker-opt s-clear" data-id="' + esc(id) + '" data-status="" onclick="pickerSet(this,event)">&#8212;</button>' : '');
       statusHtml = '<div class="ci-picker-row" onclick="event.stopPropagation()">' + opts + '</div>';
     } else {
-      const sc = STATUS_CONF[status] || STATUS_CONF._none;
-      statusHtml = '<button class="ci-spill s-' + (status||'none') + '" data-id="' + esc(id) + '" onclick="openPicker(this,event)">' + sc.icon + ' ' + sc.label + '</button>';
+      const sc = STATUS_CONF[status];
+      statusHtml = status
+        ? '<button class="ci-spill s-' + status + '" data-id="' + esc(id) + '" onclick="openPicker(this,event)">' + sc.icon + ' ' + sc.label + '</button>'
+        : '<button class="ci-spill ' + defaultSpillCls + '" data-id="' + esc(id) + '" onclick="openPicker(this,event)">' + defaultSpillIcon + ' ' + defaultSpillLabel + '</button>';
     }
 
     // Times
