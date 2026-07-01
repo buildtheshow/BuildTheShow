@@ -353,8 +353,9 @@
 
   let _sb, _prodId, _prodName = '';
   let _events = [], _chars = [], _assignments = [], _volunteers = [];
-  let _allApplicants = []; // everyone who auditioned for this production
+  let _allApplicants = [];
   let _people  = {};
+  let _emailCharMap = {}; // email → [character names], built after resolving assignment IDs
   let _selectedEvent = null;
   let _allAttendees  = [];
   let _filterTab   = 'everyone';
@@ -423,6 +424,25 @@
     });
     // Sort alphabetically by first name
     _allApplicants.sort((a,b) => (_people[a.id]?.name||'').localeCompare(_people[b.id]?.name||''));
+
+    // Build email → characters map by resolving casting assignment applicant IDs
+    // applicant_id may point to audition_applications OR audition_bookings — fetch both
+    const assignmentIds = [...new Set(_assignments.map(a => a.applicant_id).filter(Boolean))];
+    if (assignmentIds.length) {
+      const [aRes, bRes] = await Promise.all([
+        _sb.from('audition_applications').select('id,email').in('id', assignmentIds),
+        _sb.from('audition_bookings').select('id,email').in('id', assignmentIds),
+      ]);
+      const idToEmail = {};
+      (aRes.data||[]).forEach(r => { if (r.email) idToEmail[r.id] = r.email.toLowerCase(); });
+      (bRes.data||[]).forEach(r => { if (r.email) idToEmail[r.id] = r.email.toLowerCase(); });
+      _assignments.forEach(a => {
+        const email = idToEmail[a.applicant_id]; if (!email) return;
+        const char  = _chars.find(c => c.id === a.character_id); if (!char) return;
+        if (!_emailCharMap[email]) _emailCharMap[email] = [];
+        if (!_emailCharMap[email].includes(char.name)) _emailCharMap[email].push(char.name);
+      });
+    }
   }
 
   // ── Page routing ──────────────────────────────────────────────────
@@ -878,12 +898,12 @@
 
   function resolveAttendees(ev) {
     const evDate = ev.start_time?.slice(0,10) || '';
-    const charMap = buildCharMap();
 
     // All registered performers, always — no date filtering
     const cast = _allApplicants.map(a => {
       const p = _people[a.id] || {};
-      return { id:a.id, type:'cast', name:p.name||'Unknown', headshot_url:p.headshot_url||null, characters: charMap[a.id] || [] };
+      const chars = _emailCharMap[(p.email||'').toLowerCase()] || [];
+      return { id:a.id, type:'cast', name:p.name||'Unknown', headshot_url:p.headshot_url||null, characters: chars };
     });
 
     // Volunteers scheduled for this date
