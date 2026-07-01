@@ -409,38 +409,44 @@
     _assignments = asRes.data || [];
 
     const sessIds = (sessRes.data || []).map(s => s.id);
+    console.log('[BTS Check-In] production_id:', _prodId);
+    console.log('[BTS Check-In] audition_sessions found:', sessIds.length, sessIds);
+
     const volQ = _sb.from('volunteer_signups').select('id,name,email,role_name,shift_date,required_dates,status').eq('production_id', _prodId).in('status', ['approved','checked_in','completed']);
 
-    // Load ALL applicants from every audition session for this production
-    const queries = [volQ];
+    const seen = new Set();
+    const addApplicant = (id, personData, dateConflicts, source) => {
+      if (seen.has(id)) return; seen.add(id);
+      _people[id] = personData;
+      _allApplicants.push({ id, source, date_conflicts: dateConflicts });
+    };
+
     if (sessIds.length) {
-      queries.push(
+      const [appsRes, booksRes, volsRes] = await Promise.all([
         _sb.from('audition_applications')
           .select('id,name,email,phone,pronouns,guardian_name,guardian_contact,guardian_phone,is_minor,headshot_url,date_conflicts')
           .in('session_id', sessIds),
         _sb.from('audition_bookings')
           .select('id,name,email,headshot_url,guardian_name,guardian_email,guardian_phone,phone,date_conflicts')
           .in('session_id', sessIds),
-      );
+        volQ,
+      ]);
+      console.log('[BTS Check-In] audition_applications:', (appsRes.data||[]).length, appsRes.error);
+      console.log('[BTS Check-In] audition_bookings:', (booksRes.data||[]).length, booksRes.error);
+      (appsRes.data||[]).forEach(a => addApplicant(a.id, { name:a.name, email:a.email, phone:a.phone, pronouns:a.pronouns, guardian_name:a.guardian_name, guardian_contact:a.guardian_contact, guardian_phone:a.guardian_phone, is_minor:a.is_minor, headshot_url:a.headshot_url, date_conflicts:a.date_conflicts }, a.date_conflicts, 'application'));
+      (booksRes.data||[]).forEach(b => addApplicant(b.id, { name:b.name, email:b.email, phone:b.phone, headshot_url:b.headshot_url, guardian_name:b.guardian_name, guardian_contact:b.guardian_email, guardian_phone:b.guardian_phone, date_conflicts:b.date_conflicts }, b.date_conflicts, 'booking'));
+      _volunteers = volsRes.data || [];
+    } else {
+      // No sessions found via production_id — try fetching a sample to diagnose
+      const [sampleSessRes, volsRes] = await Promise.all([
+        _sb.from('audition_sessions').select('id,production_id').limit(5),
+        volQ,
+      ]);
+      console.log('[BTS Check-In] Sample sessions in DB (any production):', sampleSessRes.data, sampleSessRes.error);
+      _volunteers = volsRes.data || [];
     }
 
-    const results = await Promise.all(queries);
-    _volunteers   = results[0].data || [];
-    const appsData  = sessIds.length ? (results[1].data || []) : [];
-    const booksData = sessIds.length ? (results[2].data || []) : [];
-
-    // Build unified applicants list + _people map
-    const seen = new Set();
-    appsData.forEach(a => {
-      if (seen.has(a.id)) return; seen.add(a.id);
-      _people[a.id] = { name:a.name, email:a.email, phone:a.phone, pronouns:a.pronouns, guardian_name:a.guardian_name, guardian_contact:a.guardian_contact, guardian_phone:a.guardian_phone, is_minor:a.is_minor, headshot_url:a.headshot_url, date_conflicts:a.date_conflicts };
-      _allApplicants.push({ id:a.id, source:'application', date_conflicts:a.date_conflicts });
-    });
-    booksData.forEach(b => {
-      if (seen.has(b.id)) return; seen.add(b.id);
-      _people[b.id] = { name:b.name, email:b.email, phone:b.phone, headshot_url:b.headshot_url, guardian_name:b.guardian_name, guardian_contact:b.guardian_email, guardian_phone:b.guardian_phone, date_conflicts:b.date_conflicts };
-      _allApplicants.push({ id:b.id, source:'booking', date_conflicts:b.date_conflicts });
-    });
+    console.log('[BTS Check-In] Total applicants loaded:', _allApplicants.length);
   }
 
   // ── Page routing ──────────────────────────────────────────────────
