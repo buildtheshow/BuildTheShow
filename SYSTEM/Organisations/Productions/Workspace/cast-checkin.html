@@ -671,6 +671,7 @@
         '<th class="ci-th" style="width:36px"><input type="checkbox" id="ci-check-all" onchange="selectAll(this)"></th>' +
         '<th class="ci-th">Performer</th>' +
         '<th class="ci-th">Character</th>' +
+        '<th class="ci-th" style="width:80px">T-Shirt</th>' +
         '<th class="ci-th" style="width:240px">Status</th>' +
         '<th class="ci-th" style="width:100px">Arrived</th>' +
         '<th class="ci-th" style="width:80px">Left</th>' +
@@ -698,7 +699,9 @@
     const evDate   = _selectedEvent?.start_time?.slice(0,10) || '';
     const conflict = evDate && hasConflict((_people[id]||{}).date_conflicts, evDate);
     const subLine  = a.type === 'volunteer' ? '<div class="ci-perf-sub">Volunteer</div>' : '';
-    const charCell = a.type === 'cast' ? esc((a.characters||[]).join(', ')||'—') : esc(a.role_name||'—');
+    const charCell   = a.type === 'cast' ? esc((a.characters||[]).join(', ')||'—') : esc(a.role_name||'—');
+    const tshirtSize = ca((_people[id]||{}).custom_answers, 't-shirt', 'tshirt', 'shirt size');
+    const tshirtCell = '<span style="font-weight:700">' + esc(tshirtSize||'—') + '</span>';
 
     // Status — when unmarked, show Expected or Cannot Attend based on audition conflict
     const defaultSpillCls   = conflict ? 's-conflict'  : 's-expected';
@@ -751,6 +754,7 @@
       '<td class="ci-td" onclick="event.stopPropagation()"><input type="checkbox" class="ci-row-cb" data-id="' + esc(id) + '" ' + (_bulkSelected.has(id)?'checked':'') + ' onchange="toggleBulk(this)"></td>' +
       '<td class="ci-td"><div class="ci-perf-cell">' + avatar + '<div><div class="ci-perf-name">' + esc(a.name||'Unknown') + '</div>' + subLine + '</div></div></td>' +
       '<td class="ci-td ci-char-cell">' + charCell + '</td>' +
+      '<td class="ci-td" style="font-size:0.8rem">' + tshirtCell + '</td>' +
       '<td class="ci-td ci-status-cell" onclick="event.stopPropagation()">' + statusHtml + '</td>' +
       '<td class="ci-td">' + arrivedHtml + '</td>' +
       '<td class="ci-td">' + leftHtml    + '</td>' +
@@ -803,6 +807,8 @@
         (gName ? '<div class="rp-line"><span class="rp-lbl">' + esc(gName) + '</span>' + (gPhone ? '<br><a href="tel:' + esc(gPhone) + '">' + esc(gPhone) + '</a>' : '') + '</div>' : '<div class="rp-empty">No guardian on file</div>') +
         '</div>'
       : '';
+    const rpTshirt = ca(p.custom_answers, 't-shirt', 'tshirt', 'shirt size');
+    const tshirtHtml = rpTshirt ? '<div class="rp-section"><div class="rp-section-title">T-Shirt Size</div><div class="rp-line"><span class="rp-lbl" style="font-weight:900;font-size:1rem">' + esc(rpTshirt) + '</span></div></div>' : '';
     const now = new Date(); const pastEvs = _events.filter(e => e.end_time ? new Date(e.end_time)<now : e.start_time&&new Date(e.start_time)<now).slice(-12);
     const histDots = pastEvs.map(ev => { const entry=(ev.event_checkins||[]).find(c=>c.id===id); const s=entry?.status||null; const conf=s?(HIST_CONF[s]||HIST_CONF._none):HIST_CONF._none; return '<div class="rp-hist-dot" style="background:'+conf.bg+';color:'+conf.colour+'" title="'+esc((ev.title||EV_LABELS[ev.event_type]||'Event')+' — '+conf.label)+'">'+conf.letter+'</div>'; }).join('');
 
@@ -814,6 +820,7 @@
         '<div class="rp-status-row"><span class="ci-spill s-' + (state.status||'none') + '">' + sc.icon + ' ' + sc.label + '</span>' + (state.checked_in_at ? '<span class="rp-arrived">Arrived ' + fmtTime(state.checked_in_at) + '</span>' : '') + '</div>' +
       '</div></div>' +
       (callBtn||textBtn||emailBtn ? '<div class="rp-action-row">' + callBtn + textBtn + emailBtn + '</div>' : '') +
+      tshirtHtml +
       guardianHtml +
       '<div class="rp-section"><div class="rp-section-title">Medical Notes</div><div class="rp-empty">No medical information on file.</div></div>' +
       '<div class="rp-section"><div class="rp-section-title">Attendance History</div>' + (histDots ? '<div class="rp-hist-dots">' + histDots + '</div><div class="rp-hist-legend">H = Here &nbsp;&#183;&nbsp; L = Late &nbsp;&#183;&nbsp; A = Absent &nbsp;&#183;&nbsp; E = Excused</div>' : '<div class="rp-empty">No history yet.</div>') + '</div>' +
@@ -1051,11 +1058,13 @@
       const pickupCell = '<td>' + (pickupLines.length ? pickupLines.join('<br>') : '<span style="color:#bbb">—</span>') + '</td>';
 
       const rowBg = i % 2 === 0 ? '' : ' style="background:#f7f7f9"';
+      const printTshirt = ca(ans, 't-shirt', 'tshirt', 'shirt size');
       return '<tr' + rowBg + '>' +
         '<td style="text-align:center;color:#aaa;font-size:10px;width:22px">' + (i+1) + '</td>' +
-        '<td style="width:150px"><strong>' + pesc(a.name||'Unknown') + '</strong>' +
+        '<td style="width:140px"><strong>' + pesc(a.name||'Unknown') + '</strong>' +
           (charLine ? '<br><span style="font-size:9px;color:#666">' + pesc(charLine) + '</span>' : '') +
         '</td>' +
+        '<td style="font-weight:900;text-align:center">' + pesc(printTshirt||'—') + '</td>' +
         statusCell +
         emgCell +
         pickupCell +
@@ -1096,9 +1105,9 @@
         '<div class="stat"><div class="stat-n" style="color:#2a4a8a">' + checkins.filter(c=>c.status==='excused').length + '</div><div class="stat-l">Excused</div></div>' +
       '</div>' +
       '<table>' +
-        '<colgroup><col style="width:22px"><col style="width:145px"><col style="width:70px"><col style="width:120px"><col><col style="width:70px"><col style="width:70px"></colgroup>' +
+        '<colgroup><col style="width:22px"><col style="width:140px"><col style="width:48px"><col style="width:65px"><col style="width:115px"><col><col style="width:65px"><col style="width:65px"></colgroup>' +
         '<thead><tr>' +
-          '<th>#</th><th>Performer</th><th>Status</th><th>Emergency Contact</th><th>Authorised Pickup</th><th>Signed In</th><th>Signed Out</th>' +
+          '<th>#</th><th>Performer</th><th>T-Shirt</th><th>Status</th><th>Emergency Contact</th><th>Authorised Pickup</th><th>Signed In</th><th>Signed Out</th>' +
         '</tr></thead>' +
         '<tbody>' + rows + '</tbody>' +
       '</table>' +
