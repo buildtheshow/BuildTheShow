@@ -5,280 +5,314 @@
   <link rel="preconnect" href="https://tkmaiktxpwqfbgeojbnf.supabase.co" />
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Cast Check-In - Build The Show</title>
+  <title>Attendance - Build The Show</title>
   <link rel="stylesheet" href="/ASSETS/styles/styles.css?v=typography-safe-20260421-2025" />
   <link rel="stylesheet" href="/ASSETS/styles/production-sidebar.css?v=sidebar-v49-20260618" />
   <style>
     * { box-sizing: border-box; }
-    html { width: 100%; max-width: 100%; overflow-x: hidden; }
-    body { margin: 0; width: 100%; max-width: 100%; overflow-x: hidden; background: #ffffff; font-family: var(--bts-font); color: #1a1530; display: flex; flex-direction: column; min-height: 100vh; }
-    body.mobile-sidebar-open { overflow: hidden; }
-    .prod-main { margin-left: 220px; flex: 1; padding: 2rem 2.25rem; max-width: calc(100vw - 220px); overflow-x: clip; position: relative; z-index: 0; }
-    .prod-main::before { content: ''; position: fixed; inset: 0 0 0 220px; background-image: url('/ASSETS/Images/Decrotive/Grid-purple.png'); background-repeat: repeat; background-size: 720px; opacity: 0.04; pointer-events: none; z-index: -1; }
-    .prod-main-inner { position: relative; z-index: 1; max-width: 1400px; }
-    @media (max-width: 900px) { .prod-main { margin-left: 0; max-width: 100vw; padding: 4.5rem 1rem 2rem; } .prod-main::before { inset: 0; } }
+    html, body { margin: 0; width: 100%; overflow-x: hidden; background: #f5f4f9; font-family: var(--bts-font); color: #1a1530; }
 
-    /* Hero */
-    .ci-hero { margin-bottom: 1.75rem; }
-    .ci-hero-kicker { display: flex; align-items: center; gap: 0.5rem; font-size: 0.72rem; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: rgba(26,21,48,0.45); margin-bottom: 0.4rem; }
-    .ci-hero-kicker-dot { width: 7px; height: 7px; border-radius: 50%; background: #572e88; display: inline-block; }
-    .ci-hero-title { font-size: 1.7rem; font-weight: 950; color: #1a1530; margin: 0 0 0.3rem; }
-    .ci-hero-copy { font-size: 0.88rem; color: rgba(26,21,48,0.55); margin: 0; }
+    .prod-main { margin-left: 220px; min-height: 100vh; display: flex; flex-direction: column; }
+    @media (max-width: 900px) { .prod-main { margin-left: 0; } }
 
-    /* Two-panel layout */
-    .ci-layout { display: flex; gap: 1.25rem; align-items: flex-start; }
+    /* ── Event selector overlay ── */
+    .ev-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.22); z-index: 400; align-items: flex-start; justify-content: center; padding-top: 5rem; }
+    .ev-overlay.open { display: flex; }
+    .ev-modal { background: #fff; border-radius: 16px; width: 480px; max-width: calc(100vw - 2rem); max-height: 75vh; display: flex; flex-direction: column; box-shadow: 0 8px 40px rgba(0,0,0,0.18); overflow: hidden; }
+    .ev-modal-head { padding: 1.2rem 1.4rem; border-bottom: 1px solid rgba(87,46,136,0.1); display: flex; align-items: center; justify-content: space-between; }
+    .ev-modal-title { font-size: 0.88rem; font-weight: 900; color: #1a1530; }
+    .ev-modal-close { width: 28px; height: 28px; border-radius: 50%; border: 1.5px solid rgba(87,46,136,0.15); background: #fff; color: rgba(26,21,48,0.45); font-size: 1rem; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+    .ev-modal-close:hover { border-color: #572e88; color: #572e88; }
+    .ev-modal-chips { padding: 0.75rem 1.4rem; border-bottom: 1px solid rgba(87,46,136,0.08); display: flex; gap: 0.4rem; flex-wrap: wrap; }
+    .ev-chip { padding: 0.28rem 0.65rem; border-radius: 20px; font-size: 0.72rem; font-weight: 800; border: 1.5px solid rgba(87,46,136,0.18); background: #fff; color: rgba(26,21,48,0.55); cursor: pointer; font-family: var(--bts-font); }
+    .ev-chip.active { background: #572e88; color: #fff; border-color: #572e88; }
+    .ev-list { overflow-y: auto; flex: 1; padding: 0.5rem 0; }
+    .ev-date-label { padding: 0.55rem 1.4rem 0.2rem; font-size: 0.62rem; font-weight: 900; letter-spacing: 0.07em; text-transform: uppercase; color: rgba(26,21,48,0.38); }
+    .ev-item { display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem 1.4rem; cursor: pointer; }
+    .ev-item:hover { background: rgba(87,46,136,0.05); }
+    .ev-item.active { background: rgba(87,46,136,0.08); }
+    .ev-item-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+    .ev-item-name { font-size: 0.88rem; font-weight: 850; color: #1a1530; }
+    .ev-item-sub  { font-size: 0.75rem; color: rgba(26,21,48,0.48); margin-top: 0.1rem; }
 
-    /* Events panel */
-    .ci-events-panel { width: 250px; flex-shrink: 0; background: #f9f8fc; border: 1px solid rgba(87,46,136,0.12); border-radius: 14px; overflow: hidden; position: sticky; top: 1.5rem; max-height: calc(100vh - 130px); display: flex; flex-direction: column; }
-    .ci-panel-head { padding: 1rem 1rem 0.75rem; border-bottom: 1px solid rgba(87,46,136,0.1); flex-shrink: 0; }
-    .ci-panel-title { font-size: 0.72rem; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: rgba(26,21,48,0.45); margin-bottom: 0.65rem; }
-    .ci-filter-chips { display: flex; gap: 0.35rem; flex-wrap: wrap; }
-    .ci-chip { padding: 0.28rem 0.65rem; border-radius: 20px; font-size: 0.72rem; font-weight: 800; border: 1.5px solid rgba(87,46,136,0.18); background: #fff; color: rgba(26,21,48,0.55); cursor: pointer; font-family: var(--bts-font); }
-    .ci-chip.active { background: #572e88; color: #fff; border-color: #572e88; }
-    .ci-events-list { overflow-y: auto; flex: 1; padding: 0.5rem 0; }
-    .ci-date-label { padding: 0.55rem 1rem 0.2rem; font-size: 0.65rem; font-weight: 900; letter-spacing: 0.07em; text-transform: uppercase; color: rgba(26,21,48,0.38); }
-    .ci-event-row { display: flex; align-items: center; gap: 0.65rem; padding: 0.65rem 1rem; cursor: pointer; }
-    .ci-event-row:hover { background: rgba(87,46,136,0.06); }
-    .ci-event-row.selected { background: rgba(87,46,136,0.1); }
-    .ci-event-row.past .ci-event-name, .ci-event-row.past .ci-event-time { opacity: 0.5; }
-    .ci-event-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
-    .ci-event-row.past .ci-event-dot { opacity: 0.4; }
-    .ci-event-info { flex: 1; min-width: 0; }
-    .ci-event-name { font-size: 0.82rem; font-weight: 800; color: #1a1530; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .ci-event-time { font-size: 0.72rem; color: rgba(26,21,48,0.5); margin-top: 0.1rem; }
-    .ci-event-count { font-size: 0.7rem; font-weight: 900; color: #572e88; flex-shrink: 0; }
+    /* ── Right panel ── */
+    .rp-overlay { display: none; position: fixed; inset: 0; z-index: 300; }
+    .rp-overlay.open { display: block; }
+    .ci-right-panel { position: fixed; top: 0; right: 0; bottom: 0; width: 380px; background: #fff; z-index: 301; box-shadow: -4px 0 32px rgba(0,0,0,0.11); transform: translateX(100%); transition: transform 0.2s ease; overflow-y: auto; }
+    .ci-right-panel.open { transform: translateX(0); }
 
-    /* Detail */
-    .ci-detail { flex: 1; min-width: 0; }
-    .ci-detail-empty { padding: 5rem 2rem; text-align: center; color: rgba(26,21,48,0.38); font-size: 0.88rem; line-height: 1.6; }
-    .ci-detail-empty img { display: block; margin: 0 auto 1rem; width: 44px; opacity: 0.18; }
+    /* ── Page header ── */
+    .ci-header { background: #fff; border-bottom: 1px solid rgba(87,46,136,0.1); padding: 1.1rem 1.75rem; display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
+    .ci-header-left { flex: 1; min-width: 0; }
+    .ci-ev-kicker { font-size: 0.68rem; font-weight: 900; text-transform: uppercase; letter-spacing: 0.08em; color: rgba(26,21,48,0.4); margin-bottom: 0.2rem; display: flex; align-items: center; gap: 0.5rem; }
+    .ci-ev-kicker-dot { width: 7px; height: 7px; border-radius: 50%; }
+    .ci-ev-title { font-size: 1.55rem; font-weight: 950; color: #1a1530; margin: 0 0 0.35rem; cursor: pointer; display: inline-flex; align-items: center; gap: 0.4rem; }
+    .ci-ev-title:hover .ci-ev-change { opacity: 1; }
+    .ci-ev-change { font-size: 0.62rem; font-weight: 850; padding: 0.2rem 0.55rem; border-radius: 20px; border: 1.5px solid rgba(87,46,136,0.25); color: #572e88; background: rgba(87,46,136,0.06); opacity: 0; transition: opacity 0.15s; cursor: pointer; vertical-align: middle; white-space: nowrap; }
+    .ci-ev-meta { display: flex; flex-wrap: wrap; gap: 0.3rem 1.25rem; font-size: 0.82rem; color: rgba(26,21,48,0.5); }
+    .ci-header-btns { display: flex; gap: 0.6rem; align-items: center; flex-shrink: 0; }
+    .ci-bulk-actions-btn { padding: 0.48rem 1.1rem; border-radius: 8px; font-size: 0.78rem; font-weight: 850; border: 1.5px solid rgba(87,46,136,0.2); background: #fff; color: #572e88; cursor: pointer; font-family: var(--bts-font); }
+    .ci-end-btn { padding: 0.48rem 1.1rem; border-radius: 8px; font-size: 0.78rem; font-weight: 850; border: 1.5px solid rgba(87,46,136,0.25); background: #572e88; color: #fff; cursor: pointer; font-family: var(--bts-font); display: flex; align-items: center; gap: 0.4rem; }
+    .ci-end-btn:hover { background: #3e1f6b; }
+    .ci-locked-badge { display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.38rem 0.95rem; border-radius: 20px; background: rgba(71,106,170,0.1); color: #3b5a9b; font-size: 0.78rem; font-weight: 900; }
+    .ci-select-event-btn { padding: 0.55rem 1.25rem; border-radius: 10px; border: 2px dashed rgba(87,46,136,0.25); background: rgba(87,46,136,0.04); color: #572e88; font-size: 0.84rem; font-weight: 850; cursor: pointer; font-family: var(--bts-font); }
+    .ci-select-event-btn:hover { background: rgba(87,46,136,0.08); }
 
-    /* Event header */
-    .ci-event-header { margin-bottom: 1.25rem; padding-bottom: 1.25rem; border-bottom: 1px solid rgba(87,46,136,0.1); display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
-    .ci-event-type-pill { display: inline-flex; align-items: center; padding: 0.25rem 0.75rem; border-radius: 20px; font-size: 0.7rem; font-weight: 900; letter-spacing: 0.04em; color: #fff; margin-bottom: 0.55rem; }
-    .ci-detail-title { font-size: 1.2rem; font-weight: 950; color: #1a1530; margin: 0 0 0.4rem; }
-    .ci-detail-meta { font-size: 0.82rem; color: rgba(26,21,48,0.5); display: flex; flex-wrap: wrap; gap: 0.4rem 1.25rem; }
-    .ci-header-btns { display: flex; gap: 0.5rem; align-items: center; flex-shrink: 0; flex-wrap: wrap; }
-    .ci-end-btn { padding: 0.45rem 1rem; border-radius: 8px; font-size: 0.78rem; font-weight: 900; border: 1.5px solid rgba(209,82,61,0.3); background: rgba(209,82,61,0.06); color: #bf3a24; cursor: pointer; font-family: var(--bts-font); }
-    .ci-end-btn:hover { background: #d1523d; color: #fff; border-color: #d1523d; }
-    .ci-locked-badge { display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.35rem 0.85rem; border-radius: 20px; background: rgba(71,106,170,0.12); color: #3b5a9b; font-size: 0.75rem; font-weight: 900; }
+    /* ── Stats bar ── */
+    .ci-stats { display: flex; gap: 0; border-bottom: 1px solid rgba(87,46,136,0.1); background: #fff; }
+    .ci-stat { flex: 1; padding: 1rem 1.25rem; text-align: center; border-right: 1px solid rgba(87,46,136,0.08); }
+    .ci-stat:last-child { border-right: none; }
+    .ci-stat-num { font-size: 2rem; font-weight: 950; color: #1a1530; line-height: 1; }
+    .ci-stat-pct { font-size: 0.65rem; font-weight: 800; color: rgba(26,21,48,0.35); margin-top: 0.05rem; }
+    .ci-stat-lbl { font-size: 0.6rem; font-weight: 900; text-transform: uppercase; letter-spacing: 0.07em; color: rgba(26,21,48,0.4); margin-top: 0.2rem; }
+    .ci-stat.s-here    .ci-stat-num { color: #3a8036; }
+    .ci-stat.s-late    .ci-stat-num { color: #9b6b00; }
+    .ci-stat.s-absent  .ci-stat-num { color: #bf3a24; }
+    .ci-stat.s-excused .ci-stat-num { color: #476aaa; }
 
-    /* Tabs */
-    .ci-tabs { display: flex; border-bottom: 2px solid rgba(87,46,136,0.1); margin-bottom: 1.25rem; }
-    .ci-tab-btn { padding: 0.6rem 1.25rem; font-size: 0.82rem; font-weight: 800; color: rgba(26,21,48,0.45); border: none; background: none; cursor: pointer; border-bottom: 2.5px solid transparent; margin-bottom: -2px; font-family: var(--bts-font); }
-    .ci-tab-btn.active { color: #572e88; border-bottom-color: #572e88; }
-
-    /* Common buttons */
-    .ci-btn-secondary { padding: 0.45rem 0.95rem; border-radius: 8px; font-size: 0.75rem; font-weight: 850; border: 1.5px solid rgba(87,46,136,0.2); background: #fff; color: #572e88; cursor: pointer; font-family: var(--bts-font); }
-    .ci-btn-primary { padding: 0.45rem 1rem; border-radius: 8px; font-size: 0.78rem; font-weight: 850; border: none; background: #572e88; color: #fff; cursor: pointer; font-family: var(--bts-font); }
-    .ci-btn-primary:disabled { opacity: 0.45; cursor: default; }
-
-    /* Call list */
-    .ci-calllist-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; flex-wrap: wrap; margin-bottom: 1rem; }
-    .ci-calllist-hint { font-size: 0.8rem; color: rgba(26,21,48,0.5); max-width: 480px; line-height: 1.5; }
-    .ci-calllist-actions { display: flex; gap: 0.6rem; align-items: center; flex-shrink: 0; }
-    .ci-char-grid { display: flex; flex-direction: column; gap: 0.4rem; }
-    .ci-char-row { display: flex; align-items: center; gap: 0.75rem; padding: 0.65rem 0.85rem; border-radius: 10px; border: 1.5px solid rgba(87,46,136,0.12); background: #fff; cursor: pointer; user-select: none; }
-    .ci-char-row:hover { border-color: rgba(87,46,136,0.28); }
-    .ci-char-row.called { border-color: #572e88; background: rgba(87,46,136,0.04); }
-    .ci-char-checkbox { width: 18px; height: 18px; border: 2px solid rgba(87,46,136,0.3); border-radius: 4px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
-    .ci-char-row.called .ci-char-checkbox { background: #572e88; border-color: #572e88; }
-    .ci-check-icon { color: #fff; font-size: 11px; line-height: 1; }
-    .ci-char-name { font-size: 0.85rem; font-weight: 800; color: #1a1530; }
-    .ci-char-cast { font-size: 0.75rem; color: rgba(26,21,48,0.5); margin-top: 0.1rem; }
-    .ci-char-uncasted { font-size: 0.75rem; color: rgba(26,21,48,0.35); margin-top: 0.1rem; font-style: italic; }
-    .ci-empty-state { padding: 2.5rem; text-align: center; color: rgba(26,21,48,0.38); font-size: 0.85rem; }
-
-    /* ═══ Check-In: Stats bar ═══ */
-    .ci-stats-bar { display: flex; gap: 0.65rem; flex-wrap: wrap; margin-bottom: 1.25rem; }
-    .ci-stat-box { background: #fff; border: 1px solid rgba(87,46,136,0.12); border-radius: 12px; padding: 0.85rem 1rem; text-align: center; flex: 1; min-width: 80px; }
-    .ci-stat-num { font-size: 1.9rem; font-weight: 950; line-height: 1; color: #1a1530; }
-    .ci-stat-pct { font-size: 0.68rem; font-weight: 800; color: rgba(26,21,48,0.38); margin-top: 0.08rem; }
-    .ci-stat-lbl { font-size: 0.6rem; font-weight: 900; text-transform: uppercase; letter-spacing: 0.07em; color: rgba(26,21,48,0.4); margin-top: 0.22rem; }
-    .ci-stat-box.s-here    { border-color: rgba(70,155,66,0.2); }
-    .ci-stat-box.s-late    { border-color: rgba(239,171,69,0.2); }
-    .ci-stat-box.s-absent  { border-color: rgba(209,82,61,0.2); }
-    .ci-stat-box.s-excused { border-color: rgba(71,106,170,0.2); }
-    .ci-stat-box.s-here    .ci-stat-num { color: #469b42; }
-    .ci-stat-box.s-late    .ci-stat-num { color: #efab45; }
-    .ci-stat-box.s-absent  .ci-stat-num { color: #d1523d; }
-    .ci-stat-box.s-excused .ci-stat-num { color: #476aaa; }
-
-    /* Controls row */
-    .ci-controls { display: flex; align-items: center; gap: 0.65rem; flex-wrap: wrap; margin-bottom: 0.85rem; }
+    /* ── Controls row ── */
+    .ci-controls { display: flex; align-items: center; gap: 0.5rem; padding: 0.75rem 1.75rem; background: #fff; border-bottom: 1px solid rgba(87,46,136,0.08); flex-wrap: wrap; }
     .ci-filter-tabs { display: flex; gap: 0.3rem; flex-wrap: wrap; flex: 1; }
-    .ci-ftab { padding: 0.35rem 0.75rem; border-radius: 20px; font-size: 0.73rem; font-weight: 800; border: 1.5px solid rgba(87,46,136,0.15); background: #fff; color: rgba(26,21,48,0.52); cursor: pointer; font-family: var(--bts-font); white-space: nowrap; }
+    .ci-ftab { padding: 0.35rem 0.75rem; border-radius: 20px; font-size: 0.73rem; font-weight: 800; border: 1.5px solid rgba(87,46,136,0.14); background: #f5f4f9; color: rgba(26,21,48,0.52); cursor: pointer; font-family: var(--bts-font); white-space: nowrap; }
     .ci-ftab.active { background: #1a1530; color: #fff; border-color: #1a1530; }
-    .ci-ftab span { opacity: 0.6; margin-left: 0.2rem; }
-    .ci-controls-right { display: flex; gap: 0.45rem; align-items: center; flex-shrink: 0; }
-    .ci-search { padding: 0.48rem 0.85rem; border: 1.5px solid rgba(87,46,136,0.18); border-radius: 8px; font-size: 0.82rem; font-family: var(--bts-font); color: #1a1530; outline: none; width: 210px; }
-    .ci-search:focus { border-color: #572e88; }
+    .ci-ftab span { opacity: 0.55; margin-left: 0.18rem; font-weight: 700; }
+    .ci-search { padding: 0.45rem 0.85rem; border: 1.5px solid rgba(87,46,136,0.16); border-radius: 8px; font-size: 0.82rem; font-family: var(--bts-font); color: #1a1530; outline: none; width: 200px; background: #f9f8fc; }
+    .ci-search:focus { border-color: #572e88; background: #fff; }
+    .ci-setup-calllist-btn { padding: 0.38rem 0.85rem; border-radius: 8px; border: 1.5px solid rgba(87,46,136,0.2); background: #fff; color: #572e88; font-size: 0.73rem; font-weight: 850; cursor: pointer; font-family: var(--bts-font); white-space: nowrap; }
 
-    /* Bulk bar */
-    .ci-bulk-bar { display: none; align-items: center; gap: 0.45rem; padding: 0.55rem 0.85rem; background: #1a1530; border-radius: 8px; margin-bottom: 0.85rem; flex-wrap: wrap; }
-    .ci-bulk-lbl { font-size: 0.75rem; color: rgba(255,255,255,0.6); font-weight: 700; flex-shrink: 0; }
-    .ci-bulk-opt { padding: 0.28rem 0.65rem; border-radius: 5px; font-size: 0.7rem; font-weight: 900; border: none; cursor: pointer; font-family: var(--bts-font); }
+    /* ── Bulk bar ── */
+    .ci-bulk-bar { display: none; align-items: center; gap: 0.4rem; padding: 0.55rem 1.75rem; background: #1a1530; flex-wrap: wrap; }
+    .ci-bulk-bar.vis { display: flex; }
+    .ci-bulk-lbl { font-size: 0.75rem; color: rgba(255,255,255,0.55); font-weight: 700; flex-shrink: 0; }
+    .ci-bulk-opt { padding: 0.3rem 0.7rem; border-radius: 5px; font-size: 0.72rem; font-weight: 900; border: none; cursor: pointer; font-family: var(--bts-font); }
     .ci-bulk-opt.s-here    { background: #469b42; color: #fff; }
-    .ci-bulk-opt.s-late    { background: #efab45; color: #fff; }
+    .ci-bulk-opt.s-late    { background: #efab45; color: #1a1530; }
     .ci-bulk-opt.s-absent  { background: #d1523d; color: #fff; }
     .ci-bulk-opt.s-excused { background: #476aaa; color: #fff; }
-    .ci-bulk-opt.s-clear   { background: rgba(255,255,255,0.12); color: #fff; }
-    .ci-bulk-desel { background: transparent; color: rgba(255,255,255,0.45); border: none; cursor: pointer; font-size: 0.7rem; margin-left: auto; font-family: var(--bts-font); }
+    .ci-bulk-opt.s-clear   { background: rgba(255,255,255,0.1); color: rgba(255,255,255,0.75); }
+    .ci-bulk-desel { margin-left: auto; background: transparent; border: none; color: rgba(255,255,255,0.38); font-size: 0.7rem; cursor: pointer; font-family: var(--bts-font); }
 
-    /* Table */
-    .ci-table-wrap { border-radius: 12px; border: 1px solid rgba(87,46,136,0.1); overflow: hidden; }
-    .ci-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
-    .ci-th { padding: 0.6rem 0.85rem; font-size: 0.62rem; font-weight: 900; text-transform: uppercase; letter-spacing: 0.07em; color: rgba(26,21,48,0.4); background: #f9f8fc; text-align: left; border-bottom: 1px solid rgba(87,46,136,0.1); white-space: nowrap; }
-    .ci-tr { border-bottom: 1px solid rgba(87,46,136,0.07); background: #fff; }
-    .ci-tr:last-child { border-bottom: none; }
-    .ci-tr:hover { background: rgba(87,46,136,0.025); }
-    .ci-tr.is-selected { background: rgba(87,46,136,0.06) !important; }
-    .ci-tr.ci-tr-here    { background: rgba(70,155,66,0.03); }
-    .ci-tr.ci-tr-late    { background: rgba(239,171,69,0.04); }
-    .ci-tr.ci-tr-absent  { background: rgba(209,82,61,0.03); }
-    .ci-tr.ci-tr-excused { background: rgba(71,106,170,0.03); }
-    .ci-td { padding: 0.7rem 0.85rem; vertical-align: middle; font-size: 0.84rem; color: #1a1530; }
-    .ci-td:first-child { padding-left: 0.85rem; }
+    /* ── Table ── */
+    .ci-table-wrap { flex: 1; overflow-x: auto; }
+    .ci-table { width: 100%; border-collapse: collapse; }
+    .ci-thead { background: #faf9fc; }
+    .ci-th { padding: 0.55rem 0.85rem; font-size: 0.6rem; font-weight: 900; text-transform: uppercase; letter-spacing: 0.07em; color: rgba(26,21,48,0.38); text-align: left; border-bottom: 1px solid rgba(87,46,136,0.09); white-space: nowrap; }
+    .ci-th:first-child { padding-left: 1.75rem; }
+    .ci-th:last-child  { padding-right: 1.75rem; }
+    .ci-tr { border-bottom: 1px solid rgba(87,46,136,0.06); background: #fff; transition: background 0.1s; cursor: pointer; }
+    .ci-tr:hover { background: rgba(87,46,136,0.03); }
+    .ci-tr.selected { background: rgba(87,46,136,0.06) !important; }
+    .ci-tr.panel-open { background: rgba(87,46,136,0.05) !important; }
+    .ci-tr.s-here    { background: rgba(70,155,66,0.025); }
+    .ci-tr.s-late    { background: rgba(239,171,69,0.035); }
+    .ci-tr.s-absent  { background: rgba(209,82,61,0.025); }
+    .ci-tr.s-excused { background: rgba(71,106,170,0.025); }
+    .ci-td { padding: 0.7rem 0.85rem; vertical-align: middle; }
+    .ci-td:first-child { padding-left: 1.75rem; }
+    .ci-td:last-child  { padding-right: 1.75rem; }
 
     /* Performer cell */
-    .ci-performer-cell { display: flex; align-items: center; gap: 0.6rem; }
-    .ci-row-avatar { width: 34px; height: 34px; border-radius: 6px; object-fit: cover; flex-shrink: 0; background: #efefef; }
-    .ci-row-avatar-init { width: 34px; height: 34px; border-radius: 6px; background: #572e88; color: #fff; font-size: 0.68rem; font-weight: 900; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
-    .ci-performer-name { font-size: 0.84rem; font-weight: 850; color: #1a1530; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .ci-conflict-dot { display: inline-block; width: 14px; height: 14px; background: #efab45; color: #fff; font-size: 0.58rem; font-weight: 900; border-radius: 50%; text-align: center; line-height: 14px; margin-left: 0.25rem; vertical-align: middle; flex-shrink: 0; }
-    .ci-badge-vol { display: inline-block; padding: 0.08rem 0.38rem; border-radius: 20px; background: rgba(118,158,123,0.15); color: #4a7e50; font-size: 0.6rem; font-weight: 900; }
-    .ci-td-role { color: rgba(26,21,48,0.5); font-size: 0.78rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .ci-perf-cell { display: flex; align-items: center; gap: 0.65rem; }
+    .ci-avatar { width: 38px; height: 38px; border-radius: 8px; object-fit: cover; flex-shrink: 0; background: #efefef; }
+    .ci-avatar-init { width: 38px; height: 38px; border-radius: 8px; background: #572e88; color: #fff; font-size: 0.72rem; font-weight: 900; display: flex; align-items: center; justify-content: center; flex-shrink: 0; letter-spacing: 0.02em; }
+    .ci-perf-name { font-size: 0.88rem; font-weight: 850; color: #1a1530; line-height: 1.2; }
+    .ci-perf-badge { display: inline-block; padding: 0.07rem 0.38rem; border-radius: 20px; font-size: 0.58rem; font-weight: 900; margin-top: 0.12rem; }
+    .ci-badge-vol  { background: rgba(118,158,123,0.15); color: #4a7e50; }
+    .ci-char-cell { font-size: 0.8rem; color: rgba(26,21,48,0.52); }
 
-    /* Status pill */
-    .ci-spill { padding: 0.3rem 0.7rem; border-radius: 20px; font-size: 0.7rem; font-weight: 900; border: 1.5px solid transparent; cursor: pointer; font-family: var(--bts-font); white-space: nowrap; }
-    .ci-spill.s-here    { background: rgba(70,155,66,0.12);  color: #3a8036;  border-color: rgba(70,155,66,0.2); }
-    .ci-spill.s-late    { background: rgba(239,171,69,0.13); color: #9b6b00;  border-color: rgba(239,171,69,0.22); }
-    .ci-spill.s-absent  { background: rgba(209,82,61,0.1);   color: #bf3a24;  border-color: rgba(209,82,61,0.18); }
-    .ci-spill.s-excused { background: rgba(71,106,170,0.1);  color: #3b5a9b;  border-color: rgba(71,106,170,0.18); }
+    /* Inline status picker */
+    .ci-status-cell { white-space: nowrap; }
+    .ci-spill { display: inline-flex; align-items: center; gap: 0.3rem; padding: 0.32rem 0.75rem; border-radius: 20px; font-size: 0.72rem; font-weight: 900; border: 1.5px solid transparent; cursor: pointer; font-family: var(--bts-font); white-space: nowrap; }
+    .ci-spill.s-here    { background: rgba(70,155,66,0.12);  color: #3a8036;  border-color: rgba(70,155,66,0.22); }
+    .ci-spill.s-late    { background: rgba(239,171,69,0.14); color: #9b6b00;  border-color: rgba(239,171,69,0.25); }
+    .ci-spill.s-absent  { background: rgba(209,82,61,0.1);   color: #bf3a24;  border-color: rgba(209,82,61,0.2); }
+    .ci-spill.s-excused { background: rgba(71,106,170,0.1);  color: #3b5a9b;  border-color: rgba(71,106,170,0.2); }
     .ci-spill.s-none    { background: rgba(26,21,48,0.05);   color: rgba(26,21,48,0.38); border-color: rgba(26,21,48,0.1); }
-    button.ci-spill:hover { opacity: 0.75; }
-
-    /* Floating picker */
-    .ci-picker-float { position: fixed; z-index: 500; background: #fff; border: 1.5px solid rgba(87,46,136,0.18); border-radius: 10px; box-shadow: 0 4px 20px rgba(0,0,0,0.13); padding: 0.3rem; display: flex; flex-direction: column; gap: 0.15rem; min-width: 140px; }
-    .ci-picker-opt { padding: 0.38rem 0.75rem; border-radius: 6px; font-size: 0.78rem; font-weight: 850; border: none; cursor: pointer; font-family: var(--bts-font); text-align: left; background: transparent; }
-    .ci-picker-opt.s-here    { color: #3a8036; }
-    .ci-picker-opt.s-late    { color: #9b6b00; }
-    .ci-picker-opt.s-absent  { color: #bf3a24; }
-    .ci-picker-opt.s-excused { color: #3b5a9b; }
-    .ci-picker-opt.s-clear   { color: rgba(26,21,48,0.38); }
-    .ci-picker-opt:hover { background: rgba(87,46,136,0.07); }
+    .ci-picker-row { display: flex; gap: 0.3rem; align-items: center; }
+    .ci-picker-opt { padding: 0.3rem 0.65rem; border-radius: 20px; font-size: 0.7rem; font-weight: 900; border: 1.5px solid transparent; cursor: pointer; font-family: var(--bts-font); }
+    .ci-picker-opt.s-here    { border-color: rgba(70,155,66,0.3);   color: #3a8036;  background: rgba(70,155,66,0.08); }
+    .ci-picker-opt.s-late    { border-color: rgba(239,171,69,0.3);  color: #9b6b00;  background: rgba(239,171,69,0.09); }
+    .ci-picker-opt.s-absent  { border-color: rgba(209,82,61,0.25);  color: #bf3a24;  background: rgba(209,82,61,0.07); }
+    .ci-picker-opt.s-excused { border-color: rgba(71,106,170,0.25); color: #3b5a9b;  background: rgba(71,106,170,0.07); }
     .ci-picker-opt.is-active { font-weight: 950; }
+    .ci-picker-opt.s-here.is-active    { background: rgba(70,155,66,0.18); }
+    .ci-picker-opt.s-late.is-active    { background: rgba(239,171,69,0.2); }
+    .ci-picker-opt.s-absent.is-active  { background: rgba(209,82,61,0.16); }
+    .ci-picker-opt.s-excused.is-active { background: rgba(71,106,170,0.16); }
+    .ci-picker-opt:hover { filter: brightness(0.93); }
 
-    /* Time cells */
-    .ci-time-btn { background: none; border: none; cursor: pointer; font-size: 0.78rem; color: rgba(26,21,48,0.5); font-family: var(--bts-font); padding: 0.18rem 0; }
-    .ci-time-btn:hover { color: #572e88; }
-    .ci-late-note { color: #efab45; font-size: 0.68rem; font-weight: 800; }
+    /* Time cell */
+    .ci-time-val { font-size: 0.8rem; color: rgba(26,21,48,0.6); }
+    .ci-late-mins { font-size: 0.65rem; color: #9b6b00; font-weight: 800; display: block; }
+    .ci-time-btn { background: none; border: none; cursor: pointer; font-size: 0.8rem; color: rgba(26,21,48,0.55); font-family: var(--bts-font); padding: 0; }
+    .ci-time-btn:hover { color: #572e88; text-decoration: underline; }
+
+    /* Notes indicator */
+    .ci-note-dot { position: relative; display: inline-flex; }
+    .ci-note-icon { font-size: 1rem; color: rgba(26,21,48,0.28); cursor: pointer; }
+    .ci-note-icon.has-note { color: #572e88; }
+    .ci-note-badge { position: absolute; top: -3px; right: -4px; width: 8px; height: 8px; border-radius: 50%; background: #d1523d; border: 1.5px solid #fff; }
 
     /* Action icons */
-    .ci-icon-btn { width: 26px; height: 26px; border-radius: 5px; border: none; background: transparent; color: rgba(26,21,48,0.35); font-size: 0.85rem; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; text-decoration: none; font-family: var(--bts-font); }
-    .ci-icon-btn:hover { background: rgba(87,46,136,0.08); color: #572e88; }
+    .ci-actions-cell { display: flex; gap: 0.2rem; }
+    .ci-act-btn { width: 28px; height: 28px; border-radius: 6px; border: none; background: transparent; color: rgba(26,21,48,0.32); font-size: 0.88rem; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; text-decoration: none; font-family: var(--bts-font); }
+    .ci-act-btn:hover { background: rgba(87,46,136,0.08); color: #572e88; }
 
-    /* Right panel */
-    .ci-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.18); z-index: 300; }
-    .ci-overlay.open { display: block; }
-    .ci-right-panel { position: fixed; top: 0; right: 0; bottom: 0; width: 355px; background: #fff; z-index: 301; box-shadow: -4px 0 24px rgba(0,0,0,0.1); transform: translateX(100%); transition: transform 0.22s ease; overflow-y: auto; }
-    .ci-right-panel.open { transform: translateX(0); }
-    .ci-rp-top { padding: 1.1rem 1.1rem 0; display: flex; justify-content: flex-end; }
-    .ci-rp-close { width: 28px; height: 28px; border-radius: 50%; border: 1.5px solid rgba(87,46,136,0.15); background: #fff; color: rgba(26,21,48,0.45); font-size: 1rem; cursor: pointer; display: flex; align-items: center; justify-content: center; }
-    .ci-rp-close:hover { border-color: #572e88; color: #572e88; }
-    .ci-rp-hero { padding: 0.85rem 1.1rem 1.1rem; display: flex; gap: 0.85rem; align-items: flex-start; border-bottom: 1px solid rgba(87,46,136,0.09); }
-    .ci-rp-avatar { width: 66px; height: 66px; border-radius: 9px; object-fit: cover; flex-shrink: 0; background: #efefef; }
-    .ci-rp-avatar-init { width: 66px; height: 66px; border-radius: 9px; background: #572e88; color: #fff; font-size: 1.3rem; font-weight: 900; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
-    .ci-rp-name { font-size: 1rem; font-weight: 950; color: #1a1530; }
-    .ci-rp-role { font-size: 0.78rem; color: rgba(26,21,48,0.52); margin-top: 0.12rem; }
-    .ci-rp-status-row { display: flex; align-items: center; gap: 0.4rem; margin-top: 0.45rem; flex-wrap: wrap; }
-    .ci-rp-time { font-size: 0.68rem; color: rgba(26,21,48,0.42); }
-    .ci-rp-actions { display: flex; gap: 0.45rem; padding: 0.75rem 1.1rem; border-bottom: 1px solid rgba(87,46,136,0.09); flex-wrap: wrap; }
-    .ci-rp-action-btn { display: flex; flex-direction: column; align-items: center; gap: 0.2rem; padding: 0.45rem 0.75rem; border-radius: 8px; border: 1.5px solid rgba(87,46,136,0.15); background: #fff; color: #572e88; font-size: 0.65rem; font-weight: 900; cursor: pointer; text-align: center; text-decoration: none; font-family: var(--bts-font); flex: 1; min-width: 60px; }
-    .ci-rp-action-btn:hover { background: rgba(87,46,136,0.06); }
-    .ci-rp-action-icon { font-size: 1rem; }
-    .ci-rp-section { padding: 0.9rem 1.1rem; border-bottom: 1px solid rgba(87,46,136,0.08); }
-    .ci-rp-section:last-child { border-bottom: none; padding-bottom: 1.5rem; }
-    .ci-rp-section-title { font-size: 0.62rem; font-weight: 900; text-transform: uppercase; letter-spacing: 0.08em; color: rgba(26,21,48,0.38); margin-bottom: 0.6rem; }
-    .ci-rp-row { font-size: 0.8rem; color: #1a1530; margin-bottom: 0.32rem; line-height: 1.4; }
-    .ci-rp-row a { color: #572e88; text-decoration: none; }
-    .ci-rp-row a:hover { text-decoration: underline; }
-    .ci-rp-label { font-weight: 850; }
-    .ci-rp-empty { font-size: 0.75rem; color: rgba(26,21,48,0.32); font-style: italic; }
+    /* Empty state */
+    .ci-empty { padding: 4rem 2rem; text-align: center; color: rgba(26,21,48,0.35); font-size: 0.88rem; }
+    .ci-no-event { padding: 5rem 2rem; text-align: center; }
+    .ci-no-event-title { font-size: 1.1rem; font-weight: 900; color: #1a1530; margin-bottom: 0.5rem; }
+    .ci-no-event-copy  { font-size: 0.85rem; color: rgba(26,21,48,0.5); margin-bottom: 1.25rem; }
 
-    /* History dots */
-    .ci-hist-row { display: flex; flex-wrap: wrap; gap: 0.28rem; margin-bottom: 0.45rem; }
-    .ci-hist-dot { width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.58rem; font-weight: 900; cursor: default; }
-    .ci-hist-legend { font-size: 0.62rem; color: rgba(26,21,48,0.36); }
+    /* ── Call list modal ── */
+    .cl-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.22); z-index: 400; align-items: flex-start; justify-content: center; padding-top: 4rem; }
+    .cl-overlay.open { display: flex; }
+    .cl-modal { background: #fff; border-radius: 16px; width: 520px; max-width: calc(100vw - 2rem); max-height: 80vh; display: flex; flex-direction: column; box-shadow: 0 8px 40px rgba(0,0,0,0.18); overflow: hidden; }
+    .cl-head { padding: 1.2rem 1.4rem; border-bottom: 1px solid rgba(87,46,136,0.1); display: flex; align-items: center; justify-content: space-between; }
+    .cl-title { font-size: 0.95rem; font-weight: 900; color: #1a1530; }
+    .cl-sub   { font-size: 0.75rem; color: rgba(26,21,48,0.45); margin-top: 0.1rem; }
+    .cl-close { width: 28px; height: 28px; border-radius: 50%; border: 1.5px solid rgba(87,46,136,0.15); background: #fff; color: rgba(26,21,48,0.45); font-size: 1rem; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .cl-close:hover { border-color: #572e88; color: #572e88; }
+    .cl-body { overflow-y: auto; flex: 1; padding: 0.75rem 1.4rem; display: flex; flex-direction: column; gap: 0.4rem; }
+    .cl-row { display: flex; align-items: center; gap: 0.75rem; padding: 0.65rem 0.75rem; border-radius: 10px; border: 1.5px solid rgba(87,46,136,0.1); cursor: pointer; user-select: none; }
+    .cl-row:hover { border-color: rgba(87,46,136,0.25); }
+    .cl-row.called { border-color: #572e88; background: rgba(87,46,136,0.04); }
+    .cl-cb { width: 18px; height: 18px; border: 2px solid rgba(87,46,136,0.28); border-radius: 4px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
+    .cl-row.called .cl-cb { background: #572e88; border-color: #572e88; color: #fff; font-size: 11px; }
+    .cl-char-name { font-size: 0.85rem; font-weight: 850; color: #1a1530; }
+    .cl-char-cast { font-size: 0.73rem; color: rgba(26,21,48,0.45); margin-top: 0.08rem; }
+    .cl-foot { padding: 0.85rem 1.4rem; border-top: 1px solid rgba(87,46,136,0.1); display: flex; gap: 0.5rem; justify-content: flex-end; align-items: center; }
+    .cl-sel-all { padding: 0.42rem 0.9rem; border-radius: 7px; border: 1.5px solid rgba(87,46,136,0.2); background: #fff; color: #572e88; font-size: 0.75rem; font-weight: 850; cursor: pointer; font-family: var(--bts-font); }
+    .cl-save { padding: 0.42rem 1.1rem; border-radius: 7px; border: none; background: #572e88; color: #fff; font-size: 0.78rem; font-weight: 900; cursor: pointer; font-family: var(--bts-font); }
+    .cl-save:disabled { opacity: 0.45; cursor: default; }
 
-    /* Notes */
-    .ci-notes-area { width: 100%; padding: 0.55rem 0.7rem; border: 1.5px solid rgba(87,46,136,0.18); border-radius: 8px; font-size: 0.82rem; font-family: var(--bts-font); color: #1a1530; resize: vertical; min-height: 75px; outline: none; }
-    .ci-notes-area:focus { border-color: #572e88; }
-    .ci-notes-save { margin-top: 0.45rem; padding: 0.42rem 0.95rem; border-radius: 7px; border: none; background: #572e88; color: #fff; font-size: 0.73rem; font-weight: 900; cursor: pointer; font-family: var(--bts-font); }
+    /* ── Right panel ── */
+    .rp-top { padding: 1rem 1.1rem 0; display: flex; justify-content: flex-end; }
+    .rp-close { width: 28px; height: 28px; border-radius: 50%; border: 1.5px solid rgba(87,46,136,0.15); background: #fff; color: rgba(26,21,48,0.45); font-size: 1rem; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+    .rp-close:hover { border-color: #572e88; color: #572e88; }
+    .rp-hero { padding: 0.75rem 1.25rem 1.1rem; display: flex; gap: 1rem; align-items: flex-start; border-bottom: 1px solid rgba(87,46,136,0.09); }
+    .rp-avatar { width: 72px; height: 72px; border-radius: 10px; object-fit: cover; flex-shrink: 0; background: #efefef; }
+    .rp-avatar-init { width: 72px; height: 72px; border-radius: 10px; background: #572e88; color: #fff; font-size: 1.4rem; font-weight: 900; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .rp-name { font-size: 1.05rem; font-weight: 950; color: #1a1530; }
+    .rp-char { font-size: 0.8rem; color: rgba(26,21,48,0.5); margin-top: 0.12rem; }
+    .rp-status-row { display: flex; align-items: center; gap: 0.45rem; margin-top: 0.5rem; flex-wrap: wrap; }
+    .rp-arrived { font-size: 0.7rem; color: rgba(26,21,48,0.4); }
+    .rp-action-row { display: flex; gap: 0.5rem; padding: 0.75rem 1.25rem; border-bottom: 1px solid rgba(87,46,136,0.09); flex-wrap: wrap; }
+    .rp-act-btn { display: flex; flex-direction: column; align-items: center; gap: 0.22rem; padding: 0.5rem 0.65rem; border-radius: 9px; border: 1.5px solid rgba(87,46,136,0.15); background: #fff; color: #572e88; font-size: 0.62rem; font-weight: 900; cursor: pointer; text-decoration: none; font-family: var(--bts-font); flex: 1; min-width: 55px; }
+    .rp-act-btn:hover { background: rgba(87,46,136,0.06); }
+    .rp-act-icon { font-size: 1.1rem; }
+    .rp-section { padding: 0.9rem 1.25rem; border-bottom: 1px solid rgba(87,46,136,0.07); }
+    .rp-section:last-child { border-bottom: none; padding-bottom: 2rem; }
+    .rp-section-title { font-size: 0.6rem; font-weight: 900; text-transform: uppercase; letter-spacing: 0.08em; color: rgba(26,21,48,0.38); margin-bottom: 0.6rem; }
+    .rp-line { font-size: 0.82rem; color: #1a1530; margin-bottom: 0.28rem; line-height: 1.45; }
+    .rp-line a { color: #572e88; text-decoration: none; }
+    .rp-line a:hover { text-decoration: underline; }
+    .rp-lbl { font-weight: 850; }
+    .rp-empty { font-size: 0.75rem; color: rgba(26,21,48,0.3); font-style: italic; }
+    .rp-medical { font-size: 0.82rem; color: #1a1530; line-height: 1.55; padding: 0.6rem 0.75rem; background: rgba(239,171,69,0.08); border: 1.5px solid rgba(239,171,69,0.22); border-radius: 8px; }
+    .rp-hist-dots { display: flex; flex-wrap: wrap; gap: 0.28rem; margin-bottom: 0.4rem; }
+    .rp-hist-dot { width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.6rem; font-weight: 900; }
+    .rp-hist-legend { font-size: 0.6rem; color: rgba(26,21,48,0.35); line-height: 1.7; }
+    .rp-notes-ta { width: 100%; padding: 0.55rem 0.7rem; border: 1.5px solid rgba(87,46,136,0.16); border-radius: 8px; font-size: 0.82rem; font-family: var(--bts-font); color: #1a1530; resize: vertical; min-height: 80px; outline: none; }
+    .rp-notes-ta:focus { border-color: #572e88; }
+    .rp-notes-save { margin-top: 0.45rem; padding: 0.42rem 1rem; border-radius: 7px; border: none; background: #572e88; color: #fff; font-size: 0.72rem; font-weight: 900; cursor: pointer; font-family: var(--bts-font); }
+    .rp-note-meta { font-size: 0.68rem; color: rgba(26,21,48,0.38); margin-bottom: 0.4rem; }
 
     @media (max-width: 900px) {
-      .ci-layout { flex-direction: column; }
-      .ci-events-panel { width: 100%; position: static; max-height: 240px; }
-      .ci-right-panel { width: 100%; }
-      .ci-search { width: 140px; }
+      .ci-right-panel { width: 100vw; }
+      .ci-search { width: 120px; }
     }
   </style>
 </head>
 <body>
   <div id="prod-sidebar-host"></div>
 
-  <!-- Right slide-out panel -->
-  <div id="ci-overlay" class="ci-overlay" onclick="closePanel()"></div>
-  <div id="ci-right-panel" class="ci-right-panel">
-    <div id="ci-rp-content"></div>
+  <!-- Event selector modal -->
+  <div class="ev-overlay" id="ev-overlay" onclick="closeEvSelector()">
+    <div class="ev-modal" onclick="event.stopPropagation()">
+      <div class="ev-modal-head">
+        <div class="ev-modal-title">Select Event</div>
+        <button class="ev-modal-close" onclick="closeEvSelector()">&#10005;</button>
+      </div>
+      <div class="ev-modal-chips">
+        <button class="ev-chip active" id="ev-chip-today"    onclick="setEvFilter('today')">Today</button>
+        <button class="ev-chip"        id="ev-chip-upcoming" onclick="setEvFilter('upcoming')">Upcoming</button>
+        <button class="ev-chip"        id="ev-chip-all"      onclick="setEvFilter('all')">All</button>
+        <button class="ev-chip"        id="ev-chip-past"     onclick="setEvFilter('past')">Past</button>
+      </div>
+      <div class="ev-list" id="ev-list"></div>
+    </div>
+  </div>
+
+  <!-- Call list modal -->
+  <div class="cl-overlay" id="cl-overlay" onclick="closeCLModal()">
+    <div class="cl-modal" onclick="event.stopPropagation()">
+      <div class="cl-head">
+        <div><div class="cl-title">Edit Call List</div><div class="cl-sub">Tick which characters are called to this event</div></div>
+        <button class="cl-close" onclick="closeCLModal()">&#10005;</button>
+      </div>
+      <div class="cl-body" id="cl-body"></div>
+      <div class="cl-foot">
+        <button class="cl-sel-all" onclick="clSelectAll()">Select All</button>
+        <button class="cl-save" id="cl-save-btn" onclick="clSave()">Save Call List</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Right panel -->
+  <div class="rp-overlay" id="rp-overlay" onclick="closePanel()"></div>
+  <div class="ci-right-panel" id="ci-right-panel">
+    <div id="rp-content"></div>
   </div>
 
   <div class="prod-main">
-    <div class="prod-main-inner">
-
-      <div class="ci-hero">
-        <div class="ci-hero-kicker"><span class="ci-hero-kicker-dot"></span>Cast</div>
-        <h1 class="ci-hero-title">Check-In</h1>
-        <p class="ci-hero-copy">Set call lists for each event and track who shows up to rehearsals, tech, and performances.</p>
+    <!-- Header -->
+    <div class="ci-header" id="ci-header">
+      <div class="ci-header-left">
+        <div class="ci-ev-kicker">
+          <span class="ci-ev-kicker-dot" style="background:#572e88"></span>
+          Attendance
+        </div>
+        <h1 class="ci-ev-title" id="ci-ev-title" onclick="openEvSelector()">
+          Select an event
+          <span class="ci-ev-change">Change</span>
+        </h1>
+        <div class="ci-ev-meta" id="ci-ev-meta"></div>
       </div>
-
-      <div class="ci-layout">
-
-        <div class="ci-events-panel">
-          <div class="ci-panel-head">
-            <div class="ci-panel-title">Events</div>
-            <div class="ci-filter-chips">
-              <button class="ci-chip" id="chip-today"    onclick="setFilter('today')">Today</button>
-              <button class="ci-chip" id="chip-upcoming" onclick="setFilter('upcoming')">Upcoming</button>
-              <button class="ci-chip" id="chip-all"      onclick="setFilter('all')">All</button>
-              <button class="ci-chip" id="chip-past"     onclick="setFilter('past')">Past</button>
-            </div>
-          </div>
-          <div class="ci-events-list" id="ci-events-list">
-            <div style="padding:1.5rem;text-align:center;color:rgba(26,21,48,0.4);font-size:0.82rem;">Loading...</div>
-          </div>
-        </div>
-
-        <div class="ci-detail" id="ci-detail">
-          <div class="ci-detail-empty" id="ci-detail-empty">
-            <img src="/ASSETS/Images/Icons/Zeus-Calendar.svg?v=20260617" alt="" />
-            Select an event to set the call list and check people in.
-          </div>
-          <div id="ci-detail-inner" style="display:none">
-            <div class="ci-event-header" id="ci-event-header"></div>
-            <div class="ci-tabs">
-              <button class="ci-tab-btn active" id="tab-calllist" onclick="switchTab('calllist')">Call List</button>
-              <button class="ci-tab-btn"        id="tab-checkin"  onclick="switchTab('checkin')">Check-In</button>
-            </div>
-            <div id="ci-calllist-panel"></div>
-            <div id="ci-checkin-panel" style="display:none">
-              <div class="ci-bulk-bar" id="ci-bulk-bar"></div>
-            </div>
-          </div>
-        </div>
-
+      <div class="ci-header-btns" id="ci-header-btns">
+        <button class="ci-select-event-btn" onclick="openEvSelector()">Select Event</button>
       </div>
     </div>
+
+    <!-- Stats bar -->
+    <div class="ci-stats" id="ci-stats" style="display:none">
+      <div class="ci-stat"><div class="ci-stat-num" id="stat-total">0</div><div class="ci-stat-lbl">Expected</div></div>
+      <div class="ci-stat s-here">   <div class="ci-stat-num" id="stat-here">0</div>   <div class="ci-stat-pct" id="stat-here-pct"></div>   <div class="ci-stat-lbl">Here</div></div>
+      <div class="ci-stat s-late">   <div class="ci-stat-num" id="stat-late">0</div>   <div class="ci-stat-pct" id="stat-late-pct"></div>   <div class="ci-stat-lbl">Late</div></div>
+      <div class="ci-stat s-absent"> <div class="ci-stat-num" id="stat-absent">0</div> <div class="ci-stat-pct" id="stat-absent-pct"></div> <div class="ci-stat-lbl">Absent</div></div>
+      <div class="ci-stat s-excused"><div class="ci-stat-num" id="stat-excused">0</div><div class="ci-stat-pct" id="stat-excused-pct"></div><div class="ci-stat-lbl">Excused</div></div>
+    </div>
+
+    <!-- Controls -->
+    <div class="ci-controls" id="ci-controls" style="display:none">
+      <div class="ci-filter-tabs" id="ci-filter-tabs"></div>
+      <input class="ci-search" type="text" placeholder="Search by name..." id="ci-search" oninput="onSearch(this.value)" />
+      <button class="ci-setup-calllist-btn" onclick="openCLModal()">Edit Call List</button>
+    </div>
+
+    <!-- Bulk bar -->
+    <div class="ci-bulk-bar" id="ci-bulk-bar">
+      <span class="ci-bulk-lbl" id="ci-bulk-lbl">0 selected:</span>
+      <button class="ci-bulk-opt s-here"    onclick="bulkSet('here')">Here</button>
+      <button class="ci-bulk-opt s-late"    onclick="bulkSet('late')">Late</button>
+      <button class="ci-bulk-opt s-absent"  onclick="bulkSet('absent')">Absent</button>
+      <button class="ci-bulk-opt s-excused" onclick="bulkSet('excused')">Excused</button>
+      <button class="ci-bulk-opt s-clear"   onclick="bulkSet(null)">Clear</button>
+      <button class="ci-bulk-desel"         onclick="clearBulk()">Deselect all</button>
+    </div>
+
+    <!-- Table area -->
+    <div id="ci-table-area"></div>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -290,47 +324,36 @@
   const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRrbWFpa3R4cHdxZmJnZW9qYm5mIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM3MzE4MTcsImV4cCI6MjA4OTMwNzgxN30.TkTZBNWUatk3Y6Vmfv1hIRR3DfVjgwauwa76Pf00J_8';
 
   const CHECKIN_TYPES = ['rehearsal','music_rehearsal','choreography','tech','dress','performance','meeting','event','cast_party','strike'];
-
-  const EVENT_COLOURS = {
-    rehearsal:'#7fcae3', music_rehearsal:'#7fcae3', choreography:'#7fcae3',
-    tech:'#7ac177', dress:'#469b42', performance:'#2b6529',
-    strike:'#7497e7', cast_party:'#aa2943', event:'#aa2943', meeting:'#7b7b7b',
-  };
-  const EVENT_LABELS = {
-    rehearsal:'Rehearsal', music_rehearsal:'Music Rehearsal', choreography:'Choreography',
-    tech:'Tech', dress:'Dress Rehearsal', performance:'Performance',
-    strike:'Strike', cast_party:'Cast Party', event:'Event', meeting:'Meeting',
-  };
-
-  const STATUS_CONF = {
-    here:    { label:'Here',        icon:'&#10003;', colour:'#3a8036', bg:'rgba(70,155,66,0.15)'   },
-    late:    { label:'Late',        icon:'&#9203;',  colour:'#9b6b00', bg:'rgba(239,171,69,0.18)'  },
-    absent:  { label:'Absent',      icon:'&#10005;', colour:'#bf3a24', bg:'rgba(209,82,61,0.15)'   },
-    excused: { label:'Excused',     icon:'&#9675;',  colour:'#3b5a9b', bg:'rgba(71,106,170,0.15)'  },
-    _none:   { label:'Not Marked',  icon:'&#8212;',  colour:'rgba(26,21,48,0.3)', bg:'rgba(26,21,48,0.07)' },
+  const EVENT_COLOURS = { rehearsal:'#7fcae3', music_rehearsal:'#7fcae3', choreography:'#7fcae3', tech:'#7ac177', dress:'#469b42', performance:'#2b6529', strike:'#7497e7', cast_party:'#aa2943', event:'#aa2943', meeting:'#7b7b7b' };
+  const EVENT_LABELS  = { rehearsal:'Rehearsal', music_rehearsal:'Music Rehearsal', choreography:'Choreography', tech:'Tech', dress:'Dress Rehearsal', performance:'Performance', strike:'Strike', cast_party:'Cast Party', event:'Event', meeting:'Meeting' };
+  const STATUS_CONF   = {
+    here:    { label:'Here',       icon:'&#10003;', colour:'#3a8036' },
+    late:    { label:'Late',       icon:'&#9203;',  colour:'#9b6b00' },
+    absent:  { label:'Absent',     icon:'&#10005;', colour:'#bf3a24' },
+    excused: { label:'Excused',    icon:'&#9675;',  colour:'#3b5a9b' },
+    _none:   { label:'Not Marked', icon:'&#8212;',  colour:'rgba(26,21,48,0.32)' },
   };
   const HIST_CONF = {
     here:    { letter:'H', label:'Here',       colour:'#3a8036', bg:'rgba(70,155,66,0.18)'   },
-    late:    { letter:'L', label:'Late',        colour:'#9b6b00', bg:'rgba(239,171,69,0.2)'   },
-    absent:  { letter:'A', label:'Absent',      colour:'#bf3a24', bg:'rgba(209,82,61,0.16)'   },
-    excused: { letter:'E', label:'Excused',     colour:'#3b5a9b', bg:'rgba(71,106,170,0.16)'  },
-    _none:   { letter:'?', label:'Not recorded',colour:'rgba(26,21,48,0.28)', bg:'rgba(26,21,48,0.06)' },
+    late:    { letter:'L', label:'Late',       colour:'#9b6b00', bg:'rgba(239,171,69,0.2)'   },
+    absent:  { letter:'A', label:'Absent',     colour:'#bf3a24', bg:'rgba(209,82,61,0.16)'   },
+    excused: { letter:'E', label:'Excused',    colour:'#3b5a9b', bg:'rgba(71,106,170,0.16)'  },
+    _none:   { letter:'?', label:'No record',  colour:'rgba(26,21,48,0.26)', bg:'rgba(26,21,48,0.06)' },
   };
 
   let _sb, _prodId;
   let _events = [], _chars = [], _assignments = [], _volunteers = [];
-  let _people = {};
+  let _people  = {};
   let _selectedEvent = null;
   let _allAttendees  = [];
-  let _activeTab  = 'calllist';
-  let _filter     = 'today';
   let _filterTab  = 'everyone';
-  let _searchQuery = '';
+  let _searchQ    = '';
+  let _pickerOpenId  = null;
+  let _panelOpenId   = null;
+  let _bulkSelected  = new Set();
+  let _evFilter      = 'today';
   let _pendingCallIds = new Set();
-  let _callListDirty  = false;
-  let _bulkSelected   = new Set();
-  let _openPickerId   = null;
-  let _openPanelId    = null;
+  let _clDirty        = false;
 
   window.initProductionPage('cast');
 
@@ -338,86 +361,671 @@
     _sb = supabase.createClient(SUPA_URL, SUPA_KEY);
     const params = new URLSearchParams(window.location.search);
     _prodId = params.get('id') || '';
-    if (!_prodId) {
-      document.getElementById('ci-events-list').innerHTML = '<div style="padding:1.5rem;color:#d1523d;font-size:0.82rem;">No production ID in URL.</div>';
-      return;
-    }
+    if (!_prodId) return;
     await loadData();
-    const today = todayDate();
-    const hasToday = _events.some(e => e.start_time?.slice(0, 10) === today);
-    setFilter(hasToday ? 'today' : 'upcoming');
-    const firstToday = _events.find(e => e.start_time?.slice(0, 10) === today);
-    if (firstToday) selectEvent(firstToday.id);
+    autoSelectEvent();
   });
 
   // Close picker on outside click
   document.addEventListener('click', function () { closePicker(); });
 
-  // ── Data loading ─────────────────────────────────────────────────
+  // ── Data ─────────────────────────────────────────────────────────
   async function loadData() {
     const [evRes, chRes, asRes] = await Promise.all([
       _sb.from('production_events')
         .select('id,title,event_type,start_time,end_time,venue,called_character_ids,event_checkins,is_locked,locked_at')
-        .eq('production_id', _prodId)
-        .in('event_type', CHECKIN_TYPES)
-        .order('start_time'),
-      _sb.from('production_characters')
-        .select('id,name,sort_order')
-        .eq('production_id', _prodId)
-        .order('sort_order'),
-      _sb.from('casting_assignments')
-        .select('id,character_id,applicant_id,state')
-        .eq('production_id', _prodId)
-        .eq('state', 'chosen'),
+        .eq('production_id', _prodId).in('event_type', CHECKIN_TYPES).order('start_time'),
+      _sb.from('production_characters').select('id,name,sort_order').eq('production_id', _prodId).order('sort_order'),
+      _sb.from('casting_assignments').select('id,character_id,applicant_id,state').eq('production_id', _prodId).eq('state', 'chosen'),
     ]);
-    _events      = evRes.data || [];
-    _chars       = chRes.data || [];
+    _events = evRes.data || [];
+    _chars  = chRes.data || [];
     _assignments = asRes.data || [];
 
     const appIds = [...new Set(_assignments.map(a => a.applicant_id).filter(Boolean))];
-    const volsQ  = _sb.from('volunteer_signups')
+    const volQ = _sb.from('volunteer_signups')
       .select('id,name,email,role_name,shift_date,required_dates,status')
-      .eq('production_id', _prodId)
-      .in('status', ['approved','checked_in','completed']);
+      .eq('production_id', _prodId).in('status', ['approved','checked_in','completed']);
 
     if (appIds.length) {
       const [appsRes, booksRes, volsRes] = await Promise.all([
         _sb.from('audition_applications')
           .select('id,name,email,phone,pronouns,guardian_name,guardian_contact,guardian_phone,is_minor,headshot_url,date_conflicts')
           .in('id', appIds),
-        _sb.from('audition_bookings')
-          .select('id,name,headshot_url,guardian_name,guardian_email,phone')
-          .in('id', appIds),
-        volsQ,
+        _sb.from('audition_bookings').select('id,name,headshot_url,guardian_name,guardian_email,phone').in('id', appIds),
+        volQ,
       ]);
       (appsRes.data || []).forEach(a => {
-        _people[a.id] = {
-          name: a.name, email: a.email, phone: a.phone, pronouns: a.pronouns,
-          guardian_name: a.guardian_name, guardian_contact: a.guardian_contact,
-          guardian_phone: a.guardian_phone, is_minor: a.is_minor,
-          headshot_url: a.headshot_url, date_conflicts: a.date_conflicts,
-        };
+        _people[a.id] = { name:a.name, email:a.email, phone:a.phone, pronouns:a.pronouns, guardian_name:a.guardian_name, guardian_contact:a.guardian_contact, guardian_phone:a.guardian_phone, is_minor:a.is_minor, headshot_url:a.headshot_url, date_conflicts:a.date_conflicts };
       });
       (booksRes.data || []).forEach(b => {
-        if (!_people[b.id]) _people[b.id] = {
-          name: b.name, headshot_url: b.headshot_url,
-          guardian_name: b.guardian_name, guardian_contact: b.guardian_email,
-          phone: b.phone,
-        };
+        if (!_people[b.id]) _people[b.id] = { name:b.name, headshot_url:b.headshot_url, guardian_name:b.guardian_name, guardian_contact:b.guardian_email, phone:b.phone };
       });
       _volunteers = volsRes.data || [];
     } else {
-      const volsRes = await volsQ;
-      _volunteers = volsRes.data || [];
+      const v = await volQ; _volunteers = v.data || [];
     }
   }
 
-  // ── Date helpers ─────────────────────────────────────────────────
-  function todayDate() { return new Date().toISOString().slice(0, 10); }
-  function fmtEventDate(ts) {
-    if (!ts) return '';
-    return new Date(ts).toLocaleDateString('en-CA', { weekday:'long', month:'long', day:'numeric' });
+  function autoSelectEvent() {
+    const today = todayStr();
+    const now   = new Date();
+    // Prefer event currently running
+    let ev = _events.find(e => e.start_time && e.end_time && new Date(e.start_time) <= now && new Date(e.end_time) >= now);
+    // Else next upcoming today
+    if (!ev) ev = _events.find(e => e.start_time?.slice(0,10) === today && new Date(e.start_time) >= now);
+    // Else most recent past today
+    if (!ev) ev = [..._events].reverse().find(e => e.start_time?.slice(0,10) === today);
+    // Else next upcoming
+    if (!ev) ev = _events.find(e => new Date(e.start_time) >= now);
+    if (ev) selectEvent(ev.id);
   }
+
+  // ── Event selector ────────────────────────────────────────────────
+  function openEvSelector() {
+    setEvFilter(_evFilter);
+    renderEvList();
+    document.getElementById('ev-overlay').classList.add('open');
+  }
+  function closeEvSelector() { document.getElementById('ev-overlay').classList.remove('open'); }
+  function setEvFilter(f) {
+    _evFilter = f;
+    document.querySelectorAll('.ev-chip').forEach(c => c.classList.remove('active'));
+    const chip = document.getElementById('ev-chip-' + f); if (chip) chip.classList.add('active');
+    renderEvList();
+  }
+  function renderEvList() {
+    const el   = document.getElementById('ev-list');
+    const today = todayStr();
+    let evs = [..._events];
+    if (_evFilter === 'today')    evs = evs.filter(e => e.start_time?.slice(0,10) === today);
+    if (_evFilter === 'upcoming') evs = evs.filter(e => (e.start_time?.slice(0,10)||'') >= today);
+    if (_evFilter === 'past')     evs = evs.filter(e => (e.start_time?.slice(0,10)||'') < today).reverse();
+    if (!evs.length) { el.innerHTML = '<div style="padding:1.5rem;text-align:center;color:rgba(26,21,48,0.38);font-size:0.82rem;">No events found.</div>'; return; }
+    const groups = {};
+    evs.forEach(e => { const d = e.start_time?.slice(0,10)||''; (groups[d]=groups[d]||[]).push(e); });
+    let html = '';
+    Object.keys(groups).sort().forEach(d => {
+      html += '<div class="ev-date-label">' + esc(dateLbl(d)) + '</div>';
+      groups[d].forEach(e => {
+        const col = EVENT_COLOURS[e.event_type]||'#572e88';
+        const sel = _selectedEvent?.id === e.id ? ' active' : '';
+        html += '<div class="ev-item' + sel + '" onclick="selectEvent(\'' + e.id + '\');closeEvSelector()">' +
+          '<div class="ev-item-dot" style="background:' + col + '"></div>' +
+          '<div><div class="ev-item-name">' + esc(e.title||EVENT_LABELS[e.event_type]||'Event') + '</div>' +
+          '<div class="ev-item-sub">' + esc(fmtTime(e.start_time)) + (e.end_time ? ' – ' + fmtTime(e.end_time) : '') + (e.venue ? ' &nbsp;&#183;&nbsp; ' + e.venue : '') + '</div></div>' +
+        '</div>';
+      });
+    });
+    el.innerHTML = html;
+  }
+
+  // ── Select event ─────────────────────────────────────────────────
+  function selectEvent(id) {
+    _selectedEvent = _events.find(e => e.id === id) || null;
+    if (!_selectedEvent) return;
+    _pendingCallIds = new Set(_selectedEvent.called_character_ids || []);
+    _clDirty = false;
+    _searchQ = '';
+    _filterTab = 'everyone';
+    _bulkSelected.clear();
+    closePanel();
+    renderHeader();
+    renderStats();
+    renderControls();
+    renderTable();
+  }
+
+  function renderHeader() {
+    const e = _selectedEvent;
+    const label = EVENT_LABELS[e.event_type] || 'Event';
+    const col   = EVENT_COLOURS[e.event_type] || '#572e88';
+    const date  = e.start_time ? new Date(e.start_time + (e.start_time.includes('T') ? '' : 'T00:00:00')).toLocaleDateString('en-CA', {weekday:'long',month:'long',day:'numeric',year:'numeric'}) : '';
+    const times = (e.start_time ? fmtTime(e.start_time) : '') + (e.end_time ? ' – ' + fmtTime(e.end_time) : '');
+    const locked = e.is_locked || false;
+
+    document.getElementById('ci-ev-kicker').innerHTML =
+      '<span class="ci-ev-kicker-dot" style="background:' + col + '"></span>' + esc(label);
+    document.getElementById('ci-ev-title').innerHTML =
+      esc(e.title || label) + ' <span class="ci-ev-change" onclick="openEvSelector();event.stopPropagation()">Change</span>';
+    document.getElementById('ci-ev-meta').innerHTML =
+      (date ? '<span>' + esc(date) + '</span>' : '') +
+      (times ? '<span>' + esc(times) + '</span>' : '') +
+      (e.venue ? '<span>' + esc(e.venue) + '</span>' : '');
+    document.getElementById('ci-header-btns').innerHTML = locked
+      ? '<span class="ci-locked-badge">Rehearsal Ended</span>'
+      : '<button class="ci-bulk-actions-btn" onclick="openBulkActionsHint()">Bulk Actions</button>' +
+        '<button class="ci-end-btn" onclick="endRehearsal()">&#128274; End Rehearsal</button>';
+    document.getElementById('ci-stats').style.display    = '';
+    document.getElementById('ci-controls').style.display = '';
+  }
+
+  // ── Stats ─────────────────────────────────────────────────────────
+  function renderStats() {
+    const checkins = _selectedEvent.event_checkins || [];
+    const att = resolveAttendees(_selectedEvent);
+    const total = att.length;
+    const c = s => att.filter(a => getState(checkins, a.id).status === s).length;
+    const pct = n => total ? Math.round(n/total*100) + '%' : '';
+    const h = c('here'), l = c('late'), ab = c('absent'), ex = c('excused');
+    el('stat-total', total);
+    elPct('stat-here',    h,  pct(h));
+    elPct('stat-late',    l,  pct(l));
+    elPct('stat-absent',  ab, pct(ab));
+    elPct('stat-excused', ex, pct(ex));
+  }
+  function el(id, val) { const e = document.getElementById(id); if (e) e.textContent = val; }
+  function elPct(numId, num, pct) {
+    el(numId, num);
+    const pe = document.getElementById(numId + '-pct'); if (pe) pe.textContent = num ? pct : '';
+  }
+
+  // ── Controls ──────────────────────────────────────────────────────
+  function renderControls() {
+    const checkins  = _selectedEvent.event_checkins || [];
+    const att = resolveAttendees(_selectedEvent);
+    const total = att.length;
+    const c = s => att.filter(a => getState(checkins, a.id).status === s).length;
+    const notHere = att.filter(a => !getState(checkins, a.id).status).length;
+    const tabs = [
+      ['everyone', 'Everyone', total],
+      ['not_here', 'Not Here', notHere],
+      ['late',     'Late',     c('late')],
+      ['absent',   'Absent',   c('absent')],
+      ['excused',  'Excused',  c('excused')],
+    ];
+    document.getElementById('ci-filter-tabs').innerHTML = tabs.map(([key, lbl, n]) =>
+      '<button class="ci-ftab' + (_filterTab === key ? ' active' : '') + '" onclick="setFilter(\'' + key + '\')">' + lbl + ' <span>' + n + '</span></button>'
+    ).join('');
+    document.getElementById('ci-search').value = _searchQ;
+  }
+  function setFilter(tab) { _filterTab = tab; renderControls(); renderTable(); }
+  function onSearch(val)  { _searchQ = val; renderControls(); renderTable(); }
+
+  // ── Table ─────────────────────────────────────────────────────────
+  function renderTable() {
+    const area = document.getElementById('ci-table-area');
+    if (!_selectedEvent) { area.innerHTML = ''; return; }
+    _allAttendees = resolveAttendees(_selectedEvent);
+    const checkins = _selectedEvent.event_checkins || [];
+    const isLocked = _selectedEvent.is_locked || false;
+
+    // Filter
+    let rows = [..._allAttendees];
+    if (_filterTab === 'not_here') rows = rows.filter(a => !getState(checkins, a.id).status);
+    else if (_filterTab !== 'everyone') rows = rows.filter(a => getState(checkins, a.id).status === _filterTab);
+    if (_searchQ) {
+      const q = _searchQ.toLowerCase();
+      rows = rows.filter(a => (a.name||'').toLowerCase().includes(q) || (a.characters||[]).some(c=>c.toLowerCase().includes(q)) || (a.role_name||'').toLowerCase().includes(q));
+    }
+
+    if (!rows.length) {
+      area.innerHTML = '<div class="ci-empty">' + (_allAttendees.length ? 'No performers match this filter.' : 'No performers are on the call list yet. Use <strong>Edit Call List</strong> to add characters, then come back here.') + '</div>';
+      return;
+    }
+
+    const tbody = rows.map(a => buildRow(a, getState(checkins, a.id), isLocked)).join('');
+    area.innerHTML =
+      '<div class="ci-table-wrap"><table class="ci-table">' +
+      '<thead class="ci-thead"><tr>' +
+        '<th class="ci-th" style="width:36px"><input type="checkbox" id="ci-check-all" onchange="selectAll(this)" /></th>' +
+        '<th class="ci-th">Performer</th>' +
+        '<th class="ci-th">Character</th>' +
+        '<th class="ci-th" style="width:250px">Status</th>' +
+        '<th class="ci-th" style="width:100px">Arrived</th>' +
+        '<th class="ci-th" style="width:80px">Left</th>' +
+        '<th class="ci-th" style="width:36px"></th>' +
+        '<th class="ci-th" style="width:110px"></th>' +
+      '</tr></thead>' +
+      '<tbody>' + tbody + '</tbody>' +
+      '</table></div>';
+  }
+
+  function buildRow(a, state, isLocked) {
+    const status = state.status;
+    const id     = a.id;
+    const rowSel  = _bulkSelected.has(id) ? ' selected' : '';
+    const rowPanl = _panelOpenId === id   ? ' panel-open' : '';
+    const rowStat = status ? ' s-' + status : '';
+    const isPickerOpen = _pickerOpenId === id;
+    const initials = (a.name||'?').split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase();
+    const avatar = a.headshot_url
+      ? '<img class="ci-avatar" src="' + esc(a.headshot_url) + '" alt="" />'
+      : '<div class="ci-avatar-init">' + esc(initials) + '</div>';
+
+    const subLine = a.type === 'volunteer'
+      ? '<span class="ci-perf-badge ci-badge-vol">Volunteer</span>'
+      : '';
+
+    const charCell = a.type === 'cast'
+      ? esc((a.characters||[]).join(', ') || '—')
+      : esc(a.role_name || '—');
+
+    // Status cell
+    let statusHtml;
+    if (isLocked) {
+      const sc = STATUS_CONF[status] || STATUS_CONF._none;
+      statusHtml = '<span class="ci-spill s-' + (status||'none') + '">' + sc.icon + ' ' + sc.label + '</span>';
+    } else if (isPickerOpen) {
+      const opts = ['here','late','absent','excused'].map(s => {
+        const sc = STATUS_CONF[s];
+        return '<button class="ci-picker-opt s-' + s + (status===s?' is-active':'') + '" data-id="' + esc(id) + '" data-status="' + s + '" onclick="pickerSet(this,event)">' + sc.icon + ' ' + sc.label + '</button>';
+      }).join('');
+      statusHtml = '<div class="ci-picker-row" onclick="event.stopPropagation()">' + opts + (status ? '<button class="ci-picker-opt s-none" data-id="' + esc(id) + '" data-status="" onclick="pickerSet(this,event)" title="Clear">&#8212;</button>' : '') + '</div>';
+    } else {
+      const sc = STATUS_CONF[status] || STATUS_CONF._none;
+      statusHtml = '<button class="ci-spill s-' + (status||'none') + '" data-id="' + esc(id) + '" onclick="openPicker(this,event)">' + sc.icon + ' ' + sc.label + '</button>';
+    }
+
+    // Arrived
+    const arrivedISO = state.checked_in_at;
+    const leftISO    = state.left_at;
+    let arrivedHtml = '<span style="color:rgba(26,21,48,0.25)">—</span>';
+    let leftHtml    = '<span style="color:rgba(26,21,48,0.25)">—</span>';
+    if (arrivedISO) {
+      const minsLate = _selectedEvent.start_time ? Math.round((new Date(arrivedISO) - new Date(_selectedEvent.start_time)) / 60000) : 0;
+      arrivedHtml = '<div class="ci-time-val">' + fmtTime(arrivedISO) + (minsLate > 2 ? '<span class="ci-late-mins">+' + minsLate + 'm late</span>' : '') + '</div>';
+    }
+    if (!isLocked) {
+      arrivedHtml = '<button class="ci-time-btn" data-id="' + esc(id) + '" data-field="arrived" onclick="editTime(this,event)">' + (arrivedISO ? fmtTime(arrivedISO) : '—') + '</button>';
+      leftHtml    = '<button class="ci-time-btn" data-id="' + esc(id) + '" data-field="left"    onclick="editTime(this,event)">' + (leftISO    ? fmtTime(leftISO)    : '—') + '</button>';
+    } else if (leftISO) {
+      leftHtml = '<div class="ci-time-val">' + fmtTime(leftISO) + '</div>';
+    }
+
+    // Note indicator
+    const hasNote = !!(state.notes);
+    const noteHtml = '<div class="ci-note-dot"><span class="ci-note-icon' + (hasNote ? ' has-note' : '') + '" title="' + (hasNote ? esc(state.notes) : 'No notes') + '">&#x1F4AC;</span>' + (hasNote ? '<span class="ci-note-badge"></span>' : '') + '</div>';
+
+    // Actions
+    const person = _people[id] || {};
+    const emailA = person.email ? '<a class="ci-act-btn" href="mailto:' + esc(person.email) + '" onclick="event.stopPropagation()" title="Email">&#x2709;</a>' : '';
+    const phoneA = person.phone ? '<a class="ci-act-btn" href="tel:'    + esc(person.phone) + '" onclick="event.stopPropagation()" title="Call">&#x260E;</a>' : '';
+
+    return '<tr class="ci-tr' + rowSel + rowPanl + rowStat + '" id="ci-row-' + esc(id) + '" onclick="rowClick(\'' + esc(id) + '\')">' +
+      '<td class="ci-td" onclick="event.stopPropagation()"><input type="checkbox" class="ci-row-cb" data-id="' + esc(id) + '" ' + (_bulkSelected.has(id)?'checked':'') + ' onchange="toggleBulk(this)" /></td>' +
+      '<td class="ci-td"><div class="ci-perf-cell">' + avatar + '<div><div class="ci-perf-name">' + esc(a.name||'Unknown') + '</div>' + subLine + '</div></div></td>' +
+      '<td class="ci-td ci-char-cell">' + charCell + '</td>' +
+      '<td class="ci-td ci-status-cell" onclick="event.stopPropagation()">' + statusHtml + '</td>' +
+      '<td class="ci-td">' + arrivedHtml + '</td>' +
+      '<td class="ci-td">' + leftHtml + '</td>' +
+      '<td class="ci-td" onclick="event.stopPropagation()">' + noteHtml + '</td>' +
+      '<td class="ci-td" onclick="event.stopPropagation()"><div class="ci-actions-cell">' + emailA + phoneA +
+        '<button class="ci-act-btn" data-id="' + esc(id) + '" onclick="rowClick(\'' + esc(id) + '\')" title="Details">&#x24D8;</button>' +
+      '</div></td>' +
+    '</tr>';
+  }
+
+  // ── Picker ────────────────────────────────────────────────────────
+  function openPicker(btn, event) {
+    event.stopPropagation();
+    const id = btn.dataset.id;
+    const wasOpen = _pickerOpenId === id;
+    _pickerOpenId = wasOpen ? null : id;
+    renderTable();
+  }
+  function closePicker() {
+    if (_pickerOpenId) { _pickerOpenId = null; renderTable(); }
+  }
+  async function pickerSet(btn, event) {
+    event.stopPropagation();
+    const id = btn.dataset.id;
+    const newStatus = btn.dataset.status || null;
+    _pickerOpenId = null;
+    await setStatus(id, newStatus);
+  }
+
+  // ── Row click → panel ─────────────────────────────────────────────
+  function rowClick(id) {
+    if (_pickerOpenId) { _pickerOpenId = null; renderTable(); return; }
+    if (_panelOpenId === id) { closePanel(); return; }
+    _panelOpenId = id;
+    document.getElementById('rp-overlay').classList.add('open');
+    document.getElementById('ci-right-panel').classList.add('open');
+    renderPanel(id);
+    // Mark row
+    document.querySelectorAll('.ci-tr').forEach(r => r.classList.remove('panel-open'));
+    const row = document.getElementById('ci-row-' + id);
+    if (row) row.classList.add('panel-open');
+  }
+  function closePanel() {
+    _panelOpenId = null;
+    document.getElementById('rp-overlay').classList.remove('open');
+    document.getElementById('ci-right-panel').classList.remove('open');
+    document.querySelectorAll('.ci-tr').forEach(r => r.classList.remove('panel-open'));
+  }
+
+  function renderPanel(id) {
+    const a = _allAttendees.find(x => x.id === id);
+    if (!a) return;
+    const state  = getState(_selectedEvent.event_checkins || [], id);
+    const person = _people[id] || {};
+    const initials = (a.name||'?').split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase();
+    const avatar = a.headshot_url
+      ? '<img class="rp-avatar" src="' + esc(a.headshot_url) + '" alt="" />'
+      : '<div class="rp-avatar-init">' + esc(initials) + '</div>';
+    const charLine = a.type === 'cast' ? (a.characters||[]).join(', ') : (a.role_name||'Volunteer');
+    const sc = STATUS_CONF[state.status] || STATUS_CONF._none;
+
+    // Contact actions
+    const callBtn  = person.phone ? '<a class="rp-act-btn" href="tel:'    + esc(person.phone)  + '"><span class="rp-act-icon">&#x260E;</span>Call</a>'   : '';
+    const textBtn  = person.phone ? '<a class="rp-act-btn" href="sms:'    + esc(person.phone)  + '"><span class="rp-act-icon">&#x1F4AC;</span>Text</a>'  : '';
+    const emailBtn = person.email ? '<a class="rp-act-btn" href="mailto:' + esc(person.email)  + '"><span class="rp-act-icon">&#x2709;</span>Email</a>'  : '';
+
+    // Guardian
+    const gName = person.guardian_name || '';
+    const gPhone = person.guardian_phone || person.guardian_contact || '';
+    const guardianSection = (gName || person.is_minor)
+      ? '<div class="rp-section">' +
+          '<div class="rp-section-title">Parent / Guardian</div>' +
+          (gName
+            ? '<div class="rp-line"><span class="rp-lbl">' + esc(gName) + '</span>' +
+              (gPhone ? '<br><a href="tel:' + esc(gPhone) + '">' + esc(gPhone) + '</a>' : '') +
+              (person.guardian_contact && person.guardian_contact !== gPhone ? '<br><a href="mailto:' + esc(person.guardian_contact) + '">' + esc(person.guardian_contact) + '</a>' : '') + '</div>'
+            : '<div class="rp-empty">No guardian on file</div>') +
+        '</div>'
+      : '';
+
+    // Emergency contact — check guardian_contact as fallback (no dedicated field yet)
+    const emergencySection = '';
+
+    // Medical notes — check registration_answers if available
+    const medSection = '<div class="rp-section">' +
+      '<div class="rp-section-title">Medical Notes</div>' +
+      '<div class="rp-empty">No medical information on file.</div>' +
+    '</div>';
+
+    // History
+    const histSection = buildHistSection(id);
+
+    // Notes
+    const existing = state.notes || '';
+    const noteMeta = state.notes_at
+      ? '<div class="rp-note-meta">Last updated ' + esc(fmtTime(state.notes_at)) + '</div>'
+      : '';
+
+    document.getElementById('rp-content').innerHTML =
+      '<div class="rp-top"><button class="rp-close" onclick="closePanel()">&#10005;</button></div>' +
+      '<div class="rp-hero">' + avatar +
+        '<div>' +
+          '<div class="rp-name">' + esc(a.name||'Unknown') + '</div>' +
+          '<div class="rp-char">' + esc(charLine) + '</div>' +
+          '<div class="rp-status-row">' +
+            '<span class="ci-spill s-' + (state.status||'none') + '">' + sc.icon + ' ' + sc.label + '</span>' +
+            (state.checked_in_at ? '<span class="rp-arrived">Arrived ' + fmtTime(state.checked_in_at) + '</span>' : '') +
+          '</div>' +
+        '</div>' +
+      '</div>' +
+      (callBtn || textBtn || emailBtn ? '<div class="rp-action-row">' + callBtn + textBtn + emailBtn + '</div>' : '') +
+      guardianSection +
+      emergencySection +
+      medSection +
+      histSection +
+      '<div class="rp-section">' +
+        '<div class="rp-section-title">Today\'s Notes</div>' +
+        noteMeta +
+        '<textarea class="rp-notes-ta" id="rp-notes-ta" placeholder="Add a note...">' + esc(existing) + '</textarea>' +
+        '<button class="rp-notes-save" data-id="' + esc(id) + '" onclick="saveNote(this)">Save Note</button>' +
+      '</div>';
+  }
+
+  function buildHistSection(personId) {
+    const now = new Date();
+    const pastEvs = _events.filter(e => e.end_time ? new Date(e.end_time) < now : e.start_time && new Date(e.start_time) < now);
+    const recent  = pastEvs.slice(-12);
+    if (!recent.length) return '<div class="rp-section"><div class="rp-section-title">Attendance History</div><div class="rp-empty">No history yet.</div></div>';
+    const dots = recent.map(ev => {
+      const entry  = (ev.event_checkins||[]).find(c => c.id === personId);
+      const status = entry?.status || null;
+      const conf   = status ? (HIST_CONF[status]||HIST_CONF._none) : HIST_CONF._none;
+      const ttl    = esc((ev.title||EVENT_LABELS[ev.event_type]||'Event') + ' — ' + conf.label);
+      return '<div class="rp-hist-dot" style="background:' + conf.bg + ';color:' + conf.colour + '" title="' + ttl + '">' + conf.letter + '</div>';
+    }).join('');
+    return '<div class="rp-section">' +
+      '<div class="rp-section-title">Attendance History</div>' +
+      '<div class="rp-hist-dots">' + dots + '</div>' +
+      '<div class="rp-hist-legend">H = Here &nbsp;&#183;&nbsp; L = Late &nbsp;&#183;&nbsp; A = Absent &nbsp;&#183;&nbsp; E = Excused &nbsp;&#183;&nbsp; ? = No record</div>' +
+    '</div>';
+  }
+
+  async function saveNote(btn) {
+    const id  = btn.dataset.id;
+    const ta  = document.getElementById('rp-notes-ta');
+    if (!ta) return;
+    const txt = ta.value.trim();
+    const checkins = [...(_selectedEvent.event_checkins || [])];
+    const idx = checkins.findIndex(c => c.id === id);
+    const a   = _allAttendees.find(x => x.id === id);
+    const now = new Date().toISOString();
+    if (idx >= 0) { checkins[idx] = { ...checkins[idx], notes: txt||null, notes_at: now }; }
+    else { checkins.push({ id, type: a?.type||'cast', name: a?.name||'', status:null, checked_in_at:null, left_at:null, notes: txt||null, notes_at: now }); }
+    await saveCheckins(checkins, false);
+    ta.style.borderColor = '#469b42';
+    setTimeout(() => { if (document.getElementById('rp-notes-ta')) document.getElementById('rp-notes-ta').style.borderColor = ''; }, 1500);
+  }
+
+  // ── Status / time setters ─────────────────────────────────────────
+  async function setStatus(id, newStatus) {
+    if (!_selectedEvent) return;
+    const checkins = [...(_selectedEvent.event_checkins || [])];
+    const idx = checkins.findIndex(c => c.id === id);
+    const now = new Date().toISOString();
+    const arrived = newStatus === 'here' || newStatus === 'late';
+    if (idx >= 0) {
+      checkins[idx] = { ...checkins[idx], status: newStatus, checked_in_at: arrived && !checkins[idx].checked_in_at ? now : checkins[idx].checked_in_at };
+    } else {
+      const a = _allAttendees.find(x => x.id === id);
+      checkins.push({ id, type: a?.type||'cast', name: a?.name||'', status: newStatus, checked_in_at: arrived ? now : null, left_at: null, notes: null });
+    }
+    await saveCheckins(checkins);
+  }
+
+  async function editTime(btn, event) {
+    event.stopPropagation();
+    const id    = btn.dataset.id;
+    const field = btn.dataset.field;
+    const state = getState(_selectedEvent.event_checkins||[], id);
+    const iso   = field === 'arrived' ? state.checked_in_at : state.left_at;
+    const cur   = iso ? String(iso).match(/T(\d{2}):(\d{2})/)?.[1+0] + ':' + String(iso).match(/T(\d{2}):(\d{2})/)?.[2] : '';
+    const input = document.createElement('input');
+    input.type  = 'time';
+    input.value = cur || '';
+    input.style.cssText = 'width:90px;padding:0.22rem 0.4rem;border:1.5px solid #572e88;border-radius:5px;font-size:0.8rem;font-family:inherit;outline:none;';
+    btn.replaceWith(input);
+    input.focus();
+    let done = false;
+    async function commit() {
+      if (done) return; done = true;
+      const val = input.value;
+      const day = _selectedEvent.start_time?.slice(0,10) || todayStr();
+      const newIso = val ? day + 'T' + val + ':00' : null;
+      const key = field === 'arrived' ? 'checked_in_at' : 'left_at';
+      const checkins = [...(_selectedEvent.event_checkins||[])];
+      const idx = checkins.findIndex(c => c.id === id);
+      const a = _allAttendees.find(x => x.id === id);
+      if (idx >= 0) checkins[idx] = { ...checkins[idx], [key]: newIso };
+      else checkins.push({ id, type: a?.type||'cast', name: a?.name||'', status:null, checked_in_at:null, left_at:null, [key]: newIso });
+      await saveCheckins(checkins);
+    }
+    input.addEventListener('blur', commit);
+    input.addEventListener('keydown', e => { if (e.key === 'Enter') input.blur(); if (e.key === 'Escape') { done = true; renderTable(); } });
+  }
+
+  async function saveCheckins(checkins, reRender = true) {
+    const { error } = await _sb.from('production_events').update({ event_checkins: checkins }).eq('id', _selectedEvent.id);
+    if (!error) {
+      _selectedEvent.event_checkins = checkins;
+      _events = _events.map(e => e.id === _selectedEvent.id ? _selectedEvent : e);
+      if (reRender) { renderStats(); renderControls(); renderTable(); }
+      if (_panelOpenId) renderPanel(_panelOpenId);
+    }
+  }
+
+  // ── End rehearsal ─────────────────────────────────────────────────
+  async function endRehearsal() {
+    if (!_selectedEvent) return;
+    if (!confirm('End this event?\n\nEveryone not yet marked will be recorded as Absent. The record will be locked.')) return;
+    const att = resolveAttendees(_selectedEvent);
+    const checkins = [...(_selectedEvent.event_checkins||[])];
+    const now = new Date().toISOString();
+    att.forEach(a => {
+      if (!getState(checkins, a.id).status) {
+        const idx = checkins.findIndex(c => c.id === a.id);
+        if (idx >= 0) checkins[idx] = { ...checkins[idx], status: 'absent' };
+        else checkins.push({ id: a.id, type: a.type, name: a.name, status: 'absent', checked_in_at: null, left_at: null, notes: null });
+      }
+    });
+    const { error } = await _sb.from('production_events').update({ event_checkins: checkins, is_locked: true, locked_at: now }).eq('id', _selectedEvent.id);
+    if (!error) {
+      _selectedEvent.event_checkins = checkins;
+      _selectedEvent.is_locked = true;
+      _selectedEvent.locked_at = now;
+      _events = _events.map(e => e.id === _selectedEvent.id ? _selectedEvent : e);
+      renderHeader(); renderStats(); renderControls(); renderTable();
+    }
+  }
+
+  function openBulkActionsHint() {
+    if (_allAttendees.length) alert('Select performers using the checkboxes to apply a status to multiple people at once.');
+  }
+
+  // ── Bulk ──────────────────────────────────────────────────────────
+  function toggleBulk(cb) {
+    const id = cb.dataset.id;
+    const row = document.getElementById('ci-row-' + id);
+    if (cb.checked) { _bulkSelected.add(id); row?.classList.add('selected'); }
+    else            { _bulkSelected.delete(id); row?.classList.remove('selected'); }
+    updateBulkBar();
+  }
+  function selectAll(cb) {
+    document.querySelectorAll('.ci-row-cb').forEach(c => {
+      c.checked = cb.checked;
+      const row = document.getElementById('ci-row-' + c.dataset.id);
+      if (cb.checked) { _bulkSelected.add(c.dataset.id); row?.classList.add('selected'); }
+      else            { _bulkSelected.delete(c.dataset.id); row?.classList.remove('selected'); }
+    });
+    updateBulkBar();
+  }
+  function clearBulk() {
+    _bulkSelected.clear();
+    document.querySelectorAll('.ci-row-cb').forEach(c => { c.checked = false; });
+    const all = document.getElementById('ci-check-all'); if (all) all.checked = false;
+    document.querySelectorAll('.ci-tr').forEach(r => r.classList.remove('selected'));
+    updateBulkBar();
+  }
+  function updateBulkBar() {
+    const bar = document.getElementById('ci-bulk-bar');
+    if (!bar) return;
+    if (_bulkSelected.size === 0) { bar.classList.remove('vis'); return; }
+    bar.classList.add('vis');
+    const lbl = document.getElementById('ci-bulk-lbl');
+    if (lbl) lbl.textContent = _bulkSelected.size + ' selected:';
+  }
+  async function bulkSet(status) {
+    if (!_selectedEvent || !_bulkSelected.size) return;
+    const checkins = [...(_selectedEvent.event_checkins||[])];
+    const now = new Date().toISOString();
+    const arrived = status === 'here' || status === 'late';
+    _bulkSelected.forEach(id => {
+      const idx = checkins.findIndex(c => c.id === id);
+      const a   = _allAttendees.find(x => x.id === id);
+      if (idx >= 0) checkins[idx] = { ...checkins[idx], status, checked_in_at: arrived && !checkins[idx].checked_in_at ? now : checkins[idx].checked_in_at };
+      else if (a)   checkins.push({ id, type: a.type, name: a.name, status, checked_in_at: arrived ? now : null, left_at: null, notes: null });
+    });
+    await saveCheckins(checkins);
+    clearBulk();
+  }
+
+  // ── Call list modal ───────────────────────────────────────────────
+  function openCLModal() {
+    _pendingCallIds = new Set(_selectedEvent.called_character_ids || []);
+    _clDirty = false;
+    renderCLModal();
+    document.getElementById('cl-overlay').classList.add('open');
+  }
+  function closeCLModal() { document.getElementById('cl-overlay').classList.remove('open'); }
+  function renderCLModal() {
+    const castMap = {};
+    _assignments.forEach(a => { const p = _people[a.applicant_id]; if (!castMap[a.character_id]) castMap[a.character_id] = []; if (p?.name) castMap[a.character_id].push(p.name); });
+    const body = document.getElementById('cl-body');
+    body.innerHTML = _chars.map(c => {
+      const called = _pendingCallIds.has(c.id);
+      const names  = castMap[c.id] || [];
+      const castLine = names.length ? 'Cast: ' + names.join(', ') : 'Not yet cast';
+      return '<div class="cl-row' + (called ? ' called' : '') + '" onclick="clToggle(\'' + esc(c.id) + '\')">' +
+        '<div class="cl-cb">' + (called ? '&#10003;' : '') + '</div>' +
+        '<div><div class="cl-char-name">' + esc(c.name) + '</div><div class="cl-char-cast">' + esc(castLine) + '</div></div>' +
+      '</div>';
+    }).join('');
+    const btn = document.getElementById('cl-save-btn');
+    if (btn) btn.disabled = !_clDirty;
+  }
+  function clToggle(charId) {
+    if (_pendingCallIds.has(charId)) _pendingCallIds.delete(charId);
+    else _pendingCallIds.add(charId);
+    _clDirty = true;
+    renderCLModal();
+  }
+  function clSelectAll() {
+    const allIds = _chars.map(c => c.id);
+    if (allIds.every(id => _pendingCallIds.has(id))) _pendingCallIds.clear();
+    else allIds.forEach(id => _pendingCallIds.add(id));
+    _clDirty = true;
+    renderCLModal();
+  }
+  async function clSave() {
+    const btn = document.getElementById('cl-save-btn');
+    if (btn) { btn.disabled = true; btn.textContent = 'Saving...'; }
+    const calledIds = [..._pendingCallIds];
+    const tmpEv     = { ..._selectedEvent, called_character_ids: calledIds };
+    const attendees = resolveAttendees(tmpEv);
+    const merged    = mergeCheckins(_selectedEvent.event_checkins || [], attendees);
+    const { error } = await _sb.from('production_events')
+      .update({ called_character_ids: calledIds, event_checkins: merged })
+      .eq('id', _selectedEvent.id);
+    if (!error) {
+      _selectedEvent.called_character_ids = calledIds;
+      _selectedEvent.event_checkins = merged;
+      _events = _events.map(e => e.id === _selectedEvent.id ? _selectedEvent : e);
+      closeCLModal();
+      _allAttendees = resolveAttendees(_selectedEvent);
+      renderStats(); renderControls(); renderTable();
+    } else {
+      if (btn) { btn.disabled = false; btn.textContent = 'Save Call List'; }
+    }
+  }
+  function mergeCheckins(existing, attendees) {
+    const map = {};
+    (existing||[]).forEach(c => { map[c.id] = c; });
+    return attendees.map(a => map[a.id]
+      ? { ...map[a.id], name: a.name }
+      : { id: a.id, type: a.type, name: a.name, status: null, checked_in_at: null, left_at: null, notes: null }
+    );
+  }
+
+  // ── Helpers ───────────────────────────────────────────────────────
+  function resolveAttendees(ev) {
+    const calledIds = new Set(ev.called_character_ids || []);
+    const personMap = {};
+    _assignments.filter(a => calledIds.has(a.character_id)).forEach(a => {
+      const person = _people[a.applicant_id] || { name:'Unknown' };
+      const char   = _chars.find(c => c.id === a.character_id);
+      if (!personMap[a.applicant_id]) personMap[a.applicant_id] = { id: a.applicant_id, type:'cast', name: person.name||'Unknown', headshot_url: person.headshot_url||null, characters: [] };
+      if (char) personMap[a.applicant_id].characters.push(char.name);
+    });
+    const evDate = ev.start_time?.slice(0,10) || '';
+    const vols = _volunteers
+      .filter(v => { const extra = Array.isArray(v.required_dates)?v.required_dates:[]; return v.shift_date===evDate||extra.includes(evDate); })
+      .map(v => ({ id: v.id, type:'volunteer', name: v.name||v.email||'Volunteer', headshot_url: null, characters: [], role_name: v.role_name||'' }));
+    return [...Object.values(personMap), ...vols].sort((a,b) => (a.name||'').localeCompare(b.name||''));
+  }
+
+  function getState(checkins, id) {
+    const entry = (checkins||[]).find(c => c.id === id);
+    if (!entry) return { status:null, checked_in_at:null, left_at:null, notes:null };
+    return entry;
+  }
+
   function fmtTime(ts) {
     if (!ts) return '';
     const m = String(ts).match(/T(\d{2}):(\d{2})/);
@@ -428,724 +1036,16 @@
     h = h % 12 || 12;
     return h + ':' + min + ' ' + ampm;
   }
-  function fmtDateGroupLabel(dateStr) {
-    const today = todayDate();
-    const diff  = Math.round((new Date(dateStr) - new Date(today)) / 86400000);
+
+  function todayStr() { return new Date().toISOString().slice(0,10); }
+
+  function dateLbl(d) {
+    const today = todayStr();
+    const diff  = Math.round((new Date(d) - new Date(today)) / 86400000);
     if (diff === 0)  return 'Today';
     if (diff === 1)  return 'Tomorrow';
     if (diff === -1) return 'Yesterday';
-    return new Date(dateStr + 'T12:00:00').toLocaleDateString('en-CA', { weekday:'long', month:'long', day:'numeric' });
-  }
-  function isPast(ev) {
-    const end = ev.end_time || ev.start_time;
-    return end ? new Date(end) < new Date() : false;
-  }
-
-  // ── Event list ───────────────────────────────────────────────────
-  function setFilter(f) {
-    _filter = f;
-    document.querySelectorAll('.ci-chip').forEach(c => c.classList.remove('active'));
-    const chip = document.getElementById('chip-' + f);
-    if (chip) chip.classList.add('active');
-    renderEventList();
-  }
-  function filteredEvents() {
-    const today = todayDate();
-    if (_filter === 'today')    return _events.filter(e => e.start_time?.slice(0,10) === today);
-    if (_filter === 'upcoming') return _events.filter(e => (e.start_time?.slice(0,10) || '') >= today);
-    if (_filter === 'past')     return _events.filter(e => (e.start_time?.slice(0,10) || '') < today).reverse();
-    return _events;
-  }
-  function renderEventList() {
-    const el  = document.getElementById('ci-events-list');
-    const evs = filteredEvents();
-    if (!evs.length) {
-      el.innerHTML = '<div style="padding:1.5rem;text-align:center;color:rgba(26,21,48,0.4);font-size:0.82rem;">No events found.</div>';
-      return;
-    }
-    const groups = {};
-    evs.forEach(e => { const d = e.start_time?.slice(0,10) || 'unknown'; (groups[d] = groups[d]||[]).push(e); });
-    let html = '';
-    Object.keys(groups).sort().forEach(dateStr => {
-      html += '<div class="ci-date-label">' + esc(fmtDateGroupLabel(dateStr)) + '</div>';
-      groups[dateStr].forEach(e => {
-        const colour    = EVENT_COLOURS[e.event_type] || '#572e88';
-        const past      = isPast(e) ? ' past' : '';
-        const sel       = _selectedEvent?.id === e.id ? ' selected' : '';
-        const checkins  = e.event_checkins || [];
-        const attendees = resolveAttendees(e);
-        const total     = attendees.length;
-        const present   = checkins.filter(c => c.status === 'here' || c.status === 'late').length;
-        const count     = total > 0 ? '<div class="ci-event-count">' + present + '/' + total + '</div>' : '';
-        html +=
-          '<div class="ci-event-row' + past + sel + '" onclick="selectEvent(\'' + e.id + '\')">' +
-            '<div class="ci-event-dot" style="background:' + colour + '"></div>' +
-            '<div class="ci-event-info">' +
-              '<div class="ci-event-name">' + esc(e.title || EVENT_LABELS[e.event_type] || 'Event') + '</div>' +
-              '<div class="ci-event-time">' + esc(fmtTime(e.start_time)) + (e.end_time ? ' – ' + fmtTime(e.end_time) : '') + '</div>' +
-            '</div>' + count +
-          '</div>';
-      });
-    });
-    el.innerHTML = html;
-  }
-
-  // ── Event selection ──────────────────────────────────────────────
-  function selectEvent(id) {
-    _selectedEvent = _events.find(e => e.id === id) || null;
-    if (!_selectedEvent) return;
-    _pendingCallIds = new Set(_selectedEvent.called_character_ids || []);
-    _callListDirty = false;
-    _searchQuery   = '';
-    _filterTab     = 'everyone';
-    _bulkSelected.clear();
-    document.getElementById('ci-detail-empty').style.display  = 'none';
-    document.getElementById('ci-detail-inner').style.display  = '';
-    renderEventList();
-    renderEventHeader();
-    switchTab(_activeTab, true);
-  }
-
-  function renderEventHeader() {
-    const e      = _selectedEvent;
-    const colour = EVENT_COLOURS[e.event_type] || '#572e88';
-    const label  = EVENT_LABELS[e.event_type]  || 'Event';
-    const timeStr = e.start_time
-      ? fmtTime(e.start_time) + (e.end_time ? ' – ' + fmtTime(e.end_time) : '') : '';
-    const locked = e.is_locked || false;
-    const rightBtn = locked
-      ? '<span class="ci-locked-badge">Rehearsal Ended</span>'
-      : '<button class="ci-end-btn" onclick="endRehearsal()">End Rehearsal</button>';
-    document.getElementById('ci-event-header').innerHTML =
-      '<div>' +
-        '<div class="ci-event-type-pill" style="background:' + colour + '">' + esc(label) + '</div>' +
-        '<div class="ci-detail-title">' + esc(e.title || label) + '</div>' +
-        '<div class="ci-detail-meta">' +
-          '<span>' + esc(fmtEventDate(e.start_time)) + '</span>' +
-          (timeStr ? '<span>' + esc(timeStr) + '</span>' : '') +
-          (e.venue ? '<span>' + esc(e.venue) + '</span>' : '') +
-        '</div>' +
-      '</div>' +
-      '<div class="ci-header-btns">' + rightBtn + '</div>';
-  }
-
-  function switchTab(tab, force) {
-    if (!force && tab === _activeTab) return;
-    _activeTab = tab;
-    document.querySelectorAll('.ci-tab-btn').forEach(b => b.classList.remove('active'));
-    const btn = document.getElementById('tab-' + tab);
-    if (btn) btn.classList.add('active');
-    document.getElementById('ci-calllist-panel').style.display = tab === 'calllist' ? '' : 'none';
-    document.getElementById('ci-checkin-panel').style.display  = tab === 'checkin'  ? '' : 'none';
-    if (tab === 'calllist') renderCallList();
-    else renderCheckinPanel();
-  }
-
-  // ── Call list ────────────────────────────────────────────────────
-  function renderCallList() {
-    const panel = document.getElementById('ci-calllist-panel');
-    if (!_chars.length) { panel.innerHTML = '<div class="ci-empty-state">No characters set up yet.</div>'; return; }
-    const castMap = {};
-    _assignments.forEach(a => {
-      const p = _people[a.applicant_id];
-      if (!castMap[a.character_id]) castMap[a.character_id] = [];
-      if (p?.name) castMap[a.character_id].push(p.name);
-    });
-    const rows = _chars.map(c => {
-      const called = _pendingCallIds.has(c.id);
-      const names  = castMap[c.id] || [];
-      const castLine = names.length
-        ? '<div class="ci-char-cast">Cast: ' + esc(names.join(', ')) + '</div>'
-        : '<div class="ci-char-uncasted">Not yet cast</div>';
-      return '<div class="ci-char-row' + (called ? ' called' : '') + '" onclick="toggleCharCall(\'' + c.id + '\')">' +
-        '<div class="ci-char-checkbox">' + (called ? '<span class="ci-check-icon">&#10003;</span>' : '') + '</div>' +
-        '<div><div class="ci-char-name">' + esc(c.name) + '</div>' + castLine + '</div>' +
-      '</div>';
-    }).join('');
-    const cnt = _pendingCallIds.size;
-    panel.innerHTML =
-      '<div class="ci-calllist-top">' +
-        '<div class="ci-calllist-hint">Tick which characters are called to this event. Check-In will show the matching cast plus volunteers scheduled for this date.</div>' +
-        '<div class="ci-calllist-actions">' +
-          '<button class="ci-btn-secondary" onclick="selectAllChars()">Select All</button>' +
-          '<button class="ci-btn-primary" id="ci-save-btn" onclick="saveCallList()"' + (_callListDirty ? '' : ' disabled') + '>Save' + (cnt ? ' (' + cnt + ')' : '') + '</button>' +
-        '</div>' +
-      '</div>' +
-      '<div class="ci-char-grid">' + rows + '</div>';
-  }
-
-  function toggleCharCall(charId) {
-    if (_pendingCallIds.has(charId)) _pendingCallIds.delete(charId);
-    else _pendingCallIds.add(charId);
-    _callListDirty = true;
-    renderCallList();
-  }
-  function selectAllChars() {
-    const allIds = _chars.map(c => c.id);
-    if (allIds.every(id => _pendingCallIds.has(id))) _pendingCallIds.clear();
-    else allIds.forEach(id => _pendingCallIds.add(id));
-    _callListDirty = true;
-    renderCallList();
-  }
-  async function saveCallList() {
-    const btn = document.getElementById('ci-save-btn');
-    if (btn) { btn.disabled = true; btn.textContent = 'Saving...'; }
-    const calledIds  = [..._pendingCallIds];
-    const tmpEv      = { ..._selectedEvent, called_character_ids: calledIds };
-    const attendees  = resolveAttendees(tmpEv);
-    const merged     = mergeCheckins(_selectedEvent.event_checkins || [], attendees);
-    const { error }  = await _sb.from('production_events')
-      .update({ called_character_ids: calledIds, event_checkins: merged })
-      .eq('id', _selectedEvent.id);
-    if (error) { if (btn) { btn.disabled = false; btn.textContent = 'Save'; } alert('Could not save.'); return; }
-    _selectedEvent.called_character_ids = calledIds;
-    _selectedEvent.event_checkins = merged;
-    _events = _events.map(e => e.id === _selectedEvent.id ? _selectedEvent : e);
-    _callListDirty = false;
-    renderCallList();
-    renderEventList();
-  }
-
-  function mergeCheckins(existing, attendees) {
-    const map = {};
-    (existing || []).forEach(c => { map[c.id] = c; });
-    return attendees.map(a => map[a.id]
-      ? { ...map[a.id], name: a.name }
-      : { id: a.id, type: a.type, name: a.name, status: null, checked_in_at: null, left_at: null, notes: null }
-    );
-  }
-
-  // ── Check-in panel ───────────────────────────────────────────────
-  function renderCheckinPanel() {
-    const panel     = document.getElementById('ci-checkin-panel');
-    _allAttendees   = resolveAttendees(_selectedEvent);
-    const checkins  = _selectedEvent.event_checkins || [];
-    const isLocked  = _selectedEvent.is_locked || false;
-
-    if (!_allAttendees.length) {
-      const bulk = document.getElementById('ci-bulk-bar');
-      if (bulk) bulk.after(Object.assign(document.createElement('div'), { className:'ci-empty-state', textContent:'No one is called to this event yet. Set up the call list first.' }));
-      return;
-    }
-
-    const stateMap = {};
-    _allAttendees.forEach(a => { stateMap[a.id] = getCheckinState(checkins, a.id); });
-
-    const hereCount    = _allAttendees.filter(a => stateMap[a.id].status === 'here').length;
-    const lateCount    = _allAttendees.filter(a => stateMap[a.id].status === 'late').length;
-    const absentCount  = _allAttendees.filter(a => stateMap[a.id].status === 'absent').length;
-    const excusedCount = _allAttendees.filter(a => stateMap[a.id].status === 'excused').length;
-    const notHereCount = _allAttendees.filter(a => !stateMap[a.id].status).length;
-    const total        = _allAttendees.length;
-    const pct          = n => total ? Math.round(n / total * 100) : 0;
-
-    // Apply filter + search
-    let filtered = [..._allAttendees];
-    if (_filterTab === 'not_here') filtered = filtered.filter(a => !stateMap[a.id].status);
-    else if (_filterTab !== 'everyone') filtered = filtered.filter(a => stateMap[a.id].status === _filterTab);
-    if (_searchQuery) {
-      const q = _searchQuery.toLowerCase();
-      filtered = filtered.filter(a =>
-        (a.name||'').toLowerCase().includes(q) ||
-        (a.characters||[]).some(c => c.toLowerCase().includes(q)) ||
-        (a.role_name||'').toLowerCase().includes(q)
-      );
-    }
-
-    let html =
-      '<div class="ci-stats-bar">' +
-        '<div class="ci-stat-box"><div class="ci-stat-num">' + total + '</div><div class="ci-stat-lbl">Expected</div></div>' +
-        '<div class="ci-stat-box s-here"><div class="ci-stat-num">' + hereCount + '</div><div class="ci-stat-pct">' + pct(hereCount) + '%</div><div class="ci-stat-lbl">Here</div></div>' +
-        '<div class="ci-stat-box s-late"><div class="ci-stat-num">' + lateCount + '</div><div class="ci-stat-pct">' + pct(lateCount) + '%</div><div class="ci-stat-lbl">Late</div></div>' +
-        '<div class="ci-stat-box s-absent"><div class="ci-stat-num">' + absentCount + '</div><div class="ci-stat-pct">' + pct(absentCount) + '%</div><div class="ci-stat-lbl">Absent</div></div>' +
-        '<div class="ci-stat-box s-excused"><div class="ci-stat-num">' + excusedCount + '</div><div class="ci-stat-pct">' + pct(excusedCount) + '%</div><div class="ci-stat-lbl">Excused</div></div>' +
-      '</div>' +
-      '<div class="ci-controls">' +
-        '<div class="ci-filter-tabs">' +
-          ftab('everyone', 'Everyone', total) +
-          ftab('not_here', 'Not Here', notHereCount) +
-          ftab('late',     'Late',     lateCount) +
-          ftab('absent',   'Absent',   absentCount) +
-          ftab('excused',  'Excused',  excusedCount) +
-        '</div>' +
-        '<div class="ci-controls-right">' +
-          '<input class="ci-search" type="text" placeholder="Search..." value="' + esc(_searchQuery) + '" oninput="onSearch(this.value)" />' +
-          '<button class="ci-btn-secondary" onclick="exportCsv()">Export .csv</button>' +
-        '</div>' +
-      '</div>';
-
-    if (!filtered.length) {
-      html += '<div class="ci-empty-state">No results.</div>';
-    } else {
-      html +=
-        '<div class="ci-table-wrap"><table class="ci-table">' +
-        '<colgroup>' +
-          '<col style="width:36px">' +
-          '<col>' +
-          '<col style="width:148px">' +
-          '<col style="width:145px">' +
-          '<col style="width:95px">' +
-          '<col style="width:95px">' +
-          '<col style="width:90px">' +
-        '</colgroup>' +
-        '<thead><tr>' +
-          '<th class="ci-th"><input type="checkbox" id="ci-check-all" onchange="toggleSelectAll(this)" /></th>' +
-          '<th class="ci-th">Performer</th>' +
-          '<th class="ci-th">Role / Character</th>' +
-          '<th class="ci-th">Status</th>' +
-          '<th class="ci-th">Arrived</th>' +
-          '<th class="ci-th">Left</th>' +
-          '<th class="ci-th"></th>' +
-        '</tr></thead>' +
-        '<tbody id="ci-table-body">' +
-        filtered.map(a => buildRow(a, stateMap[a.id], isLocked)).join('') +
-        '</tbody></table></div>';
-    }
-
-    // Replace content of checkin panel (preserving bulk bar)
-    const bulkBar = document.getElementById('ci-bulk-bar');
-    document.getElementById('ci-checkin-panel').innerHTML = '';
-    document.getElementById('ci-checkin-panel').appendChild(bulkBar || (() => {
-      const d = document.createElement('div');
-      d.id = 'ci-bulk-bar';
-      d.className = 'ci-bulk-bar';
-      return d;
-    })());
-    document.getElementById('ci-checkin-panel').insertAdjacentHTML('beforeend', html);
-    _bulkSelected.clear();
-    updateBulkBar();
-  }
-
-  function ftab(key, label, count) {
-    return '<button class="ci-ftab' + (_filterTab === key ? ' active' : '') + '" onclick="setFilterTab(\'' + key + '\')">' + label + ' <span>' + count + '</span></button>';
-  }
-
-  function buildRow(a, state, isLocked) {
-    const status = state.status;
-    const rowClass = status ? ' ci-tr-' + status : '';
-    const initials = (a.name||'?').split(' ').map(w => w[0]).slice(0,2).join('').toUpperCase();
-    const avatar = a.headshot_url
-      ? '<img class="ci-row-avatar" src="' + esc(a.headshot_url) + '" alt="" />'
-      : '<div class="ci-row-avatar-init">' + esc(initials) + '</div>';
-    const subLabel = a.type === 'cast' ? (a.characters||[]).join(', ') : (a.role_name||'Volunteer');
-    const id = esc(a.id);
-    const conflictDot = a.has_conflict ? '<span class="ci-conflict-dot" title="Conflict submitted">!</span>' : '';
-    const volBadge = a.type === 'volunteer' ? '<br><span class="ci-badge-vol">Volunteer</span>' : '';
-
-    // Status pill
-    const sc = STATUS_CONF[status] || STATUS_CONF._none;
-    const pillEl = isLocked
-      ? '<span class="ci-spill s-' + (status||'none') + '">' + sc.icon + ' ' + sc.label + '</span>'
-      : '<button class="ci-spill s-' + (status||'none') + '" data-id="' + id + '" onclick="togglePicker(this,event)">' + sc.icon + ' ' + sc.label + '</button>';
-
-    // Arrived / Left
-    const arrivedISO = state.checked_in_at;
-    const leftISO    = state.left_at;
-    let arrivedHtml = '--', leftHtml = '--';
-    if (arrivedISO) {
-      const minsLate = _selectedEvent.start_time
-        ? Math.round((new Date(arrivedISO) - new Date(_selectedEvent.start_time)) / 60000)
-        : 0;
-      arrivedHtml = fmtTime(arrivedISO) + (minsLate > 0 ? ' <span class="ci-late-note">(' + minsLate + 'm)</span>' : '');
-    }
-    if (leftISO) leftHtml = fmtTime(leftISO);
-
-    const arrivedCell = isLocked ? arrivedHtml : '<button class="ci-time-btn" data-id="' + id + '" data-field="arrived" onclick="editTime(this,event)">' + arrivedHtml + '</button>';
-    const leftCell    = isLocked ? leftHtml    : '<button class="ci-time-btn" data-id="' + id + '" data-field="left"    onclick="editTime(this,event)">' + leftHtml + '</button>';
-
-    // Action icons
-    const person = _people[a.id] || {};
-    const emailIcon = person.email ? '<a class="ci-icon-btn" href="mailto:' + esc(person.email) + '" onclick="event.stopPropagation()" title="Email">&#x2709;</a>' : '';
-    const phoneIcon = person.phone ? '<a class="ci-icon-btn" href="tel:'    + esc(person.phone) + '" onclick="event.stopPropagation()" title="Call">&#x260E;</a>'   : '';
-
-    return '<tr class="ci-tr' + rowClass + '" id="ci-row-' + id + '">' +
-      '<td class="ci-td" onclick="event.stopPropagation()"><input type="checkbox" class="ci-row-check" data-id="' + id + '" onchange="toggleRowSelect(this)" /></td>' +
-      '<td class="ci-td"><div class="ci-performer-cell">' + avatar + '<div><div class="ci-performer-name">' + esc(a.name||'Unknown') + conflictDot + '</div>' + volBadge + '</div></div></td>' +
-      '<td class="ci-td ci-td-role">' + esc(subLabel) + '</td>' +
-      '<td class="ci-td">' + pillEl + '</td>' +
-      '<td class="ci-td">' + arrivedCell + '</td>' +
-      '<td class="ci-td">' + leftCell + '</td>' +
-      '<td class="ci-td"><div style="display:flex;gap:0.15rem">' +
-        '<button class="ci-icon-btn" data-id="' + id + '" onclick="openPanel(this,event)" title="Details">&#x24D8;</button>' +
-        emailIcon + phoneIcon +
-      '</div></td>' +
-    '</tr>';
-  }
-
-  // ── Status picker ────────────────────────────────────────────────
-  function togglePicker(btn, event) {
-    event.stopPropagation();
-    const id = btn.dataset.id;
-    closePicker();
-    if (_openPickerId === id) { _openPickerId = null; return; }
-    _openPickerId = id;
-
-    const state  = getCheckinStateById(id);
-    const status = state.status;
-
-    const picker = document.createElement('div');
-    picker.id = 'ci-picker-float';
-    picker.className = 'ci-picker-float';
-    picker.addEventListener('click', e => e.stopPropagation());
-
-    const opts = ['here','late','absent','excused'].map(s => {
-      const sc = STATUS_CONF[s];
-      return '<button class="ci-picker-opt s-' + s + (status === s ? ' is-active' : '') + '" data-id="' + esc(id) + '" data-status="' + s + '" onclick="pickerSetStatus(this,event)">' + sc.icon + ' ' + sc.label + '</button>';
-    });
-    if (status) opts.push('<button class="ci-picker-opt s-clear" data-id="' + esc(id) + '" data-status="" onclick="pickerSetStatus(this,event)">&#8212; Clear</button>');
-    picker.innerHTML = opts.join('');
-    document.body.appendChild(picker);
-
-    const rect = btn.getBoundingClientRect();
-    picker.style.left = Math.min(rect.left, window.innerWidth - 155) + 'px';
-    picker.style.top  = (rect.bottom + window.scrollY + 4) + 'px';
-  }
-
-  function closePicker() {
-    const p = document.getElementById('ci-picker-float');
-    if (p) p.remove();
-    _openPickerId = null;
-  }
-
-  function pickerSetStatus(btn, event) {
-    event.stopPropagation();
-    const id     = btn.dataset.id;
-    const status = btn.dataset.status || null;
-    const a      = _allAttendees.find(x => x.id === id);
-    setStatus(id, a?.name || '', status);
-  }
-
-  // ── Status setter ────────────────────────────────────────────────
-  async function setStatus(id, name, newStatus) {
-    closePicker();
-    if (!_selectedEvent) return;
-    const checkins = [...(_selectedEvent.event_checkins || [])];
-    const idx      = checkins.findIndex(c => c.id === id);
-    const now      = new Date().toISOString();
-    const existing = idx >= 0 ? checkins[idx].status : null;
-    const resolved = (newStatus !== null && existing === newStatus) ? null : newStatus;
-    const arrived  = resolved === 'here' || resolved === 'late';
-    if (idx >= 0) {
-      checkins[idx] = {
-        ...checkins[idx],
-        status: resolved,
-        checked_in_at: arrived && !checkins[idx].checked_in_at ? now : checkins[idx].checked_in_at,
-      };
-    } else {
-      const a = _allAttendees.find(x => x.id === id);
-      checkins.push({ id, type: a?.type||'cast', name: a?.name||name, status: resolved, checked_in_at: arrived ? now : null, left_at: null, notes: null });
-    }
-    await saveCheckins(checkins);
-  }
-
-  // ── Time editing ─────────────────────────────────────────────────
-  async function editTime(btn, event) {
-    event.stopPropagation();
-    const id    = btn.dataset.id;
-    const field = btn.dataset.field;
-    const state = getCheckinStateById(id);
-    const iso   = field === 'arrived' ? state.checked_in_at : state.left_at;
-    const cur   = iso ? new Date(iso).toTimeString().slice(0,5) : '';
-
-    const input = document.createElement('input');
-    input.type  = 'time';
-    input.value = cur;
-    input.style.cssText = 'width:85px;padding:0.25rem 0.4rem;border:1.5px solid #572e88;border-radius:5px;font-size:0.8rem;font-family:inherit;outline:none;';
-    btn.replaceWith(input);
-    input.focus();
-
-    let done = false;
-    async function commit() {
-      if (done) return; done = true;
-      const val = input.value;
-      const day = _selectedEvent.start_time?.slice(0,10) || todayDate();
-      const newIso = val ? day + 'T' + val + ':00' : null;
-      const a = _allAttendees.find(x => x.id === id);
-      const checkins = [...(_selectedEvent.event_checkins || [])];
-      const idx = checkins.findIndex(c => c.id === id);
-      const key = field === 'arrived' ? 'checked_in_at' : 'left_at';
-      if (idx >= 0) {
-        checkins[idx] = { ...checkins[idx], [key]: newIso };
-      } else {
-        checkins.push({ id, type: a?.type||'cast', name: a?.name||'', status: null, checked_in_at: null, left_at: null, [key]: newIso });
-      }
-      await saveCheckins(checkins);
-    }
-    input.addEventListener('blur', commit);
-    input.addEventListener('keydown', e => {
-      if (e.key === 'Enter') input.blur();
-      if (e.key === 'Escape') { done = true; renderCheckinPanel(); }
-    });
-  }
-
-  // ── Save checkins to DB ──────────────────────────────────────────
-  async function saveCheckins(checkins) {
-    const { error } = await _sb.from('production_events')
-      .update({ event_checkins: checkins })
-      .eq('id', _selectedEvent.id);
-    if (!error) {
-      _selectedEvent.event_checkins = checkins;
-      _events = _events.map(e => e.id === _selectedEvent.id ? _selectedEvent : e);
-      renderCheckinPanel();
-      renderEventList();
-      if (_openPanelId) renderRightPanel(_openPanelId);
-    }
-  }
-
-  // ── Filter / search ──────────────────────────────────────────────
-  function setFilterTab(tab) { _filterTab = tab; renderCheckinPanel(); }
-  function onSearch(val)     { _searchQuery = val; renderCheckinPanel(); }
-
-  // ── Bulk selection ───────────────────────────────────────────────
-  function toggleRowSelect(cb) {
-    const id = cb.dataset.id;
-    const row = document.getElementById('ci-row-' + id);
-    if (cb.checked) { _bulkSelected.add(id); row?.classList.add('is-selected'); }
-    else            { _bulkSelected.delete(id); row?.classList.remove('is-selected'); }
-    updateBulkBar();
-  }
-  function toggleSelectAll(cb) {
-    document.querySelectorAll('.ci-row-check').forEach(check => {
-      check.checked = cb.checked;
-      const row = document.getElementById('ci-row-' + check.dataset.id);
-      if (cb.checked) { _bulkSelected.add(check.dataset.id); row?.classList.add('is-selected'); }
-      else            { _bulkSelected.delete(check.dataset.id); row?.classList.remove('is-selected'); }
-    });
-    updateBulkBar();
-  }
-  function clearSelection() {
-    _bulkSelected.clear();
-    document.querySelectorAll('.ci-row-check').forEach(cb => { cb.checked = false; });
-    const all = document.getElementById('ci-check-all');
-    if (all) all.checked = false;
-    document.querySelectorAll('.ci-tr').forEach(r => r.classList.remove('is-selected'));
-    updateBulkBar();
-  }
-  function updateBulkBar() {
-    const bar = document.getElementById('ci-bulk-bar');
-    if (!bar) return;
-    if (_bulkSelected.size === 0) { bar.style.display = 'none'; return; }
-    bar.style.display = 'flex';
-    bar.innerHTML =
-      '<span class="ci-bulk-lbl">' + _bulkSelected.size + ' selected:</span>' +
-      '<button class="ci-bulk-opt s-here"    onclick="bulkSetStatus(\'here\')">Here</button>' +
-      '<button class="ci-bulk-opt s-late"    onclick="bulkSetStatus(\'late\')">Late</button>' +
-      '<button class="ci-bulk-opt s-absent"  onclick="bulkSetStatus(\'absent\')">Absent</button>' +
-      '<button class="ci-bulk-opt s-excused" onclick="bulkSetStatus(\'excused\')">Excused</button>' +
-      '<button class="ci-bulk-opt s-clear"   onclick="bulkSetStatus(null)">Clear</button>' +
-      '<button class="ci-bulk-desel" onclick="clearSelection()">Deselect all</button>';
-  }
-  async function bulkSetStatus(status) {
-    if (!_selectedEvent || !_bulkSelected.size) return;
-    const checkins = [...(_selectedEvent.event_checkins || [])];
-    const now = new Date().toISOString();
-    const arrived = status === 'here' || status === 'late';
-    _bulkSelected.forEach(id => {
-      const idx = checkins.findIndex(c => c.id === id);
-      const a   = _allAttendees.find(x => x.id === id);
-      if (idx >= 0) {
-        checkins[idx] = { ...checkins[idx], status, checked_in_at: arrived && !checkins[idx].checked_in_at ? now : checkins[idx].checked_in_at };
-      } else if (a) {
-        checkins.push({ id, type: a.type, name: a.name, status, checked_in_at: arrived ? now : null, left_at: null, notes: null });
-      }
-    });
-    await saveCheckins(checkins);
-    clearSelection();
-  }
-
-  // ── End Rehearsal ────────────────────────────────────────────────
-  async function endRehearsal() {
-    if (!_selectedEvent) return;
-    if (!confirm('End this event?\n\nEveryone not yet marked will be recorded as Absent. The record will be locked from further edits.')) return;
-    const attendees = resolveAttendees(_selectedEvent);
-    const checkins  = [...(_selectedEvent.event_checkins || [])];
-    const now = new Date().toISOString();
-    attendees.forEach(a => {
-      if (!getCheckinState(checkins, a.id).status) {
-        const idx = checkins.findIndex(c => c.id === a.id);
-        if (idx >= 0) checkins[idx] = { ...checkins[idx], status: 'absent' };
-        else checkins.push({ id: a.id, type: a.type, name: a.name, status: 'absent', checked_in_at: null, left_at: null, notes: null });
-      }
-    });
-    const { error } = await _sb.from('production_events')
-      .update({ event_checkins: checkins, is_locked: true, locked_at: now })
-      .eq('id', _selectedEvent.id);
-    if (!error) {
-      _selectedEvent.event_checkins = checkins;
-      _selectedEvent.is_locked  = true;
-      _selectedEvent.locked_at  = now;
-      _events = _events.map(e => e.id === _selectedEvent.id ? _selectedEvent : e);
-      renderEventHeader();
-      renderCheckinPanel();
-      renderEventList();
-    }
-  }
-
-  // ── Export CSV ───────────────────────────────────────────────────
-  function exportCsv() {
-    if (!_selectedEvent) return;
-    const checkins = _selectedEvent.event_checkins || [];
-    const rows = [['Name','Type','Role / Character','Status','Arrived','Left','Conflict']];
-    _allAttendees.forEach(a => {
-      const s = getCheckinState(checkins, a.id);
-      const sub = a.type === 'cast' ? (a.characters||[]).join(' / ') : (a.role_name||'Volunteer');
-      rows.push([a.name||'', a.type, sub, s.status||'not marked', s.checked_in_at ? fmtTime(s.checked_in_at) : '', s.left_at ? fmtTime(s.left_at) : '', a.has_conflict ? 'yes' : '']);
-    });
-    const csv = rows.map(r => r.map(v => '"' + String(v).replace(/"/g,'""') + '"').join(',')).join('\n');
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(new Blob([csv], {type:'text/csv'}));
-    a.download = 'checkin-' + (_selectedEvent.title||'event').replace(/\s+/g,'-').toLowerCase() + '.csv';
-    a.click();
-  }
-
-  // ── Right panel ──────────────────────────────────────────────────
-  function openPanel(btn, event) {
-    event.stopPropagation();
-    _openPanelId = btn.dataset.id;
-    renderRightPanel(_openPanelId);
-    document.getElementById('ci-overlay').classList.add('open');
-    document.getElementById('ci-right-panel').classList.add('open');
-  }
-  function closePanel() {
-    _openPanelId = null;
-    document.getElementById('ci-overlay').classList.remove('open');
-    document.getElementById('ci-right-panel').classList.remove('open');
-  }
-
-  function renderRightPanel(id) {
-    const a = _allAttendees.find(x => x.id === id);
-    if (!a) return;
-    const state  = getCheckinStateById(id);
-    const person = _people[id] || {};
-    const initials = (a.name||'?').split(' ').map(w => w[0]).slice(0,2).join('').toUpperCase();
-    const avatar = a.headshot_url
-      ? '<img class="ci-rp-avatar" src="' + esc(a.headshot_url) + '" alt="" />'
-      : '<div class="ci-rp-avatar-init">' + esc(initials) + '</div>';
-    const subLabel = a.type === 'cast' ? (a.characters||[]).join(', ') : (a.role_name||'Volunteer');
-    const sc = STATUS_CONF[state.status] || STATUS_CONF._none;
-    const arrivedNote = state.checked_in_at ? 'Arrived ' + fmtTime(state.checked_in_at) : '';
-    const leftNote    = state.left_at       ? 'Left '    + fmtTime(state.left_at)        : '';
-
-    // Actions
-    const callBtn  = person.phone ? '<a class="ci-rp-action-btn" href="tel:' + esc(person.phone)  + '"><span class="ci-rp-action-icon">&#x260E;</span>Call</a>'  : '';
-    const textBtn  = person.phone ? '<a class="ci-rp-action-btn" href="sms:' + esc(person.phone)  + '"><span class="ci-rp-action-icon">&#x1F4AC;</span>Text</a>'  : '';
-    const emailBtn = person.email ? '<a class="ci-rp-action-btn" href="mailto:' + esc(person.email) + '"><span class="ci-rp-action-icon">&#x2709;</span>Email</a>' : '';
-
-    // Guardian
-    const gName    = person.guardian_name    || '';
-    const gContact = person.guardian_contact || person.guardian_phone || '';
-    const guardianHtml = (gName || person.is_minor)
-      ? '<div class="ci-rp-section">' +
-          '<div class="ci-rp-section-title">Parent / Guardian</div>' +
-          (gName ? '<div class="ci-rp-row"><span class="ci-rp-label">' + esc(gName) + '</span>' + (gContact ? '<br><a href="tel:' + esc(gContact) + '">' + esc(gContact) + '</a>' : '') + '</div>' : '') +
-          (!gName && !gContact ? '<div class="ci-rp-empty">No guardian on file</div>' : '') +
-        '</div>'
-      : '';
-
-    // Attendance history
-    const histHtml = buildAttendanceHistory(id);
-
-    // Existing note
-    const existingNote = state.notes || '';
-
-    document.getElementById('ci-rp-content').innerHTML =
-      '<div class="ci-rp-top"><button class="ci-rp-close" onclick="closePanel()">&#10005;</button></div>' +
-      '<div class="ci-rp-hero">' + avatar +
-        '<div>' +
-          '<div class="ci-rp-name">' + esc(a.name||'Unknown') + '</div>' +
-          '<div class="ci-rp-role">' + esc(subLabel) + '</div>' +
-          '<div class="ci-rp-status-row">' +
-            '<span class="ci-spill s-' + (state.status||'none') + '">' + sc.icon + ' ' + sc.label + '</span>' +
-            (arrivedNote ? '<span class="ci-rp-time">' + esc(arrivedNote) + '</span>' : '') +
-            (leftNote    ? '<span class="ci-rp-time">' + esc(leftNote)    + '</span>' : '') +
-          '</div>' +
-        '</div>' +
-      '</div>' +
-      (callBtn || textBtn || emailBtn ? '<div class="ci-rp-actions">' + callBtn + textBtn + emailBtn + '</div>' : '') +
-      guardianHtml +
-      '<div class="ci-rp-section">' +
-        '<div class="ci-rp-section-title">Attendance History</div>' +
-        histHtml +
-      '</div>' +
-      '<div class="ci-rp-section">' +
-        '<div class="ci-rp-section-title">Notes</div>' +
-        '<textarea class="ci-notes-area" id="ci-notes-ta" placeholder="Add a note...">' + esc(existingNote) + '</textarea>' +
-        '<button class="ci-notes-save" data-id="' + esc(id) + '" onclick="saveNote(this)">Save Note</button>' +
-      '</div>';
-  }
-
-  function buildAttendanceHistory(personId) {
-    const pastEvs = _events.filter(e => isPast(e)).slice(-14);
-    const cur = _events.find(e => e.id === _selectedEvent?.id);
-    const toShow = cur && !pastEvs.find(e => e.id === cur.id) ? [...pastEvs, cur] : pastEvs;
-    if (!toShow.length) return '<div class="ci-rp-empty">No attendance history yet.</div>';
-    const dots = toShow.map(ev => {
-      const entry  = (ev.event_checkins||[]).find(c => c.id === personId);
-      const status = entry?.status || null;
-      const conf   = status ? (HIST_CONF[status]||HIST_CONF._none) : HIST_CONF._none;
-      const evLbl  = esc(ev.title || EVENT_LABELS[ev.event_type] || 'Event');
-      return '<div class="ci-hist-dot" style="background:' + conf.bg + ';color:' + conf.colour + '" title="' + evLbl + ' — ' + conf.label + '">' + conf.letter + '</div>';
-    }).join('');
-    return '<div class="ci-hist-row">' + dots + '</div>' +
-           '<div class="ci-hist-legend">H = Here &nbsp;&#183;&nbsp; L = Late &nbsp;&#183;&nbsp; A = Absent &nbsp;&#183;&nbsp; E = Excused</div>';
-  }
-
-  async function saveNote(btn) {
-    const id = btn.dataset.id;
-    const ta = document.getElementById('ci-notes-ta');
-    if (!ta || !_selectedEvent) return;
-    const noteText = ta.value.trim();
-    const checkins = [...(_selectedEvent.event_checkins||[])];
-    const idx      = checkins.findIndex(c => c.id === id);
-    const a        = _allAttendees.find(x => x.id === id);
-    if (idx >= 0) checkins[idx] = { ...checkins[idx], notes: noteText||null };
-    else checkins.push({ id, type: a?.type||'cast', name: a?.name||'', status: null, checked_in_at: null, left_at: null, notes: noteText||null });
-    await saveCheckins(checkins);
-    ta.style.borderColor = '#469b42';
-    setTimeout(() => { ta.style.borderColor = ''; }, 1500);
-  }
-
-  // ── Attendee resolution ──────────────────────────────────────────
-  function resolveAttendees(ev) {
-    const calledIds = new Set(ev.called_character_ids || []);
-    const personMap = {};
-    _assignments.filter(a => calledIds.has(a.character_id)).forEach(a => {
-      const person = _people[a.applicant_id] || { name:'Unknown' };
-      const char   = _chars.find(c => c.id === a.character_id);
-      if (!personMap[a.applicant_id]) {
-        personMap[a.applicant_id] = {
-          id: a.applicant_id, type:'cast',
-          name: person.name||'Unknown', headshot_url: person.headshot_url||null,
-          characters: [], has_conflict: checkConflict(person.date_conflicts, ev),
-        };
-      }
-      if (char) personMap[a.applicant_id].characters.push(char.name);
-    });
-    const evDate = ev.start_time?.slice(0,10) || '';
-    const volList = _volunteers
-      .filter(v => { const extra = Array.isArray(v.required_dates) ? v.required_dates : []; return v.shift_date === evDate || extra.includes(evDate); })
-      .map(v => ({ id: v.id, type:'volunteer', name: v.name||v.email||'Volunteer', headshot_url: null, characters: [], role_name: v.role_name||'', has_conflict: false }));
-    return [...Object.values(personMap), ...volList].sort((a,b) => (a.name||'').localeCompare(b.name||''));
-  }
-
-  function checkConflict(dateConflicts, ev) {
-    if (!dateConflicts) return false;
-    const raw = typeof dateConflicts === 'string' ? (()=>{ try{ return JSON.parse(dateConflicts)||{}; }catch{ return {}; }})() : (dateConflicts||{});
-    const byId = raw[ev.id];
-    if (byId === true || byId?.conflict === true) return true;
-    const evDate = ev.start_time?.slice(0,10);
-    if (!evDate) return false;
-    return Object.values(raw).some(v => typeof v === 'object' && v?.date === evDate && v?.conflict === true);
-  }
-
-  function getCheckinState(checkins, id) {
-    const entry = (checkins||[]).find(c => c.id === id);
-    if (!entry) return { status:null, checked_in_at:null, left_at:null, notes:null };
-    if (entry.status === undefined && entry.checked_in) return { status:'here', checked_in_at:entry.checked_in_at, left_at:null, notes:null };
-    return entry;
-  }
-  function getCheckinStateById(id) {
-    return getCheckinState(_selectedEvent?.event_checkins || [], id);
+    return new Date(d + 'T12:00:00').toLocaleDateString('en-CA', { weekday:'long', month:'long', day:'numeric' });
   }
 
   function esc(s) {
