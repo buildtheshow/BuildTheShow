@@ -249,22 +249,12 @@
 
   <!-- Print options modal -->
   <div class="cl-overlay" id="print-overlay" onclick="closePrintModal()">
-    <div class="cl-modal" style="width:400px" onclick="event.stopPropagation()">
+    <div class="cl-modal" style="width:380px" onclick="event.stopPropagation()">
       <div class="cl-head">
-        <div><div class="cl-title">Print Attendance Sheet</div><div class="cl-sub">Choose what to include on the printed sheet</div></div>
+        <div><div class="cl-title">Print Attendance Sheet</div><div class="cl-sub">Includes names, characters, status, emergency contacts, and authorised pickup</div></div>
         <button class="cl-close" onclick="closePrintModal()">&#10005;</button>
       </div>
-      <div style="padding:1.4rem 1.5rem;display:flex;flex-direction:column;gap:1rem;">
-        <label style="display:flex;align-items:center;gap:0.75rem;cursor:pointer;font-size:0.88rem;font-weight:700;color:#1a1530">
-          <input type="checkbox" id="print-opt-contacts" checked style="width:16px;height:16px;accent-color:#572e88">
-          Emergency contacts
-        </label>
-        <label style="display:flex;align-items:center;gap:0.75rem;cursor:pointer;font-size:0.88rem;font-weight:700;color:#1a1530">
-          <input type="checkbox" id="print-opt-pickup" style="width:16px;height:16px;accent-color:#572e88">
-          Drop-off and pickup instructions column
-        </label>
-      </div>
-      <div style="padding:1rem 1.5rem 1.4rem;display:flex;justify-content:flex-end;gap:0.6rem;border-top:1px solid rgba(87,46,136,0.1)">
+      <div style="padding:1rem 1.5rem 1.4rem;display:flex;justify-content:flex-end;gap:0.6rem;">
         <button class="cl-cancel" onclick="closePrintModal()">Cancel</button>
         <button class="cl-save" onclick="doPrint()">Print Sheet</button>
       </div>
@@ -968,124 +958,121 @@
     const ev  = _events.find(e => e.id === evId);
     if (!ev) return;
 
-    const includeContacts = document.getElementById('print-opt-contacts').checked;
-    const includePickup   = document.getElementById('print-opt-pickup').checked;
-
     const att      = resolveAttendees(ev);
     const checkins = ev.event_checkins || [];
-    const label    = EV_LABELS[ev.event_type] || 'Event';
-    const title    = ev.title || label;
-    const date     = ev.start_time ? new Date(ev.start_time + (ev.start_time.includes('T') ? '' : 'T00:00:00')).toLocaleDateString('en-CA', {weekday:'long',month:'long',day:'numeric',year:'numeric'}) : '';
+    const evDate   = ev.start_time?.slice(0,10) || '';
+    const title    = ev.title || EV_LABELS[ev.event_type] || 'Event';
     const times    = (ev.start_time ? fmtTime(ev.start_time) : '') + (ev.end_time ? ' – ' + fmtTime(ev.end_time) : '');
+    const dateStr  = ev.start_time ? ev.start_time.slice(0,10).split('-').reverse().join('/') : '';
 
-    // Status label map for printed sheet
-    const statusLabel = { here:'Here', late:'Late', absent:'Absent', excused:'Excused' };
+    const statusLabels = { here:'Here', late:'Late', absent:'Absent', excused:'Excused' };
+    const statusColour = { here:'#2a7228', late:'#7a5000', absent:'#a02020', excused:'#2a4a8a' };
 
     const rows = att.map((a, i) => {
-      const state  = getState(checkins, a.id);
-      const p      = _people[a.id] || {};
-      const charLine = a.type === 'cast' ? (a.characters||[]).join(', ') : (a.role_name || 'Volunteer');
-      const arrived  = state.checked_in_at ? fmtTime(state.checked_in_at) : '';
-      const left     = state.left_at       ? fmtTime(state.left_at)       : '';
-      const status   = state.status ? statusLabel[state.status] : '';
+      const state    = getState(checkins, a.id);
+      const p        = _people[a.id] || {};
+      const ans      = p.custom_answers || {};
+      const charLine = a.type === 'cast' ? (a.characters||[]).join(', ') : (a.role_name||'Volunteer');
+      const conflict = evDate && hasConflict(p.date_conflicts, evDate);
 
-      const pGFirst = p.guardian_name || ca(p.custom_answers, 'guardian first');
-      const pGLast  = ca(p.custom_answers, 'guardian last');
-      const pGName  = pGFirst ? (pGFirst + (pGLast ? ' ' + pGLast : '')) : '';
-      const pGPhone = p.guardian_phone || p.guardian_contact || ca(p.custom_answers, 'guardian phone', 'emergency contact phone');
-      const contactCell = includeContacts
-        ? '<td>' +
-            (pGName  ? '<strong>' + pesc(pGName)  + '</strong><br>' : '') +
-            (pGPhone ? pesc(pGPhone) : '') +
-          '</td>'
-        : '';
+      // Status cell
+      let statusCell;
+      if (state.status) {
+        statusCell = '<td style="font-weight:700;color:' + statusColour[state.status] + '">' + pesc(statusLabels[state.status]) +
+          (state.checked_in_at ? '<br><span style="font-weight:400;font-size:9px;color:#555">In ' + pesc(fmtTime(state.checked_in_at)) + '</span>' : '') +
+          (state.left_at       ? '<br><span style="font-weight:400;font-size:9px;color:#555">Out ' + pesc(fmtTime(state.left_at)) + '</span>' : '') +
+          '</td>';
+      } else {
+        statusCell = conflict
+          ? '<td style="color:#a05000;font-weight:700;font-size:9px">Cannot Attend</td>'
+          : '<td style="color:#888">&#9744;</td>';
+      }
 
-      const pickupCell = includePickup ? '<td></td>' : '';
+      // Emergency contact
+      const emgName  = ca(ans, 'emergency contact name');
+      const emgPhone = ca(ans, 'emergency contact phone');
+      const emgRel   = ca(ans, 'emergency contact relationship');
+      const emgCell  = '<td>' +
+        (emgName  ? '<strong>' + pesc(emgName) + '</strong>' + (emgRel ? ' (' + pesc(emgRel) + ')' : '') + '<br>' : '') +
+        (emgPhone ? pesc(emgPhone) : '<span style="color:#bbb">—</span>') +
+        '</td>';
 
-      return '<tr>' +
-        '<td style="text-align:center;color:#888">' + (i + 1) + '</td>' +
-        '<td><strong>' + pesc(a.name || 'Unknown') + '</strong></td>' +
-        '<td>' + pesc(charLine) + '</td>' +
-        '<td style="text-align:center">' + pesc(status) + '</td>' +
-        '<td style="text-align:center">' + pesc(arrived) + '</td>' +
-        '<td style="text-align:center">' + pesc(left)    + '</td>' +
-        contactCell +
+      // Pickup info
+      let pickupLines = [];
+      const canLeaveAlone = Object.entries(ans).some(([k,v]) => k.toLowerCase().includes('can leave') && (v===true||v==='true'||v==='yes'));
+      if (canLeaveAlone) {
+        pickupLines.push('<em>Can leave on own</em>');
+      } else {
+        for (let n = 1; n <= 3; n++) {
+          const pName  = ca(ans, 'authorised pickup ' + n + ' full name', 'authorized pickup ' + n + ' full name');
+          const pPhone = ca(ans, 'authorised pickup ' + n + ' phone',     'authorized pickup ' + n + ' phone');
+          const pRel   = ca(ans, 'authorised pickup ' + n + ' relationship', 'authorized pickup ' + n + ' relation');
+          if (pName) pickupLines.push('<strong>' + pesc(pName) + '</strong>' + (pRel ? ' (' + pesc(pRel) + ')' : '') + (pPhone ? ' &mdash; ' + pesc(pPhone) : ''));
+        }
+        const pickupNotes = ca(ans, 'additional pickup notes');
+        if (pickupNotes) pickupLines.push('<span style="color:#555">' + pesc(pickupNotes) + '</span>');
+      }
+      const pickupCell = '<td>' + (pickupLines.length ? pickupLines.join('<br>') : '<span style="color:#bbb">—</span>') + '</td>';
+
+      const rowBg = i % 2 === 0 ? '' : ' style="background:#f7f7f9"';
+      return '<tr' + rowBg + '>' +
+        '<td style="text-align:center;color:#aaa;font-size:10px;width:22px">' + (i+1) + '</td>' +
+        '<td style="width:150px"><strong>' + pesc(a.name||'Unknown') + '</strong>' +
+          (charLine ? '<br><span style="font-size:9px;color:#666">' + pesc(charLine) + '</span>' : '') +
+        '</td>' +
+        statusCell +
+        emgCell +
         pickupCell +
-        '<td></td>' + // notes
+        '<td style="width:80px"></td>' +
       '</tr>';
     }).join('');
 
-    const extraHeaders = (includeContacts ? '<th>Emergency Contact</th>' : '') +
-                         (includePickup   ? '<th>Drop-off / Pickup</th>' : '');
-
     const html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Attendance — ' + pesc(title) + '</title>' +
       '<style>' +
-        'body { font-family: Arial, Helvetica, sans-serif; font-size: 11px; color: #000; margin: 0; padding: 0; }' +
-        '.sheet { padding: 18mm 14mm 14mm; }' +
-        '.hdr { border-bottom: 2.5px solid #000; padding-bottom: 8px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: flex-end; }' +
-        '.hdr-left h1 { margin: 0 0 2px; font-size: 18px; font-weight: 900; }' +
-        '.hdr-left p  { margin: 0; font-size: 11px; color: #444; }' +
-        '.hdr-right   { text-align: right; font-size: 10px; color: #666; }' +
-        '.summary { display: flex; gap: 16px; margin-bottom: 12px; }' +
-        '.sum-box { border: 1px solid #ccc; border-radius: 5px; padding: 5px 12px; text-align: center; }' +
-        '.sum-num { font-size: 18px; font-weight: 900; line-height: 1; }' +
-        '.sum-lbl { font-size: 9px; text-transform: uppercase; letter-spacing: 0.06em; color: #666; }' +
-        'table { width: 100%; border-collapse: collapse; }' +
-        'th { background: #1a1530; color: #fff; padding: 5px 7px; font-size: 9px; text-transform: uppercase; letter-spacing: 0.07em; text-align: left; font-weight: 900; }' +
-        'th:first-child { border-radius: 4px 0 0 4px; }' +
-        'th:last-child  { border-radius: 0 4px 4px 0; }' +
-        'td { padding: 6px 7px; border-bottom: 1px solid #e8e8e8; vertical-align: top; }' +
-        'tr:nth-child(even) td { background: #f9f9f9; }' +
-        'tr:last-child td { border-bottom: none; }' +
-        '.status-here    { color: #2a7228; font-weight: 700; }' +
-        '.status-late    { color: #7a5000; font-weight: 700; }' +
-        '.status-absent  { color: #a02020; font-weight: 700; }' +
-        '.status-excused { color: #2a4a8a; font-weight: 700; }' +
-        '.footer { margin-top: 14px; border-top: 1px solid #ccc; padding-top: 6px; display: flex; justify-content: space-between; font-size: 9px; color: #888; }' +
-        '@media print {' +
-          'body { margin: 0; }' +
-          '.sheet { padding: 12mm 10mm; }' +
-          'button { display: none; }' +
-        '}' +
-      '</style></head><body>' +
-      '<div class="sheet">' +
-        '<div class="hdr">' +
-          '<div class="hdr-left">' +
-            '<h1>' + pesc(title) + '</h1>' +
-            '<p>' + (date ? pesc(date) : '') + (times ? '&nbsp;&nbsp;&#183;&nbsp;&nbsp;' + pesc(times) : '') + (ev.venue ? '&nbsp;&nbsp;&#183;&nbsp;&nbsp;' + pesc(ev.venue) : '') + '</p>' +
-          '</div>' +
-          '<div class="hdr-right">Printed ' + new Date().toLocaleDateString('en-CA', {year:'numeric',month:'long',day:'numeric'}) + '<br><em>Build The Show</em></div>' +
-        '</div>' +
-        '<div class="summary">' +
-          '<div class="sum-box"><div class="sum-num">' + att.length + '</div><div class="sum-lbl">Expected</div></div>' +
-          '<div class="sum-box"><div class="sum-num" style="color:#2a7228">' + checkins.filter(c=>c.status==='here').length + '</div><div class="sum-lbl">Here</div></div>' +
-          '<div class="sum-box"><div class="sum-num" style="color:#7a5000">' + checkins.filter(c=>c.status==='late').length + '</div><div class="sum-lbl">Late</div></div>' +
-          '<div class="sum-box"><div class="sum-num" style="color:#a02020">' + checkins.filter(c=>c.status==='absent').length + '</div><div class="sum-lbl">Absent</div></div>' +
-          '<div class="sum-box"><div class="sum-num" style="color:#2a4a8a">' + checkins.filter(c=>c.status==='excused').length + '</div><div class="sum-lbl">Excused</div></div>' +
-        '</div>' +
-        '<table>' +
-          '<thead><tr>' +
-            '<th style="width:28px">#</th>' +
-            '<th>Performer</th>' +
-            '<th>Character / Role</th>' +
-            '<th style="width:55px">Status</th>' +
-            '<th style="width:58px">Arrived</th>' +
-            '<th style="width:45px">Left</th>' +
-            extraHeaders +
-            '<th>Notes</th>' +
-          '</tr></thead>' +
-          '<tbody>' + rows + '</tbody>' +
-        '</table>' +
-        '<div class="footer">' +
-          '<span>Stage Manager sign-off: ________________________________</span>' +
-          '<span>' + pesc(title) + ' &nbsp;&#183;&nbsp; ' + (date || '') + '</span>' +
-        '</div>' +
+        'body{font-family:Arial,Helvetica,sans-serif;font-size:10.5px;color:#000;margin:0;padding:0}' +
+        '.sheet{padding:14mm 12mm 12mm}' +
+        '.hdr{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:2.5px solid #1a1530;padding-bottom:8px;margin-bottom:10px}' +
+        '.hdr h1{margin:0 0 2px;font-size:17px;font-weight:900;letter-spacing:-0.01em}' +
+        '.hdr p{margin:0;font-size:10px;color:#555}' +
+        '.hdr-right{text-align:right;font-size:9px;color:#888}' +
+        '.stats{display:flex;gap:10px;margin-bottom:10px;flex-wrap:wrap}' +
+        '.stat{border:1px solid #ddd;border-radius:5px;padding:4px 10px;text-align:center;min-width:52px}' +
+        '.stat-n{font-size:16px;font-weight:900;line-height:1.1}' +
+        '.stat-l{font-size:8px;text-transform:uppercase;letter-spacing:.06em;color:#777}' +
+        'table{width:100%;border-collapse:collapse;table-layout:fixed}' +
+        'th{background:#1a1530;color:#fff;padding:5px 6px;font-size:8.5px;text-transform:uppercase;letter-spacing:.07em;text-align:left;font-weight:900;white-space:nowrap}' +
+        'td{padding:7px 6px;border-bottom:1px solid #e5e5e5;vertical-align:top;font-size:10px}' +
+        'tr:last-child td{border-bottom:none}' +
+        '.footer{margin-top:12px;border-top:1px solid #ccc;padding-top:5px;display:flex;justify-content:space-between;font-size:8.5px;color:#999}' +
+        '@media print{body{margin:0}.sheet{padding:10mm 8mm}button{display:none}}' +
+      '</style></head><body><div class="sheet">' +
+      '<div class="hdr"><div>' +
+        '<h1>' + pesc(title) + '</h1>' +
+        '<p>' + pesc(dateStr) + (times ? ' &nbsp;&middot;&nbsp; ' + pesc(times) : '') + (ev.venue ? ' &nbsp;&middot;&nbsp; ' + pesc(ev.venue) : '') + '</p>' +
+      '</div><div class="hdr-right">Printed ' + new Date().toLocaleDateString('en-CA',{year:'numeric',month:'long',day:'numeric'}) + '<br><em>Build The Show</em></div></div>' +
+      '<div class="stats">' +
+        '<div class="stat"><div class="stat-n">' + att.length + '</div><div class="stat-l">Expected</div></div>' +
+        '<div class="stat"><div class="stat-n" style="color:#a05000">' + att.filter(a=>hasConflict((_people[a.id]||{}).date_conflicts,evDate)).length + '</div><div class="stat-l">Cannot Attend</div></div>' +
+        '<div class="stat"><div class="stat-n" style="color:#2a7228">' + checkins.filter(c=>c.status==='here').length + '</div><div class="stat-l">Here</div></div>' +
+        '<div class="stat"><div class="stat-n" style="color:#7a5000">' + checkins.filter(c=>c.status==='late').length + '</div><div class="stat-l">Late</div></div>' +
+        '<div class="stat"><div class="stat-n" style="color:#a02020">' + checkins.filter(c=>c.status==='absent').length + '</div><div class="stat-l">Absent</div></div>' +
+        '<div class="stat"><div class="stat-n" style="color:#2a4a8a">' + checkins.filter(c=>c.status==='excused').length + '</div><div class="stat-l">Excused</div></div>' +
       '</div>' +
-      '<script>window.onload=function(){window.print();}<\/script>' +
-      '</body></html>';
+      '<table>' +
+        '<colgroup><col style="width:22px"><col style="width:150px"><col style="width:80px"><col style="width:130px"><col><col style="width:80px"></colgroup>' +
+        '<thead><tr>' +
+          '<th>#</th><th>Performer</th><th>Status</th><th>Emergency Contact</th><th>Authorised Pickup</th><th>Notes</th>' +
+        '</tr></thead>' +
+        '<tbody>' + rows + '</tbody>' +
+      '</table>' +
+      '<div class="footer"><span>Stage manager sign-off: ________________________________</span><span>' + pesc(title) + ' &nbsp;&middot;&nbsp; ' + pesc(dateStr) + '</span></div>' +
+      '</div><script>window.onload=function(){window.print();}<\/script></body></html>';
 
     const win = window.open('', '_blank');
     if (win) { win.document.write(html); win.document.close(); }
+  }
+
+  // (old html block removed — replaced above)
   }
 
   // Plain-text escaper for the print window (no innerHTML tricks)
