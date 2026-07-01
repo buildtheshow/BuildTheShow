@@ -145,6 +145,7 @@
     .ci-avatar-init { width: 38px; height: 38px; border-radius: 8px; background: #572e88; color: #fff; font-size: 0.72rem; font-weight: 900; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
     .ci-perf-name { font-size: 0.88rem; font-weight: 850; color: #1a1530; }
     .ci-perf-sub  { font-size: 0.68rem; color: rgba(26,21,48,0.42); margin-top: 0.06rem; }
+    .ci-conflict-badge { font-size: 0.63rem; font-weight: 900; color: #dd8233; margin-top: 0.1rem; letter-spacing: 0.01em; }
     .ci-char-cell { font-size: 0.8rem; color: rgba(26,21,48,0.52); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 160px; }
 
     /* Status */
@@ -403,7 +404,7 @@
         .eq('production_id', _prodId).in('event_type', CHECKIN_TYPES).order('start_time'),
       _sb.from('production_characters').select('id,name,sort_order').eq('production_id', _prodId).order('sort_order'),
       _sb.from('casting_assignments').select('id,character_id,applicant_id,state').eq('production_id', _prodId).in('state', ['chosen','offer_accepted']),
-      _sb.from('audition_applications').select('id,name,email,pronouns,headshot_url,custom_answers,status').eq('production_id', _prodId).order('name'),
+      _sb.from('audition_applications').select('id,name,email,pronouns,headshot_url,custom_answers,status,date_conflicts').eq('production_id', _prodId).order('name'),
       _sb.from('volunteer_signups').select('id,name,email,role_name,shift_date,required_dates,status').eq('production_id', _prodId).in('status', ['approved','checked_in','completed']),
     ]);
     _events      = evRes.data || [];
@@ -419,7 +420,7 @@
       const emailKey = (a.email||a.id).toLowerCase();
       if (seenEmails.has(emailKey)) return;
       seenEmails.add(emailKey);
-      _people[a.id] = { name:a.name, email:a.email, pronouns:a.pronouns, headshot_url:a.headshot_url, custom_answers:ca, status:a.status };
+      _people[a.id] = { name:a.name, email:a.email, pronouns:a.pronouns, headshot_url:a.headshot_url, custom_answers:ca, status:a.status, date_conflicts:a.date_conflicts };
       _allApplicants.push({ id: a.id });
     });
     // Sort alphabetically by first name
@@ -656,7 +657,11 @@
     const avatar   = a.headshot_url
       ? '<img class="ci-avatar" src="' + esc(a.headshot_url) + '" alt="">'
       : '<div class="ci-avatar-init">' + esc(initials) + '</div>';
-    const subLine = a.type === 'volunteer' ? '<div class="ci-perf-sub">Volunteer</div>' : '';
+    const evDate   = _selectedEvent?.start_time?.slice(0,10) || '';
+    const conflict = evDate && hasConflict((_people[id]||{}).date_conflicts, evDate);
+    const subLine  = conflict
+      ? '<div class="ci-conflict-badge">Cannot attend this date</div>'
+      : (a.type === 'volunteer' ? '<div class="ci-perf-sub">Volunteer</div>' : '');
     const charCell = a.type === 'cast' ? esc((a.characters||[]).join(', ')||'—') : esc(a.role_name||'—');
 
     // Status
