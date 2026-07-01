@@ -420,8 +420,8 @@
         .eq('production_id', _prodId).in('event_type', CHECKIN_TYPES).order('start_time'),
       _sb.from('production_characters').select('id,name,sort_order').eq('production_id', _prodId).order('sort_order'),
       _sb.from('casting_assignments').select('id,character_id,applicant_id,state').eq('production_id', _prodId).in('state', ['chosen','offer_accepted']),
-      _sb.from('audition_applications').select('id,name,email,pronouns,headshot_url,custom_answers,status,date_conflicts').eq('production_id', _prodId).order('name'),
-      _sb.from('audition_bookings').select('id,name,email,headshot_url,custom_answers,date_conflicts').eq('production_id', _prodId).order('name'),
+      _sb.from('audition_applications').select('id,name,email,pronouns,headshot_url,custom_answers,registration_answers,status,date_conflicts').eq('production_id', _prodId).order('name'),
+      _sb.from('audition_bookings').select('id,name,email,headshot_url,custom_answers').eq('production_id', _prodId).order('name'),
       _sb.from('volunteer_signups').select('id,name,email,role_name,shift_date,required_dates,status').eq('production_id', _prodId).in('status', ['approved','checked_in','completed']),
     ]);
     _events      = evRes.data || [];
@@ -429,23 +429,29 @@
     _assignments = asRes.data || [];
     _volunteers  = volsRes.data || [];
 
+    const isRegistered = (custom_answers, registration_answers) => {
+      if (custom_answers?.__bts_registration_status === 'complete') return true;
+      if (registration_answers && Object.keys(registration_answers).length > 0) return true;
+      return false;
+    };
+
     // Registered performers from audition_applications — build name+email set for dedup
     const seenNameEmail = new Set();
     (appsRes.data||[]).forEach(a => {
+      if (!isRegistered(a.custom_answers, a.registration_answers)) return;
       const ca = a.custom_answers || {};
-      if (ca.__bts_registration_status !== 'complete') return;
       seenNameEmail.add((a.name||'').toLowerCase() + '|' + (a.email||'').toLowerCase());
       _people[a.id] = { name:a.name, email:a.email, pronouns:a.pronouns, headshot_url:a.headshot_url, custom_answers:ca, status:a.status, date_conflicts:a.date_conflicts };
       _allApplicants.push({ id: a.id });
     });
     // Also include registered performers from audition_bookings (Clio) not already covered
     (booksRes.data||[]).forEach(b => {
-      const ca = b.custom_answers || {};
-      if (ca.__bts_registration_status !== 'complete') return;
+      if (!isRegistered(b.custom_answers, null)) return;
       const key = (b.name||'').toLowerCase() + '|' + (b.email||'').toLowerCase();
       if (seenNameEmail.has(key)) return;
       seenNameEmail.add(key);
-      _people[b.id] = { name:b.name, email:b.email, headshot_url:b.headshot_url, custom_answers:ca, date_conflicts:b.date_conflicts };
+      const ca = b.custom_answers || {};
+      _people[b.id] = { name:b.name, email:b.email, headshot_url:b.headshot_url, custom_answers:ca };
       _allApplicants.push({ id: b.id });
     });
     // Sort alphabetically by preferred first name
