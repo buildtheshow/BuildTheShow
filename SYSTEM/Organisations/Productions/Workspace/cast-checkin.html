@@ -396,15 +396,13 @@
 
   // ── Data ──────────────────────────────────────────────────────────
   async function loadData() {
-    // audition_applications and audition_bookings both have production_id directly
-    const [evRes, chRes, asRes, appsRes, booksRes, volsRes] = await Promise.all([
+    const [evRes, chRes, asRes, appsRes, volsRes] = await Promise.all([
       _sb.from('production_events')
         .select('id,title,event_type,start_time,end_time,venue,called_character_ids,event_checkins,is_locked,locked_at')
         .eq('production_id', _prodId).in('event_type', CHECKIN_TYPES).order('start_time'),
       _sb.from('production_characters').select('id,name,sort_order').eq('production_id', _prodId).order('sort_order'),
       _sb.from('casting_assignments').select('id,character_id,applicant_id,state').eq('production_id', _prodId).in('state', ['chosen','confirmed','offered']),
-      _sb.from('audition_applications').select('id,name,email,pronouns,headshot_url,custom_answers').eq('production_id', _prodId).order('name'),
-      _sb.from('audition_bookings').select('id,name,custom_answers').eq('production_id', _prodId).order('name'),
+      _sb.from('audition_applications').select('id,name,email,pronouns,headshot_url,custom_answers,status').eq('production_id', _prodId).order('name'),
       _sb.from('volunteer_signups').select('id,name,email,role_name,shift_date,required_dates,status').eq('production_id', _prodId).in('status', ['approved','checked_in','completed']),
     ]);
     _events      = evRes.data || [];
@@ -412,15 +410,15 @@
     _assignments = asRes.data || [];
     _volunteers  = volsRes.data || [];
 
-    const seen = new Set();
-    const addPerson = (id, data) => {
-      if (seen.has(id)) return; seen.add(id);
-      _people[id] = data;
-      _allApplicants.push({ id });
-    };
-
-    (appsRes.data||[]).forEach(a => addPerson(a.id, { name:a.name, email:a.email, pronouns:a.pronouns, headshot_url:a.headshot_url, custom_answers:a.custom_answers||{} }));
-    (booksRes.data||[]).forEach(b => addPerson(b.id, { name:b.name, custom_answers:b.custom_answers||{} }));
+    // Deduplicate by email — one row per person
+    const seenEmails = new Set();
+    (appsRes.data||[]).forEach(a => {
+      const emailKey = (a.email||a.id).toLowerCase();
+      if (seenEmails.has(emailKey)) return;
+      seenEmails.add(emailKey);
+      _people[a.id] = { name:a.name, email:a.email, pronouns:a.pronouns, headshot_url:a.headshot_url, custom_answers:a.custom_answers||{}, status:a.status };
+      _allApplicants.push({ id: a.id });
+    });
   }
 
   // ── Page routing ──────────────────────────────────────────────────
