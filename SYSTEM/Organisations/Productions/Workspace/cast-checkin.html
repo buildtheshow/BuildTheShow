@@ -396,16 +396,21 @@
 
   // ── Data ──────────────────────────────────────────────────────────
   async function loadData() {
-    const [evRes, chRes, asRes] = await Promise.all([
+    // audition_applications and audition_bookings both have production_id directly
+    const [evRes, chRes, asRes, appsRes, booksRes, volsRes] = await Promise.all([
       _sb.from('production_events')
         .select('id,title,event_type,start_time,end_time,venue,called_character_ids,event_checkins,is_locked,locked_at')
         .eq('production_id', _prodId).in('event_type', CHECKIN_TYPES).order('start_time'),
       _sb.from('production_characters').select('id,name,sort_order').eq('production_id', _prodId).order('sort_order'),
       _sb.from('casting_assignments').select('id,character_id,applicant_id,state').eq('production_id', _prodId).in('state', ['chosen','confirmed','offered']),
+      _sb.from('audition_applications').select('id,name,email,phone,pronouns,guardian_name,guardian_contact,guardian_phone,is_minor,headshot_url').eq('production_id', _prodId).order('name'),
+      _sb.from('audition_bookings').select('id,name,email,phone,headshot_url,guardian_name,guardian_email,guardian_phone').eq('production_id', _prodId).order('name'),
+      _sb.from('volunteer_signups').select('id,name,email,role_name,shift_date,required_dates,status').eq('production_id', _prodId).in('status', ['approved','checked_in','completed']),
     ]);
-    _events = evRes.data || [];
-    _chars  = chRes.data || [];
+    _events      = evRes.data || [];
+    _chars       = chRes.data || [];
     _assignments = asRes.data || [];
+    _volunteers  = volsRes.data || [];
 
     const seen = new Set();
     const addPerson = (id, data) => {
@@ -414,52 +419,8 @@
       _allApplicants.push({ id });
     };
 
-    // Try every path that might have performers for this production, in parallel
-    const [
-      cardSessRes,  // audition_sessions via audition_cards
-      directSessRes,// audition_sessions with direct production_id (if that column exists)
-      castMembRes,  // cast_members table
-      volsRes,
-    ] = await Promise.all([
-      _sb.from('audition_cards').select('id').eq('production_id', _prodId),
-      _sb.from('audition_sessions').select('id').eq('production_id', _prodId),
-      _sb.from('cast_members').select('id,name,email,phone,headshot_url,pronouns,guardian_name,guardian_phone,guardian_email,is_minor').eq('production_id', _prodId),
-      _sb.from('volunteer_signups').select('id,name,email,role_name,shift_date,required_dates,status').eq('production_id', _prodId).in('status', ['approved','checked_in','completed']),
-    ]);
-
-    _volunteers = volsRes.data || [];
-
-    // Cast members (registration-based — most complete source)
-    (castMembRes.data || []).forEach(m => addPerson(m.id, { name:m.name, email:m.email, phone:m.phone, headshot_url:m.headshot_url, pronouns:m.pronouns, guardian_name:m.guardian_name, guardian_contact:m.guardian_email, guardian_phone:m.guardian_phone, is_minor:m.is_minor }));
-
-    // Collect session IDs from both paths
-    const sessIdSet = new Set((directSessRes.data||[]).map(s => s.id));
-    const cardIds   = (cardSessRes.data||[]).map(c => c.id);
-    if (cardIds.length) {
-      const cardSess = await _sb.from('audition_sessions').select('id').in('card_id', cardIds);
-      (cardSess.data||[]).forEach(s => sessIdSet.add(s.id));
-    }
-    const sessIds = [...sessIdSet];
-
-    if (sessIds.length) {
-      const [appsRes, booksRes] = await Promise.all([
-        _sb.from('audition_applications').select('id,name,email,phone,pronouns,guardian_name,guardian_contact,guardian_phone,is_minor,headshot_url').in('session_id', sessIds),
-        _sb.from('audition_bookings').select('id,name,email,headshot_url,guardian_name,guardian_email,guardian_phone,phone').in('session_id', sessIds),
-      ]);
-      (appsRes.data||[]).forEach(a => addPerson(a.id, { name:a.name, email:a.email, phone:a.phone, pronouns:a.pronouns, guardian_name:a.guardian_name, guardian_contact:a.guardian_contact, guardian_phone:a.guardian_phone, is_minor:a.is_minor, headshot_url:a.headshot_url }));
-      (booksRes.data||[]).forEach(b => addPerson(b.id, { name:b.name, email:b.email, phone:b.phone, headshot_url:b.headshot_url, guardian_name:b.guardian_name, guardian_contact:b.guardian_email, guardian_phone:b.guardian_phone }));
-    }
-
-    // Last resort: pull from casting_assignments applicant IDs we already have
-    const assignmentIds = [...new Set(_assignments.map(a => a.applicant_id).filter(Boolean))].filter(id => !seen.has(id));
-    if (assignmentIds.length) {
-      const [appsRes, booksRes] = await Promise.all([
-        _sb.from('audition_applications').select('id,name,email,phone,pronouns,guardian_name,guardian_contact,guardian_phone,is_minor,headshot_url').in('id', assignmentIds),
-        _sb.from('audition_bookings').select('id,name,email,headshot_url,guardian_name,guardian_email,guardian_phone,phone').in('id', assignmentIds),
-      ]);
-      (appsRes.data||[]).forEach(a => addPerson(a.id, { name:a.name, email:a.email, phone:a.phone, pronouns:a.pronouns, guardian_name:a.guardian_name, guardian_contact:a.guardian_contact, guardian_phone:a.guardian_phone, is_minor:a.is_minor, headshot_url:a.headshot_url }));
-      (booksRes.data||[]).forEach(b => addPerson(b.id, { name:b.name, email:b.email, phone:b.phone, headshot_url:b.headshot_url, guardian_name:b.guardian_name, guardian_contact:b.guardian_email, guardian_phone:b.guardian_phone }));
-    }
+    (appsRes.data||[]).forEach(a => addPerson(a.id, { name:a.name, email:a.email, phone:a.phone, pronouns:a.pronouns, guardian_name:a.guardian_name, guardian_contact:a.guardian_contact, guardian_phone:a.guardian_phone, is_minor:a.is_minor, headshot_url:a.headshot_url }));
+    (booksRes.data||[]).forEach(b => addPerson(b.id, { name:b.name, email:b.email, phone:b.phone, headshot_url:b.headshot_url, guardian_name:b.guardian_name, guardian_contact:b.guardian_email, guardian_phone:b.guardian_phone }));
   }
 
   // ── Page routing ──────────────────────────────────────────────────
