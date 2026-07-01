@@ -435,8 +435,8 @@
       _people[a.id] = { name:a.name, email:a.email, pronouns:a.pronouns, headshot_url:a.headshot_url, custom_answers:ca, status:a.status, date_conflicts:a.date_conflicts };
       _allApplicants.push({ id: a.id });
     });
-    // Sort alphabetically by first name
-    _allApplicants.sort((a,b) => (_people[a.id]?.name||'').localeCompare(_people[b.id]?.name||''));
+    // Sort alphabetically by preferred first name
+    _allApplicants.sort((a,b) => displayName(_people[a.id]||{}).localeCompare(displayName(_people[b.id]||{})));
 
     // Build id → characters map by resolving casting assignment applicant IDs
     // applicant_id may point to audition_applications OR audition_bookings — fetch both
@@ -933,7 +933,7 @@
     const cast = _allApplicants.map(a => {
       const p = _people[a.id] || {};
       const chars = _idCharMap[a.id] || [];
-      return { id:a.id, type:'cast', name:p.name||'Unknown', headshot_url:p.headshot_url||null, characters: chars };
+      return { id:a.id, type:'cast', name:displayName(p), headshot_url:p.headshot_url||null, characters: chars };
     });
 
     // Volunteers scheduled for this date
@@ -950,6 +950,18 @@
   function esc(s) { const d=document.createElement('div');d.textContent=String(s??'');return d.innerHTML; }
   // Pull contact fields from custom_answers JSONB (field names are the form question text)
   function ca(answers, ...keys) { if (!answers) return ''; for (const k of keys) { const v = Object.entries(answers).find(([key])=>key.toLowerCase().includes(k.toLowerCase()))?.[1]; if (v) return String(v); } return ''; }
+  // Format: Preferred (Legal First) Last — falls back to raw name if fields missing
+  function displayName(p) {
+    const ans      = p.custom_answers || {};
+    const preferred = ca(ans, 'preferred name');
+    const legalFirst = ca(ans, 'legal first name');
+    const legalLast  = ca(ans, 'legal last name');
+    if (preferred && legalFirst && legalLast) {
+      return preferred + ' (' + legalFirst + ') ' + legalLast;
+    }
+    if (preferred && legalLast) return preferred + ' ' + legalLast;
+    return p.name || 'Unknown';
+  }
 
   // ── Print sheet ───────────────────────────────────────────────────
   let _printEvId = null;
