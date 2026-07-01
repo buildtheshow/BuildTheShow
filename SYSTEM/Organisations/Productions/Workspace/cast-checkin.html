@@ -403,8 +403,8 @@
         .eq('production_id', _prodId).in('event_type', CHECKIN_TYPES).order('start_time'),
       _sb.from('production_characters').select('id,name,sort_order').eq('production_id', _prodId).order('sort_order'),
       _sb.from('casting_assignments').select('id,character_id,applicant_id,state').eq('production_id', _prodId).in('state', ['chosen','confirmed','offered']),
-      _sb.from('audition_applications').select('id,name,email,phone,pronouns,guardian_name,guardian_contact,guardian_phone,is_minor,headshot_url').eq('production_id', _prodId).order('name'),
-      _sb.from('audition_bookings').select('id,name,email,phone,headshot_url,guardian_name,guardian_email,guardian_phone').eq('production_id', _prodId).order('name'),
+      _sb.from('audition_applications').select('id,name,email,pronouns,headshot_url,custom_answers').eq('production_id', _prodId).order('name'),
+      _sb.from('audition_bookings').select('id,name,custom_answers').eq('production_id', _prodId).order('name'),
       _sb.from('volunteer_signups').select('id,name,email,role_name,shift_date,required_dates,status').eq('production_id', _prodId).in('status', ['approved','checked_in','completed']),
     ]);
     _events      = evRes.data || [];
@@ -419,8 +419,8 @@
       _allApplicants.push({ id });
     };
 
-    (appsRes.data||[]).forEach(a => addPerson(a.id, { name:a.name, email:a.email, phone:a.phone, pronouns:a.pronouns, guardian_name:a.guardian_name, guardian_contact:a.guardian_contact, guardian_phone:a.guardian_phone, is_minor:a.is_minor, headshot_url:a.headshot_url }));
-    (booksRes.data||[]).forEach(b => addPerson(b.id, { name:b.name, email:b.email, phone:b.phone, headshot_url:b.headshot_url, guardian_name:b.guardian_name, guardian_contact:b.guardian_email, guardian_phone:b.guardian_phone }));
+    (appsRes.data||[]).forEach(a => addPerson(a.id, { name:a.name, email:a.email, pronouns:a.pronouns, headshot_url:a.headshot_url, custom_answers:a.custom_answers||{} }));
+    (booksRes.data||[]).forEach(b => addPerson(b.id, { name:b.name, custom_answers:b.custom_answers||{} }));
   }
 
   // ── Page routing ──────────────────────────────────────────────────
@@ -719,11 +719,15 @@
     const avatar = a.headshot_url ? '<img class="rp-avatar" src="' + esc(a.headshot_url) + '" alt="">' : '<div class="rp-avatar-init">' + esc(initials) + '</div>';
     const charLine = a.type === 'cast' ? (a.characters||[]).join(', ') : (a.role_name||'Volunteer');
     const sc = STATUS_CONF[state.status] || STATUS_CONF._none;
-    const callBtn  = p.phone ? '<a class="rp-act-btn" href="tel:'    + esc(p.phone) + '"><span class="rp-act-icon">&#x260E;</span>Call</a>'   : '';
-    const textBtn  = p.phone ? '<a class="rp-act-btn" href="sms:'    + esc(p.phone) + '"><span class="rp-act-icon">&#x1F4AC;</span>Text</a>'  : '';
+    const phone    = p.phone || ca(p.custom_answers, 'contact phone', 'phone number');
+    const callBtn  = phone ? '<a class="rp-act-btn" href="tel:'    + esc(phone) + '"><span class="rp-act-icon">&#x260E;</span>Call</a>'   : '';
+    const textBtn  = phone ? '<a class="rp-act-btn" href="sms:'    + esc(phone) + '"><span class="rp-act-icon">&#x1F4AC;</span>Text</a>'  : '';
     const emailBtn = p.email ? '<a class="rp-act-btn" href="mailto:' + esc(p.email) + '"><span class="rp-act-icon">&#x2709;</span>Email</a>'  : '';
-    const gName = p.guardian_name || ''; const gPhone = p.guardian_phone || p.guardian_contact || '';
-    const guardianHtml = (gName || p.is_minor)
+    const gFirst   = p.guardian_name || ca(p.custom_answers, 'guardian first');
+    const gLast    = ca(p.custom_answers, 'guardian last');
+    const gName    = gFirst ? (gFirst + (gLast ? ' ' + gLast : '')) : '';
+    const gPhone   = p.guardian_phone || p.guardian_contact || ca(p.custom_answers, 'guardian phone', 'emergency contact phone');
+    const guardianHtml = gName
       ? '<div class="rp-section"><div class="rp-section-title">Parent / Guardian</div>' +
         (gName ? '<div class="rp-line"><span class="rp-lbl">' + esc(gName) + '</span>' + (gPhone ? '<br><a href="tel:' + esc(gPhone) + '">' + esc(gPhone) + '</a>' : '') + '</div>' : '<div class="rp-empty">No guardian on file</div>') +
         '</div>'
@@ -892,6 +896,8 @@
   function fmtTime(ts) { if(!ts)return'';const m=String(ts).match(/T(\d{2}):(\d{2})/);if(!m)return'';let h=parseInt(m[1],10);const min=m[2];const ap=h>=12?'PM':'AM';h=h%12||12;return h+':'+min+' '+ap; }
   function todayStr() { return new Date().toISOString().slice(0,10); }
   function esc(s) { const d=document.createElement('div');d.textContent=String(s??'');return d.innerHTML; }
+  // Pull contact fields from custom_answers JSONB (field names are the form question text)
+  function ca(answers, ...keys) { if (!answers) return ''; for (const k of keys) { const v = Object.entries(answers).find(([key])=>key.toLowerCase().includes(k.toLowerCase()))?.[1]; if (v) return String(v); } return ''; }
 
   // ── Print sheet ───────────────────────────────────────────────────
   function printSheet(evId) {
@@ -919,10 +925,14 @@
       const left     = state.left_at       ? fmtTime(state.left_at)       : '';
       const status   = state.status ? statusLabel[state.status] : '';
 
+      const pGFirst = p.guardian_name || ca(p.custom_answers, 'guardian first');
+      const pGLast  = ca(p.custom_answers, 'guardian last');
+      const pGName  = pGFirst ? (pGFirst + (pGLast ? ' ' + pGLast : '')) : '';
+      const pGPhone = p.guardian_phone || p.guardian_contact || ca(p.custom_answers, 'guardian phone', 'emergency contact phone');
       const contactCell = includeContacts
         ? '<td>' +
-            (p.guardian_name  ? '<strong>' + pesc(p.guardian_name) + '</strong><br>' : '') +
-            (p.guardian_phone || p.guardian_contact ? pesc(p.guardian_phone || p.guardian_contact) : '') +
+            (pGName  ? '<strong>' + pesc(pGName)  + '</strong><br>' : '') +
+            (pGPhone ? pesc(pGPhone) : '') +
           '</td>'
         : '';
 
