@@ -1408,14 +1408,20 @@
       const { data: urlData } = sb.storage.from('org-logos').getPublicUrl(path);
       fields[cfg.column] = urlData.publicUrl;
     }
-    const legacyLogoOnlyFields = fields.logo_url ? { ...fields, logo_white_url: undefined, logo_black_url: undefined, logo_alternative_url: undefined } : null;
+    const legacySetupFields = {
+      ...fields,
+      leadership_roles: undefined,
+      logo_white_url: undefined,
+      logo_black_url: undefined,
+      logo_alternative_url: undefined,
+    };
 
     let orgId = _editOrgId;
 
     if (EDIT_MODE && orgId) {
       let { error: updErr } = await sb.from('organizations').update(fields).eq('id', orgId);
-      if (updErr && /logo_white_url|logo_black_url|logo_alternative_url|column/i.test(updErr.message || '') && legacyLogoOnlyFields) {
-        const retry = await sb.from('organizations').update(legacyLogoOnlyFields).eq('id', orgId);
+      if (updErr && /leadership_roles|logo_white_url|logo_black_url|logo_alternative_url|column/i.test(updErr.message || '')) {
+        const retry = await sb.from('organizations').update(legacySetupFields).eq('id', orgId);
         updErr = retry.error;
       }
       if (updErr) {
@@ -1433,8 +1439,8 @@
       }
     } else {
       let { data: orgRow, error: orgErr } = await sb.from('organizations').insert({ ...fields, custom_id: genId(), admin_id: user.id }).select('id').single();
-      if (orgErr && /logo_white_url|logo_black_url|logo_alternative_url|column/i.test(orgErr.message || '') && legacyLogoOnlyFields) {
-        const retry = await sb.from('organizations').insert({ ...legacyLogoOnlyFields, custom_id: genId(), admin_id: user.id }).select('id').single();
+      if (orgErr && /leadership_roles|logo_white_url|logo_black_url|logo_alternative_url|column/i.test(orgErr.message || '')) {
+        const retry = await sb.from('organizations').insert({ ...legacySetupFields, custom_id: genId(), admin_id: user.id }).select('id').single();
         orgRow = retry.data;
         orgErr = retry.error;
       }
