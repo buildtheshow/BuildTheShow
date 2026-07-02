@@ -523,18 +523,8 @@
         </div>
         <div class="form-group">
           <label class="form-label" for="owner-role">Your Role</label>
-          <select class="form-select" id="owner-role">
-            <option value="">Select your role...</option>
-            <option value="artistic_director">Artistic Director</option>
-            <option value="executive_director">Executive Director</option>
-            <option value="producer">Producer</option>
-            <option value="board_chair">Board Chair</option>
-            <option value="treasurer">Treasurer</option>
-            <option value="secretary">Secretary</option>
-            <option value="volunteer_coordinator">Volunteer Coordinator</option>
-            <option value="administrator">Administrator</option>
-            <option value="other">Other</option>
-          </select>
+          <input class="form-input" type="text" id="owner-role" list="owner-role-options" placeholder="Start typing your role..." />
+          <datalist id="owner-role-options"></datalist>
         </div>
       </div>
 
@@ -833,9 +823,37 @@
 
   // All defined role names across the master list (for custom detection)
   const _allMasterRoles = new Set(Object.values(ALL_ROLES_BY_CATEGORY).flat());
+  const OWNER_ROLE_LEGACY_LABELS = {
+    artistic_director: 'Artistic Director',
+    executive_director: 'Executive Director',
+    producer: 'Producer',
+    board_chair: 'Board Chair',
+    treasurer: 'Treasurer',
+    secretary: 'Secretary',
+    volunteer_coordinator: 'Volunteer Coordinator',
+    administrator: 'Administrator',
+    other: 'Other',
+  };
+  const OWNER_ROLE_SUGGESTIONS = [...new Set([
+    ...Object.values(OWNER_ROLE_LEGACY_LABELS),
+    ...Object.values(ALL_ROLES_BY_CATEGORY).flat().filter(role => role !== 'Other (Custom)'),
+  ])].sort((a, b) => a.localeCompare(b));
 
   let _leadershipInitType = '';
   let _addMoreExpanded = false;
+
+  function normalizeOwnerRole(value) {
+    const raw = String(value || '').trim();
+    return OWNER_ROLE_LEGACY_LABELS[raw] || raw;
+  }
+
+  function renderOwnerRoleOptions() {
+    const list = document.getElementById('owner-role-options');
+    if (!list) return;
+    list.innerHTML = OWNER_ROLE_SUGGESTIONS
+      .map(role => `<option value="${esc(role)}"></option>`)
+      .join('');
+  }
 
   function buildLeadershipStep() {
     if (_d.leadershipRoles.length === 0 || _leadershipInitType !== _d.orgType) {
@@ -1224,13 +1242,12 @@
     const legalL = {registered_charity:'Registered Charity',not_for_profit:'Not-for-Profit / Nonprofit Organisation',corporation:'Business or Company',government_educational:'Government or Educational Institution',informal:'Informal Group',other:'Other'};
     const typeL  = {theatre:'Theatre Company',school:'Public or Private School',college:'College or University',studio:'Performing Arts Studio',independent:'Independent Producer',festival:'Festival or Event',other:'Other'};
     const typeDisplay = typeL[_d.orgType] || _d.orgType;
-    const roleL  = {artistic_director:'Artistic Director',executive_director:'Executive Director',producer:'Producer',board_chair:'Board Chair',treasurer:'Treasurer',secretary:'Secretary',volunteer_coordinator:'Volunteer Coordinator',administrator:'Administrator',other:'Other'};
 
     const rows = [
       { l:'Organisation',   v: _d.orgName },
       { l:'Abbreviation',   v: _d.abbr },
       { l:'Type',           v: typeDisplay },
-      { l:'Login ownership', v: _d.ownerType==='personal' ? `Individual login — ${_d.ownerName} (${roleL[_d.ownerRole]||_d.ownerRole})` : 'Organisation main login' },
+      { l:'Login ownership', v: _d.ownerType==='personal' ? `Individual login - ${_d.ownerName} (${normalizeOwnerRole(_d.ownerRole)})` : 'Organisation main login' },
       _d.leadershipRoles.length ? { l:'Leadership roles', v: _d.leadershipRoles.join(', ') } : null,
       { l:'Legal structure',v: legalL[_d.legalStructure]||_d.legalStructure },
       { l:'Location',       v: _d.location },
@@ -1349,9 +1366,9 @@
     if (!_d.ownerType) { showErr('Please select who owns this account.'); return; }
     if (_d.ownerType==='personal') {
       _d.ownerName = document.getElementById('owner-name').value.trim();
-      _d.ownerRole = document.getElementById('owner-role').value;
+      _d.ownerRole = normalizeOwnerRole(document.getElementById('owner-role').value);
       if (!_d.ownerName) { showErr('Please enter your name.'); return; }
-      if (!_d.ownerRole) { showErr('Please select your role.'); return; }
+      if (!_d.ownerRole) { showErr('Please enter your role.'); return; }
     }
     showStep(4);
   });
@@ -1428,6 +1445,8 @@
 
   // ── Auth guard + prefill ─────────────────────────────────────────────
   async function init() {
+    renderOwnerRoleOptions();
+
     const { data: { session } } = await sb.auth.getSession();
     if (!session) { window.location.href = '/login'; return; }
 
@@ -1450,7 +1469,7 @@
       _d.orgType        = o.org_type          || '';
       _d.ownerType      = o.account_owner_type|| '';
       _d.ownerName      = o.account_owner_name|| '';
-      _d.ownerRole      = o.account_owner_role|| '';
+      _d.ownerRole      = normalizeOwnerRole(o.account_owner_role|| '');
       _d.leadershipRoles  = Array.isArray(o.leadership_roles) ? o.leadership_roles : [];
       _leadershipInitType = _d.orgType;
       _d.legalStructure   = o.legal_structure   || '';
@@ -1496,7 +1515,7 @@
         if (_d.ownerType==='personal') {
           document.getElementById('personal-fields').classList.add('visible');
           document.getElementById('owner-name').value = _d.ownerName;
-          document.getElementById('owner-role').value = _d.ownerRole;
+          document.getElementById('owner-role').value = normalizeOwnerRole(_d.ownerRole);
         }
       }
 
