@@ -2329,7 +2329,7 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
     }
 
     currentOrg = org;
-    hydrateCronusPlanningEvents();
+    await hydrateCronusPlanningEvents();
     orgDashboardReady = true;
     btsRouteLog('organisation context loaded', { organizationId: org.id });
     renderOrgInfo();
@@ -4154,6 +4154,43 @@ If you cannot find any productions, return an empty array: []`;
     try { localStorage.setItem(cronusPlanningStorageKey(), JSON.stringify(rows)); } catch {}
   }
 
+  function isPlanningStorageSchemaError(error) {
+    const text = String(error?.message || error?.details || error?.hint || '').toLowerCase();
+    return text.includes('schema cache')
+      || text.includes('column')
+      || text.includes('relation')
+      || text.includes('does not exist')
+      || text.includes('could not find');
+  }
+
+  function planningEventFromRow(row = {}) {
+    return {
+      id: row.id,
+      title: row.title,
+      start: row.start_at,
+      end: row.end_at,
+      allDay: row.all_day !== false,
+      notes: row.notes || '',
+      created_at: row.created_at,
+      updated_at: row.updated_at,
+    };
+  }
+
+  function planningEventToRow(item = {}) {
+    return {
+      id: item.id,
+      organization_id: currentOrg.id,
+      title: item.title,
+      start_at: item.start,
+      end_at: item.end || null,
+      all_day: item.allDay !== false,
+      notes: item.notes || '',
+      created_by: currentUser?.id || null,
+      created_at: item.created_at || new Date().toISOString(),
+      updated_at: item.updated_at || new Date().toISOString(),
+    };
+  }
+
   function cronusHolidayStorageKey() {
     return currentOrg?.id ? `bts-org-holidays-visible:${currentOrg.id}` : 'bts-org-holidays-visible';
   }
@@ -4360,10 +4397,45 @@ If you cannot find any productions, return an empty array: []`;
     return rows;
   }
 
-  function hydrateCronusPlanningEvents() {
-    const orgRows = normalizePlanningEvents(currentOrg?.planning_calendar);
-    const hasSharedColumn = !!currentOrg && Object.prototype.hasOwnProperty.call(currentOrg, 'planning_calendar');
-    cronusPlanningEvents = hasSharedColumn ? orgRows : loadPlanningEventsFromLocal();
+  async function hydrateCronusPlanningEvents() {
+    if (!currentOrg) {
+      cronusPlanningEvents = [];
+      return;
+    }
+
+    const localRows = loadPlanningEventsFromLocal();
+    const legacyOrgRows = normalizePlanningEvents(currentOrg?.planning_calendar);
+
+    try {
+      const { data, error } = await sb.from('organization_planning_events')
+        .select('id,title,start_at,end_at,all_day,notes,created_at,updated_at')
+        .eq('organization_id', currentOrg.id)
+        .order('start_at', { ascending: true })
+        .order('created_at', { ascending: true });
+      if (error) throw error;
+
+      const orgRows = normalizePlanningEvents((data || []).map(planningEventFromRow));
+
+      if (!orgRows.length) {
+        const seedRows = legacyOrgRows.length ? legacyOrgRows : localRows;
+        if (seedRows.length) {
+          await persistPlanningEvents(seedRows, 'Planning dates moved into this organisation.');
+          return;
+        }
+      }
+
+      cronusPlanningEvents = orgRows;
+      savePlanningEventsToLocal(orgRows);
+      return;
+    } catch (error) {
+      if (!isPlanningStorageSchemaError(error)) {
+        console.error('Could not load organisation planning calendar:', error);
+        cronusPlanningEvents = legacyOrgRows.length ? legacyOrgRows : localRows;
+        return;
+      }
+    }
+
+    cronusPlanningEvents = legacyOrgRows.length ? legacyOrgRows : localRows;
   }
 
   function formatPlanningModalEndValue(event = {}) {
@@ -4417,28 +4489,42 @@ If you cannot find any productions, return an empty array: []`;
 
   async function persistPlanningEvents(rows, successMessage = 'Planning calendar saved.') {
     const normalized = normalizePlanningEvents(rows);
+    const removedIds = cronusPlanningEvents
+      .filter(item => !normalized.some(nextItem => nextItem.id === item.id))
+      .map(item => item.id);
     let savedToOrg = false;
     let error = null;
     try {
-      const result = await sb.from('organizations').update({ planning_calendar: normalized }).eq('id', currentOrg.id);
-      error = result.error || null;
-      if (!error) savedToOrg = true;
+      if (removedIds.length) {
+        const { error: deleteError } = await sb.from('organization_planning_events')
+          .delete()
+          .eq('organization_id', currentOrg.id)
+          .in('id', removedIds);
+        if (deleteError) throw deleteError;
+      }
+
+      if (normalized.length) {
+        const { error: upsertError } = await sb.from('organization_planning_events')
+          .upsert(normalized.map(planningEventToRow), { onConflict: 'id' });
+        if (upsertError) throw upsertError;
+      }
+
+      savedToOrg = true;
     } catch (err) {
       error = err;
     }
 
-    if (error && !isOrgSchemaColumnError(error)) {
+    if (error && !isPlanningStorageSchemaError(error)) {
       throw error;
     }
 
     cronusPlanningEvents = normalized;
     savePlanningEventsToLocal(normalized);
-    if (savedToOrg) currentOrg = { ...currentOrg, planning_calendar: normalized };
     if (successMessage) {
       showToast(
         savedToOrg
           ? successMessage
-          : 'Planning dates could not be saved to this organisation yet, so we kept a temporary copy in this browser so your work is not lost.',
+          : 'Planning dates are still using temporary browser storage because organisation planning storage is not live in this workspace yet.',
         !savedToOrg,
         6000
       );
@@ -4813,7 +4899,7 @@ If you cannot find any productions, return an empty array: []`;
   window.addEventListener('load', async () => {
     if (!currentOrg) return;
     loadCronusHolidayPreference();
-    hydrateCronusPlanningEvents();
+    await hydrateCronusPlanningEvents();
     updateCronusModeUi();
     await loadCronusData();
     sb.channel('cronus-prod-events')
