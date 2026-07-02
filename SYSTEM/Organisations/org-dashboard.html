@@ -1109,6 +1109,54 @@
     .cronus-empty-card.visible { display: block; }
     .cronus-empty-title { font-size: 0.92rem; font-weight: 800; color: #1a1530; margin-bottom: 0.3rem; }
     .cronus-empty-copy { font-size: 0.82rem; color: #6a5a80; line-height: 1.5; }
+    .cronus-planning-palette {
+      display:none;
+      margin-bottom:1rem;
+      padding:1rem 1.05rem;
+      border:1px dashed rgba(87,46,136,0.24);
+      border-radius:18px;
+      background:rgba(255,255,255,0.92);
+    }
+    .cronus-planning-palette.visible { display:block; }
+    .cronus-planning-palette-title {
+      font-size:0.92rem;
+      font-weight:800;
+      color:#1a1530;
+      margin-bottom:0.3rem;
+    }
+    .cronus-planning-palette-copy {
+      font-size:0.82rem;
+      color:#6a5a80;
+      line-height:1.45;
+      margin-bottom:0.8rem;
+    }
+    .cronus-planning-palette-grid {
+      display:flex;
+      flex-wrap:wrap;
+      gap:0.55rem;
+    }
+    .cronus-planning-template {
+      display:inline-flex;
+      align-items:center;
+      gap:0.45rem;
+      padding:0.55rem 0.78rem;
+      border-radius:999px;
+      border:1px solid rgba(87,46,136,0.14);
+      background:#fff;
+      color:#1a1530;
+      font-size:0.8rem;
+      font-weight:700;
+      box-shadow:0 10px 24px rgba(26,21,48,0.06);
+      cursor:grab;
+      user-select:none;
+    }
+    .cronus-planning-template:active { cursor:grabbing; }
+    .cronus-planning-template-dot {
+      width:0.65rem;
+      height:0.65rem;
+      border-radius:999px;
+      flex-shrink:0;
+    }
     #cronus-cal { min-height: 600px; }
     /* Cronus event tile formatting — matches Zeus block style */
     #tab-cronus .fc-event { border: none !important; border-radius: 4px !important; font-size: 0.68rem; font-weight: 600; cursor: pointer; line-height: 1.3; }
@@ -1299,6 +1347,7 @@
       .cronus-modebar { align-items: stretch; justify-content: stretch; }
       .cronus-segmented { width: 100%; justify-content: stretch; }
       .cronus-segmented-btn { flex: 1; text-align: center; }
+      .cronus-planning-template { width:100%; justify-content:flex-start; }
       .planning-form-grid { grid-template-columns:1fr; }
       .planning-form-actions { flex-direction:column; align-items:stretch; }
       .planning-form-actions-right { margin-left:0; width:100%; }
@@ -1518,6 +1567,11 @@
       <div class="cronus-empty-card" id="cronus-planning-empty">
         <div class="cronus-empty-title">Planning calendar</div>
         <div class="cronus-empty-copy">Use this space for ideas, holds, rough timelines, and possible show windows. These dates stay separate from your confirmed BTS calendar until you decide what becomes real.</div>
+      </div>
+      <div class="cronus-planning-palette" id="cronus-planning-palette">
+        <div class="cronus-planning-palette-title">Drag a planning item onto the calendar</div>
+        <div class="cronus-planning-palette-copy">Start with a simple type, drop it onto a date, then fill in the details.</div>
+        <div class="cronus-planning-palette-grid" id="cronus-planning-palette-grid"></div>
       </div>
       <div class="cronus-toolbar" style="margin-top:-0.2rem;">
         <div class="cronus-legend" id="cronus-legend"></div>
@@ -2142,6 +2196,10 @@
     </div>
     <div class="planning-modal-note">This planning calendar is not connected to productions, registrations, tickets, or public listings. It is just for planning.</div>
     <div class="planning-form-grid">
+      <div class="planning-form-field planning-form-field--full">
+        <label class="planning-form-label" for="planning-category">Type</label>
+        <select class="planning-form-input" id="planning-category"></select>
+      </div>
       <div class="planning-form-field planning-form-field--full">
         <label class="planning-form-label" for="planning-title">Title</label>
         <input class="planning-form-input" id="planning-title" type="text" placeholder="Potential fall musical opening night" />
@@ -4156,8 +4214,21 @@ If you cannot find any productions, return an empty array: []`;
     '#dc2626','#7c3aed','#0284c7','#be185d','#15803d',
   ];
   const CRONUS_PLANNING_COLOR = '#efab45';
+  const CRONUS_PLANNING_TYPES = [
+    { key: 'meeting', label: 'Meeting', color: '#446aa4' },
+    { key: 'performance', label: 'Performance', color: '#572e88' },
+    { key: 'deadline', label: 'Deadline', color: '#d1523d' },
+    { key: 'event', label: 'Event', color: '#0891b2' },
+    { key: 'renewal', label: 'Renewal', color: '#0f766e' },
+    { key: 'milestone', label: 'Milestone', color: '#c2487a' },
+    { key: 'announcement', label: 'Announcement', color: '#7c3aed' },
+    { key: 'launch', label: 'Launch', color: '#dd8233' },
+    { key: 'holiday_closure', label: 'Holiday / Closure', color: '#476aaa' },
+    { key: 'other', label: 'Other', color: '#6b7280' },
+  ];
   const CRONUS_MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
   let cronusCalendar  = null;
+  let cronusPlanningPalette = null;
   let cronusEvents    = [];
   let cronusProdsMap  = {}; // prodId → { title, color }
   let cronusHidden    = new Set();
@@ -4168,6 +4239,15 @@ If you cannot find any productions, return an empty array: []`;
   let cronusShowHolidays = false;
   const cronusHolidayCache = new Map();
 
+  function normalizePlanningType(value) {
+    const key = String(value || 'other').trim().toLowerCase().replace(/[^a-z0-9]+/g, '_');
+    return CRONUS_PLANNING_TYPES.some(type => type.key === key) ? key : 'other';
+  }
+
+  function getPlanningTypeMeta(value) {
+    return CRONUS_PLANNING_TYPES.find(type => type.key === normalizePlanningType(value)) || CRONUS_PLANNING_TYPES[CRONUS_PLANNING_TYPES.length - 1];
+  }
+
   function cronusPlanningStorageKey() {
     return currentOrg?.id ? `bts-org-planning-calendar:${currentOrg.id}` : 'bts-org-planning-calendar';
   }
@@ -4175,6 +4255,7 @@ If you cannot find any productions, return an empty array: []`;
   function normalizePlanningEvents(rows) {
     return (Array.isArray(rows) ? rows : []).map(item => ({
       id: String(item?.id || crypto.randomUUID()),
+      category: normalizePlanningType(item?.category),
       title: String(item?.title || '').trim(),
       start: item?.start || null,
       end: item?.end || null,
@@ -4209,6 +4290,7 @@ If you cannot find any productions, return an empty array: []`;
   function planningEventFromRow(row = {}) {
     return {
       id: row.id,
+      category: normalizePlanningType(row.category),
       title: row.title,
       start: row.start_at,
       end: row.end_at,
@@ -4223,6 +4305,7 @@ If you cannot find any productions, return an empty array: []`;
     return {
       id: item.id,
       organization_id: currentOrg.id,
+      category: normalizePlanningType(item.category),
       title: item.title,
       start_at: item.start,
       end_at: item.end || null,
@@ -4451,7 +4534,7 @@ If you cannot find any productions, return an empty array: []`;
 
     try {
       const { data, error } = await sb.from('organization_planning_events')
-        .select('id,title,start_at,end_at,all_day,notes,created_at,updated_at')
+        .select('id,category,title,start_at,end_at,all_day,notes,created_at,updated_at')
         .eq('organization_id', currentOrg.id)
         .order('start_at', { ascending: true })
         .order('created_at', { ascending: true });
@@ -4501,10 +4584,30 @@ If you cannot find any productions, return an empty array: []`;
     if (!startEl.value) startEl.value = new Date().toISOString().slice(0, allDay ? 10 : 16);
   }
 
+  function renderPlanningCategoryOptions() {
+    const select = document.getElementById('planning-category');
+    if (!select) return;
+    select.innerHTML = CRONUS_PLANNING_TYPES
+      .map(type => `<option value="${type.key}">${type.label}</option>`)
+      .join('');
+  }
+
+  function renderCronusPlanningPalette() {
+    const el = document.getElementById('cronus-planning-palette-grid');
+    if (!el) return;
+    el.innerHTML = CRONUS_PLANNING_TYPES.map(type => `
+      <div class="cronus-planning-template" data-planning-type="${type.key}" data-event='${JSON.stringify({ title: type.label, duration: '01:00', create: true }).replace(/'/g, '&apos;')}'>
+        <span class="cronus-planning-template-dot" style="background:${type.color};"></span>
+        <span>${type.label}</span>
+      </div>
+    `).join('');
+  }
+
   function openPlanningEventModal(eventId = null, seed = {}) {
     editingPlanningEventId = eventId;
     const modal = document.getElementById('planning-event-modal');
     const titleEl = document.getElementById('planning-modal-title');
+    const categoryInput = document.getElementById('planning-category');
     const titleInput = document.getElementById('planning-title');
     const startInput = document.getElementById('planning-start');
     const endInput = document.getElementById('planning-end');
@@ -4514,6 +4617,7 @@ If you cannot find any productions, return an empty array: []`;
     const source = eventId ? cronusPlanningEvents.find(item => item.id === eventId) : null;
     const event = source || seed || {};
     titleEl.textContent = source ? 'Edit Planning Date' : 'Add Planning Date';
+    if (categoryInput) categoryInput.value = normalizePlanningType(event.category);
     titleInput.value = event.title || '';
     allDayInput.checked = event.allDay !== false;
     syncPlanningDateInputs();
@@ -4581,12 +4685,13 @@ If you cannot find any productions, return an empty array: []`;
       start: item.start,
       end: item.end || null,
       allDay: item.allDay !== false,
-      backgroundColor: CRONUS_PLANNING_COLOR,
-      borderColor: CRONUS_PLANNING_COLOR,
+      backgroundColor: getPlanningTypeMeta(item.category).color,
+      borderColor: getPlanningTypeMeta(item.category).color,
       textColor: '#1a1530',
       extendedProps: {
         planning: true,
-        prodTitle: 'Planning calendar',
+        planningType: normalizePlanningType(item.category),
+        prodTitle: getPlanningTypeMeta(item.category).label,
         notes: item.notes || '',
       },
     }));
@@ -4604,12 +4709,14 @@ If you cannot find any productions, return an empty array: []`;
     const holidayCheck = document.getElementById('cronus-holidays-check');
     const copy = document.getElementById('cronus-copy');
     const empty = document.getElementById('cronus-planning-empty');
+    const palette = document.getElementById('cronus-planning-palette');
     if (addBtn) addBtn.style.display = cronusMode === 'planning' ? 'inline-flex' : 'none';
     if (holidayCheck) holidayCheck.checked = !!cronusShowHolidays;
     if (copy) copy.textContent = cronusMode === 'planning'
       ? 'A planning calendar for ideas, holds, and possibilities.'
       : 'Every event, across every production, all at once.';
     if (empty) empty.classList.toggle('visible', cronusMode === 'planning' && !cronusPlanningEvents.length);
+    if (palette) palette.classList.toggle('visible', cronusMode === 'planning');
   }
 
   async function toggleCronusHolidays() {
@@ -4694,6 +4801,7 @@ If you cannot find any productions, return an empty array: []`;
   }
 
   async function savePlanningEvent() {
+    const category = normalizePlanningType(document.getElementById('planning-category').value);
     const title = document.getElementById('planning-title').value.trim();
     const notes = document.getElementById('planning-notes').value.trim();
     const allDay = document.getElementById('planning-all-day').checked;
@@ -4714,6 +4822,7 @@ If you cannot find any productions, return an empty array: []`;
       ...cronusPlanningEvents.filter(item => item.id !== editingPlanningEventId),
       {
         id: editingPlanningEventId || crypto.randomUUID(),
+        category,
         title,
         start,
         end,
@@ -4831,6 +4940,8 @@ If you cannot find any productions, return an empty array: []`;
     const el = document.getElementById('cronus-cal');
     if (!el) return;
 
+    renderPlanningCategoryOptions();
+    renderCronusPlanningPalette();
     const isMobileCalendar = window.matchMedia('(max-width: 700px)').matches;
     cronusCalendar = new FullCalendar.Calendar(el, {
       initialView: isMobileCalendar ? 'listWeek' : 'dayGridMonth',
@@ -4838,6 +4949,7 @@ If you cannot find any productions, return an empty array: []`;
         ? { left: 'prev,next', center: 'title', right: 'listWeek' }
         : { left: 'prev,next today', center: 'title', right: 'dayGridMonth,timeGridWeek,listWeek' },
       height: 'auto',
+      droppable: true,
       dayMaxEvents: true,
       nowIndicator: true,
       locale: 'en-CA',
@@ -4892,11 +5004,51 @@ If you cannot find any productions, return an empty array: []`;
         if (cronusMode !== 'planning') return;
         openPlanningEventModal(null, { start: info.dateStr, allDay: true });
       },
+      eventReceive: async (info) => {
+        if (cronusMode !== 'planning') {
+          info.event.remove();
+          return;
+        }
+        const planningType = normalizePlanningType(info.draggedEl?.dataset?.planningType);
+        const planningMeta = getPlanningTypeMeta(planningType);
+        const allDay = info.event.allDay !== false;
+        const now = new Date().toISOString();
+        const created = {
+          id: crypto.randomUUID(),
+          category: planningType,
+          title: planningMeta.label,
+          start: info.event.startStr,
+          end: info.event.endStr || null,
+          allDay,
+          notes: '',
+          created_at: now,
+          updated_at: now,
+        };
+        info.event.remove();
+        try {
+          await persistPlanningEvents([
+            ...cronusPlanningEvents,
+            created,
+          ].sort((a, b) => String(a.start).localeCompare(String(b.start))), '');
+          updateCronusModeUi();
+          renderCronusLegend();
+          cronusCalendar?.refetchEvents();
+          openPlanningEventModal(created.id);
+        } catch (error) {
+          showToast(error.message || 'Could not add planning item.', true);
+        }
+      },
       datesSet() {
         renderCronusTitlePicker();
       },
     });
     cronusCalendar.render();
+    const paletteEl = document.getElementById('cronus-planning-palette-grid');
+    if (paletteEl && !cronusPlanningPalette) {
+      cronusPlanningPalette = new FullCalendar.Draggable(paletteEl, {
+        itemSelector: '.cronus-planning-template',
+      });
+    }
     updateCronusModeUi();
     renderCronusLegend();
     renderCronusTitlePicker();
@@ -4941,6 +5093,8 @@ If you cannot find any productions, return an empty array: []`;
   // Load Cronus data after FullCalendar is ready, then subscribe to live updates
   window.addEventListener('load', async () => {
     if (!currentOrg) return;
+    renderPlanningCategoryOptions();
+    renderCronusPlanningPalette();
     loadCronusHolidayPreference();
     await hydrateCronusPlanningEvents();
     updateCronusModeUi();
