@@ -4355,6 +4355,11 @@ If you cannot find any productions, return an empty array: []`;
     return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
   }
 
+  function formatLocalDateInputValue(date) {
+    if (!(date instanceof Date) || Number.isNaN(date.getTime())) return '';
+    return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
+  }
+
   function localDate(year, monthIndex, day) {
     return new Date(year, monthIndex, day);
   }
@@ -4579,7 +4584,7 @@ If you cannot find any productions, return an empty array: []`;
     const el = document.getElementById('cronus-planning-palette-grid');
     if (!el) return;
     el.innerHTML = CRONUS_PLANNING_TYPES.map(type => `
-      <span class="fc-legend-item" draggable="true" data-planning-type="${type.key}" data-event='${JSON.stringify({ title: type.label, duration: '01:00', create: true }).replace(/'/g, '&apos;')}' style="--c:${type.color}">${type.label}</span>
+      <span class="fc-legend-item" draggable="true" data-planning-type="${type.key}" data-event='${JSON.stringify({ title: type.label, create: true, allDay: true }).replace(/'/g, '&apos;')}' style="--c:${type.color}">${type.label}</span>
     `).join('')
       + '<span class="fc-legend-hint">← drag onto a date to add</span>'
       + `<label class="holidays-pill-toggle${cronusShowHolidays ? ' active' : ''}" id="holidays-toggle-wrap" onclick="toggleCronusHolidays()"><span class="hpt-track"><span class="hpt-thumb"></span></span><span class="hpt-label">Holidays</span></label>`;
@@ -4948,7 +4953,7 @@ If you cannot find any productions, return an empty array: []`;
         const wrap = document.createElement('div');
         wrap.style.cssText = 'width:100%;overflow:hidden;text-align:center;line-height:1.25;';
         const te = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-        const prodTitle = ev.extendedProps.prodTitle || '';
+        const prodTitle = ev.extendedProps.planning ? '' : (ev.extendedProps.prodTitle || '');
         if (ev.extendedProps.planning) wrap.style.color = '#ffffff';
         wrap.innerHTML = (timeStr ? `<div class="cronus-event-time">${te(timeStr)}</div>` : '')
           + `<div class="cronus-event-label">${te(ev.title)}</div>`
@@ -4992,14 +4997,20 @@ If you cannot find any productions, return an empty array: []`;
         }
         const planningType = normalizePlanningType(info.draggedEl?.dataset?.planningType);
         const planningMeta = getPlanningTypeMeta(planningType);
-        const allDay = info.event.allDay !== false;
+        const allDay = true;
+        const start = formatLocalDateInputValue(info.event.start);
+        if (!start) {
+          info.event.remove();
+          showToast('Could not place that planning item. Please try again.', true);
+          return;
+        }
         const now = new Date().toISOString();
         const created = {
           id: crypto.randomUUID(),
           category: planningType,
           title: planningMeta.label,
-          start: info.event.startStr,
-          end: info.event.endStr || null,
+          start,
+          end: null,
           allDay,
           notes: '',
           created_at: now,
