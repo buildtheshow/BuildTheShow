@@ -3109,6 +3109,7 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
 
   // ── Venues ────────────────────────────────────────────
   let orgVenues = [];
+  let orgVenuesLoaded = false;
   let venuePreviewData  = null;
   let _venueSugDebounce = null;
 
@@ -3205,6 +3206,7 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
       .eq('org_id', currentOrg.id)
       .order('name', { ascending: true });
     orgVenues = data || [];
+    orgVenuesLoaded = true;
     renderVenuesList();
   }
 
@@ -4140,6 +4142,29 @@ If you cannot find any productions, return an empty array: []`;
     return normaliseCountryName(currentOrg?.location || '');
   }
 
+  function inferHolidayCountries() {
+    const found = new Set();
+    const addCountry = (value) => {
+      const code = normaliseCountryName(value);
+      if (code) found.add(code);
+    };
+    addCountry(currentOrg?.location || '');
+    (orgVenues || []).forEach((venue) => addCountry(venue?.address || venue?.name || venue?.nickname || ''));
+    return [...found];
+  }
+
+  async function ensureHolidayLocationData() {
+    if (!currentOrg || orgVenuesLoaded) return;
+    try {
+      const { data } = await sb.from('venues')
+        .select('id,name,nickname,address')
+        .eq('org_id', currentOrg.id)
+        .order('name', { ascending: true });
+      orgVenues = data || [];
+    } catch {}
+    orgVenuesLoaded = true;
+  }
+
   function pad2(value) {
     return String(value).padStart(2, '0');
   }
@@ -4286,13 +4311,15 @@ If you cannot find any productions, return an empty array: []`;
 
   function buildHolidayEventsForRange(fetchInfo = null) {
     if (!cronusShowHolidays) return [];
-    const countryCode = inferOrgHolidayCountry();
-    if (!countryCode) return [];
+    const countryCodes = inferHolidayCountries();
+    if (!countryCodes.length) return [];
     const startYear = fetchInfo?.start ? fetchInfo.start.getFullYear() : cronusCalendar?.getDate()?.getFullYear() || new Date().getFullYear();
     const endYear = fetchInfo?.end ? fetchInfo.end.getFullYear() : startYear;
     const rows = [];
-    for (let year = startYear; year <= endYear; year += 1) {
-      rows.push(...buildHolidayEventsForYear(countryCode, year));
+    for (const countryCode of countryCodes) {
+      for (let year = startYear; year <= endYear; year += 1) {
+        rows.push(...buildHolidayEventsForYear(countryCode, year));
+      }
     }
     return rows;
   }
@@ -4418,10 +4445,11 @@ If you cannot find any productions, return an empty array: []`;
     if (empty) empty.classList.toggle('visible', cronusMode === 'planning' && !cronusPlanningEvents.length);
   }
 
-  function toggleCronusHolidays() {
-    const countryCode = inferOrgHolidayCountry();
-    if (!countryCode) {
-      showToast('Set your organisation location with country details first so we can show the right public holidays.', true, 5000);
+  async function toggleCronusHolidays() {
+    await ensureHolidayLocationData();
+    const countryCodes = inferHolidayCountries();
+    if (!countryCodes.length) {
+      showToast('Add location details to your organisation or saved venues first so we can show the right public holidays.', true, 5000);
       return;
     }
     cronusShowHolidays = !cronusShowHolidays;
