@@ -1060,8 +1060,9 @@
       display: inline-flex;
       align-items: center;
       justify-content: center;
+      gap: 0.15rem;
     }
-    .cronus-title-picker-btn {
+    .cronus-title-trigger {
       display: inline-flex;
       align-items: center;
       gap: 0.45rem;
@@ -1076,11 +1077,15 @@
       border-radius: 999px;
       transition: background 0.15s, color 0.15s;
     }
-    .cronus-title-picker-btn:hover {
+    .cronus-title-trigger:hover {
       background: rgba(87,46,136,0.08);
       color: #572e88;
     }
-    .cronus-title-picker-caret {
+    .cronus-title-trigger.is-open {
+      background: rgba(87,46,136,0.08);
+      color: #572e88;
+    }
+    .cronus-title-trigger-caret {
       font-size: 0.78rem;
       line-height: 1;
       color: #6a5a80;
@@ -1088,36 +1093,21 @@
     .cronus-title-picker-menu {
       position: absolute;
       top: calc(100% + 0.55rem);
-      left: 50%;
-      transform: translateX(-50%);
-      min-width: 240px;
+      min-width: 190px;
       background: #fff;
       border: 1px solid rgba(87,46,136,0.14);
       border-radius: 16px;
       box-shadow: 0 18px 44px rgba(26,21,48,0.18);
-      padding: 0.9rem;
+      padding: 0.5rem;
       z-index: 30;
       display: none;
     }
     .cronus-title-picker-menu.open { display: block; }
-    .cronus-title-picker-grid {
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-      gap: 0.7rem;
-      margin-bottom: 0.8rem;
+    .cronus-title-picker-menu.month-menu {
+      left: 0;
     }
-    .cronus-title-picker-field {
-      display: flex;
-      flex-direction: column;
-      gap: 0.32rem;
-      text-align: left;
-    }
-    .cronus-title-picker-label {
-      font-size: 0.68rem;
-      font-weight: 800;
-      letter-spacing: 0.06em;
-      text-transform: uppercase;
-      color: #6a5a80;
+    .cronus-title-picker-menu.year-menu {
+      right: 0;
     }
     .cronus-title-picker-select {
       width: 100%;
@@ -1128,10 +1118,34 @@
       color: #1a1530;
       background: #fff;
     }
-    .cronus-title-picker-actions {
+    .cronus-title-picker-list {
       display: flex;
-      justify-content: flex-end;
-      gap: 0.55rem;
+      flex-direction: column;
+      gap: 0.18rem;
+      max-height: 280px;
+      overflow-y: auto;
+    }
+    .cronus-title-picker-option {
+      border: none;
+      background: transparent;
+      text-align: left;
+      width: 100%;
+      border-radius: 10px;
+      padding: 0.58rem 0.72rem;
+      font: inherit;
+      font-size: 0.84rem;
+      font-weight: 700;
+      color: #1a1530;
+      cursor: pointer;
+      transition: background 0.15s, color 0.15s;
+    }
+    .cronus-title-picker-option:hover {
+      background: rgba(87,46,136,0.08);
+      color: #572e88;
+    }
+    .cronus-title-picker-option.active {
+      background: #572e88;
+      color: #fff;
     }
     #tab-cronus .fc-button { background: #572e88 !important; border-color: #572e88 !important; font-family: var(--bts-font); font-size: 0.8rem; }
     #tab-cronus .fc-button:hover { background: #3d1f6a !important; border-color: #3d1f6a !important; }
@@ -1206,13 +1220,12 @@
         gap: 0.35rem;
       }
       #tab-cronus .fc-toolbar-title { font-size: 0.95rem; }
-      .cronus-title-picker-btn { font-size: 0.95rem; }
+      .cronus-title-trigger { font-size: 0.95rem; }
       .cronus-title-picker-menu {
-        left: 0;
-        transform: none;
         min-width: min(88vw, 260px);
       }
-      .cronus-title-picker-grid { grid-template-columns: 1fr; }
+      .cronus-title-picker-menu.month-menu { left: 0; right: auto; }
+      .cronus-title-picker-menu.year-menu { right: 0; left: auto; }
       #tab-cronus .fc-button { font-size: 0.74rem !important; padding: 0.3rem 0.55rem !important; }
       #tab-cronus .fc-list {
         border-radius: 12px;
@@ -4046,7 +4059,7 @@ If you cannot find any productions, return an empty array: []`;
   let cronusMode      = 'active';
   let cronusPlanningEvents = [];
   let editingPlanningEventId = null;
-  let cronusTitlePickerOpen = false;
+  let cronusTitlePickerOpen = null;
 
   function cronusPlanningStorageKey() {
     return currentOrg?.id ? `bts-org-planning-calendar:${currentOrg.id}` : 'bts-org-planning-calendar';
@@ -4206,9 +4219,7 @@ If you cannot find any productions, return an empty array: []`;
   }
 
   function closeCronusTitlePicker() {
-    cronusTitlePickerOpen = false;
-    const menu = document.querySelector('.cronus-title-picker-menu');
-    if (menu) menu.classList.remove('open');
+    cronusTitlePickerOpen = null;
     if (cronusCalendar) renderCronusTitlePicker();
   }
 
@@ -4223,45 +4234,44 @@ If you cannot find any productions, return an empty array: []`;
     const years = Array.from({ length: 15 }, (_, index) => startYear + index);
     titleHost.innerHTML = `
       <div class="cronus-title-picker-wrap">
-        <button type="button" class="cronus-title-picker-btn" aria-haspopup="dialog" aria-expanded="${cronusTitlePickerOpen ? 'true' : 'false'}" onclick="toggleCronusTitlePicker(event)">
-          <span>${CRONUS_MONTHS[monthIndex]} ${year}</span>
-          <span class="cronus-title-picker-caret">${cronusTitlePickerOpen ? '▲' : '▼'}</span>
+        <button type="button" class="cronus-title-trigger${cronusTitlePickerOpen === 'month' ? ' is-open' : ''}" aria-haspopup="menu" aria-expanded="${cronusTitlePickerOpen === 'month' ? 'true' : 'false'}" onclick="toggleCronusTitlePicker(event, 'month')">
+          <span>${CRONUS_MONTHS[monthIndex]}</span>
+          <span class="cronus-title-trigger-caret">${cronusTitlePickerOpen === 'month' ? '▲' : '▼'}</span>
         </button>
-        <div class="cronus-title-picker-menu${cronusTitlePickerOpen ? ' open' : ''}">
-          <div class="cronus-title-picker-grid">
-            <label class="cronus-title-picker-field">
-              <span class="cronus-title-picker-label">Month</span>
-              <select class="cronus-title-picker-select" id="cronus-title-picker-month">
-                ${CRONUS_MONTHS.map((label, index) => `<option value="${index}"${index === monthIndex ? ' selected' : ''}>${label}</option>`).join('')}
-              </select>
-            </label>
-            <label class="cronus-title-picker-field">
-              <span class="cronus-title-picker-label">Year</span>
-              <select class="cronus-title-picker-select" id="cronus-title-picker-year">
-                ${years.map(optionYear => `<option value="${optionYear}"${optionYear === year ? ' selected' : ''}>${optionYear}</option>`).join('')}
-              </select>
-            </label>
+        <div class="cronus-title-picker-menu month-menu${cronusTitlePickerOpen === 'month' ? ' open' : ''}">
+          <div class="cronus-title-picker-list">
+            ${CRONUS_MONTHS.map((label, index) => `<button type="button" class="cronus-title-picker-option${index === monthIndex ? ' active' : ''}" onclick="jumpCronusToMonth(${index})">${label}</button>`).join('')}
           </div>
-          <div class="cronus-title-picker-actions">
-            <button type="button" class="btn-secondary" style="padding:0.45rem 0.8rem;font-size:0.76rem;" onclick="closeCronusTitlePicker()">Cancel</button>
-            <button type="button" class="btn-primary" style="padding:0.5rem 0.9rem;font-size:0.76rem;" onclick="jumpCronusToSelectedMonth()">Go</button>
+        </div>
+        <button type="button" class="cronus-title-trigger${cronusTitlePickerOpen === 'year' ? ' is-open' : ''}" aria-haspopup="menu" aria-expanded="${cronusTitlePickerOpen === 'year' ? 'true' : 'false'}" onclick="toggleCronusTitlePicker(event, 'year')">
+          <span>${year}</span>
+          <span class="cronus-title-trigger-caret">${cronusTitlePickerOpen === 'year' ? '▲' : '▼'}</span>
+        </button>
+        <div class="cronus-title-picker-menu year-menu${cronusTitlePickerOpen === 'year' ? ' open' : ''}">
+          <div class="cronus-title-picker-list">
+            ${years.map(optionYear => `<button type="button" class="cronus-title-picker-option${optionYear === year ? ' active' : ''}" onclick="jumpCronusToYear(${optionYear})">${optionYear}</button>`).join('')}
           </div>
         </div>
       </div>`;
   }
 
-  function toggleCronusTitlePicker(event) {
+  function toggleCronusTitlePicker(event, type) {
     event?.stopPropagation?.();
-    cronusTitlePickerOpen = !cronusTitlePickerOpen;
+    cronusTitlePickerOpen = cronusTitlePickerOpen === type ? null : type;
     renderCronusTitlePicker();
   }
 
-  function jumpCronusToSelectedMonth() {
+  function jumpCronusToMonth(monthIndex) {
     if (!cronusCalendar) return;
-    const monthValue = document.getElementById('cronus-title-picker-month')?.value;
-    const yearValue = document.getElementById('cronus-title-picker-year')?.value;
-    if (monthValue == null || yearValue == null) return;
-    cronusCalendar.gotoDate(new Date(Number(yearValue), Number(monthValue), 1));
+    const currentDate = cronusCalendar.getDate();
+    cronusCalendar.gotoDate(new Date(currentDate.getFullYear(), Number(monthIndex), 1));
+    closeCronusTitlePicker();
+  }
+
+  function jumpCronusToYear(yearValue) {
+    if (!cronusCalendar) return;
+    const currentDate = cronusCalendar.getDate();
+    cronusCalendar.gotoDate(new Date(Number(yearValue), currentDate.getMonth(), 1));
     closeCronusTitlePicker();
   }
 
