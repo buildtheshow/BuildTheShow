@@ -572,16 +572,24 @@
       <p class="step-desc">This sets your time zone, currency, and holiday calendar defaults.</p>
 
       <div class="form-group">
-        <label class="form-label" for="org-location">City or Town</label>
-        <div class="location-wrap">
-          <input class="form-input" type="text" id="org-location" placeholder="Start typing your city..." autocomplete="off" />
-          <div class="location-suggestions" id="location-suggestions" role="listbox"></div>
+        <label class="form-label">Country</label>
+        <div class="check-group" id="country-picks">
+          <label class="check-option"><input type="radio" name="org-country" value="Canada" /><span>Canada</span></label>
+          <label class="check-option"><input type="radio" name="org-country" value="United States" /><span>United States</span></label>
+          <label class="check-option"><input type="radio" name="org-country" value="United Kingdom" /><span>United Kingdom</span></label>
+          <label class="check-option"><input type="radio" name="org-country" value="Ireland" /><span>Ireland</span></label>
+          <label class="check-option"><input type="radio" name="org-country" value="Australia" /><span>Australia</span></label>
+          <label class="check-option"><input type="radio" name="org-country" value="New Zealand" /><span>New Zealand</span></label>
+          <label class="check-option"><input type="radio" name="org-country" value="Other" /><span>Other</span></label>
         </div>
-        <input type="hidden" id="org-location-lat" />
-        <input type="hidden" id="org-location-lng" />
-        <input type="hidden" id="org-location-country" />
-        <input type="hidden" id="org-location-region" />
-        <p class="form-hint">Start typing and select from the list.</p>
+      </div>
+
+      <div class="form-group" id="region-group" style="display:none">
+        <label class="form-label" id="region-label">Region</label>
+        <select class="form-select" id="org-region" style="display:none">
+          <option value="">Select...</option>
+        </select>
+        <input class="form-input" type="text" id="region-free-input" placeholder="Region, county, or province..." style="display:none" />
       </div>
 
       <div class="wizard-nav">
@@ -1088,70 +1096,50 @@
   });
 
   // ── Location autocomplete (step 4) ──────────────────────────────────
-  const locIn   = document.getElementById('org-location');
-  const locList = document.getElementById('location-suggestions');
-  let locTimer2=null, locChosen=false, locIdx=-1;
+  // ── Country → region data ────────────────────────────────────────────
+  const REGIONS = {
+    'Canada':         { label: 'Province or Territory', options: ['Alberta','British Columbia','Manitoba','New Brunswick','Newfoundland and Labrador','Northwest Territories','Nova Scotia','Nunavut','Ontario','Prince Edward Island','Quebec','Saskatchewan','Yukon'] },
+    'United States':  { label: 'State',                 options: ['Alabama','Alaska','Arizona','Arkansas','California','Colorado','Connecticut','Delaware','District of Columbia','Florida','Georgia','Hawaii','Idaho','Illinois','Indiana','Iowa','Kansas','Kentucky','Louisiana','Maine','Maryland','Massachusetts','Michigan','Minnesota','Mississippi','Missouri','Montana','Nebraska','Nevada','New Hampshire','New Jersey','New Mexico','New York','North Carolina','North Dakota','Ohio','Oklahoma','Oregon','Pennsylvania','Rhode Island','South Carolina','South Dakota','Tennessee','Texas','Utah','Vermont','Virginia','Washington','West Virginia','Wisconsin','Wyoming'] },
+    'United Kingdom': { label: 'Country or Region',     options: ['England','Scotland','Wales','Northern Ireland'] },
+    'Ireland':        { label: 'County',                 options: ['Carlow','Cavan','Clare','Cork','Donegal','Dublin','Galway','Kerry','Kildare','Kilkenny','Laois','Leitrim','Limerick','Longford','Louth','Mayo','Meath','Monaghan','Offaly','Roscommon','Sligo','Tipperary','Waterford','Westmeath','Wexford','Wicklow'] },
+    'Australia':      { label: 'State or Territory',    options: ['Australian Capital Territory','New South Wales','Northern Territory','Queensland','South Australia','Tasmania','Victoria','Western Australia'] },
+    'New Zealand':    { label: 'Region',                 options: ['Auckland','Bay of Plenty','Canterbury','Gisborne',"Hawke's Bay",'Manawatu-Whanganui','Marlborough','Nelson','Northland','Otago','Southland','Taranaki','Tasman','Waikato','Wellington','West Coast'] },
+    'Other':          { label: 'Region / County / Province', options: null },
+  };
 
-  locIn.addEventListener('input', () => {
-    locChosen = false;
-    clearTimeout(locTimer2);
-    const q = locIn.value.trim();
-    if (q.length < 3) { closeLoc(); return; }
-    locTimer2 = setTimeout(() => fetchLoc(q), 350);
+  function applyCountry(country) {
+    const info = REGIONS[country];
+    if (!info) return;
+    _d.country = country;
+    document.getElementById('region-label').textContent = info.label;
+    const sel   = document.getElementById('org-region');
+    const free  = document.getElementById('region-free-input');
+    if (info.options) {
+      sel.innerHTML = '<option value="">Select...</option>' + info.options.map(o => `<option value="${o}">${o}</option>`).join('');
+      sel.style.display   = '';
+      free.style.display  = 'none';
+    } else {
+      sel.style.display   = 'none';
+      free.style.display  = '';
+    }
+    document.getElementById('region-group').style.display = '';
+    _d.region = '';
+    sel.value = '';
+    free.value = '';
+  }
+
+  function parseLocation(loc) {
+    const known = Object.keys(REGIONS);
+    for (const c of known) {
+      if (loc.endsWith(', ' + c)) return { country: c, region: loc.slice(0, loc.length - (', ' + c).length) };
+    }
+    const idx = loc.lastIndexOf(', ');
+    return idx !== -1 ? { country: loc.slice(idx + 2), region: loc.slice(0, idx) } : { country: '', region: loc };
+  }
+
+  document.querySelectorAll('input[name="org-country"]').forEach(rb => {
+    rb.addEventListener('change', () => applyCountry(rb.value));
   });
-
-  locIn.addEventListener('keydown', e => {
-    const items = locList.querySelectorAll('.location-suggestion-item');
-    if (!items.length) return;
-    if (e.key==='ArrowDown') { e.preventDefault(); locIdx=Math.min(locIdx+1,items.length-1); updateLocIdx(items); }
-    else if (e.key==='ArrowUp') { e.preventDefault(); locIdx=Math.max(locIdx-1,0); updateLocIdx(items); }
-    else if (e.key==='Enter' && locIdx>=0) { e.preventDefault(); items[locIdx].click(); }
-    else if (e.key==='Escape') closeLoc();
-  });
-
-  document.addEventListener('click', e => { if (!e.target.closest('.location-wrap')) closeLoc(); });
-
-  function updateLocIdx(items) {
-    items.forEach((el,i) => el.classList.toggle('active', i===locIdx));
-    if (locIdx>=0) items[locIdx].scrollIntoView({block:'nearest'});
-  }
-
-  async function fetchLoc(q) {
-    try {
-      const res  = await fetch(`https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=6&q=${encodeURIComponent(q)}`, {headers:{'Accept-Language':'en'}});
-      const data = await res.json();
-      renderLoc(data);
-    } catch { closeLoc(); }
-  }
-
-  function renderLoc(results) {
-    locList.innerHTML=''; locIdx=-1;
-    if (!results.length) { closeLoc(); return; }
-    results.forEach(place => {
-      const addr    = place.address || {};
-      const city    = addr.city||addr.town||addr.village||addr.municipality||'';
-      const region  = addr.state||addr.province||addr.county||'';
-      const country = addr.country||'';
-      const primary   = city||place.display_name.split(',')[0];
-      const secondary = [region,country].filter(Boolean).join(', ');
-      const item = document.createElement('div');
-      item.className = 'location-suggestion-item';
-      item.innerHTML = `<div class="place-name">${primary}</div>${secondary?`<div class="place-detail">${secondary}</div>`:''}`;
-      item.addEventListener('click', () => {
-        locIn.value = [primary, secondary].filter(Boolean).join(', ');
-        document.getElementById('org-location-lat').value    = place.lat;
-        document.getElementById('org-location-lng').value    = place.lon;
-        document.getElementById('org-location-country').value = country;
-        document.getElementById('org-location-region').value  = region;
-        locChosen = true;
-        closeLoc();
-      });
-      locList.appendChild(item);
-    });
-    locList.classList.add('open');
-  }
-
-  function closeLoc() { locList.classList.remove('open'); locList.innerHTML=''; locIdx=-1; }
 
   // ── Pill helper ─────────────────────────────────────────────────────
   function bindPills(id, setter) {
@@ -1377,12 +1365,18 @@
 
   document.getElementById('back-5').addEventListener('click', () => showStep(4));
   document.getElementById('next-5').addEventListener('click', () => {
-    if (!locChosen) { showErr('Please search for and select your city from the list.'); return; }
-    _d.location = locIn.value;
-    _d.lat      = document.getElementById('org-location-lat').value || null;
-    _d.lng      = document.getElementById('org-location-lng').value || null;
-    _d.country  = document.getElementById('org-location-country').value;
-    _d.region   = document.getElementById('org-location-region').value;
+    if (!_d.country) { showErr('Please select your country.'); return; }
+    const regionVal = _d.country === 'Other'
+      ? document.getElementById('region-free-input').value.trim()
+      : document.getElementById('org-region').value;
+    if (!regionVal) {
+      showErr('Please select your ' + (REGIONS[_d.country]?.label || 'region').toLowerCase() + '.');
+      return;
+    }
+    _d.region   = regionVal;
+    _d.location = `${regionVal}, ${_d.country}`;
+    _d.lat      = null;
+    _d.lng      = null;
     autoSlug(_d.orgName, _d.abbr, _d.location).then(s => {
       if (s && !slugInput.value) { slugInput.value=s; slugInput.dispatchEvent(new Event('input')); }
     });
@@ -1463,6 +1457,7 @@
       _d.location       = o.location          || '';
       _d.lat            = o.location_lat;
       _d.lng            = o.location_lng;
+      if (_d.location) { const p = parseLocation(_d.location); _d.country = p.country; _d.region = p.region; }
       _d.email          = o.email             || '';
       _d.phone          = o.phone             || '';
       _d.website        = o.website           || '';
@@ -1478,8 +1473,16 @@
       document.getElementById('org-name').value   = _d.orgName;
       document.getElementById('org-abbr').value   = _d.abbr;
       if (_d.abbr) { document.getElementById('abbr-toggle').checked = true; document.getElementById('abbr-field-wrap').style.display = ''; }
-      document.getElementById('org-location').value = _d.location;
-      if (_d.location) locChosen = true;
+      if (_d.country) {
+        const rb = document.querySelector(`input[name="org-country"][value="${_d.country}"]`);
+        if (rb) { rb.checked = true; applyCountry(_d.country); }
+        if (_d.region) {
+          const sel = document.getElementById('org-region');
+          const free = document.getElementById('region-free-input');
+          if (sel.style.display !== 'none') sel.value = _d.region;
+          else free.value = _d.region;
+        }
+      }
       document.getElementById('org-bio').value     = _d.bio;
       document.getElementById('org-year').value    = _d.year;
       document.getElementById('org-website').value = _d.website;
