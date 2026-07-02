@@ -1832,6 +1832,18 @@
               </div>
             </div>
 
+            <!-- Public URL -->
+            <div class="section-card" id="slug-settings-card">
+              <p class="sp-card-title">Your public URL</p>
+              <p class="sp-card-desc">This is your organisation's address on Build The Show.</p>
+              <div style="display:flex;align-items:center;gap:0.6rem;flex-wrap:wrap;">
+                <div id="slug-display" style="flex:1;min-width:0;background:#f5f3fc;border:1px solid rgba(87,46,136,0.14);border-radius:8px;padding:0.5rem 0.75rem;font-size:0.84rem;font-weight:700;color:#1a1530;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">buildtheshow.com/<span id="slug-display-value"></span></div>
+                <button type="button" id="slug-change-btn" class="sp-upload-btn" onclick="openSlugChangeModal()" style="white-space:nowrap;">Change URL</button>
+              </div>
+              <p id="slug-locked-note" style="display:none;font-size:0.7rem;color:#9a90b0;margin-top:0.45rem;">You have already used your one URL change. Contact support if you need to update this again.</p>
+              <p id="slug-change-note" style="font-size:0.7rem;color:#9a90b0;margin-top:0.45rem;">You can change this once. Existing links will break.</p>
+            </div>
+
             <!-- Stats & Visibility (collapsed into one card) -->
             <div class="section-card">
               <p class="sp-card-title">Stats &amp; visibility</p>
@@ -2253,6 +2265,41 @@
   </div>
 </div>
 
+<div class="modal-overlay" id="slug-change-modal">
+  <div class="modal" style="max-width:460px;">
+    <div class="modal-header">
+      <div class="modal-title">Change your public URL</div>
+      <button class="modal-close" onclick="closeSlugChangeModal()">✕</button>
+    </div>
+    <p style="font-size:0.875rem;color:#4a3d6b;line-height:1.6;margin:0 0 0.75rem;"><strong>This is a one-time change.</strong> Once you update your URL, you cannot change it again.</p>
+    <div style="background:#fef3f2;border:1px solid rgba(209,82,61,0.2);border-radius:8px;padding:0.75rem 0.9rem;margin-bottom:1.25rem;">
+      <p style="font-size:0.8rem;color:#d1523d;font-weight:700;margin:0 0 0.3rem;">These will break permanently:</p>
+      <ul style="margin:0;padding:0 0 0 1.1rem;font-size:0.78rem;color:#7a4030;line-height:1.8;">
+        <li>Your public org page link</li>
+        <li>Any audition booking links you've shared</li>
+        <li>Emails sent with your old URL</li>
+        <li>Any external links or bookmarks</li>
+      </ul>
+    </div>
+    <div class="form-group">
+      <label class="form-label">New URL handle</label>
+      <div style="display:flex;align-items:center;gap:0;border:1.5px solid rgba(87,46,136,0.22);border-radius:9px;overflow:hidden;background:#fff;">
+        <span style="padding:0 0.6rem 0 0.75rem;font-size:0.8rem;color:#9a90b0;white-space:nowrap;background:#f5f3fc;border-right:1px solid rgba(87,46,136,0.14);align-self:stretch;display:flex;align-items:center;">buildtheshow.com/</span>
+        <input type="text" id="slug-new-input" placeholder="your-org-handle" maxlength="48" style="flex:1;border:none;outline:none;padding:0.55rem 0.75rem;font-size:0.88rem;font-weight:700;font-family:var(--bts-font);background:#fff;" oninput="onSlugChangeInput(this)" />
+      </div>
+      <p id="slug-new-feedback" style="font-size:0.72rem;margin-top:0.3rem;min-height:1em;"></p>
+    </div>
+    <div class="form-group" style="margin-bottom:1.25rem;">
+      <label class="form-label">Type <strong id="slug-confirm-target"></strong> to confirm</label>
+      <input type="text" id="slug-confirm-input" placeholder="" style="width:100%;border:1.5px solid rgba(87,46,136,0.22);border-radius:9px;padding:0.55rem 0.75rem;font-size:0.88rem;font-family:var(--bts-font);outline:none;" oninput="onSlugConfirmInput()" />
+    </div>
+    <div style="display:flex;gap:0.6rem;">
+      <button class="btn-secondary" onclick="closeSlugChangeModal()" style="flex:1;justify-content:center;">Cancel</button>
+      <button id="slug-save-btn" class="btn-primary" onclick="saveSlugChange()" style="flex:2;justify-content:center;background:#d1523d;border-color:#d1523d;" disabled>Change URL</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="org-file-tag-modal">
   <div class="modal" style="max-width:380px;">
     <div class="modal-header">
@@ -2553,6 +2600,16 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
     hydrate('s-profile-public', o.profile_public !== false);
     hydrate('s-show-contact', o.show_contact !== false);
     hydrate('org-etransfer-email', o.etransfer_email || '');
+    // Slug / public URL
+    const slugVal = document.getElementById('slug-display-value');
+    if (slugVal) slugVal.textContent = o.slug || '';
+    const slugLocked = !!o.slug_changed_at;
+    const slugBtn  = document.getElementById('slug-change-btn');
+    const slugNote = document.getElementById('slug-change-note');
+    const slugLockNote = document.getElementById('slug-locked-note');
+    if (slugBtn)  { slugBtn.disabled = slugLocked; slugBtn.style.opacity = slugLocked ? '0.45' : '1'; slugBtn.style.cursor = slugLocked ? 'not-allowed' : 'pointer'; }
+    if (slugNote) slugNote.style.display = slugLocked ? 'none' : 'block';
+    if (slugLockNote) slugLockNote.style.display = slugLocked ? 'block' : 'none';
     // Branding panel preview
     setBrandingPreview('logo', o.logo_url, o.logo_url ? 'Change logo' : '');
     setBrandingPreview('whiteLogo', o.logo_white_url || o.logo_transparent_url, (o.logo_white_url || o.logo_transparent_url) ? 'Change white logo' : '');
@@ -3564,6 +3621,88 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
     }
     btn.disabled = false;
     btn.textContent = 'Save Changes';
+  }
+
+  // ── Slug change modal ─────────────────────────────────────────────
+  let _slugCheckTimer = null;
+  let _slugNewValue   = '';
+  let _slugValid      = false;
+
+  function openSlugChangeModal() {
+    if (currentOrg?.slug_changed_at) return;
+    document.getElementById('slug-new-input').value   = '';
+    document.getElementById('slug-confirm-input').value = '';
+    document.getElementById('slug-new-feedback').textContent = '';
+    document.getElementById('slug-new-feedback').style.color = '#9a90b0';
+    document.getElementById('slug-confirm-target').textContent = '';
+    document.getElementById('slug-save-btn').disabled = true;
+    _slugNewValue = '';
+    _slugValid    = false;
+    document.getElementById('slug-change-modal').classList.add('open');
+  }
+
+  function closeSlugChangeModal() {
+    document.getElementById('slug-change-modal').classList.remove('open');
+  }
+
+  function slugify(s) {
+    return s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  }
+
+  function onSlugChangeInput(input) {
+    const raw = input.value;
+    const clean = slugify(raw);
+    if (clean !== raw) { input.value = clean; }
+    _slugNewValue = clean;
+    _slugValid = false;
+    document.getElementById('slug-save-btn').disabled = true;
+    document.getElementById('slug-confirm-target').textContent = clean ? `"${clean}"` : '';
+    document.getElementById('slug-confirm-input').value = '';
+    const fb = document.getElementById('slug-new-feedback');
+    if (!clean) { fb.textContent = ''; return; }
+    if (clean === currentOrg?.slug) { fb.textContent = 'That is already your current URL.'; fb.style.color = '#9a90b0'; return; }
+    if (clean.length < 3) { fb.textContent = 'Too short — needs at least 3 characters.'; fb.style.color = '#d1523d'; return; }
+    fb.textContent = 'Checking...'; fb.style.color = '#9a90b0';
+    clearTimeout(_slugCheckTimer);
+    _slugCheckTimer = setTimeout(async () => {
+      try {
+        const { data, error } = await sb.rpc('organization_slug_available', { p_slug: clean, p_exclude_org_id: currentOrg.id });
+        const available = !error && data === true;
+        if (available) {
+          fb.textContent = `"${clean}" is available.`; fb.style.color = '#769e7b';
+          _slugValid = true;
+        } else {
+          fb.textContent = 'That handle is already taken.'; fb.style.color = '#d1523d';
+          _slugValid = false;
+        }
+      } catch { fb.textContent = 'Could not check availability.'; fb.style.color = '#d1523d'; _slugValid = false; }
+      onSlugConfirmInput();
+    }, 450);
+  }
+
+  function onSlugConfirmInput() {
+    const confirmVal = document.getElementById('slug-confirm-input').value.trim();
+    const ready = _slugValid && confirmVal === _slugNewValue && _slugNewValue.length >= 3;
+    document.getElementById('slug-save-btn').disabled = !ready;
+  }
+
+  async function saveSlugChange() {
+    if (!_slugValid || !_slugNewValue) return;
+    const btn = document.getElementById('slug-save-btn');
+    btn.disabled = true; btn.textContent = 'Saving...';
+    const { error } = await sb.from('organizations').update({
+      slug: _slugNewValue,
+      slug_changed_at: new Date().toISOString(),
+    }).eq('id', currentOrg.id);
+    if (error) {
+      showToast('Could not update URL: ' + error.message, true);
+      btn.disabled = false; btn.textContent = 'Change URL';
+      return;
+    }
+    currentOrg = { ...currentOrg, slug: _slugNewValue, slug_changed_at: new Date().toISOString() };
+    renderOrgInfo();
+    closeSlugChangeModal();
+    showToast('Your public URL has been updated.');
   }
 
   const BRANDING_FIELDS = {
