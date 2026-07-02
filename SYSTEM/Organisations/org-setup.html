@@ -316,6 +316,30 @@
     }
     .logo-preview-wrap.visible { display: flex; }
     .logo-preview-wrap img { max-width: 100%; max-height: 100%; object-fit: contain; }
+    .logo-upload-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 1rem;
+    }
+    .logo-upload-card {
+      border: 1px solid rgba(87,46,136,0.14);
+      border-radius: 12px;
+      padding: 1rem;
+      background: #faf9fd;
+    }
+    .logo-upload-card .form-group:last-child { margin-bottom: 0; }
+    .logo-upload-title {
+      font-size: 0.82rem;
+      font-weight: 800;
+      color: #1a1530;
+      margin-bottom: 0.15rem;
+    }
+    .logo-upload-help {
+      font-size: 0.76rem;
+      color: #7a6a9a;
+      line-height: 1.5;
+      margin-bottom: 0.75rem;
+    }
 
     /* Summary */
     .done-summary { background: #f5f3fc; border-radius: 12px; padding: 1.25rem; margin-bottom: 1.5rem; }
@@ -684,13 +708,49 @@
     <!-- Step 10: Logo -->
     <div class="wizard-step" id="step-10">
       <div class="step-kicker">Branding</div>
-      <h2 class="step-title">Upload your primary logo</h2>
-      <p class="step-desc">JPG or PNG, under 5 MB. You can upload additional logo variants (white, icon, horizontal) in your organisation settings later.</p>
+      <h2 class="step-title">Upload your logos</h2>
+      <p class="step-desc">Add your main logo now, and add any optional versions you already have. You do not need all of them to keep going.</p>
 
-      <div class="form-group">
-        <input class="form-input" type="file" id="org-logo" accept="image/*" />
-        <div class="logo-preview-wrap" id="logo-preview-wrap">
-          <img id="logo-preview-img" src="" alt="Logo preview" />
+      <div class="logo-upload-grid">
+        <div class="logo-upload-card">
+          <div class="logo-upload-title">Primary logo</div>
+          <div class="logo-upload-help">Your main full-colour logo. JPG or PNG, under 5 MB.</div>
+          <div class="form-group">
+            <input class="form-input" type="file" id="org-logo" accept="image/*" />
+            <div class="logo-preview-wrap" id="logo-preview-wrap">
+              <img id="logo-preview-img" src="" alt="Primary logo preview" />
+            </div>
+          </div>
+        </div>
+        <div class="logo-upload-card">
+          <div class="logo-upload-title">White logo <span class="opt">(optional)</span></div>
+          <div class="logo-upload-help">Useful for dark or purple backgrounds.</div>
+          <div class="form-group">
+            <input class="form-input" type="file" id="org-logo-white" accept="image/*" />
+            <div class="logo-preview-wrap" id="logo-white-preview-wrap">
+              <img id="logo-white-preview-img" src="" alt="White logo preview" />
+            </div>
+          </div>
+        </div>
+        <div class="logo-upload-card">
+          <div class="logo-upload-title">Black logo <span class="opt">(optional)</span></div>
+          <div class="logo-upload-help">Useful for light backgrounds and print use.</div>
+          <div class="form-group">
+            <input class="form-input" type="file" id="org-logo-black" accept="image/*" />
+            <div class="logo-preview-wrap" id="logo-black-preview-wrap">
+              <img id="logo-black-preview-img" src="" alt="Black logo preview" />
+            </div>
+          </div>
+        </div>
+        <div class="logo-upload-card">
+          <div class="logo-upload-title">Alternative logo <span class="opt">(optional)</span></div>
+          <div class="logo-upload-help">Use this for an icon, stamp, or alternate layout if you have one.</div>
+          <div class="form-group">
+            <input class="form-input" type="file" id="org-logo-alt" accept="image/*" />
+            <div class="logo-preview-wrap" id="logo-alt-preview-wrap">
+              <img id="logo-alt-preview-img" src="" alt="Alternative logo preview" />
+            </div>
+          </div>
         </div>
       </div>
 
@@ -732,7 +792,7 @@
     venues:[],
     bio:'', year:'', website:'',
     email:'', phone:'',
-    logoFile:null,
+    logoFile:null, logoWhiteFile:null, logoBlackFile:null, logoAltFile:null,
   };
 
   const TOTAL    = 10;
@@ -1223,19 +1283,48 @@
   });
 
   // ── Logo preview ────────────────────────────────────────────────────
-  document.getElementById('org-logo').addEventListener('change', e => {
-    const file = e.target.files[0];
-    _d.logoFile = file || null;
-    const wrap = document.getElementById('logo-preview-wrap');
-    const img  = document.getElementById('logo-preview-img');
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = ev => { img.src = ev.target.result; wrap.classList.add('visible'); };
-      reader.readAsDataURL(file);
+  const SETUP_LOGO_FIELDS = {
+    logo:  { stateKey: 'logoFile',      previewWrap: 'logo-preview-wrap',       previewImg: 'logo-preview-img',       pathName: 'logo',             column: 'logo_url' },
+    white: { stateKey: 'logoWhiteFile', previewWrap: 'logo-white-preview-wrap', previewImg: 'logo-white-preview-img', pathName: 'logo-white',       column: 'logo_white_url' },
+    black: { stateKey: 'logoBlackFile', previewWrap: 'logo-black-preview-wrap', previewImg: 'logo-black-preview-img', pathName: 'logo-black',       column: 'logo_black_url' },
+    alt:   { stateKey: 'logoAltFile',   previewWrap: 'logo-alt-preview-wrap',   previewImg: 'logo-alt-preview-img',   pathName: 'logo-alternative', column: 'logo_alternative_url' },
+  };
+
+  function setSetupLogoPreview(type, src) {
+    const cfg = SETUP_LOGO_FIELDS[type];
+    if (!cfg) return;
+    const wrap = document.getElementById(cfg.previewWrap);
+    const img = document.getElementById(cfg.previewImg);
+    if (!wrap || !img) return;
+    if (src) {
+      img.src = src;
+      wrap.classList.add('visible');
     } else {
-      wrap.classList.remove('visible'); img.src='';
+      img.src = '';
+      wrap.classList.remove('visible');
     }
-  });
+  }
+
+  function bindSetupLogoInput(inputId, type) {
+    document.getElementById(inputId).addEventListener('change', e => {
+      const file = e.target.files[0] || null;
+      const cfg = SETUP_LOGO_FIELDS[type];
+      if (!cfg) return;
+      _d[cfg.stateKey] = file;
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = ev => setSetupLogoPreview(type, ev.target.result);
+        reader.readAsDataURL(file);
+      } else {
+        setSetupLogoPreview(type, '');
+      }
+    });
+  }
+
+  bindSetupLogoInput('org-logo', 'logo');
+  bindSetupLogoInput('org-logo-white', 'white');
+  bindSetupLogoInput('org-logo-black', 'black');
+  bindSetupLogoInput('org-logo-alt', 'alt');
 
   // ── Summary ─────────────────────────────────────────────────────────
   function buildSummary() {
@@ -1285,9 +1374,6 @@
     const { data: { user } } = await sb.auth.getUser();
     if (!user) { showErr('Session expired. Please log in again.'); btn.disabled=false; btn.textContent='Take me to my dashboard'; return; }
 
-    let logo_url = null;
-    if (_d.logoFile) logo_url = await uploadFile(_d.logoFile, user.id, 'org-logos');
-
     const fields = {
       name:               _d.orgName,
       abbreviation:       _d.abbr,
@@ -1307,12 +1393,31 @@
       account_owner_role: _d.ownerRole       || null,
       leadership_roles:   _d.leadershipRoles.length ? _d.leadershipRoles : null,
     };
-    if (logo_url) fields.logo_url = logo_url;
+    for (const cfg of Object.values(SETUP_LOGO_FIELDS)) {
+      const file = _d[cfg.stateKey];
+      if (!file) continue;
+      const ext = file.name.split('.').pop();
+      const path = `${user.id}/${cfg.pathName}-${Date.now()}.${ext}`;
+      const { error: uploadError } = await sb.storage.from('org-logos').upload(path, file, { upsert: true, contentType: file.type });
+      if (uploadError) {
+        showErr(uploadError.message || 'Could not upload your logo files.');
+        btn.disabled = false;
+        btn.textContent = EDIT_MODE ? 'Save changes' : 'Take me to my dashboard';
+        return;
+      }
+      const { data: urlData } = sb.storage.from('org-logos').getPublicUrl(path);
+      fields[cfg.column] = urlData.publicUrl;
+    }
+    const legacyLogoOnlyFields = fields.logo_url ? { ...fields, logo_white_url: undefined, logo_black_url: undefined, logo_alternative_url: undefined } : null;
 
     let orgId = _editOrgId;
 
     if (EDIT_MODE && orgId) {
-      const { error: updErr } = await sb.from('organizations').update(fields).eq('id', orgId);
+      let { error: updErr } = await sb.from('organizations').update(fields).eq('id', orgId);
+      if (updErr && /logo_white_url|logo_black_url|logo_alternative_url|column/i.test(updErr.message || '') && legacyLogoOnlyFields) {
+        const retry = await sb.from('organizations').update(legacyLogoOnlyFields).eq('id', orgId);
+        updErr = retry.error;
+      }
       if (updErr) {
         const msg = (updErr.code==='23505' && updErr.message.includes('slug'))
           ? 'That URL is already taken. Please go back and choose a different handle.'
@@ -1327,7 +1432,12 @@
         await sb.from('venues').insert(_d.venues.map(v => ({ org_id: orgId, name: v.name, address: v.location||null })));
       }
     } else {
-      const { data: orgRow, error: orgErr } = await sb.from('organizations').insert({ ...fields, custom_id: genId(), admin_id: user.id }).select('id').single();
+      let { data: orgRow, error: orgErr } = await sb.from('organizations').insert({ ...fields, custom_id: genId(), admin_id: user.id }).select('id').single();
+      if (orgErr && /logo_white_url|logo_black_url|logo_alternative_url|column/i.test(orgErr.message || '') && legacyLogoOnlyFields) {
+        const retry = await sb.from('organizations').insert({ ...legacyLogoOnlyFields, custom_id: genId(), admin_id: user.id }).select('id').single();
+        orgRow = retry.data;
+        orgErr = retry.error;
+      }
       if (orgErr) {
         const msg = (orgErr.code==='23505' && orgErr.message.includes('slug'))
           ? 'That URL is already taken. Please go back and choose a different handle.'
@@ -1451,7 +1561,7 @@
     if (!session) { window.location.href = '/login'; return; }
 
     const { data: existing } = await sb.from('organizations')
-      .select('id,slug,name,abbreviation,org_type,account_owner_type,account_owner_name,account_owner_role,leadership_roles,legal_structure,location,location_lat,location_lng,email,phone,website,description,established_year')
+      .select('id,slug,name,abbreviation,org_type,account_owner_type,account_owner_name,account_owner_role,leadership_roles,legal_structure,location,location_lat,location_lng,email,phone,website,description,established_year,logo_url,logo_white_url,logo_black_url,logo_alternative_url')
       .eq('admin_id', session.user.id).limit(1);
 
     if (existing && existing.length > 0) {
@@ -1518,6 +1628,10 @@
           document.getElementById('owner-role').value = normalizeOwnerRole(_d.ownerRole);
         }
       }
+      setSetupLogoPreview('logo', o.logo_url || '');
+      setSetupLogoPreview('white', o.logo_white_url || '');
+      setSetupLogoPreview('black', o.logo_black_url || '');
+      setSetupLogoPreview('alt', o.logo_alternative_url || '');
 
       // Prefill slug input and trigger check
       if (_d.slug) { slugInput.value = _d.slug; slugInput.dispatchEvent(new Event('input')); }
