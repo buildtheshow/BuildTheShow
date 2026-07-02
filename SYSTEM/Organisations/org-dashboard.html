@@ -1055,6 +1055,84 @@
     /* FullCalendar resets for Cronus */
     #tab-cronus .fc { font-family: var(--bts-font); }
     #tab-cronus .fc-toolbar-title { font-size: 1.1rem; font-weight: 700; color: #1a1530; }
+    .cronus-title-picker-wrap {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .cronus-title-picker-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.45rem;
+      border: none;
+      background: transparent;
+      color: #1a1530;
+      font: inherit;
+      font-size: 1.1rem;
+      font-weight: 800;
+      cursor: pointer;
+      padding: 0.2rem 0.45rem;
+      border-radius: 999px;
+      transition: background 0.15s, color 0.15s;
+    }
+    .cronus-title-picker-btn:hover {
+      background: rgba(87,46,136,0.08);
+      color: #572e88;
+    }
+    .cronus-title-picker-caret {
+      font-size: 0.78rem;
+      line-height: 1;
+      color: #6a5a80;
+    }
+    .cronus-title-picker-menu {
+      position: absolute;
+      top: calc(100% + 0.55rem);
+      left: 50%;
+      transform: translateX(-50%);
+      min-width: 240px;
+      background: #fff;
+      border: 1px solid rgba(87,46,136,0.14);
+      border-radius: 16px;
+      box-shadow: 0 18px 44px rgba(26,21,48,0.18);
+      padding: 0.9rem;
+      z-index: 30;
+      display: none;
+    }
+    .cronus-title-picker-menu.open { display: block; }
+    .cronus-title-picker-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      gap: 0.7rem;
+      margin-bottom: 0.8rem;
+    }
+    .cronus-title-picker-field {
+      display: flex;
+      flex-direction: column;
+      gap: 0.32rem;
+      text-align: left;
+    }
+    .cronus-title-picker-label {
+      font-size: 0.68rem;
+      font-weight: 800;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: #6a5a80;
+    }
+    .cronus-title-picker-select {
+      width: 100%;
+      border: 1.5px solid rgba(87,46,136,0.15);
+      border-radius: 10px;
+      padding: 0.6rem 0.7rem;
+      font: inherit;
+      color: #1a1530;
+      background: #fff;
+    }
+    .cronus-title-picker-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 0.55rem;
+    }
     #tab-cronus .fc-button { background: #572e88 !important; border-color: #572e88 !important; font-family: var(--bts-font); font-size: 0.8rem; }
     #tab-cronus .fc-button:hover { background: #3d1f6a !important; border-color: #3d1f6a !important; }
     #tab-cronus .fc-button-active { background: #3d1f6a !important; border-color: #3d1f6a !important; }
@@ -1128,6 +1206,13 @@
         gap: 0.35rem;
       }
       #tab-cronus .fc-toolbar-title { font-size: 0.95rem; }
+      .cronus-title-picker-btn { font-size: 0.95rem; }
+      .cronus-title-picker-menu {
+        left: 0;
+        transform: none;
+        min-width: min(88vw, 260px);
+      }
+      .cronus-title-picker-grid { grid-template-columns: 1fr; }
       #tab-cronus .fc-button { font-size: 0.74rem !important; padding: 0.3rem 0.55rem !important; }
       #tab-cronus .fc-list {
         border-radius: 12px;
@@ -3953,6 +4038,7 @@ If you cannot find any productions, return an empty array: []`;
     '#dc2626','#7c3aed','#0284c7','#be185d','#15803d',
   ];
   const CRONUS_PLANNING_COLOR = '#efab45';
+  const CRONUS_MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
   let cronusCalendar  = null;
   let cronusEvents    = [];
   let cronusProdsMap  = {}; // prodId → { title, color }
@@ -3960,6 +4046,7 @@ If you cannot find any productions, return an empty array: []`;
   let cronusMode      = 'active';
   let cronusPlanningEvents = [];
   let editingPlanningEventId = null;
+  let cronusTitlePickerOpen = false;
 
   function cronusPlanningStorageKey() {
     return currentOrg?.id ? `bts-org-planning-calendar:${currentOrg.id}` : 'bts-org-planning-calendar';
@@ -4116,6 +4203,66 @@ If you cannot find any productions, return an empty array: []`;
       cronusCalendar.refetchEvents();
       cronusCalendar.render();
     }
+  }
+
+  function closeCronusTitlePicker() {
+    cronusTitlePickerOpen = false;
+    const menu = document.querySelector('.cronus-title-picker-menu');
+    if (menu) menu.classList.remove('open');
+    if (cronusCalendar) renderCronusTitlePicker();
+  }
+
+  function renderCronusTitlePicker() {
+    if (!cronusCalendar) return;
+    const titleHost = document.querySelector('#tab-cronus .fc-toolbar-title');
+    if (!titleHost) return;
+    const currentDate = cronusCalendar.getDate();
+    const monthIndex = currentDate.getMonth();
+    const year = currentDate.getFullYear();
+    const startYear = Math.max(2020, year - 6);
+    const years = Array.from({ length: 15 }, (_, index) => startYear + index);
+    titleHost.innerHTML = `
+      <div class="cronus-title-picker-wrap">
+        <button type="button" class="cronus-title-picker-btn" aria-haspopup="dialog" aria-expanded="${cronusTitlePickerOpen ? 'true' : 'false'}" onclick="toggleCronusTitlePicker(event)">
+          <span>${CRONUS_MONTHS[monthIndex]} ${year}</span>
+          <span class="cronus-title-picker-caret">${cronusTitlePickerOpen ? '▲' : '▼'}</span>
+        </button>
+        <div class="cronus-title-picker-menu${cronusTitlePickerOpen ? ' open' : ''}">
+          <div class="cronus-title-picker-grid">
+            <label class="cronus-title-picker-field">
+              <span class="cronus-title-picker-label">Month</span>
+              <select class="cronus-title-picker-select" id="cronus-title-picker-month">
+                ${CRONUS_MONTHS.map((label, index) => `<option value="${index}"${index === monthIndex ? ' selected' : ''}>${label}</option>`).join('')}
+              </select>
+            </label>
+            <label class="cronus-title-picker-field">
+              <span class="cronus-title-picker-label">Year</span>
+              <select class="cronus-title-picker-select" id="cronus-title-picker-year">
+                ${years.map(optionYear => `<option value="${optionYear}"${optionYear === year ? ' selected' : ''}>${optionYear}</option>`).join('')}
+              </select>
+            </label>
+          </div>
+          <div class="cronus-title-picker-actions">
+            <button type="button" class="btn-secondary" style="padding:0.45rem 0.8rem;font-size:0.76rem;" onclick="closeCronusTitlePicker()">Cancel</button>
+            <button type="button" class="btn-primary" style="padding:0.5rem 0.9rem;font-size:0.76rem;" onclick="jumpCronusToSelectedMonth()">Go</button>
+          </div>
+        </div>
+      </div>`;
+  }
+
+  function toggleCronusTitlePicker(event) {
+    event?.stopPropagation?.();
+    cronusTitlePickerOpen = !cronusTitlePickerOpen;
+    renderCronusTitlePicker();
+  }
+
+  function jumpCronusToSelectedMonth() {
+    if (!cronusCalendar) return;
+    const monthValue = document.getElementById('cronus-title-picker-month')?.value;
+    const yearValue = document.getElementById('cronus-title-picker-year')?.value;
+    if (monthValue == null || yearValue == null) return;
+    cronusCalendar.gotoDate(new Date(Number(yearValue), Number(monthValue), 1));
+    closeCronusTitlePicker();
   }
 
   async function savePlanningEvent() {
@@ -4313,10 +4460,14 @@ If you cannot find any productions, return an empty array: []`;
         if (cronusMode !== 'planning') return;
         openPlanningEventModal(null, { start: info.dateStr, allDay: true });
       },
+      datesSet() {
+        renderCronusTitlePicker();
+      },
     });
     cronusCalendar.render();
     updateCronusModeUi();
     renderCronusLegend();
+    renderCronusTitlePicker();
   }
 
   function renderCronusLegend() {
@@ -4366,6 +4517,11 @@ If you cannot find any productions, return an empty array: []`;
         if (cronusCalendar) cronusCalendar.refetchEvents();
       })
       .subscribe();
+  });
+  document.addEventListener('click', (event) => {
+    if (!cronusTitlePickerOpen) return;
+    if (event.target.closest('.cronus-title-picker-wrap')) return;
+    closeCronusTitlePicker();
   });
 </script>
 <script>
