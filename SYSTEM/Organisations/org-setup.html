@@ -166,6 +166,15 @@
     .pill-group.stacked { flex-direction: column; }
     .pill-group.stacked .pill-option { border-radius: 10px; text-align: left; padding: 0.8rem 1rem; }
 
+    /* Checkbox group */
+    .check-group { display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 1.1rem; }
+    .check-option { display: flex; align-items: center; gap: 0.7rem; cursor: pointer; padding: 0.65rem 0.9rem; border: 1.5px solid rgba(87,46,136,0.15); border-radius: 10px; transition: border-color 0.15s, background 0.15s; user-select: none; }
+    .check-option:hover { border-color: #572e88; background: rgba(87,46,136,0.03); }
+    .check-option input[type="checkbox"] { width: 18px; height: 18px; accent-color: #572e88; flex-shrink: 0; cursor: pointer; }
+    .check-option span { font-size: 0.9rem; color: #1a1530; font-weight: 500; }
+    .check-option:has(input:checked) { border-color: #572e88; background: rgba(87,46,136,0.06); }
+    .check-option:has(input:checked) span { color: #572e88; font-weight: 700; }
+
     /* Owner cards */
     .owner-options { display: flex; flex-direction: column; gap: 0.65rem; margin-bottom: 1rem; }
     .owner-card {
@@ -391,12 +400,12 @@
       </div>
       <div class="form-group">
         <label class="form-label">Type of Organisation</label>
-        <div class="pill-group" id="org-type-pills">
-          <button type="button" class="pill-option" data-value="theatre">Theatre Company</button>
-          <button type="button" class="pill-option" data-value="school">School / Educational</button>
-          <button type="button" class="pill-option" data-value="community">Community Group</button>
-          <button type="button" class="pill-option" data-value="independent">Independent Producer</button>
-          <button type="button" class="pill-option" data-value="other">Other</button>
+        <div class="check-group" id="org-type-checks">
+          <label class="check-option"><input type="checkbox" value="theatre" /><span>Theatre Company</span></label>
+          <label class="check-option"><input type="checkbox" value="school" /><span>School / Educational</span></label>
+          <label class="check-option"><input type="checkbox" value="community" /><span>Community Group</span></label>
+          <label class="check-option"><input type="checkbox" value="independent" /><span>Independent Producer</span></label>
+          <label class="check-option"><input type="checkbox" value="other" /><span>Other</span></label>
         </div>
       </div>
 
@@ -836,7 +845,11 @@
     });
   }
 
-  bindPills('org-type-pills', v => { _d.orgType = v; });
+  document.querySelectorAll('#org-type-checks input[type="checkbox"]').forEach(cb => {
+    cb.addEventListener('change', () => {
+      _d.orgType = Array.from(document.querySelectorAll('#org-type-checks input:checked')).map(c => c.value).join(',');
+    });
+  });
   bindPills('legal-pills',    v => { _d.legalStructure = v; });
 
   // ── Abbreviation formatting ─────────────────────────────────────────
@@ -900,12 +913,13 @@
   function buildSummary() {
     const legalL = {sole_proprietor:'Sole Proprietor',corporation:'Business / Corporation',not_for_profit:'Not-for-Profit',registered_charity:'Registered Charity',school:'School / Educational',informal:'Informal Group'};
     const typeL  = {theatre:'Theatre Company',school:'School / Educational',community:'Community Group',independent:'Independent Producer',other:'Other'};
+    const typeDisplay = (_d.orgType||'').split(',').filter(Boolean).map(v => typeL[v]||v).join(', ');
     const roleL  = {artistic_director:'Artistic Director',executive_director:'Executive Director',producer:'Producer',board_chair:'Board Chair',treasurer:'Treasurer',secretary:'Secretary',volunteer_coordinator:'Volunteer Coordinator',administrator:'Administrator',other:'Other'};
 
     const rows = [
       { l:'Organisation',   v: _d.orgName },
       { l:'Abbreviation',   v: _d.abbr },
-      { l:'Type',           v: typeL[_d.orgType]||_d.orgType },
+      { l:'Type',           v: typeDisplay },
       { l:'Account',        v: _d.ownerType==='personal' ? `${_d.ownerName} (${roleL[_d.ownerRole]||_d.ownerRole})` : 'Shared / Organisation inbox' },
       { l:'Legal structure',v: legalL[_d.legalStructure]||_d.legalStructure },
       { l:'Location',       v: _d.location },
@@ -1008,7 +1022,7 @@
     const abbr = document.getElementById('org-abbr').value.trim();
     if (!name) { showErr('Please enter your organisation name.'); return; }
     if (!abbr) { showErr('Please enter an abbreviation or nickname.'); return; }
-    if (!_d.orgType) { showErr('Please select the type of organisation.'); return; }
+    if (!_d.orgType) { showErr('Please select at least one type of organisation.'); return; }
     _d.orgName = name; _d.abbr = abbr;
     showStep(2);
     autoSlug(_d.orgName, _d.abbr, '').then(s => { if (s) { slugInput.value=s; slugInput.dispatchEvent(new Event('input')); } });
@@ -1140,7 +1154,7 @@
       document.getElementById('org-email').value   = _d.email;
       document.getElementById('org-phone').value   = _d.phone;
 
-      if (_d.orgType)        document.querySelector(`#org-type-pills [data-value="${_d.orgType}"]`)?.classList.add('selected');
+      if (_d.orgType) { (_d.orgType).split(',').forEach(v => { const cb = document.querySelector(`#org-type-checks input[value="${v.trim()}"]`); if (cb) cb.checked = true; }); }
       if (_d.legalStructure) document.querySelector(`#legal-pills [data-value="${_d.legalStructure}"]`)?.classList.add('selected');
       if (_d.ownerType) {
         document.querySelector(`#owner-options [data-value="${_d.ownerType}"]`)?.classList.add('selected');
