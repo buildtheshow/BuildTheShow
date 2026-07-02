@@ -620,7 +620,9 @@
     logoFile:null,
   };
 
-  const TOTAL = 9;
+  const TOTAL    = 9;
+  const EDIT_MODE = new URLSearchParams(location.search).get('edit') === '1';
+  let   _editOrgId = null;
 
   // ── Progress ────────────────────────────────────────────────────────
   function setProgress(step) {
@@ -903,7 +905,8 @@
   // ── Save ─────────────────────────────────────────────────────────────
   async function saveOrg() {
     const btn = document.getElementById('finish-btn');
-    btn.disabled = true; btn.textContent = 'Creating your organisation...';
+    btn.disabled = true;
+    btn.textContent = EDIT_MODE ? 'Saving changes...' : 'Creating your organisation...';
     clearErr();
 
     const { data: { user } } = await sb.auth.getUser();
@@ -912,12 +915,10 @@
     let logo_url = null;
     if (_d.logoFile) logo_url = await uploadFile(_d.logoFile, user.id, 'org-logos');
 
-    const custom_id = genId();
-    const insert = {
+    const fields = {
       name:               _d.orgName,
       abbreviation:       _d.abbr,
       slug:               _d.slug,
-      custom_id,
       location:           _d.location,
       location_lat:       _d.lat || null,
       location_lng:       _d.lng || null,
@@ -925,8 +926,6 @@
       website:            _d.website || null,
       description:        _d.bio    || null,
       established_year:   _d.year   ? parseInt(_d.year) : null,
-      logo_url,
-      admin_id:           user.id,
       org_type:           _d.orgType         || null,
       legal_structure:    _d.legalStructure  || null,
       phone:              _d.phone           || null,
@@ -934,19 +933,39 @@
       account_owner_name: _d.ownerName       || null,
       account_owner_role: _d.ownerRole       || null,
     };
+    if (logo_url) fields.logo_url = logo_url;
 
-    const { data: orgRow, error: orgErr } = await sb.from('organizations').insert(insert).select('id').single();
-    if (orgErr) {
-      const msg = (orgErr.code==='23505' && orgErr.message.includes('slug'))
-        ? 'That URL is already taken. Please go back and choose a different handle.'
-        : (orgErr.message || 'Could not create your organisation. Please try again.');
-      showErr(msg);
-      btn.disabled=false; btn.textContent='Take me to my dashboard';
-      return;
-    }
+    let orgId = _editOrgId;
 
-    if (_d.venues.length && orgRow?.id) {
-      await sb.from('venues').insert(_d.venues.map(v => ({ org_id: orgRow.id, name: v.name, address: v.location||null })));
+    if (EDIT_MODE && orgId) {
+      const { error: updErr } = await sb.from('organizations').update(fields).eq('id', orgId);
+      if (updErr) {
+        const msg = (updErr.code==='23505' && updErr.message.includes('slug'))
+          ? 'That URL is already taken. Please go back and choose a different handle.'
+          : (updErr.message || 'Could not save changes. Please try again.');
+        showErr(msg);
+        btn.disabled=false; btn.textContent='Save changes';
+        return;
+      }
+      // Replace all venues for this org
+      await sb.from('venues').delete().eq('org_id', orgId);
+      if (_d.venues.length) {
+        await sb.from('venues').insert(_d.venues.map(v => ({ org_id: orgId, name: v.name, address: v.location||null })));
+      }
+    } else {
+      const { data: orgRow, error: orgErr } = await sb.from('organizations').insert({ ...fields, custom_id: genId(), admin_id: user.id }).select('id').single();
+      if (orgErr) {
+        const msg = (orgErr.code==='23505' && orgErr.message.includes('slug'))
+          ? 'That URL is already taken. Please go back and choose a different handle.'
+          : (orgErr.message || 'Could not create your organisation. Please try again.');
+        showErr(msg);
+        btn.disabled=false; btn.textContent='Take me to my dashboard';
+        return;
+      }
+      orgId = orgRow?.id;
+      if (_d.venues.length && orgId) {
+        await sb.from('venues').insert(_d.venues.map(v => ({ org_id: orgId, name: v.name, address: v.location||null })));
+      }
     }
 
     window.location.href = `/${encodeURIComponent(_d.slug)}/ORG`;
@@ -1039,13 +1058,75 @@
 
   document.getElementById('finish-btn').addEventListener('click', saveOrg);
 
-  // ── Auth guard ───────────────────────────────────────────────────────
+  // ── Auth guard + prefill ─────────────────────────────────────────────
   async function init() {
     const { data: { session } } = await sb.auth.getSession();
     if (!session) { window.location.href = '/login'; return; }
-    const { data: existing } = await sb.from('organizations').select('id,slug').eq('admin_id', session.user.id).limit(1);
+
+    const { data: existing } = await sb.from('organizations')
+      .select('id,slug,name,abbreviation,org_type,account_owner_type,account_owner_name,account_owner_role,legal_structure,location,location_lat,location_lng,email,phone,website,description,established_year')
+      .eq('admin_id', session.user.id).limit(1);
+
     if (existing && existing.length > 0) {
-      window.location.href = existing[0]?.slug ? `/${encodeURIComponent(existing[0].slug)}/ORG` : '/org/dashboard';
+      if (!EDIT_MODE) {
+        window.location.href = existing[0]?.slug ? `/${encodeURIComponent(existing[0].slug)}/ORG` : '/org/dashboard';
+        return;
+      }
+      // Edit mode — prefill from existing org
+      const o = existing[0];
+      _editOrgId = o.id;
+
+      // Prefill _d
+      _d.orgName        = o.name              || '';
+      _d.abbr           = o.abbreviation      || '';
+      _d.orgType        = o.org_type          || '';
+      _d.ownerType      = o.account_owner_type|| '';
+      _d.ownerName      = o.account_owner_name|| '';
+      _d.ownerRole      = o.account_owner_role|| '';
+      _d.legalStructure = o.legal_structure   || '';
+      _d.location       = o.location          || '';
+      _d.lat            = o.location_lat;
+      _d.lng            = o.location_lng;
+      _d.email          = o.email             || '';
+      _d.phone          = o.phone             || '';
+      _d.website        = o.website           || '';
+      _d.bio            = o.description       || '';
+      _d.year           = o.established_year  ? String(o.established_year) : '';
+      _d.slug           = o.slug              || '';
+
+      // Load venues
+      const { data: vData } = await sb.from('venues').select('name,address').eq('org_id', o.id);
+      _d.venues = (vData||[]).map(v => ({ name: v.name, location: v.address||'' }));
+
+      // Prefill form fields
+      document.getElementById('org-name').value   = _d.orgName;
+      document.getElementById('org-abbr').value   = _d.abbr;
+      document.getElementById('org-location').value = _d.location;
+      if (_d.location) locChosen = true;
+      document.getElementById('org-bio').value     = _d.bio;
+      document.getElementById('org-year').value    = _d.year;
+      document.getElementById('org-website').value = _d.website;
+      document.getElementById('org-email').value   = _d.email;
+      document.getElementById('org-phone').value   = _d.phone;
+
+      if (_d.orgType)        document.querySelector(`#org-type-pills [data-value="${_d.orgType}"]`)?.classList.add('selected');
+      if (_d.legalStructure) document.querySelector(`#legal-pills [data-value="${_d.legalStructure}"]`)?.classList.add('selected');
+      if (_d.ownerType) {
+        document.querySelector(`#owner-options [data-value="${_d.ownerType}"]`)?.classList.add('selected');
+        if (_d.ownerType==='personal') {
+          document.getElementById('personal-fields').classList.add('visible');
+          document.getElementById('owner-name').value = _d.ownerName;
+          document.getElementById('owner-role').value = _d.ownerRole;
+        }
+      }
+
+      // Prefill slug input and trigger check
+      if (_d.slug) { slugInput.value = _d.slug; slugInput.dispatchEvent(new Event('input')); }
+
+      renderVenues();
+
+      // Update done button label
+      document.getElementById('finish-btn').textContent = 'Save changes';
     }
   }
 
