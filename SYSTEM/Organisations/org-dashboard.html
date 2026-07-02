@@ -1033,6 +1033,18 @@
       font-weight:700;
       border:1px solid rgba(239,171,69,0.32);
     }
+    .cronus-holiday-chip {
+      display:inline-flex;
+      align-items:center;
+      gap:0.45rem;
+      padding:0.38rem 0.7rem;
+      border-radius:999px;
+      background: rgba(71,106,170,0.12);
+      color:#33578f;
+      font-size:0.78rem;
+      font-weight:700;
+      border:1px solid rgba(71,106,170,0.24);
+    }
     .cronus-empty-card {
       border: 1px dashed rgba(87,46,136,0.2);
       border-radius: 18px;
@@ -1049,6 +1061,15 @@
     #tab-cronus .fc-event { border: none !important; border-radius: 4px !important; font-size: 0.68rem; font-weight: 600; cursor: pointer; line-height: 1.3; }
     #tab-cronus .fc-daygrid-event { padding: 1px 2px !important; margin-bottom: 2px !important; min-height: 34px !important; }
     #tab-cronus .fc-event-main { padding: 3px 5px !important; width: 100%; display: flex; align-items: center; justify-content: center; }
+    #tab-cronus .fc-event.cronus-holiday-event {
+      background: rgba(71,106,170,0.12) !important;
+      border: 1px dashed rgba(71,106,170,0.38) !important;
+      color: #33578f !important;
+    }
+    #tab-cronus .fc-event.cronus-holiday-event .fc-event-main {
+      justify-content: flex-start;
+      padding: 3px 6px !important;
+    }
     .cronus-event-time  { font-size: 0.67rem; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: clip; }
     .cronus-event-label { font-size: 0.7rem;  font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: clip; }
     .cronus-event-prod  { font-size: 0.58rem; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: clip; opacity: 0.82; margin-top: 1px; }
@@ -1417,7 +1438,10 @@
           </div>
           <div class="cronus-helper" id="cronus-helper">Confirmed BTS dates pulled from your productions.</div>
         </div>
-        <button class="btn-primary" id="cronus-add-planning-btn" onclick="openPlanningEventModal()" style="display:none;">+ Add Planning Date</button>
+        <div style="display:flex;align-items:center;gap:0.65rem;flex-wrap:wrap;justify-content:flex-end;">
+          <button class="btn-secondary" id="cronus-holidays-btn" onclick="toggleCronusHolidays()">Show Public Holidays</button>
+          <button class="btn-primary" id="cronus-add-planning-btn" onclick="openPlanningEventModal()" style="display:none;">+ Add Planning Date</button>
+        </div>
       </div>
       <div class="cronus-empty-card" id="cronus-planning-empty">
         <div class="cronus-empty-title">Planning calendar</div>
@@ -4060,6 +4084,8 @@ If you cannot find any productions, return an empty array: []`;
   let cronusPlanningEvents = [];
   let editingPlanningEventId = null;
   let cronusTitlePickerOpen = null;
+  let cronusShowHolidays = false;
+  const cronusHolidayCache = new Map();
 
   function cronusPlanningStorageKey() {
     return currentOrg?.id ? `bts-org-planning-calendar:${currentOrg.id}` : 'bts-org-planning-calendar';
@@ -4088,6 +4114,187 @@ If you cannot find any productions, return an empty array: []`;
 
   function savePlanningEventsToLocal(rows) {
     try { localStorage.setItem(cronusPlanningStorageKey(), JSON.stringify(rows)); } catch {}
+  }
+
+  function cronusHolidayStorageKey() {
+    return currentOrg?.id ? `bts-org-holidays-visible:${currentOrg.id}` : 'bts-org-holidays-visible';
+  }
+
+  function loadCronusHolidayPreference() {
+    try { cronusShowHolidays = localStorage.getItem(cronusHolidayStorageKey()) === '1'; } catch { cronusShowHolidays = false; }
+  }
+
+  function saveCronusHolidayPreference() {
+    try { localStorage.setItem(cronusHolidayStorageKey(), cronusShowHolidays ? '1' : '0'); } catch {}
+  }
+
+  function normaliseCountryName(text = '') {
+    const raw = String(text || '').toLowerCase();
+    if (/canada|ontario|british columbia|alberta|saskatchewan|manitoba|quebec|nova scotia|new brunswick|newfoundland|labrador|prince edward island|pei|northwest territories|nunavut|yukon/.test(raw)) return 'CA';
+    if (/united kingdom|uk|england|scotland|wales|northern ireland/.test(raw)) return 'GB';
+    if (/united states|united states of america|usa|u\.s\.a|u\.s\.|america|california|new york|texas|florida|washington|illinois|ohio/.test(raw)) return 'US';
+    return '';
+  }
+
+  function inferOrgHolidayCountry() {
+    return normaliseCountryName(currentOrg?.location || '');
+  }
+
+  function pad2(value) {
+    return String(value).padStart(2, '0');
+  }
+
+  function isoDateFromLocalDate(date) {
+    return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
+  }
+
+  function localDate(year, monthIndex, day) {
+    return new Date(year, monthIndex, day);
+  }
+
+  function nthWeekdayOfMonth(year, monthIndex, weekday, nth) {
+    const date = new Date(year, monthIndex, 1);
+    while (date.getDay() !== weekday) date.setDate(date.getDate() + 1);
+    date.setDate(date.getDate() + ((nth - 1) * 7));
+    return date;
+  }
+
+  function lastWeekdayOfMonth(year, monthIndex, weekday) {
+    const date = new Date(year, monthIndex + 1, 0);
+    while (date.getDay() !== weekday) date.setDate(date.getDate() - 1);
+    return date;
+  }
+
+  function observedWeekday(date) {
+    const observed = new Date(date);
+    if (observed.getDay() === 6) observed.setDate(observed.getDate() - 1);
+    else if (observed.getDay() === 0) observed.setDate(observed.getDate() + 1);
+    return observed;
+  }
+
+  function calculateEasterSunday(year) {
+    const a = year % 19;
+    const b = Math.floor(year / 100);
+    const c = year % 100;
+    const d = Math.floor(b / 4);
+    const e = b % 4;
+    const f = Math.floor((b + 8) / 25);
+    const g = Math.floor((b - f + 1) / 3);
+    const h = (19 * a + b - d - g + 15) % 30;
+    const i = Math.floor(c / 4);
+    const k = c % 4;
+    const l = (32 + 2 * e + 2 * i - h - k) % 7;
+    const m = Math.floor((a + 11 * h + 22 * l) / 451);
+    const month = Math.floor((h + l - 7 * m + 114) / 31) - 1;
+    const day = ((h + l - 7 * m + 114) % 31) + 1;
+    return new Date(year, month, day);
+  }
+
+  function holidayEvent(label, date, countryCode) {
+    return {
+      id: `holiday:${countryCode}:${label}:${isoDateFromLocalDate(date)}`,
+      title: label,
+      start: isoDateFromLocalDate(date),
+      allDay: true,
+      backgroundColor: '#e7eefb',
+      borderColor: '#476aaa',
+      textColor: '#33578f',
+      classNames: ['cronus-holiday-event'],
+      extendedProps: {
+        holiday: true,
+        prodTitle: 'Public holiday',
+      },
+    };
+  }
+
+  function buildCanadaHolidayEvents(year) {
+    const easterSunday = calculateEasterSunday(year);
+    const goodFriday = new Date(easterSunday); goodFriday.setDate(goodFriday.getDate() - 2);
+    const victoriaDay = new Date(year, 4, 24);
+    while (victoriaDay.getDay() !== 1) victoriaDay.setDate(victoriaDay.getDate() - 1);
+    return [
+      holidayEvent(`New Year's Day`, observedWeekday(localDate(year, 0, 1)), 'CA'),
+      holidayEvent('Good Friday', goodFriday, 'CA'),
+      holidayEvent('Victoria Day', victoriaDay, 'CA'),
+      holidayEvent('Canada Day', observedWeekday(localDate(year, 6, 1)), 'CA'),
+      holidayEvent('Labour Day', nthWeekdayOfMonth(year, 8, 1, 1), 'CA'),
+      holidayEvent('National Day for Truth and Reconciliation', observedWeekday(localDate(year, 8, 30)), 'CA'),
+      holidayEvent('Thanksgiving', nthWeekdayOfMonth(year, 9, 1, 2), 'CA'),
+      holidayEvent('Remembrance Day', observedWeekday(localDate(year, 10, 11)), 'CA'),
+      holidayEvent('Christmas Day', observedWeekday(localDate(year, 11, 25)), 'CA'),
+      holidayEvent('Boxing Day', observedWeekday(localDate(year, 11, 26)), 'CA'),
+    ];
+  }
+
+  function buildUkHolidayEvents(year) {
+    const easterSunday = calculateEasterSunday(year);
+    const goodFriday = new Date(easterSunday); goodFriday.setDate(goodFriday.getDate() - 2);
+    const easterMonday = new Date(easterSunday); easterMonday.setDate(easterMonday.getDate() + 1);
+    const christmas = localDate(year, 11, 25);
+    const boxingDay = localDate(year, 11, 26);
+    let christmasObserved = new Date(christmas);
+    let boxingObserved = new Date(boxingDay);
+    if (christmas.getDay() === 6) {
+      christmasObserved = localDate(year, 11, 27);
+      boxingObserved = localDate(year, 11, 28);
+    } else if (christmas.getDay() === 0) {
+      christmasObserved = localDate(year, 11, 27);
+      boxingObserved = localDate(year, 11, 26).getDay() === 1 ? localDate(year, 11, 26) : localDate(year, 11, 28);
+    } else if (boxingDay.getDay() === 6) {
+      boxingObserved = localDate(year, 11, 28);
+    } else if (boxingDay.getDay() === 0) {
+      boxingObserved = localDate(year, 11, 28);
+    }
+    return [
+      holidayEvent(`New Year's Day`, observedWeekday(localDate(year, 0, 1)), 'GB'),
+      holidayEvent('Good Friday', goodFriday, 'GB'),
+      holidayEvent('Easter Monday', easterMonday, 'GB'),
+      holidayEvent('Early May bank holiday', nthWeekdayOfMonth(year, 4, 1, 1), 'GB'),
+      holidayEvent('Spring bank holiday', lastWeekdayOfMonth(year, 4, 1), 'GB'),
+      holidayEvent('Summer bank holiday', lastWeekdayOfMonth(year, 7, 1), 'GB'),
+      holidayEvent('Christmas Day', christmasObserved, 'GB'),
+      holidayEvent('Boxing Day', boxingObserved, 'GB'),
+    ];
+  }
+
+  function buildUsHolidayEvents(year) {
+    return [
+      holidayEvent(`New Year's Day`, observedWeekday(localDate(year, 0, 1)), 'US'),
+      holidayEvent('Martin Luther King Jr. Day', nthWeekdayOfMonth(year, 0, 1, 3), 'US'),
+      holidayEvent("Presidents' Day", nthWeekdayOfMonth(year, 1, 1, 3), 'US'),
+      holidayEvent('Memorial Day', lastWeekdayOfMonth(year, 4, 1), 'US'),
+      holidayEvent('Juneteenth', observedWeekday(localDate(year, 5, 19)), 'US'),
+      holidayEvent('Independence Day', observedWeekday(localDate(year, 6, 4)), 'US'),
+      holidayEvent('Labour Day', nthWeekdayOfMonth(year, 8, 1, 1), 'US'),
+      holidayEvent("Columbus Day / Indigenous Peoples' Day", nthWeekdayOfMonth(year, 9, 1, 2), 'US'),
+      holidayEvent('Veterans Day', observedWeekday(localDate(year, 10, 11)), 'US'),
+      holidayEvent('Thanksgiving', nthWeekdayOfMonth(year, 10, 4, 4), 'US'),
+      holidayEvent('Christmas Day', observedWeekday(localDate(year, 11, 25)), 'US'),
+    ];
+  }
+
+  function buildHolidayEventsForYear(countryCode, year) {
+    const cacheKey = `${countryCode}:${year}`;
+    if (cronusHolidayCache.has(cacheKey)) return cronusHolidayCache.get(cacheKey);
+    let rows = [];
+    if (countryCode === 'CA') rows = buildCanadaHolidayEvents(year);
+    else if (countryCode === 'GB') rows = buildUkHolidayEvents(year);
+    else if (countryCode === 'US') rows = buildUsHolidayEvents(year);
+    cronusHolidayCache.set(cacheKey, rows);
+    return rows;
+  }
+
+  function buildHolidayEventsForRange(fetchInfo = null) {
+    if (!cronusShowHolidays) return [];
+    const countryCode = inferOrgHolidayCountry();
+    if (!countryCode) return [];
+    const startYear = fetchInfo?.start ? fetchInfo.start.getFullYear() : cronusCalendar?.getDate()?.getFullYear() || new Date().getFullYear();
+    const endYear = fetchInfo?.end ? fetchInfo.end.getFullYear() : startYear;
+    const rows = [];
+    for (let year = startYear; year <= endYear; year += 1) {
+      rows.push(...buildHolidayEventsForYear(countryCode, year));
+    }
+    return rows;
   }
 
   function hydrateCronusPlanningEvents() {
@@ -4188,17 +4395,20 @@ If you cannot find any productions, return an empty array: []`;
   }
 
   function currentCronusEvents() {
-    return cronusMode === 'planning' ? buildPlanningCalendarEvents() : cronusEvents;
+    const base = cronusMode === 'planning' ? buildPlanningCalendarEvents() : cronusEvents;
+    return [...base, ...buildHolidayEventsForRange()];
   }
 
   function updateCronusModeUi() {
     document.getElementById('cronus-mode-active')?.classList.toggle('active', cronusMode === 'active');
     document.getElementById('cronus-mode-planning')?.classList.toggle('active', cronusMode === 'planning');
     const addBtn = document.getElementById('cronus-add-planning-btn');
+    const holidayBtn = document.getElementById('cronus-holidays-btn');
     const helper = document.getElementById('cronus-helper');
     const copy = document.getElementById('cronus-copy');
     const empty = document.getElementById('cronus-planning-empty');
     if (addBtn) addBtn.style.display = cronusMode === 'planning' ? 'inline-flex' : 'none';
+    if (holidayBtn) holidayBtn.textContent = cronusShowHolidays ? 'Hide Public Holidays' : 'Show Public Holidays';
     if (helper) helper.textContent = cronusMode === 'planning'
       ? 'A shared planning space for rough dates, ideas, and early possibilities.'
       : 'Confirmed BTS dates pulled from your productions.';
@@ -4206,6 +4416,19 @@ If you cannot find any productions, return an empty array: []`;
       ? 'A planning calendar for ideas, holds, and possibilities.'
       : 'Every event, across every production, all at once.';
     if (empty) empty.classList.toggle('visible', cronusMode === 'planning' && !cronusPlanningEvents.length);
+  }
+
+  function toggleCronusHolidays() {
+    const countryCode = inferOrgHolidayCountry();
+    if (!countryCode) {
+      showToast('Set your organisation location with country details first so we can show the right public holidays.', true, 5000);
+      return;
+    }
+    cronusShowHolidays = !cronusShowHolidays;
+    saveCronusHolidayPreference();
+    updateCronusModeUi();
+    renderCronusLegend();
+    cronusCalendar?.refetchEvents();
   }
 
   function switchCronusMode(mode) {
@@ -4448,6 +4671,7 @@ If you cannot find any productions, return an empty array: []`;
         if (cronusMode === 'active' && cronusHidden.has(info.event.extendedProps.production_id)) {
           info.el.style.display = 'none';
         }
+        if (info.event.extendedProps.holiday) info.el.classList.add('cronus-holiday-event');
         ['.cronus-event-time', '.cronus-event-label', '.cronus-event-prod'].forEach(sel => {
           const node = info.el.querySelector(sel);
           if (!node) return;
@@ -4460,7 +4684,10 @@ If you cannot find any productions, return an empty array: []`;
         });
       },
       events(fetchInfo, successCb) {
-        successCb(currentCronusEvents());
+        successCb([
+          ...(cronusMode === 'planning' ? buildPlanningCalendarEvents() : cronusEvents),
+          ...buildHolidayEventsForRange(fetchInfo),
+        ]);
       },
       eventClick(info) {
         if (cronusMode !== 'planning') return;
@@ -4484,14 +4711,15 @@ If you cannot find any productions, return an empty array: []`;
     const el = document.getElementById('cronus-legend');
     if (!el) return;
     if (cronusMode === 'planning') {
-      el.innerHTML = '<div class="cronus-planning-chip"><span class="cronus-legend-dot" style="background:#efab45;"></span>Planning calendar items</div>';
+      el.innerHTML = '<div class="cronus-planning-chip"><span class="cronus-legend-dot" style="background:#efab45;"></span>Planning calendar items</div>'
+        + (cronusShowHolidays ? '<div class="cronus-holiday-chip"><span class="cronus-legend-dot" style="background:#476aaa;"></span>Public holidays</div>' : '');
       return;
     }
     el.innerHTML = Object.entries(cronusProdsMap).map(([id, p]) => `
       <div class="cronus-legend-item${cronusHidden.has(id) ? ' dimmed' : ''}" onclick="toggleCronusProd('${id}')" style="color:${p.color};">
         <span class="cronus-legend-dot" style="background:${p.color};"></span>
         ${p.title}
-      </div>`).join('');
+      </div>`).join('') + (cronusShowHolidays ? '<div class="cronus-holiday-chip"><span class="cronus-legend-dot" style="background:#476aaa;"></span>Public holidays</div>' : '');
   }
 
   function toggleCronusProd(prodId) {
@@ -4518,6 +4746,7 @@ If you cannot find any productions, return an empty array: []`;
   // Load Cronus data after FullCalendar is ready, then subscribe to live updates
   window.addEventListener('load', async () => {
     if (!currentOrg) return;
+    loadCronusHolidayPreference();
     hydrateCronusPlanningEvents();
     updateCronusModeUi();
     await loadCronusData();
